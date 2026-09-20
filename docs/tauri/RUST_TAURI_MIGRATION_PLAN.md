@@ -80,6 +80,27 @@ docs/tauri/                   # 协议、兼容性和验收证据
 `desktop-tauri/frontend` 可以在探索期引用现有前端源码，但在第一条可运行
 路径确定后必须确定唯一前端目录，避免两个 React 应用长期漂移。
 
+### 已落地的偏差（决策记录）
+
+实现没有新建 `desktop-tauri/`，而是把 host 放在 `desktop/tauri/`，前端保持唯一的
+`desktop/frontend/`，没有复制第二个 React 应用：
+
+```text
+desktop/frontend/                      # 唯一前端；Wails 与 Tauri 共用
+desktop/tauri/                         # Tauri 2 host（Rust）
+├── src/{main.rs,bridge.rs,protocol_generated.rs}
+├── capabilities/main-window.json
+└── tauri.conf.json
+cmd/reasonix-desktop-bridge/           # Go：唯一的稳定桌面 bridge 入口
+internal/desktopbridge/                # Go：runtime、ledger、protocolgen
+docs/tauri/                            # 协议、兼容性和验收证据
+```
+
+这样"唯一前端目录"的要求无需额外收敛步骤即成立。代价是 host 位于即将被替换的
+Wails Go module 内部：将来摘除 Wails 时，需要把 `desktop/tauri/` 与
+`desktop/frontend/` 一起移出，而不能直接删除 `desktop/`。在计划第一次需要决定
+"`desktop/` 是否整体退场"时重新评估这个取舍。
+
 ## 4. Bridge 合同：先设计，后编码
 
 ### 4.1 传输选择
@@ -150,6 +171,18 @@ Provider 设置、文件工具、MCP、终端、工作区、远程主机、更�
 4. 标出每一个直接 Wails runtime 调用，并划分为 Rust host、Go bridge 或暂不支持。
 
 退出条件：前端不再直接依赖生成的 Wails binding；不改变任何可见功能。
+
+#### 已落地的偏差（决策记录）
+
+没有新增 `desktopApi` 接口。`API_SURFACE_AUDIT.md` 盘点后确认
+`desktop/frontend/src/lib/bridge.ts` 已经是唯一的 React-to-Go adapter —— 545 个
+host 入口集中在 `app` Proxy 与事件订阅 helper 中。在它之上再包一层只增加转发
+代码，不增加边界，因此不引入该层。
+
+Tauri adapter 落在 `desktop/frontend/src/lib/tauriBridge.ts`，只覆盖已迁移的最小
+命令面。代价是退出条件目前**未达成**：`bridge.ts` 仍 `import type` 生成的 Wails
+类型，运行时仍经 `window.go.main.App`。该条件随功能面逐个迁移收敛，不是一次性
+切换。
 
 ### Phase 2 — Go desktop bridge（不引入 Tauri UI）
 
