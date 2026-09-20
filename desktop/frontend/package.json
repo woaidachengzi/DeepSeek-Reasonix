@@ -6,6 +6,7 @@
   "packageManager": "pnpm@10.34.5",
   "scripts": {
     "dev": "vite",
+    "tauri:dev": "node scripts/tauri-dev.mjs",
     "build": "pnpm lint:hooks && pnpm check:waapi && pnpm check:scroll-writer && pnpm check:app-layers && node scripts/check-css-syntax.mjs src/styles.css src/components/RemoteConnectWizard.css src/components/TranscriptSelectionMenu.css src/components/MCPInteractionCard.css src/components/SubagentDetails.css && node scripts/check-z-index-tokens.mjs src/styles.css src/components/RemoteConnectWizard.css && node scripts/check-theme-token-contract.mjs && tsc --noEmit && vite build && node scripts/check-bundle-budget.mjs",
     "check:bundle": "node scripts/check-bundle-budget.mjs",
     "check:scroll-writer": "node scripts/check-single-scroll-writer.mjs",
@@ -75,6 +76,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "2.11.1",
     "@types/hast": "3.0.5",
     "@types/jsdom": "^30.0.0",
     "@types/mdast": "^4.0.4",

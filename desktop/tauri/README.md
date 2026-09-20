@@ -16,8 +16,16 @@ Tauri WebView 中激活；现有 `desktop/frontend/src/lib/bridge.ts` 仍是 Wai
 取消，并显示 bridge 事件和连接故障；它是有意隔离的最小垂直切片，不会冒充完整 Wails UI。
 事件订阅可从 snapshot 的 sequence 开始，避免切换期间漏掉事件。
 
-开发环境还需要满足前端锁定的 Node 24 与 pnpm 10；当前机器的 Node 16 不能启动 Vite。
-在准备好 bridge 二进制及正确 Node 环境后，从此目录运行 `cargo tauri dev`。
+开发环境还需要满足前端锁定的 Node 24 与 pnpm 10。使用前端目录中的本地 Tauri CLI
+启动，脚本会把 Go sidecar 构建到被忽略的 `desktop/tauri/target/sidecar-dev/`，并仅向
+Tauri host 注入其路径：
+
+```bash
+cd desktop/frontend
+pnpm tauri:dev
+```
+
+这不依赖全局 `cargo tauri`，也不会将 sidecar 路径、token 或 loopback 地址暴露给 WebView。
 
 ## 测试
 
