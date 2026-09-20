@@ -2,7 +2,10 @@
 
 mod bridge;
 
-use bridge::{BridgeStatus, BridgeSupervisor};
+use bridge::{
+    BridgeSession, BridgeStatus, BridgeSupervisor, OpenSessionRequest, SessionRequest,
+    SubmitRequest,
+};
 use tauri::{Manager, State};
 
 #[tauri::command]
@@ -15,6 +18,38 @@ fn restart_bridge(supervisor: State<'_, BridgeSupervisor>) -> Result<BridgeStatu
     supervisor.restart()
 }
 
+#[tauri::command]
+fn bridge_open_session(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: OpenSessionRequest,
+) -> Result<BridgeSession, String> {
+    supervisor.open_session(request)
+}
+
+#[tauri::command]
+fn bridge_session_snapshot(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: SessionRequest,
+) -> Result<BridgeSession, String> {
+    supervisor.snapshot(request)
+}
+
+#[tauri::command]
+fn bridge_submit(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: SubmitRequest,
+) -> Result<BridgeSession, String> {
+    supervisor.submit(request)
+}
+
+#[tauri::command]
+fn bridge_cancel(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: SessionRequest,
+) -> Result<BridgeSession, String> {
+    supervisor.cancel(request)
+}
+
 fn main() {
     let supervisor = BridgeSupervisor::from_environment().unwrap_or_else(|error| panic!("{error}"));
     let app = tauri::Builder::default()
@@ -25,7 +60,14 @@ fn main() {
                 .map_err(std::io::Error::other)?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![bridge_status, restart_bridge])
+        .invoke_handler(tauri::generate_handler![
+            bridge_status,
+            restart_bridge,
+            bridge_open_session,
+            bridge_session_snapshot,
+            bridge_submit,
+            bridge_cancel
+        ])
         .build(tauri::generate_context!())
         .expect("failed to build Reasonix Tauri host");
     app.run(|app, event| {

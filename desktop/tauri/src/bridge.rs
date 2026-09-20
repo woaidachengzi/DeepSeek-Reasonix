@@ -1,6 +1,7 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::TryRngCore;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::{
     env, fs,
     io::{Read, Write},
@@ -25,6 +26,42 @@ pub struct BridgeStatus {
     pub running: bool,
     pub protocol_version: Option<u8>,
     pub sidecar_instance_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenSessionRequest {
+    pub session_id: String,
+    pub workspace_root: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubmitRequest {
+    pub session_id: String,
+    pub input: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionRequest {
+    pub session_id: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeSession {
+    pub id: String,
+    pub path: String,
+    pub workspace_root: Option<String>,
+    pub state: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionEnvelope {
+    protocol_version: u8,
+    session: BridgeSession,
 }
 
 #[derive(Debug)]
@@ -122,6 +159,32 @@ impl BridgeSupervisor {
         self.start()
     }
 
+    pub fn open_session(&self, request: OpenSessionRequest) -> Result<BridgeSession, String> {
+        self.request_session(
+            "POST",
+            "/v1/sessions:open",
+            Some(json!({
+                "sessionId": request.session_id,
+                "workspaceRoot": request.workspace_root,
+            })),
+        )
+    }
+
+    pub fn snapshot(&self, request: SessionRequest) -> Result<BridgeSession, String> {
+        let path = format!("/v1/sessions/{}/snapshot", request.session_id);
+        self.request_session("GET", &path, None)
+    }
+
+    pub fn submit(&self, request: SubmitRequest) -> Result<BridgeSession, String> {
+        let path = format!("/v1/sessions/{}:submit", request.session_id);
+        self.request_session("POST", &path, Some(json!({ "input": request.input })))
+    }
+
+    pub fn cancel(&self, request: SessionRequest) -> Result<BridgeSession, String> {
+        let path = format!("/v1/sessions/{}:cancel", request.session_id);
+        self.request_session("POST", &path, None)
+    }
+
     pub fn stop(&self) -> Result<(), String> {
         let process = self
             .process
@@ -183,6 +246,31 @@ impl BridgeSupervisor {
             sidecar_instance_id: ready.sidecar_instance_id,
         })
     }
+
+    fn request_session(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<Value>,
+    ) -> Result<BridgeSession, String> {
+        let mut process = self
+            .process
+            .lock()
+            .map_err(|_| "bridge state lock is unavailable")?;
+        let Some(running) = process.as_mut() else {
+            return Err("desktop bridge is not running".to_string());
+        };
+        if running.child.try_wait().map_err(display_error)?.is_some() {
+            *process = None;
+            return Err("desktop bridge is not running".to_string());
+        }
+        let response = request_json(running.address, &running.token, method, path, body)?;
+        let envelope: SessionEnvelope = serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != PROTOCOL_VERSION {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope.session)
+    }
 }
 
 #[derive(Debug)]
@@ -237,28 +325,60 @@ fn verify_ready(contents: &str, launch_id: &str) -> Result<VerifiedReady, String
 }
 
 fn request_shutdown(address: SocketAddr, token: &str) -> Result<(), String> {
+    request_json(address, token, "POST", "/v1:shutdown", None).map(|_| ())
+}
+
+fn request_json(
+    address: SocketAddr,
+    token: &str,
+    method: &str,
+    path: &str,
+    body: Option<Value>,
+) -> Result<Value, String> {
+    let bytes = body
+        .map(|value| serde_json::to_vec(&value))
+        .transpose()
+        .map_err(display_error)?;
+    let body = bytes.as_deref().unwrap_or_default();
     let mut stream =
         TcpStream::connect_timeout(&address, Duration::from_secs(1)).map_err(display_error)?;
     stream
-        .set_read_timeout(Some(Duration::from_secs(1)))
+        .set_read_timeout(Some(Duration::from_secs(2)))
         .map_err(display_error)?;
+    let headers = format!(
+        "{method} {path} HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    );
     stream
-        .write_all(
-            format!(
-                "POST /v1:shutdown HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {token}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-            )
-            .as_bytes(),
-        )
+        .write_all(headers.as_bytes())
         .map_err(display_error)?;
-    let mut response = String::new();
-    stream
-        .read_to_string(&mut response)
-        .map_err(display_error)?;
-    if response.starts_with("HTTP/1.1 202") {
-        Ok(())
-    } else {
-        Err("desktop bridge did not accept graceful shutdown".to_string())
+    stream.write_all(body).map_err(display_error)?;
+    let mut response = Vec::new();
+    stream.read_to_end(&mut response).map_err(display_error)?;
+    parse_json_response(&response)
+}
+
+fn parse_json_response(response: &[u8]) -> Result<Value, String> {
+    let boundary = b"\r\n\r\n";
+    let Some(index) = response
+        .windows(boundary.len())
+        .position(|window| window == boundary)
+    else {
+        return Err("desktop bridge returned an invalid HTTP response".to_string());
+    };
+    let headers = std::str::from_utf8(&response[..index]).map_err(display_error)?;
+    let status = headers
+        .lines()
+        .next()
+        .and_then(|line| line.split_whitespace().nth(1))
+        .and_then(|value| value.parse::<u16>().ok())
+        .ok_or_else(|| "desktop bridge returned an invalid HTTP status".to_string())?;
+    if !(200..300).contains(&status) {
+        return Err(format!(
+            "desktop bridge request failed with status {status}"
+        ));
     }
+    serde_json::from_slice(&response[index + boundary.len()..]).map_err(display_error)
 }
 
 fn wait_for_exit(child: &mut Child, timeout: Duration) -> Result<bool, String> {
@@ -288,7 +408,7 @@ fn display_error(error: impl std::fmt::Display) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::verify_ready;
+    use super::{parse_json_response, verify_ready};
 
     #[test]
     fn ready_file_requires_matching_loopback_launch() {
@@ -301,5 +421,12 @@ mod tests {
     fn ready_file_rejects_non_loopback_address() {
         let ready = r#"{"protocolVersion":1,"address":"0.0.0.0:12345","sidecarInstanceId":"instance","launchId":"launch"}"#;
         assert!(verify_ready(ready, "launch").is_err());
+    }
+
+    #[test]
+    fn response_parser_requires_successful_json_http_response() {
+        let response = b"HTTP/1.1 202 Accepted\r\nContent-Type: application/json\r\n\r\n{\"protocolVersion\":1}";
+        assert_eq!(parse_json_response(response).unwrap()["protocolVersion"], 1);
+        assert!(parse_json_response(b"HTTP/1.1 401 Unauthorized\r\n\r\n{}").is_err());
     }
 }
