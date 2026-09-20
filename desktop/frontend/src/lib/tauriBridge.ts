@@ -74,3 +74,20 @@ export function onTauriBridgeConnectionError(callback: (message: string) => void
   requireTauri();
   return listen<string>("bridge:connection-error", ({ payload }) => callback(payload));
 }
+
+// Pure helpers shared by TauriSessionPreview and tests.
+// Exported so the contract is exercised by deterministic tests instead of
+// relying on component internals.
+
+export function newTauriSessionId(): string {
+  return `tauri-${crypto.randomUUID()}`;
+}
+
+export function tauriMessageFrom(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function tauriEventSummary(event: { payload: unknown }): string {
+  const payload = JSON.stringify(event.payload);
+  return payload.length > 500 ? `${payload.slice(0, 497)}...` : payload;
+}

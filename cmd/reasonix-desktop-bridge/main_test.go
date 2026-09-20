@@ -376,3 +376,151 @@ func TestRunPublishesReadyHealthAndShutdown(t *testing.T) {
 		t.Fatalf("ready file remained after shutdown: %v", err)
 	}
 }
+
+// Protocol compatibility: the bridge must always emit the current
+// ProtocolVersion in every response envelope. This test documents that
+// contract by asserting the constant stays at 1 and every response shape
+// carries it. A future version bump requires updating both the Go constant
+// and the Rust PROTOCOL_VERSION, plus a migration plan.
+func TestAllResponsesCarryCurrentProtocolVersion(t *testing.T) {
+	bridge := newBridgeServer(testToken, "instance-a")
+	handler := bridge.handler()
+
+	// Health
+	healthReq := httptest.NewRequest(http.MethodGet, "/v1/health", nil)
+	healthReq.Header.Set("Authorization", "Bearer "+testToken)
+	healthRec := httptest.NewRecorder()
+	handler.ServeHTTP(healthRec, healthReq)
+	var health healthResponse
+	if err := json.NewDecoder(healthRec.Body).Decode(&health); err != nil {
+		t.Fatal(err)
+	}
+	if health.ProtocolVersion != desktopbridge.ProtocolVersion {
+		t.Fatalf("health protocolVersion = %d, want %d", health.ProtocolVersion, desktopbridge.ProtocolVersion)
+	}
+
+	// Open session
+	runtime := &bridgeTestRuntime{path: "/tmp/reasonix-session", state: "idle"}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		return runtime, nil
+	}))
+	bridge2 := newBridgeServer(testToken, "instance-b", manager)
+	handler2 := bridge2.handler()
+
+	openReq := httptest.NewRequest(http.MethodPost, "/v1/sessions:open", strings.NewReader(`{"sessionId":"t"}`))
+	openReq.Header.Set("Authorization", "Bearer "+testToken)
+	openReq.Header.Set("Content-Type", "application/json")
+	openRec := httptest.NewRecorder()
+	handler2.ServeHTTP(openRec, openReq)
+	var openResp struct {
+		ProtocolVersion int `json:"protocolVersion"`
+	}
+	if err := json.NewDecoder(openRec.Body).Decode(&openResp); err != nil {
+		t.Fatal(err)
+	}
+	if openResp.ProtocolVersion != desktopbridge.ProtocolVersion {
+		t.Fatalf("open protocolVersion = %d, want %d", openResp.ProtocolVersion, desktopbridge.ProtocolVersion)
+	}
+
+	// Snapshot
+	snapReq := httptest.NewRequest(http.MethodGet, "/v1/sessions/t/snapshot", nil)
+	snapReq.Header.Set("Authorization", "Bearer "+testToken)
+	snapRec := httptest.NewRecorder()
+	handler2.ServeHTTP(snapRec, snapReq)
+	var snapResp struct {
+		ProtocolVersion int `json:"protocolVersion"`
+	}
+	if err := json.NewDecoder(snapRec.Body).Decode(&snapResp); err != nil {
+		t.Fatal(err)
+	}
+	if snapResp.ProtocolVersion != desktopbridge.ProtocolVersion {
+		t.Fatalf("snapshot protocolVersion = %d, want %d", snapResp.ProtocolVersion, desktopbridge.ProtocolVersion)
+	}
+
+	// Submit
+	subReq := httptest.NewRequest(http.MethodPost, "/v1/sessions/t:submit", strings.NewReader(`{"input":"hi"}`))
+	subReq.Header.Set("Authorization", "Bearer "+testToken)
+	subReq.Header.Set("Content-Type", "application/json")
+	subRec := httptest.NewRecorder()
+	handler2.ServeHTTP(subRec, subReq)
+	var subResp struct {
+		ProtocolVersion int `json:"protocolVersion"`
+	}
+	if err := json.NewDecoder(subRec.Body).Decode(&subResp); err != nil {
+		t.Fatal(err)
+	}
+	if subResp.ProtocolVersion != desktopbridge.ProtocolVersion {
+		t.Fatalf("submit protocolVersion = %d, want %d", subResp.ProtocolVersion, desktopbridge.ProtocolVersion)
+	}
+
+	// Cancel
+	cancelReq := httptest.NewRequest(http.MethodPost, "/v1/sessions/t:cancel", nil)
+	cancelReq.Header.Set("Authorization", "Bearer "+testToken)
+	cancelRec := httptest.NewRecorder()
+	handler2.ServeHTTP(cancelRec, cancelReq)
+	var cancelResp struct {
+		ProtocolVersion int `json:"protocolVersion"`
+	}
+	if err := json.NewDecoder(cancelRec.Body).Decode(&cancelResp); err != nil {
+		t.Fatal(err)
+	}
+	if cancelResp.ProtocolVersion != desktopbridge.ProtocolVersion {
+		t.Fatalf("cancel protocolVersion = %d, want %d", cancelResp.ProtocolVersion, desktopbridge.ProtocolVersion)
+	}
+}
+
+// Protocol compatibility: the bridge must reject requests that carry
+// unknown top-level fields, matching the schema's additionalProperties: false.
+func TestBridgeRejectsRequestWithUnknownFields(t *testing.T) {
+	bridge := newBridgeServer(testToken, "instance-a")
+	handler := bridge.handler()
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/sessions:open",
+		strings.NewReader(`{"sessionId":"t","unknownField":"surprise"}`))
+	req.Header.Set("Authorization", "Bearer "+testToken)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d for unknown field", rec.Code, http.StatusBadRequest)
+	}
+}
+
+// Protocol compatibility: requestId must not survive a sidecar restart.
+// The idempotency ledger is per-process; after restart, a previously-seen
+// requestId must NOT be treated as a completed request.
+func TestRequestIdDoesNotSurviveRestart(t *testing.T) {
+	runtime := &bridgeTestRuntime{path: "/tmp/reasonix-session", state: "idle"}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		return runtime, nil
+	}))
+
+	// First server instance: open a session with a specific requestId.
+	bridge1 := newBridgeServer(testToken, "inst-1", manager)
+	handler1 := bridge1.handler()
+	openReq := httptest.NewRequest(http.MethodPost, "/v1/sessions:open",
+		strings.NewReader(`{"sessionId":"t"}`))
+	openReq.Header.Set("Authorization", "Bearer "+testToken)
+	openReq.Header.Set("Content-Type", "application/json")
+	openReq.Header.Set("X-Reasonix-Request-ID", "req-42")
+	openRec := httptest.NewRecorder()
+	handler1.ServeHTTP(openRec, openReq)
+	if openRec.Code != http.StatusOK {
+		t.Fatalf("first open: status = %d", openRec.Code)
+	}
+
+	// Second server instance (simulating restart): same requestId must be
+	// treated as a fresh request, not a replay.
+	bridge2 := newBridgeServer(testToken, "inst-2", manager)
+	handler2 := bridge2.handler()
+	openReq2 := httptest.NewRequest(http.MethodPost, "/v1/sessions:open",
+		strings.NewReader(`{"sessionId":"t"}`))
+	openReq2.Header.Set("Authorization", "Bearer "+testToken)
+	openReq2.Header.Set("Content-Type", "application/json")
+	openReq2.Header.Set("X-Reasonix-Request-ID", "req-42")
+	openRec2 := httptest.NewRecorder()
+	handler2.ServeHTTP(openRec2, openReq2)
+	if openRec2.Code != http.StatusOK {
+		t.Fatalf("second open after restart: status = %d, want 200 (not a replay or conflict)", openRec2.Code)
+	}
+}

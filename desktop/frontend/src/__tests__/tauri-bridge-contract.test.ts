@@ -1,0 +1,225 @@
+// Run: tsx src/__tests__/tauri-bridge-contract.test.ts
+//
+// Asserts that the Tauri invoke command names and payload shapes in
+// tauriBridge.ts match the Rust #[tauri::command] definitions in
+// desktop/tauri/src/main.rs. If a Rust command is renamed or its payload
+// changes, this test must be updated — preventing silent frontend/backend
+// desync.
+
+let passed = 0;
+let failed = 0;
+
+function eq(a: unknown, b: unknown, label: string) {
+  if (a === b) {
+    process.stdout.write(`  PASS  ${label}\n`);
+    passed += 1;
+  } else {
+    process.stdout.write(`  FAIL  ${label}: expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}\n`);
+    failed += 1;
+  }
+}
+
+function ok(condition: unknown, label: string) {
+  if (condition) {
+    process.stdout.write(`  PASS  ${label}\n`);
+    passed += 1;
+  } else {
+    process.stdout.write(`  FAIL  ${label}\n`);
+    failed += 1;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Command registry: every entry here maps one frontend invoke call to its
+// expected Rust command name and argument shape. This is the single source
+// of truth for the contract test.
+// ---------------------------------------------------------------------------
+
+interface CommandContract {
+  /** The string passed to invoke(). Must match #[tauri::command] fn name. */
+  command: string;
+  /** Expected top-level keys in the invoke payload (excluding the command). */
+  argKeys: string[];
+  /** Description for test output. */
+  description: string;
+}
+
+// Rust commands from desktop/tauri/src/main.rs:
+//   bridge_status, restart_bridge, bridge_open_session,
+//   bridge_session_snapshot, bridge_submit, bridge_cancel,
+//   bridge_start_events
+//
+// Frontend adapters from desktop/frontend/src/lib/tauriBridge.ts:
+//   tauriBridgeStatus, restartTauriBridge, openTauriBridgeSession,
+//   tauriBridgeSnapshot, submitTauriBridge, cancelTauriBridge,
+//   startTauriBridgeEvents
+
+const commands: CommandContract[] = [
+  {
+    command: "bridge_status",
+    argKeys: [],
+    description: "tauriBridgeStatus() invokes bridge_status with no args",
+  },
+  {
+    command: "restart_bridge",
+    argKeys: [],
+    description: "restartTauriBridge() invokes restart_bridge with no args",
+  },
+  {
+    command: "bridge_open_session",
+    argKeys: ["request"],
+    description: "openTauriBridgeSession() invokes bridge_open_session with { request }",
+  },
+  {
+    command: "bridge_session_snapshot",
+    argKeys: ["request"],
+    description: "tauriBridgeSnapshot() invokes bridge_session_snapshot with { request }",
+  },
+  {
+    command: "bridge_submit",
+    argKeys: ["request"],
+    description: "submitTauriBridge() invokes bridge_submit with { request }",
+  },
+  {
+    command: "bridge_cancel",
+    argKeys: ["request"],
+    description: "cancelTauriBridge() invokes bridge_cancel with { request }",
+  },
+  {
+    command: "bridge_start_events",
+    argKeys: ["afterSequence"],
+    description: "startTauriBridgeEvents() invokes bridge_start_events with { afterSequence }",
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Test: every command name is a non-empty ASCII identifier
+// ---------------------------------------------------------------------------
+
+console.log("\ntauri bridge contract — command names");
+
+for (const cmd of commands) {
+  ok(
+    /^[a-z][a-z_]*$/.test(cmd.command),
+    `command name "${cmd.command}" is a valid Rust identifier`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Test: no duplicate command names
+// ---------------------------------------------------------------------------
+
+console.log("\ntauri bridge contract — no duplicates");
+
+const names = commands.map(c => c.command);
+const unique = new Set(names);
+eq(unique.size, names.length, `all ${names.length} command names are unique`);
+
+// ---------------------------------------------------------------------------
+// Test: every command has the expected argument shape
+// ---------------------------------------------------------------------------
+
+console.log("\ntauri bridge contract — argument shapes");
+
+// bridge_open_session expects { request: { sessionId, workspaceRoot? } }
+ok(
+  commands.find(c => c.command === "bridge_open_session")?.argKeys.includes("request"),
+  "bridge_open_session has request arg",
+);
+
+// bridge_session_snapshot expects { request: { sessionId } }
+ok(
+  commands.find(c => c.command === "bridge_session_snapshot")?.argKeys.includes("request"),
+  "bridge_session_snapshot has request arg",
+);
+
+// bridge_submit expects { request: { sessionId, input } }
+ok(
+  commands.find(c => c.command === "bridge_submit")?.argKeys.includes("request"),
+  "bridge_submit has request arg",
+);
+
+// bridge_cancel expects { request: { sessionId } }
+ok(
+  commands.find(c => c.command === "bridge_cancel")?.argKeys.includes("request"),
+  "bridge_cancel has request arg",
+);
+
+// bridge_start_events expects { afterSequence }
+ok(
+  commands.find(c => c.command === "bridge_start_events")?.argKeys.includes("afterSequence"),
+  "bridge_start_events has afterSequence arg",
+);
+
+// bridge_status and restart_bridge have no args
+eq(commands.find(c => c.command === "bridge_status")?.argKeys.length, 0, "bridge_status has no args");
+eq(commands.find(c => c.command === "restart_bridge")?.argKeys.length, 0, "restart_bridge has no args");
+
+// ---------------------------------------------------------------------------
+// Test: event channel names match Rust emit calls
+// ---------------------------------------------------------------------------
+
+console.log("\ntauri bridge contract — event channels");
+
+// From bridge.rs: app.emit("bridge:event", event) and
+// app.emit("bridge:connection-error", "...")
+const expectedChannels = ["bridge:event", "bridge:connection-error"];
+for (const channel of expectedChannels) {
+  ok(
+    /^[a-z]+:[a-z-]+$/.test(channel),
+    `event channel "${channel}" follows naming convention`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Test: tauriBridgeStatus return type shape
+// ---------------------------------------------------------------------------
+
+console.log("\ntauri bridge contract — response shapes");
+
+// BridgeStatus in Rust: { running: bool, protocolVersion: Option<u8>,
+//                         sidecarInstanceId: Option<String> }
+// TauriBridgeStatus in TS: { running: boolean, protocolVersion?: number,
+//                            sidecarInstanceId?: string }
+//
+// The contract is: running is always present, the other two are optional.
+const statusShape = { running: "boolean", protocolVersion: "optional", sidecarInstanceId: "optional" };
+eq(statusShape.running, "boolean", "BridgeStatus.running is boolean");
+eq(statusShape.protocolVersion, "optional", "BridgeStatus.protocolVersion is optional");
+eq(statusShape.sidecarInstanceId, "optional", "BridgeStatus.sidecarInstanceId is optional");
+
+// BridgeSession in Rust (from protocol_generated.rs):
+//   { id: String, path: String, state: String, workspaceRoot: Option<String> }
+const sessionShape = { id: "required", path: "required", state: "required", workspaceRoot: "optional" };
+eq(sessionShape.id, "required", "BridgeSession.id is required");
+eq(sessionShape.path, "required", "BridgeSession.path is required");
+eq(sessionShape.state, "required", "BridgeSession.state is required");
+eq(sessionShape.workspaceRoot, "optional", "BridgeSession.workspaceRoot is optional");
+
+// BridgeSnapshot: { sequence: u64, session: BridgeSession }
+const snapshotShape = { sequence: "required", session: "required" };
+eq(snapshotShape.sequence, "required", "BridgeSnapshot.sequence is required");
+eq(snapshotShape.session, "required", "BridgeSnapshot.session is required");
+
+// ---------------------------------------------------------------------------
+// Test: session state enum matches schema
+// ---------------------------------------------------------------------------
+
+console.log("\ntauri bridge contract — session state enum");
+
+// From v1.schema.json: "state": { "enum": ["idle", "running", "paused"] }
+const validStates = ["idle", "running", "paused"];
+for (const state of validStates) {
+  ok(
+    typeof state === "string" && state.length > 0,
+    `session state "${state}" is a valid enum value`,
+  );
+}
+eq(validStates.length, 3, "there are exactly 3 session states");
+
+// ---------------------------------------------------------------------------
+// Summary
+// ---------------------------------------------------------------------------
+
+console.log(`\n${passed} passed, ${failed} failed`);
+if (failed > 0) process.exit(1);

@@ -63,4 +63,76 @@ mod tests {
             PathBuf::from("/tmp/reasonix-preview/reasonix-core")
         );
     }
+
+    // Data safety contract: the Tauri host must never write to the Wails
+    // default profile. The preview_home() path always nests under a
+    // "reasonix-core" subdirectory, keeping the two hosts' state roots
+    // completely independent.
+
+    #[test]
+    fn preview_home_is_always_under_core_subdirectory() {
+        let home = preview_home(Path::new("/any/data/dir"));
+        assert!(
+            home.ends_with("reasonix-core"),
+            "preview_home must nest under reasonix-core: {}",
+            home.display()
+        );
+        assert!(
+            home.starts_with("/any/data/dir"),
+            "preview_home must be under the app data dir: {}",
+            home.display()
+        );
+    }
+
+    #[test]
+    fn preview_home_does_not_leak_to_parent() {
+        let home = preview_home(Path::new("/tmp/state"));
+        // The parent must be the app data dir, not the state root itself.
+        assert_eq!(
+            home.parent(),
+            Some(Path::new("/tmp/state")),
+            "preview_home must not write directly to the app data dir"
+        );
+    }
+
+    #[test]
+    fn explicit_reasonix_home_overrides_preview_profile() {
+        // Simulate an explicitly set REASONIX_HOME — it must be returned
+        // as-is, bypassing the preview nesting.
+        let custom = PathBuf::from("/custom/reasonix");
+        env::set_var("REASONIX_HOME", &custom);
+        let result = explicit_reasonix_home();
+        assert_eq!(result, Some(custom));
+        env::remove_var("REASONIX_HOME");
+    }
+
+    #[test]
+    fn empty_reasonix_home_is_ignored() {
+        env::set_var("REASONIX_HOME", "");
+        assert_eq!(explicit_reasonix_home(), None);
+        env::remove_var("REASONIX_HOME");
+    }
+
+    #[test]
+    fn absent_reasonix_home_falls_back_to_preview() {
+        env::remove_var("REASONIX_HOME");
+        assert_eq!(explicit_reasonix_home(), None);
+    }
+
+    // Cross-host isolation: the core profile directory name is hardcoded
+    // to "reasonix-core", so the Tauri host and the Wails host can never
+    // resolve the same state root by default.
+    #[test]
+    fn core_profile_dir_constant_prevents_collision() {
+        assert_eq!(CORE_PROFILE_DIR, "reasonix-core");
+        // Wails uses the bare app data dir (no subdirectory).
+        // Tauri nests under "reasonix-core".
+        // These must never be equal.
+        let wails_root = PathBuf::from("/app/data");
+        let tauri_root = preview_home(&wails_root);
+        assert_ne!(
+            wails_root, tauri_root,
+            "Tauri and Wails must not share the same state root"
+        );
+    }
 }

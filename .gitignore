@@ -72,6 +72,9 @@ benchmarks/context-maintenance-e2e/run/
 # Local scratch
 temp/
 
+# Tauri migration test scratch (progress docs, not committed)
+/desktop/tauri/tests/
+
 # Official theme art intermediate outputs / caches
 scripts/official-theme-art/out/
 scripts/official-theme-art/__pycache__/

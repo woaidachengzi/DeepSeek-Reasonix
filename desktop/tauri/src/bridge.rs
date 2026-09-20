@@ -6,7 +6,7 @@ use std::{
     env, fs,
     io::{BufRead, BufReader, Read, Write},
     net::{IpAddr, SocketAddr, TcpStream},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -862,7 +862,7 @@ mod tests {
     #[test]
     fn host_rejects_event_with_unsupported_protocol_version() {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
-        let address = listener.local_addr().expect("test address");
+        let _address = listener.local_addr().expect("test address");
         thread::spawn(move || {
             let (stream, _) = listener.accept().expect("accept request");
             let mut reader = BufReader::new(stream);

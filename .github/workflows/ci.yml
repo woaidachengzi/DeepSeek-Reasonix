@@ -601,11 +601,15 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
+          components: rustfmt, clippy
 
       - name: Check Rust formatting
         working-directory: desktop/tauri
         run: cargo fmt --check
+
+      - name: Clippy
+        working-directory: desktop/tauri
+        run: cargo clippy --locked -- -D warnings
 
       - name: Test the Tauri host against a real bridge
         working-directory: desktop/tauri

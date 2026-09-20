@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import {
   cancelTauriBridge,
+  newTauriSessionId,
   onTauriBridgeConnectionError,
   onTauriBridgeEvent,
   openTauriBridgeSession,
@@ -10,6 +11,8 @@ import {
   submitTauriBridge,
   tauriBridgeSnapshot,
   tauriBridgeStatus,
+  tauriEventSummary,
+  tauriMessageFrom,
   type TauriBridgeEvent,
   type TauriBridgeSession,
   type TauriBridgeStatus,
@@ -17,16 +20,15 @@ import {
 import "./tauriSessionPreview.css";
 
 function newSessionId(): string {
-  return `tauri-${crypto.randomUUID()}`;
+  return newTauriSessionId();
 }
 
 function messageFrom(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return tauriMessageFrom(error);
 }
 
 function eventSummary(event: TauriBridgeEvent): string {
-  const payload = JSON.stringify(event.payload);
-  return payload.length > 500 ? `${payload.slice(0, 497)}...` : payload;
+  return tauriEventSummary(event);
 }
 
 /**
