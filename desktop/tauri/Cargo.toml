@@ -1,0 +1,18 @@
+[package]
+name = "reasonix-tauri"
+version = "0.1.0"
+description = "Tauri host for the Reasonix desktop bridge"
+authors = ["Reasonix Contributors"]
+edition = "2021"
+rust-version = "1.77"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+base64 = "0.22"
+rand = "0.9"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = [] }
+tempfile = "3"
