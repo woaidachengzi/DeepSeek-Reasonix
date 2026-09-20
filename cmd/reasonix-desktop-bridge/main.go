@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"reasonix/internal/boot"
 	"reasonix/internal/desktopbridge"
 )
 
@@ -103,7 +102,7 @@ func run(ctx context.Context, cfg config, token string) error {
 		return err
 	}
 	events := desktopbridge.NewEventStream(1024)
-	manager := desktopbridge.NewRuntimeManager(desktopbridge.NewControllerFactory(boot.Options{}, events))
+	manager := desktopbridge.NewRuntimeManager(newControllerFactory(events))
 	bridge := newBridgeServerWithEvents(token, instanceID, manager, events)
 	ready := readyFile{
 		ProtocolVersion:   desktopbridge.ProtocolVersion,

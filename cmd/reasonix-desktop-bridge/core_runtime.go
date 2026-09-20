@@ -1,4 +1,4 @@
-package desktopbridge
+package main
 
 import (
 	"context"
@@ -6,28 +6,24 @@ import (
 
 	"reasonix/internal/boot"
 	"reasonix/internal/control"
+	"reasonix/internal/desktopbridge"
 	"reasonix/internal/event"
 )
 
-// ControllerFactory builds the established Go core only after a bridge client
-// opens a session. Its Base options allow the desktop host to add tightly scoped
-// process-local policy later without reimplementing boot.Build.
-type ControllerFactory struct {
-	Base   boot.Options
-	build  func(context.Context, boot.Options) (*control.Controller, error)
-	events *EventStream
+// controllerFactory builds the established Go core only after a bridge client
+// opens a session. It lives with the host because the layering rule keeps
+// internal/desktopbridge free of boot and control imports.
+type controllerFactory struct {
+	base   boot.Options
+	events *desktopbridge.EventStream
 }
 
-func NewControllerFactory(base boot.Options, streams ...*EventStream) *ControllerFactory {
-	var events *EventStream
-	if len(streams) > 0 {
-		events = streams[0]
-	}
-	return &ControllerFactory{Base: base, build: boot.Build, events: events}
+func newControllerFactory(events *desktopbridge.EventStream) *controllerFactory {
+	return &controllerFactory{events: events}
 }
 
-func (f *ControllerFactory) Open(ctx context.Context, request OpenRequest) (Runtime, error) {
-	opts := f.Base
+func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+	opts := f.base
 	opts.WorkspaceRoot = request.WorkspaceRoot
 	if f.events != nil {
 		opts.Sink = f.events.Sink(request.SessionID)
@@ -37,7 +33,7 @@ func (f *ControllerFactory) Open(ctx context.Context, request OpenRequest) (Runt
 	if strings.TrimSpace(opts.StatsSource) == "" {
 		opts.StatsSource = "desktop-tauri"
 	}
-	controller, err := f.build(ctx, opts)
+	controller, err := boot.Build(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -45,6 +41,8 @@ func (f *ControllerFactory) Open(ctx context.Context, request OpenRequest) (Runt
 	return &controllerRuntime{controller: controller}, nil
 }
 
+// controllerRuntime adapts the established controller to the bridge's minimal
+// Runtime surface.
 type controllerRuntime struct {
 	controller *control.Controller
 }

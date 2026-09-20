@@ -33,11 +33,17 @@ Controller；Controller 已拥有 `Submit`、`Cancel`、`History`、`Snapshot`�
 新增 `internal/desktopbridge`，由 `cmd/reasonix-desktop-bridge` 调用。包内应有：
 
 ```text
-RuntimeFactory        # 生产实现调用 boot.Build；测试可注入 fake
 RuntimeManager        # session path → 唯一 Controller owner
 EventLedger           # 单调 sequence、小型可重连缓存、snapshot fallback
 Bridge API handlers   # 只实现协议 v1 的 open/snapshot/submit/cancel/events
 ```
+
+生产 `RuntimeFactory` 实现位于 host 侧（`cmd/reasonix-desktop-bridge/core_runtime.go`），
+不在 `internal/desktopbridge` 内：`repolint` 的 layering 规则只允许 `cli`、`serve`、
+`acp`、`bot`、`botruntime`、`boot` 这几个 frontend 与 `cmd/`、`desktop/` 这两个 host
+import `internal/control`，而 `internal/desktopbridge` 只保留与 core 无关的生命周期
+原语。host 通过既有的 `RuntimeFactory` 接口注入自己的实现，测试继续注入
+`RuntimeFactoryFunc` fake。
 
 初版必须限制为一个本地 workspace、一个活跃 session owner；同一 session path 的
 第二次 open 应返回已存在快照，而不是创建第二个 Controller。Controller 在 manager
