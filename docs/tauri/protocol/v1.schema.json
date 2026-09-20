@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reasonix.local/schemas/desktop-bridge/v1.json",
+  "title": "Reasonix Desktop Bridge Protocol v1",
+  "oneOf": [
+    { "$ref": "#/$defs/health" },
+    { "$ref": "#/$defs/openSession" },
+    { "$ref": "#/$defs/submit" },
+    { "$ref": "#/$defs/cancel" },
+    { "$ref": "#/$defs/event" },
+    { "$ref": "#/$defs/error" }
+  ],
+  "$defs": {
+    "protocolVersion": { "type": "integer", "const": 1 },
+    "requestId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "sessionId": { "type": "string", "minLength": 1 },
+    "health": {
+      "type": "object",
+      "required": ["protocolVersion", "status", "sidecarInstanceId"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "status": { "const": "ok" },
+        "sidecarInstanceId": { "type": "string", "minLength": 1 },
+        "capabilities": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "openSession": {
+      "type": "object",
+      "required": ["protocolVersion", "requestId", "operation"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "requestId": { "$ref": "#/$defs/requestId" },
+        "operation": { "const": "open_session" },
+        "sessionId": { "$ref": "#/$defs/sessionId" },
+        "workspaceRoot": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "submit": {
+      "type": "object",
+      "required": ["protocolVersion", "requestId", "operation", "sessionId", "input"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "requestId": { "$ref": "#/$defs/requestId" },
+        "operation": { "const": "submit" },
+        "sessionId": { "$ref": "#/$defs/sessionId" },
+        "input": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "cancel": {
+      "type": "object",
+      "required": ["protocolVersion", "requestId", "operation", "sessionId"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "requestId": { "$ref": "#/$defs/requestId" },
+        "operation": { "const": "cancel" },
+        "sessionId": { "$ref": "#/$defs/sessionId" }
+      },
+      "additionalProperties": false
+    },
+    "event": {
+      "type": "object",
+      "required": ["protocolVersion", "sequence", "eventKind", "sessionId", "payload"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "eventKind": { "type": "string", "minLength": 1 },
+        "sessionId": { "$ref": "#/$defs/sessionId" },
+        "tabId": { "type": "string" },
+        "payload": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "required": ["protocolVersion", "error"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "requestId": { "$ref": "#/$defs/requestId" },
+        "error": {
+          "type": "object",
+          "required": ["code", "message"],
+          "properties": {
+            "code": { "enum": ["unauthenticated", "protocol_version_unsupported", "not_found", "conflict", "resync_required", "internal"] },
+            "message": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
