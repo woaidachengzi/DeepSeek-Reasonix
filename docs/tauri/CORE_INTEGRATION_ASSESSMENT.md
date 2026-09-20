@@ -46,9 +46,11 @@ import `internal/control`，而 `internal/desktopbridge` 只保留与 core 无�
 `RuntimeFactoryFunc` fake。
 
 初版必须限制为一个本地 workspace、一个活跃 session owner；同一 session path 的
-第二次 open 应返回已存在快照，而不是创建第二个 Controller。Controller 在 manager
-关闭时先 `SnapshotForShutdown`，再 `Close`。跨实例锁、桌面 tabs、恢复旧会话和
-多 workspace 留到这条受限路径经过回归验证之后。
+第二次 open 应返回已存在快照，而不是创建第二个 Controller。bridge ID 仅映射到会话目录
+内确定的 `tauri-<id>.jsonl`：首次打开创建该 Tauri preview 路径，重启后以 Go core 的
+`LoadSession`/`Resume` 恢复它；不扫描、迁移或静默接管既有 Wails 会话。Controller 在
+manager 关闭时先 `SnapshotForShutdown`，再 `Close`。跨实例锁、桌面 tabs 和多 workspace
+留到这条受限路径经过回归验证之后。
 
 ## 验收先决条件
 

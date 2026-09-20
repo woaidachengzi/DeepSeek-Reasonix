@@ -92,6 +92,20 @@ func TestRuntimeManagerDoesNotPublishFailedOrNilRuntime(t *testing.T) {
 	}
 }
 
+func TestRuntimeManagerRejectsUnsafeSessionIDBeforeOpeningCore(t *testing.T) {
+	var opened atomic.Int32
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(context.Context, OpenRequest) (Runtime, error) {
+		opened.Add(1)
+		return &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}, nil
+	}))
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "../outside"}); !errors.Is(err, ErrInvalidSessionID) {
+		t.Fatalf("unsafe session ID error = %v, want invalid session ID", err)
+	}
+	if got := opened.Load(); got != 0 {
+		t.Fatalf("factory opens = %d, want 0", got)
+	}
+}
+
 func TestRuntimeManagerClosesRuntimeBuiltDuringConcurrentShutdown(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})

@@ -2,8 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
+	"reasonix/internal/agent"
 	"reasonix/internal/boot"
 	"reasonix/internal/control"
 	"reasonix/internal/desktopbridge"
@@ -37,8 +42,47 @@ func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.Open
 	if err != nil {
 		return nil, err
 	}
-	controller.EnsureSessionPath()
+	if err := resumeBridgeSession(controller, request.SessionID); err != nil {
+		controller.Close()
+		return nil, err
+	}
 	return &controllerRuntime{controller: controller}, nil
+}
+
+// resumeBridgeSession gives a bridge ID one deterministic transcript path.
+// Existing Wails sessions are intentionally not discovered or migrated here:
+// a Tauri preview creates its own explicitly named session on first open and
+// can only resume the same ID it created earlier.
+func resumeBridgeSession(controller *control.Controller, sessionID string) error {
+	path, err := bridgeSessionPath(controller.SessionDir(), sessionID)
+	if err != nil {
+		return err
+	}
+	loaded, err := agent.LoadSession(path)
+	if errors.Is(err, os.ErrNotExist) {
+		controller.SetFreshSessionPath(path)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("load desktop bridge session: %w", err)
+	}
+	controller.Resume(loaded, path)
+	return nil
+}
+
+func bridgeSessionPath(sessionDir, sessionID string) (string, error) {
+	if strings.TrimSpace(sessionDir) == "" {
+		return "", fmt.Errorf("desktop bridge session directory is unavailable")
+	}
+	if sessionID == "" || len(sessionID) > 128 {
+		return "", fmt.Errorf("desktop bridge session identifier is invalid")
+	}
+	for _, byte := range []byte(sessionID) {
+		if !(byte >= 'a' && byte <= 'z') && !(byte >= 'A' && byte <= 'Z') && !(byte >= '0' && byte <= '9') && byte != '-' && byte != '_' {
+			return "", fmt.Errorf("desktop bridge session identifier is invalid")
+		}
+	}
+	return filepath.Join(sessionDir, "tauri-"+sessionID+".jsonl"), nil
 }
 
 // controllerRuntime adapts the established controller to the bridge's minimal

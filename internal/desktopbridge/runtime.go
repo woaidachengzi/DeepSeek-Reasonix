@@ -80,7 +80,7 @@ func NewRuntimeManager(factory RuntimeFactory) *RuntimeManager {
 func (m *RuntimeManager) Open(ctx context.Context, request OpenRequest) (SessionView, error) {
 	request.SessionID = strings.TrimSpace(request.SessionID)
 	request.WorkspaceRoot = strings.TrimSpace(request.WorkspaceRoot)
-	if request.SessionID == "" {
+	if !validSessionID(request.SessionID) {
 		return SessionView{}, ErrInvalidSessionID
 	}
 
@@ -135,6 +135,21 @@ func (m *RuntimeManager) Open(ctx context.Context, request OpenRequest) (Session
 	}
 	_ = runtime.Shutdown()
 	return SessionView{}, ErrClosed
+}
+
+// validSessionID keeps the bridge's public ID safe for hosts that derive a
+// deterministic session filename. The Rust host already applies this rule;
+// enforcing it here keeps direct loopback callers from widening that boundary.
+func validSessionID(sessionID string) bool {
+	if sessionID == "" || len(sessionID) > 128 {
+		return false
+	}
+	for _, byte := range []byte(sessionID) {
+		if !(byte >= 'a' && byte <= 'z') && !(byte >= 'A' && byte <= 'Z') && !(byte >= '0' && byte <= '9') && byte != '-' && byte != '_' {
+			return false
+		}
+	}
+	return true
 }
 
 // Snapshot returns current bridge-owned metadata without writing session data.
