@@ -12,7 +12,9 @@ Tauri `bridge:event` 和故障时的 `bridge:connection-error` 事件转发给 W
 
 `desktop/frontend/src/lib/tauriBridge.ts` 已为上述小范围命令提供类型化适配器，只会在
 Tauri WebView 中激活；现有 `desktop/frontend/src/lib/bridge.ts` 仍是 Wails 默认实现，直到
-对应功能面完成迁移。事件订阅可从 snapshot 的 sequence 开始，避免切换期间漏掉事件。
+对应功能面完成迁移。Tauri WebView 现会渲染 `TauriSessionPreview`：可开/读会话、发送、
+取消，并显示 bridge 事件和连接故障；它是有意隔离的最小垂直切片，不会冒充完整 Wails UI。
+事件订阅可从 snapshot 的 sequence 开始，避免切换期间漏掉事件。
 
 开发环境还需要满足前端锁定的 Node 24 与 pnpm 10；当前机器的 Node 16 不能启动 Vite。
 在准备好 bridge 二进制及正确 Node 环境后，从此目录运行 `cargo tauri dev`。

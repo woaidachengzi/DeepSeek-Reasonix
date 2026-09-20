@@ -18,6 +18,13 @@ import { initTheme } from "./lib/theme";
 import { initConversationWidth } from "./lib/conversationWidth";
 import appShellStylesheetURL from "./styles.css?url";
 
+function isTauriRuntime(): boolean {
+  // Mirrors @tauri-apps/api/core's isTauri() check without pulling the native
+  // API into the Wails/browser entry chunk. The Tauri-specific module imports
+  // that official API only after this host marker is present.
+  return (globalThis as typeof globalThis & { isTauri?: unknown }).isTauri === true;
+}
+
 // Install first so startup/runtime failures paint a useful error instead of a
 // featureless webview background, with the recent console trail attached.
 installWailsNonFileDragErrorSuppression();
@@ -111,14 +118,23 @@ async function mountApp() {
     return;
   }
   if (localeResult.status === "rejected") console.error("failed to preload desktop locale", localeResult.reason);
+  let application;
+  if (isTauriRuntime()) {
+    const { TauriSessionPreview } = await import("./tauri/TauriSessionPreview");
+    application = <TauriSessionPreview />;
+  } else {
+    application = (
+      <LocaleProvider>
+        <ToastProvider>
+          <App />
+        </ToastProvider>
+      </LocaleProvider>
+    );
+  }
   createRoot(rootElement).render(
     <StrictMode>
       <ErrorBoundary>
-        <LocaleProvider>
-          <ToastProvider>
-            <App />
-          </ToastProvider>
-        </LocaleProvider>
+        {application}
       </ErrorBoundary>
     </StrictMode>,
   );
