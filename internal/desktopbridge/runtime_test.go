@@ -10,15 +10,47 @@ import (
 type fakeRuntime struct {
 	path          string
 	state         string
+	submits       []string
+	cancelCalls   atomic.Int32
 	shutdownCalls atomic.Int32
 	shutdownErr   error
 }
 
 func (r *fakeRuntime) SessionPath() string { return r.path }
 func (r *fakeRuntime) State() string       { return r.state }
+func (r *fakeRuntime) Submit(input string) { r.submits = append(r.submits, input) }
+func (r *fakeRuntime) Cancel()             { r.cancelCalls.Add(1) }
 func (r *fakeRuntime) Shutdown() error {
 	r.shutdownCalls.Add(1)
 	return r.shutdownErr
+}
+
+func TestRuntimeManagerSubmitsAndCancelsOwnedSession(t *testing.T) {
+	runtime := &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(context.Context, OpenRequest) (Runtime, error) {
+		return runtime, nil
+	}))
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Submit("a", "hello"); err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if len(runtime.submits) != 1 || runtime.submits[0] != "hello" {
+		t.Fatalf("submits = %#v", runtime.submits)
+	}
+	if _, err := manager.Cancel("a"); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	if runtime.cancelCalls.Load() != 1 {
+		t.Fatalf("cancel calls = %d", runtime.cancelCalls.Load())
+	}
+	if _, err := manager.Submit("missing", "hello"); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("missing session error = %v", err)
+	}
+	if _, err := manager.Submit("a", "   "); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("blank input error = %v", err)
+	}
 }
 
 func TestRuntimeManagerOwnsOneSessionAndShutsDownOnce(t *testing.T) {

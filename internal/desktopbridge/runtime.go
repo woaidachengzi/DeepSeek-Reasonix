@@ -15,6 +15,8 @@ var (
 	ErrOpenInProgress   = errors.New("desktop bridge session open is already in progress")
 	ErrSessionConflict  = errors.New("desktop bridge already owns a different session")
 	ErrInvalidSessionID = errors.New("desktop bridge session id is required")
+	ErrInvalidInput     = errors.New("desktop bridge input is required")
+	ErrSessionNotFound  = errors.New("desktop bridge session was not found")
 )
 
 // OpenRequest identifies the one local session the first bridge release owns.
@@ -40,6 +42,8 @@ type SessionView struct {
 type Runtime interface {
 	SessionPath() string
 	State() string
+	Submit(input string)
+	Cancel()
 	Shutdown() error
 }
 
@@ -145,6 +149,26 @@ func (m *RuntimeManager) Snapshot() (SessionView, bool) {
 	return view, true
 }
 
+// Submit starts a turn on the bridge-owned runtime. It intentionally returns
+// after admission rather than waiting for Agent work; progress is delivered by
+// the event transport added on top of this lifecycle layer.
+func (m *RuntimeManager) Submit(sessionID, input string) (SessionView, error) {
+	if strings.TrimSpace(input) == "" {
+		return SessionView{}, ErrInvalidInput
+	}
+	return m.withRuntime(sessionID, func(runtime Runtime) {
+		runtime.Submit(input)
+	})
+}
+
+// Cancel asks the bridge-owned runtime to stop foreground work. It is safe to
+// call while idle; the core decides whether there is work that can be stopped.
+func (m *RuntimeManager) Cancel(sessionID string) (SessionView, error) {
+	return m.withRuntime(sessionID, func(runtime Runtime) {
+		runtime.Cancel()
+	})
+}
+
 // Shutdown makes the owned core durable and then releases it. It is idempotent.
 func (m *RuntimeManager) Shutdown() error {
 	m.mu.Lock()
@@ -175,4 +199,20 @@ func (m *RuntimeManager) finishOpen(runtime Runtime, view SessionView) bool {
 		m.view = view
 	}
 	return true
+}
+
+func (m *RuntimeManager) withRuntime(sessionID string, action func(Runtime)) (SessionView, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return SessionView{}, ErrClosed
+	}
+	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
+		return SessionView{}, ErrSessionNotFound
+	}
+	action(m.runtime)
+	view := m.view
+	view.State = m.runtime.State()
+	return view, nil
 }

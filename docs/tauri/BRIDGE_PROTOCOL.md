@@ -32,11 +32,16 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 流订阅 | `GET /v1/events?afterSequence=N` | 可重连 |
 | 正常关闭 | `POST /v1:shutdown` | 是 |
 
+当前 bridge 已实现 health、建/开会话、快照、submit、cancel 与正常关闭。`submit`
+仅确认既有 Go Controller 已接收输入（HTTP 202）；它不会等待 Agent 生成结束，后续由 SSE
+事件携带进度和最终结果。事件路由、`requestId` 重放去重与历史页仍属于下一阶段，Tauri
+host 在这些能力落地前不得对提交请求自动重试。
+
 ## Envelope
 
-请求带 `X-Reasonix-Request-ID`。成功结果、错误和事件都显式带
-`protocolVersion: 1`。未知 major version 返回 `protocol_version_unsupported`，
-不进行猜测或部分兼容。
+目标协议的变更请求带 `X-Reasonix-Request-ID`，用于重放去重；成功结果、错误和事件都
+显式带 `protocolVersion: 1`。在 requestId 支持落地前，当前实现不会静默声称提供重试
+安全性。未知 major version 将返回 `protocol_version_unsupported`，不进行猜测或部分兼容。
 
 事件 `sequence` 在一个 sidecar 生命周期内严格递增。客户端在断线后使用最后已
 确认 sequence 重连；若缓存不再覆盖请求位置，sidecar 返回 `resync_required`，

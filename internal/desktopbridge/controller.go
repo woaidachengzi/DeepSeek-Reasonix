@@ -56,6 +56,10 @@ func (r *controllerRuntime) State() string {
 	}
 }
 
+func (r *controllerRuntime) Submit(input string) { r.controller.SubmitHTTP(input) }
+
+func (r *controllerRuntime) Cancel() { r.controller.Cancel() }
+
 func (r *controllerRuntime) Shutdown() error {
 	err := r.controller.SnapshotForShutdown()
 	r.controller.Close()

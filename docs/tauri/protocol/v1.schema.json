@@ -2,21 +2,31 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://reasonix.local/schemas/desktop-bridge/v1.json",
   "title": "Reasonix Desktop Bridge Protocol v1",
+  "description": "JSON request and response bodies for the private loopback HTTP bridge. Route parameters are documented in BRIDGE_PROTOCOL.md.",
   "oneOf": [
     { "$ref": "#/$defs/health" },
-    { "$ref": "#/$defs/openSession" },
-    { "$ref": "#/$defs/submit" },
-    { "$ref": "#/$defs/cancel" },
-    { "$ref": "#/$defs/event" },
+    { "$ref": "#/$defs/openSessionRequest" },
+    { "$ref": "#/$defs/submitRequest" },
+    { "$ref": "#/$defs/sessionResponse" },
     { "$ref": "#/$defs/error" }
   ],
   "$defs": {
     "protocolVersion": { "type": "integer", "const": 1 },
-    "requestId": { "type": "string", "minLength": 1, "maxLength": 128 },
     "sessionId": { "type": "string", "minLength": 1 },
+    "session": {
+      "type": "object",
+      "required": ["id", "path", "state"],
+      "properties": {
+        "id": { "$ref": "#/$defs/sessionId" },
+        "path": { "type": "string", "minLength": 1 },
+        "workspaceRoot": { "type": "string" },
+        "state": { "enum": ["idle", "running", "paused"] }
+      },
+      "additionalProperties": false
+    },
     "health": {
       "type": "object",
-      "required": ["protocolVersion", "status", "sidecarInstanceId"],
+      "required": ["protocolVersion", "status", "sidecarInstanceId", "capabilities"],
       "properties": {
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
         "status": { "const": "ok" },
@@ -25,51 +35,30 @@
       },
       "additionalProperties": false
     },
-    "openSession": {
+    "openSessionRequest": {
       "type": "object",
-      "required": ["protocolVersion", "requestId", "operation"],
+      "required": ["sessionId"],
       "properties": {
-        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
-        "requestId": { "$ref": "#/$defs/requestId" },
-        "operation": { "const": "open_session" },
         "sessionId": { "$ref": "#/$defs/sessionId" },
         "workspaceRoot": { "type": "string" }
       },
       "additionalProperties": false
     },
-    "submit": {
+    "submitRequest": {
       "type": "object",
-      "required": ["protocolVersion", "requestId", "operation", "sessionId", "input"],
+      "required": ["input"],
       "properties": {
-        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
-        "requestId": { "$ref": "#/$defs/requestId" },
-        "operation": { "const": "submit" },
-        "sessionId": { "$ref": "#/$defs/sessionId" },
         "input": { "type": "string", "minLength": 1 }
       },
       "additionalProperties": false
     },
-    "cancel": {
+    "sessionResponse": {
       "type": "object",
-      "required": ["protocolVersion", "requestId", "operation", "sessionId"],
+      "required": ["protocolVersion", "session"],
       "properties": {
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
-        "requestId": { "$ref": "#/$defs/requestId" },
-        "operation": { "const": "cancel" },
-        "sessionId": { "$ref": "#/$defs/sessionId" }
-      },
-      "additionalProperties": false
-    },
-    "event": {
-      "type": "object",
-      "required": ["protocolVersion", "sequence", "eventKind", "sessionId", "payload"],
-      "properties": {
-        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
-        "sequence": { "type": "integer", "minimum": 1 },
-        "eventKind": { "type": "string", "minLength": 1 },
-        "sessionId": { "$ref": "#/$defs/sessionId" },
-        "tabId": { "type": "string" },
-        "payload": { "type": "object" }
+        "sequence": { "type": "integer", "minimum": 0 },
+        "session": { "$ref": "#/$defs/session" }
       },
       "additionalProperties": false
     },
@@ -78,12 +67,11 @@
       "required": ["protocolVersion", "error"],
       "properties": {
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
-        "requestId": { "$ref": "#/$defs/requestId" },
         "error": {
           "type": "object",
           "required": ["code", "message"],
           "properties": {
-            "code": { "enum": ["unauthenticated", "protocol_version_unsupported", "not_found", "conflict", "resync_required", "internal"] },
+            "code": { "enum": ["unauthenticated", "invalid_request", "not_found", "conflict", "resync_required", "shutting_down", "internal"] },
             "message": { "type": "string" }
           },
           "additionalProperties": false

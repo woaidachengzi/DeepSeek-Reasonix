@@ -19,11 +19,15 @@ const testToken = "0123456789abcdef0123456789abcdef"
 type bridgeTestRuntime struct {
 	path          string
 	state         string
+	submits       []string
+	cancelCalls   int
 	shutdownCalls int
 }
 
 func (r *bridgeTestRuntime) SessionPath() string { return r.path }
 func (r *bridgeTestRuntime) State() string       { return r.state }
+func (r *bridgeTestRuntime) Submit(input string) { r.submits = append(r.submits, input) }
+func (r *bridgeTestRuntime) Cancel()             { r.cancelCalls++ }
 func (r *bridgeTestRuntime) Shutdown() error {
 	r.shutdownCalls++
 	return nil
@@ -157,6 +161,64 @@ func TestBridgeServerShutdownClosesOpenedRuntime(t *testing.T) {
 	}
 	if runtime.shutdownCalls != 1 {
 		t.Fatalf("shutdown calls = %d, want 1", runtime.shutdownCalls)
+	}
+}
+
+func TestBridgeServerSubmitsAndCancelsOpenedRuntime(t *testing.T) {
+	runtime := &bridgeTestRuntime{path: "/tmp/reasonix-session", state: "idle"}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		return runtime, nil
+	}))
+	bridge := newBridgeServer(testToken, "instance", manager)
+
+	openRequest := httptest.NewRequest(http.MethodPost, "/v1/sessions:open", strings.NewReader(`{"sessionId":"tab-1"}`))
+	openRequest.Header.Set("Authorization", "Bearer "+testToken)
+	openRecorder := httptest.NewRecorder()
+	bridge.handler().ServeHTTP(openRecorder, openRequest)
+	if openRecorder.Code != http.StatusOK {
+		t.Fatalf("open status = %d, body = %s", openRecorder.Code, openRecorder.Body.String())
+	}
+
+	submitRequest := httptest.NewRequest(http.MethodPost, "/v1/sessions/tab-1:submit", strings.NewReader(`{"input":"hello"}`))
+	submitRequest.Header.Set("Authorization", "Bearer "+testToken)
+	submitRecorder := httptest.NewRecorder()
+	bridge.handler().ServeHTTP(submitRecorder, submitRequest)
+	if submitRecorder.Code != http.StatusAccepted {
+		t.Fatalf("submit status = %d, body = %s", submitRecorder.Code, submitRecorder.Body.String())
+	}
+	if len(runtime.submits) != 1 || runtime.submits[0] != "hello" {
+		t.Fatalf("submits = %#v", runtime.submits)
+	}
+
+	cancelRequest := httptest.NewRequest(http.MethodPost, "/v1/sessions/tab-1:cancel", nil)
+	cancelRequest.Header.Set("Authorization", "Bearer "+testToken)
+	cancelRecorder := httptest.NewRecorder()
+	bridge.handler().ServeHTTP(cancelRecorder, cancelRequest)
+	if cancelRecorder.Code != http.StatusAccepted {
+		t.Fatalf("cancel status = %d, body = %s", cancelRecorder.Code, cancelRecorder.Body.String())
+	}
+	if runtime.cancelCalls != 1 {
+		t.Fatalf("cancel calls = %d", runtime.cancelCalls)
+	}
+}
+
+func TestBridgeServerRejectsMalformedAndUnknownCommandInput(t *testing.T) {
+	bridge := newBridgeServer(testToken, "instance")
+
+	malformedRequest := httptest.NewRequest(http.MethodPost, "/v1/sessions:open", strings.NewReader(`{"sessionId":"tab-1","unexpected":true}`))
+	malformedRequest.Header.Set("Authorization", "Bearer "+testToken)
+	malformedRecorder := httptest.NewRecorder()
+	bridge.handler().ServeHTTP(malformedRecorder, malformedRequest)
+	if malformedRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("malformed status = %d, body = %s", malformedRecorder.Code, malformedRecorder.Body.String())
+	}
+
+	unknownRouteRequest := httptest.NewRequest(http.MethodPost, "/v1/sessions/tab-1:unknown", nil)
+	unknownRouteRequest.Header.Set("Authorization", "Bearer "+testToken)
+	unknownRouteRecorder := httptest.NewRecorder()
+	bridge.handler().ServeHTTP(unknownRouteRecorder, unknownRouteRequest)
+	if unknownRouteRecorder.Code != http.StatusNotFound {
+		t.Fatalf("unknown route status = %d, body = %s", unknownRouteRecorder.Code, unknownRouteRecorder.Body.String())
 	}
 }
 

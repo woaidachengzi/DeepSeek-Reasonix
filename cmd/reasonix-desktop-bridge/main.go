@@ -12,6 +12,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -169,8 +170,27 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("GET /v1/health", b.authorized(b.health))
 	mux.HandleFunc("POST /v1/sessions:open", b.authorized(b.openSession))
 	mux.HandleFunc("GET /v1/sessions/{id}/snapshot", b.authorized(b.sessionSnapshot))
+	// ServeMux path wildcards occupy a complete segment, while the public v1
+	// routes use the conventional ":submit" and ":cancel" suffixes. Dispatch
+	// that narrow route family explicitly to retain the documented URLs.
+	mux.HandleFunc("POST /v1/sessions/", b.authorized(b.sessionCommand))
 	mux.HandleFunc("POST /v1:shutdown", b.authorized(b.shutdown))
 	return mux
+}
+
+func (b *bridgeServer) sessionCommand(w http.ResponseWriter, r *http.Request) {
+	const prefix = "/v1/sessions/"
+	path := strings.TrimPrefix(r.URL.Path, prefix)
+	switch {
+	case strings.HasSuffix(path, ":submit"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":submit"))
+		b.submit(w, r)
+	case strings.HasSuffix(path, ":cancel"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":cancel"))
+		b.cancel(w, r)
+	default:
+		writeProtocolError(w, http.StatusNotFound, "not_found", "desktop bridge route not found")
+	}
 }
 
 func (b *bridgeServer) authorized(next http.HandlerFunc) http.HandlerFunc {
@@ -198,7 +218,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "open_session", "session_snapshot", "shutdown"},
+		Capabilities:      []string{"health", "open_session", "session_snapshot", "submit", "cancel", "shutdown"},
 	})
 }
 
@@ -221,9 +241,13 @@ type openSessionRequest struct {
 	WorkspaceRoot string `json:"workspaceRoot,omitempty"`
 }
 
+type submitRequest struct {
+	Input string `json:"input"`
+}
+
 func (b *bridgeServer) openSession(w http.ResponseWriter, r *http.Request) {
 	var request openSessionRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil {
+	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid open_session request")
 		return
 	}
@@ -251,6 +275,59 @@ func (b *bridgeServer) sessionSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "sequence": 0, "session": view})
+}
+
+func (b *bridgeServer) submit(w http.ResponseWriter, r *http.Request) {
+	var request submitRequest
+	if err := decodeJSONBody(w, r, 1<<20, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid submit request")
+		return
+	}
+	view, err := b.runtimes.Submit(r.PathValue("id"), request.Input)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to submit desktop bridge input")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})
+}
+
+func decodeJSONBody(w http.ResponseWriter, r *http.Request, maxBytes int64, target any) error {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBytes))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("request body must contain one JSON value")
+		}
+		return err
+	}
+	return nil
+}
+
+func (b *bridgeServer) cancel(w http.ResponseWriter, r *http.Request) {
+	view, err := b.runtimes.Cancel(r.PathValue("id"))
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to cancel desktop bridge input")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})
+}
+
+func (b *bridgeServer) writeRuntimeError(w http.ResponseWriter, err error, message string) {
+	status, code := http.StatusInternalServerError, "internal"
+	switch {
+	case errors.Is(err, desktopbridge.ErrInvalidSessionID), errors.Is(err, desktopbridge.ErrInvalidInput):
+		status, code = http.StatusBadRequest, "invalid_request"
+	case errors.Is(err, desktopbridge.ErrSessionConflict), errors.Is(err, desktopbridge.ErrOpenInProgress):
+		status, code = http.StatusConflict, "conflict"
+	case errors.Is(err, desktopbridge.ErrSessionNotFound):
+		status, code = http.StatusNotFound, "not_found"
+	case errors.Is(err, desktopbridge.ErrClosed):
+		status, code = http.StatusServiceUnavailable, "shutting_down"
+	}
+	writeProtocolError(w, status, code, message)
 }
 
 func writeProtocolError(w http.ResponseWriter, status int, code, message string) {
