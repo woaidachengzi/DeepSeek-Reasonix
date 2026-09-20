@@ -587,9 +587,26 @@ fn display_error(error: impl std::fmt::Display) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_json_response, session_path_component, verify_ready, BridgeEvent, BridgeSupervisor,
+        parse_json_response, session_path_component, verify_ready, wait_for_exit, BridgeEvent,
+        BridgeSupervisor,
     };
-    use std::{env, path::PathBuf};
+    use std::{env, path::PathBuf, time::Duration};
+
+    // Local `cargo test` has no built Go bridge, so the supervised lifecycle
+    // tests are opt-in there. CI must provide the path: a missing binary fails
+    // instead of letting the supervisor report a silent pass.
+    fn bridge_under_test() -> Option<PathBuf> {
+        match env::var_os("REASONIX_TAURI_BRIDGE_TEST_BIN") {
+            Some(binary) => Some(PathBuf::from(binary)),
+            None => {
+                assert!(
+                    env::var_os("CI").is_none(),
+                    "REASONIX_TAURI_BRIDGE_TEST_BIN must be set under CI"
+                );
+                None
+            }
+        }
+    }
 
     #[test]
     fn ready_file_requires_matching_loopback_launch() {
@@ -630,13 +647,37 @@ mod tests {
 
     #[test]
     fn supervisor_starts_and_stops_a_real_bridge_when_provided() {
-        let Some(binary) = env::var_os("REASONIX_TAURI_BRIDGE_TEST_BIN") else {
+        let Some(binary) = bridge_under_test() else {
             return;
         };
-        let supervisor = BridgeSupervisor::with_binary(PathBuf::from(binary));
+        let supervisor = BridgeSupervisor::with_binary(binary);
         let status = supervisor.start().expect("start bridge");
         assert!(status.running);
         assert_eq!(status.protocol_version, Some(1));
+        supervisor.stop().expect("stop bridge");
+        assert!(!supervisor.status().running);
+    }
+
+    #[test]
+    fn supervisor_recovers_from_an_unexpected_sidecar_exit() {
+        let Some(binary) = bridge_under_test() else {
+            return;
+        };
+        let supervisor = BridgeSupervisor::with_binary(binary);
+        assert!(supervisor.start().expect("start bridge").running);
+        {
+            let mut process = supervisor.process.lock().expect("bridge state lock");
+            let running = process.as_mut().expect("running bridge");
+            running.child.kill().expect("kill sidecar");
+            assert!(
+                wait_for_exit(&mut running.child, Duration::from_secs(10)).expect("reap sidecar"),
+                "the killed sidecar did not exit"
+            );
+        }
+        // A dead sidecar must read as stopped so the host can offer a restart,
+        // and the reaped child must leave no orphan process behind.
+        assert!(!supervisor.status().running);
+        assert!(supervisor.restart().expect("restart bridge").running);
         supervisor.stop().expect("stop bridge");
         assert!(!supervisor.status().running);
     }

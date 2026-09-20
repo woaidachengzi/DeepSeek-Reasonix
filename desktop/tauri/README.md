@@ -18,3 +18,15 @@ Tauri WebView 中激活；现有 `desktop/frontend/src/lib/bridge.ts` 仍是 Wai
 
 开发环境还需要满足前端锁定的 Node 24 与 pnpm 10；当前机器的 Node 16 不能启动 Vite。
 在准备好 bridge 二进制及正确 Node 环境后，从此目录运行 `cargo tauri dev`。
+
+## 测试
+
+依赖 Go bridge 的受监督生命周期测试在本地默认跳过。要让它们真正运行，先构建 bridge
+并把路径传进去：
+
+```bash
+go build -o bin/reasonix-desktop-bridge ./cmd/reasonix-desktop-bridge
+cd desktop/tauri && REASONIX_TAURI_BRIDGE_TEST_BIN="$PWD/../../bin/reasonix-desktop-bridge" cargo test
+```
+
+`CI` 环境变量存在时该路径是必需的：缺失会让这两个测试失败，而不是静默跳过。
