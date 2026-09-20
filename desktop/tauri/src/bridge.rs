@@ -121,11 +121,15 @@ impl BridgeSupervisor {
         let binary = env::var_os(BRIDGE_BINARY_ENV).ok_or_else(|| {
             format!("{BRIDGE_BINARY_ENV} must name the reasonix-desktop-bridge executable")
         })?;
-        Ok(Self {
-            binary: PathBuf::from(binary),
+        Ok(Self::with_binary(PathBuf::from(binary)))
+    }
+
+    fn with_binary(binary: PathBuf) -> Self {
+        Self {
+            binary,
             process: Mutex::new(None),
             events: Mutex::new(None),
-        })
+        }
     }
 
     pub fn start(&self) -> Result<BridgeStatus, String> {
@@ -580,7 +584,10 @@ fn display_error(error: impl std::fmt::Display) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_json_response, session_path_component, verify_ready, BridgeEvent};
+    use super::{
+        parse_json_response, session_path_component, verify_ready, BridgeEvent, BridgeSupervisor,
+    };
+    use std::{env, path::PathBuf};
 
     #[test]
     fn ready_file_requires_matching_loopback_launch() {
@@ -617,5 +624,18 @@ mod tests {
         assert_eq!(session_path_component("tab_1-abc").unwrap(), "tab_1-abc");
         assert!(session_path_component("tab/1").is_err());
         assert!(session_path_component("tab\r\nInjected: value").is_err());
+    }
+
+    #[test]
+    fn supervisor_starts_and_stops_a_real_bridge_when_provided() {
+        let Some(binary) = env::var_os("REASONIX_TAURI_BRIDGE_TEST_BIN") else {
+            return;
+        };
+        let supervisor = BridgeSupervisor::with_binary(PathBuf::from(binary));
+        let status = supervisor.start().expect("start bridge");
+        assert!(status.running);
+        assert_eq!(status.protocol_version, Some(1));
+        supervisor.stop().expect("stop bridge");
+        assert!(!supervisor.status().running);
     }
 }
