@@ -1,16 +1,12 @@
 import "./lib/compat";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { installPerformancePressureMonitor } from "./lib/crash";
 import { installGlobalCrashHandlers } from "./lib/globalCrashHandlers";
-import { installWailsNonFileDragErrorSuppression } from "./lib/bridge";
 import { installBreadcrumbConsoleHook } from "./lib/breadcrumbs";
 import { installMessageSelectionCopy } from "./lib/messageSelectionCopy";
 import { installPerfDebugHook } from "./lib/perfDebug";
-import { LocaleProvider, preloadDetectedLocale } from "./lib/i18n";
-import { ToastProvider } from "./lib/toast";
 import { initFontFamily } from "./lib/fontFamily";
 import { initTextSize } from "./lib/textSize";
 import { initTypographyPreferences } from "./lib/typographyPreferences";
@@ -24,14 +20,6 @@ function isTauriRuntime(): boolean {
   // that official API only after this host marker is present.
   return (globalThis as typeof globalThis & { isTauri?: unknown }).isTauri === true;
 }
-
-// Install first so startup/runtime failures paint a useful error instead of a
-// featureless webview background, with the recent console trail attached.
-installWailsNonFileDragErrorSuppression();
-installGlobalCrashHandlers();
-installBreadcrumbConsoleHook();
-installPerformancePressureMonitor();
-installPerfDebugHook();
 
 // Apply the saved appearance (auto/light/dark) before the first paint.
 function initTypographyPlatform() {
@@ -78,29 +66,45 @@ prewarmFontFallbacks();
 
 installMessageSelectionCopy(document);
 
-// Inside the Wails shell, suppress the webview's default right-click menu — its
-// Reload / Back / Inspect entries are easy to hit by accident and can reset or
-// navigate away from the app. Text inputs keep their native Cut/Copy/Paste menu;
-// the terminal area is exempt so its own context menu can offer copy/paste.
-// Left alone in a plain browser (pnpm dev) so devtools stay reachable.
-if (typeof window !== "undefined" && window.runtime) {
-  window.addEventListener("contextmenu", (e) => {
-    const target = e.target as HTMLElement | null;
-    if (!target?.closest("input, textarea") && !target?.closest(".terminal-view")) e.preventDefault();
-  });
-}
-
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");
 const rootElement = root;
 
 async function mountApp() {
+  const tauriRuntime = isTauriRuntime();
+
+  // The Wails adapter is intentionally outside Tauri's startup graph. Import
+  // it before the generic crash handlers so its drag rejection filter retains
+  // the established ordering on the stable desktop path.
+  if (!tauriRuntime) {
+    const { installWailsNonFileDragErrorSuppression } = await import("./lib/bridge");
+    installWailsNonFileDragErrorSuppression();
+    if (typeof window !== "undefined" && window.runtime) {
+      window.addEventListener("contextmenu", (e) => {
+        const target = e.target as HTMLElement | null;
+        if (!target?.closest("input, textarea") && !target?.closest(".terminal-view")) e.preventDefault();
+      });
+    }
+  }
+
+  // Install next so startup/runtime failures paint a useful error instead of a
+  // featureless webview background, with the recent console trail attached.
+  installGlobalCrashHandlers();
+  installBreadcrumbConsoleHook();
+  installPerformancePressureMonitor();
+  installPerfDebugHook();
+
   // The HTML boot shell paints immediately with critical inline styles. Load
   // the full stylesheet and detected locale in parallel, then replace that
   // shell in one React commit so users never see an unstyled application.
-  const preloadLocaleForMount = async () => {
-    await preloadDetectedLocale();
-  };
+  const wailsModules = tauriRuntime
+    ? null
+    : Promise.all([import("./App"), import("./lib/i18n"), import("./lib/toast")]);
+  const preloadLocaleForMount = wailsModules
+    ? wailsModules.then(async ([, { preloadDetectedLocale }]) => {
+      await preloadDetectedLocale();
+    })
+    : Promise.resolve();
   const stylesResult = await Promise.allSettled([
     new Promise<void>((resolve, reject) => {
       const link = document.createElement("link");
@@ -110,7 +114,7 @@ async function mountApp() {
       link.onerror = () => reject(new Error(`failed to load desktop stylesheet: ${appShellStylesheetURL}`));
       document.head.appendChild(link);
     }),
-    preloadLocaleForMount(),
+    preloadLocaleForMount,
   ]);
   const [styleResult, localeResult] = stylesResult;
   if (styleResult.status === "rejected") {
@@ -119,10 +123,14 @@ async function mountApp() {
   }
   if (localeResult.status === "rejected") console.error("failed to preload desktop locale", localeResult.reason);
   let application;
-  if (isTauriRuntime()) {
+  if (tauriRuntime) {
     const { TauriSessionPreview } = await import("./tauri/TauriSessionPreview");
     application = <TauriSessionPreview />;
   } else {
+    const [appModule, i18n, toast] = await wailsModules!;
+    const App = appModule.default;
+    const { LocaleProvider } = i18n;
+    const { ToastProvider } = toast;
     application = (
       <LocaleProvider>
         <ToastProvider>
@@ -139,9 +147,11 @@ async function mountApp() {
     </StrictMode>,
   );
 
-  void import("./lib/desktopWebViewHeartbeat").then(({ installDesktopWebViewHeartbeat }) => {
-    installDesktopWebViewHeartbeat();
-  });
+  if (!tauriRuntime) {
+    void import("./lib/desktopWebViewHeartbeat").then(({ installDesktopWebViewHeartbeat }) => {
+      installDesktopWebViewHeartbeat();
+    });
+  }
 }
 
 void mountApp();
