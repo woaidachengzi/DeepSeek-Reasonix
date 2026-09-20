@@ -568,6 +568,44 @@ jobs:
       - name: test -race
         run: go test -race ./...
 
+  # The Tauri host and the Go bridge it supervises are a separate runtime from
+  # the Wails module, so they get their own macOS leg. The built bridge path is
+  # passed in: without it the supervised lifecycle tests skip, and this job
+  # exists to make that impossible to mistake for a pass.
+  desktop-tauri:
+    needs: changes
+    if: always() && (github.event_name != 'pull_request' || needs.changes.outputs.desktop != 'false')
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Build the Go desktop bridge
+        run: go build -o "$RUNNER_TEMP/reasonix-desktop-bridge" ./cmd/reasonix-desktop-bridge
+
+      - name: Test the Go desktop bridge
+        run: go test ./cmd/reasonix-desktop-bridge/... ./internal/desktopbridge/...
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check Rust formatting
+        working-directory: desktop/tauri
+        run: cargo fmt --check
+
+      - name: Test the Tauri host against a real bridge
+        working-directory: desktop/tauri
+        env:
+          REASONIX_TAURI_BRIDGE_TEST_BIN: ${{ runner.temp }}/reasonix-desktop-bridge
+        run: cargo test --locked
+
   # Ubuntu 24.04 ships WebKitGTK 4.1 only. Keep this capability build separate
   # from the 22.04/4.0 leg so neither runtime becomes a distro whitelist.
   desktop-linux-webkit41:
