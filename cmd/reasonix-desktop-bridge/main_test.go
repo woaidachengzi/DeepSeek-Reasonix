@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,19 @@ import (
 )
 
 const testToken = "0123456789abcdef0123456789abcdef"
+
+type bridgeTestRuntime struct {
+	path          string
+	state         string
+	shutdownCalls int
+}
+
+func (r *bridgeTestRuntime) SessionPath() string { return r.path }
+func (r *bridgeTestRuntime) State() string       { return r.state }
+func (r *bridgeTestRuntime) Shutdown() error {
+	r.shutdownCalls++
+	return nil
+}
 
 func TestHealthRequiresToken(t *testing.T) {
 	bridge := newBridgeServer(testToken, "instance-a")
@@ -59,6 +73,90 @@ func TestShutdownIsAuthenticatedAndIdempotent(t *testing.T) {
 	case <-bridge.shutdownRequested:
 	default:
 		t.Fatal("shutdown request was not signalled")
+	}
+}
+
+func TestBridgeServerOpensSessionAndReturnsSnapshot(t *testing.T) {
+	runtime := &bridgeTestRuntime{path: "/tmp/reasonix-session", state: "idle"}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(_ context.Context, request desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		if request.SessionID != "tab-1" {
+			t.Fatalf("unexpected session ID: %q", request.SessionID)
+		}
+		if request.WorkspaceRoot != "/workspace" {
+			t.Fatalf("unexpected workspace root: %q", request.WorkspaceRoot)
+		}
+		return runtime, nil
+	}))
+	bridge := newBridgeServer(testToken, "instance", manager)
+
+	openRequest := httptest.NewRequest(http.MethodPost, "/v1/sessions:open", strings.NewReader(`{"sessionId":"tab-1","workspaceRoot":"/workspace"}`))
+	openRequest.Header.Set("Authorization", "Bearer "+testToken)
+	openRequest.Header.Set("Content-Type", "application/json")
+	openRecorder := httptest.NewRecorder()
+	bridge.handler().ServeHTTP(openRecorder, openRequest)
+	if openRecorder.Code != http.StatusOK {
+		t.Fatalf("open status = %d, body = %s", openRecorder.Code, openRecorder.Body.String())
+	}
+
+	var openResponse struct {
+		ProtocolVersion int                       `json:"protocolVersion"`
+		Session         desktopbridge.SessionView `json:"session"`
+	}
+	if err := json.NewDecoder(openRecorder.Body).Decode(&openResponse); err != nil {
+		t.Fatalf("decode open response: %v", err)
+	}
+	if openResponse.ProtocolVersion != desktopbridge.ProtocolVersion {
+		t.Fatalf("protocol version = %d", openResponse.ProtocolVersion)
+	}
+	if openResponse.Session.ID != "tab-1" || openResponse.Session.Path != runtime.path || openResponse.Session.State != "idle" {
+		t.Fatalf("unexpected session: %#v", openResponse.Session)
+	}
+
+	snapshotRequest := httptest.NewRequest(http.MethodGet, "/v1/sessions/tab-1/snapshot", nil)
+	snapshotRequest.Header.Set("Authorization", "Bearer "+testToken)
+	snapshotRecorder := httptest.NewRecorder()
+	bridge.handler().ServeHTTP(snapshotRecorder, snapshotRequest)
+	if snapshotRecorder.Code != http.StatusOK {
+		t.Fatalf("snapshot status = %d, body = %s", snapshotRecorder.Code, snapshotRecorder.Body.String())
+	}
+
+	var snapshotResponse struct {
+		ProtocolVersion int                       `json:"protocolVersion"`
+		Sequence        uint64                    `json:"sequence"`
+		Session         desktopbridge.SessionView `json:"session"`
+	}
+	if err := json.NewDecoder(snapshotRecorder.Body).Decode(&snapshotResponse); err != nil {
+		t.Fatalf("decode snapshot response: %v", err)
+	}
+	if snapshotResponse.ProtocolVersion != desktopbridge.ProtocolVersion || snapshotResponse.Sequence != 0 || snapshotResponse.Session.ID != "tab-1" {
+		t.Fatalf("unexpected snapshot: %#v", snapshotResponse)
+	}
+}
+
+func TestBridgeServerShutdownClosesOpenedRuntime(t *testing.T) {
+	runtime := &bridgeTestRuntime{path: "/tmp/reasonix-session", state: "idle"}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		return runtime, nil
+	}))
+	bridge := newBridgeServer(testToken, "instance", manager)
+
+	openRequest := httptest.NewRequest(http.MethodPost, "/v1/sessions:open", strings.NewReader(`{"sessionId":"tab-1"}`))
+	openRequest.Header.Set("Authorization", "Bearer "+testToken)
+	openRecorder := httptest.NewRecorder()
+	bridge.handler().ServeHTTP(openRecorder, openRequest)
+	if openRecorder.Code != http.StatusOK {
+		t.Fatalf("open status = %d, body = %s", openRecorder.Code, openRecorder.Body.String())
+	}
+
+	shutdownRequest := httptest.NewRequest(http.MethodPost, "/v1:shutdown", nil)
+	shutdownRequest.Header.Set("Authorization", "Bearer "+testToken)
+	shutdownRecorder := httptest.NewRecorder()
+	bridge.handler().ServeHTTP(shutdownRecorder, shutdownRequest)
+	if shutdownRecorder.Code != http.StatusAccepted {
+		t.Fatalf("shutdown status = %d, body = %s", shutdownRecorder.Code, shutdownRecorder.Body.String())
+	}
+	if runtime.shutdownCalls != 1 {
+		t.Fatalf("shutdown calls = %d, want 1", runtime.shutdownCalls)
 	}
 }
 

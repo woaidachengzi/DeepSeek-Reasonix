@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"reasonix/internal/boot"
 	"reasonix/internal/desktopbridge"
 )
 
@@ -58,6 +59,7 @@ type bridgeServer struct {
 	instanceID        string
 	shutdownRequested chan struct{}
 	shutdownOnce      sync.Once
+	runtimes          *desktopbridge.RuntimeManager
 }
 
 func main() {
@@ -97,7 +99,7 @@ func run(ctx context.Context, cfg config, token string) error {
 	if err != nil {
 		return err
 	}
-	bridge := newBridgeServer(token, instanceID)
+	bridge := newBridgeServer(token, instanceID, desktopbridge.NewRuntimeManager(desktopbridge.NewControllerFactory(boot.Options{})))
 	ready := readyFile{
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Address:           listener.Addr().String(),
@@ -149,17 +151,24 @@ func requireLoopbackAddress(address string) error {
 	return nil
 }
 
-func newBridgeServer(token, instanceID string) *bridgeServer {
+func newBridgeServer(token, instanceID string, managers ...*desktopbridge.RuntimeManager) *bridgeServer {
+	manager := desktopbridge.NewRuntimeManager(nil)
+	if len(managers) > 0 && managers[0] != nil {
+		manager = managers[0]
+	}
 	return &bridgeServer{
 		token:             token,
 		instanceID:        instanceID,
 		shutdownRequested: make(chan struct{}),
+		runtimes:          manager,
 	}
 }
 
 func (b *bridgeServer) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/health", b.authorized(b.health))
+	mux.HandleFunc("POST /v1/sessions:open", b.authorized(b.openSession))
+	mux.HandleFunc("GET /v1/sessions/{id}/snapshot", b.authorized(b.sessionSnapshot))
 	mux.HandleFunc("POST /v1:shutdown", b.authorized(b.shutdown))
 	return mux
 }
@@ -189,16 +198,65 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "shutdown"},
+		Capabilities:      []string{"health", "open_session", "session_snapshot", "shutdown"},
 	})
 }
 
 func (b *bridgeServer) shutdown(w http.ResponseWriter, _ *http.Request) {
+	shutdownErr := b.runtimes.Shutdown()
 	b.shutdownOnce.Do(func() { close(b.shutdownRequested) })
+	if shutdownErr != nil {
+		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to close desktop bridge session")
+		return
+	}
 	writeJSON(w, http.StatusAccepted, shutdownResponse{
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "stopping",
 		SidecarInstanceID: b.instanceID,
+	})
+}
+
+type openSessionRequest struct {
+	SessionID     string `json:"sessionId"`
+	WorkspaceRoot string `json:"workspaceRoot,omitempty"`
+}
+
+func (b *bridgeServer) openSession(w http.ResponseWriter, r *http.Request) {
+	var request openSessionRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid open_session request")
+		return
+	}
+	view, err := b.runtimes.Open(r.Context(), desktopbridge.OpenRequest{SessionID: request.SessionID, WorkspaceRoot: request.WorkspaceRoot})
+	if err != nil {
+		status, code := http.StatusInternalServerError, "internal"
+		switch {
+		case errors.Is(err, desktopbridge.ErrInvalidSessionID):
+			status, code = http.StatusBadRequest, "invalid_request"
+		case errors.Is(err, desktopbridge.ErrSessionConflict), errors.Is(err, desktopbridge.ErrOpenInProgress):
+			status, code = http.StatusConflict, "conflict"
+		case errors.Is(err, desktopbridge.ErrClosed):
+			status, code = http.StatusServiceUnavailable, "shutting_down"
+		}
+		writeProtocolError(w, status, code, "unable to open desktop bridge session")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})
+}
+
+func (b *bridgeServer) sessionSnapshot(w http.ResponseWriter, r *http.Request) {
+	view, ok := b.runtimes.Snapshot()
+	if !ok || view.ID != r.PathValue("id") {
+		writeProtocolError(w, http.StatusNotFound, "not_found", "desktop bridge session not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "sequence": 0, "session": view})
+}
+
+func writeProtocolError(w http.ResponseWriter, status int, code, message string) {
+	writeJSON(w, status, map[string]any{
+		"protocolVersion": desktopbridge.ProtocolVersion,
+		"error":           map[string]string{"code": code, "message": message},
 	})
 }
 
