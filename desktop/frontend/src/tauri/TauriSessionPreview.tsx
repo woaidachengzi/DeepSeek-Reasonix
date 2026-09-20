@@ -5,6 +5,7 @@ import {
   onTauriBridgeConnectionError,
   onTauriBridgeEvent,
   openTauriBridgeSession,
+  restartTauriBridge,
   startTauriBridgeEvents,
   submitTauriBridge,
   tauriBridgeSnapshot,
@@ -42,6 +43,8 @@ export function TauriSessionPreview() {
   const [session, setSession] = useState<TauriBridgeSession | null>(null);
   const [events, setEvents] = useState<TauriBridgeEvent[]>([]);
   const [sequence, setSequence] = useState(0);
+  const [streamRevision, setStreamRevision] = useState(0);
+  const [streamReady, setStreamReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -67,11 +70,22 @@ export function TauriSessionPreview() {
           setEvents(previous => [event, ...previous].slice(0, 100));
         });
         offError = await onTauriBridgeConnectionError(message => {
-          if (active) setError(`Bridge event stream: ${message}`);
+          if (active) {
+            setStreamReady(false);
+            setStatus({ running: false });
+            setError(`Bridge event stream: ${message}`);
+          }
         });
         await startTauriBridgeEvents(snapshot.sequence);
+        if (active) {
+          setError("");
+          setStreamReady(true);
+        }
       } catch (error) {
-        if (active) setError(messageFrom(error));
+        if (active) {
+          setStreamReady(false);
+          setError(messageFrom(error));
+        }
       }
     })();
 
@@ -80,7 +94,7 @@ export function TauriSessionPreview() {
       offEvent?.();
       offError?.();
     };
-  }, [session?.id]);
+  }, [session?.id, streamRevision]);
 
   async function openSession() {
     const id = sessionId.trim();
@@ -91,8 +105,11 @@ export function TauriSessionPreview() {
     setBusy(true);
     setError("");
     setEvents([]);
+    setSequence(0);
+    setStreamReady(false);
     try {
       setSession(await openTauriBridgeSession(id, workspaceRoot.trim() || undefined));
+      setStreamRevision(previous => previous + 1);
       setStatus(await tauriBridgeStatus());
     } catch (error) {
       setError(messageFrom(error));
@@ -102,7 +119,7 @@ export function TauriSessionPreview() {
   }
 
   async function submit() {
-    if (!session || !prompt.trim()) return;
+    if (!session || !streamReady || !prompt.trim()) return;
     setBusy(true);
     setError("");
     try {
@@ -128,6 +145,30 @@ export function TauriSessionPreview() {
     }
   }
 
+  async function restartBridge() {
+    setBusy(true);
+    setError("");
+    setStreamReady(false);
+    try {
+      const restarted = await restartTauriBridge();
+      setStatus(restarted);
+      if (!session) return;
+      // A restarted sidecar deliberately owns no inherited in-memory runtime.
+      // Re-open the same session, then let the effect obtain its authoritative
+      // snapshot before event forwarding or another submit becomes available.
+      const reopened = await openTauriBridgeSession(session.id, session.workspaceRoot);
+      setSession(reopened);
+      setEvents([]);
+      setSequence(0);
+      setStreamRevision(previous => previous + 1);
+    } catch (error) {
+      setStatus({ running: false });
+      setError(messageFrom(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="tauri-preview">
       <section className="tauri-preview__card">
@@ -137,6 +178,7 @@ export function TauriSessionPreview() {
         <p className={`tauri-preview__status ${status?.running ? "is-ready" : ""}`}>
           {status?.running ? `Bridge ready · protocol v${status.protocolVersion ?? "?"}` : "Connecting to bridge…"}
         </p>
+        <button className="tauri-preview__restart" type="button" onClick={() => void restartBridge()} disabled={busy}>Restart bridge{session ? " and recover session" : ""}</button>
 
         <label>
           Session ID
@@ -156,13 +198,13 @@ export function TauriSessionPreview() {
           <code>{session.path}</code>
           <textarea value={prompt} onChange={event => setPrompt(event.target.value)} placeholder="Send a prompt to the bridge-owned session" disabled={busy} rows={5} />
           <div className="tauri-preview__actions">
-            <button className="tauri-preview__primary" type="button" onClick={() => void submit()} disabled={busy || !prompt.trim()}>Send</button>
+            <button className="tauri-preview__primary" type="button" onClick={() => void submit()} disabled={busy || !streamReady || !prompt.trim()}>Send</button>
             <button type="button" onClick={() => void cancel()} disabled={busy || session.state !== "running"}>Cancel active turn</button>
           </div>
           <p className="tauri-preview__sequence">Event cursor: {sequence}</p>
         </section>}
 
-        {error && <p className="tauri-preview__error" role="alert">{error}</p>}
+        {error && <p className="tauri-preview__error" role="alert">{error} {session && "Restart the bridge to recover this session."}</p>}
       </section>
       <section className="tauri-preview__events" aria-live="polite">
         <h2>Bridge events</h2>

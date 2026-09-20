@@ -8,6 +8,7 @@
 .tauri-preview__intro, .tauri-preview__events > p { margin: 0 0 22px; color: #acb8cc; }
 .tauri-preview__status, .tauri-preview__sequence { color: #acb8cc; font-size: 13px; }
 .tauri-preview__status.is-ready { color: #6fdea0; }
+.tauri-preview__restart { margin: -8px 0 4px; font-size: 13px !important; }
 .tauri-preview label { display: grid; gap: 7px; margin-top: 16px; color: #d6deec; font-weight: 600; }
 .tauri-preview label span { color: #8290a9; font-weight: 400; }
 .tauri-preview input, .tauri-preview textarea { width: 100%; border: 1px solid #3a4864; border-radius: 9px; padding: 10px 12px; color: inherit; background: #0e1420; font: inherit; }
