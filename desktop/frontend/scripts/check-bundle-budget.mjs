@@ -445,6 +445,10 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // measure 2488853 B. Keep the next tenth; gzip, CSS, and chunk limits unchanged.
 // Combined model-settings and read-evidence integration measures 2492541 B,
 // adding 3688 B (0.148%) over the base. Retain the next one-decimal ceiling.
-const rawInitialBudgetKiB = 2_434.2;
+// The Tauri host branch in main.tsx selects between the Wails application tree
+// and a lazily imported native preview. The host marker, branch and dynamic
+// import measure 2492931 B raw (+311 B); the preview component, its stylesheet
+// and @tauri-apps/api stay in a lazy chunk. Retain the next one-decimal ceiling.
+const rawInitialBudgetKiB = 2_434.6;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
