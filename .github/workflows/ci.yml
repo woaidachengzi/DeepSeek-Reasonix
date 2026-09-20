@@ -586,6 +586,9 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
+      - name: Verify the wire mirrors match the schema
+        run: go run ./cmd/desktop-bridge-protocol-gen -check
+
       - name: Build the Go desktop bridge
         run: go build -o "$RUNNER_TEMP/reasonix-desktop-bridge" ./cmd/reasonix-desktop-bridge
 
