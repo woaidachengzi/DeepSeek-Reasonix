@@ -590,7 +590,11 @@ jobs:
         run: go run ./cmd/desktop-bridge-protocol-gen -check
 
       - name: Build the Go desktop bridge
-        run: go build -o "$RUNNER_TEMP/reasonix-desktop-bridge" ./cmd/reasonix-desktop-bridge
+        run: |
+          bridge_target="$(rustc --print host-tuple)"
+          mkdir -p desktop/tauri/binaries
+          go build -trimpath -o "$RUNNER_TEMP/reasonix-desktop-bridge" ./cmd/reasonix-desktop-bridge
+          cp "$RUNNER_TEMP/reasonix-desktop-bridge" "desktop/tauri/binaries/reasonix-desktop-bridge-${bridge_target}"
 
       - name: Test the Go desktop bridge
         run: go test ./cmd/reasonix-desktop-bridge/... ./internal/desktopbridge/...

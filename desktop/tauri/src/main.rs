@@ -61,13 +61,12 @@ fn bridge_start_events(
 }
 
 fn main() {
-    let supervisor = BridgeSupervisor::from_environment().unwrap_or_else(|error| panic!("{error}"));
     let app = tauri::Builder::default()
-        .manage(supervisor)
+        .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            app.state::<BridgeSupervisor>()
-                .start()
-                .map_err(std::io::Error::other)?;
+            let supervisor = BridgeSupervisor::from_environment(app.handle().clone());
+            supervisor.start().map_err(std::io::Error::other)?;
+            app.manage(supervisor);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "identifier": "io.reasonix.desktop",
   "build": {
-    "beforeDevCommand": "cd ../frontend && pnpm dev",
-    "beforeBuildCommand": "cd ../frontend && pnpm build",
+    "beforeDevCommand": "cd frontend && pnpm dev",
+    "beforeBuildCommand": "cd frontend && pnpm build",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../frontend/dist"
   },
@@ -26,8 +26,9 @@
     }
   },
   "bundle": {
-    "active": false,
+    "active": true,
     "targets": "all",
-    "icon": ["../build/appicon.png"]
+    "icon": ["../build/appicon.png", "../build/darwin/icon.icns"],
+    "externalBin": ["binaries/reasonix-desktop-bridge"]
   }
 }
