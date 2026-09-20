@@ -336,7 +336,7 @@ func (b *bridgeServer) sessionSnapshot(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, http.StatusNotFound, "not_found", "desktop bridge session not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "sequence": 0, "session": view})
+	writeJSON(w, http.StatusOK, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "sequence": b.events.LatestSequence(), "session": view})
 }
 
 func (b *bridgeServer) submit(w http.ResponseWriter, r *http.Request) {

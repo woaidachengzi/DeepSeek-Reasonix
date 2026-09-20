@@ -18,3 +18,12 @@ func TestEventLedgerReplaysAndRequiresResyncAfterOverflow(t *testing.T) {
 		t.Fatalf("after(1) = %#v, resync=%v", events, resync)
 	}
 }
+
+func TestEventLedgerReportsNewestSequenceAfterEviction(t *testing.T) {
+	ledger := NewEventLedger(1)
+	ledger.Append(Event{EventKind: "first"})
+	ledger.Append(Event{EventKind: "second"})
+	if got := ledger.LatestSequence(); got != 2 {
+		t.Fatalf("latest sequence = %d, want 2", got)
+	}
+}

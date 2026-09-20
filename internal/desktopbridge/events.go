@@ -59,6 +59,12 @@ func (s *EventStream) Subscribe(after uint64) (events []Event, resyncRequired bo
 	}
 }
 
+// LatestSequence is the recovery cursor to pair with an authoritative session
+// snapshot before opening a fresh event subscription.
+func (s *EventStream) LatestSequence() uint64 {
+	return s.ledger.LatestSequence()
+}
+
 func (s *EventStream) publish(input Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

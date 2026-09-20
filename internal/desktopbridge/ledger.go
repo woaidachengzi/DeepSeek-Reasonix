@@ -70,3 +70,11 @@ func (l *EventLedger) After(sequence uint64) (events []Event, resyncRequired boo
 	}
 	return events, false
 }
+
+// LatestSequence reports the newest sequence assigned by this ledger, even
+// when no event remains in its bounded replay window.
+func (l *EventLedger) LatestSequence() uint64 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.next
+}

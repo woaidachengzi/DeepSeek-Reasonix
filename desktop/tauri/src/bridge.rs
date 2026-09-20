@@ -61,6 +61,13 @@ pub struct BridgeSession {
     pub state: String,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeSnapshot {
+    pub sequence: u64,
+    pub session: BridgeSession,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeEvent {
@@ -76,6 +83,7 @@ pub struct BridgeEvent {
 #[serde(rename_all = "camelCase")]
 struct SessionEnvelope {
     protocol_version: u8,
+    sequence: Option<u64>,
     session: BridgeSession,
 }
 
@@ -181,29 +189,43 @@ impl BridgeSupervisor {
     }
 
     pub fn open_session(&self, request: OpenSessionRequest) -> Result<BridgeSession, String> {
+        let session_id = session_path_component(&request.session_id)?;
         self.request_session(
             "POST",
             "/v1/sessions:open",
             Some(json!({
-                "sessionId": request.session_id,
+                "sessionId": session_id,
                 "workspaceRoot": request.workspace_root,
             })),
         )
+        .map(|envelope| envelope.session)
     }
 
-    pub fn snapshot(&self, request: SessionRequest) -> Result<BridgeSession, String> {
-        let path = format!("/v1/sessions/{}/snapshot", request.session_id);
-        self.request_session("GET", &path, None)
+    pub fn snapshot(&self, request: SessionRequest) -> Result<BridgeSnapshot, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let path = format!("/v1/sessions/{session_id}/snapshot");
+        let envelope = self.request_session("GET", &path, None)?;
+        let sequence = envelope.sequence.ok_or_else(|| {
+            "desktop bridge snapshot did not contain an event sequence".to_string()
+        })?;
+        Ok(BridgeSnapshot {
+            sequence,
+            session: envelope.session,
+        })
     }
 
     pub fn submit(&self, request: SubmitRequest) -> Result<BridgeSession, String> {
-        let path = format!("/v1/sessions/{}:submit", request.session_id);
+        let session_id = session_path_component(&request.session_id)?;
+        let path = format!("/v1/sessions/{session_id}:submit");
         self.request_session("POST", &path, Some(json!({ "input": request.input })))
+            .map(|envelope| envelope.session)
     }
 
     pub fn cancel(&self, request: SessionRequest) -> Result<BridgeSession, String> {
-        let path = format!("/v1/sessions/{}:cancel", request.session_id);
+        let session_id = session_path_component(&request.session_id)?;
+        let path = format!("/v1/sessions/{session_id}:cancel");
         self.request_session("POST", &path, None)
+            .map(|envelope| envelope.session)
     }
 
     pub fn start_events(&self, app: tauri::AppHandle) -> Result<(), String> {
@@ -288,7 +310,7 @@ impl BridgeSupervisor {
         method: &str,
         path: &str,
         body: Option<Value>,
-    ) -> Result<BridgeSession, String> {
+    ) -> Result<SessionEnvelope, String> {
         let mut process = self
             .process
             .lock()
@@ -305,7 +327,7 @@ impl BridgeSupervisor {
         if envelope.protocol_version != PROTOCOL_VERSION {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
-        Ok(envelope.session)
+        Ok(envelope)
     }
 
     fn event_connection(&self) -> Result<(SocketAddr, String), String> {
@@ -440,6 +462,19 @@ fn parse_json_response(response: &[u8]) -> Result<Value, String> {
     serde_json::from_slice(&response[index + boundary.len()..]).map_err(display_error)
 }
 
+fn session_path_component(session_id: &str) -> Result<String, String> {
+    let session_id = session_id.trim();
+    if session_id.is_empty()
+        || session_id.len() > 128
+        || !session_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+    {
+        return Err("desktop bridge session identifier is invalid".to_string());
+    }
+    Ok(session_id.to_string())
+}
+
 fn forward_events(
     app: tauri::AppHandle,
     address: SocketAddr,
@@ -545,7 +580,7 @@ fn display_error(error: impl std::fmt::Display) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_json_response, verify_ready, BridgeEvent};
+    use super::{parse_json_response, session_path_component, verify_ready, BridgeEvent};
 
     #[test]
     fn ready_file_requires_matching_loopback_launch() {
@@ -575,5 +610,12 @@ mod tests {
         .unwrap();
         assert_eq!(event.sequence, 7);
         assert_eq!(event.payload["text"], "hello");
+    }
+
+    #[test]
+    fn session_identifier_is_safe_for_an_http_path() {
+        assert_eq!(session_path_component("tab_1-abc").unwrap(), "tab_1-abc");
+        assert!(session_path_component("tab/1").is_err());
+        assert!(session_path_component("tab\r\nInjected: value").is_err());
     }
 }

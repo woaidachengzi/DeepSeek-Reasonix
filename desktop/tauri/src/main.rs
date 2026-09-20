@@ -3,8 +3,8 @@
 mod bridge;
 
 use bridge::{
-    BridgeSession, BridgeStatus, BridgeSupervisor, OpenSessionRequest, SessionRequest,
-    SubmitRequest,
+    BridgeSession, BridgeSnapshot, BridgeStatus, BridgeSupervisor, OpenSessionRequest,
+    SessionRequest, SubmitRequest,
 };
 use tauri::{Manager, State};
 
@@ -30,7 +30,7 @@ fn bridge_open_session(
 fn bridge_session_snapshot(
     supervisor: State<'_, BridgeSupervisor>,
     request: SessionRequest,
-) -> Result<BridgeSession, String> {
+) -> Result<BridgeSnapshot, String> {
     supervisor.snapshot(request)
 }
 
