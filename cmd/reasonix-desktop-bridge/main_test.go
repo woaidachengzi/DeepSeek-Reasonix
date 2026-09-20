@@ -203,6 +203,46 @@ func TestBridgeServerSubmitsAndCancelsOpenedRuntime(t *testing.T) {
 	}
 }
 
+func TestBridgeServerReplaysRequestIDWithoutSubmittingTwice(t *testing.T) {
+	runtime := &bridgeTestRuntime{path: "/tmp/reasonix-session", state: "idle"}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		return runtime, nil
+	}))
+	bridge := newBridgeServer(testToken, "instance", manager)
+	handler := bridge.handler()
+
+	openRequest := httptest.NewRequest(http.MethodPost, "/v1/sessions:open", strings.NewReader(`{"sessionId":"tab-1"}`))
+	openRequest.Header.Set("Authorization", "Bearer "+testToken)
+	openRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(openRecorder, openRequest)
+	if openRecorder.Code != http.StatusOK {
+		t.Fatalf("open status = %d, body = %s", openRecorder.Code, openRecorder.Body.String())
+	}
+
+	for range 2 {
+		submitRequest := httptest.NewRequest(http.MethodPost, "/v1/sessions/tab-1:submit", strings.NewReader(`{"input":"hello"}`))
+		submitRequest.Header.Set("Authorization", "Bearer "+testToken)
+		submitRequest.Header.Set(requestIDHeader, "request-123")
+		submitRecorder := httptest.NewRecorder()
+		handler.ServeHTTP(submitRecorder, submitRequest)
+		if submitRecorder.Code != http.StatusAccepted {
+			t.Fatalf("submit status = %d, body = %s", submitRecorder.Code, submitRecorder.Body.String())
+		}
+	}
+	if len(runtime.submits) != 1 || runtime.submits[0] != "hello" {
+		t.Fatalf("submits = %#v, want one accepted prompt", runtime.submits)
+	}
+
+	conflictRequest := httptest.NewRequest(http.MethodPost, "/v1/sessions/tab-1:submit", strings.NewReader(`{"input":"different"}`))
+	conflictRequest.Header.Set("Authorization", "Bearer "+testToken)
+	conflictRequest.Header.Set(requestIDHeader, "request-123")
+	conflictRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(conflictRecorder, conflictRequest)
+	if conflictRecorder.Code != http.StatusConflict {
+		t.Fatalf("reused request ID status = %d, body = %s", conflictRecorder.Code, conflictRecorder.Body.String())
+	}
+}
+
 func TestBridgeServerRejectsMalformedAndUnknownCommandInput(t *testing.T) {
 	bridge := newBridgeServer(testToken, "instance")
 

@@ -25,9 +25,9 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 操作 | 方法与路径 | 幂等性 |
 | --- | --- | --- |
 | 健康检查 | `GET /v1/health` | 是 |
-| 建/开会话 | `POST /v1/sessions:open` | `requestId` 去重（尚未实现） |
+| 建/开会话 | `POST /v1/sessions:open` | `X-Reasonix-Request-ID` 去重 |
 | 会话快照 | `GET /v1/sessions/{sessionId}/snapshot` | 是 |
-| 提交 | `POST /v1/sessions/{sessionId}:submit` | `requestId` 去重（尚未实现） |
+| 提交 | `POST /v1/sessions/{sessionId}:submit` | `X-Reasonix-Request-ID` 去重 |
 | 取消 | `POST /v1/sessions/{sessionId}:cancel` | 是 |
 | 流订阅 | `GET /v1/events?afterSequence=N` | 可重连 |
 | 正常关闭 | `POST /v1:shutdown` | 是 |
@@ -35,14 +35,18 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 当前 bridge 已实现 health、建/开会话、快照、submit、cancel、SSE 事件与正常关闭。
 `submit` 仅确认既有 Go Controller 已接收输入（HTTP 202）；它不会等待 Agent 生成结束，
 SSE 事件携带进度和最终结果。事件 replay 使用有界 ledger；落在窗口之前的 sequence 会
-得到 `resync_required`，host 必须请求快照。`requestId` 重放去重与历史页仍属于下一阶段，
-在其落地前 Tauri host 不得对提交请求自动重试。
+得到 `resync_required`，host 必须请求快照。Tauri host 为建/开会话和提交生成高熵
+`X-Reasonix-Request-ID`；bridge 以请求方法、路径和 body 的 SHA-256 指纹在当前 sidecar
+生命周期内有界缓存 256 个完成响应。相同 ID+相同请求会重放原响应，不同请求复用同一 ID
+返回 `conflict`。缓存只保存响应与摘要，不保存 prompt 原文；host 仅在传输失败后用相同 ID
+重试一次。历史页仍属于下一阶段。
 
 ## Envelope
 
 目标协议的变更请求带 `X-Reasonix-Request-ID`，用于重放去重；成功结果、错误和事件都
-显式带 `protocolVersion: 1`。在 requestId 支持落地前，当前实现不会静默声称提供重试
-安全性。未知 major version 将返回 `protocol_version_unsupported`，不进行猜测或部分兼容。
+显式带 `protocolVersion: 1`。请求 ID 去重仅在一个 sidecar 生命周期内有效；sidecar 重启后
+host 必须先恢复健康状态和快照，不能复用旧 ID 假定提交已完成。未知 major version将返回
+`protocol_version_unsupported`，不进行猜测或部分兼容。
 
 事件 `sequence` 在一个 sidecar 生命周期内严格递增。客户端在断线后使用最后已
 确认 sequence 重连；若缓存不再覆盖请求位置，sidecar 返回 `resync_required`，

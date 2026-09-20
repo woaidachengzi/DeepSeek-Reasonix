@@ -4,8 +4,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
@@ -27,6 +29,8 @@ import (
 
 const (
 	tokenEnvironment = "REASONIX_DESKTOP_BRIDGE_TOKEN"
+	requestIDHeader  = "X-Reasonix-Request-ID"
+	maxRequestIDs    = 256
 )
 
 type config struct {
@@ -62,6 +66,7 @@ type bridgeServer struct {
 	shutdownOnce      sync.Once
 	runtimes          *desktopbridge.RuntimeManager
 	events            *desktopbridge.EventStream
+	requestIDs        *idempotencyLedger
 }
 
 func main() {
@@ -170,13 +175,168 @@ func newBridgeServerWithEvents(token, instanceID string, manager *desktopbridge.
 		shutdownRequested: make(chan struct{}),
 		runtimes:          manager,
 		events:            events,
+		requestIDs:        newIdempotencyLedger(maxRequestIDs),
 	}
+}
+
+// idempotent remembers completed open/submit responses by an opaque host-generated
+// request ID. It stores a hash of the request target and bytes, never the prompt
+// itself. A duplicate waits for the original response instead of admitting a
+// second Agent turn; reusing an ID for different input is an explicit conflict.
+func (b *bridgeServer) idempotent(maxBodyBytes int64, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		requestID := r.Header.Get(requestIDHeader)
+		if requestID == "" {
+			next(w, r) // Preserve compatibility while older private hosts roll forward.
+			return
+		}
+		if !validRequestID(requestID) {
+			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid desktop bridge request ID")
+			return
+		}
+		body, err := io.ReadAll(io.LimitReader(r.Body, maxBodyBytes+1))
+		if err != nil || int64(len(body)) > maxBodyBytes {
+			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid desktop bridge request")
+			return
+		}
+		fingerprint := requestFingerprint(r.Method, r.URL.Path, body)
+		record, owner, conflict := b.requestIDs.reserve(requestID, fingerprint)
+		if conflict {
+			writeProtocolError(w, http.StatusConflict, "conflict", "desktop bridge request ID was reused for different input")
+			return
+		}
+		if !owner {
+			<-record.done
+			writeStoredResponse(w, record.response)
+			return
+		}
+
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		captured := newResponseCapture()
+		next(captured, r)
+		stored := captured.stored()
+		b.requestIDs.finish(requestID, stored)
+		writeStoredResponse(w, stored)
+	}
+}
+
+func validRequestID(requestID string) bool {
+	if len(requestID) == 0 || len(requestID) > 128 {
+		return false
+	}
+	for _, char := range requestID {
+		if !(char >= 'a' && char <= 'z') && !(char >= 'A' && char <= 'Z') && !(char >= '0' && char <= '9') && char != '-' && char != '_' {
+			return false
+		}
+	}
+	return true
+}
+
+func requestFingerprint(method, path string, body []byte) [sha256.Size]byte {
+	hash := sha256.New()
+	_, _ = hash.Write([]byte(method))
+	_, _ = hash.Write([]byte{0})
+	_, _ = hash.Write([]byte(path))
+	_, _ = hash.Write([]byte{0})
+	_, _ = hash.Write(body)
+	var fingerprint [sha256.Size]byte
+	copy(fingerprint[:], hash.Sum(nil))
+	return fingerprint
+}
+
+type idempotencyRecord struct {
+	fingerprint [sha256.Size]byte
+	done        chan struct{}
+	response    storedResponse
+}
+
+type idempotencyLedger struct {
+	mu      sync.Mutex
+	entries map[string]*idempotencyRecord
+	order   []string
+	limit   int
+}
+
+func newIdempotencyLedger(limit int) *idempotencyLedger {
+	return &idempotencyLedger{entries: make(map[string]*idempotencyRecord), limit: limit}
+}
+
+func (l *idempotencyLedger) reserve(requestID string, fingerprint [sha256.Size]byte) (record *idempotencyRecord, owner, conflict bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if existing, ok := l.entries[requestID]; ok {
+		return existing, false, existing.fingerprint != fingerprint
+	}
+	record = &idempotencyRecord{fingerprint: fingerprint, done: make(chan struct{})}
+	l.entries[requestID] = record
+	l.order = append(l.order, requestID)
+	return record, true, false
+}
+
+func (l *idempotencyLedger) finish(requestID string, response storedResponse) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	record, ok := l.entries[requestID]
+	if !ok {
+		return
+	}
+	record.response = response
+	close(record.done)
+	for len(l.entries) > l.limit && len(l.order) > 0 {
+		oldestID := l.order[0]
+		l.order = l.order[1:]
+		oldest, exists := l.entries[oldestID]
+		if exists && oldest.response.body != nil {
+			delete(l.entries, oldestID)
+		}
+	}
+}
+
+type storedResponse struct {
+	status      int
+	contentType string
+	body        []byte
+}
+
+type responseCapture struct {
+	header http.Header
+	status int
+	body   bytes.Buffer
+}
+
+func newResponseCapture() *responseCapture     { return &responseCapture{header: make(http.Header)} }
+func (w *responseCapture) Header() http.Header { return w.header }
+func (w *responseCapture) WriteHeader(status int) {
+	if w.status == 0 {
+		w.status = status
+	}
+}
+func (w *responseCapture) Write(body []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	return w.body.Write(body)
+}
+func (w *responseCapture) stored() storedResponse {
+	status := w.status
+	if status == 0 {
+		status = http.StatusOK
+	}
+	return storedResponse{status: status, contentType: w.header.Get("Content-Type"), body: append([]byte(nil), w.body.Bytes()...)}
+}
+
+func writeStoredResponse(w http.ResponseWriter, response storedResponse) {
+	if response.contentType != "" {
+		w.Header().Set("Content-Type", response.contentType)
+	}
+	w.WriteHeader(response.status)
+	_, _ = w.Write(response.body)
 }
 
 func (b *bridgeServer) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/health", b.authorized(b.health))
-	mux.HandleFunc("POST /v1/sessions:open", b.authorized(b.openSession))
+	mux.HandleFunc("POST /v1/sessions:open", b.authorized(b.idempotent(64<<10, b.openSession)))
 	mux.HandleFunc("GET /v1/sessions/{id}/snapshot", b.authorized(b.sessionSnapshot))
 	mux.HandleFunc("GET /v1/events", b.authorized(b.eventsHandler))
 	// ServeMux path wildcards occupy a complete segment, while the public v1
@@ -245,7 +405,7 @@ func (b *bridgeServer) sessionCommand(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case strings.HasSuffix(path, ":submit"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":submit"))
-		b.submit(w, r)
+		b.idempotent(1<<20, b.submit)(w, r)
 	case strings.HasSuffix(path, ":cancel"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":cancel"))
 		b.cancel(w, r)
@@ -279,7 +439,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "open_session", "session_snapshot", "submit", "cancel", "shutdown"},
+		Capabilities:      []string{"health", "open_session", "session_snapshot", "submit", "cancel", "idempotency", "shutdown"},
 	})
 }
 

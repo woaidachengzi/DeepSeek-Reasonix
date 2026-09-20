@@ -166,6 +166,7 @@ impl BridgeSupervisor {
 
     pub fn open_session(&self, request: OpenSessionRequest) -> Result<BridgeSession, String> {
         let session_id = session_path_component(&request.session_id)?;
+        let request_id = opaque_secret()?;
         self.request_session(
             "POST",
             "/v1/sessions:open",
@@ -173,6 +174,7 @@ impl BridgeSupervisor {
                 "sessionId": session_id,
                 "workspaceRoot": request.workspace_root,
             })),
+            Some(&request_id),
         )
         .map(|envelope| envelope.session)
     }
@@ -180,7 +182,7 @@ impl BridgeSupervisor {
     pub fn snapshot(&self, request: SessionRequest) -> Result<BridgeSnapshot, String> {
         let session_id = session_path_component(&request.session_id)?;
         let path = format!("/v1/sessions/{session_id}/snapshot");
-        let envelope = self.request_session("GET", &path, None)?;
+        let envelope = self.request_session("GET", &path, None, None)?;
         let sequence = envelope.sequence.ok_or_else(|| {
             "desktop bridge snapshot did not contain an event sequence".to_string()
         })?;
@@ -192,15 +194,21 @@ impl BridgeSupervisor {
 
     pub fn submit(&self, request: SubmitRequest) -> Result<BridgeSession, String> {
         let session_id = session_path_component(&request.session_id)?;
+        let request_id = opaque_secret()?;
         let path = format!("/v1/sessions/{session_id}:submit");
-        self.request_session("POST", &path, Some(json!({ "input": request.input })))
-            .map(|envelope| envelope.session)
+        self.request_session(
+            "POST",
+            &path,
+            Some(json!({ "input": request.input })),
+            Some(&request_id),
+        )
+        .map(|envelope| envelope.session)
     }
 
     pub fn cancel(&self, request: SessionRequest) -> Result<BridgeSession, String> {
         let session_id = session_path_component(&request.session_id)?;
         let path = format!("/v1/sessions/{session_id}:cancel");
-        self.request_session("POST", &path, None)
+        self.request_session("POST", &path, None, None)
             .map(|envelope| envelope.session)
     }
 
@@ -288,6 +296,7 @@ impl BridgeSupervisor {
         method: &str,
         path: &str,
         body: Option<Value>,
+        request_id: Option<&str>,
     ) -> Result<BridgeSessionResponse, String> {
         let mut process = self
             .process
@@ -300,7 +309,29 @@ impl BridgeSupervisor {
             *process = None;
             return Err("desktop bridge is not running".to_string());
         }
-        let response = request_json(running.address, &running.token, method, path, body)?;
+        let response = request_json(
+            running.address,
+            &running.token,
+            method,
+            path,
+            body.clone(),
+            request_id,
+        )
+        // The Go bridge caches this request ID before a turn is admitted. If
+        // the host lost the first response after sending it, one same-ID retry
+        // is safe; it replays the response instead of submitting twice.
+        .or_else(|first_error| match request_id {
+            Some(request_id) => request_json(
+                running.address,
+                &running.token,
+                method,
+                path,
+                body,
+                Some(request_id),
+            )
+            .map_err(|_| first_error),
+            None => Err(first_error),
+        })?;
         let envelope: BridgeSessionResponse =
             serde_json::from_value(response).map_err(display_error)?;
         if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
@@ -385,7 +416,7 @@ fn verify_ready(contents: &str, launch_id: &str) -> Result<VerifiedReady, String
 }
 
 fn request_shutdown(address: SocketAddr, token: &str) -> Result<(), String> {
-    request_json(address, token, "POST", "/v1:shutdown", None).map(|_| ())
+    request_json(address, token, "POST", "/v1:shutdown", None, None).map(|_| ())
 }
 
 fn request_json(
@@ -394,6 +425,7 @@ fn request_json(
     method: &str,
     path: &str,
     body: Option<Value>,
+    request_id: Option<&str>,
 ) -> Result<Value, String> {
     let bytes = body
         .map(|value| serde_json::to_vec(&value))
@@ -405,8 +437,11 @@ fn request_json(
     stream
         .set_read_timeout(Some(Duration::from_secs(2)))
         .map_err(display_error)?;
+    let request_id_header = request_id
+        .map(|request_id| format!("X-Reasonix-Request-ID: {request_id}\r\n"))
+        .unwrap_or_default();
     let headers = format!(
-        "{method} {path} HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        "{method} {path} HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {token}\r\n{request_id_header}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     );
     stream
@@ -560,10 +595,19 @@ fn display_error(error: impl std::fmt::Display) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_json_response, session_path_component, verify_ready, wait_for_exit, BridgeEvent,
-        BridgeSupervisor,
+        parse_json_response, request_json, session_path_component, verify_ready, wait_for_exit,
+        BridgeEvent, BridgeSupervisor,
     };
-    use std::{env, path::PathBuf, time::Duration};
+    use serde_json::json;
+    use std::{
+        env,
+        io::{BufRead, BufReader, Read, Write},
+        net::TcpListener,
+        path::PathBuf,
+        sync::mpsc,
+        thread,
+        time::Duration,
+    };
 
     // Local `cargo test` has no built Go bridge, so the supervised lifecycle
     // tests are opt-in there. CI must provide the path: a missing binary fails
@@ -586,6 +630,53 @@ mod tests {
         let ready = r#"{"protocolVersion":1,"address":"127.0.0.1:12345","sidecarInstanceId":"instance","launchId":"launch"}"#;
         assert!(verify_ready(ready, "launch").is_ok());
         assert!(verify_ready(ready, "other").is_err());
+    }
+
+    #[test]
+    fn bridge_requests_send_the_opaque_request_id() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
+        let address = listener.local_addr().expect("test address");
+        let (headers_tx, headers_rx) = mpsc::channel();
+        thread::spawn(move || {
+            let (stream, _) = listener.accept().expect("accept request");
+            let mut reader = BufReader::new(stream);
+            let mut headers = String::new();
+            loop {
+                let mut line = String::new();
+                reader.read_line(&mut line).expect("read request header");
+                if line == "\r\n" {
+                    break;
+                }
+                headers.push_str(&line);
+            }
+            let content_length = headers
+                .lines()
+                .find_map(|line| line.strip_prefix("Content-Length: "))
+                .and_then(|value| value.parse::<usize>().ok())
+                .expect("content length");
+            let mut body = vec![0; content_length];
+            reader.read_exact(&mut body).expect("read request body");
+            headers_tx.send(headers).expect("send headers");
+            let mut stream = reader.into_inner();
+            stream
+                .write_all(b"HTTP/1.1 202 Accepted\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}")
+                .expect("write response");
+        });
+
+        let response = request_json(
+            address,
+            "test-token",
+            "POST",
+            "/v1/sessions/tab-1:submit",
+            Some(json!({ "input": "not logged" })),
+            Some("request-123"),
+        )
+        .expect("bridge response");
+        assert_eq!(response, json!({}));
+        let headers = headers_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("headers");
+        assert!(headers.contains("X-Reasonix-Request-ID: request-123\r\n"));
     }
 
     #[test]
