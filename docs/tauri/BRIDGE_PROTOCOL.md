@@ -25,9 +25,9 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 操作 | 方法与路径 | 幂等性 |
 | --- | --- | --- |
 | 健康检查 | `GET /v1/health` | 是 |
-| 建/开会话 | `POST /v1/sessions:open` | `requestId` 去重 |
+| 建/开会话 | `POST /v1/sessions:open` | `requestId` 去重（尚未实现） |
 | 会话快照 | `GET /v1/sessions/{sessionId}/snapshot` | 是 |
-| 提交 | `POST /v1/sessions/{sessionId}:submit` | `requestId` 去重 |
+| 提交 | `POST /v1/sessions/{sessionId}:submit` | `requestId` 去重（尚未实现） |
 | 取消 | `POST /v1/sessions/{sessionId}:cancel` | 是 |
 | 流订阅 | `GET /v1/events?afterSequence=N` | 可重连 |
 | 正常关闭 | `POST /v1:shutdown` | 是 |
@@ -61,4 +61,8 @@ v1 的 `payload` 保持为有类型对象但 Schema 暂允许附加字段，以�
   snapshot，再允许提交。
 - 同一 state root 由跨进程锁保护；Wails 或另一个 Tauri 实例持锁时拒绝启动。
 
-机器可校验的 v1 envelope 位于 `docs/tauri/protocol/v1.schema.json`。
+机器可校验的 v1 envelope 位于 `docs/tauri/protocol/v1.schema.json`。该 Schema 是
+源文件：`go run ./cmd/desktop-bridge-protocol-gen` 从它生成 TypeScript 与 Rust 的
+wire 镜像，`-check` 在 CI 中拒绝漂移。Go 侧 DTO 由其自身持有：Go 是 wire 格式的
+生产者，Schema 描述它而非反向生成它。host 自身的 command 载荷（`BridgeStatus`、
+`BridgeSnapshot`）不属于 wire 协议，仍手写。
