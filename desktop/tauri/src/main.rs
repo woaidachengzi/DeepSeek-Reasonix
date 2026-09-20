@@ -50,6 +50,14 @@ fn bridge_cancel(
     supervisor.cancel(request)
 }
 
+#[tauri::command]
+fn bridge_start_events(
+    app: tauri::AppHandle,
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<(), String> {
+    supervisor.start_events(app)
+}
+
 fn main() {
     let supervisor = BridgeSupervisor::from_environment().unwrap_or_else(|error| panic!("{error}"));
     let app = tauri::Builder::default()
@@ -66,7 +74,8 @@ fn main() {
             bridge_open_session,
             bridge_session_snapshot,
             bridge_submit,
-            bridge_cancel
+            bridge_cancel,
+            bridge_start_events
         ])
         .build(tauri::generate_context!())
         .expect("failed to build Reasonix Tauri host");

@@ -4,14 +4,18 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     env, fs,
-    io::{Read, Write},
+    io::{BufRead, BufReader, Read, Write},
     net::{IpAddr, SocketAddr, TcpStream},
     path::PathBuf,
     process::{Child, Command, Stdio},
-    sync::Mutex,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
     thread,
     time::{Duration, Instant},
 };
+use tauri::Emitter;
 use tempfile::TempDir;
 
 const BRIDGE_TOKEN_ENV: &str = "REASONIX_DESKTOP_BRIDGE_TOKEN";
@@ -57,6 +61,17 @@ pub struct BridgeSession {
     pub state: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeEvent {
+    pub protocol_version: u8,
+    pub sequence: u64,
+    pub event_kind: String,
+    pub session_id: String,
+    pub tab_id: Option<String>,
+    pub payload: Value,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SessionEnvelope {
@@ -64,10 +79,10 @@ struct SessionEnvelope {
     session: BridgeSession,
 }
 
-#[derive(Debug)]
 pub struct BridgeSupervisor {
     binary: PathBuf,
     process: Mutex<Option<BridgeProcess>>,
+    events: Mutex<Option<EventForwarder>>,
 }
 
 #[derive(Debug)]
@@ -77,6 +92,11 @@ struct BridgeProcess {
     address: SocketAddr,
     token: String,
     sidecar_instance_id: String,
+}
+
+struct EventForwarder {
+    stop: Arc<AtomicBool>,
+    handle: thread::JoinHandle<()>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -96,6 +116,7 @@ impl BridgeSupervisor {
         Ok(Self {
             binary: PathBuf::from(binary),
             process: Mutex::new(None),
+            events: Mutex::new(None),
         })
     }
 
@@ -185,7 +206,22 @@ impl BridgeSupervisor {
         self.request_session("POST", &path, None)
     }
 
+    pub fn start_events(&self, app: tauri::AppHandle) -> Result<(), String> {
+        let (address, token) = self.event_connection()?;
+        self.stop_events();
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_for_thread = Arc::clone(&stop);
+        let handle = thread::spawn(move || forward_events(app, address, token, stop_for_thread));
+        *self
+            .events
+            .lock()
+            .map_err(|_| "bridge event state lock is unavailable")? =
+            Some(EventForwarder { stop, handle });
+        Ok(())
+    }
+
     pub fn stop(&self) -> Result<(), String> {
+        self.stop_events();
         let process = self
             .process
             .lock()
@@ -270,6 +306,29 @@ impl BridgeSupervisor {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
         Ok(envelope.session)
+    }
+
+    fn event_connection(&self) -> Result<(SocketAddr, String), String> {
+        let mut process = self
+            .process
+            .lock()
+            .map_err(|_| "bridge state lock is unavailable")?;
+        let Some(running) = process.as_mut() else {
+            return Err("desktop bridge is not running".to_string());
+        };
+        if running.child.try_wait().map_err(display_error)?.is_some() {
+            *process = None;
+            return Err("desktop bridge is not running".to_string());
+        }
+        Ok((running.address, running.token.clone()))
+    }
+
+    fn stop_events(&self) {
+        let forwarder = self.events.lock().ok().and_then(|mut events| events.take());
+        if let Some(forwarder) = forwarder {
+            forwarder.stop.store(true, Ordering::Release);
+            let _ = forwarder.handle.join();
+        }
     }
 }
 
@@ -381,6 +440,84 @@ fn parse_json_response(response: &[u8]) -> Result<Value, String> {
     serde_json::from_slice(&response[index + boundary.len()..]).map_err(display_error)
 }
 
+fn forward_events(
+    app: tauri::AppHandle,
+    address: SocketAddr,
+    token: String,
+    stop: Arc<AtomicBool>,
+) {
+    let mut after_sequence = 0;
+    while !stop.load(Ordering::Acquire) {
+        match open_event_stream(address, &token, after_sequence) {
+            Ok(mut reader) => {
+                while !stop.load(Ordering::Acquire) {
+                    let mut line = String::new();
+                    match reader.read_line(&mut line) {
+                        Ok(0) | Err(_) => break,
+                        Ok(_) => {
+                            let Some(data) = line.strip_prefix("data: ") else {
+                                continue;
+                            };
+                            let Ok(event) = serde_json::from_str::<BridgeEvent>(data.trim_end())
+                            else {
+                                continue;
+                            };
+                            if event.protocol_version != PROTOCOL_VERSION {
+                                continue;
+                            }
+                            after_sequence = after_sequence.max(event.sequence);
+                            let _ = app.emit("bridge:event", event);
+                        }
+                    }
+                }
+            }
+            Err(_) => {
+                let _ = app.emit(
+                    "bridge:connection-error",
+                    "bridge event stream is unavailable",
+                );
+            }
+        }
+        if !stop.load(Ordering::Acquire) {
+            thread::sleep(Duration::from_millis(100));
+        }
+    }
+}
+
+fn open_event_stream(
+    address: SocketAddr,
+    token: &str,
+    after_sequence: u64,
+) -> Result<BufReader<TcpStream>, String> {
+    let mut stream =
+        TcpStream::connect_timeout(&address, Duration::from_secs(1)).map_err(display_error)?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(1)))
+        .map_err(display_error)?;
+    stream
+        .write_all(
+            format!(
+                "GET /v1/events?afterSequence={after_sequence} HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {token}\r\nAccept: text/event-stream\r\nConnection: keep-alive\r\n\r\n"
+            )
+            .as_bytes(),
+        )
+        .map_err(display_error)?;
+    let mut reader = BufReader::new(stream);
+    let mut status = String::new();
+    reader.read_line(&mut status).map_err(display_error)?;
+    if !status.starts_with("HTTP/1.1 200") {
+        return Err("desktop bridge did not accept event streaming".to_string());
+    }
+    loop {
+        let mut header = String::new();
+        reader.read_line(&mut header).map_err(display_error)?;
+        if header == "\r\n" || header.is_empty() {
+            break;
+        }
+    }
+    Ok(reader)
+}
+
 fn wait_for_exit(child: &mut Child, timeout: Duration) -> Result<bool, String> {
     let deadline = Instant::now() + timeout;
     loop {
@@ -408,7 +545,7 @@ fn display_error(error: impl std::fmt::Display) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_json_response, verify_ready};
+    use super::{parse_json_response, verify_ready, BridgeEvent};
 
     #[test]
     fn ready_file_requires_matching_loopback_launch() {
@@ -428,5 +565,15 @@ mod tests {
         let response = b"HTTP/1.1 202 Accepted\r\nContent-Type: application/json\r\n\r\n{\"protocolVersion\":1}";
         assert_eq!(parse_json_response(response).unwrap()["protocolVersion"], 1);
         assert!(parse_json_response(b"HTTP/1.1 401 Unauthorized\r\n\r\n{}").is_err());
+    }
+
+    #[test]
+    fn bridge_events_deserialize_only_the_public_envelope() {
+        let event: BridgeEvent = serde_json::from_str(
+            r#"{"protocolVersion":1,"sequence":7,"eventKind":"text","sessionId":"tab-1","payload":{"kind":"text","text":"hello"}}"#,
+        )
+        .unwrap();
+        assert_eq!(event.sequence, 7);
+        assert_eq!(event.payload["text"], "hello");
     }
 }
