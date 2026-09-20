@@ -142,6 +142,90 @@ func TestWriteReplacesStaleArtifacts(t *testing.T) {
 	}
 }
 
+func TestCheckGoDTOsBindsEveryFieldWithMatchingOptionality(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, SchemaPath, `{"$defs":{"thing":{"type":"object",
+		"required":["name","count"],
+		"properties":{"name":{"type":"string"},"count":{"type":"integer"},"note":{"type":"string"}}}}}`)
+
+	type exact struct {
+		Name  string `json:"name"`
+		Count int    `json:"count"`
+		Note  string `json:"note,omitempty"`
+	}
+	if err := CheckGoDTOs(root, []Definition{{Name: "thing", Sample: exact{}}}); err != nil {
+		t.Fatalf("exact DTO was rejected: %v", err)
+	}
+
+	cases := map[string]any{
+		"schema field no Go field serializes": struct {
+			Name  string `json:"name"`
+			Count int    `json:"count"`
+		}{},
+		"Go field the schema does not declare": struct {
+			Name  string `json:"name"`
+			Count int    `json:"count"`
+			Note  string `json:"note,omitempty"`
+			Extra string `json:"extra,omitempty"`
+		}{},
+		"omitempty on a required field": struct {
+			Name  string `json:"name,omitempty"`
+			Count int    `json:"count"`
+			Note  string `json:"note,omitempty"`
+		}{},
+		"always serialized optional field": struct {
+			Name  string `json:"name"`
+			Count int    `json:"count"`
+			Note  string `json:"note"`
+		}{},
+		"Go type contradicting the schema": struct {
+			Name  int    `json:"name"`
+			Count int    `json:"count"`
+			Note  string `json:"note,omitempty"`
+		}{},
+	}
+	for name, sample := range cases {
+		if err := CheckGoDTOs(root, []Definition{{Name: "thing", Sample: sample}}); err == nil {
+			t.Errorf("%s: CheckGoDTOs accepted %T", name, sample)
+		}
+	}
+}
+
+func TestCheckGoDTOsResolvesRefsAndStringConsts(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, SchemaPath, `{"$defs":{
+		"id":{"type":"string","minLength":1},
+		"thing":{"type":"object","required":["id","status"],
+			"properties":{"id":{"$ref":"#/$defs/id"},"status":{"const":"ok"}}}}}`)
+
+	type thing struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := CheckGoDTOs(root, []Definition{{Name: "thing", Sample: thing{}}}); err != nil {
+		t.Fatalf("ref/const DTO was rejected: %v", err)
+	}
+
+	type wrongID struct {
+		ID     int    `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := CheckGoDTOs(root, []Definition{{Name: "thing", Sample: wrongID{}}}); err == nil {
+		t.Fatal("CheckGoDTOs accepted an int where the $ref declares a string")
+	}
+}
+
+func TestCheckGoDTOsRejectsUndeclaredDefinition(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, SchemaPath, `{"$defs":{"thing":{"type":"object","properties":{"name":{"type":"string"}}}}}`)
+	type thing struct {
+		Name string `json:"name"`
+	}
+	if err := CheckGoDTOs(root, []Definition{{Name: "missing", Sample: thing{}}}); err == nil {
+		t.Fatal("CheckGoDTOs accepted a definition the schema does not declare")
+	}
+}
+
 func writeFile(t *testing.T, root, relative, content string) {
 	t.Helper()
 	path := filepath.Join(root, relative)

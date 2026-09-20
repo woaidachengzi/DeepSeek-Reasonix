@@ -67,26 +67,19 @@ type generator struct {
 // Generate builds every wire mirror from the schema. It never reads the
 // committed outputs, so a stale artifact cannot feed back into a new one.
 func Generate(root string) ([]Artifact, error) {
-	raw, err := os.ReadFile(filepath.Join(root, SchemaPath))
+	defs, err := loadSchema(root)
 	if err != nil {
-		return nil, fmt.Errorf("read wire schema: %w", err)
-	}
-	var doc document
-	if err := json.Unmarshal(raw, &doc); err != nil {
-		return nil, fmt.Errorf("decode wire schema: %w", err)
-	}
-	if len(doc.Defs) == 0 {
-		return nil, fmt.Errorf("wire schema %s declares no $defs", SchemaPath)
+		return nil, err
 	}
 
-	g := &generator{defs: doc.Defs, types: map[string]*named{}}
-	keys := make([]string, 0, len(doc.Defs))
-	for key := range doc.Defs {
+	g := &generator{defs: defs, types: map[string]*named{}}
+	keys := make([]string, 0, len(defs))
+	for key := range defs {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		if _, _, err := g.typeOf(doc.Defs[key], defName(key, doc.Defs[key])); err != nil {
+		if _, _, err := g.typeOf(defs[key], defName(key, defs[key])); err != nil {
 			return nil, fmt.Errorf("$defs.%s: %w", key, err)
 		}
 	}
@@ -100,6 +93,21 @@ func Generate(root string) ([]Artifact, error) {
 		{Path: TypeScriptArtifactPath, Data: renderTypeScript(ordered)},
 		{Path: RustArtifactPath, Data: renderRust(ordered)},
 	}, nil
+}
+
+func loadSchema(root string) (map[string]json.RawMessage, error) {
+	raw, err := os.ReadFile(filepath.Join(root, SchemaPath))
+	if err != nil {
+		return nil, fmt.Errorf("read wire schema: %w", err)
+	}
+	var doc document
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return nil, fmt.Errorf("decode wire schema: %w", err)
+	}
+	if len(doc.Defs) == 0 {
+		return nil, fmt.Errorf("wire schema %s declares no $defs", SchemaPath)
+	}
+	return doc.Defs, nil
 }
 
 // Check reports the first artifact that differs from what the schema produces.
