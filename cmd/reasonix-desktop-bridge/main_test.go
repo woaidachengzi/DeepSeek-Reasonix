@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"reasonix/internal/desktopbridge"
 )
 
 const testToken = "0123456789abcdef0123456789abcdef"
@@ -36,7 +38,7 @@ func TestHealthReturnsProtocolAndCapabilities(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&got); err != nil {
 		t.Fatal(err)
 	}
-	if got.ProtocolVersion != protocolVersion || got.Status != "ok" || got.SidecarInstanceID != "instance-a" {
+	if got.ProtocolVersion != desktopbridge.ProtocolVersion || got.Status != "ok" || got.SidecarInstanceID != "instance-a" {
 		t.Fatalf("health = %#v", got)
 	}
 }
@@ -62,7 +64,7 @@ func TestShutdownIsAuthenticatedAndIdempotent(t *testing.T) {
 
 func TestReadyFileDoesNotContainTokenAndIsOwnerOnly(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nested", "ready.json")
-	ready := readyFile{ProtocolVersion: protocolVersion, Address: "127.0.0.1:12345", SidecarInstanceID: "instance-a", LaunchID: "launch-a"}
+	ready := readyFile{ProtocolVersion: desktopbridge.ProtocolVersion, Address: "127.0.0.1:12345", SidecarInstanceID: "instance-a", LaunchID: "launch-a"}
 	if err := writeReadyFile(path, ready); err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +118,7 @@ func TestRunPublishesReadyHealthAndShutdown(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if ready.LaunchID != "test-launch" || ready.ProtocolVersion != protocolVersion {
+	if ready.LaunchID != "test-launch" || ready.ProtocolVersion != desktopbridge.ProtocolVersion {
 		t.Fatalf("ready = %#v", ready)
 	}
 

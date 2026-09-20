@@ -19,10 +19,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"reasonix/internal/desktopbridge"
 )
 
 const (
-	protocolVersion  = 1
 	tokenEnvironment = "REASONIX_DESKTOP_BRIDGE_TOKEN"
 )
 
@@ -98,7 +99,7 @@ func run(ctx context.Context, cfg config, token string) error {
 	}
 	bridge := newBridgeServer(token, instanceID)
 	ready := readyFile{
-		ProtocolVersion:   protocolVersion,
+		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Address:           listener.Addr().String(),
 		SidecarInstanceID: instanceID,
 		LaunchID:          cfg.launchID,
@@ -171,7 +172,7 @@ func (b *bridgeServer) authorized(next http.HandlerFunc) http.HandlerFunc {
 		if !strings.HasPrefix(authorization, bearer) ||
 			subtle.ConstantTimeCompare([]byte(provided), []byte(b.token)) != 1 {
 			writeJSON(w, http.StatusUnauthorized, map[string]any{
-				"protocolVersion": protocolVersion,
+				"protocolVersion": desktopbridge.ProtocolVersion,
 				"error": map[string]string{
 					"code":    "unauthenticated",
 					"message": "desktop bridge authentication failed",
@@ -185,7 +186,7 @@ func (b *bridgeServer) authorized(next http.HandlerFunc) http.HandlerFunc {
 
 func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, healthResponse{
-		ProtocolVersion:   protocolVersion,
+		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
 		Capabilities:      []string{"health", "shutdown"},
@@ -195,7 +196,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 func (b *bridgeServer) shutdown(w http.ResponseWriter, _ *http.Request) {
 	b.shutdownOnce.Do(func() { close(b.shutdownRequested) })
 	writeJSON(w, http.StatusAccepted, shutdownResponse{
-		ProtocolVersion:   protocolVersion,
+		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "stopping",
 		SidecarInstanceID: b.instanceID,
 	})
