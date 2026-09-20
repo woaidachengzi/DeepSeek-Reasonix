@@ -82,6 +82,7 @@
       "properties": {
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
         "error": {
+          "title": "BridgeErrorBody",
           "type": "object",
           "required": ["code", "message"],
           "properties": {

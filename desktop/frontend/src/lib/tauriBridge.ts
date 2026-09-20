@@ -1,5 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { BridgeEvent, BridgeSession } from "./bridgeProtocol.generated";
 
 export interface TauriBridgeStatus {
   running: boolean;
@@ -7,25 +8,14 @@ export interface TauriBridgeStatus {
   sidecarInstanceId?: string;
 }
 
-export interface TauriBridgeSession {
-  id: string;
-  path: string;
-  workspaceRoot?: string;
-  state: "idle" | "running" | "paused";
-}
+// The wire mirrors come from the generated schema; the snapshot below is a
+// host-owned command payload and stays hand-written.
+export type TauriBridgeSession = BridgeSession;
+export type TauriBridgeEvent = BridgeEvent;
 
 export interface TauriBridgeSnapshot {
   sequence: number;
   session: TauriBridgeSession;
-}
-
-export interface TauriBridgeEvent {
-  protocolVersion: number;
-  sequence: number;
-  eventKind: string;
-  sessionId: string;
-  tabId?: string;
-  payload: Record<string, unknown>;
 }
 
 // Keep Tauri detection and all Tauri-specific imports here. The established

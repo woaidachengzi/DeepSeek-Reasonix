@@ -34,13 +34,6 @@ pub struct BridgeStatus {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct OpenSessionRequest {
-    pub session_id: String,
-    pub workspace_root: Option<String>,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SubmitRequest {
     pub session_id: String,
     pub input: String,
@@ -52,39 +45,18 @@ pub struct SessionRequest {
     pub session_id: String,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BridgeSession {
-    pub id: String,
-    pub path: String,
-    pub workspace_root: Option<String>,
-    pub state: String,
-}
+// The wire DTOs mirror docs/tauri/protocol/v1.schema.json through the generated
+// module; only the host-facing command payloads below stay hand-written.
+pub use crate::protocol_generated::{
+    BridgeEvent, BridgeOpenSessionRequest as OpenSessionRequest, BridgeSession,
+    BridgeSessionResponse,
+};
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeSnapshot {
     pub sequence: u64,
     pub session: BridgeSession,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BridgeEvent {
-    pub protocol_version: u8,
-    pub sequence: u64,
-    pub event_kind: String,
-    pub session_id: String,
-    pub tab_id: Option<String>,
-    pub payload: Value,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SessionEnvelope {
-    protocol_version: u8,
-    sequence: Option<u64>,
-    session: BridgeSession,
 }
 
 pub struct BridgeSupervisor {
@@ -316,7 +288,7 @@ impl BridgeSupervisor {
         method: &str,
         path: &str,
         body: Option<Value>,
-    ) -> Result<SessionEnvelope, String> {
+    ) -> Result<BridgeSessionResponse, String> {
         let mut process = self
             .process
             .lock()
@@ -329,8 +301,9 @@ impl BridgeSupervisor {
             return Err("desktop bridge is not running".to_string());
         }
         let response = request_json(running.address, &running.token, method, path, body)?;
-        let envelope: SessionEnvelope = serde_json::from_value(response).map_err(display_error)?;
-        if envelope.protocol_version != PROTOCOL_VERSION {
+        let envelope: BridgeSessionResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
         Ok(envelope)
@@ -503,7 +476,7 @@ fn forward_events(
                             else {
                                 continue;
                             };
-                            if event.protocol_version != PROTOCOL_VERSION {
+                            if event.protocol_version != u64::from(PROTOCOL_VERSION) {
                                 continue;
                             }
                             after_sequence = after_sequence.max(event.sequence);
