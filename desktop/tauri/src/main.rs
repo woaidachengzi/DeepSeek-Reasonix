@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod bridge;
+mod data_profile;
 mod protocol_generated;
 
 use bridge::{
@@ -64,6 +65,7 @@ fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
+            data_profile::configure_preview_profile(app).map_err(std::io::Error::other)?;
             let supervisor = BridgeSupervisor::from_environment(app.handle().clone());
             supervisor.start().map_err(std::io::Error::other)?;
             app.manage(supervisor);

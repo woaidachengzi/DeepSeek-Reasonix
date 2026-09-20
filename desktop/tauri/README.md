@@ -6,6 +6,12 @@
 包内定位同一个 bridge。两种路径都通过每次启动独有的 token、ready 文件和 launch nonce
 监管它。
 
+## 数据隔离
+
+Preview 使用 Tauri 应用数据目录下私有的 `REASONIX_HOME`。因此它不会静默读取、迁移或
+写入稳定 Wails 客户端的配置、会话和缓存；稳定版可与它并存。导入稳定版数据会作为单独的
+“先备份、再确认”的功能实现。开发者显式传入的 `REASONIX_HOME` 仍是有意识的覆盖选择。
+
 目前暴露给 WebView 的命令为 `bridge_status`、`restart_bridge`、`bridge_open_session`、
 `bridge_session_snapshot`、`bridge_submit` 和 `bridge_cancel`。token、loopback 端口和
 bridge 原始请求不暴露给 JavaScript。`bridge_start_events` 在 Rust 内部订阅 SSE，并以

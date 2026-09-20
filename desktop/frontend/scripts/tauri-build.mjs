@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -62,7 +62,11 @@ if (tauri.status !== 0) process.exit(tauri.status ?? 1);
 // Official builds set APPLE_SIGNING_IDENTITY and keep Tauri's Developer ID
 // signature for notarization instead.
 if (process.platform === "darwin" && !process.env.APPLE_SIGNING_IDENTITY) {
-  const appBundle = join(tauriDirectory, "target", "release", "bundle", "macos", "Reasonix.app");
+  const { productName } = JSON.parse(readFileSync(join(tauriDirectory, "tauri.conf.json"), "utf8"));
+  if (typeof productName !== "string" || !productName.trim()) {
+    throw new Error("tauri.conf.json must define a productName before macOS signing");
+  }
+  const appBundle = join(tauriDirectory, "target", "release", "bundle", "macos", `${productName}.app`);
   const signing = spawnSync("codesign", ["--force", "--deep", "-s", "-", appBundle], {
     stdio: "inherit",
   });
