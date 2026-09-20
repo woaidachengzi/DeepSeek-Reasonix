@@ -54,8 +54,9 @@ fn bridge_cancel(
 fn bridge_start_events(
     app: tauri::AppHandle,
     supervisor: State<'_, BridgeSupervisor>,
+    after_sequence: Option<u64>,
 ) -> Result<(), String> {
-    supervisor.start_events(app)
+    supervisor.start_events(app, after_sequence.unwrap_or(0))
 }
 
 fn main() {

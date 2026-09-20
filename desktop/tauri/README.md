@@ -8,8 +8,11 @@ launch nonce 监管它。
 目前暴露给 WebView 的命令为 `bridge_status`、`restart_bridge`、`bridge_open_session`、
 `bridge_session_snapshot`、`bridge_submit` 和 `bridge_cancel`。token、loopback 端口和
 bridge 原始请求不暴露给 JavaScript。`bridge_start_events` 在 Rust 内部订阅 SSE，并以
-Tauri `bridge:event` 和故障时的 `bridge:connection-error` 事件转发给 WebView；下一阶段
-让 `desktop/frontend/src/lib/bridge.ts` 使用该适配器。
+Tauri `bridge:event` 和故障时的 `bridge:connection-error` 事件转发给 WebView。
+
+`desktop/frontend/src/lib/tauriBridge.ts` 已为上述小范围命令提供类型化适配器，只会在
+Tauri WebView 中激活；现有 `desktop/frontend/src/lib/bridge.ts` 仍是 Wails 默认实现，直到
+对应功能面完成迁移。事件订阅可从 snapshot 的 sequence 开始，避免切换期间漏掉事件。
 
 开发环境还需要满足前端锁定的 Node 24 与 pnpm 10；当前机器的 Node 16 不能启动 Vite。
 在准备好 bridge 二进制及正确 Node 环境后，从此目录运行 `cargo tauri dev`。

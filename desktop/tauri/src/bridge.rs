@@ -232,12 +232,14 @@ impl BridgeSupervisor {
             .map(|envelope| envelope.session)
     }
 
-    pub fn start_events(&self, app: tauri::AppHandle) -> Result<(), String> {
+    pub fn start_events(&self, app: tauri::AppHandle, after_sequence: u64) -> Result<(), String> {
         let (address, token) = self.event_connection()?;
         self.stop_events();
         let stop = Arc::new(AtomicBool::new(false));
         let stop_for_thread = Arc::clone(&stop);
-        let handle = thread::spawn(move || forward_events(app, address, token, stop_for_thread));
+        let handle = thread::spawn(move || {
+            forward_events(app, address, token, after_sequence, stop_for_thread)
+        });
         *self
             .events
             .lock()
@@ -483,9 +485,9 @@ fn forward_events(
     app: tauri::AppHandle,
     address: SocketAddr,
     token: String,
+    mut after_sequence: u64,
     stop: Arc<AtomicBool>,
 ) {
-    let mut after_sequence = 0;
     while !stop.load(Ordering::Acquire) {
         match open_event_stream(address, &token, after_sequence) {
             Ok(mut reader) => {
