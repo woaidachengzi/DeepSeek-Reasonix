@@ -8,6 +8,7 @@
     { "$ref": "#/$defs/openSessionRequest" },
     { "$ref": "#/$defs/submitRequest" },
     { "$ref": "#/$defs/sessionResponse" },
+    { "$ref": "#/$defs/event" },
     { "$ref": "#/$defs/error" }
   ],
   "$defs": {
@@ -59,6 +60,19 @@
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
         "sequence": { "type": "integer", "minimum": 0 },
         "session": { "$ref": "#/$defs/session" }
+      },
+      "additionalProperties": false
+    },
+    "event": {
+      "type": "object",
+      "required": ["protocolVersion", "sequence", "eventKind", "sessionId", "payload"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "eventKind": { "type": "string", "minLength": 1 },
+        "sessionId": { "$ref": "#/$defs/sessionId" },
+        "tabId": { "type": "string" },
+        "payload": { "type": "object" }
       },
       "additionalProperties": false
     },

@@ -32,10 +32,11 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 流订阅 | `GET /v1/events?afterSequence=N` | 可重连 |
 | 正常关闭 | `POST /v1:shutdown` | 是 |
 
-当前 bridge 已实现 health、建/开会话、快照、submit、cancel 与正常关闭。`submit`
-仅确认既有 Go Controller 已接收输入（HTTP 202）；它不会等待 Agent 生成结束，后续由 SSE
-事件携带进度和最终结果。事件路由、`requestId` 重放去重与历史页仍属于下一阶段，Tauri
-host 在这些能力落地前不得对提交请求自动重试。
+当前 bridge 已实现 health、建/开会话、快照、submit、cancel、SSE 事件与正常关闭。
+`submit` 仅确认既有 Go Controller 已接收输入（HTTP 202）；它不会等待 Agent 生成结束，
+SSE 事件携带进度和最终结果。事件 replay 使用有界 ledger；落在窗口之前的 sequence 会
+得到 `resync_required`，host 必须请求快照。`requestId` 重放去重与历史页仍属于下一阶段，
+在其落地前 Tauri host 不得对提交请求自动重试。
 
 ## Envelope
 

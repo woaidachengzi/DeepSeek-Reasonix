@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -61,6 +62,7 @@ type bridgeServer struct {
 	shutdownRequested chan struct{}
 	shutdownOnce      sync.Once
 	runtimes          *desktopbridge.RuntimeManager
+	events            *desktopbridge.EventStream
 }
 
 func main() {
@@ -100,7 +102,9 @@ func run(ctx context.Context, cfg config, token string) error {
 	if err != nil {
 		return err
 	}
-	bridge := newBridgeServer(token, instanceID, desktopbridge.NewRuntimeManager(desktopbridge.NewControllerFactory(boot.Options{})))
+	events := desktopbridge.NewEventStream(1024)
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.NewControllerFactory(boot.Options{}, events))
+	bridge := newBridgeServerWithEvents(token, instanceID, manager, events)
 	ready := readyFile{
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Address:           listener.Addr().String(),
@@ -157,11 +161,16 @@ func newBridgeServer(token, instanceID string, managers ...*desktopbridge.Runtim
 	if len(managers) > 0 && managers[0] != nil {
 		manager = managers[0]
 	}
+	return newBridgeServerWithEvents(token, instanceID, manager, desktopbridge.NewEventStream(1024))
+}
+
+func newBridgeServerWithEvents(token, instanceID string, manager *desktopbridge.RuntimeManager, events *desktopbridge.EventStream) *bridgeServer {
 	return &bridgeServer{
 		token:             token,
 		instanceID:        instanceID,
 		shutdownRequested: make(chan struct{}),
 		runtimes:          manager,
+		events:            events,
 	}
 }
 
@@ -170,12 +179,65 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("GET /v1/health", b.authorized(b.health))
 	mux.HandleFunc("POST /v1/sessions:open", b.authorized(b.openSession))
 	mux.HandleFunc("GET /v1/sessions/{id}/snapshot", b.authorized(b.sessionSnapshot))
+	mux.HandleFunc("GET /v1/events", b.authorized(b.eventsHandler))
 	// ServeMux path wildcards occupy a complete segment, while the public v1
 	// routes use the conventional ":submit" and ":cancel" suffixes. Dispatch
 	// that narrow route family explicitly to retain the documented URLs.
 	mux.HandleFunc("POST /v1/sessions/", b.authorized(b.sessionCommand))
 	mux.HandleFunc("POST /v1:shutdown", b.authorized(b.shutdown))
 	return mux
+}
+
+func (b *bridgeServer) eventsHandler(w http.ResponseWriter, r *http.Request) {
+	after, err := parseAfterSequence(r.URL.Query().Get("afterSequence"))
+	if err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid afterSequence")
+		return
+	}
+	replay, resyncRequired, live, cancel := b.events.Subscribe(after)
+	defer cancel()
+	if resyncRequired {
+		writeProtocolError(w, http.StatusConflict, "resync_required", "event replay window is no longer available")
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeProtocolError(w, http.StatusInternalServerError, "internal", "streaming is unavailable")
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	for _, item := range replay {
+		if !writeSSE(w, item) {
+			return
+		}
+	}
+	flusher.Flush()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case item := <-live:
+			if !writeSSE(w, item) {
+				return
+			}
+			flusher.Flush()
+		}
+	}
+}
+
+func parseAfterSequence(raw string) (uint64, error) {
+	if raw == "" {
+		return 0, nil
+	}
+	return strconv.ParseUint(raw, 10, 64)
+}
+
+func writeSSE(w io.Writer, item desktopbridge.Event) bool {
+	_, err := fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", item.Sequence, item.EventKind, item.Payload)
+	return err == nil
 }
 
 func (b *bridgeServer) sessionCommand(w http.ResponseWriter, r *http.Request) {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"reasonix/internal/desktopbridge"
+	"reasonix/internal/event"
 )
 
 const testToken = "0123456789abcdef0123456789abcdef"
@@ -219,6 +220,25 @@ func TestBridgeServerRejectsMalformedAndUnknownCommandInput(t *testing.T) {
 	bridge.handler().ServeHTTP(unknownRouteRecorder, unknownRouteRequest)
 	if unknownRouteRecorder.Code != http.StatusNotFound {
 		t.Fatalf("unknown route status = %d, body = %s", unknownRouteRecorder.Code, unknownRouteRecorder.Body.String())
+	}
+}
+
+func TestBridgeServerEventsRequireResyncOutsideReplayWindow(t *testing.T) {
+	events := desktopbridge.NewEventStream(1)
+	sink := events.Sink("tab-1")
+	sink.Emit(event.Event{Kind: event.Text, Text: "first"})
+	sink.Emit(event.Event{Kind: event.Text, Text: "second"})
+	bridge := newBridgeServerWithEvents(testToken, "instance", desktopbridge.NewRuntimeManager(nil), events)
+
+	request := httptest.NewRequest(http.MethodGet, "/v1/events?afterSequence=0", nil)
+	request.Header.Set("Authorization", "Bearer "+testToken)
+	response := httptest.NewRecorder()
+	bridge.handler().ServeHTTP(response, request)
+	if response.Code != http.StatusConflict {
+		t.Fatalf("events status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "resync_required") {
+		t.Fatalf("events response = %s", response.Body.String())
 	}
 }
 
