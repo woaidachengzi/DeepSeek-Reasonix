@@ -142,6 +142,58 @@ func TestBridgeServerOpensSessionAndReturnsSnapshot(t *testing.T) {
 	}
 }
 
+func TestBridgeServerSwitchesOnlyIdleSessions(t *testing.T) {
+	first := &bridgeTestRuntime{path: "/tmp/reasonix-a", state: "idle"}
+	second := &bridgeTestRuntime{path: "/tmp/reasonix-b", state: "idle"}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(_ context.Context, request desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		switch request.SessionID {
+		case "tab-a":
+			return first, nil
+		case "tab-b":
+			return second, nil
+		default:
+			t.Fatalf("unexpected session %q", request.SessionID)
+			return nil, nil
+		}
+	}))
+	bridge := newBridgeServer(testToken, "instance", manager)
+	handler := bridge.handler()
+
+	open := httptest.NewRequest(http.MethodPost, "/v1/sessions:open", strings.NewReader(`{"sessionId":"tab-a"}`))
+	open.Header.Set("Authorization", "Bearer "+testToken)
+	open.Header.Set("Content-Type", "application/json")
+	openResult := httptest.NewRecorder()
+	handler.ServeHTTP(openResult, open)
+	if openResult.Code != http.StatusOK {
+		t.Fatalf("open status = %d, body = %s", openResult.Code, openResult.Body.String())
+	}
+
+	switchRequest := httptest.NewRequest(http.MethodPost, "/v1/sessions:switch", strings.NewReader(`{"sessionId":"tab-b"}`))
+	switchRequest.Header.Set("Authorization", "Bearer "+testToken)
+	switchRequest.Header.Set("Content-Type", "application/json")
+	switchResult := httptest.NewRecorder()
+	handler.ServeHTTP(switchResult, switchRequest)
+	if switchResult.Code != http.StatusOK {
+		t.Fatalf("switch status = %d, body = %s", switchResult.Code, switchResult.Body.String())
+	}
+	if first.shutdownCalls != 1 || second.shutdownCalls != 0 {
+		t.Fatalf("switch shutdowns first=%d second=%d", first.shutdownCalls, second.shutdownCalls)
+	}
+
+	second.state = "running"
+	blocked := httptest.NewRequest(http.MethodPost, "/v1/sessions:switch", strings.NewReader(`{"sessionId":"tab-a"}`))
+	blocked.Header.Set("Authorization", "Bearer "+testToken)
+	blocked.Header.Set("Content-Type", "application/json")
+	blockedResult := httptest.NewRecorder()
+	handler.ServeHTTP(blockedResult, blocked)
+	if blockedResult.Code != http.StatusConflict {
+		t.Fatalf("switch running status = %d, body = %s", blockedResult.Code, blockedResult.Body.String())
+	}
+	if second.shutdownCalls != 0 {
+		t.Fatalf("running session was closed %d times", second.shutdownCalls)
+	}
+}
+
 func TestBridgeServerReturnsDisplaySafeSessionHistory(t *testing.T) {
 	runtime := &bridgeTestRuntime{
 		path:  "/tmp/reasonix-session",

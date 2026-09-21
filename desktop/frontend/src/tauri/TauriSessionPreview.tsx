@@ -11,6 +11,7 @@ import {
   restartTauriBridge,
   startTauriBridgeEvents,
   submitTauriBridge,
+  switchTauriBridgeSession,
   tauriBridgeHistory,
   tauriBridgeSnapshot,
   tauriBridgeStatus,
@@ -39,6 +40,15 @@ function eventSummary(event: TauriBridgeEvent): string {
   return tauriEventSummary(event);
 }
 
+interface WorkbenchSessionTab {
+  id: string;
+  workspaceRoot?: string;
+}
+
+function workbenchSessionLabel(tab: WorkbenchSessionTab): string {
+  return tab.id.length > 28 ? `${tab.id.slice(0, 25)}…` : tab.id;
+}
+
 /**
  * A deliberately narrow, native-host-only vertical slice. It makes the bridge
  * executable and observable while the large Wails surface is migrated in
@@ -54,6 +64,7 @@ export function TauriSessionPreview() {
   const [runtimeInfo, setRuntimeInfo] = useState<TauriPreviewRuntimeInfo | null>(null);
   const [profileNotice, setProfileNotice] = useState("");
   const [session, setSession] = useState<TauriBridgeSession | null>(null);
+  const [tabs, setTabs] = useState<WorkbenchSessionTab[]>([]);
   const [events, setEvents] = useState<TauriBridgeEvent[]>([]);
   const [history, setHistory] = useState<TauriBridgeHistory | null>(null);
   const [sequence, setSequence] = useState(0);
@@ -61,6 +72,7 @@ export function TauriSessionPreview() {
   const [streamReady, setStreamReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const switchingBlocked = Boolean(session && session.state !== "idle");
 
   useEffect(() => {
     void tauriBridgeStatus().then(setStatus).catch(error => setError(messageFrom(error)));
@@ -115,8 +127,12 @@ export function TauriSessionPreview() {
     };
   }, [session?.id, streamRevision]);
 
-  async function openSession() {
-    const id = sessionId.trim();
+  function rememberSession(next: TauriBridgeSession) {
+    const tab = { id: next.id, workspaceRoot: next.workspaceRoot };
+    setTabs(previous => [tab, ...previous.filter(existing => existing.id !== tab.id)]);
+  }
+
+  async function activateSession(id: string, root?: string) {
     if (!id) {
       setError("Session ID is required");
       return;
@@ -128,7 +144,16 @@ export function TauriSessionPreview() {
     setSequence(0);
     setStreamReady(false);
     try {
-      setSession(await openTauriBridgeSession(id, workspaceRoot.trim() || undefined));
+      // The bridge owns one Controller in this migration stage. Moving between
+      // tabs is therefore an explicit, durable handoff; the bridge refuses to
+      // replace a running or paused turn.
+      const next = session && session.id !== id
+        ? await switchTauriBridgeSession(id, root)
+        : await openTauriBridgeSession(id, root);
+      setSession(next);
+      setSessionId(next.id);
+      setWorkspaceRoot(next.workspaceRoot ?? "");
+      rememberSession(next);
       setStreamRevision(previous => previous + 1);
       setStatus(await tauriBridgeStatus());
     } catch (error) {
@@ -136,6 +161,18 @@ export function TauriSessionPreview() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function openSession() {
+    const id = sessionId.trim();
+    await activateSession(id, workspaceRoot.trim() || undefined);
+  }
+
+  async function createSession() {
+    const id = newSessionId();
+    setSessionId(id);
+    setWorkspaceRoot("");
+    await activateSession(id);
   }
 
   async function chooseWorkspaceRoot() {
@@ -192,6 +229,7 @@ export function TauriSessionPreview() {
       // snapshot before event forwarding or another submit becomes available.
       const reopened = await openTauriBridgeSession(session.id, session.workspaceRoot);
       setSession(reopened);
+      rememberSession(reopened);
       setEvents([]);
       setHistory(null);
       setSequence(0);
@@ -239,7 +277,30 @@ export function TauriSessionPreview() {
   }
 
   return (
-    <main className="tauri-preview">
+    <main className="tauri-workbench">
+      <aside className="tauri-workbench__sidebar" aria-label="Session navigation">
+        <div className="tauri-workbench__brand">
+          <span>Reasonix</span>
+          <small>Tauri Preview</small>
+        </div>
+        <button className="tauri-workbench__new" type="button" onClick={() => void createSession()} disabled={busy || switchingBlocked}>New conversation</button>
+        <p className="tauri-workbench__heading">Open conversations</p>
+        <nav className="tauri-workbench__tabs">
+          {tabs.length === 0 ? <p>No conversation is open yet.</p> : tabs.map(tab => <button
+            key={tab.id}
+            type="button"
+            className={session?.id === tab.id ? "is-active" : ""}
+            disabled={busy || session?.id === tab.id || switchingBlocked}
+            onClick={() => void activateSession(tab.id, tab.workspaceRoot)}
+            title={tab.workspaceRoot ? `${tab.id}\n${tab.workspaceRoot}` : tab.id}
+          >
+            <b>{workbenchSessionLabel(tab)}</b>
+            <small>{tab.workspaceRoot || "Private preview profile"}</small>
+          </button>)}
+        </nav>
+        <p className="tauri-workbench__notice">Switching is enabled only after the active turn is idle, so an in-flight response is never replaced.</p>
+      </aside>
+      <section className="tauri-preview">
       <section className="tauri-preview__card">
         <p className="tauri-preview__eyebrow">Reasonix Stable · Tauri Preview</p>
         <h1>Bridge session</h1>
@@ -312,6 +373,7 @@ export function TauriSessionPreview() {
       <section className="tauri-preview__events" aria-live="polite">
         <h2>Bridge events</h2>
         {events.length === 0 ? <p>Open a session to begin streaming events.</p> : <ol>{events.map(event => <li key={event.sequence}><b>#{event.sequence} · {event.eventKind}</b><pre>{eventSummary(event)}</pre></li>)}</ol>}
+      </section>
       </section>
     </main>
   );

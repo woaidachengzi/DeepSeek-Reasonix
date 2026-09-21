@@ -108,6 +108,61 @@ func TestRuntimeManagerOwnsOneSessionAndShutsDownOnce(t *testing.T) {
 	}
 }
 
+func TestRuntimeManagerSwitchesOnlyAfterClosingAnIdleSession(t *testing.T) {
+	first := &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}
+	second := &fakeRuntime{path: "/sessions/b.jsonl", state: "idle"}
+	opened := make([]string, 0, 2)
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(_ context.Context, request OpenRequest) (Runtime, error) {
+		opened = append(opened, request.SessionID)
+		switch request.SessionID {
+		case "a":
+			return first, nil
+		case "b":
+			return second, nil
+		default:
+			t.Fatalf("unexpected session %q", request.SessionID)
+			return nil, nil
+		}
+	}))
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	view, err := manager.Switch(context.Background(), OpenRequest{SessionID: "b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.ID != "b" || first.shutdownCalls.Load() != 1 || second.shutdownCalls.Load() != 0 {
+		t.Fatalf("switch result = %#v; shutdowns first=%d second=%d", view, first.shutdownCalls.Load(), second.shutdownCalls.Load())
+	}
+	if got, ok := manager.Snapshot(); !ok || got.ID != "b" {
+		t.Fatalf("active snapshot = %#v, %t", got, ok)
+	}
+	if len(opened) != 2 || opened[0] != "a" || opened[1] != "b" {
+		t.Fatalf("opened = %#v", opened)
+	}
+}
+
+func TestRuntimeManagerRefusesToSwitchAnActiveSession(t *testing.T) {
+	first := &fakeRuntime{path: "/sessions/a.jsonl", state: "running"}
+	var opened atomic.Int32
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(_ context.Context, request OpenRequest) (Runtime, error) {
+		opened.Add(1)
+		return first, nil
+	}))
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Switch(context.Background(), OpenRequest{SessionID: "b"}); !errors.Is(err, ErrSessionConflict) {
+		t.Fatalf("switch running session error = %v, want conflict", err)
+	}
+	if first.shutdownCalls.Load() != 0 || opened.Load() != 1 {
+		t.Fatalf("running session was altered: shutdowns=%d opens=%d", first.shutdownCalls.Load(), opened.Load())
+	}
+	if got, ok := manager.Snapshot(); !ok || got.ID != "a" {
+		t.Fatalf("active snapshot = %#v, %t", got, ok)
+	}
+}
+
 func TestRuntimeManagerDoesNotPublishFailedOrNilRuntime(t *testing.T) {
 	manager := NewRuntimeManager(RuntimeFactoryFunc(func(context.Context, OpenRequest) (Runtime, error) {
 		return nil, errors.New("build failed")

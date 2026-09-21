@@ -1,4 +1,19 @@
-.tauri-preview { box-sizing: border-box; min-height: 100vh; margin: 0 auto; max-width: 1100px; padding: 48px 28px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, .8fr); gap: 24px; color: #e8edf8; background: #101522; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.tauri-workbench { display: grid; min-height: 100vh; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); background: #101522; color: #e8edf8; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.tauri-workbench__sidebar { display: flex; flex-direction: column; gap: 14px; padding: 24px 16px; border-right: 1px solid #2c3852; background: #131a29; }
+.tauri-workbench__brand { display: grid; gap: 1px; padding: 0 8px 10px; font-size: 17px; font-weight: 700; }
+.tauri-workbench__brand small { color: #8bb6ff; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+.tauri-workbench button { border: 1px solid #50617f; border-radius: 9px; padding: 9px 13px; color: #e8edf8; background: #253149; font: inherit; cursor: pointer; }
+.tauri-workbench button:disabled { opacity: .5; cursor: not-allowed; }
+.tauri-workbench__new { border-color: #4e8df0 !important; background: #2869c9 !important; }
+.tauri-workbench__heading { margin: 8px 8px 0; color: #8290a9; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+.tauri-workbench__tabs { display: grid; gap: 5px; overflow: auto; }
+.tauri-workbench__tabs > p { margin: 0; padding: 8px; color: #8290a9; font-size: 13px; }
+.tauri-workbench__tabs button { display: grid; gap: 2px; width: 100%; border-color: transparent; padding: 9px 10px; text-align: left; background: transparent; }
+.tauri-workbench__tabs button:hover, .tauri-workbench__tabs button.is-active { border-color: #3a4864; background: #202b40; opacity: 1; }
+.tauri-workbench__tabs b, .tauri-workbench__tabs small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tauri-workbench__tabs small, .tauri-workbench__notice { color: #8290a9; font-size: 12px; font-weight: 400; }
+.tauri-workbench__notice { margin: auto 8px 0; }
+.tauri-preview { box-sizing: border-box; min-width: 0; min-height: 100vh; padding: 32px 28px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, .8fr); gap: 24px; color: #e8edf8; }
 .tauri-preview *, .tauri-preview *::before, .tauri-preview *::after { box-sizing: border-box; }
 .tauri-preview__card, .tauri-preview__events { border: 1px solid #2c3852; border-radius: 16px; padding: 28px; background: #171e2d; box-shadow: 0 16px 45px #05091266; }
 .tauri-preview h1, .tauri-preview h2 { margin: 0 0 12px; line-height: 1.2; }
@@ -52,4 +67,4 @@
 .tauri-preview__events li { border: 1px solid #2c3852; border-radius: 9px; padding: 10px; }
 .tauri-preview__events b { color: #9cc1ff; font-size: 13px; }
 .tauri-preview__events pre { margin: 7px 0 0; overflow: auto; color: #bfcae0; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
-@media (max-width: 760px) { .tauri-preview { padding: 18px; grid-template-columns: 1fr; } .tauri-preview__card, .tauri-preview__events { padding: 20px; } }
+@media (max-width: 760px) { .tauri-workbench { grid-template-columns: 1fr; } .tauri-workbench__sidebar { border-right: 0; border-bottom: 1px solid #2c3852; } .tauri-workbench__tabs { grid-auto-flow: column; grid-auto-columns: minmax(170px, 1fr); overflow-x: auto; } .tauri-workbench__notice { display: none; } .tauri-preview { min-height: auto; padding: 18px; grid-template-columns: 1fr; } .tauri-preview__card, .tauri-preview__events { padding: 20px; } }

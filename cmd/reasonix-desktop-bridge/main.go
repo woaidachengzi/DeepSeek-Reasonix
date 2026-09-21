@@ -337,6 +337,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/health", b.authorized(b.health))
 	mux.HandleFunc("POST /v1/sessions:open", b.authorized(b.idempotent(64<<10, b.openSession)))
+	mux.HandleFunc("POST /v1/sessions:switch", b.authorized(b.idempotent(64<<10, b.switchSession)))
 	mux.HandleFunc("GET /v1/sessions/{id}/snapshot", b.authorized(b.sessionSnapshot))
 	mux.HandleFunc("GET /v1/sessions/{id}/history", b.authorized(b.sessionHistory))
 	mux.HandleFunc("GET /v1/events", b.authorized(b.eventsHandler))
@@ -440,7 +441,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "open_session", "session_snapshot", "session_history", "submit", "cancel", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "open_session", "switch_session", "session_snapshot", "session_history", "submit", "cancel", "idempotency", "shutdown"},
 	})
 }
 
@@ -494,6 +495,20 @@ func (b *bridgeServer) openSession(w http.ResponseWriter, r *http.Request) {
 			status, code = http.StatusServiceUnavailable, "shutting_down"
 		}
 		writeProtocolError(w, status, code, "unable to open desktop bridge session")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})
+}
+
+func (b *bridgeServer) switchSession(w http.ResponseWriter, r *http.Request) {
+	var request openSessionRequest
+	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid switch_session request")
+		return
+	}
+	view, err := b.runtimes.Switch(r.Context(), desktopbridge.OpenRequest{SessionID: request.SessionID, WorkspaceRoot: request.WorkspaceRoot})
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to switch desktop bridge session")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})

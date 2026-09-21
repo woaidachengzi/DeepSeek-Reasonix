@@ -46,11 +46,13 @@ interface CommandContract {
 
 // Rust commands from desktop/tauri/src/main.rs:
 //   bridge_status, restart_bridge, bridge_open_session,
+//   bridge_switch_session,
 //   bridge_session_snapshot, bridge_session_history, bridge_submit, bridge_cancel,
 //   bridge_start_events, preview_profile_status, preview_runtime_info, import_stable_profile
 //
 // Frontend adapters from desktop/frontend/src/lib/tauriBridge.ts:
 //   tauriBridgeStatus, restartTauriBridge, openTauriBridgeSession,
+//   switchTauriBridgeSession,
 //   tauriBridgeSnapshot, tauriBridgeHistory, submitTauriBridge, cancelTauriBridge,
 //   startTauriBridgeEvents, tauriPreviewProfileStatus,
 //   tauriPreviewRuntimeInfo, importTauriStableProfile
@@ -70,6 +72,11 @@ const commands: CommandContract[] = [
     command: "bridge_open_session",
     argKeys: ["request"],
     description: "openTauriBridgeSession() invokes bridge_open_session with { request }",
+  },
+  {
+    command: "bridge_switch_session",
+    argKeys: ["request"],
+    description: "switchTauriBridgeSession() invokes bridge_switch_session with { request }",
   },
   {
     command: "bridge_session_snapshot",
@@ -146,6 +153,11 @@ console.log("\ntauri bridge contract — argument shapes");
 ok(
   commands.find(c => c.command === "bridge_open_session")?.argKeys.includes("request"),
   "bridge_open_session has request arg",
+);
+
+ok(
+  commands.find(c => c.command === "bridge_switch_session")?.argKeys.includes("request"),
+  "bridge_switch_session has request arg",
 );
 
 // bridge_session_snapshot expects { request: { sessionId } }

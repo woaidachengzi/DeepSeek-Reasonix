@@ -159,6 +159,60 @@ func (m *RuntimeManager) Open(ctx context.Context, request OpenRequest) (Session
 	return SessionView{}, ErrClosed
 }
 
+// Switch makes an explicit, durable handoff between two bridge sessions.
+// The first bridge version owns only one controller, so allowing a second
+// open to silently replace it would lose in-flight state. Only an idle
+// runtime may be switched: it is snapshotted and closed before the next core
+// controller is constructed. A running or paused turn remains selected until
+// the user cancels or completes it.
+func (m *RuntimeManager) Switch(ctx context.Context, request OpenRequest) (SessionView, error) {
+	request.SessionID = strings.TrimSpace(request.SessionID)
+	request.WorkspaceRoot = strings.TrimSpace(request.WorkspaceRoot)
+	if !validSessionID(request.SessionID) {
+		return SessionView{}, ErrInvalidSessionID
+	}
+
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return SessionView{}, ErrClosed
+	}
+	if m.runtime == nil {
+		m.mu.Unlock()
+		return m.Open(ctx, request)
+	}
+	if m.opening {
+		m.mu.Unlock()
+		return SessionView{}, ErrOpenInProgress
+	}
+	if m.view.ID == request.SessionID && m.view.WorkspaceRoot == request.WorkspaceRoot {
+		view := m.view
+		m.mu.Unlock()
+		return view, nil
+	}
+	if state := m.runtime.State(); state != "idle" {
+		active := m.view.ID
+		m.mu.Unlock()
+		return SessionView{}, fmt.Errorf("%w: active session %q is %s", ErrSessionConflict, active, state)
+	}
+	previous := m.runtime
+	factory := m.factory
+	if factory == nil {
+		m.mu.Unlock()
+		return SessionView{}, errors.New("desktop bridge runtime factory is not configured")
+	}
+	m.runtime = nil
+	m.view = SessionView{}
+	m.opening = true
+	m.mu.Unlock()
+
+	if err := previous.Shutdown(); err != nil {
+		m.finishOpen(nil, SessionView{})
+		return SessionView{}, fmt.Errorf("close active desktop bridge session: %w", err)
+	}
+	return m.openWithFactory(ctx, factory, request)
+}
+
 // validSessionID keeps the bridge's public ID safe for hosts that derive a
 // deterministic session filename. The Rust host already applies this rule;
 // enforcing it here keeps direct loopback callers from widening that boundary.
@@ -266,6 +320,35 @@ func (m *RuntimeManager) finishOpen(runtime Runtime, view SessionView) bool {
 		m.view = view
 	}
 	return true
+}
+
+func (m *RuntimeManager) openWithFactory(ctx context.Context, factory RuntimeFactory, request OpenRequest) (SessionView, error) {
+	runtime, err := factory.Open(ctx, request)
+	if err != nil {
+		m.finishOpen(nil, SessionView{})
+		return SessionView{}, err
+	}
+	if runtime == nil {
+		m.finishOpen(nil, SessionView{})
+		return SessionView{}, errors.New("desktop bridge runtime factory returned nil runtime")
+	}
+	path := strings.TrimSpace(runtime.SessionPath())
+	if path == "" {
+		_ = runtime.Shutdown()
+		m.finishOpen(nil, SessionView{})
+		return SessionView{}, errors.New("desktop bridge runtime has no session path")
+	}
+	view := SessionView{
+		ID:            request.SessionID,
+		Path:          path,
+		WorkspaceRoot: request.WorkspaceRoot,
+		State:         runtime.State(),
+	}
+	if m.finishOpen(runtime, view) {
+		return view, nil
+	}
+	_ = runtime.Shutdown()
+	return SessionView{}, ErrClosed
 }
 
 func (m *RuntimeManager) withRuntime(sessionID string, action func(Runtime)) (SessionView, error) {

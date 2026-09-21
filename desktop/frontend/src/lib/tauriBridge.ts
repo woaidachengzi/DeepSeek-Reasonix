@@ -106,6 +106,11 @@ export async function openTauriBridgeSession(sessionId: string, workspaceRoot?: 
   return invoke<TauriBridgeSession>("bridge_open_session", { request: { sessionId, workspaceRoot } });
 }
 
+export async function switchTauriBridgeSession(sessionId: string, workspaceRoot?: string): Promise<TauriBridgeSession> {
+  requireTauri();
+  return invoke<TauriBridgeSession>("bridge_switch_session", { request: { sessionId, workspaceRoot } });
+}
+
 export async function tauriBridgeSnapshot(sessionId: string): Promise<TauriBridgeSnapshot> {
   requireTauri();
   return invoke<TauriBridgeSnapshot>("bridge_session_snapshot", { request: { sessionId } });

@@ -306,6 +306,21 @@ impl BridgeSupervisor {
         .map(|envelope| envelope.session)
     }
 
+    pub fn switch_session(&self, request: OpenSessionRequest) -> Result<BridgeSession, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let request_id = opaque_secret()?;
+        self.request_session(
+            "POST",
+            "/v1/sessions:switch",
+            Some(json!({
+                "sessionId": session_id,
+                "workspaceRoot": request.workspace_root,
+            })),
+            Some(&request_id),
+        )
+        .map(|envelope| envelope.session)
+    }
+
     pub fn snapshot(&self, request: SessionRequest) -> Result<BridgeSnapshot, String> {
         let session_id = session_path_component(&request.session_id)?;
         let path = format!("/v1/sessions/{session_id}/snapshot");

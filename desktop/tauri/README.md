@@ -22,6 +22,10 @@ Preview 使用 Tauri 应用数据目录下私有的 `REASONIX_HOME`。因此它�
 均不会导入；导入后若 Provider 依赖环境变量，仍需由用户自行提供。显式设置
 `REASONIX_HOME` 的开发环境不会显示该导入入口。
 
+Preview 已开始采用工作台导航壳层：本次运行中打开的会话会显示在左侧，切换会话通过
+bridge 的显式 `switch_session` 完成。首版 bridge 仍只拥有一个 Go Controller，因此只允许
+从 `idle` 会话切换；`running` 或 `paused` 的会话必须先结束或取消，绝不被 UI 静默替换。
+
 目前暴露给 WebView 的命令为 `bridge_status`、`restart_bridge`、`bridge_open_session`、
 `bridge_session_snapshot`、`bridge_session_history`、`bridge_submit` 和 `bridge_cancel`。
 token、loopback 端口和

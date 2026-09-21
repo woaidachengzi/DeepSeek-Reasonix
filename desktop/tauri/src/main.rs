@@ -34,6 +34,14 @@ fn bridge_open_session(
 }
 
 #[tauri::command]
+fn bridge_switch_session(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: OpenSessionRequest,
+) -> Result<BridgeSession, String> {
+    supervisor.switch_session(request)
+}
+
+#[tauri::command]
 fn bridge_session_snapshot(
     supervisor: State<'_, BridgeSupervisor>,
     request: SessionRequest,
@@ -117,6 +125,7 @@ fn main() {
             bridge_status,
             restart_bridge,
             bridge_open_session,
+            bridge_switch_session,
             bridge_session_snapshot,
             bridge_session_history,
             bridge_submit,
