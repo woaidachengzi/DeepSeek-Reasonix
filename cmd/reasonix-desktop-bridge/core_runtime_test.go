@@ -11,6 +11,8 @@ import (
 	"reasonix/internal/boot"
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/event"
+	"reasonix/internal/provider"
+	"reasonix/internal/sessioncontext"
 )
 
 func TestBridgeSessionPathIsDeterministicAndContained(t *testing.T) {
@@ -33,6 +35,35 @@ func TestTruncateBridgeHistoryContentPreservesUnicodeAndMarksTruncation(t *testi
 	got, truncated := truncateBridgeHistoryContent(content)
 	if !truncated || !strings.HasPrefix(got, strings.Repeat("界", bridgeHistoryMaxContentRunes)) || !strings.HasSuffix(got, "[Preview truncated this message]") {
 		t.Fatalf("history truncation = %q, %v", got, truncated)
+	}
+}
+
+func TestBridgeHistoryProjectionHidesHostSessionContext(t *testing.T) {
+	snapshot := sessioncontext.Build(sessioncontext.Sections{
+		Environment: "darwin/arm64",
+		Workspace:   "Current workspace: /tmp/project",
+	})
+	if !sessioncontext.IsContent(snapshot.Content) {
+		t.Fatal("test fixture is not a valid session-context snapshot")
+	}
+	if sessioncontext.IsContent("the user's actual question") {
+		t.Fatal("ordinary user text was classified as session context")
+	}
+	// Keep this contract close to the bridge's projection rule: the host
+	// snapshot is omitted while the adjacent user question remains visible.
+	visible := []provider.Message{
+		{Role: provider.RoleUser, Origin: provider.MessageOriginHost, Content: snapshot.Content},
+		{Role: provider.RoleUser, Origin: provider.MessageOriginUser, Content: "the user's actual question"},
+	}
+	projected := make([]string, 0, len(visible))
+	for _, message := range visible {
+		if !bridgeHistoryMessageVisible(message) {
+			continue
+		}
+		projected = append(projected, message.Content)
+	}
+	if len(projected) != 1 || projected[0] != "the user's actual question" {
+		t.Fatalf("projected bridge history = %#v", projected)
 	}
 }
 

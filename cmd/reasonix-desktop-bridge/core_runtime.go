@@ -14,6 +14,7 @@ import (
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/sessioncontext"
 )
 
 // controllerFactory builds the established Go core only after a bridge client
@@ -132,6 +133,11 @@ func (r *controllerRuntime) State() string {
 
 const bridgeHistoryMaxContentRunes = 16_000
 
+func bridgeHistoryMessageVisible(message provider.Message) bool {
+	return message.Role == provider.RoleUser && !sessioncontext.IsContent(message.Content) ||
+		message.Role == provider.RoleAssistant
+}
+
 // History makes only user- and assistant-visible text available to the host.
 // The controller transcript also contains system prompts, provider reasoning,
 // tool requests/results, image references, and local execution metadata; none
@@ -140,6 +146,12 @@ func (r *controllerRuntime) History() []desktopbridge.HistoryMessage {
 	history := r.controller.History()
 	messages := make([]desktopbridge.HistoryMessage, 0, len(history))
 	for _, message := range history {
+		// Session-context is provider-facing runtime metadata, not a user
+		// question. It is persisted as a host-authored user-role message so the
+		// model can see it, but must never be projected into the chat transcript.
+		if !bridgeHistoryMessageVisible(message) {
+			continue
+		}
 		var role string
 		switch message.Role {
 		case provider.RoleUser:
