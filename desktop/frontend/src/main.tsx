@@ -124,7 +124,7 @@ async function mountApp() {
   if (localeResult.status === "rejected") console.error("failed to preload desktop locale", localeResult.reason);
   let application;
   if (tauriRuntime) {
-    const { TauriSessionPreview } = await import("./tauri/TauriSessionPreview");
+    const { TauriSessionPreview } = await import("./tauri/TauriChatWorkspace");
     application = <TauriSessionPreview />;
   } else {
     const [appModule, i18n, toast] = await wailsModules!;
