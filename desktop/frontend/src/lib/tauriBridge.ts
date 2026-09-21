@@ -50,6 +50,11 @@ export interface TauriPreviewRuntimeInfo {
   sidecarInstanceId?: string;
 }
 
+export interface TauriWorkbenchSession {
+  sessionId: string;
+  workspaceRoot?: string;
+}
+
 // Keep Tauri detection and all Tauri-specific imports here. The established
 // bridge.ts remains on its Wails path until each feature family has a complete
 // Tauri equivalent; partially swapping its 500+ binding surface would turn a
@@ -85,6 +90,21 @@ export async function tauriPreviewRuntimeInfo(): Promise<TauriPreviewRuntimeInfo
 export async function importTauriStableProfile(): Promise<TauriProfileImportResult> {
   requireTauri();
   return invoke<TauriProfileImportResult>("import_stable_profile", { confirmed: true });
+}
+
+export async function tauriWorkbenchSessions(): Promise<TauriWorkbenchSession[]> {
+  requireTauri();
+  return invoke<TauriWorkbenchSession[]>("workbench_sessions");
+}
+
+export async function rememberTauriWorkbenchSession(
+  sessionId: string,
+  workspaceRoot?: string,
+): Promise<TauriWorkbenchSession[]> {
+  requireTauri();
+  return invoke<TauriWorkbenchSession[]>("remember_workbench_session", {
+    request: { sessionId, workspaceRoot },
+  });
 }
 
 /**

@@ -48,14 +48,16 @@ interface CommandContract {
 //   bridge_status, restart_bridge, bridge_open_session,
 //   bridge_switch_session,
 //   bridge_session_snapshot, bridge_session_history, bridge_submit, bridge_cancel,
-//   bridge_start_events, preview_profile_status, preview_runtime_info, import_stable_profile
+//   bridge_start_events, preview_profile_status, preview_runtime_info, import_stable_profile,
+//   workbench_sessions, remember_workbench_session
 //
 // Frontend adapters from desktop/frontend/src/lib/tauriBridge.ts:
 //   tauriBridgeStatus, restartTauriBridge, openTauriBridgeSession,
 //   switchTauriBridgeSession,
 //   tauriBridgeSnapshot, tauriBridgeHistory, submitTauriBridge, cancelTauriBridge,
 //   startTauriBridgeEvents, tauriPreviewProfileStatus,
-//   tauriPreviewRuntimeInfo, importTauriStableProfile
+//   tauriPreviewRuntimeInfo, importTauriStableProfile, tauriWorkbenchSessions,
+//   rememberTauriWorkbenchSession
 
 const commands: CommandContract[] = [
   {
@@ -117,6 +119,16 @@ const commands: CommandContract[] = [
     command: "import_stable_profile",
     argKeys: ["confirmed"],
     description: "importTauriStableProfile() invokes import_stable_profile with explicit confirmation",
+  },
+  {
+    command: "workbench_sessions",
+    argKeys: [],
+    description: "tauriWorkbenchSessions() invokes workbench_sessions with no args",
+  },
+  {
+    command: "remember_workbench_session",
+    argKeys: ["request"],
+    description: "rememberTauriWorkbenchSession() invokes remember_workbench_session with { request }",
   },
 ];
 

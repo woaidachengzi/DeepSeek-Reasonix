@@ -5,6 +5,7 @@ mod data_profile;
 mod protocol_generated;
 mod runtime_info;
 mod window_state;
+mod workbench_catalog;
 
 use bridge::{
     BridgeHistory, BridgeSession, BridgeSnapshot, BridgeStatus, BridgeSupervisor,
@@ -14,6 +15,7 @@ use data_profile::{PreviewProfile, PreviewProfileStatus, ProfileImportResult};
 use runtime_info::PreviewRuntimeInfo;
 use tauri::{Manager, State};
 use window_state::PreviewWindowState;
+use workbench_catalog::{WorkbenchCatalog, WorkbenchSession};
 
 #[tauri::command]
 fn bridge_status(supervisor: State<'_, BridgeSupervisor>) -> BridgeStatus {
@@ -103,12 +105,29 @@ fn import_stable_profile(
     profile.import_stable_config()
 }
 
+#[tauri::command]
+fn workbench_sessions(
+    catalog: State<'_, WorkbenchCatalog>,
+) -> Result<Vec<WorkbenchSession>, String> {
+    catalog.list()
+}
+
+#[tauri::command]
+fn remember_workbench_session(
+    catalog: State<'_, WorkbenchCatalog>,
+    request: WorkbenchSession,
+) -> Result<Vec<WorkbenchSession>, String> {
+    catalog.remember(request)
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             let window_state = PreviewWindowState::for_app(app)?;
+            let workbench_catalog =
+                WorkbenchCatalog::for_app(app).map_err(std::io::Error::other)?;
             if let Some(window) = app.get_webview_window("main") {
                 window_state.restore(&window);
             }
@@ -119,6 +138,7 @@ fn main() {
             app.manage(supervisor);
             app.manage(profile);
             app.manage(window_state);
+            app.manage(workbench_catalog);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -133,7 +153,9 @@ fn main() {
             bridge_start_events,
             preview_profile_status,
             preview_runtime_info,
-            import_stable_profile
+            import_stable_profile,
+            workbench_sessions,
+            remember_workbench_session
         ])
         .build(tauri::generate_context!())
         .expect("failed to build Reasonix Tauri host");
