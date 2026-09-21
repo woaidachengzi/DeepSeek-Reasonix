@@ -668,7 +668,8 @@ export function TauriSessionPreview() {
           </section>}
         </div>
 
-        {questions.length >= 2 && <QuestionJumpBar loadedQuestions={questions} totalQuestions={questions.length} activeTurn={activeQuestion} onJump={jumpToQuestion} />}
+        {questions.length >= 2 && <QuestionJumpBar loadedQuestions={questions} totalQuestions={questions.length} activeTurn={activeQuestion} onJump={jumpToQuestion}
+          height={Math.min(240, Math.max(48, questions.length * 18 + 12))} />}
 
         <footer className="tauri-composer-area">
           {error && <p className="tauri-error" role="alert">{error}</p>}

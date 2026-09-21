@@ -42,11 +42,13 @@ export function QuestionJumpBar({
   totalQuestions,
   activeTurn,
   onJump,
+  height,
 }: {
   loadedQuestions: QuestionAnchor[];
   totalQuestions: number;
   activeTurn: number | null;
   onJump: (question: QuestionAnchor) => void;
+  height?: number;
 }) {
   const t = useT();
   const total = Math.max(0, Math.floor(totalQuestions));
@@ -160,6 +162,7 @@ export function QuestionJumpBar({
   return (
     <nav
       className="jump-bar"
+      style={height == null ? undefined : { height }}
       ref={barRef}
       aria-label={t("questionNav.label")}
       onMouseLeave={() => {
