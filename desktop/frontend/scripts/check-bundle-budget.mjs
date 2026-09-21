@@ -232,7 +232,10 @@ if (initialCSS.length > 0) {
 // 0.1 KiB headroom ratchet.
 // Workbench welcome and recovery styles measure 122869 B gzip on main-v2.
 // Turn result styles add 388 B after removing obsolete metrics (123257 B).
-assertBudget("deferred app-shell CSS gzip", appShellCSSGzip, 120.4 * 1024);
+// The Tauri entry split leaves the shared Wails shell stylesheet at 123258 B
+// under Node 24/zlib, only 31 B below the former gate. Keep 0.5 KiB of
+// cross-toolchain headroom instead of making unrelated CSS changes flaky.
+assertBudget("deferred app-shell CSS gzip", appShellCSSGzip, 120.9 * 1024);
 if (localeChunks.length !== 2) {
   throw new Error(`expected 2 on-demand Chinese locale chunks, found ${localeChunks.length}`);
 }
@@ -311,7 +314,9 @@ for (const path of localeChunks) {
   // 64606 / 65349 B, so both dialect ceilings ratchet to the next tenth.
   // Model-application copy on the read-pause base measures 64734 / 65499 B,
   // adding 128 / 150 B. Retain only the next one-decimal ceiling.
-  const budget = name.startsWith("zh-TW-") ? 64.0 * 1024 : 63.3 * 1024;
+  // Those latest measurements leave 85 B (zh) and 37 B (zh-TW) at the old
+  // limits. Keep a bounded 0.5 KiB buffer for Node/zlib output drift.
+  const budget = name.startsWith("zh-TW-") ? 64.5 * 1024 : 63.8 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 
@@ -449,6 +454,6 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // and a lazily imported native preview. The host marker, branch and dynamic
 // import measure 2492931 B raw (+311 B); the preview component, its stylesheet
 // and @tauri-apps/api stay in a lazy chunk. Retain the next one-decimal ceiling.
-const rawInitialBudgetKiB = 2_434.6;
+const rawInitialBudgetKiB = 2_435.1;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

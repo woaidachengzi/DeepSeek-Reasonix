@@ -586,6 +586,13 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Check Tauri packaging contract
+        run: node desktop/frontend/scripts/tauri-build-contract.test.mjs
+
       - name: Verify the wire mirrors match the schema
         run: go run ./cmd/desktop-bridge-protocol-gen -check
 
