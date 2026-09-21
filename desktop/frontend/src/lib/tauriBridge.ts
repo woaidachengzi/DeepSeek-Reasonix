@@ -18,6 +18,20 @@ export interface TauriBridgeSnapshot {
   session: TauriBridgeSession;
 }
 
+export interface TauriPreviewProfileStatus {
+  previewHome: string;
+  previewConfigExists: boolean;
+  stableConfig?: string;
+  stableConfigExists: boolean;
+  importAvailable: boolean;
+  managedProfile: boolean;
+}
+
+export interface TauriProfileImportResult {
+  importedConfig: string;
+  backupConfig: string;
+}
+
 // Keep Tauri detection and all Tauri-specific imports here. The established
 // bridge.ts remains on its Wails path until each feature family has a complete
 // Tauri equivalent; partially swapping its 500+ binding surface would turn a
@@ -38,6 +52,16 @@ export async function tauriBridgeStatus(): Promise<TauriBridgeStatus> {
 export async function restartTauriBridge(): Promise<TauriBridgeStatus> {
   requireTauri();
   return invoke<TauriBridgeStatus>("restart_bridge");
+}
+
+export async function tauriPreviewProfileStatus(): Promise<TauriPreviewProfileStatus> {
+  requireTauri();
+  return invoke<TauriPreviewProfileStatus>("preview_profile_status");
+}
+
+export async function importTauriStableProfile(): Promise<TauriProfileImportResult> {
+  requireTauri();
+  return invoke<TauriProfileImportResult>("import_stable_profile", { confirmed: true });
 }
 
 export async function openTauriBridgeSession(sessionId: string, workspaceRoot?: string): Promise<TauriBridgeSession> {

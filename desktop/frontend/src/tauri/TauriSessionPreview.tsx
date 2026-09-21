@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import {
   cancelTauriBridge,
+  importTauriStableProfile,
   newTauriSessionId,
   onTauriBridgeConnectionError,
   onTauriBridgeEvent,
@@ -13,9 +14,11 @@ import {
   tauriBridgeStatus,
   tauriEventSummary,
   tauriMessageFrom,
+  tauriPreviewProfileStatus,
   type TauriBridgeEvent,
   type TauriBridgeSession,
   type TauriBridgeStatus,
+  type TauriPreviewProfileStatus,
 } from "../lib/tauriBridge";
 import "./tauriSessionPreview.css";
 
@@ -42,6 +45,8 @@ export function TauriSessionPreview() {
   const [workspaceRoot, setWorkspaceRoot] = useState("");
   const [prompt, setPrompt] = useState("");
   const [status, setStatus] = useState<TauriBridgeStatus | null>(null);
+  const [profile, setProfile] = useState<TauriPreviewProfileStatus | null>(null);
+  const [profileNotice, setProfileNotice] = useState("");
   const [session, setSession] = useState<TauriBridgeSession | null>(null);
   const [events, setEvents] = useState<TauriBridgeEvent[]>([]);
   const [sequence, setSequence] = useState(0);
@@ -52,6 +57,7 @@ export function TauriSessionPreview() {
 
   useEffect(() => {
     void tauriBridgeStatus().then(setStatus).catch(error => setError(messageFrom(error)));
+    void tauriPreviewProfileStatus().then(setProfile).catch(error => setError(messageFrom(error)));
   }, []);
 
   useEffect(() => {
@@ -171,6 +177,27 @@ export function TauriSessionPreview() {
     }
   }
 
+  async function importStableProfile() {
+    if (!profile?.importAvailable || busy) return;
+    const source = profile.stableConfig ?? "the stable Reasonix config";
+    const confirmed = window.confirm(
+      `Copy ${source} into this isolated Tauri Preview profile?\n\nA timestamped backup will be created first. Existing Preview config is never overwritten. Sessions, caches, plugins, and .env files are not imported.`,
+    );
+    if (!confirmed) return;
+    setBusy(true);
+    setError("");
+    setProfileNotice("");
+    try {
+      const result = await importTauriStableProfile();
+      setProfileNotice(`Imported config: ${result.importedConfig}\nBackup: ${result.backupConfig}`);
+      setProfile(await tauriPreviewProfileStatus());
+    } catch (error) {
+      setError(messageFrom(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="tauri-preview">
       <section className="tauri-preview__card">
@@ -181,6 +208,20 @@ export function TauriSessionPreview() {
           {status?.running ? `Bridge ready · protocol v${status.protocolVersion ?? "?"}` : "Connecting to bridge…"}
         </p>
         <button className="tauri-preview__restart" type="button" onClick={() => void restartBridge()} disabled={busy}>Restart bridge{session ? " and recover session" : ""}</button>
+
+        <section className="tauri-preview__profile">
+          <h2>Private preview profile</h2>
+          {profile ? <>
+            <p>This preview keeps its own config and sessions at:</p>
+            <code>{profile.previewHome}</code>
+            {profile.importAvailable ? <>
+              <p>A stable config is available to copy once. The stable install is never changed.</p>
+              <code>{profile.stableConfig}</code>
+              <button type="button" onClick={() => void importStableProfile()} disabled={busy}>Copy stable config with backup</button>
+            </> : <p>{profile.previewConfigExists ? "This Preview already has its own config; importing never overwrites it." : profile.managedProfile ? "No stable config was found at the default location." : "An explicit REASONIX_HOME was supplied, so automatic import is disabled."}</p>}
+          </> : <p>Checking isolated profile…</p>}
+          {profileNotice && <p className="tauri-preview__notice">{profileNotice}</p>}
+        </section>
 
         <label>
           Session ID

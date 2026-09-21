@@ -8,6 +8,7 @@ use bridge::{
     BridgeSession, BridgeSnapshot, BridgeStatus, BridgeSupervisor, OpenSessionRequest,
     SessionRequest, SubmitRequest,
 };
+use data_profile::{PreviewProfile, PreviewProfileStatus, ProfileImportResult};
 use tauri::{Manager, State};
 
 #[tauri::command]
@@ -61,14 +62,32 @@ fn bridge_start_events(
     supervisor.start_events(app, after_sequence.unwrap_or(0))
 }
 
+#[tauri::command]
+fn preview_profile_status(profile: State<'_, PreviewProfile>) -> PreviewProfileStatus {
+    profile.status()
+}
+
+#[tauri::command]
+fn import_stable_profile(
+    profile: State<'_, PreviewProfile>,
+    confirmed: bool,
+) -> Result<ProfileImportResult, String> {
+    if !confirmed {
+        return Err("stable config import requires explicit confirmation".into());
+    }
+    profile.import_stable_config()
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            data_profile::configure_preview_profile(app).map_err(std::io::Error::other)?;
+            let profile =
+                data_profile::configure_preview_profile(app).map_err(std::io::Error::other)?;
             let supervisor = BridgeSupervisor::from_environment(app.handle().clone());
             supervisor.start().map_err(std::io::Error::other)?;
             app.manage(supervisor);
+            app.manage(profile);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -78,7 +97,9 @@ fn main() {
             bridge_session_snapshot,
             bridge_submit,
             bridge_cancel,
-            bridge_start_events
+            bridge_start_events,
+            preview_profile_status,
+            import_stable_profile
         ])
         .build(tauri::generate_context!())
         .expect("failed to build Reasonix Tauri host");

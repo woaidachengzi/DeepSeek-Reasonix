@@ -47,12 +47,13 @@ interface CommandContract {
 // Rust commands from desktop/tauri/src/main.rs:
 //   bridge_status, restart_bridge, bridge_open_session,
 //   bridge_session_snapshot, bridge_submit, bridge_cancel,
-//   bridge_start_events
+//   bridge_start_events, preview_profile_status, import_stable_profile
 //
 // Frontend adapters from desktop/frontend/src/lib/tauriBridge.ts:
 //   tauriBridgeStatus, restartTauriBridge, openTauriBridgeSession,
 //   tauriBridgeSnapshot, submitTauriBridge, cancelTauriBridge,
-//   startTauriBridgeEvents
+//   startTauriBridgeEvents, tauriPreviewProfileStatus,
+//   importTauriStableProfile
 
 const commands: CommandContract[] = [
   {
@@ -89,6 +90,16 @@ const commands: CommandContract[] = [
     command: "bridge_start_events",
     argKeys: ["afterSequence"],
     description: "startTauriBridgeEvents() invokes bridge_start_events with { afterSequence }",
+  },
+  {
+    command: "preview_profile_status",
+    argKeys: [],
+    description: "tauriPreviewProfileStatus() invokes preview_profile_status with no args",
+  },
+  {
+    command: "import_stable_profile",
+    argKeys: ["confirmed"],
+    description: "importTauriStableProfile() invokes import_stable_profile with explicit confirmation",
   },
 ];
 
@@ -154,6 +165,11 @@ ok(
 // bridge_status and restart_bridge have no args
 eq(commands.find(c => c.command === "bridge_status")?.argKeys.length, 0, "bridge_status has no args");
 eq(commands.find(c => c.command === "restart_bridge")?.argKeys.length, 0, "restart_bridge has no args");
+eq(commands.find(c => c.command === "preview_profile_status")?.argKeys.length, 0, "preview_profile_status has no args");
+ok(
+  commands.find(c => c.command === "import_stable_profile")?.argKeys.includes("confirmed"),
+  "import_stable_profile requires explicit confirmation",
+);
 
 // ---------------------------------------------------------------------------
 // Test: event channel names match Rust emit calls

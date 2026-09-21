@@ -9,6 +9,10 @@
 .tauri-preview__status, .tauri-preview__sequence { color: #acb8cc; font-size: 13px; }
 .tauri-preview__status.is-ready { color: #6fdea0; }
 .tauri-preview__restart { margin: -8px 0 4px; font-size: 13px !important; }
+.tauri-preview__profile { margin-top: 22px; padding: 18px 0; border-top: 1px solid #2c3852; border-bottom: 1px solid #2c3852; }
+.tauri-preview__profile p { margin: 8px 0; color: #acb8cc; font-size: 13px; }
+.tauri-preview__profile button { margin-top: 12px; font-size: 13px; }
+.tauri-preview__notice { color: #6fdea0 !important; white-space: pre-wrap; }
 .tauri-preview label { display: grid; gap: 7px; margin-top: 16px; color: #d6deec; font-weight: 600; }
 .tauri-preview label span { color: #8290a9; font-weight: 400; }
 .tauri-preview input, .tauri-preview textarea { width: 100%; border: 1px solid #3a4864; border-radius: 9px; padding: 10px 12px; color: inherit; background: #0e1420; font: inherit; }

@@ -12,6 +12,12 @@ Preview 使用 Tauri 应用数据目录下私有的 `REASONIX_HOME`。因此它�
 写入稳定 Wails 客户端的配置、会话和缓存；稳定版可与它并存。导入稳定版数据会作为单独的
 “先备份、再确认”的功能实现。开发者显式传入的 `REASONIX_HOME` 仍是有意识的覆盖选择。
 
+当前 Preview 只提供最小的显式配置导入：界面会显示默认稳定配置
+`~/.reasonix/config.toml` 是否存在，用户确认后才复制它。复制前会在 Preview 私有目录创建
+带时间戳的备份，目标 `config.toml` 必须尚不存在，绝不覆盖。会话、缓存、插件和 `.env`
+均不会导入；导入后若 Provider 依赖环境变量，仍需由用户自行提供。显式设置
+`REASONIX_HOME` 的开发环境不会显示该导入入口。
+
 目前暴露给 WebView 的命令为 `bridge_status`、`restart_bridge`、`bridge_open_session`、
 `bridge_session_snapshot`、`bridge_submit` 和 `bridge_cancel`。token、loopback 端口和
 bridge 原始请求不暴露给 JavaScript。`bridge_start_events` 在 Rust 内部订阅 SSE，并以
