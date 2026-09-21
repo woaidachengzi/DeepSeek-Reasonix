@@ -7,6 +7,29 @@ use serde_json::Value;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeAttachFileRequest {
+    pub path: String,
+    pub session_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeAttachment {
+    pub is_image: bool,
+    pub name: String,
+    pub path: String,
+    pub size: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeAttachmentResponse {
+    pub attachment: BridgeAttachment,
+    pub protocol_version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeError {
     pub error: BridgeErrorBody,
     pub protocol_version: u64,

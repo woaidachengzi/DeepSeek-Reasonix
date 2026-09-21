@@ -53,6 +53,7 @@ pub struct SessionRequest {
 // The wire DTOs mirror docs/tauri/protocol/v1.schema.json through the generated
 // module; only the host-facing command payloads below stay hand-written.
 pub use crate::protocol_generated::{
+    BridgeAttachFileRequest as AttachFileRequest, BridgeAttachment, BridgeAttachmentResponse,
     BridgeEvent, BridgeHistoryMessage, BridgeHistoryResponse,
     BridgeOpenSessionRequest as OpenSessionRequest, BridgeProviderSummaryResponse, BridgeSession,
     BridgeSessionResponse, BridgeSetDefaultModelRequest,
@@ -402,6 +403,27 @@ impl BridgeSupervisor {
         .map(|envelope| envelope.session)
     }
 
+    pub fn attach_file(&self, request: AttachFileRequest) -> Result<BridgeAttachment, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        if request.path.trim().is_empty() || request.path.len() > 32 * 1024 {
+            return Err("selected attachment path is invalid".to_string());
+        }
+        let request_id = opaque_secret()?;
+        let path = format!("/v1/sessions/{session_id}:attach");
+        let response = self.request_json(
+            "POST",
+            &path,
+            Some(json!({ "sessionId": session_id, "path": request.path })),
+            Some(&request_id),
+        )?;
+        let envelope: BridgeAttachmentResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        validate_attachment(envelope.attachment)
+    }
+
     pub fn cancel(&self, request: SessionRequest) -> Result<BridgeSession, String> {
         let session_id = session_path_component(&request.session_id)?;
         let path = format!("/v1/sessions/{session_id}:cancel");
@@ -554,6 +576,22 @@ impl BridgeSupervisor {
             let _ = forwarder.handle.join();
         }
     }
+}
+
+fn validate_attachment(attachment: BridgeAttachment) -> Result<BridgeAttachment, String> {
+    let prefix = ".reasonix/attachments/";
+    let filename = attachment.path.strip_prefix(prefix).unwrap_or_default();
+    if filename.is_empty()
+        || filename.contains('/')
+        || filename.contains('\\')
+        || filename == "."
+        || filename == ".."
+        || attachment.name.is_empty()
+        || attachment.size == 0
+    {
+        return Err("desktop bridge returned an invalid attachment reference".to_string());
+    }
+    Ok(attachment)
 }
 
 #[derive(Debug)]
@@ -787,8 +825,8 @@ fn display_error(error: impl std::fmt::Display) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_json_response, request_json, session_path_component, verify_ready, wait_for_exit,
-        BridgeEvent, BridgeSupervisor,
+        parse_json_response, request_json, session_path_component, validate_attachment,
+        verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSupervisor,
     };
     use serde_json::json;
     use std::{
@@ -892,6 +930,33 @@ mod tests {
         .unwrap();
         assert_eq!(event.sequence, 7);
         assert_eq!(event.payload["text"], "hello");
+    }
+
+    #[test]
+    fn attachment_response_only_accepts_private_workspace_references() {
+        let valid = BridgeAttachment {
+            is_image: false,
+            name: "notes.txt".to_string(),
+            path: ".reasonix/attachments/clipboard-1.txt".to_string(),
+            size: 10,
+        };
+        assert!(validate_attachment(valid.clone()).is_ok());
+
+        let mut invalid = valid.clone();
+        invalid.path = "/Users/private/notes.txt".to_string();
+        assert!(validate_attachment(invalid).is_err());
+
+        let mut invalid = valid.clone();
+        invalid.path = ".reasonix/attachments/../notes.txt".to_string();
+        assert!(validate_attachment(invalid).is_err());
+
+        let mut invalid = valid.clone();
+        invalid.name.clear();
+        assert!(validate_attachment(invalid).is_err());
+
+        let mut invalid = valid;
+        invalid.size = 0;
+        assert!(validate_attachment(invalid).is_err());
     }
 
     #[test]

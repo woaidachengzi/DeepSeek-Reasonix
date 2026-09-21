@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import {
   newTauriSessionId,
   tauriAssistantTextDelta,
+  tauriComposerInput,
   tauriMessageFrom,
   tauriEventSummary,
 } from "../lib/tauriBridge";
@@ -91,6 +92,21 @@ eq(tauriAssistantTextDelta({ eventKind: "text", payload: { kind: "text", text: "
 eq(tauriAssistantTextDelta({ eventKind: "reasoning", payload: { kind: "reasoning", text: "private reasoning" } }), "", "reasoning events are never exposed as answer text");
 eq(tauriAssistantTextDelta({ eventKind: "notice", payload: { kind: "notice", text: "status" } }), "", "notice text is not appended to the assistant answer");
 eq(tauriAssistantTextDelta({ eventKind: "text", payload: { kind: "text", text: 123 } }), "", "malformed non-string text is ignored");
+
+console.log("\ntauri session preview — file attachment submission");
+eq(
+  tauriComposerInput("  Please summarize these files  ", [
+    { path: ".reasonix/attachments/clipboard-a.txt" },
+    { path: ".reasonix/attachments/clipboard-b.pdf" },
+  ]),
+  "Please summarize these files\n\n@.reasonix/attachments/clipboard-a.txt\n\n@.reasonix/attachments/clipboard-b.pdf",
+  "adds private attachment references to the submitted prompt",
+);
+eq(
+  tauriComposerInput("  ordinary prompt  ", []),
+  "ordinary prompt",
+  "trims prompt without changing attachment-free input",
+);
 
 // ---------------------------------------------------------------------------
 // Tests: session-recovery deterministic flow

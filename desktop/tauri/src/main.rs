@@ -8,9 +8,9 @@ mod window_state;
 mod workbench_catalog;
 
 use bridge::{
-    BridgeHistory, BridgeProviderSummaryResponse, BridgeSession, BridgeSetDefaultModelRequest,
-    BridgeSnapshot, BridgeStatus, BridgeSupervisor, OpenSessionRequest, SessionRequest,
-    SubmitRequest,
+    AttachFileRequest, BridgeAttachment, BridgeHistory, BridgeProviderSummaryResponse,
+    BridgeSession, BridgeSetDefaultModelRequest, BridgeSnapshot, BridgeStatus, BridgeSupervisor,
+    OpenSessionRequest, SessionRequest, SubmitRequest,
 };
 use data_profile::{PreviewProfile, PreviewProfileStatus, ProfileImportResult};
 use runtime_info::PreviewRuntimeInfo;
@@ -66,6 +66,14 @@ fn bridge_submit(
     request: SubmitRequest,
 ) -> Result<BridgeSession, String> {
     supervisor.submit(request)
+}
+
+#[tauri::command]
+fn bridge_attach_file(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: AttachFileRequest,
+) -> Result<BridgeAttachment, String> {
+    supervisor.attach_file(request)
 }
 
 #[tauri::command]
@@ -165,6 +173,7 @@ fn main() {
             bridge_session_snapshot,
             bridge_session_history,
             bridge_submit,
+            bridge_attach_file,
             bridge_cancel,
             bridge_start_events,
             preview_profile_status,

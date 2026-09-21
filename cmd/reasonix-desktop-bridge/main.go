@@ -410,6 +410,9 @@ func (b *bridgeServer) sessionCommand(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(path, ":submit"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":submit"))
 		b.idempotent(1<<20, b.submit)(w, r)
+	case strings.HasSuffix(path, ":attach"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":attach"))
+		b.idempotent(64<<10, b.attachFile)(w, r)
 	case strings.HasSuffix(path, ":cancel"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":cancel"))
 		b.cancel(w, r)
@@ -443,7 +446,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "provider_summary", "set_default_model", "open_session", "switch_session", "session_snapshot", "session_history", "submit", "cancel", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "set_default_model", "open_session", "switch_session", "session_snapshot", "session_history", "attach_file", "submit", "cancel", "idempotency", "shutdown"},
 	})
 }
 
@@ -499,6 +502,16 @@ type openSessionRequest struct {
 
 type submitRequest struct {
 	Input string `json:"input"`
+}
+
+type attachFileRequest struct {
+	SessionID string `json:"sessionId"`
+	Path      string `json:"path"`
+}
+
+type attachmentResponse struct {
+	ProtocolVersion int                          `json:"protocolVersion"`
+	Attachment      desktopbridge.AttachmentView `json:"attachment"`
 }
 
 type historyResponse struct {
@@ -586,6 +599,27 @@ func (b *bridgeServer) submit(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})
 }
 
+func (b *bridgeServer) attachFile(w http.ResponseWriter, r *http.Request) {
+	var request attachFileRequest
+	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid attach_file request")
+		return
+	}
+	if request.SessionID != r.PathValue("id") {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "attachment session does not match route")
+		return
+	}
+	attachment, err := b.runtimes.AttachFile(request.SessionID, request.Path)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to attach file to desktop bridge session")
+		return
+	}
+	writeJSON(w, http.StatusCreated, attachmentResponse{
+		ProtocolVersion: desktopbridge.ProtocolVersion,
+		Attachment:      attachment,
+	})
+}
+
 func decodeJSONBody(w http.ResponseWriter, r *http.Request, maxBytes int64, target any) error {
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBytes))
 	decoder.DisallowUnknownFields()
@@ -613,7 +647,7 @@ func (b *bridgeServer) cancel(w http.ResponseWriter, r *http.Request) {
 func (b *bridgeServer) writeRuntimeError(w http.ResponseWriter, err error, message string) {
 	status, code := http.StatusInternalServerError, "internal"
 	switch {
-	case errors.Is(err, desktopbridge.ErrInvalidSessionID), errors.Is(err, desktopbridge.ErrInvalidInput):
+	case errors.Is(err, desktopbridge.ErrInvalidSessionID), errors.Is(err, desktopbridge.ErrInvalidInput), errors.Is(err, desktopbridge.ErrInvalidAttachment):
 		status, code = http.StatusBadRequest, "invalid_request"
 	case errors.Is(err, desktopbridge.ErrSessionConflict), errors.Is(err, desktopbridge.ErrOpenInProgress):
 		status, code = http.StatusConflict, "conflict"

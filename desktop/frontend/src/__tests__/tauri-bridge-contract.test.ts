@@ -97,6 +97,11 @@ const commands: CommandContract[] = [
     description: "submitTauriBridge() invokes bridge_submit with { request }",
   },
   {
+    command: "bridge_attach_file",
+    argKeys: ["request"],
+    description: "attachTauriFile() invokes bridge_attach_file with { request }",
+  },
+  {
     command: "bridge_cancel",
     argKeys: ["request"],
     description: "cancelTauriBridge() invokes bridge_cancel with { request }",
@@ -199,6 +204,12 @@ ok(
 ok(
   commands.find(c => c.command === "bridge_submit")?.argKeys.includes("request"),
   "bridge_submit has request arg",
+);
+
+// bridge_attach_file expects { request: { sessionId, path } }
+ok(
+  commands.find(c => c.command === "bridge_attach_file")?.argKeys.includes("request"),
+  "bridge_attach_file has request arg",
 );
 
 // bridge_cancel expects { request: { sessionId } }

@@ -1,7 +1,10 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { formatAttachmentRefForSubmit } from "./attachmentDisplay";
 import type {
+  BridgeAttachFileRequest,
+  BridgeAttachment,
   BridgeEvent,
   BridgeHistoryMessage,
   BridgeProviderSummaryResponse,
@@ -19,6 +22,7 @@ export interface TauriBridgeStatus {
 export type TauriBridgeSession = BridgeSession;
 export type TauriBridgeEvent = BridgeEvent;
 export type TauriProviderSummary = BridgeProviderSummaryResponse;
+export type TauriBridgeAttachment = BridgeAttachment;
 
 /** Exposes only user-visible answer deltas; reasoning and other event text stay private. */
 export function tauriAssistantTextDelta(event: Pick<TauriBridgeEvent, "eventKind" | "payload">): string {
@@ -143,6 +147,17 @@ export async function chooseTauriWorkspaceRoot(): Promise<string | null> {
   return typeof selected === "string" ? selected : null;
 }
 
+export async function chooseTauriAttachmentFiles(): Promise<string[]> {
+  requireTauri();
+  const selected = await openDialog({
+    directory: false,
+    multiple: true,
+    title: "Add files to this conversation",
+  });
+  if (typeof selected === "string") return [selected];
+  return Array.isArray(selected) ? selected : [];
+}
+
 export async function openTauriBridgeSession(sessionId: string, workspaceRoot?: string): Promise<TauriBridgeSession> {
   requireTauri();
   return invoke<TauriBridgeSession>("bridge_open_session", { request: { sessionId, workspaceRoot } });
@@ -166,6 +181,12 @@ export async function tauriBridgeHistory(sessionId: string): Promise<TauriBridge
 export async function submitTauriBridge(sessionId: string, input: string): Promise<TauriBridgeSession> {
   requireTauri();
   return invoke<TauriBridgeSession>("bridge_submit", { request: { sessionId, input } });
+}
+
+export async function attachTauriFile(sessionId: string, path: string): Promise<TauriBridgeAttachment> {
+  requireTauri();
+  const request: BridgeAttachFileRequest = { sessionId, path };
+  return invoke<TauriBridgeAttachment>("bridge_attach_file", { request });
 }
 
 export async function cancelTauriBridge(sessionId: string): Promise<TauriBridgeSession> {
@@ -203,4 +224,13 @@ export function tauriMessageFrom(error: unknown): string {
 export function tauriEventSummary(event: { payload: unknown }): string {
   const payload = JSON.stringify(event.payload);
   return payload.length > 500 ? `${payload.slice(0, 497)}...` : payload;
+}
+
+export function tauriComposerInput(
+  prompt: string,
+  attachments: readonly Pick<TauriBridgeAttachment, "path">[],
+): string {
+  return [prompt.trim(), ...attachments.map(formatAttachmentRefForSubmit)]
+    .filter(Boolean)
+    .join("\n\n");
 }

@@ -22,6 +22,9 @@ func (r *fakeRuntime) State() string       { return r.state }
 func (r *fakeRuntime) History() []HistoryMessage {
 	return append([]HistoryMessage(nil), r.history...)
 }
+func (r *fakeRuntime) AttachFile(path string) (AttachmentView, error) {
+	return AttachmentView{Path: path, Name: "selected.txt", Size: 1}, nil
+}
 func (r *fakeRuntime) Submit(input string) { r.submits = append(r.submits, input) }
 func (r *fakeRuntime) Cancel()             { r.cancelCalls.Add(1) }
 func (r *fakeRuntime) Shutdown() error {
@@ -96,6 +99,30 @@ func TestRuntimeManagerHistoryReturnsEmptyArrayForEmptyTranscript(t *testing.T) 
 	}
 	if history.Messages == nil || len(history.Messages) != 0 {
 		t.Fatalf("empty history messages = %#v, want non-nil empty slice", history.Messages)
+	}
+}
+
+func TestRuntimeManagerAttachesFileOnlyToOwnedSession(t *testing.T) {
+	runtime := &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(context.Context, OpenRequest) (Runtime, error) {
+		return runtime, nil
+	}))
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a"}); err != nil {
+		t.Fatal(err)
+	}
+
+	attachment, err := manager.AttachFile("a", "/tmp/selected.txt")
+	if err != nil {
+		t.Fatalf("attach file: %v", err)
+	}
+	if attachment.Path != "/tmp/selected.txt" || attachment.Name != "selected.txt" {
+		t.Fatalf("attachment = %#v", attachment)
+	}
+	if _, err := manager.AttachFile("missing", "/tmp/selected.txt"); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("missing session error = %v", err)
+	}
+	if _, err := manager.AttachFile("a", " "); !errors.Is(err, ErrInvalidAttachment) {
+		t.Fatalf("blank path error = %v", err)
 	}
 }
 

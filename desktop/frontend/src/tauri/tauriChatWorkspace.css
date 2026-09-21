@@ -175,6 +175,19 @@
 .tauri-composer textarea::placeholder { color: var(--fg-faint); }
 .tauri-composer__bottom { display: flex; min-height: 30px; align-items: center; justify-content: space-between; gap: 12px; color: var(--fg-faint); font-size: 10px; }
 .tauri-composer__bottom > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tauri-composer__attachments { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 9px; }
+.tauri-composer__attachment { display: flex; max-width: min(280px, 100%); min-width: 0; align-items: center; gap: 7px; padding: 5px 7px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--surface-2); color: var(--fg-dim); font-size: 10px; }
+.tauri-composer__attachment-icon { display: grid; flex: 0 0 auto; place-items: center; color: var(--accent); }
+.tauri-composer__attachment-name { min-width: 0; overflow: hidden; color: var(--fg); text-overflow: ellipsis; white-space: nowrap; }
+.tauri-composer__attachment small { flex: 0 0 auto; color: var(--fg-faint); font-size: 9px; }
+.tauri-composer__attachment button { display: grid; width: 20px; height: 20px; flex: 0 0 auto; place-items: center; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--fg-faint); }
+.tauri-composer__attachment button:hover:not(:disabled) { background: var(--surface); color: var(--fg); }
+.tauri-composer__actions { display: flex; align-items: center; gap: 8px; }
+.tauri-attach-button { display: inline-flex; min-height: 30px; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid var(--border-soft); border-radius: 8px; background: transparent; color: var(--fg-dim); font-size: 10px; }
+.tauri-attach-button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 42%, var(--border)); background: color-mix(in srgb, var(--accent) 6%, transparent); color: var(--fg); }
+.tauri-attach-button:disabled { opacity: .45; }
+.tauri-message__attachments { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.tauri-message__attachments > span { display: inline-flex; max-width: min(300px, 100%); align-items: center; gap: 6px; overflow: hidden; padding: 5px 8px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface-2); color: var(--fg-dim); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .tauri-send-button { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border: 0; border-radius: 9px; background: var(--accent); color: var(--accent-fg) !important; }
 .tauri-send-button:hover:not(:disabled) { filter: brightness(1.08); }
 .tauri-send-button:disabled { background: var(--surface-2); color: var(--fg-faint) !important; opacity: 1 !important; }

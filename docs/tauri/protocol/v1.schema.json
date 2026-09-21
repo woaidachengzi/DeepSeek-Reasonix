@@ -8,6 +8,8 @@
     { "$ref": "#/$defs/providerSummaryResponse" },
     { "$ref": "#/$defs/setDefaultModelRequest" },
     { "$ref": "#/$defs/openSessionRequest" },
+    { "$ref": "#/$defs/attachFileRequest" },
+    { "$ref": "#/$defs/attachmentResponse" },
     { "$ref": "#/$defs/submitRequest" },
     { "$ref": "#/$defs/sessionResponse" },
     { "$ref": "#/$defs/historyResponse" },
@@ -88,6 +90,35 @@
       "required": ["input"],
       "properties": {
         "input": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "attachFileRequest": {
+      "type": "object",
+      "required": ["sessionId", "path"],
+      "properties": {
+        "sessionId": { "$ref": "#/$defs/sessionId" },
+        "path": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "attachment": {
+      "type": "object",
+      "required": ["path", "name", "size", "isImage"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "size": { "type": "integer", "minimum": 1 },
+        "isImage": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "attachmentResponse": {
+      "type": "object",
+      "required": ["protocolVersion", "attachment"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "attachment": { "$ref": "#/$defs/attachment" }
       },
       "additionalProperties": false
     },

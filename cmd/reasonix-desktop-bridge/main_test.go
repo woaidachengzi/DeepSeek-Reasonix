@@ -22,6 +22,7 @@ type bridgeTestRuntime struct {
 	state         string
 	history       []desktopbridge.HistoryMessage
 	submits       []string
+	attachCalls   int
 	cancelCalls   int
 	shutdownCalls int
 }
@@ -30,6 +31,10 @@ func (r *bridgeTestRuntime) SessionPath() string { return r.path }
 func (r *bridgeTestRuntime) State() string       { return r.state }
 func (r *bridgeTestRuntime) History() []desktopbridge.HistoryMessage {
 	return append([]desktopbridge.HistoryMessage(nil), r.history...)
+}
+func (r *bridgeTestRuntime) AttachFile(path string) (desktopbridge.AttachmentView, error) {
+	r.attachCalls++
+	return desktopbridge.AttachmentView{Path: ".reasonix/attachments/clipboard-test.txt", Name: filepath.Base(path), Size: 12}, nil
 }
 func (r *bridgeTestRuntime) Submit(input string) { r.submits = append(r.submits, input) }
 func (r *bridgeTestRuntime) Cancel()             { r.cancelCalls++ }
@@ -68,7 +73,7 @@ func TestHealthReturnsProtocolAndCapabilities(t *testing.T) {
 	for _, capability := range got.Capabilities {
 		found[capability] = true
 	}
-	if !found["provider_summary"] || !found["set_default_model"] {
+	if !found["provider_summary"] || !found["set_default_model"] || !found["attach_file"] {
 		t.Fatalf("health capabilities %v do not include provider model settings", got.Capabilities)
 	}
 }
@@ -267,6 +272,49 @@ func TestBridgeServerReturnsEmptyHistoryAsJSONArray(t *testing.T) {
 	}
 	if !strings.Contains(response.Body.String(), `"messages":[]`) {
 		t.Fatalf("empty history response = %s, want messages array", response.Body.String())
+	}
+}
+
+func TestBridgeServerAttachesFileWithIdempotentRequest(t *testing.T) {
+	runtime := &bridgeTestRuntime{path: "/tmp/reasonix-session", state: "idle"}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		return runtime, nil
+	}))
+	bridge := newBridgeServer(testToken, "instance", manager)
+	handler := bridge.handler()
+
+	open := httptest.NewRequest(http.MethodPost, "/v1/sessions:open", strings.NewReader(`{"sessionId":"tab-attach"}`))
+	open.Header.Set("Authorization", "Bearer "+testToken)
+	open.Header.Set("Content-Type", "application/json")
+	opened := httptest.NewRecorder()
+	handler.ServeHTTP(opened, open)
+	if opened.Code != http.StatusOK {
+		t.Fatalf("open status = %d, body = %s", opened.Code, opened.Body.String())
+	}
+
+	for range 2 {
+		request := httptest.NewRequest(http.MethodPost, "/v1/sessions/tab-attach:attach", strings.NewReader(`{"sessionId":"tab-attach","path":"/private/research notes.txt"}`))
+		request.Header.Set("Authorization", "Bearer "+testToken)
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set(requestIDHeader, "attach-request-1")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("attach status = %d, body = %s", response.Code, response.Body.String())
+		}
+		var got attachmentResponse
+		if err := json.NewDecoder(response.Body).Decode(&got); err != nil {
+			t.Fatalf("decode attachment response: %v", err)
+		}
+		if got.ProtocolVersion != desktopbridge.ProtocolVersion || got.Attachment.Path != ".reasonix/attachments/clipboard-test.txt" || got.Attachment.Name != "research notes.txt" || got.Attachment.Size != 12 {
+			t.Fatalf("attachment response = %#v", got)
+		}
+		if strings.Contains(response.Body.String(), "/private/") {
+			t.Fatalf("response leaked selected source path: %s", response.Body.String())
+		}
+	}
+	if runtime.attachCalls != 1 {
+		t.Fatalf("runtime attachment calls = %d, want 1 after idempotent replay", runtime.attachCalls)
 	}
 }
 

@@ -3,7 +3,7 @@
 ## 范围
 
 本协议连接 Tauri host 与本地 Go sidecar。它不是公网 API，sidecar 只允许本机
-Tauri host 访问。v1 只覆盖首次 Tauri PoC：健康检查、会话快照、创建/打开会话、
+Tauri host 访问。v1 首批覆盖：健康检查、会话快照、创建/打开会话、工作区附件、
 提交消息、取消、Agent 流事件与正常关闭。
 
 ## 安全与启动
@@ -31,12 +31,13 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 显式切换会话 | `POST /v1/sessions:switch` | `X-Reasonix-Request-ID` 去重；仅空闲会话 |
 | 会话快照 | `GET /v1/sessions/{sessionId}/snapshot` | 是 |
 | 可见历史 | `GET /v1/sessions/{sessionId}/history` | 是 |
+| 附加文件 | `POST /v1/sessions/{sessionId}:attach` | `X-Reasonix-Request-ID` 去重 |
 | 提交 | `POST /v1/sessions/{sessionId}:submit` | `X-Reasonix-Request-ID` 去重 |
 | 取消 | `POST /v1/sessions/{sessionId}:cancel` | 是 |
 | 流订阅 | `GET /v1/events?afterSequence=N` | 可重连 |
 | 正常关闭 | `POST /v1:shutdown` | 是 |
 
-当前 bridge 已实现 health、脱敏 Provider 摘要、建/开会话、空闲会话的显式切换、快照、可见历史、submit、cancel、SSE 事件与正常关闭。
+当前 bridge 已实现 health、脱敏 Provider 摘要、建/开会话、空闲会话的显式切换、快照、可见历史、工作区附件、submit、cancel、SSE 事件与正常关闭。
 Provider 摘要仅包含配置名称、类型、已配置模型 ID、模型数量、是否需要凭据、凭据是否已配置及用户默认模型；不返回 endpoint、凭据变量名、密钥或请求 headers。模型 ID 仅用于本地下拉选择。
 默认模型修改复用 `internal/config` 的选择校验、用户配置锁和窄写入，只改变新会话默认值，不重建或改写当前会话；选项只包括已启用且凭据可用的模型。工作区 `reasonix.toml` 仍可覆盖用户默认值。
 `submit` 仅确认既有 Go Controller 已接收输入（HTTP 202）；它不会等待 Agent 生成结束，
@@ -48,6 +49,12 @@ SSE 事件携带进度和最终结果。事件 replay 使用有界 ledger；落�
 重试一次。历史端点只返回 user/assistant 的 `content`：不返回 system prompt、推理内容、工具
 参数/结果、图片引用或本地执行元数据。单条正文最多 16,000 个 Unicode 字符，单次最多返回最近
 200 条可见消息；`startIndex` 与 `totalMessages` 让 host 明确提示未加载的更早内容。
+
+附件请求只接受由 Tauri 原生文件选择器返回的绝对路径。Go core 会拒绝符号链接、
+目录、空文件和超过 25 MB 的普通文件（图像上限 64 MB，并校验实际图像格式），
+随后将副本写入当前工作区的 `.reasonix/attachments/`。响应只返回工作区相对引用、
+展示名称、大小与图像标记，不返回源文件绝对路径；附加操作使用 request ID 去重，
+避免传输重试时重复创建副本。
 
 `switch_session` 是为工作台导航准备的受限交接：bridge 首版仍只拥有一个 Go
 Controller。目标会话与当前会话不同且当前状态为 `idle` 时，bridge 先调用旧

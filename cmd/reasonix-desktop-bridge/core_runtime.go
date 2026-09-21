@@ -138,6 +138,32 @@ func (r *controllerRuntime) History() []desktopbridge.HistoryMessage {
 	return messages
 }
 
+func (r *controllerRuntime) AttachFile(path string) (desktopbridge.AttachmentView, error) {
+	if !filepath.IsAbs(path) {
+		return desktopbridge.AttachmentView{}, desktopbridge.ErrInvalidAttachment
+	}
+	name := filepath.Base(path)
+	ext := strings.ToLower(filepath.Ext(path))
+	isImage := ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".webp"
+	var (
+		rel string
+		err error
+	)
+	if isImage {
+		rel, err = control.SaveImageFileInRoot(r.controller.WorkspaceRoot(), path)
+	} else {
+		rel, err = control.SaveAttachmentFileInRoot(r.controller.WorkspaceRoot(), path)
+	}
+	if err != nil {
+		return desktopbridge.AttachmentView{}, fmt.Errorf("%w: copy selected file", desktopbridge.ErrInvalidAttachment)
+	}
+	info, err := os.Stat(filepath.Join(r.controller.WorkspaceRoot(), filepath.FromSlash(rel)))
+	if err != nil {
+		return desktopbridge.AttachmentView{}, fmt.Errorf("read copied attachment metadata: %w", err)
+	}
+	return desktopbridge.AttachmentView{Path: rel, Name: name, Size: info.Size(), IsImage: isImage}, nil
+}
+
 func truncateBridgeHistoryContent(content string) (string, bool) {
 	runes := []rune(content)
 	if len(runes) <= bridgeHistoryMaxContentRunes {

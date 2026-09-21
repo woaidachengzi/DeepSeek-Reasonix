@@ -11,12 +11,13 @@ import (
 )
 
 var (
-	ErrClosed           = errors.New("desktop bridge runtime manager is closed")
-	ErrOpenInProgress   = errors.New("desktop bridge session open is already in progress")
-	ErrSessionConflict  = errors.New("desktop bridge already owns a different session")
-	ErrInvalidSessionID = errors.New("desktop bridge session id is required")
-	ErrInvalidInput     = errors.New("desktop bridge input is required")
-	ErrSessionNotFound  = errors.New("desktop bridge session was not found")
+	ErrClosed            = errors.New("desktop bridge runtime manager is closed")
+	ErrOpenInProgress    = errors.New("desktop bridge session open is already in progress")
+	ErrSessionConflict   = errors.New("desktop bridge already owns a different session")
+	ErrInvalidSessionID  = errors.New("desktop bridge session id is required")
+	ErrInvalidInput      = errors.New("desktop bridge input is required")
+	ErrInvalidAttachment = errors.New("desktop bridge attachment path is invalid")
+	ErrSessionNotFound   = errors.New("desktop bridge session was not found")
 )
 
 // OpenRequest identifies the one local session the first bridge release owns.
@@ -46,6 +47,15 @@ type HistoryMessage struct {
 	Truncated bool   `json:"truncated,omitempty"`
 }
 
+// AttachmentView is the user-visible result of copying a file into the active
+// session workspace. The source path is deliberately never returned.
+type AttachmentView struct {
+	Path    string `json:"path"`
+	Name    string `json:"name"`
+	Size    int64  `json:"size"`
+	IsImage bool   `json:"isImage"`
+}
+
 // HistoryView is the latest bounded page of display-safe messages. StartIndex
 // and TotalMessages refer to the projected (not raw provider) transcript.
 type HistoryView struct {
@@ -64,6 +74,7 @@ type Runtime interface {
 	SessionPath() string
 	State() string
 	History() []HistoryMessage
+	AttachFile(path string) (AttachmentView, error)
 	Submit(input string)
 	Cancel()
 	Shutdown() error
@@ -286,6 +297,25 @@ func (m *RuntimeManager) Submit(sessionID, input string) (SessionView, error) {
 	return m.withRuntime(sessionID, func(runtime Runtime) {
 		runtime.Submit(input)
 	})
+}
+
+// AttachFile copies a user-selected file into the owned session's workspace.
+// Holding the manager lock prevents shutdown or session replacement from
+// racing an in-progress copy.
+func (m *RuntimeManager) AttachFile(sessionID, path string) (AttachmentView, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if strings.TrimSpace(path) == "" {
+		return AttachmentView{}, ErrInvalidAttachment
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return AttachmentView{}, ErrClosed
+	}
+	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
+		return AttachmentView{}, ErrSessionNotFound
+	}
+	return m.runtime.AttachFile(path)
 }
 
 // Cancel asks the bridge-owned runtime to stop foreground work. It is safe to

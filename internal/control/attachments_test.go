@@ -121,6 +121,86 @@ func TestSaveAttachmentFile(t *testing.T) {
 	}
 }
 
+func TestSaveAttachmentFileInRootUsesExplicitWorkspace(t *testing.T) {
+	base := t.TempDir()
+	workspace := filepath.Join(base, "workspace")
+	cwd := filepath.Join(base, "cwd")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(base, "research notes.txt")
+	if err := os.WriteFile(source, []byte("useful context"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(cwd)
+
+	got, err := SaveAttachmentFileInRoot(workspace, source)
+	if err != nil {
+		t.Fatalf("SaveAttachmentFileInRoot: %v", err)
+	}
+	if !strings.HasPrefix(got, filepath.ToSlash(filepath.Join(".reasonix", "attachments", "clipboard-"))) || !strings.HasSuffix(got, ".txt") {
+		t.Fatalf("stored path = %q, want a workspace attachment path", got)
+	}
+	data, err := os.ReadFile(filepath.Join(workspace, filepath.FromSlash(got)))
+	if err != nil || string(data) != "useful context" {
+		t.Fatalf("workspace attachment = %q, %v", data, err)
+	}
+	if _, err := os.Stat(filepath.Join(cwd, ".reasonix")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("attachment unexpectedly used process cwd: %v", err)
+	}
+}
+
+func TestSaveImageFileInRootUsesExplicitWorkspace(t *testing.T) {
+	base := t.TempDir()
+	workspace := filepath.Join(base, "workspace")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(base, "image.png")
+	if err := os.WriteFile(source, mustBase64(t, tinyPNG), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := SaveImageFileInRoot(workspace, source)
+	if err != nil {
+		t.Fatalf("SaveImageFileInRoot: %v", err)
+	}
+	if !strings.HasPrefix(got, filepath.ToSlash(filepath.Join(".reasonix", "attachments", "clipboard-"))) || !strings.HasSuffix(got, ".png") {
+		t.Fatalf("stored image path = %q, want a workspace image attachment", got)
+	}
+	data, err := os.ReadFile(filepath.Join(workspace, filepath.FromSlash(got)))
+	if err != nil || string(data) != string(mustBase64(t, tinyPNG)) {
+		t.Fatalf("workspace image bytes = %d bytes, %v", len(data), err)
+	}
+}
+
+func TestSaveAttachmentFileInRootRejectsSymlinkedReasonixParent(t *testing.T) {
+	base := t.TempDir()
+	workspace := filepath.Join(base, "workspace")
+	external := filepath.Join(base, "external")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(external, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(external, filepath.Join(workspace, ".reasonix")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	source := filepath.Join(base, "notes.txt")
+	if err := os.WriteFile(source, []byte("private"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SaveAttachmentFileInRoot(workspace, source); err == nil {
+		t.Fatal("symlinked .reasonix parent should be rejected")
+	}
+	if _, err := os.Stat(filepath.Join(external, "attachments")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("created attachment directory outside workspace: %v", err)
+	}
+}
+
 func TestSaveAttachmentFileRejectsEmptyAndDir(t *testing.T) {
 	t.Chdir(t.TempDir())
 	if err := os.WriteFile("empty.txt", nil, 0o644); err != nil {

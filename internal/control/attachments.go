@@ -169,6 +169,12 @@ func saveAttachmentBytesInRoot(root, ext string, raw []byte) (string, error) {
 }
 
 func SaveImageFile(path string) (string, error) {
+	return SaveImageFileInRoot(".", path)
+}
+
+// SaveImageFileInRoot copies a local image into root/.reasonix/attachments.
+// The explicit root keeps desktop hosts from depending on process-wide cwd.
+func SaveImageFileInRoot(root, path string) (string, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
 		return "", err
@@ -203,10 +209,17 @@ func SaveImageFile(path string) (string, error) {
 	} else if !os.SameFile(opened, after) || after.Size() != opened.Size() {
 		return "", fmt.Errorf("pasted image changed while reading")
 	}
-	return SaveImageBytes("", raw)
+	return SaveImageBytesInRoot(root, "", raw)
 }
 
 func SaveAttachmentFile(path string) (string, error) {
+	return SaveAttachmentFileInRoot(".", path)
+}
+
+// SaveAttachmentFileInRoot copies a local regular file into the workspace's
+// private attachment directory without following symlinks or trusting a file
+// that changes while it is being read.
+func SaveAttachmentFileInRoot(root, path string) (string, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
 		return "", err
@@ -245,20 +258,32 @@ func SaveAttachmentFile(path string) (string, error) {
 	if !safeAttachmentExt.MatchString(ext) {
 		ext = ".bin"
 	}
-	if err := ensureAttachmentRoot(); err != nil {
+	if strings.TrimSpace(root) == "" {
+		root = "."
+	}
+	if err := ensureAttachmentRootIn(root); err != nil {
 		return "", err
 	}
-	rel, dst, err := createAttachmentFile(ext)
+	rel, dst, err := createAttachmentFileIn(root, ext)
 	if err != nil {
 		return "", err
 	}
-	if _, err := dst.Write(raw); err != nil {
+	if n, err := dst.Write(raw); err != nil {
 		_ = dst.Close()
-		_ = os.Remove(rel)
+		_ = os.Remove(filepath.Join(root, rel))
+		return "", err
+	} else if n != len(raw) {
+		_ = dst.Close()
+		_ = os.Remove(filepath.Join(root, rel))
+		return "", io.ErrShortWrite
+	}
+	if err := dst.Sync(); err != nil {
+		_ = dst.Close()
+		_ = os.Remove(filepath.Join(root, rel))
 		return "", err
 	}
 	if err := dst.Close(); err != nil {
-		_ = os.Remove(rel)
+		_ = os.Remove(filepath.Join(root, rel))
 		return "", err
 	}
 	return filepath.ToSlash(rel), nil
@@ -536,6 +561,17 @@ func ensureAttachmentRoot() error {
 }
 
 func ensureAttachmentRootIn(base string) error {
+	if strings.TrimSpace(base) == "" {
+		base = "."
+	}
+	reasonixRoot := filepath.Join(base, ".reasonix")
+	if info, err := os.Lstat(reasonixRoot); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return fmt.Errorf("attachment parent directory is invalid")
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
 	root := filepath.Join(base, ".reasonix", "attachments")
 	if info, err := os.Lstat(root); err == nil {
 		if info.Mode()&os.ModeSymlink != 0 {
