@@ -182,25 +182,36 @@ export function TauriSessionPreview() {
           const textDelta = tauriAssistantTextDelta(event);
           if (textDelta) setLiveText(previous => previous + textDelta);
           if (event.eventKind === "turn_done") {
-            const failure = tauriTurnFailure(event);
-            void Promise.all([tauriBridgeSnapshot(event.sessionId), tauriBridgeHistory(event.sessionId)])
-              .then(([latest, latestHistory]) => {
+            void (async () => {
+              // Refresh state and transcript independently. A transcript parse
+              // failure must not leave a completed turn marked as running.
+              let completionError = tauriTurnFailure(event);
+              try {
+                const latest = await tauriBridgeSnapshot(event.sessionId);
                 if (!active) return;
                 setSession(latest.session);
+              } catch (snapshotError) {
+                completionError ||= tauriMessageFrom(snapshotError);
+              }
+              try {
+                const latestHistory = await tauriBridgeHistory(event.sessionId);
+                if (!active) return;
                 setHistory(latestHistory);
                 setHistoryError("");
+              } catch (historyError) {
+                if (!active) return;
+                const message = tauriMessageFrom(historyError);
+                setHistoryError(message);
+                completionError ||= message;
+              } finally {
+                if (!active) return;
                 setHistoryLoading(false);
                 setLiveText("");
                 // A failed turn must keep its reason on screen; only a
                 // completed turn clears a previous message.
-                setError(failure);
-              })
-              .catch(error => {
-                if (!active) return;
-                const message = tauriMessageFrom(error);
-                setHistoryError(message);
-                if (!failure) setError(message);
-              });
+                setError(completionError);
+              }
+            })();
           }
         });
         offError = await onTauriBridgeConnectionError(message => {

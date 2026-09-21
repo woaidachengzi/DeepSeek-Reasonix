@@ -744,7 +744,76 @@ fn parse_json_response(response: &[u8]) -> Result<Value, String> {
             "desktop bridge request failed with status {status}"
         ));
     }
-    serde_json::from_slice(&response[index + boundary.len()..]).map_err(display_error)
+    let body = &response[index + boundary.len()..];
+    let transfer_encoding = headers.lines().skip(1).find_map(|line| {
+        let (name, value) = line.split_once(':')?;
+        name.trim()
+            .eq_ignore_ascii_case("transfer-encoding")
+            .then_some(value.trim())
+    });
+    let decoded_body = transfer_encoding
+        .map(|encoding| {
+            if encoding.eq_ignore_ascii_case("chunked") {
+                decode_chunked_body(body)
+            } else {
+                Err("desktop bridge returned an unsupported transfer encoding".to_string())
+            }
+        })
+        .transpose()?;
+    serde_json::from_slice(decoded_body.as_deref().unwrap_or(body)).map_err(display_error)
+}
+
+fn decode_chunked_body(mut body: &[u8]) -> Result<Vec<u8>, String> {
+    const MAX_BODY_BYTES: usize = 32 * 1024 * 1024;
+    let mut decoded = Vec::new();
+    loop {
+        let line_end = body
+            .windows(2)
+            .position(|window| window == b"\r\n")
+            .ok_or_else(|| "desktop bridge returned an invalid chunked response".to_string())?;
+        let line = std::str::from_utf8(&body[..line_end]).map_err(display_error)?;
+        let size = usize::from_str_radix(line.split(';').next().unwrap_or_default().trim(), 16)
+            .map_err(display_error)?;
+        body = &body[line_end + 2..];
+
+        if size == 0 {
+            loop {
+                let trailer_end = body
+                    .windows(2)
+                    .position(|window| window == b"\r\n")
+                    .ok_or_else(|| {
+                        "desktop bridge returned an invalid chunked response trailer".to_string()
+                    })?;
+                let trailer = &body[..trailer_end];
+                body = &body[trailer_end + 2..];
+                if trailer.is_empty() {
+                    if !body.is_empty() {
+                        return Err(
+                            "desktop bridge returned data after the chunked response".to_string()
+                        );
+                    }
+                    return Ok(decoded);
+                }
+                if !trailer.contains(&b':') {
+                    return Err(
+                        "desktop bridge returned an invalid chunked response trailer".to_string(),
+                    );
+                }
+            }
+        }
+
+        if decoded.len().saturating_add(size) > MAX_BODY_BYTES {
+            return Err("desktop bridge response exceeds the size limit".to_string());
+        }
+        let chunk_end = size
+            .checked_add(2)
+            .ok_or_else(|| "desktop bridge returned an invalid chunk size".to_string())?;
+        if body.len() < chunk_end || body.get(size..chunk_end) != Some(&b"\r\n"[..]) {
+            return Err("desktop bridge returned an invalid chunked response".to_string());
+        }
+        decoded.extend_from_slice(&body[..size]);
+        body = &body[chunk_end..];
+    }
 }
 
 fn session_path_component(session_id: &str) -> Result<String, String> {
@@ -949,6 +1018,22 @@ mod tests {
             .recv_timeout(Duration::from_secs(1))
             .expect("headers");
         assert!(headers.contains("X-Reasonix-Request-ID: request-123\r\n"));
+    }
+
+    #[test]
+    fn parses_chunked_json_responses_with_trailers() {
+        let expected_content = "x".repeat(4096);
+        let body = serde_json::to_vec(&json!({"content": expected_content})).unwrap();
+        let mut response = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n".to_vec();
+        for chunk in body.chunks(1024) {
+            response.extend_from_slice(format!("{:x};ext=ignored\r\n", chunk.len()).as_bytes());
+            response.extend_from_slice(chunk);
+            response.extend_from_slice(b"\r\n");
+        }
+        response.extend_from_slice(b"0\r\nX-Test-Trailer: complete\r\n\r\n");
+
+        let parsed = parse_json_response(&response).expect("chunked JSON response");
+        assert_eq!(parsed["content"].as_str(), Some(expected_content.as_str()));
     }
 
     #[test]
