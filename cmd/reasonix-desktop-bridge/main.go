@@ -401,7 +401,14 @@ func parseAfterSequence(raw string) (uint64, error) {
 }
 
 func writeSSE(w io.Writer, item desktopbridge.Event) bool {
-	_, err := fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", item.Sequence, item.EventKind, item.Payload)
+	// The Tauri host consumes the versioned bridge envelope from each data
+	// frame. Keeping only Payload here loses session, kind, sequence, and
+	// protocol metadata, so the host cannot deserialize or deliver the event.
+	data, err := json.Marshal(item)
+	if err != nil {
+		return false
+	}
+	_, err = fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", item.Sequence, item.EventKind, data)
 	return err == nil
 }
 

@@ -562,6 +562,41 @@ func TestBridgeServerEventsRequireResyncOutsideReplayWindow(t *testing.T) {
 	}
 }
 
+func TestWriteSSEEncodesVersionedBridgeEventEnvelope(t *testing.T) {
+	item := desktopbridge.Event{
+		ProtocolVersion: desktopbridge.ProtocolVersion,
+		Sequence:        7,
+		EventKind:       "turn_done",
+		SessionID:       "tab-1",
+		Payload:         json.RawMessage(`{"kind":"turn_done","status":"failed","err":"provider unavailable"}`),
+	}
+	var frame strings.Builder
+	if !writeSSE(&frame, item) {
+		t.Fatal("writeSSE returned false")
+	}
+
+	var data string
+	for _, line := range strings.Split(frame.String(), "\n") {
+		if strings.HasPrefix(line, "data: ") {
+			data = strings.TrimPrefix(line, "data: ")
+			break
+		}
+	}
+	if data == "" {
+		t.Fatalf("SSE frame has no data line: %q", frame.String())
+	}
+	var got desktopbridge.Event
+	if err := json.Unmarshal([]byte(data), &got); err != nil {
+		t.Fatalf("decode SSE bridge event envelope: %v; data=%s", err, data)
+	}
+	if got.ProtocolVersion != item.ProtocolVersion || got.Sequence != item.Sequence || got.EventKind != item.EventKind || got.SessionID != item.SessionID {
+		t.Fatalf("bridge event envelope = %#v", got)
+	}
+	if string(got.Payload) != string(item.Payload) {
+		t.Fatalf("payload = %s, want %s", got.Payload, item.Payload)
+	}
+}
+
 func TestReadyFileDoesNotContainTokenAndIsOwnerOnly(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nested", "ready.json")
 	ready := readyFile{ProtocolVersion: desktopbridge.ProtocolVersion, Address: "127.0.0.1:12345", SidecarInstanceID: "instance-a", LaunchID: "launch-a"}
