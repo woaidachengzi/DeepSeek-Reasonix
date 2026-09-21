@@ -20,6 +20,7 @@ const testToken = "0123456789abcdef0123456789abcdef"
 type bridgeTestRuntime struct {
 	path          string
 	state         string
+	history       []desktopbridge.HistoryMessage
 	submits       []string
 	cancelCalls   int
 	shutdownCalls int
@@ -27,6 +28,9 @@ type bridgeTestRuntime struct {
 
 func (r *bridgeTestRuntime) SessionPath() string { return r.path }
 func (r *bridgeTestRuntime) State() string       { return r.state }
+func (r *bridgeTestRuntime) History() []desktopbridge.HistoryMessage {
+	return append([]desktopbridge.HistoryMessage(nil), r.history...)
+}
 func (r *bridgeTestRuntime) Submit(input string) { r.submits = append(r.submits, input) }
 func (r *bridgeTestRuntime) Cancel()             { r.cancelCalls++ }
 func (r *bridgeTestRuntime) Shutdown() error {
@@ -135,6 +139,46 @@ func TestBridgeServerOpensSessionAndReturnsSnapshot(t *testing.T) {
 	}
 	if snapshotResponse.ProtocolVersion != desktopbridge.ProtocolVersion || snapshotResponse.Sequence != 0 || snapshotResponse.Session.ID != "tab-1" {
 		t.Fatalf("unexpected snapshot: %#v", snapshotResponse)
+	}
+}
+
+func TestBridgeServerReturnsDisplaySafeSessionHistory(t *testing.T) {
+	runtime := &bridgeTestRuntime{
+		path:  "/tmp/reasonix-session",
+		state: "idle",
+		history: []desktopbridge.HistoryMessage{
+			{Role: "user", Content: "hello"},
+			{Role: "assistant", Content: "hi", Truncated: true},
+		},
+	}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		return runtime, nil
+	}))
+	bridge := newBridgeServer(testToken, "instance", manager)
+	handler := bridge.handler()
+
+	open := httptest.NewRequest(http.MethodPost, "/v1/sessions:open", strings.NewReader(`{"sessionId":"tab-1"}`))
+	open.Header.Set("Authorization", "Bearer "+testToken)
+	open.Header.Set("Content-Type", "application/json")
+	openRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(openRecorder, open)
+	if openRecorder.Code != http.StatusOK {
+		t.Fatalf("open status = %d, body = %s", openRecorder.Code, openRecorder.Body.String())
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/v1/sessions/tab-1/history", nil)
+	request.Header.Set("Authorization", "Bearer "+testToken)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("history status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var got historyResponse
+	if err := json.NewDecoder(response.Body).Decode(&got); err != nil {
+		t.Fatalf("decode history response: %v", err)
+	}
+	if got.ProtocolVersion != desktopbridge.ProtocolVersion || got.Session.ID != "tab-1" || got.TotalMessages != 2 || got.StartIndex != 0 || len(got.Messages) != 2 || !got.Messages[1].Truncated {
+		t.Fatalf("history = %#v", got)
 	}
 }
 

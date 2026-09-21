@@ -8,6 +8,7 @@
     { "$ref": "#/$defs/openSessionRequest" },
     { "$ref": "#/$defs/submitRequest" },
     { "$ref": "#/$defs/sessionResponse" },
+    { "$ref": "#/$defs/historyResponse" },
     { "$ref": "#/$defs/event" },
     { "$ref": "#/$defs/error" }
   ],
@@ -60,6 +61,29 @@
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
         "sequence": { "type": "integer", "minimum": 0 },
         "session": { "$ref": "#/$defs/session" }
+      },
+      "additionalProperties": false
+    },
+    "historyMessage": {
+      "type": "object",
+      "required": ["role", "content"],
+      "properties": {
+        "role": { "enum": ["user", "assistant"] },
+        "content": { "type": "string" },
+        "truncated": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "historyResponse": {
+      "type": "object",
+      "required": ["protocolVersion", "sequence", "session", "messages", "startIndex", "totalMessages"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "sequence": { "type": "integer", "minimum": 0 },
+        "session": { "$ref": "#/$defs/session" },
+        "messages": { "type": "array", "items": { "$ref": "#/$defs/historyMessage" } },
+        "startIndex": { "type": "integer", "minimum": 0 },
+        "totalMessages": { "type": "integer", "minimum": 0 }
       },
       "additionalProperties": false
     },

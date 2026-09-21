@@ -18,6 +18,8 @@ func TestGoDTOsMatchTheWireSchema(t *testing.T) {
 		{Name: "health", Sample: healthResponse{}},
 		{Name: "openSessionRequest", Sample: openSessionRequest{}},
 		{Name: "submitRequest", Sample: submitRequest{}},
+		{Name: "historyMessage", Sample: desktopbridge.HistoryMessage{}},
+		{Name: "historyResponse", Sample: historyResponse{}},
 	}
 	if err := protocolgen.CheckGoDTOs(root, definitions); err != nil {
 		t.Fatalf("Go DTOs drifted from %s: %v", protocolgen.SchemaPath, err)

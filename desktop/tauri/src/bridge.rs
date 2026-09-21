@@ -53,8 +53,8 @@ pub struct SessionRequest {
 // The wire DTOs mirror docs/tauri/protocol/v1.schema.json through the generated
 // module; only the host-facing command payloads below stay hand-written.
 pub use crate::protocol_generated::{
-    BridgeEvent, BridgeOpenSessionRequest as OpenSessionRequest, BridgeSession,
-    BridgeSessionResponse,
+    BridgeEvent, BridgeHistoryMessage, BridgeHistoryResponse,
+    BridgeOpenSessionRequest as OpenSessionRequest, BridgeSession, BridgeSessionResponse,
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -62,6 +62,16 @@ pub use crate::protocol_generated::{
 pub struct BridgeSnapshot {
     pub sequence: u64,
     pub session: BridgeSession,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeHistory {
+    pub sequence: u64,
+    pub session: BridgeSession,
+    pub messages: Vec<BridgeHistoryMessage>,
+    pub start_index: u64,
+    pub total_messages: u64,
 }
 
 pub struct BridgeSupervisor {
@@ -309,6 +319,31 @@ impl BridgeSupervisor {
         })
     }
 
+    pub fn history(&self, request: SessionRequest) -> Result<BridgeHistory, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let path = format!("/v1/sessions/{session_id}/history");
+        let response = self.request_json("GET", &path, None, None)?;
+        let envelope: BridgeHistoryResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        let returned_messages = u64::try_from(envelope.messages.len())
+            .map_err(|_| "desktop bridge history is too large".to_string())?;
+        if envelope.start_index > envelope.total_messages
+            || returned_messages > envelope.total_messages - envelope.start_index
+        {
+            return Err("desktop bridge history pagination is invalid".to_string());
+        }
+        Ok(BridgeHistory {
+            sequence: envelope.sequence,
+            session: envelope.session,
+            messages: envelope.messages,
+            start_index: envelope.start_index,
+            total_messages: envelope.total_messages,
+        })
+    }
+
     pub fn submit(&self, request: SubmitRequest) -> Result<BridgeSession, String> {
         let session_id = session_path_component(&request.session_id)?;
         let request_id = opaque_secret()?;
@@ -400,6 +435,22 @@ impl BridgeSupervisor {
         body: Option<Value>,
         request_id: Option<&str>,
     ) -> Result<BridgeSessionResponse, String> {
+        let response = self.request_json(method, path, body, request_id)?;
+        let envelope: BridgeSessionResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope)
+    }
+
+    fn request_json(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<Value>,
+        request_id: Option<&str>,
+    ) -> Result<Value, String> {
         let mut process = self
             .process
             .lock()
@@ -411,7 +462,7 @@ impl BridgeSupervisor {
             *process = None;
             return Err("desktop bridge is not running".to_string());
         }
-        let response = request_json(
+        request_json(
             running.address,
             &running.token,
             method,
@@ -433,13 +484,7 @@ impl BridgeSupervisor {
             )
             .map_err(|_| first_error),
             None => Err(first_error),
-        })?;
-        let envelope: BridgeSessionResponse =
-            serde_json::from_value(response).map_err(display_error)?;
-        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
-            return Err("desktop bridge protocol version is unsupported".to_string());
-        }
-        Ok(envelope)
+        })
     }
 
     fn event_connection(&self) -> Result<(SocketAddr, String), String> {

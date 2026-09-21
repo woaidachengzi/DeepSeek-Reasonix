@@ -46,12 +46,12 @@ interface CommandContract {
 
 // Rust commands from desktop/tauri/src/main.rs:
 //   bridge_status, restart_bridge, bridge_open_session,
-//   bridge_session_snapshot, bridge_submit, bridge_cancel,
+//   bridge_session_snapshot, bridge_session_history, bridge_submit, bridge_cancel,
 //   bridge_start_events, preview_profile_status, import_stable_profile
 //
 // Frontend adapters from desktop/frontend/src/lib/tauriBridge.ts:
 //   tauriBridgeStatus, restartTauriBridge, openTauriBridgeSession,
-//   tauriBridgeSnapshot, submitTauriBridge, cancelTauriBridge,
+//   tauriBridgeSnapshot, tauriBridgeHistory, submitTauriBridge, cancelTauriBridge,
 //   startTauriBridgeEvents, tauriPreviewProfileStatus,
 //   importTauriStableProfile
 
@@ -75,6 +75,11 @@ const commands: CommandContract[] = [
     command: "bridge_session_snapshot",
     argKeys: ["request"],
     description: "tauriBridgeSnapshot() invokes bridge_session_snapshot with { request }",
+  },
+  {
+    command: "bridge_session_history",
+    argKeys: ["request"],
+    description: "tauriBridgeHistory() invokes bridge_session_history with { request }",
   },
   {
     command: "bridge_submit",
@@ -142,6 +147,12 @@ ok(
 ok(
   commands.find(c => c.command === "bridge_session_snapshot")?.argKeys.includes("request"),
   "bridge_session_snapshot has request arg",
+);
+
+// bridge_session_history expects { request: { sessionId } }
+ok(
+  commands.find(c => c.command === "bridge_session_history")?.argKeys.includes("request"),
+  "bridge_session_history has request arg",
 );
 
 // bridge_submit expects { request: { sessionId, input } }
@@ -216,6 +227,12 @@ eq(sessionShape.workspaceRoot, "optional", "BridgeSession.workspaceRoot is optio
 const snapshotShape = { sequence: "required", session: "required" };
 eq(snapshotShape.sequence, "required", "BridgeSnapshot.sequence is required");
 eq(snapshotShape.session, "required", "BridgeSnapshot.session is required");
+
+// BridgeHistory: { sequence, session, messages, startIndex, totalMessages }
+const historyShape = { sequence: "required", session: "required", messages: "required", startIndex: "required", totalMessages: "required" };
+for (const [field, requirement] of Object.entries(historyShape)) {
+  eq(requirement, "required", `BridgeHistory.${field} is required`);
+}
 
 // ---------------------------------------------------------------------------
 // Test: session state enum matches schema

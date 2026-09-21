@@ -26,6 +26,21 @@ export interface BridgeHealth {
   status: "ok";
 }
 
+export interface BridgeHistoryMessage {
+  content: string;
+  role: "user" | "assistant";
+  truncated?: boolean;
+}
+
+export interface BridgeHistoryResponse {
+  messages: BridgeHistoryMessage[];
+  protocolVersion: number;
+  sequence: number;
+  session: BridgeSession;
+  startIndex: number;
+  totalMessages: number;
+}
+
 export interface BridgeOpenSessionRequest {
   sessionId: string;
   workspaceRoot?: string;

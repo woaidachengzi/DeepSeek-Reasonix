@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/event"
+	"reasonix/internal/provider"
 )
 
 // controllerFactory builds the established Go core only after a bridge client
@@ -103,6 +104,46 @@ func (r *controllerRuntime) State() string {
 	default:
 		return "idle"
 	}
+}
+
+const bridgeHistoryMaxContentRunes = 16_000
+
+// History makes only user- and assistant-visible text available to the host.
+// The controller transcript also contains system prompts, provider reasoning,
+// tool requests/results, image references, and local execution metadata; none
+// of those are a safe or stable first bridge contract.
+func (r *controllerRuntime) History() []desktopbridge.HistoryMessage {
+	history := r.controller.History()
+	messages := make([]desktopbridge.HistoryMessage, 0, len(history))
+	for _, message := range history {
+		var role string
+		switch message.Role {
+		case provider.RoleUser:
+			role = "user"
+		case provider.RoleAssistant:
+			role = "assistant"
+		default:
+			continue
+		}
+		if strings.TrimSpace(message.Content) == "" {
+			continue
+		}
+		content, truncated := truncateBridgeHistoryContent(message.Content)
+		messages = append(messages, desktopbridge.HistoryMessage{
+			Role:      role,
+			Content:   content,
+			Truncated: truncated,
+		})
+	}
+	return messages
+}
+
+func truncateBridgeHistoryContent(content string) (string, bool) {
+	runes := []rune(content)
+	if len(runes) <= bridgeHistoryMaxContentRunes {
+		return content, false
+	}
+	return string(runes[:bridgeHistoryMaxContentRunes]) + "\n\n[Preview truncated this message]", true
 }
 
 func (r *controllerRuntime) Submit(input string) { r.controller.SubmitHTTP(input) }

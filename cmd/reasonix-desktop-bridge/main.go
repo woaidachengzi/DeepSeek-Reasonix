@@ -338,6 +338,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("GET /v1/health", b.authorized(b.health))
 	mux.HandleFunc("POST /v1/sessions:open", b.authorized(b.idempotent(64<<10, b.openSession)))
 	mux.HandleFunc("GET /v1/sessions/{id}/snapshot", b.authorized(b.sessionSnapshot))
+	mux.HandleFunc("GET /v1/sessions/{id}/history", b.authorized(b.sessionHistory))
 	mux.HandleFunc("GET /v1/events", b.authorized(b.eventsHandler))
 	// ServeMux path wildcards occupy a complete segment, while the public v1
 	// routes use the conventional ":submit" and ":cancel" suffixes. Dispatch
@@ -439,7 +440,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "open_session", "session_snapshot", "submit", "cancel", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "open_session", "session_snapshot", "session_history", "submit", "cancel", "idempotency", "shutdown"},
 	})
 }
 
@@ -464,6 +465,15 @@ type openSessionRequest struct {
 
 type submitRequest struct {
 	Input string `json:"input"`
+}
+
+type historyResponse struct {
+	ProtocolVersion int                            `json:"protocolVersion"`
+	Sequence        uint64                         `json:"sequence"`
+	Session         desktopbridge.SessionView      `json:"session"`
+	Messages        []desktopbridge.HistoryMessage `json:"messages"`
+	StartIndex      int                            `json:"startIndex"`
+	TotalMessages   int                            `json:"totalMessages"`
 }
 
 func (b *bridgeServer) openSession(w http.ResponseWriter, r *http.Request) {
@@ -496,6 +506,22 @@ func (b *bridgeServer) sessionSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "sequence": b.events.LatestSequence(), "session": view})
+}
+
+func (b *bridgeServer) sessionHistory(w http.ResponseWriter, r *http.Request) {
+	history, err := b.runtimes.History(r.PathValue("id"))
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to read desktop bridge session history")
+		return
+	}
+	writeJSON(w, http.StatusOK, historyResponse{
+		ProtocolVersion: desktopbridge.ProtocolVersion,
+		Sequence:        b.events.LatestSequence(),
+		Session:         history.Session,
+		Messages:        history.Messages,
+		StartIndex:      history.StartIndex,
+		TotalMessages:   history.TotalMessages,
+	})
 }
 
 func (b *bridgeServer) submit(w http.ResponseWriter, r *http.Request) {

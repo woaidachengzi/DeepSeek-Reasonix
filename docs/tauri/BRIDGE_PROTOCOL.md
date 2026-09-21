@@ -27,19 +27,22 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 健康检查 | `GET /v1/health` | 是 |
 | 建/开会话 | `POST /v1/sessions:open` | `X-Reasonix-Request-ID` 去重 |
 | 会话快照 | `GET /v1/sessions/{sessionId}/snapshot` | 是 |
+| 可见历史 | `GET /v1/sessions/{sessionId}/history` | 是 |
 | 提交 | `POST /v1/sessions/{sessionId}:submit` | `X-Reasonix-Request-ID` 去重 |
 | 取消 | `POST /v1/sessions/{sessionId}:cancel` | 是 |
 | 流订阅 | `GET /v1/events?afterSequence=N` | 可重连 |
 | 正常关闭 | `POST /v1:shutdown` | 是 |
 
-当前 bridge 已实现 health、建/开会话、快照、submit、cancel、SSE 事件与正常关闭。
+当前 bridge 已实现 health、建/开会话、快照、可见历史、submit、cancel、SSE 事件与正常关闭。
 `submit` 仅确认既有 Go Controller 已接收输入（HTTP 202）；它不会等待 Agent 生成结束，
 SSE 事件携带进度和最终结果。事件 replay 使用有界 ledger；落在窗口之前的 sequence 会
 得到 `resync_required`，host 必须请求快照。Tauri host 为建/开会话和提交生成高熵
 `X-Reasonix-Request-ID`；bridge 以请求方法、路径和 body 的 SHA-256 指纹在当前 sidecar
 生命周期内有界缓存 256 个完成响应。相同 ID+相同请求会重放原响应，不同请求复用同一 ID
 返回 `conflict`。缓存只保存响应与摘要，不保存 prompt 原文；host 仅在传输失败后用相同 ID
-重试一次。历史页仍属于下一阶段。
+重试一次。历史端点只返回 user/assistant 的 `content`：不返回 system prompt、推理内容、工具
+参数/结果、图片引用或本地执行元数据。单条正文最多 16,000 个 Unicode 字符，单次最多返回最近
+200 条可见消息；`startIndex` 与 `totalMessages` 让 host 明确提示未加载的更早内容。
 
 ## Envelope
 

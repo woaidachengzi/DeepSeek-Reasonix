@@ -36,12 +36,34 @@ type SessionView struct {
 	State         string `json:"state"`
 }
 
-// Runtime is the minimal core lifecycle surface needed before command and
-// transcript APIs are added. Implementations must make Shutdown durable before
-// releasing their core resources.
+// HistoryMessage is the deliberately small, display-safe transcript projection
+// the bridge may return to a desktop host. It must never contain provider
+// reasoning, tool arguments/results, system prompts, image data, or other
+// persistence metadata.
+type HistoryMessage struct {
+	Role      string `json:"role"`
+	Content   string `json:"content"`
+	Truncated bool   `json:"truncated,omitempty"`
+}
+
+// HistoryView is the latest bounded page of display-safe messages. StartIndex
+// and TotalMessages refer to the projected (not raw provider) transcript.
+type HistoryView struct {
+	Session       SessionView      `json:"session"`
+	Messages      []HistoryMessage `json:"messages"`
+	StartIndex    int              `json:"startIndex"`
+	TotalMessages int              `json:"totalMessages"`
+}
+
+const maxHistoryMessages = 200
+
+// Runtime is the minimal core lifecycle surface needed by the first bridge
+// vertical slices. Implementations must make Shutdown durable before releasing
+// their core resources.
 type Runtime interface {
 	SessionPath() string
 	State() string
+	History() []HistoryMessage
 	Submit(input string)
 	Cancel()
 	Shutdown() error
@@ -162,6 +184,36 @@ func (m *RuntimeManager) Snapshot() (SessionView, bool) {
 	view := m.view
 	view.State = m.runtime.State()
 	return view, true
+}
+
+// History returns the newest bounded page of the bridge-owned transcript. The
+// Runtime owns projection from its richer local model, so this package remains
+// independent of controller and provider implementation details.
+func (m *RuntimeManager) History(sessionID string) (HistoryView, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return HistoryView{}, ErrClosed
+	}
+	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
+		return HistoryView{}, ErrSessionNotFound
+	}
+	messages := m.runtime.History()
+	total := len(messages)
+	start := 0
+	if total > maxHistoryMessages {
+		start = total - maxHistoryMessages
+	}
+	page := append([]HistoryMessage(nil), messages[start:]...)
+	view := m.view
+	view.State = m.runtime.State()
+	return HistoryView{
+		Session:       view,
+		Messages:      page,
+		StartIndex:    start,
+		TotalMessages: total,
+	}, nil
 }
 
 // Submit starts a turn on the bridge-owned runtime. It intentionally returns

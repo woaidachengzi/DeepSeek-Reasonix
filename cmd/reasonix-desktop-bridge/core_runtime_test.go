@@ -2,6 +2,7 @@ package main
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -17,5 +18,13 @@ func TestBridgeSessionPathIsDeterministicAndContained(t *testing.T) {
 	}
 	if _, err := bridgeSessionPath(dir, "../outside"); err == nil {
 		t.Fatal("unsafe bridge session ID produced a path")
+	}
+}
+
+func TestTruncateBridgeHistoryContentPreservesUnicodeAndMarksTruncation(t *testing.T) {
+	content := strings.Repeat("界", bridgeHistoryMaxContentRunes+1)
+	got, truncated := truncateBridgeHistoryContent(content)
+	if !truncated || !strings.HasPrefix(got, strings.Repeat("界", bridgeHistoryMaxContentRunes)) || !strings.HasSuffix(got, "[Preview truncated this message]") {
+		t.Fatalf("history truncation = %q, %v", got, truncated)
 	}
 }

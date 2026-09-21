@@ -10,6 +10,7 @@ import (
 type fakeRuntime struct {
 	path          string
 	state         string
+	history       []HistoryMessage
 	submits       []string
 	cancelCalls   atomic.Int32
 	shutdownCalls atomic.Int32
@@ -18,6 +19,9 @@ type fakeRuntime struct {
 
 func (r *fakeRuntime) SessionPath() string { return r.path }
 func (r *fakeRuntime) State() string       { return r.state }
+func (r *fakeRuntime) History() []HistoryMessage {
+	return append([]HistoryMessage(nil), r.history...)
+}
 func (r *fakeRuntime) Submit(input string) { r.submits = append(r.submits, input) }
 func (r *fakeRuntime) Cancel()             { r.cancelCalls.Add(1) }
 func (r *fakeRuntime) Shutdown() error {
@@ -50,6 +54,30 @@ func TestRuntimeManagerSubmitsAndCancelsOwnedSession(t *testing.T) {
 	}
 	if _, err := manager.Submit("a", "   "); !errors.Is(err, ErrInvalidInput) {
 		t.Fatalf("blank input error = %v", err)
+	}
+}
+
+func TestRuntimeManagerHistoryReturnsBoundedNewestPage(t *testing.T) {
+	messages := make([]HistoryMessage, 202)
+	for i := range messages {
+		messages[i] = HistoryMessage{Role: "user", Content: "message"}
+	}
+	runtime := &fakeRuntime{path: "/sessions/a.jsonl", state: "idle", history: messages}
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(context.Context, OpenRequest) (Runtime, error) {
+		return runtime, nil
+	}))
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	history, err := manager.History("a")
+	if err != nil {
+		t.Fatalf("history: %v", err)
+	}
+	if history.Session.ID != "a" || history.TotalMessages != 202 || history.StartIndex != 2 || len(history.Messages) != maxHistoryMessages {
+		t.Fatalf("history = %#v", history)
+	}
+	if _, err := manager.History("missing"); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("missing session error = %v", err)
 	}
 }
 

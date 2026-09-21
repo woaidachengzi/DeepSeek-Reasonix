@@ -10,12 +10,14 @@ import {
   restartTauriBridge,
   startTauriBridgeEvents,
   submitTauriBridge,
+  tauriBridgeHistory,
   tauriBridgeSnapshot,
   tauriBridgeStatus,
   tauriEventSummary,
   tauriMessageFrom,
   tauriPreviewProfileStatus,
   type TauriBridgeEvent,
+  type TauriBridgeHistory,
   type TauriBridgeSession,
   type TauriBridgeStatus,
   type TauriPreviewProfileStatus,
@@ -49,6 +51,7 @@ export function TauriSessionPreview() {
   const [profileNotice, setProfileNotice] = useState("");
   const [session, setSession] = useState<TauriBridgeSession | null>(null);
   const [events, setEvents] = useState<TauriBridgeEvent[]>([]);
+  const [history, setHistory] = useState<TauriBridgeHistory | null>(null);
   const [sequence, setSequence] = useState(0);
   const [streamRevision, setStreamRevision] = useState(0);
   const [streamReady, setStreamReady] = useState(false);
@@ -85,6 +88,9 @@ export function TauriSessionPreview() {
           }
         });
         await startTauriBridgeEvents(snapshot.sequence);
+        const history = await tauriBridgeHistory(session.id);
+        if (!active) return;
+        setHistory(history);
         if (active) {
           setError("");
           setStreamReady(true);
@@ -113,6 +119,7 @@ export function TauriSessionPreview() {
     setBusy(true);
     setError("");
     setEvents([]);
+    setHistory(null);
     setSequence(0);
     setStreamReady(false);
     try {
@@ -167,6 +174,7 @@ export function TauriSessionPreview() {
       const reopened = await openTauriBridgeSession(session.id, session.workspaceRoot);
       setSession(reopened);
       setEvents([]);
+      setHistory(null);
       setSequence(0);
       setStreamRevision(previous => previous + 1);
     } catch (error) {
@@ -191,6 +199,19 @@ export function TauriSessionPreview() {
       const result = await importTauriStableProfile();
       setProfileNotice(`Imported config: ${result.importedConfig}\nBackup: ${result.backupConfig}`);
       setProfile(await tauriPreviewProfileStatus());
+    } catch (error) {
+      setError(messageFrom(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function refreshHistory() {
+    if (!session || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      setHistory(await tauriBridgeHistory(session.id));
     } catch (error) {
       setError(messageFrom(error));
     } finally {
@@ -245,6 +266,13 @@ export function TauriSessionPreview() {
             <button type="button" onClick={() => void cancel()} disabled={busy || session.state !== "running"}>Cancel active turn</button>
           </div>
           <p className="tauri-preview__sequence">Event cursor: {sequence}</p>
+          <section className="tauri-preview__history" aria-live="polite">
+            <div className="tauri-preview__history-heading"><h2>Conversation preview</h2><button type="button" onClick={() => void refreshHistory()} disabled={busy}>Refresh</button></div>
+            {!history ? <p>Loading display-safe conversation history…</p> : <>
+              {history.startIndex > 0 && <p>Showing the latest {history.messages.length} of {history.totalMessages} visible messages.</p>}
+              {history.messages.length === 0 ? <p>No user or assistant messages have been saved yet.</p> : <ol>{history.messages.map((message, index) => <li key={`${history.startIndex + index}-${message.role}`} className={`is-${message.role}`}><b>{message.role}</b><pre>{message.content}</pre>{message.truncated && <small>Preview truncated this message.</small>}</li>)}</ol>}
+            </>}
+          </section>
         </section>}
 
         {error && <p className="tauri-preview__error" role="alert">{error} {session && "Restart the bridge to recover this session."}</p>}

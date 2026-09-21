@@ -89,9 +89,10 @@ ok(!exactSummary.endsWith("..."), "payload at 500 chars exactly is not truncated
 //   3. tauriBridgeSnapshot(id) → authoritative snapshot (via useEffect)
 //   4. onTauriBridgeEvent / onTauriBridgeConnectionError → subscriptions
 //   5. startTauriBridgeEvents(snapshot.sequence) → live stream
+//   6. tauriBridgeHistory(id) → display-safe restored transcript
 //
 // The test proves:
-//   - The full 6-step sequence is correct
+//   - The full 7-step sequence is correct
 //   - Calling it twice is idempotent (no duplicate side effects)
 //   - Events from a different session are filtered out
 //   - Sequence advancement is monotonically increasing
@@ -148,17 +149,21 @@ const mockSteps: RecoveryStep[] = [
     name: "startTauriBridgeEvents",
     invoke: () => { eventStreamStartedAt = 42; },
   },
+  {
+    name: "tauriBridgeHistory",
+    invoke: () => ({ sequence: 42, messages: [], startIndex: 0, totalMessages: 0 }),
+  },
 ];
 
 // First recovery
 const results1 = simulateRecovery("test-session", "/workspace", mockSteps);
-eq(results1.length, 6, "recovery executes all 6 steps");
+eq(results1.length, 7, "recovery executes all 7 steps");
 eq(recoveredSessions.length, 1, "session was opened once");
 eq(eventStreamStartedAt, 42, "event stream started at snapshot sequence");
 
 // Second recovery (restart after restart) — proves idempotency
 const results2 = simulateRecovery("test-session", "/workspace", mockSteps);
-eq(results2.length, 6, "second recovery also executes all 6 steps");
+eq(results2.length, 7, "second recovery also executes all 7 steps");
 eq(recoveredSessions.length, 2, "session was opened again");
 
 // Event filtering: events from a different session must be ignored

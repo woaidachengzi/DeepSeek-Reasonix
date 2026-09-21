@@ -41,6 +41,25 @@ pub struct BridgeHealth {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeHistoryMessage {
+    pub content: String,
+    pub role: String,
+    pub truncated: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeHistoryResponse {
+    pub messages: Vec<BridgeHistoryMessage>,
+    pub protocol_version: u64,
+    pub sequence: u64,
+    pub session: BridgeSession,
+    pub start_index: u64,
+    pub total_messages: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeOpenSessionRequest {
     pub session_id: String,
     pub workspace_root: Option<String>,

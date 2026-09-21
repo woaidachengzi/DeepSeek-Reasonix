@@ -5,8 +5,8 @@ mod data_profile;
 mod protocol_generated;
 
 use bridge::{
-    BridgeSession, BridgeSnapshot, BridgeStatus, BridgeSupervisor, OpenSessionRequest,
-    SessionRequest, SubmitRequest,
+    BridgeHistory, BridgeSession, BridgeSnapshot, BridgeStatus, BridgeSupervisor,
+    OpenSessionRequest, SessionRequest, SubmitRequest,
 };
 use data_profile::{PreviewProfile, PreviewProfileStatus, ProfileImportResult};
 use tauri::{Manager, State};
@@ -35,6 +35,14 @@ fn bridge_session_snapshot(
     request: SessionRequest,
 ) -> Result<BridgeSnapshot, String> {
     supervisor.snapshot(request)
+}
+
+#[tauri::command]
+fn bridge_session_history(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: SessionRequest,
+) -> Result<BridgeHistory, String> {
+    supervisor.history(request)
 }
 
 #[tauri::command]
@@ -95,6 +103,7 @@ fn main() {
             restart_bridge,
             bridge_open_session,
             bridge_session_snapshot,
+            bridge_session_history,
             bridge_submit,
             bridge_cancel,
             bridge_start_events,

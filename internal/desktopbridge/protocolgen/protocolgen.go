@@ -174,6 +174,8 @@ func (g *generator) typeOf(raw json.RawMessage, hint string) (string, string, er
 	switch n.Type {
 	case "string":
 		return "string", "String", nil
+	case "boolean":
+		return "boolean", "bool", nil
 	case "integer":
 		return "number", "u64", nil
 	case "array":

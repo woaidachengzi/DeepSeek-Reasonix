@@ -1,6 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { BridgeEvent, BridgeSession } from "./bridgeProtocol.generated";
+import type { BridgeEvent, BridgeHistoryMessage, BridgeSession } from "./bridgeProtocol.generated";
 
 export interface TauriBridgeStatus {
   running: boolean;
@@ -16,6 +16,14 @@ export type TauriBridgeEvent = BridgeEvent;
 export interface TauriBridgeSnapshot {
   sequence: number;
   session: TauriBridgeSession;
+}
+
+export interface TauriBridgeHistory {
+  sequence: number;
+  session: TauriBridgeSession;
+  messages: BridgeHistoryMessage[];
+  startIndex: number;
+  totalMessages: number;
 }
 
 export interface TauriPreviewProfileStatus {
@@ -72,6 +80,11 @@ export async function openTauriBridgeSession(sessionId: string, workspaceRoot?: 
 export async function tauriBridgeSnapshot(sessionId: string): Promise<TauriBridgeSnapshot> {
   requireTauri();
   return invoke<TauriBridgeSnapshot>("bridge_session_snapshot", { request: { sessionId } });
+}
+
+export async function tauriBridgeHistory(sessionId: string): Promise<TauriBridgeHistory> {
+  requireTauri();
+  return invoke<TauriBridgeHistory>("bridge_session_history", { request: { sessionId } });
 }
 
 export async function submitTauriBridge(sessionId: string, input: string): Promise<TauriBridgeSession> {
