@@ -241,6 +241,35 @@ func TestBridgeServerReturnsDisplaySafeSessionHistory(t *testing.T) {
 	}
 }
 
+func TestBridgeServerReturnsEmptyHistoryAsJSONArray(t *testing.T) {
+	runtime := &bridgeTestRuntime{path: "/tmp/reasonix-session", state: "idle"}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		return runtime, nil
+	}))
+	bridge := newBridgeServer(testToken, "instance", manager)
+	handler := bridge.handler()
+
+	open := httptest.NewRequest(http.MethodPost, "/v1/sessions:open", strings.NewReader(`{"sessionId":"tab-empty"}`))
+	open.Header.Set("Authorization", "Bearer "+testToken)
+	open.Header.Set("Content-Type", "application/json")
+	openRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(openRecorder, open)
+	if openRecorder.Code != http.StatusOK {
+		t.Fatalf("open status = %d, body = %s", openRecorder.Code, openRecorder.Body.String())
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/v1/sessions/tab-empty/history", nil)
+	request.Header.Set("Authorization", "Bearer "+testToken)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("history status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"messages":[]`) {
+		t.Fatalf("empty history response = %s, want messages array", response.Body.String())
+	}
+}
+
 func TestBridgeServerShutdownClosesOpenedRuntime(t *testing.T) {
 	runtime := &bridgeTestRuntime{path: "/tmp/reasonix-session", state: "idle"}
 	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {

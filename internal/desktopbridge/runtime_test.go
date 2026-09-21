@@ -81,6 +81,24 @@ func TestRuntimeManagerHistoryReturnsBoundedNewestPage(t *testing.T) {
 	}
 }
 
+func TestRuntimeManagerHistoryReturnsEmptyArrayForEmptyTranscript(t *testing.T) {
+	runtime := &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(context.Context, OpenRequest) (Runtime, error) {
+		return runtime, nil
+	}))
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a"}); err != nil {
+		t.Fatal(err)
+	}
+
+	history, err := manager.History("a")
+	if err != nil {
+		t.Fatalf("history: %v", err)
+	}
+	if history.Messages == nil || len(history.Messages) != 0 {
+		t.Fatalf("empty history messages = %#v, want non-nil empty slice", history.Messages)
+	}
+}
+
 func TestRuntimeManagerOwnsOneSessionAndShutsDownOnce(t *testing.T) {
 	runtime := &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}
 	manager := NewRuntimeManager(RuntimeFactoryFunc(func(context.Context, OpenRequest) (Runtime, error) {

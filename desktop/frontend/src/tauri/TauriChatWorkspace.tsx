@@ -59,6 +59,8 @@ export function TauriSessionPreview() {
   const [profileNotice, setProfileNotice] = useState("");
   const [events, setEvents] = useState<TauriBridgeEvent[]>([]);
   const [history, setHistory] = useState<TauriBridgeHistory | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
   const [liveText, setLiveText] = useState("");
   const [sequence, setSequence] = useState(0);
   const [streamRevision, setStreamRevision] = useState(0);
@@ -92,6 +94,8 @@ export function TauriSessionPreview() {
     let active = true;
     let offEvent: UnlistenFn | undefined;
     let offError: UnlistenFn | undefined;
+    setHistoryLoading(true);
+    setHistoryError("");
 
     void (async () => {
       try {
@@ -111,10 +115,17 @@ export function TauriSessionPreview() {
                 if (!active) return;
                 setSession(latest.session);
                 setHistory(latestHistory);
+                setHistoryError("");
+                setHistoryLoading(false);
                 setLiveText("");
+                setError("");
               })
               .catch(error => {
-                if (active) setError(tauriMessageFrom(error));
+                if (active) {
+                  const message = tauriMessageFrom(error);
+                  setHistoryError(message);
+                  setError(message);
+                }
               });
           }
         });
@@ -125,15 +136,29 @@ export function TauriSessionPreview() {
           setError(`本地桥接事件流：${message}`);
         });
         await startTauriBridgeEvents(snapshot.sequence);
-        const latestHistory = await tauriBridgeHistory(session.id);
         if (!active) return;
-        setHistory(latestHistory);
         setError("");
         setStreamReady(true);
+        try {
+          const latestHistory = await tauriBridgeHistory(session.id);
+          if (!active) return;
+          setHistory(latestHistory);
+          setHistoryError("");
+        } catch (historyCause) {
+          if (!active) return;
+          const message = tauriMessageFrom(historyCause);
+          setHistoryError(message);
+          setError(message);
+        } finally {
+          if (active) setHistoryLoading(false);
+        }
       } catch (error) {
         if (!active) return;
         setStreamReady(false);
-        setError(tauriMessageFrom(error));
+        const message = tauriMessageFrom(error);
+        setHistoryLoading(false);
+        setHistoryError(message);
+        setError(message);
       }
     })();
 
@@ -156,15 +181,17 @@ export function TauriSessionPreview() {
     if (!id) return setError("缺少会话 ID");
     setBusy(true);
     setError("");
-    setEvents([]);
-    setHistory(null);
-    setLiveText("");
-    setSequence(0);
-    setStreamReady(false);
     try {
       const next = session && session.id !== id
         ? await switchTauriBridgeSession(id, root)
         : await openTauriBridgeSession(id, root);
+      setEvents([]);
+      setHistory(null);
+      setHistoryLoading(true);
+      setHistoryError("");
+      setLiveText("");
+      setSequence(0);
+      setStreamReady(false);
       setSession(next);
       setWorkspaceRoot(next.workspaceRoot ?? root ?? "");
       await rememberSession(next);
@@ -273,11 +300,16 @@ export function TauriSessionPreview() {
     if (!session || busy) return;
     setBusy(true);
     setError("");
+    setHistoryLoading(true);
+    setHistoryError("");
     try {
       setHistory(await tauriBridgeHistory(session.id));
     } catch (cause) {
-      setError(tauriMessageFrom(cause));
+      const message = tauriMessageFrom(cause);
+      setHistoryError(message);
+      setError(message);
     } finally {
+      setHistoryLoading(false);
       setBusy(false);
     }
   }
@@ -353,7 +385,7 @@ export function TauriSessionPreview() {
         </header>
 
         <div className="tauri-conversation">
-          {session && !history ? <div className="tauri-loading"><span /><p>正在载入对话…</p></div> : history?.messages.length || liveText || session?.state === "running" ? <div className="tauri-transcript">
+          {session && !history && historyLoading ? <div className="tauri-loading"><span /><p>正在载入对话…</p></div> : session && !history && historyError ? <div className="tauri-loading tauri-history-error"><p>无法载入对话记录</p><p>{historyError}</p><button type="button" className="tauri-diagnostic-action" onClick={() => void refreshHistory()} disabled={busy}>重新加载</button></div> : history?.messages.length || liveText || session?.state === "running" ? <div className="tauri-transcript">
             {history && history.startIndex > 0 && <p className="tauri-history-note">当前显示最近 {history.messages.length} 条，共 {history.totalMessages} 条可见消息</p>}
             {history?.messages.map((message, index) => <article key={`${history.startIndex + index}-${message.role}`} className={`tauri-message is-${message.role}`}>
               <div className="tauri-message__avatar" aria-hidden="true">{message.role === "user" ? "你" : <Sparkles size={16} />}</div>

@@ -260,6 +260,12 @@ func (m *RuntimeManager) History(sessionID string) (HistoryView, error) {
 		start = total - maxHistoryMessages
 	}
 	page := append([]HistoryMessage(nil), messages[start:]...)
+	// The protocol models messages as a JSON array. Keep the empty case as []
+	// rather than nil so Go's JSON encoder does not emit `null` (Rust expects a
+	// sequence when decoding BridgeHistoryResponse).
+	if page == nil {
+		page = []HistoryMessage{}
+	}
 	view := m.view
 	view.State = m.runtime.State()
 	return HistoryView{
