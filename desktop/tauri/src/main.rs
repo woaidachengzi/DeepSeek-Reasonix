@@ -3,6 +3,7 @@
 mod bridge;
 mod data_profile;
 mod protocol_generated;
+mod window_state;
 
 use bridge::{
     BridgeHistory, BridgeSession, BridgeSnapshot, BridgeStatus, BridgeSupervisor,
@@ -10,6 +11,7 @@ use bridge::{
 };
 use data_profile::{PreviewProfile, PreviewProfileStatus, ProfileImportResult};
 use tauri::{Manager, State};
+use window_state::PreviewWindowState;
 
 #[tauri::command]
 fn bridge_status(supervisor: State<'_, BridgeSupervisor>) -> BridgeStatus {
@@ -90,12 +92,17 @@ fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
+            let window_state = PreviewWindowState::for_app(app)?;
+            if let Some(window) = app.get_webview_window("main") {
+                window_state.restore(&window);
+            }
             let profile =
                 data_profile::configure_preview_profile(app).map_err(std::io::Error::other)?;
             let supervisor = BridgeSupervisor::from_environment(app.handle().clone());
             supervisor.start().map_err(std::io::Error::other)?;
             app.manage(supervisor);
             app.manage(profile);
+            app.manage(window_state);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -114,6 +121,9 @@ fn main() {
         .expect("failed to build Reasonix Tauri host");
     app.run(|app, event| {
         if matches!(event, tauri::RunEvent::Exit) {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = app.state::<PreviewWindowState>().save(&window);
+            }
             let _ = app.state::<BridgeSupervisor>().stop();
         }
     });
