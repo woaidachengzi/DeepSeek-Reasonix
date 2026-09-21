@@ -11,6 +11,8 @@
 Preview 使用 Tauri 应用数据目录下私有的 `REASONIX_HOME`。因此它不会静默读取、迁移或
 写入稳定 Wails 客户端的配置、会话和缓存；稳定版可与它并存。导入稳定版数据会作为单独的
 “先备份、再确认”的功能实现。开发者显式传入的 `REASONIX_HOME` 仍是有意识的覆盖选择。
+Preview 同时只允许一个进程运行；第二次启动会聚焦既有窗口，避免两个 Preview bridge 同时
+写入同一私有 profile。显式指定 `REASONIX_HOME` 时仍不得指向正在被 Wails 使用的目录。
 
 当前 Preview 只提供最小的显式配置导入：界面会显示默认稳定配置
 `~/.reasonix/config.toml` 是否存在，用户确认后才复制它。复制前会在 Preview 私有目录创建

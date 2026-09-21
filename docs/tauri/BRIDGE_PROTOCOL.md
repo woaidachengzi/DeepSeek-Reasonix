@@ -66,7 +66,9 @@ v1 的 `payload` 保持为有类型对象但 Schema 暂允许附加字段，以�
   的内存事件当成已持久化结果。
 - sidecar 崩溃时，Tauri 显示可操作错误并允许受控重启；重启后一定先 health、
   snapshot，再允许提交。
-- 同一 state root 由跨进程锁保护；Wails 或另一个 Tauri 实例持锁时拒绝启动。
+- 默认 Preview profile 由 Tauri 单实例机制保护；第二次启动会聚焦现有 Preview，避免两个
+  sidecar 同时写入该私有目录。Wails 使用不同的默认 profile，可以与 Preview 并存；开发者
+  显式覆盖 `REASONIX_HOME` 时必须自行避免指向正在使用的 Wails 目录。
 
 机器可校验的 v1 envelope 位于 `docs/tauri/protocol/v1.schema.json`。该 Schema 是
 源文件：`go run ./cmd/desktop-bridge-protocol-gen` 从它生成 TypeScript 与 Rust 的
