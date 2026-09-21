@@ -110,10 +110,17 @@ pub struct BridgeProviderSummaryResponse {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeRenameSessionRequest {
+    pub title: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeSession {
     pub id: String,
     pub path: String,
     pub state: String,
+    pub title: Option<String>,
     pub workspace_root: Option<String>,
 }
 

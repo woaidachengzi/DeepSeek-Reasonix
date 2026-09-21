@@ -3,12 +3,14 @@ package desktopbridge
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
 )
 
 type fakeRuntime struct {
 	path          string
+	title         string
 	state         string
 	history       []HistoryMessage
 	submits       []string
@@ -17,8 +19,10 @@ type fakeRuntime struct {
 	shutdownErr   error
 }
 
-func (r *fakeRuntime) SessionPath() string { return r.path }
-func (r *fakeRuntime) State() string       { return r.state }
+func (r *fakeRuntime) SessionPath() string       { return r.path }
+func (r *fakeRuntime) Title() string             { return r.title }
+func (r *fakeRuntime) State() string             { return r.state }
+func (r *fakeRuntime) Rename(title string) error { r.title = title; return nil }
 func (r *fakeRuntime) History() []HistoryMessage {
 	return append([]HistoryMessage(nil), r.history...)
 }
@@ -81,6 +85,32 @@ func TestRuntimeManagerHistoryReturnsBoundedNewestPage(t *testing.T) {
 	}
 	if _, err := manager.History("missing"); !errors.Is(err, ErrSessionNotFound) {
 		t.Fatalf("missing session error = %v", err)
+	}
+}
+
+func TestRuntimeManagerRenamesOnlyIdleOwnedSession(t *testing.T) {
+	runtime := &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(context.Context, OpenRequest) (Runtime, error) {
+		return runtime, nil
+	}))
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	view, err := manager.RenameSession("a", "  Release notes  ")
+	if err != nil || view.Title != "Release notes" || runtime.title != "Release notes" {
+		t.Fatalf("rename = %#v, %v; runtime title = %q", view, err, runtime.title)
+	}
+	if _, err := manager.RenameSession("missing", "Other"); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("missing session error = %v", err)
+	}
+	for _, title := range []string{"", "  ", "has\ncontrol", strings.Repeat("x", 121)} {
+		if _, err := manager.RenameSession("a", title); !errors.Is(err, ErrInvalidTitle) {
+			t.Fatalf("invalid title %q error = %v", title, err)
+		}
+	}
+	runtime.state = "running"
+	if _, err := manager.RenameSession("a", "Too soon"); !errors.Is(err, ErrSessionConflict) {
+		t.Fatalf("running session error = %v", err)
 	}
 }
 

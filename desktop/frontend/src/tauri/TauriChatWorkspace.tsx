@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Activity, ArrowUp, Check, ChevronDown, FileText, FolderOpen, MessageSquare, Paperclip, Plus, Sparkles, Square, X } from "lucide-react";
+import { Activity, ArrowUp, Check, ChevronDown, FileText, FolderOpen, MessageSquare, Paperclip, Pencil, Plus, Sparkles, Square, X } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { Markdown } from "../components/Markdown";
 import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
@@ -15,6 +15,7 @@ import {
   onTauriBridgeEvent,
   openTauriBridgeSession,
   rememberTauriWorkbenchSession,
+  renameTauriBridgeSession,
   restartTauriBridge,
   setTauriDefaultModel,
   startTauriBridgeEvents,
@@ -44,6 +45,7 @@ import "./tauriChatWorkspace.css";
 
 interface WorkbenchSessionTab {
   sessionId: string;
+  title?: string;
   workspaceRoot?: string;
 }
 
@@ -73,6 +75,8 @@ export function TauriSessionPreview() {
   const [streamReady, setStreamReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [titleEditing, setTitleEditing] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
   const [error, setError] = useState("");
   const switchingBlocked = Boolean(session && session.state !== "idle");
 
@@ -177,7 +181,7 @@ export function TauriSessionPreview() {
 
   async function rememberSession(next: TauriBridgeSession) {
     try {
-      setTabs(await rememberTauriWorkbenchSession(next.id, next.workspaceRoot ?? undefined));
+      setTabs(await rememberTauriWorkbenchSession(next.id, next.workspaceRoot ?? undefined, next.title?.trim() || undefined));
     } catch (cause) {
       setError(`对话已打开，但无法保存到最近对话：${tauriMessageFrom(cause)}`);
     }
@@ -199,11 +203,43 @@ export function TauriSessionPreview() {
       setLiveText("");
       setSequence(0);
       setStreamReady(false);
+      setTitleEditing(false);
       setSession(next);
       setWorkspaceRoot(next.workspaceRoot ?? root ?? "");
       await rememberSession(next);
       setStreamRevision(previous => previous + 1);
       setStatus(await tauriBridgeStatus());
+    } catch (cause) {
+      setError(tauriMessageFrom(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function beginTitleEdit() {
+    if (!session || busy || switchingBlocked) return;
+    setTitleDraft(session.title?.trim() || sessionLabel(session.id));
+    setTitleEditing(true);
+  }
+
+  async function saveTitle() {
+    if (!session) return;
+    const title = titleDraft.trim();
+    if (!title) {
+      setError("对话名称不能为空");
+      return;
+    }
+    if (Array.from(title).length > 120) {
+      setError("对话名称不能超过 120 个字符");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const renamed = await renameTauriBridgeSession(session.id, title);
+      setSession(renamed);
+      await rememberSession(renamed);
+      setTitleEditing(false);
     } catch (cause) {
       setError(tauriMessageFrom(cause));
     } finally {
@@ -387,7 +423,7 @@ export function TauriSessionPreview() {
             title={tab.workspaceRoot ? `${tab.sessionId}\n${tab.workspaceRoot}` : tab.sessionId}
           >
             <MessageSquare size={15} aria-hidden="true" />
-            <span>{sessionLabel(tab.sessionId)}</span>
+            <span>{tab.title?.trim() || sessionLabel(tab.sessionId)}</span>
           </button>) }
         </nav>
         <div className="tauri-sidebar__footer">
@@ -398,7 +434,19 @@ export function TauriSessionPreview() {
 
       <section className="tauri-main">
         <header className="tauri-topbar">
-          <div className="tauri-topbar__title"><strong>{session ? sessionLabel(session.id) : "新对话"}</strong><span>{session?.state === "running" ? "正在生成" : session ? "本地会话" : "Reasonix Preview"}</span></div>
+          <div className="tauri-topbar__title">
+            <div className="tauri-topbar__title-row">
+              {session && titleEditing ? <form className="tauri-session-title-edit" onSubmit={event => { event.preventDefault(); void saveTitle(); }}>
+                <input autoFocus maxLength={240} value={titleDraft} onChange={event => setTitleDraft(event.target.value)} aria-label="对话名称" onKeyDown={event => { if (event.key === "Escape") setTitleEditing(false); }} />
+                <button type="submit" className="tauri-session-title-edit__action" aria-label="保存对话名称" disabled={busy}><Check size={14} /></button>
+                <button type="button" className="tauri-session-title-edit__action" aria-label="取消重命名" disabled={busy} onClick={() => setTitleEditing(false)}><X size={14} /></button>
+              </form> : <>
+                <strong>{session ? session.title?.trim() || sessionLabel(session.id) : "新对话"}</strong>
+                {session && <button type="button" className="tauri-title-rename" aria-label="重命名对话" title="重命名对话" disabled={busy || switchingBlocked} onClick={beginTitleEdit}><Pencil size={13} /></button>}
+              </>}
+            </div>
+            <span>{session?.state === "running" ? "正在生成" : session ? "本地会话" : "Reasonix Preview"}</span>
+          </div>
           <div className="tauri-topbar__actions">
             <button type="button" className="tauri-workspace-button" onClick={() => void chooseWorkspaceRoot()} disabled={busy || session?.state === "running"} title={currentWorkspace || "选择工作区（用于新对话）"}>
               <FolderOpen size={15} /><span>{currentWorkspace || "选择工作区"}</span><ChevronDown size={13} />

@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"reasonix/internal/agent"
 	"reasonix/internal/boot"
+	"reasonix/internal/desktopbridge"
 	"reasonix/internal/event"
 )
 
@@ -31,6 +33,52 @@ func TestTruncateBridgeHistoryContentPreservesUnicodeAndMarksTruncation(t *testi
 	got, truncated := truncateBridgeHistoryContent(content)
 	if !truncated || !strings.HasPrefix(got, strings.Repeat("界", bridgeHistoryMaxContentRunes)) || !strings.HasSuffix(got, "[Preview truncated this message]") {
 		t.Fatalf("history truncation = %q, %v", got, truncated)
+	}
+}
+
+func TestControllerRuntimeRenamesSessionMetadataWithoutTouchingTranscript(t *testing.T) {
+	workspace := t.TempDir()
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	open := func() desktopbridge.Runtime {
+		factory := newControllerFactory(nil)
+		factory.base.WorkspaceRoot = workspace
+		runtime, err := factory.Open(context.Background(), desktopbridge.OpenRequest{SessionID: "tab-title"})
+		if err != nil {
+			t.Fatalf("open session: %v", err)
+		}
+		t.Cleanup(func() { _ = runtime.Shutdown() })
+		return runtime
+	}
+
+	runtime := open()
+	if got := runtime.Title(); got != "" {
+		t.Fatalf("untitled session title = %q", got)
+	}
+	sessionPath := runtime.SessionPath()
+	transcriptBefore, err := os.ReadFile(sessionPath)
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	if err := runtime.Rename("Release notes"); err != nil {
+		t.Fatalf("rename session: %v", err)
+	}
+	if got := runtime.Title(); got != "Release notes" {
+		t.Fatalf("renamed session title = %q", got)
+	}
+	if _, ok, err := agent.LoadBranchMeta(sessionPath); err != nil || !ok {
+		t.Fatalf("load branch meta = ok %v, err %v", ok, err)
+	}
+	transcriptAfter, err := os.ReadFile(sessionPath)
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	if string(transcriptAfter) != string(transcriptBefore) {
+		t.Fatal("rename rewrote the session transcript")
+	}
+
+	restored := open()
+	if restored.SessionPath() != sessionPath || restored.Title() != "Release notes" {
+		t.Fatalf("restored session = %q, %q", restored.SessionPath(), restored.Title())
 	}
 }
 

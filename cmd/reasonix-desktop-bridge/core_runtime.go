@@ -94,6 +94,18 @@ type controllerRuntime struct {
 
 func (r *controllerRuntime) SessionPath() string { return r.controller.SessionPath() }
 
+func (r *controllerRuntime) Title() string {
+	meta, ok, err := agent.LoadBranchMeta(r.SessionPath())
+	if err != nil || !ok {
+		return ""
+	}
+	return meta.CustomTitle
+}
+
+func (r *controllerRuntime) Rename(title string) error {
+	return agent.RenameSession(r.SessionPath(), title)
+}
+
 func (r *controllerRuntime) State() string {
 	status := r.controller.RuntimeStatus()
 	switch {

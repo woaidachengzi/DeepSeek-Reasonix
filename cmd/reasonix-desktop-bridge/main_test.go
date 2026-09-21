@@ -19,16 +19,24 @@ const testToken = "0123456789abcdef0123456789abcdef"
 
 type bridgeTestRuntime struct {
 	path          string
+	title         string
 	state         string
 	history       []desktopbridge.HistoryMessage
 	submits       []string
 	attachCalls   int
+	renameCalls   int
 	cancelCalls   int
 	shutdownCalls int
 }
 
 func (r *bridgeTestRuntime) SessionPath() string { return r.path }
+func (r *bridgeTestRuntime) Title() string       { return r.title }
 func (r *bridgeTestRuntime) State() string       { return r.state }
+func (r *bridgeTestRuntime) Rename(title string) error {
+	r.renameCalls++
+	r.title = title
+	return nil
+}
 func (r *bridgeTestRuntime) History() []desktopbridge.HistoryMessage {
 	return append([]desktopbridge.HistoryMessage(nil), r.history...)
 }
@@ -73,8 +81,49 @@ func TestHealthReturnsProtocolAndCapabilities(t *testing.T) {
 	for _, capability := range got.Capabilities {
 		found[capability] = true
 	}
-	if !found["provider_summary"] || !found["set_default_model"] || !found["attach_file"] {
+	if !found["provider_summary"] || !found["set_default_model"] || !found["attach_file"] || !found["rename_session"] {
 		t.Fatalf("health capabilities %v do not include provider model settings", got.Capabilities)
+	}
+}
+
+func TestBridgeServerRenamesSessionIdempotently(t *testing.T) {
+	runtime := &bridgeTestRuntime{path: "/tmp/reasonix-session", state: "idle"}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		return runtime, nil
+	}))
+	bridge := newBridgeServer(testToken, "instance", manager)
+	handler := bridge.handler()
+	open := httptest.NewRequest(http.MethodPost, "/v1/sessions:open", strings.NewReader(`{"sessionId":"tab-title"}`))
+	open.Header.Set("Authorization", "Bearer "+testToken)
+	opened := httptest.NewRecorder()
+	handler.ServeHTTP(opened, open)
+	if opened.Code != http.StatusOK {
+		t.Fatalf("open status = %d, body = %s", opened.Code, opened.Body.String())
+	}
+	for range 2 {
+		request := httptest.NewRequest(http.MethodPatch, "/v1/sessions/tab-title/title", strings.NewReader(`{"title":"Release notes"}`))
+		request.Header.Set("Authorization", "Bearer "+testToken)
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set(requestIDHeader, "rename-request-1")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"title":"Release notes"`) {
+			t.Fatalf("rename status = %d, body = %s", response.Code, response.Body.String())
+		}
+	}
+	if runtime.title != "Release notes" {
+		t.Fatalf("runtime title = %q", runtime.title)
+	}
+	if runtime.renameCalls != 1 {
+		t.Fatalf("rename calls = %d, want one after idempotent replay", runtime.renameCalls)
+	}
+	request := httptest.NewRequest(http.MethodPatch, "/v1/sessions/tab-title/title", strings.NewReader(`{"title":"bad\ntitle"}`))
+	request.Header.Set("Authorization", "Bearer "+testToken)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("invalid title status = %d, body = %s", response.Code, response.Body.String())
 	}
 }
 

@@ -12,6 +12,7 @@ const CATALOG_FILE: &str = "workbench-sessions.json";
 const MAX_SESSIONS: usize = 50;
 const MAX_SESSION_ID_LEN: usize = 128;
 const MAX_WORKSPACE_ROOT_LEN: usize = 4096;
+const MAX_SESSION_TITLE_CHARS: usize = 120;
 
 /// A reopenable session known to the Tauri Preview workbench. This catalog is
 /// host UI state, kept outside both the stable profile and Go core session data.
@@ -19,6 +20,8 @@ const MAX_WORKSPACE_ROOT_LEN: usize = 4096;
 #[serde(rename_all = "camelCase")]
 pub struct WorkbenchSession {
     pub session_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_root: Option<String>,
 }
@@ -94,6 +97,11 @@ fn validate_session(session: &WorkbenchSession) -> Result<(), String> {
             return Err("workbench workspace path is invalid".to_string());
         }
     }
+    if let Some(title) = session.title.as_deref() {
+        if title.chars().count() > MAX_SESSION_TITLE_CHARS || title.chars().any(char::is_control) {
+            return Err("workbench session title is invalid".to_string());
+        }
+    }
     Ok(())
 }
 
@@ -152,6 +160,7 @@ mod tests {
     fn session(id: &str) -> WorkbenchSession {
         WorkbenchSession {
             session_id: id.to_string(),
+            title: None,
             workspace_root: None,
         }
     }
@@ -165,6 +174,7 @@ mod tests {
         catalog
             .remember(WorkbenchSession {
                 session_id: "two".to_string(),
+                title: None,
                 workspace_root: Some("/work/project".to_string()),
             })
             .expect("remember second");
@@ -174,6 +184,7 @@ mod tests {
             session("one"),
             WorkbenchSession {
                 session_id: "two".to_string(),
+                title: None,
                 workspace_root: Some("/work/project".to_string()),
             },
         ];
@@ -189,10 +200,31 @@ mod tests {
         assert!(catalog
             .remember(WorkbenchSession {
                 session_id: "valid".to_string(),
+                title: None,
                 workspace_root: Some("/work\nproject".to_string()),
             })
             .is_err());
         assert!(catalog.list().expect("list unchanged").is_empty());
+    }
+
+    #[test]
+    fn accepts_legacy_entries_without_a_title_and_rejects_invalid_titles() {
+        let root = tempfile::tempdir().expect("temp root");
+        let path = root.path().join(CATALOG_FILE);
+        fs::write(&path, br#"[{"sessionId":"legacy"}]"#).expect("write legacy catalog");
+        let catalog = WorkbenchCatalog::at(path);
+        assert_eq!(
+            catalog.list().expect("legacy entry"),
+            vec![session("legacy")]
+        );
+
+        assert!(catalog
+            .remember(WorkbenchSession {
+                session_id: "new-session".to_string(),
+                title: Some("bad\ntitle".to_string()),
+                workspace_root: None,
+            })
+            .is_err());
     }
 
     #[test]

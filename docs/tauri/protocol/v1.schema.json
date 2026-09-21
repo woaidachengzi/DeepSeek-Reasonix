@@ -8,6 +8,7 @@
     { "$ref": "#/$defs/providerSummaryResponse" },
     { "$ref": "#/$defs/setDefaultModelRequest" },
     { "$ref": "#/$defs/openSessionRequest" },
+    { "$ref": "#/$defs/renameSessionRequest" },
     { "$ref": "#/$defs/attachFileRequest" },
     { "$ref": "#/$defs/attachmentResponse" },
     { "$ref": "#/$defs/submitRequest" },
@@ -25,6 +26,7 @@
       "properties": {
         "id": { "$ref": "#/$defs/sessionId" },
         "path": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
         "workspaceRoot": { "type": "string" },
         "state": { "enum": ["idle", "running", "paused"] }
       },
@@ -82,6 +84,15 @@
       "properties": {
         "sessionId": { "$ref": "#/$defs/sessionId" },
         "workspaceRoot": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "renameSessionRequest": {
+      "title": "BridgeRenameSessionRequest",
+      "type": "object",
+      "required": ["title"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 }
       },
       "additionalProperties": false
     },

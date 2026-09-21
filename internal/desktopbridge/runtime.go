@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"unicode"
 )
 
 var (
@@ -17,6 +18,7 @@ var (
 	ErrInvalidSessionID  = errors.New("desktop bridge session id is required")
 	ErrInvalidInput      = errors.New("desktop bridge input is required")
 	ErrInvalidAttachment = errors.New("desktop bridge attachment path is invalid")
+	ErrInvalidTitle      = errors.New("desktop bridge session title is invalid")
 	ErrSessionNotFound   = errors.New("desktop bridge session was not found")
 )
 
@@ -33,6 +35,7 @@ type OpenRequest struct {
 type SessionView struct {
 	ID            string `json:"id"`
 	Path          string `json:"path"`
+	Title         string `json:"title,omitempty"`
 	WorkspaceRoot string `json:"workspaceRoot,omitempty"`
 	State         string `json:"state"`
 }
@@ -72,8 +75,10 @@ const maxHistoryMessages = 200
 // their core resources.
 type Runtime interface {
 	SessionPath() string
+	Title() string
 	State() string
 	History() []HistoryMessage
+	Rename(title string) error
 	AttachFile(path string) (AttachmentView, error)
 	Submit(input string)
 	Cancel()
@@ -160,6 +165,7 @@ func (m *RuntimeManager) Open(ctx context.Context, request OpenRequest) (Session
 	view := SessionView{
 		ID:            request.SessionID,
 		Path:          path,
+		Title:         runtime.Title(),
 		WorkspaceRoot: request.WorkspaceRoot,
 		State:         runtime.State(),
 	}
@@ -326,6 +332,34 @@ func (m *RuntimeManager) Cancel(sessionID string) (SessionView, error) {
 	})
 }
 
+// RenameSession persists a user-selected display title in the core session
+// metadata. The controller must be idle so title writes cannot race a turn.
+func (m *RuntimeManager) RenameSession(sessionID, title string) (SessionView, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	title = strings.TrimSpace(title)
+	if title == "" || len([]rune(title)) > 120 || strings.IndexFunc(title, unicode.IsControl) >= 0 {
+		return SessionView{}, ErrInvalidTitle
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return SessionView{}, ErrClosed
+	}
+	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
+		return SessionView{}, ErrSessionNotFound
+	}
+	if state := m.runtime.State(); state != "idle" {
+		return SessionView{}, fmt.Errorf("%w: cannot rename a %s session", ErrSessionConflict, state)
+	}
+	if err := m.runtime.Rename(title); err != nil {
+		return SessionView{}, err
+	}
+	m.view.Title = m.runtime.Title()
+	view := m.view
+	view.State = m.runtime.State()
+	return view, nil
+}
+
 // Shutdown makes the owned core durable and then releases it. It is idempotent.
 func (m *RuntimeManager) Shutdown() error {
 	m.mu.Lock()
@@ -377,6 +411,7 @@ func (m *RuntimeManager) openWithFactory(ctx context.Context, factory RuntimeFac
 	view := SessionView{
 		ID:            request.SessionID,
 		Path:          path,
+		Title:         runtime.Title(),
 		WorkspaceRoot: request.WorkspaceRoot,
 		State:         runtime.State(),
 	}

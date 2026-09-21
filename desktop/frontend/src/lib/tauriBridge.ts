@@ -68,6 +68,7 @@ export interface TauriPreviewRuntimeInfo {
 
 export interface TauriWorkbenchSession {
   sessionId: string;
+  title?: string;
   workspaceRoot?: string;
 }
 
@@ -126,10 +127,11 @@ export async function tauriWorkbenchSessions(): Promise<TauriWorkbenchSession[]>
 export async function rememberTauriWorkbenchSession(
   sessionId: string,
   workspaceRoot?: string,
+  title?: string,
 ): Promise<TauriWorkbenchSession[]> {
   requireTauri();
   return invoke<TauriWorkbenchSession[]>("remember_workbench_session", {
-    request: { sessionId, workspaceRoot },
+    request: { sessionId, workspaceRoot, title },
   });
 }
 
@@ -166,6 +168,11 @@ export async function openTauriBridgeSession(sessionId: string, workspaceRoot?: 
 export async function switchTauriBridgeSession(sessionId: string, workspaceRoot?: string): Promise<TauriBridgeSession> {
   requireTauri();
   return invoke<TauriBridgeSession>("bridge_switch_session", { request: { sessionId, workspaceRoot } });
+}
+
+export async function renameTauriBridgeSession(sessionId: string, title: string): Promise<TauriBridgeSession> {
+  requireTauri();
+  return invoke<TauriBridgeSession>("bridge_rename_session", { request: { sessionId, title } });
 }
 
 export async function tauriBridgeSnapshot(sessionId: string): Promise<TauriBridgeSnapshot> {

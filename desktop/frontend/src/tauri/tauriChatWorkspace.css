@@ -100,8 +100,15 @@
 .tauri-main { display: flex; min-width: 0; min-height: 0; flex-direction: column; }
 .tauri-topbar { display: flex; height: 64px; min-height: 64px; align-items: center; justify-content: space-between; gap: 18px; padding: 0 24px; border-bottom: 1px solid var(--border-soft); }
 .tauri-topbar__title { display: grid; min-width: 0; gap: 1px; }
-.tauri-topbar__title strong { overflow: hidden; color: var(--fg); font-size: 13px; font-weight: 570; text-overflow: ellipsis; white-space: nowrap; }
+.tauri-topbar__title-row { display: flex; min-width: 0; align-items: center; gap: 5px; }
+.tauri-topbar__title strong { min-width: 0; overflow: hidden; color: var(--fg); font-size: 13px; font-weight: 570; text-overflow: ellipsis; white-space: nowrap; }
 .tauri-topbar__title span { color: var(--fg-faint); font-size: 11px; }
+.tauri-title-rename, .tauri-session-title-edit__action { display: grid; width: 24px; height: 24px; flex: 0 0 auto; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--fg-faint) !important; }
+.tauri-title-rename:hover:not(:disabled), .tauri-session-title-edit__action:hover:not(:disabled) { border-color: var(--border-soft); background: var(--surface); color: var(--fg) !important; }
+.tauri-title-rename:disabled, .tauri-session-title-edit__action:disabled { opacity: .5; }
+.tauri-session-title-edit { display: flex; min-width: min(320px, 45vw); align-items: center; gap: 3px; }
+.tauri-session-title-edit input { min-width: 0; flex: 1; padding: 4px 7px; border: 1px solid var(--border); border-radius: 6px; outline: none; background: var(--surface); color: var(--fg); font-size: 12px; }
+.tauri-session-title-edit input:focus { border-color: var(--accent); }
 .tauri-topbar__actions { display: flex; min-width: 0; align-items: center; gap: 9px; }
 
 .tauri-workspace-button,

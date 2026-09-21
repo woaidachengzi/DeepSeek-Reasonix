@@ -47,6 +47,7 @@ interface CommandContract {
 // Rust commands from desktop/tauri/src/main.rs:
 //   bridge_status, restart_bridge, bridge_open_session,
 //   bridge_switch_session,
+//   bridge_rename_session,
 //   bridge_session_snapshot, bridge_session_history, bridge_submit, bridge_cancel,
 //   bridge_start_events, preview_profile_status, preview_runtime_info, import_stable_profile,
 //   provider_summary, set_default_model, workbench_sessions, remember_workbench_session
@@ -54,6 +55,7 @@ interface CommandContract {
 // Frontend adapters from desktop/frontend/src/lib/tauriBridge.ts:
 //   tauriBridgeStatus, restartTauriBridge, openTauriBridgeSession,
 //   switchTauriBridgeSession,
+//   renameTauriBridgeSession,
 //   tauriBridgeSnapshot, tauriBridgeHistory, submitTauriBridge, cancelTauriBridge,
 //   startTauriBridgeEvents, tauriPreviewProfileStatus,
 //   tauriPreviewRuntimeInfo, importTauriStableProfile, tauriWorkbenchSessions,
@@ -80,6 +82,11 @@ const commands: CommandContract[] = [
     command: "bridge_switch_session",
     argKeys: ["request"],
     description: "switchTauriBridgeSession() invokes bridge_switch_session with { request }",
+  },
+  {
+    command: "bridge_rename_session",
+    argKeys: ["request"],
+    description: "renameTauriBridgeSession() invokes bridge_rename_session with { request }",
   },
   {
     command: "bridge_session_snapshot",

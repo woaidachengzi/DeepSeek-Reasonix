@@ -340,6 +340,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("POST /v1/settings/default-model", b.authorized(b.idempotent(64<<10, b.setDefaultModel)))
 	mux.HandleFunc("POST /v1/sessions:open", b.authorized(b.idempotent(64<<10, b.openSession)))
 	mux.HandleFunc("POST /v1/sessions:switch", b.authorized(b.idempotent(64<<10, b.switchSession)))
+	mux.HandleFunc("PATCH /v1/sessions/{id}/title", b.authorized(b.idempotent(64<<10, b.renameSession)))
 	mux.HandleFunc("GET /v1/sessions/{id}/snapshot", b.authorized(b.sessionSnapshot))
 	mux.HandleFunc("GET /v1/sessions/{id}/history", b.authorized(b.sessionHistory))
 	mux.HandleFunc("GET /v1/events", b.authorized(b.eventsHandler))
@@ -446,7 +447,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "provider_summary", "set_default_model", "open_session", "switch_session", "session_snapshot", "session_history", "attach_file", "submit", "cancel", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "set_default_model", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "attach_file", "submit", "cancel", "idempotency", "shutdown"},
 	})
 }
 
@@ -502,6 +503,10 @@ type openSessionRequest struct {
 
 type submitRequest struct {
 	Input string `json:"input"`
+}
+
+type renameSessionRequest struct {
+	Title string `json:"title"`
 }
 
 type attachFileRequest struct {
@@ -585,6 +590,20 @@ func (b *bridgeServer) sessionHistory(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (b *bridgeServer) renameSession(w http.ResponseWriter, r *http.Request) {
+	var request renameSessionRequest
+	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid rename_session request")
+		return
+	}
+	view, err := b.runtimes.RenameSession(r.PathValue("id"), request.Title)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to rename desktop bridge session")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})
+}
+
 func (b *bridgeServer) submit(w http.ResponseWriter, r *http.Request) {
 	var request submitRequest
 	if err := decodeJSONBody(w, r, 1<<20, &request); err != nil {
@@ -647,7 +666,7 @@ func (b *bridgeServer) cancel(w http.ResponseWriter, r *http.Request) {
 func (b *bridgeServer) writeRuntimeError(w http.ResponseWriter, err error, message string) {
 	status, code := http.StatusInternalServerError, "internal"
 	switch {
-	case errors.Is(err, desktopbridge.ErrInvalidSessionID), errors.Is(err, desktopbridge.ErrInvalidInput), errors.Is(err, desktopbridge.ErrInvalidAttachment):
+	case errors.Is(err, desktopbridge.ErrInvalidSessionID), errors.Is(err, desktopbridge.ErrInvalidInput), errors.Is(err, desktopbridge.ErrInvalidAttachment), errors.Is(err, desktopbridge.ErrInvalidTitle):
 		status, code = http.StatusBadRequest, "invalid_request"
 	case errors.Is(err, desktopbridge.ErrSessionConflict), errors.Is(err, desktopbridge.ErrOpenInProgress):
 		status, code = http.StatusConflict, "conflict"

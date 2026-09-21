@@ -10,7 +10,7 @@ mod workbench_catalog;
 use bridge::{
     AttachFileRequest, BridgeAttachment, BridgeHistory, BridgeProviderSummaryResponse,
     BridgeSession, BridgeSetDefaultModelRequest, BridgeSnapshot, BridgeStatus, BridgeSupervisor,
-    OpenSessionRequest, SessionRequest, SubmitRequest,
+    OpenSessionRequest, RenameSessionRequest, SessionRequest, SubmitRequest,
 };
 use data_profile::{PreviewProfile, PreviewProfileStatus, ProfileImportResult};
 use runtime_info::PreviewRuntimeInfo;
@@ -42,6 +42,14 @@ fn bridge_switch_session(
     request: OpenSessionRequest,
 ) -> Result<BridgeSession, String> {
     supervisor.switch_session(request)
+}
+
+#[tauri::command]
+fn bridge_rename_session(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: RenameSessionRequest,
+) -> Result<BridgeSession, String> {
+    supervisor.rename_session(request)
 }
 
 #[tauri::command]
@@ -170,6 +178,7 @@ fn main() {
             restart_bridge,
             bridge_open_session,
             bridge_switch_session,
+            bridge_rename_session,
             bridge_session_snapshot,
             bridge_session_history,
             bridge_submit,

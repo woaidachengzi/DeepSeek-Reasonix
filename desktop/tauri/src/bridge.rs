@@ -50,13 +50,20 @@ pub struct SessionRequest {
     pub session_id: String,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameSessionRequest {
+    pub session_id: String,
+    pub title: String,
+}
+
 // The wire DTOs mirror docs/tauri/protocol/v1.schema.json through the generated
 // module; only the host-facing command payloads below stay hand-written.
 pub use crate::protocol_generated::{
     BridgeAttachFileRequest as AttachFileRequest, BridgeAttachment, BridgeAttachmentResponse,
     BridgeEvent, BridgeHistoryMessage, BridgeHistoryResponse,
-    BridgeOpenSessionRequest as OpenSessionRequest, BridgeProviderSummaryResponse, BridgeSession,
-    BridgeSessionResponse, BridgeSetDefaultModelRequest,
+    BridgeOpenSessionRequest as OpenSessionRequest, BridgeProviderSummaryResponse,
+    BridgeRenameSessionRequest, BridgeSession, BridgeSessionResponse, BridgeSetDefaultModelRequest,
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -317,6 +324,21 @@ impl BridgeSupervisor {
             Some(json!({
                 "sessionId": session_id,
                 "workspaceRoot": request.workspace_root,
+            })),
+            Some(&request_id),
+        )
+        .map(|envelope| envelope.session)
+    }
+
+    pub fn rename_session(&self, request: RenameSessionRequest) -> Result<BridgeSession, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let request_id = opaque_secret()?;
+        let path = format!("/v1/sessions/{session_id}/title");
+        self.request_session(
+            "PATCH",
+            &path,
+            Some(json!(BridgeRenameSessionRequest {
+                title: request.title
             })),
             Some(&request_id),
         )

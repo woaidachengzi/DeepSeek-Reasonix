@@ -79,10 +79,15 @@ export interface BridgeProviderSummaryResponse {
   providers: BridgeProviderSummary[];
 }
 
+export interface BridgeRenameSessionRequest {
+  title: string;
+}
+
 export interface BridgeSession {
   id: string;
   path: string;
   state: "idle" | "running" | "paused";
+  title?: string;
   workspaceRoot?: string;
 }
 
