@@ -122,6 +122,7 @@ console.log("\ntauri-build contract — tauri.conf.json bundle config");
 const tauriConf = JSON.parse(
   readFileSync(resolve(__dirname, "../../tauri/tauri.conf.json"), "utf8"),
 );
+const tauriConfigDirectory = resolve(__dirname, "../../tauri");
 
 eq(tauriConf.bundle?.active, true, "bundle.active is true");
 eq(tauriConf.bundle?.targets, "all", "bundle.targets is 'all'");
@@ -142,6 +143,26 @@ eq(
   "../frontend/dist",
   "frontendDist points to ../frontend/dist",
 );
+
+// Tauri decodes the configured PNG into an RGBA buffer at application launch.
+// A 16-bit RGBA PNG looks like a 1024px icon to macOS tools, but supplies twice
+// the byte length Tauri expects and aborts the app during startup.
+console.log("\ntauri-build contract — launch icon format");
+
+const pngIcon = tauriConf.bundle?.icon?.find(icon => icon.endsWith(".png"));
+ok(Boolean(pngIcon), "bundle includes a PNG launch icon");
+
+if (pngIcon) {
+  const iconData = readFileSync(resolve(tauriConfigDirectory, pngIcon));
+  const pngSignature = "89504e470d0a1a0a";
+
+  eq(iconData.subarray(0, 8).toString("hex"), pngSignature, "launch icon is a PNG");
+  eq(iconData.toString("ascii", 12, 16), "IHDR", "launch icon has an IHDR header");
+  eq(iconData.readUInt32BE(16), 1024, "launch icon width is 1024px");
+  eq(iconData.readUInt32BE(20), 1024, "launch icon height is 1024px");
+  eq(iconData[24], 8, "launch icon uses 8-bit channels");
+  eq(iconData[25], 6, "launch icon uses RGBA color type");
+}
 
 // ---------------------------------------------------------------------------
 // Summary
