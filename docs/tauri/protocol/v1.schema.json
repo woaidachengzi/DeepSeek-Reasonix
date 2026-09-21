@@ -6,6 +6,7 @@
   "oneOf": [
     { "$ref": "#/$defs/health" },
     { "$ref": "#/$defs/providerSummaryResponse" },
+    { "$ref": "#/$defs/setDefaultModelRequest" },
     { "$ref": "#/$defs/openSessionRequest" },
     { "$ref": "#/$defs/submitRequest" },
     { "$ref": "#/$defs/sessionResponse" },
@@ -41,14 +42,24 @@
     "providerSummary": {
       "title": "BridgeProviderSummary",
       "type": "object",
-      "required": ["name", "kind", "modelCount", "requiresKey", "configured"],
+      "required": ["name", "kind", "models", "modelCount", "requiresKey", "configured"],
       "properties": {
         "name": { "type": "string", "minLength": 1 },
         "displayName": { "type": "string" },
         "kind": { "type": "string" },
+        "models": { "type": "array", "items": { "type": "string" } },
         "modelCount": { "type": "integer", "minimum": 0 },
         "requiresKey": { "type": "boolean" },
         "configured": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "setDefaultModelRequest": {
+      "title": "BridgeSetDefaultModelRequest",
+      "type": "object",
+      "required": ["model"],
+      "properties": {
+        "model": { "type": "string", "minLength": 1 }
       },
       "additionalProperties": false
     },

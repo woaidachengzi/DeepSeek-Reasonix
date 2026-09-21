@@ -51,6 +51,7 @@ export interface BridgeProviderSummary {
   displayName?: string;
   kind: string;
   modelCount: number;
+  models: string[];
   name: string;
   requiresKey: boolean;
 }
@@ -72,6 +73,10 @@ export interface BridgeSessionResponse {
   protocolVersion: number;
   sequence?: number;
   session: BridgeSession;
+}
+
+export interface BridgeSetDefaultModelRequest {
+  model: string;
 }
 
 export interface BridgeSubmitRequest {

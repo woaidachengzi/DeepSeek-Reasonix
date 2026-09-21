@@ -337,6 +337,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/health", b.authorized(b.health))
 	mux.HandleFunc("GET /v1/providers", b.authorized(b.providerSummary))
+	mux.HandleFunc("POST /v1/settings/default-model", b.authorized(b.idempotent(64<<10, b.setDefaultModel)))
 	mux.HandleFunc("POST /v1/sessions:open", b.authorized(b.idempotent(64<<10, b.openSession)))
 	mux.HandleFunc("POST /v1/sessions:switch", b.authorized(b.idempotent(64<<10, b.switchSession)))
 	mux.HandleFunc("GET /v1/sessions/{id}/snapshot", b.authorized(b.sessionSnapshot))
@@ -442,11 +443,33 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "provider_summary", "open_session", "switch_session", "session_snapshot", "session_history", "submit", "cancel", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "set_default_model", "open_session", "switch_session", "session_snapshot", "session_history", "submit", "cancel", "idempotency", "shutdown"},
 	})
 }
 
 func (b *bridgeServer) providerSummary(w http.ResponseWriter, _ *http.Request) {
+	summary, err := loadProviderSummary()
+	if err != nil {
+		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read provider summary")
+		return
+	}
+	writeJSON(w, http.StatusOK, summary)
+}
+
+func (b *bridgeServer) setDefaultModel(w http.ResponseWriter, r *http.Request) {
+	var request setDefaultModelRequest
+	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid default model request")
+		return
+	}
+	if err := persistDefaultModel(request.Model); err != nil {
+		if errors.Is(err, errDefaultModelUnavailable) {
+			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "selected model is not configured and ready")
+			return
+		}
+		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to save the Preview default model")
+		return
+	}
 	summary, err := loadProviderSummary()
 	if err != nil {
 		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read provider summary")

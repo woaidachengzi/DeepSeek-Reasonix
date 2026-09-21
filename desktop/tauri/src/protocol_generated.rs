@@ -72,6 +72,7 @@ pub struct BridgeProviderSummary {
     pub display_name: Option<String>,
     pub kind: String,
     pub model_count: u64,
+    pub models: Vec<String>,
     pub name: String,
     pub requires_key: bool,
 }
@@ -99,6 +100,12 @@ pub struct BridgeSessionResponse {
     pub protocol_version: u64,
     pub sequence: Option<u64>,
     pub session: BridgeSession,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeSetDefaultModelRequest {
+    pub model: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

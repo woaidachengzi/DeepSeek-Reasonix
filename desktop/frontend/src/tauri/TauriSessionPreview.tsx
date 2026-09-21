@@ -10,6 +10,7 @@ import {
   openTauriBridgeSession,
   rememberTauriWorkbenchSession,
   restartTauriBridge,
+  setTauriDefaultModel,
   startTauriBridgeEvents,
   submitTauriBridge,
   switchTauriBridgeSession,
@@ -307,6 +308,19 @@ export function TauriSessionPreview() {
     }
   }
 
+  async function changeDefaultModel(model: string) {
+    if (!model || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      setProviderSummary(await setTauriDefaultModel(model));
+    } catch (error) {
+      setError(messageFrom(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="tauri-workbench">
       <aside className="tauri-workbench__sidebar" aria-label="Session navigation">
@@ -368,7 +382,22 @@ export function TauriSessionPreview() {
         <section className="tauri-preview__profile">
           <div className="tauri-preview__history-heading"><h2>Provider status</h2><button type="button" onClick={() => void refreshProviderSummary()} disabled={busy}>Refresh</button></div>
           {!providerSummary ? <p>Checking the private Preview configuration…</p> : <>
-            <p>Default model: <code>{providerSummary.defaultModel || "not selected"}</code></p>
+            <label>
+              New-session default model
+              <select
+                value={providerSummary.defaultModel}
+                onChange={event => void changeDefaultModel(event.target.value)}
+                disabled={busy || !providerSummary.providers.some(provider => provider.configured && provider.models.length > 0)}
+              >
+                {!providerSummary.defaultModel && <option value="" disabled>Choose a default model…</option>}
+                {providerSummary.defaultModel && <option value={providerSummary.defaultModel}>{providerSummary.defaultModel} · current</option>}
+                {providerSummary.providers.filter(provider => provider.configured).flatMap(provider => provider.models.map(model => {
+                  const ref = `${provider.name}/${model}`;
+                  return ref === providerSummary.defaultModel ? null : <option key={ref} value={ref}>{provider.displayName || provider.name} / {model}</option>;
+                }))}
+              </select>
+            </label>
+            <p>Changing this only affects new conversations; existing conversations keep their selected model. A workspace&apos;s <code>reasonix.toml</code> may override the user default.</p>
             {providerSummary.providers.length === 0 ? <p>No providers are configured in the Preview profile.</p> : <ul>
               {providerSummary.providers.map(provider => <li key={provider.name}>
                 <strong>{provider.displayName || provider.name}</strong>

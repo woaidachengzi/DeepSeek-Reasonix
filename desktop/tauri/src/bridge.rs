@@ -55,7 +55,7 @@ pub struct SessionRequest {
 pub use crate::protocol_generated::{
     BridgeEvent, BridgeHistoryMessage, BridgeHistoryResponse,
     BridgeOpenSessionRequest as OpenSessionRequest, BridgeProviderSummaryResponse, BridgeSession,
-    BridgeSessionResponse,
+    BridgeSessionResponse, BridgeSetDefaultModelRequest,
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -362,6 +362,25 @@ impl BridgeSupervisor {
 
     pub fn provider_summary(&self) -> Result<BridgeProviderSummaryResponse, String> {
         let response = self.request_json("GET", "/v1/providers", None, None)?;
+        let summary: BridgeProviderSummaryResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if summary.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(summary)
+    }
+
+    pub fn set_default_model(
+        &self,
+        request: BridgeSetDefaultModelRequest,
+    ) -> Result<BridgeProviderSummaryResponse, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/default-model",
+            Some(json!({ "model": request.model })),
+            Some(&request_id),
+        )?;
         let summary: BridgeProviderSummaryResponse =
             serde_json::from_value(response).map_err(display_error)?;
         if summary.protocol_version != u64::from(PROTOCOL_VERSION) {

@@ -49,7 +49,7 @@ interface CommandContract {
 //   bridge_switch_session,
 //   bridge_session_snapshot, bridge_session_history, bridge_submit, bridge_cancel,
 //   bridge_start_events, preview_profile_status, preview_runtime_info, import_stable_profile,
-//   provider_summary, workbench_sessions, remember_workbench_session
+//   provider_summary, set_default_model, workbench_sessions, remember_workbench_session
 //
 // Frontend adapters from desktop/frontend/src/lib/tauriBridge.ts:
 //   tauriBridgeStatus, restartTauriBridge, openTauriBridgeSession,
@@ -58,6 +58,7 @@ interface CommandContract {
 //   startTauriBridgeEvents, tauriPreviewProfileStatus,
 //   tauriPreviewRuntimeInfo, importTauriStableProfile, tauriWorkbenchSessions,
 //   rememberTauriWorkbenchSession, tauriProviderSummary
+//   setTauriDefaultModel
 
 const commands: CommandContract[] = [
   {
@@ -134,6 +135,11 @@ const commands: CommandContract[] = [
     command: "provider_summary",
     argKeys: [],
     description: "tauriProviderSummary() invokes provider_summary with no args",
+  },
+  {
+    command: "set_default_model",
+    argKeys: ["request"],
+    description: "setTauriDefaultModel() invokes set_default_model with { request }",
   },
 ];
 

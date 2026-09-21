@@ -98,6 +98,11 @@ export async function tauriProviderSummary(): Promise<TauriProviderSummary> {
   return invoke<TauriProviderSummary>("provider_summary");
 }
 
+export async function setTauriDefaultModel(model: string): Promise<TauriProviderSummary> {
+  requireTauri();
+  return invoke<TauriProviderSummary>("set_default_model", { request: { model } });
+}
+
 export async function importTauriStableProfile(): Promise<TauriProfileImportResult> {
   requireTauri();
   return invoke<TauriProfileImportResult>("import_stable_profile", { confirmed: true });
