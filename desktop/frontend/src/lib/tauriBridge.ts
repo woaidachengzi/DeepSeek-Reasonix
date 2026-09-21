@@ -20,6 +20,12 @@ export type TauriBridgeSession = BridgeSession;
 export type TauriBridgeEvent = BridgeEvent;
 export type TauriProviderSummary = BridgeProviderSummaryResponse;
 
+/** Exposes only user-visible answer deltas; reasoning and other event text stay private. */
+export function tauriAssistantTextDelta(event: Pick<TauriBridgeEvent, "eventKind" | "payload">): string {
+  if (event.eventKind !== "text" || event.payload.kind !== "text") return "";
+  return typeof event.payload.text === "string" ? event.payload.text : "";
+}
+
 export interface TauriBridgeSnapshot {
   sequence: number;
   session: TauriBridgeSession;

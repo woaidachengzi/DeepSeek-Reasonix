@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import {
   newTauriSessionId,
+  tauriAssistantTextDelta,
   tauriMessageFrom,
   tauriEventSummary,
 } from "../lib/tauriBridge";
@@ -79,6 +80,17 @@ ok(bigSummary.endsWith("..."), "truncated summary ends with ...");
 
 const exactSummary = tauriEventSummary({ payload: { data: "y".repeat(489) } });
 ok(!exactSummary.endsWith("..."), "payload at 500 chars exactly is not truncated");
+
+// ---------------------------------------------------------------------------
+// Tests: tauriAssistantTextDelta
+// ---------------------------------------------------------------------------
+
+console.log("\ntauri session preview — tauriAssistantTextDelta");
+
+eq(tauriAssistantTextDelta({ eventKind: "text", payload: { kind: "text", text: "hello " } }), "hello ", "visible text event returns its delta");
+eq(tauriAssistantTextDelta({ eventKind: "reasoning", payload: { kind: "reasoning", text: "private reasoning" } }), "", "reasoning events are never exposed as answer text");
+eq(tauriAssistantTextDelta({ eventKind: "notice", payload: { kind: "notice", text: "status" } }), "", "notice text is not appended to the assistant answer");
+eq(tauriAssistantTextDelta({ eventKind: "text", payload: { kind: "text", text: 123 } }), "", "malformed non-string text is ignored");
 
 // ---------------------------------------------------------------------------
 // Tests: session-recovery deterministic flow

@@ -20,6 +20,7 @@ import {
   tauriBridgeHistory,
   tauriBridgeSnapshot,
   tauriBridgeStatus,
+  tauriAssistantTextDelta,
   tauriEventSummary,
   tauriMessageFrom,
   tauriProviderSummary,
@@ -58,6 +59,7 @@ export function TauriSessionPreview() {
   const [profileNotice, setProfileNotice] = useState("");
   const [events, setEvents] = useState<TauriBridgeEvent[]>([]);
   const [history, setHistory] = useState<TauriBridgeHistory | null>(null);
+  const [liveText, setLiveText] = useState("");
   const [sequence, setSequence] = useState(0);
   const [streamRevision, setStreamRevision] = useState(0);
   const [streamReady, setStreamReady] = useState(false);
@@ -101,12 +103,15 @@ export function TauriSessionPreview() {
           if (event.sessionId !== session.id) return;
           setSequence(previous => Math.max(previous, event.sequence));
           setEvents(previous => [event, ...previous].slice(0, 100));
+          const textDelta = tauriAssistantTextDelta(event);
+          if (textDelta) setLiveText(previous => previous + textDelta);
           if (event.eventKind === "turn_done") {
             void Promise.all([tauriBridgeSnapshot(event.sessionId), tauriBridgeHistory(event.sessionId)])
               .then(([latest, latestHistory]) => {
                 if (!active) return;
                 setSession(latest.session);
                 setHistory(latestHistory);
+                setLiveText("");
               })
               .catch(error => {
                 if (active) setError(tauriMessageFrom(error));
@@ -153,6 +158,7 @@ export function TauriSessionPreview() {
     setError("");
     setEvents([]);
     setHistory(null);
+    setLiveText("");
     setSequence(0);
     setStreamReady(false);
     try {
@@ -193,6 +199,7 @@ export function TauriSessionPreview() {
     if (!session || !streamReady || !prompt.trim()) return;
     setBusy(true);
     setError("");
+    setLiveText("");
     try {
       setSession(await submitTauriBridge(session.id, prompt.trim()));
       setHistory(await tauriBridgeHistory(session.id));
@@ -229,6 +236,7 @@ export function TauriSessionPreview() {
         await rememberSession(reopened);
         setEvents([]);
         setHistory(null);
+        setLiveText("");
         setSequence(0);
         setStreamRevision(previous => previous + 1);
       }
@@ -344,10 +352,10 @@ export function TauriSessionPreview() {
           </div>
         </header>
 
-        <div className="tauri-conversation" aria-live="polite">
-          {session && !history ? <div className="tauri-loading"><span /><p>正在载入对话…</p></div> : history?.messages.length ? <div className="tauri-transcript">
-            {history.startIndex > 0 && <p className="tauri-history-note">当前显示最近 {history.messages.length} 条，共 {history.totalMessages} 条可见消息</p>}
-            {history.messages.map((message, index) => <article key={`${history.startIndex + index}-${message.role}`} className={`tauri-message is-${message.role}`}>
+        <div className="tauri-conversation">
+          {session && !history ? <div className="tauri-loading"><span /><p>正在载入对话…</p></div> : history?.messages.length || liveText || session?.state === "running" ? <div className="tauri-transcript">
+            {history && history.startIndex > 0 && <p className="tauri-history-note">当前显示最近 {history.messages.length} 条，共 {history.totalMessages} 条可见消息</p>}
+            {history?.messages.map((message, index) => <article key={`${history.startIndex + index}-${message.role}`} className={`tauri-message is-${message.role}`}>
               <div className="tauri-message__avatar" aria-hidden="true">{message.role === "user" ? "你" : <Sparkles size={16} />}</div>
               <div className="tauri-message__content">
                 <div className="tauri-message__role">{message.role === "user" ? "你" : "Reasonix"}</div>
@@ -355,7 +363,8 @@ export function TauriSessionPreview() {
                 {message.truncated && <small>为保护界面性能，这条历史内容已截断。</small>}
               </div>
             </article>)}
-            {session?.state === "running" && <div className="tauri-thinking" role="status"><span /><span /><span />Reasonix 正在思考…</div>}
+            {liveText && <article className="tauri-message is-assistant tauri-message--live"><div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div><div className="tauri-message__content"><div className="tauri-message__role">Reasonix</div><Markdown text={liveText} streaming cacheKey={`${session?.id ?? "live"}:stream`} /></div></article>}
+            {session?.state === "running" && !liveText && <div className="tauri-thinking" role="status"><span /><span /><span />Reasonix 正在思考…</div>}
           </div> : <section className="tauri-welcome">
             <div className="tauri-welcome__mark"><Sparkles size={24} /></div>
             <p className="tauri-welcome__eyebrow">REASONIX · TAURI PREVIEW</p>
