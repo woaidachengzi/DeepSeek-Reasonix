@@ -138,6 +138,13 @@ func bridgeHistoryMessageVisible(message provider.Message) bool {
 		message.Role == provider.RoleAssistant
 }
 
+func bridgeHistoryMessageContent(message provider.Message) string {
+	if message.Role == provider.RoleUser {
+		return agent.UserMessageText(message)
+	}
+	return message.Content
+}
+
 // History makes only user- and assistant-visible text available to the host.
 // The controller transcript also contains system prompts, provider reasoning,
 // tool requests/results, image references, and local execution metadata; none
@@ -161,10 +168,11 @@ func (r *controllerRuntime) History() []desktopbridge.HistoryMessage {
 		default:
 			continue
 		}
-		if strings.TrimSpace(message.Content) == "" {
+		content := bridgeHistoryMessageContent(message)
+		if strings.TrimSpace(content) == "" {
 			continue
 		}
-		content, truncated := truncateBridgeHistoryContent(message.Content)
+		content, truncated := truncateBridgeHistoryContent(content)
 		messages = append(messages, desktopbridge.HistoryMessage{
 			Role:      role,
 			Content:   content,

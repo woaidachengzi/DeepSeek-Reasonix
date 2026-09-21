@@ -53,14 +53,14 @@ func TestBridgeHistoryProjectionHidesHostSessionContext(t *testing.T) {
 	// snapshot is omitted while the adjacent user question remains visible.
 	visible := []provider.Message{
 		{Role: provider.RoleUser, Origin: provider.MessageOriginHost, Content: snapshot.Content},
-		{Role: provider.RoleUser, Origin: provider.MessageOriginUser, Content: "the user's actual question"},
+		{Role: provider.RoleUser, Origin: provider.MessageOriginUser, Content: "<reasoning-language>\n必须使用简体中文\n</reasoning-language>\n\nthe user's actual question"},
 	}
 	projected := make([]string, 0, len(visible))
 	for _, message := range visible {
 		if !bridgeHistoryMessageVisible(message) {
 			continue
 		}
-		projected = append(projected, message.Content)
+		projected = append(projected, bridgeHistoryMessageContent(message))
 	}
 	if len(projected) != 1 || projected[0] != "the user's actual question" {
 		t.Fatalf("projected bridge history = %#v", projected)
