@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, ArrowUp, Check, ChevronDown, FileText, FolderOpen, MessageSquare, Paperclip, Pencil, Plus, Sparkles, Square, Trash2, X } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { Markdown } from "../components/Markdown";
+import { QuestionJumpBar } from "../components/QuestionJumpBar";
 import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
+import { compactQuestionText, type QuestionAnchor } from "../lib/transcriptGrouping";
 import { LocaleProvider } from "../lib/i18n";
 import logoWordmark from "../assets/logo-wordmark.svg";
 import {
@@ -141,7 +143,53 @@ export function TauriSessionPreview() {
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [error, setError] = useState("");
+  const conversationRef = useRef<HTMLDivElement>(null);
+  const [activeQuestion, setActiveQuestion] = useState<number | null>(null);
   const switchingBlocked = Boolean(session && session.state !== "idle");
+
+  const questions = useMemo<QuestionAnchor[]>(() => {
+    if (!history) return [];
+    let turn = 0;
+    return history.messages.flatMap((message, index) => {
+      if (message.role !== "user") return [];
+      const display = parseAttachmentRefsForDisplay(message.content);
+      const question: QuestionAnchor = {
+        id: `tauri-question-${history.startIndex + index}`,
+        text: compactQuestionText(display.text),
+        turn,
+        loaded: true,
+      };
+      turn += 1;
+      return [question];
+    });
+  }, [history]);
+
+  useEffect(() => {
+    const conversation = conversationRef.current;
+    if (!conversation) return;
+    const updateActiveQuestion = () => {
+      const top = conversation.getBoundingClientRect().top + 24;
+      let active = questions[0]?.turn ?? null;
+      for (const question of questions) {
+        const anchor = document.getElementById(question.id);
+        if (!anchor || anchor.getBoundingClientRect().top > top) break;
+        active = question.turn;
+      }
+      setActiveQuestion(active);
+    };
+    conversation.addEventListener("scroll", updateActiveQuestion, { passive: true });
+    updateActiveQuestion();
+    return () => conversation.removeEventListener("scroll", updateActiveQuestion);
+  }, [questions]);
+
+  function jumpToQuestion(question: QuestionAnchor) {
+    const conversation = conversationRef.current;
+    const anchor = document.getElementById(question.id);
+    if (!conversation || !anchor) return;
+    const top = anchor.getBoundingClientRect().top - conversation.getBoundingClientRect().top + conversation.scrollTop - 20;
+    conversation.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    setActiveQuestion(question.turn);
+  }
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -588,12 +636,13 @@ export function TauriSessionPreview() {
           </div>
         </header>
 
-        <div className="tauri-conversation">
+        <div className="tauri-conversation" ref={conversationRef}>
           {session && !history && historyLoading ? <div className="tauri-loading"><span /><p>正在载入对话…</p></div> : session && !history && historyError ? <div className="tauri-loading tauri-history-error"><p>无法载入对话记录</p><p>{historyError}</p><button type="button" className="tauri-diagnostic-action" onClick={() => void refreshHistory()} disabled={busy}>重新加载</button></div> : history?.messages.length || liveText || session?.state === "running" ? <div className="tauri-transcript">
             {history && history.startIndex > 0 && <p className="tauri-history-note">当前显示最近 {history.messages.length} 条，共 {history.totalMessages} 条可见消息</p>}
             {history?.messages.map((message, index) => {
               const display = message.role === "user" ? parseAttachmentRefsForDisplay(message.content) : null;
-              return <article key={`${history.startIndex + index}-${message.role}`} className={`tauri-message is-${message.role}`}>
+              const question = message.role === "user" ? questions.find(item => item.id === `tauri-question-${history.startIndex + index}`) : undefined;
+              return <article id={question?.id} data-tauri-question-anchor={question?.id} key={`${history.startIndex + index}-${message.role}`} className={`tauri-message is-${message.role}`}>
                 <div className="tauri-message__avatar" aria-hidden="true">{message.role === "user" ? "你" : <Sparkles size={16} />}</div>
                 <div className="tauri-message__content">
                   <div className="tauri-message__role">{message.role === "user" ? "你" : "Reasonix"}</div>
@@ -618,6 +667,8 @@ export function TauriSessionPreview() {
             {!session && <button className="tauri-welcome__start" type="button" onClick={() => void createSession()} disabled={busy}><Plus size={16} />开始新对话</button>}
           </section>}
         </div>
+
+        {questions.length >= 2 && <QuestionJumpBar loadedQuestions={questions} totalQuestions={questions.length} activeTurn={activeQuestion} onJump={jumpToQuestion} />}
 
         <footer className="tauri-composer-area">
           {error && <p className="tauri-error" role="alert">{error}</p>}

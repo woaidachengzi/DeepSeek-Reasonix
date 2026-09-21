@@ -138,7 +138,7 @@
 .tauri-sidebar__diagnostics { display: flex; height: 32px; align-items: center; gap: 9px; padding: 0 3px; border: 0; background: transparent; color: var(--fg-dim) !important; text-align: left; font-size: 12px !important; }
 .tauri-sidebar__diagnostics:hover { color: var(--fg) !important; }
 
-.tauri-main { display: flex; min-width: 0; min-height: 0; flex-direction: column; }
+.tauri-main { position: relative; display: flex; min-width: 0; min-height: 0; flex-direction: column; }
 .tauri-topbar { display: flex; height: 64px; min-height: 64px; align-items: center; justify-content: space-between; gap: 18px; padding: 0 24px; border-bottom: 1px solid var(--border-soft); }
 .tauri-topbar__title { display: grid; min-width: 0; gap: 1px; }
 .tauri-topbar__title-row { display: flex; min-width: 0; align-items: center; gap: 5px; }
@@ -180,6 +180,15 @@
 .tauri-icon-button:hover { border-color: var(--border-soft); background: var(--surface); color: var(--fg) !important; }
 
 .tauri-conversation { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow: auto; scrollbar-color: var(--scrollbar-thumb) transparent; }
+.tauri-main > .jump-bar {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  z-index: 4;
+  max-width: none;
+  margin: 0;
+  transform: translate(4px, -50%);
+}
 .tauri-welcome { width: min(630px, calc(100% - 48px)); margin: auto; padding: 42px 0 36px; text-align: center; animation: tauri-rise-in .38s ease both; }
 .tauri-welcome__mark { display: grid; width: 50px; height: 50px; place-items: center; margin: 0 auto 20px; border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border-soft)); border-radius: 17px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); color: var(--accent); box-shadow: 0 10px 30px color-mix(in srgb, var(--accent) 9%, transparent); }
 .tauri-welcome__eyebrow { margin: 0 0 13px; color: var(--fg-faint); font-size: 10px; font-weight: 650; letter-spacing: .14em; }
@@ -307,4 +316,5 @@
   .tauri-starters button { min-height: 68px; grid-template-columns: 29px minmax(0, 1fr) 14px; }
   .tauri-composer-area { width: calc(100% - 24px); }
   .tauri-transcript { width: calc(100% - 28px); }
+  .tauri-main > .jump-bar { display: none; }
 }
