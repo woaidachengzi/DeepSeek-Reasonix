@@ -21,6 +21,7 @@ func TestGoDTOsMatchTheWireSchema(t *testing.T) {
 		{Name: "attachment", Sample: desktopbridge.AttachmentView{}},
 		{Name: "attachmentResponse", Sample: attachmentResponse{}},
 		{Name: "submitRequest", Sample: submitRequest{}},
+		{Name: "deleteSessionResponse", Sample: deleteSessionResponse{}},
 		{Name: "historyMessage", Sample: desktopbridge.HistoryMessage{}},
 		{Name: "historyResponse", Sample: historyResponse{}},
 	}

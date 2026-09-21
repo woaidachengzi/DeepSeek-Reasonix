@@ -61,7 +61,7 @@ pub struct RenameSessionRequest {
 // module; only the host-facing command payloads below stay hand-written.
 pub use crate::protocol_generated::{
     BridgeAttachFileRequest as AttachFileRequest, BridgeAttachment, BridgeAttachmentResponse,
-    BridgeEvent, BridgeHistoryMessage, BridgeHistoryResponse,
+    BridgeDeleteSessionResponse, BridgeEvent, BridgeHistoryMessage, BridgeHistoryResponse,
     BridgeOpenSessionRequest as OpenSessionRequest, BridgeProviderSummaryResponse,
     BridgeRenameSessionRequest, BridgeSession, BridgeSessionResponse, BridgeSetDefaultModelRequest,
 };
@@ -343,6 +343,25 @@ impl BridgeSupervisor {
             Some(&request_id),
         )
         .map(|envelope| envelope.session)
+    }
+
+    pub fn delete_session(
+        &self,
+        request: SessionRequest,
+    ) -> Result<BridgeDeleteSessionResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let request_id = opaque_secret()?;
+        let path = format!("/v1/sessions/{session_id}");
+        let response = self.request_json("DELETE", &path, None, Some(&request_id))?;
+        let envelope: BridgeDeleteSessionResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        if !envelope.deleted || envelope.session_id != session_id {
+            return Err("desktop bridge did not confirm the deleted session".to_string());
+        }
+        Ok(envelope)
     }
 
     pub fn snapshot(&self, request: SessionRequest) -> Result<BridgeSnapshot, String> {
@@ -849,6 +868,7 @@ mod tests {
     use super::{
         parse_json_response, request_json, session_path_component, validate_attachment,
         verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSupervisor,
+        OpenSessionRequest, RenameSessionRequest, SessionRequest,
     };
     use serde_json::json;
     use std::{
@@ -1107,5 +1127,166 @@ mod tests {
         assert!(supervisor.restart().expect("restart bridge").running);
         supervisor.stop().expect("stop bridge");
         assert!(!supervisor.status().running);
+    }
+
+    // Exercises the whole rename path the workbench uses: Rust host -> real Go
+    // bridge -> core .jsonl.meta sidecar. The session title must survive a
+    // sidecar restart, because that is the only reason it is stored in core
+    // metadata instead of host UI state.
+    #[test]
+    fn session_title_survives_a_sidecar_restart() {
+        let Some(binary) = bridge_under_test() else {
+            return;
+        };
+        let home = tempfile::tempdir().expect("isolated reasonix home");
+        env::set_var("REASONIX_HOME", home.path());
+        let supervisor = BridgeSupervisor::with_binary(binary);
+        supervisor.start().expect("start bridge");
+
+        let opened = supervisor
+            .open_session(OpenSessionRequest {
+                session_id: "tauri-e2e-title".to_string(),
+                workspace_root: None,
+            })
+            .expect("open session");
+        assert_eq!(opened.title, None, "a new session starts untitled");
+
+        let renamed = supervisor
+            .rename_session(RenameSessionRequest {
+                session_id: "tauri-e2e-title".to_string(),
+                title: "Release notes".to_string(),
+            })
+            .expect("rename session");
+        assert_eq!(renamed.title.as_deref(), Some("Release notes"));
+
+        // The transport surfaces only the HTTP status, so assert the refusal
+        // itself; the Go tests pin the exact error code and body.
+        let rejected = supervisor
+            .rename_session(RenameSessionRequest {
+                session_id: "tauri-e2e-title".to_string(),
+                title: "bad\ntitle".to_string(),
+            })
+            .expect_err("a title with a control character must be rejected");
+        assert!(
+            rejected.contains("400"),
+            "unexpected rejection message: {rejected}"
+        );
+
+        supervisor.restart().expect("restart bridge");
+        let reopened = supervisor
+            .open_session(OpenSessionRequest {
+                session_id: "tauri-e2e-title".to_string(),
+                workspace_root: None,
+            })
+            .expect("reopen session");
+        assert_eq!(
+            reopened.title.as_deref(),
+            Some("Release notes"),
+            "the title must be read back from core session metadata"
+        );
+        supervisor.stop().expect("stop bridge");
+    }
+
+    // Deleting is the only bridge operation that destroys user data, so the
+    // whole path is checked against a real sidecar: the artifact sweep must
+    // remove every file the session owned and leave other sessions alone.
+    #[test]
+    fn deleting_a_session_removes_its_artifacts_and_keeps_other_sessions() {
+        let Some(binary) = bridge_under_test() else {
+            return;
+        };
+        let home = tempfile::tempdir().expect("isolated reasonix home");
+        std::env::set_var("REASONIX_HOME", home.path());
+        let supervisor = BridgeSupervisor::with_binary(binary);
+        supervisor.start().expect("start bridge");
+
+        let doomed_id = "tauri-e2e-doomed";
+        let opened = supervisor
+            .open_session(OpenSessionRequest {
+                session_id: doomed_id.to_string(),
+                workspace_root: None,
+            })
+            .expect("open doomed session");
+        // Renaming writes the metadata sidecar, so the session owns at least one
+        // artifact before the sweep. A fresh session has no transcript yet.
+        supervisor
+            .rename_session(RenameSessionRequest {
+                session_id: doomed_id.to_string(),
+                title: "Scratch".to_string(),
+            })
+            .expect("rename doomed session");
+        let session_dir = std::path::Path::new(&opened.path)
+            .parent()
+            .expect("session directory")
+            .to_path_buf();
+        let owned_before = session_files(&session_dir, doomed_id);
+        assert!(
+            !owned_before.is_empty(),
+            "the doomed session owns no artifacts to delete"
+        );
+
+        // A second session must survive the sweep. The bridge owns one session at
+        // a time, so switching is the supported way to move to another one.
+        let survivor_id = "tauri-e2e-keep";
+        supervisor
+            .switch_session(OpenSessionRequest {
+                session_id: survivor_id.to_string(),
+                workspace_root: None,
+            })
+            .expect("switch to survivor session");
+        supervisor
+            .rename_session(RenameSessionRequest {
+                session_id: survivor_id.to_string(),
+                title: "Kept".to_string(),
+            })
+            .expect("rename survivor session");
+
+        // Only the owned session can be deleted, so switch back before sweeping.
+        supervisor
+            .switch_session(OpenSessionRequest {
+                session_id: doomed_id.to_string(),
+                workspace_root: None,
+            })
+            .expect("switch to the doomed session");
+        let deleted = supervisor
+            .delete_session(SessionRequest {
+                session_id: doomed_id.to_string(),
+            })
+            .expect("delete session");
+        assert!(deleted.deleted);
+        assert_eq!(deleted.session_id, doomed_id);
+        for artifact in &owned_before {
+            assert!(
+                !artifact.exists(),
+                "artifact survived delete: {}",
+                artifact.display()
+            );
+        }
+
+        let survivor = supervisor
+            .switch_session(OpenSessionRequest {
+                session_id: survivor_id.to_string(),
+                workspace_root: None,
+            })
+            .expect("switch to survivor");
+        assert_eq!(
+            survivor.title.as_deref(),
+            Some("Kept"),
+            "deleting one session removed another"
+        );
+        supervisor.stop().expect("stop bridge");
+    }
+
+    fn session_files(dir: &std::path::Path, session_id: &str) -> Vec<std::path::PathBuf> {
+        std::fs::read_dir(dir)
+            .expect("read session directory")
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.contains(session_id))
+            })
+            .collect()
     }
 }

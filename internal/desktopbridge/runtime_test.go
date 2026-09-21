@@ -12,6 +12,7 @@ type fakeRuntime struct {
 	path          string
 	title         string
 	state         string
+	deleted       bool
 	history       []HistoryMessage
 	submits       []string
 	cancelCalls   atomic.Int32
@@ -23,6 +24,7 @@ func (r *fakeRuntime) SessionPath() string       { return r.path }
 func (r *fakeRuntime) Title() string             { return r.title }
 func (r *fakeRuntime) State() string             { return r.state }
 func (r *fakeRuntime) Rename(title string) error { r.title = title; return nil }
+func (r *fakeRuntime) Delete() error             { r.deleted = true; return nil }
 func (r *fakeRuntime) History() []HistoryMessage {
 	return append([]HistoryMessage(nil), r.history...)
 }
@@ -111,6 +113,41 @@ func TestRuntimeManagerRenamesOnlyIdleOwnedSession(t *testing.T) {
 	runtime.state = "running"
 	if _, err := manager.RenameSession("a", "Too soon"); !errors.Is(err, ErrSessionConflict) {
 		t.Fatalf("running session error = %v", err)
+	}
+}
+
+func TestRuntimeManagerDeletesOnlyTheIdleOwnedSession(t *testing.T) {
+	runtime := &fakeRuntime{path: "/sessions/a.jsonl", state: "running"}
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(context.Context, OpenRequest) (Runtime, error) {
+		return runtime, nil
+	}))
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.DeleteSession("a"); !errors.Is(err, ErrSessionConflict) {
+		t.Fatalf("running session delete error = %v", err)
+	}
+	if err := manager.DeleteSession("missing"); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("unowned session delete error = %v", err)
+	}
+	if runtime.deleted {
+		t.Fatal("an unowned or running session was deleted")
+	}
+
+	runtime.state = "idle"
+	if err := manager.DeleteSession("a"); err != nil {
+		t.Fatalf("delete session: %v", err)
+	}
+	if !runtime.deleted {
+		t.Fatal("delete did not reach the core runtime")
+	}
+	// The manager must release the deleted session: a second delete reports the
+	// session as gone instead of sweeping files a second time.
+	if err := manager.DeleteSession("a"); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("repeat delete error = %v", err)
+	}
+	if _, ok := manager.Snapshot(); ok {
+		t.Fatal("the manager still reports a snapshot after the session was deleted")
 	}
 }
 

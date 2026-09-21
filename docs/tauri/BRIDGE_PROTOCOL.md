@@ -30,6 +30,7 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 建/开会话 | `POST /v1/sessions:open` | `X-Reasonix-Request-ID` 去重 |
 | 显式切换会话 | `POST /v1/sessions:switch` | `X-Reasonix-Request-ID` 去重；仅空闲会话 |
 | 重命名会话 | `PATCH /v1/sessions/{sessionId}/title` | `X-Reasonix-Request-ID` 去重；仅空闲会话 |
+| 删除会话 | `DELETE /v1/sessions/{sessionId}` | `X-Reasonix-Request-ID` 去重；仅空闲且为当前持有的会话 |
 | 会话快照 | `GET /v1/sessions/{sessionId}/snapshot` | 是 |
 | 可见历史 | `GET /v1/sessions/{sessionId}/history` | 是 |
 | 附加文件 | `POST /v1/sessions/{sessionId}:attach` | `X-Reasonix-Request-ID` 去重 |
@@ -38,7 +39,7 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 流订阅 | `GET /v1/events?afterSequence=N` | 可重连 |
 | 正常关闭 | `POST /v1:shutdown` | 是 |
 
-当前 bridge 已实现 health、脱敏 Provider 摘要、建/开会话、空闲会话的显式切换与重命名、快照、可见历史、工作区附件、submit、cancel、SSE 事件与正常关闭。会话自定义标题写入 core 的 `.jsonl.meta`，不改动 transcript；标题为空、含控制字符或超过 120 个 Unicode 字符时会被拒绝。
+当前 bridge 已实现 health、脱敏 Provider 摘要、建/开会话、空闲会话的显式切换、重命名与删除、快照、可见历史、工作区附件、submit、cancel、SSE 事件与正常关闭。会话自定义标题写入 core 的 `.jsonl.meta`，不改动 transcript；标题为空、含控制字符或超过 120 个 Unicode 字符时会被拒绝。删除走 core 自身的产物清理（transcript、事件日志与 sidecar、guardian、inbox、checkpoint、子 agent 记录、cleanup 标记），只允许删除当前持有且空闲的会话，避免 host 误删另一个 host 正在使用的会话；删除成功后 bridge 释放该控制器且不再写回快照，否则会把刚删掉的文件重新创建出来。对已不存在的会话重复执行删除返回 `not_found`，而带同一 `X-Reasonix-Request-ID` 的传输重试重放首次响应。
 Provider 摘要仅包含配置名称、类型、已配置模型 ID、模型数量、是否需要凭据、凭据是否已配置及用户默认模型；不返回 endpoint、凭据变量名、密钥或请求 headers。模型 ID 仅用于本地下拉选择。
 默认模型修改复用 `internal/config` 的选择校验、用户配置锁和窄写入，只改变新会话默认值，不重建或改写当前会话；选项只包括已启用且凭据可用的模型。工作区 `reasonix.toml` 仍可覆盖用户默认值。
 `submit` 仅确认既有 Go Controller 已接收输入（HTTP 202）；它不会等待 Agent 生成结束，

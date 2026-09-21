@@ -62,6 +62,7 @@ export interface TauriPreviewRuntimeInfo {
   stableCommit: string;
   previewVersion: string;
   tauriVersion: string;
+  previewBuild: string;
   bridgeProtocolVersion: number;
   sidecarInstanceId?: string;
 }
@@ -135,6 +136,11 @@ export async function rememberTauriWorkbenchSession(
   });
 }
 
+export async function forgetTauriWorkbenchSession(sessionId: string): Promise<TauriWorkbenchSession[]> {
+  requireTauri();
+  return invoke<TauriWorkbenchSession[]>("forget_workbench_session", { sessionId });
+}
+
 /**
  * The native picker gives the bridge a path only after an explicit user
  * selection. It does not expose filesystem APIs to the webview.
@@ -173,6 +179,19 @@ export async function switchTauriBridgeSession(sessionId: string, workspaceRoot?
 export async function renameTauriBridgeSession(sessionId: string, title: string): Promise<TauriBridgeSession> {
   requireTauri();
   return invoke<TauriBridgeSession>("bridge_rename_session", { request: { sessionId, title } });
+}
+
+export interface TauriBridgeDeletedSession {
+  protocolVersion: number;
+  deleted: boolean;
+  sessionId: string;
+}
+
+/** Removes the conversation and its durable artifacts. The host may only delete
+ *  the session the bridge owns, so callers switch to the target first. */
+export async function deleteTauriBridgeSession(sessionId: string): Promise<TauriBridgeDeletedSession> {
+  requireTauri();
+  return invoke<TauriBridgeDeletedSession>("bridge_delete_session", { request: { sessionId } });
 }
 
 export async function tauriBridgeSnapshot(sessionId: string): Promise<TauriBridgeSnapshot> {
@@ -240,4 +259,34 @@ export function tauriComposerInput(
   return [prompt.trim(), ...attachments.map(formatAttachmentRefForSubmit)]
     .filter(Boolean)
     .join("\n\n");
+}
+
+/** Mirrors the bridge's title rules: non-empty, at most 120 Unicode characters,
+ *  no control characters. The Rust host and the Go runtime reject the same input. */
+export const TAURI_TITLE_MAX_CHARS = 120;
+
+export function tauriTitleError(title: string): string {
+  const trimmed = title.trim();
+  if (!trimmed) return "对话名称不能为空";
+  if (Array.from(trimmed).length > TAURI_TITLE_MAX_CHARS) {
+    return `对话名称不能超过 ${TAURI_TITLE_MAX_CHARS} 个字符`;
+  }
+  if (/\p{Cc}/u.test(trimmed)) return "对话名称不能包含控制字符";
+  return "";
+}
+
+/** The stored title when it is safe to display, otherwise the session fallback. */
+export function tauriSessionTitle(storedTitle: string | undefined, fallback: string): string {
+  const trimmed = (storedTitle ?? "").trim();
+  return tauriTitleError(trimmed) === "" ? trimmed : fallback;
+}
+
+/** What to show when a turn ends: empty on success, the reason on failure.
+ *  A failed turn used to end silently, leaving the composer on its running
+ *  state with no explanation; the wire event carries status and err. */
+export function tauriTurnFailure(event: Pick<TauriBridgeEvent, "eventKind" | "payload">): string {
+  if (event.eventKind !== "turn_done") return "";
+  if (event.payload.status !== "failed") return "";
+  const reason = typeof event.payload.err === "string" ? event.payload.err.trim() : "";
+  return reason || "本轮未完成：Agent 没有返回结果";
 }

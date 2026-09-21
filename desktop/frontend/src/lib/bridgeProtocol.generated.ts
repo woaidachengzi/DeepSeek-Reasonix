@@ -17,6 +17,12 @@ export interface BridgeAttachmentResponse {
   protocolVersion: number;
 }
 
+export interface BridgeDeleteSessionResponse {
+  deleted: boolean;
+  protocolVersion: number;
+  sessionId: string;
+}
+
 export interface BridgeError {
   error: BridgeErrorBody;
   protocolVersion: number;

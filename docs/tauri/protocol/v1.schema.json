@@ -9,6 +9,7 @@
     { "$ref": "#/$defs/setDefaultModelRequest" },
     { "$ref": "#/$defs/openSessionRequest" },
     { "$ref": "#/$defs/renameSessionRequest" },
+    { "$ref": "#/$defs/deleteSessionResponse" },
     { "$ref": "#/$defs/attachFileRequest" },
     { "$ref": "#/$defs/attachmentResponse" },
     { "$ref": "#/$defs/submitRequest" },
@@ -93,6 +94,17 @@
       "required": ["title"],
       "properties": {
         "title": { "type": "string", "minLength": 1, "maxLength": 120 }
+      },
+      "additionalProperties": false
+    },
+    "deleteSessionResponse": {
+      "title": "BridgeDeleteSessionResponse",
+      "type": "object",
+      "required": ["protocolVersion", "deleted", "sessionId"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "deleted": { "type": "boolean", "const": true },
+        "sessionId": { "$ref": "#/$defs/sessionId" }
       },
       "additionalProperties": false
     },

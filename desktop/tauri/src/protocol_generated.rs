@@ -30,6 +30,14 @@ pub struct BridgeAttachmentResponse {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeDeleteSessionResponse {
+    pub deleted: bool,
+    pub protocol_version: u64,
+    pub session_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeError {
     pub error: BridgeErrorBody,
     pub protocol_version: u64,

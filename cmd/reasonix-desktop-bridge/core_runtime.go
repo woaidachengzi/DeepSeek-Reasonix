@@ -106,6 +106,18 @@ func (r *controllerRuntime) Rename(title string) error {
 	return agent.RenameSession(r.SessionPath(), title)
 }
 
+// Delete sweeps the session's durable artifacts through the controller's own
+// removal path, so the bridge cannot drift from what the core considers a
+// session to be, then releases the controller without a shutdown snapshot.
+func (r *controllerRuntime) Delete() error {
+	path := r.SessionPath()
+	if err := control.RemoveSessionArtifacts(path); err != nil {
+		return err
+	}
+	r.controller.Close()
+	return nil
+}
+
 func (r *controllerRuntime) State() string {
 	status := r.controller.RuntimeStatus()
 	switch {

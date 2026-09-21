@@ -80,6 +80,33 @@ impl WorkbenchCatalog {
         *sessions = updated.clone();
         Ok(updated)
     }
+
+    /// Removes a session from the host-owned recent-session catalog. The core
+    /// artifacts are deleted separately by the bridge; this catalog update is
+    /// intentionally idempotent so a retry can finish a partially completed
+    /// delete without resurrecting the row.
+    pub fn forget(&self, session_id: &str) -> Result<Vec<WorkbenchSession>, String> {
+        let session_id = session_id.trim();
+        validate_session(&WorkbenchSession {
+            session_id: session_id.to_string(),
+            title: None,
+            workspace_root: None,
+        })?;
+        let mut sessions = self
+            .sessions
+            .lock()
+            .map_err(|_| "workbench catalog lock is unavailable".to_string())?;
+        let updated: Vec<_> = sessions
+            .iter()
+            .filter(|session| session.session_id != session_id)
+            .cloned()
+            .collect();
+        if updated.as_slice() != sessions.as_slice() {
+            write_sessions(&self.path, &updated)?;
+            *sessions = updated.clone();
+        }
+        Ok(updated)
+    }
 }
 
 fn validate_session(session: &WorkbenchSession) -> Result<(), String> {
@@ -190,6 +217,20 @@ mod tests {
         ];
         assert_eq!(catalog.list().expect("list sessions"), expected);
         assert_eq!(WorkbenchCatalog::at(path).list().expect("reload"), expected);
+    }
+
+    #[test]
+    fn forgets_deleted_session_and_persists_after_reload() {
+        let root = tempfile::tempdir().expect("temp root");
+        let path = root.path().join(CATALOG_FILE);
+        let catalog = WorkbenchCatalog::at(path.clone());
+        catalog.remember(session("one")).expect("remember first");
+        catalog.remember(session("two")).expect("remember second");
+
+        let expected = vec![session("two")];
+        assert_eq!(catalog.forget("one").expect("forget first"), expected);
+        assert_eq!(WorkbenchCatalog::at(path).list().expect("reload"), expected);
+        assert_eq!(catalog.forget("one").expect("idempotent forget"), expected);
     }
 
     #[test]

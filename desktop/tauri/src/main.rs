@@ -8,9 +8,10 @@ mod window_state;
 mod workbench_catalog;
 
 use bridge::{
-    AttachFileRequest, BridgeAttachment, BridgeHistory, BridgeProviderSummaryResponse,
-    BridgeSession, BridgeSetDefaultModelRequest, BridgeSnapshot, BridgeStatus, BridgeSupervisor,
-    OpenSessionRequest, RenameSessionRequest, SessionRequest, SubmitRequest,
+    AttachFileRequest, BridgeAttachment, BridgeDeleteSessionResponse, BridgeHistory,
+    BridgeProviderSummaryResponse, BridgeSession, BridgeSetDefaultModelRequest, BridgeSnapshot,
+    BridgeStatus, BridgeSupervisor, OpenSessionRequest, RenameSessionRequest, SessionRequest,
+    SubmitRequest,
 };
 use data_profile::{PreviewProfile, PreviewProfileStatus, ProfileImportResult};
 use runtime_info::PreviewRuntimeInfo;
@@ -50,6 +51,14 @@ fn bridge_rename_session(
     request: RenameSessionRequest,
 ) -> Result<BridgeSession, String> {
     supervisor.rename_session(request)
+}
+
+#[tauri::command]
+fn bridge_delete_session(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: SessionRequest,
+) -> Result<BridgeDeleteSessionResponse, String> {
+    supervisor.delete_session(request)
 }
 
 #[tauri::command]
@@ -152,6 +161,14 @@ fn remember_workbench_session(
     catalog.remember(request)
 }
 
+#[tauri::command]
+fn forget_workbench_session(
+    catalog: State<'_, WorkbenchCatalog>,
+    session_id: String,
+) -> Result<Vec<WorkbenchSession>, String> {
+    catalog.forget(&session_id)
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -179,6 +196,7 @@ fn main() {
             bridge_open_session,
             bridge_switch_session,
             bridge_rename_session,
+            bridge_delete_session,
             bridge_session_snapshot,
             bridge_session_history,
             bridge_submit,
@@ -191,7 +209,8 @@ fn main() {
             set_default_model,
             import_stable_profile,
             workbench_sessions,
-            remember_workbench_session
+            remember_workbench_session,
+            forget_workbench_session
         ])
         .build(tauri::generate_context!())
         .expect("failed to build Reasonix Tauri host");

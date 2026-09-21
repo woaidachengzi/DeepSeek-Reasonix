@@ -25,6 +25,7 @@ type bridgeTestRuntime struct {
 	submits       []string
 	attachCalls   int
 	renameCalls   int
+	deleteCalls   int
 	cancelCalls   int
 	shutdownCalls int
 }
@@ -35,6 +36,10 @@ func (r *bridgeTestRuntime) State() string       { return r.state }
 func (r *bridgeTestRuntime) Rename(title string) error {
 	r.renameCalls++
 	r.title = title
+	return nil
+}
+func (r *bridgeTestRuntime) Delete() error {
+	r.deleteCalls++
 	return nil
 }
 func (r *bridgeTestRuntime) History() []desktopbridge.HistoryMessage {
@@ -81,8 +86,54 @@ func TestHealthReturnsProtocolAndCapabilities(t *testing.T) {
 	for _, capability := range got.Capabilities {
 		found[capability] = true
 	}
-	if !found["provider_summary"] || !found["set_default_model"] || !found["attach_file"] || !found["rename_session"] {
+	if !found["provider_summary"] || !found["set_default_model"] || !found["attach_file"] || !found["rename_session"] || !found["delete_session"] {
 		t.Fatalf("health capabilities %v do not include provider model settings", got.Capabilities)
+	}
+}
+
+func TestBridgeServerDeletesSessionIdempotently(t *testing.T) {
+	runtime := &bridgeTestRuntime{path: "/tmp/reasonix-session", state: "idle"}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		return runtime, nil
+	}))
+	bridge := newBridgeServer(testToken, "instance", manager)
+	handler := bridge.handler()
+	open := httptest.NewRequest(http.MethodPost, "/v1/sessions:open", strings.NewReader(`{"sessionId":"tab-delete"}`))
+	open.Header.Set("Authorization", "Bearer "+testToken)
+	opened := httptest.NewRecorder()
+	handler.ServeHTTP(opened, open)
+	if opened.Code != http.StatusOK {
+		t.Fatalf("open status = %d, body = %s", opened.Code, opened.Body.String())
+	}
+
+	deleteTwice := func(requestID string) *httptest.ResponseRecorder {
+		response := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodDelete, "/v1/sessions/tab-delete", nil)
+		request.Header.Set("Authorization", "Bearer "+testToken)
+		request.Header.Set(requestIDHeader, requestID)
+		handler.ServeHTTP(response, request)
+		return response
+	}
+	first := deleteTwice("delete-request-1")
+	if first.Code != http.StatusOK || !strings.Contains(first.Body.String(), `"deleted":true`) || !strings.Contains(first.Body.String(), `"protocolVersion":1`) {
+		t.Fatalf("delete status = %d, body = %s", first.Code, first.Body.String())
+	}
+	if runtime.deleteCalls != 1 {
+		t.Fatalf("delete calls = %d, want one physical sweep", runtime.deleteCalls)
+	}
+	// Replaying the same request ID must return the cached response, not sweep
+	// the session a second time.
+	replay := deleteTwice("delete-request-1")
+	if replay.Code != http.StatusOK || replay.Body.String() != first.Body.String() {
+		t.Fatalf("replayed delete status = %d, body = %s", replay.Code, replay.Body.String())
+	}
+	if runtime.deleteCalls != 1 {
+		t.Fatalf("delete calls after replay = %d, want one", runtime.deleteCalls)
+	}
+	// A fresh request for the now-released session reports it as gone.
+	missing := deleteTwice("delete-request-2")
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("repeat delete status = %d, body = %s", missing.Code, missing.Body.String())
 	}
 }
 

@@ -341,6 +341,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("POST /v1/sessions:open", b.authorized(b.idempotent(64<<10, b.openSession)))
 	mux.HandleFunc("POST /v1/sessions:switch", b.authorized(b.idempotent(64<<10, b.switchSession)))
 	mux.HandleFunc("PATCH /v1/sessions/{id}/title", b.authorized(b.idempotent(64<<10, b.renameSession)))
+	mux.HandleFunc("DELETE /v1/sessions/{id}", b.authorized(b.idempotent(64<<10, b.deleteSession)))
 	mux.HandleFunc("GET /v1/sessions/{id}/snapshot", b.authorized(b.sessionSnapshot))
 	mux.HandleFunc("GET /v1/sessions/{id}/history", b.authorized(b.sessionHistory))
 	mux.HandleFunc("GET /v1/events", b.authorized(b.eventsHandler))
@@ -447,7 +448,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "provider_summary", "set_default_model", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "attach_file", "submit", "cancel", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "set_default_model", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "submit", "cancel", "idempotency", "shutdown"},
 	})
 }
 
@@ -507,6 +508,14 @@ type submitRequest struct {
 
 type renameSessionRequest struct {
 	Title string `json:"title"`
+}
+
+// deleteSessionResponse is the wire body for a completed delete. The host uses
+// it to tell "removed" apart from "the service answered something else".
+type deleteSessionResponse struct {
+	ProtocolVersion int    `json:"protocolVersion"`
+	Deleted         bool   `json:"deleted"`
+	SessionID       string `json:"sessionId"`
 }
 
 type attachFileRequest struct {
@@ -602,6 +611,22 @@ func (b *bridgeServer) renameSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})
+}
+
+// deleteSession removes the owned session's durable artifacts. The host drops
+// its catalog entry only after this succeeds, so a failure never leaves a
+// listed conversation the user cannot reopen.
+func (b *bridgeServer) deleteSession(w http.ResponseWriter, r *http.Request) {
+	sessionID := strings.TrimSpace(r.PathValue("id"))
+	if err := b.runtimes.DeleteSession(sessionID); err != nil {
+		b.writeRuntimeError(w, err, "unable to delete desktop bridge session")
+		return
+	}
+	writeJSON(w, http.StatusOK, deleteSessionResponse{
+		ProtocolVersion: desktopbridge.ProtocolVersion,
+		Deleted:         true,
+		SessionID:       sessionID,
+	})
 }
 
 func (b *bridgeServer) submit(w http.ResponseWriter, r *http.Request) {

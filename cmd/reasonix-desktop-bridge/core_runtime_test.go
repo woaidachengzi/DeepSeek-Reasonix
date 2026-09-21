@@ -82,6 +82,65 @@ func TestControllerRuntimeRenamesSessionMetadataWithoutTouchingTranscript(t *tes
 	}
 }
 
+func TestControllerRuntimeDeleteRemovesSessionArtifacts(t *testing.T) {
+	workspace := t.TempDir()
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	open := func(sessionID string) desktopbridge.Runtime {
+		factory := newControllerFactory(nil)
+		factory.base.WorkspaceRoot = workspace
+		runtime, err := factory.Open(context.Background(), desktopbridge.OpenRequest{SessionID: sessionID})
+		if err != nil {
+			t.Fatalf("open session: %v", err)
+		}
+		return runtime
+	}
+
+	doomed := open("tab-doomed")
+	if err := doomed.Rename("Scratch"); err != nil {
+		t.Fatalf("rename doomed session: %v", err)
+	}
+	doomedPath := doomed.SessionPath()
+	if _, ok, err := agent.LoadBranchMeta(doomedPath); err != nil || !ok {
+		t.Fatalf("session metadata before delete = ok %v, err %v", ok, err)
+	}
+	// Collect the artifacts that actually exist: a session with no turn yet has
+	// no transcript, so the test must assert on the observed set rather than an
+	// assumed file list.
+	artifacts, err := filepath.Glob(doomedPath + "*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) == 0 {
+		t.Fatal("the session owns no artifacts to delete")
+	}
+
+	if err := doomed.Delete(); err != nil {
+		t.Fatalf("delete session: %v", err)
+	}
+	// A second sweep of an already-removed session must stay successful, so a
+	// retried bridge request cannot report a completed delete as a failure.
+	if err := doomed.Delete(); err != nil {
+		t.Fatalf("repeat delete: %v", err)
+	}
+	for _, artifact := range artifacts {
+		if _, err := os.Stat(artifact); !os.IsNotExist(err) {
+			t.Fatalf("artifact survived delete: %s (err = %v)", artifact, err)
+		}
+	}
+
+	survivor := open("tab-survivor")
+	t.Cleanup(func() { _ = survivor.Shutdown() })
+	if survivor.SessionPath() == doomedPath {
+		t.Fatal("the surviving session shares the deleted path")
+	}
+	if err := survivor.Rename("Kept"); err != nil {
+		t.Fatalf("rename survivor: %v", err)
+	}
+	if _, ok, err := agent.LoadBranchMeta(survivor.SessionPath()); err != nil || !ok {
+		t.Fatalf("deleting one session removed another: ok %v, err %v", ok, err)
+	}
+}
+
 func TestControllerRuntimeAttachFileCopiesIntoSessionWorkspace(t *testing.T) {
 	workspace := t.TempDir()
 	source := filepath.Join(t.TempDir(), "research notes.txt")

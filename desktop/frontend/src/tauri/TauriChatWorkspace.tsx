@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
-import { Activity, ArrowUp, Check, ChevronDown, FileText, FolderOpen, MessageSquare, Paperclip, Pencil, Plus, Sparkles, Square, X } from "lucide-react";
+import { Activity, ArrowUp, Check, ChevronDown, FileText, FolderOpen, MessageSquare, Paperclip, Pencil, Plus, Sparkles, Square, Trash2, X } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { Markdown } from "../components/Markdown";
 import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
 import logoWordmark from "../assets/logo-wordmark.svg";
 import {
+  TAURI_TITLE_MAX_CHARS,
   cancelTauriBridge,
   attachTauriFile,
   chooseTauriAttachmentFiles,
   chooseTauriWorkspaceRoot,
+  deleteTauriBridgeSession,
+  forgetTauriWorkbenchSession,
   importTauriStableProfile,
   newTauriSessionId,
   onTauriBridgeConnectionError,
@@ -31,6 +34,9 @@ import {
   tauriProviderSummary,
   tauriPreviewProfileStatus,
   tauriPreviewRuntimeInfo,
+  tauriSessionTitle,
+  tauriTitleError,
+  tauriTurnFailure,
   tauriWorkbenchSessions,
   type TauriBridgeEvent,
   type TauriBridgeAttachment,
@@ -52,6 +58,62 @@ interface WorkbenchSessionTab {
 function sessionLabel(sessionId: string): string {
   const suffix = sessionId.replace(/^tauri-/, "").slice(0, 7);
   return `对话 ${suffix}`;
+}
+
+/** A stored title is authoritative; anything the bridge would reject falls back
+ *  to the session-derived label instead of rendering bad host state. */
+function displayTitle(storedTitle: string | undefined, sessionId: string): string {
+  return tauriSessionTitle(storedTitle, sessionLabel(sessionId));
+}
+
+interface SessionRowProps {
+  tab: WorkbenchSessionTab;
+  active: boolean;
+  busy: boolean;
+  switchingBlocked: boolean;
+  onActivate: () => void;
+  onDelete: () => void;
+}
+
+/** One recent conversation. The confirm step lives in the row so only the row
+ *  the user armed changes shape, and leaving the row disarms it. */
+function SessionRow({ tab, active, busy, switchingBlocked, onActivate, onDelete }: SessionRowProps) {
+  const [confirming, setConfirming] = useState(false);
+  if (confirming) {
+    return (
+      <div className="tauri-session-delete" role="group" aria-label="确认删除对话">
+        <span className="tauri-session-delete__question">删除“{displayTitle(tab.title, tab.sessionId)}”？</span>
+        <span className="tauri-session-delete__actions">
+          <button type="button" className="tauri-session-delete__confirm" disabled={busy} onClick={onDelete}>删除</button>
+          <button type="button" className="tauri-session-delete__cancel" disabled={busy} onClick={() => setConfirming(false)}>取消</button>
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className={`tauri-session-row${active ? " is-active" : ""}`}>
+      <button
+        type="button"
+        className="tauri-sidebar__session"
+        disabled={busy || active || switchingBlocked}
+        onClick={onActivate}
+        title={tab.workspaceRoot ? `${tab.sessionId}\n${tab.workspaceRoot}` : tab.sessionId}
+      >
+        <MessageSquare size={15} aria-hidden="true" />
+        <span>{displayTitle(tab.title, tab.sessionId)}</span>
+      </button>
+      <button
+        type="button"
+        className="tauri-session-row__delete"
+        aria-label={`删除对话 ${displayTitle(tab.title, tab.sessionId)}`}
+        title="删除对话"
+        disabled={busy || switchingBlocked}
+        onClick={() => setConfirming(true)}
+      >
+        <Trash2 size={13} aria-hidden="true" />
+      </button>
+    </div>
+  );
 }
 
 export function TauriSessionPreview() {
@@ -120,6 +182,7 @@ export function TauriSessionPreview() {
           const textDelta = tauriAssistantTextDelta(event);
           if (textDelta) setLiveText(previous => previous + textDelta);
           if (event.eventKind === "turn_done") {
+            const failure = tauriTurnFailure(event);
             void Promise.all([tauriBridgeSnapshot(event.sessionId), tauriBridgeHistory(event.sessionId)])
               .then(([latest, latestHistory]) => {
                 if (!active) return;
@@ -128,14 +191,15 @@ export function TauriSessionPreview() {
                 setHistoryError("");
                 setHistoryLoading(false);
                 setLiveText("");
-                setError("");
+                // A failed turn must keep its reason on screen; only a
+                // completed turn clears a previous message.
+                setError(failure);
               })
               .catch(error => {
-                if (active) {
-                  const message = tauriMessageFrom(error);
-                  setHistoryError(message);
-                  setError(message);
-                }
+                if (!active) return;
+                const message = tauriMessageFrom(error);
+                setHistoryError(message);
+                if (!failure) setError(message);
               });
           }
         });
@@ -181,7 +245,7 @@ export function TauriSessionPreview() {
 
   async function rememberSession(next: TauriBridgeSession) {
     try {
-      setTabs(await rememberTauriWorkbenchSession(next.id, next.workspaceRoot ?? undefined, next.title?.trim() || undefined));
+      setTabs(await rememberTauriWorkbenchSession(next.id, next.workspaceRoot ?? undefined, tauriSessionTitle(next.title, "") || undefined));
     } catch (cause) {
       setError(`对话已打开，但无法保存到最近对话：${tauriMessageFrom(cause)}`);
     }
@@ -218,19 +282,16 @@ export function TauriSessionPreview() {
 
   function beginTitleEdit() {
     if (!session || busy || switchingBlocked) return;
-    setTitleDraft(session.title?.trim() || sessionLabel(session.id));
+    setTitleDraft(displayTitle(session.title, session.id));
     setTitleEditing(true);
   }
 
   async function saveTitle() {
     if (!session) return;
     const title = titleDraft.trim();
-    if (!title) {
-      setError("对话名称不能为空");
-      return;
-    }
-    if (Array.from(title).length > 120) {
-      setError("对话名称不能超过 120 个字符");
+    const titleError = tauriTitleError(title);
+    if (titleError) {
+      setError(titleError);
       return;
     }
     setBusy(true);
@@ -243,6 +304,54 @@ export function TauriSessionPreview() {
     } catch (cause) {
       setError(tauriMessageFrom(cause));
     } finally {
+      setBusy(false);
+    }
+  }
+
+  // Deleting is a two-step confirmation, scoped to the row that asked for it.
+  // The bridge only removes the session it owns, so an inactive conversation is
+  // switched to first — silently, without disturbing the open transcript — and
+  // only then swept.
+  async function deleteSession(target: WorkbenchSessionTab) {
+    if (busy || switchingBlocked) return;
+    const isOpen = session?.id === target.sessionId;
+    const sessionToRestore = session;
+    if (!isOpen && (session?.state === "running" || session?.state === "paused")) {
+      setError("请先停止正在生成的对话，再删除其他会话。");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    let switchedToTarget = false;
+    let deleted = false;
+    let operationError = "";
+    try {
+      if (!isOpen) {
+        await switchTauriBridgeSession(target.sessionId, target.workspaceRoot);
+        switchedToTarget = true;
+      }
+      await deleteTauriBridgeSession(target.sessionId);
+      deleted = true;
+      if (isOpen) setSession(null);
+      setTabs(await forgetTauriWorkbenchSession(target.sessionId));
+    } catch (cause) {
+      operationError = deleted
+        ? `对话已删除，但最近对话列表更新失败：${tauriMessageFrom(cause)}`
+        : tauriMessageFrom(cause);
+    } finally {
+      // The bridge owns one controller. Deleting an inactive row temporarily
+      // switches that controller, so restore the user's open session even if
+      // deletion or catalog cleanup fails.
+      if (switchedToTarget && sessionToRestore) {
+        try {
+          setSession(await switchTauriBridgeSession(sessionToRestore.id, sessionToRestore.workspaceRoot));
+        } catch (cause) {
+          setSession(null);
+          const restoreError = `删除后无法恢复原对话：${tauriMessageFrom(cause)}`;
+          operationError = operationError ? `${operationError}；${restoreError}` : restoreError;
+        }
+      }
+      if (operationError) setError(operationError);
       setBusy(false);
     }
   }
@@ -414,17 +523,17 @@ export function TauriSessionPreview() {
         </button>
         <div className="tauri-sidebar__section-title">最近对话</div>
         <nav className="tauri-sidebar__sessions">
-          {tabs.length === 0 ? <p className="tauri-sidebar__empty">还没有对话，开始一个新话题吧。</p> : tabs.map(tab => <button
-            key={tab.sessionId}
-            type="button"
-            className={`tauri-sidebar__session${session?.id === tab.sessionId ? " is-active" : ""}`}
-            disabled={busy || session?.id === tab.sessionId || switchingBlocked}
-            onClick={() => void activateSession(tab.sessionId, tab.workspaceRoot)}
-            title={tab.workspaceRoot ? `${tab.sessionId}\n${tab.workspaceRoot}` : tab.sessionId}
-          >
-            <MessageSquare size={15} aria-hidden="true" />
-            <span>{tab.title?.trim() || sessionLabel(tab.sessionId)}</span>
-          </button>) }
+          {tabs.length === 0 ? <p className="tauri-sidebar__empty">还没有对话，开始一个新话题吧。</p> : tabs.map(tab => (
+            <SessionRow
+              key={tab.sessionId}
+              tab={tab}
+              active={session?.id === tab.sessionId}
+              busy={busy}
+              switchingBlocked={switchingBlocked}
+              onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)}
+              onDelete={() => void deleteSession(tab)}
+            />
+          )) }
         </nav>
         <div className="tauri-sidebar__footer">
           <span className={`tauri-health${status?.running ? " is-ready" : ""}`}><i />{status?.running ? "本地运行正常" : "正在连接本地服务…"}</span>
@@ -437,11 +546,11 @@ export function TauriSessionPreview() {
           <div className="tauri-topbar__title">
             <div className="tauri-topbar__title-row">
               {session && titleEditing ? <form className="tauri-session-title-edit" onSubmit={event => { event.preventDefault(); void saveTitle(); }}>
-                <input autoFocus maxLength={120} value={titleDraft} onChange={event => setTitleDraft(event.target.value)} aria-label="对话名称" onKeyDown={event => { if (event.key === "Escape") setTitleEditing(false); }} />
+                <input autoFocus maxLength={TAURI_TITLE_MAX_CHARS} value={titleDraft} onChange={event => setTitleDraft(event.target.value)} aria-label="对话名称" onKeyDown={event => { if (event.key === "Escape") setTitleEditing(false); }} />
                 <button type="submit" className="tauri-session-title-edit__action" aria-label="保存对话名称" disabled={busy}><Check size={14} /></button>
                 <button type="button" className="tauri-session-title-edit__action" aria-label="取消重命名" disabled={busy} onClick={() => setTitleEditing(false)}><X size={14} /></button>
               </form> : <>
-                <strong>{session ? session.title?.trim() || sessionLabel(session.id) : "新对话"}</strong>
+                <strong>{session ? displayTitle(session.title, session.id) : "新对话"}</strong>
                 {session && <button type="button" className="tauri-title-rename" aria-label="重命名对话" title="重命名对话" disabled={busy || switchingBlocked} onClick={beginTitleEdit}><Pencil size={13} /></button>}
               </>}
             </div>
@@ -534,7 +643,7 @@ export function TauriSessionPreview() {
               <div className="tauri-diagnostic-card__heading"><h3>模型提供方</h3><button type="button" onClick={() => void tauriProviderSummary().then(setProviderSummary).catch(cause => setError(tauriMessageFrom(cause)))} disabled={busy}>刷新</button></div>
               {!providerSummary ? <p>正在读取 Preview 配置…</p> : <><p>默认模型只影响新对话；工作区 <code>reasonix.toml</code> 可能覆盖用户默认值。</p>{providerSummary.providers.length === 0 ? <p>当前没有配置提供方。</p> : <ul>{providerSummary.providers.map(provider => <li key={provider.name}><strong>{provider.displayName || provider.name}</strong><span>{provider.kind} · {provider.modelCount} 个模型 · {provider.configured ? "已就绪" : "缺少 API Key"}</span></li>)}</ul>}<small>密钥、环境变量名和服务端点不会传到界面。</small></>}
             </section>
-            <details className="tauri-diagnostic-card tauri-runtime-details"><summary>构建与版本详情</summary>{!runtimeInfo ? <p>正在读取构建信息…</p> : <dl><div><dt>稳定版基线</dt><dd>v{runtimeInfo.stableVersion} · {runtimeInfo.stableCommit.slice(0, 12)}</dd></div><div><dt>Preview / Tauri</dt><dd>v{runtimeInfo.previewVersion} · v{runtimeInfo.tauriVersion}</dd></div><div><dt>桥接协议</dt><dd>v{runtimeInfo.bridgeProtocolVersion}</dd></div><div><dt>Sidecar</dt><dd>{runtimeInfo.sidecarInstanceId ?? "未运行"}</dd></div>{session && <div><dt>会话 ID</dt><dd>{session.id}</dd></div>}{session && <div><dt>会话路径</dt><dd>{session.path}</dd></div>}{history && <div><dt>历史记录</dt><dd>{history.totalMessages} 条</dd></div>}<div><dt>事件游标</dt><dd>{sequence} · 最近 {events.length} 个事件</dd></div></dl>}</details>
+            <details className="tauri-diagnostic-card tauri-runtime-details"><summary>构建与版本详情</summary>{!runtimeInfo ? <p>正在读取构建信息…</p> : <dl><div><dt>稳定版基线</dt><dd>v{runtimeInfo.stableVersion} · {runtimeInfo.stableCommit.slice(0, 12)}</dd></div><div><dt>Preview / Tauri</dt><dd>v{runtimeInfo.previewVersion} · v{runtimeInfo.tauriVersion}</dd></div><div><dt>宿主构建时间</dt><dd>{runtimeInfo.previewBuild}</dd></div><div><dt>桥接协议</dt><dd>v{runtimeInfo.bridgeProtocolVersion}</dd></div><div><dt>Sidecar</dt><dd>{runtimeInfo.sidecarInstanceId ?? "未运行"}</dd></div>{session && <div><dt>会话 ID</dt><dd>{session.id}</dd></div>}{session && <div><dt>会话路径</dt><dd>{session.path}</dd></div>}{history && <div><dt>历史记录</dt><dd>{history.totalMessages} 条</dd></div>}<div><dt>事件游标</dt><dd>{sequence} · 最近 {events.length} 个事件</dd></div></dl>}</details>
             <details className="tauri-diagnostic-card tauri-event-details"><summary>桥接事件日志</summary>{events.length === 0 ? <p>开始一个对话后，这里会显示桥接事件。</p> : <ol>{events.map(event => <li key={event.sequence}><b>#{event.sequence} · {event.eventKind}</b><pre>{tauriEventSummary(event)}</pre></li>)}</ol>}</details>
             {session && <button type="button" className="tauri-diagnostic-action" onClick={() => void refreshHistory()} disabled={busy}>刷新当前对话记录</button>}
             <p className="tauri-diagnostics__note">会话切换仅在当前回复结束后启用，避免中断正在进行的请求。</p>

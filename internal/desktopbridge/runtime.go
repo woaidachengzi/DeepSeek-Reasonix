@@ -79,6 +79,7 @@ type Runtime interface {
 	State() string
 	History() []HistoryMessage
 	Rename(title string) error
+	Delete() error
 	AttachFile(path string) (AttachmentView, error)
 	Submit(input string)
 	Cancel()
@@ -358,6 +359,35 @@ func (m *RuntimeManager) RenameSession(sessionID, title string) (SessionView, er
 	view := m.view
 	view.State = m.runtime.State()
 	return view, nil
+}
+
+// DeleteSession removes the session this manager owns, together with every
+// durable artifact the core records for it. Only the owned session may be
+// deleted: the manager holds the one controller, so an unowned path could be
+// running under a different host or absent from this profile entirely. The
+// operation is idempotent — a session whose files are already gone still
+// reports success, so a retried request cannot turn a completed delete into a
+// 404. After the sweep the controller is released without another durable
+// snapshot, because that snapshot would recreate the file just deleted.
+func (m *RuntimeManager) DeleteSession(sessionID string) error {
+	sessionID = strings.TrimSpace(sessionID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return ErrClosed
+	}
+	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
+		return ErrSessionNotFound
+	}
+	if state := m.runtime.State(); state != "idle" {
+		return fmt.Errorf("%w: cannot delete a %s session", ErrSessionConflict, state)
+	}
+	if err := m.runtime.Delete(); err != nil {
+		return err
+	}
+	m.runtime = nil
+	m.view = SessionView{}
+	return nil
 }
 
 // Shutdown makes the owned core durable and then releases it. It is idempotent.

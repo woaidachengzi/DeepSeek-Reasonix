@@ -6,6 +6,8 @@
 // changes, this test must be updated — preventing silent frontend/backend
 // desync.
 
+import { readFileSync } from "node:fs";
+
 let passed = 0;
 let failed = 0;
 
@@ -48,18 +50,21 @@ interface CommandContract {
 //   bridge_status, restart_bridge, bridge_open_session,
 //   bridge_switch_session,
 //   bridge_rename_session,
+//   bridge_delete_session,
 //   bridge_session_snapshot, bridge_session_history, bridge_submit, bridge_cancel,
 //   bridge_start_events, preview_profile_status, preview_runtime_info, import_stable_profile,
-//   provider_summary, set_default_model, workbench_sessions, remember_workbench_session
+//   provider_summary, set_default_model, workbench_sessions, remember_workbench_session,
+//   forget_workbench_session
 //
 // Frontend adapters from desktop/frontend/src/lib/tauriBridge.ts:
 //   tauriBridgeStatus, restartTauriBridge, openTauriBridgeSession,
 //   switchTauriBridgeSession,
 //   renameTauriBridgeSession,
+//   deleteTauriBridgeSession,
 //   tauriBridgeSnapshot, tauriBridgeHistory, submitTauriBridge, cancelTauriBridge,
 //   startTauriBridgeEvents, tauriPreviewProfileStatus,
 //   tauriPreviewRuntimeInfo, importTauriStableProfile, tauriWorkbenchSessions,
-//   rememberTauriWorkbenchSession, tauriProviderSummary
+//   rememberTauriWorkbenchSession, forgetTauriWorkbenchSession, tauriProviderSummary
 //   setTauriDefaultModel
 
 const commands: CommandContract[] = [
@@ -87,6 +92,11 @@ const commands: CommandContract[] = [
     command: "bridge_rename_session",
     argKeys: ["request"],
     description: "renameTauriBridgeSession() invokes bridge_rename_session with { request }",
+  },
+  {
+    command: "bridge_delete_session",
+    argKeys: ["request"],
+    description: "deleteTauriBridgeSession() invokes bridge_delete_session with { request }",
   },
   {
     command: "bridge_session_snapshot",
@@ -144,6 +154,11 @@ const commands: CommandContract[] = [
     description: "rememberTauriWorkbenchSession() invokes remember_workbench_session with { request }",
   },
   {
+    command: "forget_workbench_session",
+    argKeys: ["sessionId"],
+    description: "forgetTauriWorkbenchSession() invokes forget_workbench_session with { sessionId }",
+  },
+  {
     command: "provider_summary",
     argKeys: [],
     description: "tauriProviderSummary() invokes provider_summary with no args",
@@ -193,6 +208,35 @@ ok(
 ok(
   commands.find(c => c.command === "bridge_switch_session")?.argKeys.includes("request"),
   "bridge_switch_session has request arg",
+);
+
+ok(
+  commands.find(c => c.command === "bridge_rename_session")?.argKeys.includes("request"),
+  "bridge_rename_session has request arg",
+);
+
+// The session path component is scheme-free, so the rename route cannot be
+// derived from it: the PATCH verb and the literal "/title" segment are only
+// visible in the Rust source. Pin them here so a refactor of bridge.rs cannot
+// silently point the adapter at a different endpoint.
+const bridgeSource = readFileSync(
+  new URL("../../../tauri/src/bridge.rs", import.meta.url),
+  "utf8",
+);
+ok(
+  /self\.request_session\(\s*"PATCH",\s*&path,/s.test(bridgeSource) &&
+    /let path = format!\("\/v1\/sessions\/\{session_id\}\/title"\);/s.test(bridgeSource),
+  "rename_session PATCHes /v1/sessions/{sessionId}/title",
+);
+
+ok(
+  commands.find(c => c.command === "bridge_delete_session")?.argKeys.includes("request"),
+  "bridge_delete_session has request arg",
+);
+ok(
+  /let path = format!\("\/v1\/sessions\/\{session_id\}"\);/s.test(bridgeSource) &&
+    /self\.request_json\("DELETE", &path, None, Some\(&request_id\)\)/s.test(bridgeSource),
+  "delete_session DELETEs /v1/sessions/{sessionId}",
 );
 
 // bridge_session_snapshot expects { request: { sessionId } }
@@ -279,6 +323,7 @@ const runtimeInfoShape = {
   stableCommit: "required",
   previewVersion: "required",
   tauriVersion: "required",
+  previewBuild: "required",
   bridgeProtocolVersion: "required",
   sidecarInstanceId: "optional",
 };
