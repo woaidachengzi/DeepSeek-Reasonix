@@ -88,14 +88,6 @@ fn import_stable_profile(
 
 fn main() {
     let app = tauri::Builder::default()
-        // This must stay first: a second Preview process must exit before it
-        // can spawn a second bridge against the same private profile.
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
-        }))
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             let profile =
