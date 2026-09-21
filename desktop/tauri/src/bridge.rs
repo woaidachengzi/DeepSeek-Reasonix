@@ -27,7 +27,7 @@ const BRIDGE_BINARY_ENV: &str = "REASONIX_DESKTOP_BRIDGE_BIN";
 const BUNDLED_BRIDGE_NAME: &str = "reasonix-desktop-bridge";
 const READY_TIMEOUT: Duration = Duration::from_secs(5);
 const STOP_TIMEOUT: Duration = Duration::from_secs(5);
-const PROTOCOL_VERSION: u8 = 1;
+pub const PROTOCOL_VERSION: u8 = 1;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

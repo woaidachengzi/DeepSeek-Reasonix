@@ -3,6 +3,7 @@
 mod bridge;
 mod data_profile;
 mod protocol_generated;
+mod runtime_info;
 mod window_state;
 
 use bridge::{
@@ -10,6 +11,7 @@ use bridge::{
     OpenSessionRequest, SessionRequest, SubmitRequest,
 };
 use data_profile::{PreviewProfile, PreviewProfileStatus, ProfileImportResult};
+use runtime_info::PreviewRuntimeInfo;
 use tauri::{Manager, State};
 use window_state::PreviewWindowState;
 
@@ -78,6 +80,11 @@ fn preview_profile_status(profile: State<'_, PreviewProfile>) -> PreviewProfileS
 }
 
 #[tauri::command]
+fn preview_runtime_info(supervisor: State<'_, BridgeSupervisor>) -> PreviewRuntimeInfo {
+    PreviewRuntimeInfo::from_status(supervisor.status())
+}
+
+#[tauri::command]
 fn import_stable_profile(
     profile: State<'_, PreviewProfile>,
     confirmed: bool,
@@ -116,6 +123,7 @@ fn main() {
             bridge_cancel,
             bridge_start_events,
             preview_profile_status,
+            preview_runtime_info,
             import_stable_profile
         ])
         .build(tauri::generate_context!())

@@ -35,6 +35,10 @@ Tauri WebView 中激活；现有 `desktop/frontend/src/lib/bridge.ts` 仍是 Wai
 事件订阅可从 snapshot 的 sequence 开始，避免切换期间漏掉事件。sidecar 异常退出时，预览
 提供受控重启：重新启动 bridge、重新打开当前 session、获取新 snapshot 后才恢复事件订阅和发送。
 
+Preview 的 Runtime details 面板显示冻结的 1.38.3 基线与提交、当前 Preview/Tauri host
+版本、bridge 协议版本和 live sidecar instance ID。当前 bridge 尚未提供独立的语义化发布
+版本，因此界面不会把 instance ID 伪装成版本号。
+
 选择 workspace 时，Preview 只提供系统目录选择器；`main-window` capability 仅授予
 `dialog:allow-open`，而不授予文件读写、保存对话框或任意 shell 权限。选中的路径仍会通过
 既有 bridge 的 workspace 校验，取消选择不会改变当前输入。

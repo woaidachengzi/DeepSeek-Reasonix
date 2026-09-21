@@ -47,13 +47,13 @@ interface CommandContract {
 // Rust commands from desktop/tauri/src/main.rs:
 //   bridge_status, restart_bridge, bridge_open_session,
 //   bridge_session_snapshot, bridge_session_history, bridge_submit, bridge_cancel,
-//   bridge_start_events, preview_profile_status, import_stable_profile
+//   bridge_start_events, preview_profile_status, preview_runtime_info, import_stable_profile
 //
 // Frontend adapters from desktop/frontend/src/lib/tauriBridge.ts:
 //   tauriBridgeStatus, restartTauriBridge, openTauriBridgeSession,
 //   tauriBridgeSnapshot, tauriBridgeHistory, submitTauriBridge, cancelTauriBridge,
 //   startTauriBridgeEvents, tauriPreviewProfileStatus,
-//   importTauriStableProfile
+//   tauriPreviewRuntimeInfo, importTauriStableProfile
 
 const commands: CommandContract[] = [
   {
@@ -100,6 +100,11 @@ const commands: CommandContract[] = [
     command: "preview_profile_status",
     argKeys: [],
     description: "tauriPreviewProfileStatus() invokes preview_profile_status with no args",
+  },
+  {
+    command: "preview_runtime_info",
+    argKeys: [],
+    description: "tauriPreviewRuntimeInfo() invokes preview_runtime_info with no args",
   },
   {
     command: "import_stable_profile",
@@ -177,6 +182,7 @@ ok(
 eq(commands.find(c => c.command === "bridge_status")?.argKeys.length, 0, "bridge_status has no args");
 eq(commands.find(c => c.command === "restart_bridge")?.argKeys.length, 0, "restart_bridge has no args");
 eq(commands.find(c => c.command === "preview_profile_status")?.argKeys.length, 0, "preview_profile_status has no args");
+eq(commands.find(c => c.command === "preview_runtime_info")?.argKeys.length, 0, "preview_runtime_info has no args");
 ok(
   commands.find(c => c.command === "import_stable_profile")?.argKeys.includes("confirmed"),
   "import_stable_profile requires explicit confirmation",
@@ -214,6 +220,18 @@ const statusShape = { running: "boolean", protocolVersion: "optional", sidecarIn
 eq(statusShape.running, "boolean", "BridgeStatus.running is boolean");
 eq(statusShape.protocolVersion, "optional", "BridgeStatus.protocolVersion is optional");
 eq(statusShape.sidecarInstanceId, "optional", "BridgeStatus.sidecarInstanceId is optional");
+
+const runtimeInfoShape = {
+  stableVersion: "required",
+  stableCommit: "required",
+  previewVersion: "required",
+  tauriVersion: "required",
+  bridgeProtocolVersion: "required",
+  sidecarInstanceId: "optional",
+};
+for (const [field, requirement] of Object.entries(runtimeInfoShape)) {
+  eq(requirement, field === "sidecarInstanceId" ? "optional" : "required", `PreviewRuntimeInfo.${field} contract`);
+}
 
 // BridgeSession in Rust (from protocol_generated.rs):
 //   { id: String, path: String, state: String, workspaceRoot: Option<String> }

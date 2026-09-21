@@ -9,6 +9,13 @@
 .tauri-preview__status, .tauri-preview__sequence { color: #acb8cc; font-size: 13px; }
 .tauri-preview__status.is-ready { color: #6fdea0; }
 .tauri-preview__restart { margin: -8px 0 4px; font-size: 13px !important; }
+.tauri-preview__runtime { margin-top: 16px; border: 1px solid #2c3852; border-radius: 9px; padding: 10px 12px; color: #acb8cc; font-size: 13px; }
+.tauri-preview__runtime summary { cursor: pointer; color: #d6deec; font-weight: 600; }
+.tauri-preview__runtime p { margin: 10px 0 0; }
+.tauri-preview__runtime dl { display: grid; gap: 8px; margin: 12px 0 0; }
+.tauri-preview__runtime dl > div { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 10px; }
+.tauri-preview__runtime dt { color: #8290a9; }
+.tauri-preview__runtime dd { margin: 0; overflow-wrap: anywhere; color: #d6deec; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .tauri-preview__profile { margin-top: 22px; padding: 18px 0; border-top: 1px solid #2c3852; border-bottom: 1px solid #2c3852; }
 .tauri-preview__profile p { margin: 8px 0; color: #acb8cc; font-size: 13px; }
 .tauri-preview__profile button { margin-top: 12px; font-size: 13px; }

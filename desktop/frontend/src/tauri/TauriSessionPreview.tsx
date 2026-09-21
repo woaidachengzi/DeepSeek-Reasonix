@@ -17,11 +17,13 @@ import {
   tauriEventSummary,
   tauriMessageFrom,
   tauriPreviewProfileStatus,
+  tauriPreviewRuntimeInfo,
   type TauriBridgeEvent,
   type TauriBridgeHistory,
   type TauriBridgeSession,
   type TauriBridgeStatus,
   type TauriPreviewProfileStatus,
+  type TauriPreviewRuntimeInfo,
 } from "../lib/tauriBridge";
 import "./tauriSessionPreview.css";
 
@@ -49,6 +51,7 @@ export function TauriSessionPreview() {
   const [prompt, setPrompt] = useState("");
   const [status, setStatus] = useState<TauriBridgeStatus | null>(null);
   const [profile, setProfile] = useState<TauriPreviewProfileStatus | null>(null);
+  const [runtimeInfo, setRuntimeInfo] = useState<TauriPreviewRuntimeInfo | null>(null);
   const [profileNotice, setProfileNotice] = useState("");
   const [session, setSession] = useState<TauriBridgeSession | null>(null);
   const [events, setEvents] = useState<TauriBridgeEvent[]>([]);
@@ -62,6 +65,7 @@ export function TauriSessionPreview() {
   useEffect(() => {
     void tauriBridgeStatus().then(setStatus).catch(error => setError(messageFrom(error)));
     void tauriPreviewProfileStatus().then(setProfile).catch(error => setError(messageFrom(error)));
+    void tauriPreviewRuntimeInfo().then(setRuntimeInfo).catch(error => setError(messageFrom(error)));
   }, []);
 
   useEffect(() => {
@@ -244,6 +248,16 @@ export function TauriSessionPreview() {
           {status?.running ? `Bridge ready · protocol v${status.protocolVersion ?? "?"}` : "Connecting to bridge…"}
         </p>
         <button className="tauri-preview__restart" type="button" onClick={() => void restartBridge()} disabled={busy}>Restart bridge{session ? " and recover session" : ""}</button>
+
+        <details className="tauri-preview__runtime">
+          <summary>Runtime details</summary>
+          {!runtimeInfo ? <p>Loading build and bridge information…</p> : <dl>
+            <div><dt>Stable baseline</dt><dd>v{runtimeInfo.stableVersion} · {runtimeInfo.stableCommit.slice(0, 12)}</dd></div>
+            <div><dt>Preview / Tauri</dt><dd>v{runtimeInfo.previewVersion} · v{runtimeInfo.tauriVersion}</dd></div>
+            <div><dt>Bridge protocol</dt><dd>v{runtimeInfo.bridgeProtocolVersion}</dd></div>
+            <div><dt>Live sidecar</dt><dd>{runtimeInfo.sidecarInstanceId ?? "not running"}</dd></div>
+          </dl>}
+        </details>
 
         <section className="tauri-preview__profile">
           <h2>Private preview profile</h2>
