@@ -123,6 +123,9 @@ const tauriConf = JSON.parse(
   readFileSync(resolve(__dirname, "../../tauri/tauri.conf.json"), "utf8"),
 );
 const tauriConfigDirectory = resolve(__dirname, "../../tauri");
+const mainWindowCapability = JSON.parse(
+  readFileSync(resolve(tauriConfigDirectory, "capabilities/main-window.json"), "utf8"),
+);
 
 eq(tauriConf.bundle?.active, true, "bundle.active is true");
 eq(tauriConf.bundle?.targets, "all", "bundle.targets is 'all'");
@@ -142,6 +145,15 @@ eq(
   tauriConf.build?.frontendDist,
   "../frontend/dist",
   "frontendDist points to ../frontend/dist",
+);
+
+ok(
+  mainWindowCapability.permissions?.includes("dialog:allow-open"),
+  "workspace picker has only the dialog open permission it needs",
+);
+ok(
+  !mainWindowCapability.permissions?.includes("dialog:default"),
+  "workspace picker does not receive dialog save or message permissions",
 );
 
 // Tauri decodes the configured PNG into an RGBA buffer at application launch.

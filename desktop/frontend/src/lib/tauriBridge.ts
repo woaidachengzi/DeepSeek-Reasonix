@@ -1,5 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import type { BridgeEvent, BridgeHistoryMessage, BridgeSession } from "./bridgeProtocol.generated";
 
 export interface TauriBridgeStatus {
@@ -70,6 +71,20 @@ export async function tauriPreviewProfileStatus(): Promise<TauriPreviewProfileSt
 export async function importTauriStableProfile(): Promise<TauriProfileImportResult> {
   requireTauri();
   return invoke<TauriProfileImportResult>("import_stable_profile", { confirmed: true });
+}
+
+/**
+ * The native picker gives the bridge a path only after an explicit user
+ * selection. It does not expose filesystem APIs to the webview.
+ */
+export async function chooseTauriWorkspaceRoot(): Promise<string | null> {
+  requireTauri();
+  const selected = await openDialog({
+    directory: true,
+    multiple: false,
+    title: "Choose Reasonix workspace",
+  });
+  return typeof selected === "string" ? selected : null;
 }
 
 export async function openTauriBridgeSession(sessionId: string, workspaceRoot?: string): Promise<TauriBridgeSession> {

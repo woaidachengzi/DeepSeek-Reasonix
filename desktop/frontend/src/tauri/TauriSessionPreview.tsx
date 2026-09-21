@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import {
   cancelTauriBridge,
+  chooseTauriWorkspaceRoot,
   importTauriStableProfile,
   newTauriSessionId,
   onTauriBridgeConnectionError,
@@ -133,6 +134,20 @@ export function TauriSessionPreview() {
     }
   }
 
+  async function chooseWorkspaceRoot() {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const selected = await chooseTauriWorkspaceRoot();
+      if (selected) setWorkspaceRoot(selected);
+    } catch (error) {
+      setError(messageFrom(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submit() {
     if (!session || !streamReady || !prompt.trim()) return;
     setBusy(true);
@@ -253,7 +268,10 @@ export function TauriSessionPreview() {
         </label>
         <label>
           Workspace root <span>(optional)</span>
-          <input value={workspaceRoot} onChange={event => setWorkspaceRoot(event.target.value)} placeholder="/path/to/workspace" disabled={busy} />
+          <div className="tauri-preview__inline">
+            <input value={workspaceRoot} onChange={event => setWorkspaceRoot(event.target.value)} placeholder="/path/to/workspace" disabled={busy} />
+            <button type="button" onClick={() => void chooseWorkspaceRoot()} disabled={busy}>Choose…</button>
+          </div>
         </label>
         <button className="tauri-preview__primary" type="button" onClick={() => void openSession()} disabled={busy}>Open session</button>
 

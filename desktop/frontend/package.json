@@ -55,6 +55,7 @@
     "@modelcontextprotocol/ext-apps": "1.7.5",
     "@tanstack/react-virtual": "^3.14.9",
     "@tauri-apps/api": "2.11.1",
+    "@tauri-apps/plugin-dialog": "2.7.3",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
     "hast-util-to-jsx-runtime": "2.3.6",

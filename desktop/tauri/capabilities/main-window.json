@@ -3,5 +3,5 @@
   "identifier": "main-window",
   "description": "Least-privilege capability set for the local Reasonix window.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "dialog:allow-open"]
 }

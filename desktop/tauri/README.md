@@ -35,6 +35,10 @@ Tauri WebView 中激活；现有 `desktop/frontend/src/lib/bridge.ts` 仍是 Wai
 事件订阅可从 snapshot 的 sequence 开始，避免切换期间漏掉事件。sidecar 异常退出时，预览
 提供受控重启：重新启动 bridge、重新打开当前 session、获取新 snapshot 后才恢复事件订阅和发送。
 
+选择 workspace 时，Preview 只提供系统目录选择器；`main-window` capability 仅授予
+`dialog:allow-open`，而不授予文件读写、保存对话框或任意 shell 权限。选中的路径仍会通过
+既有 bridge 的 workspace 校验，取消选择不会改变当前输入。
+
 开发环境还需要满足前端锁定的 Node 24 与 pnpm 10。使用前端目录中的本地 Tauri CLI
 启动，脚本会把 Go sidecar 构建到被忽略的 `desktop/tauri/target/sidecar-dev/`，并仅向
 Tauri host 注入其路径：
