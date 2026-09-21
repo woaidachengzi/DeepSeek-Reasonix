@@ -26,12 +26,13 @@ Preview 已开始采用工作台导航壳层：本次运行中打开的会话会
 bridge 的显式 `switch_session` 完成。首版 bridge 仍只拥有一个 Go Controller，因此只允许
 从 `idle` 会话切换；`running` 或 `paused` 的会话必须先结束或取消，绝不被 UI 静默替换。
 
-目前暴露给 WebView 的命令为 `bridge_status`、`restart_bridge`、`bridge_open_session`、
+目前暴露给 WebView 的命令为 `bridge_status`、`restart_bridge`、`provider_summary`、`bridge_open_session`、
 `bridge_session_snapshot`、`bridge_session_history`、`bridge_submit` 和 `bridge_cancel`。
 token、loopback 端口和
 bridge 原始请求不暴露给 JavaScript。`bridge_start_events` 在 Rust 内部订阅 SSE，并以
 Tauri `bridge:event` 和故障时的 `bridge:connection-error` 事件转发给 WebView。
 
+`provider_summary` 只投影 Preview 私有配置中的 Provider 名称/类型、模型数量、默认模型和凭据就绪布尔值；不把服务 URL、凭据变量名或密钥传入 WebView。
 `desktop/frontend/src/lib/tauriBridge.ts` 已为上述小范围命令提供类型化适配器，只会在
 Tauri WebView 中激活；现有 `desktop/frontend/src/lib/bridge.ts` 仍是 Wails 默认实现，直到
 对应功能面完成迁移。Tauri WebView 现会渲染 `TauriSessionPreview`：可开/读会话、发送、

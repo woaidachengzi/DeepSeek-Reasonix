@@ -67,6 +67,25 @@ pub struct BridgeOpenSessionRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeProviderSummary {
+    pub configured: bool,
+    pub display_name: Option<String>,
+    pub kind: String,
+    pub model_count: u64,
+    pub name: String,
+    pub requires_key: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeProviderSummaryResponse {
+    pub default_model: String,
+    pub protocol_version: u64,
+    pub providers: Vec<BridgeProviderSummary>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeSession {
     pub id: String,
     pub path: String,

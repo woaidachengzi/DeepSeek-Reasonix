@@ -1,7 +1,12 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import type { BridgeEvent, BridgeHistoryMessage, BridgeSession } from "./bridgeProtocol.generated";
+import type {
+  BridgeEvent,
+  BridgeHistoryMessage,
+  BridgeProviderSummaryResponse,
+  BridgeSession,
+} from "./bridgeProtocol.generated";
 
 export interface TauriBridgeStatus {
   running: boolean;
@@ -13,6 +18,7 @@ export interface TauriBridgeStatus {
 // host-owned command payload and stays hand-written.
 export type TauriBridgeSession = BridgeSession;
 export type TauriBridgeEvent = BridgeEvent;
+export type TauriProviderSummary = BridgeProviderSummaryResponse;
 
 export interface TauriBridgeSnapshot {
   sequence: number;
@@ -85,6 +91,11 @@ export async function tauriPreviewProfileStatus(): Promise<TauriPreviewProfileSt
 export async function tauriPreviewRuntimeInfo(): Promise<TauriPreviewRuntimeInfo> {
   requireTauri();
   return invoke<TauriPreviewRuntimeInfo>("preview_runtime_info");
+}
+
+export async function tauriProviderSummary(): Promise<TauriProviderSummary> {
+  requireTauri();
+  return invoke<TauriProviderSummary>("provider_summary");
 }
 
 export async function importTauriStableProfile(): Promise<TauriProfileImportResult> {

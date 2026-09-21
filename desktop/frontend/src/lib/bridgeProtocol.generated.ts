@@ -46,6 +46,21 @@ export interface BridgeOpenSessionRequest {
   workspaceRoot?: string;
 }
 
+export interface BridgeProviderSummary {
+  configured: boolean;
+  displayName?: string;
+  kind: string;
+  modelCount: number;
+  name: string;
+  requiresKey: boolean;
+}
+
+export interface BridgeProviderSummaryResponse {
+  defaultModel: string;
+  protocolVersion: number;
+  providers: BridgeProviderSummary[];
+}
+
 export interface BridgeSession {
   id: string;
   path: string;

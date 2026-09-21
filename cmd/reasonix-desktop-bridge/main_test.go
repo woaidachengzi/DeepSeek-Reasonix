@@ -64,6 +64,12 @@ func TestHealthReturnsProtocolAndCapabilities(t *testing.T) {
 	if got.ProtocolVersion != desktopbridge.ProtocolVersion || got.Status != "ok" || got.SidecarInstanceID != "instance-a" {
 		t.Fatalf("health = %#v", got)
 	}
+	for _, capability := range got.Capabilities {
+		if capability == "provider_summary" {
+			return
+		}
+	}
+	t.Fatalf("health capabilities %v do not include provider_summary", got.Capabilities)
 }
 
 func TestShutdownIsAuthenticatedAndIdempotent(t *testing.T) {

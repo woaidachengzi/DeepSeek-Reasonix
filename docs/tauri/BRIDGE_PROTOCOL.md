@@ -25,6 +25,7 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 操作 | 方法与路径 | 幂等性 |
 | --- | --- | --- |
 | 健康检查 | `GET /v1/health` | 是 |
+| 脱敏 Provider 摘要 | `GET /v1/providers` | 是 |
 | 建/开会话 | `POST /v1/sessions:open` | `X-Reasonix-Request-ID` 去重 |
 | 显式切换会话 | `POST /v1/sessions:switch` | `X-Reasonix-Request-ID` 去重；仅空闲会话 |
 | 会话快照 | `GET /v1/sessions/{sessionId}/snapshot` | 是 |
@@ -34,7 +35,8 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 流订阅 | `GET /v1/events?afterSequence=N` | 可重连 |
 | 正常关闭 | `POST /v1:shutdown` | 是 |
 
-当前 bridge 已实现 health、建/开会话、空闲会话的显式切换、快照、可见历史、submit、cancel、SSE 事件与正常关闭。
+当前 bridge 已实现 health、脱敏 Provider 摘要、建/开会话、空闲会话的显式切换、快照、可见历史、submit、cancel、SSE 事件与正常关闭。
+Provider 摘要仅包含配置名称、类型、模型数量、是否需要凭据、凭据是否已配置及默认模型；不返回 endpoint、凭据变量名、密钥、请求 headers 或模型清单。
 `submit` 仅确认既有 Go Controller 已接收输入（HTTP 202）；它不会等待 Agent 生成结束，
 SSE 事件携带进度和最终结果。事件 replay 使用有界 ledger；落在窗口之前的 sequence 会
 得到 `resync_required`，host 必须请求快照。Tauri host 为建/开会话和提交生成高熵

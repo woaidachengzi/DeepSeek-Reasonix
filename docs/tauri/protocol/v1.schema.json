@@ -5,6 +5,7 @@
   "description": "JSON request and response bodies for the private loopback HTTP bridge. Route parameters are documented in BRIDGE_PROTOCOL.md.",
   "oneOf": [
     { "$ref": "#/$defs/health" },
+    { "$ref": "#/$defs/providerSummaryResponse" },
     { "$ref": "#/$defs/openSessionRequest" },
     { "$ref": "#/$defs/submitRequest" },
     { "$ref": "#/$defs/sessionResponse" },
@@ -34,6 +35,31 @@
         "status": { "const": "ok" },
         "sidecarInstanceId": { "type": "string", "minLength": 1 },
         "capabilities": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "providerSummary": {
+      "title": "BridgeProviderSummary",
+      "type": "object",
+      "required": ["name", "kind", "modelCount", "requiresKey", "configured"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "displayName": { "type": "string" },
+        "kind": { "type": "string" },
+        "modelCount": { "type": "integer", "minimum": 0 },
+        "requiresKey": { "type": "boolean" },
+        "configured": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "providerSummaryResponse": {
+      "title": "BridgeProviderSummaryResponse",
+      "type": "object",
+      "required": ["protocolVersion", "defaultModel", "providers"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "defaultModel": { "type": "string" },
+        "providers": { "type": "array", "items": { "$ref": "#/$defs/providerSummary" } }
       },
       "additionalProperties": false
     },

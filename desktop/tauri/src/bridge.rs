@@ -54,7 +54,8 @@ pub struct SessionRequest {
 // module; only the host-facing command payloads below stay hand-written.
 pub use crate::protocol_generated::{
     BridgeEvent, BridgeHistoryMessage, BridgeHistoryResponse,
-    BridgeOpenSessionRequest as OpenSessionRequest, BridgeSession, BridgeSessionResponse,
+    BridgeOpenSessionRequest as OpenSessionRequest, BridgeProviderSummaryResponse, BridgeSession,
+    BridgeSessionResponse,
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -357,6 +358,16 @@ impl BridgeSupervisor {
             start_index: envelope.start_index,
             total_messages: envelope.total_messages,
         })
+    }
+
+    pub fn provider_summary(&self) -> Result<BridgeProviderSummaryResponse, String> {
+        let response = self.request_json("GET", "/v1/providers", None, None)?;
+        let summary: BridgeProviderSummaryResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if summary.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(summary)
     }
 
     pub fn submit(&self, request: SubmitRequest) -> Result<BridgeSession, String> {

@@ -8,8 +8,8 @@ mod window_state;
 mod workbench_catalog;
 
 use bridge::{
-    BridgeHistory, BridgeSession, BridgeSnapshot, BridgeStatus, BridgeSupervisor,
-    OpenSessionRequest, SessionRequest, SubmitRequest,
+    BridgeHistory, BridgeProviderSummaryResponse, BridgeSession, BridgeSnapshot, BridgeStatus,
+    BridgeSupervisor, OpenSessionRequest, SessionRequest, SubmitRequest,
 };
 use data_profile::{PreviewProfile, PreviewProfileStatus, ProfileImportResult};
 use runtime_info::PreviewRuntimeInfo;
@@ -95,6 +95,13 @@ fn preview_runtime_info(supervisor: State<'_, BridgeSupervisor>) -> PreviewRunti
 }
 
 #[tauri::command]
+fn provider_summary(
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<BridgeProviderSummaryResponse, String> {
+    supervisor.provider_summary()
+}
+
+#[tauri::command]
 fn import_stable_profile(
     profile: State<'_, PreviewProfile>,
     confirmed: bool,
@@ -153,6 +160,7 @@ fn main() {
             bridge_start_events,
             preview_profile_status,
             preview_runtime_info,
+            provider_summary,
             import_stable_profile,
             workbench_sessions,
             remember_workbench_session

@@ -1,6 +1,6 @@
 // Command reasonix-desktop-bridge exposes the small, local protocol used by a
-// desktop host to supervise the Reasonix core. It deliberately starts with no
-// session or Agent operations: transport/lifecycle correctness comes first.
+// desktop host to inspect a redacted provider summary and supervise the
+// Reasonix core's session and Agent lifecycle.
 package main
 
 import (
@@ -336,6 +336,7 @@ func writeStoredResponse(w http.ResponseWriter, response storedResponse) {
 func (b *bridgeServer) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/health", b.authorized(b.health))
+	mux.HandleFunc("GET /v1/providers", b.authorized(b.providerSummary))
 	mux.HandleFunc("POST /v1/sessions:open", b.authorized(b.idempotent(64<<10, b.openSession)))
 	mux.HandleFunc("POST /v1/sessions:switch", b.authorized(b.idempotent(64<<10, b.switchSession)))
 	mux.HandleFunc("GET /v1/sessions/{id}/snapshot", b.authorized(b.sessionSnapshot))
@@ -441,8 +442,17 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "open_session", "switch_session", "session_snapshot", "session_history", "submit", "cancel", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "open_session", "switch_session", "session_snapshot", "session_history", "submit", "cancel", "idempotency", "shutdown"},
 	})
+}
+
+func (b *bridgeServer) providerSummary(w http.ResponseWriter, _ *http.Request) {
+	summary, err := loadProviderSummary()
+	if err != nil {
+		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read provider summary")
+		return
+	}
+	writeJSON(w, http.StatusOK, summary)
 }
 
 func (b *bridgeServer) shutdown(w http.ResponseWriter, _ *http.Request) {

@@ -18,6 +18,7 @@ import {
   tauriBridgeStatus,
   tauriEventSummary,
   tauriMessageFrom,
+  tauriProviderSummary,
   tauriPreviewProfileStatus,
   tauriPreviewRuntimeInfo,
   tauriWorkbenchSessions,
@@ -27,6 +28,7 @@ import {
   type TauriBridgeStatus,
   type TauriPreviewProfileStatus,
   type TauriPreviewRuntimeInfo,
+  type TauriProviderSummary,
 } from "../lib/tauriBridge";
 import "./tauriSessionPreview.css";
 
@@ -64,6 +66,7 @@ export function TauriSessionPreview() {
   const [status, setStatus] = useState<TauriBridgeStatus | null>(null);
   const [profile, setProfile] = useState<TauriPreviewProfileStatus | null>(null);
   const [runtimeInfo, setRuntimeInfo] = useState<TauriPreviewRuntimeInfo | null>(null);
+  const [providerSummary, setProviderSummary] = useState<TauriProviderSummary | null>(null);
   const [profileNotice, setProfileNotice] = useState("");
   const [session, setSession] = useState<TauriBridgeSession | null>(null);
   const [tabs, setTabs] = useState<WorkbenchSessionTab[]>([]);
@@ -80,6 +83,7 @@ export function TauriSessionPreview() {
     void tauriBridgeStatus().then(setStatus).catch(error => setError(messageFrom(error)));
     void tauriPreviewProfileStatus().then(setProfile).catch(error => setError(messageFrom(error)));
     void tauriPreviewRuntimeInfo().then(setRuntimeInfo).catch(error => setError(messageFrom(error)));
+    void tauriProviderSummary().then(setProviderSummary).catch(error => setError(messageFrom(error)));
     void tauriWorkbenchSessions()
       .then(sessions => setTabs(previous => previous.length === 0 ? sessions : previous))
       .catch(error => setError(messageFrom(error)));
@@ -273,6 +277,7 @@ export function TauriSessionPreview() {
       const result = await importTauriStableProfile();
       setProfileNotice(`Imported config: ${result.importedConfig}\nBackup: ${result.backupConfig}`);
       setProfile(await tauriPreviewProfileStatus());
+      setProviderSummary(await tauriProviderSummary());
     } catch (error) {
       setError(messageFrom(error));
     } finally {
@@ -290,6 +295,15 @@ export function TauriSessionPreview() {
       setError(messageFrom(error));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function refreshProviderSummary() {
+    setError("");
+    try {
+      setProviderSummary(await tauriProviderSummary());
+    } catch (error) {
+      setError(messageFrom(error));
     }
   }
 
@@ -349,6 +363,20 @@ export function TauriSessionPreview() {
             </> : <p>{profile.previewConfigExists ? "This Preview already has its own config; importing never overwrites it." : profile.managedProfile ? "No stable config was found at the default location." : "An explicit REASONIX_HOME was supplied, so automatic import is disabled."}</p>}
           </> : <p>Checking isolated profile…</p>}
           {profileNotice && <p className="tauri-preview__notice">{profileNotice}</p>}
+        </section>
+
+        <section className="tauri-preview__profile">
+          <div className="tauri-preview__history-heading"><h2>Provider status</h2><button type="button" onClick={() => void refreshProviderSummary()} disabled={busy}>Refresh</button></div>
+          {!providerSummary ? <p>Checking the private Preview configuration…</p> : <>
+            <p>Default model: <code>{providerSummary.defaultModel || "not selected"}</code></p>
+            {providerSummary.providers.length === 0 ? <p>No providers are configured in the Preview profile.</p> : <ul>
+              {providerSummary.providers.map(provider => <li key={provider.name}>
+                <strong>{provider.displayName || provider.name}</strong>
+                <span> · {provider.kind} · {provider.modelCount} model{provider.modelCount === 1 ? "" : "s"} · {provider.configured ? "Configured" : "API key missing"}</span>
+              </li>)}
+            </ul>}
+            <p>This summary never sends API keys, credential variable names, or provider endpoints to the WebView.</p>
+          </>}
         </section>
 
         <label>
