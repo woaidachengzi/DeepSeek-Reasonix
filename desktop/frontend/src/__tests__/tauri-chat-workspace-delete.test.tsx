@@ -86,15 +86,18 @@ async function main() {
     { sessionId: "tauri-doomed-row", title: "待删除会话", workspaceRoot: "/tmp/ws" },
     { sessionId: "tauri-kept-row", title: "保留会话", workspaceRoot: "/tmp/ws" },
   ];
+  (globalThis as unknown as { __tauriHistoryMessages: unknown[] }).__tauriHistoryMessages = [
+    { role: "assistant", content: "```js\nconst answer = 42;\n```" },
+  ];
 
   const React = await import("react");
   const { act } = React;
   const { createRoot } = await import("react-dom/client");
-  const { TauriSessionPreview } = await import("../tauri/TauriChatWorkspace");
+  const { TauriSessionApp } = await import("../tauri/TauriChatWorkspace");
 
   const root = createRoot(document.getElementById("root")!);
   await act(async () => {
-    root.render(React.createElement(TauriSessionPreview));
+    root.render(React.createElement(TauriSessionApp));
   });
   await act(async () => {
     await settle();
@@ -129,6 +132,7 @@ async function main() {
     await settle();
     await settle();
   });
+  ok(text().includes("const answer = 42"), "the Tauri entry renders historical Markdown without a localization crash");
 
   // Step 3: confirming switches to the target, deletes it, removes the host
   // catalog entry, then returns to the previously open conversation.

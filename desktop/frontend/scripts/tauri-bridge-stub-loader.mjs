@@ -120,7 +120,8 @@ export function tauriBridgeSnapshot(sessionId) {
 }
 
 export function tauriBridgeHistory(sessionId) {
-  return Promise.resolve({ sequence: 0, session: { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle" }, messages: [], startIndex: 0, totalMessages: 0 });
+  const messages = globalThis.__tauriHistoryMessages ?? [];
+  return Promise.resolve({ sequence: 0, session: { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle" }, messages, startIndex: 0, totalMessages: messages.length });
 }
 
 export function submitTauriBridge(sessionId, input) {

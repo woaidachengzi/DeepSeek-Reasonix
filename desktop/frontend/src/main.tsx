@@ -100,11 +100,14 @@ async function mountApp() {
   const wailsModules = tauriRuntime
     ? null
     : Promise.all([import("./App"), import("./lib/i18n"), import("./lib/toast")]);
+  const tauriLocaleModule = tauriRuntime ? import("./lib/i18n") : null;
   const preloadLocaleForMount = wailsModules
     ? wailsModules.then(async ([, { preloadDetectedLocale }]) => {
       await preloadDetectedLocale();
     })
-    : Promise.resolve();
+    : tauriLocaleModule
+      ? tauriLocaleModule.then(({ preloadDetectedLocale }) => preloadDetectedLocale())
+      : Promise.resolve();
   const stylesResult = await Promise.allSettled([
     new Promise<void>((resolve, reject) => {
       const link = document.createElement("link");
@@ -124,8 +127,8 @@ async function mountApp() {
   if (localeResult.status === "rejected") console.error("failed to preload desktop locale", localeResult.reason);
   let application;
   if (tauriRuntime) {
-    const { TauriSessionPreview } = await import("./tauri/TauriChatWorkspace");
-    application = <TauriSessionPreview />;
+    const { TauriSessionApp } = await import("./tauri/TauriChatWorkspace");
+    application = <TauriSessionApp />;
   } else {
     const [appModule, i18n, toast] = await wailsModules!;
     const App = appModule.default;

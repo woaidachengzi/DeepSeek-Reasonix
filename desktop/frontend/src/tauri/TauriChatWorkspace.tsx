@@ -3,6 +3,7 @@ import { Activity, ArrowUp, Check, ChevronDown, FileText, FolderOpen, MessageSqu
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { Markdown } from "../components/Markdown";
 import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
+import { LocaleProvider } from "../lib/i18n";
 import logoWordmark from "../assets/logo-wordmark.svg";
 import {
   TAURI_TITLE_MAX_CHARS,
@@ -662,5 +663,14 @@ export function TauriSessionPreview() {
         </aside>
       </>}
     </main>
+  );
+}
+
+/** The standalone Tauri entry owns the same localization context as Wails. */
+export function TauriSessionApp() {
+  return (
+    <LocaleProvider>
+      <TauriSessionPreview />
+    </LocaleProvider>
   );
 }
