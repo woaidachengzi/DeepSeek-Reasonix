@@ -82,6 +82,13 @@ pub struct AnswerMCPInteractionRequest {
     pub content: Option<Value>,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceRequest {
+    pub session_id: String,
+    pub path: String,
+}
+
 // The wire DTOs mirror docs/tauri/protocol/v1.schema.json through the generated
 // module; only the host-facing command payloads below stay hand-written.
 pub use crate::protocol_generated::{
@@ -90,7 +97,8 @@ pub use crate::protocol_generated::{
     BridgeDeleteSessionResponse, BridgeEvent, BridgeHistoryMessage, BridgeHistoryResponse,
     BridgeMCPInteractionAnswerRequest, BridgeOpenSessionRequest as OpenSessionRequest,
     BridgeProviderSummaryResponse, BridgeRenameSessionRequest, BridgeSession,
-    BridgeSessionResponse, BridgeSetDefaultModelRequest,
+    BridgeSessionResponse, BridgeSetDefaultModelRequest, BridgeWorkspaceListResponse,
+    BridgeWorkspaceRequest,
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -490,6 +498,29 @@ impl BridgeSupervisor {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
         validate_attachment(envelope.attachment)
+    }
+
+    pub fn workspace(
+        &self,
+        request: WorkspaceRequest,
+    ) -> Result<BridgeWorkspaceListResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        if request.path.len() > 4096 || request.path.contains('\0') {
+            return Err("workspace path is invalid".to_string());
+        }
+        let path = format!("/v1/sessions/{session_id}:workspace");
+        let response = self.request_json(
+            "POST",
+            &path,
+            Some(json!(BridgeWorkspaceRequest { path: request.path })),
+            None,
+        )?;
+        let envelope: BridgeWorkspaceListResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope)
     }
 
     pub fn cancel(&self, request: SessionRequest) -> Result<BridgeSession, String> {

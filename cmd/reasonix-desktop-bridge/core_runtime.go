@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"reasonix/internal/agent"
@@ -13,6 +14,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/event"
+	"reasonix/internal/fileref"
 	"reasonix/internal/provider"
 	"reasonix/internal/sessioncontext"
 )
@@ -206,6 +208,100 @@ func (r *controllerRuntime) AttachFile(path string) (desktopbridge.AttachmentVie
 		return desktopbridge.AttachmentView{}, fmt.Errorf("read copied attachment metadata: %w", err)
 	}
 	return desktopbridge.AttachmentView{Path: rel, Name: name, Size: info.Size(), IsImage: isImage}, nil
+}
+
+const bridgeWorkspaceEntryLimit = 200
+
+// ListWorkspace exposes the same bounded, one-level view used by the stable
+// desktop file-reference picker. Paths are always relative to the active
+// workspace and generated/vendor directories stay hidden.
+func (r *controllerRuntime) ListWorkspace(rel string) (desktopbridge.WorkspaceList, error) {
+	root := strings.TrimSpace(r.controller.WorkspaceRoot())
+	if root == "" {
+		root = "."
+	}
+	base, err := filepath.Abs(root)
+	if err != nil {
+		return desktopbridge.WorkspaceList{}, err
+	}
+	rawRel := strings.TrimSpace(strings.ReplaceAll(rel, "\\", "/"))
+	if strings.HasPrefix(rawRel, "/") || filepath.VolumeName(rawRel) != "" {
+		return desktopbridge.WorkspaceList{}, fmt.Errorf("%w: absolute paths are not allowed", desktopbridge.ErrInvalidWorkspacePath)
+	}
+	cleanRel := strings.Trim(rawRel, "/")
+	if len(cleanRel) > 1024 || strings.ContainsRune(cleanRel, '\x00') {
+		return desktopbridge.WorkspaceList{}, desktopbridge.ErrInvalidWorkspacePath
+	}
+	if cleanRel == "." {
+		cleanRel = ""
+	}
+	dir := base
+	if cleanRel != "" {
+		candidate := filepath.Join(base, filepath.FromSlash(cleanRel))
+		relative, relErr := filepath.Rel(base, candidate)
+		if relErr != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) {
+			return desktopbridge.WorkspaceList{}, fmt.Errorf("%w: path escapes root", desktopbridge.ErrInvalidWorkspacePath)
+		}
+		dir = candidate
+	}
+	resolvedBase, resolveErr := filepath.EvalSymlinks(base)
+	if resolveErr != nil {
+		return desktopbridge.WorkspaceList{}, resolveErr
+	}
+	resolvedDir, resolveErr := filepath.EvalSymlinks(dir)
+	if resolveErr != nil {
+		return desktopbridge.WorkspaceList{}, resolveErr
+	}
+	resolvedRelative, resolveErr := filepath.Rel(resolvedBase, resolvedDir)
+	if resolveErr != nil || resolvedRelative == ".." || strings.HasPrefix(resolvedRelative, ".."+string(os.PathSeparator)) {
+		return desktopbridge.WorkspaceList{}, fmt.Errorf("%w: symlink escapes root", desktopbridge.ErrInvalidWorkspacePath)
+	}
+	dir = resolvedDir
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return desktopbridge.WorkspaceList{}, err
+	}
+	result := make([]desktopbridge.WorkspaceEntry, 0, minInt(len(entries), bridgeWorkspaceEntryLimit))
+	for _, entry := range entries {
+		name := entry.Name()
+		isDir := entry.IsDir()
+		entryPath := name
+		if cleanRel != "" {
+			entryPath = cleanRel + "/" + name
+		}
+		if fileref.SkipEntry(entryPath, name, isDir) {
+			continue
+		}
+		if !isDir {
+			info, infoErr := entry.Info()
+			if infoErr != nil || !info.Mode().IsRegular() {
+				continue
+			}
+		}
+		result = append(result, desktopbridge.WorkspaceEntry{Name: name, Path: filepath.ToSlash(entryPath), IsDir: isDir})
+	}
+	sort.SliceStable(result, func(i, j int) bool {
+		if result[i].IsDir != result[j].IsDir {
+			return result[i].IsDir
+		}
+		left, right := strings.ToLower(result[i].Name), strings.ToLower(result[j].Name)
+		if left == right {
+			return result[i].Name < result[j].Name
+		}
+		return left < right
+	})
+	truncated := len(result) > bridgeWorkspaceEntryLimit
+	if truncated {
+		result = result[:bridgeWorkspaceEntryLimit]
+	}
+	return desktopbridge.WorkspaceList{Path: cleanRel, Entries: result, Truncated: truncated}, nil
+}
+
+func minInt(left, right int) int {
+	if left < right {
+		return left
+	}
+	return right
 }
 
 func truncateBridgeHistoryContent(content string) (string, bool) {

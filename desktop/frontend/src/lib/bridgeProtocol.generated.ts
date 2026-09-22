@@ -131,3 +131,20 @@ export interface BridgeSetDefaultModelRequest {
 export interface BridgeSubmitRequest {
   input: string;
 }
+
+export interface BridgeWorkspaceEntry {
+  isDir: boolean;
+  name: string;
+  path: string;
+}
+
+export interface BridgeWorkspaceListResponse {
+  entries: BridgeWorkspaceEntry[];
+  path: string;
+  protocolVersion: number;
+  truncated: boolean;
+}
+
+export interface BridgeWorkspaceRequest {
+  path: string;
+}

@@ -200,3 +200,44 @@ func TestControllerRuntimeAttachFileCopiesIntoSessionWorkspace(t *testing.T) {
 		t.Fatalf("workspace attachment directory: %v", err)
 	}
 }
+
+func TestControllerRuntimeListsBoundedWorkspaceEntries(t *testing.T) {
+	workspace := t.TempDir()
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	if err := os.Mkdir(filepath.Join(workspace, "src"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{
+		"README.md":   "read me",
+		"src/main.go": "package main",
+		".git/config": "private",
+	} {
+		path := filepath.Join(workspace, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	controller, err := boot.Build(context.Background(), boot.Options{WorkspaceRoot: workspace, Sink: event.Discard})
+	if err != nil {
+		t.Fatalf("build controller: %v", err)
+	}
+	t.Cleanup(controller.Close)
+	runtime := &controllerRuntime{controller: controller}
+	listing, err := runtime.ListWorkspace("")
+	if err != nil {
+		t.Fatalf("list workspace: %v", err)
+	}
+	if listing.Path != "" || len(listing.Entries) != 2 || listing.Entries[0].Name != "src" || !listing.Entries[0].IsDir || listing.Entries[1].Path != "README.md" {
+		t.Fatalf("root listing = %#v", listing)
+	}
+	child, err := runtime.ListWorkspace("src")
+	if err != nil || len(child.Entries) != 1 || child.Entries[0].Path != "src/main.go" {
+		t.Fatalf("child listing = %#v, err = %v", child, err)
+	}
+	if _, err := runtime.ListWorkspace("../"); err == nil {
+		t.Fatal("workspace listing accepted a path outside the root")
+	}
+}

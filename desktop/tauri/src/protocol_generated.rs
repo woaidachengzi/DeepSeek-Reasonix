@@ -180,3 +180,26 @@ pub struct BridgeSetDefaultModelRequest {
 pub struct BridgeSubmitRequest {
     pub input: String,
 }
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceEntry {
+    pub is_dir: bool,
+    pub name: String,
+    pub path: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceListResponse {
+    pub entries: Vec<BridgeWorkspaceEntry>,
+    pub path: String,
+    pub protocol_version: u64,
+    pub truncated: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceRequest {
+    pub path: String,
+}

@@ -52,6 +52,7 @@ interface CommandContract {
 //   bridge_rename_session,
 //   bridge_delete_session,
 //   bridge_session_snapshot, bridge_session_history, bridge_submit, bridge_cancel,
+//   bridge_attach_file, bridge_workspace,
 //   bridge_approve, bridge_answer_question, bridge_answer_mcp_interaction,
 //   bridge_replay_pending_prompts,
 //   bridge_start_events, preview_profile_status, preview_runtime_info, import_stable_profile,
@@ -64,6 +65,7 @@ interface CommandContract {
 //   renameTauriBridgeSession,
 //   deleteTauriBridgeSession,
 //   tauriBridgeSnapshot, tauriBridgeHistory, submitTauriBridge, cancelTauriBridge,
+//   attachTauriFile, tauriWorkspace,
 //   startTauriBridgeEvents, tauriPreviewProfileStatus,
 //   tauriPreviewRuntimeInfo, importTauriStableProfile, tauriWorkbenchSessions,
 //   rememberTauriWorkbenchSession, forgetTauriWorkbenchSession, tauriProviderSummary
@@ -119,6 +121,11 @@ const commands: CommandContract[] = [
     command: "bridge_attach_file",
     argKeys: ["request"],
     description: "attachTauriFile() invokes bridge_attach_file with { request }",
+  },
+  {
+    command: "bridge_workspace",
+    argKeys: ["request"],
+    description: "tauriWorkspace() invokes bridge_workspace with { request }",
   },
   {
     command: "bridge_cancel",
@@ -283,6 +290,12 @@ ok(
 ok(
   commands.find(c => c.command === "bridge_attach_file")?.argKeys.includes("request"),
   "bridge_attach_file has request arg",
+);
+
+// bridge_workspace expects { request: { sessionId, path } }
+ok(
+  commands.find(c => c.command === "bridge_workspace")?.argKeys.includes("request"),
+  "bridge_workspace has request arg",
 );
 
 // bridge_cancel expects { request: { sessionId } }

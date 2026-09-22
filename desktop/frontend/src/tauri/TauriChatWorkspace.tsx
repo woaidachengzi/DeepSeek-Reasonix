@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, ArrowUp, Check, ChevronDown, FileText, FolderOpen, MessageSquare, Paperclip, Pencil, Plus, Sparkles, Square, Trash2, X } from "lucide-react";
+import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, FileText, FolderOpen, FolderTree, MessageSquare, Paperclip, Pencil, Plus, Sparkles, Square, Trash2, X } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { Markdown } from "../components/Markdown";
 import { QuestionJumpBar } from "../components/QuestionJumpBar";
@@ -31,6 +31,7 @@ import {
   startTauriBridgeEvents,
   submitTauriBridge,
   switchTauriBridgeSession,
+  tauriWorkspace,
   tauriBridgeHistory,
   tauriBridgeSnapshot,
   tauriBridgeStatus,
@@ -53,6 +54,7 @@ import {
   type TauriBridgeSession,
   type TauriBridgeStatus,
   type TauriPendingPrompt,
+  type TauriWorkspaceEntry,
   type TauriPreviewProfileStatus,
   type TauriPreviewRuntimeInfo,
   type TauriProviderSummary,
@@ -187,6 +189,12 @@ export function TauriSessionPreview() {
   const [streamReady, setStreamReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [workspacePath, setWorkspacePath] = useState("");
+  const [workspaceEntries, setWorkspaceEntries] = useState<TauriWorkspaceEntry[]>([]);
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState("");
+  const [workspaceTruncated, setWorkspaceTruncated] = useState(false);
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [error, setError] = useState("");
@@ -401,6 +409,9 @@ export function TauriSessionPreview() {
       setSequence(0);
       setStreamReady(false);
       setTitleEditing(false);
+      setWorkspaceOpen(false);
+      setWorkspacePath("");
+      setWorkspaceEntries([]);
       setSession(next);
       setWorkspaceRoot(next.workspaceRoot ?? root ?? "");
       await rememberSession(next);
@@ -505,6 +516,47 @@ export function TauriSessionPreview() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function loadWorkspace(path = "") {
+    if (!session) return;
+    const sessionID = session.id;
+    setWorkspaceLoading(true);
+    setWorkspaceError("");
+    try {
+      const listing = await tauriWorkspace(sessionID, path);
+      if (sessionID !== session?.id) return;
+      setWorkspacePath(listing.path);
+      setWorkspaceEntries(listing.entries);
+      setWorkspaceTruncated(listing.truncated);
+    } catch (cause) {
+      if (sessionID === session?.id) setWorkspaceError(tauriMessageFrom(cause));
+    } finally {
+      if (sessionID === session?.id) setWorkspaceLoading(false);
+    }
+  }
+
+  function toggleWorkspace() {
+    if (!session || busy) return;
+    const nextOpen = !workspaceOpen;
+    setWorkspaceOpen(nextOpen);
+    if (nextOpen) void loadWorkspace(workspacePath);
+  }
+
+  function workspaceParent(path: string): string {
+    const parts = path.split("/").filter(Boolean);
+    parts.pop();
+    return parts.join("/");
+  }
+
+  function insertWorkspaceReference(entry: TauriWorkspaceEntry) {
+    if (entry.isDir) {
+      void loadWorkspace(entry.path);
+      return;
+    }
+    const reference = `@${entry.path}`;
+    setPrompt(previous => previous.trim() ? `${previous.trim()}\n\n${reference}` : reference);
+    setWorkspaceOpen(false);
   }
 
   async function addAttachments() {
@@ -749,6 +801,9 @@ export function TauriSessionPreview() {
             <button type="button" className="tauri-workspace-button" onClick={() => void chooseWorkspaceRoot()} disabled={busy || session?.state === "running"} title={currentWorkspace || "选择工作区（用于新对话）"}>
               <FolderOpen size={15} /><span>{currentWorkspace || "选择工作区"}</span><ChevronDown size={13} />
             </button>
+            <button type="button" className="tauri-icon-button tauri-workspace-tree-button" aria-label="浏览工作区文件" title="浏览工作区文件" onClick={toggleWorkspace} disabled={busy || !session}>
+              <FolderTree size={17} />
+            </button>
             <label className="tauri-model-picker" title="此默认模型用于新对话；工作区配置可能覆盖它">
               <span>模型</span>
               <select value={providerSummary?.defaultModel ?? ""} onChange={event => void changeDefaultModel(event.target.value)} disabled={busy || !providerSummary?.providers.some(provider => provider.configured && provider.models.length > 0)}>
@@ -842,6 +897,30 @@ export function TauriSessionPreview() {
             <details className="tauri-diagnostic-card tauri-event-details"><summary>桥接事件日志</summary>{events.length === 0 ? <p>开始一个对话后，这里会显示桥接事件。</p> : <ol>{events.map(event => <li key={event.sequence}><b>#{event.sequence} · {event.eventKind}</b><pre>{tauriEventSummary(event)}</pre></li>)}</ol>}</details>
             {session && <button type="button" className="tauri-diagnostic-action" onClick={() => void refreshHistory()} disabled={busy}>刷新当前对话记录</button>}
             <p className="tauri-diagnostics__note">会话切换仅在当前回复结束后启用，避免中断正在进行的请求。</p>
+          </div>
+        </aside>
+      </>}
+
+      {workspaceOpen && <>
+        <button className="tauri-workspace-drawer__scrim" aria-label="关闭工作区文件" type="button" onClick={() => setWorkspaceOpen(false)} />
+        <aside className="tauri-workspace-drawer" aria-label="工作区文件">
+          <header className="tauri-workspace-drawer__header">
+            <div><p>WORKSPACE</p><h2>文件</h2><span title={currentWorkspace}>{workspacePath ? `/${workspacePath}` : "工作区根目录"}</span></div>
+            <button type="button" className="tauri-icon-button" onClick={() => setWorkspaceOpen(false)} aria-label="关闭"><X size={17} /></button>
+          </header>
+          <div className="tauri-workspace-drawer__body">
+            <div className="tauri-workspace-drawer__toolbar">
+              <button type="button" className="tauri-diagnostic-action" onClick={() => void loadWorkspace(workspacePath)} disabled={workspaceLoading}>刷新</button>
+              <button type="button" className="tauri-diagnostic-action" onClick={() => void loadWorkspace(workspaceParent(workspacePath))} disabled={workspaceLoading || !workspacePath}>返回上级</button>
+            </div>
+            {workspaceError && <p className="tauri-workspace-drawer__error">{workspaceError}</p>}
+            {workspaceLoading ? <div className="tauri-workspace-drawer__loading">正在读取文件…</div> : workspaceEntries.length === 0 ? <div className="tauri-workspace-drawer__empty">此目录没有可展示的文件。</div> : <ul className="tauri-workspace-drawer__entries">
+              {workspaceEntries.map(entry => <li key={entry.path}><button type="button" className="tauri-workspace-entry" onClick={() => insertWorkspaceReference(entry)} title={entry.isDir ? `打开 ${entry.name}` : `插入 @${entry.path}`}>
+                <span className="tauri-workspace-entry__icon">{entry.isDir ? <FolderOpen size={15} /> : <FileText size={15} />}</span><span className="tauri-workspace-entry__name">{entry.name}</span>{entry.isDir && <ChevronRight size={14} />}
+              </button></li>)}
+            </ul>}
+            {workspaceTruncated && <p className="tauri-workspace-drawer__note">目录较大，仅显示前 200 项。</p>}
+            <p className="tauri-workspace-drawer__hint">点击文件会把 <code>@路径</code> 插入输入框，发送后让助手读取它。</p>
           </div>
         </aside>
       </>}

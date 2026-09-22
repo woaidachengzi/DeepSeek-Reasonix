@@ -178,6 +178,7 @@
 .tauri-model-picker > svg { pointer-events: none; }
 .tauri-icon-button { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--fg-dim) !important; }
 .tauri-icon-button:hover { border-color: var(--border-soft); background: var(--surface); color: var(--fg) !important; }
+.tauri-workspace-tree-button { color: var(--fg-faint) !important; }
 
 .tauri-conversation { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow: auto; scrollbar-color: var(--scrollbar-thumb) transparent; }
 .tauri-main > .jump-bar {
@@ -275,6 +276,26 @@
 .tauri-composer-hint { margin: 8px 0 0; color: var(--fg-faint); text-align: center; font-size: 10px; }
 .tauri-composer-hint button { padding: 0 0 0 4px; border: 0; background: transparent; color: var(--fg-dim); font-size: 10px; text-decoration: underline; text-underline-offset: 2px; }
 .tauri-error { margin: 0 0 8px; padding: 8px 10px; border: 1px solid color-mix(in srgb, #d96a66 34%, transparent); border-radius: 8px; background: color-mix(in srgb, #d96a66 8%, var(--surface)); color: #d96a66; font-size: 11px; white-space: pre-wrap; }
+
+.tauri-workspace-drawer__scrim { position: fixed; z-index: 20; inset: 0; border: 0; background: color-mix(in srgb, #000 18%, transparent); }
+.tauri-workspace-drawer { position: fixed; z-index: 21; inset: 0 0 0 auto; display: flex; width: min(360px, 92vw); flex-direction: column; border-left: 1px solid var(--border); background: var(--bg); box-shadow: -18px 0 45px color-mix(in srgb, #000 15%, transparent); animation: tauri-drawer-in .2s ease both; }
+.tauri-workspace-drawer__header { display: flex; min-height: 88px; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; border-bottom: 1px solid var(--border-soft); }
+.tauri-workspace-drawer__header p { margin: 0 0 2px; color: var(--fg-faint); font-size: 9px; font-weight: 650; letter-spacing: .12em; }
+.tauri-workspace-drawer__header h2 { margin: 0; color: var(--fg); font-size: 15px; font-weight: 580; }
+.tauri-workspace-drawer__header span { display: block; max-width: 280px; overflow: hidden; color: var(--fg-faint); font: 10px/1.4 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.tauri-workspace-drawer__body { display: grid; align-content: start; gap: 10px; min-height: 0; overflow: auto; padding: 14px; }
+.tauri-workspace-drawer__toolbar { display: flex; gap: 7px; }
+.tauri-workspace-drawer__entries { display: grid; gap: 2px; padding: 0; margin: 0; list-style: none; }
+.tauri-workspace-entry { display: flex; width: 100%; min-height: 34px; align-items: center; gap: 8px; padding: 0 9px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--fg-dim); text-align: left; }
+.tauri-workspace-entry:hover { border-color: var(--border-soft); background: var(--surface); color: var(--fg); }
+.tauri-workspace-entry__icon { display: grid; flex: 0 0 auto; place-items: center; color: var(--accent); }
+.tauri-workspace-entry__name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tauri-workspace-entry > svg { flex: 0 0 auto; color: var(--fg-faint); }
+.tauri-workspace-drawer__loading, .tauri-workspace-drawer__empty { padding: 18px 8px; color: var(--fg-faint); font-size: 11px; text-align: center; }
+.tauri-workspace-drawer__error { margin: 0; padding: 8px 9px; border: 1px solid color-mix(in srgb, #d96a66 34%, transparent); border-radius: 8px; color: #d96a66; font-size: 10px; }
+.tauri-workspace-drawer__note, .tauri-workspace-drawer__hint { margin: 0; color: var(--fg-faint); font-size: 10px; line-height: 1.55; }
+.tauri-workspace-drawer__hint { padding-top: 9px; border-top: 1px solid var(--border-soft); }
+.tauri-workspace-drawer__hint code { color: var(--fg-dim); font: 10px var(--font-mono); }
 
 .tauri-diagnostics__scrim { position: fixed; z-index: 20; inset: 0; border: 0; background: color-mix(in srgb, #000 24%, transparent); }
 .tauri-diagnostics { position: fixed; z-index: 21; inset: 0 0 0 auto; display: flex; width: min(410px, 92vw); flex-direction: column; border-left: 1px solid var(--border); background: var(--bg); box-shadow: -18px 0 45px color-mix(in srgb, #000 18%, transparent); animation: tauri-drawer-in .2s ease both; }

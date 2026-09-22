@@ -28,6 +28,7 @@ type bridgeTestRuntime struct {
 	deleteCalls   int
 	cancelCalls   int
 	shutdownCalls int
+	workspace     desktopbridge.WorkspaceList
 }
 
 func (r *bridgeTestRuntime) SessionPath() string { return r.path }
@@ -48,6 +49,11 @@ func (r *bridgeTestRuntime) History() []desktopbridge.HistoryMessage {
 func (r *bridgeTestRuntime) AttachFile(path string) (desktopbridge.AttachmentView, error) {
 	r.attachCalls++
 	return desktopbridge.AttachmentView{Path: ".reasonix/attachments/clipboard-test.txt", Name: filepath.Base(path), Size: 12}, nil
+}
+func (r *bridgeTestRuntime) ListWorkspace(path string) (desktopbridge.WorkspaceList, error) {
+	listing := r.workspace
+	listing.Path = path
+	return listing, nil
 }
 func (r *bridgeTestRuntime) Submit(input string)                                       { r.submits = append(r.submits, input) }
 func (r *bridgeTestRuntime) Cancel()                                                   { r.cancelCalls++ }
@@ -877,5 +883,40 @@ func TestRequestIdDoesNotSurviveRestart(t *testing.T) {
 	handler2.ServeHTTP(openRec2, openReq2)
 	if openRec2.Code != http.StatusOK {
 		t.Fatalf("second open after restart: status = %d, want 200 (not a replay or conflict)", openRec2.Code)
+	}
+}
+
+func TestBridgeServerListsWorkspaceEntries(t *testing.T) {
+	runtime := &bridgeTestRuntime{path: "/tmp/reasonix-session", state: "idle", workspace: desktopbridge.WorkspaceList{
+		Entries:   []desktopbridge.WorkspaceEntry{{Name: "src", Path: "src", IsDir: true}},
+		Truncated: true,
+	}}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		return runtime, nil
+	}))
+	bridge := newBridgeServer(testToken, "instance", manager)
+	handler := bridge.handler()
+	open := httptest.NewRequest(http.MethodPost, "/v1/sessions:open", strings.NewReader(`{"sessionId":"tab-workspace"}`))
+	open.Header.Set("Authorization", "Bearer "+testToken)
+	open.Header.Set("Content-Type", "application/json")
+	openRec := httptest.NewRecorder()
+	handler.ServeHTTP(openRec, open)
+	if openRec.Code != http.StatusOK {
+		t.Fatalf("open status = %d, body = %s", openRec.Code, openRec.Body.String())
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v1/sessions/tab-workspace:workspace", strings.NewReader(`{"path":"src"}`))
+	request.Header.Set("Authorization", "Bearer "+testToken)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("workspace status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var response workspaceListResponse
+	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	if response.ProtocolVersion != desktopbridge.ProtocolVersion || response.Path != "src" || len(response.Entries) != 1 || !response.Truncated {
+		t.Fatalf("workspace response = %#v", response)
 	}
 }

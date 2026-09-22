@@ -422,6 +422,9 @@ func (b *bridgeServer) sessionCommand(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(path, ":attach"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":attach"))
 		b.idempotent(64<<10, b.attachFile)(w, r)
+	case strings.HasSuffix(path, ":workspace"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":workspace"))
+		b.workspaceList(w, r)
 	case strings.HasSuffix(path, ":cancel"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":cancel"))
 		b.cancel(w, r)
@@ -467,7 +470,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "provider_summary", "set_default_model", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "replay_pending_prompts", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "set_default_model", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "replay_pending_prompts", "idempotency", "shutdown"},
 	})
 }
 
@@ -556,6 +559,17 @@ type deleteSessionResponse struct {
 type attachFileRequest struct {
 	SessionID string `json:"sessionId"`
 	Path      string `json:"path"`
+}
+
+type workspaceRequest struct {
+	Path string `json:"path"`
+}
+
+type workspaceListResponse struct {
+	ProtocolVersion int                            `json:"protocolVersion"`
+	Path            string                         `json:"path"`
+	Entries         []desktopbridge.WorkspaceEntry `json:"entries"`
+	Truncated       bool                           `json:"truncated"`
 }
 
 type attachmentResponse struct {
@@ -699,6 +713,25 @@ func (b *bridgeServer) attachFile(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (b *bridgeServer) workspaceList(w http.ResponseWriter, r *http.Request) {
+	var request workspaceRequest
+	if err := decodeJSONBody(w, r, 16<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid workspace request")
+		return
+	}
+	workspace, err := b.runtimes.Workspace(r.PathValue("id"), request.Path)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to list desktop bridge workspace")
+		return
+	}
+	writeJSON(w, http.StatusOK, workspaceListResponse{
+		ProtocolVersion: desktopbridge.ProtocolVersion,
+		Path:            workspace.Path,
+		Entries:         workspace.Entries,
+		Truncated:       workspace.Truncated,
+	})
+}
+
 func decodeJSONBody(w http.ResponseWriter, r *http.Request, maxBytes int64, target any) error {
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBytes))
 	decoder.DisallowUnknownFields()
@@ -777,7 +810,7 @@ func (b *bridgeServer) replayPendingPrompts(w http.ResponseWriter, r *http.Reque
 func (b *bridgeServer) writeRuntimeError(w http.ResponseWriter, err error, message string) {
 	status, code := http.StatusInternalServerError, "internal"
 	switch {
-	case errors.Is(err, desktopbridge.ErrInvalidSessionID), errors.Is(err, desktopbridge.ErrInvalidInput), errors.Is(err, desktopbridge.ErrInvalidAttachment), errors.Is(err, desktopbridge.ErrInvalidTitle):
+	case errors.Is(err, desktopbridge.ErrInvalidSessionID), errors.Is(err, desktopbridge.ErrInvalidInput), errors.Is(err, desktopbridge.ErrInvalidAttachment), errors.Is(err, desktopbridge.ErrInvalidWorkspacePath), errors.Is(err, desktopbridge.ErrInvalidTitle):
 		status, code = http.StatusBadRequest, "invalid_request"
 	case errors.Is(err, desktopbridge.ErrSessionConflict), errors.Is(err, desktopbridge.ErrOpenInProgress):
 		status, code = http.StatusConflict, "conflict"

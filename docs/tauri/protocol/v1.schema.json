@@ -12,6 +12,8 @@
     { "$ref": "#/$defs/deleteSessionResponse" },
     { "$ref": "#/$defs/attachFileRequest" },
     { "$ref": "#/$defs/attachmentResponse" },
+    { "$ref": "#/$defs/workspaceRequest" },
+    { "$ref": "#/$defs/workspaceListResponse" },
     { "$ref": "#/$defs/submitRequest" },
     { "$ref": "#/$defs/approvalRequest" },
     { "$ref": "#/$defs/askAnswer" },
@@ -187,6 +189,38 @@
       "properties": {
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
         "attachment": { "$ref": "#/$defs/attachment" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceRequest": {
+      "title": "BridgeWorkspaceRequest",
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceEntry": {
+      "title": "BridgeWorkspaceEntry",
+      "type": "object",
+      "required": ["name", "path", "isDir"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "isDir": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceListResponse": {
+      "title": "BridgeWorkspaceListResponse",
+      "type": "object",
+      "required": ["protocolVersion", "path", "entries", "truncated"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "path": { "type": "string" },
+        "entries": { "type": "array", "items": { "$ref": "#/$defs/workspaceEntry" } },
+        "truncated": { "type": "boolean" }
       },
       "additionalProperties": false
     },

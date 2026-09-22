@@ -31,6 +31,9 @@ func (r *fakeRuntime) History() []HistoryMessage {
 func (r *fakeRuntime) AttachFile(path string) (AttachmentView, error) {
 	return AttachmentView{Path: path, Name: "selected.txt", Size: 1}, nil
 }
+func (r *fakeRuntime) ListWorkspace(path string) (WorkspaceList, error) {
+	return WorkspaceList{Path: path, Entries: []WorkspaceEntry{}}, nil
+}
 func (r *fakeRuntime) Submit(input string)                                       { r.submits = append(r.submits, input) }
 func (r *fakeRuntime) Cancel()                                                   { r.cancelCalls.Add(1) }
 func (r *fakeRuntime) Approve(string, bool)                                      {}

@@ -12,14 +12,15 @@ import (
 )
 
 var (
-	ErrClosed            = errors.New("desktop bridge runtime manager is closed")
-	ErrOpenInProgress    = errors.New("desktop bridge session open is already in progress")
-	ErrSessionConflict   = errors.New("desktop bridge already owns a different session")
-	ErrInvalidSessionID  = errors.New("desktop bridge session id is required")
-	ErrInvalidInput      = errors.New("desktop bridge input is required")
-	ErrInvalidAttachment = errors.New("desktop bridge attachment path is invalid")
-	ErrInvalidTitle      = errors.New("desktop bridge session title is invalid")
-	ErrSessionNotFound   = errors.New("desktop bridge session was not found")
+	ErrClosed               = errors.New("desktop bridge runtime manager is closed")
+	ErrOpenInProgress       = errors.New("desktop bridge session open is already in progress")
+	ErrSessionConflict      = errors.New("desktop bridge already owns a different session")
+	ErrInvalidSessionID     = errors.New("desktop bridge session id is required")
+	ErrInvalidInput         = errors.New("desktop bridge input is required")
+	ErrInvalidAttachment    = errors.New("desktop bridge attachment path is invalid")
+	ErrInvalidWorkspacePath = errors.New("desktop bridge workspace path is invalid")
+	ErrInvalidTitle         = errors.New("desktop bridge session title is invalid")
+	ErrSessionNotFound      = errors.New("desktop bridge session was not found")
 )
 
 // OpenRequest identifies the one local session the first bridge release owns.
@@ -67,6 +68,24 @@ type AttachmentView struct {
 	IsImage bool   `json:"isImage"`
 }
 
+// WorkspaceEntry is one bounded, workspace-relative directory entry. The
+// bridge never returns an absolute path, so the renderer cannot turn a list
+// response into a filesystem escape.
+type WorkspaceEntry struct {
+	Name  string `json:"name"`
+	Path  string `json:"path"`
+	IsDir bool   `json:"isDir"`
+}
+
+// WorkspaceList is one directory level. Callers request another level with
+// the returned relative path; the core intentionally avoids recursive scans
+// because large repositories are common desktop workspaces.
+type WorkspaceList struct {
+	Path      string           `json:"path"`
+	Entries   []WorkspaceEntry `json:"entries"`
+	Truncated bool             `json:"truncated"`
+}
+
 // HistoryView is the latest bounded page of display-safe messages. StartIndex
 // and TotalMessages refer to the projected (not raw provider) transcript.
 type HistoryView struct {
@@ -89,6 +108,7 @@ type Runtime interface {
 	Rename(title string) error
 	Delete() error
 	AttachFile(path string) (AttachmentView, error)
+	ListWorkspace(path string) (WorkspaceList, error)
 	Submit(input string)
 	Cancel()
 	Approve(promptID string, allow bool)
@@ -335,6 +355,22 @@ func (m *RuntimeManager) AttachFile(sessionID, path string) (AttachmentView, err
 		return AttachmentView{}, ErrSessionNotFound
 	}
 	return m.runtime.AttachFile(path)
+}
+
+// Workspace lists one directory in the owned session workspace. Keeping the
+// manager lock across the call prevents a session switch or shutdown from
+// racing the runtime's workspace root.
+func (m *RuntimeManager) Workspace(sessionID, path string) (WorkspaceList, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return WorkspaceList{}, ErrClosed
+	}
+	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
+		return WorkspaceList{}, ErrSessionNotFound
+	}
+	return m.runtime.ListWorkspace(path)
 }
 
 // Cancel asks the bridge-owned runtime to stop foreground work. It is safe to
