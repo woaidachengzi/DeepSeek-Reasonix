@@ -30,6 +30,7 @@ type bridgeTestRuntime struct {
 	shutdownCalls int
 	workspace     desktopbridge.WorkspaceList
 	preview       desktopbridge.WorkspaceFilePreview
+	changes       desktopbridge.WorkspaceChanges
 }
 
 func (r *bridgeTestRuntime) SessionPath() string { return r.path }
@@ -60,6 +61,10 @@ func (r *bridgeTestRuntime) ReadWorkspaceFile(path string) (desktopbridge.Worksp
 	preview := r.preview
 	preview.Path = path
 	return preview, nil
+}
+func (r *bridgeTestRuntime) WorkspaceChanges() desktopbridge.WorkspaceChanges { return r.changes }
+func (r *bridgeTestRuntime) WorkspaceChangeDetail(string) (desktopbridge.WorkspaceChangeDetail, error) {
+	return desktopbridge.WorkspaceChangeDetail{Source: "git", Diff: "@@ -1 +1 @@\n-old\n+new"}, nil
 }
 func (r *bridgeTestRuntime) Submit(input string)                                       { r.submits = append(r.submits, input) }
 func (r *bridgeTestRuntime) Cancel()                                                   { r.cancelCalls++ }
@@ -956,5 +961,55 @@ func TestBridgeServerPreviewsWorkspaceFile(t *testing.T) {
 	}
 	if response.ProtocolVersion != desktopbridge.ProtocolVersion || response.Preview.Path != "notes.txt" || response.Preview.Body != "hello" {
 		t.Fatalf("workspace file response = %#v", response)
+	}
+}
+
+func TestBridgeServerReturnsWorkspaceChangesAndDetail(t *testing.T) {
+	runtime := &bridgeTestRuntime{path: "/tmp/reasonix-session", state: "idle", changes: desktopbridge.WorkspaceChanges{
+		GitAvailable: true,
+		GitBranch:    "main",
+		Files:        []desktopbridge.WorkspaceChangeView{{Path: "notes.txt", Sources: []string{"git"}, GitStatus: " M"}},
+	}}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		return runtime, nil
+	}))
+	bridge := newBridgeServer(testToken, "instance", manager)
+	handler := bridge.handler()
+	open := httptest.NewRequest(http.MethodPost, "/v1/sessions:open", strings.NewReader(`{"sessionId":"tab-changes"}`))
+	open.Header.Set("Authorization", "Bearer "+testToken)
+	open.Header.Set("Content-Type", "application/json")
+	openRec := httptest.NewRecorder()
+	handler.ServeHTTP(openRec, open)
+	if openRec.Code != http.StatusOK {
+		t.Fatalf("open status = %d, body = %s", openRec.Code, openRec.Body.String())
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v1/sessions/tab-changes:workspace-changes", nil)
+	request.Header.Set("Authorization", "Bearer "+testToken)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("workspace changes status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var changes workspaceChangesResponse
+	if err := json.NewDecoder(recorder.Body).Decode(&changes); err != nil {
+		t.Fatal(err)
+	}
+	if changes.ProtocolVersion != desktopbridge.ProtocolVersion || changes.Changes.GitBranch != "main" || len(changes.Changes.Files) != 1 {
+		t.Fatalf("workspace changes response = %#v", changes)
+	}
+	detailRequest := httptest.NewRequest(http.MethodPost, "/v1/sessions/tab-changes:workspace-change-detail", strings.NewReader(`{"path":"notes.txt"}`))
+	detailRequest.Header.Set("Authorization", "Bearer "+testToken)
+	detailRequest.Header.Set("Content-Type", "application/json")
+	detailRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(detailRecorder, detailRequest)
+	if detailRecorder.Code != http.StatusOK {
+		t.Fatalf("workspace change detail status = %d, body = %s", detailRecorder.Code, detailRecorder.Body.String())
+	}
+	var detail workspaceChangeDetailResponse
+	if err := json.NewDecoder(detailRecorder.Body).Decode(&detail); err != nil {
+		t.Fatal(err)
+	}
+	if detail.ProtocolVersion != desktopbridge.ProtocolVersion || detail.Detail.Source != "git" || !strings.Contains(detail.Detail.Diff, "+new") {
+		t.Fatalf("workspace change detail response = %#v", detail)
 	}
 }

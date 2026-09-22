@@ -98,6 +98,32 @@ type WorkspaceFilePreview struct {
 	Error     string `json:"error,omitempty"`
 }
 
+// WorkspaceChangeView is one current Git working-tree change. Paths remain
+// relative to the active workspace and source is intentionally explicit so a
+// future session-checkpoint source cannot be mistaken for Git state.
+type WorkspaceChangeView struct {
+	Path      string   `json:"path"`
+	OldPath   string   `json:"oldPath,omitempty"`
+	Sources   []string `json:"sources"`
+	GitStatus string   `json:"gitStatus,omitempty"`
+}
+
+type WorkspaceChanges struct {
+	Files        []WorkspaceChangeView `json:"files"`
+	GitAvailable bool                  `json:"gitAvailable"`
+	GitErr       string                `json:"gitErr,omitempty"`
+	GitBranch    string                `json:"gitBranch,omitempty"`
+}
+
+type WorkspaceChangeDetail struct {
+	Diff      string `json:"diff,omitempty"`
+	Source    string `json:"source,omitempty"`
+	Added     int    `json:"added,omitempty"`
+	Removed   int    `json:"removed,omitempty"`
+	Binary    bool   `json:"binary,omitempty"`
+	Truncated bool   `json:"truncated,omitempty"`
+}
+
 // HistoryView is the latest bounded page of display-safe messages. StartIndex
 // and TotalMessages refer to the projected (not raw provider) transcript.
 type HistoryView struct {
@@ -122,6 +148,8 @@ type Runtime interface {
 	AttachFile(path string) (AttachmentView, error)
 	ListWorkspace(path string) (WorkspaceList, error)
 	ReadWorkspaceFile(path string) (WorkspaceFilePreview, error)
+	WorkspaceChanges() WorkspaceChanges
+	WorkspaceChangeDetail(path string) (WorkspaceChangeDetail, error)
 	Submit(input string)
 	Cancel()
 	Approve(promptID string, allow bool)
@@ -400,6 +428,32 @@ func (m *RuntimeManager) WorkspaceFilePreview(sessionID, path string) (Workspace
 		return WorkspaceFilePreview{}, ErrSessionNotFound
 	}
 	return m.runtime.ReadWorkspaceFile(path)
+}
+
+func (m *RuntimeManager) WorkspaceChanges(sessionID string) (WorkspaceChanges, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return WorkspaceChanges{}, ErrClosed
+	}
+	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
+		return WorkspaceChanges{}, ErrSessionNotFound
+	}
+	return m.runtime.WorkspaceChanges(), nil
+}
+
+func (m *RuntimeManager) WorkspaceChangeDetail(sessionID, path string) (WorkspaceChangeDetail, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return WorkspaceChangeDetail{}, ErrClosed
+	}
+	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
+		return WorkspaceChangeDetail{}, ErrSessionNotFound
+	}
+	return m.runtime.WorkspaceChangeDetail(path)
 }
 
 // Cancel asks the bridge-owned runtime to stop foreground work. It is safe to

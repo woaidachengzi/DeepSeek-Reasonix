@@ -132,6 +132,43 @@ export interface BridgeSubmitRequest {
   input: string;
 }
 
+export interface BridgeWorkspaceChangeDetail {
+  added?: number;
+  binary?: boolean;
+  diff?: string;
+  removed?: number;
+  source?: string;
+  truncated?: boolean;
+}
+
+export interface BridgeWorkspaceChangeDetailRequest {
+  path: string;
+}
+
+export interface BridgeWorkspaceChangeDetailResponse {
+  detail: BridgeWorkspaceChangeDetail;
+  protocolVersion: number;
+}
+
+export interface BridgeWorkspaceChangeView {
+  gitStatus?: string;
+  oldPath?: string;
+  path: string;
+  sources: string[];
+}
+
+export interface BridgeWorkspaceChanges {
+  files: BridgeWorkspaceChangeView[];
+  gitAvailable: boolean;
+  gitBranch?: string;
+  gitErr?: string;
+}
+
+export interface BridgeWorkspaceChangesResponse {
+  changes: BridgeWorkspaceChanges;
+  protocolVersion: number;
+}
+
 export interface BridgeWorkspaceEntry {
   isDir: boolean;
   name: string;

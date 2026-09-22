@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -267,5 +268,48 @@ func TestControllerRuntimePreviewsSafeWorkspaceFiles(t *testing.T) {
 	}
 	if _, err := runtime.ReadWorkspaceFile("../outside.txt"); err == nil {
 		t.Fatal("workspace file preview accepted a path outside the root")
+	}
+}
+
+func TestControllerRuntimeListsAndPreviewsGitChanges(t *testing.T) {
+	repo := t.TempDir()
+	runGitTest := func(args ...string) {
+		t.Helper()
+		command := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, output)
+		}
+	}
+	runGitTest("init", "-q")
+	runGitTest("config", "user.email", "test@example.com")
+	runGitTest("config", "user.name", "Reasonix Test")
+	if err := os.WriteFile(filepath.Join(repo, "tracked.txt"), []byte("old\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runGitTest("add", "tracked.txt")
+	runGitTest("commit", "-qm", "initial")
+	if err := os.WriteFile(filepath.Join(repo, "tracked.txt"), []byte("new\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "new.txt"), []byte("created\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	controller, err := boot.Build(context.Background(), boot.Options{WorkspaceRoot: repo, Sink: event.Discard})
+	if err != nil {
+		t.Fatalf("build controller: %v", err)
+	}
+	t.Cleanup(controller.Close)
+	runtime := &controllerRuntime{controller: controller}
+	changes := runtime.WorkspaceChanges()
+	if !changes.GitAvailable || changes.GitBranch == "" || len(changes.Files) != 2 {
+		t.Fatalf("workspace changes = %#v", changes)
+	}
+	detail, err := runtime.WorkspaceChangeDetail("tracked.txt")
+	if err != nil || detail.Source != "git" || !strings.Contains(detail.Diff, "+new") || detail.Added != 1 || detail.Removed != 1 {
+		t.Fatalf("tracked detail = %#v, err = %v", detail, err)
+	}
+	untracked, err := runtime.WorkspaceChangeDetail("new.txt")
+	if err != nil || untracked.Source != "git" || !strings.Contains(untracked.Diff, "+created") {
+		t.Fatalf("untracked detail = %#v, err = %v", untracked, err)
 	}
 }

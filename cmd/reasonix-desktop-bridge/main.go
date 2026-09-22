@@ -428,6 +428,12 @@ func (b *bridgeServer) sessionCommand(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(path, ":workspace-file"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":workspace-file"))
 		b.workspaceFile(w, r)
+	case strings.HasSuffix(path, ":workspace-changes"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":workspace-changes"))
+		b.workspaceChanges(w, r)
+	case strings.HasSuffix(path, ":workspace-change-detail"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":workspace-change-detail"))
+		b.workspaceChangeDetail(w, r)
 	case strings.HasSuffix(path, ":cancel"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":cancel"))
 		b.cancel(w, r)
@@ -473,7 +479,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "provider_summary", "set_default_model", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "replay_pending_prompts", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "set_default_model", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "replay_pending_prompts", "idempotency", "shutdown"},
 	})
 }
 
@@ -572,6 +578,10 @@ type workspaceFileRequest struct {
 	Path string `json:"path"`
 }
 
+type workspaceChangeDetailRequest struct {
+	Path string `json:"path"`
+}
+
 type workspaceListResponse struct {
 	ProtocolVersion int                            `json:"protocolVersion"`
 	Path            string                         `json:"path"`
@@ -582,6 +592,16 @@ type workspaceListResponse struct {
 type workspaceFileResponse struct {
 	ProtocolVersion int                                `json:"protocolVersion"`
 	Preview         desktopbridge.WorkspaceFilePreview `json:"preview"`
+}
+
+type workspaceChangesResponse struct {
+	ProtocolVersion int                            `json:"protocolVersion"`
+	Changes         desktopbridge.WorkspaceChanges `json:"changes"`
+}
+
+type workspaceChangeDetailResponse struct {
+	ProtocolVersion int                                 `json:"protocolVersion"`
+	Detail          desktopbridge.WorkspaceChangeDetail `json:"detail"`
 }
 
 type attachmentResponse struct {
@@ -759,6 +779,29 @@ func (b *bridgeServer) workspaceFile(w http.ResponseWriter, r *http.Request) {
 		ProtocolVersion: desktopbridge.ProtocolVersion,
 		Preview:         preview,
 	})
+}
+
+func (b *bridgeServer) workspaceChanges(w http.ResponseWriter, r *http.Request) {
+	changes, err := b.runtimes.WorkspaceChanges(r.PathValue("id"))
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to list desktop bridge workspace changes")
+		return
+	}
+	writeJSON(w, http.StatusOK, workspaceChangesResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Changes: changes})
+}
+
+func (b *bridgeServer) workspaceChangeDetail(w http.ResponseWriter, r *http.Request) {
+	var request workspaceChangeDetailRequest
+	if err := decodeJSONBody(w, r, 16<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid workspace change detail request")
+		return
+	}
+	detail, err := b.runtimes.WorkspaceChangeDetail(r.PathValue("id"), request.Path)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to read desktop bridge workspace change detail")
+		return
+	}
+	writeJSON(w, http.StatusOK, workspaceChangeDetailResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Detail: detail})
 }
 
 func decodeJSONBody(w http.ResponseWriter, r *http.Request, maxBytes int64, target any) error {

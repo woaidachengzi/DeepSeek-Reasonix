@@ -37,6 +37,12 @@ func (r *fakeRuntime) ListWorkspace(path string) (WorkspaceList, error) {
 func (r *fakeRuntime) ReadWorkspaceFile(path string) (WorkspaceFilePreview, error) {
 	return WorkspaceFilePreview{Path: path, Body: "preview", Size: 7}, nil
 }
+func (r *fakeRuntime) WorkspaceChanges() WorkspaceChanges {
+	return WorkspaceChanges{Files: []WorkspaceChangeView{}, GitAvailable: true}
+}
+func (r *fakeRuntime) WorkspaceChangeDetail(string) (WorkspaceChangeDetail, error) {
+	return WorkspaceChangeDetail{}, nil
+}
 func (r *fakeRuntime) Submit(input string)                                       { r.submits = append(r.submits, input) }
 func (r *fakeRuntime) Cancel()                                                   { r.cancelCalls.Add(1) }
 func (r *fakeRuntime) Approve(string, bool)                                      {}

@@ -183,6 +183,55 @@ pub struct BridgeSubmitRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceChangeDetail {
+    pub added: Option<u64>,
+    pub binary: Option<bool>,
+    pub diff: Option<String>,
+    pub removed: Option<u64>,
+    pub source: Option<String>,
+    pub truncated: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceChangeDetailRequest {
+    pub path: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceChangeDetailResponse {
+    pub detail: BridgeWorkspaceChangeDetail,
+    pub protocol_version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceChangeView {
+    pub git_status: Option<String>,
+    pub old_path: Option<String>,
+    pub path: String,
+    pub sources: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceChanges {
+    pub files: Vec<BridgeWorkspaceChangeView>,
+    pub git_available: bool,
+    pub git_branch: Option<String>,
+    pub git_err: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceChangesResponse {
+    pub changes: BridgeWorkspaceChanges,
+    pub protocol_version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeWorkspaceEntry {
     pub is_dir: bool,
     pub name: String,

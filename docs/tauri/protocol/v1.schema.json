@@ -17,6 +17,12 @@
     { "$ref": "#/$defs/workspaceFileRequest" },
     { "$ref": "#/$defs/workspaceFilePreview" },
     { "$ref": "#/$defs/workspaceFileResponse" },
+    { "$ref": "#/$defs/workspaceChangeView" },
+    { "$ref": "#/$defs/workspaceChanges" },
+    { "$ref": "#/$defs/workspaceChangesResponse" },
+    { "$ref": "#/$defs/workspaceChangeDetailRequest" },
+    { "$ref": "#/$defs/workspaceChangeDetail" },
+    { "$ref": "#/$defs/workspaceChangeDetailResponse" },
     { "$ref": "#/$defs/submitRequest" },
     { "$ref": "#/$defs/approvalRequest" },
     { "$ref": "#/$defs/askAnswer" },
@@ -257,6 +263,72 @@
       "properties": {
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
         "preview": { "$ref": "#/$defs/workspaceFilePreview" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceChangeView": {
+      "title": "BridgeWorkspaceChangeView",
+      "type": "object",
+      "required": ["path", "sources"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "oldPath": { "type": "string" },
+        "sources": { "type": "array", "items": { "type": "string" } },
+        "gitStatus": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceChanges": {
+      "title": "BridgeWorkspaceChanges",
+      "type": "object",
+      "required": ["files", "gitAvailable"],
+      "properties": {
+        "files": { "type": "array", "items": { "$ref": "#/$defs/workspaceChangeView" } },
+        "gitAvailable": { "type": "boolean" },
+        "gitErr": { "type": "string" },
+        "gitBranch": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceChangesResponse": {
+      "title": "BridgeWorkspaceChangesResponse",
+      "type": "object",
+      "required": ["protocolVersion", "changes"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "changes": { "$ref": "#/$defs/workspaceChanges" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceChangeDetailRequest": {
+      "title": "BridgeWorkspaceChangeDetailRequest",
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "workspaceChangeDetail": {
+      "title": "BridgeWorkspaceChangeDetail",
+      "type": "object",
+      "properties": {
+        "diff": { "type": "string" },
+        "source": { "type": "string" },
+        "added": { "type": "integer", "minimum": 0 },
+        "removed": { "type": "integer", "minimum": 0 },
+        "binary": { "type": "boolean" },
+        "truncated": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceChangeDetailResponse": {
+      "title": "BridgeWorkspaceChangeDetailResponse",
+      "type": "object",
+      "required": ["protocolVersion", "detail"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "detail": { "$ref": "#/$defs/workspaceChangeDetail" }
       },
       "additionalProperties": false
     },

@@ -53,6 +53,7 @@ interface CommandContract {
 //   bridge_delete_session,
 //   bridge_session_snapshot, bridge_session_history, bridge_submit, bridge_cancel,
 //   bridge_attach_file, bridge_workspace, bridge_workspace_file,
+//   bridge_workspace_changes, bridge_workspace_change_detail,
 //   bridge_approve, bridge_answer_question, bridge_answer_mcp_interaction,
 //   bridge_replay_pending_prompts,
 //   bridge_start_events, preview_profile_status, preview_runtime_info, import_stable_profile,
@@ -65,7 +66,8 @@ interface CommandContract {
 //   renameTauriBridgeSession,
 //   deleteTauriBridgeSession,
 //   tauriBridgeSnapshot, tauriBridgeHistory, submitTauriBridge, cancelTauriBridge,
-//   attachTauriFile, tauriWorkspace, tauriWorkspaceFile,
+//   attachTauriFile, tauriWorkspace, tauriWorkspaceFile, tauriWorkspaceChanges,
+//   tauriWorkspaceChangeDetail,
 //   startTauriBridgeEvents, tauriPreviewProfileStatus,
 //   tauriPreviewRuntimeInfo, importTauriStableProfile, tauriWorkbenchSessions,
 //   rememberTauriWorkbenchSession, forgetTauriWorkbenchSession, tauriProviderSummary
@@ -131,6 +133,16 @@ const commands: CommandContract[] = [
     command: "bridge_workspace_file",
     argKeys: ["request"],
     description: "tauriWorkspaceFile() invokes bridge_workspace_file with { request }",
+  },
+  {
+    command: "bridge_workspace_changes",
+    argKeys: ["request"],
+    description: "tauriWorkspaceChanges() invokes bridge_workspace_changes with { request }",
+  },
+  {
+    command: "bridge_workspace_change_detail",
+    argKeys: ["request"],
+    description: "tauriWorkspaceChangeDetail() invokes bridge_workspace_change_detail with { request }",
   },
   {
     command: "bridge_cancel",
@@ -307,6 +319,15 @@ ok(
 ok(
   commands.find(c => c.command === "bridge_workspace_file")?.argKeys.includes("request"),
   "bridge_workspace_file has request arg",
+);
+
+ok(
+  commands.find(c => c.command === "bridge_workspace_changes")?.argKeys.includes("request"),
+  "bridge_workspace_changes has request arg",
+);
+ok(
+  commands.find(c => c.command === "bridge_workspace_change_detail")?.argKeys.includes("request"),
+  "bridge_workspace_change_detail has request arg",
 );
 
 // bridge_cancel expects { request: { sessionId } }

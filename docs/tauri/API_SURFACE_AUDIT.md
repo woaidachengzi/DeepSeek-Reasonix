@@ -46,7 +46,7 @@ desktop API contract (保留 app/event helper 的调用形状)
 | 组别 | 首轮处理 | 示例 |
 | --- | --- | --- |
 | A：PoC 必需 | 建立精简 bridge | health、session snapshot、open/create、submit、cancel、event subscription、shutdown。 |
-| B：核心稳定性 | PoC 通过后 | settings/provider、会话历史、workspace、文件与 diff。当前 Tauri 已有 provider/历史/附件、逐层 workspace 文件引用和受限文件预览；diff 仍待后续切片。 |
+| B：核心稳定性 | PoC 通过后 | settings/provider、会话历史、workspace、文件与 diff。当前 Tauri 已有 provider/历史/附件、逐层 workspace 文件引用、受限文件预览和 Git 变更/diff；session checkpoint 变更来源仍待后续切片。 |
 | C：进程与工具 | 需单独生命周期测试 | shell/terminal、MCP、Browser、plugins、worktree。 |
 | D：host 平台能力 | 由 Rust 实现，不进 Go core | 窗口、文件对话框、外部链接、菜单、托盘、通知、钥匙串。 |
 | E：后置 | Preview 稳定后 | remote host、bot、updater、复杂管理页。 |

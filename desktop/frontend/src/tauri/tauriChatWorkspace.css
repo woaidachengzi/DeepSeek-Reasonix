@@ -285,12 +285,15 @@
 .tauri-workspace-drawer__header span { display: block; max-width: 280px; overflow: hidden; color: var(--fg-faint); font: 10px/1.4 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
 .tauri-workspace-drawer__body { display: grid; align-content: start; gap: 10px; min-height: 0; overflow: auto; padding: 14px; }
 .tauri-workspace-drawer__toolbar { display: flex; gap: 7px; }
+.tauri-workspace-drawer__toolbar .tauri-diagnostic-action { display: inline-flex; align-items: center; gap: 4px; }
+.tauri-workspace-drawer__toolbar .tauri-diagnostic-action.is-active { border-color: color-mix(in srgb, var(--accent) 48%, var(--border)); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); color: var(--fg); }
 .tauri-workspace-drawer__entries { display: grid; gap: 2px; padding: 0; margin: 0; list-style: none; }
 .tauri-workspace-entry { display: flex; width: 100%; min-height: 34px; align-items: center; gap: 8px; padding: 0 9px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--fg-dim); text-align: left; }
 .tauri-workspace-entry:hover { border-color: var(--border-soft); background: var(--surface); color: var(--fg); }
 .tauri-workspace-entry__icon { display: grid; flex: 0 0 auto; place-items: center; color: var(--accent); }
 .tauri-workspace-entry__name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tauri-workspace-entry > svg { flex: 0 0 auto; color: var(--fg-faint); }
+.tauri-workspace-change-entry small { flex: 0 0 auto; color: var(--accent); font-size: 9px; }
 .tauri-workspace-drawer__loading, .tauri-workspace-drawer__empty { padding: 18px 8px; color: var(--fg-faint); font-size: 11px; text-align: center; }
 .tauri-workspace-drawer__error { margin: 0; padding: 8px 9px; border: 1px solid color-mix(in srgb, #d96a66 34%, transparent); border-radius: 8px; color: #d96a66; font-size: 10px; }
 .tauri-workspace-drawer__note, .tauri-workspace-drawer__hint { margin: 0; color: var(--fg-faint); font-size: 10px; line-height: 1.55; }
