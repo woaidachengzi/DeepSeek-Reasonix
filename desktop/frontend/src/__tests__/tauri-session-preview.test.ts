@@ -3,7 +3,6 @@
 // Tests for the pure-function helpers in tauriBridge.ts and the deterministic
 // session-recovery flow exercised by TauriSessionPreview's restartBridge().
 
-import assert from "node:assert/strict";
 import {
   newTauriSessionId,
   tauriAssistantTextDelta,
@@ -147,8 +146,8 @@ interface RecoveryStep {
 }
 
 function simulateRecovery(
-  sessionId: string,
-  workspaceRoot: string | undefined,
+  _sessionId: string,
+  _workspaceRoot: string | undefined,
   steps: RecoveryStep[],
 ): unknown[] {
   const results: unknown[] = [];

@@ -962,7 +962,13 @@ fn parse_json_response(response: &[u8]) -> Result<Value, String> {
             }
         })
         .transpose()?;
-    serde_json::from_slice(decoded_body.as_deref().unwrap_or(body)).map_err(display_error)
+    let raw = decoded_body.as_deref().unwrap_or(body);
+    // Trim leading/trailing whitespace before parsing to handle responses
+    // that may have extra bytes or formatting issues.
+    let trimmed = raw.iter().position(|&b| b == b'{' || b == b'[').map_or(raw, |start| {
+        &raw[start..]
+    });
+    serde_json::from_slice(trimmed).map_err(display_error)
 }
 
 fn decode_chunked_body(mut body: &[u8]) -> Result<Vec<u8>, String> {

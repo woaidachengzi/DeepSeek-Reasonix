@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Eye, FileText, FolderOpen, FolderTree, GitBranch, MessageSquare, Paperclip, Pencil, Plus, Sparkles, Square, Trash2, X } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { Markdown } from "../components/Markdown";
@@ -7,6 +7,20 @@ import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
 import { compactQuestionText, type QuestionAnchor } from "../lib/transcriptGrouping";
 import { LocaleProvider } from "../lib/i18n";
 import logoWordmark from "../assets/logo-wordmark.svg";
+
+/** Per-message error boundary to prevent one bad message from crashing the entire transcript. */
+class MessageErrorBoundary extends Component<{ children: ReactNode; index: number }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) {
+      return <div style={{ padding: "8px 12px", color: "#e0696a", fontSize: "11px", border: "1px solid #343945", borderRadius: "8px", margin: "8px 0" }}>
+        消息 #{this.props.index} 渲染出错
+      </div>;
+    }
+    return this.props.children;
+  }
+}
 import {
   TAURI_TITLE_MAX_CHARS,
   answerTauriMCPInteraction,
@@ -338,8 +352,14 @@ export function TauriSessionPreview() {
                 const latest = await tauriBridgeSnapshot(event.sessionId);
                 if (!active) return;
                 setSession(latest.session);
+                // Ensure session state is explicitly set to idle after turn_done
+                if (latest.session.state !== "idle") {
+                  setSession(prev => prev ? { ...prev, state: "idle" } : prev);
+                }
               } catch (snapshotError) {
                 completionError ||= tauriMessageFrom(snapshotError);
+                // Even on snapshot failure, mark session as idle
+                setSession(prev => prev ? { ...prev, state: "idle" } : prev);
               }
               try {
                 const latestHistory = await tauriBridgeHistory(event.sessionId);
@@ -689,14 +709,24 @@ export function TauriSessionPreview() {
   async function submit() {
     const input = tauriComposerInput(prompt, attachments);
     if (!session || !streamReady || !input) return;
+    const sessionId = session.id;
     setBusy(true);
     setError("");
     setLiveText("");
     try {
-      setSession(await submitTauriBridge(session.id, input));
+      const submitted = await submitTauriBridge(sessionId, input);
+      if (sessionId !== session?.id) return;
+      setSession(submitted);
       setPrompt("");
       setAttachments([]);
-      setHistory(await tauriBridgeHistory(session.id));
+      // Fetch history after a short delay to let the backend settle
+      await new Promise(resolve => setTimeout(resolve, 100));
+      try {
+        const latestHistory = await tauriBridgeHistory(sessionId);
+        if (sessionId === session?.id) setHistory(latestHistory);
+      } catch {
+        // History fetch failure after submit is non-fatal; events will update
+      }
     } catch (cause) {
       setError(tauriMessageFrom(cause));
     } finally {
@@ -760,10 +790,22 @@ export function TauriSessionPreview() {
 
   async function cancel() {
     if (!session) return;
+    const sessionId = session.id;
     setBusy(true);
     setError("");
     try {
-      setSession(await cancelTauriBridge(session.id));
+      const cancelled = await cancelTauriBridge(sessionId);
+      setSession(cancelled);
+      setLiveText("");
+      setPendingPrompt(null);
+      setPromptSelections({});
+      // Refresh history after cancel
+      try {
+        const latestHistory = await tauriBridgeHistory(sessionId);
+        setHistory(latestHistory);
+      } catch {
+        // Non-fatal
+      }
     } catch (cause) {
       setError(tauriMessageFrom(cause));
     } finally {
@@ -928,17 +970,19 @@ export function TauriSessionPreview() {
             {history?.messages.map((message, index) => {
               const display = message.role === "user" ? parseAttachmentRefsForDisplay(message.content) : null;
               const question = message.role === "user" ? questions.find(item => item.id === `tauri-question-${history.startIndex + index}`) : undefined;
-              return <article id={question?.id} data-tauri-question-anchor={question?.id} key={`${history.startIndex + index}-${message.role}`} className={`tauri-message is-${message.role}`}>
-                <div className="tauri-message__avatar" aria-hidden="true">{message.role === "user" ? "你" : <Sparkles size={16} />}</div>
-                <div className="tauri-message__content">
-                  <div className="tauri-message__role">{message.role === "user" ? "你" : "Reasonix"}</div>
-                  <Markdown text={display?.text ?? message.content} cacheKey={`${history.session.id}:${history.startIndex + index}`} />
-                  {display && display.attachments.length > 0 && <div className="tauri-message__attachments">{display.attachments.map(attachment => <span key={attachment.path} title={attachment.path}><Paperclip size={13} />{attachment.name}</span>)}</div>}
-                  {message.truncated && <small>为保护界面性能，这条历史内容已截断。</small>}
-                </div>
-              </article>;
+              return <MessageErrorBoundary key={`${history.startIndex + index}-${message.role}`} index={index}>
+                <article id={question?.id} data-tauri-question-anchor={question?.id} className={`tauri-message is-${message.role}`}>
+                  <div className="tauri-message__avatar" aria-hidden="true">{message.role === "user" ? "你" : <Sparkles size={16} />}</div>
+                  <div className="tauri-message__content">
+                    <div className="tauri-message__role">{message.role === "user" ? "你" : "Reasonix"}</div>
+                    <Markdown text={display?.text ?? message.content ?? ""} cacheKey={`${history.session.id}:${history.startIndex + index}`} />
+                    {display && display.attachments.length > 0 && <div className="tauri-message__attachments">{display.attachments.map(attachment => <span key={attachment.path} title={attachment.path}><Paperclip size={13} />{attachment.name}</span>)}</div>}
+                    {message.truncated && <small>为保护界面性能，这条历史内容已截断。</small>}
+                  </div>
+                </article>
+              </MessageErrorBoundary>;
             })}
-            {liveText && <article className="tauri-message is-assistant tauri-message--live"><div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div><div className="tauri-message__content"><div className="tauri-message__role">Reasonix</div><Markdown text={liveText} streaming cacheKey={`${session?.id ?? "live"}:stream`} /></div></article>}
+            {liveText && <article className="tauri-message is-assistant tauri-message--live"><div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div><div className="tauri-message__content"><div className="tauri-message__role">Reasonix</div><Markdown text={liveText || ""} streaming cacheKey={`${session?.id ?? "live"}:stream`} /></div></article>}
             {session?.state === "running" && !liveText && <div className="tauri-thinking" role="status"><span /><span /><span />Reasonix 正在思考…</div>}
           </div> : <section className="tauri-welcome">
             <div className="tauri-welcome__mark"><Sparkles size={24} /></div>
