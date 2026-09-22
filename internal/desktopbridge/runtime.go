@@ -50,6 +50,14 @@ type HistoryMessage struct {
 	Truncated bool   `json:"truncated,omitempty"`
 }
 
+// AskAnswer is the transport-neutral projection of one structured question
+// answer. The bridge keeps this small DTO independent from the controller's
+// event package so the lifecycle manager remains host-neutral.
+type AskAnswer struct {
+	QuestionID string   `json:"questionId"`
+	Selected   []string `json:"selected"`
+}
+
 // AttachmentView is the user-visible result of copying a file into the active
 // session workspace. The source path is deliberately never returned.
 type AttachmentView struct {
@@ -83,6 +91,10 @@ type Runtime interface {
 	AttachFile(path string) (AttachmentView, error)
 	Submit(input string)
 	Cancel()
+	Approve(promptID string, allow bool)
+	AnswerQuestion(promptID string, answers []AskAnswer) error
+	AnswerMCPInteraction(promptID, action string, content map[string]any) error
+	ReplayPendingPrompts()
 	Shutdown() error
 }
 
@@ -333,6 +345,47 @@ func (m *RuntimeManager) Cancel(sessionID string) (SessionView, error) {
 	})
 }
 
+// Approve resolves one pending tool permission. The core treats an unknown or
+// already answered ID as a no-op, which makes a retried button safe.
+func (m *RuntimeManager) Approve(sessionID, promptID string, allow bool) (SessionView, error) {
+	if strings.TrimSpace(promptID) == "" {
+		return SessionView{}, ErrInvalidInput
+	}
+	return m.withRuntime(sessionID, func(runtime Runtime) {
+		runtime.Approve(promptID, allow)
+	})
+}
+
+// AnswerQuestion durably records an ask-tool answer before the blocked turn is
+// released. The runtime owns validation against the pending prompt.
+func (m *RuntimeManager) AnswerQuestion(sessionID, promptID string, answers []AskAnswer) (SessionView, error) {
+	if strings.TrimSpace(promptID) == "" {
+		return SessionView{}, ErrInvalidInput
+	}
+	return m.withRuntimeError(sessionID, func(runtime Runtime) error {
+		return runtime.AnswerQuestion(promptID, answers)
+	})
+}
+
+// AnswerMCPInteraction durably records an MCP elicitation action before the
+// plugin call resumes. Form values are carried only in memory for this call.
+func (m *RuntimeManager) AnswerMCPInteraction(sessionID, promptID, action string, content map[string]any) (SessionView, error) {
+	if strings.TrimSpace(promptID) == "" || strings.TrimSpace(action) == "" {
+		return SessionView{}, ErrInvalidInput
+	}
+	return m.withRuntimeError(sessionID, func(runtime Runtime) error {
+		return runtime.AnswerMCPInteraction(promptID, action, content)
+	})
+}
+
+// ReplayPendingPrompts re-emits a prompt that survived a bridge reconnect, so
+// a newly attached desktop host can rebuild its actionable card.
+func (m *RuntimeManager) ReplayPendingPrompts(sessionID string) (SessionView, error) {
+	return m.withRuntime(sessionID, func(runtime Runtime) {
+		runtime.ReplayPendingPrompts()
+	})
+}
+
 // RenameSession persists a user-selected display title in the core session
 // metadata. The controller must be idle so title writes cannot race a turn.
 func (m *RuntimeManager) RenameSession(sessionID, title string) (SessionView, error) {
@@ -463,6 +516,24 @@ func (m *RuntimeManager) withRuntime(sessionID string, action func(Runtime)) (Se
 		return SessionView{}, ErrSessionNotFound
 	}
 	action(m.runtime)
+	view := m.view
+	view.State = m.runtime.State()
+	return view, nil
+}
+
+func (m *RuntimeManager) withRuntimeError(sessionID string, action func(Runtime) error) (SessionView, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return SessionView{}, ErrClosed
+	}
+	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
+		return SessionView{}, ErrSessionNotFound
+	}
+	if err := action(m.runtime); err != nil {
+		return SessionView{}, err
+	}
 	view := m.view
 	view.State = m.runtime.State()
 	return view, nil

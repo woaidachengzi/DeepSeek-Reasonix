@@ -4,7 +4,7 @@
 
 本协议连接 Tauri host 与本地 Go sidecar。它不是公网 API，sidecar 只允许本机
 Tauri host 访问。v1 首批覆盖：健康检查、会话快照、创建/打开会话、工作区附件、
-提交消息、取消、Agent 流事件与正常关闭。
+提交消息、取消、审批/提问/MCP 交互、Agent 流事件与正常关闭。
 
 ## 安全与启动
 
@@ -36,10 +36,14 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 附加文件 | `POST /v1/sessions/{sessionId}:attach` | `X-Reasonix-Request-ID` 去重 |
 | 提交 | `POST /v1/sessions/{sessionId}:submit` | `X-Reasonix-Request-ID` 去重 |
 | 取消 | `POST /v1/sessions/{sessionId}:cancel` | 是 |
+| 工具审批 | `POST /v1/sessions/{sessionId}:approve` | 可安全重试 |
+| 回答 `ask` | `POST /v1/sessions/{sessionId}:answer` | 可安全重试 |
+| 回答 MCP 交互 | `POST /v1/sessions/{sessionId}:mcp` | 可安全重试 |
+| 重放待处理提示 | `POST /v1/sessions/{sessionId}:replay-prompts` | 是 |
 | 流订阅 | `GET /v1/events?afterSequence=N` | 可重连 |
 | 正常关闭 | `POST /v1:shutdown` | 是 |
 
-当前 bridge 已实现 health、脱敏 Provider 摘要、建/开会话、空闲会话的显式切换、重命名与删除、快照、可见历史、工作区附件、submit、cancel、SSE 事件与正常关闭。会话自定义标题写入 core 的 `.jsonl.meta`，不改动 transcript；标题为空、含控制字符或超过 120 个 Unicode 字符时会被拒绝。删除走 core 自身的产物清理（transcript、事件日志与 sidecar、guardian、inbox、checkpoint、子 agent 记录、cleanup 标记），只允许删除当前持有且空闲的会话，避免 host 误删另一个 host 正在使用的会话；删除成功后 bridge 释放该控制器且不再写回快照，否则会把刚删掉的文件重新创建出来。对已不存在的会话重复执行删除返回 `not_found`，而带同一 `X-Reasonix-Request-ID` 的传输重试重放首次响应。
+当前 bridge 已实现 health、脱敏 Provider 摘要、建/开会话、空闲会话的显式切换、重命名与删除、快照、可见历史、工作区附件、submit、cancel、审批/ask/MCP 提示回答、断线后的待处理提示重放、SSE 事件与正常关闭。会话自定义标题写入 core 的 `.jsonl.meta`，不改动 transcript；标题为空、含控制字符或超过 120 个 Unicode 字符时会被拒绝。删除走 core 自身的产物清理（transcript、事件日志与 sidecar、guardian、inbox、checkpoint、子 agent 记录、cleanup 标记），只允许删除当前持有且空闲的会话，避免 host 误删另一个 host 正在使用的会话；删除成功后 bridge 释放该控制器且不再写回快照，否则会把刚删掉的文件重新创建出来。对已不存在的会话重复执行删除返回 `not_found`，而带同一 `X-Reasonix-Request-ID` 的传输重试重放首次响应。
 Provider 摘要仅包含配置名称、类型、已配置模型 ID、模型数量、是否需要凭据、凭据是否已配置及用户默认模型；不返回 endpoint、凭据变量名、密钥或请求 headers。模型 ID 仅用于本地下拉选择。
 默认模型修改复用 `internal/config` 的选择校验、用户配置锁和窄写入，只改变新会话默认值，不重建或改写当前会话；选项只包括已启用且凭据可用的模型。工作区 `reasonix.toml` 仍可覆盖用户默认值。
 `submit` 仅确认既有 Go Controller 已接收输入（HTTP 202）；它不会等待 Agent 生成结束，
@@ -62,6 +66,12 @@ SSE 事件携带进度和最终结果。事件 replay 使用有界 ledger；落�
 Controller。目标会话与当前会话不同且当前状态为 `idle` 时，bridge 先调用旧
 Controller 的 durable shutdown，再创建/恢复目标 Controller；`running` 或 `paused`
 状态返回 `conflict`，不会停止或替换用户的活动回合。
+
+审批请求只允许一次性“允许”或“拒绝”，Tauri 不直接暴露原始工具参数；`ask` 请求携带
+结构化问题和选项，回答可为空表示跳过；MCP 交互只转发 `accept`、`decline`、`cancel`
+及表单内容。所有三类回答都先由 Controller 持久化 `prompt_answered` 再释放阻塞的 Agent
+回合。重新打开处于 `paused` 的会话后，host 在建立 SSE 监听后调用
+`replay-prompts`，因此审批卡片不会因窗口重启而丢失。
 
 ## Envelope
 

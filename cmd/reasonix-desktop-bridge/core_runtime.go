@@ -220,6 +220,24 @@ func (r *controllerRuntime) Submit(input string) { r.controller.SubmitHTTP(input
 
 func (r *controllerRuntime) Cancel() { r.controller.Cancel() }
 
+func (r *controllerRuntime) Approve(promptID string, allow bool) {
+	r.controller.Approve(promptID, allow, false, false)
+}
+
+func (r *controllerRuntime) AnswerQuestion(promptID string, answers []desktopbridge.AskAnswer) error {
+	selected := make([]event.AskAnswer, len(answers))
+	for i, answer := range answers {
+		selected[i] = event.AskAnswer{QuestionID: answer.QuestionID, Selected: append([]string(nil), answer.Selected...)}
+	}
+	return r.controller.AnswerQuestionChecked(promptID, selected)
+}
+
+func (r *controllerRuntime) AnswerMCPInteraction(promptID, action string, content map[string]any) error {
+	return r.controller.AnswerMCPInteractionChecked(promptID, action, content)
+}
+
+func (r *controllerRuntime) ReplayPendingPrompts() { r.controller.ReplayPendingPrompts() }
+
 func (r *controllerRuntime) Shutdown() error {
 	err := r.controller.SnapshotForShutdown()
 	r.controller.Close()

@@ -425,6 +425,18 @@ func (b *bridgeServer) sessionCommand(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(path, ":cancel"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":cancel"))
 		b.cancel(w, r)
+	case strings.HasSuffix(path, ":approve"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":approve"))
+		b.approve(w, r)
+	case strings.HasSuffix(path, ":answer"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":answer"))
+		b.answerQuestion(w, r)
+	case strings.HasSuffix(path, ":mcp"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":mcp"))
+		b.answerMCPInteraction(w, r)
+	case strings.HasSuffix(path, ":replay-prompts"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":replay-prompts"))
+		b.replayPendingPrompts(w, r)
 	default:
 		writeProtocolError(w, http.StatusNotFound, "not_found", "desktop bridge route not found")
 	}
@@ -455,7 +467,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "provider_summary", "set_default_model", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "submit", "cancel", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "set_default_model", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "replay_pending_prompts", "idempotency", "shutdown"},
 	})
 }
 
@@ -511,6 +523,22 @@ type openSessionRequest struct {
 
 type submitRequest struct {
 	Input string `json:"input"`
+}
+
+type approveRequest struct {
+	ID    string `json:"id"`
+	Allow bool   `json:"allow"`
+}
+
+type answerQuestionRequest struct {
+	ID      string                    `json:"id"`
+	Answers []desktopbridge.AskAnswer `json:"answers"`
+}
+
+type answerMCPInteractionRequest struct {
+	ID      string         `json:"id"`
+	Action  string         `json:"action"`
+	Content map[string]any `json:"content,omitempty"`
 }
 
 type renameSessionRequest struct {
@@ -690,6 +718,57 @@ func (b *bridgeServer) cancel(w http.ResponseWriter, r *http.Request) {
 	view, err := b.runtimes.Cancel(r.PathValue("id"))
 	if err != nil {
 		b.writeRuntimeError(w, err, "unable to cancel desktop bridge input")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})
+}
+
+func (b *bridgeServer) approve(w http.ResponseWriter, r *http.Request) {
+	var request approveRequest
+	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil || strings.TrimSpace(request.ID) == "" {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid approval request")
+		return
+	}
+	view, err := b.runtimes.Approve(r.PathValue("id"), request.ID, request.Allow)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to answer desktop bridge approval")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})
+}
+
+func (b *bridgeServer) answerQuestion(w http.ResponseWriter, r *http.Request) {
+	var request answerQuestionRequest
+	if err := decodeJSONBody(w, r, 256<<10, &request); err != nil || strings.TrimSpace(request.ID) == "" {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid question answer request")
+		return
+	}
+	view, err := b.runtimes.AnswerQuestion(r.PathValue("id"), request.ID, request.Answers)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to answer desktop bridge question")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})
+}
+
+func (b *bridgeServer) answerMCPInteraction(w http.ResponseWriter, r *http.Request) {
+	var request answerMCPInteractionRequest
+	if err := decodeJSONBody(w, r, 256<<10, &request); err != nil || strings.TrimSpace(request.ID) == "" || strings.TrimSpace(request.Action) == "" {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid MCP interaction answer request")
+		return
+	}
+	view, err := b.runtimes.AnswerMCPInteraction(r.PathValue("id"), request.ID, request.Action, request.Content)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to answer desktop bridge MCP interaction")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})
+}
+
+func (b *bridgeServer) replayPendingPrompts(w http.ResponseWriter, r *http.Request) {
+	view, err := b.runtimes.ReplayPendingPrompts(r.PathValue("id"))
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to replay desktop bridge prompts")
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})

@@ -57,13 +57,40 @@ pub struct RenameSessionRequest {
     pub title: String,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApproveRequest {
+    pub session_id: String,
+    pub id: String,
+    pub allow: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnswerQuestionRequest {
+    pub session_id: String,
+    pub id: String,
+    pub answers: Vec<BridgeAskAnswer>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnswerMCPInteractionRequest {
+    pub session_id: String,
+    pub id: String,
+    pub action: String,
+    pub content: Option<Value>,
+}
+
 // The wire DTOs mirror docs/tauri/protocol/v1.schema.json through the generated
 // module; only the host-facing command payloads below stay hand-written.
 pub use crate::protocol_generated::{
+    BridgeAnswerQuestionRequest, BridgeApprovalRequest, BridgeAskAnswer,
     BridgeAttachFileRequest as AttachFileRequest, BridgeAttachment, BridgeAttachmentResponse,
     BridgeDeleteSessionResponse, BridgeEvent, BridgeHistoryMessage, BridgeHistoryResponse,
-    BridgeOpenSessionRequest as OpenSessionRequest, BridgeProviderSummaryResponse,
-    BridgeRenameSessionRequest, BridgeSession, BridgeSessionResponse, BridgeSetDefaultModelRequest,
+    BridgeMCPInteractionAnswerRequest, BridgeOpenSessionRequest as OpenSessionRequest,
+    BridgeProviderSummaryResponse, BridgeRenameSessionRequest, BridgeSession,
+    BridgeSessionResponse, BridgeSetDefaultModelRequest,
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -472,6 +499,65 @@ impl BridgeSupervisor {
             .map(|envelope| envelope.session)
     }
 
+    pub fn approve(&self, request: ApproveRequest) -> Result<BridgeSession, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let prompt_id = prompt_id_component(&request.id)?;
+        let path = format!("/v1/sessions/{session_id}:approve");
+        self.request_session(
+            "POST",
+            &path,
+            Some(json!(BridgeApprovalRequest {
+                id: prompt_id,
+                allow: request.allow
+            })),
+            None,
+        )
+        .map(|envelope| envelope.session)
+    }
+
+    pub fn answer_question(&self, request: AnswerQuestionRequest) -> Result<BridgeSession, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let prompt_id = prompt_id_component(&request.id)?;
+        let path = format!("/v1/sessions/{session_id}:answer");
+        self.request_session(
+            "POST",
+            &path,
+            Some(json!(BridgeAnswerQuestionRequest {
+                id: prompt_id,
+                answers: request.answers
+            })),
+            None,
+        )
+        .map(|envelope| envelope.session)
+    }
+
+    pub fn answer_mcp_interaction(
+        &self,
+        request: AnswerMCPInteractionRequest,
+    ) -> Result<BridgeSession, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let prompt_id = prompt_id_component(&request.id)?;
+        let path = format!("/v1/sessions/{session_id}:mcp");
+        self.request_session(
+            "POST",
+            &path,
+            Some(json!(BridgeMCPInteractionAnswerRequest {
+                id: prompt_id,
+                action: request.action,
+                content: request.content,
+            })),
+            None,
+        )
+        .map(|envelope| envelope.session)
+    }
+
+    pub fn replay_pending_prompts(&self, request: SessionRequest) -> Result<BridgeSession, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let path = format!("/v1/sessions/{session_id}:replay-prompts");
+        self.request_session("POST", &path, None, None)
+            .map(|envelope| envelope.session)
+    }
+
     pub fn start_events(&self, app: tauri::AppHandle, after_sequence: u64) -> Result<(), String> {
         let (address, token) = self.event_connection()?;
         self.stop_events();
@@ -827,6 +913,17 @@ fn session_path_component(session_id: &str) -> Result<String, String> {
         return Err("desktop bridge session identifier is invalid".to_string());
     }
     Ok(session_id.to_string())
+}
+
+fn prompt_id_component(prompt_id: &str) -> Result<String, String> {
+    let prompt_id = prompt_id.trim();
+    if prompt_id.is_empty()
+        || prompt_id.len() > 256
+        || prompt_id.bytes().any(|byte| byte.is_ascii_control())
+    {
+        return Err("desktop bridge prompt identifier is invalid".to_string());
+    }
+    Ok(prompt_id.to_string())
 }
 
 fn forward_events(

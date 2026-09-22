@@ -9,6 +9,9 @@ import { LocaleProvider } from "../lib/i18n";
 import logoWordmark from "../assets/logo-wordmark.svg";
 import {
   TAURI_TITLE_MAX_CHARS,
+  answerTauriMCPInteraction,
+  answerTauriQuestion,
+  approveTauriBridge,
   cancelTauriBridge,
   attachTauriFile,
   chooseTauriAttachmentFiles,
@@ -23,6 +26,7 @@ import {
   rememberTauriWorkbenchSession,
   renameTauriBridgeSession,
   restartTauriBridge,
+  replayTauriPendingPrompts,
   setTauriDefaultModel,
   startTauriBridgeEvents,
   submitTauriBridge,
@@ -34,6 +38,8 @@ import {
   tauriComposerInput,
   tauriEventSummary,
   tauriMessageFrom,
+  tauriPromptAnsweredId,
+  tauriPromptFromEvent,
   tauriProviderSummary,
   tauriPreviewProfileStatus,
   tauriPreviewRuntimeInfo,
@@ -46,6 +52,7 @@ import {
   type TauriBridgeHistory,
   type TauriBridgeSession,
   type TauriBridgeStatus,
+  type TauriPendingPrompt,
   type TauriPreviewProfileStatus,
   type TauriPreviewRuntimeInfo,
   type TauriProviderSummary,
@@ -119,6 +126,46 @@ function SessionRow({ tab, active, busy, switchingBlocked, onActivate, onDelete 
   );
 }
 
+interface PromptCardProps {
+  prompt: TauriPendingPrompt;
+  busy: boolean;
+  selections: Record<string, string[]>;
+  onApproval: (allow: boolean) => void;
+  onAskSelection: (questionId: string, label: string, multi: boolean) => void;
+  onAskSubmit: () => void;
+  onMCPAction: (action: "accept" | "decline" | "cancel") => void;
+}
+
+function PromptCard({ prompt, busy, selections, onApproval, onAskSelection, onAskSubmit, onMCPAction }: PromptCardProps) {
+  if (prompt.kind === "approval") {
+    return <section className="tauri-prompt-card" aria-live="polite" aria-label="等待权限确认">
+      <div className="tauri-prompt-card__heading"><Sparkles size={17} /><div><strong>需要你的确认</strong><span>{prompt.tool}</span></div></div>
+      {prompt.subject && <p className="tauri-prompt-card__subject">{prompt.subject}</p>}
+      {prompt.reason && <p className="tauri-prompt-card__reason">{prompt.reason}</p>}
+      <div className="tauri-prompt-card__actions"><button type="button" className="tauri-prompt-card__allow" onClick={() => onApproval(true)} disabled={busy}>允许一次</button><button type="button" className="tauri-prompt-card__deny" onClick={() => onApproval(false)} disabled={busy}>拒绝</button></div>
+    </section>;
+  }
+  if (prompt.kind === "ask") {
+    return <section className="tauri-prompt-card" aria-live="polite" aria-label="回答助手提问">
+      <div className="tauri-prompt-card__heading"><Sparkles size={17} /><div><strong>请回答一个问题</strong><span>回答后助手会继续工作</span></div></div>
+      <div className="tauri-prompt-card__questions">{prompt.questions.map(question => {
+        const selected = selections[question.id] ?? [];
+        return <fieldset key={question.id} className="tauri-prompt-card__question"><legend>{question.header || "问题"}</legend><p>{question.prompt}</p><div className="tauri-prompt-card__options">{question.options.map(option => {
+          const active = selected.includes(option.label);
+          return <button key={option.label} type="button" className={active ? "is-selected" : ""} onClick={() => onAskSelection(question.id, option.label, question.multi)} disabled={busy} aria-pressed={active}><b>{option.label}</b>{option.description && <small>{option.description}</small>}</button>;
+        })}</div></fieldset>;
+      })}</div>
+      <div className="tauri-prompt-card__actions"><button type="button" className="tauri-prompt-card__allow" onClick={onAskSubmit} disabled={busy}>提交回答</button><button type="button" className="tauri-prompt-card__deny" onClick={onAskSubmit} disabled={busy}>跳过</button></div>
+    </section>;
+  }
+  return <section className="tauri-prompt-card" aria-live="polite" aria-label="MCP 服务请求">
+    <div className="tauri-prompt-card__heading"><Sparkles size={17} /><div><strong>{prompt.server} 请求你的操作</strong><span>{prompt.mode === "url" ? "打开链接完成后再继续" : "这是一个外部服务请求"}</span></div></div>
+    {prompt.message && <p className="tauri-prompt-card__subject">{prompt.message}</p>}
+    {prompt.url && <a className="tauri-prompt-card__link" href={prompt.url} target="_blank" rel="noreferrer">打开外部链接</a>}
+    <div className="tauri-prompt-card__actions"><button type="button" className="tauri-prompt-card__allow" onClick={() => onMCPAction("accept")} disabled={busy}>接受并继续</button><button type="button" className="tauri-prompt-card__deny" onClick={() => onMCPAction("decline")} disabled={busy}>拒绝</button><button type="button" className="tauri-prompt-card__cancel" onClick={() => onMCPAction("cancel")} disabled={busy}>取消</button></div>
+  </section>;
+}
+
 export function TauriSessionPreview() {
   const [session, setSession] = useState<TauriBridgeSession | null>(null);
   const [tabs, setTabs] = useState<WorkbenchSessionTab[]>([]);
@@ -143,6 +190,8 @@ export function TauriSessionPreview() {
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [error, setError] = useState("");
+  const [pendingPrompt, setPendingPrompt] = useState<TauriPendingPrompt | null>(null);
+  const [promptSelections, setPromptSelections] = useState<Record<string, string[]>>({});
   const conversationRef = useRef<HTMLDivElement>(null);
   const [activeQuestion, setActiveQuestion] = useState<number | null>(null);
   const switchingBlocked = Boolean(session && session.state !== "idle");
@@ -228,9 +277,23 @@ export function TauriSessionPreview() {
           if (event.sessionId !== session.id) return;
           setSequence(previous => Math.max(previous, event.sequence));
           setEvents(previous => [event, ...previous].slice(0, 100));
+          const incomingPrompt = tauriPromptFromEvent(event);
+          if (incomingPrompt) {
+            setPendingPrompt(incomingPrompt);
+            setPromptSelections({});
+            setSession(previous => previous ? { ...previous, state: "paused" } : previous);
+          }
+          const answeredPromptID = tauriPromptAnsweredId(event);
+          if (answeredPromptID) {
+            setPendingPrompt(previous => previous?.id === answeredPromptID ? null : previous);
+            setPromptSelections({});
+            setSession(previous => previous ? { ...previous, state: "running" } : previous);
+          }
           const textDelta = tauriAssistantTextDelta(event);
           if (textDelta) setLiveText(previous => previous + textDelta);
           if (event.eventKind === "turn_done") {
+            setPendingPrompt(null);
+            setPromptSelections({});
             void (async () => {
               // Refresh state and transcript independently. A transcript parse
               // failure must not leave a completed turn marked as running.
@@ -270,6 +333,14 @@ export function TauriSessionPreview() {
           setError(`本地桥接事件流：${message}`);
         });
         await startTauriBridgeEvents(snapshot.sequence);
+        // Re-emit an approval/ask/MCP prompt after the listener is live. This
+        // is what makes a paused historical session actionable after restart.
+        try {
+          const replayed = await replayTauriPendingPrompts(session.id);
+          if (active) setSession(replayed);
+        } catch (replayError) {
+          if (active) setError(tauriMessageFrom(replayError));
+        }
         if (!active) return;
         setError("");
         setStreamReady(true);
@@ -322,6 +393,8 @@ export function TauriSessionPreview() {
       setEvents([]);
       setHistory(null);
       setAttachments([]);
+      setPendingPrompt(null);
+      setPromptSelections({});
       setHistoryLoading(true);
       setHistoryError("");
       setLiveText("");
@@ -435,7 +508,7 @@ export function TauriSessionPreview() {
   }
 
   async function addAttachments() {
-    if (!session || !streamReady || busy || session.state === "running") return;
+    if (!session || !streamReady || busy || session.state !== "idle") return;
     setBusy(true);
     setError("");
     try {
@@ -477,6 +550,60 @@ export function TauriSessionPreview() {
     }
   }
 
+  function selectPromptOption(questionID: string, label: string, multi: boolean) {
+    setPromptSelections(previous => {
+      const current = previous[questionID] ?? [];
+      if (multi) {
+        return { ...previous, [questionID]: current.includes(label) ? current.filter(item => item !== label) : [...current, label] };
+      }
+      return { ...previous, [questionID]: current[0] === label ? [] : [label] };
+    });
+  }
+
+  async function answerApproval(allow: boolean) {
+    if (!session || !pendingPrompt || pendingPrompt.kind !== "approval") return;
+    setBusy(true);
+    setError("");
+    try {
+      setSession(await approveTauriBridge(session.id, pendingPrompt.id, allow));
+      setPendingPrompt(null);
+    } catch (cause) {
+      setError(tauriMessageFrom(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function answerAsk() {
+    if (!session || !pendingPrompt || pendingPrompt.kind !== "ask") return;
+    setBusy(true);
+    setError("");
+    try {
+      const answers = pendingPrompt.questions.map(question => ({ questionId: question.id, selected: promptSelections[question.id] ?? [] }));
+      setSession(await answerTauriQuestion(session.id, pendingPrompt.id, answers));
+      setPendingPrompt(null);
+      setPromptSelections({});
+    } catch (cause) {
+      setError(tauriMessageFrom(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function answerMCP(action: "accept" | "decline" | "cancel") {
+    if (!session || !pendingPrompt || pendingPrompt.kind !== "mcp") return;
+    setBusy(true);
+    setError("");
+    try {
+      setSession(await answerTauriMCPInteraction(session.id, pendingPrompt.id, action));
+      setPendingPrompt(null);
+    } catch (cause) {
+      setError(tauriMessageFrom(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function cancel() {
     if (!session) return;
     setBusy(true);
@@ -503,6 +630,8 @@ export function TauriSessionPreview() {
         setEvents([]);
         setHistory(null);
         setAttachments([]);
+        setPendingPrompt(null);
+        setPromptSelections({});
         setLiveText("");
         setSequence(0);
         setStreamRevision(previous => previous + 1);
@@ -614,7 +743,7 @@ export function TauriSessionPreview() {
                 {session && <button type="button" className="tauri-title-rename" aria-label="重命名对话" title="重命名对话" disabled={busy || switchingBlocked} onClick={beginTitleEdit}><Pencil size={13} /></button>}
               </>}
             </div>
-            <span>{session?.state === "running" ? "正在生成" : session ? "本地会话" : "Reasonix Preview"}</span>
+            <span>{session?.state === "running" ? "正在生成" : session?.state === "paused" ? "等待你的操作" : session ? "本地会话" : "Reasonix Preview"}</span>
           </div>
           <div className="tauri-topbar__actions">
             <button type="button" className="tauri-workspace-button" onClick={() => void chooseWorkspaceRoot()} disabled={busy || session?.state === "running"} title={currentWorkspace || "选择工作区（用于新对话）"}>
@@ -671,6 +800,8 @@ export function TauriSessionPreview() {
         {questions.length >= 2 && <QuestionJumpBar loadedQuestions={questions} totalQuestions={questions.length} activeTurn={activeQuestion} onJump={jumpToQuestion}
           height={Math.min(240, Math.max(48, questions.length * 18 + 12))} />}
 
+        {pendingPrompt && <PromptCard prompt={pendingPrompt} busy={busy} selections={promptSelections} onApproval={allow => void answerApproval(allow)} onAskSelection={selectPromptOption} onAskSubmit={() => void answerAsk()} onMCPAction={action => void answerMCP(action)} />}
+
         <footer className="tauri-composer-area">
           {error && <p className="tauri-error" role="alert">{error}</p>}
           <div className="tauri-composer">
@@ -680,11 +811,11 @@ export function TauriSessionPreview() {
             </div>)}</div>}
             <textarea value={prompt} onChange={event => setPrompt(event.target.value)} onKeyDown={event => {
               if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void submit(); }
-            }} placeholder={session ? "继续聊聊你的问题…（⌘/Ctrl + Enter 发送）" : "先开始一个新对话，再输入你的问题"} disabled={busy || !session || !streamReady} rows={3} />
+            }} placeholder={session?.state === "paused" ? "请先完成上方确认…" : session ? "继续聊聊你的问题…（⌘/Ctrl + Enter 发送）" : "先开始一个新对话，再输入你的问题"} disabled={busy || !session || !streamReady || session.state === "paused"} rows={3} />
             <div className="tauri-composer__bottom"><span>{session?.workspaceRoot ? `工作区 · ${session.workspaceRoot}` : session ? "当前会话使用默认工作区" : "Preview 配置与稳定版相互隔离"}</span>
               <div className="tauri-composer__actions">
-                <button className="tauri-attach-button" type="button" onClick={() => void addAttachments()} disabled={busy || !session || !streamReady || session.state === "running"} aria-label="添加文件" title="从本机选择文件并附加到消息"><Paperclip size={16} /><span>添加文件</span></button>
-                {session?.state === "running" ? <button className="tauri-send-button is-stop" type="button" onClick={() => void cancel()} disabled={busy} aria-label="停止生成"><Square size={15} fill="currentColor" /></button> : <button className="tauri-send-button" type="button" onClick={() => void submit()} disabled={busy || !streamReady || (!prompt.trim() && attachments.length === 0)} aria-label="发送消息"><ArrowUp size={18} /></button>}
+                <button className="tauri-attach-button" type="button" onClick={() => void addAttachments()} disabled={busy || !session || !streamReady || session.state !== "idle"} aria-label="添加文件" title="从本机选择文件并附加到消息"><Paperclip size={16} /><span>添加文件</span></button>
+                {session?.state === "running" ? <button className="tauri-send-button is-stop" type="button" onClick={() => void cancel()} disabled={busy} aria-label="停止生成"><Square size={15} fill="currentColor" /></button> : <button className="tauri-send-button" type="button" onClick={() => void submit()} disabled={busy || !streamReady || session?.state === "paused" || (!prompt.trim() && attachments.length === 0)} aria-label="发送消息"><ArrowUp size={18} /></button>}
               </div>
             </div>
           </div>

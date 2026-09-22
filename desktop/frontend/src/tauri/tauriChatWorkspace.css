@@ -225,6 +225,29 @@
 .tauri-thinking > span:nth-child(2) { animation-delay: .15s; }
 .tauri-thinking > span:nth-child(3) { margin-right: 3px; animation-delay: .3s; }
 
+.tauri-prompt-card { width: min(820px, calc(100% - 48px)); align-self: center; margin: 8px auto 0; padding: 13px 15px; border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border)); border-radius: 14px; background: color-mix(in srgb, var(--accent) 5%, var(--surface)); box-shadow: 0 5px 18px color-mix(in srgb, var(--shadow-color) 7%, transparent); }
+.tauri-prompt-card__heading { display: flex; align-items: flex-start; gap: 9px; color: var(--accent); }
+.tauri-prompt-card__heading > div { display: grid; gap: 2px; }
+.tauri-prompt-card__heading strong { color: var(--fg); font-size: 12px; font-weight: 650; }
+.tauri-prompt-card__heading span { color: var(--fg-faint); font-size: 10px; }
+.tauri-prompt-card__subject, .tauri-prompt-card__reason { margin: 10px 0 0 26px; color: var(--fg-dim); font-size: 11px; line-height: 1.55; white-space: pre-wrap; }
+.tauri-prompt-card__reason { color: var(--fg-faint); }
+.tauri-prompt-card__questions { display: grid; gap: 12px; margin: 12px 0 0 26px; }
+.tauri-prompt-card__question { min-width: 0; padding: 0; border: 0; }
+.tauri-prompt-card__question legend { color: var(--fg-dim); font-size: 10px; font-weight: 650; }
+.tauri-prompt-card__question p { margin: 5px 0 7px; color: var(--fg); font-size: 11px; line-height: 1.5; }
+.tauri-prompt-card__options { display: flex; flex-wrap: wrap; gap: 7px; }
+.tauri-prompt-card__options button { display: grid; gap: 2px; min-width: 90px; padding: 7px 9px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface); color: var(--fg-dim); text-align: left; }
+.tauri-prompt-card__options button:hover:not(:disabled), .tauri-prompt-card__options button.is-selected { border-color: color-mix(in srgb, var(--accent) 52%, var(--border)); background: color-mix(in srgb, var(--accent) 9%, var(--surface)); color: var(--fg); }
+.tauri-prompt-card__options b { font-size: 10px; font-weight: 600; }
+.tauri-prompt-card__options small { color: var(--fg-faint); font-size: 9px; line-height: 1.35; }
+.tauri-prompt-card__link { display: inline-block; margin: 9px 0 0 26px; color: var(--accent); font-size: 10px; text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+.tauri-prompt-card__actions { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0 0 26px; }
+.tauri-prompt-card__actions button { min-height: 29px; padding: 0 10px; border-radius: 8px; font-size: 10px; }
+.tauri-prompt-card__allow { border: 1px solid color-mix(in srgb, var(--accent) 48%, var(--border)); background: var(--accent); color: var(--accent-fg); }
+.tauri-prompt-card__deny, .tauri-prompt-card__cancel { border: 1px solid var(--border-soft); background: var(--surface); color: var(--fg-dim); }
+.tauri-prompt-card__deny:hover:not(:disabled), .tauri-prompt-card__cancel:hover:not(:disabled) { border-color: var(--border); color: var(--fg); }
+
 .tauri-composer-area { width: min(820px, calc(100% - 48px)); flex: 0 0 auto; align-self: center; padding: 9px 0 13px; }
 .tauri-composer { padding: 11px 12px 9px 15px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: 0 8px 26px color-mix(in srgb, var(--shadow-color) 9%, transparent); transition: border-color .16s ease, box-shadow .16s ease; }
 .tauri-composer:focus-within { border-color: color-mix(in srgb, var(--accent) 57%, var(--border)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 9%, transparent), 0 8px 26px color-mix(in srgb, var(--shadow-color) 9%, transparent); }
@@ -315,6 +338,7 @@
   .tauri-starters { grid-template-columns: 1fr; }
   .tauri-starters button { min-height: 68px; grid-template-columns: 29px minmax(0, 1fr) 14px; }
   .tauri-composer-area { width: calc(100% - 24px); }
+  .tauri-prompt-card { width: calc(100% - 24px); }
   .tauri-transcript { width: calc(100% - 28px); }
   .tauri-main > .jump-bar { display: none; }
 }

@@ -8,10 +8,10 @@ mod window_state;
 mod workbench_catalog;
 
 use bridge::{
-    AttachFileRequest, BridgeAttachment, BridgeDeleteSessionResponse, BridgeHistory,
-    BridgeProviderSummaryResponse, BridgeSession, BridgeSetDefaultModelRequest, BridgeSnapshot,
-    BridgeStatus, BridgeSupervisor, OpenSessionRequest, RenameSessionRequest, SessionRequest,
-    SubmitRequest,
+    AnswerMCPInteractionRequest, AnswerQuestionRequest, ApproveRequest, AttachFileRequest,
+    BridgeAttachment, BridgeDeleteSessionResponse, BridgeHistory, BridgeProviderSummaryResponse,
+    BridgeSession, BridgeSetDefaultModelRequest, BridgeSnapshot, BridgeStatus, BridgeSupervisor,
+    OpenSessionRequest, RenameSessionRequest, SessionRequest, SubmitRequest,
 };
 use data_profile::{PreviewProfile, PreviewProfileStatus, ProfileImportResult};
 use runtime_info::PreviewRuntimeInfo;
@@ -99,6 +99,38 @@ fn bridge_cancel(
     request: SessionRequest,
 ) -> Result<BridgeSession, String> {
     supervisor.cancel(request)
+}
+
+#[tauri::command]
+fn bridge_approve(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: ApproveRequest,
+) -> Result<BridgeSession, String> {
+    supervisor.approve(request)
+}
+
+#[tauri::command]
+fn bridge_answer_question(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: AnswerQuestionRequest,
+) -> Result<BridgeSession, String> {
+    supervisor.answer_question(request)
+}
+
+#[tauri::command]
+fn bridge_answer_mcp_interaction(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: AnswerMCPInteractionRequest,
+) -> Result<BridgeSession, String> {
+    supervisor.answer_mcp_interaction(request)
+}
+
+#[tauri::command]
+fn bridge_replay_pending_prompts(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: SessionRequest,
+) -> Result<BridgeSession, String> {
+    supervisor.replay_pending_prompts(request)
 }
 
 #[tauri::command]
@@ -202,6 +234,10 @@ fn main() {
             bridge_submit,
             bridge_attach_file,
             bridge_cancel,
+            bridge_approve,
+            bridge_answer_question,
+            bridge_answer_mcp_interaction,
+            bridge_replay_pending_prompts,
             bridge_start_events,
             preview_profile_status,
             preview_runtime_info,

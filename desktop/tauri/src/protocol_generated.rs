@@ -7,6 +7,27 @@ use serde_json::Value;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeAnswerQuestionRequest {
+    pub answers: Vec<BridgeAskAnswer>,
+    pub id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeApprovalRequest {
+    pub allow: bool,
+    pub id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeAskAnswer {
+    pub question_id: String,
+    pub selected: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeAttachFileRequest {
     pub path: String,
     pub session_id: String,
@@ -87,6 +108,14 @@ pub struct BridgeHistoryResponse {
     pub session: BridgeSession,
     pub start_index: u64,
     pub total_messages: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeMCPInteractionAnswerRequest {
+    pub action: String,
+    pub content: Option<Value>,
+    pub id: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

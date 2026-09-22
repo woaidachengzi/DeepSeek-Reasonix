@@ -52,6 +52,8 @@ interface CommandContract {
 //   bridge_rename_session,
 //   bridge_delete_session,
 //   bridge_session_snapshot, bridge_session_history, bridge_submit, bridge_cancel,
+//   bridge_approve, bridge_answer_question, bridge_answer_mcp_interaction,
+//   bridge_replay_pending_prompts,
 //   bridge_start_events, preview_profile_status, preview_runtime_info, import_stable_profile,
 //   provider_summary, set_default_model, workbench_sessions, remember_workbench_session,
 //   forget_workbench_session
@@ -122,6 +124,26 @@ const commands: CommandContract[] = [
     command: "bridge_cancel",
     argKeys: ["request"],
     description: "cancelTauriBridge() invokes bridge_cancel with { request }",
+  },
+  {
+    command: "bridge_approve",
+    argKeys: ["request"],
+    description: "approveTauriBridge() invokes bridge_approve with { request }",
+  },
+  {
+    command: "bridge_answer_question",
+    argKeys: ["request"],
+    description: "answerTauriQuestion() invokes bridge_answer_question with { request }",
+  },
+  {
+    command: "bridge_answer_mcp_interaction",
+    argKeys: ["request"],
+    description: "answerTauriMCPInteraction() invokes bridge_answer_mcp_interaction with { request }",
+  },
+  {
+    command: "bridge_replay_pending_prompts",
+    argKeys: ["request"],
+    description: "replayTauriPendingPrompts() invokes bridge_replay_pending_prompts with { request }",
   },
   {
     command: "bridge_start_events",

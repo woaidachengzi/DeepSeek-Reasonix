@@ -49,8 +49,12 @@ func (r *bridgeTestRuntime) AttachFile(path string) (desktopbridge.AttachmentVie
 	r.attachCalls++
 	return desktopbridge.AttachmentView{Path: ".reasonix/attachments/clipboard-test.txt", Name: filepath.Base(path), Size: 12}, nil
 }
-func (r *bridgeTestRuntime) Submit(input string) { r.submits = append(r.submits, input) }
-func (r *bridgeTestRuntime) Cancel()             { r.cancelCalls++ }
+func (r *bridgeTestRuntime) Submit(input string)                                       { r.submits = append(r.submits, input) }
+func (r *bridgeTestRuntime) Cancel()                                                   { r.cancelCalls++ }
+func (r *bridgeTestRuntime) Approve(string, bool)                                      {}
+func (r *bridgeTestRuntime) AnswerQuestion(string, []desktopbridge.AskAnswer) error    { return nil }
+func (r *bridgeTestRuntime) AnswerMCPInteraction(string, string, map[string]any) error { return nil }
+func (r *bridgeTestRuntime) ReplayPendingPrompts()                                     {}
 func (r *bridgeTestRuntime) Shutdown() error {
 	r.shutdownCalls++
 	return nil
@@ -480,6 +484,42 @@ func TestBridgeServerSubmitsAndCancelsOpenedRuntime(t *testing.T) {
 	}
 	if runtime.cancelCalls != 1 {
 		t.Fatalf("cancel calls = %d", runtime.cancelCalls)
+	}
+}
+
+func TestBridgeServerAnswersAndReplaysPromptCommands(t *testing.T) {
+	runtime := &bridgeTestRuntime{path: "/tmp/reasonix-session", state: "idle"}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		return runtime, nil
+	}))
+	bridge := newBridgeServer(testToken, "instance", manager)
+	handler := bridge.handler()
+
+	openRequest := httptest.NewRequest(http.MethodPost, "/v1/sessions:open", strings.NewReader(`{"sessionId":"tab-prompts"}`))
+	openRequest.Header.Set("Authorization", "Bearer "+testToken)
+	openRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(openRecorder, openRequest)
+	if openRecorder.Code != http.StatusOK {
+		t.Fatalf("open status = %d, body = %s", openRecorder.Code, openRecorder.Body.String())
+	}
+
+	cases := []struct {
+		path string
+		body string
+	}{
+		{path: "/v1/sessions/tab-prompts:approve", body: `{"id":"approval-1","allow":true}`},
+		{path: "/v1/sessions/tab-prompts:answer", body: `{"id":"ask-1","answers":[{"questionId":"q-1","selected":["yes"]}]}`},
+		{path: "/v1/sessions/tab-prompts:mcp", body: `{"id":"mcp-1","action":"decline"}`},
+		{path: "/v1/sessions/tab-prompts:replay-prompts", body: ``},
+	}
+	for _, tc := range cases {
+		request := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
+		request.Header.Set("Authorization", "Bearer "+testToken)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusAccepted {
+			t.Fatalf("%s status = %d, body = %s", tc.path, response.Code, response.Body.String())
+		}
 	}
 }
 

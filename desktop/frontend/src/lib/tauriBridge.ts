@@ -3,10 +3,14 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { formatAttachmentRefForSubmit } from "./attachmentDisplay";
 import type {
+  BridgeAnswerQuestionRequest,
+  BridgeApprovalRequest,
+  BridgeAskAnswer,
   BridgeAttachFileRequest,
   BridgeAttachment,
   BridgeEvent,
   BridgeHistoryMessage,
+  BridgeMCPInteractionAnswerRequest,
   BridgeProviderSummaryResponse,
   BridgeSession,
 } from "./bridgeProtocol.generated";
@@ -220,6 +224,38 @@ export async function cancelTauriBridge(sessionId: string): Promise<TauriBridgeS
   return invoke<TauriBridgeSession>("bridge_cancel", { request: { sessionId } });
 }
 
+export async function approveTauriBridge(sessionId: string, id: string, allow: boolean): Promise<TauriBridgeSession> {
+  requireTauri();
+  const request: BridgeApprovalRequest & { sessionId: string } = { sessionId, id, allow };
+  return invoke<TauriBridgeSession>("bridge_approve", { request });
+}
+
+export async function answerTauriQuestion(
+  sessionId: string,
+  id: string,
+  answers: readonly BridgeAskAnswer[],
+): Promise<TauriBridgeSession> {
+  requireTauri();
+  const request: BridgeAnswerQuestionRequest & { sessionId: string } = { sessionId, id, answers: [...answers] };
+  return invoke<TauriBridgeSession>("bridge_answer_question", { request });
+}
+
+export async function answerTauriMCPInteraction(
+  sessionId: string,
+  id: string,
+  action: "accept" | "decline" | "cancel",
+  content?: Record<string, unknown>,
+): Promise<TauriBridgeSession> {
+  requireTauri();
+  const request: BridgeMCPInteractionAnswerRequest & { sessionId: string } = { sessionId, id, action, content };
+  return invoke<TauriBridgeSession>("bridge_answer_mcp_interaction", { request });
+}
+
+export async function replayTauriPendingPrompts(sessionId: string): Promise<TauriBridgeSession> {
+  requireTauri();
+  return invoke<TauriBridgeSession>("bridge_replay_pending_prompts", { request: { sessionId } });
+}
+
 export async function startTauriBridgeEvents(afterSequence: number): Promise<void> {
   requireTauri();
   return invoke<void>("bridge_start_events", { afterSequence });
@@ -233,6 +269,90 @@ export function onTauriBridgeEvent(callback: (event: TauriBridgeEvent) => void):
 export function onTauriBridgeConnectionError(callback: (message: string) => void): Promise<UnlistenFn> {
   requireTauri();
   return listen<string>("bridge:connection-error", ({ payload }) => callback(payload));
+}
+
+export interface TauriApprovalPrompt {
+  kind: "approval";
+  id: string;
+  tool: string;
+  subject: string;
+  reason: string;
+}
+
+export interface TauriAskOption {
+  label: string;
+  description?: string;
+}
+
+export interface TauriAskQuestion {
+  id: string;
+  header?: string;
+  prompt: string;
+  options: TauriAskOption[];
+  multi: boolean;
+}
+
+export interface TauriAskPrompt {
+  kind: "ask";
+  id: string;
+  questions: TauriAskQuestion[];
+}
+
+export interface TauriMCPPrompt {
+  kind: "mcp";
+  id: string;
+  server: string;
+  mode: string;
+  message: string;
+  url?: string;
+}
+
+export type TauriPendingPrompt = TauriApprovalPrompt | TauriAskPrompt | TauriMCPPrompt;
+
+function objectValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+/** Converts the opaque v1 event payload into the three actionable prompt cards. */
+export function tauriPromptFromEvent(event: Pick<TauriBridgeEvent, "eventKind" | "payload">): TauriPendingPrompt | null {
+  const payload = event.payload;
+  const promptKind = stringValue(payload.promptKind);
+  const approval = objectValue(payload.approval);
+  if (approval && (event.eventKind === "approval_request" || promptKind === "approval" || promptKind === stringValue(approval.kind))) {
+    const id = stringValue(approval.id) || stringValue(payload.promptId) || stringValue(payload.itemId);
+    if (!id) return null;
+    return { kind: "approval", id, tool: stringValue(approval.tool) || "工具", subject: stringValue(approval.subject), reason: stringValue(approval.reason) };
+  }
+  const ask = objectValue(payload.ask);
+  if (ask && (event.eventKind === "ask_request" || promptKind === "ask")) {
+    const questions = Array.isArray(ask.questions) ? ask.questions.flatMap(raw => {
+      const question = objectValue(raw);
+      if (!question || !stringValue(question.id) || !stringValue(question.prompt)) return [];
+      const options = Array.isArray(question.options) ? question.options.flatMap(rawOption => {
+        const option = objectValue(rawOption);
+        if (!option || !stringValue(option.label)) return [];
+        return [{ label: stringValue(option.label), description: stringValue(option.description) || undefined }];
+      }) : [];
+      return [{ id: stringValue(question.id), header: stringValue(question.header) || undefined, prompt: stringValue(question.prompt), options, multi: question.multi === true }];
+    }) : [];
+    const id = stringValue(ask.id) || stringValue(payload.promptId) || stringValue(payload.itemId);
+    return id && questions.length > 0 ? { kind: "ask", id, questions } : null;
+  }
+  const mcp = objectValue(payload.mcpInteraction);
+  if (mcp && (event.eventKind === "mcp_interaction" || promptKind === "mcp")) {
+    const id = stringValue(mcp.id) || stringValue(payload.promptId) || stringValue(payload.itemId);
+    return id ? { kind: "mcp", id, server: stringValue(mcp.server) || "MCP 服务", mode: stringValue(mcp.mode), message: stringValue(mcp.message), url: stringValue(mcp.url) || undefined } : null;
+  }
+  return null;
+}
+
+export function tauriPromptAnsweredId(event: Pick<TauriBridgeEvent, "eventKind" | "payload">): string {
+  if (event.eventKind !== "prompt_answered") return "";
+  return stringValue(event.payload.promptId) || stringValue(event.payload.itemId);
 }
 
 // Pure helpers shared by TauriSessionPreview and tests.

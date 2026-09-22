@@ -13,6 +13,10 @@
     { "$ref": "#/$defs/attachFileRequest" },
     { "$ref": "#/$defs/attachmentResponse" },
     { "$ref": "#/$defs/submitRequest" },
+    { "$ref": "#/$defs/approvalRequest" },
+    { "$ref": "#/$defs/askAnswer" },
+    { "$ref": "#/$defs/answerQuestionRequest" },
+    { "$ref": "#/$defs/mcpInteractionAnswerRequest" },
     { "$ref": "#/$defs/sessionResponse" },
     { "$ref": "#/$defs/historyResponse" },
     { "$ref": "#/$defs/event" },
@@ -113,6 +117,47 @@
       "required": ["input"],
       "properties": {
         "input": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "approvalRequest": {
+      "title": "BridgeApprovalRequest",
+      "type": "object",
+      "required": ["id", "allow"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "allow": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "askAnswer": {
+      "title": "BridgeAskAnswer",
+      "type": "object",
+      "required": ["questionId", "selected"],
+      "properties": {
+        "questionId": { "type": "string", "minLength": 1 },
+        "selected": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "answerQuestionRequest": {
+      "title": "BridgeAnswerQuestionRequest",
+      "type": "object",
+      "required": ["id", "answers"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "answers": { "type": "array", "items": { "$ref": "#/$defs/askAnswer" } }
+      },
+      "additionalProperties": false
+    },
+    "mcpInteractionAnswerRequest": {
+      "title": "BridgeMCPInteractionAnswerRequest",
+      "type": "object",
+      "required": ["id", "action"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "action": { "enum": ["accept", "decline", "cancel"] },
+        "content": { "type": "object" }
       },
       "additionalProperties": false
     },

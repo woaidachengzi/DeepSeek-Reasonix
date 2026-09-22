@@ -10,6 +10,8 @@ import {
   tauriComposerInput,
   tauriMessageFrom,
   tauriEventSummary,
+  tauriPromptAnsweredId,
+  tauriPromptFromEvent,
 } from "../lib/tauriBridge";
 
 let passed = 0;
@@ -102,6 +104,17 @@ eq(
   "Please summarize these files\n\n@.reasonix/attachments/clipboard-a.txt\n\n@.reasonix/attachments/clipboard-b.pdf",
   "adds private attachment references to the submitted prompt",
 );
+
+console.log("\ntauri session preview — actionable prompt payloads");
+const approval = tauriPromptFromEvent({ eventKind: "approval_request", payload: { promptId: "ap-1", approval: { id: "ap-1", tool: "bash", subject: "go test", reason: "需要执行本地检查" } } });
+eq(approval?.kind, "approval", "approval event becomes an actionable prompt");
+eq(approval?.id, "ap-1", "approval keeps its correlation ID");
+const ask = tauriPromptFromEvent({ eventKind: "ask_request", payload: { promptKind: "ask", ask: { id: "ask-1", questions: [{ id: "q-1", prompt: "选择一个", options: [{ label: "A" }], multi: false }] } } });
+eq(ask?.kind, "ask", "ask event becomes an actionable prompt");
+eq(ask?.id, "ask-1", "ask keeps its correlation ID");
+const mcp = tauriPromptFromEvent({ eventKind: "mcp_interaction", payload: { mcpInteraction: { id: "mcp-1", server: "demo", mode: "url", message: "请打开链接" } } });
+eq(mcp?.kind, "mcp", "MCP event becomes an actionable prompt");
+eq(tauriPromptAnsweredId({ eventKind: "prompt_answered", payload: { promptId: "ask-1" } }), "ask-1", "prompt answer event clears the matching card");
 eq(
   tauriComposerInput("  ordinary prompt  ", []),
   "ordinary prompt",
