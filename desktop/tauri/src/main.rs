@@ -11,8 +11,8 @@ use bridge::{
     AnswerMCPInteractionRequest, AnswerQuestionRequest, ApproveRequest, AttachFileRequest,
     BridgeAttachment, BridgeDeleteSessionResponse, BridgeHistory, BridgeProviderSummaryResponse,
     BridgeSession, BridgeSetDefaultModelRequest, BridgeSnapshot, BridgeStatus, BridgeSupervisor,
-    BridgeWorkspaceListResponse, OpenSessionRequest, RenameSessionRequest, SessionRequest,
-    SubmitRequest, WorkspaceRequest,
+    BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse, OpenSessionRequest,
+    RenameSessionRequest, SessionRequest, SubmitRequest, WorkspaceFileRequest, WorkspaceRequest,
 };
 use data_profile::{PreviewProfile, PreviewProfileStatus, ProfileImportResult};
 use runtime_info::PreviewRuntimeInfo;
@@ -100,6 +100,14 @@ fn bridge_workspace(
     request: WorkspaceRequest,
 ) -> Result<BridgeWorkspaceListResponse, String> {
     supervisor.workspace(request)
+}
+
+#[tauri::command]
+fn bridge_workspace_file(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: WorkspaceFileRequest,
+) -> Result<BridgeWorkspaceFileResponse, String> {
+    supervisor.workspace_file(request)
 }
 
 #[tauri::command]
@@ -243,6 +251,7 @@ fn main() {
             bridge_submit,
             bridge_attach_file,
             bridge_workspace,
+            bridge_workspace_file,
             bridge_cancel,
             bridge_approve,
             bridge_answer_question,

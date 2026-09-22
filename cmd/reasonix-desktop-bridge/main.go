@@ -425,6 +425,9 @@ func (b *bridgeServer) sessionCommand(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(path, ":workspace"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":workspace"))
 		b.workspaceList(w, r)
+	case strings.HasSuffix(path, ":workspace-file"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":workspace-file"))
+		b.workspaceFile(w, r)
 	case strings.HasSuffix(path, ":cancel"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":cancel"))
 		b.cancel(w, r)
@@ -470,7 +473,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "provider_summary", "set_default_model", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "replay_pending_prompts", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "set_default_model", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "replay_pending_prompts", "idempotency", "shutdown"},
 	})
 }
 
@@ -565,11 +568,20 @@ type workspaceRequest struct {
 	Path string `json:"path"`
 }
 
+type workspaceFileRequest struct {
+	Path string `json:"path"`
+}
+
 type workspaceListResponse struct {
 	ProtocolVersion int                            `json:"protocolVersion"`
 	Path            string                         `json:"path"`
 	Entries         []desktopbridge.WorkspaceEntry `json:"entries"`
 	Truncated       bool                           `json:"truncated"`
+}
+
+type workspaceFileResponse struct {
+	ProtocolVersion int                                `json:"protocolVersion"`
+	Preview         desktopbridge.WorkspaceFilePreview `json:"preview"`
 }
 
 type attachmentResponse struct {
@@ -729,6 +741,23 @@ func (b *bridgeServer) workspaceList(w http.ResponseWriter, r *http.Request) {
 		Path:            workspace.Path,
 		Entries:         workspace.Entries,
 		Truncated:       workspace.Truncated,
+	})
+}
+
+func (b *bridgeServer) workspaceFile(w http.ResponseWriter, r *http.Request) {
+	var request workspaceFileRequest
+	if err := decodeJSONBody(w, r, 16<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid workspace file request")
+		return
+	}
+	preview, err := b.runtimes.WorkspaceFilePreview(r.PathValue("id"), request.Path)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to preview desktop bridge workspace file")
+		return
+	}
+	writeJSON(w, http.StatusOK, workspaceFileResponse{
+		ProtocolVersion: desktopbridge.ProtocolVersion,
+		Preview:         preview,
 	})
 }
 

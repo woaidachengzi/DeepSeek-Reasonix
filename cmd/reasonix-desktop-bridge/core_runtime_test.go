@@ -241,3 +241,31 @@ func TestControllerRuntimeListsBoundedWorkspaceEntries(t *testing.T) {
 		t.Fatal("workspace listing accepted a path outside the root")
 	}
 }
+
+func TestControllerRuntimePreviewsSafeWorkspaceFiles(t *testing.T) {
+	workspace := t.TempDir()
+	textPath := filepath.Join(workspace, "notes.txt")
+	if err := os.WriteFile(textPath, []byte("hello\nworld"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspace, "image.bin"), []byte{'a', 0, 'b'}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	controller, err := boot.Build(context.Background(), boot.Options{WorkspaceRoot: workspace, Sink: event.Discard})
+	if err != nil {
+		t.Fatalf("build controller: %v", err)
+	}
+	t.Cleanup(controller.Close)
+	runtime := &controllerRuntime{controller: controller}
+	preview, err := runtime.ReadWorkspaceFile("notes.txt")
+	if err != nil || preview.Path != "notes.txt" || preview.Body != "hello\nworld" || preview.Size != 11 || preview.Binary || preview.Truncated {
+		t.Fatalf("text preview = %#v, err = %v", preview, err)
+	}
+	binary, err := runtime.ReadWorkspaceFile("image.bin")
+	if err != nil || !binary.Binary || binary.Body != "" || binary.Size != 3 {
+		t.Fatalf("binary preview = %#v, err = %v", binary, err)
+	}
+	if _, err := runtime.ReadWorkspaceFile("../outside.txt"); err == nil {
+		t.Fatal("workspace file preview accepted a path outside the root")
+	}
+}

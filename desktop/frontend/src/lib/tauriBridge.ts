@@ -14,6 +14,7 @@ import type {
   BridgeProviderSummaryResponse,
   BridgeSession,
   BridgeWorkspaceListResponse,
+  BridgeWorkspaceFileResponse,
 } from "./bridgeProtocol.generated";
 
 export interface TauriBridgeStatus {
@@ -30,6 +31,7 @@ export type TauriProviderSummary = BridgeProviderSummaryResponse;
 export type TauriBridgeAttachment = BridgeAttachment;
 export type TauriWorkspaceEntry = BridgeWorkspaceListResponse["entries"][number];
 export type TauriWorkspaceList = BridgeWorkspaceListResponse;
+export type TauriWorkspaceFilePreview = BridgeWorkspaceFileResponse["preview"];
 
 /** Exposes only user-visible answer deltas; reasoning and other event text stay private. */
 export function tauriAssistantTextDelta(event: Pick<TauriBridgeEvent, "eventKind" | "payload">): string {
@@ -225,6 +227,12 @@ export async function attachTauriFile(sessionId: string, path: string): Promise<
 export async function tauriWorkspace(sessionId: string, path = ""): Promise<TauriWorkspaceList> {
   requireTauri();
   return invoke<TauriWorkspaceList>("bridge_workspace", { request: { sessionId, path } });
+}
+
+export async function tauriWorkspaceFile(sessionId: string, path: string): Promise<TauriWorkspaceFilePreview> {
+  requireTauri();
+  const response = await invoke<BridgeWorkspaceFileResponse>("bridge_workspace_file", { request: { sessionId, path } });
+  return response.preview;
 }
 
 export async function cancelTauriBridge(sessionId: string): Promise<TauriBridgeSession> {

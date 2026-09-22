@@ -86,6 +86,18 @@ type WorkspaceList struct {
 	Truncated bool             `json:"truncated"`
 }
 
+// WorkspaceFilePreview is a bounded, workspace-relative text preview. Binary
+// or invalid-UTF-8 files never expose their bytes to the renderer; callers can
+// still use Path to insert a safe @reference into the composer.
+type WorkspaceFilePreview struct {
+	Path      string `json:"path"`
+	Body      string `json:"body,omitempty"`
+	Size      int64  `json:"size"`
+	Truncated bool   `json:"truncated,omitempty"`
+	Binary    bool   `json:"binary,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
 // HistoryView is the latest bounded page of display-safe messages. StartIndex
 // and TotalMessages refer to the projected (not raw provider) transcript.
 type HistoryView struct {
@@ -109,6 +121,7 @@ type Runtime interface {
 	Delete() error
 	AttachFile(path string) (AttachmentView, error)
 	ListWorkspace(path string) (WorkspaceList, error)
+	ReadWorkspaceFile(path string) (WorkspaceFilePreview, error)
 	Submit(input string)
 	Cancel()
 	Approve(promptID string, allow bool)
@@ -371,6 +384,22 @@ func (m *RuntimeManager) Workspace(sessionID, path string) (WorkspaceList, error
 		return WorkspaceList{}, ErrSessionNotFound
 	}
 	return m.runtime.ListWorkspace(path)
+}
+
+// WorkspaceFilePreview reads a bounded, display-safe preview from the owned
+// session workspace. Keeping the manager lock across the call prevents a
+// session switch or shutdown from racing the path validation and read.
+func (m *RuntimeManager) WorkspaceFilePreview(sessionID, path string) (WorkspaceFilePreview, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return WorkspaceFilePreview{}, ErrClosed
+	}
+	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
+		return WorkspaceFilePreview{}, ErrSessionNotFound
+	}
+	return m.runtime.ReadWorkspaceFile(path)
 }
 
 // Cancel asks the bridge-owned runtime to stop foreground work. It is safe to

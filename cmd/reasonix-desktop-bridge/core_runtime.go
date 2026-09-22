@@ -1,13 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"reasonix/internal/agent"
 	"reasonix/internal/boot"
@@ -212,51 +215,63 @@ func (r *controllerRuntime) AttachFile(path string) (desktopbridge.AttachmentVie
 
 const bridgeWorkspaceEntryLimit = 200
 
-// ListWorkspace exposes the same bounded, one-level view used by the stable
-// desktop file-reference picker. Paths are always relative to the active
-// workspace and generated/vendor directories stay hidden.
-func (r *controllerRuntime) ListWorkspace(rel string) (desktopbridge.WorkspaceList, error) {
+const bridgeWorkspacePreviewLimit = 512 << 10
+
+// resolveWorkspacePath validates a renderer-supplied relative path and
+// resolves symlinks before any filesystem access. Returning the normalized
+// relative spelling separately keeps responses stable even when a path points
+// through a symlink that remains inside the workspace.
+func (r *controllerRuntime) resolveWorkspacePath(rel string) (string, string, string, error) {
 	root := strings.TrimSpace(r.controller.WorkspaceRoot())
 	if root == "" {
 		root = "."
 	}
 	base, err := filepath.Abs(root)
 	if err != nil {
-		return desktopbridge.WorkspaceList{}, err
+		return "", "", "", err
 	}
 	rawRel := strings.TrimSpace(strings.ReplaceAll(rel, "\\", "/"))
 	if strings.HasPrefix(rawRel, "/") || filepath.VolumeName(rawRel) != "" {
-		return desktopbridge.WorkspaceList{}, fmt.Errorf("%w: absolute paths are not allowed", desktopbridge.ErrInvalidWorkspacePath)
+		return "", "", "", fmt.Errorf("%w: absolute paths are not allowed", desktopbridge.ErrInvalidWorkspacePath)
 	}
 	cleanRel := strings.Trim(rawRel, "/")
 	if len(cleanRel) > 1024 || strings.ContainsRune(cleanRel, '\x00') {
-		return desktopbridge.WorkspaceList{}, desktopbridge.ErrInvalidWorkspacePath
+		return "", "", "", desktopbridge.ErrInvalidWorkspacePath
 	}
 	if cleanRel == "." {
 		cleanRel = ""
 	}
-	dir := base
+	candidate := base
 	if cleanRel != "" {
-		candidate := filepath.Join(base, filepath.FromSlash(cleanRel))
+		candidate = filepath.Join(base, filepath.FromSlash(cleanRel))
 		relative, relErr := filepath.Rel(base, candidate)
 		if relErr != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) {
-			return desktopbridge.WorkspaceList{}, fmt.Errorf("%w: path escapes root", desktopbridge.ErrInvalidWorkspacePath)
+			return "", "", "", fmt.Errorf("%w: path escapes root", desktopbridge.ErrInvalidWorkspacePath)
 		}
-		dir = candidate
 	}
 	resolvedBase, resolveErr := filepath.EvalSymlinks(base)
 	if resolveErr != nil {
-		return desktopbridge.WorkspaceList{}, resolveErr
+		return "", "", "", resolveErr
 	}
-	resolvedDir, resolveErr := filepath.EvalSymlinks(dir)
+	resolvedPath, resolveErr := filepath.EvalSymlinks(candidate)
 	if resolveErr != nil {
-		return desktopbridge.WorkspaceList{}, resolveErr
+		return "", "", "", resolveErr
 	}
-	resolvedRelative, resolveErr := filepath.Rel(resolvedBase, resolvedDir)
+	resolvedRelative, resolveErr := filepath.Rel(resolvedBase, resolvedPath)
 	if resolveErr != nil || resolvedRelative == ".." || strings.HasPrefix(resolvedRelative, ".."+string(os.PathSeparator)) {
-		return desktopbridge.WorkspaceList{}, fmt.Errorf("%w: symlink escapes root", desktopbridge.ErrInvalidWorkspacePath)
+		return "", "", "", fmt.Errorf("%w: symlink escapes root", desktopbridge.ErrInvalidWorkspacePath)
 	}
-	dir = resolvedDir
+	return base, resolvedPath, cleanRel, nil
+}
+
+// ListWorkspace exposes the same bounded, one-level view used by the stable
+// desktop file-reference picker. Paths are always relative to the active
+// workspace and generated/vendor directories stay hidden.
+func (r *controllerRuntime) ListWorkspace(rel string) (desktopbridge.WorkspaceList, error) {
+	_, dir, cleanRel, err := r.resolveWorkspacePath(rel)
+	if err != nil {
+		return desktopbridge.WorkspaceList{}, err
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return desktopbridge.WorkspaceList{}, err
@@ -295,6 +310,49 @@ func (r *controllerRuntime) ListWorkspace(rel string) (desktopbridge.WorkspaceLi
 		result = result[:bridgeWorkspaceEntryLimit]
 	}
 	return desktopbridge.WorkspaceList{Path: cleanRel, Entries: result, Truncated: truncated}, nil
+}
+
+// ReadWorkspaceFile returns at most bridgeWorkspacePreviewLimit bytes of a
+// regular text file. Binary and invalid-UTF-8 files are identified without
+// returning their contents to the renderer.
+func (r *controllerRuntime) ReadWorkspaceFile(rel string) (desktopbridge.WorkspaceFilePreview, error) {
+	_, resolvedPath, cleanRel, err := r.resolveWorkspacePath(rel)
+	if err != nil {
+		return desktopbridge.WorkspaceFilePreview{}, err
+	}
+	if cleanRel == "" {
+		return desktopbridge.WorkspaceFilePreview{}, fmt.Errorf("%w: a file path is required", desktopbridge.ErrInvalidWorkspacePath)
+	}
+	info, err := os.Stat(resolvedPath)
+	if err != nil {
+		return desktopbridge.WorkspaceFilePreview{}, fmt.Errorf("%w: file is unavailable", desktopbridge.ErrInvalidWorkspacePath)
+	}
+	if info.IsDir() || !info.Mode().IsRegular() {
+		return desktopbridge.WorkspaceFilePreview{}, fmt.Errorf("%w: path is not a regular file", desktopbridge.ErrInvalidWorkspacePath)
+	}
+	file, err := os.Open(resolvedPath)
+	if err != nil {
+		return desktopbridge.WorkspaceFilePreview{}, fmt.Errorf("%w: file cannot be opened", desktopbridge.ErrInvalidWorkspacePath)
+	}
+	defer file.Close()
+	buffer := make([]byte, bridgeWorkspacePreviewLimit+1)
+	read, readErr := io.ReadFull(file, buffer)
+	if readErr != nil && !errors.Is(readErr, io.EOF) && !errors.Is(readErr, io.ErrUnexpectedEOF) {
+		return desktopbridge.WorkspaceFilePreview{}, fmt.Errorf("read workspace file: %w", readErr)
+	}
+	truncated := read > bridgeWorkspacePreviewLimit
+	if truncated {
+		buffer = buffer[:bridgeWorkspacePreviewLimit]
+	} else {
+		buffer = buffer[:read]
+	}
+	preview := desktopbridge.WorkspaceFilePreview{Path: filepath.ToSlash(cleanRel), Size: info.Size(), Truncated: truncated}
+	if bytes.IndexByte(buffer, 0) != -1 || !utf8.Valid(buffer) {
+		preview.Binary = true
+		return preview, nil
+	}
+	preview.Body = string(buffer)
+	return preview, nil
 }
 
 func minInt(left, right int) int {

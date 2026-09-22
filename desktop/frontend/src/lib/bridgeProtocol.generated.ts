@@ -138,6 +138,24 @@ export interface BridgeWorkspaceEntry {
   path: string;
 }
 
+export interface BridgeWorkspaceFilePreview {
+  binary?: boolean;
+  body?: string;
+  error?: string;
+  path: string;
+  size: number;
+  truncated?: boolean;
+}
+
+export interface BridgeWorkspaceFileRequest {
+  path: string;
+}
+
+export interface BridgeWorkspaceFileResponse {
+  preview: BridgeWorkspaceFilePreview;
+  protocolVersion: number;
+}
+
 export interface BridgeWorkspaceListResponse {
   entries: BridgeWorkspaceEntry[];
   path: string;

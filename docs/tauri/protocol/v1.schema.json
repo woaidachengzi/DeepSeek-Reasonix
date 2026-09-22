@@ -14,6 +14,9 @@
     { "$ref": "#/$defs/attachmentResponse" },
     { "$ref": "#/$defs/workspaceRequest" },
     { "$ref": "#/$defs/workspaceListResponse" },
+    { "$ref": "#/$defs/workspaceFileRequest" },
+    { "$ref": "#/$defs/workspaceFilePreview" },
+    { "$ref": "#/$defs/workspaceFileResponse" },
     { "$ref": "#/$defs/submitRequest" },
     { "$ref": "#/$defs/approvalRequest" },
     { "$ref": "#/$defs/askAnswer" },
@@ -221,6 +224,39 @@
         "path": { "type": "string" },
         "entries": { "type": "array", "items": { "$ref": "#/$defs/workspaceEntry" } },
         "truncated": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceFileRequest": {
+      "title": "BridgeWorkspaceFileRequest",
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "workspaceFilePreview": {
+      "title": "BridgeWorkspaceFilePreview",
+      "type": "object",
+      "required": ["path", "size"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "body": { "type": "string" },
+        "size": { "type": "integer", "minimum": 0 },
+        "truncated": { "type": "boolean" },
+        "binary": { "type": "boolean" },
+        "error": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceFileResponse": {
+      "title": "BridgeWorkspaceFileResponse",
+      "type": "object",
+      "required": ["protocolVersion", "preview"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "preview": { "$ref": "#/$defs/workspaceFilePreview" }
       },
       "additionalProperties": false
     },

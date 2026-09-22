@@ -191,6 +191,30 @@ pub struct BridgeWorkspaceEntry {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceFilePreview {
+    pub binary: Option<bool>,
+    pub body: Option<String>,
+    pub error: Option<String>,
+    pub path: String,
+    pub size: u64,
+    pub truncated: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceFileRequest {
+    pub path: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceFileResponse {
+    pub preview: BridgeWorkspaceFilePreview,
+    pub protocol_version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeWorkspaceListResponse {
     pub entries: Vec<BridgeWorkspaceEntry>,
     pub path: String,

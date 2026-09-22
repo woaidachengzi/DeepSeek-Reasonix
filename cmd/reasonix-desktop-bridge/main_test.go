@@ -29,6 +29,7 @@ type bridgeTestRuntime struct {
 	cancelCalls   int
 	shutdownCalls int
 	workspace     desktopbridge.WorkspaceList
+	preview       desktopbridge.WorkspaceFilePreview
 }
 
 func (r *bridgeTestRuntime) SessionPath() string { return r.path }
@@ -54,6 +55,11 @@ func (r *bridgeTestRuntime) ListWorkspace(path string) (desktopbridge.WorkspaceL
 	listing := r.workspace
 	listing.Path = path
 	return listing, nil
+}
+func (r *bridgeTestRuntime) ReadWorkspaceFile(path string) (desktopbridge.WorkspaceFilePreview, error) {
+	preview := r.preview
+	preview.Path = path
+	return preview, nil
 }
 func (r *bridgeTestRuntime) Submit(input string)                                       { r.submits = append(r.submits, input) }
 func (r *bridgeTestRuntime) Cancel()                                                   { r.cancelCalls++ }
@@ -918,5 +924,37 @@ func TestBridgeServerListsWorkspaceEntries(t *testing.T) {
 	}
 	if response.ProtocolVersion != desktopbridge.ProtocolVersion || response.Path != "src" || len(response.Entries) != 1 || !response.Truncated {
 		t.Fatalf("workspace response = %#v", response)
+	}
+}
+
+func TestBridgeServerPreviewsWorkspaceFile(t *testing.T) {
+	runtime := &bridgeTestRuntime{path: "/tmp/reasonix-session", state: "idle", preview: desktopbridge.WorkspaceFilePreview{Body: "hello", Size: 5}}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		return runtime, nil
+	}))
+	bridge := newBridgeServer(testToken, "instance", manager)
+	handler := bridge.handler()
+	open := httptest.NewRequest(http.MethodPost, "/v1/sessions:open", strings.NewReader(`{"sessionId":"tab-preview"}`))
+	open.Header.Set("Authorization", "Bearer "+testToken)
+	open.Header.Set("Content-Type", "application/json")
+	openRec := httptest.NewRecorder()
+	handler.ServeHTTP(openRec, open)
+	if openRec.Code != http.StatusOK {
+		t.Fatalf("open status = %d, body = %s", openRec.Code, openRec.Body.String())
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v1/sessions/tab-preview:workspace-file", strings.NewReader(`{"path":"notes.txt"}`))
+	request.Header.Set("Authorization", "Bearer "+testToken)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("workspace file status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var response workspaceFileResponse
+	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	if response.ProtocolVersion != desktopbridge.ProtocolVersion || response.Preview.Path != "notes.txt" || response.Preview.Body != "hello" {
+		t.Fatalf("workspace file response = %#v", response)
 	}
 }
