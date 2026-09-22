@@ -2,8 +2,10 @@
 
 mod bridge;
 mod data_profile;
+mod menu;
 mod protocol_generated;
 mod runtime_info;
+mod tray;
 mod window_state;
 mod workbench_catalog;
 
@@ -236,10 +238,29 @@ fn forget_workbench_session(
     catalog.forget(&session_id)
 }
 
+#[tauri::command]
+fn platform_info() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "darwin"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else {
+        "linux"
+    }
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // When a second instance is launched, focus the existing window
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let window_state = PreviewWindowState::for_app(app)?;
             let workbench_catalog =
@@ -251,11 +272,113 @@ fn main() {
                 data_profile::configure_preview_profile(app).map_err(std::io::Error::other)?;
             let supervisor = BridgeSupervisor::from_environment(app.handle().clone());
             supervisor.start().map_err(std::io::Error::other)?;
+
+            let menu = menu::build_app_menu(app)
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
+            app.set_menu(menu)?;
+
+            tray::create_tray(app)
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
+
             app.manage(supervisor);
             app.manage(profile);
             app.manage(window_state);
             app.manage(workbench_catalog);
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            // macOS: hide to tray on close button instead of quitting
+            #[cfg(target_os = "macos")]
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // Prevent the default close behavior
+                api.prevent_close();
+                // Hide the window instead
+                let _ = window.hide();
+            }
+        })
+        .on_menu_event(|app, event| {
+            match event.id().as_ref() {
+                "quit" => {
+                    // Cmd+Q: actually quit the application
+                    app.exit(0);
+                }
+                "about" => {
+                    let version = env!("CARGO_PKG_VERSION");
+                    let stable = runtime_info::STABLE_VERSION;
+                    let commit = &runtime_info::STABLE_COMMIT[..8];
+                    let msg = format!(
+                        "Reasonix Tauri Preview\n\nVersion: {version}\nBased on Stable: {stable} ({commit})\nTauri: {}\nBridge Protocol: {}",
+                        tauri::VERSION,
+                        bridge::PROTOCOL_VERSION
+                    );
+                    let dialog = tauri_plugin_dialog::DialogExt::dialog(app);
+                    let _ = dialog
+                        .message(&msg)
+                        .title("About Reasonix")
+                        .kind(tauri_plugin_dialog::MessageDialogKind::Info)
+                        .blocking_show();
+                }
+                "check_updates" => {
+                    let version = env!("CARGO_PKG_VERSION");
+                    let msg = format!(
+                        "Current version: {version}\n\nAuto-update is not yet available for the Tauri preview.\nPlease check GitHub Releases for the latest version."
+                    );
+                    let dialog = tauri_plugin_dialog::DialogExt::dialog(app);
+                    let _ = dialog
+                        .message(&msg)
+                        .title("Check for Updates")
+                        .kind(tauri_plugin_dialog::MessageDialogKind::Info)
+                        .blocking_show();
+                }
+                "reload" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.eval("location.reload()");
+                    }
+                }
+                "force_reload" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.eval("location.reload()");
+                    }
+                }
+                "toggle_fullscreen" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.set_fullscreen(!window.is_fullscreen().unwrap_or(false));
+                    }
+                }
+                "zoom_in" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.eval("document.body.style.zoom = (parseFloat(document.body.style.zoom || '1') + 0.1).toString()");
+                    }
+                }
+                "zoom_out" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.eval("document.body.style.zoom = Math.max(0.5, parseFloat(document.body.style.zoom || '1') - 0.1).toString()");
+                    }
+                }
+                "zoom_reset" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.eval("document.body.style.zoom = '1'");
+                    }
+                }
+                "minimize" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.minimize();
+                    }
+                }
+                "hide" => {
+                    let _ = app.hide();
+                }
+                "hide_others" => {
+                    // macOS-only: hide other applications
+                    #[cfg(target_os = "macos")]
+                    {
+                        // Tauri doesn't expose hide_others directly; we rely on
+                        // the native menu accelerator to handle this via macOS.
+                        // The menu item with Cmd+Alt+H triggers the system behavior.
+                    }
+                }
+                _ => {}
+            }
         })
         .invoke_handler(tauri::generate_handler![
             bridge_status,
@@ -285,7 +408,8 @@ fn main() {
             import_stable_profile,
             workbench_sessions,
             remember_workbench_session,
-            forget_workbench_session
+            forget_workbench_session,
+            platform_info
         ])
         .build(tauri::generate_context!())
         .expect("failed to build Reasonix Tauri host");

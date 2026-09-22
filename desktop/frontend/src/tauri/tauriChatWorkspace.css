@@ -15,6 +15,18 @@
   font: 14px/1.5 var(--font-ui);
 }
 
+/* macOS: traffic light overlay titlebar requires drag regions and padding */
+.tauri-shell[data-platform="darwin"] {
+  --titlebar-height: 52px;
+  --traffic-light-left: 14px;
+  --traffic-light-width: 70px;
+}
+
+/* All other platforms: standard titlebar */
+.tauri-shell:not([data-platform="darwin"]) {
+  --titlebar-height: 0px;
+}
+
 .tauri-shell button,
 .tauri-shell textarea,
 .tauri-shell select {
@@ -26,11 +38,12 @@
 .tauri-shell button:disabled { cursor: not-allowed; opacity: .48; }
 
 .tauri-sidebar {
+  position: relative;
   display: flex;
   min-width: 0;
   min-height: 0;
   flex-direction: column;
-  padding: 42px 12px 12px;
+  padding: var(--titlebar-height) 12px 12px;
   border-right: 1px solid var(--border-soft);
   background: var(--sidebar-bg);
 }
@@ -42,6 +55,21 @@
   justify-content: space-between;
   padding: 0 10px;
   margin-bottom: 20px;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* macOS: drag region above sidebar content (traffic light area) */
+.tauri-shell[data-platform="darwin"] .tauri-sidebar::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--titlebar-height);
+  -webkit-app-region: drag;
+  app-region: drag;
+  pointer-events: auto;
 }
 
 .tauri-sidebar__brand img { display: block; width: 118px; max-height: 25px; object-fit: contain; object-position: left center; }
@@ -59,6 +87,8 @@
   color: var(--fg) !important;
   text-align: left;
   transition: background .15s ease, border-color .15s ease;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .tauri-sidebar__new:hover { border-color: color-mix(in srgb, var(--accent) 52%, var(--border)); background: color-mix(in srgb, var(--accent) 13%, var(--sidebar-bg)); }
@@ -82,6 +112,8 @@
   background: transparent;
   color: var(--fg-dim) !important;
   text-align: left;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .tauri-sidebar__session:hover:not(:disabled) { background: var(--sidebar-hover); color: var(--fg) !important; }
@@ -139,7 +171,20 @@
 .tauri-sidebar__diagnostics:hover { color: var(--fg) !important; }
 
 .tauri-main { position: relative; display: flex; min-width: 0; min-height: 0; flex-direction: column; }
-.tauri-topbar { display: flex; height: 64px; min-height: 64px; align-items: center; justify-content: space-between; gap: 18px; padding: 0 24px; border-bottom: 1px solid var(--border-soft); }
+.tauri-topbar { position: relative; display: flex; height: 64px; min-height: 64px; align-items: center; justify-content: space-between; gap: 18px; padding: 0 24px; border-bottom: 1px solid var(--border-soft); }
+
+/* macOS: drag region above topbar content */
+.tauri-shell[data-platform="darwin"] .tauri-topbar::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  -webkit-app-region: drag;
+  app-region: drag;
+  pointer-events: auto;
+}
 .tauri-topbar__title { display: grid; min-width: 0; gap: 1px; }
 .tauri-topbar__title-row { display: flex; min-width: 0; align-items: center; gap: 5px; }
 .tauri-topbar__title strong { min-width: 0; overflow: hidden; color: var(--fg); font-size: 13px; font-weight: 570; text-overflow: ellipsis; white-space: nowrap; }
@@ -176,7 +221,7 @@
 .tauri-model-picker select { width: 126px; min-width: 0; padding: 0; border: 0; outline: 0; appearance: none; background: transparent; color: var(--fg-dim); font-size: 11px; }
 .tauri-model-picker select option { color: var(--fg); background: var(--bg-elev); }
 .tauri-model-picker > svg { pointer-events: none; }
-.tauri-icon-button { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--fg-dim) !important; }
+.tauri-icon-button { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--fg-dim) !important; -webkit-app-region: no-drag; app-region: no-drag; }
 .tauri-icon-button:hover { border-color: var(--border-soft); background: var(--surface); color: var(--fg) !important; }
 .tauri-workspace-tree-button { color: var(--fg-faint) !important; }
 

@@ -313,3 +313,23 @@ func TestControllerRuntimeListsAndPreviewsGitChanges(t *testing.T) {
 		t.Fatalf("untracked detail = %#v, err = %v", untracked, err)
 	}
 }
+
+func TestBridgeSessionChangeDetailHandlesCreatedAndDeletedFiles(t *testing.T) {
+	workspace := t.TempDir()
+	created := filepath.Join(workspace, "created.txt")
+	if err := os.WriteFile(created, []byte("new\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	createdDetail, err := bridgeSessionChangeDetail(workspace, "created.txt", nil)
+	if err != nil || createdDetail.Source != "session" || !strings.Contains(createdDetail.Diff, "+new") || createdDetail.Added != 1 {
+		t.Fatalf("created session detail = %#v, err = %v", createdDetail, err)
+	}
+
+	deletedDetail, err := bridgeSessionChangeDetail(workspace, "deleted.txt", func() *string {
+		old := "old\n"
+		return &old
+	}())
+	if err != nil || deletedDetail.Source != "session" || !strings.Contains(deletedDetail.Diff, "-old") || deletedDetail.Removed != 1 {
+		t.Fatalf("deleted session detail = %#v, err = %v", deletedDetail, err)
+	}
+}

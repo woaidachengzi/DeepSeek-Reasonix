@@ -17,18 +17,40 @@
         "width": 1280,
         "height": 820,
         "minWidth": 900,
-        "minHeight": 620
+        "minHeight": 620,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "decorations": true,
+        "transparent": false
       }
     ],
     "security": {
       "capabilities": ["main-window"],
-      "csp": "default-src 'self'; connect-src 'self'; img-src 'self' asset: data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+      "csp": "default-src 'self'; connect-src 'self' https://github.com https://api.github.com; img-src 'self' asset: data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'"
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
     "icon": ["../build/appicon.png", "../build/darwin/icon.icns"],
-    "externalBin": ["binaries/reasonix-desktop-bridge"]
+    "externalBin": ["binaries/reasonix-desktop-bridge"],
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "signingIdentity": null,
+      "entitlements": "./Entitlements.plist",
+      "dmg": {
+        "appPosition": { "x": 180, "y": 170 },
+        "applicationFolderPosition": { "x": 480, "y": 170 },
+        "windowSize": { "width": 660, "height": 400 }
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": [
+        "https://github.com/esengine/DeepSeek-Reasonix/releases/download/desktop-v/latest.json"
+      ]
+    }
   }
 }

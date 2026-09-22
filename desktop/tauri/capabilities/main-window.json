@@ -3,5 +3,14 @@
   "identifier": "main-window",
   "description": "Least-privilege capability set for the local Reasonix window.",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:allow-open"]
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "core:tray:default",
+    "dialog:default",
+    "dialog:allow-open",
+    "dialog:allow-message",
+    "shell:allow-open",
+    "updater:default"
+  ]
 }

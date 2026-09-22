@@ -303,6 +303,11 @@ export function onTauriBridgeConnectionError(callback: (message: string) => void
   return listen<string>("bridge:connection-error", ({ payload }) => callback(payload));
 }
 
+export async function tauriPlatformInfo(): Promise<string> {
+  requireTauri();
+  return invoke<string>("platform_info");
+}
+
 export interface TauriApprovalPrompt {
   kind: "approval";
   id: string;

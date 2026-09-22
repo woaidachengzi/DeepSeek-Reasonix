@@ -208,10 +208,14 @@ pub struct BridgeWorkspaceChangeDetailResponse {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeWorkspaceChangeView {
+    pub can_session_revert: Option<bool>,
     pub git_status: Option<String>,
+    pub latest_prompt: Option<String>,
+    pub latest_time: Option<u64>,
     pub old_path: Option<String>,
     pub path: String,
     pub sources: Vec<String>,
+    pub turns: Option<Vec<u64>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -274,7 +274,11 @@
         "path": { "type": "string", "minLength": 1 },
         "oldPath": { "type": "string" },
         "sources": { "type": "array", "items": { "type": "string" } },
-        "gitStatus": { "type": "string" }
+        "gitStatus": { "type": "string" },
+        "turns": { "type": "array", "items": { "type": "integer" } },
+        "latestPrompt": { "type": "string" },
+        "latestTime": { "type": "integer" },
+        "canSessionRevert": { "type": "boolean" }
       },
       "additionalProperties": false
     },

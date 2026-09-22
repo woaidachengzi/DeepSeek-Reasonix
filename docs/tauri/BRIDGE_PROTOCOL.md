@@ -36,8 +36,8 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 附加文件 | `POST /v1/sessions/{sessionId}:attach` | `X-Reasonix-Request-ID` 去重 |
 | 工作区目录（逐层） | `POST /v1/sessions/{sessionId}:workspace` | 是 |
 | 工作区文件预览 | `POST /v1/sessions/{sessionId}:workspace-file` | 是；仅返回受限文本或二进制标记 |
-| 工作区 Git 变更 | `POST /v1/sessions/{sessionId}:workspace-changes` | 是 |
-| 工作区变更详情 | `POST /v1/sessions/{sessionId}:workspace-change-detail` | 是；仅返回受限 diff |
+| 工作区变更（Git + 本轮会话检查点） | `POST /v1/sessions/{sessionId}:workspace-changes` | 是；来源显式标记 |
+| 工作区变更详情 | `POST /v1/sessions/{sessionId}:workspace-change-detail` | 是；仅返回受限 diff，支持 Git 或会话检查点 |
 | 提交 | `POST /v1/sessions/{sessionId}:submit` | `X-Reasonix-Request-ID` 去重 |
 | 取消 | `POST /v1/sessions/{sessionId}:cancel` | 是 |
 | 工具审批 | `POST /v1/sessions/{sessionId}:approve` | 可安全重试 |

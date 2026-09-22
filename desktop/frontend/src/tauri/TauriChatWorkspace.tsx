@@ -45,6 +45,7 @@ import {
   tauriPromptAnsweredId,
   tauriPromptFromEvent,
   tauriProviderSummary,
+  tauriPlatformInfo,
   tauriPreviewProfileStatus,
   tauriPreviewRuntimeInfo,
   tauriSessionTitle,
@@ -84,13 +85,14 @@ function displayTitle(storedTitle: string | undefined, sessionId: string): strin
   return tauriSessionTitle(storedTitle, sessionLabel(sessionId));
 }
 
-function workspaceChangeLabel(status?: string): string {
+function workspaceChangeLabel(status?: string, sources?: string[]): string {
   const normalized = (status ?? "").trim();
   if (normalized === "??") return "新增";
   if (normalized.includes("R")) return "重命名";
   if (normalized.includes("D")) return "删除";
   if (normalized.includes("A")) return "新增";
   if (normalized.includes("M")) return "修改";
+  if (sources?.includes("session")) return "本轮修改";
   return normalized || "变更";
 }
 
@@ -227,6 +229,7 @@ export function TauriSessionPreview() {
   const conversationRef = useRef<HTMLDivElement>(null);
   const [activeQuestion, setActiveQuestion] = useState<number | null>(null);
   const switchingBlocked = Boolean(session && session.state !== "idle");
+  const [platform, setPlatform] = useState<string>("");
 
   const questions = useMemo<QuestionAnchor[]>(() => {
     if (!history) return [];
@@ -289,6 +292,7 @@ export function TauriSessionPreview() {
     void tauriPreviewRuntimeInfo().then(setRuntimeInfo).catch(error => setError(tauriMessageFrom(error)));
     void tauriProviderSummary().then(setProviderSummary).catch(error => setError(tauriMessageFrom(error)));
     void tauriWorkbenchSessions().then(setTabs).catch(error => setError(tauriMessageFrom(error)));
+    void tauriPlatformInfo().then(setPlatform).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -854,7 +858,7 @@ export function TauriSessionPreview() {
   const currentWorkspace = workspaceRoot || session?.workspaceRoot || "";
 
   return (
-    <main className="tauri-shell">
+    <main className="tauri-shell" data-platform={platform}>
       <aside className="tauri-sidebar" aria-label="会话导航">
         <div className="tauri-sidebar__brand"><img src={logoWordmark} alt="Reasonix" draggable={false} /><span>PREVIEW</span></div>
         <button className="tauri-sidebar__new" type="button" onClick={() => void createSession()} disabled={busy || switchingBlocked}>
@@ -1027,17 +1031,20 @@ export function TauriSessionPreview() {
               {workspaceTruncated && <p className="tauri-workspace-drawer__note">目录较大，仅显示前 200 项。</p>}
               <p className="tauri-workspace-drawer__hint">单击文件把 <code>@路径</code> 插入输入框，双击文件查看安全预览。</p>
             </> : <>
-              {workspaceChangesLoading ? <div className="tauri-workspace-drawer__loading">正在读取变更…</div> : workspaceChanges && !workspaceChanges.gitAvailable ? <div className="tauri-workspace-drawer__empty">当前工作区没有可用的 Git：{workspaceChanges.gitErr || "未检测到仓库"}</div> : workspaceChanges?.files.length ? <ul className="tauri-workspace-drawer__entries">
+              {workspaceChangesLoading ? <div className="tauri-workspace-drawer__loading">正在读取变更…</div> : workspaceChanges?.files.length ? <>
+                {workspaceChanges && !workspaceChanges.gitAvailable && <p className="tauri-workspace-drawer__note">Git 不可用，仅显示 Reasonix 本轮会话检查点：{workspaceChanges.gitErr || "未检测到仓库"}</p>}
+                <ul className="tauri-workspace-drawer__entries">
                 {workspaceChanges.files.map(change => <li key={change.path}><button type="button" className="tauri-workspace-entry tauri-workspace-change-entry" onClick={() => void loadWorkspaceChangeDetail(change.path)} title={`查看 ${change.path} 的差异`}>
-                  <span className="tauri-workspace-entry__icon"><GitBranch size={15} /></span><span className="tauri-workspace-entry__name">{change.path}</span><small>{workspaceChangeLabel(change.gitStatus)}</small>
+                  <span className="tauri-workspace-entry__icon"><GitBranch size={15} /></span><span className="tauri-workspace-entry__name">{change.path}</span><small>{workspaceChangeLabel(change.gitStatus, change.sources)}{change.sources?.length > 1 ? " · Git+本轮" : change.sources?.includes("session") ? ` · 第${change.turns && change.turns.length > 0 ? change.turns[change.turns.length - 1] : "?"}轮` : ""}</small>
                 </button></li>)}
-              </ul> : <div className="tauri-workspace-drawer__empty">当前没有 Git 变更。</div>}
+                </ul>
+              </> : <div className="tauri-workspace-drawer__empty">当前没有工作区变更。</div>}
               {workspaceChangeDetailLoading && <div className="tauri-workspace-preview__loading">正在读取差异…</div>}
               {workspaceChangeDetail && <section className="tauri-workspace-preview" aria-label="文件差异">
-                <header><div><strong>{workspaceChangeDetailPath}</strong><span>{workspaceChangeDetail.added ?? 0} 新增 · {workspaceChangeDetail.removed ?? 0} 删除{workspaceChangeDetail.truncated ? " · 已截断" : ""}</span></div><button type="button" className="tauri-diagnostic-action" onClick={() => insertWorkspacePath(workspaceChangeDetailPath)}><Eye size={13} /> 引用文件</button></header>
+                <header><div><strong>{workspaceChangeDetailPath}</strong><span>{workspaceChangeDetail.source === "session" ? "本轮会话" : "Git"} · {workspaceChangeDetail.added ?? 0} 新增 · {workspaceChangeDetail.removed ?? 0} 删除{workspaceChangeDetail.truncated ? " · 已截断" : ""}</span></div><button type="button" className="tauri-diagnostic-action" onClick={() => insertWorkspacePath(workspaceChangeDetailPath)}><Eye size={13} /> 引用文件</button></header>
                 {workspaceChangeDetail.binary ? <p className="tauri-workspace-preview__binary">这是二进制变更，无法显示文本差异。</p> : <pre>{workspaceChangeDetail.diff || "（没有可显示的文本差异）"}</pre>}
               </section>}
-              <p className="tauri-workspace-drawer__hint">变更来自当前工作区 Git 状态；点击文件查看受限差异。</p>
+              <p className="tauri-workspace-drawer__hint">变更来自 Git 或本轮会话检查点；点击文件查看受限差异。</p>
             </>}
           </div>
         </aside>

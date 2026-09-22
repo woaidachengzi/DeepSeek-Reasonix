@@ -98,14 +98,18 @@ type WorkspaceFilePreview struct {
 	Error     string `json:"error,omitempty"`
 }
 
-// WorkspaceChangeView is one current Git working-tree change. Paths remain
-// relative to the active workspace and source is intentionally explicit so a
-// future session-checkpoint source cannot be mistaken for Git state.
+// WorkspaceChangeView is one current workspace change. Sources identifies
+// whether it comes from Git, the active session checkpoint, or both. Paths
+// remain relative to the active workspace.
 type WorkspaceChangeView struct {
-	Path      string   `json:"path"`
-	OldPath   string   `json:"oldPath,omitempty"`
-	Sources   []string `json:"sources"`
-	GitStatus string   `json:"gitStatus,omitempty"`
+	Path             string   `json:"path"`
+	OldPath          string   `json:"oldPath,omitempty"`
+	Sources          []string `json:"sources"`
+	GitStatus        string   `json:"gitStatus,omitempty"`
+	Turns            []int    `json:"turns,omitempty"`
+	LatestPrompt     string   `json:"latestPrompt,omitempty"`
+	LatestTime       int64    `json:"latestTime,omitempty"`
+	CanSessionRevert bool     `json:"canSessionRevert,omitempty"`
 }
 
 type WorkspaceChanges struct {

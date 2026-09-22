@@ -151,10 +151,14 @@ export interface BridgeWorkspaceChangeDetailResponse {
 }
 
 export interface BridgeWorkspaceChangeView {
+  canSessionRevert?: boolean;
   gitStatus?: string;
+  latestPrompt?: string;
+  latestTime?: number;
   oldPath?: string;
   path: string;
   sources: string[];
+  turns?: number[];
 }
 
 export interface BridgeWorkspaceChanges {

@@ -6,12 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"reasonix/internal/desktopbridge"
+	"reasonix/internal/diff"
 	"reasonix/internal/gitcmd"
 )
 
@@ -28,78 +32,254 @@ func (r *controllerRuntime) WorkspaceChanges() desktopbridge.WorkspaceChanges {
 	if err != nil {
 		return desktopbridge.WorkspaceChanges{Files: []desktopbridge.WorkspaceChangeView{}, GitAvailable: false, GitErr: err.Error()}
 	}
-	entries, err := bridgeGitStatus(base)
-	if err != nil {
-		return desktopbridge.WorkspaceChanges{Files: []desktopbridge.WorkspaceChangeView{}, GitAvailable: false, GitErr: err.Error()}
+
+	type accumulator struct {
+		view       desktopbridge.WorkspaceChangeView
+		hasSession bool
+		hasGit     bool
 	}
-	files := make([]desktopbridge.WorkspaceChangeView, 0, len(entries))
+	changes := map[string]*accumulator{}
+	add := func(path string) *accumulator {
+		rel := bridgeWorkspaceRel(base, path)
+		if rel == "" {
+			return nil
+		}
+		if changes[rel] == nil {
+			changes[rel] = &accumulator{view: desktopbridge.WorkspaceChangeView{Path: rel}}
+		}
+		return changes[rel]
+	}
+
+	for _, meta := range r.controller.Checkpoints() {
+		for _, path := range meta.Paths {
+			acc := add(path)
+			if acc == nil {
+				continue
+			}
+			acc.hasSession = true
+			if len(acc.view.Turns) == 0 || acc.view.Turns[len(acc.view.Turns)-1] != meta.Turn {
+				acc.view.Turns = append(acc.view.Turns, meta.Turn)
+			}
+			if meta.Time.UnixMilli() >= acc.view.LatestTime {
+				acc.view.LatestPrompt = meta.Prompt
+				acc.view.LatestTime = meta.Time.UnixMilli()
+			}
+		}
+	}
+
+	out := desktopbridge.WorkspaceChanges{Files: []desktopbridge.WorkspaceChangeView{}, GitAvailable: true}
+	entries, gitErr := bridgeGitStatus(base)
+	if gitErr != nil {
+		out.GitAvailable = false
+		out.GitErr = gitErr.Error()
+	} else {
+		out.GitBranch = bridgeGitBranch(base)
+	}
 	for _, entry := range entries {
-		files = append(files, desktopbridge.WorkspaceChangeView{
-			Path:      entry.Path,
-			OldPath:   entry.OldPath,
-			Sources:   []string{"git"},
-			GitStatus: entry.Status,
-		})
+		acc := add(entry.Path)
+		if acc == nil {
+			continue
+		}
+		acc.hasGit = true
+		acc.view.GitStatus = entry.Status
+		acc.view.OldPath = bridgeWorkspaceRel(base, entry.OldPath)
 	}
-	return desktopbridge.WorkspaceChanges{
-		Files:        files,
-		GitAvailable: true,
-		GitBranch:    bridgeGitBranch(base),
+
+	for _, acc := range changes {
+		if acc.hasSession {
+			acc.view.Sources = append(acc.view.Sources, "session")
+			if state, ok := r.controller.CheckpointFileState(acc.view.Path); ok && state.Owned {
+				acc.view.CanSessionRevert = true
+			}
+		}
+		if acc.hasGit {
+			acc.view.Sources = append(acc.view.Sources, "git")
+		}
+		out.Files = append(out.Files, acc.view)
 	}
+	sort.Slice(out.Files, func(i, j int) bool {
+		if len(out.Files[i].Sources) != len(out.Files[j].Sources) {
+			return len(out.Files[i].Sources) > len(out.Files[j].Sources)
+		}
+		return strings.ToLower(out.Files[i].Path) < strings.ToLower(out.Files[j].Path)
+	})
+	return out
 }
 
 func (r *controllerRuntime) WorkspaceChangeDetail(rel string) (desktopbridge.WorkspaceChangeDetail, error) {
-	base, _, cleanRel, err := r.resolveWorkspacePath(rel)
+	base, cleanRel, err := r.resolveWorkspaceChangePath(rel)
 	if err != nil {
 		return desktopbridge.WorkspaceChangeDetail{}, err
 	}
 	if cleanRel == "" {
 		return desktopbridge.WorkspaceChangeDetail{}, fmt.Errorf("%w: a changed file path is required", desktopbridge.ErrInvalidWorkspacePath)
 	}
-	entries, err := bridgeGitStatus(base)
-	if err != nil {
-		return desktopbridge.WorkspaceChangeDetail{}, err
-	}
-	var entry *bridgeGitStatusEntry
-	for i := range entries {
-		if entries[i].Path == filepath.ToSlash(cleanRel) {
-			entry = &entries[i]
-			break
+	entries, gitErr := bridgeGitStatus(base)
+	if gitErr == nil {
+		var entry *bridgeGitStatusEntry
+		for i := range entries {
+			if entries[i].Path == filepath.ToSlash(cleanRel) {
+				entry = &entries[i]
+				break
+			}
+		}
+		if entry != nil {
+			args := []string{"-C", base, "diff", "--no-ext-diff", "--no-textconv", "--relative", "HEAD", "--", filepath.FromSlash(cleanRel)}
+			allowExitOne := false
+			if entry.Status == "??" {
+				// Keep the diff operands relative to -C base so the user's absolute
+				// workspace path never crosses the bridge in a patch header.
+				args = []string{"-C", base, "diff", "--no-ext-diff", "--no-textconv", "--no-index", "--", "/dev/null", filepath.FromSlash(cleanRel)}
+				allowExitOne = true
+			}
+			raw, truncated, err := bridgeGitDiff(args, allowExitOne)
+			if err != nil {
+				return desktopbridge.WorkspaceChangeDetail{}, err
+			}
+			if truncated {
+				return desktopbridge.WorkspaceChangeDetail{Source: "git", Truncated: true}, nil
+			}
+			patch := strings.TrimSpace(string(raw))
+			if patch != "" {
+				added, removed := bridgeTallyUnifiedPatch(patch)
+				return desktopbridge.WorkspaceChangeDetail{
+					Diff:    patch,
+					Source:  "git",
+					Added:   added,
+					Removed: removed,
+					Binary:  bytes.Contains(raw, []byte("Binary files ")) || bytes.Contains(raw, []byte("GIT binary patch")),
+				}, nil
+			}
 		}
 	}
-	if entry == nil {
-		return desktopbridge.WorkspaceChangeDetail{}, nil
+	if state, ok := r.controller.CheckpointFileState(cleanRel); ok {
+		return bridgeSessionChangeDetail(base, cleanRel, state.Content)
 	}
+	if gitErr != nil {
+		return desktopbridge.WorkspaceChangeDetail{}, gitErr
+	}
+	return desktopbridge.WorkspaceChangeDetail{}, nil
+}
 
-	args := []string{"-C", base, "diff", "--no-ext-diff", "--no-textconv", "--relative", "HEAD", "--", filepath.FromSlash(cleanRel)}
-	allowExitOne := false
-	if entry.Status == "??" {
-		// Git does not include untracked files in `diff HEAD`; --no-index gives
-		// the same create patch while keeping the requested path argument literal.
-		// Keep the diff operands relative to -C base; using the resolved absolute
-		// path would leak the user's workspace location in Git's header.
-		args = []string{"-C", base, "diff", "--no-ext-diff", "--no-textconv", "--no-index", "--", "/dev/null", filepath.FromSlash(cleanRel)}
-		allowExitOne = true
+// resolveWorkspaceChangePath is like resolveWorkspacePath but also accepts a
+// deleted checkpoint file. It keeps the lexical root guard and evaluates the
+// parent directory when the target no longer exists.
+func (r *controllerRuntime) resolveWorkspaceChangePath(rel string) (string, string, error) {
+	root := strings.TrimSpace(r.controller.WorkspaceRoot())
+	if root == "" {
+		root = "."
 	}
-	raw, truncated, err := bridgeGitDiff(args, allowExitOne)
+	base, err := filepath.Abs(root)
+	if err != nil {
+		return "", "", err
+	}
+	raw := strings.TrimSpace(strings.ReplaceAll(rel, "\\", "/"))
+	if raw == "" || strings.HasPrefix(raw, "/") || filepath.VolumeName(raw) != "" {
+		return "", "", fmt.Errorf("%w: relative file path is required", desktopbridge.ErrInvalidWorkspacePath)
+	}
+	clean := filepath.Clean(filepath.FromSlash(raw))
+	relative, err := filepath.Rel(base, filepath.Join(base, clean))
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) || relative == "." {
+		return "", "", fmt.Errorf("%w: path escapes root", desktopbridge.ErrInvalidWorkspacePath)
+	}
+	resolvedBase, err := filepath.EvalSymlinks(base)
+	if err != nil {
+		return "", "", err
+	}
+	candidate := filepath.Join(base, clean)
+	check := candidate
+	if _, statErr := os.Lstat(candidate); os.IsNotExist(statErr) {
+		check = filepath.Dir(candidate)
+	}
+	resolved, err := filepath.EvalSymlinks(check)
+	if err != nil {
+		return "", "", err
+	}
+	inside, err := filepath.Rel(resolvedBase, resolved)
+	if err != nil || inside == ".." || strings.HasPrefix(inside, ".."+string(os.PathSeparator)) {
+		return "", "", fmt.Errorf("%w: path escapes root", desktopbridge.ErrInvalidWorkspacePath)
+	}
+	return base, filepath.ToSlash(relative), nil
+}
+
+func bridgeWorkspaceRel(base, path string) string {
+	raw := strings.TrimSpace(strings.ReplaceAll(path, "\\", "/"))
+	if raw == "" {
+		return ""
+	}
+	var candidate string
+	if filepath.IsAbs(filepath.FromSlash(raw)) || filepath.VolumeName(raw) != "" {
+		candidate = filepath.FromSlash(raw)
+	} else {
+		candidate = filepath.Join(base, filepath.FromSlash(raw))
+	}
+	rel, err := filepath.Rel(base, candidate)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return ""
+	}
+	return filepath.ToSlash(rel)
+}
+
+func bridgeSessionChangeDetail(base, rel string, old *string) (desktopbridge.WorkspaceChangeDetail, error) {
+	path := filepath.Join(base, filepath.FromSlash(rel))
+	oldText := ""
+	if old != nil {
+		if len(*old) > bridgeWorkspaceChangeLimit {
+			return desktopbridge.WorkspaceChangeDetail{Source: "session", Truncated: true}, nil
+		}
+		oldText = *old
+	}
+	newText, exists, truncated, err := bridgeCurrentWorkspaceText(path)
 	if err != nil {
 		return desktopbridge.WorkspaceChangeDetail{}, err
 	}
 	if truncated {
-		return desktopbridge.WorkspaceChangeDetail{Source: "git", Truncated: true}, nil
+		return desktopbridge.WorkspaceChangeDetail{Source: "session", Truncated: true}, nil
 	}
-	patch := strings.TrimSpace(string(raw))
-	if patch == "" {
-		return desktopbridge.WorkspaceChangeDetail{}, nil
+	kind := diff.Modify
+	if old == nil {
+		kind = diff.Create
+	} else if !exists {
+		kind = diff.Delete
 	}
-	added, removed := bridgeTallyUnifiedPatch(patch)
-	return desktopbridge.WorkspaceChangeDetail{
-		Diff:    patch,
-		Source:  "git",
-		Added:   added,
-		Removed: removed,
-		Binary:  bytes.Contains(raw, []byte("Binary files ")) || bytes.Contains(raw, []byte("GIT binary patch")),
-	}, nil
+	change := diff.Build(rel, oldText, newText, kind)
+	if len(change.Diff) > bridgeWorkspaceChangeLimit {
+		return desktopbridge.WorkspaceChangeDetail{Source: "session", Truncated: true}, nil
+	}
+	return desktopbridge.WorkspaceChangeDetail{Diff: change.Diff, Source: "session", Added: change.Added, Removed: change.Removed, Binary: change.Binary}, nil
+}
+
+func bridgeCurrentWorkspaceText(path string) (string, bool, bool, error) {
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return "", false, false, nil
+	}
+	if err != nil {
+		return "", false, false, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		target, err := os.Readlink(path)
+		return target, true, false, err
+	}
+	if !info.Mode().IsRegular() {
+		return "", true, false, fmt.Errorf("workspace change path %q is not a regular file", path)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return "", false, false, err
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(io.LimitReader(f, bridgeWorkspaceChangeLimit+1))
+	if err != nil {
+		return "", false, false, err
+	}
+	if len(raw) > bridgeWorkspaceChangeLimit {
+		return "", true, true, nil
+	}
+	if !utf8.Valid(raw) {
+		return "\x00", true, false, nil
+	}
+	return string(raw), true, false, nil
 }
 
 func bridgeGitStatus(base string) ([]bridgeGitStatusEntry, error) {
