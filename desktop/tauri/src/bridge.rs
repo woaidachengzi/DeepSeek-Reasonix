@@ -963,12 +963,43 @@ fn parse_json_response(response: &[u8]) -> Result<Value, String> {
         })
         .transpose()?;
     let raw = decoded_body.as_deref().unwrap_or(body);
-    // Trim leading/trailing whitespace before parsing to handle responses
-    // that may have extra bytes or formatting issues.
-    let trimmed = raw.iter().position(|&b| b == b'{' || b == b'[').map_or(raw, |start| {
-        &raw[start..]
-    });
-    serde_json::from_slice(trimmed).map_err(display_error)
+    // Some local proxies prepend diagnostics or append a separator after the
+    // JSON body. Extract exactly the first balanced object/array so neither
+    // form produces serde_json's misleading "trailing characters" error.
+    serde_json::from_slice(first_json_value(raw)).map_err(display_error)
+}
+
+fn first_json_value(raw: &[u8]) -> &[u8] {
+    let Some(start) = raw.iter().position(|&b| b == b'{' || b == b'[') else {
+        return raw;
+    };
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut escaped = false;
+    for (offset, &byte) in raw[start..].iter().enumerate() {
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match byte {
+            b'"' => in_string = true,
+            b'{' | b'[' => depth += 1,
+            b'}' | b']' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return &raw[start..=start + offset];
+                }
+            }
+            _ => {}
+        }
+    }
+    &raw[start..]
 }
 
 fn decode_chunked_body(mut body: &[u8]) -> Result<Vec<u8>, String> {
@@ -1266,6 +1297,14 @@ mod tests {
         let response = b"HTTP/1.1 202 Accepted\r\nContent-Type: application/json\r\n\r\n{\"protocolVersion\":1}";
         assert_eq!(parse_json_response(response).unwrap()["protocolVersion"], 1);
         assert!(parse_json_response(b"HTTP/1.1 401 Unauthorized\r\n\r\n{}").is_err());
+    }
+
+    #[test]
+    fn response_parser_ignores_diagnostic_prefix_and_trailing_separator() {
+        let response = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\nproxy: {\"protocolVersion\":1,\"message\":\"brace } in string\"}\ntrailing diagnostics";
+        let parsed = parse_json_response(response).expect("JSON surrounded by diagnostics");
+        assert_eq!(parsed["protocolVersion"], 1);
+        assert_eq!(parsed["message"], "brace } in string");
     }
 
     #[test]

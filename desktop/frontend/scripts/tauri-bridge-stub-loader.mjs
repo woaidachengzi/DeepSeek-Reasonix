@@ -139,6 +139,35 @@ export function cancelTauriBridge(sessionId) {
   return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle" });
 }
 
+export function approveTauriBridge(sessionId, id, allow) {
+  record("bridge_approve", { sessionId, id, allow });
+  return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "running" });
+}
+
+export function answerTauriQuestion(sessionId, id, answers) {
+  record("bridge_answer_question", { sessionId, id, answers });
+  return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "running" });
+}
+
+export function answerTauriMCPInteraction(sessionId, id, action, content) {
+  record("bridge_answer_mcp_interaction", { sessionId, id, action, content });
+  return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "running" });
+}
+
+export function replayTauriPendingPrompts(sessionId) {
+  record("bridge_replay_pending_prompts", { sessionId });
+  return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle" });
+}
+
+export function tauriPromptFromEvent() { return null; }
+export function tauriPromptAnsweredId() { return ""; }
+export function tauriPlatformInfo() { return Promise.resolve("darwin"); }
+
+export function tauriWorkspace() { return Promise.resolve({ path: "", entries: [], truncated: false }); }
+export function tauriWorkspaceFile() { return Promise.resolve({ path: "", body: "", size: 0 }); }
+export function tauriWorkspaceChanges() { return Promise.resolve({ files: [], gitAvailable: false }); }
+export function tauriWorkspaceChangeDetail() { return Promise.resolve({ source: "" }); }
+
 export function startTauriBridgeEvents() { record("bridge_start_events"); return Promise.resolve(); }
 export function onTauriBridgeEvent() { return Promise.resolve(() => {}); }
 export function onTauriBridgeConnectionError() { return Promise.resolve(() => {}); }
