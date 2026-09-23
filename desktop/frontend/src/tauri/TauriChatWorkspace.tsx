@@ -1,6 +1,7 @@
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Eye, FileText, FolderOpen, FolderTree, GitBranch, MessageSquare, Paperclip, Pencil, Plus, Settings, Sparkles, Square, Trash2, X } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
+import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { Markdown } from "../components/Markdown";
 import { QuestionJumpBar } from "../components/QuestionJumpBar";
 import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
@@ -348,6 +349,23 @@ export function TauriSessionPreview() {
           if (event.eventKind === "turn_done") {
             setPendingPrompt(null);
             setPromptSelections({});
+            // Send notification if window is not focused
+            void (async () => {
+              try {
+                const hasPermission = await isPermissionGranted();
+                if (!hasPermission) {
+                  const permission = await requestPermission();
+                  if (permission !== "granted") return;
+                }
+                const failure = tauriTurnFailure(event);
+                sendNotification({
+                  title: "Reasonix",
+                  body: failure ? `生成失败：${failure}` : "回复已完成",
+                });
+              } catch {
+                // Notification is best-effort
+              }
+            })();
             void (async () => {
               // Refresh state and transcript independently. A transcript parse
               // failure must not leave a completed turn marked as running.

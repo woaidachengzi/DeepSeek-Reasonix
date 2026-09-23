@@ -261,6 +261,7 @@ fn main() {
             }
         }))
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let window_state = PreviewWindowState::for_app(app)?;
             let workbench_catalog =

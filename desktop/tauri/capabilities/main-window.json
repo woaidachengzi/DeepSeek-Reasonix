@@ -11,6 +11,7 @@
     "dialog:allow-open",
     "dialog:allow-message",
     "shell:allow-open",
-    "updater:default"
+    "updater:default",
+    "notification:default"
   ]
 }
