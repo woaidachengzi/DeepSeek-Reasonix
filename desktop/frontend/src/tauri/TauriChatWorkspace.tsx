@@ -380,7 +380,9 @@ export function TauriSessionPreview() {
     let offRestored: UnlistenFn | undefined;
     let offResync: UnlistenFn | undefined;
     let resyncRequested = false;
-    let streamDisconnected = false;
+    let streamDisconnected = true;
+    let startRequested = false;
+    setStreamReady(false);
     setHistoryLoading(true);
     setHistoryError("");
 
@@ -499,7 +501,7 @@ export function TauriSessionPreview() {
         });
         if (!active) { offError(); return; }
         offRestored = await onTauriBridgeConnectionRestored(() => {
-          if (!active || resyncRequested) return;
+          if (!active || resyncRequested || !startRequested) return;
           streamDisconnected = false;
           setStreamReady(true);
           setError(previous => previous.startsWith("本地桥接事件流：") ? "" : previous);
@@ -515,6 +517,7 @@ export function TauriSessionPreview() {
           setStreamRevision(previous => previous + 1);
         });
         if (!active) { offResync(); return; }
+        startRequested = true;
         await startTauriBridgeEvents(snapshot.sequence);
         if (!active || resyncRequested) return;
         // Re-emit an approval/ask/MCP prompt after the listener is live. This
@@ -528,7 +531,6 @@ export function TauriSessionPreview() {
         }
         if (!active) return;
         if (!streamDisconnected && turnEpochRef.current === replayEpoch) setError("");
-        setStreamReady(!streamDisconnected);
         const historyEpoch = turnEpochRef.current;
         try {
           const latestHistory = await tauriBridgeHistory(session.id);

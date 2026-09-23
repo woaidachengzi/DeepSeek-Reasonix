@@ -1117,13 +1117,18 @@ fn forward_events(
     stop: Arc<AtomicBool>,
 ) {
     let mut disconnected = false;
+    let mut connected_once = false;
     while !stop.load(Ordering::Acquire) {
         match open_event_stream(address, &token, after_sequence) {
             Ok(mut reader) => {
-                if disconnected {
-                    let _ = app.emit("bridge:connection-restored", ());
-                    disconnected = false;
+                if stop.load(Ordering::Acquire) {
+                    break;
                 }
+                if !connected_once || disconnected {
+                    let _ = app.emit("bridge:connection-restored", ());
+                }
+                connected_once = true;
+                disconnected = false;
                 while !stop.load(Ordering::Acquire) {
                     let mut line = String::new();
                     match reader.read_line(&mut line) {

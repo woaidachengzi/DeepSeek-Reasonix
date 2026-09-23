@@ -135,11 +135,20 @@ async function main() {
 
   // Keep another session open while deleting an inactive row. The bridge owns
   // one controller, so the delete flow must restore the previously open row.
+  (globalThis as unknown as { __holdStreamReady?: boolean }).__holdStreamReady = true;
   ok(clickSession("保留会话"), "the other conversation can be opened first");
   await act(async () => {
     await settle();
     await settle();
   });
+  ok(bridgeCalls().some(call => call.name === "bridge_start_events"), "opening a conversation starts the event subscription");
+  ok(document.querySelector<HTMLTextAreaElement>("textarea")?.disabled, "subscription command completion alone does not enable sending");
+  await act(async () => {
+    (globalThis as unknown as { __emitBridgeRestored?: () => void }).__emitBridgeRestored?.();
+    await settle();
+  });
+  ok(!document.querySelector<HTMLTextAreaElement>("textarea")?.disabled, "confirmed initial event connection enables sending");
+  (globalThis as unknown as { __holdStreamReady?: boolean }).__holdStreamReady = false;
   ok(text().includes("const answer = 42"), "the Tauri entry renders historical Markdown without a localization crash");
 
   // Step 3: confirming switches to the target, deletes it, removes the host

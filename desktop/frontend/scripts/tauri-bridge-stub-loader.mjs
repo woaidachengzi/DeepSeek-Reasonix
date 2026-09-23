@@ -177,7 +177,12 @@ export function tauriWorkspaceFile() { return Promise.resolve({ path: "", body: 
 export function tauriWorkspaceChanges() { return Promise.resolve({ files: [], gitAvailable: false }); }
 export function tauriWorkspaceChangeDetail() { return Promise.resolve({ source: "" }); }
 
-export function startTauriBridgeEvents() { record("bridge_start_events"); if (globalThis.__outageOnStart) globalThis.__emitBridgeError?.("temporarily unavailable"); return Promise.resolve(); }
+export function startTauriBridgeEvents() {
+  record("bridge_start_events");
+  if (globalThis.__outageOnStart) globalThis.__emitBridgeError?.("temporarily unavailable");
+  else if (!globalThis.__holdStreamReady) queueMicrotask(() => globalThis.__emitBridgeRestored?.());
+  return Promise.resolve();
+}
 export function onTauriBridgeEvent(callback) { globalThis.__emitBridgeEvent = callback; return Promise.resolve(() => { if (globalThis.__emitBridgeEvent === callback) globalThis.__emitBridgeEvent = undefined; }); }
 export function onTauriBridgeConnectionError(callback) { globalThis.__emitBridgeError = callback; return Promise.resolve(() => { if (globalThis.__emitBridgeError === callback) globalThis.__emitBridgeError = undefined; }); }
 export function onTauriBridgeConnectionRestored(callback) { globalThis.__emitBridgeRestored = callback; return Promise.resolve(() => { if (globalThis.__emitBridgeRestored === callback) globalThis.__emitBridgeRestored = undefined; }); }
