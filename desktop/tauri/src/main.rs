@@ -322,7 +322,7 @@ fn main() {
                 "check_updates" => {
                     let version = env!("CARGO_PKG_VERSION");
                     let msg = format!(
-                        "Current version: {version}\n\nAuto-update is not yet available for the Tauri preview.\nPlease check GitHub Releases for the latest version."
+                        "Current version: {version}\n\nAuto-update checks are performed at startup.\nTo manually check, restart the application."
                     );
                     let dialog = tauri_plugin_dialog::DialogExt::dialog(app);
                     let _ = dialog
