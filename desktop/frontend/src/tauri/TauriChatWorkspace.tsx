@@ -296,6 +296,12 @@ export function TauriSessionPreview() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // Escape: Close open panels (no modifier required)
+      if (event.key === "Escape") {
+        if (settingsOpen) { setSettingsOpen(false); return; }
+        if (diagnosticsOpen) { setDiagnosticsOpen(false); return; }
+        if (workspaceOpen) { setWorkspaceOpen(false); return; }
+      }
       const mod = event.metaKey || event.ctrlKey;
       if (!mod) return;
       const key = event.key.toLowerCase();
@@ -323,12 +329,6 @@ export function TauriSessionPreview() {
       if (key === "r" && session && !busy) {
         event.preventDefault();
         void refreshHistory();
-      }
-      // Escape: Close open panels
-      if (event.key === "Escape") {
-        if (settingsOpen) setSettingsOpen(false);
-        else if (diagnosticsOpen) setDiagnosticsOpen(false);
-        else if (workspaceOpen) setWorkspaceOpen(false);
       }
     };
     window.addEventListener("keydown", onKeyDown);
