@@ -473,3 +473,16 @@
 .tauri-settings-actions { display: flex; gap: 8px; margin-top: 16px; }
 .tauri-settings-button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface); color: var(--fg-dim); font-size: 11px; text-decoration: none; cursor: pointer; transition: border-color .12s, background .12s; }
 .tauri-settings-button:hover { border-color: var(--border); background: var(--surface-2); color: var(--fg); }
+.tauri-settings-button--danger { border-color: color-mix(in srgb, var(--err) 32%, var(--border-soft)); color: var(--err); }
+.tauri-settings-button--danger:hover { background: color-mix(in srgb, var(--err) 8%, var(--surface)); border-color: color-mix(in srgb, var(--err) 48%, var(--border)); }
+.tauri-settings-apikey { margin-top: 10px; }
+.tauri-settings-apikey-input { display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface-2); }
+.tauri-settings-apikey-input > svg { flex: 0 0 auto; color: var(--fg-faint); }
+.tauri-settings-apikey-input input { flex: 1; min-width: 0; padding: 7px 0; border: 0; outline: 0; background: transparent; color: var(--fg); font: 11px var(--font-mono); }
+.tauri-settings-apikey-input input::placeholder { color: var(--fg-faint); }
+.tauri-settings-apikey-input button { display: grid; width: 24px; height: 24px; flex: 0 0 auto; place-items: center; border: 0; background: transparent; color: var(--fg-faint); cursor: pointer; }
+.tauri-settings-apikey-input button:hover { color: var(--fg); }
+.tauri-settings-apikey-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.tauri-settings-apikey-status { font-size: 10px; }
+.tauri-settings-apikey-status.is-success { color: var(--ok); }
+.tauri-settings-apikey-status.is-error { color: var(--err); }

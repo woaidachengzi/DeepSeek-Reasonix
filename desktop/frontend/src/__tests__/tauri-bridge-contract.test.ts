@@ -214,6 +214,21 @@ const commands: CommandContract[] = [
     argKeys: ["request"],
     description: "setTauriDefaultModel() invokes set_default_model with { request }",
   },
+  {
+    command: "keychain_save",
+    argKeys: ["key", "value"],
+    description: "keychainSave() invokes keychain_save with { key, value }",
+  },
+  {
+    command: "keychain_load",
+    argKeys: ["key"],
+    description: "keychainLoad() invokes keychain_load with { key }",
+  },
+  {
+    command: "keychain_delete",
+    argKeys: ["key"],
+    description: "keychainDelete() invokes keychain_delete with { key }",
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -432,6 +447,29 @@ for (const state of validStates) {
   );
 }
 eq(validStates.length, 3, "there are exactly 3 session states");
+
+// ---------------------------------------------------------------------------
+// Test: keychain commands
+// ---------------------------------------------------------------------------
+
+console.log("\ntauri bridge contract — keychain commands");
+
+ok(
+  commands.find(c => c.command === "keychain_save")?.argKeys.includes("key"),
+  "keychain_save has key arg",
+);
+ok(
+  commands.find(c => c.command === "keychain_save")?.argKeys.includes("value"),
+  "keychain_save has value arg",
+);
+ok(
+  commands.find(c => c.command === "keychain_load")?.argKeys.includes("key"),
+  "keychain_load has key arg",
+);
+ok(
+  commands.find(c => c.command === "keychain_delete")?.argKeys.includes("key"),
+  "keychain_delete has key arg",
+);
 
 // ---------------------------------------------------------------------------
 // Summary

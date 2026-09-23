@@ -447,3 +447,23 @@ export function tauriTurnFailure(event: Pick<TauriBridgeEvent, "eventKind" | "pa
   const reason = typeof event.payload.err === "string" ? event.payload.err.trim() : "";
   return reason || "本轮未完成：Agent 没有返回结果";
 }
+
+// ── Keychain API ──────────────────────────────────────────────────────
+
+/** Save a secret to the system keychain. */
+export async function keychainSave(key: string, value: string): Promise<void> {
+  requireTauri();
+  await invoke<void>("keychain_save", { key, value });
+}
+
+/** Load a secret from the system keychain. Returns null if not found. */
+export async function keychainLoad(key: string): Promise<string | null> {
+  requireTauri();
+  return invoke<string | null>("keychain_load", { key });
+}
+
+/** Delete a secret from the system keychain. Returns true if deleted. */
+export async function keychainDelete(key: string): Promise<boolean> {
+  requireTauri();
+  return invoke<boolean>("keychain_delete", { key });
+}

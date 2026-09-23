@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
-import { X, Check, ChevronRight, Globe, Palette, Info, RefreshCw, ExternalLink } from "lucide-react";
-import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, tauriPlatformInfo, type TauriPreviewRuntimeInfo, type TauriProviderSummary } from "../lib/tauriBridge";
+import { X, Check, ChevronRight, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff } from "lucide-react";
+import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, tauriPlatformInfo, keychainSave, keychainDelete, type TauriPreviewRuntimeInfo, type TauriProviderSummary } from "../lib/tauriBridge";
 
 interface TauriSettingsProps {
   onClose: () => void;
@@ -112,6 +112,33 @@ function GeneralSettings({ theme, onThemeChange, platform }: { theme: string; on
 }
 
 function ModelSettings({ providerSummary, onModelChange }: { providerSummary: TauriProviderSummary | null; onModelChange: (m: string) => void }) {
+  const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({});
+  const [showApiKey, setShowApiKey] = useState<Record<string, boolean>>({});
+  const [keyStatus, setKeyStatus] = useState<Record<string, "saved" | "error" | null>>({});
+
+  const handleSaveApiKey = async (providerName: string) => {
+    const key = apiKeyInputs[providerName];
+    if (!key) return;
+    try {
+      await keychainSave(`api_key_${providerName}`, key);
+      setKeyStatus(prev => ({ ...prev, [providerName]: "saved" }));
+      setApiKeyInputs(prev => ({ ...prev, [providerName]: "" }));
+      setTimeout(() => setKeyStatus(prev => ({ ...prev, [providerName]: null })), 2000);
+    } catch {
+      setKeyStatus(prev => ({ ...prev, [providerName]: "error" }));
+    }
+  };
+
+  const handleDeleteApiKey = async (providerName: string) => {
+    try {
+      await keychainDelete(`api_key_${providerName}`);
+      setKeyStatus(prev => ({ ...prev, [providerName]: "saved" }));
+      setTimeout(() => setKeyStatus(prev => ({ ...prev, [providerName]: null })), 2000);
+    } catch {
+      setKeyStatus(prev => ({ ...prev, [providerName]: "error" }));
+    }
+  };
+
   if (!providerSummary) return <div className="tauri-settings-loading">正在读取 Provider 配置…</div>;
 
   return (
@@ -142,11 +169,37 @@ function ModelSettings({ providerSummary, onModelChange }: { providerSummary: Ta
                   </select>
                 </div>
               )}
+              {provider.requiresKey && (
+                <div className="tauri-settings-apikey">
+                  <div className="tauri-settings-apikey-input">
+                    <Key size={13} />
+                    <input
+                      type={showApiKey[provider.name] ? "text" : "password"}
+                      placeholder={provider.configured ? "已配置（通过环境变量）" : "输入 API Key…"}
+                      value={apiKeyInputs[provider.name] ?? ""}
+                      onChange={e => setApiKeyInputs(prev => ({ ...prev, [provider.name]: e.target.value }))}
+                    />
+                    <button type="button" onClick={() => setShowApiKey(prev => ({ ...prev, [provider.name]: !prev[provider.name] }))}>
+                      {showApiKey[provider.name] ? <EyeOff size={13} /> : <Eye size={13} />}
+                    </button>
+                  </div>
+                  <div className="tauri-settings-apikey-actions">
+                    <button type="button" className="tauri-settings-button" onClick={() => void handleSaveApiKey(provider.name)} disabled={!apiKeyInputs[provider.name]}>
+                      保存到钥匙串
+                    </button>
+                    <button type="button" className="tauri-settings-button tauri-settings-button--danger" onClick={() => void handleDeleteApiKey(provider.name)}>
+                      删除
+                    </button>
+                    {keyStatus[provider.name] === "saved" && <span className="tauri-settings-apikey-status is-success">已保存</span>}
+                    {keyStatus[provider.name] === "error" && <span className="tauri-settings-apikey-status is-error">保存失败</span>}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
-      <p className="tauri-settings-hint">密钥和环境变量名不会显示在界面中。</p>
+      <p className="tauri-settings-hint">API Key 安全存储在系统钥匙串中，不会写入配置文件。</p>
     </div>
   );
 }
