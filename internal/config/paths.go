@@ -480,6 +480,15 @@ func DesktopTopicStatePath(workspaceRoot string) string {
 	return filepath.Join(base, "projects", WorkspaceSlug(root), "desktop", "topic-state-v1.sqlite")
 }
 
+// DesktopSessionIdentityPath is the durable Preview session identity database.
+func DesktopSessionIdentityPath() string {
+	base := MemoryUserDir()
+	if base == "" {
+		return ""
+	}
+	return filepath.Join(base, "desktop", "session-state-v1.sqlite")
+}
+
 // WorkspaceSlug flattens an absolute workspace path into the directory name
 // used under <config root>/projects. Windows spells the same folder with
 // varying case (drive-letter case, Explorer renames), so the slug folds case
