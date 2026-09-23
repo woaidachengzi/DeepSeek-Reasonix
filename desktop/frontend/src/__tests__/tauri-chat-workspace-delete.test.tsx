@@ -196,6 +196,32 @@ async function main() {
   await act(async () => { await settle(); await settle(); });
   eq(bridgeCalls().filter(call => call.name === "restart_bridge").length, 1, "idle session can restart to apply its key");
 
+  const streamCallbacks = globalThis as unknown as {
+    __emitBridgeEvent?: (event: { sessionId: string; sequence: number; eventKind: string; payload: object }) => void;
+    __emitBridgeError?: (message: string) => void;
+    __emitBridgeRestored?: () => void;
+    __emitBridgeResync?: () => void;
+  };
+  await act(async () => { streamCallbacks.__emitBridgeError?.("temporarily unavailable"); });
+  ok(document.querySelector<HTMLTextAreaElement>("textarea")?.disabled, "event stream outage disables sending");
+  await act(async () => { streamCallbacks.__emitBridgeRestored?.(); await settle(); });
+  ok(!document.querySelector<HTMLTextAreaElement>("textarea")?.disabled, "reconnected event stream re-enables sending");
+
+  const snapshotsBeforeResync = bridgeCalls().filter(call => call.name === "bridge_session_snapshot").length;
+  const subscriptionsBeforeResync = bridgeCalls().filter(call => call.name === "bridge_start_events").length;
+  (globalThis as unknown as { __outageOnStart?: boolean }).__outageOnStart = true;
+  await act(async () => { streamCallbacks.__emitBridgeResync?.(); await settle(); await settle(); });
+  eq(bridgeCalls().filter(call => call.name === "bridge_session_snapshot").length, snapshotsBeforeResync + 1, "expired replay window fetches a fresh snapshot");
+  eq(bridgeCalls().filter(call => call.name === "bridge_start_events").length, subscriptionsBeforeResync + 1, "resync starts a new event subscription");
+  ok(document.querySelector<HTMLTextAreaElement>("textarea")?.disabled, "outage during subscription setup cannot re-enable sending");
+  (globalThis as unknown as { __outageOnStart?: boolean }).__outageOnStart = false;
+  await act(async () => { streamCallbacks.__emitBridgeRestored?.(); await settle(); });
+  ok(!document.querySelector<HTMLTextAreaElement>("textarea")?.disabled, "recovery after setup outage re-enables sending");
+
+  const replayed = { sessionId: "tauri-kept-row", sequence: 1, eventKind: "text", payload: { kind: "text", text: "hello" } };
+  await act(async () => { streamCallbacks.__emitBridgeEvent?.(replayed); streamCallbacks.__emitBridgeEvent?.(replayed); });
+  eq(document.querySelectorAll(".tauri-event-details li").length, 1, "replayed event sequence is applied only once");
+
   await act(async () => {
     root.unmount();
   });

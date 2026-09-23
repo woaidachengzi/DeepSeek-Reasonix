@@ -373,9 +373,9 @@ ok(
 
 console.log("\ntauri bridge contract — event channels");
 
-// From bridge.rs: app.emit("bridge:event", event) and
-// app.emit("bridge:connection-error", "...")
-const expectedChannels = ["bridge:event", "bridge:connection-error"];
+// From bridge.rs: the event forwarder reports data, outages, recovery and
+// replay-window expiration on distinct channels.
+const expectedChannels = ["bridge:event", "bridge:connection-error", "bridge:connection-restored", "bridge:resync-required"];
 for (const channel of expectedChannels) {
   ok(
     /^[a-z]+:[a-z-]+$/.test(channel),

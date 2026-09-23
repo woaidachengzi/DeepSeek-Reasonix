@@ -42,6 +42,8 @@ Provider 配置和桥接事件收纳在诊断抽屉。它仍是逐步迁移中�
 回合结束后由经过过滤的持久历史接管显示。
 事件订阅可从 snapshot 的 sequence 开始，避免切换期间漏掉事件。sidecar 异常退出时，预览
 提供受控重启：重新启动 bridge、重新打开当前 session、获取新 snapshot 后才恢复事件订阅和发送。
+短暂的事件流断线会暂停发送，重连成功后恢复；若有界事件回放窗口已过期，host 会通知前端
+重新获取权威 snapshot 和历史，再以新 sequence 订阅，而不会无限重试失效的旧游标。
 
 Preview 的 Runtime details 面板显示冻结的 1.38.3 基线与提交、当前 Preview/Tauri host
 版本、bridge 协议版本和 live sidecar instance ID。当前 bridge 尚未提供独立的语义化发布

@@ -119,7 +119,8 @@ export function deleteTauriBridgeSession(sessionId) {
 }
 
 export function tauriBridgeSnapshot(sessionId) {
-  return Promise.resolve({ sequence: 0, session: { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: globalThis.__snapshotState ?? "idle" } });
+  record("bridge_session_snapshot", { sessionId });
+  return Promise.resolve({ sequence: globalThis.__snapshotSequence ?? 0, session: { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: globalThis.__snapshotState ?? "idle" } });
 }
 
 export function tauriBridgeHistory(sessionId) {
@@ -171,9 +172,11 @@ export function tauriWorkspaceFile() { return Promise.resolve({ path: "", body: 
 export function tauriWorkspaceChanges() { return Promise.resolve({ files: [], gitAvailable: false }); }
 export function tauriWorkspaceChangeDetail() { return Promise.resolve({ source: "" }); }
 
-export function startTauriBridgeEvents() { record("bridge_start_events"); return Promise.resolve(); }
-export function onTauriBridgeEvent() { return Promise.resolve(() => {}); }
-export function onTauriBridgeConnectionError() { return Promise.resolve(() => {}); }
+export function startTauriBridgeEvents() { record("bridge_start_events"); if (globalThis.__outageOnStart) globalThis.__emitBridgeError?.("temporarily unavailable"); return Promise.resolve(); }
+export function onTauriBridgeEvent(callback) { globalThis.__emitBridgeEvent = callback; return Promise.resolve(() => { if (globalThis.__emitBridgeEvent === callback) globalThis.__emitBridgeEvent = undefined; }); }
+export function onTauriBridgeConnectionError(callback) { globalThis.__emitBridgeError = callback; return Promise.resolve(() => { if (globalThis.__emitBridgeError === callback) globalThis.__emitBridgeError = undefined; }); }
+export function onTauriBridgeConnectionRestored(callback) { globalThis.__emitBridgeRestored = callback; return Promise.resolve(() => { if (globalThis.__emitBridgeRestored === callback) globalThis.__emitBridgeRestored = undefined; }); }
+export function onTauriBridgeResyncRequired(callback) { globalThis.__emitBridgeResync = callback; return Promise.resolve(() => { if (globalThis.__emitBridgeResync === callback) globalThis.__emitBridgeResync = undefined; }); }
 
 export function tauriAssistantTextDelta() { return ""; }
 export function tauriComposerInput(prompt, attachments) { return prompt.trim(); }

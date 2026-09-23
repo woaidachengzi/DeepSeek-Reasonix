@@ -1116,9 +1116,14 @@ fn forward_events(
     mut after_sequence: u64,
     stop: Arc<AtomicBool>,
 ) {
+    let mut disconnected = false;
     while !stop.load(Ordering::Acquire) {
         match open_event_stream(address, &token, after_sequence) {
             Ok(mut reader) => {
+                if disconnected {
+                    let _ = app.emit("bridge:connection-restored", ());
+                    disconnected = false;
+                }
                 while !stop.load(Ordering::Acquire) {
                     let mut line = String::new();
                     match reader.read_line(&mut line) {
@@ -1140,11 +1145,18 @@ fn forward_events(
                     }
                 }
             }
-            Err(_) => {
-                let _ = app.emit(
-                    "bridge:connection-error",
-                    "bridge event stream is unavailable",
-                );
+            Err(EventStreamError::ResyncRequired) => {
+                let _ = app.emit("bridge:resync-required", ());
+                break;
+            }
+            Err(EventStreamError::Unavailable) => {
+                if !disconnected {
+                    let _ = app.emit(
+                        "bridge:connection-error",
+                        "bridge event stream is unavailable",
+                    );
+                    disconnected = true;
+                }
             }
         }
         if !stop.load(Ordering::Acquire) {
@@ -1153,16 +1165,22 @@ fn forward_events(
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum EventStreamError {
+    ResyncRequired,
+    Unavailable,
+}
+
 fn open_event_stream(
     address: SocketAddr,
     token: &str,
     after_sequence: u64,
-) -> Result<BufReader<TcpStream>, String> {
-    let mut stream =
-        TcpStream::connect_timeout(&address, Duration::from_secs(1)).map_err(display_error)?;
+) -> Result<BufReader<TcpStream>, EventStreamError> {
+    let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(1))
+        .map_err(|_| EventStreamError::Unavailable)?;
     stream
         .set_read_timeout(Some(Duration::from_secs(1)))
-        .map_err(display_error)?;
+        .map_err(|_| EventStreamError::Unavailable)?;
     stream
         .write_all(
             format!(
@@ -1170,16 +1188,23 @@ fn open_event_stream(
             )
             .as_bytes(),
         )
-        .map_err(display_error)?;
+        .map_err(|_| EventStreamError::Unavailable)?;
     let mut reader = BufReader::new(stream);
     let mut status = String::new();
-    reader.read_line(&mut status).map_err(display_error)?;
+    reader
+        .read_line(&mut status)
+        .map_err(|_| EventStreamError::Unavailable)?;
+    if status.starts_with("HTTP/1.1 409") {
+        return Err(EventStreamError::ResyncRequired);
+    }
     if !status.starts_with("HTTP/1.1 200") {
-        return Err("desktop bridge did not accept event streaming".to_string());
+        return Err(EventStreamError::Unavailable);
     }
     loop {
         let mut header = String::new();
-        reader.read_line(&mut header).map_err(display_error)?;
+        reader
+            .read_line(&mut header)
+            .map_err(|_| EventStreamError::Unavailable)?;
         if header == "\r\n" || header.is_empty() {
             break;
         }
@@ -1215,9 +1240,10 @@ fn display_error(error: impl std::fmt::Display) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_json_response, request_json, session_path_component, validate_attachment,
-        verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSupervisor,
-        OpenSessionRequest, RenameSessionRequest, SessionRequest,
+        open_event_stream, parse_json_response, request_json, session_path_component,
+        validate_attachment, verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent,
+        BridgeSupervisor, EventStreamError, OpenSessionRequest, RenameSessionRequest,
+        SessionRequest,
     };
     use serde_json::json;
     use std::{
@@ -1427,6 +1453,23 @@ mod tests {
             response["protocolVersion"],
             u64::from(super::PROTOCOL_VERSION)
         );
+    }
+
+    #[test]
+    fn expired_event_cursor_requires_a_fresh_snapshot() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
+        let address = listener.local_addr().expect("test address");
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept request");
+            stream
+                .write_all(b"HTTP/1.1 409 Conflict\r\nContent-Type: application/json\r\nContent-Length: 0\r\n\r\n")
+                .expect("write response");
+        });
+        assert!(matches!(
+            open_event_stream(address, "test-token", 1),
+            Err(EventStreamError::ResyncRequired)
+        ));
+        server.join().expect("server exit");
     }
 
     #[test]

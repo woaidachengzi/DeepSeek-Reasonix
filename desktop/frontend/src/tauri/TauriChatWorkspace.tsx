@@ -39,7 +39,9 @@ import {
   importTauriStableProfile,
   newTauriSessionId,
   onTauriBridgeConnectionError,
+  onTauriBridgeConnectionRestored,
   onTauriBridgeEvent,
+  onTauriBridgeResyncRequired,
   openTauriBridgeSession,
   rememberTauriWorkbenchSession,
   renameTauriBridgeSession,
@@ -373,6 +375,10 @@ export function TauriSessionPreview() {
     let active = true;
     let offEvent: UnlistenFn | undefined;
     let offError: UnlistenFn | undefined;
+    let offRestored: UnlistenFn | undefined;
+    let offResync: UnlistenFn | undefined;
+    let resyncRequested = false;
+    let streamDisconnected = false;
     setHistoryLoading(true);
     setHistoryError("");
 
@@ -382,8 +388,10 @@ export function TauriSessionPreview() {
         if (!active) return;
         setSession(snapshot.session);
         setSequence(snapshot.sequence);
+        let lastSequence = snapshot.sequence;
         offEvent = await onTauriBridgeEvent(event => {
-          if (event.sessionId !== session.id) return;
+          if (!active || resyncRequested || event.sessionId !== session.id || event.sequence <= lastSequence) return;
+          lastSequence = event.sequence;
           setSequence(previous => Math.max(previous, event.sequence));
           setEvents(previous => [event, ...previous].slice(0, 100));
           const incomingPrompt = tauriPromptFromEvent(event);
@@ -459,13 +467,33 @@ export function TauriSessionPreview() {
             })();
           }
         });
+        if (!active) { offEvent(); return; }
         offError = await onTauriBridgeConnectionError(message => {
           if (!active) return;
+          streamDisconnected = true;
           setStreamReady(false);
-          setStatus({ running: false });
           setError(`本地桥接事件流：${message}`);
         });
+        if (!active) { offError(); return; }
+        offRestored = await onTauriBridgeConnectionRestored(() => {
+          if (!active || resyncRequested) return;
+          streamDisconnected = false;
+          setStreamReady(true);
+          setError(previous => previous.startsWith("本地桥接事件流：") ? "" : previous);
+          void tauriBridgeStatus().then(next => { if (active) setStatus(next); }).catch(() => {});
+        });
+        if (!active) { offRestored(); return; }
+        offResync = await onTauriBridgeResyncRequired(() => {
+          if (!active || resyncRequested) return;
+          resyncRequested = true;
+          active = false;
+          setStreamReady(false);
+          setLiveText("");
+          setStreamRevision(previous => previous + 1);
+        });
+        if (!active) { offResync(); return; }
         await startTauriBridgeEvents(snapshot.sequence);
+        if (!active || resyncRequested) return;
         // Re-emit an approval/ask/MCP prompt after the listener is live. This
         // is what makes a paused historical session actionable after restart.
         try {
@@ -475,8 +503,8 @@ export function TauriSessionPreview() {
           if (active) setError(tauriMessageFrom(replayError));
         }
         if (!active) return;
-        setError("");
-        setStreamReady(true);
+        if (!streamDisconnected) setError("");
+        setStreamReady(!streamDisconnected);
         try {
           const latestHistory = await tauriBridgeHistory(session.id);
           if (!active) return;
@@ -492,6 +520,10 @@ export function TauriSessionPreview() {
         }
       } catch (error) {
         if (!active) return;
+        offEvent?.();
+        offError?.();
+        offRestored?.();
+        offResync?.();
         setStreamReady(false);
         const message = tauriMessageFrom(error);
         setHistoryLoading(false);
@@ -504,6 +536,8 @@ export function TauriSessionPreview() {
       active = false;
       offEvent?.();
       offError?.();
+      offRestored?.();
+      offResync?.();
     };
   }, [session?.id, streamRevision]);
 

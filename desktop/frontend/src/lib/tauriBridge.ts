@@ -303,6 +303,16 @@ export function onTauriBridgeConnectionError(callback: (message: string) => void
   return listen<string>("bridge:connection-error", ({ payload }) => callback(payload));
 }
 
+export function onTauriBridgeConnectionRestored(callback: () => void): Promise<UnlistenFn> {
+  requireTauri();
+  return listen("bridge:connection-restored", callback);
+}
+
+export function onTauriBridgeResyncRequired(callback: () => void): Promise<UnlistenFn> {
+  requireTauri();
+  return listen("bridge:resync-required", callback);
+}
+
 export async function tauriPlatformInfo(): Promise<string> {
   requireTauri();
   return invoke<string>("platform_info");
