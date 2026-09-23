@@ -364,6 +364,18 @@ function stringValue(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+/** Only navigable web URLs may be rendered from an MCP server's event payload. */
+export function tauriSafeMCPURL(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  try {
+    const target = new URL(value.trim());
+    if ((target.protocol !== "https:" && target.protocol !== "http:") || !target.hostname || target.username || target.password) return undefined;
+    return target.href;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Converts the opaque v1 event payload into the three actionable prompt cards. */
 export function tauriPromptFromEvent(event: Pick<TauriBridgeEvent, "eventKind" | "payload">): TauriPendingPrompt | null {
   const payload = event.payload;
@@ -392,7 +404,7 @@ export function tauriPromptFromEvent(event: Pick<TauriBridgeEvent, "eventKind" |
   const mcp = objectValue(payload.mcpInteraction);
   if (mcp && (event.eventKind === "mcp_interaction" || promptKind === "mcp")) {
     const id = stringValue(mcp.id) || stringValue(payload.promptId) || stringValue(payload.itemId);
-    return id ? { kind: "mcp", id, server: stringValue(mcp.server) || "MCP 服务", mode: stringValue(mcp.mode), message: stringValue(mcp.message), url: stringValue(mcp.url) || undefined } : null;
+    return id ? { kind: "mcp", id, server: stringValue(mcp.server) || "MCP 服务", mode: stringValue(mcp.mode), message: stringValue(mcp.message), url: tauriSafeMCPURL(mcp.url) } : null;
   }
   return null;
 }

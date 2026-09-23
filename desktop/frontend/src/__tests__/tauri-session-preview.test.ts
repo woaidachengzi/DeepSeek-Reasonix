@@ -11,6 +11,7 @@ import {
   tauriEventSummary,
   tauriPromptAnsweredId,
   tauriPromptFromEvent,
+  tauriSafeMCPURL,
 } from "../lib/tauriBridge";
 
 let passed = 0;
@@ -113,6 +114,15 @@ eq(ask?.kind, "ask", "ask event becomes an actionable prompt");
 eq(ask?.id, "ask-1", "ask keeps its correlation ID");
 const mcp = tauriPromptFromEvent({ eventKind: "mcp_interaction", payload: { mcpInteraction: { id: "mcp-1", server: "demo", mode: "url", message: "请打开链接" } } });
 eq(mcp?.kind, "mcp", "MCP event becomes an actionable prompt");
+eq(tauriSafeMCPURL("https://docs.example.test/authorize?state=abc"), "https://docs.example.test/authorize?state=abc", "safe MCP authorization link keeps its path and query");
+eq(tauriSafeMCPURL("http://127.0.0.1:8023/callback"), "http://127.0.0.1:8023/callback", "loopback HTTP callback remains available");
+for (const unsafe of ["javascript:alert(1)", "file:///tmp/private", "//example.test/relative", "/relative", "https://user:pass@example.test/private", "not a url"]) {
+  eq(tauriSafeMCPURL(unsafe), undefined, `unsafe MCP URL is rejected: ${unsafe}`);
+}
+const safeMcp = tauriPromptFromEvent({ eventKind: "mcp_interaction", payload: { mcpInteraction: { id: "mcp-safe", url: "https://docs.example.test/authorize" } } });
+eq(safeMcp?.kind === "mcp" ? safeMcp.url : undefined, "https://docs.example.test/authorize", "MCP prompt retains a validated web link");
+const unsafeMcp = tauriPromptFromEvent({ eventKind: "mcp_interaction", payload: { mcpInteraction: { id: "mcp-unsafe", url: "javascript:alert(1)" } } });
+eq(unsafeMcp?.kind === "mcp" ? unsafeMcp.url : undefined, undefined, "MCP prompt drops an unsafe link without losing the action card");
 eq(tauriPromptAnsweredId({ eventKind: "prompt_answered", payload: { promptId: "ask-1" } }), "ask-1", "prompt answer event clears the matching card");
 eq(
   tauriComposerInput("  ordinary prompt  ", []),

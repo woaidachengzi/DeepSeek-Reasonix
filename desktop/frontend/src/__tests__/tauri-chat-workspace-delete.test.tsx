@@ -386,6 +386,21 @@ async function main() {
   ok(!text().includes("stale completion marker"), "late history from an older turn cannot replace the new turn transcript");
 
   await act(async () => {
+    streamCallbacks.__emitBridgeEvent?.({ sessionId: "tauri-kept-row", sequence: 9, eventKind: "mcp_interaction", payload: { mcpInteraction: { id: "unsafe-link", server: "demo", mode: "url", url: "javascript:alert(1)" } } });
+    await settle();
+  });
+  ok(text().includes("链接不可安全打开"), "unsafe MCP link gives a visible configuration warning");
+  eq(document.querySelectorAll(".tauri-prompt-card__link").length, 0, "unsafe MCP link is never rendered as a clickable anchor");
+  await act(async () => {
+    streamCallbacks.__emitBridgeEvent?.({ sessionId: "tauri-kept-row", sequence: 10, eventKind: "prompt_answered", payload: { promptId: "unsafe-link" } });
+    streamCallbacks.__emitBridgeEvent?.({ sessionId: "tauri-kept-row", sequence: 11, eventKind: "mcp_interaction", payload: { mcpInteraction: { id: "safe-link", server: "demo", mode: "url", url: "https://docs.example.test/authorize" } } });
+    await settle();
+  });
+  const safeLink = document.querySelector<HTMLAnchorElement>(".tauri-prompt-card__link");
+  eq(safeLink?.getAttribute("href"), "https://docs.example.test/authorize", "safe MCP link keeps its authorization path");
+  ok(safeLink?.textContent?.includes("docs.example.test"), "MCP link shows the actual destination host");
+
+  await act(async () => {
     root.unmount();
   });
 

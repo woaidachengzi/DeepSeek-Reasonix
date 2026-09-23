@@ -168,8 +168,18 @@ export function replayTauriPendingPrompts(sessionId) {
   return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle" });
 }
 
-export function tauriPromptFromEvent() { return null; }
-export function tauriPromptAnsweredId() { return ""; }
+export function tauriPromptFromEvent(event) {
+  if (event.eventKind !== "mcp_interaction" || !event.payload.mcpInteraction) return null;
+  return { ...event.payload.mcpInteraction, kind: "mcp" };
+}
+export function tauriPromptAnsweredId(event) { return event.eventKind === "prompt_answered" ? event.payload.promptId ?? "" : ""; }
+export function tauriSafeMCPURL(value) {
+  if (typeof value !== "string") return undefined;
+  try {
+    const target = new URL(value.trim());
+    return (target.protocol === "https:" || target.protocol === "http:") && target.hostname && !target.username && !target.password ? target.href : undefined;
+  } catch { return undefined; }
+}
 export function tauriPlatformInfo() { return Promise.resolve("darwin"); }
 
 export function tauriWorkspace(sessionId, path) {

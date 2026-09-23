@@ -69,6 +69,7 @@ import {
   tauriPreviewProfileStatus,
   tauriPreviewRuntimeInfo,
   tauriSessionTitle,
+  tauriSafeMCPURL,
   tauriTitleError,
   tauriTurnFailure,
   tauriWorkbenchSessions,
@@ -198,10 +199,12 @@ function PromptCard({ prompt, busy, selections, onApproval, onAskSelection, onAs
       <div className="tauri-prompt-card__actions"><button type="button" className="tauri-prompt-card__allow" onClick={onAskSubmit} disabled={busy}>提交回答</button><button type="button" className="tauri-prompt-card__deny" onClick={onAskSubmit} disabled={busy}>跳过</button></div>
     </section>;
   }
+  const safeURL = tauriSafeMCPURL(prompt.url);
+  const linkHint = prompt.mode !== "url" ? "这是一个外部服务请求" : safeURL ? "打开链接完成后再继续" : "链接不可安全打开，请检查服务配置";
   return <section className="tauri-prompt-card" aria-live="polite" aria-label="MCP 服务请求">
-    <div className="tauri-prompt-card__heading"><Sparkles size={17} /><div><strong>{prompt.server} 请求你的操作</strong><span>{prompt.mode === "url" ? "打开链接完成后再继续" : "这是一个外部服务请求"}</span></div></div>
+    <div className="tauri-prompt-card__heading"><Sparkles size={17} /><div><strong>{prompt.server} 请求你的操作</strong><span>{linkHint}</span></div></div>
     {prompt.message && <p className="tauri-prompt-card__subject">{prompt.message}</p>}
-    {prompt.url && <a className="tauri-prompt-card__link" href={prompt.url} target="_blank" rel="noreferrer">打开外部链接</a>}
+    {safeURL && <a className="tauri-prompt-card__link" href={safeURL} target="_blank" rel="noreferrer">打开外部链接（{new URL(safeURL).host}）</a>}
     <div className="tauri-prompt-card__actions"><button type="button" className="tauri-prompt-card__allow" onClick={() => onMCPAction("accept")} disabled={busy}>接受并继续</button><button type="button" className="tauri-prompt-card__deny" onClick={() => onMCPAction("decline")} disabled={busy}>拒绝</button><button type="button" className="tauri-prompt-card__cancel" onClick={() => onMCPAction("cancel")} disabled={busy}>取消</button></div>
   </section>;
 }
