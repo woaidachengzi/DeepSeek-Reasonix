@@ -29,6 +29,7 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 设置新会话默认模型 | `POST /v1/settings/default-model` | `X-Reasonix-Request-ID` 去重 |
 | 建/开会话 | `POST /v1/sessions:open` | `X-Reasonix-Request-ID` 去重 |
 | 显式切换会话 | `POST /v1/sessions:switch` | `X-Reasonix-Request-ID` 去重；仅空闲会话 |
+| 旧会话标题摘要 | `POST /v1/sessions:previews` | 只读；最多 50 个 ID，仅返回已有标题和首条可见用户消息，不切换当前会话 |
 | 重命名会话 | `PATCH /v1/sessions/{sessionId}/title` | `X-Reasonix-Request-ID` 去重；仅空闲会话 |
 | 删除会话 | `DELETE /v1/sessions/{sessionId}` | `X-Reasonix-Request-ID` 去重；仅空闲且为当前持有的会话 |
 | 会话快照 | `GET /v1/sessions/{sessionId}/snapshot` | 是 |

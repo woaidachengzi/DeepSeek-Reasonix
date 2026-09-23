@@ -26,6 +26,13 @@ pub struct WorkbenchSession {
     pub workspace_root: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkbenchTitle {
+    pub session_id: String,
+    pub title: String,
+}
+
 pub struct WorkbenchCatalog {
     path: PathBuf,
     sessions: Mutex<Vec<WorkbenchSession>>,
@@ -61,12 +68,20 @@ impl WorkbenchCatalog {
             .map_err(|_| "workbench catalog lock is unavailable".to_string())
     }
 
-    pub fn remember(&self, session: WorkbenchSession) -> Result<Vec<WorkbenchSession>, String> {
+    pub fn remember(&self, mut session: WorkbenchSession) -> Result<Vec<WorkbenchSession>, String> {
         validate_session(&session)?;
         let mut sessions = self
             .sessions
             .lock()
             .map_err(|_| "workbench catalog lock is unavailable".to_string())?;
+        // An open/snapshot without a core title must not erase a title derived
+        // from the first user turn (or recovered from an older transcript).
+        if session.title.is_none() {
+            session.title = sessions
+                .iter()
+                .find(|existing| existing.session_id == session.session_id)
+                .and_then(|existing| existing.title.clone());
+        }
         let mut updated = Vec::with_capacity(MAX_SESSIONS);
         updated.push(session.clone());
         updated.extend(
@@ -106,6 +121,37 @@ impl WorkbenchCatalog {
             *sessions = updated.clone();
         }
         Ok(updated)
+    }
+
+    /// Fill missing legacy titles without changing the recent-use order or
+    /// overwriting explicit/manual titles (including a concurrent rename).
+    pub fn fill_titles(
+        &self,
+        titles: Vec<WorkbenchTitle>,
+    ) -> Result<Vec<WorkbenchSession>, String> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .map_err(|_| "workbench catalog lock is unavailable".to_string())?;
+        let mut updated = sessions.clone();
+        for item in titles {
+            validate_session(&WorkbenchSession {
+                session_id: item.session_id.clone(),
+                title: Some(item.title.clone()),
+                workspace_root: None,
+            })?;
+            if let Some(existing) = updated
+                .iter_mut()
+                .find(|entry| entry.session_id == item.session_id && entry.title.is_none())
+            {
+                existing.title = Some(item.title);
+            }
+        }
+        if updated != *sessions {
+            write_sessions(&self.path, &updated)?;
+            *sessions = updated;
+        }
+        Ok(sessions.clone())
     }
 }
 
@@ -266,6 +312,54 @@ mod tests {
                 workspace_root: None,
             })
             .is_err());
+    }
+
+    #[test]
+    fn fills_only_missing_titles_without_reordering_or_losing_them_on_open() {
+        let root = tempfile::tempdir().expect("temp root");
+        let path = root.path().join(CATALOG_FILE);
+        let catalog = WorkbenchCatalog::at(path.clone());
+        catalog.remember(session("older")).expect("older");
+        catalog
+            .remember(WorkbenchSession {
+                session_id: "manual".into(),
+                title: Some("My title".into()),
+                workspace_root: None,
+            })
+            .expect("manual");
+        let filled = catalog
+            .fill_titles(vec![
+                WorkbenchTitle {
+                    session_id: "older".into(),
+                    title: "First question".into(),
+                },
+                WorkbenchTitle {
+                    session_id: "manual".into(),
+                    title: "Wrong title".into(),
+                },
+                WorkbenchTitle {
+                    session_id: "unknown".into(),
+                    title: "Ignored".into(),
+                },
+            ])
+            .expect("fill");
+        assert_eq!(
+            filled
+                .iter()
+                .map(|entry| entry.session_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["manual", "older"]
+        );
+        assert_eq!(filled[0].title.as_deref(), Some("My title"));
+        assert_eq!(filled[1].title.as_deref(), Some("First question"));
+        let reopened = catalog.remember(session("older")).expect("reopen");
+        assert_eq!(reopened[0].title.as_deref(), Some("First question"));
+        assert_eq!(
+            WorkbenchCatalog::at(path).list().expect("reload")[0]
+                .title
+                .as_deref(),
+            Some("First question")
+        );
     }
 
     #[test]

@@ -16,14 +16,14 @@ use bridge::{
     BridgeSession, BridgeSetDefaultModelRequest, BridgeSnapshot, BridgeStatus, BridgeSupervisor,
     BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
     BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse, OpenSessionRequest,
-    RenameSessionRequest, SessionRequest, SubmitRequest, WorkspaceChangeDetailRequest,
-    WorkspaceFileRequest, WorkspaceRequest,
+    RenameSessionRequest, SessionPreview, SessionRequest, SubmitRequest,
+    WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
 };
 use data_profile::{PreviewProfile, PreviewProfileStatus, ProfileImportResult};
 use runtime_info::PreviewRuntimeInfo;
 use tauri::{Manager, State};
 use window_state::PreviewWindowState;
-use workbench_catalog::{WorkbenchCatalog, WorkbenchSession};
+use workbench_catalog::{WorkbenchCatalog, WorkbenchSession, WorkbenchTitle};
 
 #[tauri::command]
 fn bridge_status(supervisor: State<'_, BridgeSupervisor>) -> BridgeStatus {
@@ -227,6 +227,22 @@ fn workbench_sessions(
 }
 
 #[tauri::command]
+fn bridge_session_previews(
+    supervisor: State<'_, BridgeSupervisor>,
+    session_ids: Vec<String>,
+) -> Result<Vec<SessionPreview>, String> {
+    supervisor.session_previews(session_ids)
+}
+
+#[tauri::command]
+fn backfill_workbench_titles(
+    catalog: State<'_, WorkbenchCatalog>,
+    titles: Vec<WorkbenchTitle>,
+) -> Result<Vec<WorkbenchSession>, String> {
+    catalog.fill_titles(titles)
+}
+
+#[tauri::command]
 fn remember_workbench_session(
     catalog: State<'_, WorkbenchCatalog>,
     request: WorkbenchSession,
@@ -407,6 +423,7 @@ fn main() {
             bridge_delete_session,
             bridge_session_snapshot,
             bridge_session_history,
+            bridge_session_previews,
             bridge_submit,
             bridge_attach_file,
             bridge_workspace,
@@ -425,6 +442,7 @@ fn main() {
             set_default_model,
             import_stable_profile,
             workbench_sessions,
+            backfill_workbench_titles,
             remember_workbench_session,
             forget_workbench_session,
             platform_info,

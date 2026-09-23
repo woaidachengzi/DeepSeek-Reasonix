@@ -77,6 +77,18 @@ export function tauriWorkbenchSessions() {
   return Promise.resolve((globalThis.__workbenchSessions ?? []).slice());
 }
 
+export function tauriSessionPreviews(sessionIds) {
+  record("bridge_session_previews", { sessionIds });
+  return Promise.resolve(sessionIds.map(sessionId => ({ sessionId, firstUser: globalThis.__previewFirstUsers?.[sessionId] ?? "" })));
+}
+
+export function backfillTauriWorkbenchTitles(titles) {
+  record("backfill_workbench_titles", { titles });
+  const byId = new Map(titles.map(item => [item.sessionId, item.title]));
+  globalThis.__workbenchSessions = (globalThis.__workbenchSessions ?? []).map(entry => ({ ...entry, title: entry.title ?? byId.get(entry.sessionId) }));
+  return Promise.resolve(globalThis.__workbenchSessions.slice());
+}
+
 export function rememberTauriWorkbenchSession(sessionId, workspaceRoot, title) {
   record("remember_workbench_session", { sessionId, workspaceRoot, title });
   const existing = (globalThis.__workbenchSessions ?? []).find(entry => entry.sessionId === sessionId);

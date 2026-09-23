@@ -115,6 +115,11 @@ const commands: CommandContract[] = [
     description: "tauriBridgeHistory() invokes bridge_session_history with { request }",
   },
   {
+    command: "bridge_session_previews",
+    argKeys: ["sessionIds"],
+    description: "tauriSessionPreviews() invokes bridge_session_previews with { sessionIds }",
+  },
+  {
     command: "bridge_submit",
     argKeys: ["request"],
     description: "submitTauriBridge() invokes bridge_submit with { request }",
@@ -193,6 +198,11 @@ const commands: CommandContract[] = [
     command: "workbench_sessions",
     argKeys: [],
     description: "tauriWorkbenchSessions() invokes workbench_sessions with no args",
+  },
+  {
+    command: "backfill_workbench_titles",
+    argKeys: ["titles"],
+    description: "backfillTauriWorkbenchTitles() invokes backfill_workbench_titles with { titles }",
   },
   {
     command: "remember_workbench_session",

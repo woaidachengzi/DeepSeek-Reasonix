@@ -27,6 +27,7 @@ class MessageErrorBoundary extends Component<{ children: ReactNode; index: numbe
 }
 import {
   TAURI_TITLE_MAX_CHARS,
+  backfillTauriWorkbenchTitles,
   answerTauriMCPInteraction,
   answerTauriQuestion,
   approveTauriBridge,
@@ -69,6 +70,7 @@ import {
   tauriPreviewProfileStatus,
   tauriPreviewRuntimeInfo,
   tauriSessionTitle,
+  tauriSessionPreviews,
   tauriSafeMCPURL,
   tauriTitleError,
   tauriTurnFailure,
@@ -87,6 +89,7 @@ import {
   type TauriPreviewRuntimeInfo,
   type TauriProviderSummary,
 } from "../lib/tauriBridge";
+import { groupWorkbenchSessions, titleFromFirstUser } from "./workbenchSessions";
 import "./tauriChatWorkspace.css";
 
 interface WorkbenchSessionTab {
@@ -95,15 +98,10 @@ interface WorkbenchSessionTab {
   workspaceRoot?: string;
 }
 
-function sessionLabel(sessionId: string): string {
-  const suffix = sessionId.replace(/^tauri-/, "").slice(0, 7);
-  return `对话 ${suffix}`;
-}
-
 /** A stored title is authoritative; anything the bridge would reject falls back
- *  to the session-derived label instead of rendering bad host state. */
-function displayTitle(storedTitle: string | undefined, sessionId: string): string {
-  return tauriSessionTitle(storedTitle, sessionLabel(sessionId));
+ *  to the catalog title or a neutral label instead of rendering bad host state. */
+function displayTitle(storedTitle: string | undefined, catalogTitle?: string): string {
+  return tauriSessionTitle(storedTitle, tauriSessionTitle(catalogTitle, "新对话"));
 }
 
 function workspaceChangeLabel(status?: string, sources?: string[]): string {
@@ -133,7 +131,7 @@ function SessionRow({ tab, active, busy, switchingBlocked, onActivate, onDelete 
   if (confirming) {
     return (
       <div className="tauri-session-delete" role="group" aria-label="确认删除对话">
-        <span className="tauri-session-delete__question">删除“{displayTitle(tab.title, tab.sessionId)}”？</span>
+        <span className="tauri-session-delete__question">删除“{displayTitle(tab.title)}”？</span>
         <span className="tauri-session-delete__actions">
           <button type="button" className="tauri-session-delete__confirm" disabled={busy} onClick={onDelete}>删除</button>
           <button type="button" className="tauri-session-delete__cancel" disabled={busy} onClick={() => setConfirming(false)}>取消</button>
@@ -151,12 +149,12 @@ function SessionRow({ tab, active, busy, switchingBlocked, onActivate, onDelete 
         title={tab.workspaceRoot ? `${tab.sessionId}\n${tab.workspaceRoot}` : tab.sessionId}
       >
         <MessageSquare size={15} aria-hidden="true" />
-        <span>{displayTitle(tab.title, tab.sessionId)}</span>
+        <span>{displayTitle(tab.title)}</span>
       </button>
       <button
         type="button"
         className="tauri-session-row__delete"
-        aria-label={`删除对话 ${displayTitle(tab.title, tab.sessionId)}`}
+        aria-label={`删除对话 ${displayTitle(tab.title)}`}
         title="删除对话"
         disabled={busy || switchingBlocked}
         onClick={() => setConfirming(true)}
@@ -212,6 +210,7 @@ function PromptCard({ prompt, busy, selections, onApproval, onAskSelection, onAs
 export function TauriSessionPreview() {
   const [session, setSession] = useState<TauriBridgeSession | null>(null);
   const [tabs, setTabs] = useState<WorkbenchSessionTab[]>([]);
+  const [collapsedProjects, setCollapsedProjects] = useState<Record<string, boolean>>({});
   const [workspaceRoot, setWorkspaceRoot] = useState("");
   const [prompt, setPrompt] = useState("");
   const [attachments, setAttachments] = useState<TauriBridgeAttachment[]>([]);
@@ -265,6 +264,8 @@ export function TauriSessionPreview() {
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   // Drag-and-drop state
   const [dragging, setDragging] = useState(false);
+  const projectGroups = useMemo(() => groupWorkbenchSessions(tabs), [tabs]);
+  const activeCatalogTitle = tabs.find(tab => tab.sessionId === session?.id)?.title;
 
   const questions = useMemo<QuestionAnchor[]>(() => {
     if (!history) return [];
@@ -356,8 +357,36 @@ export function TauriSessionPreview() {
     void tauriPreviewProfileStatus().then(setProfile).catch(error => setError(tauriMessageFrom(error)));
     void tauriPreviewRuntimeInfo().then(setRuntimeInfo).catch(error => setError(tauriMessageFrom(error)));
     void tauriProviderSummary().then(setProviderSummary).catch(error => setError(tauriMessageFrom(error)));
-    void tauriWorkbenchSessions().then(setTabs).catch(error => setError(tauriMessageFrom(error)));
+    let active = true;
+    void (async () => {
+      try {
+        const listed = await tauriWorkbenchSessions();
+        if (!active) return;
+        setTabs(listed);
+        const missing = listed.filter(tab => !tauriSessionTitle(tab.title, "")).map(tab => tab.sessionId);
+        for (let offset = 0; active && offset < missing.length; offset += 10) {
+          try {
+            const previews = await tauriSessionPreviews(missing.slice(offset, offset + 10));
+            if (!active) return;
+            const titles = previews.flatMap(preview => {
+              const title = tauriSessionTitle(preview.title, "") || titleFromFirstUser(preview.firstUser ?? "");
+              return title ? [{ sessionId: preview.sessionId, title }] : [];
+            });
+            if (titles.length > 0) {
+              const updated = await backfillTauriWorkbenchTitles(titles);
+              if (active) setTabs(updated);
+            }
+          } catch {
+            // Legacy enrichment is best-effort. The catalog remains usable,
+            // and another launch can retry this batch without changing order.
+          }
+        }
+      } catch (cause) {
+        if (active) setError(`读取最近对话失败：${tauriMessageFrom(cause)}`);
+      }
+    })();
     void tauriPlatformInfo().then(setPlatform).catch(() => {});
+    return () => { active = false; };
   }, []);
 
   // Tauri drag-and-drop file handler
@@ -648,7 +677,7 @@ export function TauriSessionPreview() {
 
   function beginTitleEdit() {
     if (!session || busy || switchingBlocked) return;
-    setTitleDraft(displayTitle(session.title, session.id));
+    setTitleDraft(displayTitle(session.title, activeCatalogTitle));
     setTitleEditing(true);
   }
 
@@ -729,8 +758,8 @@ export function TauriSessionPreview() {
     }
   }
 
-  async function createSession() {
-    await activateSession(newTauriSessionId(), workspaceRoot.trim() || undefined);
+  async function createSession(root = workspaceRoot) {
+    await activateSession(newTauriSessionId(), root.trim() || undefined);
   }
 
   async function chooseWorkspaceRoot() {
@@ -919,6 +948,16 @@ export function TauriSessionPreview() {
       const submitted = await submitTauriBridge(sessionId, input);
       if (sessionId !== session?.id) return;
       if (turnEpochRef.current === submitEpoch) setSession(submitted);
+      if (!tauriSessionTitle(submitted.title, "") && !tabs.find(tab => tab.sessionId === sessionId)?.title) {
+        const title = titleFromFirstUser(input);
+        if (title) {
+          try {
+            setTabs(await backfillTauriWorkbenchTitles([{ sessionId, title }]));
+          } catch {
+            // The turn was accepted; catalog enrichment must not report it as a failed send.
+          }
+        }
+      }
       setPrompt("");
       setAttachments([]);
       // Fetch history after a short delay to let the backend settle
@@ -1148,19 +1187,20 @@ export function TauriSessionPreview() {
         <button className="tauri-sidebar__new" type="button" onClick={() => void createSession()} disabled={busy || switchingBlocked}>
           <Plus size={17} aria-hidden="true" /><span>新建对话</span><kbd>⌘ N</kbd>
         </button>
-        <div className="tauri-sidebar__section-title">最近对话</div>
+        <div className="tauri-sidebar__section-title">项目</div>
         <nav className="tauri-sidebar__sessions">
-          {tabs.length === 0 ? <p className="tauri-sidebar__empty">还没有对话，开始一个新话题吧。</p> : tabs.map(tab => (
-            <SessionRow
-              key={tab.sessionId}
-              tab={tab}
-              active={session?.id === tab.sessionId}
-              busy={busy}
-              switchingBlocked={switchingBlocked}
-              onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)}
-              onDelete={() => void deleteSession(tab)}
-            />
-          )) }
+          {projectGroups.length === 0 ? <p className="tauri-sidebar__empty">还没有对话，开始一个新话题吧。</p> : projectGroups.map(group => (
+            <section className="tauri-project-group" key={group.key || "global"} aria-label={group.label}>
+              <div className="tauri-project-group__heading">
+                <button type="button" className="tauri-project-group__toggle" aria-label={`${collapsedProjects[group.key] ? "展开" : "收起"} ${group.label}`} aria-expanded={!collapsedProjects[group.key]} onClick={() => setCollapsedProjects(previous => ({ ...previous, [group.key]: !previous[group.key] }))}>
+                  {collapsedProjects[group.key] ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                </button>
+                <button type="button" className="tauri-project-group__select" title={group.root || "未指定项目"} aria-label={`切换到项目 ${group.label}`} disabled={busy || switchingBlocked} onClick={() => { const latest = group.sessions[0]; if (latest && latest.sessionId !== session?.id) void activateSession(latest.sessionId, latest.workspaceRoot); }}><FolderOpen size={14} /><span>{group.label}</span><small>{group.sessions.length}</small></button>
+                <button type="button" className="tauri-project-group__new" aria-label={`在 ${group.label} 中新建对话`} title="在此项目新建对话" disabled={busy || switchingBlocked} onClick={() => void createSession(group.root || "")}><Plus size={14} /></button>
+              </div>
+              {!collapsedProjects[group.key] && group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} busy={busy} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} />)}
+            </section>
+          ))}
         </nav>
         <div className="tauri-sidebar__footer">
           <span className={`tauri-health${status?.running ? " is-ready" : ""}`}><i />{status?.running ? "本地运行正常" : "正在连接本地服务…"}</span>
@@ -1178,7 +1218,7 @@ export function TauriSessionPreview() {
                 <button type="submit" className="tauri-session-title-edit__action" aria-label="保存对话名称" disabled={busy}><Check size={14} /></button>
                 <button type="button" className="tauri-session-title-edit__action" aria-label="取消重命名" disabled={busy} onClick={() => setTitleEditing(false)}><X size={14} /></button>
               </form> : <>
-                <strong>{session ? displayTitle(session.title, session.id) : "新对话"}</strong>
+                <strong>{session ? displayTitle(session.title, activeCatalogTitle) : "新对话"}</strong>
                 {session && <button type="button" className="tauri-title-rename" aria-label="重命名对话" title="重命名对话" disabled={busy || switchingBlocked} onClick={beginTitleEdit}><Pencil size={13} /></button>}
               </>}
             </div>

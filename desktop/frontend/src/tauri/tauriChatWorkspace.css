@@ -98,6 +98,17 @@
 .tauri-sidebar__section-title { padding: 24px 10px 9px; color: var(--fg-faint); font-size: 11px; font-weight: 650; letter-spacing: .03em; }
 .tauri-sidebar__sessions { display: grid; align-content: start; gap: 3px; overflow: auto; }
 .tauri-sidebar__empty { margin: 0; padding: 10px; color: var(--fg-faint); font-size: 12px; }
+.tauri-project-group { display: grid; align-content: start; min-width: 0; gap: 2px; }
+.tauri-project-group__heading { display: flex; min-width: 0; align-items: center; }
+.tauri-project-group__toggle { display: grid; width: 22px; height: 34px; flex: 0 0 auto; place-items: center; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--fg-dim); }
+.tauri-project-group__select { display: flex; flex: 1; min-width: 0; height: 34px; align-items: center; gap: 7px; padding: 0 4px; border: 0; border-radius: 8px; background: transparent; color: var(--fg-dim); text-align: left; }
+.tauri-project-group__toggle:hover, .tauri-project-group__select:hover:not(:disabled) { background: var(--sidebar-hover); color: var(--fg); }
+.tauri-project-group__select span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 650; }
+.tauri-project-group__select small { color: var(--fg-faint); font-size: 11px; }
+.tauri-project-group__new { display: grid; width: 27px; height: 27px; flex: 0 0 auto; place-items: center; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--fg-faint); }
+.tauri-project-group__new:hover:not(:disabled) { border-color: var(--border-soft); background: var(--surface); color: var(--fg); }
+.tauri-project-group__new:disabled { opacity: .35; }
+.tauri-project-group .tauri-session-row { margin-left: 13px; }
 
 .tauri-sidebar__session {
   display: flex;
@@ -406,6 +417,9 @@
   .tauri-sidebar__new { position: absolute; top: 9px; right: 12px; width: 38px; min-height: 32px; justify-content: center; padding: 0; }
   .tauri-sidebar__new span, .tauri-sidebar__new kbd, .tauri-sidebar__section-title, .tauri-sidebar__footer { display: none; }
   .tauri-sidebar__sessions { grid-auto-columns: max-content; grid-auto-flow: column; justify-content: start; overflow-x: auto; }
+  .tauri-project-group { grid-auto-columns: max-content; grid-auto-flow: column; align-items: center; }
+  .tauri-project-group__heading { max-width: 150px; }
+  .tauri-project-group .tauri-session-row { margin-left: 0; }
   .tauri-sidebar__empty { display: none; }
   .tauri-sidebar__session { min-height: 32px; }
   .tauri-topbar { height: 54px; min-height: 54px; }

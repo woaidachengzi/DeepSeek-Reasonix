@@ -50,6 +50,23 @@ pub struct SessionRequest {
     pub session_id: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionPreview {
+    pub session_id: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub first_user: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionPreviewsResponse {
+    protocol_version: u8,
+    previews: Vec<SessionPreview>,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenameSessionRequest {
@@ -394,6 +411,36 @@ impl BridgeSupervisor {
             Some(&request_id),
         )
         .map(|envelope| envelope.session)
+    }
+
+    pub fn session_previews(
+        &self,
+        session_ids: Vec<String>,
+    ) -> Result<Vec<SessionPreview>, String> {
+        if session_ids.len() > 50 {
+            return Err("too many session previews requested".to_string());
+        }
+        let ids: Vec<String> = session_ids
+            .iter()
+            .map(|id| session_path_component(id))
+            .collect::<Result<_, _>>()?;
+        let response = self.request_json_with_timeout(
+            "POST",
+            "/v1/sessions:previews",
+            Some(json!({ "sessionIds": ids })),
+            Duration::from_secs(20),
+        )?;
+        let envelope: SessionPreviewsResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != PROTOCOL_VERSION || envelope.previews.len() != ids.len() {
+            return Err("desktop bridge session previews are invalid".to_string());
+        }
+        for (requested, preview) in ids.iter().zip(&envelope.previews) {
+            if requested != &preview.session_id {
+                return Err("desktop bridge session preview identity is invalid".to_string());
+            }
+        }
+        Ok(envelope.previews)
     }
 
     pub fn delete_session(
@@ -827,6 +874,17 @@ impl BridgeSupervisor {
         })
     }
 
+    fn request_json_with_timeout(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<Value>,
+        timeout: Duration,
+    ) -> Result<Value, String> {
+        let (address, token) = self.event_connection()?;
+        request_json_with_timeout(address, &token, method, path, body, None, timeout)
+    }
+
     fn event_connection(&self) -> Result<(SocketAddr, String), String> {
         let mut process = self
             .process
@@ -930,6 +988,26 @@ fn request_json(
     body: Option<Value>,
     request_id: Option<&str>,
 ) -> Result<Value, String> {
+    request_json_with_timeout(
+        address,
+        token,
+        method,
+        path,
+        body,
+        request_id,
+        Duration::from_secs(2),
+    )
+}
+
+fn request_json_with_timeout(
+    address: SocketAddr,
+    token: &str,
+    method: &str,
+    path: &str,
+    body: Option<Value>,
+    request_id: Option<&str>,
+    read_timeout: Duration,
+) -> Result<Value, String> {
     let bytes = body
         .map(|value| serde_json::to_vec(&value))
         .transpose()
@@ -938,7 +1016,7 @@ fn request_json(
     let mut stream =
         TcpStream::connect_timeout(&address, Duration::from_secs(1)).map_err(display_error)?;
     stream
-        .set_read_timeout(Some(Duration::from_secs(2)))
+        .set_read_timeout(Some(read_timeout))
         .map_err(display_error)?;
     let request_id_header = request_id
         .map(|request_id| format!("X-Reasonix-Request-ID: {request_id}\r\n"))

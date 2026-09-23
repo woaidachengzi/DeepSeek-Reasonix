@@ -22,7 +22,7 @@ Preview 使用 Tauri 应用数据目录下私有的 `REASONIX_HOME`。因此它�
 均不会导入；导入后若 Provider 依赖环境变量，仍需由用户自行提供。显式设置
 `REASONIX_HOME` 的开发环境不会显示该导入入口。
 
-Preview 已开始采用工作台导航壳层：本次运行中打开的会话会显示在左侧，切换会话通过
+Preview 已开始采用工作台导航壳层：最近会话按工作区文件夹分组；可展开项目、切换到该项目最近会话，或直接在项目中新建对话。首条用户消息生成本地可读标题；旧会话的缺失标题通过只读摘要异步回填，手动标题优先，回填不改变最近使用顺序。切换会话通过
 bridge 的显式 `switch_session` 完成。首版 bridge 仍只拥有一个 Go Controller，因此只允许
 从 `idle` 会话切换；`running` 或 `paused` 的会话必须先结束或取消，绝不被 UI 静默替换。
 
@@ -35,7 +35,7 @@ Tauri `bridge:event` 和故障时的 `bridge:connection-error` 事件转发给 W
 `provider_summary` 只投影 Preview 私有配置中的 Provider 名称/类型、模型 ID、模型数量、默认模型和凭据就绪布尔值；不把服务 URL、凭据变量名、请求 headers 或密钥传入 WebView。`set_default_model` 复用 Go 配置库校验和窄写入，只影响新会话，现有会话不会被重建。
 `desktop/frontend/src/lib/tauriBridge.ts` 已为上述小范围命令提供类型化适配器，只会在
 Tauri WebView 中激活；现有 `desktop/frontend/src/lib/bridge.ts` 仍是 Wails 默认实现，直到
-对应功能面完成迁移。Tauri WebView 现会渲染 `TauriSessionPreview` 聊天工作台：左侧最近
+对应功能面完成迁移。Tauri WebView 现会渲染 `TauriSessionPreview` 聊天工作台：左侧项目与
 对话、欢迎页与建议入口、Markdown 消息流、底部输入框、顶栏工作区/新会话默认模型；运行时、
 Provider 配置和桥接事件收纳在诊断抽屉。它仍是逐步迁移中的 Tauri 界面，尚不代表完整 Wails
 功能对齐。助手正文按桥接 `text` 增量事件实时渲染；`reasoning` 与其他事件不进入聊天正文，
