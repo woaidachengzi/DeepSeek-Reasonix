@@ -20,8 +20,9 @@ import (
 
 // Load builds the configuration: defaults, then user config, then project
 // config, then MCP servers from Claude Code's .mcp.json, then (lowest priority)
-// the v0.x ~/.reasonix/config.json's mcpServers. Provider api_key_env values
-// resolve from Reasonix's global .env, not from project .env files.
+// the v0.x ~/.reasonix/config.json's mcpServers. Provider credentials resolve
+// from a Tauri sidecar's in-memory keychain handoff when present, otherwise
+// from Reasonix's global .env; project .env files are not credential sources.
 func Load() (*Config, error) {
 	return LoadForRoot(".")
 }

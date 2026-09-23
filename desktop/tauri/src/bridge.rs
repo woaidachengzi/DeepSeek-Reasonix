@@ -482,6 +482,36 @@ impl BridgeSupervisor {
         Ok(summary)
     }
 
+    /// Synchronize a provider key into the sidecar's private memory. The key
+    /// is sent only over the authenticated loopback bridge; it is never added
+    /// to a process environment or returned to the WebView.
+    pub fn set_provider_key(
+        &self,
+        provider_name: &str,
+        api_key: Option<&str>,
+    ) -> Result<BridgeProviderSummaryResponse, String> {
+        if provider_name.trim().is_empty() {
+            return Err("provider name is invalid".to_string());
+        }
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/provider-key",
+            Some(json!({
+                "providerName": provider_name,
+                "apiKey": api_key.unwrap_or_default(),
+                "delete": api_key.is_none(),
+            })),
+            Some(&request_id),
+        )?;
+        let summary: BridgeProviderSummaryResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if summary.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(summary)
+    }
+
     pub fn submit(&self, request: SubmitRequest) -> Result<BridgeSession, String> {
         let session_id = session_path_component(&request.session_id)?;
         let request_id = opaque_secret()?;

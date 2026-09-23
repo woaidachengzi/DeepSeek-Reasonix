@@ -1,25 +1,33 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { X, Check, ChevronRight, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff } from "lucide-react";
 import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, tauriPlatformInfo, keychainSave, keychainDelete, type TauriPreviewRuntimeInfo, type TauriProviderSummary } from "../lib/tauriBridge";
 
 interface TauriSettingsProps {
   onClose: () => void;
+  onProviderSummaryChange?: (summary: TauriProviderSummary) => void;
 }
 
 type SettingsTab = "general" | "model" | "about";
 
-export function TauriSettings({ onClose }: TauriSettingsProps) {
+export function TauriSettings({ onClose, onProviderSummaryChange }: TauriSettingsProps) {
   const [tab, setTab] = useState<SettingsTab>("general");
   const [runtimeInfo, setRuntimeInfo] = useState<TauriPreviewRuntimeInfo | null>(null);
   const [providerSummary, setProviderSummaryState] = useState<TauriProviderSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [platform, setPlatform] = useState("");
+  const loadRequest = useRef(0);
   const [theme, setTheme] = useState<"light" | "dark" | "system">(() => {
     const saved = localStorage.getItem("tauri-theme");
     return (saved as "light" | "dark" | "system") || "system";
   });
 
+  const updateProviderSummary = useCallback((summary: TauriProviderSummary) => {
+    setProviderSummaryState(summary);
+    onProviderSummaryChange?.(summary);
+  }, [onProviderSummaryChange]);
+
   const loadSettings = useCallback(async () => {
+    const request = ++loadRequest.current;
     setLoading(true);
     try {
       const [info, providers, plat] = await Promise.all([
@@ -27,18 +35,22 @@ export function TauriSettings({ onClose }: TauriSettingsProps) {
         tauriProviderSummary(),
         tauriPlatformInfo(),
       ]);
-      setRuntimeInfo(info);
-      setProviderSummaryState(providers);
-      setPlatform(plat);
+      if (request === loadRequest.current) {
+        setRuntimeInfo(info);
+        updateProviderSummary(providers);
+        setPlatform(plat);
+      }
     } catch {
       // Non-fatal
     } finally {
-      setLoading(false);
+      if (request === loadRequest.current) setLoading(false);
     }
-  }, []);
+  }, [updateProviderSummary]);
 
-  // Load on mount
-  useState(() => { void loadSettings(); });
+  useEffect(() => {
+    void loadSettings();
+    return () => { loadRequest.current += 1; };
+  }, [loadSettings]);
 
   const handleThemeChange = (newTheme: "light" | "dark" | "system") => {
     setTheme(newTheme);
@@ -49,7 +61,7 @@ export function TauriSettings({ onClose }: TauriSettingsProps) {
   const handleModelChange = async (model: string) => {
     try {
       const updated = await setTauriDefaultModel(model);
-      setProviderSummaryState(updated);
+      updateProviderSummary(updated);
     } catch {
       // Non-fatal
     }
@@ -79,7 +91,7 @@ export function TauriSettings({ onClose }: TauriSettingsProps) {
         <div className="tauri-settings-content">
           {loading ? <div className="tauri-settings-loading">加载中…</div> : <>
             {tab === "general" && <GeneralSettings theme={theme} onThemeChange={handleThemeChange} platform={platform} />}
-            {tab === "model" && <ModelSettings providerSummary={providerSummary} onModelChange={handleModelChange} />}
+            {tab === "model" && <ModelSettings providerSummary={providerSummary} onModelChange={handleModelChange} onProviderSummaryChange={updateProviderSummary} />}
             {tab === "about" && <AboutSettings runtimeInfo={runtimeInfo} onRefresh={loadSettings} />}
           </>}
         </div>
@@ -111,31 +123,65 @@ function GeneralSettings({ theme, onThemeChange, platform }: { theme: string; on
   );
 }
 
-function ModelSettings({ providerSummary, onModelChange }: { providerSummary: TauriProviderSummary | null; onModelChange: (m: string) => void }) {
+function ModelSettings({ providerSummary, onModelChange, onProviderSummaryChange }: { providerSummary: TauriProviderSummary | null; onModelChange: (m: string) => void; onProviderSummaryChange: (summary: TauriProviderSummary) => void }) {
   const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({});
   const [showApiKey, setShowApiKey] = useState<Record<string, boolean>>({});
-  const [keyStatus, setKeyStatus] = useState<Record<string, "saved" | "error" | null>>({});
+  const [keyStatus, setKeyStatus] = useState<Record<string, { message: string; error: boolean } | null>>({});
+  const [keyBusy, setKeyBusy] = useState(false);
+  const keyBusyRef = useRef(false);
+  const statusTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const mounted = useRef(false);
 
-  const handleSaveApiKey = async (providerName: string) => {
-    const key = apiKeyInputs[providerName];
-    if (!key) return;
-    try {
-      await keychainSave(`api_key_${providerName}`, key);
-      setKeyStatus(prev => ({ ...prev, [providerName]: "saved" }));
-      setApiKeyInputs(prev => ({ ...prev, [providerName]: "" }));
-      setTimeout(() => setKeyStatus(prev => ({ ...prev, [providerName]: null })), 2000);
-    } catch {
-      setKeyStatus(prev => ({ ...prev, [providerName]: "error" }));
-    }
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      for (const timer of statusTimers.current.values()) clearTimeout(timer);
+      statusTimers.current.clear();
+    };
+  }, []);
+
+  const showStatus = (providerName: string, message: string, error = false) => {
+    if (!mounted.current) return;
+    const previousTimer = statusTimers.current.get(providerName);
+    if (previousTimer) clearTimeout(previousTimer);
+    setKeyStatus(prev => ({ ...prev, [providerName]: { message, error } }));
+    const timer = setTimeout(() => {
+      statusTimers.current.delete(providerName);
+      setKeyStatus(prev => ({ ...prev, [providerName]: null }));
+    }, 2000);
+    statusTimers.current.set(providerName, timer);
   };
 
-  const handleDeleteApiKey = async (providerName: string) => {
+  const handleApiKeyAction = async (providerName: string, action: "save" | "delete") => {
+    const key = apiKeyInputs[providerName];
+    if (keyBusyRef.current || (action === "save" && !key)) return;
+    keyBusyRef.current = true;
+    setKeyBusy(true);
+    const previousTimer = statusTimers.current.get(providerName);
+    if (previousTimer) clearTimeout(previousTimer);
+    statusTimers.current.delete(providerName);
+    setKeyStatus(prev => ({ ...prev, [providerName]: null }));
     try {
-      await keychainDelete(`api_key_${providerName}`);
-      setKeyStatus(prev => ({ ...prev, [providerName]: "saved" }));
-      setTimeout(() => setKeyStatus(prev => ({ ...prev, [providerName]: null })), 2000);
+      let deleted = false;
+      if (action === "save") await keychainSave(`api_key_${providerName}`, key);
+      else deleted = await keychainDelete(`api_key_${providerName}`);
+      if (action === "save" && mounted.current) {
+        setApiKeyInputs(prev => ({ ...prev, [providerName]: prev[providerName] === key ? "" : prev[providerName] }));
+      }
+      try {
+        const summary = await tauriProviderSummary();
+        if (mounted.current) onProviderSummaryChange(summary);
+        const configured = summary.providers.find(provider => provider.name === providerName)?.configured;
+        showStatus(providerName, action === "save" ? "已保存到钥匙串" : !deleted ? "钥匙串中没有密钥" : configured ? "钥匙串密钥已删除；其他凭据仍可用" : "钥匙串密钥已删除");
+      } catch {
+        showStatus(providerName, action === "save" ? "已保存到钥匙串；配置状态刷新失败" : deleted ? "钥匙串密钥已删除；配置状态刷新失败" : "钥匙串中没有密钥；配置状态刷新失败", true);
+      }
     } catch {
-      setKeyStatus(prev => ({ ...prev, [providerName]: "error" }));
+      showStatus(providerName, action === "save" ? "保存失败" : "删除失败", true);
+    } finally {
+      keyBusyRef.current = false;
+      if (mounted.current) setKeyBusy(false);
     }
   };
 
@@ -175,7 +221,7 @@ function ModelSettings({ providerSummary, onModelChange }: { providerSummary: Ta
                     <Key size={13} />
                     <input
                       type={showApiKey[provider.name] ? "text" : "password"}
-                      placeholder={provider.configured ? "已配置（通过环境变量）" : "输入 API Key…"}
+                      placeholder={provider.configured ? "已配置（钥匙串或其他凭据来源）" : "输入 API Key…"}
                       value={apiKeyInputs[provider.name] ?? ""}
                       onChange={e => setApiKeyInputs(prev => ({ ...prev, [provider.name]: e.target.value }))}
                     />
@@ -184,14 +230,13 @@ function ModelSettings({ providerSummary, onModelChange }: { providerSummary: Ta
                     </button>
                   </div>
                   <div className="tauri-settings-apikey-actions">
-                    <button type="button" className="tauri-settings-button" onClick={() => void handleSaveApiKey(provider.name)} disabled={!apiKeyInputs[provider.name]}>
+                    <button type="button" className="tauri-settings-button" onClick={() => void handleApiKeyAction(provider.name, "save")} disabled={keyBusy || !apiKeyInputs[provider.name]}>
                       保存到钥匙串
                     </button>
-                    <button type="button" className="tauri-settings-button tauri-settings-button--danger" onClick={() => void handleDeleteApiKey(provider.name)}>
+                    <button type="button" className="tauri-settings-button tauri-settings-button--danger" onClick={() => void handleApiKeyAction(provider.name, "delete")} disabled={keyBusy}>
                       删除
                     </button>
-                    {keyStatus[provider.name] === "saved" && <span className="tauri-settings-apikey-status is-success">已保存</span>}
-                    {keyStatus[provider.name] === "error" && <span className="tauri-settings-apikey-status is-error">保存失败</span>}
+                    {keyStatus[provider.name] && <span className={`tauri-settings-apikey-status${keyStatus[provider.name]?.error ? " is-error" : " is-success"}`}>{keyStatus[provider.name]?.message}</span>}
                   </div>
                 </div>
               )}
@@ -199,7 +244,7 @@ function ModelSettings({ providerSummary, onModelChange }: { providerSummary: Ta
           ))}
         </div>
       )}
-      <p className="tauri-settings-hint">API Key 安全存储在系统钥匙串中，不会写入配置文件。</p>
+      <p className="tauri-settings-hint">在此保存的 API Key 存储在系统钥匙串中，对新会话生效；当前会话可在诊断面板重启桥接服务后继续使用。删除钥匙串密钥后，其他凭据来源仍可能使提供方保持就绪。</p>
     </div>
   );
 }

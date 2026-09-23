@@ -17,6 +17,17 @@ import (
 
 const testToken = "0123456789abcdef0123456789abcdef"
 
+func TestBridgeTokenIsRemovedBeforeCoreStarts(t *testing.T) {
+	t.Setenv(tokenEnvironment, testToken)
+	token, err := consumeBridgeToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token != testToken || os.Getenv(tokenEnvironment) != "" {
+		t.Fatal("bridge token was not consumed from the process environment")
+	}
+}
+
 type bridgeTestRuntime struct {
 	path          string
 	title         string

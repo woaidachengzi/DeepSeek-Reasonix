@@ -76,10 +76,24 @@ func main() {
 	flag.StringVar(&cfg.launchID, "launch-id", "", "opaque host-generated launch identifier")
 	flag.Parse()
 
-	if err := run(context.Background(), cfg, os.Getenv(tokenEnvironment)); err != nil {
+	token, err := consumeBridgeToken()
+	if err == nil {
+		err = run(context.Background(), cfg, token)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "reasonix desktop bridge:", err)
 		os.Exit(1)
 	}
+}
+
+// The host passes authentication only at launch. Remove it before the core can
+// spawn shell commands or other subprocesses that inherit this environment.
+func consumeBridgeToken() (string, error) {
+	token := os.Getenv(tokenEnvironment)
+	if err := os.Unsetenv(tokenEnvironment); err != nil {
+		return "", fmt.Errorf("clear desktop bridge token from process environment: %w", err)
+	}
+	return token, nil
 }
 
 func run(ctx context.Context, cfg config, token string) error {
@@ -338,6 +352,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("GET /v1/health", b.authorized(b.health))
 	mux.HandleFunc("GET /v1/providers", b.authorized(b.providerSummary))
 	mux.HandleFunc("POST /v1/settings/default-model", b.authorized(b.idempotent(64<<10, b.setDefaultModel)))
+	mux.HandleFunc("POST /v1/settings/provider-key", b.authorized(b.idempotent(64<<10, b.setProviderKey)))
 	mux.HandleFunc("POST /v1/sessions:open", b.authorized(b.idempotent(64<<10, b.openSession)))
 	mux.HandleFunc("POST /v1/sessions:switch", b.authorized(b.idempotent(64<<10, b.switchSession)))
 	mux.HandleFunc("PATCH /v1/sessions/{id}/title", b.authorized(b.idempotent(64<<10, b.renameSession)))
@@ -479,7 +494,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "provider_summary", "set_default_model", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "replay_pending_prompts", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "set_default_model", "set_provider_key", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "replay_pending_prompts", "idempotency", "shutdown"},
 	})
 }
 
@@ -504,6 +519,24 @@ func (b *bridgeServer) setDefaultModel(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to save the Preview default model")
+		return
+	}
+	summary, err := loadProviderSummary()
+	if err != nil {
+		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read provider summary")
+		return
+	}
+	writeJSON(w, http.StatusOK, summary)
+}
+
+func (b *bridgeServer) setProviderKey(w http.ResponseWriter, r *http.Request) {
+	var request setProviderKeyRequest
+	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid provider key request")
+		return
+	}
+	if err := updateProviderKey(request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "provider key could not be updated")
 		return
 	}
 	summary, err := loadProviderSummary()

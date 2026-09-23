@@ -26,11 +26,12 @@ const (
 )
 
 const (
-	CredentialSourceEnvironment = "environment"
-	CredentialSourceProjectEnv  = "project_env"
-	CredentialSourceCredentials = "credentials"
-	CredentialSourceHomeEnv     = "home_env"
-	CredentialSourceLegacy      = "legacy_credentials"
+	CredentialSourceEnvironment    = "environment"
+	CredentialSourceProjectEnv     = "project_env"
+	CredentialSourceCredentials    = "credentials"
+	CredentialSourceHomeEnv        = "home_env"
+	CredentialSourceLegacy         = "legacy_credentials"
+	CredentialSourceSystemKeychain = "system_keychain"
 )
 
 type CredentialSource struct {
@@ -56,6 +57,48 @@ var credentialSourceTracker = struct {
 	sync.Mutex
 	byKey map[string]trackedCredentialSource
 }{byKey: map[string]trackedCredentialSource{}}
+
+// desktopKeychainCredentials holds values supplied by the Tauri host after it
+// reads them from the platform credential store. Keeping this in-process means
+// a desktop API key is neither written to Reasonix's .env file nor inherited by
+// commands the Agent may launch. The desktop bridge is the only caller that
+// populates this map.
+var desktopKeychainCredentials = struct {
+	sync.RWMutex
+	byProvider map[string]string
+}{byProvider: map[string]string{}}
+
+// SetDesktopKeychainCredential makes a platform-keychain value available to
+// the desktop bridge's next core runtime build. It is intentionally scoped by
+// provider name rather than api_key_env so two provider definitions cannot
+// accidentally share a value.
+func SetDesktopKeychainCredential(providerName, value string) {
+	providerName = strings.TrimSpace(providerName)
+	if providerName == "" || value == "" {
+		return
+	}
+	desktopKeychainCredentials.Lock()
+	desktopKeychainCredentials.byProvider[providerName] = value
+	desktopKeychainCredentials.Unlock()
+}
+
+// ClearDesktopKeychainCredential removes an in-memory desktop credential.
+func ClearDesktopKeychainCredential(providerName string) {
+	providerName = strings.TrimSpace(providerName)
+	if providerName == "" {
+		return
+	}
+	desktopKeychainCredentials.Lock()
+	delete(desktopKeychainCredentials.byProvider, providerName)
+	desktopKeychainCredentials.Unlock()
+}
+
+func desktopKeychainCredential(providerName string) (string, bool) {
+	desktopKeychainCredentials.RLock()
+	value, ok := desktopKeychainCredentials.byProvider[strings.TrimSpace(providerName)]
+	desktopKeychainCredentials.RUnlock()
+	return value, ok && value != ""
+}
 
 // userCredentialEditMu serializes Reasonix-owned credential-store writes.
 // LockUserCredentialEdits also takes a path-derived advisory file lock so a
@@ -233,6 +276,14 @@ func resolveProviderCredentialsForRoot(root string, cfg *Config) {
 
 func resolveProviderCredentialWithResolver(entry *ProviderEntry, resolver *CredentialResolver) {
 	if entry == nil {
+		return
+	}
+	if value, ok := desktopKeychainCredential(entry.Name); ok {
+		entry.resolvedAPIKey = value
+		entry.resolvedSource = CredentialSource{
+			Kind:  CredentialSourceSystemKeychain,
+			Label: "system keychain",
+		}
 		return
 	}
 	key := strings.TrimSpace(entry.APIKeyEnv)
@@ -550,6 +601,8 @@ func credentialSourceLabel(source CredentialSource) string {
 		return "legacy Reasonix credentials"
 	case CredentialSourceEnvironment:
 		return "environment variable"
+	case CredentialSourceSystemKeychain:
+		return "system keychain"
 	default:
 		return ""
 	}

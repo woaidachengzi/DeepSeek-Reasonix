@@ -7,8 +7,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+
+	configpkg "reasonix/internal/config"
 )
 
 func TestProviderSummaryIsAuthenticatedAndRedacted(t *testing.T) {
@@ -116,6 +119,91 @@ default = "deepseek-chat"
 	}
 	if strings.Contains(string(encoded), secretValue) {
 		t.Fatalf("provider summary leaked a credential value: %s", encoded)
+	}
+}
+
+func TestSetProviderKeyEndpointUsesPrivateMemoryOnly(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	const providerName = "keychain-test-provider"
+	const secretValue = "desktop-keychain-test-secret"
+	t.Cleanup(func() { configpkg.ClearDesktopKeychainCredential(providerName) })
+	config := `default_model = "keychain-test-provider/chat"
+
+[[providers]]
+name = "keychain-test-provider"
+kind = "openai"
+base_url = "https://api.openai.com/v1"
+api_key_env = "KEYCHAIN_TEST_PROVIDER_KEY"
+models = ["chat"]
+default = "chat"
+`
+	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	bridge := newBridgeServer(testToken, "instance-a")
+	request := func(body string, authorized bool) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/v1/settings/provider-key", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(requestIDHeader, "provider-key-test-"+strconv.Itoa(len(body)))
+		if authorized {
+			req.Header.Set("Authorization", "Bearer "+testToken)
+		}
+		response := httptest.NewRecorder()
+		bridge.handler().ServeHTTP(response, req)
+		return response
+	}
+
+	if got := request(`{"providerName":"keychain-test-provider","apiKey":"desktop-keychain-test-secret"}`, false).Code; got != http.StatusUnauthorized {
+		t.Fatalf("unauthorized status = %d, want %d", got, http.StatusUnauthorized)
+	}
+	stored := request(`{"providerName":"keychain-test-provider","apiKey":"desktop-keychain-test-secret"}`, true)
+	if stored.Code != http.StatusOK {
+		t.Fatalf("store status = %d, body = %s", stored.Code, stored.Body.String())
+	}
+	if strings.Contains(stored.Body.String(), secretValue) {
+		t.Fatalf("store response leaked API key: %s", stored.Body.String())
+	}
+	var summary providerSummaryResponse
+	if err := json.NewDecoder(stored.Body).Decode(&summary); err != nil {
+		t.Fatal(err)
+	}
+	if len(summary.Providers) != 1 || !summary.Providers[0].Configured {
+		t.Fatalf("stored provider summary = %#v", summary)
+	}
+	coreConfig, err := configpkg.LoadUserConfigReadOnly()
+	if err != nil {
+		t.Fatal(err)
+	}
+	coreConfig.Providers[0].ResolveAPIKeyForRoot(".")
+	if got := coreConfig.Providers[0].APIKey(); got != secretValue {
+		t.Fatal("core provider did not resolve the in-memory keychain credential")
+	}
+	if got := os.Getenv("KEYCHAIN_TEST_PROVIDER_KEY"); got != "" {
+		t.Fatal("provider key escaped into the process environment")
+	}
+	configOnDisk, err := os.ReadFile(filepath.Join(home, "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(configOnDisk), secretValue) {
+		t.Fatal("provider key was written to config.toml")
+	}
+
+	deleted := request(`{"providerName":"keychain-test-provider","delete":true}`, true)
+	if deleted.Code != http.StatusOK {
+		t.Fatalf("delete status = %d, body = %s", deleted.Code, deleted.Body.String())
+	}
+	if err := json.NewDecoder(deleted.Body).Decode(&summary); err != nil {
+		t.Fatal(err)
+	}
+	if len(summary.Providers) != 1 || summary.Providers[0].Configured {
+		t.Fatalf("deleted provider summary = %#v", summary)
+	}
+	coreConfig.Providers[0].ResolveAPIKeyForRoot(".")
+	if got := coreConfig.Providers[0].APIKey(); got != "" {
+		t.Fatal("core provider retained a deleted keychain credential")
 	}
 }
 

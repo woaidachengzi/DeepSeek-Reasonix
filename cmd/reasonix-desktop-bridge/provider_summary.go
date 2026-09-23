@@ -29,6 +29,14 @@ type setDefaultModelRequest struct {
 	Model string `json:"model"`
 }
 
+// setProviderKeyRequest is private to the native host/sidecar boundary. The
+// WebView never receives the bridge token and cannot call this endpoint.
+type setProviderKeyRequest struct {
+	ProviderName string `json:"providerName"`
+	APIKey       string `json:"apiKey,omitempty"`
+	Delete       bool   `json:"delete,omitempty"`
+}
+
 var errDefaultModelUnavailable = errors.New("selected model is not configured and ready")
 
 // loadProviderSummary reads only the private user config selected by
@@ -40,12 +48,12 @@ func loadProviderSummary() (providerSummaryResponse, error) {
 	if err != nil {
 		return providerSummaryResponse{}, fmt.Errorf("load user provider configuration: %w", err)
 	}
-	credentials := configpkg.NewCredentialResolverForRoot(".")
 	providers := make([]providerSummaryEntry, 0, len(cfg.Providers))
 	for i := range cfg.Providers {
 		provider := &cfg.Providers[i]
 		requiresKey := provider.RequiresAPIKey()
-		configured := !requiresKey || credentials.ResolveGlobalFirst(provider.APIKeyEnv).Set
+		provider.ResolveAPIKeyForRoot(".")
+		configured := !requiresKey || provider.Configured()
 		models := provider.ModelList()
 		if models == nil {
 			models = []string{}
@@ -66,6 +74,37 @@ func loadProviderSummary() (providerSummaryResponse, error) {
 		DefaultModel:    cfg.DefaultModel,
 		Providers:       providers,
 	}, nil
+}
+
+func updateProviderKey(request setProviderKeyRequest) error {
+	name := strings.TrimSpace(request.ProviderName)
+	if name == "" {
+		return errors.New("provider name is required")
+	}
+	if !request.Delete && strings.TrimSpace(request.APIKey) == "" {
+		return errors.New("API key is required")
+	}
+
+	cfg, err := configpkg.LoadUserConfigReadOnly()
+	if err != nil {
+		return fmt.Errorf("load user provider configuration: %w", err)
+	}
+	for i := range cfg.Providers {
+		provider := &cfg.Providers[i]
+		if provider.Name != name {
+			continue
+		}
+		if !provider.RequiresAPIKey() {
+			return errors.New("provider does not require an API key")
+		}
+		if request.Delete {
+			configpkg.ClearDesktopKeychainCredential(name)
+		} else {
+			configpkg.SetDesktopKeychainCredential(name, request.APIKey)
+		}
+		return nil
+	}
+	return errors.New("provider was not found")
 }
 
 // persistDefaultModel applies the existing config package's validation and

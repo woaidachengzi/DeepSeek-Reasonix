@@ -527,6 +527,38 @@ func TestCredentialResolverCachesGlobalFirstLookups(t *testing.T) {
 	}
 }
 
+func TestDesktopKeychainCredentialOverridesFileCredentialForSameProvider(t *testing.T) {
+	const provider = "desktop-keychain-test-provider"
+	defer ClearDesktopKeychainCredential(provider)
+	entry := &ProviderEntry{Name: provider, APIKeyEnv: "DESKTOP_KEYCHAIN_TEST_KEY"}
+	stubStoredCredentialValueForTest(t, func(key string) (string, CredentialSource, bool) {
+		if key != entry.APIKeyEnv {
+			t.Fatalf("stored credential lookup key = %q", key)
+		}
+		return "file-secret", CredentialSource{Kind: CredentialSourceCredentials}, true
+	})
+
+	SetDesktopKeychainCredential(provider, "keychain-secret")
+	resolveProviderCredentialWithResolver(entry, NewCredentialResolverForRoot("."))
+	if entry.APIKey() != "keychain-secret" || entry.resolvedSource.Kind != CredentialSourceSystemKeychain {
+		t.Fatalf("provider credential = %#v, want system keychain value", entry)
+	}
+}
+
+func TestDesktopKeychainCredentialWorksWithoutAPIKeyEnv(t *testing.T) {
+	const provider = "desktop-keychain-no-env-provider"
+	defer ClearDesktopKeychainCredential(provider)
+	entry := &ProviderEntry{Name: provider, Kind: "openai", BaseURL: "https://api.openai.com/v1"}
+	if !entry.RequiresAPIKey() {
+		t.Fatal("test provider should require an API key")
+	}
+	SetDesktopKeychainCredential(provider, "keychain-secret")
+	entry.ResolveAPIKeyForRoot(".")
+	if !entry.Configured() || entry.APIKey() != "keychain-secret" {
+		t.Fatalf("provider without api_key_env did not resolve its keychain credential: %#v", entry)
+	}
+}
+
 func stubStoredCredentialValueForTest(t *testing.T, fn func(string) (string, CredentialSource, bool)) {
 	t.Helper()
 	old := storedCredentialValueLookup

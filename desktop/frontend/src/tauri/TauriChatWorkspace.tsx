@@ -10,6 +10,7 @@ import { compactQuestionText, type QuestionAnchor } from "../lib/transcriptGroup
 import { LocaleProvider } from "../lib/i18n";
 import logoWordmark from "../assets/logo-wordmark.svg";
 import { TauriSettings } from "./TauriSettings";
+import { handleTauriDragDropEvent } from "./dragDrop";
 
 /** Per-message error boundary to prevent one bad message from crashing the entire transcript. */
 class MessageErrorBoundary extends Component<{ children: ReactNode; index: number }, { hasError: boolean }> {
@@ -353,22 +354,12 @@ export function TauriSessionPreview() {
     void (async () => {
       try {
         unlisten = await getCurrentWindow().onDragDropEvent(async (event) => {
-          if (event.payload.type === "over") {
-            setDragging(true);
-          } else if (event.payload.type === "drop") {
-            setDragging(false);
-            if (!session || event.payload.paths.length === 0) return;
-            for (const path of event.payload.paths) {
-              try {
-                const attached = await attachTauriFile(session.id, path);
-                setAttachments(previous => [...previous, attached]);
-              } catch {
-                // Non-fatal per file
-              }
-            }
-          } else {
-            setDragging(false);
-          }
+          await handleTauriDragDropEvent(event.payload, {
+            sessionId: session?.id,
+            attachFile: attachTauriFile,
+            addAttachment: attached => setAttachments(previous => [...previous, attached]),
+            setDragging,
+          });
         });
       } catch {
         // Drag-drop not supported in browser mode
@@ -1191,7 +1182,7 @@ export function TauriSessionPreview() {
         </aside>
       </>}
 
-      {settingsOpen && <TauriSettings onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <TauriSettings onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} />}
     </main>
   );
 }

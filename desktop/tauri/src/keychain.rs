@@ -6,8 +6,11 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
+use crate::bridge::{BridgeStatus, BridgeSupervisor};
+
 const SERVICE_NAME: &str = "com.reasonix.desktop";
 const LEGACY_FILE_NAME: &str = "keychain.dat";
+const PROVIDER_API_KEY_PREFIX: &str = "api_key_";
 
 trait CredentialBackend: Send + Sync {
     fn save(&self, key: &str, value: &str) -> Result<(), String>;
@@ -58,18 +61,23 @@ impl CredentialBackend for PlatformCredentialBackend {
 /// macOS Keychain, Windows Credential Manager, or Linux Secret Service.
 pub struct KeychainStore {
     backend: Arc<dyn CredentialBackend>,
+    provider_sync: Mutex<()>,
 }
 
 impl KeychainStore {
     pub fn new() -> Self {
         Self {
             backend: Arc::new(PlatformCredentialBackend),
+            provider_sync: Mutex::new(()),
         }
     }
 
     #[cfg(test)]
     fn with_backend(backend: Arc<dyn CredentialBackend>) -> Self {
-        Self { backend }
+        Self {
+            backend,
+            provider_sync: Mutex::new(()),
+        }
     }
 
     pub fn initialize(&self, app: &tauri::AppHandle) -> Result<(), String> {
@@ -112,15 +120,142 @@ impl KeychainStore {
     pub fn delete_secret(&self, key: &str) -> Result<bool, String> {
         self.backend.delete(key)
     }
+
+    /// Restore provider keys after the bridge starts. The native credential
+    /// store remains the source of truth; the bridge retains values only for
+    /// its current lifetime so core sessions can resolve them without .env.
+    pub fn restore_provider_api_keys(&self, supervisor: &BridgeSupervisor) -> Result<(), String> {
+        let _guard = self
+            .provider_sync
+            .lock()
+            .map_err(|_| "provider credential lock is unavailable")?;
+        self.restore_provider_api_keys_unlocked(supervisor)
+    }
+
+    pub fn restart_bridge(&self, supervisor: &BridgeSupervisor) -> Result<BridgeStatus, String> {
+        let _guard = self
+            .provider_sync
+            .lock()
+            .map_err(|_| "provider credential lock is unavailable")?;
+        let status = supervisor.restart()?;
+        self.restore_provider_api_keys_unlocked(supervisor)?;
+        Ok(status)
+    }
+
+    fn restore_provider_api_keys_unlocked(
+        &self,
+        supervisor: &BridgeSupervisor,
+    ) -> Result<(), String> {
+        let summary = supervisor.provider_summary()?;
+        for provider in summary.providers {
+            if !provider.requires_key {
+                continue;
+            }
+            let key = format!("{PROVIDER_API_KEY_PREFIX}{}", provider.name);
+            if let Some(value) = self.load_secret(&key)? {
+                supervisor.set_provider_key(&provider.name, Some(&value))?;
+            }
+        }
+        Ok(())
+    }
+
+    /// The keychain is authoritative. A bridge update can fail after the
+    /// sidecar accepted it but before its response reached us, so both stores
+    /// are reconciled to the previous value on an uncertain outcome.
+    fn mutate_secret_with_sync<F>(
+        &self,
+        key: &str,
+        value: Option<&str>,
+        sync: F,
+    ) -> Result<bool, String>
+    where
+        F: Fn(&str, Option<&str>) -> Result<(), String>,
+    {
+        let provider_name = provider_name_for_key(key)?;
+        if provider_name.is_some()
+            && value.is_some_and(|v| v.trim().is_empty() || v.len() > 32 << 10)
+        {
+            return Err("provider API key is invalid".to_string());
+        }
+        let _guard = self
+            .provider_sync
+            .lock()
+            .map_err(|_| "provider credential lock is unavailable")?;
+        let previous = self.load_secret(key)?;
+        let deleted = match value {
+            Some(value) => {
+                self.save_secret(key, value)?;
+                false
+            }
+            None => self.delete_secret(key)?,
+        };
+        if let Some(provider_name) = provider_name {
+            if let Err(error) = sync(provider_name, value) {
+                restore_secret(self, key, previous.as_deref()).map_err(|_| {
+                    "provider key synchronization failed and keychain rollback could not be confirmed"
+                        .to_string()
+                })?;
+                // A timed-out response can still have applied in the bridge.
+                // Reconcile its memory with the restored keychain when reachable.
+                if sync(provider_name, previous.as_deref()).is_err() {
+                    return Err(format!(
+                        "{error}; bridge credential recovery could not be confirmed; restart the bridge"
+                    ));
+                }
+                return Err(error);
+            }
+        }
+        Ok(deleted)
+    }
+
+    pub fn save_and_sync_provider_key(
+        &self,
+        supervisor: &BridgeSupervisor,
+        key: &str,
+        value: &str,
+    ) -> Result<(), String> {
+        self.mutate_secret_with_sync(key, Some(value), |name, value| {
+            supervisor.set_provider_key(name, value).map(|_| ())
+        })
+        .map(|_| ())
+    }
+
+    pub fn delete_and_sync_provider_key(
+        &self,
+        supervisor: &BridgeSupervisor,
+        key: &str,
+    ) -> Result<bool, String> {
+        self.mutate_secret_with_sync(key, None, |name, value| {
+            supervisor.set_provider_key(name, value).map(|_| ())
+        })
+    }
+}
+
+fn provider_name_for_key(key: &str) -> Result<Option<&str>, String> {
+    let Some(provider_name) = key.strip_prefix(PROVIDER_API_KEY_PREFIX) else {
+        return Ok(None);
+    };
+    if provider_name.is_empty() || provider_name.trim() != provider_name {
+        return Err("provider key name is invalid".to_string());
+    }
+    Ok(Some(provider_name))
+}
+
+fn restore_secret(store: &KeychainStore, key: &str, previous: Option<&str>) -> Result<(), String> {
+    match previous {
+        Some(value) => store.save_secret(key, value),
+        None => store.delete_secret(key).map(|_| ()),
+    }
 }
 
 #[tauri::command]
 pub fn keychain_save(
     state: tauri::State<'_, KeychainStore>,
+    supervisor: tauri::State<'_, BridgeSupervisor>,
     key: String,
     value: String,
 ) -> Result<(), String> {
-    state.save_secret(&key, &value)
+    state.save_and_sync_provider_key(&supervisor, &key, &value)
 }
 
 #[tauri::command]
@@ -134,9 +269,10 @@ pub fn keychain_load(
 #[tauri::command]
 pub fn keychain_delete(
     state: tauri::State<'_, KeychainStore>,
+    supervisor: tauri::State<'_, BridgeSupervisor>,
     key: String,
 ) -> Result<bool, String> {
-    state.delete_secret(&key)
+    state.delete_and_sync_provider_key(&supervisor, &key)
 }
 
 #[cfg(test)]
@@ -247,6 +383,47 @@ mod tests {
                 .load_secret("legacy-key")
                 .expect("load migrated value"),
             Some("legacy-value".to_string())
+        );
+    }
+
+    #[test]
+    fn recognizes_only_named_provider_api_keys() {
+        assert_eq!(
+            provider_name_for_key("api_key_deepseek").unwrap(),
+            Some("deepseek")
+        );
+        assert!(provider_name_for_key("api_key_ ").is_err());
+        assert_eq!(provider_name_for_key("other_key_deepseek").unwrap(), None);
+    }
+
+    #[test]
+    fn failed_bridge_response_reconciles_both_copies() {
+        let store = test_store();
+        store
+            .save_secret("api_key_deepseek", "old-secret")
+            .expect("seed");
+        let bridge_value = Mutex::new(Some("old-secret".to_string()));
+        let calls = Mutex::new(0);
+        let result =
+            store.mutate_secret_with_sync("api_key_deepseek", Some("new-secret"), |name, value| {
+                assert_eq!(name, "deepseek");
+                *bridge_value.lock().expect("bridge lock") = value.map(str::to_string);
+                let mut calls = calls.lock().expect("calls lock");
+                *calls += 1;
+                if *calls == 1 {
+                    return Err("bridge response was lost".to_string());
+                }
+                Ok(())
+            });
+        assert!(result.is_err());
+        assert_eq!(*calls.lock().expect("calls lock"), 2);
+        assert_eq!(
+            bridge_value.lock().expect("bridge lock").as_deref(),
+            Some("old-secret")
+        );
+        assert_eq!(
+            store.load_secret("api_key_deepseek").expect("load"),
+            Some("old-secret".to_string())
         );
     }
 }

@@ -31,8 +31,11 @@ fn bridge_status(supervisor: State<'_, BridgeSupervisor>) -> BridgeStatus {
 }
 
 #[tauri::command]
-fn restart_bridge(supervisor: State<'_, BridgeSupervisor>) -> Result<BridgeStatus, String> {
-    supervisor.restart()
+fn restart_bridge(
+    supervisor: State<'_, BridgeSupervisor>,
+    keychain: State<'_, keychain::KeychainStore>,
+) -> Result<BridgeStatus, String> {
+    keychain.restart_bridge(&supervisor)
 }
 
 #[tauri::command]
@@ -273,7 +276,6 @@ fn main() {
             let profile =
                 data_profile::configure_preview_profile(app).map_err(std::io::Error::other)?;
             let supervisor = BridgeSupervisor::from_environment(app.handle().clone());
-            supervisor.start().map_err(std::io::Error::other)?;
 
             let menu = menu::build_app_menu(app)
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
@@ -285,6 +287,15 @@ fn main() {
             // Initialize keychain store
             let keychain = keychain::KeychainStore::new();
             keychain.initialize(app.handle()).map_err(std::io::Error::other)?;
+
+            supervisor.start().map_err(std::io::Error::other)?;
+            if let Err(error) = keychain.restore_provider_api_keys(&supervisor) {
+                // A native credential service can be temporarily unavailable.
+                // Keep the app usable with its existing file-backed settings;
+                // the provider will simply remain unavailable until the next
+                // startup or a user saves the key again.
+                eprintln!("Reasonix could not restore system keychain credentials: {error}");
+            }
             app.manage(keychain);
 
             app.manage(supervisor);
