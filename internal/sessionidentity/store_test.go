@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"testing"
 
-	"reasonix/internal/config"
+	"reasonix/internal/desktopbridge/sessionpath"
 )
 
 func TestImportPreservesTranscriptAndIdentityAcrossReopen(t *testing.T) {
@@ -167,10 +167,14 @@ func TestImportRejectsOutsideRootAndSymlink(t *testing.T) {
 func TestImportWorkbenchCatalogPreservesOrderAndWorkspace(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
 	catalog := filepath.Join(t.TempDir(), "workbench-sessions.json")
 	workspace := filepath.Join(t.TempDir(), "project")
-	globalPath := filepath.Join(root, "sessions", "tauri-tauri-global.jsonl")
-	projectPath := filepath.Join(root, "projects", config.WorkspaceSlug(workspace), "sessions", "tauri-tauri-project.jsonl")
+	// The bridge writes every session flat in its session dir, whatever the
+	// workspace. The importer must derive the same paths; a workspace must not
+	// move a transcript into projects/<slug>/sessions.
+	projectPath := filepath.Join(sessionDir, "tauri-tauri-project.jsonl")
+	globalPath := filepath.Join(sessionDir, "tauri-tauri-global.jsonl")
 	for _, path := range []string{globalPath, projectPath} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			t.Fatal(err)
@@ -194,16 +198,30 @@ func TestImportWorkbenchCatalogPreservesOrderAndWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	if err := store.ImportWorkbenchCatalog(ctx, root, catalog); err != nil {
+	if err := store.ImportWorkbenchCatalog(ctx, sessionDir, catalog); err != nil {
 		t.Fatal(err)
 	}
 	records, err := store.List(ctx)
 	if err != nil || len(records) != 2 {
 		t.Fatalf("imported catalog = %#v, %v", records, err)
 	}
-	if records[0].ID != "tauri-project" || records[0].Path != projectPath || records[0].WorkspaceRoot != workspace ||
-		records[1].ID != "tauri-global" || records[1].Path != globalPath {
+	// A workspace-bearing session keeps its metadata but lands beside the
+	// session dir's other transcripts.
+	if records[0].ID != "tauri-project" || records[0].Path != projectPath || records[0].WorkspaceRoot != workspace {
 		t.Fatalf("catalog mapping = %#v", records)
+	}
+	if records[1].ID != "tauri-global" || records[1].Path != globalPath {
+		t.Fatalf("catalog mapping = %#v", records)
+	}
+
+	// The importer and the bridge must agree for the same session ID. If this
+	// fails, one of them changed its layout rule alone.
+	fromBridge, err := sessionpath.TranscriptPath(sessionDir, "tauri-project")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fromBridge != records[0].Path {
+		t.Fatalf("bridge path %q != imported path %q", fromBridge, records[0].Path)
 	}
 }
 

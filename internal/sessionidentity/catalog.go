@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"reasonix/internal/config"
+	"reasonix/internal/desktopbridge/sessionpath"
 )
 
 type catalogEntry struct {
@@ -19,7 +19,13 @@ type catalogEntry struct {
 	WorkspaceRoot string `json:"workspaceRoot"`
 }
 
-func (s *Store) ImportWorkbenchCatalog(ctx context.Context, previewRoot, catalogPath string) error {
+// ImportWorkbenchCatalog registers the sessions the Preview host lists.
+//
+// sessionDir must be the directory the writer actually uses, so this importer
+// shares one path rule with the bridge instead of re-deriving a layout: a
+// session's workspace is UI metadata and never selects its transcript
+// directory. The catalog keeps its own order, titles and workspaces.
+func (s *Store) ImportWorkbenchCatalog(ctx context.Context, sessionDir, catalogPath string) error {
 	file, err := os.Open(catalogPath)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
@@ -44,20 +50,22 @@ func (s *Store) ImportWorkbenchCatalog(ctx context.Context, previewRoot, catalog
 	}
 	candidates := make([]Candidate, 0, len(entries))
 	for position, entry := range entries {
-		root := strings.TrimSpace(entry.WorkspaceRoot)
-		dir := filepath.Join(previewRoot, "sessions")
-		if root != "" {
-			abs, err := filepath.Abs(root)
+		workspace := strings.TrimSpace(entry.WorkspaceRoot)
+		if workspace != "" {
+			abs, err := filepath.Abs(workspace)
 			if err != nil {
 				return fmt.Errorf("resolve workbench workspace: %w", err)
 			}
-			root = abs
-			dir = filepath.Join(previewRoot, "projects", config.WorkspaceSlug(root), "sessions")
+			workspace = abs
+		}
+		path, err := sessionpath.TranscriptPath(sessionDir, entry.SessionID)
+		if err != nil {
+			return fmt.Errorf("workbench session %s: %w", entry.SessionID, err)
 		}
 		candidates = append(candidates, Candidate{
-			ID: entry.SessionID, Path: filepath.Join(dir, "tauri-"+entry.SessionID+".jsonl"),
-			WorkspaceRoot: root, Title: entry.Title, Position: position,
+			ID: entry.SessionID, Path: path,
+			WorkspaceRoot: workspace, Title: entry.Title, Position: position,
 		})
 	}
-	return s.Import(ctx, previewRoot, candidates)
+	return s.Import(ctx, sessionDir, candidates)
 }

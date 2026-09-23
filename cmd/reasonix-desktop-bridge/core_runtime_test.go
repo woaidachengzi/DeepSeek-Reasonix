@@ -11,10 +11,36 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/boot"
 	"reasonix/internal/desktopbridge"
+	"reasonix/internal/desktopbridge/sessionpath"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
 	"reasonix/internal/sessioncontext"
 )
+
+// The bridge and the identity importer must not derive transcript paths
+// separately: that drift is what the S0 fix removes. The importer side of this
+// pair is asserted in internal/sessionidentity (its catalog test imports the
+// same shared rule), so this test pins the writer side plus the validator.
+func TestBridgeSessionPathMatchesTheSharedRule(t *testing.T) {
+	dir := t.TempDir()
+	for _, id := range []string{"tauri-abc123", "bare_id", "t-"} {
+		got, err := bridgeSessionPath(dir, id)
+		if err != nil {
+			t.Fatalf("bridgeSessionPath(%q): %v", id, err)
+		}
+		want, err := sessionpath.TranscriptPath(dir, id)
+		if err != nil {
+			t.Fatalf("sessionpath.TranscriptPath(%q): %v", id, err)
+		}
+		if got != want {
+			t.Fatalf("bridge path %q != shared path %q", got, want)
+		}
+		// Flat: a workspace never selects the directory.
+		if expected := filepath.Join(dir, "tauri-"+id+".jsonl"); want != expected {
+			t.Fatalf("shared path = %q, want %q", want, expected)
+		}
+	}
+}
 
 func TestBridgeSessionPathIsDeterministicAndContained(t *testing.T) {
 	dir := t.TempDir()

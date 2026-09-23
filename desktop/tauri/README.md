@@ -12,6 +12,12 @@ Preview 使用 Tauri 应用数据目录下私有的 `REASONIX_HOME`。因此它�
 写入稳定 Wails 客户端的配置、会话和缓存；稳定版可与它并存。导入稳定版数据会作为单独的
 “先备份、再确认”的功能实现。开发者显式传入的 `REASONIX_HOME` 仍是有意识的覆盖选择。
 
+Go core 解析状态根的顺序是 `REASONIX_STATE_HOME` 优先、`REASONIX_HOME` 其次。托管的
+Preview 在启动时会清除继承来的 `REASONIX_STATE_HOME`，否则该变量会覆盖上面的私有
+`REASONIX_HOME`，把 Preview 的会话目录、配置与身份库指向稳定版数据根——这个错误是静默的，
+所以由 `data_profile` 的单元测试固定。显式 `REASONIX_HOME` 属于非托管 profile，不做这项
+覆盖，也不会启用自动导入。
+
 窗口尺寸与最大化状态同样保存在 Preview 自己的 Tauri 应用数据目录，而非
 `REASONIX_HOME`。损坏或不合理的状态会被忽略并使用默认窗口；导入、重置或删除 Go core
 配置不会影响窗口偏好。

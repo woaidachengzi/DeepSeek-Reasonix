@@ -71,15 +71,28 @@ pub fn configure_preview_profile(app: &tauri::App) -> Result<PreviewProfile, Str
         )
     })?;
 
-    // The Tauri host is single-threaded during setup, before the bridge
-    // sidecar is spawned. The sidecar inherits this environment and the Go
-    // core routes config, state, sessions, and cache below this root.
-    env::set_var("REASONIX_HOME", &home);
+    // The Go core resolves its state root as REASONIX_STATE_HOME first and
+    // REASONIX_HOME second. An inherited REASONIX_STATE_HOME therefore wins
+    // over the preview home below, which would route preview sessions, the
+    // config and the identity database into a stable installation.
+    enable_managed_profile(&home);
     Ok(PreviewProfile {
         home,
         stable_config,
         managed_profile: true,
     })
+}
+
+/// Points the Go core at one private state root and drops inherited overrides.
+///
+/// Split out from `configure_preview_profile` so the isolation rule is directly
+/// testable without a Tauri `App`: the failure it prevents is silent, because
+/// the sidecar would simply read and write a stable installation.
+fn enable_managed_profile(home: &Path) {
+    if std::env::var_os("REASONIX_STATE_HOME").is_some() {
+        std::env::remove_var("REASONIX_STATE_HOME");
+    }
+    std::env::set_var("REASONIX_HOME", home);
 }
 
 impl PreviewProfile {
@@ -319,5 +332,40 @@ mod tests {
         };
         assert!(!profile.status().import_available);
         assert!(profile.import_stable_config().is_err());
+    }
+
+    /// The Go core reads REASONIX_STATE_HOME before REASONIX_HOME, so an
+    /// inherited state home would silently move preview sessions, config and
+    /// the identity database into a stable installation.
+    #[test]
+    fn managed_profile_drops_an_inherited_state_home() {
+        // Both variables are process-global; this test owns them for its
+        // duration, so the previous values are restored afterwards.
+        let previous_state = env::var_os("REASONIX_STATE_HOME");
+        let previous_home = env::var_os("REASONIX_HOME");
+        env::set_var("REASONIX_STATE_HOME", "/stable/state");
+
+        let home = PathBuf::from("/preview/home");
+        enable_managed_profile(&home);
+
+        assert_eq!(
+            env::var_os("REASONIX_STATE_HOME"),
+            None,
+            "an inherited state home must not survive"
+        );
+        assert_eq!(
+            env::var_os("REASONIX_HOME"),
+            Some(home.into_os_string()),
+            "the preview home must be the Go core's state root"
+        );
+
+        match previous_state {
+            Some(value) => env::set_var("REASONIX_STATE_HOME", value),
+            None => env::remove_var("REASONIX_STATE_HOME"),
+        }
+        match previous_home {
+            Some(value) => env::set_var("REASONIX_HOME", value),
+            None => env::remove_var("REASONIX_HOME"),
+        }
     }
 }

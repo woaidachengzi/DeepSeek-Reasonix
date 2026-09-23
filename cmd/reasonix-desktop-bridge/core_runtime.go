@@ -16,6 +16,7 @@ import (
 	"reasonix/internal/boot"
 	"reasonix/internal/control"
 	"reasonix/internal/desktopbridge"
+	"reasonix/internal/desktopbridge/sessionpath"
 	"reasonix/internal/event"
 	"reasonix/internal/fileref"
 	"reasonix/internal/provider"
@@ -77,19 +78,11 @@ func resumeBridgeSession(controller *control.Controller, sessionID string) error
 	return nil
 }
 
+// bridgeSessionPath keeps the bridge on the shared session-path rule. The
+// workspace is deliberately absent: it is UI metadata and never selects the
+// transcript directory.
 func bridgeSessionPath(sessionDir, sessionID string) (string, error) {
-	if strings.TrimSpace(sessionDir) == "" {
-		return "", fmt.Errorf("desktop bridge session directory is unavailable")
-	}
-	if sessionID == "" || len(sessionID) > 128 {
-		return "", fmt.Errorf("desktop bridge session identifier is invalid")
-	}
-	for _, byte := range []byte(sessionID) {
-		if !(byte >= 'a' && byte <= 'z') && !(byte >= 'A' && byte <= 'Z') && !(byte >= '0' && byte <= '9') && byte != '-' && byte != '_' {
-			return "", fmt.Errorf("desktop bridge session identifier is invalid")
-		}
-	}
-	return filepath.Join(sessionDir, "tauri-"+sessionID+".jsonl"), nil
+	return sessionpath.TranscriptPath(sessionDir, sessionID)
 }
 
 // controllerRuntime adapts the established controller to the bridge's minimal
