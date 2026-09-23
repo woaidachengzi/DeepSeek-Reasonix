@@ -898,11 +898,23 @@ export function TauriSessionPreview() {
     }
   }
 
-  async function restartBridge() {
+  async function restartBridge(): Promise<boolean> {
+    if (busy) return false;
     setBusy(true);
     setError("");
-    setStreamReady(false);
     try {
+      if (session) {
+        const current = await tauriBridgeSnapshot(session.id);
+        if (current.session.state !== "idle") {
+          setError("请等待当前回合结束，再重启桥接服务。");
+          return false;
+        }
+        if (attachments.length > 0) {
+          setError("请先处理待发送的附件，再重启桥接服务。");
+          return false;
+        }
+      }
+      setStreamReady(false);
       setStatus(await restartTauriBridge());
       if (session) {
         const reopened = await openTauriBridgeSession(session.id, session.workspaceRoot);
@@ -917,9 +929,12 @@ export function TauriSessionPreview() {
         setSequence(0);
         setStreamRevision(previous => previous + 1);
       }
+      setProviderSummary(await tauriProviderSummary());
+      return true;
     } catch (cause) {
-      setStatus({ running: false });
+      setStatus(await tauriBridgeStatus().catch(() => ({ running: false })));
       setError(tauriMessageFrom(cause));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -1182,7 +1197,7 @@ export function TauriSessionPreview() {
         </aside>
       </>}
 
-      {settingsOpen && <TauriSettings onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} />}
+      {settingsOpen && <TauriSettings onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionState={session?.state} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} />}
     </main>
   );
 }

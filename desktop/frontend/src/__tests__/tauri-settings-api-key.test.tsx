@@ -58,12 +58,13 @@ const { renderToString } = await import("react-dom/server");
 const { createRoot } = await import("react-dom/client");
 const { TauriSettings } = await import("../tauri/TauriSettings");
 let parentConfigured: boolean | undefined;
+let applyCalls = 0;
 
 renderToString(<TauriSettings onClose={() => {}} />);
 assert.equal(calls.length, 0, "rendering settings does not start bridge work");
 
 const root = createRoot(document.getElementById("root")!);
-await act(async () => { root.render(<TauriSettings onClose={() => {}} onProviderSummaryChange={value => { parentConfigured = value.providers[0]?.configured; }} />); });
+await act(async () => { root.render(<TauriSettings onClose={() => {}} onProviderSummaryChange={value => { parentConfigured = value.providers[0]?.configured; }} currentSessionState="idle" onApplyToCurrentSession={async () => { applyCalls += 1; return true; }} />); });
 assert.equal(calls.filter(call => call === "provider_summary").length, 1, "settings load once after mount");
 assert.equal(parentConfigured, true, "the model picker outside settings receives the initial summary");
 
@@ -100,6 +101,10 @@ assert.match(visibleText(), /已保存到钥匙串/);
 assert.equal(document.querySelector<HTMLInputElement>(".tauri-settings-apikey input")?.value, "", "successful save clears the entered secret");
 assert.equal(calls.filter(call => call === "provider_summary").length, 2, "save refreshes the provider summary");
 assert.equal(parentConfigured, true, "the model picker outside settings receives the saved status");
+assert.match(visibleText(), /应用到当前会话/, "saved key offers an explicit active-session update");
+await act(async () => { click("应用到当前会话"); });
+assert.equal(applyCalls, 1, "active-session update is user initiated");
+assert.doesNotMatch(visibleText(), /应用到当前会话/, "successful update clears the pending action");
 
 await act(async () => { click("删除"); });
 assert.match(visibleText(), /钥匙串密钥已删除；其他凭据仍可用/, "delete reports the keychain scope when .env remains");

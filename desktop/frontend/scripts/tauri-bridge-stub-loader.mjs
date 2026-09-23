@@ -119,7 +119,7 @@ export function deleteTauriBridgeSession(sessionId) {
 }
 
 export function tauriBridgeSnapshot(sessionId) {
-  return Promise.resolve({ sequence: 0, session: { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle" } });
+  return Promise.resolve({ sequence: 0, session: { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: globalThis.__snapshotState ?? "idle" } });
 }
 
 export function tauriBridgeHistory(sessionId) {

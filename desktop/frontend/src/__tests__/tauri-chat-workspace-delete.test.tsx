@@ -56,6 +56,14 @@ function clickByClass(className: string): boolean {
   return true;
 }
 
+function clickButton(label: string): boolean {
+  const button = [...document.querySelectorAll<HTMLButtonElement>("button")]
+    .find(candidate => candidate.textContent?.trim() === label);
+  if (!button) return false;
+  button.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  return true;
+}
+
 function clickSession(title: string): boolean {
   const row = [...document.querySelectorAll<HTMLElement>(".tauri-session-row")]
     .find(candidate => candidate.textContent?.includes(title));
@@ -172,6 +180,21 @@ async function main() {
   });
   ok(text().includes("already owns a different session"), "a rejected delete shows the bridge error");
   ok(text().includes("保留会话"), "a rejected delete keeps the row");
+
+  // A stale UI state must not let restart interrupt a turn that the bridge
+  // reports as running. Once idle, the same control can apply a new key.
+  ok(clickButton("运行状态"), "runtime panel can be opened");
+  await act(async () => { await settle(); });
+  (globalThis as unknown as { __snapshotState?: string }).__snapshotState = "running";
+  ok(clickButton("重启桥接服务并恢复当前会话"), "restart control is present");
+  await act(async () => { await settle(); });
+  eq(bridgeCalls().filter(call => call.name === "restart_bridge").length, 0, "running turn cannot be interrupted by restart");
+  ok(text().includes("请等待当前回合结束"), "running turn shows an actionable explanation");
+
+  (globalThis as unknown as { __snapshotState?: string }).__snapshotState = "idle";
+  clickButton("重启桥接服务并恢复当前会话");
+  await act(async () => { await settle(); await settle(); });
+  eq(bridgeCalls().filter(call => call.name === "restart_bridge").length, 1, "idle session can restart to apply its key");
 
   await act(async () => {
     root.unmount();

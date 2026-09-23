@@ -5,11 +5,14 @@ import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, ta
 interface TauriSettingsProps {
   onClose: () => void;
   onProviderSummaryChange?: (summary: TauriProviderSummary) => void;
+  currentSessionState?: "idle" | "running" | "paused";
+  currentSessionHasAttachments?: boolean;
+  onApplyToCurrentSession?: () => Promise<boolean>;
 }
 
 type SettingsTab = "general" | "model" | "about";
 
-export function TauriSettings({ onClose, onProviderSummaryChange }: TauriSettingsProps) {
+export function TauriSettings({ onClose, onProviderSummaryChange, currentSessionState, currentSessionHasAttachments, onApplyToCurrentSession }: TauriSettingsProps) {
   const [tab, setTab] = useState<SettingsTab>("general");
   const [runtimeInfo, setRuntimeInfo] = useState<TauriPreviewRuntimeInfo | null>(null);
   const [providerSummary, setProviderSummaryState] = useState<TauriProviderSummary | null>(null);
@@ -91,7 +94,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange }: TauriSetting
         <div className="tauri-settings-content">
           {loading ? <div className="tauri-settings-loading">加载中…</div> : <>
             {tab === "general" && <GeneralSettings theme={theme} onThemeChange={handleThemeChange} platform={platform} />}
-            {tab === "model" && <ModelSettings providerSummary={providerSummary} onModelChange={handleModelChange} onProviderSummaryChange={updateProviderSummary} />}
+            {tab === "model" && <ModelSettings providerSummary={providerSummary} onModelChange={handleModelChange} onProviderSummaryChange={updateProviderSummary} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "about" && <AboutSettings runtimeInfo={runtimeInfo} onRefresh={loadSettings} />}
           </>}
         </div>
@@ -123,11 +126,19 @@ function GeneralSettings({ theme, onThemeChange, platform }: { theme: string; on
   );
 }
 
-function ModelSettings({ providerSummary, onModelChange, onProviderSummaryChange }: { providerSummary: TauriProviderSummary | null; onModelChange: (m: string) => void; onProviderSummaryChange: (summary: TauriProviderSummary) => void }) {
+function ModelSettings({ providerSummary, onModelChange, onProviderSummaryChange, currentSessionState, currentSessionHasAttachments, onApplyToCurrentSession }: {
+  providerSummary: TauriProviderSummary | null;
+  onModelChange: (m: string) => void;
+  onProviderSummaryChange: (summary: TauriProviderSummary) => void;
+  currentSessionState?: "idle" | "running" | "paused";
+  currentSessionHasAttachments?: boolean;
+  onApplyToCurrentSession?: () => Promise<boolean>;
+}) {
   const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({});
   const [showApiKey, setShowApiKey] = useState<Record<string, boolean>>({});
   const [keyStatus, setKeyStatus] = useState<Record<string, { message: string; error: boolean } | null>>({});
   const [keyBusy, setKeyBusy] = useState(false);
+  const [pendingApply, setPendingApply] = useState<Record<string, boolean>>({});
   const keyBusyRef = useRef(false);
   const statusTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const mounted = useRef(false);
@@ -169,6 +180,9 @@ function ModelSettings({ providerSummary, onModelChange, onProviderSummaryChange
       if (action === "save" && mounted.current) {
         setApiKeyInputs(prev => ({ ...prev, [providerName]: prev[providerName] === key ? "" : prev[providerName] }));
       }
+      if (mounted.current && (action === "save" || deleted)) {
+        setPendingApply(prev => ({ ...prev, [providerName]: true }));
+      }
       try {
         const summary = await tauriProviderSummary();
         if (mounted.current) onProviderSummaryChange(summary);
@@ -179,6 +193,24 @@ function ModelSettings({ providerSummary, onModelChange, onProviderSummaryChange
       }
     } catch {
       showStatus(providerName, action === "save" ? "保存失败" : "删除失败", true);
+    } finally {
+      keyBusyRef.current = false;
+      if (mounted.current) setKeyBusy(false);
+    }
+  };
+
+  const handleApplyToCurrentSession = async (providerName: string) => {
+    if (!onApplyToCurrentSession || !pendingApply[providerName] || keyBusyRef.current) return;
+    keyBusyRef.current = true;
+    setKeyBusy(true);
+    try {
+      const applied = await onApplyToCurrentSession();
+      if (applied && mounted.current) {
+        setPendingApply({});
+      }
+      showStatus(providerName, applied ? "当前会话已更新" : "当前会话未能更新，请在诊断面板重试", !applied);
+    } catch {
+      showStatus(providerName, "当前会话未能更新，请在诊断面板重试", true);
     } finally {
       keyBusyRef.current = false;
       if (mounted.current) setKeyBusy(false);
@@ -236,6 +268,11 @@ function ModelSettings({ providerSummary, onModelChange, onProviderSummaryChange
                     <button type="button" className="tauri-settings-button tauri-settings-button--danger" onClick={() => void handleApiKeyAction(provider.name, "delete")} disabled={keyBusy}>
                       删除
                     </button>
+                    {pendingApply[provider.name] && currentSessionState && onApplyToCurrentSession && (
+                      <button type="button" className="tauri-settings-button" onClick={() => void handleApplyToCurrentSession(provider.name)} disabled={keyBusy || currentSessionState !== "idle" || currentSessionHasAttachments} title={currentSessionState !== "idle" ? "请等待当前回合结束" : currentSessionHasAttachments ? "请先处理待发送的附件" : undefined}>
+                        应用到当前会话
+                      </button>
+                    )}
                     {keyStatus[provider.name] && <span className={`tauri-settings-apikey-status${keyStatus[provider.name]?.error ? " is-error" : " is-success"}`}>{keyStatus[provider.name]?.message}</span>}
                   </div>
                 </div>
