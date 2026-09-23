@@ -244,6 +244,8 @@ export function TauriSessionPreview() {
   const [activeQuestion, setActiveQuestion] = useState<number | null>(null);
   const switchingBlocked = Boolean(session && session.state !== "idle");
   const [platform, setPlatform] = useState<string>("");
+  // Optimistic user message: displayed immediately after submit, cleared when history loads
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
 
   const questions = useMemo<QuestionAnchor[]>(() => {
     if (!history) return [];
@@ -365,6 +367,7 @@ export function TauriSessionPreview() {
                 const latestHistory = await tauriBridgeHistory(event.sessionId);
                 if (!active) return;
                 setHistory(latestHistory);
+                setPendingUserMessage(null); // Clear optimistic message
                 setHistoryError("");
               } catch (historyError) {
                 if (!active) return;
@@ -454,6 +457,7 @@ export function TauriSessionPreview() {
       setHistoryLoading(true);
       setHistoryError("");
       setLiveText("");
+      setPendingUserMessage(null);
       setSequence(0);
       setStreamReady(false);
       setTitleEditing(false);
@@ -710,9 +714,12 @@ export function TauriSessionPreview() {
     const input = tauriComposerInput(prompt, attachments);
     if (!session || !streamReady || !input) return;
     const sessionId = session.id;
+    const userText = prompt.trim();
     setBusy(true);
     setError("");
     setLiveText("");
+    // Show user message immediately (optimistic update)
+    setPendingUserMessage(userText || null);
     try {
       const submitted = await submitTauriBridge(sessionId, input);
       if (sessionId !== session?.id) return;
@@ -723,12 +730,16 @@ export function TauriSessionPreview() {
       await new Promise(resolve => setTimeout(resolve, 100));
       try {
         const latestHistory = await tauriBridgeHistory(sessionId);
-        if (sessionId === session?.id) setHistory(latestHistory);
+        if (sessionId === session?.id) {
+          setHistory(latestHistory);
+          setPendingUserMessage(null); // Clear optimistic message when real history arrives
+        }
       } catch {
         // History fetch failure after submit is non-fatal; events will update
       }
     } catch (cause) {
       setError(tauriMessageFrom(cause));
+      setPendingUserMessage(null);
     } finally {
       setBusy(false);
     }
@@ -965,7 +976,7 @@ export function TauriSessionPreview() {
         </header>
 
         <div className="tauri-conversation" ref={conversationRef}>
-          {session && !history && historyLoading ? <div className="tauri-loading"><span /><p>正在载入对话…</p></div> : session && !history && historyError ? <div className="tauri-loading tauri-history-error"><p>无法载入对话记录</p><p>{historyError}</p><button type="button" className="tauri-diagnostic-action" onClick={() => void refreshHistory()} disabled={busy}>重新加载</button></div> : history?.messages.length || liveText || session?.state === "running" ? <div className="tauri-transcript">
+          {session && !history && historyLoading ? <div className="tauri-loading"><span /><p>正在载入对话…</p></div> : session && !history && historyError ? <div className="tauri-loading tauri-history-error"><p>无法载入对话记录</p><p>{historyError}</p><button type="button" className="tauri-diagnostic-action" onClick={() => void refreshHistory()} disabled={busy}>重新加载</button></div> : history?.messages.length || liveText || pendingUserMessage || session?.state === "running" ? <div className="tauri-transcript">
             {history && history.startIndex > 0 && <p className="tauri-history-note">当前显示最近 {history.messages.length} 条，共 {history.totalMessages} 条可见消息</p>}
             {history?.messages.map((message, index) => {
               const display = message.role === "user" ? parseAttachmentRefsForDisplay(message.content) : null;
@@ -982,8 +993,10 @@ export function TauriSessionPreview() {
                 </article>
               </MessageErrorBoundary>;
             })}
+            {/* Optimistic user message: shown immediately after submit, before history loads */}
+            {pendingUserMessage && <article className="tauri-message is-user"><div className="tauri-message__avatar" aria-hidden="true">你</div><div className="tauri-message__content"><div className="tauri-message__role">你</div><Markdown text={pendingUserMessage} /></div></article>}
             {liveText && <article className="tauri-message is-assistant tauri-message--live"><div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div><div className="tauri-message__content"><div className="tauri-message__role">Reasonix</div><Markdown text={liveText || ""} streaming cacheKey={`${session?.id ?? "live"}:stream`} /></div></article>}
-            {session?.state === "running" && !liveText && <div className="tauri-thinking" role="status"><span /><span /><span />Reasonix 正在思考…</div>}
+            {session?.state === "running" && !liveText && !pendingUserMessage && <div className="tauri-thinking" role="status"><span /><span /><span />Reasonix 正在思考…</div>}
           </div> : <section className="tauri-welcome">
             <div className="tauri-welcome__mark"><Sparkles size={24} /></div>
             <p className="tauri-welcome__eyebrow">REASONIX · TAURI PREVIEW</p>
