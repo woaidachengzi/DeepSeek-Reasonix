@@ -2,6 +2,7 @@
 
 mod bridge;
 mod data_profile;
+mod keychain;
 mod menu;
 mod protocol_generated;
 mod runtime_info;
@@ -262,13 +263,6 @@ fn main() {
         }))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
-        .plugin(
-            tauri_plugin_stronghold::Builder::new(|password| {
-                // Simple hash for development; use argon2 or similar in production
-                password.as_bytes().to_vec()
-            })
-            .build(),
-        )
         .setup(|app| {
             let window_state = PreviewWindowState::for_app(app)?;
             let workbench_catalog =
@@ -287,6 +281,11 @@ fn main() {
 
             tray::create_tray(app)
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
+
+            // Initialize keychain store
+            let keychain = keychain::KeychainStore::new();
+            keychain.initialize(app.handle()).map_err(std::io::Error::other)?;
+            app.manage(keychain);
 
             app.manage(supervisor);
             app.manage(profile);
@@ -417,7 +416,10 @@ fn main() {
             workbench_sessions,
             remember_workbench_session,
             forget_workbench_session,
-            platform_info
+            platform_info,
+            keychain::keychain_save,
+            keychain::keychain_load,
+            keychain::keychain_delete
         ])
         .build(tauri::generate_context!())
         .expect("failed to build Reasonix Tauri host");
