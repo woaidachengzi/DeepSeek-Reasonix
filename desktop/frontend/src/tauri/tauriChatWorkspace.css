@@ -297,6 +297,7 @@
 .tauri-composer-area { width: min(820px, calc(100% - 48px)); flex: 0 0 auto; align-self: center; padding: 9px 0 13px; }
 .tauri-composer { padding: 11px 12px 9px 15px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: 0 8px 26px color-mix(in srgb, var(--shadow-color) 9%, transparent); transition: border-color .16s ease, box-shadow .16s ease; }
 .tauri-composer:focus-within { border-color: color-mix(in srgb, var(--accent) 57%, var(--border)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 9%, transparent), 0 8px 26px color-mix(in srgb, var(--shadow-color) 9%, transparent); }
+.tauri-composer.is-dragging { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent), 0 8px 26px color-mix(in srgb, var(--accent) 10%, transparent); background: color-mix(in srgb, var(--accent) 4%, var(--surface)); }
 .tauri-composer textarea { display: block; width: 100%; min-height: 64px; max-height: 180px; resize: vertical; border: 0; outline: 0; background: transparent; color: var(--fg); font-size: 13px; line-height: 1.65; }
 .tauri-composer textarea::placeholder { color: var(--fg-faint); }
 .tauri-composer__bottom { display: flex; min-height: 30px; align-items: center; justify-content: space-between; gap: 12px; color: var(--fg-faint); font-size: 10px; }

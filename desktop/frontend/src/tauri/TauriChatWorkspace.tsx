@@ -1,6 +1,7 @@
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Eye, FileText, FolderOpen, FolderTree, GitBranch, MessageSquare, Paperclip, Pencil, Plus, Settings, Sparkles, Square, Trash2, X } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { Markdown } from "../components/Markdown";
 import { QuestionJumpBar } from "../components/QuestionJumpBar";
@@ -249,6 +250,8 @@ export function TauriSessionPreview() {
   const [platform, setPlatform] = useState<string>("");
   // Optimistic user message: displayed immediately after submit, cleared when history loads
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
+  // Drag-and-drop state
+  const [dragging, setDragging] = useState(false);
 
   const questions = useMemo<QuestionAnchor[]>(() => {
     if (!history) return [];
@@ -343,6 +346,36 @@ export function TauriSessionPreview() {
     void tauriWorkbenchSessions().then(setTabs).catch(error => setError(tauriMessageFrom(error)));
     void tauriPlatformInfo().then(setPlatform).catch(() => {});
   }, []);
+
+  // Tauri drag-and-drop file handler
+  useEffect(() => {
+    let unlisten: UnlistenFn | undefined;
+    void (async () => {
+      try {
+        unlisten = await getCurrentWindow().onDragDropEvent(async (event) => {
+          if (event.payload.type === "over") {
+            setDragging(true);
+          } else if (event.payload.type === "drop") {
+            setDragging(false);
+            if (!session || event.payload.paths.length === 0) return;
+            for (const path of event.payload.paths) {
+              try {
+                const attached = await attachTauriFile(session.id, path);
+                setAttachments(previous => [...previous, attached]);
+              } catch {
+                // Non-fatal per file
+              }
+            }
+          } else {
+            setDragging(false);
+          }
+        });
+      } catch {
+        // Drag-drop not supported in browser mode
+      }
+    })();
+    return () => { unlisten?.(); };
+  }, [session?.id]);
 
   useEffect(() => {
     if (!session) return;
@@ -1069,7 +1102,7 @@ export function TauriSessionPreview() {
 
         <footer className="tauri-composer-area">
           {error && <p className="tauri-error" role="alert">{error}</p>}
-          <div className="tauri-composer">
+          <div className={`tauri-composer${dragging ? " is-dragging" : ""}`}>
             {attachments.length > 0 && <div className="tauri-composer__attachments" aria-label="已添加文件">{attachments.map((attachment, index) => <div className="tauri-composer__attachment" key={`${attachment.path}-${index}`} title={attachment.path}>
               <span className="tauri-composer__attachment-icon"><FileText size={15} /></span><span className="tauri-composer__attachment-name">{attachment.name}</span><small>{attachment.size < 1024 ? `${attachment.size} B` : `${(attachment.size / 1024).toFixed(1)} KB`}</small>
               <button type="button" onClick={() => setAttachments(previous => previous.filter((_, itemIndex) => itemIndex !== index))} disabled={busy} aria-label={`移除文件 ${attachment.name}`}><X size={13} /></button>
