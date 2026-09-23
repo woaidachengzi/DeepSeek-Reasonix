@@ -52,9 +52,10 @@ Preview 的 Runtime details 面板显示冻结的 1.38.3 基线与提交、当�
 版本、bridge 协议版本和 live sidecar instance ID。当前 bridge 尚未提供独立的语义化发布
 版本，因此界面不会把 instance ID 伪装成版本号。
 
-选择 workspace 时，Preview 只提供系统目录选择器；`main-window` capability 仅授予
-`dialog:allow-open`，而不授予文件读写、保存对话框或任意 shell 权限。选中的路径仍会通过
-既有 bridge 的 workspace 校验，取消选择不会改变当前输入。
+选择 workspace 时，Preview 只提供系统目录选择器；`main-window` capability 只授予
+事件监听、系统文件选择器与通知所需的命令，不授予文件读写、保存对话框、shell、
+更新器、托盘或菜单调用权限。选中的路径仍会通过既有 bridge 的 workspace 校验，
+取消选择不会改变当前输入。
 
 开发环境还需要满足前端锁定的 Node 24 与 pnpm 10。使用前端目录中的本地 Tauri CLI
 启动，脚本会把 Go sidecar 构建到被忽略的 `desktop/tauri/target/sidecar-dev/`，并仅向

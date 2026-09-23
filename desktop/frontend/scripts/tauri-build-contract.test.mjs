@@ -147,13 +147,18 @@ eq(
   "frontendDist points to ../frontend/dist",
 );
 
-ok(
-  mainWindowCapability.permissions?.includes("dialog:allow-open"),
-  "workspace picker has only the dialog open permission it needs",
-);
-ok(
-  !mainWindowCapability.permissions?.includes("dialog:default"),
-  "workspace picker does not receive dialog save or message permissions",
+const expectedWebviewPermissions = [
+  "core:event:allow-listen",
+  "core:event:allow-unlisten",
+  "dialog:allow-open",
+  "notification:allow-is-permission-granted",
+  "notification:allow-request-permission",
+  "notification:allow-notify",
+];
+eq(
+  JSON.stringify([...mainWindowCapability.permissions].sort()),
+  JSON.stringify(expectedWebviewPermissions.sort()),
+  "WebView has only event-listener, file-picker, and notification permissions",
 );
 
 // Tauri decodes the configured PNG into an RGBA buffer at application launch.
