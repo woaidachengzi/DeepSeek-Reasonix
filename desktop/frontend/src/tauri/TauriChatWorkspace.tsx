@@ -248,6 +248,8 @@ export function TauriSessionPreview() {
   const [pendingPrompt, setPendingPrompt] = useState<TauriPendingPrompt | null>(null);
   const [promptSelections, setPromptSelections] = useState<Record<string, string[]>>({});
   const conversationRef = useRef<HTMLDivElement>(null);
+  const turnEpochRef = useRef(0);
+  const submitInFlightRef = useRef(false);
   const [activeQuestion, setActiveQuestion] = useState<number | null>(null);
   const switchingBlocked = Boolean(session && session.state !== "idle");
   const [platform, setPlatform] = useState<string>("");
@@ -394,6 +396,11 @@ export function TauriSessionPreview() {
           lastSequence = event.sequence;
           setSequence(previous => Math.max(previous, event.sequence));
           setEvents(previous => [event, ...previous].slice(0, 100));
+          if (event.eventKind === "turn_started") {
+            turnEpochRef.current += 1;
+            setSession(previous => previous ? { ...previous, state: "running" } : previous);
+            setLiveText("");
+          }
           const incomingPrompt = tauriPromptFromEvent(event);
           if (incomingPrompt) {
             setPendingPrompt(incomingPrompt);
@@ -409,8 +416,11 @@ export function TauriSessionPreview() {
           const textDelta = tauriAssistantTextDelta(event);
           if (textDelta) setLiveText(previous => previous + textDelta);
           if (event.eventKind === "turn_done") {
+            const completionEpoch = ++turnEpochRef.current;
+            const completionIsCurrent = () => active && turnEpochRef.current === completionEpoch;
             setPendingPrompt(null);
             setPromptSelections({});
+            setSession(previous => previous ? { ...previous, state: "running" } : previous);
             // Send notification if window is not focused
             void (async () => {
               try {
@@ -430,39 +440,52 @@ export function TauriSessionPreview() {
             })();
             void (async () => {
               // Refresh state and transcript independently. A transcript parse
-              // failure must not leave a completed turn marked as running.
+              // failure must not prevent state reconciliation. The core can
+              // still be in its finishing window while TurnDone fans out, so
+              // only an authoritative idle snapshot may reopen admission.
               let completionError = tauriTurnFailure(event);
-              try {
-                const latest = await tauriBridgeSnapshot(event.sessionId);
-                if (!active) return;
-                setSession(latest.session);
-                // Ensure session state is explicitly set to idle after turn_done
-                if (latest.session.state !== "idle") {
-                  setSession(prev => prev ? { ...prev, state: "idle" } : prev);
+              let latestState: TauriBridgeSession["state"] | undefined;
+              let snapshotError = "";
+              for (let attempt = 0; attempt < 5; attempt += 1) {
+                if (attempt > 0) await new Promise(resolve => setTimeout(resolve, 100));
+                if (!completionIsCurrent()) return;
+                try {
+                  const latest = await tauriBridgeSnapshot(event.sessionId);
+                  if (!completionIsCurrent()) return;
+                  latestState = latest.session.state;
+                  setSession(latest.session);
+                  snapshotError = "";
+                  if (latestState === "idle") break;
+                } catch (cause) {
+                  if (!completionIsCurrent()) return;
+                  snapshotError = tauriMessageFrom(cause);
                 }
-              } catch (snapshotError) {
-                completionError ||= tauriMessageFrom(snapshotError);
-                // Even on snapshot failure, mark session as idle
-                setSession(prev => prev ? { ...prev, state: "idle" } : prev);
+              }
+              if (latestState !== "idle") {
+                const stateError = snapshotError
+                  ? `无法确认当前会话状态：${snapshotError}；请刷新当前对话状态与记录`
+                  : "回合结束事件已到达，但会话尚未空闲；请稍后刷新当前对话状态与记录";
+                completionError = [completionError, stateError].filter(Boolean).join("；");
               }
               try {
                 const latestHistory = await tauriBridgeHistory(event.sessionId);
-                if (!active) return;
+                if (!completionIsCurrent()) return;
                 setHistory(latestHistory);
                 setPendingUserMessage(null); // Clear optimistic message
                 setHistoryError("");
               } catch (historyError) {
-                if (!active) return;
+                if (!completionIsCurrent()) return;
                 const message = tauriMessageFrom(historyError);
                 setHistoryError(message);
                 completionError ||= message;
               } finally {
-                if (!active) return;
+                if (!completionIsCurrent()) return;
                 setHistoryLoading(false);
                 setLiveText("");
                 // A failed turn must keep its reason on screen; only a
-                // completed turn clears a previous message.
-                setError(completionError);
+                // completed turn clears a previous message. Do not erase a
+                // newer event-stream outage while transcript refresh finishes.
+                setError(previous => streamDisconnected && previous.startsWith("本地桥接事件流：") ? previous : completionError);
               }
             })();
           }
@@ -496,25 +519,31 @@ export function TauriSessionPreview() {
         if (!active || resyncRequested) return;
         // Re-emit an approval/ask/MCP prompt after the listener is live. This
         // is what makes a paused historical session actionable after restart.
+        const replayEpoch = turnEpochRef.current;
         try {
           const replayed = await replayTauriPendingPrompts(session.id);
-          if (active) setSession(replayed);
+          if (active && turnEpochRef.current === replayEpoch) setSession(replayed);
         } catch (replayError) {
-          if (active) setError(tauriMessageFrom(replayError));
+          if (active && turnEpochRef.current === replayEpoch) setError(tauriMessageFrom(replayError));
         }
         if (!active) return;
-        if (!streamDisconnected) setError("");
+        if (!streamDisconnected && turnEpochRef.current === replayEpoch) setError("");
         setStreamReady(!streamDisconnected);
+        const historyEpoch = turnEpochRef.current;
         try {
           const latestHistory = await tauriBridgeHistory(session.id);
           if (!active) return;
-          setHistory(latestHistory);
-          setHistoryError("");
+          if (turnEpochRef.current === historyEpoch) {
+            setHistory(latestHistory);
+            setHistoryError("");
+          }
         } catch (historyCause) {
           if (!active) return;
-          const message = tauriMessageFrom(historyCause);
-          setHistoryError(message);
-          setError(message);
+          if (turnEpochRef.current === historyEpoch) {
+            const message = tauriMessageFrom(historyCause);
+            setHistoryError(message);
+            setError(message);
+          }
         } finally {
           if (active) setHistoryLoading(false);
         }
@@ -580,6 +609,7 @@ export function TauriSessionPreview() {
       setWorkspaceChangeDetailPath("");
       setWorkspaceChangesLoading(false);
       setWorkspaceChangeDetailLoading(false);
+      turnEpochRef.current += 1;
       setSession(next);
       setWorkspaceRoot(next.workspaceRoot ?? root ?? "");
       await rememberSession(next);
@@ -644,7 +674,10 @@ export function TauriSessionPreview() {
       }
       await deleteTauriBridgeSession(target.sessionId);
       deleted = true;
-      if (isOpen) setSession(null);
+      if (isOpen) {
+        turnEpochRef.current += 1;
+        setSession(null);
+      }
       setTabs(await forgetTauriWorkbenchSession(target.sessionId));
     } catch (cause) {
       operationError = deleted
@@ -656,6 +689,7 @@ export function TauriSessionPreview() {
       // deletion or catalog cleanup fails.
       if (switchedToTarget && sessionToRestore) {
         try {
+          turnEpochRef.current += 1;
           setSession(await switchTauriBridgeSession(sessionToRestore.id, sessionToRestore.workspaceRoot));
         } catch (cause) {
           setSession(null);
@@ -820,9 +854,11 @@ export function TauriSessionPreview() {
 
   async function submit() {
     const input = tauriComposerInput(prompt, attachments);
-    if (!session || !streamReady || !input) return;
+    if (!session || !streamReady || busy || session.state !== "idle" || !input || submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
     const sessionId = session.id;
     const userText = prompt.trim();
+    const submitEpoch = ++turnEpochRef.current;
     setBusy(true);
     setError("");
     setLiveText("");
@@ -831,14 +867,14 @@ export function TauriSessionPreview() {
     try {
       const submitted = await submitTauriBridge(sessionId, input);
       if (sessionId !== session?.id) return;
-      setSession(submitted);
+      if (turnEpochRef.current === submitEpoch) setSession(submitted);
       setPrompt("");
       setAttachments([]);
       // Fetch history after a short delay to let the backend settle
       await new Promise(resolve => setTimeout(resolve, 100));
       try {
         const latestHistory = await tauriBridgeHistory(sessionId);
-        if (sessionId === session?.id) {
+        if (sessionId === session?.id && turnEpochRef.current === submitEpoch) {
           setHistory(latestHistory);
           setPendingUserMessage(null); // Clear optimistic message when real history arrives
         }
@@ -849,6 +885,7 @@ export function TauriSessionPreview() {
       setError(tauriMessageFrom(cause));
       setPendingUserMessage(null);
     } finally {
+      submitInFlightRef.current = false;
       setBusy(false);
     }
   }
@@ -952,6 +989,7 @@ export function TauriSessionPreview() {
       setStatus(await restartTauriBridge());
       if (session) {
         const reopened = await openTauriBridgeSession(session.id, session.workspaceRoot);
+        turnEpochRef.current += 1;
         setSession(reopened);
         await rememberSession(reopened);
         setEvents([]);
@@ -997,16 +1035,33 @@ export function TauriSessionPreview() {
 
   async function refreshHistory() {
     if (!session || busy) return;
+    const refreshEpoch = ++turnEpochRef.current;
+    const sessionId = session.id;
     setBusy(true);
     setError("");
     setHistoryLoading(true);
     setHistoryError("");
+    let refreshError = "";
     try {
-      setHistory(await tauriBridgeHistory(session.id));
-    } catch (cause) {
-      const message = tauriMessageFrom(cause);
-      setHistoryError(message);
-      setError(message);
+      try {
+        const latest = await tauriBridgeSnapshot(sessionId);
+        if (turnEpochRef.current !== refreshEpoch) return;
+        setSession(latest.session);
+      } catch (cause) {
+        if (turnEpochRef.current !== refreshEpoch) return;
+        refreshError = `刷新会话状态失败：${tauriMessageFrom(cause)}`;
+      }
+      try {
+        const latestHistory = await tauriBridgeHistory(sessionId);
+        if (turnEpochRef.current !== refreshEpoch) return;
+        setHistory(latestHistory);
+      } catch (cause) {
+        if (turnEpochRef.current !== refreshEpoch) return;
+        const message = tauriMessageFrom(cause);
+        setHistoryError(message);
+        refreshError = [refreshError, message].filter(Boolean).join("；");
+      }
+      setError(refreshError);
     } finally {
       setHistoryLoading(false);
       setBusy(false);
@@ -1178,7 +1233,7 @@ export function TauriSessionPreview() {
             </section>
             <details className="tauri-diagnostic-card tauri-runtime-details"><summary>构建与版本详情</summary>{!runtimeInfo ? <p>正在读取构建信息…</p> : <dl><div><dt>稳定版基线</dt><dd>v{runtimeInfo.stableVersion} · {runtimeInfo.stableCommit.slice(0, 12)}</dd></div><div><dt>Preview / Tauri</dt><dd>v{runtimeInfo.previewVersion} · v{runtimeInfo.tauriVersion}</dd></div><div><dt>宿主构建时间</dt><dd>{runtimeInfo.previewBuild}</dd></div><div><dt>桥接协议</dt><dd>v{runtimeInfo.bridgeProtocolVersion}</dd></div><div><dt>Sidecar</dt><dd>{runtimeInfo.sidecarInstanceId ?? "未运行"}</dd></div>{session && <div><dt>会话 ID</dt><dd>{session.id}</dd></div>}{session && <div><dt>会话路径</dt><dd>{session.path}</dd></div>}{history && <div><dt>历史记录</dt><dd>{history.totalMessages} 条</dd></div>}<div><dt>事件游标</dt><dd>{sequence} · 最近 {events.length} 个事件</dd></div></dl>}</details>
             <details className="tauri-diagnostic-card tauri-event-details"><summary>桥接事件日志</summary>{events.length === 0 ? <p>开始一个对话后，这里会显示桥接事件。</p> : <ol>{events.map(event => <li key={event.sequence}><b>#{event.sequence} · {event.eventKind}</b><pre>{tauriEventSummary(event)}</pre></li>)}</ol>}</details>
-            {session && <button type="button" className="tauri-diagnostic-action" onClick={() => void refreshHistory()} disabled={busy}>刷新当前对话记录</button>}
+            {session && <button type="button" className="tauri-diagnostic-action" onClick={() => void refreshHistory()} disabled={busy}>刷新当前对话状态与记录</button>}
             <p className="tauri-diagnostics__note">会话切换仅在当前回复结束后启用，避免中断正在进行的请求。</p>
           </div>
         </aside>

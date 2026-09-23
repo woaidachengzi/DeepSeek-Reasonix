@@ -222,6 +222,87 @@ async function main() {
   await act(async () => { streamCallbacks.__emitBridgeEvent?.(replayed); streamCallbacks.__emitBridgeEvent?.(replayed); });
   eq(document.querySelectorAll(".tauri-event-details li").length, 1, "replayed event sequence is applied only once");
 
+  (globalThis as unknown as { __snapshotState?: string }).__snapshotState = "running";
+  await act(async () => {
+    streamCallbacks.__emitBridgeEvent?.({ sessionId: "tauri-kept-row", sequence: 2, eventKind: "turn_done", payload: { kind: "turn_done", status: "completed" } });
+    await new Promise(resolve => setTimeout(resolve, 650));
+  });
+  ok(Boolean(document.querySelector('button[aria-label="停止生成"]')), "turn_done does not invent idle state while snapshots remain running");
+  ok(text().includes("会话尚未空闲"), "unconfirmed turn completion asks for an authoritative refresh");
+
+  (globalThis as unknown as { __snapshotState?: string }).__snapshotState = "idle";
+  await act(async () => { clickButton("刷新当前对话状态与记录"); await settle(); });
+  ok(!document.querySelector('button[aria-label="停止生成"]'), "manual refresh restores idle state from the bridge");
+
+  (globalThis as unknown as { __snapshotStates?: string[] }).__snapshotStates = ["running", "idle"];
+  const snapshotsBeforeCompletion = bridgeCalls().filter(call => call.name === "bridge_session_snapshot").length;
+  await act(async () => {
+    streamCallbacks.__emitBridgeEvent?.({ sessionId: "tauri-kept-row", sequence: 3, eventKind: "turn_done", payload: { kind: "turn_done", status: "completed" } });
+    await new Promise(resolve => setTimeout(resolve, 180));
+  });
+  eq(bridgeCalls().filter(call => call.name === "bridge_session_snapshot").length, snapshotsBeforeCompletion + 2, "finishing snapshot is retried until idle");
+  ok(!text().includes("会话尚未空闲"), "confirmed idle state clears the stale completion warning");
+
+  (globalThis as unknown as { __snapshotError?: boolean }).__snapshotError = true;
+  await act(async () => {
+    streamCallbacks.__emitBridgeEvent?.({ sessionId: "tauri-kept-row", sequence: 4, eventKind: "turn_done", payload: { kind: "turn_done", status: "completed" } });
+    await new Promise(resolve => setTimeout(resolve, 650));
+  });
+  ok(Boolean(document.querySelector('button[aria-label="停止生成"]')), "failed snapshots keep turn admission closed");
+  ok(text().includes("无法确认当前会话状态"), "snapshot failure remains visible instead of claiming completion");
+  (globalThis as unknown as { __snapshotError?: boolean }).__snapshotError = false;
+  await act(async () => { clickButton("刷新当前对话状态与记录"); await settle(); });
+  ok(!document.querySelector('button[aria-label="停止生成"]'), "manual refresh recovers from snapshot failure");
+
+  let releaseStaleSnapshot: (() => void) | undefined;
+  (globalThis as unknown as { __snapshotGate?: Promise<void> }).__snapshotGate = new Promise(resolve => { releaseStaleSnapshot = resolve; });
+  await act(async () => {
+    streamCallbacks.__emitBridgeEvent?.({ sessionId: "tauri-kept-row", sequence: 5, eventKind: "turn_done", payload: { kind: "turn_done", status: "completed" } });
+    await settle();
+  });
+  (globalThis as unknown as { __snapshotGate?: Promise<void> }).__snapshotGate = undefined;
+  await act(async () => {
+    streamCallbacks.__emitBridgeEvent?.({ sessionId: "tauri-kept-row", sequence: 6, eventKind: "turn_started", payload: { kind: "turn_started" } });
+    releaseStaleSnapshot?.();
+    await settle();
+  });
+  ok(Boolean(document.querySelector('button[aria-label="停止生成"]')), "late snapshot from an older completed turn cannot mark a new turn idle");
+
+  await act(async () => { clickButton("刷新当前对话状态与记录"); await settle(); });
+  const composer = document.querySelector<HTMLTextAreaElement>(".tauri-composer textarea");
+  ok(Boolean(composer), "composer is available for submit guard test");
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, "value")!.set!.call(composer, "one request");
+    composer?.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  });
+  let releaseSubmit: (() => void) | undefined;
+  (globalThis as unknown as { __submitGate?: Promise<void> }).__submitGate = new Promise(resolve => { releaseSubmit = resolve; });
+  const submitsBefore = bridgeCalls().filter(call => call.name === "bridge_submit").length;
+  await act(async () => {
+    const send = document.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]');
+    send?.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+    send?.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+  });
+  eq(bridgeCalls().filter(call => call.name === "bridge_submit").length, submitsBefore + 1, "two immediate sends start one bridge request");
+  (globalThis as unknown as { __submitGate?: Promise<void> }).__submitGate = undefined;
+  await act(async () => { releaseSubmit?.(); await new Promise(resolve => setTimeout(resolve, 130)); });
+
+  let releaseStaleHistory: (() => void) | undefined;
+  (globalThis as unknown as { __tauriHistoryMessages?: object[] }).__tauriHistoryMessages = [{ role: "assistant", content: "stale completion marker" }];
+  (globalThis as unknown as { __historyGate?: Promise<void> }).__historyGate = new Promise(resolve => { releaseStaleHistory = resolve; });
+  await act(async () => {
+    streamCallbacks.__emitBridgeEvent?.({ sessionId: "tauri-kept-row", sequence: 7, eventKind: "turn_done", payload: { kind: "turn_done", status: "completed" } });
+    await settle();
+  });
+  (globalThis as unknown as { __historyGate?: Promise<void> }).__historyGate = undefined;
+  (globalThis as unknown as { __tauriHistoryMessages?: object[] }).__tauriHistoryMessages = [];
+  await act(async () => {
+    streamCallbacks.__emitBridgeEvent?.({ sessionId: "tauri-kept-row", sequence: 8, eventKind: "turn_started", payload: { kind: "turn_started" } });
+    releaseStaleHistory?.();
+    await settle();
+  });
+  ok(!text().includes("stale completion marker"), "late history from an older turn cannot replace the new turn transcript");
+
   await act(async () => {
     root.unmount();
   });

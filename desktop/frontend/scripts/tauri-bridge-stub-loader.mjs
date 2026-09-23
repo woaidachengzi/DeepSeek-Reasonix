@@ -120,17 +120,22 @@ export function deleteTauriBridgeSession(sessionId) {
 
 export function tauriBridgeSnapshot(sessionId) {
   record("bridge_session_snapshot", { sessionId });
-  return Promise.resolve({ sequence: globalThis.__snapshotSequence ?? 0, session: { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: globalThis.__snapshotState ?? "idle" } });
+  if (globalThis.__snapshotError) return Promise.reject(new Error("snapshot unavailable"));
+  const state = globalThis.__snapshotStates?.shift() ?? globalThis.__snapshotState ?? "idle";
+  const result = { sequence: globalThis.__snapshotSequence ?? 0, session: { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state } };
+  return globalThis.__snapshotGate ? globalThis.__snapshotGate.then(() => result) : Promise.resolve(result);
 }
 
 export function tauriBridgeHistory(sessionId) {
   const messages = globalThis.__tauriHistoryMessages ?? [];
-  return Promise.resolve({ sequence: 0, session: { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle" }, messages, startIndex: 0, totalMessages: messages.length });
+  const result = { sequence: 0, session: { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle" }, messages, startIndex: 0, totalMessages: messages.length };
+  return globalThis.__historyGate ? globalThis.__historyGate.then(() => result) : Promise.resolve(result);
 }
 
 export function submitTauriBridge(sessionId, input) {
   record("bridge_submit", { sessionId, input });
-  return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "running" });
+  const result = { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "running" };
+  return globalThis.__submitGate ? globalThis.__submitGate.then(() => result) : Promise.resolve(result);
 }
 
 export function attachTauriFile(sessionId, path) {
