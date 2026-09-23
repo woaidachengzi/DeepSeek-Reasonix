@@ -270,6 +270,118 @@ func TestRuntimeManagerSwitchesOnlyAfterClosingAnIdleSession(t *testing.T) {
 	}
 }
 
+func TestRuntimeManagerRestoresPreviousSessionWhenSwitchTargetFails(t *testing.T) {
+	first := &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}
+	recovered := &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}
+	targetErr := errors.New("target unavailable")
+	var opens atomic.Int32
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(ctx context.Context, request OpenRequest) (Runtime, error) {
+		switch opens.Add(1) {
+		case 1:
+			return first, nil
+		case 2:
+			if request.SessionID != "b" {
+				t.Fatalf("target request = %#v", request)
+			}
+			return nil, targetErr
+		case 3:
+			if request.SessionID != "a" || request.WorkspaceRoot != "/workspace" || ctx.Err() != nil {
+				t.Fatalf("recovery request = %#v, context error = %v", request, ctx.Err())
+			}
+			return recovered, nil
+		default:
+			t.Fatal("unexpected extra open")
+			return nil, nil
+		}
+	}))
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a", WorkspaceRoot: "/workspace"}); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := manager.Switch(ctx, OpenRequest{SessionID: "b"}); !errors.Is(err, targetErr) {
+		t.Fatalf("switch error = %v, want target failure", err)
+	}
+	if first.shutdownCalls.Load() != 1 || recovered.shutdownCalls.Load() != 0 {
+		t.Fatalf("shutdowns first=%d recovered=%d", first.shutdownCalls.Load(), recovered.shutdownCalls.Load())
+	}
+	if view, ok := manager.Snapshot(); !ok || view.ID != "a" || view.WorkspaceRoot != "/workspace" {
+		t.Fatalf("restored snapshot = %#v, %t", view, ok)
+	}
+}
+
+func TestRuntimeManagerReportsBothFailuresWhenSwitchRecoveryFails(t *testing.T) {
+	first := &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}
+	targetErr := errors.New("target unavailable")
+	recoveryErr := errors.New("previous unavailable")
+	var opens atomic.Int32
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(_ context.Context, _ OpenRequest) (Runtime, error) {
+		switch opens.Add(1) {
+		case 1:
+			return first, nil
+		case 2:
+			return nil, targetErr
+		default:
+			return nil, recoveryErr
+		}
+	}))
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := manager.Switch(context.Background(), OpenRequest{SessionID: "b"})
+	if !errors.Is(err, targetErr) || !errors.Is(err, recoveryErr) {
+		t.Fatalf("switch error = %v, want both failures", err)
+	}
+	if _, ok := manager.Snapshot(); ok {
+		t.Fatal("unrestored session was published")
+	}
+}
+
+func TestRuntimeManagerDoesNotPublishRecoveredSessionAfterShutdown(t *testing.T) {
+	first := &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}
+	recovered := &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}
+	recoveryStarted := make(chan struct{})
+	releaseRecovery := make(chan struct{})
+	var opens atomic.Int32
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(_ context.Context, _ OpenRequest) (Runtime, error) {
+		switch opens.Add(1) {
+		case 1:
+			return first, nil
+		case 2:
+			return nil, errors.New("target unavailable")
+		default:
+			close(recoveryStarted)
+			<-releaseRecovery
+			return recovered, nil
+		}
+	}))
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	result := make(chan error, 1)
+	go func() {
+		_, err := manager.Switch(context.Background(), OpenRequest{SessionID: "b"})
+		result <- err
+	}()
+	<-recoveryStarted
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "c"}); !errors.Is(err, ErrOpenInProgress) {
+		t.Fatalf("concurrent open error = %v, want open in progress", err)
+	}
+	if err := manager.Shutdown(); err != nil {
+		t.Fatal(err)
+	}
+	close(releaseRecovery)
+	if err := <-result; !errors.Is(err, ErrClosed) {
+		t.Fatalf("switch error = %v, want closed", err)
+	}
+	if recovered.shutdownCalls.Load() != 1 {
+		t.Fatalf("recovered runtime shutdowns = %d, want 1", recovered.shutdownCalls.Load())
+	}
+	if _, ok := manager.Snapshot(); ok {
+		t.Fatal("recovered session survived manager shutdown")
+	}
+}
+
 func TestRuntimeManagerRefusesToSwitchAnActiveSession(t *testing.T) {
 	first := &fakeRuntime{path: "/sessions/a.jsonl", state: "running"}
 	var opened atomic.Int32

@@ -69,7 +69,9 @@ SSE 事件携带进度和最终结果。事件 replay 使用有界 ledger；落�
 `switch_session` 是为工作台导航准备的受限交接：bridge 首版仍只拥有一个 Go
 Controller。目标会话与当前会话不同且当前状态为 `idle` 时，bridge 先调用旧
 Controller 的 durable shutdown，再创建/恢复目标 Controller；`running` 或 `paused`
-状态返回 `conflict`，不会停止或替换用户的活动回合。
+状态返回 `conflict`，不会停止或替换用户的活动回合。若旧 Controller 已正常关闭但
+目标创建失败，bridge 会尝试重新打开原会话；恢复成功时仍返回目标切换错误，调用方
+保留原选择。若原会话也无法恢复，则同时报告两项失败，不伪称切换成功。
 
 审批请求只允许一次性“允许”或“拒绝”，Tauri 不直接暴露原始工具参数；`ask` 请求携带
 结构化问题和选项，回答可为空表示跳过；MCP 交互只转发 `accept`、`decline`、`cancel`

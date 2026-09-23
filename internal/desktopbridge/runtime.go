@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 )
 
@@ -224,34 +225,7 @@ func (m *RuntimeManager) Open(ctx context.Context, request OpenRequest) (Session
 	m.opening = true
 	factory := m.factory
 	m.mu.Unlock()
-
-	runtime, err := factory.Open(ctx, request)
-	if err != nil {
-		m.finishOpen(nil, SessionView{})
-		return SessionView{}, err
-	}
-	if runtime == nil {
-		m.finishOpen(nil, SessionView{})
-		return SessionView{}, errors.New("desktop bridge runtime factory returned nil runtime")
-	}
-	path := strings.TrimSpace(runtime.SessionPath())
-	if path == "" {
-		_ = runtime.Shutdown()
-		m.finishOpen(nil, SessionView{})
-		return SessionView{}, errors.New("desktop bridge runtime has no session path")
-	}
-	view := SessionView{
-		ID:            request.SessionID,
-		Path:          path,
-		Title:         runtime.Title(),
-		WorkspaceRoot: request.WorkspaceRoot,
-		State:         runtime.State(),
-	}
-	if m.finishOpen(runtime, view) {
-		return view, nil
-	}
-	_ = runtime.Shutdown()
-	return SessionView{}, ErrClosed
+	return m.openWithFactory(ctx, factory, request)
 }
 
 // Switch makes an explicit, durable handoff between two bridge sessions.
@@ -291,6 +265,7 @@ func (m *RuntimeManager) Switch(ctx context.Context, request OpenRequest) (Sessi
 		return SessionView{}, fmt.Errorf("%w: active session %q is %s", ErrSessionConflict, active, state)
 	}
 	previous := m.runtime
+	previousRequest := OpenRequest{SessionID: m.view.ID, WorkspaceRoot: m.view.WorkspaceRoot}
 	factory := m.factory
 	if factory == nil {
 		m.mu.Unlock()
@@ -305,7 +280,40 @@ func (m *RuntimeManager) Switch(ctx context.Context, request OpenRequest) (Sessi
 		m.finishOpen(nil, SessionView{})
 		return SessionView{}, fmt.Errorf("close active desktop bridge session: %w", err)
 	}
-	return m.openWithFactory(ctx, factory, request)
+	runtime, view, err := buildRuntime(ctx, factory, request)
+	if err == nil {
+		if m.finishOpen(runtime, view) {
+			return view, nil
+		}
+		_ = runtime.Shutdown()
+		return SessionView{}, ErrClosed
+	}
+
+	// A failed target open must not strand the previous conversation. The old
+	// controller was durably closed above, so it is safe to reopen it. A caller
+	// cancellation must not cancel this recovery attempt as well.
+	m.mu.Lock()
+	closed := m.closed
+	m.mu.Unlock()
+	if closed {
+		m.finishOpen(nil, SessionView{})
+		return SessionView{}, ErrClosed
+	}
+	recoveryCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	recovered, recoveredView, recoveryErr := buildRuntime(recoveryCtx, factory, previousRequest)
+	if recoveryErr != nil {
+		m.finishOpen(nil, SessionView{})
+		return SessionView{}, errors.Join(
+			fmt.Errorf("open target desktop bridge session: %w", err),
+			fmt.Errorf("restore previous desktop bridge session: %w", recoveryErr),
+		)
+	}
+	if !m.finishOpen(recovered, recoveredView) {
+		_ = recovered.Shutdown()
+		return SessionView{}, ErrClosed
+	}
+	return SessionView{}, fmt.Errorf("open target desktop bridge session: %w; previous session restored", err)
 }
 
 // validSessionID keeps the bridge's public ID safe for hosts that derive a
@@ -599,20 +607,30 @@ func (m *RuntimeManager) finishOpen(runtime Runtime, view SessionView) bool {
 }
 
 func (m *RuntimeManager) openWithFactory(ctx context.Context, factory RuntimeFactory, request OpenRequest) (SessionView, error) {
-	runtime, err := factory.Open(ctx, request)
+	runtime, view, err := buildRuntime(ctx, factory, request)
 	if err != nil {
 		m.finishOpen(nil, SessionView{})
 		return SessionView{}, err
 	}
+	if m.finishOpen(runtime, view) {
+		return view, nil
+	}
+	_ = runtime.Shutdown()
+	return SessionView{}, ErrClosed
+}
+
+func buildRuntime(ctx context.Context, factory RuntimeFactory, request OpenRequest) (Runtime, SessionView, error) {
+	runtime, err := factory.Open(ctx, request)
+	if err != nil {
+		return nil, SessionView{}, err
+	}
 	if runtime == nil {
-		m.finishOpen(nil, SessionView{})
-		return SessionView{}, errors.New("desktop bridge runtime factory returned nil runtime")
+		return nil, SessionView{}, errors.New("desktop bridge runtime factory returned nil runtime")
 	}
 	path := strings.TrimSpace(runtime.SessionPath())
 	if path == "" {
 		_ = runtime.Shutdown()
-		m.finishOpen(nil, SessionView{})
-		return SessionView{}, errors.New("desktop bridge runtime has no session path")
+		return nil, SessionView{}, errors.New("desktop bridge runtime has no session path")
 	}
 	view := SessionView{
 		ID:            request.SessionID,
@@ -621,11 +639,7 @@ func (m *RuntimeManager) openWithFactory(ctx context.Context, factory RuntimeFac
 		WorkspaceRoot: request.WorkspaceRoot,
 		State:         runtime.State(),
 	}
-	if m.finishOpen(runtime, view) {
-		return view, nil
-	}
-	_ = runtime.Shutdown()
-	return SessionView{}, ErrClosed
+	return runtime, view, nil
 }
 
 func (m *RuntimeManager) withRuntime(sessionID string, action func(Runtime)) (SessionView, error) {
