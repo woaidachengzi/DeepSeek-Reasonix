@@ -296,14 +296,44 @@ export function TauriSessionPreview() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "n" && !busy && !switchingBlocked) {
+      const mod = event.metaKey || event.ctrlKey;
+      if (!mod) return;
+      const key = event.key.toLowerCase();
+      // Cmd/Ctrl + N: New session
+      if (key === "n" && !busy && !switchingBlocked) {
         event.preventDefault();
         void createSession();
+      }
+      // Cmd/Ctrl + ,: Settings
+      if (key === ",") {
+        event.preventDefault();
+        setSettingsOpen(true);
+      }
+      // Cmd/Ctrl + .: Diagnostics
+      if (key === ".") {
+        event.preventDefault();
+        setDiagnosticsOpen(true);
+      }
+      // Cmd/Ctrl + B: Toggle workspace panel
+      if (key === "b" && session) {
+        event.preventDefault();
+        toggleWorkspace();
+      }
+      // Cmd/Ctrl + R: Refresh history
+      if (key === "r" && session && !busy) {
+        event.preventDefault();
+        void refreshHistory();
+      }
+      // Escape: Close open panels
+      if (event.key === "Escape") {
+        if (settingsOpen) setSettingsOpen(false);
+        else if (diagnosticsOpen) setDiagnosticsOpen(false);
+        else if (workspaceOpen) setWorkspaceOpen(false);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [busy, switchingBlocked]);
+  }, [busy, switchingBlocked, session, settingsOpen, diagnosticsOpen, workspaceOpen]);
 
   useEffect(() => {
     void tauriBridgeStatus().then(setStatus).catch(error => setError(tauriMessageFrom(error)));
