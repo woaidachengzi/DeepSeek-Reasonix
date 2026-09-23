@@ -59,17 +59,30 @@
   app-region: no-drag;
 }
 
-/* macOS: drag region above sidebar content (traffic light area) */
-.tauri-shell[data-platform="darwin"] .tauri-sidebar::before {
-  content: "";
+/* macOS: real drag strips (Tauri ignores -webkit-app-region / pseudo-elements) */
+.tauri-sidebar__drag {
+  display: none;
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   height: var(--titlebar-height);
+  z-index: 2;
+}
+.tauri-shell[data-platform="darwin"] .tauri-sidebar__drag { display: block; }
+.tauri-sidebar__drag,
+.tauri-topbar[data-tauri-drag-region],
+.tauri-topbar [data-tauri-drag-region] {
   -webkit-app-region: drag;
   app-region: drag;
-  pointer-events: auto;
+}
+.tauri-topbar button,
+.tauri-topbar select,
+.tauri-topbar input,
+.tauri-topbar label,
+.tauri-topbar form {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .tauri-sidebar__brand img { display: block; width: 118px; max-height: 25px; object-fit: contain; object-position: left center; }
@@ -183,19 +196,8 @@
 
 .tauri-main { position: relative; display: flex; min-width: 0; min-height: 0; flex-direction: column; }
 .tauri-topbar { position: relative; display: flex; height: 64px; min-height: 64px; align-items: center; justify-content: space-between; gap: 18px; padding: 0 24px; border-bottom: 1px solid var(--border-soft); }
-
-/* macOS: drag region above topbar content */
-.tauri-shell[data-platform="darwin"] .tauri-topbar::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 28px;
-  -webkit-app-region: drag;
-  app-region: drag;
-  pointer-events: auto;
-}
+.tauri-topbar [data-tauri-drag-region] { cursor: default; }
+.tauri-topbar button, .tauri-topbar select, .tauri-topbar input, .tauri-topbar label { -webkit-app-region: no-drag; app-region: no-drag; }
 .tauri-topbar__title { display: grid; min-width: 0; gap: 1px; }
 .tauri-topbar__title-row { display: flex; min-width: 0; align-items: center; gap: 5px; }
 .tauri-topbar__title strong { min-width: 0; overflow: hidden; color: var(--fg); font-size: 13px; font-weight: 570; text-overflow: ellipsis; white-space: nowrap; }

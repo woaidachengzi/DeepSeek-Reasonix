@@ -11,7 +11,8 @@ assert.deepEqual(groups.map(group => group.key), ["/work/a/project", "/work/b/pr
 assert.deepEqual(groups[0].sessions.map(session => session.sessionId), ["new-a", "old-a"]);
 assert.equal(groups[0].label, "project · a");
 assert.equal(groups[1].label, "project · b");
-assert.equal(groups[2].label, "未指定项目");
+assert.equal(groups[2].label, "");
+assert.equal(groups[2].root, undefined);
 assert.equal(groupWorkbenchSessions([{ sessionId: "root", workspaceRoot: "/" }])[0].key, "/");
 assert.equal(titleFromFirstUser("修复登录失败\n请加回归测试"), "修复登录失败 请加回归测试");
 assert.equal(titleFromFirstUser("请处理 😀".repeat(30))?.endsWith("…"), true);

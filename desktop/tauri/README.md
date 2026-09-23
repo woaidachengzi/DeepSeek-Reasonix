@@ -53,7 +53,7 @@ Preview 的 Runtime details 面板显示冻结的 1.38.3 基线与提交、当�
 版本，因此界面不会把 instance ID 伪装成版本号。
 
 选择 workspace 时，Preview 只提供系统目录选择器；`main-window` capability 只授予
-事件监听、系统文件选择器与通知所需的命令，不授予文件读写、保存对话框、shell、
+事件监听、窗口拖动、系统文件选择器与通知所需的命令，不授予文件读写、保存对话框、shell、
 更新器、托盘或菜单调用权限。选中的路径仍会通过既有 bridge 的 workspace 校验，
 取消选择不会改变当前输入。
 

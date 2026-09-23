@@ -18,15 +18,17 @@ function projectName(root: string): string {
   return segments[segments.length - 1] || root;
 }
 
-/** The catalog is newest-first. Keep that order both within projects and
- * among projects, so the most recently used project stays at the top. */
+/** Preserve catalog order both within projects and among projects. New
+ *  sessions prepend; reopening an existing row never reorders folders.
+ *  A blank root stays rootless so the sidebar can list it as a bare chat
+ *  instead of inventing an "unspecified project" folder. */
 export function groupWorkbenchSessions(sessions: readonly TauriWorkbenchSession[]): WorkbenchProjectGroup[] {
   const groups = new Map<string, WorkbenchProjectGroup>();
   for (const session of sessions) {
     const key = projectKey(session.workspaceRoot);
     let group = groups.get(key);
     if (!group) {
-      group = { key, root: key || undefined, label: key ? projectName(key) : "未指定项目", sessions: [] };
+      group = { key, root: key || undefined, label: key ? projectName(key) : "", sessions: [] };
       groups.set(key, group);
     }
     group.sessions.push(session);

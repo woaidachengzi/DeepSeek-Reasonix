@@ -74,23 +74,22 @@ impl WorkbenchCatalog {
             .sessions
             .lock()
             .map_err(|_| "workbench catalog lock is unavailable".to_string())?;
-        // An open/snapshot without a core title must not erase a title derived
-        // from the first user turn (or recovered from an older transcript).
-        if session.title.is_none() {
-            session.title = sessions
-                .iter()
-                .find(|existing| existing.session_id == session.session_id)
-                .and_then(|existing| existing.title.clone());
+        // Opening an existing row only refreshes its metadata. Reordering on
+        // every activate makes project folders jump under the cursor.
+        if let Some(index) = sessions
+            .iter()
+            .position(|existing| existing.session_id == session.session_id)
+        {
+            if session.title.is_none() {
+                session.title = sessions[index].title.clone();
+            }
+            sessions[index] = session;
+            write_sessions(&self.path, &sessions)?;
+            return Ok(sessions.clone());
         }
         let mut updated = Vec::with_capacity(MAX_SESSIONS);
-        updated.push(session.clone());
-        updated.extend(
-            sessions
-                .iter()
-                .filter(|existing| existing.session_id != session.session_id)
-                .take(MAX_SESSIONS - 1)
-                .cloned(),
-        );
+        updated.push(session);
+        updated.extend(sessions.iter().take(MAX_SESSIONS - 1).cloned());
         write_sessions(&self.path, &updated)?;
         *sessions = updated.clone();
         Ok(updated)
@@ -251,18 +250,65 @@ mod tests {
                 workspace_root: Some("/work/project".to_string()),
             })
             .expect("remember second");
-        catalog.remember(session("one")).expect("bump first");
+        catalog
+            .remember(session("one"))
+            .expect("reopen first in place");
 
+        // New rows prepend; reopening an existing row does not move it.
         let expected = vec![
-            session("one"),
             WorkbenchSession {
                 session_id: "two".to_string(),
                 title: None,
                 workspace_root: Some("/work/project".to_string()),
             },
+            session("one"),
         ];
         assert_eq!(catalog.list().expect("list sessions"), expected);
         assert_eq!(WorkbenchCatalog::at(path).list().expect("reload"), expected);
+    }
+
+    #[test]
+    fn reopening_existing_session_keeps_sidebar_order() {
+        let root = tempfile::tempdir().expect("temp root");
+        let path = root.path().join(CATALOG_FILE);
+        let catalog = WorkbenchCatalog::at(path.clone());
+        catalog
+            .remember(WorkbenchSession {
+                session_id: "older".into(),
+                title: Some("Older".into()),
+                workspace_root: Some("/work/a".into()),
+            })
+            .expect("older");
+        catalog
+            .remember(WorkbenchSession {
+                session_id: "newer".into(),
+                title: Some("Newer".into()),
+                workspace_root: Some("/work/b".into()),
+            })
+            .expect("newer");
+        let after_insert = catalog.list().expect("list after insert");
+        assert_eq!(
+            after_insert
+                .iter()
+                .map(|entry| entry.session_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["newer", "older"]
+        );
+        let updated = catalog
+            .remember(WorkbenchSession {
+                session_id: "older".into(),
+                title: Some("Still older title".into()),
+                workspace_root: Some("/work/a".into()),
+            })
+            .expect("reopen older");
+        assert_eq!(
+            updated
+                .iter()
+                .map(|entry| entry.session_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["newer", "older"]
+        );
+        assert_eq!(updated[1].title.as_deref(), Some("Still older title"));
     }
 
     #[test]
@@ -353,9 +399,16 @@ mod tests {
         assert_eq!(filled[0].title.as_deref(), Some("My title"));
         assert_eq!(filled[1].title.as_deref(), Some("First question"));
         let reopened = catalog.remember(session("older")).expect("reopen");
-        assert_eq!(reopened[0].title.as_deref(), Some("First question"));
         assert_eq!(
-            WorkbenchCatalog::at(path).list().expect("reload")[0]
+            reopened
+                .iter()
+                .map(|entry| entry.session_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["manual", "older"]
+        );
+        assert_eq!(reopened[1].title.as_deref(), Some("First question"));
+        assert_eq!(
+            WorkbenchCatalog::at(path).list().expect("reload")[1]
                 .title
                 .as_deref(),
             Some("First question")

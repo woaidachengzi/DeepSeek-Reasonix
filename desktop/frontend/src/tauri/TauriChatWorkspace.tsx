@@ -613,6 +613,8 @@ export function TauriSessionPreview() {
     };
   }, [session?.id, streamRevision]);
 
+  // Existing rows keep their sidebar position on reopen; only brand-new
+  // sessions are prepended (matches WorkbenchCatalog::remember).
   async function rememberSession(next: TauriBridgeSession) {
     try {
       setTabs(await rememberTauriWorkbenchSession(next.id, next.workspaceRoot ?? undefined, tauriSessionTitle(next.title, "") || undefined));
@@ -1183,24 +1185,25 @@ export function TauriSessionPreview() {
   return (
     <main className="tauri-shell" data-platform={platform}>
       <aside className="tauri-sidebar" aria-label="会话导航">
+        <div className="tauri-sidebar__drag" data-tauri-drag-region aria-hidden="true" />
         <div className="tauri-sidebar__brand"><img src={logoWordmark} alt="Reasonix" draggable={false} /><span>PREVIEW</span></div>
         <button className="tauri-sidebar__new" type="button" onClick={() => void createSession()} disabled={busy || switchingBlocked}>
           <Plus size={17} aria-hidden="true" /><span>新建对话</span><kbd>⌘ N</kbd>
         </button>
         <div className="tauri-sidebar__section-title">项目</div>
         <nav className="tauri-sidebar__sessions">
-          {projectGroups.length === 0 ? <p className="tauri-sidebar__empty">还没有对话，开始一个新话题吧。</p> : projectGroups.map(group => (
-            <section className="tauri-project-group" key={group.key || "global"} aria-label={group.label}>
+          {projectGroups.length === 0 ? <p className="tauri-sidebar__empty">还没有对话，开始一个新话题吧。</p> : projectGroups.map(group => group.root ? (
+            <section className="tauri-project-group" key={group.key} aria-label={group.label}>
               <div className="tauri-project-group__heading">
                 <button type="button" className="tauri-project-group__toggle" aria-label={`${collapsedProjects[group.key] ? "展开" : "收起"} ${group.label}`} aria-expanded={!collapsedProjects[group.key]} onClick={() => setCollapsedProjects(previous => ({ ...previous, [group.key]: !previous[group.key] }))}>
                   {collapsedProjects[group.key] ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
                 </button>
-                <button type="button" className="tauri-project-group__select" title={group.root || "未指定项目"} aria-label={`切换到项目 ${group.label}`} disabled={busy || switchingBlocked} onClick={() => { const latest = group.sessions[0]; if (latest && latest.sessionId !== session?.id) void activateSession(latest.sessionId, latest.workspaceRoot); }}><FolderOpen size={14} /><span>{group.label}</span><small>{group.sessions.length}</small></button>
+                <button type="button" className="tauri-project-group__select" title={group.root} aria-label={`切换到项目 ${group.label}`} disabled={busy || switchingBlocked} onClick={() => { const latest = group.sessions[0]; if (latest && latest.sessionId !== session?.id) void activateSession(latest.sessionId, latest.workspaceRoot); }}><FolderOpen size={14} /><span>{group.label}</span><small>{group.sessions.length}</small></button>
                 <button type="button" className="tauri-project-group__new" aria-label={`在 ${group.label} 中新建对话`} title="在此项目新建对话" disabled={busy || switchingBlocked} onClick={() => void createSession(group.root || "")}><Plus size={14} /></button>
               </div>
               {!collapsedProjects[group.key] && group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} busy={busy} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} />)}
             </section>
-          ))}
+          ) : group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} busy={busy} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} />))}
         </nav>
         <div className="tauri-sidebar__footer">
           <span className={`tauri-health${status?.running ? " is-ready" : ""}`}><i />{status?.running ? "本地运行正常" : "正在连接本地服务…"}</span>
@@ -1210,7 +1213,7 @@ export function TauriSessionPreview() {
       </aside>
 
       <section className="tauri-main">
-        <header className="tauri-topbar">
+        <header className="tauri-topbar" data-tauri-drag-region>
           <div className="tauri-topbar__title">
             <div className="tauri-topbar__title-row">
               {session && titleEditing ? <form className="tauri-session-title-edit" onSubmit={event => { event.preventDefault(); void saveTitle(); }}>
@@ -1218,11 +1221,11 @@ export function TauriSessionPreview() {
                 <button type="submit" className="tauri-session-title-edit__action" aria-label="保存对话名称" disabled={busy}><Check size={14} /></button>
                 <button type="button" className="tauri-session-title-edit__action" aria-label="取消重命名" disabled={busy} onClick={() => setTitleEditing(false)}><X size={14} /></button>
               </form> : <>
-                <strong>{session ? displayTitle(session.title, activeCatalogTitle) : "新对话"}</strong>
+                <strong data-tauri-drag-region>{session ? displayTitle(session.title, activeCatalogTitle) : "新对话"}</strong>
                 {session && <button type="button" className="tauri-title-rename" aria-label="重命名对话" title="重命名对话" disabled={busy || switchingBlocked} onClick={beginTitleEdit}><Pencil size={13} /></button>}
               </>}
             </div>
-            <span>{session?.state === "running" ? "正在生成" : session?.state === "paused" ? "等待你的操作" : session ? "本地会话" : "Reasonix Preview"}</span>
+            <span data-tauri-drag-region>{session?.state === "running" ? "正在生成" : session?.state === "paused" ? "等待你的操作" : session ? "本地会话" : "Reasonix Preview"}</span>
           </div>
           <div className="tauri-topbar__actions">
             <button type="button" className="tauri-workspace-button" onClick={() => void chooseWorkspaceRoot()} disabled={busy || session?.state === "running"} title={currentWorkspace || "选择工作区（用于新对话）"}>

@@ -91,11 +91,18 @@ export function backfillTauriWorkbenchTitles(titles) {
 
 export function rememberTauriWorkbenchSession(sessionId, workspaceRoot, title) {
   record("remember_workbench_session", { sessionId, workspaceRoot, title });
-  const existing = (globalThis.__workbenchSessions ?? []).find(entry => entry.sessionId === sessionId);
-  const next = (globalThis.__workbenchSessions ?? []).filter(entry => entry.sessionId !== sessionId);
-  next.push({ sessionId, workspaceRoot, title: title ?? existing?.title });
-  globalThis.__workbenchSessions = next;
-  return Promise.resolve(next.slice());
+  const list = globalThis.__workbenchSessions ?? [];
+  const existing = list.find(entry => entry.sessionId === sessionId);
+  if (existing) {
+    globalThis.__workbenchSessions = list.map(entry =>
+      entry.sessionId === sessionId
+        ? { ...entry, workspaceRoot, title: title ?? entry.title }
+        : entry
+    );
+    return Promise.resolve(globalThis.__workbenchSessions.slice());
+  }
+  globalThis.__workbenchSessions = [{ sessionId, workspaceRoot, title }, ...list];
+  return Promise.resolve(globalThis.__workbenchSessions.slice());
 }
 
 export function forgetTauriWorkbenchSession(sessionId) {
