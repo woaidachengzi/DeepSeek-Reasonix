@@ -1,5 +1,5 @@
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Eye, FileText, FolderOpen, FolderTree, GitBranch, MessageSquare, Paperclip, Pencil, Plus, Sparkles, Square, Trash2, X } from "lucide-react";
+import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Eye, FileText, FolderOpen, FolderTree, GitBranch, MessageSquare, Paperclip, Pencil, Plus, Settings, Sparkles, Square, Trash2, X } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { Markdown } from "../components/Markdown";
 import { QuestionJumpBar } from "../components/QuestionJumpBar";
@@ -7,6 +7,7 @@ import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
 import { compactQuestionText, type QuestionAnchor } from "../lib/transcriptGrouping";
 import { LocaleProvider } from "../lib/i18n";
 import logoWordmark from "../assets/logo-wordmark.svg";
+import { TauriSettings } from "./TauriSettings";
 
 /** Per-message error boundary to prevent one bad message from crashing the entire transcript. */
 class MessageErrorBoundary extends Component<{ children: ReactNode; index: number }, { hasError: boolean }> {
@@ -221,6 +222,7 @@ export function TauriSessionPreview() {
   const [streamReady, setStreamReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspacePath, setWorkspacePath] = useState("");
   const [workspaceEntries, setWorkspaceEntries] = useState<TauriWorkspaceEntry[]>([]);
@@ -933,7 +935,8 @@ export function TauriSessionPreview() {
         </nav>
         <div className="tauri-sidebar__footer">
           <span className={`tauri-health${status?.running ? " is-ready" : ""}`}><i />{status?.running ? "本地运行正常" : "正在连接本地服务…"}</span>
-          <button type="button" className="tauri-sidebar__diagnostics" onClick={() => setDiagnosticsOpen(true)}><Activity size={15} />运行状态与设置</button>
+          <button type="button" className="tauri-sidebar__diagnostics" onClick={() => setSettingsOpen(true)}><Settings size={15} />设置</button>
+          <button type="button" className="tauri-sidebar__diagnostics" onClick={() => setDiagnosticsOpen(true)}><Activity size={15} />运行状态</button>
         </div>
       </aside>
 
@@ -1106,6 +1109,8 @@ export function TauriSessionPreview() {
           </div>
         </aside>
       </>}
+
+      {settingsOpen && <TauriSettings onClose={() => setSettingsOpen(false)} />}
     </main>
   );
 }
