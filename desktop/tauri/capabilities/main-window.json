@@ -12,6 +12,7 @@
     "dialog:allow-message",
     "shell:allow-open",
     "updater:default",
-    "notification:default"
+    "notification:default",
+    "core:app:default"
   ]
 }

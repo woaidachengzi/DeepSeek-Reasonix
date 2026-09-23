@@ -262,6 +262,13 @@ fn main() {
         }))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
+        .plugin(
+            tauri_plugin_stronghold::Builder::new(|password| {
+                // Simple hash for development; use argon2 or similar in production
+                password.as_bytes().to_vec()
+            })
+            .build(),
+        )
         .setup(|app| {
             let window_state = PreviewWindowState::for_app(app)?;
             let workbench_catalog =
