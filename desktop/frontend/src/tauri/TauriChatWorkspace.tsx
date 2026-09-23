@@ -1,4 +1,4 @@
-import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Eye, FileText, FolderOpen, FolderTree, GitBranch, MessageSquare, Paperclip, Pencil, Plus, Settings, Sparkles, Square, Trash2, X } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -10,7 +10,7 @@ import { compactQuestionText, type QuestionAnchor } from "../lib/transcriptGroup
 import { LocaleProvider } from "../lib/i18n";
 import logoWordmark from "../assets/logo-wordmark.svg";
 import { TauriSettings } from "./TauriSettings";
-import { handleTauriDragDropEvent } from "./dragDrop";
+import { handleTauriDragDropEvent, retainTauriDragDropListener } from "./dragDrop";
 
 /** Per-message error boundary to prevent one bad message from crashing the entire transcript. */
 class MessageErrorBoundary extends Component<{ children: ReactNode; index: number }, { hasError: boolean }> {
@@ -358,24 +358,28 @@ export function TauriSessionPreview() {
   }, []);
 
   // Tauri drag-and-drop file handler
-  useEffect(() => {
+  useLayoutEffect(() => {
+    let active = true;
     let unlisten: UnlistenFn | undefined;
+    const canAttach = Boolean(session && streamReady && !busy && session.state === "idle");
     void (async () => {
       try {
-        unlisten = await getCurrentWindow().onDragDropEvent(async (event) => {
+        unlisten = await retainTauriDragDropListener(getCurrentWindow().onDragDropEvent(async (event) => {
+          if (!active) return;
           await handleTauriDragDropEvent(event.payload, {
-            sessionId: session?.id,
+            sessionId: canAttach ? session?.id : undefined,
             attachFile: attachTauriFile,
             addAttachment: attached => setAttachments(previous => [...previous, attached]),
             setDragging,
+            isCurrent: () => active,
           });
-        });
+        }), () => active);
       } catch {
         // Drag-drop not supported in browser mode
       }
     })();
-    return () => { unlisten?.(); };
-  }, [session?.id]);
+    return () => { active = false; unlisten?.(); };
+  }, [session?.id, session?.state, streamReady, busy]);
 
   useEffect(() => {
     if (!session) return;
@@ -605,6 +609,7 @@ export function TauriSessionPreview() {
       setEvents([]);
       setHistory(null);
       setAttachments([]);
+      setDragging(false);
       setPendingPrompt(null);
       setPromptSelections({});
       setHistoryLoading(true);
@@ -682,6 +687,7 @@ export function TauriSessionPreview() {
     setError("");
     invalidateWorkspaceRequests();
     setWorkspaceOpen(false);
+    setDragging(false);
     let switchedToTarget = false;
     let deleted = false;
     let operationError = "";
@@ -1028,6 +1034,7 @@ export function TauriSessionPreview() {
         }
       }
       invalidateWorkspaceRequests();
+      setDragging(false);
       setStreamReady(false);
       setStatus(await restartTauriBridge());
       if (session) {
