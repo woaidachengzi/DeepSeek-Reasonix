@@ -250,6 +250,11 @@ export function TauriSessionPreview() {
   const conversationRef = useRef<HTMLDivElement>(null);
   const turnEpochRef = useRef(0);
   const submitInFlightRef = useRef(false);
+  const workspaceEpochRef = useRef(0);
+  const workspaceListRequestRef = useRef(0);
+  const workspaceChangesRequestRef = useRef(0);
+  const workspacePreviewRequestRef = useRef(0);
+  const workspaceDetailRequestRef = useRef(0);
   const [activeQuestion, setActiveQuestion] = useState<number | null>(null);
   const switchingBlocked = Boolean(session && session.state !== "idle");
   const [platform, setPlatform] = useState<string>("");
@@ -580,6 +585,14 @@ export function TauriSessionPreview() {
     }
   }
 
+  function invalidateWorkspaceRequests() {
+    workspaceEpochRef.current += 1;
+    setWorkspaceLoading(false);
+    setWorkspaceChangesLoading(false);
+    setWorkspacePreviewLoading(false);
+    setWorkspaceChangeDetailLoading(false);
+  }
+
   async function activateSession(id: string, root?: string) {
     if (!id) return setError("缺少会话 ID");
     setBusy(true);
@@ -588,6 +601,7 @@ export function TauriSessionPreview() {
       const next = session && session.id !== id
         ? await switchTauriBridgeSession(id, root)
         : await openTauriBridgeSession(id, root);
+      invalidateWorkspaceRequests();
       setEvents([]);
       setHistory(null);
       setAttachments([]);
@@ -666,6 +680,8 @@ export function TauriSessionPreview() {
     }
     setBusy(true);
     setError("");
+    invalidateWorkspaceRequests();
+    setWorkspaceOpen(false);
     let switchedToTarget = false;
     let deleted = false;
     let operationError = "";
@@ -725,54 +741,68 @@ export function TauriSessionPreview() {
   async function loadWorkspace(path = "") {
     if (!session) return;
     const sessionID = session.id;
+    const epoch = workspaceEpochRef.current;
+    const request = ++workspaceListRequestRef.current;
+    const isCurrent = () => workspaceEpochRef.current === epoch && workspaceListRequestRef.current === request;
+    workspacePreviewRequestRef.current += 1;
     setWorkspaceLoading(true);
+    setWorkspacePreviewLoading(false);
+    setWorkspacePreview(null);
     setWorkspaceError("");
     try {
       const listing = await tauriWorkspace(sessionID, path);
-      if (sessionID !== session?.id) return;
+      if (!isCurrent()) return;
       setWorkspacePath(listing.path);
       setWorkspaceEntries(listing.entries);
       setWorkspaceTruncated(listing.truncated);
-      setWorkspacePreview(null);
     } catch (cause) {
-      if (sessionID === session?.id) setWorkspaceError(tauriMessageFrom(cause));
+      if (isCurrent()) setWorkspaceError(tauriMessageFrom(cause));
     } finally {
-      if (sessionID === session?.id) setWorkspaceLoading(false);
+      if (isCurrent()) setWorkspaceLoading(false);
     }
   }
 
   async function loadWorkspaceChanges() {
     if (!session) return;
     const sessionID = session.id;
+    const epoch = workspaceEpochRef.current;
+    const request = ++workspaceChangesRequestRef.current;
+    const isCurrent = () => workspaceEpochRef.current === epoch && workspaceChangesRequestRef.current === request;
+    workspaceDetailRequestRef.current += 1;
     setWorkspaceChangesLoading(true);
+    setWorkspaceChangeDetailLoading(false);
+    setWorkspaceChangeDetail(null);
     setWorkspaceError("");
     try {
       const changes = await tauriWorkspaceChanges(sessionID);
-      if (sessionID !== session?.id) return;
+      if (!isCurrent()) return;
       setWorkspaceChanges(changes);
-      setWorkspaceChangeDetail(null);
     } catch (cause) {
-      if (sessionID === session?.id) setWorkspaceError(tauriMessageFrom(cause));
+      if (isCurrent()) setWorkspaceError(tauriMessageFrom(cause));
     } finally {
-      if (sessionID === session?.id) setWorkspaceChangesLoading(false);
+      if (isCurrent()) setWorkspaceChangesLoading(false);
     }
   }
 
   async function loadWorkspaceChangeDetail(path: string) {
     if (!session) return;
     const sessionID = session.id;
+    const epoch = workspaceEpochRef.current;
+    const request = ++workspaceDetailRequestRef.current;
+    const isCurrent = () => workspaceEpochRef.current === epoch && workspaceDetailRequestRef.current === request;
     setWorkspaceChangeDetailLoading(true);
+    setWorkspaceChangeDetail(null);
     setWorkspaceError("");
     try {
       const detail = await tauriWorkspaceChangeDetail(sessionID, path);
-      if (sessionID === session?.id) {
+      if (isCurrent()) {
         setWorkspaceChangeDetail(detail);
         setWorkspaceChangeDetailPath(path);
       }
     } catch (cause) {
-      if (sessionID === session?.id) setWorkspaceError(tauriMessageFrom(cause));
+      if (isCurrent()) setWorkspaceError(tauriMessageFrom(cause));
     } finally {
-      if (sessionID === session?.id) setWorkspaceChangeDetailLoading(false);
+      if (isCurrent()) setWorkspaceChangeDetailLoading(false);
     }
   }
 
@@ -787,9 +817,15 @@ export function TauriSessionPreview() {
     setWorkspaceView(view);
     setWorkspaceError("");
     if (view === "files") {
+      workspaceChangesRequestRef.current += 1;
+      setWorkspaceChangesLoading(false);
       setWorkspaceChangeDetail(null);
       void loadWorkspace(workspacePath);
     } else {
+      workspaceListRequestRef.current += 1;
+      workspacePreviewRequestRef.current += 1;
+      setWorkspaceLoading(false);
+      setWorkspacePreviewLoading(false);
       setWorkspacePreview(null);
       void loadWorkspaceChanges();
     }
@@ -817,15 +853,19 @@ export function TauriSessionPreview() {
   async function previewWorkspaceFile(entry: TauriWorkspaceEntry) {
     if (entry.isDir || !session || busy) return;
     const sessionID = session.id;
+    const epoch = workspaceEpochRef.current;
+    const request = ++workspacePreviewRequestRef.current;
+    const isCurrent = () => workspaceEpochRef.current === epoch && workspacePreviewRequestRef.current === request;
     setWorkspacePreviewLoading(true);
+    setWorkspacePreview(null);
     setWorkspaceError("");
     try {
       const preview = await tauriWorkspaceFile(sessionID, entry.path);
-      if (sessionID === session?.id) setWorkspacePreview(preview);
+      if (isCurrent()) setWorkspacePreview(preview);
     } catch (cause) {
-      if (sessionID === session?.id) setWorkspaceError(tauriMessageFrom(cause));
+      if (isCurrent()) setWorkspaceError(tauriMessageFrom(cause));
     } finally {
-      if (sessionID === session?.id) setWorkspacePreviewLoading(false);
+      if (isCurrent()) setWorkspacePreviewLoading(false);
     }
   }
 
@@ -987,6 +1027,7 @@ export function TauriSessionPreview() {
           return false;
         }
       }
+      invalidateWorkspaceRequests();
       setStreamReady(false);
       setStatus(await restartTauriBridge());
       if (session) {

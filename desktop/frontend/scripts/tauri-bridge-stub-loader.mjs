@@ -172,10 +172,22 @@ export function tauriPromptFromEvent() { return null; }
 export function tauriPromptAnsweredId() { return ""; }
 export function tauriPlatformInfo() { return Promise.resolve("darwin"); }
 
-export function tauriWorkspace() { return Promise.resolve({ path: "", entries: [], truncated: false }); }
-export function tauriWorkspaceFile() { return Promise.resolve({ path: "", body: "", size: 0 }); }
-export function tauriWorkspaceChanges() { return Promise.resolve({ files: [], gitAvailable: false }); }
-export function tauriWorkspaceChangeDetail() { return Promise.resolve({ source: "" }); }
+export function tauriWorkspace(sessionId, path) {
+  record("bridge_workspace", { sessionId, path });
+  return globalThis.__workspaceHandler?.(sessionId, path) ?? Promise.resolve({ path, entries: [], truncated: false });
+}
+export function tauriWorkspaceFile(sessionId, path) {
+  record("bridge_workspace_file", { sessionId, path });
+  return globalThis.__workspaceFileHandler?.(sessionId, path) ?? Promise.resolve({ path, body: "", size: 0 });
+}
+export function tauriWorkspaceChanges(sessionId) {
+  record("bridge_workspace_changes", { sessionId });
+  return globalThis.__workspaceChangesHandler?.(sessionId) ?? Promise.resolve({ files: [], gitAvailable: false });
+}
+export function tauriWorkspaceChangeDetail(sessionId, path) {
+  record("bridge_workspace_change_detail", { sessionId, path });
+  return globalThis.__workspaceDetailHandler?.(sessionId, path) ?? Promise.resolve({ source: "" });
+}
 
 export function startTauriBridgeEvents() {
   record("bridge_start_events");

@@ -1,10 +1,8 @@
 // Run: node --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-chat-workspace-delete.test.tsx
 //
-// Mounts the Tauri chat workspace in jsdom and clicks the real controls. The
-// delete button was reported as doing nothing, so this test drives the actual
-// DOM instead of re-implementing the flow: click the row's delete control, then
-// the confirm button, and assert the adapter was reached and the row left the
-// catalog.
+// Mounts the Tauri chat workspace in jsdom and drives the real controls:
+// workspace requests resolving out of order, followed by the two-step session
+// delete flow and event-stream recovery.
 
 import { JSDOM } from "jsdom";
 
@@ -112,7 +110,7 @@ async function main() {
     await settle();
   });
 
-  console.log("\ntauri chat workspace — delete flow");
+  console.log("\ntauri chat workspace — workspace, delete, and recovery flows");
   ok(text().includes("待删除会话"), "the recent-session list renders the stored title");
   eq(document.querySelectorAll(".tauri-session-row__delete").length, 2, "each row has a delete control");
 
@@ -150,6 +148,81 @@ async function main() {
   ok(!document.querySelector<HTMLTextAreaElement>("textarea")?.disabled, "confirmed initial event connection enables sending");
   (globalThis as unknown as { __holdStreamReady?: boolean }).__holdStreamReady = false;
   ok(text().includes("const answer = 42"), "the Tauri entry renders historical Markdown without a localization crash");
+
+  const workspaceStub = globalThis as unknown as {
+    __workspaceHandler?: (sessionId: string, path: string) => Promise<object>;
+    __workspaceFileHandler?: (sessionId: string, path: string) => Promise<object>;
+    __workspaceChangesHandler?: (sessionId: string) => Promise<object>;
+    __workspaceDetailHandler?: (sessionId: string, path: string) => Promise<object>;
+  };
+  const keptFiles = { path: "", truncated: false, entries: [
+    { path: "a.txt", name: "a.txt", isDir: false },
+    { path: "b.txt", name: "b.txt", isDir: false },
+  ] };
+  const otherFiles = { path: "", truncated: false, entries: [{ path: "other.txt", name: "other.txt", isDir: false }] };
+  workspaceStub.__workspaceHandler = async sessionId => sessionId === "tauri-kept-row" ? keptFiles : otherFiles;
+  await act(async () => { clickByClass("tauri-workspace-tree-button"); await settle(); });
+  ok(text().includes("a.txt") && text().includes("b.txt"), "workspace drawer lists the current session's files");
+
+  let releaseOldPreview: ((value: object) => void) | undefined;
+  const oldPreview = new Promise<object>(resolve => { releaseOldPreview = resolve; });
+  workspaceStub.__workspaceFileHandler = async (_sessionId, path) => path === "a.txt"
+    ? oldPreview
+    : { path, body: "new preview", size: 11, binary: false, truncated: false };
+  const doubleClickFile = (path: string) => document.querySelector<HTMLElement>(`.tauri-workspace-entry[title*="${path}"]`)
+    ?.dispatchEvent(new dom.window.MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+  await act(async () => { doubleClickFile("a.txt"); await settle(); });
+  await act(async () => { doubleClickFile("b.txt"); await settle(); });
+  await act(async () => {
+    releaseOldPreview?.({ path: "a.txt", body: "stale preview", size: 13, binary: false, truncated: false });
+    await settle();
+  });
+  ok(text().includes("new preview") && !text().includes("stale preview"), "late preview of the first file cannot replace the latest file");
+
+  workspaceStub.__workspaceChangesHandler = async () => ({ gitAvailable: true, files: [
+    { path: "a.txt", gitStatus: "M", sources: ["git"] },
+    { path: "b.txt", gitStatus: "M", sources: ["git"] },
+  ] });
+  let releaseOldDetail: ((value: object) => void) | undefined;
+  const oldDetail = new Promise<object>(resolve => { releaseOldDetail = resolve; });
+  workspaceStub.__workspaceDetailHandler = async (_sessionId, path) => path === "a.txt"
+    ? oldDetail
+    : { source: "git", diff: "new diff", binary: false, added: 1, removed: 0, truncated: false };
+  await act(async () => { clickButton("变更"); await settle(); });
+  const clickChange = (path: string) => document.querySelector<HTMLElement>(`.tauri-workspace-change-entry[title*="${path}"]`)
+    ?.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  await act(async () => { clickChange("a.txt"); await settle(); });
+  await act(async () => { clickChange("b.txt"); await settle(); });
+  await act(async () => {
+    releaseOldDetail?.({ source: "git", diff: "stale diff", binary: false, added: 1, removed: 0, truncated: false });
+    await settle();
+  });
+  ok(text().includes("new diff") && !text().includes("stale diff"), "late diff of the first file cannot replace the latest diff");
+  await act(async () => { clickButton("文件"); await settle(); });
+  let rejectOldPreview: ((reason: Error) => void) | undefined;
+  const failingPreview = new Promise<object>((_resolve, reject) => { rejectOldPreview = reject; });
+  workspaceStub.__workspaceFileHandler = async () => failingPreview;
+  await act(async () => { doubleClickFile("a.txt"); await settle(); });
+  await act(async () => { clickButton("变更"); await settle(); });
+  await act(async () => { rejectOldPreview?.(new Error("stale preview failure")); await settle(); });
+  ok(!text().includes("stale preview failure"), "file preview failure cannot leak into the changes view");
+  await act(async () => { clickButton("文件"); await settle(); });
+
+  let releaseOldListing: ((value: object) => void) | undefined;
+  const oldListing = new Promise<object>(resolve => { releaseOldListing = resolve; });
+  workspaceStub.__workspaceHandler = async sessionId => sessionId === "tauri-kept-row" ? oldListing : otherFiles;
+  await act(async () => { clickButton("刷新"); await settle(); });
+  ok(clickSession("待删除会话"), "a session switch can start while a workspace request is pending");
+  await act(async () => { await settle(); await settle(); });
+  await act(async () => { clickByClass("tauri-workspace-tree-button"); await settle(); });
+  ok(text().includes("other.txt"), "new session workspace appears before the old request finishes");
+  await act(async () => { releaseOldListing?.(keptFiles); await settle(); });
+  ok(text().includes("other.txt") && !text().includes("a.txt"), "late listing from the previous session cannot replace the active workspace");
+  workspaceStub.__workspaceHandler = async sessionId => sessionId === "tauri-kept-row" ? keptFiles : otherFiles;
+  workspaceStub.__workspaceFileHandler = undefined;
+  workspaceStub.__workspaceChangesHandler = undefined;
+  workspaceStub.__workspaceDetailHandler = undefined;
+  await act(async () => { clickSession("保留会话"); await settle(); await settle(); });
 
   // Step 3: confirming switches to the target, deletes it, removes the host
   // catalog entry, then returns to the previously open conversation.
