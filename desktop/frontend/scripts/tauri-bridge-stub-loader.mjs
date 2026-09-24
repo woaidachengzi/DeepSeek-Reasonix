@@ -86,6 +86,14 @@ export function tauriWorkbenchProjectFolders() {
   return Promise.resolve((globalThis.__savedProjectFolders ?? []).slice());
 }
 
+export function rememberTauriWorkbenchProjectFolder(root) {
+  record("remember_workbench_project_folder", { root });
+  const folders = globalThis.__savedProjectFolders ?? [];
+  if (!folders.some(folder => folder.root === root)) folders.push({ root });
+  globalThis.__savedProjectFolders = folders;
+  return Promise.resolve(folders.slice());
+}
+
 export function tauriWorkbenchSessionPage(cursor, limit = 200) {
   record("workbench_session_page", { cursor, limit });
   const pages = globalThis.__workbenchPages;

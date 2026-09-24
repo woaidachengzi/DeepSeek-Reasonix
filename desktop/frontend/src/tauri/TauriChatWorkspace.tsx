@@ -46,6 +46,7 @@ import {
   onTauriBridgeResyncRequired,
   openTauriBridgeSession,
   rememberTauriWorkbenchSession,
+  rememberTauriWorkbenchProjectFolder,
   renameTauriBridgeSession,
   restartTauriBridge,
   replayTauriPendingPrompts,
@@ -875,6 +876,15 @@ export function TauriSessionPreview() {
       turnEpochRef.current += 1;
       setSession(next);
       setWorkspaceRoot(next.workspaceRoot ?? root ?? "");
+      const openedRoot = next.workspaceRoot ?? root;
+      if (openedRoot?.trim()) {
+        try {
+          const folders = await rememberTauriWorkbenchProjectFolder(openedRoot);
+          setProjectFolders(folders.map(folder => ({ root: folder.root, title: folder.title })));
+        } catch (cause) {
+          setError(`对话已打开，但无法保存项目文件夹：${tauriMessageFrom(cause)}`);
+        }
+      }
       await rememberSession(next);
       setStreamRevision(previous => previous + 1);
       setStatus(await tauriBridgeStatus());
@@ -994,7 +1004,11 @@ export function TauriSessionPreview() {
     setError("");
     try {
       const selected = await chooseTauriWorkspaceRoot();
-      if (selected) setWorkspaceRoot(selected);
+      if (selected) {
+        setWorkspaceRoot(selected);
+        const folders = await rememberTauriWorkbenchProjectFolder(selected);
+        setProjectFolders(folders.map(folder => ({ root: folder.root, title: folder.title })));
+      }
     } catch (cause) {
       setError(tauriMessageFrom(cause));
     } finally {

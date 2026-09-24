@@ -10,6 +10,7 @@ mod session_shadow;
 mod tray;
 mod window_state;
 mod workbench_catalog;
+mod workbench_projects;
 
 #[cfg(test)]
 pub(crate) mod test_env {
@@ -72,6 +73,7 @@ use session_shadow::SessionShadowReport;
 use tauri::{Manager, State};
 use window_state::PreviewWindowState;
 use workbench_catalog::{WorkbenchCatalog, WorkbenchSession, WorkbenchTitle};
+use workbench_projects::WorkbenchProjectCatalog;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -395,8 +397,52 @@ fn workbench_sessions(
 #[tauri::command]
 fn workbench_project_folders(
     supervisor: State<'_, BridgeSupervisor>,
+    catalog: State<'_, WorkbenchProjectCatalog>,
 ) -> Result<Vec<BridgeProjectFolder>, String> {
-    supervisor.project_folders()
+    merged_workbench_project_folders(&supervisor, &catalog)
+}
+
+#[tauri::command]
+fn remember_workbench_project_folder(
+    supervisor: State<'_, BridgeSupervisor>,
+    catalog: State<'_, WorkbenchProjectCatalog>,
+    root: String,
+) -> Result<Vec<BridgeProjectFolder>, String> {
+    catalog.remember(&root)?;
+    merged_workbench_project_folders(&supervisor, &catalog)
+}
+
+fn merged_workbench_project_folders(
+    supervisor: &BridgeSupervisor,
+    catalog: &WorkbenchProjectCatalog,
+) -> Result<Vec<BridgeProjectFolder>, String> {
+    let mut folders = supervisor.project_folders().unwrap_or_default();
+    let local = match catalog.list() {
+        Ok(local) => local,
+        Err(_) if !folders.is_empty() => return Ok(folders),
+        Err(error) => return Err(error),
+    };
+    for folder in local {
+        if let Some(existing) = folders.iter_mut().find(|existing| {
+            workbench_project_key(&existing.root) == workbench_project_key(&folder.root)
+        }) {
+            if existing.title.as_deref().unwrap_or("").trim().is_empty() {
+                existing.title = folder.title;
+            }
+        } else {
+            folders.push(folder);
+        }
+    }
+    Ok(folders)
+}
+
+fn workbench_project_key(root: &str) -> String {
+    let root = root.trim().trim_end_matches(['/', '\\']);
+    if cfg!(windows) {
+        root.to_ascii_lowercase()
+    } else {
+        root.to_string()
+    }
 }
 
 #[tauri::command]
@@ -669,6 +715,8 @@ fn main() {
             let window_state = PreviewWindowState::for_app(app)?;
             let workbench_catalog =
                 WorkbenchCatalog::for_app(app).map_err(std::io::Error::other)?;
+            let project_catalog =
+                WorkbenchProjectCatalog::for_app(app).map_err(std::io::Error::other)?;
             if let Some(window) = app.get_webview_window("main") {
                 window_state.restore(&window);
             }
@@ -701,6 +749,7 @@ fn main() {
             app.manage(profile);
             app.manage(window_state);
             app.manage(workbench_catalog);
+            app.manage(project_catalog);
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -834,6 +883,7 @@ fn main() {
             import_stable_project_folders,
             workbench_sessions,
             workbench_project_folders,
+            remember_workbench_project_folder,
             workbench_session_page,
             backfill_workbench_titles,
             remember_workbench_session,
