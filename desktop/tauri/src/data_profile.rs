@@ -339,10 +339,7 @@ mod tests {
     /// the identity database into a stable installation.
     #[test]
     fn managed_profile_drops_an_inherited_state_home() {
-        // Both variables are process-global; this test owns them for its
-        // duration, so the previous values are restored afterwards.
-        let previous_state = env::var_os("REASONIX_STATE_HOME");
-        let previous_home = env::var_os("REASONIX_HOME");
+        let _env = crate::test_env::guard();
         env::set_var("REASONIX_STATE_HOME", "/stable/state");
 
         let home = PathBuf::from("/preview/home");
@@ -358,14 +355,5 @@ mod tests {
             Some(home.into_os_string()),
             "the preview home must be the Go core's state root"
         );
-
-        match previous_state {
-            Some(value) => env::set_var("REASONIX_STATE_HOME", value),
-            None => env::remove_var("REASONIX_STATE_HOME"),
-        }
-        match previous_home {
-            Some(value) => env::set_var("REASONIX_HOME", value),
-            None => env::remove_var("REASONIX_HOME"),
-        }
     }
 }

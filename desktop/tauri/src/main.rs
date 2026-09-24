@@ -11,6 +11,44 @@ mod tray;
 mod window_state;
 mod workbench_catalog;
 
+#[cfg(test)]
+pub(crate) mod test_env {
+    use std::sync::{Mutex, MutexGuard};
+
+    static PROCESS_ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    pub(crate) struct Guard {
+        _lock: MutexGuard<'static, ()>,
+        reasonix_home: Option<std::ffi::OsString>,
+        reasonix_state_home: Option<std::ffi::OsString>,
+    }
+
+    pub(crate) fn guard() -> Guard {
+        let lock = PROCESS_ENV_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Guard {
+            _lock: lock,
+            reasonix_home: std::env::var_os("REASONIX_HOME"),
+            reasonix_state_home: std::env::var_os("REASONIX_STATE_HOME"),
+        }
+    }
+
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            restore("REASONIX_HOME", self.reasonix_home.take());
+            restore("REASONIX_STATE_HOME", self.reasonix_state_home.take());
+        }
+    }
+
+    fn restore(name: &str, value: Option<std::ffi::OsString>) {
+        match value {
+            Some(value) => std::env::set_var(name, value),
+            None => std::env::remove_var(name),
+        }
+    }
+}
+
 use serde::Serialize;
 use std::path::Path;
 

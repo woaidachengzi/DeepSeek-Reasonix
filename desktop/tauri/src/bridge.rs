@@ -2258,6 +2258,7 @@ mod tests {
         let Some(binary) = bridge_under_test() else {
             return;
         };
+        let _env = crate::test_env::guard();
         let supervisor = BridgeSupervisor::with_binary(binary);
         let status = supervisor.start().expect("start bridge");
         assert!(status.running);
@@ -2271,9 +2272,8 @@ mod tests {
         let Some(binary) = bridge_under_test() else {
             return;
         };
+        let _env = crate::test_env::guard();
         let home = tempfile::tempdir().expect("isolated reasonix home");
-        let previous_home = env::var_os("REASONIX_HOME");
-        let previous_state_home = env::var_os("REASONIX_STATE_HOME");
         env::set_var("REASONIX_HOME", home.path());
         env::set_var("REASONIX_STATE_HOME", home.path());
         let supervisor = BridgeSupervisor::with_binary(binary);
@@ -2304,14 +2304,6 @@ mod tests {
         assert_eq!(report.physical_state_mismatches, 0);
         assert!(report.legacy_matches_directory);
         supervisor.stop().expect("stop bridge");
-        match previous_home {
-            Some(value) => env::set_var("REASONIX_HOME", value),
-            None => env::remove_var("REASONIX_HOME"),
-        }
-        match previous_state_home {
-            Some(value) => env::set_var("REASONIX_STATE_HOME", value),
-            None => env::remove_var("REASONIX_STATE_HOME"),
-        }
     }
 
     #[test]
@@ -2319,9 +2311,8 @@ mod tests {
         let Some(binary) = bridge_under_test() else {
             return;
         };
+        let _env = crate::test_env::guard();
         let home = tempfile::tempdir().expect("isolated reasonix home");
-        let previous_home = env::var_os("REASONIX_HOME");
-        let previous_state_home = env::var_os("REASONIX_STATE_HOME");
         env::set_var("REASONIX_HOME", home.path());
         env::set_var("REASONIX_STATE_HOME", home.path());
 
@@ -2354,14 +2345,6 @@ mod tests {
         assert_eq!(page[0].position, 0);
 
         supervisor.stop().expect("stop bridge");
-        match previous_home {
-            Some(value) => env::set_var("REASONIX_HOME", value),
-            None => env::remove_var("REASONIX_HOME"),
-        }
-        match previous_state_home {
-            Some(value) => env::set_var("REASONIX_STATE_HOME", value),
-            None => env::remove_var("REASONIX_STATE_HOME"),
-        }
     }
 
     #[test]
@@ -2369,6 +2352,7 @@ mod tests {
         let Some(binary) = bridge_under_test() else {
             return;
         };
+        let _env = crate::test_env::guard();
         let supervisor = BridgeSupervisor::with_binary(binary);
         assert!(supervisor.start().expect("start bridge").running);
         {
@@ -2397,6 +2381,7 @@ mod tests {
         let Some(binary) = bridge_under_test() else {
             return;
         };
+        let _env = crate::test_env::guard();
         let home = tempfile::tempdir().expect("isolated reasonix home");
         env::set_var("REASONIX_HOME", home.path());
         let supervisor = BridgeSupervisor::with_binary(binary);
@@ -2454,6 +2439,7 @@ mod tests {
         let Some(binary) = bridge_under_test() else {
             return;
         };
+        let _env = crate::test_env::guard();
         let home = tempfile::tempdir().expect("isolated reasonix home");
         std::env::set_var("REASONIX_HOME", home.path());
         let supervisor = BridgeSupervisor::with_binary(binary);
