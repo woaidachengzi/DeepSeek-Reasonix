@@ -204,7 +204,19 @@ CREATE INDEX sessions_visible_order ON sessions(state, position, id);
 
 ### S2：shadow 读写与 resolver
 
-**当前安全切片**：bridge 已将新建、恢复、缺失、删除中与已删除会话分开处理；已登记但 transcript 缺失时拒绝静默创建同 ID 空会话，缺失与中断删除均可经显式删除安全退休并保留 tombstone。Tauri Preview 侧栏按页读取身份目录，但首屏只有在 count-only 影子比对确认一致时才选 SQLite；比对不一致或失败时回退旧 JSON 目录，且新增/改名/删除后的重新盘点发现漂移时也会回退。身份表现为相对 state-root 的 `relative_path`；旧 v1–v3 绝对路径通过校验后事务迁移到 v4，离线快照的跨目录恢复测试确认 ID 可解析到新 profile。此为可回退的 Preview 读取路径，不代表稳定版迁移或全 profile 权威切换。完整跨资源恢复演练、旧版写者停写确认与旧 bridge 客户端兼容矩阵仍待完成。
+**当前安全切片**：bridge 已将新建、恢复、缺失、删除中与已删除会话分开处理；已登记但 transcript 缺失时拒绝静默创建同 ID 空会话，缺失与中断删除均可经显式删除安全退休并保留 tombstone。Tauri Preview 侧栏按页读取身份目录，但首屏只有在 count-only 影子比对确认一致时才选 SQLite；比对不一致或失败时回退旧 JSON 目录，且新增/改名/删除后的重新盘点发现漂移时也会回退。身份表现为相对 state-root 的 `relative_path`；旧 v1–v3 绝对路径通过校验后事务迁移到 v4，离线快照与旧 catalog 重放的跨资源恢复演练已覆盖新 profile 路径。此为可回退的 Preview 读取路径，不代表稳定版迁移或全 profile 权威切换。旧 bridge 缺少必需的 `session_catalog_sync` capability 时，新 host 会在启动阶段拒绝该 sidecar；真实旧 writer 停写确认与旧 Tauri host 二进制认证仍待完成，详见下方兼容矩阵。
+
+### 旧客户端 / sidecar 兼容矩阵（当前验证范围）
+
+| 组合 | 结论 | 依据 / 限制 |
+| --- | --- | --- |
+| 当前 Tauri host + 当前 bridge（protocol v1，含 `session_catalog_sync`） | 支持 | Host 启动时先校验 ready frame，再读取认证 health；协议版本、sidecar instance ID 或会话目录同步 capability 不匹配时，拒绝把该进程登记为可用并终止它。 |
+| 当前 Tauri host + 旧 bridge（仍报 protocol v1、但不含 `session_catalog_sync`） | 明确拒绝 | protocol major 相同不代表新增 endpoint 可用；health capability 缺失会在启动阶段报错，不等到初次目录同步才失败。 |
+| 旧 Tauri host + 新 bridge（protocol v1） | 预期向后兼容，非发布认证 | bridge 保留既有 v1 路由；旧 host 不调用新增目录同步接口时，不会要求它理解身份库。完整旧 host 二进制尚未纳入自动化矩阵。 |
+| Wails 1.38.3 / 1.38.10 与 Tauri Preview 共用 profile 并同时写入 | 不支持 | 这些旧 writer 不遵守 `profilegate`。不得用新 bridge 的锁推断旧进程已停；真实 profile 操作前需外部确认 writer 全退出。 |
+| 稳定版 Wails profile 顺序复制到隔离的 Preview，再离线导入 | 有条件支持，需人工核对 | 只对副本执行 inventory、快照、逐项审核导入与恢复演练；不在稳定目录就地迁移、不让两个版本并发写。 |
+
+自动化目前覆盖 capability 缺失/instance 不匹配拒绝、当前协议 health 响应、旧 catalog 导入和相对路径恢复；没有真实 1.38.3/1.38.10 writer 停写证明，也没有旧 Tauri host 二进制的端到端认证。将“预期向后兼容”升级为“发布认证”前，需加入可复现的旧 host fixture/二进制矩阵；仅凭协议版本号不能替代这项验证。
 
 1. 新会话先 `reserved` 登记 ID；实际写入后转 `ready`。bridge 的打开/切换/重命名/删除均先解析身份行，再定位文件。无记录的新建与已登记但 `missing` 的恢复必须分开。
 2. 一段发布窗口内，host 对比 JSON 与 SQLite 的 ID/标题/工作区/顺序/文件状态；只记录差异统计，不把私密消息写诊断。SQLite 只在影子报告 clean 时作为当前 Preview 侧栏来源，否则继续显示 JSON；差异或盘点错误不得进入 SQLite 来源。
@@ -224,7 +236,7 @@ CREATE INDEX sessions_visible_order ON sessions(state, position, id);
 审批稿 A1–A6、B3–B5、C1–C5 的边界继续有效；A7 改为“记忆布局待独立设计”，B1 的扫描器改为**只读候选清单**而非自动认领，B2 的 alias 延至 Move 语义确定。审批稿中 Wails 的路径身份与 Tauri 已有 ID 必须分开描述，`C6`/`B5` 的交叉引用也需更正。
 
 S0 路径与隔离修正已提交；S1 的只读清单和离线核验导入已有代码与测试，
-离线快照会校验整份 profile 与 host catalog，快照暂存到新目录后的身份读取与路径重绑定已有自动化演练。身份库 schema v4 已把绝对 `path` 迁为相对 `relative_path`，v1–v3 迁移会先核对路径归属，越界时拒绝迁移且不改 v3 数据。下一步是旧写者停写确认、完整跨资源恢复演练和旧 bridge 客户端兼容矩阵；新版本 bridge 同 profile 进程互斥已有跨进程测试，但不约束不使用新锁协议的旧版本写者。Preview 仅在首屏影子报告 clean 时选择身份目录；启动或新增、
+离线快照会校验整份 profile 与 host catalog，暂存快照后的身份路径重绑定及 catalog 对恢复 transcript 的重放已有自动化演练。身份库 schema v4 已把绝对 `path` 迁为相对 `relative_path`，v1–v3 迁移会先核对路径归属，越界时拒绝迁移且不改 v3 数据。当前 host 已在启动时校验 `session_catalog_sync` capability，旧 v1 sidecar 缺能力会被拒绝；上方兼容矩阵记录了可证明与仅预期兼容的组合。仍待旧 writer 停写确认及旧 Tauri host 二进制端到端认证；新版本 bridge 同 profile 进程互斥已有跨进程测试，但不约束不使用新锁协议的旧版本 writer。Preview 仅在首屏影子报告 clean 时选择身份目录；启动或新增、
 改名、删除后若重盘点发现漂移或失败，则回退 JSON。稳定版及真实 profile 自动迁移仍未授权。
 
 > **[DeepSeek] 本段的 A/B/C 编号与两处更正已并入 V2 的决议索引。**

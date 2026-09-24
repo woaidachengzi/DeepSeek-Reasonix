@@ -1221,6 +1221,13 @@ impl BridgeSupervisor {
             let _ = child.kill();
             let _ = wait_for_exit(&mut child, STOP_TIMEOUT);
         })?;
+        let health = request_json(ready.address, &token, "GET", "/v1/health", None, None)
+            .and_then(|response| verify_bridge_health(response, &ready.sidecar_instance_id));
+        if let Err(error) = health {
+            let _ = child.kill();
+            let _ = wait_for_exit(&mut child, STOP_TIMEOUT);
+            return Err(error);
+        }
         Ok(BridgeProcess {
             child,
             _ready_directory: ready_directory,
@@ -1389,6 +1396,25 @@ fn verify_ready(contents: &str, launch_id: &str) -> Result<VerifiedReady, String
         address,
         sidecar_instance_id: ready.sidecar_instance_id,
     })
+}
+
+fn verify_bridge_health(response: Value, expected_instance_id: &str) -> Result<(), String> {
+    let health: crate::protocol_generated::BridgeHealth =
+        serde_json::from_value(response).map_err(display_error)?;
+    if health.protocol_version != u64::from(PROTOCOL_VERSION)
+        || health.status != "ok"
+        || health.sidecar_instance_id != expected_instance_id
+    {
+        return Err("desktop bridge health handshake did not match its ready frame".to_string());
+    }
+    if !health
+        .capabilities
+        .iter()
+        .any(|capability| capability == "session_catalog_sync")
+    {
+        return Err("desktop bridge does not support session catalog synchronization".to_string());
+    }
+    Ok(())
 }
 
 fn request_shutdown(address: SocketAddr, token: &str) -> Result<(), String> {
@@ -1848,10 +1874,11 @@ fn display_error(error: impl std::fmt::Display) -> String {
 mod tests {
     use super::{
         open_event_stream, parse_json_response, request_json, session_directory_path,
-        session_path_component, validate_attachment, validate_session_directory_page, verify_ready,
-        wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSupervisor, EventStreamError,
-        OpenSessionRequest, RenameSessionRequest, SessionDirectoryCursor, SessionDirectoryEntry,
-        SessionDirectoryPage, SessionInventoryResponse, SessionRequest, PROTOCOL_VERSION,
+        session_path_component, validate_attachment, validate_session_directory_page,
+        verify_bridge_health, verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent,
+        BridgeSupervisor, EventStreamError, OpenSessionRequest, RenameSessionRequest,
+        SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage,
+        SessionInventoryResponse, SessionRequest, PROTOCOL_VERSION,
     };
     use crate::{session_shadow, workbench_catalog::WorkbenchSession};
     use serde_json::json;
@@ -1886,6 +1913,28 @@ mod tests {
         let ready = r#"{"protocolVersion":1,"address":"127.0.0.1:12345","sidecarInstanceId":"instance","launchId":"launch"}"#;
         assert!(verify_ready(ready, "launch").is_ok());
         assert!(verify_ready(ready, "other").is_err());
+    }
+
+    #[test]
+    fn bridge_health_requires_current_session_storage_capability_and_instance() {
+        let healthy = json!({
+            "protocolVersion": 1,
+            "status": "ok",
+            "sidecarInstanceId": "instance",
+            "capabilities": ["open_session", "session_catalog_sync"],
+        });
+        assert!(verify_bridge_health(healthy.clone(), "instance").is_ok());
+        assert!(verify_bridge_health(healthy.clone(), "other").is_err());
+
+        let old_v1_sidecar = json!({
+            "protocolVersion": 1,
+            "status": "ok",
+            "sidecarInstanceId": "instance",
+            "capabilities": ["open_session"],
+        });
+        assert!(verify_bridge_health(old_v1_sidecar, "instance")
+            .unwrap_err()
+            .contains("session catalog synchronization"));
     }
 
     #[test]
