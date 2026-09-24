@@ -101,9 +101,9 @@ pub struct SessionDirectoryPage {
 #[serde(rename_all = "camelCase")]
 struct SessionInventoryResponse {
     protocol_version: u8,
-    entries: Vec<SessionInventoryEntry>,
-    unclaimed: Vec<String>,
-    errors: Vec<String>,
+    entries: Option<Vec<SessionInventoryEntry>>,
+    unclaimed: Option<Vec<String>>,
+    errors: Option<Vec<String>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -660,6 +660,7 @@ impl BridgeSupervisor {
         Ok(SessionPhysicalInventory {
             states: inventory
                 .entries
+                .unwrap_or_default()
                 .into_iter()
                 .filter(|entry| entry.source == "identity")
                 .map(|entry| SessionPhysicalState {
@@ -668,8 +669,8 @@ impl BridgeSupervisor {
                     readable: entry.detail.is_empty() || entry.detail == "transcript is absent",
                 })
                 .collect(),
-            unclaimed_count: inventory.unclaimed.len(),
-            error_count: inventory.errors.len(),
+            unclaimed_count: inventory.unclaimed.unwrap_or_default().len(),
+            error_count: inventory.errors.unwrap_or_default().len(),
         })
     }
 
@@ -1728,6 +1729,7 @@ mod tests {
         OpenSessionRequest, RenameSessionRequest, SessionDirectoryCursor, SessionDirectoryEntry,
         SessionDirectoryPage, SessionInventoryResponse, SessionRequest, PROTOCOL_VERSION,
     };
+    use crate::{session_shadow, workbench_catalog::WorkbenchSession};
     use serde_json::json;
     use std::{
         env,
@@ -1824,11 +1826,11 @@ mod tests {
         let inventory: SessionInventoryResponse = serde_json::from_value(json!({
             "protocolVersion": PROTOCOL_VERSION,
             "entries": [{ "id": "safe", "source": "identity", "exists": true }],
-            "unclaimed": [],
-            "errors": []
+            "unclaimed": null,
+            "errors": null
         }))
         .expect("parse healthy inventory row");
-        assert!(inventory.entries[0].detail.is_empty());
+        assert!(inventory.entries.expect("entry")[0].detail.is_empty());
     }
 
     #[test]
@@ -2071,6 +2073,54 @@ mod tests {
         assert_eq!(status.protocol_version, Some(1));
         supervisor.stop().expect("stop bridge");
         assert!(!supervisor.status().running);
+    }
+
+    #[test]
+    fn shadow_reads_real_directory_and_physical_inventory_when_bridge_is_provided() {
+        let Some(binary) = bridge_under_test() else {
+            return;
+        };
+        let home = tempfile::tempdir().expect("isolated reasonix home");
+        let previous_home = env::var_os("REASONIX_HOME");
+        let previous_state_home = env::var_os("REASONIX_STATE_HOME");
+        env::set_var("REASONIX_HOME", home.path());
+        env::set_var("REASONIX_STATE_HOME", home.path());
+        let supervisor = BridgeSupervisor::with_binary(binary);
+        supervisor.start().expect("start bridge");
+        supervisor
+            .open_session(OpenSessionRequest {
+                session_id: "tauri-e2e-shadow".to_string(),
+                workspace_root: None,
+            })
+            .expect("reserve session");
+        let directory = supervisor
+            .session_directory_snapshot()
+            .expect("read identity directory");
+        let physical = supervisor
+            .session_physical_inventory()
+            .expect("read physical inventory");
+        let report = session_shadow::compare(
+            &[WorkbenchSession {
+                session_id: "tauri-e2e-shadow".to_string(),
+                title: None,
+                workspace_root: None,
+            }],
+            &directory,
+            &physical,
+        )
+        .expect("compare catalog");
+        assert_eq!(report.matched_count, 1);
+        assert_eq!(report.physical_state_mismatches, 0);
+        assert!(report.legacy_matches_directory);
+        supervisor.stop().expect("stop bridge");
+        match previous_home {
+            Some(value) => env::set_var("REASONIX_HOME", value),
+            None => env::remove_var("REASONIX_HOME"),
+        }
+        match previous_state_home {
+            Some(value) => env::set_var("REASONIX_STATE_HOME", value),
+            None => env::remove_var("REASONIX_STATE_HOME"),
+        }
     }
 
     #[test]
