@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -161,5 +162,62 @@ func TestOfflineSnapshotRejectsSymlinkAndLeavesIncompleteMarker(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(snapshot, "manifest.json")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("incomplete snapshot has a valid manifest: %v", err)
+	}
+}
+
+// A manifest that forgets a file on disk must not verify: recovery staging
+// copies only manifest members, so an unlisted session would be dropped.
+func TestOfflineSnapshotRejectsManifestMissingOnDiskFile(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	profile := filepath.Join(root, "profile")
+	writeTranscript(t, filepath.Join(profile, "sessions", "tauri-tauri-one.jsonl"))
+	catalog := filepath.Join(root, "workbench-sessions.json")
+	writeCatalog(t, catalog, []catalogEntry{{SessionID: "tauri-one"}})
+	backupParent := filepath.Join(root, "backups")
+	if err := os.Mkdir(backupParent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := CreateOfflineSnapshot(ctx, profile, catalog, backupParent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Inject a session file that the published manifest never listed.
+	ghost := filepath.Join(snapshot, "profile", "sessions", "tauri-tauri-ghost.jsonl")
+	if err := os.WriteFile(ghost, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyOfflineSnapshot(ctx, snapshot); err == nil {
+		t.Fatal("verification accepted a snapshot whose manifest omitted an on-disk file")
+	} else if !strings.Contains(err.Error(), "missing from the manifest") {
+		t.Fatalf("verification error = %v, want an unlisted-member message", err)
+	}
+	if _, err := StageOfflineSnapshot(ctx, snapshot, root); err == nil {
+		t.Fatal("staging accepted a snapshot whose manifest omitted an on-disk file")
+	}
+}
+
+// An unlisted directory is equally fatal: empty dirs are part of the profile.
+func TestOfflineSnapshotRejectsManifestMissingOnDiskDirectory(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	profile := filepath.Join(root, "profile")
+	writeTranscript(t, filepath.Join(profile, "sessions", "tauri-tauri-one.jsonl"))
+	catalog := filepath.Join(root, "workbench-sessions.json")
+	writeCatalog(t, catalog, []catalogEntry{{SessionID: "tauri-one"}})
+	backupParent := filepath.Join(root, "backups")
+	if err := os.Mkdir(backupParent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := CreateOfflineSnapshot(ctx, profile, catalog, backupParent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ghostDir := filepath.Join(snapshot, "profile", "unlisted-empty")
+	if err := os.Mkdir(ghostDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyOfflineSnapshot(ctx, snapshot); err == nil {
+		t.Fatal("verification accepted a snapshot whose manifest omitted an on-disk directory")
 	}
 }

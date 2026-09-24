@@ -229,6 +229,62 @@ func VerifyOfflineSnapshot(ctx context.Context, snapshotDir string) (SnapshotMan
 	if !seen[filepath.FromSlash("catalog/workbench-sessions.json")] {
 		return SnapshotManifest{}, errors.New("snapshot manifest omits the workbench catalog")
 	}
+	// Completeness is the other half of verification: every regular file and
+	// directory under the snapshot root must appear in the manifest. Without
+	// this walk a manifest that simply forgot a session file would still
+	// verify, and StageOfflineSnapshot would silently drop that file.
+	diskFiles := make(map[string]bool)
+	diskDirs := make(map[string]bool)
+	walkErr := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("snapshot contains an unlisted symlink: %s", filepath.ToSlash(rel))
+		}
+		slashed := filepath.ToSlash(rel)
+		if entry.IsDir() {
+			diskDirs[slashed] = true
+			return nil
+		}
+		if !entry.Type().IsRegular() {
+			return fmt.Errorf("snapshot contains a non-regular member: %s", slashed)
+		}
+		// The manifest is the index itself; it is not a profile member.
+		if slashed == "manifest.json" {
+			return nil
+		}
+		diskFiles[slashed] = true
+		return nil
+	})
+	if walkErr != nil {
+		return SnapshotManifest{}, fmt.Errorf("walk snapshot directory: %w", walkErr)
+	}
+	for name := range diskDirs {
+		if !directorySeen[filepath.FromSlash(name)] {
+			return SnapshotManifest{}, fmt.Errorf("snapshot directory is missing from the manifest: %s", name)
+		}
+	}
+	for name := range diskFiles {
+		if !seen[filepath.FromSlash(name)] {
+			return SnapshotManifest{}, fmt.Errorf("snapshot file is missing from the manifest: %s", name)
+		}
+	}
+	for name := range seen {
+		if !diskFiles[name] {
+			return SnapshotManifest{}, fmt.Errorf("manifest member is missing on disk: %s", filepath.ToSlash(name))
+		}
+	}
 	return manifest, nil
 }
 
