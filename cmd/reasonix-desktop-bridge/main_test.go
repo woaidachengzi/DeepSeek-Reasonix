@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -746,6 +747,9 @@ func TestRunPublishesReadyHealthAndShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := io.Copy(io.Discard, healthResponse.Body); err != nil {
+		t.Fatal(err)
+	}
 	healthResponse.Body.Close()
 	if healthResponse.StatusCode != http.StatusOK {
 		t.Fatalf("health status = %d, want %d", healthResponse.StatusCode, http.StatusOK)
@@ -758,6 +762,9 @@ func TestRunPublishesReadyHealthAndShutdown(t *testing.T) {
 	shutdownRequest.Header.Set("Authorization", "Bearer "+testToken)
 	shutdownResponse, err := http.DefaultClient.Do(shutdownRequest)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.Copy(io.Discard, shutdownResponse.Body); err != nil {
 		t.Fatal(err)
 	}
 	shutdownResponse.Body.Close()
