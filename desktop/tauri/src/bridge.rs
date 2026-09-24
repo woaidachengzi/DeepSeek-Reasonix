@@ -67,6 +67,35 @@ struct SessionPreviewsResponse {
     previews: Vec<SessionPreview>,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionDirectoryCursor {
+    pub position: i64,
+    pub id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionDirectoryEntry {
+    pub id: String,
+    pub title: String,
+    pub title_source: String,
+    pub workspace_root: Option<String>,
+    pub state: String,
+    pub missing: bool,
+    pub position: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionDirectoryPage {
+    pub protocol_version: u8,
+    pub sessions: Vec<SessionDirectoryEntry>,
+    pub next_cursor: Option<SessionDirectoryCursor>,
+    pub total: u64,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenameSessionRequest {
@@ -520,6 +549,26 @@ impl BridgeSupervisor {
             }
         }
         Ok(envelope.previews)
+    }
+
+    /// Reads one identity-store directory page without changing the host's
+    /// current JSON catalog authority. The UI can shadow-compare these pages
+    /// before a later, explicit source switch.
+    pub fn session_directory_page(
+        &self,
+        limit: u16,
+        cursor: Option<SessionDirectoryCursor>,
+        workspace_root: Option<String>,
+    ) -> Result<SessionDirectoryPage, String> {
+        let workspace_root = workspace_root
+            .as_deref()
+            .map(str::trim)
+            .filter(|root| !root.is_empty());
+        let path = session_directory_path(limit, cursor.as_ref(), workspace_root)?;
+        let response = self.request_json("GET", &path, None, None)?;
+        let page: SessionDirectoryPage = serde_json::from_value(response).map_err(display_error)?;
+        validate_session_directory_page(&page, limit, cursor.as_ref(), workspace_root)?;
+        Ok(page)
     }
 
     pub fn delete_session(
@@ -1340,6 +1389,74 @@ fn mcp_path(base: &str, workspace_root: Option<&str>) -> Result<String, String> 
     Ok(format!("{base}?workspaceRoot={encoded}"))
 }
 
+fn session_directory_path(
+    limit: u16,
+    cursor: Option<&SessionDirectoryCursor>,
+    workspace_root: Option<&str>,
+) -> Result<String, String> {
+    if !(1..=200).contains(&limit) {
+        return Err("desktop bridge session page limit is invalid".to_string());
+    }
+    let mut path = mcp_path("/v1/sessions", workspace_root)?;
+    path.push(if path.contains('?') { '&' } else { '?' });
+    path.push_str(&format!("limit={limit}"));
+    if let Some(cursor) = cursor {
+        if cursor.position < 0 {
+            return Err("desktop bridge session page cursor is invalid".to_string());
+        }
+        let id = session_path_component(&cursor.id)?;
+        path.push_str(&format!(
+            "&cursorPosition={}&cursorId={id}",
+            cursor.position
+        ));
+    }
+    Ok(path)
+}
+
+fn validate_session_directory_page(
+    page: &SessionDirectoryPage,
+    limit: u16,
+    after: Option<&SessionDirectoryCursor>,
+    workspace_root: Option<&str>,
+) -> Result<(), String> {
+    if page.protocol_version != PROTOCOL_VERSION
+        || page.sessions.len() > usize::from(limit)
+        || page.total < page.sessions.len() as u64
+    {
+        return Err("desktop bridge session page is invalid".to_string());
+    }
+    let mut previous = after.cloned();
+    for entry in &page.sessions {
+        session_path_component(&entry.id)?;
+        if entry.position < 0
+            || !matches!(entry.state.as_str(), "reserved" | "ready" | "missing")
+            || entry.missing != (entry.state == "missing")
+            || workspace_root
+                .filter(|root| !root.is_empty())
+                .is_some_and(|root| entry.workspace_root.as_deref() != Some(root))
+        {
+            return Err("desktop bridge session page contains an invalid entry".to_string());
+        }
+        let key = SessionDirectoryCursor {
+            position: entry.position,
+            id: entry.id.clone(),
+        };
+        if previous
+            .as_ref()
+            .is_some_and(|old| (key.position, key.id.as_str()) <= (old.position, old.id.as_str()))
+        {
+            return Err("desktop bridge session page order is invalid".to_string());
+        }
+        previous = Some(key);
+    }
+    if let Some(next) = &page.next_cursor {
+        if page.sessions.len() != usize::from(limit) || previous.as_ref() != Some(next) {
+            return Err("desktop bridge session page cursor is invalid".to_string());
+        }
+    }
+    Ok(())
+}
+
 fn forward_events(
     app: tauri::AppHandle,
     address: SocketAddr,
@@ -1476,10 +1593,11 @@ fn display_error(error: impl std::fmt::Display) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        open_event_stream, parse_json_response, request_json, session_path_component,
-        validate_attachment, verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent,
-        BridgeSupervisor, EventStreamError, OpenSessionRequest, RenameSessionRequest,
-        SessionRequest,
+        open_event_stream, parse_json_response, request_json, session_directory_path,
+        session_path_component, validate_attachment, validate_session_directory_page, verify_ready,
+        wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSupervisor, EventStreamError,
+        OpenSessionRequest, RenameSessionRequest, SessionDirectoryCursor, SessionDirectoryEntry,
+        SessionDirectoryPage, SessionRequest, PROTOCOL_VERSION,
     };
     use serde_json::json;
     use std::{
@@ -1513,6 +1631,63 @@ mod tests {
         let ready = r#"{"protocolVersion":1,"address":"127.0.0.1:12345","sidecarInstanceId":"instance","launchId":"launch"}"#;
         assert!(verify_ready(ready, "launch").is_ok());
         assert!(verify_ready(ready, "other").is_err());
+    }
+
+    #[test]
+    fn session_directory_query_uses_composite_cursor_and_escaped_workspace() {
+        let cursor = SessionDirectoryCursor {
+            position: 12,
+            id: "session-009".to_string(),
+        };
+        assert_eq!(
+            session_directory_path(73, Some(&cursor), Some("/work/a b")).unwrap(),
+            "/v1/sessions?workspaceRoot=/work/a%20b&limit=73&cursorPosition=12&cursorId=session-009"
+        );
+        assert!(session_directory_path(0, None, None).is_err());
+        assert!(session_directory_path(201, None, None).is_err());
+        assert!(session_directory_path(
+            1,
+            Some(&SessionDirectoryCursor {
+                position: 0,
+                id: "../outside".to_string(),
+            }),
+            None,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn session_directory_page_rejects_tombstones_and_bad_paging() {
+        let entry = |id: &str| SessionDirectoryEntry {
+            id: id.to_string(),
+            title: String::new(),
+            title_source: "fallback".to_string(),
+            workspace_root: Some("/work/a".to_string()),
+            state: "ready".to_string(),
+            missing: false,
+            position: 12,
+            updated_at_ms: 1,
+        };
+        let mut page = SessionDirectoryPage {
+            protocol_version: PROTOCOL_VERSION,
+            sessions: vec![entry("session-001"), entry("session-002")],
+            next_cursor: Some(SessionDirectoryCursor {
+                position: 12,
+                id: "session-002".to_string(),
+            }),
+            total: 3,
+        };
+        assert!(validate_session_directory_page(&page, 2, None, Some("/work/a")).is_ok());
+        let after = SessionDirectoryCursor {
+            position: 12,
+            id: "session-001".to_string(),
+        };
+        assert!(validate_session_directory_page(&page, 2, Some(&after), None).is_err());
+        page.sessions[0].state = "deleted".to_string();
+        assert!(validate_session_directory_page(&page, 2, None, None).is_err());
+        page.sessions[0].state = "ready".to_string();
+        page.next_cursor.as_mut().unwrap().id = "wrong".to_string();
+        assert!(validate_session_directory_page(&page, 2, None, None).is_err());
     }
 
     #[test]

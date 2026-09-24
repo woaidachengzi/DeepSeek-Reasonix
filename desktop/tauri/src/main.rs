@@ -17,8 +17,9 @@ use bridge::{
     BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
     BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse, MCPServerDeleteRequest,
     MCPServerInput, MCPServerMutationResponse, MCPServerView, OpenSessionRequest,
-    RenameSessionRequest, SessionPreview, SessionRequest, SubmitRequest,
-    WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
+    RenameSessionRequest, SessionDirectoryCursor, SessionDirectoryPage, SessionPreview,
+    SessionRequest, SubmitRequest, WorkspaceChangeDetailRequest, WorkspaceFileRequest,
+    WorkspaceRequest,
 };
 use data_profile::{PreviewProfile, PreviewProfileStatus, ProfileImportResult};
 use runtime_info::PreviewRuntimeInfo;
@@ -262,6 +263,16 @@ fn bridge_session_previews(
 }
 
 #[tauri::command]
+fn bridge_session_directory_page(
+    supervisor: State<'_, BridgeSupervisor>,
+    limit: Option<u16>,
+    cursor: Option<SessionDirectoryCursor>,
+    workspace_root: Option<String>,
+) -> Result<SessionDirectoryPage, String> {
+    supervisor.session_directory_page(limit.unwrap_or(200), cursor, workspace_root)
+}
+
+#[tauri::command]
 fn backfill_workbench_titles(
     catalog: State<'_, WorkbenchCatalog>,
     titles: Vec<WorkbenchTitle>,
@@ -454,6 +465,7 @@ fn main() {
             bridge_session_snapshot,
             bridge_session_history,
             bridge_session_previews,
+            bridge_session_directory_page,
             bridge_submit,
             bridge_attach_file,
             bridge_workspace,
