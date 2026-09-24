@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -164,6 +165,89 @@ func TestReservedIdentitySurvivesSidecarsAndTransitions(t *testing.T) {
 	record, _, err = store.Get(ctx, "draft")
 	if err != nil || record.State != StateReady {
 		t.Fatalf("reviewed file import did not recover identity: %#v, %v", record, err)
+	}
+}
+
+func TestListVisibleKeysetPaginationDoesNotLoseTiedPositions(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, filepath.Join(root, "desktop", "state.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	candidates := make([]Candidate, 209)
+	for i := range candidates {
+		id := fmt.Sprintf("session-%03d", i)
+		path := filepath.Join(sessionDir, "tauri-"+id+".jsonl")
+		if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		workspace := "/work/a"
+		if i%2 != 0 {
+			workspace = "/work/b"
+		}
+		candidates[i] = Candidate{ID: id, Path: path, WorkspaceRoot: workspace, Position: i / 4}
+	}
+	if err := store.Import(ctx, root, candidates); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.db.ExecContext(ctx, `UPDATE sessions SET state='missing' WHERE id='session-000'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.db.ExecContext(ctx, `UPDATE sessions SET state='deleting' WHERE id='session-001'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.db.ExecContext(ctx, `UPDATE sessions SET state='deleted' WHERE id='session-002'`); err != nil {
+		t.Fatal(err)
+	}
+	seen := make(map[string]bool, 209)
+	var cursor *Cursor
+	total := -1
+	for {
+		page, err := store.ListVisible(ctx, 73, cursor, "")
+		if err != nil {
+			t.Fatalf("list visible page: %v", err)
+		}
+		if total == -1 {
+			total = page.Total
+		}
+		if page.Total != total {
+			t.Fatalf("total changed between pages: %d then %d", total, page.Total)
+		}
+		for _, record := range page.Records {
+			if seen[record.ID] {
+				t.Fatalf("duplicate session across pages: %s", record.ID)
+			}
+			seen[record.ID] = true
+			if record.ID == "session-001" || record.ID == "session-002" {
+				t.Fatalf("hidden lifecycle state leaked into visible page: %#v", record)
+			}
+			if record.ID == "session-000" && (record.State != StateMissing || !record.Missing) {
+				t.Fatalf("missing session projection = %#v", record)
+			}
+		}
+		if page.NextCursor == nil {
+			break
+		}
+		cursor = page.NextCursor
+	}
+	if total != 207 || len(seen) != 207 {
+		t.Fatalf("visible sessions total=%d collected=%d, want 207", total, len(seen))
+	}
+
+	filtered, err := store.ListVisible(ctx, 200, nil, "/work/a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, record := range filtered.Records {
+		if record.WorkspaceRoot != "/work/a" {
+			t.Fatalf("workspace filter leaked record: %#v", record)
+		}
 	}
 }
 

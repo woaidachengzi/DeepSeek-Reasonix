@@ -1,7 +1,8 @@
 # 第 5 项设计稿：持久会话目录与完整项目树（存储 S2）
 
 > 状态：**部分实现**。身份库 schema v3 生命周期状态、首次会话 reservation、恢复前状态检查及
-> 残留 sidecar 防误复用已实现；分页目录、host 权威切换、删除 tombstone 流程与 UI 恢复选项仍未实现。
+> 残留 sidecar 防误复用、身份库 keyset 分页及 bridge 只读列表接口已实现；host 权威切换、删除 tombstone
+> 流程与 UI 恢复选项仍未实现。侧栏当前仍受 host JSON 的 50 条上限约束。
 > 本文继续作为其余工作契约、验收条件、测试矩阵与回退路径。
 >
 > 背景与边界：[SESSION_STORAGE_IMPLEMENTATION_V3.md](./SESSION_STORAGE_IMPLEMENTATION_V3.md) §5 S2。
@@ -96,11 +97,11 @@ V3 要求 `reserved/ready/missing/deleting/deleted`。schema v3 已包含状态�
 
 上限的根因是 host 的 JSON 文件被当作权威列表。切换后 host 不再持有权威列表：
 
-- 身份库 `ListVisible(limit, cursor)`：按 **`(position, id)`** 排序，**分页**而非截断；
+- 身份库 `ListVisible(limit, cursor)`：已按 **`(position, id)`** 排序分页；
   `deleted` 不返回，`missing` 返回并带标记，`deleting` 不返回。
   游标必须是 `(position, id)` 复合键——只按 `position` 会在同 `position` 的
   并列会话上漏项或重复（SQLite 中 `position` 未强制唯一）。
-- bridge 新增只读端点：
+- bridge 只读端点已实现：
 
 ```text
 GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot=<path>
@@ -145,12 +146,12 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 | 步骤 | 内容 | 验收条件 | 回退 |
 | --- | --- | --- | --- |
 | **5.0** | `resumeBridgeSession` 按身份状态优先判定；新 ID 先 reservation；识别缺文件与残留 sidecar | 已覆盖 `reserved/ready/missing`、v2→v3 迁移、missing 文件恢复后仍拒绝复活、sidecar-only 残留拒绝新建 | 当前 schema 仍保留 transcript 与旧 JSON 清单；回退需保留 v2 DB 备份 |
-| **5.1** | 完成删除 tombstone 状态写入与 `ListVisible` 按 `(position, id)` 分页 | `deleting/deleted` 由删除流程写入且不可重用；200 条分页无重复遗漏 | 保留 v3 备份文件即可回退读取 |
-| **5.2** | bridge `GET /v1/sessions` 分页列表 | 200+ 会话全部可见，无截断；`deleted` 不出现；契约测试覆盖可选字段；老客户端不受影响 | 端点只是新增，host 不读即无影响 |
+| **5.1** | 完成删除 tombstone 状态写入 | `deleting/deleted` 由删除流程写入且不可重用；身份库分页已实现 | 保留 v3 备份文件即可回退读取 |
+| **5.2** | bridge `GET /v1/sessions` 分页列表 | 已实现身份库分页和 bridge 接口；host 尚未切换读取 | 端点只是新增，host 不读即无影响 |
 | **5.3** | host 切换到 bridge 列表，JSON 作为回退 | 新旧列表 diff 为零或可解释；重启后 ID 不变；侧栏项目树完整 | host 改回读 JSON（一个常量开关） |
 | **5.4** | missing/deleting/deleted 的用户可见处理 + 重启续做清理 | 删除中途 kill → 重启后清理完成或可重试；missing 会话有明确提示且不可"以空会话打开" | 状态回退为 `missing` 等待用户决定 |
 
-5.0 与 schema 生命周期基础已落地；5.1–5.4 仍按序实施。
+5.0、schema 生命周期基础及 5.2 后端接口已落地；5.1 删除 tombstone 与 5.3–5.4 仍按序实施。
 
 ## 5. 测试矩阵
 
@@ -161,24 +162,25 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 - 身份库记录为 `deleted` 或 `deleting` → resolver 已拒绝 Resume/新建；写入这两种状态的删除流程仍待 5.1/5.4。
 - 身份库记录为 `missing` → 拒绝 Resume/新建；host 显示"该会话的文件已不在"。
 
-**5.1**
+**5.1 / 5.2**
 - v2 → v3 迁移：`missing=1` 变 `missing`，其余变 `ready`，行数与 path 不变。
 - 迁移中途失败 → 整体回滚，`user_version` 不变。
 - future schema（v99）→ 拒绝打开且文件未被改写（沿用现有测试）。
-- `ListVisible` 分页：200 条分 3 页无重复无遗漏；`deleted` 永不出现。
-- 同一 `position` 下多条会话用 `(position, id)` 游标翻页：无漏项、无重复。
+- `ListVisible` 分页：209 条分 3 页无重复无遗漏；`deleted` 永不出现。
+- 同一 `position` 下多条会话用 `(position, id)` 游标翻页：无漏项、无重复（已实现）。
+- bridge 接口认证、缺库空列表、分页 DTO 不含 transcript 路径和内容（已实现）。
 
-**5.2**
+**5.3**
 - 209 条会话的列表返回 209 条（分页合计），证明 50 条上限不再适用。
 - 老客户端（只读 `workbench-sessions.json`）行为不变。
 - 响应不含 transcript 内容与凭据类字段。
 
-**5.3**
+**5.4**
 - 同一切换点：host 列表与身份库逐项比对（ID/标题/工作区/顺序/状态）差异为零。
 - 侧栏：多项目、项目内多会话、无工作区会话、工作区已删除，四种展示均正确。
 - 重启后 ID 与顺序不变；折叠状态仍只在本机。
 
-**5.4**
+**5.5**
 - 删除中途强制终止 → 重启后要么清理完成，要么仍为 `deleting` 并可重试；**绝不出现空会话**。
 - `missing` 会话在 UI 上不可被当作新会话打开。
 

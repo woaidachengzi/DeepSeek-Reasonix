@@ -79,6 +79,21 @@ type Record struct {
 	UpdatedAtMS   int64
 }
 
+// Cursor is the stable keyset boundary for visible-session pagination.
+type Cursor struct {
+	Position int    `json:"position"`
+	ID       string `json:"id"`
+}
+
+// Page contains one bounded page plus a cursor only when more rows remain.
+type Page struct {
+	Records    []Record
+	NextCursor *Cursor
+	Total      int
+}
+
+const MaxVisiblePageSize = 200
+
 type Store struct {
 	db *sql.DB
 }
@@ -420,6 +435,67 @@ func (s *Store) Get(ctx context.Context, id string) (Record, bool, error) {
 		return Record{}, false, err
 	}
 	return record, true, nil
+}
+
+// ListVisible returns a keyset-paginated view of sessions. Tombstones and
+// in-progress deletion rows are deliberately hidden; missing sessions remain
+// visible so the host can explain and recover them.
+func (s *Store) ListVisible(ctx context.Context, limit int, cursor *Cursor, workspaceRoot string) (Page, error) {
+	if limit < 1 || limit > MaxVisiblePageSize {
+		return Page{}, fmt.Errorf("session page limit must be between 1 and %d", MaxVisiblePageSize)
+	}
+	if cursor != nil && (cursor.Position < 0 || cursor.ID == "") {
+		return Page{}, errors.New("session page cursor is invalid")
+	}
+	workspaceRoot = strings.TrimSpace(workspaceRoot)
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return Page{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var total int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions
+		WHERE state NOT IN ('deleting','deleted') AND (?='' OR workspace_root=?)`, workspaceRoot, workspaceRoot).Scan(&total); err != nil {
+		return Page{}, err
+	}
+	query := `SELECT id, path, workspace_root, title, title_source, title_revision, position, state,
+		created_at_ms, updated_at_ms FROM sessions
+		WHERE state NOT IN ('deleting','deleted') AND (?='' OR workspace_root=?)`
+	args := []any{workspaceRoot, workspaceRoot}
+	if cursor != nil {
+		query += ` AND (position>? OR (position=? AND id>?))`
+		args = append(args, cursor.Position, cursor.Position, cursor.ID)
+	}
+	query += ` ORDER BY position, id LIMIT ?`
+	args = append(args, limit+1)
+	rows, err := tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return Page{}, err
+	}
+	defer rows.Close()
+	page := Page{Records: make([]Record, 0, limit), Total: total}
+	for rows.Next() {
+		record, err := scanIdentityRecord(rows)
+		if err != nil {
+			return Page{}, err
+		}
+		if len(page.Records) == limit {
+			last := page.Records[len(page.Records)-1]
+			page.NextCursor = &Cursor{Position: last.Position, ID: last.ID}
+			break
+		}
+		page.Records = append(page.Records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return Page{}, err
+	}
+	if err := rows.Close(); err != nil {
+		return Page{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Page{}, err
+	}
+	return page, nil
 }
 
 // Reserve claims an unused session ID and path before the first transcript or

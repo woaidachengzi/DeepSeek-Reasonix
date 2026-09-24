@@ -393,6 +393,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/sessions/{id}", b.authorized(b.idempotent(64<<10, b.deleteSession)))
 	mux.HandleFunc("GET /v1/sessions/{id}/snapshot", b.authorized(b.sessionSnapshot))
 	mux.HandleFunc("GET /v1/sessions/{id}/history", b.authorized(b.sessionHistory))
+	mux.HandleFunc("GET /v1/sessions", b.authorized(b.sessionList))
 	mux.HandleFunc("GET /v1/sessions/inventory", b.authorized(b.sessionInventory))
 	mux.HandleFunc("GET /v1/mcp/servers", b.authorized(b.listMCPServers))
 	mux.HandleFunc("POST /v1/mcp/servers", b.authorized(b.idempotent(256<<10, b.upsertMCPServer)))
