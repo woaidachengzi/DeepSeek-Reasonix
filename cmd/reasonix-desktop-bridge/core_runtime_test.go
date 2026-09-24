@@ -348,6 +348,15 @@ func TestControllerRuntimeRenamesSessionMetadataWithoutTouchingTranscript(t *tes
 	if got := runtime.Title(); got != "Release notes" {
 		t.Fatalf("renamed session title = %q", got)
 	}
+	identities, err := sessionidentity.OpenReadOnly(context.Background(), appconfig.DesktopSessionIdentityPath())
+	if err != nil {
+		t.Fatalf("open session identity: %v", err)
+	}
+	identity, exists, err := identities.Get(context.Background(), "tab-title")
+	_ = identities.Close()
+	if err != nil || !exists || identity.Title != "Release notes" || identity.TitleSource != sessionidentity.TitleUser {
+		t.Fatalf("renamed session identity = %#v, exists %v, err %v", identity, exists, err)
+	}
 	if _, ok, err := agent.LoadBranchMeta(sessionPath); err != nil || !ok {
 		t.Fatalf("load branch meta = ok %v, err %v", ok, err)
 	}

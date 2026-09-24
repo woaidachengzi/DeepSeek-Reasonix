@@ -150,6 +150,20 @@ pub struct RenameSessionRequest {
     pub title: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionFirstMessageTitle {
+    pub session_id: String,
+    pub title: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BackfillSessionTitlesResponse {
+    protocol_version: u64,
+    titles: Vec<SessionFirstMessageTitle>,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApproveRequest {
@@ -566,6 +580,48 @@ impl BridgeSupervisor {
             Some(&request_id),
         )
         .map(|envelope| envelope.session)
+    }
+
+    pub fn backfill_session_titles(
+        &self,
+        titles: Vec<SessionFirstMessageTitle>,
+    ) -> Result<Vec<SessionFirstMessageTitle>, String> {
+        if titles.len() > 50 {
+            return Err("too many session titles to backfill".to_string());
+        }
+        let titles: Vec<_> = titles
+            .into_iter()
+            .map(|mut item| {
+                item.session_id = session_path_component(&item.session_id)?;
+                Ok(item)
+            })
+            .collect::<Result<_, String>>()?;
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/sessions/titles/first-message",
+            Some(json!({ "titles": titles })),
+            Some(&request_id),
+        )?;
+        let envelope: BackfillSessionTitlesResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION)
+            || envelope.titles.len() > titles.len()
+        {
+            return Err("desktop bridge title backfill response is invalid".to_string());
+        }
+        let requested: std::collections::HashSet<_> =
+            titles.iter().map(|item| item.session_id.as_str()).collect();
+        let mut returned = std::collections::HashSet::new();
+        for item in &envelope.titles {
+            if !requested.contains(item.session_id.as_str())
+                || item.title.trim().is_empty()
+                || !returned.insert(item.session_id.as_str())
+            {
+                return Err("desktop bridge title backfill response is invalid".to_string());
+            }
+        }
+        Ok(envelope.titles)
     }
 
     pub fn session_previews(

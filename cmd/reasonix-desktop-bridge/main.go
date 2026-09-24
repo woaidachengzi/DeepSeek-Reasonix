@@ -389,6 +389,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("POST /v1/sessions:open", b.authorized(b.idempotent(64<<10, b.openSession)))
 	mux.HandleFunc("POST /v1/sessions:switch", b.authorized(b.idempotent(64<<10, b.switchSession)))
 	mux.HandleFunc("POST /v1/sessions:previews", b.authorized(b.sessionPreviews))
+	mux.HandleFunc("POST /v1/sessions/titles/first-message", b.authorized(b.backfillSessionTitles))
 	mux.HandleFunc("PATCH /v1/sessions/{id}/title", b.authorized(b.idempotent(64<<10, b.renameSession)))
 	mux.HandleFunc("DELETE /v1/sessions/{id}", b.authorized(b.idempotent(64<<10, b.deleteSession)))
 	mux.HandleFunc("GET /v1/sessions/{id}/snapshot", b.authorized(b.sessionSnapshot))

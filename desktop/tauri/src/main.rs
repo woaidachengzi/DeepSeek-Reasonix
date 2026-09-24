@@ -19,8 +19,8 @@ use bridge::{
     BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse, LegacySessionCatalogEntry,
     MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse, MCPServerView,
     OpenSessionRequest, RenameSessionRequest, SessionDirectoryCursor, SessionDirectoryPage,
-    SessionPreview, SessionRequest, SubmitRequest, WorkspaceChangeDetailRequest,
-    WorkspaceFileRequest, WorkspaceRequest,
+    SessionFirstMessageTitle, SessionPreview, SessionRequest, SubmitRequest,
+    WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
 };
 use data_profile::{PreviewProfile, PreviewProfileStatus, ProfileImportResult};
 use runtime_info::PreviewRuntimeInfo;
@@ -314,10 +314,40 @@ fn bridge_session_catalog_shadow(
 
 #[tauri::command]
 fn backfill_workbench_titles(
+    supervisor: State<'_, BridgeSupervisor>,
     catalog: State<'_, WorkbenchCatalog>,
     titles: Vec<WorkbenchTitle>,
 ) -> Result<Vec<WorkbenchSession>, String> {
-    catalog.fill_titles(titles)
+    let sessions = catalog.list()?;
+    let missing: Vec<_> = titles
+        .into_iter()
+        .filter(|title| {
+            sessions
+                .iter()
+                .any(|session| session.session_id == title.session_id && session.title.is_none())
+        })
+        .collect();
+    if missing.is_empty() {
+        return Ok(sessions);
+    }
+    let resolved = supervisor.backfill_session_titles(
+        missing
+            .iter()
+            .map(|title| SessionFirstMessageTitle {
+                session_id: title.session_id.clone(),
+                title: title.title.clone(),
+            })
+            .collect(),
+    )?;
+    catalog.fill_titles(
+        resolved
+            .into_iter()
+            .map(|title| WorkbenchTitle {
+                session_id: title.session_id,
+                title: title.title,
+            })
+            .collect(),
+    )
 }
 
 #[tauri::command]

@@ -279,7 +279,28 @@ func (r *controllerRuntime) Title() string {
 }
 
 func (r *controllerRuntime) Rename(title string) error {
-	return agent.RenameSession(r.SessionPath(), title)
+	if err := agent.RenameSession(r.SessionPath(), title); err != nil {
+		return err
+	}
+	if r.sessionID == "" || appconfig.DesktopSessionIdentityPath() == "" {
+		return nil
+	}
+	identities, err := sessionidentity.Open(context.Background(), appconfig.DesktopSessionIdentityPath())
+	if err != nil {
+		return fmt.Errorf("open session identity for title update: %w", err)
+	}
+	defer func() { _ = identities.Close() }()
+	record, exists, err := identities.Get(context.Background(), r.sessionID)
+	if err != nil {
+		return fmt.Errorf("read session identity for title update: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("session identity for title update: %w", sessionidentity.ErrSessionNotFound)
+	}
+	if err := identities.SetTitle(context.Background(), r.sessionID, record.TitleRevision, title, sessionidentity.TitleManualRename); err != nil {
+		return fmt.Errorf("update session identity title: %w", err)
+	}
+	return nil
 }
 
 // Delete sweeps the session's durable artifacts through the controller's own
