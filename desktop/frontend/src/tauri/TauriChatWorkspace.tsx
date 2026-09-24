@@ -250,6 +250,7 @@ export function TauriSessionPreview() {
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [catalogAudit, setCatalogAudit] = useState<TauriSessionShadowReport | null>(null);
   const [catalogAuditError, setCatalogAuditError] = useState("");
+  const catalogAuditRequestRef = useRef(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspacePath, setWorkspacePath] = useState("");
@@ -407,15 +408,7 @@ export function TauriSessionPreview() {
             // and another launch can retry this batch without changing order.
           }
         }
-        try {
-          const report = await tauriSessionCatalogShadow();
-          if (active) {
-            setCatalogAudit(report);
-            setCatalogAuditError("");
-          }
-        } catch (cause) {
-          if (active) setCatalogAuditError(tauriMessageFrom(cause));
-        }
+        await refreshCatalogAudit(() => active);
       } catch (cause) {
         if (active) setError(`读取最近对话失败：${tauriMessageFrom(cause)}`);
       }
@@ -653,8 +646,23 @@ export function TauriSessionPreview() {
   async function rememberSession(next: TauriBridgeSession) {
     try {
       setTabs(await rememberTauriWorkbenchSession(next.id, next.workspaceRoot ?? undefined, tauriSessionTitle(next.title, "") || undefined));
+      await refreshCatalogAudit();
     } catch (cause) {
       setError(`对话已打开，但无法保存到最近对话：${tauriMessageFrom(cause)}`);
+    }
+  }
+
+  async function refreshCatalogAudit(isActive: () => boolean = () => true) {
+    const request = ++catalogAuditRequestRef.current;
+    setCatalogAudit(null);
+    setCatalogAuditError("");
+    try {
+      const report = await tauriSessionCatalogShadow();
+      if (request === catalogAuditRequestRef.current && isActive()) setCatalogAudit(report);
+    } catch (cause) {
+      if (request === catalogAuditRequestRef.current && isActive()) {
+        setCatalogAuditError(tauriMessageFrom(cause));
+      }
     }
   }
 
@@ -782,6 +790,7 @@ export function TauriSessionPreview() {
         setSession(null);
       }
       setTabs(await forgetTauriWorkbenchSession(target.sessionId));
+      await refreshCatalogAudit();
     } catch (cause) {
       const userMessage = sessionLifecycleNotice(cause) ?? tauriMessageFrom(cause);
       operationError = deleted
