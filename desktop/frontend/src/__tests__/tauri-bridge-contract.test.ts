@@ -215,6 +215,11 @@ const commands: CommandContract[] = [
     description: "tauriWorkbenchSessions() invokes workbench_sessions with no args",
   },
   {
+    command: "bridge_session_catalog_shadow",
+    argKeys: [],
+    description: "tauriSessionCatalogShadow() invokes bridge_session_catalog_shadow with no args",
+  },
+  {
     command: "bridge_import_legacy_session_catalog",
     argKeys: [],
     description: "tauriImportLegacySessionCatalog() invokes bridge_import_legacy_session_catalog with no args",

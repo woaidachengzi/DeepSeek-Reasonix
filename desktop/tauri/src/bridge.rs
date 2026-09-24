@@ -27,6 +27,7 @@ const BRIDGE_BINARY_ENV: &str = "REASONIX_DESKTOP_BRIDGE_BIN";
 const BUNDLED_BRIDGE_NAME: &str = "reasonix-desktop-bridge";
 const READY_TIMEOUT: Duration = Duration::from_secs(5);
 const STOP_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_SHADOW_SESSIONS: usize = 10_000;
 pub const PROTOCOL_VERSION: u8 = 1;
 
 #[derive(Clone, Debug, Serialize)]
@@ -94,6 +95,37 @@ pub struct SessionDirectoryPage {
     pub sessions: Vec<SessionDirectoryEntry>,
     pub next_cursor: Option<SessionDirectoryCursor>,
     pub total: u64,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionInventoryResponse {
+    protocol_version: u8,
+    entries: Vec<SessionInventoryEntry>,
+    unclaimed: Vec<String>,
+    errors: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionInventoryEntry {
+    id: String,
+    source: String,
+    exists: bool,
+    #[serde(default)]
+    detail: String,
+}
+
+pub struct SessionPhysicalState {
+    pub id: String,
+    pub exists: bool,
+    pub readable: bool,
+}
+
+pub struct SessionPhysicalInventory {
+    pub states: Vec<SessionPhysicalState>,
+    pub unclaimed_count: usize,
+    pub error_count: usize,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -584,6 +616,61 @@ impl BridgeSupervisor {
         let page: SessionDirectoryPage = serde_json::from_value(response).map_err(display_error)?;
         validate_session_directory_page(&page, limit, cursor.as_ref(), workspace_root)?;
         Ok(page)
+    }
+
+    /// Read the entire visible directory for a bounded, diagnostic-only
+    /// comparison. A changing total or incomplete scan cannot be mistaken
+    /// for a zero-difference migration result.
+    pub fn session_directory_snapshot(&self) -> Result<Vec<SessionDirectoryEntry>, String> {
+        let mut entries = Vec::new();
+        let mut cursor = None;
+        let mut expected_total = None;
+        loop {
+            let page = self.session_directory_page(200, cursor, None)?;
+            let total = usize::try_from(page.total)
+                .map_err(|_| "session directory is too large for shadow comparison".to_string())?;
+            if total > MAX_SHADOW_SESSIONS {
+                return Err("session directory exceeds shadow comparison limit".to_string());
+            }
+            if expected_total.is_some_and(|expected| expected != total) {
+                return Err("session directory changed during shadow comparison".to_string());
+            }
+            expected_total = Some(total);
+            entries.extend(page.sessions);
+            if entries.len() > total {
+                return Err("session directory changed during shadow comparison".to_string());
+            }
+            match page.next_cursor {
+                Some(next) => cursor = Some(next),
+                None if entries.len() == total => return Ok(entries),
+                None => return Err("session directory scan is incomplete".to_string()),
+            }
+        }
+    }
+
+    /// Reduce the existing read-only inventory to file-state evidence. Paths
+    /// and diagnostics never leave this method or enter the shadow report.
+    pub fn session_physical_inventory(&self) -> Result<SessionPhysicalInventory, String> {
+        let response = self.request_json("GET", "/v1/sessions/inventory", None, None)?;
+        let inventory: SessionInventoryResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if inventory.protocol_version != PROTOCOL_VERSION {
+            return Err("desktop bridge inventory protocol is unsupported".to_string());
+        }
+        Ok(SessionPhysicalInventory {
+            states: inventory
+                .entries
+                .into_iter()
+                .filter(|entry| entry.source == "identity")
+                .map(|entry| SessionPhysicalState {
+                    id: entry.id,
+                    exists: entry.exists,
+                    readable: entry.detail.is_empty() || entry.detail == "transcript is absent",
+                })
+                .collect(),
+            unclaimed_count: inventory.unclaimed.len(),
+            error_count: inventory.errors.len(),
+        })
     }
 
     /// Imports the bounded host catalog once into the identity store. The Go
@@ -1639,7 +1726,7 @@ mod tests {
         session_path_component, validate_attachment, validate_session_directory_page, verify_ready,
         wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSupervisor, EventStreamError,
         OpenSessionRequest, RenameSessionRequest, SessionDirectoryCursor, SessionDirectoryEntry,
-        SessionDirectoryPage, SessionRequest, PROTOCOL_VERSION,
+        SessionDirectoryPage, SessionInventoryResponse, SessionRequest, PROTOCOL_VERSION,
     };
     use serde_json::json;
     use std::{
@@ -1730,6 +1817,18 @@ mod tests {
         page.sessions[0].state = "ready".to_string();
         page.next_cursor.as_mut().unwrap().id = "wrong".to_string();
         assert!(validate_session_directory_page(&page, 2, None, None).is_err());
+    }
+
+    #[test]
+    fn inventory_parser_accepts_omitted_empty_detail() {
+        let inventory: SessionInventoryResponse = serde_json::from_value(json!({
+            "protocolVersion": PROTOCOL_VERSION,
+            "entries": [{ "id": "safe", "source": "identity", "exists": true }],
+            "unclaimed": [],
+            "errors": []
+        }))
+        .expect("parse healthy inventory row");
+        assert!(inventory.entries[0].detail.is_empty());
     }
 
     #[test]

@@ -6,6 +6,7 @@ mod keychain;
 mod menu;
 mod protocol_generated;
 mod runtime_info;
+mod session_shadow;
 mod tray;
 mod window_state;
 mod workbench_catalog;
@@ -23,6 +24,7 @@ use bridge::{
 };
 use data_profile::{PreviewProfile, PreviewProfileStatus, ProfileImportResult};
 use runtime_info::PreviewRuntimeInfo;
+use session_shadow::SessionShadowReport;
 use tauri::{Manager, State};
 use window_state::PreviewWindowState;
 use workbench_catalog::{WorkbenchCatalog, WorkbenchSession, WorkbenchTitle};
@@ -289,6 +291,27 @@ fn bridge_import_legacy_session_catalog(
     supervisor.import_legacy_session_catalog(sessions)
 }
 
+fn compare_session_catalog(
+    supervisor: &BridgeSupervisor,
+    catalog: &WorkbenchCatalog,
+) -> Result<SessionShadowReport, String> {
+    let legacy = catalog.list()?;
+    let directory = supervisor.session_directory_snapshot()?;
+    let physical = supervisor.session_physical_inventory()?;
+    session_shadow::compare(&legacy, &directory, &physical)
+}
+
+#[tauri::command]
+fn bridge_session_catalog_shadow(
+    supervisor: State<'_, BridgeSupervisor>,
+    catalog: State<'_, WorkbenchCatalog>,
+) -> Result<SessionShadowReport, String> {
+    // Bridge inventory errors can contain private filesystem paths. Keep the
+    // UI-facing diagnostic count-only even when the shadow scan fails.
+    compare_session_catalog(&supervisor, &catalog)
+        .map_err(|_| "session catalog shadow is unavailable; retry later".to_string())
+}
+
 #[tauri::command]
 fn backfill_workbench_titles(
     catalog: State<'_, WorkbenchCatalog>,
@@ -483,6 +506,7 @@ fn main() {
             bridge_session_history,
             bridge_session_previews,
             bridge_session_directory_page,
+            bridge_session_catalog_shadow,
             bridge_import_legacy_session_catalog,
             bridge_submit,
             bridge_attach_file,

@@ -86,6 +86,23 @@ export interface TauriWorkbenchSession {
   workspaceRoot?: string;
 }
 
+/** Read-only, count-only comparison of the legacy sidebar catalog and SQLite. */
+export interface TauriSessionShadowReport {
+  legacyCount: number;
+  directoryCount: number;
+  matchedCount: number;
+  directoryOnlyCount: number;
+  missingFromDirectory: number;
+  titleMismatches: number;
+  workspaceMismatches: number;
+  orderMismatches: number;
+  missingTranscripts: number;
+  physicalStateMismatches: number;
+  unclaimedTranscripts: number;
+  inventoryErrors: number;
+  legacyMatchesDirectory: boolean;
+}
+
 export interface TauriSessionPreview {
   sessionId: string;
   title?: string;
@@ -211,6 +228,11 @@ export async function tauriWorkbenchSessions(): Promise<TauriWorkbenchSession[]>
 export async function tauriImportLegacySessionCatalog(): Promise<number> {
   requireTauri();
   return invoke<number>("bridge_import_legacy_session_catalog");
+}
+
+export async function tauriSessionCatalogShadow(): Promise<TauriSessionShadowReport> {
+  requireTauri();
+  return invoke<TauriSessionShadowReport>("bridge_session_catalog_shadow");
 }
 
 export async function tauriSessionPreviews(sessionIds: string[]): Promise<TauriSessionPreview[]> {
