@@ -772,7 +772,7 @@ func (b *bridgeServer) renameSession(w http.ResponseWriter, r *http.Request) {
 // listed conversation the user cannot reopen.
 func (b *bridgeServer) deleteSession(w http.ResponseWriter, r *http.Request) {
 	sessionID := strings.TrimSpace(r.PathValue("id"))
-	if err := b.runtimes.DeleteSession(sessionID); err != nil {
+	if err := b.deleteOwnedOrInterruptedSession(r.Context(), sessionID); err != nil {
 		b.writeRuntimeError(w, err, "unable to delete desktop bridge session")
 		return
 	}

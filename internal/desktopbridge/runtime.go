@@ -208,7 +208,11 @@ func (m *RuntimeManager) Open(ctx context.Context, request OpenRequest) (Session
 	}
 	if m.runtime != nil {
 		view := m.view
+		state := m.runtime.State()
 		m.mu.Unlock()
+		if state == "deleting" {
+			return SessionView{}, fmt.Errorf("%w: session deletion is in progress", ErrSessionConflict)
+		}
 		if view.ID == request.SessionID && view.WorkspaceRoot == request.WorkspaceRoot {
 			return view, nil
 		}
@@ -255,6 +259,10 @@ func (m *RuntimeManager) Switch(ctx context.Context, request OpenRequest) (Sessi
 		return SessionView{}, ErrOpenInProgress
 	}
 	if m.view.ID == request.SessionID && m.view.WorkspaceRoot == request.WorkspaceRoot {
+		if m.runtime.State() == "deleting" {
+			m.mu.Unlock()
+			return SessionView{}, fmt.Errorf("%w: session deletion is in progress", ErrSessionConflict)
+		}
 		view := m.view
 		m.mu.Unlock()
 		return view, nil
@@ -563,7 +571,7 @@ func (m *RuntimeManager) DeleteSession(sessionID string) error {
 	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
 		return ErrSessionNotFound
 	}
-	if state := m.runtime.State(); state != "idle" {
+	if state := m.runtime.State(); state != "idle" && state != "deleting" {
 		return fmt.Errorf("%w: cannot delete a %s session", ErrSessionConflict, state)
 	}
 	if err := m.runtime.Delete(); err != nil {
@@ -652,6 +660,9 @@ func (m *RuntimeManager) withRuntime(sessionID string, action func(Runtime)) (Se
 	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
 		return SessionView{}, ErrSessionNotFound
 	}
+	if m.runtime.State() == "deleting" {
+		return SessionView{}, fmt.Errorf("%w: session deletion is in progress", ErrSessionConflict)
+	}
 	action(m.runtime)
 	view := m.view
 	view.State = m.runtime.State()
@@ -667,6 +678,9 @@ func (m *RuntimeManager) withRuntimeError(sessionID string, action func(Runtime)
 	}
 	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
 		return SessionView{}, ErrSessionNotFound
+	}
+	if m.runtime.State() == "deleting" {
+		return SessionView{}, fmt.Errorf("%w: session deletion is in progress", ErrSessionConflict)
 	}
 	if err := action(m.runtime); err != nil {
 		return SessionView{}, err

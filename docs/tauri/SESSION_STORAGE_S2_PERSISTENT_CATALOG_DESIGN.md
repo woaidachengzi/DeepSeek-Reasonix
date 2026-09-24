@@ -2,7 +2,8 @@
 
 > 状态：**部分实现**。身份库 schema v3 生命周期状态、首次会话 reservation、恢复前状态检查及
 > 残留 sidecar 防误复用、身份库 keyset 分页、bridge 只读列表接口、删除状态的存储 API 及旧 JSON catalog 幂等导入已实现；
-> host 权威切换、bridge 删除清理接线与 UI 恢复选项仍未实现。侧栏当前仍受 host JSON 的 50 条上限约束。
+> bridge 删除清理已接入（包括 `deleting` 状态下的重试与重启后续删）；host 权威切换与 UI 恢复选项仍未实现。
+> 侧栏当前仍受 host JSON 的 50 条上限约束。
 > 本文继续作为其余工作契约、验收条件、测试矩阵与回退路径。
 >
 > 背景与边界：[SESSION_STORAGE_IMPLEMENTATION_V3.md](./SESSION_STORAGE_IMPLEMENTATION_V3.md) §5 S2。
@@ -51,7 +52,7 @@ cache/session-catalog、history FTS5
 
 ### 3.2 生命周期与状态（把 V3 §3.2 落到本仓库）
 
-V3 要求 `reserved/ready/missing/deleting/deleted`。schema v3 已包含状态列与 v2 回填；`BeginDelete` / `FinishDelete` 已在存储层保证可重试的门禁与 tombstone，但还未接入 bridge 的 artifact sweep：
+V3 要求 `reserved/ready/missing/deleting/deleted`。schema v3 已包含状态列与 v2 回填；`BeginDelete` / `FinishDelete` 已接入 bridge artifact sweep。清理失败后写入被隔离，重启后的同 ID 删除请求只可续删 `deleting` 记录：
 
 | 状态 | 含义 | 允许的迁移 |
 | --- | --- | --- |
@@ -154,8 +155,8 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 | **5.3** | host 切换到 bridge 列表，JSON 作为回退 | 旧 JSON 幂等导入已接入；新旧列表 diff 与权威切换仍待实现 | host 改回读 JSON（一个常量开关） |
 | **5.4** | missing/deleting/deleted 的用户可见处理 + 重启续做清理 | 删除中途 kill → 重启后清理完成或可重试；missing 会话有明确提示且不可"以空会话打开" | 状态回退为 `missing` 等待用户决定 |
 
-5.0、schema 生命周期基础、5.2 后端接口及 5.3 的旧目录导入前置已落地；5.1 删除清理接线、
-5.3 影子比对/权威切换与 5.4 UI 恢复选项仍待实施。
+5.0、5.1、5.2 后端接口及 5.3 的旧目录导入前置已落地；5.3 影子比对/权威切换与
+5.4 UI 恢复选项仍待实施。重启后续删采用显式重试，不在启动时无提示地自动删除。
 
 ## 5. 测试矩阵
 
@@ -163,7 +164,8 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 - transcript 被删 → 打开返回错误；返回信息可区分"文件缺失"与其他失败。
 - 从未存在的 ID → 仍新建（回归）。
 - 只有 `.jsonl.meta` 残余（无身份库）→ 拒绝新建。
-- 身份库记录为 `deleted` 或 `deleting` → resolver 已拒绝 Resume/新建；写入这两种状态的删除流程仍待 5.1/5.4。
+- 身份库记录为 `deleted` 或 `deleting` → resolver 拒绝 Resume/新建；bridge 删除流程先持久化
+  `deleting`，清理成功后持久化 `deleted`，失败时保留可重试状态且关闭时不重建 transcript。
 - 身份库记录为 `missing` → 拒绝 Resume/新建；host 显示"该会话的文件已不在"。
 
 **5.1 / 5.2**

@@ -424,6 +424,100 @@ func TestControllerRuntimeDeleteRemovesSessionArtifacts(t *testing.T) {
 	}
 }
 
+func TestBridgeDeletionFenceRejectsWritesAndRetriesCleanup(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	var owned *controllerRuntime
+	factory := desktopbridge.RuntimeFactoryFunc(func(ctx context.Context, request desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		runtime, err := newControllerFactory(nil).Open(ctx, request)
+		if err != nil {
+			return nil, err
+		}
+		owned = runtime.(*controllerRuntime)
+		owned.removeArtifacts = func(string) error { return errors.New("injected artifact sweep failure") }
+		return runtime, nil
+	})
+	manager := desktopbridge.NewRuntimeManager(factory)
+	ctx := context.Background()
+	view, err := manager.Open(ctx, desktopbridge.OpenRequest{SessionID: "delete-retry", WorkspaceRoot: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.DeleteSession("delete-retry"); err == nil {
+		t.Fatal("injected artifact sweep failure was ignored")
+	}
+	identities, err := sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, exists, err := identities.Get(ctx, "delete-retry")
+	_ = identities.Close()
+	if err != nil || !exists || record.State != sessionidentity.StateDeleting {
+		t.Fatalf("failed deletion state = %#v, %v, %v", record, exists, err)
+	}
+	if _, err := manager.Submit("delete-retry", "must not be sent"); !errors.Is(err, desktopbridge.ErrSessionConflict) {
+		t.Fatalf("submit during deletion = %v", err)
+	}
+	if _, err := manager.Open(ctx, desktopbridge.OpenRequest{SessionID: "delete-retry", WorkspaceRoot: view.WorkspaceRoot}); !errors.Is(err, desktopbridge.ErrSessionConflict) {
+		t.Fatalf("reopen during deletion = %v", err)
+	}
+	owned.removeArtifacts = nil
+	if err := manager.DeleteSession("delete-retry"); err != nil {
+		t.Fatalf("retry deletion: %v", err)
+	}
+	identities, err = sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, exists, err = identities.Get(ctx, "delete-retry")
+	_ = identities.Close()
+	if err != nil || !exists || record.State != sessionidentity.StateDeleted {
+		t.Fatalf("completed deletion tombstone = %#v, %v, %v", record, exists, err)
+	}
+	if _, err := manager.Open(ctx, desktopbridge.OpenRequest{SessionID: "delete-retry", WorkspaceRoot: view.WorkspaceRoot}); !errors.Is(err, desktopbridge.ErrSessionConflict) {
+		t.Fatalf("tombstoned session reopened: %v", err)
+	}
+}
+
+func TestBridgeShutdownDoesNotSnapshotDeletingSession(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	factory := desktopbridge.RuntimeFactoryFunc(func(ctx context.Context, request desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		runtime, err := newControllerFactory(nil).Open(ctx, request)
+		if err != nil {
+			return nil, err
+		}
+		runtime.(*controllerRuntime).removeArtifacts = func(string) error { return errors.New("injected artifact sweep failure") }
+		return runtime, nil
+	})
+	manager := desktopbridge.NewRuntimeManager(factory)
+	ctx := context.Background()
+	view, err := manager.Open(ctx, desktopbridge.OpenRequest{SessionID: "delete-shutdown", WorkspaceRoot: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.DeleteSession("delete-shutdown"); err == nil {
+		t.Fatal("injected artifact sweep failure was ignored")
+	}
+	if err := manager.Shutdown(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(view.Path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("shutdown recreated deleting transcript: %v", err)
+	}
+	identities, err := sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer identities.Close()
+	record, exists, err := identities.Get(ctx, "delete-shutdown")
+	if err != nil || !exists || record.State != sessionidentity.StateDeleting {
+		t.Fatalf("shutdown deletion state = %#v, %v, %v", record, exists, err)
+	}
+}
+
 func TestControllerRuntimeAttachFileCopiesIntoSessionWorkspace(t *testing.T) {
 	workspace := t.TempDir()
 	source := filepath.Join(t.TempDir(), "research notes.txt")

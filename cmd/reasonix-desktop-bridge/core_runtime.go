@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"unicode/utf8"
 
 	"reasonix/internal/agent"
@@ -65,7 +66,7 @@ func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.Open
 		controller.Close()
 		return nil, err
 	}
-	return &controllerRuntime{controller: controller}, nil
+	return &controllerRuntime{controller: controller, sessionID: request.SessionID}, nil
 }
 
 type bridgeLifecycleSink struct {
@@ -260,7 +261,11 @@ func bridgeSessionPath(sessionDir, sessionID string) (string, error) {
 // controllerRuntime adapts the established controller to the bridge's minimal
 // Runtime surface.
 type controllerRuntime struct {
-	controller *control.Controller
+	controller      *control.Controller
+	sessionID       string
+	deleting        atomic.Bool
+	deleted         atomic.Bool
+	removeArtifacts func(string) error
 }
 
 func (r *controllerRuntime) SessionPath() string { return r.controller.SessionPath() }
@@ -281,15 +286,52 @@ func (r *controllerRuntime) Rename(title string) error {
 // removal path, so the bridge cannot drift from what the core considers a
 // session to be, then releases the controller without a shutdown snapshot.
 func (r *controllerRuntime) Delete() error {
+	if r.deleted.Load() {
+		return nil
+	}
 	path := r.SessionPath()
-	if err := control.RemoveSessionArtifacts(path); err != nil {
+	remove := r.removeArtifacts
+	if remove == nil {
+		remove = control.RemoveSessionArtifacts
+	}
+	identityPath := appconfig.DesktopSessionIdentityPath()
+	managed := r.sessionID != "" && identityPath != "" && appconfig.SessionDir() != "" &&
+		pathidentity.Canonical(appconfig.SessionDir()) == pathidentity.Canonical(r.controller.SessionDir())
+	if !managed {
+		if err := remove(path); err != nil {
+			return err
+		}
+		r.controller.Close()
+		r.deleted.Store(true)
+		return nil
+	}
+	identities, err := sessionidentity.Open(context.Background(), identityPath)
+	if err != nil {
+		return fmt.Errorf("open session identity for deletion: %w", err)
+	}
+	defer identities.Close()
+	if err := identities.BeginDelete(context.Background(), r.sessionID, path); err != nil {
+		return fmt.Errorf("fence desktop bridge session deletion: %w", err)
+	}
+	r.deleting.Store(true)
+	if err := remove(path); err != nil {
 		return err
 	}
+	if err := identities.FinishDelete(context.Background(), r.sessionID, path); err != nil {
+		return fmt.Errorf("finalize desktop bridge session deletion: %w", err)
+	}
 	r.controller.Close()
+	r.deleted.Store(true)
 	return nil
 }
 
 func (r *controllerRuntime) State() string {
+	if r.deleted.Load() {
+		return "deleted"
+	}
+	if r.deleting.Load() {
+		return "deleting"
+	}
 	status := r.controller.RuntimeStatus()
 	switch {
 	case status.Running:
@@ -558,6 +600,12 @@ func (r *controllerRuntime) AnswerMCPInteraction(promptID, action string, conten
 func (r *controllerRuntime) ReplayPendingPrompts() { r.controller.ReplayPendingPrompts() }
 
 func (r *controllerRuntime) Shutdown() error {
+	if r.deleting.Load() {
+		// A failed or interrupted sweep has already fenced this identity.
+		// Snapshotting here would recreate a transcript during deletion.
+		r.controller.Close()
+		return nil
+	}
 	err := r.controller.SnapshotForShutdown()
 	r.controller.Close()
 	return err
