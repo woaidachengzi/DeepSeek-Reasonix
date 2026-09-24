@@ -132,6 +132,10 @@ function preserveWorkbenchLifecycle(
   });
 }
 
+function isMissingWorkbenchSession(session: WorkbenchSessionTab): boolean {
+  return session.missing === true || session.state === "missing";
+}
+
 /** A stored title is authoritative; anything the bridge would reject falls back
  *  to the catalog title or a neutral label instead of rendering bad host state. */
 function displayTitle(storedTitle: string | undefined, catalogTitle?: string): string {
@@ -162,7 +166,7 @@ interface SessionRowProps {
  *  the user armed changes shape, and leaving the row disarms it. */
 function SessionRow({ tab, active, busy, switchingBlocked, onActivate, onDelete }: SessionRowProps) {
   const [confirming, setConfirming] = useState(false);
-  const missing = tab.missing === true || tab.state === "missing";
+  const missing = isMissingWorkbenchSession(tab);
   if (confirming) {
     return (
       <div className="tauri-session-delete" role="group" aria-label="确认删除对话">
@@ -302,6 +306,7 @@ export function TauriSessionPreview() {
   const submitInFlightRef = useRef(false);
   const createSessionInFlightRef = useRef(false);
   const sessionPageRequestRef = useRef(false);
+  const sessionPageRevisionRef = useRef(0);
   const projectRootsRequestRef = useRef(0);
   const workspaceEpochRef = useRef(0);
   const workspaceListRequestRef = useRef(0);
@@ -478,11 +483,13 @@ export function TauriSessionPreview() {
   async function loadMoreWorkbenchSessions() {
     const cursor = sessionPageCursor;
     if (!cursor || sessionPageRequestRef.current) return;
+    const revision = sessionPageRevisionRef.current;
     sessionPageRequestRef.current = true;
     setSessionPageLoading(true);
     setSessionPageError("");
     try {
       const page = await tauriWorkbenchSessionPage(cursor);
+      if (revision !== sessionPageRevisionRef.current) return;
       setTabs(previous => {
         const known = new Set(previous.map(tab => tab.sessionId));
         return [...previous, ...page.sessions.filter(tab => !known.has(tab.sessionId))];
@@ -499,6 +506,7 @@ export function TauriSessionPreview() {
           });
           if (titles.length > 0) {
             await backfillTauriWorkbenchTitles(titles);
+            if (revision !== sessionPageRevisionRef.current) return;
             setTabs(previous => previous.map(tab => {
               const title = titles.find(item => item.sessionId === tab.sessionId)?.title;
               return title ? { ...tab, title } : tab;
@@ -745,14 +753,17 @@ export function TauriSessionPreview() {
   async function rememberSession(next: TauriBridgeSession) {
     try {
       const updated = await rememberTauriWorkbenchSession(next.id, next.workspaceRoot ?? undefined, tauriSessionTitle(next.title, "") || undefined);
-      setTabs(previous => preserveWorkbenchLifecycle(updated, previous));
-      await refreshCatalogAudit();
+      sessionPageRevisionRef.current += 1;
+      if (sessionPageSource !== "identity") {
+        setTabs(previous => preserveWorkbenchLifecycle(updated, previous));
+      }
+      await refreshCatalogAudit(() => true, true);
     } catch (cause) {
       setError(`对话已打开，但无法保存到最近对话：${tauriMessageFrom(cause)}`);
     }
   }
 
-  async function refreshCatalogAudit(isActive: () => boolean = () => true) {
+  async function refreshCatalogAudit(isActive: () => boolean = () => true, refreshVisiblePage = false) {
     const request = ++catalogAuditRequestRef.current;
     setCatalogAudit(null);
     setCatalogAuditError("");
@@ -769,6 +780,32 @@ export function TauriSessionPreview() {
               setTabs(page.sessions);
               setSessionPageCursor(page.nextCursor ?? null);
               setSessionPageSource(page.source);
+            }
+          } catch (cause) {
+            if (request === catalogAuditRequestRef.current && isActive()) {
+              setSessionPageError(tauriMessageFrom(cause));
+            }
+          }
+        } else if (refreshVisiblePage && sessionPageSource === "identity") {
+          try {
+            const desiredPages = Math.max(1, Math.ceil(tabs.length / 200));
+            let page = await tauriWorkbenchSessionPage();
+            if (request !== catalogAuditRequestRef.current || !isActive()) return;
+            const sessions = [...page.sessions];
+            let cursor = page.nextCursor ?? null;
+            let pagesRead = 1;
+            while (cursor && pagesRead < desiredPages) {
+              page = await tauriWorkbenchSessionPage(cursor);
+              if (request !== catalogAuditRequestRef.current || !isActive()) return;
+              const known = new Set(sessions.map(tab => tab.sessionId));
+              sessions.push(...page.sessions.filter(tab => !known.has(tab.sessionId)));
+              cursor = page.nextCursor ?? null;
+              pagesRead += 1;
+            }
+            if (request === catalogAuditRequestRef.current && isActive()) {
+              setTabs(previous => preserveWorkbenchLifecycle(sessions, previous));
+              setSessionPageCursor(cursor);
+              setSessionPageSource("identity");
             }
           } catch (cause) {
             if (request === catalogAuditRequestRef.current && isActive()) {
@@ -908,8 +945,11 @@ export function TauriSessionPreview() {
         setSession(null);
       }
       const updated = await forgetTauriWorkbenchSession(target.sessionId);
-      setTabs(previous => preserveWorkbenchLifecycle(updated, previous));
-      await refreshCatalogAudit();
+      sessionPageRevisionRef.current += 1;
+      if (sessionPageSource !== "identity") {
+        setTabs(previous => preserveWorkbenchLifecycle(updated, previous));
+      }
+      await refreshCatalogAudit(() => true, true);
     } catch (cause) {
       const userMessage = sessionLifecycleNotice(cause) ?? tauriMessageFrom(cause);
       operationError = deleted
@@ -1132,7 +1172,13 @@ export function TauriSessionPreview() {
         if (title) {
           try {
             const updated = await backfillTauriWorkbenchTitles([{ sessionId, title }]);
-            setTabs(previous => preserveWorkbenchLifecycle(updated, previous));
+            const resolvedTitle = updated.find(tab => tab.sessionId === sessionId)?.title ?? title;
+            if (sessionPageSource === "identity") {
+              setTabs(previous => previous.map(tab => tab.sessionId === sessionId ? { ...tab, title: resolvedTitle } : tab));
+              await refreshCatalogAudit();
+            } else {
+              setTabs(previous => preserveWorkbenchLifecycle(updated, previous));
+            }
           } catch {
             // The turn was accepted; catalog enrichment must not report it as a failed send.
           }
@@ -1423,7 +1469,7 @@ export function TauriSessionPreview() {
                 <button type="button" className="tauri-project-group__toggle" aria-label={`${collapsedProjects[group.key] ? "展开" : "收起"} ${group.label}`} aria-expanded={!collapsedProjects[group.key]} onClick={() => setCollapsedProjects(previous => ({ ...previous, [group.key]: !previous[group.key] }))}>
                   {collapsedProjects[group.key] ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
                 </button>
-                <button type="button" className="tauri-project-group__select" title={workspaceAvailability[group.root] === false ? `${group.root}\n工作区不可用；已有会话仍可打开` : group.root} aria-label={`切换到项目 ${group.label}${workspaceAvailability[group.root] === false ? "（工作区不可用）" : ""}`} disabled={busy || switchingBlocked} onClick={() => { const latest = group.sessions[0]; if (latest && latest.sessionId !== session?.id) void activateSession(latest.sessionId, latest.workspaceRoot); }}><FolderOpen size={14} /><span>{group.label}</span>{workspaceAvailability[group.root] === false && <small className="tauri-project-group__unavailable">工作区不可用</small>}<small>{group.sessions.length}</small></button>
+                <button type="button" className="tauri-project-group__select" title={workspaceAvailability[group.root] === false ? `${group.root}\n工作区不可用；已有会话仍可打开` : group.root} aria-label={`切换到项目 ${group.label}${workspaceAvailability[group.root] === false ? "（工作区不可用）" : ""}`} disabled={busy || switchingBlocked || !group.sessions.some(tab => !isMissingWorkbenchSession(tab))} onClick={() => { const latest = group.sessions.find(tab => !isMissingWorkbenchSession(tab)); if (latest && latest.sessionId !== session?.id) void activateSession(latest.sessionId, latest.workspaceRoot); }}><FolderOpen size={14} /><span>{group.label}</span>{workspaceAvailability[group.root] === false && <small className="tauri-project-group__unavailable">工作区不可用</small>}<small>{group.sessions.length}</small></button>
                 <button type="button" className="tauri-project-group__new" aria-label={`在 ${group.label} 中新建对话`} title={workspaceAvailability[group.root] === false ? "工作区不可用，无法在此处新建对话" : "在此项目新建对话"} disabled={busy || switchingBlocked || workspaceAvailability[group.root] === false} onClick={() => void createSession(group.root || "")}><Plus size={14} /></button>
               </div>
               {!collapsedProjects[group.key] && group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} busy={busy} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} />)}

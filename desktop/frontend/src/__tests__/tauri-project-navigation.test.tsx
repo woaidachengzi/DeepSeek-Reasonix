@@ -13,8 +13,8 @@ Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, co
 ];
 (globalThis as unknown as { __workbenchPages: unknown[] }).__workbenchPages = [
   { sessions: [
-    { sessionId: "old-alpha", workspaceRoot: "/work/alpha" },
     { sessionId: "missing-alpha", title: "丢失文件会话", workspaceRoot: "/work/alpha", state: "missing", missing: true },
+    { sessionId: "old-alpha", workspaceRoot: "/work/alpha" },
     { sessionId: "recent-beta", workspaceRoot: "/work/beta", title: "Beta task" },
   ], nextCursor: { position: 3, id: "recent-beta" }, total: 4, source: "identity" },
   { sessions: [{ sessionId: "older-gamma", workspaceRoot: "/work/gamma", title: "Gamma task" }], nextCursor: null, total: 3, source: "identity" },
@@ -50,13 +50,20 @@ assert.ok(!document.querySelector<HTMLButtonElement>('[aria-label="在 beta 中�
 
 const select = document.querySelector<HTMLButtonElement>('[aria-label="切换到项目 beta"]');
 assert.ok(select);
+const alphaSelect = document.querySelector<HTMLButtonElement>('[aria-label="切换到项目 alpha（工作区不可用）"]');
+assert.ok(alphaSelect);
+await act(async () => { alphaSelect.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.ok(calls.some(call => call.name === "bridge_open_session" && call.args.sessionId === "old-alpha"), "project switching skips the newest missing session");
 await act(async () => { select.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
-assert.ok(calls.some(call => call.name === "bridge_open_session" && call.args.sessionId === "recent-beta" && call.args.workspaceRoot === "/work/beta"));
+assert.ok(calls.some(call => call.name === "bridge_switch_session" && call.args.sessionId === "recent-beta" && call.args.workspaceRoot === "/work/beta"));
 
 const create = document.querySelector<HTMLButtonElement>('[aria-label="在 beta 中新建对话"]');
 assert.ok(create);
 await act(async () => { create.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
 assert.ok(calls.some(call => call.name === "bridge_switch_session" && call.args.workspaceRoot === "/work/beta"));
+await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.ok(calls.filter(call => call.name === "workbench_session_page").length >= 4, "catalog mutations refresh the already-loaded identity pages");
+assert.ok([...document.querySelectorAll<HTMLButtonElement>(".tauri-sidebar__session")].some(button => button.textContent?.trim() === "新对话"), "a newly created session appears in the identity-backed sidebar");
 const composer = document.querySelector<HTMLTextAreaElement>(".tauri-composer textarea");
 assert.ok(composer);
 await act(async () => {
