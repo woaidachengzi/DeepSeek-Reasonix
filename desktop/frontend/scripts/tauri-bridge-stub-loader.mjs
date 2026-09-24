@@ -147,6 +147,8 @@ export function openTauriBridgeSession(sessionId, workspaceRoot) {
 
 export function switchTauriBridgeSession(sessionId, workspaceRoot) {
   record("bridge_switch_session", { sessionId, workspaceRoot });
+  const failure = globalThis.__switchFailure;
+  if (failure) return Promise.reject(new Error(failure));
   return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle", title: storedTitle(sessionId), workspaceRoot });
 }
 
