@@ -178,14 +178,14 @@ CREATE INDEX sessions_visible_order ON sessions(state, position, id);
 **当前实现边界**：只读 inventory 与 `PrepareImportReview` / `ApplyImportReview` 已在存储层落地。
 审核计划必须显式列出 catalog ID，并包含 catalog 与每个选中 transcript 的 SHA-256；
 应用前重新核对，冲突整批拒绝，未选中的扫描文件不认领。当前没有对真实 profile
-暴露导入端点，也没有 profile 级写者锁或已接入的跨资源备份门禁；因此这只是离线/测试 profile
+暴露导入端点；bridge 已有仅供新版本协作的 profile 锁，但没有旧写者停写确认或已接入的跨资源备份门禁；因此这只是离线/测试 profile
 的 S1 能力，不能在运行中的 Preview 上直接执行真实数据迁移。
 
 离线快照工具现可把**整份** Preview profile 与独立的 workbench catalog 复制到 profile
 之外的私有目录，manifest 逐文件记录大小和 SHA-256，完成后可验证并在**新目录**演练恢复；
 符号链接、嵌套备份位置、缺失或被篡改的成员会被拒绝。它尚未接入用户迁移入口，
 也**不能替代停写门禁**：旧客户端不认识新 profile 锁，快照 API 只适用于已由外部确认
-全部写者停止的离线 profile。真实资料备份/恢复演练与写者所有权改造仍待完成。
+全部写者停止的离线 profile。真实资料备份/恢复演练与旧写者停写确认仍待完成。
 
 > **[DeepSeek] S1 的两份未展开规格在 V2，可直接引用而不必重写：**
 > - **清单字段**：V2 §7.1 给出列定义（`id | 来源(workbench/scan) | 推导路径 | 磁盘是否存在 |
@@ -222,7 +222,7 @@ CREATE INDEX sessions_visible_order ON sessions(state, position, id);
 审批稿 A1–A6、B3–B5、C1–C5 的边界继续有效；A7 改为“记忆布局待独立设计”，B1 的扫描器改为**只读候选清单**而非自动认领，B2 的 alias 延至 Move 语义确定。审批稿中 Wails 的路径身份与 Tauri 已有 ID 必须分开描述，`C6`/`B5` 的交叉引用也需更正。
 
 S0 路径与隔离修正已提交；S1 的只读清单和离线核验导入已有代码与测试，
-下一步是写者静止门禁、跨资源备份与真实 profile 的人工核对演练。
+下一步是旧写者停写确认、跨资源备份与真实 profile 的人工核对演练。
 标题溯源与 v1→v2 迁移已先在尚未接入运行流的身份库存储层实现并测试；这不是
 S1/S2 完成声明。当前存储层仍使用 v1 的绝对 `path` 与 `missing` 列；上方
 `relative_path` / 完整生命周期状态机是后续目标，不得误认为已经落地。
