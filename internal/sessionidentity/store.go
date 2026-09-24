@@ -189,6 +189,10 @@ func (s *Store) Close() error {
 }
 
 func (s *Store) Import(ctx context.Context, previewRoot string, candidates []Candidate) error {
+	return s.importCandidates(ctx, previewRoot, candidates, false)
+}
+
+func (s *Store) importCandidates(ctx context.Context, previewRoot string, candidates []Candidate, requirePresent bool) error {
 	root, err := filepath.Abs(previewRoot)
 	if err != nil || strings.TrimSpace(previewRoot) == "" {
 		return errors.New("preview root is invalid")
@@ -210,6 +214,9 @@ func (s *Store) Import(ctx context.Context, previewRoot string, candidates []Can
 		if err != nil && !missing {
 			return fmt.Errorf("inspect transcript: %w", err)
 		}
+		if requirePresent && missing {
+			return fmt.Errorf("%w: selected transcript is missing: %s", ErrImportReviewChanged, candidate.Path)
+		}
 		if !missing && !info.Mode().IsRegular() {
 			return fmt.Errorf("transcript is not a regular file: %s", candidate.Path)
 		}
@@ -222,6 +229,12 @@ func (s *Store) Import(ctx context.Context, previewRoot string, candidates []Can
 	defer func() { _ = tx.Rollback() }()
 	now := time.Now().UnixMilli()
 	for _, incoming := range prepared {
+		if requirePresent {
+			info, err := os.Lstat(incoming.Path)
+			if err != nil || !info.Mode().IsRegular() {
+				return fmt.Errorf("%w: selected transcript changed before registration: %s", ErrImportReviewChanged, incoming.Path)
+			}
+		}
 		var current Record
 		var missing int
 		err := tx.QueryRowContext(ctx, `SELECT path, workspace_root, title, position, missing, created_at_ms, updated_at_ms
