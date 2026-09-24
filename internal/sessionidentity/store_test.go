@@ -252,3 +252,166 @@ func TestOpenRejectsFutureSchemaWithoutChangingIt(t *testing.T) {
 		t.Fatalf("future schema version = %d, %v", version, err)
 	}
 }
+
+func TestTitleProvenanceAndRepeatImport(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	path := filepath.Join(root, "sessions", "tauri-title.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, filepath.Join(root, "identity.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	entry := Candidate{ID: "title", Path: path, Title: "Catalog title"}
+	if err := store.Import(ctx, root, []Candidate{entry}); err != nil {
+		t.Fatal(err)
+	}
+	records, err := store.List(ctx)
+	if err != nil || records[0].TitleSource != TitleLegacyUnknown {
+		t.Fatalf("imported title provenance = %#v, %v", records, err)
+	}
+	if err := store.SetTitle(ctx, "title", 0, "Automatic", TitleAutomaticGeneration); !errors.Is(err, ErrTitleProtected) {
+		t.Fatalf("automatic rename of legacy title = %v", err)
+	}
+	if err := store.SetTitle(ctx, "title", 0, "Manual", TitleManualRename); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetTitle(ctx, "title", 0, "Stale", TitleManualRename); !errors.Is(err, ErrTitleConflict) {
+		t.Fatalf("stale rename = %v", err)
+	}
+	if err := store.Import(ctx, root, []Candidate{entry}); err != nil {
+		t.Fatal(err)
+	}
+	records, err = store.List(ctx)
+	if err != nil || records[0].Title != "Manual" || records[0].TitleSource != TitleUser || records[0].TitleRevision != 1 {
+		t.Fatalf("repeat import overwrote rename = %#v, %v", records, err)
+	}
+	if err := store.SetTitle(ctx, "title", 1, "Background", TitleAutomaticGeneration); !errors.Is(err, ErrTitleProtected) {
+		t.Fatalf("automatic rename of manual title = %v", err)
+	}
+	if err := store.SetTitle(ctx, "title", 1, "Requested AI title", TitleUserRequestedGeneration); err != nil {
+		t.Fatal(err)
+	}
+	records, err = store.List(ctx)
+	if err != nil || records[0].Title != "Requested AI title" || records[0].TitleSource != TitleUser || records[0].TitleRevision != 2 {
+		t.Fatalf("user-requested AI rename = %#v, %v", records, err)
+	}
+}
+
+func TestFallbackTitleCanBeDerivedThenGenerated(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	path := filepath.Join(root, "sessions", "tauri-fallback.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, filepath.Join(root, "identity.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := store.Import(ctx, root, []Candidate{{ID: "fallback", Path: path}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetTitle(ctx, "fallback", 0, "First message", TitleFirstMessage); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetTitle(ctx, "fallback", 1, "Another first message", TitleFirstMessage); !errors.Is(err, ErrTitleProtected) {
+		t.Fatalf("second first-message title = %v", err)
+	}
+	if err := store.SetTitle(ctx, "fallback", 1, "Generated", TitleAutomaticGeneration); err != nil {
+		t.Fatal(err)
+	}
+	records, err := store.List(ctx)
+	if err != nil || records[0].TitleSource != TitleGenerated || records[0].TitleRevision != 2 {
+		t.Fatalf("generated fallback title = %#v, %v", records, err)
+	}
+}
+
+func TestConcurrentTitleWritersCannotBothCommitSameRevision(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	path := filepath.Join(root, "sessions", "tauri-race.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dbPath := filepath.Join(root, "identity.sqlite")
+	first, err := Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = first.Close() })
+	second, err := Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = second.Close() })
+	if err := first.Import(ctx, root, []Candidate{{ID: "race", Path: path}}); err != nil {
+		t.Fatal(err)
+	}
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for _, store := range []*Store{first, second} {
+		go func(store *Store) {
+			<-start
+			results <- store.SetTitle(ctx, "race", 0, "Renamed", TitleManualRename)
+		}(store)
+	}
+	close(start)
+	a, b := <-results, <-results
+	if !((a == nil && errors.Is(b, ErrTitleConflict)) || (b == nil && errors.Is(a, ErrTitleConflict))) {
+		t.Fatalf("concurrent title updates = %v, %v; want one success and one conflict", a, b)
+	}
+	records, err := first.List(ctx)
+	if err != nil || len(records) != 1 || records[0].TitleRevision != 1 {
+		t.Fatalf("concurrent title result = %#v, %v", records, err)
+	}
+}
+
+func TestOpenMigratesV1TitlesWithoutAssumingUserIntent(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	dbPath := filepath.Join(root, "identity.sqlite")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE sessions (
+		id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, workspace_root TEXT NOT NULL DEFAULT '',
+		title TEXT NOT NULL DEFAULT '', position INTEGER NOT NULL DEFAULT 0,
+		missing INTEGER NOT NULL DEFAULT 0 CHECK (missing IN (0, 1)),
+		created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL);
+		INSERT INTO sessions VALUES ('named', '/a.jsonl', '', 'Legacy title', 0, 0, 1, 1);
+		INSERT INTO sessions VALUES ('empty', '/b.jsonl', '', '', 1, 0, 1, 1);
+		PRAGMA user_version=1`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	records, err := store.List(ctx)
+	if err != nil || len(records) != 2 || records[0].TitleSource != TitleLegacyUnknown || records[1].TitleSource != TitleFallback {
+		t.Fatalf("migrated provenance = %#v, %v", records, err)
+	}
+	var version int
+	if err := store.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil || version != 2 {
+		t.Fatalf("migrated version = %d, %v", version, err)
+	}
+}

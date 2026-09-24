@@ -12,13 +12,42 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 1
+const schemaVersion = 2
 
 var ErrPathChanged = errors.New("session identity path changed without an explicit move")
+var ErrTitleConflict = errors.New("session title revision changed")
+var ErrTitleProtected = errors.New("session title is protected from automatic replacement")
+var ErrSessionNotFound = errors.New("session identity not found")
+var ErrInvalidTitle = errors.New("invalid session title")
+
+// TitleSource records the authority of a title, not merely whether AI wrote
+// its text. A user-requested AI rename has user authority; an imported legacy
+// title cannot safely be classified as manual or generated.
+type TitleSource string
+
+const (
+	TitleFallback      TitleSource = "fallback"
+	TitleGenerated     TitleSource = "generated"
+	TitleUser          TitleSource = "user"
+	TitleLegacyUnknown TitleSource = "legacy_unknown"
+)
+
+// TitleOperation is intentionally an action, not a caller-provided source.
+// This prevents a background generator from claiming user authority.
+type TitleOperation int
+
+const (
+	TitleManualRename TitleOperation = iota
+	TitleAutomaticGeneration
+	TitleFirstMessage
+	TitleUserRequestedGeneration
+)
 
 type Candidate struct {
 	ID            string
@@ -30,9 +59,11 @@ type Candidate struct {
 
 type Record struct {
 	Candidate
-	Missing     bool
-	CreatedAtMS int64
-	UpdatedAtMS int64
+	Missing       bool
+	TitleSource   TitleSource
+	TitleRevision int64
+	CreatedAtMS   int64
+	UpdatedAtMS   int64
 }
 
 type Store struct {
@@ -98,6 +129,8 @@ func Open(ctx context.Context, path string) (*Store, error) {
 			path TEXT NOT NULL UNIQUE,
 			workspace_root TEXT NOT NULL DEFAULT '',
 			title TEXT NOT NULL DEFAULT '',
+			title_source TEXT NOT NULL DEFAULT 'fallback' CHECK (title_source IN ('fallback','generated','user','legacy_unknown')),
+			title_revision INTEGER NOT NULL DEFAULT 0 CHECK (title_revision >= 0),
 			position INTEGER NOT NULL DEFAULT 0,
 			missing INTEGER NOT NULL DEFAULT 0 CHECK (missing IN (0, 1)),
 			created_at_ms INTEGER NOT NULL,
@@ -106,9 +139,31 @@ func Open(ctx context.Context, path string) (*Store, error) {
 			_ = tx.Rollback()
 			return fail(err)
 		}
-		if _, err := tx.ExecContext(ctx, "PRAGMA user_version=1"); err != nil {
+		if _, err := tx.ExecContext(ctx, "PRAGMA user_version=2"); err != nil {
 			_ = tx.Rollback()
 			return fail(err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fail(err)
+		}
+	} else if version == 1 {
+		// Legacy catalog titles may have been derived from the first user message,
+		// manually renamed, or copied from a sidecar. Preserve them without
+		// pretending that all nonempty values were explicitly user-authored.
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fail(err)
+		}
+		for _, statement := range []string{
+			"ALTER TABLE sessions ADD COLUMN title_source TEXT NOT NULL DEFAULT 'fallback' CHECK (title_source IN ('fallback','generated','user','legacy_unknown'))",
+			"ALTER TABLE sessions ADD COLUMN title_revision INTEGER NOT NULL DEFAULT 0 CHECK (title_revision >= 0)",
+			"UPDATE sessions SET title_source=CASE WHEN title='' THEN 'fallback' ELSE 'legacy_unknown' END",
+			"PRAGMA user_version=2",
+		} {
+			if _, err := tx.ExecContext(ctx, statement); err != nil {
+				_ = tx.Rollback()
+				return fail(fmt.Errorf("migrate session identity to v2: %w", err))
+			}
 		}
 		if err := tx.Commit(); err != nil {
 			return fail(err)
@@ -176,10 +231,14 @@ func (s *Store) Import(ctx context.Context, previewRoot string, candidates []Can
 			if incoming.Missing {
 				continue
 			}
+			source := TitleFallback
+			if incoming.Title != "" {
+				source = TitleLegacyUnknown
+			}
 			_, err = tx.ExecContext(ctx, `INSERT INTO sessions
-				(id, path, workspace_root, title, position, missing, created_at_ms, updated_at_ms)
-				VALUES (?, ?, ?, ?, ?, 0, ?, ?)`, incoming.ID, incoming.Path,
-				incoming.WorkspaceRoot, incoming.Title, incoming.Position, now, now)
+				(id, path, workspace_root, title, title_source, position, missing, created_at_ms, updated_at_ms)
+				VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`, incoming.ID, incoming.Path,
+				incoming.WorkspaceRoot, incoming.Title, source, incoming.Position, now, now)
 			if err != nil {
 				return fmt.Errorf("register session %s: %w", incoming.ID, err)
 			}
@@ -191,9 +250,9 @@ func (s *Store) Import(ctx context.Context, previewRoot string, candidates []Can
 		if current.Path != incoming.Path {
 			return fmt.Errorf("%w: %s", ErrPathChanged, incoming.ID)
 		}
-		if incoming.Title == "" {
-			incoming.Title = current.Title
-		}
+		// Import is registration/reconciliation, never a title command. The
+		// catalog can be stale after a manual rename or automatic generation.
+		incoming.Title = current.Title
 		if incoming.WorkspaceRoot == "" {
 			incoming.WorkspaceRoot = current.WorkspaceRoot
 		}
@@ -234,7 +293,7 @@ func validateCandidate(root string, candidate Candidate) error {
 }
 
 func (s *Store) List(ctx context.Context) ([]Record, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, path, workspace_root, title, position, missing,
+	rows, err := s.db.QueryContext(ctx, `SELECT id, path, workspace_root, title, title_source, title_revision, position, missing,
 		created_at_ms, updated_at_ms FROM sessions ORDER BY position, id`)
 	if err != nil {
 		return nil, err
@@ -244,7 +303,7 @@ func (s *Store) List(ctx context.Context) ([]Record, error) {
 	for rows.Next() {
 		var record Record
 		var missing int
-		if err := rows.Scan(&record.ID, &record.Path, &record.WorkspaceRoot, &record.Title,
+		if err := rows.Scan(&record.ID, &record.Path, &record.WorkspaceRoot, &record.Title, &record.TitleSource, &record.TitleRevision,
 			&record.Position, &missing, &record.CreatedAtMS, &record.UpdatedAtMS); err != nil {
 			return nil, err
 		}
@@ -252,4 +311,56 @@ func (s *Store) List(ctx context.Context) ([]Record, error) {
 		records = append(records, record)
 	}
 	return records, rows.Err()
+}
+
+// SetTitle is the only title writer in the identity store. The caller names
+// the action, never the desired source, and supplies the revision it observed.
+// The revision and protection policy are both checked by the UPDATE itself,
+// so a concurrent rename cannot slip between a read and the write.
+func (s *Store) SetTitle(ctx context.Context, id string, expectedRevision int64, title string, operation TitleOperation) error {
+	if strings.TrimSpace(title) == "" || utf8.RuneCountInString(title) > 120 ||
+		strings.IndexFunc(title, unicode.IsControl) >= 0 {
+		return ErrInvalidTitle
+	}
+	if expectedRevision < 0 {
+		return ErrTitleConflict
+	}
+	var source TitleSource
+	var guard string
+	switch operation {
+	case TitleManualRename, TitleUserRequestedGeneration:
+		source = TitleUser
+		guard = "1=1"
+	case TitleAutomaticGeneration:
+		source = TitleGenerated
+		guard = "title_source IN ('fallback','generated')"
+	case TitleFirstMessage:
+		source = TitleFallback
+		guard = "title_source='fallback' AND title=''"
+	default:
+		return errors.New("invalid session title operation")
+	}
+	result, err := s.db.ExecContext(ctx, `UPDATE sessions SET title=?, title_source=?,
+		title_revision=title_revision+1, updated_at_ms=? WHERE id=? AND title_revision=? AND `+guard,
+		title, source, time.Now().UnixMilli(), id, expectedRevision)
+	if err != nil {
+		return err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if changed == 1 {
+		return nil
+	}
+	var revision int64
+	if err := s.db.QueryRowContext(ctx, `SELECT title_revision FROM sessions WHERE id=?`, id).Scan(&revision); errors.Is(err, sql.ErrNoRows) {
+		return ErrSessionNotFound
+	} else if err != nil {
+		return err
+	}
+	if revision != expectedRevision {
+		return ErrTitleConflict
+	}
+	return ErrTitleProtected
 }
