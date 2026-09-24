@@ -128,6 +128,10 @@ func Inventory(ctx context.Context, identities *Store, sessionDir, catalogPath s
 	if err != nil {
 		return InventoryReport{}, err
 	}
+	catalogIDCount := make(map[string]int, len(catalogEntries))
+	for _, entry := range catalogEntries {
+		catalogIDCount[entry.SessionID]++
+	}
 	for position, entry := range catalogEntries {
 		path, err := sessionpath.TranscriptPath(dir, entry.SessionID)
 		if err != nil {
@@ -158,6 +162,13 @@ func Inventory(ctx context.Context, identities *Store, sessionDir, catalogPath s
 		}
 		if row.Claim == "" {
 			switch {
+			case catalogIDCount[entry.SessionID] > 1:
+				row.Claim = ClaimPathConflict
+				row.Detail = "duplicate session ID in workbench catalog"
+				report.Errors = append(report.Errors, fmt.Sprintf("workbench entry %d: %s", position, row.Detail))
+			case detail != "" && (exists || detail != "transcript is absent"):
+				row.Claim = ClaimUnreadable
+				report.Errors = append(report.Errors, fmt.Sprintf("workbench entry %d: %s", position, detail))
 			case !exists:
 				row.Claim = ClaimMissingFile
 			case claimedPaths[filepath.Clean(path)] != "":
@@ -174,7 +185,9 @@ func Inventory(ctx context.Context, identities *Store, sessionDir, catalogPath s
 	// on disk is an unclaimed candidate.
 	knownNames := make(map[string]bool, len(registered)+len(catalogEntries))
 	for _, record := range registered {
-		knownNames[filepath.Base(record.Path)] = true
+		if filepath.Clean(filepath.Dir(record.Path)) == dir {
+			knownNames[filepath.Base(record.Path)] = true
+		}
 	}
 	for _, entry := range catalogEntries {
 		path, err := sessionpath.TranscriptPath(dir, entry.SessionID)
@@ -207,10 +220,26 @@ func Inventory(ctx context.Context, identities *Store, sessionDir, catalogPath s
 			Exists: true,
 			Source: InventoryFromScan,
 		}
-		if !sessionpath.ValidID(id) {
+		roundTrip, pathErr := sessionpath.TranscriptPath(dir, id)
+		if pathErr != nil || roundTrip != path {
 			row.Claim = ClaimInvalidFile
-			row.Detail = "file name yields no safe session ID"
+			row.Detail = "file name does not round-trip to a bridge session path"
 			report.Errors = append(report.Errors, fmt.Sprintf("%s: %s", item.Name(), row.Detail))
+			report.Entries = append(report.Entries, row)
+			continue
+		}
+		if record, ok := byID[id]; ok && filepath.Clean(record.Path) != filepath.Clean(path) {
+			row.Claim = ClaimPathChanged
+			row.Detail = fmt.Sprintf("registered path %s", record.Path)
+			report.Errors = append(report.Errors, fmt.Sprintf("%s: %s", item.Name(), row.Detail))
+			report.Entries = append(report.Entries, row)
+			continue
+		}
+		if exists, detail := inspectTranscript(path); !exists || detail != "" {
+			row.Exists = exists
+			row.Claim = ClaimUnreadable
+			row.Detail = detail
+			report.Errors = append(report.Errors, fmt.Sprintf("%s: %s", item.Name(), detail))
 			report.Entries = append(report.Entries, row)
 			continue
 		}
