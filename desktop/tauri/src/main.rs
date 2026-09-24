@@ -456,7 +456,7 @@ fn sync_workbench_order(
     if sessions.is_empty() {
         return Ok(0);
     }
-    supervisor.sync_session_catalog(
+    let synced = supervisor.sync_session_catalog(
         sessions
             .iter()
             .map(|session| SessionCatalogMetadata {
@@ -464,7 +464,30 @@ fn sync_workbench_order(
                 workspace_root: session.workspace_root.clone(),
             })
             .collect(),
-    )
+    )?;
+    require_complete_workbench_sync(sessions.len(), synced)
+}
+
+fn require_complete_workbench_sync(expected: usize, synced: usize) -> Result<usize, String> {
+    if synced == expected {
+        Ok(synced)
+    } else {
+        Err("session catalog sync was incomplete".into())
+    }
+}
+
+#[cfg(test)]
+mod workbench_order_sync_tests {
+    use super::require_complete_workbench_sync;
+
+    #[test]
+    fn accepts_complete_sync_and_rejects_partial_sync() {
+        assert_eq!(require_complete_workbench_sync(3, 3), Ok(3));
+        assert_eq!(
+            require_complete_workbench_sync(3, 2),
+            Err("session catalog sync was incomplete".into())
+        );
+    }
 }
 
 fn compare_session_catalog(
