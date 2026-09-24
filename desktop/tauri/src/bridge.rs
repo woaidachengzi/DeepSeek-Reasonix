@@ -1464,11 +1464,6 @@ fn parse_json_response(response: &[u8]) -> Result<Value, String> {
         .and_then(|line| line.split_whitespace().nth(1))
         .and_then(|value| value.parse::<u16>().ok())
         .ok_or_else(|| "desktop bridge returned an invalid HTTP status".to_string())?;
-    if !(200..300).contains(&status) {
-        return Err(format!(
-            "desktop bridge request failed with status {status}"
-        ));
-    }
     let body = &response[index + boundary.len()..];
     let transfer_encoding = headers.lines().skip(1).find_map(|line| {
         let (name, value) = line.split_once(':')?;
@@ -1486,6 +1481,27 @@ fn parse_json_response(response: &[u8]) -> Result<Value, String> {
         })
         .transpose()?;
     let raw = decoded_body.as_deref().unwrap_or(body);
+    if !(200..300).contains(&status) {
+        // Carry only a small allowlist of lifecycle codes across the Tauri
+        // String error boundary. Never forward the bridge's free-text message:
+        // it may contain a private transcript or workspace path.
+        if status == 409 {
+            let parsed = serde_json::from_slice::<Value>(first_json_value(raw)).ok();
+            let code = parsed
+                .as_ref()
+                .and_then(|value| value.pointer("/error/code"))
+                .and_then(Value::as_str);
+            if let Some(code @ ("session_missing" | "session_deleting" | "session_deleted")) = code
+            {
+                return Err(format!(
+                    "desktop bridge request failed with status 409 ({code})"
+                ));
+            }
+        }
+        return Err(format!(
+            "desktop bridge request failed with status {status}"
+        ));
+    }
     // Some local proxies prepend diagnostics or append a separator after the
     // JSON body. Extract exactly the first balanced object/array so neither
     // form produces serde_json's misleading "trailing characters" error.
@@ -2015,6 +2031,24 @@ mod tests {
         let response = b"HTTP/1.1 202 Accepted\r\nContent-Type: application/json\r\n\r\n{\"protocolVersion\":1}";
         assert_eq!(parse_json_response(response).unwrap()["protocolVersion"], 1);
         assert!(parse_json_response(b"HTTP/1.1 401 Unauthorized\r\n\r\n{}").is_err());
+    }
+
+    #[test]
+    fn response_parser_preserves_only_known_session_state_codes() {
+        for code in ["session_missing", "session_deleting", "session_deleted"] {
+            let response = format!(
+                "HTTP/1.1 409 Conflict\r\nContent-Type: application/json\r\n\r\n{{\"error\":{{\"code\":\"{code}\",\"message\":\"/private/transcript.jsonl\"}}}}"
+            );
+            assert_eq!(
+                parse_json_response(response.as_bytes()).unwrap_err(),
+                format!("desktop bridge request failed with status 409 ({code})")
+            );
+        }
+        let unknown = b"HTTP/1.1 409 Conflict\r\n\r\n{\"error\":{\"code\":\"unexpected\",\"message\":\"/private/transcript.jsonl\"}}";
+        assert_eq!(
+            parse_json_response(unknown).unwrap_err(),
+            "desktop bridge request failed with status 409"
+        );
     }
 
     #[test]

@@ -701,16 +701,7 @@ func (b *bridgeServer) openSession(w http.ResponseWriter, r *http.Request) {
 	}
 	view, err := b.runtimes.Open(r.Context(), desktopbridge.OpenRequest{SessionID: request.SessionID, WorkspaceRoot: request.WorkspaceRoot})
 	if err != nil {
-		status, code := http.StatusInternalServerError, "internal"
-		switch {
-		case errors.Is(err, desktopbridge.ErrInvalidSessionID):
-			status, code = http.StatusBadRequest, "invalid_request"
-		case errors.Is(err, desktopbridge.ErrSessionConflict), errors.Is(err, desktopbridge.ErrOpenInProgress):
-			status, code = http.StatusConflict, "conflict"
-		case errors.Is(err, desktopbridge.ErrClosed):
-			status, code = http.StatusServiceUnavailable, "shutting_down"
-		}
-		writeProtocolError(w, status, code, "unable to open desktop bridge session")
+		b.writeRuntimeError(w, err, "unable to open desktop bridge session")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})
@@ -957,6 +948,12 @@ func (b *bridgeServer) replayPendingPrompts(w http.ResponseWriter, r *http.Reque
 func (b *bridgeServer) writeRuntimeError(w http.ResponseWriter, err error, message string) {
 	status, code := http.StatusInternalServerError, "internal"
 	switch {
+	case errors.Is(err, ErrKnownSessionMissing):
+		status, code = http.StatusConflict, "session_missing"
+	case errors.Is(err, ErrKnownSessionDeleting):
+		status, code = http.StatusConflict, "session_deleting"
+	case errors.Is(err, ErrKnownSessionDeleted):
+		status, code = http.StatusConflict, "session_deleted"
 	case errors.Is(err, desktopbridge.ErrInvalidSessionID), errors.Is(err, desktopbridge.ErrInvalidInput), errors.Is(err, desktopbridge.ErrInvalidAttachment), errors.Is(err, desktopbridge.ErrInvalidWorkspacePath), errors.Is(err, desktopbridge.ErrInvalidTitle):
 		status, code = http.StatusBadRequest, "invalid_request"
 	case errors.Is(err, desktopbridge.ErrSessionConflict), errors.Is(err, desktopbridge.ErrOpenInProgress):

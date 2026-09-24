@@ -30,9 +30,11 @@ import (
 )
 
 // A registered identity must never be reused as an empty session merely
-// because its transcript is absent. Keep the existing conflict wire status
-// until the full S2 lifecycle protocol is introduced.
+// because its transcript is absent. These errors keep the existing conflict
+// HTTP status while allowing the host to explain the lifecycle reason.
 var ErrKnownSessionMissing = fmt.Errorf("%w: registered transcript is missing", desktopbridge.ErrSessionConflict)
+var ErrKnownSessionDeleting = fmt.Errorf("%w: session deletion is in progress", desktopbridge.ErrSessionConflict)
+var ErrKnownSessionDeleted = fmt.Errorf("%w: session was deleted", desktopbridge.ErrSessionConflict)
 
 // controllerFactory builds the established Go core only after a bridge client
 // opens a session. It lives with the host because the layering rule keeps
@@ -146,8 +148,10 @@ func resumeBridgeSession(ctx context.Context, controller *control.Controller, se
 		switch record.State {
 		case sessionidentity.StateMissing:
 			return fmt.Errorf("%w: %s", ErrKnownSessionMissing, sessionID)
-		case sessionidentity.StateDeleting, sessionidentity.StateDeleted:
-			return fmt.Errorf("%w: session %s is %s", desktopbridge.ErrSessionConflict, sessionID, record.State)
+		case sessionidentity.StateDeleting:
+			return fmt.Errorf("%w: %s", ErrKnownSessionDeleting, sessionID)
+		case sessionidentity.StateDeleted:
+			return fmt.Errorf("%w: %s", ErrKnownSessionDeleted, sessionID)
 		case sessionidentity.StateReserved, sessionidentity.StateReady:
 		default:
 			return fmt.Errorf("%w: session %s has unknown state %q", desktopbridge.ErrSessionConflict, sessionID, record.State)
