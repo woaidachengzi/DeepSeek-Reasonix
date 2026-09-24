@@ -257,6 +257,11 @@ export async function rememberTauriWorkbenchProjectFolder(root: string): Promise
   return invoke<BridgeProjectFolder[]>("remember_workbench_project_folder", { root });
 }
 
+export async function renameTauriWorkbenchProjectFolder(root: string, title: string): Promise<BridgeProjectFolder[]> {
+  requireTauri();
+  return invoke<BridgeProjectFolder[]>("rename_workbench_project_folder", { root, title });
+}
+
 export async function tauriWorkbenchSessionPage(
   cursor?: { position: number; id: string },
   limit = 200,

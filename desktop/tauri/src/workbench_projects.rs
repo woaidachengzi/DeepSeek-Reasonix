@@ -93,6 +93,42 @@ impl WorkbenchProjectCatalog {
         state.folders = updated.clone();
         Ok(updated)
     }
+
+    pub fn set_title(&self, root: &str, title: &str) -> Result<Vec<BridgeProjectFolder>, String> {
+        let root = normalize_root(root)?;
+        let title = title.trim();
+        if title.chars().count() > MAX_TITLE_CHARS || title.chars().any(char::is_control) {
+            return Err(
+                "project title must be at most 1024 characters and contain no control characters"
+                    .to_string(),
+            );
+        }
+        let mut state = self
+            .folders
+            .lock()
+            .map_err(|_| "project folder catalog lock is unavailable".to_string())?;
+        if let Some(error) = &state.load_error {
+            return Err(error.clone());
+        }
+        let mut updated = state.folders.clone();
+        if let Some(folder) = updated
+            .iter_mut()
+            .find(|folder| project_key(&folder.root) == project_key(&root))
+        {
+            folder.title = Some(title.to_string());
+        } else {
+            if updated.len() >= MAX_PROJECTS {
+                return Err("project folder catalog is full".to_string());
+            }
+            updated.push(BridgeProjectFolder {
+                root,
+                title: Some(title.to_string()),
+            });
+        }
+        write_folders(&self.path, &updated)?;
+        state.folders = updated.clone();
+        Ok(updated)
+    }
 }
 
 fn normalize_root(root: &str) -> Result<String, String> {
@@ -198,6 +234,9 @@ fn read_bounded_catalog(mut reader: impl Read, max_bytes: u64) -> std::io::Resul
 fn write_folders(path: &Path, folders: &[BridgeProjectFolder]) -> Result<(), String> {
     let encoded = serde_json::to_vec(folders)
         .map_err(|error| format!("encode project folder catalog: {error}"))?;
+    if encoded.len() as u64 > MAX_CATALOG_BYTES {
+        return Err("project folder catalog exceeds the size limit".to_string());
+    }
     let directory = path
         .parent()
         .ok_or_else(|| "project folder catalog path has no parent directory".to_string())?;
@@ -221,6 +260,95 @@ fn write_folders(path: &Path, folders: &[BridgeProjectFolder]) -> Result<(), Str
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remembered_folders_are_normalized_deduplicated_and_persistent() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let path = directory.path().join(CATALOG_FILE);
+        let catalog = WorkbenchProjectCatalog::at(path.clone());
+
+        let folders = catalog
+            .remember(" /work/alpha/// ")
+            .expect("remember absolute workspace");
+        assert_eq!(folders.len(), 1);
+        assert_eq!(folders[0].root, "/work/alpha");
+        assert_eq!(folders[0].title, None);
+
+        let duplicate = catalog
+            .remember("/work/alpha/")
+            .expect("deduplicate normalized workspace");
+        assert_eq!(duplicate.len(), folders.len());
+        assert_eq!(duplicate[0].root, folders[0].root);
+        let reloaded = WorkbenchProjectCatalog::at(path).list().expect("reload");
+        assert_eq!(reloaded.len(), 1);
+        assert_eq!(reloaded[0].root, "/work/alpha");
+        assert_eq!(reloaded[0].title, None);
+    }
+
+    #[test]
+    fn malformed_catalog_fails_closed_without_overwriting_source() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let path = directory.path().join(CATALOG_FILE);
+        let malformed = b"not valid project JSON";
+        fs::write(&path, malformed).expect("write malformed catalog");
+        let catalog = WorkbenchProjectCatalog::at(path.clone());
+
+        assert!(catalog.list().is_err());
+        assert!(catalog.remember("/work/new").is_err());
+        assert_eq!(fs::read(path).expect("read preserved catalog"), malformed);
+    }
+
+    #[test]
+    fn project_title_updates_are_normalized_and_persistent() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let path = directory.path().join(CATALOG_FILE);
+        let catalog = WorkbenchProjectCatalog::at(path.clone());
+
+        let renamed = catalog
+            .set_title("/work/alpha/", "  Alpha workspace  ")
+            .expect("set project title");
+        assert_eq!(renamed.len(), 1);
+        assert_eq!(renamed[0].root, "/work/alpha");
+        assert_eq!(renamed[0].title.as_deref(), Some("Alpha workspace"));
+
+        let cleared = catalog
+            .set_title("/work/alpha", "  ")
+            .expect("clear project title");
+        assert_eq!(cleared.len(), 1);
+        assert_eq!(cleared[0].title.as_deref(), Some(""));
+        let reloaded = WorkbenchProjectCatalog::at(path).list().expect("reload");
+        assert_eq!(reloaded.len(), 1);
+        assert_eq!(reloaded[0].title.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn invalid_project_title_does_not_write_catalog() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let path = directory.path().join(CATALOG_FILE);
+        let catalog = WorkbenchProjectCatalog::at(path.clone());
+
+        assert!(catalog
+            .set_title("/work/alpha", &"a".repeat(MAX_TITLE_CHARS + 1))
+            .is_err());
+        assert!(catalog.set_title("/work/alpha", "bad\ntitle").is_err());
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn oversized_catalog_is_rejected_before_creating_destination() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let path = directory.path().join(CATALOG_FILE);
+        let root = format!("/{}", "a".repeat(MAX_ROOT_BYTES - 1));
+        let folders = (0..1100)
+            .map(|_| BridgeProjectFolder {
+                root: root.clone(),
+                title: None,
+            })
+            .collect::<Vec<_>>();
+
+        assert!(write_folders(&path, &folders).is_err());
+        assert!(!path.exists());
+    }
 
     #[test]
     fn bounded_catalog_reader_rejects_growth_past_limit() {

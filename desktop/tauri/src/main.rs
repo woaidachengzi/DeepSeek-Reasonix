@@ -412,6 +412,17 @@ fn remember_workbench_project_folder(
     merged_workbench_project_folders(&supervisor, &catalog)
 }
 
+#[tauri::command]
+fn rename_workbench_project_folder(
+    supervisor: State<'_, BridgeSupervisor>,
+    catalog: State<'_, WorkbenchProjectCatalog>,
+    root: String,
+    title: String,
+) -> Result<Vec<BridgeProjectFolder>, String> {
+    catalog.set_title(&root, &title)?;
+    merged_workbench_project_folders(&supervisor, &catalog)
+}
+
 fn merged_workbench_project_folders(
     supervisor: &BridgeSupervisor,
     catalog: &WorkbenchProjectCatalog,
@@ -426,7 +437,7 @@ fn merged_workbench_project_folders(
         if let Some(existing) = folders.iter_mut().find(|existing| {
             workbench_project_key(&existing.root) == workbench_project_key(&folder.root)
         }) {
-            if existing.title.as_deref().unwrap_or("").trim().is_empty() {
+            if folder.title.is_some() {
                 existing.title = folder.title;
             }
         } else {
@@ -884,6 +895,7 @@ fn main() {
             workbench_sessions,
             workbench_project_folders,
             remember_workbench_project_folder,
+            rename_workbench_project_folder,
             workbench_session_page,
             backfill_workbench_titles,
             remember_workbench_session,

@@ -47,6 +47,7 @@ import {
   openTauriBridgeSession,
   rememberTauriWorkbenchSession,
   rememberTauriWorkbenchProjectFolder,
+  renameTauriWorkbenchProjectFolder,
   renameTauriBridgeSession,
   restartTauriBridge,
   replayTauriPendingPrompts,
@@ -262,6 +263,8 @@ export function TauriSessionPreview() {
   const [workspaceAvailability, setWorkspaceAvailability] = useState<Record<string, boolean | null>>({});
   const [collapsedProjects, setCollapsedProjects] = useState<Record<string, boolean>>({});
   const [workspaceRoot, setWorkspaceRoot] = useState("");
+  const [editingProjectRoot, setEditingProjectRoot] = useState<string | null>(null);
+  const [projectTitleDraft, setProjectTitleDraft] = useState("");
   const [prompt, setPrompt] = useState("");
   const [attachments, setAttachments] = useState<TauriBridgeAttachment[]>([]);
   const [status, setStatus] = useState<TauriBridgeStatus | null>(null);
@@ -1016,6 +1019,21 @@ export function TauriSessionPreview() {
     }
   }
 
+  async function saveProjectTitle(root: string) {
+    if (!root || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const folders = await renameTauriWorkbenchProjectFolder(root, projectTitleDraft);
+      setProjectFolders(folders.map(folder => ({ root: folder.root, title: folder.title })));
+      setEditingProjectRoot(null);
+    } catch (cause) {
+      setError(tauriMessageFrom(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function loadWorkspace(path = "") {
     if (!session) return;
     const sessionID = session.id;
@@ -1515,7 +1533,12 @@ export function TauriSessionPreview() {
                 <button type="button" className="tauri-project-group__toggle" aria-label={`${collapsedProjects[group.key] ? "展开" : "收起"} ${group.label}`} aria-expanded={!collapsedProjects[group.key]} onClick={() => setCollapsedProjects(previous => ({ ...previous, [group.key]: !previous[group.key] }))}>
                   {collapsedProjects[group.key] ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
                 </button>
-                <button type="button" className="tauri-project-group__select" title={workspaceAvailability[group.root] === false ? `${group.root}\n工作区不可用；已有会话仍可打开` : group.root} aria-label={`切换到项目 ${group.label}${workspaceAvailability[group.root] === false ? "（工作区不可用）" : ""}`} disabled={busy || switchingBlocked || (group.sessions.length > 0 && !group.sessions.some(tab => !isMissingWorkbenchSession(tab)))} onClick={() => { const latest = group.sessions.find(tab => !isMissingWorkbenchSession(tab)); if (latest) { if (latest.sessionId !== session?.id) void activateSession(latest.sessionId, latest.workspaceRoot); } else setWorkspaceRoot(group.root || ""); }}><FolderOpen size={14} /><span>{group.label}</span>{workspaceAvailability[group.root] === false && <small className="tauri-project-group__unavailable">工作区不可用</small>}<small>{group.sessions.length}</small></button>
+                {editingProjectRoot === group.root ? <form className="tauri-project-title-edit" onSubmit={event => { event.preventDefault(); void saveProjectTitle(group.root!); }}>
+                  <input autoFocus maxLength={1024} value={projectTitleDraft} aria-label={`重命名项目 ${group.label}`} onChange={event => setProjectTitleDraft(event.target.value)} onKeyDown={event => { if (event.key === "Escape") setEditingProjectRoot(null); }} />
+                  <button type="submit" aria-label="保存项目名称" disabled={busy}><Check size={13} /></button>
+                  <button type="button" aria-label="取消重命名项目" disabled={busy} onClick={() => setEditingProjectRoot(null)}><X size={13} /></button>
+                </form> : <button type="button" className="tauri-project-group__select" title={workspaceAvailability[group.root] === false ? `${group.root}\n工作区不可用；已有会话仍可打开` : group.root} aria-label={`切换到项目 ${group.label}${workspaceAvailability[group.root] === false ? "（工作区不可用）" : ""}`} disabled={busy || switchingBlocked || (group.sessions.length > 0 && !group.sessions.some(tab => !isMissingWorkbenchSession(tab)))} onClick={() => { const latest = group.sessions.find(tab => !isMissingWorkbenchSession(tab)); if (latest) { if (latest.sessionId !== session?.id) void activateSession(latest.sessionId, latest.workspaceRoot); } else setWorkspaceRoot(group.root || ""); }}><FolderOpen size={14} /><span>{group.label}</span>{workspaceAvailability[group.root] === false && <small className="tauri-project-group__unavailable">工作区不可用</small>}<small>{group.sessions.length}</small></button>}
+                <button type="button" className="tauri-project-group__rename" aria-label={`重命名项目 ${group.label}`} title="重命名项目" disabled={busy || switchingBlocked || editingProjectRoot !== null} onClick={() => { setEditingProjectRoot(group.root || null); setProjectTitleDraft(group.savedTitle ? group.label : ""); }}><Pencil size={12} /></button>
                 <button type="button" className="tauri-project-group__new" aria-label={`在 ${group.label} 中新建对话`} title={workspaceAvailability[group.root] === false ? "工作区不可用，无法在此处新建对话" : "在此项目新建对话"} disabled={busy || switchingBlocked || workspaceAvailability[group.root] === false} onClick={() => void createSession(group.root || "")}><Plus size={14} /></button>
               </div>
               {!collapsedProjects[group.key] && group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} busy={busy} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} />)}
