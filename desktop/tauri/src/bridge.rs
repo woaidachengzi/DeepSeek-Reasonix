@@ -1877,8 +1877,8 @@ mod tests {
         session_path_component, validate_attachment, validate_session_directory_page,
         verify_bridge_health, verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent,
         BridgeSupervisor, EventStreamError, OpenSessionRequest, RenameSessionRequest,
-        SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage,
-        SessionInventoryResponse, SessionRequest, PROTOCOL_VERSION,
+        SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
+        SessionDirectoryPage, SessionInventoryResponse, SessionRequest, PROTOCOL_VERSION,
     };
     use crate::{session_shadow, workbench_catalog::WorkbenchSession};
     use serde_json::json;
@@ -2303,6 +2303,56 @@ mod tests {
         assert_eq!(report.matched_count, 1);
         assert_eq!(report.physical_state_mismatches, 0);
         assert!(report.legacy_matches_directory);
+        supervisor.stop().expect("stop bridge");
+        match previous_home {
+            Some(value) => env::set_var("REASONIX_HOME", value),
+            None => env::remove_var("REASONIX_HOME"),
+        }
+        match previous_state_home {
+            Some(value) => env::set_var("REASONIX_STATE_HOME", value),
+            None => env::remove_var("REASONIX_STATE_HOME"),
+        }
+    }
+
+    #[test]
+    fn host_syncs_session_order_through_a_real_bridge_when_provided() {
+        let Some(binary) = bridge_under_test() else {
+            return;
+        };
+        let home = tempfile::tempdir().expect("isolated reasonix home");
+        let previous_home = env::var_os("REASONIX_HOME");
+        let previous_state_home = env::var_os("REASONIX_STATE_HOME");
+        env::set_var("REASONIX_HOME", home.path());
+        env::set_var("REASONIX_STATE_HOME", home.path());
+
+        let supervisor = BridgeSupervisor::with_binary(binary);
+        supervisor
+            .start()
+            .expect("start bridge with capability handshake");
+        supervisor
+            .open_session(OpenSessionRequest {
+                session_id: "tauri-e2e-order".to_string(),
+                workspace_root: None,
+            })
+            .expect("reserve session before syncing its host metadata");
+        let workspace = home.path().join("project").to_string_lossy().into_owned();
+        assert_eq!(
+            supervisor
+                .sync_session_catalog(vec![SessionCatalogMetadata {
+                    session_id: "tauri-e2e-order".to_string(),
+                    workspace_root: Some(workspace.clone()),
+                }])
+                .expect("sync session catalog"),
+            1
+        );
+        let page = supervisor
+            .session_directory_snapshot()
+            .expect("read synchronized identity catalog");
+        assert_eq!(page.len(), 1);
+        assert_eq!(page[0].id, "tauri-e2e-order");
+        assert_eq!(page[0].workspace_root.as_deref(), Some(workspace.as_str()));
+        assert_eq!(page[0].position, 0);
+
         supervisor.stop().expect("stop bridge");
         match previous_home {
             Some(value) => env::set_var("REASONIX_HOME", value),
