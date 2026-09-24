@@ -242,6 +242,11 @@ export async function tauriWorkbenchSessionPage(
   return invoke<TauriWorkbenchSessionPage>("workbench_session_page", { limit, cursor });
 }
 
+export async function tauriWorkspaceRootsAvailability(roots: string[]): Promise<(boolean | null)[]> {
+  requireTauri();
+  return invoke<(boolean | null)[]>("workspace_roots_availability", { roots });
+}
+
 export async function tauriImportLegacySessionCatalog(): Promise<number> {
   requireTauri();
   return invoke<number>("bridge_import_legacy_session_catalog");

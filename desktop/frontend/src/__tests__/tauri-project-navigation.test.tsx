@@ -20,6 +20,7 @@ Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, co
   { sessions: [{ sessionId: "older-gamma", workspaceRoot: "/work/gamma", title: "Gamma task" }], nextCursor: null, total: 3, source: "identity" },
 ];
 (globalThis as unknown as { __previewFirstUsers: Record<string, string> }).__previewFirstUsers = { "old-alpha": "整理报告并加测试" };
+(globalThis as unknown as { __unavailableWorkspaceRoots: string[] }).__unavailableWorkspaceRoots = ["/work/alpha"];
 
 const React = await import("react");
 const { act } = React;
@@ -42,6 +43,10 @@ const missingRow = document.querySelector<HTMLButtonElement>('[aria-label="丢�
 assert.ok(missingRow?.disabled);
 assert.match(missingRow?.textContent ?? "", /文件缺失/);
 assert.ok(document.querySelector<HTMLButtonElement>('[aria-label="删除对话 丢失文件会话"]'), "missing sessions remain explicitly deletable");
+await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.match(document.body.textContent ?? "", /工作区不可用/);
+assert.ok(document.querySelector<HTMLButtonElement>('[aria-label="在 alpha 中新建对话"]')?.disabled);
+assert.ok(!document.querySelector<HTMLButtonElement>('[aria-label="在 beta 中新建对话"]')?.disabled);
 
 const select = document.querySelector<HTMLButtonElement>('[aria-label="切换到项目 beta"]');
 assert.ok(select);

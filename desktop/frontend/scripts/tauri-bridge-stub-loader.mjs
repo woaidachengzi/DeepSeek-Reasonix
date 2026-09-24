@@ -85,6 +85,12 @@ export function tauriWorkbenchSessionPage(cursor, limit = 200) {
   return Promise.resolve({ sessions, nextCursor: null, total: sessions.length, source: "identity" });
 }
 
+export function tauriWorkspaceRootsAvailability(roots) {
+  record("workspace_roots_availability", { roots });
+  const unavailable = new Set(globalThis.__unavailableWorkspaceRoots ?? []);
+  return Promise.resolve(roots.map(root => !unavailable.has(root)));
+}
+
 export function tauriImportLegacySessionCatalog() {
   record("bridge_import_legacy_session_catalog");
   return Promise.resolve((globalThis.__workbenchSessions ?? []).length);

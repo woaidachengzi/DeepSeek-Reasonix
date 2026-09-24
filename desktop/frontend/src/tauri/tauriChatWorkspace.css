@@ -123,6 +123,7 @@
 .tauri-project-group__toggle:hover, .tauri-project-group__select:hover:not(:disabled) { background: var(--sidebar-hover); color: var(--fg); }
 .tauri-project-group__select span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 650; }
 .tauri-project-group__select small { color: var(--fg-faint); font-size: 11px; }
+.tauri-project-group__select .tauri-project-group__unavailable { flex: 0 0 auto; color: #e5a65b; font-size: 9px; }
 .tauri-project-group__new { display: grid; width: 27px; height: 27px; flex: 0 0 auto; place-items: center; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--fg-faint); }
 .tauri-project-group__new:hover:not(:disabled) { border-color: var(--border-soft); background: var(--surface); color: var(--fg); }
 .tauri-project-group__new:disabled { opacity: .35; }

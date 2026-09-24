@@ -150,6 +150,11 @@ const commands: CommandContract[] = [
     description: "tauriWorkspaceChangeDetail() invokes bridge_workspace_change_detail with { request }",
   },
   {
+    command: "workspace_roots_availability",
+    argKeys: ["roots"],
+    description: "tauriWorkspaceRootsAvailability() invokes workspace_roots_availability with { roots }",
+  },
+  {
     command: "bridge_cancel",
     argKeys: ["request"],
     description: "cancelTauriBridge() invokes bridge_cancel with { request }",

@@ -74,6 +74,7 @@ import {
   tauriPreviewRuntimeInfo,
   tauriSessionTitle,
   tauriWorkbenchSessionPage,
+  tauriWorkspaceRootsAvailability,
   tauriSessionPreviews,
   tauriSafeMCPURL,
   tauriTitleError,
@@ -250,6 +251,7 @@ export function TauriSessionPreview() {
   const [sessionPageSource, setSessionPageSource] = useState<"identity" | "legacy">("identity");
   const [sessionPageLoading, setSessionPageLoading] = useState(false);
   const [sessionPageError, setSessionPageError] = useState("");
+  const [workspaceAvailability, setWorkspaceAvailability] = useState<Record<string, boolean | null>>({});
   const [collapsedProjects, setCollapsedProjects] = useState<Record<string, boolean>>({});
   const [workspaceRoot, setWorkspaceRoot] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -300,6 +302,7 @@ export function TauriSessionPreview() {
   const submitInFlightRef = useRef(false);
   const createSessionInFlightRef = useRef(false);
   const sessionPageRequestRef = useRef(false);
+  const projectRootsRequestRef = useRef(0);
   const workspaceEpochRef = useRef(0);
   const workspaceListRequestRef = useRef(0);
   const workspaceChangesRequestRef = useRef(0);
@@ -313,7 +316,31 @@ export function TauriSessionPreview() {
   // Drag-and-drop state
   const [dragging, setDragging] = useState(false);
   const projectGroups = useMemo(() => groupWorkbenchSessions(tabs), [tabs]);
+  const projectRootsKey = projectGroups.flatMap(group => group.root ? [group.root] : []).join("\u0000");
   const activeCatalogTitle = tabs.find(tab => tab.sessionId === session?.id)?.title;
+
+  useEffect(() => {
+    const roots = projectRootsKey ? projectRootsKey.split("\u0000") : [];
+    if (roots.length === 0) return;
+    const request = ++projectRootsRequestRef.current;
+    void (async () => {
+      for (let offset = 0; offset < roots.length; offset += 200) {
+        try {
+          const batch = roots.slice(offset, offset + 200);
+          const availability = await tauriWorkspaceRootsAvailability(batch);
+          if (request !== projectRootsRequestRef.current) return;
+          setWorkspaceAvailability(previous => ({
+            ...previous,
+            ...Object.fromEntries(batch.map((root, index) => [root, availability[index] ?? null])),
+          }));
+        } catch {
+          // Workspace availability is informational; a failed probe must not block session access.
+          return;
+        }
+      }
+    })();
+    return () => { projectRootsRequestRef.current += 1; };
+  }, [projectRootsKey]);
 
   const questions = useMemo<QuestionAnchor[]>(() => {
     if (!history) return [];
@@ -1396,8 +1423,8 @@ export function TauriSessionPreview() {
                 <button type="button" className="tauri-project-group__toggle" aria-label={`${collapsedProjects[group.key] ? "展开" : "收起"} ${group.label}`} aria-expanded={!collapsedProjects[group.key]} onClick={() => setCollapsedProjects(previous => ({ ...previous, [group.key]: !previous[group.key] }))}>
                   {collapsedProjects[group.key] ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
                 </button>
-                <button type="button" className="tauri-project-group__select" title={group.root} aria-label={`切换到项目 ${group.label}`} disabled={busy || switchingBlocked} onClick={() => { const latest = group.sessions[0]; if (latest && latest.sessionId !== session?.id) void activateSession(latest.sessionId, latest.workspaceRoot); }}><FolderOpen size={14} /><span>{group.label}</span><small>{group.sessions.length}</small></button>
-                <button type="button" className="tauri-project-group__new" aria-label={`在 ${group.label} 中新建对话`} title="在此项目新建对话" disabled={busy || switchingBlocked} onClick={() => void createSession(group.root || "")}><Plus size={14} /></button>
+                <button type="button" className="tauri-project-group__select" title={workspaceAvailability[group.root] === false ? `${group.root}\n工作区不可用；已有会话仍可打开` : group.root} aria-label={`切换到项目 ${group.label}${workspaceAvailability[group.root] === false ? "（工作区不可用）" : ""}`} disabled={busy || switchingBlocked} onClick={() => { const latest = group.sessions[0]; if (latest && latest.sessionId !== session?.id) void activateSession(latest.sessionId, latest.workspaceRoot); }}><FolderOpen size={14} /><span>{group.label}</span>{workspaceAvailability[group.root] === false && <small className="tauri-project-group__unavailable">工作区不可用</small>}<small>{group.sessions.length}</small></button>
+                <button type="button" className="tauri-project-group__new" aria-label={`在 ${group.label} 中新建对话`} title={workspaceAvailability[group.root] === false ? "工作区不可用，无法在此处新建对话" : "在此项目新建对话"} disabled={busy || switchingBlocked || workspaceAvailability[group.root] === false} onClick={() => void createSession(group.root || "")}><Plus size={14} /></button>
               </div>
               {!collapsedProjects[group.key] && group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} busy={busy} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} />)}
             </section>

@@ -12,6 +12,7 @@ mod window_state;
 mod workbench_catalog;
 
 use serde::Serialize;
+use std::path::Path;
 
 use bridge::{
     AnswerMCPInteractionRequest, AnswerQuestionRequest, ApproveRequest, AttachFileRequest,
@@ -218,6 +219,34 @@ fn bridge_workspace_change_detail(
     request: WorkspaceChangeDetailRequest,
 ) -> Result<BridgeWorkspaceChangeDetailResponse, String> {
     supervisor.workspace_change_detail(request)
+}
+
+fn workspace_root_is_available(root: &str) -> Option<bool> {
+    let path = root.trim();
+    if path.is_empty() || path.len() > 4096 || !Path::new(path).is_absolute() {
+        return Some(false);
+    }
+    match std::fs::metadata(path) {
+        Ok(metadata) => Some(metadata.is_dir()),
+        Err(error)
+            if error.kind() == std::io::ErrorKind::NotFound
+                || error.kind() == std::io::ErrorKind::NotADirectory =>
+        {
+            Some(false)
+        }
+        Err(_) => None,
+    }
+}
+
+#[tauri::command]
+fn workspace_roots_availability(roots: Vec<String>) -> Result<Vec<Option<bool>>, String> {
+    if roots.len() > 200 {
+        return Err("too many workspace roots to inspect".into());
+    }
+    Ok(roots
+        .iter()
+        .map(|root| workspace_root_is_available(root))
+        .collect())
 }
 
 #[tauri::command]
@@ -709,6 +738,7 @@ fn main() {
             bridge_workspace_file,
             bridge_workspace_changes,
             bridge_workspace_change_detail,
+            workspace_roots_availability,
             bridge_cancel,
             bridge_approve,
             bridge_answer_question,
@@ -799,5 +829,20 @@ mod workbench_page_lifecycle_tests {
         let page = page_entries_from_legacy(vec![legacy], Some(&[identity]));
         assert_eq!(page[0].state.as_deref(), Some("missing"));
         assert_eq!(page[0].missing, Some(true));
+    }
+}
+
+#[cfg(test)]
+mod workspace_availability_tests {
+    use super::workspace_root_is_available;
+
+    #[test]
+    fn workspace_availability_distinguishes_invalid_and_existing_directories() {
+        assert_eq!(workspace_root_is_available("relative/project"), Some(false));
+        assert_eq!(workspace_root_is_available(""), Some(false));
+        assert_eq!(
+            workspace_root_is_available(&std::env::temp_dir().to_string_lossy()),
+            Some(true)
+        );
     }
 }
