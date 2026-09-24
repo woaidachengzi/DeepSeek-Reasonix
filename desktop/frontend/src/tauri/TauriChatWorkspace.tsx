@@ -97,6 +97,7 @@ import {
   type TauriSessionShadowReport,
 } from "../lib/tauriBridge";
 import { groupWorkbenchSessions, titleFromFirstUser } from "./workbenchSessions";
+import { sessionLifecycleFailure, sessionLifecycleNotice } from "./sessionLifecycleError";
 import {
   emptyMCPDraft,
   mcpCredentialHint,
@@ -705,7 +706,7 @@ export function TauriSessionPreview() {
       setStreamRevision(previous => previous + 1);
       setStatus(await tauriBridgeStatus());
     } catch (cause) {
-      setError(tauriMessageFrom(cause));
+      setError(sessionLifecycleNotice(cause) ?? tauriMessageFrom(cause));
     } finally {
       setBusy(false);
     }
@@ -761,9 +762,17 @@ export function TauriSessionPreview() {
     let operationError = "";
     try {
       if (!isOpen) {
-        await switchTauriBridgeSession(target.sessionId, target.workspaceRoot);
-        switchedToTarget = true;
+        try {
+          await switchTauriBridgeSession(target.sessionId, target.workspaceRoot);
+          switchedToTarget = true;
+        } catch (cause) {
+          // An interrupted cleanup deliberately cannot be reopened. The bridge
+          // DELETE endpoint can safely resume that exact fenced deletion.
+          if (sessionLifecycleFailure(cause) !== "deleting") throw cause;
+        }
       }
+      // For an interrupted deletion, avoid switching the single bridge
+      // controller. DELETE resumes cleanup without recreating the transcript.
       await deleteTauriBridgeSession(target.sessionId);
       deleted = true;
       if (isOpen) {
@@ -772,9 +781,10 @@ export function TauriSessionPreview() {
       }
       setTabs(await forgetTauriWorkbenchSession(target.sessionId));
     } catch (cause) {
+      const userMessage = sessionLifecycleNotice(cause) ?? tauriMessageFrom(cause);
       operationError = deleted
-        ? `对话已删除，但最近对话列表更新失败：${tauriMessageFrom(cause)}`
-        : tauriMessageFrom(cause);
+        ? `对话已删除，但最近对话列表更新失败：${userMessage}`
+        : userMessage;
     } finally {
       // The bridge owns one controller. Deleting an inactive row temporarily
       // switches that controller, so restore the user's open session even if
@@ -970,7 +980,10 @@ export function TauriSessionPreview() {
 
   async function submit() {
     const input = tauriComposerInput(prompt, attachments);
-    if (!session || !streamReady || busy || session.state !== "idle" || !input || submitInFlightRef.current) return;
+    if (busy || session?.state === "paused" || !input || submitInFlightRef.current) return;
+    // Typing may open a session asynchronously; send waits for that session
+    // and for the event stream, same gate the send button already uses.
+    if (!session || !streamReady || session.state !== "idle") return;
     submitInFlightRef.current = true;
     const sessionId = session.id;
     const userText = prompt.trim();
@@ -1379,13 +1392,23 @@ export function TauriSessionPreview() {
               <span className="tauri-composer__attachment-icon"><FileText size={15} /></span><span className="tauri-composer__attachment-name">{attachment.name}</span><small>{attachment.size < 1024 ? `${attachment.size} B` : `${(attachment.size / 1024).toFixed(1)} KB`}</small>
               <button type="button" onClick={() => setAttachments(previous => previous.filter((_, itemIndex) => itemIndex !== index))} disabled={busy} aria-label={`移除文件 ${attachment.name}`}><X size={13} /></button>
             </div>)}</div>}
-            <textarea value={prompt} onChange={event => setPrompt(event.target.value)} onKeyDown={event => {
+            <textarea value={prompt} onChange={event => {
+              const next = event.target.value;
+              setPrompt(next);
+              // Drafting must not wait on a session or the event stream; open
+              // one on the first keystroke so send has an id when it is ready.
+              // Do not flip `busy` here — that would disable the textarea mid-word.
+              if (!session && next && !createSessionInFlightRef.current) {
+                createSessionInFlightRef.current = true;
+                void createSession().finally(() => { createSessionInFlightRef.current = false; });
+              }
+            }} onKeyDown={event => {
               if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void submit(); }
-            }} placeholder={session?.state === "paused" ? "请先完成上方确认…" : session ? "继续聊聊你的问题…（⌘/Ctrl + Enter 发送）" : "先开始一个新对话，再输入你的问题"} disabled={busy || !session || !streamReady || session.state === "paused"} rows={3} />
+            }} placeholder={session?.state === "paused" ? "请先完成上方确认…" : session ? "继续聊聊你的问题…（⌘/Ctrl + Enter 发送）" : "输入问题，开始新对话…（⌘/Ctrl + Enter 发送）"} disabled={session?.state === "paused"} rows={3} />
             <div className="tauri-composer__bottom"><span>{session?.workspaceRoot ? `工作区 · ${session.workspaceRoot}` : session ? "当前会话使用默认工作区" : "Preview 配置与稳定版相互隔离"}</span>
               <div className="tauri-composer__actions">
                 <button className="tauri-attach-button" type="button" onClick={() => void addAttachments()} disabled={busy || !session || !streamReady || session.state !== "idle"} aria-label="添加文件" title="从本机选择文件并附加到消息"><Paperclip size={16} /><span>添加文件</span></button>
-                {session?.state === "running" ? <button className="tauri-send-button is-stop" type="button" onClick={() => void cancel()} disabled={busy} aria-label="停止生成"><Square size={15} fill="currentColor" /></button> : <button className="tauri-send-button" type="button" onClick={() => void submit()} disabled={busy || !streamReady || session?.state === "paused" || (!prompt.trim() && attachments.length === 0)} aria-label="发送消息"><ArrowUp size={18} /></button>}
+                {session?.state === "running" ? <button className="tauri-send-button is-stop" type="button" onClick={() => void cancel()} disabled={busy} aria-label="停止生成"><Square size={15} fill="currentColor" /></button> : <button className="tauri-send-button" type="button" onClick={() => void submit()} disabled={busy || !session || !streamReady || session.state === "paused" || (!prompt.trim() && attachments.length === 0)} aria-label="发送消息"><ArrowUp size={18} /></button>}
               </div>
             </div>
           </div>
