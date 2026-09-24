@@ -55,6 +55,12 @@ func TestOpenReadOnlyListsButCannotImportOrRename(t *testing.T) {
 	if err != nil || len(records) != 1 || records[0].Title != "Title" {
 		t.Fatalf("read-only records = %#v, %v", records, err)
 	}
+	if known, err := reader.HasRegisteredID(ctx, "existing"); err != nil || !known {
+		t.Fatalf("read-only registered ID = %v, %v", known, err)
+	}
+	if known, err := reader.HasRegisteredID(ctx, "new"); err != nil || known {
+		t.Fatalf("read-only unregistered ID = %v, %v", known, err)
+	}
 	if err := reader.SetTitle(ctx, "existing", 0, "Changed", TitleManualRename); err == nil {
 		t.Fatal("read-only title update succeeded")
 	}

@@ -204,6 +204,8 @@ CREATE INDEX sessions_visible_order ON sessions(state, position, id);
 
 ### S2：shadow 读写与 resolver
 
+**当前安全切片**：bridge 在 transcript 缺失时只读检查已有身份库；若该 ID 已登记，拒绝作为新会话打开，身份库不可读时也拒绝静默新建。尚未接入 `reserved`/`deleting` 状态机、相对路径迁移或 SQLite 列表权威；无身份库的旧 catalog 会话仍需完整 S2 resolver 解决。
+
 1. 新会话先 `reserved` 登记 ID；实际写入后转 `ready`。bridge 的打开/切换/重命名/删除均先解析身份行，再定位文件。无记录的新建与已登记但 `missing` 的恢复必须分开。
 2. 一段发布窗口内，host 仍显示 JSON 列表，同时在后台读 SQLite 并比较 ID/标题/工作区/顺序/文件状态；只记录差异统计，不把私密消息写诊断。
 3. 对删除使用持久状态机：先标 `deleting` 并阻止新写，再调用既有 `control.RemoveSessionArtifacts`，成功后保留 `deleted` tombstone；重启时重试未完成清理。文件系统与 SQLite 无法组成一个原子事务，不能承诺“同时消失”。

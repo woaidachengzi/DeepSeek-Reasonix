@@ -352,6 +352,15 @@ func (s *Store) List(ctx context.Context) ([]Record, error) {
 	return records, rows.Err()
 }
 
+// HasRegisteredID checks whether an ID has ever been claimed by this identity
+// store. A missing transcript does not release its ID for a fresh session.
+// This works on OpenReadOnly stores and does not reconcile or modify rows.
+func (s *Store) HasRegisteredID(ctx context.Context, id string) (bool, error) {
+	var registered bool
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sessions WHERE id=?)`, id).Scan(&registered)
+	return registered, err
+}
+
 // SetTitle is the only title writer in the identity store. The caller names
 // the action, never the desired source, and supplies the revision it observed.
 // The revision and protection policy are both checked by the UPDATE itself,

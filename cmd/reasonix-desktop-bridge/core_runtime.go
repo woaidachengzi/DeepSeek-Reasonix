@@ -14,14 +14,22 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/boot"
+	appconfig "reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/desktopbridge/sessionpath"
 	"reasonix/internal/event"
 	"reasonix/internal/fileref"
+	"reasonix/internal/pathidentity"
 	"reasonix/internal/provider"
 	"reasonix/internal/sessioncontext"
+	"reasonix/internal/sessionidentity"
 )
+
+// A registered identity must never be reused as an empty session merely
+// because its transcript is absent. Keep the existing conflict wire status
+// until the full S2 lifecycle protocol is introduced.
+var ErrKnownSessionMissing = fmt.Errorf("%w: registered transcript is missing", desktopbridge.ErrSessionConflict)
 
 // controllerFactory builds the established Go core only after a bridge client
 // opens a session. It lives with the host because the layering rule keeps
@@ -50,7 +58,7 @@ func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.Open
 	if err != nil {
 		return nil, err
 	}
-	if err := resumeBridgeSession(controller, request.SessionID); err != nil {
+	if err := resumeBridgeSession(ctx, controller, request.SessionID); err != nil {
 		controller.Close()
 		return nil, err
 	}
@@ -61,13 +69,16 @@ func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.Open
 // Existing Wails sessions are intentionally not discovered or migrated here:
 // a Tauri preview creates its own explicitly named session on first open and
 // can only resume the same ID it created earlier.
-func resumeBridgeSession(controller *control.Controller, sessionID string) error {
+func resumeBridgeSession(ctx context.Context, controller *control.Controller, sessionID string) error {
 	path, err := bridgeSessionPath(controller.SessionDir(), sessionID)
 	if err != nil {
 		return err
 	}
 	loaded, err := agent.LoadSession(path)
 	if errors.Is(err, os.ErrNotExist) {
+		if err := rejectRegisteredMissingSession(ctx, controller.SessionDir(), sessionID); err != nil {
+			return err
+		}
 		controller.SetFreshSessionPath(path)
 		return nil
 	}
@@ -75,6 +86,42 @@ func resumeBridgeSession(controller *control.Controller, sessionID string) error
 		return fmt.Errorf("load desktop bridge session: %w", err)
 	}
 	controller.Resume(loaded, path)
+	return nil
+}
+
+// rejectRegisteredMissingSession is a read-only guard for the S1 identity
+// store. It does not create the database or import unclaimed files. If an
+// existing identity database cannot be inspected, fail closed rather than
+// risk rebinding a known ID to a new empty transcript.
+func rejectRegisteredMissingSession(ctx context.Context, sessionDir, sessionID string) error {
+	configuredDir := appconfig.SessionDir()
+	identityPath := appconfig.DesktopSessionIdentityPath()
+	if configuredDir == "" || identityPath == "" ||
+		pathidentity.Canonical(configuredDir) != pathidentity.Canonical(sessionDir) {
+		return nil // A custom controller directory is outside this profile store.
+	}
+	info, err := os.Lstat(identityPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil // No identity has yet been imported for this profile.
+	}
+	if err != nil {
+		return fmt.Errorf("inspect session identity store: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return errors.New("session identity store is not a regular file")
+	}
+	identities, err := sessionidentity.OpenReadOnly(ctx, identityPath)
+	if err != nil {
+		return fmt.Errorf("read session identity store: %w", err)
+	}
+	defer identities.Close()
+	registered, err := identities.HasRegisteredID(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("check session identity: %w", err)
+	}
+	if registered {
+		return fmt.Errorf("%w: %s", ErrKnownSessionMissing, sessionID)
+	}
 	return nil
 }
 

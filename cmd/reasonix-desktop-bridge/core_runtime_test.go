@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,11 +11,13 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/boot"
+	appconfig "reasonix/internal/config"
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/desktopbridge/sessionpath"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
 	"reasonix/internal/sessioncontext"
+	"reasonix/internal/sessionidentity"
 )
 
 // The bridge and the identity importer must not derive transcript paths
@@ -54,6 +57,70 @@ func TestBridgeSessionPathIsDeterministicAndContained(t *testing.T) {
 	}
 	if _, err := bridgeSessionPath(dir, "../outside"); err == nil {
 		t.Fatal("unsafe bridge session ID produced a path")
+	}
+}
+
+func TestRegisteredMissingTranscriptCannotBecomeFresh(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	ctx := context.Background()
+	sessionDir := appconfig.SessionDir()
+	path, err := bridgeSessionPath(sessionDir, "known")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	identities, err := sessionidentity.Open(ctx, appconfig.DesktopSessionIdentityPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Import(ctx, sessionDir, []sessionidentity.Candidate{{ID: "known", Path: path}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	factory := newControllerFactory(nil)
+	workspace := t.TempDir()
+	if runtime, err := factory.Open(ctx, desktopbridge.OpenRequest{SessionID: "known", WorkspaceRoot: workspace}); runtime != nil || !errors.Is(err, ErrKnownSessionMissing) {
+		t.Fatalf("open registered missing session = %v, %v", runtime, err)
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("registered missing transcript was recreated: %v", err)
+	}
+	runtime, err := factory.Open(ctx, desktopbridge.OpenRequest{SessionID: "new", WorkspaceRoot: workspace})
+	if err != nil {
+		t.Fatalf("unregistered new session was rejected: %v", err)
+	}
+	if err := runtime.Shutdown(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMissingSessionFailsClosedWhenIdentityStoreIsUnreadable(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	identityPath := appconfig.DesktopSessionIdentityPath()
+	if err := os.MkdirAll(filepath.Dir(identityPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(identityPath, []byte("not a sqlite database"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	factory := newControllerFactory(nil)
+	runtime, err := factory.Open(context.Background(), desktopbridge.OpenRequest{SessionID: "unknown", WorkspaceRoot: t.TempDir()})
+	if runtime != nil || err == nil {
+		t.Fatalf("unreadable identity store allowed a fresh session: %v, %v", runtime, err)
 	}
 }
 
