@@ -216,7 +216,7 @@ CREATE INDEX sessions_visible_order ON sessions(state, position, id);
 | Wails 1.38.3 / 1.38.10 与 Tauri Preview 共用 profile 并同时写入 | 不支持 | 这些旧 writer 不遵守 `profilegate`。不得用新 bridge 的锁推断旧进程已停；真实 profile 操作前需外部确认 writer 全退出。 |
 | 稳定版 Wails profile 顺序复制到隔离的 Preview，再离线导入 | 有条件支持，需人工核对 | 只对副本执行 inventory、快照、逐项审核导入与恢复演练；不在稳定目录就地迁移、不让两个版本并发写。 |
 
-自动化目前覆盖 capability 缺失/instance 不匹配拒绝、当前协议 health 响应、当前 Rust host 启动并关闭真实 Go bridge、sidecar 意外退出后的重启握手、Rust host 经真实 bridge 同步会话工作区/顺序并读回 SQLite、真实测试 profile 的身份目录与磁盘盘点、旧 catalog 导入和相对路径恢复；没有真实 1.38.3/1.38.10 writer 停写证明，也没有旧 Tauri host 二进制的端到端认证。将“预期向后兼容”升级为“发布认证”前，需加入可复现的旧 host fixture/二进制矩阵；仅凭协议版本号不能替代这项验证。
+自动化目前覆盖 capability 缺失/instance 不匹配拒绝、当前协议 health 响应、当前 Rust host 启动并关闭真实 Go bridge、sidecar 意外退出后的重启握手、Rust host 经真实 bridge 同步会话工作区/顺序并读回 SQLite、真实测试 profile 的身份目录与磁盘盘点、旧 catalog 导入和相对路径恢复；没有真实 1.38.3/1.38.10 writer 停写证明，也没有旧 Tauri host 二进制的端到端认证。仓库没有随项目跟踪的旧 Tauri 应用包；`50c1b9bc6` 是当前历史中存储改造开始前最近的 Tauri host 提交，可作为**候选源码基线**，但不是已认证的发布二进制。将“预期向后兼容”升级为“发布认证”前，需从该基线构建并记录 host 二进制哈希，在一次性隔离 profile 中与当前 bridge 做端到端启动及会话操作，再按实际发布版本补充二进制矩阵；若找到对应发布包，应优先认证发布包。仅凭协议版本号或源码兼容推断不能替代这项验证。
 
 1. 新会话先 `reserved` 登记 ID；实际写入后转 `ready`。bridge 的打开/切换/重命名/删除均先解析身份行，再定位文件。无记录的新建与已登记但 `missing` 的恢复必须分开。
 2. 一段发布窗口内，host 对比 JSON 与 SQLite 的 ID/标题/工作区/顺序/文件状态；只记录差异统计，不把私密消息写诊断。SQLite 只在影子报告 clean 时作为当前 Preview 侧栏来源，否则继续显示 JSON；差异或盘点错误不得进入 SQLite 来源。
