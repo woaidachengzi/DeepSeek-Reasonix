@@ -3,6 +3,12 @@
 > 状态：实施设计，尚未授权真实用户数据迁移；基于 `experiment/tauri` 的 `4ed41fbe6` 及其后未提交的界面改动。
 > 对照：本地草稿 `SESSION_STORAGE_PLAN_V2.md`、`MIMO_STYLE_SESSION_STORAGE_APPROVAL.md`，以及已入库的[既有评审](./MIMO_STYLE_SESSION_STORAGE_REVIEW.md)。
 > 本稿替代前两份文档的实施建议；它们保留为设计讨论记录。本稿不是“已完成迁移”的声明。
+>
+> **标注约定（DeepSeek 标注）**：本稿中带 `> [DeepSeek]` 前缀的引用块由 DeepSeek
+> 侧添加，用于把 `SESSION_STORAGE_PLAN_V2.md` 的**补充与验证**挂到本稿对应位置。
+> 原则：**本稿（V3）是实施稿，V2 不覆盖它的结论**；标注只做三种事——
+> ① 记录 V2 已认出、并**采纳本稿**的地方；② 指向 V2 中本稿未展开的规格；
+> ③ 指向 V2 附带的行号级证据，供评审独立复核。V3 原有正文未作改动。
 
 ## 1. 决定
 
@@ -27,6 +33,23 @@
 
 以上 1 和 4 是任何真实 profile 导入之前的阻断项。只读样本检查不等于已修复。
 
+> **[DeepSeek] 第 1–5 条已由 DeepSeek 侧独立复核，全部成立。**
+> 行号级证据与三条"本稿纠正了 V2 何处"的对照表见
+> `SESSION_STORAGE_PLAN_V2.md` §13.5：
+> - 第 1 条（`projects/<slug>/` 缺陷 + 测试把错误路径写成期望）→ V2 §2.1、§4.2、§13.5 错误 2；
+>   补充事实：`config.ProjectSessionDir()` 真实存在且在 CLI/desktop/bot 使用
+>   （`internal/config/paths.go:451-462`、`internal/cli/session_machine.go:156`、
+>   `internal/bot/gateway.go:2358`），所以缺陷是"按 workspaceRoot 自行推导"而非"目录不存在"。
+> - 第 3 条（`.jsonl.meta` 不能作为独立证据）→ V2 §6.4 已整节重写。
+>   补充证据：`BranchMeta.ID` 通常由文件名派生或在缺失时由文件名补足
+>   （`internal/agent/branch.go:186-195`），但已有侧车值不能视为独立身份凭证；
+>   `sessionEventIndex` 只有 `writer_id`
+>   （`internal/agent/session_events.go:122-130`），`SessionDisplayIndex` 连它也没有
+>   （`internal/agent/session_display_index.go:33-53`）。
+> - 第 4 条（`REASONIX_STATE_HOME` 优先于 `REASONIX_HOME`）→ V2 §3.3 与 §13.5 已登记为阻断项。
+> - 第 5 条（`layers.go` 的 leaf 表不含 `internal/config`）→ V2 §4.1 已更正；
+>   V2 上一版正是写错这一条，由本稿纠正。
+
 ## 3. 身份与路径契约
 
 ### 3.1 唯一路径规则
@@ -34,6 +57,12 @@
 抽出一个无 `reasonix/` 内部依赖的 `internal/sessionpath.TranscriptPath(sessionDir, id)`，精确保留现有 bridge 的 ID 校验、错误语义和 `tauri-<id>.jsonl` 命名。bridge、导入器与测试都调用它；host 不拼 transcript 路径。
 
 导入器只传**实际** `config.SessionDir()`/Controller session dir，工作区仅是元数据。用跨包契约测试固定：ID=`tauri-abc`、任意工作区时，bridge 和导入器都得到 `<state-home>/sessions/tauri-tauri-abc.jsonl`。禁止根据 `workspaceRoot` 推导 transcript 所在目录。
+
+> **[DeepSeek] 采纳本稿的"传入实际 session dir"原则。**
+> V2 §4.2 原先按 `workspaceRoot` 推导目录的写法已作废，改写后的原则与本段一致：
+> 目录是真实存在的（`config.ProjectSessionDir()`），错在**按 workspaceRoot 推导
+> 而非沿用写入方的 dir**。本稿这条与 V2 §4.1 的 `internal/sessionpath.TranscriptPath`
+> 抽取是同一件事，可合并实施：函数抽取按 V2 §4.1，调用点与测试按本段。
 
 ### 3.2 SQLite 模型
 
@@ -51,6 +80,9 @@ CREATE TABLE sessions (
   relative_path TEXT NOT NULL UNIQUE,
   workspace_root TEXT NOT NULL DEFAULT '',
   title TEXT NOT NULL DEFAULT '',
+  title_source TEXT NOT NULL DEFAULT 'fallback'
+    CHECK (title_source IN ('fallback','generated','user','legacy_unknown')),
+  title_revision INTEGER NOT NULL DEFAULT 0 CHECK (title_revision >= 0),
   position INTEGER NOT NULL,
   state TEXT NOT NULL CHECK (state IN ('reserved','ready','missing','deleting','deleted')),
   created_at_ms INTEGER NOT NULL,
@@ -63,11 +95,51 @@ CREATE INDEX sessions_visible_order ON sessions(state, position, id);
 
 现有 `session-state-v1.sqlite` 尚未接入运行流，但“真实 profile 没有数据库”只能通过只读检查确认。**若已经有任何实际身份库或备份，不能原地把 schema v1 改定义**：必须用带版本号的事务迁移，并保留恢复路径。若确认从未真实使用，可在首次接线前调整尚未生效的 schema 与测试。
 
+> **[DeepSeek] V2 已采纳本稿的 `relative_path` 与状态机；两处补充来自 MiMo 源码复核。**
+> - V2 §5 的 schema 已按本稿改写为 `relative_path TEXT NOT NULL UNIQUE` +
+>   `state TEXT CHECK(state IN ('reserved','ready','missing','deleting','deleted'))`，
+>   并给出本段要求的动作分离 API（`ImportKnown/ReserveNew/ResolveForOpen/MarkPersisted/
+>   MarkMissing/BeginDelete/FinishDelete/ListVisible`），另加"禁止通用 Upsert 兼办多件事"。
+> - 本稿的 schema 未含标题溯源列。V2 §5 依 MiMo 源码补了
+>   `title_source ∈ {user,generated,fallback}` + `title_revision`（CAS）：
+>   MiMo 的守卫是显式的（`packages/opencode/src/session/projectors.ts:95-99`），
+>   "user 标题不可被 generated 降级"。**建议本稿采纳这两列**，否则将来接入自动标题时
+>   生成结果会覆盖用户手改的标题，且无 CAS 可依。
+>   **完整提案（含精确 diff、4 条写入守卫、3 条可失败测试、影响面与待裁决点）见
+>   [SESSION_STORAGE_V3_TITLE_PROVENANCE_PROPOSAL.md](./SESSION_STORAGE_V3_TITLE_PROVENANCE_PROPOSAL.md)。**
+>   补充事实：**项目里已经有两条标题写入路径**——用户手工 `agent.RenameSession`，
+>   以及 AI 生成的 `desktop/session_ai_title.go:22-70`（底层
+>   `internal/control/session_title.go:30`），后者已自行实现"读取-比较-写入"。
+>   所以这不是"将来接入"的问题，而是"同一条规则已有两处实现、Preview 会成为第三处"。
+> - `relative_path` 的相对根必须由宿主与 sidecar 的同一个 profile 解析，**不得从库内旧值反推**；
+>   并需拒绝 `..`、绝对路径、符号链接逃逸（V2 §5 已列入构造函数职责）。
+
+**标题溯源裁决（覆盖上方三态提案）**：接受 `title_source` 与
+`title_revision`，但新增 `legacy_unknown`，且新行默认 `fallback`。旧 catalog 的非空标题
+可能是手工、首条消息派生或侧车回填，导入时统一标为 `legacy_unknown` 并保护；空标题
+标为 `fallback`。首条消息派生标题仍属 `fallback`，后台自动标题是 `generated`，
+手工重命名和用户主动要求的 AI 重命名具有 `user` 权限。标题操作由 bridge/存储层的
+**操作类型**决定，不允许 host 自称 `title_source`。每次成功更新用 SQLite 的
+`title_revision` CAS；后台生成不得覆盖 `user` 或 `legacy_unknown`。重复导入只能登记
+身份或回填未初始化标题，不能用旧 catalog 覆盖已登记行的标题。UI 占位文案不写入库。
+
+**权威切换门禁**：当前 `.jsonl.meta`、host catalog 和身份库尚未有跨资源原子提交。
+在 SQLite 成为标题权威前，必须明确侧车兼容镜像、失败后的对账规则，以及 bridge 的
+读取路径；不可把增加两列视为完成切换。现有 v1 身份库升级必须使用版本化事务迁移，
+非空旧标题保守回填为 `legacy_unknown`，不得重建真实库。`position` 规则保持不变。
+
 ### 3.3 认领与移动
 
 导入优先级：已有身份库记录 > 有效 workbench catalog ID > 未登记文件的只读候选清单。文件名 `tauri-<id>.jsonl` 可提供候选 ID，但复制、改名、同名冲突时不能自动断定身份。大小/mtime 只用于扫描加速，绝不用于认领。
 
 阶段 1 **不做自动重连或物理移动**。`ErrPathChanged` 是阻止无证据漂移的保护，不是必须马上加 alias 表的理由。要支持显式 Move，先定义它是“认领已搬好的完整 artifact bundle”，还是“应用负责移动整个 bundle”；两者的文件操作、失败恢复不同。届时 alias 仅把旧引用解析到同一 ID，不能把旧路径当作读取 transcript 的后备位置；当前路径和 alias 之间也必须查重。未定义 Move 前保持 `missing` 并要求显式选择。
+
+> **[DeepSeek] 确认：V2 已撤回"阶段 1 就带 alias"的主张，改与本稿一致。**
+> V2 §13.5 采纳的第 3 条即本段，`MIMO_STYLE_SESSION_STORAGE_APPROVAL.md` 的 B2 时机分歧
+> 就此闭合（V2 §13.4 第 1 条已标闭合）。另外补一条 V2 §6.3 的实现约定：
+> MiMo 的 `memory.md` 单文件 rename 可作为并发场景的参考，不能直接移植为会话 Move
+> 的成功判据。Move 涉及 JSONL、侧车及 SQLite 定位/alias；单个文件的 `ENOENT`
+> 不能证明整个 artifact bundle 已被另一写者成功移动，必须通过完整状态核验和恢复记录。
 
 ## 4. 数据库、隔离与备份门禁
 
@@ -86,6 +158,14 @@ CREATE INDEX sessions_visible_order ON sessions(state, position, id);
 
 **退出**：测试证明两个路径消费者完全相同；原 workbench 和 JSONL 字节不变；Preview 与稳定版目录无交叉。回退只是撤销代码，无数据迁移。
 
+> **[DeepSeek] S0 建议追加一条退出条件：`resumeBridgeSession` 的静默空会话路径必须已被设计覆盖。**
+> `cmd/reasonix-desktop-bridge/core_runtime.go:65-68` 在 `agent.LoadSession` 返回
+> `os.ErrNotExist` 时**无条件** `controller.SetFreshSessionPath(path)`：已登记且曾落盘的
+> 会话，其 transcript 被删/移后再打开，会**静默变成同 ID 的空会话**。
+> 本稿 §3.2 的状态机正是它的解药（`missing` 不得走新建分支）。
+> 由于 S0 不写身份库，S0 只需记录该缺陷并加一条失败测试作为基线，
+> 真正的修复落在 S2；V2 §13.5 已把这条登记为"V3 发现、V2 遗漏"的缺陷。
+
 ### S1：清单与旁路导入（UI 仍读 JSON）
 
 1. 用只读命令输出 `id | 候选路径 | 文件状态 | title | workspace | 来源 | 冲突原因`。扫描仅限 Preview 的会话目录，并用 `store.IsSessionTranscriptName` 排除辅助日志；未在 catalog 中的文件只列候选，不自动随机分配 ID。
@@ -93,6 +173,21 @@ CREATE INDEX sessions_visible_order ON sessions(state, position, id);
 3. 重复导入、进程中断、损坏行、相同内容不同 ID、同名副本与恢复后 root 改变均有固定测试。阶段 1 仍允许 `workbench-sessions.json` 作为 UI 权威。
 
 **退出**：清单与磁盘逐条一致、两次导入结果和 ID 一致、JSONL/侧车 hash 不变；真实 profile 导入前有可恢复快照。此时身份库尚非运行权威，测试库可删除重建；真实库一旦被引用就不得再“删库重导”。
+
+> **[DeepSeek] S1 的两份未展开规格在 V2，可直接引用而不必重写：**
+> - **清单字段**：V2 §7.1 给出列定义（`id | 来源(workbench/scan) | 推导路径 | 磁盘是否存在 |
+>   判定 | 标题 | workspace_root`），并要求单列一节 **"未认领文件"**——扫到但无法确定性
+>   推导 ID 的文件不进库但必须报出，否则用户会以为身份库已覆盖全部会话。
+> - **扫描器规则**：V2 §6.6 给出只读范围（`sessions/` 一层 + `store.IsSessionTranscriptName`
+>   排除 `.events/.turns/.conflicts/.guardian`）、确定性 ID 推导与往返校验、
+>   只读 SHA-256 前后比对、以及 workbench 优先的合并优先级。
+> - **两类容错必须分开**（V2 §6.1 表）：已登记 ID 的路径变了 → **整体失败、一条不写**；
+>   单条候选不可读/父实体缺失 → **跳过并计入错误清单**，其余照常提交。
+>   本稿 S1.2 写的是"任何路径冲突或越界都使该批次失败"，与第一类一致；
+>   请确认第二类也按"跳过 + 报出"而不是整体失败，否则一个坏文件会挡住全部导入。
+> - **一致性提醒**：MiMo 的批量导入对孤儿记录是*跳过 + 计数 + warn*
+>   （`packages/opencode/src/storage/json-migration.ts:238`），对批内失败是
+>   *保存点回滚 + 记 `errors[]` 后继续*（同文件 `102-112`）。V2 §14.1 有逐条行号。
 
 ### S2：shadow 读写与 resolver
 
@@ -113,7 +208,20 @@ CREATE INDEX sessions_visible_order ON sessions(state, position, id);
 
 审批稿 A1–A6、B3–B5、C1–C5 的边界继续有效；A7 改为“记忆布局待独立设计”，B1 的扫描器改为**只读候选清单**而非自动认领，B2 的 alias 延至 Move 语义确定。审批稿中 Wails 的路径身份与 Tauri 已有 ID 必须分开描述，`C6`/`B5` 的交叉引用也需更正。
 
-**下一步唯一可直接开工的改动是 S0。** 未通过 S0 的同源路径与隔离测试前，不接入真实 profile，也不切换 UI 数据源。
+S0 路径与隔离修正已提交；下一步按 S1 的清单、只读核验和旁路导入推进。
+标题溯源与 v1→v2 迁移已先在尚未接入运行流的身份库存储层实现并测试；这不是
+S1/S2 完成声明。当前存储层仍使用 v1 的绝对 `path` 与 `missing` 列；上方
+`relative_path` / 完整生命周期状态机是后续目标，不得误认为已经落地。
+真实 profile 自动迁移或 UI 数据源切换均未授权。
+
+> **[DeepSeek] 本段的 A/B/C 编号与两处更正已并入 V2 的决议索引。**
+> - V2 §13.1 声明**直接采纳** A1–A7、B3–B5、C1–C5，并注明 A7 的
+>   "已有 `REASONIX.md` 不迁移、双轨写入需 RFC"这一限定必须保留。
+> - V2 §13.2/§13.3 记录了 V2 与 APPROVAL 的覆盖/补充关系；
+>   本段所指的 `C6`/`B5` 交叉引用更正，V2 §13.3 末行已标注"上游规模数据只说明
+>   变更规模与修复密度，不能单独证明某架构是崩溃原因"，沿用同一限定。
+> - **编号不要混读**：APPROVAL 用 A/B/C/Q，V2 新增的问题用 V1–V6；
+>   评审请分别表态（V2 §10 有对照表）。
 
 ## 7. 代码改动位置
 
