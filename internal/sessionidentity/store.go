@@ -289,6 +289,32 @@ func validateCandidate(root string, candidate Candidate) error {
 	if err != nil || rel == ".." || filepath.IsAbs(rel) || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return errors.New("transcript path escapes preview root")
 	}
+	// A lexical relative path is not enough: root/sessions may be a symlink
+	// outside the profile. Resolve the nearest existing parent so even a
+	// missing transcript below a linked directory cannot be imported later.
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return fmt.Errorf("resolve preview root: %w", err)
+	}
+	parent := filepath.Dir(candidate.Path)
+	for {
+		resolvedParent, resolveErr := filepath.EvalSymlinks(parent)
+		if resolveErr == nil {
+			resolvedRel, relErr := filepath.Rel(resolvedRoot, resolvedParent)
+			if relErr != nil || resolvedRel == ".." || filepath.IsAbs(resolvedRel) ||
+				strings.HasPrefix(resolvedRel, ".."+string(filepath.Separator)) {
+				return errors.New("transcript path escapes preview root through a symlink")
+			}
+			break
+		}
+		if !errors.Is(resolveErr, os.ErrNotExist) {
+			return fmt.Errorf("resolve transcript parent: %w", resolveErr)
+		}
+		if parent == root {
+			return fmt.Errorf("resolve transcript parent: %w", resolveErr)
+		}
+		parent = filepath.Dir(parent)
+	}
 	return nil
 }
 

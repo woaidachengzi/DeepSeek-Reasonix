@@ -162,6 +162,13 @@ func TestImportRejectsOutsideRootAndSymlink(t *testing.T) {
 	if err := store.Import(ctx, root, []Candidate{{ID: "linked", Path: link}}); err == nil {
 		t.Fatal("symlink transcript accepted")
 	}
+	linkedDir := filepath.Join(root, "linked-dir")
+	if err := os.Symlink(filepath.Dir(outside), linkedDir); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+	if err := store.Import(ctx, root, []Candidate{{ID: "parent-linked", Path: filepath.Join(linkedDir, "outside.jsonl")}}); err == nil {
+		t.Fatal("transcript outside root through a parent symlink accepted")
+	}
 }
 
 func TestImportWorkbenchCatalogPreservesOrderAndWorkspace(t *testing.T) {
