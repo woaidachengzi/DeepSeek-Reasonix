@@ -18,8 +18,8 @@ use bridge::{
     BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
     BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse, LegacySessionCatalogEntry,
     MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse, MCPServerView,
-    OpenSessionRequest, RenameSessionRequest, SessionDirectoryCursor, SessionDirectoryPage,
-    SessionFirstMessageTitle, SessionPreview, SessionRequest, SubmitRequest,
+    OpenSessionRequest, RenameSessionRequest, SessionCatalogMetadata, SessionDirectoryCursor,
+    SessionDirectoryPage, SessionFirstMessageTitle, SessionPreview, SessionRequest, SubmitRequest,
     WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
 };
 use data_profile::{PreviewProfile, PreviewProfileStatus, ProfileImportResult};
@@ -279,16 +279,37 @@ fn bridge_import_legacy_session_catalog(
     supervisor: State<'_, BridgeSupervisor>,
     catalog: State<'_, WorkbenchCatalog>,
 ) -> Result<usize, String> {
-    let sessions = catalog
-        .list()?
-        .into_iter()
-        .map(|session| LegacySessionCatalogEntry {
-            session_id: session.session_id,
-            title: session.title,
-            workspace_root: session.workspace_root,
-        })
-        .collect();
-    supervisor.import_legacy_session_catalog(sessions)
+    let sessions = catalog.list()?;
+    let imported = supervisor.import_legacy_session_catalog(
+        sessions
+            .iter()
+            .map(|session| LegacySessionCatalogEntry {
+                session_id: session.session_id.clone(),
+                title: session.title.clone(),
+                workspace_root: session.workspace_root.clone(),
+            })
+            .collect(),
+    )?;
+    sync_workbench_order(&supervisor, &sessions)?;
+    Ok(imported)
+}
+
+fn sync_workbench_order(
+    supervisor: &BridgeSupervisor,
+    sessions: &[WorkbenchSession],
+) -> Result<usize, String> {
+    if sessions.is_empty() {
+        return Ok(0);
+    }
+    supervisor.sync_session_catalog(
+        sessions
+            .iter()
+            .map(|session| SessionCatalogMetadata {
+                session_id: session.session_id.clone(),
+                workspace_root: session.workspace_root.clone(),
+            })
+            .collect(),
+    )
 }
 
 fn compare_session_catalog(
@@ -352,18 +373,24 @@ fn backfill_workbench_titles(
 
 #[tauri::command]
 fn remember_workbench_session(
+    supervisor: State<'_, BridgeSupervisor>,
     catalog: State<'_, WorkbenchCatalog>,
     request: WorkbenchSession,
 ) -> Result<Vec<WorkbenchSession>, String> {
-    catalog.remember(request)
+    let sessions = catalog.remember(request)?;
+    sync_workbench_order(&supervisor, &sessions)?;
+    Ok(sessions)
 }
 
 #[tauri::command]
 fn forget_workbench_session(
+    supervisor: State<'_, BridgeSupervisor>,
     catalog: State<'_, WorkbenchCatalog>,
     session_id: String,
 ) -> Result<Vec<WorkbenchSession>, String> {
-    catalog.forget(&session_id)
+    let sessions = catalog.forget(&session_id)?;
+    sync_workbench_order(&supervisor, &sessions)?;
+    Ok(sessions)
 }
 
 #[tauri::command]

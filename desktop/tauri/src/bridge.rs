@@ -157,11 +157,25 @@ pub struct SessionFirstMessageTitle {
     pub title: String,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionCatalogMetadata {
+    pub session_id: String,
+    pub workspace_root: Option<String>,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct BackfillSessionTitlesResponse {
     protocol_version: u64,
     titles: Vec<SessionFirstMessageTitle>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncSessionCatalogResponse {
+    protocol_version: u64,
+    synced: usize,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -622,6 +636,44 @@ impl BridgeSupervisor {
             }
         }
         Ok(envelope.titles)
+    }
+
+    pub fn sync_session_catalog(
+        &self,
+        sessions: Vec<SessionCatalogMetadata>,
+    ) -> Result<usize, String> {
+        if sessions.len() > 50 {
+            return Err("session catalog exceeds the host limit".to_string());
+        }
+        let sessions: Vec<_> = sessions
+            .into_iter()
+            .map(|mut session| {
+                session.session_id = session_path_component(&session.session_id)?;
+                if session
+                    .workspace_root
+                    .as_ref()
+                    .is_some_and(|root| root.len() > 4096)
+                {
+                    return Err("session workspace path is too long".to_string());
+                }
+                Ok(session)
+            })
+            .collect::<Result<_, String>>()?;
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/sessions/sync-catalog",
+            Some(json!({ "sessions": sessions })),
+            Some(&request_id),
+        )?;
+        let envelope: SyncSessionCatalogResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION)
+            || envelope.synced > sessions.len()
+        {
+            return Err("desktop bridge catalog sync response is invalid".to_string());
+        }
+        Ok(envelope.synced)
     }
 
     pub fn session_previews(
