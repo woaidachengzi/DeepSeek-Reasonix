@@ -2,7 +2,8 @@
 
 > 状态：**部分实现**。身份库 schema v3 生命周期状态、首次会话 reservation、恢复前状态检查及
 > 残留 sidecar 防误复用、身份库 keyset 分页、bridge 只读列表接口、删除状态的存储 API 及旧 JSON catalog 幂等导入已实现；
-> bridge 删除清理已接入（包括 `deleting` 状态下的重试与重启后续删）；host 权威切换与 UI 恢复选项仍未实现。
+> bridge 删除清理已接入（包括 `deleting` 状态下的重试与重启后续删）；Rust host 全量分页影子比对及
+> 运行状态面板报告已实现；host 权威切换与 UI 恢复选项仍未实现。
 > 侧栏当前仍受 host JSON 的 50 条上限约束。
 > 本文继续作为其余工作契约、验收条件、测试矩阵与回退路径。
 >
@@ -116,6 +117,9 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 - 迁移入口 `POST /v1/sessions/import-catalog` 与 host 启动调用已接入：最多接收旧 JSON 的
   50 项；仅插入身份库中不存在的记录，保留旧目录顺序、标题与工作区；缺失 transcript 作为
   `missing` 保留。重复调用不会覆盖身份库中较新的元数据，JSON 文件仍不修改。
+- host 已全量读取分页目录并提供只读影子报告，比较旧 JSON 与身份库的 ID 覆盖、标题、工作区、
+  顺序及缺失 transcript 数量；扫描不完整或目录在读取期间变化时不会报告为一致。运行状态面板展示汇总，
+  报告不输出会话 ID、路径或标题内容。
 - host 首次只取一页（例如 200 条），滚动到底再取下一页；**不再有丢弃**。
 - 迁移：`workbench-sessions.json` 的现有条目一次性导入身份库（沿用第 2、3 项已交付的
   `Import` 与 `ImportWorkbenchCatalog`，路径已同源）。导入后该文件转为只读回退输入。
@@ -152,10 +156,10 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 | **5.0** | `resumeBridgeSession` 按身份状态优先判定；新 ID 先 reservation；识别缺文件与残留 sidecar | 已覆盖 `reserved/ready/missing`、v2→v3 迁移、missing 文件恢复后仍拒绝复活、sidecar-only 残留拒绝新建 | 当前 schema 仍保留 transcript 与旧 JSON 清单；回退需保留 v2 DB 备份 |
 | **5.1** | 完成删除 tombstone 状态写入 | `deleting/deleted` 由删除流程写入且不可重用；身份库分页已实现 | 保留 v3 备份文件即可回退读取 |
 | **5.2** | bridge `GET /v1/sessions` 分页列表 | 已实现身份库分页和 bridge 接口；host 尚未切换读取 | 端点只是新增，host 不读即无影响 |
-| **5.3** | host 切换到 bridge 列表，JSON 作为回退 | 旧 JSON 幂等导入已接入；新旧列表 diff 与权威切换仍待实现 | host 改回读 JSON（一个常量开关） |
+| **5.3** | host 切换到 bridge 列表，JSON 作为回退 | 旧 JSON 幂等导入与只读影子比对已接入；侧栏权威切换仍待实现 | host 改回读 JSON（一个常量开关） |
 | **5.4** | missing/deleting/deleted 的用户可见处理 + 重启续做清理 | 删除中途 kill → 重启后清理完成或可重试；missing 会话有明确提示且不可"以空会话打开" | 状态回退为 `missing` 等待用户决定 |
 
-5.0、5.1、5.2 后端接口及 5.3 的旧目录导入前置已落地；5.3 影子比对/权威切换与
+5.0、5.1、5.2 后端接口及 5.3 的旧目录导入/影子比对已落地；5.3 权威切换与
 5.4 UI 恢复选项仍待实施。重启后续删采用显式重试，不在启动时无提示地自动删除。
 
 ## 5. 测试矩阵
@@ -180,6 +184,9 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 - 209 条会话的列表返回 209 条（分页合计），证明 50 条上限不再适用。
 - 老客户端（只读 `workbench-sessions.json`）行为不变。
 - 响应不含 transcript 内容与凭据类字段。
+- 影子盘点：身份目录额外行不误判为旧目录缺失；标题/工作区/顺序差异及 missing、物理状态漂移均计数。
+- 重复 ID、分页总数漂移、未登记 transcript 或盘点错误不能得到“完全一致”结果。
+- 影子报告只返回汇总数，不返回会话 ID、标题或文件路径。
 
 **5.4**
 - 同一切换点：host 列表与身份库逐项比对（ID/标题/工作区/顺序/状态）差异为零。

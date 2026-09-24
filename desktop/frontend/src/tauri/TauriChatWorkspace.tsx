@@ -79,6 +79,7 @@ import {
   tauriTurnFailure,
   tauriWorkbenchSessions,
   tauriImportLegacySessionCatalog,
+  tauriSessionCatalogShadow,
   type TauriMCPServer,
   type TauriBridgeEvent,
   type TauriBridgeAttachment,
@@ -93,6 +94,7 @@ import {
   type TauriPreviewProfileStatus,
   type TauriPreviewRuntimeInfo,
   type TauriProviderSummary,
+  type TauriSessionShadowReport,
 } from "../lib/tauriBridge";
 import { groupWorkbenchSessions, titleFromFirstUser } from "./workbenchSessions";
 import {
@@ -245,6 +247,8 @@ export function TauriSessionPreview() {
   const [streamReady, setStreamReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [catalogAudit, setCatalogAudit] = useState<TauriSessionShadowReport | null>(null);
+  const [catalogAuditError, setCatalogAuditError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspacePath, setWorkspacePath] = useState("");
@@ -401,6 +405,15 @@ export function TauriSessionPreview() {
             // Legacy enrichment is best-effort. The catalog remains usable,
             // and another launch can retry this batch without changing order.
           }
+        }
+        try {
+          const report = await tauriSessionCatalogShadow();
+          if (active) {
+            setCatalogAudit(report);
+            setCatalogAuditError("");
+          }
+        } catch (cause) {
+          if (active) setCatalogAuditError(tauriMessageFrom(cause));
         }
       } catch (cause) {
         if (active) setError(`读取最近对话失败：${tauriMessageFrom(cause)}`);
@@ -1386,6 +1399,15 @@ export function TauriSessionPreview() {
           <header className="tauri-diagnostics__header"><div><p>TAURI PREVIEW</p><h2>运行状态与设置</h2></div><button type="button" className="tauri-icon-button" onClick={() => setDiagnosticsOpen(false)} aria-label="关闭"><X size={17} /></button></header>
           <div className="tauri-diagnostics__body">
             <section className="tauri-diagnostic-card"><div className="tauri-diagnostic-card__heading"><h3>本地服务</h3><span className={`tauri-health${status?.running ? " is-ready" : ""}`}><i />{status?.running ? `运行中 · 协议 v${status.protocolVersion ?? "?"}` : "正在连接"}</span></div><button type="button" className="tauri-diagnostic-action" onClick={() => void restartBridge()} disabled={busy}>重启桥接服务{session ? "并恢复当前会话" : ""}</button></section>
+            <section className="tauri-diagnostic-card" aria-label="会话目录迁移检查">
+              <div className="tauri-diagnostic-card__heading"><h3>会话目录迁移检查</h3><span>{catalogAudit ? "影子比对" : "检查中"}</span></div>
+              {catalogAudit ? <>
+                <p>旧目录 {catalogAudit.legacyCount} 条 · 身份目录 {catalogAudit.directoryCount} 条；当前侧栏仍使用旧目录。</p>
+                <p>{catalogAudit.legacyMatchesDirectory ? "旧目录条目与身份目录一致" : `差异：身份库缺项 ${catalogAudit.missingFromDirectory}、标题 ${catalogAudit.titleMismatches}、工作区 ${catalogAudit.workspaceMismatches}、顺序 ${catalogAudit.orderMismatches}、磁盘状态 ${catalogAudit.physicalStateMismatches}、未登记文件 ${catalogAudit.unclaimedTranscripts}、盘点错误 ${catalogAudit.inventoryErrors}`}</p>
+                {catalogAudit.directoryOnlyCount > 0 && <p>身份目录新增项：{catalogAudit.directoryOnlyCount} 条</p>}
+                {catalogAudit.missingTranscripts > 0 && <p>transcript 缺失：{catalogAudit.missingTranscripts} 条</p>}
+              </> : <p>{catalogAuditError || "正在分页读取身份目录并与旧目录比较…"}</p>}
+            </section>
             <section className="tauri-diagnostic-card">
               <h3>预览配置</h3>
               {profile ? <><p>配置与会话保存在独立预览目录：</p><code>{profile.previewHome}</code>{profile.importAvailable ? <><p>检测到稳定版配置。复制前会创建备份，不会改动稳定版。</p><button type="button" className="tauri-diagnostic-action" onClick={() => void importStableProfile()} disabled={busy}>复制稳定版配置（先备份）</button></> : <p>{profile.previewConfigExists ? "预览配置已存在，不会覆盖。" : profile.managedProfile ? "未发现可复制的稳定版配置。" : "检测到自定义 REASONIX_HOME，已停用自动导入。"}</p>}</> : <p>正在检查隔离配置…</p>}

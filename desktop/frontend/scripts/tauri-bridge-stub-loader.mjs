@@ -82,6 +82,26 @@ export function tauriImportLegacySessionCatalog() {
   return Promise.resolve((globalThis.__workbenchSessions ?? []).length);
 }
 
+export function tauriSessionCatalogShadow() {
+  record("bridge_session_catalog_shadow");
+  const count = (globalThis.__workbenchSessions ?? []).length;
+  return Promise.resolve({
+    legacyCount: count,
+    directoryCount: count,
+    matchedCount: count,
+    directoryOnlyCount: 0,
+    missingFromDirectory: 0,
+    titleMismatches: 0,
+    workspaceMismatches: 0,
+    orderMismatches: 0,
+    missingTranscripts: 0,
+    physicalStateMismatches: 0,
+    unclaimedTranscripts: 0,
+    inventoryErrors: 0,
+    legacyMatchesDirectory: true,
+  });
+}
+
 export function tauriSessionPreviews(sessionIds) {
   record("bridge_session_previews", { sessionIds });
   return Promise.resolve(sessionIds.map(sessionId => ({ sessionId, firstUser: globalThis.__previewFirstUsers?.[sessionId] ?? "" })));
