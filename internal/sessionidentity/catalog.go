@@ -2,11 +2,8 @@ package sessionidentity
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -26,24 +23,9 @@ type catalogEntry struct {
 // session's workspace is UI metadata and never selects its transcript
 // directory. The catalog keeps its own order, titles and workspaces.
 func (s *Store) ImportWorkbenchCatalog(ctx context.Context, sessionDir, catalogPath string) error {
-	file, err := os.Open(catalogPath)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
+	entries, err := readCatalog(catalogPath)
 	if err != nil {
-		return fmt.Errorf("open workbench catalog: %w", err)
-	}
-	defer file.Close()
-	encoded, err := io.ReadAll(io.LimitReader(file, 1<<20+1))
-	if err != nil {
-		return fmt.Errorf("read workbench catalog: %w", err)
-	}
-	if len(encoded) > 1<<20 {
-		return errors.New("workbench catalog is too large")
-	}
-	var entries []catalogEntry
-	if err := json.Unmarshal(encoded, &entries); err != nil {
-		return fmt.Errorf("decode workbench catalog: %w", err)
+		return err
 	}
 	if len(entries) > 50 {
 		return errors.New("workbench catalog contains too many sessions")

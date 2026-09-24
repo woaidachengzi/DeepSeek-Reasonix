@@ -360,6 +360,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/sessions/{id}", b.authorized(b.idempotent(64<<10, b.deleteSession)))
 	mux.HandleFunc("GET /v1/sessions/{id}/snapshot", b.authorized(b.sessionSnapshot))
 	mux.HandleFunc("GET /v1/sessions/{id}/history", b.authorized(b.sessionHistory))
+	mux.HandleFunc("GET /v1/sessions/inventory", b.authorized(b.sessionInventory))
 	mux.HandleFunc("GET /v1/events", b.authorized(b.eventsHandler))
 	// ServeMux path wildcards occupy a complete segment, while the public v1
 	// routes use the conventional ":submit" and ":cancel" suffixes. Dispatch
