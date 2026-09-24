@@ -62,6 +62,9 @@ import {
   tauriAssistantTextDelta,
   tauriComposerInput,
   tauriEventSummary,
+  deleteTauriMCPServer,
+  saveTauriMCPServer,
+  tauriMCPServers,
   tauriMessageFrom,
   tauriPromptAnsweredId,
   tauriPromptFromEvent,
@@ -75,6 +78,7 @@ import {
   tauriTitleError,
   tauriTurnFailure,
   tauriWorkbenchSessions,
+  type TauriMCPServer,
   type TauriBridgeEvent,
   type TauriBridgeAttachment,
   type TauriBridgeHistory,
@@ -90,6 +94,14 @@ import {
   type TauriProviderSummary,
 } from "../lib/tauriBridge";
 import { groupWorkbenchSessions, titleFromFirstUser } from "./workbenchSessions";
+import {
+  emptyMCPDraft,
+  mcpCredentialHint,
+  mcpDraftForEditing,
+  mcpDraftToInput,
+  mcpTransportSummary,
+  type MCPDraft,
+} from "./tauriMCPServers";
 import "./tauriChatWorkspace.css";
 
 interface WorkbenchSessionTab {
@@ -219,6 +231,9 @@ export function TauriSessionPreview() {
   const [runtimeInfo, setRuntimeInfo] = useState<TauriPreviewRuntimeInfo | null>(null);
   const [providerSummary, setProviderSummary] = useState<TauriProviderSummary | null>(null);
   const [profileNotice, setProfileNotice] = useState("");
+  const [mcpServers, setMcpServers] = useState<TauriMCPServer[]>([]);
+  const [mcpNotice, setMcpNotice] = useState("");
+  const [mcpDraft, setMcpDraft] = useState<MCPDraft | null>(null);
   const [events, setEvents] = useState<TauriBridgeEvent[]>([]);
   const [history, setHistory] = useState<TauriBridgeHistory | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -357,6 +372,7 @@ export function TauriSessionPreview() {
     void tauriPreviewProfileStatus().then(setProfile).catch(error => setError(tauriMessageFrom(error)));
     void tauriPreviewRuntimeInfo().then(setRuntimeInfo).catch(error => setError(tauriMessageFrom(error)));
     void tauriProviderSummary().then(setProviderSummary).catch(error => setError(tauriMessageFrom(error)));
+    void tauriMCPServers().then(setMcpServers).catch(error => setMcpNotice(tauriMessageFrom(error)));
     let active = true;
     void (async () => {
       try {
@@ -1182,6 +1198,53 @@ export function TauriSessionPreview() {
 
   const currentWorkspace = workspaceRoot || session?.workspaceRoot || "";
 
+  async function refreshMCPServers() {
+    try {
+      setMcpServers(await tauriMCPServers(currentWorkspace || undefined));
+      setMcpNotice("");
+    } catch (cause) {
+      setMcpNotice(tauriMessageFrom(cause));
+    }
+  }
+
+  /** Credentials are write-only: an empty field keeps the stored value, so an
+   *  edit never requires retyping a token and never reveals one. */
+  async function saveMCPServer() {
+    if (!mcpDraft) return;
+    let input;
+    try {
+      input = mcpDraftToInput(mcpDraft);
+    } catch (cause) {
+      setMcpNotice(tauriMessageFrom(cause));
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await saveTauriMCPServer(input, currentWorkspace || undefined);
+      setMcpServers(result.servers);
+      setMcpDraft(null);
+      setMcpNotice("");
+    } catch (cause) {
+      setMcpNotice(tauriMessageFrom(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeMCPServer(server: TauriMCPServer) {
+    setBusy(true);
+    try {
+      const result = await deleteTauriMCPServer(server.name, currentWorkspace || undefined);
+      setMcpServers(result.servers);
+      if (mcpDraft?.name === server.name) setMcpDraft(null);
+      setMcpNotice("");
+    } catch (cause) {
+      setMcpNotice(tauriMessageFrom(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="tauri-shell" data-platform={platform}>
       <aside className="tauri-sidebar" aria-label="会话导航">
@@ -1326,6 +1389,30 @@ export function TauriSessionPreview() {
             <section className="tauri-diagnostic-card">
               <div className="tauri-diagnostic-card__heading"><h3>模型提供方</h3><button type="button" onClick={() => void tauriProviderSummary().then(setProviderSummary).catch(cause => setError(tauriMessageFrom(cause)))} disabled={busy}>刷新</button></div>
               {!providerSummary ? <p>正在读取 Preview 配置…</p> : <><p>默认模型只影响新对话；工作区 <code>reasonix.toml</code> 可能覆盖用户默认值。</p>{providerSummary.providers.length === 0 ? <p>当前没有配置提供方。</p> : <ul>{providerSummary.providers.map(provider => <li key={provider.name}><strong>{provider.displayName || provider.name}</strong><span>{provider.kind} · {provider.modelCount} 个模型 · {provider.configured ? "已就绪" : "缺少 API Key"}</span></li>)}</ul>}<small>密钥、环境变量名和服务端点不会传到界面。</small></>}
+            </section>
+            <section className="tauri-diagnostic-card">
+              <div className="tauri-diagnostic-card__heading"><h3>MCP 服务器</h3><span><button type="button" onClick={() => void refreshMCPServers()} disabled={busy}>刷新</button><button type="button" onClick={() => setMcpDraft(emptyMCPDraft(currentWorkspace ? "project" : "global"))} disabled={busy || mcpDraft !== null}>添加</button></span></div>
+              {mcpNotice && <p className="tauri-diagnostic-error" role="alert">{mcpNotice}</p>}
+              <p>项目级写入工作区的 <code>reasonix.toml</code>，全局级写入用户配置。密钥只写不回传。</p>
+              {mcpServers.length === 0 ? <p>还没有配置 MCP 服务器。</p> : <ul className="tauri-mcp-list">{mcpServers.map(server => <li key={server.name}>
+                <div className="tauri-mcp-list__row"><strong>{server.name}</strong><span className="tauri-mcp-list__meta">{server.scope === "project" ? "项目" : server.scope === "global" ? "全局" : server.scope} · {server.type}</span></div>
+                <code className="tauri-mcp-list__transport">{mcpTransportSummary(server) || "—"}</code>
+                {mcpCredentialHint(server) && <small>{mcpCredentialHint(server)}</small>}
+                {server.managedByPackage && <small>由已安装插件包管理，不能在此修改。</small>}
+                <div className="tauri-mcp-list__actions"><button type="button" onClick={() => setMcpDraft(mcpDraftForEditing(server))} disabled={busy || server.managedByPackage}>编辑</button><button type="button" onClick={() => void removeMCPServer(server)} disabled={busy || server.managedByPackage}>删除</button></div>
+              </li>)}</ul>}
+              {mcpDraft && <form className="tauri-mcp-form" onSubmit={event => { event.preventDefault(); void saveMCPServer(); }}>
+                <label>名称<input value={mcpDraft.name} onChange={event => setMcpDraft({ ...mcpDraft, name: event.target.value })} disabled={mcpDraft.editing} aria-label="MCP 服务器名称" /></label>
+                <label>作用域<select value={mcpDraft.scope} onChange={event => setMcpDraft({ ...mcpDraft, scope: event.target.value === "project" ? "project" : "global" })} disabled={mcpDraft.editing}><option value="project">项目（写入工作区 reasonix.toml）</option><option value="global">全局（写入用户配置）</option></select></label>
+                <label>传输<select value={mcpDraft.type} onChange={event => setMcpDraft({ ...mcpDraft, type: event.target.value === "http" ? "http" : event.target.value === "sse" ? "sse" : "stdio" })}><option value="stdio">stdio</option><option value="http">http</option><option value="sse">sse</option></select></label>
+                {mcpDraft.type === "stdio" ? <>
+                  <label>命令<input value={mcpDraft.command} onChange={event => setMcpDraft({ ...mcpDraft, command: event.target.value })} placeholder="uvx" aria-label="MCP 服务器命令" /></label>
+                  <label>参数<input value={mcpDraft.args} onChange={event => setMcpDraft({ ...mcpDraft, args: event.target.value })} placeholder="mcp-server-time" aria-label="MCP 服务器参数" /></label>
+                </> : <label>URL<input value={mcpDraft.url} onChange={event => setMcpDraft({ ...mcpDraft, url: event.target.value })} placeholder="https://…" aria-label="MCP 服务器 URL" /></label>}
+                <label>环境变量<textarea value={mcpDraft.env} onChange={event => setMcpDraft({ ...mcpDraft, env: event.target.value })} rows={2} placeholder="KEY=value，每行一个；留空保持原值" aria-label="MCP 服务器环境变量" /></label>
+                <label>请求头<textarea value={mcpDraft.headers} onChange={event => setMcpDraft({ ...mcpDraft, headers: event.target.value })} rows={2} placeholder="Header=value，每行一个；留空保持原值" aria-label="MCP 服务器请求头" /></label>
+                <div className="tauri-mcp-form__actions"><button type="submit" disabled={busy}>{mcpDraft.editing ? "保存修改" : "添加服务器"}</button><button type="button" onClick={() => setMcpDraft(null)} disabled={busy}>取消</button></div>
+              </form>}
             </section>
             <details className="tauri-diagnostic-card tauri-runtime-details"><summary>构建与版本详情</summary>{!runtimeInfo ? <p>正在读取构建信息…</p> : <dl><div><dt>稳定版基线</dt><dd>v{runtimeInfo.stableVersion} · {runtimeInfo.stableCommit.slice(0, 12)}</dd></div><div><dt>Preview / Tauri</dt><dd>v{runtimeInfo.previewVersion} · v{runtimeInfo.tauriVersion}</dd></div><div><dt>宿主构建时间</dt><dd>{runtimeInfo.previewBuild}</dd></div><div><dt>桥接协议</dt><dd>v{runtimeInfo.bridgeProtocolVersion}</dd></div><div><dt>Sidecar</dt><dd>{runtimeInfo.sidecarInstanceId ?? "未运行"}</dd></div>{session && <div><dt>会话 ID</dt><dd>{session.id}</dd></div>}{session && <div><dt>会话路径</dt><dd>{session.path}</dd></div>}{history && <div><dt>历史记录</dt><dd>{history.totalMessages} 条</dd></div>}<div><dt>事件游标</dt><dd>{sequence} · 最近 {events.length} 个事件</dd></div></dl>}</details>
             <details className="tauri-diagnostic-card tauri-event-details"><summary>桥接事件日志</summary>{events.length === 0 ? <p>开始一个对话后，这里会显示桥接事件。</p> : <ol>{events.map(event => <li key={event.sequence}><b>#{event.sequence} · {event.eventKind}</b><pre>{tauriEventSummary(event)}</pre></li>)}</ol>}</details>

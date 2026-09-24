@@ -15,7 +15,8 @@ use bridge::{
     BridgeAttachment, BridgeDeleteSessionResponse, BridgeHistory, BridgeProviderSummaryResponse,
     BridgeSession, BridgeSetDefaultModelRequest, BridgeSnapshot, BridgeStatus, BridgeSupervisor,
     BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
-    BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse, OpenSessionRequest,
+    BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse, MCPServerDeleteRequest,
+    MCPServerInput, MCPServerMutationResponse, MCPServerView, OpenSessionRequest,
     RenameSessionRequest, SessionPreview, SessionRequest, SubmitRequest,
     WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
 };
@@ -68,6 +69,32 @@ fn bridge_delete_session(
     request: SessionRequest,
 ) -> Result<BridgeDeleteSessionResponse, String> {
     supervisor.delete_session(request)
+}
+
+#[tauri::command]
+fn list_mcp_servers(
+    supervisor: State<'_, BridgeSupervisor>,
+    workspace_root: Option<String>,
+) -> Result<Vec<MCPServerView>, String> {
+    supervisor.mcp_servers(workspace_root.as_deref())
+}
+
+#[tauri::command]
+fn save_mcp_server(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: MCPServerInput,
+    workspace_root: Option<String>,
+) -> Result<MCPServerMutationResponse, String> {
+    supervisor.save_mcp_server(request, workspace_root.as_deref())
+}
+
+#[tauri::command]
+fn delete_mcp_server(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: MCPServerDeleteRequest,
+    workspace_root: Option<String>,
+) -> Result<MCPServerMutationResponse, String> {
+    supervisor.delete_mcp_server(request.name, workspace_root.as_deref())
 }
 
 #[tauri::command]
@@ -421,6 +448,9 @@ fn main() {
             bridge_switch_session,
             bridge_rename_session,
             bridge_delete_session,
+            list_mcp_servers,
+            save_mcp_server,
+            delete_mcp_server,
             bridge_session_snapshot,
             bridge_session_history,
             bridge_session_previews,

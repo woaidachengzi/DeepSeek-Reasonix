@@ -175,6 +175,21 @@ const commands: CommandContract[] = [
     description: "replayTauriPendingPrompts() invokes bridge_replay_pending_prompts with { request }",
   },
   {
+    command: "list_mcp_servers",
+    argKeys: ["workspaceRoot"],
+    description: "tauriMCPServers() invokes list_mcp_servers with workspaceRoot",
+  },
+  {
+    command: "save_mcp_server",
+    argKeys: ["request", "workspaceRoot"],
+    description: "saveTauriMCPServer() invokes save_mcp_server with request and workspaceRoot",
+  },
+  {
+    command: "delete_mcp_server",
+    argKeys: ["request", "workspaceRoot"],
+    description: "deleteTauriMCPServer() invokes delete_mcp_server with request and workspaceRoot",
+  },
+  {
     command: "bridge_start_events",
     argKeys: ["afterSequence"],
     description: "startTauriBridgeEvents() invokes bridge_start_events with { afterSequence }",

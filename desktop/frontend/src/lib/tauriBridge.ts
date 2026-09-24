@@ -134,6 +134,70 @@ export async function setTauriDefaultModel(model: string): Promise<TauriProvider
   return invoke<TauriProviderSummary>("set_default_model", { request: { model } });
 }
 
+/** One MCP server as the renderer may see it. Credentials are write-only: the
+ *  bridge returns the credential key names a server expects, never a value. */
+export interface TauriMCPServer {
+  name: string;
+  type: string;
+  source: string;
+  scope: "project" | "global" | "other";
+  configPath: string;
+  command?: string;
+  args?: string[];
+  url?: string;
+  envKeys?: string[];
+  headerKeys?: string[];
+  startupTimeoutSeconds?: number;
+  callTimeoutSeconds?: number;
+  autoStart?: boolean;
+  tier?: string;
+  managedByPackage?: boolean;
+}
+
+export interface TauriMCPServerInput {
+  scope: "project" | "global";
+  name: string;
+  type?: string;
+  command?: string;
+  args?: string[];
+  /** Credentials are write-only. Omit a field to keep the stored value; send an
+   *  empty object to clear it. */
+  env?: Record<string, string>;
+  url?: string;
+  headers?: Record<string, string>;
+  autoStart?: boolean;
+  tier?: string;
+}
+
+export interface TauriMCPServerMutation {
+  protocolVersion: number;
+  status: "saved" | "removed";
+  configPath?: string;
+  server?: TauriMCPServer;
+  servers: TauriMCPServer[];
+}
+
+export async function tauriMCPServers(workspaceRoot?: string): Promise<TauriMCPServer[]> {
+  requireTauri();
+  return invoke<TauriMCPServer[]>("list_mcp_servers", { workspaceRoot });
+}
+
+export async function saveTauriMCPServer(
+  server: TauriMCPServerInput,
+  workspaceRoot?: string,
+): Promise<TauriMCPServerMutation> {
+  requireTauri();
+  return invoke<TauriMCPServerMutation>("save_mcp_server", { request: server, workspaceRoot });
+}
+
+export async function deleteTauriMCPServer(
+  name: string,
+  workspaceRoot?: string,
+): Promise<TauriMCPServerMutation> {
+  requireTauri();
+  return invoke<TauriMCPServerMutation>("delete_mcp_server", { request: { name }, workspaceRoot });
+}
+
 export async function importTauriStableProfile(): Promise<TauriProfileImportResult> {
   requireTauri();
   return invoke<TauriProfileImportResult>("import_stable_profile", { confirmed: true });

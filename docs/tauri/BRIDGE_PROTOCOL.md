@@ -34,6 +34,9 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 删除会话 | `DELETE /v1/sessions/{sessionId}` | `X-Reasonix-Request-ID` 去重；仅空闲且为当前持有的会话 |
 | 会话快照 | `GET /v1/sessions/{sessionId}/snapshot` | 是 |
 | 只读会话清单 | `GET /v1/sessions/inventory?catalog=<path>` | 是；只读，不建库、不认领 |
+| MCP 服务器列表 | `GET /v1/mcp/servers?workspaceRoot=<path>` | 是；只返回凭据键名 |
+| 新增/编辑 MCP 服务器 | `POST /v1/mcp/servers?workspaceRoot=<path>` | `X-Reasonix-Request-ID` 去重；字段省略即保留原值 |
+| 删除 MCP 服务器 | `DELETE /v1/mcp/servers?workspaceRoot=<path>` | 否；不存在返回 `not_found` |
 | 可见历史 | `GET /v1/sessions/{sessionId}/history` | 是 |
 | 附加文件 | `POST /v1/sessions/{sessionId}:attach` | `X-Reasonix-Request-ID` 去重 |
 | 工作区目录（逐层） | `POST /v1/sessions/{sessionId}:workspace` | 是 |
@@ -50,6 +53,8 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 正常关闭 | `POST /v1:shutdown` | 是 |
 
 当前 bridge 已实现 health、脱敏 Provider 摘要、建/开会话、空闲会话的显式切换、重命名与删除、快照、可见历史、工作区附件、逐层工作区目录、受限工作区文件预览、Git 变更列表与受限 diff、submit、cancel、审批/ask/MCP 提示回答、断线后的待处理提示重放、SSE 事件与正常关闭。工作区目录只返回当前会话工作区下的一层，隐藏常见构建产物、依赖目录和 `.git`，每层最多 200 项；返回值只有相对路径，`..` 越界会被拒绝。文件预览只读取有限大小的常规文件；二进制或非法 UTF-8 文件仅返回 `binary: true`，不会把原始字节交给 renderer。Git 变更查询只执行固定的只读 Git 子命令，diff 输出限制为 2 MiB；非 Git 工作区会返回 `gitAvailable: false`，不会伪造“干净”。会话自定义标题写入 core 的 `.jsonl.meta`，不改动 transcript；标题为空、含控制字符或超过 120 个 Unicode 字符时会被拒绝。删除走 core 自身的产物清理（transcript、事件日志与 sidecar、guardian、inbox、checkpoint、子 agent 记录、cleanup 标记），只允许删除当前持有且空闲的会话，避免 host 误删另一个 host 正在使用的会话；删除成功后 bridge 释放该控制器且不再写回快照，否则会把刚删掉的文件重新创建出来。对已不存在的会话重复执行删除返回 `not_found`，而带同一 `X-Reasonix-Request-ID` 的传输重试重放首次响应。
+
+MCP 服务器管理按“列表 → 新增 → 编辑/删除”拆分。`GET /v1/mcp/servers` 返回每个服务器的 `name / type / source / scope / configPath / command / args / url / envKeys / headerKeys / autoStart / tier / managedByPackage`：**凭据只写不回传**——`envKeys` 与 `headerKeys` 只给出该服务器期望的键名，任何值都不会进入响应。`scope=project` 的写入由 `workspaceRoot` 选定的 `reasonix.toml`，`scope=global` 写入用户配置；已有条目按内核记录的真实来源写回，不会把项目级服务器提升为全局。`POST` 的 `args` / `env` / `headers` 用“字段省略 = 保留原值、显式空对象 = 清空”的语义，因此编辑不需要重输密钥；由已安装插件包管理的服务器会被拒绝修改。删除会从拥有该声明的配置文件移除，名称不存在时返回 `not_found`。
 
 `GET /v1/sessions/inventory` 是迁移前的只读盘点：返回 `sessionDir`、`identityPath`（由 sidecar 自身解析，**不接受调用方指定**）以及每行 `id / path / exists / registered / workspaceRoot / title / source / claim / detail`，并单列 `unclaimed`（磁盘上没有任何 catalog 或身份行解释的 transcript）与 `errors`（逐行问题）。`source` 取 `identity` / `workbench` / `scan`，`claim` 取 `registered`、`claimable`、`missing_file`、`path_conflict`、`path_changed`、`unclaimed_file`、`invalid_file`、`unreadable_file`。它**不创建身份库、不登记任何候选、不改动 transcript**；旧文件只作为候选列出，未在 catalog 中的文件不会被自动认领。会话 sidecar（`.events/.turns/.conflicts/.guardian`）不计入清单。`catalog` 参数可选，由宿主持有的 `workbench-sessions.json` 路径传入；它是只读输入。
 Provider 摘要仅包含配置名称、类型、已配置模型 ID、模型数量、是否需要凭据、凭据是否已配置及用户默认模型；不返回 endpoint、凭据变量名、密钥或请求 headers。模型 ID 仅用于本地下拉选择。

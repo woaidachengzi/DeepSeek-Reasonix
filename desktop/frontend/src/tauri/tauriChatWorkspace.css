@@ -502,3 +502,40 @@
 .tauri-settings-apikey-status { font-size: 10px; }
 .tauri-settings-apikey-status.is-success { color: var(--ok); }
 .tauri-settings-apikey-status.is-error { color: var(--err); }
+
+/* MCP server management: list rows and the add/edit form. */
+.tauri-mcp-list { display: grid; gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
+.tauri-mcp-list li { display: grid; gap: 3px; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface); }
+.tauri-mcp-list__row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.tauri-mcp-list__meta { color: var(--fg-faint); font-size: 11px; }
+.tauri-mcp-list__transport { overflow: hidden; color: var(--fg-dim); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.tauri-mcp-list li small { color: var(--fg-faint); font-size: 11px; }
+.tauri-mcp-list__actions { display: flex; gap: 6px; margin-top: 4px; }
+.tauri-mcp-list__actions button, .tauri-mcp-form__actions button, .tauri-diagnostic-card__heading button {
+  padding: 3px 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--fg) !important;
+  font-size: 12px;
+}
+.tauri-mcp-list__actions button:disabled, .tauri-mcp-form__actions button:disabled { opacity: .5; }
+.tauri-diagnostic-card__heading span { display: flex; gap: 6px; }
+
+.tauri-mcp-form { display: grid; gap: 8px; margin-top: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.tauri-mcp-form label { display: grid; gap: 3px; color: var(--fg-dim); font-size: 12px; }
+.tauri-mcp-form input, .tauri-mcp-form select, .tauri-mcp-form textarea {
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 12px;
+}
+.tauri-mcp-form input:focus, .tauri-mcp-form select:focus, .tauri-mcp-form textarea:focus { border-color: var(--accent); }
+.tauri-mcp-form input:disabled { opacity: .6; }
+.tauri-mcp-form textarea { resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.tauri-mcp-form__actions { display: flex; gap: 6px; }
+.tauri-diagnostic-error { color: var(--danger, #d64545); font-size: 12px; }

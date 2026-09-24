@@ -151,6 +151,85 @@ pub struct BridgeHistory {
     pub total_messages: u64,
 }
 
+/// One MCP server as the host may see it. Credential material is write-only, so
+/// this carries the key names a server expects and never a value. Hand-written
+/// like the other host-owned payloads: the wire shape belongs to this host, not
+/// to the frozen bridge schema.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPServerView {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub source: String,
+    pub scope: String,
+    pub config_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub args: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub env_keys: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub header_keys: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_start: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tier: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub managed_by_package: Option<bool>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPServerListResponse {
+    pub protocol_version: u64,
+    pub servers: Vec<MCPServerView>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPServerInput {
+    pub scope: String,
+    pub name: String,
+    #[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
+    pub mcp_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub args: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub env: Option<std::collections::BTreeMap<String, String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub headers: Option<std::collections::BTreeMap<String, String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_start: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tier: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPServerDeleteRequest {
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPServerMutationResponse {
+    pub protocol_version: u64,
+    pub status: String,
+    #[serde(default)]
+    pub config_path: Option<String>,
+    #[serde(default)]
+    pub server: Option<MCPServerView>,
+    pub servers: Vec<MCPServerView>,
+}
+
 pub struct BridgeSupervisor {
     launcher: BridgeLauncher,
     process: Mutex<Option<BridgeProcess>>,
@@ -508,6 +587,55 @@ impl BridgeSupervisor {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
         Ok(summary)
+    }
+
+    /// Lists the effective MCP servers for a workspace. Credentials never cross
+    /// this boundary: the bridge returns key names only.
+    pub fn mcp_servers(&self, workspace_root: Option<&str>) -> Result<Vec<MCPServerView>, String> {
+        let path = mcp_path("/v1/mcp/servers", workspace_root)?;
+        let response = self.request_json("GET", &path, None, None)?;
+        let envelope: MCPServerListResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope.servers)
+    }
+
+    pub fn save_mcp_server(
+        &self,
+        input: MCPServerInput,
+        workspace_root: Option<&str>,
+    ) -> Result<MCPServerMutationResponse, String> {
+        let request_id = opaque_secret()?;
+        let path = mcp_path("/v1/mcp/servers", workspace_root)?;
+        let response = self.request_json("POST", &path, Some(json!(input)), Some(&request_id))?;
+        let envelope: MCPServerMutationResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope)
+    }
+
+    pub fn delete_mcp_server(
+        &self,
+        name: String,
+        workspace_root: Option<&str>,
+    ) -> Result<MCPServerMutationResponse, String> {
+        let path = mcp_path("/v1/mcp/servers", workspace_root)?;
+        let response = self.request_json(
+            "DELETE",
+            &path,
+            Some(json!(MCPServerDeleteRequest { name })),
+            None,
+        )?;
+        let envelope: MCPServerMutationResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope)
     }
 
     pub fn set_default_model(
@@ -1185,6 +1313,31 @@ fn prompt_id_component(prompt_id: &str) -> Result<String, String> {
         return Err("desktop bridge prompt identifier is invalid".to_string());
     }
     Ok(prompt_id.to_string())
+}
+
+/// Builds an MCP endpoint with an optional workspace root. The root selects the
+/// project configuration file, so it travels as a query parameter and is bounds
+/// checked here rather than trusted by the sidecar.
+fn mcp_path(base: &str, workspace_root: Option<&str>) -> Result<String, String> {
+    let Some(root) = workspace_root
+        .map(str::trim)
+        .filter(|root| !root.is_empty())
+    else {
+        return Ok(base.to_string());
+    };
+    if root.len() > 4096 || root.contains('\0') {
+        return Err("desktop bridge workspace path is invalid".to_string());
+    }
+    let mut encoded = String::with_capacity(root.len() * 3);
+    for byte in root.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
+                encoded.push(byte as char)
+            }
+            _ => encoded.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    Ok(format!("{base}?workspaceRoot={encoded}"))
 }
 
 fn forward_events(

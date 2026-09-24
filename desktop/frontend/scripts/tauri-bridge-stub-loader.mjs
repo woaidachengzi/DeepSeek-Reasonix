@@ -229,6 +229,38 @@ export function onTauriBridgeConnectionError(callback) { globalThis.__emitBridge
 export function onTauriBridgeConnectionRestored(callback) { globalThis.__emitBridgeRestored = callback; return Promise.resolve(() => { if (globalThis.__emitBridgeRestored === callback) globalThis.__emitBridgeRestored = undefined; }); }
 export function onTauriBridgeResyncRequired(callback) { globalThis.__emitBridgeResync = callback; return Promise.resolve(() => { if (globalThis.__emitBridgeResync === callback) globalThis.__emitBridgeResync = undefined; }); }
 
+export function tauriMCPServers(workspaceRoot) {
+  record("list_mcp_servers", { workspaceRoot });
+  return Promise.resolve((globalThis.__mcpServers ?? []).slice());
+}
+
+export function saveTauriMCPServer(server, workspaceRoot) {
+  record("save_mcp_server", { server, workspaceRoot });
+  const list = (globalThis.__mcpServers ?? []).filter(entry => entry.name !== server.name);
+  const saved = {
+    name: server.name,
+    type: server.type ?? "stdio",
+    source: server.scope === "project" ? "project_config" : "user_config",
+    scope: server.scope,
+    configPath: "/tmp/config.toml",
+    command: server.command,
+    args: server.args,
+    url: server.url,
+    envKeys: server.env ? Object.keys(server.env) : (globalThis.__mcpServers ?? []).find(entry => entry.name === server.name)?.envKeys,
+    headerKeys: server.headers ? Object.keys(server.headers) : (globalThis.__mcpServers ?? []).find(entry => entry.name === server.name)?.headerKeys,
+  };
+  list.push(saved);
+  globalThis.__mcpServers = list;
+  return Promise.resolve({ protocolVersion: 1, status: "saved", configPath: saved.configPath, server: saved, servers: list.slice() });
+}
+
+export function deleteTauriMCPServer(name, workspaceRoot) {
+  record("delete_mcp_server", { name, workspaceRoot });
+  const list = (globalThis.__mcpServers ?? []).filter(entry => entry.name !== name);
+  globalThis.__mcpServers = list;
+  return Promise.resolve({ protocolVersion: 1, status: "removed", servers: list.slice() });
+}
+
 export function tauriAssistantTextDelta() { return ""; }
 export function tauriComposerInput(prompt, attachments) { return prompt.trim(); }
 export function tauriEventSummary(event) { return JSON.stringify(event.payload); }
