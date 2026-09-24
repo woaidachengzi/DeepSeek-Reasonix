@@ -146,6 +146,7 @@ CREATE INDEX sessions_visible_order ON sessions(state, position, id);
 - `Open` 在任何可持久修改现有数据库的操作前，先读取并验证 `user_version`、完整性和路径归属；未来 schema/损坏库应拒绝打开，不能“修成空库”。先配置 `busy_timeout`，再做可能取锁的初始化。`journal_mode=WAL` 是持久变更，不能放在“未来 schema 零改动”检查之前；身份库使用 `synchronous=FULL`。测试未来库拒绝时，不只检查版本值，也检查文件和伴随文件未被意外改写。
 - managed Preview 启动时必须核对规范化 `REASONIX_HOME`、`REASONIX_STATE_HOME` 与实际 `SessionDir()`/身份库路径。不能让继承的 `REASONIX_STATE_HOME` 指向稳定版目录；要么将 managed state 明确路由到 Preview，要么拒绝启动身份迁移并给出诊断。显式自定义 profile 保留为用户选择，但应标记非隔离且禁止自动导入稳定版。
 - 同一 canonical state root 的多进程写入需 profile 级锁或等价的唯一 sidecar 所有权；Tauri 单实例插件不能代替它。锁覆盖数据库操作与 JSONL 写入切换，不仅覆盖 UI。
+- 当前 bridge 在发布 ready 前获取 `internal/profilegate` 的独占锁，运行时关闭后才释放；同一 profile 的第二个**已接入锁**的 bridge 会拒绝启动。此门禁只覆盖使用该协议的新进程，不能检测或停止 1.38.3/1.38.10 等旧写者。真实 profile 的离线快照、导入与回退仍须由外部确认所有旧写者已退出；不得把获取新锁视为静默迁移许可。
 - 身份库、JSONL、侧车、Markdown 和 host catalog 的备份是**一组跨资源快照**。运行中仅对 SQLite 使用 backup API，不能保证它与 JSONL 同时点一致；完整迁移/回退备份须暂停写入后做，记录 manifest/hash 并演练恢复。禁止只复制活跃 WAL 下的 `.sqlite` 单文件。
 
 ## 5. 交付切片与退出条件

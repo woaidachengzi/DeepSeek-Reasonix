@@ -24,7 +24,9 @@ import (
 	"sync"
 	"time"
 
+	appconfig "reasonix/internal/config"
 	"reasonix/internal/desktopbridge"
+	"reasonix/internal/profilegate"
 )
 
 const (
@@ -96,7 +98,7 @@ func consumeBridgeToken() (string, error) {
 	return token, nil
 }
 
-func run(ctx context.Context, cfg config, token string) error {
+func run(ctx context.Context, cfg config, token string) (runErr error) {
 	if cfg.readyFile == "" {
 		return errors.New("--ready-file is required")
 	}
@@ -109,6 +111,15 @@ func run(ctx context.Context, cfg config, token string) error {
 	if err := requireLoopbackAddress(cfg.listen); err != nil {
 		return err
 	}
+	sessionDir := appconfig.SessionDir()
+	if sessionDir == "" {
+		return errors.New("session profile root is unavailable")
+	}
+	releaseProfile, err := profilegate.TryAcquire(filepath.Dir(sessionDir))
+	if err != nil {
+		return fmt.Errorf("session profile ownership: %w", err)
+	}
+	defer releaseProfile()
 
 	listener, err := net.Listen("tcp", cfg.listen)
 	if err != nil {
@@ -122,6 +133,11 @@ func run(ctx context.Context, cfg config, token string) error {
 	}
 	events := desktopbridge.NewEventStream(1024)
 	manager := desktopbridge.NewRuntimeManager(newControllerFactory(events))
+	defer func() {
+		if err := manager.Shutdown(); err != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("close session runtime: %w", err))
+		}
+	}()
 	bridge := newBridgeServerWithEvents(token, instanceID, manager, events)
 	ready := readyFile{
 		ProtocolVersion:   desktopbridge.ProtocolVersion,

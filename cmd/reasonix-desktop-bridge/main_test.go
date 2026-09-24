@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +14,7 @@ import (
 
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/event"
+	"reasonix/internal/profilegate"
 )
 
 const testToken = "0123456789abcdef0123456789abcdef"
@@ -697,6 +699,8 @@ func TestRequireLoopbackAddress(t *testing.T) {
 }
 
 func TestRunPublishesReadyHealthAndShutdown(t *testing.T) {
+	profileRoot := t.TempDir()
+	t.Setenv("REASONIX_STATE_HOME", profileRoot)
 	readyPath := filepath.Join(t.TempDir(), "ready.json")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -712,6 +716,11 @@ func TestRunPublishesReadyHealthAndShutdown(t *testing.T) {
 	var ready readyFile
 	deadline := time.Now().Add(5 * time.Second)
 	for {
+		select {
+		case err := <-errCh:
+			t.Fatalf("bridge exited before readiness: %v", err)
+		default:
+		}
 		content, err := os.ReadFile(readyPath)
 		if err == nil && json.Unmarshal(content, &ready) == nil && ready.Address != "" {
 			break
@@ -723,6 +732,9 @@ func TestRunPublishesReadyHealthAndShutdown(t *testing.T) {
 	}
 	if ready.LaunchID != "test-launch" || ready.ProtocolVersion != desktopbridge.ProtocolVersion {
 		t.Fatalf("ready = %#v", ready)
+	}
+	if _, err := profilegate.TryAcquire(profileRoot); !errors.Is(err, profilegate.ErrHeld) {
+		t.Fatalf("ready bridge does not own profile: %v", err)
 	}
 
 	healthRequest, err := http.NewRequest(http.MethodGet, "http://"+ready.Address+"/v1/health", nil)
@@ -757,6 +769,31 @@ func TestRunPublishesReadyHealthAndShutdown(t *testing.T) {
 	}
 	if _, err := os.Stat(readyPath); !os.IsNotExist(err) {
 		t.Fatalf("ready file remained after shutdown: %v", err)
+	}
+	release, err := profilegate.TryAcquire(profileRoot)
+	if err != nil {
+		t.Fatalf("profile ownership remained after shutdown: %v", err)
+	}
+	release()
+}
+
+func TestRunRejectsSecondProfileOwnerBeforePublishingReady(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_STATE_HOME", root)
+	release, err := profilegate.TryAcquire(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	readyPath := filepath.Join(t.TempDir(), "ready.json")
+	err = run(context.Background(), config{
+		listen: "127.0.0.1:0", readyFile: readyPath, launchID: "second-owner",
+	}, testToken)
+	if !errors.Is(err, profilegate.ErrHeld) {
+		t.Fatalf("run error = %v, want profile owner conflict", err)
+	}
+	if _, err := os.Stat(readyPath); !os.IsNotExist(err) {
+		t.Fatalf("second owner published readiness: %v", err)
 	}
 }
 
