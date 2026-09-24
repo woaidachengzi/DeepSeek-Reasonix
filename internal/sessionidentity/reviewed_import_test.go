@@ -196,7 +196,7 @@ func TestReviewedImportStrictRegistrationNeverSkipsSelectedMissingFile(t *testin
 	err = identities.importCandidates(ctx, sessionDir, []Candidate{
 		{ID: "tauri-present", Path: present},
 		{ID: "tauri-missing", Path: missing},
-	}, true)
+	}, true, false, false)
 	if !errors.Is(err, ErrImportReviewChanged) {
 		t.Fatalf("strict import of missing selected file = %v", err)
 	}

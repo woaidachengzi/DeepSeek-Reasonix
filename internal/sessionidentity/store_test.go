@@ -159,7 +159,7 @@ func TestReservedIdentitySurvivesSidecarsAndTransitions(t *testing.T) {
 	if err != nil || record.State != StateMissing {
 		t.Fatalf("unreviewed file appearance recovered missing identity: %#v, %v", record, err)
 	}
-	if err := store.importCandidates(ctx, sessionDir, []Candidate{candidate}, true); err != nil {
+	if err := store.importCandidates(ctx, sessionDir, []Candidate{candidate}, true, false, false); err != nil {
 		t.Fatal(err)
 	}
 	record, _, err = store.Get(ctx, "draft")
@@ -406,6 +406,38 @@ func TestOpenRejectsFutureSchemaWithoutChangingIt(t *testing.T) {
 	var version int
 	if err := db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 99 {
 		t.Fatalf("future schema version = %d, %v", version, err)
+	}
+}
+
+func TestImportLegacyCatalogPreservesMissingRowsAndIsIdempotent(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(sessionDir, "tauri-legacy-missing.jsonl")
+	store, err := Open(ctx, filepath.Join(root, "desktop", "state.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	candidates := []Candidate{{ID: "legacy-missing", Path: path, Title: "Old title", Position: 0}}
+	if err := store.ImportLegacyCatalog(ctx, sessionDir, candidates); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ImportLegacyCatalog(ctx, sessionDir, []Candidate{{ID: "legacy-missing", Path: path, Title: "Stale title", Position: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	record, ok, err := store.Get(ctx, "legacy-missing")
+	if err != nil || !ok {
+		t.Fatalf("legacy record lookup: ok=%v err=%v", ok, err)
+	}
+	if record.State != StateMissing || !record.Missing || record.Title != "Old title" || record.Position != 0 {
+		t.Fatalf("legacy missing row was lost or overwritten: %#v", record)
+	}
+	if err := store.ImportLegacyCatalog(ctx, sessionDir, make([]Candidate, 51)); err == nil {
+		t.Fatal("oversized legacy catalog was accepted")
 	}
 }
 

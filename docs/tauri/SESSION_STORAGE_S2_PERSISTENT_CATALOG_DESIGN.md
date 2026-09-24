@@ -1,7 +1,7 @@
 # 第 5 项设计稿：持久会话目录与完整项目树（存储 S2）
 
 > 状态：**部分实现**。身份库 schema v3 生命周期状态、首次会话 reservation、恢复前状态检查及
-> 残留 sidecar 防误复用、身份库 keyset 分页、bridge 只读列表接口及删除状态的存储 API 已实现；
+> 残留 sidecar 防误复用、身份库 keyset 分页、bridge 只读列表接口、删除状态的存储 API 及旧 JSON catalog 幂等导入已实现；
 > host 权威切换、bridge 删除清理接线与 UI 恢复选项仍未实现。侧栏当前仍受 host JSON 的 50 条上限约束。
 > 本文继续作为其余工作契约、验收条件、测试矩阵与回退路径。
 >
@@ -112,6 +112,9 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
   （严格 `>` 比较：`position > cursorPosition || (position == cursorPosition && id > cursorId)`）。
   每项至少含 `id / title / titleSource / workspaceRoot / state / missing / position / updatedAtMs`，
   **不含** transcript 内容、不含凭据类字段。
+- 迁移入口 `POST /v1/sessions/import-catalog` 与 host 启动调用已接入：最多接收旧 JSON 的
+  50 项；仅插入身份库中不存在的记录，保留旧目录顺序、标题与工作区；缺失 transcript 作为
+  `missing` 保留。重复调用不会覆盖身份库中较新的元数据，JSON 文件仍不修改。
 - host 首次只取一页（例如 200 条），滚动到底再取下一页；**不再有丢弃**。
 - 迁移：`workbench-sessions.json` 的现有条目一次性导入身份库（沿用第 2、3 项已交付的
   `Import` 与 `ImportWorkbenchCatalog`，路径已同源）。导入后该文件转为只读回退输入。
@@ -148,10 +151,11 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 | **5.0** | `resumeBridgeSession` 按身份状态优先判定；新 ID 先 reservation；识别缺文件与残留 sidecar | 已覆盖 `reserved/ready/missing`、v2→v3 迁移、missing 文件恢复后仍拒绝复活、sidecar-only 残留拒绝新建 | 当前 schema 仍保留 transcript 与旧 JSON 清单；回退需保留 v2 DB 备份 |
 | **5.1** | 完成删除 tombstone 状态写入 | `deleting/deleted` 由删除流程写入且不可重用；身份库分页已实现 | 保留 v3 备份文件即可回退读取 |
 | **5.2** | bridge `GET /v1/sessions` 分页列表 | 已实现身份库分页和 bridge 接口；host 尚未切换读取 | 端点只是新增，host 不读即无影响 |
-| **5.3** | host 切换到 bridge 列表，JSON 作为回退 | 新旧列表 diff 为零或可解释；重启后 ID 不变；侧栏项目树完整 | host 改回读 JSON（一个常量开关） |
+| **5.3** | host 切换到 bridge 列表，JSON 作为回退 | 旧 JSON 幂等导入已接入；新旧列表 diff 与权威切换仍待实现 | host 改回读 JSON（一个常量开关） |
 | **5.4** | missing/deleting/deleted 的用户可见处理 + 重启续做清理 | 删除中途 kill → 重启后清理完成或可重试；missing 会话有明确提示且不可"以空会话打开" | 状态回退为 `missing` 等待用户决定 |
 
-5.0、schema 生命周期基础及 5.2 后端接口已落地；5.1 删除 tombstone 与 5.3–5.4 仍按序实施。
+5.0、schema 生命周期基础、5.2 后端接口及 5.3 的旧目录导入前置已落地；5.1 删除清理接线、
+5.3 影子比对/权威切换与 5.4 UI 恢复选项仍待实施。
 
 ## 5. 测试矩阵
 

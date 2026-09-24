@@ -49,5 +49,5 @@ func (s *Store) ImportWorkbenchCatalog(ctx context.Context, sessionDir, catalogP
 			WorkspaceRoot: workspace, Title: entry.Title, Position: position,
 		})
 	}
-	return s.Import(ctx, sessionDir, candidates)
+	return s.ImportLegacyCatalog(ctx, sessionDir, candidates)
 }

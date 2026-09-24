@@ -208,6 +208,11 @@ export async function tauriWorkbenchSessions(): Promise<TauriWorkbenchSession[]>
   return invoke<TauriWorkbenchSession[]>("workbench_sessions");
 }
 
+export async function tauriImportLegacySessionCatalog(): Promise<number> {
+  requireTauri();
+  return invoke<number>("bridge_import_legacy_session_catalog");
+}
+
 export async function tauriSessionPreviews(sessionIds: string[]): Promise<TauriSessionPreview[]> {
   requireTauri();
   return invoke<TauriSessionPreview[]>("bridge_session_previews", { sessionIds });

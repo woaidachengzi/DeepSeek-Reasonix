@@ -96,6 +96,21 @@ pub struct SessionDirectoryPage {
     pub total: u64,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LegacySessionCatalogEntry {
+    pub session_id: String,
+    pub title: Option<String>,
+    pub workspace_root: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LegacyCatalogImportResponse {
+    protocol_version: u64,
+    accepted: usize,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenameSessionRequest {
@@ -569,6 +584,33 @@ impl BridgeSupervisor {
         let page: SessionDirectoryPage = serde_json::from_value(response).map_err(display_error)?;
         validate_session_directory_page(&page, limit, cursor.as_ref(), workspace_root)?;
         Ok(page)
+    }
+
+    /// Imports the bounded host catalog once into the identity store. The Go
+    /// side only inserts absent rows, so retries cannot overwrite newer title,
+    /// workspace, or ordering metadata.
+    pub fn import_legacy_session_catalog(
+        &self,
+        sessions: Vec<LegacySessionCatalogEntry>,
+    ) -> Result<usize, String> {
+        if sessions.len() > 50 {
+            return Err("legacy session catalog exceeds the migration limit".to_string());
+        }
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/sessions/import-catalog",
+            Some(json!({ "sessions": sessions })),
+            Some(&request_id),
+        )?;
+        let envelope: LegacyCatalogImportResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION)
+            || envelope.accepted > sessions.len()
+        {
+            return Err("desktop bridge catalog import response is invalid".to_string());
+        }
+        Ok(envelope.accepted)
     }
 
     pub fn delete_session(

@@ -171,7 +171,7 @@ func (s *Store) ApplyImportReview(ctx context.Context, plan ImportReview) error 
 	for i, row := range plan.Rows {
 		candidates[i] = row.Candidate
 	}
-	return s.importCandidates(ctx, plan.SessionDir, candidates, true)
+	return s.importCandidates(ctx, plan.SessionDir, candidates, true, false, false)
 }
 
 func fileSHA256(ctx context.Context, path string) (string, error) {

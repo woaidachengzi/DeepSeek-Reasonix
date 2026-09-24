@@ -394,6 +394,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("GET /v1/sessions/{id}/snapshot", b.authorized(b.sessionSnapshot))
 	mux.HandleFunc("GET /v1/sessions/{id}/history", b.authorized(b.sessionHistory))
 	mux.HandleFunc("GET /v1/sessions", b.authorized(b.sessionList))
+	mux.HandleFunc("POST /v1/sessions/import-catalog", b.authorized(b.importLegacyCatalog))
 	mux.HandleFunc("GET /v1/sessions/inventory", b.authorized(b.sessionInventory))
 	mux.HandleFunc("GET /v1/mcp/servers", b.authorized(b.listMCPServers))
 	mux.HandleFunc("POST /v1/mcp/servers", b.authorized(b.idempotent(256<<10, b.upsertMCPServer)))

@@ -242,10 +242,20 @@ func (s *Store) Close() error {
 }
 
 func (s *Store) Import(ctx context.Context, previewRoot string, candidates []Candidate) error {
-	return s.importCandidates(ctx, previewRoot, candidates, false)
+	return s.importCandidates(ctx, previewRoot, candidates, false, false, false)
 }
 
-func (s *Store) importCandidates(ctx context.Context, previewRoot string, candidates []Candidate, requirePresent bool) error {
+// ImportLegacyCatalog migrates the host's bounded legacy catalog without
+// overwriting existing identity metadata. Missing transcripts are retained as
+// visible missing rows so migration never silently drops a legacy entry.
+func (s *Store) ImportLegacyCatalog(ctx context.Context, previewRoot string, candidates []Candidate) error {
+	if len(candidates) > 50 {
+		return errors.New("legacy catalog contains too many sessions")
+	}
+	return s.importCandidates(ctx, previewRoot, candidates, false, true, true)
+}
+
+func (s *Store) importCandidates(ctx context.Context, previewRoot string, candidates []Candidate, requirePresent, preserveMissing, preserveExisting bool) error {
 	root, err := filepath.Abs(previewRoot)
 	if err != nil || strings.TrimSpace(previewRoot) == "" {
 		return errors.New("preview root is invalid")
@@ -297,7 +307,7 @@ func (s *Store) importCandidates(ctx context.Context, previewRoot string, candid
 			FROM sessions WHERE id=?`, incoming.ID).Scan(&current.Path, &current.WorkspaceRoot, &current.Title,
 			&current.Position, &current.State, &current.CreatedAtMS, &current.UpdatedAtMS)
 		if errors.Is(err, sql.ErrNoRows) {
-			if incoming.Missing {
+			if incoming.Missing && !preserveMissing {
 				continue
 			}
 			source := TitleFallback
@@ -321,6 +331,9 @@ func (s *Store) importCandidates(ctx context.Context, previewRoot string, candid
 		}
 		if current.State == StateDeleting || current.State == StateDeleted {
 			return fmt.Errorf("%w: %s", ErrSessionStateConflict, incoming.ID)
+		}
+		if preserveExisting {
+			continue
 		}
 		// Import is registration/reconciliation, never a title command. The
 		// catalog can be stale after a manual rename or automatic generation.

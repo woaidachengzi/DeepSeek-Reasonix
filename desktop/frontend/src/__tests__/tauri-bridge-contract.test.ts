@@ -215,6 +215,11 @@ const commands: CommandContract[] = [
     description: "tauriWorkbenchSessions() invokes workbench_sessions with no args",
   },
   {
+    command: "bridge_import_legacy_session_catalog",
+    argKeys: [],
+    description: "tauriImportLegacySessionCatalog() invokes bridge_import_legacy_session_catalog with no args",
+  },
+  {
     command: "backfill_workbench_titles",
     argKeys: ["titles"],
     description: "backfillTauriWorkbenchTitles() invokes backfill_workbench_titles with { titles }",

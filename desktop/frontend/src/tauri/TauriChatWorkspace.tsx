@@ -78,6 +78,7 @@ import {
   tauriTitleError,
   tauriTurnFailure,
   tauriWorkbenchSessions,
+  tauriImportLegacySessionCatalog,
   type TauriMCPServer,
   type TauriBridgeEvent,
   type TauriBridgeAttachment,
@@ -376,6 +377,10 @@ export function TauriSessionPreview() {
     let active = true;
     void (async () => {
       try {
+        // One-time, idempotent migration. The JSON catalog remains the visible
+        // source until the identity directory has been shadow-verified.
+        try { await tauriImportLegacySessionCatalog(); } catch { /* keep legacy catalog usable while the bridge is unavailable */ }
+        if (!active) return;
         const listed = await tauriWorkbenchSessions();
         if (!active) return;
         setTabs(listed);

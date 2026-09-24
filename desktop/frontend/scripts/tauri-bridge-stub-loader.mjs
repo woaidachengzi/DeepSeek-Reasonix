@@ -77,6 +77,11 @@ export function tauriWorkbenchSessions() {
   return Promise.resolve((globalThis.__workbenchSessions ?? []).slice());
 }
 
+export function tauriImportLegacySessionCatalog() {
+  record("bridge_import_legacy_session_catalog");
+  return Promise.resolve((globalThis.__workbenchSessions ?? []).length);
+}
+
 export function tauriSessionPreviews(sessionIds) {
   record("bridge_session_previews", { sessionIds });
   return Promise.resolve(sessionIds.map(sessionId => ({ sessionId, firstUser: globalThis.__previewFirstUsers?.[sessionId] ?? "" })));

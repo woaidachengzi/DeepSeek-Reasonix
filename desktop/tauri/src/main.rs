@@ -15,11 +15,11 @@ use bridge::{
     BridgeAttachment, BridgeDeleteSessionResponse, BridgeHistory, BridgeProviderSummaryResponse,
     BridgeSession, BridgeSetDefaultModelRequest, BridgeSnapshot, BridgeStatus, BridgeSupervisor,
     BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
-    BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse, MCPServerDeleteRequest,
-    MCPServerInput, MCPServerMutationResponse, MCPServerView, OpenSessionRequest,
-    RenameSessionRequest, SessionDirectoryCursor, SessionDirectoryPage, SessionPreview,
-    SessionRequest, SubmitRequest, WorkspaceChangeDetailRequest, WorkspaceFileRequest,
-    WorkspaceRequest,
+    BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse, LegacySessionCatalogEntry,
+    MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse, MCPServerView,
+    OpenSessionRequest, RenameSessionRequest, SessionDirectoryCursor, SessionDirectoryPage,
+    SessionPreview, SessionRequest, SubmitRequest, WorkspaceChangeDetailRequest,
+    WorkspaceFileRequest, WorkspaceRequest,
 };
 use data_profile::{PreviewProfile, PreviewProfileStatus, ProfileImportResult};
 use runtime_info::PreviewRuntimeInfo;
@@ -273,6 +273,23 @@ fn bridge_session_directory_page(
 }
 
 #[tauri::command]
+fn bridge_import_legacy_session_catalog(
+    supervisor: State<'_, BridgeSupervisor>,
+    catalog: State<'_, WorkbenchCatalog>,
+) -> Result<usize, String> {
+    let sessions = catalog
+        .list()?
+        .into_iter()
+        .map(|session| LegacySessionCatalogEntry {
+            session_id: session.session_id,
+            title: session.title,
+            workspace_root: session.workspace_root,
+        })
+        .collect();
+    supervisor.import_legacy_session_catalog(sessions)
+}
+
+#[tauri::command]
 fn backfill_workbench_titles(
     catalog: State<'_, WorkbenchCatalog>,
     titles: Vec<WorkbenchTitle>,
@@ -466,6 +483,7 @@ fn main() {
             bridge_session_history,
             bridge_session_previews,
             bridge_session_directory_page,
+            bridge_import_legacy_session_catalog,
             bridge_submit,
             bridge_attach_file,
             bridge_workspace,
