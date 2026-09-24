@@ -141,12 +141,23 @@ async function main() {
     await settle();
   });
   ok(bridgeCalls().some(call => call.name === "bridge_start_events"), "opening a conversation starts the event subscription");
-  ok(document.querySelector<HTMLTextAreaElement>("textarea")?.disabled, "subscription command completion alone does not enable sending");
+  ok(document.querySelector<HTMLTextAreaElement>("textarea")?.disabled !== true, "the composer still accepts typing before the stream connects");
+  // Send is gated on the event stream and on having content; seed a draft so
+  // the assertions measure stream readiness alone.
+  const seedDraft = async () => {
+    const box = document.querySelector<HTMLTextAreaElement>("textarea");
+    if (!box) return;
+    Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, "value")!.set!.call(box, "hello stream");
+    box.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    await act(async () => { await settle(); });
+  };
+  await seedDraft();
+  ok(document.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]')?.disabled, "subscription command completion alone does not enable sending");
   await act(async () => {
     (globalThis as unknown as { __emitBridgeRestored?: () => void }).__emitBridgeRestored?.();
     await settle();
   });
-  ok(!document.querySelector<HTMLTextAreaElement>("textarea")?.disabled, "confirmed initial event connection enables sending");
+  ok(!document.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]')?.disabled, "confirmed initial event connection enables sending");
   (globalThis as unknown as { __holdStreamReady?: boolean }).__holdStreamReady = false;
   ok(text().includes("const answer = 42"), "the Tauri entry renders historical Markdown without a localization crash");
 
@@ -300,9 +311,10 @@ async function main() {
     __emitBridgeResync?: () => void;
   };
   await act(async () => { streamCallbacks.__emitBridgeError?.("temporarily unavailable"); });
-  ok(document.querySelector<HTMLTextAreaElement>("textarea")?.disabled, "event stream outage disables sending");
+  await seedDraft();
+  ok(document.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]')?.disabled, "event stream outage disables sending");
   await act(async () => { streamCallbacks.__emitBridgeRestored?.(); await settle(); });
-  ok(!document.querySelector<HTMLTextAreaElement>("textarea")?.disabled, "reconnected event stream re-enables sending");
+  ok(!document.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]')?.disabled, "reconnected event stream re-enables sending");
 
   const snapshotsBeforeResync = bridgeCalls().filter(call => call.name === "bridge_session_snapshot").length;
   const subscriptionsBeforeResync = bridgeCalls().filter(call => call.name === "bridge_start_events").length;
@@ -310,10 +322,11 @@ async function main() {
   await act(async () => { streamCallbacks.__emitBridgeResync?.(); await settle(); await settle(); });
   eq(bridgeCalls().filter(call => call.name === "bridge_session_snapshot").length, snapshotsBeforeResync + 1, "expired replay window fetches a fresh snapshot");
   eq(bridgeCalls().filter(call => call.name === "bridge_start_events").length, subscriptionsBeforeResync + 1, "resync starts a new event subscription");
-  ok(document.querySelector<HTMLTextAreaElement>("textarea")?.disabled, "outage during subscription setup cannot re-enable sending");
+  ok(document.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]')?.disabled, "outage during subscription setup cannot re-enable sending");
   (globalThis as unknown as { __outageOnStart?: boolean }).__outageOnStart = false;
   await act(async () => { streamCallbacks.__emitBridgeRestored?.(); await settle(); });
-  ok(!document.querySelector<HTMLTextAreaElement>("textarea")?.disabled, "recovery after setup outage re-enables sending");
+  await seedDraft();
+  ok(!document.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]')?.disabled, "recovery after setup outage re-enables sending");
 
   const replayed = { sessionId: "tauri-kept-row", sequence: 1, eventKind: "text", payload: { kind: "text", text: "hello" } };
   await act(async () => { streamCallbacks.__emitBridgeEvent?.(replayed); streamCallbacks.__emitBridgeEvent?.(replayed); });
