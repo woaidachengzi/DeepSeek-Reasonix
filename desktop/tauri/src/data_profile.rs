@@ -1,6 +1,6 @@
 use std::{
     env, fs,
-    io::Write,
+    io::{Read, Write},
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -228,7 +228,20 @@ impl PreviewProfile {
                 "the stable project folder file must be a regular file no larger than 4 MiB".into(),
             );
         }
-        let bytes = fs::read(&source)
+        let file = fs::File::open(&source)
+            .map_err(|error| format!("read saved project folders {}: {error}", source.display()))?;
+        let opened_metadata = file.metadata().map_err(|error| {
+            format!(
+                "inspect opened project folders {}: {error}",
+                source.display()
+            )
+        })?;
+        if !opened_metadata.is_file() || opened_metadata.len() > MAX_PROJECTS_FILE {
+            return Err(
+                "the stable project folder file must be a regular file no larger than 4 MiB".into(),
+            );
+        }
+        let bytes = read_bounded_project_folders(file, MAX_PROJECTS_FILE)
             .map_err(|error| format!("read saved project folders {}: {error}", source.display()))?;
         #[derive(serde::Deserialize)]
         struct StoredProject {
@@ -346,6 +359,21 @@ fn explicit_reasonix_home() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+fn read_bounded_project_folders(mut reader: impl Read, max_bytes: u64) -> std::io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    reader
+        .by_ref()
+        .take(max_bytes.saturating_add(1))
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "project folder file exceeds the size limit",
+        ));
+    }
+    Ok(bytes)
+}
+
 fn default_stable_config_path() -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
     {
@@ -391,6 +419,18 @@ mod tests {
             stable_config: Some(stable_config),
             managed_profile: true,
         }
+    }
+
+    #[test]
+    fn bounded_project_folder_reader_rejects_growth_past_limit() {
+        assert_eq!(
+            read_bounded_project_folders(std::io::Cursor::new(b"1234"), 4)
+                .expect("exact limit is accepted"),
+            b"1234"
+        );
+        let error = read_bounded_project_folders(std::io::Cursor::new(b"12345"), 4)
+            .expect_err("one byte above limit is rejected");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
     }
 
     #[test]
@@ -456,6 +496,40 @@ mod tests {
         };
         assert!(!profile.status().import_available);
         assert!(profile.import_stable_config().is_err());
+    }
+
+    #[test]
+    fn project_folder_import_copies_only_roots_and_never_overwrites_preview() {
+        let root = tempfile::tempdir().expect("temp root");
+        let stable = root.path().join("stable/config.toml");
+        let stable_projects = root.path().join("stable/desktop-projects.json");
+        fs::create_dir_all(stable.parent().expect("stable parent")).expect("create stable home");
+        let source = br#"{"projects":[{"root":"/work/alpha","title":"Alpha","topics":["private-topic"],"pinnedTopics":["private-pin"]},{"root":"/work/empty","title":"Empty"},{"root":"/work/alpha","title":"Duplicate"}],"globalTopics":["private-global"]}"#;
+        fs::write(&stable_projects, source).expect("write stable project folders");
+        let profile = managed_profile(root.path().join("preview"), stable);
+
+        let result = profile
+            .import_stable_project_folders()
+            .expect("import stable project folders");
+        assert_eq!(result.project_count, 2);
+        let imported = fs::read(&result.imported_file).expect("read imported folders");
+        let imported_text = String::from_utf8(imported.clone()).expect("UTF-8 JSON");
+        assert!(imported_text.contains("/work/alpha"));
+        assert!(imported_text.contains("Alpha"));
+        assert!(imported_text.contains("/work/empty"));
+        assert!(!imported_text.contains("private-topic"));
+        assert!(!imported_text.contains("private-pin"));
+        assert!(!imported_text.contains("private-global"));
+        assert_eq!(
+            fs::read(&stable_projects).expect("stable source unchanged"),
+            source
+        );
+
+        assert!(profile.import_stable_project_folders().is_err());
+        assert_eq!(
+            fs::read(&result.imported_file).expect("preview file remains unchanged"),
+            imported
+        );
     }
 
     /// The Go core reads REASONIX_STATE_HOME before REASONIX_HOME, so an

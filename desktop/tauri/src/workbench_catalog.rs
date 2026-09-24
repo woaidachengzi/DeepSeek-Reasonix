@@ -35,7 +35,18 @@ pub struct WorkbenchTitle {
 
 pub struct WorkbenchCatalog {
     path: PathBuf,
-    sessions: Mutex<Vec<WorkbenchSession>>,
+    state: Mutex<CatalogState>,
+}
+
+struct CatalogState {
+    sessions: Vec<WorkbenchSession>,
+    load_error: Option<String>,
+}
+
+impl CatalogState {
+    fn ensure_loaded(&self) -> Result<(), String> {
+        self.load_error.clone().map_or(Ok(()), Err)
+    }
 }
 
 impl WorkbenchCatalog {
@@ -54,44 +65,54 @@ impl WorkbenchCatalog {
     }
 
     fn at(path: PathBuf) -> Self {
-        let sessions = read_sessions(&path);
+        let (sessions, load_error) = match read_sessions(&path) {
+            Ok(sessions) => (sessions, None),
+            Err(error) => (Vec::new(), Some(error)),
+        };
         Self {
             path,
-            sessions: Mutex::new(sessions),
+            state: Mutex::new(CatalogState {
+                sessions,
+                load_error,
+            }),
         }
     }
 
     pub fn list(&self) -> Result<Vec<WorkbenchSession>, String> {
-        self.sessions
+        let state = self
+            .state
             .lock()
-            .map(|sessions| sessions.clone())
-            .map_err(|_| "workbench catalog lock is unavailable".to_string())
+            .map_err(|_| "workbench catalog lock is unavailable".to_string())?;
+        state.ensure_loaded()?;
+        Ok(state.sessions.clone())
     }
 
     pub fn remember(&self, mut session: WorkbenchSession) -> Result<Vec<WorkbenchSession>, String> {
         validate_session(&session)?;
-        let mut sessions = self
-            .sessions
+        let mut state = self
+            .state
             .lock()
             .map_err(|_| "workbench catalog lock is unavailable".to_string())?;
+        state.ensure_loaded()?;
         // Opening an existing row only refreshes its metadata. Reordering on
         // every activate makes project folders jump under the cursor.
-        if let Some(index) = sessions
+        if let Some(index) = state
+            .sessions
             .iter()
             .position(|existing| existing.session_id == session.session_id)
         {
             if session.title.is_none() {
-                session.title = sessions[index].title.clone();
+                session.title = state.sessions[index].title.clone();
             }
-            sessions[index] = session;
-            write_sessions(&self.path, &sessions)?;
-            return Ok(sessions.clone());
+            state.sessions[index] = session;
+            write_sessions(&self.path, &state.sessions)?;
+            return Ok(state.sessions.clone());
         }
         let mut updated = Vec::with_capacity(MAX_SESSIONS);
         updated.push(session);
-        updated.extend(sessions.iter().take(MAX_SESSIONS - 1).cloned());
+        updated.extend(state.sessions.iter().take(MAX_SESSIONS - 1).cloned());
         write_sessions(&self.path, &updated)?;
-        *sessions = updated.clone();
+        state.sessions = updated.clone();
         Ok(updated)
     }
 
@@ -106,18 +127,20 @@ impl WorkbenchCatalog {
             title: None,
             workspace_root: None,
         })?;
-        let mut sessions = self
-            .sessions
+        let mut state = self
+            .state
             .lock()
             .map_err(|_| "workbench catalog lock is unavailable".to_string())?;
-        let updated: Vec<_> = sessions
+        state.ensure_loaded()?;
+        let updated: Vec<_> = state
+            .sessions
             .iter()
             .filter(|session| session.session_id != session_id)
             .cloned()
             .collect();
-        if updated.as_slice() != sessions.as_slice() {
+        if updated.as_slice() != state.sessions.as_slice() {
             write_sessions(&self.path, &updated)?;
-            *sessions = updated.clone();
+            state.sessions = updated.clone();
         }
         Ok(updated)
     }
@@ -128,11 +151,12 @@ impl WorkbenchCatalog {
         &self,
         titles: Vec<WorkbenchTitle>,
     ) -> Result<Vec<WorkbenchSession>, String> {
-        let mut sessions = self
-            .sessions
+        let mut state = self
+            .state
             .lock()
             .map_err(|_| "workbench catalog lock is unavailable".to_string())?;
-        let mut updated = sessions.clone();
+        state.ensure_loaded()?;
+        let mut updated = state.sessions.clone();
         for item in titles {
             validate_session(&WorkbenchSession {
                 session_id: item.session_id.clone(),
@@ -146,11 +170,11 @@ impl WorkbenchCatalog {
                 existing.title = Some(item.title);
             }
         }
-        if updated != *sessions {
+        if updated != state.sessions {
             write_sessions(&self.path, &updated)?;
-            *sessions = updated;
+            state.sessions = updated;
         }
-        Ok(sessions.clone())
+        Ok(state.sessions.clone())
     }
 }
 
@@ -177,13 +201,14 @@ fn validate_session(session: &WorkbenchSession) -> Result<(), String> {
     Ok(())
 }
 
-fn read_sessions(path: &Path) -> Vec<WorkbenchSession> {
-    let Ok(encoded) = fs::read(path) else {
-        return Vec::new();
+fn read_sessions(path: &Path) -> Result<Vec<WorkbenchSession>, String> {
+    let encoded = match fs::read(path) {
+        Ok(encoded) => encoded,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(format!("read workbench session catalog failed: {error}")),
     };
-    let Ok(decoded) = serde_json::from_slice::<Vec<WorkbenchSession>>(&encoded) else {
-        return Vec::new();
-    };
+    let decoded = serde_json::from_slice::<Vec<WorkbenchSession>>(&encoded)
+        .map_err(|_| "workbench session catalog is not valid JSON".to_string())?;
 
     let mut sessions = Vec::with_capacity(MAX_SESSIONS);
     for session in decoded {
@@ -199,7 +224,7 @@ fn read_sessions(path: &Path) -> Vec<WorkbenchSession> {
             break;
         }
     }
-    sessions
+    Ok(sessions)
 }
 
 fn write_sessions(path: &Path, sessions: &[WorkbenchSession]) -> Result<(), String> {
@@ -416,7 +441,7 @@ mod tests {
     }
 
     #[test]
-    fn caps_catalog_and_ignores_corrupt_files() {
+    fn caps_catalog_and_fails_closed_on_corrupt_files() {
         let root = tempfile::tempdir().expect("temp root");
         let path = root.path().join(CATALOG_FILE);
         let catalog = WorkbenchCatalog::at(path.clone());
@@ -427,10 +452,14 @@ mod tests {
         }
         assert_eq!(catalog.list().expect("list").len(), MAX_SESSIONS);
 
-        fs::write(&path, b"not json").expect("write corrupt catalog");
-        assert!(WorkbenchCatalog::at(path)
-            .list()
-            .expect("load corrupt catalog")
-            .is_empty());
+        let corrupt = b"not json";
+        fs::write(&path, corrupt).expect("write corrupt catalog");
+        let catalog = WorkbenchCatalog::at(path.clone());
+        assert_eq!(
+            catalog.list(),
+            Err("workbench session catalog is not valid JSON".to_string())
+        );
+        assert!(catalog.remember(session("new-session")).is_err());
+        assert_eq!(fs::read(path).expect("preserve corrupt catalog"), corrupt);
     }
 }
