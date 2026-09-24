@@ -10,7 +10,7 @@ export function sessionLifecycleFailure(cause: unknown): SessionLifecycleFailure
 export function sessionLifecycleNotice(cause: unknown): string | undefined {
   switch (sessionLifecycleFailure(cause)) {
     case "missing":
-      return "该会话的文件已不在。不会创建同名空会话；请选择其他对话。";
+      return "该会话文件已不在，不会创建同名空会话；可删除这条失效记录或选择其他对话。";
     case "deleting":
       return "该会话仍在删除中，不能重新打开。请稍后重试删除。";
     case "deleted":

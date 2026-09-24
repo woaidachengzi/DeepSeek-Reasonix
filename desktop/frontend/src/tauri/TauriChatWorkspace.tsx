@@ -766,9 +766,11 @@ export function TauriSessionPreview() {
           await switchTauriBridgeSession(target.sessionId, target.workspaceRoot);
           switchedToTarget = true;
         } catch (cause) {
-          // An interrupted cleanup deliberately cannot be reopened. The bridge
-          // DELETE endpoint can safely resume that exact fenced deletion.
-          if (sessionLifecycleFailure(cause) !== "deleting") throw cause;
+          // Missing and interrupted sessions cannot be reopened. The bridge
+          // DELETE endpoint can retire a missing identity or resume its fenced
+          // deletion without recreating a transcript.
+          const failure = sessionLifecycleFailure(cause);
+          if (failure !== "missing" && failure !== "deleting") throw cause;
         }
       }
       // For an interrupted deletion, avoid switching the single bridge

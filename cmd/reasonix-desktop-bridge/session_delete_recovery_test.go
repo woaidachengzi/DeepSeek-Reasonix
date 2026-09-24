@@ -93,3 +93,55 @@ func TestBridgeRecoveryCannotDeleteUnownedNormalSession(t *testing.T) {
 		t.Fatalf("unowned transcript was removed: %v", err)
 	}
 }
+
+func TestBridgeDeleteCanRetireMissingSessionWithoutRecreatingIt(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	ctx := context.Background()
+	sessionDir := appconfig.SessionDir()
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path, err := bridgeSessionPath(sessionDir, "retire-missing-session")
+	if err != nil {
+		t.Fatal(err)
+	}
+	identities, err := sessionidentity.Open(ctx, appconfig.DesktopSessionIdentityPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.ImportLegacyCatalog(ctx, sessionDir, []sessionidentity.Candidate{{
+		ID: "retire-missing-session", Path: path,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("fixture transcript unexpectedly exists: %v", err)
+	}
+
+	server := newBridgeServer(testToken, "retire-missing", desktopbridge.NewRuntimeManager(newControllerFactory(nil)))
+	request := httptest.NewRequest(http.MethodDelete, "/v1/sessions/retire-missing-session", nil)
+	request.Header.Set("Authorization", "Bearer "+testToken)
+	request.Header.Set(requestIDHeader, "retire-missing-delete")
+	response := httptest.NewRecorder()
+	server.handler().ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("missing-session delete status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing-session delete created transcript: %v", err)
+	}
+	identities, err = sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer identities.Close()
+	record, exists, err := identities.Get(ctx, "retire-missing-session")
+	if err != nil || !exists || record.State != sessionidentity.StateDeleted {
+		t.Fatalf("retired identity = %#v, %v, %v", record, exists, err)
+	}
+}

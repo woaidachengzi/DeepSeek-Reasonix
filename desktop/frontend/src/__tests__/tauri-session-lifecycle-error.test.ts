@@ -8,7 +8,9 @@ for (const [code, kind] of [
 ] as const) {
   const marker = `desktop bridge request failed with status 409 (${code})`;
   assert.equal(sessionLifecycleFailure(marker), kind);
-  assert.ok(sessionLifecycleNotice(new Error(marker))?.includes("不能重新打开") || kind === "missing");
+  const notice = sessionLifecycleNotice(new Error(marker));
+  if (kind === "missing") assert.ok(notice?.includes("可删除"));
+  else assert.ok(notice?.includes("不能重新打开"));
 }
 assert.equal(sessionLifecycleFailure("desktop bridge request failed with status 500 (session_missing)"), undefined);
 assert.equal(sessionLifecycleFailure("desktop bridge request failed with status 409 (unknown)"), undefined);

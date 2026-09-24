@@ -54,8 +54,17 @@ func retryInterruptedSessionDelete(ctx context.Context, sessionID string) error 
 	if err != nil {
 		return err
 	}
-	if !exists || record.Path != expectedPath || record.State != sessionidentity.StateDeleting {
+	if !exists || record.Path != expectedPath ||
+		(record.State != sessionidentity.StateDeleting && record.State != sessionidentity.StateMissing) {
 		return desktopbridge.ErrSessionNotFound
+	}
+	// A missing transcript is not an orphan eligible for ID reuse, but an
+	// explicit user delete may still retire the identity permanently. Fence it
+	// first so an overlapping open cannot recreate it during cleanup.
+	if record.State == sessionidentity.StateMissing {
+		if err := identities.BeginDelete(ctx, sessionID, expectedPath); err != nil {
+			return fmt.Errorf("begin missing session deletion: %w", err)
+		}
 	}
 	if err := control.RemoveSessionArtifacts(expectedPath); err != nil {
 		return fmt.Errorf("resume session artifact deletion: %w", err)
