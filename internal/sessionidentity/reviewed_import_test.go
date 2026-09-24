@@ -205,3 +205,19 @@ func TestReviewedImportStrictRegistrationNeverSkipsSelectedMissingFile(t *testin
 		t.Fatalf("strict import left partial identities: %#v, %v", records, err)
 	}
 }
+
+func TestReviewedImportRejectsInvalidSelectedCatalogMetadata(t *testing.T) {
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	writeTranscript(t, filepath.Join(sessionDir, "tauri-tauri-one.jsonl"))
+	catalog := filepath.Join(root, "workbench-sessions.json")
+	for _, entry := range []catalogEntry{
+		{SessionID: "tauri-one", Title: "bad\ntitle"},
+		{SessionID: "tauri-one", WorkspaceRoot: "bad\nworkspace"},
+	} {
+		writeCatalog(t, catalog, []catalogEntry{entry})
+		if _, err := PrepareImportReview(context.Background(), nil, sessionDir, catalog, []string{"tauri-one"}); err == nil {
+			t.Fatalf("invalid catalog metadata was accepted: %#v", entry)
+		}
+	}
+}

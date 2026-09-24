@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"reasonix/internal/desktopbridge/sessionpath"
 )
@@ -103,6 +105,10 @@ func PrepareImportReview(ctx context.Context, identities *Store, sessionDir, cat
 	for position, entry := range entries {
 		if !selected[entry.SessionID] {
 			continue
+		}
+		if utf8.RuneCountInString(entry.Title) > 120 || strings.IndexFunc(entry.Title, unicode.IsControl) >= 0 ||
+			len(entry.WorkspaceRoot) > 4096 || strings.IndexFunc(entry.WorkspaceRoot, unicode.IsControl) >= 0 {
+			return ImportReview{}, fmt.Errorf("session %s catalog metadata is invalid", entry.SessionID)
 		}
 		if counts[entry.SessionID] != 1 || len(byID[entry.SessionID]) != 1 {
 			return ImportReview{}, fmt.Errorf("session %s is duplicated or invalid in the catalog", entry.SessionID)
