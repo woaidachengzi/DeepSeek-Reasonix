@@ -218,6 +218,12 @@ CREATE INDEX sessions_visible_order ON sessions(state, position, id);
 
 自动化目前覆盖 capability 缺失/instance 不匹配拒绝、当前协议 health 响应、当前 Rust host 启动并关闭真实 Go bridge、sidecar 意外退出后的重启握手、Rust host 经真实 bridge 同步会话工作区/顺序并读回 SQLite、真实测试 profile 的身份目录与磁盘盘点、旧 catalog 导入和相对路径恢复；没有真实 1.38.3/1.38.10 writer 停写证明，也没有旧 Tauri host 二进制的端到端认证。仓库没有随项目跟踪的旧 Tauri 应用包；`50c1b9bc6` 是当前历史中存储改造开始前最近的 Tauri host 提交，可作为**候选源码基线**，但不是已认证的发布二进制。将“预期向后兼容”升级为“发布认证”前，需从该基线构建并记录 host 二进制哈希，在一次性隔离 profile 中与当前 bridge 做端到端启动及会话操作，再按实际发布版本补充二进制矩阵；若找到对应发布包，应优先认证发布包。仅凭协议版本号或源码兼容推断不能替代这项验证。
 
+**候选基线预检（2026-09-24）**：从 `50c1b9bc6` 的源码构建出了 arm64 host（SHA-256 `d24e8031e8b5e2b4a02dcb7249585ae6912621a46f098fd3daf975943ae91b6a`），并用当前 bridge（构建源码基线 `c4ce11fe5`）通过了旧 `BridgeSupervisor` 的真实进程启停、改名后重启读取、删除隔离会话三项测试。候选 host Mach-O 也已在临时 `REASONIX_HOME`/`REASONIX_STATE_HOME` 下启动，并拉起当前 bridge；退出后确认没有遗留进程。所有运行均使用 `/private/tmp` 下的隔离 profile。改名、重启读取和删除操作是在 Cargo test harness 中执行，尚未通过应用窗口操作会话，也没有认证签名/发布包，因此兼容矩阵仍保持“预期向后兼容，非发布认证”。
+
+可用 `bash tools/tauri/verify-legacy-host.sh` 重建这组候选验证：脚本从 `50c1b9bc6` 和运行时 `HEAD` 的归档源码开始，在新的 `/private/tmp` 工作目录中构建 bridge、运行上述三项旧 host 集成测试并构建候选 host；它不会读取或修改真实 profile，也不会清理生成目录。脚本输出 bridge/host 源码基线、候选 host SHA-256 和产物目录。该脚本只复现源码基线与测试 harness 验证，不验证应用窗口交互、签名、公证或实际发布包；执行环境还需允许测试 host 绑定 loopback 端口。
+
+**脚本复现（2026-09-24）**：在允许 `127.0.0.1` loopback 的运行环境中，三项 host 集成测试均通过；bridge 源码基线为 `251bb55e3ba069918a463403d365df25aac465bf`，本次 debug host SHA-256 为 `accf0273d96338ed6071ff0c5f73364eddf7f9ab0205cf6c720f060c83c7281a`，产物与独立 profile 保留在 `/private/tmp/reasonix-tauri-compat.7tpjTY`。该哈希对应本次 debug 构建，不代表稳定发布二进制；兼容矩阵仍保持“预期向后兼容，非发布认证”。
+
 1. 新会话先 `reserved` 登记 ID；实际写入后转 `ready`。bridge 的打开/切换/重命名/删除均先解析身份行，再定位文件。无记录的新建与已登记但 `missing` 的恢复必须分开。
 2. 一段发布窗口内，host 对比 JSON 与 SQLite 的 ID/标题/工作区/顺序/文件状态；只记录差异统计，不把私密消息写诊断。SQLite 只在影子报告 clean 时作为当前 Preview 侧栏来源，否则继续显示 JSON；差异或盘点错误不得进入 SQLite 来源。
 3. 对删除使用持久状态机：先标 `deleting` 并阻止新写，再调用既有 `control.RemoveSessionArtifacts`，成功后保留 `deleted` tombstone；重启时重试未完成清理。文件系统与 SQLite 无法组成一个原子事务，不能承诺“同时消失”。

@@ -140,11 +140,12 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 - 工作区已被删除（目录不存在）的会话：项目节点标为"工作区不可用"，会话仍可打开
   （transcript 在 Preview 自己的目录里，与工作区是否存在无关）。
 
-### 3.6 schema 迁移（v2 → v3）
+### 3.6 schema 迁移（v1–v3 → v4）
 
-- v2→v3 迁移必须**带版本号、单事务**：`ALTER TABLE` 增 `state TEXT`，由 `missing` 回填
-  （`missing=1 → 'missing'`，否则 `ready`），然后建 `(state, position, id)` 索引。
-- 打开时若 `user_version > schemaVersion` → 拒绝打开且**不改动文件**（现有测试语义保留）。
+- v1→v2 在事务中加入标题来源与 revision；非空旧标题标为 `legacy_unknown`，空标题保留 `fallback`。
+- v2→v3 在事务中加入生命周期 `state`，按旧 `missing` 标记回填为 `missing`/`ready`，并建 `(state, position, id)` 索引。
+- v3→v4 先按传入的 canonical profile root 校验全部旧绝对路径及 transcript 命名，再在事务中把 `path` 改为相对 `relative_path` 并设置 `user_version=4`。任一路径越界或不符合共享路径契约时拒绝迁移；现有测试固定了 v3 数据与版本值不变的拒绝语义。
+- 每个版本迁移各自使用事务；打开时若 `user_version > 4` 或完整性检查失败，拒绝打开，不把库修成空库。现有测试还验证 future schema 的版本与数据库文件不被改写。
 - 已存在的旧库在 bridge 启动、开放只读盘点前完成迁移；只读盘点自身不创建数据库。bridge 首次创建 Tauri 会话时会建库并先写入 `reserved`，保证 sidecar
   产生前身份已稳定登记；这不等于切换会话列表权威。
 
@@ -152,14 +153,13 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 
 | 步骤 | 内容 | 验收条件 | 回退 |
 | --- | --- | --- | --- |
-| **5.0** | `resumeBridgeSession` 按身份状态优先判定；新 ID 先 reservation；识别缺文件与残留 sidecar | 已覆盖 `reserved/ready/missing`、v2→v3 迁移、missing 文件恢复后仍拒绝复活、sidecar-only 残留拒绝新建 | 当前 schema 仍保留 transcript 与旧 JSON 清单；回退需保留 v2 DB 备份 |
-| **5.1** | 完成删除 tombstone 状态写入 | `deleting/deleted` 由删除流程写入且不可重用；身份库分页已实现 | 保留 v3 备份文件即可回退读取 |
-| **5.2** | bridge `GET /v1/sessions` 分页列表 | 已实现身份库分页和 bridge 接口；host 尚未切换读取 | 端点只是新增，host 不读即无影响 |
-| **5.3** | host 切换到 bridge 列表，JSON 作为回退 | 旧 JSON 幂等导入与只读影子比对已接入；侧栏权威切换仍待实现 | host 改回读 JSON（一个常量开关） |
-| **5.4** | missing/deleting/deleted 的用户可见处理 + 重启续做清理 | 删除中途 kill → 重启后清理完成或可重试；missing 会话有明确提示且不可"以空会话打开" | 状态回退为 `missing` 等待用户决定 |
+| **5.0** | `resumeBridgeSession` 按身份状态优先判定；新 ID 先 reservation；识别缺文件与残留 sidecar | 已覆盖 `reserved/ready/missing`、v1–v3 → v4 迁移、missing 文件恢复后仍拒绝复活、sidecar-only 残留拒绝新建 | 当前 schema 仍保留 transcript 与旧 JSON 清单；回退需保留离线 profile 快照 |
+| **5.1** | 完成删除 tombstone 状态写入 | `deleting/deleted` 由删除流程写入且不可重用；身份库分页已实现 | 回退时保留 v4 身份库和 transcript；使用经验证的整份离线 profile 快照 |
+| **5.2** | bridge `GET /v1/sessions` 分页列表 | 身份库分页与 bridge 接口已实现，并由 5.3 clean 门禁后的侧栏读取 | 端点保留兼容，host 可回退旧 JSON |
+| **5.3** | 影子审计 clean 时读取 bridge 身份目录，漂移或审计失败时回退 JSON | 旧 JSON 幂等导入、分页读取、clean 门禁和漂移回退已接入；移除 JSON 回退并宣布整个 profile 唯一权威仍需独立发布门禁 | 保留 JSON 输入与回退路径 |
+| **5.4** | missing/deleting/deleted 的用户可见处理 + 重启续做清理 | missing 行不可打开但可直接删除；deleting 可通过 DELETE 续做；明确错误提示与恢复路径已覆盖 | 保留 `missing` 记录，等待用户处理 |
 
-5.0、5.1、5.2 后端接口及 5.3 的旧目录导入/影子比对已落地；5.3 权威切换与
-5.4 UI 恢复选项仍待实施。重启后续删采用显式重试，不在启动时无提示地自动删除。
+5.0–5.4 的后端接口、clean 门禁、分页侧栏和 lifecycle 恢复流程均已接入。SQLite 仍处于可回退的 Preview 读取阶段；移除 JSON 回退前仍须完成稳定窗口零差异、完整跨资源恢复和旧写者停写确认。重启后续删采用显式重试，不在启动时无提示地自动删除。
 
 ## 5. 测试矩阵
 
@@ -172,9 +172,10 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 - 身份库记录为 `missing` → 拒绝 Resume/新建；host 显示"该会话的文件已不在"。
 
 **5.1 / 5.2**
-- v2 → v3 迁移：`missing=1` 变 `missing`，其余变 `ready`，行数与 path 不变。
-- 迁移中途失败 → 整体回滚，`user_version` 不变。
+- v1、v2 → v4：旧标题溯源、`missing` 生命周期和相对 transcript 路径正确回填；行数与 ID 不变（`TestOpenMigratesV1TitlesWithoutAssumingUserIntent`、`TestOpenMigratesV2MissingFlagToLifecycleState`）。
+- v3 → v4 路径越界：拒绝迁移且原 `path` 与 `user_version=3` 保持不变（`TestV3PathMigrationRejectsPathsOutsideProfileWithoutChangingDatabase`）。
 - future schema（v99）→ 拒绝打开且文件未被改写（沿用现有测试）。
+- 迁移步骤各自在版本事务内提交；迁移错误不得提交该步骤的 DDL、数据更新或版本号。
 - `ListVisible` 分页：209 条分 3 页无重复无遗漏；`deleted` 永不出现。
 - 同一 `position` 下多条会话用 `(position, id)` 游标翻页：无漏项、无重复（已实现）。
 - bridge 接口认证、缺库空列表、分页 DTO 不含 transcript 路径和内容（已实现）。
@@ -190,6 +191,8 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 **5.4**
 - 同一切换点：host 列表与身份库逐项比对（ID/标题/工作区/顺序/状态）差异为零。
 - 侧栏：多项目、项目内多会话、无工作区会话、工作区已删除，四种展示均正确。
+- missing 会话行不可打开、提供删除入口；删除时直接退休身份，不要求先成功切换（`tauri-project-navigation.test.tsx`、`tauri-chat-workspace-delete.test.tsx`）。
+- `missing/deleting/deleted` lifecycle 错误有明确提示；删除中断后可再次调用 DELETE 续做（`tauri-session-lifecycle-error.test.ts`、`TestBridgeRetriesInterruptedDeleteAfterRestart`）。
 - 重启后 ID 与顺序不变；折叠状态仍只在本机。
 
 **5.5**
@@ -202,7 +205,7 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 | --- | --- |
 | 切换权威后 host 与身份库不一致 | 5.3 要求 diff 为零并持续一个窗口；不一致即回退读 JSON |
 | 单条坏数据挡住整个列表 | `ListVisible` 逐行容错，坏行计入诊断而非使整页失败 |
-| 迁移把 v2 库写坏 | 迁移单事务；动手前复制 `.sqlite`（停机后，不用 WAL 活跃拷贝） |
+| 旧身份库升级失败 | 每个版本迁移单事务；真实迁移前停写并验证整份离线 profile 快照，不单独复制活跃 WAL 下的 `.sqlite` |
 | 与上游 1.38.10 会话重构冲突 | 本项只动 Preview 身份库与 host 列表；transcript 格式冻结 |
 | 用户看到"会话消失"却无法自救 | `missing` 必须可解释、可删除记录；恢复路径写进 UI 文案 |
 
