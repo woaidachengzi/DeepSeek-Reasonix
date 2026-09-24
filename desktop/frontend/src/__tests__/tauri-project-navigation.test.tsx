@@ -14,8 +14,9 @@ Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, co
 (globalThis as unknown as { __workbenchPages: unknown[] }).__workbenchPages = [
   { sessions: [
     { sessionId: "old-alpha", workspaceRoot: "/work/alpha" },
+    { sessionId: "missing-alpha", title: "丢失文件会话", workspaceRoot: "/work/alpha", state: "missing", missing: true },
     { sessionId: "recent-beta", workspaceRoot: "/work/beta", title: "Beta task" },
-  ], nextCursor: { position: 2, id: "recent-beta" }, total: 3, source: "identity" },
+  ], nextCursor: { position: 3, id: "recent-beta" }, total: 4, source: "identity" },
   { sessions: [{ sessionId: "older-gamma", workspaceRoot: "/work/gamma", title: "Gamma task" }], nextCursor: null, total: 3, source: "identity" },
 ];
 (globalThis as unknown as { __previewFirstUsers: Record<string, string> }).__previewFirstUsers = { "old-alpha": "整理报告并加测试" };
@@ -36,6 +37,11 @@ assert.ok(loadMore);
 await act(async () => { loadMore.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
 assert.match(document.body.textContent ?? "", /Gamma task/);
 assert.equal(document.querySelector('[aria-label="加载更多会话"]'), null);
+
+const missingRow = document.querySelector<HTMLButtonElement>('[aria-label="丢失文件会话（文件缺失）"]');
+assert.ok(missingRow?.disabled);
+assert.match(missingRow?.textContent ?? "", /文件缺失/);
+assert.ok(document.querySelector<HTMLButtonElement>('[aria-label="删除对话 丢失文件会话"]'), "missing sessions remain explicitly deletable");
 
 const select = document.querySelector<HTMLButtonElement>('[aria-label="切换到项目 beta"]');
 assert.ok(select);

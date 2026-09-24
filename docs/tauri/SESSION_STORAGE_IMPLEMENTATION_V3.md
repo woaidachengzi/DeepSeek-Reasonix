@@ -204,12 +204,12 @@ CREATE INDEX sessions_visible_order ON sessions(state, position, id);
 
 ### S2：shadow 读写与 resolver
 
-**当前安全切片**：bridge 在 transcript 缺失时只读检查已有身份库；若该 ID 已登记，拒绝作为新会话打开，身份库不可读时也拒绝静默新建。尚未接入 `reserved`/`deleting` 状态机、相对路径迁移或 SQLite 列表权威；无身份库的旧 catalog 会话仍需完整 S2 resolver 解决。
+**当前安全切片**：bridge 已将新建、恢复、缺失、删除中与已删除会话分开处理；已登记但 transcript 缺失时拒绝静默创建同 ID 空会话，缺失与中断删除均可经显式删除安全退休并保留 tombstone。Tauri Preview 侧栏按页读取身份目录，但首屏只有在 count-only 影子比对确认一致时才选 SQLite；比对不一致或失败时回退旧 JSON 目录，且新增/改名/删除后的重新盘点发现漂移时也会回退。此为可回退的 Preview 读取路径，不代表稳定版迁移或全 profile 权威切换。当前身份表仍保存绝对 transcript path；相对路径迁移、完整跨资源恢复演练与 same-profile 多写者防护仍待完成。
 
 1. 新会话先 `reserved` 登记 ID；实际写入后转 `ready`。bridge 的打开/切换/重命名/删除均先解析身份行，再定位文件。无记录的新建与已登记但 `missing` 的恢复必须分开。
-2. 一段发布窗口内，host 仍显示 JSON 列表，同时在后台读 SQLite 并比较 ID/标题/工作区/顺序/文件状态；只记录差异统计，不把私密消息写诊断。
+2. 一段发布窗口内，host 对比 JSON 与 SQLite 的 ID/标题/工作区/顺序/文件状态；只记录差异统计，不把私密消息写诊断。SQLite 只在影子报告 clean 时作为当前 Preview 侧栏来源，否则继续显示 JSON；差异或盘点错误不得进入 SQLite 来源。
 3. 对删除使用持久状态机：先标 `deleting` 并阻止新写，再调用既有 `control.RemoveSessionArtifacts`，成功后保留 `deleted` tombstone；重启时重试未完成清理。文件系统与 SQLite 无法组成一个原子事务，不能承诺“同时消失”。
-4. 差异为零且缺失/删除/崩溃恢复测试通过后，host 才改为读 bridge 的列表。原 JSON 保留作只读回退输入，停止双向写入，避免两套权威。
+4. 首屏 clean 门禁与分页读取已接入 Preview；新增/改名/删除后的重新盘点若发现差异会触发回退。只有缺失/删除/崩溃恢复、损坏库、备份恢复及双进程测试完成后，才能考虑移除 JSON 回退并宣布 SQLite 为唯一权威。当前保留旧 JSON 回退输入与排序同步，避免在验证窗口丢失可用列表。
 
 **退出**：重启 ID 不变；缺文件不会变空会话；删除失败可续做；同 profile 竞争写者被阻止；新旧列表差异可解释。回退时恢复旧读路径，**保留**已成为权威的身份库和 tombstone，不删除或重分配 ID。
 
@@ -224,11 +224,11 @@ CREATE INDEX sessions_visible_order ON sessions(state, position, id);
 审批稿 A1–A6、B3–B5、C1–C5 的边界继续有效；A7 改为“记忆布局待独立设计”，B1 的扫描器改为**只读候选清单**而非自动认领，B2 的 alias 延至 Move 语义确定。审批稿中 Wails 的路径身份与 Tauri 已有 ID 必须分开描述，`C6`/`B5` 的交叉引用也需更正。
 
 S0 路径与隔离修正已提交；S1 的只读清单和离线核验导入已有代码与测试，
-下一步是旧写者停写确认、跨资源备份与真实 profile 的人工核对演练。
-标题溯源与 v1→v2 迁移已先在尚未接入运行流的身份库存储层实现并测试；这不是
-S1/S2 完成声明。当前存储层仍使用 v1 的绝对 `path` 与 `missing` 列；上方
-`relative_path` / 完整生命周期状态机是后续目标，不得误认为已经落地。
-真实 profile 自动迁移或 UI 数据源切换均未授权。
+下一步是旧写者停写确认、跨资源备份与真实 profile 的人工核对演练。身份库现已
+升至生命周期状态 schema 并接入 Preview 的影子门控分页读取，但不宣告 S1/S2
+完成：身份表仍使用绝对 `path`，完整跨资源恢复、双进程竞争与旧 bridge 客户端
+兼容矩阵仍需补齐。Preview 仅在首屏影子报告 clean 时选择身份目录；启动或新增、
+改名、删除后若重盘点发现漂移或失败，则回退 JSON。稳定版及真实 profile 自动迁移仍未授权。
 
 > **[DeepSeek] 本段的 A/B/C 编号与两处更正已并入 V2 的决议索引。**
 > - V2 §13.1 声明**直接采纳** A1–A7、B3–B5、C1–C5，并注明 A7 的

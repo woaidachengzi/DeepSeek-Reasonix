@@ -21,8 +21,9 @@ use bridge::{
     BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse, LegacySessionCatalogEntry,
     MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse, MCPServerView,
     OpenSessionRequest, RenameSessionRequest, SessionCatalogMetadata, SessionDirectoryCursor,
-    SessionDirectoryPage, SessionFirstMessageTitle, SessionPreview, SessionRequest, SubmitRequest,
-    WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
+    SessionDirectoryEntry, SessionDirectoryPage, SessionFirstMessageTitle, SessionPreview,
+    SessionRequest, SubmitRequest, WorkspaceChangeDetailRequest, WorkspaceFileRequest,
+    WorkspaceRequest,
 };
 use data_profile::{PreviewProfile, PreviewProfileStatus, ProfileImportResult};
 use runtime_info::PreviewRuntimeInfo;
@@ -34,10 +35,54 @@ use workbench_catalog::{WorkbenchCatalog, WorkbenchSession, WorkbenchTitle};
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct WorkbenchSessionPage {
-    sessions: Vec<WorkbenchSession>,
+    sessions: Vec<WorkbenchSessionPageEntry>,
     next_cursor: Option<SessionDirectoryCursor>,
     total: u64,
     source: &'static str,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkbenchSessionPageEntry {
+    session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    workspace_root: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    state: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    missing: Option<bool>,
+}
+
+fn page_entries_from_legacy(
+    sessions: Vec<WorkbenchSession>,
+    directory: Option<&[SessionDirectoryEntry]>,
+) -> Vec<WorkbenchSessionPageEntry> {
+    sessions
+        .into_iter()
+        .map(|session| {
+            let identity = directory
+                .and_then(|entries| entries.iter().find(|entry| entry.id == session.session_id));
+            WorkbenchSessionPageEntry {
+                session_id: session.session_id,
+                title: session.title,
+                workspace_root: session.workspace_root,
+                state: identity.map(|entry| entry.state.clone()),
+                missing: identity.map(|entry| entry.missing || entry.state == "missing"),
+            }
+        })
+        .collect()
+}
+
+fn page_entry_from_identity(entry: SessionDirectoryEntry) -> WorkbenchSessionPageEntry {
+    WorkbenchSessionPageEntry {
+        session_id: entry.id,
+        title: (!entry.title.is_empty()).then_some(entry.title),
+        workspace_root: entry.workspace_root,
+        state: Some(entry.state),
+        missing: Some(entry.missing),
+    }
 }
 
 #[tauri::command]
@@ -274,26 +319,60 @@ fn workbench_session_page(
     limit: Option<u16>,
     cursor: Option<SessionDirectoryCursor>,
 ) -> Result<WorkbenchSessionPage, String> {
+    // The legacy JSON catalog remains the recovery source until SQLite has
+    // been shadow-verified. A readable but stale identity DB is not enough to
+    // switch the visible sidebar.
+    let legacy_sessions = if cursor.is_none() {
+        Some(catalog.list()?)
+    } else {
+        None
+    };
+    let mut shadow_directory = None;
+    if let Some(sessions) = legacy_sessions.as_ref() {
+        match compare_session_catalog_with_directory(&supervisor, &catalog) {
+            Ok((report, directory)) if identity_session_catalog_is_verified(Ok(report.clone())) => {
+                shadow_directory = Some(directory);
+            }
+            Ok((_, directory)) => {
+                let total = sessions.len() as u64;
+                return Ok(WorkbenchSessionPage {
+                    sessions: page_entries_from_legacy(sessions.clone(), Some(&directory)),
+                    next_cursor: None,
+                    total,
+                    source: "legacy",
+                });
+            }
+            Err(_) => {
+                let total = sessions.len() as u64;
+                return Ok(WorkbenchSessionPage {
+                    sessions: page_entries_from_legacy(sessions.clone(), None),
+                    next_cursor: None,
+                    total,
+                    source: "legacy",
+                });
+            }
+        }
+    }
+
     match supervisor.session_directory_page(limit.unwrap_or(200), cursor.clone(), None) {
         Ok(page) => Ok(WorkbenchSessionPage {
             sessions: page
                 .sessions
                 .into_iter()
-                .map(|entry| WorkbenchSession {
-                    session_id: entry.id,
-                    title: (!entry.title.is_empty()).then_some(entry.title),
-                    workspace_root: entry.workspace_root,
-                })
+                .map(page_entry_from_identity)
                 .collect(),
             next_cursor: page.next_cursor,
             total: page.total,
             source: "identity",
         }),
         Err(_error) if cursor.is_none() => {
-            let sessions = catalog.list()?;
+            let sessions = match legacy_sessions {
+                Some(sessions) => sessions,
+                None => catalog.list()?,
+            };
             let total = sessions.len() as u64;
             Ok(WorkbenchSessionPage {
-                sessions,
+                sessions: page_entries_from_legacy(sessions, shadow_directory.as_deref()),
                 next_cursor: None,
                 total,
                 source: "legacy",
@@ -363,10 +442,22 @@ fn compare_session_catalog(
     supervisor: &BridgeSupervisor,
     catalog: &WorkbenchCatalog,
 ) -> Result<SessionShadowReport, String> {
+    compare_session_catalog_with_directory(supervisor, catalog).map(|(report, _)| report)
+}
+
+fn compare_session_catalog_with_directory(
+    supervisor: &BridgeSupervisor,
+    catalog: &WorkbenchCatalog,
+) -> Result<(SessionShadowReport, Vec<SessionDirectoryEntry>), String> {
     let legacy = catalog.list()?;
     let directory = supervisor.session_directory_snapshot()?;
     let physical = supervisor.session_physical_inventory()?;
-    session_shadow::compare(&legacy, &directory, &physical)
+    let report = session_shadow::compare(&legacy, &directory, &physical)?;
+    Ok((report, directory))
+}
+
+fn identity_session_catalog_is_verified(report: Result<SessionShadowReport, String>) -> bool {
+    report.is_ok_and(|report| report.legacy_matches_directory)
 }
 
 #[tauri::command]
@@ -649,4 +740,64 @@ fn main() {
             let _ = app.state::<BridgeSupervisor>().stop();
         }
     });
+}
+
+#[cfg(test)]
+mod session_catalog_gate_tests {
+    use super::*;
+
+    fn report(clean: bool) -> SessionShadowReport {
+        SessionShadowReport {
+            legacy_count: 1,
+            directory_count: 1,
+            matched_count: 1,
+            directory_only_count: 0,
+            missing_from_directory: 0,
+            title_mismatches: 0,
+            workspace_mismatches: 0,
+            order_mismatches: 0,
+            missing_transcripts: 0,
+            physical_state_mismatches: 0,
+            unclaimed_transcripts: 0,
+            inventory_errors: 0,
+            legacy_matches_directory: clean,
+        }
+    }
+
+    #[test]
+    fn identity_sidebar_requires_a_clean_successful_shadow_report() {
+        assert!(identity_session_catalog_is_verified(Ok(report(true))));
+        assert!(!identity_session_catalog_is_verified(Ok(report(false))));
+        assert!(!identity_session_catalog_is_verified(Err(
+            "inventory unavailable".into()
+        )));
+    }
+}
+
+#[cfg(test)]
+mod workbench_page_lifecycle_tests {
+    use super::*;
+
+    #[test]
+    fn legacy_fallback_preserves_known_missing_identity_state() {
+        let legacy = WorkbenchSession {
+            session_id: "missing-session".into(),
+            title: Some("Old conversation".into()),
+            workspace_root: Some("/work/project".into()),
+        };
+        let identity = SessionDirectoryEntry {
+            id: "missing-session".into(),
+            title: "Old conversation".into(),
+            title_source: "manual".into(),
+            workspace_root: Some("/work/project".into()),
+            state: "missing".into(),
+            missing: true,
+            position: 0,
+            updated_at_ms: 0,
+        };
+
+        let page = page_entries_from_legacy(vec![legacy], Some(&[identity]));
+        assert_eq!(page[0].state.as_deref(), Some("missing"));
+        assert_eq!(page[0].missing, Some(true));
+    }
 }

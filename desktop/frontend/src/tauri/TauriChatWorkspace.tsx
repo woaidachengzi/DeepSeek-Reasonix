@@ -112,6 +112,23 @@ interface WorkbenchSessionTab {
   sessionId: string;
   title?: string;
   workspaceRoot?: string;
+  state?: string;
+  missing?: boolean;
+}
+
+function preserveWorkbenchLifecycle(
+  sessions: WorkbenchSessionTab[],
+  previous: readonly WorkbenchSessionTab[],
+): WorkbenchSessionTab[] {
+  const byId = new Map(previous.map(session => [session.sessionId, session]));
+  return sessions.map(session => {
+    const prior = byId.get(session.sessionId);
+    return prior ? {
+      ...session,
+      state: session.state ?? prior.state,
+      missing: session.missing ?? prior.missing,
+    } : session;
+  });
 }
 
 /** A stored title is authoritative; anything the bridge would reject falls back
@@ -144,6 +161,7 @@ interface SessionRowProps {
  *  the user armed changes shape, and leaving the row disarms it. */
 function SessionRow({ tab, active, busy, switchingBlocked, onActivate, onDelete }: SessionRowProps) {
   const [confirming, setConfirming] = useState(false);
+  const missing = tab.missing === true || tab.state === "missing";
   if (confirming) {
     return (
       <div className="tauri-session-delete" role="group" aria-label="确认删除对话">
@@ -159,13 +177,15 @@ function SessionRow({ tab, active, busy, switchingBlocked, onActivate, onDelete 
     <div className={`tauri-session-row${active ? " is-active" : ""}`}>
       <button
         type="button"
-        className="tauri-sidebar__session"
-        disabled={busy || active || switchingBlocked}
+        className={`tauri-sidebar__session${missing ? " is-missing" : ""}`}
+        disabled={busy || active || switchingBlocked || missing}
         onClick={onActivate}
-        title={tab.workspaceRoot ? `${tab.sessionId}\n${tab.workspaceRoot}` : tab.sessionId}
+        aria-label={missing ? `${displayTitle(tab.title)}（文件缺失）` : undefined}
+        title={missing ? "会话文件缺失，无法打开。可删除这条失效记录。" : tab.workspaceRoot ? `${tab.sessionId}\n${tab.workspaceRoot}` : tab.sessionId}
       >
         <MessageSquare size={15} aria-hidden="true" />
         <span>{displayTitle(tab.title)}</span>
+        {missing && <small className="tauri-session-missing">文件缺失</small>}
       </button>
       <button
         type="button"
@@ -278,6 +298,8 @@ export function TauriSessionPreview() {
   const conversationRef = useRef<HTMLDivElement>(null);
   const turnEpochRef = useRef(0);
   const submitInFlightRef = useRef(false);
+  const createSessionInFlightRef = useRef(false);
+  const sessionPageRequestRef = useRef(false);
   const workspaceEpochRef = useRef(0);
   const workspaceListRequestRef = useRef(0);
   const workspaceChangesRequestRef = useRef(0);
@@ -695,7 +717,8 @@ export function TauriSessionPreview() {
   // sessions are prepended (matches WorkbenchCatalog::remember).
   async function rememberSession(next: TauriBridgeSession) {
     try {
-      setTabs(await rememberTauriWorkbenchSession(next.id, next.workspaceRoot ?? undefined, tauriSessionTitle(next.title, "") || undefined));
+      const updated = await rememberTauriWorkbenchSession(next.id, next.workspaceRoot ?? undefined, tauriSessionTitle(next.title, "") || undefined);
+      setTabs(previous => preserveWorkbenchLifecycle(updated, previous));
       await refreshCatalogAudit();
     } catch (cause) {
       setError(`对话已打开，但无法保存到最近对话：${tauriMessageFrom(cause)}`);
@@ -708,7 +731,25 @@ export function TauriSessionPreview() {
     setCatalogAuditError("");
     try {
       const report = await tauriSessionCatalogShadow();
-      if (request === catalogAuditRequestRef.current && isActive()) setCatalogAudit(report);
+      if (request === catalogAuditRequestRef.current && isActive()) {
+        setCatalogAudit(report);
+        if (!report.legacyMatchesDirectory && sessionPageSource === "identity") {
+          // If the shadow diverges after startup, stop presenting SQLite as
+          // the visible source and return to the compatible host catalog.
+          try {
+            const page = await tauriWorkbenchSessionPage();
+            if (request === catalogAuditRequestRef.current && isActive()) {
+              setTabs(page.sessions);
+              setSessionPageCursor(page.nextCursor ?? null);
+              setSessionPageSource(page.source);
+            }
+          } catch (cause) {
+            if (request === catalogAuditRequestRef.current && isActive()) {
+              setSessionPageError(tauriMessageFrom(cause));
+            }
+          }
+        }
+      }
     } catch (cause) {
       if (request === catalogAuditRequestRef.current && isActive()) {
         setCatalogAuditError(tauriMessageFrom(cause));
@@ -819,7 +860,7 @@ export function TauriSessionPreview() {
     let deleted = false;
     let operationError = "";
     try {
-      if (!isOpen) {
+      if (!isOpen && !target.missing && target.state !== "missing") {
         try {
           await switchTauriBridgeSession(target.sessionId, target.workspaceRoot);
           switchedToTarget = true;
@@ -839,7 +880,8 @@ export function TauriSessionPreview() {
         turnEpochRef.current += 1;
         setSession(null);
       }
-      setTabs(await forgetTauriWorkbenchSession(target.sessionId));
+      const updated = await forgetTauriWorkbenchSession(target.sessionId);
+      setTabs(previous => preserveWorkbenchLifecycle(updated, previous));
       await refreshCatalogAudit();
     } catch (cause) {
       const userMessage = sessionLifecycleNotice(cause) ?? tauriMessageFrom(cause);
@@ -1062,7 +1104,8 @@ export function TauriSessionPreview() {
         const title = titleFromFirstUser(input);
         if (title) {
           try {
-            setTabs(await backfillTauriWorkbenchTitles([{ sessionId, title }]));
+            const updated = await backfillTauriWorkbenchTitles([{ sessionId, title }]);
+            setTabs(previous => preserveWorkbenchLifecycle(updated, previous));
           } catch {
             // The turn was accepted; catalog enrichment must not report it as a failed send.
           }

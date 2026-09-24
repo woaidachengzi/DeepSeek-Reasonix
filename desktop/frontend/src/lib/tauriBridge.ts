@@ -84,6 +84,8 @@ export interface TauriWorkbenchSession {
   sessionId: string;
   title?: string;
   workspaceRoot?: string;
+  state?: string;
+  missing?: boolean;
 }
 
 export interface TauriWorkbenchSessionPage {

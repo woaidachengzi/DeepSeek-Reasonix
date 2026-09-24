@@ -148,7 +148,9 @@
 .tauri-sidebar__session:hover:not(:disabled) { background: var(--sidebar-hover); color: var(--fg) !important; }
 .tauri-sidebar__session.is-active { border-color: color-mix(in srgb, var(--accent) 20%, transparent); background: var(--sidebar-active); color: var(--fg) !important; }
 .tauri-sidebar__session svg { flex: 0 0 auto; color: var(--fg-faint); }
-.tauri-sidebar__session span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tauri-sidebar__session span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tauri-sidebar__session .tauri-session-missing { flex: 0 0 auto; padding: 2px 5px; border: 1px solid color-mix(in srgb, #e5a65b 28%, transparent); border-radius: 5px; color: #e5a65b; font-size: 9px; line-height: 1.2; }
+.tauri-sidebar__session.is-missing { color: var(--fg-faint) !important; cursor: not-allowed; }
 
 .tauri-session-row { position: relative; display: flex; min-width: 0; align-items: center; }
 .tauri-session-row .tauri-sidebar__session { flex: 1; padding-right: 34px; }
