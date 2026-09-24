@@ -127,6 +127,20 @@ pub struct BridgeOpenSessionRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeProjectFolder {
+    pub root: String,
+    pub title: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeProjectFoldersResponse {
+    pub projects: Vec<BridgeProjectFolder>,
+    pub protocol_version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeProviderSummary {
     pub configured: bool,
     pub display_name: Option<String>,

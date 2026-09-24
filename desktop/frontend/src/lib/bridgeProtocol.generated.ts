@@ -90,6 +90,16 @@ export interface BridgeOpenSessionRequest {
   workspaceRoot?: string;
 }
 
+export interface BridgeProjectFolder {
+  root: string;
+  title?: string;
+}
+
+export interface BridgeProjectFoldersResponse {
+  projects: BridgeProjectFolder[];
+  protocolVersion: number;
+}
+
 export interface BridgeProviderSummary {
   configured: boolean;
   displayName?: string;

@@ -10,6 +10,9 @@ use tauri::Manager;
 
 const CORE_PROFILE_DIR: &str = "reasonix-core";
 const CONFIG_FILE: &str = "config.toml";
+const PROJECTS_FILE: &str = "desktop-projects.json";
+const MAX_PROJECTS_FILE: u64 = 4 * 1024 * 1024;
+const MAX_PROJECT_COUNT: usize = 10_000;
 
 /// The preview's private core profile and the stable config it may explicitly
 /// import. This state is created before `REASONIX_HOME` is changed, so the
@@ -30,6 +33,8 @@ pub struct PreviewProfileStatus {
     pub stable_config_exists: bool,
     pub import_available: bool,
     pub managed_profile: bool,
+    pub project_folders_import_available: bool,
+    pub project_folders_file_exists: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -37,6 +42,13 @@ pub struct PreviewProfileStatus {
 pub struct ProfileImportResult {
     pub imported_config: String,
     pub backup_config: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectFoldersImportResult {
+    pub imported_file: String,
+    pub project_count: usize,
 }
 
 /// Selects the Go core's private storage root for the Tauri preview.
@@ -114,6 +126,12 @@ impl PreviewProfile {
                 && stable_config_exists
                 && !preview_config_exists,
             managed_profile: self.managed_profile,
+            project_folders_import_available: self.managed_profile
+                && self
+                    .stable_projects_path()
+                    .is_some_and(|path| path.is_file())
+                && !self.project_folders_path().exists(),
+            project_folders_file_exists: self.project_folders_path().is_file(),
         }
     }
 
@@ -183,8 +201,114 @@ impl PreviewProfile {
         })
     }
 
+    /// Imports only saved project folder roots and optional labels. Topic IDs,
+    /// session metadata, ordering, and every other stable-profile field stay
+    /// out of the Preview copy.
+    pub fn import_stable_project_folders(&self) -> Result<ProjectFoldersImportResult, String> {
+        if !self.managed_profile {
+            return Err(
+                "project folder import is unavailable when REASONIX_HOME was explicitly supplied"
+                    .into(),
+            );
+        }
+        let source = self
+            .stable_projects_path()
+            .ok_or("the stable project folder location is unavailable")?;
+        let metadata = fs::symlink_metadata(&source).map_err(|error| {
+            format!(
+                "inspect saved project folders {}: {error}",
+                source.display()
+            )
+        })?;
+        if metadata.file_type().is_symlink()
+            || !metadata.is_file()
+            || metadata.len() > MAX_PROJECTS_FILE
+        {
+            return Err(
+                "the stable project folder file must be a regular file no larger than 4 MiB".into(),
+            );
+        }
+        let bytes = fs::read(&source)
+            .map_err(|error| format!("read saved project folders {}: {error}", source.display()))?;
+        #[derive(serde::Deserialize)]
+        struct StoredProject {
+            #[serde(default)]
+            root: String,
+            #[serde(default)]
+            title: String,
+        }
+        #[derive(serde::Deserialize)]
+        struct StoredProjects {
+            #[serde(default)]
+            projects: Vec<StoredProject>,
+        }
+        let stored: StoredProjects = serde_json::from_slice(&bytes)
+            .map_err(|error| format!("parse saved project folders: {error}"))?;
+        if stored.projects.len() > MAX_PROJECT_COUNT {
+            return Err("the stable project folder file contains too many entries".into());
+        }
+        let mut projects = Vec::with_capacity(stored.projects.len());
+        let mut seen = std::collections::HashSet::new();
+        for project in stored.projects {
+            let root = project.root.trim();
+            if root.is_empty()
+                || root.len() > 4096
+                || root.chars().any(char::is_control)
+                || !seen.insert(root.to_string())
+            {
+                continue;
+            }
+            let title: String = project.title.trim().chars().take(256).collect();
+            projects.push(serde_json::json!({ "root": root, "title": title }));
+        }
+        let project_count = projects.len();
+        let output = serde_json::to_vec_pretty(&serde_json::json!({ "projects": projects }))
+            .map_err(|error| format!("encode Preview project folders: {error}"))?;
+        fs::create_dir_all(&self.home)
+            .map_err(|error| format!("create Preview profile {}: {error}", self.home.display()))?;
+        let destination = self.project_folders_path();
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&destination)
+            .map_err(|error| {
+                format!(
+                    "create Preview project folder file {} without overwriting: {error}",
+                    destination.display()
+                )
+            })?;
+        if let Err(error) = file.write_all(&output).and_then(|()| file.sync_all()) {
+            drop(file);
+            let _ = fs::remove_file(&destination);
+            return Err(format!(
+                "write Preview project folders {}: {error}",
+                destination.display()
+            ));
+        }
+        drop(file);
+        if let Err(error) = restrict_config_permissions(&destination) {
+            let _ = fs::remove_file(&destination);
+            return Err(error);
+        }
+        Ok(ProjectFoldersImportResult {
+            imported_file: destination.display().to_string(),
+            project_count,
+        })
+    }
+
     fn config_path(&self) -> PathBuf {
         self.home.join(CONFIG_FILE)
+    }
+
+    fn stable_projects_path(&self) -> Option<PathBuf> {
+        self.stable_config
+            .as_ref()
+            .and_then(|path| path.parent())
+            .map(|directory| directory.join(PROJECTS_FILE))
+    }
+
+    fn project_folders_path(&self) -> PathBuf {
+        self.home.join(PROJECTS_FILE)
     }
 
     fn create_backup_dir(&self) -> Result<PathBuf, String> {

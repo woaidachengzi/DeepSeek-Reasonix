@@ -37,6 +37,7 @@ import {
   chooseTauriWorkspaceRoot,
   deleteTauriBridgeSession,
   forgetTauriWorkbenchSession,
+  importTauriStableProjectFolders,
   importTauriStableProfile,
   newTauriSessionId,
   onTauriBridgeConnectionError,
@@ -74,6 +75,7 @@ import {
   tauriPreviewRuntimeInfo,
   tauriSessionTitle,
   tauriWorkbenchSessionPage,
+  tauriWorkbenchProjectFolders,
   tauriWorkspaceRootsAvailability,
   tauriSessionPreviews,
   tauriSafeMCPURL,
@@ -97,7 +99,7 @@ import {
   type TauriProviderSummary,
   type TauriSessionShadowReport,
 } from "../lib/tauriBridge";
-import { groupWorkbenchSessions, titleFromFirstUser } from "./workbenchSessions";
+import { groupWorkbenchSessions, titleFromFirstUser, type WorkbenchProjectFolder } from "./workbenchSessions";
 import { sessionLifecycleFailure, sessionLifecycleNotice } from "./sessionLifecycleError";
 import {
   emptyMCPDraft,
@@ -251,6 +253,7 @@ function PromptCard({ prompt, busy, selections, onApproval, onAskSelection, onAs
 export function TauriSessionPreview() {
   const [session, setSession] = useState<TauriBridgeSession | null>(null);
   const [tabs, setTabs] = useState<WorkbenchSessionTab[]>([]);
+  const [projectFolders, setProjectFolders] = useState<WorkbenchProjectFolder[]>([]);
   const [sessionPageCursor, setSessionPageCursor] = useState<{ position: number; id: string } | null>(null);
   const [sessionPageSource, setSessionPageSource] = useState<"identity" | "legacy">("identity");
   const [sessionPageLoading, setSessionPageLoading] = useState(false);
@@ -320,7 +323,7 @@ export function TauriSessionPreview() {
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   // Drag-and-drop state
   const [dragging, setDragging] = useState(false);
-  const projectGroups = useMemo(() => groupWorkbenchSessions(tabs), [tabs]);
+  const projectGroups = useMemo(() => groupWorkbenchSessions(tabs, projectFolders), [tabs, projectFolders]);
   const projectRootsKey = projectGroups.flatMap(group => group.root ? [group.root] : []).join("\u0000");
   const activeCatalogTitle = tabs.find(tab => tab.sessionId === session?.id)?.title;
 
@@ -441,6 +444,13 @@ export function TauriSessionPreview() {
     let active = true;
     void (async () => {
       try {
+        try {
+          const folders = await tauriWorkbenchProjectFolders();
+          if (active) setProjectFolders(folders.map(folder => ({ root: folder.root, title: folder.title })));
+        } catch {
+          // The session catalog still supplies project folders when the older
+          // saved-project snapshot is unavailable.
+        }
         // One-time, idempotent migration. Prefer the identity directory after
         // import, but retain the JSON catalog as an initial-load fallback.
         try { await tauriImportLegacySessionCatalog(); } catch { /* keep legacy catalog usable while the bridge is unavailable */ }
@@ -1351,6 +1361,28 @@ export function TauriSessionPreview() {
     }
   }
 
+  async function importStableProjectFolders() {
+    if (!profile?.projectFoldersImportAvailable || busy) return;
+    const confirmed = window.confirm(
+      "将稳定版保存的项目文件夹名称和路径复制到隔离的 Tauri Preview？只导入文件夹清单，不导入会话、topic 或其他配置；不会修改稳定版。",
+    );
+    if (!confirmed) return;
+    setBusy(true);
+    setError("");
+    setProfileNotice("");
+    try {
+      const result = await importTauriStableProjectFolders();
+      const folders = await tauriWorkbenchProjectFolders();
+      setProjectFolders(folders.map(folder => ({ root: folder.root, title: folder.title })));
+      setProfile(await tauriPreviewProfileStatus());
+      setProfileNotice(`已导入 ${result.projectCount} 个项目文件夹：\n${result.importedFile}`);
+    } catch (cause) {
+      setError(tauriMessageFrom(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function refreshHistory() {
     if (!session || busy) return;
     const refreshEpoch = ++turnEpochRef.current;
@@ -1469,7 +1501,7 @@ export function TauriSessionPreview() {
                 <button type="button" className="tauri-project-group__toggle" aria-label={`${collapsedProjects[group.key] ? "展开" : "收起"} ${group.label}`} aria-expanded={!collapsedProjects[group.key]} onClick={() => setCollapsedProjects(previous => ({ ...previous, [group.key]: !previous[group.key] }))}>
                   {collapsedProjects[group.key] ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
                 </button>
-                <button type="button" className="tauri-project-group__select" title={workspaceAvailability[group.root] === false ? `${group.root}\n工作区不可用；已有会话仍可打开` : group.root} aria-label={`切换到项目 ${group.label}${workspaceAvailability[group.root] === false ? "（工作区不可用）" : ""}`} disabled={busy || switchingBlocked || !group.sessions.some(tab => !isMissingWorkbenchSession(tab))} onClick={() => { const latest = group.sessions.find(tab => !isMissingWorkbenchSession(tab)); if (latest && latest.sessionId !== session?.id) void activateSession(latest.sessionId, latest.workspaceRoot); }}><FolderOpen size={14} /><span>{group.label}</span>{workspaceAvailability[group.root] === false && <small className="tauri-project-group__unavailable">工作区不可用</small>}<small>{group.sessions.length}</small></button>
+                <button type="button" className="tauri-project-group__select" title={workspaceAvailability[group.root] === false ? `${group.root}\n工作区不可用；已有会话仍可打开` : group.root} aria-label={`切换到项目 ${group.label}${workspaceAvailability[group.root] === false ? "（工作区不可用）" : ""}`} disabled={busy || switchingBlocked || (group.sessions.length > 0 && !group.sessions.some(tab => !isMissingWorkbenchSession(tab)))} onClick={() => { const latest = group.sessions.find(tab => !isMissingWorkbenchSession(tab)); if (latest) { if (latest.sessionId !== session?.id) void activateSession(latest.sessionId, latest.workspaceRoot); } else setWorkspaceRoot(group.root || ""); }}><FolderOpen size={14} /><span>{group.label}</span>{workspaceAvailability[group.root] === false && <small className="tauri-project-group__unavailable">工作区不可用</small>}<small>{group.sessions.length}</small></button>
                 <button type="button" className="tauri-project-group__new" aria-label={`在 ${group.label} 中新建对话`} title={workspaceAvailability[group.root] === false ? "工作区不可用，无法在此处新建对话" : "在此项目新建对话"} disabled={busy || switchingBlocked || workspaceAvailability[group.root] === false} onClick={() => void createSession(group.root || "")}><Plus size={14} /></button>
               </div>
               {!collapsedProjects[group.key] && group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} busy={busy} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} />)}
@@ -1615,7 +1647,9 @@ export function TauriSessionPreview() {
             </section>
             <section className="tauri-diagnostic-card">
               <h3>预览配置</h3>
-              {profile ? <><p>配置与会话保存在独立预览目录：</p><code>{profile.previewHome}</code>{profile.importAvailable ? <><p>检测到稳定版配置。复制前会创建备份，不会改动稳定版。</p><button type="button" className="tauri-diagnostic-action" onClick={() => void importStableProfile()} disabled={busy}>复制稳定版配置（先备份）</button></> : <p>{profile.previewConfigExists ? "预览配置已存在，不会覆盖。" : profile.managedProfile ? "未发现可复制的稳定版配置。" : "检测到自定义 REASONIX_HOME，已停用自动导入。"}</p>}</> : <p>正在检查隔离配置…</p>}
+              {profile ? <><p>配置与会话保存在独立预览目录：</p><code>{profile.previewHome}</code>{profile.importAvailable ? <><p>检测到稳定版配置。复制前会创建备份，不会改动稳定版。</p><button type="button" className="tauri-diagnostic-action" onClick={() => void importStableProfile()} disabled={busy}>复制稳定版配置（先备份）</button></> : <p>{profile.previewConfigExists ? "预览配置已存在，不会覆盖。" : profile.managedProfile ? "未发现可复制的稳定版配置。" : "检测到自定义 REASONIX_HOME，已停用自动导入。"}</p>}
+                {profile.projectFoldersImportAvailable ? <><p>可单独导入稳定版保存的实际项目文件夹；只复制根路径和显示名称。</p><button type="button" className="tauri-diagnostic-action" onClick={() => void importStableProjectFolders()} disabled={busy}>导入旧版项目文件夹</button></> : profile.projectFoldersFileExists ? <p>当前配置目录中已有项目文件夹清单。</p> : <p>{profile.managedProfile ? "没有可导入的稳定版项目文件夹清单。" : "自定义 REASONIX_HOME 下停用稳定版项目文件夹导入。"}</p>}
+              </> : <p>正在检查隔离配置…</p>}
               {profileNotice && <p className="tauri-diagnostic-notice">{profileNotice}</p>}
             </section>
             <section className="tauri-diagnostic-card">

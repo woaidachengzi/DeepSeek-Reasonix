@@ -69,12 +69,21 @@ export function keychainSave(key, value) { record("keychain_save", { key, value 
 export function keychainLoad(key) { record("keychain_load", { key }); return Promise.resolve(null); }
 export function keychainDelete(key) { record("keychain_delete", { key }); return Promise.resolve(true); }
 export function importTauriStableProfile() { return Promise.resolve({ importedConfig: "", backupConfig: "" }); }
+export function importTauriStableProjectFolders() {
+  record("import_stable_project_folders");
+  return Promise.resolve({ importedFile: "/tmp/desktop-projects.json", projectCount: 0 });
+}
 export function chooseTauriWorkspaceRoot() { return Promise.resolve(null); }
 export function chooseTauriAttachmentFiles() { return Promise.resolve([]); }
 
 export function tauriWorkbenchSessions() {
   record("workbench_sessions");
   return Promise.resolve((globalThis.__workbenchSessions ?? []).slice());
+}
+
+export function tauriWorkbenchProjectFolders() {
+  record("workbench_project_folders");
+  return Promise.resolve((globalThis.__savedProjectFolders ?? []).slice());
 }
 
 export function tauriWorkbenchSessionPage(cursor, limit = 200) {

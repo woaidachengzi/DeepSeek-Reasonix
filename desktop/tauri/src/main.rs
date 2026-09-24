@@ -54,17 +54,19 @@ use std::path::Path;
 
 use bridge::{
     AnswerMCPInteractionRequest, AnswerQuestionRequest, ApproveRequest, AttachFileRequest,
-    BridgeAttachment, BridgeDeleteSessionResponse, BridgeHistory, BridgeProviderSummaryResponse,
-    BridgeSession, BridgeSetDefaultModelRequest, BridgeSnapshot, BridgeStatus, BridgeSupervisor,
-    BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
-    BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse, LegacySessionCatalogEntry,
-    MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse, MCPServerView,
-    OpenSessionRequest, RenameSessionRequest, SessionCatalogMetadata, SessionDirectoryCursor,
-    SessionDirectoryEntry, SessionDirectoryPage, SessionFirstMessageTitle, SessionPreview,
-    SessionRequest, SubmitRequest, WorkspaceChangeDetailRequest, WorkspaceFileRequest,
-    WorkspaceRequest,
+    BridgeAttachment, BridgeDeleteSessionResponse, BridgeHistory, BridgeProjectFolder,
+    BridgeProviderSummaryResponse, BridgeSession, BridgeSetDefaultModelRequest, BridgeSnapshot,
+    BridgeStatus, BridgeSupervisor, BridgeWorkspaceChangeDetailResponse,
+    BridgeWorkspaceChangesResponse, BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse,
+    LegacySessionCatalogEntry, MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse,
+    MCPServerView, OpenSessionRequest, RenameSessionRequest, SessionCatalogMetadata,
+    SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage, SessionFirstMessageTitle,
+    SessionPreview, SessionRequest, SubmitRequest, WorkspaceChangeDetailRequest,
+    WorkspaceFileRequest, WorkspaceRequest,
 };
-use data_profile::{PreviewProfile, PreviewProfileStatus, ProfileImportResult};
+use data_profile::{
+    PreviewProfile, PreviewProfileStatus, ProfileImportResult, ProjectFoldersImportResult,
+};
 use runtime_info::PreviewRuntimeInfo;
 use session_shadow::SessionShadowReport;
 use tauri::{Manager, State};
@@ -373,10 +375,28 @@ fn import_stable_profile(
 }
 
 #[tauri::command]
+fn import_stable_project_folders(
+    profile: State<'_, PreviewProfile>,
+    confirmed: bool,
+) -> Result<ProjectFoldersImportResult, String> {
+    if !confirmed {
+        return Err("stable project folder import requires explicit confirmation".into());
+    }
+    profile.import_stable_project_folders()
+}
+
+#[tauri::command]
 fn workbench_sessions(
     catalog: State<'_, WorkbenchCatalog>,
 ) -> Result<Vec<WorkbenchSession>, String> {
     catalog.list()
+}
+
+#[tauri::command]
+fn workbench_project_folders(
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<Vec<BridgeProjectFolder>, String> {
+    supervisor.project_folders()
 }
 
 #[tauri::command]
@@ -811,7 +831,9 @@ fn main() {
             provider_summary,
             set_default_model,
             import_stable_profile,
+            import_stable_project_folders,
             workbench_sessions,
+            workbench_project_folders,
             workbench_session_page,
             backfill_workbench_titles,
             remember_workbench_session,

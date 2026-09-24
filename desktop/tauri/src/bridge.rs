@@ -231,11 +231,11 @@ pub use crate::protocol_generated::{
     BridgeAttachFileRequest as AttachFileRequest, BridgeAttachment, BridgeAttachmentResponse,
     BridgeDeleteSessionResponse, BridgeEvent, BridgeHistoryMessage, BridgeHistoryResponse,
     BridgeMCPInteractionAnswerRequest, BridgeOpenSessionRequest as OpenSessionRequest,
-    BridgeProviderSummaryResponse, BridgeRenameSessionRequest, BridgeSession,
-    BridgeSessionResponse, BridgeSetDefaultModelRequest, BridgeWorkspaceChangeDetailRequest,
-    BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
-    BridgeWorkspaceFileRequest, BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse,
-    BridgeWorkspaceRequest,
+    BridgeProjectFolder, BridgeProjectFoldersResponse, BridgeProviderSummaryResponse,
+    BridgeRenameSessionRequest, BridgeSession, BridgeSessionResponse, BridgeSetDefaultModelRequest,
+    BridgeWorkspaceChangeDetailRequest, BridgeWorkspaceChangeDetailResponse,
+    BridgeWorkspaceChangesResponse, BridgeWorkspaceFileRequest, BridgeWorkspaceFileResponse,
+    BridgeWorkspaceListResponse, BridgeWorkspaceRequest,
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -724,6 +724,29 @@ impl BridgeSupervisor {
         let page: SessionDirectoryPage = serde_json::from_value(response).map_err(display_error)?;
         validate_session_directory_page(&page, limit, cursor.as_ref(), workspace_root)?;
         Ok(page)
+    }
+
+    /// Reads the saved workspace folders from the legacy desktop project file.
+    /// This endpoint is read-only; Tauri does not participate in the legacy
+    /// project's write lifecycle.
+    pub fn project_folders(&self) -> Result<Vec<BridgeProjectFolder>, String> {
+        let response = self.request_json("GET", "/v1/projects", None, None)?;
+        let envelope: BridgeProjectFoldersResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION)
+            || envelope.projects.len() > 10_000
+            || envelope.projects.iter().any(|project| {
+                project.root.trim().is_empty()
+                    || project.root.len() > 4096
+                    || project
+                        .title
+                        .as_ref()
+                        .is_some_and(|title| title.chars().count() > 1024)
+            })
+        {
+            return Err("desktop bridge returned an invalid project folder list".to_string());
+        }
+        Ok(envelope.projects)
     }
 
     /// Read the entire visible directory for a bounded, diagnostic-only

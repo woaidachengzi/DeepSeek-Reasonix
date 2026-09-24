@@ -30,6 +30,7 @@
     { "$ref": "#/$defs/mcpInteractionAnswerRequest" },
     { "$ref": "#/$defs/sessionResponse" },
     { "$ref": "#/$defs/historyResponse" },
+    { "$ref": "#/$defs/projectFoldersResponse" },
     { "$ref": "#/$defs/event" },
     { "$ref": "#/$defs/error" }
   ],
@@ -366,6 +367,26 @@
         "messages": { "type": "array", "items": { "$ref": "#/$defs/historyMessage" } },
         "startIndex": { "type": "integer", "minimum": 0 },
         "totalMessages": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "projectFolder": {
+      "title": "BridgeProjectFolder",
+      "type": "object",
+      "required": ["root"],
+      "properties": {
+        "root": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "title": { "type": "string", "maxLength": 1024 }
+      },
+      "additionalProperties": false
+    },
+    "projectFoldersResponse": {
+      "title": "BridgeProjectFoldersResponse",
+      "type": "object",
+      "required": ["protocolVersion", "projects"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "projects": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/$defs/projectFolder" } }
       },
       "additionalProperties": false
     },

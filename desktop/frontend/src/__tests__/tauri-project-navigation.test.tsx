@@ -22,15 +22,22 @@ Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, co
 (globalThis as unknown as { __previewFirstUsers: Record<string, string> }).__previewFirstUsers = { "old-alpha": "整理报告并加测试" };
 (globalThis as unknown as { __unavailableWorkspaceRoots: string[] }).__unavailableWorkspaceRoots = ["/work/alpha"];
 
+(globalThis as typeof globalThis & { __savedProjectFolders: unknown[] }).__savedProjectFolders = [
+  { root: "/work/empty", title: "Saved empty project" },
+];
+
 const React = await import("react");
 const { act } = React;
 const { createRoot } = await import("react-dom/client");
 const { TauriSessionApp } = await import("../tauri/TauriChatWorkspace");
 const root = createRoot(document.getElementById("root")!);
 await act(async () => { root.render(React.createElement(TauriSessionApp)); await new Promise(resolve => setTimeout(resolve, 0)); });
-assert.equal(document.querySelectorAll(".tauri-project-group").length, 2);
+assert.equal(document.querySelectorAll(".tauri-project-group").length, 3);
+assert.ok(document.querySelector('[aria-label="切换到项目 Saved empty project"]'));
+assert.ok(document.querySelector('[aria-label="在 Saved empty project 中新建对话"]'));
 assert.match(document.body.textContent ?? "", /整理报告并加测试/);
 const calls = (globalThis as unknown as { __tauriBridgeCalls: Array<{ name: string; args: Record<string, string> }> }).__tauriBridgeCalls;
+assert.ok(calls.some(call => call.name === "workbench_project_folders"));
 assert.ok(calls.some(call => call.name === "bridge_session_previews"));
 assert.ok(calls.some(call => call.name === "backfill_workbench_titles"));
 const loadMore = document.querySelector<HTMLButtonElement>('[aria-label="加载更多会话"]');

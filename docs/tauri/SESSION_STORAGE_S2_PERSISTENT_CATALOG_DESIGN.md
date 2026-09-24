@@ -16,7 +16,7 @@
 | 1 | **缺文件的会话会被静默重开成同 ID 的空会话** | 已由身份状态优先检查、missing 状态与 reservation 修复；见 §3.3。 |
 | 2 | **最近列表硬上限 50，且会静默丢弃** | SQLite keyset 分页侧栏已可继续加载超出 JSON 最近列表的旧会话；JSON 仍保留最多 50 条作为兼容回退源。 |
 | 3 | **列表权威在 host 的 JSON 文件，不在身份库** | Preview 首屏影子比对 clean 时按页读取身份库，不一致或审计失败时回退 JSON；这仍是迁移期门禁，不等同唯一权威切换。 |
-| 4 | **"项目树"只是按 workspaceRoot 分组的最近列表** | `desktop/frontend/src/tauri/workbenchSessions.ts` 的 `groupWorkbenchSessions`；没有项目级实体，也就没有"项目下全部会话"。 |
+| 4 | **Tauri 曾只从最近会话生成工作区文件夹** | 已增加显式导入旧版文件夹清单，并合并身份目录会话；历史空文件夹可见，文件夹下会话仍按分页加载。 |
 
 问题 1 是数据安全，问题 2 是功能上限，两者都必须在切换权威之前解决。
 
@@ -119,6 +119,7 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 - host 已全量读取分页目录并提供只读影子报告，比较旧 JSON 与身份库的 ID 覆盖、标题、工作区、
   顺序及缺失 transcript 数量；扫描不完整或目录在读取期间变化时不会报告为一致。运行状态面板展示汇总，
   报告不输出会话 ID、路径或标题内容。
+- 旧 JSON catalog 文件缺失按首次启动处理为空目录；文件存在但不可读或 JSON 格式无法解析时，读取与写入均 fail-closed，不能静默当成空目录后覆盖原文件。
 - host 首次只取一页（例如 200 条），滚动到底再取下一页；**不再有丢弃**。
 - 迁移：`workbench-sessions.json` 的现有条目一次性导入身份库（沿用第 2、3 项已交付的
   `Import` 与 `ImportWorkbenchCatalog`，路径已同源）。导入后该文件转为只读回退输入。
@@ -128,13 +129,13 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 
 ### 3.5 完整项目树
 
-"项目树"= 工作区分组 + 每个工作区下的**全部**会话（不再受列表长度限制）。
+"项目树"= 已保存的工作区文件夹 + 每个工作区下的**全部**会话（不再受列表长度限制）。
 
-- 数据来源：身份库按 `workspace_root` 分组（`sessionidentity` 已有该列），
-  加上磁盘核对结果（`Inventory` 的分类）。
+- 用户明确选择导入后，只把旧桌面 `desktop-projects.json` 中的根路径和显示名称复制到 Preview；不自动读取稳定配置目录，也不复制 topic/session 元数据。bridge endpoint 只读 Preview 副本。
+- 会话根目录按身份库 `workspace_root` 分组（`sessionidentity` 已有该列）。Tauri 合并两者，因此仍保留尚无会话的已保存文件夹。
+- Tauri 不写 Wails 持有的项目文件，也不新建第二份项目注册表；旧写者的停写确认仍是切换写入行为前的独立门禁。
+- 磁盘核对结果（`Inventory` 的分类）只决定文件夹可用状态，不改变文件夹身份或隐藏其下的会话。
 - 无工作区的会话：作为"未指定项目"的平铺行显示，**不伪造项目实体**（第 1 项已定的语义）。
-- 项目实体只从会话的 `workspace_root` 派生，**不新增项目注册表**——否则要处理
-  "项目删除但会话还在"的一致性问题，而本项不需要这个复杂度。
 - 侧栏分组键仍是规范化后的 workspace 路径；隐藏/折叠状态继续只存在 host（`collapsedProjects`），
   不写入身份库。
 - 工作区已被删除（目录不存在）的会话：项目节点标为"工作区不可用"，会话仍可打开
@@ -183,6 +184,7 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 **5.3**
 - 209 条会话的列表返回 209 条（分页合计），证明 50 条上限不再适用。
 - 老客户端（只读 `workbench-sessions.json`）行为不变。
+- JSON catalog 缺失按空目录启动；损坏 catalog 返回显式错误，且被 `remember` 保留的原始字节不变（`caps_catalog_and_fails_closed_on_corrupt_files`）。
 - 响应不含 transcript 内容与凭据类字段。
 - 影子盘点：身份目录额外行不误判为旧目录缺失；标题/工作区/顺序差异及 missing、物理状态漂移均计数。
 - 重复 ID、分页总数漂移、未登记 transcript 或盘点错误不能得到“完全一致”结果。

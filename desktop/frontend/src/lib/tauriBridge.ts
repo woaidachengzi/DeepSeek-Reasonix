@@ -11,6 +11,7 @@ import type {
   BridgeEvent,
   BridgeHistoryMessage,
   BridgeMCPInteractionAnswerRequest,
+  BridgeProjectFolder,
   BridgeProviderSummaryResponse,
   BridgeSession,
   BridgeWorkspaceListResponse,
@@ -63,11 +64,18 @@ export interface TauriPreviewProfileStatus {
   stableConfigExists: boolean;
   importAvailable: boolean;
   managedProfile: boolean;
+  projectFoldersImportAvailable?: boolean;
+  projectFoldersFileExists?: boolean;
 }
 
 export interface TauriProfileImportResult {
   importedConfig: string;
   backupConfig: string;
+}
+
+export interface TauriProjectFoldersImportResult {
+  importedFile: string;
+  projectCount: number;
 }
 
 export interface TauriPreviewRuntimeInfo {
@@ -229,9 +237,19 @@ export async function importTauriStableProfile(): Promise<TauriProfileImportResu
   return invoke<TauriProfileImportResult>("import_stable_profile", { confirmed: true });
 }
 
+export async function importTauriStableProjectFolders(): Promise<TauriProjectFoldersImportResult> {
+  requireTauri();
+  return invoke<TauriProjectFoldersImportResult>("import_stable_project_folders", { confirmed: true });
+}
+
 export async function tauriWorkbenchSessions(): Promise<TauriWorkbenchSession[]> {
   requireTauri();
   return invoke<TauriWorkbenchSession[]>("workbench_sessions");
+}
+
+export async function tauriWorkbenchProjectFolders(): Promise<BridgeProjectFolder[]> {
+  requireTauri();
+  return invoke<BridgeProjectFolder[]>("workbench_project_folders");
 }
 
 export async function tauriWorkbenchSessionPage(

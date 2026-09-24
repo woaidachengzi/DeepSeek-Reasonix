@@ -34,6 +34,7 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 删除会话 | `DELETE /v1/sessions/{sessionId}` | `X-Reasonix-Request-ID` 去重；仅空闲且为当前持有的会话 |
 | 会话快照 | `GET /v1/sessions/{sessionId}/snapshot` | 是 |
 | 只读会话清单 | `GET /v1/sessions/inventory?catalog=<path>` | 是；只读，不建库、不认领 |
+| 保存的项目文件夹 | `GET /v1/projects` | 是；只读旧版项目目录的 workspace root 与自定义标题 |
 | MCP 服务器列表 | `GET /v1/mcp/servers?workspaceRoot=<path>` | 是；只返回凭据键名 |
 | 新增/编辑 MCP 服务器 | `POST /v1/mcp/servers?workspaceRoot=<path>` | `X-Reasonix-Request-ID` 去重；字段省略即保留原值 |
 | 删除 MCP 服务器 | `DELETE /v1/mcp/servers?workspaceRoot=<path>` | 否；不存在返回 `not_found` |

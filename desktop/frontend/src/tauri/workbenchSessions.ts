@@ -6,6 +6,12 @@ export interface WorkbenchProjectGroup {
   root?: string;
   label: string;
   sessions: TauriWorkbenchSession[];
+  savedTitle?: boolean;
+}
+
+export interface WorkbenchProjectFolder {
+  root: string;
+  title?: string;
 }
 
 function projectKey(root?: string): string {
@@ -22,8 +28,23 @@ function projectName(root: string): string {
  *  sessions prepend; reopening an existing row never reorders folders.
  *  A blank root stays rootless so the sidebar can list it as a bare chat
  *  instead of inventing an "unspecified project" folder. */
-export function groupWorkbenchSessions(sessions: readonly TauriWorkbenchSession[]): WorkbenchProjectGroup[] {
+export function groupWorkbenchSessions(
+  sessions: readonly TauriWorkbenchSession[],
+  folders: readonly WorkbenchProjectFolder[] = [],
+): WorkbenchProjectGroup[] {
   const groups = new Map<string, WorkbenchProjectGroup>();
+  for (const folder of folders) {
+    const key = projectKey(folder.root);
+    if (!key || groups.has(key)) continue;
+    const title = folder.title?.trim();
+    groups.set(key, {
+      key,
+      root: key,
+      label: title || projectName(key),
+      sessions: [],
+      savedTitle: Boolean(title),
+    });
+  }
   for (const session of sessions) {
     const key = projectKey(session.workspaceRoot);
     let group = groups.get(key);
@@ -37,7 +58,7 @@ export function groupWorkbenchSessions(sessions: readonly TauriWorkbenchSession[
   const labelCounts = new Map<string, number>();
   for (const group of result) labelCounts.set(group.label, (labelCounts.get(group.label) ?? 0) + 1);
   for (const group of result) {
-    if (group.root && (labelCounts.get(group.label) ?? 0) > 1) {
+    if (group.root && !group.savedTitle && (labelCounts.get(group.label) ?? 0) > 1) {
       const segments = group.root.split(/[/\\]/).filter(Boolean);
       const parent = segments[segments.length - 2];
       group.label = parent ? `${group.label} · ${parent}` : group.root;
