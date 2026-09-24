@@ -32,6 +32,7 @@ func TestOfflineSnapshotVerifiesAndStagesCompleteProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	identityPath := filepath.Join(profile, "desktop", "session-state-v1.sqlite")
+	workspace := filepath.Join(root, "project-workspace")
 	writer, err := Open(ctx, identityPath)
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +44,7 @@ func TestOfflineSnapshotVerifiesAndStagesCompleteProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	catalog := filepath.Join(root, "workbench-sessions.json")
-	writeCatalog(t, catalog, []catalogEntry{{SessionID: "tauri-first", Title: "First"}})
+	writeCatalog(t, catalog, []catalogEntry{{SessionID: "tauri-first", Title: "First", WorkspaceRoot: workspace}})
 	backupParent := filepath.Join(root, "backups")
 	if err := os.Mkdir(backupParent, 0o700); err != nil {
 		t.Fatal(err)
@@ -119,6 +120,35 @@ func TestOfflineSnapshotVerifiesAndStagesCompleteProfile(t *testing.T) {
 	defer relocated.Close()
 	if err := relocated.Import(ctx, filepath.Join(staged, "profile", "sessions"), []Candidate{{ID: "tauri-first", Path: wantRestoredTranscript}}); err != nil {
 		t.Fatalf("reconcile relocated identity: %v", err)
+	}
+	if err := relocated.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Exercise the legacy-catalog recovery path against the relocated transcript
+	// rather than merely checking that the catalog bytes were copied. A scratch
+	// identity store avoids replacing or mutating the restored identity DB.
+	replayed, err := Open(ctx, filepath.Join(staged, "profile", "desktop", "catalog-replay.sqlite"), filepath.Join(staged, "profile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := replayed.ImportWorkbenchCatalog(ctx, filepath.Join(staged, "profile", "sessions"), filepath.Join(staged, "catalog", "workbench-sessions.json")); err != nil {
+		_ = replayed.Close()
+		t.Fatalf("replay restored workbench catalog: %v", err)
+	}
+	replayedRecords, err := replayed.List(ctx)
+	if err != nil || len(replayedRecords) != 1 {
+		_ = replayed.Close()
+		t.Fatalf("replayed catalog records = %#v, %v", replayedRecords, err)
+	}
+	replayedRecord := replayedRecords[0]
+	if replayedRecord.ID != "tauri-first" || replayedRecord.Path != wantRestoredTranscript ||
+		replayedRecord.Title != "First" || replayedRecord.WorkspaceRoot != workspace || replayedRecord.State != StateReady {
+		_ = replayed.Close()
+		t.Fatalf("replayed catalog record = %#v", replayedRecord)
+	}
+	if err := replayed.Close(); err != nil {
+		t.Fatal(err)
 	}
 }
 
