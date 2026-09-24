@@ -1,8 +1,8 @@
 # 第 5 项设计稿：持久会话目录与完整项目树（存储 S2）
 
 > 状态：**部分实现**。身份库 schema v3 生命周期状态、首次会话 reservation、恢复前状态检查及
-> 残留 sidecar 防误复用、身份库 keyset 分页及 bridge 只读列表接口已实现；host 权威切换、删除 tombstone
-> 流程与 UI 恢复选项仍未实现。侧栏当前仍受 host JSON 的 50 条上限约束。
+> 残留 sidecar 防误复用、身份库 keyset 分页、bridge 只读列表接口及删除状态的存储 API 已实现；
+> host 权威切换、bridge 删除清理接线与 UI 恢复选项仍未实现。侧栏当前仍受 host JSON 的 50 条上限约束。
 > 本文继续作为其余工作契约、验收条件、测试矩阵与回退路径。
 >
 > 背景与边界：[SESSION_STORAGE_IMPLEMENTATION_V3.md](./SESSION_STORAGE_IMPLEMENTATION_V3.md) §5 S2。
@@ -51,11 +51,11 @@ cache/session-catalog、history FTS5
 
 ### 3.2 生命周期与状态（把 V3 §3.2 落到本仓库）
 
-V3 要求 `reserved/ready/missing/deleting/deleted`。schema v3 已包含状态列与 v2 回填；删除状态的写入流程仍待实现：
+V3 要求 `reserved/ready/missing/deleting/deleted`。schema v3 已包含状态列与 v2 回填；`BeginDelete` / `FinishDelete` 已在存储层保证可重试的门禁与 tombstone，但还未接入 bridge 的 artifact sweep：
 
 | 状态 | 含义 | 允许的迁移 |
 | --- | --- | --- |
-| `reserved` | 新 ID 已登记，尚无 transcript | → `ready`（首次落盘）、→ `deleted` |
+| `reserved` | 新 ID 已登记，尚无 transcript | → `ready`（首次落盘）、→ `deleting` → `deleted` |
 | `ready` | 已有 transcript | → `missing`（文件消失）、→ `deleting` |
 | `missing` | 曾落盘，文件已不在 | → `ready`（文件回来，需证据）、→ `deleting`（用户明确放弃） |
 | `deleting` | 正在清理 | → `deleted`（清理成功） |
