@@ -18,9 +18,10 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 2
+const schemaVersion = 3
 
 var ErrPathChanged = errors.New("session identity path changed without an explicit move")
+var ErrSessionStateConflict = errors.New("session identity lifecycle state conflict")
 var ErrTitleConflict = errors.New("session title revision changed")
 var ErrTitleProtected = errors.New("session title is protected from automatic replacement")
 var ErrSessionNotFound = errors.New("session identity not found")
@@ -49,6 +50,17 @@ const (
 	TitleUserRequestedGeneration
 )
 
+// SessionState is the persistent lifecycle state of a desktop session identity.
+type SessionState string
+
+const (
+	StateReserved SessionState = "reserved"
+	StateReady    SessionState = "ready"
+	StateMissing  SessionState = "missing"
+	StateDeleting SessionState = "deleting"
+	StateDeleted  SessionState = "deleted"
+)
+
 type Candidate struct {
 	ID            string
 	Path          string
@@ -59,6 +71,7 @@ type Candidate struct {
 
 type Record struct {
 	Candidate
+	State         SessionState
 	Missing       bool
 	TitleSource   TitleSource
 	TitleRevision int64
@@ -132,14 +145,18 @@ func Open(ctx context.Context, path string) (*Store, error) {
 			title_source TEXT NOT NULL DEFAULT 'fallback' CHECK (title_source IN ('fallback','generated','user','legacy_unknown')),
 			title_revision INTEGER NOT NULL DEFAULT 0 CHECK (title_revision >= 0),
 			position INTEGER NOT NULL DEFAULT 0,
-			missing INTEGER NOT NULL DEFAULT 0 CHECK (missing IN (0, 1)),
+			state TEXT NOT NULL DEFAULT 'ready' CHECK (state IN ('reserved','ready','missing','deleting','deleted')),
 			created_at_ms INTEGER NOT NULL,
 			updated_at_ms INTEGER NOT NULL
 		)`); err != nil {
 			_ = tx.Rollback()
 			return fail(err)
 		}
-		if _, err := tx.ExecContext(ctx, "PRAGMA user_version=2"); err != nil {
+		if _, err := tx.ExecContext(ctx, "CREATE INDEX sessions_state_position_id ON sessions(state, position, id)"); err != nil {
+			_ = tx.Rollback()
+			return fail(err)
+		}
+		if _, err := tx.ExecContext(ctx, "PRAGMA user_version=3"); err != nil {
 			_ = tx.Rollback()
 			return fail(err)
 		}
@@ -163,6 +180,27 @@ func Open(ctx context.Context, path string) (*Store, error) {
 			if _, err := tx.ExecContext(ctx, statement); err != nil {
 				_ = tx.Rollback()
 				return fail(fmt.Errorf("migrate session identity to v2: %w", err))
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return fail(err)
+		}
+		version = 2
+	}
+	if version == 2 {
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fail(err)
+		}
+		for _, statement := range []string{
+			"ALTER TABLE sessions ADD COLUMN state TEXT NOT NULL DEFAULT 'ready' CHECK (state IN ('reserved','ready','missing','deleting','deleted'))",
+			"UPDATE sessions SET state=CASE WHEN missing=1 THEN 'missing' ELSE 'ready' END",
+			"CREATE INDEX sessions_state_position_id ON sessions(state, position, id)",
+			"PRAGMA user_version=3",
+		} {
+			if _, err := tx.ExecContext(ctx, statement); err != nil {
+				_ = tx.Rollback()
+				return fail(fmt.Errorf("migrate session identity to v3: %w", err))
 			}
 		}
 		if err := tx.Commit(); err != nil {
@@ -220,7 +258,11 @@ func (s *Store) importCandidates(ctx context.Context, previewRoot string, candid
 		if !missing && !info.Mode().IsRegular() {
 			return fmt.Errorf("transcript is not a regular file: %s", candidate.Path)
 		}
-		prepared = append(prepared, Record{Candidate: candidate, Missing: missing})
+		state := StateReady
+		if missing {
+			state = StateMissing
+		}
+		prepared = append(prepared, Record{Candidate: candidate, State: state, Missing: missing})
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -236,10 +278,9 @@ func (s *Store) importCandidates(ctx context.Context, previewRoot string, candid
 			}
 		}
 		var current Record
-		var missing int
-		err := tx.QueryRowContext(ctx, `SELECT path, workspace_root, title, position, missing, created_at_ms, updated_at_ms
+		err := tx.QueryRowContext(ctx, `SELECT path, workspace_root, title, position, state, created_at_ms, updated_at_ms
 			FROM sessions WHERE id=?`, incoming.ID).Scan(&current.Path, &current.WorkspaceRoot, &current.Title,
-			&current.Position, &missing, &current.CreatedAtMS, &current.UpdatedAtMS)
+			&current.Position, &current.State, &current.CreatedAtMS, &current.UpdatedAtMS)
 		if errors.Is(err, sql.ErrNoRows) {
 			if incoming.Missing {
 				continue
@@ -249,9 +290,9 @@ func (s *Store) importCandidates(ctx context.Context, previewRoot string, candid
 				source = TitleLegacyUnknown
 			}
 			_, err = tx.ExecContext(ctx, `INSERT INTO sessions
-				(id, path, workspace_root, title, title_source, position, missing, created_at_ms, updated_at_ms)
-				VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`, incoming.ID, incoming.Path,
-				incoming.WorkspaceRoot, incoming.Title, source, incoming.Position, now, now)
+				(id, path, workspace_root, title, title_source, title_revision, position, state, created_at_ms, updated_at_ms)
+				VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`, incoming.ID, incoming.Path,
+				incoming.WorkspaceRoot, incoming.Title, source, incoming.Position, incoming.State, now, now)
 			if err != nil {
 				return fmt.Errorf("register session %s: %w", incoming.ID, err)
 			}
@@ -263,22 +304,31 @@ func (s *Store) importCandidates(ctx context.Context, previewRoot string, candid
 		if current.Path != incoming.Path {
 			return fmt.Errorf("%w: %s", ErrPathChanged, incoming.ID)
 		}
+		if current.State == StateDeleting || current.State == StateDeleted {
+			return fmt.Errorf("%w: %s", ErrSessionStateConflict, incoming.ID)
+		}
 		// Import is registration/reconciliation, never a title command. The
 		// catalog can be stale after a manual rename or automatic generation.
 		incoming.Title = current.Title
 		if incoming.WorkspaceRoot == "" {
 			incoming.WorkspaceRoot = current.WorkspaceRoot
 		}
-		newMissing := 0
-		if incoming.Missing {
-			newMissing = 1
+		newState := incoming.State
+		if current.State == StateReserved && incoming.Missing {
+			newState = StateReserved
+		}
+		if current.State == StateMissing && incoming.State == StateReady && !requirePresent {
+			// A file reappearing at the same path is not proof that this is the
+			// original transcript. Only the reviewed, presence-checked import may
+			// recover a missing identity.
+			newState = StateMissing
 		}
 		if current.Title == incoming.Title && current.WorkspaceRoot == incoming.WorkspaceRoot &&
-			current.Position == incoming.Position && missing == newMissing {
+			current.Position == incoming.Position && current.State == newState {
 			continue
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE sessions SET title=?, workspace_root=?, position=?, missing=?, updated_at_ms=? WHERE id=?`,
-			incoming.Title, incoming.WorkspaceRoot, incoming.Position, newMissing, now, incoming.ID); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE sessions SET title=?, workspace_root=?, position=?, state=?, updated_at_ms=? WHERE id=?`,
+			incoming.Title, incoming.WorkspaceRoot, incoming.Position, newState, now, incoming.ID); err != nil {
 			return err
 		}
 	}
@@ -332,7 +382,7 @@ func validateCandidate(root string, candidate Candidate) error {
 }
 
 func (s *Store) List(ctx context.Context) ([]Record, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, path, workspace_root, title, title_source, title_revision, position, missing,
+	rows, err := s.db.QueryContext(ctx, `SELECT id, path, workspace_root, title, title_source, title_revision, position, state,
 		created_at_ms, updated_at_ms FROM sessions ORDER BY position, id`)
 	if err != nil {
 		return nil, err
@@ -340,16 +390,134 @@ func (s *Store) List(ctx context.Context) ([]Record, error) {
 	defer rows.Close()
 	var records []Record
 	for rows.Next() {
-		var record Record
-		var missing int
-		if err := rows.Scan(&record.ID, &record.Path, &record.WorkspaceRoot, &record.Title, &record.TitleSource, &record.TitleRevision,
-			&record.Position, &missing, &record.CreatedAtMS, &record.UpdatedAtMS); err != nil {
+		record, err := scanIdentityRecord(rows)
+		if err != nil {
 			return nil, err
 		}
-		record.Missing = missing != 0
 		records = append(records, record)
 	}
 	return records, rows.Err()
+}
+
+type identityScanner interface{ Scan(...any) error }
+
+func scanIdentityRecord(scanner identityScanner) (Record, error) {
+	var record Record
+	err := scanner.Scan(&record.ID, &record.Path, &record.WorkspaceRoot, &record.Title, &record.TitleSource,
+		&record.TitleRevision, &record.Position, &record.State, &record.CreatedAtMS, &record.UpdatedAtMS)
+	record.Missing = record.State == StateMissing
+	return record, err
+}
+
+// Get returns one identity record without reconciling it against the disk.
+func (s *Store) Get(ctx context.Context, id string) (Record, bool, error) {
+	record, err := scanIdentityRecord(s.db.QueryRowContext(ctx, `SELECT id, path, workspace_root, title, title_source,
+		title_revision, position, state, created_at_ms, updated_at_ms FROM sessions WHERE id=?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Record{}, false, nil
+	}
+	if err != nil {
+		return Record{}, false, err
+	}
+	return record, true, nil
+}
+
+// Reserve claims an unused session ID and path before the first transcript or
+// sidecar is written. Repeating the same reservation is idempotent.
+func (s *Store) Reserve(ctx context.Context, sessionDir string, candidate Candidate) error {
+	if err := validateCandidate(sessionDir, candidate); err != nil {
+		return err
+	}
+	if _, err := os.Lstat(candidate.Path); err == nil {
+		return fmt.Errorf("%w: cannot reserve an existing transcript", ErrSessionStateConflict)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspect reserved transcript: %w", err)
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	current, err := scanIdentityRecord(tx.QueryRowContext(ctx, `SELECT id, path, workspace_root, title, title_source,
+		title_revision, position, state, created_at_ms, updated_at_ms FROM sessions WHERE id=?`, candidate.ID))
+	if err == nil {
+		if current.Path != candidate.Path {
+			return fmt.Errorf("%w: %s", ErrPathChanged, candidate.ID)
+		}
+		if current.State != StateReserved {
+			return fmt.Errorf("%w: %s is already %s", ErrSessionStateConflict, candidate.ID, current.State)
+		}
+		return tx.Commit()
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	var position int
+	if err := tx.QueryRowContext(ctx, "SELECT COALESCE(MAX(position), -1) + 1 FROM sessions").Scan(&position); err != nil {
+		return err
+	}
+	now := time.Now().UnixMilli()
+	_, err = tx.ExecContext(ctx, `INSERT INTO sessions
+		(id, path, workspace_root, title, title_source, title_revision, position, state, created_at_ms, updated_at_ms)
+		VALUES (?, ?, ?, ?, 'fallback', 0, ?, 'reserved', ?, ?)`, candidate.ID, candidate.Path,
+		candidate.WorkspaceRoot, candidate.Title, position, now, now)
+	if err != nil {
+		return fmt.Errorf("reserve session identity: %w", err)
+	}
+	return tx.Commit()
+}
+
+// MarkReady advances a reserved identity after a transcript has been observed
+// and successfully loaded. Repeating it for a ready record is harmless.
+func (s *Store) MarkReady(ctx context.Context, id, transcriptPath string) error {
+	info, err := os.Lstat(transcriptPath)
+	if err != nil || !info.Mode().IsRegular() {
+		if err == nil {
+			err = errors.New("transcript is not a regular file")
+		}
+		return fmt.Errorf("mark session ready: %w", err)
+	}
+	result, err := s.db.ExecContext(ctx, `UPDATE sessions SET state='ready', updated_at_ms=?
+		WHERE id=? AND path=? AND state='reserved'`, time.Now().UnixMilli(), id, transcriptPath)
+	if err != nil {
+		return err
+	}
+	if changed, _ := result.RowsAffected(); changed == 1 {
+		return nil
+	}
+	record, exists, err := s.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if exists && record.Path == transcriptPath && record.State == StateReady {
+		return nil
+	}
+	return fmt.Errorf("%w: %s cannot become ready", ErrSessionStateConflict, id)
+}
+
+// MarkMissing records that a previously ready transcript disappeared.
+func (s *Store) MarkMissing(ctx context.Context, id, transcriptPath string) error {
+	if _, err := os.Lstat(transcriptPath); err == nil {
+		return fmt.Errorf("%w: transcript still exists", ErrSessionStateConflict)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspect missing transcript: %w", err)
+	}
+	result, err := s.db.ExecContext(ctx, `UPDATE sessions SET state='missing', updated_at_ms=?
+		WHERE id=? AND path=? AND state='ready'`, time.Now().UnixMilli(), id, transcriptPath)
+	if err != nil {
+		return err
+	}
+	if changed, _ := result.RowsAffected(); changed == 1 {
+		return nil
+	}
+	record, exists, err := s.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if exists && record.Path == transcriptPath && record.State == StateMissing {
+		return nil
+	}
+	return fmt.Errorf("%w: %s cannot become missing", ErrSessionStateConflict, id)
 }
 
 // HasRegisteredID checks whether an ID has ever been claimed by this identity

@@ -1,7 +1,8 @@
 # 第 5 项设计稿：持久会话目录与完整项目树（存储 S2）
 
-> 状态：**设计稿，未实现**。本项涉及"真实数据权威切换"，按分步指令需先 review 第 2、3 项
-> 的设计与测试，再决定是否动手。本文给出可执行契约、验收条件、测试矩阵与回退路径。
+> 状态：**部分实现**。身份库 schema v3 生命周期状态、首次会话 reservation、恢复前状态检查及
+> 残留 sidecar 防误复用已实现；分页目录、host 权威切换、删除 tombstone 流程与 UI 恢复选项仍未实现。
+> 本文继续作为其余工作契约、验收条件、测试矩阵与回退路径。
 >
 > 背景与边界：[SESSION_STORAGE_IMPLEMENTATION_V3.md](./SESSION_STORAGE_IMPLEMENTATION_V3.md) §5 S2。
 > 本稿不改动其中的边界，只把它落到本仓库当前的代码事实上。
@@ -10,9 +11,9 @@
 
 | # | 问题 | 现状证据 |
 | --- | --- | --- |
-| 1 | **缺文件的会话会被静默重开成同 ID 的空会话** | `cmd/reasonix-desktop-bridge/core_runtime.go:65-68`：`agent.LoadSession` 返回 `os.ErrNotExist` 时无条件 `controller.SetFreshSessionPath(path)`。用户看到的是"历史凭空消失"。 |
+| 1 | **缺文件的会话会被静默重开成同 ID 的空会话** | 已由身份状态优先检查、missing 状态与 reservation 修复；见 §3.3。 |
 | 2 | **最近列表硬上限 50，且会静默丢弃** | `desktop/tauri/src/workbench_catalog.rs:12` `MAX_SESSIONS: usize = 50`，`remember` 用 `take(MAX_SESSIONS - 1)` 截断。第 51 个会话会挤掉最旧的记录，被挤掉的会话**不再出现在侧栏**，也没有任何提示。 |
-| 3 | **列表权威在 host 的 JSON 文件，不在身份库** | host 的 `workbench_sessions` 读 `WorkbenchCatalog`（`workbench-sessions.json`）；`internal/sessionidentity` 至今只被第 3 项的只读清单使用，没有参与任何写入路径。 |
+| 3 | **列表权威在 host 的 JSON 文件，不在身份库** | host 的 `workbench_sessions` 仍读 `WorkbenchCatalog`（`workbench-sessions.json`）；身份库写入目前只负责会话生命周期登记。 |
 | 4 | **"项目树"只是按 workspaceRoot 分组的最近列表** | `desktop/frontend/src/tauri/workbenchSessions.ts` 的 `groupWorkbenchSessions`；没有项目级实体，也就没有"项目下全部会话"。 |
 
 问题 1 是数据安全，问题 2 是功能上限，两者都必须在切换权威之前解决。
@@ -22,7 +23,7 @@
 - 删除与产物清理：`control.RemoveSessionArtifacts`（`internal/control/controller.go:3241`），
   已覆盖 transcript、13 类 sidecar、guardian、inbox、checkpoint、子 agent、cleanup 标记。
   第 5 项**不得**新增第二套删除实现。
-- 身份库：`internal/sessionidentity` 已是 schema v2，含 `path UNIQUE`、`missing`、
+- 身份库：`internal/sessionidentity` 已是 schema v3，含 `path UNIQUE`、生命周期 `state`、
   `title_source`/`title_revision`（CAS，`SetTitle`）、`Import`、`OpenReadOnly`、`Inventory`。
 - 只读盘点：`sessionidentity.Inventory` 与 `GET /v1/sessions/inventory`（第 3 项已交付），
   它已经是"缺文件"的权威观测点。
@@ -49,8 +50,7 @@ cache/session-catalog、history FTS5
 
 ### 3.2 生命周期与状态（把 V3 §3.2 落到本仓库）
 
-V3 要求 `reserved/ready/missing/deleting/deleted`。当前 schema 只有 `missing INTEGER`。
-**第 5 项第一步**是把它升级为状态机（schema v3，带版本迁移，见 §3.6）：
+V3 要求 `reserved/ready/missing/deleting/deleted`。schema v3 已包含状态列与 v2 回填；删除状态的写入流程仍待实现：
 
 | 状态 | 含义 | 允许的迁移 |
 | --- | --- | --- |
@@ -74,11 +74,11 @@ V3 要求 `reserved/ready/missing/deleting/deleted`。当前 schema 只有 `miss
 4. 身份库有该 ID 的 ready 记录，但文件不存在
                     → 返回冲突错误，绝不新建；host 显示"该会话的文件已不在"
 5. 身份库有该 ID 的 reserved 记录
-                    → 允许首次落盘（SetFreshSessionPath），与新建同路径
-6. 无身份库记录，但磁盘存在该会话的残余（<transcript>.jsonl.meta 或 <stem>.inbox）
-                    → 返回冲突错误（用于身份库尚未登记的情形）
-7. 无身份库记录、无残余、文件也不存在
-                    → SetFreshSessionPath（首次创建，现状不变）
+                    → 文件不存在时 SetFreshSessionPath；若已有 transcript，校验后转 ready 并 Resume
+6. 无身份库记录、transcript 存在
+                    → 校验并 Resume，再登记为 ready（兼容升级前创建的 Tauri 会话）
+7. 无身份库记录、transcript 不存在
+                    → 有 `.jsonl.meta` / `.inbox` 残余则冲突；否则先登记 reserved，再 SetFreshSessionPath
 ```
 
 **为什么 1–2 必须先于“文件存在”**：墓碑/删除中的 ID 若仍残留 transcript 文件，
@@ -134,30 +134,31 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 
 ### 3.6 schema 迁移（v2 → v3）
 
-- 迁移必须**带版本号、单事务**：`ALTER TABLE` 增 `state TEXT`，由 `missing` 回填
+- v2→v3 迁移必须**带版本号、单事务**：`ALTER TABLE` 增 `state TEXT`，由 `missing` 回填
   （`missing=1 → 'missing'`，否则 `ready`），然后建 `(state, position, id)` 索引。
 - 打开时若 `user_version > schemaVersion` → 拒绝打开且**不改动文件**（现有测试语义保留）。
-- **数据库不存在**时不创建：仍由导入（S1 收尾）负责建库；切换权威只读取已存在的库。
+- 已存在的旧库在 bridge 启动、开放只读盘点前完成迁移；只读盘点自身不创建数据库。bridge 首次创建 Tauri 会话时会建库并先写入 `reserved`，保证 sidecar
+  产生前身份已稳定登记；这不等于切换会话列表权威。
 
 ## 4. 交付切片与验收条件
 
 | 步骤 | 内容 | 验收条件 | 回退 |
 | --- | --- | --- | --- |
-| **5.0** | 修 `resumeBridgeSession`：身份状态优先于文件存在（§3.3 的 1–7 分支） | 删除 transcript 后再打开 → 明确错误；从未存在过的 ID 仍可新建；`deleted`/`deleting` 即使文件残留也不 Resume；两侧都有测试 | 纯代码，撤销即回退 |
-| **5.1** | 身份库 schema v3（状态机）+ `ListVisible` 按 `(position, id)` 分页 | v2 库可原地迁移；future schema 拒绝打开；`deleted` 不可重用有测试；同 `position` 并列不漏项 | 保留 v2 备份文件即可降级读取 |
+| **5.0** | `resumeBridgeSession` 按身份状态优先判定；新 ID 先 reservation；识别缺文件与残留 sidecar | 已覆盖 `reserved/ready/missing`、v2→v3 迁移、missing 文件恢复后仍拒绝复活、sidecar-only 残留拒绝新建 | 当前 schema 仍保留 transcript 与旧 JSON 清单；回退需保留 v2 DB 备份 |
+| **5.1** | 完成删除 tombstone 状态写入与 `ListVisible` 按 `(position, id)` 分页 | `deleting/deleted` 由删除流程写入且不可重用；200 条分页无重复遗漏 | 保留 v3 备份文件即可回退读取 |
 | **5.2** | bridge `GET /v1/sessions` 分页列表 | 200+ 会话全部可见，无截断；`deleted` 不出现；契约测试覆盖可选字段；老客户端不受影响 | 端点只是新增，host 不读即无影响 |
 | **5.3** | host 切换到 bridge 列表，JSON 作为回退 | 新旧列表 diff 为零或可解释；重启后 ID 不变；侧栏项目树完整 | host 改回读 JSON（一个常量开关） |
 | **5.4** | missing/deleting/deleted 的用户可见处理 + 重启续做清理 | 删除中途 kill → 重启后清理完成或可重试；missing 会话有明确提示且不可"以空会话打开" | 状态回退为 `missing` 等待用户决定 |
 
-5.0 可以先单独落地（它是数据安全修复，不依赖状态机）；5.1–5.4 按序。
+5.0 与 schema 生命周期基础已落地；5.1–5.4 仍按序实施。
 
 ## 5. 测试矩阵
 
-**5.0**
+**已实现的 5.0 验收**
 - transcript 被删 → 打开返回错误；返回信息可区分"文件缺失"与其他失败。
 - 从未存在的 ID → 仍新建（回归）。
 - 只有 `.jsonl.meta` 残余（无身份库）→ 拒绝新建。
-- 身份库记录为 `deleted` 或 `deleting` → 拒绝 Resume/新建，**即使 transcript 文件仍在**（墓碑优先）。
+- 身份库记录为 `deleted` 或 `deleting` → resolver 已拒绝 Resume/新建；写入这两种状态的删除流程仍待 5.1/5.4。
 - 身份库记录为 `missing` → 拒绝 Resume/新建；host 显示"该会话的文件已不在"。
 
 **5.1**

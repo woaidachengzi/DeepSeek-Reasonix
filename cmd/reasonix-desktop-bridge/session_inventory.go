@@ -40,10 +40,8 @@ func (b *bridgeServer) sessionInventory(w http.ResponseWriter, r *http.Request) 
 	var identities *sessionidentity.Store
 	identityStore := false
 	if identityPath != "" {
-		// OpenReadOnly never creates the file, refuses to change journal mode or
-		// schema, and returns a query_only connection. A missing database is the
-		// expected state before any import, so the listing is produced from disk
-		// alone.
+		// Existing schema versions are upgraded during bridge startup. This
+		// read-only request never creates the database or mutates session rows.
 		if info, err := os.Stat(identityPath); err == nil && info.Mode().IsRegular() {
 			store, err := sessionidentity.OpenReadOnly(r.Context(), identityPath)
 			if err != nil {

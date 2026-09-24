@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"reasonix/internal/agent"
@@ -24,6 +25,7 @@ import (
 	"reasonix/internal/provider"
 	"reasonix/internal/sessioncontext"
 	"reasonix/internal/sessionidentity"
+	sessionstore "reasonix/internal/store"
 )
 
 // A registered identity must never be reused as an empty session merely
@@ -51,6 +53,7 @@ func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.Open
 	} else if opts.Sink == nil {
 		opts.Sink = event.Discard
 	}
+	opts.Sink = newBridgeLifecycleSink(opts.Sink, request.SessionID)
 	if strings.TrimSpace(opts.StatsSource) == "" {
 		opts.StatsSource = "desktop-tauri"
 	}
@@ -58,26 +61,166 @@ func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.Open
 	if err != nil {
 		return nil, err
 	}
-	if err := resumeBridgeSession(ctx, controller, request.SessionID); err != nil {
+	if err := resumeBridgeSession(ctx, controller, request.SessionID, request.WorkspaceRoot); err != nil {
 		controller.Close()
 		return nil, err
 	}
 	return &controllerRuntime{controller: controller}, nil
 }
 
+type bridgeLifecycleSink struct {
+	inner        event.Sink
+	sessionID    string
+	sessionPath  string
+	identityPath string
+	mu           sync.Mutex
+	markedReady  bool
+}
+
+func newBridgeLifecycleSink(inner event.Sink, sessionID string) event.Sink {
+	sessionPath, err := bridgeSessionPath(appconfig.SessionDir(), sessionID)
+	if err != nil || appconfig.DesktopSessionIdentityPath() == "" {
+		return inner
+	}
+	return &bridgeLifecycleSink{
+		inner: inner, sessionID: sessionID, sessionPath: sessionPath,
+		identityPath: appconfig.DesktopSessionIdentityPath(),
+	}
+}
+
+func (s *bridgeLifecycleSink) Emit(input event.Event) {
+	if s.inner != nil {
+		s.inner.Emit(input)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.markedReady {
+		return
+	}
+	info, err := os.Lstat(s.sessionPath)
+	if err != nil || !info.Mode().IsRegular() {
+		return
+	}
+	identities, err := sessionidentity.Open(context.Background(), s.identityPath)
+	if err != nil {
+		return
+	}
+	err = identities.MarkReady(context.Background(), s.sessionID, s.sessionPath)
+	_ = identities.Close()
+	if err == nil {
+		s.markedReady = true
+	}
+}
+
 // resumeBridgeSession gives a bridge ID one deterministic transcript path.
 // Existing Wails sessions are intentionally not discovered or migrated here:
 // a Tauri preview creates its own explicitly named session on first open and
 // can only resume the same ID it created earlier.
-func resumeBridgeSession(ctx context.Context, controller *control.Controller, sessionID string) error {
+func resumeBridgeSession(ctx context.Context, controller *control.Controller, sessionID, workspaceRoot string) error {
 	path, err := bridgeSessionPath(controller.SessionDir(), sessionID)
 	if err != nil {
 		return err
 	}
+
+	identityPath := appconfig.DesktopSessionIdentityPath()
+	if appconfig.SessionDir() == "" || identityPath == "" ||
+		pathidentity.Canonical(appconfig.SessionDir()) != pathidentity.Canonical(controller.SessionDir()) {
+		return resumeUncataloguedBridgeSession(controller, path)
+	}
+
+	identities, err := sessionidentity.Open(ctx, identityPath)
+	if err != nil {
+		return fmt.Errorf("open session identity store: %w", err)
+	}
+	defer identities.Close()
+
+	record, registered, err := identities.Get(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("read session identity: %w", err)
+	}
+	if registered && pathidentity.Canonical(record.Path) != pathidentity.Canonical(path) {
+		return fmt.Errorf("%w: %s", sessionidentity.ErrPathChanged, sessionID)
+	}
+	if registered {
+		switch record.State {
+		case sessionidentity.StateMissing:
+			return fmt.Errorf("%w: %s", ErrKnownSessionMissing, sessionID)
+		case sessionidentity.StateDeleting, sessionidentity.StateDeleted:
+			return fmt.Errorf("%w: session %s is %s", desktopbridge.ErrSessionConflict, sessionID, record.State)
+		case sessionidentity.StateReserved, sessionidentity.StateReady:
+		default:
+			return fmt.Errorf("%w: session %s has unknown state %q", desktopbridge.ErrSessionConflict, sessionID, record.State)
+		}
+	}
+
+	transcriptInfo, statErr := os.Lstat(path)
+	if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+		return fmt.Errorf("inspect desktop bridge transcript: %w", statErr)
+	}
+	transcriptExists := statErr == nil
+	if transcriptExists && !transcriptInfo.Mode().IsRegular() {
+		return fmt.Errorf("%w: session transcript is not a regular file", desktopbridge.ErrSessionConflict)
+	}
+	if registered && record.State == sessionidentity.StateReady && !transcriptExists {
+		if err := identities.MarkMissing(ctx, sessionID, path); err != nil {
+			return err
+		}
+		return fmt.Errorf("%w: %s", ErrKnownSessionMissing, sessionID)
+	}
+	if registered && record.State == sessionidentity.StateReserved && !transcriptExists {
+		controller.SetFreshSessionPath(path)
+		return nil
+	}
+	if !registered && !transcriptExists {
+		residue, err := hasBridgeSessionResidue(path)
+		if err != nil {
+			return err
+		}
+		if residue {
+			return fmt.Errorf("%w: unregistered session files remain for %s", desktopbridge.ErrSessionConflict, sessionID)
+		}
+		if err := os.MkdirAll(controller.SessionDir(), 0o700); err != nil {
+			return fmt.Errorf("create desktop bridge session directory: %w", err)
+		}
+		if err := identities.Reserve(ctx, controller.SessionDir(), sessionidentity.Candidate{
+			ID: sessionID, Path: path, WorkspaceRoot: workspaceRoot,
+		}); err != nil {
+			return fmt.Errorf("reserve desktop bridge session: %w", err)
+		}
+		controller.SetFreshSessionPath(path)
+		return nil
+	}
+
+	loaded, err := agent.LoadSession(path)
+	if err != nil {
+		return fmt.Errorf("load desktop bridge session: %w", err)
+	}
+	if registered && record.State == sessionidentity.StateReserved {
+		if err := identities.MarkReady(ctx, sessionID, path); err != nil {
+			return err
+		}
+	}
+	if !registered {
+		meta, _, _ := agent.LoadBranchMeta(path)
+		if err := identities.Import(ctx, controller.SessionDir(), []sessionidentity.Candidate{{
+			ID: sessionID, Path: path, WorkspaceRoot: workspaceRoot, Title: meta.CustomTitle,
+		}}); err != nil {
+			return fmt.Errorf("register existing desktop bridge session: %w", err)
+		}
+	}
+	controller.Resume(loaded, path)
+	return nil
+}
+
+func resumeUncataloguedBridgeSession(controller *control.Controller, path string) error {
 	loaded, err := agent.LoadSession(path)
 	if errors.Is(err, os.ErrNotExist) {
-		if err := rejectRegisteredMissingSession(ctx, controller.SessionDir(), sessionID); err != nil {
-			return err
+		residue, residueErr := hasBridgeSessionResidue(path)
+		if residueErr != nil {
+			return residueErr
+		}
+		if residue {
+			return fmt.Errorf("%w: unregistered session files remain", desktopbridge.ErrSessionConflict)
 		}
 		controller.SetFreshSessionPath(path)
 		return nil
@@ -89,40 +232,22 @@ func resumeBridgeSession(ctx context.Context, controller *control.Controller, se
 	return nil
 }
 
-// rejectRegisteredMissingSession is a read-only guard for the S1 identity
-// store. It does not create the database or import unclaimed files. If an
-// existing identity database cannot be inspected, fail closed rather than
-// risk rebinding a known ID to a new empty transcript.
-func rejectRegisteredMissingSession(ctx context.Context, sessionDir, sessionID string) error {
-	configuredDir := appconfig.SessionDir()
-	identityPath := appconfig.DesktopSessionIdentityPath()
-	if configuredDir == "" || identityPath == "" ||
-		pathidentity.Canonical(configuredDir) != pathidentity.Canonical(sessionDir) {
-		return nil // A custom controller directory is outside this profile store.
+// hasBridgeSessionResidue detects durable sidecars left behind after a
+// transcript is removed. They prevent an unknown ID from being reused fresh.
+func hasBridgeSessionResidue(transcriptPath string) (bool, error) {
+	for _, residuePath := range []string{
+		sessionstore.SessionMeta(transcriptPath),
+		sessionstore.SessionInboxDir(transcriptPath),
+	} {
+		_, err := os.Lstat(residuePath)
+		if err == nil {
+			return true, nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return false, fmt.Errorf("inspect desktop bridge session residue: %w", err)
+		}
 	}
-	info, err := os.Lstat(identityPath)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil // No identity has yet been imported for this profile.
-	}
-	if err != nil {
-		return fmt.Errorf("inspect session identity store: %w", err)
-	}
-	if !info.Mode().IsRegular() {
-		return errors.New("session identity store is not a regular file")
-	}
-	identities, err := sessionidentity.OpenReadOnly(ctx, identityPath)
-	if err != nil {
-		return fmt.Errorf("read session identity store: %w", err)
-	}
-	defer identities.Close()
-	registered, err := identities.HasRegisteredID(ctx, sessionID)
-	if err != nil {
-		return fmt.Errorf("check session identity: %w", err)
-	}
-	if registered {
-		return fmt.Errorf("%w: %s", ErrKnownSessionMissing, sessionID)
-	}
-	return nil
+	return false, nil
 }
 
 // bridgeSessionPath keeps the bridge on the shared session-path rule. The

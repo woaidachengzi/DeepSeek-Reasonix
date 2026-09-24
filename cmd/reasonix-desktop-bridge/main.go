@@ -27,6 +27,7 @@ import (
 	appconfig "reasonix/internal/config"
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/profilegate"
+	"reasonix/internal/sessionidentity"
 )
 
 const (
@@ -120,6 +121,22 @@ func run(ctx context.Context, cfg config, token string) (runErr error) {
 		return fmt.Errorf("session profile ownership: %w", err)
 	}
 	defer releaseProfile()
+	if identityPath := appconfig.DesktopSessionIdentityPath(); identityPath != "" {
+		if info, err := os.Lstat(identityPath); err == nil {
+			if !info.Mode().IsRegular() {
+				return errors.New("session identity store is not a regular file")
+			}
+			identities, err := sessionidentity.Open(ctx, identityPath)
+			if err != nil {
+				return fmt.Errorf("migrate session identity store: %w", err)
+			}
+			if err := identities.Close(); err != nil {
+				return fmt.Errorf("close migrated session identity store: %w", err)
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("inspect session identity store: %w", err)
+		}
+	}
 
 	listener, err := net.Listen("tcp", cfg.listen)
 	if err != nil {

@@ -18,6 +18,7 @@ import (
 	"reasonix/internal/provider"
 	"reasonix/internal/sessioncontext"
 	"reasonix/internal/sessionidentity"
+	sessionstore "reasonix/internal/store"
 )
 
 // The bridge and the identity importer must not derive transcript paths
@@ -97,12 +98,169 @@ func TestRegisteredMissingTranscriptCannotBecomeFresh(t *testing.T) {
 	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("registered missing transcript was recreated: %v", err)
 	}
+	identityStore, err := sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, registered, err := identityStore.Get(ctx, "known")
+	_ = identityStore.Close()
+	if err != nil || !registered || record.State != sessionidentity.StateMissing {
+		t.Fatalf("deleted transcript identity state = %#v, %v, %v", record, registered, err)
+	}
 	runtime, err := factory.Open(ctx, desktopbridge.OpenRequest{SessionID: "new", WorkspaceRoot: workspace})
 	if err != nil {
 		t.Fatalf("unregistered new session was rejected: %v", err)
 	}
 	if err := runtime.Shutdown(); err != nil {
 		t.Fatal(err)
+	}
+	identityStore, err = sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	newRecord, registered, err := identityStore.Get(ctx, "new")
+	_ = identityStore.Close()
+	if err != nil || !registered || newRecord.State != sessionidentity.StateReserved {
+		t.Fatalf("fresh session was not reserved: %#v, %v, %v", newRecord, registered, err)
+	}
+}
+
+func TestMissingIdentityWinsOverAResidualTranscript(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	ctx := context.Background()
+	sessionDir := appconfig.SessionDir()
+	path, err := bridgeSessionPath(sessionDir, "missing-but-restored")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	identities, err := sessionidentity.Open(ctx, appconfig.DesktopSessionIdentityPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate := sessionidentity.Candidate{ID: "missing-but-restored", Path: path}
+	if err := identities.Import(ctx, sessionDir, []sessionidentity.Candidate{candidate}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Import(ctx, sessionDir, []sessionidentity.Candidate{candidate}); err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := newControllerFactory(nil).Open(ctx, desktopbridge.OpenRequest{SessionID: candidate.ID, WorkspaceRoot: t.TempDir()})
+	if runtime != nil || !errors.Is(err, ErrKnownSessionMissing) {
+		t.Fatalf("open missing identity with restored transcript = %v, %v", runtime, err)
+	}
+}
+
+func TestUnregisteredSessionResidueCannotBecomeFresh(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	ctx := context.Background()
+	sessionDir := appconfig.SessionDir()
+	path, err := bridgeSessionPath(sessionDir, "orphan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sessionstore.SessionMeta(path), []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := newControllerFactory(nil).Open(ctx, desktopbridge.OpenRequest{SessionID: "orphan", WorkspaceRoot: t.TempDir()})
+	if runtime != nil || !errors.Is(err, desktopbridge.ErrSessionConflict) {
+		t.Fatalf("open unregistered session with sidecar = %v, %v", runtime, err)
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("orphan transcript was created: %v", err)
+	}
+}
+
+func TestUnregisteredExistingTranscriptIsClaimedReady(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	sessionDir := appconfig.SessionDir()
+	path, err := bridgeSessionPath(sessionDir, "legacy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := newControllerFactory(nil).Open(context.Background(), desktopbridge.OpenRequest{SessionID: "legacy", WorkspaceRoot: t.TempDir()})
+	if err != nil {
+		t.Fatalf("resume legacy transcript: %v", err)
+	}
+	if err := runtime.Shutdown(); err != nil {
+		t.Fatal(err)
+	}
+	identityStore, err := sessionidentity.OpenReadOnly(context.Background(), appconfig.DesktopSessionIdentityPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer identityStore.Close()
+	record, registered, err := identityStore.Get(context.Background(), "legacy")
+	if err != nil || !registered || record.State != sessionidentity.StateReady {
+		t.Fatalf("legacy identity = %#v, %v, %v", record, registered, err)
+	}
+}
+
+func TestBridgeLifecycleSinkMarksReservedIdentityReadyAfterFirstSave(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	ctx := context.Background()
+	sessionDir := appconfig.SessionDir()
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path, err := bridgeSessionPath(sessionDir, "first-save")
+	if err != nil {
+		t.Fatal(err)
+	}
+	identities, err := sessionidentity.Open(ctx, appconfig.DesktopSessionIdentityPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Reserve(ctx, sessionDir, sessionidentity.Candidate{ID: "first-save", Path: path}); err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sink := newBridgeLifecycleSink(event.Discard, "first-save")
+	sink.Emit(event.Event{Kind: event.TurnDone})
+	identities, err = sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer identities.Close()
+	record, exists, err := identities.Get(ctx, "first-save")
+	if err != nil || !exists || record.State != sessionidentity.StateReady {
+		t.Fatalf("first transcript save did not advance reservation: %#v, %v, %v", record, exists, err)
 	}
 }
 

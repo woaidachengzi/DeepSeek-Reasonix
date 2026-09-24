@@ -102,6 +102,71 @@ func TestImportMarksKnownMissingWithoutCreatingFiles(t *testing.T) {
 	}
 }
 
+func TestReservedIdentitySurvivesSidecarsAndTransitions(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(sessionDir, "tauri-draft.jsonl")
+	store, err := Open(ctx, filepath.Join(root, "desktop", "state.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	candidate := Candidate{ID: "draft", Path: path, WorkspaceRoot: "/work/project"}
+	if err := store.Reserve(ctx, sessionDir, candidate); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path+".meta", []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Reserve(ctx, sessionDir, candidate); err != nil {
+		t.Fatalf("idempotent reservation: %v", err)
+	}
+	record, ok, err := store.Get(ctx, "draft")
+	if err != nil || !ok || record.State != StateReserved || record.Missing {
+		t.Fatalf("reserved identity = %#v, %v, %v", record, ok, err)
+	}
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MarkReady(ctx, "draft", path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MarkMissing(ctx, "draft", path); err != nil {
+		t.Fatal(err)
+	}
+	record, ok, err = store.Get(ctx, "draft")
+	if err != nil || !ok || record.State != StateMissing || !record.Missing {
+		t.Fatalf("missing identity = %#v, %v, %v", record, ok, err)
+	}
+	if err := store.Reserve(ctx, sessionDir, candidate); !errors.Is(err, ErrSessionStateConflict) {
+		t.Fatalf("missing ID was reused: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Import(ctx, sessionDir, []Candidate{candidate}); err != nil {
+		t.Fatal(err)
+	}
+	record, _, err = store.Get(ctx, "draft")
+	if err != nil || record.State != StateMissing {
+		t.Fatalf("unreviewed file appearance recovered missing identity: %#v, %v", record, err)
+	}
+	if err := store.importCandidates(ctx, sessionDir, []Candidate{candidate}, true); err != nil {
+		t.Fatal(err)
+	}
+	record, _, err = store.Get(ctx, "draft")
+	if err != nil || record.State != StateReady {
+		t.Fatalf("reviewed file import did not recover identity: %#v, %v", record, err)
+	}
+}
+
 func TestImportRejectsPathChangeAndRollsBack(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
@@ -401,7 +466,7 @@ func TestOpenMigratesV1TitlesWithoutAssumingUserIntent(t *testing.T) {
 		missing INTEGER NOT NULL DEFAULT 0 CHECK (missing IN (0, 1)),
 		created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL);
 		INSERT INTO sessions VALUES ('named', '/a.jsonl', '', 'Legacy title', 0, 0, 1, 1);
-		INSERT INTO sessions VALUES ('empty', '/b.jsonl', '', '', 1, 0, 1, 1);
+		INSERT INTO sessions VALUES ('empty', '/b.jsonl', '', '', 1, 1, 1, 1);
 		PRAGMA user_version=1`); err != nil {
 		t.Fatal(err)
 	}
@@ -418,7 +483,46 @@ func TestOpenMigratesV1TitlesWithoutAssumingUserIntent(t *testing.T) {
 		t.Fatalf("migrated provenance = %#v, %v", records, err)
 	}
 	var version int
-	if err := store.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil || version != 2 {
+	if err := store.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil || version != 3 {
 		t.Fatalf("migrated version = %d, %v", version, err)
+	}
+	if records[0].State != StateReady || records[1].State != StateMissing || !records[1].Missing {
+		t.Fatalf("migrated lifecycle states = %#v", records)
+	}
+}
+
+func TestOpenMigratesV2MissingFlagToLifecycleState(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "identity.sqlite")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE sessions (
+		id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, workspace_root TEXT NOT NULL DEFAULT '',
+		title TEXT NOT NULL DEFAULT '', title_source TEXT NOT NULL DEFAULT 'fallback',
+		title_revision INTEGER NOT NULL DEFAULT 0, position INTEGER NOT NULL DEFAULT 0,
+		missing INTEGER NOT NULL DEFAULT 0 CHECK (missing IN (0, 1)),
+		created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL);
+		INSERT INTO sessions VALUES ('ready', '/ready.jsonl', '', '', 'fallback', 0, 0, 0, 1, 1);
+		INSERT INTO sessions VALUES ('missing', '/missing.jsonl', '', '', 'fallback', 0, 1, 1, 1, 1);
+		PRAGMA user_version=2`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	records, err := store.List(ctx)
+	if err != nil || len(records) != 2 || records[0].State != StateReady || records[1].State != StateMissing {
+		t.Fatalf("v2 migration records = %#v, %v", records, err)
+	}
+	var version int
+	if err := store.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil || version != 3 {
+		t.Fatalf("migrated schema version = %d, %v", version, err)
 	}
 }
