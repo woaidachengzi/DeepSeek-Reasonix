@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"reasonix/internal/pluginpkg"
 )
 
 const mcpTestSecret = "mcp-test-secret-value"
@@ -216,6 +218,155 @@ func TestMCPServerDeleteReportsMissingServers(t *testing.T) {
 	again := mcpRequest(t, handler, http.MethodDelete, "/v1/mcp/servers", `{"name":"doomed"}`)
 	if again.Code != http.StatusNotFound {
 		t.Fatalf("second delete status = %d, body = %s", again.Code, again.Body.String())
+	}
+}
+
+// Same name in global and project must not leak the global credential into
+// the workspace file when the project scope is what the request asked for.
+func TestMCPServerCrossScopeUpsertDoesNotCopyCredentials(t *testing.T) {
+	handler, home := mcpTestBridge(t)
+	projectRoot := t.TempDir()
+
+	if response := mcpRequest(t, handler, http.MethodPost, "/v1/mcp/servers",
+		`{"scope":"global","name":"shared","type":"stdio","command":"uvx","env":{"API_TOKEN":"`+mcpTestSecret+`"}}`); response.Code != http.StatusOK {
+		t.Fatalf("global add status = %d, body = %s", response.Code, response.Body.String())
+	}
+
+	created := mcpRequest(t, handler, http.MethodPost, "/v1/mcp/servers?workspaceRoot="+projectRoot,
+		`{"scope":"project","name":"shared","type":"stdio","command":"node","args":["server.js"]}`)
+	if created.Code != http.StatusOK {
+		t.Fatalf("project add status = %d, body = %s", created.Code, created.Body.String())
+	}
+	projectConfig := filepath.Join(projectRoot, "reasonix.toml")
+	stored, err := os.ReadFile(projectConfig)
+	if err != nil {
+		t.Fatalf("read project config: %v", err)
+	}
+	if strings.Contains(string(stored), mcpTestSecret) {
+		t.Fatalf("cross-scope create copied the global credential into %s: %s", projectConfig, stored)
+	}
+	body := decodeMCPMutation(t, created)
+	if body.Server == nil || body.Server.Scope != "project" {
+		t.Fatalf("project server view = %#v", body.Server)
+	}
+	if len(body.Server.EnvKeys) != 0 {
+		t.Fatalf("project server inherited env keys: %#v", body.Server.EnvKeys)
+	}
+
+	// Global still owns its secret after the project create.
+	globalConfig, err := os.ReadFile(filepath.Join(home, "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(globalConfig), mcpTestSecret) {
+		t.Fatal("global credential was cleared by the project create")
+	}
+}
+
+// Deleting the row the list shows must not wipe the same name from every
+// scope; only the effective declaration goes away.
+func TestMCPServerDeleteRemovesOnlyEffectiveScope(t *testing.T) {
+	handler, home := mcpTestBridge(t)
+	projectRoot := t.TempDir()
+
+	if response := mcpRequest(t, handler, http.MethodPost, "/v1/mcp/servers",
+		`{"scope":"global","name":"layered","command":"uvx","env":{"API_TOKEN":"`+mcpTestSecret+`"}}`); response.Code != http.StatusOK {
+		t.Fatalf("global add status = %d", response.Code)
+	}
+	if response := mcpRequest(t, handler, http.MethodPost, "/v1/mcp/servers?workspaceRoot="+projectRoot,
+		`{"scope":"project","name":"layered","command":"node"}`); response.Code != http.StatusOK {
+		t.Fatalf("project add status = %d", response.Code)
+	}
+
+	// Effective precedence is project-over-global; delete removes the project row only.
+	removed := mcpRequest(t, handler, http.MethodDelete, "/v1/mcp/servers?workspaceRoot="+projectRoot, `{"name":"layered"}`)
+	if removed.Code != http.StatusOK {
+		t.Fatalf("delete status = %d, body = %s", removed.Code, removed.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(projectRoot, "reasonix.toml")); err == nil {
+		if stored, err := os.ReadFile(filepath.Join(projectRoot, "reasonix.toml")); err == nil && strings.Contains(string(stored), "layered") {
+			t.Fatalf("project declaration survived effective delete: %s", stored)
+		}
+	}
+	globalConfig, err := os.ReadFile(filepath.Join(home, "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(globalConfig), "layered") {
+		t.Fatalf("global declaration was wiped by an effective-scope delete: %s", globalConfig)
+	}
+	if !strings.Contains(string(globalConfig), mcpTestSecret) {
+		t.Fatal("global credential was lost")
+	}
+
+	// After the project override is gone, the list falls back to global.
+	list := decodeMCPList(t, mcpRequest(t, handler, http.MethodGet, "/v1/mcp/servers?workspaceRoot="+projectRoot, ""))
+	found := false
+	for _, server := range list.Servers {
+		if server.Name == "layered" {
+			found = true
+			if server.Scope != "global" {
+				t.Fatalf("fallback scope = %q, want global", server.Scope)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("global fallback missing from list: %#v", list.Servers)
+	}
+}
+
+// Package-managed servers are rejected before Source is rewritten to the
+// request scope, so asking for project/global cannot bypass the guard.
+func TestMCPServerRejectsPackageManagedUnderAnyRequestedScope(t *testing.T) {
+	handler, home := mcpTestBridge(t)
+	pluginRoot := filepath.Join(home, "plugins", "packaged")
+	if err := os.MkdirAll(pluginRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `{
+  "apiVersion": "reasonix.io/plugin/v2",
+  "name": "packaged",
+  "mcpServers": {"packaged-srv": {"type": "stdio", "command": "uvx", "args": ["packaged-mcp"]}}
+}`
+	if err := os.WriteFile(filepath.Join(pluginRoot, pluginpkg.NativeManifest), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := pluginpkg.Upsert(home, pluginpkg.InstalledPlugin{
+		Name: "packaged", Root: "plugins/packaged", Enabled: true, ManifestKind: "reasonix",
+	}); err != nil {
+		t.Fatalf("register package: %v", err)
+	}
+
+	// Listing must surface the package-managed row.
+	listed := decodeMCPList(t, mcpRequest(t, handler, http.MethodGet, "/v1/mcp/servers", ""))
+	var managed *mcpServerView
+	for i := range listed.Servers {
+		if listed.Servers[i].Name == "packaged-srv" {
+			managed = &listed.Servers[i]
+			break
+		}
+	}
+	if managed == nil {
+		t.Fatalf("package MCP missing from list: %#v", listed.Servers)
+	}
+	if !managed.ManagedByPackage {
+		t.Fatalf("package MCP not flagged managed: %#v", managed)
+	}
+
+	for _, scope := range []string{"project", "global"} {
+		response := mcpRequest(t, handler, http.MethodPost, "/v1/mcp/servers",
+			`{"scope":"`+scope+`","name":"packaged-srv","command":"node"}`)
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("scope=%s status = %d, body = %s", scope, response.Code, response.Body.String())
+		}
+		if !strings.Contains(response.Body.String(), "plugin package") {
+			t.Fatalf("scope=%s body = %s", scope, response.Body.String())
+		}
+	}
+
+	deleted := mcpRequest(t, handler, http.MethodDelete, "/v1/mcp/servers", `{"name":"packaged-srv"}`)
+	if deleted.Code != http.StatusBadRequest {
+		t.Fatalf("delete package-managed status = %d, body = %s", deleted.Code, deleted.Body.String())
 	}
 }
 

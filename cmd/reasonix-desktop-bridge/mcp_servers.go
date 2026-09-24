@@ -122,9 +122,12 @@ type mcpServerUpsertRequest struct {
 	Tier      *string            `json:"tier,omitempty"`
 }
 
-// upsertMCPServer adds a server, or edits the one with the same name. Editing
-// preserves every field the request omits, including stored credentials, so a
-// user can change a command without retyping a token — and never sees one.
+// upsertMCPServer adds a server, or edits the one with the same name in the
+// requested scope. Editing preserves every field the request omits, including
+// stored credentials, so a user can change a command without retyping a token —
+// and never sees one. Fields are never inherited across scopes: a global
+// secret must not land in the workspace reasonix.toml just because the names
+// match.
 func (b *bridgeServer) upsertMCPServer(w http.ResponseWriter, r *http.Request) {
 	var request mcpServerUpsertRequest
 	if err := decodeJSONBody(w, r, 256<<10, &request); err != nil {
@@ -144,21 +147,25 @@ func (b *bridgeServer) upsertMCPServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	entry := appconfig.PluginEntry{Name: name, Source: source}
-	// Seed the merge from the declaration this name already has, in any source.
-	// A project entry must not be silently promoted to a global one just because
-	// the request asked for the default scope.
+	// Inspect the effective declaration first so package-managed servers are
+	// rejected before Source is rewritten to the request's scope.
 	if cfg, err := appconfig.LoadForRootReadOnly(root); err == nil {
 		for _, existing := range cfg.Plugins {
-			if existing.Name == name {
+			if existing.Name != name {
+				continue
+			}
+			if existing.Source == appconfig.MCPSourcePluginPackage {
+				writeProtocolError(w, http.StatusBadRequest, "invalid_request", "this MCP server is managed by an installed plugin package")
+				return
+			}
+			// Same-scope edit inherits stored fields (including credentials).
+			// A different scope starts clean so secrets never cross files.
+			if mcpScopeFor(existing.Source) == mcpScopeFor(source) {
 				entry = existing
 				entry.Source = source
-				break
 			}
+			break
 		}
-	}
-	if entry.Source == appconfig.MCPSourcePluginPackage {
-		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "this MCP server is managed by an installed plugin package")
-		return
 	}
 
 	if trimmed := strings.TrimSpace(request.Type); trimmed != "" {
@@ -206,7 +213,9 @@ type mcpServerMutationResponse struct {
 	Servers         []mcpServerView `json:"servers"`
 }
 
-// deleteMCPServer removes a server from whichever configuration file owns it.
+// deleteMCPServer removes only the declaration the settings list is showing
+// (the effective scope). Lower-priority same-name entries in other files stay
+// put so a project override can reappear after the global row is deleted.
 func (b *bridgeServer) deleteMCPServer(w http.ResponseWriter, r *http.Request) {
 	var request mcpServerDeleteRequest
 	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
@@ -219,16 +228,30 @@ func (b *bridgeServer) deleteMCPServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	root := strings.TrimSpace(r.URL.Query().Get("workspaceRoot"))
-	removed, err := appconfig.RemovePluginFromSourcesForRoot(root, name)
+	// Reject package-managed rows before the config helper turns that into an
+	// internal error: the settings UI must see an actionable 400.
+	if cfg, err := appconfig.LoadForRootReadOnly(root); err == nil {
+		for _, existing := range cfg.Plugins {
+			if existing.Name == name && existing.Source == appconfig.MCPSourcePluginPackage {
+				writeProtocolError(w, http.StatusBadRequest, "invalid_request", "this MCP server is managed by an installed plugin package")
+				return
+			}
+		}
+	}
+	entry, removed, path, err := appconfig.RemovePluginFromEffectiveSourceForRoot(root, name)
 	if err != nil {
 		b.writeRuntimeError(w, err, "unable to remove the MCP server")
+		return
+	}
+	if entry.Source == appconfig.MCPSourcePluginPackage {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "this MCP server is managed by an installed plugin package")
 		return
 	}
 	if !removed {
 		writeProtocolError(w, http.StatusNotFound, "not_found", "no such MCP server")
 		return
 	}
-	b.writeMCPServers(w, root, "", "removed", name)
+	b.writeMCPServers(w, root, path, "removed", name)
 }
 
 // writeMCPServers answers with the redacted server that was written and the
