@@ -57,7 +57,7 @@ interface CommandContract {
 //   bridge_approve, bridge_answer_question, bridge_answer_mcp_interaction,
 //   bridge_replay_pending_prompts,
 //   bridge_start_events, preview_profile_status, preview_runtime_info, import_stable_profile,
-//   provider_summary, set_default_model, workbench_sessions, remember_workbench_session,
+//   provider_summary, set_default_model, workbench_sessions, workbench_session_page, remember_workbench_session,
 //   forget_workbench_session
 //
 // Frontend adapters from desktop/frontend/src/lib/tauriBridge.ts:
@@ -69,7 +69,7 @@ interface CommandContract {
 //   attachTauriFile, tauriWorkspace, tauriWorkspaceFile, tauriWorkspaceChanges,
 //   tauriWorkspaceChangeDetail,
 //   startTauriBridgeEvents, tauriPreviewProfileStatus,
-//   tauriPreviewRuntimeInfo, importTauriStableProfile, tauriWorkbenchSessions,
+//   tauriPreviewRuntimeInfo, importTauriStableProfile, tauriWorkbenchSessions, tauriWorkbenchSessionPage,
 //   rememberTauriWorkbenchSession, forgetTauriWorkbenchSession, tauriProviderSummary
 //   setTauriDefaultModel
 
@@ -213,6 +213,11 @@ const commands: CommandContract[] = [
     command: "workbench_sessions",
     argKeys: [],
     description: "tauriWorkbenchSessions() invokes workbench_sessions with no args",
+  },
+  {
+    command: "workbench_session_page",
+    argKeys: ["limit", "cursor"],
+    description: "tauriWorkbenchSessionPage() invokes workbench_session_page with paging args",
   },
   {
     command: "bridge_session_catalog_shadow",

@@ -7,9 +7,16 @@ Object.assign(globalThis, { window: dom.window, document: dom.window.document, H
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
 (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri = true;
 (dom.window as unknown as { __TAURI__?: unknown }).__TAURI__ = { core: { invoke: () => Promise.resolve(null) } };
-(globalThis as unknown as { __workbenchSessions: unknown[]; __previewFirstUsers: Record<string, string> }).__workbenchSessions = [
+(globalThis as unknown as { __workbenchSessions: unknown[]; __previewFirstUsers: Record<string, string>; __workbenchPages: unknown[] }).__workbenchSessions = [
   { sessionId: "old-alpha", workspaceRoot: "/work/alpha" },
   { sessionId: "recent-beta", workspaceRoot: "/work/beta", title: "Beta task" },
+];
+(globalThis as unknown as { __workbenchPages: unknown[] }).__workbenchPages = [
+  { sessions: [
+    { sessionId: "old-alpha", workspaceRoot: "/work/alpha" },
+    { sessionId: "recent-beta", workspaceRoot: "/work/beta", title: "Beta task" },
+  ], nextCursor: { position: 2, id: "recent-beta" }, total: 3, source: "identity" },
+  { sessions: [{ sessionId: "older-gamma", workspaceRoot: "/work/gamma", title: "Gamma task" }], nextCursor: null, total: 3, source: "identity" },
 ];
 (globalThis as unknown as { __previewFirstUsers: Record<string, string> }).__previewFirstUsers = { "old-alpha": "整理报告并加测试" };
 
@@ -24,6 +31,11 @@ assert.match(document.body.textContent ?? "", /整理报告并加测试/);
 const calls = (globalThis as unknown as { __tauriBridgeCalls: Array<{ name: string; args: Record<string, string> }> }).__tauriBridgeCalls;
 assert.ok(calls.some(call => call.name === "bridge_session_previews"));
 assert.ok(calls.some(call => call.name === "backfill_workbench_titles"));
+const loadMore = document.querySelector<HTMLButtonElement>('[aria-label="加载更多会话"]');
+assert.ok(loadMore);
+await act(async () => { loadMore.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.match(document.body.textContent ?? "", /Gamma task/);
+assert.equal(document.querySelector('[aria-label="加载更多会话"]'), null);
 
 const select = document.querySelector<HTMLButtonElement>('[aria-label="切换到项目 beta"]');
 assert.ok(select);

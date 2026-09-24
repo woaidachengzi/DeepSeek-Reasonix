@@ -86,6 +86,13 @@ export interface TauriWorkbenchSession {
   workspaceRoot?: string;
 }
 
+export interface TauriWorkbenchSessionPage {
+  sessions: TauriWorkbenchSession[];
+  nextCursor?: { position: number; id: string } | null;
+  total: number;
+  source: "identity" | "legacy";
+}
+
 /** Read-only, count-only comparison of the legacy sidebar catalog and SQLite. */
 export interface TauriSessionShadowReport {
   legacyCount: number;
@@ -223,6 +230,14 @@ export async function importTauriStableProfile(): Promise<TauriProfileImportResu
 export async function tauriWorkbenchSessions(): Promise<TauriWorkbenchSession[]> {
   requireTauri();
   return invoke<TauriWorkbenchSession[]>("workbench_sessions");
+}
+
+export async function tauriWorkbenchSessionPage(
+  cursor?: { position: number; id: string },
+  limit = 200,
+): Promise<TauriWorkbenchSessionPage> {
+  requireTauri();
+  return invoke<TauriWorkbenchSessionPage>("workbench_session_page", { limit, cursor });
 }
 
 export async function tauriImportLegacySessionCatalog(): Promise<number> {

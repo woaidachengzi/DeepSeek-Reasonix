@@ -77,6 +77,14 @@ export function tauriWorkbenchSessions() {
   return Promise.resolve((globalThis.__workbenchSessions ?? []).slice());
 }
 
+export function tauriWorkbenchSessionPage(cursor, limit = 200) {
+  record("workbench_session_page", { cursor, limit });
+  const pages = globalThis.__workbenchPages;
+  if (Array.isArray(pages) && pages.length > 0) return Promise.resolve(pages.shift());
+  const sessions = (globalThis.__workbenchSessions ?? []).slice();
+  return Promise.resolve({ sessions, nextCursor: null, total: sessions.length, source: "identity" });
+}
+
 export function tauriImportLegacySessionCatalog() {
   record("bridge_import_legacy_session_catalog");
   return Promise.resolve((globalThis.__workbenchSessions ?? []).length);

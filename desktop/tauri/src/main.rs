@@ -11,6 +11,8 @@ mod tray;
 mod window_state;
 mod workbench_catalog;
 
+use serde::Serialize;
+
 use bridge::{
     AnswerMCPInteractionRequest, AnswerQuestionRequest, ApproveRequest, AttachFileRequest,
     BridgeAttachment, BridgeDeleteSessionResponse, BridgeHistory, BridgeProviderSummaryResponse,
@@ -28,6 +30,15 @@ use session_shadow::SessionShadowReport;
 use tauri::{Manager, State};
 use window_state::PreviewWindowState;
 use workbench_catalog::{WorkbenchCatalog, WorkbenchSession, WorkbenchTitle};
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkbenchSessionPage {
+    sessions: Vec<WorkbenchSession>,
+    next_cursor: Option<SessionDirectoryCursor>,
+    total: u64,
+    source: &'static str,
+}
 
 #[tauri::command]
 fn bridge_status(supervisor: State<'_, BridgeSupervisor>) -> BridgeStatus {
@@ -254,6 +265,42 @@ fn workbench_sessions(
     catalog: State<'_, WorkbenchCatalog>,
 ) -> Result<Vec<WorkbenchSession>, String> {
     catalog.list()
+}
+
+#[tauri::command]
+fn workbench_session_page(
+    supervisor: State<'_, BridgeSupervisor>,
+    catalog: State<'_, WorkbenchCatalog>,
+    limit: Option<u16>,
+    cursor: Option<SessionDirectoryCursor>,
+) -> Result<WorkbenchSessionPage, String> {
+    match supervisor.session_directory_page(limit.unwrap_or(200), cursor.clone(), None) {
+        Ok(page) => Ok(WorkbenchSessionPage {
+            sessions: page
+                .sessions
+                .into_iter()
+                .map(|entry| WorkbenchSession {
+                    session_id: entry.id,
+                    title: (!entry.title.is_empty()).then_some(entry.title),
+                    workspace_root: entry.workspace_root,
+                })
+                .collect(),
+            next_cursor: page.next_cursor,
+            total: page.total,
+            source: "identity",
+        }),
+        Err(_error) if cursor.is_none() => {
+            let sessions = catalog.list()?;
+            let total = sessions.len() as u64;
+            Ok(WorkbenchSessionPage {
+                sessions,
+                next_cursor: None,
+                total,
+                source: "legacy",
+            })
+        }
+        Err(error) => Err(error),
+    }
 }
 
 #[tauri::command]
@@ -583,6 +630,7 @@ fn main() {
             set_default_model,
             import_stable_profile,
             workbench_sessions,
+            workbench_session_page,
             backfill_workbench_titles,
             remember_workbench_session,
             forget_workbench_session,

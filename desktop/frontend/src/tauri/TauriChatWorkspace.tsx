@@ -73,11 +73,11 @@ import {
   tauriPreviewProfileStatus,
   tauriPreviewRuntimeInfo,
   tauriSessionTitle,
+  tauriWorkbenchSessionPage,
   tauriSessionPreviews,
   tauriSafeMCPURL,
   tauriTitleError,
   tauriTurnFailure,
-  tauriWorkbenchSessions,
   tauriImportLegacySessionCatalog,
   tauriSessionCatalogShadow,
   type TauriMCPServer,
@@ -226,6 +226,10 @@ function PromptCard({ prompt, busy, selections, onApproval, onAskSelection, onAs
 export function TauriSessionPreview() {
   const [session, setSession] = useState<TauriBridgeSession | null>(null);
   const [tabs, setTabs] = useState<WorkbenchSessionTab[]>([]);
+  const [sessionPageCursor, setSessionPageCursor] = useState<{ position: number; id: string } | null>(null);
+  const [sessionPageSource, setSessionPageSource] = useState<"identity" | "legacy">("identity");
+  const [sessionPageLoading, setSessionPageLoading] = useState(false);
+  const [sessionPageError, setSessionPageError] = useState("");
   const [collapsedProjects, setCollapsedProjects] = useState<Record<string, boolean>>({});
   const [workspaceRoot, setWorkspaceRoot] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -383,25 +387,30 @@ export function TauriSessionPreview() {
     let active = true;
     void (async () => {
       try {
-        // One-time, idempotent migration. The JSON catalog remains the visible
-        // source until the identity directory has been shadow-verified.
+        // One-time, idempotent migration. Prefer the identity directory after
+        // import, but retain the JSON catalog as an initial-load fallback.
         try { await tauriImportLegacySessionCatalog(); } catch { /* keep legacy catalog usable while the bridge is unavailable */ }
         if (!active) return;
-        const listed = await tauriWorkbenchSessions();
+        const page = await tauriWorkbenchSessionPage();
         if (!active) return;
-        setTabs(listed);
-        const missing = listed.filter(tab => !tauriSessionTitle(tab.title, "")).map(tab => tab.sessionId);
-        for (let offset = 0; active && offset < missing.length; offset += 10) {
+        setTabs(page.sessions);
+        setSessionPageCursor(page.nextCursor ?? null);
+        setSessionPageSource(page.source);
+        const missing = page.sessions.filter(tab => !tauriSessionTitle(tab.title, "")).map(tab => tab.sessionId);
+        for (let offset = 0; active && offset < missing.length; offset += 50) {
           try {
-            const previews = await tauriSessionPreviews(missing.slice(offset, offset + 10));
+            const previews = await tauriSessionPreviews(missing.slice(offset, offset + 50));
             if (!active) return;
             const titles = previews.flatMap(preview => {
               const title = tauriSessionTitle(preview.title, "") || titleFromFirstUser(preview.firstUser ?? "");
               return title ? [{ sessionId: preview.sessionId, title }] : [];
             });
             if (titles.length > 0) {
-              const updated = await backfillTauriWorkbenchTitles(titles);
-              if (active) setTabs(updated);
+              await backfillTauriWorkbenchTitles(titles);
+              if (active) setTabs(previous => previous.map(tab => {
+                const title = titles.find(item => item.sessionId === tab.sessionId)?.title;
+                return title ? { ...tab, title } : tab;
+              }));
             }
           } catch {
             // Legacy enrichment is best-effort. The catalog remains usable,
@@ -416,6 +425,47 @@ export function TauriSessionPreview() {
     void tauriPlatformInfo().then(setPlatform).catch(() => {});
     return () => { active = false; };
   }, []);
+
+  async function loadMoreWorkbenchSessions() {
+    const cursor = sessionPageCursor;
+    if (!cursor || sessionPageRequestRef.current) return;
+    sessionPageRequestRef.current = true;
+    setSessionPageLoading(true);
+    setSessionPageError("");
+    try {
+      const page = await tauriWorkbenchSessionPage(cursor);
+      setTabs(previous => {
+        const known = new Set(previous.map(tab => tab.sessionId));
+        return [...previous, ...page.sessions.filter(tab => !known.has(tab.sessionId))];
+      });
+      setSessionPageCursor(page.nextCursor ?? null);
+      setSessionPageSource(page.source);
+      const missing = page.sessions.filter(tab => !tauriSessionTitle(tab.title, "")).map(tab => tab.sessionId);
+      for (let offset = 0; offset < missing.length; offset += 50) {
+        try {
+          const previews = await tauriSessionPreviews(missing.slice(offset, offset + 50));
+          const titles = previews.flatMap(preview => {
+            const title = tauriSessionTitle(preview.title, "") || titleFromFirstUser(preview.firstUser ?? "");
+            return title ? [{ sessionId: preview.sessionId, title }] : [];
+          });
+          if (titles.length > 0) {
+            await backfillTauriWorkbenchTitles(titles);
+            setTabs(previous => previous.map(tab => {
+              const title = titles.find(item => item.sessionId === tab.sessionId)?.title;
+              return title ? { ...tab, title } : tab;
+            }));
+          }
+        } catch {
+          // Keep the page visible; title enrichment can be retried on a later launch.
+        }
+      }
+    } catch (cause) {
+      setSessionPageError(tauriMessageFrom(cause));
+    } finally {
+      sessionPageRequestRef.current = false;
+      setSessionPageLoading(false);
+    }
+  }
 
   // Tauri drag-and-drop file handler
   useLayoutEffect(() => {
@@ -1309,6 +1359,11 @@ export function TauriSessionPreview() {
               {!collapsedProjects[group.key] && group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} busy={busy} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} />)}
             </section>
           ) : group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} busy={busy} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} />))}
+          {sessionPageCursor && <button type="button" className="tauri-sidebar__load-more" onClick={() => void loadMoreWorkbenchSessions()} disabled={sessionPageLoading} aria-label="加载更多会话">
+            {sessionPageLoading ? "正在加载…" : "加载更多会话"}
+          </button>}
+          {sessionPageError && <p className="tauri-sidebar__page-error" role="alert">加载失败：{sessionPageError}</p>}
+          {sessionPageSource === "legacy" && <p className="tauri-sidebar__page-note">当前使用本地兼容目录</p>}
         </nav>
         <div className="tauri-sidebar__footer">
           <span className={`tauri-health${status?.running ? " is-ready" : ""}`}><i />{status?.running ? "本地运行正常" : "正在连接本地服务…"}</span>

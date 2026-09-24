@@ -110,6 +110,11 @@
 .tauri-sidebar__new kbd { color: var(--fg-faint); font: 10px var(--font-mono); }
 .tauri-sidebar__section-title { padding: 24px 10px 9px; color: var(--fg-faint); font-size: 11px; font-weight: 650; letter-spacing: .03em; }
 .tauri-sidebar__sessions { display: grid; align-content: start; gap: 3px; overflow: auto; }
+.tauri-sidebar__load-more, .tauri-sidebar__page-note, .tauri-sidebar__page-error { margin: 7px 10px 9px; color: var(--muted, #858994); font-size: 11px; }
+.tauri-sidebar__load-more { border: 1px solid var(--line, #292b34); border-radius: 7px; padding: 7px 10px; background: transparent; color: inherit; cursor: pointer; }
+.tauri-sidebar__load-more:hover:not(:disabled) { border-color: var(--accent, #5145cd); color: var(--text, #e6e7eb); }
+.tauri-sidebar__load-more:disabled { cursor: wait; opacity: .65; }
+.tauri-sidebar__page-error { color: #e07a7a; overflow-wrap: anywhere; }
 .tauri-sidebar__empty { margin: 0; padding: 10px; color: var(--fg-faint); font-size: 12px; }
 .tauri-project-group { display: grid; align-content: start; min-width: 0; gap: 2px; }
 .tauri-project-group__heading { display: flex; min-width: 0; align-items: center; }
