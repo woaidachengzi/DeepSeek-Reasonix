@@ -62,19 +62,30 @@ V3 要求 `reserved/ready/missing/deleting/deleted`。当前 schema 只有 `miss
 
 ### 3.3 缺文件不得被重开成空会话（本项最关键的修复）
 
-`resumeBridgeSession` 的判定顺序改为：
+`resumeBridgeSession` 的判定顺序改为（**身份状态优先于文件是否存在**）：
 
 ```text
-1. 文件存在            → Resume（现状不变）
-2. 文件不存在，且身份库有该 ID 的 ready/missing/deleting/deleted 记录
-                       → 返回冲突错误，绝不新建；host 显示"该会话的文件已不在"
-3. 文件不存在，且磁盘存在该会话的残余（<transcript>.jsonl.meta 或 <stem>.inbox）
-                       → 返回冲突错误（与 2 同效，用于身份库尚未登记的情形）
-4. 文件不存在，无记录也无残余
-                       → SetFreshSessionPath（首次创建，现状不变）
+1. 身份库有该 ID 的 deleting/deleted 记录
+                    → 返回冲突错误，绝不 Resume、绝不新建；host 显示墓碑原因
+2. 身份库有该 ID 的 missing 记录
+                    → 返回冲突错误（文件已不在），host 显示"该会话的文件已不在"
+3. 身份库有该 ID 的 ready 记录，且文件存在
+                    → Resume（现状不变）
+4. 身份库有该 ID 的 ready 记录，但文件不存在
+                    → 返回冲突错误，绝不新建；host 显示"该会话的文件已不在"
+5. 身份库有该 ID 的 reserved 记录
+                    → 允许首次落盘（SetFreshSessionPath），与新建同路径
+6. 无身份库记录，但磁盘存在该会话的残余（<transcript>.jsonl.meta 或 <stem>.inbox）
+                    → 返回冲突错误（用于身份库尚未登记的情形）
+7. 无身份库记录、无残余、文件也不存在
+                    → SetFreshSessionPath（首次创建，现状不变）
 ```
 
-第 3 条要有测试固定：第 3 项的 `TestDeletingATranscriptLeavesSidecarEvidence`
+**为什么 1–2 必须先于“文件存在”**：墓碑/删除中的 ID 若仍残留 transcript 文件，
+按“文件存在就 Resume”会绕过墓碑状态，让已删除会话复活。身份库是生命周期权威；
+文件只是内容载体。
+
+第 6 条要有测试固定：第 3 项的 `TestDeletingATranscriptLeavesSidecarEvidence`
 已证明删除后 `.jsonl.meta` 与 `.inbox` 会留存，这就是可用的证据。
 
 **host 侧要求**：打开失败时显示明确原因与三个选项——"选择其他会话"、"在 Finder 中查看"
@@ -85,15 +96,19 @@ V3 要求 `reserved/ready/missing/deleting/deleted`。当前 schema 只有 `miss
 
 上限的根因是 host 的 JSON 文件被当作权威列表。切换后 host 不再持有权威列表：
 
-- 身份库 `ListVisible(limit, cursor)`：按 `position` 排序，**分页**而非截断；
+- 身份库 `ListVisible(limit, cursor)`：按 **`(position, id)`** 排序，**分页**而非截断；
   `deleted` 不返回，`missing` 返回并带标记，`deleting` 不返回。
+  游标必须是 `(position, id)` 复合键——只按 `position` 会在同 `position` 的
+  并列会话上漏项或重复（SQLite 中 `position` 未强制唯一）。
 - bridge 新增只读端点：
 
 ```text
-GET /v1/sessions?limit=<n>&cursor=<position>&workspaceRoot=<path>
-→ { protocolVersion, sessions: [...], nextCursor?, total }
+GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot=<path>
+→ { protocolVersion, sessions: [...], nextCursor?{position,id}, total }
 ```
 
+  `nextCursor` 仅在还有下一页时出现；每页末项的 `(position, id)` 即下一页起点
+  （严格 `>` 比较：`position > cursorPosition || (position == cursorPosition && id > cursorId)`）。
   每项至少含 `id / title / titleSource / workspaceRoot / state / missing / position / updatedAtMs`，
   **不含** transcript 内容、不含凭据类字段。
 - host 首次只取一页（例如 200 条），滚动到底再取下一页；**不再有丢弃**。
@@ -128,8 +143,8 @@ GET /v1/sessions?limit=<n>&cursor=<position>&workspaceRoot=<path>
 
 | 步骤 | 内容 | 验收条件 | 回退 |
 | --- | --- | --- | --- |
-| **5.0** | 修 `resumeBridgeSession`：缺文件不新建（§3.3 的 1–4 分支） | 删除 transcript 后再打开 → 明确错误；从未存在过的 ID 仍可新建；两侧都有测试 | 纯代码，撤销即回退 |
-| **5.1** | 身份库 schema v3（状态机）+ `ListVisible` 分页 | v2 库可原地迁移；future schema 拒绝打开；`deleted` 不可重用有测试 | 保留 v2 备份文件即可降级读取 |
+| **5.0** | 修 `resumeBridgeSession`：身份状态优先于文件存在（§3.3 的 1–7 分支） | 删除 transcript 后再打开 → 明确错误；从未存在过的 ID 仍可新建；`deleted`/`deleting` 即使文件残留也不 Resume；两侧都有测试 | 纯代码，撤销即回退 |
+| **5.1** | 身份库 schema v3（状态机）+ `ListVisible` 按 `(position, id)` 分页 | v2 库可原地迁移；future schema 拒绝打开；`deleted` 不可重用有测试；同 `position` 并列不漏项 | 保留 v2 备份文件即可降级读取 |
 | **5.2** | bridge `GET /v1/sessions` 分页列表 | 200+ 会话全部可见，无截断；`deleted` 不出现；契约测试覆盖可选字段；老客户端不受影响 | 端点只是新增，host 不读即无影响 |
 | **5.3** | host 切换到 bridge 列表，JSON 作为回退 | 新旧列表 diff 为零或可解释；重启后 ID 不变；侧栏项目树完整 | host 改回读 JSON（一个常量开关） |
 | **5.4** | missing/deleting/deleted 的用户可见处理 + 重启续做清理 | 删除中途 kill → 重启后清理完成或可重试；missing 会话有明确提示且不可"以空会话打开" | 状态回退为 `missing` 等待用户决定 |
@@ -142,13 +157,15 @@ GET /v1/sessions?limit=<n>&cursor=<position>&workspaceRoot=<path>
 - transcript 被删 → 打开返回错误；返回信息可区分"文件缺失"与其他失败。
 - 从未存在的 ID → 仍新建（回归）。
 - 只有 `.jsonl.meta` 残余（无身份库）→ 拒绝新建。
-- 身份库记录为 `deleted` → 拒绝新建，即使文件不存在且无残余。
+- 身份库记录为 `deleted` 或 `deleting` → 拒绝 Resume/新建，**即使 transcript 文件仍在**（墓碑优先）。
+- 身份库记录为 `missing` → 拒绝 Resume/新建；host 显示"该会话的文件已不在"。
 
 **5.1**
 - v2 → v3 迁移：`missing=1` 变 `missing`，其余变 `ready`，行数与 path 不变。
 - 迁移中途失败 → 整体回滚，`user_version` 不变。
 - future schema（v99）→ 拒绝打开且文件未被改写（沿用现有测试）。
 - `ListVisible` 分页：200 条分 3 页无重复无遗漏；`deleted` 永不出现。
+- 同一 `position` 下多条会话用 `(position, id)` 游标翻页：无漏项、无重复。
 
 **5.2**
 - 209 条会话的列表返回 209 条（分页合计），证明 50 条上限不再适用。
