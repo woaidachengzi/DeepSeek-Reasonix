@@ -153,6 +153,11 @@ func PrepareImportReview(ctx context.Context, identities *Store, sessionDir, cat
 // This is an offline S1 operation: its caller must quiesce transcript writers
 // and hold a profile-level ownership lock before using it on a real profile.
 func (s *Store) ApplyImportReview(ctx context.Context, plan ImportReview) error {
+	if s.profileRoot == "" {
+		if err := s.bindProfileRoot(filepath.Dir(plan.SessionDir)); err != nil {
+			return err
+		}
+	}
 	ids := make([]string, len(plan.Rows))
 	for i, row := range plan.Rows {
 		ids[i] = row.ID

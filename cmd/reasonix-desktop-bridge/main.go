@@ -126,7 +126,7 @@ func run(ctx context.Context, cfg config, token string) (runErr error) {
 			if !info.Mode().IsRegular() {
 				return errors.New("session identity store is not a regular file")
 			}
-			identities, err := sessionidentity.Open(ctx, identityPath)
+			identities, err := sessionidentity.Open(ctx, identityPath, appconfig.SessionProfileRoot())
 			if err != nil {
 				return fmt.Errorf("migrate session identity store: %w", err)
 			}

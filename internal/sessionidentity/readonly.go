@@ -18,7 +18,7 @@ import (
 // Unlike Open, it never creates a directory or database, changes journal mode,
 // or migrates a schema. Callers should pass nil to Inventory when no database
 // exists yet; a missing or unsupported database is not silently replaced.
-func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
+func OpenReadOnly(ctx context.Context, path string, profileRoots ...string) (*Store, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, errors.New("session identity path is empty")
 	}
@@ -32,6 +32,13 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 	}
 	if !info.Mode().IsRegular() {
 		return nil, errors.New("session identity database is not a regular file")
+	}
+	if len(profileRoots) != 1 {
+		return nil, errors.New("session profile root is required for read-only identity access")
+	}
+	profileRoot, err := normalizeProfileRoot(profileRoots[0])
+	if err != nil {
+		return nil, err
 	}
 	slash := filepath.ToSlash(abs)
 	if runtime.GOOS == "windows" && len(slash) >= 2 && slash[1] == ':' {
@@ -71,5 +78,5 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 	if integrity != "ok" {
 		return fail(fmt.Errorf("session identity quick check: %s", integrity))
 	}
-	return &Store{db: db}, nil
+	return &Store{db: db, profileRoot: profileRoot}, nil
 }

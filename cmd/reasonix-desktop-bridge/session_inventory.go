@@ -43,7 +43,7 @@ func (b *bridgeServer) sessionInventory(w http.ResponseWriter, r *http.Request) 
 		// Existing schema versions are upgraded during bridge startup. This
 		// read-only request never creates the database or mutates session rows.
 		if info, err := os.Stat(identityPath); err == nil && info.Mode().IsRegular() {
-			store, err := sessionidentity.OpenReadOnly(r.Context(), identityPath)
+			store, err := sessionidentity.OpenReadOnly(r.Context(), identityPath, appconfig.SessionProfileRoot())
 			if err != nil {
 				b.writeRuntimeError(w, err, "unable to open the session identity store")
 				return

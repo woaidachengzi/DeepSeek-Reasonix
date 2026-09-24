@@ -98,7 +98,7 @@ func TestRegisteredMissingTranscriptCannotBecomeFresh(t *testing.T) {
 	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("registered missing transcript was recreated: %v", err)
 	}
-	identityStore, err := sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath())
+	identityStore, err := sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestRegisteredMissingTranscriptCannotBecomeFresh(t *testing.T) {
 	if err := runtime.Shutdown(); err != nil {
 		t.Fatal(err)
 	}
-	identityStore, err = sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath())
+	identityStore, err = sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func TestUnregisteredExistingTranscriptIsClaimedReady(t *testing.T) {
 	if err := runtime.Shutdown(); err != nil {
 		t.Fatal(err)
 	}
-	identityStore, err := sessionidentity.OpenReadOnly(context.Background(), appconfig.DesktopSessionIdentityPath())
+	identityStore, err := sessionidentity.OpenReadOnly(context.Background(), appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func TestBridgeLifecycleSinkMarksReservedIdentityReadyAfterFirstSave(t *testing.
 	}
 	sink := newBridgeLifecycleSink(event.Discard, "first-save")
 	sink.Emit(event.Event{Kind: event.TurnDone})
-	identities, err = sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath())
+	identities, err = sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,7 +348,7 @@ func TestControllerRuntimeRenamesSessionMetadataWithoutTouchingTranscript(t *tes
 	if got := runtime.Title(); got != "Release notes" {
 		t.Fatalf("renamed session title = %q", got)
 	}
-	identities, err := sessionidentity.OpenReadOnly(context.Background(), appconfig.DesktopSessionIdentityPath())
+	identities, err := sessionidentity.OpenReadOnly(context.Background(), appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
 	if err != nil {
 		t.Fatalf("open session identity: %v", err)
 	}
@@ -456,7 +456,7 @@ func TestBridgeDeletionFenceRejectsWritesAndRetriesCleanup(t *testing.T) {
 	if err := manager.DeleteSession("delete-retry"); err == nil {
 		t.Fatal("injected artifact sweep failure was ignored")
 	}
-	identities, err := sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath())
+	identities, err := sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -475,7 +475,7 @@ func TestBridgeDeletionFenceRejectsWritesAndRetriesCleanup(t *testing.T) {
 	if err := manager.DeleteSession("delete-retry"); err != nil {
 		t.Fatalf("retry deletion: %v", err)
 	}
-	identities, err = sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath())
+	identities, err = sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -516,7 +516,7 @@ func TestBridgeShutdownDoesNotSnapshotDeletingSession(t *testing.T) {
 	if _, err := os.Stat(view.Path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("shutdown recreated deleting transcript: %v", err)
 	}
-	identities, err := sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath())
+	identities, err := sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
 	if err != nil {
 		t.Fatal(err)
 	}

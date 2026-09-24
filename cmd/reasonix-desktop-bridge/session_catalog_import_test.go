@@ -55,7 +55,7 @@ func TestImportLegacyCatalogPreservesExistingAndMissingEntries(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil || result.Accepted != 2 || result.ProtocolVersion != 1 {
 		t.Fatalf("catalog import response=%#v err=%v", result, err)
 	}
-	identities, err = sessionidentity.OpenReadOnly(context.Background(), appconfig.DesktopSessionIdentityPath())
+	identities, err = sessionidentity.OpenReadOnly(context.Background(), appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
 	if err != nil {
 		t.Fatal(err)
 	}

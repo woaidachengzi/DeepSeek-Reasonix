@@ -50,7 +50,7 @@ func (b *bridgeServer) syncSessionCatalog(w http.ResponseWriter, r *http.Request
 		}
 		seen[entry.ID] = struct{}{}
 	}
-	identities, err := sessionidentity.Open(r.Context(), identityPath)
+	identities, err := sessionidentity.Open(r.Context(), identityPath, appconfig.SessionProfileRoot())
 	if err != nil {
 		b.writeRuntimeError(w, err, "unable to open the session identity store")
 		return

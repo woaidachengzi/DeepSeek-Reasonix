@@ -48,7 +48,11 @@ func TestImportPreservesTranscriptAndIdentityAcrossReopen(t *testing.T) {
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err = Open(ctx, dbPath)
+	if reopened, err := Open(ctx, dbPath); err == nil {
+		_ = reopened.Close()
+		t.Fatal("existing relative-path database opened without its profile root")
+	}
+	store, err = Open(ctx, dbPath, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -536,12 +540,12 @@ func TestConcurrentTitleWritersCannotBothCommitSameRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	dbPath := filepath.Join(root, "identity.sqlite")
-	first, err := Open(ctx, dbPath)
+	first, err := Open(ctx, dbPath, root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = first.Close() })
-	second, err := Open(ctx, dbPath)
+	second, err := Open(ctx, dbPath, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -571,6 +575,9 @@ func TestConcurrentTitleWritersCannotBothCommitSameRevision(t *testing.T) {
 func TestOpenMigratesV1TitlesWithoutAssumingUserIntent(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "sessions"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	dbPath := filepath.Join(root, "identity.sqlite")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
@@ -581,15 +588,15 @@ func TestOpenMigratesV1TitlesWithoutAssumingUserIntent(t *testing.T) {
 		title TEXT NOT NULL DEFAULT '', position INTEGER NOT NULL DEFAULT 0,
 		missing INTEGER NOT NULL DEFAULT 0 CHECK (missing IN (0, 1)),
 		created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL);
-		INSERT INTO sessions VALUES ('named', '/a.jsonl', '', 'Legacy title', 0, 0, 1, 1);
-		INSERT INTO sessions VALUES ('empty', '/b.jsonl', '', '', 1, 1, 1, 1);
+		INSERT INTO sessions VALUES ('named', '` + filepath.ToSlash(filepath.Join(root, "sessions", "a.jsonl")) + `', '', 'Legacy title', 0, 0, 1, 1);
+		INSERT INTO sessions VALUES ('empty', '` + filepath.ToSlash(filepath.Join(root, "sessions", "b.jsonl")) + `', '', '', 1, 1, 1, 1);
 		PRAGMA user_version=1`); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err := Open(ctx, dbPath)
+	store, err := Open(ctx, dbPath, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -599,17 +606,28 @@ func TestOpenMigratesV1TitlesWithoutAssumingUserIntent(t *testing.T) {
 		t.Fatalf("migrated provenance = %#v, %v", records, err)
 	}
 	var version int
-	if err := store.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil || version != 3 {
+	if err := store.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil || version != 4 {
 		t.Fatalf("migrated version = %d, %v", version, err)
 	}
 	if records[0].State != StateReady || records[1].State != StateMissing || !records[1].Missing {
 		t.Fatalf("migrated lifecycle states = %#v", records)
 	}
+	if got, want := records[1].Path, filepath.Join(root, "sessions", "b.jsonl"); got != want {
+		t.Fatalf("v1 migrated absolute path = %q, want %q", got, want)
+	}
+	var relative string
+	if err := store.db.QueryRowContext(ctx, "SELECT relative_path FROM sessions WHERE id='empty'").Scan(&relative); err != nil || relative != "sessions/b.jsonl" {
+		t.Fatalf("v1 stored relative path = %q, %v", relative, err)
+	}
 }
 
 func TestOpenMigratesV2MissingFlagToLifecycleState(t *testing.T) {
 	ctx := context.Background()
-	dbPath := filepath.Join(t.TempDir(), "identity.sqlite")
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "sessions"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	dbPath := filepath.Join(root, "identity.sqlite")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatal(err)
@@ -620,15 +638,15 @@ func TestOpenMigratesV2MissingFlagToLifecycleState(t *testing.T) {
 		title_revision INTEGER NOT NULL DEFAULT 0, position INTEGER NOT NULL DEFAULT 0,
 		missing INTEGER NOT NULL DEFAULT 0 CHECK (missing IN (0, 1)),
 		created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL);
-		INSERT INTO sessions VALUES ('ready', '/ready.jsonl', '', '', 'fallback', 0, 0, 0, 1, 1);
-		INSERT INTO sessions VALUES ('missing', '/missing.jsonl', '', '', 'fallback', 0, 1, 1, 1, 1);
+		INSERT INTO sessions VALUES ('ready', '` + filepath.ToSlash(filepath.Join(root, "sessions", "ready.jsonl")) + `', '', '', 'fallback', 0, 0, 0, 1, 1);
+		INSERT INTO sessions VALUES ('missing', '` + filepath.ToSlash(filepath.Join(root, "sessions", "missing.jsonl")) + `', '', '', 'fallback', 0, 1, 1, 1, 1);
 		PRAGMA user_version=2`); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err := Open(ctx, dbPath)
+	store, err := Open(ctx, dbPath, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -638,7 +656,48 @@ func TestOpenMigratesV2MissingFlagToLifecycleState(t *testing.T) {
 		t.Fatalf("v2 migration records = %#v, %v", records, err)
 	}
 	var version int
-	if err := store.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil || version != 3 {
+	if err := store.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil || version != 4 {
 		t.Fatalf("migrated schema version = %d, %v", version, err)
+	}
+}
+
+func TestV3PathMigrationRejectsPathsOutsideProfileWithoutChangingDatabase(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	dbPath := filepath.Join(root, "identity.sqlite")
+	external := filepath.Join(t.TempDir(), "sessions", "tauri-outside.jsonl")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE sessions (
+		id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, workspace_root TEXT NOT NULL DEFAULT '',
+		title TEXT NOT NULL DEFAULT '', title_source TEXT NOT NULL DEFAULT 'fallback',
+		title_revision INTEGER NOT NULL DEFAULT 0, position INTEGER NOT NULL DEFAULT 0,
+		state TEXT NOT NULL DEFAULT 'ready', created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL);
+		INSERT INTO sessions VALUES ('outside', '` + filepath.ToSlash(external) + `', '', '', 'fallback', 0, 0, 'ready', 1, 1);
+		CREATE INDEX sessions_state_position_id ON sessions(state, position, id);
+		PRAGMA user_version=3`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if store, err := Open(ctx, dbPath, root); err == nil {
+		_ = store.Close()
+		t.Fatal("migration accepted a transcript path outside the supplied profile")
+	}
+	db, err = sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var version int
+	var storedPath string
+	if err := db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 3 {
+		t.Fatalf("failed migration changed schema version to %d: %v", version, err)
+	}
+	if err := db.QueryRow("SELECT path FROM sessions WHERE id='outside'").Scan(&storedPath); err != nil || filepath.ToSlash(storedPath) != filepath.ToSlash(external) {
+		t.Fatalf("failed migration changed stored path to %q: %v", storedPath, err)
 	}
 }

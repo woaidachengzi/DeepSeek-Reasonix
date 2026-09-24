@@ -1,10 +1,9 @@
 # 第 5 项设计稿：持久会话目录与完整项目树（存储 S2）
 
-> 状态：**部分实现**。身份库 schema v3 生命周期状态、首次会话 reservation、恢复前状态检查及
+> 状态：**部分实现（2026-09）**。身份库 schema v4 已含相对 profile-root 路径、标题溯源、生命周期状态；首次会话 reservation、恢复前状态检查及
 > 残留 sidecar 防误复用、身份库 keyset 分页、bridge 只读列表接口、删除状态的存储 API 及旧 JSON catalog 幂等导入已实现；
-> bridge 删除清理已接入（包括 `deleting` 状态下的重试与重启后续删）；Rust host 全量分页影子比对及
-> 运行状态面板报告已实现；host 权威切换与 UI 恢复选项仍未实现。
-> 侧栏当前仍受 host JSON 的 50 条上限约束。
+> bridge 删除清理已接入（包括 `deleting` 状态下的重试与重启后续删）；Rust host 影子比对门禁与身份库分页侧栏已实现，目录差异时仍回退 JSON。
+> 侧栏可通过加载更多超过旧 JSON 的 50 条上限；全 profile 权威切换、旧写者停写确认与完整跨资源恢复/兼容演练仍未实现。
 > 本文继续作为其余工作契约、验收条件、测试矩阵与回退路径。
 >
 > 背景与边界：[SESSION_STORAGE_IMPLEMENTATION_V3.md](./SESSION_STORAGE_IMPLEMENTATION_V3.md) §5 S2。
@@ -15,8 +14,8 @@
 | # | 问题 | 现状证据 |
 | --- | --- | --- |
 | 1 | **缺文件的会话会被静默重开成同 ID 的空会话** | 已由身份状态优先检查、missing 状态与 reservation 修复；见 §3.3。 |
-| 2 | **最近列表硬上限 50，且会静默丢弃** | `desktop/tauri/src/workbench_catalog.rs:12` `MAX_SESSIONS: usize = 50`，`remember` 用 `take(MAX_SESSIONS - 1)` 截断。第 51 个会话会挤掉最旧的记录，被挤掉的会话**不再出现在侧栏**，也没有任何提示。 |
-| 3 | **列表权威在 host 的 JSON 文件，不在身份库** | host 的 `workbench_sessions` 仍读 `WorkbenchCatalog`（`workbench-sessions.json`）；身份库写入目前只负责会话生命周期登记。 |
+| 2 | **最近列表硬上限 50，且会静默丢弃** | SQLite keyset 分页侧栏已可继续加载超出 JSON 最近列表的旧会话；JSON 仍保留最多 50 条作为兼容回退源。 |
+| 3 | **列表权威在 host 的 JSON 文件，不在身份库** | Preview 首屏影子比对 clean 时按页读取身份库，不一致或审计失败时回退 JSON；这仍是迁移期门禁，不等同唯一权威切换。 |
 | 4 | **"项目树"只是按 workspaceRoot 分组的最近列表** | `desktop/frontend/src/tauri/workbenchSessions.ts` 的 `groupWorkbenchSessions`；没有项目级实体，也就没有"项目下全部会话"。 |
 
 问题 1 是数据安全，问题 2 是功能上限，两者都必须在切换权威之前解决。
@@ -26,7 +25,7 @@
 - 删除与产物清理：`control.RemoveSessionArtifacts`（`internal/control/controller.go:3241`），
   已覆盖 transcript、13 类 sidecar、guardian、inbox、checkpoint、子 agent、cleanup 标记。
   第 5 项**不得**新增第二套删除实现。
-- 身份库：`internal/sessionidentity` 已是 schema v3，含 `path UNIQUE`、生命周期 `state`、
+- 身份库：`internal/sessionidentity` 已是 schema v4，含 `relative_path UNIQUE`、生命周期 `state`、
   `title_source`/`title_revision`（CAS，`SetTitle`）、`Import`、`OpenReadOnly`、`Inventory`。
 - 只读盘点：`sessionidentity.Inventory` 与 `GET /v1/sessions/inventory`（第 3 项已交付），
   它已经是"缺文件"的权威观测点。
@@ -53,7 +52,7 @@ cache/session-catalog、history FTS5
 
 ### 3.2 生命周期与状态（把 V3 §3.2 落到本仓库）
 
-V3 要求 `reserved/ready/missing/deleting/deleted`。schema v3 已包含状态列与 v2 回填；`BeginDelete` / `FinishDelete` 已接入 bridge artifact sweep。清理失败后写入被隔离，重启后的同 ID 删除请求只可续删 `deleting` 记录：
+V3 要求 `reserved/ready/missing/deleting/deleted`。schema v4 保留 v3 生命周期状态并加入相对 `relative_path`；`BeginDelete` / `FinishDelete` 已接入 bridge artifact sweep。清理失败后写入被隔离，重启后的同 ID 删除请求只可续删 `deleting` 记录：
 
 | 状态 | 含义 | 允许的迁移 |
 | --- | --- | --- |

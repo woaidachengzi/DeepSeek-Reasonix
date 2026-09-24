@@ -67,7 +67,7 @@ func (b *bridgeServer) backfillSessionTitles(w http.ResponseWriter, r *http.Requ
 		}
 		seen[item.SessionID] = struct{}{}
 	}
-	identities, err := sessionidentity.Open(r.Context(), identityPath)
+	identities, err := sessionidentity.Open(r.Context(), identityPath, appconfig.SessionProfileRoot())
 	if err != nil {
 		b.writeRuntimeError(w, err, "unable to open the session identity store")
 		return

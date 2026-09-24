@@ -32,6 +32,11 @@ func (s *Store) SyncWorkbenchOrder(ctx context.Context, sessionDir string, entri
 	if strings.TrimSpace(sessionDir) == "" || len(entries) > 50 {
 		return 0, errors.New("workbench catalog is invalid")
 	}
+	if s.profileRoot == "" {
+		if err := s.bindProfileRoot(filepath.Dir(sessionDir)); err != nil {
+			return 0, err
+		}
+	}
 	root, err := filepath.Abs(sessionDir)
 	if err != nil {
 		return 0, fmt.Errorf("resolve session directory: %w", err)
@@ -70,7 +75,7 @@ func (s *Store) SyncWorkbenchOrder(ctx context.Context, sessionDir string, entri
 		return 0, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	rows, err := tx.QueryContext(ctx, `SELECT id, path, workspace_root, title, title_source, title_revision, position, state,
+	rows, err := tx.QueryContext(ctx, `SELECT id, relative_path, workspace_root, title, title_source, title_revision, position, state,
 		created_at_ms, updated_at_ms FROM sessions ORDER BY position, id`)
 	if err != nil {
 		return 0, err
@@ -78,7 +83,7 @@ func (s *Store) SyncWorkbenchOrder(ctx context.Context, sessionDir string, entri
 	current := make([]Record, 0)
 	byID := make(map[string]Record)
 	for rows.Next() {
-		record, scanErr := scanIdentityRecord(rows)
+		record, scanErr := scanIdentityRecord(rows, s.profileRoot)
 		if scanErr != nil {
 			_ = rows.Close()
 			return 0, scanErr

@@ -1,6 +1,6 @@
 # Tauri Preview 会话存储实施稿 v3
 
-> 状态：实施设计，尚未授权真实用户数据迁移；基于 `experiment/tauri` 的 `4ed41fbe6` 及其后未提交的界面改动。
+> 状态：持续实施中；Preview 身份库已升至 schema v4 并采用相对 profile-root 路径，真实稳定版数据迁移仍未授权。本文保留设计边界与阶段验收记录。
 > 对照：本地草稿 `SESSION_STORAGE_PLAN_V2.md`、`MIMO_STYLE_SESSION_STORAGE_APPROVAL.md`，以及已入库的[既有评审](./MIMO_STYLE_SESSION_STORAGE_REVIEW.md)。
 > 本稿替代前两份文档的实施建议；它们保留为设计讨论记录。本稿不是“已完成迁移”的声明。
 >
@@ -204,7 +204,7 @@ CREATE INDEX sessions_visible_order ON sessions(state, position, id);
 
 ### S2：shadow 读写与 resolver
 
-**当前安全切片**：bridge 已将新建、恢复、缺失、删除中与已删除会话分开处理；已登记但 transcript 缺失时拒绝静默创建同 ID 空会话，缺失与中断删除均可经显式删除安全退休并保留 tombstone。Tauri Preview 侧栏按页读取身份目录，但首屏只有在 count-only 影子比对确认一致时才选 SQLite；比对不一致或失败时回退旧 JSON 目录，且新增/改名/删除后的重新盘点发现漂移时也会回退。此为可回退的 Preview 读取路径，不代表稳定版迁移或全 profile 权威切换。当前身份表仍保存绝对 transcript path；相对路径迁移、完整跨资源恢复演练与 same-profile 多写者防护仍待完成。
+**当前安全切片**：bridge 已将新建、恢复、缺失、删除中与已删除会话分开处理；已登记但 transcript 缺失时拒绝静默创建同 ID 空会话，缺失与中断删除均可经显式删除安全退休并保留 tombstone。Tauri Preview 侧栏按页读取身份目录，但首屏只有在 count-only 影子比对确认一致时才选 SQLite；比对不一致或失败时回退旧 JSON 目录，且新增/改名/删除后的重新盘点发现漂移时也会回退。身份表现为相对 state-root 的 `relative_path`；旧 v1–v3 绝对路径通过校验后事务迁移到 v4，离线快照的跨目录恢复测试确认 ID 可解析到新 profile。此为可回退的 Preview 读取路径，不代表稳定版迁移或全 profile 权威切换。完整跨资源恢复演练、旧版写者停写确认与旧 bridge 客户端兼容矩阵仍待完成。
 
 1. 新会话先 `reserved` 登记 ID；实际写入后转 `ready`。bridge 的打开/切换/重命名/删除均先解析身份行，再定位文件。无记录的新建与已登记但 `missing` 的恢复必须分开。
 2. 一段发布窗口内，host 对比 JSON 与 SQLite 的 ID/标题/工作区/顺序/文件状态；只记录差异统计，不把私密消息写诊断。SQLite 只在影子报告 clean 时作为当前 Preview 侧栏来源，否则继续显示 JSON；差异或盘点错误不得进入 SQLite 来源。
@@ -224,10 +224,7 @@ CREATE INDEX sessions_visible_order ON sessions(state, position, id);
 审批稿 A1–A6、B3–B5、C1–C5 的边界继续有效；A7 改为“记忆布局待独立设计”，B1 的扫描器改为**只读候选清单**而非自动认领，B2 的 alias 延至 Move 语义确定。审批稿中 Wails 的路径身份与 Tauri 已有 ID 必须分开描述，`C6`/`B5` 的交叉引用也需更正。
 
 S0 路径与隔离修正已提交；S1 的只读清单和离线核验导入已有代码与测试，
-下一步是旧写者停写确认、跨资源备份与真实 profile 的人工核对演练。身份库现已
-升至生命周期状态 schema 并接入 Preview 的影子门控分页读取，但不宣告 S1/S2
-完成：身份表仍使用绝对 `path`，完整跨资源恢复、双进程竞争与旧 bridge 客户端
-兼容矩阵仍需补齐。Preview 仅在首屏影子报告 clean 时选择身份目录；启动或新增、
+离线快照会校验整份 profile 与 host catalog，快照暂存到新目录后的身份读取与路径重绑定已有自动化演练。身份库 schema v4 已把绝对 `path` 迁为相对 `relative_path`，v1–v3 迁移会先核对路径归属，越界时拒绝迁移且不改 v3 数据。下一步是旧写者停写确认、完整跨资源恢复演练和旧 bridge 客户端兼容矩阵；新版本 bridge 同 profile 进程互斥已有跨进程测试，但不约束不使用新锁协议的旧版本写者。Preview 仅在首屏影子报告 clean 时选择身份目录；启动或新增、
 改名、删除后若重盘点发现漂移或失败，则回退 JSON。稳定版及真实 profile 自动迁移仍未授权。
 
 > **[DeepSeek] 本段的 A/B/C 编号与两处更正已并入 V2 的决议索引。**

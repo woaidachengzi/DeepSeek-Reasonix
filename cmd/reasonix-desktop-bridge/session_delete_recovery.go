@@ -45,7 +45,7 @@ func retryInterruptedSessionDelete(ctx context.Context, sessionID string) error 
 	if err != nil {
 		return desktopbridge.ErrSessionNotFound
 	}
-	identities, err := sessionidentity.Open(ctx, identityPath)
+	identities, err := sessionidentity.Open(ctx, identityPath, appconfig.SessionProfileRoot())
 	if err != nil {
 		return fmt.Errorf("open session identity for deletion recovery: %w", err)
 	}

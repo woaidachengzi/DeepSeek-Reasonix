@@ -12,4 +12,7 @@ func TestDesktopSessionIdentityPathUsesStateHome(t *testing.T) {
 	if got, want := DesktopSessionIdentityPath(), filepath.Join(stateHome, "desktop", "session-state-v1.sqlite"); got != want {
 		t.Fatalf("identity path = %q, want %q", got, want)
 	}
+	if got := SessionProfileRoot(); got != stateHome {
+		t.Fatalf("session profile root = %q, want %q", got, stateHome)
+	}
 }

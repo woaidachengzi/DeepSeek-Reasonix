@@ -58,7 +58,7 @@ func TestBackfillSessionTitlesOnlyFillsFallbackTitles(t *testing.T) {
 		t.Fatalf("backfill status=%d body=%s", response.Code, response.Body.String())
 	}
 
-	identities, err = sessionidentity.OpenReadOnly(context.Background(), appconfig.DesktopSessionIdentityPath())
+	identities, err = sessionidentity.OpenReadOnly(context.Background(), appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
 	if err != nil {
 		t.Fatal(err)
 	}

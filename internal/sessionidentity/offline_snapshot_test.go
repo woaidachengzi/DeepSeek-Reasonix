@@ -97,14 +97,28 @@ func TestOfflineSnapshotVerifiesAndStagesCompleteProfile(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(originalCatalog, recoveredCatalog) {
 		t.Fatalf("catalog recovery differs: %v", err)
 	}
-	restoredDB, err := OpenReadOnly(ctx, filepath.Join(staged, "profile", "desktop", "session-state-v1.sqlite"))
+	restoredDB, err := OpenReadOnly(ctx, filepath.Join(staged, "profile", "desktop", "session-state-v1.sqlite"), filepath.Join(staged, "profile"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer restoredDB.Close()
 	records, err := restoredDB.List(ctx)
 	if err != nil || len(records) != 1 || records[0].ID != "tauri-first" {
 		t.Fatalf("restored identity database = %#v, %v", records, err)
+	}
+	wantRestoredTranscript := filepath.Join(staged, "profile", "sessions", "tauri-tauri-first.jsonl")
+	if records[0].Path != wantRestoredTranscript {
+		t.Fatalf("restored identity path = %q, want relocated profile path %q", records[0].Path, wantRestoredTranscript)
+	}
+	if err := restoredDB.Close(); err != nil {
+		t.Fatal(err)
+	}
+	relocated, err := Open(ctx, filepath.Join(staged, "profile", "desktop", "session-state-v1.sqlite"), filepath.Join(staged, "profile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer relocated.Close()
+	if err := relocated.Import(ctx, filepath.Join(staged, "profile", "sessions"), []Candidate{{ID: "tauri-first", Path: wantRestoredTranscript}}); err != nil {
+		t.Fatalf("reconcile relocated identity: %v", err)
 	}
 }
 

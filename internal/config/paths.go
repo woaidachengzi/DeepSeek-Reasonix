@@ -434,6 +434,17 @@ func SessionDir() string {
 	return filepath.Join(dir, "sessions")
 }
 
+// SessionProfileRoot is the canonical state root shared by session transcripts
+// and the desktop session identity database. Persisted identity paths are
+// relative to this root so relocating a complete profile does not strand IDs.
+func SessionProfileRoot() string {
+	dir := SessionDir()
+	if dir == "" {
+		return ""
+	}
+	return filepath.Dir(dir)
+}
+
 // StatsDir is where usage statistics are persisted (one .jsonl per day, e.g.
 // stats/2026-08-02.jsonl). It lives under the user state root — not the install
 // directory, which is typically read-only and replaced on upgrade — so usage

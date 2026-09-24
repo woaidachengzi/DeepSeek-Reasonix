@@ -46,7 +46,7 @@ func TestDeleteLifecyclePersistsFenceAndTombstone(t *testing.T) {
 	if err := identities.Close(); err != nil {
 		t.Fatal(err)
 	}
-	identities, err = Open(ctx, dbPath)
+	identities, err = Open(ctx, dbPath, root)
 	if err != nil {
 		t.Fatal(err)
 	}

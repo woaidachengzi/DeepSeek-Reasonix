@@ -53,7 +53,7 @@ func TestBridgeRetriesInterruptedDeleteAfterRestart(t *testing.T) {
 	if _, err := os.Lstat(view.Path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("interrupted transcript survived recovery: %v", err)
 	}
-	identities, err := sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath())
+	identities, err := sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestBridgeDeleteCanRetireMissingSessionWithoutRecreatingIt(t *testing.T) {
 	if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("missing-session delete created transcript: %v", err)
 	}
-	identities, err = sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath())
+	identities, err = sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
 	if err != nil {
 		t.Fatal(err)
 	}

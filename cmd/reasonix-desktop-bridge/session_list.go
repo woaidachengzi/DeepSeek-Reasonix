@@ -76,7 +76,7 @@ func (b *bridgeServer) sessionList(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, http.StatusInternalServerError, "internal", "session identity store is not a regular file")
 		return
 	}
-	identities, err := sessionidentity.OpenReadOnly(r.Context(), identityPath)
+	identities, err := sessionidentity.OpenReadOnly(r.Context(), identityPath, appconfig.SessionProfileRoot())
 	if err != nil {
 		b.writeRuntimeError(w, err, "unable to open the session identity store")
 		return

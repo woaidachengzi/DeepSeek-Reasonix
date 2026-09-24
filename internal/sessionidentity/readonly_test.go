@@ -46,7 +46,7 @@ func TestOpenReadOnlyListsButCannotImportOrRename(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reader, err := OpenReadOnly(ctx, dbPath)
+	reader, err := OpenReadOnly(ctx, dbPath, root)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -104,7 +104,7 @@ func (s *bridgeLifecycleSink) Emit(input event.Event) {
 	if err != nil || !info.Mode().IsRegular() {
 		return
 	}
-	identities, err := sessionidentity.Open(context.Background(), s.identityPath)
+	identities, err := sessionidentity.Open(context.Background(), s.identityPath, appconfig.SessionProfileRoot())
 	if err != nil {
 		return
 	}
@@ -131,7 +131,7 @@ func resumeBridgeSession(ctx context.Context, controller *control.Controller, se
 		return resumeUncataloguedBridgeSession(controller, path)
 	}
 
-	identities, err := sessionidentity.Open(ctx, identityPath)
+	identities, err := sessionidentity.Open(ctx, identityPath, filepath.Dir(controller.SessionDir()))
 	if err != nil {
 		return fmt.Errorf("open session identity store: %w", err)
 	}
@@ -289,7 +289,7 @@ func (r *controllerRuntime) Rename(title string) error {
 	if r.sessionID == "" || appconfig.DesktopSessionIdentityPath() == "" {
 		return nil
 	}
-	identities, err := sessionidentity.Open(context.Background(), appconfig.DesktopSessionIdentityPath())
+	identities, err := sessionidentity.Open(context.Background(), appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
 	if err != nil {
 		return fmt.Errorf("open session identity for title update: %w", err)
 	}
@@ -330,7 +330,7 @@ func (r *controllerRuntime) Delete() error {
 		r.deleted.Store(true)
 		return nil
 	}
-	identities, err := sessionidentity.Open(context.Background(), identityPath)
+	identities, err := sessionidentity.Open(context.Background(), identityPath, filepath.Dir(r.controller.SessionDir()))
 	if err != nil {
 		return fmt.Errorf("open session identity for deletion: %w", err)
 	}

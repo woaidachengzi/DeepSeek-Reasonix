@@ -53,7 +53,7 @@ func TestSyncSessionCatalogMirrorsOrderAndWorkspaceWithoutTouchingTitles(t *test
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"synced":2`) {
 		t.Fatalf("sync status=%d body=%s", response.Code, response.Body.String())
 	}
-	identities, err = sessionidentity.OpenReadOnly(context.Background(), appconfig.DesktopSessionIdentityPath())
+	identities, err = sessionidentity.OpenReadOnly(context.Background(), appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestSyncSessionCatalogRejectsDuplicateEntriesWithoutMutation(t *testing.T) 
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("duplicate sync status=%d body=%s", response.Code, response.Body.String())
 	}
-	identities, err = sessionidentity.OpenReadOnly(context.Background(), appconfig.DesktopSessionIdentityPath())
+	identities, err = sessionidentity.OpenReadOnly(context.Background(), appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
 	if err != nil {
 		t.Fatal(err)
 	}

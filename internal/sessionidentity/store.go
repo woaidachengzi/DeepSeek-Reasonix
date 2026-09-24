@@ -18,7 +18,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 3
+const schemaVersion = 4
 
 var ErrPathChanged = errors.New("session identity path changed without an explicit move")
 var ErrSessionStateConflict = errors.New("session identity lifecycle state conflict")
@@ -95,12 +95,27 @@ type Page struct {
 const MaxVisiblePageSize = 200
 
 type Store struct {
-	db *sql.DB
+	db          *sql.DB
+	profileRoot string
 }
 
-func Open(ctx context.Context, path string) (*Store, error) {
+// Open opens the identity database. Existing databases require an explicit
+// state/profile root; a new empty database may bind that root when its first
+// import or reservation is supplied. Production bridge callers pass it here.
+func Open(ctx context.Context, path string, profileRoots ...string) (*Store, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, errors.New("session identity path is empty")
+	}
+	if len(profileRoots) > 1 {
+		return nil, errors.New("only one session profile root may be supplied")
+	}
+	profileRoot := ""
+	if len(profileRoots) == 1 {
+		var err error
+		profileRoot, err = normalizeProfileRoot(profileRoots[0])
+		if err != nil {
+			return nil, err
+		}
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("create session identity directory: %w", err)
@@ -144,6 +159,9 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return fail(err)
 	}
+	if version != 0 && profileRoot == "" {
+		return fail(errors.New("session profile root is required for an existing identity database"))
+	}
 	if version > schemaVersion {
 		return fail(fmt.Errorf("session identity schema %d is newer than supported %d", version, schemaVersion))
 	}
@@ -154,7 +172,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		}
 		if _, err := tx.ExecContext(ctx, `CREATE TABLE sessions (
 			id TEXT PRIMARY KEY,
-			path TEXT NOT NULL UNIQUE,
+			relative_path TEXT NOT NULL UNIQUE,
 			workspace_root TEXT NOT NULL DEFAULT '',
 			title TEXT NOT NULL DEFAULT '',
 			title_source TEXT NOT NULL DEFAULT 'fallback' CHECK (title_source IN ('fallback','generated','user','legacy_unknown')),
@@ -171,13 +189,14 @@ func Open(ctx context.Context, path string) (*Store, error) {
 			_ = tx.Rollback()
 			return fail(err)
 		}
-		if _, err := tx.ExecContext(ctx, "PRAGMA user_version=3"); err != nil {
+		if _, err := tx.ExecContext(ctx, "PRAGMA user_version=4"); err != nil {
 			_ = tx.Rollback()
 			return fail(err)
 		}
 		if err := tx.Commit(); err != nil {
 			return fail(err)
 		}
+		version = 4
 	} else if version == 1 {
 		// Legacy catalog titles may have been derived from the first user message,
 		// manually renamed, or copied from a sidecar. Preserve them without
@@ -221,6 +240,60 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		if err := tx.Commit(); err != nil {
 			return fail(err)
 		}
+		version = 3
+	}
+	if version == 3 {
+		if profileRoot == "" {
+			return fail(errors.New("session profile root is required to migrate absolute identity paths"))
+		}
+		rows, err := db.QueryContext(ctx, "SELECT id, path FROM sessions ORDER BY id")
+		if err != nil {
+			return fail(err)
+		}
+		type pathMigration struct{ id, relative string }
+		migrations := make([]pathMigration, 0)
+		for rows.Next() {
+			var id, absolute string
+			if err := rows.Scan(&id, &absolute); err != nil {
+				_ = rows.Close()
+				return fail(err)
+			}
+			relative, err := relativeTranscriptPath(profileRoot, id, absolute)
+			if err != nil {
+				_ = rows.Close()
+				return fail(fmt.Errorf("migrate session identity path for %s: %w", id, err))
+			}
+			migrations = append(migrations, pathMigration{id: id, relative: relative})
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return fail(err)
+		}
+		if err := rows.Close(); err != nil {
+			return fail(err)
+		}
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fail(err)
+		}
+		if _, err := tx.ExecContext(ctx, "ALTER TABLE sessions RENAME COLUMN path TO relative_path"); err != nil {
+			_ = tx.Rollback()
+			return fail(err)
+		}
+		for _, migration := range migrations {
+			if _, err := tx.ExecContext(ctx, "UPDATE sessions SET relative_path=? WHERE id=?", migration.relative, migration.id); err != nil {
+				_ = tx.Rollback()
+				return fail(err)
+			}
+		}
+		if _, err := tx.ExecContext(ctx, "PRAGMA user_version=4"); err != nil {
+			_ = tx.Rollback()
+			return fail(err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fail(err)
+		}
+		version = 4
 	}
 	if _, err := db.ExecContext(ctx, "PRAGMA journal_mode=WAL"); err != nil {
 		return fail(err)
@@ -231,7 +304,68 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	_ = os.Chmod(abs, 0o600)
 	_ = os.Chmod(abs+"-wal", 0o600)
 	_ = os.Chmod(abs+"-shm", 0o600)
-	return &Store{db: db}, nil
+	return &Store{db: db, profileRoot: profileRoot}, nil
+}
+
+func normalizeProfileRoot(root string) (string, error) {
+	if strings.TrimSpace(root) == "" {
+		return "", errors.New("session profile root is empty")
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return "", fmt.Errorf("resolve session profile root: %w", err)
+	}
+	return filepath.Clean(abs), nil
+}
+
+func relativeTranscriptPath(profileRoot, id, transcriptPath string) (string, error) {
+	root, err := normalizeProfileRoot(profileRoot)
+	if err != nil {
+		return "", err
+	}
+	path, err := filepath.Abs(transcriptPath)
+	if err != nil {
+		return "", err
+	}
+	if err := validateCandidate(root, Candidate{ID: id, Path: path}); err != nil {
+		return "", err
+	}
+	relative, err := filepath.Rel(root, path)
+	if err != nil || relative == "." || relative == ".." || filepath.IsAbs(relative) || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", errors.New("transcript path escapes session profile root")
+	}
+	return filepath.ToSlash(relative), nil
+}
+
+func resolveTranscriptPath(profileRoot, id, relative string) (string, error) {
+	root, err := normalizeProfileRoot(profileRoot)
+	if err != nil {
+		return "", err
+	}
+	clean := filepath.Clean(filepath.FromSlash(relative))
+	if clean == "." || clean == ".." || filepath.IsAbs(clean) || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", errors.New("session identity contains an invalid relative path")
+	}
+	path := filepath.Join(root, clean)
+	if _, err := relativeTranscriptPath(root, id, path); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func (s *Store) bindProfileRoot(root string) error {
+	resolved, err := normalizeProfileRoot(root)
+	if err != nil {
+		return err
+	}
+	if s.profileRoot == "" {
+		s.profileRoot = resolved
+		return nil
+	}
+	if filepath.Clean(s.profileRoot) != resolved {
+		return errors.New("session profile root changed while the identity store is open")
+	}
+	return nil
 }
 
 func (s *Store) Close() error {
@@ -242,6 +376,14 @@ func (s *Store) Close() error {
 }
 
 func (s *Store) Import(ctx context.Context, previewRoot string, candidates []Candidate) error {
+	if s.profileRoot == "" {
+		if err := s.bindImportProfileRoot(previewRoot); err != nil {
+			return err
+		}
+	}
+	if err := normalizeImportPathRoot(s.profileRoot, previewRoot); err != nil {
+		return err
+	}
 	return s.importCandidates(ctx, previewRoot, candidates, false, false, false)
 }
 
@@ -252,7 +394,39 @@ func (s *Store) ImportLegacyCatalog(ctx context.Context, previewRoot string, can
 	if len(candidates) > 50 {
 		return errors.New("legacy catalog contains too many sessions")
 	}
+	if s.profileRoot == "" {
+		if err := s.bindImportProfileRoot(previewRoot); err != nil {
+			return err
+		}
+	}
+	if err := normalizeImportPathRoot(s.profileRoot, previewRoot); err != nil {
+		return err
+	}
 	return s.importCandidates(ctx, previewRoot, candidates, false, true, true)
+}
+
+func normalizeImportPathRoot(profileRoot, transcriptRoot string) error {
+	profile, err := normalizeProfileRoot(profileRoot)
+	if err != nil {
+		return err
+	}
+	transcripts, err := normalizeProfileRoot(transcriptRoot)
+	if err != nil {
+		return err
+	}
+	relative, err := filepath.Rel(profile, transcripts)
+	if err != nil || relative == ".." || filepath.IsAbs(relative) || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return errors.New("session transcript directory escapes profile root")
+	}
+	return nil
+}
+
+func (s *Store) bindImportProfileRoot(previewRoot string) error {
+	root := previewRoot
+	if filepath.Base(filepath.Clean(previewRoot)) == "sessions" {
+		root = filepath.Dir(previewRoot)
+	}
+	return s.bindProfileRoot(root)
 }
 
 func (s *Store) importCandidates(ctx context.Context, previewRoot string, candidates []Candidate, requirePresent, preserveMissing, preserveExisting bool) error {
@@ -303,8 +477,9 @@ func (s *Store) importCandidates(ctx context.Context, previewRoot string, candid
 			}
 		}
 		var current Record
-		err := tx.QueryRowContext(ctx, `SELECT path, workspace_root, title, position, state, created_at_ms, updated_at_ms
-			FROM sessions WHERE id=?`, incoming.ID).Scan(&current.Path, &current.WorkspaceRoot, &current.Title,
+		var currentRelativePath string
+		err := tx.QueryRowContext(ctx, `SELECT relative_path, workspace_root, title, position, state, created_at_ms, updated_at_ms
+			FROM sessions WHERE id=?`, incoming.ID).Scan(&currentRelativePath, &current.WorkspaceRoot, &current.Title,
 			&current.Position, &current.State, &current.CreatedAtMS, &current.UpdatedAtMS)
 		if errors.Is(err, sql.ErrNoRows) {
 			if incoming.Missing && !preserveMissing {
@@ -314,15 +489,23 @@ func (s *Store) importCandidates(ctx context.Context, previewRoot string, candid
 			if incoming.Title != "" {
 				source = TitleLegacyUnknown
 			}
+			relativePath, err := relativeTranscriptPath(s.profileRoot, incoming.ID, incoming.Path)
+			if err != nil {
+				return err
+			}
 			_, err = tx.ExecContext(ctx, `INSERT INTO sessions
-				(id, path, workspace_root, title, title_source, title_revision, position, state, created_at_ms, updated_at_ms)
-				VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`, incoming.ID, incoming.Path,
+				(id, relative_path, workspace_root, title, title_source, title_revision, position, state, created_at_ms, updated_at_ms)
+				VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`, incoming.ID, relativePath,
 				incoming.WorkspaceRoot, incoming.Title, source, incoming.Position, incoming.State, now, now)
 			if err != nil {
 				return fmt.Errorf("register session %s: %w", incoming.ID, err)
 			}
 			continue
 		}
+		if err != nil {
+			return err
+		}
+		current.Path, err = resolveTranscriptPath(s.profileRoot, incoming.ID, currentRelativePath)
 		if err != nil {
 			return err
 		}
@@ -410,7 +593,7 @@ func validateCandidate(root string, candidate Candidate) error {
 }
 
 func (s *Store) List(ctx context.Context) ([]Record, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, path, workspace_root, title, title_source, title_revision, position, state,
+	rows, err := s.db.QueryContext(ctx, `SELECT id, relative_path, workspace_root, title, title_source, title_revision, position, state,
 		created_at_ms, updated_at_ms FROM sessions ORDER BY position, id`)
 	if err != nil {
 		return nil, err
@@ -418,7 +601,7 @@ func (s *Store) List(ctx context.Context) ([]Record, error) {
 	defer rows.Close()
 	var records []Record
 	for rows.Next() {
-		record, err := scanIdentityRecord(rows)
+		record, err := scanIdentityRecord(rows, s.profileRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -429,18 +612,22 @@ func (s *Store) List(ctx context.Context) ([]Record, error) {
 
 type identityScanner interface{ Scan(...any) error }
 
-func scanIdentityRecord(scanner identityScanner) (Record, error) {
+func scanIdentityRecord(scanner identityScanner, profileRoot string) (Record, error) {
 	var record Record
-	err := scanner.Scan(&record.ID, &record.Path, &record.WorkspaceRoot, &record.Title, &record.TitleSource,
+	var relativePath string
+	err := scanner.Scan(&record.ID, &relativePath, &record.WorkspaceRoot, &record.Title, &record.TitleSource,
 		&record.TitleRevision, &record.Position, &record.State, &record.CreatedAtMS, &record.UpdatedAtMS)
+	if err == nil {
+		record.Path, err = resolveTranscriptPath(profileRoot, record.ID, relativePath)
+	}
 	record.Missing = record.State == StateMissing
 	return record, err
 }
 
 // Get returns one identity record without reconciling it against the disk.
 func (s *Store) Get(ctx context.Context, id string) (Record, bool, error) {
-	record, err := scanIdentityRecord(s.db.QueryRowContext(ctx, `SELECT id, path, workspace_root, title, title_source,
-		title_revision, position, state, created_at_ms, updated_at_ms FROM sessions WHERE id=?`, id))
+	record, err := scanIdentityRecord(s.db.QueryRowContext(ctx, `SELECT id, relative_path, workspace_root, title, title_source,
+		title_revision, position, state, created_at_ms, updated_at_ms FROM sessions WHERE id=?`, id), s.profileRoot)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Record{}, false, nil
 	}
@@ -471,7 +658,7 @@ func (s *Store) ListVisible(ctx context.Context, limit int, cursor *Cursor, work
 		WHERE state NOT IN ('deleting','deleted') AND (?='' OR workspace_root=?)`, workspaceRoot, workspaceRoot).Scan(&total); err != nil {
 		return Page{}, err
 	}
-	query := `SELECT id, path, workspace_root, title, title_source, title_revision, position, state,
+	query := `SELECT id, relative_path, workspace_root, title, title_source, title_revision, position, state,
 		created_at_ms, updated_at_ms FROM sessions
 		WHERE state NOT IN ('deleting','deleted') AND (?='' OR workspace_root=?)`
 	args := []any{workspaceRoot, workspaceRoot}
@@ -488,7 +675,7 @@ func (s *Store) ListVisible(ctx context.Context, limit int, cursor *Cursor, work
 	defer rows.Close()
 	page := Page{Records: make([]Record, 0, limit), Total: total}
 	for rows.Next() {
-		record, err := scanIdentityRecord(rows)
+		record, err := scanIdentityRecord(rows, s.profileRoot)
 		if err != nil {
 			return Page{}, err
 		}
@@ -514,6 +701,14 @@ func (s *Store) ListVisible(ctx context.Context, limit int, cursor *Cursor, work
 // Reserve claims an unused session ID and path before the first transcript or
 // sidecar is written. Repeating the same reservation is idempotent.
 func (s *Store) Reserve(ctx context.Context, sessionDir string, candidate Candidate) error {
+	if s.profileRoot == "" {
+		if err := s.bindProfileRoot(filepath.Dir(sessionDir)); err != nil {
+			return err
+		}
+	}
+	if err := normalizeImportPathRoot(s.profileRoot, sessionDir); err != nil {
+		return err
+	}
 	if err := validateCandidate(sessionDir, candidate); err != nil {
 		return err
 	}
@@ -527,8 +722,8 @@ func (s *Store) Reserve(ctx context.Context, sessionDir string, candidate Candid
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	current, err := scanIdentityRecord(tx.QueryRowContext(ctx, `SELECT id, path, workspace_root, title, title_source,
-		title_revision, position, state, created_at_ms, updated_at_ms FROM sessions WHERE id=?`, candidate.ID))
+	current, err := scanIdentityRecord(tx.QueryRowContext(ctx, `SELECT id, relative_path, workspace_root, title, title_source,
+		title_revision, position, state, created_at_ms, updated_at_ms FROM sessions WHERE id=?`, candidate.ID), s.profileRoot)
 	if err == nil {
 		if current.Path != candidate.Path {
 			return fmt.Errorf("%w: %s", ErrPathChanged, candidate.ID)
@@ -546,9 +741,13 @@ func (s *Store) Reserve(ctx context.Context, sessionDir string, candidate Candid
 		return err
 	}
 	now := time.Now().UnixMilli()
+	relativePath, err := relativeTranscriptPath(s.profileRoot, candidate.ID, candidate.Path)
+	if err != nil {
+		return err
+	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO sessions
-		(id, path, workspace_root, title, title_source, title_revision, position, state, created_at_ms, updated_at_ms)
-		VALUES (?, ?, ?, ?, 'fallback', 0, ?, 'reserved', ?, ?)`, candidate.ID, candidate.Path,
+		(id, relative_path, workspace_root, title, title_source, title_revision, position, state, created_at_ms, updated_at_ms)
+		VALUES (?, ?, ?, ?, 'fallback', 0, ?, 'reserved', ?, ?)`, candidate.ID, relativePath,
 		candidate.WorkspaceRoot, candidate.Title, position, now, now)
 	if err != nil {
 		return fmt.Errorf("reserve session identity: %w", err)
@@ -559,6 +758,10 @@ func (s *Store) Reserve(ctx context.Context, sessionDir string, candidate Candid
 // MarkReady advances a reserved identity after a transcript has been observed
 // and successfully loaded. Repeating it for a ready record is harmless.
 func (s *Store) MarkReady(ctx context.Context, id, transcriptPath string) error {
+	relativePath, err := relativeTranscriptPath(s.profileRoot, id, transcriptPath)
+	if err != nil {
+		return err
+	}
 	info, err := os.Lstat(transcriptPath)
 	if err != nil || !info.Mode().IsRegular() {
 		if err == nil {
@@ -567,7 +770,7 @@ func (s *Store) MarkReady(ctx context.Context, id, transcriptPath string) error 
 		return fmt.Errorf("mark session ready: %w", err)
 	}
 	result, err := s.db.ExecContext(ctx, `UPDATE sessions SET state='ready', updated_at_ms=?
-		WHERE id=? AND path=? AND state='reserved'`, time.Now().UnixMilli(), id, transcriptPath)
+		WHERE id=? AND relative_path=? AND state='reserved'`, time.Now().UnixMilli(), id, relativePath)
 	if err != nil {
 		return err
 	}
@@ -586,13 +789,17 @@ func (s *Store) MarkReady(ctx context.Context, id, transcriptPath string) error 
 
 // MarkMissing records that a previously ready transcript disappeared.
 func (s *Store) MarkMissing(ctx context.Context, id, transcriptPath string) error {
+	relativePath, err := relativeTranscriptPath(s.profileRoot, id, transcriptPath)
+	if err != nil {
+		return err
+	}
 	if _, err := os.Lstat(transcriptPath); err == nil {
 		return fmt.Errorf("%w: transcript still exists", ErrSessionStateConflict)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("inspect missing transcript: %w", err)
 	}
 	result, err := s.db.ExecContext(ctx, `UPDATE sessions SET state='missing', updated_at_ms=?
-		WHERE id=? AND path=? AND state='ready'`, time.Now().UnixMilli(), id, transcriptPath)
+		WHERE id=? AND relative_path=? AND state='ready'`, time.Now().UnixMilli(), id, relativePath)
 	if err != nil {
 		return err
 	}
