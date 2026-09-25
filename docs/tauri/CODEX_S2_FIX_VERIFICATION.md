@@ -88,7 +88,7 @@ defer releaseProfile()
 | --- | --- | --- |
 | **1.1** | **没有启动期自动续做（有意保留），直接可发现性已补足** | 启动时仍不无提示地自动删除；新增 path-free `GET /v1/sessions/deletion-recovery`、受 health capability 保护的 Rust 命令和侧栏“待完成删除”区域。用户可显式确认后重试；不在普通列表开放或恢复会话。 |
 | **1.3** | **legacy 回退不提供分页** | `main.rs:498-506`、`:510-518` 两处 legacy 分支仍是 `next_cursor: None`，调用 `page_entries_from_legacy`。上限仍来自 `workbench_catalog.rs:12`（`MAX_SESSIONS = 50`）。**注意**：提示与重试按钮已存在（见 §3），因此本条现在只是"无法翻到 50 条之后"，不再是"无任何说明" |
-| **1.4** | **每页仍重复全量影子审计（已部分缓解）** | `main.rs` 的列表页仍调用 `compare_session_catalog_with_directory`，并拉取完整物理 inventory；但工作区已有 `GET /v1/sessions/snapshot` 与 `session_directory_snapshot_full_v1`，把原先按 200 条循环请求改成一次有界快照（上限 10,000）。因此每页的重复全量工作仍存在，但不再是旧报告描述的重复分页请求 + 额外完整目录清单；不能称已完全解决。 |
+| **1.4** | **每页仍重复全量影子审计（已部分缓解）** | `main.rs` 的列表页仍调用 `compare_session_catalog_with_directory`，并拉取完整物理 inventory；工作区已有 `GET /v1/sessions/snapshot` 与 `session_directory_snapshot_full_v1`，把原先按 200 条循环请求改成一次有界快照（上限 10,000）。同一分页请求现在也只读取一次 host JSON catalog，影子比较与回退展示共用该快照。每页的完整物理盘点仍存在，不能称已完全解决。 |
 
 ### 2.2 中严重度（5 条仍存在，1 条部分缓解，1 条未证实）
 
@@ -100,7 +100,7 @@ defer releaseProfile()
 | **2.4** | 路径归一化三层不一致 | `store.go:819`、`:831` 等处仍是大小写敏感的 `workspace_root=?`；Rust 组键小写化（`workbench_projects.rs:158-173`）、前端同样（`workbenchSessions.ts:15-25`）。目前仍未接工作区过滤（`tauriBridge.ts:270` 只传 limit/cursor），故仍是**潜在**问题 |
 | **2.5** | 离线快照多次哈希（部分缓解） | `copyVerifiedSnapshotFile` 现在在复制时流式计算副本 SHA-256，仍复读源文件比对，并由 `CreateOfflineSnapshot` 最终执行完整 `VerifyOfflineSnapshot`。与原先复制后分别重读目标和源相比，去掉了一遍目标读取，尚保留源稳定性检查和发布前端到端验证。 |
 | **2.7** | `SyncWorkbenchOrder` 50 条硬限制 | `catalog.go:32` 仍 `len(entries) > 50` 直接报错（`:159` 是 `ImportWorkbenchCatalog` 的同款限制） |
-| **2.8** | 恢复路径用读写 `Open` | `session_delete_recovery.go:48` 仍用 `sessionidentity.Open`（会迁移 schema），而列表/清单用 `OpenReadOnly`（`session_list.go:90`） |
+| **2.8** | 恢复路径用读写 `Open`（有意取舍） | `retryInterruptedSessionDelete` 是 DELETE 写路径：`BeginDelete` 与 `FinishDelete` 要持久化 fence/tombstone，故使用经 schema/路径预检的读写 `Open`，旧 schema 可能在失败重试前迁移。独立的 GET 恢复清单与目录清单仍使用 `OpenReadOnly`；代码注释已明确区别。 |
 
 ### 2.3 低严重度（5 条仍存在，1 条已修，1 条未证实）
 

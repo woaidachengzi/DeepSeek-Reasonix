@@ -45,6 +45,9 @@ func retryInterruptedSessionDelete(ctx context.Context, sessionID string) error 
 	if err != nil {
 		return desktopbridge.ErrSessionNotFound
 	}
+	// DELETE must persist the deleting fence and final tombstone. This writable
+	// open may migrate an older schema after validation; the separate GET
+	// recovery list uses OpenReadOnly and never migrates the identity store.
 	identities, err := sessionidentity.Open(ctx, identityPath, appconfig.SessionProfileRoot())
 	if err != nil {
 		return fmt.Errorf("open session identity for deletion recovery: %w", err)

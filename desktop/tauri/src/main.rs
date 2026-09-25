@@ -469,7 +469,7 @@ fn workbench_session_page(
     // Revalidate every page, not only the first one. A cursor may outlive a
     // catalog mutation or a newly-created transcript between page requests.
     let legacy_sessions = catalog.list()?;
-    let shadow = compare_session_catalog_with_directory(&supervisor, &catalog);
+    let shadow = compare_session_catalog_with_directory(&supervisor, &legacy_sessions);
     let page_cursor = cursor.clone();
     workbench_session_page_from_shadow(
         legacy_sessions,
@@ -588,8 +588,9 @@ fn bridge_session_directory_page(
     cursor: Option<SessionDirectoryCursor>,
     workspace_root: Option<String>,
 ) -> Result<SessionDirectoryPage, String> {
+    let legacy_sessions = catalog.list()?;
     let (report, _, full_snapshot_id) =
-        compare_session_catalog_with_directory(&supervisor, &catalog)?;
+        compare_session_catalog_with_directory(&supervisor, &legacy_sessions)?;
     if !identity_session_catalog_is_verified(Ok(report)) {
         return Err("session catalog shadow is unavailable; identity paging is disabled".into());
     }
@@ -683,17 +684,18 @@ fn compare_session_catalog(
     supervisor: &BridgeSupervisor,
     catalog: &WorkbenchCatalog,
 ) -> Result<SessionShadowReport, String> {
-    compare_session_catalog_with_directory(supervisor, catalog).map(|(report, _, _)| report)
+    let legacy_sessions = catalog.list()?;
+    compare_session_catalog_with_directory(supervisor, &legacy_sessions)
+        .map(|(report, _, _)| report)
 }
 
 fn compare_session_catalog_with_directory(
     supervisor: &BridgeSupervisor,
-    catalog: &WorkbenchCatalog,
+    legacy_sessions: &[WorkbenchSession],
 ) -> Result<(SessionShadowReport, Vec<SessionDirectoryEntry>, String), String> {
-    let legacy = catalog.list()?;
     let (directory, snapshot_id) = supervisor.session_directory_snapshot_with_id()?;
     let physical = supervisor.session_physical_inventory()?;
-    let report = session_shadow::compare(&legacy, &directory, &physical)?;
+    let report = session_shadow::compare(legacy_sessions, &directory, &physical)?;
     Ok((report, directory, snapshot_id))
 }
 
