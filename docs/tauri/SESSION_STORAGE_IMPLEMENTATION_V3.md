@@ -247,6 +247,8 @@ Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝
 
 **脚本复现（2026-09-25）**：再次运行同一隔离脚本，三项旧 host 集成测试均通过；bridge 源码基线为 `224ef28bd94ec53bf0ddceaccd12a03d3552cab1`，本次 debug host SHA-256 为 `04f962e94bca9f20ffeea62a5bd86e68ce8fac01926efc9a361eb4382084b049`，产物与三个独立测试 profile 保留在系统临时目录 `/var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/reasonix-tauri-compat.eiW2d3`。测试通过 localhost loopback 运行，未读取或修改真实 profile；该哈希仍是候选源码基线的 debug 构建，不代表稳定发布二进制，兼容矩阵仍保持“预期向后兼容，非发布认证”。
 
+**当前 bridge 复测（2026-09-25）**：相同脚本从 `50c1b9bc6` 的归档源码与当前 bridge 提交 `d7d8dc422c67d953ed73fc972458cbc0ffafe879` 重建，三项旧 host 真实进程集成测试（启动/停止 bridge、改名后重启读取、删除隔离会话）均通过；当前 Rust host 对这份新 bridge 二进制的真实会话目录同步测试也通过。新生成的 debug 旧 host SHA-256 为 `0d419e82d7422bc58226fc4fd2e7070b849e55c87242674eb52c665145922f21`，一次性测试 profile 与构建产物位于 `/var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/reasonix-tauri-compat.WvRjwU`。这是候选源码的兼容回归，不涉及真实 profile，也未验证应用窗口交互、签名、公证或旧版发布二进制；矩阵结论不升级。
+
 1. 新会话先 `reserved` 登记 ID；实际写入后转 `ready`。bridge 的打开/切换/重命名/删除均先解析身份行，再定位文件。无记录的新建与已登记但 `missing` 的恢复必须分开。
 2. 一段发布窗口内，host 对比 JSON 与 SQLite 的 ID/标题/工作区/顺序/文件状态；只记录差异统计，不把私密消息写诊断。SQLite 只在影子报告 clean 时作为当前 Preview 侧栏来源，否则继续显示 JSON；差异或盘点错误不得进入 SQLite 来源。
 3. 对删除使用持久状态机：先标 `deleting` 并阻止新写，再调用既有 `control.RemoveSessionArtifacts`，成功后保留 `deleted` tombstone；重启时重试未完成清理。若 tombstone 已提交但 host JSON 尚未清理，路径匹配的重复 DELETE 幂等成功以便清理陈旧 catalog 行，不重新扫描或删除 artifacts。文件系统与 SQLite 无法组成一个原子事务，不能承诺“同时消失”。
