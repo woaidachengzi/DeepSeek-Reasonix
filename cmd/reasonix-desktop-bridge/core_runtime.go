@@ -325,13 +325,32 @@ func (r *controllerRuntime) Rename(title string) error {
 	if !exists {
 		return fmt.Errorf("session identity for title update: %w", sessionidentity.ErrSessionNotFound)
 	}
+	path := r.SessionPath()
+	if filepath.Clean(record.Path) != filepath.Clean(path) {
+		return fmt.Errorf("session identity for title update: %w", sessionidentity.ErrPathChanged)
+	}
+	meta, _, err := agent.LoadBranchMeta(path)
+	if err != nil {
+		return fmt.Errorf("read session metadata for title update: %w", err)
+	}
 	// A deterministic identity-store failure must not change the legacy sidecar.
 	// The sidecar and SQLite cannot commit atomically, so retain the title CAS
 	// below to detect a concurrent identity writer after this preflight.
-	if err := agent.RenameSession(r.SessionPath(), title); err != nil {
+	if err := agent.RenameSession(path, title); err != nil {
 		return err
 	}
 	if err := identities.SetTitle(context.Background(), r.sessionID, record.TitleRevision, title, sessionidentity.TitleManualRename); err != nil {
+		// A failed SQLite statement does not prove whether a commit happened.
+		// Restore the previous sidecar title only after a fresh read proves the
+		// identity row did not change; the conditional meta write leaves a newer
+		// sidecar rename alone if another writer won in the meantime.
+		current, stillExists, readErr := identities.Get(context.Background(), r.sessionID)
+		if readErr == nil && stillExists && current.Path == record.Path && current.State == record.State &&
+			current.Title == record.Title && current.TitleSource == record.TitleSource && current.TitleRevision == record.TitleRevision {
+			if restoreErr := agent.RenameSessionIfTitleUnchanged(path, title, meta.CustomTitle); restoreErr != nil {
+				return fmt.Errorf("update session identity title: %w; sidecar compensation failed", err)
+			}
+		}
 		return fmt.Errorf("update session identity title: %w", err)
 	}
 	return nil

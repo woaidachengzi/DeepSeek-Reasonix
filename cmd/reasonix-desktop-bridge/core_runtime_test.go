@@ -613,6 +613,89 @@ func TestControllerRuntimeRenameLeavesMetadataWhenIdentityStoreUnavailable(t *te
 	}
 }
 
+func TestControllerRuntimeRenameRestoresSidecarAfterRejectedIdentityWrite(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	ctx := context.Background()
+	runtime, err := newControllerFactory(nil).Open(ctx, desktopbridge.OpenRequest{SessionID: "rename-write-rejected"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Shutdown() })
+	if err := runtime.Rename("Original title"); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", appconfig.DesktopSessionIdentityPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TRIGGER reject_title_update BEFORE UPDATE OF title ON sessions
+		BEGIN SELECT RAISE(ABORT, 'injected title write failure'); END`); err != nil {
+		_ = db.Close()
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.Rename("Should not persist"); err == nil {
+		t.Fatal("rename succeeded despite rejected identity write")
+	}
+	if got := runtime.Title(); got != "Original title" {
+		t.Fatalf("failed rename left sidecar title %q", got)
+	}
+	identities, err := sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer identities.Close()
+	record, exists, err := identities.Get(ctx, "rename-write-rejected")
+	if err != nil || !exists || record.Title != "Original title" {
+		t.Fatalf("failed rename changed identity: %#v exists=%v err=%v", record, exists, err)
+	}
+}
+
+func TestControllerRuntimeRenameRejectsChangedIdentityPathBeforeSidecarWrite(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	runtime, err := newControllerFactory(nil).Open(context.Background(), desktopbridge.OpenRequest{SessionID: "rename-path-changed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Shutdown() })
+	if err := runtime.Rename("Original title"); err != nil {
+		t.Fatal(err)
+	}
+	metaPath := sessionstore.SessionMeta(runtime.SessionPath())
+	metaBefore, err := os.ReadFile(metaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", appconfig.DesktopSessionIdentityPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	originalRelative, err := filepath.Rel(root, runtime.SessionPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_, _ = db.Exec(`UPDATE sessions SET relative_path=? WHERE id='rename-path-changed'`, filepath.ToSlash(originalRelative))
+	}()
+	if _, err := db.Exec(`UPDATE sessions SET relative_path='sessions/other.jsonl' WHERE id='rename-path-changed'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.Rename("Should not persist"); !errors.Is(err, sessionidentity.ErrPathChanged) {
+		t.Fatalf("rename with changed identity path = %v, want ErrPathChanged", err)
+	}
+	metaAfter, err := os.ReadFile(metaPath)
+	if err != nil || string(metaAfter) != string(metaBefore) {
+		t.Fatalf("changed identity path rewrote sidecar: read error=%v", err)
+	}
+}
+
 func TestControllerRuntimeDeleteRemovesSessionArtifacts(t *testing.T) {
 	workspace := t.TempDir()
 	t.Setenv("REASONIX_HOME", t.TempDir())

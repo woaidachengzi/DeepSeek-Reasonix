@@ -128,6 +128,13 @@ CREATE INDEX sessions_visible_order ON sessions(state, position, id);
 读取路径；不可把增加两列视为完成切换。现有 v1 身份库升级必须使用版本化事务迁移，
 非空旧标题保守回填为 `legacy_unknown`，不得重建真实库。`position` 规则保持不变。
 
+Preview 手工重命名的当前局部保护：bridge 在修改 `.jsonl.meta` 前先打开身份库，确认
+会话身份存在且定位仍等于当前 transcript；SQLite 标题写入失败时，只有重新读取证明
+身份行的路径、状态、标题、标题来源及修订号均未变化，才用侧车标题的条件写恢复原值。
+若身份状态无法核实或侧车已被别的写者改动，则返回失败而不盲目回滚。这个补偿只覆盖
+可证实未提交的失败窗口，不覆盖进程在两次写入之间退出，也不解决 host catalog 的
+对账；因此仍未满足 SQLite 标题权威切换门禁。
+
 ### 3.3 认领与移动
 
 导入优先级：已有身份库记录 > 有效 workbench catalog ID > 未登记文件的只读候选清单。文件名 `tauri-<id>.jsonl` 可提供候选 ID，但复制、改名、同名冲突时不能自动断定身份。大小/mtime 只用于扫描加速，绝不用于认领。
