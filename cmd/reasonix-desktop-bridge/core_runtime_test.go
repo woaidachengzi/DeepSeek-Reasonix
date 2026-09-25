@@ -572,6 +572,47 @@ func TestControllerRuntimeRenamesSessionMetadataWithoutTouchingTranscript(t *tes
 	}
 }
 
+func TestControllerRuntimeRenameLeavesMetadataWhenIdentityStoreUnavailable(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	runtime, err := newControllerFactory(nil).Open(context.Background(), desktopbridge.OpenRequest{SessionID: "rename-store-unavailable"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Shutdown() })
+	if err := runtime.Rename("Original title"); err != nil {
+		t.Fatal(err)
+	}
+	metaPath := sessionstore.SessionMeta(runtime.SessionPath())
+	metaBefore, err := os.ReadFile(metaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identityPath := appconfig.DesktopSessionIdentityPath()
+	parkedPath := identityPath + ".parked"
+	if err := os.Rename(identityPath, parkedPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(identityPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Remove(identityPath)
+		_ = os.Rename(parkedPath, identityPath)
+	})
+	if err := runtime.Rename("Should not persist"); err == nil {
+		t.Fatal("rename succeeded with an unavailable identity store")
+	}
+	if got := runtime.Title(); got != "Original title" {
+		t.Fatalf("failed rename changed sidecar title to %q", got)
+	}
+	metaAfter, err := os.ReadFile(metaPath)
+	if err != nil || string(metaAfter) != string(metaBefore) {
+		t.Fatalf("failed rename changed sidecar bytes: read error=%v", err)
+	}
+}
+
 func TestControllerRuntimeDeleteRemovesSessionArtifacts(t *testing.T) {
 	workspace := t.TempDir()
 	t.Setenv("REASONIX_HOME", t.TempDir())

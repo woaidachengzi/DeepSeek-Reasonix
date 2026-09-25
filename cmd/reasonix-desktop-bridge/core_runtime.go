@@ -310,11 +310,8 @@ func (r *controllerRuntime) Title() string {
 }
 
 func (r *controllerRuntime) Rename(title string) error {
-	if err := agent.RenameSession(r.SessionPath(), title); err != nil {
-		return err
-	}
 	if r.sessionID == "" || appconfig.DesktopSessionIdentityPath() == "" {
-		return nil
+		return agent.RenameSession(r.SessionPath(), title)
 	}
 	identities, err := sessionidentity.Open(context.Background(), appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
 	if err != nil {
@@ -327,6 +324,12 @@ func (r *controllerRuntime) Rename(title string) error {
 	}
 	if !exists {
 		return fmt.Errorf("session identity for title update: %w", sessionidentity.ErrSessionNotFound)
+	}
+	// A deterministic identity-store failure must not change the legacy sidecar.
+	// The sidecar and SQLite cannot commit atomically, so retain the title CAS
+	// below to detect a concurrent identity writer after this preflight.
+	if err := agent.RenameSession(r.SessionPath(), title); err != nil {
+		return err
 	}
 	if err := identities.SetTitle(context.Background(), r.sessionID, record.TitleRevision, title, sessionidentity.TitleManualRename); err != nil {
 		return fmt.Errorf("update session identity title: %w", err)
