@@ -174,4 +174,28 @@ assert.match(document.body.textContent ?? "", /recent catalog unavailable/);
 assert.match(document.body.textContent ?? "", /待完成删除/);
 assert.ok(document.querySelector<HTMLButtonElement>('[aria-label="继续删除 独立恢复记录"]'));
 await act(async () => { root.unmount(); });
+
+// The standalone shadow check can be clean just before the guarded first-page
+// command observes a new drift. A legacy page must stay labeled as legacy.
+(globalThis as unknown as { __workbenchSessions: unknown[] }).__workbenchSessions = [
+  { sessionId: "before-race", title: "审计时的身份页" },
+];
+(globalThis as unknown as { __pendingSessionDeletes: unknown[] }).__pendingSessionDeletes = [];
+(globalThis as unknown as { __failSessionCatalogShadow: boolean }).__failSessionCatalogShadow = false;
+(globalThis as unknown as { __workbenchPages: unknown[] }).__workbenchPages = [
+  { sessions: [{ sessionId: "before-race", title: "审计时的身份页" }], nextCursor: null, total: 1, source: "identity" },
+  { sessions: [{ sessionId: "after-race", title: "漂移后的兼容页" }], nextCursor: null, total: 1, source: "legacy" },
+];
+root = createRoot(document.getElementById("root")!);
+await act(async () => { root.render(React.createElement(TauriSessionApp)); await new Promise(resolve => setTimeout(resolve, 0)); });
+await act(async () => {
+  document.querySelector<HTMLButtonElement>(".tauri-sidebar__new")?.click();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise(resolve => setTimeout(resolve, 0));
+});
+assert.match(document.body.textContent ?? "", /漂移后的兼容页/);
+assert.doesNotMatch(document.body.textContent ?? "", /审计时的身份页/);
+assert.match(document.body.textContent ?? "", /最多 50 条/);
+assert.ok(document.querySelector<HTMLButtonElement>('[aria-label="重新检查会话目录"]'));
+await act(async () => { root.unmount(); });
 console.log("tauri project navigation and legacy title backfill: OK");

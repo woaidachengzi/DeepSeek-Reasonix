@@ -906,12 +906,31 @@ export function TauriSessionPreview() {
             const desiredPages = Math.max(1, Math.ceil(tabs.length / 200));
             let page = await tauriWorkbenchSessionPage();
             if (request !== catalogAuditRequestRef.current || !isActive()) return;
+            if (page.source !== "identity") {
+              // The guarded page can detect drift after the separate shadow
+              // check. Honor its newer source instead of relabeling JSON as
+              // a verified identity page and hiding the 50-row warning.
+              setTabs(page.sessions);
+              setSessionPageCursor(page.nextCursor ?? null);
+              setSessionPageSource(page.source);
+              setCatalogAudit(null);
+              setCatalogAuditError("会话目录在影子检查后发生变化；已回退到兼容目录");
+              return;
+            }
             const sessions = [...page.sessions];
             let cursor = page.nextCursor ?? null;
             let pagesRead = 1;
             while (cursor && pagesRead < desiredPages) {
               page = await tauriWorkbenchSessionPage(cursor);
               if (request !== catalogAuditRequestRef.current || !isActive()) return;
+              if (page.source !== "identity") {
+                setTabs(page.sessions);
+                setSessionPageCursor(page.nextCursor ?? null);
+                setSessionPageSource(page.source);
+                setCatalogAudit(null);
+                setCatalogAuditError("会话目录在续页期间发生变化；已回退到兼容目录");
+                return;
+              }
               const known = new Set(sessions.map(tab => tab.sessionId));
               sessions.push(...page.sessions.filter(tab => !known.has(tab.sessionId)));
               cursor = page.nextCursor ?? null;
