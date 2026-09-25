@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +13,58 @@ import (
 	"reasonix/internal/desktopbridge/sessionpath"
 	"reasonix/internal/sessionidentity"
 )
+
+func TestSyncSessionCatalogRejectsControlCharactersWithoutMutation(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	sessionDir := appconfig.SessionDir()
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	transcript, err := sessionpath.TranscriptPath(sessionDir, "existing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(transcript, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	identities, err := sessionidentity.Open(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Import(ctx, sessionDir, []sessionidentity.Candidate{{
+		ID: "existing", Path: transcript, WorkspaceRoot: "/original",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Close(); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(syncSessionCatalogRequest{Sessions: []sessionidentity.WorkbenchOrderEntry{{
+		ID: "existing", WorkspaceRoot: "/project\nother",
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v1/sessions/sync-catalog", strings.NewReader(string(payload)))
+	request.Header.Set("Authorization", "Bearer "+testToken)
+	response := httptest.NewRecorder()
+	newBridgeServer(testToken, "instance", nil).handler().ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `"code":"invalid_request"`) {
+		t.Fatalf("invalid workspace: status=%d body=%s", response.Code, response.Body.String())
+	}
+	identities, err = sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer identities.Close()
+	record, exists, err := identities.Get(ctx, "existing")
+	if err != nil || !exists || record.WorkspaceRoot != "/original" {
+		t.Fatalf("identity mutated by rejected sync: %#v, exists=%v, err=%v", record, exists, err)
+	}
+}
 
 func TestSyncSessionCatalogMirrorsOrderAndWorkspaceWithoutTouchingTitles(t *testing.T) {
 	root := t.TempDir()

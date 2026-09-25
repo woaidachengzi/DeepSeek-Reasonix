@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	appconfig "reasonix/internal/config"
 	"reasonix/internal/desktopbridge"
@@ -48,6 +50,14 @@ func (b *bridgeServer) importLegacyCatalog(w http.ResponseWriter, r *http.Reques
 	}
 	candidates := make([]sessionidentity.Candidate, 0, len(request.Sessions))
 	for position, entry := range request.Sessions {
+		if entry.Title != nil && !validCatalogTitle(*entry.Title) {
+			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "legacy catalog contains an invalid title")
+			return
+		}
+		if entry.WorkspaceRoot != nil && !validCatalogWorkspace(*entry.WorkspaceRoot) {
+			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "legacy catalog contains an invalid workspace path")
+			return
+		}
 		path, err := sessionpath.TranscriptPath(sessionDir, entry.SessionID)
 		if err != nil {
 			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "legacy catalog contains an invalid session identifier")
@@ -86,4 +96,16 @@ func (b *bridgeServer) importLegacyCatalog(w http.ResponseWriter, r *http.Reques
 		ProtocolVersion: desktopbridge.ProtocolVersion,
 		Accepted:        len(candidates),
 	})
+}
+
+// Match the host catalog's metadata bounds before a request can open or
+// mutate the identity store. An absent/empty legacy title is still valid.
+func validCatalogTitle(title string) bool {
+	return utf8.ValidString(title) && utf8.RuneCountInString(title) <= 120 &&
+		strings.IndexFunc(title, unicode.IsControl) < 0
+}
+
+func validCatalogWorkspace(root string) bool {
+	return utf8.ValidString(root) && len(root) <= 4096 &&
+		strings.IndexFunc(root, unicode.IsControl) < 0
 }

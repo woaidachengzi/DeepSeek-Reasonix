@@ -45,8 +45,8 @@ func (b *bridgeServer) syncSessionCatalog(w http.ResponseWriter, r *http.Request
 			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "session catalog contains duplicate identifiers")
 			return
 		}
-		if len(entry.WorkspaceRoot) > 4096 {
-			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "session workspace path is too long")
+		if !validCatalogWorkspace(entry.WorkspaceRoot) {
+			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "session workspace path is invalid")
 			return
 		}
 		seen[entry.ID] = struct{}{}

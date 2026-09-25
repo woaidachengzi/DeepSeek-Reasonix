@@ -99,3 +99,39 @@ func TestImportLegacyCatalogRequiresAuthorizationAndBoundedInput(t *testing.T) {
 		t.Fatalf("rejected import created identity store: %v", err)
 	}
 }
+
+func TestImportLegacyCatalogRejectsInvalidMetadataBeforeOpeningStore(t *testing.T) {
+	for _, test := range []struct {
+		name, title, workspace string
+	}{
+		{name: "long title", title: strings.Repeat("a", 121)},
+		{name: "control in title", title: "old\nname"},
+		{name: "long workspace", workspace: "/" + strings.Repeat("a", 4096)},
+		{name: "control in workspace", workspace: "/project\nother"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			t.Setenv("REASONIX_HOME", root)
+			t.Setenv("REASONIX_STATE_HOME", root)
+			if err := os.MkdirAll(appconfig.SessionDir(), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			payload, err := json.Marshal(importLegacyCatalogRequest{Sessions: []legacyCatalogEntry{{
+				SessionID: "legacy", Title: &test.title, WorkspaceRoot: &test.workspace,
+			}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := httptest.NewRequest(http.MethodPost, "/v1/sessions/import-catalog", strings.NewReader(string(payload)))
+			request.Header.Set("Authorization", "Bearer "+testToken)
+			response := httptest.NewRecorder()
+			newBridgeServer(testToken, "instance", nil).handler().ServeHTTP(response, request)
+			if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `"code":"invalid_request"`) {
+				t.Fatalf("invalid catalog metadata: status=%d body=%s", response.Code, response.Body.String())
+			}
+			if _, err := os.Lstat(appconfig.DesktopSessionIdentityPath()); !os.IsNotExist(err) {
+				t.Fatalf("invalid catalog metadata opened identity store: %v", err)
+			}
+		})
+	}
+}
