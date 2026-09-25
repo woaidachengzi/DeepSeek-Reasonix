@@ -327,7 +327,7 @@ export function TauriSessionPreview() {
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   // Drag-and-drop state
   const [dragging, setDragging] = useState(false);
-  const projectGroups = useMemo(() => groupWorkbenchSessions(tabs, projectFolders), [tabs, projectFolders]);
+  const projectGroups = useMemo(() => groupWorkbenchSessions(tabs, projectFolders, platform), [tabs, projectFolders, platform]);
   const projectRootsKey = projectGroups.flatMap(group => group.root ? [group.root] : []).join("\u0000");
   const activeCatalogTitle = tabs.find(tab => tab.sessionId === session?.id)?.title;
 

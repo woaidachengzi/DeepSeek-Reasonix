@@ -15,9 +15,10 @@ export interface WorkbenchProjectFolder {
   title?: string;
 }
 
-function projectKey(root?: string): string {
+function projectKey(root?: string, caseInsensitive = false): string {
   const trimmed = (root ?? "").trim();
-  return trimmed.replace(/[/\\]+$/, "") || (trimmed ? trimmed[0] : "");
+  const key = trimmed.replace(/[/\\]+$/, "") || (trimmed ? trimmed[0] : "");
+  return caseInsensitive ? key.toLowerCase() : key;
 }
 
 function projectName(root: string): string {
@@ -32,11 +33,13 @@ function projectName(root: string): string {
 export function groupWorkbenchSessions(
   sessions: readonly TauriWorkbenchSession[],
   folders: readonly WorkbenchProjectFolder[] = [],
+  platform = "",
 ): WorkbenchProjectGroup[] {
+  const caseInsensitivePaths = platform === "windows";
   const groups = new Map<string, WorkbenchProjectGroup>();
   for (const folder of folders) {
     const root = folder.root.trim();
-    const key = projectKey(root);
+    const key = projectKey(root, caseInsensitivePaths);
     if (!key || groups.has(key)) continue;
     const title = folder.title?.trim();
     groups.set(key, {
@@ -50,7 +53,7 @@ export function groupWorkbenchSessions(
   }
   for (const session of sessions) {
     const root = (session.workspaceRoot ?? "").trim();
-    const key = projectKey(root);
+    const key = projectKey(root, caseInsensitivePaths);
     let group = groups.get(key);
     if (!group) {
       group = { key, root: root || undefined, label: key ? projectName(key) : "", sessions: [] };
