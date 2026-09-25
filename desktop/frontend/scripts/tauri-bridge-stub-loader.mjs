@@ -107,7 +107,10 @@ export function renameTauriWorkbenchProjectFolder(root, title) {
 export function tauriWorkbenchSessionPage(cursor, limit = 200) {
   record("workbench_session_page", { cursor, limit });
   const pages = globalThis.__workbenchPages;
-  if (Array.isArray(pages) && pages.length > 0) return Promise.resolve(pages.shift());
+  if (Array.isArray(pages) && pages.length > 0) {
+    const page = pages.shift();
+    return page instanceof Error ? Promise.reject(page) : Promise.resolve(page);
+  }
   const sessions = (globalThis.__workbenchSessions ?? []).slice();
   return Promise.resolve({ sessions, nextCursor: null, total: sessions.length, source: "identity" });
 }
@@ -125,6 +128,10 @@ export function tauriImportLegacySessionCatalog() {
 
 export function tauriSessionCatalogShadow() {
   record("bridge_session_catalog_shadow");
+  if (globalThis.__failSessionCatalogShadow) {
+    globalThis.__failSessionCatalogShadow = false;
+    return Promise.reject(new Error("session catalog shadow unavailable"));
+  }
   const count = (globalThis.__workbenchSessions ?? []).length;
   return Promise.resolve({
     legacyCount: count,

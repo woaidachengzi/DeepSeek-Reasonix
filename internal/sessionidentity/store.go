@@ -3,9 +3,13 @@ package sessionidentity
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -21,11 +25,13 @@ import (
 const schemaVersion = 4
 
 var ErrPathChanged = errors.New("session identity path changed without an explicit move")
+var ErrTranscriptPathConflict = errors.New("session transcript path already belongs to another identity")
 var ErrSessionStateConflict = errors.New("session identity lifecycle state conflict")
 var ErrTitleConflict = errors.New("session title revision changed")
 var ErrTitleProtected = errors.New("session title is protected from automatic replacement")
 var ErrSessionNotFound = errors.New("session identity not found")
 var ErrInvalidTitle = errors.New("invalid session title")
+var ErrDirectoryChanged = errors.New("session directory changed while paging")
 
 // TitleSource records the authority of a title, not merely whether AI wrote
 // its text. A user-requested AI rename has user authority; an imported legacy
@@ -81,8 +87,9 @@ type Record struct {
 
 // Cursor is the stable keyset boundary for visible-session pagination.
 type Cursor struct {
-	Position int    `json:"position"`
-	ID       string `json:"id"`
+	Position   int    `json:"position"`
+	ID         string `json:"id"`
+	SnapshotID string `json:"snapshotId,omitempty"`
 }
 
 // Page contains one bounded page plus a cursor only when more rows remain.
@@ -90,9 +97,11 @@ type Page struct {
 	Records    []Record
 	NextCursor *Cursor
 	Total      int
+	SnapshotID string
 }
 
 const MaxVisiblePageSize = 200
+const MaxVisibleSnapshotSize = 10_000
 
 type Store struct {
 	db          *sql.DB
@@ -117,19 +126,44 @@ func Open(ctx context.Context, path string, profileRoots ...string) (*Store, err
 			return nil, err
 		}
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return nil, fmt.Errorf("create session identity directory: %w", err)
-	}
-	_ = os.Chmod(filepath.Dir(path), 0o700)
 	abs, err := filepath.Abs(path)
 	if err != nil {
+		return nil, err
+	}
+	unlock := lockIdentityOpen(abs)
+	defer unlock()
+	if err := validateIdentityDatabaseLocation(abs, profileRoot); err != nil {
+		return nil, err
+	}
+	if err := validateIdentityDatabasePath(abs, true); err != nil {
+		return nil, err
+	}
+	artifactsExist, err := identityDatabaseArtifactsExist(abs)
+	if err != nil {
+		return nil, err
+	}
+	if profileRoot == "" && artifactsExist {
+		return nil, errors.New("session profile root is required for an existing identity database")
+	}
+	if err := validateExistingIdentityDatabase(ctx, abs); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Dir(abs), 0o700); err != nil {
+		return nil, fmt.Errorf("create session identity directory: %w", err)
+	}
+	_ = os.Chmod(filepath.Dir(abs), 0o700)
+	if err := validateIdentityDatabaseLocation(abs, profileRoot); err != nil {
 		return nil, err
 	}
 	slash := filepath.ToSlash(abs)
 	if runtime.GOOS == "windows" && len(slash) >= 2 && slash[1] == ':' {
 		slash = "/" + slash
 	}
-	dsn := (&url.URL{Scheme: "file", Path: slash}).String()
+	databaseURL := &url.URL{Scheme: "file", Path: slash}
+	query := databaseURL.Query()
+	query.Add("_pragma", "busy_timeout(2000)")
+	databaseURL.RawQuery = query.Encode()
+	dsn := databaseURL.String()
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
@@ -295,8 +329,18 @@ func Open(ctx context.Context, path string, profileRoots ...string) (*Store, err
 		}
 		version = 4
 	}
-	if _, err := db.ExecContext(ctx, "PRAGMA journal_mode=WAL"); err != nil {
-		return fail(err)
+	var journalMode string
+	if err := db.QueryRowContext(ctx, "PRAGMA journal_mode").Scan(&journalMode); err != nil {
+		return fail(fmt.Errorf("read session identity journal mode: %w", err))
+	}
+	// Switching journal mode is a persistent database change and needs an
+	// exclusive lock. Once WAL is established, repeating this PRAGMA on every
+	// Open can race with a read-only inventory using an already-open Store and
+	// fail with SQLITE_BUSY. Only perform the transition when it is necessary.
+	if !strings.EqualFold(journalMode, "wal") {
+		if _, err := db.ExecContext(ctx, "PRAGMA journal_mode=WAL"); err != nil {
+			return fail(fmt.Errorf("enable session identity WAL mode: %w", err))
+		}
 	}
 	if _, err := db.ExecContext(ctx, "PRAGMA synchronous=FULL"); err != nil {
 		return fail(err)
@@ -334,6 +378,19 @@ func relativeTranscriptPath(profileRoot, id, transcriptPath string) (string, err
 	if err != nil || relative == "." || relative == ".." || filepath.IsAbs(relative) || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		return "", errors.New("transcript path escapes session profile root")
 	}
+	resolvedRoot, err := resolveIdentityPath(root)
+	if err != nil {
+		return "", fmt.Errorf("resolve session profile root: %w", err)
+	}
+	resolvedPath, err := resolveIdentityPath(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve transcript path: %w", err)
+	}
+	resolvedRelative, err := filepath.Rel(resolvedRoot, resolvedPath)
+	if err != nil || resolvedRelative == "." || resolvedRelative == ".." || filepath.IsAbs(resolvedRelative) ||
+		strings.HasPrefix(resolvedRelative, ".."+string(filepath.Separator)) {
+		return "", errors.New("transcript path escapes session profile root through a symlink")
+	}
 	return filepath.ToSlash(relative), nil
 }
 
@@ -351,6 +408,98 @@ func resolveTranscriptPath(profileRoot, id, relative string) (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+// ensureTranscriptPathAvailable prevents two IDs from claiming one physical
+// transcript through internal symlink aliases or hard links. The lexical
+// relative_path UNIQUE constraint remains useful, but cannot express physical
+// filesystem identity. Callers run this inside the same SQLite transaction as
+// the insert so a detected conflict rolls back the complete import/reserve.
+func ensureTranscriptPathAvailable(ctx context.Context, tx *sql.Tx, profileRoot, id, transcriptPath string) error {
+	candidatePath, err := resolveIdentityPath(transcriptPath)
+	if err != nil {
+		return fmt.Errorf("resolve candidate transcript identity: %w", err)
+	}
+	rows, err := tx.QueryContext(ctx, "SELECT id, relative_path FROM sessions WHERE id<>?", id)
+	if err != nil {
+		return err
+	}
+	type existingIdentityPath struct{ id, path string }
+	var existing []existingIdentityPath
+	for rows.Next() {
+		var otherID, relative string
+		if err := rows.Scan(&otherID, &relative); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		otherPath, err := resolveTranscriptPath(profileRoot, otherID, relative)
+		if err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("resolve existing transcript identity %s: %w", otherID, err)
+		}
+		existing = append(existing, existingIdentityPath{id: otherID, path: otherPath})
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, other := range existing {
+		otherResolved, err := resolveIdentityPath(other.path)
+		if err != nil {
+			return fmt.Errorf("resolve existing transcript identity %s: %w", other.id, err)
+		}
+		if candidatePath == otherResolved || sameCaseInsensitivePath(candidatePath, otherResolved) {
+			return fmt.Errorf("%w: %s and %s", ErrTranscriptPathConflict, id, other.id)
+		}
+		candidateInfo, candidateErr := os.Stat(transcriptPath)
+		otherInfo, otherErr := os.Stat(other.path)
+		if candidateErr == nil && otherErr == nil && os.SameFile(candidateInfo, otherInfo) {
+			return fmt.Errorf("%w: %s and %s", ErrTranscriptPathConflict, id, other.id)
+		}
+		if candidateErr != nil && !errors.Is(candidateErr, os.ErrNotExist) {
+			return fmt.Errorf("inspect candidate transcript identity: %w", candidateErr)
+		}
+		if otherErr != nil && !errors.Is(otherErr, os.ErrNotExist) {
+			return fmt.Errorf("inspect existing transcript identity %s: %w", other.id, otherErr)
+		}
+	}
+	return nil
+}
+
+// CheckTranscriptPathUnique verifies that an existing identity still has an
+// exclusive physical claim to its transcript. Runtime resume uses this to
+// keep legacy duplicate identities from opening the same conversation under
+// multiple IDs. The transaction acquires SQLite's writer reservation before
+// comparing rows so the result is serialized with import/reserve mutations.
+func (s *Store) CheckTranscriptPathUnique(ctx context.Context, id, transcriptPath string) error {
+	relativePath, err := relativeTranscriptPath(s.profileRoot, id, transcriptPath)
+	if err != nil {
+		return err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, "UPDATE sessions SET updated_at_ms=updated_at_ms WHERE id=?", id); err != nil {
+		return err
+	}
+	var storedRelative string
+	if err := tx.QueryRowContext(ctx, "SELECT relative_path FROM sessions WHERE id=?", id).Scan(&storedRelative); errors.Is(err, sql.ErrNoRows) {
+		return ErrSessionNotFound
+	} else if err != nil {
+		return err
+	}
+	if storedRelative != relativePath {
+		return fmt.Errorf("%w: %s", ErrPathChanged, id)
+	}
+	if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, id, transcriptPath); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *Store) bindProfileRoot(root string) error {
@@ -411,6 +560,14 @@ func normalizeImportPathRoot(profileRoot, transcriptRoot string) error {
 		return err
 	}
 	transcripts, err := normalizeProfileRoot(transcriptRoot)
+	if err != nil {
+		return err
+	}
+	profile, err = resolveIdentityPath(profile)
+	if err != nil {
+		return err
+	}
+	transcripts, err = resolveIdentityPath(transcripts)
 	if err != nil {
 		return err
 	}
@@ -484,6 +641,9 @@ func (s *Store) importCandidates(ctx context.Context, previewRoot string, candid
 		if errors.Is(err, sql.ErrNoRows) {
 			if incoming.Missing && !preserveMissing {
 				continue
+			}
+			if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, incoming.ID, incoming.Path); err != nil {
+				return err
 			}
 			source := TitleFallback
 			if incoming.Title != "" {
@@ -644,7 +804,8 @@ func (s *Store) ListVisible(ctx context.Context, limit int, cursor *Cursor, work
 	if limit < 1 || limit > MaxVisiblePageSize {
 		return Page{}, fmt.Errorf("session page limit must be between 1 and %d", MaxVisiblePageSize)
 	}
-	if cursor != nil && (cursor.Position < 0 || cursor.ID == "") {
+	if cursor != nil && (cursor.Position < 0 || cursor.ID == "" ||
+		(cursor.SnapshotID != "" && !validSnapshotID(cursor.SnapshotID))) {
 		return Page{}, errors.New("session page cursor is invalid")
 	}
 	workspaceRoot = strings.TrimSpace(workspaceRoot)
@@ -657,6 +818,13 @@ func (s *Store) ListVisible(ctx context.Context, limit int, cursor *Cursor, work
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions
 		WHERE state NOT IN ('deleting','deleted') AND (?='' OR workspace_root=?)`, workspaceRoot, workspaceRoot).Scan(&total); err != nil {
 		return Page{}, err
+	}
+	snapshotID, err := visibleSnapshotID(ctx, tx, workspaceRoot)
+	if err != nil {
+		return Page{}, err
+	}
+	if cursor != nil && cursor.SnapshotID != "" && cursor.SnapshotID != snapshotID {
+		return Page{}, ErrDirectoryChanged
 	}
 	query := `SELECT id, relative_path, workspace_root, title, title_source, title_revision, position, state,
 		created_at_ms, updated_at_ms FROM sessions
@@ -673,7 +841,7 @@ func (s *Store) ListVisible(ctx context.Context, limit int, cursor *Cursor, work
 		return Page{}, err
 	}
 	defer rows.Close()
-	page := Page{Records: make([]Record, 0, limit), Total: total}
+	page := Page{Records: make([]Record, 0, limit), Total: total, SnapshotID: snapshotID}
 	for rows.Next() {
 		record, err := scanIdentityRecord(rows, s.profileRoot)
 		if err != nil {
@@ -681,7 +849,7 @@ func (s *Store) ListVisible(ctx context.Context, limit int, cursor *Cursor, work
 		}
 		if len(page.Records) == limit {
 			last := page.Records[len(page.Records)-1]
-			page.NextCursor = &Cursor{Position: last.Position, ID: last.ID}
+			page.NextCursor = &Cursor{Position: last.Position, ID: last.ID, SnapshotID: snapshotID}
 			break
 		}
 		page.Records = append(page.Records, record)
@@ -696,6 +864,133 @@ func (s *Store) ListVisible(ctx context.Context, limit int, cursor *Cursor, work
 		return Page{}, err
 	}
 	return page, nil
+}
+
+// ListVisibleSnapshot reads the complete bounded visible directory and its
+// structural snapshot ID in one SQLite read transaction. It is intended for
+// host shadow comparison, where making one full scan per 200-row page would
+// repeatedly recount and rehash the same directory.
+func (s *Store) ListVisibleSnapshot(ctx context.Context, limit int, workspaceRoot string) (Page, error) {
+	if limit < 1 || limit > MaxVisibleSnapshotSize {
+		return Page{}, fmt.Errorf("session directory snapshot limit must be between 1 and %d", MaxVisibleSnapshotSize)
+	}
+	workspaceRoot = strings.TrimSpace(workspaceRoot)
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return Page{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	rows, err := tx.QueryContext(ctx, `SELECT id, relative_path, workspace_root, title, title_source,
+		title_revision, position, state, created_at_ms, updated_at_ms FROM sessions
+		WHERE state NOT IN ('deleting','deleted') AND (?='' OR workspace_root=?)
+		ORDER BY position, id LIMIT ?`, workspaceRoot, workspaceRoot, limit+1)
+	if err != nil {
+		return Page{}, err
+	}
+	hasher := newVisibleSnapshotHasher()
+	page := Page{Records: make([]Record, 0, limit)}
+	for rows.Next() {
+		if len(page.Records) == limit {
+			_ = rows.Close()
+			return Page{}, fmt.Errorf("session directory snapshot exceeds %d entries", limit)
+		}
+		var record Record
+		var relativePath string
+		if err := rows.Scan(&record.ID, &relativePath, &record.WorkspaceRoot, &record.Title,
+			&record.TitleSource, &record.TitleRevision, &record.Position, &record.State,
+			&record.CreatedAtMS, &record.UpdatedAtMS); err != nil {
+			_ = rows.Close()
+			return Page{}, err
+		}
+		record.Path, err = resolveTranscriptPath(s.profileRoot, record.ID, relativePath)
+		if err != nil {
+			_ = rows.Close()
+			return Page{}, err
+		}
+		record.Missing = record.State == StateMissing
+		hasher.add(record.ID, relativePath, record.WorkspaceRoot, int64(record.Position), record.State)
+		page.Records = append(page.Records, record)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return Page{}, err
+	}
+	if err := rows.Close(); err != nil {
+		return Page{}, err
+	}
+	page.Total = len(page.Records)
+	page.SnapshotID = hasher.sum()
+	if err := tx.Commit(); err != nil {
+		return Page{}, err
+	}
+	return page, nil
+}
+
+func visibleSnapshotID(ctx context.Context, tx *sql.Tx, workspaceRoot string) (string, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT id, relative_path, workspace_root,
+		position, state FROM sessions
+		WHERE state NOT IN ('deleting','deleted') AND (?='' OR workspace_root=?)
+		ORDER BY position, id`, workspaceRoot, workspaceRoot)
+	if err != nil {
+		return "", err
+	}
+	hasher := newVisibleSnapshotHasher()
+	for rows.Next() {
+		var id, relativePath, workspace, state string
+		var position int64
+		if err := rows.Scan(&id, &relativePath, &workspace, &position, &state); err != nil {
+			_ = rows.Close()
+			return "", err
+		}
+		hasher.add(id, relativePath, workspace, position, SessionState(state))
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return "", err
+	}
+	if err := rows.Close(); err != nil {
+		return "", err
+	}
+	return hasher.sum(), nil
+}
+
+type visibleSnapshotHasher struct{ h hash.Hash }
+
+func newVisibleSnapshotHasher() visibleSnapshotHasher {
+	h := sha256.New()
+	_, _ = h.Write([]byte("reasonix-session-directory-v2\x00"))
+	return visibleSnapshotHasher{h: h}
+}
+
+func (hasher visibleSnapshotHasher) add(id, relativePath, workspaceRoot string, position int64, state SessionState) {
+	writeString := func(value string) {
+		var length [8]byte
+		binary.BigEndian.PutUint64(length[:], uint64(len(value)))
+		_, _ = hasher.h.Write(length[:])
+		_, _ = hasher.h.Write([]byte(value))
+	}
+	writeInt := func(value int64) {
+		var encoded [8]byte
+		binary.BigEndian.PutUint64(encoded[:], uint64(value))
+		_, _ = hasher.h.Write(encoded[:])
+	}
+	writeString(id)
+	writeString(relativePath)
+	writeString(workspaceRoot)
+	writeInt(position)
+	writeString(string(state))
+}
+
+func (hasher visibleSnapshotHasher) sum() string {
+	return hex.EncodeToString(hasher.h.Sum(nil))
+}
+
+func validSnapshotID(value string) bool {
+	if len(value) != sha256.Size*2 {
+		return false
+	}
+	decoded, err := hex.DecodeString(value)
+	return err == nil && hex.EncodeToString(decoded) == value
 }
 
 // Reserve claims an unused session ID and path before the first transcript or
@@ -736,6 +1031,9 @@ func (s *Store) Reserve(ctx context.Context, sessionDir string, candidate Candid
 	if !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
+	if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, candidate.ID, candidate.Path); err != nil {
+		return err
+	}
 	var position int
 	if err := tx.QueryRowContext(ctx, "SELECT COALESCE(MAX(position), -1) + 1 FROM sessions").Scan(&position); err != nil {
 		return err
@@ -769,22 +1067,52 @@ func (s *Store) MarkReady(ctx context.Context, id, transcriptPath string) error 
 		}
 		return fmt.Errorf("mark session ready: %w", err)
 	}
-	result, err := s.db.ExecContext(ctx, `UPDATE sessions SET state='ready', updated_at_ms=?
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	// Acquire SQLite's writer reservation before reading the lifecycle state.
+	// Without this no-op write, concurrent MarkReady/BeginDelete calls can both
+	// establish read snapshots and then one fails to promote its snapshot with
+	// SQLITE_BUSY instead of observing the committed fence.
+	if _, err := tx.ExecContext(ctx, "UPDATE sessions SET updated_at_ms=updated_at_ms WHERE id=?", id); err != nil {
+		return err
+	}
+	var storedRelative string
+	var state SessionState
+	err = tx.QueryRowContext(ctx, "SELECT relative_path, state FROM sessions WHERE id=?", id).Scan(&storedRelative, &state)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("%w: %s cannot become ready", ErrSessionStateConflict, id)
+	}
+	if err != nil {
+		return err
+	}
+	if storedRelative != relativePath {
+		return fmt.Errorf("%w: %s", ErrPathChanged, id)
+	}
+	if state == StateReady {
+		return tx.Commit()
+	}
+	if state != StateReserved {
+		return fmt.Errorf("%w: %s cannot become ready from %s", ErrSessionStateConflict, id, state)
+	}
+	if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, id, transcriptPath); err != nil {
+		return err
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE sessions SET state='ready', updated_at_ms=?
 		WHERE id=? AND relative_path=? AND state='reserved'`, time.Now().UnixMilli(), id, relativePath)
 	if err != nil {
 		return err
 	}
-	if changed, _ := result.RowsAffected(); changed == 1 {
-		return nil
-	}
-	record, exists, err := s.Get(ctx, id)
+	changed, err := result.RowsAffected()
 	if err != nil {
 		return err
 	}
-	if exists && record.Path == transcriptPath && record.State == StateReady {
-		return nil
+	if changed != 1 {
+		return fmt.Errorf("%w: %s cannot become ready", ErrSessionStateConflict, id)
 	}
-	return fmt.Errorf("%w: %s cannot become ready", ErrSessionStateConflict, id)
+	return tx.Commit()
 }
 
 // MarkMissing records that a previously ready transcript disappeared.

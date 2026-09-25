@@ -2,6 +2,7 @@ package sessionidentity
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -16,34 +17,61 @@ func (s *Store) BeginDelete(ctx context.Context, id, transcriptPath string) erro
 	if err != nil {
 		return err
 	}
-	result, err := s.db.ExecContext(ctx, `UPDATE sessions SET state='deleting', updated_at_ms=?
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	// Serialize the path check with MarkReady and other deletion fences before
+	// reading lifecycle state. This avoids a deferred read-to-write upgrade race.
+	if _, err := tx.ExecContext(ctx, "UPDATE sessions SET updated_at_ms=updated_at_ms WHERE id=?", id); err != nil {
+		return fmt.Errorf("begin session deletion: %w", err)
+	}
+	var storedRelative string
+	var state SessionState
+	err = tx.QueryRowContext(ctx, "SELECT relative_path, state FROM sessions WHERE id=?", id).Scan(&storedRelative, &state)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrSessionNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if storedRelative != relativePath {
+		return fmt.Errorf("%w: %s cannot begin deletion from a different path", ErrSessionStateConflict, id)
+	}
+	if state == StateDeleting {
+		if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, id, transcriptPath); err != nil {
+			return err
+		}
+		return tx.Commit()
+	}
+	if state != StateReserved && state != StateReady && state != StateMissing {
+		return fmt.Errorf("%w: %s cannot begin deletion from %s", ErrSessionStateConflict, id, state)
+	}
+	if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, id, transcriptPath); err != nil {
+		return err
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE sessions SET state='deleting', updated_at_ms=?
 		WHERE id=? AND relative_path=? AND state IN ('reserved','ready','missing')`,
 		time.Now().UnixMilli(), id, relativePath)
 	if err != nil {
 		return fmt.Errorf("begin session deletion: %w", err)
 	}
-	if changed, err := result.RowsAffected(); err != nil {
-		return err
-	} else if changed == 1 {
-		return nil
-	}
-	record, exists, err := s.Get(ctx, id)
+	changed, err := result.RowsAffected()
 	if err != nil {
 		return err
 	}
-	if !exists {
-		return ErrSessionNotFound
+	if changed != 1 {
+		return fmt.Errorf("%w: %s cannot begin deletion from %s", ErrSessionStateConflict, id, state)
 	}
-	if record.Path == transcriptPath && record.State == StateDeleting {
-		return nil
-	}
-	return fmt.Errorf("%w: %s cannot begin deletion from %s", ErrSessionStateConflict, id, record.State)
+	return tx.Commit()
 }
 
 // FinishDelete leaves a permanent tombstone after the caller has successfully
-// removed the entire artifact bundle. This method additionally refuses to
-// finalize while the transcript itself still exists; it cannot verify every
-// sidecar, so the caller must use the core's artifact sweep first.
+// removed the entire artifact bundle. This method refuses to finalize while
+// the transcript exists or its path is still claimed by another identity; it
+// cannot verify every sidecar, so the caller must use the core's artifact sweep
+// first.
 func (s *Store) FinishDelete(ctx context.Context, id, transcriptPath string) error {
 	relativePath, err := relativeTranscriptPath(s.profileRoot, id, transcriptPath)
 	if err != nil {
@@ -54,25 +82,46 @@ func (s *Store) FinishDelete(ctx context.Context, id, transcriptPath string) err
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("inspect deleted transcript: %w", err)
 	}
-	result, err := s.db.ExecContext(ctx, `UPDATE sessions SET state='deleted', updated_at_ms=?
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, "UPDATE sessions SET updated_at_ms=updated_at_ms WHERE id=?", id); err != nil {
+		return fmt.Errorf("finish session deletion: %w", err)
+	}
+	var storedRelative string
+	var state SessionState
+	err = tx.QueryRowContext(ctx, "SELECT relative_path, state FROM sessions WHERE id=?", id).Scan(&storedRelative, &state)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrSessionNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if storedRelative != relativePath {
+		return fmt.Errorf("%w: %s cannot finish deletion from a different path", ErrSessionStateConflict, id)
+	}
+	if state == StateDeleted {
+		return tx.Commit()
+	}
+	if state != StateDeleting {
+		return fmt.Errorf("%w: %s cannot finish deletion from %s", ErrSessionStateConflict, id, state)
+	}
+	if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, id, transcriptPath); err != nil {
+		return err
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE sessions SET state='deleted', updated_at_ms=?
 		WHERE id=? AND relative_path=? AND state='deleting'`, time.Now().UnixMilli(), id, relativePath)
 	if err != nil {
 		return fmt.Errorf("finish session deletion: %w", err)
 	}
-	if changed, err := result.RowsAffected(); err != nil {
-		return err
-	} else if changed == 1 {
-		return nil
-	}
-	record, exists, err := s.Get(ctx, id)
+	changed, err := result.RowsAffected()
 	if err != nil {
 		return err
 	}
-	if !exists {
-		return ErrSessionNotFound
+	if changed != 1 {
+		return fmt.Errorf("%w: %s cannot finish deletion from %s", ErrSessionStateConflict, id, state)
 	}
-	if record.Path == transcriptPath && record.State == StateDeleted {
-		return nil
-	}
-	return fmt.Errorf("%w: %s cannot finish deletion from %s", ErrSessionStateConflict, id, record.State)
+	return tx.Commit()
 }

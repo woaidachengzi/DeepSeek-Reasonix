@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -121,7 +122,7 @@ func TestHealthReturnsProtocolAndCapabilities(t *testing.T) {
 	for _, capability := range got.Capabilities {
 		found[capability] = true
 	}
-	if !found["provider_summary"] || !found["set_default_model"] || !found["attach_file"] || !found["rename_session"] || !found["delete_session"] || !found["session_catalog_sync"] {
+	if !found["provider_summary"] || !found["set_default_model"] || !found["attach_file"] || !found["rename_session"] || !found["delete_session"] || !found["session_catalog_sync"] || !found["session_directory_snapshot_v1"] || !found["session_directory_snapshot_full_v1"] {
 		t.Fatalf("health capabilities %v do not include provider model settings", got.Capabilities)
 	}
 }
@@ -801,6 +802,41 @@ func TestRunRejectsSecondProfileOwnerBeforePublishingReady(t *testing.T) {
 	}
 	if _, err := os.Stat(readyPath); !os.IsNotExist(err) {
 		t.Fatalf("second owner published readiness: %v", err)
+	}
+}
+
+func TestRunRejectsSecondProfileOwnerFromAnotherProcess(t *testing.T) {
+	root := t.TempDir()
+	release, err := profilegate.TryAcquire(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	readyPath := filepath.Join(t.TempDir(), "child-ready.json")
+	command := exec.Command(os.Args[0], "-test.run=^TestRunProfileGateChildProcess$")
+	command.Env = append(os.Environ(),
+		"REASONIX_BRIDGE_PROFILE_GATE_CHILD=1",
+		"REASONIX_STATE_HOME="+root,
+		"REASONIX_BRIDGE_PROFILE_GATE_READY="+readyPath,
+	)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("child bridge startup: %v\n%s", err, output)
+	}
+	if _, err := os.Stat(readyPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("second process published a ready file: %v", err)
+	}
+}
+
+func TestRunProfileGateChildProcess(t *testing.T) {
+	if os.Getenv("REASONIX_BRIDGE_PROFILE_GATE_CHILD") != "1" {
+		return
+	}
+	readyPath := os.Getenv("REASONIX_BRIDGE_PROFILE_GATE_READY")
+	err := run(context.Background(), config{
+		listen: "127.0.0.1:0", readyFile: readyPath, launchID: "second-process-owner",
+	}, testToken)
+	if !errors.Is(err, profilegate.ErrHeld) {
+		t.Fatalf("child bridge startup = %v, want profile owner conflict", err)
 	}
 }
 

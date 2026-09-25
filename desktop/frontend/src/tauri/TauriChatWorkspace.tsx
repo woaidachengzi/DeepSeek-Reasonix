@@ -25,6 +25,24 @@ class MessageErrorBoundary extends Component<{ children: ReactNode; index: numbe
     return this.props.children;
   }
 }
+
+const COLLAPSED_PROJECTS_STORAGE_KEY = "reasonix.tauri.workbench.collapsed-projects.v1";
+
+function loadCollapsedProjectGroups(): Record<string, boolean> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(COLLAPSED_PROJECTS_STORAGE_KEY);
+    if (!raw) return {};
+    const decoded: unknown = JSON.parse(raw);
+    if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) return {};
+    return Object.fromEntries(Object.entries(decoded)
+      .filter(([root, collapsed]) => root.length > 0 && root.length <= 4096 && collapsed === true)
+      .slice(-1000));
+  } catch {
+    return {};
+  }
+}
+
 import {
   TAURI_TITLE_MAX_CHARS,
   backfillTauriWorkbenchTitles,
@@ -101,7 +119,7 @@ import {
   type TauriProviderSummary,
   type TauriSessionShadowReport,
 } from "../lib/tauriBridge";
-import { groupWorkbenchSessions, titleFromFirstUser, type WorkbenchProjectFolder } from "./workbenchSessions";
+import { groupWorkbenchSessions, titleFromFirstUser, workbenchProjectKey, type WorkbenchProjectFolder } from "./workbenchSessions";
 import { sessionLifecycleFailure, sessionLifecycleNotice } from "./sessionLifecycleError";
 import {
   emptyMCPDraft,
@@ -256,12 +274,12 @@ export function TauriSessionPreview() {
   const [session, setSession] = useState<TauriBridgeSession | null>(null);
   const [tabs, setTabs] = useState<WorkbenchSessionTab[]>([]);
   const [projectFolders, setProjectFolders] = useState<WorkbenchProjectFolder[]>([]);
-  const [sessionPageCursor, setSessionPageCursor] = useState<{ position: number; id: string } | null>(null);
-  const [sessionPageSource, setSessionPageSource] = useState<"identity" | "legacy">("identity");
+  const [sessionPageCursor, setSessionPageCursor] = useState<{ position: number; id: string; snapshotId: string } | null>(null);
+  const [sessionPageSource, setSessionPageSource] = useState<"identity" | "legacy" | "unavailable">("identity");
   const [sessionPageLoading, setSessionPageLoading] = useState(false);
   const [sessionPageError, setSessionPageError] = useState("");
   const [workspaceAvailability, setWorkspaceAvailability] = useState<Record<string, boolean | null>>({});
-  const [collapsedProjects, setCollapsedProjects] = useState<Record<string, boolean>>({});
+  const [collapsedProjects, setCollapsedProjects] = useState<Record<string, boolean>>(loadCollapsedProjectGroups);
   const [workspaceRoot, setWorkspaceRoot] = useState("");
   const [editingProjectRoot, setEditingProjectRoot] = useState<string | null>(null);
   const [projectTitleDraft, setProjectTitleDraft] = useState("");
@@ -330,6 +348,17 @@ export function TauriSessionPreview() {
   const projectGroups = useMemo(() => groupWorkbenchSessions(tabs, projectFolders, platform), [tabs, projectFolders, platform]);
   const projectRootsKey = projectGroups.flatMap(group => group.root ? [group.root] : []).join("\u0000");
   const activeCatalogTitle = tabs.find(tab => tab.sessionId === session?.id)?.title;
+
+  useEffect(() => {
+    try {
+      const collapsed = Object.entries(collapsedProjects)
+        .filter(([root, value]) => root.length > 0 && root.length <= 4096 && value)
+        .slice(-1000);
+      window.localStorage.setItem(COLLAPSED_PROJECTS_STORAGE_KEY, JSON.stringify(Object.fromEntries(collapsed)));
+    } catch {
+      // The sidebar remains usable when WebView storage is unavailable or full.
+    }
+  }, [collapsedProjects]);
 
   useEffect(() => {
     const roots = projectRootsKey ? projectRootsKey.split("\u0000") : [];
@@ -531,7 +560,25 @@ export function TauriSessionPreview() {
         }
       }
     } catch (cause) {
-      setSessionPageError(tauriMessageFrom(cause));
+      if (revision !== sessionPageRevisionRef.current) return;
+      // A rejected continuation may mean the directory changed after the
+      // previous page. Restart from a freshly shadow-verified first page so
+      // we never leave the sidebar stranded on a stale cursor or mix snapshots.
+      try {
+        const page = await tauriWorkbenchSessionPage();
+        if (revision !== sessionPageRevisionRef.current) return;
+        setTabs(page.sessions);
+        setSessionPageCursor(page.nextCursor ?? null);
+        setSessionPageSource(page.source);
+        setSessionPageError("");
+      } catch (restartCause) {
+        if (revision === sessionPageRevisionRef.current) {
+          setTabs([]);
+          setSessionPageCursor(null);
+          setSessionPageSource("unavailable");
+          setSessionPageError(`${tauriMessageFrom(cause)}；重新读取失败：${tauriMessageFrom(restartCause)}`);
+        }
+      }
     } finally {
       sessionPageRequestRef.current = false;
       setSessionPageLoading(false);
@@ -770,10 +817,46 @@ export function TauriSessionPreview() {
       sessionPageRevisionRef.current += 1;
       if (sessionPageSource !== "identity") {
         setTabs(previous => preserveWorkbenchLifecycle(updated, previous));
+        setSessionPageSource("legacy");
       }
       await refreshCatalogAudit(() => true, true);
     } catch (cause) {
       setError(`对话已打开，但无法保存到最近对话：${tauriMessageFrom(cause)}`);
+    }
+  }
+
+  async function reloadFirstWorkbenchSessionPage(request: number, isActive: () => boolean) {
+    try {
+      const page = await tauriWorkbenchSessionPage();
+      if (request !== catalogAuditRequestRef.current || !isActive()) return;
+      setTabs(page.sessions);
+      setSessionPageCursor(page.nextCursor ?? null);
+      setSessionPageSource(page.source);
+      setSessionPageError("");
+    } catch (cause) {
+      if (request === catalogAuditRequestRef.current && isActive()) {
+        setTabs([]);
+        setSessionPageCursor(null);
+        setSessionPageSource("unavailable");
+        setSessionPageError(tauriMessageFrom(cause));
+      }
+    }
+  }
+
+  async function retryWorkbenchSessionDirectory() {
+    if (sessionPageRequestRef.current) return;
+    sessionPageRequestRef.current = true;
+    sessionPageRevisionRef.current += 1;
+    const request = ++catalogAuditRequestRef.current;
+    setSessionPageLoading(true);
+    setSessionPageError("");
+    try {
+      await reloadFirstWorkbenchSessionPage(request, () => true);
+    } finally {
+      if (request === catalogAuditRequestRef.current) {
+        sessionPageRequestRef.current = false;
+        setSessionPageLoading(false);
+      }
     }
   }
 
@@ -788,18 +871,7 @@ export function TauriSessionPreview() {
         if (!report.legacyMatchesDirectory && sessionPageSource === "identity") {
           // If the shadow diverges after startup, stop presenting SQLite as
           // the visible source and return to the compatible host catalog.
-          try {
-            const page = await tauriWorkbenchSessionPage();
-            if (request === catalogAuditRequestRef.current && isActive()) {
-              setTabs(page.sessions);
-              setSessionPageCursor(page.nextCursor ?? null);
-              setSessionPageSource(page.source);
-            }
-          } catch (cause) {
-            if (request === catalogAuditRequestRef.current && isActive()) {
-              setSessionPageError(tauriMessageFrom(cause));
-            }
-          }
+          await reloadFirstWorkbenchSessionPage(request, isActive);
         } else if (refreshVisiblePage && sessionPageSource === "identity") {
           try {
             const desiredPages = Math.max(1, Math.ceil(tabs.length / 200));
@@ -824,6 +896,7 @@ export function TauriSessionPreview() {
           } catch (cause) {
             if (request === catalogAuditRequestRef.current && isActive()) {
               setSessionPageError(tauriMessageFrom(cause));
+              await reloadFirstWorkbenchSessionPage(request, isActive);
             }
           }
         }
@@ -831,6 +904,10 @@ export function TauriSessionPreview() {
     } catch (cause) {
       if (request === catalogAuditRequestRef.current && isActive()) {
         setCatalogAuditError(tauriMessageFrom(cause));
+        // An unavailable audit is not evidence that the current page is still
+        // safe. Re-read through the guarded first-page command; it chooses JSON
+        // whenever the current shadow check is incomplete or divergent.
+        await reloadFirstWorkbenchSessionPage(request, isActive);
       }
     }
   }
@@ -952,11 +1029,11 @@ export function TauriSessionPreview() {
           await switchTauriBridgeSession(target.sessionId, target.workspaceRoot);
           switchedToTarget = true;
         } catch (cause) {
-          // Missing and interrupted sessions cannot be reopened. The bridge
-          // DELETE endpoint can retire a missing identity or resume its fenced
-          // deletion without recreating a transcript.
+          // Missing, deleting, and tombstoned sessions cannot be reopened.
+          // DELETE can retire/retry them without recreating a transcript, and
+          // is idempotent for a tombstone left in the legacy host catalog.
           const failure = sessionLifecycleFailure(cause);
-          if (failure !== "missing" && failure !== "deleting") throw cause;
+          if (failure !== "missing" && failure !== "deleting" && failure !== "deleted") throw cause;
         }
       }
       // For an interrupted deletion, avoid switching the single bridge
@@ -971,6 +1048,7 @@ export function TauriSessionPreview() {
       sessionPageRevisionRef.current += 1;
       if (sessionPageSource !== "identity") {
         setTabs(previous => preserveWorkbenchLifecycle(updated, previous));
+        setSessionPageSource("legacy");
       }
       await refreshCatalogAudit(() => true, true);
     } catch (cause) {
@@ -1469,6 +1547,7 @@ export function TauriSessionPreview() {
   }
 
   const currentWorkspace = workspaceRoot || session?.workspaceRoot || "";
+  const activeProjectKey = workbenchProjectKey(currentWorkspace, platform);
 
   async function refreshMCPServers() {
     try {
@@ -1530,14 +1609,19 @@ export function TauriSessionPreview() {
           {projectGroups.length === 0 ? <p className="tauri-sidebar__empty">还没有对话，开始一个新话题吧。</p> : projectGroups.map(group => group.root ? (
             <section className="tauri-project-group" key={group.key} aria-label={group.label}>
               <div className="tauri-project-group__heading">
-                <button type="button" className="tauri-project-group__toggle" aria-label={`${collapsedProjects[group.key] ? "展开" : "收起"} ${group.label}`} aria-expanded={!collapsedProjects[group.key]} onClick={() => setCollapsedProjects(previous => ({ ...previous, [group.key]: !previous[group.key] }))}>
+                <button type="button" className="tauri-project-group__toggle" aria-label={`${collapsedProjects[group.key] ? "展开" : "收起"} ${group.label}`} aria-expanded={!collapsedProjects[group.key]} onClick={() => setCollapsedProjects(previous => {
+                  const next = { ...previous };
+                  if (next[group.key]) delete next[group.key];
+                  else next[group.key] = true;
+                  return next;
+                })}>
                   {collapsedProjects[group.key] ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
                 </button>
                 {editingProjectRoot === group.root ? <form className="tauri-project-title-edit" onSubmit={event => { event.preventDefault(); void saveProjectTitle(group.root!); }}>
                   <input autoFocus maxLength={1024} value={projectTitleDraft} aria-label={`重命名项目 ${group.label}`} onChange={event => setProjectTitleDraft(event.target.value)} onKeyDown={event => { if (event.key === "Escape") setEditingProjectRoot(null); }} />
                   <button type="submit" aria-label="保存项目名称" disabled={busy}><Check size={13} /></button>
                   <button type="button" aria-label="取消重命名项目" disabled={busy} onClick={() => setEditingProjectRoot(null)}><X size={13} /></button>
-                </form> : <button type="button" className="tauri-project-group__select" title={workspaceAvailability[group.root] === false ? `${group.root}\n工作区不可用；已有会话仍可打开` : group.root} aria-label={`切换到项目 ${group.label}${workspaceAvailability[group.root] === false ? "（工作区不可用）" : ""}`} disabled={busy || switchingBlocked || (group.sessions.length > 0 && !group.sessions.some(tab => !isMissingWorkbenchSession(tab)))} onClick={() => { const latest = group.sessions.find(tab => !isMissingWorkbenchSession(tab)); if (latest) { if (latest.sessionId !== session?.id) void activateSession(latest.sessionId, latest.workspaceRoot); } else setWorkspaceRoot(group.root || ""); }}><FolderOpen size={14} /><span>{group.label}</span>{workspaceAvailability[group.root] === false && <small className="tauri-project-group__unavailable">工作区不可用</small>}<small>{group.sessions.length}</small></button>}
+                </form> : <button type="button" className={`tauri-project-group__select${activeProjectKey === group.key ? " is-active" : ""}`} aria-current={activeProjectKey === group.key ? "location" : undefined} title={workspaceAvailability[group.root] === false ? `${group.root}\n工作区不可用；已有会话仍可打开` : group.root} aria-label={`切换到项目 ${group.label}${workspaceAvailability[group.root] === false ? "（工作区不可用）" : ""}`} disabled={busy || switchingBlocked || (group.sessions.length > 0 && !group.sessions.some(tab => !isMissingWorkbenchSession(tab)))} onClick={() => { const latest = group.sessions.find(tab => !isMissingWorkbenchSession(tab)); if (latest) { if (latest.sessionId !== session?.id) void activateSession(latest.sessionId, latest.workspaceRoot); } else setWorkspaceRoot(group.root || ""); }}><FolderOpen size={14} /><span>{group.label}</span>{workspaceAvailability[group.root] === false && <small className="tauri-project-group__unavailable">工作区不可用</small>}<small>{group.sessions.length}</small></button>}
                 <button type="button" className="tauri-project-group__rename" aria-label={`重命名项目 ${group.label}`} title="重命名项目" disabled={busy || switchingBlocked || editingProjectRoot !== null} onClick={() => { setEditingProjectRoot(group.root || null); setProjectTitleDraft(group.title ?? ""); }}><Pencil size={12} /></button>
                 <button type="button" className="tauri-project-group__new" aria-label={`在 ${group.label} 中新建对话`} title={workspaceAvailability[group.root] === false ? "工作区不可用，无法在此处新建对话" : "在此项目新建对话"} disabled={busy || switchingBlocked || workspaceAvailability[group.root] === false} onClick={() => void createSession(group.root || "")}><Plus size={14} /></button>
               </div>
@@ -1548,7 +1632,12 @@ export function TauriSessionPreview() {
             {sessionPageLoading ? "正在加载…" : "加载更多会话"}
           </button>}
           {sessionPageError && <p className="tauri-sidebar__page-error" role="alert">加载失败：{sessionPageError}</p>}
-          {sessionPageSource === "legacy" && <p className="tauri-sidebar__page-note">当前使用本地兼容目录</p>}
+          {sessionPageSource === "legacy" && <>
+            <p className="tauri-sidebar__page-note" role="status">当前使用本地兼容目录，最多 50 条；持久会话目录未通过校验，列表可能不完整。</p>
+            <button type="button" className="tauri-sidebar__load-more" aria-label="重新检查会话目录" onClick={() => void retryWorkbenchSessionDirectory()} disabled={sessionPageLoading}>
+              {sessionPageLoading ? "正在重新检查…" : "重新检查会话目录"}
+            </button>
+          </>}
         </nav>
         <div className="tauri-sidebar__footer">
           <span className={`tauri-health${status?.running ? " is-ready" : ""}`}><i />{status?.running ? "本地运行正常" : "正在连接本地服务…"}</span>

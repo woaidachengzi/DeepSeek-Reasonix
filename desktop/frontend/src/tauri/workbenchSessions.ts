@@ -15,14 +15,22 @@ export interface WorkbenchProjectFolder {
   title?: string;
 }
 
-function projectKey(root?: string, caseInsensitive = false): string {
+export function workbenchProjectKey(root?: string, platform = ""): string {
   const trimmed = (root ?? "").trim();
-  const key = trimmed.replace(/[/\\]+$/, "") || (trimmed ? trimmed[0] : "");
-  return caseInsensitive ? key.replace(/\//g, "\\").toLowerCase() : key;
+  const key = platform === "windows"
+    ? trimmed.replace(/[/\\]+$/, "")
+    : trimmed.replace(/\/+$/, "");
+  return platform === "windows"
+    ? (key || (trimmed ? trimmed[0] : "")).replace(/\//g, "\\").toLowerCase()
+    : key || (trimmed ? trimmed[0] : "");
 }
 
-function projectName(root: string): string {
-  const segments = root.split(/[/\\]/).filter(Boolean);
+function projectPathSegments(root: string, platform: string): string[] {
+  return root.split(platform === "windows" ? /[/\\]/ : /\//).filter(Boolean);
+}
+
+function projectName(root: string, platform: string): string {
+  const segments = projectPathSegments(root, platform);
   return segments[segments.length - 1] || root;
 }
 
@@ -35,17 +43,16 @@ export function groupWorkbenchSessions(
   folders: readonly WorkbenchProjectFolder[] = [],
   platform = "",
 ): WorkbenchProjectGroup[] {
-  const caseInsensitivePaths = platform === "windows";
   const groups = new Map<string, WorkbenchProjectGroup>();
   for (const folder of folders) {
     const root = folder.root.trim();
-    const key = projectKey(root, caseInsensitivePaths);
+    const key = workbenchProjectKey(root, platform);
     if (!key || groups.has(key)) continue;
     const title = folder.title?.trim();
     groups.set(key, {
       key,
       root,
-      label: title || projectName(root),
+      label: title || projectName(root, platform),
       title: title || undefined,
       sessions: [],
       savedTitle: Boolean(title),
@@ -53,10 +60,10 @@ export function groupWorkbenchSessions(
   }
   for (const session of sessions) {
     const root = (session.workspaceRoot ?? "").trim();
-    const key = projectKey(root, caseInsensitivePaths);
+    const key = workbenchProjectKey(root, platform);
     let group = groups.get(key);
     if (!group) {
-      group = { key, root: root || undefined, label: root ? projectName(root) : "", sessions: [] };
+      group = { key, root: root || undefined, label: root ? projectName(root, platform) : "", sessions: [] };
       groups.set(key, group);
     }
     group.sessions.push(session);
@@ -72,12 +79,12 @@ export function groupWorkbenchSessions(
     if (duplicates.length < 2) continue;
     const parentCounts = new Map<string, number>();
     for (const group of duplicates) {
-      const segments = (group.root ?? "").split(/[/\\]/).filter(Boolean);
+      const segments = projectPathSegments(group.root ?? "", platform);
       const parent = segments[segments.length - 2] ?? "";
       parentCounts.set(parent, (parentCounts.get(parent) ?? 0) + 1);
     }
     for (const group of duplicates) {
-      const segments = (group.root ?? "").split(/[/\\]/).filter(Boolean);
+      const segments = projectPathSegments(group.root ?? "", platform);
       const parent = segments[segments.length - 2] ?? "";
       const suffix = parent && parentCounts.get(parent) === 1 ? parent : group.root || label;
       group.label = `${label} · ${suffix}`;

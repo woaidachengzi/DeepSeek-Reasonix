@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -62,6 +65,160 @@ func TestInventoryDoesNotCreateTheDatabase(t *testing.T) {
 	}
 	if _, err := os.Stat(dbPath); !os.IsNotExist(err) {
 		t.Fatalf("inventory created an identity database: %v", err)
+	}
+}
+
+func TestEmptyInventorySerializesExplicitEmptyArrays(t *testing.T) {
+	sessionDir := t.TempDir()
+	report, err := Inventory(context.Background(), nil, sessionDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &payload); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"entries", "unclaimed", "errors"} {
+		if got := string(payload[field]); got != "[]" {
+			t.Errorf("empty inventory %s = %s, want []", field, got)
+		}
+	}
+}
+
+func TestInventoryAuditsLegacyPhysicalTranscriptAliases(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	writeTranscript(t, filepath.Join(sessionDir, "tauri-shared.jsonl"))
+	aliasDir := filepath.Join(root, "sessions-alias")
+	if err := os.Symlink(sessionDir, aliasDir); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+
+	identities, err := Open(ctx, filepath.Join(root, "desktop", "state.sqlite"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = identities.Close() })
+	// Seed a legacy duplicate directly: current Import correctly refuses to
+	// create this state, but inventory must be able to audit an older database.
+	for position, identity := range []struct{ id, path string }{
+		{id: "legacy-first", path: filepath.Join(sessionDir, "tauri-shared.jsonl")},
+		{id: "legacy-second", path: filepath.Join(aliasDir, "tauri-shared.jsonl")},
+	} {
+		relative, err := relativeTranscriptPath(root, identity.id, identity.path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := identities.db.ExecContext(ctx, `INSERT INTO sessions
+			(id, relative_path, position, state, created_at_ms, updated_at_ms)
+			VALUES (?, ?, ?, 'ready', 0, 0)`, identity.id, relative, position); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	report, err := Inventory(ctx, identities, sessionDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"legacy-first", "legacy-second"} {
+		entry := findEntry(t, report, id)
+		if entry.Claim != ClaimPathConflict || !strings.Contains(entry.Detail, "physical transcript") {
+			t.Fatalf("legacy physical alias %q not flagged: %#v", id, entry)
+		}
+	}
+	if len(report.Errors) == 0 {
+		t.Fatal("physical alias audit did not add an inventory error")
+	}
+}
+
+func TestInventoryAuditsLegacyHardLinkedTranscripts(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	firstPath := filepath.Join(sessionDir, "tauri-first.jsonl")
+	secondPath := filepath.Join(sessionDir, "tauri-second.jsonl")
+	writeTranscript(t, firstPath)
+	if err := os.Link(firstPath, secondPath); err != nil {
+		t.Skipf("hard links unavailable: %v", err)
+	}
+	identities, err := Open(ctx, filepath.Join(root, "desktop", "state.sqlite"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = identities.Close() })
+	for position, identity := range []struct{ id, path string }{
+		{id: "legacy-first", path: firstPath},
+		{id: "legacy-second", path: secondPath},
+	} {
+		relative, err := relativeTranscriptPath(root, identity.id, identity.path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := identities.db.ExecContext(ctx, `INSERT INTO sessions
+			(id, relative_path, position, state, created_at_ms, updated_at_ms)
+			VALUES (?, ?, ?, 'ready', 0, 0)`, identity.id, relative, position); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first, err := Inventory(ctx, identities, sessionDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := Inventory(ctx, identities, sessionDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(first, second) {
+		t.Fatalf("hard-link audit is not repeatable: %#v then %#v", first, second)
+	}
+	for _, id := range []string{"legacy-first", "legacy-second"} {
+		entry := findEntry(t, first, id)
+		if entry.Claim != ClaimPathConflict || !strings.Contains(entry.Detail, "physical transcript") {
+			t.Fatalf("legacy hard link %q not flagged: %#v", id, entry)
+		}
+	}
+}
+
+func TestInventoryAuditsCaseOnlyPathAliasesOnCaseInsensitivePlatforms(t *testing.T) {
+	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
+		t.Skip("conservative case-folding is enabled only on macOS and Windows")
+	}
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	identities, err := Open(ctx, filepath.Join(root, "desktop", "state.sqlite"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = identities.Close() })
+	for position, identity := range []struct{ id, name string }{
+		{id: "case-first", name: "tauri-Session.jsonl"},
+		{id: "case-second", name: "tauri-session.jsonl"},
+	} {
+		relative := filepath.ToSlash(filepath.Join("sessions", identity.name))
+		if _, err := identities.db.ExecContext(ctx, `INSERT INTO sessions
+			(id, relative_path, position, state, created_at_ms, updated_at_ms)
+			VALUES (?, ?, ?, 'reserved', 0, 0)`, identity.id, relative, position); err != nil {
+			t.Fatal(err)
+		}
+	}
+	report, err := Inventory(ctx, identities, sessionDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"case-first", "case-second"} {
+		entry := findEntry(t, report, id)
+		if entry.Claim != ClaimPathConflict {
+			t.Fatalf("case-only legacy alias %q not flagged: %#v", id, entry)
+		}
 	}
 }
 

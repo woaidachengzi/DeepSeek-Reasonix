@@ -98,7 +98,7 @@ export interface TauriWorkbenchSession {
 
 export interface TauriWorkbenchSessionPage {
   sessions: TauriWorkbenchSession[];
-  nextCursor?: { position: number; id: string } | null;
+  nextCursor?: { position: number; id: string; snapshotId: string } | null;
   total: number;
   source: "identity" | "legacy";
 }
@@ -263,7 +263,7 @@ export async function renameTauriWorkbenchProjectFolder(root: string, title: str
 }
 
 export async function tauriWorkbenchSessionPage(
-  cursor?: { position: number; id: string },
+  cursor?: { position: number; id: string; snapshotId: string },
   limit = 200,
 ): Promise<TauriWorkbenchSessionPage> {
   requireTauri();

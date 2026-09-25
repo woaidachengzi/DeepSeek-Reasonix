@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"os"
@@ -28,6 +30,7 @@ type sessionListResponse struct {
 	Sessions        []sessionListEntry      `json:"sessions"`
 	NextCursor      *sessionidentity.Cursor `json:"nextCursor,omitempty"`
 	Total           int                     `json:"total"`
+	SnapshotID      string                  `json:"snapshotId"`
 }
 
 func (b *bridgeServer) sessionList(w http.ResponseWriter, r *http.Request) {
@@ -44,13 +47,17 @@ func (b *bridgeServer) sessionList(w http.ResponseWriter, r *http.Request) {
 
 	var cursor *sessionidentity.Cursor
 	rawPosition, rawID := query.Get("cursorPosition"), query.Get("cursorId")
+	rawSnapshotID := query.Get("cursorSnapshot")
 	if rawPosition != "" || rawID != "" {
 		position, err := strconv.Atoi(rawPosition)
 		if err != nil || position < 0 || strings.TrimSpace(rawID) == "" {
 			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "session page cursor is invalid")
 			return
 		}
-		cursor = &sessionidentity.Cursor{Position: position, ID: rawID}
+		cursor = &sessionidentity.Cursor{Position: position, ID: rawID, SnapshotID: rawSnapshotID}
+	} else if rawSnapshotID != "" {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "session page cursor is invalid")
+		return
 	}
 	workspaceRoot := query.Get("workspaceRoot")
 	if len(workspaceRoot) > 4096 {
@@ -65,7 +72,11 @@ func (b *bridgeServer) sessionList(w http.ResponseWriter, r *http.Request) {
 	}
 	info, err := os.Lstat(identityPath)
 	if errors.Is(err, os.ErrNotExist) {
-		writeJSON(w, http.StatusOK, sessionListResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Sessions: []sessionListEntry{}})
+		if cursor != nil && cursor.SnapshotID != "" {
+			writeProtocolError(w, http.StatusConflict, "resync_required", "session directory changed while paging")
+			return
+		}
+		writeJSON(w, http.StatusOK, sessionListResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Sessions: []sessionListEntry{}, SnapshotID: emptyVisibleSnapshotID()})
 		return
 	}
 	if err != nil {
@@ -85,21 +96,83 @@ func (b *bridgeServer) sessionList(w http.ResponseWriter, r *http.Request) {
 
 	page, err := identities.ListVisible(r.Context(), limit, cursor, workspaceRoot)
 	if err != nil {
+		if errors.Is(err, sessionidentity.ErrDirectoryChanged) {
+			writeProtocolError(w, http.StatusConflict, "resync_required", "session directory changed while paging")
+			return
+		}
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
-	entries := make([]sessionListEntry, 0, len(page.Records))
-	for _, record := range page.Records {
+	writeJSON(w, http.StatusOK, sessionListResponse{
+		ProtocolVersion: desktopbridge.ProtocolVersion,
+		Sessions:        sessionListEntries(page.Records),
+		NextCursor:      page.NextCursor,
+		Total:           page.Total,
+		SnapshotID:      page.SnapshotID,
+	})
+}
+
+func (b *bridgeServer) sessionDirectorySnapshot(w http.ResponseWriter, r *http.Request) {
+	workspaceRoot := r.URL.Query().Get("workspaceRoot")
+	if len(workspaceRoot) > 4096 {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "workspace filter is too long")
+		return
+	}
+	identityPath := appconfig.DesktopSessionIdentityPath()
+	if identityPath == "" {
+		writeProtocolError(w, http.StatusServiceUnavailable, "internal", "session identity store is unavailable")
+		return
+	}
+	info, err := os.Lstat(identityPath)
+	if errors.Is(err, os.ErrNotExist) {
+		writeJSON(w, http.StatusOK, sessionListResponse{
+			ProtocolVersion: desktopbridge.ProtocolVersion,
+			Sessions:        []sessionListEntry{},
+			SnapshotID:      emptyVisibleSnapshotID(),
+		})
+		return
+	}
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to inspect the session identity store")
+		return
+	}
+	if !info.Mode().IsRegular() {
+		writeProtocolError(w, http.StatusInternalServerError, "internal", "session identity store is not a regular file")
+		return
+	}
+	identities, err := sessionidentity.OpenReadOnly(r.Context(), identityPath, appconfig.SessionProfileRoot())
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to open the session identity store")
+		return
+	}
+	defer func() { _ = identities.Close() }()
+
+	snapshot, err := identities.ListVisibleSnapshot(r.Context(), sessionidentity.MaxVisibleSnapshotSize, workspaceRoot)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to read the session directory snapshot")
+		return
+	}
+	writeJSON(w, http.StatusOK, sessionListResponse{
+		ProtocolVersion: desktopbridge.ProtocolVersion,
+		Sessions:        sessionListEntries(snapshot.Records),
+		Total:           snapshot.Total,
+		SnapshotID:      snapshot.SnapshotID,
+	})
+}
+
+func sessionListEntries(records []sessionidentity.Record) []sessionListEntry {
+	entries := make([]sessionListEntry, 0, len(records))
+	for _, record := range records {
 		entries = append(entries, sessionListEntry{
 			ID: record.ID, Title: record.Title, TitleSource: record.TitleSource,
 			WorkspaceRoot: record.WorkspaceRoot, State: record.State, Missing: record.Missing,
 			Position: record.Position, UpdatedAtMS: record.UpdatedAtMS,
 		})
 	}
-	writeJSON(w, http.StatusOK, sessionListResponse{
-		ProtocolVersion: desktopbridge.ProtocolVersion,
-		Sessions:        entries,
-		NextCursor:      page.NextCursor,
-		Total:           page.Total,
-	})
+	return entries
+}
+
+func emptyVisibleSnapshotID() string {
+	digest := sha256.Sum256([]byte("reasonix-session-directory-v2\x00"))
+	return hex.EncodeToString(digest[:])
 }

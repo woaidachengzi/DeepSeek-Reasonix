@@ -77,11 +77,9 @@ impl WorkbenchProjectCatalog {
         if let Some(error) = &state.load_error {
             return Err(error.clone());
         }
-        if state
-            .folders
-            .iter()
-            .any(|existing| project_key(&existing.root) == project_key(&folder.root))
-        {
+        if state.folders.iter().any(|existing| {
+            normalized_project_key(&existing.root) == normalized_project_key(&folder.root)
+        }) {
             return Ok(state.folders.clone());
         }
         if state.folders.len() >= MAX_PROJECTS {
@@ -113,7 +111,7 @@ impl WorkbenchProjectCatalog {
         let mut updated = state.folders.clone();
         if let Some(folder) = updated
             .iter_mut()
-            .find(|folder| project_key(&folder.root) == project_key(&root))
+            .find(|folder| normalized_project_key(&folder.root) == normalized_project_key(&root))
         {
             folder.title = Some(title.to_string());
         } else {
@@ -140,10 +138,14 @@ fn normalize_root(root: &str) -> Result<String, String> {
     {
         return Err("project folder path must be an absolute directory path".to_string());
     }
-    let trimmed = root.trim_end_matches(['/', '\\']);
+    let trimmed = if cfg!(windows) {
+        root.trim_end_matches(['/', '\\'])
+    } else {
+        root.trim_end_matches('/')
+    };
     let normalized = if trimmed.is_empty() {
         root.chars().next().unwrap_or('/').to_string()
-    } else if trimmed.len() == 2 && trimmed.as_bytes()[1] == b':' {
+    } else if cfg!(windows) && trimmed.len() == 2 && trimmed.as_bytes()[1] == b':' {
         format!("{trimmed}\\")
     } else {
         trimmed.to_string()
@@ -151,12 +153,21 @@ fn normalize_root(root: &str) -> Result<String, String> {
     Ok(normalized)
 }
 
-fn project_key(root: &str) -> String {
-    let trimmed = root.trim().trim_end_matches(['/', '\\']);
+pub(crate) fn normalized_project_key(root: &str) -> String {
     if cfg!(windows) {
-        trimmed.replace('/', "\\").to_lowercase()
+        let trimmed = root.trim().trim_end_matches(['/', '\\']);
+        if trimmed.is_empty() {
+            root.trim()
+                .chars()
+                .next()
+                .map(|separator| if separator == '/' { '\\' } else { separator })
+                .unwrap_or_default()
+                .to_string()
+        } else {
+            trimmed.replace('/', "\\").to_lowercase()
+        }
     } else {
-        trimmed.to_string()
+        root.trim().trim_end_matches('/').to_string()
     }
 }
 
@@ -199,10 +210,9 @@ fn read_folders(path: &Path) -> Result<Vec<BridgeProjectFolder>, String> {
                 return Err("project folder title is invalid or too long".to_string());
             }
         }
-        if folders
-            .iter()
-            .any(|existing: &BridgeProjectFolder| project_key(&existing.root) == project_key(&root))
-        {
+        if folders.iter().any(|existing: &BridgeProjectFolder| {
+            normalized_project_key(&existing.root) == normalized_project_key(&root)
+        }) {
             continue;
         }
         folders.push(BridgeProjectFolder {

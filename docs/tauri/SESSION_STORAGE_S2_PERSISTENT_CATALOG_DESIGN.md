@@ -2,8 +2,8 @@
 
 > 状态：**部分实现（2026-09）**。身份库 schema v4 已含相对 profile-root 路径、标题溯源、生命周期状态；首次会话 reservation、恢复前状态检查及
 > 残留 sidecar 防误复用、身份库 keyset 分页、bridge 只读列表接口、删除状态的存储 API 及旧 JSON catalog 幂等导入已实现；
-> bridge 删除清理已接入（包括 `deleting` 状态下的重试与重启后续删）；Rust host 影子比对门禁与身份库分页侧栏已实现，目录差异时仍回退 JSON。
-> 侧栏可通过加载更多超过旧 JSON 的 50 条上限；全 profile 权威切换、旧写者停写确认与完整跨资源恢复/兼容演练仍未实现。
+> bridge 删除清理已接入（包括 `deleting` 状态下的重试、重启后续删，以及清理已完成后通过 `deleted` tombstone 幂等清掉陈旧 host catalog 行）；Rust host 影子比对门禁与身份库分页侧栏已实现，目录差异时仍回退 JSON。分页 continuation 已绑定完整可见目录快照，变化时返回 `resync_required`；子进程强制终止于删除清理中途后的重启续删也有隔离回归。
+> 侧栏可通过加载更多超过旧 JSON 的 50 条上限；临时测试 profile 的快照 staging、身份路径重定位与旧 catalog 重放已有自动化演练；全 profile 权威切换、真实 profile 停写确认及其跨资源恢复/兼容演练仍未完成。
 > 本文继续作为其余工作契约、验收条件、测试矩阵与回退路径。
 >
 > 背景与边界：[SESSION_STORAGE_IMPLEMENTATION_V3.md](./SESSION_STORAGE_IMPLEMENTATION_V3.md) §5 S2。
@@ -106,13 +106,17 @@ V3 要求 `reserved/ready/missing/deleting/deleted`。schema v4 保留 v3 生命
 
 ```text
 GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot=<path>
-→ { protocolVersion, sessions: [...], nextCursor?{position,id}, total }
+→ { protocolVersion, sessions: [...], nextCursor?{position,id,snapshotId}, total, snapshotId }
 ```
 
-  `nextCursor` 仅在还有下一页时出现；每页末项的 `(position, id)` 即下一页起点
-  （严格 `>` 比较：`position > cursorPosition || (position == cursorPosition && id > cursorId)`）。
+  `snapshotId` 是 SQLite 同一只读事务中对完整可见目录投影计算的 SHA-256。`nextCursor`
+  仅在还有下一页时出现；每页末项的 `(position, id)` 即下一页起点
+  （严格 `>` 比较：`position > cursorPosition || (position == cursorPosition && id > cursorId)`），
+  同时携带首屏的 `snapshotId`。下一页的目录指纹若变化（即使总数没变），bridge 返回 HTTP 409
+  `resync_required`；host 对 shadow scan 与实际读取页也交叉核对指纹，不拼接不同快照。
   每项至少含 `id / title / titleSource / workspaceRoot / state / missing / position / updatedAtMs`，
   **不含** transcript 内容、不含凭据类字段。
+- Host 做 shadow 比对时使用 `GET /v1/sessions/snapshot?workspaceRoot=<path>` 一次性读取最多 10,000 条；该端点在一个 SQLite 只读事务中返回完整目录与同一结构快照 ID，避免为组装完整目录按 200 条逐页请求并重复 count/hash 全表。它由 `session_directory_snapshot_full_v1` capability 保护；完整快照完成影子比对后，host 仍会单独请求所展示页并核对 snapshot ID。
 - 迁移入口 `POST /v1/sessions/import-catalog` 与 host 启动调用已接入：最多接收旧 JSON 的
   50 项；仅插入身份库中不存在的记录，保留旧目录顺序、标题与工作区；缺失 transcript 作为
   `missing` 保留。重复调用不会覆盖身份库中较新的元数据，JSON 文件仍不修改。
@@ -159,9 +163,10 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 | **5.1** | 完成删除 tombstone 状态写入 | `deleting/deleted` 由删除流程写入且不可重用；身份库分页已实现 | 回退时保留 v4 身份库和 transcript；使用经验证的整份离线 profile 快照 |
 | **5.2** | bridge `GET /v1/sessions` 分页列表 | 身份库分页与 bridge 接口已实现，并由 5.3 clean 门禁后的侧栏读取 | 端点保留兼容，host 可回退旧 JSON |
 | **5.3** | 影子审计 clean 时读取 bridge 身份目录，漂移或审计失败时回退 JSON | 旧 JSON 幂等导入、分页读取、clean 门禁和漂移回退已接入；移除 JSON 回退并宣布整个 profile 唯一权威仍需独立发布门禁 | 保留 JSON 输入与回退路径 |
-| **5.4** | missing/deleting/deleted 的用户可见处理 + 重启续做清理 | missing 行不可打开但可直接删除；deleting 可通过 DELETE 续做；明确错误提示与恢复路径已覆盖 | 保留 `missing` 记录，等待用户处理 |
+| **5.4** | missing/deleting/deleted 的用户可见处理 + 重启续做清理 | missing 行不可打开但可直接删除；deleting 可通过 DELETE 续做；若 host 旧 catalog 留有 deleted tombstone 行，重复 DELETE 幂等成功以完成 host 行清理；明确错误提示与恢复路径已覆盖 | 保留 `missing` 记录，等待用户处理 |
+| **5.5** | SQLite 崩溃恢复与删除清理中的进程崩溃恢复 | 子进程在 WAL 有已提交和未提交更新时强制退出，重开保留已提交状态并回滚未提交更新；bridge 子进程在 `deleting` 已提交、artifact sweep 已删 transcript 但尚未删 `.meta` 时强制终止，重启后拒绝打开为新空会话、继续清理并写入 `deleted` tombstone（`TestSessionIdentityRecoversAfterAbruptProcessExit`、`TestBridgeDeleteRecoversAfterForcedProcessExit`） | 仅在临时隔离 profile 演练；真实 profile 仍需停写确认和离线恢复演练 |
 
-5.0–5.4 的后端接口、clean 门禁、分页侧栏和 lifecycle 恢复流程均已接入。SQLite 仍处于可回退的 Preview 读取阶段；移除 JSON 回退前仍须完成稳定窗口零差异、完整跨资源恢复和旧写者停写确认。重启后续删采用显式重试，不在启动时无提示地自动删除。
+5.0–5.5 的后端接口、clean 门禁、分页侧栏和 lifecycle/崩溃恢复流程均已接入。临时测试 profile 的跨资源 snapshot/staging/catalog replay 自动化已覆盖，但 SQLite 仍处于可回退的 Preview 读取阶段；移除 JSON 回退前仍须完成稳定窗口零差异、真实离线 profile 的停写后恢复演练和旧写者停写确认。重启后续删采用显式重试，不在启动时无提示地自动删除。
 
 ## 5. 测试矩阵
 
@@ -199,7 +204,8 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 - 重启后 ID 与顺序不变；折叠状态仍只在本机。
 
 **5.5**
-- 删除中途强制终止 → 重启后要么清理完成，要么仍为 `deleting` 并可重试；**绝不出现空会话**。
+- SQLite writer 子进程在 WAL 中同时留有已提交身份和未提交标题更新时强制退出 → 重开保留已提交 `ready` 身份与标题，未提交标题不可见（`TestSessionIdentityRecoversAfterAbruptProcessExit`）。
+- 删除 bridge 子进程在 `deleting` 已提交、artifact sweep 已删 transcript 但遗留 `.meta` 时强制终止 → 重启确认身份仍为 `deleting`，尝试打开会话仍被拒绝，不会变成空会话；再次 DELETE 后剩余 artifacts 被清理、状态变为 `deleted`，ID 不重用（`TestBridgeDeleteRecoversAfterForcedProcessExit`）。
 - `missing` 会话在 UI 上不可被当作新会话打开。
 
 ## 6. 风险与回退

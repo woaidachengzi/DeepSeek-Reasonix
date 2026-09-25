@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	appconfig "reasonix/internal/config"
@@ -152,5 +154,76 @@ func TestSessionInventoryIgnoresACallerSuppliedIdentityPath(t *testing.T) {
 	}
 	if _, err := os.Stat(elsewhere); !os.IsNotExist(err) {
 		t.Fatalf("a caller-supplied identity path was used: %v", err)
+	}
+}
+
+func TestSessionInventoryExposesLegacyPhysicalPathConflicts(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("REASONIX_STATE_HOME", home)
+	sessionDir := appconfig.SessionDir()
+	transcript := filepath.Join(sessionDir, "tauri-shared.jsonl")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(transcript, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	aliasDir := filepath.Join(home, "sessions-alias")
+	if err := os.Symlink(sessionDir, aliasDir); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+	identityPath := appconfig.DesktopSessionIdentityPath()
+	identities, err := sessionidentity.Open(context.Background(), identityPath, appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", identityPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for position, relative := range []string{
+		filepath.ToSlash(filepath.Join("sessions", filepath.Base(transcript))),
+		filepath.ToSlash(filepath.Join("sessions-alias", filepath.Base(transcript))),
+	} {
+		id := []string{"legacy-one", "legacy-two"}[position]
+		if _, err := db.Exec(`INSERT INTO sessions
+			(id, relative_path, position, state, created_at_ms, updated_at_ms)
+			VALUES (?, ?, ?, 'ready', 0, 0)`, id, relative, position); err != nil {
+			_ = db.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/v1/sessions/inventory", nil)
+	request.Header.Set("Authorization", "Bearer "+testToken)
+	response := httptest.NewRecorder()
+	newBridgeServer(testToken, "instance", nil).handler().ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("inventory status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var body sessionInventoryResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"legacy-one", "legacy-two"} {
+		found := false
+		for _, entry := range body.Entries {
+			if entry.ID == id {
+				found = entry.Claim == sessionidentity.ClaimPathConflict && strings.Contains(entry.Detail, "physical transcript")
+			}
+		}
+		if !found {
+			t.Fatalf("inventory omitted physical conflict for %s: %#v", id, body)
+		}
+	}
+	if len(body.Errors) == 0 {
+		t.Fatalf("inventory response omitted conflict errors: %#v", body)
 	}
 }

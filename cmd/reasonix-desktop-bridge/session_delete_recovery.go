@@ -54,23 +54,30 @@ func retryInterruptedSessionDelete(ctx context.Context, sessionID string) error 
 	if err != nil {
 		return err
 	}
-	if !exists || record.Path != expectedPath ||
-		(record.State != sessionidentity.StateDeleting && record.State != sessionidentity.StateMissing) {
+	if !exists || record.Path != expectedPath {
+		return desktopbridge.ErrSessionNotFound
+	}
+	if record.State == sessionidentity.StateDeleted {
+		// The core sweep may have completed just before the host removed its
+		// legacy catalog row. Treat a retry as success without touching files.
+		return nil
+	}
+	if record.State != sessionidentity.StateDeleting && record.State != sessionidentity.StateMissing {
 		return desktopbridge.ErrSessionNotFound
 	}
 	// A missing transcript is not an orphan eligible for ID reuse, but an
 	// explicit user delete may still retire the identity permanently. Fence it
-	// first so an overlapping open cannot recreate it during cleanup.
-	if record.State == sessionidentity.StateMissing {
-		if err := identities.BeginDelete(ctx, sessionID, expectedPath); err != nil {
-			return fmt.Errorf("begin missing session deletion: %w", err)
-		}
+	// first so an overlapping open cannot recreate it during cleanup. Re-check
+	// uniqueness for deleting retries too: a legacy duplicate owner must not be
+	// swept just because an earlier version persisted the fence before crashing.
+	if err := identities.BeginDelete(ctx, sessionID, expectedPath); err != nil {
+		return fmt.Errorf("fence interrupted session deletion: %w", bridgeIdentityConflict(err))
 	}
 	if err := control.RemoveSessionArtifacts(expectedPath); err != nil {
 		return fmt.Errorf("resume session artifact deletion: %w", err)
 	}
 	if err := identities.FinishDelete(ctx, sessionID, expectedPath); err != nil {
-		return fmt.Errorf("finish interrupted session deletion: %w", err)
+		return fmt.Errorf("finish interrupted session deletion: %w", bridgeIdentityConflict(err))
 	}
 	return nil
 }

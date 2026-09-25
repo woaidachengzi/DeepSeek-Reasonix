@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"sync"
 	"testing"
 
 	"reasonix/internal/desktopbridge/sessionpath"
@@ -64,6 +66,116 @@ func TestImportPreservesTranscriptAndIdentityAcrossReopen(t *testing.T) {
 	got, err := os.ReadFile(path)
 	if err != nil || !reflect.DeepEqual(got, content) {
 		t.Fatalf("transcript changed: %q, %v", got, err)
+	}
+}
+
+func TestConcurrentFirstOpenInitializesIdentityDatabaseOnce(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	dbPath := filepath.Join(root, "desktop", "session-state-v1.sqlite")
+	const workers = 16
+	start := make(chan struct{})
+	errs := make(chan error, workers)
+	var wg sync.WaitGroup
+	for worker := range workers {
+		wg.Add(1)
+		go func(readOnly bool) {
+			defer wg.Done()
+			<-start
+			if readOnly {
+				store, err := OpenReadOnly(ctx, dbPath, root)
+				if errors.Is(err, os.ErrNotExist) {
+					errs <- nil // A read that wins before first creation sees no catalog yet.
+					return
+				}
+				if err != nil {
+					errs <- fmt.Errorf("OpenReadOnly: %w", err)
+					return
+				}
+				_, err = store.List(ctx)
+				if closeErr := store.Close(); err == nil {
+					err = closeErr
+				}
+				if err != nil {
+					err = fmt.Errorf("OpenReadOnly List/Close: %w", err)
+				}
+				errs <- err
+				return
+			}
+			store, err := Open(ctx, dbPath, root)
+			if err != nil {
+				errs <- fmt.Errorf("Open: %w", err)
+				return
+			}
+			if err := store.Close(); err != nil {
+				errs <- err
+				return
+			}
+			errs <- nil
+		}(worker%2 == 1)
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Errorf("concurrent first open failed: %v", err)
+		}
+	}
+	store, err := Open(ctx, dbPath, root)
+	if err != nil {
+		t.Fatalf("open after concurrent initialization: %v", err)
+	}
+	defer store.Close()
+	var version int
+	if err := store.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil || version != schemaVersion {
+		t.Fatalf("concurrent first-open schema version = %d, %v", version, err)
+	}
+}
+
+func TestOpenWithoutProfileRootRejectsBeforeTouchingExistingWAL(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	dbPath := filepath.Join(root, "desktop", "session-state-v1.sqlite")
+	sessionDir := filepath.Join(root, "sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, dbPath, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if _, err := store.db.ExecContext(ctx, "PRAGMA wal_autocheckpoint=0"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Reserve(ctx, sessionDir, Candidate{
+		ID: "root-required", Path: filepath.Join(sessionDir, "tauri-root-required.jsonl"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	paths := []string{dbPath, dbPath + "-wal", dbPath + "-shm", dbPath + "-journal"}
+	readArtifacts := func() map[string][]byte {
+		t.Helper()
+		artifacts := make(map[string][]byte)
+		for _, path := range paths {
+			content, err := os.ReadFile(path)
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			if err != nil {
+				t.Fatalf("read identity artifact %s: %v", path, err)
+			}
+			artifacts[path] = content
+		}
+		return artifacts
+	}
+	before := readArtifacts()
+	if _, err := Open(ctx, dbPath); err == nil {
+		t.Fatal("existing identity database opened without a profile root")
+	}
+	if after := readArtifacts(); !reflect.DeepEqual(before, after) {
+		t.Fatal("missing-profile-root rejection changed database or WAL artifacts")
 	}
 }
 
@@ -255,6 +367,96 @@ func TestListVisibleKeysetPaginationDoesNotLoseTiedPositions(t *testing.T) {
 	}
 }
 
+func TestListVisibleRejectsContinuationAfterSameSizeDirectoryChange(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, filepath.Join(root, "desktop", "state.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	var candidates []Candidate
+	for _, id := range []string{"first", "second", "third"} {
+		path := filepath.Join(sessionDir, "tauri-"+id+".jsonl")
+		if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		candidates = append(candidates, Candidate{ID: id, Path: path})
+	}
+	if err := store.Import(ctx, root, candidates); err != nil {
+		t.Fatal(err)
+	}
+	first, err := store.ListVisible(ctx, 1, nil, "")
+	if err != nil || first.NextCursor == nil || first.SnapshotID == "" || first.NextCursor.SnapshotID != first.SnapshotID {
+		t.Fatalf("first page = %#v, %v; want snapshot-bound cursor", first, err)
+	}
+	if _, err := store.db.ExecContext(ctx, "UPDATE sessions SET position=position+10 WHERE id=?", "third"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ListVisible(ctx, 1, first.NextCursor, ""); !errors.Is(err, ErrDirectoryChanged) {
+		t.Fatalf("continuation after catalog change = %v, want ErrDirectoryChanged", err)
+	}
+}
+
+func TestListVisibleAllowsTitleOnlyChangeDuringPagination(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, filepath.Join(root, "desktop", "state.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	var candidates []Candidate
+	for _, id := range []string{"first", "second", "third"} {
+		path := filepath.Join(sessionDir, "tauri-"+id+".jsonl")
+		if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		candidates = append(candidates, Candidate{ID: id, Path: path})
+	}
+	if err := store.Import(ctx, root, candidates); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := store.ListVisibleSnapshot(ctx, 3, "")
+	if err != nil || snapshot.Total != 3 || len(snapshot.Records) != 3 || snapshot.NextCursor != nil {
+		t.Fatalf("complete snapshot = %#v, %v; want three rows and no continuation", snapshot, err)
+	}
+	tooSmall, err := store.ListVisibleSnapshot(ctx, 2, "")
+	if err == nil || len(tooSmall.Records) != 0 {
+		t.Fatalf("bounded snapshot = %#v, %v; want fail-closed overflow", tooSmall, err)
+	}
+	first, err := store.ListVisible(ctx, 1, nil, "")
+	if err != nil || first.NextCursor == nil {
+		t.Fatalf("first page = %#v, %v; want continuation", first, err)
+	}
+	if snapshot.SnapshotID != first.SnapshotID {
+		t.Fatalf("snapshot id %q differs from paged read %q", snapshot.SnapshotID, first.SnapshotID)
+	}
+	if _, err := store.db.ExecContext(ctx, `UPDATE sessions SET title=?, title_source=?,
+		title_revision=title_revision+1, updated_at_ms=updated_at_ms+1 WHERE id=?`, "enriched title", "user", "third"); err != nil {
+		t.Fatal(err)
+	}
+	afterTitle, err := store.ListVisibleSnapshot(ctx, 3, "")
+	if err != nil || afterTitle.SnapshotID != snapshot.SnapshotID {
+		t.Fatalf("snapshot after title-only update = %#v, %v; want stable structural ID", afterTitle, err)
+	}
+	second, err := store.ListVisible(ctx, 1, first.NextCursor, "")
+	if err != nil {
+		t.Fatalf("continuation after presentation-only update = %v", err)
+	}
+	if second.SnapshotID != first.SnapshotID || len(second.Records) != 1 || second.Records[0].ID != "second" {
+		t.Fatalf("continuation after title update = %#v, want stable snapshot and second record", second)
+	}
+}
+
 func TestImportRejectsPathChangeAndRollsBack(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
@@ -321,6 +523,254 @@ func TestImportRejectsOutsideRootAndSymlink(t *testing.T) {
 	}
 	if err := store.Import(ctx, root, []Candidate{{ID: "parent-linked", Path: filepath.Join(linkedDir, "outside.jsonl")}}); err == nil {
 		t.Fatal("transcript outside root through a parent symlink accepted")
+	}
+}
+
+func TestImportAndReserveRejectSessionDirectorySymlinkEscape(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	outside := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	if err := os.Symlink(outside, sessionDir); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+	transcript := filepath.Join(sessionDir, "tauri-symlink-root.jsonl")
+	if err := os.WriteFile(transcript, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, filepath.Join(root, "desktop", "identity.sqlite"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	candidate := Candidate{ID: "symlink-root", Path: transcript}
+	if err := store.Import(ctx, sessionDir, []Candidate{candidate}); err == nil {
+		t.Fatal("import accepted a sessions root outside the profile")
+	}
+	if err := store.Reserve(ctx, sessionDir, candidate); err == nil {
+		t.Fatal("reservation accepted a sessions root outside the profile")
+	}
+	if _, err := store.SyncWorkbenchOrder(ctx, sessionDir, []WorkbenchOrderEntry{{ID: candidate.ID}}); err == nil {
+		t.Fatal("catalog sync accepted a sessions root outside the profile")
+	}
+	if _, err := relativeTranscriptPath(root, candidate.ID, transcript); err == nil {
+		t.Fatal("relative transcript resolver accepted a sessions root outside the profile")
+	}
+	records, err := store.List(ctx)
+	if err != nil || len(records) != 0 {
+		t.Fatalf("rejected external transcript was registered: %#v, %v", records, err)
+	}
+}
+
+func TestImportRejectsPhysicalTranscriptAliases(t *testing.T) {
+	for _, aliasKind := range []string{"internal-directory-symlink", "hard-link"} {
+		t.Run(aliasKind, func(t *testing.T) {
+			ctx := context.Background()
+			root := t.TempDir()
+			sessionDir := filepath.Join(root, "sessions")
+			if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			firstPath := filepath.Join(sessionDir, "first.jsonl")
+			if err := os.WriteFile(firstPath, []byte("{}\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			aliasPath := filepath.Join(root, "alias", "second.jsonl")
+			switch aliasKind {
+			case "internal-directory-symlink":
+				if err := os.Symlink(sessionDir, filepath.Join(root, "alias")); err != nil {
+					t.Skipf("directory symlinks unavailable: %v", err)
+				}
+				aliasPath = filepath.Join(root, "alias", "first.jsonl")
+			case "hard-link":
+				aliasPath = filepath.Join(root, "second.jsonl")
+				if err := os.Link(firstPath, aliasPath); err != nil {
+					t.Skipf("hard links unavailable: %v", err)
+				}
+			}
+			store, err := Open(ctx, filepath.Join(root, "desktop", "identity.sqlite"), root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			if err := store.Import(ctx, root, []Candidate{{ID: "first", Path: firstPath}}); err != nil {
+				t.Fatalf("import first identity: %v", err)
+			}
+			thirdPath := filepath.Join(sessionDir, "third.jsonl")
+			if err := os.WriteFile(thirdPath, []byte("{}\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			batch := []Candidate{{ID: "third", Path: thirdPath}, {ID: "second", Path: aliasPath}}
+			if err := store.Import(ctx, root, batch); !errors.Is(err, ErrTranscriptPathConflict) {
+				t.Fatalf("import aliased identity error = %v, want ErrTranscriptPathConflict", err)
+			}
+			records, err := store.List(ctx)
+			if err != nil || len(records) != 1 || records[0].ID != "first" {
+				t.Fatalf("alias import left partial identity: %#v, %v", records, err)
+			}
+		})
+	}
+}
+
+func TestReserveRejectsInternalDirectorySymlinkAlias(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	aliasDir := filepath.Join(root, "sessions-alias")
+	if err := os.Symlink(sessionDir, aliasDir); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+	store, err := Open(ctx, filepath.Join(root, "desktop", "identity.sqlite"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := store.Reserve(ctx, sessionDir, Candidate{ID: "reserved-first", Path: filepath.Join(sessionDir, "first.jsonl")}); err != nil {
+		t.Fatalf("reserve first identity: %v", err)
+	}
+	if err := store.Reserve(ctx, aliasDir, Candidate{ID: "reserved-second", Path: filepath.Join(aliasDir, "first.jsonl")}); !errors.Is(err, ErrTranscriptPathConflict) {
+		t.Fatalf("reserve aliased identity error = %v, want ErrTranscriptPathConflict", err)
+	}
+	records, err := store.List(ctx)
+	if err != nil || len(records) != 1 || records[0].ID != "reserved-first" {
+		t.Fatalf("alias reservation left partial identity: %#v, %v", records, err)
+	}
+}
+
+func TestReserveRejectsCaseOnlyAliasOnCaseInsensitivePlatforms(t *testing.T) {
+	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
+		t.Skip("conservative case-folding is enabled only on macOS and Windows")
+	}
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, filepath.Join(root, "desktop", "state.sqlite"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := store.Reserve(ctx, sessionDir, Candidate{
+		ID: "case-first", Path: filepath.Join(sessionDir, "tauri-Session.jsonl"),
+	}); err != nil {
+		t.Fatalf("reserve first case variant: %v", err)
+	}
+	if err := store.Reserve(ctx, sessionDir, Candidate{
+		ID: "case-second", Path: filepath.Join(sessionDir, "tauri-session.jsonl"),
+	}); !errors.Is(err, ErrTranscriptPathConflict) {
+		t.Fatalf("reserve case-only alias = %v, want ErrTranscriptPathConflict", err)
+	}
+}
+
+func TestMarkReadyRechecksPhysicalPathAfterReservation(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	otherDir := filepath.Join(root, "other-sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(otherDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	aliasDir := filepath.Join(root, "sessions-alias")
+	if err := os.Symlink(otherDir, aliasDir); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+	store, err := Open(ctx, filepath.Join(root, "desktop", "state.sqlite"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	firstPath := filepath.Join(sessionDir, "shared.jsonl")
+	secondPath := filepath.Join(aliasDir, "shared.jsonl")
+	if err := store.Reserve(ctx, sessionDir, Candidate{ID: "ready-first", Path: firstPath}); err != nil {
+		t.Fatalf("reserve first identity: %v", err)
+	}
+	if err := store.Reserve(ctx, aliasDir, Candidate{ID: "ready-second", Path: secondPath}); err != nil {
+		t.Fatalf("reserve initially distinct alias: %v", err)
+	}
+	if err := os.Remove(aliasDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(sessionDir, aliasDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(firstPath, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MarkReady(ctx, "ready-first", firstPath); !errors.Is(err, ErrTranscriptPathConflict) {
+		t.Fatalf("mark aliasing reservation ready = %v, want ErrTranscriptPathConflict", err)
+	}
+	for _, id := range []string{"ready-first", "ready-second"} {
+		record, exists, err := store.Get(ctx, id)
+		if err != nil || !exists || record.State != StateReserved {
+			t.Fatalf("identity %s after rejected ready transition = %#v, %v, %v", id, record, exists, err)
+		}
+	}
+}
+
+func TestConcurrentReserveCannotClaimPhysicalPathAlias(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	aliasDir := filepath.Join(root, "sessions-alias")
+	if err := os.Symlink(sessionDir, aliasDir); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+	dbPath := filepath.Join(root, "desktop", "state.sqlite")
+	firstStore, err := Open(ctx, dbPath, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer firstStore.Close()
+	secondStore, err := Open(ctx, dbPath, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secondStore.Close()
+
+	type attempt struct {
+		id  string
+		err error
+	}
+	start := make(chan struct{})
+	results := make(chan attempt, 2)
+	reserve := func(store *Store, dir, id string) {
+		<-start
+		results <- attempt{id: id, err: store.Reserve(ctx, dir, Candidate{
+			ID: id, Path: filepath.Join(dir, "shared.jsonl"),
+		})}
+	}
+	go reserve(firstStore, sessionDir, "concurrent-first")
+	go reserve(secondStore, aliasDir, "concurrent-second")
+	close(start)
+	first, second := <-results, <-results
+	successes := 0
+	for _, result := range []attempt{first, second} {
+		if result.err == nil {
+			successes++
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("concurrent alias reservations succeeded %d times: %#v, %#v", successes, first, second)
+	}
+	reopened, err := Open(ctx, dbPath, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	records, err := reopened.List(ctx)
+	if err != nil || len(records) != 1 {
+		t.Fatalf("concurrent reservations registered %#v: %v", records, err)
 	}
 }
 
@@ -392,24 +842,140 @@ func TestOpenRejectsFutureSchemaWithoutChangingIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("CREATE TABLE wal_marker (value TEXT)"); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.Exec("PRAGMA user_version=99"); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
+	paths := []string{path, path + "-wal", path + "-shm", path + "-journal"}
+	readFiles := func() map[string][]byte {
+		t.Helper()
+		files := make(map[string][]byte)
+		for _, candidate := range paths {
+			content, err := os.ReadFile(candidate)
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			if err != nil {
+				t.Fatalf("read database artifact %s: %v", candidate, err)
+			}
+			files[candidate] = content
+		}
+		return files
+	}
+	before := readFiles()
+	if _, ok := before[path+"-wal"]; !ok {
+		t.Fatal("future schema fixture did not retain an active WAL")
 	}
 	if store, err := Open(ctx, path); err == nil {
 		_ = store.Close()
 		t.Fatal("future schema was opened")
 	}
-	db, err = sql.Open("sqlite", path)
-	if err != nil {
-		t.Fatal(err)
+	after := readFiles()
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("future schema rejection changed database or journal artifacts")
 	}
-	defer db.Close()
 	var version int
 	if err := db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 99 {
 		t.Fatalf("future schema version = %d, %v", version, err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOpenRejectsCorruptDatabaseWithoutChangingIt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "corrupt.sqlite")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("CREATE TABLE marker (id INTEGER PRIMARY KEY, value TEXT)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("INSERT INTO marker(value) VALUES ('preserve this row')"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	corrupt, err := os.ReadFile(path)
+	if err != nil || len(corrupt) <= 100 {
+		t.Fatalf("read fixture database: len=%d err=%v", len(corrupt), err)
+	}
+	// The first byte after SQLite's 100-byte database header is the page-one
+	// b-tree type. 0xff is not a valid page type and quick_check must reject it.
+	corrupt[100] = 0xff
+	if err := os.WriteFile(path, corrupt, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if store, err := Open(context.Background(), path); err == nil {
+		_ = store.Close()
+		t.Fatal("corrupt identity database was opened")
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !reflect.DeepEqual(corrupt, after) {
+		t.Fatalf("corrupt identity database changed: %q, %v", after, err)
+	}
+	for _, suffix := range []string{"-wal", "-shm", "-journal"} {
+		if _, err := os.Lstat(path + suffix); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("corrupt database open left %s artifact: %v", suffix, err)
+		}
+	}
+}
+
+func TestOpenRejectsExistingEmptyDatabaseWithoutInitializingIt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "empty.sqlite")
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if store, err := Open(context.Background(), path); err == nil {
+		_ = store.Close()
+		t.Fatal("existing zero-byte identity database was initialized")
+	}
+	content, err := os.ReadFile(path)
+	if err != nil || len(content) != 0 {
+		t.Fatalf("zero-byte identity database changed: %d bytes, %v", len(content), err)
+	}
+	for _, suffix := range []string{"-wal", "-shm", "-journal"} {
+		if _, err := os.Lstat(path + suffix); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("empty database open left %s artifact: %v", suffix, err)
+		}
+	}
+}
+
+func TestOpenRejectsTruncatedSQLiteHeaderWithoutInitializingIt(t *testing.T) {
+	sourcePath := filepath.Join(t.TempDir(), "valid.sqlite")
+	db, err := sql.Open("sqlite", sourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("CREATE TABLE marker (id INTEGER PRIMARY KEY)"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	valid, err := os.ReadFile(sourcePath)
+	if err != nil || len(valid) <= 100 {
+		t.Fatalf("read valid SQLite fixture: len=%d err=%v", len(valid), err)
+	}
+	path := filepath.Join(t.TempDir(), "truncated.sqlite")
+	truncated := append([]byte(nil), valid[:100]...)
+	if err := os.WriteFile(path, truncated, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if store, err := Open(context.Background(), path); err == nil {
+		_ = store.Close()
+		t.Fatal("truncated SQLite header was initialized as a new identity database")
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !reflect.DeepEqual(truncated, after) {
+		t.Fatalf("truncated SQLite database changed: %d bytes, %v", len(after), err)
 	}
 }
 

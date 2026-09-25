@@ -121,6 +121,7 @@
 .tauri-project-group__toggle { display: grid; width: 22px; height: 34px; flex: 0 0 auto; place-items: center; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--fg-dim); }
 .tauri-project-group__select { display: flex; flex: 1; min-width: 0; height: 34px; align-items: center; gap: 7px; padding: 0 4px; border: 0; border-radius: 8px; background: transparent; color: var(--fg-dim); text-align: left; }
 .tauri-project-group__toggle:hover, .tauri-project-group__select:hover:not(:disabled) { background: var(--sidebar-hover); color: var(--fg); }
+.tauri-project-group__select.is-active { background: var(--sidebar-active); color: var(--fg); }
 .tauri-project-group__select span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 650; }
 .tauri-project-group__select small { color: var(--fg-faint); font-size: 11px; }
 .tauri-project-group__select .tauri-project-group__unavailable { flex: 0 0 auto; color: #e5a65b; font-size: 9px; }

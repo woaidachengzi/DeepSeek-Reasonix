@@ -2,6 +2,7 @@ package sessionidentity
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -183,6 +184,172 @@ func TestOfflineSnapshotRejectsTamperingAndNestedDestination(t *testing.T) {
 	original, err := os.ReadFile(filepath.Join(profile, "sessions", "tauri-tauri-one.jsonl"))
 	if err != nil || string(original) != "{}\n" {
 		t.Fatalf("source profile changed: %q, %v", original, err)
+	}
+}
+
+func TestOfflineSnapshotRejectsNonPrivatePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permission bits are not enforced on Windows")
+	}
+	ctx := context.Background()
+	root := t.TempDir()
+	profile := filepath.Join(root, "profile")
+	writeTranscript(t, filepath.Join(profile, "sessions", "tauri-tauri-one.jsonl"))
+	catalog := filepath.Join(root, "workbench-sessions.json")
+	writeCatalog(t, catalog, []catalogEntry{{SessionID: "tauri-one"}})
+	backupParent := filepath.Join(root, "backups")
+	if err := os.Mkdir(backupParent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := CreateOfflineSnapshot(ctx, profile, catalog, backupParent)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Chmod(snapshot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyOfflineSnapshot(ctx, snapshot); err == nil || !strings.Contains(err.Error(), "non-private permissions") {
+		t.Fatalf("snapshot with public root permissions verified: %v", err)
+	}
+	if err := os.Chmod(snapshot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	member := filepath.Join(snapshot, "profile", "sessions", "tauri-tauri-one.jsonl")
+	if err := os.Chmod(member, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyOfflineSnapshot(ctx, snapshot); err == nil || !strings.Contains(err.Error(), "non-private permissions") {
+		t.Fatalf("snapshot with public member permissions verified: %v", err)
+	}
+	if err := os.Chmod(member, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyOfflineSnapshot(ctx, snapshot); err != nil {
+		t.Fatalf("private snapshot did not verify after restoring permissions: %v", err)
+	}
+}
+
+func TestOfflineSnapshotRequiresCatalogOutsideProfile(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	profile := filepath.Join(root, "profile")
+	writeTranscript(t, filepath.Join(profile, "sessions", "tauri-tauri-one.jsonl"))
+	catalog := filepath.Join(profile, "workbench-sessions.json")
+	writeCatalog(t, catalog, []catalogEntry{{SessionID: "tauri-one"}})
+	backupParent := filepath.Join(root, "backups")
+	if err := os.Mkdir(backupParent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CreateOfflineSnapshot(ctx, profile, catalog, backupParent); err == nil {
+		t.Fatal("snapshot accepted a catalog that is already inside the profile")
+	}
+	entries, err := os.ReadDir(backupParent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("rejected overlapping catalog left backup artifacts: %v", entries)
+	}
+}
+
+func TestOfflineSnapshotRefusesToStageInsideSourceProfile(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	profile := filepath.Join(root, "profile")
+	writeTranscript(t, filepath.Join(profile, "sessions", "tauri-tauri-one.jsonl"))
+	catalog := filepath.Join(root, "workbench-sessions.json")
+	writeCatalog(t, catalog, []catalogEntry{{SessionID: "tauri-one"}})
+	backupParent := filepath.Join(root, "backups")
+	if err := os.Mkdir(backupParent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := CreateOfflineSnapshot(ctx, profile, catalog, backupParent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeEntries, err := os.ReadDir(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeNames := make([]string, len(beforeEntries))
+	for i, entry := range beforeEntries {
+		beforeNames[i] = entry.Name()
+	}
+	if _, err := StageOfflineSnapshot(ctx, snapshot, profile); err == nil {
+		t.Fatal("staging accepted the snapshot's source profile as its destination")
+	}
+	afterEntries, err := os.ReadDir(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterNames := make([]string, len(afterEntries))
+	for i, entry := range afterEntries {
+		afterNames[i] = entry.Name()
+	}
+	if !reflect.DeepEqual(beforeNames, afterNames) {
+		t.Fatalf("refused staging changed source profile entries: before=%v after=%v", beforeNames, afterNames)
+	}
+}
+
+func TestOfflineSnapshotRefusesSourceProfileSymlinkAlias(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	profile := filepath.Join(root, "profile")
+	writeTranscript(t, filepath.Join(profile, "sessions", "tauri-tauri-one.jsonl"))
+	catalog := filepath.Join(root, "workbench-sessions.json")
+	writeCatalog(t, catalog, []catalogEntry{{SessionID: "tauri-one"}})
+	backupParent := filepath.Join(root, "backups")
+	if err := os.Mkdir(backupParent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := CreateOfflineSnapshot(ctx, profile, catalog, backupParent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profileAlias := filepath.Join(root, "profile-alias")
+	if err := os.Symlink(profile, profileAlias); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+	manifestPath := filepath.Join(snapshot, "manifest.json")
+	encoded, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest SnapshotManifest
+	if err := json.Unmarshal(encoded, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	manifest.SourceProfile = profileAlias
+	encoded, err = json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manifestPath, encoded, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	beforeEntries, err := os.ReadDir(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeNames := make([]string, len(beforeEntries))
+	for i, entry := range beforeEntries {
+		beforeNames[i] = entry.Name()
+	}
+	if _, err := StageOfflineSnapshot(ctx, snapshot, profile); err == nil {
+		t.Fatal("staging accepted a symlink alias of the snapshot's source profile")
+	}
+	afterEntries, err := os.ReadDir(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterNames := make([]string, len(afterEntries))
+	for i, entry := range afterEntries {
+		afterNames[i] = entry.Name()
+	}
+	if !reflect.DeepEqual(beforeNames, afterNames) {
+		t.Fatalf("refused staging through a source alias changed profile entries: before=%v after=%v", beforeNames, afterNames)
 	}
 }
 

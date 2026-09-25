@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	appconfig "reasonix/internal/config"
@@ -92,7 +93,7 @@ func (b *bridgeServer) projectFolders(w http.ResponseWriter, _ *http.Request) {
 	seen := make(map[string]struct{}, len(stored.Projects))
 	for _, project := range stored.Projects {
 		root := strings.TrimSpace(project.Root)
-		if root == "" || len(root) > 4096 || strings.ContainsAny(root, "\x00\r\n") {
+		if root == "" || len(root) > 4096 || strings.IndexFunc(root, unicode.IsControl) >= 0 {
 			continue
 		}
 		if _, ok := seen[root]; ok {

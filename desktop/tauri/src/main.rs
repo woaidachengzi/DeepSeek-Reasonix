@@ -73,7 +73,7 @@ use session_shadow::SessionShadowReport;
 use tauri::{Manager, State};
 use window_state::PreviewWindowState;
 use workbench_catalog::{WorkbenchCatalog, WorkbenchSession, WorkbenchTitle};
-use workbench_projects::WorkbenchProjectCatalog;
+use workbench_projects::{normalized_project_key, WorkbenchProjectCatalog};
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -435,7 +435,7 @@ fn merged_workbench_project_folders(
     };
     for folder in local {
         if let Some(existing) = folders.iter_mut().find(|existing| {
-            workbench_project_key(&existing.root) == workbench_project_key(&folder.root)
+            normalized_project_key(&existing.root) == normalized_project_key(&folder.root)
         }) {
             if folder.title.is_some() {
                 existing.title = folder.title;
@@ -445,15 +445,6 @@ fn merged_workbench_project_folders(
         }
     }
     Ok(folders)
-}
-
-fn workbench_project_key(root: &str) -> String {
-    let root = root.trim().trim_end_matches(['/', '\\']);
-    if cfg!(windows) {
-        root.replace('/', "\\").to_lowercase()
-    } else {
-        root.to_string()
-    }
 }
 
 #[tauri::command]
@@ -466,57 +457,103 @@ fn workbench_session_page(
     // The legacy JSON catalog remains the recovery source until SQLite has
     // been shadow-verified. A readable but stale identity DB is not enough to
     // switch the visible sidebar.
-    let legacy_sessions = if cursor.is_none() {
-        Some(catalog.list()?)
-    } else {
-        None
-    };
-    let mut shadow_directory = None;
-    if let Some(sessions) = legacy_sessions.as_ref() {
-        match compare_session_catalog_with_directory(&supervisor, &catalog) {
-            Ok((report, directory)) if identity_session_catalog_is_verified(Ok(report.clone())) => {
-                shadow_directory = Some(directory);
-            }
-            Ok((_, directory)) => {
-                let total = sessions.len() as u64;
-                return Ok(WorkbenchSessionPage {
-                    sessions: page_entries_from_legacy(sessions.clone(), Some(&directory)),
-                    next_cursor: None,
-                    total,
-                    source: "legacy",
-                });
-            }
-            Err(_) => {
-                let total = sessions.len() as u64;
-                return Ok(WorkbenchSessionPage {
-                    sessions: page_entries_from_legacy(sessions.clone(), None),
-                    next_cursor: None,
-                    total,
-                    source: "legacy",
-                });
-            }
-        }
-    }
+    // Revalidate every page, not only the first one. A cursor may outlive a
+    // catalog mutation or a newly-created transcript between page requests.
+    let legacy_sessions = catalog.list()?;
+    let shadow = compare_session_catalog_with_directory(&supervisor, &catalog);
+    let page_cursor = cursor.clone();
+    workbench_session_page_from_shadow(
+        legacy_sessions,
+        cursor,
+        limit.unwrap_or(200),
+        shadow,
+        || supervisor.session_directory_page(limit.unwrap_or(200), page_cursor, None),
+    )
+}
 
-    match supervisor.session_directory_page(limit.unwrap_or(200), cursor.clone(), None) {
-        Ok(page) => Ok(WorkbenchSessionPage {
-            sessions: page
-                .sessions
-                .into_iter()
-                .map(page_entry_from_identity)
-                .collect(),
-            next_cursor: page.next_cursor,
-            total: page.total,
-            source: "identity",
-        }),
-        Err(_error) if cursor.is_none() => {
-            let sessions = match legacy_sessions {
-                Some(sessions) => sessions,
-                None => catalog.list()?,
-            };
-            let total = sessions.len() as u64;
+fn workbench_session_page_from_shadow(
+    legacy_sessions: Vec<WorkbenchSession>,
+    cursor: Option<SessionDirectoryCursor>,
+    limit: u16,
+    shadow: Result<(SessionShadowReport, Vec<SessionDirectoryEntry>, String), String>,
+    load_identity_page: impl FnOnce() -> Result<SessionDirectoryPage, String>,
+) -> Result<WorkbenchSessionPage, String> {
+    if !(1..=200).contains(&limit) {
+        return Err("session page limit is invalid".into());
+    }
+    let shadow_directory = match shadow {
+        Ok((report, directory, snapshot_id))
+            if identity_session_catalog_is_verified(Ok(report.clone())) =>
+        {
+            if cursor
+                .as_ref()
+                .is_some_and(|cursor| cursor.snapshot_id.as_deref() != Some(snapshot_id.as_str()))
+            {
+                return Err(
+                    "session catalog changed while paging; restart the session list".into(),
+                );
+            }
+            Some((directory, snapshot_id))
+        }
+        Ok((_, directory, _)) if cursor.is_none() => {
+            let total = legacy_sessions.len() as u64;
+            return Ok(WorkbenchSessionPage {
+                sessions: page_entries_from_legacy(legacy_sessions, Some(&directory)),
+                next_cursor: None,
+                total,
+                source: "legacy",
+            });
+        }
+        Ok(_) => {
+            return Err("session catalog changed while paging; restart the session list".into());
+        }
+        Err(_) if cursor.is_none() => {
+            let total = legacy_sessions.len() as u64;
+            return Ok(WorkbenchSessionPage {
+                sessions: page_entries_from_legacy(legacy_sessions, None),
+                next_cursor: None,
+                total,
+                source: "legacy",
+            });
+        }
+        Err(_) => {
+            return Err("session catalog shadow is unavailable; restart the session list".into());
+        }
+    };
+
+    match load_identity_page() {
+        Ok(page)
+            if shadow_directory
+                .as_ref()
+                .is_some_and(|(_, id)| *id == page.snapshot_id) =>
+        {
             Ok(WorkbenchSessionPage {
-                sessions: page_entries_from_legacy(sessions, shadow_directory.as_deref()),
+                sessions: page
+                    .sessions
+                    .into_iter()
+                    .map(page_entry_from_identity)
+                    .collect(),
+                next_cursor: page.next_cursor,
+                total: page.total,
+                source: "identity",
+            })
+        }
+        Ok(_) if cursor.is_none() => {
+            let total = legacy_sessions.len() as u64;
+            let directory = shadow_directory.as_ref().map(|(entries, _)| entries);
+            Ok(WorkbenchSessionPage {
+                sessions: page_entries_from_legacy(legacy_sessions, directory.map(Vec::as_slice)),
+                next_cursor: None,
+                total,
+                source: "legacy",
+            })
+        }
+        Ok(_) => Err("session directory changed while paging; restart the session list".into()),
+        Err(_error) if cursor.is_none() => {
+            let total = legacy_sessions.len() as u64;
+            let directory = shadow_directory.as_ref().map(|(entries, _)| entries);
+            Ok(WorkbenchSessionPage {
+                sessions: page_entries_from_legacy(legacy_sessions, directory.map(Vec::as_slice)),
                 next_cursor: None,
                 total,
                 source: "legacy",
@@ -537,11 +574,39 @@ fn bridge_session_previews(
 #[tauri::command]
 fn bridge_session_directory_page(
     supervisor: State<'_, BridgeSupervisor>,
+    catalog: State<'_, WorkbenchCatalog>,
     limit: Option<u16>,
     cursor: Option<SessionDirectoryCursor>,
     workspace_root: Option<String>,
 ) -> Result<SessionDirectoryPage, String> {
-    supervisor.session_directory_page(limit.unwrap_or(200), cursor, workspace_root)
+    let (report, _, full_snapshot_id) =
+        compare_session_catalog_with_directory(&supervisor, &catalog)?;
+    if !identity_session_catalog_is_verified(Ok(report)) {
+        return Err("session catalog shadow is unavailable; identity paging is disabled".into());
+    }
+    let expected_snapshot_id = match workspace_root
+        .as_deref()
+        .map(str::trim)
+        .filter(|root| !root.is_empty())
+    {
+        Some(root) => {
+            supervisor
+                .session_directory_snapshot_for_workspace(Some(root.to_string()))?
+                .1
+        }
+        None => full_snapshot_id,
+    };
+    if cursor
+        .as_ref()
+        .is_some_and(|cursor| cursor.snapshot_id.as_deref() != Some(expected_snapshot_id.as_str()))
+    {
+        return Err("session directory changed while paging; restart the session list".into());
+    }
+    let page = supervisor.session_directory_page(limit.unwrap_or(200), cursor, workspace_root)?;
+    if page.snapshot_id != expected_snapshot_id {
+        return Err("session directory changed while paging; restart the session list".into());
+    }
+    Ok(page)
 }
 
 #[tauri::command]
@@ -609,18 +674,18 @@ fn compare_session_catalog(
     supervisor: &BridgeSupervisor,
     catalog: &WorkbenchCatalog,
 ) -> Result<SessionShadowReport, String> {
-    compare_session_catalog_with_directory(supervisor, catalog).map(|(report, _)| report)
+    compare_session_catalog_with_directory(supervisor, catalog).map(|(report, _, _)| report)
 }
 
 fn compare_session_catalog_with_directory(
     supervisor: &BridgeSupervisor,
     catalog: &WorkbenchCatalog,
-) -> Result<(SessionShadowReport, Vec<SessionDirectoryEntry>), String> {
+) -> Result<(SessionShadowReport, Vec<SessionDirectoryEntry>, String), String> {
     let legacy = catalog.list()?;
-    let directory = supervisor.session_directory_snapshot()?;
+    let (directory, snapshot_id) = supervisor.session_directory_snapshot_with_id()?;
     let physical = supervisor.session_physical_inventory()?;
     let report = session_shadow::compare(&legacy, &directory, &physical)?;
-    Ok((report, directory))
+    Ok((report, directory, snapshot_id))
 }
 
 fn identity_session_catalog_is_verified(report: Result<SessionShadowReport, String>) -> bool {
@@ -946,6 +1011,197 @@ mod session_catalog_gate_tests {
         assert!(!identity_session_catalog_is_verified(Err(
             "inventory unavailable".into()
         )));
+    }
+
+    fn legacy_session() -> WorkbenchSession {
+        WorkbenchSession {
+            session_id: "legacy-session".into(),
+            title: Some("Legacy title".into()),
+            workspace_root: None,
+        }
+    }
+
+    fn identity_page() -> SessionDirectoryPage {
+        SessionDirectoryPage {
+            protocol_version: 1,
+            sessions: vec![SessionDirectoryEntry {
+                id: "identity-session".into(),
+                title: "Identity title".into(),
+                title_source: "manual".into(),
+                workspace_root: None,
+                state: "ready".into(),
+                missing: false,
+                position: 1,
+                updated_at_ms: 0,
+            }],
+            next_cursor: None,
+            total: 1,
+            snapshot_id: snapshot_id(),
+        }
+    }
+
+    fn snapshot_id() -> String {
+        "a".repeat(64)
+    }
+
+    #[test]
+    fn first_page_fails_back_without_querying_identity_on_shadow_error() {
+        let mut identity_query_called = false;
+        let page = workbench_session_page_from_shadow(
+            vec![legacy_session()],
+            None,
+            200,
+            Err("inventory unavailable".into()),
+            || {
+                identity_query_called = true;
+                Ok(identity_page())
+            },
+        )
+        .expect("legacy fallback");
+        assert_eq!(page.source, "legacy");
+        assert_eq!(page.sessions[0].session_id, "legacy-session");
+        assert!(!identity_query_called);
+    }
+
+    #[test]
+    fn interrupted_delete_remains_visible_for_explicit_legacy_retry() {
+        let interrupted = WorkbenchSession {
+            session_id: "interrupted-delete".into(),
+            title: Some("Deletion can be retried".into()),
+            workspace_root: None,
+        };
+        let page = workbench_session_page_from_shadow(
+            vec![interrupted],
+            None,
+            200,
+            Ok((report(false), Vec::new(), snapshot_id())),
+            || panic!("identity page must not be consulted for a dirty shadow"),
+        )
+        .expect("legacy row remains available after interrupted deletion");
+        assert_eq!(page.source, "legacy");
+        assert_eq!(page.sessions.len(), 1);
+        assert_eq!(page.sessions[0].session_id, "interrupted-delete");
+        assert_eq!(page.sessions[0].state, None);
+        assert!(page.next_cursor.is_none());
+    }
+
+    #[test]
+    fn continuation_page_fails_closed_on_shadow_drift_or_error() {
+        let cursor = Some(SessionDirectoryCursor {
+            position: 1,
+            id: "cursor-session".into(),
+            snapshot_id: Some(snapshot_id()),
+        });
+        for shadow in [
+            Ok((report(false), Vec::new(), snapshot_id())),
+            Err("inventory unavailable".into()),
+        ] {
+            let mut identity_query_called = false;
+            let result = workbench_session_page_from_shadow(
+                vec![legacy_session()],
+                cursor.clone(),
+                200,
+                shadow,
+                || {
+                    identity_query_called = true;
+                    Ok(identity_page())
+                },
+            );
+            assert!(result.is_err(), "unverified continuation was accepted");
+            assert!(
+                !identity_query_called,
+                "identity query ran after shadow failure"
+            );
+        }
+    }
+
+    #[test]
+    fn clean_continuation_uses_the_identity_page() {
+        let page = workbench_session_page_from_shadow(
+            vec![legacy_session()],
+            Some(SessionDirectoryCursor {
+                position: 1,
+                id: "cursor-session".into(),
+                snapshot_id: Some(snapshot_id()),
+            }),
+            200,
+            Ok((report(true), Vec::new(), snapshot_id())),
+            || Ok(identity_page()),
+        )
+        .expect("verified identity page");
+        assert_eq!(page.source, "identity");
+        assert_eq!(page.sessions[0].session_id, "identity-session");
+    }
+
+    #[test]
+    fn continuation_rejects_a_new_shadow_snapshot_before_loading_a_page() {
+        let mut identity_query_called = false;
+        let result = workbench_session_page_from_shadow(
+            vec![legacy_session()],
+            Some(SessionDirectoryCursor {
+                position: 1,
+                id: "cursor-session".into(),
+                snapshot_id: Some(snapshot_id()),
+            }),
+            200,
+            Ok((report(true), Vec::new(), "b".repeat(64))),
+            || {
+                identity_query_called = true;
+                Ok(identity_page())
+            },
+        );
+        assert!(
+            result.is_err(),
+            "continuation accepted a different shadow snapshot"
+        );
+        assert!(
+            !identity_query_called,
+            "identity page loaded after the continuation snapshot changed"
+        );
+    }
+
+    #[test]
+    fn first_page_race_falls_back_when_page_differs_from_shadow_snapshot() {
+        let page = workbench_session_page_from_shadow(
+            vec![legacy_session()],
+            None,
+            200,
+            Ok((report(true), Vec::new(), "b".repeat(64))),
+            || Ok(identity_page()),
+        )
+        .expect("legacy fallback after first-page race");
+        assert_eq!(page.source, "legacy");
+        assert_eq!(page.sessions[0].session_id, "legacy-session");
+    }
+
+    #[test]
+    fn identity_page_failure_falls_back_only_for_the_first_page() {
+        let first_page = workbench_session_page_from_shadow(
+            vec![legacy_session()],
+            None,
+            200,
+            Ok((report(true), Vec::new(), snapshot_id())),
+            || Err("identity store unavailable".into()),
+        )
+        .expect("first page legacy fallback");
+        assert_eq!(first_page.source, "legacy");
+        assert_eq!(first_page.sessions[0].session_id, "legacy-session");
+
+        let continuation = workbench_session_page_from_shadow(
+            vec![legacy_session()],
+            Some(SessionDirectoryCursor {
+                position: 1,
+                id: "cursor-session".into(),
+                snapshot_id: Some(snapshot_id()),
+            }),
+            200,
+            Ok((report(true), Vec::new(), snapshot_id())),
+            || Err("identity store unavailable".into()),
+        );
+        assert!(
+            matches!(continuation, Err(error) if error == "identity store unavailable"),
+            "continuation failures must not splice legacy rows into an identity page"
+        );
     }
 }
 

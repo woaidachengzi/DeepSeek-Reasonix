@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -33,8 +34,8 @@ type SnapshotManifest struct {
 	Files         []SnapshotFile `json:"files"`
 }
 
-// CreateOfflineSnapshot copies the entire Preview profile plus its host-owned
-// workbench catalog into a new private directory outside the profile. The
+// CreateOfflineSnapshot copies the entire Preview profile plus its separate,
+// host-owned workbench catalog into a new private directory outside the profile. The
 // caller must first stop all profile writers: existing binaries do not honor
 // a common profile lock, so this function intentionally does not claim that a
 // lock taken here would make a running profile consistent. It never removes or
@@ -54,6 +55,9 @@ func CreateOfflineSnapshot(ctx context.Context, profileRoot, catalogPath, destin
 	catalog, err := existingPlainFile(catalogPath)
 	if err != nil {
 		return "", fmt.Errorf("workbench catalog: %w", err)
+	}
+	if withinDirectory(root, catalog) {
+		return "", errors.New("workbench catalog must be outside the profile")
 	}
 	destination, err := existingPlainDirectory(destinationParent)
 	if err != nil {
@@ -159,9 +163,19 @@ func VerifyOfflineSnapshot(ctx context.Context, snapshotDir string) (SnapshotMan
 	if err != nil {
 		return SnapshotManifest{}, err
 	}
+	if info, err := os.Stat(root); err != nil {
+		return SnapshotManifest{}, err
+	} else if err := requirePrivateSnapshotMode(root, info); err != nil {
+		return SnapshotManifest{}, err
+	}
 	manifestPath, err := existingPlainFile(filepath.Join(root, "manifest.json"))
 	if err != nil {
 		return SnapshotManifest{}, fmt.Errorf("snapshot is incomplete: %w", err)
+	}
+	if info, err := os.Stat(manifestPath); err != nil {
+		return SnapshotManifest{}, err
+	} else if err := requirePrivateSnapshotMode("manifest.json", info); err != nil {
+		return SnapshotManifest{}, err
 	}
 	file, err := os.Open(manifestPath)
 	if err != nil {
@@ -179,6 +193,12 @@ func VerifyOfflineSnapshot(ctx context.Context, snapshotDir string) (SnapshotMan
 	if manifest.Version != offlineSnapshotVersion || len(manifest.Files) == 0 {
 		return SnapshotManifest{}, errors.New("snapshot manifest version or contents are invalid")
 	}
+	if _, err := cleanSnapshotSourcePath(manifest.SourceProfile); err != nil {
+		return SnapshotManifest{}, fmt.Errorf("snapshot manifest has an invalid source profile: %w", err)
+	}
+	if _, err := cleanSnapshotSourcePath(manifest.SourceCatalog); err != nil {
+		return SnapshotManifest{}, fmt.Errorf("snapshot manifest has an invalid source catalog: %w", err)
+	}
 	directorySeen := make(map[string]bool, len(manifest.Directories))
 	for _, name := range manifest.Directories {
 		rel := filepath.FromSlash(name)
@@ -193,6 +213,9 @@ func VerifyOfflineSnapshot(ctx context.Context, snapshotDir string) (SnapshotMan
 		info, err := os.Lstat(filepath.Join(root, rel))
 		if err != nil || !info.IsDir() {
 			return SnapshotManifest{}, fmt.Errorf("snapshot directory missing or changed: %s", name)
+		}
+		if err := requirePrivateSnapshotMode(name, info); err != nil {
+			return SnapshotManifest{}, err
 		}
 	}
 	if !directorySeen["profile"] || !directorySeen["catalog"] {
@@ -220,6 +243,9 @@ func VerifyOfflineSnapshot(ctx context.Context, snapshotDir string) (SnapshotMan
 		info, err := os.Lstat(path)
 		if err != nil || !info.Mode().IsRegular() || info.Size() != item.Size {
 			return SnapshotManifest{}, fmt.Errorf("snapshot member missing or changed: %s", item.Path)
+		}
+		if err := requirePrivateSnapshotMode(item.Path, info); err != nil {
+			return SnapshotManifest{}, err
 		}
 		digest, err := fileSHA256(ctx, path)
 		if err != nil || digest != item.SHA256 {
@@ -288,6 +314,13 @@ func VerifyOfflineSnapshot(ctx context.Context, snapshotDir string) (SnapshotMan
 	return manifest, nil
 }
 
+func requirePrivateSnapshotMode(path string, info os.FileInfo) error {
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
+		return fmt.Errorf("snapshot member has non-private permissions: %s", path)
+	}
+	return nil
+}
+
 // StageOfflineSnapshot proves a snapshot can be restored by copying it into a
 // newly allocated directory. It never overwrites a live profile or catalog.
 // The result contains profile/ and catalog/workbench-sessions.json, ready for
@@ -307,6 +340,17 @@ func StageOfflineSnapshot(ctx context.Context, snapshotDir, destinationParent st
 	}
 	if withinDirectory(source, destination) {
 		return "", errors.New("recovery staging must be outside the snapshot")
+	}
+	sourceProfile, err := cleanSnapshotSourcePath(manifest.SourceProfile)
+	if err != nil {
+		return "", fmt.Errorf("snapshot manifest has an invalid source profile: %w", err)
+	}
+	resolvedSourceProfile, err := resolveIdentityPath(sourceProfile)
+	if err != nil {
+		return "", fmt.Errorf("resolve snapshot source profile: %w", err)
+	}
+	if withinDirectory(sourceProfile, destination) || withinDirectory(resolvedSourceProfile, destination) {
+		return "", errors.New("recovery staging must be outside the snapshot's source profile")
 	}
 	staged, err := os.MkdirTemp(destination, "reasonix-session-recovery-")
 	if err != nil {
@@ -329,6 +373,16 @@ func StageOfflineSnapshot(ctx context.Context, snapshotDir, destinationParent st
 		}
 	}
 	return staged, nil
+}
+
+func cleanSnapshotSourcePath(path string) (string, error) {
+	if strings.TrimSpace(path) == "" || !filepath.IsAbs(path) || filepath.Clean(path) != path {
+		return "", errors.New("source path must be clean and absolute")
+	}
+	if filepath.Dir(path) == path {
+		return "", errors.New("filesystem root cannot be a snapshot source")
+	}
+	return path, nil
 }
 
 func existingPlainDirectory(path string) (string, error) {

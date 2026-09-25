@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -26,12 +25,10 @@ func OpenReadOnly(ctx context.Context, path string, profileRoots ...string) (*St
 	if err != nil {
 		return nil, err
 	}
-	info, err := os.Stat(abs)
-	if err != nil {
-		return nil, fmt.Errorf("inspect session identity database: %w", err)
-	}
-	if !info.Mode().IsRegular() {
-		return nil, errors.New("session identity database is not a regular file")
+	unlock := lockIdentityOpen(abs)
+	defer unlock()
+	if err := validateIdentityDatabasePath(abs, false); err != nil {
+		return nil, err
 	}
 	if len(profileRoots) != 1 {
 		return nil, errors.New("session profile root is required for read-only identity access")
@@ -40,12 +37,18 @@ func OpenReadOnly(ctx context.Context, path string, profileRoots ...string) (*St
 	if err != nil {
 		return nil, err
 	}
+	if err := validateIdentityDatabaseLocation(abs, profileRoot); err != nil {
+		return nil, err
+	}
 	slash := filepath.ToSlash(abs)
 	if runtime.GOOS == "windows" && len(slash) >= 2 && slash[1] == ':' {
 		slash = "/" + slash
 	}
 	u := &url.URL{Scheme: "file", Path: slash}
-	u.RawQuery = "mode=ro"
+	query := u.Query()
+	query.Set("mode", "ro")
+	query.Add("_pragma", "busy_timeout(2000)")
+	u.RawQuery = query.Encode()
 	db, err := sql.Open("sqlite", u.String())
 	if err != nil {
 		return nil, err
@@ -57,23 +60,26 @@ func OpenReadOnly(ctx context.Context, path string, profileRoots ...string) (*St
 		return nil, cause
 	}
 	if err := db.PingContext(ctx); err != nil {
-		return fail(err)
+		return fail(fmt.Errorf("ping read-only session identity store: %w", err))
+	}
+	if _, err := db.ExecContext(ctx, "PRAGMA busy_timeout=2000"); err != nil {
+		return fail(fmt.Errorf("configure read-only session identity busy timeout: %w", err))
 	}
 	// query_only protects this connection even if a future caller accidentally
 	// invokes a write method on the returned Store.
 	if _, err := db.ExecContext(ctx, "PRAGMA query_only=ON"); err != nil {
-		return fail(err)
+		return fail(fmt.Errorf("set read-only session identity query mode: %w", err))
 	}
 	var version int
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
-		return fail(err)
+		return fail(fmt.Errorf("read session identity schema version: %w", err))
 	}
 	if version != schemaVersion {
 		return fail(fmt.Errorf("read-only session inventory requires schema %d; found %d", schemaVersion, version))
 	}
 	var integrity string
 	if err := db.QueryRowContext(ctx, "PRAGMA quick_check").Scan(&integrity); err != nil {
-		return fail(err)
+		return fail(fmt.Errorf("check read-only session identity integrity: %w", err))
 	}
 	if integrity != "ok" {
 		return fail(fmt.Errorf("session identity quick check: %s", integrity))

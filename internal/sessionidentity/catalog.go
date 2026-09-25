@@ -37,6 +37,9 @@ func (s *Store) SyncWorkbenchOrder(ctx context.Context, sessionDir string, entri
 			return 0, err
 		}
 	}
+	if err := normalizeImportPathRoot(s.profileRoot, sessionDir); err != nil {
+		return 0, err
+	}
 	root, err := filepath.Abs(sessionDir)
 	if err != nil {
 		return 0, fmt.Errorf("resolve session directory: %w", err)

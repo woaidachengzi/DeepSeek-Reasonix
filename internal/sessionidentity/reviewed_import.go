@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"reasonix/internal/desktopbridge/sessionpath"
+	"reasonix/internal/profilegate"
 )
 
 var ErrImportReviewChanged = errors.New("session import review is stale")
@@ -27,13 +28,30 @@ type ReviewedImportRow struct {
 	TranscriptSHA256 string
 }
 
+// ImportReviewIssue reports one explicitly selected catalog row that was
+// skipped without preventing unrelated valid rows from being reviewed.
+// Reasons are deliberately path-free so a review can be rendered safely.
+type ImportReviewIssue struct {
+	SessionID string `json:"sessionId"`
+	Reason    string `json:"reason"`
+}
+
 // ImportReview is a read-only snapshot of an explicitly selected catalog
 // subset. Unclaimed scan results are deliberately never included.
 type ImportReview struct {
 	SessionDir    string
 	CatalogPath   string
 	CatalogSHA256 string
+	SelectedIDs   []string
 	Rows          []ReviewedImportRow
+	Errors        []ImportReviewIssue
+}
+
+// ImportReviewResult accompanies the transactional apply outcome with the
+// rows accepted for application and every selected row skipped during review.
+type ImportReviewResult struct {
+	Applied int                 `json:"applied"`
+	Errors  []ImportReviewIssue `json:"errors"`
 }
 
 // PrepareImportReview does not open or create an identity database. identities
@@ -101,21 +119,44 @@ func PrepareImportReview(ctx context.Context, identities *Store, sessionDir, cat
 			byID[row.ID] = append(byID[row.ID], row)
 		}
 	}
-	plan := ImportReview{SessionDir: dir, CatalogPath: catalog, CatalogSHA256: catalogHash}
+	plan := ImportReview{
+		SessionDir: dir, CatalogPath: catalog, CatalogSHA256: catalogHash,
+		SelectedIDs: append([]string(nil), selectedIDs...),
+		Rows:        make([]ReviewedImportRow, 0, len(selected)),
+		Errors:      make([]ImportReviewIssue, 0),
+	}
+	selectedFound := make(map[string]bool, len(selected))
 	for position, entry := range entries {
 		if !selected[entry.SessionID] {
 			continue
 		}
+		selectedFound[entry.SessionID] = true
 		if utf8.RuneCountInString(entry.Title) > 120 || strings.IndexFunc(entry.Title, unicode.IsControl) >= 0 ||
 			len(entry.WorkspaceRoot) > 4096 || strings.IndexFunc(entry.WorkspaceRoot, unicode.IsControl) >= 0 {
-			return ImportReview{}, fmt.Errorf("session %s catalog metadata is invalid", entry.SessionID)
+			plan.Errors = append(plan.Errors, ImportReviewIssue{SessionID: entry.SessionID, Reason: "catalog metadata is invalid"})
+			continue
 		}
-		if counts[entry.SessionID] != 1 || len(byID[entry.SessionID]) != 1 {
+		if counts[entry.SessionID] != 1 {
 			return ImportReview{}, fmt.Errorf("session %s is duplicated or invalid in the catalog", entry.SessionID)
+		}
+		if len(byID[entry.SessionID]) != 1 {
+			plan.Errors = append(plan.Errors, ImportReviewIssue{SessionID: entry.SessionID, Reason: "session inventory entry is unavailable"})
+			continue
 		}
 		row := byID[entry.SessionID][0]
 		if !row.Exists || row.Detail != "" || (row.Claim != Claimable && row.Claim != ClaimRegistered) {
-			return ImportReview{}, fmt.Errorf("session %s cannot be imported: %s (%s)", entry.SessionID, row.Claim, row.Detail)
+			plan.Errors = append(plan.Errors, ImportReviewIssue{SessionID: entry.SessionID, Reason: importReviewSkipReason(row)})
+			continue
+		}
+		if identities != nil {
+			record, exists, err := identities.Get(ctx, entry.SessionID)
+			if err != nil {
+				return ImportReview{}, err
+			}
+			if exists && (record.State == StateDeleting || record.State == StateDeleted) {
+				plan.Errors = append(plan.Errors, ImportReviewIssue{SessionID: entry.SessionID, Reason: "identity is retired or deleting"})
+				continue
+			}
 		}
 		path, err := sessionpath.TranscriptPath(dir, entry.SessionID)
 		if err != nil || path != row.Path {
@@ -134,12 +175,18 @@ func PrepareImportReview(ctx context.Context, identities *Store, sessionDir, cat
 		}
 		fingerprint, err := fileSHA256(ctx, path)
 		if err != nil {
-			return ImportReview{}, fmt.Errorf("hash session %s: %w", entry.SessionID, err)
+			if contextErr := ctx.Err(); contextErr != nil {
+				return ImportReview{}, contextErr
+			}
+			plan.Errors = append(plan.Errors, ImportReviewIssue{SessionID: entry.SessionID, Reason: "transcript could not be read"})
+			continue
 		}
 		plan.Rows = append(plan.Rows, ReviewedImportRow{Candidate: candidate, TranscriptSHA256: fingerprint})
 	}
-	if len(plan.Rows) != len(selected) {
-		return ImportReview{}, errors.New("one or more selected sessions are absent from the catalog")
+	for _, id := range selectedIDs {
+		if !selectedFound[id] {
+			return ImportReview{}, fmt.Errorf("selected session %s is absent from the catalog", id)
+		}
 	}
 	endingHash, err := fileSHA256(ctx, catalog)
 	if err != nil || endingHash != catalogHash {
@@ -148,35 +195,74 @@ func PrepareImportReview(ctx context.Context, identities *Store, sessionDir, cat
 	return plan, nil
 }
 
+func importReviewSkipReason(row InventoryEntry) string {
+	if !row.Exists && (row.Detail == "" || row.Detail == "transcript is absent") {
+		return "transcript is missing"
+	}
+	if row.Detail != "" && row.Detail != "transcript is absent" {
+		return "transcript is unreadable"
+	}
+	switch row.Claim {
+	case ClaimMissingFile:
+		return "transcript is missing"
+	case ClaimUnreadable:
+		return "transcript is unreadable"
+	case ClaimInvalidFile:
+		return "transcript failed path validation"
+	default:
+		if row.Detail != "" {
+			return "transcript failed inventory validation"
+		}
+		return "session is not eligible for import"
+	}
+}
+
 // ApplyImportReview rechecks every selected catalog row and transcript digest
 // before the existing single-transaction importer writes any identity row.
-// This is an offline S1 operation: its caller must quiesce transcript writers
-// and hold a profile-level ownership lock before using it on a real profile.
-func (s *Store) ApplyImportReview(ctx context.Context, plan ImportReview) error {
+// This is an offline S1 operation: it acquires the profile gate itself, while
+// callers must separately quiesce writers (such as old Wails versions) that do
+// not participate in that gate.
+func (s *Store) ApplyImportReview(ctx context.Context, plan ImportReview) (ImportReviewResult, error) {
+	if strings.TrimSpace(plan.SessionDir) == "" || strings.TrimSpace(plan.CatalogPath) == "" {
+		return ImportReviewResult{}, ErrImportReviewChanged
+	}
 	if s.profileRoot == "" {
 		if err := s.bindProfileRoot(filepath.Dir(plan.SessionDir)); err != nil {
-			return err
+			return ImportReviewResult{}, err
 		}
 	}
-	ids := make([]string, len(plan.Rows))
-	for i, row := range plan.Rows {
-		ids[i] = row.ID
+	releaseProfile, err := profilegate.TryAcquire(s.profileRoot)
+	if err != nil {
+		return ImportReviewResult{}, fmt.Errorf("session profile ownership: %w", err)
+	}
+	defer releaseProfile()
+	ids := append([]string(nil), plan.SelectedIDs...)
+	if len(ids) == 0 {
+		return ImportReviewResult{}, ErrImportReviewChanged
 	}
 	fresh, err := PrepareImportReview(ctx, s, plan.SessionDir, plan.CatalogPath, ids)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return err
+			return ImportReviewResult{}, err
 		}
-		return fmt.Errorf("%w: %w", ErrImportReviewChanged, err)
+		return ImportReviewResult{}, fmt.Errorf("%w: %w", ErrImportReviewChanged, err)
 	}
 	if !reflect.DeepEqual(plan, fresh) {
-		return ErrImportReviewChanged
+		return ImportReviewResult{}, ErrImportReviewChanged
 	}
 	candidates := make([]Candidate, len(plan.Rows))
 	for i, row := range plan.Rows {
 		candidates[i] = row.Candidate
 	}
-	return s.importCandidates(ctx, plan.SessionDir, candidates, true, false, false)
+	result := ImportReviewResult{Applied: len(candidates), Errors: append([]ImportReviewIssue(nil), plan.Errors...)}
+	if len(candidates) == 0 {
+		return result, nil
+	}
+	if err := s.importCandidates(ctx, plan.SessionDir, candidates, true, false, false); err != nil {
+		result.Applied = 0
+		return result, err
+	}
+	return result, nil
 }
 
 func fileSHA256(ctx context.Context, path string) (string, error) {

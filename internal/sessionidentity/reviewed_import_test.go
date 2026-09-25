@@ -6,7 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+
+	"reasonix/internal/profilegate"
 )
 
 func TestReviewedImportIsSelectedTransactionalAndReplayable(t *testing.T) {
@@ -38,15 +41,29 @@ func TestReviewedImportIsSelectedTransactionalAndReplayable(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	if err := store.ApplyImportReview(ctx, plan); err != nil {
+	release, err := profilegate.TryAcquire(root)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if _, err := store.ApplyImportReview(ctx, plan); !errors.Is(err, profilegate.ErrHeld) {
+		t.Fatalf("apply while profile is owned = %v, want profilegate.ErrHeld", err)
+	}
+	release()
+	before, err := store.List(ctx)
+	if err != nil || len(before) != 0 {
+		t.Fatalf("profile lock rejection changed identities: %#v, %v", before, err)
+	}
+	result, err := store.ApplyImportReview(ctx, plan)
+	if err != nil || result.Applied != 1 || len(result.Errors) != 0 {
+		t.Fatalf("apply result = %#v, %v", result, err)
 	}
 	first, err := store.List(ctx)
 	if err != nil || len(first) != 1 || first[0].ID != "tauri-first" || first[0].TitleSource != TitleLegacyUnknown {
 		t.Fatalf("imported identities = %#v, %v", first, err)
 	}
-	if err := store.ApplyImportReview(ctx, plan); err != nil {
-		t.Fatalf("review replay: %v", err)
+	result, err = store.ApplyImportReview(ctx, plan)
+	if err != nil || result.Applied != 1 || len(result.Errors) != 0 {
+		t.Fatalf("review replay result = %#v, %v", result, err)
 	}
 	second, err := store.List(ctx)
 	if err != nil || !reflect.DeepEqual(first, second) {
@@ -86,7 +103,7 @@ func TestReviewedImportRejectsStaleTranscriptWithoutPartialRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	if err := store.ApplyImportReview(ctx, plan); !errors.Is(err, ErrImportReviewChanged) {
+	if _, err := store.ApplyImportReview(ctx, plan); !errors.Is(err, ErrImportReviewChanged) {
 		t.Fatalf("stale transcript import = %v", err)
 	}
 	records, err := store.List(ctx)
@@ -116,7 +133,7 @@ func TestReviewedImportRejectsCatalogChangeAndUnclaimedSelection(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	if err := store.ApplyImportReview(ctx, plan); !errors.Is(err, ErrImportReviewChanged) {
+	if _, err := store.ApplyImportReview(ctx, plan); !errors.Is(err, ErrImportReviewChanged) {
 		t.Fatalf("stale catalog import = %v", err)
 	}
 	records, err := store.List(ctx)
@@ -152,6 +169,82 @@ func TestReviewedImportRejectsUnrelatedRegisteredPathConflict(t *testing.T) {
 	}
 }
 
+func TestReviewedImportRejectsLegacyPhysicalPathConflict(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	transcript := filepath.Join(sessionDir, "tauri-good.jsonl")
+	writeTranscript(t, transcript)
+	aliasDir := filepath.Join(root, "sessions-alias")
+	if err := os.Symlink(sessionDir, aliasDir); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+	catalog := filepath.Join(root, "workbench-sessions.json")
+	writeCatalog(t, catalog, []catalogEntry{{SessionID: "good"}})
+	identities, err := Open(ctx, filepath.Join(root, "desktop", "state.sqlite"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = identities.Close() })
+	legacyPath := filepath.Join(aliasDir, filepath.Base(transcript))
+	relative, err := relativeTranscriptPath(root, "legacy-owner", legacyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identities.db.ExecContext(ctx, `INSERT INTO sessions
+		(id, relative_path, position, state, created_at_ms, updated_at_ms)
+		VALUES ('legacy-owner', ?, 0, 'ready', 0, 0)`, relative); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PrepareImportReview(ctx, identities, sessionDir, catalog, []string{"good"}); err == nil {
+		t.Fatal("review accepted a transcript already owned through a physical path alias")
+	}
+	records, err := identities.List(ctx)
+	if err != nil || len(records) != 1 || records[0].ID != "legacy-owner" {
+		t.Fatalf("conflicted review changed identities: %#v, %v", records, err)
+	}
+}
+
+func TestApplyImportReviewRejectsPhysicalConflictAddedAfterReview(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	transcript := filepath.Join(sessionDir, "tauri-good.jsonl")
+	writeTranscript(t, transcript)
+	catalog := filepath.Join(root, "workbench-sessions.json")
+	writeCatalog(t, catalog, []catalogEntry{{SessionID: "good"}})
+	plan, err := PrepareImportReview(ctx, nil, sessionDir, catalog, []string{"good"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	aliasDir := filepath.Join(root, "sessions-alias")
+	if err := os.Symlink(sessionDir, aliasDir); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+	identities, err := Open(ctx, filepath.Join(root, "desktop", "state.sqlite"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = identities.Close() })
+	legacyPath := filepath.Join(aliasDir, filepath.Base(transcript))
+	relative, err := relativeTranscriptPath(root, "legacy-owner", legacyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identities.db.ExecContext(ctx, `INSERT INTO sessions
+		(id, relative_path, position, state, created_at_ms, updated_at_ms)
+		VALUES ('legacy-owner', ?, 0, 'ready', 0, 0)`, relative); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identities.ApplyImportReview(ctx, plan); !errors.Is(err, ErrImportReviewChanged) {
+		t.Fatalf("apply after physical conflict = %v, want ErrImportReviewChanged", err)
+	}
+	records, err := identities.List(ctx)
+	if err != nil || len(records) != 1 || records[0].ID != "legacy-owner" {
+		t.Fatalf("stale review registered a conflicting identity: %#v, %v", records, err)
+	}
+}
+
 func TestReviewedImportKeepsDistinctIDsForIdenticalTranscripts(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
@@ -172,7 +265,7 @@ func TestReviewedImportKeepsDistinctIDsForIdenticalTranscripts(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = identities.Close() })
-	if err := identities.ApplyImportReview(ctx, plan); err != nil {
+	if _, err := identities.ApplyImportReview(ctx, plan); err != nil {
 		t.Fatal(err)
 	}
 	records, err := identities.List(ctx)
@@ -206,7 +299,7 @@ func TestReviewedImportStrictRegistrationNeverSkipsSelectedMissingFile(t *testin
 	}
 }
 
-func TestReviewedImportRejectsInvalidSelectedCatalogMetadata(t *testing.T) {
+func TestReviewedImportReportsInvalidSelectedCatalogMetadata(t *testing.T) {
 	root := t.TempDir()
 	sessionDir := filepath.Join(root, "sessions")
 	writeTranscript(t, filepath.Join(sessionDir, "tauri-tauri-one.jsonl"))
@@ -216,8 +309,99 @@ func TestReviewedImportRejectsInvalidSelectedCatalogMetadata(t *testing.T) {
 		{SessionID: "tauri-one", WorkspaceRoot: "bad\nworkspace"},
 	} {
 		writeCatalog(t, catalog, []catalogEntry{entry})
-		if _, err := PrepareImportReview(context.Background(), nil, sessionDir, catalog, []string{"tauri-one"}); err == nil {
-			t.Fatalf("invalid catalog metadata was accepted: %#v", entry)
+		ctx := context.Background()
+		plan, err := PrepareImportReview(ctx, nil, sessionDir, catalog, []string{"tauri-one"})
+		if err != nil || len(plan.Rows) != 0 || len(plan.Errors) != 1 || plan.Errors[0].SessionID != "tauri-one" {
+			t.Fatalf("invalid catalog metadata was not reported as a skipped row: plan=%#v err=%v", plan, err)
 		}
+		identities, err := Open(ctx, filepath.Join(root, "desktop", "state.sqlite"), root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := identities.ApplyImportReview(ctx, plan)
+		closeErr := identities.Close()
+		if err != nil || closeErr != nil || result.Applied != 0 || !reflect.DeepEqual(result.Errors, plan.Errors) {
+			t.Fatalf("all-skipped review result = %#v, apply err=%v close err=%v", result, err, closeErr)
+		}
+	}
+}
+
+func TestReviewedImportSkipsBadSelectedRowsAndCommitsValidRows(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	goodPath := filepath.Join(sessionDir, "tauri-tauri-good.jsonl")
+	missingPath := filepath.Join(sessionDir, "tauri-tauri-missing.jsonl")
+	unreadablePath := filepath.Join(sessionDir, "tauri-tauri-unreadable.jsonl")
+	writeTranscript(t, goodPath)
+	if err := os.MkdirAll(unreadablePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	catalog := filepath.Join(root, "workbench-sessions.json")
+	writeCatalog(t, catalog, []catalogEntry{
+		{SessionID: "tauri-good", Title: "Good"},
+		{SessionID: "tauri-missing", Title: "Missing"},
+		{SessionID: "tauri-unreadable", Title: "Unreadable"},
+	})
+	selected := []string{"tauri-good", "tauri-missing", "tauri-unreadable"}
+	plan, err := PrepareImportReview(ctx, nil, sessionDir, catalog, selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(plan.SelectedIDs, selected) || len(plan.Rows) != 1 || plan.Rows[0].ID != "tauri-good" || len(plan.Errors) != 2 {
+		t.Fatalf("review did not separate usable and skipped rows: %#v", plan)
+	}
+	if plan.Errors[0].SessionID != "tauri-missing" || plan.Errors[0].Reason != "transcript is missing" ||
+		plan.Errors[1].SessionID != "tauri-unreadable" || plan.Errors[1].Reason != "transcript is unreadable" {
+		t.Fatalf("review issues = %#v", plan.Errors)
+	}
+	for _, issue := range plan.Errors {
+		if strings.Contains(issue.Reason, root) {
+			t.Fatalf("review issue leaked a private path: %#v", issue)
+		}
+	}
+	identities, err := Open(ctx, filepath.Join(root, "desktop", "state.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = identities.Close() })
+	result, err := identities.ApplyImportReview(ctx, plan)
+	if err != nil || result.Applied != 1 || len(result.Errors) != 2 || !reflect.DeepEqual(result.Errors, plan.Errors) {
+		t.Fatalf("partial review result = %#v, %v", result, err)
+	}
+	records, err := identities.List(ctx)
+	if err != nil || len(records) != 1 || records[0].ID != "tauri-good" {
+		t.Fatalf("valid row was not committed independently: %#v, %v", records, err)
+	}
+	if _, err := os.Lstat(missingPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("skipped missing transcript was created: %v", err)
+	}
+}
+
+func TestReviewedImportRejectsPlanWhenSkippedTranscriptAppears(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	goodPath := filepath.Join(sessionDir, "tauri-tauri-good.jsonl")
+	missingPath := filepath.Join(sessionDir, "tauri-tauri-missing.jsonl")
+	writeTranscript(t, goodPath)
+	catalog := filepath.Join(root, "workbench-sessions.json")
+	writeCatalog(t, catalog, []catalogEntry{{SessionID: "tauri-good"}, {SessionID: "tauri-missing"}})
+	plan, err := PrepareImportReview(ctx, nil, sessionDir, catalog, []string{"tauri-good", "tauri-missing"})
+	if err != nil || len(plan.Errors) != 1 || plan.Errors[0].SessionID != "tauri-missing" {
+		t.Fatalf("initial review = %#v, %v", plan, err)
+	}
+	writeTranscript(t, missingPath)
+	identities, err := Open(ctx, filepath.Join(root, "desktop", "state.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = identities.Close() })
+	if _, err := identities.ApplyImportReview(ctx, plan); !errors.Is(err, ErrImportReviewChanged) {
+		t.Fatalf("review with a newly available skipped file = %v", err)
+	}
+	records, err := identities.List(ctx)
+	if err != nil || len(records) != 0 {
+		t.Fatalf("stale mixed review partially imported valid row: %#v, %v", records, err)
 	}
 }

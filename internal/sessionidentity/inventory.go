@@ -39,7 +39,8 @@ const (
 	// ClaimMissingFile is a catalog entry whose transcript is absent; it must be
 	// reported, never reopened as an empty session with the same ID.
 	ClaimMissingFile InventoryClaim = "missing_file"
-	// ClaimPathConflict means two candidates want one transcript path.
+	// ClaimPathConflict means different IDs want the same lexical or physical
+	// transcript path.
 	ClaimPathConflict InventoryClaim = "path_conflict"
 	// ClaimPathChanged means a registered ID now maps to a different path.
 	ClaimPathChanged InventoryClaim = "path_changed"
@@ -91,7 +92,12 @@ func Inventory(ctx context.Context, identities *Store, sessionDir, catalogPath s
 	if err != nil {
 		return InventoryReport{}, err
 	}
-	report := InventoryReport{SessionDir: dir}
+	report := InventoryReport{
+		SessionDir: dir,
+		Entries:    make([]InventoryEntry, 0),
+		Unclaimed:  make([]string, 0),
+		Errors:     make([]string, 0),
+	}
 
 	var registered []Record
 	if identities != nil {
@@ -248,6 +254,7 @@ func Inventory(ctx context.Context, identities *Store, sessionDir, catalogPath s
 		report.Unclaimed = append(report.Unclaimed, path)
 		report.Entries = append(report.Entries, row)
 	}
+	markPhysicalPathConflicts(&report)
 
 	sort.SliceStable(report.Entries, func(i, j int) bool {
 		if report.Entries[i].Source != report.Entries[j].Source {
@@ -260,6 +267,74 @@ func Inventory(ctx context.Context, identities *Store, sessionDir, catalogPath s
 	})
 	sort.Strings(report.Unclaimed)
 	return report, nil
+}
+
+// markPhysicalPathConflicts annotates pre-existing identities that resolve to
+// one physical transcript. Inventory is also the read-only audit path for
+// databases written before physical-path uniqueness was enforced.
+func markPhysicalPathConflicts(report *InventoryReport) {
+	type pathOwner struct {
+		id, path, resolved string
+		info               os.FileInfo
+		entryIndex         int
+	}
+	owners := make([]pathOwner, 0, len(report.Entries))
+	for entryIndex, entry := range report.Entries {
+		if entry.ID == "" || entry.Path == "" {
+			continue
+		}
+		resolved, err := resolveIdentityPath(entry.Path)
+		if err != nil {
+			report.Errors = append(report.Errors, fmt.Sprintf("%s: resolve transcript path: %v", entry.ID, err))
+			continue
+		}
+		info, err := os.Stat(entry.Path)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			report.Errors = append(report.Errors, fmt.Sprintf("%s: inspect transcript identity: %v", entry.ID, err))
+			continue
+		}
+		owners = append(owners, pathOwner{id: entry.ID, path: entry.Path, resolved: resolved, info: info, entryIndex: entryIndex})
+	}
+	conflicts := make(map[int]map[string]bool)
+	for i := range owners {
+		for j := 0; j < i; j++ {
+			if owners[i].id == owners[j].id {
+				continue // Multiple report sources can describe the same identity.
+			}
+			same := owners[i].resolved == owners[j].resolved ||
+				sameCaseInsensitivePath(owners[i].resolved, owners[j].resolved)
+			if !same && owners[i].info != nil && owners[j].info != nil {
+				same = os.SameFile(owners[i].info, owners[j].info)
+			}
+			if same {
+				if conflicts[i] == nil {
+					conflicts[i] = make(map[string]bool)
+				}
+				if conflicts[j] == nil {
+					conflicts[j] = make(map[string]bool)
+				}
+				conflicts[i][owners[j].id] = true
+				conflicts[j][owners[i].id] = true
+			}
+		}
+	}
+	indices := make([]int, 0, len(conflicts))
+	for index := range conflicts {
+		indices = append(indices, index)
+	}
+	sort.Ints(indices)
+	for _, index := range indices {
+		otherIDs := conflicts[index]
+		others := make([]string, 0, len(otherIDs))
+		for id := range otherIDs {
+			others = append(others, id)
+		}
+		sort.Strings(others)
+		entry := &report.Entries[owners[index].entryIndex]
+		entry.Claim = ClaimPathConflict
+		entry.Detail = "physical transcript also belongs to session " + strings.Join(others, ", ")
+		report.Errors = append(report.Errors, fmt.Sprintf("%s: %s", entry.ID, entry.Detail))
+	}
 }
 
 // inspectTranscript reports whether a path holds a regular file.

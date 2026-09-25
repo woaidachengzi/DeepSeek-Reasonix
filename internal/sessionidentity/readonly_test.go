@@ -20,6 +20,105 @@ func TestOpenReadOnlyNeverCreatesMissingDatabase(t *testing.T) {
 	}
 }
 
+func TestIdentityOpenRejectsDatabaseSymlink(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	target := filepath.Join(root, "outside.sqlite")
+	store, err := Open(ctx, target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	link := filepath.Join(root, "profile", "identity.sqlite")
+	if err := os.MkdirAll(filepath.Dir(link), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(ctx, link); err == nil {
+		t.Fatal("write open followed a symlinked identity database")
+	}
+	if _, err := OpenReadOnly(ctx, link, root); err == nil {
+		t.Fatal("read-only open followed a symlinked identity database")
+	}
+	after, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("rejected symlink open changed the target database")
+	}
+}
+
+func TestIdentityOpenRejectsSymlinkedSQLiteJournal(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	dbPath := filepath.Join(root, "identity.sqlite")
+	store, err := Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(root, "outside-wal")
+	if err := os.WriteFile(target, []byte("must not be opened as a journal"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, dbPath+"-wal"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(ctx, dbPath); err == nil {
+		t.Fatal("write open followed a symlinked SQLite journal")
+	}
+	if _, err := OpenReadOnly(ctx, dbPath, root); err == nil {
+		t.Fatal("read-only open accepted a symlinked SQLite journal")
+	}
+}
+
+func TestIdentityOpenRejectsDatabaseDirectorySymlinkEscape(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	outside := t.TempDir()
+	target := filepath.Join(outside, "identity.sqlite")
+	store, err := Open(ctx, target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "desktop")); err != nil {
+		t.Fatal(err)
+	}
+	linkPath := filepath.Join(root, "desktop", "identity.sqlite")
+	if _, err := Open(ctx, linkPath, root); err == nil {
+		t.Fatal("write open accepted an identity directory symlink escape")
+	}
+	if _, err := OpenReadOnly(ctx, linkPath, root); err == nil {
+		t.Fatal("read-only open accepted an identity directory symlink escape")
+	}
+	after, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("rejected directory symlink open changed the target database")
+	}
+}
+
 func TestOpenReadOnlyListsButCannotImportOrRename(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()

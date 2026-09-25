@@ -92,6 +92,7 @@ async function main() {
     { sessionId: "tauri-doomed-row", title: "待删除会话", workspaceRoot: "/tmp/ws" },
     { sessionId: "tauri-kept-row", title: "保留会话", workspaceRoot: "/tmp/ws" },
     { sessionId: "tauri-missing-row", title: "文件缺失会话", workspaceRoot: "/tmp/ws" },
+    { sessionId: "tauri-deleted-row", title: "已删除会话", workspaceRoot: "/tmp/ws" },
   ];
   (globalThis as unknown as { __tauriHistoryMessages: unknown[] }).__tauriHistoryMessages = [
     { role: "assistant", content: "```js\nconst answer = 42;\n```" },
@@ -113,7 +114,7 @@ async function main() {
 
   console.log("\ntauri chat workspace — workspace, delete, and recovery flows");
   ok(text().includes("待删除会话"), "the recent-session list renders the stored title");
-  eq(document.querySelectorAll(".tauri-session-row__delete").length, 3, "each row has a delete control");
+  eq(document.querySelectorAll(".tauri-session-row__delete").length, 4, "each row has a delete control");
 
   // Step 1: the row-level delete control opens an inline confirmation.
   const opened = clickByClass("tauri-session-row__delete");
@@ -259,7 +260,7 @@ async function main() {
   eq((switches.at(-1)?.args as { sessionId?: string } | undefined)?.sessionId, "tauri-kept-row", "deleting an inactive row restores the previously open conversation");
   ok(!text().includes("待删除会话"), "the deleted row leaves the list");
   ok(text().includes("保留会话"), "the other row survives");
-  eq(document.querySelectorAll(".tauri-session-row__delete").length, 2, "two recent conversations remain");
+  eq(document.querySelectorAll(".tauri-session-row__delete").length, 3, "three recent conversations remain");
 
   // A missing transcript cannot be opened, but the user must still be able
   // to retire its identity directly without switching the active controller.
@@ -274,6 +275,18 @@ async function main() {
   const missingDelete = bridgeCalls().filter(call => call.name === "bridge_delete_session").at(-1);
   eq((missingDelete?.args as { sessionId?: string } | undefined)?.sessionId, "tauri-missing-row", "missing-row delete reaches the recovery endpoint directly");
   ok(text().includes("保留会话") && !text().includes("文件缺失会话"), "missing identity is removed without disturbing the active conversation");
+
+  // A crash can leave a tombstoned identity in the legacy host catalog. Its
+  // explicit deleted conflict must also proceed directly to idempotent DELETE.
+  (globalThis as unknown as { __switchFailure?: string }).__switchFailure = "desktop bridge request failed with status 409 (session_deleted)";
+  ok(clickDeleteFor("已删除会话"), "a stale tombstone row can be armed for cleanup");
+  await act(async () => { await settle(); });
+  clickByClass("tauri-session-delete__confirm");
+  await act(async () => { await settle(); await settle(); });
+  (globalThis as unknown as { __switchFailure?: string }).__switchFailure = undefined;
+  const deletedRetry = bridgeCalls().filter(call => call.name === "bridge_delete_session").at(-1);
+  eq((deletedRetry?.args as { sessionId?: string } | undefined)?.sessionId, "tauri-deleted-row", "deleted tombstone retries DELETE to clear the stale catalog row");
+  ok(text().includes("保留会话") && !text().includes("已删除会话"), "stale tombstone cleanup preserves the active conversation");
 
   // Step 4: a bridge failure must surface instead of silently restoring.
   (globalThis as unknown as { __deleteFailure?: string }).__deleteFailure = "desktop bridge already owns a different session";

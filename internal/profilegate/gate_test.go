@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestTryAcquireExcludesSameProfileAndReleases(t *testing.T) {
@@ -97,12 +98,88 @@ func TestTryAcquireExcludesOtherProcess(t *testing.T) {
 	runChild(false)
 }
 
+func TestTryAcquireReleasesAfterOwnerProcessExit(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "profile")
+	marker := filepath.Join(t.TempDir(), "owner-acquired")
+	child := exec.Command(os.Args[0], "-test.run=^TestProfileGateChildProcess$")
+	child.Env = append(os.Environ(),
+		"REASONIX_PROFILEGATE_CHILD_ROOT="+root,
+		"REASONIX_PROFILEGATE_CHILD_EXPECT=hold",
+		"REASONIX_PROFILEGATE_CHILD_MARKER="+marker,
+	)
+	child.Stdout = os.Stdout
+	child.Stderr = os.Stderr
+	if err := child.Start(); err != nil {
+		t.Fatalf("start profile lock owner: %v", err)
+	}
+	waitChild := make(chan error, 1)
+	go func() { waitChild <- child.Wait() }()
+	childRunning := true
+	t.Cleanup(func() {
+		if childRunning {
+			_ = child.Process.Kill()
+			<-waitChild
+		}
+	})
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if _, err := os.Stat(marker); err == nil {
+			break
+		}
+		if time.Until(deadline) <= 0 {
+			_ = child.Process.Kill()
+			<-waitChild
+			childRunning = false
+			t.Fatal("child did not publish profile lock ownership")
+		}
+		select {
+		case err := <-waitChild:
+			childRunning = false
+			t.Fatalf("profile lock owner exited before signaling: %v", err)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	if _, err := TryAcquire(root); !errors.Is(err, ErrHeld) {
+		t.Fatalf("second process could acquire a held profile: %v", err)
+	}
+	if err := child.Process.Kill(); err != nil {
+		<-waitChild
+		childRunning = false
+		t.Fatalf("forcibly stop profile lock owner: %v", err)
+	}
+	if err := <-waitChild; err == nil {
+		childRunning = false
+		t.Fatal("profile lock owner unexpectedly exited cleanly")
+	}
+	childRunning = false
+	release, err := TryAcquire(root)
+	if err != nil {
+		t.Fatalf("profile lock remained held after owner process exit: %v", err)
+	}
+	release()
+}
+
 func TestProfileGateChildProcess(t *testing.T) {
 	root := os.Getenv("REASONIX_PROFILEGATE_CHILD_ROOT")
 	if root == "" {
 		return
 	}
 	release, err := TryAcquire(root)
+	if os.Getenv("REASONIX_PROFILEGATE_CHILD_EXPECT") == "hold" {
+		if err != nil {
+			t.Fatalf("child could not acquire profile: %v", err)
+		}
+		marker := os.Getenv("REASONIX_PROFILEGATE_CHILD_MARKER")
+		if marker == "" {
+			t.Fatal("child profile lock marker path is empty")
+		}
+		if err := os.WriteFile(marker, []byte("held\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		for {
+			time.Sleep(time.Hour) // The parent kills this owner to exercise OS lock release.
+		}
+	}
 	if os.Getenv("REASONIX_PROFILEGATE_CHILD_EXPECT") == "held" {
 		if !errors.Is(err, ErrHeld) {
 			t.Fatalf("other process owns profile; child got %v", err)

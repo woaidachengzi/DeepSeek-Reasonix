@@ -105,8 +105,10 @@ impl WorkbenchCatalog {
             if session.title.is_none() {
                 session.title = state.sessions[index].title.clone();
             }
-            state.sessions[index] = session;
-            write_sessions(&self.path, &state.sessions)?;
+            let mut updated = state.sessions.clone();
+            updated[index] = session;
+            write_sessions(&self.path, &updated)?;
+            state.sessions = updated;
             return Ok(state.sessions.clone());
         }
         let mut updated = Vec::with_capacity(MAX_SESSIONS);
@@ -231,20 +233,21 @@ fn read_sessions(path: &Path) -> Result<Vec<WorkbenchSession>, String> {
     }
     let decoded = serde_json::from_slice::<Vec<WorkbenchSession>>(&encoded)
         .map_err(|_| "workbench session catalog is not valid JSON".to_string())?;
+    if decoded.len() > MAX_SESSIONS {
+        return Err("workbench session catalog contains too many sessions".to_string());
+    }
 
     let mut sessions = Vec::with_capacity(MAX_SESSIONS);
     for session in decoded {
-        if validate_session(&session).is_err()
-            || sessions
-                .iter()
-                .any(|existing: &WorkbenchSession| existing.session_id == session.session_id)
+        validate_session(&session)
+            .map_err(|_| "workbench session catalog contains an invalid session".to_string())?;
+        if sessions
+            .iter()
+            .any(|existing: &WorkbenchSession| existing.session_id == session.session_id)
         {
-            continue;
+            return Err("workbench session catalog contains duplicate session IDs".to_string());
         }
         sessions.push(session);
-        if sessions.len() == MAX_SESSIONS {
-            break;
-        }
     }
     Ok(sessions)
 }
@@ -356,6 +359,39 @@ mod tests {
             vec!["newer", "older"]
         );
         assert_eq!(updated[1].title.as_deref(), Some("Still older title"));
+    }
+
+    #[test]
+    fn failed_existing_session_update_does_not_change_in_memory_catalog() {
+        let root = tempfile::tempdir().expect("temp root");
+        let path = root.path().join(CATALOG_FILE);
+        let catalog = WorkbenchCatalog::at(path.clone());
+        catalog
+            .remember(WorkbenchSession {
+                session_id: "stable".into(),
+                title: Some("Original title".into()),
+                workspace_root: None,
+            })
+            .expect("remember initial session");
+
+        // Make the final atomic rename fail after the catalog has loaded.
+        fs::remove_file(&path).expect("remove catalog destination");
+        fs::create_dir(&path).expect("replace destination with directory");
+
+        let result = catalog.remember(WorkbenchSession {
+            session_id: "stable".into(),
+            title: Some("Uncommitted title".into()),
+            workspace_root: None,
+        });
+        assert!(result.is_err(), "destination directory must reject persist");
+        assert_eq!(
+            catalog.list().expect("list after failed write"),
+            vec![WorkbenchSession {
+                session_id: "stable".into(),
+                title: Some("Original title".into()),
+                workspace_root: None,
+            }]
+        );
     }
 
     #[test]
@@ -483,5 +519,52 @@ mod tests {
         );
         assert!(catalog.remember(session("new-session")).is_err());
         assert_eq!(fs::read(path).expect("preserve corrupt catalog"), corrupt);
+    }
+
+    #[test]
+    fn oversized_catalog_fails_closed_without_truncating_source() {
+        let root = tempfile::tempdir().expect("temp root");
+        let path = root.path().join(CATALOG_FILE);
+        let sessions: Vec<_> = (0..=MAX_SESSIONS)
+            .map(|index| session(&format!("session-{index}")))
+            .collect();
+        let encoded = serde_json::to_vec(&sessions).expect("encode oversized catalog");
+        fs::write(&path, &encoded).expect("write oversized catalog");
+
+        let catalog = WorkbenchCatalog::at(path.clone());
+        assert_eq!(
+            catalog.list(),
+            Err("workbench session catalog contains too many sessions".to_string())
+        );
+        assert!(catalog.remember(session("new-session")).is_err());
+        assert_eq!(fs::read(path).expect("preserve oversized catalog"), encoded);
+    }
+
+    #[test]
+    fn invalid_or_duplicate_catalog_rows_fail_closed_without_dropping_source() {
+        let root = tempfile::tempdir().expect("temp root");
+        let path = root.path().join(CATALOG_FILE);
+        let cases = [
+            vec![WorkbenchSession {
+                session_id: "invalid-title".into(),
+                title: Some("bad\ntitle".into()),
+                workspace_root: None,
+            }],
+            vec![WorkbenchSession {
+                session_id: "invalid-workspace".into(),
+                title: None,
+                workspace_root: Some("/work\nproject".into()),
+            }],
+            vec![session("duplicate"), session("duplicate")],
+        ];
+
+        for rows in cases {
+            let encoded = serde_json::to_vec(&rows).expect("encode invalid catalog");
+            fs::write(&path, &encoded).expect("write invalid catalog");
+            let catalog = WorkbenchCatalog::at(path.clone());
+            assert!(catalog.list().is_err(), "invalid catalog loaded: {rows:?}");
+            assert!(catalog.remember(session("new-session")).is_err());
+            assert_eq!(fs::read(&path).expect("preserve invalid catalog"), encoded);
+        }
     }
 }

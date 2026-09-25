@@ -22,6 +22,7 @@ import (
 	"reasonix/internal/desktopbridge/sessionpath"
 	"reasonix/internal/event"
 	"reasonix/internal/fileref"
+	"reasonix/internal/guardian"
 	"reasonix/internal/pathidentity"
 	"reasonix/internal/provider"
 	"reasonix/internal/sessioncontext"
@@ -156,6 +157,9 @@ func resumeBridgeSession(ctx context.Context, controller *control.Controller, se
 		default:
 			return fmt.Errorf("%w: session %s has unknown state %q", desktopbridge.ErrSessionConflict, sessionID, record.State)
 		}
+		if err := identities.CheckTranscriptPathUnique(ctx, sessionID, path); err != nil {
+			return fmt.Errorf("check desktop bridge session path ownership: %w", bridgeIdentityConflict(err))
+		}
 	}
 
 	transcriptInfo, statErr := os.Lstat(path)
@@ -190,7 +194,7 @@ func resumeBridgeSession(ctx context.Context, controller *control.Controller, se
 		if err := identities.Reserve(ctx, controller.SessionDir(), sessionidentity.Candidate{
 			ID: sessionID, Path: path, WorkspaceRoot: workspaceRoot,
 		}); err != nil {
-			return fmt.Errorf("reserve desktop bridge session: %w", err)
+			return fmt.Errorf("reserve desktop bridge session: %w", bridgeIdentityConflict(err))
 		}
 		controller.SetFreshSessionPath(path)
 		return nil
@@ -202,7 +206,7 @@ func resumeBridgeSession(ctx context.Context, controller *control.Controller, se
 	}
 	if registered && record.State == sessionidentity.StateReserved {
 		if err := identities.MarkReady(ctx, sessionID, path); err != nil {
-			return err
+			return bridgeIdentityConflict(err)
 		}
 	}
 	if !registered {
@@ -210,11 +214,18 @@ func resumeBridgeSession(ctx context.Context, controller *control.Controller, se
 		if err := identities.Import(ctx, controller.SessionDir(), []sessionidentity.Candidate{{
 			ID: sessionID, Path: path, WorkspaceRoot: workspaceRoot, Title: meta.CustomTitle,
 		}}); err != nil {
-			return fmt.Errorf("register existing desktop bridge session: %w", err)
+			return fmt.Errorf("register existing desktop bridge session: %w", bridgeIdentityConflict(err))
 		}
 	}
 	controller.Resume(loaded, path)
 	return nil
+}
+
+func bridgeIdentityConflict(err error) error {
+	if errors.Is(err, sessionidentity.ErrTranscriptPathConflict) {
+		return fmt.Errorf("%w: %w", desktopbridge.ErrSessionConflict, err)
+	}
+	return err
 }
 
 func resumeUncataloguedBridgeSession(controller *control.Controller, path string) error {
@@ -240,10 +251,16 @@ func resumeUncataloguedBridgeSession(controller *control.Controller, path string
 // hasBridgeSessionResidue detects durable sidecars left behind after a
 // transcript is removed. They prevent an unknown ID from being reused fresh.
 func hasBridgeSessionResidue(transcriptPath string) (bool, error) {
-	for _, residuePath := range []string{
-		sessionstore.SessionMeta(transcriptPath),
-		sessionstore.SessionInboxDir(transcriptPath),
-	} {
+	guardianPath := guardian.PathFor(transcriptPath)
+	residuePaths := []string{transcriptPath, sessionstore.SessionInboxDir(transcriptPath),
+		sessionstore.SessionCheckpointDir(transcriptPath), sessionstore.SessionJobsDir(transcriptPath),
+		sessionstore.SessionCleanupPending(transcriptPath), guardianPath, guardian.CursorPathFor(transcriptPath)}
+	residuePaths = append(residuePaths, sessionstore.SessionSidecarFiles(transcriptPath)...)
+	residuePaths = append(residuePaths, sessionstore.SessionSidecarFiles(guardianPath)...)
+	for _, residuePath := range residuePaths {
+		if residuePath == "" {
+			continue
+		}
 		_, err := os.Lstat(residuePath)
 		if err == nil {
 			return true, nil
@@ -251,6 +268,16 @@ func hasBridgeSessionResidue(transcriptPath string) (bool, error) {
 		if !errors.Is(err, os.ErrNotExist) {
 			return false, fmt.Errorf("inspect desktop bridge session residue: %w", err)
 		}
+	}
+	// Parent-owned subagent transcripts live in a shared directory rather than
+	// beside the parent transcript, but removal treats them as part of the same
+	// durable session. Do not recycle the parent ID while any remain.
+	subagents, err := agent.ListSubagentsByParent(filepath.Dir(transcriptPath), agent.BranchID(transcriptPath))
+	if err != nil {
+		return false, fmt.Errorf("inspect desktop bridge subagent residue: %w", err)
+	}
+	if len(subagents) != 0 {
+		return true, nil
 	}
 	return false, nil
 }
@@ -336,14 +363,14 @@ func (r *controllerRuntime) Delete() error {
 	}
 	defer identities.Close()
 	if err := identities.BeginDelete(context.Background(), r.sessionID, path); err != nil {
-		return fmt.Errorf("fence desktop bridge session deletion: %w", err)
+		return fmt.Errorf("fence desktop bridge session deletion: %w", bridgeIdentityConflict(err))
 	}
 	r.deleting.Store(true)
 	if err := remove(path); err != nil {
 		return err
 	}
 	if err := identities.FinishDelete(context.Background(), r.sessionID, path); err != nil {
-		return fmt.Errorf("finalize desktop bridge session deletion: %w", err)
+		return fmt.Errorf("finalize desktop bridge session deletion: %w", bridgeIdentityConflict(err))
 	}
 	r.controller.Close()
 	r.deleted.Store(true)

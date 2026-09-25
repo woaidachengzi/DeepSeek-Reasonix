@@ -16,7 +16,7 @@ Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, co
     { sessionId: "missing-alpha", title: "丢失文件会话", workspaceRoot: "/work/alpha", state: "missing", missing: true },
     { sessionId: "old-alpha", workspaceRoot: "/work/alpha" },
     { sessionId: "recent-beta", workspaceRoot: "/work/beta", title: "Beta task" },
-  ], nextCursor: { position: 3, id: "recent-beta" }, total: 4, source: "identity" },
+  ], nextCursor: { position: 3, id: "recent-beta", snapshotId: "a".repeat(64) }, total: 4, source: "identity" },
   { sessions: [{ sessionId: "older-gamma", workspaceRoot: "/work/gamma", title: "Gamma task" }], nextCursor: null, total: 3, source: "identity" },
 ];
 (globalThis as unknown as { __previewFirstUsers: Record<string, string> }).__previewFirstUsers = { "old-alpha": "整理报告并加测试" };
@@ -30,7 +30,7 @@ const React = await import("react");
 const { act } = React;
 const { createRoot } = await import("react-dom/client");
 const { TauriSessionApp } = await import("../tauri/TauriChatWorkspace");
-const root = createRoot(document.getElementById("root")!);
+let root = createRoot(document.getElementById("root")!);
 await act(async () => { root.render(React.createElement(TauriSessionApp)); await new Promise(resolve => setTimeout(resolve, 0)); });
 assert.equal(document.querySelectorAll(".tauri-project-group").length, 3);
 assert.ok(document.querySelector('[aria-label="切换到项目 Saved empty project"]'));
@@ -45,6 +45,9 @@ assert.ok(loadMore);
 await act(async () => { loadMore.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
 assert.match(document.body.textContent ?? "", /Gamma task/);
 assert.equal(document.querySelector('[aria-label="加载更多会话"]'), null);
+const continuationCall = calls.find(call => call.name === "workbench_session_page" && Boolean(call.args.cursor));
+assert.ok(continuationCall, "continuation requests preserve the server cursor");
+assert.equal((continuationCall.args.cursor as unknown as { snapshotId: string }).snapshotId, "a".repeat(64));
 
 const missingRow = document.querySelector<HTMLButtonElement>('[aria-label="丢失文件会话（文件缺失）"]');
 assert.ok(missingRow?.disabled);
@@ -83,5 +86,75 @@ await act(async () => {
 });
 assert.ok(calls.some(call => call.name === "backfill_workbench_titles" && JSON.stringify(call.args).includes("修复侧栏显示问题")));
 assert.match(document.body.textContent ?? "", /修复侧栏显示问题/);
+await act(async () => { root.unmount(); });
+
+(globalThis as unknown as { __workbenchPages: unknown[] }).__workbenchPages = [
+  { sessions: [{ sessionId: "stale-first-page", title: "旧快照" }], nextCursor: { position: 1, id: "stale-first-page", snapshotId: "b".repeat(64) }, total: 2, source: "identity" },
+  new Error("session catalog changed while paging; restart the session list"),
+  { sessions: [{ sessionId: "fresh-first-page", title: "新快照" }], nextCursor: null, total: 1, source: "legacy" },
+];
+root = createRoot(document.getElementById("root")!);
+await act(async () => { root.render(React.createElement(TauriSessionApp)); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.match(document.body.textContent ?? "", /旧快照/);
+const staleLoadMore = document.querySelector<HTMLButtonElement>('[aria-label="加载更多会话"]');
+assert.ok(staleLoadMore);
+await act(async () => { staleLoadMore.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.match(document.body.textContent ?? "", /新快照/);
+assert.doesNotMatch(document.body.textContent ?? "", /旧快照/);
+assert.equal(document.querySelector('[aria-label="加载更多会话"]'), null);
+await act(async () => { root.unmount(); });
+
+(globalThis as unknown as { __failSessionCatalogShadow: boolean }).__failSessionCatalogShadow = true;
+(globalThis as unknown as { __workbenchPages: unknown[] }).__workbenchPages = [
+  { sessions: [{ sessionId: "identity-before-audit", title: "审计前身份页" }], nextCursor: null, total: 1, source: "identity" },
+  { sessions: [{ sessionId: "legacy-after-audit-failure", title: "审计失败后的 JSON 回退" }], nextCursor: null, total: 1, source: "legacy" },
+  { sessions: [{ sessionId: "verified-after-retry", title: "重查后身份目录" }], nextCursor: null, total: 1, source: "identity" },
+];
+root = createRoot(document.getElementById("root")!);
+await act(async () => {
+  root.render(React.createElement(TauriSessionApp));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise(resolve => setTimeout(resolve, 0));
+});
+assert.match(document.body.textContent ?? "", /审计失败后的 JSON 回退/);
+assert.doesNotMatch(document.body.textContent ?? "", /审计前身份页/);
+assert.match(document.body.textContent ?? "", /最多 50 条/);
+const retryDirectory = document.querySelector<HTMLButtonElement>('[aria-label="重新检查会话目录"]');
+assert.ok(retryDirectory, "legacy fallback offers an explicit recheck");
+await act(async () => { retryDirectory.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.match(document.body.textContent ?? "", /重查后身份目录/);
+assert.doesNotMatch(document.body.textContent ?? "", /审计失败后的 JSON 回退/);
+await act(async () => { root.unmount(); });
+
+(globalThis as unknown as { __failSessionCatalogShadow: boolean }).__failSessionCatalogShadow = true;
+(globalThis as unknown as { __workbenchPages: unknown[] }).__workbenchPages = [
+  { sessions: [{ sessionId: "unverified-audit-page", title: "审计失效后残留的身份页" }], nextCursor: null, total: 1, source: "identity" },
+  new Error("legacy catalog unavailable"),
+];
+root = createRoot(document.getElementById("root")!);
+await act(async () => {
+  root.render(React.createElement(TauriSessionApp));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise(resolve => setTimeout(resolve, 0));
+});
+assert.doesNotMatch(document.body.textContent ?? "", /审计失效后残留的身份页/);
+assert.match(document.body.textContent ?? "", /legacy catalog unavailable/);
+assert.equal(document.querySelector('[aria-label="加载更多会话"]'), null);
+await act(async () => { root.unmount(); });
+
+(globalThis as unknown as { __failSessionCatalogShadow: boolean }).__failSessionCatalogShadow = false;
+(globalThis as unknown as { __workbenchPages: unknown[] }).__workbenchPages = [
+  { sessions: [{ sessionId: "unverified-continuation-page", title: "续页回读失败后残留的身份页" }], nextCursor: { position: 1, id: "unverified-continuation-page", snapshotId: "c".repeat(64) }, total: 2, source: "identity" },
+  new Error("session directory changed while paging"),
+  new Error("session catalog shadow unavailable"),
+];
+root = createRoot(document.getElementById("root")!);
+await act(async () => { root.render(React.createElement(TauriSessionApp)); await new Promise(resolve => setTimeout(resolve, 0)); });
+const failedRestartLoadMore = document.querySelector<HTMLButtonElement>('[aria-label="加载更多会话"]');
+assert.ok(failedRestartLoadMore);
+await act(async () => { failedRestartLoadMore.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.doesNotMatch(document.body.textContent ?? "", /续页回读失败后残留的身份页/);
+assert.match(document.body.textContent ?? "", /session catalog shadow unavailable/);
+assert.equal(document.querySelector('[aria-label="加载更多会话"]'), null);
 await act(async () => { root.unmount(); });
 console.log("tauri project navigation and legacy title backfill: OK");

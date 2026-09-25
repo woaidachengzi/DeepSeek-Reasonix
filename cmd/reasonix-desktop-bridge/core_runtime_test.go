@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -15,6 +17,7 @@ import (
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/desktopbridge/sessionpath"
 	"reasonix/internal/event"
+	"reasonix/internal/guardian"
 	"reasonix/internal/provider"
 	"reasonix/internal/sessioncontext"
 	"reasonix/internal/sessionidentity"
@@ -58,6 +61,69 @@ func TestBridgeSessionPathIsDeterministicAndContained(t *testing.T) {
 	}
 	if _, err := bridgeSessionPath(dir, "../outside"); err == nil {
 		t.Fatal("unsafe bridge session ID produced a path")
+	}
+}
+
+func TestBridgeSessionResidueDetectsAllDurableArtifacts(t *testing.T) {
+	root := t.TempDir()
+	transcript := filepath.Join(root, "tauri-residue.jsonl")
+	guardianPath := guardian.PathFor(transcript)
+	for _, artifact := range []string{
+		sessionstore.SessionEventLog(transcript),
+		sessionstore.SessionGoalState(transcript),
+		sessionstore.SessionEventIndex(transcript),
+		sessionstore.SessionCheckpointDir(transcript),
+		sessionstore.SessionJobsDir(transcript),
+		sessionstore.SessionInboxDir(transcript),
+		sessionstore.SessionCleanupPending(transcript),
+		guardianPath,
+		guardian.CursorPathFor(transcript),
+		sessionstore.SessionEventLog(guardianPath),
+	} {
+		t.Run(filepath.Base(artifact), func(t *testing.T) {
+			if err := os.MkdirAll(filepath.Dir(artifact), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if artifact == sessionstore.SessionCheckpointDir(transcript) || artifact == sessionstore.SessionJobsDir(transcript) || artifact == sessionstore.SessionInboxDir(transcript) {
+				if err := os.MkdirAll(artifact, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := os.WriteFile(artifact, []byte("residue"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			got, err := hasBridgeSessionResidue(transcript)
+			if err != nil || !got {
+				t.Fatalf("hasBridgeSessionResidue = %v, %v; want true, nil", got, err)
+			}
+		})
+		if err := os.RemoveAll(artifact); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, err := hasBridgeSessionResidue(transcript); err != nil || got {
+		t.Fatalf("empty session residue = %v, %v; want false, nil", got, err)
+	}
+}
+
+func TestBridgeSessionResidueDetectsOwnedSubagents(t *testing.T) {
+	sessionDir := t.TempDir()
+	transcript := filepath.Join(sessionDir, "tauri-parent.jsonl")
+	subagentDir := filepath.Join(sessionDir, "subagents")
+	if err := os.MkdirAll(subagentDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := json.Marshal(agent.SubagentMeta{
+		Ref: "sa_residue_test", ParentSession: agent.BranchID(transcript), Status: agent.SubagentCompleted,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(subagentDir, "sa_residue_test.meta.json"), metadata, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := hasBridgeSessionResidue(transcript)
+	if err != nil || !got {
+		t.Fatalf("hasBridgeSessionResidue with owned subagent = %v, %v; want true, nil", got, err)
 	}
 }
 
@@ -189,6 +255,138 @@ func TestUnregisteredSessionResidueCannotBecomeFresh(t *testing.T) {
 	}
 	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("orphan transcript was created: %v", err)
+	}
+}
+
+func TestPhysicalIdentityConflictIsReportedAsSessionConflict(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	ctx := context.Background()
+	sessionDir := appconfig.SessionDir()
+	path, err := bridgeSessionPath(sessionDir, "new-id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	transcript := []byte("{}\n")
+	if err := os.WriteFile(path, transcript, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	identities, err := sessionidentity.Open(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Import(ctx, sessionDir, []sessionidentity.Candidate{{ID: "legacy-owner", Path: path}}); err != nil {
+		_ = identities.Close()
+		t.Fatalf("seed existing path owner: %v", err)
+	}
+	if err := identities.Close(); err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := newControllerFactory(nil).Open(ctx, desktopbridge.OpenRequest{
+		SessionID: "new-id", WorkspaceRoot: t.TempDir(),
+	})
+	if runtime != nil || !errors.Is(err, desktopbridge.ErrSessionConflict) {
+		t.Fatalf("open colliding identity = %v, %v; want session conflict", runtime, err)
+	}
+	if after, err := os.ReadFile(path); err != nil || string(after) != string(transcript) {
+		t.Fatalf("conflicting session path changed: %q, %v", after, err)
+	}
+}
+
+func TestDeletePhysicalPathConflictDoesNotSweepTranscript(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	ctx := context.Background()
+	sessionDir := appconfig.SessionDir()
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	aliasDir := filepath.Join(root, "sessions-alias")
+	if err := os.Symlink(sessionDir, aliasDir); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+	path, err := bridgeSessionPath(sessionDir, "delete-target")
+	if err != nil {
+		t.Fatal(err)
+	}
+	transcript := []byte("{}\n")
+	if err := os.WriteFile(path, transcript, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	identityPath := appconfig.DesktopSessionIdentityPath()
+	identities, err := sessionidentity.Open(ctx, identityPath, appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", identityPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for position, identity := range []struct{ id, path string }{
+		{id: "delete-target", path: path},
+	} {
+		relative, err := filepath.Rel(appconfig.SessionProfileRoot(), identity.path)
+		if err != nil {
+			_ = db.Close()
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`INSERT INTO sessions
+			(id, relative_path, position, state, created_at_ms, updated_at_ms)
+			VALUES (?, ?, ?, 'ready', 0, 0)`, identity.id, filepath.ToSlash(relative), position); err != nil {
+			_ = db.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := newControllerFactory(nil).Open(ctx, desktopbridge.OpenRequest{
+		SessionID: "delete-target", WorkspaceRoot: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("open legacy duplicate identity: %v", err)
+	}
+	defer runtime.Shutdown()
+	db, err = sql.Open("sqlite", identityPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownerRelative, err := filepath.Rel(appconfig.SessionProfileRoot(), filepath.Join(aliasDir, filepath.Base(path)))
+	if err != nil {
+		_ = db.Close()
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO sessions
+		(id, relative_path, position, state, created_at_ms, updated_at_ms)
+		VALUES (?, ?, ?, 'ready', 0, 0)`, "legacy-owner", filepath.ToSlash(ownerRelative), 1); err != nil {
+		_ = db.Close()
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	conflictingRuntime, openErr := newControllerFactory(nil).Open(ctx, desktopbridge.OpenRequest{
+		SessionID: "delete-target", WorkspaceRoot: t.TempDir(),
+	})
+	if conflictingRuntime != nil || !errors.Is(openErr, desktopbridge.ErrSessionConflict) {
+		if conflictingRuntime != nil {
+			_ = conflictingRuntime.Shutdown()
+		}
+		t.Fatalf("open legacy duplicate identity = %v, %v; want session conflict", conflictingRuntime, openErr)
+	}
+	if err := runtime.Delete(); !errors.Is(err, desktopbridge.ErrSessionConflict) {
+		t.Fatalf("delete aliased identity = %v, want session conflict", err)
+	}
+	if after, err := os.ReadFile(path); err != nil || string(after) != string(transcript) {
+		t.Fatalf("physical conflict delete swept transcript: %q, %v", after, err)
 	}
 }
 
