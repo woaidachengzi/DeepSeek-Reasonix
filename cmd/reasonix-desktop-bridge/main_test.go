@@ -862,6 +862,37 @@ func TestRunRejectsSecondProfileOwnerBeforePublishingReady(t *testing.T) {
 	}
 }
 
+func TestRunRejectsOrphanSQLiteSidecarBeforePublishingReady(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	identityPath := appconfig.DesktopSessionIdentityPath()
+	if err := os.MkdirAll(filepath.Dir(identityPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	walPath := identityPath + "-wal"
+	before := []byte("orphan WAL is evidence of an incomplete identity store\n")
+	if err := os.WriteFile(walPath, before, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	readyPath := filepath.Join(root, "ready.json")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // A regression must return, not leave the test hosting a bridge.
+	err := run(ctx, config{listen: "127.0.0.1:0", readyFile: readyPath, launchID: "orphan-wal"}, testToken)
+	if err == nil || !strings.Contains(err.Error(), "sidecars remain") {
+		t.Fatalf("run with orphan WAL = %v, want startup refusal", err)
+	}
+	if _, err := os.Lstat(readyPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("orphan WAL profile published bridge readiness: %v", err)
+	}
+	if _, err := os.Lstat(identityPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("startup created identity database beside orphan WAL: %v", err)
+	}
+	if after, err := os.ReadFile(walPath); err != nil || string(after) != string(before) {
+		t.Fatalf("startup changed orphan WAL: %q, %v", after, err)
+	}
+}
+
 func TestRunRejectsSecondProfileOwnerFromAnotherProcess(t *testing.T) {
 	root := t.TempDir()
 	release, err := profilegate.TryAcquire(root)

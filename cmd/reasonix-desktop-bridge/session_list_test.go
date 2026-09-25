@@ -41,6 +41,44 @@ func TestSessionListEmptyDoesNotCreateIdentityStore(t *testing.T) {
 	}
 }
 
+func TestSessionReadEndpointsRejectOrphanSQLiteSidecars(t *testing.T) {
+	for _, suffix := range []string{"-wal", "-shm", "-journal"} {
+		t.Run(suffix, func(t *testing.T) {
+			root := t.TempDir()
+			t.Setenv("REASONIX_HOME", root)
+			t.Setenv("REASONIX_STATE_HOME", root)
+			identityPath := appconfig.DesktopSessionIdentityPath()
+			if err := os.MkdirAll(filepath.Dir(identityPath), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			artifact := identityPath + suffix
+			before := []byte("orphaned SQLite state must not look like an empty catalog\n")
+			if err := os.WriteFile(artifact, before, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			handler := newBridgeServer(testToken, "orphan-sidecar", nil).handler()
+			for _, path := range []string{
+				"/v1/sessions", "/v1/sessions/snapshot", "/v1/sessions/inventory",
+				"/v1/sessions/deletion-recovery", "/v1/sessions/title-recovery",
+			} {
+				request := httptest.NewRequest(http.MethodGet, path, nil)
+				request.Header.Set("Authorization", "Bearer "+testToken)
+				response := httptest.NewRecorder()
+				handler.ServeHTTP(response, request)
+				if response.Code != http.StatusInternalServerError {
+					t.Fatalf("%s with orphan %s status=%d body=%s", path, suffix, response.Code, response.Body.String())
+				}
+			}
+			if _, err := os.Lstat(identityPath); !os.IsNotExist(err) {
+				t.Fatalf("read endpoints created the missing identity database: %v", err)
+			}
+			if after, err := os.ReadFile(artifact); err != nil || string(after) != string(before) {
+				t.Fatalf("read endpoints changed the orphan sidecar: %q, %v", after, err)
+			}
+		})
+	}
+}
+
 func TestSessionListEndpointPagesAndProjectsSafeFields(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("REASONIX_HOME", root)

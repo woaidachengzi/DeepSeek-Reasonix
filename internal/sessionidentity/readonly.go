@@ -25,7 +25,7 @@ func OpenReadOnly(ctx context.Context, path string, profileRoots ...string) (*St
 	if err != nil {
 		return nil, err
 	}
-	unlock := lockIdentityOpen(abs)
+	unlock := lockIdentityOpen()
 	defer unlock()
 	if err := validateIdentityDatabasePath(abs, false); err != nil {
 		return nil, err

@@ -122,10 +122,11 @@ func run(ctx context.Context, cfg config, token string) (runErr error) {
 	}
 	defer releaseProfile()
 	if identityPath := appconfig.DesktopSessionIdentityPath(); identityPath != "" {
-		if info, err := os.Lstat(identityPath); err == nil {
-			if !info.Mode().IsRegular() {
-				return errors.New("session identity store is not a regular file")
-			}
+		exists, err := sessionidentity.IdentityDatabaseExists(identityPath, appconfig.SessionProfileRoot())
+		if err != nil {
+			return fmt.Errorf("inspect session identity store: %w", err)
+		}
+		if exists {
 			identities, err := sessionidentity.Open(ctx, identityPath, appconfig.SessionProfileRoot())
 			if err != nil {
 				return fmt.Errorf("migrate session identity store: %w", err)
@@ -138,8 +139,6 @@ func run(ctx context.Context, cfg config, token string) (runErr error) {
 			if err := closeErr; err != nil {
 				return fmt.Errorf("close migrated session identity store: %w", err)
 			}
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("inspect session identity store: %w", err)
 		}
 	}
 

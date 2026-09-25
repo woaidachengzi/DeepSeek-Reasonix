@@ -246,6 +246,13 @@ Unix 上验证还会拒绝 group/other 可访问的快照目录、清单、成�
 
 **当前安全切片**：bridge 已将新建、恢复、缺失、删除中与已删除会话分开处理；已登记但 transcript 缺失时拒绝静默创建同 ID 空会话，缺失与中断删除均可经显式删除安全退休并保留 tombstone。若清理已完成但 host 尚未移除旧 JSON 行，匹配路径的 `deleted` tombstone 会令重复 DELETE 幂等成功，从而允许 host 完成陈旧 catalog 清理而不再触碰会话文件。标题/首条消息预览拒绝读取 symlink 的 profile 外 `sessions` 目录、transcript、`.meta` 与事件日志；身份导入、预留、catalog 顺序同步和相对路径解析也会按规范化 profile root 拒绝指向 profile 外部的 `sessions` 目录。预览有新鲜普通用户投影时避免重放整段 transcript，合成 `session-context` 首项仍走完整解析以保留显示语义。身份库打开会校验其父目录仍在指定 profile root 内，并以 `Lstat` 拒绝数据库及 SQLite journal sidecar 为 symlink 或非普通文件；这些都是路径级预检，不防止并发替换竞态。Tauri Preview 侧栏按页读取身份目录，每次首屏及续页请求都重新做 count-only 影子比对；不一致或失败时首屏回退旧 JSON，续页则拒绝混入未经验证的 SQLite 结果并要求重启列表读取。每页还携带仅覆盖分页键与可见性字段的 SHA-256 snapshot ID，游标绑定该快照；路径、工作区、状态或顺序变化会返回 `resync_required`，而标题回填不破坏分页。完整 shadow compare 仍核对展示元数据。对 WebView 暴露的低层身份分页命令也执行相同 clean shadow 门禁。新增/改名/删除后的重新盘点发现漂移时也会回退。身份表现为相对 state-root 的 `relative_path`；旧 v1–v3 绝对路径通过校验后事务迁移到 v4，离线快照与旧 catalog 重放的跨资源恢复演练已覆盖新 profile 路径；SQLite WAL abrupt-exit 恢复及删除清理中的 bridge 进程强制终止后重试已有隔离测试。此为可回退的 Preview 读取路径，不代表稳定版迁移或全 profile 权威切换。旧 bridge 缺少必需的 `session_catalog_sync` 或 `session_directory_snapshot_v1` capability 时，新 host 会在启动阶段拒绝该 sidecar；真实旧 writer 停写确认与旧 Tauri host 二进制认证仍待完成，详见下方兼容矩阵。
 
+缺少身份库主文件不一定是新 profile：若同名 WAL、SHM 或 journal 尚在，bridge 启动、
+只读目录/盘点/恢复清单以及写入打开均 fail-closed，不能返回假的空目录或在残留
+sidecar 旁创建新库；缺库分支也检查数据库父目录仍在 profile 内。首次并发开库
+使用进程内短时全局锁，避免主文件和父目录创建期间路径别名导致锁键漂移与
+并行初始化。隔离测试保留残留文件原字节并确认没有发布 bridge readiness。
+这些检查是路径级预检与进程内串行化，不代替停写门禁。
+
 中断删除的 `deleting` identity 不属于普通目录，但现在可通过 `GET /v1/sessions/deletion-recovery` 单独发现；该响应只包含 ID 和标题，不暴露 transcript 路径。Tauri host 在 health capability 缺失时拒绝旧 bridge；侧栏独立加载恢复清单，普通最近会话页读取失败时仍展示这些记录。只有用户明确确认才调用既有 DELETE 重试；不做启动期自动删除，也不允许打开该会话。
 
 未完成的手工标题意图另有 `GET /v1/sessions/title-recovery` 清单，要求 `session_title_recovery_list_v1` capability。它只发现，不自动完成意图；侧栏可显式重开可读会话，沿已有路径核对侧车后完成或撤销改名。侧车有歧义、无法重开时，可由用户二次确认直接删除该会话并放弃意图；这条未持有会话的删除路径只接受仍有匹配意图的 ready/reserved 身份，普通未持有会话继续拒绝。文件缺失的行可删除失效记录，当前已打开的会话须先切换后重开。旧 catalog 的 50 条上限不再遮蔽这类恢复入口，但一般影子失败时的旧目录分页限制仍在。

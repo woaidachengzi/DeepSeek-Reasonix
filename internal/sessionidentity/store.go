@@ -148,7 +148,7 @@ func Open(ctx context.Context, path string, profileRoots ...string) (*Store, err
 	if err != nil {
 		return nil, err
 	}
-	unlock := lockIdentityOpen(abs)
+	unlock := lockIdentityOpen()
 	defer unlock()
 	if err := validateIdentityDatabaseLocation(abs, profileRoot); err != nil {
 		return nil, err

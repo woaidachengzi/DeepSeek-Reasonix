@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 
 	appconfig "reasonix/internal/config"
 	"reasonix/internal/control"
@@ -32,15 +31,12 @@ func deleteUnownedRecoverableSession(ctx context.Context, sessionID string) erro
 		return desktopbridge.ErrSessionNotFound
 	}
 	// A lookup must not create a new identity DB or follow an unexpected link.
-	info, err := os.Lstat(identityPath)
-	if errors.Is(err, os.ErrNotExist) {
-		return desktopbridge.ErrSessionNotFound
-	}
+	exists, err := sessionidentity.IdentityDatabaseExists(identityPath, appconfig.SessionProfileRoot())
 	if err != nil {
 		return fmt.Errorf("inspect session identity for deletion recovery: %w", err)
 	}
-	if !info.Mode().IsRegular() {
-		return errors.New("session identity store is not a regular file")
+	if !exists {
+		return desktopbridge.ErrSessionNotFound
 	}
 	expectedPath, err := bridgeSessionPath(sessionDir, sessionID)
 	if err != nil {

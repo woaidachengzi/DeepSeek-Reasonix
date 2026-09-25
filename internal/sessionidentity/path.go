@@ -15,15 +15,7 @@ import (
 	"sync"
 )
 
-type identityOpenLock struct {
-	mu   sync.Mutex
-	refs int
-}
-
-var identityOpenLocks = struct {
-	sync.Mutex
-	locks map[string]*identityOpenLock
-}{locks: make(map[string]*identityOpenLock)}
+var identityOpenMu sync.Mutex
 
 // sameCaseInsensitivePath conservatively treats case-only path differences as
 // aliases on the platforms whose normal filesystems are case-insensitive.
@@ -37,45 +29,25 @@ func sameCaseInsensitivePath(a, b string) bool {
 	return strings.EqualFold(filepath.Clean(a), filepath.Clean(b))
 }
 
-// lockIdentityOpen serializes connection setup for aliases of the same
-// database path inside this process. profilegate remains responsible for
-// excluding other bridge processes using the same profile.
-func lockIdentityOpen(path string) func() {
-	key, err := resolveIdentityPath(path)
-	if err != nil {
-		key = filepath.Clean(path)
-	}
-	identityOpenLocks.Lock()
-	lock := identityOpenLocks.locks[key]
-	if lock == nil {
-		lock = &identityOpenLock{}
-		identityOpenLocks.locks[key] = lock
-	}
-	lock.refs++
-	identityOpenLocks.Unlock()
-
-	lock.mu.Lock()
-	return func() {
-		lock.mu.Unlock()
-		identityOpenLocks.Lock()
-		lock.refs--
-		if lock.refs == 0 {
-			delete(identityOpenLocks.locks, key)
-		}
-		identityOpenLocks.Unlock()
-	}
+// lockIdentityOpen serializes connection setup in this process. A canonical
+// per-path key is not stable while an ancestor is being created: macOS may
+// report /var for one opener and /private/var for another. Connection setup
+// is short and profilegate still excludes other bridge processes, so one
+// process-wide lock is safer than allowing simultaneous schema creation.
+func lockIdentityOpen() func() {
+	identityOpenMu.Lock()
+	return identityOpenMu.Unlock
 }
 
 // validateIdentityDatabasePath rejects symlinked or non-regular SQLite files
 // before SQLite opens the database or its journal sidecars. This is a
 // best-effort path check; it does not eliminate a concurrent path swap.
 func validateIdentityDatabasePath(path string, allowMissingDatabase bool) error {
+	databaseExists := false
+	sidecarExists := false
 	for index, candidate := range []string{path, path + "-wal", path + "-shm", path + "-journal"} {
 		info, err := os.Lstat(candidate)
 		if errors.Is(err, os.ErrNotExist) {
-			if index == 0 && !allowMissingDatabase {
-				return fmt.Errorf("inspect session identity database: %w", err)
-			}
 			continue
 		}
 		if err != nil {
@@ -87,8 +59,42 @@ func validateIdentityDatabasePath(path string, allowMissingDatabase bool) error 
 		if !info.Mode().IsRegular() {
 			return fmt.Errorf("session identity database path is not a regular file: %s", candidate)
 		}
+		if index == 0 {
+			databaseExists = true
+		} else {
+			sidecarExists = true
+		}
+	}
+	if !databaseExists && sidecarExists {
+		return errors.New("session identity database is missing while SQLite sidecars remain")
+	}
+	if !databaseExists && !allowMissingDatabase {
+		return fmt.Errorf("inspect session identity database: %w", os.ErrNotExist)
 	}
 	return nil
+}
+
+// IdentityDatabaseExists distinguishes a genuinely new profile from a missing
+// main database with leftover WAL/SHM/journal evidence. Read-only callers may
+// return an empty directory only in the former case.
+func IdentityDatabaseExists(path, profileRoot string) (bool, error) {
+	if strings.TrimSpace(profileRoot) == "" {
+		return false, errors.New("session profile root is required to inspect identity database")
+	}
+	if err := validateIdentityDatabaseLocation(path, profileRoot); err != nil {
+		return false, err
+	}
+	if err := validateIdentityDatabasePath(path, true); err != nil {
+		return false, err
+	}
+	_, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("inspect session identity database: %w", err)
+	}
+	return true, nil
 }
 
 func identityDatabaseArtifactsExist(path string) (bool, error) {

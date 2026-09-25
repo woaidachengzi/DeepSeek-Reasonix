@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 
@@ -70,21 +69,17 @@ func (b *bridgeServer) sessionList(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, http.StatusServiceUnavailable, "internal", "session identity store is unavailable")
 		return
 	}
-	info, err := os.Lstat(identityPath)
-	if errors.Is(err, os.ErrNotExist) {
+	exists, err := sessionidentity.IdentityDatabaseExists(identityPath, appconfig.SessionProfileRoot())
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to inspect the session identity store")
+		return
+	}
+	if !exists {
 		if cursor != nil && cursor.SnapshotID != "" {
 			writeProtocolError(w, http.StatusConflict, "resync_required", "session directory changed while paging")
 			return
 		}
 		writeJSON(w, http.StatusOK, sessionListResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Sessions: []sessionListEntry{}, SnapshotID: emptyVisibleSnapshotID()})
-		return
-	}
-	if err != nil {
-		b.writeRuntimeError(w, err, "unable to inspect the session identity store")
-		return
-	}
-	if !info.Mode().IsRegular() {
-		writeProtocolError(w, http.StatusInternalServerError, "internal", "session identity store is not a regular file")
 		return
 	}
 	identities, err := sessionidentity.OpenReadOnly(r.Context(), identityPath, appconfig.SessionProfileRoot())
@@ -123,21 +118,17 @@ func (b *bridgeServer) sessionDirectorySnapshot(w http.ResponseWriter, r *http.R
 		writeProtocolError(w, http.StatusServiceUnavailable, "internal", "session identity store is unavailable")
 		return
 	}
-	info, err := os.Lstat(identityPath)
-	if errors.Is(err, os.ErrNotExist) {
+	exists, err := sessionidentity.IdentityDatabaseExists(identityPath, appconfig.SessionProfileRoot())
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to inspect the session identity store")
+		return
+	}
+	if !exists {
 		writeJSON(w, http.StatusOK, sessionListResponse{
 			ProtocolVersion: desktopbridge.ProtocolVersion,
 			Sessions:        []sessionListEntry{},
 			SnapshotID:      emptyVisibleSnapshotID(),
 		})
-		return
-	}
-	if err != nil {
-		b.writeRuntimeError(w, err, "unable to inspect the session identity store")
-		return
-	}
-	if !info.Mode().IsRegular() {
-		writeProtocolError(w, http.StatusInternalServerError, "internal", "session identity store is not a regular file")
 		return
 	}
 	identities, err := sessionidentity.OpenReadOnly(r.Context(), identityPath, appconfig.SessionProfileRoot())

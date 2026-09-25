@@ -1,9 +1,7 @@
 package main
 
 import (
-	"errors"
 	"net/http"
-	"os"
 
 	appconfig "reasonix/internal/config"
 	"reasonix/internal/desktopbridge"
@@ -26,20 +24,16 @@ func (b *bridgeServer) pendingSessionDeletes(w http.ResponseWriter, r *http.Requ
 		writeProtocolError(w, http.StatusServiceUnavailable, "internal", "session identity store is unavailable")
 		return
 	}
-	info, err := os.Lstat(identityPath)
-	if errors.Is(err, os.ErrNotExist) {
-		writeJSON(w, http.StatusOK, pendingSessionDeletesResponse{
-			ProtocolVersion: desktopbridge.ProtocolVersion,
-			Sessions:        []pendingSessionDeleteEntry{},
-		})
-		return
-	}
+	exists, err := sessionidentity.IdentityDatabaseExists(identityPath, appconfig.SessionProfileRoot())
 	if err != nil {
 		b.writeRuntimeError(w, err, "unable to inspect session deletion recovery state")
 		return
 	}
-	if !info.Mode().IsRegular() {
-		writeProtocolError(w, http.StatusInternalServerError, "internal", "session identity store is not a regular file")
+	if !exists {
+		writeJSON(w, http.StatusOK, pendingSessionDeletesResponse{
+			ProtocolVersion: desktopbridge.ProtocolVersion,
+			Sessions:        []pendingSessionDeleteEntry{},
+		})
 		return
 	}
 	identities, err := sessionidentity.OpenReadOnly(r.Context(), identityPath, appconfig.SessionProfileRoot())

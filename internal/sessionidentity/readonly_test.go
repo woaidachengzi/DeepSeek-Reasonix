@@ -20,6 +20,58 @@ func TestOpenReadOnlyNeverCreatesMissingDatabase(t *testing.T) {
 	}
 }
 
+func TestIdentityDatabaseOrphanSidecarsAreNotAnEmptyProfile(t *testing.T) {
+	ctx := context.Background()
+	for _, suffix := range []string{"-wal", "-shm", "-journal"} {
+		t.Run(suffix, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, "desktop", "identity.sqlite")
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			artifact := path + suffix
+			before := []byte("orphaned SQLite evidence must survive rejected opens\n")
+			if err := os.WriteFile(artifact, before, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if exists, err := IdentityDatabaseExists(path, root); err == nil || exists {
+				t.Fatalf("orphan sidecar reported as empty profile: exists=%v err=%v", exists, err)
+			}
+			if opened, err := Open(ctx, path, root); err == nil {
+				_ = opened.Close()
+				t.Fatal("writable open recreated the missing main database beside an orphan sidecar")
+			}
+			if opened, err := OpenReadOnly(ctx, path, root); err == nil {
+				_ = opened.Close()
+				t.Fatal("read-only open accepted an orphan sidecar")
+			} else if errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("read-only open misclassified orphan sidecar as a new empty profile: %v", err)
+			}
+			if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("rejected open created a main database: %v", err)
+			}
+			if after, err := os.ReadFile(artifact); err != nil || !reflect.DeepEqual(after, before) {
+				t.Fatalf("rejected open changed orphan sidecar: %q, %v", after, err)
+			}
+		})
+	}
+}
+
+func TestMissingIdentityDatabaseOutsideProfileIsNotAnEmptyProfile(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	path := filepath.Join(root, "desktop", "identity.sqlite")
+	if err := os.Symlink(outside, filepath.Dir(path)); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+	if exists, err := IdentityDatabaseExists(path, root); err == nil || exists {
+		t.Fatalf("outside-profile missing database looked empty: exists=%v err=%v", exists, err)
+	}
+	if _, err := os.Lstat(filepath.Join(outside, "identity.sqlite")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("identity inspection created an outside-profile database: %v", err)
+	}
+}
+
 func TestIdentityOpenRejectsDatabaseSymlink(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
