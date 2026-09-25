@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"reasonix/internal/agent"
 	appconfig "reasonix/internal/config"
 	"reasonix/internal/sessionidentity"
 )
@@ -133,6 +134,94 @@ func TestSessionInventoryIsReadOnlyAndAuthenticated(t *testing.T) {
 		if entry.ID == "tauri-present" && (!entry.Registered || entry.Claim != "registered") {
 			t.Fatalf("registered entry = %#v", entry)
 		}
+	}
+}
+
+func TestSessionInventoryReportsSidecarTitleDriftWithoutChangingSources(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	ctx := context.Background()
+	sessionDir := appconfig.SessionDir()
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(sessionDir, "tauri-title-drift.jsonl")
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	identities, err := sessionidentity.Open(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Import(ctx, sessionDir, []sessionidentity.Candidate{{ID: "title-drift", Path: path, Title: "Original title"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := agent.RenameSession(path, "Original title"); err != nil {
+		t.Fatal(err)
+	}
+	readInventory := func() sessionInventoryResponse {
+		request := httptest.NewRequest(http.MethodGet, "/v1/sessions/inventory", nil)
+		request.Header.Set("Authorization", "Bearer "+testToken)
+		response := httptest.NewRecorder()
+		newBridgeServer(testToken, "instance", nil).handler().ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("inventory status=%d body=%s", response.Code, response.Body.String())
+		}
+		var body sessionInventoryResponse
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		return body
+	}
+	if clean := readInventory(); len(clean.Errors) != 0 {
+		t.Fatalf("matching title was reported dirty: %#v", clean.Errors)
+	}
+	if err := agent.RenameSession(path, "Uncommitted sidecar title"); err != nil {
+		t.Fatal(err)
+	}
+	dirty := readInventory()
+	if len(dirty.Errors) == 0 || !strings.Contains(strings.Join(dirty.Errors, " "), "title metadata differs") {
+		t.Fatalf("sidecar-only title change was not reported: %#v", dirty)
+	}
+	if strings.Contains(strings.Join(dirty.Errors, " "), "Uncommitted sidecar title") {
+		t.Fatalf("inventory error leaked sidecar title: %#v", dirty.Errors)
+	}
+	for _, entry := range dirty.Entries {
+		if entry.Source == sessionidentity.InventoryFromIdentity && entry.ID == "title-drift" && entry.Detail != "" {
+			t.Fatalf("title drift mislabeled the readable transcript: %#v", entry)
+		}
+	}
+	identities, err = sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer identities.Close()
+	record, exists, err := identities.Get(ctx, "title-drift")
+	if err != nil || !exists || record.Title != "Original title" {
+		t.Fatalf("read-only inventory changed identity: %#v exists=%v err=%v", record, exists, err)
+	}
+	meta, ok, err := agent.LoadBranchMeta(path)
+	if err != nil || !ok || meta.CustomTitle != "Uncommitted sidecar title" {
+		t.Fatalf("read-only inventory changed sidecar: %#v ok=%v err=%v", meta, ok, err)
+	}
+	outsideMeta := filepath.Join(t.TempDir(), "outside.meta")
+	if err := os.WriteFile(outsideMeta, []byte(`{"custom_title":"outside private title"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(agent.BranchMetaPath(path)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideMeta, agent.BranchMetaPath(path)); err != nil {
+		t.Skipf("sidecar symlinks unavailable: %v", err)
+	}
+	linked := readInventory()
+	if len(linked.Errors) == 0 || !strings.Contains(strings.Join(linked.Errors, " "), "title metadata is unreadable") ||
+		strings.Contains(strings.Join(linked.Errors, " "), "outside private title") {
+		t.Fatalf("symlinked title sidecar inventory = %#v", linked.Errors)
 	}
 }
 

@@ -2340,6 +2340,23 @@ mod tests {
     }
 
     #[test]
+    fn physical_inventory_counts_title_sidecar_drift_without_hiding_readable_transcript() {
+        let inventory: SessionInventoryResponse = serde_json::from_value(json!({
+            "protocolVersion": PROTOCOL_VERSION,
+            "entries": [{ "id": "drifted", "source": "identity", "exists": true }],
+            "unclaimed": [],
+            "errors": ["drifted: session title metadata differs from identity"]
+        }))
+        .expect("parse drifted inventory");
+        let physical = inventory
+            .into_physical_inventory()
+            .expect("complete inventory");
+        assert_eq!(physical.states.len(), 1);
+        assert!(physical.states[0].readable);
+        assert_eq!(physical.error_count, 1);
+    }
+
+    #[test]
     fn physical_inventory_rejects_missing_or_null_summary_arrays_even_when_empty() {
         let complete = json!({
             "protocolVersion": PROTOCOL_VERSION,

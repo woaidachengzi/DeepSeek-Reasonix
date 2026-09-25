@@ -5,9 +5,11 @@ import (
 	"os"
 	"strings"
 
+	"reasonix/internal/agent"
 	appconfig "reasonix/internal/config"
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/sessionidentity"
+	sessionstore "reasonix/internal/store"
 )
 
 // sessionInventoryResponse is the wire body of the read-only session listing.
@@ -59,6 +61,9 @@ func (b *bridgeServer) sessionInventory(w http.ResponseWriter, r *http.Request) 
 		b.writeRuntimeError(w, err, "unable to list the desktop bridge sessions")
 		return
 	}
+	if identities != nil {
+		auditIdentitySidecarTitles(&report)
+	}
 	writeJSON(w, http.StatusOK, sessionInventoryResponse{
 		ProtocolVersion: desktopbridge.ProtocolVersion,
 		SessionDir:      report.SessionDir,
@@ -68,4 +73,38 @@ func (b *bridgeServer) sessionInventory(w http.ResponseWriter, r *http.Request) 
 		Unclaimed:       report.Unclaimed,
 		Errors:          report.Errors,
 	})
+}
+
+// A crash between the legacy sidecar write and the identity title CAS can
+// leave the host catalog and SQLite matching while the reopened controller
+// displays a different title. Surface that as physical drift so the host's
+// existing shadow gate cannot declare the directory clean. This is read-only:
+// without a durable rename intent, inventory cannot choose which title wins.
+func auditIdentitySidecarTitles(report *sessionidentity.InventoryReport) {
+	for index := range report.Entries {
+		entry := &report.Entries[index]
+		if entry.Source != sessionidentity.InventoryFromIdentity || !entry.Exists || entry.Detail != "" {
+			continue
+		}
+		metaPath := sessionstore.SessionMeta(entry.Path)
+		info, err := os.Lstat(metaPath)
+		if os.IsNotExist(err) {
+			continue
+		}
+		detail := ""
+		switch {
+		case err != nil || !info.Mode().IsRegular():
+			detail = "session title metadata is unreadable"
+		default:
+			meta, present, loadErr := agent.LoadBranchMeta(entry.Path)
+			if loadErr != nil {
+				detail = "session title metadata is unreadable"
+			} else if present && meta.CustomTitle != "" && meta.CustomTitle != entry.Title {
+				detail = "session title metadata differs from identity"
+			}
+		}
+		if detail != "" {
+			report.Errors = append(report.Errors, entry.ID+": "+detail)
+		}
+	}
 }
