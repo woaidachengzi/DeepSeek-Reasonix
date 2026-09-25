@@ -135,3 +135,22 @@ func TestImportLegacyCatalogRejectsInvalidMetadataBeforeOpeningStore(t *testing.
 		})
 	}
 }
+
+func TestImportLegacyCatalogRejectsDuplicateIDsBeforeOpeningStore(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	if err := os.MkdirAll(appconfig.SessionDir(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v1/sessions/import-catalog", strings.NewReader(`{"sessions":[{"sessionId":"legacy"},{"sessionId":"legacy"}]}`))
+	request.Header.Set("Authorization", "Bearer "+testToken)
+	response := httptest.NewRecorder()
+	newBridgeServer(testToken, "instance", nil).handler().ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `"code":"invalid_request"`) {
+		t.Fatalf("duplicate catalog IDs: status=%d body=%s", response.Code, response.Body.String())
+	}
+	if _, err := os.Lstat(appconfig.DesktopSessionIdentityPath()); !os.IsNotExist(err) {
+		t.Fatalf("duplicate catalog IDs opened identity store: %v", err)
+	}
+}

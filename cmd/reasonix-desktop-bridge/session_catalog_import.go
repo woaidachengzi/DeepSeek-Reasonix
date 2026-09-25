@@ -47,7 +47,13 @@ func (b *bridgeServer) importLegacyCatalog(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	candidates := make([]sessionidentity.Candidate, 0, len(request.Sessions))
+	seen := make(map[string]struct{}, len(request.Sessions))
 	for position, entry := range request.Sessions {
+		if _, duplicate := seen[entry.SessionID]; duplicate {
+			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "legacy catalog contains duplicate session identifiers")
+			return
+		}
+		seen[entry.SessionID] = struct{}{}
 		if entry.Title != nil && !sessionidentity.ValidWorkbenchCatalogTitle(*entry.Title) {
 			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "legacy catalog contains an invalid title")
 			return
