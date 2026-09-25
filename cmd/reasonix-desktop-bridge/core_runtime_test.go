@@ -696,6 +696,186 @@ func TestControllerRuntimeRenameRejectsChangedIdentityPathBeforeSidecarWrite(t *
 	}
 }
 
+func TestControllerRuntimeRenameRejectsSymlinkedTitleSidecar(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	ctx := context.Background()
+	runtime, err := newControllerFactory(nil).Open(ctx, desktopbridge.OpenRequest{SessionID: "rename-meta-link"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Shutdown() })
+	if err := runtime.Rename("Original title"); err != nil {
+		t.Fatal(err)
+	}
+	metaPath := sessionstore.SessionMeta(runtime.SessionPath())
+	originalMeta, err := os.ReadFile(metaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.meta")
+	outsideBytes := []byte(`{"custom_title":"outside private title"}`)
+	if err := os.WriteFile(outside, outsideBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(metaPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, metaPath); err != nil {
+		t.Skipf("sidecar symlinks unavailable: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Remove(metaPath)
+		_ = os.WriteFile(metaPath, originalMeta, 0o600)
+	})
+	if err := runtime.Rename("Should not persist"); !errors.Is(err, desktopbridge.ErrSessionConflict) {
+		t.Fatalf("rename through sidecar symlink = %v, want session conflict", err)
+	}
+	if got, err := os.ReadFile(outside); err != nil || string(got) != string(outsideBytes) {
+		t.Fatalf("external sidecar changed: %q, %v", got, err)
+	}
+	identities, err := sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer identities.Close()
+	if _, pending, err := identities.PendingManualTitleRename(ctx, "rename-meta-link"); err != nil || pending {
+		t.Fatalf("rejected sidecar link created intent: pending=%v err=%v", pending, err)
+	}
+}
+
+func TestBridgeOpenRecoversDurableManualTitleIntent(t *testing.T) {
+	for _, test := range []struct {
+		name, sidecarTitle, wantTitle string
+		wantPending                   bool
+		wantOpenError                 bool
+	}{
+		{name: "sidecar committed", sidecarTitle: "New title", wantTitle: "New title"},
+		{name: "sidecar unchanged", wantTitle: "", wantPending: false},
+		{name: "sidecar changed again", sidecarTitle: "Third title", wantPending: true, wantOpenError: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			t.Setenv("REASONIX_HOME", root)
+			t.Setenv("REASONIX_STATE_HOME", root)
+			ctx := context.Background()
+			sessionDir := appconfig.SessionDir()
+			if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			path, err := bridgeSessionPath(sessionDir, "pending-rename")
+			if err != nil {
+				t.Fatal(err)
+			}
+			identities, err := sessionidentity.Open(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := identities.Reserve(ctx, sessionDir, sessionidentity.Candidate{ID: "pending-rename", Path: path}); err != nil {
+				t.Fatal(err)
+			}
+			if err := identities.BeginManualTitleRename(ctx, "pending-rename", path, "", "New title", 0); err != nil {
+				t.Fatal(err)
+			}
+			if err := identities.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if test.sidecarTitle != "" {
+				if err := agent.RenameSession(path, test.sidecarTitle); err != nil {
+					t.Fatal(err)
+				}
+			}
+			runtime, openErr := newControllerFactory(nil).Open(ctx, desktopbridge.OpenRequest{SessionID: "pending-rename"})
+			if test.wantOpenError {
+				if openErr == nil {
+					_ = runtime.Shutdown()
+					t.Fatal("ambiguous title intent reopened")
+				}
+			} else {
+				if openErr != nil {
+					t.Fatal(openErr)
+				}
+				defer runtime.Shutdown()
+				if got := runtime.Title(); got != test.wantTitle {
+					t.Fatalf("recovered runtime title = %q, want %q", got, test.wantTitle)
+				}
+			}
+			identities, err = sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer identities.Close()
+			intent, pending, err := identities.PendingManualTitleRename(ctx, "pending-rename")
+			if err != nil || pending != test.wantPending {
+				t.Fatalf("recovered intent = %#v pending=%v err=%v", intent, pending, err)
+			}
+			record, exists, err := identities.Get(ctx, "pending-rename")
+			if err != nil || !exists || record.Title != test.wantTitle {
+				t.Fatalf("recovered identity = %#v exists=%v err=%v", record, exists, err)
+			}
+		})
+	}
+}
+
+func TestBridgeRecoversManualTitleIntentAfterAbruptWriterExit(t *testing.T) {
+	const childMarker = "REASONIX_TEST_TITLE_INTENT_ABRUPT_EXIT"
+	if os.Getenv(childMarker) == "1" {
+		ctx := context.Background()
+		sessionDir := appconfig.SessionDir()
+		if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		path, err := bridgeSessionPath(sessionDir, "abrupt-title")
+		if err != nil {
+			t.Fatal(err)
+		}
+		identities, err := sessionidentity.Open(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := identities.Reserve(ctx, sessionDir, sessionidentity.Candidate{ID: "abrupt-title", Path: path}); err != nil {
+			t.Fatal(err)
+		}
+		if err := identities.BeginManualTitleRename(ctx, "abrupt-title", path, "", "Recovered after exit", 0); err != nil {
+			t.Fatal(err)
+		}
+		if err := agent.RenameSession(path, "Recovered after exit"); err != nil {
+			t.Fatal(err)
+		}
+		os.Exit(0) // Deliberately skip Store.Close and the title commit.
+	}
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	cmd := exec.Command(os.Args[0], "-test.run=^TestBridgeRecoversManualTitleIntentAfterAbruptWriterExit$")
+	cmd.Env = append(os.Environ(), childMarker+"=1")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("abrupt title writer failed: %v\n%s", err, output)
+	}
+	ctx := context.Background()
+	runtime, err := newControllerFactory(nil).Open(ctx, desktopbridge.OpenRequest{SessionID: "abrupt-title"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Shutdown()
+	if got := runtime.Title(); got != "Recovered after exit" {
+		t.Fatalf("recovered title after abrupt exit = %q", got)
+	}
+	identities, err := sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer identities.Close()
+	record, exists, err := identities.Get(ctx, "abrupt-title")
+	if err != nil || !exists || record.Title != "Recovered after exit" || record.TitleSource != sessionidentity.TitleUser {
+		t.Fatalf("recovered identity = %#v exists=%v err=%v", record, exists, err)
+	}
+	if _, pending, err := identities.PendingManualTitleRename(ctx, "abrupt-title"); err != nil || pending {
+		t.Fatalf("title intent remains after recovery: pending=%v err=%v", pending, err)
+	}
+}
+
 func TestControllerRuntimeDeleteRemovesSessionArtifacts(t *testing.T) {
 	workspace := t.TempDir()
 	t.Setenv("REASONIX_HOME", t.TempDir())

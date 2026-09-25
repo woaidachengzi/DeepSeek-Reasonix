@@ -291,6 +291,49 @@ func TestSessionInventoryRequiresMirrorForUserTitleButNotLegacyTitle(t *testing.
 	}
 }
 
+func TestSessionInventoryFlagsPendingTitleIntentBeforeSidecarChanges(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	ctx := context.Background()
+	sessionDir := appconfig.SessionDir()
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(sessionDir, "tauri-pending-title.jsonl")
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	identities, err := sessionidentity.Open(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Import(ctx, sessionDir, []sessionidentity.Candidate{{ID: "pending-title", Path: path}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.BeginManualTitleRename(ctx, "pending-title", path, "", "Private new title", 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Close(); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/v1/sessions/inventory", nil)
+	request.Header.Set("Authorization", "Bearer "+testToken)
+	response := httptest.NewRecorder()
+	newBridgeServer(testToken, "instance", nil).handler().ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("inventory status=%d body=%s", response.Code, response.Body.String())
+	}
+	var body sessionInventoryResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Errors) != 1 || !strings.Contains(body.Errors[0], "pending-title: session title rename recovery is pending") ||
+		strings.Contains(response.Body.String(), "Private new title") {
+		t.Fatalf("pending intent inventory = %#v", body.Errors)
+	}
+}
+
 // The identity path is the store's own location and must not be settable by the
 // caller, or a request could point the store outside the profile.
 func TestSessionInventoryIgnoresACallerSuppliedIdentityPath(t *testing.T) {

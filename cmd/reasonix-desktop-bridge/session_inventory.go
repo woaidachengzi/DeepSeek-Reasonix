@@ -63,6 +63,14 @@ func (b *bridgeServer) sessionInventory(w http.ResponseWriter, r *http.Request) 
 	}
 	if identities != nil {
 		auditIdentitySidecarTitles(&report)
+		pendingIDs, err := identities.PendingManualTitleRenameIDs(r.Context())
+		if err != nil {
+			b.writeRuntimeError(w, err, "unable to inspect pending session title renames")
+			return
+		}
+		for _, id := range pendingIDs {
+			report.Errors = append(report.Errors, id+": session title rename recovery is pending")
+		}
 	}
 	writeJSON(w, http.StatusOK, sessionInventoryResponse{
 		ProtocolVersion: desktopbridge.ProtocolVersion,

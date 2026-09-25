@@ -1,6 +1,6 @@
 # Tauri Preview 会话存储实施稿 v3
 
-> 状态：持续实施中；Preview 身份库已升至 schema v4 并采用相对 profile-root 路径，真实稳定版数据迁移仍未授权。本文保留设计边界与阶段验收记录。
+> 状态：持续实施中；Preview 身份库已升至 schema v5（相对 profile-root 路径与手工标题重命名意图），真实稳定版数据迁移仍未授权。本文保留设计边界与阶段验收记录。
 > 对照：本地草稿 `SESSION_STORAGE_PLAN_V2.md`、`MIMO_STYLE_SESSION_STORAGE_APPROVAL.md`，以及已入库的[既有评审](./MIMO_STYLE_SESSION_STORAGE_REVIEW.md)。
 > 本稿替代前两份文档的实施建议；它们保留为设计讨论记录。本稿不是“已完成迁移”的声明。
 >
@@ -131,9 +131,15 @@ CREATE INDEX sessions_visible_order ON sessions(state, position, id);
 Preview 手工重命名的当前局部保护：bridge 在修改 `.jsonl.meta` 前先打开身份库，确认
 会话身份存在且定位仍等于当前 transcript；SQLite 标题写入失败时，只有重新读取证明
 身份行的路径、状态、标题、标题来源及修订号均未变化，才用侧车标题的条件写恢复原值。
-若身份状态无法核实或侧车已被别的写者改动，则返回失败而不盲目回滚。这个补偿只覆盖
-可证实未提交的失败窗口，不覆盖进程在两次写入之间退出，也不解决 host catalog 的
-对账；因此仍未满足 SQLite 标题权威切换门禁。
+schema v5 的 `session_title_intents` 会在侧车写入前记录 ID、相对路径、预期修订号及
+前后标题；侧车写入后，SQLite 标题更新与清除意图在同一事务提交。进程在两次写入
+之间退出后，用户重开该会话时，bridge 只在侧车等于意图中的新标题时完成提交，
+等于旧标题时撤销意图；第三种值、路径变化或不可读侧车均拒绝猜测。若身份状态无法
+核实或侧车已被别的写者改动，也返回失败而不盲目回滚。只读 inventory 会将尚未完成
+的意图记为错误，使 host 影子目录保持 dirty。隔离子进程强制退出测试已覆盖意图
+在未关闭 Store 时的恢复。恢复目前由**显式重开该会话**触发，不会在启动时自动遍历
+并修改所有会话；host catalog 的对账及旧写者并发门禁仍未解决，因此仍未满足 SQLite
+标题权威切换门禁。
 bridge 的只读物理 inventory 现在还会把已登记会话中非空 `.jsonl.meta` 手工标题与
 SQLite 标题不一致、或侧车不可安全读取的情况记为错误；现有 host 影子门禁据此拒绝
 把目录判为 clean。它只发现漂移，不自动认定哪份标题正确，也不替代崩溃后的标题对账。
@@ -279,7 +285,7 @@ Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝
 审批稿 A1–A6、B3–B5、C1–C5 的边界继续有效；A7 改为“记忆布局待独立设计”，B1 的扫描器改为**只读候选清单**而非自动认领，B2 的 alias 延至 Move 语义确定。审批稿中 Wails 的路径身份与 Tauri 已有 ID 必须分开描述，`C6`/`B5` 的交叉引用也需更正。
 
 S0 路径与隔离修正已提交；S1 的只读清单和离线核验导入已有代码与测试，
-离线快照会校验整份 profile 与 host catalog，暂存快照后的身份路径重绑定及 catalog 对恢复 transcript 的重放已有自动化演练。身份库 schema v4 已把绝对 `path` 迁为相对 `relative_path`，v1–v3 迁移会先核对路径归属，越界时拒绝迁移且不改 v3 数据。当前 host 已在启动时校验 `session_catalog_sync` 与 `session_directory_snapshot_v1` capability，缺任一能力的旧 v1 sidecar 会被拒绝；上方兼容矩阵记录了可证明与仅预期兼容的组合。仍待旧 writer 停写确认及旧 Tauri host 二进制端到端认证；新版本 bridge 同 profile 进程互斥已有跨进程测试，但不约束不使用新锁协议的旧版本 writer。Preview 每次首屏或续页请求均在影子报告 clean 后才选择身份目录；启动或新增、改名、删除后若重盘点发现漂移或失败，则回退 JSON；续页期间发现漂移时要求从首屏重读。稳定版及真实 profile 自动迁移仍未授权。
+离线快照会校验整份 profile 与 host catalog，暂存快照后的身份路径重绑定及 catalog 对恢复 transcript 的重放已有自动化演练。身份库 schema v4 已把绝对 `path` 迁为相对 `relative_path`，v1–v3 迁移会先核对路径归属，越界时拒绝迁移且不改 v3 数据；当前 schema v5 再以版本化事务增加手工标题意图表。当前 host 启动握手会校验会话同步、目录快照、显式删除恢复及持久标题意图 capability；缺少所需能力的旧 sidecar 会被拒绝；上方兼容矩阵记录了可证明与仅预期兼容的组合。仍待旧 writer 停写确认及旧 Tauri host 二进制端到端认证；新版本 bridge 同 profile 进程互斥已有跨进程测试，但不约束不使用新锁协议的旧版本 writer。Preview 每次首屏或续页请求均在影子报告 clean 后才选择身份目录；启动或新增、改名、删除后若重盘点发现漂移或失败，则回退 JSON；续页期间发现漂移时要求从首屏重读。稳定版及真实 profile 自动迁移仍未授权。
 
 > **[DeepSeek] 本段的 A/B/C 编号与两处更正已并入 V2 的决议索引。**
 > - V2 §13.1 声明**直接采纳** A1–A7、B3–B5、C1–C5，并注明 A7 的

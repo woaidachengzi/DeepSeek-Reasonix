@@ -22,7 +22,16 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 4
+const schemaVersion = 5
+
+const createTitleIntentTable = `CREATE TABLE session_title_intents (
+	session_id TEXT PRIMARY KEY REFERENCES sessions(id),
+	relative_path TEXT NOT NULL,
+	expected_revision INTEGER NOT NULL CHECK (expected_revision >= 0),
+	previous_sidecar_title TEXT NOT NULL,
+	new_title TEXT NOT NULL,
+	created_at_ms INTEGER NOT NULL
+)`
 
 var ErrPathChanged = errors.New("session identity path changed without an explicit move")
 var ErrTranscriptPathConflict = errors.New("session transcript path already belongs to another identity")
@@ -231,14 +240,18 @@ func Open(ctx context.Context, path string, profileRoots ...string) (*Store, err
 			_ = tx.Rollback()
 			return fail(err)
 		}
-		if _, err := tx.ExecContext(ctx, "PRAGMA user_version=4"); err != nil {
+		if _, err := tx.ExecContext(ctx, createTitleIntentTable); err != nil {
+			_ = tx.Rollback()
+			return fail(err)
+		}
+		if _, err := tx.ExecContext(ctx, "PRAGMA user_version=5"); err != nil {
 			_ = tx.Rollback()
 			return fail(err)
 		}
 		if err := tx.Commit(); err != nil {
 			return fail(err)
 		}
-		version = 4
+		version = 5
 	} else if version == 1 {
 		// Legacy catalog titles may have been derived from the first user message,
 		// manually renamed, or copied from a sidecar. Preserve them without
@@ -336,6 +349,24 @@ func Open(ctx context.Context, path string, profileRoots ...string) (*Store, err
 			return fail(err)
 		}
 		version = 4
+	}
+	if version == 4 {
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fail(err)
+		}
+		if _, err := tx.ExecContext(ctx, createTitleIntentTable); err != nil {
+			_ = tx.Rollback()
+			return fail(fmt.Errorf("migrate session identity to v5: %w", err))
+		}
+		if _, err := tx.ExecContext(ctx, "PRAGMA user_version=5"); err != nil {
+			_ = tx.Rollback()
+			return fail(fmt.Errorf("migrate session identity to v5: %w", err))
+		}
+		if err := tx.Commit(); err != nil {
+			return fail(err)
+		}
+		version = 5
 	}
 	var journalMode string
 	if err := db.QueryRowContext(ctx, "PRAGMA journal_mode").Scan(&journalMode); err != nil {
@@ -1224,12 +1255,13 @@ func (s *Store) HasRegisteredID(ctx context.Context, id string) (bool, error) {
 	return registered, err
 }
 
-// SetTitle is the only title writer in the identity store. The caller names
-// the action, never the desired source, and supplies the revision it observed.
-// The revision and protection policy are both checked by the UPDATE itself,
-// so a concurrent rename cannot slip between a read and the write.
+// SetTitle is the direct title writer for generated and fallback titles.
+// Managed bridge manual renames use the durable title-intent transaction so a
+// crash between SQLite and its legacy sidecar has recoverable evidence. The
+// caller names the action, never the desired source, and supplies the revision
+// it observed. The revision and protection policy are checked by the UPDATE.
 func (s *Store) SetTitle(ctx context.Context, id string, expectedRevision int64, title string, operation TitleOperation) error {
-	if strings.TrimSpace(title) == "" || utf8.RuneCountInString(title) > 120 ||
+	if strings.TrimSpace(title) == "" || !utf8.ValidString(title) || utf8.RuneCountInString(title) > 120 ||
 		strings.IndexFunc(title, unicode.IsControl) >= 0 {
 		return ErrInvalidTitle
 	}
@@ -1241,13 +1273,13 @@ func (s *Store) SetTitle(ctx context.Context, id string, expectedRevision int64,
 	switch operation {
 	case TitleManualRename, TitleUserRequestedGeneration:
 		source = TitleUser
-		guard = "1=1"
+		guard = "NOT EXISTS (SELECT 1 FROM session_title_intents WHERE session_id=sessions.id)"
 	case TitleAutomaticGeneration:
 		source = TitleGenerated
-		guard = "title_source IN ('fallback','generated')"
+		guard = "title_source IN ('fallback','generated') AND NOT EXISTS (SELECT 1 FROM session_title_intents WHERE session_id=sessions.id)"
 	case TitleFirstMessage:
 		source = TitleFallback
-		guard = "title_source='fallback' AND title=''"
+		guard = "title_source='fallback' AND title='' AND NOT EXISTS (SELECT 1 FROM session_title_intents WHERE session_id=sessions.id)"
 	default:
 		return errors.New("invalid session title operation")
 	}
@@ -1271,6 +1303,13 @@ func (s *Store) SetTitle(ctx context.Context, id string, expectedRevision int64,
 		return err
 	}
 	if revision != expectedRevision {
+		return ErrTitleConflict
+	}
+	var pending bool
+	if err := s.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM session_title_intents WHERE session_id=?)", id).Scan(&pending); err != nil {
+		return err
+	}
+	if pending {
 		return ErrTitleConflict
 	}
 	return ErrTitleProtected

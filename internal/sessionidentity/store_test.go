@@ -1108,6 +1108,9 @@ func TestTitleProvenanceAndRepeatImport(t *testing.T) {
 	if err := store.SetTitle(ctx, "title", 0, "Automatic", TitleAutomaticGeneration); !errors.Is(err, ErrTitleProtected) {
 		t.Fatalf("automatic rename of legacy title = %v", err)
 	}
+	if err := store.SetTitle(ctx, "title", 0, string([]byte{0xff}), TitleManualRename); !errors.Is(err, ErrInvalidTitle) {
+		t.Fatalf("invalid UTF-8 title = %v, want ErrInvalidTitle", err)
+	}
 	if err := store.SetTitle(ctx, "title", 0, "Manual", TitleManualRename); err != nil {
 		t.Fatal(err)
 	}
@@ -1243,7 +1246,7 @@ func TestOpenMigratesV1TitlesWithoutAssumingUserIntent(t *testing.T) {
 		t.Fatalf("migrated provenance = %#v, %v", records, err)
 	}
 	var version int
-	if err := store.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil || version != 4 {
+	if err := store.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil || version != schemaVersion {
 		t.Fatalf("migrated version = %d, %v", version, err)
 	}
 	if records[0].State != StateReady || records[1].State != StateMissing || !records[1].Missing {
@@ -1293,7 +1296,7 @@ func TestOpenMigratesV2MissingFlagToLifecycleState(t *testing.T) {
 		t.Fatalf("v2 migration records = %#v, %v", records, err)
 	}
 	var version int
-	if err := store.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil || version != 4 {
+	if err := store.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil || version != schemaVersion {
 		t.Fatalf("migrated schema version = %d, %v", version, err)
 	}
 }

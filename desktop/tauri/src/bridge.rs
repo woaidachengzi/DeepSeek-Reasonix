@@ -1508,6 +1508,13 @@ fn verify_bridge_health(response: Value, expected_instance_id: &str) -> Result<(
             "desktop bridge does not support explicit session deletion recovery".to_string(),
         );
     }
+    if !health
+        .capabilities
+        .iter()
+        .any(|capability| capability == "session_title_intent_v1")
+    {
+        return Err("desktop bridge does not support durable session title intents".to_string());
+    }
     Ok(())
 }
 
@@ -2115,7 +2122,7 @@ mod tests {
             "protocolVersion": 1,
             "status": "ok",
             "sidecarInstanceId": "instance",
-            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_delete_recovery_list_v1"],
+            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_delete_recovery_list_v1", "session_title_intent_v1"],
         });
         assert!(verify_bridge_health(healthy.clone(), "instance").is_ok());
         assert!(verify_bridge_health(healthy.clone(), "other").is_err());
@@ -2159,6 +2166,16 @@ mod tests {
         assert!(verify_bridge_health(old_recovery_sidecar, "instance")
             .unwrap_err()
             .contains("explicit session deletion recovery"));
+
+        let old_title_intent_sidecar = json!({
+            "protocolVersion": 1,
+            "status": "ok",
+            "sidecarInstanceId": "instance",
+            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_delete_recovery_list_v1"],
+        });
+        assert!(verify_bridge_health(old_title_intent_sidecar, "instance")
+            .unwrap_err()
+            .contains("durable session title intents"));
     }
 
     #[test]

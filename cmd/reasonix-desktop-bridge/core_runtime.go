@@ -177,6 +177,9 @@ func resumeBridgeSession(ctx context.Context, controller *control.Controller, se
 		return fmt.Errorf("%w: %s", ErrKnownSessionMissing, sessionID)
 	}
 	if registered && record.State == sessionidentity.StateReserved && !transcriptExists {
+		if err := recoverBridgeManualTitleRename(ctx, identities, sessionID, path); err != nil {
+			return fmt.Errorf("recover desktop bridge session title: %w", err)
+		}
 		controller.SetFreshSessionPath(path)
 		return nil
 	}
@@ -204,6 +207,11 @@ func resumeBridgeSession(ctx context.Context, controller *control.Controller, se
 	if err != nil {
 		return fmt.Errorf("load desktop bridge session: %w", err)
 	}
+	if registered {
+		if err := recoverBridgeManualTitleRename(ctx, identities, sessionID, path); err != nil {
+			return fmt.Errorf("recover desktop bridge session title: %w", err)
+		}
+	}
 	if registered && record.State == sessionidentity.StateReserved {
 		if err := identities.MarkReady(ctx, sessionID, path); err != nil {
 			return bridgeIdentityConflict(err)
@@ -226,6 +234,40 @@ func bridgeIdentityConflict(err error) error {
 		return fmt.Errorf("%w: %w", desktopbridge.ErrSessionConflict, err)
 	}
 	return err
+}
+
+func recoverBridgeManualTitleRename(ctx context.Context, identities *sessionidentity.Store, sessionID, path string) error {
+	intent, pending, err := identities.PendingManualTitleRename(ctx, sessionID)
+	if err != nil || !pending {
+		return err
+	}
+	if filepath.Clean(intent.Path) != filepath.Clean(path) {
+		return sessionidentity.ErrPathChanged
+	}
+	metaPath := sessionstore.SessionMeta(path)
+	info, err := os.Lstat(metaPath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspect session title metadata: %w", err)
+	}
+	sidecarTitle := ""
+	if err == nil {
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("%w: session title metadata is not a regular file", desktopbridge.ErrSessionConflict)
+		}
+		meta, exists, loadErr := agent.LoadBranchMeta(path)
+		if loadErr != nil || !exists {
+			return fmt.Errorf("%w: session title metadata is unavailable", desktopbridge.ErrSessionConflict)
+		}
+		sidecarTitle = meta.CustomTitle
+	}
+	switch sidecarTitle {
+	case intent.NewTitle:
+		return identities.CommitManualTitleRename(ctx, sessionID, path)
+	case intent.PreviousSidecarTitle:
+		return identities.AbandonManualTitleRename(ctx, sessionID, intent.ExpectedRevision)
+	default:
+		return fmt.Errorf("%w: session title metadata changed during pending rename", desktopbridge.ErrSessionConflict)
+	}
 }
 
 func resumeUncataloguedBridgeSession(controller *control.Controller, path string) error {
@@ -329,26 +371,43 @@ func (r *controllerRuntime) Rename(title string) error {
 	if filepath.Clean(record.Path) != filepath.Clean(path) {
 		return fmt.Errorf("session identity for title update: %w", sessionidentity.ErrPathChanged)
 	}
+	if info, statErr := os.Lstat(sessionstore.SessionMeta(path)); statErr == nil {
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("%w: session title metadata is not a regular file", desktopbridge.ErrSessionConflict)
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return fmt.Errorf("inspect session metadata for title update: %w", statErr)
+	}
 	meta, _, err := agent.LoadBranchMeta(path)
 	if err != nil {
 		return fmt.Errorf("read session metadata for title update: %w", err)
 	}
-	// A deterministic identity-store failure must not change the legacy sidecar.
-	// The sidecar and SQLite cannot commit atomically, so retain the title CAS
-	// below to detect a concurrent identity writer after this preflight.
-	if err := agent.RenameSession(path, title); err != nil {
+	if err := identities.BeginManualTitleRename(context.Background(), r.sessionID, path, meta.CustomTitle, title, record.TitleRevision); err != nil {
+		return fmt.Errorf("begin session identity title update: %w", err)
+	}
+	if err := agent.RenameSessionIfTitleUnchanged(path, meta.CustomTitle, title); err != nil {
+		if latest, exists, readErr := agent.LoadBranchMeta(path); readErr == nil &&
+			(!exists && meta.CustomTitle == "" || exists && latest.CustomTitle == meta.CustomTitle) {
+			_ = identities.AbandonManualTitleRename(context.Background(), r.sessionID, record.TitleRevision)
+		}
+		if errors.Is(err, agent.ErrSessionTitleChanged) {
+			return fmt.Errorf("%w: session title metadata changed during rename", desktopbridge.ErrSessionConflict)
+		}
 		return err
 	}
-	if err := identities.SetTitle(context.Background(), r.sessionID, record.TitleRevision, title, sessionidentity.TitleManualRename); err != nil {
+	if err := identities.CommitManualTitleRename(context.Background(), r.sessionID, path); err != nil {
 		// A failed SQLite statement does not prove whether a commit happened.
 		// Restore the previous sidecar title only after a fresh read proves the
-		// identity row did not change; the conditional meta write leaves a newer
-		// sidecar rename alone if another writer won in the meantime.
+		// identity row did not change. An unfinished durable intent remains if
+		// restoration or intent cleanup fails, so a later open can retry safely.
 		current, stillExists, readErr := identities.Get(context.Background(), r.sessionID)
 		if readErr == nil && stillExists && current.Path == record.Path && current.State == record.State &&
 			current.Title == record.Title && current.TitleSource == record.TitleSource && current.TitleRevision == record.TitleRevision {
 			if restoreErr := agent.RenameSessionIfTitleUnchanged(path, title, meta.CustomTitle); restoreErr != nil {
 				return fmt.Errorf("update session identity title: %w; sidecar compensation failed", err)
+			}
+			if abandonErr := identities.AbandonManualTitleRename(context.Background(), r.sessionID, record.TitleRevision); abandonErr != nil {
+				return fmt.Errorf("update session identity title: %w; title intent cleanup failed", err)
 			}
 		}
 		return fmt.Errorf("update session identity title: %w", err)
