@@ -45,7 +45,7 @@ export function groupWorkbenchSessions(
     groups.set(key, {
       key,
       root,
-      label: title || projectName(key),
+      label: title || projectName(root),
       title: title || undefined,
       sessions: [],
       savedTitle: Boolean(title),
@@ -56,7 +56,7 @@ export function groupWorkbenchSessions(
     const key = projectKey(root, caseInsensitivePaths);
     let group = groups.get(key);
     if (!group) {
-      group = { key, root: root || undefined, label: key ? projectName(key) : "", sessions: [] };
+      group = { key, root: root || undefined, label: root ? projectName(root) : "", sessions: [] };
       groups.set(key, group);
     }
     group.sessions.push(session);
