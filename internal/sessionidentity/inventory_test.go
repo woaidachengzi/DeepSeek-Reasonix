@@ -3,6 +3,7 @@ package sessionidentity
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -180,6 +181,66 @@ func TestInventoryAuditsLegacyHardLinkedTranscripts(t *testing.T) {
 		entry := findEntry(t, first, id)
 		if entry.Claim != ClaimPathConflict || !strings.Contains(entry.Detail, "physical transcript") {
 			t.Fatalf("legacy hard link %q not flagged: %#v", id, entry)
+		}
+	}
+}
+
+func TestInventoryAuditsLateHardLinkAmongManyDistinctFiles(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	identities, err := Open(ctx, filepath.Join(root, "desktop", "state.sqlite"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = identities.Close() })
+	for index := range 64 {
+		id := fmt.Sprintf("peer-%02d", index)
+		path := filepath.Join(sessionDir, "tauri-"+id+".jsonl")
+		writeTranscript(t, path)
+		if _, err := identities.db.ExecContext(ctx, `INSERT INTO sessions
+			(id, relative_path, position, state, created_at_ms, updated_at_ms)
+			VALUES (?, ?, ?, 'ready', 0, 0)`, id, filepath.ToSlash(filepath.Join("sessions", filepath.Base(path))), index); err != nil {
+			t.Fatal(err)
+		}
+	}
+	aliasPath := filepath.Join(sessionDir, "tauri-late-alias.jsonl")
+	if err := os.Link(filepath.Join(sessionDir, "tauri-peer-00.jsonl"), aliasPath); err != nil {
+		t.Skipf("hard links unavailable: %v", err)
+	}
+	if _, err := identities.db.ExecContext(ctx, `INSERT INTO sessions
+		(id, relative_path, position, state, created_at_ms, updated_at_ms)
+		VALUES ('late-alias', 'sessions/tauri-late-alias.jsonl', 64, 'ready', 0, 0)`); err != nil {
+		t.Fatal(err)
+	}
+	report, err := Inventory(ctx, identities, sessionDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"peer-00", "late-alias"} {
+		entry := findEntry(t, report, id)
+		if entry.Claim != ClaimPathConflict {
+			t.Fatalf("late hard-link owner %s was not flagged: %#v", id, entry)
+		}
+	}
+	if entry := findEntry(t, report, "peer-63"); entry.Claim != ClaimRegistered {
+		t.Fatalf("unrelated identity was flagged: %#v", entry)
+	}
+}
+
+func TestFoldedResolvedPathMatchesUnicodeSimpleFold(t *testing.T) {
+	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
+		t.Skip("conservative case folding is enabled only on macOS and Windows")
+	}
+	for _, pair := range [][2]string{{"K", "K"}, {"Σ", "ς"}, {"A", "a"}} {
+		if !strings.EqualFold(pair[0], pair[1]) {
+			t.Fatalf("invalid EqualFold fixture: %q and %q", pair[0], pair[1])
+		}
+		if foldedResolvedPath(pair[0]) != foldedResolvedPath(pair[1]) {
+			t.Fatalf("EqualFold paths received different buckets: %q and %q", pair[0], pair[1])
 		}
 	}
 }

@@ -254,6 +254,8 @@ Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝
 
 **物理 transcript 唯一性**：新身份导入、首次预留、`reserved → ready`、已登记会话恢复前和开始删除的 lifecycle fence 均在 SQLite 写事务中检查 profile 内现存身份，拒绝同一文件经内部目录 symlink 别名或 hard link 被不同 ID 认领；`deleting` 重试和最终 tombstone 写入都会再确认路径唯一，旧库已有别名时拒绝打开、继续清理或完成退休。macOS/Windows 还保守拒绝只差大小写的路径键（macOS 大小写敏感卷上也可能拒绝本可区分的路径）。批量导入冲突会整批回滚。两个 Store 连接并发预留同一物理路径的回归确认最多一方成功，symlink 在预留后改变的用例确认冲突时不会推进为 ready；旧库重复物理路径的打开、删除及中断删除重试用例确认不会加载或清理 transcript。只读 inventory 也会将已有记录中解析到同一路径或同一文件的不同 ID 标记为 path conflict 并写入错误清单，`PrepareImportReview` 遇到这种冲突会拒绝整份计划；`ApplyImportReview` 会重新盘点，计划生成后新增的冲突会令整份计划过期。bridge 将该路径冲突映射为 session conflict（HTTP 409）；物理 inventory 的 `errors` 计数也会传入 Tauri shadow 门禁，使目录选择保持 dirty。审计不自动重写或修复数据库，范围是 inventory 当前列出的身份、catalog 与扫描候选，不是独立的全磁盘硬链接扫描器。
 
+只读 inventory 的物理冲突审计仍逐项解析和检查文件，但 macOS/Linux 对已获取的文件身份按设备号与 inode 分组，对解析路径按等价键分组（macOS 额外采用保守的大小写折叠），只在同组内确认冲突，避免大量互不相关会话之间的两两比较。缺少可用文件身份键时保留逐对 `SameFile` 检查；Windows 目前走这一保守回退，并对路径采用大小写折叠。隔离基准 `BenchmarkInventory` 覆盖 50/500 条完整盘点，可用于观察开销；这项优化不缓存或跳过每页物理盘点，S2 每页全量 shadow 审计的剩余问题仍在。
+
 热路径唯一性检查仍需遍历现存身份，不能用词法索引替代父目录 symlink 和 hard-link 检查。路径校验现复用同一轮父目录校验得到的 profile root 解析结果，但保留父目录与最终 transcript 的分别检查；回归覆盖“父目录指向 profile 外、最终文件又链回 profile 内”的情况。隔离基准 `BenchmarkCheckTranscriptPathUnique` 可用于测量 50/500 条身份目录的成本，不能据此宣布 O(n) 问题已解决。
 
 ### 旧客户端 / sidecar 兼容矩阵（当前验证范围）

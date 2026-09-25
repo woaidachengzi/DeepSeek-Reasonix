@@ -8,8 +8,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
+	"unicode"
 
 	"reasonix/internal/desktopbridge/sessionpath"
 	"reasonix/internal/store"
@@ -300,26 +302,54 @@ func markPhysicalPathConflicts(report *InventoryReport) {
 		owners = append(owners, pathOwner{id: entry.ID, path: entry.Path, resolved: resolved, info: info, entryIndex: entryIndex})
 	}
 	conflicts := make(map[int]map[string]bool)
-	for i := range owners {
-		for j := 0; j < i; j++ {
-			if owners[i].id == owners[j].id {
-				continue // Multiple report sources can describe the same identity.
+	markPair := func(i, j int) {
+		if owners[i].id == owners[j].id {
+			return // Multiple report sources can describe the same identity.
+		}
+		if conflicts[i] == nil {
+			conflicts[i] = make(map[string]bool)
+		}
+		if conflicts[j] == nil {
+			conflicts[j] = make(map[string]bool)
+		}
+		conflicts[i][owners[j].id] = true
+		conflicts[j][owners[i].id] = true
+	}
+	pathBuckets := make(map[string][]int, len(owners))
+	fileBuckets := make(map[physicalFileKey][]int, len(owners))
+	var unkeyedFiles []int
+	for i, owner := range owners {
+		pathKey := foldedResolvedPath(owner.resolved)
+		for _, j := range pathBuckets[pathKey] {
+			if owner.resolved == owners[j].resolved || sameCaseInsensitivePath(owner.resolved, owners[j].resolved) {
+				markPair(i, j)
 			}
-			same := owners[i].resolved == owners[j].resolved ||
-				sameCaseInsensitivePath(owners[i].resolved, owners[j].resolved)
-			if !same && owners[i].info != nil && owners[j].info != nil {
-				same = os.SameFile(owners[i].info, owners[j].info)
-			}
-			if same {
-				if conflicts[i] == nil {
-					conflicts[i] = make(map[string]bool)
+		}
+		pathBuckets[pathKey] = append(pathBuckets[pathKey], i)
+		if owner.info == nil {
+			continue
+		}
+		if key, ok := fileKey(owner.info); ok {
+			for _, j := range fileBuckets[key] {
+				if os.SameFile(owner.info, owners[j].info) {
+					markPair(i, j)
 				}
-				if conflicts[j] == nil {
-					conflicts[j] = make(map[string]bool)
-				}
-				conflicts[i][owners[j].id] = true
-				conflicts[j][owners[i].id] = true
 			}
+			for _, j := range unkeyedFiles {
+				if os.SameFile(owner.info, owners[j].info) {
+					markPair(i, j)
+				}
+			}
+			fileBuckets[key] = append(fileBuckets[key], i)
+		} else {
+			// Platforms without a stable file key retain the conservative
+			// pairwise SameFile check rather than silently missing hard links.
+			for j := 0; j < i; j++ {
+				if owners[j].info != nil && os.SameFile(owner.info, owners[j].info) {
+					markPair(i, j)
+				}
+			}
+			unkeyedFiles = append(unkeyedFiles, i)
 		}
 	}
 	indices := make([]int, 0, len(conflicts))
@@ -339,6 +369,28 @@ func markPhysicalPathConflicts(report *InventoryReport) {
 		entry.Detail = "physical transcript also belongs to session " + strings.Join(others, ", ")
 		report.Errors = append(report.Errors, fmt.Sprintf("%s: %s", entry.ID, entry.Detail))
 	}
+}
+
+// EqualFold uses Unicode simple-fold cycles, not just lowercase mappings.
+// Choosing each rune's smallest cycle member gives equal paths the same
+// bucket on macOS/Windows while the final comparison remains authoritative.
+func foldedResolvedPath(path string) string {
+	path = filepath.Clean(path)
+	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
+		return path
+	}
+	var folded strings.Builder
+	folded.Grow(len(path))
+	for _, original := range path {
+		minimum := original
+		for next := unicode.SimpleFold(original); next != original; next = unicode.SimpleFold(next) {
+			if next < minimum {
+				minimum = next
+			}
+		}
+		folded.WriteRune(minimum)
+	}
+	return folded.String()
 }
 
 // inspectTranscript reports whether a path holds a regular file.
