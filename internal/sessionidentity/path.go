@@ -153,7 +153,11 @@ func validateExistingIdentityDatabase(ctx context.Context, path string) error {
 	// user_version lives on SQLite page 1. A WAL containing only complete
 	// non-page-1 frames cannot override the version already checked in the
 	// main file header. Unknown or changing WAL layouts keep the copy check.
-	canSkipCopy, err := walLeavesSchemaPageUntouched(walFile)
+	mainPageSize := int64(binary.BigEndian.Uint16(header[16:18]))
+	if mainPageSize == 1 {
+		mainPageSize = 65536
+	}
+	canSkipCopy, err := walLeavesSchemaPageUntouched(walFile, mainPageSize)
 	if err != nil {
 		return fmt.Errorf("inspect session identity WAL frames: %w", err)
 	}
@@ -169,7 +173,7 @@ func validateExistingIdentityDatabase(ctx context.Context, path string) error {
 // walLeavesSchemaPageUntouched is deliberately conservative: it only accepts
 // an unchanged, complete WAL with valid frame spacing and no page-1 frame.
 // It does not try to decide which frames SQLite would commit or recover.
-func walLeavesSchemaPageUntouched(file *os.File) (bool, error) {
+func walLeavesSchemaPageUntouched(file *os.File, mainPageSize int64) (bool, error) {
 	before, err := file.Stat()
 	if err != nil {
 		return false, err
@@ -185,8 +189,13 @@ func walLeavesSchemaPageUntouched(file *os.File) (bool, error) {
 	if magic != 0x377f0682 && magic != 0x377f0683 {
 		return false, nil
 	}
+	// Do not interpret frame offsets for a WAL format newer than the layout
+	// documented by SQLite (format version 3007000).
+	if binary.BigEndian.Uint32(header[4:8]) != 3007000 {
+		return false, nil
+	}
 	pageSize := int64(binary.BigEndian.Uint32(header[8:12]))
-	if pageSize < 512 || pageSize > 65536 || pageSize&(pageSize-1) != 0 {
+	if pageSize != mainPageSize || pageSize < 512 || pageSize > 65536 || pageSize&(pageSize-1) != 0 {
 		return false, nil
 	}
 	frameSize := pageSize + 24

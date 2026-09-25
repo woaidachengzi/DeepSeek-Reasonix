@@ -30,11 +30,19 @@ func TestOpenSkipsWALCopyWhenNoSchemaPageWasWritten(t *testing.T) {
 		('ordinary', 'sessions/tauri-ordinary.jsonl', 1, 1)`); err != nil {
 		t.Fatal(err)
 	}
+	walBytes, err := os.ReadFile(path + "-wal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(walBytes) < 32 {
+		t.Fatal("ordinary data write did not leave a WAL header")
+	}
+	pageSize := int64(binary.BigEndian.Uint32(walBytes[8:12]))
 	wal, err := os.Open(path + "-wal")
 	if err != nil {
 		t.Fatal(err)
 	}
-	canSkipCopy, err := walLeavesSchemaPageUntouched(wal)
+	canSkipCopy, err := walLeavesSchemaPageUntouched(wal, pageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,15 +52,16 @@ func TestOpenSkipsWALCopyWhenNoSchemaPageWasWritten(t *testing.T) {
 	if !canSkipCopy {
 		t.Fatal("ordinary row write unexpectedly modified the WAL schema page")
 	}
-	walBytes, err := os.ReadFile(path + "-wal")
-	if err != nil {
-		t.Fatal(err)
-	}
 	for name, content := range map[string][]byte{
 		"incomplete": append(append([]byte(nil), walBytes...), 0),
 		"bad-size": func() []byte {
 			altered := append([]byte(nil), walBytes...)
 			binary.BigEndian.PutUint32(altered[8:12], 513)
+			return altered
+		}(),
+		"unknown-version": func() []byte {
+			altered := append([]byte(nil), walBytes...)
+			binary.BigEndian.PutUint32(altered[4:8], 3007001)
 			return altered
 		}(),
 	} {
@@ -64,11 +73,20 @@ func TestOpenSkipsWALCopyWhenNoSchemaPageWasWritten(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		canSkipCopy, probeErr := walLeavesSchemaPageUntouched(file)
+		canSkipCopy, probeErr := walLeavesSchemaPageUntouched(file, pageSize)
 		_ = file.Close()
 		if probeErr != nil || canSkipCopy {
 			t.Fatalf("%s WAL schema probe = %v, %v; want fallback", name, canSkipCopy, probeErr)
 		}
+	}
+	wal, err = os.Open(path + "-wal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	canSkipCopy, probeErr := walLeavesSchemaPageUntouched(wal, pageSize+512)
+	_ = wal.Close()
+	if probeErr != nil || canSkipCopy {
+		t.Fatalf("mismatched database page size probe = %v, %v; want fallback", canSkipCopy, probeErr)
 	}
 	reopened, err := Open(ctx, path, root)
 	if err != nil {
@@ -107,11 +125,12 @@ func TestWALSchemaPageProbeFallsBackOnPageOneFrame(t *testing.T) {
 	if len(walBytes) <= 32 || binary.BigEndian.Uint32(walBytes[32:36]) != 1 {
 		t.Fatal("future schema fixture did not write page 1 to WAL")
 	}
+	pageSize := int64(binary.BigEndian.Uint32(walBytes[8:12]))
 	file, err := os.Open(path + "-wal")
 	if err != nil {
 		t.Fatal(err)
 	}
-	canSkipCopy, probeErr := walLeavesSchemaPageUntouched(file)
+	canSkipCopy, probeErr := walLeavesSchemaPageUntouched(file, pageSize)
 	_ = file.Close()
 	if probeErr != nil || canSkipCopy {
 		t.Fatalf("page-one WAL schema probe = %v, %v; want fallback", canSkipCopy, probeErr)
