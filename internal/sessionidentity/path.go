@@ -230,17 +230,21 @@ func resolveIdentityPath(path string) (string, error) {
 	current := path
 	var missing []string
 	for {
-		if _, err := os.Lstat(current); err == nil {
-			resolved, err := filepath.EvalSymlinks(current)
-			if err != nil {
-				return "", err
-			}
+		resolved, resolveErr := filepath.EvalSymlinks(current)
+		if resolveErr == nil {
 			for index := len(missing) - 1; index >= 0; index-- {
 				resolved = filepath.Join(resolved, missing[index])
 			}
 			return filepath.Clean(resolved), nil
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return "", err
+		}
+		// A failed resolution is not proof that the path is absent: a
+		// dangling symlink itself exists and must remain an error. On the
+		// common existing-path case EvalSymlinks already checked the path,
+		// so avoid an additional Lstat before it.
+		if _, statErr := os.Lstat(current); statErr == nil {
+			return "", resolveErr
+		} else if !errors.Is(statErr, os.ErrNotExist) {
+			return "", statErr
 		}
 		parent := filepath.Dir(current)
 		if parent == current {

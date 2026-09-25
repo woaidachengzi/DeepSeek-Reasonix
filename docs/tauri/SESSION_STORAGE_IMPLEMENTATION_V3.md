@@ -256,7 +256,7 @@ Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝
 
 只读 inventory 的物理冲突审计仍逐项解析和检查文件，但 macOS/Linux 对已获取的文件身份按设备号与 inode 分组，对解析路径按等价键分组（macOS 额外采用保守的大小写折叠），只在同组内确认冲突，避免大量互不相关会话之间的两两比较。缺少可用文件身份键时保留逐对 `SameFile` 检查；Windows 目前走这一保守回退，并对路径采用大小写折叠。隔离基准 `BenchmarkInventory` 覆盖 50/500 条完整盘点，可用于观察开销；这项优化不缓存或跳过每页物理盘点，S2 每页全量 shadow 审计的剩余问题仍在。
 
-补充的隔离基准分别测量已打开 Store 的完整 inventory、每次经 `OpenReadOnly` 开库的 inventory，以及单独的身份行 `List`。在 Apple M4、500 条均为已登记普通 transcript 且无旧 catalog 的样本中，多次短跑约为 27 ms、29 ms、18 ms/次；数值仅用于定位热点，不代表真实 profile 性能或跨平台保证。当前主要开销是逐行路径校验，而非只读开库；在旧 Wails writer 停写尚未确认的阶段，不以缓存或跳过这些校验换取数字。
+补充的隔离基准分别测量已打开 Store 的完整 inventory、每次经 `OpenReadOnly` 开库的 inventory，以及单独的身份行 `List`。在 Apple M4、500 条均为已登记普通 transcript 且无旧 catalog 的样本中，`4359c238b` 基线多次短跑约为 27 ms、29 ms、18 ms/次；数值仅用于定位热点，不代表真实 profile 性能或跨平台保证。主要开销是逐行路径校验，而非只读开库；在旧 Wails writer 停写尚未确认的阶段，不以缓存或跳过这些校验换取数字。已存在路径的解析现先调用 `EvalSymlinks`，仅在失败时用 `Lstat` 区分缺失路径与断开的 symlink，避免成功路径多做一次检查；缺失、目录别名与断链路径的原有行为由回归覆盖。
 
 热路径唯一性检查仍需遍历现存身份，不能用词法索引替代父目录 symlink 和 hard-link 检查。路径校验现复用同一轮父目录校验得到的 profile root 解析结果，但保留父目录与最终 transcript 的分别检查；回归覆盖“父目录指向 profile 外、最终文件又链回 profile 内”的情况。隔离基准 `BenchmarkCheckTranscriptPathUnique` 可用于测量 50/500 条身份目录的成本，不能据此宣布 O(n) 问题已解决。
 
