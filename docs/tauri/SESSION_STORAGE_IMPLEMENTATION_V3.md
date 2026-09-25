@@ -273,6 +273,8 @@ Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝
 
 补充的隔离基准分别测量已打开 Store 的完整 inventory、每次经 `OpenReadOnly` 开库的 inventory，以及单独的身份行 `List`。在 Apple M4、500 条均为已登记普通 transcript 且无旧 catalog 的样本中，`4359c238b` 基线多次短跑约为 27 ms、29 ms、18 ms/次；数值仅用于定位热点，不代表真实 profile 性能或跨平台保证。主要开销是逐行路径校验，而非只读开库；在旧 Wails writer 停写尚未确认的阶段，不以缓存或跳过这些校验换取数字。已存在路径的解析现先调用 `EvalSymlinks`，仅在失败时用 `Lstat` 区分缺失路径与断开的 symlink，避免成功路径多做一次检查；缺失、目录别名与断链路径的原有行为由回归覆盖。
 
+写路径 `Open` 的 WAL 预检另有保守快路径：主库 header 的 schema version 已核对后，只有当现有 WAL 的帧布局完整且逐帧确认没有第 1 页（`user_version` 所在页）时，才跳过为读取 WAL schema 而做的临时整库复制。出现第 1 页、截断帧或无法判定的布局仍沿用副本校验；SQLite 原库打开后的 `quick_check` 与版本判定也照常执行。`OpenReadOnly` 从来不走这条副本校验，仍直接只读核对 schema 与完整性。此优化不缓存跨请求的 schema 结果，也不解决并发路径替换竞态。
+
 热路径唯一性检查仍需遍历现存身份，不能用词法索引替代父目录 symlink 和 hard-link 检查。路径校验现复用同一轮父目录校验得到的 profile root 解析结果，但保留父目录与最终 transcript 的分别检查；回归覆盖“父目录指向 profile 外、最终文件又链回 profile 内”的情况。隔离基准 `BenchmarkCheckTranscriptPathUnique` 可用于测量 50/500 条身份目录的成本，不能据此宣布 O(n) 问题已解决。
 
 ### 旧客户端 / sidecar 兼容矩阵（当前验证范围）

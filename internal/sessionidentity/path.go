@@ -150,10 +150,63 @@ func validateExistingIdentityDatabase(ctx context.Context, path string) error {
 	if binary.BigEndian.Uint32(magic[:]) != 0x377f0682 && binary.BigEndian.Uint32(magic[:]) != 0x377f0683 {
 		return errors.New("session identity WAL header is invalid")
 	}
+	// user_version lives on SQLite page 1. A WAL containing only complete
+	// non-page-1 frames cannot override the version already checked in the
+	// main file header. Unknown or changing WAL layouts keep the copy check.
+	canSkipCopy, err := walLeavesSchemaPageUntouched(walFile)
+	if err != nil {
+		return fmt.Errorf("inspect session identity WAL frames: %w", err)
+	}
+	if canSkipCopy {
+		return nil
+	}
 	if err := inspectWALSchemaOnCopy(ctx, path); err != nil {
 		return err
 	}
 	return nil
+}
+
+// walLeavesSchemaPageUntouched is deliberately conservative: it only accepts
+// an unchanged, complete WAL with valid frame spacing and no page-1 frame.
+// It does not try to decide which frames SQLite would commit or recover.
+func walLeavesSchemaPageUntouched(file *os.File) (bool, error) {
+	before, err := file.Stat()
+	if err != nil {
+		return false, err
+	}
+	if before.Size() < 32 {
+		return false, nil
+	}
+	var header [32]byte
+	if _, err := file.ReadAt(header[:], 0); err != nil {
+		return false, err
+	}
+	magic := binary.BigEndian.Uint32(header[:4])
+	if magic != 0x377f0682 && magic != 0x377f0683 {
+		return false, nil
+	}
+	pageSize := int64(binary.BigEndian.Uint32(header[8:12]))
+	if pageSize < 512 || pageSize > 65536 || pageSize&(pageSize-1) != 0 {
+		return false, nil
+	}
+	frameSize := pageSize + 24
+	if (before.Size()-32)%frameSize != 0 {
+		return false, nil
+	}
+	var pageNumber [4]byte
+	for offset := int64(32); offset < before.Size(); offset += frameSize {
+		if _, err := file.ReadAt(pageNumber[:], offset); err != nil {
+			return false, err
+		}
+		if binary.BigEndian.Uint32(pageNumber[:]) <= 1 {
+			return false, nil
+		}
+	}
+	after, err := file.Stat()
+	if err != nil {
+		return false, err
+	}
+	return before.Size() == after.Size() && before.ModTime() == after.ModTime() && os.SameFile(before, after), nil
 }
 
 func inspectWALSchemaOnCopy(ctx context.Context, path string) error {
