@@ -5,6 +5,7 @@ export interface WorkbenchProjectGroup {
   key: string;
   root?: string;
   label: string;
+  title?: string;
   sessions: TauriWorkbenchSession[];
   savedTitle?: boolean;
 }
@@ -42,6 +43,7 @@ export function groupWorkbenchSessions(
       key,
       root,
       label: title || projectName(key),
+      title: title || undefined,
       sessions: [],
       savedTitle: Boolean(title),
     });
@@ -57,13 +59,25 @@ export function groupWorkbenchSessions(
     group.sessions.push(session);
   }
   const result = [...groups.values()];
-  const labelCounts = new Map<string, number>();
-  for (const group of result) labelCounts.set(group.label, (labelCounts.get(group.label) ?? 0) + 1);
+  const duplicateLabels = new Map<string, WorkbenchProjectGroup[]>();
   for (const group of result) {
-    if (group.root && !group.savedTitle && (labelCounts.get(group.label) ?? 0) > 1) {
-      const segments = group.root.split(/[/\\]/).filter(Boolean);
-      const parent = segments[segments.length - 2];
-      group.label = parent ? `${group.label} · ${parent}` : group.root;
+    const sameLabel = duplicateLabels.get(group.label) ?? [];
+    sameLabel.push(group);
+    duplicateLabels.set(group.label, sameLabel);
+  }
+  for (const [label, duplicates] of duplicateLabels) {
+    if (duplicates.length < 2) continue;
+    const parentCounts = new Map<string, number>();
+    for (const group of duplicates) {
+      const segments = (group.root ?? "").split(/[/\\]/).filter(Boolean);
+      const parent = segments[segments.length - 2] ?? "";
+      parentCounts.set(parent, (parentCounts.get(parent) ?? 0) + 1);
+    }
+    for (const group of duplicates) {
+      const segments = (group.root ?? "").split(/[/\\]/).filter(Boolean);
+      const parent = segments[segments.length - 2] ?? "";
+      const suffix = parent && parentCounts.get(parent) === 1 ? parent : group.root || label;
+      group.label = `${label} · ${suffix}`;
     }
   }
   return result;
