@@ -34,22 +34,24 @@ export function groupWorkbenchSessions(
 ): WorkbenchProjectGroup[] {
   const groups = new Map<string, WorkbenchProjectGroup>();
   for (const folder of folders) {
-    const key = projectKey(folder.root);
+    const root = folder.root.trim();
+    const key = projectKey(root);
     if (!key || groups.has(key)) continue;
     const title = folder.title?.trim();
     groups.set(key, {
       key,
-      root: key,
+      root,
       label: title || projectName(key),
       sessions: [],
       savedTitle: Boolean(title),
     });
   }
   for (const session of sessions) {
-    const key = projectKey(session.workspaceRoot);
+    const root = (session.workspaceRoot ?? "").trim();
+    const key = projectKey(root);
     let group = groups.get(key);
     if (!group) {
-      group = { key, root: key || undefined, label: key ? projectName(key) : "", sessions: [] };
+      group = { key, root: root || undefined, label: key ? projectName(key) : "", sessions: [] };
       groups.set(key, group);
     }
     group.sessions.push(session);
