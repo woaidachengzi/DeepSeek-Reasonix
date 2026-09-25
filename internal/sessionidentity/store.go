@@ -796,6 +796,13 @@ func (s *Store) ListPendingDeletes(ctx context.Context) ([]PendingDelete, error)
 		if len(deletions) == MaxPendingDeletes {
 			return nil, errors.New("too many pending session deletions")
 		}
+		// Legacy imports can retain titles that the host or UI refuses to
+		// display. Keep the deletion discoverable with a neutral title without
+		// rewriting the stored metadata or dropping any pending identity.
+		if !utf8.ValidString(pending.Title) || utf8.RuneCountInString(pending.Title) > 120 ||
+			strings.IndexFunc(pending.Title, unicode.IsControl) >= 0 {
+			pending.Title = ""
+		}
 		deletions = append(deletions, pending)
 	}
 	if err := rows.Err(); err != nil {

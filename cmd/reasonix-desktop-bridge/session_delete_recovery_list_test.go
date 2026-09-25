@@ -98,3 +98,80 @@ func TestPendingSessionDeletesExposePathFreeExplicitRecoveryEntries(t *testing.T
 		t.Fatalf("recovered identity = %#v, exists=%v, err=%v", record, exists, err)
 	}
 }
+
+func TestPendingSessionDeletesKeepEveryEntryWhenImportedTitlesAreUnsafe(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	sessionDir := appconfig.SessionDir()
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	identities, err := sessionidentity.Open(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	titles := []struct {
+		id, stored, displayed string
+	}{
+		{"long-title", strings.Repeat("a", 1025), ""},
+		{"control-title", "old\nlegacy title", ""},
+		{"safe-title", "Visible title", "Visible title"},
+	}
+	for position, entry := range titles {
+		transcript, err := sessionpath.TranscriptPath(sessionDir, entry.id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(transcript, []byte("pending deletion\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := identities.Import(ctx, sessionDir, []sessionidentity.Candidate{{
+			ID: entry.id, Path: transcript, Title: entry.stored, Position: position,
+		}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := identities.BeginDelete(ctx, entry.id, transcript); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := identities.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := newBridgeServer(testToken, "instance", desktopbridge.NewRuntimeManager(newControllerFactory(nil))).handler()
+	request := httptest.NewRequest(http.MethodGet, "/v1/sessions/deletion-recovery", nil)
+	request.Header.Set("Authorization", "Bearer "+testToken)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("pending delete status=%d body=%s", response.Code, response.Body.String())
+	}
+	var body pendingSessionDeletesResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Sessions) != len(titles) {
+		t.Fatalf("pending deletes = %#v", body.Sessions)
+	}
+	for index, entry := range titles {
+		if body.Sessions[index].ID != entry.id || body.Sessions[index].Title != entry.displayed {
+			t.Fatalf("pending delete %d = %#v", index, body.Sessions[index])
+		}
+	}
+	if strings.Contains(response.Body.String(), `"path"`) {
+		t.Fatalf("pending delete response leaked a path: %s", response.Body.String())
+	}
+	identities, err = sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer identities.Close()
+	for _, entry := range titles {
+		record, exists, err := identities.Get(ctx, entry.id)
+		if err != nil || !exists || record.Title != entry.stored || record.State != sessionidentity.StateDeleting {
+			t.Fatalf("stored identity %s = %#v, exists=%v, err=%v", entry.id, record, exists, err)
+		}
+	}
+}
