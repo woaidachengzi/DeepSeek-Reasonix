@@ -86,9 +86,13 @@ func auditIdentitySidecarTitles(report *sessionidentity.InventoryReport) {
 		if entry.Source != sessionidentity.InventoryFromIdentity || !entry.Exists || entry.Detail != "" {
 			continue
 		}
+		requiresMirror := entry.TitleSource == sessionidentity.TitleUser && entry.Title != ""
 		metaPath := sessionstore.SessionMeta(entry.Path)
 		info, err := os.Lstat(metaPath)
 		if os.IsNotExist(err) {
+			if requiresMirror {
+				report.Errors = append(report.Errors, entry.ID+": session title metadata is absent")
+			}
 			continue
 		}
 		detail := ""
@@ -99,7 +103,9 @@ func auditIdentitySidecarTitles(report *sessionidentity.InventoryReport) {
 			meta, present, loadErr := agent.LoadBranchMeta(entry.Path)
 			if loadErr != nil {
 				detail = "session title metadata is unreadable"
-			} else if present && meta.CustomTitle != "" && meta.CustomTitle != entry.Title {
+			} else if !present && requiresMirror {
+				detail = "session title metadata is unreadable"
+			} else if present && meta.CustomTitle != entry.Title && (meta.CustomTitle != "" || requiresMirror) {
 				detail = "session title metadata differs from identity"
 			}
 		}

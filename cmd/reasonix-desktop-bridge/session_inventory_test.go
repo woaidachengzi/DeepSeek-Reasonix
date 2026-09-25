@@ -225,6 +225,72 @@ func TestSessionInventoryReportsSidecarTitleDriftWithoutChangingSources(t *testi
 	}
 }
 
+func TestSessionInventoryRequiresMirrorForUserTitleButNotLegacyTitle(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	ctx := context.Background()
+	sessionDir := appconfig.SessionDir()
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	manualPath := filepath.Join(sessionDir, "tauri-manual.jsonl")
+	legacyPath := filepath.Join(sessionDir, "tauri-legacy.jsonl")
+	for _, path := range []string{manualPath, legacyPath} {
+		if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	identities, err := sessionidentity.Open(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Import(ctx, sessionDir, []sessionidentity.Candidate{
+		{ID: "manual", Path: manualPath},
+		{ID: "legacy", Path: legacyPath, Title: "Legacy catalog title", Position: 1},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.SetTitle(ctx, "manual", 0, "Chosen title", sessionidentity.TitleManualRename); err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := agent.RenameSession(manualPath, "Chosen title"); err != nil {
+		t.Fatal(err)
+	}
+	readErrors := func() []string {
+		request := httptest.NewRequest(http.MethodGet, "/v1/sessions/inventory", nil)
+		request.Header.Set("Authorization", "Bearer "+testToken)
+		response := httptest.NewRecorder()
+		newBridgeServer(testToken, "instance", nil).handler().ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("inventory status=%d body=%s", response.Code, response.Body.String())
+		}
+		var body sessionInventoryResponse
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		return body.Errors
+	}
+	if errors := readErrors(); len(errors) != 0 {
+		t.Fatalf("matching user title or absent legacy sidecar was reported dirty: %#v", errors)
+	}
+	if err := os.Remove(agent.BranchMetaPath(manualPath)); err != nil {
+		t.Fatal(err)
+	}
+	if errors := readErrors(); len(errors) != 1 || !strings.Contains(errors[0], "manual") {
+		t.Fatalf("missing user-title mirror was not reported: %#v", errors)
+	}
+	if err := agent.RenameSession(manualPath, ""); err != nil {
+		t.Fatal(err)
+	}
+	if errors := readErrors(); len(errors) != 1 || !strings.Contains(errors[0], "manual") {
+		t.Fatalf("empty user-title mirror was not reported: %#v", errors)
+	}
+}
+
 // The identity path is the store's own location and must not be settable by the
 // caller, or a request could point the store outside the profile.
 func TestSessionInventoryIgnoresACallerSuppliedIdentityPath(t *testing.T) {

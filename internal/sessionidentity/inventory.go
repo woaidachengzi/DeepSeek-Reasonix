@@ -52,15 +52,18 @@ const (
 
 // InventoryEntry is one row of the read-only session inventory.
 type InventoryEntry struct {
-	ID            string          `json:"id"`
-	Path          string          `json:"path"`
-	Exists        bool            `json:"exists"`
-	Registered    bool            `json:"registered"`
-	WorkspaceRoot string          `json:"workspaceRoot,omitempty"`
-	Title         string          `json:"title,omitempty"`
-	Source        InventorySource `json:"source"`
-	Claim         InventoryClaim  `json:"claim"`
-	Detail        string          `json:"detail,omitempty"`
+	ID            string `json:"id"`
+	Path          string `json:"path"`
+	Exists        bool   `json:"exists"`
+	Registered    bool   `json:"registered"`
+	WorkspaceRoot string `json:"workspaceRoot,omitempty"`
+	Title         string `json:"title,omitempty"`
+	// TitleSource is needed by the bridge's local sidecar audit but is not
+	// part of the inventory wire format or import-review manifest.
+	TitleSource TitleSource     `json:"-"`
+	Source      InventorySource `json:"source"`
+	Claim       InventoryClaim  `json:"claim"`
+	Detail      string          `json:"detail,omitempty"`
 }
 
 // InventoryReport is the whole listing plus the summary a reviewer needs.
@@ -118,6 +121,7 @@ func Inventory(ctx context.Context, identities *Store, sessionDir, catalogPath s
 			Registered:    true,
 			WorkspaceRoot: record.WorkspaceRoot,
 			Title:         record.Title,
+			TitleSource:   record.TitleSource,
 			Source:        InventoryFromIdentity,
 			Claim:         ClaimRegistered,
 		}
