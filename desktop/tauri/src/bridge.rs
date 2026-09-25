@@ -2783,7 +2783,7 @@ mod tests {
     }
 
     #[test]
-    fn physical_inventory_accepts_explicit_empty_arrays_from_real_bridge() {
+    fn real_bridge_exposes_empty_inventory_and_deletion_recovery_list() {
         let Some(binary) = bridge_under_test() else {
             return;
         };
@@ -2800,6 +2800,10 @@ mod tests {
         assert!(inventory.states.is_empty());
         assert_eq!(inventory.unclaimed_count, 0);
         assert_eq!(inventory.error_count, 0);
+        assert!(supervisor
+            .pending_session_deletes()
+            .expect("read empty deletion recovery list")
+            .is_empty());
         supervisor.stop().expect("stop bridge");
     }
 
