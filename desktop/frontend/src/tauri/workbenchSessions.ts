@@ -80,6 +80,21 @@ export function groupWorkbenchSessions(
       group.label = `${label} · ${suffix}`;
     }
   }
+  const usedLabels = new Set<string>();
+  for (const group of result) {
+    if (usedLabels.has(group.label)) {
+      const base = group.label;
+      const path = group.root ?? "会话";
+      let candidate = `${base} · ${path}`;
+      let suffix = 2;
+      while (usedLabels.has(candidate)) {
+        candidate = `${base} · ${path} (${suffix})`;
+        suffix += 1;
+      }
+      group.label = candidate;
+    }
+    usedLabels.add(group.label);
+  }
   return result;
 }
 
