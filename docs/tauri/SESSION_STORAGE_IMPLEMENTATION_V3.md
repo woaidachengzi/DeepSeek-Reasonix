@@ -307,6 +307,8 @@ Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝
 
 **标题恢复入口后的候选旧 host 复测（2026-09-25）**：`verify-legacy-host.sh` 从当前 bridge 提交 `39a598e0c035d56fd1a241bdb0b89ab4fac63ce9` 与候选旧 host 源码 `50c1b9bc6` 重建，三项真实进程测试再次全部通过；候选 debug host SHA-256 为 `a7e3b24eeb15c601c034f621fdd456d5c09af4338c4d9271eff3ee554d67d7a5`，隔离 profile 与产物位于 `/var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/reasonix-tauri-compat.4kmCCR`。这只证明新增只读入口后候选旧 host 的原有流程仍可用，不含应用窗口交互或实际签名发布包；正式旧 host 二进制认证仍未完成。
 
+**当前 bridge 候选旧 host 复测（2026-09-25）**：从 bridge 提交 `b9499ac6e26b10e13f731c853316d4809557e64a` 与候选旧 host 源码 `50c1b9bc6` 在临时目录重建，真实进程启停、改名后重启读取、删除隔离会话三项测试均通过；候选 debug host SHA-256 为 `2d8f1d31fb83bb346e08e3ad336c75b7062123cefbc60681192a19446ada6e2f`。二进制与三个测试 profile 位于 `/var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/reasonix-tauri-compat.jnKBHq`，哈希和独立 profile 目录已复核；没有读取或修改真实 profile。此结果仍只针对候选源码和测试 harness，不含应用窗口交互、签名/公证或正式旧发布二进制，兼容矩阵结论不升级。
+
 1. 新会话先 `reserved` 登记 ID；实际写入后转 `ready`。bridge 的打开/切换/重命名/删除均先解析身份行，再定位文件。无记录的新建与已登记但 `missing` 的恢复必须分开。
 2. 一段发布窗口内，host 对比 JSON 与 SQLite 的 ID/标题/工作区/顺序/文件状态；只记录差异统计，不把私密消息写诊断。SQLite 只在影子报告 clean 时作为当前 Preview 侧栏来源，否则继续显示 JSON；差异或盘点错误不得进入 SQLite 来源。
 3. 对删除使用持久状态机：先标 `deleting` 并阻止新写，再调用既有 `control.RemoveSessionArtifacts`，成功后保留 `deleted` tombstone；重启时重试未完成清理。若 tombstone 已提交但 host JSON 尚未清理，路径匹配的重复 DELETE 幂等成功以便清理陈旧 catalog 行，不重新扫描或删除 artifacts。文件系统与 SQLite 无法组成一个原子事务，不能承诺“同时消失”。
