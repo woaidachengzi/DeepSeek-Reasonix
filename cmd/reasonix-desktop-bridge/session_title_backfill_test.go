@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +13,29 @@ import (
 	"reasonix/internal/desktopbridge/sessionpath"
 	"reasonix/internal/sessionidentity"
 )
+
+func TestBackfillSessionTitlesRejectsMalformedJSONWithProtocolError(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	request := httptest.NewRequest(http.MethodPost, "/v1/sessions/titles/first-message", strings.NewReader(`{"titles":[`))
+	request.Header.Set("Authorization", "Bearer "+testToken)
+	response := httptest.NewRecorder()
+	newBridgeServer(testToken, "instance", nil).handler().ServeHTTP(response, request)
+	var body struct {
+		ProtocolVersion int `json:"protocolVersion"`
+		Error           struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if response.Code != http.StatusBadRequest || json.Unmarshal(response.Body.Bytes(), &body) != nil ||
+		body.ProtocolVersion != 1 || body.Error.Code != "invalid_request" {
+		t.Fatalf("malformed title backfill response: status=%d body=%s", response.Code, response.Body.String())
+	}
+	if _, err := os.Lstat(appconfig.DesktopSessionIdentityPath()); !os.IsNotExist(err) {
+		t.Fatalf("malformed title backfill opened identity store: %v", err)
+	}
+}
 
 func TestBackfillSessionTitlesOnlyFillsFallbackTitles(t *testing.T) {
 	root := t.TempDir()

@@ -3,8 +3,6 @@ package main
 import (
 	"net/http"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	appconfig "reasonix/internal/config"
 	"reasonix/internal/desktopbridge"
@@ -32,6 +30,7 @@ type backfillSessionTitlesResponse struct {
 func (b *bridgeServer) backfillSessionTitles(w http.ResponseWriter, r *http.Request) {
 	var request backfillSessionTitlesRequest
 	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid first-message title request")
 		return
 	}
 	if len(request.Titles) > 50 {
@@ -60,8 +59,7 @@ func (b *bridgeServer) backfillSessionTitles(w http.ResponseWriter, r *http.Requ
 			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "session title contains a duplicate identifier")
 			return
 		}
-		if strings.TrimSpace(item.Title) == "" || utf8.RuneCountInString(item.Title) > 120 ||
-			strings.IndexFunc(item.Title, unicode.IsControl) >= 0 {
+		if strings.TrimSpace(item.Title) == "" || !sessionidentity.ValidWorkbenchCatalogTitle(item.Title) {
 			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "session title is invalid")
 			return
 		}
