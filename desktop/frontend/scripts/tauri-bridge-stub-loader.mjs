@@ -133,6 +133,11 @@ export function tauriImportLegacySessionCatalog() {
 
 export function tauriSessionCatalogShadow() {
   record("bridge_session_catalog_shadow");
+  const responses = globalThis.__sessionCatalogShadowResponses;
+  if (Array.isArray(responses) && responses.length > 0) {
+    const response = responses.shift();
+    return response instanceof Error ? Promise.reject(response) : Promise.resolve(response);
+  }
   if (globalThis.__failSessionCatalogShadow) {
     globalThis.__failSessionCatalogShadow = false;
     return Promise.reject(new Error("session catalog shadow unavailable"));

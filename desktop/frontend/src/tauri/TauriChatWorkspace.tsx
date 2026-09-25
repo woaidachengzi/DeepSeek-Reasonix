@@ -838,15 +838,20 @@ export function TauriSessionPreview() {
   }
 
   async function reloadFirstWorkbenchSessionPage(request: number, isActive: () => boolean) {
+    // A fresh guarded first page replaces the previous snapshot. Invalidate
+    // any continuation already in flight before it can append old rows.
+    sessionPageRevisionRef.current += 1;
     try {
       const page = await tauriWorkbenchSessionPage();
       if (request !== catalogAuditRequestRef.current || !isActive()) return;
+      sessionPageRevisionRef.current += 1;
       setTabs(page.sessions);
       setSessionPageCursor(page.nextCursor ?? null);
       setSessionPageSource(page.source);
       setSessionPageError("");
     } catch (cause) {
       if (request === catalogAuditRequestRef.current && isActive()) {
+        sessionPageRevisionRef.current += 1;
         setTabs([]);
         setSessionPageCursor(null);
         setSessionPageSource("unavailable");
@@ -875,7 +880,6 @@ export function TauriSessionPreview() {
   async function retryWorkbenchSessionDirectory() {
     if (sessionPageRequestRef.current) return;
     sessionPageRequestRef.current = true;
-    sessionPageRevisionRef.current += 1;
     const request = ++catalogAuditRequestRef.current;
     setSessionPageLoading(true);
     setSessionPageError("");
@@ -902,6 +906,7 @@ export function TauriSessionPreview() {
           // the visible source and return to the compatible host catalog.
           await reloadFirstWorkbenchSessionPage(request, isActive);
         } else if (refreshVisiblePage && sessionPageSource === "identity") {
+          sessionPageRevisionRef.current += 1;
           try {
             const desiredPages = Math.max(1, Math.ceil(tabs.length / 200));
             let page = await tauriWorkbenchSessionPage();
@@ -910,6 +915,7 @@ export function TauriSessionPreview() {
               // The guarded page can detect drift after the separate shadow
               // check. Honor its newer source instead of relabeling JSON as
               // a verified identity page and hiding the 50-row warning.
+              sessionPageRevisionRef.current += 1;
               setTabs(page.sessions);
               setSessionPageCursor(page.nextCursor ?? null);
               setSessionPageSource(page.source);
@@ -924,6 +930,7 @@ export function TauriSessionPreview() {
               page = await tauriWorkbenchSessionPage(cursor);
               if (request !== catalogAuditRequestRef.current || !isActive()) return;
               if (page.source !== "identity") {
+                sessionPageRevisionRef.current += 1;
                 setTabs(page.sessions);
                 setSessionPageCursor(page.nextCursor ?? null);
                 setSessionPageSource(page.source);
@@ -937,6 +944,7 @@ export function TauriSessionPreview() {
               pagesRead += 1;
             }
             if (request === catalogAuditRequestRef.current && isActive()) {
+              sessionPageRevisionRef.current += 1;
               setTabs(previous => preserveWorkbenchLifecycle(sessions, previous));
               setSessionPageCursor(cursor);
               setSessionPageSource("identity");

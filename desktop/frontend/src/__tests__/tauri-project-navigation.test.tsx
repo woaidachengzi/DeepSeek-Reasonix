@@ -198,4 +198,34 @@ assert.doesNotMatch(document.body.textContent ?? "", /审计时的身份页/);
 assert.match(document.body.textContent ?? "", /最多 50 条/);
 assert.ok(document.querySelector<HTMLButtonElement>('[aria-label="重新检查会话目录"]'));
 await act(async () => { root.unmount(); });
+
+let rejectAudit!: (reason: Error) => void;
+let resolveOldContinuation!: (page: unknown) => void;
+const delayedAudit = new Promise<unknown>((_, reject) => { rejectAudit = reject; });
+const delayedContinuation = new Promise<unknown>(resolve => { resolveOldContinuation = resolve; });
+(globalThis as unknown as { __workbenchSessions: unknown[] }).__workbenchSessions = [
+  { sessionId: "old-first", title: "旧身份首屏" },
+];
+(globalThis as unknown as { __sessionCatalogShadowResponses: unknown[] }).__sessionCatalogShadowResponses = [delayedAudit];
+(globalThis as unknown as { __workbenchPages: unknown[] }).__workbenchPages = [
+  { sessions: [{ sessionId: "old-first", title: "旧身份首屏" }], nextCursor: { position: 0, id: "old-first", snapshotId: "d".repeat(64) }, total: 2, source: "identity" },
+  delayedContinuation,
+  { sessions: [{ sessionId: "fallback-first", title: "审计失败后的兼容首屏" }], nextCursor: null, total: 1, source: "legacy" },
+];
+root = createRoot(document.getElementById("root")!);
+await act(async () => { root.render(React.createElement(TauriSessionApp)); await new Promise(resolve => setTimeout(resolve, 0)); });
+await act(async () => {
+  document.querySelector<HTMLButtonElement>('[aria-label="加载更多会话"]')?.click();
+  await new Promise(resolve => setTimeout(resolve, 0));
+});
+await act(async () => { rejectAudit(new Error("shadow changed during continuation")); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.match(document.body.textContent ?? "", /审计失败后的兼容首屏/);
+assert.match(document.body.textContent ?? "", /最多 50 条/);
+await act(async () => {
+  resolveOldContinuation({ sessions: [{ sessionId: "stale-second", title: "过时的身份续页" }], nextCursor: null, total: 2, source: "identity" });
+  await new Promise(resolve => setTimeout(resolve, 0));
+});
+assert.doesNotMatch(document.body.textContent ?? "", /过时的身份续页/);
+assert.match(document.body.textContent ?? "", /最多 50 条/);
+await act(async () => { root.unmount(); });
 console.log("tauri project navigation and legacy title backfill: OK");
