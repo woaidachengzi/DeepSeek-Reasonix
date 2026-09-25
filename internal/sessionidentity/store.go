@@ -411,16 +411,13 @@ func relativeTranscriptPath(profileRoot, id, transcriptPath string) (string, err
 	if err != nil {
 		return "", err
 	}
-	if err := validateCandidate(root, Candidate{ID: id, Path: path}); err != nil {
+	resolvedRoot, err := validateCandidateWithResolvedRoot(root, Candidate{ID: id, Path: path})
+	if err != nil {
 		return "", err
 	}
 	relative, err := filepath.Rel(root, path)
 	if err != nil || relative == "." || relative == ".." || filepath.IsAbs(relative) || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		return "", errors.New("transcript path escapes session profile root")
-	}
-	resolvedRoot, err := resolveIdentityPath(root)
-	if err != nil {
-		return "", fmt.Errorf("resolve session profile root: %w", err)
 	}
 	resolvedPath, err := resolveIdentityPath(path)
 	if err != nil {
@@ -778,28 +775,37 @@ func (s *Store) importCandidates(ctx context.Context, previewRoot string, candid
 }
 
 func validateCandidate(root string, candidate Candidate) error {
+	_, err := validateCandidateWithResolvedRoot(root, candidate)
+	return err
+}
+
+// validateCandidateWithResolvedRoot returns the root resolved by the parent
+// path check, so callers that also validate the transcript itself need not
+// resolve the same root a second time. The parent check must remain separate:
+// a parent can escape the profile even if the final file links back inside.
+func validateCandidateWithResolvedRoot(root string, candidate Candidate) (string, error) {
 	if candidate.ID == "" || len(candidate.ID) > 128 || candidate.Position < 0 {
-		return errors.New("invalid session identity candidate")
+		return "", errors.New("invalid session identity candidate")
 	}
 	for _, c := range []byte(candidate.ID) {
 		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
 			(c >= '0' && c <= '9') || c == '-' || c == '_') {
-			return errors.New("invalid session identity candidate")
+			return "", errors.New("invalid session identity candidate")
 		}
 	}
 	if !filepath.IsAbs(candidate.Path) || filepath.Ext(candidate.Path) != ".jsonl" {
-		return errors.New("transcript path is invalid")
+		return "", errors.New("transcript path is invalid")
 	}
 	rel, err := filepath.Rel(root, filepath.Clean(candidate.Path))
 	if err != nil || rel == ".." || filepath.IsAbs(rel) || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return errors.New("transcript path escapes preview root")
+		return "", errors.New("transcript path escapes preview root")
 	}
 	// A lexical relative path is not enough: root/sessions may be a symlink
 	// outside the profile. Resolve the nearest existing parent so even a
 	// missing transcript below a linked directory cannot be imported later.
 	resolvedRoot, err := filepath.EvalSymlinks(root)
 	if err != nil {
-		return fmt.Errorf("resolve preview root: %w", err)
+		return "", fmt.Errorf("resolve preview root: %w", err)
 	}
 	parent := filepath.Dir(candidate.Path)
 	for {
@@ -808,19 +814,19 @@ func validateCandidate(root string, candidate Candidate) error {
 			resolvedRel, relErr := filepath.Rel(resolvedRoot, resolvedParent)
 			if relErr != nil || resolvedRel == ".." || filepath.IsAbs(resolvedRel) ||
 				strings.HasPrefix(resolvedRel, ".."+string(filepath.Separator)) {
-				return errors.New("transcript path escapes preview root through a symlink")
+				return "", errors.New("transcript path escapes preview root through a symlink")
 			}
 			break
 		}
 		if !errors.Is(resolveErr, os.ErrNotExist) {
-			return fmt.Errorf("resolve transcript parent: %w", resolveErr)
+			return "", fmt.Errorf("resolve transcript parent: %w", resolveErr)
 		}
 		if parent == root {
-			return fmt.Errorf("resolve transcript parent: %w", resolveErr)
+			return "", fmt.Errorf("resolve transcript parent: %w", resolveErr)
 		}
 		parent = filepath.Dir(parent)
 	}
-	return nil
+	return resolvedRoot, nil
 }
 
 func (s *Store) List(ctx context.Context) ([]Record, error) {

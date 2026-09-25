@@ -563,6 +563,36 @@ func TestImportAndReserveRejectSessionDirectorySymlinkEscape(t *testing.T) {
 	}
 }
 
+func TestRelativeTranscriptPathRejectsEscapedParentEvenWhenFileLinksBackInside(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	insideDir := filepath.Join(root, "sessions")
+	if err := os.MkdirAll(insideDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	inside := filepath.Join(insideDir, "tauri-inside.jsonl")
+	if err := os.WriteFile(inside, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(inside, filepath.Join(outside, "tauri-inside.jsonl")); err != nil {
+		t.Skipf("file symlinks unavailable: %v", err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "escaped-parent")); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+	path := filepath.Join(root, "escaped-parent", "tauri-inside.jsonl")
+	resolvedInside, err := resolveIdentityPath(inside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved, err := resolveIdentityPath(path); err != nil || resolved != resolvedInside {
+		t.Fatalf("fixture did not link back inside profile: resolved=%q want=%q err=%v", resolved, resolvedInside, err)
+	}
+	if _, err := relativeTranscriptPath(root, "inside", path); err == nil {
+		t.Fatal("transcript path through an external parent was accepted")
+	}
+}
+
 func TestImportRejectsPhysicalTranscriptAliases(t *testing.T) {
 	for _, aliasKind := range []string{"internal-directory-symlink", "hard-link"} {
 		t.Run(aliasKind, func(t *testing.T) {
