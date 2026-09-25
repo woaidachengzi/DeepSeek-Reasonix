@@ -249,8 +249,8 @@ Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝
 
 | 组合 | 结论 | 依据 / 限制 |
 | --- | --- | --- |
-| 当前 Tauri host + 当前 bridge（protocol v1，含 `session_catalog_sync`、目录快照 capability 与 `session_delete_recovery_list_v1`） | 支持 | Host 启动时先校验 ready frame，再读取认证 health；协议版本、sidecar instance ID 或必需 capability 不匹配时，拒绝把该进程登记为可用并终止它。 |
-| 当前 Tauri host + 旧 bridge（仍报 protocol v1、但缺少任一必需目录/恢复 capability） | 明确拒绝 | protocol major 相同不代表新增 endpoint 可用；health capability 缺失会在启动阶段报错，不等到首次目录读取或恢复检查才失败。 |
+| 当前 Tauri host + 当前 bridge（protocol v1，含会话同步、目录快照、删除恢复和 `session_title_intent_v1` capability） | 支持 | Host 启动时先校验 ready frame，再读取认证 health；协议版本、sidecar instance ID 或必需 capability 不匹配时，拒绝把该进程登记为可用并终止它。 |
+| 当前 Tauri host + 旧 bridge（仍报 protocol v1、但缺少任一必需 capability） | 明确拒绝 | protocol major 相同不代表新增端点及持久标题恢复可用；health capability 缺失会在启动阶段报错。 |
 | 旧 Tauri host + 新 bridge（protocol v1） | 预期向后兼容，非发布认证 | bridge 保留既有 v1 路由；旧 host 不调用新增目录同步接口时，不会要求它理解身份库。完整旧 host 二进制尚未纳入自动化矩阵。 |
 | Wails 1.38.3 / 1.38.10 与 Tauri Preview 共用 profile 并同时写入 | 不支持 | 这些旧 writer 不遵守 `profilegate`。不得用新 bridge 的锁推断旧进程已停；真实 profile 操作前需外部确认 writer 全退出。 |
 | 稳定版 Wails profile 顺序复制到隔离的 Preview，再离线导入 | 有条件支持，需人工核对 | 只对副本执行 inventory、快照、逐项审核导入与恢复演练；不在稳定目录就地迁移、不让两个版本并发写。 |
@@ -266,6 +266,8 @@ Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝
 **脚本复现（2026-09-25）**：再次运行同一隔离脚本，三项旧 host 集成测试均通过；bridge 源码基线为 `224ef28bd94ec53bf0ddceaccd12a03d3552cab1`，本次 debug host SHA-256 为 `04f962e94bca9f20ffeea62a5bd86e68ce8fac01926efc9a361eb4382084b049`，产物与三个独立测试 profile 保留在系统临时目录 `/var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/reasonix-tauri-compat.eiW2d3`。测试通过 localhost loopback 运行，未读取或修改真实 profile；该哈希仍是候选源码基线的 debug 构建，不代表稳定发布二进制，兼容矩阵仍保持“预期向后兼容，非发布认证”。
 
 **当前 bridge 复测（2026-09-25）**：相同脚本从 `50c1b9bc6` 的归档源码与当前 bridge 提交 `d7d8dc422c67d953ed73fc972458cbc0ffafe879` 重建，三项旧 host 真实进程集成测试（启动/停止 bridge、改名后重启读取、删除隔离会话）均通过；当前 Rust host 对这份新 bridge 二进制的真实会话目录同步测试也通过。新生成的 debug 旧 host SHA-256 为 `0d419e82d7422bc58226fc4fd2e7070b849e55c87242674eb52c665145922f21`，一次性测试 profile 与构建产物位于 `/var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/reasonix-tauri-compat.WvRjwU`。这是候选源码的兼容回归，不涉及真实 profile，也未验证应用窗口交互、签名、公证或旧版发布二进制；矩阵结论不升级。
+
+**v5 标题意图复测（2026-09-25）**：以当前 bridge 源码 `ea8e0dee5ad8d85fb0f6f95be1ab4075c45506e0` 和候选旧 host 源码 `50c1b9bc6` 在独立临时 profile 中重跑上述三项真实进程集成测试，全部通过；候选 debug host SHA-256 为 `b7f5c3f1a2e6f4d0589055dae3398643dc8f047ad94d8e01dab5b25f50d9b64d`，产物保留于 `/var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/reasonix-tauri-compat.thPN9x`。当前 host 的 83 项 Rust 测试也用该 bridge 的临时构建运行通过。这仍是候选源码与测试 harness 的隔离验证，未触碰真实 profile，也不是旧发布二进制认证。
 
 1. 新会话先 `reserved` 登记 ID；实际写入后转 `ready`。bridge 的打开/切换/重命名/删除均先解析身份行，再定位文件。无记录的新建与已登记但 `missing` 的恢复必须分开。
 2. 一段发布窗口内，host 对比 JSON 与 SQLite 的 ID/标题/工作区/顺序/文件状态；只记录差异统计，不把私密消息写诊断。SQLite 只在影子报告 clean 时作为当前 Preview 侧栏来源，否则继续显示 JSON；差异或盘点错误不得进入 SQLite 来源。
