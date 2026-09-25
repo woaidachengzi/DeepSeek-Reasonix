@@ -55,3 +55,25 @@ func BenchmarkCheckTranscriptPathUnique(b *testing.B) {
 		})
 	}
 }
+
+// BenchmarkCheckMissingTranscriptPathUnique covers a reserved identity whose
+// transcript has not been written yet, as happens during first open.
+func BenchmarkCheckMissingTranscriptPathUnique(b *testing.B) {
+	for _, count := range []int{50, 500} {
+		b.Run(fmt.Sprintf("identities-%d", count), func(b *testing.B) {
+			ctx := context.Background()
+			store, sessionDir, _ := inventoryBenchmarkFixture(b, count)
+			b.Cleanup(func() { _ = store.Close() })
+			path := filepath.Join(sessionDir, "tauri-reserved.jsonl")
+			if err := store.Reserve(ctx, sessionDir, Candidate{ID: "reserved", Path: path}); err != nil {
+				b.Fatal(err)
+			}
+			b.ResetTimer()
+			for range b.N {
+				if err := store.CheckTranscriptPathUnique(ctx, "reserved", path); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}

@@ -279,6 +279,8 @@ Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝
 
 热路径唯一性检查仍需遍历现存身份，不能用词法索引替代父目录 symlink 和 hard-link 检查。路径校验现复用同一轮父目录校验得到的 profile root 解析结果，但保留父目录与最终 transcript 的分别检查；回归覆盖“父目录指向 profile 外、最终文件又链回 profile 内”的情况。隔离基准 `BenchmarkCheckTranscriptPathUnique` 可用于测量 50/500 条身份目录的成本，不能据此宣布 O(n) 问题已解决。
 
+首次预留的 transcript 尚不存在时，唯一性门禁仍逐项解析已有身份路径并检测目录 symlink 别名，但不为不存在的候选逐个读取 peer 文件身份；末尾仍重查候选，若检查期间文件出现，立即恢复完整 peer 文件身份比对。保留现存候选的 hard-link 检查，并以断链已有身份回归确认缺失候选不能绕过路径错误。Apple M4 上隔离的 500 行 `BenchmarkCheckMissingTranscriptPathUnique` 优化前约 36–45 ms、优化后约 35 ms/次；收益有限且不改变 O(n) 验证范围，不代表真实 profile 或跨平台性能。
+
 ### 旧客户端 / sidecar 兼容矩阵（当前验证范围）
 
 | 组合 | 结论 | 依据 / 限制 |

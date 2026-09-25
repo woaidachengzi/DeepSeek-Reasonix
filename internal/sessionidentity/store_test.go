@@ -708,6 +708,39 @@ func TestReserveRejectsInternalDirectorySymlinkAlias(t *testing.T) {
 	}
 }
 
+func TestMissingCandidateStillRejectsBrokenExistingIdentityPath(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, filepath.Join(root, "desktop", "state.sqlite"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	broken := filepath.Join(sessionDir, "tauri-broken.jsonl")
+	if err := os.Symlink(filepath.Join(sessionDir, "absent.jsonl"), broken); err != nil {
+		t.Skipf("file symlinks unavailable: %v", err)
+	}
+	if _, err := store.db.ExecContext(ctx, `INSERT INTO sessions
+		(id, relative_path, state, created_at_ms, updated_at_ms)
+		VALUES ('broken', 'sessions/tauri-broken.jsonl', 'ready', 0, 0)`); err != nil {
+		t.Fatal(err)
+	}
+	candidate := filepath.Join(sessionDir, "tauri-fresh.jsonl")
+	if err := store.Reserve(ctx, sessionDir, Candidate{ID: "fresh", Path: candidate}); err == nil {
+		t.Fatal("missing candidate bypassed invalid existing transcript path")
+	}
+	if _, err := os.Lstat(candidate); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("failed reserve wrote a transcript: %v", err)
+	}
+	if _, exists, err := store.Get(ctx, "fresh"); err != nil || exists {
+		t.Fatalf("failed reserve wrote an identity: exists=%v err=%v", exists, err)
+	}
+}
+
 func TestReserveRejectsCaseOnlyAliasOnCaseInsensitivePlatforms(t *testing.T) {
 	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
 		t.Skip("conservative case-folding is enabled only on macOS and Windows")

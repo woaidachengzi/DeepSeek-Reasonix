@@ -502,13 +502,18 @@ func ensureTranscriptPathAvailable(ctx context.Context, tx *sql.Tx, profileRoot,
 	if candidateErr != nil && !errors.Is(candidateErr, os.ErrNotExist) {
 		return fmt.Errorf("inspect candidate transcript identity: %w", candidateErr)
 	}
-	for _, other := range existing {
-		otherInfo, otherErr := os.Stat(other.path)
-		if candidateErr == nil && otherErr == nil && os.SameFile(candidateInfo, otherInfo) {
-			return fmt.Errorf("%w: %s and %s", ErrTranscriptPathConflict, id, other.id)
-		}
-		if otherErr != nil && !errors.Is(otherErr, os.ErrNotExist) {
-			return fmt.Errorf("inspect existing transcript identity %s: %w", other.id, otherErr)
+	// A missing candidate has no file identity that could match a peer. The
+	// earlier path-resolution passes still validate every peer and detect
+	// symlink aliases; the final candidate stat below catches late creation.
+	if candidateErr == nil {
+		for _, other := range existing {
+			otherInfo, otherErr := os.Stat(other.path)
+			if otherErr == nil && os.SameFile(candidateInfo, otherInfo) {
+				return fmt.Errorf("%w: %s and %s", ErrTranscriptPathConflict, id, other.id)
+			}
+			if otherErr != nil && !errors.Is(otherErr, os.ErrNotExist) {
+				return fmt.Errorf("inspect existing transcript identity %s: %w", other.id, otherErr)
+			}
 		}
 	}
 	// The candidate may have been created or replaced while other identities
