@@ -613,6 +613,43 @@ func TestImportRejectsPhysicalTranscriptAliases(t *testing.T) {
 	}
 }
 
+func TestPhysicalPathCheckCoversLateHardLinkAfterManyIdentities(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, filepath.Join(root, "desktop", "identity.sqlite"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	for i := range 12 {
+		id := fmt.Sprintf("existing-%02d", i)
+		path := filepath.Join(sessionDir, id+".jsonl")
+		if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.Import(ctx, root, []Candidate{{ID: id, Path: path, Position: i}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.Reserve(ctx, sessionDir, Candidate{ID: "new-reservation", Path: filepath.Join(sessionDir, "new-reservation.jsonl")}); err != nil {
+		t.Fatalf("distinct missing transcript was rejected: %v", err)
+	}
+	aliasPath := filepath.Join(sessionDir, "late-hard-link.jsonl")
+	if err := os.Link(filepath.Join(sessionDir, "existing-11.jsonl"), aliasPath); err != nil {
+		t.Skipf("hard links unavailable: %v", err)
+	}
+	if err := store.Import(ctx, root, []Candidate{{ID: "late-hard-link", Path: aliasPath}}); !errors.Is(err, ErrTranscriptPathConflict) {
+		t.Fatalf("late hard-link import = %v, want ErrTranscriptPathConflict", err)
+	}
+	if _, exists, err := store.Get(ctx, "late-hard-link"); err != nil || exists {
+		t.Fatalf("rejected hard link registered identity: exists=%v err=%v", exists, err)
+	}
+}
+
 func TestReserveRejectsInternalDirectorySymlinkAlias(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()

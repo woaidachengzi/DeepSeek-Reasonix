@@ -454,6 +454,11 @@ func ensureTranscriptPathAvailable(ctx context.Context, tx *sql.Tx, profileRoot,
 	if err := rows.Close(); err != nil {
 		return err
 	}
+	if len(existing) == 0 {
+		return nil
+	}
+	// Check path aliases before file identity. They also conflict when neither
+	// transcript exists yet, as is common while reserving a fresh session.
 	for _, other := range existing {
 		otherResolved, err := resolveIdentityPath(other.path)
 		if err != nil {
@@ -462,16 +467,37 @@ func ensureTranscriptPathAvailable(ctx context.Context, tx *sql.Tx, profileRoot,
 		if candidatePath == otherResolved || sameCaseInsensitivePath(candidatePath, otherResolved) {
 			return fmt.Errorf("%w: %s and %s", ErrTranscriptPathConflict, id, other.id)
 		}
-		candidateInfo, candidateErr := os.Stat(transcriptPath)
+	}
+	candidateInfo, candidateErr := os.Stat(transcriptPath)
+	if candidateErr != nil && !errors.Is(candidateErr, os.ErrNotExist) {
+		return fmt.Errorf("inspect candidate transcript identity: %w", candidateErr)
+	}
+	for _, other := range existing {
 		otherInfo, otherErr := os.Stat(other.path)
 		if candidateErr == nil && otherErr == nil && os.SameFile(candidateInfo, otherInfo) {
 			return fmt.Errorf("%w: %s and %s", ErrTranscriptPathConflict, id, other.id)
 		}
-		if candidateErr != nil && !errors.Is(candidateErr, os.ErrNotExist) {
-			return fmt.Errorf("inspect candidate transcript identity: %w", candidateErr)
-		}
 		if otherErr != nil && !errors.Is(otherErr, os.ErrNotExist) {
 			return fmt.Errorf("inspect existing transcript identity %s: %w", other.id, otherErr)
+		}
+	}
+	// The candidate may have been created or replaced while other identities
+	// were inspected. Recheck it and compare every peer again if its file
+	// identity changed. This does not replace the profile writer gate, but it
+	// avoids an avoidable N-fold candidate stat in the steady state.
+	latestInfo, latestErr := os.Stat(transcriptPath)
+	if latestErr != nil && !errors.Is(latestErr, os.ErrNotExist) {
+		return fmt.Errorf("inspect candidate transcript identity: %w", latestErr)
+	}
+	if latestErr == nil && (candidateErr != nil || !os.SameFile(candidateInfo, latestInfo)) {
+		for _, other := range existing {
+			otherInfo, otherErr := os.Stat(other.path)
+			if otherErr == nil && os.SameFile(latestInfo, otherInfo) {
+				return fmt.Errorf("%w: %s and %s", ErrTranscriptPathConflict, id, other.id)
+			}
+			if otherErr != nil && !errors.Is(otherErr, os.ErrNotExist) {
+				return fmt.Errorf("inspect existing transcript identity %s: %w", other.id, otherErr)
+			}
 		}
 	}
 	return nil
