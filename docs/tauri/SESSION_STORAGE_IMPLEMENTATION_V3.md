@@ -145,6 +145,9 @@ schema v5 的 `session_title_intents` 会在侧车写入前记录 ID、相对路
 用户明确删除会话时，删除 fence 与清除该 ID 的未完成标题意图在同一 SQLite 事务内提交；
 删除清理中断后的重试及最终 tombstone 提交也清除遗留意图。删除已阻止会话重开，
 因此不能把标题意图留给已不存在的重开恢复路径，否则只读盘点会永久保持 dirty。
+为兼容此前 v5 可能已留下的终态意图，bridge 启动时在取得 profile gate 后只清除
+`deleting/deleted` 的残留意图，再发布 ready；`reserved/ready/missing` 的意图不在
+启动时猜测或清除，仍需显式恢复或后续用户操作。隔离启动测试验证 ready 前清理。
 bridge 的只读物理 inventory 现在还会把已登记会话中非空 `.jsonl.meta` 手工标题与
 SQLite 标题不一致、或侧车不可安全读取的情况记为错误；现有 host 影子门禁据此拒绝
 把目录判为 clean。它只发现漂移，不自动认定哪份标题正确，也不替代崩溃后的标题对账。

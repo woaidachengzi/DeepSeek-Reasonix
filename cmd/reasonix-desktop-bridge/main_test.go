@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
@@ -14,9 +15,11 @@ import (
 	"testing"
 	"time"
 
+	appconfig "reasonix/internal/config"
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/event"
 	"reasonix/internal/profilegate"
+	"reasonix/internal/sessionidentity"
 )
 
 const testToken = "0123456789abcdef0123456789abcdef"
@@ -702,7 +705,51 @@ func TestRequireLoopbackAddress(t *testing.T) {
 
 func TestRunPublishesReadyHealthAndShutdown(t *testing.T) {
 	profileRoot := t.TempDir()
+	t.Setenv("REASONIX_HOME", profileRoot)
 	t.Setenv("REASONIX_STATE_HOME", profileRoot)
+	sessionDir := appconfig.SessionDir()
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	transcriptPath, err := bridgeSessionPath(sessionDir, "startup-terminal-title")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(transcriptPath, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	identityPath := appconfig.DesktopSessionIdentityPath()
+	identities, err := sessionidentity.Open(context.Background(), identityPath, profileRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Import(context.Background(), sessionDir, []sessionidentity.Candidate{{ID: "startup-terminal-title", Path: transcriptPath}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.BeginDelete(context.Background(), "startup-terminal-title", transcriptPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(transcriptPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.FinishDelete(context.Background(), "startup-terminal-title", transcriptPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Close(); err != nil {
+		t.Fatal(err)
+	}
+	legacyDB, err := sql.Open("sqlite", identityPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := legacyDB.Exec(`INSERT INTO session_title_intents
+		(session_id, relative_path, expected_revision, previous_sidecar_title, new_title, created_at_ms)
+		SELECT id, relative_path, title_revision, '', 'Stranded title', 1 FROM sessions WHERE id='startup-terminal-title'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := legacyDB.Close(); err != nil {
+		t.Fatal(err)
+	}
 	readyPath := filepath.Join(t.TempDir(), "ready.json")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -734,6 +781,16 @@ func TestRunPublishesReadyHealthAndShutdown(t *testing.T) {
 	}
 	if ready.LaunchID != "test-launch" || ready.ProtocolVersion != desktopbridge.ProtocolVersion {
 		t.Fatalf("ready = %#v", ready)
+	}
+	identityReader, err := sessionidentity.OpenReadOnly(context.Background(), identityPath, profileRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, pending, err := identityReader.PendingManualTitleRename(context.Background(), "startup-terminal-title"); err != nil || pending {
+		t.Fatalf("ready bridge left terminal title intent: pending=%v err=%v", pending, err)
+	}
+	if err := identityReader.Close(); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := profilegate.TryAcquire(profileRoot); !errors.Is(err, profilegate.ErrHeld) {
 		t.Fatalf("ready bridge does not own profile: %v", err)

@@ -47,6 +47,21 @@ func (s *Store) PendingManualTitleRenameIDs(ctx context.Context) ([]string, erro
 	return ids, nil
 }
 
+// DiscardTerminalManualTitleRenames removes intents that an older bridge could
+// leave after a session entered deleting/deleted. Those sessions cannot be
+// reopened to replay a rename; the explicit deletion fence is the winning
+// user action. Bridge startup calls this only while owning the profile gate.
+// Intents for reserved, ready, and missing sessions are never inferred away.
+func (s *Store) DiscardTerminalManualTitleRenames(ctx context.Context) (int64, error) {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM session_title_intents
+		WHERE EXISTS (SELECT 1 FROM sessions WHERE sessions.id=session_title_intents.session_id
+		AND sessions.state IN ('deleting','deleted'))`)
+	if err != nil {
+		return 0, fmt.Errorf("discard terminal session title renames: %w", err)
+	}
+	return result.RowsAffected()
+}
+
 func (s *Store) PendingManualTitleRename(ctx context.Context, id string) (ManualTitleIntent, bool, error) {
 	var intent ManualTitleIntent
 	var relative string

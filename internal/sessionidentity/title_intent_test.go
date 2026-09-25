@@ -223,6 +223,54 @@ func TestDeleteFenceRollsBackWhenTitleIntentCannotBeCleared(t *testing.T) {
 	}
 }
 
+func TestDiscardTerminalManualTitleRenamesKeepsRecoverableIntents(t *testing.T) {
+	ctx, root, _, readyPath, store := titleIntentFixture(t)
+	defer store.Close()
+	if err := store.BeginManualTitleRename(ctx, "title", readyPath, "", "Recoverable title", 0); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range []struct {
+		id      string
+		deleted bool
+	}{{id: "deleting"}, {id: "deleted", deleted: true}} {
+		path := filepath.Join(root, "sessions", "tauri-"+item.id+".jsonl")
+		if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.Import(ctx, filepath.Dir(path), []Candidate{{ID: item.id, Path: path}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.BeginDelete(ctx, item.id, path); err != nil {
+			t.Fatal(err)
+		}
+		if item.deleted {
+			if err := os.Remove(path); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.FinishDelete(ctx, item.id, path); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// Simulate a v5 database where the lifecycle became terminal before
+		// the title intent was cleaned up.
+		if _, err := store.db.ExecContext(ctx, `INSERT INTO session_title_intents
+			(session_id, relative_path, expected_revision, previous_sidecar_title, new_title, created_at_ms)
+			SELECT id, relative_path, title_revision, '', 'Stranded title', 1 FROM sessions WHERE id=?`, item.id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	removed, err := store.DiscardTerminalManualTitleRenames(ctx)
+	if err != nil || removed != 2 {
+		t.Fatalf("discard terminal title intents = %d, %v", removed, err)
+	}
+	if ids, err := store.PendingManualTitleRenameIDs(ctx); err != nil || len(ids) != 1 || ids[0] != "title" {
+		t.Fatalf("pending title intents after cleanup = %#v, %v", ids, err)
+	}
+	if removed, err := store.DiscardTerminalManualTitleRenames(ctx); err != nil || removed != 0 {
+		t.Fatalf("repeat terminal title cleanup = %d, %v", removed, err)
+	}
+}
+
 func TestOpenMigratesV4ToTitleIntentSchemaWithoutChangingIdentity(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()

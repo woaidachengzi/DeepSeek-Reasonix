@@ -130,7 +130,12 @@ func run(ctx context.Context, cfg config, token string) (runErr error) {
 			if err != nil {
 				return fmt.Errorf("migrate session identity store: %w", err)
 			}
-			if err := identities.Close(); err != nil {
+			_, discardErr := identities.DiscardTerminalManualTitleRenames(ctx)
+			closeErr := identities.Close()
+			if discardErr != nil {
+				return fmt.Errorf("reconcile terminal session title intents before startup: %w", discardErr)
+			}
+			if err := closeErr; err != nil {
 				return fmt.Errorf("close migrated session identity store: %w", err)
 			}
 		} else if !errors.Is(err, os.ErrNotExist) {
