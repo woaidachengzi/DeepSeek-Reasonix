@@ -181,6 +181,123 @@ func TestOfflineSnapshotVerifiesAndStagesCompleteProfile(t *testing.T) {
 	}
 }
 
+func TestOfflineSnapshotRestoresPendingManualTitleIntentAtNewProfilePath(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	profile := filepath.Join(root, "preview-profile")
+	sessionDir := filepath.Join(profile, "sessions")
+	transcript := filepath.Join(sessionDir, "tauri-tauri-title.jsonl")
+	writeTranscript(t, transcript)
+	sidecar := []byte(`{"id":"tauri-tauri-title","custom_title":"Chosen title"}`)
+	if err := os.WriteFile(transcript+".meta", sidecar, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	identityPath := filepath.Join(profile, "desktop", "session-state-v1.sqlite")
+	writer, err := Open(ctx, identityPath, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Import(ctx, sessionDir, []Candidate{{ID: "tauri-title", Path: transcript}}); err != nil {
+		_ = writer.Close()
+		t.Fatal(err)
+	}
+	if err := writer.BeginManualTitleRename(ctx, "tauri-title", transcript, "", "Chosen title", 0); err != nil {
+		_ = writer.Close()
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	catalog := filepath.Join(root, "workbench-sessions.json")
+	writeCatalog(t, catalog, []catalogEntry{{SessionID: "tauri-title"}})
+	backupParent := filepath.Join(root, "backups")
+	recoveryParent := filepath.Join(root, "recovery")
+	for _, parent := range []string{backupParent, recoveryParent} {
+		if err := os.Mkdir(parent, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	snapshot, err := CreateOfflineSnapshot(ctx, profile, catalog, backupParent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staged, err := StageOfflineSnapshot(ctx, snapshot, recoveryParent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restoredProfile := filepath.Join(staged, "profile")
+	restoredTranscript := filepath.Join(restoredProfile, "sessions", "tauri-tauri-title.jsonl")
+	restoredSidecar, err := os.ReadFile(restoredTranscript + ".meta")
+	if err != nil || !reflect.DeepEqual(restoredSidecar, sidecar) {
+		t.Fatalf("restored title sidecar = %q, %v", restoredSidecar, err)
+	}
+	var restoredMeta struct {
+		CustomTitle string `json:"custom_title"`
+	}
+	if err := json.Unmarshal(restoredSidecar, &restoredMeta); err != nil {
+		t.Fatal(err)
+	}
+	restoredDBPath := filepath.Join(restoredProfile, "desktop", "session-state-v1.sqlite")
+	reader, err := OpenReadOnly(ctx, restoredDBPath, restoredProfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	intent, pending, err := reader.PendingManualTitleRename(ctx, "tauri-title")
+	if err != nil || !pending || intent.Path != restoredTranscript || intent.NewTitle != restoredMeta.CustomTitle ||
+		intent.ExpectedRevision != 0 || intent.PreviousSidecarTitle != "" {
+		_ = reader.Close()
+		t.Fatalf("restored title intent = %#v pending=%v err=%v", intent, pending, err)
+	}
+	recoveries, err := reader.ListPendingManualTitleRecoveries(ctx)
+	if err != nil || len(recoveries) != 1 || recoveries[0].ID != "tauri-title" || recoveries[0].State != StateReady {
+		_ = reader.Close()
+		t.Fatalf("restored title recovery list = %#v, %v", recoveries, err)
+	}
+	if err := reader.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	restoredWriter, err := Open(ctx, restoredDBPath, restoredProfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restoredWriter.CommitManualTitleRename(ctx, "tauri-title", restoredTranscript); err != nil {
+		_ = restoredWriter.Close()
+		t.Fatalf("commit restored title intent: %v", err)
+	}
+	restoredRecord, exists, err := restoredWriter.Get(ctx, "tauri-title")
+	if err != nil || !exists || restoredRecord.Title != "Chosen title" ||
+		restoredRecord.TitleSource != TitleUser || restoredRecord.TitleRevision != 1 {
+		_ = restoredWriter.Close()
+		t.Fatalf("restored committed title = %#v exists=%v err=%v", restoredRecord, exists, err)
+	}
+	if _, pending, err := restoredWriter.PendingManualTitleRename(ctx, "tauri-title"); err != nil || pending {
+		_ = restoredWriter.Close()
+		t.Fatalf("restored title intent remained pending: pending=%v err=%v", pending, err)
+	}
+	if err := restoredWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	source, err := OpenReadOnly(ctx, identityPath, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.Close()
+	if original, pending, err := source.PendingManualTitleRename(ctx, "tauri-title"); err != nil || !pending ||
+		original.Path != transcript || original.NewTitle != "Chosen title" {
+		t.Fatalf("source title intent changed during recovery: %#v pending=%v err=%v", original, pending, err)
+	}
+	if original, exists, err := source.Get(ctx, "tauri-title"); err != nil || !exists ||
+		original.Title != "" || original.TitleRevision != 0 {
+		t.Fatalf("source identity title changed during recovery: %#v exists=%v err=%v", original, exists, err)
+	}
+	if originalSidecar, err := os.ReadFile(transcript + ".meta"); err != nil || !reflect.DeepEqual(originalSidecar, sidecar) {
+		t.Fatalf("source title sidecar changed during recovery: %q, %v", originalSidecar, err)
+	}
+}
+
 func TestOfflineSnapshotRejectsTamperingAndNestedDestination(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
