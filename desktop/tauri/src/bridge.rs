@@ -738,6 +738,7 @@ impl BridgeSupervisor {
             || envelope.projects.iter().any(|project| {
                 project.root.trim().is_empty()
                     || project.root.len() > 4096
+                    || project.root.chars().any(char::is_control)
                     || project
                         .title
                         .as_ref()
@@ -746,7 +747,16 @@ impl BridgeSupervisor {
         {
             return Err("desktop bridge returned an invalid project folder list".to_string());
         }
-        Ok(envelope.projects)
+        Ok(envelope
+            .projects
+            .into_iter()
+            .map(|mut project| {
+                if let Some(title) = project.title.as_mut() {
+                    title.retain(|character| !character.is_control());
+                }
+                project
+            })
+            .collect())
     }
 
     /// Read the entire visible directory for a bounded, diagnostic-only

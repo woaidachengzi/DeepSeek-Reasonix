@@ -195,8 +195,8 @@ fn read_folders(path: &Path) -> Result<Vec<BridgeProjectFolder>, String> {
     for folder in decoded {
         let root = normalize_root(&folder.root)?;
         if let Some(title) = folder.title.as_ref() {
-            if title.chars().count() > MAX_TITLE_CHARS {
-                return Err("project folder title is too long".to_string());
+            if title.chars().count() > MAX_TITLE_CHARS || title.chars().any(char::is_control) {
+                return Err("project folder title is invalid or too long".to_string());
             }
         }
         if folders
