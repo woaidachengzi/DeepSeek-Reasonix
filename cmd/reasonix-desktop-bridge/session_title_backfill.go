@@ -88,7 +88,10 @@ func (b *bridgeServer) backfillSessionTitles(w http.ResponseWriter, r *http.Requ
 			}
 			record.Title = item.Title
 		}
-		if record.Title != "" {
+		// Imported historical metadata can predate the host's catalog bounds.
+		// Keep it in SQLite, but never let one unsafe title make the host reject
+		// the whole backfill response (including unrelated valid rows).
+		if strings.TrimSpace(record.Title) != "" && sessionidentity.ValidWorkbenchCatalogTitle(record.Title) {
 			resolved = append(resolved, firstMessageTitle{SessionID: item.SessionID, Title: record.Title})
 		}
 	}
