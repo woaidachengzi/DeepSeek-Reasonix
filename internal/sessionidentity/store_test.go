@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 
@@ -1008,6 +1009,39 @@ func TestImportLegacyCatalogPreservesMissingRowsAndIsIdempotent(t *testing.T) {
 	}
 	if err := store.ImportLegacyCatalog(ctx, sessionDir, make([]Candidate, 51)); err == nil {
 		t.Fatal("oversized legacy catalog was accepted")
+	}
+}
+
+func TestImportLegacyCatalogRejectsInvalidMetadataAtomically(t *testing.T) {
+	for _, test := range []struct {
+		name, title, workspace string
+	}{
+		{name: "title", title: strings.Repeat("a", 121)},
+		{name: "workspace", workspace: "/project\nother"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			root := t.TempDir()
+			sessionDir := filepath.Join(root, "sessions")
+			if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			store, err := Open(ctx, filepath.Join(root, "identity.sqlite"), root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer store.Close()
+			candidates := []Candidate{
+				{ID: "valid", Path: filepath.Join(sessionDir, "tauri-valid.jsonl")},
+				{ID: "invalid", Path: filepath.Join(sessionDir, "tauri-invalid.jsonl"), Title: test.title, WorkspaceRoot: test.workspace, Position: 1},
+			}
+			if err := store.ImportLegacyCatalog(ctx, sessionDir, candidates); err == nil {
+				t.Fatal("invalid catalog metadata was imported")
+			}
+			if records, err := store.List(ctx); err != nil || len(records) != 0 {
+				t.Fatalf("invalid import left partial identities: %#v err=%v", records, err)
+			}
+		})
 	}
 }
 

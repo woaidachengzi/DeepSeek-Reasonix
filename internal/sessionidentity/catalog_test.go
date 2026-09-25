@@ -2,11 +2,80 @@ package sessionidentity
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
+
+func TestImportWorkbenchCatalogRejectsRawInvalidMetadata(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, filepath.Join(root, "identity.sqlite"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	for _, test := range []struct {
+		name, title, workspace string
+	}{
+		{name: "title", title: strings.Repeat("a", 121)},
+		{name: "workspace before trimming", workspace: "\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			catalog := filepath.Join(root, "workbench-sessions.json")
+			encoded, err := json.Marshal([]catalogEntry{{SessionID: "legacy", Title: test.title, WorkspaceRoot: test.workspace}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(catalog, encoded, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.ImportWorkbenchCatalog(ctx, sessionDir, catalog); err == nil {
+				t.Fatal("invalid workbench catalog metadata was imported")
+			}
+			if _, exists, err := store.Get(ctx, "legacy"); err != nil || exists {
+				t.Fatalf("invalid catalog registered an identity: exists=%v err=%v", exists, err)
+			}
+		})
+	}
+}
+
+func TestSyncWorkbenchOrderRejectsControlCharactersBeforeMutation(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, filepath.Join(root, "identity.sqlite"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	path := filepath.Join(sessionDir, "tauri-one.jsonl")
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Import(ctx, sessionDir, []Candidate{{ID: "one", Path: path, WorkspaceRoot: "/original"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SyncWorkbenchOrder(ctx, sessionDir, []WorkbenchOrderEntry{{
+		ID: "one", WorkspaceRoot: "/project\nother",
+	}}); err == nil {
+		t.Fatal("invalid workspace metadata was synchronized")
+	}
+	record, exists, err := store.Get(ctx, "one")
+	if err != nil || !exists || record.WorkspaceRoot != "/original" {
+		t.Fatalf("invalid sync mutated identity: %#v exists=%v err=%v", record, exists, err)
+	}
+}
 
 func TestSyncWorkbenchOrderUpdatesListedMetadataAndPreservesHiddenRows(t *testing.T) {
 	ctx := context.Background()

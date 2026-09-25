@@ -45,7 +45,7 @@ func (b *bridgeServer) syncSessionCatalog(w http.ResponseWriter, r *http.Request
 			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "session catalog contains duplicate identifiers")
 			return
 		}
-		if !validCatalogWorkspace(entry.WorkspaceRoot) {
+		if !sessionidentity.ValidWorkbenchCatalogWorkspaceRoot(entry.WorkspaceRoot) {
 			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "session workspace path is invalid")
 			return
 		}

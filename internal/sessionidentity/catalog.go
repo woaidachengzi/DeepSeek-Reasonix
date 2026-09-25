@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"reasonix/internal/desktopbridge/sessionpath"
 )
@@ -23,6 +25,19 @@ type catalogEntry struct {
 type WorkbenchOrderEntry struct {
 	ID            string `json:"sessionId"`
 	WorkspaceRoot string `json:"workspaceRoot"`
+}
+
+// Keep the Go catalog write boundaries aligned with the host catalog reader.
+// Empty legacy titles and workspace roots are valid; callers must validate
+// the raw fields before trimming or resolving workspace paths.
+func ValidWorkbenchCatalogTitle(title string) bool {
+	return utf8.ValidString(title) && utf8.RuneCountInString(title) <= 120 &&
+		strings.IndexFunc(title, unicode.IsControl) < 0
+}
+
+func ValidWorkbenchCatalogWorkspaceRoot(root string) bool {
+	return utf8.ValidString(root) && len(root) <= 4096 &&
+		strings.IndexFunc(root, unicode.IsControl) < 0
 }
 
 // SyncWorkbenchOrder mirrors the host's bounded recent-session order and
@@ -48,10 +63,10 @@ func (s *Store) SyncWorkbenchOrder(ctx context.Context, sessionDir string, entri
 	paths := make(map[string]string, len(entries))
 	workspaces := make(map[string]string, len(entries))
 	for position, entry := range entries {
-		workspace := strings.TrimSpace(entry.WorkspaceRoot)
-		if len(workspace) > 4096 {
-			return 0, errors.New("workbench workspace path is too long")
+		if !ValidWorkbenchCatalogWorkspaceRoot(entry.WorkspaceRoot) {
+			return 0, errors.New("workbench workspace path is invalid")
 		}
+		workspace := strings.TrimSpace(entry.WorkspaceRoot)
 		if workspace != "" {
 			workspace, err = filepath.Abs(workspace)
 			if err != nil {
@@ -161,6 +176,9 @@ func (s *Store) ImportWorkbenchCatalog(ctx context.Context, sessionDir, catalogP
 	}
 	candidates := make([]Candidate, 0, len(entries))
 	for position, entry := range entries {
+		if !ValidWorkbenchCatalogTitle(entry.Title) || !ValidWorkbenchCatalogWorkspaceRoot(entry.WorkspaceRoot) {
+			return errors.New("workbench catalog metadata is invalid")
+		}
 		workspace := strings.TrimSpace(entry.WorkspaceRoot)
 		if workspace != "" {
 			abs, err := filepath.Abs(workspace)

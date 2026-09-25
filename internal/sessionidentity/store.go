@@ -551,6 +551,11 @@ func (s *Store) ImportLegacyCatalog(ctx context.Context, previewRoot string, can
 	if len(candidates) > 50 {
 		return errors.New("legacy catalog contains too many sessions")
 	}
+	for _, candidate := range candidates {
+		if !ValidWorkbenchCatalogTitle(candidate.Title) || !ValidWorkbenchCatalogWorkspaceRoot(candidate.WorkspaceRoot) {
+			return errors.New("legacy catalog metadata is invalid")
+		}
+	}
 	if s.profileRoot == "" {
 		if err := s.bindImportProfileRoot(previewRoot); err != nil {
 			return err
@@ -799,8 +804,7 @@ func (s *Store) ListPendingDeletes(ctx context.Context) ([]PendingDelete, error)
 		// Legacy imports can retain titles that the host or UI refuses to
 		// display. Keep the deletion discoverable with a neutral title without
 		// rewriting the stored metadata or dropping any pending identity.
-		if !utf8.ValidString(pending.Title) || utf8.RuneCountInString(pending.Title) > 120 ||
-			strings.IndexFunc(pending.Title, unicode.IsControl) >= 0 {
+		if !ValidWorkbenchCatalogTitle(pending.Title) {
 			pending.Title = ""
 		}
 		deletions = append(deletions, pending)
