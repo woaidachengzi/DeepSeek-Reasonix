@@ -1,6 +1,6 @@
 use std::{
     fs,
-    io::Write,
+    io::{Read, Write},
     path::{Path, PathBuf},
     sync::Mutex,
 };
@@ -13,6 +13,7 @@ const MAX_SESSIONS: usize = 50;
 const MAX_SESSION_ID_LEN: usize = 128;
 const MAX_WORKSPACE_ROOT_LEN: usize = 4096;
 const MAX_SESSION_TITLE_CHARS: usize = 120;
+const MAX_CATALOG_BYTES: u64 = 1024 * 1024;
 
 /// A reopenable session known to the Tauri Preview workbench. This catalog is
 /// host UI state, kept outside both the stable profile and Go core session data.
@@ -202,11 +203,32 @@ fn validate_session(session: &WorkbenchSession) -> Result<(), String> {
 }
 
 fn read_sessions(path: &Path) -> Result<Vec<WorkbenchSession>, String> {
-    let encoded = match fs::read(path) {
-        Ok(encoded) => encoded,
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(format!("read workbench session catalog failed: {error}")),
+        Err(error) => return Err(format!("inspect workbench session catalog failed: {error}")),
     };
+    if metadata.file_type().is_symlink()
+        || !metadata.is_file()
+        || metadata.len() > MAX_CATALOG_BYTES
+    {
+        return Err("workbench session catalog is not a regular file within the size limit".into());
+    }
+    let file = fs::File::open(path)
+        .map_err(|error| format!("read workbench session catalog failed: {error}"))?;
+    let opened_metadata = file
+        .metadata()
+        .map_err(|error| format!("inspect opened workbench session catalog failed: {error}"))?;
+    if !opened_metadata.is_file() || opened_metadata.len() > MAX_CATALOG_BYTES {
+        return Err("workbench session catalog is not a regular file within the size limit".into());
+    }
+    let mut encoded = Vec::new();
+    file.take(MAX_CATALOG_BYTES.saturating_add(1))
+        .read_to_end(&mut encoded)
+        .map_err(|error| format!("read workbench session catalog failed: {error}"))?;
+    if encoded.len() as u64 > MAX_CATALOG_BYTES {
+        return Err("workbench session catalog exceeds the size limit".to_string());
+    }
     let decoded = serde_json::from_slice::<Vec<WorkbenchSession>>(&encoded)
         .map_err(|_| "workbench session catalog is not valid JSON".to_string())?;
 
