@@ -352,6 +352,12 @@ func (r *controllerRuntime) Title() string {
 }
 
 func (r *controllerRuntime) Rename(title string) error {
+	// LoadBranchMeta sanitizes transient message wrappers even in CustomTitle.
+	// A title changed by that read path cannot be a stable SQLite/sidecar
+	// mirror, so reject it before persisting a durable rename intent.
+	if agent.UserPreviewText(title) != title {
+		return desktopbridge.ErrInvalidTitle
+	}
 	if r.sessionID == "" || appconfig.DesktopSessionIdentityPath() == "" {
 		return agent.RenameSession(r.SessionPath(), title)
 	}

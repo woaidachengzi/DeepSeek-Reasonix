@@ -745,6 +745,51 @@ func TestControllerRuntimeRenameRejectsSymlinkedTitleSidecar(t *testing.T) {
 	}
 }
 
+func TestControllerRuntimeRenameRejectsTitleChangedBySidecarRead(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	ctx := context.Background()
+	runtime, err := newControllerFactory(nil).Open(ctx, desktopbridge.OpenRequest{SessionID: "rename-sanitized-title"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Shutdown() })
+	if err := runtime.Rename("Original title"); err != nil {
+		t.Fatal(err)
+	}
+	metaPath := sessionstore.SessionMeta(runtime.SessionPath())
+	before, err := os.ReadFile(metaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The regular title validator accepts this text, but LoadBranchMeta
+	// strips the trailing memory-recall block on every read.
+	unstable := "Chosen <memory-recall>hidden</memory-recall>"
+	if got := agent.UserPreviewText(unstable); got != "Chosen" {
+		t.Fatalf("test title no longer exercises sanitization: %q", got)
+	}
+	if err := runtime.Rename(unstable); !errors.Is(err, desktopbridge.ErrInvalidTitle) {
+		t.Fatalf("unstable title rename = %v, want invalid title", err)
+	}
+	after, err := os.ReadFile(metaPath)
+	if err != nil || string(after) != string(before) {
+		t.Fatalf("rejected title changed sidecar bytes: %v", err)
+	}
+	identities, err := sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer identities.Close()
+	if _, pending, err := identities.PendingManualTitleRename(ctx, "rename-sanitized-title"); err != nil || pending {
+		t.Fatalf("rejected title created intent: pending=%v err=%v", pending, err)
+	}
+	record, exists, err := identities.Get(ctx, "rename-sanitized-title")
+	if err != nil || !exists || record.Title != "Original title" || record.TitleRevision != 1 {
+		t.Fatalf("rejected title changed identity: %#v exists=%v err=%v", record, exists, err)
+	}
+}
+
 func TestBridgeOpenRecoversDurableManualTitleIntent(t *testing.T) {
 	for _, test := range []struct {
 		name, sidecarTitle, wantTitle string
