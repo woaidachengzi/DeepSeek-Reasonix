@@ -43,7 +43,7 @@ func TestManualTitleIntentSurvivesReopenAndCommitsAtomically(t *testing.T) {
 	if err := store.BeginManualTitleRename(ctx, "title", path, "", "Other title", 0); !errors.Is(err, ErrTitleConflict) {
 		t.Fatalf("second manual title intent = %v, want conflict", err)
 	}
-	if err := store.SetTitle(ctx, "title", 0, "Competing title", TitleManualRename); !errors.Is(err, ErrTitleConflict) {
+	if err := store.SetTitle(ctx, "title", 0, "Competing title", TitleAutomaticGeneration); !errors.Is(err, ErrTitleConflict) {
 		t.Fatalf("ordinary title writer during pending intent = %v, want conflict", err)
 	}
 	if err := store.Close(); err != nil {

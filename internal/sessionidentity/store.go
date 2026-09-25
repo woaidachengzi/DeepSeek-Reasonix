@@ -40,6 +40,7 @@ var ErrTitleConflict = errors.New("session title revision changed")
 var ErrTitleProtected = errors.New("session title is protected from automatic replacement")
 var ErrSessionNotFound = errors.New("session identity not found")
 var ErrInvalidTitle = errors.New("invalid session title")
+var ErrTitleIntentRequired = errors.New("user-authority session title requires a durable rename intent")
 var ErrDirectoryChanged = errors.New("session directory changed while paging")
 
 // TitleSource records the authority of a title, not merely whether AI wrote
@@ -1255,11 +1256,11 @@ func (s *Store) HasRegisteredID(ctx context.Context, id string) (bool, error) {
 	return registered, err
 }
 
-// SetTitle is the direct title writer for generated and fallback titles.
-// Managed bridge manual renames use the durable title-intent transaction so a
-// crash between SQLite and its legacy sidecar has recoverable evidence. The
-// caller names the action, never the desired source, and supplies the revision
-// it observed. The revision and protection policy are checked by the UPDATE.
+// SetTitle writes generated and fallback titles directly. User-authority
+// titles must use the durable title-intent transaction so a crash between
+// SQLite and the legacy sidecar has recoverable evidence. The caller names
+// the action, never the desired source, and supplies the revision it observed.
+// The revision and protection policy are checked by the UPDATE.
 func (s *Store) SetTitle(ctx context.Context, id string, expectedRevision int64, title string, operation TitleOperation) error {
 	if strings.TrimSpace(title) == "" || !utf8.ValidString(title) || utf8.RuneCountInString(title) > 120 ||
 		strings.IndexFunc(title, unicode.IsControl) >= 0 {
@@ -1272,8 +1273,7 @@ func (s *Store) SetTitle(ctx context.Context, id string, expectedRevision int64,
 	var guard string
 	switch operation {
 	case TitleManualRename, TitleUserRequestedGeneration:
-		source = TitleUser
-		guard = "NOT EXISTS (SELECT 1 FROM session_title_intents WHERE session_id=sessions.id)"
+		return ErrTitleIntentRequired
 	case TitleAutomaticGeneration:
 		source = TitleGenerated
 		guard = "title_source IN ('fallback','generated') AND NOT EXISTS (SELECT 1 FROM session_title_intents WHERE session_id=sessions.id)"

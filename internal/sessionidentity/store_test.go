@@ -1111,10 +1111,16 @@ func TestTitleProvenanceAndRepeatImport(t *testing.T) {
 	if err := store.SetTitle(ctx, "title", 0, string([]byte{0xff}), TitleManualRename); !errors.Is(err, ErrInvalidTitle) {
 		t.Fatalf("invalid UTF-8 title = %v, want ErrInvalidTitle", err)
 	}
-	if err := store.SetTitle(ctx, "title", 0, "Manual", TitleManualRename); err != nil {
+	if err := store.SetTitle(ctx, "title", 0, "Manual", TitleManualRename); !errors.Is(err, ErrTitleIntentRequired) {
+		t.Fatalf("direct manual rename = %v, want durable intent", err)
+	}
+	if err := store.BeginManualTitleRename(ctx, "title", path, "", "Manual", 0); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SetTitle(ctx, "title", 0, "Stale", TitleManualRename); !errors.Is(err, ErrTitleConflict) {
+	if err := store.CommitManualTitleRename(ctx, "title", path); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BeginManualTitleRename(ctx, "title", path, "Manual", "Stale", 0); !errors.Is(err, ErrTitleConflict) {
 		t.Fatalf("stale rename = %v", err)
 	}
 	if err := store.Import(ctx, root, []Candidate{entry}); err != nil {
@@ -1127,7 +1133,13 @@ func TestTitleProvenanceAndRepeatImport(t *testing.T) {
 	if err := store.SetTitle(ctx, "title", 1, "Background", TitleAutomaticGeneration); !errors.Is(err, ErrTitleProtected) {
 		t.Fatalf("automatic rename of manual title = %v", err)
 	}
-	if err := store.SetTitle(ctx, "title", 1, "Requested AI title", TitleUserRequestedGeneration); err != nil {
+	if err := store.SetTitle(ctx, "title", 1, "Requested AI title", TitleUserRequestedGeneration); !errors.Is(err, ErrTitleIntentRequired) {
+		t.Fatalf("direct user-requested AI rename = %v, want durable intent", err)
+	}
+	if err := store.BeginManualTitleRename(ctx, "title", path, "Manual", "Requested AI title", 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CommitManualTitleRename(ctx, "title", path); err != nil {
 		t.Fatal(err)
 	}
 	records, err = store.List(ctx)
@@ -1198,7 +1210,7 @@ func TestConcurrentTitleWritersCannotBothCommitSameRevision(t *testing.T) {
 	for _, store := range []*Store{first, second} {
 		go func(store *Store) {
 			<-start
-			results <- store.SetTitle(ctx, "race", 0, "Renamed", TitleManualRename)
+			results <- store.SetTitle(ctx, "race", 0, "Generated", TitleAutomaticGeneration)
 		}(store)
 	}
 	close(start)

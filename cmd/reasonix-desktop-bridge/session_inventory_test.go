@@ -251,13 +251,16 @@ func TestSessionInventoryRequiresMirrorForUserTitleButNotLegacyTitle(t *testing.
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := identities.SetTitle(ctx, "manual", 0, "Chosen title", sessionidentity.TitleManualRename); err != nil {
-		t.Fatal(err)
-	}
-	if err := identities.Close(); err != nil {
+	if err := identities.BeginManualTitleRename(ctx, "manual", manualPath, "", "Chosen title", 0); err != nil {
 		t.Fatal(err)
 	}
 	if err := agent.RenameSession(manualPath, "Chosen title"); err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.CommitManualTitleRename(ctx, "manual", manualPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Close(); err != nil {
 		t.Fatal(err)
 	}
 	readErrors := func() []string {
