@@ -450,7 +450,7 @@ fn merged_workbench_project_folders(
 fn workbench_project_key(root: &str) -> String {
     let root = root.trim().trim_end_matches(['/', '\\']);
     if cfg!(windows) {
-        root.to_ascii_lowercase()
+        root.replace('/', "\\").to_lowercase()
     } else {
         root.to_string()
     }

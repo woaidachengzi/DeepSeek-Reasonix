@@ -154,7 +154,7 @@ fn normalize_root(root: &str) -> Result<String, String> {
 fn project_key(root: &str) -> String {
     let trimmed = root.trim().trim_end_matches(['/', '\\']);
     if cfg!(windows) {
-        trimmed.to_ascii_lowercase()
+        trimmed.replace('/', "\\").to_lowercase()
     } else {
         trimmed.to_string()
     }

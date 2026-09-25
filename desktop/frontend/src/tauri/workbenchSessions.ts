@@ -18,7 +18,7 @@ export interface WorkbenchProjectFolder {
 function projectKey(root?: string, caseInsensitive = false): string {
   const trimmed = (root ?? "").trim();
   const key = trimmed.replace(/[/\\]+$/, "") || (trimmed ? trimmed[0] : "");
-  return caseInsensitive ? key.toLowerCase() : key;
+  return caseInsensitive ? key.replace(/\//g, "\\").toLowerCase() : key;
 }
 
 function projectName(root: string): string {
