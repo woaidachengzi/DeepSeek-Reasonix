@@ -23,7 +23,7 @@ Object.assign(globalThis, {
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
 // The adapter stub answers every Tauri call; these markers keep any host check
 // inside the component on the Tauri path.
-(globalThis as typeof globalThis & { isTauri?: boolean }).isTauri = true;
+  (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri = true;
 (dom.window as unknown as { __TAURI__?: unknown }).__TAURI__ = { core: { invoke: () => Promise.resolve(null) } };
 
 let passed = 0;
@@ -94,6 +94,9 @@ async function main() {
     { sessionId: "tauri-missing-row", title: "文件缺失会话", workspaceRoot: "/tmp/ws" },
     { sessionId: "tauri-deleted-row", title: "已删除会话", workspaceRoot: "/tmp/ws" },
   ];
+  (globalThis as unknown as { __pendingSessionDeletes: unknown[] }).__pendingSessionDeletes = [
+    { id: "tauri-interrupted-delete", title: "删除中断会话" },
+  ];
   (globalThis as unknown as { __tauriHistoryMessages: unknown[] }).__tauriHistoryMessages = [
     { role: "assistant", content: "```js\nconst answer = 42;\n```" },
   ];
@@ -114,10 +117,11 @@ async function main() {
 
   console.log("\ntauri chat workspace — workspace, delete, and recovery flows");
   ok(text().includes("待删除会话"), "the recent-session list renders the stored title");
-  eq(document.querySelectorAll(".tauri-session-row__delete").length, 4, "each row has a delete control");
+  ok(text().includes("待完成删除") && text().includes("删除未完成"), "interrupted deletion is surfaced separately from ordinary sessions");
+  eq(document.querySelectorAll(".tauri-session-row__delete").length, 5, "each regular or recovery row has a delete control");
 
   // Step 1: the row-level delete control opens an inline confirmation.
-  const opened = clickByClass("tauri-session-row__delete");
+  const opened = clickDeleteFor("待删除会话");
   ok(opened, "the delete control is present and clickable");
   await act(async () => {
     await settle();
@@ -132,6 +136,16 @@ async function main() {
   });
   eq(bridgeCalls().filter(call => call.name === "bridge_delete_session").length, 0, "cancelling never reaches the bridge");
   ok(text().includes("待删除会话"), "cancelling restores the row");
+
+  const switchCountBeforeRecovery = bridgeCalls().filter(call => call.name === "bridge_switch_session").length;
+  ok(clickDeleteFor("删除中断会话"), "an interrupted identity can be armed for explicit cleanup");
+  await act(async () => { await settle(); });
+  ok(clickButton("继续删除"), "interrupted cleanup requires a distinct confirmation");
+  await act(async () => { await settle(); await settle(); });
+  const recoveredDelete = bridgeCalls().filter(call => call.name === "bridge_delete_session").at(-1);
+  eq((recoveredDelete?.args as { sessionId?: string } | undefined)?.sessionId, "tauri-interrupted-delete", "explicit recovery targets the interrupted identity");
+  eq(bridgeCalls().filter(call => call.name === "bridge_switch_session").length, switchCountBeforeRecovery, "recovery never opens or switches to the interrupted session");
+  ok(!text().includes("删除中断会话"), "completed recovery removes the pending-deletion row");
 
   // Keep another session open while deleting an inactive row. The bridge owns
   // one controller, so the delete flow must restore the previously open row.
@@ -250,10 +264,10 @@ async function main() {
   });
   const calls = bridgeCalls().map(call => call.name);
   ok(calls.includes("bridge_switch_session"), "deleting an inactive session switches to it first");
-  const deleted = bridgeCalls().find(call => call.name === "bridge_delete_session");
+  const deleted = bridgeCalls().filter(call => call.name === "bridge_delete_session").at(-1);
   ok(deleted !== undefined, "confirming reaches the delete adapter");
   eq((deleted?.args as { sessionId?: string } | undefined)?.sessionId, "tauri-doomed-row", "the delete targets the confirmed row");
-  const forgotten = bridgeCalls().find(call => call.name === "forget_workbench_session");
+  const forgotten = bridgeCalls().filter(call => call.name === "forget_workbench_session").at(-1);
   ok(forgotten !== undefined, "successful core deletion removes the persistent host catalog entry");
   eq((forgotten?.args as { sessionId?: string } | undefined)?.sessionId, "tauri-doomed-row", "the catalog cleanup targets the deleted row");
   const switches = bridgeCalls().filter(call => call.name === "bridge_switch_session");

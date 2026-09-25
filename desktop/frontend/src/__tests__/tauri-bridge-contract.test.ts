@@ -51,6 +51,7 @@ interface CommandContract {
 //   bridge_switch_session,
 //   bridge_rename_session,
 //   bridge_delete_session,
+//   bridge_pending_session_deletes,
 //   bridge_session_snapshot, bridge_session_history, bridge_submit, bridge_cancel,
 //   bridge_attach_file, bridge_workspace, bridge_workspace_file,
 //   bridge_workspace_changes, bridge_workspace_change_detail,
@@ -65,6 +66,7 @@ interface CommandContract {
 //   switchTauriBridgeSession,
 //   renameTauriBridgeSession,
 //   deleteTauriBridgeSession,
+//   tauriPendingSessionDeletes,
 //   tauriBridgeSnapshot, tauriBridgeHistory, submitTauriBridge, cancelTauriBridge,
 //   attachTauriFile, tauriWorkspace, tauriWorkspaceFile, tauriWorkspaceChanges,
 //   tauriWorkspaceChangeDetail,
@@ -74,6 +76,11 @@ interface CommandContract {
 //   setTauriDefaultModel
 
 const commands: CommandContract[] = [
+  {
+    command: "bridge_pending_session_deletes",
+    argKeys: [],
+    description: "tauriPendingSessionDeletes() invokes bridge_pending_session_deletes with no args",
+  },
   {
     command: "bridge_status",
     argKeys: [],

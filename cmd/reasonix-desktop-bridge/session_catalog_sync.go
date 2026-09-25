@@ -23,6 +23,7 @@ type syncSessionCatalogResponse struct {
 func (b *bridgeServer) syncSessionCatalog(w http.ResponseWriter, r *http.Request) {
 	var request syncSessionCatalogRequest
 	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid session catalog sync request")
 		return
 	}
 	if len(request.Sessions) > 50 {

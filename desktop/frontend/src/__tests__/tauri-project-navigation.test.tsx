@@ -157,4 +157,21 @@ assert.doesNotMatch(document.body.textContent ?? "", /续页回读失败后残�
 assert.match(document.body.textContent ?? "", /session catalog shadow unavailable/);
 assert.equal(document.querySelector('[aria-label="加载更多会话"]'), null);
 await act(async () => { root.unmount(); });
+
+// Deletion recovery is sourced from SQLite even when the ordinary sidebar
+// catalog cannot be loaded at all.
+(globalThis as unknown as { __workbenchPages: unknown[] }).__workbenchPages = [new Error("recent catalog unavailable")];
+(globalThis as unknown as { __pendingSessionDeletes: unknown[] }).__pendingSessionDeletes = [
+  { id: "orphan-pending-delete", title: "独立恢复记录" },
+];
+root = createRoot(document.getElementById("root")!);
+await act(async () => {
+  root.render(React.createElement(TauriSessionApp));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise(resolve => setTimeout(resolve, 0));
+});
+assert.match(document.body.textContent ?? "", /recent catalog unavailable/);
+assert.match(document.body.textContent ?? "", /待完成删除/);
+assert.ok(document.querySelector<HTMLButtonElement>('[aria-label="继续删除 独立恢复记录"]'));
+await act(async () => { root.unmount(); });
 console.log("tauri project navigation and legacy title backfill: OK");

@@ -102,6 +102,20 @@ pub struct SessionDirectoryPage {
     pub snapshot_id: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingSessionDelete {
+    pub id: String,
+    pub title: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PendingSessionDeletesResponse {
+    protocol_version: u8,
+    sessions: Vec<PendingSessionDelete>,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SessionInventoryResponse {
@@ -797,11 +811,6 @@ impl BridgeSupervisor {
     /// Read the entire visible directory for a bounded, diagnostic-only
     /// comparison. A changing total or incomplete scan cannot be mistaken
     /// for a zero-difference migration result.
-    pub fn session_directory_snapshot(&self) -> Result<Vec<SessionDirectoryEntry>, String> {
-        self.session_directory_snapshot_with_id()
-            .map(|(entries, _)| entries)
-    }
-
     pub fn session_directory_snapshot_with_id(
         &self,
     ) -> Result<(Vec<SessionDirectoryEntry>, String), String> {
@@ -822,6 +831,15 @@ impl BridgeSupervisor {
             serde_json::from_value(response).map_err(display_error)?;
         validate_session_directory_snapshot(&snapshot, workspace_root)?;
         Ok((snapshot.sessions, snapshot.snapshot_id))
+    }
+
+    /// Reads path-free identities left in the explicit deleting state. These
+    /// remain separate from ordinary paging and are never auto-deleted here.
+    pub fn pending_session_deletes(&self) -> Result<Vec<PendingSessionDelete>, String> {
+        let response = self.request_json("GET", "/v1/sessions/deletion-recovery", None, None)?;
+        let envelope: PendingSessionDeletesResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        validate_pending_session_deletes(envelope)
     }
 
     /// Reduce the existing read-only inventory to file-state evidence. Paths
@@ -1481,6 +1499,15 @@ fn verify_bridge_health(response: Value, expected_instance_id: &str) -> Result<(
             "desktop bridge does not support complete session directory snapshots".to_string(),
         );
     }
+    if !health
+        .capabilities
+        .iter()
+        .any(|capability| capability == "session_delete_recovery_list_v1")
+    {
+        return Err(
+            "desktop bridge does not support explicit session deletion recovery".to_string(),
+        );
+    }
     Ok(())
 }
 
@@ -1883,6 +1910,25 @@ fn valid_session_snapshot_id(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
+fn validate_pending_session_deletes(
+    envelope: PendingSessionDeletesResponse,
+) -> Result<Vec<PendingSessionDelete>, String> {
+    if envelope.protocol_version != PROTOCOL_VERSION || envelope.sessions.len() > 10_000 {
+        return Err("desktop bridge deletion recovery response is invalid".to_string());
+    }
+    let mut seen = std::collections::HashSet::with_capacity(envelope.sessions.len());
+    for pending in &envelope.sessions {
+        if session_path_component(&pending.id)? != pending.id
+            || pending.title.chars().count() > 1024
+            || pending.title.chars().any(char::is_control)
+            || !seen.insert(pending.id.as_str())
+        {
+            return Err("desktop bridge deletion recovery entry is invalid".to_string());
+        }
+    }
+    Ok(envelope.sessions)
+}
+
 fn forward_events(
     app: tauri::AppHandle,
     address: SocketAddr,
@@ -2021,11 +2067,12 @@ mod tests {
     use super::{
         open_event_stream, parse_json_response, read_bounded_response, request_json,
         session_directory_path, session_path_component, validate_attachment,
-        validate_session_directory_page, validate_session_directory_snapshot, verify_bridge_health,
-        verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSupervisor,
-        EventStreamError, OpenSessionRequest, RenameSessionRequest, SessionCatalogMetadata,
-        SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage,
-        SessionInventoryResponse, SessionRequest, PROTOCOL_VERSION,
+        validate_pending_session_deletes, validate_session_directory_page,
+        validate_session_directory_snapshot, verify_bridge_health, verify_ready, wait_for_exit,
+        BridgeAttachment, BridgeEvent, BridgeSupervisor, EventStreamError, OpenSessionRequest,
+        PendingSessionDelete, PendingSessionDeletesResponse, RenameSessionRequest,
+        SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
+        SessionDirectoryPage, SessionInventoryResponse, SessionRequest, PROTOCOL_VERSION,
     };
     use crate::{session_shadow, workbench_catalog::WorkbenchSession};
     use serde_json::json;
@@ -2068,7 +2115,7 @@ mod tests {
             "protocolVersion": 1,
             "status": "ok",
             "sidecarInstanceId": "instance",
-            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1"],
+            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_delete_recovery_list_v1"],
         });
         assert!(verify_bridge_health(healthy.clone(), "instance").is_ok());
         assert!(verify_bridge_health(healthy.clone(), "other").is_err());
@@ -2102,6 +2149,55 @@ mod tests {
         assert!(verify_bridge_health(old_snapshot_sidecar, "instance")
             .unwrap_err()
             .contains("complete session directory snapshots"));
+
+        let old_recovery_sidecar = json!({
+            "protocolVersion": 1,
+            "status": "ok",
+            "sidecarInstanceId": "instance",
+            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1"],
+        });
+        assert!(verify_bridge_health(old_recovery_sidecar, "instance")
+            .unwrap_err()
+            .contains("explicit session deletion recovery"));
+    }
+
+    #[test]
+    fn pending_session_delete_response_is_bounded_unique_and_path_free() {
+        let entries = validate_pending_session_deletes(PendingSessionDeletesResponse {
+            protocol_version: PROTOCOL_VERSION,
+            sessions: vec![PendingSessionDelete {
+                id: "interrupted-delete".into(),
+                title: "Interrupted conversation".into(),
+            }],
+        })
+        .expect("valid pending deletion");
+        assert_eq!(entries.len(), 1);
+        assert!(
+            validate_pending_session_deletes(PendingSessionDeletesResponse {
+                protocol_version: PROTOCOL_VERSION,
+                sessions: vec![
+                    PendingSessionDelete {
+                        id: "same".into(),
+                        title: "one".into()
+                    },
+                    PendingSessionDelete {
+                        id: "same".into(),
+                        title: "two".into()
+                    },
+                ],
+            })
+            .is_err()
+        );
+        assert!(
+            validate_pending_session_deletes(PendingSessionDeletesResponse {
+                protocol_version: PROTOCOL_VERSION,
+                sessions: vec![PendingSessionDelete {
+                    id: "../outside".into(),
+                    title: "unsafe".into()
+                }],
+            })
+            .is_err()
+        );
     }
 
     #[test]
@@ -2577,8 +2673,9 @@ mod tests {
             })
             .expect("reserve session");
         let directory = supervisor
-            .session_directory_snapshot()
-            .expect("read identity directory");
+            .session_directory_snapshot_with_id()
+            .expect("read identity directory")
+            .0;
         let physical = supervisor
             .session_physical_inventory()
             .expect("read physical inventory");
@@ -2737,8 +2834,9 @@ mod tests {
             1
         );
         let page = supervisor
-            .session_directory_snapshot()
-            .expect("read synchronized identity catalog");
+            .session_directory_snapshot_with_id()
+            .expect("read synchronized identity catalog")
+            .0;
         assert_eq!(page.len(), 1);
         assert_eq!(page[0].id, "tauri-e2e-order");
         assert_eq!(page[0].workspace_root.as_deref(), Some(workspace.as_str()));

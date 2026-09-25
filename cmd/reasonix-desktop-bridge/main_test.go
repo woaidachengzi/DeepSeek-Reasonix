@@ -122,7 +122,7 @@ func TestHealthReturnsProtocolAndCapabilities(t *testing.T) {
 	for _, capability := range got.Capabilities {
 		found[capability] = true
 	}
-	if !found["provider_summary"] || !found["set_default_model"] || !found["attach_file"] || !found["rename_session"] || !found["delete_session"] || !found["session_catalog_sync"] || !found["session_directory_snapshot_v1"] || !found["session_directory_snapshot_full_v1"] {
+	if !found["provider_summary"] || !found["set_default_model"] || !found["attach_file"] || !found["rename_session"] || !found["delete_session"] || !found["session_catalog_sync"] || !found["session_directory_snapshot_v1"] || !found["session_directory_snapshot_full_v1"] || !found["session_delete_recovery_list_v1"] {
 		t.Fatalf("health capabilities %v do not include provider model settings", got.Capabilities)
 	}
 }

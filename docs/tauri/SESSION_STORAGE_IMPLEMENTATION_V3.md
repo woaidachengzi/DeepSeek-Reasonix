@@ -213,6 +213,8 @@ Unix 上验证还会拒绝 group/other 可访问的快照目录、清单、成�
 
 **当前安全切片**：bridge 已将新建、恢复、缺失、删除中与已删除会话分开处理；已登记但 transcript 缺失时拒绝静默创建同 ID 空会话，缺失与中断删除均可经显式删除安全退休并保留 tombstone。若清理已完成但 host 尚未移除旧 JSON 行，匹配路径的 `deleted` tombstone 会令重复 DELETE 幂等成功，从而允许 host 完成陈旧 catalog 清理而不再触碰会话文件。标题/首条消息预览拒绝读取 symlink 的 profile 外 `sessions` 目录、transcript、`.meta` 与事件日志；身份导入、预留、catalog 顺序同步和相对路径解析也会按规范化 profile root 拒绝指向 profile 外部的 `sessions` 目录。预览有新鲜普通用户投影时避免重放整段 transcript，合成 `session-context` 首项仍走完整解析以保留显示语义。身份库打开会校验其父目录仍在指定 profile root 内，并以 `Lstat` 拒绝数据库及 SQLite journal sidecar 为 symlink 或非普通文件；这些都是路径级预检，不防止并发替换竞态。Tauri Preview 侧栏按页读取身份目录，每次首屏及续页请求都重新做 count-only 影子比对；不一致或失败时首屏回退旧 JSON，续页则拒绝混入未经验证的 SQLite 结果并要求重启列表读取。每页还携带仅覆盖分页键与可见性字段的 SHA-256 snapshot ID，游标绑定该快照；路径、工作区、状态或顺序变化会返回 `resync_required`，而标题回填不破坏分页。完整 shadow compare 仍核对展示元数据。对 WebView 暴露的低层身份分页命令也执行相同 clean shadow 门禁。新增/改名/删除后的重新盘点发现漂移时也会回退。身份表现为相对 state-root 的 `relative_path`；旧 v1–v3 绝对路径通过校验后事务迁移到 v4，离线快照与旧 catalog 重放的跨资源恢复演练已覆盖新 profile 路径；SQLite WAL abrupt-exit 恢复及删除清理中的 bridge 进程强制终止后重试已有隔离测试。此为可回退的 Preview 读取路径，不代表稳定版迁移或全 profile 权威切换。旧 bridge 缺少必需的 `session_catalog_sync` 或 `session_directory_snapshot_v1` capability 时，新 host 会在启动阶段拒绝该 sidecar；真实旧 writer 停写确认与旧 Tauri host 二进制认证仍待完成，详见下方兼容矩阵。
 
+中断删除的 `deleting` identity 不属于普通目录，但现在可通过 `GET /v1/sessions/deletion-recovery` 单独发现；该响应只包含 ID 和标题，不暴露 transcript 路径。Tauri host 在 health capability 缺失时拒绝旧 bridge；侧栏独立加载恢复清单，普通最近会话页读取失败时仍展示这些记录。只有用户明确确认才调用既有 DELETE 重试；不做启动期自动删除，也不允许打开该会话。
+
 **Shadow inventory 完整性**：Go bridge 即使 inventory 为空也显式序列化 `entries`、`unclaimed`、`errors` 为空数组；Rust host 缺少任一字段或收到 `null` 时拒绝该物理快照，因此空 profile 不会把缺失响应误判为 clean。
 
 Rust host 读取 bridge HTTP 响应时限制原始响应最多 64 MiB、解码 JSON body 最多 32 MiB，超限在 JSON 解析前拒绝；避免异常膨胀的 inventory/history 响应无界占用 host 内存。
@@ -229,8 +231,8 @@ Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝
 
 | 组合 | 结论 | 依据 / 限制 |
 | --- | --- | --- |
-| 当前 Tauri host + 当前 bridge（protocol v1，含 `session_catalog_sync`、`session_directory_snapshot_v1` 与 `session_directory_snapshot_full_v1`） | 支持 | Host 启动时先校验 ready frame，再读取认证 health；协议版本、sidecar instance ID 或必需的目录同步/分页/完整快照 capability 不匹配时，拒绝把该进程登记为可用并终止它。 |
-| 当前 Tauri host + 旧 bridge（仍报 protocol v1、但缺少任一必需目录 capability） | 明确拒绝 | protocol major 相同不代表新增 endpoint 或快照绑定分页可用；health capability 缺失会在启动阶段报错，不等到初次目录同步才失败。 |
+| 当前 Tauri host + 当前 bridge（protocol v1，含 `session_catalog_sync`、目录快照 capability 与 `session_delete_recovery_list_v1`） | 支持 | Host 启动时先校验 ready frame，再读取认证 health；协议版本、sidecar instance ID 或必需 capability 不匹配时，拒绝把该进程登记为可用并终止它。 |
+| 当前 Tauri host + 旧 bridge（仍报 protocol v1、但缺少任一必需目录/恢复 capability） | 明确拒绝 | protocol major 相同不代表新增 endpoint 可用；health capability 缺失会在启动阶段报错，不等到首次目录读取或恢复检查才失败。 |
 | 旧 Tauri host + 新 bridge（protocol v1） | 预期向后兼容，非发布认证 | bridge 保留既有 v1 路由；旧 host 不调用新增目录同步接口时，不会要求它理解身份库。完整旧 host 二进制尚未纳入自动化矩阵。 |
 | Wails 1.38.3 / 1.38.10 与 Tauri Preview 共用 profile 并同时写入 | 不支持 | 这些旧 writer 不遵守 `profilegate`。不得用新 bridge 的锁推断旧进程已停；真实 profile 操作前需外部确认 writer 全退出。 |
 | 稳定版 Wails profile 顺序复制到隔离的 Preview，再离线导入 | 有条件支持，需人工核对 | 只对副本执行 inventory、快照、逐项审核导入与恢复演练；不在稳定目录就地迁移、不让两个版本并发写。 |

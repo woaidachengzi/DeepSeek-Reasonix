@@ -115,6 +115,11 @@ export function tauriWorkbenchSessionPage(cursor, limit = 200) {
   return Promise.resolve({ sessions, nextCursor: null, total: sessions.length, source: "identity" });
 }
 
+export function tauriPendingSessionDeletes() {
+  record("bridge_pending_session_deletes");
+  return Promise.resolve((globalThis.__pendingSessionDeletes ?? []).slice());
+}
+
 export function tauriWorkspaceRootsAvailability(roots) {
   record("workspace_roots_availability", { roots });
   const unavailable = new Set(globalThis.__unavailableWorkspaceRoots ?? []);
@@ -209,6 +214,7 @@ export function deleteTauriBridgeSession(sessionId) {
   record("bridge_delete_session", { sessionId });
   const failure = globalThis.__deleteFailure;
   if (failure) return Promise.reject(new Error(failure));
+  globalThis.__pendingSessionDeletes = (globalThis.__pendingSessionDeletes ?? []).filter(entry => entry.id !== sessionId);
   return Promise.resolve({ protocolVersion: 1, deleted: true, sessionId });
 }
 

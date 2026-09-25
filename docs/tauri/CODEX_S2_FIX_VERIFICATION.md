@@ -2,28 +2,33 @@
 
 > 对照文档：[CODEX_S2_REVIEW.md](./CODEX_S2_REVIEW.md)（我上一轮的审查报告，19 条问题）
 > 核对时间：2026-09-25
-> 核对方式：先按原报告做只读核对，再于 2026-09-25 复核现有工作区改动；本次为校正过时结论，不改产品代码。
-> 状态：`git log` 显示 HEAD 未变（仍 `c8a2a8deb`），修复都在未提交工作区中；
-> 当前 diff 规模 40 文件 / +4,254 −341（审查时为 39 文件 / +3,415 −283）。
+> 核对方式：先按原报告做只读核对，再于 2026-09-25 复核现有工作区改动；本次修正过时结论，并记录后续小幅产品代码修复。
+> 状态：审查基线为 `c8a2a8deb`；已核对阶段改造于 `0b3bf8fba` 提交（44 文件 / +5,026 −343）。
+> 下文 2.5 的流式哈希优化、中断删除恢复入口与 CI 门禁修复是该提交后的跟进实现。
 > 回归验证：`go test ./internal/sessionidentity/... ./cmd/reasonix-desktop-bridge/` **全部通过**。
 
 ## 0. 结论摘要
 
-| 严重度 | 总数 | 已修 | 部分缓解 | 仍存在 |
-| --- | --- | --- | --- |
-| 高（功能） | 4 | **1** | **2** | 1 |
-| 中（性能/一致性） | 8 | **1** | 0 | 7 |
-| 低（细节） | 7 | 0 | 0 | 7 |
-| **合计** | **19** | **2** | **2** | **15** |
+| 严重度 | 总数 | 已修 | 部分缓解 | 仍存在 | 未证实 |
+| --- | --- | --- | --- | --- | --- |
+| 高（功能） | 4 | **2** | **1** | 1 | 0 |
+| 中（性能/一致性） | 8 | **1** | **1** | 5 | 1 |
+| 低（细节） | 7 | **1** | 0 | 5 | 1 |
+| **合计** | **19** | **4** | **2** | **11** | **2** |
 
-**已修的 2 条**：
+**已修的 4 条**：
 
+- **1.1 中断删除缺少独立发现入口** —— 已增加仅含 ID 和标题的恢复清单；普通目录页失败时仍可显示，用户确认后续做删除。
 - **1.2 标题变化导致分页失效** —— 已修，且测试同步更新并新增反向用例。
 - **2.6 `ApplyImportReview` 的 TOCTOU 只靠注释约束** —— 已修，改为函数内强制获取 profile 锁。
+- **3.1 两个 catalog 端点对坏 JSON 返回空响应** —— 阶段提交后的跟进修复已在 `session_catalog_import.go` 与 `session_catalog_sync.go` 返回协议化 `invalid_request`，`TestSessionCatalogEndpointsReturnProtocolErrorForMalformedJSON` 覆盖两个端点。
 
 **另有 1 处是原审查结论有误**，见 §3：1.3 中"用户得不到任何提示"不成立，
-UI 实际上已有明确提示与重试按钮。原报告的 1.1 与 1.4 也需按现有改动更新：前者已有显式
-legacy 重试路径但没有启动期自动续做；后者改用单次有界快照接口，仍会按列表页重复做完整影子审计。
+UI 实际上已有明确提示与重试按钮。原报告的 1.1 与 1.4 也需按现有改动更新：前者现在有独立的显式
+恢复入口，启动期不会自动删除；后者改用单次有界快照接口，仍会按列表页重复做完整影子审计。
+在阶段提交后，2.5 另做了一次安全的读放大优化：复制时流式计算目标摘要，保持源文件复读比对与最终
+`VerifyOfflineSnapshot`；该项由四遍整文件读取降为三遍，属于部分缓解。
+2.3 与 3.7 经复核未证实为问题：导入会保留缺失条目为 `missing` identity；空 catalog 响应中的 `Accepted` 由 JSON 正常编码为 `0`。
 
 ---
 
@@ -75,39 +80,39 @@ defer releaseProfile()
 
 ---
 
-## 2. 未完全解决或仍存在（17 条：2 条部分缓解，15 条未修）
+## 2. 未完全解决或仍存在（13 条：2 条部分缓解，11 条仍存在；2.3、3.7 未证实）
 
-### 2.1 高严重度（1 条仍存在，2 条部分缓解）
+### 2.1 高严重度（1 条恢复入口已补足，1 条仍存在，1 条部分缓解）
 
 | 编号 | 问题 | 核对证据 |
 | --- | --- | --- |
-| **1.1** | **中断删除没有启动期自动续做** | `session_delete_recovery.go` 中 `retryInterruptedSessionDelete` 仍仅由删除端点路径调用，没有启动期 reconciler；身份分页仍排除 `deleting` 行。不过当前 legacy 回退保留 JSON catalog 条目，用户可从兼容列表显式再次删除，Rust 回归 `interrupted_delete_remains_visible_for_explicit_legacy_retry` 覆盖可见性。因此“完全无法重试”不成立；缺口是自动续做和非 legacy fallback 下的直接可见性。 |
+| **1.1** | **没有启动期自动续做（有意保留），直接可发现性已补足** | 启动时仍不无提示地自动删除；新增 path-free `GET /v1/sessions/deletion-recovery`、受 health capability 保护的 Rust 命令和侧栏“待完成删除”区域。用户可显式确认后重试；不在普通列表开放或恢复会话。 |
 | **1.3** | **legacy 回退不提供分页** | `main.rs:498-506`、`:510-518` 两处 legacy 分支仍是 `next_cursor: None`，调用 `page_entries_from_legacy`。上限仍来自 `workbench_catalog.rs:12`（`MAX_SESSIONS = 50`）。**注意**：提示与重试按钮已存在（见 §3），因此本条现在只是"无法翻到 50 条之后"，不再是"无任何说明" |
 | **1.4** | **每页仍重复全量影子审计（已部分缓解）** | `main.rs` 的列表页仍调用 `compare_session_catalog_with_directory`，并拉取完整物理 inventory；但工作区已有 `GET /v1/sessions/snapshot` 与 `session_directory_snapshot_full_v1`，把原先按 200 条循环请求改成一次有界快照（上限 10,000）。因此每页的重复全量工作仍存在，但不再是旧报告描述的重复分页请求 + 额外完整目录清单；不能称已完全解决。 |
 
-### 2.2 中严重度（7 条仍存在）
+### 2.2 中严重度（5 条仍存在，1 条部分缓解，1 条未证实）
 
 | 编号 | 问题 | 核对证据 |
 | --- | --- | --- |
 | **2.1** | 每次变更 O(n) 次 syscall | `store.go:418` `ensureTranscriptPathAvailable` 仍 `SELECT id, relative_path FROM sessions WHERE id<>?`（全表），逐行 `resolveTranscriptPath`（内部 `EvalSymlinks`）＋ `os.Stat` |
 | **2.2** | 打开库可能整库拷贝 | `path.go:147` 仍调用 `inspectWALSchemaOnCopy`（`:153`），WAL 非空即复制 `.sqlite`+`-wal`+`-journal`。`Open` 仍在热路径（`core_runtime.go:108`、`:135`） |
-| **2.3** | `Accepted`/`Synced` 计数与实际写入不符 | `session_catalog_import.go:86` 仍 `Accepted: len(candidates)`；`catalog.go:127-145` 的 `listedPosition` 仍只统计存在条目，而 host `main.rs:651-657` 要求等于 legacy 条数 |
+| **2.3** | `Accepted`/`Synced` 计数与实际写入不符（未证实） | 当前代码以 `Accepted` 表示接纳的目录项，而非新插入行；`ImportLegacyCatalog` 使用 `preserveMissing=true`，缺失 transcript 也会建为 `StateMissing`。`SyncWorkbenchOrder` 只排除 deleting/deleted，故 missing 行仍计入 `listedPosition`。`session_catalog_import_test.go` 与 `store_test.go` 有保留缺失项的回归覆盖；现有证据不支持“合法缺失会被跳过并导致计数不匹配”。 |
 | **2.4** | 路径归一化三层不一致 | `store.go:819`、`:831` 等处仍是大小写敏感的 `workspace_root=?`；Rust 组键小写化（`workbench_projects.rs:158-173`）、前端同样（`workbenchSessions.ts:15-25`）。目前仍未接工作区过滤（`tauriBridge.ts:270` 只传 limit/cursor），故仍是**潜在**问题 |
-| **2.5** | 离线快照多次哈希 | 当前 `copyVerifiedSnapshotFile` 仍在拷贝后分别哈希目标和源，`CreateOfflineSnapshot` 最后仍执行完整 `VerifyOfflineSnapshot`；复制时尚未采用流式哈希。 |
+| **2.5** | 离线快照多次哈希（部分缓解） | `copyVerifiedSnapshotFile` 现在在复制时流式计算副本 SHA-256，仍复读源文件比对，并由 `CreateOfflineSnapshot` 最终执行完整 `VerifyOfflineSnapshot`。与原先复制后分别重读目标和源相比，去掉了一遍目标读取，尚保留源稳定性检查和发布前端到端验证。 |
 | **2.7** | `SyncWorkbenchOrder` 50 条硬限制 | `catalog.go:32` 仍 `len(entries) > 50` 直接报错（`:159` 是 `ImportWorkbenchCatalog` 的同款限制） |
 | **2.8** | 恢复路径用读写 `Open` | `session_delete_recovery.go:48` 仍用 `sessionidentity.Open`（会迁移 schema），而列表/清单用 `OpenReadOnly`（`session_list.go:90`） |
 
-### 2.3 低严重度（7 条全部未修）
+### 2.3 低严重度（5 条仍存在，1 条已修，1 条未证实）
 
 | 编号 | 问题 | 核对证据 |
 | --- | --- | --- |
-| 3.1 | 解析失败返回空 400 | `session_catalog_import.go:31-33`、`session_catalog_sync.go:25-27` 仍直接 `return` |
+| 3.1 | 解析失败返回空 400（已修） | 两个 catalog handler 现在在 `decodeJSONBody` 出错时返回协议化 `invalid_request`；`session_catalog_request_errors_test.go` 分别验证状态码和响应 envelope。 |
 | 3.2 | 死代码 | `bridge_session_directory_page`（`main.rs:575`）仍已注册但前端无调用点 |
 | 3.3 | 重复计算 | `store.go:407` 仍丢弃 `relativeTranscriptPath` 的返回值 |
 | 3.4 | 平台策略无提示 | `path.go:33-38` `sameCaseInsensitivePath` 未变，错误信息未点明平台策略 |
 | 3.5 | 快照包含可重建缓存 | `offline_snapshot.go:82-117` 仍整树拷贝 profile（含 `cache/`） |
 | 3.6 | `previewRoot` 命名过时 | `store.go:521`、`:583` 仍用 `previewRoot`，实际传的是 session dir |
-| 3.7 | 空数组提前返回语义含糊 | `session_catalog_import.go:38-41` 仍返回 `Accepted` 默认 0 |
+| 3.7 | 空数组提前返回语义含糊（未证实） | `Accepted` 是非 `omitempty` 的 `int` 字段，JSON 会明确输出 `"accepted":0`；空目录成功导入 0 条，现有响应语义明确且可解析。 |
 
 ---
 
@@ -147,14 +152,89 @@ defer releaseProfile()
 
 **仍然建议优先处理（按影响排序）**：
 
-1. **1.1 中断删除的续做入口** —— 唯一的"数据可见性"缺口，且与设计稿明确要求不符。
-2. **1.4 每页全量重扫** —— 它会随会话数放大，且与本项"解除 50 条上限"的目标正面冲突：
-   真到了几百上千条，翻页会不可用。
-3. **2.1 / 2.2 的热路径开销** —— 与 1.4 同源（都在"每次操作/每页"上），建议合并处理。
-4. **1.3 的 legacy 分页** —— 现在有提示，因此不紧急；但"最多 50 条"仍是能力上限。
-5. **2.3 计数语义** —— 会把"合法跳过"误判为"同步不完整"，属于正确性问题，建议随 1.3 一起改。
+1. **1.4 每页全量重扫** —— 它会随会话数放大；在旧 Wails writer 停写确认前保留物理 inventory 与 shadow 门禁，不应靠缓存跳过校验。
+2. **2.1 / 2.2 的热路径开销** —— 需在不削弱 transcript 唯一性与 WAL/schema 校验的条件下测量、优化。
+3. **1.3 的 legacy 分页** —— 现在有提示，因此不紧急；fallback 自身仍受 JSON catalog 的 50 条上限约束。
 
-**可以推迟**：2.4（潜在，未接线）、2.5、2.7、2.8 与全部低严重度项。
+1.1 的独立恢复入口已补齐；启动期不无提示地自动删除是当前明确的产品行为。2.3、3.7 的原判定未证实，不建议按原建议改动。
 
-**回归状态**：原核对记录称 `go test ./internal/sessionidentity/... ./cmd/reasonix-desktop-bridge/`
-通过。本次复核仅做静态核验，Rust 与前端测试未在本次复核中重跑；提交前应重跑本阶段相关套件。
+**可以推迟**：2.4（潜在，未接线）、2.5 剩余读取、2.7、2.8 与其余低严重度项。
+
+**回归状态**：阶段提交前 `go test ./internal/sessionidentity/... ./cmd/reasonix-desktop-bridge/`、Rust host
+81 项、前端专项 95 项与前端 typecheck 均通过。提交后的 2.5 优化通过 `go test ./internal/sessionidentity`
+与 `go test -race ./internal/sessionidentity`；3.1 修复后 bridge 与 sessionidentity 两个 Go 包通过，格式与 diff 检查通过。
+
+---
+
+## 7. 独立复核（DeepSeek，2026-09-25 追加）
+
+本节由 DeepSeek 追加，用于**独立验证**上文（含 Codex 对本文的修订）中的状态判定。
+未改动上文任何内容。核对对象：`0b3bf8fba` 提交 + 当前工作区（6 个未提交改动）。
+
+### 7.1 已逐条独立确认的修订
+
+| 上文判定 | 我的独立核验 | 结论 |
+| --- | --- | --- |
+| **3.1 已修** | 两个 handler 现在都调用 `writeProtocolError(..., "invalid_request", ...)`（`session_catalog_import.go:31-33`、`session_catalog_sync.go:25-27`），并有新测试 `TestSessionCatalogEndpointsReturnProtocolErrorForMalformedJSON`（`session_catalog_request_errors_test.go:11`，断言 `body.Error.Code != "invalid_request"`） | **确认属实** |
+| **2.5 部分缓解** | `copyVerifiedSnapshotFile` 改为 `io.Copy(io.MultiWriter(writer, streamHash), ...)`（`offline_snapshot.go:450-451`），副本摘要在复制时流式产生；源复读比对（`:474`）与最终 `VerifyOfflineSnapshot` 仍在 | **确认属实**（4 遍 → 3 遍） |
+| **2.3 未证实** | `ImportLegacyCatalog` 调用 `importCandidates(..., requirePresent=false, preserveMissing=true, preserveExisting=true)`（`store.go:554`）；`:642-643` 表明 `preserveMissing=true` 时缺失条目**仍会插入**，且插入使用 `incoming.State`（`:655-660`，即 `StateMissing`）；`SyncWorkbenchOrder` 的 `listedPosition` 只排除 `deleting/deleted`（`catalog.go:108-133`），故 missing 行**会计入** | **确认原 2.3 不成立**，我的原判定有误 |
+| **3.7 未证实** | `Accepted int \`json:"accepted"\``（`session_catalog_import.go:26`）**无 omitempty**，JSON 恒输出 `"accepted":0`；空数组时"尝试 0 条"与"写入 0 条"本就一致 | **确认原 3.7 不成立** |
+| **1.4 部分缓解** | `session_directory_snapshot_for_workspace` 现在只发**一次** `GET /v1/sessions/snapshot`（`bridge.rs:819-824`），旧的按 200 条循环已移除；但 `workbench_session_page` 仍**每页**调用 `compare_session_catalog_with_directory`（`main.rs:462-463`） | **确认属实**：循环请求已修，每页重复全量审计仍在 |
+| **1.1 需修正限定** | 见 7.3：重试路径确实存在（经 legacy 回退使其可见），但仍无启动期自动续做 | **确认属实，我原表述需更正** |
+
+### 7.2 当时新增发现：CI clippy 门禁失败（现已修复）
+
+本阶段修复前，`cargo clippy --locked -- -D warnings`（CI 门禁位于 `.github/workflows/ci.yml:617-619`）报 2 个错误并编译失败：
+
+| # | 错误 | 位置 | 说明 |
+| --- | --- | --- | --- |
+| 1 | `method 'session_directory_snapshot' is never used` | `desktop/tauri/src/bridge.rs:800` | 该薄封装已无调用方（`compare_session_catalog_with_directory` 用的是 `session_directory_snapshot_with_id`）。是重构到单次快照接口后的遗留死代码，与 3.2 同类问题 |
+| 2 | `current MSRV is 1.77.2 but this item is stable since 1.83.0` | `desktop/tauri/src/main.rs:275` | 使用了 `std::io::ErrorKind::NotADirectory`；`Cargo.toml:7` 声明 `rust-version = "1.77.2"`，因此在声明的 MSRV 上**根本无法编译** |
+
+**归因（已核实，非本次提交引入）**：
+
+- `git log -S "NotADirectory" -- desktop/tauri/src/main.rs` → 由 **`c1ddc5bb4 feat(tauri): show unavailable project workspaces`**（2026-09-24 16:24）引入，距 HEAD **26 个提交**，不是 `0b3bf8fba` 带入的。
+- `session_directory_snapshot` 的 dead code 也不在 `0b3bf8fba` 的 diff 中。
+- 这两个错误此前已在分支上存在，与阶段提交 `0b3bf8fba` 无关。
+
+本阶段移除了只供测试调用的 `session_directory_snapshot` 薄封装，两个测试改用现有的 `session_directory_snapshot_with_id`；工作区可用性检查通过逐级检查非目录父节点处理相同场景，避开 Rust 1.83 才稳定的 `ErrorKind::NotADirectory`。本地 clippy 门禁现已通过；这不等于用 Rust 1.77.2 编译器完成了独立 MSRV 验证。
+
+**其余门禁实测结果**：
+
+| 门禁 | 结果 |
+| --- | --- |
+| `cargo fmt --check` | 通过 |
+| `cargo test --bin reasonix-tauri` | **82 passed**（本阶段更新） |
+| `cargo clippy --locked -- -D warnings` | **通过**（本阶段更新） |
+| `go test ./internal/sessionidentity/... ./cmd/reasonix-desktop-bridge/` | 通过 |
+| 前端 `tsc --noEmit` | 通过 |
+
+### 7.3 对 1.1 的更正（原报告表述及本阶段后续处理）
+
+我原先写"会话从 UI 消失且**无法重试**"。经核实，完整链条是：
+
+1. 删除中断 → identity 行为 `state='deleting'`；
+2. `deleting` 被排除出身份库目录（`store.go:819`）；
+3. 但 host 的 legacy catalog **仍保留该行**（`forgetTauriWorkbenchSession` 只在删除成功后才移除）；
+4. 于是影子比对 `missing_from_directory > 0`（`session_shadow.rs:63-68`）→ `legacy_matches_directory = false`（`:114`）；
+5. UI 因此**回退到 legacy 列表**（`main.rs:498-506`），并在侧栏显示"最多 50 条；列表可能不完整"的提示；
+6. 该行在 legacy 列表中**可见**，用户再点删除即可续做（前端会在 switch 失败后直接调 DELETE，`TauriChatWorkspace.tsx:1029-1040`）；测试 `TestBridgeRetriesInterruptedDeleteAfterRestart` 覆盖了这条续做路径。
+
+**更正后的准确表述**：中断删除**不是**"静默黑洞"，而是让整个侧栏降级为 legacy 模式（50 条上限 + 警告），并依赖用户手动重试该行才能收敛。
+本阶段已补充 path-free 独立恢复列表与显式确认重试，因此即使 identity 不在 legacy catalog 中也可发现；仍不做启动期无提示自动删除，这是为了保留用户确认。
+
+### 7.4 复核后的状态汇总（本阶段更新：19 条 = 4 + 2 + 11 + 2）
+
+| 状态 | 条数 | 编号 |
+| --- | --- | --- |
+| 已修 | 4 | 1.1（补足中断删除的独立发现与显式重试）、1.2（标题不再使分页失效）、2.6（导入强制持锁）、3.1（协议化错误响应） |
+| 部分缓解 | 2 | 1.4（循环请求已改为单次快照，每页全量审计仍在）、2.5（流式哈希，4 遍 → 3 遍） |
+| 仍存在 | 11 | 1.3、2.1、2.2、2.4、2.7、2.8、3.2、3.3、3.4、3.5、3.6 |
+| 我的原判定不成立 | 2 | 2.3、3.7 |
+| **另有新增发现（已修）** | **1** | **CI clippy 门禁失败（§7.2，分支既有、非阶段提交引入）** |
+
+其中需要说明的两条：
+
+- **1.3** 归入"仍存在"而非"部分缓解"：侧栏提示与重试按钮**在我上一轮审查时就已经存在**
+  （见 §3 的更正），并非本次修复带来的缓解；本条待办仍是"legacy 回退无法翻到 50 条之后"。
+- **1.1** 已从遗留项移至已修：恢复入口独立于 legacy catalog；启动期自动续做仍不属于本阶段行为。

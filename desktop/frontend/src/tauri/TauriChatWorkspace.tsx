@@ -94,6 +94,7 @@ import {
   tauriPreviewProfileStatus,
   tauriPreviewRuntimeInfo,
   tauriSessionTitle,
+  tauriPendingSessionDeletes,
   tauriWorkbenchSessionPage,
   tauriWorkbenchProjectFolders,
   tauriWorkspaceRootsAvailability,
@@ -110,6 +111,7 @@ import {
   type TauriBridgeSession,
   type TauriBridgeStatus,
   type TauriPendingPrompt,
+  type TauriPendingSessionDelete,
   type TauriWorkspaceEntry,
   type TauriWorkspaceFilePreview,
   type TauriWorkspaceChanges,
@@ -137,6 +139,7 @@ interface WorkbenchSessionTab {
   workspaceRoot?: string;
   state?: string;
   missing?: boolean;
+  deletionInterrupted?: boolean;
 }
 
 function preserveWorkbenchLifecycle(
@@ -150,6 +153,7 @@ function preserveWorkbenchLifecycle(
       ...session,
       state: session.state ?? prior.state,
       missing: session.missing ?? prior.missing,
+      deletionInterrupted: session.deletionInterrupted ?? prior.deletionInterrupted,
     } : session;
   });
 }
@@ -189,12 +193,13 @@ interface SessionRowProps {
 function SessionRow({ tab, active, busy, switchingBlocked, onActivate, onDelete }: SessionRowProps) {
   const [confirming, setConfirming] = useState(false);
   const missing = isMissingWorkbenchSession(tab);
+  const deletionInterrupted = tab.deletionInterrupted === true;
   if (confirming) {
     return (
       <div className="tauri-session-delete" role="group" aria-label="确认删除对话">
-        <span className="tauri-session-delete__question">删除“{displayTitle(tab.title)}”？</span>
+        <span className="tauri-session-delete__question">{deletionInterrupted ? `继续删除“${displayTitle(tab.title)}”？` : `删除“${displayTitle(tab.title)}”？`}</span>
         <span className="tauri-session-delete__actions">
-          <button type="button" className="tauri-session-delete__confirm" disabled={busy} onClick={onDelete}>删除</button>
+          <button type="button" className="tauri-session-delete__confirm" disabled={busy} onClick={onDelete}>{deletionInterrupted ? "继续删除" : "删除"}</button>
           <button type="button" className="tauri-session-delete__cancel" disabled={busy} onClick={() => setConfirming(false)}>取消</button>
         </span>
       </div>
@@ -205,20 +210,21 @@ function SessionRow({ tab, active, busy, switchingBlocked, onActivate, onDelete 
       <button
         type="button"
         className={`tauri-sidebar__session${missing ? " is-missing" : ""}`}
-        disabled={busy || active || switchingBlocked || missing}
+        disabled={busy || active || switchingBlocked || missing || deletionInterrupted}
         onClick={onActivate}
-        aria-label={missing ? `${displayTitle(tab.title)}（文件缺失）` : undefined}
-        title={missing ? "会话文件缺失，无法打开。可删除这条失效记录。" : tab.workspaceRoot ? `${tab.sessionId}\n${tab.workspaceRoot}` : tab.sessionId}
+        aria-label={deletionInterrupted ? `${displayTitle(tab.title)}（删除未完成）` : missing ? `${displayTitle(tab.title)}（文件缺失）` : undefined}
+        title={deletionInterrupted ? "上次删除被中断；点击右侧按钮并确认后继续删除。" : missing ? "会话文件缺失，无法打开。可删除这条失效记录。" : tab.workspaceRoot ? `${tab.sessionId}\n${tab.workspaceRoot}` : tab.sessionId}
       >
         <MessageSquare size={15} aria-hidden="true" />
         <span>{displayTitle(tab.title)}</span>
+        {deletionInterrupted && <small className="tauri-session-recovery">删除未完成</small>}
         {missing && <small className="tauri-session-missing">文件缺失</small>}
       </button>
       <button
         type="button"
         className="tauri-session-row__delete"
-        aria-label={`删除对话 ${displayTitle(tab.title)}`}
-        title="删除对话"
+        aria-label={`${deletionInterrupted ? "继续删除" : "删除对话"} ${displayTitle(tab.title)}`}
+        title={deletionInterrupted ? "继续删除已开始的删除操作" : "删除对话"}
         disabled={busy || switchingBlocked}
         onClick={() => setConfirming(true)}
       >
@@ -273,6 +279,8 @@ function PromptCard({ prompt, busy, selections, onApproval, onAskSelection, onAs
 export function TauriSessionPreview() {
   const [session, setSession] = useState<TauriBridgeSession | null>(null);
   const [tabs, setTabs] = useState<WorkbenchSessionTab[]>([]);
+  const [pendingSessionDeletes, setPendingSessionDeletes] = useState<TauriPendingSessionDelete[]>([]);
+  const [pendingSessionDeleteError, setPendingSessionDeleteError] = useState("");
   const [projectFolders, setProjectFolders] = useState<WorkbenchProjectFolder[]>([]);
   const [sessionPageCursor, setSessionPageCursor] = useState<{ position: number; id: string; snapshotId: string } | null>(null);
   const [sessionPageSource, setSessionPageSource] = useState<"identity" | "legacy" | "unavailable">("identity");
@@ -332,6 +340,7 @@ export function TauriSessionPreview() {
   const createSessionInFlightRef = useRef(false);
   const sessionPageRequestRef = useRef(false);
   const sessionPageRevisionRef = useRef(0);
+  const pendingDeleteRequestRef = useRef(0);
   const projectRootsRequestRef = useRef(0);
   const workspaceEpochRef = useRef(0);
   const workspaceListRequestRef = useRef(0);
@@ -345,7 +354,9 @@ export function TauriSessionPreview() {
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   // Drag-and-drop state
   const [dragging, setDragging] = useState(false);
-  const projectGroups = useMemo(() => groupWorkbenchSessions(tabs, projectFolders, platform), [tabs, projectFolders, platform]);
+  const pendingSessionDeleteIDs = useMemo(() => new Set(pendingSessionDeletes.map(item => item.id)), [pendingSessionDeletes]);
+  const visibleTabs = useMemo(() => tabs.filter(tab => !pendingSessionDeleteIDs.has(tab.sessionId)), [tabs, pendingSessionDeleteIDs]);
+  const projectGroups = useMemo(() => groupWorkbenchSessions(visibleTabs, projectFolders, platform), [visibleTabs, projectFolders, platform]);
   const projectRootsKey = projectGroups.flatMap(group => group.root ? [group.root] : []).join("\u0000");
   const activeCatalogTitle = tabs.find(tab => tab.sessionId === session?.id)?.title;
 
@@ -488,6 +499,7 @@ export function TauriSessionPreview() {
         // import, but retain the JSON catalog as an initial-load fallback.
         try { await tauriImportLegacySessionCatalog(); } catch { /* keep legacy catalog usable while the bridge is unavailable */ }
         if (!active) return;
+        void reloadPendingSessionDeletes(() => active);
         const page = await tauriWorkbenchSessionPage();
         if (!active) return;
         setTabs(page.sessions);
@@ -843,6 +855,23 @@ export function TauriSessionPreview() {
     }
   }
 
+  async function reloadPendingSessionDeletes(isActive: () => boolean = () => true) {
+    const request = ++pendingDeleteRequestRef.current;
+    try {
+      const entries = await tauriPendingSessionDeletes();
+      if (!isActive() || request !== pendingDeleteRequestRef.current) return;
+      setPendingSessionDeletes(entries);
+      setPendingSessionDeleteError("");
+    } catch (cause) {
+      if (!isActive() || request !== pendingDeleteRequestRef.current) return;
+      setPendingSessionDeleteError(tauriMessageFrom(cause));
+    }
+  }
+
+  async function retryPendingSessionDeleteCheck() {
+    await reloadPendingSessionDeletes();
+  }
+
   async function retryWorkbenchSessionDirectory() {
     if (sessionPageRequestRef.current) return;
     sessionPageRequestRef.current = true;
@@ -1024,7 +1053,7 @@ export function TauriSessionPreview() {
     let deleted = false;
     let operationError = "";
     try {
-      if (!isOpen && !target.missing && target.state !== "missing") {
+      if (!isOpen && !target.deletionInterrupted && !target.missing && target.state !== "missing") {
         try {
           await switchTauriBridgeSession(target.sessionId, target.workspaceRoot);
           switchedToTarget = true;
@@ -1040,6 +1069,9 @@ export function TauriSessionPreview() {
       // controller. DELETE resumes cleanup without recreating the transcript.
       await deleteTauriBridgeSession(target.sessionId);
       deleted = true;
+      if (target.deletionInterrupted) {
+        setPendingSessionDeletes(previous => previous.filter(item => item.id !== target.sessionId));
+      }
       if (isOpen) {
         turnEpochRef.current += 1;
         setSession(null);
@@ -1057,6 +1089,7 @@ export function TauriSessionPreview() {
         ? `对话已删除，但最近对话列表更新失败：${userMessage}`
         : userMessage;
     } finally {
+      await reloadPendingSessionDeletes();
       // The bridge owns one controller. Deleting an inactive row temporarily
       // switches that controller, so restore the user's open session even if
       // deletion or catalog cleanup fails.
@@ -1604,6 +1637,19 @@ export function TauriSessionPreview() {
         <button className="tauri-sidebar__new" type="button" onClick={() => void createSession()} disabled={busy || switchingBlocked}>
           <Plus size={17} aria-hidden="true" /><span>新建对话</span><kbd>⌘ N</kbd>
         </button>
+        {pendingSessionDeletes.length > 0 && <>
+          <div className="tauri-sidebar__section-title">待完成删除</div>
+          <section className="tauri-pending-deletes" aria-label="待完成删除">
+            {pendingSessionDeletes.map(item => {
+              const tab: WorkbenchSessionTab = { sessionId: item.id, title: item.title, state: "deleting", deletionInterrupted: true };
+              return <SessionRow key={item.id} tab={tab} active={false} busy={busy} switchingBlocked={switchingBlocked} onActivate={() => {}} onDelete={() => void deleteSession(tab)} />;
+            })}
+          </section>
+        </>}
+        {pendingSessionDeleteError && <div className="tauri-pending-deletes__error" role="alert">
+          <span>读取待完成删除失败：{pendingSessionDeleteError}</span>
+          <button type="button" onClick={() => void retryPendingSessionDeleteCheck()} disabled={busy}>重新检查</button>
+        </div>}
         <div className="tauri-sidebar__section-title">项目</div>
         <nav className="tauri-sidebar__sessions">
           {projectGroups.length === 0 ? <p className="tauri-sidebar__empty">还没有对话，开始一个新话题吧。</p> : projectGroups.map(group => group.root ? (

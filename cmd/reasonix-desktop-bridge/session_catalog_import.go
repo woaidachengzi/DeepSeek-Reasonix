@@ -29,6 +29,7 @@ type importLegacyCatalogResponse struct {
 func (b *bridgeServer) importLegacyCatalog(w http.ResponseWriter, r *http.Request) {
 	var request importLegacyCatalogRequest
 	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid legacy session catalog request")
 		return
 	}
 	if len(request.Sessions) > 50 {

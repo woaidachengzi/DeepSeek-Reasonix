@@ -100,8 +100,16 @@ type Page struct {
 	SnapshotID string
 }
 
+// PendingDelete contains only display metadata for a deletion explicitly
+// started by the user. It deliberately has no transcript path.
+type PendingDelete struct {
+	ID    string
+	Title string
+}
+
 const MaxVisiblePageSize = 200
 const MaxVisibleSnapshotSize = 10_000
+const MaxPendingDeletes = 10_000
 
 type Store struct {
 	db          *sql.DB
@@ -768,6 +776,32 @@ func (s *Store) List(ctx context.Context) ([]Record, error) {
 		records = append(records, record)
 	}
 	return records, rows.Err()
+}
+
+// ListPendingDeletes exposes deleting identities through a separate recovery
+// path without making them openable or part of normal session pagination.
+func (s *Store) ListPendingDeletes(ctx context.Context) ([]PendingDelete, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, title FROM sessions
+		WHERE state='deleting' ORDER BY position, id LIMIT ?`, MaxPendingDeletes+1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	deletions := make([]PendingDelete, 0)
+	for rows.Next() {
+		var pending PendingDelete
+		if err := rows.Scan(&pending.ID, &pending.Title); err != nil {
+			return nil, err
+		}
+		if len(deletions) == MaxPendingDeletes {
+			return nil, errors.New("too many pending session deletions")
+		}
+		deletions = append(deletions, pending)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return deletions, nil
 }
 
 type identityScanner interface{ Scan(...any) error }

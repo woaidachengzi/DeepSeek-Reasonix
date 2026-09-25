@@ -60,10 +60,10 @@ use bridge::{
     BridgeStatus, BridgeSupervisor, BridgeWorkspaceChangeDetailResponse,
     BridgeWorkspaceChangesResponse, BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse,
     LegacySessionCatalogEntry, MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse,
-    MCPServerView, OpenSessionRequest, RenameSessionRequest, SessionCatalogMetadata,
-    SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage, SessionFirstMessageTitle,
-    SessionPreview, SessionRequest, SubmitRequest, WorkspaceChangeDetailRequest,
-    WorkspaceFileRequest, WorkspaceRequest,
+    MCPServerView, OpenSessionRequest, PendingSessionDelete, RenameSessionRequest,
+    SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage,
+    SessionFirstMessageTitle, SessionPreview, SessionRequest, SubmitRequest,
+    WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
 };
 use data_profile::{
     PreviewProfile, PreviewProfileStatus, ProfileImportResult, ProjectFoldersImportResult,
@@ -174,6 +174,13 @@ fn bridge_delete_session(
 }
 
 #[tauri::command]
+fn bridge_pending_session_deletes(
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<Vec<PendingSessionDelete>, String> {
+    supervisor.pending_session_deletes()
+}
+
+#[tauri::command]
 fn list_mcp_servers(
     supervisor: State<'_, BridgeSupervisor>,
     workspace_root: Option<String>,
@@ -270,9 +277,11 @@ fn workspace_root_is_available(root: &str) -> Option<bool> {
     }
     match std::fs::metadata(path) {
         Ok(metadata) => Some(metadata.is_dir()),
-        Err(error)
-            if error.kind() == std::io::ErrorKind::NotFound
-                || error.kind() == std::io::ErrorKind::NotADirectory =>
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Some(false),
+        Err(_)
+            if Path::new(path).ancestors().skip(1).any(|parent| {
+                std::fs::metadata(parent).is_ok_and(|metadata| !metadata.is_dir())
+            }) =>
         {
             Some(false)
         }
@@ -929,6 +938,7 @@ fn main() {
             bridge_switch_session,
             bridge_rename_session,
             bridge_delete_session,
+            bridge_pending_session_deletes,
             list_mcp_servers,
             save_mcp_server,
             delete_mcp_server,
@@ -1244,6 +1254,13 @@ mod workspace_availability_tests {
         assert_eq!(
             workspace_root_is_available(&std::env::temp_dir().to_string_lossy()),
             Some(true)
+        );
+        let home = tempfile::tempdir().expect("isolated workspace parent");
+        let file = home.path().join("regular-file");
+        std::fs::write(&file, b"not a directory").expect("write regular file");
+        assert_eq!(
+            workspace_root_is_available(&file.join("child").to_string_lossy()),
+            Some(false)
         );
     }
 }

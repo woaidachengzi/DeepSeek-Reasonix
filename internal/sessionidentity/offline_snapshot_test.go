@@ -2,6 +2,8 @@ package sessionidentity
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -11,6 +13,32 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestCopyVerifiedSnapshotFileHashesBytesWhileCopying(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source.jsonl")
+	destination := filepath.Join(root, "snapshot.jsonl")
+	contents := []byte("{\"role\":\"user\",\"content\":\"snapshot\"}\n")
+	if err := os.WriteFile(source, contents, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := copyVerifiedSnapshotFile(context.Background(), source, destination)
+	if err != nil {
+		t.Fatalf("copyVerifiedSnapshotFile: %v", err)
+	}
+	expectedHash := sha256.Sum256(contents)
+	if result.Size != int64(len(contents)) || result.SHA256 != hex.EncodeToString(expectedHash[:]) {
+		t.Fatalf("snapshot file metadata = %#v; want size %d and streamed SHA-256", result, len(contents))
+	}
+	copied, err := os.ReadFile(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(copied) != string(contents) {
+		t.Fatalf("copied contents = %q; want %q", copied, contents)
+	}
+}
 
 func TestOfflineSnapshotVerifiesAndStagesCompleteProfile(t *testing.T) {
 	ctx := context.Background()

@@ -96,6 +96,11 @@ export interface TauriWorkbenchSession {
   missing?: boolean;
 }
 
+export interface TauriPendingSessionDelete {
+  id: string;
+  title: string;
+}
+
 export interface TauriWorkbenchSessionPage {
   sessions: TauriWorkbenchSession[];
   nextCursor?: { position: number; id: string; snapshotId: string } | null;
@@ -268,6 +273,11 @@ export async function tauriWorkbenchSessionPage(
 ): Promise<TauriWorkbenchSessionPage> {
   requireTauri();
   return invoke<TauriWorkbenchSessionPage>("workbench_session_page", { limit, cursor });
+}
+
+export async function tauriPendingSessionDeletes(): Promise<TauriPendingSessionDelete[]> {
+  requireTauri();
+  return invoke<TauriPendingSessionDelete[]>("bridge_pending_session_deletes");
 }
 
 export async function tauriWorkspaceRootsAvailability(roots: string[]): Promise<(boolean | null)[]> {

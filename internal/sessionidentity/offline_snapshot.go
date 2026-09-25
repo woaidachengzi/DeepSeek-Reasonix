@@ -2,6 +2,8 @@ package sessionidentity
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -445,7 +447,8 @@ func copyVerifiedSnapshotFile(ctx context.Context, source, destination string) (
 	if err != nil {
 		return SnapshotFile{}, err
 	}
-	written, copyErr := io.Copy(writer, contextReader{ctx: ctx, reader: reader})
+	streamHash := sha256.New()
+	written, copyErr := io.Copy(io.MultiWriter(writer, streamHash), contextReader{ctx: ctx, reader: reader})
 	if copyErr == nil {
 		mode := os.FileMode(0o600)
 		if before.Mode().Perm()&0o111 != 0 {
@@ -467,10 +470,7 @@ func copyVerifiedSnapshotFile(ctx context.Context, source, destination string) (
 	if err != nil || !os.SameFile(before, after) || after.Size() != written {
 		return SnapshotFile{}, fmt.Errorf("snapshot source changed during copy: %s", source)
 	}
-	copyHash, err := fileSHA256(ctx, destination)
-	if err != nil {
-		return SnapshotFile{}, err
-	}
+	copyHash := hex.EncodeToString(streamHash.Sum(nil))
 	sourceHash, err := fileSHA256(ctx, source)
 	if err != nil || sourceHash != copyHash {
 		return SnapshotFile{}, fmt.Errorf("snapshot source changed during verification: %s", source)

@@ -100,6 +100,7 @@ V3 要求 `reserved/ready/missing/deleting/deleted`。schema v4 保留 v3 生命
 
 - 身份库 `ListVisible(limit, cursor)`：已按 **`(position, id)`** 排序分页；
   `deleted` 不返回，`missing` 返回并带标记，`deleting` 不返回。
+  `deleting` identity 另由 `GET /v1/sessions/deletion-recovery` 返回仅含 ID/标题的有界恢复清单；Tauri 侧栏将其独立展示，用户二次确认后才重试 DELETE，不在启动时无提示地自动删除。
   游标必须是 `(position, id)` 复合键——只按 `position` 会在同 `position` 的
   并列会话上漏项或重复（SQLite 中 `position` 未强制唯一）。
 - bridge 只读端点已实现：
@@ -163,7 +164,7 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 | **5.1** | 完成删除 tombstone 状态写入 | `deleting/deleted` 由删除流程写入且不可重用；身份库分页已实现 | 回退时保留 v4 身份库和 transcript；使用经验证的整份离线 profile 快照 |
 | **5.2** | bridge `GET /v1/sessions` 分页列表 | 身份库分页与 bridge 接口已实现，并由 5.3 clean 门禁后的侧栏读取 | 端点保留兼容，host 可回退旧 JSON |
 | **5.3** | 影子审计 clean 时读取 bridge 身份目录，漂移或审计失败时回退 JSON | 旧 JSON 幂等导入、分页读取、clean 门禁和漂移回退已接入；移除 JSON 回退并宣布整个 profile 唯一权威仍需独立发布门禁 | 保留 JSON 输入与回退路径 |
-| **5.4** | missing/deleting/deleted 的用户可见处理 + 重启续做清理 | missing 行不可打开但可直接删除；deleting 可通过 DELETE 续做；若 host 旧 catalog 留有 deleted tombstone 行，重复 DELETE 幂等成功以完成 host 行清理；明确错误提示与恢复路径已覆盖 | 保留 `missing` 记录，等待用户处理 |
+| **5.4** | missing/deleting/deleted 的用户可见处理 + 中断清理恢复 | missing 行不可打开但可直接删除；deleting 通过独立 path-free 清单展示，并仅在用户确认后用 DELETE 续做；不做启动期无提示自动删除。若 host 旧 catalog 留有 deleted tombstone 行，重复 DELETE 幂等成功以完成 host 行清理；明确错误提示与恢复路径已覆盖 | 保留 `missing` 记录，等待用户处理 |
 | **5.5** | SQLite 崩溃恢复与删除清理中的进程崩溃恢复 | 子进程在 WAL 有已提交和未提交更新时强制退出，重开保留已提交状态并回滚未提交更新；bridge 子进程在 `deleting` 已提交、artifact sweep 已删 transcript 但尚未删 `.meta` 时强制终止，重启后拒绝打开为新空会话、继续清理并写入 `deleted` tombstone（`TestSessionIdentityRecoversAfterAbruptProcessExit`、`TestBridgeDeleteRecoversAfterForcedProcessExit`） | 仅在临时隔离 profile 演练；真实 profile 仍需停写确认和离线恢复演练 |
 
 5.0–5.5 的后端接口、clean 门禁、分页侧栏和 lifecycle/崩溃恢复流程均已接入。临时测试 profile 的跨资源 snapshot/staging/catalog replay 自动化已覆盖，但 SQLite 仍处于可回退的 Preview 读取阶段；移除 JSON 回退前仍须完成稳定窗口零差异、真实离线 profile 的停写后恢复演练和旧写者停写确认。重启后续删采用显式重试，不在启动时无提示地自动删除。
