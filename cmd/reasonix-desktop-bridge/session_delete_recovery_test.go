@@ -41,8 +41,28 @@ func TestBridgeRetriesInterruptedDeleteAfterRestart(t *testing.T) {
 	if err := os.WriteFile(view.Path, []byte("transcript left by interrupted deletion\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	identities, err := sessionidentity.Open(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.BeginManualTitleRename(ctx, view.ID, view.Path, "", "Interrupted rename", 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Close(); err != nil {
+		t.Fatal(err)
+	}
 	if err := manager.DeleteSession(view.ID); err == nil {
 		t.Fatal("injected cleanup failure was ignored")
+	}
+	identities, err = sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, pending, err := identities.PendingManualTitleRename(ctx, view.ID); err != nil || pending {
+		t.Fatalf("deleting fence left title intent: pending=%v err=%v", pending, err)
+	}
+	if err := identities.Close(); err != nil {
+		t.Fatal(err)
 	}
 	if err := manager.Shutdown(); err != nil {
 		t.Fatal(err)
@@ -60,7 +80,7 @@ func TestBridgeRetriesInterruptedDeleteAfterRestart(t *testing.T) {
 	if _, err := os.Lstat(view.Path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("interrupted transcript survived recovery: %v", err)
 	}
-	identities, err := sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+	identities, err = sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
 	if err != nil {
 		t.Fatal(err)
 	}

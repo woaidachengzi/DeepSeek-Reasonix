@@ -125,6 +125,104 @@ func TestManualTitleIntentCanBeAbandonedWhenSidecarDidNotChange(t *testing.T) {
 	}
 }
 
+func TestExplicitDeleteDiscardsPendingManualTitleIntentWithFence(t *testing.T) {
+	ctx, _, _, path, store := titleIntentFixture(t)
+	defer store.Close()
+	if err := store.BeginManualTitleRename(ctx, "title", path, "", "No longer needed", 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BeginDelete(ctx, "title", path); err != nil {
+		t.Fatal(err)
+	}
+	record, exists, err := store.Get(ctx, "title")
+	if err != nil || !exists || record.State != StateDeleting || record.TitleRevision != 0 {
+		t.Fatalf("delete fence = %#v exists=%v err=%v", record, exists, err)
+	}
+	if _, pending, err := store.PendingManualTitleRename(ctx, "title"); err != nil || pending {
+		t.Fatalf("delete fence left title intent: pending=%v err=%v", pending, err)
+	}
+	if err := store.CommitManualTitleRename(ctx, "title", path); !errors.Is(err, ErrTitleConflict) {
+		t.Fatalf("title committed after deletion fence: %v", err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.FinishDelete(ctx, "title", path); err != nil {
+		t.Fatal(err)
+	}
+	if ids, err := store.PendingManualTitleRenameIDs(ctx); err != nil || len(ids) != 0 {
+		t.Fatalf("deleted identity still has pending title IDs: %#v, %v", ids, err)
+	}
+}
+
+func TestDeleteRetryAndFinishDiscardStrandedManualTitleIntent(t *testing.T) {
+	ctx, _, _, path, store := titleIntentFixture(t)
+	defer store.Close()
+	if err := store.BeginDelete(ctx, "title", path); err != nil {
+		t.Fatal(err)
+	}
+	insertStrandedIntent := func() {
+		t.Helper()
+		if _, err := store.db.ExecContext(ctx, `INSERT INTO session_title_intents
+			(session_id, relative_path, expected_revision, previous_sidecar_title, new_title, created_at_ms)
+			SELECT id, relative_path, title_revision, '', 'Stranded title', 1 FROM sessions WHERE id='title'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertNoIntent := func() {
+		t.Helper()
+		if _, pending, err := store.PendingManualTitleRename(ctx, "title"); err != nil || pending {
+			t.Fatalf("stranded title intent remains: pending=%v err=%v", pending, err)
+		}
+	}
+	insertStrandedIntent()
+	if err := store.BeginDelete(ctx, "title", path); err != nil {
+		t.Fatalf("retry deletion fence: %v", err)
+	}
+	assertNoIntent()
+	insertStrandedIntent()
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.FinishDelete(ctx, "title", path); err != nil {
+		t.Fatalf("finish deletion: %v", err)
+	}
+	assertNoIntent()
+	insertStrandedIntent()
+	if err := store.FinishDelete(ctx, "title", path); err != nil {
+		t.Fatalf("retry tombstone finalization: %v", err)
+	}
+	assertNoIntent()
+}
+
+func TestDeleteFenceRollsBackWhenTitleIntentCannotBeCleared(t *testing.T) {
+	ctx, _, _, path, store := titleIntentFixture(t)
+	defer store.Close()
+	if err := store.BeginManualTitleRename(ctx, "title", path, "", "Pending title", 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.db.ExecContext(ctx, `CREATE TRIGGER reject_title_intent_delete BEFORE DELETE ON session_title_intents
+		BEGIN SELECT RAISE(ABORT, 'injected title intent cleanup failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BeginDelete(ctx, "title", path); err == nil {
+		t.Fatal("delete fence committed despite rejected intent cleanup")
+	}
+	record, exists, err := store.Get(ctx, "title")
+	if err != nil || !exists || record.State != StateReady {
+		t.Fatalf("failed deletion changed lifecycle: %#v exists=%v err=%v", record, exists, err)
+	}
+	if _, pending, err := store.PendingManualTitleRename(ctx, "title"); err != nil || !pending {
+		t.Fatalf("failed deletion lost title intent: pending=%v err=%v", pending, err)
+	}
+	if _, err := store.db.ExecContext(ctx, "DROP TRIGGER reject_title_intent_delete"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BeginDelete(ctx, "title", path); err != nil {
+		t.Fatalf("retry delete fence after cleanup failure: %v", err)
+	}
+}
+
 func TestOpenMigratesV4ToTitleIntentSchemaWithoutChangingIdentity(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()

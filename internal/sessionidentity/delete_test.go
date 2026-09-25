@@ -113,8 +113,14 @@ func TestBeginDeleteRefusesLegacyPhysicalPathConflict(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if err := store.BeginManualTitleRename(ctx, "delete-first", transcript, "", "Preserve pending title", 0); err != nil {
+		t.Fatal(err)
+	}
 	if err := store.BeginDelete(ctx, "delete-first", transcript); !errors.Is(err, ErrTranscriptPathConflict) {
 		t.Fatalf("begin deletion of aliased identity = %v, want ErrTranscriptPathConflict", err)
+	}
+	if _, pending, err := store.PendingManualTitleRename(ctx, "delete-first"); err != nil || !pending {
+		t.Fatalf("rejected deletion lost title intent: pending=%v err=%v", pending, err)
 	}
 	for _, id := range []string{"delete-first", "delete-second"} {
 		record, exists, err := store.Get(ctx, id)

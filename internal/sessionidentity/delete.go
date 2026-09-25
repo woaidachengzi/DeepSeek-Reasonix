@@ -43,6 +43,9 @@ func (s *Store) BeginDelete(ctx context.Context, id, transcriptPath string) erro
 		if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, id, transcriptPath); err != nil {
 			return err
 		}
+		if err := discardPendingTitleRenameForDelete(ctx, tx, id); err != nil {
+			return err
+		}
 		return tx.Commit()
 	}
 	if state != StateReserved && state != StateReady && state != StateMissing {
@@ -63,6 +66,9 @@ func (s *Store) BeginDelete(ctx context.Context, id, transcriptPath string) erro
 	}
 	if changed != 1 {
 		return fmt.Errorf("%w: %s cannot begin deletion from %s", ErrSessionStateConflict, id, state)
+	}
+	if err := discardPendingTitleRenameForDelete(ctx, tx, id); err != nil {
+		return err
 	}
 	return tx.Commit()
 }
@@ -103,6 +109,9 @@ func (s *Store) FinishDelete(ctx context.Context, id, transcriptPath string) err
 		return fmt.Errorf("%w: %s cannot finish deletion from a different path", ErrSessionStateConflict, id)
 	}
 	if state == StateDeleted {
+		if err := discardPendingTitleRenameForDelete(ctx, tx, id); err != nil {
+			return err
+		}
 		return tx.Commit()
 	}
 	if state != StateDeleting {
@@ -123,5 +132,19 @@ func (s *Store) FinishDelete(ctx context.Context, id, transcriptPath string) err
 	if changed != 1 {
 		return fmt.Errorf("%w: %s cannot finish deletion from %s", ErrSessionStateConflict, id, state)
 	}
+	if err := discardPendingTitleRenameForDelete(ctx, tx, id); err != nil {
+		return err
+	}
 	return tx.Commit()
+}
+
+// Once explicit deletion is fenced, the title can never be committed or
+// recovered by reopening the session. Remove its intent in the same
+// transaction as the lifecycle change so inventory cannot remain dirty after
+// the artifact sweep and tombstone succeed.
+func discardPendingTitleRenameForDelete(ctx context.Context, tx *sql.Tx, id string) error {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM session_title_intents WHERE session_id=?", id); err != nil {
+		return fmt.Errorf("discard pending session title rename during deletion: %w", err)
+	}
+	return nil
 }
