@@ -90,6 +90,60 @@ func TestEmptyInventorySerializesExplicitEmptyArrays(t *testing.T) {
 	}
 }
 
+func TestInventoryVisibleSnapshotMatchesStandaloneDirectorySnapshot(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	identities, err := Open(ctx, filepath.Join(root, "desktop", "state.sqlite"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer identities.Close()
+	candidates := make([]Candidate, 0, 4)
+	for index, id := range []string{"first", "second", "missing", "deleting"} {
+		path := filepath.Join(sessionDir, "tauri-"+id+".jsonl")
+		writeTranscript(t, path)
+		candidates = append(candidates, Candidate{ID: id, Path: path, Title: "Title " + id, Position: index})
+	}
+	if err := identities.Import(ctx, sessionDir, candidates); err != nil {
+		t.Fatal(err)
+	}
+	for id, state := range map[string]SessionState{"missing": StateMissing, "deleting": StateDeleting} {
+		if _, err := identities.db.ExecContext(ctx, "UPDATE sessions SET state=? WHERE id=?", state, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	report, err := Inventory(ctx, identities, sessionDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	combined, err := report.VisibleSnapshot(MaxVisibleSnapshotSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	standalone, err := identities.ListVisibleSnapshot(ctx, MaxVisibleSnapshotSize, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if combined.SnapshotID != standalone.SnapshotID || combined.Total != standalone.Total ||
+		!reflect.DeepEqual(combined.Records, standalone.Records) {
+		t.Fatalf("inventory directory snapshot = %#v, want %#v", combined, standalone)
+	}
+	if _, err := report.VisibleSnapshot(1); err == nil {
+		t.Fatal("bounded inventory snapshot silently truncated visible identities")
+	}
+	encoded, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), `"registered":[`) || strings.Contains(string(encoded), "relativePath") {
+		t.Fatalf("inventory serialized internal snapshot rows: %s", encoded)
+	}
+}
+
 func TestInventoryAuditsLegacyPhysicalTranscriptAliases(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()

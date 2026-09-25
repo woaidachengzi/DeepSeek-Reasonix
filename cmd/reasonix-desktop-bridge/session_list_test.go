@@ -58,7 +58,7 @@ func TestSessionReadEndpointsRejectOrphanSQLiteSidecars(t *testing.T) {
 			}
 			handler := newBridgeServer(testToken, "orphan-sidecar", nil).handler()
 			for _, path := range []string{
-				"/v1/sessions", "/v1/sessions/snapshot", "/v1/sessions/inventory",
+				"/v1/sessions", "/v1/sessions/snapshot", "/v1/sessions/shadow-snapshot", "/v1/sessions/inventory",
 				"/v1/sessions/deletion-recovery", "/v1/sessions/title-recovery",
 			} {
 				request := httptest.NewRequest(http.MethodGet, path, nil)

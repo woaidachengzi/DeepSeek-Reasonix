@@ -8,13 +8,107 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"reasonix/internal/agent"
 	appconfig "reasonix/internal/config"
+	"reasonix/internal/desktopbridge"
 	"reasonix/internal/sessionidentity"
 )
+
+func TestSessionShadowSnapshotReusesCompletePhysicalInventory(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	ctx := context.Background()
+	sessionDir := appconfig.SessionDir()
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	identities, err := sessionidentity.Open(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var candidates []sessionidentity.Candidate
+	for index, id := range []string{"recent", "older"} {
+		path := filepath.Join(sessionDir, "tauri-"+id+".jsonl")
+		if err := os.WriteFile(path, []byte("private transcript\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		candidates = append(candidates, sessionidentity.Candidate{ID: id, Path: path, Title: "Title " + id, Position: index})
+	}
+	if err := identities.Import(ctx, sessionDir, candidates); err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sessionDir, "tauri-unclaimed.jsonl"), []byte("orphan\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	handler := newBridgeServer(testToken, "shadow-snapshot", nil).handler()
+	get := func(path string, destination any) {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		request.Header.Set("Authorization", "Bearer "+testToken)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("GET %s status=%d body=%s", path, response.Code, response.Body.String())
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), destination); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var combined sessionShadowSnapshotResponse
+	get("/v1/sessions/shadow-snapshot", &combined)
+	var directory sessionListResponse
+	get("/v1/sessions/snapshot", &directory)
+	var inventory sessionInventoryResponse
+	get("/v1/sessions/inventory", &inventory)
+	if combined.ProtocolVersion != desktopbridge.ProtocolVersion ||
+		!reflect.DeepEqual(combined.Directory, directory) || !reflect.DeepEqual(combined.Inventory, inventory) {
+		t.Fatalf("combined shadow snapshot differs from standalone reads: %#v, %#v, %#v", combined, directory, inventory)
+	}
+	if len(combined.Inventory.Unclaimed) != 1 || len(combined.Directory.Sessions) != 2 {
+		t.Fatalf("combined shadow snapshot lost physical or directory rows: %#v", combined)
+	}
+	encodedDirectory, err := json.Marshal(combined.Directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encodedDirectory), sessionDir) || strings.Contains(string(encodedDirectory), "private transcript") {
+		t.Fatalf("directory portion exposed a transcript path or content: %s", encodedDirectory)
+	}
+}
+
+func TestSessionShadowSnapshotWithoutIdentityDatabaseStaysReadOnly(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	identityPath := appconfig.DesktopSessionIdentityPath()
+	request := httptest.NewRequest(http.MethodGet, "/v1/sessions/shadow-snapshot", nil)
+	request.Header.Set("Authorization", "Bearer "+testToken)
+	response := httptest.NewRecorder()
+	newBridgeServer(testToken, "empty-shadow", nil).handler().ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("empty shadow snapshot status=%d body=%s", response.Code, response.Body.String())
+	}
+	var snapshot sessionShadowSnapshotResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Directory.Total != 0 || len(snapshot.Directory.Sessions) != 0 ||
+		snapshot.Directory.SnapshotID != emptyVisibleSnapshotID() || snapshot.Inventory.IdentityStore ||
+		snapshot.Inventory.Entries == nil || snapshot.Inventory.Unclaimed == nil || snapshot.Inventory.Errors == nil {
+		t.Fatalf("empty shadow snapshot is incomplete: %#v", snapshot)
+	}
+	if _, err := os.Stat(identityPath); !os.IsNotExist(err) {
+		t.Fatalf("shadow snapshot created the identity database: %v", err)
+	}
+}
 
 // The inventory endpoint is the host's read-only view of what the profile
 // holds. It must answer before any identity database exists, and it must not

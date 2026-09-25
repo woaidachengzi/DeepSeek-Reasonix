@@ -402,6 +402,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("GET /v1/sessions/{id}/snapshot", b.authorized(b.sessionSnapshot))
 	mux.HandleFunc("GET /v1/sessions/{id}/history", b.authorized(b.sessionHistory))
 	mux.HandleFunc("GET /v1/sessions/snapshot", b.authorized(b.sessionDirectorySnapshot))
+	mux.HandleFunc("GET /v1/sessions/shadow-snapshot", b.authorized(b.sessionShadowSnapshot))
 	mux.HandleFunc("GET /v1/sessions", b.authorized(b.sessionList))
 	mux.HandleFunc("GET /v1/projects", b.authorized(b.projectFolders))
 	mux.HandleFunc("POST /v1/sessions/import-catalog", b.authorized(b.importLegacyCatalog))
@@ -544,7 +545,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "provider_summary", "set_default_model", "set_provider_key", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "set_default_model", "set_provider_key", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
 	})
 }
 

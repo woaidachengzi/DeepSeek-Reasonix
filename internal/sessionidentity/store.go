@@ -87,6 +87,7 @@ type Candidate struct {
 
 type Record struct {
 	Candidate
+	relativePath  string
 	State         SessionState
 	Missing       bool
 	TitleSource   TitleSource
@@ -887,6 +888,7 @@ func scanIdentityRecord(scanner identityScanner, profileRoot string) (Record, er
 	err := scanner.Scan(&record.ID, &relativePath, &record.WorkspaceRoot, &record.Title, &record.TitleSource,
 		&record.TitleRevision, &record.Position, &record.State, &record.CreatedAtMS, &record.UpdatedAtMS)
 	if err == nil {
+		record.relativePath = relativePath
 		record.Path, err = resolveTranscriptPath(profileRoot, record.ID, relativePath)
 	}
 	record.Missing = record.State == StateMissing
@@ -1011,6 +1013,7 @@ func (s *Store) ListVisibleSnapshot(ctx context.Context, limit int, workspaceRoo
 			_ = rows.Close()
 			return Page{}, err
 		}
+		record.relativePath = relativePath
 		record.Path, err = resolveTranscriptPath(s.profileRoot, record.ID, relativePath)
 		if err != nil {
 			_ = rows.Close()

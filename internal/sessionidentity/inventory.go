@@ -77,6 +77,37 @@ type InventoryReport struct {
 	// Errors carries per-row problems; an inventory never fails because one
 	// transcript is odd.
 	Errors []string `json:"errors"`
+	// Registered rows came from the same validated identity read as Entries.
+	// They are kept only in memory so the bridge can build a bounded directory
+	// snapshot without resolving every transcript path a second time.
+	registered []Record
+}
+
+// VisibleSnapshot builds the host's structural directory snapshot from the
+// identity rows already read for this physical inventory. It never substitutes
+// for the inventory or the subsequent snapshot-bound page read.
+func (report InventoryReport) VisibleSnapshot(limit int) (Page, error) {
+	if limit < 1 || limit > MaxVisibleSnapshotSize {
+		return Page{}, fmt.Errorf("session directory snapshot limit must be between 1 and %d", MaxVisibleSnapshotSize)
+	}
+	page := Page{Records: make([]Record, 0, min(len(report.registered), limit))}
+	hasher := newVisibleSnapshotHasher()
+	for _, record := range report.registered {
+		if record.State == StateDeleting || record.State == StateDeleted {
+			continue
+		}
+		if len(page.Records) == limit {
+			return Page{}, fmt.Errorf("session directory snapshot exceeds %d entries", limit)
+		}
+		if record.relativePath == "" {
+			return Page{}, errors.New("session inventory omitted an identity relative path")
+		}
+		hasher.add(record.ID, record.relativePath, record.WorkspaceRoot, int64(record.Position), record.State)
+		page.Records = append(page.Records, record)
+	}
+	page.Total = len(page.Records)
+	page.SnapshotID = hasher.sum()
+	return page, nil
 }
 
 // Inventory lists what the session directory holds and what the identity store
@@ -112,6 +143,7 @@ func Inventory(ctx context.Context, identities *Store, sessionDir, catalogPath s
 			return InventoryReport{}, err
 		}
 	}
+	report.registered = registered
 	byID := make(map[string]Record, len(registered))
 	for _, record := range registered {
 		byID[record.ID] = record

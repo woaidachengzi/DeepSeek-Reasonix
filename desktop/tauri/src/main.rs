@@ -700,8 +700,7 @@ fn compare_session_catalog_with_directory(
     supervisor: &BridgeSupervisor,
     legacy_sessions: &[WorkbenchSession],
 ) -> Result<(SessionShadowReport, Vec<SessionDirectoryEntry>, String), String> {
-    let (directory, snapshot_id) = supervisor.session_directory_snapshot_with_id()?;
-    let physical = supervisor.session_physical_inventory()?;
+    let (directory, snapshot_id, physical) = supervisor.session_shadow_snapshot()?;
     let report = session_shadow::compare(legacy_sessions, &directory, &physical)?;
     Ok((report, directory, snapshot_id))
 }

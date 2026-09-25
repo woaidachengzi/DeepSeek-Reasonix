@@ -141,6 +141,14 @@ struct SessionInventoryResponse {
     errors: Option<Vec<String>>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionShadowSnapshotResponse {
+    protocol_version: u8,
+    directory: SessionDirectoryPage,
+    inventory: SessionInventoryResponse,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SessionInventoryEntry {
@@ -827,6 +835,7 @@ impl BridgeSupervisor {
     /// Read the entire visible directory for a bounded, diagnostic-only
     /// comparison. A changing total or incomplete scan cannot be mistaken
     /// for a zero-difference migration result.
+    #[cfg(test)]
     pub fn session_directory_snapshot_with_id(
         &self,
     ) -> Result<(Vec<SessionDirectoryEntry>, String), String> {
@@ -847,6 +856,26 @@ impl BridgeSupervisor {
             serde_json::from_value(response).map_err(display_error)?;
         validate_session_directory_snapshot(&snapshot, workspace_root)?;
         Ok((snapshot.sessions, snapshot.snapshot_id))
+    }
+
+    /// One complete physical audit and directory projection per guarded page.
+    /// The displayed page is still fetched separately with this snapshot ID.
+    pub fn session_shadow_snapshot(
+        &self,
+    ) -> Result<(Vec<SessionDirectoryEntry>, String, SessionPhysicalInventory), String> {
+        let response = self.request_json("GET", "/v1/sessions/shadow-snapshot", None, None)?;
+        let snapshot: SessionShadowSnapshotResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if snapshot.protocol_version != PROTOCOL_VERSION {
+            return Err("desktop bridge shadow snapshot protocol is unsupported".to_string());
+        }
+        validate_session_directory_snapshot(&snapshot.directory, None)?;
+        let physical = snapshot.inventory.into_physical_inventory()?;
+        Ok((
+            snapshot.directory.sessions,
+            snapshot.directory.snapshot_id,
+            physical,
+        ))
     }
 
     /// Reads path-free identities left in the explicit deleting state. These
@@ -871,6 +900,7 @@ impl BridgeSupervisor {
 
     /// Reduce the existing read-only inventory to file-state evidence. Paths
     /// and diagnostics never leave this method or enter the shadow report.
+    #[cfg(test)]
     pub fn session_physical_inventory(&self) -> Result<SessionPhysicalInventory, String> {
         let response = self.request_json("GET", "/v1/sessions/inventory", None, None)?;
         let inventory: SessionInventoryResponse =
@@ -1529,6 +1559,15 @@ fn verify_bridge_health(response: Value, expected_instance_id: &str) -> Result<(
     if !health
         .capabilities
         .iter()
+        .any(|capability| capability == "session_shadow_snapshot_v1")
+    {
+        return Err(
+            "desktop bridge does not support combined session shadow snapshots".to_string(),
+        );
+    }
+    if !health
+        .capabilities
+        .iter()
         .any(|capability| capability == "session_delete_recovery_list_v1")
     {
         return Err(
@@ -2180,7 +2219,7 @@ mod tests {
             "protocolVersion": 1,
             "status": "ok",
             "sidecarInstanceId": "instance",
-            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1"],
+            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1"],
         });
         assert!(verify_bridge_health(healthy.clone(), "instance").is_ok());
         assert!(verify_bridge_health(healthy.clone(), "other").is_err());
@@ -2215,11 +2254,21 @@ mod tests {
             .unwrap_err()
             .contains("complete session directory snapshots"));
 
-        let old_recovery_sidecar = json!({
+        let old_shadow_sidecar = json!({
             "protocolVersion": 1,
             "status": "ok",
             "sidecarInstanceId": "instance",
             "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1"],
+        });
+        assert!(verify_bridge_health(old_shadow_sidecar, "instance")
+            .unwrap_err()
+            .contains("combined session shadow snapshots"));
+
+        let old_recovery_sidecar = json!({
+            "protocolVersion": 1,
+            "status": "ok",
+            "sidecarInstanceId": "instance",
+            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1"],
         });
         assert!(verify_bridge_health(old_recovery_sidecar, "instance")
             .unwrap_err()
@@ -2229,7 +2278,7 @@ mod tests {
             "protocolVersion": 1,
             "status": "ok",
             "sidecarInstanceId": "instance",
-            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_delete_recovery_list_v1"],
+            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_delete_recovery_list_v1"],
         });
         assert!(verify_bridge_health(old_title_intent_sidecar, "instance")
             .unwrap_err()
@@ -2239,7 +2288,7 @@ mod tests {
             "protocolVersion": 1,
             "status": "ok",
             "sidecarInstanceId": "instance",
-            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_delete_recovery_list_v1", "session_title_intent_v1"],
+            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1"],
         });
         assert!(verify_bridge_health(old_title_recovery_sidecar, "instance")
             .unwrap_err()
@@ -2818,13 +2867,16 @@ mod tests {
                 workspace_root: None,
             })
             .expect("reserve session");
-        let directory = supervisor
-            .session_directory_snapshot_with_id()
-            .expect("read identity directory")
-            .0;
-        let physical = supervisor
-            .session_physical_inventory()
-            .expect("read physical inventory");
+        let (directory, snapshot_id, physical) = supervisor
+            .session_shadow_snapshot()
+            .expect("read combined identity directory and physical inventory");
+        assert_eq!(
+            snapshot_id,
+            supervisor
+                .session_directory_snapshot_with_id()
+                .expect("read standalone directory snapshot")
+                .1
+        );
         let report = session_shadow::compare(
             &[WorkbenchSession {
                 session_id: "tauri-e2e-shadow".to_string(),
@@ -2946,6 +2998,13 @@ mod tests {
         assert!(inventory.states.is_empty());
         assert_eq!(inventory.unclaimed_count, 0);
         assert_eq!(inventory.error_count, 0);
+        let (directory, _, combined_inventory) = supervisor
+            .session_shadow_snapshot()
+            .expect("read complete empty shadow snapshot");
+        assert!(directory.is_empty());
+        assert!(combined_inventory.states.is_empty());
+        assert_eq!(combined_inventory.unclaimed_count, 0);
+        assert_eq!(combined_inventory.error_count, 0);
         assert!(supervisor
             .pending_session_deletes()
             .expect("read empty deletion recovery list")

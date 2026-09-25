@@ -261,7 +261,7 @@ sidecar 旁创建新库；缺库分支也检查数据库父目录仍在 profile 
 
 Rust host 读取 bridge HTTP 响应时限制原始响应最多 64 MiB、解码 JSON body 最多 32 MiB，超限在 JSON 解析前拒绝；避免异常膨胀的 inventory/history 响应无界占用 host 内存。
 
-Host 的 shadow 目录读取使用 `/v1/sessions/snapshot`：Go 在一个 SQLite 只读事务中返回有界完整目录与结构快照 ID，最多 10,000 条，避免为了拼完整快照而逐 200 条请求、每次重复 count/hash 全表。新增的 `session_directory_snapshot_full_v1` capability 区分旧 bridge；缺少该 endpoint 的 sidecar 会在启动握手阶段被拒绝。Rust 校验总数、顺序、可见状态与 workspace filter；物理 inventory 完成后，host 仍单独读取实际分页并核对 snapshot ID，保留竞态检测。超过条数或 HTTP body 上限时拒绝该快照并走既有 fail-closed fallback。
+Host 的每页 shadow 门禁使用 `/v1/sessions/shadow-snapshot`：Go 在一次请求中完成物理 inventory，并从其中已经读取、校验过的身份行构建有界完整目录与结构快照 ID，最多 10,000 条，避免第二次开库并解析全部 transcript 路径。独立的 `/v1/sessions/snapshot` 保留给诊断及其他调用方。`session_shadow_snapshot_v1` capability 区分旧 bridge；缺少该 endpoint 的 sidecar 会在启动握手阶段被拒绝。Rust 对合并响应中的目录仍校验总数、顺序与可见状态，并严格检查物理 inventory 的必需数组；随后单独读取实际分页并核对 snapshot ID，保留竞态检测。超过条数或 HTTP body 上限时拒绝快照并走既有 fail-closed fallback。此改动不缓存或跳过每页完整物理盘点，也没有消除分页本身的额外读取。
 
 Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝加载而不跳过行；否则 shadow 比对可能把被过滤的旧 catalog 行误当成不存在，之后任一 catalog 写入还可能永久丢弃这些行。超限、重复或非法文件在失败读取与尝试写入后均保持原字节不变，省略 title 的合法旧格式继续支持。
 
@@ -269,7 +269,7 @@ Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝
 
 **物理 transcript 唯一性**：新身份导入、首次预留、`reserved → ready`、已登记会话恢复前和开始删除的 lifecycle fence 均在 SQLite 写事务中检查 profile 内现存身份，拒绝同一文件经内部目录 symlink 别名或 hard link 被不同 ID 认领；`deleting` 重试和最终 tombstone 写入都会再确认路径唯一，旧库已有别名时拒绝打开、继续清理或完成退休。macOS/Windows 还保守拒绝只差大小写的路径键（macOS 大小写敏感卷上也可能拒绝本可区分的路径）。批量导入冲突会整批回滚。两个 Store 连接并发预留同一物理路径的回归确认最多一方成功，symlink 在预留后改变的用例确认冲突时不会推进为 ready；旧库重复物理路径的打开、删除及中断删除重试用例确认不会加载或清理 transcript。只读 inventory 也会将已有记录中解析到同一路径或同一文件的不同 ID 标记为 path conflict 并写入错误清单，`PrepareImportReview` 遇到这种冲突会拒绝整份计划；`ApplyImportReview` 会重新盘点，计划生成后新增的冲突会令整份计划过期。bridge 将该路径冲突映射为 session conflict（HTTP 409）；物理 inventory 的 `errors` 计数也会传入 Tauri shadow 门禁，使目录选择保持 dirty。审计不自动重写或修复数据库，范围是 inventory 当前列出的身份、catalog 与扫描候选，不是独立的全磁盘硬链接扫描器。
 
-只读 inventory 的物理冲突审计仍逐项解析和检查文件，但 macOS/Linux 对已获取的文件身份按设备号与 inode 分组，对解析路径按等价键分组（macOS 额外采用保守的大小写折叠），只在同组内确认冲突，避免大量互不相关会话之间的两两比较。缺少可用文件身份键时保留逐对 `SameFile` 检查；Windows 目前走这一保守回退，并对路径采用大小写折叠。隔离基准 `BenchmarkInventory` 覆盖 50/500 条完整盘点，可用于观察开销；这项优化不缓存或跳过每页物理盘点，S2 每页全量 shadow 审计的剩余问题仍在。
+只读 inventory 的物理冲突审计仍逐项解析和检查文件，但 macOS/Linux 对已获取的文件身份按设备号与 inode 分组，对解析路径按等价键分组（macOS 额外采用保守的大小写折叠），只在同组内确认冲突，避免大量互不相关会话之间的两两比较。缺少可用文件身份键时保留逐对 `SameFile` 检查；Windows 目前走这一保守回退，并对路径采用大小写折叠。隔离基准 `BenchmarkInventory` 覆盖 50/500 条完整盘点，可用于观察开销；合并 shadow 快照消除了独立完整目录快照的重复路径校验，但仍不缓存或跳过每页物理盘点，S2 每页全量 shadow 审计的剩余问题仍在。
 
 补充的隔离基准分别测量已打开 Store 的完整 inventory、每次经 `OpenReadOnly` 开库的 inventory，以及单独的身份行 `List`。在 Apple M4、500 条均为已登记普通 transcript 且无旧 catalog 的样本中，`4359c238b` 基线多次短跑约为 27 ms、29 ms、18 ms/次；数值仅用于定位热点，不代表真实 profile 性能或跨平台保证。主要开销是逐行路径校验，而非只读开库；在旧 Wails writer 停写尚未确认的阶段，不以缓存或跳过这些校验换取数字。已存在路径的解析现先调用 `EvalSymlinks`，仅在失败时用 `Lstat` 区分缺失路径与断开的 symlink，避免成功路径多做一次检查；缺失、目录别名与断链路径的原有行为由回归覆盖。
 
@@ -279,7 +279,7 @@ Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝
 
 | 组合 | 结论 | 依据 / 限制 |
 | --- | --- | --- |
-| 当前 Tauri host + 当前 bridge（protocol v1，含会话同步、目录快照、删除恢复、`session_title_intent_v1` 与 `session_title_recovery_list_v1` capability） | 支持 | Host 启动时先校验 ready frame，再读取认证 health；协议版本、sidecar instance ID 或必需 capability 不匹配时，拒绝把该进程登记为可用并终止它。 |
+| 当前 Tauri host + 当前 bridge（protocol v1，含会话同步、目录快照、`session_shadow_snapshot_v1`、删除恢复、`session_title_intent_v1` 与 `session_title_recovery_list_v1` capability） | 支持 | Host 启动时先校验 ready frame，再读取认证 health；协议版本、sidecar instance ID 或必需 capability 不匹配时，拒绝把该进程登记为可用并终止它。 |
 | 当前 Tauri host + 旧 bridge（仍报 protocol v1、但缺少任一必需 capability） | 明确拒绝 | protocol major 相同不代表新增端点及持久标题恢复可用；health capability 缺失会在启动阶段报错。 |
 | 旧 Tauri host + 新 bridge（protocol v1） | 预期向后兼容，非发布认证 | bridge 保留既有 v1 路由；旧 host 不调用新增目录同步接口时，不会要求它理解身份库。完整旧 host 二进制尚未纳入自动化矩阵。 |
 | Wails 1.38.3 / 1.38.10 与 Tauri Preview 共用 profile 并同时写入 | 不支持 | 这些旧 writer 不遵守 `profilegate`。不得用新 bridge 的锁推断旧进程已停；真实 profile 操作前需外部确认 writer 全退出。 |
