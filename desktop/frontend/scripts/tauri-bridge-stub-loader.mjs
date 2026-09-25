@@ -227,6 +227,7 @@ export function deleteTauriBridgeSession(sessionId) {
   const failure = globalThis.__deleteFailure;
   if (failure) return Promise.reject(new Error(failure));
   globalThis.__pendingSessionDeletes = (globalThis.__pendingSessionDeletes ?? []).filter(entry => entry.id !== sessionId);
+  globalThis.__pendingSessionTitleRecoveries = (globalThis.__pendingSessionTitleRecoveries ?? []).filter(entry => entry.id !== sessionId);
   return Promise.resolve({ protocolVersion: 1, deleted: true, sessionId });
 }
 

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"reasonix/internal/agent"
 	appconfig "reasonix/internal/config"
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/sessionidentity"
@@ -316,6 +317,71 @@ func TestBridgeRecoveryCannotDeleteUnownedNormalSession(t *testing.T) {
 	}
 	if _, err := os.Stat(view.Path); err != nil {
 		t.Fatalf("unowned transcript was removed: %v", err)
+	}
+}
+
+func TestBridgeExplicitDeleteRetiresAmbiguousPendingTitleWithoutReopening(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	ctx := context.Background()
+	sessionDir := appconfig.SessionDir()
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	id := "ambiguous-title-delete"
+	path, err := bridgeSessionPath(sessionDir, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("transcript to delete\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	identities, err := sessionidentity.Open(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.Import(ctx, sessionDir, []sessionidentity.Candidate{{ID: id, Path: path, Title: "Before rename"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := identities.BeginManualTitleRename(ctx, id, path, "", "After rename", 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := agent.RenameSession(path, "Unexpected third title"); err != nil {
+		t.Fatal(err)
+	}
+	if err := recoverBridgeManualTitleRename(ctx, identities, id, path); err == nil {
+		t.Fatal("ambiguous sidecar title unexpectedly recovered")
+	}
+	if err := identities.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	server := newBridgeServer(testToken, "ambiguous-delete", desktopbridge.NewRuntimeManager(newControllerFactory(nil)))
+	request := httptest.NewRequest(http.MethodDelete, "/v1/sessions/"+id, nil)
+	request.Header.Set("Authorization", "Bearer "+testToken)
+	request.Header.Set(requestIDHeader, "ambiguous-title-delete")
+	response := httptest.NewRecorder()
+	server.handler().ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("pending-title delete status = %d, body = %s", response.Code, response.Body.String())
+	}
+	for _, artifact := range []string{path, store.SessionMeta(path)} {
+		if _, err := os.Lstat(artifact); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("pending-title delete retained %s: %v", artifact, err)
+		}
+	}
+	identities, err = sessionidentity.OpenReadOnly(ctx, appconfig.DesktopSessionIdentityPath(), appconfig.SessionProfileRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer identities.Close()
+	record, exists, err := identities.Get(ctx, id)
+	if err != nil || !exists || record.State != sessionidentity.StateDeleted {
+		t.Fatalf("deleted identity = %#v, exists=%v, err=%v", record, exists, err)
+	}
+	if _, pending, err := identities.PendingManualTitleRename(ctx, id); err != nil || pending {
+		t.Fatalf("deleted identity retained title intent: pending=%v, err=%v", pending, err)
 	}
 }
 

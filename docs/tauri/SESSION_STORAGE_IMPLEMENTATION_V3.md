@@ -145,6 +145,8 @@ schema v5 的 `session_title_intents` 会在侧车写入前记录 ID、相对路
 工作区元数据及状态，即使 ID 已不在 host 的 50 条旧 catalog 内也能从侧栏找到并重开。
 响应不暴露 transcript 路径或尚未提交的新标题；host 要求对应 capability，完成重开后
 重新拉取清单。文件缺失或侧车内容存在歧义时仍拒绝猜测，清单保留供用户处理。
+用户可在该清单二次确认后直接删除会话并放弃未完成改名；bridge 在同一 SQLite
+事务内核对意图、路径和物理唯一性后建立删除 fence，不能借此删除普通未持有的 ready 会话。
 host catalog 的对账及旧写者并发门禁仍未解决，因此仍未满足 SQLite
 标题权威切换门禁。
 用户明确删除会话时，删除 fence 与清除该 ID 的未完成标题意图在同一 SQLite 事务内提交；
@@ -246,7 +248,7 @@ Unix 上验证还会拒绝 group/other 可访问的快照目录、清单、成�
 
 中断删除的 `deleting` identity 不属于普通目录，但现在可通过 `GET /v1/sessions/deletion-recovery` 单独发现；该响应只包含 ID 和标题，不暴露 transcript 路径。Tauri host 在 health capability 缺失时拒绝旧 bridge；侧栏独立加载恢复清单，普通最近会话页读取失败时仍展示这些记录。只有用户明确确认才调用既有 DELETE 重试；不做启动期自动删除，也不允许打开该会话。
 
-未完成的手工标题意图另有 `GET /v1/sessions/title-recovery` 清单，要求 `session_title_recovery_list_v1` capability。它只发现，不自动完成意图；侧栏可显式重开可读会话，沿已有路径核对侧车后完成或撤销改名。文件缺失的行只提供失效记录删除，当前已打开的会话须先切换后重开。旧 catalog 的 50 条上限不再遮蔽这类恢复入口，但一般影子失败时的旧目录分页限制仍在。
+未完成的手工标题意图另有 `GET /v1/sessions/title-recovery` 清单，要求 `session_title_recovery_list_v1` capability。它只发现，不自动完成意图；侧栏可显式重开可读会话，沿已有路径核对侧车后完成或撤销改名。侧车有歧义、无法重开时，可由用户二次确认直接删除该会话并放弃意图；这条未持有会话的删除路径只接受仍有匹配意图的 ready/reserved 身份，普通未持有会话继续拒绝。文件缺失的行可删除失效记录，当前已打开的会话须先切换后重开。旧 catalog 的 50 条上限不再遮蔽这类恢复入口，但一般影子失败时的旧目录分页限制仍在。
 
 **Shadow inventory 完整性**：Go bridge 即使 inventory 为空也显式序列化 `entries`、`unclaimed`、`errors` 为空数组；Rust host 缺少任一字段或收到 `null` 时拒绝该物理快照，因此空 profile 不会把缺失响应误判为 clean。
 

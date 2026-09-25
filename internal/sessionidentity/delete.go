@@ -13,6 +13,19 @@ import (
 // bundle. Retrying an interrupted deletion is safe: deleting remains deleting.
 // The caller must not write this session after this transition succeeds.
 func (s *Store) BeginDelete(ctx context.Context, id, transcriptPath string) error {
+	return s.beginDelete(ctx, id, transcriptPath, false)
+}
+
+// BeginDeletePendingManualTitle permits an explicit DELETE of an unowned
+// reserved/ready session only while its interrupted manual rename is still
+// recorded. The intent check and deletion fence share one transaction, so a
+// completed recovery cannot race this authorization into deleting an ordinary
+// unowned session.
+func (s *Store) BeginDeletePendingManualTitle(ctx context.Context, id, transcriptPath string) error {
+	return s.beginDelete(ctx, id, transcriptPath, true)
+}
+
+func (s *Store) beginDelete(ctx context.Context, id, transcriptPath string, requirePendingTitle bool) error {
 	relativePath, err := relativeTranscriptPath(s.profileRoot, id, transcriptPath)
 	if err != nil {
 		return err
@@ -38,6 +51,22 @@ func (s *Store) BeginDelete(ctx context.Context, id, transcriptPath string) erro
 	}
 	if storedRelative != relativePath {
 		return fmt.Errorf("%w: %s cannot begin deletion from a different path", ErrSessionStateConflict, id)
+	}
+	if requirePendingTitle {
+		if state != StateReserved && state != StateReady {
+			return fmt.Errorf("%w: %s has no deletable pending title in %s", ErrSessionStateConflict, id, state)
+		}
+		var intentRelative string
+		err := tx.QueryRowContext(ctx, "SELECT relative_path FROM session_title_intents WHERE session_id=?", id).Scan(&intentRelative)
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("%w: %s has no pending manual title", ErrSessionStateConflict, id)
+		}
+		if err != nil {
+			return err
+		}
+		if intentRelative != relativePath {
+			return fmt.Errorf("%w: %s pending title path differs", ErrSessionStateConflict, id)
+		}
 	}
 	if state == StateDeleting {
 		if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, id, transcriptPath); err != nil {

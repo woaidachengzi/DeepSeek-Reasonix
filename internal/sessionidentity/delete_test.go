@@ -116,6 +116,9 @@ func TestBeginDeleteRefusesLegacyPhysicalPathConflict(t *testing.T) {
 	if err := store.BeginManualTitleRename(ctx, "delete-first", transcript, "", "Preserve pending title", 0); err != nil {
 		t.Fatal(err)
 	}
+	if err := store.BeginDeletePendingManualTitle(ctx, "delete-first", transcript); !errors.Is(err, ErrTranscriptPathConflict) {
+		t.Fatalf("pending-title deletion of aliased identity = %v, want ErrTranscriptPathConflict", err)
+	}
 	if err := store.BeginDelete(ctx, "delete-first", transcript); !errors.Is(err, ErrTranscriptPathConflict) {
 		t.Fatalf("begin deletion of aliased identity = %v, want ErrTranscriptPathConflict", err)
 	}
@@ -139,6 +142,62 @@ func TestBeginDeleteRefusesLegacyPhysicalPathConflict(t *testing.T) {
 	}
 	if after, err := os.ReadFile(transcript); err != nil || string(after) != string(content) {
 		t.Fatalf("conflicted delete changed transcript: %q, %v", after, err)
+	}
+}
+
+func TestBeginDeletePendingManualTitleRequiresMatchingIntent(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(sessionDir, "tauri-pending-title.jsonl")
+	if err := os.WriteFile(path, []byte("keep until authorized\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, filepath.Join(root, "desktop", "state.sqlite"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if err := store.Import(ctx, sessionDir, []Candidate{{ID: "pending-title", Path: path}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BeginDeletePendingManualTitle(ctx, "pending-title", path); !errors.Is(err, ErrSessionStateConflict) {
+		t.Fatalf("ordinary ready identity deleted without intent: %v", err)
+	}
+	if err := store.BeginManualTitleRename(ctx, "pending-title", path, "", "New title", 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.db.ExecContext(ctx, "UPDATE session_title_intents SET relative_path=? WHERE session_id=?", "sessions/tauri-other.jsonl", "pending-title"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BeginDeletePendingManualTitle(ctx, "pending-title", path); !errors.Is(err, ErrSessionStateConflict) {
+		t.Fatalf("pending title with mismatched path authorized deletion: %v", err)
+	}
+	if _, err := store.db.ExecContext(ctx, "UPDATE session_title_intents SET relative_path=? WHERE session_id=?", "sessions/tauri-pending-title.jsonl", "pending-title"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BeginDeletePendingManualTitle(ctx, "pending-title", path); err != nil {
+		t.Fatal(err)
+	}
+	record, exists, err := store.Get(ctx, "pending-title")
+	if err != nil || !exists || record.State != StateDeleting {
+		t.Fatalf("pending-title delete fence = %#v, %v, %v", record, exists, err)
+	}
+	if _, pending, err := store.PendingManualTitleRename(ctx, "pending-title"); err != nil || pending {
+		t.Fatalf("pending title survived delete fence: %v, %v", pending, err)
+	}
+	reservedPath := filepath.Join(sessionDir, "tauri-reserved-title.jsonl")
+	if err := store.Reserve(ctx, sessionDir, Candidate{ID: "reserved-title", Path: reservedPath}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BeginManualTitleRename(ctx, "reserved-title", reservedPath, "", "Reserved title", 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BeginDeletePendingManualTitle(ctx, "reserved-title", reservedPath); err != nil {
+		t.Fatalf("reserved pending title could not be fenced: %v", err)
 	}
 }
 

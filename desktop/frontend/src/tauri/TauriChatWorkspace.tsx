@@ -187,14 +187,13 @@ interface SessionRowProps {
   active: boolean;
   busy: boolean;
   switchingBlocked: boolean;
-  hideDelete?: boolean;
   onActivate: () => void;
   onDelete: () => void;
 }
 
 /** One recent conversation. The confirm step lives in the row so only the row
  *  the user armed changes shape, and leaving the row disarms it. */
-function SessionRow({ tab, active, busy, switchingBlocked, hideDelete, onActivate, onDelete }: SessionRowProps) {
+function SessionRow({ tab, active, busy, switchingBlocked, onActivate, onDelete }: SessionRowProps) {
   const [confirming, setConfirming] = useState(false);
   const missing = isMissingWorkbenchSession(tab);
   const deletionInterrupted = tab.deletionInterrupted === true;
@@ -202,7 +201,7 @@ function SessionRow({ tab, active, busy, switchingBlocked, hideDelete, onActivat
   if (confirming) {
     return (
       <div className="tauri-session-delete" role="group" aria-label="确认删除对话">
-        <span className="tauri-session-delete__question">{deletionInterrupted ? `继续删除“${displayTitle(tab.title)}”？` : `删除“${displayTitle(tab.title)}”？`}</span>
+        <span className="tauri-session-delete__question">{deletionInterrupted ? `继续删除“${displayTitle(tab.title)}”？` : titleRecoveryPending ? `删除“${displayTitle(tab.title)}”并放弃未完成的改名？` : `删除“${displayTitle(tab.title)}”？`}</span>
         <span className="tauri-session-delete__actions">
           <button type="button" className="tauri-session-delete__confirm" disabled={busy} onClick={onDelete}>{deletionInterrupted ? "继续删除" : "删除"}</button>
           <button type="button" className="tauri-session-delete__cancel" disabled={busy} onClick={() => setConfirming(false)}>取消</button>
@@ -226,7 +225,7 @@ function SessionRow({ tab, active, busy, switchingBlocked, hideDelete, onActivat
         {titleRecoveryPending && <small className="tauri-session-recovery">标题待恢复</small>}
         {missing && <small className="tauri-session-missing">文件缺失</small>}
       </button>
-      {!hideDelete && <button
+      <button
         type="button"
         className="tauri-session-row__delete"
         aria-label={`${deletionInterrupted ? "继续删除" : "删除对话"} ${displayTitle(tab.title)}`}
@@ -235,7 +234,7 @@ function SessionRow({ tab, active, busy, switchingBlocked, hideDelete, onActivat
         onClick={() => setConfirming(true)}
       >
         <Trash2 size={13} aria-hidden="true" />
-      </button>}
+      </button>
     </div>
   );
 }
@@ -1088,9 +1087,9 @@ export function TauriSessionPreview() {
   }
 
   // Deleting is a two-step confirmation, scoped to the row that asked for it.
-  // The bridge only removes the session it owns, so an inactive conversation is
-  // switched to first — silently, without disturbing the open transcript — and
-  // only then swept.
+  // Ordinary inactive conversations switch to the bridge's owned controller
+  // before deletion. A pending manual title cannot always be reopened: the
+  // bridge atomically verifies that intent before fencing explicit deletion.
   async function deleteSession(target: WorkbenchSessionTab) {
     if (busy || switchingBlocked) return;
     const isOpen = session?.id === target.sessionId;
@@ -1108,7 +1107,7 @@ export function TauriSessionPreview() {
     let deleted = false;
     let operationError = "";
     try {
-      if (!isOpen && !target.deletionInterrupted && !target.missing && target.state !== "missing") {
+      if (!isOpen && !target.deletionInterrupted && !target.titleRecoveryPending && !target.missing && target.state !== "missing") {
         try {
           await switchTauriBridgeSession(target.sessionId, target.workspaceRoot);
           switchedToTarget = true;
@@ -1709,13 +1708,13 @@ export function TauriSessionPreview() {
         {pendingSessionTitleRecoveries.length > 0 && <>
           <div className="tauri-sidebar__section-title">待恢复标题</div>
           <section className="tauri-pending-deletes" aria-label="待恢复标题">
-            <p className="tauri-sidebar__page-note">打开会话以核对上次改名；当前会话需先切换。文件缺失时可删除失效记录。</p>
+            <p className="tauri-sidebar__page-note">打开会话以核对上次改名；当前会话需先切换。也可确认删除该会话并放弃未完成的改名。</p>
             {pendingSessionTitleRecoveries.map(item => {
               const tab: WorkbenchSessionTab = {
                 sessionId: item.id, title: item.title, workspaceRoot: item.workspaceRoot,
                 state: item.state, missing: item.state === "missing", titleRecoveryPending: true,
               };
-              return <SessionRow key={item.id} tab={tab} active={session?.id === item.id} busy={busy} switchingBlocked={switchingBlocked} hideDelete={item.state !== "missing"} onActivate={() => void activateSession(item.id, item.workspaceRoot)} onDelete={() => void deleteSession(tab)} />;
+              return <SessionRow key={item.id} tab={tab} active={session?.id === item.id} busy={busy} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(item.id, item.workspaceRoot)} onDelete={() => void deleteSession(tab)} />;
             })}
           </section>
         </>}
