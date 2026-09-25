@@ -539,9 +539,15 @@ fn workbench_session_page_from_shadow(
 
     match load_identity_page() {
         Ok(page)
-            if shadow_directory
-                .as_ref()
-                .is_some_and(|(_, id)| *id == page.snapshot_id) =>
+            if shadow_directory.as_ref().is_some_and(|(directory, id)| {
+                *id == page.snapshot_id
+                    && session_page_matches_shadow_snapshot(
+                        &page,
+                        directory,
+                        cursor.as_ref(),
+                        limit,
+                    )
+            }) =>
         {
             Ok(WorkbenchSessionPage {
                 sessions: page
@@ -577,6 +583,44 @@ fn workbench_session_page_from_shadow(
         }
         Err(error) => Err(error),
     }
+}
+
+// Structural snapshot IDs intentionally ignore title-only updates so they do
+// not invalidate keyset cursors between requests. Within one guarded request,
+// however, the displayed page must match the metadata that was just audited.
+fn session_page_matches_shadow_snapshot(
+    page: &SessionDirectoryPage,
+    directory: &[SessionDirectoryEntry],
+    after: Option<&SessionDirectoryCursor>,
+    limit: u16,
+) -> bool {
+    if page.total != directory.len() as u64 {
+        return false;
+    }
+    let start = match after {
+        None => 0,
+        Some(cursor) => match directory.binary_search_by(|entry| {
+            (entry.position, entry.id.as_str()).cmp(&(cursor.position, cursor.id.as_str()))
+        }) {
+            Ok(index) => index + 1,
+            Err(_) => return false,
+        },
+    };
+    let end = (start + usize::from(limit)).min(directory.len());
+    if page.sessions.len() != end - start || page.next_cursor.is_some() != (end < directory.len()) {
+        return false;
+    }
+    page.sessions
+        .iter()
+        .zip(&directory[start..end])
+        .all(|(entry, audited)| {
+            audited.id == entry.id
+                && audited.position == entry.position
+                && audited.title == entry.title
+                && audited.workspace_root == entry.workspace_root
+                && audited.state == entry.state
+                && audited.missing == entry.missing
+        })
 }
 
 #[tauri::command]
@@ -1059,6 +1103,27 @@ mod session_catalog_gate_tests {
         }
     }
 
+    fn identity_continuation() -> (
+        SessionDirectoryPage,
+        Vec<SessionDirectoryEntry>,
+        SessionDirectoryCursor,
+    ) {
+        let mut page = identity_page();
+        page.total = 2;
+        let mut earlier = page.sessions[0].clone();
+        earlier.id = "earlier-session".into();
+        earlier.title = "Earlier title".into();
+        earlier.position = 0;
+        let mut directory = vec![earlier.clone()];
+        directory.extend(page.sessions.clone());
+        let cursor = SessionDirectoryCursor {
+            position: earlier.position,
+            id: earlier.id,
+            snapshot_id: Some(snapshot_id()),
+        };
+        (page, directory, cursor)
+    }
+
     fn snapshot_id() -> String {
         "a".repeat(64)
     }
@@ -1136,16 +1201,13 @@ mod session_catalog_gate_tests {
 
     #[test]
     fn clean_continuation_uses_the_identity_page() {
+        let (identity_page, directory, cursor) = identity_continuation();
         let page = workbench_session_page_from_shadow(
             vec![legacy_session()],
-            Some(SessionDirectoryCursor {
-                position: 1,
-                id: "cursor-session".into(),
-                snapshot_id: Some(snapshot_id()),
-            }),
+            Some(cursor),
             200,
-            Ok((report(true), Vec::new(), snapshot_id())),
-            || Ok(identity_page()),
+            Ok((report(true), directory, snapshot_id())),
+            || Ok(identity_page),
         )
         .expect("verified identity page");
         assert_eq!(page.source, "identity");
@@ -1191,6 +1253,73 @@ mod session_catalog_gate_tests {
         .expect("legacy fallback after first-page race");
         assert_eq!(page.source, "legacy");
         assert_eq!(page.sessions[0].session_id, "legacy-session");
+    }
+
+    #[test]
+    fn title_change_between_shadow_and_page_cannot_pass_the_structural_snapshot_id() {
+        let audited = identity_page().sessions;
+        let mut changed = identity_page();
+        changed.sessions[0].title = "Title changed after audit".into();
+        assert_eq!(changed.snapshot_id, snapshot_id());
+        let legacy = WorkbenchSession {
+            session_id: "identity-session".into(),
+            title: Some("Identity title".into()),
+            workspace_root: None,
+        };
+
+        let first = workbench_session_page_from_shadow(
+            vec![legacy.clone()],
+            None,
+            200,
+            Ok((report(true), audited.clone(), snapshot_id())),
+            || Ok(changed.clone()),
+        )
+        .expect("first page falls back after unaudited title change");
+        assert_eq!(first.source, "legacy");
+        assert_eq!(first.sessions[0].title.as_deref(), Some("Identity title"));
+
+        let (mut continuation_page, continuation_directory, cursor) = identity_continuation();
+        continuation_page.sessions[0].title = "Title changed after audit".into();
+        let continuation = workbench_session_page_from_shadow(
+            vec![legacy],
+            Some(cursor),
+            200,
+            Ok((report(true), continuation_directory, snapshot_id())),
+            || Ok(continuation_page),
+        );
+        assert!(
+            continuation.is_err(),
+            "continuation displayed an unaudited title"
+        );
+    }
+
+    #[test]
+    fn page_must_be_the_exact_slice_of_the_audited_directory() {
+        let (mut page, mut directory, cursor) = identity_continuation();
+        assert!(session_page_matches_shadow_snapshot(
+            &page,
+            &directory,
+            Some(&cursor),
+            200
+        ));
+
+        page.sessions.clear();
+        assert!(!session_page_matches_shadow_snapshot(
+            &page,
+            &directory,
+            Some(&cursor),
+            200
+        ));
+
+        let (mut page, _, _) = identity_continuation();
+        page.sessions[0].title = "Updated before this page request".into();
+        directory[1].title = page.sessions[0].title.clone();
+        assert!(session_page_matches_shadow_snapshot(
+            &page,
+            &directory,
+            Some(&cursor),
+            200
+        ));
     }
 
     #[test]

@@ -74,6 +74,24 @@ func BenchmarkInventoryIdentityList(b *testing.B) {
 	}
 }
 
+// BenchmarkListVisible measures the snapshot-bound first-page read. The
+// structural digest must still cover every visible identity on each request.
+func BenchmarkListVisible(b *testing.B) {
+	for _, count := range []int{50, 500} {
+		b.Run(fmt.Sprintf("identities-%d", count), func(b *testing.B) {
+			ctx := context.Background()
+			identities, _, _ := inventoryBenchmarkFixture(b, count)
+			b.Cleanup(func() { _ = identities.Close() })
+			b.ResetTimer()
+			for range b.N {
+				if _, err := identities.ListVisible(ctx, 50, nil, ""); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
 func inventoryBenchmarkFixture(b *testing.B, count int) (*Store, string, string) {
 	b.Helper()
 	ctx := context.Background()

@@ -261,7 +261,7 @@ sidecar 旁创建新库；缺库分支也检查数据库父目录仍在 profile 
 
 Rust host 读取 bridge HTTP 响应时限制原始响应最多 64 MiB、解码 JSON body 最多 32 MiB，超限在 JSON 解析前拒绝；避免异常膨胀的 inventory/history 响应无界占用 host 内存。
 
-Host 的每页 shadow 门禁使用 `/v1/sessions/shadow-snapshot`：Go 在一次请求中完成物理 inventory，并从其中已经读取、校验过的身份行构建有界完整目录与结构快照 ID，最多 10,000 条，避免第二次开库并解析全部 transcript 路径。独立的 `/v1/sessions/snapshot` 保留给诊断及其他调用方。`session_shadow_snapshot_v1` capability 区分旧 bridge；缺少该 endpoint 的 sidecar 会在启动握手阶段被拒绝。Rust 对合并响应中的目录仍校验总数、顺序与可见状态，并严格检查物理 inventory 的必需数组；随后单独读取实际分页并核对 snapshot ID，保留竞态检测。超过条数或 HTTP body 上限时拒绝快照并走既有 fail-closed fallback。此改动不缓存或跳过每页完整物理盘点，也没有消除分页本身的额外读取。
+Host 的每页 shadow 门禁使用 `/v1/sessions/shadow-snapshot`：Go 在一次请求中完成物理 inventory，并从其中已经读取、校验过的身份行构建有界完整目录与结构快照 ID，最多 10,000 条，避免第二次开库并解析全部 transcript 路径。独立的 `/v1/sessions/snapshot` 保留给诊断及其他调用方。`session_shadow_snapshot_v1` capability 区分旧 bridge；缺少该 endpoint 的 sidecar 会在启动握手阶段被拒绝。Rust 对合并响应中的目录仍校验总数、顺序与可见状态，并严格检查物理 inventory 的必需数组；随后单独读取实际分页，既核对结构 snapshot ID，也要求该页恰为同轮 shadow 目录对应的完整分页切片，逐项核对 ID、标题、工作区与生命周期。标题变化不使跨请求的结构游标失效，但若恰在同一请求的盘点与分页之间变化，首屏回退旧目录、续页拒绝混入未经审计的新标题。超过条数或 HTTP body 上限时拒绝快照并走既有 fail-closed fallback。此改动不缓存或跳过每页完整物理盘点，也没有消除分页本身的额外读取。
 
 Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝加载而不跳过行；否则 shadow 比对可能把被过滤的旧 catalog 行误当成不存在，之后任一 catalog 写入还可能永久丢弃这些行。超限、重复或非法文件在失败读取与尝试写入后均保持原字节不变，省略 title 的合法旧格式继续支持。
 
@@ -272,6 +272,8 @@ Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝
 只读 inventory 的物理冲突审计仍逐项解析和检查文件，但 macOS/Linux 对已获取的文件身份按设备号与 inode 分组，对解析路径按等价键分组（macOS 额外采用保守的大小写折叠），只在同组内确认冲突，避免大量互不相关会话之间的两两比较。缺少可用文件身份键时保留逐对 `SameFile` 检查；Windows 目前走这一保守回退，并对路径采用大小写折叠。隔离基准 `BenchmarkInventory` 覆盖 50/500 条完整盘点，可用于观察开销；合并 shadow 快照消除了独立完整目录快照的重复路径校验，但仍不缓存或跳过每页物理盘点，S2 每页全量 shadow 审计的剩余问题仍在。
 
 补充的隔离基准分别测量已打开 Store 的完整 inventory、每次经 `OpenReadOnly` 开库的 inventory，以及单独的身份行 `List`。在 Apple M4、500 条均为已登记普通 transcript 且无旧 catalog 的样本中，`4359c238b` 基线多次短跑约为 27 ms、29 ms、18 ms/次；数值仅用于定位热点，不代表真实 profile 性能或跨平台保证。主要开销是逐行路径校验，而非只读开库；在旧 Wails writer 停写尚未确认的阶段，不以缓存或跳过这些校验换取数字。已存在路径的解析现先调用 `EvalSymlinks`，仅在失败时用 `Lstat` 区分缺失路径与断开的 symlink，避免成功路径多做一次检查；缺失、目录别名与断链路径的原有行为由回归覆盖。
+
+`BenchmarkListVisible` 另测每页结构快照绑定的首屏读取。隔离的 50/500 行样本在 Apple M4 上约为 3.0/3.8 ms；尝试把 `COUNT(*)` 并入已存在的哈希扫描后，多次短跑没有可辨改善，因此撤回该生产改动。该基准保留为后续定位证据；不能据此跳过结构哈希或每页 shadow 盘点。
 
 写路径 `Open` 的 WAL 预检另有保守快路径：主库 header 的 schema version 已核对后，只有当现有 WAL 的帧布局完整且逐帧确认没有第 1 页（`user_version` 所在页）时，才跳过为读取 WAL schema 而做的临时整库复制。出现第 1 页、截断帧或无法判定的布局仍沿用副本校验；SQLite 原库打开后的 `quick_check` 与版本判定也照常执行。`OpenReadOnly` 从来不走这条副本校验，仍直接只读核对 schema 与完整性。此优化不缓存跨请求的 schema 结果，也不解决并发路径替换竞态。
 
