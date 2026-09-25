@@ -60,9 +60,9 @@ use bridge::{
     BridgeStatus, BridgeSupervisor, BridgeWorkspaceChangeDetailResponse,
     BridgeWorkspaceChangesResponse, BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse,
     LegacySessionCatalogEntry, MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse,
-    MCPServerView, OpenSessionRequest, PendingSessionDelete, RenameSessionRequest,
-    SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage,
-    SessionFirstMessageTitle, SessionPreview, SessionRequest, SubmitRequest,
+    MCPServerView, OpenSessionRequest, PendingSessionDelete, PendingSessionTitleRecovery,
+    RenameSessionRequest, SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
+    SessionDirectoryPage, SessionFirstMessageTitle, SessionPreview, SessionRequest, SubmitRequest,
     WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
 };
 use data_profile::{
@@ -178,6 +178,13 @@ fn bridge_pending_session_deletes(
     supervisor: State<'_, BridgeSupervisor>,
 ) -> Result<Vec<PendingSessionDelete>, String> {
     supervisor.pending_session_deletes()
+}
+
+#[tauri::command]
+fn bridge_pending_session_title_recoveries(
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<Vec<PendingSessionTitleRecovery>, String> {
+    supervisor.pending_session_title_recoveries()
 }
 
 #[tauri::command]
@@ -941,6 +948,7 @@ fn main() {
             bridge_rename_session,
             bridge_delete_session,
             bridge_pending_session_deletes,
+            bridge_pending_session_title_recoveries,
             list_mcp_servers,
             save_mcp_server,
             delete_mcp_server,

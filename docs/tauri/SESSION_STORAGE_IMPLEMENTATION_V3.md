@@ -141,7 +141,11 @@ schema v5 的 `session_title_intents` 会在侧车写入前记录 ID、相对路
 用户主动要求的 AI 改名若绕过意图 API，会返回 `ErrTitleIntentRequired`。只读 inventory
 会将尚未完成的意图记为错误，使 host 影子目录保持 dirty。隔离子进程强制退出测试已覆盖意图
 在未关闭 Store 时的恢复。恢复目前由**显式重开该会话**触发，不会在启动时自动遍历
-并修改所有会话；host catalog 的对账及旧写者并发门禁仍未解决，因此仍未满足 SQLite
+并修改所有会话；只读 `GET /v1/sessions/title-recovery` 会独立列出待恢复 ID、旧标题、
+工作区元数据及状态，即使 ID 已不在 host 的 50 条旧 catalog 内也能从侧栏找到并重开。
+响应不暴露 transcript 路径或尚未提交的新标题；host 要求对应 capability，完成重开后
+重新拉取清单。文件缺失或侧车内容存在歧义时仍拒绝猜测，清单保留供用户处理。
+host catalog 的对账及旧写者并发门禁仍未解决，因此仍未满足 SQLite
 标题权威切换门禁。
 用户明确删除会话时，删除 fence 与清除该 ID 的未完成标题意图在同一 SQLite 事务内提交；
 删除清理中断后的重试及最终 tombstone 提交也清除遗留意图。删除已阻止会话重开，
@@ -242,6 +246,8 @@ Unix 上验证还会拒绝 group/other 可访问的快照目录、清单、成�
 
 中断删除的 `deleting` identity 不属于普通目录，但现在可通过 `GET /v1/sessions/deletion-recovery` 单独发现；该响应只包含 ID 和标题，不暴露 transcript 路径。Tauri host 在 health capability 缺失时拒绝旧 bridge；侧栏独立加载恢复清单，普通最近会话页读取失败时仍展示这些记录。只有用户明确确认才调用既有 DELETE 重试；不做启动期自动删除，也不允许打开该会话。
 
+未完成的手工标题意图另有 `GET /v1/sessions/title-recovery` 清单，要求 `session_title_recovery_list_v1` capability。它只发现，不自动完成意图；侧栏可显式重开可读会话，沿已有路径核对侧车后完成或撤销改名。文件缺失的行只提供失效记录删除，当前已打开的会话须先切换后重开。旧 catalog 的 50 条上限不再遮蔽这类恢复入口，但一般影子失败时的旧目录分页限制仍在。
+
 **Shadow inventory 完整性**：Go bridge 即使 inventory 为空也显式序列化 `entries`、`unclaimed`、`errors` 为空数组；Rust host 缺少任一字段或收到 `null` 时拒绝该物理快照，因此空 profile 不会把缺失响应误判为 clean。
 
 Rust host 读取 bridge HTTP 响应时限制原始响应最多 64 MiB、解码 JSON body 最多 32 MiB，超限在 JSON 解析前拒绝；避免异常膨胀的 inventory/history 响应无界占用 host 内存。
@@ -264,7 +270,7 @@ Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝
 
 | 组合 | 结论 | 依据 / 限制 |
 | --- | --- | --- |
-| 当前 Tauri host + 当前 bridge（protocol v1，含会话同步、目录快照、删除恢复和 `session_title_intent_v1` capability） | 支持 | Host 启动时先校验 ready frame，再读取认证 health；协议版本、sidecar instance ID 或必需 capability 不匹配时，拒绝把该进程登记为可用并终止它。 |
+| 当前 Tauri host + 当前 bridge（protocol v1，含会话同步、目录快照、删除恢复、`session_title_intent_v1` 与 `session_title_recovery_list_v1` capability） | 支持 | Host 启动时先校验 ready frame，再读取认证 health；协议版本、sidecar instance ID 或必需 capability 不匹配时，拒绝把该进程登记为可用并终止它。 |
 | 当前 Tauri host + 旧 bridge（仍报 protocol v1、但缺少任一必需 capability） | 明确拒绝 | protocol major 相同不代表新增端点及持久标题恢复可用；health capability 缺失会在启动阶段报错。 |
 | 旧 Tauri host + 新 bridge（protocol v1） | 预期向后兼容，非发布认证 | bridge 保留既有 v1 路由；旧 host 不调用新增目录同步接口时，不会要求它理解身份库。完整旧 host 二进制尚未纳入自动化矩阵。 |
 | Wails 1.38.3 / 1.38.10 与 Tauri Preview 共用 profile 并同时写入 | 不支持 | 这些旧 writer 不遵守 `profilegate`。不得用新 bridge 的锁推断旧进程已停；真实 profile 操作前需外部确认 writer 全退出。 |

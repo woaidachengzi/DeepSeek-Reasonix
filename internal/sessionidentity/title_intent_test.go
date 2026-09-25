@@ -40,6 +40,10 @@ func TestManualTitleIntentSurvivesReopenAndCommitsAtomically(t *testing.T) {
 	if ids, err := store.PendingManualTitleRenameIDs(ctx); err != nil || len(ids) != 1 || ids[0] != "title" {
 		t.Fatalf("pending title IDs = %#v, %v", ids, err)
 	}
+	if entries, err := store.ListPendingManualTitleRecoveries(ctx); err != nil || len(entries) != 1 ||
+		entries[0].ID != "title" || entries[0].Title != "" || entries[0].State != StateReady {
+		t.Fatalf("pending title recovery entries = %#v, %v", entries, err)
+	}
 	if err := store.BeginManualTitleRename(ctx, "title", path, "", "Other title", 0); !errors.Is(err, ErrTitleConflict) {
 		t.Fatalf("second manual title intent = %v, want conflict", err)
 	}
@@ -71,6 +75,9 @@ func TestManualTitleIntentSurvivesReopenAndCommitsAtomically(t *testing.T) {
 	}
 	if ids, err := store.PendingManualTitleRenameIDs(ctx); err != nil || len(ids) != 0 {
 		t.Fatalf("committed title still listed as pending: %#v, %v", ids, err)
+	}
+	if entries, err := store.ListPendingManualTitleRecoveries(ctx); err != nil || len(entries) != 0 {
+		t.Fatalf("committed title still has a recovery entry: %#v, %v", entries, err)
 	}
 }
 
@@ -104,6 +111,21 @@ func TestManualTitleIntentRetainsIntentAfterRejectedCommit(t *testing.T) {
 	}
 	if err := store.CommitManualTitleRename(ctx, "title", path); err != nil {
 		t.Fatalf("retry durable title intent: %v", err)
+	}
+}
+
+func TestPendingManualTitleRecoveryKeepsIDWhenLegacyMetadataIsUnsafe(t *testing.T) {
+	ctx, _, _, path, store := titleIntentFixture(t)
+	defer store.Close()
+	if err := store.BeginManualTitleRename(ctx, "title", path, "", "New title", 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.db.ExecContext(ctx, "UPDATE sessions SET title=?, workspace_root=? WHERE id='title'", "bad\ntitle", "bad\nroot"); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := store.ListPendingManualTitleRecoveries(ctx)
+	if err != nil || len(entries) != 1 || entries[0].ID != "title" || entries[0].Title != "" || entries[0].WorkspaceRoot != "" {
+		t.Fatalf("unsafe metadata hid pending title recovery: %#v, %v", entries, err)
 	}
 }
 

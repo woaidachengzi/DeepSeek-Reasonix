@@ -120,6 +120,11 @@ export function tauriPendingSessionDeletes() {
   return Promise.resolve((globalThis.__pendingSessionDeletes ?? []).slice());
 }
 
+export function tauriPendingSessionTitleRecoveries() {
+  record("bridge_pending_session_title_recoveries");
+  return Promise.resolve((globalThis.__pendingSessionTitleRecoveries ?? []).slice());
+}
+
 export function tauriWorkspaceRootsAvailability(roots) {
   record("workspace_roots_availability", { roots });
   const unavailable = new Set(globalThis.__unavailableWorkspaceRoots ?? []);
@@ -200,14 +205,16 @@ function storedTitle(sessionId) {
 
 export function openTauriBridgeSession(sessionId, workspaceRoot) {
   record("bridge_open_session", { sessionId, workspaceRoot });
-  return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle", title: storedTitle(sessionId), workspaceRoot });
+  globalThis.__pendingSessionTitleRecoveries = (globalThis.__pendingSessionTitleRecoveries ?? []).filter(entry => entry.id !== sessionId);
+  return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle", title: globalThis.__recoveredTitles?.[sessionId] ?? storedTitle(sessionId), workspaceRoot });
 }
 
 export function switchTauriBridgeSession(sessionId, workspaceRoot) {
   record("bridge_switch_session", { sessionId, workspaceRoot });
   const failure = globalThis.__switchFailure;
   if (failure) return Promise.reject(new Error(failure));
-  return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle", title: storedTitle(sessionId), workspaceRoot });
+  globalThis.__pendingSessionTitleRecoveries = (globalThis.__pendingSessionTitleRecoveries ?? []).filter(entry => entry.id !== sessionId);
+  return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle", title: globalThis.__recoveredTitles?.[sessionId] ?? storedTitle(sessionId), workspaceRoot });
 }
 
 export function renameTauriBridgeSession(sessionId, title) {

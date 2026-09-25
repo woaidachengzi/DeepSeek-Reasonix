@@ -116,6 +116,22 @@ struct PendingSessionDeletesResponse {
     sessions: Vec<PendingSessionDelete>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingSessionTitleRecovery {
+    pub id: String,
+    pub title: String,
+    pub workspace_root: Option<String>,
+    pub state: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PendingSessionTitleRecoveriesResponse {
+    protocol_version: u8,
+    sessions: Vec<PendingSessionTitleRecovery>,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SessionInventoryResponse {
@@ -842,6 +858,17 @@ impl BridgeSupervisor {
         validate_pending_session_deletes(envelope)
     }
 
+    /// Lists incomplete manual title renames independently of the bounded
+    /// legacy catalog. Reopening one is an explicit user action in the UI.
+    pub fn pending_session_title_recoveries(
+        &self,
+    ) -> Result<Vec<PendingSessionTitleRecovery>, String> {
+        let response = self.request_json("GET", "/v1/sessions/title-recovery", None, None)?;
+        let envelope: PendingSessionTitleRecoveriesResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        validate_pending_session_title_recoveries(envelope)
+    }
+
     /// Reduce the existing read-only inventory to file-state evidence. Paths
     /// and diagnostics never leave this method or enter the shadow report.
     pub fn session_physical_inventory(&self) -> Result<SessionPhysicalInventory, String> {
@@ -1515,6 +1542,13 @@ fn verify_bridge_health(response: Value, expected_instance_id: &str) -> Result<(
     {
         return Err("desktop bridge does not support durable session title intents".to_string());
     }
+    if !health
+        .capabilities
+        .iter()
+        .any(|capability| capability == "session_title_recovery_list_v1")
+    {
+        return Err("desktop bridge does not support explicit session title recovery".to_string());
+    }
     Ok(())
 }
 
@@ -1936,6 +1970,29 @@ fn validate_pending_session_deletes(
     Ok(envelope.sessions)
 }
 
+fn validate_pending_session_title_recoveries(
+    envelope: PendingSessionTitleRecoveriesResponse,
+) -> Result<Vec<PendingSessionTitleRecovery>, String> {
+    if envelope.protocol_version != PROTOCOL_VERSION || envelope.sessions.len() > 10_000 {
+        return Err("desktop bridge title recovery response is invalid".to_string());
+    }
+    let mut seen = std::collections::HashSet::with_capacity(envelope.sessions.len());
+    for pending in &envelope.sessions {
+        if session_path_component(&pending.id)? != pending.id
+            || pending.title.chars().count() > 120
+            || pending.title.chars().any(char::is_control)
+            || pending.workspace_root.as_deref().is_some_and(|root| {
+                root.is_empty() || root.len() > 4096 || root.chars().any(char::is_control)
+            })
+            || !matches!(pending.state.as_str(), "reserved" | "ready" | "missing")
+            || !seen.insert(pending.id.as_str())
+        {
+            return Err("desktop bridge title recovery entry is invalid".to_string());
+        }
+    }
+    Ok(envelope.sessions)
+}
+
 fn forward_events(
     app: tauri::AppHandle,
     address: SocketAddr,
@@ -2074,10 +2131,11 @@ mod tests {
     use super::{
         open_event_stream, parse_json_response, read_bounded_response, request_json,
         session_directory_path, session_path_component, validate_attachment,
-        validate_pending_session_deletes, validate_session_directory_page,
-        validate_session_directory_snapshot, verify_bridge_health, verify_ready, wait_for_exit,
-        BridgeAttachment, BridgeEvent, BridgeSupervisor, EventStreamError, OpenSessionRequest,
-        PendingSessionDelete, PendingSessionDeletesResponse, RenameSessionRequest,
+        validate_pending_session_deletes, validate_pending_session_title_recoveries,
+        validate_session_directory_page, validate_session_directory_snapshot, verify_bridge_health,
+        verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSupervisor,
+        EventStreamError, OpenSessionRequest, PendingSessionDelete, PendingSessionDeletesResponse,
+        PendingSessionTitleRecoveriesResponse, PendingSessionTitleRecovery, RenameSessionRequest,
         SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
         SessionDirectoryPage, SessionInventoryResponse, SessionRequest, PROTOCOL_VERSION,
     };
@@ -2122,7 +2180,7 @@ mod tests {
             "protocolVersion": 1,
             "status": "ok",
             "sidecarInstanceId": "instance",
-            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_delete_recovery_list_v1", "session_title_intent_v1"],
+            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1"],
         });
         assert!(verify_bridge_health(healthy.clone(), "instance").is_ok());
         assert!(verify_bridge_health(healthy.clone(), "other").is_err());
@@ -2176,6 +2234,60 @@ mod tests {
         assert!(verify_bridge_health(old_title_intent_sidecar, "instance")
             .unwrap_err()
             .contains("durable session title intents"));
+
+        let old_title_recovery_sidecar = json!({
+            "protocolVersion": 1,
+            "status": "ok",
+            "sidecarInstanceId": "instance",
+            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_delete_recovery_list_v1", "session_title_intent_v1"],
+        });
+        assert!(verify_bridge_health(old_title_recovery_sidecar, "instance")
+            .unwrap_err()
+            .contains("explicit session title recovery"));
+    }
+
+    #[test]
+    fn pending_session_title_recovery_response_is_bounded_and_unique() {
+        let entry = PendingSessionTitleRecovery {
+            id: "older-than-recent-catalog".into(),
+            title: "Before rename".into(),
+            workspace_root: Some("/work/project".into()),
+            state: "ready".into(),
+        };
+        let entries =
+            validate_pending_session_title_recoveries(PendingSessionTitleRecoveriesResponse {
+                protocol_version: PROTOCOL_VERSION,
+                sessions: vec![entry.clone()],
+            })
+            .expect("valid pending title recovery");
+        assert_eq!(entries.len(), 1);
+        assert!(
+            validate_pending_session_title_recoveries(PendingSessionTitleRecoveriesResponse {
+                protocol_version: PROTOCOL_VERSION,
+                sessions: vec![entry.clone(), entry.clone()],
+            })
+            .is_err()
+        );
+        assert!(
+            validate_pending_session_title_recoveries(PendingSessionTitleRecoveriesResponse {
+                protocol_version: PROTOCOL_VERSION,
+                sessions: vec![PendingSessionTitleRecovery {
+                    state: "deleted".into(),
+                    ..entry.clone()
+                }],
+            })
+            .is_err()
+        );
+        assert!(
+            validate_pending_session_title_recoveries(PendingSessionTitleRecoveriesResponse {
+                protocol_version: PROTOCOL_VERSION,
+                sessions: vec![PendingSessionTitleRecovery {
+                    id: "../escape".into(),
+                    ..entry
+                }],
+            })
+            .is_err()
+        );
     }
 
     #[test]
@@ -2817,7 +2929,7 @@ mod tests {
     }
 
     #[test]
-    fn real_bridge_exposes_empty_inventory_and_deletion_recovery_list() {
+    fn real_bridge_exposes_empty_inventory_and_recovery_lists() {
         let Some(binary) = bridge_under_test() else {
             return;
         };
@@ -2837,6 +2949,10 @@ mod tests {
         assert!(supervisor
             .pending_session_deletes()
             .expect("read empty deletion recovery list")
+            .is_empty());
+        assert!(supervisor
+            .pending_session_title_recoveries()
+            .expect("read empty title recovery list")
             .is_empty());
         supervisor.stop().expect("stop bridge");
     }

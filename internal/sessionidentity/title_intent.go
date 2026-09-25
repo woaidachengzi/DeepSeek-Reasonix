@@ -21,6 +21,48 @@ type ManualTitleIntent struct {
 	NewTitle             string
 }
 
+// PendingManualTitleRecovery is the transcript-path-free metadata needed to make a
+// stranded rename discoverable even when its ID is outside the host's bounded
+// recent-session catalog. Recovery itself still requires an explicit open.
+type PendingManualTitleRecovery struct {
+	ID            string
+	Title         string
+	WorkspaceRoot string
+	State         SessionState
+}
+
+func (s *Store) ListPendingManualTitleRecoveries(ctx context.Context) ([]PendingManualTitleRecovery, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT intents.session_id, sessions.title, sessions.workspace_root, sessions.state
+		FROM session_title_intents AS intents JOIN sessions ON sessions.id=intents.session_id
+		WHERE sessions.state IN ('reserved','ready','missing')
+		ORDER BY intents.session_id LIMIT ?`, MaxVisibleSnapshotSize+1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	recoveries := make([]PendingManualTitleRecovery, 0)
+	for rows.Next() {
+		var recovery PendingManualTitleRecovery
+		if err := rows.Scan(&recovery.ID, &recovery.Title, &recovery.WorkspaceRoot, &recovery.State); err != nil {
+			return nil, err
+		}
+		if len(recoveries) == MaxVisibleSnapshotSize {
+			return nil, errors.New("too many pending session title renames")
+		}
+		if !ValidWorkbenchCatalogTitle(recovery.Title) {
+			recovery.Title = ""
+		}
+		if !ValidWorkbenchCatalogWorkspaceRoot(recovery.WorkspaceRoot) {
+			recovery.WorkspaceRoot = ""
+		}
+		recoveries = append(recoveries, recovery)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return recoveries, nil
+}
+
 // PendingManualTitleRenameIDs returns only identifiers. Inventory uses it to
 // keep an interrupted rename from appearing as a clean shadow directory,
 // including when the sidecar still has its old title.

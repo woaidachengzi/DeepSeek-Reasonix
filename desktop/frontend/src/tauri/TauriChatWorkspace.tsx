@@ -95,6 +95,7 @@ import {
   tauriPreviewRuntimeInfo,
   tauriSessionTitle,
   tauriPendingSessionDeletes,
+  tauriPendingSessionTitleRecoveries,
   tauriWorkbenchSessionPage,
   tauriWorkbenchProjectFolders,
   tauriWorkspaceRootsAvailability,
@@ -112,6 +113,7 @@ import {
   type TauriBridgeStatus,
   type TauriPendingPrompt,
   type TauriPendingSessionDelete,
+  type TauriPendingSessionTitleRecovery,
   type TauriWorkspaceEntry,
   type TauriWorkspaceFilePreview,
   type TauriWorkspaceChanges,
@@ -140,6 +142,7 @@ interface WorkbenchSessionTab {
   state?: string;
   missing?: boolean;
   deletionInterrupted?: boolean;
+  titleRecoveryPending?: boolean;
 }
 
 function preserveWorkbenchLifecycle(
@@ -184,16 +187,18 @@ interface SessionRowProps {
   active: boolean;
   busy: boolean;
   switchingBlocked: boolean;
+  hideDelete?: boolean;
   onActivate: () => void;
   onDelete: () => void;
 }
 
 /** One recent conversation. The confirm step lives in the row so only the row
  *  the user armed changes shape, and leaving the row disarms it. */
-function SessionRow({ tab, active, busy, switchingBlocked, onActivate, onDelete }: SessionRowProps) {
+function SessionRow({ tab, active, busy, switchingBlocked, hideDelete, onActivate, onDelete }: SessionRowProps) {
   const [confirming, setConfirming] = useState(false);
   const missing = isMissingWorkbenchSession(tab);
   const deletionInterrupted = tab.deletionInterrupted === true;
+  const titleRecoveryPending = tab.titleRecoveryPending === true;
   if (confirming) {
     return (
       <div className="tauri-session-delete" role="group" aria-label="确认删除对话">
@@ -212,15 +217,16 @@ function SessionRow({ tab, active, busy, switchingBlocked, onActivate, onDelete 
         className={`tauri-sidebar__session${missing ? " is-missing" : ""}`}
         disabled={busy || active || switchingBlocked || missing || deletionInterrupted}
         onClick={onActivate}
-        aria-label={deletionInterrupted ? `${displayTitle(tab.title)}（删除未完成）` : missing ? `${displayTitle(tab.title)}（文件缺失）` : undefined}
-        title={deletionInterrupted ? "上次删除被中断；点击右侧按钮并确认后继续删除。" : missing ? "会话文件缺失，无法打开。可删除这条失效记录。" : tab.workspaceRoot ? `${tab.sessionId}\n${tab.workspaceRoot}` : tab.sessionId}
+        aria-label={deletionInterrupted ? `${displayTitle(tab.title)}（删除未完成）` : missing ? `${displayTitle(tab.title)}（文件缺失）` : titleRecoveryPending ? `${displayTitle(tab.title)}（标题恢复待完成）` : undefined}
+        title={deletionInterrupted ? "上次删除被中断；点击右侧按钮并确认后继续删除。" : missing ? "会话文件缺失，无法打开。可删除这条失效记录。" : titleRecoveryPending ? "上次改名被中断；打开此会话会核对侧车并尝试完成或撤销改名。" : tab.workspaceRoot ? `${tab.sessionId}\n${tab.workspaceRoot}` : tab.sessionId}
       >
         <MessageSquare size={15} aria-hidden="true" />
         <span>{displayTitle(tab.title)}</span>
         {deletionInterrupted && <small className="tauri-session-recovery">删除未完成</small>}
+        {titleRecoveryPending && <small className="tauri-session-recovery">标题待恢复</small>}
         {missing && <small className="tauri-session-missing">文件缺失</small>}
       </button>
-      <button
+      {!hideDelete && <button
         type="button"
         className="tauri-session-row__delete"
         aria-label={`${deletionInterrupted ? "继续删除" : "删除对话"} ${displayTitle(tab.title)}`}
@@ -229,7 +235,7 @@ function SessionRow({ tab, active, busy, switchingBlocked, onActivate, onDelete 
         onClick={() => setConfirming(true)}
       >
         <Trash2 size={13} aria-hidden="true" />
-      </button>
+      </button>}
     </div>
   );
 }
@@ -281,6 +287,8 @@ export function TauriSessionPreview() {
   const [tabs, setTabs] = useState<WorkbenchSessionTab[]>([]);
   const [pendingSessionDeletes, setPendingSessionDeletes] = useState<TauriPendingSessionDelete[]>([]);
   const [pendingSessionDeleteError, setPendingSessionDeleteError] = useState("");
+  const [pendingSessionTitleRecoveries, setPendingSessionTitleRecoveries] = useState<TauriPendingSessionTitleRecovery[]>([]);
+  const [pendingSessionTitleRecoveryError, setPendingSessionTitleRecoveryError] = useState("");
   const [projectFolders, setProjectFolders] = useState<WorkbenchProjectFolder[]>([]);
   const [sessionPageCursor, setSessionPageCursor] = useState<{ position: number; id: string; snapshotId: string } | null>(null);
   const [sessionPageSource, setSessionPageSource] = useState<"identity" | "legacy" | "unavailable">("identity");
@@ -341,6 +349,7 @@ export function TauriSessionPreview() {
   const sessionPageRequestRef = useRef(false);
   const sessionPageRevisionRef = useRef(0);
   const pendingDeleteRequestRef = useRef(0);
+  const pendingTitleRecoveryRequestRef = useRef(0);
   const projectRootsRequestRef = useRef(0);
   const workspaceEpochRef = useRef(0);
   const workspaceListRequestRef = useRef(0);
@@ -500,6 +509,7 @@ export function TauriSessionPreview() {
         try { await tauriImportLegacySessionCatalog(); } catch { /* keep legacy catalog usable while the bridge is unavailable */ }
         if (!active) return;
         void reloadPendingSessionDeletes(() => active);
+        void reloadPendingSessionTitleRecoveries(() => active);
         const page = await tauriWorkbenchSessionPage();
         if (!active) return;
         setTabs(page.sessions);
@@ -877,6 +887,23 @@ export function TauriSessionPreview() {
     await reloadPendingSessionDeletes();
   }
 
+  async function reloadPendingSessionTitleRecoveries(isActive: () => boolean = () => true) {
+    const request = ++pendingTitleRecoveryRequestRef.current;
+    try {
+      const entries = await tauriPendingSessionTitleRecoveries();
+      if (!isActive() || request !== pendingTitleRecoveryRequestRef.current) return;
+      setPendingSessionTitleRecoveries(entries);
+      setPendingSessionTitleRecoveryError("");
+    } catch (cause) {
+      if (!isActive() || request !== pendingTitleRecoveryRequestRef.current) return;
+      setPendingSessionTitleRecoveryError(tauriMessageFrom(cause));
+    }
+  }
+
+  async function retryPendingSessionTitleRecoveryCheck() {
+    await reloadPendingSessionTitleRecoveries();
+  }
+
   async function retryWorkbenchSessionDirectory() {
     if (sessionPageRequestRef.current) return;
     sessionPageRequestRef.current = true;
@@ -1022,6 +1049,7 @@ export function TauriSessionPreview() {
         }
       }
       await rememberSession(next);
+      await reloadPendingSessionTitleRecoveries();
       setStreamRevision(previous => previous + 1);
       setStatus(await tauriBridgeStatus());
     } catch (cause) {
@@ -1117,6 +1145,7 @@ export function TauriSessionPreview() {
         : userMessage;
     } finally {
       await reloadPendingSessionDeletes();
+      await reloadPendingSessionTitleRecoveries();
       // The bridge owns one controller. Deleting an inactive row temporarily
       // switches that controller, so restore the user's open session even if
       // deletion or catalog cleanup fails.
@@ -1676,6 +1705,23 @@ export function TauriSessionPreview() {
         {pendingSessionDeleteError && <div className="tauri-pending-deletes__error" role="alert">
           <span>读取待完成删除失败：{pendingSessionDeleteError}</span>
           <button type="button" onClick={() => void retryPendingSessionDeleteCheck()} disabled={busy}>重新检查</button>
+        </div>}
+        {pendingSessionTitleRecoveries.length > 0 && <>
+          <div className="tauri-sidebar__section-title">待恢复标题</div>
+          <section className="tauri-pending-deletes" aria-label="待恢复标题">
+            <p className="tauri-sidebar__page-note">打开会话以核对上次改名；当前会话需先切换。文件缺失时可删除失效记录。</p>
+            {pendingSessionTitleRecoveries.map(item => {
+              const tab: WorkbenchSessionTab = {
+                sessionId: item.id, title: item.title, workspaceRoot: item.workspaceRoot,
+                state: item.state, missing: item.state === "missing", titleRecoveryPending: true,
+              };
+              return <SessionRow key={item.id} tab={tab} active={session?.id === item.id} busy={busy} switchingBlocked={switchingBlocked} hideDelete={item.state !== "missing"} onActivate={() => void activateSession(item.id, item.workspaceRoot)} onDelete={() => void deleteSession(tab)} />;
+            })}
+          </section>
+        </>}
+        {pendingSessionTitleRecoveryError && <div className="tauri-pending-deletes__error" role="alert">
+          <span>读取待恢复标题失败：{pendingSessionTitleRecoveryError}</span>
+          <button type="button" onClick={() => void retryPendingSessionTitleRecoveryCheck()} disabled={busy}>重新检查</button>
         </div>}
         <div className="tauri-sidebar__section-title">项目</div>
         <nav className="tauri-sidebar__sessions">
