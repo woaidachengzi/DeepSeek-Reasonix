@@ -88,7 +88,7 @@ defer releaseProfile()
 
 | 编号 | 问题 | 核对证据 |
 | --- | --- | --- |
-| **1.1** | **没有启动期自动续做（有意保留），直接可发现性已补足** | 启动时仍不无提示地自动删除；新增 path-free `GET /v1/sessions/deletion-recovery`、受 health capability 保护的 Rust 命令和侧栏“待完成删除”区域。用户可显式确认后重试；不在普通列表开放或恢复会话。 |
+| **1.1** | **没有启动期自动续做（有意保留），直接可发现性已补足** | 启动时仍不无提示地自动删除；当前 Tauri host 使用 path-free 分页 `GET /v1/sessions/deletion-recovery/page`、受 health capability 保护的分页 command 和侧栏“待完成删除”区域。用户可显式确认后重试；不在普通列表开放或恢复会话。旧无参数 `GET /v1/sessions/deletion-recovery` 仅由 sidecar 保留给旧 host，当前 Tauri invoke 不再暴露该无分页入口。 |
 | **1.3** | **shadow 完全不可用时的 legacy 回退仍不提供分页** | legacy JSON 合同最多 50 条。shadow 可读但有结构/物理差异时，当前走 `identity_unverified` 并分页完整身份目录，旧目录独有项单独显示，所有会话操作禁用；shadow 不可用或 page 与同轮 shadow snapshot 不匹配时，才回退至 `next_cursor: None` 的最多 50 条列表。侧栏说明该上限与审计数量的区别。 |
 | **1.4** | **每页仍重复全量影子审计（后续已进一步缓解）** | 首屏仍执行 fresh `compare_session_catalog_with_directory` 与物理 inventory；同一有效快照下的续页校验 SQLite revision 并读当前页，不重做物理盘点。前端启动、会话变更刷新复用页面携带的 shadow 报告，不再紧接着重复请求 inventory。显式诊断重查仍执行 fresh audit；外部文件系统变化要靠首屏重查发现。 |
 
