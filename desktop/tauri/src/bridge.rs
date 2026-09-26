@@ -135,15 +135,8 @@ pub struct PendingSessionDeletePage {
 #[serde(rename_all = "camelCase")]
 struct PendingSessionDeletesPageResponse {
     protocol_version: u8,
-    sessions: Vec<PendingSessionDeletePageEntry>,
+    sessions: Vec<PendingSessionDelete>,
     next_cursor: Option<PendingSessionDeleteCursor>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PendingSessionDeletePageEntry {
-    id: String,
-    title: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -2214,14 +2207,7 @@ fn validate_pending_session_deletes_page(
         }
     }
     Ok(PendingSessionDeletePage {
-        sessions: envelope
-            .sessions
-            .into_iter()
-            .map(|entry| PendingSessionDelete {
-                id: entry.id,
-                title: entry.title,
-            })
-            .collect(),
+        sessions: envelope.sessions,
         next_cursor: envelope.next_cursor,
     })
 }
@@ -2391,11 +2377,10 @@ mod tests {
         validate_session_directory_page, validate_session_directory_snapshot, verify_bridge_health,
         verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSupervisor,
         EventStreamError, OpenSessionRequest, PendingSessionDelete,
-        PendingSessionDeletesPageResponse,
-        PendingSessionTitleRecoveriesResponse, PendingSessionTitleRecovery, RenameSessionRequest,
-        SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
-        SessionDirectoryPage, SessionInventoryResponse, SessionRequest, SubmitRequest,
-        PROTOCOL_VERSION,
+        PendingSessionDeletesPageResponse, PendingSessionTitleRecoveriesResponse,
+        PendingSessionTitleRecovery, RenameSessionRequest, SessionCatalogMetadata,
+        SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage,
+        SessionInventoryResponse, SessionRequest, SubmitRequest, PROTOCOL_VERSION,
     };
     use crate::{session_shadow, workbench_catalog::WorkbenchSession};
     use serde_json::json;
@@ -2598,15 +2583,17 @@ mod tests {
             })
             .is_err()
         );
-        assert!(validate_pending_session_deletes_page(PendingSessionDeletesPageResponse {
-            protocol_version: PROTOCOL_VERSION,
-            sessions: vec![PendingSessionDelete {
-                id: "first".into(),
-                title: "First".into(),
-            }],
-            next_cursor: Some(super::PendingSessionDeleteCursor { id: "later".into() }),
-        })
-        .is_err());
+        assert!(
+            validate_pending_session_deletes_page(PendingSessionDeletesPageResponse {
+                protocol_version: PROTOCOL_VERSION,
+                sessions: vec![PendingSessionDelete {
+                    id: "first".into(),
+                    title: "First".into(),
+                }],
+                next_cursor: Some(super::PendingSessionDeleteCursor { id: "later".into() }),
+            })
+            .is_err()
+        );
     }
 
     #[test]

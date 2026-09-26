@@ -473,7 +473,7 @@
 ## 43. 待完成删除恢复分页没有整表 10,000 条拒绝上限（2026-09-26）
 
 - 当前 Tauri host 读取 `/v1/sessions/deletion-recovery/page`，Store 对 `state='deleting'` 按 ID keyset 查询，每页最多 200 条并以 `limit+1` 决定是否签发 cursor；不先读取或计数整份 backlog，也没有 10,000 条整表拒绝。Rust 校验页上限、ID 严格递增及 cursor 等于本页最后 ID。
-- 无参数兼容路由 `/v1/sessions/deletion-recovery` 仍最多 10,000 条，这是旧 host 路径；当前分页命令不调用它。前端读取页失败时保留已有 rows 并显示错误/重查入口，成功重查会从第一页替换数据，续页会按 ID 去重追加。未发现恢复 backlog 超过 legacy cap 会阻断新 host 首批可见性的路径。
+- 无参数兼容路由 `/v1/sessions/deletion-recovery` 仍最多 10,000 条，sidecar 保留它给旧 host 使用；当前 Tauri host 不再注册/暴露对应的无分页 invoke，只提供 paged command。前端读取页失败时保留已有 rows 并显示错误/重查入口，成功重查会从第一页替换数据，续页会按 ID 去重追加。未发现恢复 backlog 超过 legacy cap 会阻断新 host 首批可见性的路径。
 - 该结论限于当前 host/bridge API 合同；旧发布 host 的 capability 与运行兼容仍未认证。
 
 ## 44. 项目文件夹重试会重新读取启动时不可用的本地清单（2026-09-26）

@@ -115,11 +115,6 @@ export function tauriWorkbenchSessionPage(cursor, limit = 200) {
   return Promise.resolve({ sessions, nextCursor: null, total: sessions.length, source: "identity" });
 }
 
-export function tauriPendingSessionDeletes() {
-  record("bridge_pending_session_deletes");
-  return Promise.resolve((globalThis.__pendingSessionDeletes ?? []).slice());
-}
-
 export function tauriPendingSessionDeletesPage(cursor, limit = 200) {
   record("bridge_pending_session_deletes_page", { cursor, limit });
   return Promise.resolve({ sessions: (globalThis.__pendingSessionDeletes ?? []).slice(), nextCursor: null });

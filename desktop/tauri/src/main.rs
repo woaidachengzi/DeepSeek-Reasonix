@@ -70,12 +70,11 @@ use bridge::{
     BridgeStatus, BridgeSupervisor, BridgeWorkspaceChangeDetailResponse,
     BridgeWorkspaceChangesResponse, BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse,
     LegacySessionCatalogEntry, MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse,
-    MCPServerView, OpenSessionRequest, PendingSessionDelete, PendingSessionDeleteCursor,
-    PendingSessionDeletePage, PendingSessionTitleRecovery, RenameSessionRequest,
-    ScanImportCandidate, ScanImportSelection, SessionCatalogMetadata, SessionDirectoryCursor,
-    SessionDirectoryEntry, SessionDirectoryPage, SessionFirstMessageTitle, SessionPreview,
-    SessionRequest, SubmitRequest, WorkspaceChangeDetailRequest, WorkspaceFileRequest,
-    WorkspaceRequest,
+    MCPServerView, OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
+    PendingSessionTitleRecovery, RenameSessionRequest, ScanImportCandidate, ScanImportSelection,
+    SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage,
+    SessionFirstMessageTitle, SessionPreview, SessionRequest, SubmitRequest,
+    WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
 };
 use data_profile::{
     PreviewProfile, PreviewProfileStatus, ProfileImportResult, ProjectFoldersImportResult,

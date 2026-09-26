@@ -551,4 +551,5 @@ defer releaseProfile()
 
 - 重新对照 Review §1.1–§1.4 与当前实现：待完成删除由独立 ID keyset 页面暴露并可显式重试；legacy 回退维持 50 条上限且侧栏说明无法从该回退继续翻页；常规续页 cache hit 复用首屏物理盘点、按 snapshot ID/total 和当前页结构字段校验；结构快照忽略 title-only 更新。未发现这四项在当前工作树回归。
 - 抽核 §2、§3 仍开放的源码边界：profile gate 仍不声称约束旧 Wails writer；离线 snapshot 源复读仍保留；identity path 唯一性仍枚举全部身份项以核实 symlink/hard-link 别名；旧 host 源码隔离构建不等同于已发布二进制认证。它们仍分别是保守正确性边界或外部未认证门禁，没有用源码推断替代认证。
+- 当前 host 原先还暴露了有 10,000 条上限的无分页 pending-delete invoke，虽然生产 UI 已只调用 page API。现已删除 Tauri command、Rust supervisor/client 方法与前端 wrapper，current invoke surface 只能按页读取；Go sidecar 旧 HTTP route 保留以服务旧 host 的历史合同。未分页 validator 对应测试和 invoke contract 已改为覆盖 page endpoint。
 - 当前非测试验证：`GOCACHE=/private/tmp/reasonix-tauri-go-build-cache go build ./...`、Tauri `cargo fmt --check && cargo check --locked`、前端 `npx tsc --noEmit -p tsconfig.json`、`git diff --check` 通过。未运行测试、未运行 host、未访问真实 profile；旧 Wails writer 停写和旧 Tauri host 发布二进制兼容仍未认证。
