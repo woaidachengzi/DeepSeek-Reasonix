@@ -429,6 +429,11 @@ func withinDirectory(root, path string) bool {
 		!strings.HasPrefix(rel, ".."+string(filepath.Separator))))
 }
 
+// copyVerifiedSnapshotFile copies and hashes the opened source while checking
+// that its file identity, size, and bytes stayed stable. It returns the
+// expected destination digest but does not reread the destination: snapshot
+// creation verifies it in the final manifest pass, while staging verifies
+// each destination member before returning success.
 func copyVerifiedSnapshotFile(ctx context.Context, source, destination string) (SnapshotFile, error) {
 	before, err := os.Lstat(source)
 	if err != nil || !before.Mode().IsRegular() {

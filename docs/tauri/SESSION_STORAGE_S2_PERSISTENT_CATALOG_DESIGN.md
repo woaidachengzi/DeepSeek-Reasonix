@@ -139,6 +139,7 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 - 用户明确选择导入后，只把旧桌面 `desktop-projects.json` 中的根路径和显示名称复制到 Preview；不自动读取稳定配置目录，也不复制 topic/session 元数据。bridge endpoint 只读 Preview 副本。
 - Preview 另有 host-owned `workbench-project-folders.json`，保存用户在 Tauri 中选择或打开过的工作区根目录；它只含 root/title，不接管 Wails 数据。
 - 会话根目录按身份库 `workspace_root` 分组（`sessionidentity` 已有该列）。Tauri 合并两个 Preview 文件夹清单与分页会话，因此尚无会话或最近会话已删除的文件夹仍可显示。
+- 会话侧栏按当前已加载的全局会话页构造分组；有后续 cursor 或使用最多 50 条的 legacy fallback 时，组内数量都只表示当前可见数据。某组还没有已加载的可打开会话时，不把它当作空组：有 cursor 时提示继续加载；legacy fallback 时提示先重新检查目录；两种情况下都暂时禁用组选择，组内新建入口仍可用。只有实时身份分页完成后，确认空的已保存项目才按空项目语义选择为新对话默认工作区。
 - Tauri 不写 Wails 持有的项目文件；旧写者的停写确认仍是切换写入行为前的独立门禁。
 - 磁盘核对结果（`Inventory` 的分类）只决定文件夹可用状态，不改变文件夹身份或隐藏其下的会话。
 - 无工作区的会话：作为"未指定项目"的平铺行显示，**不伪造项目实体**（第 1 项已定的语义）。

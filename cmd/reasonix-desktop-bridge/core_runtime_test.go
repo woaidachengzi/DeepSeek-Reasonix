@@ -14,6 +14,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/boot"
 	appconfig "reasonix/internal/config"
+	"reasonix/internal/control"
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/desktopbridge/sessionpath"
 	"reasonix/internal/event"
@@ -23,6 +24,74 @@ import (
 	"reasonix/internal/sessionidentity"
 	sessionstore "reasonix/internal/store"
 )
+
+func TestShouldSnapshotSubmissionFollowsControllerRouteClassification(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	controller, err := boot.Build(context.Background(), boot.Options{WorkspaceRoot: t.TempDir(), Sink: event.Discard})
+	if err != nil {
+		t.Fatalf("build controller: %v", err)
+	}
+	t.Cleanup(controller.Close)
+
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{input: "explain this", want: true},
+		{input: "/mcp__filesystem.read_file", want: true},
+		{input: "/custom-command", want: true},
+		{input: "/clear", want: false},
+		{input: "!custom-command", want: true},
+		{input: "# save this note", want: false},
+		{input: "/remember save this note", want: false},
+		{input: "/model", want: false},
+		{input: "  \n  ", want: false},
+	}
+	for _, test := range tests {
+		t.Run(test.input, func(t *testing.T) {
+			if got := shouldSnapshotSubmission(controller, test.input); got != test.want {
+				t.Fatalf("shouldSnapshotSubmission(%q) = %v, want %v", test.input, got, test.want)
+			}
+		})
+	}
+}
+
+func TestSnapshotActivityFailureKeepsPendingForThrottledRetry(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	controller, err := boot.Build(context.Background(), boot.Options{WorkspaceRoot: t.TempDir(), Sink: event.Discard})
+	if err != nil {
+		t.Fatalf("build controller: %v", err)
+	}
+	t.Cleanup(controller.Close)
+
+	attempts := 0
+	runtime := &controllerRuntime{
+		controller: controller,
+		snapshotActivity: func() error {
+			attempts++
+			if attempts == 1 {
+				return errors.New("injected snapshot failure")
+			}
+			return nil
+		},
+	}
+	runtime.markSnapshotPending()
+
+	runtime.snapshotIfSettled(control.RuntimeStatus{})
+	if attempts != 1 || !runtime.snapshotPending.Load() {
+		t.Fatalf("after failed snapshot: attempts=%d pending=%v", attempts, runtime.snapshotPending.Load())
+	}
+	runtime.snapshotIfSettled(control.RuntimeStatus{})
+	if attempts != 1 {
+		t.Fatalf("retry was not throttled: attempts=%d", attempts)
+	}
+
+	runtime.snapshotRetryAt.Store(0)
+	runtime.snapshotIfSettled(control.RuntimeStatus{})
+	if attempts != 2 || runtime.snapshotPending.Load() {
+		t.Fatalf("after successful retry: attempts=%d pending=%v", attempts, runtime.snapshotPending.Load())
+	}
+}
 
 // The bridge and the identity importer must not derive transcript paths
 // separately: that drift is what the S0 fix removes. The importer side of this

@@ -40,7 +40,7 @@ func TestProjectFoldersReadsSanitizedSnapshotWithoutWriting(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("REASONIX_HOME", home)
 	path := filepath.Join(home, legacyProjectFoldersFile)
-	contents := []byte(`{"projects":[{"root":" /work/alpha ","title":" Alpha "},{"root":"/work/alpha","title":"Duplicate"},{"root":"","title":"Invalid"},{"root":"/work/beta"}]}`)
+	contents := []byte(`{"projects":[{"root":"/work/alpha ","title":" Alpha "},{"root":"/work/alpha","title":"Duplicate"},{"root":"","title":"Invalid"},{"root":"/work/beta"}]}`)
 	if err := os.WriteFile(path, contents, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,8 @@ func TestProjectFoldersReadsSanitizedSnapshotWithoutWriting(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 	want := []projectFolder{
-		{Root: "/work/alpha", Title: "Alpha"},
+		{Root: "/work/alpha ", Title: "Alpha"},
+		{Root: "/work/alpha", Title: "Duplicate"},
 		{Root: "/work/beta"},
 	}
 	if !reflect.DeepEqual(result.Projects, want) {

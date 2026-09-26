@@ -8,7 +8,7 @@
 > **时点说明**：上面的文件规模与下方 §0、§1–§6 是初始审查快照，不代表当前工作树状态。
 > 后续复核与修复记录见 §7 以后；截至 2026-09-26，标题漂移不再单独触发回退，安全可核验的
 > `missing` 行及未认领 transcript 差异可保留身份目录分页；缓存续页和启动/会话变更刷新会复用
-> 首屏 shadow 报告。可读 shadow 中的结构/物理差异现在显示全量身份分页与独立旧目录项，但标记为未核验只读；shadow 不可读时也会尝试通过身份分页只读展示，首屏身份页不可用时才回退到最多 50 条兼容目录，续页失败则不拼接来源。
+> 首屏 shadow 报告。可读 shadow 中的结构/物理差异现在显示全量身份分页与独立旧目录项，但标记为未核验只读；shadow 或旧兼容 catalog 不可读时也会尝试通过身份分页只读展示，首屏身份页不可用时才回退到最多 50 条兼容目录，续页失败则不拼接来源。§34 记录了 WAL checksum 校验后的 schema 检查快路径；当前 salt 下的损坏帧拒绝打开，旧 WAL 尾帧仍走隔离副本检查。§35 记录旧 JSON catalog 无法读取时身份目录仍可见但强制只读；§36 记录未核验身份页在刷新已加载目录时保留分页；§37 记录缓存续页 cursor 改用二分定位；§38 记录启动与其余只读目录来源下的会话操作门禁；§39 记录 fallback 和续页扫描成本；§40 记录路径唯一性扫描仍有 O(n) peer 枚举；§41 记录 offline review gate 与快照复核边界；§42 记录 cursor 尚有后续页时不把空项目组当作完整空组；§43 记录待完成删除恢复分页的容量边界；§44 记录启动时本地项目目录读取失败后的重试恢复；§45 记录 legacy fallback 下项目组仍视为历史未核验；§46 记录历史 host 源码与当前 sidecar 的隔离构建结果及认证边界。
 > 两轮读取覆盖：`path.go`、`store.go`、`delete.go`、`inventory.go`、`reviewed_import.go`、
 > `offline_snapshot.go`、`catalog.go`、`readonly.go`、`session_list.go`、`session_delete_recovery.go`、
 > `session_catalog_import.go`、`session_catalog_sync.go`、`project_folders.go`、`core_runtime.go`、
@@ -237,9 +237,9 @@
 
 | 原项 | 当前状态 | 当前证据与边界 |
 | --- | --- | --- |
-| **1.1 中断删除不可发现** | **可发现并可显式重试；当前 host 已支持有界分页** | bridge 在打开 listener 前持 profile gate 对已有 identity DB 执行可迁移 `Open`；`/v1/sessions/deletion-recovery/page` 使用 sidecar 生命周期内 integrity-checked 的只读 Store，按不可变 session ID 游标每页最多 200 条 `deleting` 身份。schema 6 为该续页查询维护仅含 `deleting` 行的 ID 部分索引；旧 host 兼容路由与 schema 5 只读检查仍可工作，但旧发布二进制兼容性仍未认证。重试完成只会移除对应 ID；按 ID 排序使 workbench 顺序变化和旧数据库 position 值都不会移动续页边界。Tauri 侧栏加载首批待删除项并可按需继续加载，失败显示错误和重查入口；重查会从第一页重新开始。前端用请求序号丢弃过期的重查/续页响应，并在请求期间禁止重复续页，避免旧页面覆盖较新的检查结果。恢复行由独立只读端点提供，显式重试即使普通身份目录当前为 `identity_unverified` 也不会被通用列表门禁挡住；若当前另一个会话正在生成/暂停，该项 DELETE 无需切换 controller，仍可直接重试。原 `/v1/sessions/deletion-recovery` 无参数路由保留给旧 host，仍有 10,000 项上限。能力 `session_delete_recovery_list_v1` 纳入 host 握手。普通会话列表按待删 ID 过滤，避免 JSON fallback 中的旧 catalog 行与恢复区重复展示。显式 DELETE 在无 live runtime 时校验 profile 内预期路径，再用读写 Store 重走 `BeginDelete → RemoveSessionArtifacts → FinishDelete`；只有 artifact sweep 成功后才提交 `deleted`，失败保留 `deleting` 供下次显式重试。清理将不存在的文件视为已清理，可重复执行。另：shadow 审计把 legacy catalog 中与身份库 `deleting` 状态相符的 ID，以及 transcript 已确认不存在的 `deleted` ID，作为已解释的生命周期差异，不让一个待完成删除迫使其余会话降级到 50 条 fallback；审计仍单独报告该计数，未知缺项仍阻止 clean。证据：`cmd/reasonix-desktop-bridge/main.go` 的启动顺序、`session_delete_recovery_list.go`、`session_delete_recovery.go`、`internal/sessionidentity/delete.go`、`internal/control/controller.go`、`desktop/frontend/src/tauri/TauriChatWorkspace.tsx`。 |
-| **1.2 标题变化打断分页** | **实现已修复；一条 host 测试断言仍陈旧，未执行测试** | 当前 `visibleSnapshotID` 仅覆盖 `id`、`relative_path`、`workspace_root`、`position`、`state`；`session_page_matches_shadow_snapshot` 也只比较结构字段，所以标题回填/改名本身不使游标失效。源码中的 `title_change_between_shadow_and_page_cannot_pass_the_structural_snapshot_id` 仍断言首屏应 legacy fallback、续页应报错，与当前结构快照合同相反；本轮按验证限制没有运行或改动测试。证据：`internal/sessionidentity/store.go` 的 `visibleSnapshotID`、`desktop/tauri/src/main.rs` 的分页匹配函数及该测试。 |
-| **1.3 影子差异时 legacy 上限与可见性** | **dirty shadow 或 shadow 不可读时优先身份只读分页；首屏身份页也不可用时仍最多 50 条** | clean/partial identity 继续可操作分页。workspace/order、物理状态或 inventory 有差异但 shadow 可读且 identity 页逐页匹配同一 snapshot 时，新增 `identity_unverified` 来源，分页展示全部已登记身份行；旧目录独有项放在独立只读区，标题/项目元数据冲突摘要可见；打开、删除、新建均禁用，不将冲突元数据当作已核验。shadow 不可读但 identity 页可用时，也以 `identity_unverified` 分页显示身份目录，不显示无法核验的旧目录独有项，不允许会话操作或项目切换；续页必须携带且匹配同一 snapshot ID 和 total。sidecar 离线时已核验缓存仍以 `cached` 只读标签展示。只有首屏身份页不可用才使用最多 50 条 legacy JSON；identity continuation 失败则报错并要求重新读取首屏，不把两种来源拼接。UI 区分 shadow 不可用与已知差异，并保留重查入口。 |
+| **1.1 中断删除不可发现** | **可发现并可显式重试；当前 host 已支持有界分页** | bridge 在打开 listener 前持 profile gate 对已有 identity DB 执行可迁移 `Open`；`/v1/sessions/deletion-recovery/page` 使用 sidecar 生命周期内 integrity-checked 的只读 Store，按不可变 session ID 游标每页最多 200 条 `deleting` 身份。schema 6 为该续页查询维护仅含 `deleting` 行的 ID 部分索引；旧 host 兼容路由与 schema 5 只读检查仍可工作，但旧发布二进制兼容性仍未认证。重试完成只会移除对应 ID；按 ID 排序使 workbench 顺序变化和旧数据库 position 值都不会移动续页边界。Tauri 侧栏加载首批待删除项并可按需继续加载，失败显示错误和重查入口；重查会从第一页重新开始。前端用请求序号丢弃过期的重查/续页响应，并在请求期间禁止重复续页，避免旧页面覆盖较新的检查结果。恢复行由独立只读端点提供，显式重试不会被普通目录的 `identity_unverified` 或 `cached` 来源门禁挡住；即使另一个会话正在生成/暂停，该项 DELETE 无需切换 controller，仍可直接重试。原 `/v1/sessions/deletion-recovery` 无参数路由保留给旧 host，仍有 10,000 项上限。能力 `session_delete_recovery_list_v1` 纳入 host 握手。普通会话列表按待删 ID 过滤，避免 JSON fallback 中的旧 catalog 行与恢复区重复展示。显式 DELETE 在无 live runtime 时校验 profile 内预期路径，再用读写 Store 重走 `BeginDelete → RemoveSessionArtifacts → FinishDelete`；只有 artifact sweep 成功后才提交 `deleted`，失败保留 `deleting` 供下次显式重试。清理将不存在的文件视为已清理，可重复执行。另：shadow 审计把 legacy catalog 中与身份库 `deleting` 状态相符的 ID，以及 transcript 已确认不存在的 `deleted` ID，作为已解释的生命周期差异，不让一个待完成删除迫使其余会话降级到 50 条 fallback；审计仍单独报告该计数，未知缺项仍阻止 clean。证据：`cmd/reasonix-desktop-bridge/main.go` 的启动顺序、`session_delete_recovery_list.go`、`session_delete_recovery.go`、`internal/sessionidentity/delete.go`、`internal/control/controller.go`、`desktop/frontend/src/tauri/TauriChatWorkspace.tsx`。 |
+| **1.2 标题变化打断分页** | **实现和测试断言已修复；本轮未运行测试** | 当前 `visibleSnapshotID` 仅覆盖 `id`、`relative_path`、`workspace_root`、`position`、`state`；`session_page_matches_shadow_snapshot` 也只比较结构字段，所以标题回填/改名本身不使游标失效。当前 `title_change_between_shadow_and_page_preserves_structural_snapshot_id` 首屏和续页都断言 source 为 `identity`，并断言返回更新后的标题；首屏 `expect` 诊断文字也已改为说明标题变化保留结构分页。本轮只静态核对，未运行或改动测试。证据：`internal/sessionidentity/store.go` 的 `visibleSnapshotID`、`desktop/tauri/src/main.rs` 的分页匹配函数及该测试。 |
+| **1.3 影子差异时 legacy 上限与可见性** | **dirty shadow、shadow 不可读或旧 catalog 不可读时优先身份只读分页；首屏身份页也不可用时仍最多 50 条** | clean/partial identity 继续可操作分页。workspace/order、物理状态或 inventory 有差异但 shadow 可读且 identity 页逐页匹配同一 snapshot 时，新增 `identity_unverified` 来源，分页展示全部已登记身份行；旧目录独有项放在独立只读区，标题/项目元数据冲突摘要可见；打开、重命名、删除、新建均禁用，不将冲突元数据当作已核验。shadow 不可读但 identity 页可用时，也以 `identity_unverified` 分页显示身份目录，不显示无法核验的旧目录独有项，不允许会话操作或项目切换；旧 JSON catalog 解析/读取失败时同样展示身份页，并附不可读提示、强制只读。续页必须携带且匹配同一 snapshot ID 和 total。sidecar 离线时已核验缓存仍以 `cached` 只读标签展示。只有首屏身份页不可用才使用最多 50 条 legacy JSON；identity continuation 失败则报错并要求重新读取首屏，不把两种来源拼接。UI 区分 shadow、catalog 不可用与已知差异，并保留重查入口。 |
 | **1.4 每页全量 shadow 扫描** | **clean 与未核验 identity 续页都复用首屏物理盘点；新 schema 使用 DB generation/revision** | 首屏通过完整 shadow 审计后，host 缓存已审计的物理 inventory 与完整身份目录。clean/partial 页逐页验证 ID、workspace 和生命周期；结构/物理差异的 `identity_unverified` 页则逐页与缓存 shadow snapshot 对照，均不在每页重复全量 inventory。schema 6 用 SQLite trigger 对身份结构变更递增 revision；首次分页读取同事务里的 generation/revision 并统计 total，游标携带 total，续页在同一读事务中校验 revision 后只读当前页。随机 generation 与 revision、workspace filter 一起参与 snapshot ID，避免数据库替换后 revision 数值碰巧相同而复用旧游标；完整 shadow snapshot 和分页接口共用该 ID。schema 5、revision 表/行或任一 trigger 不可用时仍使用覆盖索引上的完整结构哈希和计数。分页 handler 复用 integrity-checked 的只读 Store；每次缓存命中仍复查 profile containment、SQLite sidecar 类型和主数据库文件 identity。未做性能基准；外部文件系统变化需用户显式重新检查。旧 Wails writer 停写及旧 Tauri host 发布二进制兼容仍未认证。 |
 | **2.3 `Accepted` / `Synced` 计数语义** | **删除生命周期导致的 `Synced` 假失败已修正；匹配的旧 tombstone 不再阻断 legacy import** | `ImportLegacyCatalog` 保留已存在身份 metadata、保留缺失 transcript 行，因此 `Accepted = len(candidates)` 是被接纳的输入数，而非新增行数；对 ID/path 匹配的 deleting/deleted 行，legacy migration 现在保留 terminal identity 并继续处理其余输入，路径冲突仍失败。`SyncWorkbenchOrder` 把匹配的旧 host tombstone 计为已识别并返回给 host 完整性门禁，但仍将其从可见顺序及元数据更新中排除；未知 ID 仍不计入并会被 host 拒绝。证据：`internal/sessionidentity/store.go` 的 `preserveExisting` import 分支、`session_catalog_import.go`、`desktop/tauri/src/bridge.rs` 的 `import_legacy_session_catalog`、`internal/sessionidentity/catalog.go` 的 `SyncWorkbenchOrder`、`desktop/tauri/src/main.rs` 的 `require_complete_workbench_sync`。 |
 | **3.1 JSON 解析失败无协议响应** | **已修复** | 当前 catalog import/sync handler 对 `decodeJSONBody` 错误统一写 `400 invalid_request` 协议错误体，不再直接返回空响应。证据：`cmd/reasonix-desktop-bridge/session_catalog_import.go`、`cmd/reasonix-desktop-bridge/session_catalog_sync.go`。 |
@@ -253,11 +253,11 @@
 
 | 原项 | 当前结论 | 证据/边界 |
 | --- | --- | --- |
-| **2.1 写入唯一性检查 O(n)** | **仍存在，已去掉每个 peer 重复规范化/解析同一 profile root 的成本** | `ensureTranscriptPathAvailable` 仍逐条解析现有身份，以发现 symlink/hard-link 别名；扫描当前不按 lifecycle state 过滤，missing/deleting/deleted 行仍保留其 transcript 路径身份，不能假定可被另一 ID 重用。当前调用方把经验证的候选 resolved path 传入；peer 扫描现在每次唯一性检查只规范化 root 一次，并在有 peer 时只 `EvalSymlinks(root)` 一次，再对每个 peer 独立验证其最近存在父目录、最终路径 containment 和 file identity。并非每个写操作都扫：`Reserve` 对已存在且路径不变的 reserved 行直接返回，`MarkReady` 对 ready 行幂等返回；首次 ready、身份路径唯一性复核及删除 fence/finalize 仍需扫描。仅用 lexical UNIQUE 索引不能检测物理别名；剩余 O(n) peer 检查需要可验证的文件身份索引及失效规则才能安全减少。 |
-| **2.2 WAL 打开时整库复制** | **常见路径已优化，保守 fallback 保留；ready 标记重试不再重复开库** | `validateExistingIdentityDatabase` 只在 WAL 布局完整、帧大小匹配且没有第 1 页帧时跳过拷贝校验；出现 schema 页帧或任何不确定布局仍将 DB/WAL/journal 复制到临时目录读取 `user_version`。生产 sidecar 的只读列表/清单查询通过 `readIdentityStore` 复用 integrity-checked Store，每次使用前仍调用 `ValidateReadOnlyPath` 复核位置与文件 identity，sidecar 退出时关闭；写入路由仍按操作新开 Store。`bridgeLifecycleSink` 首次成功打开 Store 后复用它重试 `MarkReady`，避免 transcript 落盘前的每个事件重复执行 Open/WAL/schema 预检；runtime 关闭时释放 Store。异常与不确定 WAL 路径仍保留复制校验，不能从静态检查推断可删除。 |
+| **2.1 写入唯一性检查 O(n)** | **新建缺失候选减少同目录 peer 路径解析；全量 peer 枚举与一次 Lstat 仍在** | `ensureTranscriptPathAvailable` 仍枚举所有 identity 行，因此 SQL/字符串比较仍为 O(n)；候选缺失且 lexical parent 在 shortcut 开始/peer 枚举结束时都解析到 caller 已验证的 parent，同父目录 peer 仍各做一次 `Lstat`，但 absent/regular peer 不再逐项做 symlink/path resolve 和后续 file stat。若 peer 是 symlink 或非普通项、候选已存在，或 peer 在不同 lexical parent，则继续完整解析和身份检查。shortcut peer 的路径仍保留供候选扫描期间被创建后的末尾 file identity 检查。该快路径主要覆盖 flat `sessions/tauri-<id>.jsonl` 的新预留；路径重定向与 missing/deleting/deleted 身份的保留语义仍完整核查。后续减少 identity 行遍历本身仍需要有可靠外部文件变化失效规则的身份索引。 |
+| **2.2 WAL 打开时整库复制** | **完整且校验通过、未触及第 1 页的 WAL 跳过整库复制；其余保留保守 fallback** | `walLeavesSchemaPageUntouched` 校验 WAL header checksum、magic 决定的 checksum 字节序、活跃帧滚动 checksum 与 salt、帧长度和文件扫描前后 identity/size/mtime；只在完整 WAL 没有 page-1 frame 时跳过复制。page-1 frame、旧 WAL 重用留下的 salt 边界、布局未知/不完整或文件变化仍复制 DB/WAL/journal 到临时目录读取 `user_version`；当前 salt 下的帧 checksum 损坏 fail closed，避免 SQLite 打开时回放或截断原始 profile 文件。生产 sidecar 的只读列表/清单查询通过 `readIdentityStore` 复用 integrity-checked Store，每次使用前仍调用 `ValidateReadOnlyPath` 复核位置与文件 identity，sidecar 退出时关闭；写入路由仍按操作新开 Store。`bridgeLifecycleSink` 首次成功打开 Store 后复用它重试 `MarkReady`，避免 transcript 落盘前的每个事件重复执行 Open/WAL/schema 预检；runtime 关闭时释放 Store。此路径未做并发旧 writer 认证。 |
 | **2.3 `Accepted` / `Synced` 计数与实际处理不符** | **当前计数语义一致；匹配的 terminal legacy 行被无副作用接纳** | `ImportLegacyCatalog` 使用 `preserveMissing=true`，缺失 transcript 会登记为 `missing`，已存在身份会逐项校验后保留，因此成功响应中的 `accepted=len(candidates)` 表示请求条目全部处理而非新增行数。对 ID/path 匹配的 `deleting/deleted` 行，legacy migration 保留 terminal identity 并继续处理其余 catalog 项；路径冲突仍报错。顺序同步只对身份 ID 与 transcript path 均匹配的 host 条目计入 `synced`；直接同步遇到匹配 tombstone 也计数，但不会把 tombstone 放回可见顺序。缺少 identity 的条目不计数，host 要求 `synced == sessions.len()`，否则报告同步不完整。 |
 | **2.4 工作区路径过滤大小写不一致** | **当前列表路径未触发；未使用的 Tauri 过滤入口已移除** | Preview 请求全局分页后在前端分组，没有以 workspace root 调用分页过滤；本轮移除了未使用的 `bridge_session_directory_page` Tauri command，避免暴露有大小写语义差异的旁路。bridge 内部按 workspace 查询仍是精确匹配；若未来重新暴露项目过滤，需先统一 Windows 根路径大小写/分隔符语义。 |
-| **2.5 离线快照重复读取** | **仍存在，数据一致性校验仍在** | `copyVerifiedSnapshotFile` 对源数据流式哈希后还会重新哈希源文件；快照收尾再验证目标副本和 manifest。创建快照的合同要求先停写所有 profile writer，而旧 Wails writer 停写仍未认证，因此不据此删掉验证步骤。 |
+| **2.5 离线快照重复读取** | **源稳定性复读仍保留；staging 目标校验已补齐** | `copyVerifiedSnapshotFile` 对源数据流式哈希后还会重新哈希源文件；创建快照在收尾验证目标副本和 manifest。`StageOfflineSnapshot` 现对每个落盘目标重新读取并核对 manifest 大小/SHA-256，同时核验打开前后文件 identity，避免只凭源流摘要就报告恢复副本可用。创建快照的合同要求先停写所有 profile writer，而旧 Wails writer 停写仍未认证，因此源复读暂不删除。 |
 | **2.6 ApplyImportReview 锁只在注释** | **新 profilegate 门禁已由函数获取；旧 writer 外部门禁仍未认证** | `ApplyImportReview` 当前在重新审查与应用前调用 `profilegate.TryAcquire(s.profileRoot)` 并 `defer` 释放。该 gate 不能约束不遵守新锁协议的旧 writer。 |
 | **2.7 同步/导入 50 条限制** | **仍是有意的 bounded recent-session 合同；不是身份分页上限** | Tauri JSON catalog、legacy import 与 workbench-order sync 仍限制 50 条；身份目录分页上限为 10,000。超过 identity snapshot 上限时首屏直接报错，不签发不可续页游标；Rust 同时拒绝超限响应，host 随后可走最多 50 条的 legacy fallback 并明确标注上限。shadow clean 时项目树可以继续从身份目录分页，见 §7 的 1.3。 |
 | **2.8 删除恢复使用读写 Open** | **写恢复仍需可迁移 Open；只读恢复清单复用只读连接** | DELETE 恢复必须提交 `deleting/deleted` 状态，所以使用可迁移 schema 的 `Open`；只读 GET recovery 清单走 sidecar 生命周期内的只读 Store。旧 Tauri host 二进制能否通过新 capability 握手仍未认证。 |
@@ -271,14 +271,14 @@
 
 - 当前分组先按保存的项目文件夹建组，再将身份目录页中的会话归入对应路径；没有会话的保存项目仍显示为空组。路径 key 保留 `/` 文件系统根，不裁掉路径内容首尾的空格；Windows key 统一分隔符、区分盘符根 `C:\` 与盘符相对路径 `C:` 并折叠大小写，其他平台保留大小写以兼容大小写敏感卷。稳定版目录导入、保存目录、身份导入与影子比较、工作区可用性探测、MCP 项目范围及新建会话参数都保留原始路径字符串；只在判断空值时将纯空白视为空。
 - Tauri 项目文件夹 catalog 只接受绝对路径，持久化时去掉尾部分隔符（Windows 盘符根保留 `\\`），通过相同 project key 合并重复根；非分隔符空格保留。稳定版项目清单导入、Go sidecar 项目读取及 Rust bridge 响应校验均拒绝相对路径；稳定版导入、Go sidecar 与 Rust bridge 解码去重也复用平台 project key，避免尾分隔符/Windows 大小写别名成为重复组。Go 与 bridge 都保留 sidecar 首个根及其顺序，本地保存标题仍覆盖对应根标题。标题改名通过 key 找回原根并原子替换 JSON catalog；损坏 catalog 会保持原文件且禁止写入。保存目录与稳定版目录合并时，稳定版目录顺序优先。
-- 点击有可恢复会话的项目组会打开组内最新的非缺失会话；点击空项目组只设置新会话默认工作区，不切换当前对话。工作区按钮显式标为“新对话默认工作区”，MCP 项目范围跟随所选默认工作区，输入框底部标为“当前对话工作区”。
+- 点击已加载到的有可恢复会话的项目组会打开组内最新的非缺失会话；点击确认空的项目组只设置新会话默认工作区，不切换当前对话。尚有全局续页且项目组当前没有已加载会话时，不能据此断定组为空；当前实现提示继续加载并暂时禁用组选择，组内新建按钮仍可用。工作区按钮显式标为“新对话默认工作区”，MCP 项目范围跟随所选默认工作区，输入框底部标为“当前对话工作区”。
 - 项目根可用性通过分批只读探测刷新；不可用状态会标注并阻止在该根下新建，但不阻止打开已有会话。导入稳定版项目文件夹后，前端立即重读合并后的项目列表，根集合变化会触发新一轮可用性探测。2026-09-26 逐行补看 `workbench_catalog.rs`、`workbench_projects.rs` 与完整前端分页状态机，并修正了旧项目目录测试中与“保留路径空格”要求相冲突的 fixture；本轮未运行测试或访问真实 profile。
 
 ## 10. 前端分页状态机复核（2026-09-26）
 
 - 当前页状态由 `sessionPageRevisionRef` 防止旧续页响应覆盖新首屏；续页追加前按 ID 去重，目录变更/请求失败后重新读取受 shadow 保护的首屏，重启仍失败则清空页并显示错误。标题补全失败只影响标题，不丢弃已读页面。完整审计刷新已加载页数时逐页重新取身份目录，若页间数据源退回 legacy/cached，会采用新来源并提示目录发生变化；不把兼容 catalog 误标为 identity。
-- legacy 页面明确显示最多 50 条、审计数量不等于可分页数量，并提供重试导入与重新检查入口；title-only drift 和仅未认领文件差异已可从身份目录继续分页，其他可读冲突通过 `identity_unverified` 展示全量只读身份页和隔离的 legacy-only 项。shadow 不可读时，身份页可用也会以 `identity_unverified` 只读分页；首屏身份页不可用才回退到 50 条 legacy，续页失败则重新读首屏、不拼接来源。cached 页面说明可能过期且不能操作。待完成删除列表在读取期间显示 loading，失败可重查，重试状态会清理旧错误。
-- cached 快照的分页结构比较忽略标题、校验 ID 顺序和 workspace；离线 catalog 仅标题变化时继续使用上次 shadow 快照中的旧标题，仍显示 cached/可能过期标签并禁用会话操作。若缓存来自 dirty shadow，UI 同时保留“目录未核验”差异和隔离出的旧目录独有行，不把该缓存标为 clean。
+- legacy 页面明确显示最多 50 条、审计数量不等于可分页数量，并提供重试导入与重新检查入口；title-only drift 和仅未认领文件差异已可从身份目录继续分页，其他可读冲突通过 `identity_unverified` 展示全量只读身份页和隔离的 legacy-only 项。shadow 不可读时，身份页可用也会以 `identity_unverified` 只读分页；首屏身份页不可用才回退到 50 条 legacy，续页失败则重新读首屏、不拼接来源。cached 页面说明可能过期，普通会话操作禁用；独立待完成删除列表仍可显式重试。该列表在读取期间显示 loading，失败可重查，重试状态会清理旧错误。
+- cached 快照的分页结构比较忽略标题、校验 ID 顺序和 workspace；离线 catalog 仅标题变化时继续使用上次 shadow 快照中的旧标题，仍显示 cached/可能过期标签并禁用普通会话操作。独立待完成删除恢复列表保留显式重试。若缓存来自 dirty shadow，UI 同时保留“目录未核验”差异和隔离出的旧目录独有行，不把该缓存标为 clean。
 - 重命名先成功更新 bridge，再更新本地 workbench catalog；若 catalog 同步失败，UI 现在说明标题已保存、列表同步失败，并提示重新检查，避免显示“无法保存到最近对话”的错误上下文。
 - Tauri 运行时已增加独立的 scan-only 候选接口和审核弹窗；仅 `managedProfile` 的隔离 Preview profile 可调用，需逐项确认标题/项目及 transcript 指纹，`apply` 在 sidecar 持有 profile gate 时复核并事务登记。它不会扫描稳定版 profile，也不把旧 Wails writer 的兼容性视作已认证。额外的 `reasonix-session-import` 命令仍用于停写确认后的来源快照/恢复副本演练；该 CLI 不会合并或切换运行中的 Preview，详见 `OFFLINE_SCAN_SESSION_IMPORT.md`。身份页只有完整 shadow 可验证时可操作；可读但有结构/物理差异时现在走 `identity_unverified` 全量只读分页，并隔离显示仅在旧目录中的行。shadow 不可读时若 identity page 可用，也走未核验只读分页；首屏身份页不可用才用最多 50 条兼容回退。
 - 标题改名先写 bridge identity，再写 host workbench catalog；若跨存储同步失败，当前对话已更新并提示“标题已保存、列表同步失败”，让用户重新检查目录。此时 shadow 门禁仍报告差异；若差异仅为标题，分页来源会标记为 `partial_identity` 并采用身份目录标题。
@@ -292,7 +292,7 @@
 ## 12. 未认领 transcript 与已验证目录分页（2026-09-26）
 
 - 当前 shadow 比对将未认领 transcript 数与 catalog/身份元数据、物理状态和 inventory 错误分开。若 ID、workspace、顺序与物理 inventory 一致，title-only drift、被 inventory 确认的 missing identity rows 与未认领文件差异都允许 Tauri 返回 `partial_identity` 并继续分页已登记 identity rows；missing rows 标注为不可打开，未认领文件只有经过显式审核导入才会登记。若存在其他可读 shadow 差异，使用同轮核验的 `identity_unverified` 全量只读分页；shadow 不可用时也会尝试通过身份页只读分页，首屏身份页不可用才退回最多 50 条 legacy fallback。managed Preview 的审核弹窗把选择交给 bridge gate 内复核，稳定版 profile 不在该 Tauri 命令的 profile root 下；离线 CLI 快照/暂存仍提供独立恢复副本流程。
-- 续页缓存记录未认领计数；bridge 离线时显示为可能过期的 cached 快照并禁用会话操作。UI 在 partial source 下说明已显示范围与未导入数量。该切片减少“只有孤儿文件”导致的既有身份目录 50 条退化，不替代剩余旧历史的逐条审核导入。
+- 续页缓存记录未认领计数；bridge 离线时显示为可能过期的 cached 快照并禁用普通会话操作。独立 pending-delete 恢复入口仍可尝试显式重试。UI 在 partial source 下说明已显示范围与未导入数量。该切片减少“只有孤儿文件”导致的既有身份目录 50 条退化，不替代剩余旧历史的逐条审核导入。
 
 ## 13. 清理旧 Preview 路径术语（2026-09-26）
 
@@ -320,7 +320,7 @@
 
 ## 17. cached 续页不被标题漂移打断（2026-09-26）
 
-- 离线 cached 页面仍要求兼容目录 ID、顺序与 workspace 结构匹配，并用快照 ID 验证 cursor；只放宽 cached 页的 title 比较，继续使用最后一次核验的旧标题。cached 标签提示数据可能过期，且该来源禁用会话操作。
+- 离线 cached 页面仍要求兼容目录 ID、顺序与 workspace 结构匹配，并用快照 ID 验证 cursor；只放宽 cached 页的 title 比较，继续使用最后一次核验的旧标题。cached 标签提示数据可能过期，且该来源禁用普通会话操作；pending-delete 恢复仍可独立显式重试。
 - 这样避免仅 JSON 标题变化造成缓存页拒绝/无法加载下一页；实时路径仍要求身份结构、workspace 与生命周期匹配；标题是可变展示数据，独立差异会标记并使用身份目录标题。
 - 非测试验证：Tauri `cargo fmt --check && cargo check --locked`、前端 `npx tsc --noEmit -p tsconfig.json`、`git diff --check`。未运行测试或访问真实 profile。
 
@@ -409,3 +409,86 @@
 - §7 中的标题分页测试陈旧状态已修正：测试现在验证标题变化不会使结构快照失效。Rust 90 项测试通过。
 - 修正 dirty shadow 首屏提前回退旧目录的分支。结构差异下，匹配同轮 shadow 的身份页显示为 `identity_unverified`，旧目录独有项单列；续页仍要求快照匹配。新增对应首屏与续页断言。
 - 前端项目文件夹测试桩已同步 host 的 `{ folders, warning? }` 返回格式，相关前端用例和 TypeScript 类型检查通过。Go 身份库、SQLite DAG、bridge 和离线导入定向测试通过；全仓 `go test ./... -run '^$'` 编译通过。完整 Go 测试套件在当前沙箱因 `httptest` 无法监听本地端口而中断，未据此宣称全量测试通过。
+
+## 33. 缺失候选的同目录 peer 路径快路径（2026-09-26）
+
+- `Reserve` 在 transcript 尚不存在时，原先仍为同一个平面 session directory 中的每条身份逐一解析 peer 路径并检查文件。现在 `ensureTranscriptPathAvailable` 只有在候选 `Lstat` 为缺失、且重新解析后的父目录在 peer 枚举前后都匹配已验证候选路径时，才对 lexical 同父 peer 用一次 `Lstat` 区分 absent/regular 项与 symlink/非普通项；absent/regular peer 不再继续逐项解析父路径和做后续 file stat，期间 parent symlink 变化则 fail closed。
+- 所有 peer 仍从同一事务内枚举；不同父目录或候选已存在时保留完整解析与物理身份检查。shortcut peers 的 lexical path 保留到末尾候选 identity recheck，以发现扫描期间出现的 hard link。故这减少常见新预留的 syscall 数量，但没有消除 O(n) SQL/字符串遍历，也没有宣称跨旧 writer 的唯一性认证。
+- 非测试验证：`gofmt`、`GOCACHE=/private/tmp/reasonix-tauri-go-build-cache go build ./...`、`git diff --check` 通过；未运行测试或访问真实 profile。
+
+## 34. WAL checksum 校验后跳过常见 schema 检查整库复制（2026-09-26）
+
+- 之前的 fast path 只检查 WAL magic、格式版本、page size、帧长度和 page number；即使帧内容损坏，也可能把“没有 page-1 frame”当作安全依据。现在按 magic 指定的字节序验证 header checksum、逐帧滚动 checksum 和 salt，并在扫描前后复核 WAL 文件 identity、大小及修改时间；只有完整、未变更且未包含 page-1 frame 的 WAL 才跳过临时整库复制。
+- 当前 salt 下的 frame checksum 损坏 fail closed；salt mismatch 作为 WAL 重用/有效帧终止边界转入隔离副本 schema 检查。page-1 frame、未知/不完整布局与扫描期间文件变化也保留该 fallback。改动不证明旧 writer 停写，也不认证真实 profile 并发行为。工作树增加了 corruption-rejection 测试，但本轮遵守不运行测试的约束。
+- 官方 SQLite 文件格式说明：magic `0x377f0683` 使用大端 checksum 输入、`0x377f0682` 使用小端；checksum 存储值始终大端。[SQLite WAL 文件格式](https://sqlite.org/fileformat.html)。非测试验证：Go `go build ./...`、Tauri `cargo fmt --check && cargo check --locked`、前端 `npx tsc --noEmit -p tsconfig.json`、`git diff --check` 均通过；未访问真实 profile。
+
+## 35. 旧 JSON catalog 不可读时保留只读身份目录可见性（2026-09-26）
+
+- `workbench_session_page` 之前在读取 bounded legacy JSON catalog 时直接 `?` 返回；损坏、权限错误或 catalog lock 不可用时，即使 bridge 的 SQLite identity page 正常，侧栏仍整页失败。现在 catalog 读取失败时以空 legacy projection 仅尝试读取 identity page，来源强制为 `identity_unverified`，附明确 catalog warning，并禁用基于未核验来源的会话操作；不会把空 projection 当作 clean shadow，也不会显示旧目录独有行。
+- snapshot cache 在 catalog 的同一不可读状态下仍可按 identity cursor 续页；若 identity 首屏也不可用，则返回兼容空列表与不可读警告，不拼造页、不跨来源续页。catalog 若在本进程启动时损坏，修复后需重启 Preview 才能重新加载其状态。
+- 非测试验证：Go `go build ./...`、Tauri `cargo fmt --check && cargo check --locked`、前端 `npx tsc --noEmit -p tsconfig.json`、`git diff --check` 均通过；未运行测试或访问真实 profile。
+
+## 36. 未核验身份页的目录刷新保留已加载页数（2026-09-26）
+
+- `refreshCatalogAudit` 原先仅把 clean/partial identity 视为可续页来源；dirty shadow 的 `identity_unverified` 虽有有效 cursor，却被当作 fallback，在刷新目录时只保留首屏。现在刷新状态机将其识别为可分页身份来源，按此前已加载页数续读；每个续页仍经 bridge snapshot 与当前 shadow projection 校验，期间来源变化则重读首屏，不混合来源。
+- “可分页”只影响目录读取；未核验来源继续禁用打开、重命名、删除和新建。安全的 identity 操作来源判断未放宽。
+- 本轮非测试验证结果见 `CODEX_S2_FIX_VERIFICATION.md` §51；未运行测试或访问真实 profile。
+
+## 37. 离线身份快照续页使用有序 cursor 二分定位（2026-09-26）
+
+- `SessionShadowSnapshotCache::page` 在 bridge 离线时原用 `.iter().position()` 在线性遍历完整缓存身份目录来定位 `(position,id)` cursor。缓存来自按该 key 排序并经 bridge 校验的 session directory snapshot；现在用 `binary_search_by` 定位，cursor 查找由 O(n) 降为 O(log n)，页面仍只比较/复制最多 `limit` 行。缓存 cursor 统一要求 snapshot ID 与 total 都匹配，防止离线分支忽略过期/不一致的 total。
+- live page 与 shadow projection 已使用同一有序 key 的二分查找；这次让 offline cached continuation 的定位复杂度也与之相符，不改变 cursor identity 或只读语义。
+- 非测试验证结果见 `CODEX_S2_FIX_VERIFICATION.md` §52；未运行测试或访问真实 profile。
+
+## 38. 首次核验前及只读来源下拒绝会话目录写操作（2026-09-26）
+
+- 侧栏此前把初始 page source 设为 `identity`，而首次目录审计异步进行；在 shadow/catalog 结果尚未回来时，新建入口可能提前可用。`cached` 与 `unavailable` 的打开、标题修改和删除也部分依赖按钮 disabled，没有统一函数门禁。
+- 初始来源现为 `unavailable`；`unavailable`、`cached`、`identity_unverified` 统一视作只读来源。打开、重命名、删除、新建的 handler 都复查来源，相关按钮/项目切换同时禁用。独立 pending-delete recovery 的显式删除重试保留原例外，不需要切换 controller。
+- 侧栏的 pending-delete recovery 行不再因普通目录进入 `cached` 来源而禁用；该端点独立读取 `deleting` 身份，重试路径由 handler 单独校验并继续允许。普通目录仍保持只读。
+- 非测试验证结果见 `CODEX_S2_FIX_VERIFICATION.md` §53；未运行测试或访问真实 profile。
+
+## 39. fallback 上限提示与正常续页扫描成本复核（2026-09-26）
+
+- 复核 `workbench_session_page`：正常 cursor 命中当前进程 shadow cache 时，检查有界旧 catalog 的 ID/workspace/order 结构、cursor 的 snapshot ID/total，再请求当前身份页，并与缓存 projection 逐页比较；不会在每个续页重新获取完整物理 inventory。缓存缺失、结构改变、cursor 失配或 live page 不一致时才重新做完整 shadow audit；这类失配是重新确认状态的安全路径，不能仅为了省扫描而跳过。
+- 首屏身份目录超过 10,000 行时 Go 不签发页或 cursor，Rust host 也拒绝超限响应。首屏身份不可用时兼容 catalog 仍最多 50 行；侧栏明示该上限、仅审计计数不能翻页及重新检查入口。未发现 fallback 上限或提示与实现不一致。
+- 仍有的成本边界：旧 schema/缺失 revision 元数据会以完整结构哈希回退；shadow cache 仅存于进程内，重启后的首屏审计仍需全量 inventory；没有大目录性能基准。此轮源码核验不将这些路径描述为已消除，也未触碰真实 profile。
+
+## 40. transcript 唯一性扫描仍需枚举所有身份路径（2026-09-26）
+
+- 复核 `ensureTranscriptPathAvailable`：缺失候选在同一 lexical parent 的常见预留路径上，对 regular/absent peer 已跳过逐项 symlink resolution 和后续 stat；保留一次 `Lstat` 以发现 symlink/非普通项，保留 SQL identity 行枚举、lexical/case-fold 冲突判断和候选期间文件出现后的 SameFile 复核。候选存在、父目录不同或 peer 异常仍走完整路径解析与物理身份检查。
+- 剩余 O(n) peer enumeration 仍是当前身份路径能够别名到同一文件的验证依据。仅按 path 建 SQL 索引不能发现 symlink/hard-link；若缓存 filesystem identity，则外部文件替换/链接变化需要可靠的失效证据。当前没有这些证据，也没有旧 Wails writer 停写认证，故未放宽检查或宣称 O(n) 已解决。证据：`internal/sessionidentity/store.go` 的 `ensureTranscriptPathAvailable`；当前约束见 §2.1。
+
+## 41. Offline import review gate 与快照复读边界（2026-09-26）
+
+- `Store.ApplyImportReview` 在刷新审核计划、核对摘要和调用事务导入前自行获取 `profilegate.TryAcquire(s.profileRoot)`，并通过 `defer` 覆盖整个 apply 期间；拒绝已由 lock-aware bridge 持有的 profile。profilegate 本身明确只协调遵守该协议的进程。
+- `CreateOfflineSnapshot` 的接口合同要求调用方先停写所有 profile writer；每个源文件在复制后再次读取并比较摘要，manifest 发布后再验证整个 snapshot。`StageOfflineSnapshot` 也逐项读取并核验新目标。源复读是对复制期间不稳定内容的校验，不构成阻止写入的锁，也不能证明旧 Wails 已退出。未删去复读或把 gate 写成跨版本互斥；见 §2.5–§2.6。
+- 这是源码路径核对，不是 writer 生命周期或真实 profile 认证；旧 Wails 停写与旧 Tauri host 发布二进制兼容仍未认证。
+
+## 42. 分页未完成时不把未加载项目组当作空组（2026-09-26）
+
+- 项目树按当前加载的 `tabs` 分组，而身份目录按最近顺序全局分页。保存的项目文件夹若只含较早会话，首屏中会表现为 0 条；此前点击会按空文件夹语义只设置新会话默认工作区，可能误导用户以为该项目没有历史会话。
+- 现在若仍有全局 cursor 且某项目组尚无已加载的可打开会话（包括当前已加载行全部标记为缺失），组选择按钮显示“历史未加载”、提供说明并禁用；“在此项目新建对话”仍可用。分页未结束时另提示组计数仅统计已加载页。全部页读取完成后，真正无可恢复会话的保存项目恢复原有可选择默认工作区行为；已有已加载可用会话的组仍直接打开最近的可用会话。
+- 这只表示该项目组当前页中没有会话，不推断完整身份目录中该项目的总会话数；没有新增按 workspace 过滤的分页旁路，因此不改变路径大小写匹配合同。
+
+## 43. 待完成删除恢复分页没有整表 10,000 条拒绝上限（2026-09-26）
+
+- 当前 Tauri host 读取 `/v1/sessions/deletion-recovery/page`，Store 对 `state='deleting'` 按 ID keyset 查询，每页最多 200 条并以 `limit+1` 决定是否签发 cursor；不先读取或计数整份 backlog，也没有 10,000 条整表拒绝。Rust 校验页上限、ID 严格递增及 cursor 等于本页最后 ID。
+- 无参数兼容路由 `/v1/sessions/deletion-recovery` 仍最多 10,000 条，这是旧 host 路径；当前分页命令不调用它。前端读取页失败时保留已有 rows 并显示错误/重查入口，成功重查会从第一页替换数据，续页会按 ID 去重追加。未发现恢复 backlog 超过 legacy cap 会阻断新 host 首批可见性的路径。
+- 该结论限于当前 host/bridge API 合同；旧发布 host 的 capability 与运行兼容仍未认证。
+
+## 44. 项目文件夹重试会重新读取启动时不可用的本地清单（2026-09-26）
+
+- §28 已增加来源告警和“重新检查”入口，但 `WorkbenchProjectCatalog::at` 会把启动时的读取错误保存到 `load_error`；之前 `list()` 只重放缓存错误，导致用户修复损坏 JSON 或文件权限后，重试仍失败，必须重启 Preview。
+- `list()` 现在只在存在缓存读取错误时重新读取本地清单；成功则更新内存目录并清除错误，失败则更新最新错误并继续返回告警。正常已加载清单仍使用内存快照，文件写入与 catalog 锁合同不变。
+- 非测试验证：Tauri `cargo fmt --check`、`cargo check --locked`、前端 `npx tsc --noEmit -p tsconfig.json`、`git diff --check`。未运行测试或访问真实 profile；旧 Wails writer 停写及旧 Tauri host 发布二进制兼容仍未认证。
+
+## 45. Legacy fallback 下空项目组仍不可判定为空（2026-09-26）
+
+- §42 已覆盖全局身份 cursor 尚有后续页的场景；但 shadow 不可用或身份首屏不可读时，host 返回最多 50 条、`next_cursor=None` 的 `legacy` 回退页。此时前端只检查 cursor，保存文件夹中没有可见会话的组仍会被当成完整空组并可切换默认工作区，尽管 fallback 明确无法证明身份目录里没有更早会话。
+- 前端现把 `legacy` 来源也视为项目历史可能不完整。没有已加载可打开会话的组被禁用；cursor 模式提示“历史未加载/加载更多”，legacy 模式提示“目录未核验/重新检查”。组内新建入口和已有可打开会话的选择语义不变。
+- 非测试验证：前端 `npx tsc --noEmit -p tsconfig.json`、`git diff --check`。未运行测试或访问真实 profile；旧 Wails writer 停写及旧 Tauri host 发布二进制兼容仍未认证。
+
+## 46. 历史 host 源码使用当前 sidecar 的隔离构建（2026-09-26）
+
+- 按 `tools/tauri/verify-legacy-host.sh` 指定的 host 源码提交 `50c1b9bc6`，在 `/private/tmp` 导出源码，并放入从当前工作树构建的 Go sidecar 二进制；`cargo build --offline` 成功。候选 host 产物 SHA-256 为 `4290bea369739b5cb633203b391079bc105f726f89a27ef10cde79eb6e833238`。
+- 本轮只执行 Go build 与历史 host `cargo build`，没有运行 host、没有运行验证脚本里的 Cargo 测试，也没有访问任何真实或隔离 profile。源码构建不能证明已发布旧 host 二进制的 capability 握手、运行时协议或 profile 行为；旧 Tauri host 发布二进制兼容仍未认证，旧 Wails writer 停写也仍未认证。

@@ -16,7 +16,7 @@
 | 低（细节） | 7 | **1** | 0 | 5 | 1 |
 | **合计** | **19** | **4** | **2** | **11** | **2** |
 
-**下表和 §7.4 的分类是 2026-09-25 初始核对时点的历史快照；当前状态以 §8–§45 的后续复核及 `CODEX_S2_REVIEW.md` §7–§31 为准。** 尤其 1.4 后续新增了 schema 6 generation/revision 续页快路径，不再是“每页全量审计仍在”；缓存续页、启动诊断和新建/删除后的可见列表刷新会复用首屏 shadow 报告，减少重复 inventory。title-only drift、inventory 确认的 missing identity rows 或仅有未认领文件差异时，partial identity 来源会继续分页已验证的身份行；其他可读结构/物理冲突通过 `identity_unverified` 只读分页呈现。shadow 不可读时也会尝试分页显示未核验身份目录，只有首屏身份页不可用才退回最多 50 条 legacy fallback；identity continuation 出错会重新读取首屏，不拼接来源。managed Tauri Preview 已接入 scan-only 用户审核弹窗；稳定版 Wails profile 与旧 host 发布二进制仍未认证，见 Review §26–§27。项目文件夹清单读取失败现在会显示来源告警，见 Review §28。
+**下表和 §7.4 的分类是 2026-09-25 初始核对时点的历史快照；当前状态以 §8–§63 的后续复核及 `CODEX_S2_REVIEW.md` §7–§46 为准。** 尤其 1.4 后续新增了 schema 6 generation/revision 续页快路径，不再是“每页全量审计仍在”；缓存续页、启动诊断和新建/删除后的可见列表刷新会复用首屏 shadow 报告，减少重复 inventory。title-only drift、inventory 确认的 missing identity rows 或仅有未认领文件差异时，partial identity 来源会继续分页已验证的身份行；其他可读结构/物理冲突通过 `identity_unverified` 只读分页呈现。shadow 或旧兼容 catalog 不可读时也会尝试分页显示未核验身份目录，只有首屏身份页不可用才退回最多 50 条 legacy fallback；identity continuation 出错会重新读取首屏，不拼接来源。未核验身份页在刷新时会保留已加载页数，离线缓存续页按有序 cursor 二分定位，详见 §51–§52。首次目录核验前及 cached/unverified 来源下的会话操作现由 handler 与 UI 双重拒绝，详见 §53。项目目录文件启动读取失败后，侧栏重新检查会重新访问本地文件，详见 §60；没有 cursor 的 legacy fallback 项目组也会保持“历史未核验”，详见 §61。managed Tauri Preview 已接入 scan-only 用户审核弹窗；稳定版 Wails profile 与旧 host 发布二进制仍未认证，见 Review §26–§27。最近加入的 WAL checksum fast path 以拒绝当前 salt 下的损坏帧、隔离检查未知或旧帧尾为界，详见 §49。项目文件夹清单读取失败现在会显示来源告警并支持重新读取，见 Review §28、§44。Review §46 的历史 host 源码隔离构建仍只是编译证据，没有升级旧发布二进制的认证状态。
 
 **初始核对时已修的 4 条**：
 
@@ -247,7 +247,7 @@ defer releaseProfile()
 
 - legacy 回退下的“重新检查会话目录”现在重试有界、幂等的 legacy catalog 导入，然后重新读取受保护的首屏；导入失败且页面仍来自 legacy 时会显示错误。50 条 fallback 上限仍未解除。
 - 回退页现在附带最近一次审计读到的 identity 目录条数；只要审计数量与当前展示条数不同，侧栏就显示该数并说明它仅为审计数量，不代表兼容回退列表可分页。它不会让未通过 shadow 校验的身份记录进入分页或会话打开路径。
-- 完整 shadow 审计通过且目录有续页时，当前进程保留无 transcript 路径的已验证快照。shadow 请求不可用（无论 bridge 是否仍报告运行）时可从快照继续分页，数据源标为“上次已校验快照”；成功返回的 dirty 审计会清除此快照，首次不可用启动仍使用受限的 50 条 legacy 列表。缓存快照可能陈旧，cached 模式禁用打开、删除、新建，服务恢复后需重新检查。
+- 完整 shadow 审计通过且目录有续页时，当前进程保留无 transcript 路径的已验证快照。shadow 请求不可用（无论 bridge 是否仍报告运行）时可从快照继续分页，数据源标为“上次已校验快照”；成功返回的 dirty 审计会清除此快照，首次不可用启动仍使用受限的 50 条 legacy 列表。缓存快照可能陈旧，cached 模式禁用普通会话的打开、删除、新建；独立待完成删除列表仍可显式重试。服务恢复后需重新检查。
 - 该字段经 Tauri `cargo fmt --check && cargo check`、前端 `tsc --noEmit` 和 `git diff --check` 验证通过；本次增量未改 Go 源码，因此未重跑 Go 编译。未运行测试。
 - macOS/Windows 上仅大小写不同的路径冲突会解释保守别名策略；macOS 卷大小写行为可能不同。冲突策略未放宽。
 - 本轮仅做 `go build ./...`、Tauri `cargo fmt --check && cargo check`、前端 `tsc --noEmit` 与 `git diff --check`；未运行测试，未访问真实 profile。旧 writer 停写及旧 host 二进制兼容仍未认证。
@@ -255,7 +255,7 @@ defer releaseProfile()
 ## 10. bridge 离线时的进程内目录续页（2026-09-25）
 
 - 仅在 clean shadow 审计通过且目录超出首屏时，Tauri 保留当前进程内的 path-free 目录快照；sidecar 明确离线后可显示/翻页，来源标为 `cached`。
-- 快照可能过期，因此 cached 模式禁用打开、删除和新建；实时 shadow 恢复后显式重新检查，再回到实时来源。成功返回的 dirty shadow、目录结构变化或首次不可用启动均不使用缓存，仍受原 legacy 50 条限制。
+- 快照可能过期，因此 cached 模式禁用普通会话的打开、删除和新建；独立 pending-delete recovery 仍可显式重试。实时 shadow 恢复后显式重新检查，再回到实时来源。成功返回的 dirty shadow、目录结构变化或首次不可用启动均不使用缓存，仍受原 legacy 50 条限制。
 - 本轮增量通过 `cargo fmt --check`、`cargo check`、前端 `tsc --noEmit`、`git diff --check`；Go 源码未变，未运行测试或访问真实 profile。旧 Wails writer 停写与旧 Tauri host 二进制兼容仍未认证。
 
 ## 11. 续页哈希覆盖索引（2026-09-25）
@@ -307,7 +307,7 @@ defer releaseProfile()
 ## 19. 未认领文件不再遮蔽已验证身份目录分页（2026-09-26）
 
 - shadow 报告现区分“身份目录与 legacy metadata/物理盘点一致”与“整份 inventory clean”。若 `missingFromDirectory`、标题/工作区/顺序差异、缺失 transcript、物理状态差异和 inventory errors 均为 0，仅 `unclaimedCount` 大于 0，host 返回 `partial_identity`，继续分页已经登记且逐项核验的 identity rows；未认领文件只显示数量，不会自动分配或登记 ID。其他 dirty shadow 仍清理缓存并退回最多 50 条 legacy 页面。
-- partial 快照续页继续匹配 shadow snapshot/cursor；缓存也保留未认领计数。bridge 离线时仍标为 cached 并禁用打开、删除和新建，UI 同时提示快照可能过期及未导入文件数量。运行中的目录统计和完整旧历史仍可能不完整；新增的逐条审核导入仅通过独立离线 CLI 写入隔离恢复副本，不接入 Tauri/sidecar 在线流程，也不自动切换 Preview，见 `OFFLINE_SCAN_SESSION_IMPORT.md`。
+- partial 快照续页继续匹配 shadow snapshot/cursor；缓存也保留未认领计数。bridge 离线时仍标为 cached 并禁用普通会话的打开、删除和新建，UI 同时提示快照可能过期及未导入文件数量；待完成删除恢复仍可独立显式重试。运行中的目录统计和完整旧历史仍可能不完整；新增的逐条审核导入仅通过独立离线 CLI 写入隔离恢复副本，不接入 Tauri/sidecar 在线流程，也不自动切换 Preview，见 `OFFLINE_SCAN_SESSION_IMPORT.md`。
 - 非测试验证：Tauri `cargo fmt --check && cargo check --locked`、前端 `npx tsc --noEmit -p tsconfig.json`、`git diff --check`。未运行测试或访问真实 profile。旧 Wails writer 停写及旧 Tauri host 发布二进制兼容仍未认证。
 
 ## 20. 清理旧 Preview 路径术语（2026-09-26）
@@ -330,7 +330,7 @@ defer releaseProfile()
 
 ## 23. cached 续页允许标题漂移
 
-- cached 快照页继续验证兼容目录的 ID、顺序、workspace 与 snapshot cursor，但不再因当前 JSON catalog 的 title-only 更新拒绝快照页。页面继续使用快照标题并明确标记可能过期；cached 来源的会话操作仍禁用。
+- cached 快照页继续验证兼容目录的 ID、顺序、workspace 与 snapshot cursor，但不再因当前 JSON catalog 的 title-only 更新拒绝快照页。页面继续使用快照标题并明确标记可能过期；cached 来源的普通会话操作仍禁用，pending-delete 恢复仍可独立显式重试。
 - 在线 identity 页的 shadow 与逐页 metadata 校验未改变。
 - 非测试验证：Tauri `cargo fmt --check && cargo check --locked`、前端 `npx tsc --noEmit -p tsconfig.json`、`git diff --check`。未运行测试或访问真实 profile。
 
@@ -434,11 +434,11 @@ defer releaseProfile()
 - import 成功后 Rust 才调用顺序同步。Go `Synced` 对请求中 ID 与 identity transcript path 匹配的每条记录计数；直接同步遇到匹配 tombstone 仍计数，但不会放回可见顺序。legacy import 对 ID/path 匹配的 tombstone 现在无副作用地保留 terminal identity 并继续处理其他条目；路径冲突显式失败，不返回虚高 `accepted`。合法缺失文件会登记为 `missing` 并可完整同步。直接同步缺失 identity 时 Go 不计该行，随后 host 的 `synced == sessions.len()` 检查会明确报告不完整。Review §8 已记录当前合同。
 - 本轮只更新核对文档。非测试验证 `git diff --check`；未运行测试或访问真实 profile。旧 Wails writer 停写与旧 host 发布二进制兼容仍未认证。
 
-## 42. 标题游标修复与 host 测试断言不一致（2026-09-26）
+## 42. 标题游标测试与诊断文案复核（2026-09-26，历史记录）
 
 - 当前 Go snapshot ID 和 Rust 页/审计投影匹配都只比较结构字段；title-only 更新可随当前页返回，不使已签发游标失效。
-- 发现现有 `desktop/tauri/src/main.rs` 测试 `title_change_between_shadow_and_page_cannot_pass_the_structural_snapshot_id` 仍断言标题变化应回退 legacy 或让续页失败，与实现合同相反。本轮按“只做非测试验证”的约束未运行或改动测试；不能把 Rust 测试套件描述为本轮验证通过。应在获准运行测试的验证轮次前修正该陈旧断言，再执行对应测试。
-- 本轮只更新核对记录，`git diff --check` 通过；未访问真实 profile。
+- 当时源码已将该测试改为 `title_change_between_shadow_and_page_preserves_structural_snapshot_id`，首屏和续页都断言 `identity` 来源并检查更新后的标题；首屏 `expect` 文案仍遗留旧的回退描述。这个历史发现后来在 §53 修正：诊断文字改为结构分页语义。当前源码中的两个 `expect` 均与成功断言一致。
+- 本节只记录当时发现，不代表当前源码仍有该问题；§53 记录修正，未因此在本轮运行 Rust 测试或访问真实 profile。
 
 ## 43. 遗留 catalog 不再被已完成删除的 tombstone 阻断（2026-09-26）
 
@@ -455,5 +455,100 @@ defer releaseProfile()
 ## 45. S2 review 与当前组合工作区复核（2026-09-26）
 
 - 当前身份库 `schemaVersion=9`。v4–v6 包含 S2 相对路径、标题意图及目录 generation/revision；v7 添加 SQLite 会话事件表，v8 增加 checkpoint 水位，v9 增加事件来源验证标记。事件存储是独立的 managed Preview capability，不据此改变 S2 的兼容认证结论。
-- 当前工作树包含会话事件存储和 scan-import 等并行未提交改动；Go build、Tauri `cargo fmt --check && cargo check --locked`、前端 `npx tsc --noEmit -p tsconfig.json` 与 `git diff --check` 均通过。本轮未运行测试，也未读取或修改真实 profile。
+- 当时工作树包含会话事件存储和 scan-import 等并行改动；Go build、Tauri `cargo fmt --check && cargo check --locked`、前端 `npx tsc --noEmit -p tsconfig.json` 与 `git diff --check` 均通过。本轮未运行测试，也未读取或修改真实 profile。
 - 旧 Wails writer 停写、旧 Tauri host 发布二进制兼容及真实 profile 演练仍未认证。源码版本提高、隔离构建与类型检查都不能替代这些门禁。
+
+## 46. 恢复 staging 核对实际目标文件（2026-09-26）
+
+- `copyVerifiedSnapshotFile` 从复制流计算摘要并确认源在读取期间保持稳定，但它本身不重新读取目标。`CreateOfflineSnapshot` 会在发布 manifest 前执行完整 `VerifyOfflineSnapshot`；`StageOfflineSnapshot` 现在也逐个重新读取 staging 目标并比对 manifest 大小/SHA-256，同时检查目标文件打开前后仍是同一普通文件，才返回 staging 成功。
+- 这补足恢复副本的落盘核验，不移除快照创建时的源文件复读；旧 Wails writer 未确认停写前仍保留该一致性检查。本轮非测试验证：`gofmt`、`GOCACHE=/private/tmp/reasonix-tauri-go-build-cache go build ./...`、`git diff --check` 通过；未运行测试或访问真实 profile。
+
+## 47. Preview bridge turn 完成后刷新 transcript checkpoint（2026-09-26）
+
+- 当前 bridge runtime 在 `SubmitHTTP` 返回后按 controller 的 `ClassifySubmitRoute` 决定是否标记 `snapshotPending`：会记录会启动模型回合的 `/mcp__`、自定义斜杠命令和普通输入；管理命令、空输入、被 HTTP 拒绝的 `!` shell 输入及 memory quick-add/remember 不会被误记。取消、审批、问答和 prompt 重放也会在 controller 调用返回后标记待保存。runtime monitor 每 20ms 检查状态，只有不在运行且没有 pending prompt 时才尝试消费标志；消费后再读一次状态，若期间有新 turn/prompt 则恢复标志。
+- 若 `SnapshotActivity` 失败，待保存标志会恢复，并设置一秒退避后重试，避免失败后漏存及每个 monitor tick 重复报错。`State()` 使用相同逻辑并返回复读后的状态；关闭时先停 monitor，再执行 shutdown snapshot。这是完成后的轮询/状态查询刷新机制，不是 `TurnDone` sink 同步回调；durable inbox 的快照仍由 controller 自己的确认路径处理。
+- 项目文件夹 bridge 回归样例现明确验证绝对路径尾部空格属于路径内容、不得被裁掉；标题仍按约定 trim。非测试验证：`gofmt`、`GOCACHE=/private/tmp/reasonix-tauri-go-build-cache go build ./...`、Tauri `cargo fmt --check && cargo check --locked`、前端 `npx tsc --noEmit -p tsconfig.json`、`git diff --check` 通过；未运行测试或访问真实 profile。
+
+## 48. 新建缺失 transcript 时减少同目录 peer filesystem 检查（2026-09-26）
+
+- `ensureTranscriptPathAvailable` 发现 candidate 不存在且父目录在 peer 枚举前后都解析到调用方已验证路径时，同 lexical parent 的 peer 仍各做一次 `Lstat`；absent/regular 项通过完整路径/大小写别名比较后不再执行 peer symlink/path resolve 和后续 file stat。symlink 与非普通项仍走完整校验。各 peer 路径仍保留在最终候选 identity recheck 集合中，候选若在扫描期间出现仍会与所有 peer 比较 file identity；期间 parent symlink 改变则拒绝操作。
+- 候选已存在、父路径变化或 peer 位于其他目录时，原完整检查保留；身份行 SQL/字符串枚举仍为 O(n)，此项只减少常见 flat session directory 新预留的文件系统调用。非测试验证：`gofmt`、`GOCACHE=/private/tmp/reasonix-tauri-go-build-cache go build ./...`、`git diff --check` 通过；未运行测试或访问真实 profile。
+
+## 49. WAL checksum 验证后复用主库 schema header（2026-09-26）
+
+- `walLeavesSchemaPageUntouched` 现在验证 WAL header checksum、magic 对应的 checksum 字节序、活跃帧滚动 checksum 与 salt，并检查扫描期间文件 identity/size/mtime 稳定。只有完整且无 page-1 frame 的 WAL 才跳过整库副本检查；page-1、salt mismatch（可能是未截断 WAL 的旧帧尾）、未知或不完整布局、文件变化仍保留隔离副本 schema 检查。当前 salt 下损坏的 header/frame checksum 会拒绝打开，避免 SQLite 回放损坏帧或改写原 DB/WAL。
+- 工作树新增了损坏 WAL 拒绝测试，但本轮没有运行测试。官方 SQLite 规范确认 magic `0x377f0682` 的 checksum 输入按小端解释，`0x377f0683` 按大端解释，而保存的 checksum 字段始终为大端。旧 Wails writer 并发仍未认证。
+- 非测试验证：Go `go build ./...`、Tauri `cargo fmt --check && cargo check --locked`、前端 `npx tsc --noEmit -p tsconfig.json`、`git diff --check` 通过；未访问真实 profile。
+
+## 50. 旧会话 JSON catalog 损坏时保留身份页只读可见性（2026-09-26）
+
+- Rust host 不再因 `WorkbenchCatalog::list()` 失败而提前中断会话目录加载；改用空 legacy projection 尝试 identity pagination，并把可读身份页降为 `identity_unverified`、附带 catalog warning。未核验页继续关闭打开、删除、新建操作。若侧栏桥接离线，已有的匹配 identity snapshot 仍可只读续页；identity 首屏不可用则保留空兼容页及 warning，不会伪造旧 catalog 内容。
+- 前端新增兼容 catalog warning 字段，在侧栏提示需修复旧目录并重启 Preview；page unavailable 时清除过期 warning。
+- 非测试验证：Go `go build ./...`、Tauri `cargo fmt --check && cargo check --locked`、前端 `npx tsc --noEmit -p tsconfig.json`、`git diff --check` 均通过；未运行测试或访问真实 profile。
+
+## 51. 刷新时续读已加载的未核验身份页（2026-09-26）
+
+- `refreshCatalogAudit` 新增“可分页身份来源”判断，将 `identity_unverified` 纳入已加载页恢复流程；未核验来源可续读以维持会话目录完整性，但仍不进入安全身份来源分支。刷新续页失败或来源变化时仍重新读取首屏。
+- 非测试验证：Go `go build ./...`、Tauri `cargo fmt --check && cargo check --locked`、前端 `npx tsc --noEmit -p tsconfig.json`、`git diff --check` 通过；未运行测试或访问真实 profile。
+
+## 52. 离线缓存身份页的 cursor 二分定位（2026-09-26）
+
+- 缓存目录按 `(position,id)` 有序，离线 `SessionShadowSnapshotCache::page` 现用二分查找 cursor 起点，避免每个缓存续页从快照首行线性扫描。缓存查找和附带的 shadow 元数据都要求 cursor 的 snapshot ID 与 total 匹配；页面结构校验仍只检查当前页，并保留身份只读状态。
+- 非测试验证：Go `go build ./...`、Tauri `cargo fmt --check && cargo check --locked`、前端 `npx tsc --noEmit -p tsconfig.json`、`git diff --check` 均通过；未运行测试或访问真实 profile。
+
+## 53. 首次目录读取完成前与只读来源下关闭操作入口（2026-09-26）
+
+- Tauri sidebar 的 page source 初始值改为 `unavailable`，避免首次异步 shadow 核验前按 `identity` 放行新建。`unavailable`、`cached`、`identity_unverified` 下普通目录项的打开、重命名、删除和新建操作在 UI 和业务 handler 都拒绝；pending-delete recovery 行仍有独立显式重试路径。
+- 修正 pending-delete 行的 UI 门禁：普通目录处于 `cached` 来源时，独立恢复行仍可进入确认和显式重试；页面目录只读状态不再遮住恢复操作。另将标题游标源码测试的过时 `expect` 诊断文字改为结构分页语义，未运行测试。
+- 非测试验证：Go `go build ./...`、Tauri `cargo fmt --check && cargo check --locked`、前端 `npx tsc --noEmit -p tsconfig.json`、`git diff --check` 通过；未运行测试或访问真实 profile。
+
+## 54. 复核 legacy fallback 上限与 identity 续页扫描成本（2026-09-26）
+
+- 当前 host 的正常续页 cache hit 先校验旧 catalog 结构和 cursor 的 snapshot ID/total，再获取、核对当前身份页；不重新获取完整物理 inventory。cache miss、目录结构变化或 cursor/page 不匹配会走重新 shadow audit。identity snapshot 超过 10,000 条不签发页或 cursor；首屏 identity 不可用时的 legacy fallback 仍受 50 条上限约束，UI 同时说明无法从 fallback 翻页并提供重新检查入口。Review §39 记录当前边界。
+- 非测试验证：`GOCACHE=/private/tmp/reasonix-tauri-go-build-cache go build ./...`、Tauri `cargo check --locked`、前端 `npx tsc --noEmit -p tsconfig.json`、`cargo fmt --check`、`git diff --check` 均通过。未运行测试或访问真实 profile；旧 Wails writer 停写及旧 Tauri host 发布二进制兼容继续未认证。
+
+## 55. 复核 transcript 路径唯一性扫描边界（2026-09-26）
+
+- `ensureTranscriptPathAvailable` 已为缺失候选的同目录 regular/absent peer 跳过完整解析与后续文件 stat，但仍逐条枚举 identity，并保留 `Lstat` 以发现 symlink/non-regular peer，以及候选在扫描期间出现时的 file identity recheck。未发现可在无外部 filesystem identity 失效机制下安全删除这些 peer 检查的方式；详见 Review §40。此为源码边界复核，没有修改唯一性算法。
+- 验证 `git diff --check`；未运行测试或访问真实 profile。旧 Wails writer 停写及旧 Tauri host 发布二进制兼容仍未认证。
+
+## 56. 复核离线 review 锁与 snapshot 源复读边界（2026-09-26）
+
+- `ApplyImportReview` 的 profile gate 在函数内覆盖重审及 identity transaction import；`CreateOfflineSnapshot` 复制后重读源摘要，并在发布 manifest 后验证完整副本；staging 重新校验写入目标。profilegate 文档和 snapshot API 合同仍要求调用方独立停掉不遵守新 gate 的旧 writer，源码检查不证明实际 writer 已停止。Review §41 已记录此范围。
+- 验证 `git diff --check`；未运行测试、未读取真实 profile。旧 Wails writer 停写和旧 Tauri host 发布二进制兼容继续未认证。
+
+## 57. 区分未加载项目组与确认空项目组（2026-09-26）
+
+- 项目分组由已加载的全局会话页构成。还有后续 cursor 时，保存项目文件夹若当前已加载页没有可打开会话（含所有已加载行均为 missing），不再被当成完整空组：显示“历史未加载”并禁用组选择，直到用户继续分页；组内新建入口保持可用。分页未结束时，侧栏说明项目组计数仅是已加载数量。没有 cursor 且无可恢复会话时，仍可将该文件夹设为新对话默认工作区。Review §42 与 S2 设计稿 §3.5 记录状态语义。
+- 非测试验证：前端 `npx tsc --noEmit -p tsconfig.json`、`git diff --check` 通过；未运行测试或访问真实 profile。旧 Wails writer 停写及旧 Tauri host 发布二进制兼容仍未认证。
+
+## 58. 对齐 V3 总览的 shadow 差异回退描述（2026-09-26）
+
+- `SESSION_STORAGE_IMPLEMENTATION_V3.md` 原有两个阶段摘要仍称一般差异/盘点错误直接回退 JSON。已同步为当前行为：shadow 可读且 identity page 与同轮 projection 匹配时提供全量 `identity_unverified` 只读分页；shadow 不可读但身份页可用时也尝试只读分页；仅不匹配或首屏身份页不可用时回退有界 JSON。未改变实现或安全门禁。
+- 验证 `git diff --check`；未运行测试或访问真实 profile。旧 Wails writer 停写和旧 Tauri host 发布二进制兼容继续未认证。
+
+## 59. 复核待完成删除分页不受旧清单总数上限阻断（2026-09-26）
+
+- 当前 Tauri host 使用按 ID 排序的 `/v1/sessions/deletion-recovery/page`，每次最多 200 条；旧无参数列表的 10,000 条限制只留给兼容旧 host，不约束新分页路由。Rust 校验页大小、递增 ID 和 next cursor；前端页失败保留已有项并显示重查入口。Review §43 记录边界。
+- 验证 `git diff --check`；未运行测试或访问真实 profile。旧 Tauri host 发布二进制兼容继续未认证。
+
+## 60. 项目文件夹清单重试恢复磁盘读取（2026-09-26）
+
+- 项目文件夹目录在 Preview 启动时若因损坏、权限或瞬时 I/O 错误无法读取，之前本地 catalog 会一直返回内存中的旧 `load_error`；侧栏“重新检查”不会重新访问磁盘。现在仅对已失败的本地目录读取重试 `read_folders`，有效文件被修复后立即恢复文件夹显示，正常已加载目录仍走内存状态。
+- 非测试验证：Tauri `cargo fmt --check`、`cargo check --locked`、前端 `npx tsc --noEmit -p tsconfig.json`、`git diff --check`。未运行测试或访问真实 profile；旧 Wails writer 停写及旧 Tauri host 发布二进制兼容仍未认证。
+
+## 61. Legacy fallback 不再把未知项目组当成空组（2026-09-26）
+
+- `legacy` 首屏没有 continuation cursor，但最多只含兼容目录的 50 条，不能证明无可见会话的保存文件夹在身份目录中也是空的。前端现将 `legacy` 与“仍有后续 cursor”一并视为项目历史未完整；对没有已加载可打开会话的项目组禁用切换，并按来源给出重新检查或加载更多的提示。已有可打开会话仍可选择，组内新建入口保持独立可用。
+- 非测试验证：前端 `npx tsc --noEmit -p tsconfig.json`、`git diff --check`。未运行测试或访问真实 profile；旧 Wails writer 停写及旧 Tauri host 发布二进制兼容仍未认证。
+
+## 62. 历史 host 与当前 sidecar 的非测试源码构建（2026-09-26）
+
+- 在临时目录导出历史 Tauri host 源码提交 `50c1b9bc6`，以当前工作树 `cmd/reasonix-desktop-bridge` 构建 sidecar 并复制到历史 host 的资源位置；离线 `cargo build` 成功。候选二进制 SHA-256：`4290bea369739b5cb633203b391079bc105f726f89a27ef10cde79eb6e833238`。
+- 没有运行 host 或 Cargo 测试，没有访问真实 profile；该构建不证明已发布旧二进制兼容，也不改变旧 Tauri host 兼容和旧 Wails writer 停写仍未认证的结论。
+
+## 63. 当前工作树 S2 优先项复核（2026-09-26）
+
+- 重新对照 Review §1.1–§1.4 与当前实现：待完成删除由独立 ID keyset 页面暴露并可显式重试；legacy 回退维持 50 条上限且侧栏说明无法从该回退继续翻页；常规续页 cache hit 复用首屏物理盘点、按 snapshot ID/total 和当前页结构字段校验；结构快照忽略 title-only 更新。未发现这四项在当前工作树回归。
+- 抽核 §2、§3 仍开放的源码边界：profile gate 仍不声称约束旧 Wails writer；离线 snapshot 源复读仍保留；identity path 唯一性仍枚举全部身份项以核实 symlink/hard-link 别名；旧 host 源码隔离构建不等同于已发布二进制认证。它们仍分别是保守正确性边界或外部未认证门禁，没有用源码推断替代认证。
+- 当前非测试验证：`GOCACHE=/private/tmp/reasonix-tauri-go-build-cache go build ./...`、Tauri `cargo fmt --check && cargo check --locked`、前端 `npx tsc --noEmit -p tsconfig.json`、`git diff --check` 通过。未运行测试、未运行 host、未访问真实 profile；旧 Wails writer 停写和旧 Tauri host 发布二进制兼容仍未认证。

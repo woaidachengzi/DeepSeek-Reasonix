@@ -64,6 +64,42 @@ func TestSessionIdentityRecoversAfterAbruptProcessExit(t *testing.T) {
 	}
 }
 
+func TestOpenRejectsCorruptWALWithoutChangingCommittedDatabase(t *testing.T) {
+	root := t.TempDir()
+	dbPath := filepath.Join(root, "desktop", "session-state-v1.sqlite")
+	command := exec.Command(os.Args[0], "-test.run=^TestSessionIdentityRecoversAfterAbruptProcessExit$")
+	command.Env = append(os.Environ(), crashRecoveryDBEnv+"="+dbPath, crashRecoveryRootEnv+"="+root)
+	output, err := command.CombinedOutput()
+	var exitError *exec.ExitError
+	if !errors.As(err, &exitError) || exitError.ExitCode() != crashRecoveryExit {
+		t.Fatalf("crash writer exit = %v (code %d), output: %s", err, exitCode(exitError), output)
+	}
+	databaseBefore, err := os.ReadFile(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wal, err := os.ReadFile(dbPath + "-wal")
+	if err != nil || len(wal) < 32 {
+		t.Fatalf("read crash WAL: len=%d err=%v", len(wal), err)
+	}
+	wal[len(wal)-1] ^= 0xff // Break the checksum in the last committed WAL frame.
+	if err := os.WriteFile(dbPath+"-wal", wal, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if store, err := Open(context.Background(), dbPath, root); err == nil {
+		_ = store.Close()
+		t.Fatal("WAL with a corrupt committed-frame checksum was opened")
+	}
+	databaseAfter, err := os.ReadFile(dbPath)
+	if err != nil || string(databaseAfter) != string(databaseBefore) {
+		t.Fatalf("corrupt WAL rejection changed the committed database: err=%v", err)
+	}
+	walAfter, err := os.ReadFile(dbPath + "-wal")
+	if err != nil || string(walAfter) != string(wal) {
+		t.Fatalf("corrupt WAL rejection changed the WAL: err=%v", err)
+	}
+}
+
 func runCrashRecoveryWriter(dbPath, root string) error {
 	ctx := context.Background()
 	sessionDir := filepath.Join(root, "sessions")

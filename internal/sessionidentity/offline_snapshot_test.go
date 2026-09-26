@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCopyVerifiedSnapshotFileHashesBytesWhileCopying(t *testing.T) {
@@ -178,6 +179,127 @@ func TestOfflineSnapshotVerifiesAndStagesCompleteProfile(t *testing.T) {
 	}
 	if err := replayed.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestOfflineSnapshotRestoresSQLiteSessionEventsAndWatermarks(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	profile := filepath.Join(root, "preview-profile")
+	sessionDir := filepath.Join(profile, "sessions")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	transcript := filepath.Join(sessionDir, "tauri-tauri-event-recovery.jsonl")
+	transcriptBytes := []byte("{\"role\":\"system\",\"content\":\"isolated recovery\"}\n")
+	if err := os.WriteFile(transcript, transcriptBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	eventPath := transcript[:len(transcript)-len(".jsonl")] + ".events.jsonl"
+	createdAt := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+	eventPayload := json.RawMessage(`{"schema_version":2,"type":"log","at":"2026-09-26T00:00:00Z","generation":1}`)
+	eventProjection := append(append([]byte(nil), eventPayload...), '\n')
+	if err := os.WriteFile(eventPath, eventProjection, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	identityPath := filepath.Join(profile, "desktop", "session-state-v1.sqlite")
+	writer, err := Open(ctx, identityPath, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Import(ctx, sessionDir, []Candidate{{ID: "tauri-event-recovery", Path: transcript}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writer.AppendEvents(ctx, "tauri-event-recovery", []SessionEvent{{
+		ID: "event-log", Type: "log", CreatedAt: createdAt.UnixMilli(), Payload: eventPayload,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	eventDigest := sha256.Sum256(eventProjection)
+	if err := writer.MarkEventProjection(ctx, "tauri-event-recovery", 1, 1, hex.EncodeToString(eventDigest[:])); err != nil {
+		t.Fatal(err)
+	}
+	checkpointDigest := sha256.Sum256(transcriptBytes)
+	if err := writer.MarkCheckpointProjection(ctx, "tauri-event-recovery", 1, 1, hex.EncodeToString(checkpointDigest[:])); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	catalog := filepath.Join(root, "workbench-sessions.json")
+	if err := os.WriteFile(catalog, []byte("[]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	backupParent := filepath.Join(root, "backups")
+	if err := os.Mkdir(backupParent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := CreateOfflineSnapshot(ctx, profile, catalog, backupParent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := VerifyOfflineSnapshot(ctx, snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestFiles := make(map[string]bool, len(manifest.Files))
+	for _, item := range manifest.Files {
+		manifestFiles[item.Path] = true
+	}
+	for _, path := range []string{
+		"profile/desktop/session-state-v1.sqlite",
+		"profile/sessions/tauri-tauri-event-recovery.events.jsonl",
+		"profile/sessions/tauri-tauri-event-recovery.jsonl",
+	} {
+		if !manifestFiles[path] {
+			t.Fatalf("offline snapshot omitted required session member %q", path)
+		}
+	}
+	recoveryParent := filepath.Join(root, "recovery")
+	if err := os.Mkdir(recoveryParent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	staged, err := StageOfflineSnapshot(ctx, snapshot, recoveryParent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stagedProfile := filepath.Join(staged, "profile")
+	stagedDB, err := OpenReadOnly(ctx, filepath.Join(stagedProfile, "desktop", "session-state-v1.sqlite"), stagedProfile)
+	if err != nil {
+		t.Fatalf("open staged event store: %v", err)
+	}
+	status, err := stagedDB.EventStreamStatus(ctx, "tauri-event-recovery")
+	if err != nil || status.Generation != 1 || status.LastSequence != 1 || status.ProjectionSequence != 1 || status.ProjectionSHA256 != hex.EncodeToString(eventDigest[:]) ||
+		status.CheckpointSequence != 1 || status.CheckpointSHA256 != hex.EncodeToString(checkpointDigest[:]) {
+		t.Fatalf("restored event stream watermarks = %#v, %v", status, err)
+	}
+	rows, err := stagedDB.ReadEvents(ctx, "tauri-event-recovery", 0, 10)
+	if err != nil || len(rows) != 1 || rows[0].Sequence != 1 || rows[0].ID != "event-log" || !reflect.DeepEqual(rows[0].Payload, eventPayload) {
+		t.Fatalf("restored SQLite events = %#v, %v", rows, err)
+	}
+	if err := stagedDB.Close(); err != nil {
+		t.Fatal(err)
+	}
+	stagedProjection, err := os.ReadFile(filepath.Join(stagedProfile, "sessions", "tauri-tauri-event-recovery.events.jsonl"))
+	if err != nil || !reflect.DeepEqual(stagedProjection, eventProjection) {
+		t.Fatalf("restored event projection differs: %v", err)
+	}
+	stagedTranscript, err := os.ReadFile(filepath.Join(stagedProfile, "sessions", "tauri-tauri-event-recovery.jsonl"))
+	if err != nil || !reflect.DeepEqual(stagedTranscript, transcriptBytes) {
+		t.Fatalf("restored transcript checkpoint differs: %v", err)
+	}
+	continued, err := Open(ctx, filepath.Join(stagedProfile, "desktop", "session-state-v1.sqlite"), stagedProfile)
+	if err != nil {
+		t.Fatalf("reopen staged event store for continuation: %v", err)
+	}
+	defer continued.Close()
+	if _, err := continued.AppendEvents(ctx, "tauri-event-recovery", []SessionEvent{{
+		ID: "event-next", Type: "probe", Payload: json.RawMessage(`{"type":"probe","id":"event-next"}`),
+	}}); err != nil {
+		t.Fatalf("append after offline restore: %v", err)
+	}
+	if last, err := continued.LastEventSequence(ctx, "tauri-event-recovery"); err != nil || last != 2 {
+		t.Fatalf("restored stream continuation sequence = %d, %v; want 2", last, err)
 	}
 }
 

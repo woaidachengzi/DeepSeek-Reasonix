@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +26,13 @@ import (
 	"reasonix/internal/turnevent"
 )
 
+const (
+	sqliteDAGCrashModeEnv = "REASONIX_TEST_SQLITE_DAG_CRASH_MODE"
+	sqliteDAGCrashPathEnv = "REASONIX_TEST_SQLITE_DAG_CRASH_PATH"
+	sqliteDAGCrashRootEnv = "REASONIX_TEST_SQLITE_DAG_CRASH_ROOT"
+	sqliteDAGCrashExit    = 47
+)
+
 func prepareSQLiteEventTestSession(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -32,7 +42,7 @@ func prepareSQLiteEventTestSession(t *testing.T) string {
 	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	id := "sqlite-" + t.Name()
+	id := "sqlite-" + strings.ReplaceAll(t.Name(), "/", "-")
 	path := filepath.Join(sessionDir, "tauri-"+id+".jsonl")
 	identities, err := sessionidentity.Open(context.Background(), config.DesktopSessionIdentityPath(), root)
 	if err != nil {
@@ -89,6 +99,26 @@ func TestSQLiteSessionDAGAppendProjectsAndReplaysCommittedEvents(t *testing.T) {
 	}
 }
 
+func TestSQLiteSessionEventStoreRequiresPreviewGateAndProfilePath(t *testing.T) {
+	managedPath := prepareSQLiteEventTestSession(t)
+	t.Setenv(previewSQLiteEventsEnv, "0")
+	if db, _, enabled, err := sqliteSessionEventStore(managedPath); err != nil || enabled || db != nil {
+		t.Fatalf("event store without Preview capability = db:%v enabled:%v err:%v; want disabled", db != nil, enabled, err)
+	}
+	t.Setenv(previewSQLiteEventsEnv, "1")
+	for _, path := range []string{
+		filepath.Join(t.TempDir(), "tauri-outside.jsonl"),
+		filepath.Join(config.SessionDir(), "custom-profile.jsonl"),
+	} {
+		if db, _, enabled, err := sqliteSessionEventStore(path); err != nil || enabled || db != nil {
+			t.Fatalf("event store for non-managed path %q = db:%v enabled:%v err:%v; want disabled", path, db != nil, enabled, err)
+		}
+	}
+	if db, _, enabled, err := sqliteSessionEventStore(managedPath); err != nil || !enabled || db == nil {
+		t.Fatalf("event store for managed Preview session = db:%v enabled:%v err:%v; want enabled", db != nil, enabled, err)
+	}
+}
+
 func TestSQLiteSessionDAGReplayEnforcesRecordAndByteBudgets(t *testing.T) {
 	path := prepareSQLiteEventTestSession(t)
 	entries := []sessionDAGEntry{
@@ -119,6 +149,142 @@ func TestSQLiteSessionDAGReplayEnforcesRecordAndByteBudgets(t *testing.T) {
 	}
 }
 
+func TestSQLiteSessionDAGAppendBudgetRejectsBeforeCommitting(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		maxEvents int
+		maxBytes  func(header, next []byte) int64
+	}{
+		{
+			name:      "record limit",
+			maxEvents: 1,
+			maxBytes:  func(_, _ []byte) int64 { return defaultSessionReplayLimits.maxBytes },
+		},
+		{
+			name:      "projection byte limit",
+			maxEvents: defaultSessionReplayLimits.maxRecords,
+			maxBytes: func(header, next []byte) int64 {
+				return int64(len(header) + len(next) - 1)
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := prepareSQLiteEventTestSession(t)
+			base := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+			headerEntries := []sessionDAGEntry{{Type: sessionDAGTypeLog, Generation: 1, At: base}}
+			headerData, err := encodeSessionDAGEntries(headerEntries, base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			limits := defaultSessionReplayLimits
+			limits.maxRecords = tc.maxEvents
+			limits.maxBytes = defaultSessionReplayLimits.maxBytes
+			if _, handled, err := appendSQLiteDAGEventsWithinLimits(path, headerEntries, headerData, limits); err != nil || !handled {
+				t.Fatalf("append initial log header: handled=%v err=%v", handled, err)
+			}
+			headerProjection, err := os.ReadFile(store.SessionEventLog(path))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(headerProjection, headerData) {
+				t.Fatal("initial SQLite event projection differs from its canonical encoding")
+			}
+			nextEntries := []sessionDAGEntry{
+				dagMessageEntry(t, SessionMainHead, "", "turn-budgeted", dagMsg("user", "must not partially commit", "budgeted-message"), base.Add(time.Second)),
+			}
+			nextData, err := encodeSessionDAGEntries(nextEntries, base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			limits.maxBytes = tc.maxBytes(headerData, nextData)
+			if _, handled, err := appendSQLiteDAGEventsWithinLimits(path, nextEntries, nextData, limits); !handled || !errors.Is(err, sessionidentity.ErrEventLimitExceeded) {
+				t.Fatalf("over-budget append: handled=%v err=%v; want ErrEventLimitExceeded", handled, err)
+			}
+			db, id, enabled, err := sqliteSessionEventStore(path)
+			if err != nil || !enabled {
+				t.Fatalf("open event store after rejected append: enabled=%v err=%v", enabled, err)
+			}
+			status, err := db.EventStreamStatus(context.Background(), id)
+			if err != nil || status.LastSequence != 1 {
+				t.Fatalf("SQLite sequence after rejected append = %d, %v; want 1", status.LastSequence, err)
+			}
+			after, err := os.ReadFile(store.SessionEventLog(path))
+			if err != nil || !bytes.Equal(after, headerProjection) {
+				t.Fatalf("projection changed after rejected append: err=%v", err)
+			}
+			projected, active, err := sqliteDAGEventBytes(context.Background(), store.SessionEventLog(path), defaultSessionReplayLimits)
+			if err != nil || !active || !bytes.Equal(projected, headerData) {
+				t.Fatalf("committed SQLite state after rejected append: active=%v data_equal=%v err=%v", active, bytes.Equal(projected, headerData), err)
+			}
+		})
+	}
+}
+
+func TestSQLiteSessionDAGRotationBudgetRejectsBeforeReplacingGeneration(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		entries   func(time.Time) []sessionDAGEntry
+		setLimits func(*sessionReplayLimits, []byte)
+	}{
+		{
+			name: "record limit",
+			entries: func(at time.Time) []sessionDAGEntry {
+				return []sessionDAGEntry{
+					{Type: sessionDAGTypeLog, Generation: 2, At: at, Writer: "rotation-writer"},
+					{Type: sessionDAGTypeSelect, ID: "selected-head", Head: SessionMainHead, At: at, Writer: "rotation-writer"},
+				}
+			},
+			setLimits: func(limits *sessionReplayLimits, _ []byte) { limits.maxRecords = 1 },
+		},
+		{
+			name: "projection byte limit",
+			entries: func(at time.Time) []sessionDAGEntry {
+				return []sessionDAGEntry{{Type: sessionDAGTypeLog, Generation: 2, At: at, Writer: strings.Repeat("writer", 16)}}
+			},
+			setLimits: func(limits *sessionReplayLimits, encoded []byte) { limits.maxBytes = int64(len(encoded) - 1) },
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := prepareSQLiteEventTestSession(t)
+			base := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+			initial := []sessionDAGEntry{{Type: sessionDAGTypeLog, Generation: 1, At: base, Writer: "initial-writer"}}
+			initialData, err := encodeSessionDAGEntries(initial, base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, handled, err := appendSQLiteDAGEventsWithinLimits(path, initial, initialData, defaultSessionReplayLimits); err != nil || !handled {
+				t.Fatalf("append initial generation: handled=%v err=%v", handled, err)
+			}
+			before, err := os.ReadFile(store.SessionEventLog(path))
+			if err != nil {
+				t.Fatal(err)
+			}
+			replacement := tc.entries(base.Add(time.Second))
+			replacementData, err := encodeSessionDAGEntries(replacement, base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			limits := defaultSessionReplayLimits
+			tc.setLimits(&limits, replacementData)
+			if handled, err := replaceSQLiteDAGEventsWithinLimits(path, replacement, 1, limits); !handled || !errors.Is(err, ErrSessionReplayLimitExceeded) {
+				t.Fatalf("over-budget rotation: handled=%v err=%v; want replay-limit refusal", handled, err)
+			}
+			db, id, enabled, err := sqliteSessionEventStore(path)
+			if err != nil || !enabled {
+				t.Fatalf("open event store after rejected rotation: enabled=%v err=%v", enabled, err)
+			}
+			status, err := db.EventStreamStatus(context.Background(), id)
+			if err != nil || status.Generation != 1 || status.LastSequence != 1 {
+				t.Fatalf("SQLite stream after rejected rotation = generation %d sequence %d, %v; want 1/1", status.Generation, status.LastSequence, err)
+			}
+			after, err := os.ReadFile(store.SessionEventLog(path))
+			if err != nil || !bytes.Equal(after, before) {
+				t.Fatalf("event projection changed after rejected rotation: err=%v", err)
+			}
+		})
+	}
+}
+
 func TestSQLiteSessionEventProjectionAcceptsExactly128MiBAndRejectsOneByteOver(t *testing.T) {
 	limit := sessionEventReplayMaxBytes
 	if err := checkSQLiteProjectionBudget("projection", limit-1, 1, limit); err != nil {
@@ -128,6 +294,80 @@ func TestSQLiteSessionEventProjectionAcceptsExactly128MiBAndRejectsOneByteOver(t
 	var budgetErr *SessionReplayLimitError
 	if !errors.As(err, &budgetErr) || budgetErr.Value != limit+1 || budgetErr.Limit != limit {
 		t.Fatalf("one-byte-over boundary error = %#v; want value %d limit %d", err, limit+1, limit)
+	}
+}
+
+func TestSQLiteSessionDAGRoundTripsMessageNear128MiBReplayLimit(t *testing.T) {
+	path := prepareSQLiteEventTestSession(t)
+	const messageBytes = 120 << 20
+	message := strings.Repeat("m", messageBytes)
+	entries := []sessionDAGEntry{
+		{Type: sessionDAGTypeLog, Generation: 1, At: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)},
+		dagMessageEntry(t, SessionMainHead, "", "turn-large", dagMsg(provider.RoleUser, message, "large-message"), time.Date(2026, 9, 1, 0, 0, 1, 0, time.UTC)),
+	}
+	if _, err := appendSessionDAGEntries(path, entries, true); err != nil {
+		t.Fatalf("append near-limit SQLite message: %v", err)
+	}
+	state, err := replaySessionDAG(context.Background(), store.SessionEventLog(path), defaultSessionReplayLimits)
+	if err != nil || !state.sqliteBacked || state.records != len(entries) {
+		t.Fatalf("replay near-limit SQLite message: backing=%v records=%d err=%v", state.sqliteBacked, state.records, err)
+	}
+	messages, _ := state.materialize(SessionMainHead)
+	if len(messages) != 1 || len(messages[0].Content) != messageBytes || messages[0].Content != message {
+		t.Fatalf("near-limit message round trip: messages=%d content_bytes=%d", len(messages), func() int {
+			if len(messages) == 0 {
+				return 0
+			}
+			return len(messages[0].Content)
+		}())
+	}
+}
+
+func TestSQLiteSessionDAGRoundTripsToolCallImageAndResultForLegacyExport(t *testing.T) {
+	path := prepareSQLiteEventTestSession(t)
+	base := time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC)
+	user := dagMsg(provider.RoleUser, "run the check", "tool-user")
+	user.RawContent = "run the check with the attached reference"
+	user.Images = []string{"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p1sAAAAASUVORK5CYII="}
+	assistant := provider.Message{
+		Role:             provider.RoleAssistant,
+		ID:               "tool-assistant",
+		ReasoningContent: "checking the attached reference before running the command",
+		DecisionReceipts: []*provider.DecisionReceipt{{
+			ID: "approval-call-1", Kind: "tool", Tool: "bash", Subject: "report.txt", Outcome: "allow_once",
+		}},
+		ToolCalls: []provider.ToolCall{{
+			ID: "call-1", Name: "bash", Arguments: `{"command":"printf ready"}`,
+			WriteIntents: []json.RawMessage{json.RawMessage(`{"version":1,"path":"report.txt"}`)},
+			Diff:         "report.txt created", Added: 1,
+		}},
+	}
+	toolResult := provider.Message{Role: provider.RoleTool, ID: "tool-result", Name: "bash", ToolCallID: "call-1", Content: "ready"}
+	entries := []sessionDAGEntry{
+		{Type: sessionDAGTypeLog, Generation: 1, At: base},
+		dagMessageEntry(t, SessionMainHead, "", "tool-turn", user, base.Add(time.Second)),
+		dagMessageEntry(t, SessionMainHead, user.ID, "tool-turn", assistant, base.Add(2*time.Second)),
+		dagMessageEntry(t, SessionMainHead, assistant.ID, "tool-turn", toolResult, base.Add(3*time.Second)),
+	}
+	if _, err := appendSessionDAGEntries(path, entries, true); err != nil {
+		t.Fatalf("append tool-call DAG: %v", err)
+	}
+	state, err := replaySessionDAG(context.Background(), store.SessionEventLog(path), defaultSessionReplayLimits)
+	if err != nil || !state.sqliteBacked {
+		t.Fatalf("replay tool-call SQLite DAG: backing=%v err=%v", state.sqliteBacked, err)
+	}
+	want := []provider.Message{user, assistant, toolResult}
+	got, _ := state.materialize(SessionMainHead)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("SQLite tool-call history differs:\ngot:  %#v\nwant: %#v", got, want)
+	}
+	destination := filepath.Join(t.TempDir(), "tool-call-legacy.jsonl")
+	if err := ExportSessionSchemaOne(path, destination); err != nil {
+		t.Fatalf("export SQLite tool-call history for legacy reader: %v", err)
+	}
+	legacy, err := LoadSession(destination)
+	if err != nil || !reflect.DeepEqual(legacy.Messages, want) {
+		t.Fatalf("legacy tool-call round trip differs: got=%#v err=%v", legacy.Messages, err)
 	}
 }
 
@@ -262,6 +502,73 @@ func TestSQLiteSessionSaveUsesManagedPreviewEventStore(t *testing.T) {
 	}
 }
 
+func TestSQLiteSessionUpgradesLegacyCheckpointAsLinearHistory(t *testing.T) {
+	path := prepareSQLiteEventTestSession(t)
+	t.Setenv(previewSQLiteEventsEnv, "0")
+	t.Setenv(SessionLogSchemaEnv, "v1")
+	legacy := NewSession("legacy system")
+	legacy.AddBatch(dagMsg(provider.RoleUser, "old question", "legacy-user"), dagMsg(provider.RoleAssistant, "old answer", "legacy-assistant"))
+	if err := legacy.Save(path); err != nil {
+		t.Fatalf("write isolated schema-1 checkpoint: %v", err)
+	}
+	legacyCheckpoint, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate a legacy release that kept only the transcript checkpoint.
+	if err := os.Remove(store.SessionEventLog(path)); err != nil {
+		t.Fatalf("remove legacy event sidecar for checkpoint-only fixture: %v", err)
+	}
+	if _, err := os.Stat(store.SessionEventLog(path)); !os.IsNotExist(err) {
+		t.Fatalf("schema-1 checkpoint unexpectedly has event history: stat err=%v", err)
+	}
+
+	t.Setenv(previewSQLiteEventsEnv, "1")
+	t.Setenv(SessionLogSchemaEnv, "")
+	loaded, err := LoadSession(path)
+	if err != nil {
+		t.Fatalf("load legacy checkpoint in Preview: %v", err)
+	}
+	lease, err := TryAcquireSessionLease(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lease.Release()
+	loaded.Add(dagMsg(provider.RoleUser, "new question", "new-user"))
+	if err := loaded.Save(path); err != nil {
+		t.Fatalf("upgrade and append from legacy checkpoint: %v", err)
+	}
+	state, err := replaySessionDAG(context.Background(), store.SessionEventLog(path), defaultSessionReplayLimits)
+	if err != nil || !state.sqliteBacked || state.upgradedFrom != sessionEventSchemaVersion || len(state.heads) != 1 {
+		t.Fatalf("legacy checkpoint upgrade state: backing=%v upgradedFrom=%d heads=%d err=%v", state.sqliteBacked, state.upgradedFrom, len(state.heads), err)
+	}
+	messages, _ := state.materialize(SessionMainHead)
+	if got := dagContents(messages); !reflect.DeepEqual(got, []string{"legacy system", "old question", "old answer", "new question"}) {
+		t.Fatalf("linear checkpoint migration history = %#v", got)
+	}
+	if status, err := func() (sessionidentity.SessionEventStreamStatus, error) {
+		db, id, enabled, err := sqliteSessionEventStore(path)
+		if err != nil || !enabled {
+			return sessionidentity.SessionEventStreamStatus{}, err
+		}
+		return db.EventStreamStatus(context.Background(), id)
+	}(); err != nil || !status.ImportVerified || status.ImportSourceSHA256 == "" {
+		t.Fatalf("verified checkpoint-upgrade event stream = %#v, %v", status, err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("legacy-reader transcript checkpoint missing after upgrade: %v", err)
+	}
+	if len(legacyCheckpoint) == 0 {
+		t.Fatal("legacy fixture checkpoint was empty")
+	}
+	t.Setenv(previewSQLiteEventsEnv, "0")
+	t.Setenv(SessionLogSchemaEnv, "v1")
+	oldReader, err := LoadSession(path)
+	if err != nil || !reflect.DeepEqual(dagContents(oldReader.Messages), []string{"legacy system", "old question", "old answer", "new question"}) {
+		t.Fatalf("old schema-1 reader failed after checkpoint migration: messages=%#v err=%v", dagContents(oldReader.Messages), err)
+	}
+}
+
 func TestSQLiteSessionDAGImportsLegacyGenerationAndRepairsProjection(t *testing.T) {
 	path := prepareSQLiteEventTestSession(t)
 	base := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
@@ -342,6 +649,44 @@ func TestSQLiteSessionUnverifiedImportCannotBypassShadowValidationAfterRestart(t
 	status, err := db.EventStreamStatus(context.Background(), sessionID)
 	if err != nil || status.ImportVerified {
 		t.Fatalf("interrupted import status = %#v err=%v; want unverified", status, err)
+	}
+}
+
+func TestSQLiteSessionDamagedLegacyImportIsAtomicAndLeavesSourceUntouched(t *testing.T) {
+	path := prepareSQLiteEventTestSession(t)
+	base := time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC)
+	entries := []sessionDAGEntry{
+		{Type: sessionDAGTypeLog, Generation: 1, At: base},
+		dagMessageEntry(t, SessionMainHead, "", "turn-damaged-import", dagMsg(provider.RoleUser, "valid prefix", "valid-message"), base.Add(time.Second)),
+	}
+	data, err := encodeSessionDAGEntries(entries, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = append(data, []byte(`{"schema_version":2,"type":"message","id":`)...)
+	data = append(data, '\n')
+	pathToLog := store.SessionEventLog(path)
+	if err := os.WriteFile(pathToLog, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	db, sessionID, enabled, err := sqliteSessionEventStore(path)
+	if err != nil || !enabled {
+		t.Fatalf("open isolated event store: enabled=%v err=%v", enabled, err)
+	}
+	if _, err := replaySessionDAG(context.Background(), pathToLog, defaultSessionReplayLimits); err == nil {
+		t.Fatal("damaged legacy event log was imported")
+	}
+	last, err := db.LastEventSequence(context.Background(), sessionID)
+	if err != nil || last != 0 {
+		t.Fatalf("partial events persisted after rejected import: last=%d err=%v", last, err)
+	}
+	status, err := db.EventStreamStatus(context.Background(), sessionID)
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("event stream after rejected import = %#v, %v; want no stream", status, err)
+	}
+	after, err := os.ReadFile(pathToLog)
+	if err != nil || !bytes.Equal(after, data) {
+		t.Fatalf("rejected import changed source bytes: err=%v", err)
 	}
 }
 
@@ -430,6 +775,192 @@ func TestSQLiteSessionDAGCrashAfterCommitRecoversFromDatabase(t *testing.T) {
 	}
 }
 
+func TestSQLiteSessionDAGCrashAfterProjectionStageRecoversFromDatabase(t *testing.T) {
+	path := prepareSQLiteEventTestSession(t)
+	base := time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC)
+	first := []sessionDAGEntry{
+		{Type: sessionDAGTypeLog, Generation: 1, At: base},
+		dagMessageEntry(t, SessionMainHead, "", "turn-stage", dagMsg("user", "first", "stage-1"), base.Add(time.Second)),
+	}
+	if _, err := appendSessionDAGEntries(path, first, true); err != nil {
+		t.Fatalf("append initial SQLite DAG: %v", err)
+	}
+	projectionPath := store.SessionEventLog(path)
+	projectionBefore, err := os.ReadFile(projectionPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousCrashPoint := fileutil.CrashPoint
+	t.Cleanup(func() { fileutil.CrashPoint = previousCrashPoint })
+	fileutil.CrashPoint = func(op, target string) {
+		if op == "staged-write-publish" && target == projectionPath {
+			panic("simulated process crash after projection stage")
+		}
+	}
+	crashed := false
+	func() {
+		defer func() { crashed = recover() != nil }()
+		entry := dagMessageEntry(t, SessionMainHead, "stage-1", "turn-stage", dagMsg("assistant", "committed", "stage-2"), base.Add(2*time.Second))
+		_, _ = appendSessionDAGEntries(path, []sessionDAGEntry{entry}, true)
+	}()
+	if !crashed {
+		t.Fatal("expected injected crash after projection staging")
+	}
+	fileutil.CrashPoint = previousCrashPoint
+	projectionAfterCrash, err := os.ReadFile(projectionPath)
+	if err != nil || !bytes.Equal(projectionAfterCrash, projectionBefore) {
+		t.Fatalf("projection changed before staged publish: err=%v", err)
+	}
+	state, err := replaySessionDAG(context.Background(), projectionPath, defaultSessionReplayLimits)
+	if err != nil || !state.sqliteBacked || state.records != 3 {
+		t.Fatalf("replay after staged projection crash: backing=%v records=%d err=%v", state.sqliteBacked, state.records, err)
+	}
+	messages, _ := state.materialize(SessionMainHead)
+	if got := dagContents(messages); len(got) != 2 || got[1] != "committed" {
+		t.Fatalf("recovered history after staged projection crash = %#v", got)
+	}
+	projectionAfterRecovery, err := os.ReadFile(projectionPath)
+	if err != nil || bytes.Equal(projectionAfterRecovery, projectionBefore) {
+		t.Fatalf("projection was not rebuilt after staged publish crash: err=%v", err)
+	}
+}
+
+func TestSQLiteSessionDAGCrashAfterProjectionPublishRepairsWatermark(t *testing.T) {
+	path := prepareSQLiteEventTestSession(t)
+	base := time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC)
+	first := []sessionDAGEntry{
+		{Type: sessionDAGTypeLog, Generation: 1, At: base},
+		dagMessageEntry(t, SessionMainHead, "", "turn-publish", dagMsg("user", "first", "publish-1"), base.Add(time.Second)),
+	}
+	if _, err := appendSessionDAGEntries(path, first, true); err != nil {
+		t.Fatalf("append initial SQLite DAG: %v", err)
+	}
+	projectionPath := store.SessionEventLog(path)
+	previousCrashPoint := fileutil.CrashPoint
+	t.Cleanup(func() { fileutil.CrashPoint = previousCrashPoint })
+	fileutil.CrashPoint = func(op, target string) {
+		if op == "dag-sqlite-projection-published" && target == projectionPath {
+			panic("simulated process crash after projection publish")
+		}
+	}
+	crashed := false
+	func() {
+		defer func() { crashed = recover() != nil }()
+		entry := dagMessageEntry(t, SessionMainHead, "publish-1", "turn-publish", dagMsg("assistant", "committed", "publish-2"), base.Add(2*time.Second))
+		_, _ = appendSessionDAGEntries(path, []sessionDAGEntry{entry}, true)
+	}()
+	if !crashed {
+		t.Fatal("expected injected crash after projection publish")
+	}
+	fileutil.CrashPoint = previousCrashPoint
+	db, sessionID, _, err := sqliteSessionEventStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err := db.EventStreamStatus(context.Background(), sessionID)
+	if err != nil || status.LastSequence != 3 || status.ProjectionSequence >= status.LastSequence {
+		t.Fatalf("pre-recovery event watermarks = %#v, %v; want committed events with pending projection mark", status, err)
+	}
+	projection, err := os.ReadFile(projectionPath)
+	if err != nil || !bytes.Contains(projection, []byte(`"id":"publish-2"`)) {
+		t.Fatalf("published projection after injected crash does not contain committed event: err=%v", err)
+	}
+	state, err := replaySessionDAG(context.Background(), projectionPath, defaultSessionReplayLimits)
+	if err != nil || !state.sqliteBacked || state.records != 3 {
+		t.Fatalf("replay after published projection crash: backing=%v records=%d err=%v", state.sqliteBacked, state.records, err)
+	}
+	status, err = db.EventStreamStatus(context.Background(), sessionID)
+	if err != nil || status.ProjectionSequence != status.LastSequence || status.ProjectionSHA256 == "" {
+		t.Fatalf("repaired projection watermark = %#v, %v", status, err)
+	}
+}
+
+func TestSQLiteSessionDAGRecoversAfterAbruptProjectionCrash(t *testing.T) {
+	if mode := os.Getenv(sqliteDAGCrashModeEnv); mode != "" {
+		path := os.Getenv(sqliteDAGCrashPathEnv)
+		os.Setenv("REASONIX_STATE_HOME", os.Getenv(sqliteDAGCrashRootEnv))
+		os.Setenv(previewSQLiteEventsEnv, "1")
+		fileutil.CrashPoint = func(op, target string) {
+			if op == mode && target == store.SessionEventLog(path) {
+				os.Exit(sqliteDAGCrashExit)
+			}
+		}
+		base := time.Date(2026, 9, 4, 0, 0, 0, 0, time.UTC)
+		entries := []sessionDAGEntry{
+			{Type: sessionDAGTypeLog, Generation: 1, At: base},
+			dagMessageEntry(t, SessionMainHead, "", "turn-process-crash", dagMsg(provider.RoleUser, "committed before crash", "process-crash-message"), base.Add(time.Second)),
+		}
+		if _, err := appendSessionDAGEntries(path, entries, true); err != nil {
+			t.Fatalf("append before injected process exit: %v", err)
+		}
+		t.Fatal("crash injection point was not reached")
+	}
+
+	for _, mode := range []string{"dag-sqlite-committed", "staged-write-publish", "dag-sqlite-projection-published"} {
+		t.Run(mode, func(t *testing.T) {
+			root := t.TempDir()
+			t.Setenv("REASONIX_STATE_HOME", root)
+			t.Setenv(previewSQLiteEventsEnv, "1")
+			sessionDir := config.SessionDir()
+			if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			id := "sqlite-crash-" + mode
+			path := filepath.Join(sessionDir, "tauri-"+id+".jsonl")
+			identities, err := sessionidentity.Open(context.Background(), config.DesktopSessionIdentityPath(), root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := identities.Reserve(context.Background(), sessionDir, sessionidentity.Candidate{ID: id, Path: path}); err != nil {
+				_ = identities.Close()
+				t.Fatal(err)
+			}
+			if err := identities.Close(); err != nil {
+				t.Fatal(err)
+			}
+
+			command := exec.Command(os.Args[0], "-test.run=^TestSQLiteSessionDAGRecoversAfterAbruptProjectionCrash$")
+			command.Env = append(os.Environ(), sqliteDAGCrashModeEnv+"="+mode, sqliteDAGCrashPathEnv+"="+path, sqliteDAGCrashRootEnv+"="+root)
+			output, err := command.CombinedOutput()
+			var exitError *exec.ExitError
+			exitCode := -1
+			if errors.As(err, &exitError) {
+				exitCode = exitError.ExitCode()
+			}
+			if exitCode != sqliteDAGCrashExit {
+				t.Fatalf("crash writer exit = %v (code %d), output: %s", err, exitCode, output)
+			}
+
+			db, sessionID, enabled, err := sqliteSessionEventStore(path)
+			if err != nil || !enabled {
+				t.Fatalf("reopen event store after process exit: enabled=%v err=%v", enabled, err)
+			}
+			t.Cleanup(func() {
+				if cached, ok := sessionEventStores.Load(filepath.Clean(config.DesktopSessionIdentityPath())); ok {
+					_ = cached.(*sessionidentity.Store).Close()
+					sessionEventStores.Delete(filepath.Clean(config.DesktopSessionIdentityPath()))
+				}
+			})
+			status, err := db.EventStreamStatus(context.Background(), sessionID)
+			if err != nil || status.LastSequence != 2 {
+				t.Fatalf("committed event stream after abrupt %s exit = %#v, %v", mode, status, err)
+			}
+			state, err := replaySessionDAG(context.Background(), store.SessionEventLog(path), defaultSessionReplayLimits)
+			if err != nil || !state.sqliteBacked || state.records != 2 {
+				t.Fatalf("recover projection after abrupt %s exit: backing=%v records=%d err=%v", mode, state.sqliteBacked, state.records, err)
+			}
+			messages, _ := state.materialize(SessionMainHead)
+			if len(messages) != 1 || messages[0].Content != "committed before crash" {
+				t.Fatalf("recovered message after abrupt %s exit = %#v", mode, messages)
+			}
+			status, err = db.EventStreamStatus(context.Background(), sessionID)
+			if err != nil || status.ProjectionSequence != status.LastSequence {
+				t.Fatalf("projection watermark after abrupt %s recovery = %#v, %v", mode, status, err)
+			}
+		})
+	}
+}
+
 func TestSQLiteSessionCheckpointProjectionRecoversAfterCrash(t *testing.T) {
 	path := prepareSQLiteEventTestSession(t)
 	session := NewSession("system prompt")
@@ -499,6 +1030,9 @@ func TestSQLiteSessionDAGShadowReplayMatchesJSONLForBranchesAndRedaction(t *test
 	jsonlState, err := replaySessionDAGFile(context.Background(), logPath, defaultSessionReplayLimits)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !sessionDAGShadowSemanticsEqual(jsonlState, sqliteState) {
+		t.Fatal("SQLite reducer and JSONL reducer differ in DAG metadata, heads, turns, redactions, compaction, or materialized messages")
 	}
 	if !sqliteState.sqliteBacked || sqliteState.records != jsonlState.records || sqliteState.selectedHead() != jsonlState.selectedHead() {
 		t.Fatalf("shadow state differs: sqlite records/head %d/%q; JSONL %d/%q", sqliteState.records, sqliteState.selectedHead(), jsonlState.records, jsonlState.selectedHead())

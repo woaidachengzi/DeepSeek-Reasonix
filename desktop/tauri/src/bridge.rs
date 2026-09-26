@@ -133,13 +133,6 @@ pub struct PendingSessionDeletePage {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct PendingSessionDeletesResponse {
-    protocol_version: u8,
-    sessions: Vec<PendingSessionDelete>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
 struct PendingSessionDeletesPageResponse {
     protocol_version: u8,
     sessions: Vec<PendingSessionDeletePageEntry>,
@@ -998,15 +991,6 @@ impl BridgeSupervisor {
             snapshot.directory.snapshot_id,
             physical,
         ))
-    }
-
-    /// Reads path-free identities left in the explicit deleting state. These
-    /// remain separate from ordinary paging and are never auto-deleted here.
-    pub fn pending_session_deletes(&self) -> Result<Vec<PendingSessionDelete>, String> {
-        let response = self.request_json("GET", "/v1/sessions/deletion-recovery", None, None)?;
-        let envelope: PendingSessionDeletesResponse =
-            serde_json::from_value(response).map_err(display_error)?;
-        validate_pending_session_deletes(envelope)
     }
 
     pub fn pending_session_deletes_page(
@@ -2198,25 +2182,6 @@ fn valid_session_snapshot_id(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-fn validate_pending_session_deletes(
-    envelope: PendingSessionDeletesResponse,
-) -> Result<Vec<PendingSessionDelete>, String> {
-    if envelope.protocol_version != PROTOCOL_VERSION || envelope.sessions.len() > 10_000 {
-        return Err("desktop bridge deletion recovery response is invalid".to_string());
-    }
-    let mut seen = std::collections::HashSet::with_capacity(envelope.sessions.len());
-    for pending in &envelope.sessions {
-        if session_path_component(&pending.id)? != pending.id
-            || pending.title.chars().count() > 1024
-            || pending.title.chars().any(char::is_control)
-            || !seen.insert(pending.id.as_str())
-        {
-            return Err("desktop bridge deletion recovery entry is invalid".to_string());
-        }
-    }
-    Ok(envelope.sessions)
-}
-
 fn validate_pending_session_deletes_page(
     envelope: PendingSessionDeletesPageResponse,
 ) -> Result<PendingSessionDeletePage, String> {
@@ -2243,7 +2208,7 @@ fn validate_pending_session_deletes_page(
             || envelope
                 .sessions
                 .last()
-                .map_or(true, |entry| entry.id != cursor.id)
+                .is_none_or(|entry| entry.id != cursor.id)
         {
             return Err("desktop bridge deletion recovery cursor is invalid".to_string());
         }
@@ -2422,13 +2387,15 @@ mod tests {
     use super::{
         open_event_stream, parse_json_response, read_bounded_response, request_json,
         session_directory_path, session_path_component, validate_attachment,
-        validate_pending_session_deletes, validate_pending_session_title_recoveries,
+        validate_pending_session_deletes_page, validate_pending_session_title_recoveries,
         validate_session_directory_page, validate_session_directory_snapshot, verify_bridge_health,
         verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSupervisor,
-        EventStreamError, OpenSessionRequest, PendingSessionDelete, PendingSessionDeletesResponse,
+        EventStreamError, OpenSessionRequest, PendingSessionDelete,
+        PendingSessionDeletesPageResponse,
         PendingSessionTitleRecoveriesResponse, PendingSessionTitleRecovery, RenameSessionRequest,
         SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
-        SessionDirectoryPage, SessionInventoryResponse, SessionRequest, PROTOCOL_VERSION,
+        SessionDirectoryPage, SessionInventoryResponse, SessionRequest, SubmitRequest,
+        PROTOCOL_VERSION,
     };
     use crate::{session_shadow, workbench_catalog::WorkbenchSession};
     use serde_json::json;
@@ -2592,18 +2559,19 @@ mod tests {
     }
 
     #[test]
-    fn pending_session_delete_response_is_bounded_unique_and_path_free() {
-        let entries = validate_pending_session_deletes(PendingSessionDeletesResponse {
+    fn pending_session_delete_page_is_bounded_unique_and_path_free() {
+        let page = validate_pending_session_deletes_page(PendingSessionDeletesPageResponse {
             protocol_version: PROTOCOL_VERSION,
             sessions: vec![PendingSessionDelete {
                 id: "interrupted-delete".into(),
                 title: "Interrupted conversation".into(),
             }],
+            next_cursor: None,
         })
         .expect("valid pending deletion");
-        assert_eq!(entries.len(), 1);
+        assert_eq!(page.sessions.len(), 1);
         assert!(
-            validate_pending_session_deletes(PendingSessionDeletesResponse {
+            validate_pending_session_deletes_page(PendingSessionDeletesPageResponse {
                 protocol_version: PROTOCOL_VERSION,
                 sessions: vec![
                     PendingSessionDelete {
@@ -2615,19 +2583,30 @@ mod tests {
                         title: "two".into()
                     },
                 ],
+                next_cursor: None,
             })
             .is_err()
         );
         assert!(
-            validate_pending_session_deletes(PendingSessionDeletesResponse {
+            validate_pending_session_deletes_page(PendingSessionDeletesPageResponse {
                 protocol_version: PROTOCOL_VERSION,
                 sessions: vec![PendingSessionDelete {
                     id: "../outside".into(),
                     title: "unsafe".into()
                 }],
+                next_cursor: None,
             })
             .is_err()
         );
+        assert!(validate_pending_session_deletes_page(PendingSessionDeletesPageResponse {
+            protocol_version: PROTOCOL_VERSION,
+            sessions: vec![PendingSessionDelete {
+                id: "first".into(),
+                title: "First".into(),
+            }],
+            next_cursor: Some(super::PendingSessionDeleteCursor { id: "later".into() }),
+        })
+        .is_err());
     }
 
     #[test]
@@ -3263,8 +3242,9 @@ mod tests {
         assert_eq!(combined_inventory.unclaimed_count, 0);
         assert_eq!(combined_inventory.error_count, 0);
         assert!(supervisor
-            .pending_session_deletes()
-            .expect("read empty deletion recovery list")
+            .pending_session_deletes_page(None)
+            .expect("read first deletion recovery page")
+            .sessions
             .is_empty());
         assert!(supervisor
             .pending_session_title_recoveries()
@@ -3409,6 +3389,42 @@ mod tests {
         env::set_var("REASONIX_HOME", home.path());
         env::remove_var("REASONIX_STATE_HOME");
         env::set_var("REASONIX_PREVIEW_SQLITE_EVENTS", "1");
+        let provider_listener = TcpListener::bind("127.0.0.1:0").expect("bind fake provider");
+        let provider_address = provider_listener.local_addr().expect("provider address");
+        provider_listener
+            .set_nonblocking(true)
+            .expect("set provider listener nonblocking");
+        let (provider_served_tx, provider_served_rx) = mpsc::channel();
+        let (provider_stop_tx, provider_stop_rx) = mpsc::channel();
+        let provider_thread = thread::spawn(move || {
+            let deadline = std::time::Instant::now() + Duration::from_secs(20);
+            while std::time::Instant::now() < deadline && provider_stop_rx.try_recv().is_err() {
+                match provider_listener.accept() {
+                    Ok((mut stream, _)) => {
+                        let mut request = [0u8; 65_536];
+                        let _ = stream.read(&mut request);
+                        let body = b"data: {\"choices\":[{\"delta\":{\"content\":\"preview SQLite answer\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n";
+                        write!(
+                            stream,
+                            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            body.len()
+                        )
+                        .expect("write fake provider headers");
+                        stream.write_all(body).expect("write fake provider stream");
+                        let _ = provider_served_tx.send(());
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(error) => panic!("accept fake provider request: {error}"),
+                }
+            }
+        });
+        let provider_config = format!(
+            "default_model = \"local/alpha\"\n\n[desktop]\nprovider_access = [\"local\"]\n\n[[providers]]\nname = \"local\"\nkind = \"openai\"\nbase_url = \"http://{provider_address}/v1\"\nmodels = [\"alpha\"]\ndefault = \"alpha\"\n"
+        );
+        std::fs::write(home.path().join("config.toml"), provider_config)
+            .expect("configure fake local provider");
         let supervisor = BridgeSupervisor::with_binary(binary);
         supervisor.start().expect("start managed Preview sidecar");
 
@@ -3430,7 +3446,7 @@ mod tests {
             .join(format!("{stem}.events.jsonl"));
         std::fs::write(
             &session_path,
-            b"{\"role\":\"user\",\"content\":\"legacy checkpoint\"}\n",
+            b"{\"role\":\"system\",\"content\":\"test system prompt\"}\n{\"role\":\"user\",\"content\":\"legacy checkpoint\"}\n",
         )
         .expect("write isolated compatibility checkpoint");
         let legacy_events = b"{\"schema_version\":2,\"type\":\"log\",\"generation\":1,\"at\":\"2026-09-26T00:00:00Z\"}\n";
@@ -3449,21 +3465,138 @@ mod tests {
             "managed Preview SQLite database was not created"
         );
 
-        std::fs::write(&event_path, b"stale projection\n").expect("corrupt only the projection");
+        std::fs::write(&event_path, b"stale imported projection\n")
+            .expect("corrupt imported projection");
         supervisor
             .restart()
-            .expect("restart before projection recovery");
+            .expect("restart before imported projection recovery");
         supervisor
             .open_session(OpenSessionRequest {
                 session_id: session_id.to_string(),
                 workspace_root: None,
             })
+            .expect("recover imported projection from SQLite");
+        let repaired_import = std::fs::read(&event_path).expect("read imported event projection");
+        assert!(repaired_import.starts_with(legacy_events));
+        supervisor
+            .restart()
+            .expect("restart after validating imported session recovery");
+
+        let write_session_id = "tauri-e2e-sqlite-write";
+        let write_opened = supervisor
+            .open_session(OpenSessionRequest {
+                session_id: write_session_id.to_string(),
+                workspace_root: None,
+            })
+            .expect("open fresh Preview session for SQLite write");
+        let write_session_path = std::path::PathBuf::from(&write_opened.path);
+        let write_stem = write_session_path
+            .file_stem()
+            .expect("write session transcript filename")
+            .to_string_lossy();
+        let write_event_path = write_session_path
+            .parent()
+            .expect("write session transcript directory")
+            .join(format!("{write_stem}.events.jsonl"));
+
+        supervisor
+            .submit(SubmitRequest {
+                session_id: write_session_id.to_string(),
+                input: "write an event into Preview SQLite".to_string(),
+            })
+            .expect("submit through the real bridge");
+        let history_deadline = std::time::Instant::now() + Duration::from_secs(15);
+        let history = loop {
+            let history = supervisor
+                .history(SessionRequest {
+                    session_id: write_session_id.to_string(),
+                })
+                .expect("read submitted session history");
+            if history
+                .messages
+                .iter()
+                .any(|message| message.content == "preview SQLite answer")
+                && history.session.state == "idle"
+            {
+                break history;
+            }
+            assert!(
+                std::time::Instant::now() < history_deadline,
+                "bridge turn did not finish; state={:?}, messages={:?}, provider_requests={}",
+                history.session.state,
+                history
+                    .messages
+                    .iter()
+                    .map(|message| (&message.role, &message.content))
+                    .collect::<Vec<_>>(),
+                provider_served_rx.try_iter().count()
+            );
+            thread::sleep(Duration::from_millis(25));
+        };
+        assert!(history
+            .messages
+            .iter()
+            .any(|message| message.content == "write an event into Preview SQLite"));
+        let _ = provider_stop_tx.send(());
+        provider_thread.join().expect("fake provider stopped");
+        let turn_persistence_deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            if std::fs::read_to_string(&write_session_path)
+                .is_ok_and(|saved| saved.contains("preview SQLite answer"))
+            {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < turn_persistence_deadline,
+                "completed bridge turn was not checkpointed before sidecar shutdown"
+            );
+            thread::sleep(Duration::from_millis(20));
+        }
+        let turn_projection = std::fs::read_to_string(&write_event_path)
+            .expect("read event projection after completed turn");
+        assert!(
+            turn_projection.contains("preview SQLite answer"),
+            "completed bridge turn did not reach SQLite before sidecar shutdown"
+        );
+        supervisor
+            .restart()
+            .expect("snapshot completed turn while restarting the sidecar");
+        let saved_checkpoint =
+            std::fs::read_to_string(&write_session_path).expect("read shutdown checkpoint");
+        assert!(
+            saved_checkpoint.contains("preview SQLite answer"),
+            "sidecar shutdown did not save the completed bridge turn"
+        );
+        let saved_projection =
+            std::fs::read_to_string(&write_event_path).expect("read SQLite projection");
+        assert!(
+            saved_projection.contains("preview SQLite answer"),
+            "sidecar shutdown did not append the completed bridge turn to SQLite: {saved_projection}"
+        );
+
+        std::fs::write(&write_event_path, b"stale projection\n")
+            .expect("corrupt only the new session projection");
+        supervisor
+            .restart()
+            .expect("restart before projection recovery");
+        supervisor
+            .open_session(OpenSessionRequest {
+                session_id: write_session_id.to_string(),
+                workspace_root: None,
+            })
             .expect("recover event projection from SQLite");
-        let repaired = std::fs::read(&event_path).expect("read repaired event projection");
+        let repaired = std::fs::read(&write_event_path).expect("read repaired event projection");
         let repaired_text = String::from_utf8(repaired).expect("UTF-8 event projection");
-        assert!(repaired_text.starts_with(
-            std::str::from_utf8(legacy_events).expect("legacy event projection UTF-8")
-        ));
+        assert!(repaired_text.contains("preview SQLite answer"));
+        let reopened = supervisor
+            .history(SessionRequest {
+                session_id: write_session_id.to_string(),
+            })
+            .expect("read history after second sidecar restart");
+        assert!(reopened
+            .messages
+            .iter()
+            .any(|message| message.content == "preview SQLite answer"));
         supervisor.stop().expect("stop managed Preview sidecar");
     }
 

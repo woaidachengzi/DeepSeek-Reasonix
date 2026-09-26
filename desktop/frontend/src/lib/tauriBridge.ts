@@ -128,6 +128,7 @@ export interface TauriWorkbenchSessionPage {
   titleMismatchCount?: number;
   missingTranscriptCount?: number;
   shadowReport?: TauriSessionShadowReport;
+  catalogWarning?: string;
 }
 
 export interface TauriScanImportCandidate {
@@ -329,11 +330,6 @@ export async function tauriScanUnclaimedSessions(): Promise<TauriScanImportCandi
 export async function tauriImportUnclaimedSessions(selected: TauriScanImportSelection[]): Promise<string[]> {
   requireTauri();
   return invoke<string[]>("import_unclaimed_workbench_sessions", { selected });
-}
-
-export async function tauriPendingSessionDeletes(): Promise<TauriPendingSessionDelete[]> {
-  requireTauri();
-  return invoke<TauriPendingSessionDelete[]>("bridge_pending_session_deletes");
 }
 
 export async function tauriPendingSessionDeletesPage(

@@ -3652,6 +3652,25 @@ func TestRebuildSettingLockedRestoresSessionAuthorizations(t *testing.T) {
 	}
 }
 
+func TestFreshSessionDoesNotInheritPreviousSessionAuthorizations(t *testing.T) {
+	oldCtrl := control.New(control.Options{})
+	oldCtrl.RestoreSessionAuthorizations(control.SessionAuthorizations{
+		Grants:                   []string{"bash|go test ./..."},
+		PlanModeReadOnlyCommands: []string{"go test ./..."},
+	})
+	freshCtrl := control.New(control.Options{})
+	t.Cleanup(oldCtrl.Close)
+	t.Cleanup(freshCtrl.Close)
+
+	// Session switches configure a new controller without the old controller;
+	// only same-session rebuild paths pass it to configureControllerRuntime.
+	configureControllerRuntime(freshCtrl, nil, normalizedTabRuntime{})
+	got := freshCtrl.SessionAuthorizations()
+	if len(got.Grants) != 0 || len(got.PlanModeReadOnlyCommands) != 0 || len(got.WriteRoots) != 0 {
+		t.Fatalf("fresh session inherited authorizations: %+v", got)
+	}
+}
+
 func TestSetModelForTabContinuesRecoveryPathAfterSnapshotConflict(t *testing.T) {
 	isolateDesktopUserDirsSchemaOne(t)
 	setDesktopTestCredential(t, "OLD_MODEL_KEY", "sk-test")

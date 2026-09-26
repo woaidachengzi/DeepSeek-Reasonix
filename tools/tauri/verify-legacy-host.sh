@@ -15,6 +15,14 @@ git -C "$repo_root" cat-file -e "${legacy_rev}^{commit}"
 mkdir -p "$legacy_root" "$bridge_root"
 git -C "$repo_root" archive "$legacy_rev" | tar -x -C "$legacy_root"
 git -C "$repo_root" archive "$current_rev" | tar -x -C "$bridge_root"
+# The compatibility run must exercise the bridge that is actually in the
+# worktree, including staged and unstaged edits. Keep the source archive
+# reproducible from HEAD, then overlay its complete tracked diff and any
+# non-ignored untracked source files into the isolated build copy.
+git -C "$repo_root" diff --binary HEAD -- | git -C "$bridge_root" apply --binary
+git -C "$repo_root" ls-files --others --exclude-standard -z \
+  | tar --null -T - -cf - \
+  | tar -xf - -C "$bridge_root"
 
 (
   cd "$bridge_root"
@@ -25,9 +33,8 @@ sidecar_dir="$legacy_root/desktop/tauri/binaries"
 mkdir -p "$sidecar_dir"
 cp "$bridge_bin" "$sidecar_dir/reasonix-desktop-bridge-$host_triple"
 
-run_host_integration() {
-  local test_name="$1"
-  local profile_root="$work_root/profile-$test_name"
+run_host_compatibility_suite() {
+  local profile_root="$work_root/profile-compatibility-suite"
   mkdir -p "$profile_root"
   (
     cd "$legacy_root/desktop/tauri"
@@ -35,13 +42,11 @@ run_host_integration() {
       REASONIX_STATE_HOME="$profile_root/state" \
       REASONIX_TAURI_BRIDGE_TEST_BIN="$bridge_bin" \
       CARGO_TARGET_DIR="$target_root" \
-      cargo test --offline --manifest-path "$legacy_root/desktop/tauri/Cargo.toml" "$test_name"
+      cargo test --offline --manifest-path "$legacy_root/desktop/tauri/Cargo.toml" -- --test-threads=1
   )
 }
 
-run_host_integration supervisor_starts_and_stops_a_real_bridge_when_provided
-run_host_integration session_title_survives_a_sidecar_restart
-run_host_integration deleting_a_session_removes_its_artifacts_and_keeps_other_sessions
+run_host_compatibility_suite
 
 (
   cd "$legacy_root/desktop/tauri"
@@ -51,7 +56,11 @@ run_host_integration deleting_a_session_removes_its_artifacts_and_keeps_other_se
 
 host_bin="$target_root/debug/reasonix-tauri"
 printf 'legacy host source: %s\n' "$legacy_rev"
-printf 'current bridge source: %s\n' "$current_rev"
+printf 'current bridge HEAD: %s\n' "$current_rev"
+printf 'current bridge tracked diff: '
+git -C "$repo_root" diff --binary HEAD -- | shasum -a 256
+printf 'current bridge binary: %s\n' "$bridge_bin"
+shasum -a 256 "$bridge_bin"
 printf 'candidate host binary: %s\n' "$host_bin"
 shasum -a 256 "$host_bin"
 printf 'isolated artifacts and profiles: %s\n' "$work_root"

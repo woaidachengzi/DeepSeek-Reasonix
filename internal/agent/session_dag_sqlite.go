@@ -295,6 +295,10 @@ func sqliteDAGEventBytes(ctx context.Context, sessionPath string, limits session
 }
 
 func appendSQLiteDAGEvents(sessionPath string, entries []sessionDAGEntry, encoded []byte) (int64, bool, error) {
+	return appendSQLiteDAGEventsWithinLimits(sessionPath, entries, encoded, defaultSessionReplayLimits)
+}
+
+func appendSQLiteDAGEventsWithinLimits(sessionPath string, entries []sessionDAGEntry, encoded []byte, limits sessionReplayLimits) (int64, bool, error) {
 	db, sessionID, enabled, err := sqliteSessionEventStore(sessionPath)
 	if err != nil || !enabled {
 		return 0, enabled, err
@@ -322,7 +326,7 @@ func appendSQLiteDAGEvents(sessionPath string, entries []sessionDAGEntry, encode
 			MessageID: entry.ID, WriterID: entry.Writer, CreatedAt: entry.At.UnixMilli(), Payload: payload,
 		})
 	}
-	if _, err := db.AppendEvents(ctx, sessionID, events); err != nil {
+	if _, err := db.AppendEventsWithinLimits(ctx, sessionID, events, int64(limits.maxRecords), limits.maxBytes); err != nil {
 		return 0, true, fmt.Errorf("commit session events to SQLite: %w", err)
 	}
 	fileutil.Crash("dag-sqlite-committed", store.SessionEventLog(sessionPath))
@@ -345,12 +349,19 @@ func appendSQLiteDAGEvents(sessionPath string, entries []sessionDAGEntry, encode
 }
 
 func replaceSQLiteDAGEvents(sessionPath string, entries []sessionDAGEntry, expectedSequence int64) (bool, error) {
+	return replaceSQLiteDAGEventsWithinLimits(sessionPath, entries, expectedSequence, defaultSessionReplayLimits)
+}
+
+func replaceSQLiteDAGEventsWithinLimits(sessionPath string, entries []sessionDAGEntry, expectedSequence int64, limits sessionReplayLimits) (bool, error) {
 	db, sessionID, enabled, err := sqliteSessionEventStore(sessionPath)
 	if err != nil || !enabled {
 		return enabled, err
 	}
 	ctx := context.Background()
 	if _, err := ensureSQLiteDAGImport(ctx, sessionPath, db, sessionID, defaultSessionReplayLimits); err != nil {
+		return true, err
+	}
+	if err := checkSQLiteDAGReplacementBudget(sessionPath, entries, limits); err != nil {
 		return true, err
 	}
 	status, err := db.EventStreamStatus(ctx, sessionID)
@@ -376,12 +387,30 @@ func replaceSQLiteDAGEvents(sessionPath string, entries []sessionDAGEntry, expec
 		return true, fmt.Errorf("rotate SQLite session events: %w", err)
 	}
 	fileutil.Crash("dag-sqlite-rotated", store.SessionEventLog(sessionPath))
-	if _, err := writeSQLiteDAGProjection(ctx, db, sessionID, generation, sequence, store.SessionEventLog(sessionPath), defaultSessionReplayLimits); err != nil {
+	if _, err := writeSQLiteDAGProjection(ctx, db, sessionID, generation, sequence, store.SessionEventLog(sessionPath), limits); err != nil {
 		// Rotation has committed in SQLite; the compatibility projection can be
 		// rebuilt from the new generation on the next managed Preview read.
 		slog.Warn("session: SQLite event projection pending after rotation", "path", sessionPath, "err", err)
 	}
 	return true, nil
+}
+
+func checkSQLiteDAGReplacementBudget(path string, entries []sessionDAGEntry, limits sessionReplayLimits) error {
+	if len(entries) > limits.maxRecords {
+		return sessionReplayLimitError(path, "event_records", int64(len(entries)), int64(limits.maxRecords))
+	}
+	var projectionBytes int64
+	for _, entry := range entries {
+		payload, err := json.Marshal(entry)
+		if err != nil {
+			return err
+		}
+		if err := checkSQLiteProjectionBudget(path, projectionBytes, len(payload)+1, limits.maxBytes); err != nil {
+			return err
+		}
+		projectionBytes += int64(len(payload)) + 1
+	}
+	return nil
 }
 
 func writeSQLiteDAGProjection(ctx context.Context, db *sessionidentity.Store, sessionID string, generation, sequence int64, projectionPath string, limits sessionReplayLimits) (int64, error) {
@@ -411,6 +440,7 @@ func writeSQLiteDAGProjection(ctx context.Context, db *sessionidentity.Store, se
 		_ = os.Remove(staged)
 		return 0, err
 	}
+	fileutil.Crash("dag-sqlite-projection-published", projectionPath)
 	digest := sha256.Sum256(data.Bytes())
 	if err := db.MarkEventProjection(ctx, sessionID, generation, sequence, hex.EncodeToString(digest[:])); err != nil {
 		return 0, err

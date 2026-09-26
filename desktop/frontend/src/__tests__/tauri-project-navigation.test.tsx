@@ -33,7 +33,7 @@ const { TauriSessionApp } = await import("../tauri/TauriChatWorkspace");
 let root = createRoot(document.getElementById("root")!);
 await act(async () => { root.render(React.createElement(TauriSessionApp)); await new Promise(resolve => setTimeout(resolve, 0)); });
 assert.equal(document.querySelectorAll(".tauri-project-group").length, 3);
-assert.ok(document.querySelector('[aria-label="切换到项目 Saved empty project"]'));
+assert.ok(document.querySelector<HTMLButtonElement>('[aria-label="切换到项目 Saved empty project（历史会话尚未加载，先加载更多）"]')?.disabled);
 assert.ok(document.querySelector('[aria-label="在 Saved empty project 中新建对话"]'));
 assert.match(document.body.textContent ?? "", /整理报告并加测试/);
 const calls = (globalThis as unknown as { __tauriBridgeCalls: Array<{ name: string; args: Record<string, string> }> }).__tauriBridgeCalls;

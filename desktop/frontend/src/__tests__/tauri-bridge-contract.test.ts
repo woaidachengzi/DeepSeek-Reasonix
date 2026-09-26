@@ -51,7 +51,7 @@ interface CommandContract {
 //   bridge_switch_session,
 //   bridge_rename_session,
 //   bridge_delete_session,
-//   bridge_pending_session_deletes,
+//   bridge_pending_session_deletes_page,
 //   bridge_pending_session_title_recoveries,
 //   bridge_session_snapshot, bridge_session_history, bridge_submit, bridge_cancel,
 //   bridge_attach_file, bridge_workspace, bridge_workspace_file,
@@ -67,7 +67,7 @@ interface CommandContract {
 //   switchTauriBridgeSession,
 //   renameTauriBridgeSession,
 //   deleteTauriBridgeSession,
-//   tauriPendingSessionDeletes,
+//   tauriPendingSessionDeletesPage,
 //   tauriPendingSessionTitleRecoveries,
 //   tauriBridgeSnapshot, tauriBridgeHistory, submitTauriBridge, cancelTauriBridge,
 //   attachTauriFile, tauriWorkspace, tauriWorkspaceFile, tauriWorkspaceChanges,
@@ -79,9 +79,9 @@ interface CommandContract {
 
 const commands: CommandContract[] = [
   {
-    command: "bridge_pending_session_deletes",
-    argKeys: [],
-    description: "tauriPendingSessionDeletes() invokes bridge_pending_session_deletes with no args",
+    command: "bridge_pending_session_deletes_page",
+    argKeys: ["cursor"],
+    description: "tauriPendingSessionDeletesPage() invokes the bounded deletion recovery page command",
   },
   {
     command: "bridge_pending_session_title_recoveries",

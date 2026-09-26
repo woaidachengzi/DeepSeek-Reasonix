@@ -170,8 +170,9 @@ func validateExistingIdentityDatabase(ctx context.Context, path string) error {
 }
 
 // walLeavesSchemaPageUntouched is deliberately conservative: it only accepts
-// an unchanged, complete WAL with valid frame spacing and no page-1 frame.
-// It does not try to decide which frames SQLite would commit or recover.
+// an unchanged, complete WAL with valid header/frame checksums and salts, and
+// no page-1 frame. It does not try to decide which frames SQLite would commit
+// or recover.
 func walLeavesSchemaPageUntouched(file *os.File, mainPageSize int64) (bool, error) {
 	before, err := file.Stat()
 	if err != nil {
@@ -193,28 +194,68 @@ func walLeavesSchemaPageUntouched(file *os.File, mainPageSize int64) (bool, erro
 	if binary.BigEndian.Uint32(header[4:8]) != 3007000 {
 		return false, nil
 	}
+	var checksumOrder binary.ByteOrder = binary.LittleEndian
+	if magic == 0x377f0683 {
+		checksumOrder = binary.BigEndian
+	}
 	pageSize := int64(binary.BigEndian.Uint32(header[8:12]))
 	if pageSize != mainPageSize || pageSize < 512 || pageSize > 65536 || pageSize&(pageSize-1) != 0 {
 		return false, nil
 	}
-	frameSize := pageSize + 24
-	if (before.Size()-32)%frameSize != 0 {
-		return false, nil
+	checksum1, checksum2 := walChecksum(header[:24], checksumOrder, 0, 0)
+	if checksum1 != binary.BigEndian.Uint32(header[24:28]) || checksum2 != binary.BigEndian.Uint32(header[28:32]) {
+		return false, errors.New("session identity WAL header checksum is invalid")
 	}
-	var pageNumber [4]byte
-	for offset := int64(32); offset < before.Size(); offset += frameSize {
-		if _, err := file.ReadAt(pageNumber[:], offset); err != nil {
+	frameSize := pageSize + 24
+	completeEnd := before.Size() - (before.Size()-32)%frameSize
+	page := make([]byte, pageSize)
+	salt1, salt2 := binary.BigEndian.Uint32(header[16:20]), binary.BigEndian.Uint32(header[20:24])
+	schemaPageUntouched := true
+	for offset := int64(32); offset+frameSize <= completeEnd; offset += frameSize {
+		var frameHeader [24]byte
+		if _, err := file.ReadAt(frameHeader[:], offset); err != nil {
 			return false, err
 		}
-		if binary.BigEndian.Uint32(pageNumber[:]) <= 1 {
+		if binary.BigEndian.Uint32(frameHeader[8:12]) != salt1 || binary.BigEndian.Uint32(frameHeader[12:16]) != salt2 {
+			// SQLite may reuse a checkpointed WAL without truncating old frame
+			// bytes. A salt mismatch ends the active frame sequence; let the
+			// isolated SQLite copy check determine the effective schema.
 			return false, nil
+		}
+		if _, err := file.ReadAt(page, offset+24); err != nil {
+			return false, err
+		}
+		checksum1, checksum2 = walChecksum(frameHeader[:8], checksumOrder, checksum1, checksum2)
+		checksum1, checksum2 = walChecksum(page, checksumOrder, checksum1, checksum2)
+		if checksum1 != binary.BigEndian.Uint32(frameHeader[16:20]) || checksum2 != binary.BigEndian.Uint32(frameHeader[20:24]) {
+			return false, fmt.Errorf("session identity WAL frame checksum is invalid at offset %d", offset)
+		}
+		if binary.BigEndian.Uint32(frameHeader[:4]) <= 1 {
+			schemaPageUntouched = false
 		}
 	}
 	after, err := file.Stat()
 	if err != nil {
 		return false, err
 	}
-	return before.Size() == after.Size() && before.ModTime() == after.ModTime() && os.SameFile(before, after), nil
+	if before.Size() != after.Size() || before.ModTime() != after.ModTime() || !os.SameFile(before, after) {
+		return false, nil
+	}
+	if completeEnd != before.Size() {
+		return false, nil
+	}
+	return schemaPageUntouched, nil
+}
+
+// walChecksum computes SQLite's rolling WAL checksum. The checksum input uses
+// the byte order selected by the WAL magic; stored checksum words are always
+// big-endian. The caller passes only an even number of 32-bit words.
+func walChecksum(data []byte, order binary.ByteOrder, sum1, sum2 uint32) (uint32, uint32) {
+	for offset := 0; offset+8 <= len(data); offset += 8 {
+		sum1 += order.Uint32(data[offset:offset+4]) + sum2
+		sum2 += order.Uint32(data[offset+4:offset+8]) + sum1
+	}
+	return sum1, sum2
 }
 
 func inspectWALSchemaOnCopy(ctx context.Context, path string) error {

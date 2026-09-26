@@ -136,3 +136,45 @@ func TestWALSchemaPageProbeFallsBackOnPageOneFrame(t *testing.T) {
 		t.Fatalf("page-one WAL schema probe = %v, %v; want fallback", canSkipCopy, probeErr)
 	}
 }
+
+func TestWALSchemaPageProbeRejectsCorruptFrameAfterSchemaPage(t *testing.T) {
+	const pageSize = 512
+	wal := make([]byte, 32+2*(24+pageSize))
+	binary.BigEndian.PutUint32(wal[0:4], 0x377f0682)
+	binary.BigEndian.PutUint32(wal[4:8], 3007000)
+	binary.BigEndian.PutUint32(wal[8:12], pageSize)
+	binary.BigEndian.PutUint32(wal[16:20], 11)
+	binary.BigEndian.PutUint32(wal[20:24], 22)
+	sum1, sum2 := walChecksum(wal[:24], binary.LittleEndian, 0, 0)
+	binary.BigEndian.PutUint32(wal[24:28], sum1)
+	binary.BigEndian.PutUint32(wal[28:32], sum2)
+	for i, pageNumber := range []uint32{1, 2} {
+		offset := 32 + i*(24+pageSize)
+		frame := wal[offset : offset+24+pageSize]
+		binary.BigEndian.PutUint32(frame[0:4], pageNumber)
+		binary.BigEndian.PutUint32(frame[8:12], 11)
+		binary.BigEndian.PutUint32(frame[12:16], 22)
+		for j := 24; j < len(frame); j++ {
+			frame[j] = byte(i + 1)
+		}
+		sum1, sum2 = walChecksum(frame[:8], binary.LittleEndian, sum1, sum2)
+		sum1, sum2 = walChecksum(frame[24:], binary.LittleEndian, sum1, sum2)
+		binary.BigEndian.PutUint32(frame[16:20], sum1)
+		binary.BigEndian.PutUint32(frame[20:24], sum2)
+	}
+	// Page 1 requires the schema-copy fallback, but it must not stop validation
+	// before later complete frames are checked.
+	wal[len(wal)-1] ^= 0xff
+	path := filepath.Join(t.TempDir(), "corrupt-later-frame.wal")
+	if err := os.WriteFile(path, wal, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if _, err := walLeavesSchemaPageUntouched(file, pageSize); err == nil {
+		t.Fatal("corrupt frame after schema page was not rejected")
+	}
+}

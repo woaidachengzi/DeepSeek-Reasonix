@@ -56,10 +56,27 @@ impl WorkbenchProjectCatalog {
     }
 
     pub fn list(&self) -> Result<Vec<BridgeProjectFolder>, String> {
-        let state = self
+        let mut state = self
             .folders
             .lock()
             .map_err(|_| "project folder catalog lock is unavailable".to_string())?;
+        // A startup read failure is cached so the sidebar can report which
+        // source is unavailable. A user-triggered list/recheck must retry the
+        // disk read instead of returning that stale error forever; otherwise
+        // repairing permissions or replacing a malformed file requires an
+        // app restart before project folders can be used again.
+        if state.load_error.is_some() {
+            match read_folders(&self.path) {
+                Ok(folders) => {
+                    state.folders = folders;
+                    state.load_error = None;
+                }
+                Err(error) => {
+                    state.load_error = Some(error.clone());
+                    return Err(error);
+                }
+            }
+        }
         state
             .load_error
             .clone()

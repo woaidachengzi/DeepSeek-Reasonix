@@ -6,12 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unicode/utf8"
 
 	"reasonix/internal/agent"
@@ -70,7 +72,9 @@ func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.Open
 		controller.Close()
 		return nil, errors.Join(err, lifecycleSink.Close())
 	}
-	return &controllerRuntime{controller: controller, sessionID: request.SessionID, lifecycleSink: lifecycleSink}, nil
+	runtime := &controllerRuntime{controller: controller, sessionID: request.SessionID, lifecycleSink: lifecycleSink}
+	runtime.startTurnSnapshotMonitor()
+	return runtime, nil
 }
 
 type bridgeLifecycleSink struct {
@@ -352,12 +356,18 @@ func bridgeSessionPath(sessionDir, sessionID string) (string, error) {
 // controllerRuntime adapts the established controller to the bridge's minimal
 // Runtime surface.
 type controllerRuntime struct {
-	controller      *control.Controller
-	sessionID       string
-	lifecycleSink   *bridgeLifecycleSink
-	deleting        atomic.Bool
-	deleted         atomic.Bool
-	removeArtifacts func(string) error
+	controller       *control.Controller
+	sessionID        string
+	lifecycleSink    *bridgeLifecycleSink
+	snapshotStop     chan struct{}
+	snapshotStopped  chan struct{}
+	snapshotStopOne  sync.Once
+	snapshotPending  atomic.Bool
+	snapshotRetryAt  atomic.Int64
+	snapshotActivity func() error
+	deleting         atomic.Bool
+	deleted          atomic.Bool
+	removeArtifacts  func(string) error
 }
 
 func (r *controllerRuntime) SessionPath() string { return r.controller.SessionPath() }
@@ -491,6 +501,7 @@ func (r *controllerRuntime) State() string {
 		return "deleting"
 	}
 	status := r.controller.RuntimeStatus()
+	status = r.snapshotIfSettled(status)
 	switch {
 	case status.Running:
 		return "running"
@@ -735,12 +746,96 @@ func truncateBridgeHistoryContent(content string) (string, bool) {
 	return string(runes[:bridgeHistoryMaxContentRunes]) + "\n\n[Preview truncated this message]", true
 }
 
-func (r *controllerRuntime) Submit(input string) { r.controller.SubmitHTTP(input) }
+func (r *controllerRuntime) Submit(input string) {
+	trackTurn := shouldSnapshotSubmission(r.controller, input)
+	r.controller.SubmitHTTP(input)
+	if trackTurn {
+		r.markSnapshotPending()
+	}
+}
 
-func (r *controllerRuntime) Cancel() { r.controller.Cancel() }
+func shouldSnapshotSubmission(controller *control.Controller, input string) bool {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return false
+	}
+	return controller.ClassifySubmitRoute(input) == control.SubmitTurnStarted
+}
+
+func (r *controllerRuntime) markSnapshotPending() {
+	if r != nil {
+		r.snapshotPending.Store(true)
+		r.snapshotRetryAt.Store(0)
+	}
+}
+
+func (r *controllerRuntime) snapshotIfSettled(status control.RuntimeStatus) control.RuntimeStatus {
+	if status.Running || status.PendingPrompt || !r.snapshotPending.Load() {
+		return status
+	}
+	if retryAt := r.snapshotRetryAt.Load(); retryAt > time.Now().UnixNano() {
+		return status
+	}
+	if !r.snapshotPending.Swap(false) {
+		return status
+	}
+	// A submit/approval may start after the first status read. If so, restore
+	// the pending marker for the next settled observation instead of snapshotting
+	// an in-flight transcript and consuming the completion checkpoint.
+	status = r.controller.RuntimeStatus()
+	if status.Running || status.PendingPrompt {
+		r.snapshotPending.Store(true)
+		return status
+	}
+	snapshot := r.snapshotActivity
+	if snapshot == nil {
+		snapshot = r.controller.SnapshotActivity
+	}
+	if err := snapshot(); err != nil {
+		r.snapshotPending.Store(true)
+		r.snapshotRetryAt.Store(time.Now().Add(time.Second).UnixNano())
+		slog.Warn("desktop bridge: snapshot completed turn", "session_id", r.sessionID, "err", err)
+		return status
+	}
+	r.snapshotRetryAt.Store(0)
+	return status
+}
+
+func (r *controllerRuntime) startTurnSnapshotMonitor() {
+	r.snapshotStop = make(chan struct{})
+	r.snapshotStopped = make(chan struct{})
+	go func() {
+		defer close(r.snapshotStopped)
+		ticker := time.NewTicker(20 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-r.snapshotStop:
+				return
+			case <-ticker.C:
+				status := r.controller.RuntimeStatus()
+				_ = r.snapshotIfSettled(status)
+			}
+		}
+	}()
+}
+
+func (r *controllerRuntime) stopTurnSnapshotMonitor() {
+	if r == nil || r.snapshotStop == nil {
+		return
+	}
+	r.snapshotStopOne.Do(func() { close(r.snapshotStop) })
+	<-r.snapshotStopped
+}
+
+func (r *controllerRuntime) Cancel() {
+	r.controller.Cancel()
+	r.markSnapshotPending()
+}
 
 func (r *controllerRuntime) Approve(promptID string, allow bool) {
 	r.controller.Approve(promptID, allow, false, false)
+	r.markSnapshotPending()
 }
 
 func (r *controllerRuntime) AnswerQuestion(promptID string, answers []desktopbridge.AskAnswer) error {
@@ -748,16 +843,28 @@ func (r *controllerRuntime) AnswerQuestion(promptID string, answers []desktopbri
 	for i, answer := range answers {
 		selected[i] = event.AskAnswer{QuestionID: answer.QuestionID, Selected: append([]string(nil), answer.Selected...)}
 	}
-	return r.controller.AnswerQuestionChecked(promptID, selected)
+	err := r.controller.AnswerQuestionChecked(promptID, selected)
+	if err == nil {
+		r.markSnapshotPending()
+	}
+	return err
 }
 
 func (r *controllerRuntime) AnswerMCPInteraction(promptID, action string, content map[string]any) error {
-	return r.controller.AnswerMCPInteractionChecked(promptID, action, content)
+	err := r.controller.AnswerMCPInteractionChecked(promptID, action, content)
+	if err == nil {
+		r.markSnapshotPending()
+	}
+	return err
 }
 
-func (r *controllerRuntime) ReplayPendingPrompts() { r.controller.ReplayPendingPrompts() }
+func (r *controllerRuntime) ReplayPendingPrompts() {
+	r.controller.ReplayPendingPrompts()
+	r.markSnapshotPending()
+}
 
 func (r *controllerRuntime) Shutdown() error {
+	r.stopTurnSnapshotMonitor()
 	if r.deleting.Load() {
 		// A failed or interrupted sweep has already fenced this identity.
 		// Snapshotting here would recreate a transcript during deletion.

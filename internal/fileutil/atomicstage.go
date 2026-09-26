@@ -14,6 +14,7 @@ func StageAtomicWrite(path string, data []byte, perm os.FileMode) (string, error
 // locks, then a best-effort parent-directory fsync. A failed publish removes
 // the staged file.
 func PublishStagedWrite(tmpPath, path string) error {
+	Crash("staged-write-publish", path)
 	if err := replaceFile(tmpPath, path, false); err != nil {
 		_ = os.Remove(tmpPath)
 		return err

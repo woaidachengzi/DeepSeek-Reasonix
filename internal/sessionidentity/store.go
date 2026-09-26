@@ -662,7 +662,22 @@ func ensureTranscriptPathAvailable(ctx context.Context, tx *sql.Tx, profileRoot,
 	if err != nil {
 		return err
 	}
+	// A missing candidate cannot be a hard link or final-component symlink to
+	// an existing peer. For peers in the exact same lexical parent, only an
+	// identical or case-folded name can still alias; avoid resolving/statting
+	// every sibling transcript on the common fresh-reservation path. Resolve
+	// the parent before and after peer enumeration so a changed parent symlink
+	// fails closed instead of reusing the caller's stale candidate path.
+	candidateMissing := false
+	if _, statErr := os.Lstat(transcriptPath); errors.Is(statErr, os.ErrNotExist) {
+		candidateMissing = true
+	}
+	if candidateMissing {
+		resolvedParent, parentErr := resolveIdentityPath(filepath.Dir(transcriptPath))
+		candidateMissing = parentErr == nil && filepath.Clean(resolvedParent) == filepath.Clean(filepath.Dir(candidateResolvedPath))
+	}
 	var resolvedRoot string
+	siblingShortcutUsed := false
 	rows, err := tx.QueryContext(ctx, "SELECT id, relative_path FROM sessions WHERE id<>?", id)
 	if err != nil {
 		return err
@@ -675,6 +690,33 @@ func ensureTranscriptPathAvailable(ctx context.Context, tx *sql.Tx, profileRoot,
 			_ = rows.Close()
 			return err
 		}
+		cleanRelative := filepath.Clean(filepath.FromSlash(relative))
+		if cleanRelative == "." || cleanRelative == ".." || filepath.IsAbs(cleanRelative) || strings.HasPrefix(cleanRelative, ".."+string(filepath.Separator)) {
+			_ = rows.Close()
+			return fmt.Errorf("resolve existing transcript identity %s: invalid relative path", otherID)
+		}
+		otherPath := filepath.Join(root, cleanRelative)
+		if candidateMissing && filepath.Dir(filepath.Clean(otherPath)) == filepath.Dir(filepath.Clean(transcriptPath)) {
+			if filepath.Clean(otherPath) == filepath.Clean(transcriptPath) || sameCaseInsensitivePath(otherPath, transcriptPath) {
+				_ = rows.Close()
+				return fmt.Errorf("%w: %s and %s", ErrTranscriptPathConflict, id, otherID)
+			}
+			info, statErr := os.Lstat(otherPath)
+			if errors.Is(statErr, os.ErrNotExist) || (statErr == nil && info.Mode().IsRegular()) {
+				siblingShortcutUsed = true
+				// A missing candidate cannot alias an absent peer or a regular
+				// sibling. Keep its lexical path for a final same-file recheck if
+				// another writer creates the candidate during this transaction.
+				existing = append(existing, existingIdentityPath{id: otherID, path: otherPath})
+				continue
+			}
+			if statErr != nil {
+				_ = rows.Close()
+				return fmt.Errorf("inspect existing transcript identity %s: %w", otherID, statErr)
+			}
+			// Symlinks and non-regular entries still need full resolution and
+			// validation, including a broken final-component symlink.
+		}
 		if resolvedRoot == "" {
 			resolvedRoot, err = filepath.EvalSymlinks(root)
 			if err != nil {
@@ -682,12 +724,12 @@ func ensureTranscriptPathAvailable(ctx context.Context, tx *sql.Tx, profileRoot,
 				return fmt.Errorf("resolve session profile root: %w", err)
 			}
 		}
-		otherPath, otherResolved, err := resolveTranscriptPathWithResolvedRoot(root, resolvedRoot, otherID, relative)
-		if err != nil {
+		resolvedOtherPath, otherResolved, resolveErr := resolveTranscriptPathWithResolvedRoot(root, resolvedRoot, otherID, relative)
+		if resolveErr != nil {
 			_ = rows.Close()
-			return fmt.Errorf("resolve existing transcript identity %s: %w", otherID, err)
+			return fmt.Errorf("resolve existing transcript identity %s: %w", otherID, resolveErr)
 		}
-		existing = append(existing, existingIdentityPath{id: otherID, path: otherPath, resolved: otherResolved})
+		existing = append(existing, existingIdentityPath{id: otherID, path: resolvedOtherPath, resolved: otherResolved})
 	}
 	if err := rows.Err(); err != nil {
 		_ = rows.Close()
@@ -696,12 +738,21 @@ func ensureTranscriptPathAvailable(ctx context.Context, tx *sql.Tx, profileRoot,
 	if err := rows.Close(); err != nil {
 		return err
 	}
+	if siblingShortcutUsed {
+		resolvedParent, parentErr := resolveIdentityPath(filepath.Dir(transcriptPath))
+		if parentErr != nil || filepath.Clean(resolvedParent) != filepath.Clean(filepath.Dir(candidateResolvedPath)) {
+			return fmt.Errorf("session transcript parent changed during path uniqueness check")
+		}
+	}
 	if len(existing) == 0 {
 		return nil
 	}
 	// Check path aliases before file identity. They also conflict when neither
 	// transcript exists yet, as is common while reserving a fresh session.
 	for _, other := range existing {
+		if other.resolved == "" {
+			continue
+		}
 		if candidateResolvedPath == other.resolved {
 			return fmt.Errorf("%w: %s and %s", ErrTranscriptPathConflict, id, other.id)
 		}
@@ -713,9 +764,10 @@ func ensureTranscriptPathAvailable(ctx context.Context, tx *sql.Tx, profileRoot,
 	if candidateErr != nil && !errors.Is(candidateErr, os.ErrNotExist) {
 		return fmt.Errorf("inspect candidate transcript identity: %w", candidateErr)
 	}
-	// A missing candidate has no file identity that could match a peer. The
-	// earlier path-resolution passes still validate every peer and detect
-	// symlink aliases; the final candidate stat below catches late creation.
+	// A missing candidate has no file identity that could match a peer. Peers
+	// outside the same lexical parent were fully resolved above; same-parent
+	// peers were retained for the final candidate identity check if the file
+	// appears while this scan runs.
 	if candidateErr == nil {
 		for _, other := range existing {
 			otherInfo, otherErr := os.Stat(other.path)

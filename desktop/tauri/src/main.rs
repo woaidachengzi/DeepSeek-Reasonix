@@ -106,6 +106,8 @@ struct WorkbenchSessionPage {
     missing_transcript_count: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     shadow_report: Option<SessionShadowReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    catalog_warning: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -148,6 +150,14 @@ struct CachedSessionShadowSnapshot {
     shadow_report: SessionShadowReport,
 }
 
+fn cached_cursor_matches(
+    snapshot: &CachedSessionShadowSnapshot,
+    cursor: &SessionDirectoryCursor,
+) -> bool {
+    cursor.snapshot_id.as_deref() == Some(snapshot.snapshot_id.as_str())
+        && cursor.total == snapshot.directory.len() as u64
+}
+
 impl SessionShadowSnapshotCache {
     fn matches(
         &self,
@@ -159,7 +169,7 @@ impl SessionShadowSnapshotCache {
         };
         cached.as_ref().is_some_and(|snapshot| {
             session_catalog_structure_matches(&snapshot.legacy_sessions, legacy_sessions)
-                && cursor.snapshot_id.as_deref() == Some(snapshot.snapshot_id.as_str())
+                && cached_cursor_matches(snapshot, cursor)
         })
     }
 
@@ -171,7 +181,7 @@ impl SessionShadowSnapshotCache {
         let cached = self.0.lock().ok()?;
         let snapshot = cached.as_ref()?;
         (session_catalog_structure_matches(&snapshot.legacy_sessions, legacy_sessions)
-            && cursor.snapshot_id.as_deref() == Some(snapshot.snapshot_id.as_str()))
+            && cached_cursor_matches(snapshot, cursor))
         .then_some(snapshot.unclaimed_transcript_count)
     }
 
@@ -183,7 +193,7 @@ impl SessionShadowSnapshotCache {
         let cached = self.0.lock().ok()?;
         let snapshot = cached.as_ref()?;
         (session_catalog_structure_matches(&snapshot.legacy_sessions, legacy_sessions)
-            && cursor.snapshot_id.as_deref() == Some(snapshot.snapshot_id.as_str()))
+            && cached_cursor_matches(snapshot, cursor))
         .then_some(snapshot.title_mismatch_count)
     }
 
@@ -195,7 +205,7 @@ impl SessionShadowSnapshotCache {
         let cached = self.0.lock().ok()?;
         let snapshot = cached.as_ref()?;
         (session_catalog_structure_matches(&snapshot.legacy_sessions, legacy_sessions)
-            && cursor.snapshot_id.as_deref() == Some(snapshot.snapshot_id.as_str()))
+            && cached_cursor_matches(snapshot, cursor))
         .then_some(snapshot.missing_transcript_count)
     }
 
@@ -207,7 +217,7 @@ impl SessionShadowSnapshotCache {
         let cached = self.0.lock().ok()?;
         let snapshot = cached.as_ref()?;
         (session_catalog_structure_matches(&snapshot.legacy_sessions, legacy_sessions)
-            && cursor.snapshot_id.as_deref() == Some(snapshot.snapshot_id.as_str()))
+            && cached_cursor_matches(snapshot, cursor))
         .then(|| snapshot.shadow_report.clone())
     }
 
@@ -219,7 +229,7 @@ impl SessionShadowSnapshotCache {
         let cached = self.0.lock().ok()?;
         let snapshot = cached.as_ref()?;
         (session_catalog_structure_matches(&snapshot.legacy_sessions, legacy_sessions)
-            && cursor.snapshot_id.as_deref() == Some(snapshot.snapshot_id.as_str()))
+            && cached_cursor_matches(snapshot, cursor))
         .then_some(snapshot.identity_safe)
     }
 
@@ -237,37 +247,16 @@ impl SessionShadowSnapshotCache {
             return false;
         };
         session_catalog_structure_matches(&snapshot.legacy_sessions, legacy_sessions)
-            && cursor.snapshot_id.as_deref() == Some(snapshot.snapshot_id.as_str())
+            && cached_cursor_matches(snapshot, cursor)
             && (!snapshot.identity_safe
                 || session_page_matches_legacy_workspace(page, legacy_sessions))
             && page.snapshot_id == snapshot.snapshot_id
             && session_page_matches_shadow_snapshot(page, &snapshot.directory, Some(cursor), limit)
     }
 
-    fn remember(
-        &self,
-        legacy_sessions: Vec<WorkbenchSession>,
-        snapshot_id: String,
-        directory: Vec<SessionDirectoryEntry>,
-        identity_safe: bool,
-        unverified_legacy_sessions: Vec<WorkbenchSessionPageEntry>,
-        unclaimed_transcript_count: u64,
-        title_mismatch_count: u64,
-        missing_transcript_count: u64,
-        shadow_report: SessionShadowReport,
-    ) {
+    fn remember(&self, snapshot: CachedSessionShadowSnapshot) {
         if let Ok(mut cached) = self.0.lock() {
-            *cached = Some(CachedSessionShadowSnapshot {
-                legacy_sessions,
-                snapshot_id,
-                directory,
-                identity_safe,
-                unverified_legacy_sessions,
-                unclaimed_transcript_count,
-                title_mismatch_count,
-                missing_transcript_count,
-                shadow_report,
-            });
+            *cached = Some(snapshot);
         }
     }
 
@@ -281,21 +270,23 @@ impl SessionShadowSnapshotCache {
         let snapshot = cached.as_ref()?;
         if !session_catalog_structure_matches(&snapshot.legacy_sessions, legacy_sessions)
             || !(1..=200).contains(&limit)
-            || cursor.is_some_and(|cursor| {
-                cursor.snapshot_id.as_deref() != Some(snapshot.snapshot_id.as_str())
-            })
+            || cursor.is_some_and(|cursor| !cached_cursor_matches(snapshot, cursor))
         {
             return None;
         }
-        let start =
-            match cursor {
-                None => 0,
-                Some(cursor) => {
-                    snapshot.directory.iter().position(|entry| {
-                        entry.position == cursor.position && entry.id == cursor.id
-                    })? + 1
-                }
-            };
+        let start = match cursor {
+            None => 0,
+            Some(cursor) => {
+                snapshot
+                    .directory
+                    .binary_search_by(|entry| {
+                        (entry.position, entry.id.as_str())
+                            .cmp(&(cursor.position, cursor.id.as_str()))
+                    })
+                    .ok()?
+                    + 1
+            }
+        };
         let end = start
             .saturating_add(usize::from(limit))
             .min(snapshot.directory.len());
@@ -342,6 +333,7 @@ impl SessionShadowSnapshotCache {
             missing_transcript_count: (snapshot.missing_transcript_count > 0)
                 .then_some(snapshot.missing_transcript_count),
             shadow_report: Some(snapshot.shadow_report.clone()),
+            catalog_warning: None,
         })
     }
 
@@ -409,7 +401,25 @@ fn workbench_page_from_unverified_identity(page: SessionDirectoryPage) -> Workbe
         title_mismatch_count: None,
         missing_transcript_count: None,
         shadow_report: None,
+        catalog_warning: None,
     }
+}
+
+fn apply_catalog_read_warning(
+    mut page: WorkbenchSessionPage,
+    catalog_warning: Option<&str>,
+) -> WorkbenchSessionPage {
+    if let Some(warning) = catalog_warning {
+        if matches!(page.source, "identity" | "partial_identity") {
+            // An unreadable compatibility catalog cannot establish a clean
+            // shadow relationship. Keep the persistent directory visible,
+            // but never make its rows actionable on this evidence alone.
+            page.source = "identity_unverified";
+            page.unverified_legacy_sessions = None;
+        }
+        page.catalog_warning = Some(warning.to_string());
+    }
+    page
 }
 
 fn legacy_sessions_missing_from_identity(
@@ -498,13 +508,6 @@ fn bridge_delete_session(
     request: SessionRequest,
 ) -> Result<BridgeDeleteSessionResponse, String> {
     supervisor.delete_session(request)
-}
-
-#[tauri::command]
-fn bridge_pending_session_deletes(
-    supervisor: State<'_, BridgeSupervisor>,
-) -> Result<Vec<PendingSessionDelete>, String> {
-    supervisor.pending_session_deletes()
 }
 
 #[tauri::command]
@@ -832,11 +835,16 @@ fn workbench_session_page(
     // SQLite has been shadow-verified. When shadow audit is unavailable but
     // the identity page itself is readable, it may be paged for visibility
     // only, with session actions disabled.
-    let legacy_sessions = catalog.list()?;
+    let legacy_sessions_result = catalog.list();
+    let catalog_warning = legacy_sessions_result.as_ref().err().map(|_| {
+        "旧会话兼容目录无法读取；当前仅显示未核验的持久目录，不能据此操作会话。修复目录后重启 Preview 并重新检查。"
+    });
+    let legacy_catalog_readable = catalog_warning.is_none();
+    let legacy_sessions = legacy_sessions_result.unwrap_or_default();
     let limit = limit.unwrap_or(200);
     if cursor.is_none() && !supervisor.status().running {
         if let Some(page) = shadow_cache.page(&legacy_sessions, None, limit) {
-            return Ok(page);
+            return Ok(apply_catalog_read_warning(page, catalog_warning));
         }
     }
     if let Some(cursor) = cursor
@@ -854,7 +862,8 @@ fn workbench_session_page(
         match supervisor.session_directory_page(limit, Some(cursor.clone()), None) {
             Ok(page)
                 if shadow_cache.live_page_matches(&legacy_sessions, &page, cursor, limit)
-                    && catalog.list().is_ok_and(|latest| latest == legacy_sessions) =>
+                    && (!legacy_catalog_readable
+                        || catalog.list().is_ok_and(|latest| latest == legacy_sessions)) =>
             {
                 let identity_safe = shadow_cache
                     .identity_safe(&legacy_sessions, cursor)
@@ -869,35 +878,39 @@ fn workbench_session_page(
                     .missing_transcript_count(&legacy_sessions, cursor)
                     .filter(|count| *count > 0);
                 let shadow_report = shadow_cache.shadow_report(&legacy_sessions, cursor);
-                return Ok(WorkbenchSessionPage {
-                    sessions: page
-                        .sessions
-                        .into_iter()
-                        .map(page_entry_from_identity)
-                        .collect(),
-                    next_cursor: page.next_cursor,
-                    total: page.total,
-                    source: if !identity_safe {
-                        "identity_unverified"
-                    } else if unclaimed_transcript_count.is_some()
-                        || title_mismatch_count.is_some()
-                        || missing_transcript_count.is_some()
-                    {
-                        "partial_identity"
-                    } else {
-                        "identity"
+                return Ok(apply_catalog_read_warning(
+                    WorkbenchSessionPage {
+                        sessions: page
+                            .sessions
+                            .into_iter()
+                            .map(page_entry_from_identity)
+                            .collect(),
+                        next_cursor: page.next_cursor,
+                        total: page.total,
+                        source: if !identity_safe {
+                            "identity_unverified"
+                        } else if unclaimed_transcript_count.is_some()
+                            || title_mismatch_count.is_some()
+                            || missing_transcript_count.is_some()
+                        {
+                            "partial_identity"
+                        } else {
+                            "identity"
+                        },
+                        unverified_legacy_sessions: None,
+                        shadow_directory_count: Some(page.total),
+                        unclaimed_transcript_count,
+                        title_mismatch_count,
+                        missing_transcript_count,
+                        shadow_report,
+                        catalog_warning: None,
                     },
-                    unverified_legacy_sessions: None,
-                    shadow_directory_count: Some(page.total),
-                    unclaimed_transcript_count,
-                    title_mismatch_count,
-                    missing_transcript_count,
-                    shadow_report,
-                });
+                    catalog_warning,
+                ));
             }
             Err(_) if !supervisor.status().running => {
                 if let Some(page) = shadow_cache.page(&legacy_sessions, Some(cursor), limit) {
-                    return Ok(page);
+                    return Ok(apply_catalog_read_warning(page, catalog_warning));
                 }
                 shadow_cache.clear();
             }
@@ -951,8 +964,8 @@ fn workbench_session_page(
                 shadow_report,
             )) = cache_snapshot
             {
-                shadow_cache.remember(
-                    cache_legacy_sessions,
+                shadow_cache.remember(CachedSessionShadowSnapshot {
+                    legacy_sessions: cache_legacy_sessions,
                     snapshot_id,
                     directory,
                     identity_safe,
@@ -961,14 +974,14 @@ fn workbench_session_page(
                     title_mismatch_count,
                     missing_transcript_count,
                     shadow_report,
-                );
+                });
             } else {
                 shadow_cache.clear();
             }
         }
         _ => shadow_cache.clear(),
     }
-    page
+    page.map(|page| apply_catalog_read_warning(page, catalog_warning))
 }
 
 fn session_page_matches_legacy_workspace(
@@ -980,7 +993,7 @@ fn session_page_matches_legacy_workspace(
         .map(|session| (session.session_id.as_str(), session))
         .collect();
     page.sessions.iter().all(|entry| {
-        legacy_by_id.get(entry.id.as_str()).map_or(true, |legacy| {
+        legacy_by_id.get(entry.id.as_str()).is_none_or(|legacy| {
             legacy.workspace_root.as_deref().unwrap_or("")
                 == entry.workspace_root.as_deref().unwrap_or("")
         })
@@ -998,7 +1011,7 @@ fn session_page_matches_legacy_workspace_entries(
     page.iter().all(|entry| {
         legacy_by_id
             .get(entry.session_id.as_str())
-            .map_or(true, |legacy| {
+            .is_none_or(|legacy| {
                 legacy.workspace_root.as_deref().unwrap_or("")
                     == entry.workspace_root.as_deref().unwrap_or("")
             })
@@ -1046,6 +1059,7 @@ fn workbench_session_page_from_shadow(
                     title_mismatch_count: None,
                     missing_transcript_count: None,
                     shadow_report: None,
+                    catalog_warning: None,
                 }),
             };
         }
@@ -1104,6 +1118,7 @@ fn workbench_session_page_from_shadow(
                 title_mismatch_count,
                 missing_transcript_count,
                 shadow_report: Some(report),
+                catalog_warning: None,
             })
         }
         Ok(_) | Err(_) if cursor.is_none() => Ok(WorkbenchSessionPage {
@@ -1117,6 +1132,7 @@ fn workbench_session_page_from_shadow(
             title_mismatch_count: None,
             missing_transcript_count: None,
             shadow_report: Some(report),
+            catalog_warning: None,
         }),
         Ok(_) => Err("session directory changed while paging; restart the session list".into()),
         Err(error) => Err(error),
@@ -1544,7 +1560,6 @@ fn main() {
             bridge_switch_session,
             bridge_rename_session,
             bridge_delete_session,
-            bridge_pending_session_deletes,
             bridge_pending_session_deletes_page,
             bridge_pending_session_title_recoveries,
             list_mcp_servers,
@@ -1849,7 +1864,7 @@ mod session_catalog_gate_tests {
             Ok((report(true), audited.clone(), snapshot_id())),
             || Ok(changed.clone()),
         )
-        .expect("first page falls back after unaudited title change");
+        .expect("title-only changes preserve structural pagination");
         assert_eq!(first.source, "identity");
         assert_eq!(
             first.sessions[0].title.as_deref(),

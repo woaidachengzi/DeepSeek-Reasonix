@@ -47,11 +47,27 @@ type SessionEventStreamStatus struct {
 
 var ErrEventConflict = errors.New("session event sequence or identity conflict")
 var ErrEventImportConflict = errors.New("session event import source changed")
+var ErrEventLimitExceeded = errors.New("session event append exceeds configured limits")
 
 // AppendEvents commits a complete batch atomically. Retrying the exact batch
 // after an uncertain commit is idempotent; partial overlap or a reused event
 // ID with different bytes is rejected.
 func (s *Store) AppendEvents(ctx context.Context, sessionID string, events []SessionEvent) (int64, error) {
+	return s.appendEvents(ctx, sessionID, events, 0, 0)
+}
+
+// AppendEventsWithinLimits commits a complete batch only when both the final
+// event count and canonical JSONL projection size fit the supplied budgets.
+// Limits are checked under the append transaction, so a rejected write cannot
+// become authoritative in SQLite while remaining unreadable by the reducer.
+func (s *Store) AppendEventsWithinLimits(ctx context.Context, sessionID string, events []SessionEvent, maxRecords, maxProjectionBytes int64) (int64, error) {
+	if maxRecords <= 0 || maxProjectionBytes <= 0 {
+		return 0, errors.New("session event append limits must be positive")
+	}
+	return s.appendEvents(ctx, sessionID, events, maxRecords, maxProjectionBytes)
+}
+
+func (s *Store) appendEvents(ctx context.Context, sessionID string, events []SessionEvent, maxRecords, maxProjectionBytes int64) (int64, error) {
 	if len(events) == 0 {
 		return s.LastEventSequence(ctx, sessionID)
 	}
@@ -68,6 +84,10 @@ func (s *Store) AppendEvents(ctx context.Context, sessionID string, events []Ses
 	if err := ensureEventStream(ctx, tx, sessionID); err != nil {
 		return 0, err
 	}
+	sequence, projectionBytes, err := inspectSessionEventStream(ctx, tx, sessionID)
+	if err != nil {
+		return 0, err
+	}
 	prior, err := countExistingEventIDs(ctx, tx, sessionID, events)
 	if err != nil {
 		return 0, err
@@ -76,27 +96,33 @@ func (s *Store) AppendEvents(ctx context.Context, sessionID string, events []Ses
 		if prior != len(events) {
 			return 0, ErrEventConflict
 		}
-		for _, event := range events {
+		var batchStart int64
+		for index, event := range events {
 			digest, err := validateEvent(event)
 			if err != nil {
 				return 0, err
 			}
 			var stored string
-			if err := tx.QueryRowContext(ctx, "SELECT payload_sha256 FROM session_events WHERE session_id=? AND event_id=?", sessionID, event.ID).Scan(&stored); err != nil {
+			var storedSequence int64
+			if err := tx.QueryRowContext(ctx, "SELECT sequence,payload_sha256 FROM session_events WHERE session_id=? AND event_id=?", sessionID, event.ID).Scan(&storedSequence, &stored); err != nil {
 				return 0, err
 			}
 			if stored != digest {
 				return 0, ErrEventConflict
 			}
+			if index == 0 {
+				batchStart = storedSequence
+			}
+			if storedSequence != batchStart+int64(index) {
+				return 0, ErrEventConflict
+			}
 		}
-		var last int64
-		if err := tx.QueryRowContext(ctx, "SELECT coalesce(max(sequence),0) FROM session_events WHERE session_id=?", sessionID).Scan(&last); err != nil {
+		if err := checkSessionEventAppendLimits(sequence, projectionBytes, nil, maxRecords, maxProjectionBytes); err != nil {
 			return 0, err
 		}
-		return last, tx.Commit()
+		return sequence, tx.Commit()
 	}
-	var sequence int64
-	if err := tx.QueryRowContext(ctx, "SELECT coalesce(max(sequence),0) FROM session_events WHERE session_id=?", sessionID).Scan(&sequence); err != nil {
+	if err := checkSessionEventAppendLimits(sequence, projectionBytes, events, maxRecords, maxProjectionBytes); err != nil {
 		return 0, err
 	}
 	for _, event := range events {
@@ -118,6 +144,27 @@ func (s *Store) AppendEvents(ctx context.Context, sessionID string, events []Ses
 	return sequence, tx.Commit()
 }
 
+func checkSessionEventAppendLimits(currentRecords, currentProjectionBytes int64, events []SessionEvent, maxRecords, maxProjectionBytes int64) error {
+	if maxRecords == 0 && maxProjectionBytes == 0 {
+		return nil
+	}
+	if currentRecords > maxRecords || currentProjectionBytes > maxProjectionBytes {
+		return ErrEventLimitExceeded
+	}
+	if int64(len(events)) > maxRecords-currentRecords {
+		return ErrEventLimitExceeded
+	}
+	addedBytes := int64(0)
+	for _, event := range events {
+		eventBytes := int64(len(event.Payload)) + 1 // newline in the compatibility projection
+		if eventBytes > maxProjectionBytes-currentProjectionBytes-addedBytes {
+			return ErrEventLimitExceeded
+		}
+		addedBytes += eventBytes
+	}
+	return nil
+}
+
 func countExistingEventIDs(ctx context.Context, tx *sql.Tx, sessionID string, events []SessionEvent) (int, error) {
 	count := 0
 	for start := 0; start < len(events); start += sessionEventLookupChunkSize {
@@ -131,6 +178,46 @@ func countExistingEventIDs(ctx context.Context, tx *sql.Tx, sessionID string, ev
 		count += chunk
 	}
 	return count, nil
+}
+
+// inspectSessionEventStream verifies the complete persisted prefix before a
+// writer extends or replaces it. This prevents a valid SQLite page/WAL image
+// with a tampered event payload, hash, or sequence hole from being extended or
+// destructively compacted before the reducer notices the damage.
+func inspectSessionEventStream(ctx context.Context, tx *sql.Tx, sessionID string) (int64, int64, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT sequence,event_id,event_type,head_id,parent_id,message_id,writer_id,created_at_ms,payload_json,payload_sha256
+		FROM session_events WHERE session_id=? ORDER BY sequence`, sessionID)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer rows.Close()
+	var sequence, projectionBytes int64
+	for rows.Next() {
+		var stored StoredSessionEvent
+		var payload []byte
+		var digest string
+		if err := rows.Scan(&stored.Sequence, &stored.ID, &stored.Type, &stored.HeadID, &stored.ParentID, &stored.MessageID,
+			&stored.WriterID, &stored.CreatedAt, &payload, &digest); err != nil {
+			return 0, 0, err
+		}
+		if stored.Sequence != sequence+1 {
+			return 0, 0, fmt.Errorf("session event sequence is not contiguous: %w", ErrEventConflict)
+		}
+		stored.Payload = append(json.RawMessage(nil), payload...)
+		want, err := validateEvent(stored.SessionEvent)
+		if err != nil || want != digest {
+			return 0, 0, fmt.Errorf("verify session event %s before write: %w", stored.ID, ErrEventConflict)
+		}
+		if int64(len(payload))+1 > int64(^uint64(0)>>1)-projectionBytes {
+			return 0, 0, ErrEventLimitExceeded
+		}
+		projectionBytes += int64(len(payload)) + 1
+		sequence = stored.Sequence
+	}
+	if err := rows.Err(); err != nil {
+		return 0, 0, err
+	}
+	return sequence, projectionBytes, nil
 }
 
 // ReadEvents returns a bounded, sequence-ordered snapshot of canonical event
@@ -185,10 +272,13 @@ func (s *Store) ReplaceEvents(ctx context.Context, sessionID string, expectedGen
 	if err := ensureEventStream(ctx, tx, sessionID); err != nil {
 		return 0, 0, err
 	}
-	var generation, sequence int64
-	if err := tx.QueryRowContext(ctx, `SELECT st.generation,coalesce(max(ev.sequence),0) FROM session_event_streams st
-		LEFT JOIN session_events ev ON ev.session_id=st.session_id WHERE st.session_id=? GROUP BY st.session_id`, sessionID).Scan(&generation, &sequence); err != nil {
+	var generation int64
+	if err := tx.QueryRowContext(ctx, "SELECT generation FROM session_event_streams WHERE session_id=?", sessionID).Scan(&generation); err != nil {
 		return 0, 0, err
+	}
+	sequence, _, err := inspectSessionEventStream(ctx, tx, sessionID)
+	if err != nil {
+		return generation, 0, err
 	}
 	if generation != expectedGeneration || sequence != expectedSequence {
 		return generation, 0, ErrEventConflict
