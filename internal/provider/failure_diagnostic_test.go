@@ -36,6 +36,23 @@ func TestFailureDiagnosticKeepsDisplayAndStableIdentitySeparate(t *testing.T) {
 	}
 }
 
+func TestToolDiagnosticPersistsButIsStrippedFromProviderMessages(t *testing.T) {
+	diagnostic := json.RawMessage(`{"source":"host","recoverable":true}`)
+	stored := []Message{{Role: RoleTool, Content: "tool result", ToolDiagnostic: diagnostic}}
+
+	projection := ProjectionMessages(stored)
+	if len(projection) != 1 || string(projection[0].ToolDiagnostic) != string(diagnostic) {
+		t.Fatalf("stored projection lost tool diagnostic: %+v", projection)
+	}
+	model := ModelMessages(stored)
+	if len(model) != 1 || len(model[0].ToolDiagnostic) != 0 || model[0].Content != stored[0].Content {
+		t.Fatalf("provider projection retained tool diagnostic: %+v", model)
+	}
+	if string(stored[0].ToolDiagnostic) != string(diagnostic) {
+		t.Fatal("provider projection mutated the stored diagnostic")
+	}
+}
+
 func TestRequestFailureKeepsDisplayAndStableIdentitySeparate(t *testing.T) {
 	cause := errors.New("invalid request URL")
 	err := &RequestFailure{

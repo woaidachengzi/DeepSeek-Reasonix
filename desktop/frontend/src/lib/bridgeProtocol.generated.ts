@@ -66,8 +66,10 @@ export interface BridgeHealth {
 
 export interface BridgeHistoryMessage {
   content: string;
+  createdAtMs?: number;
   role: "user" | "assistant";
   truncated?: boolean;
+  workDurationMs?: number;
 }
 
 export interface BridgeHistoryResponse {

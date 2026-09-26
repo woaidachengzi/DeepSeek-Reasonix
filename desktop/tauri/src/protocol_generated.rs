@@ -95,8 +95,10 @@ pub struct BridgeHealth {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeHistoryMessage {
     pub content: String,
+    pub created_at_ms: Option<u64>,
     pub role: String,
     pub truncated: Option<bool>,
+    pub work_duration_ms: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

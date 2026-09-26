@@ -353,7 +353,9 @@
       "properties": {
         "role": { "enum": ["user", "assistant"] },
         "content": { "type": "string" },
-        "truncated": { "type": "boolean" }
+        "truncated": { "type": "boolean" },
+        "workDurationMs": { "type": "integer", "minimum": 0 },
+        "createdAtMs": { "type": "integer", "minimum": 0 }
       },
       "additionalProperties": false
     },

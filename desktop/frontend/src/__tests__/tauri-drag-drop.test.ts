@@ -63,6 +63,14 @@ async function run() {
   await handleTauriDragDropEvent(dragEvent("over"), { ...options, sessionId: undefined });
   eq(dragging[dragging.length - 1], false, "drag over an unavailable composer does not show attachment feedback");
 
+  const draftPaths: string[] = [];
+  const draftOptions = { ...options, sessionId: undefined, queuePendingPath: (path: string) => { draftPaths.push(path); } };
+  await handleTauriDragDropEvent(dragEvent("over"), draftOptions);
+  eq(dragging[dragging.length - 1], true, "draft composer accepts file drops without opening a session");
+  await handleTauriDragDropEvent(dragEvent("drop", ["/tmp/draft-a.txt", "/tmp/draft-b.txt"]), draftOptions);
+  eq(draftPaths.length, 2, "draft drop queues files until the first send");
+  eq(attachedPaths.length, 3, "draft drop does not copy files into a session");
+
   let current = true;
   let resolveFirst: ((attachment: { path: string; name: string; size: number; isImage: boolean }) => void) | undefined;
   const lateAttachments: string[] = [];

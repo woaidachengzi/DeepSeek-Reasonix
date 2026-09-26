@@ -23,7 +23,7 @@ func messagesNeedProjection(msgs []Message, keepExecution, keepOrigin bool) bool
 		if m.ReadPause != nil {
 			return true
 		}
-		if slices.ContainsFunc(m.ServerSearch, func(s ServerSearchCall) bool { return s.SourcesStatus != "" }) || len(m.ProtocolRecovery) > 0 || (!keepExecution && slices.ContainsFunc(m.ToolCalls, func(c ToolCall) bool { return len(c.WriteIntents) > 0 })) || m.LocalOnly || (!keepOrigin && m.Origin != "") || m.RawContent != "" || m.ProviderContent != "" || m.DecisionReceipt != nil || len(m.DecisionReceipts) > 0 || m.VisionSummary != nil || m.MCPApp != nil || len(m.ReadResult) > 0 || ((m.ToolExecution != nil || m.ToolRunState != "") && !keepExecution) {
+		if slices.ContainsFunc(m.ServerSearch, func(s ServerSearchCall) bool { return s.SourcesStatus != "" }) || len(m.ProtocolRecovery) > 0 || (!keepExecution && slices.ContainsFunc(m.ToolCalls, func(c ToolCall) bool { return len(c.WriteIntents) > 0 })) || m.LocalOnly || (!keepOrigin && m.Origin != "") || m.RawContent != "" || m.ProviderContent != "" || m.DecisionReceipt != nil || len(m.DecisionReceipts) > 0 || m.VisionSummary != nil || m.MCPApp != nil || len(m.ReadResult) > 0 || (!keepExecution && len(m.ToolDiagnostic) > 0) || ((m.ToolExecution != nil || m.ToolRunState != "") && !keepExecution) {
 			return true
 		}
 	}
@@ -48,6 +48,9 @@ func projectMessages(msgs []Message, keepExecution, keepOrigin bool) []Message {
 		// Read delivery envelopes are host evidence; they must never change
 		// provider bytes.
 		candidate.ReadResult = nil
+		if !keepExecution {
+			candidate.ToolDiagnostic = nil
+		}
 		candidate.ReadPause = nil
 		if !keepExecution && slices.ContainsFunc(candidate.ServerSearch, func(s ServerSearchCall) bool { return s.SourcesStatus != "" }) {
 			candidate.ServerSearch = append([]ServerSearchCall(nil), candidate.ServerSearch...)

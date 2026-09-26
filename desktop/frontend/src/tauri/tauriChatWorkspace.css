@@ -116,9 +116,9 @@
   align-items: center;
   gap: 10px;
   padding: 0 11px;
-  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border-soft));
-  border-radius: 11px;
-  background: color-mix(in srgb, var(--accent) 8%, var(--sidebar-bg));
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
   color: var(--fg) !important;
   text-align: left;
   transition: background .15s ease, border-color .15s ease;
@@ -126,8 +126,8 @@
   app-region: no-drag;
 }
 
-.tauri-sidebar__new:hover { border-color: color-mix(in srgb, var(--accent) 52%, var(--border)); background: color-mix(in srgb, var(--accent) 13%, var(--sidebar-bg)); }
-.tauri-sidebar__new svg { color: var(--accent); }
+.tauri-sidebar__new:hover { background: var(--sidebar-hover); }
+.tauri-sidebar__new svg { color: var(--fg-dim); }
 .tauri-sidebar__new span { flex: 1; font-weight: 560; }
 .tauri-sidebar__new kbd { color: var(--fg-faint); font: 10px var(--font-mono); }
 .tauri-sidebar__section-title { padding: 24px 10px 9px; color: var(--fg-faint); font-size: 11px; font-weight: 650; letter-spacing: .03em; }
@@ -146,9 +146,15 @@
 .tauri-project-group__select.is-active { background: var(--sidebar-active); color: var(--fg); }
 .tauri-project-group__select span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 650; }
 .tauri-project-group__select small { color: var(--fg-faint); font-size: 11px; }
+.tauri-project-group__select > small:last-child { display: none; }
 .tauri-project-group__select .tauri-project-group__unavailable { flex: 0 0 auto; color: #e5a65b; font-size: 9px; }
 .tauri-project-group__select .tauri-project-group__unloaded { flex: 0 0 auto; color: var(--fg-faint); font-size: 9px; }
 .tauri-project-group__new { display: grid; width: 27px; height: 27px; flex: 0 0 auto; place-items: center; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--fg-faint); }
+.tauri-project-group__new, .tauri-project-group__rename { opacity: 0; }
+.tauri-project-group__heading:hover .tauri-project-group__new,
+.tauri-project-group__heading:hover .tauri-project-group__rename,
+.tauri-project-group__heading:focus-within .tauri-project-group__new,
+.tauri-project-group__heading:focus-within .tauri-project-group__rename { opacity: 1; }
 .tauri-project-group__new:hover:not(:disabled) { border-color: var(--border-soft); background: var(--surface); color: var(--fg); }
 .tauri-project-group__new:disabled { opacity: .35; }
 .tauri-project-group__rename { display: grid; width: 24px; height: 24px; flex: 0 0 auto; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--fg-faint); }
@@ -186,7 +192,9 @@
 .tauri-sidebar__session.is-missing { color: var(--fg-faint) !important; cursor: not-allowed; }
 
 .tauri-session-row { position: relative; display: flex; min-width: 0; align-items: center; }
-.tauri-session-row .tauri-sidebar__session { flex: 1; padding-right: 34px; }
+.tauri-session-row .tauri-sidebar__session { flex: 1; padding-right: 10px; }
+.tauri-project-group .tauri-sidebar__session > svg { display: none; }
+.tauri-project-group .tauri-sidebar__session { padding-left: 11px; }
 .tauri-session-row.is-active .tauri-sidebar__session { border-color: color-mix(in srgb, var(--accent) 20%, transparent); background: var(--sidebar-active); color: var(--fg) !important; }
 .tauri-session-row__delete {
   position: absolute;
@@ -200,8 +208,10 @@
   border-radius: 6px;
   background: transparent;
   color: var(--fg-faint) !important;
-  opacity: .55;
+  opacity: 0;
 }
+.tauri-session-row:hover .tauri-sidebar__session, .tauri-session-row:focus-within .tauri-sidebar__session { padding-right: 34px; }
+.tauri-session-row:focus-within .tauri-session-row__delete { opacity: 1; }
 .tauri-session-row:hover .tauri-session-row__delete, .tauri-session-row__delete:focus-visible { border-color: var(--border-soft); background: var(--surface); color: var(--fg) !important; opacity: 1; }
 .tauri-session-row__delete:disabled { opacity: .25; }
 
@@ -311,7 +321,11 @@
 .tauri-history-note { margin: 0 0 26px; color: var(--fg-faint); text-align: center; font-size: 11px; }
 .tauri-message { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 13px; padding: 16px 0; }
 .tauri-message + .tauri-message { margin-top: 12px; }
-.tauri-message.is-user { margin: 7px 0; padding: 14px; border: 1px solid var(--border-soft); border-radius: 14px; background: var(--surface); }
+.tauri-message.is-user { display: flex; width: fit-content; max-width: min(78%, 720px); flex-direction: column; gap: 7px; margin: 16px 0 30px auto; padding: 0; }
+.tauri-message.is-user .tauri-message__content { padding: 13px 18px; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border-soft)); border-radius: 12px; background: color-mix(in srgb, var(--accent) 13%, var(--surface)); }
+.tauri-message__meta { display: flex; min-height: 20px; align-items: center; justify-content: flex-end; gap: 12px; color: var(--fg-faint); font-size: 11px; }
+.tauri-message__meta button { display: grid; width: 22px; height: 22px; place-items: center; padding: 0; border: 0; border-radius: 5px; background: transparent; color: inherit; opacity: .6; }
+.tauri-message__meta button:hover, .tauri-message__meta button:focus-visible { background: var(--sidebar-hover); color: var(--fg); opacity: 1; }
 .tauri-message__avatar { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--surface); color: var(--accent); font-size: 11px; font-weight: 650; }
 .tauri-message.is-user .tauri-message__avatar { border-color: color-mix(in srgb, var(--accent) 25%, var(--border-soft)); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
 .tauri-message__role { margin: 2px 0 8px; color: var(--fg-dim); font-size: 11px; font-weight: 600; }
@@ -319,6 +333,17 @@
 .tauri-message__content > small { display: block; margin-top: 8px; color: var(--fg-faint); font-size: 10px; }
 .tauri-message .md { color: var(--fg); font-size: 13px; line-height: 1.75; }
 .tauri-message .md > :first-child { margin-top: 0; }
+.tauri-progress { margin: 12px 0; border: 1px solid var(--border-soft); border-radius: 10px; background: color-mix(in srgb, var(--surface) 60%, transparent); }
+.tauri-progress > summary { display: flex; min-height: 38px; align-items: center; gap: 8px; padding: 8px 12px; color: var(--fg-dim); cursor: pointer; font-size: 11px; list-style: none; }
+.tauri-progress > summary::-webkit-details-marker { display: none; }
+.tauri-progress > summary:hover { color: var(--fg); }
+.tauri-progress > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tauri-progress > summary > svg { flex: 0 0 auto; transition: transform .15s ease; }
+.tauri-progress[open] > summary > svg { transform: rotate(90deg); }
+.tauri-progress > summary > small { color: var(--fg-faint); font-size: 10px; }
+.tauri-progress__messages { padding: 0 12px 9px; border-top: 1px solid var(--border-soft); }
+.tauri-progress__messages .tauri-message { padding: 10px 0; }
+.tauri-progress__messages .tauri-message + .tauri-message { margin-top: 2px; }
 .tauri-thinking { display: flex; align-items: center; gap: 6px; padding: 13px 0 8px 43px; color: var(--fg-faint); font-size: 11px; }
 .tauri-thinking > span { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); animation: tauri-thinking 1.1s ease-in-out infinite; }
 .tauri-thinking > span:nth-child(2) { animation-delay: .15s; }

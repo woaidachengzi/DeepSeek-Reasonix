@@ -110,6 +110,9 @@ type Message struct {
 	// ReadResult is a persisted, host-only reader delivery envelope for diagnostics.
 	// ModelMessages strips it; provider serializers must never emit it on the wire.
 	ReadResult json.RawMessage `json:"read_result,omitempty"`
+	// ToolDiagnostic is opaque host recovery data attached to historical tool
+	// messages. Keep it in persisted projections, but never send it to a provider.
+	ToolDiagnostic json.RawMessage `json:"tool_diagnostic,omitempty"`
 	// MCPApp is the local MCP Apps presentation for results from App-capableservers. Persisted for
 	// Desktopcardsand stripped by ModelMessages;
 	// provider serializers must never emit it on the wire.

@@ -39,7 +39,10 @@ func probeLogForSave(path string) (sessionEventLogProbe, error) {
 	if probe.futureSchema {
 		return probe, fmt.Errorf("session event log for %s uses schema %d; this build supports up to %d", path, probe.schemaVersion, sessionDAGSchemaVersion)
 	}
-	if probe.native && probe.size > 0 {
+	// The SQLite DAG probe also marks the stream as native. Its schema-2
+	// compatibility projection must never pass through the schema-1 tail
+	// repairer during a shutdown snapshot or session switch.
+	if probe.native && !probe.dag && probe.size > 0 {
 		if err := repairSessionEventLogTail(path); err != nil {
 			return probe, fmt.Errorf("repair session event log: %w", err)
 		}

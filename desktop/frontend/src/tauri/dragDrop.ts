@@ -5,6 +5,7 @@ import type { TauriBridgeAttachment } from "../lib/tauriBridge";
 
 export interface TauriDragDropOptions {
   sessionId?: string;
+  queuePendingPath?: (path: string) => void;
   attachFile: (sessionId: string, path: string) => Promise<TauriBridgeAttachment>;
   addAttachment: (attachment: TauriBridgeAttachment) => void;
   setDragging: (dragging: boolean) => void;
@@ -34,7 +35,7 @@ export async function handleTauriDragDropEvent(
   const isCurrent = options.isCurrent ?? (() => true);
   if (!isCurrent()) return;
   if (event.type === "over") {
-    options.setDragging(Boolean(options.sessionId));
+    options.setDragging(Boolean(options.sessionId || options.queuePendingPath));
     return;
   }
   if (event.type !== "drop") {
@@ -43,9 +44,13 @@ export async function handleTauriDragDropEvent(
   }
 
   options.setDragging(false);
-  if (!options.sessionId || event.paths.length === 0) return;
+  if (event.paths.length === 0 || (!options.sessionId && !options.queuePendingPath)) return;
   for (const path of event.paths) {
     if (!isCurrent()) return;
+    if (!options.sessionId) {
+      options.queuePendingPath?.(path);
+      continue;
+    }
     try {
       const attachment = await options.attachFile(options.sessionId, path);
       if (!isCurrent()) return;

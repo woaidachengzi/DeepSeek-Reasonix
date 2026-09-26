@@ -555,9 +555,11 @@ func (r *controllerRuntime) History() []desktopbridge.HistoryMessage {
 		}
 		content, truncated := truncateBridgeHistoryContent(content)
 		messages = append(messages, desktopbridge.HistoryMessage{
-			Role:      role,
-			Content:   content,
-			Truncated: truncated,
+			Role:           role,
+			Content:        content,
+			Truncated:      truncated,
+			WorkDurationMs: message.WorkDurationMs,
+			CreatedAtMs:    message.CreatedAt,
 		})
 	}
 	return messages

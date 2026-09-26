@@ -47,9 +47,11 @@ type SessionView struct {
 // reasoning, tool arguments/results, system prompts, image data, or other
 // persistence metadata.
 type HistoryMessage struct {
-	Role      string `json:"role"`
-	Content   string `json:"content"`
-	Truncated bool   `json:"truncated,omitempty"`
+	Role           string `json:"role"`
+	Content        string `json:"content"`
+	Truncated      bool   `json:"truncated,omitempty"`
+	WorkDurationMs int64  `json:"workDurationMs,omitempty"`
+	CreatedAtMs    int64  `json:"createdAtMs,omitempty"`
 }
 
 // AskAnswer is the transport-neutral projection of one structured question

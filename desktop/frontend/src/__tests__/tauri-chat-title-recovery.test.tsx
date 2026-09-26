@@ -63,7 +63,7 @@ async function main() {
     await settle();
     await settle();
   });
-  const opened = state.__tauriBridgeCalls.find(call => call.name === "bridge_open_session" &&
+  const opened = state.__tauriBridgeCalls.find(call => call.name === "bridge_switch_session" &&
     (call.args as { sessionId?: string }).sessionId === id);
   if (!opened || (opened.args as { workspaceRoot?: string }).workspaceRoot !== workspaceRoot) {
     throw new Error("explicit recovery did not open the original ID and workspace");

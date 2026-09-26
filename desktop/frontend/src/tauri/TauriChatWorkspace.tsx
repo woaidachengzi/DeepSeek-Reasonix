@@ -1,5 +1,5 @@
 import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Eye, FileText, FolderOpen, FolderTree, GitBranch, MessageSquare, Paperclip, Pencil, Plus, Settings, Sparkles, Square, Trash2, X } from "lucide-react";
+import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Copy, Eye, FileText, FolderOpen, FolderTree, GitBranch, MessageSquare, Paperclip, Pencil, Plus, Settings, Sparkles, Square, Trash2, X } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
@@ -11,6 +11,7 @@ import { LocaleProvider } from "../lib/i18n";
 import logoWordmark from "../assets/logo-wordmark.svg";
 import { TauriSettings } from "./TauriSettings";
 import { handleTauriDragDropEvent, retainTauriDragDropListener } from "./dragDrop";
+import { formatTauriWorkDuration, groupTauriHistory, type IndexedHistoryMessage } from "./historyPresentation";
 
 /** Per-message error boundary to prevent one bad message from crashing the entire transcript. */
 class MessageErrorBoundary extends Component<{ children: ReactNode; index: number }, { hasError: boolean }> {
@@ -24,6 +25,32 @@ class MessageErrorBoundary extends Component<{ children: ReactNode; index: numbe
     }
     return this.props.children;
   }
+}
+
+function HistoryMessageArticle({ entry, sessionId, questionId }: {
+  entry: IndexedHistoryMessage;
+  sessionId: string;
+  questionId?: string;
+}) {
+  const { message, index } = entry;
+  const display = message.role === "user" ? parseAttachmentRefsForDisplay(message.content) : null;
+  const created = message.createdAtMs && Number.isSafeInteger(message.createdAtMs) ? new Date(message.createdAtMs) : null;
+  const createdAt = created && !Number.isNaN(created.getTime()) ? created : null;
+  return <MessageErrorBoundary index={index}>
+    <article id={questionId} data-tauri-question-anchor={questionId} className={`tauri-message is-${message.role}`}>
+      {message.role !== "user" && <div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div>}
+      <div className="tauri-message__content">
+        {message.role !== "user" && <div className="tauri-message__role">Reasonix</div>}
+        <Markdown text={display?.text ?? message.content ?? ""} cacheKey={`${sessionId}:${index}`} />
+        {display && display.attachments.length > 0 && <div className="tauri-message__attachments">{display.attachments.map(attachment => <span key={attachment.path} title={attachment.path}><Paperclip size={13} />{attachment.name}</span>)}</div>}
+        {message.truncated && <small>为保护界面性能，这条历史内容已截断。</small>}
+      </div>
+      {message.role === "user" && <div className="tauri-message__meta">
+        {createdAt && <time dateTime={createdAt.toISOString()}>{createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>}
+        <button type="button" aria-label="复制消息" title="复制消息" onClick={() => { void navigator.clipboard?.writeText(message.content).catch(() => {}); }}><Copy size={14} /></button>
+      </div>}
+    </article>
+  </MessageErrorBoundary>;
 }
 
 const COLLAPSED_PROJECTS_STORAGE_KEY = "reasonix.tauri.workbench.collapsed-projects.v1";
@@ -365,6 +392,7 @@ export function TauriSessionPreview() {
   const [projectTitleDraft, setProjectTitleDraft] = useState("");
   const [prompt, setPrompt] = useState("");
   const [attachments, setAttachments] = useState<TauriBridgeAttachment[]>([]);
+  const [draftAttachmentPaths, setDraftAttachmentPaths] = useState<string[]>([]);
   const [status, setStatus] = useState<TauriBridgeStatus | null>(null);
   const [profile, setProfile] = useState<TauriPreviewProfileStatus | null>(null);
   const [scanImportOpen, setScanImportOpen] = useState(false);
@@ -414,9 +442,10 @@ export function TauriSessionPreview() {
   const [pendingPrompt, setPendingPrompt] = useState<TauriPendingPrompt | null>(null);
   const [promptSelections, setPromptSelections] = useState<Record<string, string[]>>({});
   const conversationRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const turnEpochRef = useRef(0);
   const submitInFlightRef = useRef(false);
-  const createSessionInFlightRef = useRef(false);
+  const pendingDraftSubmissionRef = useRef<{ sessionId: string; text: string; paths: string[]; workspaceRoot?: string } | null>(null);
   const sessionPageRequestRef = useRef(false);
   const sessionPageRevisionRef = useRef(0);
   const pendingDeleteRequestRef = useRef(0);
@@ -494,6 +523,14 @@ export function TauriSessionPreview() {
       return [question];
     });
   }, [history]);
+
+  const historyPresentation = useMemo(() => history
+    ? groupTauriHistory(
+      history.messages,
+      history.startIndex,
+      Boolean(session && session.state !== "idle" && history.session.state !== "idle" && !pendingUserMessage),
+    )
+    : [], [history, session?.state, pendingUserMessage]);
 
   useEffect(() => {
     const conversation = conversationRef.current;
@@ -724,13 +761,17 @@ export function TauriSessionPreview() {
   useLayoutEffect(() => {
     let active = true;
     let unlisten: UnlistenFn | undefined;
-    const canAttach = Boolean(session && streamReady && !busy && session.state === "idle");
+    const canAttach = !busy && !isReadOnlyWorkbenchSource(sessionPageSource) &&
+      (!session || (streamReady && session.state === "idle"));
     void (async () => {
       try {
         unlisten = await retainTauriDragDropListener(getCurrentWindow().onDragDropEvent(async (event) => {
           if (!active) return;
           await handleTauriDragDropEvent(event.payload, {
             sessionId: canAttach ? session?.id : undefined,
+            queuePendingPath: canAttach && !session
+              ? path => setDraftAttachmentPaths(previous => [...previous, path])
+              : undefined,
             attachFile: attachTauriFile,
             addAttachment: attached => setAttachments(previous => [...previous, attached]),
             setDragging,
@@ -742,7 +783,7 @@ export function TauriSessionPreview() {
       }
     })();
     return () => { active = false; unlisten?.(); };
-  }, [session?.id, session?.state, streamReady, busy]);
+  }, [session?.id, session?.state, streamReady, busy, sessionPageSource]);
 
   useEffect(() => {
     if (!session) return;
@@ -870,6 +911,7 @@ export function TauriSessionPreview() {
           streamDisconnected = true;
           setStreamReady(false);
           setError(`本地桥接事件流：${message}`);
+          void abandonUnsentDraft(session.id, `无法开始新对话：${message}`);
         });
         if (!active) { offError(); return; }
         offRestored = await onTauriBridgeConnectionRestored(() => {
@@ -932,6 +974,7 @@ export function TauriSessionPreview() {
         setHistoryLoading(false);
         setHistoryError(message);
         setError(message);
+        void abandonUnsentDraft(session.id, `无法开始新对话：${message}`);
       }
     })();
 
@@ -943,6 +986,29 @@ export function TauriSessionPreview() {
       offResync?.();
     };
   }, [session?.id, streamRevision]);
+
+  useEffect(() => {
+    const pending = pendingDraftSubmissionRef.current;
+    if (!pending || !session || !streamReady || pending.sessionId !== session.id) return;
+    pendingDraftSubmissionRef.current = null;
+    void submitPreparedInput(pending.sessionId, pending.text, [], pending.paths, true, pending.workspaceRoot);
+  }, [session?.id, streamReady]);
+
+  async function abandonUnsentDraft(sessionId: string, message: string) {
+    if (pendingDraftSubmissionRef.current?.sessionId !== sessionId) return;
+    pendingDraftSubmissionRef.current = null;
+    try {
+      await deleteTauriBridgeSession(sessionId);
+      setSession(previous => previous?.id === sessionId ? null : previous);
+      setStreamReady(false);
+      setError(message);
+    } catch (cause) {
+      setError(`${message}；空会话清理失败：${tauriMessageFrom(cause)}`);
+    } finally {
+      submitInFlightRef.current = false;
+      setBusy(false);
+    }
+  }
 
   // Existing rows keep their sidebar position on reopen; only brand-new
   // sessions are prepended (matches WorkbenchCatalog::remember).
@@ -1232,13 +1298,13 @@ export function TauriSessionPreview() {
     setBusy(true);
     setError("");
     try {
-      const next = session && session.id !== id
-        ? await switchTauriBridgeSession(id, root)
-        : await openTauriBridgeSession(id, root);
+      const next = await switchTauriBridgeSession(id, root);
       invalidateWorkspaceRequests();
       setEvents([]);
       setHistory(null);
       setAttachments([]);
+      setDraftAttachmentPaths([]);
+      if (!session) setPrompt("");
       setDragging(false);
       setPendingPrompt(null);
       setPromptSelections({});
@@ -1405,12 +1471,33 @@ export function TauriSessionPreview() {
     }
   }
 
-  async function createSession(root = workspaceRoot) {
+  function createSession(root = workspaceRoot) {
     if (isReadOnlyWorkbenchSource(sessionPageSource)) {
       setError("当前会话目录为只读来源；重新检查并核验通过后才能新建会话。");
       return;
     }
-    await activateSession(newTauriSessionId(), root.trim() ? root : undefined);
+    if (busy || switchingBlocked) return;
+    invalidateWorkspaceRequests();
+    turnEpochRef.current += 1;
+    setSession(null);
+    setHistory(null);
+    setHistoryError("");
+    setHistoryLoading(false);
+    setStreamReady(false);
+    setEvents([]);
+    setLiveText("");
+    setPendingUserMessage(null);
+    setPendingPrompt(null);
+    setPromptSelections({});
+    setAttachments([]);
+    setDraftAttachmentPaths([]);
+    setPrompt("");
+    setError("");
+    setTitleEditing(false);
+    setWorkspaceOpen(false);
+    setDragging(false);
+    setWorkspaceRoot(root.trim());
+    composerRef.current?.focus();
   }
 
   async function chooseWorkspaceRoot() {
@@ -1580,12 +1667,16 @@ export function TauriSessionPreview() {
   }
 
   async function addAttachments() {
-    if (!session || !streamReady || busy || session.state !== "idle") return;
+    if (busy || isReadOnlyWorkbenchSource(sessionPageSource) || (session && (!streamReady || session.state !== "idle"))) return;
     setBusy(true);
     setError("");
     try {
       const selected = await chooseTauriAttachmentFiles();
       if (selected.length === 0) return;
+      if (!session) {
+        setDraftAttachmentPaths(previous => [...previous, ...selected]);
+        return;
+      }
       const added: TauriBridgeAttachment[] = [];
       let firstError = "";
       for (const path of selected) {
@@ -1605,24 +1696,71 @@ export function TauriSessionPreview() {
   }
 
   async function submit() {
-    const input = tauriComposerInput(prompt, attachments);
-    if (busy || session?.state === "paused" || !input || submitInFlightRef.current) return;
-    // Typing may open a session asynchronously; send waits for that session
-    // and for the event stream, same gate the send button already uses.
-    if (!session || !streamReady || session.state !== "idle") return;
+    const text = prompt.trim();
+    if (busy || submitInFlightRef.current || isReadOnlyWorkbenchSource(sessionPageSource) ||
+        (!text && attachments.length === 0 && draftAttachmentPaths.length === 0)) return;
+    if (session && (!streamReady || session.state !== "idle")) return;
     submitInFlightRef.current = true;
-    const sessionId = session.id;
-    const userText = prompt.trim();
-    const submitEpoch = ++turnEpochRef.current;
     setBusy(true);
     setError("");
+    if (!session) {
+      const sessionId = newTauriSessionId();
+      const root = workspaceRoot.trim() || undefined;
+      try {
+        // The new session is opened only after the first Send. The event
+        // listener must become ready before its turn is submitted.
+        const opened = await switchTauriBridgeSession(sessionId, root);
+        pendingDraftSubmissionRef.current = {
+          sessionId, text, paths: [...draftAttachmentPaths], workspaceRoot: root,
+        };
+        setSession(opened);
+        setStreamReady(false);
+      } catch (cause) {
+        setError(tauriMessageFrom(cause));
+        submitInFlightRef.current = false;
+        setBusy(false);
+      }
+      return;
+    }
+    await submitPreparedInput(session.id, text, attachments, [], false, session.workspaceRoot);
+  }
+
+  async function submitPreparedInput(
+    sessionId: string,
+    text: string,
+    readyAttachments: TauriBridgeAttachment[],
+    pendingPaths: string[],
+    firstTurn: boolean,
+    root?: string,
+  ) {
+    const submitEpoch = ++turnEpochRef.current;
     setLiveText("");
-    // Show user message immediately (optimistic update)
-    setPendingUserMessage(userText || null);
+    setPendingUserMessage(text || null);
     try {
+      const prepared = [...readyAttachments];
+      let attachmentError = "";
+      for (const path of pendingPaths) {
+        try {
+          prepared.push(await attachTauriFile(sessionId, path));
+        } catch (cause) {
+          attachmentError ||= tauriMessageFrom(cause);
+        }
+      }
+      const input = tauriComposerInput(text, prepared);
+      if (!input) {
+        if (firstTurn) {
+          await deleteTauriBridgeSession(sessionId);
+          setSession(null);
+          setStreamReady(false);
+        }
+        setError(attachmentError ? `文件未能添加：${attachmentError}` : "请输入消息或添加文件");
+        setPendingUserMessage(null);
+        return;
+      }
       const submitted = await submitTauriBridge(sessionId, input);
       if (sessionId !== session?.id) return;
       if (turnEpochRef.current === submitEpoch) setSession(submitted);
+      if (firstTurn) await rememberSession({ ...submitted, workspaceRoot: root });
       if (!tauriSessionTitle(submitted.title, "") && !tabs.find(tab => tab.sessionId === sessionId)?.title) {
         const title = titleFromFirstUser(input);
         if (title) {
@@ -1642,6 +1780,8 @@ export function TauriSessionPreview() {
       }
       setPrompt("");
       setAttachments([]);
+      setDraftAttachmentPaths([]);
+      if (attachmentError) setError(`部分文件未能添加：${attachmentError}`);
       // Fetch history after a short delay to let the backend settle
       await new Promise(resolve => setTimeout(resolve, 100));
       try {
@@ -1930,7 +2070,7 @@ export function TauriSessionPreview() {
 
   async function selectStarterPrompt(value: string) {
     setPrompt(value);
-    if (!session) await createSession();
+    composerRef.current?.focus();
   }
 
   const currentWorkspace = workspaceRoot || session?.workspaceRoot || "";
@@ -2136,24 +2276,15 @@ export function TauriSessionPreview() {
         <div className="tauri-conversation" ref={conversationRef}>
           {session && !history && historyLoading ? <div className="tauri-loading"><span /><p>正在载入对话…</p></div> : session && !history && historyError ? <div className="tauri-loading tauri-history-error"><p>无法载入对话记录</p><p>{historyError}</p><button type="button" className="tauri-diagnostic-action" onClick={() => void refreshHistory()} disabled={busy}>重新加载</button></div> : history?.messages.length || liveText || pendingUserMessage || session?.state === "running" ? <div className="tauri-transcript">
             {history && history.startIndex > 0 && <p className="tauri-history-note">当前显示最近 {history.messages.length} 条，共 {history.totalMessages} 条可见消息</p>}
-            {history?.messages.map((message, index) => {
-              const display = message.role === "user" ? parseAttachmentRefsForDisplay(message.content) : null;
-              const question = message.role === "user" ? questions.find(item => item.id === `tauri-question-${history.startIndex + index}`) : undefined;
-              return <MessageErrorBoundary key={`${history.startIndex + index}-${message.role}`} index={index}>
-                <article id={question?.id} data-tauri-question-anchor={question?.id} className={`tauri-message is-${message.role}`}>
-                  <div className="tauri-message__avatar" aria-hidden="true">{message.role === "user" ? "你" : <Sparkles size={16} />}</div>
-                  <div className="tauri-message__content">
-                    <div className="tauri-message__role">{message.role === "user" ? "你" : "Reasonix"}</div>
-                    <Markdown text={display?.text ?? message.content ?? ""} cacheKey={`${history.session.id}:${history.startIndex + index}`} />
-                    {display && display.attachments.length > 0 && <div className="tauri-message__attachments">{display.attachments.map(attachment => <span key={attachment.path} title={attachment.path}><Paperclip size={13} />{attachment.name}</span>)}</div>}
-                    {message.truncated && <small>为保护界面性能，这条历史内容已截断。</small>}
-                  </div>
-                </article>
-              </MessageErrorBoundary>;
-            })}
+            {historyPresentation.map(item => item.kind === "message"
+              ? <HistoryMessageArticle key={`message-${item.entry.index}`} entry={item.entry} sessionId={history!.session.id} questionId={item.entry.message.role === "user" ? `tauri-question-${item.entry.index}` : undefined} />
+              : <details className="tauri-progress" key={`progress-${item.entries[0].index}`}>
+                <summary><ChevronRight size={14} aria-hidden="true" /><span>{item.active ? "正在处理" : formatTauriWorkDuration(item.durationMs) ?? "过程记录"}</span><small>{item.entries.length} 条过程更新</small></summary>
+                <div className="tauri-progress__messages">{item.entries.map(entry => <HistoryMessageArticle key={entry.index} entry={entry} sessionId={history!.session.id} />)}</div>
+              </details>)}
             {/* Optimistic user message: shown immediately after submit, before history loads */}
-            {pendingUserMessage && <article className="tauri-message is-user"><div className="tauri-message__avatar" aria-hidden="true">你</div><div className="tauri-message__content"><div className="tauri-message__role">你</div><Markdown text={pendingUserMessage} /></div></article>}
-            {liveText && <article className="tauri-message is-assistant tauri-message--live"><div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div><div className="tauri-message__content"><div className="tauri-message__role">Reasonix</div><Markdown text={liveText || ""} streaming cacheKey={`${session?.id ?? "live"}:stream`} /></div></article>}
+            {pendingUserMessage && <article className="tauri-message is-user"><div className="tauri-message__content"><Markdown text={pendingUserMessage} /></div></article>}
+            {liveText && <details className="tauri-progress tauri-progress--live"><summary><ChevronRight size={14} aria-hidden="true" /><span>正在处理</span><small>展开查看当前输出</small></summary><div className="tauri-progress__messages"><article className="tauri-message is-assistant tauri-message--live"><div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div><div className="tauri-message__content"><div className="tauri-message__role">Reasonix</div><Markdown text={liveText} streaming cacheKey={`${session?.id ?? "live"}:stream`} /></div></article></div></details>}
             {session?.state === "running" && !liveText && !pendingUserMessage && <div className="tauri-thinking" role="status"><span /><span /><span />Reasonix 正在思考…</div>}
           </div> : <section className="tauri-welcome">
             <div className="tauri-welcome__mark"><Sparkles size={24} /></div>
@@ -2165,7 +2296,7 @@ export function TauriSessionPreview() {
               <button type="button" onClick={() => void selectStarterPrompt("帮我把这个想法拆解成清晰、可执行的步骤")} disabled={busy}><span className="tauri-starters__icon"><Sparkles size={16} /></span><span><b>拆解一个想法</b><small>从目标整理到可执行计划</small></span><ArrowUp size={14} /></button>
               <button type="button" onClick={() => void selectStarterPrompt("请帮我检查这段内容，指出问题并给出改进建议")} disabled={busy}><span className="tauri-starters__icon"><Check size={16} /></span><span><b>检查并改进</b><small>发现问题并给出具体建议</small></span><ArrowUp size={14} /></button>
             </div>
-            {!session && <button className="tauri-welcome__start" type="button" onClick={() => void createSession()} disabled={busy}><Plus size={16} />开始新对话</button>}
+            {!session && <button className="tauri-welcome__start" type="button" onClick={() => composerRef.current?.focus()} disabled={busy}><Plus size={16} />开始新对话</button>}
           </section>}
         </div>
 
@@ -2181,23 +2312,17 @@ export function TauriSessionPreview() {
               <span className="tauri-composer__attachment-icon"><FileText size={15} /></span><span className="tauri-composer__attachment-name">{attachment.name}</span><small>{attachment.size < 1024 ? `${attachment.size} B` : `${(attachment.size / 1024).toFixed(1)} KB`}</small>
               <button type="button" onClick={() => setAttachments(previous => previous.filter((_, itemIndex) => itemIndex !== index))} disabled={busy} aria-label={`移除文件 ${attachment.name}`}><X size={13} /></button>
             </div>)}</div>}
-            <textarea value={prompt} onChange={event => {
-              const next = event.target.value;
-              setPrompt(next);
-              // Drafting must not wait on a session or the event stream; open
-              // one on the first keystroke so send has an id when it is ready.
-              // Do not flip `busy` here — that would disable the textarea mid-word.
-              if (!session && next && !createSessionInFlightRef.current) {
-                createSessionInFlightRef.current = true;
-                void createSession().finally(() => { createSessionInFlightRef.current = false; });
-              }
-            }} onKeyDown={event => {
+            {draftAttachmentPaths.length > 0 && <div className="tauri-composer__attachments" aria-label="待发送文件">{draftAttachmentPaths.map((path, index) => <div className="tauri-composer__attachment" key={`${path}-${index}`} title={path}>
+              <span className="tauri-composer__attachment-icon"><FileText size={15} /></span><span className="tauri-composer__attachment-name">{path.split(/[\\/]/).pop() || path}</span><small>待发送</small>
+              <button type="button" onClick={() => setDraftAttachmentPaths(previous => previous.filter((_, itemIndex) => itemIndex !== index))} disabled={busy} aria-label={`移除待发送文件 ${path.split(/[\\/]/).pop() || path}`}><X size={13} /></button>
+            </div>)}</div>}
+            <textarea ref={composerRef} value={prompt} onChange={event => setPrompt(event.target.value)} onKeyDown={event => {
               if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void submit(); }
             }} placeholder={session?.state === "paused" ? "请先完成上方确认…" : session ? "继续聊聊你的问题…（⌘/Ctrl + Enter 发送）" : "输入问题，开始新对话…（⌘/Ctrl + Enter 发送）"} disabled={session?.state === "paused"} rows={3} />
             <div className="tauri-composer__bottom"><span>{session?.workspaceRoot ? `当前对话工作区 · ${session.workspaceRoot}` : session ? "当前对话使用默认工作区" : currentWorkspace ? `新对话默认工作区 · ${currentWorkspace}` : "Preview 配置与稳定版相互隔离"}</span>
               <div className="tauri-composer__actions">
-                <button className="tauri-attach-button" type="button" onClick={() => void addAttachments()} disabled={busy || !session || !streamReady || session.state !== "idle"} aria-label="添加文件" title="从本机选择文件并附加到消息"><Paperclip size={16} /><span>添加文件</span></button>
-                {session?.state === "running" ? <button className="tauri-send-button is-stop" type="button" onClick={() => void cancel()} disabled={busy} aria-label="停止生成"><Square size={15} fill="currentColor" /></button> : <button className="tauri-send-button" type="button" onClick={() => void submit()} disabled={busy || !session || !streamReady || session.state === "paused" || (!prompt.trim() && attachments.length === 0)} aria-label="发送消息"><ArrowUp size={18} /></button>}
+                <button className="tauri-attach-button" type="button" onClick={() => void addAttachments()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state !== "idle"))} aria-label="添加文件" title="从本机选择文件并附加到消息"><Paperclip size={16} /><span>添加文件</span></button>
+                {session?.state === "running" ? <button className="tauri-send-button is-stop" type="button" onClick={() => void cancel()} disabled={busy} aria-label="停止生成"><Square size={15} fill="currentColor" /></button> : <button className="tauri-send-button" type="button" onClick={() => void submit()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state === "paused")) || (!prompt.trim() && attachments.length === 0 && draftAttachmentPaths.length === 0)} aria-label="发送消息"><ArrowUp size={18} /></button>}
               </div>
             </div>
           </div>

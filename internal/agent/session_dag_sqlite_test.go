@@ -99,6 +99,24 @@ func TestSQLiteSessionDAGAppendProjectsAndReplaysCommittedEvents(t *testing.T) {
 	}
 }
 
+func TestSQLiteDAGProbeForSaveSkipsSchemaOneTailRepair(t *testing.T) {
+	path := prepareSQLiteEventTestSession(t)
+	entries := []sessionDAGEntry{
+		{Type: sessionDAGTypeLog, Generation: 1, At: time.Now().UTC()},
+		dagMessageEntry(t, SessionMainHead, "", "turn-1", dagMsg("user", "question", "message-1"), time.Now().UTC()),
+	}
+	if _, err := appendSessionDAGEntries(path, entries, true); err != nil {
+		t.Fatal(err)
+	}
+	probe, err := probeLogForSave(path)
+	if err != nil {
+		t.Fatalf("probe SQLite DAG before save: %v", err)
+	}
+	if !probe.dag || probe.size == 0 {
+		t.Fatalf("probe = %+v; want nonempty DAG", probe)
+	}
+}
+
 func TestSQLiteSessionEventStoreRequiresPreviewGateAndProfilePath(t *testing.T) {
 	managedPath := prepareSQLiteEventTestSession(t)
 	t.Setenv(previewSQLiteEventsEnv, "0")

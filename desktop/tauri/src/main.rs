@@ -1338,27 +1338,12 @@ fn backfill_workbench_titles(
     catalog: State<'_, WorkbenchCatalog>,
     titles: Vec<WorkbenchTitle>,
 ) -> Result<Vec<WorkbenchSession>, String> {
-    let sessions = catalog.list()?;
-    let missing: Vec<_> = titles
-        .into_iter()
-        .filter(|title| {
-            sessions
-                .iter()
-                .any(|session| session.session_id == title.session_id && session.title.is_none())
-        })
-        .collect();
-    if missing.is_empty() {
-        return Ok(sessions);
-    }
-    let resolved = supervisor.backfill_session_titles(
-        missing
-            .iter()
-            .map(|title| SessionFirstMessageTitle {
-                session_id: title.session_id.clone(),
-                title: title.title.clone(),
-            })
-            .collect(),
-    )?;
+    // The identity directory can contain migrated sessions that are not yet
+    // present in the host's bounded recent-session catalog. Backfill every
+    // supplied identity title first; the bridge only fills fallback titles,
+    // and catalog.fill_titles below remains a no-op for identity-only rows.
+    let _sessions = catalog.list()?;
+    let resolved = supervisor.backfill_session_titles(identity_title_backfill_request(titles))?;
     catalog.fill_titles(
         resolved
             .into_iter()
@@ -1368,6 +1353,32 @@ fn backfill_workbench_titles(
             })
             .collect(),
     )
+}
+
+fn identity_title_backfill_request(titles: Vec<WorkbenchTitle>) -> Vec<SessionFirstMessageTitle> {
+    titles
+        .into_iter()
+        .map(|title| SessionFirstMessageTitle {
+            session_id: title.session_id,
+            title: title.title,
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod identity_title_backfill_tests {
+    use super::{identity_title_backfill_request, WorkbenchTitle};
+
+    #[test]
+    fn includes_identity_only_sessions_missing_from_the_host_catalog() {
+        let request = identity_title_backfill_request(vec![WorkbenchTitle {
+            session_id: "migrated-session".into(),
+            title: "Recovered from first user message".into(),
+        }]);
+        assert_eq!(request.len(), 1);
+        assert_eq!(request[0].session_id, "migrated-session");
+        assert_eq!(request[0].title, "Recovered from first user message");
+    }
 }
 
 #[tauri::command]

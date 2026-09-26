@@ -351,7 +351,7 @@ func TestBridgeServerReturnsDisplaySafeSessionHistory(t *testing.T) {
 		state: "idle",
 		history: []desktopbridge.HistoryMessage{
 			{Role: "user", Content: "hello"},
-			{Role: "assistant", Content: "hi", Truncated: true},
+			{Role: "assistant", Content: "hi", Truncated: true, WorkDurationMs: 960_000},
 		},
 	}
 	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
@@ -380,7 +380,7 @@ func TestBridgeServerReturnsDisplaySafeSessionHistory(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&got); err != nil {
 		t.Fatalf("decode history response: %v", err)
 	}
-	if got.ProtocolVersion != desktopbridge.ProtocolVersion || got.Session.ID != "tab-1" || got.TotalMessages != 2 || got.StartIndex != 0 || len(got.Messages) != 2 || !got.Messages[1].Truncated {
+	if got.ProtocolVersion != desktopbridge.ProtocolVersion || got.Session.ID != "tab-1" || got.TotalMessages != 2 || got.StartIndex != 0 || len(got.Messages) != 2 || !got.Messages[1].Truncated || got.Messages[1].WorkDurationMs != 960_000 {
 		t.Fatalf("history = %#v", got)
 	}
 }
