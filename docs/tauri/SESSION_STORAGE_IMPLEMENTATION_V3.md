@@ -1,6 +1,6 @@
 # Tauri Preview 会话存储实施稿 v3
 
-> 状态：持续实施中；Preview 身份库已升至 schema v5（相对 profile-root 路径与手工标题重命名意图），真实稳定版数据迁移仍未授权。本文保留设计边界与阶段验收记录。
+> 状态：持续实施中；当前工作树身份库已迁移到 schema v9。S2 的相对 profile-root 路径、手工标题意图与会话目录 generation/revision 分页分别在 v4–v6 引入；v7 添加事件流表，v8 增加 checkpoint 水位，v9 增加事件来源验证标记，属于单独的 Preview SQLite 事件库 RFC，不能视作 S2 发布兼容认证。真实稳定版数据迁移仍未授权。本文保留设计边界与阶段验收记录。
 > 对照：本地草稿 `SESSION_STORAGE_PLAN_V2.md`、`MIMO_STYLE_SESSION_STORAGE_APPROVAL.md`，以及已入库的[既有评审](./MIMO_STYLE_SESSION_STORAGE_REVIEW.md)。
 > 本稿替代前两份文档的实施建议；它们保留为设计讨论记录。本稿不是“已完成迁移”的声明。
 >
@@ -221,9 +221,9 @@ SQLite 标题不一致、或侧车不可安全读取的情况记为错误；现�
 暴露导入端点；应用函数会在重新审核与 SQLite 导入的整个区间取得 profile gate，已有 lock-aware writer 时 fail closed，但旧 Wails 写者不遵守该 gate。没有旧写者停写确认或已接入的跨资源备份门禁；因此这只是离线/测试 profile
 的 S1 能力，不能在运行中的 Preview 上直接执行真实数据迁移。
 
-离线快照工具现可把**整份** Preview profile 与独立的 workbench catalog 复制到 profile
-之外的私有目录，manifest 逐文件记录大小和 SHA-256，完成后可验证并在**新目录**演练恢复；
-Unix 上验证还会拒绝 group/other 可访问的快照目录、清单、成员目录或文件。符号链接、嵌套备份位置、缺失或被篡改的成员会被拒绝，恢复 staging 还会将 manifest 中的来源 profile 解析为实际路径，拒绝通过 symlink 别名写回来源 profile。它尚未接入用户迁移入口，
+离线快照工具现可把 Preview profile 的权威数据（跳过可再生成的顶层 `cache/`）与独立的
+workbench catalog 复制到 profile 之外的私有目录，manifest 逐文件记录大小和 SHA-256，完成后可验证并在**新目录**演练恢复；
+Unix 上验证还会拒绝 group/other 可访问的快照目录、清单、成员目录或文件。符号链接、嵌套备份位置、缺失或被篡改的成员会被拒绝，恢复 staging 还会将 manifest 中的来源 profile 解析为实际路径，拒绝通过 symlink 别名写回来源 profile；恢复 staging 不含缓存，应用按需重建。它尚未接入用户迁移入口，
 也**不能替代停写门禁**：旧客户端不认识新 profile 锁，快照 API 只适用于已由外部确认
 全部写者停止的离线 profile。真实资料备份/恢复演练与旧写者停写确认仍待完成。
 
@@ -244,7 +244,7 @@ Unix 上验证还会拒绝 group/other 可访问的快照目录、清单、成�
 
 ### S2：shadow 读写与 resolver
 
-**当前安全切片**：bridge 已将新建、恢复、缺失、删除中与已删除会话分开处理；已登记但 transcript 缺失时拒绝静默创建同 ID 空会话，缺失与中断删除均可经显式删除安全退休并保留 tombstone。若清理已完成但 host 尚未移除旧 JSON 行，匹配路径的 `deleted` tombstone 会令重复 DELETE 幂等成功，从而允许 host 完成陈旧 catalog 清理而不再触碰会话文件。标题/首条消息预览拒绝读取 symlink 的 profile 外 `sessions` 目录、transcript、`.meta` 与事件日志；身份导入、预留、catalog 顺序同步和相对路径解析也会按规范化 profile root 拒绝指向 profile 外部的 `sessions` 目录。预览有新鲜普通用户投影时避免重放整段 transcript，合成 `session-context` 首项仍走完整解析以保留显示语义。身份库打开会校验其父目录仍在指定 profile root 内，并以 `Lstat` 拒绝数据库及 SQLite journal sidecar 为 symlink 或非普通文件；这些都是路径级预检，不防止并发替换竞态。Tauri Preview 侧栏按页读取身份目录，每次首屏及续页请求都重新做 count-only 影子比对；不一致或失败时首屏回退旧 JSON，续页则拒绝混入未经验证的 SQLite 结果并要求重启列表读取。每页还携带仅覆盖分页键与可见性字段的 SHA-256 snapshot ID，游标绑定该快照；路径、工作区、状态或顺序变化会返回 `resync_required`，而标题回填不破坏分页。完整 shadow compare 仍核对展示元数据。对 WebView 暴露的低层身份分页命令也执行相同 clean shadow 门禁。新增/改名/删除后的重新盘点发现漂移时也会回退。身份表现为相对 state-root 的 `relative_path`；旧 v1–v3 绝对路径通过校验后事务迁移到 v4，离线快照与旧 catalog 重放的跨资源恢复演练已覆盖新 profile 路径；SQLite WAL abrupt-exit 恢复及删除清理中的 bridge 进程强制终止后重试已有隔离测试。此为可回退的 Preview 读取路径，不代表稳定版迁移或全 profile 权威切换。旧 bridge 缺少必需的 `session_catalog_sync` 或 `session_directory_snapshot_v1` capability 时，新 host 会在启动阶段拒绝该 sidecar；真实旧 writer 停写确认与旧 Tauri host 二进制认证仍待完成，详见下方兼容矩阵。
+**当前安全切片**：bridge 已将新建、恢复、缺失、删除中与已删除会话分开处理；已登记但 transcript 缺失时拒绝静默创建同 ID 空会话，缺失与中断删除均可经显式删除安全退休并保留 tombstone。若清理已完成但 host 尚未移除旧 JSON 行，匹配路径的 `deleted` tombstone 会令重复 DELETE 幂等成功；legacy catalog migration 也会将匹配 ID/path 的 terminal identity 视为已处理并保留其状态，避免一条 crash 后遗留的旧行阻断其他会话导入。标题/首条消息预览拒绝读取 symlink 的 profile 外 `sessions` 目录、transcript、`.meta` 与事件日志；身份导入、预留、catalog 顺序同步和相对路径解析也会按规范化 profile root 拒绝指向 profile 外部的 `sessions` 目录。预览有新鲜普通用户投影时避免重放整段 transcript，合成 `session-context` 首项仍走完整解析以保留显示语义。身份库打开会校验其父目录仍在指定 profile root 内，并以 `Lstat` 拒绝数据库及 SQLite journal sidecar 为 symlink 或非普通文件；这些都是路径级预检，不防止并发替换竞态。Tauri Preview 侧栏首屏执行完整 shadow 审计；续页仅在 legacy catalog 与结构 snapshot ID 匹配时复用已审计物理 inventory，bridge 仍逐页检查结构快照。title-only drift 和 inventory 确认的 missing identity rows 不阻止身份目录分页并在侧栏提示；其他首屏差异若身份页与同轮 shadow projection 逐页吻合，则返回 `identity_unverified` 只读页并隔离旧目录独有项；不吻合或身份页不可用时才回退旧 JSON。shadow 请求不可用时，若当前进程持有匹配 legacy 结构与 cursor snapshot 的 path-free 投影，可用 `cached` 只读分页；原快照若未核验，会保留未核验标记及隔离旧目录项。缓存不把 dirty shadow 升级为 clean。续页结构漂移仍拒绝混入不同快照并要求从首屏重新读取。页面间仅发生在文件系统上的外部变化由始终可见的“重新检查会话目录”按钮触发完整复核；打开缺失 transcript 仍失败关闭。分页 cursor 绑定结构 snapshot ID 与 total：schema 6 使用 generation/revision，schema 5 或 revision 元数据/触发器不完整时回退覆盖索引上的结构 SHA-256；路径、工作区、状态或顺序变化会返回 `resync_required`，而标题回填不破坏分页。完整 shadow compare 仍核对并报告展示元数据差异；安全分页门禁允许独立 title-only drift。WebView 不暴露低层身份目录分页 invoke；唯一的生产分页入口 `workbench_session_page` 执行相同结构与物理状态门禁。新增/改名/删除后的显式重新盘点发现差异时，会按同轮 identity page 可否匹配返回未核验只读页或有界 legacy 回退。身份表现为相对 state-root 的 `relative_path`；旧 v1–v3 绝对路径通过校验后事务迁移到 v4，离线快照与旧 catalog 重放的跨资源恢复演练已覆盖新 profile 路径；SQLite WAL abrupt-exit 恢复及删除清理中的 bridge 进程强制终止后重试已有隔离测试。此为可回退的 Preview 读取路径，不代表稳定版迁移或全 profile 权威切换。旧 bridge 缺少必需的 `session_catalog_sync` 或 `session_directory_snapshot_v1` capability 时，新 host 会在启动阶段拒绝该 sidecar；真实旧 writer 停写确认与旧 Tauri host 二进制认证仍待完成，详见下方兼容矩阵。
 
 缺少身份库主文件不一定是新 profile：若同名 WAL、SHM 或 journal 尚在，bridge 启动、
 只读目录/盘点/恢复清单以及写入打开均 fail-closed，不能返回假的空目录或在残留
@@ -253,7 +253,7 @@ sidecar 旁创建新库；缺库分支也检查数据库父目录仍在 profile 
 并行初始化。隔离测试保留残留文件原字节并确认没有发布 bridge readiness。
 这些检查是路径级预检与进程内串行化，不代替停写门禁。
 
-中断删除的 `deleting` identity 不属于普通目录，但现在可通过 `GET /v1/sessions/deletion-recovery` 单独发现；该响应只包含 ID 和标题，不暴露 transcript 路径。Tauri host 在 health capability 缺失时拒绝旧 bridge；侧栏独立加载恢复清单，普通最近会话页读取失败时仍展示这些记录。只有用户明确确认才调用既有 DELETE 重试；不做启动期自动删除，也不允许打开该会话。
+中断删除的 `deleting` identity 不属于普通目录。当前 Tauri host 使用 `GET /v1/sessions/deletion-recovery/page` 按不可变 ID 游标分页，每页最多 200 条；兼容旧 host 的无参数 `GET /v1/sessions/deletion-recovery` 路由仍保留，并有 10,000 条上限。两个响应都只包含 ID 和标题，不暴露 transcript 路径。Tauri host 在 health capability 缺失时拒绝旧 bridge；侧栏独立加载待完成删除页，普通最近会话页读取失败时仍展示这些记录，并提供续页、失败重查入口。只有用户明确确认才调用既有 DELETE 重试；不做启动期自动删除，也不允许打开该会话。
 
 未完成的手工标题意图另有 `GET /v1/sessions/title-recovery` 清单，要求 `session_title_recovery_list_v1` capability。它只发现，不自动完成意图；侧栏可显式重开可读会话，沿已有路径核对侧车后完成或撤销改名。侧车有歧义、无法重开时，可由用户二次确认直接删除该会话并放弃意图；这条未持有会话的删除路径只接受仍有匹配意图的 ready/reserved 身份，普通未持有会话继续拒绝。文件缺失的行可删除失效记录，当前已打开的会话须先切换后重开。旧 catalog 的 50 条上限不再遮蔽这类恢复入口，但一般影子失败时的旧目录分页限制仍在。
 
@@ -261,7 +261,7 @@ sidecar 旁创建新库；缺库分支也检查数据库父目录仍在 profile 
 
 Rust host 读取 bridge HTTP 响应时限制原始响应最多 64 MiB、解码 JSON body 最多 32 MiB，超限在 JSON 解析前拒绝；避免异常膨胀的 inventory/history 响应无界占用 host 内存。
 
-Host 的每页 shadow 门禁使用 `/v1/sessions/shadow-snapshot`：Go 在一次请求中完成物理 inventory，并从其中已经读取、校验过的身份行构建有界完整目录与结构快照 ID，最多 10,000 条，避免第二次开库并解析全部 transcript 路径。独立的 `/v1/sessions/snapshot` 保留给诊断及其他调用方。`session_shadow_snapshot_v1` capability 区分旧 bridge；缺少该 endpoint 的 sidecar 会在启动握手阶段被拒绝。Rust 对合并响应中的目录仍校验总数、顺序与可见状态，并严格检查物理 inventory 的必需数组；随后单独读取实际分页，既核对结构 snapshot ID，也要求该页恰为同轮 shadow 目录对应的完整分页切片，逐项核对 ID、标题、工作区与生命周期。标题变化不使跨请求的结构游标失效，但若恰在同一请求的盘点与分页之间变化，首屏回退旧目录、续页拒绝混入未经审计的新标题。超过条数或 HTTP body 上限时拒绝快照并走既有 fail-closed fallback。此改动不缓存或跳过每页完整物理盘点，也没有消除分页本身的额外读取。
+Host 的首屏 shadow 门禁使用 `/v1/sessions/shadow-audit-snapshot`：Go 在一次请求中完成物理 inventory，并从其中已经读取、校验过的身份行构建有界完整目录与结构快照 ID，最多 10,000 条，避免第二次开库并解析全部 transcript 路径。该专用审计响应只传可见身份的物理状态，以及未认领文件数和诊断数；不传 inventory 中完整文件路径与逐项诊断文本。旧 `/v1/sessions/shadow-snapshot` 完整响应保留给既有 host。`session_shadow_audit_snapshot_v1` capability 用于握手确认新响应形状，缺少能力的 sidecar 会在启动握手阶段被拒绝；旧 Tauri host 对当前 sidecar 的兼容性仍未认证。独立的 `/v1/sessions/snapshot` 保留给诊断及其他调用方。Rust 对合并响应中的目录仍校验总数、顺序与可见状态，并严格检查物理 inventory 的必需字段；随后单独读取实际分页，既核对结构 snapshot ID，也要求该页恰为同轮 shadow 目录对应的完整分页切片，逐项核对 ID、顺序、工作区与生命周期；标题属于可变展示元数据，不要求与同一请求 shadow 读取时完全相同。标题变化不使跨请求的结构游标失效，shadow 仍报告盘点时检测到的标题差异。超过条数或 HTTP body 上限时拒绝快照并走既有 fail-closed fallback；Tauri 首屏分页响应同时返回同轮 path-free shadow report，启动诊断复用它以避免紧接着重复物理盘点，手动刷新诊断仍会重新执行审计。shadow 请求不可用且有同进程此前通过安全分页检查的快照时，允许以明确标记的 cached source 继续展示；cached 页使用快照标题继续分页；仅标题漂移不会使已标记可能过期且禁用操作的缓存 cursor 失效，ID、顺序或 workspace 变化仍使其失效；title-only drift、已登记且 inventory 确认 transcript 不存在的 missing rows、或未认领文件差异都会将实时页面标为 `partial_identity`；完整身份目录仍可分页并分别报告差异。missing rows 禁止打开但允许显式删除，未认领文件不会自动认领；cached 页面同时注明可能过期并禁用操作。存在其他 shadow 差异或 inventory 错误时，若身份页可与同轮 shadow projection 匹配则返回未核验只读页；无法匹配时才回退 legacy。此类 dirty shadow 快照可留在进程内供明确标记的只读 cached continuation 使用。首屏通过安全分页检查后，host 可在 legacy catalog 的 ID/工作区/顺序结构与 SQLite 结构 snapshot ID 均未变化时复用该次物理 inventory 完成续页；纯标题变化不清除此缓存；当前 legacy catalog 的 workspace 仍逐页核对，标题差异使用身份目录标题并在 UI 报告数量。Go 在 schema 6 且 generation/revision 元数据与结构触发器完整时，于 SQLite 读事务内校验 generation/revision 和 cursor total，再只读取当前页；schema 5 或元数据/任一触发器缺失时回退覆盖索引上的 O(n) 结构哈希。两种路径都令结构变化使续页失效。该复用不监视页面间仅发生在文件系统上的外部变化；用户可用始终可见的“重新检查会话目录”按钮重新执行首屏完整审计，打开缺失 transcript 也仍会失败关闭。旧 Wails writer 的停写尚未认证，不能将此缓存语义视为跨旧 writer 的一致性保证。
 
 Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝加载而不跳过行；否则 shadow 比对可能把被过滤的旧 catalog 行误当成不存在，之后任一 catalog 写入还可能永久丢弃这些行。超限、重复或非法文件在失败读取与尝试写入后均保持原字节不变，省略 title 的合法旧格式继续支持。
 
@@ -269,11 +269,11 @@ Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝
 
 **物理 transcript 唯一性**：新身份导入、首次预留、`reserved → ready`、已登记会话恢复前和开始删除的 lifecycle fence 均在 SQLite 写事务中检查 profile 内现存身份，拒绝同一文件经内部目录 symlink 别名或 hard link 被不同 ID 认领；`deleting` 重试和最终 tombstone 写入都会再确认路径唯一，旧库已有别名时拒绝打开、继续清理或完成退休。macOS/Windows 还保守拒绝只差大小写的路径键（macOS 大小写敏感卷上也可能拒绝本可区分的路径）。批量导入冲突会整批回滚。两个 Store 连接并发预留同一物理路径的回归确认最多一方成功，symlink 在预留后改变的用例确认冲突时不会推进为 ready；旧库重复物理路径的打开、删除及中断删除重试用例确认不会加载或清理 transcript。只读 inventory 也会将已有记录中解析到同一路径或同一文件的不同 ID 标记为 path conflict 并写入错误清单，`PrepareImportReview` 遇到这种冲突会拒绝整份计划；`ApplyImportReview` 会重新盘点，计划生成后新增的冲突会令整份计划过期。bridge 将该路径冲突映射为 session conflict（HTTP 409）；物理 inventory 的 `errors` 计数也会传入 Tauri shadow 门禁，使目录选择保持 dirty。审计不自动重写或修复数据库，范围是 inventory 当前列出的身份、catalog 与扫描候选，不是独立的全磁盘硬链接扫描器。
 
-只读 inventory 的物理冲突审计仍逐项解析和检查文件，但 macOS/Linux 对已获取的文件身份按设备号与 inode 分组，对解析路径按等价键分组（macOS 额外采用保守的大小写折叠），只在同组内确认冲突，避免大量互不相关会话之间的两两比较。缺少可用文件身份键时保留逐对 `SameFile` 检查；Windows 目前走这一保守回退，并对路径采用大小写折叠。隔离基准 `BenchmarkInventory` 覆盖 50/500 条完整盘点，可用于观察开销；合并 shadow 快照消除了独立完整目录快照的重复路径校验，但仍不缓存或跳过每页物理盘点，S2 每页全量 shadow 审计的剩余问题仍在。
+只读 inventory 的物理冲突审计仍逐项解析和检查文件，但 macOS/Linux 对已获取的文件身份按设备号与 inode 分组，对解析路径按等价键分组（macOS 额外采用保守的大小写折叠），只在同组内确认冲突，避免大量互不相关会话之间的两两比较。缺少可用文件身份键时保留逐对 `SameFile` 检查；Windows 目前走这一保守回退，并对路径采用大小写折叠。隔离基准 `BenchmarkInventory` 覆盖 50/500 条完整盘点，可用于观察开销；合并 shadow 快照消除了独立完整目录快照的重复路径校验。当前 host 只在首屏做完整物理盘点，并在目录身份快照未变化时跨续页复用。schema 6 的续页结构 cursor 使用 SQLite revision；schema 5 或 revision 元数据/trigger 缺失时回退到 O(n) 结构哈希。页面间文件系统外部变化要通过显式重新检查发现。
 
 补充的隔离基准分别测量已打开 Store 的完整 inventory、每次经 `OpenReadOnly` 开库的 inventory，以及单独的身份行 `List`。在 Apple M4、500 条均为已登记普通 transcript 且无旧 catalog 的样本中，`4359c238b` 基线多次短跑约为 27 ms、29 ms、18 ms/次；数值仅用于定位热点，不代表真实 profile 性能或跨平台保证。主要开销是逐行路径校验，而非只读开库；在旧 Wails writer 停写尚未确认的阶段，不以缓存或跳过这些校验换取数字。已存在路径的解析现先调用 `EvalSymlinks`，仅在失败时用 `Lstat` 区分缺失路径与断开的 symlink，避免成功路径多做一次检查；缺失、目录别名与断链路径的原有行为由回归覆盖。
 
-`BenchmarkListVisible` 另测每页结构快照绑定的首屏读取。隔离的 50/500 行样本在 Apple M4 上约为 3.0/3.8 ms；尝试把 `COUNT(*)` 并入已存在的哈希扫描后，多次短跑没有可辨改善，因此撤回该生产改动。该基准保留为后续定位证据；不能据此跳过结构哈希或每页 shadow 盘点。
+`BenchmarkListVisible` 另测每页结构快照绑定的首屏读取。隔离的 50/500 行样本在 Apple M4 上约为 3.0/3.8 ms；早前在未使用覆盖索引时尝试把 `COUNT(*)` 并入哈希扫描，多次短跑没有可辨改善，因此当时撤回。schema 6 首屏通过 SQLite generation/revision 计算快照并读取一次 visible total，后续页使用携带的 total 做 O(1) generation/revision 校验；随机 generation 使替换过的数据库不会因 revision 数值相同而继承旧 cursor。结构变更后 revision 失配并要求重启分页。schema 5 或 revision 元数据/trigger 不完整时，`visibleSnapshotID` 使用覆盖结构列索引重算哈希并累计 total。本轮未重新做性能基准，不据此声称可测延迟改善。完整物理 inventory 只在首屏完整审计及用户显式重新检查时执行。
 
 写路径 `Open` 的 WAL 预检另有保守快路径：主库 header 的 schema version 已核对后，只有当现有 WAL 的帧布局完整且逐帧确认没有第 1 页（`user_version` 所在页）时，才跳过为读取 WAL schema 而做的临时整库复制。出现第 1 页、截断帧或无法判定的布局仍沿用副本校验；SQLite 原库打开后的 `quick_check` 与版本判定也照常执行。`OpenReadOnly` 从来不走这条副本校验，仍直接只读核对 schema 与完整性。此优化不缓存跨请求的 schema 结果，也不解决并发路径替换竞态。
 
@@ -285,7 +285,7 @@ Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝
 
 | 组合 | 结论 | 依据 / 限制 |
 | --- | --- | --- |
-| 当前 Tauri host + 当前 bridge（protocol v1，含会话同步、目录快照、`session_shadow_snapshot_v1`、删除恢复、`session_title_intent_v1` 与 `session_title_recovery_list_v1` capability） | 支持 | Host 启动时先校验 ready frame，再读取认证 health；协议版本、sidecar instance ID 或必需 capability 不匹配时，拒绝把该进程登记为可用并终止它。 |
+| 当前 Tauri host + 当前 bridge（protocol v1，含会话同步、目录快照、`session_shadow_snapshot_v1`、`session_shadow_audit_snapshot_v1`、删除恢复、`session_title_intent_v1` 与 `session_title_recovery_list_v1` capability） | 支持 | Host 启动时先校验 ready frame，再读取认证 health；协议版本、sidecar instance ID 或必需 capability 不匹配时，拒绝把该进程登记为可用并终止它。 |
 | 当前 Tauri host + 旧 bridge（仍报 protocol v1、但缺少任一必需 capability） | 明确拒绝 | protocol major 相同不代表新增端点及持久标题恢复可用；health capability 缺失会在启动阶段报错。 |
 | 旧 Tauri host + 新 bridge（protocol v1） | 预期向后兼容，非发布认证 | bridge 保留既有 v1 路由；旧 host 不调用新增目录同步接口时，不会要求它理解身份库。完整旧 host 二进制尚未纳入自动化矩阵。 |
 | Wails 1.38.3 / 1.38.10 与 Tauri Preview 共用 profile 并同时写入 | 不支持 | 这些旧 writer 不遵守 `profilegate`。不得用新 bridge 的锁推断旧进程已停；真实 profile 操作前需外部确认 writer 全退出。 |
@@ -310,9 +310,9 @@ Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝
 **当前 bridge 候选旧 host 复测（2026-09-25）**：从 bridge 提交 `b9499ac6e26b10e13f731c853316d4809557e64a` 与候选旧 host 源码 `50c1b9bc6` 在临时目录重建，真实进程启停、改名后重启读取、删除隔离会话三项测试均通过；候选 debug host SHA-256 为 `2d8f1d31fb83bb346e08e3ad336c75b7062123cefbc60681192a19446ada6e2f`。二进制与三个测试 profile 位于 `/var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/reasonix-tauri-compat.jnKBHq`，哈希和独立 profile 目录已复核；没有读取或修改真实 profile。此结果仍只针对候选源码和测试 harness，不含应用窗口交互、签名/公证或正式旧发布二进制，兼容矩阵结论不升级。
 
 1. 新会话先 `reserved` 登记 ID；实际写入后转 `ready`。bridge 的打开/切换/重命名/删除均先解析身份行，再定位文件。无记录的新建与已登记但 `missing` 的恢复必须分开。
-2. 一段发布窗口内，host 对比 JSON 与 SQLite 的 ID/标题/工作区/顺序/文件状态；只记录差异统计，不把私密消息写诊断。SQLite 只在影子报告 clean 时作为当前 Preview 侧栏来源，否则继续显示 JSON；差异或盘点错误不得进入 SQLite 来源。
-3. 对删除使用持久状态机：先标 `deleting` 并阻止新写，再调用既有 `control.RemoveSessionArtifacts`，成功后保留 `deleted` tombstone；重启时重试未完成清理。若 tombstone 已提交但 host JSON 尚未清理，路径匹配的重复 DELETE 幂等成功以便清理陈旧 catalog 行，不重新扫描或删除 artifacts。文件系统与 SQLite 无法组成一个原子事务，不能承诺“同时消失”。
-4. 首屏及每次续页的 clean 门禁均已接入 Preview；新增/改名/删除后的重新盘点若发现差异会触发回退。每页在 SQLite 读事务内计算覆盖分页键与可见性字段（ID、相对路径、工作区、顺序、状态）的 SHA-256 snapshot ID，续页 cursor 携带该 ID；总数不变但路径、工作区、状态或顺序等结构性目录变化，bridge 返回 `resync_required`。仅标题、标题来源/修订号及展示时间戳变化不会使 keyset cursor 失效，避免首条消息标题回填打断分页；这些字段仍由完整 shadow compare 校验。host 也会将影子扫描和实际首屏页的 snapshot ID 作二次核对，避免 TOCTOU 后展示未验证页。若续页与首屏之间发生结构漂移或盘点不可用，调用方需从首屏重新读取，避免合并不同目录快照。若独立影子审计失败，前端同样重读经门禁保护的首屏，由 host 决定是否回退旧 JSON；不会仅展示审计错误并继续保留上次的 SQLite 页面。只有缺失/删除/崩溃恢复、损坏库、备份恢复及双进程测试完成后，才能考虑移除 JSON 回退并宣布 SQLite 为唯一权威。当前保留旧 JSON 回退输入与排序同步，避免在验证窗口丢失可用列表。
+2. 一段发布窗口内，host 对比 JSON 与 SQLite 的 ID/标题/工作区/顺序/文件状态；只记录差异统计，不把私密消息写诊断。若 ID、workspace、顺序和物理状态通过安全核验，title-only drift 与 inventory 确认的 missing identity rows 不阻止 SQLite 身份目录分页；UI 分别说明采用身份目录标题或标记文件缺失。其他差异或盘点错误仍使用有界 JSON 回退。
+3. 对删除使用持久状态机：先标 `deleting` 并阻止新写，再调用既有 `control.RemoveSessionArtifacts`，成功后保留 `deleted` tombstone。若进程在中途退出，重启后将该行显示在独立恢复清单中，用户确认后可重试清理；当前不会在启动时自动删除。若 tombstone 已提交但 host JSON 尚未清理，路径匹配的重复 DELETE 幂等成功以便清理陈旧 catalog 行，不重新扫描或删除 artifacts。文件系统与 SQLite 无法组成一个原子事务，不能承诺“同时消失”。
+4. Preview 首屏执行结构与物理状态安全 shadow 检查；title-only drift 和 inventory 确认的 missing identity rows 不阻断身份目录分页，但仍计入 shadow 差异并在侧栏分别提示身份标题来源和缺失状态。续页在 legacy catalog 与结构 snapshot ID 仍匹配时复用首屏物理 inventory，并由 bridge 再验证 cursor 的结构快照。新增/改名/删除后的显式重新盘点若发现差异，会在身份页与同轮 shadow 匹配时显示未核验只读分页，否则才触发有界回退。首屏在 SQLite 读事务内读取结构快照 ID 与可见总数：schema 6 优先使用 generation/revision，schema 5 或 revision 元数据/触发器不完整时对覆盖结构索引计算 SHA-256；续页 cursor 携带 snapshot ID 与 total。路径、工作区、状态或顺序变化都会令 snapshot 校验失败并返回 `resync_required`。仅标题、标题来源/修订号及展示时间戳变化不会使 keyset cursor 失效，避免首条消息标题回填打断分页；这些字段仍由完整 shadow compare 校验。host 也会将影子扫描和首屏页的 snapshot ID 作二次核对，避免 TOCTOU 后展示未验证页。schema 6 且 revision 元数据与触发器完整时，续页通过 generation/revision 做 O(1) 结构校验；schema 5 或元数据/触发器不完整时仍需 O(n) 结构哈希扫描，`sessions_visible_structure_snapshot(position,id,state,relative_path,workspace_root)` 覆盖索引避免该回退路径逐行回表。页面间仅文件系统状态变化不会自动触发完整 inventory，侧栏提供“重新检查会话目录”按钮执行首屏完整审计，打开缺失 transcript 仍失败关闭。若续页结构漂移，调用方需从首屏重新读取，避免合并不同目录快照。若首屏 shadow 仅发现 title-only drift、已确认 missing rows 或未认领文件，仍分页已核验身份行；missing rows 禁止打开，其他差异时回退旧 JSON。实时 shadow 不可用但仍有匹配快照时，可显示明确标记为 cached 的可能过期只读列表；若快照来自 dirty shadow，未核验状态和 legacy-only 分区继续保留，不把缓存当作新审计结果。只有缺失/删除/崩溃恢复、损坏库、备份恢复及双进程测试完成后，才能考虑移除 JSON 回退并宣布 SQLite 为唯一权威。当前保留旧 JSON 回退输入与排序同步，避免在验证窗口丢失可用列表。
 
 **退出**：重启 ID 不变；缺文件不会变空会话；删除失败可续做；同 profile 竞争写者被阻止；新旧列表差异可解释。回退时恢复旧读路径，**保留**已成为权威的身份库和 tombstone，不删除或重分配 ID。
 
@@ -327,7 +327,7 @@ Tauri workbench catalog 超过 50 条、含重复 ID 或非法元数据时拒绝
 审批稿 A1–A6、B3–B5、C1–C5 的边界继续有效；A7 改为“记忆布局待独立设计”，B1 的扫描器改为**只读候选清单**而非自动认领，B2 的 alias 延至 Move 语义确定。审批稿中 Wails 的路径身份与 Tauri 已有 ID 必须分开描述，`C6`/`B5` 的交叉引用也需更正。
 
 S0 路径与隔离修正已提交；S1 的只读清单和离线核验导入已有代码与测试，
-离线快照会校验整份 profile 与 host catalog，暂存快照后的身份路径重绑定及 catalog 对恢复 transcript 的重放已有自动化演练。隔离用例覆盖 schema v5 的未完成手工改名：快照恢复到不同路径后，只读恢复清单仍能发现旧标题且不泄漏路径或未提交标题；通过真实 bridge 恢复分支，侧车尚未更新时撤销意图并保留旧标题，侧车已更新而 SQLite 尚未提交时则提交新标题。两种情况下源 profile 的待办记录与侧车均保持不变。身份库 schema v4 已把绝对 `path` 迁为相对 `relative_path`，v1–v3 迁移会先核对路径归属，越界时拒绝迁移且不改 v3 数据；当前 schema v5 再以版本化事务增加手工标题意图表。当前 host 启动握手会校验会话同步、目录快照、显式删除恢复及持久标题意图 capability；缺少所需能力的旧 sidecar 会被拒绝；上方兼容矩阵记录了可证明与仅预期兼容的组合。仍待旧 writer 停写确认及旧 Tauri host 二进制端到端认证；新版本 bridge 同 profile 进程互斥已有跨进程测试，但不约束不使用新锁协议的旧版本 writer。Preview 每次首屏或续页请求均在影子报告 clean 后才选择身份目录；启动或新增、改名、删除后若重盘点发现漂移或失败，则回退 JSON；续页期间发现漂移时要求从首屏重读。稳定版及真实 profile 自动迁移仍未授权。
+离线快照会校验 profile 权威数据（不含可再生成的顶层 `cache/`）与 host catalog，暂存快照后的身份路径重绑定及 catalog 对恢复 transcript 的重放已有自动化演练。隔离用例覆盖 schema v5 的未完成手工改名：快照恢复到不同路径后，只读恢复清单仍能发现旧标题且不泄漏路径或未提交标题；通过真实 bridge 恢复分支，侧车尚未更新时撤销意图并保留旧标题，侧车已更新而 SQLite 尚未提交时则提交新标题。两种情况下源 profile 的待办记录与侧车均保持不变。身份库 schema v4 已把绝对 `path` 迁为相对 `relative_path`，v1–v3 迁移会先核对路径归属，越界时拒绝迁移且不改 v3 数据；schema v5 以版本化事务增加手工标题意图表；schema v6 增加会话目录 generation/revision 与结构变更触发器。当前 host 启动握手会校验会话同步、目录快照、显式删除恢复及持久标题意图 capability；缺少所需能力的旧 sidecar 会被拒绝；上方兼容矩阵记录了可证明与仅预期兼容的组合。仍待旧 writer 停写确认及旧 Tauri host 二进制端到端认证；新版本 bridge 同 profile 进程互斥已有跨进程测试，但不约束不使用新锁协议的旧版本 writer。Preview 首屏通过结构与物理状态安全检查后选择身份目录；title-only drift、确认缺失行与未认领文件会标记 partial source 并分别提示。续页复用对应的物理 inventory，并逐页通过结构 cursor 校验。首屏启动或重新检查发现其他漂移时，若身份页能与同轮 shadow projection 匹配则显示未核验只读分页，否则才回退 JSON；shadow 不可用时若存在匹配缓存也只读显示并保留原未核验标记。续页期间发现结构漂移时要求从首屏重读。页面间仅文件系统状态变化不会自动触发完整 inventory，需用户点“重新检查会话目录”。稳定版及真实 profile 自动迁移仍未授权。
 
 > **[DeepSeek] 本段的 A/B/C 编号与两处更正已并入 V2 的决议索引。**
 > - V2 §13.1 声明**直接采纳** A1–A7、B3–B5、C1–C5，并注明 A7 的

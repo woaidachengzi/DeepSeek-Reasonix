@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -138,6 +139,12 @@ func SessionEventIndexPath(sessionPath string) string {
 }
 
 func sessionEventLogSize(sessionPath string) int64 {
+	if data, active, err := sqliteDAGEventBytes(context.Background(), sessionPath, defaultSessionReplayLimits); err != nil {
+		slog.Warn("session: could not inspect SQLite event store size", "path", sessionPath, "err", err)
+		return math.MaxInt64
+	} else if active {
+		return int64(len(data))
+	}
 	path := store.SessionEventLog(sessionPath)
 	if path == "" {
 		return 0

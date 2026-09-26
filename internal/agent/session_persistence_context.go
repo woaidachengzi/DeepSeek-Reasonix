@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -141,6 +142,10 @@ func writeSessionMessagesContext(ctx context.Context, path string, msgs []provid
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	checkpointTarget, checkpointActive, checkpointErr := captureSQLiteCheckpointTarget(path)
+	if checkpointErr != nil {
+		slog.Warn("session: could not capture SQLite checkpoint watermark", "path", path, "err", checkpointErr)
+	}
 	fileutil.Crash("session-checkpoint", path)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
@@ -188,6 +193,11 @@ func writeSessionMessagesContext(ctx context.Context, path string, msgs []provid
 	if err := fileutil.ReplaceFile(tmpPath, path); err != nil {
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("write session messages: %w", err)
+	}
+	if checkpointActive && checkpointErr == nil {
+		if err := markSQLiteCheckpointProjection(checkpointTarget, path); err != nil {
+			slog.Warn("session: SQLite checkpoint watermark pending", "path", path, "err", err)
+		}
 	}
 	return nil
 }

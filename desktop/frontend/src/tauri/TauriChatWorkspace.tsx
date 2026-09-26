@@ -94,9 +94,11 @@ import {
   tauriPreviewProfileStatus,
   tauriPreviewRuntimeInfo,
   tauriSessionTitle,
-  tauriPendingSessionDeletes,
+  tauriPendingSessionDeletesPage,
   tauriPendingSessionTitleRecoveries,
   tauriWorkbenchSessionPage,
+  tauriScanUnclaimedSessions,
+  tauriImportUnclaimedSessions,
   tauriWorkbenchProjectFolders,
   tauriWorkspaceRootsAvailability,
   tauriSessionPreviews,
@@ -113,7 +115,11 @@ import {
   type TauriBridgeStatus,
   type TauriPendingPrompt,
   type TauriPendingSessionDelete,
+  type TauriPendingSessionDeleteCursor,
   type TauriPendingSessionTitleRecovery,
+  type TauriWorkbenchSessionPage,
+  type TauriScanImportCandidate,
+  type TauriScanImportSelection,
   type TauriWorkspaceEntry,
   type TauriWorkspaceFilePreview,
   type TauriWorkspaceChanges,
@@ -143,6 +149,44 @@ interface WorkbenchSessionTab {
   missing?: boolean;
   deletionInterrupted?: boolean;
   titleRecoveryPending?: boolean;
+}
+
+function isIdentityPageSource(source: TauriWorkbenchSessionPage["source"] | "unavailable"): boolean {
+  return source === "identity" || source === "partial_identity";
+}
+
+function workbenchPageSourceLabel(source: TauriWorkbenchSessionPage["source"]): string {
+  if (source === "identity" || source === "partial_identity") return "当前会话列表已重新核验";
+  if (source === "identity_unverified") return "当前显示未核验的持久目录（只读）";
+  if (source === "cached") return "当前仍显示上次 shadow 审计快照（只读）";
+  return "当前仍显示本地兼容目录";
+}
+
+function isSessionShadowSafeToPage(report: TauriSessionShadowReport): boolean {
+  return report.missingFromDirectory === 0
+    && report.workspaceMismatches === 0
+    && report.orderMismatches === 0
+    && report.physicalStateMismatches === 0
+    && report.inventoryErrors === 0;
+}
+
+function sessionShadowDifferenceSummary(report: TauriSessionShadowReport): string {
+  const differences = [
+    report.missingFromDirectory > 0 ? `旧目录有 ${report.missingFromDirectory} 条未登记到身份库` : "",
+    report.directoryOnlyCount > 0 ? `身份目录有 ${report.directoryOnlyCount} 条未见于旧目录` : "",
+    report.titleMismatches > 0 ? `标题差异 ${report.titleMismatches} 条` : "",
+    report.workspaceMismatches > 0 ? `工作区差异 ${report.workspaceMismatches} 条` : "",
+    report.orderMismatches > 0 ? `顺序差异 ${report.orderMismatches} 条` : "",
+    report.missingTranscripts > 0 ? `transcript 缺失 ${report.missingTranscripts} 条` : "",
+    report.physicalStateMismatches > 0 ? `磁盘状态差异 ${report.physicalStateMismatches} 条` : "",
+    report.unclaimedTranscripts > 0 ? `未认领 transcript ${report.unclaimedTranscripts} 个` : "",
+    report.inventoryErrors > 0 ? `盘点错误 ${report.inventoryErrors} 项` : "",
+    report.retiredLegacyCount > 0 ? `旧目录中有 ${report.retiredLegacyCount} 条为待删除或已删除会话` : "",
+  ].filter(Boolean);
+  if (differences.length > 0) return differences.join("；");
+  return report.legacyMatchesDirectory
+    ? "审计报告显示目录一致，但分页读取未通过同轮校验；请重新检查"
+    : "审计报告发现差异，但未返回可展示的差异类别；请重新检查";
 }
 
 function preserveWorkbenchLifecycle(
@@ -230,7 +274,7 @@ function SessionRow({ tab, active, busy, switchingBlocked, onActivate, onDelete 
         className="tauri-session-row__delete"
         aria-label={`${deletionInterrupted ? "继续删除" : "删除对话"} ${displayTitle(tab.title)}`}
         title={deletionInterrupted ? "继续删除已开始的删除操作" : "删除对话"}
-        disabled={busy || switchingBlocked}
+        disabled={busy || (switchingBlocked && !deletionInterrupted)}
         onClick={() => setConfirming(true)}
       >
         <Trash2 size={13} aria-hidden="true" />
@@ -284,14 +328,23 @@ function PromptCard({ prompt, busy, selections, onApproval, onAskSelection, onAs
 export function TauriSessionPreview() {
   const [session, setSession] = useState<TauriBridgeSession | null>(null);
   const [tabs, setTabs] = useState<WorkbenchSessionTab[]>([]);
+  const [unverifiedLegacyTabs, setUnverifiedLegacyTabs] = useState<WorkbenchSessionTab[]>([]);
   const [pendingSessionDeletes, setPendingSessionDeletes] = useState<TauriPendingSessionDelete[]>([]);
+  const [pendingSessionDeleteCursor, setPendingSessionDeleteCursor] = useState<TauriPendingSessionDeleteCursor | null>(null);
+  const [pendingSessionDeleteLoading, setPendingSessionDeleteLoading] = useState(true);
   const [pendingSessionDeleteError, setPendingSessionDeleteError] = useState("");
   const [pendingSessionTitleRecoveries, setPendingSessionTitleRecoveries] = useState<TauriPendingSessionTitleRecovery[]>([]);
   const [pendingSessionTitleRecoveryError, setPendingSessionTitleRecoveryError] = useState("");
   const [projectFolders, setProjectFolders] = useState<WorkbenchProjectFolder[]>([]);
-  const [sessionPageCursor, setSessionPageCursor] = useState<{ position: number; id: string; snapshotId: string } | null>(null);
-  const [sessionPageSource, setSessionPageSource] = useState<"identity" | "legacy" | "unavailable">("identity");
+  const [projectFoldersWarning, setProjectFoldersWarning] = useState("");
+  const [sessionPageCursor, setSessionPageCursor] = useState<{ position: number; id: string; snapshotId: string; total: number } | null>(null);
+  const [sessionPageSource, setSessionPageSource] = useState<TauriWorkbenchSessionPage["source"] | "unavailable">("identity");
+  const [sessionPageDirectoryCount, setSessionPageDirectoryCount] = useState<number | null>(null);
+  const [sessionPageUnclaimedCount, setSessionPageUnclaimedCount] = useState<number | null>(null);
+  const [sessionPageTitleMismatchCount, setSessionPageTitleMismatchCount] = useState<number | null>(null);
+  const [sessionPageMissingTranscriptCount, setSessionPageMissingTranscriptCount] = useState<number | null>(null);
   const [sessionPageLoading, setSessionPageLoading] = useState(false);
+  const [sessionPageNotice, setSessionPageNotice] = useState("");
   const [sessionPageError, setSessionPageError] = useState("");
   const [workspaceAvailability, setWorkspaceAvailability] = useState<Record<string, boolean | null>>({});
   const [collapsedProjects, setCollapsedProjects] = useState<Record<string, boolean>>(loadCollapsedProjectGroups);
@@ -302,6 +355,12 @@ export function TauriSessionPreview() {
   const [attachments, setAttachments] = useState<TauriBridgeAttachment[]>([]);
   const [status, setStatus] = useState<TauriBridgeStatus | null>(null);
   const [profile, setProfile] = useState<TauriPreviewProfileStatus | null>(null);
+  const [scanImportOpen, setScanImportOpen] = useState(false);
+  const [scanImportCandidates, setScanImportCandidates] = useState<TauriScanImportCandidate[]>([]);
+  const [scanImportDrafts, setScanImportDrafts] = useState<Record<string, { selected: boolean; title: string; workspaceRoot: string }>>({});
+  const [scanImportBlockedCount, setScanImportBlockedCount] = useState(0);
+  const [scanImportLoading, setScanImportLoading] = useState(false);
+  const [scanImportError, setScanImportError] = useState("");
   const [runtimeInfo, setRuntimeInfo] = useState<TauriPreviewRuntimeInfo | null>(null);
   const [providerSummary, setProviderSummary] = useState<TauriProviderSummary | null>(null);
   const [profileNotice, setProfileNotice] = useState("");
@@ -495,26 +554,32 @@ export function TauriSessionPreview() {
     void tauriMCPServers().then(setMcpServers).catch(error => setMcpNotice(tauriMessageFrom(error)));
     let active = true;
     void (async () => {
+      let importFailure = "";
       try {
-        try {
-          const folders = await tauriWorkbenchProjectFolders();
-          if (active) setProjectFolders(folders.map(folder => ({ root: folder.root, title: folder.title })));
-        } catch {
-          // The session catalog still supplies project folders when the older
-          // saved-project snapshot is unavailable.
-        }
+        await reloadWorkbenchProjectFolders(() => active);
         // One-time, idempotent migration. Prefer the identity directory after
         // import, but retain the JSON catalog as an initial-load fallback.
-        try { await tauriImportLegacySessionCatalog(); } catch { /* keep legacy catalog usable while the bridge is unavailable */ }
+        try {
+          await tauriImportLegacySessionCatalog();
+        } catch (cause) {
+          importFailure = tauriMessageFrom(cause);
+        }
         if (!active) return;
         void reloadPendingSessionDeletes(() => active);
         void reloadPendingSessionTitleRecoveries(() => active);
         const page = await tauriWorkbenchSessionPage();
         if (!active) return;
         setTabs(page.sessions);
+        setUnverifiedLegacyTabs(page.unverifiedLegacySessions ?? []);
         setSessionPageCursor(page.nextCursor ?? null);
         setSessionPageSource(page.source);
-        const missing = page.sessions.filter(tab => !tauriSessionTitle(tab.title, "")).map(tab => tab.sessionId);
+        setSessionPageDirectoryCount(page.shadowDirectoryCount ?? (page.source === "identity" ? page.total : null));
+        setSessionPageUnclaimedCount(page.unclaimedTranscriptCount ?? null);
+        setSessionPageTitleMismatchCount(page.titleMismatchCount ?? null);
+        setSessionPageMissingTranscriptCount(page.missingTranscriptCount ?? null);
+        const missing = isIdentityPageSource(page.source)
+          ? page.sessions.filter(tab => !tauriSessionTitle(tab.title, "")).map(tab => tab.sessionId)
+          : [];
         for (let offset = 0; active && offset < missing.length; offset += 50) {
           try {
             const previews = await tauriSessionPreviews(missing.slice(offset, offset + 50));
@@ -535,9 +600,20 @@ export function TauriSessionPreview() {
             // and another launch can retry this batch without changing order.
           }
         }
-        await refreshCatalogAudit(() => active);
+        if (page.shadowReport) {
+          setCatalogAudit(page.shadowReport);
+          setCatalogAuditError("");
+        } else {
+          await refreshCatalogAudit(() => active);
+        }
+        if (active && importFailure) {
+          setSessionPageNotice(`最近会话列表已加载；启动时旧会话目录导入失败：${importFailure}`);
+        }
       } catch (cause) {
-        if (active) setError(`读取最近对话失败：${tauriMessageFrom(cause)}`);
+        if (active) {
+          const importNotice = importFailure ? `；旧会话目录导入也失败：${importFailure}` : "";
+          setError(`读取最近对话失败：${tauriMessageFrom(cause)}${importNotice}`);
+        }
       }
     })();
     void tauriPlatformInfo().then(setPlatform).catch(() => {});
@@ -550,6 +626,7 @@ export function TauriSessionPreview() {
     const revision = sessionPageRevisionRef.current;
     sessionPageRequestRef.current = true;
     setSessionPageLoading(true);
+    setSessionPageNotice("");
     setSessionPageError("");
     try {
       const page = await tauriWorkbenchSessionPage(cursor);
@@ -560,7 +637,13 @@ export function TauriSessionPreview() {
       });
       setSessionPageCursor(page.nextCursor ?? null);
       setSessionPageSource(page.source);
-      const missing = page.sessions.filter(tab => !tauriSessionTitle(tab.title, "")).map(tab => tab.sessionId);
+      setSessionPageDirectoryCount(page.shadowDirectoryCount ?? (page.source === "identity" ? page.total : null));
+      setSessionPageUnclaimedCount(page.unclaimedTranscriptCount ?? null);
+      setSessionPageTitleMismatchCount(page.titleMismatchCount ?? null);
+      setSessionPageMissingTranscriptCount(page.missingTranscriptCount ?? null);
+      const missing = isIdentityPageSource(page.source)
+        ? page.sessions.filter(tab => !tauriSessionTitle(tab.title, "")).map(tab => tab.sessionId)
+        : [];
       for (let offset = 0; offset < missing.length; offset += 50) {
         try {
           const previews = await tauriSessionPreviews(missing.slice(offset, offset + 50));
@@ -589,14 +672,24 @@ export function TauriSessionPreview() {
         const page = await tauriWorkbenchSessionPage();
         if (revision !== sessionPageRevisionRef.current) return;
         setTabs(page.sessions);
+        setUnverifiedLegacyTabs(page.unverifiedLegacySessions ?? []);
         setSessionPageCursor(page.nextCursor ?? null);
         setSessionPageSource(page.source);
+        setSessionPageDirectoryCount(page.shadowDirectoryCount ?? (page.source === "identity" ? page.total : null));
+        setSessionPageUnclaimedCount(page.unclaimedTranscriptCount ?? null);
+        setSessionPageTitleMismatchCount(page.titleMismatchCount ?? null);
+        setSessionPageMissingTranscriptCount(page.missingTranscriptCount ?? null);
         setSessionPageError("");
       } catch (restartCause) {
         if (revision === sessionPageRevisionRef.current) {
           setTabs([]);
+          setUnverifiedLegacyTabs([]);
           setSessionPageCursor(null);
           setSessionPageSource("unavailable");
+          setSessionPageDirectoryCount(null);
+          setSessionPageUnclaimedCount(null);
+          setSessionPageTitleMismatchCount(null);
+          setSessionPageMissingTranscriptCount(null);
           setSessionPageError(`${tauriMessageFrom(cause)}；重新读取失败：${tauriMessageFrom(restartCause)}`);
         }
       }
@@ -832,58 +925,109 @@ export function TauriSessionPreview() {
 
   // Existing rows keep their sidebar position on reopen; only brand-new
   // sessions are prepended (matches WorkbenchCatalog::remember).
-  async function rememberSession(next: TauriBridgeSession) {
+  async function rememberSession(
+    next: TauriBridgeSession,
+    failureMessage = "对话已打开，但无法保存到最近对话",
+  ) {
     try {
       const updated = await rememberTauriWorkbenchSession(next.id, next.workspaceRoot ?? undefined, tauriSessionTitle(next.title, "") || undefined);
       sessionPageRevisionRef.current += 1;
-      if (sessionPageSource !== "identity") {
+      if (!isIdentityPageSource(sessionPageSource)) {
         setTabs(previous => preserveWorkbenchLifecycle(updated, previous));
+        setUnverifiedLegacyTabs([]);
         setSessionPageSource("legacy");
+        setSessionPageDirectoryCount(null);
+        setSessionPageUnclaimedCount(null);
+        setSessionPageTitleMismatchCount(null);
+        setSessionPageMissingTranscriptCount(null);
       }
       await refreshCatalogAudit(() => true, true);
     } catch (cause) {
-      setError(`对话已打开，但无法保存到最近对话：${tauriMessageFrom(cause)}`);
+      setError(`${failureMessage}：${tauriMessageFrom(cause)}`);
     }
   }
 
-  async function reloadFirstWorkbenchSessionPage(request: number, isActive: () => boolean) {
+  async function reloadFirstWorkbenchSessionPage(request: number, isActive: () => boolean): Promise<TauriWorkbenchSessionPage["source"] | null> {
     // A fresh guarded first page replaces the previous snapshot. Invalidate
     // any continuation already in flight before it can append old rows.
     sessionPageRevisionRef.current += 1;
+    setSessionPageNotice("");
     try {
       const page = await tauriWorkbenchSessionPage();
-      if (request !== catalogAuditRequestRef.current || !isActive()) return;
+      if (request !== catalogAuditRequestRef.current || !isActive()) return null;
       sessionPageRevisionRef.current += 1;
       setTabs(page.sessions);
+      setUnverifiedLegacyTabs(page.unverifiedLegacySessions ?? []);
       setSessionPageCursor(page.nextCursor ?? null);
       setSessionPageSource(page.source);
+      setSessionPageDirectoryCount(page.shadowDirectoryCount ?? (page.source === "identity" ? page.total : null));
+      setSessionPageUnclaimedCount(page.unclaimedTranscriptCount ?? null);
+      setSessionPageTitleMismatchCount(page.titleMismatchCount ?? null);
+      setSessionPageMissingTranscriptCount(page.missingTranscriptCount ?? null);
+      setCatalogAudit(page.shadowReport ?? null);
+      setCatalogAuditError(!page.shadowReport
+        ? "会话目录 shadow 检查不可用；重新检查会话目录可重试"
+        : page.source === "legacy" ? "首屏未通过身份目录分页校验，已回退到兼容目录" : "");
       setSessionPageError("");
+      return page.source;
     } catch (cause) {
       if (request === catalogAuditRequestRef.current && isActive()) {
         sessionPageRevisionRef.current += 1;
         setTabs([]);
+        setUnverifiedLegacyTabs([]);
         setSessionPageCursor(null);
         setSessionPageSource("unavailable");
+        setSessionPageDirectoryCount(null);
+        setSessionPageUnclaimedCount(null);
+        setSessionPageTitleMismatchCount(null);
+        setSessionPageMissingTranscriptCount(null);
+        setCatalogAudit(null);
+        setCatalogAuditError("会话目录 shadow 检查不可用；重新检查会话目录可重试");
         setSessionPageError(tauriMessageFrom(cause));
       }
+      return null;
     }
   }
 
-  async function reloadPendingSessionDeletes(isActive: () => boolean = () => true) {
+  async function reloadPendingSessionDeletes(
+    isActive: () => boolean = () => true,
+    cursor: TauriPendingSessionDeleteCursor | null = null,
+    append = false,
+  ) {
     const request = ++pendingDeleteRequestRef.current;
+    setPendingSessionDeleteLoading(true);
+    setPendingSessionDeleteError("");
     try {
-      const entries = await tauriPendingSessionDeletes();
+      const page = await tauriPendingSessionDeletesPage(cursor);
       if (!isActive() || request !== pendingDeleteRequestRef.current) return;
-      setPendingSessionDeletes(entries);
+      setPendingSessionDeletes(previous => {
+        const combined = append ? [...previous, ...page.sessions] : page.sessions;
+        const seen = new Set<string>();
+        return combined.filter(entry => {
+          if (seen.has(entry.id)) return false;
+          seen.add(entry.id);
+          return true;
+        });
+      });
+      setPendingSessionDeleteCursor(page.nextCursor ?? null);
       setPendingSessionDeleteError("");
     } catch (cause) {
       if (!isActive() || request !== pendingDeleteRequestRef.current) return;
       setPendingSessionDeleteError(tauriMessageFrom(cause));
+    } finally {
+      if (isActive() && request === pendingDeleteRequestRef.current) {
+        setPendingSessionDeleteLoading(false);
+      }
     }
   }
 
   async function retryPendingSessionDeleteCheck() {
     await reloadPendingSessionDeletes();
+  }
+
+  async function loadMorePendingSessionDeletes() {
+    if (!pendingSessionDeleteCursor || pendingSessionDeleteLoading) return;
+    await reloadPendingSessionDeletes(() => true, pendingSessionDeleteCursor, true);
   }
 
   async function reloadPendingSessionTitleRecoveries(isActive: () => boolean = () => true) {
@@ -903,14 +1047,44 @@ export function TauriSessionPreview() {
     await reloadPendingSessionTitleRecoveries();
   }
 
+  async function reloadWorkbenchProjectFolders(isActive: () => boolean = () => true) {
+    try {
+      const result = await tauriWorkbenchProjectFolders();
+      if (!isActive()) return;
+      setProjectFolders(result.folders.map(folder => ({ root: folder.root, title: folder.title })));
+      setProjectFoldersWarning(result.warning ?? "");
+    } catch (cause) {
+      if (!isActive()) return;
+      setProjectFoldersWarning(`读取项目文件夹失败：${tauriMessageFrom(cause)}`);
+    }
+  }
+
   async function retryWorkbenchSessionDirectory() {
     if (sessionPageRequestRef.current) return;
     sessionPageRequestRef.current = true;
     const request = ++catalogAuditRequestRef.current;
     setSessionPageLoading(true);
+    setSessionPageNotice("");
     setSessionPageError("");
     try {
-      await reloadFirstWorkbenchSessionPage(request, () => true);
+      let importFailure = "";
+      try {
+        // The import is idempotent and bounded; retry it when the user asks
+        // for a fresh directory check after a transient bridge failure.
+        await tauriImportLegacySessionCatalog();
+      } catch (cause) {
+        importFailure = tauriMessageFrom(cause);
+      }
+      const source = await reloadFirstWorkbenchSessionPage(request, () => true);
+      if (importFailure && request === catalogAuditRequestRef.current) {
+        if (source) {
+          setSessionPageNotice(`${workbenchPageSourceLabel(source)}；旧会话目录导入重试失败：${importFailure}`);
+        } else {
+          setSessionPageError(previous => previous
+            ? `${previous}；旧会话目录导入重试失败：${importFailure}`
+            : `旧会话目录导入重试失败：${importFailure}`);
+        }
+      }
     } finally {
       if (request === catalogAuditRequestRef.current) {
         sessionPageRequestRef.current = false;
@@ -923,64 +1097,82 @@ export function TauriSessionPreview() {
     const request = ++catalogAuditRequestRef.current;
     setCatalogAudit(null);
     setCatalogAuditError("");
+    if (refreshVisiblePage) setSessionPageNotice("");
+
+    if (refreshVisiblePage) {
+      sessionPageRevisionRef.current += 1;
+      const replaceWithPage = (page: TauriWorkbenchSessionPage) => {
+        sessionPageRevisionRef.current += 1;
+        setTabs(page.sessions);
+        setUnverifiedLegacyTabs(page.unverifiedLegacySessions ?? []);
+        setSessionPageCursor(page.nextCursor ?? null);
+        setSessionPageSource(page.source);
+        setSessionPageDirectoryCount(page.shadowDirectoryCount ?? null);
+        setSessionPageUnclaimedCount(page.unclaimedTranscriptCount ?? null);
+        setSessionPageTitleMismatchCount(page.titleMismatchCount ?? null);
+        setSessionPageMissingTranscriptCount(page.missingTranscriptCount ?? null);
+      };
+      try {
+        const desiredPages = Math.max(1, Math.ceil(tabs.length / 200));
+        let page = await tauriWorkbenchSessionPage();
+        if (request !== catalogAuditRequestRef.current || !isActive()) return;
+        let report = page.shadowReport ?? null;
+        setCatalogAudit(report);
+        setCatalogAuditError(report ? "" : "会话目录 shadow 检查不可用；重新检查会话目录可重试");
+        if (!isIdentityPageSource(page.source)) {
+          replaceWithPage(page);
+          if (report) setCatalogAuditError("首屏未通过身份目录分页校验，已回退到兼容目录");
+          return;
+        }
+
+        const sessions = [...page.sessions];
+        let cursor = page.nextCursor ?? null;
+        let pagesRead = 1;
+        while (cursor && pagesRead < desiredPages) {
+          page = await tauriWorkbenchSessionPage(cursor);
+          if (request !== catalogAuditRequestRef.current || !isActive()) return;
+          report = page.shadowReport ?? report;
+          if (!isIdentityPageSource(page.source)) {
+            if (report) setCatalogAudit(report);
+            setCatalogAuditError("续页期间身份目录不可用，正在重新读取当前安全来源");
+            await reloadFirstWorkbenchSessionPage(request, isActive);
+            return;
+          }
+          const known = new Set(sessions.map(tab => tab.sessionId));
+          sessions.push(...page.sessions.filter(tab => !known.has(tab.sessionId)));
+          cursor = page.nextCursor ?? null;
+          pagesRead += 1;
+        }
+        if (request === catalogAuditRequestRef.current && isActive()) {
+          sessionPageRevisionRef.current += 1;
+          setTabs(previous => preserveWorkbenchLifecycle(sessions, previous));
+          setSessionPageCursor(cursor);
+          setSessionPageSource(page.source);
+          setSessionPageDirectoryCount(page.shadowDirectoryCount ?? page.total);
+          setSessionPageUnclaimedCount(page.unclaimedTranscriptCount ?? null);
+          setSessionPageTitleMismatchCount(page.titleMismatchCount ?? null);
+          setSessionPageMissingTranscriptCount(page.missingTranscriptCount ?? null);
+          setCatalogAudit(report);
+          setCatalogAuditError(report ? "" : "会话目录 shadow 检查不可用；重新检查会话目录可重试");
+        }
+      } catch (cause) {
+        if (request === catalogAuditRequestRef.current && isActive()) {
+          setSessionPageError(tauriMessageFrom(cause));
+          await reloadFirstWorkbenchSessionPage(request, isActive);
+        }
+      }
+      return;
+    }
+
     try {
       const report = await tauriSessionCatalogShadow();
       if (request === catalogAuditRequestRef.current && isActive()) {
         setCatalogAudit(report);
-        if (!report.legacyMatchesDirectory && sessionPageSource === "identity") {
-          // If the shadow diverges after startup, stop presenting SQLite as
-          // the visible source and return to the compatible host catalog.
+        if (!isSessionShadowSafeToPage(report) && isIdentityPageSource(sessionPageSource)) {
+          // Structural or physical divergence stops identity paging. Title
+          // drift, verified missing rows, and unclaimed files remain visible
+          // as partial source with separate counts.
           await reloadFirstWorkbenchSessionPage(request, isActive);
-        } else if (refreshVisiblePage && sessionPageSource === "identity") {
-          sessionPageRevisionRef.current += 1;
-          try {
-            const desiredPages = Math.max(1, Math.ceil(tabs.length / 200));
-            let page = await tauriWorkbenchSessionPage();
-            if (request !== catalogAuditRequestRef.current || !isActive()) return;
-            if (page.source !== "identity") {
-              // The guarded page can detect drift after the separate shadow
-              // check. Honor its newer source instead of relabeling JSON as
-              // a verified identity page and hiding the 50-row warning.
-              sessionPageRevisionRef.current += 1;
-              setTabs(page.sessions);
-              setSessionPageCursor(page.nextCursor ?? null);
-              setSessionPageSource(page.source);
-              setCatalogAudit(null);
-              setCatalogAuditError("会话目录在影子检查后发生变化；已回退到兼容目录");
-              return;
-            }
-            const sessions = [...page.sessions];
-            let cursor = page.nextCursor ?? null;
-            let pagesRead = 1;
-            while (cursor && pagesRead < desiredPages) {
-              page = await tauriWorkbenchSessionPage(cursor);
-              if (request !== catalogAuditRequestRef.current || !isActive()) return;
-              if (page.source !== "identity") {
-                sessionPageRevisionRef.current += 1;
-                setTabs(page.sessions);
-                setSessionPageCursor(page.nextCursor ?? null);
-                setSessionPageSource(page.source);
-                setCatalogAudit(null);
-                setCatalogAuditError("会话目录在续页期间发生变化；已回退到兼容目录");
-                return;
-              }
-              const known = new Set(sessions.map(tab => tab.sessionId));
-              sessions.push(...page.sessions.filter(tab => !known.has(tab.sessionId)));
-              cursor = page.nextCursor ?? null;
-              pagesRead += 1;
-            }
-            if (request === catalogAuditRequestRef.current && isActive()) {
-              sessionPageRevisionRef.current += 1;
-              setTabs(previous => preserveWorkbenchLifecycle(sessions, previous));
-              setSessionPageCursor(cursor);
-              setSessionPageSource("identity");
-            }
-          } catch (cause) {
-            if (request === catalogAuditRequestRef.current && isActive()) {
-              setSessionPageError(tauriMessageFrom(cause));
-              await reloadFirstWorkbenchSessionPage(request, isActive);
-            }
-          }
         }
       }
     } catch (cause) {
@@ -1003,6 +1195,10 @@ export function TauriSessionPreview() {
   }
 
   async function activateSession(id: string, root?: string) {
+    if (sessionPageSource === "identity_unverified") {
+      setError("身份目录与兼容目录存在差异；该列表只用于只读核对，重新检查通过后才能打开会话。");
+      return;
+    }
     if (!id) return setError("缺少会话 ID");
     setBusy(true);
     setError("");
@@ -1041,8 +1237,9 @@ export function TauriSessionPreview() {
       const openedRoot = next.workspaceRoot ?? root;
       if (openedRoot?.trim()) {
         try {
-          const folders = await rememberTauriWorkbenchProjectFolder(openedRoot);
-          setProjectFolders(folders.map(folder => ({ root: folder.root, title: folder.title })));
+          const result = await rememberTauriWorkbenchProjectFolder(openedRoot);
+          setProjectFolders(result.folders.map(folder => ({ root: folder.root, title: folder.title })));
+          setProjectFoldersWarning(result.warning ?? "");
         } catch (cause) {
           setError(`对话已打开，但无法保存项目文件夹：${tauriMessageFrom(cause)}`);
         }
@@ -1077,7 +1274,7 @@ export function TauriSessionPreview() {
     try {
       const renamed = await renameTauriBridgeSession(session.id, title);
       setSession(renamed);
-      await rememberSession(renamed);
+      await rememberSession(renamed, "标题已保存，但同步到会话列表失败；请重新检查会话目录");
       setTitleEditing(false);
     } catch (cause) {
       setError(tauriMessageFrom(cause));
@@ -1091,10 +1288,13 @@ export function TauriSessionPreview() {
   // before deletion. A pending manual title cannot always be reopened: the
   // bridge atomically verifies that intent before fencing explicit deletion.
   async function deleteSession(target: WorkbenchSessionTab) {
-    if (busy || switchingBlocked) return;
     const isOpen = session?.id === target.sessionId;
+    // A pending delete comes from the identity recovery list. Retrying a
+    // different ID does not switch the single active controller.
+    const retryingInterruptedDelete = target.deletionInterrupted === true && !isOpen;
+    if (busy || (switchingBlocked && !retryingInterruptedDelete) || (sessionPageSource === "identity_unverified" && !retryingInterruptedDelete)) return;
     const sessionToRestore = session;
-    if (!isOpen && (session?.state === "running" || session?.state === "paused")) {
+    if (!retryingInterruptedDelete && !isOpen && (session?.state === "running" || session?.state === "paused")) {
       setError("请先停止正在生成的对话，再删除其他会话。");
       return;
     }
@@ -1132,9 +1332,14 @@ export function TauriSessionPreview() {
       }
       const updated = await forgetTauriWorkbenchSession(target.sessionId);
       sessionPageRevisionRef.current += 1;
-      if (sessionPageSource !== "identity") {
+      if (!isIdentityPageSource(sessionPageSource)) {
         setTabs(previous => preserveWorkbenchLifecycle(updated, previous));
+        setUnverifiedLegacyTabs([]);
         setSessionPageSource("legacy");
+        setSessionPageDirectoryCount(null);
+        setSessionPageUnclaimedCount(null);
+        setSessionPageTitleMismatchCount(null);
+        setSessionPageMissingTranscriptCount(null);
       }
       await refreshCatalogAudit(() => true, true);
     } catch (cause) {
@@ -1164,7 +1369,11 @@ export function TauriSessionPreview() {
   }
 
   async function createSession(root = workspaceRoot) {
-    await activateSession(newTauriSessionId(), root.trim() || undefined);
+    if (sessionPageSource === "identity_unverified") {
+      setError("身份目录尚未通过 shadow 校验；重新检查目录后才能新建会话。");
+      return;
+    }
+    await activateSession(newTauriSessionId(), root.trim() ? root : undefined);
   }
 
   async function chooseWorkspaceRoot() {
@@ -1175,8 +1384,9 @@ export function TauriSessionPreview() {
       const selected = await chooseTauriWorkspaceRoot();
       if (selected) {
         setWorkspaceRoot(selected);
-        const folders = await rememberTauriWorkbenchProjectFolder(selected);
-        setProjectFolders(folders.map(folder => ({ root: folder.root, title: folder.title })));
+        const result = await rememberTauriWorkbenchProjectFolder(selected);
+        setProjectFolders(result.folders.map(folder => ({ root: folder.root, title: folder.title })));
+        setProjectFoldersWarning(result.warning ?? "");
       }
     } catch (cause) {
       setError(tauriMessageFrom(cause));
@@ -1190,8 +1400,9 @@ export function TauriSessionPreview() {
     setBusy(true);
     setError("");
     try {
-      const folders = await renameTauriWorkbenchProjectFolder(root, projectTitleDraft);
-      setProjectFolders(folders.map(folder => ({ root: folder.root, title: folder.title })));
+      const result = await renameTauriWorkbenchProjectFolder(root, projectTitleDraft);
+      setProjectFolders(result.folders.map(folder => ({ root: folder.root, title: folder.title })));
+      setProjectFoldersWarning(result.warning ?? "");
       setEditingProjectRoot(null);
     } catch (cause) {
       setError(tauriMessageFrom(cause));
@@ -1381,7 +1592,7 @@ export function TauriSessionPreview() {
           try {
             const updated = await backfillTauriWorkbenchTitles([{ sessionId, title }]);
             const resolvedTitle = updated.find(tab => tab.sessionId === sessionId)?.title ?? title;
-            if (sessionPageSource === "identity") {
+            if (isIdentityPageSource(sessionPageSource)) {
               setTabs(previous => previous.map(tab => tab.sessionId === sessionId ? { ...tab, title: resolvedTitle } : tab));
               await refreshCatalogAudit();
             } else {
@@ -1570,14 +1781,65 @@ export function TauriSessionPreview() {
     setProfileNotice("");
     try {
       const result = await importTauriStableProjectFolders();
-      const folders = await tauriWorkbenchProjectFolders();
-      setProjectFolders(folders.map(folder => ({ root: folder.root, title: folder.title })));
+      const folderResult = await tauriWorkbenchProjectFolders();
+      setProjectFolders(folderResult.folders.map(folder => ({ root: folder.root, title: folder.title })));
+      setProjectFoldersWarning(folderResult.warning ?? "");
       setProfile(await tauriPreviewProfileStatus());
       setProfileNotice(`已导入 ${result.projectCount} 个项目文件夹：\n${result.importedFile}`);
     } catch (cause) {
       setError(tauriMessageFrom(cause));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function openScanImportReview() {
+    if (!profile?.managedProfile || busy || scanImportLoading) return;
+    setScanImportOpen(true);
+    setScanImportLoading(true);
+    setScanImportError("");
+    try {
+      const result = await tauriScanUnclaimedSessions();
+      setScanImportCandidates(result.candidates);
+      setScanImportBlockedCount(result.blockedCount);
+      setScanImportDrafts(Object.fromEntries(result.candidates.map(candidate => [
+        candidate.id,
+        { selected: false, title: "", workspaceRoot: "" },
+      ])));
+    } catch (cause) {
+      setScanImportError(tauriMessageFrom(cause));
+    } finally {
+      setScanImportLoading(false);
+    }
+  }
+
+  async function applyScanImportReview() {
+    if (!profile?.managedProfile || busy || scanImportLoading) return;
+    const selected: TauriScanImportSelection[] = scanImportCandidates.flatMap(candidate => {
+      const draft = scanImportDrafts[candidate.id];
+      return draft?.selected ? [{
+        id: candidate.id,
+        title: draft.title,
+        workspaceRoot: draft.workspaceRoot,
+        transcriptSha256: candidate.transcriptSha256,
+      }] : [];
+    });
+    if (selected.length === 0) return;
+    const confirmed = window.confirm(
+      `将这些会话加入隔离的 Preview 身份目录？\n\n${selected.map(item => `${item.id} · ${item.title || "无标题"} · ${item.workspaceRoot || "不归属项目"}`).join("\n")}\n\n每个 transcript 会在写入前重新核对 SHA-256；源文件内容不会改写。`,
+    );
+    if (!confirmed) return;
+    setScanImportLoading(true);
+    setScanImportError("");
+    try {
+      const imported = await tauriImportUnclaimedSessions(selected);
+      setScanImportOpen(false);
+      setSessionPageNotice(`已审核导入 ${imported.length} 个未认领会话。`);
+      await retryWorkbenchSessionDirectory();
+    } catch (cause) {
+      setScanImportError(tauriMessageFrom(cause));
+    } finally {
+      setScanImportLoading(false);
     }
   }
 
@@ -1689,7 +1951,7 @@ export function TauriSessionPreview() {
       <aside className="tauri-sidebar" aria-label="会话导航">
         <div className="tauri-sidebar__drag" data-tauri-drag-region aria-hidden="true" />
         <div className="tauri-sidebar__brand"><img src={logoWordmark} alt="Reasonix" draggable={false} /><span>PREVIEW</span></div>
-        <button className="tauri-sidebar__new" type="button" onClick={() => void createSession()} disabled={busy || switchingBlocked}>
+        <button className="tauri-sidebar__new" type="button" onClick={() => void createSession()} disabled={busy || sessionPageSource === "cached" || sessionPageSource === "identity_unverified" || switchingBlocked}>
           <Plus size={17} aria-hidden="true" /><span>新建对话</span><kbd>⌘ N</kbd>
         </button>
         {pendingSessionDeletes.length > 0 && <>
@@ -1697,10 +1959,17 @@ export function TauriSessionPreview() {
           <section className="tauri-pending-deletes" aria-label="待完成删除">
             {pendingSessionDeletes.map(item => {
               const tab: WorkbenchSessionTab = { sessionId: item.id, title: item.title, state: "deleting", deletionInterrupted: true };
-              return <SessionRow key={item.id} tab={tab} active={false} busy={busy} switchingBlocked={switchingBlocked} onActivate={() => {}} onDelete={() => void deleteSession(tab)} />;
+              return <SessionRow key={item.id} tab={tab} active={false} busy={busy || sessionPageSource === "cached"} switchingBlocked={switchingBlocked && session?.id === item.id} onActivate={() => {}} onDelete={() => void deleteSession(tab)} />;
             })}
+            {pendingSessionDeleteCursor && <button
+              className="tauri-sidebar__load-more"
+              type="button"
+              onClick={() => void loadMorePendingSessionDeletes()}
+              disabled={pendingSessionDeleteLoading || busy}
+            >{pendingSessionDeleteLoading ? "正在加载待完成删除…" : "加载更多待完成删除"}</button>}
           </section>
         </>}
+        {pendingSessionDeleteLoading && <p className="tauri-sidebar__page-note" role="status">正在检查待完成删除…</p>}
         {pendingSessionDeleteError && <div className="tauri-pending-deletes__error" role="alert">
           <span>读取待完成删除失败：{pendingSessionDeleteError}</span>
           <button type="button" onClick={() => void retryPendingSessionDeleteCheck()} disabled={busy}>重新检查</button>
@@ -1714,7 +1983,7 @@ export function TauriSessionPreview() {
                 sessionId: item.id, title: item.title, workspaceRoot: item.workspaceRoot,
                 state: item.state, missing: item.state === "missing", titleRecoveryPending: true,
               };
-              return <SessionRow key={item.id} tab={tab} active={session?.id === item.id} busy={busy} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(item.id, item.workspaceRoot)} onDelete={() => void deleteSession(tab)} />;
+              return <SessionRow key={item.id} tab={tab} active={session?.id === item.id} busy={busy || sessionPageSource === "cached"} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(item.id, item.workspaceRoot)} onDelete={() => void deleteSession(tab)} />;
             })}
           </section>
         </>}
@@ -1723,6 +1992,10 @@ export function TauriSessionPreview() {
           <button type="button" onClick={() => void retryPendingSessionTitleRecoveryCheck()} disabled={busy}>重新检查</button>
         </div>}
         <div className="tauri-sidebar__section-title">项目</div>
+        {projectFoldersWarning && <div className="tauri-pending-deletes__error" role="status">
+          <span>{projectFoldersWarning}</span>
+          <button type="button" onClick={() => void reloadWorkbenchProjectFolders()} disabled={busy}>重试读取项目文件夹</button>
+        </div>}
         <nav className="tauri-sidebar__sessions">
           {projectGroups.length === 0 ? <p className="tauri-sidebar__empty">还没有对话，开始一个新话题吧。</p> : projectGroups.map(group => group.root ? (
             <section className="tauri-project-group" key={group.key} aria-label={group.label}>
@@ -1739,23 +2012,42 @@ export function TauriSessionPreview() {
                   <input autoFocus maxLength={1024} value={projectTitleDraft} aria-label={`重命名项目 ${group.label}`} onChange={event => setProjectTitleDraft(event.target.value)} onKeyDown={event => { if (event.key === "Escape") setEditingProjectRoot(null); }} />
                   <button type="submit" aria-label="保存项目名称" disabled={busy}><Check size={13} /></button>
                   <button type="button" aria-label="取消重命名项目" disabled={busy} onClick={() => setEditingProjectRoot(null)}><X size={13} /></button>
-                </form> : <button type="button" className={`tauri-project-group__select${activeProjectKey === group.key ? " is-active" : ""}`} aria-current={activeProjectKey === group.key ? "location" : undefined} title={workspaceAvailability[group.root] === false ? `${group.root}\n工作区不可用；已有会话仍可打开` : group.root} aria-label={`切换到项目 ${group.label}${workspaceAvailability[group.root] === false ? "（工作区不可用）" : ""}`} disabled={busy || switchingBlocked || (group.sessions.length > 0 && !group.sessions.some(tab => !isMissingWorkbenchSession(tab)))} onClick={() => { const latest = group.sessions.find(tab => !isMissingWorkbenchSession(tab)); if (latest) { if (latest.sessionId !== session?.id) void activateSession(latest.sessionId, latest.workspaceRoot); } else setWorkspaceRoot(group.root || ""); }}><FolderOpen size={14} /><span>{group.label}</span>{workspaceAvailability[group.root] === false && <small className="tauri-project-group__unavailable">工作区不可用</small>}<small>{group.sessions.length}</small></button>}
+                </form> : <button type="button" className={`tauri-project-group__select${activeProjectKey === group.key ? " is-active" : ""}`} aria-current={activeProjectKey === group.key ? "location" : undefined} title={workspaceAvailability[group.root] === false ? `${group.root}\n工作区不可用；已有会话仍可打开` : group.root} aria-label={`切换到项目 ${group.label}${workspaceAvailability[group.root] === false ? "（工作区不可用）" : ""}`} disabled={busy || sessionPageSource === "cached" || sessionPageSource === "identity_unverified" || switchingBlocked || (group.sessions.length > 0 && !group.sessions.some(tab => !isMissingWorkbenchSession(tab)))} onClick={() => { const latest = group.sessions.find(tab => !isMissingWorkbenchSession(tab)); if (latest) { if (latest.sessionId !== session?.id) void activateSession(latest.sessionId, latest.workspaceRoot); } else setWorkspaceRoot(group.root || ""); }}><FolderOpen size={14} /><span>{group.label}</span>{workspaceAvailability[group.root] === false && <small className="tauri-project-group__unavailable">工作区不可用</small>}<small>{group.sessions.length}</small></button>}
                 <button type="button" className="tauri-project-group__rename" aria-label={`重命名项目 ${group.label}`} title="重命名项目" disabled={busy || switchingBlocked || editingProjectRoot !== null} onClick={() => { setEditingProjectRoot(group.root || null); setProjectTitleDraft(group.title ?? ""); }}><Pencil size={12} /></button>
-                <button type="button" className="tauri-project-group__new" aria-label={`在 ${group.label} 中新建对话`} title={workspaceAvailability[group.root] === false ? "工作区不可用，无法在此处新建对话" : "在此项目新建对话"} disabled={busy || switchingBlocked || workspaceAvailability[group.root] === false} onClick={() => void createSession(group.root || "")}><Plus size={14} /></button>
+                <button type="button" className="tauri-project-group__new" aria-label={`在 ${group.label} 中新建对话`} title={workspaceAvailability[group.root] === false ? "工作区不可用，无法在此处新建对话" : "在此项目新建对话"} disabled={busy || sessionPageSource === "cached" || sessionPageSource === "identity_unverified" || switchingBlocked || workspaceAvailability[group.root] === false} onClick={() => void createSession(group.root || "")}><Plus size={14} /></button>
               </div>
-              {!collapsedProjects[group.key] && group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} busy={busy} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} />)}
+              {!collapsedProjects[group.key] && group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} busy={busy || sessionPageSource === "cached" || sessionPageSource === "identity_unverified"} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} />)}
             </section>
-          ) : group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} busy={busy} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} />))}
+          ) : group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} busy={busy || sessionPageSource === "cached" || sessionPageSource === "identity_unverified"} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} />))}
+          {sessionPageSource === "identity_unverified" && <p className="tauri-sidebar__page-note" role="status">
+            正在只读显示未完成 shadow 核验的持久身份目录（{sessionPageDirectoryCount ?? tabs.length} 条）；不能据此打开、删除或新建会话。原因：{catalogAudit ? sessionShadowDifferenceSummary(catalogAudit) : "shadow 报告不可用"}。请先重新检查并处理差异。
+          </p>}
+          {unverifiedLegacyTabs.length > 0 && <section className="tauri-pending-deletes" aria-label="仅在旧兼容目录中的未核验会话">
+            <div className="tauri-sidebar__section-title">仅在旧目录中（只读）</div>
+            {unverifiedLegacyTabs.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={false} busy switchingBlocked={switchingBlocked} onActivate={() => {}} onDelete={() => {}} />)}
+          </section>}
           {sessionPageCursor && <button type="button" className="tauri-sidebar__load-more" onClick={() => void loadMoreWorkbenchSessions()} disabled={sessionPageLoading} aria-label="加载更多会话">
             {sessionPageLoading ? "正在加载…" : "加载更多会话"}
           </button>}
           {sessionPageError && <p className="tauri-sidebar__page-error" role="alert">加载失败：{sessionPageError}</p>}
+          {sessionPageNotice && <p className="tauri-sidebar__page-note" role="status">{sessionPageNotice}</p>}
+          <button type="button" className="tauri-sidebar__load-more" aria-label="重新检查会话目录" onClick={() => void retryWorkbenchSessionDirectory()} disabled={busy || sessionPageLoading}>
+            {sessionPageLoading ? "正在重新检查…" : "重新检查会话目录"}
+          </button>
           {sessionPageSource === "legacy" && <>
-            <p className="tauri-sidebar__page-note" role="status">当前使用本地兼容目录，最多 50 条；持久会话目录未通过校验，列表可能不完整。</p>
-            <button type="button" className="tauri-sidebar__load-more" aria-label="重新检查会话目录" onClick={() => void retryWorkbenchSessionDirectory()} disabled={sessionPageLoading}>
-              {sessionPageLoading ? "正在重新检查…" : "重新检查会话目录"}
-            </button>
+            <p className="tauri-sidebar__page-note" role="status">
+              当前使用本地兼容目录，最多 50 条；{sessionPageDirectoryCount !== null && sessionPageDirectoryCount !== visibleTabs.length && <>身份目录本次盘点为 {sessionPageDirectoryCount} 条（仅是审计数量，无法从当前回退列表翻页），</>}
+              持久会话目录未通过校验，列表可能不完整。{catalogAudit ? `原因：${sessionShadowDifferenceSummary(catalogAudit)}。` : "本次未能读取 shadow 诊断，暂时无法确定回退原因。"}
+              点击“重新检查会话目录”会重试旧目录导入并重新核验；未认领 transcript 不会自动导入，差异详情见“运行状态”。
+            </p>
           </>}
+          {sessionPageSource === "partial_identity" && <p className="tauri-sidebar__page-note" role="status">
+            当前分页显示已登记且通过身份结构、工作区与磁盘状态核验的会话。
+            {sessionPageTitleMismatchCount ? `其中 ${sessionPageTitleMismatchCount} 条标题与本地兼容目录不同，当前显示持久身份目录标题。` : ""}
+            {sessionPageMissingTranscriptCount ? `其中 ${sessionPageMissingTranscriptCount} 条已确认 transcript 缺失；对应行会标记“文件缺失”、禁止打开，但可显式删除失效记录。` : ""}
+            {sessionPageUnclaimedCount ? `另发现 ${sessionPageUnclaimedCount} 个未认领 transcript，尚未导入本目录；这些文件不会自动分配或认领 ID，需经审核导入。` : ""}
+          </p>}
+          {sessionPageSource === "cached" && <p className="tauri-sidebar__page-note" role="status">当前无法完成实时目录校验，分页来自本次运行中上一次审计的快照，共 {sessionPageDirectoryCount ?? tabs.length} 条；{catalogAudit && !isSessionShadowSafeToPage(catalogAudit) ? `当时已发现目录差异：${sessionShadowDifferenceSummary(catalogAudit)}。` : "该快照当时通过目录结构核验。"}{sessionPageUnclaimedCount ? `另报告 ${sessionPageUnclaimedCount} 个未认领 transcript。` : ""}内容可能已过期且当前只读。服务恢复后点击“重新检查会话目录”，完成实时校验后才能操作。</p>}
         </nav>
         <div className="tauri-sidebar__footer">
           <span className={`tauri-health${status?.running ? " is-ready" : ""}`}><i />{status?.running ? "本地运行正常" : "正在连接本地服务…"}</span>
@@ -1780,7 +2072,7 @@ export function TauriSessionPreview() {
             <span data-tauri-drag-region>{session?.state === "running" ? "正在生成" : session?.state === "paused" ? "等待你的操作" : session ? "本地会话" : "Reasonix Preview"}</span>
           </div>
           <div className="tauri-topbar__actions">
-            <button type="button" className="tauri-workspace-button" onClick={() => void chooseWorkspaceRoot()} disabled={busy || session?.state === "running"} title={currentWorkspace || "选择工作区（用于新对话）"}>
+            <button type="button" className="tauri-workspace-button" onClick={() => void chooseWorkspaceRoot()} disabled={busy || session?.state === "running"} title={currentWorkspace ? `新对话默认工作区：${currentWorkspace}` : "选择工作区（用于新对话）"}>
               <FolderOpen size={15} /><span>{currentWorkspace || "选择工作区"}</span><ChevronDown size={13} />
             </button>
             <button type="button" className="tauri-icon-button tauri-workspace-tree-button" aria-label="浏览工作区文件" title="浏览工作区文件" onClick={toggleWorkspace} disabled={busy || !session}>
@@ -1863,7 +2155,7 @@ export function TauriSessionPreview() {
             }} onKeyDown={event => {
               if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void submit(); }
             }} placeholder={session?.state === "paused" ? "请先完成上方确认…" : session ? "继续聊聊你的问题…（⌘/Ctrl + Enter 发送）" : "输入问题，开始新对话…（⌘/Ctrl + Enter 发送）"} disabled={session?.state === "paused"} rows={3} />
-            <div className="tauri-composer__bottom"><span>{session?.workspaceRoot ? `工作区 · ${session.workspaceRoot}` : session ? "当前会话使用默认工作区" : "Preview 配置与稳定版相互隔离"}</span>
+            <div className="tauri-composer__bottom"><span>{session?.workspaceRoot ? `当前对话工作区 · ${session.workspaceRoot}` : session ? "当前对话使用默认工作区" : currentWorkspace ? `新对话默认工作区 · ${currentWorkspace}` : "Preview 配置与稳定版相互隔离"}</span>
               <div className="tauri-composer__actions">
                 <button className="tauri-attach-button" type="button" onClick={() => void addAttachments()} disabled={busy || !session || !streamReady || session.state !== "idle"} aria-label="添加文件" title="从本机选择文件并附加到消息"><Paperclip size={16} /><span>添加文件</span></button>
                 {session?.state === "running" ? <button className="tauri-send-button is-stop" type="button" onClick={() => void cancel()} disabled={busy} aria-label="停止生成"><Square size={15} fill="currentColor" /></button> : <button className="tauri-send-button" type="button" onClick={() => void submit()} disabled={busy || !session || !streamReady || session.state === "paused" || (!prompt.trim() && attachments.length === 0)} aria-label="发送消息"><ArrowUp size={18} /></button>}
@@ -1874,6 +2166,41 @@ export function TauriSessionPreview() {
         </footer>
       </section>
 
+      {scanImportOpen && <>
+        <button className="tauri-scan-import__scrim" type="button" aria-label="关闭未认领会话审核" onClick={() => !scanImportLoading && setScanImportOpen(false)} />
+        <section className="tauri-scan-import" role="dialog" aria-modal="true" aria-labelledby="tauri-scan-import-title">
+          <header className="tauri-scan-import__header">
+            <div><p>PREVIEW SESSION IMPORT</p><h2 id="tauri-scan-import-title">审核未认领会话</h2></div>
+            <button type="button" className="tauri-icon-button" aria-label="关闭" onClick={() => setScanImportOpen(false)} disabled={scanImportLoading}><X size={17} /></button>
+          </header>
+          <div className="tauri-scan-import__body">
+            <p>文件名可确定的 ID 会固定显示。逐项确认是否导入，并填写标题和项目路径；项目路径留空表示不归属项目。提交前会重新核对文件指纹。</p>
+            {scanImportLoading && <p role="status">正在核对会话目录…</p>}
+            {scanImportError && <p className="tauri-scan-import__error" role="alert">{scanImportError}</p>}
+            {scanImportBlockedCount > 0 && <p className="tauri-scan-import__note">{scanImportBlockedCount} 个扫描文件因命名、文件状态或冲突未进入审核清单。</p>}
+            {!scanImportLoading && scanImportCandidates.length === 0 && !scanImportError && <p className="tauri-scan-import__empty">没有可审核的未认领 transcript。</p>}
+            <div className="tauri-scan-import__list">
+              {scanImportCandidates.map(candidate => {
+                const draft = scanImportDrafts[candidate.id] ?? { selected: false, title: "", workspaceRoot: "" };
+                return <article className="tauri-scan-import__item" key={candidate.id}>
+                  <label className="tauri-scan-import__choice">
+                    <input type="checkbox" checked={draft.selected} onChange={event => setScanImportDrafts(previous => ({ ...previous, [candidate.id]: { ...draft, selected: event.target.checked } }))} />
+                    <span><strong>{candidate.id}</strong><small>{candidate.file} · SHA-256 {candidate.transcriptSha256.slice(0, 12)}…</small></span>
+                  </label>
+                  <label>标题<input value={draft.title} onChange={event => setScanImportDrafts(previous => ({ ...previous, [candidate.id]: { ...draft, title: event.target.value } }))} maxLength={120} placeholder="留空表示确认无标题" /></label>
+                  <label>项目路径<input value={draft.workspaceRoot} onChange={event => setScanImportDrafts(previous => ({ ...previous, [candidate.id]: { ...draft, workspaceRoot: event.target.value } }))} maxLength={4096} placeholder="绝对路径；留空表示不归属项目" /></label>
+                </article>;
+              })}
+            </div>
+          </div>
+          <footer className="tauri-scan-import__footer">
+            <span>已选 {Object.values(scanImportDrafts).filter(item => item.selected).length} 项</span>
+            <button type="button" onClick={() => setScanImportOpen(false)} disabled={scanImportLoading}>取消</button>
+            <button type="button" className="is-primary" onClick={() => void applyScanImportReview()} disabled={scanImportLoading || !Object.values(scanImportDrafts).some(item => item.selected)}>审核并导入</button>
+          </footer>
+        </section>
+      </>}
+
       {diagnosticsOpen && <>
         <button className="tauri-diagnostics__scrim" aria-label="关闭运行状态面板" type="button" onClick={() => setDiagnosticsOpen(false)} />
         <aside className="tauri-diagnostics" aria-label="运行状态与设置">
@@ -1883,11 +2210,12 @@ export function TauriSessionPreview() {
             <section className="tauri-diagnostic-card" aria-label="会话目录迁移检查">
               <div className="tauri-diagnostic-card__heading"><h3>会话目录迁移检查</h3><span>{catalogAudit ? "影子比对" : "检查中"}</span></div>
               {catalogAudit ? <>
-                <p>旧目录 {catalogAudit.legacyCount} 条 · 身份目录 {catalogAudit.directoryCount} 条；当前侧栏仍使用旧目录。</p>
-                <p>{catalogAudit.legacyMatchesDirectory ? "旧目录条目与身份目录一致" : `差异：身份库缺项 ${catalogAudit.missingFromDirectory}、标题 ${catalogAudit.titleMismatches}、工作区 ${catalogAudit.workspaceMismatches}、顺序 ${catalogAudit.orderMismatches}、磁盘状态 ${catalogAudit.physicalStateMismatches}、未登记文件 ${catalogAudit.unclaimedTranscripts}、盘点错误 ${catalogAudit.inventoryErrors}`}</p>
+                <p>旧目录 {catalogAudit.legacyCount} 条 · 身份目录 {catalogAudit.directoryCount} 条；当前侧栏数据源：{sessionPageSource === "identity" ? "持久身份目录" : sessionPageSource === "partial_identity" ? "已核验身份目录（存在差异）" : sessionPageSource === "identity_unverified" ? "未核验身份目录（只读）" : sessionPageSource === "legacy" ? "本地兼容目录" : sessionPageSource === "cached" ? "上次审计快照" : "暂不可用"}。</p>
+                <p>{catalogAudit.legacyMatchesDirectory ? "旧目录中可见会话与身份目录一致" : `差异：身份库缺项 ${catalogAudit.missingFromDirectory}、标题 ${catalogAudit.titleMismatches}、工作区 ${catalogAudit.workspaceMismatches}、顺序 ${catalogAudit.orderMismatches}、磁盘状态 ${catalogAudit.physicalStateMismatches}、未登记文件 ${catalogAudit.unclaimedTranscripts}、盘点错误 ${catalogAudit.inventoryErrors}`}{catalogAudit.retiredLegacyCount > 0 && <>；另有 {catalogAudit.retiredLegacyCount} 条待删除或已删除记录由生命周期状态解释</>}</p>
                 {catalogAudit.directoryOnlyCount > 0 && <p>身份目录新增项：{catalogAudit.directoryOnlyCount} 条</p>}
                 {catalogAudit.missingTranscripts > 0 && <p>transcript 缺失：{catalogAudit.missingTranscripts} 条</p>}
               </> : <p>{catalogAuditError || "正在分页读取身份目录并与旧目录比较…"}</p>}
+              {profile?.managedProfile && <button type="button" className="tauri-diagnostic-action" onClick={() => void openScanImportReview()} disabled={busy || scanImportLoading}>扫描并审核未认领 transcript</button>}
             </section>
             <section className="tauri-diagnostic-card">
               <h3>预览配置</h3>

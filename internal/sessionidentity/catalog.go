@@ -42,7 +42,9 @@ func ValidWorkbenchCatalogWorkspaceRoot(root string) bool {
 
 // SyncWorkbenchOrder mirrors the host's bounded recent-session order and
 // workspace grouping into the identity store. Existing identity-only rows are
-// retained after the host snapshot in their previous relative order.
+// retained after the host snapshot in their previous relative order. Its
+// count reports host entries whose identity and path are recognized, including
+// deletion tombstones that remain excluded from the visible order.
 func (s *Store) SyncWorkbenchOrder(ctx context.Context, sessionDir string, entries []WorkbenchOrderEntry) (int, error) {
 	if strings.TrimSpace(sessionDir) == "" || len(entries) > 50 {
 		return 0, errors.New("workbench catalog is invalid")
@@ -66,7 +68,10 @@ func (s *Store) SyncWorkbenchOrder(ctx context.Context, sessionDir string, entri
 		if !ValidWorkbenchCatalogWorkspaceRoot(entry.WorkspaceRoot) {
 			return 0, errors.New("workbench workspace path is invalid")
 		}
-		workspace := strings.TrimSpace(entry.WorkspaceRoot)
+		workspace := entry.WorkspaceRoot
+		if strings.TrimSpace(workspace) == "" {
+			workspace = ""
+		}
 		if workspace != "" {
 			workspace, err = filepath.Abs(workspace)
 			if err != nil {
@@ -118,13 +123,22 @@ func (s *Store) SyncWorkbenchOrder(ctx context.Context, sessionDir string, entri
 	}
 	ordered := make([]Record, 0, len(current))
 	listed := make(map[string]struct{}, len(entries))
+	syncedEntries := 0
 	for _, entry := range entries {
 		record, exists := byID[entry.ID]
-		if !exists || record.State == StateDeleting || record.State == StateDeleted {
+		if !exists {
 			continue
 		}
 		if filepath.Clean(record.Path) != filepath.Clean(paths[entry.ID]) {
 			return 0, fmt.Errorf("%w: %s", ErrPathChanged, entry.ID)
+		}
+		// A stale host row can outlive a deletion that was fenced or already
+		// tombstoned before the host removed its JSON entry. It is synchronized
+		// when its ID and path still match, even though it must stay out of the
+		// visible order until the host explicitly forgets it.
+		syncedEntries++
+		if record.State == StateDeleting || record.State == StateDeleted {
+			continue
 		}
 		listed[entry.ID] = struct{}{}
 		ordered = append(ordered, record)
@@ -139,12 +153,10 @@ func (s *Store) SyncWorkbenchOrder(ctx context.Context, sessionDir string, entri
 	}
 
 	now := time.Now().UnixMilli()
-	listedPosition := 0
 	for position, record := range ordered {
 		workspace := record.WorkspaceRoot
 		if _, isListed := listed[record.ID]; isListed {
 			workspace = workspaces[record.ID]
-			listedPosition++
 		}
 		if record.Position == position && record.WorkspaceRoot == workspace {
 			continue
@@ -157,7 +169,7 @@ func (s *Store) SyncWorkbenchOrder(ctx context.Context, sessionDir string, entri
 	if err := tx.Commit(); err != nil {
 		return 0, err
 	}
-	return listedPosition, nil
+	return syncedEntries, nil
 }
 
 // ImportWorkbenchCatalog registers the sessions the Preview host lists.
@@ -179,7 +191,10 @@ func (s *Store) ImportWorkbenchCatalog(ctx context.Context, sessionDir, catalogP
 		if !ValidWorkbenchCatalogTitle(entry.Title) || !ValidWorkbenchCatalogWorkspaceRoot(entry.WorkspaceRoot) {
 			return errors.New("workbench catalog metadata is invalid")
 		}
-		workspace := strings.TrimSpace(entry.WorkspaceRoot)
+		workspace := entry.WorkspaceRoot
+		if strings.TrimSpace(workspace) == "" {
+			workspace = ""
+		}
 		if workspace != "" {
 			abs, err := filepath.Abs(workspace)
 			if err != nil {

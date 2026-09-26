@@ -163,7 +163,10 @@ func PrepareImportReview(ctx context.Context, identities *Store, sessionDir, cat
 			return ImportReview{}, fmt.Errorf("session %s path does not match the bridge", entry.SessionID)
 		}
 		candidate := Candidate{ID: entry.SessionID, Path: path, Title: entry.Title, Position: position}
-		workspace := strings.TrimSpace(entry.WorkspaceRoot)
+		workspace := entry.WorkspaceRoot
+		if strings.TrimSpace(workspace) == "" {
+			workspace = ""
+		}
 		if workspace != "" {
 			candidate.WorkspaceRoot, err = filepath.Abs(workspace)
 			if err != nil {

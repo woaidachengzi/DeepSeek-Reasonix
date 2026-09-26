@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -92,14 +93,15 @@ func (b *bridgeServer) projectFolders(w http.ResponseWriter, _ *http.Request) {
 	projects := make([]projectFolder, 0, len(stored.Projects))
 	seen := make(map[string]struct{}, len(stored.Projects))
 	for _, project := range stored.Projects {
-		root := strings.TrimSpace(project.Root)
-		if root == "" || len(root) > 4096 || strings.IndexFunc(root, unicode.IsControl) >= 0 {
+		root := project.Root
+		if strings.TrimSpace(root) == "" || len(root) > 4096 || strings.IndexFunc(root, unicode.IsControl) >= 0 || !filepath.IsAbs(root) {
 			continue
 		}
-		if _, ok := seen[root]; ok {
+		key := projectFolderKey(root)
+		if _, ok := seen[key]; ok {
 			continue
 		}
-		seen[root] = struct{}{}
+		seen[key] = struct{}{}
 		title := strings.TrimSpace(project.Title)
 		if utf8.RuneCountInString(title) > 1024 {
 			title = string([]rune(title)[:1024])
@@ -107,4 +109,29 @@ func (b *bridgeServer) projectFolders(w http.ResponseWriter, _ *http.Request) {
 		projects = append(projects, projectFolder{Root: root, Title: title})
 	}
 	writeJSON(w, http.StatusOK, projectFoldersResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Projects: projects})
+}
+
+func projectFolderKey(root string) string {
+	if runtime.GOOS == "windows" {
+		normalized := strings.ReplaceAll(root, "/", `\`)
+		hasTrailingSeparator := strings.HasSuffix(normalized, `\`)
+		trimmed := strings.TrimRight(normalized, `\`)
+		if trimmed == "" {
+			if strings.HasPrefix(root, "/") {
+				return `\`
+			}
+			return root[:1]
+		}
+		isDriveRoot := len(trimmed) == 2 && trimmed[1] == ':' &&
+			((trimmed[0] >= 'a' && trimmed[0] <= 'z') || (trimmed[0] >= 'A' && trimmed[0] <= 'Z'))
+		if hasTrailingSeparator && isDriveRoot {
+			trimmed += `\`
+		}
+		return strings.ToLower(trimmed)
+	}
+	key := strings.TrimRight(root, "/")
+	if key == "" && strings.HasPrefix(root, "/") {
+		return "/"
+	}
+	return key
 }

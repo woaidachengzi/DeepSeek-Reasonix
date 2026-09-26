@@ -69,7 +69,10 @@ func (b *bridgeServer) importLegacyCatalog(w http.ResponseWriter, r *http.Reques
 		}
 		workspaceRoot, title := "", ""
 		if entry.WorkspaceRoot != nil {
-			workspaceRoot = strings.TrimSpace(*entry.WorkspaceRoot)
+			workspaceRoot = *entry.WorkspaceRoot
+			if strings.TrimSpace(workspaceRoot) == "" {
+				workspaceRoot = ""
+			}
 			if workspaceRoot != "" {
 				workspaceRoot, err = filepath.Abs(workspaceRoot)
 				if err != nil {

@@ -18,6 +18,7 @@ pub struct SessionShadowReport {
     pub matched_count: usize,
     pub directory_only_count: usize,
     pub missing_from_directory: usize,
+    pub retired_legacy_count: usize,
     pub title_mismatches: usize,
     pub workspace_mismatches: usize,
     pub order_mismatches: usize,
@@ -26,6 +27,21 @@ pub struct SessionShadowReport {
     pub unclaimed_transcripts: usize,
     pub inventory_errors: usize,
     pub legacy_matches_directory: bool,
+}
+
+impl SessionShadowReport {
+    /// The registered identity directory is safe to page when structural and
+    /// physical comparisons pass. Titles are mutable presentation metadata,
+    /// and a transcript recorded as missing is safe when inventory confirms
+    /// that state. Unclaimed files remain separately reported and are never
+    /// auto-claimed.
+    pub fn identity_directory_is_safe_to_page(&self) -> bool {
+        self.missing_from_directory == 0
+            && self.workspace_mismatches == 0
+            && self.order_mismatches == 0
+            && self.physical_state_mismatches == 0
+            && self.inventory_errors == 0
+    }
 }
 
 pub fn compare(
@@ -41,6 +57,7 @@ pub fn compare(
     }
     let mut seen_legacy = HashSet::with_capacity(legacy.len());
     let mut missing_from_directory = 0;
+    let mut retired_legacy_count = 0;
     let mut title_mismatches = 0;
     let mut workspace_mismatches = 0;
     let mut missing_transcripts = 0;
@@ -49,6 +66,17 @@ pub fn compare(
         if physical_by_id.insert(state.id.as_str(), state).is_some() {
             return Err("session inventory contains duplicate identity IDs".to_string());
         }
+    }
+    let retired_ids: HashSet<_> = physical.retired_ids.iter().map(String::as_str).collect();
+    if retired_ids.len() != physical.retired_ids.len()
+        || retired_ids.iter().any(|id| {
+            !legacy
+                .iter()
+                .any(|session| session.session_id.as_str() == *id)
+                || by_id.contains_key(id)
+        })
+    {
+        return Err("session inventory contains an invalid retired legacy ID".to_string());
     }
     let physical_state_mismatches = directory
         .iter()
@@ -65,7 +93,11 @@ pub fn compare(
             return Err("legacy session catalog contains duplicate IDs".to_string());
         }
         let Some(&index) = by_id.get(session.session_id.as_str()) else {
-            missing_from_directory += 1;
+            if retired_ids.contains(session.session_id.as_str()) {
+                retired_legacy_count += 1;
+            } else {
+                missing_from_directory += 1;
+            }
             continue;
         };
         let entry = &directory[index];
@@ -73,7 +105,7 @@ pub fn compare(
         if session.title.as_deref().unwrap_or("") != entry.title {
             title_mismatches += 1;
         }
-        if session.workspace_root.as_deref().unwrap_or("").trim()
+        if session.workspace_root.as_deref().unwrap_or("")
             != entry.workspace_root.as_deref().unwrap_or("")
         {
             workspace_mismatches += 1;
@@ -104,6 +136,7 @@ pub fn compare(
         matched_count,
         directory_only_count: directory.len() - matched_count,
         missing_from_directory,
+        retired_legacy_count,
         title_mismatches,
         workspace_mismatches,
         order_mismatches,
@@ -160,6 +193,7 @@ mod tests {
                 .collect(),
             unclaimed_count: 0,
             error_count: 0,
+            retired_ids: Vec::new(),
         }
     }
 
@@ -244,5 +278,15 @@ mod tests {
         assert_eq!(report.unclaimed_transcripts, 1);
         assert_eq!(report.inventory_errors, 1);
         assert!(!report.legacy_matches_directory);
+    }
+
+    #[test]
+    fn unclaimed_files_do_not_hide_verified_identity_rows() {
+        let mut inventory = physical(&[("ready", true)]);
+        inventory.unclaimed_count = 3;
+        let report = compare(&[old("ready")], &[new("ready")], &inventory).expect("compare");
+        assert!(!report.legacy_matches_directory);
+        assert!(report.identity_directory_is_safe_to_page());
+        assert_eq!(report.unclaimed_transcripts, 3);
     }
 }

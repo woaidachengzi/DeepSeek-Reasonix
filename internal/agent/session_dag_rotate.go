@@ -79,6 +79,9 @@ func rotateSessionDAG(sessionPath string, st *sessionDAGState, now time.Time) er
 		return err
 	}
 	fileutil.Crash("dag-rotate", path)
+	if handled, err := replaceSQLiteDAGEvents(sessionPath, entries, int64(st.records)); handled {
+		return err
+	}
 	staged, err := fileutil.StageAtomicWrite(path, data, 0o600)
 	if err != nil {
 		return err

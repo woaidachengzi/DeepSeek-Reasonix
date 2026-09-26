@@ -3,6 +3,7 @@ package sessionidentity
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/binary"
@@ -19,10 +20,46 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"reasonix/internal/desktopbridge/sessionpath"
+
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 5
+const schemaVersion = 9
+const visibleSnapshotIndex = "sessions_visible_structure_snapshot"
+const pendingDeleteCursorIndex = "sessions_deletion_recovery_cursor"
+const visibleStructureRevisionTable = "session_directory_revision"
+
+var visibleStructureRevisionTriggers = []struct {
+	name string
+	ddl  string
+}{
+	{
+		name: "sessions_directory_revision_insert_v1",
+		ddl: `CREATE TRIGGER IF NOT EXISTS sessions_directory_revision_insert_v1
+		AFTER INSERT ON sessions BEGIN
+			UPDATE session_directory_revision SET revision=revision+1 WHERE singleton=1;
+		END`,
+	},
+	{
+		name: "sessions_directory_revision_delete_v1",
+		ddl: `CREATE TRIGGER IF NOT EXISTS sessions_directory_revision_delete_v1
+		AFTER DELETE ON sessions BEGIN
+			UPDATE session_directory_revision SET revision=revision+1 WHERE singleton=1;
+		END`,
+	},
+	{
+		name: "sessions_directory_revision_update_v1",
+		ddl: `CREATE TRIGGER IF NOT EXISTS sessions_directory_revision_update_v1
+		AFTER UPDATE OF id, relative_path, workspace_root, position, state ON sessions
+		WHEN OLD.id IS NOT NEW.id OR OLD.relative_path IS NOT NEW.relative_path OR
+			OLD.workspace_root IS NOT NEW.workspace_root OR OLD.position IS NOT NEW.position OR
+			OLD.state IS NOT NEW.state
+		BEGIN
+			UPDATE session_directory_revision SET revision=revision+1 WHERE singleton=1;
+		END`,
+	},
+}
 
 const createTitleIntentTable = `CREATE TABLE session_title_intents (
 	session_id TEXT PRIMARY KEY REFERENCES sessions(id),
@@ -101,6 +138,7 @@ type Cursor struct {
 	Position   int    `json:"position"`
 	ID         string `json:"id"`
 	SnapshotID string `json:"snapshotId,omitempty"`
+	Total      int    `json:"total,omitempty"`
 }
 
 // Page contains one bounded page plus a cursor only when more rows remain.
@@ -118,13 +156,28 @@ type PendingDelete struct {
 	Title string
 }
 
+// PendingDeleteCursor is an opaque keyset position in the separate deletion
+// recovery list. Session IDs are immutable, so retries and workbench reorders
+// cannot move the continuation boundary.
+type PendingDeleteCursor struct {
+	ID string
+}
+
+type PendingDeletePage struct {
+	Sessions   []PendingDelete
+	NextCursor *PendingDeleteCursor
+}
+
 const MaxVisiblePageSize = 200
 const MaxVisibleSnapshotSize = 10_000
 const MaxPendingDeletes = 10_000
+const MaxPendingDeletePageSize = 200
 
 type Store struct {
-	db          *sql.DB
-	profileRoot string
+	db               *sql.DB
+	profileRoot      string
+	identityPath     string
+	identityFileInfo os.FileInfo
 }
 
 // Open opens the identity database. Existing databases require an explicit
@@ -370,6 +423,140 @@ func Open(ctx context.Context, path string, profileRoots ...string) (*Store, err
 		}
 		version = 5
 	}
+	if version == 5 {
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fail(err)
+		}
+		generation := make([]byte, 16)
+		if _, err := rand.Read(generation); err != nil {
+			_ = tx.Rollback()
+			return fail(fmt.Errorf("generate session directory revision id: %w", err))
+		}
+		if _, err := tx.ExecContext(ctx, `CREATE TABLE session_directory_revision (
+			singleton INTEGER PRIMARY KEY CHECK (singleton=1),
+			generation TEXT NOT NULL,
+			revision INTEGER NOT NULL CHECK (revision >= 0)
+		)`); err != nil {
+			_ = tx.Rollback()
+			return fail(fmt.Errorf("create session directory revision: %w", err))
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO session_directory_revision(singleton,generation,revision) VALUES(1,?,0)`, hex.EncodeToString(generation)); err != nil {
+			_ = tx.Rollback()
+			return fail(fmt.Errorf("initialize session directory revision: %w", err))
+		}
+		for _, trigger := range visibleStructureRevisionTriggers {
+			if _, err := tx.ExecContext(ctx, trigger.ddl); err != nil {
+				_ = tx.Rollback()
+				return fail(fmt.Errorf("create session directory revision trigger %s: %w", trigger.name, err))
+			}
+		}
+		if _, err := tx.ExecContext(ctx, `CREATE INDEX sessions_deletion_recovery_cursor
+			ON sessions(id) WHERE state='deleting'`); err != nil {
+			_ = tx.Rollback()
+			return fail(fmt.Errorf("create session deletion recovery cursor index: %w", err))
+		}
+		if _, err := tx.ExecContext(ctx, "PRAGMA user_version=6"); err != nil {
+			_ = tx.Rollback()
+			return fail(fmt.Errorf("migrate session identity to v6: %w", err))
+		}
+		if err := tx.Commit(); err != nil {
+			return fail(err)
+		}
+		version = 6
+	}
+	if version == 6 {
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fail(err)
+		}
+		for _, statement := range []string{
+			`CREATE TABLE session_event_streams (
+				session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+				generation INTEGER NOT NULL DEFAULT 1 CHECK (generation > 0),
+				projection_sequence INTEGER NOT NULL DEFAULT 0 CHECK (projection_sequence >= 0),
+				projection_sha256 TEXT NOT NULL DEFAULT '',
+				import_source_sha256 TEXT NOT NULL DEFAULT '',
+				updated_at_ms INTEGER NOT NULL
+			)`,
+			`CREATE TABLE session_events (
+				session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+				sequence INTEGER NOT NULL CHECK (sequence > 0),
+				event_id TEXT NOT NULL,
+				event_type TEXT NOT NULL,
+				head_id TEXT NOT NULL DEFAULT '',
+				parent_id TEXT NOT NULL DEFAULT '',
+				message_id TEXT NOT NULL DEFAULT '',
+				writer_id TEXT NOT NULL DEFAULT '',
+				created_at_ms INTEGER NOT NULL,
+				payload_json BLOB NOT NULL,
+				payload_sha256 TEXT NOT NULL,
+				PRIMARY KEY (session_id, sequence),
+				UNIQUE (session_id, event_id)
+			)`,
+			`CREATE INDEX session_events_head_sequence ON session_events(session_id, head_id, sequence)`,
+			`PRAGMA user_version=7`,
+		} {
+			if _, err := tx.ExecContext(ctx, statement); err != nil {
+				_ = tx.Rollback()
+				return fail(fmt.Errorf("migrate session identity to v7: %w", err))
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return fail(err)
+		}
+		version = 7
+	}
+	if version == 7 {
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fail(err)
+		}
+		for _, statement := range []string{
+			"ALTER TABLE session_event_streams ADD COLUMN checkpoint_sequence INTEGER NOT NULL DEFAULT 0 CHECK (checkpoint_sequence >= 0)",
+			"ALTER TABLE session_event_streams ADD COLUMN checkpoint_sha256 TEXT NOT NULL DEFAULT ''",
+			"PRAGMA user_version=8",
+		} {
+			if _, err := tx.ExecContext(ctx, statement); err != nil {
+				_ = tx.Rollback()
+				return fail(fmt.Errorf("migrate session identity to v8: %w", err))
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return fail(err)
+		}
+		version = 8
+	}
+	if version == 8 {
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fail(err)
+		}
+		for _, statement := range []string{
+			"ALTER TABLE session_event_streams ADD COLUMN import_verified INTEGER NOT NULL DEFAULT 0 CHECK (import_verified IN (0,1))",
+			"PRAGMA user_version=9",
+		} {
+			if _, err := tx.ExecContext(ctx, statement); err != nil {
+				_ = tx.Rollback()
+				return fail(fmt.Errorf("migrate session identity to v9: %w", err))
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return fail(err)
+		}
+		version = 9
+	}
+	// Visible-page snapshot validation hashes these columns in position/id
+	// order. A covering index keeps that required full-structure check off the
+	// sessions table on continuation pages while preserving its exact digest.
+	if _, err := db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS sessions_visible_structure_snapshot
+		ON sessions(position, id, state, relative_path, workspace_root)`); err != nil {
+		return fail(fmt.Errorf("create session identity snapshot index: %w", err))
+	}
+	if _, err := db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS sessions_deletion_recovery_cursor
+		ON sessions(id) WHERE state='deleting'`); err != nil {
+		return fail(fmt.Errorf("create session deletion recovery cursor index: %w", err))
+	}
 	var journalMode string
 	if err := db.QueryRowContext(ctx, "PRAGMA journal_mode").Scan(&journalMode); err != nil {
 		return fail(fmt.Errorf("read session identity journal mode: %w", err))
@@ -404,48 +591,63 @@ func normalizeProfileRoot(root string) (string, error) {
 }
 
 func relativeTranscriptPath(profileRoot, id, transcriptPath string) (string, error) {
+	relative, _, err := relativeTranscriptPathWithIdentity(profileRoot, id, transcriptPath)
+	return relative, err
+}
+
+func relativeTranscriptPathWithIdentity(profileRoot, id, transcriptPath string) (string, string, error) {
 	root, err := normalizeProfileRoot(profileRoot)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	path, err := filepath.Abs(transcriptPath)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	resolvedRoot, err := validateCandidateWithResolvedRoot(root, Candidate{ID: id, Path: path})
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
+	return relativeTranscriptPathAfterValidation(root, resolvedRoot, path)
+}
+
+func relativeTranscriptPathAfterValidation(root, resolvedRoot, path string) (string, string, error) {
 	relative, err := filepath.Rel(root, path)
 	if err != nil || relative == "." || relative == ".." || filepath.IsAbs(relative) || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return "", errors.New("transcript path escapes session profile root")
+		return "", "", errors.New("transcript path escapes session profile root")
 	}
 	resolvedPath, err := resolveIdentityPath(path)
 	if err != nil {
-		return "", fmt.Errorf("resolve transcript path: %w", err)
+		return "", "", fmt.Errorf("resolve transcript path: %w", err)
 	}
 	resolvedRelative, err := filepath.Rel(resolvedRoot, resolvedPath)
 	if err != nil || resolvedRelative == "." || resolvedRelative == ".." || filepath.IsAbs(resolvedRelative) ||
 		strings.HasPrefix(resolvedRelative, ".."+string(filepath.Separator)) {
-		return "", errors.New("transcript path escapes session profile root through a symlink")
+		return "", "", errors.New("transcript path escapes session profile root through a symlink")
 	}
-	return filepath.ToSlash(relative), nil
+	return filepath.ToSlash(relative), resolvedPath, nil
 }
 
 func resolveTranscriptPath(profileRoot, id, relative string) (string, error) {
+	path, _, err := resolveTranscriptPathWithIdentity(profileRoot, id, relative)
+	return path, err
+}
+
+func resolveTranscriptPathWithIdentity(profileRoot, id, relative string) (string, string, error) {
 	root, err := normalizeProfileRoot(profileRoot)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	clean := filepath.Clean(filepath.FromSlash(relative))
 	if clean == "." || clean == ".." || filepath.IsAbs(clean) || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
-		return "", errors.New("session identity contains an invalid relative path")
+		return "", "", errors.New("session identity contains an invalid relative path")
 	}
 	path := filepath.Join(root, clean)
-	if _, err := relativeTranscriptPath(root, id, path); err != nil {
-		return "", err
+	_, resolved, err := relativeTranscriptPathWithIdentity(root, id, path)
+	if err != nil {
+		return "", "", err
 	}
-	return path, nil
+	return path, resolved, nil
 }
 
 // ensureTranscriptPathAvailable prevents two IDs from claiming one physical
@@ -453,16 +655,19 @@ func resolveTranscriptPath(profileRoot, id, relative string) (string, error) {
 // relative_path UNIQUE constraint remains useful, but cannot express physical
 // filesystem identity. Callers run this inside the same SQLite transaction as
 // the insert so a detected conflict rolls back the complete import/reserve.
-func ensureTranscriptPathAvailable(ctx context.Context, tx *sql.Tx, profileRoot, id, transcriptPath string) error {
-	candidatePath, err := resolveIdentityPath(transcriptPath)
+// candidateResolvedPath is freshly validated by the caller in that transaction,
+// so it does not repeat the candidate's final symlink resolution here.
+func ensureTranscriptPathAvailable(ctx context.Context, tx *sql.Tx, profileRoot, id, transcriptPath, candidateResolvedPath string) error {
+	root, err := normalizeProfileRoot(profileRoot)
 	if err != nil {
-		return fmt.Errorf("resolve candidate transcript identity: %w", err)
+		return err
 	}
+	var resolvedRoot string
 	rows, err := tx.QueryContext(ctx, "SELECT id, relative_path FROM sessions WHERE id<>?", id)
 	if err != nil {
 		return err
 	}
-	type existingIdentityPath struct{ id, path string }
+	type existingIdentityPath struct{ id, path, resolved string }
 	var existing []existingIdentityPath
 	for rows.Next() {
 		var otherID, relative string
@@ -470,12 +675,19 @@ func ensureTranscriptPathAvailable(ctx context.Context, tx *sql.Tx, profileRoot,
 			_ = rows.Close()
 			return err
 		}
-		otherPath, err := resolveTranscriptPath(profileRoot, otherID, relative)
+		if resolvedRoot == "" {
+			resolvedRoot, err = filepath.EvalSymlinks(root)
+			if err != nil {
+				_ = rows.Close()
+				return fmt.Errorf("resolve session profile root: %w", err)
+			}
+		}
+		otherPath, otherResolved, err := resolveTranscriptPathWithResolvedRoot(root, resolvedRoot, otherID, relative)
 		if err != nil {
 			_ = rows.Close()
 			return fmt.Errorf("resolve existing transcript identity %s: %w", otherID, err)
 		}
-		existing = append(existing, existingIdentityPath{id: otherID, path: otherPath})
+		existing = append(existing, existingIdentityPath{id: otherID, path: otherPath, resolved: otherResolved})
 	}
 	if err := rows.Err(); err != nil {
 		_ = rows.Close()
@@ -490,12 +702,11 @@ func ensureTranscriptPathAvailable(ctx context.Context, tx *sql.Tx, profileRoot,
 	// Check path aliases before file identity. They also conflict when neither
 	// transcript exists yet, as is common while reserving a fresh session.
 	for _, other := range existing {
-		otherResolved, err := resolveIdentityPath(other.path)
-		if err != nil {
-			return fmt.Errorf("resolve existing transcript identity %s: %w", other.id, err)
-		}
-		if candidatePath == otherResolved || sameCaseInsensitivePath(candidatePath, otherResolved) {
+		if candidateResolvedPath == other.resolved {
 			return fmt.Errorf("%w: %s and %s", ErrTranscriptPathConflict, id, other.id)
+		}
+		if sameCaseInsensitivePath(candidateResolvedPath, other.resolved) {
+			return fmt.Errorf("%w: case-only paths are conservatively treated as aliases on macOS/Windows (%s and %s); macOS volume case sensitivity can vary", ErrTranscriptPathConflict, id, other.id)
 		}
 	}
 	candidateInfo, candidateErr := os.Stat(transcriptPath)
@@ -538,14 +749,29 @@ func ensureTranscriptPathAvailable(ctx context.Context, tx *sql.Tx, profileRoot,
 	return nil
 }
 
+func resolveTranscriptPathWithResolvedRoot(root, resolvedRoot, id, relative string) (string, string, error) {
+	clean := filepath.Clean(filepath.FromSlash(relative))
+	if clean == "." || clean == ".." || filepath.IsAbs(clean) || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", "", errors.New("session identity contains an invalid relative path")
+	}
+	path := filepath.Join(root, clean)
+	if err := validateCandidateUnderResolvedRoot(root, resolvedRoot, Candidate{ID: id, Path: path}); err != nil {
+		return "", "", err
+	}
+	_, resolved, err := relativeTranscriptPathAfterValidation(root, resolvedRoot, path)
+	if err != nil {
+		return "", "", err
+	}
+	return path, resolved, nil
+}
+
 // CheckTranscriptPathUnique verifies that an existing identity still has an
 // exclusive physical claim to its transcript. Runtime resume uses this to
 // keep legacy duplicate identities from opening the same conversation under
 // multiple IDs. The transaction acquires SQLite's writer reservation before
 // comparing rows so the result is serialized with import/reserve mutations.
 func (s *Store) CheckTranscriptPathUnique(ctx context.Context, id, transcriptPath string) error {
-	relativePath, err := relativeTranscriptPath(s.profileRoot, id, transcriptPath)
-	if err != nil {
+	if err := validateCandidate(s.profileRoot, Candidate{ID: id, Path: transcriptPath}); err != nil {
 		return err
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -562,10 +788,14 @@ func (s *Store) CheckTranscriptPathUnique(ctx context.Context, id, transcriptPat
 	} else if err != nil {
 		return err
 	}
+	relativePath, candidatePath, err := relativeTranscriptPathWithIdentity(s.profileRoot, id, transcriptPath)
+	if err != nil {
+		return err
+	}
 	if storedRelative != relativePath {
 		return fmt.Errorf("%w: %s", ErrPathChanged, id)
 	}
-	if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, id, transcriptPath); err != nil {
+	if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, id, transcriptPath, candidatePath); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -593,22 +823,24 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
-func (s *Store) Import(ctx context.Context, previewRoot string, candidates []Candidate) error {
+func (s *Store) Import(ctx context.Context, sessionDir string, candidates []Candidate) error {
 	if s.profileRoot == "" {
-		if err := s.bindImportProfileRoot(previewRoot); err != nil {
+		if err := s.bindImportProfileRoot(sessionDir); err != nil {
 			return err
 		}
 	}
-	if err := normalizeImportPathRoot(s.profileRoot, previewRoot); err != nil {
+	if err := normalizeImportPathRoot(s.profileRoot, sessionDir); err != nil {
 		return err
 	}
-	return s.importCandidates(ctx, previewRoot, candidates, false, false, false)
+	return s.importCandidates(ctx, sessionDir, candidates, false, false, false)
 }
 
 // ImportLegacyCatalog migrates the host's bounded legacy catalog without
 // overwriting existing identity metadata. Missing transcripts are retained as
-// visible missing rows so migration never silently drops a legacy entry.
-func (s *Store) ImportLegacyCatalog(ctx context.Context, previewRoot string, candidates []Candidate) error {
+// visible missing rows so migration never silently drops a legacy entry. A
+// matching terminal identity is preserved as already processed, allowing an
+// interrupted host-catalog cleanup to leave the rest of the import usable.
+func (s *Store) ImportLegacyCatalog(ctx context.Context, sessionDir string, candidates []Candidate) error {
 	if len(candidates) > 50 {
 		return errors.New("legacy catalog contains too many sessions")
 	}
@@ -618,14 +850,14 @@ func (s *Store) ImportLegacyCatalog(ctx context.Context, previewRoot string, can
 		}
 	}
 	if s.profileRoot == "" {
-		if err := s.bindImportProfileRoot(previewRoot); err != nil {
+		if err := s.bindImportProfileRoot(sessionDir); err != nil {
 			return err
 		}
 	}
-	if err := normalizeImportPathRoot(s.profileRoot, previewRoot); err != nil {
+	if err := normalizeImportPathRoot(s.profileRoot, sessionDir); err != nil {
 		return err
 	}
-	return s.importCandidates(ctx, previewRoot, candidates, false, true, true)
+	return s.importCandidates(ctx, sessionDir, candidates, false, true, true)
 }
 
 func normalizeImportPathRoot(profileRoot, transcriptRoot string) error {
@@ -652,18 +884,18 @@ func normalizeImportPathRoot(profileRoot, transcriptRoot string) error {
 	return nil
 }
 
-func (s *Store) bindImportProfileRoot(previewRoot string) error {
-	root := previewRoot
-	if filepath.Base(filepath.Clean(previewRoot)) == "sessions" {
-		root = filepath.Dir(previewRoot)
+func (s *Store) bindImportProfileRoot(sessionDir string) error {
+	root := sessionDir
+	if filepath.Base(filepath.Clean(sessionDir)) == "sessions" {
+		root = filepath.Dir(sessionDir)
 	}
 	return s.bindProfileRoot(root)
 }
 
-func (s *Store) importCandidates(ctx context.Context, previewRoot string, candidates []Candidate, requirePresent, preserveMissing, preserveExisting bool) error {
-	root, err := filepath.Abs(previewRoot)
-	if err != nil || strings.TrimSpace(previewRoot) == "" {
-		return errors.New("preview root is invalid")
+func (s *Store) importCandidates(ctx context.Context, sessionDir string, candidates []Candidate, requirePresent, preserveMissing, preserveExisting bool) error {
+	root, err := filepath.Abs(sessionDir)
+	if err != nil || strings.TrimSpace(sessionDir) == "" {
+		return errors.New("session directory is invalid")
 	}
 	prepared := make([]Record, 0, len(candidates))
 	seenIDs := make(map[string]bool, len(candidates))
@@ -716,16 +948,16 @@ func (s *Store) importCandidates(ctx context.Context, previewRoot string, candid
 			if incoming.Missing && !preserveMissing {
 				continue
 			}
-			if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, incoming.ID, incoming.Path); err != nil {
+			relativePath, candidatePath, err := relativeTranscriptPathWithIdentity(s.profileRoot, incoming.ID, incoming.Path)
+			if err != nil {
+				return err
+			}
+			if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, incoming.ID, incoming.Path, candidatePath); err != nil {
 				return err
 			}
 			source := TitleFallback
 			if incoming.Title != "" {
 				source = TitleLegacyUnknown
-			}
-			relativePath, err := relativeTranscriptPath(s.profileRoot, incoming.ID, incoming.Path)
-			if err != nil {
-				return err
 			}
 			_, err = tx.ExecContext(ctx, `INSERT INTO sessions
 				(id, relative_path, workspace_root, title, title_source, title_revision, position, state, created_at_ms, updated_at_ms)
@@ -746,11 +978,15 @@ func (s *Store) importCandidates(ctx context.Context, previewRoot string, candid
 		if current.Path != incoming.Path {
 			return fmt.Errorf("%w: %s", ErrPathChanged, incoming.ID)
 		}
+		if preserveExisting {
+			// Legacy catalog migration is idempotent and never revives or mutates
+			// an existing identity. A stale JSON row left after a crash must not
+			// make the rest of the import fail when its identity is already
+			// deleting or tombstoned.
+			continue
+		}
 		if current.State == StateDeleting || current.State == StateDeleted {
 			return fmt.Errorf("%w: %s", ErrSessionStateConflict, incoming.ID)
-		}
-		if preserveExisting {
-			continue
 		}
 		// Import is registration/reconciliation, never a title command. The
 		// catalog can be stale after a manual rename or automatic generation.
@@ -790,29 +1026,36 @@ func validateCandidate(root string, candidate Candidate) error {
 // resolve the same root a second time. The parent check must remain separate:
 // a parent can escape the profile even if the final file links back inside.
 func validateCandidateWithResolvedRoot(root string, candidate Candidate) (string, error) {
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", fmt.Errorf("resolve session root: %w", err)
+	}
+	if err := validateCandidateUnderResolvedRoot(root, resolvedRoot, candidate); err != nil {
+		return "", err
+	}
+	return resolvedRoot, nil
+}
+
+func validateCandidateUnderResolvedRoot(root, resolvedRoot string, candidate Candidate) error {
 	if candidate.ID == "" || len(candidate.ID) > 128 || candidate.Position < 0 {
-		return "", errors.New("invalid session identity candidate")
+		return errors.New("invalid session identity candidate")
 	}
 	for _, c := range []byte(candidate.ID) {
 		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
 			(c >= '0' && c <= '9') || c == '-' || c == '_') {
-			return "", errors.New("invalid session identity candidate")
+			return errors.New("invalid session identity candidate")
 		}
 	}
 	if !filepath.IsAbs(candidate.Path) || filepath.Ext(candidate.Path) != ".jsonl" {
-		return "", errors.New("transcript path is invalid")
+		return errors.New("transcript path is invalid")
 	}
 	rel, err := filepath.Rel(root, filepath.Clean(candidate.Path))
 	if err != nil || rel == ".." || filepath.IsAbs(rel) || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", errors.New("transcript path escapes preview root")
+		return errors.New("transcript path escapes session root")
 	}
 	// A lexical relative path is not enough: root/sessions may be a symlink
 	// outside the profile. Resolve the nearest existing parent so even a
 	// missing transcript below a linked directory cannot be imported later.
-	resolvedRoot, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		return "", fmt.Errorf("resolve preview root: %w", err)
-	}
 	parent := filepath.Dir(candidate.Path)
 	for {
 		resolvedParent, resolveErr := filepath.EvalSymlinks(parent)
@@ -820,19 +1063,19 @@ func validateCandidateWithResolvedRoot(root string, candidate Candidate) (string
 			resolvedRel, relErr := filepath.Rel(resolvedRoot, resolvedParent)
 			if relErr != nil || resolvedRel == ".." || filepath.IsAbs(resolvedRel) ||
 				strings.HasPrefix(resolvedRel, ".."+string(filepath.Separator)) {
-				return "", errors.New("transcript path escapes preview root through a symlink")
+				return errors.New("transcript path escapes session root through a symlink")
 			}
 			break
 		}
 		if !errors.Is(resolveErr, os.ErrNotExist) {
-			return "", fmt.Errorf("resolve transcript parent: %w", resolveErr)
+			return fmt.Errorf("resolve transcript parent: %w", resolveErr)
 		}
 		if parent == root {
-			return "", fmt.Errorf("resolve transcript parent: %w", resolveErr)
+			return fmt.Errorf("resolve transcript parent: %w", resolveErr)
 		}
 		parent = filepath.Dir(parent)
 	}
-	return resolvedRoot, nil
+	return nil
 }
 
 func (s *Store) List(ctx context.Context) ([]Record, error) {
@@ -885,6 +1128,52 @@ func (s *Store) ListPendingDeletes(ctx context.Context) ([]PendingDelete, error)
 	return deletions, nil
 }
 
+// ListPendingDeletesPage keeps interrupted deletion recovery visible without
+// turning a large failure backlog into one unbounded response. Schema 6's
+// partial ID index lets these keyset pages avoid sorting unrelated sessions.
+func (s *Store) ListPendingDeletesPage(ctx context.Context, limit int, cursor *PendingDeleteCursor) (PendingDeletePage, error) {
+	if limit < 1 || limit > MaxPendingDeletePageSize {
+		return PendingDeletePage{}, fmt.Errorf("pending deletion page limit must be between 1 and %d", MaxPendingDeletePageSize)
+	}
+	if cursor != nil && !sessionpath.ValidID(cursor.ID) {
+		return PendingDeletePage{}, errors.New("pending deletion page cursor is invalid")
+	}
+
+	query := `SELECT id, title FROM sessions WHERE state='deleting'`
+	args := make([]any, 0, 4)
+	if cursor != nil {
+		query += ` AND id>?`
+		args = append(args, cursor.ID)
+	}
+	query += ` ORDER BY id LIMIT ?`
+	args = append(args, limit+1)
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return PendingDeletePage{}, err
+	}
+	defer rows.Close()
+	page := PendingDeletePage{Sessions: make([]PendingDelete, 0, limit)}
+	for rows.Next() {
+		var pending PendingDelete
+		if err := rows.Scan(&pending.ID, &pending.Title); err != nil {
+			return PendingDeletePage{}, err
+		}
+		if len(page.Sessions) == limit {
+			last := page.Sessions[len(page.Sessions)-1]
+			page.NextCursor = &PendingDeleteCursor{ID: last.ID}
+			break
+		}
+		if !ValidWorkbenchCatalogTitle(pending.Title) {
+			pending.Title = ""
+		}
+		page.Sessions = append(page.Sessions, pending)
+	}
+	if err := rows.Err(); err != nil {
+		return PendingDeletePage{}, err
+	}
+	return page, nil
+}
+
 type identityScanner interface{ Scan(...any) error }
 
 func scanIdentityRecord(scanner identityScanner, profileRoot string) (Record, error) {
@@ -920,24 +1209,32 @@ func (s *Store) ListVisible(ctx context.Context, limit int, cursor *Cursor, work
 	if limit < 1 || limit > MaxVisiblePageSize {
 		return Page{}, fmt.Errorf("session page limit must be between 1 and %d", MaxVisiblePageSize)
 	}
-	if cursor != nil && (cursor.Position < 0 || cursor.ID == "" ||
+	if cursor != nil && (cursor.Position < 0 || cursor.ID == "" || cursor.Total < 0 || cursor.Total > MaxVisibleSnapshotSize ||
 		(cursor.SnapshotID != "" && !validSnapshotID(cursor.SnapshotID))) {
 		return Page{}, errors.New("session page cursor is invalid")
 	}
-	workspaceRoot = strings.TrimSpace(workspaceRoot)
+	if strings.TrimSpace(workspaceRoot) == "" {
+		workspaceRoot = ""
+	}
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return Page{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	var total int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions
-		WHERE state NOT IN ('deleting','deleted') AND (?='' OR workspace_root=?)`, workspaceRoot, workspaceRoot).Scan(&total); err != nil {
-		return Page{}, err
-	}
-	snapshotID, err := visibleSnapshotID(ctx, tx, workspaceRoot)
+	snapshotID, total, err := visibleSnapshotID(ctx, tx, workspaceRoot)
 	if err != nil {
 		return Page{}, err
+	}
+	if total < 0 {
+		if cursor != nil && cursor.Total > 0 && cursor.SnapshotID != "" {
+			total = cursor.Total
+		} else if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions
+			WHERE state NOT IN ('deleting','deleted') AND (?='' OR workspace_root=?)`, workspaceRoot, workspaceRoot).Scan(&total); err != nil {
+			return Page{}, err
+		}
+	}
+	if total > MaxVisibleSnapshotSize {
+		return Page{}, fmt.Errorf("session directory exceeds the maximum snapshot size of %d", MaxVisibleSnapshotSize)
 	}
 	if cursor != nil && cursor.SnapshotID != "" && cursor.SnapshotID != snapshotID {
 		return Page{}, ErrDirectoryChanged
@@ -965,7 +1262,7 @@ func (s *Store) ListVisible(ctx context.Context, limit int, cursor *Cursor, work
 		}
 		if len(page.Records) == limit {
 			last := page.Records[len(page.Records)-1]
-			page.NextCursor = &Cursor{Position: last.Position, ID: last.ID, SnapshotID: snapshotID}
+			page.NextCursor = &Cursor{Position: last.Position, ID: last.ID, SnapshotID: snapshotID, Total: total}
 			break
 		}
 		page.Records = append(page.Records, record)
@@ -983,19 +1280,25 @@ func (s *Store) ListVisible(ctx context.Context, limit int, cursor *Cursor, work
 }
 
 // ListVisibleSnapshot reads the complete bounded visible directory and its
-// structural snapshot ID in one SQLite read transaction. It is intended for
-// host shadow comparison, where making one full scan per 200-row page would
-// repeatedly recount and rehash the same directory.
+// structural snapshot ID in one SQLite read transaction. Its ID uses the same
+// revision/hash rules as ListVisible so the host can bind its shadow audit to
+// subsequent page cursors.
 func (s *Store) ListVisibleSnapshot(ctx context.Context, limit int, workspaceRoot string) (Page, error) {
 	if limit < 1 || limit > MaxVisibleSnapshotSize {
 		return Page{}, fmt.Errorf("session directory snapshot limit must be between 1 and %d", MaxVisibleSnapshotSize)
 	}
-	workspaceRoot = strings.TrimSpace(workspaceRoot)
+	if strings.TrimSpace(workspaceRoot) == "" {
+		workspaceRoot = ""
+	}
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return Page{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	snapshotID, _, err := visibleSnapshotID(ctx, tx, workspaceRoot)
+	if err != nil {
+		return Page{}, err
+	}
 	rows, err := tx.QueryContext(ctx, `SELECT id, relative_path, workspace_root, title, title_source,
 		title_revision, position, state, created_at_ms, updated_at_ms FROM sessions
 		WHERE state NOT IN ('deleting','deleted') AND (?='' OR workspace_root=?)
@@ -1003,7 +1306,6 @@ func (s *Store) ListVisibleSnapshot(ctx context.Context, limit int, workspaceRoo
 	if err != nil {
 		return Page{}, err
 	}
-	hasher := newVisibleSnapshotHasher()
 	page := Page{Records: make([]Record, 0, limit)}
 	for rows.Next() {
 		if len(page.Records) == limit {
@@ -1025,7 +1327,6 @@ func (s *Store) ListVisibleSnapshot(ctx context.Context, limit int, workspaceRoo
 			return Page{}, err
 		}
 		record.Missing = record.State == StateMissing
-		hasher.add(record.ID, relativePath, record.WorkspaceRoot, int64(record.Position), record.State)
 		page.Records = append(page.Records, record)
 	}
 	if err := rows.Err(); err != nil {
@@ -1036,39 +1337,99 @@ func (s *Store) ListVisibleSnapshot(ctx context.Context, limit int, workspaceRoo
 		return Page{}, err
 	}
 	page.Total = len(page.Records)
-	page.SnapshotID = hasher.sum()
+	page.SnapshotID = snapshotID
 	if err := tx.Commit(); err != nil {
 		return Page{}, err
 	}
 	return page, nil
 }
 
-func visibleSnapshotID(ctx context.Context, tx *sql.Tx, workspaceRoot string) (string, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT id, relative_path, workspace_root,
+func visibleSnapshotID(ctx context.Context, tx *sql.Tx, workspaceRoot string) (string, int, error) {
+	var generation string
+	var revision int64
+	var revisionAvailable bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (
+		SELECT 1 FROM sqlite_master WHERE type='table' AND name=?
+	)`, visibleStructureRevisionTable).Scan(&revisionAvailable); err != nil {
+		return "", 0, err
+	}
+	if revisionAvailable {
+		for _, trigger := range visibleStructureRevisionTriggers {
+			var exists bool
+			if err := tx.QueryRowContext(ctx, `SELECT EXISTS (
+				SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?
+			)`, trigger.name).Scan(&exists); err != nil {
+				return "", 0, err
+			}
+			if !exists {
+				revisionAvailable = false
+				break
+			}
+		}
+	}
+	if revisionAvailable {
+		err := tx.QueryRowContext(ctx, `SELECT generation, revision FROM session_directory_revision WHERE singleton=1`).Scan(&generation, &revision)
+		if err != nil {
+			revisionAvailable = false
+		}
+	}
+	if revisionAvailable {
+		h := sha256.New()
+		_, _ = h.Write([]byte("reasonix-session-directory-revision-v1\x00"))
+		writeSnapshotPart(h, generation)
+		var revisionBytes [8]byte
+		binary.BigEndian.PutUint64(revisionBytes[:], uint64(revision))
+		_, _ = h.Write(revisionBytes[:])
+		writeSnapshotPart(h, workspaceRoot)
+		return hex.EncodeToString(h.Sum(nil)), -1, nil
+	}
+	var hasCoveringIndex bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (
+		SELECT 1 FROM sqlite_master WHERE type='index' AND name=?
+	)`, visibleSnapshotIndex).Scan(&hasCoveringIndex); err != nil {
+		return "", 0, err
+	}
+	query := `SELECT id, relative_path, workspace_root,
 		position, state FROM sessions
 		WHERE state NOT IN ('deleting','deleted') AND (?='' OR workspace_root=?)
-		ORDER BY position, id`, workspaceRoot, workspaceRoot)
+		ORDER BY position, id`
+	if hasCoveringIndex {
+		query = `SELECT id, relative_path, workspace_root, position, state
+			FROM sessions INDEXED BY sessions_visible_structure_snapshot
+			WHERE state NOT IN ('deleting','deleted') AND (?='' OR workspace_root=?)
+			ORDER BY position, id`
+	}
+	rows, err := tx.QueryContext(ctx, query, workspaceRoot, workspaceRoot)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	hasher := newVisibleSnapshotHasher()
+	total := 0
 	for rows.Next() {
 		var id, relativePath, workspace, state string
 		var position int64
 		if err := rows.Scan(&id, &relativePath, &workspace, &position, &state); err != nil {
 			_ = rows.Close()
-			return "", err
+			return "", 0, err
 		}
 		hasher.add(id, relativePath, workspace, position, SessionState(state))
+		total++
 	}
 	if err := rows.Err(); err != nil {
 		_ = rows.Close()
-		return "", err
+		return "", 0, err
 	}
 	if err := rows.Close(); err != nil {
-		return "", err
+		return "", 0, err
 	}
-	return hasher.sum(), nil
+	return hasher.sum(), total, nil
+}
+
+func writeSnapshotPart(h hash.Hash, value string) {
+	var size [8]byte
+	binary.BigEndian.PutUint64(size[:], uint64(len(value)))
+	_, _ = h.Write(size[:])
+	_, _ = h.Write([]byte(value))
 }
 
 type visibleSnapshotHasher struct{ h hash.Hash }
@@ -1148,7 +1509,11 @@ func (s *Store) Reserve(ctx context.Context, sessionDir string, candidate Candid
 	if !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, candidate.ID, candidate.Path); err != nil {
+	relativePath, candidatePath, err := relativeTranscriptPathWithIdentity(s.profileRoot, candidate.ID, candidate.Path)
+	if err != nil {
+		return err
+	}
+	if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, candidate.ID, candidate.Path, candidatePath); err != nil {
 		return err
 	}
 	var position int
@@ -1156,10 +1521,6 @@ func (s *Store) Reserve(ctx context.Context, sessionDir string, candidate Candid
 		return err
 	}
 	now := time.Now().UnixMilli()
-	relativePath, err := relativeTranscriptPath(s.profileRoot, candidate.ID, candidate.Path)
-	if err != nil {
-		return err
-	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO sessions
 		(id, relative_path, workspace_root, title, title_source, title_revision, position, state, created_at_ms, updated_at_ms)
 		VALUES (?, ?, ?, ?, 'fallback', 0, ?, 'reserved', ?, ?)`, candidate.ID, relativePath,
@@ -1173,8 +1534,7 @@ func (s *Store) Reserve(ctx context.Context, sessionDir string, candidate Candid
 // MarkReady advances a reserved identity after a transcript has been observed
 // and successfully loaded. Repeating it for a ready record is harmless.
 func (s *Store) MarkReady(ctx context.Context, id, transcriptPath string) error {
-	relativePath, err := relativeTranscriptPath(s.profileRoot, id, transcriptPath)
-	if err != nil {
+	if err := validateCandidate(s.profileRoot, Candidate{ID: id, Path: transcriptPath}); err != nil {
 		return err
 	}
 	info, err := os.Lstat(transcriptPath)
@@ -1205,6 +1565,10 @@ func (s *Store) MarkReady(ctx context.Context, id, transcriptPath string) error 
 	if err != nil {
 		return err
 	}
+	relativePath, candidatePath, err := relativeTranscriptPathWithIdentity(s.profileRoot, id, transcriptPath)
+	if err != nil {
+		return err
+	}
 	if storedRelative != relativePath {
 		return fmt.Errorf("%w: %s", ErrPathChanged, id)
 	}
@@ -1214,7 +1578,7 @@ func (s *Store) MarkReady(ctx context.Context, id, transcriptPath string) error 
 	if state != StateReserved {
 		return fmt.Errorf("%w: %s cannot become ready from %s", ErrSessionStateConflict, id, state)
 	}
-	if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, id, transcriptPath); err != nil {
+	if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, id, transcriptPath, candidatePath); err != nil {
 		return err
 	}
 	result, err := tx.ExecContext(ctx, `UPDATE sessions SET state='ready', updated_at_ms=?

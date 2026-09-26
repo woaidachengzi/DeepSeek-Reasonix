@@ -1,7 +1,10 @@
 package agent
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -49,6 +52,21 @@ func probeSessionEventLogWithLimits(sessionPath string, limits sessionReplayLimi
 	}
 	if !sessionEventSidecarsFit(sessionPath) {
 		return sessionEventLogProbe{}, nil
+	}
+	if data, active, err := sqliteDAGEventBytes(context.Background(), sessionPath, limits); err != nil {
+		return sessionEventLogProbe{}, err
+	} else if active {
+		var header struct {
+			SchemaVersion int    `json:"schema_version"`
+			Type          string `json:"type"`
+		}
+		if err := json.NewDecoder(io.LimitReader(bytes.NewReader(data), sessionEventProbeMaxBytes)).Decode(&header); err != nil {
+			return sessionEventLogProbe{}, err
+		}
+		if header.SchemaVersion != sessionDAGSchemaVersion || header.Type != sessionDAGTypeLog {
+			return sessionEventLogProbe{}, errors.New("SQLite session event stream has an invalid log header")
+		}
+		return sessionEventLogProbe{native: true, dag: true, schemaVersion: header.SchemaVersion, size: int64(len(data))}, nil
 	}
 	info, err := os.Stat(path)
 	if err != nil {

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -79,6 +80,10 @@ type sessionDAGState struct {
 	lastGoodEnd     int64
 	damaged         bool
 	holes           int // unreadable lines skipped between good entries
+	sqliteBacked    bool
+	sqliteBypass    bool
+	replayData      []byte
+	replayDataSet   bool
 }
 
 func newSessionDAGState(path string) *sessionDAGState {
@@ -99,11 +104,31 @@ func newSessionDAGState(path string) *sessionDAGState {
 // that fails to parse (damaged=true, lastGoodEnd set); an unsupported schema
 // or entry type is a hard error because a newer writer owns the log.
 func replaySessionDAG(ctx context.Context, path string, limits sessionReplayLimits) (*sessionDAGState, error) {
+	return replaySessionDAGMode(ctx, path, limits, false)
+}
+
+func replaySessionDAGFile(ctx context.Context, path string, limits sessionReplayLimits) (*sessionDAGState, error) {
+	return replaySessionDAGMode(ctx, path, limits, true)
+}
+
+func replaySessionDAGBytes(ctx context.Context, path string, data []byte, limits sessionReplayLimits, sqliteBacked bool) (*sessionDAGState, error) {
 	st := newSessionDAGState(path)
+	st.replayData = append([]byte(nil), data...)
+	st.replayDataSet = true
+	st.sqliteBacked = sqliteBacked
 	if err := st.replayFrom(ctx, 0, limits); err != nil {
 		return st, err
 	}
-	for attempt := 0; st.damaged && attempt < sessionDAGTornRetries; attempt++ {
+	return st, nil
+}
+
+func replaySessionDAGMode(ctx context.Context, path string, limits sessionReplayLimits, bypassSQLite bool) (*sessionDAGState, error) {
+	st := newSessionDAGState(path)
+	st.sqliteBypass = bypassSQLite
+	if err := st.replayFrom(ctx, 0, limits); err != nil {
+		return st, err
+	}
+	for attempt := 0; st.damaged && !st.sqliteBacked && attempt < sessionDAGTornRetries; attempt++ {
 		time.Sleep(sessionDAGTornRetryDelay)
 		info, err := os.Stat(path)
 		if err != nil || info.Size() <= st.size {
@@ -123,25 +148,53 @@ func (st *sessionDAGState) replayFrom(ctx context.Context, from int64, limits se
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	f, err := os.Open(st.path)
-	if err != nil {
-		return err
+	var source io.ReadSeeker
+	var sqliteData []byte
+	active := false
+	provided := false
+	if st.replayDataSet {
+		data := st.replayData
+		st.replayData = nil
+		st.replayDataSet = false
+		source = bytes.NewReader(data)
+		from = 0
+		st.size = int64(len(data))
+		provided = true
+	} else if !st.sqliteBypass {
+		var err error
+		sqliteData, active, err = importSQLiteProjection(ctx, st.path, limits)
+		if err != nil {
+			return err
+		}
 	}
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil {
-		return err
+	if active {
+		*st = *newSessionDAGState(st.path)
+		st.sqliteBacked = true
+		source = bytes.NewReader(sqliteData)
+		from = 0 // SQLite sequence numbers replace byte offsets for managed Preview.
+		st.size = int64(len(sqliteData))
+	} else if !provided {
+		f, err := os.Open(st.path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		info, err := f.Stat()
+		if err != nil {
+			return err
+		}
+		st.size = info.Size()
+		source = f
 	}
-	st.size = info.Size()
 	if st.size > limits.maxBytes {
 		return sessionReplayLimitError(st.path, "encoded_bytes", st.size, limits.maxBytes)
 	}
 	if from > 0 {
-		if _, err := f.Seek(from, io.SeekStart); err != nil {
+		if _, err := source.Seek(from, io.SeekStart); err != nil {
 			return err
 		}
 	}
-	limited := &io.LimitedReader{R: &contextReader{ctx: ctx, reader: f}, N: limits.maxBytes + 1 - from}
+	limited := &io.LimitedReader{R: &contextReader{ctx: ctx, reader: source}, N: limits.maxBytes + 1 - from}
 	dec := json.NewDecoder(limited)
 	for {
 		if err := ctx.Err(); err != nil {
@@ -158,6 +211,9 @@ func (st *sessionDAGState) replayFrom(ctx context.Context, from int64, limits se
 			if errors.Is(err, io.EOF) {
 				return nil
 			}
+			if st.sqliteBacked {
+				return fmt.Errorf("decode SQLite session event stream: %w", err)
+			}
 			return st.resumePastTornLine(ctx, limits)
 		}
 		if e.SchemaVersion != sessionDAGSchemaVersion {
@@ -172,6 +228,9 @@ func (st *sessionDAGState) replayFrom(ctx context.Context, from int64, limits se
 			return err
 		}
 		if !ok {
+			if st.sqliteBacked {
+				return fmt.Errorf("SQLite session event stream contains an invalid DAG entry")
+			}
 			st.damaged = true
 			return nil
 		}

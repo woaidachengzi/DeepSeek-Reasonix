@@ -16,13 +16,18 @@ export interface WorkbenchProjectFolder {
 }
 
 export function workbenchProjectKey(root?: string, platform = ""): string {
-  const trimmed = (root ?? "").trim();
-  const key = platform === "windows"
-    ? trimmed.replace(/[/\\]+$/, "")
-    : trimmed.replace(/\/+$/, "");
-  return platform === "windows"
-    ? (key || (trimmed ? trimmed[0] : "")).replace(/\//g, "\\").toLowerCase()
-    : key || (trimmed ? trimmed[0] : "");
+  const path = root ?? "";
+  if (!path.trim()) return "";
+  if (platform === "windows") {
+    const normalized = path.replace(/\//g, "\\");
+    const hasTrailingSeparator = normalized.endsWith("\\");
+    const key = normalized.replace(/\\+$/, "");
+    if (!key) return path[0] === "/" ? "\\" : path[0];
+    const isDriveDesignator = /^[a-z]:$/i.test(key);
+    return `${key}${hasTrailingSeparator && isDriveDesignator ? "\\" : ""}`.toLowerCase();
+  }
+  const key = path.replace(/\/+$/, "");
+  return key || path[0];
 }
 
 function projectPathSegments(root: string, platform: string): string[] {
@@ -45,7 +50,7 @@ export function groupWorkbenchSessions(
 ): WorkbenchProjectGroup[] {
   const groups = new Map<string, WorkbenchProjectGroup>();
   for (const folder of folders) {
-    const root = folder.root.trim();
+    const root = folder.root;
     const key = workbenchProjectKey(root, platform);
     if (!key || groups.has(key)) continue;
     const title = folder.title?.trim();
@@ -59,7 +64,8 @@ export function groupWorkbenchSessions(
     });
   }
   for (const session of sessions) {
-    const root = (session.workspaceRoot ?? "").trim();
+    const rawRoot = session.workspaceRoot ?? "";
+    const root = rawRoot.trim() ? rawRoot : "";
     const key = workbenchProjectKey(root, platform);
     let group = groups.get(key);
     if (!group) {

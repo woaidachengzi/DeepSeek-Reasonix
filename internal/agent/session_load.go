@@ -69,6 +69,9 @@ func loadSessionTranscript(ctx context.Context, sessionPath string, limits sessi
 		}
 		headID := st.selectedHead()
 		msgs, times := st.materialize(headID)
+		if st.sqliteBacked {
+			repairSQLiteCheckpointProjection(ctx, sessionPath, msgs)
+		}
 		hasher.addAll(msgs)
 		return sessionLoadResult{
 			msgs: msgs, times: times, fromEvents: true, damaged: st.damaged, dag: true,

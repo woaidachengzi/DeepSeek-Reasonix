@@ -16,6 +16,7 @@ import (
 )
 
 const offlineSnapshotVersion = 1
+const regenerableProfileCacheDirectory = "cache"
 
 // SnapshotFile is one verified member of an offline profile backup. Paths are
 // relative to the snapshot directory, never absolute restore destinations.
@@ -36,13 +37,14 @@ type SnapshotManifest struct {
 	Files         []SnapshotFile `json:"files"`
 }
 
-// CreateOfflineSnapshot copies the entire Preview profile plus its separate,
-// host-owned workbench catalog into a new private directory outside the profile. The
-// caller must first stop all profile writers: existing binaries do not honor
-// a common profile lock, so this function intentionally does not claim that a
-// lock taken here would make a running profile consistent. It never removes or
-// changes source files. On failure a partial directory is left without a
-// manifest and must not be used for recovery.
+// CreateOfflineSnapshot copies the Preview profile, except its regenerable
+// top-level cache directory, plus its separate host-owned workbench catalog
+// into a new private directory outside the profile. The caller must first stop
+// all profile writers: existing binaries do not honor a common profile lock,
+// so this function intentionally does not claim that a lock taken here would
+// make a running profile consistent. It never removes or changes source files.
+// On failure a partial directory is left without a manifest and must not be
+// used for recovery.
 func CreateOfflineSnapshot(ctx context.Context, profileRoot, catalogPath, destinationParent string) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
@@ -97,6 +99,9 @@ func CreateOfflineSnapshot(ctx context.Context, profileRoot, catalogPath, destin
 		}
 		if entry.Type()&os.ModeSymlink != 0 {
 			return fmt.Errorf("snapshot refuses symlink: %s", path)
+		}
+		if entry.IsDir() && filepath.Clean(rel) == regenerableProfileCacheDirectory {
+			return filepath.SkipDir
 		}
 		dest := filepath.Join(profileCopy, rel)
 		if entry.IsDir() {
@@ -242,16 +247,8 @@ func VerifyOfflineSnapshot(ctx context.Context, snapshotDir string) (SnapshotMan
 		if err := rejectSymlinkComponents(root, rel); err != nil {
 			return SnapshotManifest{}, err
 		}
-		info, err := os.Lstat(path)
-		if err != nil || !info.Mode().IsRegular() || info.Size() != item.Size {
-			return SnapshotManifest{}, fmt.Errorf("snapshot member missing or changed: %s", item.Path)
-		}
-		if err := requirePrivateSnapshotMode(item.Path, info); err != nil {
+		if err := verifySnapshotMember(ctx, path, item); err != nil {
 			return SnapshotManifest{}, err
-		}
-		digest, err := fileSHA256(ctx, path)
-		if err != nil || digest != item.SHA256 {
-			return SnapshotManifest{}, fmt.Errorf("snapshot member hash mismatch: %s", item.Path)
 		}
 	}
 	if !seen[filepath.FromSlash("catalog/workbench-sessions.json")] {
@@ -325,8 +322,8 @@ func requirePrivateSnapshotMode(path string, info os.FileInfo) error {
 
 // StageOfflineSnapshot proves a snapshot can be restored by copying it into a
 // newly allocated directory. It never overwrites a live profile or catalog.
-// The result contains profile/ and catalog/workbench-sessions.json, ready for
-// inspection before any separately authorized recovery operation.
+// The result contains the non-cache profile files and catalog/workbench-sessions.json,
+// ready for inspection before any separately authorized recovery operation.
 func StageOfflineSnapshot(ctx context.Context, snapshotDir, destinationParent string) (string, error) {
 	manifest, err := VerifyOfflineSnapshot(ctx, snapshotDir)
 	if err != nil {
@@ -372,6 +369,9 @@ func StageOfflineSnapshot(ctx context.Context, snapshotDir, destinationParent st
 		copied, err := copyVerifiedSnapshotFile(ctx, filepath.Join(source, rel), copyPath)
 		if err != nil || copied.Size != item.Size || copied.SHA256 != item.SHA256 {
 			return staged, fmt.Errorf("incomplete recovery staging %s: member %s changed", staged, item.Path)
+		}
+		if err := verifySnapshotMember(ctx, copyPath, item); err != nil {
+			return staged, fmt.Errorf("incomplete recovery staging %s: %w", staged, err)
 		}
 	}
 	return staged, nil
@@ -476,6 +476,45 @@ func copyVerifiedSnapshotFile(ctx context.Context, source, destination string) (
 		return SnapshotFile{}, fmt.Errorf("snapshot source changed during verification: %s", source)
 	}
 	return SnapshotFile{Size: written, SHA256: copyHash}, nil
+}
+
+// verifySnapshotMember checks the bytes actually stored at path and confirms
+// the file was not replaced or resized while it was read. Snapshot creation
+// runs this once for every member in its final manifest pass; restore staging
+// calls it on each newly copied destination before reporting the stage ready.
+func verifySnapshotMember(ctx context.Context, path string, expected SnapshotFile) error {
+	before, err := os.Lstat(path)
+	if err != nil || !before.Mode().IsRegular() || before.Size() != expected.Size {
+		return fmt.Errorf("snapshot member missing or changed: %s", expected.Path)
+	}
+	if err := requirePrivateSnapshotMode(expected.Path, before); err != nil {
+		return err
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("open snapshot member: %s: %w", expected.Path, err)
+	}
+	defer file.Close()
+	opened, err := file.Stat()
+	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(before, opened) {
+		return fmt.Errorf("snapshot member changed while opening: %s", expected.Path)
+	}
+	hash := sha256.New()
+	read, err := io.Copy(hash, contextReader{ctx: ctx, reader: file})
+	if err != nil {
+		return fmt.Errorf("read snapshot member: %s: %w", expected.Path, err)
+	}
+	after, statErr := file.Stat()
+	afterPath, pathErr := os.Lstat(path)
+	if statErr != nil || pathErr != nil || !afterPath.Mode().IsRegular() ||
+		!os.SameFile(opened, after) || !os.SameFile(opened, afterPath) ||
+		read != expected.Size || after.Size() != expected.Size || afterPath.Size() != expected.Size {
+		return fmt.Errorf("snapshot member changed while verifying: %s", expected.Path)
+	}
+	if hex.EncodeToString(hash.Sum(nil)) != expected.SHA256 {
+		return fmt.Errorf("snapshot member hash mismatch: %s", expected.Path)
+	}
+	return nil
 }
 
 func rejectSymlinkComponents(root, rel string) error {

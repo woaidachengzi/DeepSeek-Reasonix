@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -115,6 +116,10 @@ func appendSessionDisplayReadModel(path string, msgs []provider.Message, appendF
 	if err != nil || indexInfo.IsDir() || !indexInfo.ModTime().After(info.ModTime()) {
 		return false, nil
 	}
+	checkpointTarget, checkpointActive, checkpointErr := captureSQLiteCheckpointTarget(path)
+	if checkpointErr != nil {
+		slog.Warn("session: could not capture SQLite checkpoint watermark", "path", path, "err", checkpointErr)
+	}
 
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
@@ -144,5 +149,10 @@ func appendSessionDisplayReadModel(path string, msgs []provider.Message, appendF
 	// Some filesystems expose coarse mtimes. Ensure the subsequently-published
 	// index cannot appear older than this append generation.
 	_ = os.Chtimes(path, time.Now(), time.Now())
+	if checkpointActive && checkpointErr == nil {
+		if err := markSQLiteCheckpointProjection(checkpointTarget, path); err != nil {
+			slog.Warn("session: SQLite checkpoint watermark pending", "path", path, "err", err)
+		}
+	}
 	return true, nil
 }

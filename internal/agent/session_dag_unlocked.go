@@ -35,6 +35,9 @@ func appendSessionDAGEntriesUnlocked(sessionPath string, entries []sessionDAGEnt
 	if err != nil {
 		return 0, err
 	}
+	if size, handled, err := appendSQLiteDAGEvents(sessionPath, entries, data); handled {
+		return size, err
+	}
 	for range 3 {
 		size, moved, err := appendUnlockedOnce(sessionPath, path, data)
 		if err != nil || !moved {

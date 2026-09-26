@@ -39,7 +39,10 @@ type mcpServerListResponse struct {
 // listMCPServers reports the effective MCP servers for one workspace without
 // disclosing credentials.
 func (b *bridgeServer) listMCPServers(w http.ResponseWriter, r *http.Request) {
-	root := strings.TrimSpace(r.URL.Query().Get("workspaceRoot"))
+	root := r.URL.Query().Get("workspaceRoot")
+	if strings.TrimSpace(root) == "" {
+		root = ""
+	}
 	cfg, err := appconfig.LoadForRootReadOnly(root)
 	if err != nil {
 		b.writeRuntimeError(w, err, "unable to read the MCP configuration")
@@ -134,7 +137,10 @@ func (b *bridgeServer) upsertMCPServer(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid MCP server request")
 		return
 	}
-	root := strings.TrimSpace(r.URL.Query().Get("workspaceRoot"))
+	root := r.URL.Query().Get("workspaceRoot")
+	if strings.TrimSpace(root) == "" {
+		root = ""
+	}
 	name := strings.TrimSpace(request.Name)
 	if name == "" {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "MCP server name is required")
@@ -227,7 +233,10 @@ func (b *bridgeServer) deleteMCPServer(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "MCP server name is required")
 		return
 	}
-	root := strings.TrimSpace(r.URL.Query().Get("workspaceRoot"))
+	root := r.URL.Query().Get("workspaceRoot")
+	if strings.TrimSpace(root) == "" {
+		root = ""
+	}
 	// Reject package-managed rows before the config helper turns that into an
 	// internal error: the settings UI must see an actionable 400.
 	if cfg, err := appconfig.LoadForRootReadOnly(root); err == nil {

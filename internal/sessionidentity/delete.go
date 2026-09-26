@@ -26,8 +26,7 @@ func (s *Store) BeginDeletePendingManualTitle(ctx context.Context, id, transcrip
 }
 
 func (s *Store) beginDelete(ctx context.Context, id, transcriptPath string, requirePendingTitle bool) error {
-	relativePath, err := relativeTranscriptPath(s.profileRoot, id, transcriptPath)
-	if err != nil {
+	if err := validateCandidate(s.profileRoot, Candidate{ID: id, Path: transcriptPath}); err != nil {
 		return err
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -46,6 +45,10 @@ func (s *Store) beginDelete(ctx context.Context, id, transcriptPath string, requ
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrSessionNotFound
 	}
+	if err != nil {
+		return err
+	}
+	relativePath, candidatePath, err := relativeTranscriptPathWithIdentity(s.profileRoot, id, transcriptPath)
 	if err != nil {
 		return err
 	}
@@ -69,7 +72,7 @@ func (s *Store) beginDelete(ctx context.Context, id, transcriptPath string, requ
 		}
 	}
 	if state == StateDeleting {
-		if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, id, transcriptPath); err != nil {
+		if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, id, transcriptPath, candidatePath); err != nil {
 			return err
 		}
 		if err := discardPendingTitleRenameForDelete(ctx, tx, id); err != nil {
@@ -80,7 +83,7 @@ func (s *Store) beginDelete(ctx context.Context, id, transcriptPath string, requ
 	if state != StateReserved && state != StateReady && state != StateMissing {
 		return fmt.Errorf("%w: %s cannot begin deletion from %s", ErrSessionStateConflict, id, state)
 	}
-	if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, id, transcriptPath); err != nil {
+	if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, id, transcriptPath, candidatePath); err != nil {
 		return err
 	}
 	result, err := tx.ExecContext(ctx, `UPDATE sessions SET state='deleting', updated_at_ms=?
@@ -108,8 +111,7 @@ func (s *Store) beginDelete(ctx context.Context, id, transcriptPath string, requ
 // cannot verify every sidecar, so the caller must use the core's artifact sweep
 // first.
 func (s *Store) FinishDelete(ctx context.Context, id, transcriptPath string) error {
-	relativePath, err := relativeTranscriptPath(s.profileRoot, id, transcriptPath)
-	if err != nil {
+	if err := validateCandidate(s.profileRoot, Candidate{ID: id, Path: transcriptPath}); err != nil {
 		return err
 	}
 	if _, err := os.Lstat(transcriptPath); err == nil {
@@ -134,6 +136,10 @@ func (s *Store) FinishDelete(ctx context.Context, id, transcriptPath string) err
 	if err != nil {
 		return err
 	}
+	relativePath, candidatePath, err := relativeTranscriptPathWithIdentity(s.profileRoot, id, transcriptPath)
+	if err != nil {
+		return err
+	}
 	if storedRelative != relativePath {
 		return fmt.Errorf("%w: %s cannot finish deletion from a different path", ErrSessionStateConflict, id)
 	}
@@ -146,7 +152,7 @@ func (s *Store) FinishDelete(ctx context.Context, id, transcriptPath string) err
 	if state != StateDeleting {
 		return fmt.Errorf("%w: %s cannot finish deletion from %s", ErrSessionStateConflict, id, state)
 	}
-	if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, id, transcriptPath); err != nil {
+	if err := ensureTranscriptPathAvailable(ctx, tx, s.profileRoot, id, transcriptPath, candidatePath); err != nil {
 		return err
 	}
 	result, err := tx.ExecContext(ctx, `UPDATE sessions SET state='deleted', updated_at_ms=?

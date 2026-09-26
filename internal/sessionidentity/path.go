@@ -43,7 +43,12 @@ func lockIdentityOpen() func() {
 // before SQLite opens the database or its journal sidecars. This is a
 // best-effort path check; it does not eliminate a concurrent path swap.
 func validateIdentityDatabasePath(path string, allowMissingDatabase bool) error {
-	databaseExists := false
+	_, err := inspectIdentityDatabasePath(path, allowMissingDatabase)
+	return err
+}
+
+func inspectIdentityDatabasePath(path string, allowMissingDatabase bool) (os.FileInfo, error) {
+	var databaseInfo os.FileInfo
 	sidecarExists := false
 	for index, candidate := range []string{path, path + "-wal", path + "-shm", path + "-journal"} {
 		info, err := os.Lstat(candidate)
@@ -51,27 +56,27 @@ func validateIdentityDatabasePath(path string, allowMissingDatabase bool) error 
 			continue
 		}
 		if err != nil {
-			return fmt.Errorf("inspect session identity database path: %w", err)
+			return nil, fmt.Errorf("inspect session identity database path: %w", err)
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("session identity database path is a symlink: %s", candidate)
+			return nil, fmt.Errorf("session identity database path is a symlink: %s", candidate)
 		}
 		if !info.Mode().IsRegular() {
-			return fmt.Errorf("session identity database path is not a regular file: %s", candidate)
+			return nil, fmt.Errorf("session identity database path is not a regular file: %s", candidate)
 		}
 		if index == 0 {
-			databaseExists = true
+			databaseInfo = info
 		} else {
 			sidecarExists = true
 		}
 	}
-	if !databaseExists && sidecarExists {
-		return errors.New("session identity database is missing while SQLite sidecars remain")
+	if databaseInfo == nil && sidecarExists {
+		return nil, errors.New("session identity database is missing while SQLite sidecars remain")
 	}
-	if !databaseExists && !allowMissingDatabase {
-		return fmt.Errorf("inspect session identity database: %w", os.ErrNotExist)
+	if databaseInfo == nil && !allowMissingDatabase {
+		return nil, fmt.Errorf("inspect session identity database: %w", os.ErrNotExist)
 	}
-	return nil
+	return databaseInfo, nil
 }
 
 // IdentityDatabaseExists distinguishes a genuinely new profile from a missing
@@ -84,17 +89,11 @@ func IdentityDatabaseExists(path, profileRoot string) (bool, error) {
 	if err := validateIdentityDatabaseLocation(path, profileRoot); err != nil {
 		return false, err
 	}
-	if err := validateIdentityDatabasePath(path, true); err != nil {
+	info, err := inspectIdentityDatabasePath(path, true)
+	if err != nil {
 		return false, err
 	}
-	_, err := os.Lstat(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("inspect session identity database: %w", err)
-	}
-	return true, nil
+	return info != nil, nil
 }
 
 func identityDatabaseArtifactsExist(path string) (bool, error) {

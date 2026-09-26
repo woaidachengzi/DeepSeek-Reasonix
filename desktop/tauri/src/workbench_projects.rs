@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -130,8 +131,7 @@ impl WorkbenchProjectCatalog {
 }
 
 fn normalize_root(root: &str) -> Result<String, String> {
-    let root = root.trim();
-    if root.is_empty()
+    if root.trim().is_empty()
         || root.len() > MAX_ROOT_BYTES
         || root.chars().any(char::is_control)
         || !Path::new(root).is_absolute()
@@ -155,19 +155,33 @@ fn normalize_root(root: &str) -> Result<String, String> {
 
 pub(crate) fn normalized_project_key(root: &str) -> String {
     if cfg!(windows) {
-        let trimmed = root.trim().trim_end_matches(['/', '\\']);
+        let normalized = root.replace('/', "\\");
+        let has_trailing_separator = normalized.ends_with('\\');
+        let trimmed = normalized.trim_end_matches('\\');
         if trimmed.is_empty() {
-            root.trim()
-                .chars()
+            root.chars()
                 .next()
                 .map(|separator| if separator == '/' { '\\' } else { separator })
                 .unwrap_or_default()
                 .to_string()
         } else {
-            trimmed.replace('/', "\\").to_lowercase()
+            let is_drive_designator = trimmed.len() == 2
+                && trimmed.as_bytes()[1] == b':'
+                && trimmed.as_bytes()[0].is_ascii_alphabetic();
+            let key = if has_trailing_separator && is_drive_designator {
+                format!("{trimmed}\\")
+            } else {
+                trimmed.to_string()
+            };
+            key.to_lowercase()
         }
     } else {
-        root.trim().trim_end_matches('/').to_string()
+        let key = root.trim_end_matches('/');
+        if key.is_empty() && root.starts_with('/') {
+            "/".to_string()
+        } else {
+            key.to_string()
+        }
     }
 }
 
@@ -190,9 +204,17 @@ fn read_folders(path: &Path) -> Result<Vec<BridgeProjectFolder>, String> {
     let opened_metadata = file
         .metadata()
         .map_err(|error| format!("inspect opened project folder catalog failed: {error}"))?;
-    if !opened_metadata.is_file() || opened_metadata.len() > MAX_CATALOG_BYTES {
+    let current_metadata = fs::symlink_metadata(path)
+        .map_err(|error| format!("reinspect project folder catalog failed: {error}"))?;
+    if current_metadata.file_type().is_symlink()
+        || !current_metadata.is_file()
+        || !opened_metadata.is_file()
+        || opened_metadata.len() > MAX_CATALOG_BYTES
+        || !same_file_as_path(path, &file)
+            .map_err(|error| format!("verify opened project folder catalog failed: {error}"))?
+    {
         return Err(
-            "project folder catalog is not a regular file within the size limit".to_string(),
+            "project folder catalog changed while opening or is not a regular file within the size limit".to_string(),
         );
     }
     let bytes = read_bounded_catalog(file, MAX_CATALOG_BYTES)
@@ -203,6 +225,7 @@ fn read_folders(path: &Path) -> Result<Vec<BridgeProjectFolder>, String> {
         return Err("project folder catalog contains too many entries".to_string());
     }
     let mut folders = Vec::with_capacity(decoded.len().min(MAX_PROJECTS));
+    let mut seen = HashSet::with_capacity(decoded.len());
     for folder in decoded {
         let root = normalize_root(&folder.root)?;
         if let Some(title) = folder.title.as_ref() {
@@ -210,9 +233,7 @@ fn read_folders(path: &Path) -> Result<Vec<BridgeProjectFolder>, String> {
                 return Err("project folder title is invalid or too long".to_string());
             }
         }
-        if folders.iter().any(|existing: &BridgeProjectFolder| {
-            normalized_project_key(&existing.root) == normalized_project_key(&root)
-        }) {
+        if !seen.insert(normalized_project_key(&root)) {
             continue;
         }
         folders.push(BridgeProjectFolder {
@@ -224,6 +245,12 @@ fn read_folders(path: &Path) -> Result<Vec<BridgeProjectFolder>, String> {
         }
     }
     Ok(folders)
+}
+
+pub(crate) fn same_file_as_path(path: &Path, file: &fs::File) -> std::io::Result<bool> {
+    let path_handle = same_file::Handle::from_path(path)?;
+    let file_handle = same_file::Handle::from_file(file.try_clone()?)?;
+    Ok(path_handle == file_handle)
 }
 
 fn read_bounded_catalog(mut reader: impl Read, max_bytes: u64) -> std::io::Result<Vec<u8>> {
@@ -272,26 +299,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn remembered_folders_are_normalized_deduplicated_and_persistent() {
+    fn remembered_folders_preserve_path_spaces_and_deduplicate_trailing_separators() {
         let directory = tempfile::tempdir().expect("temp directory");
         let path = directory.path().join(CATALOG_FILE);
         let catalog = WorkbenchProjectCatalog::at(path.clone());
+        let expected_root = "/work/alpha ";
 
         let folders = catalog
-            .remember(" /work/alpha/// ")
+            .remember("/work/alpha /")
             .expect("remember absolute workspace");
         assert_eq!(folders.len(), 1);
-        assert_eq!(folders[0].root, "/work/alpha");
+        assert_eq!(folders[0].root, expected_root);
         assert_eq!(folders[0].title, None);
 
         let duplicate = catalog
-            .remember("/work/alpha/")
+            .remember(expected_root)
             .expect("deduplicate normalized workspace");
         assert_eq!(duplicate.len(), folders.len());
         assert_eq!(duplicate[0].root, folders[0].root);
         let reloaded = WorkbenchProjectCatalog::at(path).list().expect("reload");
         assert_eq!(reloaded.len(), 1);
-        assert_eq!(reloaded[0].root, "/work/alpha");
+        assert_eq!(reloaded[0].root, expected_root);
         assert_eq!(reloaded[0].title, None);
     }
 

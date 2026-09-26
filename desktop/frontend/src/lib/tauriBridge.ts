@@ -101,6 +101,15 @@ export interface TauriPendingSessionDelete {
   title: string;
 }
 
+export interface TauriPendingSessionDeleteCursor {
+  id: string;
+}
+
+export interface TauriPendingSessionDeletePage {
+  sessions: TauriPendingSessionDelete[];
+  nextCursor?: TauriPendingSessionDeleteCursor | null;
+}
+
 export interface TauriPendingSessionTitleRecovery {
   id: string;
   title: string;
@@ -110,9 +119,38 @@ export interface TauriPendingSessionTitleRecovery {
 
 export interface TauriWorkbenchSessionPage {
   sessions: TauriWorkbenchSession[];
-  nextCursor?: { position: number; id: string; snapshotId: string } | null;
+  nextCursor?: { position: number; id: string; snapshotId: string; total: number } | null;
   total: number;
-  source: "identity" | "legacy";
+  source: "identity" | "partial_identity" | "identity_unverified" | "legacy" | "cached";
+  unverifiedLegacySessions?: TauriWorkbenchSession[];
+  shadowDirectoryCount?: number;
+  unclaimedTranscriptCount?: number;
+  titleMismatchCount?: number;
+  missingTranscriptCount?: number;
+  shadowReport?: TauriSessionShadowReport;
+}
+
+export interface TauriScanImportCandidate {
+  id: string;
+  file: string;
+  transcriptSha256: string;
+}
+
+export interface TauriScanImportSelection {
+  id: string;
+  title: string;
+  workspaceRoot: string;
+  transcriptSha256: string;
+}
+
+export interface TauriScanImportCandidateList {
+  candidates: TauriScanImportCandidate[];
+  blockedCount: number;
+}
+
+export interface TauriWorkbenchProjectFolders {
+  folders: BridgeProjectFolder[];
+  warning?: string;
 }
 
 /** Read-only, count-only comparison of the legacy sidebar catalog and SQLite. */
@@ -122,6 +160,7 @@ export interface TauriSessionShadowReport {
   matchedCount: number;
   directoryOnlyCount: number;
   missingFromDirectory: number;
+  retiredLegacyCount: number;
   titleMismatches: number;
   workspaceMismatches: number;
   orderMismatches: number;
@@ -259,32 +298,49 @@ export async function tauriWorkbenchSessions(): Promise<TauriWorkbenchSession[]>
   return invoke<TauriWorkbenchSession[]>("workbench_sessions");
 }
 
-export async function tauriWorkbenchProjectFolders(): Promise<BridgeProjectFolder[]> {
+export async function tauriWorkbenchProjectFolders(): Promise<TauriWorkbenchProjectFolders> {
   requireTauri();
-  return invoke<BridgeProjectFolder[]>("workbench_project_folders");
+  return invoke<TauriWorkbenchProjectFolders>("workbench_project_folders");
 }
 
-export async function rememberTauriWorkbenchProjectFolder(root: string): Promise<BridgeProjectFolder[]> {
+export async function rememberTauriWorkbenchProjectFolder(root: string): Promise<TauriWorkbenchProjectFolders> {
   requireTauri();
-  return invoke<BridgeProjectFolder[]>("remember_workbench_project_folder", { root });
+  return invoke<TauriWorkbenchProjectFolders>("remember_workbench_project_folder", { root });
 }
 
-export async function renameTauriWorkbenchProjectFolder(root: string, title: string): Promise<BridgeProjectFolder[]> {
+export async function renameTauriWorkbenchProjectFolder(root: string, title: string): Promise<TauriWorkbenchProjectFolders> {
   requireTauri();
-  return invoke<BridgeProjectFolder[]>("rename_workbench_project_folder", { root, title });
+  return invoke<TauriWorkbenchProjectFolders>("rename_workbench_project_folder", { root, title });
 }
 
 export async function tauriWorkbenchSessionPage(
-  cursor?: { position: number; id: string; snapshotId: string },
+  cursor?: { position: number; id: string; snapshotId: string; total: number },
   limit = 200,
 ): Promise<TauriWorkbenchSessionPage> {
   requireTauri();
   return invoke<TauriWorkbenchSessionPage>("workbench_session_page", { limit, cursor });
 }
 
+export async function tauriScanUnclaimedSessions(): Promise<TauriScanImportCandidateList> {
+  requireTauri();
+  return invoke<TauriScanImportCandidateList>("scan_unclaimed_workbench_sessions");
+}
+
+export async function tauriImportUnclaimedSessions(selected: TauriScanImportSelection[]): Promise<string[]> {
+  requireTauri();
+  return invoke<string[]>("import_unclaimed_workbench_sessions", { selected });
+}
+
 export async function tauriPendingSessionDeletes(): Promise<TauriPendingSessionDelete[]> {
   requireTauri();
   return invoke<TauriPendingSessionDelete[]>("bridge_pending_session_deletes");
+}
+
+export async function tauriPendingSessionDeletesPage(
+  cursor?: TauriPendingSessionDeleteCursor | null,
+): Promise<TauriPendingSessionDeletePage> {
+  requireTauri();
+  return invoke<TauriPendingSessionDeletePage>("bridge_pending_session_deletes_page", { cursor: cursor ?? null });
 }
 
 export async function tauriPendingSessionTitleRecoveries(): Promise<TauriPendingSessionTitleRecovery[]> {

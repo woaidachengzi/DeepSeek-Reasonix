@@ -2,6 +2,7 @@ package sessionidentity
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -53,6 +54,14 @@ func TestSessionIdentityRecoversAfterAbruptProcessExit(t *testing.T) {
 	if records[0].Title != "committed title" || records[0].State != StateReady {
 		t.Fatalf("recovered identity = %#v; uncommitted update must be rolled back", records[0])
 	}
+	status, err := store.EventStreamStatus(context.Background(), "crash-session")
+	if err != nil || status.LastSequence != 1 {
+		t.Fatalf("recovered event stream = %#v, %v; want one committed event", status, err)
+	}
+	events, err := store.ReadEvents(context.Background(), "crash-session", 0, 10)
+	if err != nil || len(events) != 1 || events[0].ID != "crash-event" || string(events[0].Payload) != `{"type":"probe"}` {
+		t.Fatalf("recovered committed events = %#v, %v", events, err)
+	}
 }
 
 func runCrashRecoveryWriter(dbPath, root string) error {
@@ -74,6 +83,11 @@ func runCrashRecoveryWriter(dbPath, root string) error {
 	}
 	if err := store.Import(ctx, sessionDir, []Candidate{{
 		ID: "crash-session", Path: transcript, Title: "committed title",
+	}}); err != nil {
+		return err
+	}
+	if _, err := store.AppendEvents(ctx, "crash-session", []SessionEvent{{
+		ID: "crash-event", Type: "probe", CreatedAt: 1, Payload: json.RawMessage(`{"type":"probe"}`),
 	}}); err != nil {
 		return err
 	}

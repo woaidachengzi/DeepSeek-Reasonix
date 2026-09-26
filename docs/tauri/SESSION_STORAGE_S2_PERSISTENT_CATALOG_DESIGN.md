@@ -1,8 +1,8 @@
 # 第 5 项设计稿：持久会话目录与完整项目树（存储 S2）
 
-> 状态：**部分实现（2026-09）**。身份库 schema v4 已含相对 profile-root 路径、标题溯源、生命周期状态；首次会话 reservation、恢复前状态检查及
+> 状态：**Preview 迁移阶段（2026-09）**。当前工作树 identity SQLite 已到 schema v9；S2 的相对 profile-root 路径、标题意图、生命周期状态与 generation/revision 分页分别在 v4–v6 引入，v7–v9 事件表扩展属于独立的 managed Preview RFC。身份目录分页已接入；首次会话 reservation、恢复前状态检查及
 > 残留 sidecar 防误复用、身份库 keyset 分页、bridge 只读列表接口、删除状态的存储 API 及旧 JSON catalog 幂等导入已实现；
-> bridge 删除清理已接入（包括 `deleting` 状态下的重试、重启后续删，以及清理已完成后通过 `deleted` tombstone 幂等清掉陈旧 host catalog 行）；Rust host 影子比对门禁与身份库分页侧栏已实现，目录差异时仍回退 JSON。分页 continuation 已绑定完整可见目录快照，变化时返回 `resync_required`；子进程强制终止于删除清理中途后的重启续删也有隔离回归。
+> bridge 删除清理已接入（包括 `deleting` 状态下的重试、重启后续删，以及清理已完成后通过 `deleted` tombstone 幂等清掉陈旧 host catalog 行）；Rust host 影子比对门禁与身份库分页侧栏已实现。clean/可解释差异按身份页分页；可读但有结构或物理差异时，在同一 snapshot 下以 `identity_unverified` 只读分页显示身份行，并将旧目录独有项隔离展示；shadow 不可用时也尝试只读分页身份目录。只有身份页首屏不可用时才回退最多 50 条 JSON，续页失败则重新读取首屏、不拼接来源。分页 continuation 绑定可见目录快照，变化时返回 `resync_required`；子进程强制终止于删除清理中途后的重启续删也有隔离回归。
 > 侧栏可通过加载更多超过旧 JSON 的 50 条上限；临时测试 profile 的快照 staging、身份路径重定位与旧 catalog 重放已有自动化演练；全 profile 权威切换、真实 profile 停写确认及其跨资源恢复/兼容演练仍未完成。
 > 本文继续作为其余工作契约、验收条件、测试矩阵与回退路径。
 >
@@ -15,7 +15,7 @@
 | --- | --- | --- |
 | 1 | **缺文件的会话会被静默重开成同 ID 的空会话** | 已由身份状态优先检查、missing 状态与 reservation 修复；见 §3.3。 |
 | 2 | **最近列表硬上限 50，且会静默丢弃** | SQLite keyset 分页侧栏已可继续加载超出 JSON 最近列表的旧会话；JSON 仍保留最多 50 条作为兼容回退源。 |
-| 3 | **列表权威在 host 的 JSON 文件，不在身份库** | Preview 首屏影子比对 clean 时按页读取身份库，不一致或审计失败时回退 JSON；这仍是迁移期门禁，不等同唯一权威切换。 |
+| 3 | **列表权威在 host 的 JSON 文件，不在身份库** | Preview 首屏影子比对通过时按页读取身份库；有可读差异时身份页只读显示并明确标记未核验，shadow 不可用时也尝试身份只读分页。身份页首屏不可用仍回退 JSON；这仍是迁移期门禁，不等同唯一权威切换。 |
 | 4 | **Tauri 曾只从最近会话生成工作区文件夹** | 已增加显式导入旧版文件夹清单，并合并身份目录会话；历史空文件夹可见，文件夹下会话仍按分页加载。 |
 
 问题 1 是数据安全，问题 2 是功能上限，两者都必须在切换权威之前解决。
@@ -25,8 +25,8 @@
 - 删除与产物清理：`control.RemoveSessionArtifacts`（`internal/control/controller.go:3241`），
   已覆盖 transcript、13 类 sidecar、guardian、inbox、checkpoint、子 agent、cleanup 标记。
   第 5 项**不得**新增第二套删除实现。
-- 身份库：`internal/sessionidentity` 已是 schema v4，含 `relative_path UNIQUE`、生命周期 `state`、
-  `title_source`/`title_revision`（CAS，`SetTitle`）、`Import`、`OpenReadOnly`、`Inventory`。
+- 身份库：当前工作树 `internal/sessionidentity` 为 schema v9；S2 的 v4–v6 引入 `relative_path UNIQUE`、生命周期 `state`、
+  `title_source`/`title_revision`（CAS，`SetTitle`）与目录 generation/revision。v7–v9 事件表扩展另见 `SESSION_SQLITE_EVENT_STORE_RFC.md`。`Import`、`OpenReadOnly`、`Inventory` 仍是目录迁移能力。
 - 只读盘点：`sessionidentity.Inventory` 与 `GET /v1/sessions/inventory`（第 3 项已交付），
   它已经是"缺文件"的权威观测点。
 - 标题回填：host 已有 `titleFromFirstUser` 与首轮标题回填；身份库侧用 `SetTitle`
@@ -100,7 +100,7 @@ V3 要求 `reserved/ready/missing/deleting/deleted`。schema v4 保留 v3 生命
 
 - 身份库 `ListVisible(limit, cursor)`：已按 **`(position, id)`** 排序分页；
   `deleted` 不返回，`missing` 返回并带标记，`deleting` 不返回。
-  `deleting` identity 另由 `GET /v1/sessions/deletion-recovery` 返回仅含 ID/标题的有界恢复清单；Tauri 侧栏将其独立展示，用户二次确认后才重试 DELETE，不在启动时无提示地自动删除。
+  `deleting` identity 另由 `GET /v1/sessions/deletion-recovery/page` 按不可变 ID 游标返回每页最多 200 条、仅含 ID/标题的恢复清单；无参数 `GET /v1/sessions/deletion-recovery` 保留给旧 host，最多 10,000 条。Tauri 侧栏将其独立展示并可续页，用户二次确认后才重试 DELETE，不在启动时无提示地自动删除。
   游标必须是 `(position, id)` 复合键——只按 `position` 会在同 `position` 的
   并列会话上漏项或重复（SQLite 中 `position` 未强制唯一）。
 - bridge 只读端点已实现：
@@ -152,7 +152,7 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 - v1→v2 在事务中加入标题来源与 revision；非空旧标题标为 `legacy_unknown`，空标题保留 `fallback`。
 - v2→v3 在事务中加入生命周期 `state`，按旧 `missing` 标记回填为 `missing`/`ready`，并建 `(state, position, id)` 索引。
 - v3→v4 先按传入的 canonical profile root 校验全部旧绝对路径及 transcript 命名，再在事务中把 `path` 改为相对 `relative_path` 并设置 `user_version=4`。任一路径越界或不符合共享路径契约时拒绝迁移；现有测试固定了 v3 数据与版本值不变的拒绝语义。
-- 每个版本迁移各自使用事务；打开时若 `user_version > 4` 或完整性检查失败，拒绝打开，不把库修成空库。现有测试还验证 future schema 的版本与数据库文件不被改写。
+- 每个版本迁移各自使用事务；当前代码对高于所支持 schema v9 的库或完整性检查失败均拒绝打开，不把库修成空库。现有测试还验证 future schema 的版本与数据库文件不被改写。
 - 已存在的旧库在 bridge 启动、开放只读盘点前完成迁移；只读盘点自身不创建数据库。bridge 首次创建 Tauri 会话时会建库并先写入 `reserved`，保证 sidecar
   产生前身份已稳定登记；这不等于切换会话列表权威。
 
@@ -160,14 +160,14 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 
 | 步骤 | 内容 | 验收条件 | 回退 |
 | --- | --- | --- | --- |
-| **5.0** | `resumeBridgeSession` 按身份状态优先判定；新 ID 先 reservation；识别缺文件与残留 sidecar | 已覆盖 `reserved/ready/missing`、v1–v3 → v4 迁移、missing 文件恢复后仍拒绝复活、sidecar-only 残留拒绝新建 | 当前 schema 仍保留 transcript 与旧 JSON 清单；回退需保留离线 profile 快照 |
-| **5.1** | 完成删除 tombstone 状态写入 | `deleting/deleted` 由删除流程写入且不可重用；身份库分页已实现 | 回退时保留 v4 身份库和 transcript；使用经验证的整份离线 profile 快照 |
-| **5.2** | bridge `GET /v1/sessions` 分页列表 | 身份库分页与 bridge 接口已实现，并由 5.3 clean 门禁后的侧栏读取 | 端点保留兼容，host 可回退旧 JSON |
-| **5.3** | 影子审计 clean 时读取 bridge 身份目录，漂移或审计失败时回退 JSON | 旧 JSON 幂等导入、分页读取、clean 门禁和漂移回退已接入；移除 JSON 回退并宣布整个 profile 唯一权威仍需独立发布门禁 | 保留 JSON 输入与回退路径 |
+| **5.0** | `resumeBridgeSession` 按身份状态优先判定；新 ID 先 reservation；识别缺文件与残留 sidecar | 已覆盖 `reserved/ready/missing`、v1–v3 → v4 迁移、missing 文件恢复后仍拒绝复活、sidecar-only 残留拒绝新建 | 当前 schema v9 仍保留 transcript 与旧 JSON 清单；回退需保留离线 profile 快照 |
+| **5.1** | 完成删除 tombstone 状态写入 | `deleting/deleted` 由删除流程写入且不可重用；身份库分页已实现 | 回退时保留当前身份库及 transcript，不降级或重建数据库；使用经验证的权威 profile 数据快照（不含可再生成的顶层 `cache/`） |
+| **5.2** | bridge `GET /v1/sessions` 分页列表 | 身份库分页与 bridge 接口已实现，由 5.3 的 shadow 审计和来源标记门禁后的侧栏读取 | 端点保留兼容，host 可回退旧 JSON |
+| **5.3** | 影子审计通过时读取 bridge 身份目录；可读差异和 shadow 不可用时只读显示同快照身份页 | 旧 JSON 幂等导入、身份 keyset 分页、dirty-shadow `identity_unverified` 只读页、shadow 不可用时的身份页尝试、首屏最多 50 条 legacy fallback 与差异提示已接入；身份页无法读取或续页快照失效时不拼接来源。移除 JSON 回退并宣布整个 profile 唯一权威仍需独立发布门禁 | 保留 JSON 输入与有界回退；未核验页禁用会话操作 |
 | **5.4** | missing/deleting/deleted 的用户可见处理 + 中断清理恢复 | missing 行不可打开但可直接删除；deleting 通过独立 path-free 清单展示，并仅在用户确认后用 DELETE 续做；不做启动期无提示自动删除。若 host 旧 catalog 留有 deleted tombstone 行，重复 DELETE 幂等成功以完成 host 行清理；明确错误提示与恢复路径已覆盖 | 保留 `missing` 记录，等待用户处理 |
 | **5.5** | SQLite 崩溃恢复与删除清理中的进程崩溃恢复 | 子进程在 WAL 有已提交和未提交更新时强制退出，重开保留已提交状态并回滚未提交更新；bridge 子进程在 `deleting` 已提交、artifact sweep 已删 transcript 但尚未删 `.meta` 时强制终止，重启后拒绝打开为新空会话、继续清理并写入 `deleted` tombstone（`TestSessionIdentityRecoversAfterAbruptProcessExit`、`TestBridgeDeleteRecoversAfterForcedProcessExit`） | 仅在临时隔离 profile 演练；真实 profile 仍需停写确认和离线恢复演练 |
 
-5.0–5.5 的后端接口、clean 门禁、分页侧栏和 lifecycle/崩溃恢复流程均已接入。临时测试 profile 的跨资源 snapshot/staging/catalog replay 自动化已覆盖，但 SQLite 仍处于可回退的 Preview 读取阶段；移除 JSON 回退前仍须完成稳定窗口零差异、真实离线 profile 的停写后恢复演练和旧写者停写确认。重启后续删采用显式重试，不在启动时无提示地自动删除。
+5.0–5.5 的后端接口、shadow 门禁、分页侧栏和 lifecycle/崩溃恢复流程均已接入。临时测试 profile 的跨资源 snapshot/staging/catalog replay 自动化已覆盖，但 SQLite 仍处于可回退的 Preview 读取阶段；dirty shadow 与 shadow 不可用时的只读身份分页不构成权威选择。移除 JSON 回退前仍须完成稳定窗口零差异、真实离线 profile 的停写后恢复演练和旧写者停写确认。重启后续删采用显式重试，不在启动时无提示地自动删除。
 
 ## 5. 测试矩阵
 
@@ -215,7 +215,7 @@ GET /v1/sessions?limit=<n>&cursorPosition=<position>&cursorId=<id>&workspaceRoot
 | --- | --- |
 | 切换权威后 host 与身份库不一致 | 5.3 要求 diff 为零并持续一个窗口；不一致即回退读 JSON |
 | 单条坏数据挡住整个列表 | `ListVisible` 逐行容错，坏行计入诊断而非使整页失败 |
-| 旧身份库升级失败 | 每个版本迁移单事务；真实迁移前停写并验证整份离线 profile 快照，不单独复制活跃 WAL 下的 `.sqlite` |
+| 旧身份库升级失败 | 每个版本迁移单事务；真实迁移前停写并验证 profile 权威数据快照（不含可再生成的顶层 `cache/`），不单独复制活跃 WAL 下的 `.sqlite` |
 | 与上游 1.38.10 会话重构冲突 | 本项只动 Preview 身份库与 host 列表；transcript 格式冻结 |
 | 用户看到"会话消失"却无法自救 | `missing` 必须可解释、可删除记录；恢复路径写进 UI 文案 |
 

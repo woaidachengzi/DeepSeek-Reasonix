@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -71,6 +72,9 @@ func appendSessionDAGEntries(sessionPath string, entries []sessionDAGEntry, sync
 	if err != nil {
 		return 0, err
 	}
+	if size, handled, err := appendSQLiteDAGEvents(sessionPath, entries, data); handled {
+		return size, err
+	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return 0, fmt.Errorf("open session event log: %w", err)
@@ -100,6 +104,18 @@ func appendSessionDAGEntries(sessionPath string, entries []sessionDAGEntry, sync
 // readSessionDAGHeader decodes the leading log entry without reading the rest
 // of the file, so a writer can notice a rotation (new generation) cheaply.
 func readSessionDAGHeader(sessionPath string) (sessionDAGHeader, bool, error) {
+	if data, active, err := importSQLiteProjection(context.Background(), sessionPath, defaultSessionReplayLimits); err != nil {
+		return sessionDAGHeader{}, false, err
+	} else if active {
+		var e sessionDAGEntry
+		if err := json.NewDecoder(io.LimitReader(bytes.NewReader(data), sessionEventProbeMaxBytes)).Decode(&e); err != nil {
+			return sessionDAGHeader{}, false, nil
+		}
+		if e.SchemaVersion != sessionDAGSchemaVersion || e.Type != sessionDAGTypeLog {
+			return sessionDAGHeader{}, false, fmt.Errorf("SQLite session event stream has an invalid log header")
+		}
+		return sessionDAGHeader{generation: e.Generation, upgradedFrom: e.UpgradedFrom}, true, nil
+	}
 	path := store.SessionEventLog(sessionPath)
 	if path == "" {
 		return sessionDAGHeader{}, false, nil

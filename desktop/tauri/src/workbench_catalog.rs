@@ -79,6 +79,10 @@ impl WorkbenchCatalog {
         }
     }
 
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
     pub fn list(&self) -> Result<Vec<WorkbenchSession>, String> {
         let state = self
             .state

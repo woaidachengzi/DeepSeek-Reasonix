@@ -165,8 +165,8 @@ func (r *controllerRuntime) WorkspaceChangeDetail(rel string) (desktopbridge.Wor
 // deleted checkpoint file. It keeps the lexical root guard and evaluates the
 // parent directory when the target no longer exists.
 func (r *controllerRuntime) resolveWorkspaceChangePath(rel string) (string, string, error) {
-	root := strings.TrimSpace(r.controller.WorkspaceRoot())
-	if root == "" {
+	root := r.controller.WorkspaceRoot()
+	if strings.TrimSpace(root) == "" {
 		root = "."
 	}
 	base, err := filepath.Abs(root)

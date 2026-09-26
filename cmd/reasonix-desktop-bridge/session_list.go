@@ -47,13 +47,22 @@ func (b *bridgeServer) sessionList(w http.ResponseWriter, r *http.Request) {
 	var cursor *sessionidentity.Cursor
 	rawPosition, rawID := query.Get("cursorPosition"), query.Get("cursorId")
 	rawSnapshotID := query.Get("cursorSnapshot")
-	if rawPosition != "" || rawID != "" {
+	rawTotal := query.Get("cursorTotal")
+	if rawPosition != "" || rawID != "" || rawTotal != "" {
 		position, err := strconv.Atoi(rawPosition)
 		if err != nil || position < 0 || strings.TrimSpace(rawID) == "" {
 			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "session page cursor is invalid")
 			return
 		}
-		cursor = &sessionidentity.Cursor{Position: position, ID: rawID, SnapshotID: rawSnapshotID}
+		total := 0
+		if rawTotal != "" {
+			total, err = strconv.Atoi(rawTotal)
+			if err != nil || total < 1 || total > sessionidentity.MaxVisibleSnapshotSize {
+				writeProtocolError(w, http.StatusBadRequest, "invalid_request", "session page cursor is invalid")
+				return
+			}
+		}
+		cursor = &sessionidentity.Cursor{Position: position, ID: rawID, SnapshotID: rawSnapshotID, Total: total}
 	} else if rawSnapshotID != "" {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "session page cursor is invalid")
 		return
@@ -69,7 +78,7 @@ func (b *bridgeServer) sessionList(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, http.StatusServiceUnavailable, "internal", "session identity store is unavailable")
 		return
 	}
-	exists, err := sessionidentity.IdentityDatabaseExists(identityPath, appconfig.SessionProfileRoot())
+	identities, exists, closeIdentity, err := b.readIdentityStore(r.Context(), identityPath, appconfig.SessionProfileRoot())
 	if err != nil {
 		b.writeRuntimeError(w, err, "unable to inspect the session identity store")
 		return
@@ -82,12 +91,7 @@ func (b *bridgeServer) sessionList(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, sessionListResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Sessions: []sessionListEntry{}, SnapshotID: emptyVisibleSnapshotID()})
 		return
 	}
-	identities, err := sessionidentity.OpenReadOnly(r.Context(), identityPath, appconfig.SessionProfileRoot())
-	if err != nil {
-		b.writeRuntimeError(w, err, "unable to open the session identity store")
-		return
-	}
-	defer func() { _ = identities.Close() }()
+	defer closeIdentity()
 
 	page, err := identities.ListVisible(r.Context(), limit, cursor, workspaceRoot)
 	if err != nil {
@@ -118,7 +122,7 @@ func (b *bridgeServer) sessionDirectorySnapshot(w http.ResponseWriter, r *http.R
 		writeProtocolError(w, http.StatusServiceUnavailable, "internal", "session identity store is unavailable")
 		return
 	}
-	exists, err := sessionidentity.IdentityDatabaseExists(identityPath, appconfig.SessionProfileRoot())
+	identities, exists, closeIdentity, err := b.readIdentityStore(r.Context(), identityPath, appconfig.SessionProfileRoot())
 	if err != nil {
 		b.writeRuntimeError(w, err, "unable to inspect the session identity store")
 		return
@@ -131,12 +135,7 @@ func (b *bridgeServer) sessionDirectorySnapshot(w http.ResponseWriter, r *http.R
 		})
 		return
 	}
-	identities, err := sessionidentity.OpenReadOnly(r.Context(), identityPath, appconfig.SessionProfileRoot())
-	if err != nil {
-		b.writeRuntimeError(w, err, "unable to open the session identity store")
-		return
-	}
-	defer func() { _ = identities.Close() }()
+	defer closeIdentity()
 
 	snapshot, err := identities.ListVisibleSnapshot(r.Context(), sessionidentity.MaxVisibleSnapshotSize, workspaceRoot)
 	if err != nil {

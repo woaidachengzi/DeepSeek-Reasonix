@@ -57,19 +57,20 @@ func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.Open
 	} else if opts.Sink == nil {
 		opts.Sink = event.Discard
 	}
-	opts.Sink = newBridgeLifecycleSink(opts.Sink, request.SessionID)
+	lifecycleSink := newBridgeLifecycleSink(opts.Sink, request.SessionID)
+	opts.Sink = lifecycleSink
 	if strings.TrimSpace(opts.StatsSource) == "" {
 		opts.StatsSource = "desktop-tauri"
 	}
 	controller, err := boot.Build(ctx, opts)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(err, lifecycleSink.Close())
 	}
 	if err := resumeBridgeSession(ctx, controller, request.SessionID, request.WorkspaceRoot); err != nil {
 		controller.Close()
-		return nil, err
+		return nil, errors.Join(err, lifecycleSink.Close())
 	}
-	return &controllerRuntime{controller: controller, sessionID: request.SessionID}, nil
+	return &controllerRuntime{controller: controller, sessionID: request.SessionID, lifecycleSink: lifecycleSink}, nil
 }
 
 type bridgeLifecycleSink struct {
@@ -78,13 +79,14 @@ type bridgeLifecycleSink struct {
 	sessionPath  string
 	identityPath string
 	mu           sync.Mutex
+	identities   *sessionidentity.Store
 	markedReady  bool
 }
 
-func newBridgeLifecycleSink(inner event.Sink, sessionID string) event.Sink {
+func newBridgeLifecycleSink(inner event.Sink, sessionID string) *bridgeLifecycleSink {
 	sessionPath, err := bridgeSessionPath(appconfig.SessionDir(), sessionID)
 	if err != nil || appconfig.DesktopSessionIdentityPath() == "" {
-		return inner
+		return &bridgeLifecycleSink{inner: inner}
 	}
 	return &bridgeLifecycleSink{
 		inner: inner, sessionID: sessionID, sessionPath: sessionPath,
@@ -105,15 +107,31 @@ func (s *bridgeLifecycleSink) Emit(input event.Event) {
 	if err != nil || !info.Mode().IsRegular() {
 		return
 	}
-	identities, err := sessionidentity.Open(context.Background(), s.identityPath, appconfig.SessionProfileRoot())
-	if err != nil {
-		return
+	if s.identities == nil {
+		identities, err := sessionidentity.Open(context.Background(), s.identityPath, appconfig.SessionProfileRoot())
+		if err != nil {
+			return
+		}
+		s.identities = identities
 	}
-	err = identities.MarkReady(context.Background(), s.sessionID, s.sessionPath)
-	_ = identities.Close()
+	err = s.identities.MarkReady(context.Background(), s.sessionID, s.sessionPath)
 	if err == nil {
 		s.markedReady = true
 	}
+}
+
+func (s *bridgeLifecycleSink) Close() error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.identities == nil {
+		return nil
+	}
+	err := s.identities.Close()
+	s.identities = nil
+	return err
 }
 
 // resumeBridgeSession gives a bridge ID one deterministic transcript path.
@@ -336,6 +354,7 @@ func bridgeSessionPath(sessionDir, sessionID string) (string, error) {
 type controllerRuntime struct {
 	controller      *control.Controller
 	sessionID       string
+	lifecycleSink   *bridgeLifecycleSink
 	deleting        atomic.Bool
 	deleted         atomic.Bool
 	removeArtifacts func(string) error
@@ -568,8 +587,8 @@ const bridgeWorkspacePreviewLimit = 512 << 10
 // relative spelling separately keeps responses stable even when a path points
 // through a symlink that remains inside the workspace.
 func (r *controllerRuntime) resolveWorkspacePath(rel string) (string, string, string, error) {
-	root := strings.TrimSpace(r.controller.WorkspaceRoot())
-	if root == "" {
+	root := r.controller.WorkspaceRoot()
+	if strings.TrimSpace(root) == "" {
 		root = "."
 	}
 	base, err := filepath.Abs(root)
@@ -743,9 +762,9 @@ func (r *controllerRuntime) Shutdown() error {
 		// A failed or interrupted sweep has already fenced this identity.
 		// Snapshotting here would recreate a transcript during deletion.
 		r.controller.Close()
-		return nil
+		return r.lifecycleSink.Close()
 	}
 	err := r.controller.SnapshotForShutdown()
 	r.controller.Close()
-	return err
+	return errors.Join(err, r.lifecycleSink.Close())
 }

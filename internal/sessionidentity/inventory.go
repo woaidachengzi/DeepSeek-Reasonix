@@ -54,12 +54,13 @@ const (
 
 // InventoryEntry is one row of the read-only session inventory.
 type InventoryEntry struct {
-	ID            string `json:"id"`
-	Path          string `json:"path"`
-	Exists        bool   `json:"exists"`
-	Registered    bool   `json:"registered"`
-	WorkspaceRoot string `json:"workspaceRoot,omitempty"`
-	Title         string `json:"title,omitempty"`
+	ID            string       `json:"id"`
+	Path          string       `json:"path"`
+	Exists        bool         `json:"exists"`
+	Registered    bool         `json:"registered"`
+	State         SessionState `json:"state,omitempty"`
+	WorkspaceRoot string       `json:"workspaceRoot,omitempty"`
+	Title         string       `json:"title,omitempty"`
 	// TitleSource is needed by the bridge's local sidecar audit but is not
 	// part of the inventory wire format or import-review manifest.
 	TitleSource TitleSource     `json:"-"`
@@ -80,7 +81,8 @@ type InventoryReport struct {
 	// Registered rows came from the same validated identity read as Entries.
 	// They are kept only in memory so the bridge can build a bounded directory
 	// snapshot without resolving every transcript path a second time.
-	registered []Record
+	registered      []Record
+	visibleSnapshot Page
 }
 
 // VisibleSnapshot builds the host's structural directory snapshot from the
@@ -89,6 +91,12 @@ type InventoryReport struct {
 func (report InventoryReport) VisibleSnapshot(limit int) (Page, error) {
 	if limit < 1 || limit > MaxVisibleSnapshotSize {
 		return Page{}, fmt.Errorf("session directory snapshot limit must be between 1 and %d", MaxVisibleSnapshotSize)
+	}
+	if len(report.visibleSnapshot.Records) > limit {
+		return Page{}, fmt.Errorf("session directory snapshot exceeds %d entries", limit)
+	}
+	if report.visibleSnapshot.SnapshotID != "" || len(report.visibleSnapshot.Records) > 0 {
+		return report.visibleSnapshot, nil
 	}
 	page := Page{Records: make([]Record, 0, min(len(report.registered), limit))}
 	hasher := newVisibleSnapshotHasher()
@@ -142,6 +150,10 @@ func Inventory(ctx context.Context, identities *Store, sessionDir, catalogPath s
 		if err != nil {
 			return InventoryReport{}, err
 		}
+		report.visibleSnapshot, err = identities.ListVisibleSnapshot(ctx, MaxVisibleSnapshotSize, "")
+		if err != nil {
+			return InventoryReport{}, err
+		}
 	}
 	report.registered = registered
 	byID := make(map[string]Record, len(registered))
@@ -153,6 +165,7 @@ func Inventory(ctx context.Context, identities *Store, sessionDir, catalogPath s
 			ID:            record.ID,
 			Path:          record.Path,
 			Registered:    true,
+			State:         record.State,
 			WorkspaceRoot: record.WorkspaceRoot,
 			Title:         record.Title,
 			TitleSource:   record.TitleSource,
@@ -185,7 +198,7 @@ func Inventory(ctx context.Context, identities *Store, sessionDir, catalogPath s
 		row := InventoryEntry{
 			ID:            entry.SessionID,
 			Path:          path,
-			WorkspaceRoot: strings.TrimSpace(entry.WorkspaceRoot),
+			WorkspaceRoot: entry.WorkspaceRoot,
 			Title:         entry.Title,
 			Source:        InventoryFromWorkbench,
 		}

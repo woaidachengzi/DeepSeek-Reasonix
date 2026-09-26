@@ -83,7 +83,7 @@ export function tauriWorkbenchSessions() {
 
 export function tauriWorkbenchProjectFolders() {
   record("workbench_project_folders");
-  return Promise.resolve((globalThis.__savedProjectFolders ?? []).slice());
+  return Promise.resolve({ folders: (globalThis.__savedProjectFolders ?? []).slice() });
 }
 
 export function rememberTauriWorkbenchProjectFolder(root) {
@@ -91,7 +91,7 @@ export function rememberTauriWorkbenchProjectFolder(root) {
   const folders = globalThis.__savedProjectFolders ?? [];
   if (!folders.some(folder => folder.root === root)) folders.push({ root });
   globalThis.__savedProjectFolders = folders;
-  return Promise.resolve(folders.slice());
+  return Promise.resolve({ folders: folders.slice() });
 }
 
 export function renameTauriWorkbenchProjectFolder(root, title) {
@@ -101,7 +101,7 @@ export function renameTauriWorkbenchProjectFolder(root, title) {
   if (folder) folder.title = title;
   else folders.push({ root, title });
   globalThis.__savedProjectFolders = folders;
-  return Promise.resolve(folders.slice());
+  return Promise.resolve({ folders: folders.slice() });
 }
 
 export function tauriWorkbenchSessionPage(cursor, limit = 200) {
@@ -120,6 +120,11 @@ export function tauriPendingSessionDeletes() {
   return Promise.resolve((globalThis.__pendingSessionDeletes ?? []).slice());
 }
 
+export function tauriPendingSessionDeletesPage(cursor, limit = 200) {
+  record("bridge_pending_session_deletes_page", { cursor, limit });
+  return Promise.resolve({ sessions: (globalThis.__pendingSessionDeletes ?? []).slice(), nextCursor: null });
+}
+
 export function tauriPendingSessionTitleRecoveries() {
   record("bridge_pending_session_title_recoveries");
   return Promise.resolve((globalThis.__pendingSessionTitleRecoveries ?? []).slice());
@@ -134,6 +139,16 @@ export function tauriWorkspaceRootsAvailability(roots) {
 export function tauriImportLegacySessionCatalog() {
   record("bridge_import_legacy_session_catalog");
   return Promise.resolve((globalThis.__workbenchSessions ?? []).length);
+}
+
+export function tauriScanUnclaimedSessions() {
+  record("bridge_scan_unclaimed_sessions");
+  return Promise.resolve(globalThis.__scanImportCandidates ?? { candidates: [], blockedCount: 0 });
+}
+
+export function tauriImportUnclaimedSessions(selected) {
+  record("bridge_import_unclaimed_sessions", { selected });
+  return Promise.resolve(selected.map(item => item.id));
 }
 
 export function tauriSessionCatalogShadow() {

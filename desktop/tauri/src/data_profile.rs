@@ -9,10 +9,12 @@ use serde::Serialize;
 use tauri::Manager;
 
 const CORE_PROFILE_DIR: &str = "reasonix-core";
+const PREVIEW_SQLITE_EVENTS_ENV: &str = "REASONIX_PREVIEW_SQLITE_EVENTS";
 const CONFIG_FILE: &str = "config.toml";
 const PROJECTS_FILE: &str = "desktop-projects.json";
 const MAX_PROJECTS_FILE: u64 = 4 * 1024 * 1024;
 const MAX_PROJECT_COUNT: usize = 10_000;
+const MAX_PROJECT_TITLE_CHARS: usize = 1024;
 
 /// The preview's private core profile and the stable config it may explicitly
 /// import. This state is created before `REASONIX_HOME` is changed, so the
@@ -64,6 +66,7 @@ pub struct ProjectFoldersImportResult {
 pub fn configure_preview_profile(app: &tauri::App) -> Result<PreviewProfile, String> {
     let stable_config = default_stable_config_path();
     if let Some(home) = explicit_reasonix_home() {
+        disable_managed_event_store();
         return Ok(PreviewProfile {
             home,
             stable_config,
@@ -105,6 +108,11 @@ fn enable_managed_profile(home: &Path) {
         std::env::remove_var("REASONIX_STATE_HOME");
     }
     std::env::set_var("REASONIX_HOME", home);
+    std::env::set_var(PREVIEW_SQLITE_EVENTS_ENV, "1");
+}
+
+fn disable_managed_event_store() {
+    std::env::remove_var(PREVIEW_SQLITE_EVENTS_ENV);
 }
 
 impl PreviewProfile {
@@ -236,9 +244,25 @@ impl PreviewProfile {
                 source.display()
             )
         })?;
-        if !opened_metadata.is_file() || opened_metadata.len() > MAX_PROJECTS_FILE {
+        let current_metadata = fs::symlink_metadata(&source).map_err(|error| {
+            format!(
+                "reinspect saved project folders {}: {error}",
+                source.display()
+            )
+        })?;
+        if current_metadata.file_type().is_symlink()
+            || !current_metadata.is_file()
+            || !opened_metadata.is_file()
+            || opened_metadata.len() > MAX_PROJECTS_FILE
+            || !crate::workbench_projects::same_file_as_path(&source, &file).map_err(|error| {
+                format!(
+                    "verify opened project folders {}: {error}",
+                    source.display()
+                )
+            })?
+        {
             return Err(
-                "the stable project folder file must be a regular file no larger than 4 MiB".into(),
+                "the stable project folder file changed while opening or is not a regular file no larger than 4 MiB".into(),
             );
         }
         let bytes = read_bounded_project_folders(file, MAX_PROJECTS_FILE)
@@ -263,15 +287,28 @@ impl PreviewProfile {
         let mut projects = Vec::with_capacity(stored.projects.len());
         let mut seen = std::collections::HashSet::new();
         for project in stored.projects {
-            let root = project.root.trim();
-            if root.is_empty()
+            let root = project.root;
+            if root.trim().is_empty()
                 || root.len() > 4096
                 || root.chars().any(char::is_control)
-                || !seen.insert(root.to_string())
+                || !Path::new(&root).is_absolute()
             {
                 continue;
             }
-            let title: String = project.title.trim().chars().take(256).collect();
+            let key = crate::workbench_projects::normalized_project_key(&root);
+            if !seen.insert(key) {
+                continue;
+            }
+            let title_without_controls: String = project
+                .title
+                .chars()
+                .filter(|character| !character.is_control())
+                .collect();
+            let title: String = title_without_controls
+                .trim()
+                .chars()
+                .take(MAX_PROJECT_TITLE_CHARS)
+                .collect();
             projects.push(serde_json::json!({ "root": root, "title": title }));
         }
         let project_count = projects.len();
@@ -280,29 +317,29 @@ impl PreviewProfile {
         fs::create_dir_all(&self.home)
             .map_err(|error| format!("create Preview profile {}: {error}", self.home.display()))?;
         let destination = self.project_folders_path();
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&destination)
+        let mut temporary = tempfile::Builder::new()
+            .prefix(".desktop-project-folders-import-")
+            .tempfile_in(&self.home)
             .map_err(|error| {
                 format!(
-                    "create Preview project folder file {} without overwriting: {error}",
-                    destination.display()
+                    "create temporary Preview project folder file in {}: {error}",
+                    self.home.display()
                 )
             })?;
-        if let Err(error) = file.write_all(&output).and_then(|()| file.sync_all()) {
-            drop(file);
-            let _ = fs::remove_file(&destination);
-            return Err(format!(
-                "write Preview project folders {}: {error}",
+        temporary
+            .write_all(&output)
+            .map_err(|error| format!("write temporary Preview project folders: {error}"))?;
+        restrict_config_permissions(temporary.path())?;
+        temporary
+            .as_file()
+            .sync_all()
+            .map_err(|error| format!("sync temporary Preview project folders: {error}"))?;
+        temporary.persist_noclobber(&destination).map_err(|error| {
+            format!(
+                "create Preview project folder file {} without overwriting: {error}",
                 destination.display()
-            ));
-        }
-        drop(file);
-        if let Err(error) = restrict_config_permissions(&destination) {
-            let _ = fs::remove_file(&destination);
-            return Err(error);
-        }
+            )
+        })?;
         Ok(ProjectFoldersImportResult {
             imported_file: destination.display().to_string(),
             project_count,
@@ -553,5 +590,18 @@ mod tests {
             Some(home.into_os_string()),
             "the preview home must be the Go core's state root"
         );
+        assert_eq!(
+            env::var(PREVIEW_SQLITE_EVENTS_ENV).as_deref(),
+            Ok("1"),
+            "managed Preview must opt into SQLite event storage"
+        );
+    }
+
+    #[test]
+    fn explicit_profile_disables_managed_event_store_capability() {
+        let _env = crate::test_env::guard();
+        env::set_var(PREVIEW_SQLITE_EVENTS_ENV, "1");
+        disable_managed_event_store();
+        assert_eq!(env::var_os(PREVIEW_SQLITE_EVENTS_ENV), None);
     }
 }

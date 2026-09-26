@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"reasonix/internal/agent"
 	appconfig "reasonix/internal/config"
 	"reasonix/internal/desktopbridge"
+	"reasonix/internal/desktopbridge/sessionpath"
 	"reasonix/internal/sessionidentity"
 	sessionstore "reasonix/internal/store"
 )
@@ -31,6 +33,33 @@ type sessionShadowSnapshotResponse struct {
 	Inventory       sessionInventoryResponse `json:"inventory"`
 }
 
+type sessionShadowAuditSnapshotResponse struct {
+	ProtocolVersion int                         `json:"protocolVersion"`
+	Directory       sessionListResponse         `json:"directory"`
+	Inventory       sessionShadowAuditInventory `json:"inventory"`
+}
+
+type sessionShadowAuditInventory struct {
+	ProtocolVersion int                       `json:"protocolVersion"`
+	Entries         []sessionShadowAuditEntry `json:"entries"`
+	UnclaimedCount  int                       `json:"unclaimedCount"`
+	ErrorCount      int                       `json:"errorCount"`
+	RetiredIDs      []string                  `json:"retiredIds"`
+}
+
+type sessionShadowAuditEntry struct {
+	ID       string `json:"id"`
+	Source   string `json:"source"`
+	Exists   bool   `json:"exists"`
+	Readable bool   `json:"readable"`
+}
+
+type sessionShadowAuditRequest struct {
+	LegacySessionIDs []string `json:"legacySessionIds"`
+}
+
+var errSessionShadowIdentityUnavailable = errors.New("session identity store is unavailable")
+
 // sessionInventory answers what the Preview profile holds without changing it.
 //
 // The identity path is resolved here rather than accepted from the request: it
@@ -51,18 +80,13 @@ func (b *bridgeServer) sessionInventory(w http.ResponseWriter, r *http.Request) 
 	if identityPath != "" {
 		// Existing schema versions are upgraded during bridge startup. This
 		// read-only request never creates the database or mutates session rows.
-		exists, err := sessionidentity.IdentityDatabaseExists(identityPath, appconfig.SessionProfileRoot())
+		store, exists, closeIdentity, err := b.readIdentityStore(r.Context(), identityPath, appconfig.SessionProfileRoot())
 		if err != nil {
 			b.writeRuntimeError(w, err, "unable to inspect the session identity store")
 			return
 		}
 		if exists {
-			store, err := sessionidentity.OpenReadOnly(r.Context(), identityPath, appconfig.SessionProfileRoot())
-			if err != nil {
-				b.writeRuntimeError(w, err, "unable to open the session identity store")
-				return
-			}
-			defer func() { _ = store.Close() }()
+			defer closeIdentity()
 			identities = store
 			identityStore = true
 		}
@@ -80,33 +104,13 @@ func (b *bridgeServer) sessionInventory(w http.ResponseWriter, r *http.Request) 
 // physical inventory instead of resolving every transcript path again for a
 // separate complete directory response. The host still verifies each page.
 func (b *bridgeServer) sessionShadowSnapshot(w http.ResponseWriter, r *http.Request) {
-	sessionDir, identityPath := appconfig.SessionDir(), appconfig.DesktopSessionIdentityPath()
-	if strings.TrimSpace(sessionDir) == "" || strings.TrimSpace(identityPath) == "" {
-		writeProtocolError(w, http.StatusServiceUnavailable, "internal", "session identity store is unavailable")
-		return
-	}
-	exists, err := sessionidentity.IdentityDatabaseExists(identityPath, appconfig.SessionProfileRoot())
+	report, snapshot, identityPath, identityStore, err := b.readSessionShadowSnapshot(r)
 	if err != nil {
-		b.writeRuntimeError(w, err, "unable to inspect the session identity store")
-		return
-	}
-	var identities *sessionidentity.Store
-	if exists {
-		identities, err = sessionidentity.OpenReadOnly(r.Context(), identityPath, appconfig.SessionProfileRoot())
-		if err != nil {
-			b.writeRuntimeError(w, err, "unable to open the session identity store")
+		if errors.Is(err, errSessionShadowIdentityUnavailable) {
+			writeProtocolError(w, http.StatusServiceUnavailable, "internal", "session identity store is unavailable")
 			return
 		}
-		defer func() { _ = identities.Close() }()
-	}
-	report, err := bridgeSessionInventory(r.Context(), identities, sessionDir, "")
-	if err != nil {
 		b.writeRuntimeError(w, err, "unable to audit the session directory")
-		return
-	}
-	snapshot, err := report.VisibleSnapshot(sessionidentity.MaxVisibleSnapshotSize)
-	if err != nil {
-		b.writeRuntimeError(w, err, "unable to read the session directory snapshot")
 		return
 	}
 	writeJSON(w, http.StatusOK, sessionShadowSnapshotResponse{
@@ -115,8 +119,105 @@ func (b *bridgeServer) sessionShadowSnapshot(w http.ResponseWriter, r *http.Requ
 			ProtocolVersion: desktopbridge.ProtocolVersion,
 			Sessions:        sessionListEntries(snapshot.Records), Total: snapshot.Total, SnapshotID: snapshot.SnapshotID,
 		},
-		Inventory: sessionInventoryEnvelope(report, identityPath, exists),
+		Inventory: sessionInventoryEnvelope(report, identityPath, identityStore),
 	})
+}
+
+// sessionShadowAuditSnapshot sends only the physical state needed to validate
+// the visible directory. The older full shadow-snapshot endpoint remains for
+// existing hosts; this bounded projection avoids transmitting every scanned
+// path and diagnostic string on each Tauri audit.
+func (b *bridgeServer) sessionShadowAuditSnapshot(w http.ResponseWriter, r *http.Request) {
+	var request sessionShadowAuditRequest
+	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid shadow audit request")
+		return
+	}
+	if len(request.LegacySessionIDs) > 50 {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "shadow audit contains too many legacy IDs")
+		return
+	}
+	legacyIDs := make(map[string]struct{}, len(request.LegacySessionIDs))
+	for _, id := range request.LegacySessionIDs {
+		if !sessionpath.ValidID(id) {
+			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "shadow audit contains an invalid legacy ID")
+			return
+		}
+		if _, duplicate := legacyIDs[id]; duplicate {
+			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "shadow audit contains duplicate legacy IDs")
+			return
+		}
+		legacyIDs[id] = struct{}{}
+	}
+	report, snapshot, _, _, err := b.readSessionShadowSnapshot(r)
+	if err != nil {
+		if errors.Is(err, errSessionShadowIdentityUnavailable) {
+			writeProtocolError(w, http.StatusServiceUnavailable, "internal", "session identity store is unavailable")
+			return
+		}
+		b.writeRuntimeError(w, err, "unable to audit the session directory")
+		return
+	}
+	visibleIDs := make(map[string]struct{}, len(snapshot.Records))
+	for _, record := range snapshot.Records {
+		visibleIDs[record.ID] = struct{}{}
+	}
+	entries := make([]sessionShadowAuditEntry, 0, len(snapshot.Records))
+	retiredIDs := make([]string, 0)
+	for _, entry := range report.Entries {
+		if entry.Source != sessionidentity.InventoryFromIdentity {
+			continue
+		}
+		retired := entry.State == sessionidentity.StateDeleting ||
+			(entry.State == sessionidentity.StateDeleted && !entry.Exists && entry.Detail == "transcript is absent")
+		if _, requested := legacyIDs[entry.ID]; requested && retired {
+			retiredIDs = append(retiredIDs, entry.ID)
+		}
+		if _, visible := visibleIDs[entry.ID]; !visible {
+			continue
+		}
+		entries = append(entries, sessionShadowAuditEntry{
+			ID: entry.ID, Source: string(entry.Source), Exists: entry.Exists,
+			Readable: entry.Detail == "" || entry.Detail == "transcript is absent",
+		})
+	}
+	writeJSON(w, http.StatusOK, sessionShadowAuditSnapshotResponse{
+		ProtocolVersion: desktopbridge.ProtocolVersion,
+		Directory: sessionListResponse{
+			ProtocolVersion: desktopbridge.ProtocolVersion,
+			Sessions:        sessionListEntries(snapshot.Records), Total: snapshot.Total, SnapshotID: snapshot.SnapshotID,
+		},
+		Inventory: sessionShadowAuditInventory{
+			ProtocolVersion: desktopbridge.ProtocolVersion,
+			Entries:         entries,
+			UnclaimedCount:  len(report.Unclaimed),
+			ErrorCount:      len(report.Errors),
+			RetiredIDs:      retiredIDs,
+		},
+	})
+}
+
+func (b *bridgeServer) readSessionShadowSnapshot(r *http.Request) (sessionidentity.InventoryReport, sessionidentity.Page, string, bool, error) {
+	sessionDir, identityPath := appconfig.SessionDir(), appconfig.DesktopSessionIdentityPath()
+	if strings.TrimSpace(sessionDir) == "" || strings.TrimSpace(identityPath) == "" {
+		return sessionidentity.InventoryReport{}, sessionidentity.Page{}, "", false, errSessionShadowIdentityUnavailable
+	}
+	identities, exists, closeIdentity, err := b.readIdentityStore(r.Context(), identityPath, appconfig.SessionProfileRoot())
+	if err != nil {
+		return sessionidentity.InventoryReport{}, sessionidentity.Page{}, "", false, err
+	}
+	if exists {
+		defer closeIdentity()
+	}
+	report, err := bridgeSessionInventory(r.Context(), identities, sessionDir, "")
+	if err != nil {
+		return sessionidentity.InventoryReport{}, sessionidentity.Page{}, "", false, err
+	}
+	snapshot, err := report.VisibleSnapshot(sessionidentity.MaxVisibleSnapshotSize)
+	if err != nil {
+		return sessionidentity.InventoryReport{}, sessionidentity.Page{}, "", false, err
+	}
+	return report, snapshot, identityPath, exists, nil
 }
 
 func sessionInventoryEnvelope(report sessionidentity.InventoryReport, identityPath string, identityStore bool) sessionInventoryResponse {

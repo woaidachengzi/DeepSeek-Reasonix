@@ -22,17 +22,20 @@ use tauri_plugin_shell::{
 };
 use tempfile::TempDir;
 
+use crate::workbench_projects::normalized_project_key;
+
 const BRIDGE_TOKEN_ENV: &str = "REASONIX_DESKTOP_BRIDGE_TOKEN";
 const BRIDGE_BINARY_ENV: &str = "REASONIX_DESKTOP_BRIDGE_BIN";
 const BUNDLED_BRIDGE_NAME: &str = "reasonix-desktop-bridge";
 const READY_TIMEOUT: Duration = Duration::from_secs(5);
 const STOP_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_SHADOW_SESSIONS: usize = 10_000;
+const MAX_PENDING_DELETE_PAGE_SIZE: usize = 200;
 const MAX_BRIDGE_RESPONSE_BODY_BYTES: usize = 32 * 1024 * 1024;
 const MAX_BRIDGE_HTTP_RESPONSE_BYTES: usize = 64 * 1024 * 1024;
 pub const PROTOCOL_VERSION: u8 = 1;
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeStatus {
     pub running: bool,
@@ -77,6 +80,12 @@ pub struct SessionDirectoryCursor {
     pub id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub snapshot_id: Option<String>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub total: u64,
+}
+
+fn is_zero(value: &u64) -> bool {
+    *value == 0
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -109,11 +118,39 @@ pub struct PendingSessionDelete {
     pub title: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingSessionDeleteCursor {
+    pub id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingSessionDeletePage {
+    pub sessions: Vec<PendingSessionDelete>,
+    pub next_cursor: Option<PendingSessionDeleteCursor>,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PendingSessionDeletesResponse {
     protocol_version: u8,
     sessions: Vec<PendingSessionDelete>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PendingSessionDeletesPageResponse {
+    protocol_version: u8,
+    sessions: Vec<PendingSessionDeletePageEntry>,
+    next_cursor: Option<PendingSessionDeleteCursor>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PendingSessionDeletePageEntry {
+    id: String,
+    title: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -139,6 +176,9 @@ struct SessionInventoryResponse {
     entries: Option<Vec<SessionInventoryEntry>>,
     unclaimed: Option<Vec<String>>,
     errors: Option<Vec<String>>,
+    unclaimed_count: Option<usize>,
+    error_count: Option<usize>,
+    retired_ids: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -155,6 +195,7 @@ struct SessionInventoryEntry {
     id: String,
     source: String,
     exists: bool,
+    readable: Option<bool>,
     #[serde(default)]
     detail: String,
 }
@@ -169,6 +210,7 @@ pub struct SessionPhysicalInventory {
     pub states: Vec<SessionPhysicalState>,
     pub unclaimed_count: usize,
     pub error_count: usize,
+    pub retired_ids: Vec<String>,
 }
 
 impl SessionInventoryResponse {
@@ -179,12 +221,36 @@ impl SessionInventoryResponse {
         let entries = self
             .entries
             .ok_or_else(|| "desktop bridge inventory omitted entries".to_string())?;
-        let unclaimed = self
-            .unclaimed
+        let unclaimed_count = self
+            .unclaimed_count
+            .or_else(|| self.unclaimed.as_ref().map(Vec::len))
             .ok_or_else(|| "desktop bridge inventory omitted unclaimed files".to_string())?;
-        let errors = self
-            .errors
-            .ok_or_else(|| "desktop bridge inventory omitted errors".to_string())?;
+        let error_count = self
+            .error_count
+            .or_else(|| self.errors.as_ref().map(Vec::len))
+            .ok_or_else(|| "desktop bridge inventory omitted diagnostics".to_string())?;
+        if self
+            .unclaimed
+            .as_ref()
+            .is_some_and(|entries| entries.len() != unclaimed_count)
+            || self
+                .errors
+                .as_ref()
+                .is_some_and(|entries| entries.len() != error_count)
+        {
+            return Err("desktop bridge inventory counts are inconsistent".to_string());
+        }
+        let retired_ids = self.retired_ids.unwrap_or_default();
+        if retired_ids.len() > 50 {
+            return Err("desktop bridge inventory contains too many retired IDs".to_string());
+        }
+        let mut seen_retired = std::collections::HashSet::with_capacity(retired_ids.len());
+        if retired_ids
+            .iter()
+            .any(|id| !seen_retired.insert(id.as_str()))
+        {
+            return Err("desktop bridge inventory contains duplicate retired IDs".to_string());
+        }
         Ok(SessionPhysicalInventory {
             states: entries
                 .into_iter()
@@ -192,11 +258,14 @@ impl SessionInventoryResponse {
                 .map(|entry| SessionPhysicalState {
                     id: entry.id,
                     exists: entry.exists,
-                    readable: entry.detail.is_empty() || entry.detail == "transcript is absent",
+                    readable: entry.readable.unwrap_or_else(|| {
+                        entry.detail.is_empty() || entry.detail == "transcript is absent"
+                    }),
                 })
                 .collect(),
-            unclaimed_count: unclaimed.len(),
-            error_count: errors.len(),
+            unclaimed_count,
+            error_count,
+            retired_ids,
         })
     }
 }
@@ -214,6 +283,39 @@ pub struct LegacySessionCatalogEntry {
 struct LegacyCatalogImportResponse {
     protocol_version: u64,
     accepted: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanImportCandidate {
+    pub id: String,
+    pub file: String,
+    pub transcript_sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanImportSelection {
+    pub id: String,
+    pub title: Option<String>,
+    pub workspace_root: Option<String>,
+    pub transcript_sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ScanImportCandidatesResponse {
+    protocol_version: u64,
+    candidates: Vec<ScanImportCandidate>,
+    blocked_count: usize,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ScanImportApplyResponse {
+    protocol_version: u64,
+    applied: usize,
+    session_ids: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -790,8 +892,7 @@ impl BridgeSupervisor {
     ) -> Result<SessionDirectoryPage, String> {
         let workspace_root = workspace_root
             .as_deref()
-            .map(str::trim)
-            .filter(|root| !root.is_empty());
+            .filter(|root| !root.trim().is_empty());
         let path = session_directory_path(limit, cursor.as_ref(), workspace_root)?;
         let response = self.request_json("GET", &path, None, None)?;
         let page: SessionDirectoryPage = serde_json::from_value(response).map_err(display_error)?;
@@ -812,6 +913,7 @@ impl BridgeSupervisor {
                 project.root.trim().is_empty()
                     || project.root.len() > 4096
                     || project.root.chars().any(char::is_control)
+                    || !Path::new(&project.root).is_absolute()
                     || project
                         .title
                         .as_ref()
@@ -820,16 +922,17 @@ impl BridgeSupervisor {
         {
             return Err("desktop bridge returned an invalid project folder list".to_string());
         }
-        Ok(envelope
-            .projects
-            .into_iter()
-            .map(|mut project| {
-                if let Some(title) = project.title.as_mut() {
-                    title.retain(|character| !character.is_control());
-                }
-                project
-            })
-            .collect())
+        let mut seen = std::collections::HashSet::with_capacity(envelope.projects.len());
+        let mut projects = Vec::with_capacity(envelope.projects.len());
+        for mut project in envelope.projects {
+            if let Some(title) = project.title.as_mut() {
+                title.retain(|character| !character.is_control());
+            }
+            if seen.insert(normalized_project_key(&project.root)) {
+                projects.push(project);
+            }
+        }
+        Ok(projects)
     }
 
     /// Read the entire visible directory for a bounded, diagnostic-only
@@ -842,14 +945,14 @@ impl BridgeSupervisor {
         self.session_directory_snapshot_for_workspace(None)
     }
 
+    #[cfg(test)]
     pub fn session_directory_snapshot_for_workspace(
         &self,
         workspace_root: Option<String>,
     ) -> Result<(Vec<SessionDirectoryEntry>, String), String> {
         let workspace_root = workspace_root
             .as_deref()
-            .map(str::trim)
-            .filter(|root| !root.is_empty());
+            .filter(|root| !root.trim().is_empty());
         let path = mcp_path("/v1/sessions/snapshot", workspace_root)?;
         let response = self.request_json("GET", &path, None, None)?;
         let snapshot: SessionDirectoryPage =
@@ -859,11 +962,21 @@ impl BridgeSupervisor {
     }
 
     /// One complete physical audit and directory projection per guarded page.
-    /// The displayed page is still fetched separately with this snapshot ID.
+    /// The compact response omits scanned filesystem paths; the displayed page
+    /// is still fetched separately with this snapshot ID.
     pub fn session_shadow_snapshot(
         &self,
+        legacy_session_ids: &[String],
     ) -> Result<(Vec<SessionDirectoryEntry>, String, SessionPhysicalInventory), String> {
-        let response = self.request_json("GET", "/v1/sessions/shadow-snapshot", None, None)?;
+        if legacy_session_ids.len() > 50 {
+            return Err("too many legacy sessions for shadow audit".to_string());
+        }
+        let response = self.request_json(
+            "POST",
+            "/v1/sessions/shadow-audit-snapshot",
+            Some(json!({"legacySessionIds": legacy_session_ids})),
+            None,
+        )?;
         let snapshot: SessionShadowSnapshotResponse =
             serde_json::from_value(response).map_err(display_error)?;
         if snapshot.protocol_version != PROTOCOL_VERSION {
@@ -871,6 +984,15 @@ impl BridgeSupervisor {
         }
         validate_session_directory_snapshot(&snapshot.directory, None)?;
         let physical = snapshot.inventory.into_physical_inventory()?;
+        let requested: std::collections::HashSet<_> =
+            legacy_session_ids.iter().map(String::as_str).collect();
+        if physical
+            .retired_ids
+            .iter()
+            .any(|id| !requested.contains(id.as_str()))
+        {
+            return Err("desktop bridge returned an unrelated retired session ID".to_string());
+        }
         Ok((
             snapshot.directory.sessions,
             snapshot.directory.snapshot_id,
@@ -885,6 +1007,24 @@ impl BridgeSupervisor {
         let envelope: PendingSessionDeletesResponse =
             serde_json::from_value(response).map_err(display_error)?;
         validate_pending_session_deletes(envelope)
+    }
+
+    pub fn pending_session_deletes_page(
+        &self,
+        cursor: Option<PendingSessionDeleteCursor>,
+    ) -> Result<PendingSessionDeletePage, String> {
+        let mut path =
+            format!("/v1/sessions/deletion-recovery/page?limit={MAX_PENDING_DELETE_PAGE_SIZE}");
+        if let Some(cursor) = cursor {
+            if session_path_component(&cursor.id)? != cursor.id {
+                return Err("desktop bridge deletion recovery cursor is invalid".to_string());
+            }
+            path.push_str(&format!("&cursorId={}", cursor.id));
+        }
+        let response = self.request_json("GET", &path, None, None)?;
+        let envelope: PendingSessionDeletesPageResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        validate_pending_session_deletes_page(envelope)
     }
 
     /// Lists incomplete manual title renames independently of the bounded
@@ -933,6 +1073,61 @@ impl BridgeSupervisor {
             return Err("desktop bridge catalog import response is invalid".to_string());
         }
         Ok(envelope.accepted)
+    }
+
+    pub fn scan_import_candidates(
+        &self,
+        catalog_path: &str,
+    ) -> Result<(Vec<ScanImportCandidate>, usize), String> {
+        let response = self.request_json(
+            "POST",
+            "/v1/sessions/scan-import-candidates",
+            Some(json!({ "catalogPath": catalog_path })),
+            None,
+        )?;
+        let envelope: ScanImportCandidatesResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION)
+            || envelope.candidates.len() > 10_000
+            || envelope.candidates.iter().any(|item| {
+                item.id.is_empty()
+                    || item.file != format!("tauri-{}.jsonl", item.id)
+                    || item.transcript_sha256.len() != 64
+                    || !item
+                        .transcript_sha256
+                        .bytes()
+                        .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+            })
+        {
+            return Err("desktop bridge scan import inventory is invalid".to_string());
+        }
+        Ok((envelope.candidates, envelope.blocked_count))
+    }
+
+    pub fn import_scan_sessions(
+        &self,
+        catalog_path: &str,
+        selected: Vec<ScanImportSelection>,
+    ) -> Result<Vec<String>, String> {
+        if selected.is_empty() || selected.len() > 10_000 {
+            return Err("scan import selection is empty or too large".to_string());
+        }
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/sessions/import-scan",
+            Some(json!({ "catalogPath": catalog_path, "selected": selected })),
+            Some(&request_id),
+        )?;
+        let envelope: ScanImportApplyResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION)
+            || envelope.applied != selected.len()
+            || envelope.session_ids.len() != selected.len()
+        {
+            return Err("desktop bridge scan import response is invalid".to_string());
+        }
+        Ok(envelope.session_ids)
     }
 
     pub fn delete_session(
@@ -1568,6 +1763,13 @@ fn verify_bridge_health(response: Value, expected_instance_id: &str) -> Result<(
     if !health
         .capabilities
         .iter()
+        .any(|capability| capability == "session_shadow_audit_snapshot_v1")
+    {
+        return Err("desktop bridge does not support compact session shadow snapshots".to_string());
+    }
+    if !health
+        .capabilities
+        .iter()
         .any(|capability| capability == "session_delete_recovery_list_v1")
     {
         return Err(
@@ -1841,10 +2043,7 @@ fn prompt_id_component(prompt_id: &str) -> Result<String, String> {
 /// project configuration file, so it travels as a query parameter and is bounds
 /// checked here rather than trusted by the sidecar.
 fn mcp_path(base: &str, workspace_root: Option<&str>) -> Result<String, String> {
-    let Some(root) = workspace_root
-        .map(str::trim)
-        .filter(|root| !root.is_empty())
-    else {
+    let Some(root) = workspace_root.filter(|root| !root.trim().is_empty()) else {
         return Ok(base.to_string());
     };
     if root.len() > 4096 || root.contains('\0') {
@@ -1882,6 +2081,12 @@ fn session_directory_path(
             "&cursorPosition={}&cursorId={id}",
             cursor.position
         ));
+        if cursor.total > 0 {
+            if cursor.total > 10_000 {
+                return Err("desktop bridge session page cursor is invalid".to_string());
+            }
+            path.push_str(&format!("&cursorTotal={}", cursor.total));
+        }
         if let Some(snapshot_id) = cursor.snapshot_id.as_deref() {
             if !valid_session_snapshot_id(snapshot_id) {
                 return Err("desktop bridge session page cursor is invalid".to_string());
@@ -1901,6 +2106,7 @@ fn validate_session_directory_page(
     if page.protocol_version != PROTOCOL_VERSION
         || page.sessions.len() > usize::from(limit)
         || page.total < page.sessions.len() as u64
+        || page.total > MAX_SHADOW_SESSIONS as u64
         || !valid_session_snapshot_id(&page.snapshot_id)
     {
         return Err("desktop bridge session page is invalid".to_string());
@@ -1921,6 +2127,7 @@ fn validate_session_directory_page(
             position: entry.position,
             id: entry.id.clone(),
             snapshot_id: None,
+            total: 0,
         };
         if previous
             .as_ref()
@@ -1935,6 +2142,7 @@ fn validate_session_directory_page(
             || previous.as_ref().map(|key| (key.position, key.id.as_str()))
                 != Some((next.position, next.id.as_str()))
             || next.snapshot_id.as_deref() != Some(page.snapshot_id.as_str())
+            || next.total != page.total
         {
             return Err("desktop bridge session page cursor is invalid".to_string());
         }
@@ -2007,6 +2215,50 @@ fn validate_pending_session_deletes(
         }
     }
     Ok(envelope.sessions)
+}
+
+fn validate_pending_session_deletes_page(
+    envelope: PendingSessionDeletesPageResponse,
+) -> Result<PendingSessionDeletePage, String> {
+    if envelope.protocol_version != PROTOCOL_VERSION
+        || envelope.sessions.len() > MAX_PENDING_DELETE_PAGE_SIZE
+    {
+        return Err("desktop bridge deletion recovery page is invalid".to_string());
+    }
+    let mut seen = std::collections::HashSet::with_capacity(envelope.sessions.len());
+    let mut previous: Option<&str> = None;
+    for pending in &envelope.sessions {
+        if session_path_component(&pending.id)? != pending.id
+            || pending.title.chars().count() > 1024
+            || pending.title.chars().any(char::is_control)
+            || !seen.insert(pending.id.as_str())
+            || previous.is_some_and(|id| pending.id.as_str() <= id)
+        {
+            return Err("desktop bridge deletion recovery entry is invalid".to_string());
+        }
+        previous = Some(&pending.id);
+    }
+    if let Some(cursor) = &envelope.next_cursor {
+        if session_path_component(&cursor.id)? != cursor.id
+            || envelope
+                .sessions
+                .last()
+                .map_or(true, |entry| entry.id != cursor.id)
+        {
+            return Err("desktop bridge deletion recovery cursor is invalid".to_string());
+        }
+    }
+    Ok(PendingSessionDeletePage {
+        sessions: envelope
+            .sessions
+            .into_iter()
+            .map(|entry| PendingSessionDelete {
+                id: entry.id,
+                title: entry.title,
+            })
+            .collect(),
+        next_cursor: envelope.next_cursor,
+    })
 }
 
 fn validate_pending_session_title_recoveries(
@@ -2219,7 +2471,7 @@ mod tests {
             "protocolVersion": 1,
             "status": "ok",
             "sidecarInstanceId": "instance",
-            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1"],
+            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1"],
         });
         assert!(verify_bridge_health(healthy.clone(), "instance").is_ok());
         assert!(verify_bridge_health(healthy.clone(), "other").is_err());
@@ -2268,7 +2520,7 @@ mod tests {
             "protocolVersion": 1,
             "status": "ok",
             "sidecarInstanceId": "instance",
-            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1"],
+            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1"],
         });
         assert!(verify_bridge_health(old_recovery_sidecar, "instance")
             .unwrap_err()
@@ -2278,7 +2530,7 @@ mod tests {
             "protocolVersion": 1,
             "status": "ok",
             "sidecarInstanceId": "instance",
-            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_delete_recovery_list_v1"],
+            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1"],
         });
         assert!(verify_bridge_health(old_title_intent_sidecar, "instance")
             .unwrap_err()
@@ -2288,7 +2540,7 @@ mod tests {
             "protocolVersion": 1,
             "status": "ok",
             "sidecarInstanceId": "instance",
-            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1"],
+            "capabilities": ["open_session", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1"],
         });
         assert!(verify_bridge_health(old_title_recovery_sidecar, "instance")
             .unwrap_err()
@@ -2384,6 +2636,7 @@ mod tests {
             position: 12,
             id: "session-009".to_string(),
             snapshot_id: Some("a".repeat(64)),
+            total: 0,
         };
         assert_eq!(
             session_directory_path(73, Some(&cursor), Some("/work/a b")).unwrap(),
@@ -2397,6 +2650,7 @@ mod tests {
                 position: 0,
                 id: "../outside".to_string(),
                 snapshot_id: None,
+                total: 0,
             }),
             None,
         )
@@ -2422,6 +2676,7 @@ mod tests {
                 position: 12,
                 id: "session-002".to_string(),
                 snapshot_id: Some("a".repeat(64)),
+                total: 3,
             }),
             total: 3,
             snapshot_id: "a".repeat(64),
@@ -2431,6 +2686,7 @@ mod tests {
             position: 12,
             id: "session-001".to_string(),
             snapshot_id: Some("a".repeat(64)),
+            total: 0,
         };
         assert!(validate_session_directory_page(&page, 2, Some(&after), None).is_err());
         let changed_snapshot = SessionDirectoryCursor {
@@ -2476,6 +2732,7 @@ mod tests {
             position: 4,
             id: "session-002".to_string(),
             snapshot_id: Some(snapshot.snapshot_id.clone()),
+            total: snapshot.total,
         });
         assert!(validate_session_directory_snapshot(&snapshot, None).is_err());
     }
@@ -2868,7 +3125,7 @@ mod tests {
             })
             .expect("reserve session");
         let (directory, snapshot_id, physical) = supervisor
-            .session_shadow_snapshot()
+            .session_shadow_snapshot(&[])
             .expect("read combined identity directory and physical inventory");
         assert_eq!(
             snapshot_id,
@@ -2999,7 +3256,7 @@ mod tests {
         assert_eq!(inventory.unclaimed_count, 0);
         assert_eq!(inventory.error_count, 0);
         let (directory, _, combined_inventory) = supervisor
-            .session_shadow_snapshot()
+            .session_shadow_snapshot(&[])
             .expect("read complete empty shadow snapshot");
         assert!(directory.is_empty());
         assert!(combined_inventory.states.is_empty());
@@ -3140,6 +3397,74 @@ mod tests {
             "the title must be read back from core session metadata"
         );
         supervisor.stop().expect("stop bridge");
+    }
+
+    #[test]
+    fn managed_preview_sidecar_imports_and_repairs_sqlite_event_projection() {
+        let Some(binary) = bridge_under_test() else {
+            return;
+        };
+        let _env = crate::test_env::guard();
+        let home = tempfile::tempdir().expect("isolated Preview profile");
+        env::set_var("REASONIX_HOME", home.path());
+        env::remove_var("REASONIX_STATE_HOME");
+        env::set_var("REASONIX_PREVIEW_SQLITE_EVENTS", "1");
+        let supervisor = BridgeSupervisor::with_binary(binary);
+        supervisor.start().expect("start managed Preview sidecar");
+
+        let session_id = "tauri-e2e-sqlite-events";
+        let opened = supervisor
+            .open_session(OpenSessionRequest {
+                session_id: session_id.to_string(),
+                workspace_root: None,
+            })
+            .expect("reserve Preview session");
+        let session_path = std::path::PathBuf::from(&opened.path);
+        let stem = session_path
+            .file_stem()
+            .expect("session transcript filename")
+            .to_string_lossy();
+        let event_path = session_path
+            .parent()
+            .expect("session transcript directory")
+            .join(format!("{stem}.events.jsonl"));
+        std::fs::write(
+            &session_path,
+            b"{\"role\":\"user\",\"content\":\"legacy checkpoint\"}\n",
+        )
+        .expect("write isolated compatibility checkpoint");
+        let legacy_events = b"{\"schema_version\":2,\"type\":\"log\",\"generation\":1,\"at\":\"2026-09-26T00:00:00Z\"}\n";
+        std::fs::write(&event_path, legacy_events).expect("write schema-2 source event log");
+
+        supervisor.restart().expect("restart before legacy import");
+        supervisor
+            .open_session(OpenSessionRequest {
+                session_id: session_id.to_string(),
+                workspace_root: None,
+            })
+            .expect("import legacy schema-2 log into SQLite");
+        let database_path = home.path().join("desktop/session-state-v1.sqlite");
+        assert!(
+            database_path.is_file(),
+            "managed Preview SQLite database was not created"
+        );
+
+        std::fs::write(&event_path, b"stale projection\n").expect("corrupt only the projection");
+        supervisor
+            .restart()
+            .expect("restart before projection recovery");
+        supervisor
+            .open_session(OpenSessionRequest {
+                session_id: session_id.to_string(),
+                workspace_root: None,
+            })
+            .expect("recover event projection from SQLite");
+        let repaired = std::fs::read(&event_path).expect("read repaired event projection");
+        let repaired_text = String::from_utf8(repaired).expect("UTF-8 event projection");
+        assert!(repaired_text.starts_with(
+            std::str::from_utf8(legacy_events).expect("legacy event projection UTF-8")
+        ));
+        supervisor.stop().expect("stop managed Preview sidecar");
     }
 
     // Deleting is the only bridge operation that destroys user data, so the

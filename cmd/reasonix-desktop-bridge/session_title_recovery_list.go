@@ -29,7 +29,7 @@ func (b *bridgeServer) pendingSessionTitleRecoveries(w http.ResponseWriter, r *h
 		writeProtocolError(w, http.StatusServiceUnavailable, "internal", "session identity store is unavailable")
 		return
 	}
-	exists, err := sessionidentity.IdentityDatabaseExists(identityPath, appconfig.SessionProfileRoot())
+	identities, exists, closeIdentity, err := b.readIdentityStore(r.Context(), identityPath, appconfig.SessionProfileRoot())
 	if err != nil {
 		b.writeRuntimeError(w, err, "unable to inspect session title recovery state")
 		return
@@ -41,12 +41,7 @@ func (b *bridgeServer) pendingSessionTitleRecoveries(w http.ResponseWriter, r *h
 		})
 		return
 	}
-	identities, err := sessionidentity.OpenReadOnly(r.Context(), identityPath, appconfig.SessionProfileRoot())
-	if err != nil {
-		b.writeRuntimeError(w, err, "unable to open session title recovery state")
-		return
-	}
-	defer func() { _ = identities.Close() }()
+	defer closeIdentity()
 	recoveries, err := identities.ListPendingManualTitleRecoveries(r.Context())
 	if err != nil {
 		b.writeRuntimeError(w, err, "unable to read session title recovery state")
