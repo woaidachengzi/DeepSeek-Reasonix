@@ -479,6 +479,26 @@ pub struct PermissionSettingsChange {
     pub rule: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SandboxSettingsView {
+    pub protocol_version: u64,
+    pub bash: String,
+    pub network: bool,
+    pub workspace_root: String,
+    pub allow_write: Vec<String>,
+    pub platform: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SandboxSettingsChange {
+    pub bash: String,
+    pub network: bool,
+    pub workspace_root: String,
+    pub allow_write: Vec<String>,
+}
+
 /// One MCP server as the host may see it. Credential material is write-only, so
 /// this carries the key names a server expects and never a value. Hand-written
 /// like the other host-owned payloads: the wire shape belongs to this host, not
@@ -1327,6 +1347,33 @@ impl BridgeSupervisor {
         )?;
         let view: PermissionSettingsView =
             serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn sandbox_settings(&self) -> Result<SandboxSettingsView, String> {
+        let response = self.request_json("GET", "/v1/settings/sandbox", None, None)?;
+        let view: SandboxSettingsView = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn change_sandbox_settings(
+        &self,
+        change: SandboxSettingsChange,
+    ) -> Result<SandboxSettingsView, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/sandbox",
+            Some(json!(change)),
+            Some(&request_id),
+        )?;
+        let view: SandboxSettingsView = serde_json::from_value(response).map_err(display_error)?;
         if view.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }

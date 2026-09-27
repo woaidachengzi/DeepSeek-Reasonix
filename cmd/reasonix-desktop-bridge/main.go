@@ -459,6 +459,8 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("POST /v1/settings/usage-stats", b.authorized(b.usageStats))
 	mux.HandleFunc("GET /v1/settings/permissions", b.authorized(b.permissionSettings))
 	mux.HandleFunc("POST /v1/settings/permissions", b.authorized(b.idempotent(64<<10, b.changePermissionSettings)))
+	mux.HandleFunc("GET /v1/settings/sandbox", b.authorized(b.sandboxSettings))
+	mux.HandleFunc("POST /v1/settings/sandbox", b.authorized(b.idempotent(64<<10, b.changeSandboxSettings)))
 	mux.HandleFunc("POST /v1/settings/default-model", b.authorized(b.idempotent(64<<10, b.setDefaultModel)))
 	mux.HandleFunc("GET /v1/settings/desktop", b.authorized(b.desktopPreferences))
 	mux.HandleFunc("POST /v1/settings/desktop/approval", b.authorized(b.idempotent(64<<10, b.setDesktopApproval)))
@@ -622,7 +624,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "provider_summary", "provider_configs", "save_provider_config", "usage_stats", "permission_settings", "set_permission_settings", "set_default_model", "desktop_preferences", "set_desktop_approval", "set_provider_key", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "session_scan_import_review_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "provider_configs", "save_provider_config", "usage_stats", "permission_settings", "set_permission_settings", "sandbox_settings", "set_sandbox_settings", "set_default_model", "desktop_preferences", "set_desktop_approval", "set_provider_key", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "session_scan_import_review_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
 	})
 }
 
@@ -693,6 +695,29 @@ func (b *bridgeServer) changePermissionSettings(w http.ResponseWriter, r *http.R
 	view, err := persistPermissionChange(change)
 	if err != nil {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "permission settings could not be saved")
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (b *bridgeServer) sandboxSettings(w http.ResponseWriter, _ *http.Request) {
+	view, err := loadSandboxSettings()
+	if err != nil {
+		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read Preview sandbox settings")
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (b *bridgeServer) changeSandboxSettings(w http.ResponseWriter, r *http.Request) {
+	var change sandboxSettingsChange
+	if err := decodeJSONBody(w, r, 64<<10, &change); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid sandbox settings request")
+		return
+	}
+	view, err := persistSandboxSettings(change)
+	if err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "sandbox settings could not be saved")
 		return
 	}
 	writeJSON(w, http.StatusOK, view)

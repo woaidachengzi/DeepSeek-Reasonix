@@ -36,6 +36,7 @@ let closeBehavior = "keep_running";
 let approvalMode = "auto";
 let defaultModel = "";
 const permissions = { protocolVersion: 1, mode: "ask", allow: [] as string[], ask: [] as string[], deny: [] as string[] };
+let sandbox = { protocolVersion: 1, bash: "enforce", network: true, workspaceRoot: "", allowWrite: [] as string[], platform: "darwin" };
 let savedProviderInput: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean } | undefined;
 const summary = () => ({
   protocolVersion: 1,
@@ -44,7 +45,7 @@ const summary = () => ({
 });
 
 (dom.window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
-  async invoke(command: string, args?: { url?: string; behavior?: string; mode?: string; request?: { model?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean }; change?: { action: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string } }) {
+  async invoke(command: string, args?: { url?: string; behavior?: string; mode?: string; request?: { model?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean }; change?: { action?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[] } }) {
     calls.push(command);
     switch (command) {
       case "preview_runtime_info":
@@ -66,6 +67,8 @@ const summary = () => ({
         }
         return { ...permissions };
       }
+      case "sandbox_settings": return { ...sandbox };
+      case "change_sandbox_settings": sandbox = { ...sandbox, ...args?.change }; return { ...sandbox };
       case "set_default_model": defaultModel = args?.request?.model ?? ""; return summary();
       case "platform_info": return "darwin";
       case "get_close_behavior": return closeBehavior;
@@ -208,6 +211,11 @@ await act(async () => {
 });
 await act(async () => { click("添加"); });
 assert.deepEqual(permissions.deny, ["Bash(rm:*)"], "permission rule is persisted through the bridge");
+await act(async () => { click("沙盒"); });
+assert.match(visibleText(), /Bash 沙盒/, "sandbox editor is available in settings");
+await act(async () => { click("关闭"); });
+await act(async () => { click("保存沙盒设置"); });
+assert.equal(sandbox.bash, "off", "sandbox mode is persisted through the bridge");
 await act(async () => { click("模型服务"); });
 assert.match(visibleText(), /已就绪/, ".env credential configures the provider");
 assert.match(visibleText(), /服务配置/, "provider configuration is editable from settings");

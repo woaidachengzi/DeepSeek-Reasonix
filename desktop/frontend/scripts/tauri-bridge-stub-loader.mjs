@@ -70,6 +70,8 @@ export function saveTauriProviderConfig(input) { record("save_provider_config", 
 export function tauriUsageStats(request) { record("usage_stats", { request }); return Promise.resolve({ protocolVersion: 1, from: "2026-09-01", to: "2026-09-27", tokens: 0, requests: 0, turns: 0, cacheHit: 0, cacheMiss: 0, activeDays: 0, topModel: "", topProvider: "", daily: [], models: [], providers: [] }); }
 export function tauriPermissionSettings() { record("permission_settings"); return Promise.resolve({ protocolVersion: 1, mode: "ask", allow: [], ask: [], deny: [] }); }
 export function changeTauriPermissionSettings(change) { record("change_permission_settings", { change }); return Promise.resolve({ protocolVersion: 1, mode: change.mode ?? "ask", allow: [], ask: [], deny: [] }); }
+export function tauriSandboxSettings() { record("sandbox_settings"); return Promise.resolve({ protocolVersion: 1, bash: "enforce", network: true, workspaceRoot: "", allowWrite: [], platform: "darwin" }); }
+export function changeTauriSandboxSettings(change) { record("change_sandbox_settings", { change }); return Promise.resolve({ protocolVersion: 1, ...change, platform: "darwin" }); }
 export function setTauriDefaultModel() { return Promise.resolve({ protocolVersion: 1, providers: [] }); }
 export function tauriDesktopPreferences() { return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: "auto" }); }
 export function setTauriDesktopApproval(mode) { record("set_desktop_approval", { mode }); return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: mode }); }

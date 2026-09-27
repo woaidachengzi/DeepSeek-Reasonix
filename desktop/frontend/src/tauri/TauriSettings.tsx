@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
-import { Check, ArrowLeft, Search, Keyboard, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, Type, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn } from "lucide-react";
+import { Check, ArrowLeft, Search, Keyboard, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, Type, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box } from "lucide-react";
 import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, tauriDesktopPreferences, setTauriDesktopApproval, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
 import { THEME_STYLES, type Theme, type ThemeStyle } from "../lib/theme";
 import { applyConversationWidth, getCachedConversationWidth, type ConversationWidth } from "../lib/conversationWidth";
@@ -9,6 +9,7 @@ import { applyTauriAppearance, readTauriAppearance, type TauriAppearance } from 
 import { TauriMCPSettings } from "./TauriMCPSettings";
 import { TauriProviderEditor } from "./TauriProviderEditor";
 import { TauriPermissionsSettings } from "./TauriPermissionsSettings";
+import { TauriSandboxSettings } from "./TauriSandboxSettings";
 import { getTauriNotificationsEnabled, setTauriNotificationsEnabled, getTauriProgressMode, setTauriProgressMode, type TauriProgressMode } from "./tauriPreferences";
 import { getSuccessPreference, setSuccessPreference, getAttentionPreference, setAttentionPreference, getNotificationVolume, setNotificationVolume, playSuccessChime, playAttentionChime, type SoundWavPref } from "../lib/sound";
 
@@ -35,7 +36,7 @@ interface TauriSettingsProps {
   onRefreshCatalogAudit?: () => Promise<void>;
 }
 
-export type TauriSettingsTab = "general" | "appearance" | "model" | "providers" | "stats" | "mcp" | "permissions" | "diagnostics" | "data" | "shortcuts" | "about";
+export type TauriSettingsTab = "general" | "appearance" | "model" | "providers" | "stats" | "mcp" | "permissions" | "sandbox" | "diagnostics" | "data" | "shortcuts" | "about";
 
 const TauriUsageStatsPanel = lazy(() => import("../components/UsageStatsPanel").then(module => ({ default: module.UsageStatsPanel })));
 
@@ -47,7 +48,10 @@ const SETTINGS_GROUPS = [
     { id: "stats", label: "用量统计", description: "查看 Preview 的模型用量", icon: ChartNoAxesColumn },
   ] },
   { label: "集成与连接", items: [{ id: "mcp", label: "MCP", description: "管理工具服务器", icon: Server }] },
-  { label: "安全与执行", items: [{ id: "permissions", label: "权限", description: "写入决策与工具规则", icon: ShieldCheck }] },
+  { label: "安全与执行", items: [
+    { id: "permissions", label: "权限", description: "写入决策与工具规则", icon: ShieldCheck },
+    { id: "sandbox", label: "沙盒", description: "命令隔离与文件写入范围", icon: Box },
+  ] },
   { label: "运行与诊断", items: [{ id: "diagnostics", label: "运行诊断", description: "桥接状态与会话目录检查", icon: Activity }] },
   { label: "应用", items: [
     { id: "appearance", label: "外观", description: "主题、阅读布局与字体", icon: Palette },
@@ -64,6 +68,7 @@ const SETTINGS_TITLES: Record<TauriSettingsTab, { title: string; description: st
   stats: { title: "用量统计", description: "查看 Preview 资料中已记录的 token 用量。" },
   mcp: { title: "MCP 与工具", description: "连接并管理工作区可用的工具。" },
   permissions: { title: "权限", description: "设置工具的默认写入决策和规则。" },
+  sandbox: { title: "沙盒", description: "设置命令隔离、网络访问和文件写入范围。" },
   diagnostics: { title: "运行诊断", description: "检查本地服务、会话目录和 Preview 的连接状态。" },
   appearance: { title: "外观", description: "调整主题、阅读布局和字体。" },
   shortcuts: { title: "快捷键", description: "查看 Preview 中可用的键盘操作。" },
@@ -286,6 +291,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
             {tab === "stats" && <Suspense fallback={<div className="tauri-settings-loading">加载中…</div>}><TauriUsageStatsPanel loadStats={tauriUsageStats} sources={["all", "desktop-tauri"]} /></Suspense>}
             {tab === "mcp" && <TauriMCPSettings workspaceRoot={workspaceRoot} />}
             {tab === "permissions" && <TauriPermissionsSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
+            {tab === "sandbox" && <TauriSandboxSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "diagnostics" && <DiagnosticsSettings bridgeStatus={bridgeStatus} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={hostError} busy={Boolean(importBusy)} onRestartBridge={onRestartBridge} onRefreshCatalogAudit={onRefreshCatalogAudit} onOpenData={() => setTab("data")} onOpenProviders={() => setTab("providers")} />}
             {tab === "data" && <DataSettings profile={profile} busy={Boolean(importBusy)} onRefreshProfile={onRefreshProfile} onImportStableProfile={onImportStableProfile} onImportStableProjectFolders={onImportStableProjectFolders} onScanUnclaimedSessions={onScanUnclaimedSessions} onClose={onClose} />}
             {tab === "about" && (aboutLoading ? <div className="tauri-settings-loading">加载中…</div> : <>{aboutLoadError && <SettingsLoadError onRetry={loadSettings} />}{runtimeInfo && <AboutSettings runtimeInfo={runtimeInfo} platform={platform} onRefresh={loadSettings} />}</>)}

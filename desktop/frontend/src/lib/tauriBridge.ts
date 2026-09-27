@@ -279,6 +279,27 @@ export async function changeTauriPermissionSettings(change: TauriPermissionChang
   return invoke<TauriPermissionSettings>("change_permission_settings", { change });
 }
 
+export interface TauriSandboxSettings {
+  protocolVersion: number;
+  bash: "enforce" | "off";
+  network: boolean;
+  workspaceRoot: string;
+  allowWrite: string[];
+  platform: string;
+}
+
+export type TauriSandboxChange = Pick<TauriSandboxSettings, "bash" | "network" | "workspaceRoot" | "allowWrite">;
+
+export async function tauriSandboxSettings(): Promise<TauriSandboxSettings> {
+  requireTauri();
+  return invoke<TauriSandboxSettings>("sandbox_settings");
+}
+
+export async function changeTauriSandboxSettings(change: TauriSandboxChange): Promise<TauriSandboxSettings> {
+  requireTauri();
+  return invoke<TauriSandboxSettings>("change_sandbox_settings", { change });
+}
+
 export type TauriToolApprovalMode = "ask" | "auto" | "yolo";
 export interface TauriDesktopPreferences {
   protocolVersion: number;

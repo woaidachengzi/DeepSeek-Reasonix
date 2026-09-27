@@ -23,7 +23,7 @@ does not imply that the Go runtime lacks the underlying capability.
 | Diagnostics | Partial | Bridge health/restart and session catalog audit/refresh are available in settings. The existing runtime drawer also contains event logs and session details. |
 | Shortcuts | Read only | The active Preview keyboard shortcuts are listed; shortcut customization is not implemented. |
 | Permissions | Available for new sessions | The Preview settings page reads and saves the global writer fallback mode and allow/ask/deny tool rules through the authenticated bridge, preserving unrelated config fields. It can explicitly restart an idle current session to apply the saved policy. Workspace-level rules may override the global profile. |
-| Sandbox | Not in settings | No Preview sandbox settings view or verified mutation contract. |
+| Sandbox | Available for new sessions | Preview reads and saves Bash isolation mode, sandbox network egress, workspace root, and extra writable directories through the authenticated bridge. An idle current session can explicitly reload the saved configuration. Stable shell selection and effective write-root display are not present. Project configuration can override global values. |
 | Network | Not in settings | No Preview network settings view or verified mutation contract. |
 | Appearance | Partial | Theme mode/style, conversation width, text size, UI font, and code font persist locally. Remaining stable appearance controls are not present. |
 | Storage | Partial | Preview profile location, backup-before-import, project-folder import, and unclaimed session review are available in the Data tab. Broader stable storage management is not present. |

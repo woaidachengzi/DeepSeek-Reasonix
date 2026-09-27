@@ -76,11 +76,11 @@ use bridge::{
     DesktopPreferences, LegacySessionCatalogEntry, MCPServerDeleteRequest, MCPServerInput,
     MCPServerMutationResponse, MCPServerView, OpenSessionRequest, PendingSessionDeleteCursor,
     PendingSessionDeletePage, PendingSessionTitleRecovery, PermissionSettingsChange,
-    PermissionSettingsView, ProviderConfigList, RenameSessionRequest, SaveProviderConfigRequest,
-    ScanImportCandidate, ScanImportSelection, SessionCatalogMetadata, SessionDirectoryCursor,
-    SessionDirectoryEntry, SessionDirectoryPage, SessionFirstMessageTitle, SessionPreview,
-    SessionRequest, SubmitRequest, WorkspaceChangeDetailRequest, WorkspaceFileRequest,
-    WorkspaceRequest,
+    PermissionSettingsView, ProviderConfigList, RenameSessionRequest, SandboxSettingsChange,
+    SandboxSettingsView, SaveProviderConfigRequest, ScanImportCandidate, ScanImportSelection,
+    SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage,
+    SessionFirstMessageTitle, SessionPreview, SessionRequest, SubmitRequest,
+    WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
 };
 use data_profile::{
     PreviewProfile, PreviewProfileStatus, ProfileImportResult, ProjectFoldersImportResult,
@@ -758,6 +758,21 @@ fn change_permission_settings(
     change: PermissionSettingsChange,
 ) -> Result<PermissionSettingsView, String> {
     supervisor.change_permission_settings(change)
+}
+
+#[tauri::command]
+fn sandbox_settings(
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<SandboxSettingsView, String> {
+    supervisor.sandbox_settings()
+}
+
+#[tauri::command]
+fn change_sandbox_settings(
+    supervisor: State<'_, BridgeSupervisor>,
+    change: SandboxSettingsChange,
+) -> Result<SandboxSettingsView, String> {
+    supervisor.change_sandbox_settings(change)
 }
 
 #[tauri::command]
@@ -1711,6 +1726,8 @@ fn main() {
             usage_stats,
             permission_settings,
             change_permission_settings,
+            sandbox_settings,
+            change_sandbox_settings,
             desktop_preferences,
             set_desktop_approval,
             set_default_model,

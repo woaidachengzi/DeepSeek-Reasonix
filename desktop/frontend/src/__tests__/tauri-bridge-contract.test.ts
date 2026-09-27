@@ -294,6 +294,16 @@ const commands: CommandContract[] = [
     description: "changeTauriPermissionSettings() invokes change_permission_settings with { change }",
   },
   {
+    command: "sandbox_settings",
+    argKeys: [],
+    description: "tauriSandboxSettings() invokes sandbox_settings with no args",
+  },
+  {
+    command: "change_sandbox_settings",
+    argKeys: ["change"],
+    description: "changeTauriSandboxSettings() invokes change_sandbox_settings with { change }",
+  },
+  {
     command: "set_default_model",
     argKeys: ["request"],
     description: "setTauriDefaultModel() invokes set_default_model with { request }",
