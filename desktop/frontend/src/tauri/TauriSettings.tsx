@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useCallback, useEffect, useRef, lazy, Suspense, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Check, ArrowLeft, Search, X, Keyboard, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, Type, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles, Users, Webhook, Package } from "lucide-react";
 import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, tauriDesktopPreferences, setTauriDesktopApproval, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
 import { THEME_STYLES, type Theme, type ThemeStyle } from "../lib/theme";
@@ -17,6 +17,8 @@ import { TauriSubagentSettings } from "./TauriSubagentSettings";
 import { TauriHooksSettings } from "./TauriHooksSettings";
 import { TauriMemorySettings } from "./TauriMemorySettings";
 import { StatusBarItemsEditor } from "../components/StatusBarItemsEditor";
+import { comboFromKeyboardEvent, detectShortcutPlatform, formatShortcutCombo } from "../lib/keyboardShortcuts";
+import { TAURI_SHORTCUT_ACTIONS, getTauriShortcut, isValidTauriShortcut, resetTauriShortcuts, setTauriShortcut, tauriShortcutConflict, useTauriShortcuts, type TauriShortcutAction } from "./tauriKeyboardShortcuts";
 import "../components/SettingsPanel.css";
 import { getTauriNotificationsEnabled, setTauriNotificationsEnabled, getTauriProgressMode, setTauriProgressMode, type TauriProgressMode } from "./tauriPreferences";
 import { TAURI_STATUS_BAR_ITEM_IDS, setTauriStatusBarPreferences, useTauriStatusBarPreferences, type TauriStatusBarItemId } from "./tauriStatusBarPreferences";
@@ -116,6 +118,15 @@ const TAURI_STATUS_BAR_LABELS: Record<TauriStatusBarItemId, string> = {
   workspace: "工作区", model: "默认模型", session: "当前会话",
   observed_tokens: "已观测 token", turn_tokens: "本轮 token", context: "上下文",
   compact: "压缩阈值", cache_hit: "会话缓存命中", bridge: "本地服务",
+};
+
+const TAURI_SHORTCUT_LABELS: Record<TauriShortcutAction, { label: string; description: string }> = {
+  new_session: { label: "新建对话", description: "回到新对话并选择工作区。" },
+  settings: { label: "打开设置", description: "打开设置页。" },
+  diagnostics: { label: "运行状态", description: "查看本地服务与运行信息。" },
+  workspace_files: { label: "工作区文件", description: "打开当前对话的文件面板。" },
+  refresh_session: { label: "刷新当前对话", description: "重新读取当前对话的历史记录。" },
+  send_message: { label: "发送消息", description: "在输入框中发送消息；只能使用带主修饰键的 Enter。" },
 };
 
 const FONT_LABELS: Record<FontFamily, string> = {
@@ -391,11 +402,43 @@ function TauriSoundOption({ label, value, onChange, onPreview }: { label: string
 }
 
 function ShortcutSettings() {
-  const modifier = /Mac/i.test(navigator.platform) ? "⌘" : "Ctrl+";
+  const platform = detectShortcutPlatform();
+  const overrides = useTauriShortcuts();
+  const [recording, setRecording] = useState<TauriShortcutAction | null>(null);
+  const [feedback, setFeedback] = useState("");
+  const record = (action: TauriShortcutAction, event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault(); event.stopPropagation();
+      setRecording(null); setFeedback("");
+      return;
+    }
+    if (event.key === "Tab") { setRecording(null); return; }
+    const combo = comboFromKeyboardEvent(event.nativeEvent);
+    if (!combo) return;
+    event.preventDefault(); event.stopPropagation();
+    if (!isValidTauriShortcut(action, combo)) {
+      setFeedback(action === "send_message" ? "发送消息需要主修饰键 + Enter。" : "请使用包含 ⌘ 或 Ctrl 的组合键。");
+      return;
+    }
+    const conflict = tauriShortcutConflict(action, combo, platform);
+    if (conflict) {
+      setFeedback(`与“${TAURI_SHORTCUT_LABELS[conflict].label}”的快捷键冲突。`);
+      return;
+    }
+    setTauriShortcut(action, combo, platform);
+    setRecording(null); setFeedback("");
+  };
   return <div className="tauri-settings-section">
-    <h3>工作区快捷键</h3>
+    <div className="tauri-shortcuts-heading"><div><h3>工作区快捷键</h3><p>点击按键录入新组合；设置只保存在 Preview，并立即生效。</p></div><button type="button" className="tauri-settings-button" onClick={() => { resetTauriShortcuts(); setRecording(null); setFeedback(""); }} disabled={Object.keys(overrides).length === 0}>全部恢复默认</button></div>
+    {feedback && <p className="tauri-diagnostic-error" role="alert">{feedback}</p>}
     <div className="tauri-settings-shortcuts">
-      {[["新建对话", `${modifier}N`], ["打开设置", `${modifier},`], ["运行状态", `${modifier}.`], ["工作区文件", `${modifier}B`], ["刷新当前对话", `${modifier}R`], ["发送消息", `${modifier}Enter`], ["关闭面板", "Esc"]].map(([label, keys]) => <div key={label}><span>{label}</span><kbd>{keys}</kbd></div>)}
+      {TAURI_SHORTCUT_ACTIONS.map(action => {
+        const info = TAURI_SHORTCUT_LABELS[action];
+        const keys = formatShortcutCombo(getTauriShortcut(action, platform), platform);
+        const active = recording === action;
+        return <div key={action} className="tauri-shortcut-row"><span><strong>{info.label}</strong><small>{info.description}</small></span><div className="tauri-shortcut-row__actions"><button type="button" className={`tauri-shortcut-key${active ? " is-recording" : ""}`} data-tauri-shortcut-action={action} aria-label={active ? `正在录入${info.label}` : `${info.label}：${keys}`} aria-pressed={active} onClick={event => { setRecording(action); setFeedback(""); event.currentTarget.focus(); }} onBlur={() => { if (active) setRecording(null); }} onKeyDown={event => { if (active) record(action, event); }}>{active ? "请按组合键" : <kbd>{keys}</kbd>}</button><button type="button" className="tauri-shortcut-reset" disabled={!overrides[action]} onClick={() => { setTauriShortcut(action, null, platform); setFeedback(""); }}>重置</button></div></div>;
+      })}
+      <div className="tauri-shortcut-row"><span><strong>关闭面板</strong><small>保留系统常用的 Esc 操作，不能改键。</small></span><kbd>Esc</kbd></div>
     </div>
   </div>;
 }

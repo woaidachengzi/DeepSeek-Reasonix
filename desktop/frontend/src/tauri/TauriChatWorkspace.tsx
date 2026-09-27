@@ -11,6 +11,8 @@ import { LocaleProvider } from "../lib/i18n";
 import { playSuccessChime, playAttentionChime, shouldPlayAttentionChimeForEvent } from "../lib/sound";
 import logoWordmark from "../assets/logo-wordmark.svg";
 import { TauriSettings, type TauriSettingsTab } from "./TauriSettings";
+import { detectShortcutPlatform, formatShortcutCombo } from "../lib/keyboardShortcuts";
+import { defaultTauriShortcut, matchesTauriShortcut, useTauriShortcuts } from "./tauriKeyboardShortcuts";
 import { TauriStatusBar } from "./TauriStatusBar";
 import { useTauriDesktopLayout } from "./tauriDesktopLayout";
 import { observeTauriUsage, type TauriObservedUsage } from "./tauriObservedUsage";
@@ -362,6 +364,10 @@ function PromptCard({ prompt, busy, selections, onApproval, onAskSelection, onAs
 
 export function TauriSessionPreview() {
   const desktopLayout = useTauriDesktopLayout();
+  const shortcutOverrides = useTauriShortcuts();
+  const shortcutPlatform = detectShortcutPlatform();
+  const newSessionShortcutLabel = formatShortcutCombo(shortcutOverrides.new_session ?? defaultTauriShortcut("new_session", shortcutPlatform), shortcutPlatform);
+  const sendShortcutLabel = formatShortcutCombo(shortcutOverrides.send_message ?? defaultTauriShortcut("send_message", shortcutPlatform), shortcutPlatform);
   const [session, setSession] = useState<TauriBridgeSession | null>(null);
   const [tabs, setTabs] = useState<WorkbenchSessionTab[]>([]);
   const [unverifiedLegacyTabs, setUnverifiedLegacyTabs] = useState<WorkbenchSessionTab[]>([]);
@@ -569,37 +575,31 @@ export function TauriSessionPreview() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || (event.target instanceof HTMLElement && event.target.closest(".tauri-shortcut-key.is-recording"))) return;
       // Escape: Close open panels (no modifier required)
       if (event.key === "Escape") {
         if (settingsOpen) { setSettingsOpen(false); return; }
         if (diagnosticsOpen) { setDiagnosticsOpen(false); return; }
         if (workspaceOpen) { setWorkspaceOpen(false); return; }
       }
-      const mod = event.metaKey || event.ctrlKey;
-      if (!mod) return;
-      const key = event.key.toLowerCase();
-      // Cmd/Ctrl + N: New session
-      if (key === "n" && !busy && !switchingBlocked) {
+      const shortcutPlatform = detectShortcutPlatform();
+      if (matchesTauriShortcut(event, "new_session", shortcutPlatform) && !busy && !switchingBlocked) {
         event.preventDefault();
         void createSession();
       }
-      // Cmd/Ctrl + ,: Settings
-      if (key === ",") {
+      else if (matchesTauriShortcut(event, "settings", shortcutPlatform)) {
         event.preventDefault();
         setSettingsOpen(true);
       }
-      // Cmd/Ctrl + .: Diagnostics
-      if (key === ".") {
+      else if (matchesTauriShortcut(event, "diagnostics", shortcutPlatform)) {
         event.preventDefault();
         setDiagnosticsOpen(true);
       }
-      // Cmd/Ctrl + B: Toggle workspace panel
-      if (key === "b" && session) {
+      else if (matchesTauriShortcut(event, "workspace_files", shortcutPlatform) && session) {
         event.preventDefault();
         toggleWorkspace();
       }
-      // Cmd/Ctrl + R: Refresh history
-      if (key === "r" && session && !busy) {
+      else if (matchesTauriShortcut(event, "refresh_session", shortcutPlatform) && session && !busy) {
         event.preventDefault();
         void refreshHistory();
       }
@@ -2126,7 +2126,7 @@ export function TauriSessionPreview() {
         <div className="tauri-sidebar__drag" data-tauri-drag-region aria-hidden="true" />
         <div className="tauri-sidebar__brand"><img src={logoWordmark} alt="Reasonix" draggable={false} /><span>PREVIEW</span></div>
         <button className="tauri-sidebar__new" type="button" onClick={() => void createSession()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || switchingBlocked}>
-          <Plus size={17} aria-hidden="true" /><span>新建对话</span><kbd>⌘ N</kbd>
+          <Plus size={17} aria-hidden="true" /><span>新建对话</span><kbd>{newSessionShortcutLabel}</kbd>
         </button>
         <div className="tauri-sidebar__search">
           <Search size={15} aria-hidden="true" />
@@ -2322,8 +2322,8 @@ export function TauriSessionPreview() {
               <button type="button" onClick={() => setDraftAttachmentPaths(previous => previous.filter((_, itemIndex) => itemIndex !== index))} disabled={busy} aria-label={`移除待发送文件 ${path.split(/[\\/]/).pop() || path}`}><X size={13} /></button>
             </div>)}</div>}
             <textarea ref={composerRef} value={prompt} onChange={event => setPrompt(event.target.value)} onKeyDown={event => {
-              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void submit(); }
-            }} placeholder={session?.state === "paused" ? "请先完成上方确认…" : session ? "继续聊聊你的问题…（⌘/Ctrl + Enter 发送）" : "输入问题，开始新对话…（⌘/Ctrl + Enter 发送）"} disabled={session?.state === "paused"} rows={3} />
+              if (matchesTauriShortcut(event.nativeEvent, "send_message", detectShortcutPlatform())) { event.preventDefault(); void submit(); }
+            }} placeholder={session?.state === "paused" ? "请先完成上方确认…" : session ? `继续聊聊你的问题…（${sendShortcutLabel} 发送）` : `输入问题，开始新对话…（${sendShortcutLabel} 发送）`} disabled={session?.state === "paused"} rows={3} />
             <div className="tauri-composer__bottom"><span>{session?.workspaceRoot ? `当前对话工作区 · ${session.workspaceRoot}` : session ? "当前对话使用默认工作区" : currentWorkspace ? `新对话默认工作区 · ${currentWorkspace}` : "Preview 配置与稳定版相互隔离"}</span>
               <div className="tauri-composer__actions">
                 <button className="tauri-attach-button" type="button" onClick={() => void addAttachments()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state !== "idle"))} aria-label="添加文件" title="从本机选择文件并附加到消息"><Paperclip size={16} /><span>添加文件</span></button>

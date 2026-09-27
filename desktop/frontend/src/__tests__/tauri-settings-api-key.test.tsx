@@ -288,6 +288,23 @@ assert.equal(localStorage.getItem("notificationSoundSuccess"), "synth");
 assert.equal(localStorage.getItem("notificationSoundAttention"), "positive");
 assert.equal(localStorage.getItem("notificationSoundVolume"), "42");
 
+await act(async () => { click("快捷键"); });
+const settingsShortcutKey = document.querySelector<HTMLButtonElement>('[data-tauri-shortcut-action="settings"]');
+assert.ok(settingsShortcutKey);
+await act(async () => { settingsShortcutKey.click(); });
+assert.equal(document.activeElement, settingsShortcutKey, "Preview shortcut recorder receives keyboard focus");
+await act(async () => { settingsShortcutKey.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "o", ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true })); });
+assert.equal(JSON.parse(localStorage.getItem("reasonix.tauri.shortcuts.v1")!).settings.key, "o", "shortcut recording saves to Preview preferences");
+const newSessionShortcutKey = document.querySelector<HTMLButtonElement>('[data-tauri-shortcut-action="new_session"]');
+assert.ok(newSessionShortcutKey);
+await act(async () => { newSessionShortcutKey.click(); });
+await act(async () => { newSessionShortcutKey.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "o", ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true })); });
+assert.match(document.querySelector('[role="alert"]')?.textContent ?? "", /冲突/, "conflicting Preview shortcuts are rejected");
+const resetSettingsShortcut = settingsShortcutKey.closest(".tauri-shortcut-row")?.querySelector<HTMLButtonElement>(".tauri-shortcut-reset");
+assert.ok(resetSettingsShortcut);
+await act(async () => { resetSettingsShortcut.click(); });
+assert.equal(JSON.parse(localStorage.getItem("reasonix.tauri.shortcuts.v1")!).settings, undefined, "a shortcut can be reset individually");
+
 await act(async () => { click("模型偏好"); });
 const defaultModelSelect = document.querySelector<HTMLSelectElement>("#tauri-settings-default-model");
 assert.ok(defaultModelSelect, "default model has its own settings page");
