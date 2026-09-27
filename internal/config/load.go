@@ -889,6 +889,18 @@ func mergeFileSnapshotWithRead(cfg *Config, path string, readFile func(string) (
 	if err != nil {
 		return toml.MetaData{}, fmt.Errorf("config %s: %w", path, err)
 	}
+	// BurntSushi/toml leaves a destination slice untouched when a later file
+	// declares an empty array. An explicit project [] must clear an inherited
+	// user list; it is a real override, not an omitted field.
+	if meta.IsDefined("skills", "paths") {
+		cfg.Skills.Paths = validated.Skills.Paths
+	}
+	if meta.IsDefined("skills", "excluded_paths") {
+		cfg.Skills.ExcludedPaths = validated.Skills.ExcludedPaths
+	}
+	if meta.IsDefined("skills", "disabled_skills") {
+		cfg.Skills.DisabledSkills = validated.Skills.DisabledSkills
+	}
 	if meta.IsDefined("providers") {
 		var persisted Config
 		if _, err := decodeTOMLBytes(data, &persisted); err != nil {

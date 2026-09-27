@@ -357,6 +357,8 @@ export interface TauriSkillSource {
   status: string;
   enabled: boolean;
   configured: boolean;
+  configuredGlobal?: boolean;
+  configuredProject?: boolean;
 }
 
 export interface TauriSkillsSettings {
@@ -368,6 +370,7 @@ export interface TauriSkillsSettings {
 
 export interface TauriSkillsChange {
   workspaceRoot: string;
+  scope?: "global" | "project";
   action: "implicit" | "skill" | "source" | "add_source" | "remove_source";
   enabled: boolean;
   name: string;
@@ -733,6 +736,12 @@ export async function chooseTauriWorkspaceRoot(): Promise<string | null> {
     multiple: false,
     title: "Choose Reasonix workspace",
   });
+  return typeof selected === "string" ? selected : null;
+}
+
+export async function chooseTauriSkillSourceDirectory(): Promise<string | null> {
+  requireTauri();
+  const selected = await openDialog({ directory: true, multiple: false, title: "选择技能来源目录" });
   return typeof selected === "string" ? selected : null;
 }
 

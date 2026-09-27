@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -124,5 +125,118 @@ func TestPreviewSkillsSettingsDiscoverAndPersist(t *testing.T) {
 	}
 	if response := request(http.MethodPost, `{"action":"skill","name":"(invalid)","enabled":false}`, "skills-invalid", true); response.Code != http.StatusBadRequest {
 		t.Fatalf("invalid skill status = %d", response.Code)
+	}
+}
+
+func TestPreviewSkillsProjectScopeKeepsGlobalSettingsAndOtherProjects(t *testing.T) {
+	home := t.TempDir()
+	project := t.TempDir()
+	otherProject := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	globalPath := filepath.Join(home, "config.toml")
+	if err := os.WriteFile(globalPath, []byte("[skills]\ndisabled_skills = [\"review\"]\ndisable_implicit_invocation = true\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	projectPath := filepath.Join(project, "reasonix.toml")
+	if err := os.WriteFile(projectPath, []byte("future_setting = \"keep\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := persistSkillsSettings(skillsSettingsChange{WorkspaceRoot: project, Scope: "project", Action: "skill", Name: "review", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := persistSkillsSettings(skillsSettingsChange{WorkspaceRoot: project, Scope: "project", Action: "implicit", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	projectSource := filepath.Join(t.TempDir(), "project-skills")
+	if err := os.MkdirAll(projectSource, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := persistSkillsSettings(skillsSettingsChange{WorkspaceRoot: project, Scope: "project", Action: "add_source", Path: projectSource}); err != nil {
+		t.Fatal(err)
+	}
+	view, err := loadSkillsSettings(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !view.AllowImplicitInvocation {
+		t.Fatal("project implicit override was not effective")
+	}
+	var configured bool
+	for _, source := range view.Sources {
+		if source.Path == projectSource && source.ConfiguredProject && !source.ConfiguredGlobal {
+			configured = true
+		}
+	}
+	if !configured {
+		t.Fatalf("project source provenance missing: %#v", view.Sources)
+	}
+	projectRaw, err := os.ReadFile(projectPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"future_setting", "disabled_skills = []", "disable_implicit_invocation = false", projectSource} {
+		if !strings.Contains(string(projectRaw), want) {
+			t.Fatalf("project override missing %q: %s", want, projectRaw)
+		}
+	}
+	globalRaw, err := os.ReadFile(globalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(globalRaw), "disabled_skills = [\"review\"]") || !strings.Contains(string(globalRaw), "disable_implicit_invocation = true") {
+		t.Fatalf("global settings changed: %s", globalRaw)
+	}
+	other, err := loadSkillsSettings(otherProject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other.AllowImplicitInvocation {
+		t.Fatal("project override leaked to another project")
+	}
+	if _, err := persistSkillsSettings(skillsSettingsChange{Scope: "project", Action: "implicit", Enabled: true}); err == nil {
+		t.Fatal("missing project root accepted")
+	}
+	if err := os.WriteFile(projectPath, []byte("[skills\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := persistSkillsSettings(skillsSettingsChange{WorkspaceRoot: project, Scope: "project", Action: "skill", Name: "review", Enabled: true}); err == nil {
+		t.Fatal("malformed project config overwritten")
+	}
+	raw, err := os.ReadFile(projectPath)
+	if err != nil || string(raw) != "[skills\n" {
+		t.Fatalf("malformed project config changed: %v %q", err, raw)
+	}
+}
+
+func TestPreviewSkillsProjectAddSourceOverridesInheritedExclusion(t *testing.T) {
+	home, project := t.TempDir(), t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	source := filepath.Join(t.TempDir(), "skills")
+	if err := os.MkdirAll(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	globalPath := filepath.Join(home, "config.toml")
+	if err := os.WriteFile(globalPath, []byte("[skills]\nexcluded_paths = ["+strconv.Quote(source)+"]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	view, err := persistSkillsSettings(skillsSettingsChange{WorkspaceRoot: project, Scope: "project", Action: "add_source", Path: source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectRaw, err := os.ReadFile(filepath.Join(project, "reasonix.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var enabled bool
+	for _, item := range view.Sources {
+		if item.Path == source && item.Enabled {
+			enabled = true
+		}
+	}
+	if !enabled {
+		t.Fatalf("project source still excluded: %s %#v", projectRaw, view.Sources)
+	}
+	if !strings.Contains(string(projectRaw), "excluded_paths = []") {
+		t.Fatalf("missing explicit project exclusion reset: %s", projectRaw)
 	}
 }

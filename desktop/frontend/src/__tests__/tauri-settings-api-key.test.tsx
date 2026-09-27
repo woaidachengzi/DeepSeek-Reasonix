@@ -42,6 +42,7 @@ const permissions = { protocolVersion: 1, mode: "ask", allow: [] as string[], as
 let sandbox = { protocolVersion: 1, bash: "enforce", network: true, workspaceRoot: "", allowWrite: [] as string[], platform: "darwin" };
 let network = { protocolVersion: 1, proxyMode: "auto", noProxy: "", proxyType: "socks5", proxyServer: "", proxyPort: 0, proxyUsername: "", proxyUrlSet: false, proxyPasswordSet: false };
 let skills = { protocolVersion: 1, allowImplicitInvocation: true, skills: [{ name: "demo", description: "A test skill", invocation: "/demo", scope: "global", sourcePath: "/tmp/demo/SKILL.md", runAs: "inline", enabled: true }], sources: [] as { path: string; scope: string; status: string; enabled: boolean; configured: boolean }[] };
+let lastSkillScope = "";
 let subagents = { protocolVersion: 1, defaultModel: "demo/m", subagentModel: "", subagentEffort: "", maxDepth: 2, maxConcurrency: 6, maxParallelWriters: 3, modelRefs: ["demo/m"], modelEfforts: { "demo/m": ["auto", "low", "high"] }, profiles: [{ name: "reviewer", description: "Reviews code", scope: "global", invocation: "/reviewer", configuredModel: "", configuredEffort: "" }] };
 let hooks = { protocolVersion: 1, scope: "global", path: "/preview/settings.json", projectRoot: "", revision: "r1", hooks: {} as Record<string, unknown>, events: ["PreToolUse", "Stop"] };
 let memory = { protocolVersion: 1, workspaceRoot: "/preview/project", storeDir: "/preview/memory", globalStoreDir: "/preview/global-memory", docs: [{ path: "/preview/project/AGENTS.md", scope: "project", body: "Old instruction.\n", revision: "r1" }], facts: [] as unknown[], archives: [] as unknown[], diagnostics: [] as string[] };
@@ -89,6 +90,7 @@ const summary = () => ({
       case "change_network_settings": network = { ...network, ...args?.change }; return { ...network };
       case "skills_settings": return { ...skills };
       case "change_skills_settings": {
+        lastSkillScope = args?.change?.scope ?? "";
         if (args?.change?.action === "implicit") skills.allowImplicitInvocation = Boolean(args.change.enabled);
         if (args?.change?.action === "skill" && args.change.name) skills.skills = skills.skills.map(item => item.name === args.change?.name ? { ...item, enabled: Boolean(args.change?.enabled) } : item);
         return { ...skills };
@@ -151,7 +153,7 @@ renderToString(<LocaleProvider><TauriSettings onClose={() => {}} /></LocaleProvi
 assert.equal(calls.length, 0, "rendering settings does not start bridge work");
 
 const root = createRoot(document.getElementById("root")!);
-await act(async () => { root.render(<LocaleProvider><TauriSettings initialTab="appearance" onClose={() => {}} onProviderSummaryChange={value => { parentConfigured = value.providers[0]?.configured; }} currentSessionState="idle" onApplyToCurrentSession={async () => { applyCalls += 1; return true; }} bridgeStatus={{ running: true, protocolVersion: 1 }} catalogAudit={{ legacyCount: 3, directoryCount: 3, matchedCount: 3, directoryOnlyCount: 0, missingFromDirectory: 0, retiredLegacyCount: 0, titleMismatches: 0, workspaceMismatches: 0, orderMismatches: 0, missingTranscripts: 0, physicalStateMismatches: 0, unclaimedTranscripts: 0, inventoryErrors: 0, legacyMatchesDirectory: true }} sessionPageSource="identity" onRestartBridge={async () => { restartCalls += 1; return true; }} onRefreshCatalogAudit={async () => { auditRefreshCalls += 1; }} profile={{ previewHome: "/preview/home", previewConfigExists: false, stableConfigExists: true, importAvailable: true, managedProfile: true }} onImportStableProfile={async () => { profileImportCalls += 1; return "已备份并导入配置"; }} /></LocaleProvider>); });
+await act(async () => { root.render(<LocaleProvider><TauriSettings initialTab="appearance" workspaceRoot="/preview/project" onClose={() => {}} onProviderSummaryChange={value => { parentConfigured = value.providers[0]?.configured; }} currentSessionState="idle" onApplyToCurrentSession={async () => { applyCalls += 1; return true; }} bridgeStatus={{ running: true, protocolVersion: 1 }} catalogAudit={{ legacyCount: 3, directoryCount: 3, matchedCount: 3, directoryOnlyCount: 0, missingFromDirectory: 0, retiredLegacyCount: 0, titleMismatches: 0, workspaceMismatches: 0, orderMismatches: 0, missingTranscripts: 0, physicalStateMismatches: 0, unclaimedTranscripts: 0, inventoryErrors: 0, legacyMatchesDirectory: true }} sessionPageSource="identity" onRestartBridge={async () => { restartCalls += 1; return true; }} onRefreshCatalogAudit={async () => { auditRefreshCalls += 1; }} profile={{ previewHome: "/preview/home", previewConfigExists: false, stableConfigExists: true, importAvailable: true, managedProfile: true }} onImportStableProfile={async () => { profileImportCalls += 1; return "已备份并导入配置"; }} /></LocaleProvider>); });
 assert.equal(calls.filter(call => call === "provider_summary").length, 1, "settings load once after mount");
 assert.equal(parentConfigured, true, "the model picker outside settings receives the initial summary");
 
@@ -282,6 +284,10 @@ const implicitSwitch = document.querySelector<HTMLInputElement>('input[aria-labe
 assert.ok(implicitSwitch);
 await act(async () => { implicitSwitch.click(); });
 assert.equal(skills.allowImplicitInvocation, false, "implicit skill invocation is persisted through the bridge");
+assert.equal(lastSkillScope, "global", "skill settings default to global scope");
+await act(async () => { click("当前项目"); });
+await act(async () => { implicitSwitch.click(); });
+assert.equal(lastSkillScope, "project", "project skill settings use the selected workspace scope");
 await act(async () => { click("子智能体"); });
 assert.match(visibleText(), /Reviews code/, "discoverable subagent profiles appear in settings");
 await act(async () => { click("1 层"); });

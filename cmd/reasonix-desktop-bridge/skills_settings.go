@@ -23,11 +23,13 @@ type previewSkillView struct {
 }
 
 type previewSkillSourceView struct {
-	Path       string `json:"path"`
-	Scope      string `json:"scope"`
-	Status     string `json:"status"`
-	Enabled    bool   `json:"enabled"`
-	Configured bool   `json:"configured"`
+	Path              string `json:"path"`
+	Scope             string `json:"scope"`
+	Status            string `json:"status"`
+	Enabled           bool   `json:"enabled"`
+	Configured        bool   `json:"configured"`
+	ConfiguredGlobal  bool   `json:"configuredGlobal"`
+	ConfiguredProject bool   `json:"configuredProject"`
 }
 
 type skillsSettingsView struct {
@@ -39,6 +41,7 @@ type skillsSettingsView struct {
 
 type skillsSettingsChange struct {
 	WorkspaceRoot string `json:"workspaceRoot"`
+	Scope         string `json:"scope"`  // global | project
 	Action        string `json:"action"` // implicit | skill | source | add_source | remove_source
 	Enabled       bool   `json:"enabled"`
 	Name          string `json:"name"`
@@ -98,6 +101,16 @@ func loadSkillsSettings(workspaceRoot string) (skillsSettingsView, error) {
 	for _, path := range userCfg.Skills.Paths {
 		configured[configpkg.CanonicalSkillPath(path)] = true
 	}
+	projectConfigured := map[string]bool{}
+	if root != "" {
+		projectCfg, loadErr := configpkg.LoadForEditWithoutCredentialsReadOnlyStrict(filepath.Join(root, "reasonix.toml"))
+		if loadErr != nil {
+			return skillsSettingsView{}, loadErr
+		}
+		for _, path := range projectCfg.Skills.Paths {
+			projectConfigured[configpkg.CanonicalSkillPath(path)] = true
+		}
+	}
 	view := skillsSettingsView{
 		ProtocolVersion: desktopbridge.ProtocolVersion, AllowImplicitInvocation: cfg.ImplicitSkillInvocationEnabled(),
 		Skills: []previewSkillView{}, Sources: []previewSkillSourceView{},
@@ -106,7 +119,8 @@ func loadSkillsSettings(workspaceRoot string) (skillsSettingsView, error) {
 		key := configpkg.CanonicalSkillPath(source.Dir)
 		view.Sources = append(view.Sources, previewSkillSourceView{
 			Path: source.Dir, Scope: string(source.Scope), Status: string(source.Status),
-			Enabled: !excluded[key], Configured: configured[key],
+			Enabled: !excluded[key], Configured: configured[key] || projectConfigured[key],
+			ConfiguredGlobal: configured[key], ConfiguredProject: projectConfigured[key],
 		})
 	}
 	for _, item := range store.List() {
@@ -146,6 +160,59 @@ func persistSkillsSettings(change skillsSettingsChange) (skillsSettingsView, err
 			return skillsSettingsView{}, fmt.Errorf("skill source is not a directory")
 		}
 	}
+	if change.Scope == "" {
+		change.Scope = "global" // existing Preview clients used global writes
+	}
+	if change.Scope != "global" && change.Scope != "project" {
+		return skillsSettingsView{}, fmt.Errorf("invalid skill settings scope")
+	}
+	if change.Scope == "project" {
+		if root == "" {
+			return skillsSettingsView{}, fmt.Errorf("project skill settings require a workspace")
+		}
+		userCfg, err := configpkg.LoadUserConfigReadOnly()
+		if err != nil {
+			return skillsSettingsView{}, err
+		}
+		path := filepath.Join(root, "reasonix.toml")
+		err = configpkg.EditProjectConfigFileWithoutCredentials(path, func(cfg *configpkg.Config) error {
+			key := skillChangeKey(change.Action)
+			if !cfg.ProjectSkillKeyDeclared(key) {
+				seedProjectSkillSetting(cfg, userCfg, key)
+			}
+			// Adding a path also re-enables it. Preserve that intent when an
+			// inherited or project exclusion previously hid the directory.
+			reenableExcluded := false
+			if change.Action == "add_source" {
+				exclusions := cfg.Skills.ExcludedPaths
+				if !cfg.ProjectSkillKeyDeclared("excluded_paths") {
+					exclusions = userCfg.Skills.ExcludedPaths
+				}
+				for _, excluded := range exclusions {
+					if configpkg.CanonicalSkillPath(excluded) == configpkg.CanonicalSkillPath(change.Path) {
+						reenableExcluded = true
+						break
+					}
+				}
+				if reenableExcluded && !cfg.ProjectSkillKeyDeclared("excluded_paths") {
+					seedProjectSkillSetting(cfg, userCfg, "excluded_paths")
+				}
+			}
+			if err := applySkillChange(cfg, change); err != nil {
+				return err
+			}
+			if reenableExcluded {
+				if err := cfg.KeepProjectSkillKey("excluded_paths"); err != nil {
+					return err
+				}
+			}
+			return cfg.KeepProjectSkillKey(key)
+		})
+		if err != nil {
+			return skillsSettingsView{}, err
+		}
+		return loadSkillsSettings(root)
+	}
 	unlock := configpkg.LockUserConfigEdits()
 	path := configpkg.UserConfigPath()
 	if path == "" {
@@ -158,22 +225,7 @@ func persistSkillsSettings(change skillsSettingsChange) (skillsSettingsView, err
 		return skillsSettingsView{}, err
 	}
 	baseline := cfg.ModelSettingsBaseline()
-	switch change.Action {
-	case "implicit":
-		cfg.SetSkillImplicitInvocation(change.Enabled)
-	case "skill":
-		err = cfg.SetSkillEnabled(change.Name, change.Enabled)
-	case "source":
-		err = cfg.SetSkillPathEnabled(change.Path, change.Enabled)
-	case "add_source":
-		err = cfg.AddSkillPath(change.Path)
-	case "remove_source":
-		var removed bool
-		removed, err = cfg.RemoveSkillPath(change.Path)
-		if err == nil && !removed {
-			err = fmt.Errorf("skill source is not a custom path")
-		}
-	}
+	err = applySkillChange(cfg, change)
 	if err == nil {
 		err = cfg.SaveUserSettingsDeltaTo(path, baseline)
 	}
@@ -182,4 +234,51 @@ func persistSkillsSettings(change skillsSettingsChange) (skillsSettingsView, err
 		return skillsSettingsView{}, err
 	}
 	return loadSkillsSettings(root)
+}
+
+func skillChangeKey(action string) string {
+	switch action {
+	case "implicit":
+		return "disable_implicit_invocation"
+	case "skill":
+		return "disabled_skills"
+	case "source":
+		return "excluded_paths"
+	default:
+		return "paths"
+	}
+}
+
+func seedProjectSkillSetting(cfg, user *configpkg.Config, key string) {
+	switch key {
+	case "disable_implicit_invocation":
+		cfg.Skills.DisableImplicitInvocation = user.Skills.DisableImplicitInvocation
+	case "disabled_skills":
+		cfg.Skills.DisabledSkills = append([]string(nil), user.Skills.DisabledSkills...)
+	case "excluded_paths":
+		cfg.Skills.ExcludedPaths = append([]string(nil), user.Skills.ExcludedPaths...)
+	case "paths":
+		cfg.Skills.Paths = append([]string(nil), user.Skills.Paths...)
+	}
+}
+
+func applySkillChange(cfg *configpkg.Config, change skillsSettingsChange) error {
+	switch change.Action {
+	case "implicit":
+		cfg.SetSkillImplicitInvocation(change.Enabled)
+		return nil
+	case "skill":
+		return cfg.SetSkillEnabled(change.Name, change.Enabled)
+	case "source":
+		return cfg.SetSkillPathEnabled(change.Path, change.Enabled)
+	case "add_source":
+		return cfg.AddSkillPath(change.Path)
+	case "remove_source":
+		removed, err := cfg.RemoveSkillPath(change.Path)
+		if err == nil && !removed {
+			return fmt.Errorf("skill source is not a custom path in this scope")
+		}
+		return err
+	}
+	return fmt.Errorf("invalid skill settings action")
 }

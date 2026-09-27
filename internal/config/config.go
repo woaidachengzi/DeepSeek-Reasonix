@@ -110,6 +110,15 @@ func (c *Config) keepsProjectSkillKey(key string) bool {
 	return c != nil && c.explicitProjectSkillKeys[key]
 }
 
+// ProjectSkillKeyDeclared reports whether a project file explicitly owns a
+// skill setting, including an empty or false value that overrides user config.
+func (c *Config) ProjectSkillKeyDeclared(key string) bool {
+	if c == nil {
+		return false
+	}
+	return c.keepsProjectSkillKey(key) || !projectSkillKeyIsDefault(c, key)
+}
+
 type promptFileSource uint8
 
 const (

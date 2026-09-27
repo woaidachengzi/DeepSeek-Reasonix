@@ -103,6 +103,42 @@ func EditConfigFileWithoutCredentials(path string, edit func(*Config) error) err
 	return editConfigFile(path, false, edit)
 }
 
+// EditProjectConfigFileWithoutCredentials writes a minimal project delta when
+// the file does not yet exist. Existing files retain the normal incremental
+// editor, including unknown fields and comments.
+func EditProjectConfigFileWithoutCredentials(path string, edit func(*Config) error) error {
+	if edit == nil || IsUserConfigPath(path) {
+		return fmt.Errorf("edit project config: invalid target or callback")
+	}
+	unlock, err := LockConfigFileEdits(path)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	cfg, err := loadForEditStrict(path, false, false)
+	if err != nil {
+		return err
+	}
+	if err := edit(cfg); err != nil {
+		return err
+	}
+	resolved, exists, err := statConfigPath(path)
+	if err != nil {
+		return err
+	}
+	if exists {
+		info, err := os.Stat(resolved)
+		if err != nil {
+			return err
+		}
+		if info.Size() > 0 {
+			return cfg.SaveTo(path)
+		}
+	}
+	body := "# Reasonix project configuration.\n# Project-local overrides are merged over the user config.\n\n" + RenderTOMLProjectDelta(cfg)
+	return writeConfigFileResolved(resolved, body, configFilePerm(path))
+}
+
 func editConfigFile(path string, loadCredentials bool, edit func(*Config) error) error {
 	if edit == nil {
 		return fmt.Errorf("edit config: nil callback")
