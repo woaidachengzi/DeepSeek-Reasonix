@@ -12,6 +12,7 @@ const CORE_PROFILE_DIR: &str = "reasonix-core";
 const PREVIEW_SQLITE_EVENTS_ENV: &str = "REASONIX_PREVIEW_SQLITE_EVENTS";
 const CONFIG_FILE: &str = "config.toml";
 const PROJECTS_FILE: &str = "desktop-projects.json";
+const MAX_CONFIG_FILE: u64 = 16 * 1024 * 1024;
 const MAX_PROJECTS_FILE: u64 = 4 * 1024 * 1024;
 const MAX_PROJECT_COUNT: usize = 10_000;
 const MAX_PROJECT_TITLE_CHARS: usize = 1024;
@@ -161,8 +162,11 @@ impl PreviewProfile {
             .ok_or("the stable Reasonix config location is unavailable")?;
         let source_metadata = fs::symlink_metadata(source)
             .map_err(|error| format!("read stable config {}: {error}", source.display()))?;
-        if source_metadata.file_type().is_symlink() || !source_metadata.is_file() {
-            return Err("the stable config must be a regular file; refusing to import a symlink or directory".into());
+        if source_metadata.file_type().is_symlink()
+            || !source_metadata.is_file()
+            || source_metadata.len() > MAX_CONFIG_FILE
+        {
+            return Err("the stable config must be a regular file no larger than 16 MiB".into());
         }
 
         let destination = self.config_path();
@@ -173,36 +177,64 @@ impl PreviewProfile {
             ));
         }
 
+        let source_file = fs::File::open(source)
+            .map_err(|error| format!("open stable config {}: {error}", source.display()))?;
+        let opened_metadata = source_file.metadata().map_err(|error| {
+            format!("inspect opened stable config {}: {error}", source.display())
+        })?;
+        let current_metadata = fs::symlink_metadata(source)
+            .map_err(|error| format!("reinspect stable config {}: {error}", source.display()))?;
+        if current_metadata.file_type().is_symlink()
+            || !current_metadata.is_file()
+            || !opened_metadata.is_file()
+            || opened_metadata.len() > MAX_CONFIG_FILE
+            || !crate::workbench_projects::same_file_as_path(source, &source_file).map_err(
+                |error| format!("verify opened stable config {}: {error}", source.display()),
+            )?
+        {
+            return Err("the stable config changed while opening or is not a regular file no larger than 16 MiB".into());
+        }
+        let content = read_bounded_file(source_file, MAX_CONFIG_FILE)
+            .map_err(|error| format!("read stable config {}: {error}", source.display()))?;
+
         let backup_dir = self.create_backup_dir()?;
         let backup = backup_dir.join(CONFIG_FILE);
-        fs::copy(source, &backup).map_err(|error| {
-            format!(
-                "back up stable config {} to {}: {error}",
-                source.display(),
-                backup.display()
-            )
+        let mut backup_temp = tempfile::Builder::new()
+            .prefix(".stable-config-backup-")
+            .tempfile_in(&backup_dir)
+            .map_err(|error| format!("create private config backup: {error}"))?;
+        restrict_config_permissions(backup_temp.path())?;
+        backup_temp
+            .write_all(&content)
+            .map_err(|error| format!("write config backup {}: {error}", backup.display()))?;
+        backup_temp
+            .as_file()
+            .sync_all()
+            .map_err(|error| format!("sync config backup {}: {error}", backup.display()))?;
+        backup_temp.persist_noclobber(&backup).map_err(|error| {
+            format!("create private config backup {}: {error}", backup.display())
         })?;
-        restrict_config_permissions(&backup)?;
 
-        let content = fs::read(&backup)
-            .map_err(|error| format!("read backup {}: {error}", backup.display()))?;
-        let mut created = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&destination)
+        let mut destination_temp = tempfile::Builder::new()
+            .prefix(".config-import-")
+            .tempfile_in(&self.home)
+            .map_err(|error| format!("create private Preview config: {error}"))?;
+        restrict_config_permissions(destination_temp.path())?;
+        destination_temp
+            .write_all(&content)
+            .map_err(|error| format!("write Preview config {}: {error}", destination.display()))?;
+        destination_temp
+            .as_file()
+            .sync_all()
+            .map_err(|error| format!("sync Preview config {}: {error}", destination.display()))?;
+        destination_temp
+            .persist_noclobber(&destination)
             .map_err(|error| {
                 format!(
-                    "create preview config {} without overwriting: {error}",
+                    "create Preview config {} without overwriting: {error}",
                     destination.display()
                 )
             })?;
-        created
-            .write_all(&content)
-            .map_err(|error| format!("write preview config {}: {error}", destination.display()))?;
-        created
-            .sync_all()
-            .map_err(|error| format!("sync preview config {}: {error}", destination.display()))?;
-        restrict_config_permissions(&destination)?;
 
         Ok(ProfileImportResult {
             imported_config: destination.display().to_string(),
@@ -266,7 +298,7 @@ impl PreviewProfile {
                 "the stable project folder file changed while opening or is not a regular file no larger than 4 MiB".into(),
             );
         }
-        let bytes = read_bounded_project_folders(file, MAX_PROJECTS_FILE)
+        let bytes = read_bounded_file(file, MAX_PROJECTS_FILE)
             .map_err(|error| format!("read saved project folders {}: {error}", source.display()))?;
         #[derive(serde::Deserialize)]
         struct StoredProject {
@@ -397,7 +429,7 @@ fn explicit_reasonix_home() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-fn read_bounded_project_folders(mut reader: impl Read, max_bytes: u64) -> std::io::Result<Vec<u8>> {
+fn read_bounded_file(mut reader: impl Read, max_bytes: u64) -> std::io::Result<Vec<u8>> {
     let mut bytes = Vec::new();
     reader
         .by_ref()
@@ -462,11 +494,10 @@ mod tests {
     #[test]
     fn bounded_project_folder_reader_rejects_growth_past_limit() {
         assert_eq!(
-            read_bounded_project_folders(std::io::Cursor::new(b"1234"), 4)
-                .expect("exact limit is accepted"),
+            read_bounded_file(std::io::Cursor::new(b"1234"), 4).expect("exact limit is accepted"),
             b"1234"
         );
-        let error = read_bounded_project_folders(std::io::Cursor::new(b"12345"), 4)
+        let error = read_bounded_file(std::io::Cursor::new(b"12345"), 4)
             .expect_err("one byte above limit is rejected");
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
     }
@@ -501,7 +532,52 @@ mod tests {
             fs::read_to_string(&result.backup_config).expect("read backup"),
             "default_model = \"preview-test\"\n"
         );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            for path in [&result.imported_config, &result.backup_config] {
+                let mode = fs::metadata(path)
+                    .expect("private imported file")
+                    .permissions()
+                    .mode();
+                assert_eq!(mode & 0o777, 0o600);
+            }
+        }
         assert!(!stable.starts_with(&profile.home));
+    }
+
+    #[test]
+    fn import_rejects_oversized_config_before_creating_a_backup() {
+        let root = tempfile::tempdir().expect("temp root");
+        let stable = root.path().join("stable/config.toml");
+        fs::create_dir_all(stable.parent().expect("stable parent")).expect("create stable home");
+        fs::File::create(&stable)
+            .expect("create stable config")
+            .set_len(MAX_CONFIG_FILE + 1)
+            .expect("make sparse oversized config");
+        let profile = managed_profile(root.path().join("preview"), stable);
+
+        assert!(profile.import_stable_config().is_err());
+        assert!(!profile.config_path().exists());
+        assert!(!profile.home.join("backups").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn import_rejects_symlinked_stable_config() {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir().expect("temp root");
+        let stable = root.path().join("stable/config.toml");
+        let outside = root.path().join("outside.toml");
+        fs::create_dir_all(stable.parent().expect("stable parent")).expect("create stable home");
+        fs::write(&outside, "private\n").expect("write outside file");
+        symlink(&outside, &stable).expect("create stable symlink");
+        let profile = managed_profile(root.path().join("preview"), stable);
+
+        assert!(profile.import_stable_config().is_err());
+        assert!(!profile.config_path().exists());
+        assert!(!profile.home.join("backups").exists());
     }
 
     #[test]
