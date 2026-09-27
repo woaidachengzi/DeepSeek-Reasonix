@@ -12,6 +12,7 @@ import { playSuccessChime, playAttentionChime, shouldPlayAttentionChimeForEvent 
 import logoWordmark from "../assets/logo-wordmark.svg";
 import { TauriSettings, type TauriSettingsTab } from "./TauriSettings";
 import { TauriStatusBar } from "./TauriStatusBar";
+import { observeTauriUsage, type TauriObservedUsage } from "./tauriObservedUsage";
 import { getTauriNotificationsEnabled, getTauriProgressMode, TAURI_PROGRESS_MODE_CHANGED } from "./tauriPreferences";
 import { handleTauriDragDropEvent, retainTauriDragDropListener } from "./dragDrop";
 import { formatTauriWorkDuration, groupTauriHistory, type IndexedHistoryMessage } from "./historyPresentation";
@@ -399,6 +400,7 @@ export function TauriSessionPreview() {
   const [runtimeInfo, setRuntimeInfo] = useState<TauriPreviewRuntimeInfo | null>(null);
   const [providerSummary, setProviderSummary] = useState<TauriProviderSummary | null>(null);
   const [events, setEvents] = useState<TauriBridgeEvent[]>([]);
+  const [observedUsage, setObservedUsage] = useState<TauriObservedUsage | null>(null);
   const [history, setHistory] = useState<TauriBridgeHistory | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
@@ -807,6 +809,7 @@ export function TauriSessionPreview() {
     setStreamReady(false);
     setHistoryLoading(true);
     setHistoryError("");
+    setObservedUsage(null);
 
     void (async () => {
       try {
@@ -820,6 +823,7 @@ export function TauriSessionPreview() {
           lastSequence = event.sequence;
           setSequence(previous => Math.max(previous, event.sequence));
           setEvents(previous => [event, ...previous].slice(0, 100));
+          if (event.eventKind === "usage" || event.eventKind === "turn_started") setObservedUsage(previous => observeTauriUsage(previous, event));
           if (event.eventKind === "turn_started") {
             turnEpochRef.current += 1;
             // Prompt ids may restart when a controller is rebuilt between turns.
@@ -2320,7 +2324,7 @@ export function TauriSessionPreview() {
           </div>
           <p className="tauri-composer-hint">Reasonix 可能会出错，请核对重要信息。<button type="button" onClick={() => setDiagnosticsOpen(true)}>预览版说明</button></p>
         </footer>
-        <TauriStatusBar workspace={currentWorkspace} model={providerSummary?.defaultModel} sessionState={session?.state} bridgeRunning={status?.running} />
+        <TauriStatusBar workspace={currentWorkspace} model={providerSummary?.defaultModel} sessionState={session?.state} bridgeRunning={status?.running} observedUsage={observedUsage?.sessionId === session?.id ? observedUsage : null} />
       </section>
 
       {scanImportOpen && <>

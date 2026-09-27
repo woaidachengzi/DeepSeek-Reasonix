@@ -413,8 +413,9 @@
 .tauri-send-button.is-stop { background: var(--surface-2); color: var(--fg) !important; }
 .tauri-composer-hint { margin: 8px 0 0; color: var(--fg-faint); text-align: center; font-size: 10px; }
 .tauri-composer-hint button { padding: 0 0 0 4px; border: 0; background: transparent; color: var(--fg-dim); font-size: 10px; text-decoration: underline; text-underline-offset: 2px; }
-.tauri-statusbar { display: flex; min-height: 29px; flex: 0 0 auto; align-items: center; gap: 18px; padding: 0 18px; overflow: hidden; border-top: 1px solid var(--border-soft); background: var(--surface); color: var(--fg-faint); font-size: 10px; }
-.tauri-statusbar__item { display: inline-flex; min-width: 0; max-width: 32%; align-items: center; gap: 5px; overflow: hidden; white-space: nowrap; }
+.tauri-statusbar { display: flex; min-height: 29px; flex: 0 0 auto; align-items: center; gap: 18px; padding: 0 18px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; border-top: 1px solid var(--border-soft); background: var(--surface); color: var(--fg-faint); font-size: 10px; }
+.tauri-statusbar::-webkit-scrollbar { display: none; }
+.tauri-statusbar__item { display: inline-flex; min-width: 0; max-width: 40%; flex: 0 0 auto; align-items: center; gap: 5px; overflow: hidden; white-space: nowrap; }
 .tauri-statusbar__item svg { flex: 0 0 auto; color: var(--fg-faint); }
 .tauri-statusbar__item span { overflow: hidden; text-overflow: ellipsis; }
 .tauri-statusbar.is-icon { gap: 12px; }
@@ -567,7 +568,11 @@
 .tauri-settings-general .tauri-settings-field-label small { line-height: 1.5; }
 .tauri-settings-general .tauri-settings-radio-group { width: min(100%, 425px); min-width: min(100%, 425px); }
 .tauri-settings-general .tauri-settings-status-items { align-items: flex-start; }
-.tauri-settings-status-items__list { width: min(100%, 425px); min-width: min(100%, 425px); display: grid; gap: 3px; }
+.tauri-settings-status-items__control { width: min(100%, 425px); min-width: min(100%, 425px); display: grid; justify-items: end; gap: 8px; }
+.tauri-settings-status-items__toggle { display: flex; align-items: center; gap: 8px; padding: 6px 9px; border: 1px solid var(--border-soft); border-radius: 7px; background: var(--surface); color: var(--fg-dim); font-size: 11px; }
+.tauri-settings-status-items__toggle:hover { color: var(--fg); border-color: var(--border); }
+.tauri-settings-status-items__toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.tauri-settings-status-items__list { width: 100%; display: grid; gap: 3px; }
 .tauri-settings-status-items__row { display: flex; min-height: 34px; align-items: center; justify-content: space-between; gap: 10px; padding: 0 8px; border: 1px solid var(--border-soft); border-radius: 7px; color: var(--fg-dim); }
 .tauri-settings-status-items__row label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .tauri-settings-status-items__row input { accent-color: var(--accent); }
