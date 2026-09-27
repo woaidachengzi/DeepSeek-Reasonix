@@ -552,6 +552,9 @@ impl BridgeLauncher {
             "--launch-id".into(),
             launch_id.into(),
         ];
+        // macOS ps exposes a child's launch environment even after Go unsets
+        // it. Deliver the token over stdin and neutralize any inherited value.
+        let token_line = format!("{token}\n");
         match self {
             #[cfg(any(debug_assertions, test))]
             Self::Explicit(binary) => {
@@ -561,25 +564,43 @@ impl BridgeLauncher {
                         binary.display()
                     ));
                 }
-                Command::new(binary)
+                let mut child = Command::new(binary)
                     .args(&args)
-                    .env(BRIDGE_TOKEN_ENV, token)
-                    .stdin(Stdio::null())
+                    .env(BRIDGE_TOKEN_ENV, "")
+                    .stdin(Stdio::piped())
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
                     .spawn()
-                    .map(BridgeChild::Explicit)
-                    .map_err(display_error)
+                    .map_err(display_error)?;
+                let delivered = child
+                    .stdin
+                    .take()
+                    .ok_or_else(|| "desktop bridge stdin pipe is unavailable".to_string())
+                    .and_then(|mut input| {
+                        input
+                            .write_all(token_line.as_bytes())
+                            .map_err(display_error)
+                    });
+                if let Err(error) = delivered {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(error);
+                }
+                Ok(BridgeChild::Explicit(child))
             }
             Self::Bundled(app) => {
-                let (events, child) = app
+                let (events, mut child) = app
                     .shell()
                     .sidecar(BUNDLED_BRIDGE_NAME)
                     .map_err(display_error)?
                     .args(args)
-                    .env(BRIDGE_TOKEN_ENV, token)
+                    .env(BRIDGE_TOKEN_ENV, "")
                     .spawn()
                     .map_err(display_error)?;
+                if let Err(error) = child.write(token_line.as_bytes()) {
+                    let _ = child.kill();
+                    return Err(display_error(error));
+                }
                 let running = Arc::new(AtomicBool::new(true));
                 watch_bundled_child(events, Arc::clone(&running));
                 Ok(BridgeChild::Bundled {

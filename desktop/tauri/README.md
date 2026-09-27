@@ -4,7 +4,7 @@
 现有前端 API。开发构建启动时 host 从 `REASONIX_DESKTOP_BRIDGE_BIN` 读取由构建流程提供的
 `reasonix-desktop-bridge` 可执行文件路径；release 打包启动时忽略该开发覆盖，由 Tauri 的 `externalBin` 从应用
 包内定位同一个 bridge。两种路径都通过每次启动独有的 token、ready 文件和 launch nonce
-监管它。
+监管它。token 经子进程 stdin 管道发送，不放在 macOS 进程列表可见的启动环境或命令行中。
 
 ## 数据隔离
 
@@ -112,7 +112,8 @@ cd desktop/tauri && REASONIX_TAURI_BRIDGE_TEST_BIN="$PWD/../../bin/reasonix-desk
 host job 还会构建真实 Go sidecar、运行 Rust 集成测试、打出 Preview `.app`，并检查包内
 host/sidecar 可执行文件及代码签名。包级 smoke 分别在临时 HOME 下使用托管 profile 与显式
 `REASONIX_HOME` 启动真实 `.app`：检查 sidecar 实际继承的 profile 环境、ready 文件、父子进程
-关系和正常退出后的清理。托管模式故意注入外部状态与缓存覆盖，要求 host 在启动 sidecar 前清除。
+关系、无认证请求被拒绝和正常退出后的清理。测试故意注入旧 token 环境值，要求 sidecar 启动环境将其清空；
+托管模式还注入外部状态与缓存覆盖，要求 host 在启动 sidecar 前清除。
 集成测试使用临时 profile，bundle 使用开发签名；正式发布仍需
 实际发布二进制兼容认证、Developer ID 签名与公证，以及停写后的真实数据恢复演练。
 

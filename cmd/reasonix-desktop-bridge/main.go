@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -92,12 +93,20 @@ func main() {
 	}
 }
 
-// The host passes authentication only at launch. Remove it before the core can
-// spawn shell commands or other subprocesses that inherit this environment.
+// The host writes one bounded token line to the child's private stdin pipe.
+// Clear any inherited legacy environment value before starting the core, so
+// it cannot leak to subprocesses or act as an alternate authentication source.
 func consumeBridgeToken() (string, error) {
-	token := os.Getenv(tokenEnvironment)
 	if err := os.Unsetenv(tokenEnvironment); err != nil {
 		return "", fmt.Errorf("clear desktop bridge token from process environment: %w", err)
+	}
+	line, err := bufio.NewReader(io.LimitReader(os.Stdin, 129)).ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("read desktop bridge token from stdin: %w", err)
+	}
+	token := strings.TrimSuffix(line, "\n")
+	if len(token) < 32 || !validRequestID(token) {
+		return "", errors.New("desktop bridge token from stdin is invalid")
 	}
 	return token, nil
 }
@@ -110,7 +119,7 @@ func run(ctx context.Context, cfg config, token string) (runErr error) {
 		return errors.New("--launch-id is required")
 	}
 	if len(token) < 32 {
-		return fmt.Errorf("%s must be at least 32 bytes", tokenEnvironment)
+		return errors.New("desktop bridge token must be at least 32 bytes")
 	}
 	if err := requireLoopbackAddress(cfg.listen); err != nil {
 		return err

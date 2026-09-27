@@ -5,6 +5,7 @@ Usage: python3 tools/tauri/smoke-packaged-app.py PATH_TO_APP
 The host's package-smoke flag exits through Tauri's normal RunEvent::Exit path.
 """
 
+import http.client
 import ipaddress
 import json
 import os
@@ -53,8 +54,21 @@ def check_ready(path):
         raise RuntimeError("sidecar published invalid readiness")
     address = payload.get("address", "")
     host, separator, port = address.rpartition(":")
-    if not separator or not port.isdigit() or not ipaddress.ip_address(host).is_loopback:
+    host = host.removeprefix("[").removesuffix("]")
+    if not separator or not port.isdigit() or not 0 < int(port) <= 65535 or not ipaddress.ip_address(host).is_loopback:
         raise RuntimeError("sidecar readiness did not use a loopback address")
+    return host, int(port)
+
+
+def check_unauthenticated_health(address):
+    connection = http.client.HTTPConnection(*address, timeout=2)
+    try:
+        connection.request("GET", "/v1/health")
+        response = connection.getresponse()
+        if response.status != 401:
+            raise RuntimeError("packaged sidecar accepted an unauthenticated health request")
+    finally:
+        connection.close()
 
 
 def check_sidecar_profile(pid, expected_home, managed, cache_home):
@@ -78,6 +92,8 @@ def check_sidecar_profile(pid, expected_home, managed, cache_home):
         raise RuntimeError("sidecar did not inherit the selected Preview home")
     if has("REASONIX_STATE_HOME"):
         raise RuntimeError("sidecar retained an inherited state override")
+    if not equals("REASONIX_DESKTOP_BRIDGE_TOKEN", ""):
+        raise RuntimeError("sidecar launch environment exposed a bridge token")
     if managed:
         if has("REASONIX_CACHE_HOME"):
             raise RuntimeError("managed sidecar retained an inherited cache override")
@@ -102,6 +118,7 @@ def smoke_once(host_binary, sidecar_binary, identifier, managed):
             "HOME": str(home),
             "TMPDIR": str(temp),
             "REASONIX_TAURI_PACKAGE_SMOKE": "1",
+            "REASONIX_DESKTOP_BRIDGE_TOKEN": "inherited-token-must-be-cleared",
             # Release packages must ignore the development sidecar override.
             "REASONIX_DESKTOP_BRIDGE_BIN": str(root / "nonexistent-sidecar"),
         })
@@ -132,12 +149,13 @@ def smoke_once(host_binary, sidecar_binary, identifier, managed):
                 ready_files = list(temp.glob("reasonix-tauri-bridge-*/ready.json"))
                 if len(children) == 1 and len(ready_files) == 1:
                     sidecar_pid = children[0]
-                    check_ready(ready_files[0])
+                    address = check_ready(ready_files[0])
                     if not app_data.is_dir():
                         raise RuntimeError("Tauri app data escaped the temporary HOME")
                     if managed and not expected_home.is_dir():
                         raise RuntimeError("managed Preview home was not created inside app data")
                     check_sidecar_profile(sidecar_pid, expected_home, managed, cache_home)
+                    check_unauthenticated_health(address)
                     break
                 time.sleep(0.1)
             else:

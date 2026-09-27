@@ -24,14 +24,46 @@ import (
 
 const testToken = "0123456789abcdef0123456789abcdef"
 
-func TestBridgeTokenIsRemovedBeforeCoreStarts(t *testing.T) {
-	t.Setenv(tokenEnvironment, testToken)
+func tokenStdin(t *testing.T, input string) {
+	t.Helper()
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := os.Stdin
+	os.Stdin = reader
+	t.Cleanup(func() {
+		os.Stdin = previous
+		_ = reader.Close()
+	})
+	if _, err := io.WriteString(writer, input); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestBridgeTokenIsReadFromStdinAndLegacyEnvironmentIsCleared(t *testing.T) {
+	t.Setenv(tokenEnvironment, "ignored-legacy-value")
+	tokenStdin(t, testToken+"\n")
 	token, err := consumeBridgeToken()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if token != testToken || os.Getenv(tokenEnvironment) != "" {
-		t.Fatal("bridge token was not consumed from the process environment")
+		t.Fatal("bridge token was not consumed from stdin or legacy environment was retained")
+	}
+}
+
+func TestBridgeTokenDoesNotFallBackToEnvironment(t *testing.T) {
+	t.Setenv(tokenEnvironment, testToken)
+	tokenStdin(t, "")
+	if _, err := consumeBridgeToken(); err == nil {
+		t.Fatal("missing stdin token was accepted from the environment")
+	}
+	if os.Getenv(tokenEnvironment) != "" {
+		t.Fatal("legacy environment token was retained")
 	}
 }
 
