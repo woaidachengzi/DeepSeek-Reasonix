@@ -381,6 +381,15 @@ export interface TauriSkillItem {
   enabled: boolean;
   globalEnabled?: boolean;
   requires: string[];
+  archiveRevision?: string;
+}
+
+export interface TauriArchivedSkill {
+  name: string;
+  scope: "global" | "project";
+  archiveId: string;
+  path: string;
+  revision: string;
 }
 
 export interface TauriSkillSource {
@@ -402,6 +411,31 @@ export interface TauriSkillsSettings {
   projectOverrides?: { implicit: boolean; skills: boolean; sources: boolean };
   skills: TauriSkillItem[];
   sources: TauriSkillSource[];
+  archivedSkills: TauriArchivedSkill[];
+}
+
+export interface TauriSkillArchiveRequest {
+  name: string;
+  scope: "global" | "project";
+  workspaceRoot: string;
+  archiveId: string;
+  revision: string;
+}
+
+export interface TauriSkillArchiveResult {
+  protocolVersion: number;
+  backupPath: string;
+  settings: TauriSkillsSettings;
+}
+
+export async function archiveTauriSkill(request: TauriSkillArchiveRequest): Promise<TauriSkillArchiveResult> {
+  requireTauri();
+  return invoke<TauriSkillArchiveResult>("archive_skill", { request });
+}
+
+export async function restoreTauriSkill(request: TauriSkillArchiveRequest): Promise<TauriSkillArchiveResult> {
+  requireTauri();
+  return invoke<TauriSkillArchiveResult>("restore_skill", { request });
 }
 
 export interface TauriSkillsChange {

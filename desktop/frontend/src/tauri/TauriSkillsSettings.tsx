@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { changeTauriSkillsSettings, chooseTauriSkillSourceDirectory, installTauriSkill, planTauriSkillInstall, tauriMessageFrom, tauriSkillsSettings, type TauriSkillInstallPlan, type TauriSkillInstallRequest, type TauriSkillsChange, type TauriSkillsSettings } from "../lib/tauriBridge";
+import { archiveTauriSkill, changeTauriSkillsSettings, chooseTauriSkillSourceDirectory, installTauriSkill, planTauriSkillInstall, restoreTauriSkill, tauriMessageFrom, tauriSkillsSettings, type TauriArchivedSkill, type TauriSkillInstallPlan, type TauriSkillInstallRequest, type TauriSkillItem, type TauriSkillsChange, type TauriSkillsSettings } from "../lib/tauriBridge";
 
 const sourceStatusLabels: Record<string, string> = {
   ok: "可读取",
@@ -24,6 +24,7 @@ export function TauriSkillsSettings({ workspaceRoot = "", currentSessionState, c
   const [installSource, setInstallSource] = useState("");
   const [installPlan, setInstallPlan] = useState<{ request: TauriSkillInstallRequest; detail: TauriSkillInstallPlan } | null>(null);
   const [acceptRisk, setAcceptRisk] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState("");
   const [scope, setScope] = useState<"global" | "project">("global");
   const [pendingApply, setPendingApply] = useState(false);
   const busyRef = useRef(false);
@@ -42,6 +43,7 @@ export function TauriSkillsSettings({ workspaceRoot = "", currentSessionState, c
     if (!workspaceRoot) setScope("global");
     setInstallPlan(null);
     setAcceptRisk(false);
+    setArchiveTarget("");
     reload();
     return () => { reloadRequest.current += 1; };
   }, [workspaceRoot]);
@@ -112,6 +114,35 @@ export function TauriSkillsSettings({ workspaceRoot = "", currentSessionState, c
     finally { busyRef.current = false; setBusy(false); }
   };
 
+  const archiveSkill = async (item: TauriSkillItem) => {
+    if (!item.archiveRevision || busyRef.current || (item.scope !== "global" && item.scope !== "project")) return;
+    busyRef.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await archiveTauriSkill({ name: item.name, scope: item.scope, workspaceRoot, archiveId: "", revision: item.archiveRevision });
+      setView(result.settings);
+      setArchiveTarget("");
+      setPendingApply(true);
+      setNotice(`技能已移入备份区：${result.backupPath}。可在下方恢复。`);
+    } catch (err) { setError(`移入备份区失败，请刷新技能列表后重试：${tauriMessageFrom(err)}`); }
+    finally { busyRef.current = false; setBusy(false); }
+  };
+
+  const restoreSkill = async (item: TauriArchivedSkill) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await restoreTauriSkill({ name: item.name, scope: item.scope, workspaceRoot, archiveId: item.archiveId, revision: item.revision });
+      setView(result.settings);
+      setPendingApply(true);
+      setNotice(`技能 ${item.name} 已恢复；新会话会重新发现它。`);
+    } catch (err) { setError(`恢复失败，请刷新备份列表后重试：${tauriMessageFrom(err)}`); }
+    finally { busyRef.current = false; setBusy(false); }
+  };
+
   const applyCurrent = async () => {
     if (!onApplyToCurrentSession || busyRef.current || currentSessionState !== "idle" || currentSessionHasAttachments) return;
     busyRef.current = true;
@@ -127,12 +158,13 @@ export function TauriSkillsSettings({ workspaceRoot = "", currentSessionState, c
   };
 
   const filtered = view?.skills.filter(item => `${item.name} ${item.invocation} ${item.description} ${item.scope} ${item.sourcePath}`.toLowerCase().includes(query.trim().toLowerCase())) ?? [];
+  const archivedInScope = view?.archivedSkills?.filter(item => item.scope === scope) ?? [];
   const implicitEnabled = scope === "global" ? (view?.globalAllowImplicitInvocation ?? view?.allowImplicitInvocation) : view?.allowImplicitInvocation;
   return <div className="tauri-settings-section tauri-skills-settings">
     <h3>Agent Skills</h3>
     <p>查看当前工作区可发现的技能。选择保存范围后，开关和来源会写入对应配置；新会话读取更新后的值。</p>
     {loading ? <div className="tauri-settings-loading">加载中…</div> : view ? <>
-      <div className="tauri-settings-field"><span className="tauri-settings-field-label">保存范围<small>项目设置仅影响当前工作区，可覆盖全局技能设置。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="技能设置保存范围"><button type="button" role="radio" aria-checked={scope === "global"} className={`tauri-settings-radio${scope === "global" ? " is-active" : ""}`} disabled={busy} onClick={() => { setScope("global"); setInstallPlan(null); }}>全局</button><button type="button" role="radio" aria-checked={scope === "project"} className={`tauri-settings-radio${scope === "project" ? " is-active" : ""}`} disabled={busy || !workspaceRoot} onClick={() => { setScope("project"); setInstallPlan(null); }}>当前项目</button></div></div>
+      <div className="tauri-settings-field"><span className="tauri-settings-field-label">保存范围<small>项目设置仅影响当前工作区，可覆盖全局技能设置。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="技能设置保存范围"><button type="button" role="radio" aria-checked={scope === "global"} className={`tauri-settings-radio${scope === "global" ? " is-active" : ""}`} disabled={busy} onClick={() => { setScope("global"); setInstallPlan(null); setArchiveTarget(""); }}>全局</button><button type="button" role="radio" aria-checked={scope === "project"} className={`tauri-settings-radio${scope === "project" ? " is-active" : ""}`} disabled={busy || !workspaceRoot} onClick={() => { setScope("project"); setInstallPlan(null); setArchiveTarget(""); }}>当前项目</button></div></div>
       {scope === "global" && (view.projectOverrides?.implicit || view.projectOverrides?.skills || view.projectOverrides?.sources) && <p role="note">当前项目覆盖了部分全局技能设置。这里的开关显示所选范围的值；切到“当前项目”可查看最终生效值。</p>}
       <div className="tauri-settings-field"><span className="tauri-settings-field-label">允许自动调用<small>关闭后仍可明确输入 /技能名 调用。</small></span><label><input type="checkbox" role="switch" aria-label="允许自动调用技能" checked={Boolean(implicitEnabled)} disabled={busy} onChange={event => void change("implicit", event.target.checked)} /> {implicitEnabled ? "已开启" : "已关闭"}</label></div>
       <h3>安装技能</h3>
@@ -146,7 +178,8 @@ export function TauriSkillsSettings({ workspaceRoot = "", currentSessionState, c
       <h3>技能列表</h3>
       <p>共 {view.skills.length} 个可发现技能。单项开关按技能名生效，同名技能会一起受影响。</p>
       <input className="tauri-settings-input tauri-skills-search" type="search" aria-label="搜索技能" value={query} placeholder="搜索技能" onChange={event => setQuery(event.target.value)} />
-      <div className="tauri-skills-list">{filtered.length ? filtered.map((item, index) => <div className="tauri-skills-item" key={`${item.name}-${item.sourcePath}-${index}`}><div><strong>{item.invocation || item.name}</strong><span>{item.description}</span><small>{item.scope} · {item.runAs}{item.sourcePath && item.sourcePath !== "(builtin)" ? ` · ${item.sourcePath}` : ""}</small>{item.requires?.length > 0 && <small>声明依赖：{item.requires.join("、")}（调用时检查）</small>}</div><label><input type="checkbox" aria-label={`启用技能 ${item.name}`} checked={scope === "global" ? (item.globalEnabled ?? item.enabled) : item.enabled} disabled={busy} onChange={event => void change("skill", event.target.checked, item.name)} /></label></div>) : <p>{query ? "没有匹配的技能" : "当前工作区没有可发现的技能"}</p>}</div>
+      <div className="tauri-skills-list">{filtered.length ? filtered.map((item, index) => <div className="tauri-skills-item" key={`${item.name}-${item.sourcePath}-${index}`}><div><strong>{item.invocation || item.name}</strong><span>{item.description}</span><small>{item.scope} · {item.runAs}{item.sourcePath && item.sourcePath !== "(builtin)" ? ` · ${item.sourcePath}` : ""}</small>{item.requires?.length > 0 && <small>声明依赖：{item.requires.join("、")}（调用时检查）</small>}{archiveTarget === `${item.scope}:${item.name}` && <small className="tauri-skills-warning">将整个技能目录移入 Preview 备份区，可从下方恢复。</small>}</div><label><input type="checkbox" aria-label={`启用技能 ${item.name}`} checked={scope === "global" ? (item.globalEnabled ?? item.enabled) : item.enabled} disabled={busy} onChange={event => void change("skill", event.target.checked, item.name)} /></label>{item.archiveRevision && item.scope === scope && (archiveTarget === `${item.scope}:${item.name}` ? <div className="tauri-skills-archive-actions"><button type="button" className="tauri-settings-button" disabled={busy} onClick={() => setArchiveTarget("")}>取消</button><button type="button" className="tauri-settings-button" disabled={busy} onClick={() => void archiveSkill(item)}>确认备份移除</button></div> : <button type="button" className="tauri-settings-button" disabled={busy} onClick={() => setArchiveTarget(`${item.scope}:${item.name}`)}>移入备份区</button>)}</div>) : <p>{query ? "没有匹配的技能" : "当前工作区没有可发现的技能"}</p>}</div>
+      {archivedInScope.length > 0 && <><h3>已备份的技能</h3><p>恢复时会检查备份是否变化，也不会覆盖同名技能或旧格式文件。</p><div className="tauri-skills-list">{archivedInScope.map(item => <div className="tauri-skills-item" key={`${item.scope}:${item.archiveId}`}><div><strong>{item.name}</strong><small>{item.scope === "project" ? "当前项目" : "全局"} · {item.path}</small></div><button type="button" className="tauri-settings-button" disabled={busy} onClick={() => void restoreSkill(item)}>恢复</button></div>)}</div></>}
       <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" disabled={busy} onClick={reload}>刷新发现结果</button>{pendingApply && currentSessionState && onApplyToCurrentSession && <button type="button" className="tauri-settings-button" disabled={busy || currentSessionState !== "idle" || currentSessionHasAttachments} onClick={() => void applyCurrent()}>应用到当前会话</button>}</div>
     </> : <button type="button" className="tauri-settings-button" onClick={reload}>重试读取</button>}
     {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}

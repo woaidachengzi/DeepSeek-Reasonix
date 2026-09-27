@@ -586,6 +586,18 @@ pub struct SkillSettingsItem {
     pub global_enabled: bool,
     #[serde(default)]
     pub requires: Vec<String>,
+    #[serde(default)]
+    pub archive_revision: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchivedSkillItem {
+    pub name: String,
+    pub scope: String,
+    pub archive_id: String,
+    pub path: String,
+    pub revision: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -620,6 +632,26 @@ pub struct SkillsSettingsView {
     pub project_overrides: SkillProjectOverrides,
     pub skills: Vec<SkillSettingsItem>,
     pub sources: Vec<SkillSettingsSource>,
+    #[serde(default)]
+    pub archived_skills: Vec<ArchivedSkillItem>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillArchiveRequest {
+    pub name: String,
+    pub scope: String,
+    pub workspace_root: String,
+    pub archive_id: String,
+    pub revision: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillArchiveResult {
+    pub protocol_version: u64,
+    pub backup_path: String,
+    pub settings: SkillsSettingsView,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1967,6 +1999,35 @@ impl BridgeSupervisor {
             Some(&request_id),
         )?;
         let view: SkillInstallResult = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn archive_skill(
+        &self,
+        request: SkillArchiveRequest,
+    ) -> Result<SkillArchiveResult, String> {
+        self.skill_archive_request("/v1/settings/skills/archive", request)
+    }
+
+    pub fn restore_skill(
+        &self,
+        request: SkillArchiveRequest,
+    ) -> Result<SkillArchiveResult, String> {
+        self.skill_archive_request("/v1/settings/skills/restore", request)
+    }
+
+    fn skill_archive_request(
+        &self,
+        path: &str,
+        request: SkillArchiveRequest,
+    ) -> Result<SkillArchiveResult, String> {
+        let request_id = opaque_secret()?;
+        let response =
+            self.request_json_slow("POST", path, Some(json!(request)), Some(&request_id))?;
+        let view: SkillArchiveResult = serde_json::from_value(response).map_err(display_error)?;
         if view.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
@@ -3482,9 +3543,10 @@ mod tests {
         PluginInstallRequest, PluginOperationResult, PluginRemoveRequest, PluginSettingsChange,
         PluginSettingsView, ProviderConfigList, RenameSessionRequest, SaveProviderConfigRequest,
         SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
-        SessionDirectoryPage, SessionInventoryResponse, SessionRequest, SkillInstallPlan,
-        SkillInstallRequest, SkillInstallResult, SkillsSettingsChange, SkillsSettingsView,
-        SubagentSettingsChange, SubagentSettingsView, SubmitRequest, PROTOCOL_VERSION,
+        SessionDirectoryPage, SessionInventoryResponse, SessionRequest, SkillArchiveRequest,
+        SkillArchiveResult, SkillInstallPlan, SkillInstallRequest, SkillInstallResult,
+        SkillsSettingsChange, SkillsSettingsView, SubagentSettingsChange, SubagentSettingsView,
+        SubmitRequest, PROTOCOL_VERSION,
     };
     use crate::{session_shadow, workbench_catalog::WorkbenchSession};
     use serde_json::json;
@@ -3531,16 +3593,21 @@ mod tests {
             "projectOverrides": {"implicit": true, "skills": false, "sources": true},
             "skills": [{"name":"review", "description":"Review", "invocation":"/review",
                 "scope":"project", "sourcePath":"/tmp/review.md", "runAs":"subagent",
-                "enabled":true, "globalEnabled":false, "requires":["mcp-server:github"]}],
+                "enabled":true, "globalEnabled":false, "requires":["mcp-server:github"],
+                "archiveRevision":"sha256:installed"}],
             "sources": [{"path":"/tmp/skills", "scope":"project", "status":"ok",
                 "enabled":true, "configured":true, "configuredGlobal":false,
-                "configuredProject":true, "globalEnabled":false, "skillCount":1}]
+                "configuredProject":true, "globalEnabled":false, "skillCount":1}],
+            "archivedSkills":[{"name":"older", "scope":"project", "archiveId":"older--aabbccddeeffaabbccddeeff",
+                "path":"/tmp/removed-skills/older--aabbccddeeffaabbccddeeff", "revision":"sha256:older"}]
         }))
         .unwrap();
         assert!(skills.project_overrides.implicit);
         assert!(!skills.skills[0].global_enabled);
         assert_eq!(skills.skills[0].requires, ["mcp-server:github"]);
         assert_eq!(skills.sources[0].skill_count, 1);
+        assert_eq!(skills.skills[0].archive_revision, "sha256:installed");
+        assert_eq!(skills.archived_skills[0].name, "older");
         assert_eq!(
             serde_json::to_value(skills).unwrap()["sources"][0]["configuredProject"],
             true
@@ -3575,6 +3642,23 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(skill_result.status, "done");
+        let archive_request: SkillArchiveRequest = serde_json::from_value(json!({
+            "name":"review", "scope":"project", "workspaceRoot":"/tmp/project",
+            "archiveId":"", "revision":"sha256:installed"
+        }))
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(archive_request).unwrap()["workspaceRoot"],
+            "/tmp/project"
+        );
+        let archive_result: SkillArchiveResult = serde_json::from_value(json!({
+            "protocolVersion":1, "backupPath":"/tmp/removed-skills/review--aabbccddeeffaabbccddeeff",
+            "settings":{"protocolVersion":1, "allowImplicitInvocation":true,
+                "globalAllowImplicitInvocation":true,
+                "projectOverrides":{"implicit":false,"skills":false,"sources":false},
+                "skills":[], "sources":[], "archivedSkills":[]}
+        })).unwrap();
+        assert!(archive_result.backup_path.contains("removed-skills"));
 
         let plugins: PluginSettingsView = serde_json::from_value(json!({
             "protocolVersion": 1,

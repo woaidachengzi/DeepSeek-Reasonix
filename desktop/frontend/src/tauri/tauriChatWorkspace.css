@@ -731,6 +731,7 @@
 .tauri-skills-item span, .tauri-skills-item small { color: var(--fg-faint); font-size: 11px; }
 .tauri-skills-item .tauri-skills-warning { color: var(--warning, #c87838); }
 .tauri-skills-item input { width: 16px; height: 16px; accent-color: var(--accent); }
+.tauri-skills-item > .tauri-skills-archive-actions { display: flex; flex: 0 0 auto; gap: 6px; }
 .tauri-skills-add { display: flex; gap: 8px; margin-top: 12px; }
 .tauri-skills-add .tauri-settings-input { min-width: 0; width: min(100%, 400px); }
 .tauri-skills-settings > .tauri-settings-field { border-top: 1px solid var(--border-soft); }

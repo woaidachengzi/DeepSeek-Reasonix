@@ -13,15 +13,16 @@ import (
 )
 
 type previewSkillView struct {
-	Name          string   `json:"name"`
-	Description   string   `json:"description"`
-	Invocation    string   `json:"invocation"`
-	Scope         string   `json:"scope"`
-	SourcePath    string   `json:"sourcePath"`
-	RunAs         string   `json:"runAs"`
-	Enabled       bool     `json:"enabled"`
-	GlobalEnabled bool     `json:"globalEnabled"`
-	Requires      []string `json:"requires"`
+	Name            string   `json:"name"`
+	Description     string   `json:"description"`
+	Invocation      string   `json:"invocation"`
+	Scope           string   `json:"scope"`
+	SourcePath      string   `json:"sourcePath"`
+	RunAs           string   `json:"runAs"`
+	Enabled         bool     `json:"enabled"`
+	GlobalEnabled   bool     `json:"globalEnabled"`
+	Requires        []string `json:"requires"`
+	ArchiveRevision string   `json:"archiveRevision,omitempty"`
 }
 
 type previewSkillSourceView struct {
@@ -49,6 +50,7 @@ type skillsSettingsView struct {
 	ProjectOverrides              previewSkillProjectOverrides `json:"projectOverrides"`
 	Skills                        []previewSkillView           `json:"skills"`
 	Sources                       []previewSkillSourceView     `json:"sources"`
+	ArchivedSkills                []previewArchivedSkill       `json:"archivedSkills"`
 }
 
 type skillsSettingsChange struct {
@@ -142,7 +144,7 @@ func loadSkillsSettings(workspaceRoot string) (skillsSettingsView, error) {
 	view := skillsSettingsView{
 		ProtocolVersion: desktopbridge.ProtocolVersion, AllowImplicitInvocation: cfg.ImplicitSkillInvocationEnabled(),
 		GlobalAllowImplicitInvocation: userCfg.ImplicitSkillInvocationEnabled(), ProjectOverrides: projectOverrides,
-		Skills: []previewSkillView{}, Sources: []previewSkillSourceView{},
+		Skills: []previewSkillView{}, Sources: []previewSkillSourceView{}, ArchivedSkills: []previewArchivedSkill{},
 	}
 	for _, source := range allSources {
 		key := configpkg.CanonicalSkillPath(source.Dir)
@@ -154,13 +156,21 @@ func loadSkillsSettings(workspaceRoot string) (skillsSettingsView, error) {
 		})
 	}
 	for _, item := range store.List() {
-		view.Skills = append(view.Skills, previewSkillView{
+		entry := previewSkillView{
 			Name: item.Name, Description: item.Description, Invocation: "/" + item.SlashName(),
 			Scope: string(item.Scope), SourcePath: item.Path, RunAs: string(item.RunAs),
 			Enabled:       !disabled[configpkg.SkillNameKey(item.Name)],
 			GlobalEnabled: !globalDisabled[configpkg.SkillNameKey(item.Name)],
 			Requires:      append([]string{}, item.Requires...),
-		})
+		}
+		if item.Scope == skill.ScopeGlobal || item.Scope == skill.ScopeProject {
+			entry.ArchiveRevision, _ = previewCanonicalSkillRevision(entry.Scope, root, entry.Name, entry.SourcePath)
+		}
+		view.Skills = append(view.Skills, entry)
+	}
+	view.ArchivedSkills, err = listPreviewArchivedSkills(root)
+	if err != nil {
+		return skillsSettingsView{}, err
 	}
 	return view, nil
 }

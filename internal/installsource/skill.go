@@ -119,6 +119,40 @@ func skillSourceDigest(cand skillCandidate) (string, error) {
 	return "sha256:" + hex.EncodeToString(h.Sum(nil)), nil
 }
 
+// DigestSkillDirectory fingerprints the bytes and relative paths copied by
+// the skill installer. Desktop management uses the same revision to refuse a
+// removal or restore after files have changed on disk.
+func DigestSkillDirectory(path string) (string, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return "", newErr(ErrInvalidManifest, "skill source is not a regular directory")
+	}
+	return skillSourceDigest(skillCandidate{SourcePath: path, IsDir: true})
+}
+
+// ValidateSkillFile uses the installer's parser before an archived skill is
+// shown as restorable or moved back into the active skill directory.
+func ValidateSkillFile(path, expectedName string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return newErr(ErrInvalidManifest, "archived skill entry is not a regular file")
+	}
+	cand, err := readSkillFile(path, expectedName, false)
+	if err != nil {
+		return err
+	}
+	if cand.Name != expectedName {
+		return newErr(ErrInvalidManifest, "archived skill name changed")
+	}
+	return nil
+}
+
 // skillAction builds the DTO for a single-skill install (copy or link).
 func (t *installSourceTool) skillAction(req request, cand skillCandidate, mode string) action {
 	scope := t.installScope(req, "skill", cand.SourcePath)
