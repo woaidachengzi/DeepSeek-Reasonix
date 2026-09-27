@@ -9,6 +9,7 @@ import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
 import { compactQuestionText, type QuestionAnchor } from "../lib/transcriptGrouping";
 import { LocaleProvider } from "../lib/i18n";
 import { playSuccessChime, playAttentionChime, shouldPlayAttentionChimeForEvent } from "../lib/sound";
+import { generativeMusic, isGenerativeMusicEnabled } from "../lib/generative-music";
 import logoWordmark from "../assets/logo-wordmark.svg";
 import { TauriSettings, type TauriSettingsTab } from "./TauriSettings";
 import { detectShortcutPlatform, formatShortcutCombo } from "../lib/keyboardShortcuts";
@@ -803,6 +804,12 @@ export function TauriSessionPreview() {
   }, [session?.id, session?.state, streamReady, busy, sessionPageSource]);
 
   useEffect(() => {
+    if (session?.state === "running" && isGenerativeMusicEnabled()) generativeMusic.start();
+    else generativeMusic.stop();
+  }, [session?.state]);
+  useEffect(() => () => generativeMusic.stop(), []);
+
+  useEffect(() => {
     if (!session) return;
     let active = true;
     let offEvent: UnlistenFn | undefined;
@@ -834,6 +841,7 @@ export function TauriSessionPreview() {
           if (event.eventKind === "usage" || event.eventKind === "turn_started") setObservedUsage(previous => observeTauriUsage(previous, event));
           if (event.eventKind === "turn_started") {
             turnEpochRef.current += 1;
+            if (isGenerativeMusicEnabled()) generativeMusic.start();
             // Prompt ids may restart when a controller is rebuilt between turns.
             attentionChimeSeenRef.current.clear();
             setSession(previous => previous ? { ...previous, state: "running" } : previous);
@@ -859,7 +867,9 @@ export function TauriSessionPreview() {
           }
           const textDelta = tauriAssistantTextDelta(event);
           if (textDelta) setLiveText(previous => previous + textDelta);
+          if (event.eventKind === "text" || event.eventKind === "reasoning" || event.eventKind === "tool_dispatch") generativeMusic.playTokenNote();
           if (event.eventKind === "turn_done") {
+            generativeMusic.stop();
             if (!tauriTurnFailure(event)) playSuccessChime();
             const completionEpoch = ++turnEpochRef.current;
             const completionIsCurrent = () => active && turnEpochRef.current === completionEpoch;

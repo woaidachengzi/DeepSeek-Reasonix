@@ -16,6 +16,7 @@ Object.assign(globalThis, {
   HTMLElement: dom.window.HTMLElement,
   Event: dom.window.Event,
   MouseEvent: dom.window.MouseEvent,
+  localStorage: dom.window.localStorage,
   IS_REACT_ACT_ENVIRONMENT: true,
 });
 // Node 22 exposes `navigator` as a getter-only global, so it needs a definition
@@ -361,8 +362,19 @@ async function main() {
   ok(!document.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]')?.disabled, "recovery after setup outage re-enables sending");
 
   const replayed = { sessionId: "tauri-kept-row", sequence: 1, eventKind: "text", payload: { kind: "text", text: "hello" } };
+  const music = (await import("../lib/generative-music")).generativeMusic;
+  const musicStart = music.start;
+  const musicStop = music.stop;
+  const musicToken = music.playTokenNote;
+  let musicStarts = 0;
+  let musicStops = 0;
+  let musicNotes = 0;
+  music.start = () => { musicStarts += 1; };
+  music.stop = () => { musicStops += 1; };
+  music.playTokenNote = () => { musicNotes += 1; };
   await act(async () => { streamCallbacks.__emitBridgeEvent?.(replayed); streamCallbacks.__emitBridgeEvent?.(replayed); });
   eq(document.querySelectorAll(".tauri-event-details li").length, 1, "replayed event sequence is applied only once");
+  eq(musicNotes, 1, "a live text event sends one token beat and ignores replayed frames");
 
   (globalThis as unknown as { __snapshotState?: string }).__snapshotState = "running";
   await act(async () => {
@@ -403,12 +415,14 @@ async function main() {
     await settle();
   });
   (globalThis as unknown as { __snapshotGate?: Promise<void> }).__snapshotGate = undefined;
+  localStorage.setItem("generativeMusicPreset", "classic");
   await act(async () => {
     streamCallbacks.__emitBridgeEvent?.({ sessionId: "tauri-kept-row", sequence: 6, eventKind: "turn_started", payload: { kind: "turn_started" } });
     releaseStaleSnapshot?.();
     await settle();
   });
   ok(Boolean(document.querySelector('button[aria-label="停止生成"]')), "late snapshot from an older completed turn cannot mark a new turn idle");
+  ok(musicStarts > 0, "an enabled preset starts music for a running Preview turn");
 
   await act(async () => { clickButton("刷新当前对话状态与记录"); await settle(); });
   const composer = document.querySelector<HTMLTextAreaElement>(".tauri-composer textarea");
@@ -432,11 +446,13 @@ async function main() {
   let releaseStaleHistory: (() => void) | undefined;
   (globalThis as unknown as { __tauriHistoryMessages?: object[] }).__tauriHistoryMessages = [{ role: "assistant", content: "stale completion marker" }];
   (globalThis as unknown as { __historyGate?: Promise<void> }).__historyGate = new Promise(resolve => { releaseStaleHistory = resolve; });
+  const stopsBeforeCompletion = musicStops;
   await act(async () => {
     streamCallbacks.__emitBridgeEvent?.({ sessionId: "tauri-kept-row", sequence: 7, eventKind: "turn_done", payload: { kind: "turn_done", status: "completed" } });
     await settle();
   });
   (globalThis as unknown as { __historyGate?: Promise<void> }).__historyGate = undefined;
+  ok(musicStops > stopsBeforeCompletion, "turn completion stops running-turn music");
   (globalThis as unknown as { __tauriHistoryMessages?: object[] }).__tauriHistoryMessages = [];
   await act(async () => {
     streamCallbacks.__emitBridgeEvent?.({ sessionId: "tauri-kept-row", sequence: 8, eventKind: "turn_started", payload: { kind: "turn_started" } });
@@ -468,6 +484,10 @@ async function main() {
   await act(async () => {
     root.unmount();
   });
+  music.start = musicStart;
+  music.stop = musicStop;
+  music.playTokenNote = musicToken;
+  localStorage.removeItem("generativeMusicPreset");
 
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
