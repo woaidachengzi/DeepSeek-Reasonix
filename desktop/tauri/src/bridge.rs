@@ -584,6 +584,8 @@ pub struct SkillSettingsItem {
     pub run_as: String,
     pub enabled: bool,
     pub global_enabled: bool,
+    #[serde(default)]
+    pub requires: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -597,6 +599,8 @@ pub struct SkillSettingsSource {
     pub configured_global: bool,
     pub configured_project: bool,
     pub global_enabled: bool,
+    #[serde(default)]
+    pub skill_count: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -3254,14 +3258,16 @@ mod tests {
             "projectOverrides": {"implicit": true, "skills": false, "sources": true},
             "skills": [{"name":"review", "description":"Review", "invocation":"/review",
                 "scope":"project", "sourcePath":"/tmp/review.md", "runAs":"subagent",
-                "enabled":true, "globalEnabled":false}],
+                "enabled":true, "globalEnabled":false, "requires":["mcp-server:github"]}],
             "sources": [{"path":"/tmp/skills", "scope":"project", "status":"ok",
                 "enabled":true, "configured":true, "configuredGlobal":false,
-                "configuredProject":true, "globalEnabled":false}]
+                "configuredProject":true, "globalEnabled":false, "skillCount":1}]
         }))
         .unwrap();
         assert!(skills.project_overrides.implicit);
         assert!(!skills.skills[0].global_enabled);
+        assert_eq!(skills.skills[0].requires, ["mcp-server:github"]);
+        assert_eq!(skills.sources[0].skill_count, 1);
         assert_eq!(
             serde_json::to_value(skills).unwrap()["sources"][0]["configuredProject"],
             true

@@ -380,6 +380,7 @@ export interface TauriSkillItem {
   runAs: string;
   enabled: boolean;
   globalEnabled?: boolean;
+  requires: string[];
 }
 
 export interface TauriSkillSource {
@@ -391,6 +392,7 @@ export interface TauriSkillSource {
   configured: boolean;
   configuredGlobal?: boolean;
   configuredProject?: boolean;
+  skillCount: number;
 }
 
 export interface TauriSkillsSettings {

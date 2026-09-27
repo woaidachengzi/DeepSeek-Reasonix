@@ -529,6 +529,22 @@ func (s *Store) Roots() []Root {
 	return out
 }
 
+// RootSkillCounts reports the number of valid skill files discovered in each
+// readable root, before name deduplication and enablement filtering. This is
+// an inventory count, not the number of skills available to a session.
+func (s *Store) RootSkillCounts() map[string]int {
+	counts := map[string]int{}
+	if s == nil {
+		return counts
+	}
+	for _, root := range s.roots() {
+		if root.Status == StatusOK {
+			counts[root.Dir] = len(s.discoverRoot(root))
+		}
+	}
+	return counts
+}
+
 func disabledNameSet(names []string) map[string]bool {
 	out := map[string]bool{}
 	for _, name := range names {

@@ -24,7 +24,7 @@ func TestPreviewSkillsSettingsDiscoverAndPersist(t *testing.T) {
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\ndescription: Preview probe skill\n---\nRun the probe.\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\ndescription: Preview probe skill\nrequires: mcp-server:github\n---\nRun the probe.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	server := newBridgeServer(testToken, "instance-a")
@@ -65,8 +65,18 @@ func TestPreviewSkillsSettingsDiscoverAndPersist(t *testing.T) {
 		return previewSkillView{}, false
 	}
 	initial := read()
-	if item, ok := containsSkill(initial, "preview-probe"); !ok || !item.Enabled {
+	if item, ok := containsSkill(initial, "preview-probe"); !ok || !item.Enabled || len(item.Requires) != 1 || item.Requires[0] != "mcp-server:github" {
 		t.Fatalf("project skill not discovered: %#v", initial.Skills)
+	}
+	source := filepath.Join(project, ".reasonix", "skills")
+	var counted bool
+	for _, item := range initial.Sources {
+		if item.Path == source && item.SkillCount == 1 {
+			counted = true
+		}
+	}
+	if !counted {
+		t.Fatalf("source inventory count missing: %#v", initial.Sources)
 	}
 	change := func(id, body string) {
 		t.Helper()
@@ -84,7 +94,6 @@ func TestPreviewSkillsSettingsDiscoverAndPersist(t *testing.T) {
 	if item, ok := containsSkill(view, "preview-probe"); !ok || item.Enabled {
 		t.Fatalf("disabled skill not visible: %#v", item)
 	}
-	source := filepath.Join(project, ".reasonix", "skills")
 	change("skills-source", `{"action":"source","path":"`+source+`","enabled":false,"workspaceRoot":"`+project+`"}`)
 	view = read()
 	if _, ok := containsSkill(view, "preview-probe"); ok {
@@ -92,7 +101,7 @@ func TestPreviewSkillsSettingsDiscoverAndPersist(t *testing.T) {
 	}
 	var disabledSource bool
 	for _, item := range view.Sources {
-		if item.Path == source && !item.Enabled {
+		if item.Path == source && !item.Enabled && item.SkillCount == 1 {
 			disabledSource = true
 		}
 	}

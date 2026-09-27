@@ -13,14 +13,15 @@ import (
 )
 
 type previewSkillView struct {
-	Name          string `json:"name"`
-	Description   string `json:"description"`
-	Invocation    string `json:"invocation"`
-	Scope         string `json:"scope"`
-	SourcePath    string `json:"sourcePath"`
-	RunAs         string `json:"runAs"`
-	Enabled       bool   `json:"enabled"`
-	GlobalEnabled bool   `json:"globalEnabled"`
+	Name          string   `json:"name"`
+	Description   string   `json:"description"`
+	Invocation    string   `json:"invocation"`
+	Scope         string   `json:"scope"`
+	SourcePath    string   `json:"sourcePath"`
+	RunAs         string   `json:"runAs"`
+	Enabled       bool     `json:"enabled"`
+	GlobalEnabled bool     `json:"globalEnabled"`
+	Requires      []string `json:"requires"`
 }
 
 type previewSkillSourceView struct {
@@ -32,6 +33,7 @@ type previewSkillSourceView struct {
 	ConfiguredGlobal  bool   `json:"configuredGlobal"`
 	ConfiguredProject bool   `json:"configuredProject"`
 	GlobalEnabled     bool   `json:"globalEnabled"`
+	SkillCount        int    `json:"skillCount"`
 }
 
 type previewSkillProjectOverrides struct {
@@ -96,7 +98,9 @@ func loadSkillsSettings(workspaceRoot string) (skillsSettingsView, error) {
 		PluginPaths: cfg.PluginPackageSkillOwners(), PluginAgentPaths: cfg.PluginPackageAgentOwners(),
 		MaxDepth: cfg.SkillMaxDepth(), Stderr: io.Discard,
 	}
-	allSources := skill.New(opts).Roots()
+	allStore := skill.New(opts)
+	allSources := allStore.Roots()
+	sourceCounts := allStore.RootSkillCounts()
 	opts.ExcludedPaths = cfg.SkillExcludedPaths()
 	store := skill.New(opts)
 	disabled := map[string]bool{}
@@ -146,7 +150,7 @@ func loadSkillsSettings(workspaceRoot string) (skillsSettingsView, error) {
 			Path: source.Dir, Scope: string(source.Scope), Status: string(source.Status),
 			Enabled: !excluded[key], Configured: configured[key] || projectConfigured[key],
 			ConfiguredGlobal: configured[key], ConfiguredProject: projectConfigured[key],
-			GlobalEnabled: !globalExcluded[key],
+			GlobalEnabled: !globalExcluded[key], SkillCount: sourceCounts[source.Dir],
 		})
 	}
 	for _, item := range store.List() {
@@ -155,6 +159,7 @@ func loadSkillsSettings(workspaceRoot string) (skillsSettingsView, error) {
 			Scope: string(item.Scope), SourcePath: item.Path, RunAs: string(item.RunAs),
 			Enabled:       !disabled[configpkg.SkillNameKey(item.Name)],
 			GlobalEnabled: !globalDisabled[configpkg.SkillNameKey(item.Name)],
+			Requires:      append([]string{}, item.Requires...),
 		})
 	}
 	return view, nil
