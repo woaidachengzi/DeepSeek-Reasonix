@@ -88,16 +88,17 @@ contains(scriptSource, 'not supported yet', "cross-target is explicitly rejected
 
 console.log("\ntauri-build contract — macOS signing");
 
-// When no APPLE_SIGNING_IDENTITY is set, the script must ad-hoc sign
-// the .app bundle so macOS will run it after quarantine clearance.
+// When no APPLE_SIGNING_IDENTITY is set, Tauri must ad-hoc sign before
+// bundling so the .app inside the DMG has the same valid signature.
 contains(scriptSource, 'APPLE_SIGNING_IDENTITY', "checks for signing identity");
 contains(scriptSource, 'codesign', "invokes codesign for ad-hoc signing");
-contains(scriptSource, '--force', "codesign uses --force flag");
-contains(scriptSource, '--deep', "codesign uses --deep flag");
-contains(scriptSource, '"-s"', 'codesign uses ad-hoc signing flag'); contains(scriptSource, '"-"', 'codesign uses ad-hoc identity');
-contains(scriptSource, '.app', "signs the .app bundle");
+contains(scriptSource, '...(adHocMacOSBuild ? { APPLE_SIGNING_IDENTITY: "-" } : {})', "Tauri signs before bundling the DMG");
+contains(scriptSource, '--verify', "checks the packaged app signature");
+contains(scriptSource, '--deep', "checks nested binaries");
+contains(scriptSource, '--strict', "uses strict signature verification");
+contains(scriptSource, '.app', "checks the .app bundle");
 
-// Official builds (with APPLE_SIGNING_IDENTITY) skip ad-hoc signing.
+// Official builds (with APPLE_SIGNING_IDENTITY) keep their identity.
 contains(scriptSource, '!process.env.APPLE_SIGNING_IDENTITY', "ad-hoc signing only when no identity");
 
 // ---------------------------------------------------------------------------

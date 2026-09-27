@@ -67,9 +67,17 @@ console.log(`Preview source: ${previewCommit}${previewDirty ? " (uncommitted cha
 // package build does not leave a clean source checkout marked as modified.
 const frontendPlaceholder = join(repositoryRoot, "desktop", "frontend", "dist", ".gitkeep");
 const placeholderBytes = existsSync(frontendPlaceholder) ? readFileSync(frontendPlaceholder) : null;
+// Tauri must sign the app before bundling the DMG. Signing only the standalone
+// .app after `tauri build` leaves the copy already sealed in the DMG invalid.
+const adHocMacOSBuild = process.platform === "darwin" && !process.env.APPLE_SIGNING_IDENTITY;
 const tauri = spawnSync(tauriBinary, ["build", ...bundleArguments], {
   cwd: tauriDirectory,
-  env: { ...process.env, REASONIX_PREVIEW_COMMIT: previewCommit, REASONIX_PREVIEW_DIRTY: previewDirty ? "1" : "0" },
+  env: {
+    ...process.env,
+    REASONIX_PREVIEW_COMMIT: previewCommit,
+    REASONIX_PREVIEW_DIRTY: previewDirty ? "1" : "0",
+    ...(adHocMacOSBuild ? { APPLE_SIGNING_IDENTITY: "-" } : {}),
+  },
   stdio: "inherit",
 });
 if (placeholderBytes !== null) {
@@ -79,17 +87,15 @@ if (placeholderBytes !== null) {
 if (tauri.error) throw tauri.error;
 if (tauri.status !== 0) process.exit(tauri.status ?? 1);
 
-// A local preview has no Developer ID certificate. Make its app bundle
-// internally consistent so macOS can run it after the user clears quarantine.
-// Official builds set APPLE_SIGNING_IDENTITY and keep Tauri's Developer ID
-// signature for notarization instead.
-if (process.platform === "darwin" && !process.env.APPLE_SIGNING_IDENTITY) {
+// Verify the exact .app Tauri placed into the bundle. A local preview uses
+// ad-hoc signing; official builds keep their Developer ID signature.
+if (process.platform === "darwin") {
   const { productName } = JSON.parse(readFileSync(join(tauriDirectory, "tauri.conf.json"), "utf8"));
   if (typeof productName !== "string" || !productName.trim()) {
-    throw new Error("tauri.conf.json must define a productName before macOS signing");
+    throw new Error("tauri.conf.json must define a productName before macOS signature verification");
   }
   const appBundle = join(tauriDirectory, "target", "release", "bundle", "macos", `${productName}.app`);
-  const signing = spawnSync("codesign", ["--force", "--deep", "-s", "-", appBundle], {
+  const signing = spawnSync("codesign", ["--verify", "--deep", "--strict", appBundle], {
     stdio: "inherit",
   });
   if (signing.error) throw signing.error;
