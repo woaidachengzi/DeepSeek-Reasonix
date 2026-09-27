@@ -28,6 +28,22 @@ test("asset loaders and the isolated performance benchmark retain their invocati
   assert.deepEqual(plan.filter(entry => entry.serial).map(entry => entry.key), ["src/__tests__/history-performance-benchmark.tsx"]);
 });
 
+test("Tauri component suites use their bridge and asset stubs in CI", () => {
+  const plan = testPlan(scripts, files);
+  for (const file of [
+    "tauri-chat-workspace-delete.test.tsx",
+    "tauri-chat-title-recovery.test.tsx",
+    "tauri-project-navigation.test.tsx",
+    "tauri-progress-collapse.test.tsx",
+  ]) {
+    const entries = plan.filter(entry => entry.key === `src/__tests__/${file}`);
+    assert.equal(entries.length, 1, file);
+    for (const loader of ["svg", "css", "tauri-bridge"]) {
+      assert.ok(entries[0].args.includes(`./scripts/${loader}-stub-register.mjs`), `${file}: ${loader}`);
+    }
+  }
+});
+
 test("future tests are discovered without registration and unknown script grammars fail closed", () => {
   assert.ok(testPlan(scripts, [...files, "new-behavior.test.tsx"]).some(entry => entry.key.endsWith("new-behavior.test.tsx")));
   for (const body of ["pnpm test:motion", "echo passed", "node check.mjs || true", "node check.mjs; true"]) {

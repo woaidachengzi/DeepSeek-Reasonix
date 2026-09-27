@@ -103,3 +103,8 @@ cd desktop/tauri && REASONIX_TAURI_BRIDGE_TEST_BIN="$PWD/../../bin/reasonix-desk
 ```
 
 `CI` 环境变量存在时该路径是必需的：缺失会让这两个测试失败，而不是静默跳过。
+
+桌面 CI 的前端测试计划会用专用 SVG、CSS 和 bridge stub 运行 Tauri 组件测试；macOS
+host job 还会构建真实 Go sidecar、运行 Rust 集成测试、打出 Preview `.app`，并检查包内
+host/sidecar 可执行文件及代码签名。集成测试使用临时 profile，bundle 使用开发签名；正式发布仍需
+实际发布二进制兼容认证、Developer ID 签名与公证，以及停写后的真实数据恢复演练。

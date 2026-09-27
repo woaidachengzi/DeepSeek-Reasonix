@@ -1,6 +1,6 @@
 # Reasonix Stable 1.38.3：Rust + Tauri 迁移计划
 
-> 状态：设计计划，尚未开始实现。
+> 状态：原始分阶段设计计划。Tauri Preview、受管 Go bridge 和隔离的会话存储切片已实现；以下 Phase 0–3 与 §8 保留当时的实施顺序，不代表当前待办。当前能力见 [`desktop/tauri/README.md`](../../desktop/tauri/README.md)，存储与发布门禁见 [`SESSION_STORAGE_IMPLEMENTATION_V3.md`](./SESSION_STORAGE_IMPLEMENTATION_V3.md)。
 >
 > 基线：`desktop-v1.38.3` / `v1.38.3`，提交
 > `fa018e4109268c912063c8cc619302fccdb57d74`。
@@ -260,7 +260,7 @@ RFC 与真实用户数据的离线迁移演练，不属于本计划的默认范�
 | Rust 重写改变 Agent 行为 | 延后 core 重写；对每个候选模块运行 golden / replay 测试。 |
 | 自动更新覆盖 Stable | Preview 与 Stable 分离 channel；默认无自动下载/安装。 |
 
-## 8. 首个可执行任务包
+## 8. 首个可执行任务包（历史计划）
 
 下一轮只做以下内容，禁止开始 Tauri UI 或 Rust core：
 

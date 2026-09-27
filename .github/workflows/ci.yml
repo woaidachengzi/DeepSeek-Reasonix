@@ -576,7 +576,7 @@ jobs:
     needs: changes
     if: always() && (github.event_name != 'pull_request' || needs.changes.outputs.desktop != 'false')
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
 
@@ -623,6 +623,24 @@ jobs:
         env:
           REASONIX_TAURI_BRIDGE_TEST_BIN: ${{ runner.temp }}/reasonix-desktop-bridge
         run: cargo test --locked
+
+      - uses: pnpm/action-setup@v6.0.9
+        with:
+          version: 10
+          run_install: false
+
+      - name: Install frontend dependencies for Tauri packaging
+        run: pnpm --dir desktop/frontend install --frozen-lockfile
+
+      - name: Build the macOS Preview app bundle
+        run: node desktop/frontend/scripts/tauri-build.mjs -- --bundles app --ci
+
+      - name: Verify the packaged host and sidecar signature
+        run: |
+          app_path='desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
+          test -x "$app_path/Contents/MacOS/reasonix-tauri"
+          test -x "$app_path/Contents/MacOS/reasonix-desktop-bridge"
+          codesign --verify --deep --strict "$app_path"
 
   # Ubuntu 24.04 ships WebKitGTK 4.1 only. Keep this capability build separate
   # from the 22.04/4.0 leg so neither runtime becomes a distro whitelist.
