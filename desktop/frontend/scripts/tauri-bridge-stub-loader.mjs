@@ -66,7 +66,6 @@ export function tauriPreviewRuntimeInfo() { return Promise.resolve({ stableVersi
 export function tauriProviderSummary() { return Promise.resolve({ protocolVersion: 1, providers: [] }); }
 export function setTauriDefaultModel() { return Promise.resolve({ protocolVersion: 1, providers: [] }); }
 export function keychainSave(key, value) { record("keychain_save", { key, value }); return Promise.resolve(); }
-export function keychainLoad(key) { record("keychain_load", { key }); return Promise.resolve(null); }
 export function keychainDelete(key) { record("keychain_delete", { key }); return Promise.resolve(true); }
 export function importTauriStableProfile() { return Promise.resolve({ importedConfig: "", backupConfig: "" }); }
 export function importTauriStableProjectFolders() {

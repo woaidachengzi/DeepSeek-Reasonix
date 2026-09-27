@@ -279,11 +279,6 @@ const commands: CommandContract[] = [
     description: "keychainSave() invokes keychain_save with { key, value }",
   },
   {
-    command: "keychain_load",
-    argKeys: ["key"],
-    description: "keychainLoad() invokes keychain_load with { key }",
-  },
-  {
     command: "keychain_delete",
     argKeys: ["key"],
     description: "keychainDelete() invokes keychain_delete with { key }",
@@ -524,13 +519,13 @@ ok(
   "keychain_save has value arg",
 );
 ok(
-  commands.find(c => c.command === "keychain_load")?.argKeys.includes("key"),
-  "keychain_load has key arg",
-);
-ok(
   commands.find(c => c.command === "keychain_delete")?.argKeys.includes("key"),
   "keychain_delete has key arg",
 );
+const mainSource = readFileSync(new URL("../../../tauri/src/main.rs", import.meta.url), "utf8");
+const adapterSource = readFileSync(new URL("../lib/tauriBridge.ts", import.meta.url), "utf8");
+ok(!mainSource.includes("keychain::keychain_load"), "window cannot invoke a credential read command");
+ok(!adapterSource.includes('invoke<string | null>("keychain_load"'), "adapter cannot request credential values");
 
 // ---------------------------------------------------------------------------
 // Summary

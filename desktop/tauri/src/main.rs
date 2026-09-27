@@ -1611,7 +1611,6 @@ fn main() {
             forget_workbench_session,
             platform_info,
             keychain::keychain_save,
-            keychain::keychain_load,
             keychain::keychain_delete
         ])
         .build(tauri::generate_context!())

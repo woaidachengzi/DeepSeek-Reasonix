@@ -711,12 +711,6 @@ export async function keychainSave(key: string, value: string): Promise<void> {
   await invoke<void>("keychain_save", { key, value });
 }
 
-/** Load a secret from the system keychain. Returns null if not found. */
-export async function keychainLoad(key: string): Promise<string | null> {
-  requireTauri();
-  return invoke<string | null>("keychain_load", { key });
-}
-
 /** Delete a secret from the system keychain. Returns true if deleted. */
 export async function keychainDelete(key: string): Promise<boolean> {
   requireTauri();

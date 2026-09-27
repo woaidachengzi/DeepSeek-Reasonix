@@ -171,10 +171,9 @@ impl KeychainStore {
     where
         F: Fn(&str, Option<&str>) -> Result<(), String>,
     {
-        let provider_name = provider_name_for_key(key)?;
-        if provider_name.is_some()
-            && value.is_some_and(|v| v.trim().is_empty() || v.len() > 32 << 10)
-        {
+        let provider_name = provider_name_for_key(key)?
+            .ok_or_else(|| "only provider API keys may be changed from the window".to_string())?;
+        if value.is_some_and(|v| v.trim().is_empty() || v.len() > 32 << 10) {
             return Err("provider API key is invalid".to_string());
         }
         let _guard = self
@@ -189,21 +188,19 @@ impl KeychainStore {
             }
             None => self.delete_secret(key)?,
         };
-        if let Some(provider_name) = provider_name {
-            if let Err(error) = sync(provider_name, value) {
-                restore_secret(self, key, previous.as_deref()).map_err(|_| {
-                    "provider key synchronization failed and keychain rollback could not be confirmed"
-                        .to_string()
-                })?;
-                // A timed-out response can still have applied in the bridge.
-                // Reconcile its memory with the restored keychain when reachable.
-                if sync(provider_name, previous.as_deref()).is_err() {
-                    return Err(format!(
-                        "{error}; bridge credential recovery could not be confirmed; restart the bridge"
-                    ));
-                }
-                return Err(error);
+        if let Err(error) = sync(provider_name, value) {
+            restore_secret(self, key, previous.as_deref()).map_err(|_| {
+                "provider key synchronization failed and keychain rollback could not be confirmed"
+                    .to_string()
+            })?;
+            // A timed-out response can still have applied in the bridge.
+            // Reconcile its memory with the restored keychain when reachable.
+            if sync(provider_name, previous.as_deref()).is_err() {
+                return Err(format!(
+                    "{error}; bridge credential recovery could not be confirmed; restart the bridge"
+                ));
             }
+            return Err(error);
         }
         Ok(deleted)
     }
@@ -256,14 +253,6 @@ pub fn keychain_save(
     value: String,
 ) -> Result<(), String> {
     state.save_and_sync_provider_key(&supervisor, &key, &value)
-}
-
-#[tauri::command]
-pub fn keychain_load(
-    state: tauri::State<'_, KeychainStore>,
-    key: String,
-) -> Result<Option<String>, String> {
-    state.load_secret(&key)
 }
 
 #[tauri::command]
@@ -394,6 +383,21 @@ mod tests {
         );
         assert!(provider_name_for_key("api_key_ ").is_err());
         assert_eq!(provider_name_for_key("other_key_deepseek").unwrap(), None);
+    }
+
+    #[test]
+    fn window_cannot_change_unrelated_keychain_entries() {
+        let store = test_store();
+        let sync = |_: &str, _: Option<&str>| -> Result<(), String> {
+            panic!("unrelated key must never reach bridge sync")
+        };
+        assert!(store
+            .mutate_secret_with_sync("other_key_deepseek", Some("secret"), sync)
+            .is_err());
+        assert!(store
+            .mutate_secret_with_sync("other_key_deepseek", None, sync)
+            .is_err());
+        assert_eq!(store.load_secret("other_key_deepseek").unwrap(), None);
     }
 
     #[test]
