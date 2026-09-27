@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { X, Check, ChevronRight, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal } from "lucide-react";
-import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, tauriPlatformInfo, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary } from "../lib/tauriBridge";
+import { Check, ArrowLeft, Search, Keyboard, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal } from "lucide-react";
+import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary } from "../lib/tauriBridge";
 import { THEME_STYLES, type Theme, type ThemeStyle } from "../lib/theme";
 import { applyConversationWidth, getCachedConversationWidth, type ConversationWidth } from "../lib/conversationWidth";
 import { applyTextSize, getTextSize, TEXT_SIZES, type TextSize } from "../lib/textSize";
@@ -25,7 +25,29 @@ interface TauriSettingsProps {
   importBusy?: boolean;
 }
 
-export type TauriSettingsTab = "general" | "appearance" | "model" | "mcp" | "data" | "about";
+export type TauriSettingsTab = "general" | "appearance" | "model" | "mcp" | "data" | "shortcuts" | "about";
+
+const SETTINGS_GROUPS = [
+  { label: "偏好设置", items: [{ id: "general", label: "通用", description: "桌面与会话体验", icon: SlidersHorizontal }] },
+  { label: "模型", items: [{ id: "model", label: "模型", description: "默认模型与服务凭据", icon: Globe }] },
+  { label: "集成与连接", items: [{ id: "mcp", label: "MCP", description: "管理工具服务器", icon: Server }] },
+  { label: "应用", items: [
+    { id: "appearance", label: "外观", description: "主题、阅读布局与字体", icon: Palette },
+    { id: "shortcuts", label: "快捷键", description: "查看键盘操作", icon: Keyboard },
+    { id: "data", label: "数据", description: "Preview 配置与导入", icon: Database },
+    { id: "about", label: "关于", description: "版本与运行信息", icon: Info },
+  ] },
+] as const;
+
+const SETTINGS_TITLES: Record<TauriSettingsTab, { title: string; description: string }> = {
+  general: { title: "通用", description: "设置桌面体验和会话显示。" },
+  model: { title: "模型", description: "选择默认模型，管理提供方凭据。" },
+  mcp: { title: "MCP 与工具", description: "连接并管理工作区可用的工具。" },
+  appearance: { title: "外观", description: "调整主题、阅读布局和字体。" },
+  shortcuts: { title: "快捷键", description: "查看 Preview 中可用的键盘操作。" },
+  data: { title: "数据与迁移", description: "查看 Preview 配置与会话导入。" },
+  about: { title: "关于", description: "版本、构建及运行环境。" },
+};
 
 const STYLE_LABELS: Record<ThemeStyle, string> = {
   graphite: "石墨",
@@ -60,8 +82,9 @@ const MONO_FONT_LABELS: Record<MonoFontFamily, string> = {
   custom: "自定义等宽字体",
 };
 
-export function TauriSettings({ onClose, onProviderSummaryChange, currentSessionState, currentSessionHasAttachments, onApplyToCurrentSession, workspaceRoot, initialTab = "appearance", profile, onRefreshProfile, onImportStableProfile, onImportStableProjectFolders, onScanUnclaimedSessions, importBusy }: TauriSettingsProps) {
+export function TauriSettings({ onClose, onProviderSummaryChange, currentSessionState, currentSessionHasAttachments, onApplyToCurrentSession, workspaceRoot, initialTab = "general", profile, onRefreshProfile, onImportStableProfile, onImportStableProjectFolders, onScanUnclaimedSessions, importBusy }: TauriSettingsProps) {
   const [tab, setTab] = useState<TauriSettingsTab>(initialTab);
+  const [navQuery, setNavQuery] = useState("");
   const [runtimeInfo, setRuntimeInfo] = useState<TauriPreviewRuntimeInfo | null>(null);
   const [providerSummary, setProviderSummaryState] = useState<TauriProviderSummary | null>(null);
   const [modelLoading, setModelLoading] = useState(true);
@@ -69,6 +92,10 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
   const [modelLoadError, setModelLoadError] = useState(false);
   const [aboutLoadError, setAboutLoadError] = useState(false);
   const [platform, setPlatform] = useState("");
+  const [closeBehavior, setCloseBehavior] = useState<TauriCloseBehavior>("keep_running");
+  const [closeLoading, setCloseLoading] = useState(true);
+  const [closeSaving, setCloseSaving] = useState(false);
+  const [closeError, setCloseError] = useState("");
   const loadRequest = useRef(0);
   const [appearance, setAppearance] = useState<TauriAppearance>(readTauriAppearance);
   const [conversationWidth, setConversationWidth] = useState<ConversationWidth>(getCachedConversationWidth);
@@ -107,6 +134,10 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
     void tauriPlatformInfo().then(
       plat => { if (request === loadRequest.current) setPlatform(plat); },
       () => { /* Platform is optional on the About page. */ },
+    );
+    void getTauriCloseBehavior().then(
+      behavior => { if (request === loadRequest.current) { setCloseBehavior(behavior); setCloseError(""); setCloseLoading(false); } },
+      () => { if (request === loadRequest.current) { setCloseError("无法读取关闭窗口设置"); setCloseLoading(false); } },
     );
   }, [updateProviderSummary]);
 
@@ -160,38 +191,45 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
     }
   };
 
+  const handleCloseBehaviorChange = async (behavior: TauriCloseBehavior) => {
+    if (closeSaving || behavior === closeBehavior) return;
+    setCloseSaving(true);
+    setCloseError("");
+    try {
+      setCloseBehavior(await setTauriCloseBehavior(behavior));
+    } catch {
+      setCloseError("保存失败，请重试");
+    } finally {
+      setCloseSaving(false);
+    }
+  };
+
+  const query = navQuery.trim().toLocaleLowerCase();
+  const visibleGroups = SETTINGS_GROUPS.map(group => ({
+    ...group,
+    items: group.items.filter(item => !query || `${group.label} ${item.label} ${item.description}`.toLocaleLowerCase().includes(query)),
+  })).filter(group => group.items.length > 0);
+
   return (
-    <div className="tauri-settings-overlay">
-      <div className="tauri-settings-scrim" onClick={onClose} />
-      <div className="tauri-settings-panel">
-        <header className="tauri-settings-header">
-          <h2>设置</h2>
-          <button type="button" className="tauri-icon-button" onClick={onClose} aria-label="关闭"><X size={17} /></button>
-        </header>
-
-        <nav className="tauri-settings-nav">
-          <button type="button" className={`tauri-settings-nav-item${tab === "general" ? " is-active" : ""}`} onClick={() => setTab("general")}>
-            <SlidersHorizontal size={15} /><span>通用</span><ChevronRight size={13} />
-          </button>
-          <button type="button" className={`tauri-settings-nav-item${tab === "appearance" ? " is-active" : ""}`} onClick={() => setTab("appearance")}>
-            <Palette size={15} /><span>外观</span><ChevronRight size={13} />
-          </button>
-          <button type="button" className={`tauri-settings-nav-item${tab === "model" ? " is-active" : ""}`} onClick={() => setTab("model")}>
-            <Globe size={15} /><span>模型</span><ChevronRight size={13} />
-          </button>
-          <button type="button" className={`tauri-settings-nav-item${tab === "mcp" ? " is-active" : ""}`} onClick={() => setTab("mcp")}>
-            <Server size={15} /><span>MCP</span><ChevronRight size={13} />
-          </button>
-          <button type="button" className={`tauri-settings-nav-item${tab === "data" ? " is-active" : ""}`} onClick={() => setTab("data")}>
-            <Database size={15} /><span>数据</span><ChevronRight size={13} />
-          </button>
-          <button type="button" className={`tauri-settings-nav-item${tab === "about" ? " is-active" : ""}`} onClick={() => setTab("about")}>
-            <Info size={15} /><span>关于</span><ChevronRight size={13} />
-          </button>
+    <section className="tauri-settings-overlay" aria-label="设置">
+      <aside className="tauri-settings-sidebar">
+        <div className="tauri-settings-titlebar" data-tauri-drag-region />
+        <button type="button" className="tauri-settings-back" onClick={onClose}><ArrowLeft size={17} /><span>返回工作区</span></button>
+        <label className="tauri-settings-search"><Search size={16} aria-hidden="true" /><input type="search" aria-label="搜索设置" placeholder="搜索设置" value={navQuery} onChange={event => setNavQuery(event.target.value)} /></label>
+        <nav className="tauri-settings-nav" aria-label="设置分类">
+          {visibleGroups.map(group => <div className="tauri-settings-nav-group" key={group.label}>
+            <div className="tauri-settings-nav-label">{group.label}</div>
+            {group.items.map(item => { const Icon = item.icon; return <button key={item.id} type="button" aria-current={tab === item.id ? "page" : undefined} className={`tauri-settings-nav-item${tab === item.id ? " is-active" : ""}`} onClick={() => setTab(item.id)} title={item.description}>
+              <Icon size={17} /><span>{item.label}</span>
+            </button>; })}
+          </div>)}
+          {visibleGroups.length === 0 && <div className="tauri-settings-nav-empty" role="status">没有匹配的设置</div>}
         </nav>
-
-        <div className="tauri-settings-content">
-          {tab === "general" ? <GeneralSettings notificationsEnabled={notificationsEnabled} onNotificationsChange={enabled => { setNotificationsEnabled(enabled); setTauriNotificationsEnabled(enabled); }} /> : tab === "appearance" ? <AppearanceSettings appearance={appearance} onChange={handleAppearanceChange} conversationWidth={conversationWidth} onConversationWidthChange={handleConversationWidthChange} textSize={textSize} onTextSizeChange={handleTextSizeChange} fontFamily={fontFamily} onFontFamilyChange={handleFontFamilyChange} monoFontFamily={monoFontFamily} onMonoFontFamilyChange={handleMonoFontFamilyChange} customFontName={customFontName} onCustomFontChange={handleCustomFontChange} customMonoFontName={customMonoFontName} onCustomMonoFontChange={handleCustomMonoFontChange} /> : <>
+      </aside>
+      <div className="tauri-settings-panel">
+        <div className="tauri-settings-content" key={tab}>
+          <div className="tauri-settings-page-heading"><h1>{SETTINGS_TITLES[tab].title}</h1><p>{SETTINGS_TITLES[tab].description}</p></div>
+          {tab === "general" ? <GeneralSettings notificationsEnabled={notificationsEnabled} onNotificationsChange={enabled => { setNotificationsEnabled(enabled); setTauriNotificationsEnabled(enabled); }} appearance={appearance} onAppearanceChange={handleAppearanceChange} conversationWidth={conversationWidth} onConversationWidthChange={handleConversationWidthChange} textSize={textSize} onTextSizeChange={handleTextSizeChange} closeBehavior={closeBehavior} onCloseBehaviorChange={handleCloseBehaviorChange} closeLoading={closeLoading} closeSaving={closeSaving} closeError={closeError} platform={platform} /> : tab === "shortcuts" ? <ShortcutSettings /> : tab === "appearance" ? <AppearanceSettings appearance={appearance} onChange={handleAppearanceChange} conversationWidth={conversationWidth} onConversationWidthChange={handleConversationWidthChange} textSize={textSize} onTextSizeChange={handleTextSizeChange} fontFamily={fontFamily} onFontFamilyChange={handleFontFamilyChange} monoFontFamily={monoFontFamily} onMonoFontFamilyChange={handleMonoFontFamilyChange} customFontName={customFontName} onCustomFontChange={handleCustomFontChange} customMonoFontName={customMonoFontName} onCustomMonoFontChange={handleCustomMonoFontChange} /> : <>
             {tab === "model" && (modelLoading ? <div className="tauri-settings-loading">加载中…</div> : <>{modelLoadError && <SettingsLoadError onRetry={loadSettings} />}{providerSummary && <ModelSettings providerSummary={providerSummary} onModelChange={handleModelChange} onProviderSummaryChange={updateProviderSummary} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}</>)}
             {tab === "mcp" && <TauriMCPSettings workspaceRoot={workspaceRoot} />}
             {tab === "data" && <DataSettings profile={profile} busy={Boolean(importBusy)} onRefreshProfile={onRefreshProfile} onImportStableProfile={onImportStableProfile} onImportStableProjectFolders={onImportStableProjectFolders} onScanUnclaimedSessions={onScanUnclaimedSessions} onClose={onClose} />}
@@ -199,16 +237,28 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
           </>}
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
-function GeneralSettings({ notificationsEnabled, onNotificationsChange }: { notificationsEnabled: boolean; onNotificationsChange: (enabled: boolean) => void }) {
-  const modifier = /Mac/i.test(navigator.platform) ? "⌘" : "Ctrl+";
+function GeneralSettings({ notificationsEnabled, onNotificationsChange, appearance, onAppearanceChange, conversationWidth, onConversationWidthChange, textSize, onTextSizeChange, closeBehavior, onCloseBehaviorChange, closeLoading, closeSaving, closeError, platform }: { notificationsEnabled: boolean; onNotificationsChange: (enabled: boolean) => void; appearance: TauriAppearance; onAppearanceChange: (next: TauriAppearance) => void; conversationWidth: ConversationWidth; onConversationWidthChange: (next: ConversationWidth) => void; textSize: TextSize; onTextSizeChange: (next: TextSize) => void; closeBehavior: TauriCloseBehavior; onCloseBehaviorChange: (behavior: TauriCloseBehavior) => void; closeLoading: boolean; closeSaving: boolean; closeError: string; platform: string }) {
   return <div className="tauri-settings-section tauri-settings-general">
-    <h3>通用</h3>
+    <h3>桌面与显示</h3>
+    <div className="tauri-settings-field"><span className="tauri-settings-field-label">桌面风格<small>选择界面亮暗模式。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="桌面风格">{(["auto", "light", "dark"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={appearance.mode === option} className={`tauri-settings-radio${appearance.mode === option ? " is-active" : ""}`} onClick={() => onAppearanceChange({ ...appearance, mode: option })}>{option === "auto" ? "跟随系统" : option === "light" ? "浅色" : "深色"}</button>)}</div></div>
+    <h3>会话体验</h3>
+    <div className="tauri-settings-field"><span className="tauri-settings-field-label">对话宽度<small>调整消息内容的最大宽度。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="通用对话宽度">{(["standard", "full"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={conversationWidth === option} className={`tauri-settings-radio${conversationWidth === option ? " is-active" : ""}`} onClick={() => onConversationWidthChange(option)}>{option === "standard" ? "标准" : "宽屏"}</button>)}</div></div>
+    <div className="tauri-settings-field"><span className="tauri-settings-field-label">对话字号<small>调整正文的阅读大小。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="通用对话字号">{TEXT_SIZES.map(size => <button key={size} type="button" role="radio" aria-checked={textSize === size} className={`tauri-settings-radio${textSize === size ? " is-active" : ""}`} onClick={() => onTextSizeChange(size)}>{TEXT_SIZE_LABELS[size]}</button>)}</div></div>
+    <h3>系统行为</h3>
+    {platform === "darwin" && <div className="tauri-settings-field"><span className="tauri-settings-field-label">关闭窗口时<small>选择关闭主窗口后的运行方式。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="关闭窗口时">{(["keep_running", "quit"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={closeBehavior === option} className={`tauri-settings-radio${closeBehavior === option ? " is-active" : ""}`} disabled={closeLoading || closeSaving} onClick={() => onCloseBehaviorChange(option)}>{option === "keep_running" ? "保持后台运行" : "退出 Reasonix"}</button>)}</div></div>}
+    {platform === "darwin" && closeError && <p className="tauri-diagnostic-error" role="alert">{closeError}</p>}
     <label className="tauri-settings-toggle"><span><strong>桌面通知</strong><small>回复完成或失败时发送系统通知。</small></span><input type="checkbox" checked={notificationsEnabled} onChange={event => onNotificationsChange(event.target.checked)} /></label>
-    <h3>快捷键</h3>
+  </div>;
+}
+
+function ShortcutSettings() {
+  const modifier = /Mac/i.test(navigator.platform) ? "⌘" : "Ctrl+";
+  return <div className="tauri-settings-section">
+    <h3>工作区快捷键</h3>
     <div className="tauri-settings-shortcuts">
       {[["新建对话", `${modifier}N`], ["打开设置", `${modifier},`], ["运行状态", `${modifier}.`], ["工作区文件", `${modifier}B`], ["刷新当前对话", `${modifier}R`], ["发送消息", `${modifier}Enter`], ["关闭面板", "Esc"]].map(([label, keys]) => <div key={label}><span>{label}</span><kbd>{keys}</kbd></div>)}
     </div>

@@ -24,6 +24,7 @@ let failSave = false;
 let failRuntime = false;
 const calls: string[] = [];
 let openedURL = "";
+let closeBehavior = "keep_running";
 const summary = () => ({
   protocolVersion: 1,
   defaultModel: "",
@@ -31,7 +32,7 @@ const summary = () => ({
 });
 
 (dom.window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
-  async invoke(command: string, args?: { url?: string }) {
+  async invoke(command: string, args?: { url?: string; behavior?: string }) {
     calls.push(command);
     switch (command) {
       case "preview_runtime_info":
@@ -41,6 +42,8 @@ const summary = () => ({
         if (failSummary) { failSummary = false; throw new Error("summary unavailable"); }
         return summary();
       case "platform_info": return "darwin";
+      case "get_close_behavior": return closeBehavior;
+      case "set_close_behavior": closeBehavior = args?.behavior ?? closeBehavior; return closeBehavior;
       case "open_external_url": openedURL = args?.url ?? ""; return;
       case "keychain_save":
         if (failSave) throw new Error("secret-in-error-message");
@@ -70,7 +73,7 @@ renderToString(<TauriSettings onClose={() => {}} />);
 assert.equal(calls.length, 0, "rendering settings does not start bridge work");
 
 const root = createRoot(document.getElementById("root")!);
-await act(async () => { root.render(<TauriSettings onClose={() => {}} onProviderSummaryChange={value => { parentConfigured = value.providers[0]?.configured; }} currentSessionState="idle" onApplyToCurrentSession={async () => { applyCalls += 1; return true; }} profile={{ previewHome: "/preview/home", previewConfigExists: false, stableConfigExists: true, importAvailable: true, managedProfile: true }} onImportStableProfile={async () => { profileImportCalls += 1; return "已备份并导入配置"; }} />); });
+await act(async () => { root.render(<TauriSettings initialTab="appearance" onClose={() => {}} onProviderSummaryChange={value => { parentConfigured = value.providers[0]?.configured; }} currentSessionState="idle" onApplyToCurrentSession={async () => { applyCalls += 1; return true; }} profile={{ previewHome: "/preview/home", previewConfigExists: false, stableConfigExists: true, importAvailable: true, managedProfile: true }} onImportStableProfile={async () => { profileImportCalls += 1; return "已备份并导入配置"; }} />); });
 assert.equal(calls.filter(call => call === "provider_summary").length, 1, "settings load once after mount");
 assert.equal(parentConfigured, true, "the model picker outside settings receives the initial summary");
 
@@ -90,6 +93,19 @@ function enterKey(value: string) {
 function visibleText() { return document.body.textContent ?? ""; }
 
 assert.match(visibleText(), /配色风格/, "appearance controls are available without opening the model tab");
+assert.ok(document.querySelector(".tauri-settings-sidebar .tauri-settings-nav"), "settings use a full-page sidebar");
+const settingsSearch = document.querySelector<HTMLInputElement>('input[aria-label="搜索设置"]');
+assert.ok(settingsSearch, "the sidebar has settings search");
+await act(async () => {
+  Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(settingsSearch, "快捷键");
+  settingsSearch.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+});
+assert.equal(document.querySelectorAll(".tauri-settings-nav-item").length, 1, "search filters navigation items");
+assert.match(document.querySelector(".tauri-settings-nav-item")?.textContent ?? "", /快捷键/);
+await act(async () => {
+  Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(settingsSearch, "");
+  settingsSearch.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+});
 await act(async () => { click("深色"); });
 assert.equal(document.documentElement.getAttribute("data-theme"), "dark");
 assert.equal(localStorage.getItem("tauri-theme"), "dark");
@@ -110,6 +126,9 @@ await act(async () => { click("复制稳定版配置（先备份）"); });
 assert.equal(profileImportCalls, 1);
 assert.match(visibleText(), /已备份并导入配置/, "data settings surface the import result");
 await act(async () => { click("通用"); });
+await act(async () => { click("退出 Reasonix"); });
+assert.equal(closeBehavior, "quit", "close-window behavior is saved through the native host");
+assert.equal(document.querySelector('[aria-label="关闭窗口时"] [aria-checked="true"]')?.textContent, "退出 Reasonix");
 const notificationToggle = document.querySelector<HTMLInputElement>(".tauri-settings-toggle input");
 assert.ok(notificationToggle, "general settings include desktop notifications");
 await act(async () => { notificationToggle.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true })); });
@@ -172,7 +191,7 @@ await act(async () => { root.unmount(); });
 failSummary = true;
 const retryRoot = createRoot(document.getElementById("root")!);
 await act(async () => { retryRoot.render(<TauriSettings onClose={() => {}} />); });
-assert.match(visibleText(), /配色风格/, "appearance remains available when provider loading fails");
+assert.match(visibleText(), /桌面风格/, "general settings remain available when provider loading fails");
 await act(async () => { click("模型"); });
 assert.match(visibleText(), /读取设置失败/, "failed provider loading is actionable");
 await act(async () => { click("重试"); });

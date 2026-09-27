@@ -274,6 +274,16 @@ const commands: CommandContract[] = [
     description: "setTauriDefaultModel() invokes set_default_model with { request }",
   },
   {
+    command: "get_close_behavior",
+    argKeys: [],
+    description: "getTauriCloseBehavior() invokes get_close_behavior with no args",
+  },
+  {
+    command: "set_close_behavior",
+    argKeys: ["behavior"],
+    description: "setTauriCloseBehavior() invokes set_close_behavior with { behavior }",
+  },
+  {
     command: "keychain_save",
     argKeys: ["key", "value"],
     description: "keychainSave() invokes keychain_save with { key, value }",

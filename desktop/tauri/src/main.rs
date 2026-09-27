@@ -2,6 +2,7 @@
 
 mod bridge;
 mod data_profile;
+mod host_preferences;
 mod keychain;
 mod menu;
 mod protocol_generated;
@@ -82,6 +83,7 @@ use bridge::{
 use data_profile::{
     PreviewProfile, PreviewProfileStatus, ProfileImportResult, ProjectFoldersImportResult,
 };
+use host_preferences::{CloseBehavior, HostPreferences};
 use runtime_info::PreviewRuntimeInfo;
 use session_shadow::SessionShadowReport;
 use tauri::{Manager, State};
@@ -1450,6 +1452,20 @@ fn open_external_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+fn get_close_behavior(preferences: State<'_, HostPreferences>) -> CloseBehavior {
+    preferences.close_behavior()
+}
+
+#[tauri::command]
+fn set_close_behavior(
+    preferences: State<'_, HostPreferences>,
+    behavior: CloseBehavior,
+) -> Result<CloseBehavior, String> {
+    preferences.set_close_behavior(behavior)?;
+    Ok(behavior)
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -1465,6 +1481,7 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let window_state = PreviewWindowState::for_app(app)?;
+            let host_preferences = HostPreferences::for_app(app).map_err(std::io::Error::other)?;
             let workbench_catalog =
                 WorkbenchCatalog::for_app(app).map_err(std::io::Error::other)?;
             let project_catalog =
@@ -1500,19 +1517,21 @@ fn main() {
             app.manage(supervisor);
             app.manage(profile);
             app.manage(window_state);
+            app.manage(host_preferences);
             app.manage(workbench_catalog);
             app.manage(project_catalog);
             app.manage(SessionShadowSnapshotCache::default());
             Ok(())
         })
         .on_window_event(|window, event| {
-            // macOS: hide to tray on close button instead of quitting
+            // macOS keeps running by default; the Preview preference can opt into quitting.
             #[cfg(target_os = "macos")]
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                // Prevent the default close behavior
                 api.prevent_close();
-                // Hide the window instead
-                let _ = window.hide();
+                match window.app_handle().state::<HostPreferences>().close_behavior() {
+                    CloseBehavior::KeepRunning => { let _ = window.hide(); }
+                    CloseBehavior::Quit => window.app_handle().exit(0),
+                }
             }
         })
         .on_menu_event(|app, event| {
@@ -1646,6 +1665,8 @@ fn main() {
             remember_workbench_session,
             forget_workbench_session,
             platform_info,
+            get_close_behavior,
+            set_close_behavior,
             open_external_url,
             keychain::keychain_save,
             keychain::keychain_delete

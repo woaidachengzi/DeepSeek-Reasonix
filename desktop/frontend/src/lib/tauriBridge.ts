@@ -556,6 +556,18 @@ export async function tauriPlatformInfo(): Promise<string> {
   return invoke<string>("platform_info");
 }
 
+export type TauriCloseBehavior = "keep_running" | "quit";
+
+export async function getTauriCloseBehavior(): Promise<TauriCloseBehavior> {
+  requireTauri();
+  return invoke<TauriCloseBehavior>("get_close_behavior");
+}
+
+export async function setTauriCloseBehavior(behavior: TauriCloseBehavior): Promise<TauriCloseBehavior> {
+  requireTauri();
+  return invoke<TauriCloseBehavior>("set_close_behavior", { behavior });
+}
+
 export interface TauriApprovalPrompt {
   kind: "approval";
   id: string;

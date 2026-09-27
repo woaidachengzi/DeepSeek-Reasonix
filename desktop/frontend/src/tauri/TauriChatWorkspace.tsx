@@ -411,7 +411,7 @@ export function TauriSessionPreview() {
   const [sessionPageCatalogWarning, setSessionPageCatalogWarning] = useState("");
   const catalogAuditRequestRef = useRef(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<TauriSettingsTab>("appearance");
+  const [settingsTab, setSettingsTab] = useState<TauriSettingsTab>("general");
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspacePath, setWorkspacePath] = useState("");
   const [workspaceEntries, setWorkspaceEntries] = useState<TauriWorkspaceEntry[]>([]);
@@ -2203,7 +2203,7 @@ export function TauriSessionPreview() {
         </nav>
         <div className="tauri-sidebar__footer">
           <span className={`tauri-health${status?.running ? " is-ready" : ""}`}><i />{status?.running ? "本地运行正常" : "正在连接本地服务…"}</span>
-          <button type="button" className="tauri-sidebar__diagnostics" onClick={() => { setSettingsTab("appearance"); setSettingsOpen(true); }}><Settings size={15} />设置</button>
+          <button type="button" className="tauri-sidebar__diagnostics" onClick={() => { setSettingsTab("general"); setSettingsOpen(true); }}><Settings size={15} />设置</button>
           <button type="button" className="tauri-sidebar__diagnostics" onClick={() => setDiagnosticsOpen(true)}><Activity size={15} />运行状态</button>
         </div>
       </aside>
