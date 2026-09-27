@@ -11,6 +11,7 @@ import { LocaleProvider } from "../lib/i18n";
 import { playSuccessChime, playAttentionChime, shouldPlayAttentionChimeForEvent } from "../lib/sound";
 import logoWordmark from "../assets/logo-wordmark.svg";
 import { TauriSettings, type TauriSettingsTab } from "./TauriSettings";
+import { TauriStatusBar } from "./TauriStatusBar";
 import { getTauriNotificationsEnabled, getTauriProgressMode, TAURI_PROGRESS_MODE_CHANGED } from "./tauriPreferences";
 import { handleTauriDragDropEvent, retainTauriDragDropListener } from "./dragDrop";
 import { formatTauriWorkDuration, groupTauriHistory, type IndexedHistoryMessage } from "./historyPresentation";
@@ -2319,6 +2320,7 @@ export function TauriSessionPreview() {
           </div>
           <p className="tauri-composer-hint">Reasonix 可能会出错，请核对重要信息。<button type="button" onClick={() => setDiagnosticsOpen(true)}>预览版说明</button></p>
         </footer>
+        <TauriStatusBar workspace={currentWorkspace} model={providerSummary?.defaultModel} sessionState={session?.state} bridgeRunning={status?.running} />
       </section>
 
       {scanImportOpen && <>

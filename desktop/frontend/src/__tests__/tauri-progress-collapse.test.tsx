@@ -50,5 +50,17 @@ await act(async () => { document.querySelector<HTMLDetailsElement>(".tauri-progr
 assert.equal(document.querySelector<HTMLDetailsElement>(".tauri-progress")?.open, false, "deep mode still permits manual folding");
 await act(async () => { progressOptions()?.querySelectorAll<HTMLButtonElement>("button")[0]?.click(); });
 assert.equal(document.querySelector<HTMLDetailsElement>(".tauri-progress")?.open, false, "standard mode returns to folded process groups");
+const statusBar = () => document.querySelector<HTMLElement>(".tauri-statusbar");
+assert.ok(statusBar(), "Preview displays its live workspace status bar");
+assert.match(statusBar()?.textContent ?? "", /本地服务/);
+const statusStyle = document.querySelector<HTMLElement>('[aria-label="底部信息栏样式"]');
+assert.ok(statusStyle, "General settings control the visible status bar");
+await act(async () => { statusStyle.querySelectorAll<HTMLButtonElement>("button")[0]?.click(); });
+assert.ok(statusBar()?.classList.contains("is-icon"), "style updates the workspace immediately");
+const bridgeItem = [...document.querySelectorAll<HTMLInputElement>(".tauri-settings-status-items__row input")].at(-1);
+assert.ok(bridgeItem);
+await act(async () => { bridgeItem.click(); });
+assert.equal(statusBar()?.querySelector('[title^="本地服务："]'), null, "hiding an item removes its real status value");
+assert.equal(JSON.parse(localStorage.getItem("reasonix.tauri.status-bar.v1") ?? "null")?.style, "icon", "status bar preference persists");
 await act(async () => { root.unmount(); });
 console.log("tauri progress disclosure: OK");
