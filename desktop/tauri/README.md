@@ -111,3 +111,7 @@ host job 还会构建真实 Go sidecar、运行 Rust 集成测试、打出 Previ
 host/sidecar 可执行文件及代码签名。包级 smoke 在临时 HOME 与 `REASONIX_HOME` 下启动真实 `.app`，
 验证受管 sidecar 的 ready 文件、父子进程关系和正常退出后的清理。集成测试使用临时 profile，bundle 使用开发签名；正式发布仍需
 实际发布二进制兼容认证、Developer ID 签名与公证，以及停写后的真实数据恢复演练。
+
+2026-09-27 本机以独立 bundle ID 构建并 ad-hoc 签名测试包，包级 smoke 通过：host 从临时 HOME
+读取应用数据、启动包内 sidecar、验证 ready 文件，并在正常退出后清理子进程和临时目录。该测试包
+只验证本机生命周期；正式 Preview 标识的 CI 包仍需在独立 macOS runner 上通过同一门禁。

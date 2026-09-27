@@ -9,6 +9,8 @@ import ipaddress
 import json
 import os
 from pathlib import Path
+import plistlib
+import signal
 import subprocess
 import sys
 import tempfile
@@ -17,7 +19,7 @@ import time
 
 def processes():
     result = subprocess.run(
-        ["ps", "-axo", "pid=,ppid=,command="],
+        ["ps", "-wwaxo", "pid=,ppid=,command="],
         capture_output=True,
         text=True,
         check=True,
@@ -60,6 +62,10 @@ def smoke(app_path):
     sidecar_binary = app / "Contents/MacOS/reasonix-desktop-bridge"
     if not host_binary.is_file() or not sidecar_binary.is_file():
         raise RuntimeError("packaged host or sidecar is missing")
+    with (app / "Contents/Info.plist").open("rb") as file:
+        identifier = plistlib.load(file).get("CFBundleIdentifier")
+    if not isinstance(identifier, str) or not identifier:
+        raise RuntimeError("package has no bundle identifier")
     if any(command.startswith(str(host_binary)) for _, _, command in processes()):
         raise RuntimeError("this Preview package is already running; close it before the smoke")
 
@@ -103,6 +109,9 @@ def smoke(app_path):
                 if len(children) == 1 and len(ready_files) == 1:
                     sidecar_pid = children[0]
                     check_ready(ready_files[0])
+                    app_data = home / "Library/Application Support" / identifier
+                    if not app_data.is_dir():
+                        raise RuntimeError("Tauri app data escaped the temporary HOME")
                     break
                 time.sleep(0.1)
             else:
@@ -126,9 +135,15 @@ def smoke(app_path):
             if host.poll() is None:
                 host.kill()
                 host.wait(timeout=5)
-            for pid in own_sidecars(temp, sidecar_binary):
+            remaining = set(own_sidecars(temp, sidecar_binary))
+            if sidecar_pid is not None and is_alive(sidecar_pid):
+                remaining.update(
+                    pid for pid, _, command in processes()
+                    if pid == sidecar_pid and command.startswith(str(sidecar_binary))
+                )
+            for pid in remaining:
                 try:
-                    os.kill(pid, 9)
+                    os.kill(pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass
 
