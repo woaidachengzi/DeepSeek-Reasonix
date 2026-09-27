@@ -214,6 +214,7 @@ await act(async () => {
 });
 assert.equal(document.querySelectorAll(".tauri-settings-nav-item").length, 1, "search filters navigation items");
 assert.match(document.querySelector(".tauri-settings-nav-item")?.textContent ?? "", /快捷键/);
+assert.match(document.querySelector(".tauri-settings-nav-item small")?.textContent ?? "", /录入、重置/, "search exposes the matched setting's purpose");
 await act(async () => {
   Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(settingsSearch, "");
   settingsSearch.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
@@ -258,8 +259,10 @@ assert.equal(document.querySelector('[aria-label="桌面风格"] [aria-checked="
 await act(async () => { click("创作"); });
 assert.equal(localStorage.getItem("reasonix.tauri.desktop-layout.v1"), "creation", "desktop layout survives restart");
 assert.equal(document.querySelector('[aria-label="桌面风格"] [aria-checked="true"]')?.textContent, "创作", "desktop layout updates immediately");
+assert.equal(document.querySelector(".tauri-settings-overlay")?.getAttribute("data-desktop-layout"), "creation", "settings navigation follows the selected desktop layout");
 await act(async () => { click("工作台"); });
 assert.equal(localStorage.getItem("reasonix.tauri.desktop-layout.v1"), "workbench", "desktop layout can be restored");
+assert.equal(document.querySelector(".tauri-settings-overlay")?.getAttribute("data-desktop-layout"), "workbench", "settings navigation restores the workbench layout");
 await act(async () => { click("退出 Reasonix"); });
 assert.equal(closeBehavior, "quit", "close-window behavior is saved through the native host");
 assert.equal(document.querySelector('[aria-label="关闭窗口时"] [aria-checked="true"]')?.textContent, "退出 Reasonix");

@@ -62,15 +62,15 @@ const SETTINGS_GROUPS = [
   { label: "集成与连接", items: [{ id: "mcp", label: "MCP 与工具", description: "管理工具服务器", icon: Server }] },
   { label: "能力扩展", items: [{ id: "skills", label: "Agent Skills", description: "管理技能与来源", icon: Sparkles }, { id: "subagents", label: "子智能体", description: "设置模型、并行限制与覆盖", icon: Users }, { id: "plugins", label: "插件", description: "查看已安装插件及启用状态", icon: Package }] },
   { label: "记忆与上下文", items: [{ id: "memory", label: "记忆", description: "管理说明文档与已保存的事实", icon: Database }] },
+  { label: "自动化与开发者", items: [{ id: "hooks", label: "Hooks", description: "管理事件触发的本地命令", icon: Webhook }, { id: "diagnostics", label: "运行诊断", description: "桥接状态与会话目录检查", icon: Activity }] },
   { label: "安全与执行", items: [
     { id: "permissions", label: "权限", description: "写入决策与工具规则", icon: ShieldCheck },
     { id: "sandbox", label: "沙盒", description: "命令隔离与文件写入范围", icon: Box },
     { id: "network", label: "网络", description: "代理与直连设置", icon: Globe },
   ] },
-  { label: "自动化与开发者", items: [{ id: "hooks", label: "Hooks", description: "管理事件触发的本地命令", icon: Webhook }, { id: "diagnostics", label: "运行诊断", description: "桥接状态与会话目录检查", icon: Activity }] },
   { label: "应用", items: [
     { id: "appearance", label: "外观", description: "主题、阅读布局与字体", icon: Palette },
-    { id: "shortcuts", label: "快捷键", description: "查看键盘操作", icon: Keyboard },
+    { id: "shortcuts", label: "快捷键", description: "录入、重置并查看工作区按键", icon: Keyboard },
     { id: "data", label: "数据", description: "Preview 配置与导入", icon: Database },
     { id: "about", label: "关于", description: "版本与运行信息", icon: Info },
   ] },
@@ -92,7 +92,7 @@ const SETTINGS_TITLES: Record<TauriSettingsTab, { title: string; description: st
   network: { title: "网络", description: "设置 Preview 普通 HTTP 请求的代理方式。" },
   diagnostics: { title: "运行诊断", description: "检查本地服务、会话目录和 Preview 的连接状态。" },
   appearance: { title: "外观", description: "调整主题、阅读布局和字体。" },
-  shortcuts: { title: "快捷键", description: "查看 Preview 中可用的键盘操作。" },
+  shortcuts: { title: "快捷键", description: "录入和重置 Preview 中可用的键盘操作。" },
   data: { title: "数据与迁移", description: "查看 Preview 配置与会话导入。" },
   about: { title: "关于", description: "版本、构建及运行环境。" },
 };
@@ -146,6 +146,7 @@ const MONO_FONT_LABELS: Record<MonoFontFamily, string> = {
 };
 
 export function TauriSettings({ onClose, onProviderSummaryChange, currentSessionState, currentSessionHasAttachments, onApplyToCurrentSession, workspaceRoot, initialTab = "general", profile, onRefreshProfile, onImportStableProfile, onImportStableProjectFolders, onScanUnclaimedSessions, importBusy, bridgeStatus, catalogAudit, catalogAuditError, sessionPageSource, hostError, onRestartBridge, onRefreshCatalogAudit }: TauriSettingsProps) {
+  const desktopLayout = useTauriDesktopLayout();
   const [tab, setTab] = useState<TauriSettingsTab>(initialTab);
   const [navQuery, setNavQuery] = useState("");
   const [runtimeInfo, setRuntimeInfo] = useState<TauriPreviewRuntimeInfo | null>(null);
@@ -317,7 +318,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
   })).filter(group => group.items.length > 0);
 
   return (
-    <section className="tauri-settings-overlay" aria-label="设置">
+    <section className="tauri-settings-overlay" data-desktop-layout={desktopLayout} aria-label="设置">
       <aside className="tauri-settings-sidebar">
         <div className="tauri-settings-titlebar" data-tauri-drag-region />
         <button type="button" className="tauri-settings-back" onClick={onClose}><ArrowLeft size={17} /><span>返回工作区</span></button>
@@ -326,7 +327,8 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
           {visibleGroups.map(group => <div className="tauri-settings-nav-group" key={group.label}>
             <div className="tauri-settings-nav-label">{group.label}</div>
             {group.items.map(item => { const Icon = item.icon; return <button key={item.id} type="button" aria-current={tab === item.id ? "page" : undefined} className={`tauri-settings-nav-item${tab === item.id ? " is-active" : ""}`} onClick={() => setTab(item.id)} title={item.description}>
-              <Icon size={17} /><span>{item.label}</span>
+              <span className="tauri-settings-nav-item-main"><Icon size={17} aria-hidden="true" /><span>{item.label}</span></span>
+              {query && <small>{item.description}</small>}
             </button>; })}
           </div>)}
           {visibleGroups.length === 0 && <div className="tauri-settings-nav-empty" role="status">没有匹配的设置</div>}

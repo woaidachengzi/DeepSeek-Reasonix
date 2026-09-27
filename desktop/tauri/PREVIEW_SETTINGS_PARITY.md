@@ -29,6 +29,12 @@ does not imply that the Go runtime lacks the underlying capability.
 | Storage | Partial | Preview profile location, backup-before-import, project-folder import, and unclaimed session review are available in the Data tab. Broader stable storage management is not present. |
 | Updates | Not in settings | No Preview update settings UI or verified updater flow in this page. |
 
+The Preview settings shell now follows the saved Workbench or Creation desktop
+layout. Creation uses the stable version's narrower settings navigation and
+accent selection marker; search reveals each matching setting's purpose. This
+is a layout change only: the missing stable categories above still have no
+Preview control or host implementation.
+
 ## Implementation rule
 
 Add a control only with an identified source of truth, a read path, a save or
