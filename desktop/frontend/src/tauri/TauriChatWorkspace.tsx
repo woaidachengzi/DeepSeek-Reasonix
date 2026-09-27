@@ -130,6 +130,7 @@ import {
   tauriWorkspaceRootsAvailability,
   tauriSessionPreviews,
   tauriSafeMCPURL,
+  openTauriExternalURL,
   tauriTitleError,
   tauriTurnFailure,
   tauriImportLegacySessionCatalog,
@@ -330,9 +331,10 @@ interface PromptCardProps {
   onAskSelection: (questionId: string, label: string, multi: boolean) => void;
   onAskSubmit: () => void;
   onMCPAction: (action: "accept" | "decline" | "cancel") => void;
+  onOpenExternalURL: (url: string) => void;
 }
 
-function PromptCard({ prompt, busy, selections, onApproval, onAskSelection, onAskSubmit, onMCPAction }: PromptCardProps) {
+function PromptCard({ prompt, busy, selections, onApproval, onAskSelection, onAskSubmit, onMCPAction, onOpenExternalURL }: PromptCardProps) {
   if (prompt.kind === "approval") {
     return <section className="tauri-prompt-card" aria-live="polite" aria-label="等待权限确认">
       <div className="tauri-prompt-card__heading"><Sparkles size={17} /><div><strong>需要你的确认</strong><span>{prompt.tool}</span></div></div>
@@ -359,7 +361,7 @@ function PromptCard({ prompt, busy, selections, onApproval, onAskSelection, onAs
   return <section className="tauri-prompt-card" aria-live="polite" aria-label="MCP 服务请求">
     <div className="tauri-prompt-card__heading"><Sparkles size={17} /><div><strong>{prompt.server} 请求你的操作</strong><span>{linkHint}</span></div></div>
     {prompt.message && <p className="tauri-prompt-card__subject">{prompt.message}</p>}
-    {safeURL && <a className="tauri-prompt-card__link" href={safeURL} target="_blank" rel="noreferrer">打开外部链接（{new URL(safeURL).host}）</a>}
+    {safeURL && <a className="tauri-prompt-card__link" href={safeURL} onClick={event => { event.preventDefault(); onOpenExternalURL(safeURL); }}>打开外部链接（{new URL(safeURL).host}）</a>}
     <div className="tauri-prompt-card__actions"><button type="button" className="tauri-prompt-card__allow" onClick={() => onMCPAction("accept")} disabled={busy}>接受并继续</button><button type="button" className="tauri-prompt-card__deny" onClick={() => onMCPAction("decline")} disabled={busy}>拒绝</button><button type="button" className="tauri-prompt-card__cancel" onClick={() => onMCPAction("cancel")} disabled={busy}>取消</button></div>
   </section>;
 }
@@ -2303,7 +2305,7 @@ export function TauriSessionPreview() {
         {questions.length >= 2 && <QuestionJumpBar loadedQuestions={questions} totalQuestions={questions.length} activeTurn={activeQuestion} onJump={jumpToQuestion}
           height={Math.min(240, Math.max(48, questions.length * 18 + 12))} />}
 
-        {pendingPrompt && <PromptCard prompt={pendingPrompt} busy={busy} selections={promptSelections} onApproval={allow => void answerApproval(allow)} onAskSelection={selectPromptOption} onAskSubmit={() => void answerAsk()} onMCPAction={action => void answerMCP(action)} />}
+        {pendingPrompt && <PromptCard prompt={pendingPrompt} busy={busy} selections={promptSelections} onApproval={allow => void answerApproval(allow)} onAskSelection={selectPromptOption} onAskSubmit={() => void answerAsk()} onMCPAction={action => void answerMCP(action)} onOpenExternalURL={url => void openTauriExternalURL(url).catch(() => setError("无法在系统浏览器中打开链接"))} />}
 
         <footer className="tauri-composer-area">
           {error && <p className="tauri-error" role="alert">{error}</p>}

@@ -609,6 +609,12 @@ export function tauriSafeMCPURL(value: unknown): string | undefined {
   }
 }
 
+/** Open a web link in the system browser after host-side URL validation. */
+export async function openTauriExternalURL(url: string): Promise<void> {
+  requireTauri();
+  await invoke<void>("open_external_url", { url });
+}
+
 /** Converts the opaque v1 event payload into the three actionable prompt cards. */
 export function tauriPromptFromEvent(event: Pick<TauriBridgeEvent, "eventKind" | "payload">): TauriPendingPrompt | null {
   const payload = event.payload;

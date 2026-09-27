@@ -63,6 +63,7 @@ Preview 的 Runtime details 面板显示冻结的 1.38.3 基线与提交、当�
 事件监听、窗口拖动、系统文件选择器与通知所需的命令，不授予文件读写、保存对话框、shell、
 更新器、托盘或菜单调用权限。选中的路径仍会通过既有 bridge 的 workspace 校验，
 取消选择不会改变当前输入。
+MCP 授权链接和“关于”页链接由 host 校验为不含 URL 用户名/密码的 HTTP(S) 地址后交给系统浏览器；WebView 不获得通用 shell 权限。
 
 开发环境还需要满足前端锁定的 Node 24 与 pnpm 10。使用前端目录中的本地 Tauri CLI
 启动，脚本会把 Go sidecar 构建到被忽略的 `desktop/tauri/target/sidecar-dev/`，并仅向

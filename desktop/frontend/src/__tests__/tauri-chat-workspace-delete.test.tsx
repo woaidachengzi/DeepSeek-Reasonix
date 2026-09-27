@@ -454,6 +454,11 @@ async function main() {
   const safeLink = document.querySelector<HTMLAnchorElement>(".tauri-prompt-card__link");
   eq(safeLink?.getAttribute("href"), "https://docs.example.test/authorize", "safe MCP link keeps its authorization path");
   ok(safeLink?.textContent?.includes("docs.example.test"), "MCP link shows the actual destination host");
+  const linkClick = new dom.window.MouseEvent("click", { bubbles: true, cancelable: true });
+  await act(async () => { safeLink?.dispatchEvent(linkClick); });
+  ok(linkClick.defaultPrevented, "MCP link does not navigate the WebView");
+  eq(bridgeCalls().filter(call => call.name === "open_external_url").length, 1, "MCP link opens once through the native host");
+  eq((bridgeCalls().find(call => call.name === "open_external_url")?.args as { url?: string } | undefined)?.url, "https://docs.example.test/authorize", "native opener receives the validated authorization URL");
 
   await act(async () => {
     root.unmount();

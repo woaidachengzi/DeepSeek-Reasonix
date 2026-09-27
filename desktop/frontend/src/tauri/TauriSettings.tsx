@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { X, Check, ChevronRight, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff } from "lucide-react";
-import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, tauriPlatformInfo, keychainSave, keychainDelete, type TauriPreviewRuntimeInfo, type TauriProviderSummary } from "../lib/tauriBridge";
+import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, tauriPlatformInfo, keychainSave, keychainDelete, openTauriExternalURL, type TauriPreviewRuntimeInfo, type TauriProviderSummary } from "../lib/tauriBridge";
 
 interface TauriSettingsProps {
   onClose: () => void;
@@ -287,6 +287,7 @@ function ModelSettings({ providerSummary, onModelChange, onProviderSummaryChange
 }
 
 function AboutSettings({ runtimeInfo, onRefresh }: { runtimeInfo: TauriPreviewRuntimeInfo | null; onRefresh: () => void }) {
+  const [linkError, setLinkError] = useState(false);
   return (
     <div className="tauri-settings-section">
       <h3>关于 Reasonix Tauri Preview</h3>
@@ -304,8 +305,13 @@ function AboutSettings({ runtimeInfo, onRefresh }: { runtimeInfo: TauriPreviewRu
       )}
       <div className="tauri-settings-actions">
         <button type="button" className="tauri-settings-button" onClick={onRefresh}><RefreshCw size={14} /> 刷新</button>
-        <a className="tauri-settings-button" href="https://github.com/esengine/DeepSeek-Reasonix" target="_blank" rel="noreferrer"><ExternalLink size={14} /> GitHub</a>
+        <a className="tauri-settings-button" href="https://github.com/esengine/DeepSeek-Reasonix" onClick={event => {
+          event.preventDefault();
+          setLinkError(false);
+          void openTauriExternalURL(event.currentTarget.href).catch(() => setLinkError(true));
+        }}><ExternalLink size={14} /> GitHub</a>
       </div>
+      {linkError && <p role="alert">无法在系统浏览器中打开链接</p>}
     </div>
   );
 }

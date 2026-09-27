@@ -283,6 +283,11 @@ const commands: CommandContract[] = [
     argKeys: ["key"],
     description: "keychainDelete() invokes keychain_delete with { key }",
   },
+  {
+    command: "open_external_url",
+    argKeys: ["url"],
+    description: "openTauriExternalURL() invokes open_external_url with { url }",
+  },
 ];
 
 // ---------------------------------------------------------------------------

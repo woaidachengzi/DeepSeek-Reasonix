@@ -82,6 +82,7 @@ use data_profile::{
 use runtime_info::PreviewRuntimeInfo;
 use session_shadow::SessionShadowReport;
 use tauri::{Manager, State};
+use tauri_plugin_shell::ShellExt;
 use window_state::PreviewWindowState;
 use workbench_catalog::{WorkbenchCatalog, WorkbenchSession, WorkbenchTitle};
 use workbench_projects::{normalized_project_key, WorkbenchProjectCatalog};
@@ -1414,6 +1415,27 @@ fn platform_info() -> &'static str {
     }
 }
 
+fn validated_external_url(value: &str) -> Result<String, String> {
+    let url = url::Url::parse(value).map_err(|_| "external link is invalid")?;
+    if !matches!(url.scheme(), "http" | "https")
+        || url.host_str().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
+        return Err("external link must be an HTTP(S) URL without userinfo".into());
+    }
+    Ok(url.into())
+}
+
+#[tauri::command]
+#[allow(deprecated)] // The pinned shell plugin provides native URL opening until opener is adopted.
+fn open_external_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    let url = validated_external_url(&url)?;
+    app.shell()
+        .open(url, None)
+        .map_err(|error| error.to_string())
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -1610,6 +1632,7 @@ fn main() {
             remember_workbench_session,
             forget_workbench_session,
             platform_info,
+            open_external_url,
             keychain::keychain_save,
             keychain::keychain_delete
         ])
@@ -1623,6 +1646,32 @@ fn main() {
             let _ = app.state::<BridgeSupervisor>().stop();
         }
     });
+}
+
+#[cfg(test)]
+mod external_url_tests {
+    use super::validated_external_url;
+
+    #[test]
+    fn accepts_web_links_and_rejects_credentials_and_local_files() {
+        assert_eq!(
+            validated_external_url("https://example.test/authorize?state=abc").unwrap(),
+            "https://example.test/authorize?state=abc"
+        );
+        assert_eq!(
+            validated_external_url("http://127.0.0.1:8023/callback").unwrap(),
+            "http://127.0.0.1:8023/callback"
+        );
+        for value in [
+            "javascript:alert(1)",
+            "file:///tmp/private",
+            "https://user:pass@example.test/private",
+            "https://user@example.test/private",
+            "//example.test/relative",
+        ] {
+            assert!(validated_external_url(value).is_err(), "accepted {value}");
+        }
+    }
 }
 
 #[cfg(test)]

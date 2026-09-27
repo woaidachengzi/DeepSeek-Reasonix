@@ -22,6 +22,7 @@ let releaseSave: (() => void) | undefined;
 let failSummary = false;
 let failSave = false;
 const calls: string[] = [];
+let openedURL = "";
 const summary = () => ({
   protocolVersion: 1,
   defaultModel: "",
@@ -29,7 +30,7 @@ const summary = () => ({
 });
 
 (dom.window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
-  async invoke(command: string) {
+  async invoke(command: string, args?: { url?: string }) {
     calls.push(command);
     switch (command) {
       case "preview_runtime_info": return { previewVersion: "1", previewCommit: "unknown", previewDirty: false, stableVersion: "1", stableCommit: "test", tauriVersion: "2", bridgeProtocolVersion: 1, previewBuild: "test" };
@@ -37,6 +38,7 @@ const summary = () => ({
         if (failSummary) { failSummary = false; throw new Error("summary unavailable"); }
         return summary();
       case "platform_info": return "darwin";
+      case "open_external_url": openedURL = args?.url ?? ""; return;
       case "keychain_save":
         if (failSave) throw new Error("secret-in-error-message");
         if (saveGate) await saveGate;
@@ -126,6 +128,15 @@ failSave = true;
 await act(async () => { click("保存到钥匙串"); });
 assert.match(visibleText(), /保存失败/);
 assert.doesNotMatch(visibleText(), /secret-in-error-message/, "error details do not expose secrets");
+
+await act(async () => { click("关于"); });
+const githubLink = document.querySelector<HTMLAnchorElement>('.tauri-settings-about a[href^="https://github.com/"]')
+  ?? document.querySelector<HTMLAnchorElement>('.tauri-settings-actions a[href^="https://github.com/"]');
+assert.ok(githubLink, "About page has a GitHub link");
+const githubClick = new dom.window.MouseEvent("click", { bubbles: true, cancelable: true });
+await act(async () => { githubLink.dispatchEvent(githubClick); });
+assert.equal(githubClick.defaultPrevented, true, "GitHub link does not navigate the WebView");
+assert.equal(openedURL, "https://github.com/esengine/DeepSeek-Reasonix", "GitHub link opens through the native host");
 
 await act(async () => { root.unmount(); });
 console.log("tauri settings API key flow passed");
