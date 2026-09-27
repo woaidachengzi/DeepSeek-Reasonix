@@ -569,6 +569,41 @@ pub struct SkillsSettingsChange {
     pub path: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubagentProfileView {
+    pub name: String,
+    pub description: String,
+    pub scope: String,
+    pub invocation: String,
+    pub configured_model: String,
+    pub configured_effort: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubagentSettingsView {
+    pub protocol_version: u64,
+    pub default_model: String,
+    pub subagent_model: String,
+    pub subagent_effort: String,
+    pub max_depth: i32,
+    pub max_concurrency: i32,
+    pub max_parallel_writers: i32,
+    pub model_refs: Vec<String>,
+    pub profiles: Vec<SubagentProfileView>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubagentSettingsChange {
+    pub workspace_root: String,
+    pub action: String,
+    pub name: String,
+    pub value: String,
+    pub number: i32,
+}
+
 /// One MCP server as the host may see it. Credential material is write-only, so
 /// this carries the key names a server expects and never a value. Hand-written
 /// like the other host-owned payloads: the wire shape belongs to this host, not
@@ -1502,6 +1537,41 @@ impl BridgeSupervisor {
             Some(&request_id),
         )?;
         let view: SkillsSettingsView = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn subagent_settings(&self, workspace_root: &str) -> Result<SubagentSettingsView, String> {
+        let query = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("workspaceRoot", workspace_root)
+            .finish();
+        let response = self.request_json(
+            "GET",
+            &format!("/v1/settings/subagents?{query}"),
+            None,
+            None,
+        )?;
+        let view: SubagentSettingsView = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn change_subagent_settings(
+        &self,
+        change: SubagentSettingsChange,
+    ) -> Result<SubagentSettingsView, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/subagents",
+            Some(json!(change)),
+            Some(&request_id),
+        )?;
+        let view: SubagentSettingsView = serde_json::from_value(response).map_err(display_error)?;
         if view.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }

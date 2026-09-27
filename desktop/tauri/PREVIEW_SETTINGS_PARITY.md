@@ -16,7 +16,7 @@ does not imply that the Go runtime lacks the underlying capability.
 | MCP and tools | Partial | Global and project MCP servers can be listed, added, edited, and deleted through the native bridge. Other stable tool settings are not represented. |
 | Remote SSH | Not in settings | No Preview remote-management view or verified host contract. |
 | Agent Skills | Partial | Preview discovers skills and sources for the selected workspace using the same skill store as the core runtime. The authenticated bridge saves global automatic-invocation policy, per-name enablement, and source additions/removals/toggles; an idle current session can explicitly reload. Stable folder picker, per-root skill inventory, project-scoped edits, and dependency/availability diagnostics are not present. |
-| Subagents | Not in settings | No Preview subagent-management view or verified mutation contract. |
+| Subagents | Partial | Preview lists discoverable subagent profiles for the selected workspace and saves global default model, reasoning effort, delegation depth, concurrency limits, and per-profile model/effort overrides through the authenticated bridge. New sessions use the saved values; an idle current session can explicitly reload. Project configuration may override global values. Profile file creation, editing, deletion, and stable profile diagnostics are not yet available. |
 | Plugins | Not in settings | No Preview plugin-management view or verified mutation contract. |
 | Memory | Not in settings | No Preview memory-management view or verified mutation contract. |
 | Hooks | Not in settings | No Preview hook-management view or verified mutation contract. |

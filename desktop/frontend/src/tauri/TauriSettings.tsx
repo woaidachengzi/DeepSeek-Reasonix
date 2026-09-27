@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
-import { Check, ArrowLeft, Search, Keyboard, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, Type, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles } from "lucide-react";
+import { Check, ArrowLeft, Search, Keyboard, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, Type, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles, Users } from "lucide-react";
 import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, tauriDesktopPreferences, setTauriDesktopApproval, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
 import { THEME_STYLES, type Theme, type ThemeStyle } from "../lib/theme";
 import { applyConversationWidth, getCachedConversationWidth, type ConversationWidth } from "../lib/conversationWidth";
@@ -12,6 +12,7 @@ import { TauriPermissionsSettings } from "./TauriPermissionsSettings";
 import { TauriSandboxSettings } from "./TauriSandboxSettings";
 import { TauriNetworkSettings } from "./TauriNetworkSettings";
 import { TauriSkillsSettings } from "./TauriSkillsSettings";
+import { TauriSubagentSettings } from "./TauriSubagentSettings";
 import { getTauriNotificationsEnabled, setTauriNotificationsEnabled, getTauriProgressMode, setTauriProgressMode, type TauriProgressMode } from "./tauriPreferences";
 import { getSuccessPreference, setSuccessPreference, getAttentionPreference, setAttentionPreference, getNotificationVolume, setNotificationVolume, playSuccessChime, playAttentionChime, type SoundWavPref } from "../lib/sound";
 
@@ -38,7 +39,7 @@ interface TauriSettingsProps {
   onRefreshCatalogAudit?: () => Promise<void>;
 }
 
-export type TauriSettingsTab = "general" | "appearance" | "model" | "providers" | "stats" | "mcp" | "skills" | "permissions" | "sandbox" | "network" | "diagnostics" | "data" | "shortcuts" | "about";
+export type TauriSettingsTab = "general" | "appearance" | "model" | "providers" | "stats" | "mcp" | "skills" | "subagents" | "permissions" | "sandbox" | "network" | "diagnostics" | "data" | "shortcuts" | "about";
 
 const TauriUsageStatsPanel = lazy(() => import("../components/UsageStatsPanel").then(module => ({ default: module.UsageStatsPanel })));
 
@@ -50,7 +51,7 @@ const SETTINGS_GROUPS = [
     { id: "stats", label: "用量统计", description: "查看 Preview 的模型用量", icon: ChartNoAxesColumn },
   ] },
   { label: "集成与连接", items: [{ id: "mcp", label: "MCP", description: "管理工具服务器", icon: Server }] },
-  { label: "能力扩展", items: [{ id: "skills", label: "Agent Skills", description: "管理技能与来源", icon: Sparkles }] },
+  { label: "能力扩展", items: [{ id: "skills", label: "Agent Skills", description: "管理技能与来源", icon: Sparkles }, { id: "subagents", label: "子智能体", description: "设置模型、并行限制与覆盖", icon: Users }] },
   { label: "安全与执行", items: [
     { id: "permissions", label: "权限", description: "写入决策与工具规则", icon: ShieldCheck },
     { id: "sandbox", label: "沙盒", description: "命令隔离与文件写入范围", icon: Box },
@@ -72,6 +73,7 @@ const SETTINGS_TITLES: Record<TauriSettingsTab, { title: string; description: st
   stats: { title: "用量统计", description: "查看 Preview 资料中已记录的 token 用量。" },
   mcp: { title: "MCP 与工具", description: "连接并管理工作区可用的工具。" },
   skills: { title: "Agent Skills", description: "管理当前工作区可发现的技能与来源。" },
+  subagents: { title: "子智能体", description: "管理子智能体的运行默认值与按名称覆盖。" },
   permissions: { title: "权限", description: "设置工具的默认写入决策和规则。" },
   sandbox: { title: "沙盒", description: "设置命令隔离、网络访问和文件写入范围。" },
   network: { title: "网络", description: "设置 Preview 普通 HTTP 请求的代理方式。" },
@@ -297,6 +299,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
             {tab === "stats" && <Suspense fallback={<div className="tauri-settings-loading">加载中…</div>}><TauriUsageStatsPanel loadStats={tauriUsageStats} sources={["all", "desktop-tauri"]} /></Suspense>}
             {tab === "mcp" && <TauriMCPSettings workspaceRoot={workspaceRoot} />}
             {tab === "skills" && <TauriSkillsSettings workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
+            {tab === "subagents" && <TauriSubagentSettings workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "permissions" && <TauriPermissionsSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "sandbox" && <TauriSandboxSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "network" && <TauriNetworkSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}

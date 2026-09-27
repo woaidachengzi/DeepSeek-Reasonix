@@ -373,6 +373,46 @@ export async function changeTauriSkillsSettings(change: TauriSkillsChange): Prom
   return invoke<TauriSkillsSettings>("change_skills_settings", { change });
 }
 
+export interface TauriSubagentProfile {
+  name: string;
+  description: string;
+  scope: string;
+  invocation: string;
+  configuredModel: string;
+  configuredEffort: string;
+}
+
+export interface TauriSubagentSettings {
+  protocolVersion: number;
+  defaultModel: string;
+  subagentModel: string;
+  subagentEffort: string;
+  maxDepth: number;
+  maxConcurrency: number;
+  maxParallelWriters: number;
+  modelRefs: string[];
+  modelEfforts: Record<string, string[]>;
+  profiles: TauriSubagentProfile[];
+}
+
+export interface TauriSubagentChange {
+  workspaceRoot: string;
+  action: "model" | "effort" | "depth" | "concurrency" | "writers" | "profile_model" | "profile_effort";
+  name: string;
+  value: string;
+  number: number;
+}
+
+export async function tauriSubagentSettings(workspaceRoot = ""): Promise<TauriSubagentSettings> {
+  requireTauri();
+  return invoke<TauriSubagentSettings>("subagent_settings", { workspaceRoot });
+}
+
+export async function changeTauriSubagentSettings(change: TauriSubagentChange): Promise<TauriSubagentSettings> {
+  requireTauri();
+  return invoke<TauriSubagentSettings>("change_subagent_settings", { change });
+}
+
 export type TauriToolApprovalMode = "ask" | "auto" | "yolo";
 export interface TauriDesktopPreferences {
   protocolVersion: number;

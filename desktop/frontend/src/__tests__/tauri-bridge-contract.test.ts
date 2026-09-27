@@ -324,6 +324,16 @@ const commands: CommandContract[] = [
     description: "changeTauriSkillsSettings() invokes change_skills_settings with { change }",
   },
   {
+    command: "subagent_settings",
+    argKeys: ["workspaceRoot"],
+    description: "tauriSubagentSettings() invokes subagent_settings with { workspaceRoot }",
+  },
+  {
+    command: "change_subagent_settings",
+    argKeys: ["change"],
+    description: "changeTauriSubagentSettings() invokes change_subagent_settings with { change }",
+  },
+  {
     command: "set_default_model",
     argKeys: ["request"],
     description: "setTauriDefaultModel() invokes set_default_model with { request }",

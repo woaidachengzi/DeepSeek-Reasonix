@@ -80,8 +80,9 @@ use bridge::{
     ProviderConfigList, RenameSessionRequest, SandboxSettingsChange, SandboxSettingsView,
     SaveProviderConfigRequest, ScanImportCandidate, ScanImportSelection, SessionCatalogMetadata,
     SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage, SessionFirstMessageTitle,
-    SessionPreview, SessionRequest, SkillsSettingsChange, SkillsSettingsView, SubmitRequest,
-    WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
+    SessionPreview, SessionRequest, SkillsSettingsChange, SkillsSettingsView,
+    SubagentSettingsChange, SubagentSettingsView, SubmitRequest, WorkspaceChangeDetailRequest,
+    WorkspaceFileRequest, WorkspaceRequest,
 };
 use data_profile::{
     PreviewProfile, PreviewProfileStatus, ProfileImportResult, ProjectFoldersImportResult,
@@ -805,6 +806,22 @@ fn change_skills_settings(
     change: SkillsSettingsChange,
 ) -> Result<SkillsSettingsView, String> {
     supervisor.change_skills_settings(change)
+}
+
+#[tauri::command]
+fn subagent_settings(
+    supervisor: State<'_, BridgeSupervisor>,
+    workspace_root: String,
+) -> Result<SubagentSettingsView, String> {
+    supervisor.subagent_settings(&workspace_root)
+}
+
+#[tauri::command]
+fn change_subagent_settings(
+    supervisor: State<'_, BridgeSupervisor>,
+    change: SubagentSettingsChange,
+) -> Result<SubagentSettingsView, String> {
+    supervisor.change_subagent_settings(change)
 }
 
 #[tauri::command]
@@ -1764,6 +1781,8 @@ fn main() {
             change_network_settings,
             skills_settings,
             change_skills_settings,
+            subagent_settings,
+            change_subagent_settings,
             desktop_preferences,
             set_desktop_approval,
             set_default_model,
