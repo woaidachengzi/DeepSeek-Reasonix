@@ -359,6 +359,31 @@ func Remove(reasonixHome, name string) (InstalledPlugin, bool, error) {
 	return InstalledPlugin{}, false, nil
 }
 
+// RemoveIfRevision unregisters exactly the plugin registration the caller
+// reviewed. It leaves files untouched; the installer removes managed files.
+func RemoveIfRevision(reasonixHome, name, revision string) (InstalledPlugin, bool, error) {
+	if !IsValidName(name) || revision == "" {
+		return InstalledPlugin{}, false, fmt.Errorf("invalid plugin removal request")
+	}
+	stateMu.Lock()
+	defer stateMu.Unlock()
+	st, err := LoadState(reasonixHome)
+	if err != nil {
+		return InstalledPlugin{}, false, err
+	}
+	for i, p := range st.Plugins {
+		if p.Name != name {
+			continue
+		}
+		if InstalledRevision(p) != revision {
+			return InstalledPlugin{}, false, fmt.Errorf("plugin %q changed since it was read; refresh and retry", name)
+		}
+		st.Plugins = append(st.Plugins[:i], st.Plugins[i+1:]...)
+		return p, true, SaveState(reasonixHome, st)
+	}
+	return InstalledPlugin{}, false, nil
+}
+
 func SetEnabled(reasonixHome, name string, enabled bool) error {
 	stateMu.Lock()
 	defer stateMu.Unlock()

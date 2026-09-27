@@ -80,6 +80,7 @@ use bridge::{
     MemorySettingsChange, MemorySettingsView, NetworkSettingsChange, NetworkSettingsView,
     OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
     PendingSessionTitleRecovery, PermissionSettingsChange, PermissionSettingsView,
+    PluginInstallPlan, PluginInstallRequest, PluginOperationResult, PluginRemoveRequest,
     PluginSettingsChange, PluginSettingsView, ProviderConfigList, RenameSessionRequest,
     SandboxSettingsChange, SandboxSettingsView, SaveProviderConfigRequest, ScanImportCandidate,
     ScanImportSelection, SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
@@ -855,6 +856,30 @@ fn change_plugin_settings(
     change: PluginSettingsChange,
 ) -> Result<PluginSettingsView, String> {
     supervisor.change_plugin_settings(change)
+}
+
+#[tauri::command]
+fn plan_plugin_install(
+    supervisor: State<'_, BridgeSupervisor>,
+    source: String,
+) -> Result<PluginInstallPlan, String> {
+    supervisor.plan_plugin_install(&source)
+}
+
+#[tauri::command]
+fn install_plugin(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: PluginInstallRequest,
+) -> Result<PluginOperationResult, String> {
+    supervisor.install_plugin(request)
+}
+
+#[tauri::command]
+fn remove_plugin(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: PluginRemoveRequest,
+) -> Result<PluginOperationResult, String> {
+    supervisor.remove_plugin(request)
 }
 
 #[tauri::command]
@@ -1877,6 +1902,9 @@ fn main() {
             change_skills_settings,
             plugin_settings,
             change_plugin_settings,
+            plan_plugin_install,
+            install_plugin,
+            remove_plugin,
             subagent_settings,
             change_subagent_settings,
             hooks_settings,

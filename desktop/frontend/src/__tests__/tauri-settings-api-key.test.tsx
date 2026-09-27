@@ -44,6 +44,8 @@ let network = { protocolVersion: 1, proxyMode: "auto", noProxy: "", proxyType: "
 let skills = { protocolVersion: 1, allowImplicitInvocation: true, globalAllowImplicitInvocation: true, projectOverrides: { implicit: false, skills: false, sources: false }, skills: [{ name: "demo", description: "A test skill", invocation: "/demo", scope: "global", sourcePath: "/tmp/demo/SKILL.md", runAs: "inline", enabled: true, requires: ["mcp-server:github"] }], sources: [{ path: "/tmp/skills", scope: "custom", status: "ok", enabled: true, configured: true, skillCount: 1 }] };
 let failSkills = false;
 let plugins = { protocolVersion: 1, plugins: [{ name: "sample", description: "A test plugin", version: "1.0", source: "local", root: "/preview/plugins/sample", manifestKind: "reasonix", enabled: true, status: "ready", issue: "", warningCount: 0, skills: 1, agents: 0, commands: 2, hooks: 0, mcpServers: 1, runtime: false, revision: "a".repeat(64) }] };
+let installedPluginSource = "";
+let removedPluginName = "";
 let lastSkillScope = "";
 let subagents = { protocolVersion: 1, defaultModel: "demo/m", subagentModel: "", subagentEffort: "", maxDepth: 2, maxConcurrency: 6, maxParallelWriters: 3, modelRefs: ["demo/m"], modelEfforts: { "demo/m": ["auto", "low", "high"] }, profiles: [{ name: "reviewer", description: "Reviews code", scope: "global", invocation: "/reviewer", configuredModel: "", configuredEffort: "" }] };
 let savedSubagentProfile: { action?: string; scope?: string; profile?: { name: string; description: string; systemPrompt: string } } | undefined;
@@ -69,7 +71,7 @@ const summary = () => ({
 });
 
 (dom.window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
-  async invoke(command: string, args?: { scope?: string; workspaceRoot?: string; url?: string; behavior?: string; mode?: string; request?: { model?: string; role?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean; revision?: string; presetId?: string; presetAction?: string }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string; profile?: { name: string; description: string; systemPrompt: string } } }) {
+  async invoke(command: string, args?: { scope?: string; source?: string; workspaceRoot?: string; url?: string; behavior?: string; mode?: string; request?: { model?: string; role?: string; source?: string; name?: string; planId?: string; revision?: string; acceptRisk?: boolean }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean; revision?: string; presetId?: string; presetAction?: string }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string; profile?: { name: string; description: string; systemPrompt: string } } }) {
     calls.push(command);
     switch (command) {
       case "preview_runtime_info":
@@ -103,6 +105,9 @@ const summary = () => ({
       case "skills_settings": if (failSkills) { failSkills = false; throw new Error("skill inventory unavailable"); } return { ...skills };
       case "plugin_settings": return { ...plugins };
       case "change_plugin_settings": plugins = { ...plugins, plugins: plugins.plugins.map(item => item.name === args?.change?.name ? { ...item, enabled: Boolean(args.change.enabled), revision: "b".repeat(64) } : item) }; return { ...plugins };
+      case "plan_plugin_install": return { protocolVersion: 1, planId: "sha256:reviewed", warningCount: 0, actions: [{ name: "planned", version: "1.0", manifestKind: "reasonix", riskLevel: "high", skills: 1, agents: 0, commands: 0, hooks: 1, mcpServers: 0, prompts: 0, themes: 0, runtime: true, runtimeCommand: "plugin-runtime", intercepts: ["input.receive"], replaces: [] }] };
+      case "install_plugin": installedPluginSource = args?.request?.source ?? ""; plugins = { ...plugins, plugins: [...plugins.plugins, { ...plugins.plugins[0], name: "planned", revision: "c".repeat(64) }] }; return { protocolVersion: 1, status: "done", failedNames: [], settings: { ...plugins } };
+      case "remove_plugin": removedPluginName = args?.request?.name ?? ""; plugins = { ...plugins, plugins: plugins.plugins.filter(item => item.name !== removedPluginName) }; return { protocolVersion: 1, status: "done", failedNames: [], settings: { ...plugins } };
       case "change_skills_settings": {
         lastSkillScope = args?.change?.scope ?? "";
         if (args?.change?.action === "implicit") {
@@ -324,6 +329,25 @@ const pluginSwitch = document.querySelector<HTMLInputElement>('input[aria-label=
 assert.ok(pluginSwitch);
 await act(async () => { pluginSwitch.click(); });
 assert.equal(plugins.plugins[0].enabled, false, "plugin activation is saved through the bridge");
+const pluginSource = document.querySelector<HTMLInputElement>('#tauri-plugin-source');
+assert.ok(pluginSource);
+await act(async () => {
+  Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(pluginSource, "/preview/plugin-source");
+  pluginSource.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+});
+await act(async () => { click("预览安装"); });
+assert.match(visibleText(), /完整信任运行时/, "high risk plugin plan is shown before installation");
+const installButton = [...document.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.trim() === "安装已预览插件");
+assert.ok(installButton?.disabled, "high risk plan requires explicit acknowledgement");
+const riskAcknowledgement = document.querySelector<HTMLInputElement>('.tauri-plugin-plan__ack input');
+assert.ok(riskAcknowledgement);
+await act(async () => { riskAcknowledgement.click(); });
+await act(async () => { click("安装已预览插件"); });
+assert.equal(installedPluginSource, "/preview/plugin-source", "approved plugin source is sent to the bridge");
+await act(async () => { click("移除"); });
+assert.match(visibleText(), /确认移除/, "plugin removal requires a second explicit click");
+await act(async () => { click("确认移除"); });
+assert.equal(removedPluginName, "sample", "plugin removal targets the reviewed registration");
 await act(async () => { click("子智能体"); });
 assert.match(visibleText(), /Reviews code/, "discoverable subagent profiles appear in settings");
 await act(async () => { click("1 层"); });

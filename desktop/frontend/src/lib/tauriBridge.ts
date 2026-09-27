@@ -458,6 +458,59 @@ export async function changeTauriPluginSettings(change: { name: string; revision
   return invoke<TauriPluginSettings>("change_plugin_settings", { change });
 }
 
+export interface TauriPluginInstallPlanAction {
+  name: string;
+  version: string;
+  manifestKind: string;
+  riskLevel: "low" | "medium" | "high";
+  skills: number;
+  agents: number;
+  commands: number;
+  hooks: number;
+  mcpServers: number;
+  prompts: number;
+  themes: number;
+  runtime: boolean;
+  runtimeCommand: string;
+  intercepts: string[];
+  replaces: string[];
+}
+
+export interface TauriPluginInstallPlan {
+  protocolVersion: number;
+  planId: string;
+  actions: TauriPluginInstallPlanAction[];
+  warningCount: number;
+}
+
+export interface TauriPluginOperationResult {
+  protocolVersion: number;
+  status: "done" | "partial" | "failed";
+  failedNames: string[];
+  settings: TauriPluginSettings;
+}
+
+export async function planTauriPluginInstall(source: string): Promise<TauriPluginInstallPlan> {
+  requireTauri();
+  return invoke<TauriPluginInstallPlan>("plan_plugin_install", { source });
+}
+
+export async function installTauriPlugin(request: { source: string; planId: string; acceptRisk: boolean }): Promise<TauriPluginOperationResult> {
+  requireTauri();
+  return invoke<TauriPluginOperationResult>("install_plugin", { request });
+}
+
+export async function removeTauriPlugin(request: { name: string; revision: string }): Promise<TauriPluginOperationResult> {
+  requireTauri();
+  return invoke<TauriPluginOperationResult>("remove_plugin", { request });
+}
+
+export async function chooseTauriPluginDirectory(): Promise<string | null> {
+  requireTauri();
+  const selected = await openDialog({ directory: true, multiple: false, title: "选择插件目录" });
+  return typeof selected === "string" ? selected : null;
+}
+
 export interface TauriSubagentProfile {
   name: string;
   description: string;

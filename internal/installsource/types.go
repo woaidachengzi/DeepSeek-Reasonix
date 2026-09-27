@@ -29,6 +29,8 @@ type request struct {
 	// PlanID is echoed back on a confirm-apply call so the host can refuse
 	// to apply a plan that does not match the one it approved.
 	PlanID string `json:"planId"`
+	// Revision is used by desktop plugin removal to reject a stale row.
+	Revision string `json:"revision,omitempty"`
 
 	scopeExplicit bool
 }

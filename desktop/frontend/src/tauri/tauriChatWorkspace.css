@@ -752,7 +752,21 @@
 .tauri-plugin-card__counts { display: flex; flex-wrap: wrap; gap: 5px; }
 .tauri-plugin-card__counts span { padding: 4px 7px; border-radius: 5px; background: var(--bg); color: var(--fg-dim); font-size: 10px; }
 .tauri-plugin-card__counts .tauri-plugin-card__error { color: var(--err); }
-.tauri-plugin-settings__hint { margin-top: 18px !important; }
+.tauri-plugin-install-form { display: grid; gap: 10px; margin: 22px 0; padding: 16px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface); }
+.tauri-plugin-install-form > label { display: grid; gap: 4px; color: var(--fg); font-size: 12px; font-weight: 650; }
+.tauri-plugin-install-form > label small { color: var(--fg-faint); font-size: 11px; font-weight: 400; }
+.tauri-plugin-install-form > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.tauri-plugin-install-form input { min-width: 220px; flex: 1; }
+.tauri-plugin-plan { display: grid; gap: 11px; margin: 0 0 22px; padding: 16px; border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border-soft)); border-radius: 10px; }
+.tauri-plugin-plan h4 { margin: 0; color: var(--fg); font-size: 13px; }
+.tauri-plugin-plan__action { display: grid; gap: 5px; padding: 10px; border: 1px solid var(--border-soft); border-radius: 8px; }
+.tauri-plugin-plan__action strong { color: var(--fg); font-size: 12px; }
+.tauri-plugin-plan__action small, .tauri-plugin-plan__action span, .tauri-plugin-plan > small { color: var(--fg-faint); font-size: 11px; }
+.tauri-plugin-plan__action .tauri-plugin-plan__risk { margin: 3px 0 0; color: var(--err); overflow-wrap: anywhere; }
+.tauri-plugin-plan__ack { display: flex; align-items: center; gap: 8px; color: var(--fg); font-size: 11px; }
+.tauri-plugin-plan__ack input { accent-color: var(--accent); }
+.tauri-plugin-plan__actions, .tauri-plugin-card__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.tauri-plugin-card__actions small { flex: 1; min-width: 160px; }
 .tauri-subagent-settings h3:not(:first-child) { margin-top: 30px; }
 .tauri-subagent-profiles { display: grid; gap: 10px; margin-top: 15px; }
 .tauri-subagent-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; }

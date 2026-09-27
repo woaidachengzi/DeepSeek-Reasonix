@@ -89,3 +89,138 @@ func TestPreviewPluginSettingsReadToggleAndRejectStaleOrInvalid(t *testing.T) {
 		t.Fatalf("bad request: %d", got.Code)
 	}
 }
+
+func TestPreviewPluginPlanInstallAndRemove(t *testing.T) {
+	home, source := t.TempDir(), t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	manifest := `{"apiVersion":"reasonix.io/plugin/v2","name":"planned","version":"1.0","contributes":{"skills":["skills"]}}`
+	if err := os.WriteFile(filepath.Join(source, pluginpkg.NativeManifest), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(source, "skills", "sample")
+	if err := os.MkdirAll(skillDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\ndescription: Sample\n---\nSample"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	handler := newBridgeServer(testToken, "instance-b").handler()
+	post := func(path, id string, input any) *httptest.ResponseRecorder {
+		body, _ := json.Marshal(input)
+		r := httptest.NewRequest(http.MethodPost, path, strings.NewReader(string(body)))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Authorization", "Bearer "+testToken)
+		if id != "" {
+			r.Header.Set(requestIDHeader, id)
+		}
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	planResponse := post("/v1/settings/plugins/plan", "", previewPluginInstallRequest{Source: source})
+	if planResponse.Code != http.StatusOK {
+		t.Fatalf("plan: %d %s", planResponse.Code, planResponse.Body.String())
+	}
+	var plan previewPluginInstallPlan
+	if err := json.Unmarshal(planResponse.Body.Bytes(), &plan); err != nil {
+		t.Fatal(err)
+	}
+	if plan.PlanID == "" || len(plan.Actions) != 1 || plan.Actions[0].Name != "planned" || plan.Actions[0].Skills != 1 {
+		t.Fatalf("plan = %+v", plan)
+	}
+	if len(loadPluginNames(t, home)) != 0 {
+		t.Fatal("plan wrote plugin registration")
+	}
+	if got := post("/v1/settings/plugins/install", "install-bad", previewPluginInstallRequest{Source: source, PlanID: "sha256:wrong"}); got.Code != http.StatusConflict {
+		t.Fatalf("mismatched plan: %d", got.Code)
+	}
+	installResponse := post("/v1/settings/plugins/install", "install-good", previewPluginInstallRequest{Source: source, PlanID: plan.PlanID})
+	if installResponse.Code != http.StatusOK {
+		t.Fatalf("install: %d %s", installResponse.Code, installResponse.Body.String())
+	}
+	var installed previewPluginOperationResult
+	if err := json.Unmarshal(installResponse.Body.Bytes(), &installed); err != nil {
+		t.Fatal(err)
+	}
+	if installed.Status != "done" || len(installed.Settings.Plugins) != 1 || installed.Settings.Plugins[0].Name != "planned" {
+		t.Fatalf("installed = %+v", installed)
+	}
+	if _, err := os.Stat(pluginpkg.InstallRoot(home, "planned")); err != nil {
+		t.Fatalf("installed files missing: %v", err)
+	}
+	if got := post("/v1/settings/plugins/remove", "remove-stale", previewPluginRemoveRequest{Name: "planned", Revision: strings.Repeat("a", 64)}); got.Code != http.StatusConflict {
+		t.Fatalf("stale remove: %d", got.Code)
+	}
+	removed := post("/v1/settings/plugins/remove", "remove-good", previewPluginRemoveRequest{Name: "planned", Revision: installed.Settings.Plugins[0].Revision})
+	if removed.Code != http.StatusOK {
+		t.Fatalf("remove: %d %s", removed.Code, removed.Body.String())
+	}
+	if len(loadPluginNames(t, home)) != 0 {
+		t.Fatal("plugin registration remained after removal")
+	}
+	if _, err := os.Stat(pluginpkg.InstallRoot(home, "planned")); !os.IsNotExist(err) {
+		t.Fatalf("managed files remain: %v", err)
+	}
+	if validPreviewPluginSource("https://secret@github.com/user/repo") {
+		t.Fatal("URL with embedded credential accepted")
+	}
+}
+
+func TestPreviewPluginRuntimeRequiresRiskAcknowledgement(t *testing.T) {
+	home, source := t.TempDir(), t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	manifest := `{"apiVersion":"reasonix.io/plugin/v2","name":"runtime-review","version":"1.0","runtime":{"command":"${REASONIX_PLUGIN_ROOT}/bin/run","required":true,"intercepts":["input.receive"]}}`
+	if err := os.WriteFile(filepath.Join(source, pluginpkg.NativeManifest), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(source, "bin"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "bin", "run"), []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	handler := newBridgeServer(testToken, "instance-risk").handler()
+	post := func(path, id string, input any) *httptest.ResponseRecorder {
+		body, _ := json.Marshal(input)
+		r := httptest.NewRequest(http.MethodPost, path, strings.NewReader(string(body)))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Authorization", "Bearer "+testToken)
+		if id != "" {
+			r.Header.Set(requestIDHeader, id)
+		}
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	planned := post("/v1/settings/plugins/plan", "", previewPluginInstallRequest{Source: source})
+	if planned.Code != http.StatusOK {
+		t.Fatalf("plan: %d %s", planned.Code, planned.Body.String())
+	}
+	var plan previewPluginInstallPlan
+	if err := json.Unmarshal(planned.Body.Bytes(), &plan); err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Actions) != 1 || plan.Actions[0].RiskLevel != "high" || !plan.Actions[0].Runtime || !strings.Contains(plan.Actions[0].RuntimeCmd, "bin/run") {
+		t.Fatalf("runtime plan = %+v", plan)
+	}
+	request := previewPluginInstallRequest{Source: source, PlanID: plan.PlanID}
+	if got := post("/v1/settings/plugins/install", "without-risk", request); got.Code != http.StatusBadRequest {
+		t.Fatalf("high-risk install without acknowledgement: %d %s", got.Code, got.Body.String())
+	}
+	if len(loadPluginNames(t, home)) != 0 {
+		t.Fatal("unacknowledged runtime plugin was installed")
+	}
+	request.AcceptRisk = true
+	if got := post("/v1/settings/plugins/install", "with-risk", request); got.Code != http.StatusOK {
+		t.Fatalf("acknowledged install: %d %s", got.Code, got.Body.String())
+	}
+}
+
+func loadPluginNames(t *testing.T, home string) []string {
+	t.Helper()
+	names, err := pluginpkg.InstalledNames(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return names
+}

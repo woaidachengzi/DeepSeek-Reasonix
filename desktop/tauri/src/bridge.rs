@@ -672,6 +672,59 @@ pub struct PluginSettingsChange {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PluginInstallPlanAction {
+    pub name: String,
+    pub version: String,
+    pub manifest_kind: String,
+    pub risk_level: String,
+    pub skills: u64,
+    pub agents: u64,
+    pub commands: u64,
+    pub hooks: u64,
+    pub mcp_servers: u64,
+    pub prompts: u64,
+    pub themes: u64,
+    pub runtime: bool,
+    pub runtime_command: String,
+    pub intercepts: Vec<String>,
+    pub replaces: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginInstallPlan {
+    pub protocol_version: u64,
+    pub plan_id: String,
+    pub actions: Vec<PluginInstallPlanAction>,
+    pub warning_count: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginInstallRequest {
+    pub source: String,
+    pub plan_id: String,
+    pub accept_risk: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginRemoveRequest {
+    pub name: String,
+    pub revision: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginOperationResult {
+    pub protocol_version: u64,
+    pub status: String,
+    pub failed_names: Vec<String>,
+    pub settings: PluginSettingsView,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SubagentProfileView {
     pub name: String,
     pub description: String,
@@ -1872,6 +1925,58 @@ impl BridgeSupervisor {
         Ok(view)
     }
 
+    pub fn plan_plugin_install(&self, source: &str) -> Result<PluginInstallPlan, String> {
+        let response = self.request_json_slow(
+            "POST",
+            "/v1/settings/plugins/plan",
+            Some(json!({"source": source})),
+            None,
+        )?;
+        let view: PluginInstallPlan = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn install_plugin(
+        &self,
+        request: PluginInstallRequest,
+    ) -> Result<PluginOperationResult, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json_slow(
+            "POST",
+            "/v1/settings/plugins/install",
+            Some(json!(request)),
+            Some(&request_id),
+        )?;
+        let view: PluginOperationResult =
+            serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn remove_plugin(
+        &self,
+        request: PluginRemoveRequest,
+    ) -> Result<PluginOperationResult, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json_slow(
+            "POST",
+            "/v1/settings/plugins/remove",
+            Some(json!(request)),
+            Some(&request_id),
+        )?;
+        let view: PluginOperationResult =
+            serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
     pub fn subagent_settings(&self, workspace_root: &str) -> Result<SubagentSettingsView, String> {
         let query = url::form_urlencoded::Serializer::new(String::new())
             .append_pair("workspaceRoot", workspace_root)
@@ -2496,6 +2601,33 @@ impl BridgeSupervisor {
     ) -> Result<Value, String> {
         let (address, token) = self.event_connection()?;
         request_json_with_timeout(address, &token, method, path, body, None, timeout)
+    }
+
+    fn request_json_slow(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<Value>,
+        request_id: Option<&str>,
+    ) -> Result<Value, String> {
+        let (address, token) = self.event_connection()?;
+        let timeout = Duration::from_secs(120);
+        request_json_with_timeout(
+            address,
+            &token,
+            method,
+            path,
+            body.clone(),
+            request_id,
+            timeout,
+        )
+        .or_else(|first_error| match request_id {
+            Some(id) => {
+                request_json_with_timeout(address, &token, method, path, body, Some(id), timeout)
+                    .map_err(|_| first_error)
+            }
+            None => Err(first_error),
+        })
     }
 
     fn event_connection(&self) -> Result<(SocketAddr, String), String> {
@@ -3271,7 +3403,8 @@ mod tests {
         verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSessionResponse,
         BridgeSupervisor, EventStreamError, HooksSettingsView, MemorySettingsView,
         OpenSessionRequest, PendingSessionDelete, PendingSessionDeletesPageResponse,
-        PendingSessionTitleRecoveriesResponse, PendingSessionTitleRecovery, PluginSettingsChange,
+        PendingSessionTitleRecoveriesResponse, PendingSessionTitleRecovery, PluginInstallPlan,
+        PluginInstallRequest, PluginOperationResult, PluginRemoveRequest, PluginSettingsChange,
         PluginSettingsView, ProviderConfigList, RenameSessionRequest, SaveProviderConfigRequest,
         SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
         SessionDirectoryPage, SessionInventoryResponse, SessionRequest, SkillsSettingsChange,
@@ -3366,6 +3499,38 @@ mod tests {
             serde_json::to_value(plugin_change).unwrap()["enabled"],
             false
         );
+
+        let plugin_plan: PluginInstallPlan = serde_json::from_value(json!({
+            "protocolVersion": 1, "planId": "sha256:abc", "warningCount": 0,
+            "actions": [{"name":"sample", "version":"1.0", "manifestKind":"reasonix",
+                "riskLevel":"high", "skills":1, "agents":0, "commands":0, "hooks":1,
+                "mcpServers":0, "prompts":0, "themes":0, "runtime":true,
+                "runtimeCommand":"example", "intercepts":[], "replaces":[]}]
+        }))
+        .unwrap();
+        assert_eq!(plugin_plan.actions[0].risk_level, "high");
+        let plugin_install: PluginInstallRequest = serde_json::from_value(json!({
+            "source":"/tmp/sample", "planId":"sha256:abc", "acceptRisk":true
+        }))
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(plugin_install).unwrap()["acceptRisk"],
+            true
+        );
+        let plugin_remove: PluginRemoveRequest = serde_json::from_value(json!({
+            "name":"sample", "revision":"abc"
+        }))
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(plugin_remove).unwrap()["revision"],
+            "abc"
+        );
+        let plugin_result: PluginOperationResult = serde_json::from_value(json!({
+            "protocolVersion":1, "status":"partial", "failedNames":["sample"],
+            "settings":{"protocolVersion":1, "plugins":[]}
+        }))
+        .unwrap();
+        assert_eq!(plugin_result.failed_names, ["sample"]);
 
         let subagents: SubagentSettingsView = serde_json::from_value(json!({
             "protocolVersion": 1, "defaultModel": "local/chat", "subagentModel": "",

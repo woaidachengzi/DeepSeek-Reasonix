@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -336,6 +337,9 @@ func (t *installSourceTool) executeUninstall(req request) string {
 	scopes := t.uninstallSearchScopes(req)
 	for _, scope := range scopes {
 		actions = t.uninstallActionsForScope(req.Name, scope)
+		if req.Kind != "auto" {
+			actions = slices.DeleteFunc(actions, func(act action) bool { return act.Kind != req.Kind })
+		}
 		if len(actions) > 0 {
 			break
 		}

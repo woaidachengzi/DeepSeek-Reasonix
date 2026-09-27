@@ -1412,6 +1412,47 @@ func TestUninstallRemovesSkillByName(t *testing.T) {
 	}
 }
 
+func TestPluginUninstallKindLeavesSameNamedSkillAndMCP(t *testing.T) {
+	home, project := t.TempDir(), t.TempDir()
+	reasonixHome := filepath.Join(home, ".reasonix")
+	t.Setenv("REASONIX_HOME", reasonixHome)
+	name := "shared"
+	skillPath := filepath.Join(reasonixHome, "skills", name+".md")
+	writeFile(t, skillPath, "---\ndescription: Keep this skill\n---\nbody")
+	cfgPath := filepath.Join(reasonixHome, "config.toml")
+	cfg := config.LoadForEdit(cfgPath)
+	if err := cfg.UpsertPlugin(config.PluginEntry{Name: name, Type: "http", URL: "https://example.com/mcp"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.SaveTo(cfgPath); err != nil {
+		t.Fatal(err)
+	}
+	pluginRoot := pluginpkg.InstallRoot(reasonixHome, name)
+	writeFile(t, filepath.Join(pluginRoot, pluginpkg.NativeManifest), `{"apiVersion":"reasonix.io/plugin/v2","name":"shared"}`)
+	if err := pluginpkg.Upsert(reasonixHome, pluginpkg.InstalledPlugin{Name: name, Root: "plugins/shared", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	resp := execInstall(t, NewTool(Options{ProjectRoot: project, HomeDir: home}), map[string]any{
+		"op": "uninstall", "kind": "plugin", "scope": "global", "name": name,
+	})
+	if !resp.OK || len(resp.Actions) != 1 || resp.Actions[0].Kind != "plugin" {
+		t.Fatalf("plugin uninstall = %+v", resp)
+	}
+	if _, err := os.Stat(skillPath); err != nil {
+		t.Fatalf("same-named skill removed: %v", err)
+	}
+	reloaded := config.LoadForEdit(cfgPath)
+	if len(reloaded.Plugins) != 1 || reloaded.Plugins[0].Name != name {
+		t.Fatalf("same-named MCP removed: %+v", reloaded.Plugins)
+	}
+	if _, found, err := pluginpkg.FindInstalled(reasonixHome, name); err != nil || found {
+		t.Fatalf("plugin registration remains: found=%t err=%v", found, err)
+	}
+	if _, err := os.Stat(pluginRoot); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("managed plugin directory remains: %v", err)
+	}
+}
+
 func TestUninstallRemovesRegisteredSkillRootByContainedSkillName(t *testing.T) {
 	project := t.TempDir()
 	home := t.TempDir()

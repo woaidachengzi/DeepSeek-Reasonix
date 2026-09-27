@@ -686,10 +686,20 @@ func replaceSymlink(target, sourceRoot string, replace bool) error {
 	return os.Symlink(sourceRoot, target)
 }
 
-func (t *installSourceTool) applyRemovePluginPackage(_ request, act *action) error {
-	installed, ok, err := pluginpkg.Remove(t.reasonixHome, act.Name)
-	if err != nil || !ok {
+func (t *installSourceTool) applyRemovePluginPackage(req request, act *action) error {
+	var installed pluginpkg.InstalledPlugin
+	var ok bool
+	var err error
+	if req.Revision != "" {
+		installed, ok, err = pluginpkg.RemoveIfRevision(t.reasonixHome, act.Name, req.Revision)
+	} else {
+		installed, ok, err = pluginpkg.Remove(t.reasonixHome, act.Name)
+	}
+	if err != nil {
 		return err
+	}
+	if !ok {
+		return fmt.Errorf("plugin %q is not installed", act.Name)
 	}
 	root := pluginpkg.ResolveRoot(t.reasonixHome, installed.Root)
 	if t.onDisconnect != nil {
@@ -704,10 +714,16 @@ func (t *installSourceTool) applyRemovePluginPackage(_ request, act *action) err
 			}
 		}
 	}
+	// Only the canonical one-level managed install belongs to Reasonix. A
+	// linked/external root or a symlinked plugins parent is registration-only.
 	pluginsDir := pluginpkg.PluginsDir(t.reasonixHome)
-	if rel, err := filepath.Rel(pluginsDir, root); err == nil && rel != "." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != ".." {
-		if err := os.RemoveAll(root); err != nil {
-			return err
+	managedRoot := pluginpkg.InstallRoot(t.reasonixHome, installed.Name)
+	if filepath.Clean(root) == filepath.Clean(managedRoot) {
+		info, err := os.Lstat(pluginsDir)
+		if err == nil && info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
+			if err := os.RemoveAll(root); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
