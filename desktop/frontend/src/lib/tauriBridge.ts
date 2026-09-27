@@ -349,6 +349,7 @@ export interface TauriSkillItem {
   sourcePath: string;
   runAs: string;
   enabled: boolean;
+  globalEnabled?: boolean;
 }
 
 export interface TauriSkillSource {
@@ -356,6 +357,7 @@ export interface TauriSkillSource {
   scope: string;
   status: string;
   enabled: boolean;
+  globalEnabled?: boolean;
   configured: boolean;
   configuredGlobal?: boolean;
   configuredProject?: boolean;
@@ -364,6 +366,8 @@ export interface TauriSkillSource {
 export interface TauriSkillsSettings {
   protocolVersion: number;
   allowImplicitInvocation: boolean;
+  globalAllowImplicitInvocation?: boolean;
+  projectOverrides?: { implicit: boolean; skills: boolean; sources: boolean };
   skills: TauriSkillItem[];
   sources: TauriSkillSource[];
 }

@@ -161,6 +161,9 @@ func TestPreviewSkillsProjectScopeKeepsGlobalSettingsAndOtherProjects(t *testing
 	if !view.AllowImplicitInvocation {
 		t.Fatal("project implicit override was not effective")
 	}
+	if view.GlobalAllowImplicitInvocation || !view.ProjectOverrides.Implicit || !view.ProjectOverrides.Skills {
+		t.Fatalf("scope-specific values lost: global=%t overrides=%+v", view.GlobalAllowImplicitInvocation, view.ProjectOverrides)
+	}
 	var configured bool
 	for _, source := range view.Sources {
 		if source.Path == projectSource && source.ConfiguredProject && !source.ConfiguredGlobal {

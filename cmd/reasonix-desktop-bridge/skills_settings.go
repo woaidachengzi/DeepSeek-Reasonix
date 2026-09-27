@@ -13,13 +13,14 @@ import (
 )
 
 type previewSkillView struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Invocation  string `json:"invocation"`
-	Scope       string `json:"scope"`
-	SourcePath  string `json:"sourcePath"`
-	RunAs       string `json:"runAs"`
-	Enabled     bool   `json:"enabled"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	Invocation    string `json:"invocation"`
+	Scope         string `json:"scope"`
+	SourcePath    string `json:"sourcePath"`
+	RunAs         string `json:"runAs"`
+	Enabled       bool   `json:"enabled"`
+	GlobalEnabled bool   `json:"globalEnabled"`
 }
 
 type previewSkillSourceView struct {
@@ -30,13 +31,22 @@ type previewSkillSourceView struct {
 	Configured        bool   `json:"configured"`
 	ConfiguredGlobal  bool   `json:"configuredGlobal"`
 	ConfiguredProject bool   `json:"configuredProject"`
+	GlobalEnabled     bool   `json:"globalEnabled"`
+}
+
+type previewSkillProjectOverrides struct {
+	Implicit bool `json:"implicit"`
+	Skills   bool `json:"skills"`
+	Sources  bool `json:"sources"`
 }
 
 type skillsSettingsView struct {
-	ProtocolVersion         int                      `json:"protocolVersion"`
-	AllowImplicitInvocation bool                     `json:"allowImplicitInvocation"`
-	Skills                  []previewSkillView       `json:"skills"`
-	Sources                 []previewSkillSourceView `json:"sources"`
+	ProtocolVersion               int                          `json:"protocolVersion"`
+	AllowImplicitInvocation       bool                         `json:"allowImplicitInvocation"`
+	GlobalAllowImplicitInvocation bool                         `json:"globalAllowImplicitInvocation"`
+	ProjectOverrides              previewSkillProjectOverrides `json:"projectOverrides"`
+	Skills                        []previewSkillView           `json:"skills"`
+	Sources                       []previewSkillSourceView     `json:"sources"`
 }
 
 type skillsSettingsChange struct {
@@ -93,15 +103,24 @@ func loadSkillsSettings(workspaceRoot string) (skillsSettingsView, error) {
 	for _, name := range cfg.DisabledSkillNames() {
 		disabled[configpkg.SkillNameKey(name)] = true
 	}
+	globalDisabled := map[string]bool{}
+	for _, name := range userCfg.DisabledSkillNames() {
+		globalDisabled[configpkg.SkillNameKey(name)] = true
+	}
 	excluded := map[string]bool{}
 	for _, path := range cfg.SkillExcludedPaths() {
 		excluded[configpkg.CanonicalSkillPath(path)] = true
+	}
+	globalExcluded := map[string]bool{}
+	for _, path := range userCfg.SkillExcludedPaths() {
+		globalExcluded[configpkg.CanonicalSkillPath(path)] = true
 	}
 	configured := map[string]bool{}
 	for _, path := range userCfg.Skills.Paths {
 		configured[configpkg.CanonicalSkillPath(path)] = true
 	}
 	projectConfigured := map[string]bool{}
+	projectOverrides := previewSkillProjectOverrides{}
 	if root != "" {
 		projectCfg, loadErr := configpkg.LoadForEditWithoutCredentialsReadOnlyStrict(filepath.Join(root, "reasonix.toml"))
 		if loadErr != nil {
@@ -110,9 +129,15 @@ func loadSkillsSettings(workspaceRoot string) (skillsSettingsView, error) {
 		for _, path := range projectCfg.Skills.Paths {
 			projectConfigured[configpkg.CanonicalSkillPath(path)] = true
 		}
+		projectOverrides = previewSkillProjectOverrides{
+			Implicit: projectCfg.ProjectSkillKeyDeclared("disable_implicit_invocation"),
+			Skills:   projectCfg.ProjectSkillKeyDeclared("disabled_skills"),
+			Sources:  projectCfg.ProjectSkillKeyDeclared("excluded_paths"),
+		}
 	}
 	view := skillsSettingsView{
 		ProtocolVersion: desktopbridge.ProtocolVersion, AllowImplicitInvocation: cfg.ImplicitSkillInvocationEnabled(),
+		GlobalAllowImplicitInvocation: userCfg.ImplicitSkillInvocationEnabled(), ProjectOverrides: projectOverrides,
 		Skills: []previewSkillView{}, Sources: []previewSkillSourceView{},
 	}
 	for _, source := range allSources {
@@ -121,13 +146,15 @@ func loadSkillsSettings(workspaceRoot string) (skillsSettingsView, error) {
 			Path: source.Dir, Scope: string(source.Scope), Status: string(source.Status),
 			Enabled: !excluded[key], Configured: configured[key] || projectConfigured[key],
 			ConfiguredGlobal: configured[key], ConfiguredProject: projectConfigured[key],
+			GlobalEnabled: !globalExcluded[key],
 		})
 	}
 	for _, item := range store.List() {
 		view.Skills = append(view.Skills, previewSkillView{
 			Name: item.Name, Description: item.Description, Invocation: "/" + item.SlashName(),
 			Scope: string(item.Scope), SourcePath: item.Path, RunAs: string(item.RunAs),
-			Enabled: !disabled[configpkg.SkillNameKey(item.Name)],
+			Enabled:       !disabled[configpkg.SkillNameKey(item.Name)],
+			GlobalEnabled: !globalDisabled[configpkg.SkillNameKey(item.Name)],
 		})
 	}
 	return view, nil
