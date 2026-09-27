@@ -54,7 +54,7 @@ const SETTINGS_GROUPS = [
     { id: "providers", label: "模型服务", description: "配置提供方与钥匙串凭据", icon: Cable },
     { id: "stats", label: "用量统计", description: "查看 Preview 的模型用量", icon: ChartNoAxesColumn },
   ] },
-  { label: "集成与连接", items: [{ id: "mcp", label: "MCP", description: "管理工具服务器", icon: Server }] },
+  { label: "集成与连接", items: [{ id: "mcp", label: "MCP 与工具", description: "管理工具服务器", icon: Server }] },
   { label: "能力扩展", items: [{ id: "skills", label: "Agent Skills", description: "管理技能与来源", icon: Sparkles }, { id: "subagents", label: "子智能体", description: "设置模型、并行限制与覆盖", icon: Users }, { id: "plugins", label: "插件", description: "查看已安装插件及启用状态", icon: Package }] },
   { label: "记忆与上下文", items: [{ id: "memory", label: "记忆", description: "管理说明文档与已保存的事实", icon: Database }] },
   { label: "安全与执行", items: [
