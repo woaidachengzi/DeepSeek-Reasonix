@@ -50,8 +50,22 @@ const bridgeBuild = spawnSync("go", ["build", "-trimpath", "-o", bridgeBinary, "
 if (bridgeBuild.error) throw bridgeBuild.error;
 if (bridgeBuild.status !== 0) process.exit(bridgeBuild.status ?? 1);
 
+const sourceCommit = spawnSync("git", ["rev-parse", "--verify", "HEAD"], {
+  cwd: repositoryRoot,
+  encoding: "utf8",
+});
+const previewCommit = sourceCommit.status === 0 && /^[0-9a-f]{40,64}$/i.test(sourceCommit.stdout.trim())
+  ? sourceCommit.stdout.trim()
+  : "unknown";
+const sourceStatus = spawnSync("git", ["status", "--porcelain", "--untracked-files=normal"], {
+  cwd: repositoryRoot,
+  encoding: "utf8",
+});
+const previewDirty = previewCommit !== "unknown" && (sourceStatus.status !== 0 || sourceStatus.stdout.trim() !== "");
+console.log(`Preview source: ${previewCommit}${previewDirty ? " (uncommitted changes)" : ""}`);
 const tauri = spawnSync(tauriBinary, ["build", ...bundleArguments], {
   cwd: tauriDirectory,
+  env: { ...process.env, REASONIX_PREVIEW_COMMIT: previewCommit, REASONIX_PREVIEW_DIRTY: previewDirty ? "1" : "0" },
   stdio: "inherit",
 });
 if (tauri.error) throw tauri.error;

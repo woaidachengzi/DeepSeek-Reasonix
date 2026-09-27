@@ -32,7 +32,7 @@ const summary = () => ({
   async invoke(command: string) {
     calls.push(command);
     switch (command) {
-      case "preview_runtime_info": return { previewVersion: "1", stableVersion: "1", tauriVersion: "2", bridgeProtocolVersion: 1, previewBuild: "test" };
+      case "preview_runtime_info": return { previewVersion: "1", previewCommit: "unknown", previewDirty: false, stableVersion: "1", stableCommit: "test", tauriVersion: "2", bridgeProtocolVersion: 1, previewBuild: "test" };
       case "provider_summary":
         if (failSummary) { failSummary = false; throw new Error("summary unavailable"); }
         return summary();

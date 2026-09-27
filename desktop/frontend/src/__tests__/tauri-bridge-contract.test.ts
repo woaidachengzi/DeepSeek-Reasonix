@@ -463,6 +463,8 @@ const runtimeInfoShape = {
   stableVersion: "required",
   stableCommit: "required",
   previewVersion: "required",
+  previewCommit: "required",
+  previewDirty: "required",
   tauriVersion: "required",
   previewBuild: "required",
   bridgeProtocolVersion: "required",

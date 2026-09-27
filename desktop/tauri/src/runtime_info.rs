@@ -11,6 +11,8 @@ pub struct PreviewRuntimeInfo {
     pub stable_version: &'static str,
     pub stable_commit: &'static str,
     pub preview_version: &'static str,
+    pub preview_commit: &'static str,
+    pub preview_dirty: bool,
     pub tauri_version: &'static str,
     pub bridge_protocol_version: u8,
     pub sidecar_instance_id: Option<String>,
@@ -26,6 +28,8 @@ impl PreviewRuntimeInfo {
             stable_version: STABLE_VERSION,
             stable_commit: STABLE_COMMIT,
             preview_version: env!("CARGO_PKG_VERSION"),
+            preview_commit: env!("REASONIX_PREVIEW_COMMIT"),
+            preview_dirty: env!("REASONIX_PREVIEW_DIRTY") == "1",
             tauri_version: tauri::VERSION,
             bridge_protocol_version: status.protocol_version.unwrap_or(PROTOCOL_VERSION),
             sidecar_instance_id: status.sidecar_instance_id,
@@ -92,6 +96,7 @@ mod tests {
             Some("bridge-test-instance")
         );
         assert!(!info.preview_version.is_empty());
+        assert!(!info.preview_commit.is_empty());
         assert!(!info.tauri_version.is_empty());
         assert!(!info.preview_build.is_empty());
     }

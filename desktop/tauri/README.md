@@ -55,7 +55,7 @@ Provider 配置和桥接事件收纳在诊断抽屉。它仍是逐步迁移中�
 新回合开始后，旧回合延迟返回的快照与历史不会覆盖当前状态；快速重复点击发送也只启动一次请求。
 
 Preview 的 Runtime details 面板显示冻结的 1.38.3 基线与提交、当前 Preview/Tauri host
-版本、bridge 协议版本和 live sidecar instance ID。当前 bridge 尚未提供独立的语义化发布
+版本、打包时的 Preview 源码提交、bridge 协议版本和 live sidecar instance ID。当前 bridge 尚未提供独立的语义化发布
 版本，因此界面不会把 instance ID 伪装成版本号。
 
 选择 workspace 时，Preview 只提供系统目录选择器；`main-window` capability 只授予

@@ -82,6 +82,8 @@ export interface TauriPreviewRuntimeInfo {
   stableVersion: string;
   stableCommit: string;
   previewVersion: string;
+  previewCommit: string;
+  previewDirty: boolean;
   tauriVersion: string;
   previewBuild: string;
   bridgeProtocolVersion: number;
