@@ -244,6 +244,26 @@ export type TauriProviderConfigInput = Omit<TauriProviderConfig, "removable" | "
 export interface TauriProviderConfigList {
   protocolVersion: number;
   providers: TauriProviderConfig[];
+  presets: TauriProviderPreset[];
+}
+
+export interface TauriProviderPresetRoute {
+  name: string;
+  kind: string;
+  baseUrl: string;
+  models: string[];
+  default: string;
+}
+
+export interface TauriProviderPreset {
+  id: string;
+  label: string;
+  description: string;
+  group: string;
+  recommended: boolean;
+  status: "available" | "partial" | "installed" | "name_conflict";
+  routes: TauriProviderPresetRoute[];
+  revision: string;
 }
 
 export async function tauriProviderConfigs(): Promise<TauriProviderConfigList> {
@@ -254,6 +274,13 @@ export async function tauriProviderConfigs(): Promise<TauriProviderConfigList> {
 export async function saveTauriProviderConfig(input: TauriProviderConfigInput): Promise<TauriProviderConfigList> {
   requireTauri();
   return invoke<TauriProviderConfigList>("save_provider_config", { input });
+}
+
+export async function installTauriProviderPreset(preset: TauriProviderPreset): Promise<TauriProviderConfigList> {
+  requireTauri();
+  return invoke<TauriProviderConfigList>("save_provider_config", { input: {
+    presetId: preset.id, revision: preset.revision, name: "", displayName: "", kind: "", baseUrl: "", models: [], default: "", useApiKey: false,
+  } });
 }
 
 export async function deleteTauriProviderConfig(provider: TauriProviderConfig): Promise<TauriProviderConfigList> {

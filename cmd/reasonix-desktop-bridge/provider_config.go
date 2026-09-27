@@ -22,6 +22,26 @@ import (
 type providerConfigList struct {
 	ProtocolVersion int                  `json:"protocolVersion"`
 	Providers       []providerConfigView `json:"providers"`
+	Presets         []providerPresetView `json:"presets"`
+}
+
+type providerPresetRouteView struct {
+	Name    string   `json:"name"`
+	Kind    string   `json:"kind"`
+	BaseURL string   `json:"baseUrl"`
+	Models  []string `json:"models"`
+	Default string   `json:"default"`
+}
+
+type providerPresetView struct {
+	ID          string                    `json:"id"`
+	Label       string                    `json:"label"`
+	Description string                    `json:"description"`
+	Group       string                    `json:"group"`
+	Recommended bool                      `json:"recommended"`
+	Status      string                    `json:"status"`
+	Routes      []providerPresetRouteView `json:"routes"`
+	Revision    string                    `json:"revision"`
 }
 
 type providerConfigView struct {
@@ -46,6 +66,8 @@ type deleteProviderConfigRequest struct {
 }
 
 type saveProviderConfigRequest struct {
+	PresetID    string   `json:"presetId"`
+	Revision    string   `json:"revision"`
 	Name        string   `json:"name"`
 	DisplayName string   `json:"displayName"`
 	Kind        string   `json:"kind"`
@@ -80,7 +102,7 @@ func loadProviderConfigs(token string) (providerConfigList, error) {
 	if err != nil {
 		return providerConfigList{}, err
 	}
-	view := providerConfigList{ProtocolVersion: desktopbridge.ProtocolVersion, Providers: make([]providerConfigView, 0, len(cfg.Providers))}
+	view := providerConfigList{ProtocolVersion: desktopbridge.ProtocolVersion, Providers: make([]providerConfigView, 0, len(cfg.Providers)), Presets: previewProviderPresets(cfg, revision)}
 	for i := range cfg.Providers {
 		entry := &cfg.Providers[i]
 		view.Providers = append(view.Providers, providerConfigView{
@@ -91,6 +113,92 @@ func loadProviderConfigs(token string) (providerConfigList, error) {
 		})
 	}
 	return view, nil
+}
+
+func previewProviderPresets(cfg *configpkg.Config, revision string) []providerPresetView {
+	presets := configpkg.CuratedProviderPresets()
+	views := make([]providerPresetView, 0, len(presets))
+	for _, preset := range presets {
+		catalog := configpkg.CatalogForProviderPreset(preset)
+		group := catalog.BrandLabel
+		if group == "" {
+			group = preset.DisplayGroup
+		}
+		view := providerPresetView{ID: preset.ID, Label: preset.Label, Description: preset.Description, Group: group, Recommended: preset.Recommended, Revision: revision, Routes: make([]providerPresetRouteView, 0, len(preset.Entries))}
+		installed, conflict := 0, false
+		for _, entry := range preset.Entries {
+			view.Routes = append(view.Routes, providerPresetRouteView{Name: entry.Name, Kind: entry.Kind, BaseURL: entry.BaseURL, Models: append([]string{}, entry.ModelList()...), Default: entry.DefaultModel()})
+			if existing, ok := cfg.Provider(entry.Name); ok {
+				if existing.PresetID == preset.ID {
+					installed++
+				} else {
+					conflict = true
+				}
+			}
+		}
+		switch {
+		case conflict:
+			view.Status = "name_conflict"
+		case installed == len(preset.Entries):
+			view.Status = "installed"
+		case installed > 0:
+			view.Status = "partial"
+		default:
+			view.Status = "available"
+		}
+		views = append(views, view)
+	}
+	return views
+}
+
+func persistProviderPreset(input saveProviderConfigRequest, token string) error {
+	preset, ok := configpkg.CuratedProviderPreset(input.PresetID)
+	if !ok || len(preset.Entries) == 0 || len(preset.Entries) > 8 {
+		return fmt.Errorf("unknown or unsupported provider preset")
+	}
+	unlock := configpkg.LockUserConfigEdits()
+	defer unlock()
+	path := configpkg.UserConfigPath()
+	if path == "" {
+		return fmt.Errorf("Preview profile unavailable")
+	}
+	revision, err := previewProviderConfigRevision(path, token)
+	if err != nil {
+		return err
+	}
+	if input.Revision == "" || !hmac.Equal([]byte(revision), []byte(input.Revision)) {
+		return errPreviewProviderChanged
+	}
+	cfg, err := configpkg.LoadForEditReadOnlyStrict(path)
+	if err != nil {
+		return err
+	}
+	baseline := cfg.ModelSettingsBaseline()
+	missing := make([]configpkg.ProviderEntry, 0, len(preset.Entries))
+	for _, entry := range preset.Entries {
+		if existing, ok := cfg.Provider(entry.Name); ok {
+			if existing.PresetID != preset.ID {
+				return fmt.Errorf("provider name %q is already used; review it before installing this preset", entry.Name)
+			}
+			continue
+		}
+		missing = append(missing, entry)
+	}
+	if len(missing) == 0 {
+		return fmt.Errorf("provider preset is already installed")
+	}
+	for _, entry := range missing {
+		if entry.DisplayName == "" {
+			entry.DisplayName = preset.Label
+		}
+		if err := cfg.UpsertProvider(entry); err != nil {
+			return err
+		}
+		if cfg.Desktop.ProviderAccess != nil && !providerAccessAllowed(cfg.Desktop.ProviderAccess, entry.Name) {
+			cfg.Desktop.ProviderAccess = append(cfg.Desktop.ProviderAccess, entry.Name)
+		}
+	}
+	return cfg.SaveUserSettingsDeltaTo(path, baseline)
 }
 
 func removeProviderConfig(input deleteProviderConfigRequest, token string) error {

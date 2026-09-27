@@ -458,11 +458,39 @@ pub struct DeleteProviderConfigRequest {
 pub struct ProviderConfigList {
     pub protocol_version: u64,
     pub providers: Vec<ProviderConfigView>,
+    pub presets: Vec<ProviderPresetView>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderPresetRouteView {
+    pub name: String,
+    pub kind: String,
+    pub base_url: String,
+    pub models: Vec<String>,
+    pub default: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderPresetView {
+    pub id: String,
+    pub label: String,
+    pub description: String,
+    pub group: String,
+    pub recommended: bool,
+    pub status: String,
+    pub routes: Vec<ProviderPresetRouteView>,
+    pub revision: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveProviderConfigRequest {
+    #[serde(default)]
+    pub preset_id: String,
+    #[serde(default)]
+    pub revision: String,
     pub name: String,
     pub display_name: String,
     pub kind: String,
@@ -3173,11 +3201,11 @@ mod tests {
         verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSessionResponse,
         BridgeSupervisor, EventStreamError, HooksSettingsView, MemorySettingsView,
         OpenSessionRequest, PendingSessionDelete, PendingSessionDeletesPageResponse,
-        PendingSessionTitleRecoveriesResponse, PendingSessionTitleRecovery, RenameSessionRequest,
-        SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
-        SessionDirectoryPage, SessionInventoryResponse, SessionRequest, SkillsSettingsChange,
-        SkillsSettingsView, SubagentSettingsChange, SubagentSettingsView, SubmitRequest,
-        PROTOCOL_VERSION,
+        PendingSessionTitleRecoveriesResponse, PendingSessionTitleRecovery, ProviderConfigList,
+        RenameSessionRequest, SaveProviderConfigRequest, SessionCatalogMetadata,
+        SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage,
+        SessionInventoryResponse, SessionRequest, SkillsSettingsChange, SkillsSettingsView,
+        SubagentSettingsChange, SubagentSettingsView, SubmitRequest, PROTOCOL_VERSION,
     };
     use crate::{session_shadow, workbench_catalog::WorkbenchSession};
     use serde_json::json;
@@ -3193,6 +3221,27 @@ mod tests {
 
     #[test]
     fn settings_wire_views_preserve_model_efforts_and_hooks() {
+        let providers: ProviderConfigList = serde_json::from_value(json!({
+            "protocolVersion": 1, "providers": [],
+            "presets": [{"id":"mimo-api", "label":"MiMo API", "description":"Direct API",
+                "group":"Xiaomi", "recommended":false, "status":"available", "revision":"abc",
+                "routes":[{"name":"mimo-api", "kind":"openai", "baseUrl":"https://api.xiaomimimo.com/v1",
+                    "models":["mimo-v2.5-pro"], "default":"mimo-v2.5-pro"}]}]
+        })).unwrap();
+        assert_eq!(
+            providers.presets[0].routes[0].base_url,
+            "https://api.xiaomimimo.com/v1"
+        );
+        let install: SaveProviderConfigRequest = serde_json::from_value(json!({
+            "presetId":"mimo-api", "revision":"abc", "name":"", "displayName":"", "kind":"",
+            "baseUrl":"", "models":[], "default":"", "useApiKey":false
+        }))
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(install).unwrap()["presetId"],
+            "mimo-api"
+        );
+
         let skills: SkillsSettingsView = serde_json::from_value(json!({
             "protocolVersion": 1, "allowImplicitInvocation": true,
             "globalAllowImplicitInvocation": false,

@@ -669,8 +669,18 @@ func (b *bridgeServer) saveProviderConfig(w http.ResponseWriter, r *http.Request
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid provider settings")
 		return
 	}
-	if err := persistProviderConfig(input); err != nil {
-		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "provider settings could not be saved")
+	var err error
+	if input.PresetID != "" {
+		err = persistProviderPreset(input, b.token)
+	} else {
+		err = persistProviderConfig(input)
+	}
+	if err != nil {
+		message := "provider settings could not be saved"
+		if input.PresetID != "" {
+			message = err.Error()
+		}
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", message)
 		return
 	}
 	b.providerConfigs(w, r)

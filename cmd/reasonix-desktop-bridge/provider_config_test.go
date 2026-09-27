@@ -8,7 +8,133 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	configpkg "reasonix/internal/config"
 )
+
+func TestPreviewProviderPresetCatalogAndReviewedInstall(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	bridge := newBridgeServer(testToken, "instance-a")
+	request := func(method, body, id string, authorized bool) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, "/v1/settings/provider-configs", strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set(requestIDHeader, id)
+		if authorized {
+			r.Header.Set("Authorization", "Bearer "+testToken)
+		}
+		w := httptest.NewRecorder()
+		bridge.handler().ServeHTTP(w, r)
+		return w
+	}
+	if got := request(http.MethodGet, "", "", false); got.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthorized catalog status = %d", got.Code)
+	}
+	response := request(http.MethodGet, "", "", true)
+	if response.Code != http.StatusOK {
+		t.Fatalf("read catalog: %d %s", response.Code, response.Body.String())
+	}
+	var view providerConfigList
+	if err := json.Unmarshal(response.Body.Bytes(), &view); err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Presets) < 18 || strings.Contains(response.Body.String(), "MIMO_API_KEY") {
+		t.Fatalf("catalog missing entries or exposed credential identifier: %s", response.Body.String())
+	}
+	var mimo providerPresetView
+	for _, preset := range view.Presets {
+		if preset.ID == "mimo-api" {
+			mimo = preset
+		}
+	}
+	if mimo.Status != "available" || len(mimo.Routes) != 1 || mimo.Routes[0].BaseURL != "https://api.xiaomimimo.com/v1" || len(mimo.Revision) != 64 {
+		t.Fatalf("mimo preset review = %+v", mimo)
+	}
+	body := `{"presetId":"mimo-api","revision":"` + mimo.Revision + `"}`
+	if got := request(http.MethodPost, body, "preset-unauthorized", false); got.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthorized install status = %d", got.Code)
+	}
+	response = request(http.MethodPost, body, "preset-install", true)
+	if response.Code != http.StatusOK {
+		t.Fatalf("install: %d %s", response.Code, response.Body.String())
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &view); err != nil {
+		t.Fatal(err)
+	}
+	for _, preset := range view.Presets {
+		if preset.ID == "mimo-api" && preset.Status != "installed" {
+			t.Fatalf("installed preset status = %s", preset.Status)
+		}
+	}
+	cfg, err := configpkg.LoadUserConfigReadOnly()
+	if err != nil {
+		t.Fatal(err)
+	}
+	installed, ok := cfg.Provider("mimo-api")
+	if !ok || installed.PresetID != "mimo-api" || !installed.NoProxy || installed.APIKeyEnv != "MIMO_API_KEY" {
+		t.Fatalf("preset did not preserve curated provider fields: %+v", installed)
+	}
+	if got := request(http.MethodPost, body, "preset-stale", true); got.Code != http.StatusBadRequest {
+		t.Fatalf("stale install status = %d", got.Code)
+	}
+}
+
+func TestPreviewInstallsEveryCuratedProviderPreset(t *testing.T) {
+	for _, preset := range configpkg.CuratedProviderPresets() {
+		t.Run(preset.ID, func(t *testing.T) {
+			t.Setenv("REASONIX_HOME", t.TempDir())
+			revision, err := previewProviderConfigRevision(configpkg.UserConfigPath(), testToken)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := persistProviderPreset(saveProviderConfigRequest{PresetID: preset.ID, Revision: revision}, testToken); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := configpkg.LoadUserConfigReadOnly()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, route := range preset.Entries {
+				installed, ok := cfg.Provider(route.Name)
+				if !ok || installed.PresetID != preset.ID {
+					t.Fatalf("missing route %q after preset install", route.Name)
+				}
+			}
+		})
+	}
+}
+
+func TestPreviewPresetRefusesExistingProviderName(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	if err := persistProviderConfig(saveProviderConfigRequest{Name: "mimo-api", DisplayName: "My MiMo", Kind: "openai", BaseURL: "https://custom.example/v1", Models: []string{"chat"}, Default: "chat", UseAPIKey: true}); err != nil {
+		t.Fatal(err)
+	}
+	view, err := loadProviderConfigs(testToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, preset := range view.Presets {
+		if preset.ID != "mimo-api" {
+			continue
+		}
+		if preset.Status != "name_conflict" {
+			t.Fatalf("conflicting preset status = %q", preset.Status)
+		}
+		if err := persistProviderPreset(saveProviderConfigRequest{PresetID: preset.ID, Revision: preset.Revision}, testToken); err == nil {
+			t.Fatal("conflicting preset overwrote an existing provider")
+		}
+		cfg, err := configpkg.LoadUserConfigReadOnly()
+		if err != nil {
+			t.Fatal(err)
+		}
+		existing, _ := cfg.Provider("mimo-api")
+		if existing.BaseURL != "https://custom.example/v1" {
+			t.Fatalf("conflicting provider changed to %q", existing.BaseURL)
+		}
+		return
+	}
+	t.Fatal("mimo preset missing")
+}
 
 func TestProviderConfigEditPreservesHiddenFieldsAndUsesPreviewProfile(t *testing.T) {
 	home := t.TempDir()

@@ -683,6 +683,17 @@
 .tauri-settings-model-list { display: grid; gap: 8px; }
 .tauri-settings-model-card { padding: 12px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface); }
 .tauri-provider-editor { margin: 18px 0 24px; padding: 18px; border: 1px solid var(--border-soft); border-radius: 12px; background: var(--surface); }
+.tauri-provider-preset-search { width: 100%; margin: 10px 0; }
+.tauri-provider-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(205px, 1fr)); gap: 8px; max-height: 250px; overflow-y: auto; margin-bottom: 18px; }
+.tauri-provider-preset { display: grid; gap: 5px; min-width: 0; padding: 11px 12px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--bg); color: var(--fg); text-align: left; }
+.tauri-provider-preset:hover, .tauri-provider-preset.is-selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--bg)); }
+.tauri-provider-preset strong { display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.tauri-provider-preset em { padding: 2px 5px; border-radius: 4px; background: color-mix(in srgb, var(--accent) 16%, var(--bg)); color: var(--accent); font-size: 10px; font-style: normal; }
+.tauri-provider-preset small { color: var(--fg-faint); font-size: 10px; }
+.tauri-provider-preset-review { margin: 12px 0 20px; padding: 14px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--bg); }
+.tauri-provider-preset-review h4 { margin: 0 0 8px; }
+.tauri-provider-preset-route { display: grid; gap: 4px; padding: 9px 0; border-top: 1px solid var(--border-soft); overflow-wrap: anywhere; font-size: 11px; }
+.tauri-provider-preset-route span, .tauri-provider-preset-route small { color: var(--fg-faint); }
 .tauri-provider-editor-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid var(--border-soft); }
 .tauri-provider-editor-row span { display: grid; gap: 3px; min-width: 0; }
 .tauri-provider-editor-row small { color: var(--fg-faint); }
