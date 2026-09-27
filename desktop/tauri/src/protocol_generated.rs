@@ -151,14 +151,17 @@ pub struct BridgeProviderSummary {
     pub models: Vec<String>,
     pub name: String,
     pub requires_key: bool,
+    pub vision_models: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeProviderSummaryResponse {
     pub default_model: String,
+    pub planner_model: String,
     pub protocol_version: u64,
     pub providers: Vec<BridgeProviderSummary>,
+    pub vision_model: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -189,6 +192,13 @@ pub struct BridgeSessionResponse {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeSetDefaultModelRequest {
     pub model: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeSetModelRoleRequest {
+    pub model: String,
+    pub role: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

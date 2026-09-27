@@ -501,6 +501,11 @@ export async function setTauriDefaultModel(model: string): Promise<TauriProvider
   return invoke<TauriProviderSummary>("set_default_model", { request: { model } });
 }
 
+export async function setTauriModelRole(role: "planner" | "vision", model: string): Promise<TauriProviderSummary> {
+  requireTauri();
+  return invoke<TauriProviderSummary>("set_model_role", { request: { role, model } });
+}
+
 /** One MCP server as the renderer may see it. Credentials are write-only: the
  *  bridge returns the credential key names a server expects, never a value. */
 export interface TauriMCPServer {

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
 import { Check, ArrowLeft, Search, Keyboard, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, Type, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles, Users, Webhook } from "lucide-react";
-import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, tauriDesktopPreferences, setTauriDesktopApproval, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
+import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, tauriDesktopPreferences, setTauriDesktopApproval, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
 import { THEME_STYLES, type Theme, type ThemeStyle } from "../lib/theme";
 import { applyConversationWidth, getCachedConversationWidth, type ConversationWidth } from "../lib/conversationWidth";
 import { applyTextSize, getTextSize, TEXT_SIZES, type TextSize } from "../lib/textSize";
@@ -48,7 +48,7 @@ const TauriUsageStatsPanel = lazy(() => import("../components/UsageStatsPanel").
 const SETTINGS_GROUPS = [
   { label: "偏好设置", items: [{ id: "general", label: "通用", description: "桌面与会话体验", icon: SlidersHorizontal }] },
   { label: "模型", items: [
-    { id: "model", label: "模型偏好", description: "新对话的默认模型", icon: Globe },
+    { id: "model", label: "模型偏好", description: "新对话的默认与分工模型", icon: Globe },
     { id: "providers", label: "模型服务", description: "配置提供方与钥匙串凭据", icon: Cable },
     { id: "stats", label: "用量统计", description: "查看 Preview 的模型用量", icon: ChartNoAxesColumn },
   ] },
@@ -71,7 +71,7 @@ const SETTINGS_GROUPS = [
 
 const SETTINGS_TITLES: Record<TauriSettingsTab, { title: string; description: string }> = {
   general: { title: "通用", description: "设置桌面体验和会话显示。" },
-  model: { title: "模型偏好", description: "设置新对话使用的默认模型。" },
+  model: { title: "模型偏好", description: "设置新对话使用的默认模型与模型分工。" },
   providers: { title: "模型服务", description: "添加和编辑模型服务，管理钥匙串凭据。" },
   stats: { title: "用量统计", description: "查看 Preview 资料中已记录的 token 用量。" },
   mcp: { title: "MCP 与工具", description: "连接并管理工作区可用的工具。" },
@@ -247,6 +247,19 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
     }
   };
 
+  const handleModelRoleChange = async (role: "planner" | "vision", model: string) => {
+    if (modelSaving) return;
+    setModelSaving(true);
+    setModelSaveError("");
+    try {
+      updateProviderSummary(await setTauriModelRole(role, model));
+    } catch {
+      setModelSaveError("模型分工保存失败，请检查服务与模型能力后重试");
+    } finally {
+      setModelSaving(false);
+    }
+  };
+
   const handleCloseBehaviorChange = async (behavior: TauriCloseBehavior) => {
     if (closeSaving || behavior === closeBehavior) return;
     setCloseSaving(true);
@@ -300,7 +313,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
         <div className="tauri-settings-content" data-tab={tab} key={tab}>
           <div className="tauri-settings-page-heading"><h1>{SETTINGS_TITLES[tab].title}</h1><p>{SETTINGS_TITLES[tab].description}</p></div>
           {tab === "general" ? <GeneralSettings notificationsEnabled={notificationsEnabled} onNotificationsChange={enabled => { setNotificationsEnabled(enabled); setTauriNotificationsEnabled(enabled); }} appearance={appearance} onAppearanceChange={handleAppearanceChange} conversationWidth={conversationWidth} onConversationWidthChange={handleConversationWidthChange} textSize={textSize} onTextSizeChange={handleTextSizeChange} progressMode={progressMode} onProgressModeChange={next => { setProgressMode(next); setTauriProgressMode(next); }} closeBehavior={closeBehavior} onCloseBehaviorChange={handleCloseBehaviorChange} closeLoading={closeLoading} closeSaving={closeSaving} closeError={closeError} approvalMode={approvalMode} onApprovalChange={handleApprovalChange} approvalLoading={approvalLoading} approvalSaving={approvalSaving} approvalError={approvalError} platform={platform} /> : tab === "shortcuts" ? <ShortcutSettings /> : tab === "appearance" ? <AppearanceSettings appearance={appearance} onChange={handleAppearanceChange} conversationWidth={conversationWidth} onConversationWidthChange={handleConversationWidthChange} textSize={textSize} onTextSizeChange={handleTextSizeChange} fontFamily={fontFamily} onFontFamilyChange={handleFontFamilyChange} monoFontFamily={monoFontFamily} onMonoFontFamilyChange={handleMonoFontFamilyChange} customFontName={customFontName} onCustomFontChange={handleCustomFontChange} customMonoFontName={customMonoFontName} onCustomMonoFontChange={handleCustomMonoFontChange} /> : <>
-            {(tab === "model" || tab === "providers") && (modelLoading ? <div className="tauri-settings-loading">加载中…</div> : <>{modelLoadError && <SettingsLoadError onRetry={loadSettings} />}{providerSummary && (tab === "model" ? <ModelPreferenceSettings providerSummary={providerSummary} onModelChange={handleModelChange} saving={modelSaving} error={modelSaveError} onOpenProviders={() => setTab("providers")} /> : <ProviderSettings providerSummary={providerSummary} onProviderSummaryChange={updateProviderSummary} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />)}</>)}
+            {(tab === "model" || tab === "providers") && (modelLoading ? <div className="tauri-settings-loading">加载中…</div> : <>{modelLoadError && <SettingsLoadError onRetry={loadSettings} />}{providerSummary && (tab === "model" ? <ModelPreferenceSettings providerSummary={providerSummary} onModelChange={handleModelChange} onRoleChange={handleModelRoleChange} saving={modelSaving} error={modelSaveError} onOpenProviders={() => setTab("providers")} /> : <ProviderSettings providerSummary={providerSummary} onProviderSummaryChange={updateProviderSummary} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />)}</>)}
             {tab === "stats" && <Suspense fallback={<div className="tauri-settings-loading">加载中…</div>}><TauriUsageStatsPanel loadStats={tauriUsageStats} sources={["all", "desktop-tauri"]} /></Suspense>}
             {tab === "mcp" && <TauriMCPSettings workspaceRoot={workspaceRoot} />}
             {tab === "skills" && <TauriSkillsSettings workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
@@ -567,25 +580,52 @@ function DiagnosticsSettings({ bridgeStatus, catalogAudit, catalogAuditError, se
   </div>;
 }
 
-function ModelPreferenceSettings({ providerSummary, onModelChange, saving, error, onOpenProviders }: {
+function ModelPreferenceSettings({ providerSummary, onModelChange, onRoleChange, saving, error, onOpenProviders }: {
   providerSummary: TauriProviderSummary;
   onModelChange: (model: string) => void;
+  onRoleChange: (role: "planner" | "vision", model: string) => void;
   saving: boolean;
   error: string;
   onOpenProviders: () => void;
 }) {
   const available = providerSummary.providers.filter(provider => provider.configured && provider.models.length > 0);
-  const currentAvailable = available.some(provider => providerSummary.defaultModel?.startsWith(`${provider.name}/`) && provider.models.includes(providerSummary.defaultModel.slice(provider.name.length + 1)));
-  return <div className="tauri-settings-section">
+  const modelRefs = available.flatMap(provider => provider.models.map(model => `${provider.name}/${model}`));
+  const visionRefs = available.flatMap(provider => provider.visionModels.map(model => `${provider.name}/${model}`));
+  const currentAvailable = modelRefs.includes(providerSummary.defaultModel);
+  const plannerAvailable = !providerSummary.plannerModel || modelRefs.includes(providerSummary.plannerModel);
+  const visionAvailable = !providerSummary.visionModel || providerSummary.visionModel === "auto" || visionRefs.includes(providerSummary.visionModel);
+  return <div className="tauri-settings-section tauri-model-settings">
     <h3>新对话默认模型</h3>
-    <p>默认模型在创建新对话时生效。工作区的 <code>reasonix.toml</code> 可以覆盖此选择。</p>
-    {available.length === 0 ? <div className="tauri-settings-empty">没有已就绪且提供模型列表的服务。请先配置模型服务。</div> : <div className="tauri-settings-field">
-      <label className="tauri-settings-field-label" htmlFor="tauri-settings-default-model">默认模型<small>当前值：{providerSummary.defaultModel || "未指定"}</small></label>
-      <select id="tauri-settings-default-model" className="tauri-settings-select" value={currentAvailable ? providerSummary.defaultModel : ""} disabled={saving} onChange={event => { if (event.target.value) onModelChange(event.target.value); }}>
-        <option value="">选择模型…</option>
-        {available.map(provider => <optgroup key={provider.name} label={provider.displayName || provider.name}>{provider.models.map(model => <option key={model} value={`${provider.name}/${model}`}>{model}</option>)}</optgroup>)}
-      </select>
-    </div>}
+    <p>新会话读取 Preview 资料中的模型偏好。工作区的 <code>reasonix.toml</code> 可以覆盖这里的设置。</p>
+    {available.length === 0 ? <div className="tauri-settings-empty">没有已就绪且提供模型列表的服务。请先配置模型服务。</div> : <>
+      <div className="tauri-settings-field">
+        <label className="tauri-settings-field-label" htmlFor="tauri-settings-default-model">默认模型<small>主会话运行任务时使用。</small></label>
+        <select id="tauri-settings-default-model" className="tauri-settings-select" value={currentAvailable ? providerSummary.defaultModel : ""} disabled={saving} onChange={event => { if (event.target.value) onModelChange(event.target.value); }}>
+          <option value="">选择模型…</option>
+          {available.map(provider => <optgroup key={provider.name} label={provider.displayName || provider.name}>{provider.models.map(model => <option key={model} value={`${provider.name}/${model}`}>{model}</option>)}</optgroup>)}
+        </select>
+      </div>
+      {!currentAvailable && providerSummary.defaultModel && <p className="tauri-model-settings__stale">当前默认模型 {providerSummary.defaultModel} 暂不可用，请选择已就绪的模型。</p>}
+      <h3>模型分工</h3>
+      <p>规划与图片理解可使用独立模型；留空时遵循运行时默认行为。</p>
+      <div className="tauri-settings-field">
+        <label className="tauri-settings-field-label" htmlFor="tauri-settings-planner-model">规划模型<small>用于 Plan、审批或目标启动时的规划步骤。</small></label>
+        <select id="tauri-settings-planner-model" className="tauri-settings-select" value={providerSummary.plannerModel} disabled={saving} onChange={event => onRoleChange("planner", event.target.value)}>
+          <option value="">不指定</option>
+          {!plannerAvailable && <option value={providerSummary.plannerModel} disabled>{providerSummary.plannerModel}（不可用）</option>}
+          {available.map(provider => <optgroup key={provider.name} label={provider.displayName || provider.name}>{provider.models.map(model => <option key={model} value={`${provider.name}/${model}`}>{model}</option>)}</optgroup>)}
+        </select>
+      </div>
+      <div className="tauri-settings-field">
+        <label className="tauri-settings-field-label" htmlFor="tauri-settings-vision-model">图片理解模型<small>当前模型无法处理图片时使用的备用模型。</small></label>
+        <select id="tauri-settings-vision-model" className="tauri-settings-select" value={providerSummary.visionModel} disabled={saving} onChange={event => onRoleChange("vision", event.target.value)}>
+          <option value="">不指定</option><option value="auto">自动选择</option>
+          {!visionAvailable && <option value={providerSummary.visionModel} disabled>{providerSummary.visionModel}（不可用）</option>}
+          {available.map(provider => provider.visionModels.length > 0 && <optgroup key={provider.name} label={provider.displayName || provider.name}>{provider.visionModels.map(model => <option key={model} value={`${provider.name}/${model}`}>{model}</option>)}</optgroup>)}
+        </select>
+      </div>
+      {visionRefs.length === 0 && <p className="tauri-settings-hint">当前没有确认支持图片输入的已就绪模型；可以使用自动选择。</p>}
+    </>}
     {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}
     <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" onClick={onOpenProviders}>管理模型服务</button></div>
   </div>;

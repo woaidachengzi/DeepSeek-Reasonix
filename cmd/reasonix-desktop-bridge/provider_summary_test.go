@@ -259,6 +259,100 @@ default = "alpha"
 	}
 }
 
+func TestModelRoleSettingsPersistWithCapabilityAndAccessChecks(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	configPath := filepath.Join(home, "config.toml")
+	config := `default_model = "local/text"
+future_root_option = "keep-root"
+
+[desktop]
+provider_access = ["local"]
+
+[[providers]]
+name = "local"
+kind = "openai"
+base_url = "http://127.0.0.1:9123/v1"
+models = ["text", "vision"]
+vision_models = ["vision"]
+default = "text"
+future_provider_option = "keep-provider"
+
+[[providers]]
+name = "blocked"
+kind = "openai"
+base_url = "http://127.0.0.1:9124/v1"
+models = ["vision"]
+vision_models = ["vision"]
+default = "vision"
+`
+	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bridge := newBridgeServer(testToken, "instance-a")
+	requestNumber := 0
+	request := func(body string, authorized bool) *httptest.ResponseRecorder {
+		requestNumber++
+		req := httptest.NewRequest(http.MethodPost, "/v1/settings/model-role", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(requestIDHeader, "role-"+strconv.Itoa(requestNumber))
+		if authorized {
+			req.Header.Set("Authorization", "Bearer "+testToken)
+		}
+		response := httptest.NewRecorder()
+		bridge.handler().ServeHTTP(response, req)
+		return response
+	}
+	if got := request(`{"role":"planner","model":"local/text"}`, false).Code; got != http.StatusUnauthorized {
+		t.Fatalf("unauthorized role mutation = %d", got)
+	}
+	for _, body := range []string{
+		`{"role":"vision","model":"local/text"}`,
+		`{"role":"vision","model":"blocked/vision"}`,
+		`{"role":"planner","model":"blocked/vision"}`,
+		`{"role":"other","model":"local/text"}`,
+	} {
+		if response := request(body, true); response.Code != http.StatusBadRequest {
+			t.Fatalf("invalid role %s = %d %s", body, response.Code, response.Body.String())
+		}
+	}
+	for _, body := range []string{
+		`{"role":"planner","model":"local/text"}`,
+		`{"role":"vision","model":"local/vision"}`,
+	} {
+		if response := request(body, true); response.Code != http.StatusOK {
+			t.Fatalf("save role %s = %d %s", body, response.Code, response.Body.String())
+		}
+	}
+	loaded, err := configpkg.LoadUserConfigReadOnly()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Agent.PlannerModel != "local/text" || loaded.Agent.VisionModel != "local/vision" {
+		t.Fatalf("runtime role config: planner=%q vision=%q", loaded.Agent.PlannerModel, loaded.Agent.VisionModel)
+	}
+	stored, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(stored), `future_root_option = "keep-root"`) || !strings.Contains(string(stored), `future_provider_option = "keep-provider"`) {
+		t.Fatalf("unknown fields lost: %s", stored)
+	}
+	summary, err := loadProviderSummary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.PlannerModel != "local/text" || summary.VisionModel != "local/vision" || len(summary.Providers) != 2 || !strings.EqualFold(strings.Join(summary.Providers[0].VisionModels, ","), "vision") || summary.Providers[1].Configured {
+		t.Fatalf("role summary: %#v", summary)
+	}
+	if response := request(`{"role":"vision","model":"auto"}`, true); response.Code != http.StatusOK {
+		t.Fatalf("auto vision = %d %s", response.Code, response.Body.String())
+	}
+	if response := request(`{"role":"planner","model":""}`, true); response.Code != http.StatusOK {
+		t.Fatalf("clear planner = %d %s", response.Code, response.Body.String())
+	}
+}
+
 func TestPersistDefaultModelValidatesAndPreservesUnknownConfigFields(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("REASONIX_HOME", home)

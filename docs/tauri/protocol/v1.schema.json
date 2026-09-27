@@ -63,12 +63,13 @@
     "providerSummary": {
       "title": "BridgeProviderSummary",
       "type": "object",
-      "required": ["name", "kind", "models", "modelCount", "requiresKey", "configured"],
+      "required": ["name", "kind", "models", "visionModels", "modelCount", "requiresKey", "configured"],
       "properties": {
         "name": { "type": "string", "minLength": 1 },
         "displayName": { "type": "string" },
         "kind": { "type": "string" },
         "models": { "type": "array", "items": { "type": "string" } },
+        "visionModels": { "type": "array", "items": { "type": "string" } },
         "modelCount": { "type": "integer", "minimum": 0 },
         "requiresKey": { "type": "boolean" },
         "configured": { "type": "boolean" }
@@ -84,13 +85,25 @@
       },
       "additionalProperties": false
     },
+    "setModelRoleRequest": {
+      "title": "BridgeSetModelRoleRequest",
+      "type": "object",
+      "required": ["role", "model"],
+      "properties": {
+        "role": { "type": "string", "enum": ["planner", "vision"] },
+        "model": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
     "providerSummaryResponse": {
       "title": "BridgeProviderSummaryResponse",
       "type": "object",
-      "required": ["protocolVersion", "defaultModel", "providers"],
+      "required": ["protocolVersion", "defaultModel", "plannerModel", "visionModel", "providers"],
       "properties": {
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
         "defaultModel": { "type": "string" },
+        "plannerModel": { "type": "string" },
+        "visionModel": { "type": "string" },
         "providers": { "type": "array", "items": { "$ref": "#/$defs/providerSummary" } }
       },
       "additionalProperties": false

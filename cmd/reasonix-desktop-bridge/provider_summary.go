@@ -12,20 +12,28 @@ import (
 type providerSummaryResponse struct {
 	ProtocolVersion int                    `json:"protocolVersion"`
 	DefaultModel    string                 `json:"defaultModel"`
+	PlannerModel    string                 `json:"plannerModel"`
+	VisionModel     string                 `json:"visionModel"`
 	Providers       []providerSummaryEntry `json:"providers"`
 }
 
 type providerSummaryEntry struct {
-	Name        string   `json:"name"`
-	DisplayName string   `json:"displayName,omitempty"`
-	Kind        string   `json:"kind"`
-	Models      []string `json:"models"`
-	ModelCount  int      `json:"modelCount"`
-	RequiresKey bool     `json:"requiresKey"`
-	Configured  bool     `json:"configured"`
+	Name         string   `json:"name"`
+	DisplayName  string   `json:"displayName,omitempty"`
+	Kind         string   `json:"kind"`
+	Models       []string `json:"models"`
+	VisionModels []string `json:"visionModels"`
+	ModelCount   int      `json:"modelCount"`
+	RequiresKey  bool     `json:"requiresKey"`
+	Configured   bool     `json:"configured"`
 }
 
 type setDefaultModelRequest struct {
+	Model string `json:"model"`
+}
+
+type setModelRoleRequest struct {
+	Role  string `json:"role"`
 	Model string `json:"model"`
 }
 
@@ -87,31 +95,89 @@ func loadProviderSummary() (providerSummaryResponse, error) {
 		return providerSummaryResponse{}, fmt.Errorf("load user provider configuration: %w", err)
 	}
 	providers := make([]providerSummaryEntry, 0, len(cfg.Providers))
+	visionResolver := configpkg.NewModelCapabilityResolver()
 	for i := range cfg.Providers {
 		provider := &cfg.Providers[i]
 		requiresKey := provider.RequiresAPIKey()
 		provider.ResolveAPIKeyForRoot(".")
-		configured := !requiresKey || provider.Configured()
+		configured := (!requiresKey || provider.Configured()) && providerAccessAllowed(cfg.Desktop.ProviderAccess, provider.Name)
 		models := provider.ModelList()
 		if models == nil {
 			models = []string{}
 		}
+		visionModels := make([]string, 0)
+		if configured {
+			for _, model := range models {
+				resolved, ok := cfg.ResolveModel(provider.Name + "/" + model)
+				if ok && visionResolver.Resolve(resolved).State == configpkg.CapabilitySupported {
+					visionModels = append(visionModels, model)
+				}
+			}
+		}
 		entry := providerSummaryEntry{
-			Name:        provider.Name,
-			DisplayName: strings.TrimSpace(provider.DisplayName),
-			Kind:        provider.Kind,
-			Models:      models,
-			ModelCount:  len(models),
-			RequiresKey: requiresKey,
-			Configured:  configured,
+			Name:         provider.Name,
+			DisplayName:  strings.TrimSpace(provider.DisplayName),
+			Kind:         provider.Kind,
+			Models:       models,
+			VisionModels: visionModels,
+			ModelCount:   len(models),
+			RequiresKey:  requiresKey,
+			Configured:   configured,
 		}
 		providers = append(providers, entry)
 	}
 	return providerSummaryResponse{
 		ProtocolVersion: desktopbridge.ProtocolVersion,
 		DefaultModel:    cfg.DefaultModel,
+		PlannerModel:    cfg.Agent.PlannerModel,
+		VisionModel:     cfg.Agent.VisionModel,
 		Providers:       providers,
 	}, nil
+}
+
+func persistModelRole(request setModelRoleRequest) error {
+	if request.Role != "planner" && request.Role != "vision" {
+		return errDefaultModelUnavailable
+	}
+	ref := strings.TrimSpace(request.Model)
+	unlock := configpkg.LockUserConfigEdits()
+	defer unlock()
+	path := configpkg.UserConfigPath()
+	if path == "" {
+		return fmt.Errorf("resolve Preview user config path")
+	}
+	cfg, err := configpkg.LoadForEditReadOnlyStrict(path)
+	if err != nil {
+		return fmt.Errorf("load Preview user config: %w", err)
+	}
+	baseline := cfg.ModelSettingsBaseline()
+	if ref != "" && !(request.Role == "vision" && strings.EqualFold(ref, "auto")) {
+		entry, ok := cfg.ResolveModel(ref)
+		if !ok || !providerAccessAllowed(cfg.Desktop.ProviderAccess, entry.Name) {
+			return errDefaultModelUnavailable
+		}
+		entry.ResolveAPIKeyForRoot(".")
+		if !entry.Configured() {
+			return errDefaultModelUnavailable
+		}
+		if request.Role == "vision" && configpkg.NewModelCapabilityResolver().Resolve(entry).State != configpkg.CapabilitySupported {
+			return errDefaultModelUnavailable
+		}
+		ref = entry.Name + "/" + entry.Model
+	}
+	if request.Role == "planner" {
+		// Desktop supports an explicit model ref for the planner role.
+		cfg.Agent.PlannerModel = ref
+	} else {
+		if strings.EqualFold(ref, "auto") {
+			ref = "auto"
+		}
+		cfg.Agent.VisionModel = ref
+	}
+	if err := cfg.SaveModelSettingsTo(path, baseline); err != nil {
+		return fmt.Errorf("save Preview %s model: %w", request.Role, err)
+	}
+	return nil
 }
 
 func updateProviderKey(request setProviderKeyRequest) error {

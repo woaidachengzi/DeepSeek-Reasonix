@@ -406,9 +406,10 @@ pub use crate::protocol_generated::{
     BridgeMCPInteractionAnswerRequest, BridgeOpenSessionRequest as OpenSessionRequest,
     BridgeProjectFolder, BridgeProjectFoldersResponse, BridgeProviderSummaryResponse,
     BridgeRenameSessionRequest, BridgeSession, BridgeSessionResponse, BridgeSetDefaultModelRequest,
-    BridgeWorkspaceChangeDetailRequest, BridgeWorkspaceChangeDetailResponse,
-    BridgeWorkspaceChangesResponse, BridgeWorkspaceFileRequest, BridgeWorkspaceFileResponse,
-    BridgeWorkspaceListResponse, BridgeWorkspaceRequest,
+    BridgeSetModelRoleRequest, BridgeWorkspaceChangeDetailRequest,
+    BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
+    BridgeWorkspaceFileRequest, BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse,
+    BridgeWorkspaceRequest,
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -1845,6 +1846,25 @@ impl BridgeSupervisor {
             "POST",
             "/v1/settings/default-model",
             Some(json!({ "model": request.model })),
+            Some(&request_id),
+        )?;
+        let summary: BridgeProviderSummaryResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if summary.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(summary)
+    }
+
+    pub fn set_model_role(
+        &self,
+        request: BridgeSetModelRoleRequest,
+    ) -> Result<BridgeProviderSummaryResponse, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/model-role",
+            Some(json!({ "role": request.role, "model": request.model })),
             Some(&request_id),
         )?;
         let summary: BridgeProviderSummaryResponse =

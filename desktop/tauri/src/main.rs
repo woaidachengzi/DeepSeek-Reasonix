@@ -70,13 +70,14 @@ use std::{
 use bridge::{
     AnswerMCPInteractionRequest, AnswerQuestionRequest, ApproveRequest, AttachFileRequest,
     BridgeAttachment, BridgeDeleteSessionResponse, BridgeHistory, BridgeProjectFolder,
-    BridgeProviderSummaryResponse, BridgeSession, BridgeSetDefaultModelRequest, BridgeSnapshot,
-    BridgeStatus, BridgeSupervisor, BridgeWorkspaceChangeDetailResponse,
-    BridgeWorkspaceChangesResponse, BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse,
-    DeleteProviderConfigRequest, DesktopPreferences, HooksSettingsChange, HooksSettingsView,
-    LegacySessionCatalogEntry, MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse,
-    MCPServerView, MemorySettingsChange, MemorySettingsView, NetworkSettingsChange,
-    NetworkSettingsView, OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
+    BridgeProviderSummaryResponse, BridgeSession, BridgeSetDefaultModelRequest,
+    BridgeSetModelRoleRequest, BridgeSnapshot, BridgeStatus, BridgeSupervisor,
+    BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
+    BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse, DeleteProviderConfigRequest,
+    DesktopPreferences, HooksSettingsChange, HooksSettingsView, LegacySessionCatalogEntry,
+    MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse, MCPServerView,
+    MemorySettingsChange, MemorySettingsView, NetworkSettingsChange, NetworkSettingsView,
+    OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
     PendingSessionTitleRecovery, PermissionSettingsChange, PermissionSettingsView,
     ProviderConfigList, RenameSessionRequest, SandboxSettingsChange, SandboxSettingsView,
     SaveProviderConfigRequest, ScanImportCandidate, ScanImportSelection, SessionCatalogMetadata,
@@ -887,6 +888,14 @@ fn set_default_model(
     request: BridgeSetDefaultModelRequest,
 ) -> Result<BridgeProviderSummaryResponse, String> {
     supervisor.set_default_model(request)
+}
+
+#[tauri::command]
+fn set_model_role(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: BridgeSetModelRoleRequest,
+) -> Result<BridgeProviderSummaryResponse, String> {
+    supervisor.set_model_role(request)
 }
 
 #[tauri::command]
@@ -1833,6 +1842,7 @@ fn main() {
             desktop_preferences,
             set_desktop_approval,
             set_default_model,
+            set_model_role,
             import_stable_profile,
             import_stable_project_folders,
             workbench_sessions,

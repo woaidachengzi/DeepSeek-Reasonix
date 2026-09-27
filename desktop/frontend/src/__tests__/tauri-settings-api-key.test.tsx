@@ -35,6 +35,8 @@ let openedURL = "";
 let closeBehavior = "keep_running";
 let approvalMode = "auto";
 let defaultModel = "";
+let plannerModel = "";
+let visionModel = "";
 const permissions = { protocolVersion: 1, mode: "ask", allow: [] as string[], ask: [] as string[], deny: [] as string[] };
 let sandbox = { protocolVersion: 1, bash: "enforce", network: true, workspaceRoot: "", allowWrite: [] as string[], platform: "darwin" };
 let network = { protocolVersion: 1, proxyMode: "auto", noProxy: "", proxyType: "socks5", proxyServer: "", proxyPort: 0, proxyUsername: "", proxyUrlSet: false, proxyPasswordSet: false };
@@ -50,11 +52,13 @@ let savedProviderInput: { name: string; displayName: string; kind: string; baseU
 const summary = () => ({
   protocolVersion: 1,
   defaultModel,
-  providers: [{ name: "demo", displayName: "Demo", kind: "openai", modelCount: 1, models: ["m"], requiresKey: true, configured: keyPresent || envCredentialPresent }],
+  plannerModel,
+  visionModel,
+  providers: [{ name: "demo", displayName: "Demo", kind: "openai", modelCount: 1, models: ["m"], visionModels: ["m"], requiresKey: true, configured: keyPresent || envCredentialPresent }],
 });
 
 (dom.window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
-  async invoke(command: string, args?: { scope?: string; workspaceRoot?: string; url?: string; behavior?: string; mode?: string; request?: { model?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean; revision?: string }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string } }) {
+  async invoke(command: string, args?: { scope?: string; workspaceRoot?: string; url?: string; behavior?: string; mode?: string; request?: { model?: string; role?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean; revision?: string }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string } }) {
     calls.push(command);
     switch (command) {
       case "preview_runtime_info":
@@ -102,6 +106,11 @@ const summary = () => ({
         return { ...memory };
       }
       case "set_default_model": defaultModel = args?.request?.model ?? ""; return summary();
+      case "set_model_role": {
+        if (args?.request?.role === "planner") plannerModel = args.request.model ?? "";
+        if (args?.request?.role === "vision") visionModel = args.request.model ?? "";
+        return summary();
+      }
       case "platform_info": return "darwin";
       case "get_close_behavior": return closeBehavior;
       case "set_close_behavior": closeBehavior = args?.behavior ?? closeBehavior; return closeBehavior;
@@ -228,6 +237,13 @@ await act(async () => {
   defaultModelSelect.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
 });
 assert.equal(defaultModel, "demo/m", "default model is persisted through the bridge");
+const plannerSelect = document.querySelector<HTMLSelectElement>("#tauri-settings-planner-model");
+const visionSelect = document.querySelector<HTMLSelectElement>("#tauri-settings-vision-model");
+assert.ok(plannerSelect && visionSelect, "role models have controls in model preferences");
+await act(async () => { plannerSelect.value = "demo/m"; plannerSelect.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
+assert.equal(plannerModel, "demo/m", "planner model is persisted through the bridge");
+await act(async () => { visionSelect.value = "auto"; visionSelect.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
+assert.equal(visionModel, "auto", "vision routing is persisted through the bridge");
 await act(async () => { click("用量统计"); });
 assert.ok(document.querySelector(".usage-stats"), "Preview renders the stable usage chart panel");
 assert.ok(calls.includes("usage_stats"), "usage statistics read through the Tauri bridge");
