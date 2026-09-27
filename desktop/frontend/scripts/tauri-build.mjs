@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -63,11 +63,19 @@ const sourceStatus = spawnSync("git", ["status", "--porcelain", "--untracked-fil
 });
 const previewDirty = previewCommit !== "unknown" && (sourceStatus.status !== 0 || sourceStatus.stdout.trim() !== "");
 console.log(`Preview source: ${previewCommit}${previewDirty ? " (uncommitted changes)" : ""}`);
+// Vite empties dist before building. Keep the tracked placeholder so a local
+// package build does not leave a clean source checkout marked as modified.
+const frontendPlaceholder = join(repositoryRoot, "desktop", "frontend", "dist", ".gitkeep");
+const placeholderBytes = existsSync(frontendPlaceholder) ? readFileSync(frontendPlaceholder) : null;
 const tauri = spawnSync(tauriBinary, ["build", ...bundleArguments], {
   cwd: tauriDirectory,
   env: { ...process.env, REASONIX_PREVIEW_COMMIT: previewCommit, REASONIX_PREVIEW_DIRTY: previewDirty ? "1" : "0" },
   stdio: "inherit",
 });
+if (placeholderBytes !== null) {
+  mkdirSync(dirname(frontendPlaceholder), { recursive: true });
+  writeFileSync(frontendPlaceholder, placeholderBytes);
+}
 if (tauri.error) throw tauri.error;
 if (tauri.status !== 0) process.exit(tauri.status ?? 1);
 
