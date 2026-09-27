@@ -74,6 +74,7 @@ def smoke(app_path):
             "HOME": str(home),
             "TMPDIR": str(temp),
             "REASONIX_HOME": str(root / "reasonix-home"),
+            "REASONIX_CACHE_HOME": str(root / "reasonix-cache"),
             "REASONIX_TAURI_PACKAGE_SMOKE": "1",
             # Release packages must ignore the development sidecar override.
             "REASONIX_DESKTOP_BRIDGE_BIN": str(root / "nonexistent-sidecar"),

@@ -22,6 +22,7 @@ pub(crate) mod test_env {
         _lock: MutexGuard<'static, ()>,
         reasonix_home: Option<std::ffi::OsString>,
         reasonix_state_home: Option<std::ffi::OsString>,
+        reasonix_cache_home: Option<std::ffi::OsString>,
         preview_sqlite_events: Option<std::ffi::OsString>,
     }
 
@@ -33,6 +34,7 @@ pub(crate) mod test_env {
             _lock: lock,
             reasonix_home: std::env::var_os("REASONIX_HOME"),
             reasonix_state_home: std::env::var_os("REASONIX_STATE_HOME"),
+            reasonix_cache_home: std::env::var_os("REASONIX_CACHE_HOME"),
             preview_sqlite_events: std::env::var_os("REASONIX_PREVIEW_SQLITE_EVENTS"),
         }
     }
@@ -41,6 +43,7 @@ pub(crate) mod test_env {
         fn drop(&mut self) {
             restore("REASONIX_HOME", self.reasonix_home.take());
             restore("REASONIX_STATE_HOME", self.reasonix_state_home.take());
+            restore("REASONIX_CACHE_HOME", self.reasonix_cache_home.take());
             restore(
                 "REASONIX_PREVIEW_SQLITE_EVENTS",
                 self.preview_sqlite_events.take(),

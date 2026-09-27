@@ -86,10 +86,8 @@ pub fn configure_preview_profile(app: &tauri::App) -> Result<PreviewProfile, Str
         )
     })?;
 
-    // The Go core resolves its state root as REASONIX_STATE_HOME first and
-    // REASONIX_HOME second. An inherited REASONIX_STATE_HOME therefore wins
-    // over the preview home below, which would route preview sessions, the
-    // config and the identity database into a stable installation.
+    // The Go core resolves state and cache overrides before REASONIX_HOME.
+    // Inherited values would route preview writes outside its private home.
     enable_managed_profile(&home);
     Ok(PreviewProfile {
         home,
@@ -106,6 +104,9 @@ pub fn configure_preview_profile(app: &tauri::App) -> Result<PreviewProfile, Str
 fn enable_managed_profile(home: &Path) {
     if std::env::var_os("REASONIX_STATE_HOME").is_some() {
         std::env::remove_var("REASONIX_STATE_HOME");
+    }
+    if std::env::var_os("REASONIX_CACHE_HOME").is_some() {
+        std::env::remove_var("REASONIX_CACHE_HOME");
     }
     std::env::set_var("REASONIX_HOME", home);
     std::env::set_var(PREVIEW_SQLITE_EVENTS_ENV, "1");
@@ -569,13 +570,13 @@ mod tests {
         );
     }
 
-    /// The Go core reads REASONIX_STATE_HOME before REASONIX_HOME, so an
-    /// inherited state home would silently move preview sessions, config and
-    /// the identity database into a stable installation.
+    /// The Go core reads state and cache overrides before REASONIX_HOME, so
+    /// inherited roots would silently move preview writes outside its home.
     #[test]
-    fn managed_profile_drops_an_inherited_state_home() {
+    fn managed_profile_drops_inherited_state_and_cache_homes() {
         let _env = crate::test_env::guard();
         env::set_var("REASONIX_STATE_HOME", "/stable/state");
+        env::set_var("REASONIX_CACHE_HOME", "/stable/cache");
 
         let home = PathBuf::from("/preview/home");
         enable_managed_profile(&home);
@@ -584,6 +585,11 @@ mod tests {
             env::var_os("REASONIX_STATE_HOME"),
             None,
             "an inherited state home must not survive"
+        );
+        assert_eq!(
+            env::var_os("REASONIX_CACHE_HOME"),
+            None,
+            "an inherited cache home must not survive"
         );
         assert_eq!(
             env::var_os("REASONIX_HOME"),
