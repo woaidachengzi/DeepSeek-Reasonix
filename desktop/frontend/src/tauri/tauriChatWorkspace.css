@@ -613,18 +613,8 @@
 .tauri-settings-general .tauri-settings-field-label small { font-size: 11px; line-height: 1.5; }
 .tauri-settings-general .tauri-settings-radio-group { width: min(100%, 515px); min-width: min(100%, 515px); }
 .tauri-settings-general .tauri-settings-status-items { align-items: flex-start; }
-.tauri-settings-status-items__control { width: min(100%, 515px); min-width: min(100%, 515px); display: grid; justify-items: end; gap: 8px; }
-.tauri-settings-status-items__toggle { display: flex; align-items: center; gap: 8px; padding: 6px 9px; border: 1px solid var(--border-soft); border-radius: 7px; background: var(--surface); color: var(--fg-dim); font-size: 11px; }
-.tauri-settings-status-items__toggle:hover { color: var(--fg); border-color: var(--border); }
-.tauri-settings-status-items__toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
-.tauri-settings-status-items__list { width: 100%; display: grid; gap: 3px; }
-.tauri-settings-status-items__row { display: flex; min-height: 34px; align-items: center; justify-content: space-between; gap: 10px; padding: 0 8px; border: 1px solid var(--border-soft); border-radius: 7px; color: var(--fg-dim); }
-.tauri-settings-status-items__row label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-.tauri-settings-status-items__row input { accent-color: var(--accent); }
-.tauri-settings-status-items__row > div { display: flex; gap: 2px; }
-.tauri-settings-status-items__row button { display: grid; width: 25px; height: 25px; place-items: center; border: 0; border-radius: 5px; background: transparent; color: var(--fg-dim); }
-.tauri-settings-status-items__row button:hover:not(:disabled) { background: var(--surface-2); color: var(--fg); }
-.tauri-settings-status-items__row button:disabled { opacity: .3; }
+.tauri-settings-status-items .status-bar-items-editor { width: min(100%, 515px); max-width: none; flex: 0 1 515px; }
+.tauri-settings-status-items .status-bar-item-row label { font-size: var(--font-control-small); }
 .tauri-model-settings { container: tauri-model-settings / inline-size; }
 .tauri-model-settings__head, .tauri-model-settings .tauri-model-settings__row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(220px, 1.4fr) minmax(120px, .7fr); align-items: center; gap: 20px; }
 .tauri-model-settings__head { padding: 10px 4px; border-bottom: 1px solid var(--border-soft); color: var(--fg-faint); font-size: 11px; }
@@ -704,6 +694,7 @@
   .tauri-settings-overlay { grid-template-columns: 188px minmax(0, 1fr); }
   .tauri-settings-content { padding: 22px 20px 48px; }
   .tauri-settings-field { align-items: flex-start; flex-direction: column; gap: 9px; }
+  .tauri-settings-status-items .status-bar-items-editor { flex: 0 0 auto; width: 100%; }
   .tauri-settings-audit { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 540px) {

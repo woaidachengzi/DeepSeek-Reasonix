@@ -96,14 +96,14 @@ async function main() {
   const React = await import("react");
   const { act } = React;
   const { createRoot } = await import("react-dom/client");
-  const { TauriSessionPreview } = await import("../tauri/TauriChatWorkspace");
+  const { TauriSessionApp } = await import("../tauri/TauriChatWorkspace");
   const { mcpDraftFromMarketplace, mcpDraftToInput } = await import("../tauri/tauriMCPServers");
   const packageDraft = mcpDraftFromMarketplace({name:"io.example/package",suggestedName:"package",installable:true,transport:"stdio",command:"npx",args:["--yes","name with spaces"]}, [], "global");
   eq(JSON.stringify(mcpDraftToInput(packageDraft).args), JSON.stringify(["--yes","name with spaces"]), "Registry package argument boundaries survive the reviewed form");
 
   const root = createRoot(document.getElementById("root")!);
   await act(async () => {
-    root.render(React.createElement(TauriSessionPreview));
+    root.render(React.createElement(TauriSessionApp));
   });
   await act(async () => {
     await settle();

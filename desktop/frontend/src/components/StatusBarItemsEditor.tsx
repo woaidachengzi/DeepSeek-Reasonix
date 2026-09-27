@@ -1,44 +1,46 @@
 import { useEffect, useId, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent } from "react";
 import { Check, ChevronDown, ChevronUp, EyeOff, GripVertical } from "lucide-react";
 import { useT } from "../lib/i18n";
-import { DEFAULT_STATUS_BAR_ITEMS, type StatusBarItemId } from "../lib/statusBarItems";
+import { DEFAULT_STATUS_BAR_ITEMS } from "../lib/statusBarItems";
 import { Tooltip } from "./Tooltip";
 
 type DropPlacement = "before" | "after";
-type DragTarget = { id: StatusBarItemId; placement: DropPlacement };
+type DragTarget<T extends string> = { id: T; placement: DropPlacement };
 
-export function StatusBarItemsEditor({
+export function StatusBarItemsEditor<T extends string>({
   items,
+  availableItems = DEFAULT_STATUS_BAR_ITEMS as unknown as readonly T[],
   busy,
   onChange,
   itemLabel,
 }: {
-  items: StatusBarItemId[];
+  items: T[];
+  availableItems?: readonly T[];
   busy: boolean;
-  onChange: (items: StatusBarItemId[]) => void;
-  itemLabel: (id: StatusBarItemId) => string;
+  onChange: (items: T[]) => void;
+  itemLabel: (id: T) => string;
 }) {
   const t = useT();
   const [expanded, setExpanded] = useState(false);
-  const [draggingItem, setDraggingItem] = useState<StatusBarItemId | null>(null);
-  const [dragTarget, setDragTargetState] = useState<DragTarget | null>(null);
+  const [draggingItem, setDraggingItem] = useState<T | null>(null);
+  const [dragTarget, setDragTargetState] = useState<DragTarget<T> | null>(null);
   const [dropZone, setDropZoneState] = useState<"hidden" | null>(null);
-  const draggingItemRef = useRef<StatusBarItemId | null>(null);
-  const dragTargetRef = useRef<DragTarget | null>(null);
+  const draggingItemRef = useRef<T | null>(null);
+  const dragTargetRef = useRef<DragTarget<T> | null>(null);
   const dropZoneRef = useRef<"hidden" | null>(null);
   const mouseDragCleanupRef = useRef<(() => void) | null>(null);
   const panelId = useId();
   const visibleItems = items;
-  const visibleSet = new Set<StatusBarItemId>(visibleItems);
-  const hiddenItems = DEFAULT_STATUS_BAR_ITEMS.filter((id) => !visibleSet.has(id));
+  const visibleSet = new Set<T>(visibleItems);
+  const hiddenItems = availableItems.filter((id) => !visibleSet.has(id));
   const visiblePaneLabel = t("settings.statusBarItemsVisible", { count: visibleItems.length });
   const hiddenPaneLabel = t("settings.statusBarItemsHidden", { count: hiddenItems.length });
-  const isDefault = visibleItems.length === DEFAULT_STATUS_BAR_ITEMS.length &&
-    visibleItems.every((id, index) => id === DEFAULT_STATUS_BAR_ITEMS[index]);
+  const isDefault = visibleItems.length === availableItems.length &&
+    visibleItems.every((id, index) => id === availableItems[index]);
 
   useEffect(() => () => mouseDragCleanupRef.current?.(), []);
 
-  const setDragTarget = (target: DragTarget | null) => {
+  const setDragTarget = (target: DragTarget<T> | null) => {
     const current = dragTargetRef.current;
     if (current?.id === target?.id && current?.placement === target?.placement) return;
     dragTargetRef.current = target;
@@ -49,16 +51,16 @@ export function StatusBarItemsEditor({
     dropZoneRef.current = zone;
     setDropZoneState(zone);
   };
-  const itemFromPoint = (x: number, y: number): DragTarget | null => {
+  const itemFromPoint = (x: number, y: number): DragTarget<T> | null => {
     const row = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-statusbar-setting-item]");
-    const id = row?.dataset.statusbarSettingItem as StatusBarItemId | undefined;
+    const id = row?.dataset.statusbarSettingItem as T | undefined;
     if (!row || !id || !visibleItems.includes(id)) return null;
     const rect = row.getBoundingClientRect();
     return { id, placement: y < rect.top + rect.height / 2 ? "before" : "after" };
   };
   const hiddenZoneFromPoint = (x: number, y: number): boolean =>
     document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-statusbar-drop-zone='hidden']") != null;
-  const reorderItem = (fromId: StatusBarItemId, toId: StatusBarItemId, placement: DropPlacement) => {
+  const reorderItem = (fromId: T, toId: T, placement: DropPlacement) => {
     const fromIndex = visibleItems.indexOf(fromId);
     const toIndex = visibleItems.indexOf(toId);
     if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
@@ -68,14 +70,14 @@ export function StatusBarItemsEditor({
     next.splice(placement === "after" ? insertAt + 1 : insertAt, 0, fromId);
     if (!next.every((item, index) => item === visibleItems[index])) onChange(next);
   };
-  const toggleItem = (id: StatusBarItemId) => {
+  const toggleItem = (id: T) => {
     if (visibleSet.has(id)) {
       if (visibleItems.length > 1) onChange(visibleItems.filter((item) => item !== id));
       return;
     }
     onChange([...visibleItems, id]);
   };
-  const moveItem = (id: StatusBarItemId, direction: -1 | 1) => {
+  const moveItem = (id: T, direction: -1 | 1) => {
     const index = visibleItems.indexOf(id);
     const nextIndex = index + direction;
     if (index < 0 || nextIndex < 0 || nextIndex >= visibleItems.length) return;
@@ -83,7 +85,7 @@ export function StatusBarItemsEditor({
     [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
     onChange(next);
   };
-  const beginDrag = (id: StatusBarItemId): boolean => {
+  const beginDrag = (id: T): boolean => {
     if (busy || !visibleSet.has(id)) return false;
     mouseDragCleanupRef.current?.();
     mouseDragCleanupRef.current = null;
@@ -138,7 +140,7 @@ export function StatusBarItemsEditor({
     setDragTargetState(null);
     setDropZoneState(null);
   };
-  const startPointerDrag = (event: PointerEvent<HTMLElement>, id: StatusBarItemId) => {
+  const startPointerDrag = (event: PointerEvent<HTMLElement>, id: T) => {
     if (event.button !== 0 || !beginDrag(id)) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -154,7 +156,7 @@ export function StatusBarItemsEditor({
     try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* capture may already be released */ }
     finishDrag(event.clientX, event.clientY);
   };
-  const startMouseDrag = (event: ReactMouseEvent<HTMLElement>, id: StatusBarItemId) => {
+  const startMouseDrag = (event: ReactMouseEvent<HTMLElement>, id: T) => {
     if (event.button !== 0 || !beginDrag(id)) return;
     event.preventDefault();
     const handleMove = (moveEvent: MouseEvent) => {
@@ -175,7 +177,7 @@ export function StatusBarItemsEditor({
     window.addEventListener("mouseup", handleUp);
     mouseDragCleanupRef.current = cleanup;
   };
-  const renderRow = (id: StatusBarItemId, visible: boolean, index: number) => {
+  const renderRow = (id: T, visible: boolean, index: number) => {
     const label = itemLabel(id);
     const moveUpLabel = t("settings.statusBarItem.moveUp", { label });
     const moveDownLabel = t("settings.statusBarItem.moveDown", { label });
@@ -239,7 +241,7 @@ export function StatusBarItemsEditor({
     <div className={`status-bar-items-editor${expanded ? " status-bar-items-editor--expanded" : ""}`}>
       <div className="status-bar-items-editor__summary">
         <span className="status-bar-items-editor__summary-text">
-          {t("settings.statusBarItemsSummary", { visible: visibleItems.length, total: DEFAULT_STATUS_BAR_ITEMS.length })}
+          {t("settings.statusBarItemsSummary", { visible: visibleItems.length, total: availableItems.length })}
         </span>
         <div className="status-bar-items-editor__summary-actions">
           {expanded && (
@@ -247,7 +249,7 @@ export function StatusBarItemsEditor({
               <button type="button" className="status-bar-items-editor__action status-bar-items-editor__action--accent" disabled={busy || hiddenItems.length === 0} onClick={() => onChange([...visibleItems, ...hiddenItems])}>
                 {t("settings.statusBarItemsShowAll")}
               </button>
-              <button type="button" className="status-bar-items-editor__action" disabled={busy || isDefault} onClick={() => onChange([...DEFAULT_STATUS_BAR_ITEMS])}>
+              <button type="button" className="status-bar-items-editor__action" disabled={busy || isDefault} onClick={() => onChange([...availableItems])}>
                 {t("settings.statusBarItemsRestoreDefault")}
               </button>
             </>

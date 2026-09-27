@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
-import { Check, ArrowLeft, ArrowUp, ArrowDown, Search, X, Keyboard, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, Type, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles, Users, Webhook, Package } from "lucide-react";
+import { Check, ArrowLeft, Search, X, Keyboard, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, Type, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles, Users, Webhook, Package } from "lucide-react";
 import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, tauriDesktopPreferences, setTauriDesktopApproval, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
 import { THEME_STYLES, type Theme, type ThemeStyle } from "../lib/theme";
 import { applyConversationWidth, getCachedConversationWidth, type ConversationWidth } from "../lib/conversationWidth";
@@ -16,6 +16,8 @@ import { TauriPluginSettings } from "./TauriPluginSettings";
 import { TauriSubagentSettings } from "./TauriSubagentSettings";
 import { TauriHooksSettings } from "./TauriHooksSettings";
 import { TauriMemorySettings } from "./TauriMemorySettings";
+import { StatusBarItemsEditor } from "../components/StatusBarItemsEditor";
+import "../components/SettingsPanel.css";
 import { getTauriNotificationsEnabled, setTauriNotificationsEnabled, getTauriProgressMode, setTauriProgressMode, type TauriProgressMode } from "./tauriPreferences";
 import { TAURI_STATUS_BAR_ITEM_IDS, setTauriStatusBarPreferences, useTauriStatusBarPreferences, type TauriStatusBarItemId } from "./tauriStatusBarPreferences";
 import { setTauriDesktopLayout, useTauriDesktopLayout } from "./tauriDesktopLayout";
@@ -108,6 +110,12 @@ const TEXT_SIZE_LABELS: Record<TextSize, string> = {
   large: "大",
   xlarge: "更大",
   xxlarge: "最大",
+};
+
+const TAURI_STATUS_BAR_LABELS: Record<TauriStatusBarItemId, string> = {
+  workspace: "工作区", model: "默认模型", session: "当前会话",
+  observed_tokens: "已观测 token", turn_tokens: "本轮 token", context: "上下文",
+  compact: "压缩阈值", cache_hit: "会话缓存命中", bridge: "本地服务",
 };
 
 const FONT_LABELS: Record<FontFamily, string> = {
@@ -341,20 +349,10 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
 function GeneralSettings({ notificationsEnabled, onNotificationsChange, appearance, onAppearanceChange, conversationWidth, onConversationWidthChange, textSize, onTextSizeChange, progressMode, onProgressModeChange, closeBehavior, onCloseBehaviorChange, closeLoading, closeSaving, closeError, approvalMode, onApprovalChange, approvalLoading, approvalSaving, approvalError, platform }: { notificationsEnabled: boolean; onNotificationsChange: (enabled: boolean) => void; appearance: TauriAppearance; onAppearanceChange: (next: TauriAppearance) => void; conversationWidth: ConversationWidth; onConversationWidthChange: (next: ConversationWidth) => void; textSize: TextSize; onTextSizeChange: (next: TextSize) => void; progressMode: TauriProgressMode; onProgressModeChange: (next: TauriProgressMode) => void; closeBehavior: TauriCloseBehavior; onCloseBehaviorChange: (behavior: TauriCloseBehavior) => void; closeLoading: boolean; closeSaving: boolean; closeError: string; approvalMode: TauriToolApprovalMode; onApprovalChange: (mode: TauriToolApprovalMode) => void; approvalLoading: boolean; approvalSaving: boolean; approvalError: string; platform: string }) {
   const desktopLayout = useTauriDesktopLayout();
   const [soundExpanded, setSoundExpanded] = useState(false);
-  const [statusItemsExpanded, setStatusItemsExpanded] = useState(false);
   const [successSound, setSuccessSound] = useState<SoundWavPref>(getSuccessPreference);
   const [attentionSound, setAttentionSound] = useState<SoundWavPref>(getAttentionPreference);
   const [soundVolume, setSoundVolume] = useState(getNotificationVolume);
   const statusBar = useTauriStatusBarPreferences();
-  const toggleStatusItem = (id: TauriStatusBarItemId) => setTauriStatusBarPreferences({ ...statusBar, items: statusBar.items.includes(id) ? statusBar.items.filter(item => item !== id) : [...statusBar.items, id] });
-  const moveStatusItem = (id: TauriStatusBarItemId, offset: number) => {
-    const items = [...statusBar.items];
-    const index = items.indexOf(id);
-    const target = index + offset;
-    if (index < 0 || target < 0 || target >= items.length) return;
-    [items[index], items[target]] = [items[target], items[index]];
-    setTauriStatusBarPreferences({ ...statusBar, items });
-  };
   return <div className="tauri-settings-section tauri-settings-general">
     <h3>桌面与显示</h3><p className="tauri-settings-section-description">调整界面的显示方式。</p>
     <div className="tauri-settings-field"><Monitor className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">桌面风格<small>工作台适合管理项目与会话；创作让当前内容更集中。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="桌面风格">{(["workbench", "creation"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={desktopLayout === option} className={`tauri-settings-radio${desktopLayout === option ? " is-active" : ""}`} onClick={() => setTauriDesktopLayout(option)}>{option === "workbench" ? "工作台" : "创作"}</button>)}</div></div>
@@ -364,11 +362,7 @@ function GeneralSettings({ notificationsEnabled, onNotificationsChange, appearan
     <div className="tauri-settings-field"><Type className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">对话字号<small>调整正文的阅读大小。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="通用对话字号">{TEXT_SIZES.map(size => <button key={size} type="button" role="radio" aria-checked={textSize === size} className={`tauri-settings-radio${textSize === size ? " is-active" : ""}`} onClick={() => onTextSizeChange(size)}>{TEXT_SIZE_LABELS[size]}</button>)}</div></div>
     <div className="tauri-settings-field"><span className="tauri-settings-field-label">会话体验<small>选择过程更新的默认展开状态，仍可逐项手动折叠。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="会话体验">{(["standard", "deep"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={progressMode === option} className={`tauri-settings-radio${progressMode === option ? " is-active" : ""}`} onClick={() => onProgressModeChange(option)}>{option === "standard" ? "标准" : "深入"}</button>)}</div></div>
     <div className="tauri-settings-field"><PanelTop className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">底部信息栏样式<small>切换工作区底部状态信息的显示方式。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="底部信息栏样式">{(["icon", "text"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={statusBar.style === option} className={`tauri-settings-radio${statusBar.style === option ? " is-active" : ""}`} onClick={() => setTauriStatusBarPreferences({ ...statusBar, style: option })}>{option === "icon" ? "图标版" : "文字版"}</button>)}</div></div>
-    <div className="tauri-settings-field tauri-settings-status-items"><Activity className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">信息栏显示项<small>上下文和缓存来自会话快照；token 用量仅统计当前同步阶段收到的事件。</small></span><div className="tauri-settings-status-items__control"><button type="button" className="tauri-settings-status-items__toggle" aria-expanded={statusItemsExpanded} aria-controls="tauri-status-items-list" onClick={() => setStatusItemsExpanded(expanded => !expanded)}>已显示 {statusBar.items.length}/{TAURI_STATUS_BAR_ITEM_IDS.length} 项<ChevronDown size={15} aria-hidden="true" /></button>{statusItemsExpanded && <div className="tauri-settings-status-items__list" id="tauri-status-items-list">{[...statusBar.items, ...TAURI_STATUS_BAR_ITEM_IDS.filter(id => !statusBar.items.includes(id))].map(id => {
-      const index = statusBar.items.indexOf(id);
-      const label = { workspace: "工作区", model: "默认模型", session: "当前会话", observed_tokens: "已观测 token", turn_tokens: "本轮 token", context: "上下文", compact: "压缩阈值", cache_hit: "会话缓存命中", bridge: "本地服务" }[id];
-      return <div className="tauri-settings-status-items__row" key={id}><label><input type="checkbox" checked={index >= 0} onChange={() => toggleStatusItem(id)} />{label}</label><div><button type="button" aria-label={`上移${label}`} disabled={index <= 0} onClick={() => moveStatusItem(id, -1)}><ArrowUp size={14} /></button><button type="button" aria-label={`下移${label}`} disabled={index < 0 || index >= statusBar.items.length - 1} onClick={() => moveStatusItem(id, 1)}><ArrowDown size={14} /></button></div></div>;
-    })}</div>}</div></div>
+    <div className="tauri-settings-field tauri-settings-status-items"><Activity className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">信息栏显示项<small>上下文和缓存来自会话快照；token 用量仅统计当前同步阶段收到的事件。</small></span><StatusBarItemsEditor items={statusBar.items} availableItems={TAURI_STATUS_BAR_ITEM_IDS} busy={false} onChange={items => setTauriStatusBarPreferences({ ...statusBar, items })} itemLabel={id => TAURI_STATUS_BAR_LABELS[id]} /></div>
     <h3>系统行为</h3><p className="tauri-settings-section-description">控制窗口、工具审批与通知。</p>
     {platform === "darwin" && <div className="tauri-settings-field"><Power className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">关闭窗口时<small>选择关闭主窗口后的运行方式。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="关闭窗口时">{(["keep_running", "quit"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={closeBehavior === option} className={`tauri-settings-radio${closeBehavior === option ? " is-active" : ""}`} disabled={closeLoading || closeSaving} onClick={() => onCloseBehaviorChange(option)}>{option === "keep_running" ? "保持后台运行" : "退出 Reasonix"}</button>)}</div></div>}
     {platform === "darwin" && closeError && <p className="tauri-diagnostic-error" role="alert">{closeError}</p>}

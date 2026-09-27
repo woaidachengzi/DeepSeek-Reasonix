@@ -57,11 +57,11 @@ const statusStyle = document.querySelector<HTMLElement>('[aria-label="底部信�
 assert.ok(statusStyle, "General settings control the visible status bar");
 await act(async () => { statusStyle.querySelectorAll<HTMLButtonElement>("button")[0]?.click(); });
 assert.ok(statusBar()?.classList.contains("is-icon"), "style updates the workspace immediately");
-const statusItemsToggle = document.querySelector<HTMLButtonElement>(".tauri-settings-status-items__toggle");
+const statusItemsToggle = document.querySelector<HTMLButtonElement>(".status-bar-items-editor__toggle");
 assert.ok(statusItemsToggle);
 assert.equal(statusItemsToggle.getAttribute("aria-expanded"), "false", "item editing starts folded like the stable settings page");
 await act(async () => { statusItemsToggle.click(); });
-const bridgeItem = [...document.querySelectorAll<HTMLInputElement>(".tauri-settings-status-items__row input")].at(-1);
+const bridgeItem = document.querySelector<HTMLInputElement>('[data-statusbar-setting-item="bridge"] input');
 assert.ok(bridgeItem);
 await act(async () => { bridgeItem.click(); });
 assert.equal(statusBar()?.querySelector('[title^="本地服务："]'), null, "hiding an item removes its real status value");
