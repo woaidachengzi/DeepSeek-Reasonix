@@ -25,14 +25,15 @@ let failRuntime = false;
 const calls: string[] = [];
 let openedURL = "";
 let closeBehavior = "keep_running";
+let defaultModel = "";
 const summary = () => ({
   protocolVersion: 1,
-  defaultModel: "",
+  defaultModel,
   providers: [{ name: "demo", displayName: "Demo", kind: "openai", modelCount: 1, models: ["m"], requiresKey: true, configured: keyPresent || envCredentialPresent }],
 });
 
 (dom.window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
-  async invoke(command: string, args?: { url?: string; behavior?: string }) {
+  async invoke(command: string, args?: { url?: string; behavior?: string; request?: { model?: string } }) {
     calls.push(command);
     switch (command) {
       case "preview_runtime_info":
@@ -41,6 +42,7 @@ const summary = () => ({
       case "provider_summary":
         if (failSummary) { failSummary = false; throw new Error("summary unavailable"); }
         return summary();
+      case "set_default_model": defaultModel = args?.request?.model ?? ""; return summary();
       case "platform_info": return "darwin";
       case "get_close_behavior": return closeBehavior;
       case "set_close_behavior": closeBehavior = args?.behavior ?? closeBehavior; return closeBehavior;
@@ -68,12 +70,14 @@ const { TauriSettings } = await import("../tauri/TauriSettings");
 let parentConfigured: boolean | undefined;
 let applyCalls = 0;
 let profileImportCalls = 0;
+let restartCalls = 0;
+let auditRefreshCalls = 0;
 
 renderToString(<TauriSettings onClose={() => {}} />);
 assert.equal(calls.length, 0, "rendering settings does not start bridge work");
 
 const root = createRoot(document.getElementById("root")!);
-await act(async () => { root.render(<TauriSettings initialTab="appearance" onClose={() => {}} onProviderSummaryChange={value => { parentConfigured = value.providers[0]?.configured; }} currentSessionState="idle" onApplyToCurrentSession={async () => { applyCalls += 1; return true; }} profile={{ previewHome: "/preview/home", previewConfigExists: false, stableConfigExists: true, importAvailable: true, managedProfile: true }} onImportStableProfile={async () => { profileImportCalls += 1; return "已备份并导入配置"; }} />); });
+await act(async () => { root.render(<TauriSettings initialTab="appearance" onClose={() => {}} onProviderSummaryChange={value => { parentConfigured = value.providers[0]?.configured; }} currentSessionState="idle" onApplyToCurrentSession={async () => { applyCalls += 1; return true; }} bridgeStatus={{ running: true, protocolVersion: 1 }} catalogAudit={{ legacyCount: 3, directoryCount: 3, matchedCount: 3, directoryOnlyCount: 0, missingFromDirectory: 0, retiredLegacyCount: 0, titleMismatches: 0, workspaceMismatches: 0, orderMismatches: 0, missingTranscripts: 0, physicalStateMismatches: 0, unclaimedTranscripts: 0, inventoryErrors: 0, legacyMatchesDirectory: true }} sessionPageSource="identity" onRestartBridge={async () => { restartCalls += 1; return true; }} onRefreshCatalogAudit={async () => { auditRefreshCalls += 1; }} profile={{ previewHome: "/preview/home", previewConfigExists: false, stableConfigExists: true, importAvailable: true, managedProfile: true }} onImportStableProfile={async () => { profileImportCalls += 1; return "已备份并导入配置"; }} />); });
 assert.equal(calls.filter(call => call === "provider_summary").length, 1, "settings load once after mount");
 assert.equal(parentConfigured, true, "the model picker outside settings receives the initial summary");
 
@@ -134,7 +138,15 @@ assert.ok(notificationToggle, "general settings include desktop notifications");
 await act(async () => { notificationToggle.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true })); });
 assert.equal(localStorage.getItem("tauri-desktop-notifications"), "off", "notification preference is saved");
 
-await act(async () => { click("模型"); });
+await act(async () => { click("模型偏好"); });
+const defaultModelSelect = document.querySelector<HTMLSelectElement>("#tauri-settings-default-model");
+assert.ok(defaultModelSelect, "default model has its own settings page");
+await act(async () => {
+  defaultModelSelect.value = "demo/m";
+  defaultModelSelect.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+});
+assert.equal(defaultModel, "demo/m", "default model is persisted through the bridge");
+await act(async () => { click("模型服务"); });
 assert.match(visibleText(), /已就绪/, ".env credential configures the provider");
 await act(async () => { enterKey("secret-input-value"); });
 
@@ -178,6 +190,15 @@ await act(async () => { click("保存到钥匙串"); });
 assert.match(visibleText(), /保存失败/);
 assert.doesNotMatch(visibleText(), /secret-in-error-message/, "error details do not expose secrets");
 
+await act(async () => { click("运行诊断"); });
+assert.match(visibleText(), /持久身份目录/, "diagnostics show the actual sidebar data source");
+assert.match(visibleText(), /运行中 · 协议 v1/, "diagnostics show bridge status");
+await act(async () => { click("重新检查"); });
+assert.equal(auditRefreshCalls, 1, "diagnostics refresh the catalog audit");
+await act(async () => { click("重启桥接服务"); });
+assert.equal(restartCalls, 1, "diagnostics restart the existing bridge");
+assert.match(visibleText(), /桥接服务已重启/, "restart outcome is shown in settings");
+
 await act(async () => { click("关于"); });
 const githubLink = document.querySelector<HTMLAnchorElement>('.tauri-settings-about a[href^="https://github.com/"]')
   ?? document.querySelector<HTMLAnchorElement>('.tauri-settings-actions a[href^="https://github.com/"]');
@@ -192,7 +213,7 @@ failSummary = true;
 const retryRoot = createRoot(document.getElementById("root")!);
 await act(async () => { retryRoot.render(<TauriSettings onClose={() => {}} />); });
 assert.match(visibleText(), /桌面风格/, "general settings remain available when provider loading fails");
-await act(async () => { click("模型"); });
+await act(async () => { click("模型服务"); });
 assert.match(visibleText(), /读取设置失败/, "failed provider loading is actionable");
 await act(async () => { click("重试"); });
 assert.match(visibleText(), /已就绪/, "retry recovers the model settings");
@@ -200,7 +221,7 @@ await act(async () => { click("关于"); });
 failRuntime = true;
 await act(async () => { click("刷新"); });
 assert.match(visibleText(), /读取设置失败/, "runtime refresh failure is visible");
-await act(async () => { click("模型"); });
+await act(async () => { click("模型服务"); });
 assert.match(visibleText(), /已就绪/, "runtime failure does not block model settings");
 await act(async () => { retryRoot.unmount(); });
 console.log("tauri settings API key flow passed");

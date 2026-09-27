@@ -548,6 +548,12 @@
 .tauri-settings-load-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; border: 1px solid color-mix(in srgb, var(--err) 30%, var(--border-soft)); border-radius: 9px; color: var(--err); font-size: 12px; }
 .tauri-settings-section h3 { margin: 0 0 12px; color: var(--fg); font-size: 15px; font-weight: 650; }
 .tauri-settings-general h3:not(:first-child) { margin-top: 34px; }
+.tauri-settings-diagnostics h3:not(:first-child) { margin-top: 34px; }
+.tauri-settings-audit { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
+.tauri-settings-audit > div { display: grid; gap: 5px; padding: 12px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--surface); }
+.tauri-settings-audit > div span { color: var(--fg-faint); font-size: 11px; }
+.tauri-settings-audit > div strong { color: var(--fg); font-size: 18px; font-weight: 650; }
+.tauri-settings-audit > p { grid-column: 1 / -1; margin: 8px 0 0; }
 .tauri-settings-toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; padding: 12px 4px; border-top: 1px solid var(--border-soft); border-bottom: 1px solid var(--border-soft); }
 .tauri-settings-toggle span { display: grid; gap: 3px; }
 .tauri-settings-toggle strong { color: var(--fg); font-size: 12px; }
@@ -591,6 +597,7 @@
   .tauri-settings-overlay { grid-template-columns: 188px minmax(0, 1fr); }
   .tauri-settings-content { padding: 22px 20px 48px; }
   .tauri-settings-field { align-items: flex-start; flex-direction: column; gap: 9px; }
+  .tauri-settings-audit { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 540px) {
   .tauri-settings-overlay { grid-template-columns: 132px minmax(0, 1fr); }
@@ -628,7 +635,7 @@
 .tauri-settings-about-row:last-child { border-radius: 0 0 10px 10px; }
 .tauri-settings-about-row span:first-child { color: var(--fg-faint); font-size: 11px; }
 .tauri-settings-about-row span:last-child { color: var(--fg-dim); font: 11px var(--font-mono); }
-.tauri-settings-actions { display: flex; gap: 8px; margin-top: 16px; }
+.tauri-settings-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .tauri-settings-button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface); color: var(--fg-dim); font-size: 11px; text-decoration: none; cursor: pointer; transition: border-color .12s, background .12s; }
 .tauri-settings-button:hover { border-color: var(--border); background: var(--surface-2); color: var(--fg); }
 .tauri-settings-button--danger { border-color: color-mix(in srgb, var(--err) 32%, var(--border-soft)); color: var(--err); }

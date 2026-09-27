@@ -10,7 +10,7 @@ import { compactQuestionText, type QuestionAnchor } from "../lib/transcriptGroup
 import { LocaleProvider } from "../lib/i18n";
 import logoWordmark from "../assets/logo-wordmark.svg";
 import { TauriSettings, type TauriSettingsTab } from "./TauriSettings";
-import { getTauriNotificationsEnabled } from "./tauriPreferences";
+import { getTauriNotificationsEnabled, getTauriProgressMode, TAURI_PROGRESS_MODE_CHANGED } from "./tauriPreferences";
 import { handleTauriDragDropEvent, retainTauriDragDropListener } from "./dragDrop";
 import { formatTauriWorkDuration, groupTauriHistory, type IndexedHistoryMessage } from "./historyPresentation";
 
@@ -412,6 +412,7 @@ export function TauriSessionPreview() {
   const catalogAuditRequestRef = useRef(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<TauriSettingsTab>("general");
+  const [progressMode, setProgressMode] = useState(getTauriProgressMode);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspacePath, setWorkspacePath] = useState("");
   const [workspaceEntries, setWorkspaceEntries] = useState<TauriWorkspaceEntry[]>([]);
@@ -464,6 +465,12 @@ export function TauriSessionPreview() {
     : "还有未加载的会话页；加载更多以确认此项目是否为空";
   const projectRootsKey = projectGroups.flatMap(group => group.root ? [group.root] : []).join("\u0000");
   const activeCatalogTitle = tabs.find(tab => tab.sessionId === session?.id)?.title;
+
+  useEffect(() => {
+    const onProgressModeChanged = () => setProgressMode(getTauriProgressMode());
+    window.addEventListener(TAURI_PROGRESS_MODE_CHANGED, onProgressModeChanged);
+    return () => window.removeEventListener(TAURI_PROGRESS_MODE_CHANGED, onProgressModeChanged);
+  }, []);
 
   useEffect(() => {
     try {
@@ -2251,13 +2258,13 @@ export function TauriSessionPreview() {
             {history && history.startIndex > 0 && <p className="tauri-history-note">当前显示最近 {history.messages.length} 条，共 {history.totalMessages} 条可见消息</p>}
             {historyPresentation.map(item => item.kind === "message"
               ? <HistoryMessageArticle key={`message-${item.entry.index}`} entry={item.entry} sessionId={history!.session.id} questionId={item.entry.message.role === "user" ? `tauri-question-${item.entry.index}` : undefined} />
-              : <details className="tauri-progress" key={`progress-${item.entries[0].index}`}>
+              : <details className="tauri-progress" key={`progress-${item.entries[0].index}-${progressMode}`} open={progressMode === "deep"}>
                 <summary><ChevronRight size={14} aria-hidden="true" /><span>{item.active ? "正在处理" : formatTauriWorkDuration(item.durationMs) ?? "过程记录"}</span><small>{item.entries.length} 条过程更新</small></summary>
                 <div className="tauri-progress__messages">{item.entries.map(entry => <HistoryMessageArticle key={entry.index} entry={entry} sessionId={history!.session.id} />)}</div>
               </details>)}
             {/* Optimistic user message: shown immediately after submit, before history loads */}
             {pendingUserMessage && <article className="tauri-message is-user"><div className="tauri-message__content"><Markdown text={pendingUserMessage} /></div></article>}
-            {liveText && <details className="tauri-progress tauri-progress--live"><summary><ChevronRight size={14} aria-hidden="true" /><span>正在处理</span><small>展开查看当前输出</small></summary><div className="tauri-progress__messages"><article className="tauri-message is-assistant tauri-message--live"><div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div><div className="tauri-message__content"><div className="tauri-message__role">Reasonix</div><Markdown text={liveText} streaming cacheKey={`${session?.id ?? "live"}:stream`} /></div></article></div></details>}
+            {liveText && <details className="tauri-progress tauri-progress--live" key={`live-progress-${progressMode}`} open={progressMode === "deep"}><summary><ChevronRight size={14} aria-hidden="true" /><span>正在处理</span><small>展开查看当前输出</small></summary><div className="tauri-progress__messages"><article className="tauri-message is-assistant tauri-message--live"><div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div><div className="tauri-message__content"><div className="tauri-message__role">Reasonix</div><Markdown text={liveText} streaming cacheKey={`${session?.id ?? "live"}:stream`} /></div></article></div></details>}
             {session?.state === "running" && !liveText && !pendingUserMessage && <div className="tauri-thinking" role="status"><span /><span /><span />Reasonix 正在思考…</div>}
           </div> : <section className="tauri-welcome">
             <div className="tauri-welcome__mark"><Sparkles size={24} /></div>
@@ -2419,7 +2426,7 @@ export function TauriSessionPreview() {
         </aside>
       </>}
 
-      {settingsOpen && <TauriSettings initialTab={settingsTab} workspaceRoot={currentWorkspace || undefined} profile={profile} importBusy={busy} onRefreshProfile={refreshProfile} onImportStableProfile={importStableProfile} onImportStableProjectFolders={importStableProjectFolders} onScanUnclaimedSessions={() => void openScanImportReview()} onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionState={session?.state} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} />}
+      {settingsOpen && <TauriSettings initialTab={settingsTab} workspaceRoot={currentWorkspace || undefined} profile={profile} importBusy={busy} bridgeStatus={status} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={error} onRestartBridge={restartBridge} onRefreshCatalogAudit={() => refreshCatalogAudit()} onRefreshProfile={refreshProfile} onImportStableProfile={importStableProfile} onImportStableProjectFolders={importStableProjectFolders} onScanUnclaimedSessions={() => void openScanImportReview()} onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionState={session?.state} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} />}
     </main>
   );
 }

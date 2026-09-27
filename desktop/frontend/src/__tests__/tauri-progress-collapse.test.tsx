@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 
 const dom = new JSDOM("<!doctype html><html><body><div id='root'></div></body></html>", { url: "http://localhost/", pretendToBeVisual: true });
-Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, Event: dom.window.Event, MouseEvent: dom.window.MouseEvent, IS_REACT_ACT_ENVIRONMENT: true });
+Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, Event: dom.window.Event, MouseEvent: dom.window.MouseEvent, localStorage: dom.window.localStorage, IS_REACT_ACT_ENVIRONMENT: true });
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
 (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri = true;
 (dom.window as unknown as { __TAURI__?: unknown }).__TAURI__ = { core: { invoke: () => Promise.resolve(null) } };
@@ -38,5 +38,17 @@ assert.ok([...document.querySelectorAll(".tauri-message.is-assistant")].some(mes
   !progress.contains(message) && message.textContent?.includes("结论：需要测试")), "the final answer stays outside the disclosure");
 await act(async () => { progress.querySelector("summary")?.click(); });
 assert.equal(progress.open, true, "the user can expand the progress disclosure");
+const openSettings = [...document.querySelectorAll<HTMLButtonElement>(".tauri-sidebar__diagnostics")].find(button => button.textContent?.includes("设置"));
+assert.ok(openSettings);
+await act(async () => { openSettings.click(); });
+const progressOptions = () => document.querySelector<HTMLElement>('[aria-label="会话体验"]');
+assert.ok(progressOptions(), "settings expose the conversation experience preference");
+await act(async () => { progressOptions()?.querySelectorAll<HTMLButtonElement>("button")[1]?.click(); });
+assert.equal(localStorage.getItem("tauri-progress-mode"), "deep", "deep mode persists");
+assert.equal(document.querySelector<HTMLDetailsElement>(".tauri-progress")?.open, true, "deep mode expands the current process group");
+await act(async () => { document.querySelector<HTMLDetailsElement>(".tauri-progress")?.querySelector("summary")?.click(); });
+assert.equal(document.querySelector<HTMLDetailsElement>(".tauri-progress")?.open, false, "deep mode still permits manual folding");
+await act(async () => { progressOptions()?.querySelectorAll<HTMLButtonElement>("button")[0]?.click(); });
+assert.equal(document.querySelector<HTMLDetailsElement>(".tauri-progress")?.open, false, "standard mode returns to folded process groups");
 await act(async () => { root.unmount(); });
 console.log("tauri progress disclosure: OK");
