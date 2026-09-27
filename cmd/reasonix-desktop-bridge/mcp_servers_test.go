@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	appconfig "reasonix/internal/config"
+	"reasonix/internal/desktopbridge"
 	"reasonix/internal/pluginpkg"
 )
 
@@ -99,6 +100,20 @@ func TestMCPActivationChangesRuntimeCatalogForSelectedWorkspace(t *testing.T) {
 	if response := mcpRequest(t, handler, http.MethodPost, "/v1/mcp/servers/activation?workspaceRoot="+projectRoot,
 		`{"name":"time"}`); response.Code != http.StatusBadRequest {
 		t.Fatalf("missing state status = %d, want 400", response.Code)
+	}
+}
+
+func TestMCPRuntimeStatusAddsOnlyDisplayMetadata(t *testing.T) {
+	servers := []mcpServerView{{Name: "time", Enabled: true}, {Name: "other", Enabled: true}}
+	applyMCPRuntimeStatus(servers, []desktopbridge.MCPRuntimeServer{{
+		Name: "time", Status: "connected", ToolCount: 1,
+		Tools: []desktopbridge.MCPRuntimeTool{{Name: "now", Description: "Current time"}},
+	}})
+	if servers[0].RuntimeStatus != "connected" || servers[0].ToolCount != 1 || len(servers[0].ToolList) != 1 {
+		t.Fatalf("active server = %+v", servers[0])
+	}
+	if servers[1].RuntimeStatus != "" || servers[1].ToolCount != 0 {
+		t.Fatalf("unrelated server inherited status = %+v", servers[1])
 	}
 }
 

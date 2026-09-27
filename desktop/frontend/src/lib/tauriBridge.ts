@@ -511,6 +511,13 @@ export async function setTauriModelRole(role: "planner" | "vision" | "search", m
 export interface TauriMCPServer {
   name: string;
   enabled: boolean;
+  runtimeStatus?: "connected" | "failed" | "initializing";
+  toolCount?: number;
+  toolList?: { name: string; description?: string }[];
+  mcpProtocolVersion?: string;
+  mcpSessionState?: string;
+  reconnectAttempts?: number;
+  errorKind?: string;
   type: string;
   source: string;
   scope: "project" | "global" | "other";

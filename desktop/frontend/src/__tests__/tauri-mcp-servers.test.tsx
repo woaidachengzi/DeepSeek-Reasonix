@@ -57,7 +57,7 @@ function mcpButtons(label: string): HTMLButtonElement[] {
   );
 }
 
-function click(button: HTMLButtonElement | undefined) {
+function click(button: HTMLElement | undefined) {
   if (!button) return false;
   button.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
   return true;
@@ -214,6 +214,21 @@ async function main() {
     await settle();
   });
   ok(text().includes("remote"), "the Registry server appears in the installed list");
+
+  (globalThis as unknown as { __mcpServers: Array<Record<string, unknown>> }).__mcpServers =
+    (globalThis as unknown as { __mcpServers: Array<Record<string, unknown>> }).__mcpServers.map(server => server.name === "remote"
+      ? { ...server, runtimeStatus: "connected", toolCount: 1, toolList: [{ name: "search", description: "Search remote data" }] }
+      : server);
+  await act(async () => {
+    click(mcpButtons("刷新")[0]);
+    await settle();
+  });
+  ok(text().includes("当前会话已连接 · 1 项工具"), "the active session Host status is displayed");
+  await act(async () => {
+    click(document.querySelector<HTMLElement>(".tauri-mcp-list__tools summary") ?? undefined);
+  });
+  ok(Boolean(document.querySelector<HTMLDetailsElement>(".tauri-mcp-list__tools")?.open), "the Host tool details expand");
+  ok(text().includes("Search remote data"), "the current Host tool description is available in details");
 
   await act(async () => {
     root.unmount();

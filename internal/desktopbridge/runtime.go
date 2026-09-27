@@ -166,6 +166,30 @@ type Runtime interface {
 	Shutdown() error
 }
 
+// MCPRuntimeTool is display-safe metadata from the active session's MCP Host.
+// It deliberately excludes tool schemas, arguments, results, and credentials.
+type MCPRuntimeTool struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
+type MCPRuntimeServer struct {
+	Name              string           `json:"name"`
+	Status            string           `json:"status"`
+	ToolCount         int              `json:"toolCount,omitempty"`
+	Tools             []MCPRuntimeTool `json:"tools,omitempty"`
+	ProtocolVersion   string           `json:"protocolVersion,omitempty"`
+	SessionState      string           `json:"sessionState,omitempty"`
+	ReconnectAttempts int              `json:"reconnectAttempts,omitempty"`
+	ErrorKind         string           `json:"errorKind,omitempty"`
+}
+
+// MCPRuntimeStatusProvider is optional, so host-neutral fake runtimes and
+// non-MCP runtimes retain the small base Runtime contract.
+type MCPRuntimeStatusProvider interface {
+	MCPRuntimeStatus() []MCPRuntimeServer
+}
+
 // RuntimeFactory builds a core runtime only after an authenticated open request.
 // Bridge startup and health checks never invoke it.
 type RuntimeFactory interface {
@@ -351,6 +375,21 @@ func (m *RuntimeManager) Snapshot() (SessionView, bool) {
 	view := m.view
 	view.State = m.runtime.State()
 	return view, true
+}
+
+// MCPStatus reads only the current session's Host and only for its workspace.
+// A different selected project must never inherit the active session's status.
+func (m *RuntimeManager) MCPStatus(workspaceRoot string) ([]MCPRuntimeServer, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed || m.runtime == nil || m.view.WorkspaceRoot != strings.TrimSpace(workspaceRoot) {
+		return nil, false
+	}
+	provider, ok := m.runtime.(MCPRuntimeStatusProvider)
+	if !ok {
+		return nil, false
+	}
+	return provider.MCPRuntimeStatus(), true
 }
 
 // History returns the newest bounded page of the bridge-owned transcript. The

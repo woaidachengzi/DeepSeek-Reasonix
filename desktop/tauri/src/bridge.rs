@@ -708,6 +708,20 @@ pub struct SubagentSettingsChange {
 pub struct MCPServerView {
     pub name: String,
     pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_count: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_list: Option<Vec<MCPRuntimeTool>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_protocol_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_session_state: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reconnect_attempts: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_kind: Option<String>,
     #[serde(rename = "type")]
     pub kind: String,
     pub source: String,
@@ -729,6 +743,14 @@ pub struct MCPServerView {
     pub tier: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub managed_by_package: Option<bool>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPRuntimeTool {
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

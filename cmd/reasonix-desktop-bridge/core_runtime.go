@@ -385,6 +385,75 @@ type controllerRuntime struct {
 
 func (r *controllerRuntime) SessionPath() string { return r.controller.SessionPath() }
 
+// MCPRuntimeStatus projects only current Host diagnostics. Reading this never
+// starts an MCP server or exposes raw startup errors, tool schemas, or secrets.
+func (r *controllerRuntime) MCPRuntimeStatus() []desktopbridge.MCPRuntimeServer {
+	host := r.controller.Host()
+	if host == nil {
+		return nil
+	}
+	const maxServers = 100
+	const maxTools = 100
+	out := make([]desktopbridge.MCPRuntimeServer, 0)
+	seen := map[string]bool{}
+	for _, server := range host.Servers() {
+		if len(out) >= maxServers {
+			break
+		}
+		name := strings.TrimSpace(server.Name)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		view := desktopbridge.MCPRuntimeServer{
+			Name: name, Status: "connected", ToolCount: server.Tools,
+			ProtocolVersion: server.ProtocolVersion, SessionState: string(server.SessionState),
+			ReconnectAttempts: server.ReconnectAttempts, ErrorKind: string(server.LastErrorKind),
+		}
+		for _, tool := range server.ToolList {
+			if len(view.Tools) >= maxTools {
+				break
+			}
+			view.Tools = append(view.Tools, desktopbridge.MCPRuntimeTool{
+				Name:        truncateMCPStatusText(tool.Name, 120),
+				Description: truncateMCPStatusText(tool.Description, 300),
+			})
+		}
+		out = append(out, view)
+	}
+	for _, failure := range host.Failures() {
+		if len(out) >= maxServers {
+			break
+		}
+		name := strings.TrimSpace(failure.Name)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, desktopbridge.MCPRuntimeServer{Name: name, Status: "failed", ErrorKind: truncateMCPStatusText(failure.Stage, 80)})
+	}
+	for _, name := range host.ConnectingServers() {
+		if len(out) >= maxServers {
+			break
+		}
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, desktopbridge.MCPRuntimeServer{Name: name, Status: "initializing"})
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+func truncateMCPStatusText(value string, limit int) string {
+	runes := []rune(strings.TrimSpace(value))
+	if len(runes) > limit {
+		runes = runes[:limit]
+	}
+	return string(runes)
+}
+
 func (r *controllerRuntime) Title() string {
 	meta, ok, err := agent.LoadBranchMeta(r.SessionPath())
 	if err != nil || !ok {

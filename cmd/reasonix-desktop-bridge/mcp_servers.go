@@ -14,22 +14,29 @@ import (
 // Credential material is write-only: EnvKeys and HeaderKeys name the keys a
 // server expects so a user knows what to fill in, but no value is ever returned.
 type mcpServerView struct {
-	Name                 string   `json:"name"`
-	Type                 string   `json:"type"`
-	Source               string   `json:"source"`
-	Scope                string   `json:"scope"`
-	ConfigPath           string   `json:"configPath"`
-	Command              string   `json:"command,omitempty"`
-	Args                 []string `json:"args,omitempty"`
-	URL                  string   `json:"url,omitempty"`
-	EnvKeys              []string `json:"envKeys,omitempty"`
-	HeaderKeys           []string `json:"headerKeys,omitempty"`
-	StartupTimeoutSecond int      `json:"startupTimeoutSeconds,omitempty"`
-	CallTimeoutSecond    int      `json:"callTimeoutSeconds,omitempty"`
-	AutoStart            *bool    `json:"autoStart,omitempty"`
-	Tier                 string   `json:"tier,omitempty"`
-	ManagedByPackage     bool     `json:"managedByPackage,omitempty"`
-	Enabled              bool     `json:"enabled"`
+	Name                 string                         `json:"name"`
+	Type                 string                         `json:"type"`
+	Source               string                         `json:"source"`
+	Scope                string                         `json:"scope"`
+	ConfigPath           string                         `json:"configPath"`
+	Command              string                         `json:"command,omitempty"`
+	Args                 []string                       `json:"args,omitempty"`
+	URL                  string                         `json:"url,omitempty"`
+	EnvKeys              []string                       `json:"envKeys,omitempty"`
+	HeaderKeys           []string                       `json:"headerKeys,omitempty"`
+	StartupTimeoutSecond int                            `json:"startupTimeoutSeconds,omitempty"`
+	CallTimeoutSecond    int                            `json:"callTimeoutSeconds,omitempty"`
+	AutoStart            *bool                          `json:"autoStart,omitempty"`
+	Tier                 string                         `json:"tier,omitempty"`
+	ManagedByPackage     bool                           `json:"managedByPackage,omitempty"`
+	Enabled              bool                           `json:"enabled"`
+	RuntimeStatus        string                         `json:"runtimeStatus,omitempty"`
+	ToolCount            int                            `json:"toolCount,omitempty"`
+	ToolList             []desktopbridge.MCPRuntimeTool `json:"toolList,omitempty"`
+	ProtocolVersion      string                         `json:"mcpProtocolVersion,omitempty"`
+	SessionState         string                         `json:"mcpSessionState,omitempty"`
+	ReconnectAttempts    int                            `json:"reconnectAttempts,omitempty"`
+	ErrorKind            string                         `json:"errorKind,omitempty"`
 }
 
 type mcpServerListResponse struct {
@@ -54,10 +61,35 @@ func (b *bridgeServer) listMCPServers(w http.ResponseWriter, r *http.Request) {
 		b.writeRuntimeError(w, err, "unable to read MCP activation")
 		return
 	}
+	if b.runtimes != nil {
+		if runtime, active := b.runtimes.MCPStatus(root); active {
+			applyMCPRuntimeStatus(servers, runtime)
+		}
+	}
 	writeJSON(w, http.StatusOK, mcpServerListResponse{
 		ProtocolVersion: desktopbridge.ProtocolVersion,
 		Servers:         servers,
 	})
+}
+
+func applyMCPRuntimeStatus(servers []mcpServerView, runtime []desktopbridge.MCPRuntimeServer) {
+	byName := make(map[string]desktopbridge.MCPRuntimeServer, len(runtime))
+	for _, status := range runtime {
+		byName[status.Name] = status
+	}
+	for i := range servers {
+		status, ok := byName[servers[i].Name]
+		if !ok {
+			continue
+		}
+		servers[i].RuntimeStatus = status.Status
+		servers[i].ToolCount = status.ToolCount
+		servers[i].ToolList = status.Tools
+		servers[i].ProtocolVersion = status.ProtocolVersion
+		servers[i].SessionState = status.SessionState
+		servers[i].ReconnectAttempts = status.ReconnectAttempts
+		servers[i].ErrorKind = status.ErrorKind
+	}
 }
 
 func mcpServerViews(root string, entries []appconfig.PluginEntry) ([]mcpServerView, error) {
@@ -331,6 +363,11 @@ func (b *bridgeServer) writeMCPServers(w http.ResponseWriter, root, path, status
 	if err != nil {
 		b.writeRuntimeError(w, err, "unable to read MCP activation")
 		return
+	}
+	if b.runtimes != nil {
+		if runtime, active := b.runtimes.MCPStatus(root); active {
+			applyMCPRuntimeStatus(servers, runtime)
+		}
 	}
 	response := mcpServerMutationResponse{
 		ProtocolVersion: desktopbridge.ProtocolVersion,

@@ -791,6 +791,14 @@
 .tauri-mcp-list__meta { color: var(--fg-faint); font-size: 11px; }
 .tauri-mcp-list__transport { overflow: hidden; color: var(--fg-dim); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .tauri-mcp-list li small { color: var(--fg-faint); font-size: 11px; }
+.tauri-mcp-list__runtime { color: var(--fg-dim) !important; }
+.tauri-mcp-list__runtime.is-error { color: var(--err) !important; }
+.tauri-mcp-list__tools { margin: 5px 0; color: var(--fg-dim); font-size: 11px; }
+.tauri-mcp-list__tools summary { cursor: pointer; }
+.tauri-mcp-list__tools ul { display: grid; gap: 0; margin: 7px 0 0; padding: 0; border-top: 1px solid var(--border-soft); list-style: none; }
+.tauri-mcp-list__tools li { display: grid; gap: 3px; padding: 7px 3px; border: 0; border-bottom: 1px solid var(--border-soft); border-radius: 0; background: transparent; }
+.tauri-mcp-list__tools li strong { font-weight: 600; }
+.tauri-mcp-list__tools li span { color: var(--fg-faint); overflow-wrap: anywhere; }
 .tauri-mcp-list__actions { display: flex; gap: 6px; margin-top: 4px; }
 .tauri-mcp-list__toggle[aria-checked="true"] { border-color: color-mix(in srgb, var(--accent) 45%, var(--border-soft)); color: var(--accent) !important; }
 .tauri-mcp-list__actions button, .tauri-mcp-form__actions button, .tauri-diagnostic-card__heading button {

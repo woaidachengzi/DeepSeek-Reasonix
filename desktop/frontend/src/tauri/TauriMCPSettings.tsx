@@ -2,6 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { deleteTauriMCPServer, resolveTauriMCPMarketplace, saveTauriMCPServer, searchTauriMCPMarketplace, setTauriMCPServerEnabled, tauriMCPServers, tauriMessageFrom, type TauriMCPMarketplace, type TauriMCPMarketplaceEntry, type TauriMCPServer } from "../lib/tauriBridge";
 import { emptyMCPDraft, mcpCredentialHint, mcpDraftForEditing, mcpDraftFromMarketplace, mcpDraftToInput, mcpTransportSummary, type MCPDraft } from "./tauriMCPServers";
 
+function runtimeSummary(server: TauriMCPServer): string {
+  if (server.runtimeStatus === "connected") return server.enabled ? `当前会话已连接 · ${server.toolCount ?? 0} 项工具` : "当前会话仍已连接；应用设置后停用";
+  if (server.runtimeStatus === "initializing") return "当前会话正在连接";
+  if (server.runtimeStatus === "failed") return "当前会话启动失败";
+  return server.enabled ? "新会话按需连接" : "已停用";
+}
+
 export function TauriMCPSettings({ workspaceRoot, currentSessionState, currentSessionHasAttachments, onApplyToCurrentSession }: {
   workspaceRoot?: string;
   currentSessionState?: "idle" | "running" | "paused";
@@ -203,7 +210,9 @@ export function TauriMCPSettings({ workspaceRoot, currentSessionState, currentSe
       {busy && !marketplace ? <p className="tauri-settings-loading">正在查询目录…</p> : marketplace && marketplace.servers.length === 0 ? <p className="tauri-settings-empty">没有匹配的服务器。</p> : marketplace && <ul className="tauri-mcp-marketplace__list">{marketplace.servers.map(entry => <li key={entry.name}><div><strong>{entry.title || entry.name}</strong><small>{entry.name}{entry.version ? ` · ${entry.version}` : ""}{entry.transport ? ` · ${entry.transport}` : ""}</small>{entry.description && <p>{entry.description}</p>}{!entry.installable && <small>{entry.unavailableReason || "需要手动配置"}</small>}</div>{entry.installable && <button type="button" onClick={() => void prepareMarketplace(entry)} disabled={busy || marketplace.cached}>配置</button>}</li>)}</ul>}
     </div> : loading ? <p className="tauri-settings-loading">正在读取 MCP 服务器…</p> : servers.length === 0 ? <p className="tauri-settings-empty">还没有配置 MCP 服务器。</p> : <ul className="tauri-mcp-list">{servers.map(server => <li key={`${server.scope}:${server.name}`}>
       <div className="tauri-mcp-list__row"><strong>{server.name}</strong><span className="tauri-mcp-list__meta">{server.scope === "project" ? "项目" : server.scope === "global" ? "全局" : server.scope} · {server.type}</span></div>
+      <small className={`tauri-mcp-list__runtime${server.runtimeStatus === "failed" ? " is-error" : ""}`}>{runtimeSummary(server)}{server.errorKind ? ` · ${server.errorKind}` : ""}</small>
       <code className="tauri-mcp-list__transport">{mcpTransportSummary(server) || "—"}</code>
+      {server.runtimeStatus === "connected" && (server.toolList?.length ?? 0) > 0 && <details className="tauri-mcp-list__tools"><summary>查看工具列表</summary><ul>{server.toolList?.map(tool => <li key={tool.name}><strong>{tool.name}</strong>{tool.description && <span>{tool.description}</span>}</li>)}</ul></details>}
       {mcpCredentialHint(server) && <small>{mcpCredentialHint(server)}</small>}
       {server.managedByPackage && <small>由已安装插件包管理，不能在此修改。</small>}
       <div className="tauri-mcp-list__actions"><button type="button" className="tauri-mcp-list__toggle" role="switch" aria-checked={server.enabled} aria-label={`${server.name} ${server.enabled ? "已启用" : "已停用"}`} onClick={() => void toggle(server)} disabled={busy}>{server.enabled ? "已启用" : "已停用"}</button><button type="button" onClick={() => setDraft(mcpDraftForEditing(server))} disabled={busy || server.managedByPackage}>编辑</button><button type="button" onClick={() => void remove(server)} disabled={busy || server.managedByPackage}>删除</button></div>

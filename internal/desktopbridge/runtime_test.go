@@ -20,6 +20,34 @@ type fakeRuntime struct {
 	shutdownErr   error
 }
 
+type fakeMCPRuntime struct {
+	*fakeRuntime
+	servers []MCPRuntimeServer
+}
+
+func (r *fakeMCPRuntime) MCPRuntimeStatus() []MCPRuntimeServer { return r.servers }
+
+func TestMCPStatusOnlyReadsMatchingActiveWorkspace(t *testing.T) {
+	runtime := &fakeMCPRuntime{
+		fakeRuntime: &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"},
+		servers:     []MCPRuntimeServer{{Name: "time", Status: "connected", ToolCount: 1}},
+	}
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(context.Context, OpenRequest) (Runtime, error) { return runtime, nil }))
+	if servers, active := manager.MCPStatus("/work/a"); active || len(servers) != 0 {
+		t.Fatalf("unopened runtime status = %+v, active=%t", servers, active)
+	}
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a", WorkspaceRoot: "/work/a"}); err != nil {
+		t.Fatal(err)
+	}
+	if servers, active := manager.MCPStatus("/work/b"); active || len(servers) != 0 {
+		t.Fatalf("other workspace status = %+v, active=%t", servers, active)
+	}
+	servers, active := manager.MCPStatus("/work/a")
+	if !active || len(servers) != 1 || servers[0].Name != "time" {
+		t.Fatalf("matching workspace status = %+v, active=%t", servers, active)
+	}
+}
+
 func (r *fakeRuntime) SessionPath() string       { return r.path }
 func (r *fakeRuntime) Title() string             { return r.title }
 func (r *fakeRuntime) State() string             { return r.state }
