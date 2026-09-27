@@ -73,10 +73,10 @@ use bridge::{
     BridgeProviderSummaryResponse, BridgeSession, BridgeSetDefaultModelRequest, BridgeSnapshot,
     BridgeStatus, BridgeSupervisor, BridgeWorkspaceChangeDetailResponse,
     BridgeWorkspaceChangesResponse, BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse,
-    DesktopPreferences, HooksSettingsChange, HooksSettingsView, LegacySessionCatalogEntry,
-    MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse, MCPServerView,
-    MemorySettingsChange, MemorySettingsView, NetworkSettingsChange, NetworkSettingsView,
-    OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
+    DeleteProviderConfigRequest, DesktopPreferences, HooksSettingsChange, HooksSettingsView,
+    LegacySessionCatalogEntry, MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse,
+    MCPServerView, MemorySettingsChange, MemorySettingsView, NetworkSettingsChange,
+    NetworkSettingsView, OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
     PendingSessionTitleRecovery, PermissionSettingsChange, PermissionSettingsView,
     ProviderConfigList, RenameSessionRequest, SandboxSettingsChange, SandboxSettingsView,
     SaveProviderConfigRequest, ScanImportCandidate, ScanImportSelection, SessionCatalogMetadata,
@@ -738,6 +738,14 @@ fn save_provider_config(
     input: SaveProviderConfigRequest,
 ) -> Result<ProviderConfigList, String> {
     supervisor.save_provider_config(input)
+}
+
+#[tauri::command]
+fn delete_provider_config(
+    supervisor: State<'_, BridgeSupervisor>,
+    input: DeleteProviderConfigRequest,
+) -> Result<ProviderConfigList, String> {
+    supervisor.delete_provider_config(input)
 }
 
 #[tauri::command]
@@ -1806,6 +1814,7 @@ fn main() {
             provider_summary,
             provider_configs,
             save_provider_config,
+            delete_provider_config,
             usage_stats,
             permission_settings,
             change_permission_settings,

@@ -1,10 +1,16 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"regexp"
+	"slices"
 	"strings"
 
 	configpkg "reasonix/internal/config"
@@ -24,6 +30,19 @@ type providerConfigView struct {
 	Kind        string   `json:"kind"`
 	Models      []string `json:"models"`
 	Default     string   `json:"default"`
+	Removable   bool     `json:"removable"`
+	Revision    string   `json:"revision"`
+}
+
+var errPreviewProviderChanged = errors.New("provider settings changed; reload before deleting")
+
+type deleteProviderConfigRequest struct {
+	Name        string   `json:"name"`
+	DisplayName string   `json:"displayName"`
+	Kind        string   `json:"kind"`
+	Models      []string `json:"models"`
+	Default     string   `json:"default"`
+	Revision    string   `json:"revision"`
 }
 
 type saveProviderConfigRequest struct {
@@ -38,8 +57,26 @@ type saveProviderConfigRequest struct {
 
 var previewProviderName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$`)
 
-func loadProviderConfigs() (providerConfigList, error) {
+func previewProviderConfigRevision(path, token string) (string, error) {
+	raw, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		raw = []byte("<missing Preview config>")
+	} else if err != nil {
+		return "", err
+	}
+	mac := hmac.New(sha256.New, []byte(token))
+	_, _ = mac.Write(raw)
+	return hex.EncodeToString(mac.Sum(nil)), nil
+}
+
+func loadProviderConfigs(token string) (providerConfigList, error) {
+	unlock := configpkg.LockUserConfigEdits()
+	defer unlock()
 	cfg, err := configpkg.LoadUserConfigReadOnly()
+	if err != nil {
+		return providerConfigList{}, err
+	}
+	revision, err := previewProviderConfigRevision(configpkg.UserConfigPath(), token)
 	if err != nil {
 		return providerConfigList{}, err
 	}
@@ -49,9 +86,68 @@ func loadProviderConfigs() (providerConfigList, error) {
 		view.Providers = append(view.Providers, providerConfigView{
 			Name: entry.Name, DisplayName: entry.DisplayName, Kind: entry.Kind,
 			Models: append([]string(nil), entry.ModelList()...), Default: entry.Default,
+			Removable: !configpkg.IsOfficialDeepSeekProvider(entry),
+			Revision:  revision,
 		})
 	}
 	return view, nil
+}
+
+func removeProviderConfig(input deleteProviderConfigRequest, token string) error {
+	if !previewProviderName.MatchString(input.Name) || len(input.Models) > 100 {
+		return fmt.Errorf("invalid provider identity")
+	}
+	unlock := configpkg.LockUserConfigEdits()
+	defer unlock()
+	path := configpkg.UserConfigPath()
+	if path == "" {
+		return fmt.Errorf("Preview profile unavailable")
+	}
+	revision, err := previewProviderConfigRevision(path, token)
+	if err != nil {
+		return err
+	}
+	if input.Revision == "" || !hmac.Equal([]byte(revision), []byte(input.Revision)) {
+		return errPreviewProviderChanged
+	}
+	cfg, err := configpkg.LoadForEditReadOnlyStrict(path)
+	if err != nil {
+		return err
+	}
+	entry, found := cfg.Provider(input.Name)
+	if !found {
+		return errPreviewProviderChanged
+	}
+	if entry.DisplayName != input.DisplayName || entry.Kind != input.Kind || entry.Default != input.Default || !slices.Equal(entry.ModelList(), input.Models) {
+		return errPreviewProviderChanged
+	}
+	if configpkg.IsOfficialDeepSeekProvider(entry) {
+		return fmt.Errorf("official provider access cannot be deleted here")
+	}
+	baseline := cfg.ModelSettingsBaseline()
+	if err := cfg.RemoveProvider(input.Name); err != nil {
+		return fmt.Errorf("another configured provider is required before deleting this service")
+	}
+	if cfg.Desktop.ProviderAccess != nil {
+		cfg.Desktop.ProviderAccess = slices.DeleteFunc(cfg.Desktop.ProviderAccess, func(name string) bool { return strings.TrimSpace(name) == input.Name })
+		if resolved, ok := cfg.ResolveModel(cfg.DefaultModel); ok && !providerAccessAllowed(cfg.Desktop.ProviderAccess, resolved.Name) {
+			fallback := ""
+			for i := range cfg.Providers {
+				candidate := &cfg.Providers[i]
+				if providerAccessAllowed(cfg.Desktop.ProviderAccess, candidate.Name) && candidate.Configured() && len(candidate.ModelList()) > 0 {
+					fallback = candidate.Name
+					break
+				}
+			}
+			if fallback == "" {
+				return fmt.Errorf("no visible configured provider remains for the default model")
+			}
+			if err := cfg.SetDefaultModel(fallback); err != nil {
+				return err
+			}
+		}
+	}
+	return cfg.SaveUserSettingsDeltaTo(path, baseline)
 }
 
 func validateProviderConfigInput(input *saveProviderConfigRequest) error {

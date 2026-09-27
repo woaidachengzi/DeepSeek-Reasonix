@@ -279,6 +279,11 @@ const commands: CommandContract[] = [
     description: "saveTauriProviderConfig() invokes save_provider_config with { input }",
   },
   {
+    command: "delete_provider_config",
+    argKeys: ["input"],
+    description: "deleteTauriProviderConfig() invokes delete_provider_config with { input }",
+  },
+  {
     command: "usage_stats",
     argKeys: ["request"],
     description: "tauriUsageStats() invokes usage_stats with { request }",

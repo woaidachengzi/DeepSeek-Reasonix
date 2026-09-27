@@ -229,12 +229,14 @@ export interface TauriProviderConfig {
   kind: string;
   models: string[];
   default: string;
+  removable: boolean;
+  revision: string;
 }
 
-export interface TauriProviderConfigInput extends TauriProviderConfig {
+export type TauriProviderConfigInput = Omit<TauriProviderConfig, "removable" | "revision"> & {
   baseUrl: string;
   useApiKey: boolean;
-}
+};
 
 export interface TauriProviderConfigList {
   protocolVersion: number;
@@ -249,6 +251,12 @@ export async function tauriProviderConfigs(): Promise<TauriProviderConfigList> {
 export async function saveTauriProviderConfig(input: TauriProviderConfigInput): Promise<TauriProviderConfigList> {
   requireTauri();
   return invoke<TauriProviderConfigList>("save_provider_config", { input });
+}
+
+export async function deleteTauriProviderConfig(provider: TauriProviderConfig): Promise<TauriProviderConfigList> {
+  requireTauri();
+  const { name, displayName, kind, models, default: defaultModel, revision } = provider;
+  return invoke<TauriProviderConfigList>("delete_provider_config", { input: { name, displayName, kind, models, default: defaultModel, revision } });
 }
 
 export async function tauriUsageStats(request: UsageStatsRequest): Promise<UsageStatsRange> {

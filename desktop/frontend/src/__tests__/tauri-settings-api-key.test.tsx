@@ -43,6 +43,9 @@ let subagents = { protocolVersion: 1, defaultModel: "demo/m", subagentModel: "",
 let hooks = { protocolVersion: 1, scope: "global", path: "/preview/settings.json", projectRoot: "", revision: "r1", hooks: {} as Record<string, unknown>, events: ["PreToolUse", "Stop"] };
 let memory = { protocolVersion: 1, workspaceRoot: "/preview/project", storeDir: "/preview/memory", globalStoreDir: "/preview/global-memory", docs: [{ path: "/preview/project/AGENTS.md", scope: "project", body: "Old instruction.\n", revision: "r1" }], facts: [] as unknown[], archives: [] as unknown[], diagnostics: [] as string[] };
 let memoryNote = "";
+let allowDeleteProvider = false;
+let deletedProviderName = "";
+let deletedProviderRevision = "";
 let savedProviderInput: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean } | undefined;
 const summary = () => ({
   protocolVersion: 1,
@@ -51,7 +54,7 @@ const summary = () => ({
 });
 
 (dom.window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
-  async invoke(command: string, args?: { scope?: string; workspaceRoot?: string; url?: string; behavior?: string; mode?: string; request?: { model?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string } }) {
+  async invoke(command: string, args?: { scope?: string; workspaceRoot?: string; url?: string; behavior?: string; mode?: string; request?: { model?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean; revision?: string }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string } }) {
     calls.push(command);
     switch (command) {
       case "preview_runtime_info":
@@ -60,8 +63,9 @@ const summary = () => ({
       case "provider_summary":
         if (failSummary) { failSummary = false; throw new Error("summary unavailable"); }
         return summary();
-      case "provider_configs": return { protocolVersion: 1, providers: [{ name: "demo", displayName: "Demo", kind: "openai", models: ["m"], default: "m" }] };
-      case "save_provider_config": savedProviderInput = args?.input; return { protocolVersion: 1, providers: [args?.input] };
+      case "provider_configs": return { protocolVersion: 1, providers: [{ name: "demo", displayName: "Demo", kind: "openai", models: ["m"], default: "m", removable: allowDeleteProvider, revision: "r1" }] };
+      case "save_provider_config": savedProviderInput = args?.input; return { protocolVersion: 1, providers: [{ ...args?.input, removable: false }] };
+      case "delete_provider_config": deletedProviderName = args?.input?.name ?? ""; deletedProviderRevision = args?.input?.revision ?? ""; return { protocolVersion: 1, providers: [] };
       case "usage_stats": return { protocolVersion: 1, from: "2026-09-01", to: "2026-09-27", tokens: 42, requests: 1, turns: 1, cacheHit: 0, cacheMiss: 42, activeDays: 1, topModel: "demo/m", topProvider: "demo", daily: [], models: [], providers: [] };
       case "permission_settings": return { ...permissions };
       case "change_permission_settings": {
@@ -356,7 +360,7 @@ await act(async () => { root.unmount(); });
 failSummary = true;
 const retryRoot = createRoot(document.getElementById("root")!);
 await act(async () => { retryRoot.render(<LocaleProvider><TauriSettings onClose={() => {}} /></LocaleProvider>); });
-assert.match(visibleText(), /桌面风格/, "general settings remain available when provider loading fails");
+assert.match(visibleText(), /外观模式/, "general settings remain available when provider loading fails");
 await act(async () => { click("模型服务"); });
 assert.match(visibleText(), /读取设置失败/, "failed provider loading is actionable");
 await act(async () => { click("重试"); });
@@ -388,4 +392,14 @@ await act(async () => {
 await act(async () => { click("追加"); });
 assert.equal(memoryNote, "Remember this.", "quick memory note is saved through the bridge");
 await act(async () => { memoryRoot.unmount(); });
+allowDeleteProvider = true;
+(dom.window as unknown as { confirm: () => boolean }).confirm = () => true;
+const { TauriProviderEditor } = await import("../tauri/TauriProviderEditor");
+const providerRoot = createRoot(document.getElementById("root")!);
+await act(async () => { providerRoot.render(<TauriProviderEditor onSummaryChange={() => {}} />); });
+await act(async () => { click("删除"); });
+assert.equal(deletedProviderName, "demo", "confirmed custom provider deletion reaches the bridge");
+assert.equal(deletedProviderRevision, "r1", "deletion carries the configuration revision shown to the user");
+assert.match(visibleText(), /模型服务已删除/, "provider deletion reports the new-session effect");
+await act(async () => { providerRoot.unmount(); });
 console.log("tauri settings API key flow passed");

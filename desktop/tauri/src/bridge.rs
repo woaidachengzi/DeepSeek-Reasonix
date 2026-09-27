@@ -436,6 +436,19 @@ pub struct ProviderConfigView {
     pub kind: String,
     pub models: Vec<String>,
     pub default: String,
+    pub removable: bool,
+    pub revision: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteProviderConfigRequest {
+    pub name: String,
+    pub display_name: String,
+    pub kind: String,
+    pub models: Vec<String>,
+    pub default: String,
+    pub revision: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1488,6 +1501,25 @@ impl BridgeSupervisor {
         let response = self.request_json(
             "POST",
             "/v1/settings/provider-configs",
+            Some(json!(input)),
+            Some(&request_id),
+        )?;
+        let configs: ProviderConfigList =
+            serde_json::from_value(response).map_err(display_error)?;
+        if configs.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(configs)
+    }
+
+    pub fn delete_provider_config(
+        &self,
+        input: DeleteProviderConfigRequest,
+    ) -> Result<ProviderConfigList, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/provider-configs/delete",
             Some(json!(input)),
             Some(&request_id),
         )?;

@@ -456,6 +456,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("GET /v1/providers", b.authorized(b.providerSummary))
 	mux.HandleFunc("GET /v1/settings/provider-configs", b.authorized(b.providerConfigs))
 	mux.HandleFunc("POST /v1/settings/provider-configs", b.authorized(b.idempotent(64<<10, b.saveProviderConfig)))
+	mux.HandleFunc("POST /v1/settings/provider-configs/delete", b.authorized(b.idempotent(64<<10, b.deleteProviderConfig)))
 	mux.HandleFunc("POST /v1/settings/usage-stats", b.authorized(b.usageStats))
 	mux.HandleFunc("GET /v1/settings/permissions", b.authorized(b.permissionSettings))
 	mux.HandleFunc("POST /v1/settings/permissions", b.authorized(b.idempotent(64<<10, b.changePermissionSettings)))
@@ -634,7 +635,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "provider_summary", "provider_configs", "save_provider_config", "usage_stats", "permission_settings", "set_permission_settings", "sandbox_settings", "set_sandbox_settings", "network_settings", "set_network_settings", "skills_settings", "set_skills_settings", "subagent_settings", "set_subagent_settings", "hooks_settings", "set_hooks_settings", "memory_settings", "set_memory_settings", "set_default_model", "desktop_preferences", "set_desktop_approval", "set_provider_key", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "session_scan_import_review_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "provider_configs", "save_provider_config", "delete_provider_config", "usage_stats", "permission_settings", "set_permission_settings", "sandbox_settings", "set_sandbox_settings", "network_settings", "set_network_settings", "skills_settings", "set_skills_settings", "subagent_settings", "set_subagent_settings", "hooks_settings", "set_hooks_settings", "memory_settings", "set_memory_settings", "set_default_model", "desktop_preferences", "set_desktop_approval", "set_provider_key", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "session_scan_import_review_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
 	})
 }
 
@@ -648,7 +649,7 @@ func (b *bridgeServer) providerSummary(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (b *bridgeServer) providerConfigs(w http.ResponseWriter, _ *http.Request) {
-	view, err := loadProviderConfigs()
+	view, err := loadProviderConfigs(b.token)
 	if err != nil {
 		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read provider settings")
 		return
@@ -664,6 +665,23 @@ func (b *bridgeServer) saveProviderConfig(w http.ResponseWriter, r *http.Request
 	}
 	if err := persistProviderConfig(input); err != nil {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "provider settings could not be saved")
+		return
+	}
+	b.providerConfigs(w, r)
+}
+
+func (b *bridgeServer) deleteProviderConfig(w http.ResponseWriter, r *http.Request) {
+	var input deleteProviderConfigRequest
+	if err := decodeJSONBody(w, r, 64<<10, &input); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid provider deletion request")
+		return
+	}
+	if err := removeProviderConfig(input, b.token); err != nil {
+		if errors.Is(err, errPreviewProviderChanged) {
+			writeProtocolError(w, http.StatusConflict, "conflict", err.Error())
+		} else {
+			writeProtocolError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		}
 		return
 	}
 	b.providerConfigs(w, r)

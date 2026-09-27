@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { saveTauriProviderConfig, tauriMessageFrom, tauriProviderConfigs, tauriProviderSummary, type TauriProviderConfig, type TauriProviderConfigInput, type TauriProviderSummary } from "../lib/tauriBridge";
+import { deleteTauriProviderConfig, saveTauriProviderConfig, tauriMessageFrom, tauriProviderConfigs, tauriProviderSummary, type TauriProviderConfig, type TauriProviderConfigInput, type TauriProviderSummary } from "../lib/tauriBridge";
 
 const EMPTY: TauriProviderConfigInput = { name: "", displayName: "", kind: "openai", baseUrl: "", models: [], default: "", useApiKey: true };
 
@@ -43,7 +43,7 @@ export function TauriProviderEditor({ onSummaryChange }: { onSummaryChange: (sum
         }
       } catch { setError("请输入有效的服务端点地址。"); return; }
     }
-    const input = { ...editing, models, default: models.includes(editing.default) ? editing.default : models[0] };
+    const input: TauriProviderConfigInput = { name: editing.name, displayName: editing.displayName, kind: editing.kind, baseUrl: editing.baseUrl, models, default: models.includes(editing.default) ? editing.default : models[0], useApiKey: editing.useApiKey };
     setSaving(true);
     setError("");
     try {
@@ -60,12 +60,28 @@ export function TauriProviderEditor({ onSummaryChange }: { onSummaryChange: (sum
     }
   };
 
+  const remove = async (provider: TauriProviderConfig) => {
+    if (saving || !provider.removable || !window.confirm(`删除模型服务“${provider.displayName || provider.name}”？新会话将不能再选择它，已保存的钥匙串凭据不会被删除。`)) return;
+    setSaving(true);
+    setError(""); setMessage("");
+    try {
+      const view = await deleteTauriProviderConfig(provider);
+      setConfigs(view.providers);
+      setEditing(null);
+      setMessage("模型服务已删除；新会话会使用剩余的默认模型。");
+      try { onSummaryChange(await tauriProviderSummary()); }
+      catch { setError("服务已删除，但状态刷新失败。请重新打开设置。"); }
+    } catch (err) { setError(tauriMessageFrom(err)); }
+    finally { setSaving(false); }
+  };
+
   return <div className="tauri-provider-editor">
     <div className="tauri-settings-model-header"><strong>服务配置</strong><button type="button" className="tauri-settings-button" onClick={() => startEdit()} disabled={saving}>添加服务</button></div>
     <p className="tauri-settings-hint">支持 OpenAI Chat、Anthropic Messages 和 Responses 协议。端点与凭据不会显示在服务列表中。</p>
     {loading ? <p className="tauri-settings-hint">正在加载…</p> : configs.map(provider => <div className="tauri-provider-editor-row" key={provider.name}>
       <span><strong>{provider.displayName || provider.name}</strong><small>{provider.kind} · {provider.models.length} 个模型</small></span>
       <button type="button" className="tauri-settings-button" onClick={() => startEdit(provider)} disabled={saving || !["openai", "anthropic", "responses"].includes(provider.kind)}>编辑</button>
+      {provider.removable && <button type="button" className="tauri-settings-button" onClick={() => void remove(provider)} disabled={saving}>删除</button>}
     </div>)}
     {editing && <div className="tauri-provider-editor-form">
       <h4>{editingExisting ? "编辑模型服务" : "添加模型服务"}</h4>

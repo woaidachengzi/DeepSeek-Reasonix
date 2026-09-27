@@ -135,3 +135,177 @@ models = ["old"]
 		t.Fatalf("new provider not added to desktop access: %s", raw)
 	}
 }
+
+func TestProviderConfigDeleteRetargetsDefaultAndPreservesOtherSettings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	path := filepath.Join(home, "config.toml")
+	initial := `default_model = "custom/old"
+future_top_level = "keep"
+
+[desktop]
+provider_access = ["custom", "fallback"]
+default_tool_approval_mode = "ask"
+
+[[providers]]
+name = "custom"
+display_name = "Custom"
+kind = "openai"
+base_url = "https://custom.example/v1"
+models = ["old"]
+default = "old"
+
+[[providers]]
+name = "fallback"
+kind = "openai"
+base_url = "https://fallback.example/v1"
+models = ["chat"]
+default = "chat"
+`
+	if err := os.WriteFile(path, []byte(initial), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bridge := newBridgeServer(testToken, "instance-provider-delete")
+	get := func() providerConfigList {
+		r := httptest.NewRequest(http.MethodGet, "/v1/settings/provider-configs", nil)
+		r.Header.Set("Authorization", "Bearer "+testToken)
+		w := httptest.NewRecorder()
+		bridge.handler().ServeHTTP(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("get configs: %d %s", w.Code, w.Body.String())
+		}
+		var view providerConfigList
+		if err := json.Unmarshal(w.Body.Bytes(), &view); err != nil {
+			t.Fatal(err)
+		}
+		return view
+	}
+	post := func(id string, input providerConfigView) *httptest.ResponseRecorder {
+		body, err := json.Marshal(deleteProviderConfigRequest{Name: input.Name, DisplayName: input.DisplayName, Kind: input.Kind, Models: input.Models, Default: input.Default, Revision: input.Revision})
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := httptest.NewRequest(http.MethodPost, "/v1/settings/provider-configs/delete", strings.NewReader(string(body)))
+		r.Header.Set("Authorization", "Bearer "+testToken)
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set(requestIDHeader, id)
+		w := httptest.NewRecorder()
+		bridge.handler().ServeHTTP(w, r)
+		return w
+	}
+	view := get()
+	if len(view.Providers) != 2 || !view.Providers[0].Removable {
+		t.Fatalf("configs: %#v", view)
+	}
+	stale := view.Providers[0]
+	stale.Models = []string{"wrong"}
+	if w := post("stale-provider-delete", stale); w.Code != http.StatusConflict {
+		t.Fatalf("stale delete = %d: %s", w.Code, w.Body.String())
+	}
+	if err := os.WriteFile(path, []byte(strings.Replace(initial, "https://custom.example/v1", "https://changed.example/v1", 1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if w := post("hidden-provider-change", view.Providers[0]); w.Code != http.StatusConflict {
+		t.Fatalf("hidden endpoint changed but delete = %d: %s", w.Code, w.Body.String())
+	}
+	if err := os.WriteFile(path, []byte(initial), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if w := post("provider-delete", view.Providers[0]); w.Code != http.StatusOK {
+		t.Fatalf("delete = %d: %s", w.Code, w.Body.String())
+	}
+	result := get()
+	if len(result.Providers) != 1 || result.Providers[0].Name != "fallback" {
+		t.Fatalf("after delete: %#v", result)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`default_model = "fallback"`, `provider_access = ["fallback"]`, `future_top_level = "keep"`, `default_tool_approval_mode = "ask"`} {
+		if !strings.Contains(string(raw), want) {
+			t.Fatalf("config missing %q: %s", want, raw)
+		}
+	}
+	if strings.Contains(string(raw), `name = "custom"`) {
+		t.Fatalf("removed provider remained: %s", raw)
+	}
+	if w := post("last-provider-delete", result.Providers[0]); w.Code != http.StatusBadRequest {
+		t.Fatalf("last provider delete = %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestProviderConfigDeleteProtectsOfficialAndHiddenFallback(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		config        string
+		provider      string
+		wantRemovable bool
+	}{
+		{"official", `default_model = "deepseek/chat"
+[desktop]
+provider_access = ["deepseek", "fallback"]
+[[providers]]
+name = "deepseek"
+kind = "openai"
+base_url = "https://api.deepseek.com"
+models = ["chat"]
+default = "chat"
+[[providers]]
+name = "fallback"
+kind = "openai"
+base_url = "https://fallback.example/v1"
+models = ["chat"]
+default = "chat"
+`, "deepseek", false},
+		{"hidden fallback", `default_model = "custom/chat"
+[desktop]
+provider_access = ["custom"]
+[[providers]]
+name = "custom"
+kind = "openai"
+base_url = "https://custom.example/v1"
+models = ["chat"]
+default = "chat"
+[[providers]]
+name = "hidden"
+kind = "openai"
+base_url = "https://hidden.example/v1"
+models = ["chat"]
+default = "chat"
+`, "custom", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("REASONIX_HOME", home)
+			path := filepath.Join(home, "config.toml")
+			if err := os.WriteFile(path, []byte(tc.config), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			view, err := loadProviderConfigs(testToken)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var target providerConfigView
+			for _, item := range view.Providers {
+				if item.Name == tc.provider {
+					target = item
+				}
+			}
+			if target.Name == "" || target.Removable != tc.wantRemovable {
+				t.Fatalf("target = %#v", target)
+			}
+			input := deleteProviderConfigRequest{Name: target.Name, DisplayName: target.DisplayName, Kind: target.Kind, Models: target.Models, Default: target.Default, Revision: target.Revision}
+			if err := removeProviderConfig(input, testToken); err == nil {
+				t.Fatal("unsafe provider deletion succeeded")
+			}
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(raw) != tc.config {
+				t.Fatalf("failed deletion changed config: %s", raw)
+			}
+		})
+	}
+}
