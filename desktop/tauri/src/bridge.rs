@@ -776,6 +776,47 @@ pub struct MCPServerActivationRequest {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MCPMarketplaceEntry {
+    pub name: String,
+    pub suggested_name: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub version: String,
+    pub installable: bool,
+    #[serde(default)]
+    pub unavailable_reason: String,
+    #[serde(default)]
+    pub transport: String,
+    #[serde(default)]
+    pub command: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub url: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPMarketplaceResponse {
+    pub protocol_version: u64,
+    pub servers: Vec<MCPMarketplaceEntry>,
+    pub cached: bool,
+    #[serde(default)]
+    pub warning: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPMarketplaceResolveResponse {
+    pub protocol_version: u64,
+    pub server: MCPMarketplaceEntry,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MCPServerMutationResponse {
     pub protocol_version: u64,
     pub status: String,
@@ -1859,6 +1900,35 @@ impl BridgeSupervisor {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
         Ok(envelope)
+    }
+
+    pub fn search_mcp_marketplace(&self, query: &str) -> Result<MCPMarketplaceResponse, String> {
+        let encoded = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("query", query)
+            .finish();
+        let path = format!("/v1/mcp/marketplace?{encoded}");
+        let response = self.request_json("GET", &path, None, None)?;
+        let envelope: MCPMarketplaceResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope)
+    }
+
+    pub fn resolve_mcp_marketplace(&self, name: &str) -> Result<MCPMarketplaceEntry, String> {
+        let response = self.request_json(
+            "POST",
+            "/v1/mcp/marketplace/resolve",
+            Some(json!({ "name": name })),
+            None,
+        )?;
+        let envelope: MCPMarketplaceResolveResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope.server)
     }
 
     pub fn set_default_model(

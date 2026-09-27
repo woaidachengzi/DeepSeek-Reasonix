@@ -97,6 +97,9 @@ async function main() {
   const { act } = React;
   const { createRoot } = await import("react-dom/client");
   const { TauriSessionPreview } = await import("../tauri/TauriChatWorkspace");
+  const { mcpDraftFromMarketplace, mcpDraftToInput } = await import("../tauri/tauriMCPServers");
+  const packageDraft = mcpDraftFromMarketplace({name:"io.example/package",suggestedName:"package",installable:true,transport:"stdio",command:"npx",args:["--yes","name with spaces"]}, [], "global");
+  eq(JSON.stringify(mcpDraftToInput(packageDraft).args), JSON.stringify(["--yes","name with spaces"]), "Registry package argument boundaries survive the reviewed form");
 
   const root = createRoot(document.getElementById("root")!);
   await act(async () => {
@@ -193,6 +196,24 @@ async function main() {
   });
   ok(bridgeCalls().some(call => call.name === "delete_mcp_server"), "the delete reached the delete command");
   ok(text().includes("还没有配置 MCP 服务器"), "the list is empty again");
+
+  await act(async () => {
+    ok(click(mcpButtons("浏览目录")[0]), "the official directory can be opened");
+    await settle();
+  });
+  ok(text().includes("Example remote server"), "a Registry result is shown before installation");
+  await act(async () => {
+    ok(click(mcpButtons("配置")[0]), "an installable Registry entry can be selected");
+    await settle();
+  });
+  ok(bridgeCalls().some(call => call.name === "resolve_mcp_marketplace"), "the entry is re-resolved before preparing a draft");
+  eq((field("MCP 服务器名称") as HTMLInputElement | null)?.value, "remote", "the new draft uses the suggested local name");
+  eq((field("MCP 服务器 URL") as HTMLInputElement | null)?.value, "https://mcp.example.test/mcp", "the new draft contains the resolved URL");
+  await act(async () => {
+    ok(click(mcpButtons("添加服务器")[0]), "the reviewed Registry draft can be saved");
+    await settle();
+  });
+  ok(text().includes("remote"), "the Registry server appears in the installed list");
 
   await act(async () => {
     root.unmount();

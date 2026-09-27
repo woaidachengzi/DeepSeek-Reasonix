@@ -214,6 +214,16 @@ const commands: CommandContract[] = [
     description: "setTauriMCPServerEnabled() invokes set_mcp_server_enabled with request and workspaceRoot",
   },
   {
+    command: "search_mcp_marketplace",
+    argKeys: ["query"],
+    description: "searchTauriMCPMarketplace() invokes search_mcp_marketplace with query",
+  },
+  {
+    command: "resolve_mcp_marketplace",
+    argKeys: ["name"],
+    description: "resolveTauriMCPMarketplace() invokes resolve_mcp_marketplace with name",
+  },
+  {
     command: "bridge_start_events",
     argKeys: ["afterSequence"],
     description: "startTauriBridgeEvents() invokes bridge_start_events with { afterSequence }",

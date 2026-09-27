@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
-import { Check, ArrowLeft, Search, Keyboard, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, Type, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles, Users, Webhook } from "lucide-react";
+import { Check, ArrowLeft, Search, X, Keyboard, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, Type, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles, Users, Webhook } from "lucide-react";
 import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, tauriDesktopPreferences, setTauriDesktopApproval, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
 import { THEME_STYLES, type Theme, type ThemeStyle } from "../lib/theme";
 import { applyConversationWidth, getCachedConversationWidth, type ConversationWidth } from "../lib/conversationWidth";
@@ -298,7 +298,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
       <aside className="tauri-settings-sidebar">
         <div className="tauri-settings-titlebar" data-tauri-drag-region />
         <button type="button" className="tauri-settings-back" onClick={onClose}><ArrowLeft size={17} /><span>返回工作区</span></button>
-        <label className="tauri-settings-search"><Search size={16} aria-hidden="true" /><input type="search" aria-label="搜索设置" placeholder="搜索设置" value={navQuery} onChange={event => setNavQuery(event.target.value)} /></label>
+        <label className="tauri-settings-search"><Search size={16} aria-hidden="true" /><input type="search" aria-label="搜索设置" placeholder="搜索设置" value={navQuery} onChange={event => setNavQuery(event.target.value)} />{navQuery && <button type="button" aria-label="清除设置搜索" onClick={() => setNavQuery("")}><X size={14} aria-hidden="true" /></button>}</label>
         <nav className="tauri-settings-nav" aria-label="设置分类">
           {visibleGroups.map(group => <div className="tauri-settings-nav-group" key={group.label}>
             <div className="tauri-settings-nav-label">{group.label}</div>

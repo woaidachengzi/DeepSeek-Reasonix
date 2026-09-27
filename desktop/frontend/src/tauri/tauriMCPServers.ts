@@ -1,4 +1,4 @@
-import type { TauriMCPServer, TauriMCPServerInput } from "../lib/tauriBridge";
+import type { TauriMCPMarketplaceEntry, TauriMCPServer, TauriMCPServerInput } from "../lib/tauriBridge";
 
 // MCP server form draft. Credential fields stay as the user typed them and are
 // never populated from the bridge, because no credential value is ever returned
@@ -29,6 +29,27 @@ export function emptyMCPDraft(scope: "project" | "global"): MCPDraft {
     headers: "",
     editing: false,
     managedByPackage: false,
+  };
+}
+
+export function mcpDraftFromMarketplace(entry: TauriMCPMarketplaceEntry, servers: TauriMCPServer[], scope: "project" | "global"): MCPDraft {
+  if (!entry.installable || !["stdio", "http", "sse"].includes(entry.transport ?? "")) {
+    throw new Error("此目录条目需要手动配置，不能直接安装");
+  }
+  const used = new Set(servers.map(server => server.name));
+  const base = entry.suggestedName || "mcp-server";
+  let name = base;
+  for (let suffix = 2; used.has(name); suffix += 1) name = `${base}-${suffix}`;
+  return {
+    ...emptyMCPDraft(scope),
+    name,
+    type: entry.transport as MCPDraft["type"],
+    command: entry.command ?? "",
+    // JSON keeps argument boundaries intact when a Registry package contains
+    // a single argument with spaces. The ordinary form still accepts a simple
+    // whitespace-separated list for manually entered commands.
+    args: JSON.stringify(entry.args ?? []),
+    url: entry.url ?? "",
   };
 }
 
@@ -101,7 +122,16 @@ export function mcpDraftToInput(draft: MCPDraft): TauriMCPServerInput {
   };
   if (draft.type === "stdio") {
     input.command = draft.command.trim();
-    const args = draft.args.split(/\s+/).filter(Boolean);
+    let args: string[];
+    if (draft.args.trim().startsWith("[")) {
+      let parsed: unknown;
+      try { parsed = JSON.parse(draft.args); }
+      catch { throw new Error("参数 JSON 格式无效"); }
+      if (!Array.isArray(parsed) || parsed.some(arg => typeof arg !== "string")) {
+        throw new Error("参数必须是字符串数组");
+      }
+      args = parsed;
+    } else args = draft.args.split(/\s+/).filter(Boolean);
     if (args.length > 0) input.args = args;
   } else {
     input.url = draft.url.trim();

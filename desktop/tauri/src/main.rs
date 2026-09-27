@@ -75,9 +75,10 @@ use bridge::{
     BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
     BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse, DeleteProviderConfigRequest,
     DesktopPreferences, HooksSettingsChange, HooksSettingsView, LegacySessionCatalogEntry,
-    MCPServerActivationRequest, MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse,
-    MCPServerView, MemorySettingsChange, MemorySettingsView, NetworkSettingsChange,
-    NetworkSettingsView, OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
+    MCPMarketplaceEntry, MCPMarketplaceResponse, MCPServerActivationRequest,
+    MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse, MCPServerView,
+    MemorySettingsChange, MemorySettingsView, NetworkSettingsChange, NetworkSettingsView,
+    OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
     PendingSessionTitleRecovery, PermissionSettingsChange, PermissionSettingsView,
     ProviderConfigList, RenameSessionRequest, SandboxSettingsChange, SandboxSettingsView,
     SaveProviderConfigRequest, ScanImportCandidate, ScanImportSelection, SessionCatalogMetadata,
@@ -576,6 +577,22 @@ fn set_mcp_server_enabled(
     workspace_root: Option<String>,
 ) -> Result<MCPServerMutationResponse, String> {
     supervisor.set_mcp_server_enabled(request, workspace_root.as_deref())
+}
+
+#[tauri::command]
+fn search_mcp_marketplace(
+    supervisor: State<'_, BridgeSupervisor>,
+    query: String,
+) -> Result<MCPMarketplaceResponse, String> {
+    supervisor.search_mcp_marketplace(&query)
+}
+
+#[tauri::command]
+fn resolve_mcp_marketplace(
+    supervisor: State<'_, BridgeSupervisor>,
+    name: String,
+) -> Result<MCPMarketplaceEntry, String> {
+    supervisor.resolve_mcp_marketplace(&name)
 }
 
 #[tauri::command]
@@ -1808,6 +1825,8 @@ fn main() {
             save_mcp_server,
             delete_mcp_server,
             set_mcp_server_enabled,
+            search_mcp_marketplace,
+            resolve_mcp_marketplace,
             bridge_session_snapshot,
             bridge_session_history,
             bridge_session_previews,

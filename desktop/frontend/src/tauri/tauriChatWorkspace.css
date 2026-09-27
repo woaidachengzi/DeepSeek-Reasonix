@@ -524,29 +524,32 @@
 .tauri-settings-titlebar { position: absolute; top: 0; left: 0; right: 0; height: var(--titlebar-height); -webkit-app-region: drag; app-region: drag; }
 .tauri-settings-back { display: flex; min-height: 42px; align-items: center; gap: 11px; padding: 0 16px; border: 0; background: transparent; color: var(--fg-dim) !important; text-align: left; font-size: 13px !important; }
 .tauri-settings-back:hover { color: var(--fg) !important; }
-.tauri-settings-search { display: flex; height: 38px; align-items: center; gap: 8px; margin: 34px 4px 22px; padding: 0 10px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg); color: var(--fg-faint); }
+.tauri-settings-search { display: flex; height: 38px; align-items: center; gap: 8px; margin: 20px 4px 14px; padding: 0 10px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg); color: var(--fg-faint); }
 .tauri-settings-search:focus-within { border-color: var(--accent); }
 .tauri-settings-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--fg); font-size: 12px; }
 .tauri-settings-search input::placeholder { color: var(--fg-faint); }
-.tauri-settings-nav { display: flex; min-height: 0; flex-direction: column; gap: 21px; overflow: auto; padding: 4px; scrollbar-color: var(--scrollbar-thumb) transparent; }
+.tauri-settings-search button { display: grid; width: 24px; height: 24px; flex: 0 0 auto; place-items: center; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--fg-faint); }
+.tauri-settings-search button:hover, .tauri-settings-search button:focus-visible { background: var(--surface); color: var(--fg); }
+.tauri-settings-nav { display: flex; min-height: 0; flex-direction: column; gap: 14px; overflow: auto; padding: 4px; scrollbar-color: var(--scrollbar-thumb) transparent; }
 .tauri-settings-nav-group { display: grid; gap: 3px; }
 .tauri-settings-nav-label { padding: 0 10px 4px; color: var(--fg-faint); font-size: 10px; font-weight: 700; }
-.tauri-settings-nav-item { display: flex; min-height: 47px; align-items: center; gap: 11px; padding: 0 11px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--fg-dim); font-size: 13px; text-align: left; }
+.tauri-settings-nav-item { position: relative; display: flex; min-height: 48px; align-items: center; gap: 11px; padding: 0 11px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--fg-dim); font-size: 13px; text-align: left; }
 .tauri-settings-nav-item:hover { background: var(--surface); color: var(--fg); }
-.tauri-settings-nav-item.is-active { background: color-mix(in srgb, var(--fg) 8%, var(--sidebar-bg)); color: var(--fg); font-weight: 650; }
+.tauri-settings-nav-item.is-active { border-color: var(--border); background: color-mix(in srgb, var(--fg) 8%, var(--sidebar-bg)); color: var(--fg); box-shadow: 0 8px 18px rgb(0 0 0 / 10%); font-weight: 650; }
+.tauri-settings-nav-item.is-active::before { position: absolute; top: 9px; bottom: 9px; left: 0; width: 3px; border-radius: 999px; background: var(--accent); content: ""; }
 .tauri-settings-nav-item svg { flex: 0 0 auto; color: var(--fg-faint); }
 .tauri-settings-nav-item.is-active svg { color: var(--accent); }
 .tauri-settings-nav-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tauri-settings-nav-empty { padding: 12px; color: var(--fg-faint); font-size: 12px; }
 .tauri-settings-panel { display: flex; min-width: 0; min-height: 0; flex-direction: column; margin: 0 10px 10px 0; border: 1px solid var(--border); border-radius: 15px; background: var(--bg); overflow: hidden; }
-.tauri-settings-content { flex: 1; overflow-y: auto; padding: 30px clamp(22px, 1.5vw, 32px) 64px; scrollbar-color: var(--scrollbar-thumb) transparent; }
+.tauri-settings-content { flex: 1; overflow-y: auto; padding: 30px clamp(24px, 2vw, 40px) 64px; scrollbar-color: var(--scrollbar-thumb) transparent; }
 .tauri-settings-content > * { max-width: 1160px; }
 .tauri-settings-content[data-tab="general"] > * { max-width: 960px; }
 .tauri-settings-content[data-tab="model"] > * { max-width: 960px; }
 .tauri-settings-content[data-tab="general"] { padding-top: 12px; }
 .tauri-settings-content[data-tab="general"] > .tauri-settings-page-heading { display: none; }
 .tauri-settings-page-heading { margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid var(--border-soft); }
-.tauri-settings-page-heading h1 { margin: 0 0 5px; color: var(--fg); font-size: 21px; font-weight: 700; }
+.tauri-settings-page-heading h1 { margin: 0 0 5px; color: var(--fg); font-size: clamp(24px, 2.2vw, 30px); font-weight: 740; }
 .tauri-settings-page-heading p { margin: 0; color: var(--fg-faint); font-size: 12px; }
 .tauri-settings-loading { padding: 24px; color: var(--fg-faint); font-size: 12px; text-align: center; }
 .tauri-settings-load-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; border: 1px solid color-mix(in srgb, var(--err) 30%, var(--border-soft)); border-radius: 9px; color: var(--err); font-size: 12px; }
@@ -799,6 +802,20 @@
   font-size: 12px;
 }
 .tauri-mcp-list__actions button:disabled, .tauri-mcp-form__actions button:disabled { opacity: .5; }
+.tauri-mcp-marketplace { margin-top: 24px; }
+.tauri-mcp-marketplace h4 { margin: 0 0 5px; color: var(--fg); font-size: 14px; }
+.tauri-mcp-marketplace > p { margin: 0 0 14px; color: var(--fg-faint); font-size: 11px; }
+.tauri-mcp-marketplace__search { display: flex; gap: 8px; margin-bottom: 12px; }
+.tauri-mcp-marketplace__search input { flex: 1; min-width: 0; min-height: 36px; padding: 0 11px; border: 1px solid var(--border-soft); border-radius: 8px; outline: none; background: var(--surface); color: var(--fg); }
+.tauri-mcp-marketplace__search input:focus-visible { border-color: var(--accent); }
+.tauri-mcp-marketplace__search button, .tauri-mcp-marketplace__list button { padding: 6px 12px; border: 1px solid var(--border-soft); border-radius: 7px; background: var(--surface); color: var(--fg); }
+.tauri-mcp-marketplace__search button:disabled, .tauri-mcp-marketplace__list button:disabled { opacity: .5; }
+.tauri-mcp-marketplace__list { display: grid; gap: 0; margin: 0; padding: 0; border-top: 1px solid var(--border-soft); list-style: none; }
+.tauri-mcp-marketplace__list li { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 82px; padding: 12px 4px; border-bottom: 1px solid var(--border-soft); }
+.tauri-mcp-marketplace__list li > div { display: grid; min-width: 0; gap: 4px; }
+.tauri-mcp-marketplace__list strong { color: var(--fg); font-size: 12px; }
+.tauri-mcp-marketplace__list small { color: var(--fg-faint); font-size: 10px; overflow-wrap: anywhere; }
+.tauri-mcp-marketplace__list p { margin: 0; color: var(--fg-dim); font-size: 11px; line-height: 1.45; }
 .tauri-diagnostic-card__heading span { display: flex; gap: 6px; }
 
 .tauri-mcp-form { display: grid; gap: 8px; margin-top: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }

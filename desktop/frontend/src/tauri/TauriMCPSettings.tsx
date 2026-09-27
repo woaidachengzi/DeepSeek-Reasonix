@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { deleteTauriMCPServer, saveTauriMCPServer, setTauriMCPServerEnabled, tauriMCPServers, tauriMessageFrom, type TauriMCPServer } from "../lib/tauriBridge";
-import { emptyMCPDraft, mcpCredentialHint, mcpDraftForEditing, mcpDraftToInput, mcpTransportSummary, type MCPDraft } from "./tauriMCPServers";
+import { deleteTauriMCPServer, resolveTauriMCPMarketplace, saveTauriMCPServer, searchTauriMCPMarketplace, setTauriMCPServerEnabled, tauriMCPServers, tauriMessageFrom, type TauriMCPMarketplace, type TauriMCPMarketplaceEntry, type TauriMCPServer } from "../lib/tauriBridge";
+import { emptyMCPDraft, mcpCredentialHint, mcpDraftForEditing, mcpDraftFromMarketplace, mcpDraftToInput, mcpTransportSummary, type MCPDraft } from "./tauriMCPServers";
 
 export function TauriMCPSettings({ workspaceRoot, currentSessionState, currentSessionHasAttachments, onApplyToCurrentSession }: {
   workspaceRoot?: string;
@@ -15,6 +15,9 @@ export function TauriMCPSettings({ workspaceRoot, currentSessionState, currentSe
   const [loading, setLoading] = useState(true);
   const [pendingApply, setPendingApply] = useState(false);
   const [status, setStatus] = useState("");
+  const [marketplaceOpen, setMarketplaceOpen] = useState(false);
+  const [marketplaceQuery, setMarketplaceQuery] = useState("");
+  const [marketplace, setMarketplace] = useState<TauriMCPMarketplace | null>(null);
   const generation = useRef(0);
   const mutationBusy = useRef(false);
 
@@ -42,6 +45,8 @@ export function TauriMCPSettings({ workspaceRoot, currentSessionState, currentSe
     setNotice("");
     setPendingApply(false);
     setStatus("");
+    setMarketplaceOpen(false);
+    setMarketplace(null);
     void refresh();
     return () => { generation.current += 1; };
   }, [refresh]);
@@ -65,6 +70,50 @@ export function TauriMCPSettings({ workspaceRoot, currentSessionState, currentSe
         setDraft(null);
         setNotice("");
         setPendingApply(true);
+      }
+    } catch (cause) {
+      if (request === generation.current) setNotice(tauriMessageFrom(cause));
+    } finally {
+      if (request === generation.current) {
+        mutationBusy.current = false;
+        setBusy(false);
+      }
+    }
+  };
+
+  const browseMarketplace = async (query: string) => {
+    if (mutationBusy.current) return;
+    const request = generation.current;
+    mutationBusy.current = true;
+    setBusy(true);
+    setMarketplaceOpen(true);
+    setNotice("");
+    try {
+      const result = await searchTauriMCPMarketplace(query);
+      if (request === generation.current) setMarketplace(result);
+    } catch (cause) {
+      if (request === generation.current) setNotice(tauriMessageFrom(cause));
+    } finally {
+      if (request === generation.current) {
+        mutationBusy.current = false;
+        setBusy(false);
+      }
+    }
+  };
+
+  const prepareMarketplace = async (entry: TauriMCPMarketplaceEntry) => {
+    if (mutationBusy.current || marketplace?.cached) return;
+    const request = generation.current;
+    mutationBusy.current = true;
+    setBusy(true);
+    setNotice("");
+    try {
+      const current = await resolveTauriMCPMarketplace(entry.name);
+      const next = mcpDraftFromMarketplace(current, servers, workspaceRoot ? "project" : "global");
+      if (request === generation.current) {
+        setDraft(next);
+        setMarketplaceOpen(false);
+        setStatus(`已载入 ${current.title || current.name} 的最新配置，请检查命令或 URL 后保存。`);
       }
     } catch (cause) {
       if (request === generation.current) setNotice(tauriMessageFrom(cause));
@@ -141,13 +190,18 @@ export function TauriMCPSettings({ workspaceRoot, currentSessionState, currentSe
       <div><h3>MCP 服务器</h3><p>选择哪些服务器供新会话使用；项目级写入工作区的 <code>reasonix.toml</code>，全局级写入用户配置。密钥只写不回传。</p></div>
       <div className="tauri-mcp-settings__actions">
         <button type="button" className="tauri-settings-button" onClick={() => void refresh()} disabled={busy || loading}>刷新</button>
-        <button type="button" className="tauri-settings-button" onClick={() => setDraft(emptyMCPDraft(workspaceRoot ? "project" : "global"))} disabled={busy || draft !== null}>添加</button>
+        {marketplaceOpen ? <button type="button" className="tauri-settings-button" onClick={() => setMarketplaceOpen(false)} disabled={busy}>返回服务器</button> : <><button type="button" className="tauri-settings-button" onClick={() => void browseMarketplace("")} disabled={busy || draft !== null}>浏览目录</button><button type="button" className="tauri-settings-button" onClick={() => setDraft(emptyMCPDraft(workspaceRoot ? "project" : "global"))} disabled={busy || draft !== null}>添加</button></>}
         {pendingApply && currentSessionState && onApplyToCurrentSession && <button type="button" className="tauri-settings-button" onClick={() => void applyCurrent()} disabled={busy || currentSessionState !== "idle" || currentSessionHasAttachments}>应用到当前会话</button>}
       </div>
     </div>
     {notice && <p className="tauri-diagnostic-error" role="alert">{notice}</p>}
     {status && <p className="tauri-settings-hint" role="status">{status}</p>}
-    {loading ? <p className="tauri-settings-loading">正在读取 MCP 服务器…</p> : servers.length === 0 ? <p className="tauri-settings-empty">还没有配置 MCP 服务器。</p> : <ul className="tauri-mcp-list">{servers.map(server => <li key={`${server.scope}:${server.name}`}>
+    {marketplaceOpen ? <div className="tauri-mcp-marketplace">
+      <h4>官方 MCP 目录</h4><p>从目录查找可直接配置的服务器。选择后先检查配置，再保存到 Preview。</p>
+      <form className="tauri-mcp-marketplace__search" onSubmit={event => { event.preventDefault(); void browseMarketplace(marketplaceQuery); }}><input type="search" aria-label="搜索 MCP 目录" placeholder="搜索服务器名称或用途" value={marketplaceQuery} onChange={event => setMarketplaceQuery(event.target.value)} /><button type="submit" disabled={busy}>搜索</button></form>
+      {marketplace?.cached && <p className="tauri-settings-hint" role="status">当前显示离线缓存；恢复连接后可重新搜索并配置。</p>}
+      {busy && !marketplace ? <p className="tauri-settings-loading">正在查询目录…</p> : marketplace && marketplace.servers.length === 0 ? <p className="tauri-settings-empty">没有匹配的服务器。</p> : marketplace && <ul className="tauri-mcp-marketplace__list">{marketplace.servers.map(entry => <li key={entry.name}><div><strong>{entry.title || entry.name}</strong><small>{entry.name}{entry.version ? ` · ${entry.version}` : ""}{entry.transport ? ` · ${entry.transport}` : ""}</small>{entry.description && <p>{entry.description}</p>}{!entry.installable && <small>{entry.unavailableReason || "需要手动配置"}</small>}</div>{entry.installable && <button type="button" onClick={() => void prepareMarketplace(entry)} disabled={busy || marketplace.cached}>配置</button>}</li>)}</ul>}
+    </div> : loading ? <p className="tauri-settings-loading">正在读取 MCP 服务器…</p> : servers.length === 0 ? <p className="tauri-settings-empty">还没有配置 MCP 服务器。</p> : <ul className="tauri-mcp-list">{servers.map(server => <li key={`${server.scope}:${server.name}`}>
       <div className="tauri-mcp-list__row"><strong>{server.name}</strong><span className="tauri-mcp-list__meta">{server.scope === "project" ? "项目" : server.scope === "global" ? "全局" : server.scope} · {server.type}</span></div>
       <code className="tauri-mcp-list__transport">{mcpTransportSummary(server) || "—"}</code>
       {mcpCredentialHint(server) && <small>{mcpCredentialHint(server)}</small>}

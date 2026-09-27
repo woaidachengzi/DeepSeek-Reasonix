@@ -580,6 +580,37 @@ export async function setTauriMCPServerEnabled(
   return invoke<TauriMCPServerMutation>("set_mcp_server_enabled", { request: { name, enabled }, workspaceRoot });
 }
 
+export interface TauriMCPMarketplaceEntry {
+  name: string;
+  suggestedName: string;
+  title?: string;
+  description?: string;
+  version?: string;
+  installable: boolean;
+  unavailableReason?: string;
+  transport?: "stdio" | "http" | "sse";
+  command?: string;
+  args?: string[];
+  url?: string;
+}
+
+export interface TauriMCPMarketplace {
+  protocolVersion: number;
+  servers: TauriMCPMarketplaceEntry[];
+  cached: boolean;
+  warning?: string;
+}
+
+export async function searchTauriMCPMarketplace(query: string): Promise<TauriMCPMarketplace> {
+  requireTauri();
+  return invoke<TauriMCPMarketplace>("search_mcp_marketplace", { query });
+}
+
+export async function resolveTauriMCPMarketplace(name: string): Promise<TauriMCPMarketplaceEntry> {
+  requireTauri();
+  return invoke<TauriMCPMarketplaceEntry>("resolve_mcp_marketplace", { name });
+}
+
 export async function importTauriStableProfile(): Promise<TauriProfileImportResult> {
   requireTauri();
   return invoke<TauriProfileImportResult>("import_stable_profile", { confirmed: true });

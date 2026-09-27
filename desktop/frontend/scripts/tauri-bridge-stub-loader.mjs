@@ -405,6 +405,16 @@ export function setTauriMCPServerEnabled(name, enabled, workspaceRoot) {
   return Promise.resolve({ protocolVersion: 1, status: "activated", server: list.find(entry => entry.name === name), servers: list.slice() });
 }
 
+export function searchTauriMCPMarketplace(query) {
+  record("search_mcp_marketplace", { query });
+  return Promise.resolve({ protocolVersion: 1, cached: false, servers: [{ name: "io.example/remote", suggestedName: "remote", title: "Remote", description: "Example remote server", version: "1.0", installable: true, transport: "http", url: "https://mcp.example.test/mcp" }] });
+}
+
+export function resolveTauriMCPMarketplace(name) {
+  record("resolve_mcp_marketplace", { name });
+  return Promise.resolve({ name, suggestedName: "remote", title: "Remote", installable: true, transport: "http", url: "https://mcp.example.test/mcp" });
+}
+
 export function tauriAssistantTextDelta() { return ""; }
 export function tauriComposerInput(prompt, attachments) { return prompt.trim(); }
 export function tauriEventSummary(event) { return JSON.stringify(event.payload); }
