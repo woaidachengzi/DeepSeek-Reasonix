@@ -1271,6 +1271,17 @@ impl BridgeSupervisor {
         Ok(configs)
     }
 
+    pub fn usage_stats(&self, request: Value) -> Result<Value, String> {
+        let response =
+            self.request_json("POST", "/v1/settings/usage-stats", Some(request), None)?;
+        if response.get("protocolVersion").and_then(Value::as_u64)
+            != Some(u64::from(PROTOCOL_VERSION))
+        {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(response)
+    }
+
     pub fn desktop_preferences(&self) -> Result<DesktopPreferences, String> {
         let response = self.request_json("GET", "/v1/settings/desktop", None, None)?;
         let preferences: DesktopPreferences =

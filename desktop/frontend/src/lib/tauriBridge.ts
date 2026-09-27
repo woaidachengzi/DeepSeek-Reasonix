@@ -2,6 +2,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { formatAttachmentRefForSubmit } from "./attachmentDisplay";
+import type { UsageStatsRange, UsageStatsRequest } from "./types";
 import type {
   BridgeAnswerQuestionRequest,
   BridgeApprovalRequest,
@@ -248,6 +249,11 @@ export async function tauriProviderConfigs(): Promise<TauriProviderConfigList> {
 export async function saveTauriProviderConfig(input: TauriProviderConfigInput): Promise<TauriProviderConfigList> {
   requireTauri();
   return invoke<TauriProviderConfigList>("save_provider_config", { input });
+}
+
+export async function tauriUsageStats(request: UsageStatsRequest): Promise<UsageStatsRange> {
+  requireTauri();
+  return invoke<UsageStatsRange>("usage_stats", { request });
 }
 
 export type TauriToolApprovalMode = "ask" | "auto" | "yolo";

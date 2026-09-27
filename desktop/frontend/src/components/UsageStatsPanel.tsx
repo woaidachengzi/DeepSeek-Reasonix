@@ -24,6 +24,7 @@ const RANGE_PRESETS = ["7", "14", "30", "90"] as const;
 // Every entry point that records usage (see StatsSource tags in the Go
 // kernel). "all" is the unfiltered aggregate; the rest match one source label.
 const SOURCES = ["all", "desktop", "cli", "serve", "bot", "remote"] as const;
+type StatsSource = typeof SOURCES[number] | "desktop-tauri";
 
 // The heatmap always shows a fixed 40-week window regardless of the range
 // preset (it only follows the source filter).
@@ -50,6 +51,7 @@ const USAGE_STATS_TRANSLATIONS = {
     "settings.stats.source": "Source",
     "settings.stats.source.all": "All",
     "settings.stats.source.desktop": "Desktop",
+    "settings.stats.source.desktop-tauri": "Tauri Preview",
     "settings.stats.source.cli": "CLI",
     "settings.stats.source.serve": "Web",
     "settings.stats.source.bot": "Bot",
@@ -92,6 +94,7 @@ const USAGE_STATS_TRANSLATIONS = {
     "settings.stats.source": "统计来源",
     "settings.stats.source.all": "全部",
     "settings.stats.source.desktop": "桌面端",
+    "settings.stats.source.desktop-tauri": "Tauri Preview",
     "settings.stats.source.cli": "命令行",
     "settings.stats.source.serve": "网页端",
     "settings.stats.source.bot": "机器人",
@@ -134,6 +137,7 @@ const USAGE_STATS_TRANSLATIONS = {
     "settings.stats.source": "統計來源",
     "settings.stats.source.all": "全部",
     "settings.stats.source.desktop": "桌面端",
+    "settings.stats.source.desktop-tauri": "Tauri Preview",
     "settings.stats.source.cli": "命令列",
     "settings.stats.source.serve": "網頁端",
     "settings.stats.source.bot": "機器人",
@@ -166,6 +170,7 @@ const USAGE_STATS_TRANSLATIONS = {
 
 type UsageStatsKey = keyof typeof USAGE_STATS_TRANSLATIONS.en;
 type UsageStatsTranslator = (key: UsageStatsKey) => string;
+const defaultLoadStats = (request: UsageStatsRequest) => app.UsageStats(request);
 
 // Model colour palette: a fixed two-set categorical series (--chart-1..5 with
 // light/dark variants defined in styles.css, from GitHub Primer's data-viz
@@ -199,7 +204,7 @@ function localDay(offsetDays: number): string {
   return `${y}-${m}-${day}`;
 }
 
-export function UsageStatsPanel() {
+export function UsageStatsPanel({ loadStats = defaultLoadStats, sources = SOURCES }: { loadStats?: (request: UsageStatsRequest) => Promise<UsageStatsRange>; sources?: readonly StatsSource[] } = {}) {
   const { locale } = useI18n();
   const t = useCallback<UsageStatsTranslator>((key) => USAGE_STATS_TRANSLATIONS[locale][key], [locale]);
   const [range, setRange] = useState<string>("30");
@@ -224,7 +229,7 @@ export function UsageStatsPanel() {
     const generation = ++heatGenRef.current;
     setHeatDaily([]);
     try {
-      const res = await app.UsageStats({ range: "custom", from: heatWindow.from, to: heatWindow.to, source });
+      const res = await loadStats({ range: "custom", from: heatWindow.from, to: heatWindow.to, source });
       if (heatGenRef.current !== generation) return;
       setHeatDaily(res.daily);
     } catch {
@@ -233,7 +238,7 @@ export function UsageStatsPanel() {
       // empty instead of retaining cells from the previous source.
       setHeatDaily([]);
     }
-  }, [heatWindow.from, heatWindow.to, source]);
+  }, [heatWindow.from, heatWindow.to, source, loadStats]);
 
   useEffect(() => {
     void loadHeat();
@@ -257,7 +262,7 @@ export function UsageStatsPanel() {
     setLoading(true);
     setError("");
     try {
-      const res = await app.UsageStats(req);
+      const res = await loadStats(req);
       if (generationRef.current !== generation) return; // stale response
       setStats(res);
     } catch (e) {
@@ -267,7 +272,7 @@ export function UsageStatsPanel() {
     } finally {
       if (generationRef.current === generation) setLoading(false);
     }
-  }, [range, customFrom, customTo, source]);
+  }, [range, customFrom, customTo, source, loadStats]);
 
   useEffect(() => {
     void load();
@@ -365,7 +370,7 @@ export function UsageStatsPanel() {
           </div>
         )}
         <SettingsOptions className="usage-stats__group" role="group" aria-label={t("settings.stats.source")}>
-          {SOURCES.map((s) => (
+          {sources.map((s) => (
             <button
               key={s}
               type="button"

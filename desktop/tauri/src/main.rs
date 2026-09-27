@@ -737,6 +737,14 @@ fn save_provider_config(
 }
 
 #[tauri::command]
+fn usage_stats(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    supervisor.usage_stats(request)
+}
+
+#[tauri::command]
 fn desktop_preferences(
     supervisor: State<'_, BridgeSupervisor>,
 ) -> Result<DesktopPreferences, String> {
@@ -1684,6 +1692,7 @@ fn main() {
             provider_summary,
             provider_configs,
             save_provider_config,
+            usage_stats,
             desktop_preferences,
             set_desktop_approval,
             set_default_model,

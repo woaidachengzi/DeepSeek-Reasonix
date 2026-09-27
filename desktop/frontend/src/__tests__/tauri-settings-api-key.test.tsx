@@ -1,6 +1,12 @@
 // Run: tsx src/__tests__/tauri-settings-api-key.test.tsx
 import assert from "node:assert/strict";
+import { registerHooks } from "node:module";
 import { JSDOM } from "jsdom";
+
+registerHooks({ resolve(specifier, context, nextResolve) {
+  if (specifier.endsWith(".css")) return nextResolve("./asset-stub-for-tests.ts", { ...context, parentURL: import.meta.url });
+  return nextResolve(specifier, context);
+} });
 
 const dom = new JSDOM("<!doctype html><html><body><div id='root'></div></body></html>", { url: "http://localhost/" });
 Object.assign(globalThis, {
@@ -14,6 +20,8 @@ Object.assign(globalThis, {
   isTauri: true,
 });
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
+class TestResizeObserver { observe() {} unobserve() {} disconnect() {} }
+globalThis.ResizeObserver = TestResizeObserver as unknown as typeof ResizeObserver;
 
 let keyPresent = false;
 const envCredentialPresent = true;
@@ -46,6 +54,7 @@ const summary = () => ({
         return summary();
       case "provider_configs": return { protocolVersion: 1, providers: [{ name: "demo", displayName: "Demo", kind: "openai", models: ["m"], default: "m" }] };
       case "save_provider_config": savedProviderInput = args?.input; return { protocolVersion: 1, providers: [args?.input] };
+      case "usage_stats": return { protocolVersion: 1, from: "2026-09-01", to: "2026-09-27", tokens: 42, requests: 1, turns: 1, cacheHit: 0, cacheMiss: 42, activeDays: 1, topModel: "demo/m", topProvider: "demo", daily: [], models: [], providers: [] };
       case "set_default_model": defaultModel = args?.request?.model ?? ""; return summary();
       case "platform_info": return "darwin";
       case "get_close_behavior": return closeBehavior;
@@ -72,6 +81,7 @@ const React = await import("react");
 const { act } = React;
 const { renderToString } = await import("react-dom/server");
 const { createRoot } = await import("react-dom/client");
+const { LocaleProvider } = await import("../lib/i18n");
 const { TauriSettings } = await import("../tauri/TauriSettings");
 let parentConfigured: boolean | undefined;
 let applyCalls = 0;
@@ -79,11 +89,11 @@ let profileImportCalls = 0;
 let restartCalls = 0;
 let auditRefreshCalls = 0;
 
-renderToString(<TauriSettings onClose={() => {}} />);
+renderToString(<LocaleProvider><TauriSettings onClose={() => {}} /></LocaleProvider>);
 assert.equal(calls.length, 0, "rendering settings does not start bridge work");
 
 const root = createRoot(document.getElementById("root")!);
-await act(async () => { root.render(<TauriSettings initialTab="appearance" onClose={() => {}} onProviderSummaryChange={value => { parentConfigured = value.providers[0]?.configured; }} currentSessionState="idle" onApplyToCurrentSession={async () => { applyCalls += 1; return true; }} bridgeStatus={{ running: true, protocolVersion: 1 }} catalogAudit={{ legacyCount: 3, directoryCount: 3, matchedCount: 3, directoryOnlyCount: 0, missingFromDirectory: 0, retiredLegacyCount: 0, titleMismatches: 0, workspaceMismatches: 0, orderMismatches: 0, missingTranscripts: 0, physicalStateMismatches: 0, unclaimedTranscripts: 0, inventoryErrors: 0, legacyMatchesDirectory: true }} sessionPageSource="identity" onRestartBridge={async () => { restartCalls += 1; return true; }} onRefreshCatalogAudit={async () => { auditRefreshCalls += 1; }} profile={{ previewHome: "/preview/home", previewConfigExists: false, stableConfigExists: true, importAvailable: true, managedProfile: true }} onImportStableProfile={async () => { profileImportCalls += 1; return "已备份并导入配置"; }} />); });
+await act(async () => { root.render(<LocaleProvider><TauriSettings initialTab="appearance" onClose={() => {}} onProviderSummaryChange={value => { parentConfigured = value.providers[0]?.configured; }} currentSessionState="idle" onApplyToCurrentSession={async () => { applyCalls += 1; return true; }} bridgeStatus={{ running: true, protocolVersion: 1 }} catalogAudit={{ legacyCount: 3, directoryCount: 3, matchedCount: 3, directoryOnlyCount: 0, missingFromDirectory: 0, retiredLegacyCount: 0, titleMismatches: 0, workspaceMismatches: 0, orderMismatches: 0, missingTranscripts: 0, physicalStateMismatches: 0, unclaimedTranscripts: 0, inventoryErrors: 0, legacyMatchesDirectory: true }} sessionPageSource="identity" onRestartBridge={async () => { restartCalls += 1; return true; }} onRefreshCatalogAudit={async () => { auditRefreshCalls += 1; }} profile={{ previewHome: "/preview/home", previewConfigExists: false, stableConfigExists: true, importAvailable: true, managedProfile: true }} onImportStableProfile={async () => { profileImportCalls += 1; return "已备份并导入配置"; }} /></LocaleProvider>); });
 assert.equal(calls.filter(call => call === "provider_summary").length, 1, "settings load once after mount");
 assert.equal(parentConfigured, true, "the model picker outside settings receives the initial summary");
 
@@ -172,6 +182,9 @@ await act(async () => {
   defaultModelSelect.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
 });
 assert.equal(defaultModel, "demo/m", "default model is persisted through the bridge");
+await act(async () => { click("用量统计"); });
+assert.ok(document.querySelector(".usage-stats"), "Preview renders the stable usage chart panel");
+assert.ok(calls.includes("usage_stats"), "usage statistics read through the Tauri bridge");
 await act(async () => { click("模型服务"); });
 assert.match(visibleText(), /已就绪/, ".env credential configures the provider");
 assert.match(visibleText(), /服务配置/, "provider configuration is editable from settings");
@@ -258,7 +271,7 @@ assert.equal(openedURL, "https://github.com/esengine/DeepSeek-Reasonix", "GitHub
 await act(async () => { root.unmount(); });
 failSummary = true;
 const retryRoot = createRoot(document.getElementById("root")!);
-await act(async () => { retryRoot.render(<TauriSettings onClose={() => {}} />); });
+await act(async () => { retryRoot.render(<LocaleProvider><TauriSettings onClose={() => {}} /></LocaleProvider>); });
 assert.match(visibleText(), /桌面风格/, "general settings remain available when provider loading fails");
 await act(async () => { click("模型服务"); });
 assert.match(visibleText(), /读取设置失败/, "failed provider loading is actionable");
