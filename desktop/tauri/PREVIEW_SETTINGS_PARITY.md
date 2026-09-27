@@ -22,7 +22,7 @@ does not imply that the Go runtime lacks the underlying capability.
 | Hooks | Not in settings | No Preview hook-management view or verified mutation contract. |
 | Diagnostics | Partial | Bridge health/restart and session catalog audit/refresh are available in settings. The existing runtime drawer also contains event logs and session details. |
 | Shortcuts | Read only | The active Preview keyboard shortcuts are listed; shortcut customization is not implemented. |
-| Permissions | Not in settings | No Preview permission-policy editor or verified mutation contract. |
+| Permissions | Available for new sessions | The Preview settings page reads and saves the global writer fallback mode and allow/ask/deny tool rules through the authenticated bridge, preserving unrelated config fields. It can explicitly restart an idle current session to apply the saved policy. Workspace-level rules may override the global profile. |
 | Sandbox | Not in settings | No Preview sandbox settings view or verified mutation contract. |
 | Network | Not in settings | No Preview network settings view or verified mutation contract. |
 | Appearance | Partial | Theme mode/style, conversation width, text size, UI font, and code font persist locally. Remaining stable appearance controls are not present. |

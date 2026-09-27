@@ -457,6 +457,28 @@ pub struct SaveProviderConfigRequest {
     pub use_api_key: bool,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionSettingsView {
+    pub protocol_version: u64,
+    pub mode: String,
+    pub allow: Vec<String>,
+    pub ask: Vec<String>,
+    pub deny: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionSettingsChange {
+    pub action: String,
+    #[serde(default)]
+    pub mode: String,
+    #[serde(default)]
+    pub list: String,
+    #[serde(default)]
+    pub rule: String,
+}
+
 /// One MCP server as the host may see it. Credential material is write-only, so
 /// this carries the key names a server expects and never a value. Hand-written
 /// like the other host-owned payloads: the wire shape belongs to this host, not
@@ -1280,6 +1302,35 @@ impl BridgeSupervisor {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
         Ok(response)
+    }
+
+    pub fn permission_settings(&self) -> Result<PermissionSettingsView, String> {
+        let response = self.request_json("GET", "/v1/settings/permissions", None, None)?;
+        let view: PermissionSettingsView =
+            serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn change_permission_settings(
+        &self,
+        change: PermissionSettingsChange,
+    ) -> Result<PermissionSettingsView, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/permissions",
+            Some(json!(change)),
+            Some(&request_id),
+        )?;
+        let view: PermissionSettingsView =
+            serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
     }
 
     pub fn desktop_preferences(&self) -> Result<DesktopPreferences, String> {

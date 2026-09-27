@@ -75,11 +75,12 @@ use bridge::{
     BridgeWorkspaceChangesResponse, BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse,
     DesktopPreferences, LegacySessionCatalogEntry, MCPServerDeleteRequest, MCPServerInput,
     MCPServerMutationResponse, MCPServerView, OpenSessionRequest, PendingSessionDeleteCursor,
-    PendingSessionDeletePage, PendingSessionTitleRecovery, ProviderConfigList,
-    RenameSessionRequest, SaveProviderConfigRequest, ScanImportCandidate, ScanImportSelection,
-    SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage,
-    SessionFirstMessageTitle, SessionPreview, SessionRequest, SubmitRequest,
-    WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
+    PendingSessionDeletePage, PendingSessionTitleRecovery, PermissionSettingsChange,
+    PermissionSettingsView, ProviderConfigList, RenameSessionRequest, SaveProviderConfigRequest,
+    ScanImportCandidate, ScanImportSelection, SessionCatalogMetadata, SessionDirectoryCursor,
+    SessionDirectoryEntry, SessionDirectoryPage, SessionFirstMessageTitle, SessionPreview,
+    SessionRequest, SubmitRequest, WorkspaceChangeDetailRequest, WorkspaceFileRequest,
+    WorkspaceRequest,
 };
 use data_profile::{
     PreviewProfile, PreviewProfileStatus, ProfileImportResult, ProjectFoldersImportResult,
@@ -742,6 +743,21 @@ fn usage_stats(
     request: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
     supervisor.usage_stats(request)
+}
+
+#[tauri::command]
+fn permission_settings(
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<PermissionSettingsView, String> {
+    supervisor.permission_settings()
+}
+
+#[tauri::command]
+fn change_permission_settings(
+    supervisor: State<'_, BridgeSupervisor>,
+    change: PermissionSettingsChange,
+) -> Result<PermissionSettingsView, String> {
+    supervisor.change_permission_settings(change)
 }
 
 #[tauri::command]
@@ -1693,6 +1709,8 @@ fn main() {
             provider_configs,
             save_provider_config,
             usage_stats,
+            permission_settings,
+            change_permission_settings,
             desktop_preferences,
             set_desktop_approval,
             set_default_model,

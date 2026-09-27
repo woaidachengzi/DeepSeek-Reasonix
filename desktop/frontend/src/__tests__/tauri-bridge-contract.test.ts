@@ -284,6 +284,16 @@ const commands: CommandContract[] = [
     description: "tauriUsageStats() invokes usage_stats with { request }",
   },
   {
+    command: "permission_settings",
+    argKeys: [],
+    description: "tauriPermissionSettings() invokes permission_settings with no args",
+  },
+  {
+    command: "change_permission_settings",
+    argKeys: ["change"],
+    description: "changeTauriPermissionSettings() invokes change_permission_settings with { change }",
+  },
+  {
     command: "set_default_model",
     argKeys: ["request"],
     description: "setTauriDefaultModel() invokes set_default_model with { request }",

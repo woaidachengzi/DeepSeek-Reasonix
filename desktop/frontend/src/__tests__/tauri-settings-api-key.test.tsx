@@ -35,6 +35,7 @@ let openedURL = "";
 let closeBehavior = "keep_running";
 let approvalMode = "auto";
 let defaultModel = "";
+const permissions = { protocolVersion: 1, mode: "ask", allow: [] as string[], ask: [] as string[], deny: [] as string[] };
 let savedProviderInput: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean } | undefined;
 const summary = () => ({
   protocolVersion: 1,
@@ -43,7 +44,7 @@ const summary = () => ({
 });
 
 (dom.window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
-  async invoke(command: string, args?: { url?: string; behavior?: string; mode?: string; request?: { model?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean } }) {
+  async invoke(command: string, args?: { url?: string; behavior?: string; mode?: string; request?: { model?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean }; change?: { action: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string } }) {
     calls.push(command);
     switch (command) {
       case "preview_runtime_info":
@@ -55,6 +56,16 @@ const summary = () => ({
       case "provider_configs": return { protocolVersion: 1, providers: [{ name: "demo", displayName: "Demo", kind: "openai", models: ["m"], default: "m" }] };
       case "save_provider_config": savedProviderInput = args?.input; return { protocolVersion: 1, providers: [args?.input] };
       case "usage_stats": return { protocolVersion: 1, from: "2026-09-01", to: "2026-09-27", tokens: 42, requests: 1, turns: 1, cacheHit: 0, cacheMiss: 42, activeDays: 1, topModel: "demo/m", topProvider: "demo", daily: [], models: [], providers: [] };
+      case "permission_settings": return { ...permissions };
+      case "change_permission_settings": {
+        const change = args?.change;
+        if (change?.action === "mode") permissions.mode = change.mode ?? permissions.mode;
+        else if (change?.list && change.rule) {
+          if (change.action === "add") permissions[change.list] = [...permissions[change.list], change.rule];
+          else permissions[change.list] = permissions[change.list].filter(rule => rule !== change.rule);
+        }
+        return { ...permissions };
+      }
       case "set_default_model": defaultModel = args?.request?.model ?? ""; return summary();
       case "platform_info": return "darwin";
       case "get_close_behavior": return closeBehavior;
@@ -185,6 +196,18 @@ assert.equal(defaultModel, "demo/m", "default model is persisted through the bri
 await act(async () => { click("用量统计"); });
 assert.ok(document.querySelector(".usage-stats"), "Preview renders the stable usage chart panel");
 assert.ok(calls.includes("usage_stats"), "usage statistics read through the Tauri bridge");
+await act(async () => { click("权限"); });
+assert.match(visibleText(), /默认写入决策/, "permission editor is available in settings");
+await act(async () => { click("拒绝"); });
+assert.equal(permissions.mode, "deny", "writer fallback mode is persisted through the bridge");
+const denyRuleInput = document.querySelector<HTMLInputElement>('input[aria-label="新增拒绝规则"]');
+assert.ok(denyRuleInput);
+await act(async () => {
+  Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(denyRuleInput, "Bash(rm:*)");
+  denyRuleInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+});
+await act(async () => { click("添加"); });
+assert.deepEqual(permissions.deny, ["Bash(rm:*)"], "permission rule is persisted through the bridge");
 await act(async () => { click("模型服务"); });
 assert.match(visibleText(), /已就绪/, ".env credential configures the provider");
 assert.match(visibleText(), /服务配置/, "provider configuration is editable from settings");

@@ -256,6 +256,29 @@ export async function tauriUsageStats(request: UsageStatsRequest): Promise<Usage
   return invoke<UsageStatsRange>("usage_stats", { request });
 }
 
+export type TauriPermissionMode = "ask" | "allow" | "deny";
+export type TauriPermissionList = "allow" | "ask" | "deny";
+export interface TauriPermissionSettings {
+  protocolVersion: number;
+  mode: TauriPermissionMode;
+  allow: string[];
+  ask: string[];
+  deny: string[];
+}
+export type TauriPermissionChange =
+  | { action: "mode"; mode: TauriPermissionMode }
+  | { action: "add" | "remove"; list: TauriPermissionList; rule: string };
+
+export async function tauriPermissionSettings(): Promise<TauriPermissionSettings> {
+  requireTauri();
+  return invoke<TauriPermissionSettings>("permission_settings");
+}
+
+export async function changeTauriPermissionSettings(change: TauriPermissionChange): Promise<TauriPermissionSettings> {
+  requireTauri();
+  return invoke<TauriPermissionSettings>("change_permission_settings", { change });
+}
+
 export type TauriToolApprovalMode = "ask" | "auto" | "yolo";
 export interface TauriDesktopPreferences {
   protocolVersion: number;
