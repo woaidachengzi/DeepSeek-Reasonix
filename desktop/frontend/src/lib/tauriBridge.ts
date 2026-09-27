@@ -222,6 +222,22 @@ export async function tauriProviderSummary(): Promise<TauriProviderSummary> {
   return invoke<TauriProviderSummary>("provider_summary");
 }
 
+export type TauriToolApprovalMode = "ask" | "auto" | "yolo";
+export interface TauriDesktopPreferences {
+  protocolVersion: number;
+  defaultToolApprovalMode: TauriToolApprovalMode;
+}
+
+export async function tauriDesktopPreferences(): Promise<TauriDesktopPreferences> {
+  requireTauri();
+  return invoke<TauriDesktopPreferences>("desktop_preferences");
+}
+
+export async function setTauriDesktopApproval(mode: TauriToolApprovalMode): Promise<TauriDesktopPreferences> {
+  requireTauri();
+  return invoke<TauriDesktopPreferences>("set_desktop_approval", { mode });
+}
+
 export async function setTauriDefaultModel(model: string): Promise<TauriProviderSummary> {
   requireTauri();
   return invoke<TauriProviderSummary>("set_default_model", { request: { model } });

@@ -274,6 +274,16 @@ const commands: CommandContract[] = [
     description: "setTauriDefaultModel() invokes set_default_model with { request }",
   },
   {
+    command: "desktop_preferences",
+    argKeys: [],
+    description: "tauriDesktopPreferences() invokes desktop_preferences with no args",
+  },
+  {
+    command: "set_desktop_approval",
+    argKeys: ["mode"],
+    description: "setTauriDesktopApproval() invokes set_desktop_approval with { mode }",
+  },
+  {
     command: "get_close_behavior",
     argKeys: [],
     description: "getTauriCloseBehavior() invokes get_close_behavior with no args",

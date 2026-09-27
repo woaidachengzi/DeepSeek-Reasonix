@@ -29,6 +29,44 @@ type setDefaultModelRequest struct {
 	Model string `json:"model"`
 }
 
+type desktopPreferencesResponse struct {
+	ProtocolVersion         int    `json:"protocolVersion"`
+	DefaultToolApprovalMode string `json:"defaultToolApprovalMode"`
+}
+
+type setDesktopApprovalRequest struct {
+	Mode string `json:"mode"`
+}
+
+func loadDesktopPreferences() (desktopPreferencesResponse, error) {
+	cfg, err := configpkg.LoadUserConfigReadOnly()
+	if err != nil {
+		return desktopPreferencesResponse{}, err
+	}
+	return desktopPreferencesResponse{ProtocolVersion: desktopbridge.ProtocolVersion, DefaultToolApprovalMode: cfg.DesktopDefaultToolApprovalMode()}, nil
+}
+
+func persistDesktopApprovalMode(mode string) error {
+	if mode != "ask" && mode != "auto" && mode != "yolo" {
+		return fmt.Errorf("invalid approval mode")
+	}
+	unlock := configpkg.LockUserConfigEdits()
+	defer unlock()
+	path := configpkg.UserConfigPath()
+	if path == "" {
+		return fmt.Errorf("resolve Preview user config path")
+	}
+	cfg, err := configpkg.LoadForEditReadOnlyStrict(path)
+	if err != nil {
+		return err
+	}
+	baseline := cfg.ModelSettingsBaseline()
+	if err := cfg.SetDesktopDefaultToolApprovalMode(mode); err != nil {
+		return err
+	}
+	return cfg.SaveUserSettingsDeltaTo(path, baseline)
+}
+
 // setProviderKeyRequest is private to the native host/sidecar boundary. The
 // WebView never receives the bridge token and cannot call this endpoint.
 type setProviderKeyRequest struct {

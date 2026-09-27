@@ -17,6 +17,12 @@ func (c *Config) ModelSettingsBaseline() string { return RenderTOMLForScope(c, R
 // Unknown top-level and provider fields survive, including nested future fields.
 // A new file still receives the standard annotated template.
 func (c *Config) SaveModelSettingsTo(path, baseline string) error {
+	return c.SaveUserSettingsDeltaTo(path, baseline)
+}
+
+// SaveUserSettingsDeltaTo preserves unrelated and future TOML fields while
+// applying the fields changed on a typed Config under the user-config lock.
+func (c *Config) SaveUserSettingsDeltaTo(path, baseline string) error {
 	if c == nil {
 		return fmt.Errorf("save model settings: nil config")
 	}

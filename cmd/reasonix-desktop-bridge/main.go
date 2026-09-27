@@ -455,6 +455,8 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("GET /v1/health", b.authorized(b.health))
 	mux.HandleFunc("GET /v1/providers", b.authorized(b.providerSummary))
 	mux.HandleFunc("POST /v1/settings/default-model", b.authorized(b.idempotent(64<<10, b.setDefaultModel)))
+	mux.HandleFunc("GET /v1/settings/desktop", b.authorized(b.desktopPreferences))
+	mux.HandleFunc("POST /v1/settings/desktop/approval", b.authorized(b.idempotent(64<<10, b.setDesktopApproval)))
 	mux.HandleFunc("POST /v1/settings/provider-key", b.authorized(b.idempotent(64<<10, b.setProviderKey)))
 	mux.HandleFunc("POST /v1/sessions:open", b.authorized(b.idempotent(64<<10, b.openSession)))
 	mux.HandleFunc("POST /v1/sessions:switch", b.authorized(b.idempotent(64<<10, b.switchSession)))
@@ -615,7 +617,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "provider_summary", "set_default_model", "set_provider_key", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "session_scan_import_review_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "set_default_model", "desktop_preferences", "set_desktop_approval", "set_provider_key", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "session_scan_import_review_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
 	})
 }
 
@@ -626,6 +628,28 @@ func (b *bridgeServer) providerSummary(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, summary)
+}
+
+func (b *bridgeServer) desktopPreferences(w http.ResponseWriter, _ *http.Request) {
+	view, err := loadDesktopPreferences()
+	if err != nil {
+		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read desktop preferences")
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (b *bridgeServer) setDesktopApproval(w http.ResponseWriter, r *http.Request) {
+	var request setDesktopApprovalRequest
+	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil || (request.Mode != "ask" && request.Mode != "auto" && request.Mode != "yolo") {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid desktop approval mode")
+		return
+	}
+	if err := persistDesktopApprovalMode(request.Mode); err != nil {
+		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to save desktop approval mode")
+		return
+	}
+	b.desktopPreferences(w, r)
 }
 
 func (b *bridgeServer) setDefaultModel(w http.ResponseWriter, r *http.Request) {

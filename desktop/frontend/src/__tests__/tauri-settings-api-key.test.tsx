@@ -25,6 +25,7 @@ let failRuntime = false;
 const calls: string[] = [];
 let openedURL = "";
 let closeBehavior = "keep_running";
+let approvalMode = "auto";
 let defaultModel = "";
 const summary = () => ({
   protocolVersion: 1,
@@ -33,7 +34,7 @@ const summary = () => ({
 });
 
 (dom.window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
-  async invoke(command: string, args?: { url?: string; behavior?: string; request?: { model?: string } }) {
+  async invoke(command: string, args?: { url?: string; behavior?: string; mode?: string; request?: { model?: string } }) {
     calls.push(command);
     switch (command) {
       case "preview_runtime_info":
@@ -46,6 +47,8 @@ const summary = () => ({
       case "platform_info": return "darwin";
       case "get_close_behavior": return closeBehavior;
       case "set_close_behavior": closeBehavior = args?.behavior ?? closeBehavior; return closeBehavior;
+      case "desktop_preferences": return { protocolVersion: 1, defaultToolApprovalMode: approvalMode };
+      case "set_desktop_approval": approvalMode = args?.mode ?? approvalMode; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode };
       case "open_external_url": openedURL = args?.url ?? ""; return;
       case "keychain_save":
         if (failSave) throw new Error("secret-in-error-message");
@@ -133,6 +136,9 @@ await act(async () => { click("通用"); });
 await act(async () => { click("退出 Reasonix"); });
 assert.equal(closeBehavior, "quit", "close-window behavior is saved through the native host");
 assert.equal(document.querySelector('[aria-label="关闭窗口时"] [aria-checked="true"]')?.textContent, "退出 Reasonix");
+await act(async () => { click("Yolo"); });
+assert.equal(approvalMode, "yolo", "new-session approval default is saved through the bridge");
+assert.equal(document.querySelector('[aria-label="新会话默认审批"] [aria-checked="true"]')?.textContent, "Yolo");
 const notificationToggle = document.querySelector<HTMLInputElement>(".tauri-settings-toggle input");
 assert.ok(notificationToggle, "general settings include desktop notifications");
 await act(async () => { notificationToggle.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true })); });

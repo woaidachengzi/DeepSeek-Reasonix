@@ -8,7 +8,7 @@ does not imply that the Go runtime lacks the underlying capability.
 
 | Stable section | Tauri Preview status | Current behavior / missing work |
 | --- | --- | --- |
-| General | Partial | Appearance mode, conversation width, text size, standard/deep process disclosure, notifications, and macOS close behavior work. Language, currency, approval defaults, sound, and status bar controls are not wired. |
+| General | Partial | Appearance mode, conversation width, text size, standard/deep process disclosure, notifications, macOS close behavior, and new-session default tool approval work. Language, currency, sound, and status bar controls are not wired. The bridge samples the saved approval default when it opens a fresh transcript and records the session posture after a completed snapshot. |
 | Model preferences | Partial | Default model is read and saved through the bridge for new conversations. Stable runtime model preferences and assignment controls are not present. |
 | Model services | Partial | Provider readiness and model counts are shown; required API keys can be saved to or deleted from the system keychain. Provider creation/editing is not available. |
 | Usage statistics | Not in settings | No Preview settings view or verified usage data contract. |

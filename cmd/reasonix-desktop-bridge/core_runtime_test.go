@@ -1303,3 +1303,38 @@ func TestBridgeSessionChangeDetailHandlesCreatedAndDeletedFiles(t *testing.T) {
 		t.Fatalf("deleted session detail = %#v, err = %v", deletedDetail, err)
 	}
 }
+
+func TestFreshBridgeSessionUsesDesktopApprovalDefault(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte("[desktop]\ndefault_tool_approval_mode = \"yolo\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := newControllerFactory(nil).Open(context.Background(), desktopbridge.OpenRequest{SessionID: "fresh-approval", WorkspaceRoot: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := runtime.(*controllerRuntime).controller.ToolApprovalMode(); got != "yolo" {
+		t.Fatalf("fresh session approval mode = %q, want yolo", got)
+	}
+	controller := runtime.(*controllerRuntime).controller
+	if err := os.WriteFile(controller.SessionPath(), []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := persistBridgeApprovalMode(controller); err != nil {
+		t.Fatal(err)
+	}
+	controller.Close()
+	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte("[desktop]\ndefault_tool_approval_mode = \"ask\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := newControllerFactory(nil).Open(context.Background(), desktopbridge.OpenRequest{SessionID: "fresh-approval", WorkspaceRoot: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.(*controllerRuntime).controller.Close()
+	if got := reopened.(*controllerRuntime).controller.ToolApprovalMode(); got != "yolo" {
+		t.Fatalf("resumed session approval mode = %q, want saved yolo", got)
+	}
+}

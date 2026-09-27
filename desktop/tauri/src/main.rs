@@ -73,12 +73,13 @@ use bridge::{
     BridgeProviderSummaryResponse, BridgeSession, BridgeSetDefaultModelRequest, BridgeSnapshot,
     BridgeStatus, BridgeSupervisor, BridgeWorkspaceChangeDetailResponse,
     BridgeWorkspaceChangesResponse, BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse,
-    LegacySessionCatalogEntry, MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse,
-    MCPServerView, OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
-    PendingSessionTitleRecovery, RenameSessionRequest, ScanImportCandidate, ScanImportSelection,
-    SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage,
-    SessionFirstMessageTitle, SessionPreview, SessionRequest, SubmitRequest,
-    WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
+    DesktopPreferences, LegacySessionCatalogEntry, MCPServerDeleteRequest, MCPServerInput,
+    MCPServerMutationResponse, MCPServerView, OpenSessionRequest, PendingSessionDeleteCursor,
+    PendingSessionDeletePage, PendingSessionTitleRecovery, RenameSessionRequest,
+    ScanImportCandidate, ScanImportSelection, SessionCatalogMetadata, SessionDirectoryCursor,
+    SessionDirectoryEntry, SessionDirectoryPage, SessionFirstMessageTitle, SessionPreview,
+    SessionRequest, SubmitRequest, WorkspaceChangeDetailRequest, WorkspaceFileRequest,
+    WorkspaceRequest,
 };
 use data_profile::{
     PreviewProfile, PreviewProfileStatus, ProfileImportResult, ProjectFoldersImportResult,
@@ -720,6 +721,21 @@ fn provider_summary(
     supervisor: State<'_, BridgeSupervisor>,
 ) -> Result<BridgeProviderSummaryResponse, String> {
     supervisor.provider_summary()
+}
+
+#[tauri::command]
+fn desktop_preferences(
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<DesktopPreferences, String> {
+    supervisor.desktop_preferences()
+}
+
+#[tauri::command]
+fn set_desktop_approval(
+    supervisor: State<'_, BridgeSupervisor>,
+    mode: String,
+) -> Result<DesktopPreferences, String> {
+    supervisor.set_desktop_approval(mode)
 }
 
 #[tauri::command]
@@ -1653,6 +1669,8 @@ fn main() {
             preview_profile_status,
             preview_runtime_info,
             provider_summary,
+            desktop_preferences,
+            set_desktop_approval,
             set_default_model,
             import_stable_profile,
             import_stable_project_folders,

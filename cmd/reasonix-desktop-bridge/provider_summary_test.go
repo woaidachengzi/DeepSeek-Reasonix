@@ -305,3 +305,42 @@ future_provider_option = "keep-provider"
 		t.Fatal("invalid model changed the saved config")
 	}
 }
+
+func TestDesktopApprovalEndpointPersistsNarrowChange(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	path := filepath.Join(home, "config.toml")
+	initial := "future_root_option = \"keep-root\"\n[desktop]\ndefault_tool_approval_mode = \"ask\"\nfuture_desktop_option = \"keep-desktop\"\n"
+	if err := os.WriteFile(path, []byte(initial), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	handler := newBridgeServer(testToken, "instance").handler()
+	call := func(method, endpoint, body string) *httptest.ResponseRecorder {
+		request := httptest.NewRequest(method, endpoint, strings.NewReader(body))
+		request.Header.Set("Authorization", "Bearer "+testToken)
+		if method == http.MethodPost {
+			request.Header.Set(requestIDHeader, "desktop-approval-test-0001")
+		}
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+	if got := call(http.MethodGet, "/v1/settings/desktop", ""); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"defaultToolApprovalMode":"ask"`) {
+		t.Fatalf("read: %d %s", got.Code, got.Body.String())
+	}
+	if got := call(http.MethodPost, "/v1/settings/desktop/approval", `{"mode":"yolo"}`); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"defaultToolApprovalMode":"yolo"`) {
+		t.Fatalf("save: %d %s", got.Code, got.Body.String())
+	}
+	updated, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`default_tool_approval_mode = "yolo"`, `future_root_option = "keep-root"`, `future_desktop_option = "keep-desktop"`} {
+		if !strings.Contains(string(updated), want) {
+			t.Fatalf("saved config lost %q: %s", want, updated)
+		}
+	}
+	if err := persistDesktopApprovalMode("unsafe"); err == nil {
+		t.Fatal("invalid mode was accepted")
+	}
+}

@@ -72,6 +72,19 @@ func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.Open
 		controller.Close()
 		return nil, errors.Join(err, lifecycleSink.Close())
 	}
+	// The desktop default belongs to new conversations only. A saved sidecar
+	// restores the posture of a conversation that already has a transcript.
+	if path, pathErr := bridgeSessionPath(controller.SessionDir(), request.SessionID); pathErr == nil {
+		if _, statErr := os.Lstat(path); errors.Is(statErr, os.ErrNotExist) {
+			if cfg, loadErr := appconfig.LoadUserConfigReadOnly(); loadErr == nil {
+				controller.SetToolApprovalMode(cfg.DesktopDefaultToolApprovalMode())
+			}
+		} else if statErr == nil {
+			if meta, exists, loadErr := agent.LoadBranchMeta(path); loadErr == nil && exists && validBridgeApprovalMode(meta.ToolApprovalMode) {
+				controller.SetToolApprovalMode(meta.ToolApprovalMode)
+			}
+		}
+	}
 	runtime := &controllerRuntime{controller: controller, sessionID: request.SessionID, lifecycleSink: lifecycleSink}
 	runtime.startTurnSnapshotMonitor()
 	return runtime, nil
@@ -799,8 +812,40 @@ func (r *controllerRuntime) snapshotIfSettled(status control.RuntimeStatus) cont
 		slog.Warn("desktop bridge: snapshot completed turn", "session_id", r.sessionID, "err", err)
 		return status
 	}
+	if err := persistBridgeApprovalMode(r.controller); err != nil {
+		r.snapshotPending.Store(true)
+		r.snapshotRetryAt.Store(time.Now().Add(time.Second).UnixNano())
+		slog.Warn("desktop bridge: persist session approval mode", "session_id", r.sessionID, "err", err)
+		return status
+	}
 	r.snapshotRetryAt.Store(0)
 	return status
+}
+
+func validBridgeApprovalMode(mode string) bool {
+	return mode == control.ToolApprovalAsk || mode == control.ToolApprovalAuto || mode == control.ToolApprovalYolo
+}
+
+func persistBridgeApprovalMode(controller *control.Controller) error {
+	path := controller.SessionPath()
+	if path == "" {
+		return nil
+	}
+	mode := controller.ToolApprovalMode()
+	if !validBridgeApprovalMode(mode) {
+		return nil
+	}
+	meta, exists, err := agent.LoadBranchMeta(path)
+	if err != nil {
+		return err
+	}
+	if exists && meta.ToolApprovalMode == mode {
+		return nil
+	}
+	return agent.UpdateBranchMeta(path, false, func(current *agent.BranchMeta) error {
+		current.ToolApprovalMode = mode
+		return nil
+	})
 }
 
 func (r *controllerRuntime) startTurnSnapshotMonitor() {

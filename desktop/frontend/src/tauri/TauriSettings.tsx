@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Check, ArrowLeft, Search, Keyboard, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable } from "lucide-react";
-import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
+import { Check, ArrowLeft, Search, Keyboard, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, Type, ShieldCheck, Power, Bell } from "lucide-react";
+import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, tauriDesktopPreferences, setTauriDesktopApproval, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
 import { THEME_STYLES, type Theme, type ThemeStyle } from "../lib/theme";
 import { applyConversationWidth, getCachedConversationWidth, type ConversationWidth } from "../lib/conversationWidth";
 import { applyTextSize, getTextSize, TEXT_SIZES, type TextSize } from "../lib/textSize";
@@ -111,6 +111,10 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
   const [closeLoading, setCloseLoading] = useState(true);
   const [closeSaving, setCloseSaving] = useState(false);
   const [closeError, setCloseError] = useState("");
+  const [approvalMode, setApprovalMode] = useState<TauriToolApprovalMode>("auto");
+  const [approvalLoading, setApprovalLoading] = useState(true);
+  const [approvalSaving, setApprovalSaving] = useState(false);
+  const [approvalError, setApprovalError] = useState("");
   const loadRequest = useRef(0);
   const [appearance, setAppearance] = useState<TauriAppearance>(readTauriAppearance);
   const [conversationWidth, setConversationWidth] = useState<ConversationWidth>(getCachedConversationWidth);
@@ -154,6 +158,10 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
     void getTauriCloseBehavior().then(
       behavior => { if (request === loadRequest.current) { setCloseBehavior(behavior); setCloseError(""); setCloseLoading(false); } },
       () => { if (request === loadRequest.current) { setCloseError("无法读取关闭窗口设置"); setCloseLoading(false); } },
+    );
+    void tauriDesktopPreferences().then(
+      value => { if (request === loadRequest.current) { setApprovalMode(value.defaultToolApprovalMode); setApprovalError(""); setApprovalLoading(false); } },
+      () => { if (request === loadRequest.current) { setApprovalError("无法读取默认审批设置"); setApprovalLoading(false); } },
     );
   }, [updateProviderSummary]);
 
@@ -225,6 +233,20 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
     }
   };
 
+  const handleApprovalChange = async (mode: TauriToolApprovalMode) => {
+    if (approvalSaving || mode === approvalMode) return;
+    setApprovalSaving(true);
+    setApprovalError("");
+    try {
+      const updated = await setTauriDesktopApproval(mode);
+      setApprovalMode(updated.defaultToolApprovalMode);
+    } catch {
+      setApprovalError("默认审批设置保存失败，请重试");
+    } finally {
+      setApprovalSaving(false);
+    }
+  };
+
   const query = navQuery.trim().toLocaleLowerCase();
   const visibleGroups = SETTINGS_GROUPS.map(group => ({
     ...group,
@@ -250,7 +272,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
       <div className="tauri-settings-panel">
         <div className="tauri-settings-content" key={tab}>
           <div className="tauri-settings-page-heading"><h1>{SETTINGS_TITLES[tab].title}</h1><p>{SETTINGS_TITLES[tab].description}</p></div>
-          {tab === "general" ? <GeneralSettings notificationsEnabled={notificationsEnabled} onNotificationsChange={enabled => { setNotificationsEnabled(enabled); setTauriNotificationsEnabled(enabled); }} appearance={appearance} onAppearanceChange={handleAppearanceChange} conversationWidth={conversationWidth} onConversationWidthChange={handleConversationWidthChange} textSize={textSize} onTextSizeChange={handleTextSizeChange} progressMode={progressMode} onProgressModeChange={next => { setProgressMode(next); setTauriProgressMode(next); }} closeBehavior={closeBehavior} onCloseBehaviorChange={handleCloseBehaviorChange} closeLoading={closeLoading} closeSaving={closeSaving} closeError={closeError} platform={platform} /> : tab === "shortcuts" ? <ShortcutSettings /> : tab === "appearance" ? <AppearanceSettings appearance={appearance} onChange={handleAppearanceChange} conversationWidth={conversationWidth} onConversationWidthChange={handleConversationWidthChange} textSize={textSize} onTextSizeChange={handleTextSizeChange} fontFamily={fontFamily} onFontFamilyChange={handleFontFamilyChange} monoFontFamily={monoFontFamily} onMonoFontFamilyChange={handleMonoFontFamilyChange} customFontName={customFontName} onCustomFontChange={handleCustomFontChange} customMonoFontName={customMonoFontName} onCustomMonoFontChange={handleCustomMonoFontChange} /> : <>
+          {tab === "general" ? <GeneralSettings notificationsEnabled={notificationsEnabled} onNotificationsChange={enabled => { setNotificationsEnabled(enabled); setTauriNotificationsEnabled(enabled); }} appearance={appearance} onAppearanceChange={handleAppearanceChange} conversationWidth={conversationWidth} onConversationWidthChange={handleConversationWidthChange} textSize={textSize} onTextSizeChange={handleTextSizeChange} progressMode={progressMode} onProgressModeChange={next => { setProgressMode(next); setTauriProgressMode(next); }} closeBehavior={closeBehavior} onCloseBehaviorChange={handleCloseBehaviorChange} closeLoading={closeLoading} closeSaving={closeSaving} closeError={closeError} approvalMode={approvalMode} onApprovalChange={handleApprovalChange} approvalLoading={approvalLoading} approvalSaving={approvalSaving} approvalError={approvalError} platform={platform} /> : tab === "shortcuts" ? <ShortcutSettings /> : tab === "appearance" ? <AppearanceSettings appearance={appearance} onChange={handleAppearanceChange} conversationWidth={conversationWidth} onConversationWidthChange={handleConversationWidthChange} textSize={textSize} onTextSizeChange={handleTextSizeChange} fontFamily={fontFamily} onFontFamilyChange={handleFontFamilyChange} monoFontFamily={monoFontFamily} onMonoFontFamilyChange={handleMonoFontFamilyChange} customFontName={customFontName} onCustomFontChange={handleCustomFontChange} customMonoFontName={customMonoFontName} onCustomMonoFontChange={handleCustomMonoFontChange} /> : <>
             {(tab === "model" || tab === "providers") && (modelLoading ? <div className="tauri-settings-loading">加载中…</div> : <>{modelLoadError && <SettingsLoadError onRetry={loadSettings} />}{providerSummary && (tab === "model" ? <ModelPreferenceSettings providerSummary={providerSummary} onModelChange={handleModelChange} saving={modelSaving} error={modelSaveError} onOpenProviders={() => setTab("providers")} /> : <ProviderSettings providerSummary={providerSummary} onProviderSummaryChange={updateProviderSummary} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />)}</>)}
             {tab === "mcp" && <TauriMCPSettings workspaceRoot={workspaceRoot} />}
             {tab === "diagnostics" && <DiagnosticsSettings bridgeStatus={bridgeStatus} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={hostError} busy={Boolean(importBusy)} onRestartBridge={onRestartBridge} onRefreshCatalogAudit={onRefreshCatalogAudit} onOpenData={() => setTab("data")} onOpenProviders={() => setTab("providers")} />}
@@ -263,18 +285,20 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
   );
 }
 
-function GeneralSettings({ notificationsEnabled, onNotificationsChange, appearance, onAppearanceChange, conversationWidth, onConversationWidthChange, textSize, onTextSizeChange, progressMode, onProgressModeChange, closeBehavior, onCloseBehaviorChange, closeLoading, closeSaving, closeError, platform }: { notificationsEnabled: boolean; onNotificationsChange: (enabled: boolean) => void; appearance: TauriAppearance; onAppearanceChange: (next: TauriAppearance) => void; conversationWidth: ConversationWidth; onConversationWidthChange: (next: ConversationWidth) => void; textSize: TextSize; onTextSizeChange: (next: TextSize) => void; progressMode: TauriProgressMode; onProgressModeChange: (next: TauriProgressMode) => void; closeBehavior: TauriCloseBehavior; onCloseBehaviorChange: (behavior: TauriCloseBehavior) => void; closeLoading: boolean; closeSaving: boolean; closeError: string; platform: string }) {
+function GeneralSettings({ notificationsEnabled, onNotificationsChange, appearance, onAppearanceChange, conversationWidth, onConversationWidthChange, textSize, onTextSizeChange, progressMode, onProgressModeChange, closeBehavior, onCloseBehaviorChange, closeLoading, closeSaving, closeError, approvalMode, onApprovalChange, approvalLoading, approvalSaving, approvalError, platform }: { notificationsEnabled: boolean; onNotificationsChange: (enabled: boolean) => void; appearance: TauriAppearance; onAppearanceChange: (next: TauriAppearance) => void; conversationWidth: ConversationWidth; onConversationWidthChange: (next: ConversationWidth) => void; textSize: TextSize; onTextSizeChange: (next: TextSize) => void; progressMode: TauriProgressMode; onProgressModeChange: (next: TauriProgressMode) => void; closeBehavior: TauriCloseBehavior; onCloseBehaviorChange: (behavior: TauriCloseBehavior) => void; closeLoading: boolean; closeSaving: boolean; closeError: string; approvalMode: TauriToolApprovalMode; onApprovalChange: (mode: TauriToolApprovalMode) => void; approvalLoading: boolean; approvalSaving: boolean; approvalError: string; platform: string }) {
   return <div className="tauri-settings-section tauri-settings-general">
-    <h3>桌面与显示</h3>
-    <div className="tauri-settings-field"><span className="tauri-settings-field-label">桌面风格<small>选择界面亮暗模式。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="桌面风格">{(["auto", "light", "dark"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={appearance.mode === option} className={`tauri-settings-radio${appearance.mode === option ? " is-active" : ""}`} onClick={() => onAppearanceChange({ ...appearance, mode: option })}>{option === "auto" ? "跟随系统" : option === "light" ? "浅色" : "深色"}</button>)}</div></div>
-    <h3>会话体验</h3>
-    <div className="tauri-settings-field"><span className="tauri-settings-field-label">对话宽度<small>调整消息内容的最大宽度。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="通用对话宽度">{(["standard", "full"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={conversationWidth === option} className={`tauri-settings-radio${conversationWidth === option ? " is-active" : ""}`} onClick={() => onConversationWidthChange(option)}>{option === "standard" ? "标准" : "宽屏"}</button>)}</div></div>
-    <div className="tauri-settings-field"><span className="tauri-settings-field-label">对话字号<small>调整正文的阅读大小。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="通用对话字号">{TEXT_SIZES.map(size => <button key={size} type="button" role="radio" aria-checked={textSize === size} className={`tauri-settings-radio${textSize === size ? " is-active" : ""}`} onClick={() => onTextSizeChange(size)}>{TEXT_SIZE_LABELS[size]}</button>)}</div></div>
+    <h3>桌面与显示</h3><p className="tauri-settings-section-description">调整界面的显示方式。</p>
+    <div className="tauri-settings-field"><Monitor className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">桌面风格<small>选择界面亮暗模式。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="桌面风格">{(["auto", "light", "dark"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={appearance.mode === option} className={`tauri-settings-radio${appearance.mode === option ? " is-active" : ""}`} onClick={() => onAppearanceChange({ ...appearance, mode: option })}>{option === "auto" ? "跟随系统" : option === "light" ? "浅色" : "深色"}</button>)}</div></div>
+    <h3>会话体验</h3><p className="tauri-settings-section-description">选择任务运行时与完成后的阅读方式。</p>
+    <div className="tauri-settings-field"><PanelTop className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">对话宽度<small>调整消息内容的最大宽度。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="通用对话宽度">{(["standard", "full"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={conversationWidth === option} className={`tauri-settings-radio${conversationWidth === option ? " is-active" : ""}`} onClick={() => onConversationWidthChange(option)}>{option === "standard" ? "标准" : "宽屏"}</button>)}</div></div>
+    <div className="tauri-settings-field"><Type className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">对话字号<small>调整正文的阅读大小。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="通用对话字号">{TEXT_SIZES.map(size => <button key={size} type="button" role="radio" aria-checked={textSize === size} className={`tauri-settings-radio${textSize === size ? " is-active" : ""}`} onClick={() => onTextSizeChange(size)}>{TEXT_SIZE_LABELS[size]}</button>)}</div></div>
     <div className="tauri-settings-field"><span className="tauri-settings-field-label">会话体验<small>选择过程更新的默认展开状态，仍可逐项手动折叠。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="会话体验">{(["standard", "deep"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={progressMode === option} className={`tauri-settings-radio${progressMode === option ? " is-active" : ""}`} onClick={() => onProgressModeChange(option)}>{option === "standard" ? "标准" : "深入"}</button>)}</div></div>
-    <h3>系统行为</h3>
-    {platform === "darwin" && <div className="tauri-settings-field"><span className="tauri-settings-field-label">关闭窗口时<small>选择关闭主窗口后的运行方式。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="关闭窗口时">{(["keep_running", "quit"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={closeBehavior === option} className={`tauri-settings-radio${closeBehavior === option ? " is-active" : ""}`} disabled={closeLoading || closeSaving} onClick={() => onCloseBehaviorChange(option)}>{option === "keep_running" ? "保持后台运行" : "退出 Reasonix"}</button>)}</div></div>}
+    <h3>系统行为</h3><p className="tauri-settings-section-description">控制窗口、工具审批与通知。</p>
+    {platform === "darwin" && <div className="tauri-settings-field"><Power className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">关闭窗口时<small>选择关闭主窗口后的运行方式。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="关闭窗口时">{(["keep_running", "quit"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={closeBehavior === option} className={`tauri-settings-radio${closeBehavior === option ? " is-active" : ""}`} disabled={closeLoading || closeSaving} onClick={() => onCloseBehaviorChange(option)}>{option === "keep_running" ? "保持后台运行" : "退出 Reasonix"}</button>)}</div></div>}
     {platform === "darwin" && closeError && <p className="tauri-diagnostic-error" role="alert">{closeError}</p>}
-    <label className="tauri-settings-toggle"><span><strong>桌面通知</strong><small>回复完成或失败时发送系统通知。</small></span><input type="checkbox" checked={notificationsEnabled} onChange={event => onNotificationsChange(event.target.checked)} /></label>
+    <div className="tauri-settings-field"><ShieldCheck className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">新会话默认审批<small>只影响之后创建的会话；Yolo 会跳过工具审批，计划与沙盒限制仍生效。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="新会话默认审批">{(["ask", "auto", "yolo"] as const).map(mode => <button key={mode} type="button" role="radio" aria-checked={approvalMode === mode} className={`tauri-settings-radio${approvalMode === mode ? " is-active" : ""}`} disabled={approvalLoading || approvalSaving} onClick={() => onApprovalChange(mode)}>{mode === "ask" ? "询问" : mode === "auto" ? "自动" : "Yolo"}</button>)}</div></div>
+    {approvalError && <p className="tauri-diagnostic-error" role="alert">{approvalError}</p>}
+    <label className="tauri-settings-toggle"><Bell className="tauri-settings-field-icon" size={18} /><span><strong>桌面通知</strong><small>回复完成或失败时发送系统通知。</small></span><input type="checkbox" checked={notificationsEnabled} onChange={event => onNotificationsChange(event.target.checked)} /></label>
   </div>;
 }
 

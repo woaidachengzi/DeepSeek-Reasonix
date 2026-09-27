@@ -66,6 +66,8 @@ export function tauriPreviewRuntimeInfo() { return Promise.resolve({ stableVersi
 export function openTauriExternalURL(url) { record("open_external_url", { url }); return Promise.resolve(); }
 export function tauriProviderSummary() { return Promise.resolve({ protocolVersion: 1, providers: [] }); }
 export function setTauriDefaultModel() { return Promise.resolve({ protocolVersion: 1, providers: [] }); }
+export function tauriDesktopPreferences() { return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: "auto" }); }
+export function setTauriDesktopApproval(mode) { record("set_desktop_approval", { mode }); return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: mode }); }
 export function getTauriCloseBehavior() { return Promise.resolve("keep_running"); }
 export function setTauriCloseBehavior(behavior) { record("set_close_behavior", { behavior }); return Promise.resolve(behavior); }
 export function keychainSave(key, value) { record("keychain_save", { key, value }); return Promise.resolve(); }

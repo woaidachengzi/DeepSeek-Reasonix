@@ -48,6 +48,13 @@ pub struct BridgeStatus {
     pub sidecar_instance_id: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopPreferences {
+    pub protocol_version: u64,
+    pub default_tool_approval_mode: String,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubmitRequest {
@@ -1204,6 +1211,35 @@ impl BridgeSupervisor {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
         Ok(summary)
+    }
+
+    pub fn desktop_preferences(&self) -> Result<DesktopPreferences, String> {
+        let response = self.request_json("GET", "/v1/settings/desktop", None, None)?;
+        let preferences: DesktopPreferences =
+            serde_json::from_value(response).map_err(display_error)?;
+        if preferences.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(preferences)
+    }
+
+    pub fn set_desktop_approval(&self, mode: String) -> Result<DesktopPreferences, String> {
+        if !matches!(mode.as_str(), "ask" | "auto" | "yolo") {
+            return Err("invalid desktop approval mode".to_string());
+        }
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/desktop/approval",
+            Some(json!({"mode": mode})),
+            Some(&request_id),
+        )?;
+        let preferences: DesktopPreferences =
+            serde_json::from_value(response).map_err(display_error)?;
+        if preferences.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(preferences)
     }
 
     /// Lists the effective MCP servers for a workspace. Credentials never cross
