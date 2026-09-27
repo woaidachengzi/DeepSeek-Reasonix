@@ -469,7 +469,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("GET /v1/settings/skills", b.authorized(b.skillsSettings))
 	mux.HandleFunc("POST /v1/settings/skills", b.authorized(b.idempotent(64<<10, b.changeSkillsSettings)))
 	mux.HandleFunc("GET /v1/settings/subagents", b.authorized(b.subagentSettings))
-	mux.HandleFunc("POST /v1/settings/subagents", b.authorized(b.idempotent(64<<10, b.changeSubagentSettings)))
+	mux.HandleFunc("POST /v1/settings/subagents", b.authorized(b.idempotent(256<<10, b.changeSubagentSettings)))
 	mux.HandleFunc("GET /v1/settings/hooks", b.authorized(b.hooksSettings))
 	mux.HandleFunc("POST /v1/settings/hooks", b.authorized(b.idempotent(64<<10, b.changeHooksSettings)))
 	mux.HandleFunc("GET /v1/settings/memory", b.authorized(b.memorySettings))
@@ -814,13 +814,13 @@ func (b *bridgeServer) subagentSettings(w http.ResponseWriter, r *http.Request) 
 
 func (b *bridgeServer) changeSubagentSettings(w http.ResponseWriter, r *http.Request) {
 	var change subagentSettingsChange
-	if err := decodeJSONBody(w, r, 64<<10, &change); err != nil {
+	if err := decodeJSONBody(w, r, 256<<10, &change); err != nil {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid subagent settings request")
 		return
 	}
 	view, err := persistSubagentSettings(change)
 	if err != nil {
-		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "subagent settings could not be saved")
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, view)

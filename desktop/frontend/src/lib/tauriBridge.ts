@@ -398,6 +398,27 @@ export interface TauriSubagentProfile {
   invocation: string;
   configuredModel: string;
   configuredEffort: string;
+  invocationMode?: string;
+  editable?: boolean;
+  editReason?: string;
+  revision?: string;
+  body?: string;
+  color?: string;
+  model?: string;
+  effort?: string;
+  allowedTools?: string[];
+  readOnly?: boolean;
+}
+
+export interface TauriSubagentProfileInput {
+  name: string;
+  description: string;
+  systemPrompt: string;
+  color: string;
+  model: string;
+  effort: string;
+  allowedTools: string[];
+  readOnly: boolean;
 }
 
 export interface TauriSubagentSettings {
@@ -415,10 +436,13 @@ export interface TauriSubagentSettings {
 
 export interface TauriSubagentChange {
   workspaceRoot: string;
-  action: "model" | "effort" | "depth" | "concurrency" | "writers" | "profile_model" | "profile_effort";
+  action: "model" | "effort" | "depth" | "concurrency" | "writers" | "profile_model" | "profile_effort" | "create_profile" | "update_profile" | "delete_profile";
   name: string;
   value: string;
   number: number;
+  scope?: "global" | "project";
+  revision?: string;
+  profile?: TauriSubagentProfileInput;
 }
 
 export async function tauriSubagentSettings(workspaceRoot = ""): Promise<TauriSubagentSettings> {

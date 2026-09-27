@@ -44,6 +44,7 @@ let network = { protocolVersion: 1, proxyMode: "auto", noProxy: "", proxyType: "
 let skills = { protocolVersion: 1, allowImplicitInvocation: true, globalAllowImplicitInvocation: true, projectOverrides: { implicit: false, skills: false, sources: false }, skills: [{ name: "demo", description: "A test skill", invocation: "/demo", scope: "global", sourcePath: "/tmp/demo/SKILL.md", runAs: "inline", enabled: true }], sources: [] as { path: string; scope: string; status: string; enabled: boolean; configured: boolean }[] };
 let lastSkillScope = "";
 let subagents = { protocolVersion: 1, defaultModel: "demo/m", subagentModel: "", subagentEffort: "", maxDepth: 2, maxConcurrency: 6, maxParallelWriters: 3, modelRefs: ["demo/m"], modelEfforts: { "demo/m": ["auto", "low", "high"] }, profiles: [{ name: "reviewer", description: "Reviews code", scope: "global", invocation: "/reviewer", configuredModel: "", configuredEffort: "" }] };
+let savedSubagentProfile: { action?: string; scope?: string; profile?: { name: string; description: string; systemPrompt: string } } | undefined;
 let hooks = { protocolVersion: 1, scope: "global", path: "/preview/settings.json", projectRoot: "", revision: "r1", hooks: {} as Record<string, unknown>, events: ["PreToolUse", "Stop"] };
 let memory = { protocolVersion: 1, workspaceRoot: "/preview/project", storeDir: "/preview/memory", globalStoreDir: "/preview/global-memory", docs: [{ path: "/preview/project/AGENTS.md", scope: "project", body: "Old instruction.\n", revision: "r1" }], facts: [] as unknown[], archives: [] as unknown[], diagnostics: [] as string[] };
 let memoryNote = "";
@@ -61,7 +62,7 @@ const summary = () => ({
 });
 
 (dom.window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
-  async invoke(command: string, args?: { scope?: string; workspaceRoot?: string; url?: string; behavior?: string; mode?: string; request?: { model?: string; role?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean; revision?: string }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string } }) {
+  async invoke(command: string, args?: { scope?: string; workspaceRoot?: string; url?: string; behavior?: string; mode?: string; request?: { model?: string; role?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean; revision?: string }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string; profile?: { name: string; description: string; systemPrompt: string } } }) {
     calls.push(command);
     switch (command) {
       case "preview_runtime_info":
@@ -103,6 +104,7 @@ const summary = () => ({
       case "change_subagent_settings": {
         if (args?.change?.action === "depth") subagents.maxDepth = args.change.number ?? subagents.maxDepth;
         if (args?.change?.action === "model") subagents.subagentModel = args.change.value ?? subagents.subagentModel;
+        if (args?.change?.action === "create_profile") savedSubagentProfile = args.change;
         return { ...subagents };
       }
       case "hooks_settings": return { ...hooks, scope: args?.scope ?? "global" };
@@ -298,6 +300,23 @@ await act(async () => { click("子智能体"); });
 assert.match(visibleText(), /Reviews code/, "discoverable subagent profiles appear in settings");
 await act(async () => { click("1 层"); });
 assert.equal(subagents.maxDepth, 1, "subagent delegation depth is persisted through the bridge");
+await act(async () => { click("新建档案"); });
+const setProfileField = async (selector: string, value: string) => {
+  const input = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector);
+  assert.ok(input, `missing profile field: ${selector}`);
+  await act(async () => {
+    const proto = input instanceof dom.window.HTMLTextAreaElement ? dom.window.HTMLTextAreaElement.prototype : dom.window.HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(input, value);
+    input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  });
+};
+await setProfileField('input[aria-label="档案名称"]', "preview-review");
+await setProfileField('input[aria-label="档案说明"]', "Review changes");
+await setProfileField('textarea[aria-label="档案系统提示词"]', "Review carefully.");
+await act(async () => { click("保存档案"); });
+assert.equal(savedSubagentProfile?.action, "create_profile", "profile editor submits a create action");
+assert.equal(savedSubagentProfile?.scope, "project", "new profile defaults to the current workspace");
+assert.deepEqual(savedSubagentProfile?.profile, { name: "preview-review", description: "Review changes", systemPrompt: "Review carefully.", color: "", model: "", effort: "", allowedTools: [], readOnly: false }, "profile content reaches the bridge");
 await act(async () => { click("Hooks"); });
 assert.match(visibleText(), /配置文件/, "hooks editor displays its source path");
 const hooksEditor = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Hooks JSON"]');

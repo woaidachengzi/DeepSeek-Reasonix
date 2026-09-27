@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
@@ -9,15 +10,26 @@ import (
 	"reasonix/internal/boot"
 	configpkg "reasonix/internal/config"
 	"reasonix/internal/desktopbridge"
+	"reasonix/internal/skill"
 )
 
 type previewSubagentProfile struct {
-	Name             string `json:"name"`
-	Description      string `json:"description"`
-	Scope            string `json:"scope"`
-	Invocation       string `json:"invocation"`
-	ConfiguredModel  string `json:"configuredModel"`
-	ConfiguredEffort string `json:"configuredEffort"`
+	Name             string   `json:"name"`
+	Description      string   `json:"description"`
+	Scope            string   `json:"scope"`
+	Invocation       string   `json:"invocation"`
+	ConfiguredModel  string   `json:"configuredModel"`
+	ConfiguredEffort string   `json:"configuredEffort"`
+	InvocationMode   string   `json:"invocationMode"`
+	Editable         bool     `json:"editable"`
+	EditReason       string   `json:"editReason"`
+	Revision         string   `json:"revision"`
+	Body             string   `json:"body"`
+	Color            string   `json:"color"`
+	Model            string   `json:"model"`
+	Effort           string   `json:"effort"`
+	AllowedTools     []string `json:"allowedTools"`
+	ReadOnly         bool     `json:"readOnly"`
 }
 
 type subagentSettingsView struct {
@@ -34,11 +46,32 @@ type subagentSettingsView struct {
 }
 
 type subagentSettingsChange struct {
-	WorkspaceRoot string `json:"workspaceRoot"`
-	Action        string `json:"action"`
-	Name          string `json:"name"`
-	Value         string `json:"value"`
-	Number        int    `json:"number"`
+	WorkspaceRoot string                       `json:"workspaceRoot"`
+	Action        string                       `json:"action"`
+	Name          string                       `json:"name"`
+	Value         string                       `json:"value"`
+	Number        int                          `json:"number"`
+	Scope         string                       `json:"scope"`
+	Revision      string                       `json:"revision"`
+	Profile       *previewSubagentProfileInput `json:"profile"`
+}
+
+func previewSubagentStore(root string) (*skill.Store, *configpkg.Config, error) {
+	var cfg *configpkg.Config
+	var err error
+	if root == "" {
+		cfg, err = configpkg.LoadUserConfigReadOnly()
+	} else {
+		cfg, err = configpkg.LoadForRootWithoutCredentialsReadOnly(root)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return skill.New(skill.Options{
+		ProjectRoot: root, CustomPaths: cfg.SkillCustomPaths(), ExcludedPaths: cfg.SkillExcludedPaths(),
+		PluginPaths: cfg.PluginPackageSkillOwners(), PluginAgentPaths: cfg.PluginPackageAgentOwners(),
+		MaxDepth: cfg.SkillMaxDepth(), Stderr: io.Discard,
+	}), cfg, nil
 }
 
 func subagentOverride(overrides map[string]string, name string) string {
@@ -74,7 +107,7 @@ func loadSubagentSettings(workspaceRoot string) (subagentSettingsView, error) {
 	if err != nil {
 		return subagentSettingsView{}, err
 	}
-	skills, err := loadSkillsSettings(root)
+	store, _, err := previewSubagentStore(root)
 	if err != nil {
 		return subagentSettingsView{}, err
 	}
@@ -102,15 +135,26 @@ func loadSubagentSettings(workspaceRoot string) (subagentSettingsView, error) {
 		}
 	}
 	sort.Strings(view.ModelRefs)
-	for _, item := range skills.Skills {
-		if item.RunAs != "subagent" {
+	for _, item := range store.List() {
+		if item.RunAs != skill.RunSubagent {
 			continue
 		}
-		view.Profiles = append(view.Profiles, previewSubagentProfile{
-			Name: item.Name, Description: item.Description, Scope: item.Scope, Invocation: item.Invocation,
+		profile := previewSubagentProfile{
+			Name: item.Name, Description: item.Description, Scope: string(item.Scope), Invocation: "/" + item.SlashName(),
 			ConfiguredModel:  subagentOverride(cfg.Agent.SubagentModels, item.Name),
 			ConfiguredEffort: subagentOverride(cfg.Agent.SubagentEfforts, item.Name),
-		})
+			InvocationMode:   item.Invocation, Color: item.Color, Model: item.Model,
+			Effort: item.Effort, ReadOnly: item.ReadOnly,
+			AllowedTools: append([]string{}, item.AllowedTools...),
+		}
+		if err := skill.ValidateEditableSubagentProfile(item); err != nil {
+			profile.EditReason = err.Error()
+		} else if revision, err := subagentProfileRevision(item.Path); err != nil {
+			profile.EditReason = err.Error()
+		} else {
+			profile.Editable, profile.Revision, profile.Body = true, revision, item.Body
+		}
+		view.Profiles = append(view.Profiles, profile)
 	}
 	return view, nil
 }
@@ -122,6 +166,9 @@ func persistSubagentSettings(change subagentSettingsChange) (subagentSettingsVie
 	}
 	change.Name = strings.TrimSpace(change.Name)
 	change.Value = strings.TrimSpace(change.Value)
+	if change.Action == "create_profile" || change.Action == "update_profile" || change.Action == "delete_profile" {
+		return persistSubagentProfile(change, root)
+	}
 	if len(change.Name) > 64 || len(change.Value) > 256 {
 		return subagentSettingsView{}, fmt.Errorf("invalid subagent setting")
 	}

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -116,5 +117,117 @@ supported_efforts = ["low", "medium", "high"]
 	}
 	if after, err := os.ReadFile(path); err != nil || string(after) != string(raw) {
 		t.Fatalf("invalid change mutated config: %v", err)
+	}
+}
+
+func TestPreviewSubagentProfileCRUDAndRevision(t *testing.T) {
+	home, project := t.TempDir(), t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	server := newBridgeServer(testToken, "instance-a")
+	request := func(body, id string, authorized bool) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest(http.MethodPost, "/v1/settings/subagents", strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set(requestIDHeader, id)
+		if authorized {
+			r.Header.Set("Authorization", "Bearer "+testToken)
+		}
+		w := httptest.NewRecorder()
+		server.handler().ServeHTTP(w, r)
+		return w
+	}
+	create := `{"action":"create_profile","scope":"project","workspaceRoot":` + strconv.Quote(project) + `,"profile":{"name":"preview-review","description":"Review changes","systemPrompt":"Review carefully.","readOnly":true}}`
+	if got := request(create, "profile-unauthorized", false); got.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthorized status = %d", got.Code)
+	}
+	response := request(create, "profile-create", true)
+	if response.Code != http.StatusOK {
+		t.Fatalf("create: %d %s", response.Code, response.Body.String())
+	}
+	var view subagentSettingsView
+	if err := json.Unmarshal(response.Body.Bytes(), &view); err != nil {
+		t.Fatal(err)
+	}
+	var profile previewSubagentProfile
+	for _, item := range view.Profiles {
+		if item.Name == "preview-review" {
+			profile = item
+		}
+	}
+	if !profile.Editable || profile.Scope != "project" || profile.Body != "Review carefully." || len(profile.Revision) != 64 || !profile.ReadOnly {
+		t.Fatalf("created profile not visible: %+v", profile)
+	}
+	path := filepath.Join(project, ".reasonix", "skills", "preview-review", "SKILL.md")
+	raw, err := os.ReadFile(path)
+	if err != nil || !strings.Contains(string(raw), "invocation: manual") {
+		t.Fatalf("profile file: %v %s", err, raw)
+	}
+	update := `{"action":"update_profile","scope":"project","workspaceRoot":` + strconv.Quote(project) + `,"name":"preview-review","revision":` + strconv.Quote(profile.Revision) + `,"profile":{"name":"preview-review","description":"Inspect changes","systemPrompt":"Inspect deeply."}}`
+	response = request(update, "profile-update", true)
+	if response.Code != http.StatusOK {
+		t.Fatalf("update: %d %s", response.Code, response.Body.String())
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &view); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range view.Profiles {
+		if item.Name == "preview-review" {
+			profile = item
+		}
+	}
+	if profile.Body != "Inspect deeply." || profile.Revision == "" || profile.ReadOnly {
+		t.Fatalf("updated profile = %+v", profile)
+	}
+	if got := request(update, "profile-stale", true); got.Code != http.StatusBadRequest {
+		t.Fatalf("stale update status = %d", got.Code)
+	}
+	if got := request(`{"action":"create_profile","scope":"project","workspaceRoot":`+strconv.Quote(project)+`,"profile":{"name":"review","description":"Collision","systemPrompt":"Prompt"}}`, "profile-collision", true); got.Code != http.StatusBadRequest {
+		t.Fatalf("reserved name status = %d", got.Code)
+	}
+	deleteBody := `{"action":"delete_profile","scope":"project","workspaceRoot":` + strconv.Quote(project) + `,"name":"preview-review","revision":` + strconv.Quote(profile.Revision) + `}`
+	extraPath := filepath.Join(filepath.Dir(path), "notes.txt")
+	if err := os.WriteFile(extraPath, []byte("keep this file"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := request(deleteBody, "profile-delete-with-sibling", true); got.Code != http.StatusBadRequest {
+		t.Fatalf("profile directory with extra file was deleted: %d %s", got.Code, got.Body.String())
+	}
+	if raw, err := os.ReadFile(extraPath); err != nil || string(raw) != "keep this file" {
+		t.Fatalf("profile sibling was changed: %v %q", err, raw)
+	}
+	if err := os.Remove(extraPath); err != nil {
+		t.Fatal(err)
+	}
+	skillsDir := filepath.Dir(filepath.Dir(path))
+	linkedTarget := skillsDir + "-real"
+	if err := os.Rename(skillsDir, linkedTarget); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(linkedTarget, skillsDir); err != nil {
+		t.Fatal(err)
+	}
+	if got := request(deleteBody, "profile-delete-linked-root", true); got.Code != http.StatusBadRequest {
+		t.Fatalf("linked profile root was deleted: %d %s", got.Code, got.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(linkedTarget, "preview-review", "SKILL.md")); err != nil {
+		t.Fatalf("linked profile target was removed: %v", err)
+	}
+	if err := os.Remove(skillsDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(linkedTarget, skillsDir); err != nil {
+		t.Fatal(err)
+	}
+	if got := request(deleteBody, "profile-delete", true); got.Code != http.StatusOK {
+		t.Fatalf("delete: %d %s", got.Code, got.Body.String())
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("profile still exists after delete: %v", err)
+	}
+	if got := request(`{"action":"create_profile","scope":"global","profile":{"name":"global-helper","description":"Assist","systemPrompt":"Help."}}`, "profile-global", true); got.Code != http.StatusOK {
+		t.Fatalf("global create: %d %s", got.Code, got.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(home, "skills", "global-helper", "SKILL.md")); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -553,6 +553,7 @@ pub struct SkillSettingsItem {
     pub source_path: String,
     pub run_as: String,
     pub enabled: bool,
+    pub global_enabled: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -563,6 +564,17 @@ pub struct SkillSettingsSource {
     pub status: String,
     pub enabled: bool,
     pub configured: bool,
+    pub configured_global: bool,
+    pub configured_project: bool,
+    pub global_enabled: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillProjectOverrides {
+    pub implicit: bool,
+    pub skills: bool,
+    pub sources: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -570,6 +582,8 @@ pub struct SkillSettingsSource {
 pub struct SkillsSettingsView {
     pub protocol_version: u64,
     pub allow_implicit_invocation: bool,
+    pub global_allow_implicit_invocation: bool,
+    pub project_overrides: SkillProjectOverrides,
     pub skills: Vec<SkillSettingsItem>,
     pub sources: Vec<SkillSettingsSource>,
 }
@@ -578,6 +592,7 @@ pub struct SkillsSettingsView {
 #[serde(rename_all = "camelCase")]
 pub struct SkillsSettingsChange {
     pub workspace_root: String,
+    pub scope: String,
     pub action: String,
     pub enabled: bool,
     pub name: String,
@@ -593,6 +608,29 @@ pub struct SubagentProfileView {
     pub invocation: String,
     pub configured_model: String,
     pub configured_effort: String,
+    pub invocation_mode: String,
+    pub editable: bool,
+    pub edit_reason: String,
+    pub revision: String,
+    pub body: String,
+    pub color: String,
+    pub model: String,
+    pub effort: String,
+    pub allowed_tools: Vec<String>,
+    pub read_only: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubagentProfileInput {
+    pub name: String,
+    pub description: String,
+    pub system_prompt: String,
+    pub color: String,
+    pub model: String,
+    pub effort: String,
+    pub allowed_tools: Vec<String>,
+    pub read_only: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -698,6 +736,12 @@ pub struct SubagentSettingsChange {
     pub name: String,
     pub value: String,
     pub number: i32,
+    #[serde(default)]
+    pub scope: String,
+    #[serde(default)]
+    pub revision: String,
+    #[serde(default)]
+    pub profile: Option<SubagentProfileInput>,
 }
 
 /// One MCP server as the host may see it. Credential material is write-only, so
@@ -3131,8 +3175,9 @@ mod tests {
         OpenSessionRequest, PendingSessionDelete, PendingSessionDeletesPageResponse,
         PendingSessionTitleRecoveriesResponse, PendingSessionTitleRecovery, RenameSessionRequest,
         SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
-        SessionDirectoryPage, SessionInventoryResponse, SessionRequest, SubagentSettingsView,
-        SubmitRequest, PROTOCOL_VERSION,
+        SessionDirectoryPage, SessionInventoryResponse, SessionRequest, SkillsSettingsChange,
+        SkillsSettingsView, SubagentSettingsChange, SubagentSettingsView, SubmitRequest,
+        PROTOCOL_VERSION,
     };
     use crate::{session_shadow, workbench_catalog::WorkbenchSession};
     use serde_json::json;
@@ -3148,18 +3193,61 @@ mod tests {
 
     #[test]
     fn settings_wire_views_preserve_model_efforts_and_hooks() {
+        let skills: SkillsSettingsView = serde_json::from_value(json!({
+            "protocolVersion": 1, "allowImplicitInvocation": true,
+            "globalAllowImplicitInvocation": false,
+            "projectOverrides": {"implicit": true, "skills": false, "sources": true},
+            "skills": [{"name":"review", "description":"Review", "invocation":"/review",
+                "scope":"project", "sourcePath":"/tmp/review.md", "runAs":"subagent",
+                "enabled":true, "globalEnabled":false}],
+            "sources": [{"path":"/tmp/skills", "scope":"project", "status":"ok",
+                "enabled":true, "configured":true, "configuredGlobal":false,
+                "configuredProject":true, "globalEnabled":false}]
+        }))
+        .unwrap();
+        assert!(skills.project_overrides.implicit);
+        assert!(!skills.skills[0].global_enabled);
+        assert_eq!(
+            serde_json::to_value(skills).unwrap()["sources"][0]["configuredProject"],
+            true
+        );
+        let change: SkillsSettingsChange = serde_json::from_value(json!({
+            "workspaceRoot":"/tmp/project", "scope":"project", "action":"skill",
+            "enabled":true, "name":"review", "path":""
+        }))
+        .unwrap();
+        assert_eq!(serde_json::to_value(change).unwrap()["scope"], "project");
+
         let subagents: SubagentSettingsView = serde_json::from_value(json!({
             "protocolVersion": 1, "defaultModel": "local/chat", "subagentModel": "",
             "subagentEffort": "", "maxDepth": 2, "maxConcurrency": 6,
             "maxParallelWriters": 3, "modelRefs": ["local/chat"],
-            "modelEfforts": {"local/chat": ["auto", "low"]}, "profiles": []
+            "modelEfforts": {"local/chat": ["auto", "low"]},
+            "profiles": [{"name":"helper", "description":"Assist", "scope":"project",
+                "invocation":"/helper", "configuredModel":"", "configuredEffort":"",
+                "invocationMode":"manual", "editable":true, "editReason":"",
+                "revision":"abc", "body":"Help carefully.", "color":"blue",
+                "model":"local/chat", "effort":"low", "allowedTools":["Read"], "readOnly":true}]
         }))
         .unwrap();
         assert_eq!(subagents.model_efforts["local/chat"], ["auto", "low"]);
+        assert!(subagents.profiles[0].editable);
+        assert_eq!(subagents.profiles[0].allowed_tools, ["Read"]);
         assert!(serde_json::to_value(subagents)
             .unwrap()
             .get("modelEfforts")
             .is_some());
+        let profile_change: SubagentSettingsChange = serde_json::from_value(json!({
+            "workspaceRoot":"/tmp/p", "action":"create_profile", "name":"", "value":"", "number":0,
+            "scope":"project", "revision":"", "profile":{"name":"helper",
+                "description":"Assist", "systemPrompt":"Help carefully.", "color":"blue",
+                "model":"local/chat", "effort":"low", "allowedTools":["Read"], "readOnly":true}
+        }))
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(profile_change).unwrap()["profile"]["systemPrompt"],
+            "Help carefully."
+        );
 
         let hooks: HooksSettingsView = serde_json::from_value(json!({
             "protocolVersion": 1, "scope": "project", "path": "/tmp/p/.reasonix/settings.json",

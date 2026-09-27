@@ -735,6 +735,17 @@
 .tauri-subagent-profile-controls { display: flex; flex-wrap: wrap; gap: 12px; }
 .tauri-subagent-profile-controls label { display: grid; gap: 5px; min-width: min(220px, 100%); color: var(--fg-dim); font-size: 11px; }
 .tauri-subagent-profile-controls .tauri-settings-input { width: 100%; }
+.tauri-subagent-editor { display: grid; gap: 14px; margin: 16px 0; padding: 18px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface); }
+.tauri-subagent-editor h4 { margin: 0; color: var(--fg); font-size: 14px; }
+.tauri-subagent-editor label { display: grid; gap: 6px; min-width: 0; color: var(--fg-dim); font-size: 11px; }
+.tauri-subagent-editor label small { color: var(--fg-faint); }
+.tauri-subagent-editor .tauri-settings-input { width: 100%; }
+.tauri-subagent-editor textarea { height: auto; min-height: 74px; padding: 9px 10px; resize: vertical; font-family: var(--font-mono); line-height: 1.5; }
+.tauri-subagent-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.tauri-subagent-editor .tauri-subagent-editor-check { display: flex; align-items: center; gap: 8px; }
+.tauri-subagent-profile-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 13px; }
+.tauri-subagent-profile-readonly { display: block; margin-top: 12px; color: var(--fg-faint); font-size: 11px; }
+@media (max-width: 720px) { .tauri-subagent-editor-grid { grid-template-columns: minmax(0, 1fr); } }
 .tauri-hooks-settings h3:not(:first-child) { margin-top: 30px; }
 .tauri-hooks-path { max-width: 55%; overflow-wrap: anywhere; color: var(--fg-dim); font: 11px var(--font-mono); }
 .tauri-hooks-toolbar { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0; }
