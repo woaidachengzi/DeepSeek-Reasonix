@@ -122,3 +122,10 @@ host/sidecar 可执行文件及代码签名。包级 smoke 分别在临时 HOME 
 读取应用数据、启动包内 sidecar、验证实际继承的环境和 ready 文件，并在正常退出后清理子进程和临时目录。
 旧测试包的托管模式曾被该门禁准确检出继承外部缓存覆盖；重建当前代码后通过。该测试包
 只验证本机生命周期；正式 Preview 标识的 CI 包仍需在独立 macOS runner 上通过同一门禁。
+
+2026-09-27 又从提交 `dcf4c5889587e94ba9fa40f596f1a68365e94dc9` 的干净 worktree 运行完整构建：
+锁定依赖安装、Tauri 前端测试、Go bridge 测试、Rust 格式与 clippy、对真实 bridge 的 95 个 Rust 测试均通过。
+仓库的 `tauri-build.mjs` 从该提交生成正式 Preview 标识的 `.app`，包内含同一源码提交标识，
+ad-hoc 签名通过严格校验，构建后 Git 仍干净。随后复用这次完整前端产物与 sidecar，构建独立
+bundle ID 的测试 `.app`；托管和显式 profile 的真实启动 smoke 均通过。正式标识的远端 CI
+启动结果、旧发布二进制兼容、真实用户数据恢复，以及 Developer ID 签名和公证仍需分别验证。
