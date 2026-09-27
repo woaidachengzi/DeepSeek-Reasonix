@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import re
 import signal
 import subprocess
 import sys
@@ -56,40 +57,63 @@ def check_ready(path):
         raise RuntimeError("sidecar readiness did not use a loopback address")
 
 
-def smoke(app_path):
-    app = Path(app_path).resolve()
-    host_binary = app / "Contents/MacOS/reasonix-tauri"
-    sidecar_binary = app / "Contents/MacOS/reasonix-desktop-bridge"
-    if not host_binary.is_file() or not sidecar_binary.is_file():
-        raise RuntimeError("packaged host or sidecar is missing")
-    with (app / "Contents/Info.plist").open("rb") as file:
-        identifier = plistlib.load(file).get("CFBundleIdentifier")
-    if not isinstance(identifier, str) or not identifier:
-        raise RuntimeError("package has no bundle identifier")
-    if any(command.startswith(str(host_binary)) for _, _, command in processes()):
-        raise RuntimeError("this Preview package is already running; close it before the smoke")
+def check_sidecar_profile(pid, expected_home, managed, cache_home):
+    # Inspect the child's inherited environment, not the parent's intended
+    # values. Never include ps output in an error: it contains the bridge token.
+    result = subprocess.run(
+        ["ps", "eww", "-p", str(pid), "-o", "command="],
+        capture_output=True, text=True, check=True,
+    )
 
+    def has(name):
+        return re.search(rf"(?:^|\s){re.escape(name)}=", result.stdout) is not None
+
+    def equals(name, value):
+        return re.search(
+            rf"(?:^|\s){re.escape(name)}={re.escape(str(value))}(?:\s|$)",
+            result.stdout,
+        ) is not None
+
+    if not equals("REASONIX_HOME", expected_home):
+        raise RuntimeError("sidecar did not inherit the selected Preview home")
+    if has("REASONIX_STATE_HOME"):
+        raise RuntimeError("sidecar retained an inherited state override")
+    if managed:
+        if has("REASONIX_CACHE_HOME"):
+            raise RuntimeError("managed sidecar retained an inherited cache override")
+        if not equals("REASONIX_PREVIEW_SQLITE_EVENTS", "1"):
+            raise RuntimeError("managed sidecar did not enable Preview event storage")
+    elif not equals("REASONIX_CACHE_HOME", cache_home) or has("REASONIX_PREVIEW_SQLITE_EVENTS"):
+        raise RuntimeError("explicit sidecar profile environment is incorrect")
+
+
+def smoke_once(host_binary, sidecar_binary, identifier, managed):
     with tempfile.TemporaryDirectory(prefix="reasonix-tauri-package-smoke-") as root_string:
         root = Path(root_string)
         home = root / "home"
         temp = root / "tmp"
         home.mkdir()
         temp.mkdir()
+        app_data = home / "Library/Application Support" / identifier
+        expected_home = app_data / "reasonix-core" if managed else root / "reasonix-home"
+        cache_home = root / "reasonix-cache"
         env = os.environ.copy()
         env.update({
             "HOME": str(home),
             "TMPDIR": str(temp),
-            "REASONIX_HOME": str(root / "reasonix-home"),
-            "REASONIX_CACHE_HOME": str(root / "reasonix-cache"),
             "REASONIX_TAURI_PACKAGE_SMOKE": "1",
             # Release packages must ignore the development sidecar override.
             "REASONIX_DESKTOP_BRIDGE_BIN": str(root / "nonexistent-sidecar"),
         })
-        for key in (
-            "REASONIX_STATE_HOME",
-            "REASONIX_PREVIEW_SQLITE_EVENTS",
-        ):
-            env.pop(key, None)
+        env.pop("REASONIX_PREVIEW_SQLITE_EVENTS", None)
+        if managed:
+            env.pop("REASONIX_HOME", None)
+            env["REASONIX_STATE_HOME"] = str(root / "inherited-state")
+            env["REASONIX_CACHE_HOME"] = str(root / "inherited-cache")
+        else:
+            env["REASONIX_HOME"] = str(expected_home)
+            env["REASONIX_CACHE_HOME"] = str(cache_home)
+            env.pop("REASONIX_STATE_HOME", None)
 
         host = subprocess.Popen(
             [str(host_binary)], env=env, stdout=subprocess.DEVNULL,
@@ -109,9 +133,11 @@ def smoke(app_path):
                 if len(children) == 1 and len(ready_files) == 1:
                     sidecar_pid = children[0]
                     check_ready(ready_files[0])
-                    app_data = home / "Library/Application Support" / identifier
                     if not app_data.is_dir():
                         raise RuntimeError("Tauri app data escaped the temporary HOME")
+                    if managed and not expected_home.is_dir():
+                        raise RuntimeError("managed Preview home was not created inside app data")
+                    check_sidecar_profile(sidecar_pid, expected_home, managed, cache_home)
                     break
                 time.sleep(0.1)
             else:
@@ -130,7 +156,8 @@ def smoke(app_path):
                 raise RuntimeError("packaged sidecar survived host exit")
             if list(temp.glob("reasonix-tauri-bridge-*/ready.json")):
                 raise RuntimeError("sidecar readiness directory survived host exit")
-            print("packaged Preview startup, sidecar readiness, and shutdown: OK")
+            profile = "managed" if managed else "explicit"
+            print(f"packaged Preview {profile} profile, sidecar readiness, and shutdown: OK")
         finally:
             if host.poll() is None:
                 host.kill()
@@ -146,6 +173,22 @@ def smoke(app_path):
                     os.kill(pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass
+
+
+def smoke(app_path):
+    app = Path(app_path).resolve()
+    host_binary = app / "Contents/MacOS/reasonix-tauri"
+    sidecar_binary = app / "Contents/MacOS/reasonix-desktop-bridge"
+    if not host_binary.is_file() or not sidecar_binary.is_file():
+        raise RuntimeError("packaged host or sidecar is missing")
+    with (app / "Contents/Info.plist").open("rb") as file:
+        identifier = plistlib.load(file).get("CFBundleIdentifier")
+    if not isinstance(identifier, str) or not identifier:
+        raise RuntimeError("package has no bundle identifier")
+    if any(command.startswith(str(host_binary)) for _, _, command in processes()):
+        raise RuntimeError("this Preview package is already running; close it before the smoke")
+    for managed in (True, False):
+        smoke_once(host_binary, sidecar_binary, identifier, managed)
 
 
 if __name__ == "__main__":

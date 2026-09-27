@@ -108,10 +108,13 @@ cd desktop/tauri && REASONIX_TAURI_BRIDGE_TEST_BIN="$PWD/../../bin/reasonix-desk
 
 桌面 CI 的前端测试计划会用专用 SVG、CSS 和 bridge stub 运行 Tauri 组件测试；macOS
 host job 还会构建真实 Go sidecar、运行 Rust 集成测试、打出 Preview `.app`，并检查包内
-host/sidecar 可执行文件及代码签名。包级 smoke 在临时 HOME 与 `REASONIX_HOME` 下启动真实 `.app`，
-验证受管 sidecar 的 ready 文件、父子进程关系和正常退出后的清理。集成测试使用临时 profile，bundle 使用开发签名；正式发布仍需
+host/sidecar 可执行文件及代码签名。包级 smoke 分别在临时 HOME 下使用托管 profile 与显式
+`REASONIX_HOME` 启动真实 `.app`：检查 sidecar 实际继承的 profile 环境、ready 文件、父子进程
+关系和正常退出后的清理。托管模式故意注入外部状态与缓存覆盖，要求 host 在启动 sidecar 前清除。
+集成测试使用临时 profile，bundle 使用开发签名；正式发布仍需
 实际发布二进制兼容认证、Developer ID 签名与公证，以及停写后的真实数据恢复演练。
 
-2026-09-27 本机以独立 bundle ID 构建并 ad-hoc 签名测试包，包级 smoke 通过：host 从临时 HOME
-读取应用数据、启动包内 sidecar、验证 ready 文件，并在正常退出后清理子进程和临时目录。该测试包
+2026-09-27 本机以独立 bundle ID 构建并 ad-hoc 签名测试包，包级 smoke 两种 profile 都通过：host 从临时 HOME
+读取应用数据、启动包内 sidecar、验证实际继承的环境和 ready 文件，并在正常退出后清理子进程和临时目录。
+旧测试包的托管模式曾被该门禁准确检出继承外部缓存覆盖；重建当前代码后通过。该测试包
 只验证本机生命周期；正式 Preview 标识的 CI 包仍需在独立 macOS runner 上通过同一门禁。
