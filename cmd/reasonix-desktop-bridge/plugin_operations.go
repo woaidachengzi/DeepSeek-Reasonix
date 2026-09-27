@@ -34,6 +34,7 @@ type installPluginToolResponse struct {
 		Kind         string `json:"kind"`
 		Action       string `json:"action"`
 		Name         string `json:"name"`
+		Target       string `json:"target"`
 		Version      string `json:"version"`
 		ManifestKind string `json:"manifestKind"`
 		RiskLevel    string `json:"riskLevel"`
@@ -79,6 +80,26 @@ type previewPluginInstallPlan struct {
 	PlanID          string                    `json:"planId"`
 	Actions         []previewPluginPlanAction `json:"actions"`
 	WarningCount    int                       `json:"warningCount"`
+	Warnings        []string                  `json:"warnings"`
+}
+
+func previewPlanWarnings(warnings []string) []string {
+	out := []string{}
+	for _, warning := range warnings {
+		if len(out) == 32 {
+			break
+		}
+		line := strings.TrimSpace(warning)
+		if line == "" {
+			continue
+		}
+		runes := []rune(line)
+		if len(runes) > 500 {
+			line = string(runes[:500]) + "…"
+		}
+		out = append(out, line)
+	}
+	return out
 }
 
 type previewPluginOperationResult struct {
@@ -96,6 +117,10 @@ func validPreviewPluginSource(source string) bool {
 		info, err := os.Stat(source)
 		return err == nil && info.IsDir()
 	}
+	return validPreviewGitHubSource(source)
+}
+
+func validPreviewGitHubSource(source string) bool {
 	u, err := url.Parse(source)
 	if err != nil || u.Scheme != "https" || u.Hostname() != "github.com" || u.Port() != "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 		return false
@@ -146,7 +171,7 @@ func (b *bridgeServer) planPluginInstall(w http.ResponseWriter, r *http.Request)
 		writeProtocolError(w, http.StatusBadRequest, "plan_failed", "plugin source could not be reviewed")
 		return
 	}
-	view := previewPluginInstallPlan{ProtocolVersion: desktopbridge.ProtocolVersion, PlanID: plan.PlanID, Actions: []previewPluginPlanAction{}, WarningCount: len(plan.Warnings)}
+	view := previewPluginInstallPlan{ProtocolVersion: desktopbridge.ProtocolVersion, PlanID: plan.PlanID, Actions: []previewPluginPlanAction{}, WarningCount: len(plan.Warnings), Warnings: previewPlanWarnings(plan.Warnings)}
 	for _, action := range plan.Actions {
 		item := previewPluginPlanAction{
 			Name: action.Name, Version: action.Version, ManifestKind: action.ManifestKind,
@@ -177,8 +202,8 @@ func (b *bridgeServer) installPlugin(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "review the plugin plan before installing")
 		return
 	}
-	b.pluginOpsMu.Lock()
-	defer b.pluginOpsMu.Unlock()
+	b.packageOpsMu.Lock()
+	defer b.packageOpsMu.Unlock()
 	plan, ok := planPreviewPlugin(r, input.Source)
 	if !ok || plan.PlanID != input.PlanID {
 		writeProtocolError(w, http.StatusConflict, "plan_changed", "plugin plan changed; review it again")
@@ -226,8 +251,8 @@ func (b *bridgeServer) removePlugin(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid plugin removal request")
 		return
 	}
-	b.pluginOpsMu.Lock()
-	defer b.pluginOpsMu.Unlock()
+	b.packageOpsMu.Lock()
+	defer b.packageOpsMu.Unlock()
 	current, found, err := pluginpkg.FindInstalled(appconfig.ReasonixHomeDir(), input.Name)
 	if err != nil || !found || pluginpkg.InstalledRevision(current) != input.Revision {
 		writeProtocolError(w, http.StatusConflict, "plugin_changed", "plugin changed; refresh and retry")

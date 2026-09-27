@@ -635,6 +635,44 @@ pub struct SkillsSettingsChange {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SkillInstallRequest {
+    pub source: String,
+    pub scope: String,
+    pub workspace_root: String,
+    pub plan_id: String,
+    pub accept_risk: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillInstallPlanAction {
+    pub name: String,
+    pub target: String,
+    pub risk_level: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillInstallPlan {
+    pub protocol_version: u64,
+    pub plan_id: String,
+    pub actions: Vec<SkillInstallPlanAction>,
+    pub warning_count: u64,
+    #[serde(default)]
+    pub warnings: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillInstallResult {
+    pub protocol_version: u64,
+    pub status: String,
+    pub failed_names: Vec<String>,
+    pub settings: SkillsSettingsView,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PluginSettingsItem {
     pub name: String,
     pub description: String,
@@ -697,6 +735,8 @@ pub struct PluginInstallPlan {
     pub plan_id: String,
     pub actions: Vec<PluginInstallPlanAction>,
     pub warning_count: u64,
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1892,6 +1932,41 @@ impl BridgeSupervisor {
             Some(&request_id),
         )?;
         let view: SkillsSettingsView = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn plan_skill_install(
+        &self,
+        request: SkillInstallRequest,
+    ) -> Result<SkillInstallPlan, String> {
+        let response = self.request_json_slow(
+            "POST",
+            "/v1/settings/skills/plan",
+            Some(json!(request)),
+            None,
+        )?;
+        let view: SkillInstallPlan = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn install_skill(
+        &self,
+        request: SkillInstallRequest,
+    ) -> Result<SkillInstallResult, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json_slow(
+            "POST",
+            "/v1/settings/skills/install",
+            Some(json!(request)),
+            Some(&request_id),
+        )?;
+        let view: SkillInstallResult = serde_json::from_value(response).map_err(display_error)?;
         if view.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
@@ -3407,9 +3482,9 @@ mod tests {
         PluginInstallRequest, PluginOperationResult, PluginRemoveRequest, PluginSettingsChange,
         PluginSettingsView, ProviderConfigList, RenameSessionRequest, SaveProviderConfigRequest,
         SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
-        SessionDirectoryPage, SessionInventoryResponse, SessionRequest, SkillsSettingsChange,
-        SkillsSettingsView, SubagentSettingsChange, SubagentSettingsView, SubmitRequest,
-        PROTOCOL_VERSION,
+        SessionDirectoryPage, SessionInventoryResponse, SessionRequest, SkillInstallPlan,
+        SkillInstallRequest, SkillInstallResult, SkillsSettingsChange, SkillsSettingsView,
+        SubagentSettingsChange, SubagentSettingsView, SubmitRequest, PROTOCOL_VERSION,
     };
     use crate::{session_shadow, workbench_catalog::WorkbenchSession};
     use serde_json::json;
@@ -3476,6 +3551,30 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(serde_json::to_value(change).unwrap()["scope"], "project");
+
+        let skill_plan: SkillInstallPlan = serde_json::from_value(json!({
+            "protocolVersion":1, "planId":"sha256:review", "warningCount":0,
+            "actions":[{"name":"review", "target":"/tmp/skills/review/SKILL.md", "riskLevel":"medium"}]
+        })).unwrap();
+        assert_eq!(skill_plan.actions[0].name, "review");
+        let skill_install: SkillInstallRequest = serde_json::from_value(json!({
+            "source":"/tmp/review", "scope":"project", "workspaceRoot":"/tmp/project",
+            "planId":"sha256:review", "acceptRisk":false
+        }))
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(skill_install).unwrap()["workspaceRoot"],
+            "/tmp/project"
+        );
+        let skill_result: SkillInstallResult = serde_json::from_value(json!({
+            "protocolVersion":1, "status":"done", "failedNames":[],
+            "settings":{"protocolVersion":1, "allowImplicitInvocation":true,
+                "globalAllowImplicitInvocation":true,
+                "projectOverrides":{"implicit":false,"skills":false,"sources":false},
+                "skills":[], "sources":[]}
+        }))
+        .unwrap();
+        assert_eq!(skill_result.status, "done");
 
         let plugins: PluginSettingsView = serde_json::from_value(json!({
             "protocolVersion": 1,

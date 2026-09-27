@@ -793,11 +793,29 @@
 @media (max-width: 720px) { .tauri-subagent-editor-grid { grid-template-columns: minmax(0, 1fr); } }
 .tauri-hooks-settings h3:not(:first-child) { margin-top: 30px; }
 .tauri-hooks-path { max-width: 55%; overflow-wrap: anywhere; color: var(--fg-dim); font: 11px var(--font-mono); }
+.tauri-hooks-path-control { display: flex; min-width: 0; max-width: 55%; align-items: center; gap: 8px; }
+.tauri-hooks-path-control .tauri-hooks-path { max-width: none; min-width: 0; }
+.tauri-hooks-path-control button { flex: 0 0 auto; }
 .tauri-hooks-toolbar { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0; }
 .tauri-hooks-editor { display: block; width: 100%; min-height: 330px; resize: vertical; padding: 14px; border: 1px solid var(--border-soft); border-radius: 9px; outline: none; background: var(--surface); color: var(--fg); font: 11px/1.6 var(--font-mono); tab-size: 2; }
 .tauri-hooks-editor:focus-visible { border-color: var(--accent); }
 .tauri-hooks-settings .tauri-settings-actions { flex-wrap: wrap; }
 .tauri-hooks-settings .tauri-settings-actions > span { margin-right: auto; color: var(--fg-faint); font-size: 11px; }
+.tauri-skill-install-form { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 18px; }
+.tauri-skill-install-form .tauri-settings-input { flex: 1 1 300px; width: auto; }
+.tauri-skill-install-plan { margin: 0 0 24px; padding: 16px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface); }
+.tauri-skill-install-plan h4 { margin: 0 0 12px; color: var(--fg); font-size: 13px; }
+.tauri-skill-install-plan__list { display: grid; max-height: 280px; overflow-y: auto; }
+.tauri-skill-install-plan__list > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 9px 0; border-top: 1px solid var(--border-soft); }
+.tauri-skill-install-plan__list strong { color: var(--fg); font-size: 12px; }
+.tauri-skill-install-plan__list small { color: var(--fg-faint); font-size: 11px; }
+.tauri-skill-install-plan__list code { grid-column: 1 / -1; overflow-wrap: anywhere; color: var(--fg-dim); font: 11px var(--font-mono); }
+.tauri-skill-install-plan > label { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--fg-dim); font-size: 11px; }
+.tauri-skill-install-plan input[type="checkbox"] { accent-color: var(--accent); }
+.tauri-skill-install-plan .tauri-settings-actions { justify-content: flex-end; margin-top: 14px; }
+.tauri-install-warnings { margin: 12px 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border-soft)); border-radius: 8px; color: var(--fg-dim); font-size: 11px; }
+.tauri-install-warnings strong { color: var(--fg); }
+.tauri-install-warnings p { margin: 5px 0 0; overflow-wrap: anywhere; }
 .tauri-memory-settings h3:not(:first-child) { margin-top: 30px; }
 .tauri-memory-doc-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; margin: 12px 0; }
 .tauri-memory-doc { min-width: 0; padding: 10px 12px; text-align: left; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--surface); color: var(--fg); cursor: pointer; }

@@ -79,6 +79,7 @@ type action struct {
 	RiskReasons         []string                       `json:"riskReasons,omitempty"`
 	Name                string                         `json:"name,omitempty"`
 	Source              string                         `json:"source,omitempty"`
+	SourceDigest        string                         `json:"sourceDigest,omitempty"` // copied skill bytes and relative paths approved by the plan
 	Target              string                         `json:"target,omitempty"`
 	ConfigPath          string                         `json:"configPath,omitempty"`
 	Scope               string                         `json:"scope,omitempty"`

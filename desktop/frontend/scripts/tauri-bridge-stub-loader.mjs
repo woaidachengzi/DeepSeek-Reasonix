@@ -79,9 +79,11 @@ export function tauriNetworkSettings() { record("network_settings"); return Prom
 export function changeTauriNetworkSettings(change) { record("change_network_settings", { change }); return Promise.resolve({ protocolVersion: 1, ...change, proxyUrlSet: change.proxyUrlAction === "replace", proxyPasswordSet: change.proxyPasswordAction === "replace" }); }
 export function tauriSkillsSettings(workspaceRoot) { record("skills_settings", { workspaceRoot }); return Promise.resolve({ protocolVersion: 1, allowImplicitInvocation: true, skills: [], sources: [] }); }
 export function changeTauriSkillsSettings(change) { record("change_skills_settings", { change }); return Promise.resolve({ protocolVersion: 1, allowImplicitInvocation: change.action === "implicit" ? change.enabled : true, skills: [], sources: [] }); }
+export function planTauriSkillInstall(request) { record("plan_skill_install", { request }); return Promise.resolve({ protocolVersion: 1, planId: "sha256:stub", actions: [], warningCount: 0, warnings: [] }); }
+export function installTauriSkill(request) { record("install_skill", { request }); return Promise.resolve({ protocolVersion: 1, status: "done", failedNames: [], settings: { protocolVersion: 1, allowImplicitInvocation: true, skills: [], sources: [] } }); }
 export function tauriPluginSettings() { record("plugin_settings"); return Promise.resolve({ protocolVersion: 1, plugins: [] }); }
 export function changeTauriPluginSettings(change) { record("change_plugin_settings", { change }); return Promise.resolve({ protocolVersion: 1, plugins: [] }); }
-export function planTauriPluginInstall(source) { record("plan_plugin_install", { source }); return Promise.resolve({ protocolVersion: 1, planId: "sha256:stub", actions: [], warningCount: 0 }); }
+export function planTauriPluginInstall(source) { record("plan_plugin_install", { source }); return Promise.resolve({ protocolVersion: 1, planId: "sha256:stub", actions: [], warningCount: 0, warnings: [] }); }
 export function installTauriPlugin(request) { record("install_plugin", { request }); return Promise.resolve({ protocolVersion: 1, status: "done", failedNames: [], settings: { protocolVersion: 1, plugins: [] } }); }
 export function removeTauriPlugin(request) { record("remove_plugin", { request }); return Promise.resolve({ protocolVersion: 1, status: "done", failedNames: [], settings: { protocolVersion: 1, plugins: [] } }); }
 export function chooseTauriPluginDirectory() { record("choose_plugin_directory"); return Promise.resolve(null); }

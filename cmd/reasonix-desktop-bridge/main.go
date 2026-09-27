@@ -72,7 +72,7 @@ type bridgeServer struct {
 	runtimes           *desktopbridge.RuntimeManager
 	events             *desktopbridge.EventStream
 	requestIDs         *idempotencyLedger
-	pluginOpsMu        sync.Mutex
+	packageOpsMu       sync.Mutex
 	cacheIdentityReads bool
 	identityReadMu     sync.Mutex
 	identityReadStore  *sessionidentity.Store
@@ -469,6 +469,8 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("POST /v1/settings/network", b.authorized(b.idempotent(64<<10, b.changeNetworkSettings)))
 	mux.HandleFunc("GET /v1/settings/skills", b.authorized(b.skillsSettings))
 	mux.HandleFunc("POST /v1/settings/skills", b.authorized(b.idempotent(64<<10, b.changeSkillsSettings)))
+	mux.HandleFunc("POST /v1/settings/skills/plan", b.authorized(b.planSkillInstall))
+	mux.HandleFunc("POST /v1/settings/skills/install", b.authorized(b.idempotent(64<<10, b.installSkill)))
 	mux.HandleFunc("GET /v1/settings/plugins", b.authorized(b.pluginSettings))
 	mux.HandleFunc("POST /v1/settings/plugins", b.authorized(b.idempotent(64<<10, b.changePluginSettings)))
 	mux.HandleFunc("POST /v1/settings/plugins/plan", b.authorized(b.planPluginInstall))
@@ -647,7 +649,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "provider_summary", "provider_configs", "save_provider_config", "delete_provider_config", "usage_stats", "permission_settings", "set_permission_settings", "sandbox_settings", "set_sandbox_settings", "network_settings", "set_network_settings", "skills_settings", "set_skills_settings", "plugin_settings", "set_plugin_settings", "plan_plugin_install", "install_plugin", "remove_plugin", "subagent_settings", "set_subagent_settings", "hooks_settings", "set_hooks_settings", "memory_settings", "set_memory_settings", "set_default_model", "set_model_role", "desktop_preferences", "set_desktop_approval", "set_provider_key", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "mcp_server_activation", "mcp_marketplace", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "session_scan_import_review_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "provider_configs", "save_provider_config", "delete_provider_config", "usage_stats", "permission_settings", "set_permission_settings", "sandbox_settings", "set_sandbox_settings", "network_settings", "set_network_settings", "skills_settings", "set_skills_settings", "plan_skill_install", "install_skill", "plugin_settings", "set_plugin_settings", "plan_plugin_install", "install_plugin", "remove_plugin", "subagent_settings", "set_subagent_settings", "hooks_settings", "set_hooks_settings", "memory_settings", "set_memory_settings", "set_default_model", "set_model_role", "desktop_preferences", "set_desktop_approval", "set_provider_key", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "mcp_server_activation", "mcp_marketplace", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "session_scan_import_review_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
 	})
 }
 

@@ -98,6 +98,15 @@ func (t *installSourceTool) applySkillRoot(req request, act *action) error {
 // copyDir uses O_EXCL so any race that slips through the Lstat check still
 // loses atomically.
 func (t *installSourceTool) applyCopySkill(req request, act *action) error {
+	// A local source can change after the approved plan was computed. Refuse
+	// to copy new instructions or scripts under the old plan ID.
+	currentDigest, err := skillSourceDigest(act.skill)
+	if err != nil {
+		return err
+	}
+	if currentDigest != act.SourceDigest {
+		return newErr(ErrApprovalDenied, "skill source changed after planning; review a new plan")
+	}
 	canonical, err := t.skillCanonicalPath(act.skill.Name, act.Scope)
 	if err != nil {
 		return err

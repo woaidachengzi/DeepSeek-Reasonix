@@ -146,7 +146,7 @@ export function TauriPluginSettings({ currentSessionState, currentSessionHasAtta
           {action.runtime && <p className="tauri-plugin-plan__risk">完整信任运行时：{action.runtimeCommand || "未标注命令"}。它可读取会话和环境，并在本机执行操作。{action.intercepts.length > 0 && ` 拦截：${action.intercepts.join("、")}。`}{action.replaces.length > 0 && ` 替换：${action.replaces.join("、")}。`}</p>}
           {!action.runtime && action.riskLevel === "high" && <p className="tauri-plugin-plan__risk">包含会话 Hooks 或 MCP 服务，启用后可在会话中运行命令或提供工具。</p>}
         </div>)}
-        {plan.detail.warningCount > 0 && <small>{plan.detail.warningCount} 项兼容提示；安装前请检查插件来源。</small>}
+        {plan.detail.warningCount > 0 && <div className="tauri-install-warnings"><strong>{plan.detail.warningCount} 项兼容提示</strong>{plan.detail.warnings.map((warning, index) => <p key={index}>{warning}</p>)}{plan.detail.warningCount > plan.detail.warnings.length && <p>其余提示未显示；请直接检查插件来源。</p>}</div>}
         {plan.detail.actions.some(action => action.riskLevel === "high") && <label className="tauri-plugin-plan__ack"><input type="checkbox" checked={acceptRisk} disabled={busy} onChange={event => setAcceptRisk(event.target.checked)} />我已了解高风险插件可在本机执行命令</label>}
         <div className="tauri-plugin-plan__actions"><button className="tauri-settings-button" type="button" disabled={busy} onClick={() => setPlan(null)}>取消</button><button className="tauri-settings-button" type="button" disabled={busy || plan.detail.actions.some(action => action.riskLevel === "high") && !acceptRisk} onClick={() => void installReviewed()}>安装已预览插件</button></div>
       </section>}

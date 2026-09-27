@@ -85,8 +85,9 @@ use bridge::{
     SandboxSettingsChange, SandboxSettingsView, SaveProviderConfigRequest, ScanImportCandidate,
     ScanImportSelection, SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
     SessionDirectoryPage, SessionFirstMessageTitle, SessionPreview, SessionRequest,
-    SkillsSettingsChange, SkillsSettingsView, SubagentSettingsChange, SubagentSettingsView,
-    SubmitRequest, WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
+    SkillInstallPlan, SkillInstallRequest, SkillInstallResult, SkillsSettingsChange,
+    SkillsSettingsView, SubagentSettingsChange, SubagentSettingsView, SubmitRequest,
+    WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
 };
 use data_profile::{
     PreviewProfile, PreviewProfileStatus, ProfileImportResult, ProjectFoldersImportResult,
@@ -843,6 +844,22 @@ fn change_skills_settings(
     change: SkillsSettingsChange,
 ) -> Result<SkillsSettingsView, String> {
     supervisor.change_skills_settings(change)
+}
+
+#[tauri::command]
+fn plan_skill_install(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: SkillInstallRequest,
+) -> Result<SkillInstallPlan, String> {
+    supervisor.plan_skill_install(request)
+}
+
+#[tauri::command]
+fn install_skill(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: SkillInstallRequest,
+) -> Result<SkillInstallResult, String> {
+    supervisor.install_skill(request)
 }
 
 #[tauri::command]
@@ -1900,6 +1917,8 @@ fn main() {
             change_network_settings,
             skills_settings,
             change_skills_settings,
+            plan_skill_install,
+            install_skill,
             plugin_settings,
             change_plugin_settings,
             plan_plugin_install,

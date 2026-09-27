@@ -1674,6 +1674,52 @@ func TestPlanIDMismatchRefusesApply(t *testing.T) {
 	}
 }
 
+func TestSkillPlanIDRejectsSourceChanges(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		isDir   bool
+		changed string
+	}{
+		{name: "skill body", changed: "---\nname: eta\ndescription: Eta helper\n---\nchanged body"},
+		{name: "directory script", isDir: true, changed: "#!/bin/sh\necho changed\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			project := t.TempDir()
+			home := t.TempDir()
+			sourceRoot := t.TempDir()
+			source := filepath.Join(sourceRoot, "SKILL.md")
+			writeFile(t, source, "---\nname: eta\ndescription: Eta helper\n---\noriginal body")
+			if tc.isDir {
+				writeFile(t, filepath.Join(sourceRoot, "scripts", "run.sh"), "#!/bin/sh\necho original\n")
+				source = sourceRoot
+			}
+			tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
+			args := map[string]any{"source": source, "kind": "skill", "scope": "project", "mode": "copy"}
+			planned := execInstall(t, tl, args)
+			if !planned.OK || planned.PlanID == "" || len(planned.Actions) != 1 || planned.Actions[0].SourceDigest == "" {
+				t.Fatalf("unexpected plan: %+v", planned)
+			}
+			changedPath := source
+			if tc.isDir {
+				changedPath = filepath.Join(sourceRoot, "scripts", "run.sh")
+			}
+			writeFile(t, changedPath, tc.changed)
+			args["apply"] = true
+			args["planId"] = planned.PlanID
+			raw, err := json.Marshal(args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = tl.Execute(context.Background(), raw); !errors.Is(err, ErrApprovalDenied) {
+				t.Fatalf("source change should reject approved plan, got %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(project, ".reasonix", "skills", "eta")); !os.IsNotExist(err) {
+				t.Fatalf("skill should not be installed after source change, stat error: %v", err)
+			}
+		})
+	}
+}
+
 func TestPlanIDIncludesActionDetails(t *testing.T) {
 	req := request{
 		Op:     "install",

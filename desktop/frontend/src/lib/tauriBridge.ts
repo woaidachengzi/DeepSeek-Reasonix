@@ -423,6 +423,39 @@ export async function changeTauriSkillsSettings(change: TauriSkillsChange): Prom
   return invoke<TauriSkillsSettings>("change_skills_settings", { change });
 }
 
+export interface TauriSkillInstallRequest {
+  source: string;
+  scope: "global" | "project";
+  workspaceRoot: string;
+  planId: string;
+  acceptRisk: boolean;
+}
+
+export interface TauriSkillInstallPlan {
+  protocolVersion: number;
+  planId: string;
+  actions: { name: string; target: string; riskLevel: "low" | "medium" | "high" }[];
+  warningCount: number;
+  warnings: string[];
+}
+
+export interface TauriSkillInstallResult {
+  protocolVersion: number;
+  status: "done" | "partial" | "failed";
+  failedNames: string[];
+  settings: TauriSkillsSettings;
+}
+
+export async function planTauriSkillInstall(request: TauriSkillInstallRequest): Promise<TauriSkillInstallPlan> {
+  requireTauri();
+  return invoke<TauriSkillInstallPlan>("plan_skill_install", { request });
+}
+
+export async function installTauriSkill(request: TauriSkillInstallRequest): Promise<TauriSkillInstallResult> {
+  requireTauri();
+  return invoke<TauriSkillInstallResult>("install_skill", { request });
+}
+
 export interface TauriPluginItem {
   name: string;
   description: string;
@@ -481,6 +514,7 @@ export interface TauriPluginInstallPlan {
   planId: string;
   actions: TauriPluginInstallPlanAction[];
   warningCount: number;
+  warnings: string[];
 }
 
 export interface TauriPluginOperationResult {

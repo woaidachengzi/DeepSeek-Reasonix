@@ -73,6 +73,15 @@ export function TauriHooksSettings({ workspaceRoot = "", currentSessionState, cu
     try { setText(formatHooks(parseHooksEditor(text, view.events))); setError(""); }
     catch (err) { setError(tauriMessageFrom(err)); }
   };
+  const copyPath = async () => {
+    if (!view?.path) return;
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable");
+      await navigator.clipboard.writeText(view.path);
+      setNotice("已复制配置文件路径。");
+      setError("");
+    } catch { setError("复制配置文件路径失败。"); }
+  };
   const save = async () => {
     if (!view || busyRef.current) return;
     let hooks: Record<string, unknown>;
@@ -110,7 +119,7 @@ export function TauriHooksSettings({ workspaceRoot = "", currentSessionState, cu
     <div className="tauri-settings-field"><span className="tauri-settings-field-label">范围<small>项目范围使用当前选中的工作区。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="Hooks 范围">{(["global", "project"] as const).map(value => <button key={value} type="button" role="radio" aria-checked={scope === value} className={`tauri-settings-radio${scope === value ? " is-active" : ""}`} disabled={busy || (value === "project" && !workspaceRoot)} onClick={() => { if (!dirty || window.confirm("放弃尚未保存的 Hooks 编辑？")) setScope(value); }}>{value === "global" ? "全局" : "当前项目"}</button>)}</div></div>
     {scope === "project" && !workspaceRoot && <p role="status">请先打开项目会话，再编辑项目 Hooks。</p>}
     {loading ? <div className="tauri-settings-loading">加载中…</div> : view ? <>
-      <div className="tauri-settings-field"><span className="tauri-settings-field-label">配置文件<small>保存后由 Reasonix 核心在新会话中加载。</small></span><code className="tauri-hooks-path">{view.path}</code></div>
+      <div className="tauri-settings-field"><span className="tauri-settings-field-label">配置文件<small>保存后由 Reasonix 核心在新会话中加载。</small></span><div className="tauri-hooks-path-control"><code className="tauri-hooks-path" title={view.path}>{view.path}</code><button type="button" className="tauri-settings-button" disabled={busy || !view.path} onClick={() => void copyPath()}>复制路径</button></div></div>
       <h3>Hooks JSON</h3><p>按事件填写命令数组。支持 command、match、description、timeout（毫秒）与 cwd；现有条目的其他字段会保留。</p>
       <div className="tauri-hooks-toolbar"><button type="button" className="tauri-settings-button" disabled={busy} onClick={format}>格式化并检查</button><button type="button" className="tauri-settings-button" disabled={busy} onClick={() => void navigator.clipboard?.writeText(text).then(() => setNotice("已复制 JSON。"), () => setError("复制失败。"))}>复制</button><button type="button" className="tauri-settings-button" disabled={busy} onClick={() => void navigator.clipboard?.readText().then(value => { setText(value); setError(""); }, () => setError("粘贴失败。"))}>粘贴</button></div>
       <textarea className="tauri-hooks-editor" aria-label="Hooks JSON" spellCheck={false} value={text} disabled={busy} onChange={event => { setText(event.target.value); setError(""); setNotice(""); }} />

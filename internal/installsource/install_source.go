@@ -203,6 +203,9 @@ func (t *installSourceTool) Execute(ctx context.Context, raw json.RawMessage) (s
 	// reuse the exact approved snapshot. Clean it on every exit path, including
 	// plan-ID mismatch or host approval denial before executeApply runs.
 	defer cleanupActionResources(actions)
+	if err := prepareSkillSourceDigests(actions); err != nil {
+		return "", err
+	}
 	planID := computePlanID(req, actions)
 	if len(actions) == 0 {
 		out := response{

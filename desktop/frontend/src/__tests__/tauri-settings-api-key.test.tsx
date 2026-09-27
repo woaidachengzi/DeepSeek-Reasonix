@@ -47,6 +47,8 @@ let plugins = { protocolVersion: 1, plugins: [{ name: "sample", description: "A 
 let installedPluginSource = "";
 let removedPluginName = "";
 let lastSkillScope = "";
+let installedSkillSource = "";
+let installedSkillScope = "";
 let subagents = { protocolVersion: 1, defaultModel: "demo/m", subagentModel: "", subagentEffort: "", maxDepth: 2, maxConcurrency: 6, maxParallelWriters: 3, modelRefs: ["demo/m"], modelEfforts: { "demo/m": ["auto", "low", "high"] }, profiles: [{ name: "reviewer", description: "Reviews code", scope: "global", invocation: "/reviewer", configuredModel: "", configuredEffort: "" }] };
 let savedSubagentProfile: { action?: string; scope?: string; profile?: { name: string; description: string; systemPrompt: string } } | undefined;
 let hooks = { protocolVersion: 1, scope: "global", path: "/preview/settings.json", projectRoot: "", revision: "r1", hooks: {} as Record<string, unknown>, events: ["PreToolUse", "Stop"] };
@@ -71,7 +73,7 @@ const summary = () => ({
 });
 
 (dom.window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
-  async invoke(command: string, args?: { scope?: string; source?: string; workspaceRoot?: string; url?: string; behavior?: string; mode?: string; request?: { model?: string; role?: string; source?: string; name?: string; planId?: string; revision?: string; acceptRisk?: boolean }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean; revision?: string; presetId?: string; presetAction?: string }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string; profile?: { name: string; description: string; systemPrompt: string } } }) {
+  async invoke(command: string, args?: { scope?: string; source?: string; workspaceRoot?: string; url?: string; behavior?: string; mode?: string; request?: { model?: string; role?: string; source?: string; scope?: string; workspaceRoot?: string; name?: string; planId?: string; revision?: string; acceptRisk?: boolean }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean; revision?: string; presetId?: string; presetAction?: string }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string; profile?: { name: string; description: string; systemPrompt: string } } }) {
     calls.push(command);
     switch (command) {
       case "preview_runtime_info":
@@ -103,9 +105,11 @@ const summary = () => ({
       case "network_settings": return { ...network };
       case "change_network_settings": network = { ...network, ...args?.change }; return { ...network };
       case "skills_settings": if (failSkills) { failSkills = false; throw new Error("skill inventory unavailable"); } return { ...skills };
+      case "plan_skill_install": return { protocolVersion: 1, planId: "sha256:skill-review", warningCount: 0, warnings: [], actions: [{ name: "reviewed-skill", target: "/preview/home/skills/reviewed-skill/SKILL.md", riskLevel: "medium" }] };
+      case "install_skill": installedSkillSource = args?.request?.source ?? ""; installedSkillScope = args?.request?.scope ?? ""; skills = { ...skills, skills: [...skills.skills, { ...skills.skills[0], name: "reviewed-skill" }] }; return { protocolVersion: 1, status: "done", failedNames: [], settings: { ...skills } };
       case "plugin_settings": return { ...plugins };
       case "change_plugin_settings": plugins = { ...plugins, plugins: plugins.plugins.map(item => item.name === args?.change?.name ? { ...item, enabled: Boolean(args.change.enabled), revision: "b".repeat(64) } : item) }; return { ...plugins };
-      case "plan_plugin_install": return { protocolVersion: 1, planId: "sha256:reviewed", warningCount: 0, actions: [{ name: "planned", version: "1.0", manifestKind: "reasonix", riskLevel: "high", skills: 1, agents: 0, commands: 0, hooks: 1, mcpServers: 0, prompts: 0, themes: 0, runtime: true, runtimeCommand: "plugin-runtime", intercepts: ["input.receive"], replaces: [] }] };
+      case "plan_plugin_install": return { protocolVersion: 1, planId: "sha256:reviewed", warningCount: 0, warnings: [], actions: [{ name: "planned", version: "1.0", manifestKind: "reasonix", riskLevel: "high", skills: 1, agents: 0, commands: 0, hooks: 1, mcpServers: 0, prompts: 0, themes: 0, runtime: true, runtimeCommand: "plugin-runtime", intercepts: ["input.receive"], replaces: [] }] };
       case "install_plugin": installedPluginSource = args?.request?.source ?? ""; plugins = { ...plugins, plugins: [...plugins.plugins, { ...plugins.plugins[0], name: "planned", revision: "c".repeat(64) }] }; return { protocolVersion: 1, status: "done", failedNames: [], settings: { ...plugins } };
       case "remove_plugin": removedPluginName = args?.request?.name ?? ""; plugins = { ...plugins, plugins: plugins.plugins.filter(item => item.name !== removedPluginName) }; return { protocolVersion: 1, status: "done", failedNames: [], settings: { ...plugins } };
       case "change_skills_settings": {
@@ -322,6 +326,18 @@ assert.match(visibleText(), /skill inventory unavailable/, "failed refresh shows
 assert.doesNotMatch(visibleText(), /A test skill/, "failed refresh does not keep a stale inventory");
 await act(async () => { click("重试读取"); });
 assert.match(visibleText(), /A test skill/, "retry loads the current inventory");
+const skillInstallSource = document.querySelector<HTMLInputElement>('input[aria-label="技能安装来源"]');
+assert.ok(skillInstallSource);
+await act(async () => {
+  Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(skillInstallSource, "/preview/install-skill");
+  skillInstallSource.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+});
+await act(async () => { click("预览技能安装"); });
+assert.match(visibleText(), /reviewed-skill/, "skill name and destination are reviewed before installation");
+assert.equal(installedSkillSource, "", "review does not install a skill");
+await act(async () => { click("安装已预览技能"); });
+assert.equal(installedSkillSource, "/preview/install-skill", "reviewed source reaches the native installer");
+assert.equal(installedSkillScope, "global", "skill install uses the selected scope");
 await act(async () => { click("插件"); });
 assert.match(visibleText(), /A test plugin/, "installed plugin is listed in settings");
 assert.match(visibleText(), /1 技能/, "plugin contribution counts are shown");
@@ -371,6 +387,10 @@ assert.equal(savedSubagentProfile?.scope, "project", "new profile defaults to th
 assert.deepEqual(savedSubagentProfile?.profile, { name: "preview-review", description: "Review changes", systemPrompt: "Review carefully.", color: "", model: "", effort: "", allowedTools: [], readOnly: false }, "profile content reaches the bridge");
 await act(async () => { click("Hooks"); });
 assert.match(visibleText(), /配置文件/, "hooks editor displays its source path");
+let copiedHooksPath = "";
+Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (value: string) => { copiedHooksPath = value; } } });
+await act(async () => { click("复制路径"); });
+assert.equal(copiedHooksPath, "/preview/settings.json", "hooks path copy uses the current bridge path");
 const hooksEditor = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Hooks JSON"]');
 assert.ok(hooksEditor);
 await act(async () => {

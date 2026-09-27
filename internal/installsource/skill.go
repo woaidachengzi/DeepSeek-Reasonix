@@ -2,6 +2,8 @@ package installsource
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/fs"
@@ -21,6 +23,101 @@ const (
 	maxSkillScanCount = 200
 	maxSkillCopyBytes = 20 << 20
 )
+
+// prepareSkillSourceDigests includes the bytes a copy action will install in
+// its public plan. This makes the approval ID change when a skill body or a
+// directory asset changes without changing the skill's name or description.
+func prepareSkillSourceDigests(actions []action) error {
+	for i := range actions {
+		if actions[i].Action != "copy_skill" {
+			continue
+		}
+		digest, err := skillSourceDigest(actions[i].skill)
+		if err != nil {
+			return err
+		}
+		actions[i].SourceDigest = digest
+	}
+	return nil
+}
+
+func skillSourceDigest(cand skillCandidate) (string, error) {
+	if !cand.IsDir {
+		sum := sha256.Sum256([]byte(cand.Content))
+		return "sha256:" + hex.EncodeToString(sum[:]), nil
+	}
+	h := sha256.New()
+	var copied int64
+	srcRoot := cand.SourcePath
+	if resolved, err := filepath.EvalSymlinks(srcRoot); err == nil {
+		srcRoot = resolved
+	}
+	err := filepath.WalkDir(cand.SourcePath, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() && strings.EqualFold(d.Name(), ".git") {
+			return filepath.SkipDir
+		}
+		rel, err := filepath.Rel(cand.SourcePath, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if d.IsDir() {
+			_, _ = fmt.Fprintf(h, "dir:%d:%s\n", len(rel), rel)
+			return nil
+		}
+		source := path
+		if !d.Type().IsRegular() {
+			if d.Type()&os.ModeSymlink == 0 {
+				return nil
+			}
+			resolved, err := filepath.EvalSymlinks(path)
+			if err != nil {
+				return nil
+			}
+			relToRoot, err := filepath.Rel(srcRoot, resolved)
+			if err != nil || relToRoot == ".." || strings.HasPrefix(relToRoot, ".."+string(filepath.Separator)) {
+				return nil
+			}
+			info, err := os.Stat(resolved)
+			if err != nil || !info.Mode().IsRegular() {
+				return nil
+			}
+			source = resolved
+		}
+		info, err := os.Stat(source)
+		if err != nil {
+			return err
+		}
+		copied += info.Size()
+		if copied > maxSkillCopyBytes {
+			return newErr(ErrInvalidManifest, "skill directory exceeds %d bytes", maxSkillCopyBytes)
+		}
+		_, _ = fmt.Fprintf(h, "file:%d:%s:%t:%d\n", len(rel), rel, info.Mode().Perm()&0o111 != 0, info.Size())
+		in, err := os.Open(source)
+		if err != nil {
+			return err
+		}
+		read, copyErr := io.Copy(h, in)
+		closeErr := in.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		if read != info.Size() {
+			return newErr(ErrSourceUnreadable, "skill source changed while planning: %s", path)
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	return "sha256:" + hex.EncodeToString(h.Sum(nil)), nil
+}
 
 // skillAction builds the DTO for a single-skill install (copy or link).
 func (t *installSourceTool) skillAction(req request, cand skillCandidate, mode string) action {
