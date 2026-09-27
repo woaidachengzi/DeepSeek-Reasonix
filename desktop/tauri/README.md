@@ -135,3 +135,6 @@ bundle ID 的测试 `.app`；托管和显式 profile 的真实启动 smoke 均�
 2026-09-27 从提交 `7acf1358998d92f2eeb886a402e07a22a878dc1d` 的干净 worktree 再次运行
 `tauri-build.mjs -- --bundles app --ci`，得到正式 Preview 标识的 `.app`；严格签名校验与
 托管、显式 profile 的真实包级启动和退出 smoke 均通过，构建后 Git 保持干净。
+
+2026-09-27 标题回填与并发保护提交 `cb752b831f1e198f2f62b4d4060b036618b69352` 也从干净 worktree
+重建为正式 Preview `.app`；前端构建预算、严格签名校验和两种 profile 的真实包级 smoke 均通过。
