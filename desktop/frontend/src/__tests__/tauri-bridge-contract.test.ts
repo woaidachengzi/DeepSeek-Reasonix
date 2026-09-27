@@ -304,6 +304,16 @@ const commands: CommandContract[] = [
     description: "changeTauriSandboxSettings() invokes change_sandbox_settings with { change }",
   },
   {
+    command: "network_settings",
+    argKeys: [],
+    description: "tauriNetworkSettings() invokes network_settings with no args",
+  },
+  {
+    command: "change_network_settings",
+    argKeys: ["change"],
+    description: "changeTauriNetworkSettings() invokes change_network_settings with { change }",
+  },
+  {
     command: "set_default_model",
     argKeys: ["request"],
     description: "setTauriDefaultModel() invokes set_default_model with { request }",

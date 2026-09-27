@@ -10,6 +10,7 @@ import { TauriMCPSettings } from "./TauriMCPSettings";
 import { TauriProviderEditor } from "./TauriProviderEditor";
 import { TauriPermissionsSettings } from "./TauriPermissionsSettings";
 import { TauriSandboxSettings } from "./TauriSandboxSettings";
+import { TauriNetworkSettings } from "./TauriNetworkSettings";
 import { getTauriNotificationsEnabled, setTauriNotificationsEnabled, getTauriProgressMode, setTauriProgressMode, type TauriProgressMode } from "./tauriPreferences";
 import { getSuccessPreference, setSuccessPreference, getAttentionPreference, setAttentionPreference, getNotificationVolume, setNotificationVolume, playSuccessChime, playAttentionChime, type SoundWavPref } from "../lib/sound";
 
@@ -36,7 +37,7 @@ interface TauriSettingsProps {
   onRefreshCatalogAudit?: () => Promise<void>;
 }
 
-export type TauriSettingsTab = "general" | "appearance" | "model" | "providers" | "stats" | "mcp" | "permissions" | "sandbox" | "diagnostics" | "data" | "shortcuts" | "about";
+export type TauriSettingsTab = "general" | "appearance" | "model" | "providers" | "stats" | "mcp" | "permissions" | "sandbox" | "network" | "diagnostics" | "data" | "shortcuts" | "about";
 
 const TauriUsageStatsPanel = lazy(() => import("../components/UsageStatsPanel").then(module => ({ default: module.UsageStatsPanel })));
 
@@ -51,6 +52,7 @@ const SETTINGS_GROUPS = [
   { label: "安全与执行", items: [
     { id: "permissions", label: "权限", description: "写入决策与工具规则", icon: ShieldCheck },
     { id: "sandbox", label: "沙盒", description: "命令隔离与文件写入范围", icon: Box },
+    { id: "network", label: "网络", description: "代理与直连设置", icon: Globe },
   ] },
   { label: "运行与诊断", items: [{ id: "diagnostics", label: "运行诊断", description: "桥接状态与会话目录检查", icon: Activity }] },
   { label: "应用", items: [
@@ -69,6 +71,7 @@ const SETTINGS_TITLES: Record<TauriSettingsTab, { title: string; description: st
   mcp: { title: "MCP 与工具", description: "连接并管理工作区可用的工具。" },
   permissions: { title: "权限", description: "设置工具的默认写入决策和规则。" },
   sandbox: { title: "沙盒", description: "设置命令隔离、网络访问和文件写入范围。" },
+  network: { title: "网络", description: "设置 Preview 普通 HTTP 请求的代理方式。" },
   diagnostics: { title: "运行诊断", description: "检查本地服务、会话目录和 Preview 的连接状态。" },
   appearance: { title: "外观", description: "调整主题、阅读布局和字体。" },
   shortcuts: { title: "快捷键", description: "查看 Preview 中可用的键盘操作。" },
@@ -292,6 +295,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
             {tab === "mcp" && <TauriMCPSettings workspaceRoot={workspaceRoot} />}
             {tab === "permissions" && <TauriPermissionsSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "sandbox" && <TauriSandboxSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
+            {tab === "network" && <TauriNetworkSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "diagnostics" && <DiagnosticsSettings bridgeStatus={bridgeStatus} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={hostError} busy={Boolean(importBusy)} onRestartBridge={onRestartBridge} onRefreshCatalogAudit={onRefreshCatalogAudit} onOpenData={() => setTab("data")} onOpenProviders={() => setTab("providers")} />}
             {tab === "data" && <DataSettings profile={profile} busy={Boolean(importBusy)} onRefreshProfile={onRefreshProfile} onImportStableProfile={onImportStableProfile} onImportStableProjectFolders={onImportStableProjectFolders} onScanUnclaimedSessions={onScanUnclaimedSessions} onClose={onClose} />}
             {tab === "about" && (aboutLoading ? <div className="tauri-settings-loading">加载中…</div> : <>{aboutLoadError && <SettingsLoadError onRetry={loadSettings} />}{runtimeInfo && <AboutSettings runtimeInfo={runtimeInfo} platform={platform} onRefresh={loadSettings} />}</>)}

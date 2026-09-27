@@ -300,6 +300,36 @@ export async function changeTauriSandboxSettings(change: TauriSandboxChange): Pr
   return invoke<TauriSandboxSettings>("change_sandbox_settings", { change });
 }
 
+export interface TauriNetworkSettings {
+  protocolVersion: number;
+  proxyMode: "auto" | "env" | "custom" | "off";
+  noProxy: string;
+  proxyType: string;
+  proxyServer: string;
+  proxyPort: number;
+  proxyUsername: string;
+  proxyUrlSet: boolean;
+  proxyPasswordSet: boolean;
+}
+
+export type TauriNetworkSecretAction = "keep" | "replace" | "clear";
+export interface TauriNetworkChange extends Omit<TauriNetworkSettings, "protocolVersion" | "proxyUrlSet" | "proxyPasswordSet"> {
+  proxyUrlAction: TauriNetworkSecretAction;
+  proxyUrl: string;
+  proxyPasswordAction: TauriNetworkSecretAction;
+  proxyPassword: string;
+}
+
+export async function tauriNetworkSettings(): Promise<TauriNetworkSettings> {
+  requireTauri();
+  return invoke<TauriNetworkSettings>("network_settings");
+}
+
+export async function changeTauriNetworkSettings(change: TauriNetworkChange): Promise<TauriNetworkSettings> {
+  requireTauri();
+  return invoke<TauriNetworkSettings>("change_network_settings", { change });
+}
+
 export type TauriToolApprovalMode = "ask" | "auto" | "yolo";
 export interface TauriDesktopPreferences {
   protocolVersion: number;

@@ -74,13 +74,14 @@ use bridge::{
     BridgeStatus, BridgeSupervisor, BridgeWorkspaceChangeDetailResponse,
     BridgeWorkspaceChangesResponse, BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse,
     DesktopPreferences, LegacySessionCatalogEntry, MCPServerDeleteRequest, MCPServerInput,
-    MCPServerMutationResponse, MCPServerView, OpenSessionRequest, PendingSessionDeleteCursor,
-    PendingSessionDeletePage, PendingSessionTitleRecovery, PermissionSettingsChange,
-    PermissionSettingsView, ProviderConfigList, RenameSessionRequest, SandboxSettingsChange,
-    SandboxSettingsView, SaveProviderConfigRequest, ScanImportCandidate, ScanImportSelection,
-    SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage,
-    SessionFirstMessageTitle, SessionPreview, SessionRequest, SubmitRequest,
-    WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
+    MCPServerMutationResponse, MCPServerView, NetworkSettingsChange, NetworkSettingsView,
+    OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
+    PendingSessionTitleRecovery, PermissionSettingsChange, PermissionSettingsView,
+    ProviderConfigList, RenameSessionRequest, SandboxSettingsChange, SandboxSettingsView,
+    SaveProviderConfigRequest, ScanImportCandidate, ScanImportSelection, SessionCatalogMetadata,
+    SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage, SessionFirstMessageTitle,
+    SessionPreview, SessionRequest, SubmitRequest, WorkspaceChangeDetailRequest,
+    WorkspaceFileRequest, WorkspaceRequest,
 };
 use data_profile::{
     PreviewProfile, PreviewProfileStatus, ProfileImportResult, ProjectFoldersImportResult,
@@ -773,6 +774,21 @@ fn change_sandbox_settings(
     change: SandboxSettingsChange,
 ) -> Result<SandboxSettingsView, String> {
     supervisor.change_sandbox_settings(change)
+}
+
+#[tauri::command]
+fn network_settings(
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<NetworkSettingsView, String> {
+    supervisor.network_settings()
+}
+
+#[tauri::command]
+fn change_network_settings(
+    supervisor: State<'_, BridgeSupervisor>,
+    change: NetworkSettingsChange,
+) -> Result<NetworkSettingsView, String> {
+    supervisor.change_network_settings(change)
 }
 
 #[tauri::command]
@@ -1728,6 +1744,8 @@ fn main() {
             change_permission_settings,
             sandbox_settings,
             change_sandbox_settings,
+            network_settings,
+            change_network_settings,
             desktop_preferences,
             set_desktop_approval,
             set_default_model,

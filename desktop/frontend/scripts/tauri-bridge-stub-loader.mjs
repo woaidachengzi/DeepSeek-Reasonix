@@ -72,6 +72,8 @@ export function tauriPermissionSettings() { record("permission_settings"); retur
 export function changeTauriPermissionSettings(change) { record("change_permission_settings", { change }); return Promise.resolve({ protocolVersion: 1, mode: change.mode ?? "ask", allow: [], ask: [], deny: [] }); }
 export function tauriSandboxSettings() { record("sandbox_settings"); return Promise.resolve({ protocolVersion: 1, bash: "enforce", network: true, workspaceRoot: "", allowWrite: [], platform: "darwin" }); }
 export function changeTauriSandboxSettings(change) { record("change_sandbox_settings", { change }); return Promise.resolve({ protocolVersion: 1, ...change, platform: "darwin" }); }
+export function tauriNetworkSettings() { record("network_settings"); return Promise.resolve({ protocolVersion: 1, proxyMode: "auto", noProxy: "", proxyType: "socks5", proxyServer: "", proxyPort: 0, proxyUsername: "", proxyUrlSet: false, proxyPasswordSet: false }); }
+export function changeTauriNetworkSettings(change) { record("change_network_settings", { change }); return Promise.resolve({ protocolVersion: 1, ...change, proxyUrlSet: change.proxyUrlAction === "replace", proxyPasswordSet: change.proxyPasswordAction === "replace" }); }
 export function setTauriDefaultModel() { return Promise.resolve({ protocolVersion: 1, providers: [] }); }
 export function tauriDesktopPreferences() { return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: "auto" }); }
 export function setTauriDesktopApproval(mode) { record("set_desktop_approval", { mode }); return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: mode }); }

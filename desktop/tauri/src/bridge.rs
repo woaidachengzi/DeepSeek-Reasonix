@@ -499,6 +499,35 @@ pub struct SandboxSettingsChange {
     pub allow_write: Vec<String>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkSettingsView {
+    pub protocol_version: u64,
+    pub proxy_mode: String,
+    pub no_proxy: String,
+    pub proxy_type: String,
+    pub proxy_server: String,
+    pub proxy_port: i32,
+    pub proxy_username: String,
+    pub proxy_url_set: bool,
+    pub proxy_password_set: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkSettingsChange {
+    pub proxy_mode: String,
+    pub no_proxy: String,
+    pub proxy_type: String,
+    pub proxy_server: String,
+    pub proxy_port: i32,
+    pub proxy_username: String,
+    pub proxy_url_action: String,
+    pub proxy_url: String,
+    pub proxy_password_action: String,
+    pub proxy_password: String,
+}
+
 /// One MCP server as the host may see it. Credential material is write-only, so
 /// this carries the key names a server expects and never a value. Hand-written
 /// like the other host-owned payloads: the wire shape belongs to this host, not
@@ -1374,6 +1403,33 @@ impl BridgeSupervisor {
             Some(&request_id),
         )?;
         let view: SandboxSettingsView = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn network_settings(&self) -> Result<NetworkSettingsView, String> {
+        let response = self.request_json("GET", "/v1/settings/network", None, None)?;
+        let view: NetworkSettingsView = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn change_network_settings(
+        &self,
+        change: NetworkSettingsChange,
+    ) -> Result<NetworkSettingsView, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/network",
+            Some(json!(change)),
+            Some(&request_id),
+        )?;
+        let view: NetworkSettingsView = serde_json::from_value(response).map_err(display_error)?;
         if view.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
