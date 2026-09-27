@@ -1856,6 +1856,16 @@ impl BridgeSupervisor {
         Ok(response)
     }
 
+    pub fn storage_settings(&self) -> Result<Value, String> {
+        let response = self.request_json("GET", "/v1/settings/storage", None, None)?;
+        if response.get("protocolVersion").and_then(Value::as_u64)
+            != Some(u64::from(PROTOCOL_VERSION))
+        {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(response)
+    }
+
     pub fn permission_settings(&self) -> Result<PermissionSettingsView, String> {
         let response = self.request_json("GET", "/v1/settings/permissions", None, None)?;
         let view: PermissionSettingsView =

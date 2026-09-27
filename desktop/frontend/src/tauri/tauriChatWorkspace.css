@@ -717,6 +717,7 @@
   .tauri-settings-overlay, .tauri-settings-overlay[data-desktop-layout="creation"] { grid-template-columns: 188px minmax(0, 1fr); }
   .tauri-settings-content { padding: 22px 20px 48px; }
   .tauri-settings-field { align-items: flex-start; flex-direction: column; gap: 9px; }
+  .tauri-storage-path { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .tauri-settings-status-items .status-bar-items-editor { flex: 0 0 auto; width: 100%; }
   .tauri-settings-audit { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -933,6 +934,15 @@
 @media (max-width: 570px) { .tauri-mcp-settings__heading { flex-direction: column; } }
 .tauri-settings-data__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .tauri-settings-data__heading p { margin: 0 0 12px; }
+.tauri-storage-settings { margin-bottom: 30px; }
+.tauri-storage-paths { border-top: 1px solid var(--border-soft); }
+.tauri-storage-path { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(0, 1.6fr); align-items: center; gap: 20px; min-height: 62px; padding: 10px 4px; border-bottom: 1px solid var(--border-soft); }
+.tauri-storage-path > span { color: var(--fg); font-size: 12px; font-weight: 600; }
+.tauri-storage-path > div { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.tauri-storage-path input { min-width: 0; flex: 1; min-height: 34px; padding: 0 10px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface); color: var(--fg-dim); font: 11px var(--font-mono); }
+.tauri-storage-path button { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface); color: var(--fg-dim); }
+.tauri-storage-path button:hover:not(:disabled), .tauri-storage-path button:focus-visible { border-color: var(--accent); color: var(--fg); }
+.tauri-storage-path button:disabled { opacity: .45; }
 .tauri-settings-data__path { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--surface); }
 .tauri-settings-data__path span { color: var(--fg-faint); font-size: 11px; }
 .tauri-settings-data__path code { overflow-wrap: anywhere; color: var(--fg); font: 11px/1.5 var(--font-mono); }

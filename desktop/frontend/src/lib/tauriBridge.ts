@@ -72,6 +72,14 @@ export interface TauriPreviewProfileStatus {
   projectFoldersFileExists?: boolean;
 }
 
+export interface TauriStorageSettings {
+  protocolVersion: number;
+  profilePath: string;
+  statePath: string;
+  cachePath: string;
+  extensionsPath: string;
+}
+
 export interface TauriProfileImportResult {
   importedConfig: string;
   backupConfig: string;
@@ -214,6 +222,11 @@ export async function restartTauriBridge(): Promise<TauriBridgeStatus> {
 export async function tauriPreviewProfileStatus(): Promise<TauriPreviewProfileStatus> {
   requireTauri();
   return invoke<TauriPreviewProfileStatus>("preview_profile_status");
+}
+
+export async function tauriStorageSettings(): Promise<TauriStorageSettings> {
+  requireTauri();
+  return invoke<TauriStorageSettings>("storage_settings");
 }
 
 export async function tauriPreviewRuntimeInfo(): Promise<TauriPreviewRuntimeInfo> {

@@ -20,6 +20,8 @@ Object.assign(globalThis, {
   isTauri: true,
 });
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
+let copiedPath = "";
+Object.defineProperty(dom.window.navigator, "clipboard", { value: { writeText: async (value: string) => { copiedPath = value; } }, configurable: true });
 class TestResizeObserver { observe() {} unobserve() {} disconnect() {} }
 globalThis.ResizeObserver = TestResizeObserver as unknown as typeof ResizeObserver;
 
@@ -30,6 +32,7 @@ let releaseSave: (() => void) | undefined;
 let failSummary = false;
 let failSave = false;
 let failRuntime = false;
+let failStorage = false;
 const calls: string[] = [];
 let openedURL = "";
 let closeBehavior = "keep_running";
@@ -92,6 +95,9 @@ const summary = () => ({
       }
       case "delete_provider_config": deletedProviderName = args?.input?.name ?? ""; deletedProviderRevision = args?.input?.revision ?? ""; return { protocolVersion: 1, providers: [] };
       case "usage_stats": return { protocolVersion: 1, from: "2026-09-01", to: "2026-09-27", tokens: 42, requests: 1, turns: 1, cacheHit: 0, cacheMiss: 42, activeDays: 1, topModel: "demo/m", topProvider: "demo", daily: [], models: [], providers: [] };
+      case "storage_settings":
+        if (failStorage) { failStorage = false; throw new Error("storage unavailable"); }
+        return { protocolVersion: 1, profilePath: "/preview/home", statePath: "/preview/state", cachePath: "/preview/cache", extensionsPath: "/preview/home/plugins" };
       case "permission_settings": return { ...permissions };
       case "change_permission_settings": {
         const change = args?.change;
@@ -233,7 +239,17 @@ assert.equal(localStorage.getItem("reasonix-conv-width"), "full");
 await act(async () => { click("大"); });
 assert.equal(document.documentElement.getAttribute("data-text-size"), "large");
 assert.equal(localStorage.getItem("reasonix-text-size"), "large");
-await act(async () => { click("数据"); });
+await act(async () => { click("存储"); });
+assert.equal(document.querySelector<HTMLInputElement>('input[aria-label="状态目录"]')?.value, "/preview/state", "storage page reads the effective core state directory");
+assert.equal(document.querySelector<HTMLInputElement>('input[aria-label="缓存目录"]')?.value, "/preview/cache", "storage page reads the effective core cache directory");
+await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="复制状态目录"]')?.click(); });
+assert.equal(copiedPath, "/preview/state", "storage path copy uses the displayed core path");
+failStorage = true;
+await act(async () => { document.querySelector<HTMLButtonElement>('.tauri-storage-settings .tauri-settings-data__heading button')?.click(); });
+assert.match(document.querySelector('.tauri-storage-settings [role="alert"]')?.textContent ?? "", /storage unavailable/, "storage refresh exposes bridge failures");
+assert.equal(document.querySelector('.tauri-storage-paths'), null, "failed refresh does not leave stale directories");
+await act(async () => { document.querySelector<HTMLButtonElement>('.tauri-storage-settings .tauri-settings-data__heading button')?.click(); });
+assert.equal(document.querySelector<HTMLInputElement>('input[aria-label="状态目录"]')?.value, "/preview/state", "storage paths recover after retry");
 assert.match(visibleText(), /\/preview\/home/, "data settings show the isolated preview directory");
 await act(async () => { click("复制稳定版配置（先备份）"); });
 assert.equal(profileImportCalls, 1);

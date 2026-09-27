@@ -787,6 +787,11 @@ fn usage_stats(
 }
 
 #[tauri::command]
+fn storage_settings(supervisor: State<'_, BridgeSupervisor>) -> Result<serde_json::Value, String> {
+    supervisor.storage_settings()
+}
+
+#[tauri::command]
 fn permission_settings(
     supervisor: State<'_, BridgeSupervisor>,
 ) -> Result<PermissionSettingsView, String> {
@@ -1926,6 +1931,7 @@ fn main() {
             save_provider_config,
             delete_provider_config,
             usage_stats,
+            storage_settings,
             permission_settings,
             change_permission_settings,
             sandbox_settings,

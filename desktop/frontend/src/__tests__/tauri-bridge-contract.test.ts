@@ -389,6 +389,11 @@ const commands: CommandContract[] = [
     description: "tauriDesktopPreferences() invokes desktop_preferences with no args",
   },
   {
+    command: "storage_settings",
+    argKeys: [],
+    description: "tauriStorageSettings() invokes storage_settings with no args",
+  },
+  {
     command: "set_desktop_approval",
     argKeys: ["mode"],
     description: "setTauriDesktopApproval() invokes set_desktop_approval with { mode }",

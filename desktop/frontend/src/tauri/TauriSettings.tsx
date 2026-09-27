@@ -16,6 +16,7 @@ import { TauriPluginSettings } from "./TauriPluginSettings";
 import { TauriSubagentSettings } from "./TauriSubagentSettings";
 import { TauriHooksSettings } from "./TauriHooksSettings";
 import { TauriMemorySettings } from "./TauriMemorySettings";
+import { TauriStorageSettings } from "./TauriStorageSettings";
 import { StatusBarItemsEditor } from "../components/StatusBarItemsEditor";
 import { comboFromKeyboardEvent, detectShortcutPlatform, formatShortcutCombo } from "../lib/keyboardShortcuts";
 import { TAURI_SHORTCUT_ACTIONS, getTauriShortcut, isValidTauriShortcut, resetTauriShortcuts, setTauriShortcut, tauriShortcutConflict, useTauriShortcuts, type TauriShortcutAction } from "./tauriKeyboardShortcuts";
@@ -71,7 +72,7 @@ const SETTINGS_GROUPS = [
   { label: "应用", items: [
     { id: "appearance", label: "外观", description: "主题、阅读布局与字体", icon: Palette },
     { id: "shortcuts", label: "快捷键", description: "录入、重置并查看工作区按键", icon: Keyboard },
-    { id: "data", label: "数据", description: "Preview 配置与导入", icon: Database },
+    { id: "data", label: "存储", description: "存储目录与 Preview 数据迁移", icon: Database },
     { id: "about", label: "关于", description: "版本与运行信息", icon: Info },
   ] },
 ] as const;
@@ -93,7 +94,7 @@ const SETTINGS_TITLES: Record<TauriSettingsTab, { title: string; description: st
   diagnostics: { title: "运行诊断", description: "检查本地服务、会话目录和 Preview 的连接状态。" },
   appearance: { title: "外观", description: "调整主题、阅读布局和字体。" },
   shortcuts: { title: "快捷键", description: "录入和重置 Preview 中可用的键盘操作。" },
-  data: { title: "数据与迁移", description: "查看 Preview 配置与会话导入。" },
+  data: { title: "存储", description: "查看存储路径和 Preview 数据迁移。" },
   about: { title: "关于", description: "版本、构建及运行环境。" },
 };
 
@@ -350,7 +351,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
             {tab === "sandbox" && <TauriSandboxSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "network" && <TauriNetworkSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "diagnostics" && <DiagnosticsSettings bridgeStatus={bridgeStatus} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={hostError} busy={Boolean(importBusy)} onRestartBridge={onRestartBridge} onRefreshCatalogAudit={onRefreshCatalogAudit} onOpenData={() => setTab("data")} onOpenProviders={() => setTab("providers")} />}
-            {tab === "data" && <DataSettings profile={profile} busy={Boolean(importBusy)} onRefreshProfile={onRefreshProfile} onImportStableProfile={onImportStableProfile} onImportStableProjectFolders={onImportStableProjectFolders} onScanUnclaimedSessions={onScanUnclaimedSessions} onClose={onClose} />}
+            {tab === "data" && <><TauriStorageSettings workspaceRoot={workspaceRoot} /><DataSettings profile={profile} busy={Boolean(importBusy)} onRefreshProfile={onRefreshProfile} onImportStableProfile={onImportStableProfile} onImportStableProjectFolders={onImportStableProjectFolders} onScanUnclaimedSessions={onScanUnclaimedSessions} onClose={onClose} /></>}
             {tab === "about" && (aboutLoading ? <div className="tauri-settings-loading">加载中…</div> : <>{aboutLoadError && <SettingsLoadError onRetry={loadSettings} />}{runtimeInfo && <AboutSettings runtimeInfo={runtimeInfo} platform={platform} onRefresh={loadSettings} />}</>)}
           </>}
         </div>
