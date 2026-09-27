@@ -184,7 +184,18 @@ pub struct BridgeSession {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeSessionMetrics {
+    pub cache_hit_tokens: u64,
+    pub cache_miss_tokens: u64,
+    pub compact_threshold_percent: u64,
+    pub context_used_tokens: u64,
+    pub context_window_tokens: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeSessionResponse {
+    pub metrics: Option<BridgeSessionMetrics>,
     pub protocol_version: u64,
     pub sequence: Option<u64>,
     pub session: BridgeSession,

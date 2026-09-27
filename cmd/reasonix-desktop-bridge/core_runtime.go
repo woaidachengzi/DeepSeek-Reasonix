@@ -385,6 +385,16 @@ type controllerRuntime struct {
 
 func (r *controllerRuntime) SessionPath() string { return r.controller.SessionPath() }
 
+func (r *controllerRuntime) SessionMetrics() desktopbridge.SessionMetrics {
+	used, window := r.controller.ContextSnapshot()
+	hit, miss := r.controller.SessionCache()
+	return desktopbridge.SessionMetrics{
+		ContextUsedTokens: max(0, used), ContextWindowTokens: max(0, window),
+		CompactThresholdPercent: max(0, min(100, int(r.controller.CompactRatio()*100))),
+		CacheHitTokens:          max(0, hit), CacheMissTokens: max(0, miss),
+	}
+}
+
 // MCPRuntimeStatus projects only current Host diagnostics. Reading this never
 // starts an MCP server or exposes raw startup errors, tool schemas, or secrets.
 func (r *controllerRuntime) MCPRuntimeStatus() []desktopbridge.MCPRuntimeServer {

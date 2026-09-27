@@ -25,6 +25,30 @@ type fakeMCPRuntime struct {
 	servers []MCPRuntimeServer
 }
 
+type fakeMetricsRuntime struct {
+	*fakeRuntime
+	metrics SessionMetrics
+}
+
+func (r *fakeMetricsRuntime) SessionMetrics() SessionMetrics { return r.metrics }
+
+func TestSessionMetricsRequireMatchingActiveID(t *testing.T) {
+	runtime := &fakeMetricsRuntime{fakeRuntime: &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}, metrics: SessionMetrics{ContextUsedTokens: 300, ContextWindowTokens: 1000}}
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(context.Context, OpenRequest) (Runtime, error) { return runtime, nil }))
+	if _, ok := manager.SessionMetrics("a"); ok {
+		t.Fatal("metrics available before opening a session")
+	}
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a", WorkspaceRoot: "/work/a"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := manager.SessionMetrics("b"); ok {
+		t.Fatal("metrics leaked to another session ID")
+	}
+	if metrics, ok := manager.SessionMetrics("a"); !ok || metrics.ContextUsedTokens != 300 {
+		t.Fatalf("matching session metrics = %+v, available=%t", metrics, ok)
+	}
+}
+
 func (r *fakeMCPRuntime) MCPRuntimeStatus() []MCPRuntimeServer { return r.servers }
 
 func TestMCPStatusOnlyReadsMatchingActiveWorkspace(t *testing.T) {

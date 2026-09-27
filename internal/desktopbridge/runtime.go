@@ -190,6 +190,21 @@ type MCPRuntimeStatusProvider interface {
 	MCPRuntimeStatus() []MCPRuntimeServer
 }
 
+// SessionMetrics contains only current-session status values backed by the
+// active controller. Zero contextWindowTokens means no reliable gauge yet.
+type SessionMetrics struct {
+	ContextUsedTokens       int `json:"contextUsedTokens"`
+	ContextWindowTokens     int `json:"contextWindowTokens"`
+	CompactThresholdPercent int `json:"compactThresholdPercent"`
+	CacheHitTokens          int `json:"cacheHitTokens"`
+	CacheMissTokens         int `json:"cacheMissTokens"`
+}
+
+// SessionMetricsProvider is optional for runtimes that can read these values.
+type SessionMetricsProvider interface {
+	SessionMetrics() SessionMetrics
+}
+
 // RuntimeFactory builds a core runtime only after an authenticated open request.
 // Bridge startup and health checks never invoke it.
 type RuntimeFactory interface {
@@ -375,6 +390,20 @@ func (m *RuntimeManager) Snapshot() (SessionView, bool) {
 	view := m.view
 	view.State = m.runtime.State()
 	return view, true
+}
+
+// SessionMetrics returns metrics only for the exact active session ID.
+func (m *RuntimeManager) SessionMetrics(sessionID string) (SessionMetrics, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed || m.runtime == nil || m.view.ID != sessionID {
+		return SessionMetrics{}, false
+	}
+	provider, ok := m.runtime.(SessionMetricsProvider)
+	if !ok {
+		return SessionMetrics{}, false
+	}
+	return provider.SessionMetrics(), true
 }
 
 // MCPStatus reads only the current session's Host and only for its workspace.

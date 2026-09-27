@@ -15,6 +15,7 @@ import type {
   BridgeProjectFolder,
   BridgeProviderSummaryResponse,
   BridgeSession,
+  BridgeSessionMetrics,
   BridgeWorkspaceListResponse,
   BridgeWorkspaceFileResponse,
   BridgeWorkspaceChangesResponse,
@@ -30,6 +31,7 @@ export interface TauriBridgeStatus {
 // The wire mirrors come from the generated schema; the snapshot below is a
 // host-owned command payload and stays hand-written.
 export type TauriBridgeSession = BridgeSession;
+export type TauriSessionMetrics = BridgeSessionMetrics;
 export type TauriBridgeEvent = BridgeEvent;
 export type TauriProviderSummary = BridgeProviderSummaryResponse;
 export type TauriBridgeAttachment = BridgeAttachment;
@@ -48,6 +50,7 @@ export function tauriAssistantTextDelta(event: Pick<TauriBridgeEvent, "eventKind
 export interface TauriBridgeSnapshot {
   sequence: number;
   session: TauriBridgeSession;
+  metrics?: BridgeSessionMetrics;
 }
 
 export interface TauriBridgeHistory {

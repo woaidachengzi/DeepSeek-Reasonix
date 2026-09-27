@@ -358,7 +358,21 @@
       "properties": {
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
         "sequence": { "type": "integer", "minimum": 0 },
-        "session": { "$ref": "#/$defs/session" }
+        "session": { "$ref": "#/$defs/session" },
+        "metrics": { "$ref": "#/$defs/sessionMetrics" }
+      },
+      "additionalProperties": false
+    },
+    "sessionMetrics": {
+      "title": "BridgeSessionMetrics",
+      "type": "object",
+      "required": ["contextUsedTokens", "contextWindowTokens", "compactThresholdPercent", "cacheHitTokens", "cacheMissTokens"],
+      "properties": {
+        "contextUsedTokens": { "type": "integer", "minimum": 0 },
+        "contextWindowTokens": { "type": "integer", "minimum": 0 },
+        "compactThresholdPercent": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "cacheHitTokens": { "type": "integer", "minimum": 0 },
+        "cacheMissTokens": { "type": "integer", "minimum": 0 }
       },
       "additionalProperties": false
     },

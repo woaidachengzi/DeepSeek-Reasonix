@@ -1102,7 +1102,14 @@ func (b *bridgeServer) sessionSnapshot(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, http.StatusNotFound, "not_found", "desktop bridge session not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "sequence": b.events.LatestSequence(), "session": view})
+	// Capture the event boundary before reading metrics. Later events must stay
+	// replayable instead of being skipped by a newer cursor with older values.
+	sequence := b.events.LatestSequence()
+	response := map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "sequence": sequence, "session": view}
+	if metrics, ok := b.runtimes.SessionMetrics(view.ID); ok {
+		response["metrics"] = metrics
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (b *bridgeServer) sessionHistory(w http.ResponseWriter, r *http.Request) {

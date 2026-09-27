@@ -4,7 +4,6 @@ export interface TauriObservedUsage {
   sessionId: string;
   tokens: number;
   turnTokens: number;
-  cacheHitTokens: number;
 }
 
 function safeTokenCount(value: unknown): number | null {
@@ -21,12 +20,10 @@ export function observeTauriUsage(previous: TauriObservedUsage | null, event: Ta
   if (!usage || typeof usage !== "object" || Array.isArray(usage)) return previous;
   const data = usage as Record<string, unknown>;
   const tokens = safeTokenCount(data.totalTokens);
-  const cacheHit = safeTokenCount(data.cacheHitTokens);
-  if (tokens === null || cacheHit === null) return previous;
-  const baseline = previous?.sessionId === event.sessionId ? previous : { sessionId: event.sessionId, tokens: 0, turnTokens: 0, cacheHitTokens: 0 };
+  if (tokens === null) return previous;
+  const baseline = previous?.sessionId === event.sessionId ? previous : { sessionId: event.sessionId, tokens: 0, turnTokens: 0 };
   const nextTokens = baseline.tokens + tokens;
   const nextTurnTokens = baseline.turnTokens + tokens;
-  const nextCacheHit = baseline.cacheHitTokens + cacheHit;
-  if (![nextTokens, nextTurnTokens, nextCacheHit].every(Number.isSafeInteger)) return previous;
-  return { sessionId: event.sessionId, tokens: nextTokens, turnTokens: nextTurnTokens, cacheHitTokens: nextCacheHit };
+  if (![nextTokens, nextTurnTokens].every(Number.isSafeInteger)) return previous;
+  return { sessionId: event.sessionId, tokens: nextTokens, turnTokens: nextTurnTokens };
 }

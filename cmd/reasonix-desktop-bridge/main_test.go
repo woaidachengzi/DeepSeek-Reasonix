@@ -92,11 +92,13 @@ type bridgeTestRuntime struct {
 	workspace     desktopbridge.WorkspaceList
 	preview       desktopbridge.WorkspaceFilePreview
 	changes       desktopbridge.WorkspaceChanges
+	metrics       desktopbridge.SessionMetrics
 }
 
-func (r *bridgeTestRuntime) SessionPath() string { return r.path }
-func (r *bridgeTestRuntime) Title() string       { return r.title }
-func (r *bridgeTestRuntime) State() string       { return r.state }
+func (r *bridgeTestRuntime) SessionPath() string                          { return r.path }
+func (r *bridgeTestRuntime) SessionMetrics() desktopbridge.SessionMetrics { return r.metrics }
+func (r *bridgeTestRuntime) Title() string                                { return r.title }
+func (r *bridgeTestRuntime) State() string                                { return r.state }
 func (r *bridgeTestRuntime) Rename(title string) error {
 	r.renameCalls++
 	r.title = title
@@ -280,7 +282,7 @@ func TestShutdownIsAuthenticatedAndIdempotent(t *testing.T) {
 }
 
 func TestBridgeServerOpensSessionAndReturnsSnapshot(t *testing.T) {
-	runtime := &bridgeTestRuntime{path: "/tmp/reasonix-session", state: "idle"}
+	runtime := &bridgeTestRuntime{path: "/tmp/reasonix-session", state: "idle", metrics: desktopbridge.SessionMetrics{ContextUsedTokens: 2400, ContextWindowTokens: 10000, CompactThresholdPercent: 80, CacheHitTokens: 300, CacheMissTokens: 100}}
 	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(_ context.Context, request desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
 		if request.SessionID != "tab-1" {
 			t.Fatalf("unexpected session ID: %q", request.SessionID)
@@ -324,15 +326,19 @@ func TestBridgeServerOpensSessionAndReturnsSnapshot(t *testing.T) {
 	}
 
 	var snapshotResponse struct {
-		ProtocolVersion int                       `json:"protocolVersion"`
-		Sequence        uint64                    `json:"sequence"`
-		Session         desktopbridge.SessionView `json:"session"`
+		ProtocolVersion int                          `json:"protocolVersion"`
+		Sequence        uint64                       `json:"sequence"`
+		Session         desktopbridge.SessionView    `json:"session"`
+		Metrics         desktopbridge.SessionMetrics `json:"metrics"`
 	}
 	if err := json.NewDecoder(snapshotRecorder.Body).Decode(&snapshotResponse); err != nil {
 		t.Fatalf("decode snapshot response: %v", err)
 	}
 	if snapshotResponse.ProtocolVersion != desktopbridge.ProtocolVersion || snapshotResponse.Sequence != 0 || snapshotResponse.Session.ID != "tab-1" {
 		t.Fatalf("unexpected snapshot: %#v", snapshotResponse)
+	}
+	if snapshotResponse.Metrics.ContextUsedTokens != 2400 || snapshotResponse.Metrics.CacheHitTokens != 300 {
+		t.Fatalf("snapshot lost active session metrics: %+v", snapshotResponse.Metrics)
 	}
 }
 

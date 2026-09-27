@@ -140,6 +140,7 @@ import {
   type TauriBridgeAttachment,
   type TauriBridgeHistory,
   type TauriBridgeSession,
+  type TauriSessionMetrics,
   type TauriBridgeStatus,
   type TauriPendingPrompt,
   type TauriPendingSessionDelete,
@@ -401,6 +402,7 @@ export function TauriSessionPreview() {
   const [providerSummary, setProviderSummary] = useState<TauriProviderSummary | null>(null);
   const [events, setEvents] = useState<TauriBridgeEvent[]>([]);
   const [observedUsage, setObservedUsage] = useState<TauriObservedUsage | null>(null);
+  const [sessionMetrics, setSessionMetrics] = useState<{ sessionId: string; metrics: TauriSessionMetrics } | null>(null);
   const [history, setHistory] = useState<TauriBridgeHistory | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
@@ -810,12 +812,14 @@ export function TauriSessionPreview() {
     setHistoryLoading(true);
     setHistoryError("");
     setObservedUsage(null);
+    setSessionMetrics(null);
 
     void (async () => {
       try {
         const snapshot = await tauriBridgeSnapshot(session.id);
         if (!active) return;
         setSession(snapshot.session);
+        setSessionMetrics(snapshot.metrics ? { sessionId: session.id, metrics: snapshot.metrics } : null);
         setSequence(snapshot.sequence);
         let lastSequence = snapshot.sequence;
         offEvent = await onTauriBridgeEvent(event => {
@@ -892,6 +896,7 @@ export function TauriSessionPreview() {
                   if (!completionIsCurrent()) return;
                   latestState = latest.session.state;
                   setSession(latest.session);
+                  setSessionMetrics(latest.metrics ? { sessionId: event.sessionId, metrics: latest.metrics } : null);
                   snapshotError = "";
                   if (latestState === "idle") break;
                 } catch (cause) {
@@ -1916,6 +1921,7 @@ export function TauriSessionPreview() {
     try {
       if (session) {
         const current = await tauriBridgeSnapshot(session.id);
+        setSessionMetrics(current.metrics ? { sessionId: session.id, metrics: current.metrics } : null);
         if (current.session.state !== "idle") {
           setError("请等待当前回合结束，再重启桥接服务。");
           return false;
@@ -2069,6 +2075,7 @@ export function TauriSessionPreview() {
         const latest = await tauriBridgeSnapshot(sessionId);
         if (turnEpochRef.current !== refreshEpoch) return;
         setSession(latest.session);
+        setSessionMetrics(latest.metrics ? { sessionId, metrics: latest.metrics } : null);
       } catch (cause) {
         if (turnEpochRef.current !== refreshEpoch) return;
         refreshError = `刷新会话状态失败：${tauriMessageFrom(cause)}`;
@@ -2324,7 +2331,7 @@ export function TauriSessionPreview() {
           </div>
           <p className="tauri-composer-hint">Reasonix 可能会出错，请核对重要信息。<button type="button" onClick={() => setDiagnosticsOpen(true)}>预览版说明</button></p>
         </footer>
-        <TauriStatusBar workspace={currentWorkspace} model={providerSummary?.defaultModel} sessionState={session?.state} bridgeRunning={status?.running} observedUsage={observedUsage?.sessionId === session?.id ? observedUsage : null} />
+        <TauriStatusBar workspace={currentWorkspace} model={providerSummary?.defaultModel} sessionState={session?.state} bridgeRunning={status?.running} observedUsage={observedUsage?.sessionId === session?.id ? observedUsage : null} sessionMetrics={sessionMetrics && sessionMetrics.sessionId === session?.id ? sessionMetrics.metrics : null} />
       </section>
 
       {scanImportOpen && <>

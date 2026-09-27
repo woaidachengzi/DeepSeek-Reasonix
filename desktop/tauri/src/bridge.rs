@@ -405,8 +405,8 @@ pub use crate::protocol_generated::{
     BridgeDeleteSessionResponse, BridgeEvent, BridgeHistoryMessage, BridgeHistoryResponse,
     BridgeMCPInteractionAnswerRequest, BridgeOpenSessionRequest as OpenSessionRequest,
     BridgeProjectFolder, BridgeProjectFoldersResponse, BridgeProviderSummaryResponse,
-    BridgeRenameSessionRequest, BridgeSession, BridgeSessionResponse, BridgeSetDefaultModelRequest,
-    BridgeSetModelRoleRequest, BridgeWorkspaceChangeDetailRequest,
+    BridgeRenameSessionRequest, BridgeSession, BridgeSessionMetrics, BridgeSessionResponse,
+    BridgeSetDefaultModelRequest, BridgeSetModelRoleRequest, BridgeWorkspaceChangeDetailRequest,
     BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
     BridgeWorkspaceFileRequest, BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse,
     BridgeWorkspaceRequest,
@@ -417,6 +417,7 @@ pub use crate::protocol_generated::{
 pub struct BridgeSnapshot {
     pub sequence: u64,
     pub session: BridgeSession,
+    pub metrics: Option<BridgeSessionMetrics>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -1517,6 +1518,7 @@ impl BridgeSupervisor {
         Ok(BridgeSnapshot {
             sequence,
             session: envelope.session,
+            metrics: envelope.metrics,
         })
     }
 
@@ -3124,9 +3126,9 @@ mod tests {
         session_directory_path, session_path_component, validate_attachment,
         validate_pending_session_deletes_page, validate_pending_session_title_recoveries,
         validate_session_directory_page, validate_session_directory_snapshot, verify_bridge_health,
-        verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSupervisor,
-        EventStreamError, HooksSettingsView, MemorySettingsView, OpenSessionRequest,
-        PendingSessionDelete, PendingSessionDeletesPageResponse,
+        verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSessionResponse,
+        BridgeSupervisor, EventStreamError, HooksSettingsView, MemorySettingsView,
+        OpenSessionRequest, PendingSessionDelete, PendingSessionDeletesPageResponse,
         PendingSessionTitleRecoveriesResponse, PendingSessionTitleRecovery, RenameSessionRequest,
         SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
         SessionDirectoryPage, SessionInventoryResponse, SessionRequest, SubagentSettingsView,
@@ -3744,6 +3746,26 @@ mod tests {
         assert_eq!(session_path_component("tab_1-abc").unwrap(), "tab_1-abc");
         assert!(session_path_component("tab/1").is_err());
         assert!(session_path_component("tab\r\nInjected: value").is_err());
+    }
+
+    #[test]
+    fn session_snapshot_metrics_cross_the_generated_host_contract() {
+        let response: BridgeSessionResponse = serde_json::from_value(json!({
+            "protocolVersion": 1,
+            "sequence": 4,
+            "session": { "id": "a", "path": "/sessions/a.jsonl", "state": "idle" },
+            "metrics": {
+                "contextUsedTokens": 2400,
+                "contextWindowTokens": 10000,
+                "compactThresholdPercent": 80,
+                "cacheHitTokens": 300,
+                "cacheMissTokens": 100
+            }
+        }))
+        .expect("decode snapshot metrics");
+        let metrics = response.metrics.expect("metrics preserved");
+        assert_eq!(metrics.context_used_tokens, 2400);
+        assert_eq!(metrics.cache_hit_tokens, 300);
     }
 
     #[test]

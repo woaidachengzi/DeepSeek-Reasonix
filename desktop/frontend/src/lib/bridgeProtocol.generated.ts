@@ -135,7 +135,16 @@ export interface BridgeSession {
   workspaceRoot?: string;
 }
 
+export interface BridgeSessionMetrics {
+  cacheHitTokens: number;
+  cacheMissTokens: number;
+  compactThresholdPercent: number;
+  contextUsedTokens: number;
+  contextWindowTokens: number;
+}
+
 export interface BridgeSessionResponse {
+  metrics?: BridgeSessionMetrics;
   protocolVersion: number;
   sequence?: number;
   session: BridgeSession;
