@@ -375,6 +375,7 @@ export function saveTauriMCPServer(server, workspaceRoot) {
   const list = (globalThis.__mcpServers ?? []).filter(entry => entry.name !== server.name);
   const saved = {
     name: server.name,
+    enabled: (globalThis.__mcpServers ?? []).find(entry => entry.name === server.name)?.enabled ?? true,
     type: server.type ?? "stdio",
     source: server.scope === "project" ? "project_config" : "user_config",
     scope: server.scope,
@@ -395,6 +396,13 @@ export function deleteTauriMCPServer(name, workspaceRoot) {
   const list = (globalThis.__mcpServers ?? []).filter(entry => entry.name !== name);
   globalThis.__mcpServers = list;
   return Promise.resolve({ protocolVersion: 1, status: "removed", servers: list.slice() });
+}
+
+export function setTauriMCPServerEnabled(name, enabled, workspaceRoot) {
+  record("set_mcp_server_enabled", { name, enabled, workspaceRoot });
+  const list = (globalThis.__mcpServers ?? []).map(entry => entry.name === name ? { ...entry, enabled } : entry);
+  globalThis.__mcpServers = list;
+  return Promise.resolve({ protocolVersion: 1, status: "activated", server: list.find(entry => entry.name === name), servers: list.slice() });
 }
 
 export function tauriAssistantTextDelta() { return ""; }

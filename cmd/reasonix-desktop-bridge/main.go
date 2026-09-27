@@ -499,6 +499,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("POST /v1/sessions/import-scan", b.authorized(b.idempotent(2<<20, b.applyScanImport)))
 	mux.HandleFunc("GET /v1/sessions/inventory", b.authorized(b.sessionInventory))
 	mux.HandleFunc("GET /v1/mcp/servers", b.authorized(b.listMCPServers))
+	mux.HandleFunc("POST /v1/mcp/servers/activation", b.authorized(b.idempotent(64<<10, b.setMCPServerEnabled)))
 	mux.HandleFunc("POST /v1/mcp/servers", b.authorized(b.idempotent(256<<10, b.upsertMCPServer)))
 	mux.HandleFunc("DELETE /v1/mcp/servers", b.authorized(b.deleteMCPServer))
 	mux.HandleFunc("GET /v1/events", b.authorized(b.eventsHandler))
@@ -636,7 +637,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "provider_summary", "provider_configs", "save_provider_config", "delete_provider_config", "usage_stats", "permission_settings", "set_permission_settings", "sandbox_settings", "set_sandbox_settings", "network_settings", "set_network_settings", "skills_settings", "set_skills_settings", "subagent_settings", "set_subagent_settings", "hooks_settings", "set_hooks_settings", "memory_settings", "set_memory_settings", "set_default_model", "set_model_role", "desktop_preferences", "set_desktop_approval", "set_provider_key", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "session_scan_import_review_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "provider_configs", "save_provider_config", "delete_provider_config", "usage_stats", "permission_settings", "set_permission_settings", "sandbox_settings", "set_sandbox_settings", "network_settings", "set_network_settings", "skills_settings", "set_skills_settings", "subagent_settings", "set_subagent_settings", "hooks_settings", "set_hooks_settings", "memory_settings", "set_memory_settings", "set_default_model", "set_model_role", "desktop_preferences", "set_desktop_approval", "set_provider_key", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "mcp_server_activation", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "session_scan_import_review_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
 	})
 }
 

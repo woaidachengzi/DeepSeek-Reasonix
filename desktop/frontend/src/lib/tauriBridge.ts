@@ -510,6 +510,7 @@ export async function setTauriModelRole(role: "planner" | "vision" | "search", m
  *  bridge returns the credential key names a server expects, never a value. */
 export interface TauriMCPServer {
   name: string;
+  enabled: boolean;
   type: string;
   source: string;
   scope: "project" | "global" | "other";
@@ -543,7 +544,7 @@ export interface TauriMCPServerInput {
 
 export interface TauriMCPServerMutation {
   protocolVersion: number;
-  status: "saved" | "removed";
+  status: "saved" | "removed" | "activated";
   configPath?: string;
   server?: TauriMCPServer;
   servers: TauriMCPServer[];
@@ -568,6 +569,15 @@ export async function deleteTauriMCPServer(
 ): Promise<TauriMCPServerMutation> {
   requireTauri();
   return invoke<TauriMCPServerMutation>("delete_mcp_server", { request: { name }, workspaceRoot });
+}
+
+export async function setTauriMCPServerEnabled(
+  name: string,
+  enabled: boolean,
+  workspaceRoot?: string,
+): Promise<TauriMCPServerMutation> {
+  requireTauri();
+  return invoke<TauriMCPServerMutation>("set_mcp_server_enabled", { request: { name, enabled }, workspaceRoot });
 }
 
 export async function importTauriStableProfile(): Promise<TauriProfileImportResult> {

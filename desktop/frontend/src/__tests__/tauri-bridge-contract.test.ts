@@ -209,6 +209,11 @@ const commands: CommandContract[] = [
     description: "deleteTauriMCPServer() invokes delete_mcp_server with request and workspaceRoot",
   },
   {
+    command: "set_mcp_server_enabled",
+    argKeys: ["request", "workspaceRoot"],
+    description: "setTauriMCPServerEnabled() invokes set_mcp_server_enabled with request and workspaceRoot",
+  },
+  {
     command: "bridge_start_events",
     argKeys: ["afterSequence"],
     description: "startTauriBridgeEvents() invokes bridge_start_events with { afterSequence }",

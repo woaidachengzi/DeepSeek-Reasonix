@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	appconfig "reasonix/internal/config"
 	"reasonix/internal/pluginpkg"
 )
 
@@ -56,6 +57,49 @@ func decodeMCPList(t *testing.T, response *httptest.ResponseRecorder) mcpServerL
 		t.Fatalf("decode MCP list %q: %v", response.Body.String(), err)
 	}
 	return body
+}
+
+func TestMCPActivationChangesRuntimeCatalogForSelectedWorkspace(t *testing.T) {
+	handler, home := mcpTestBridge(t)
+	projectRoot := t.TempDir()
+	otherRoot := t.TempDir()
+	add := mcpRequest(t, handler, http.MethodPost, "/v1/mcp/servers?workspaceRoot="+projectRoot,
+		`{"scope":"project","name":"time","type":"stdio","command":"uvx","autoStart":false}`)
+	if add.Code != http.StatusOK {
+		t.Fatalf("add status = %d, body = %s", add.Code, add.Body.String())
+	}
+	list := decodeMCPList(t, mcpRequest(t, handler, http.MethodGet, "/v1/mcp/servers?workspaceRoot="+projectRoot, ""))
+	if len(list.Servers) != 1 || list.Servers[0].Enabled {
+		t.Fatalf("initial activation = %+v, want disabled", list.Servers)
+	}
+
+	for _, enabled := range []bool{true, false} {
+		body := fmt.Sprintf(`{"name":"time","enabled":%t}`, enabled)
+		response := mcpRequest(t, handler, http.MethodPost, "/v1/mcp/servers/activation?workspaceRoot="+projectRoot, body)
+		if response.Code != http.StatusOK {
+			t.Fatalf("toggle status = %d, body = %s", response.Code, response.Body.String())
+		}
+		mutation := decodeMCPMutation(t, response)
+		if mutation.Server == nil || mutation.Server.Enabled != enabled {
+			t.Fatalf("mutation view = %+v, want enabled=%t", mutation.Server, enabled)
+		}
+		cfg, err := appconfig.LoadForRootReadOnly(projectRoot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		catalog := cfg.EnabledPlugins(projectRoot, appconfig.NewMCPActivationStore(home))
+		if (len(catalog) == 1) != enabled {
+			t.Fatalf("runtime catalog = %+v, want enabled=%t", catalog, enabled)
+		}
+	}
+	if response := mcpRequest(t, handler, http.MethodPost, "/v1/mcp/servers/activation?workspaceRoot="+otherRoot,
+		`{"name":"time","enabled":true}`); response.Code != http.StatusNotFound {
+		t.Fatalf("unrelated workspace toggle status = %d, want 404", response.Code)
+	}
+	if response := mcpRequest(t, handler, http.MethodPost, "/v1/mcp/servers/activation?workspaceRoot="+projectRoot,
+		`{"name":"time"}`); response.Code != http.StatusBadRequest {
+		t.Fatalf("missing state status = %d, want 400", response.Code)
+	}
 }
 
 // Credentials are write-only: the listing names the keys a server expects but

@@ -707,6 +707,7 @@ pub struct SubagentSettingsChange {
 #[serde(rename_all = "camelCase")]
 pub struct MCPServerView {
     pub name: String,
+    pub enabled: bool,
     #[serde(rename = "type")]
     pub kind: String,
     pub source: String,
@@ -764,6 +765,13 @@ pub struct MCPServerInput {
 #[serde(rename_all = "camelCase")]
 pub struct MCPServerDeleteRequest {
     pub name: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPServerActivationRequest {
+    pub name: String,
+    pub enabled: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1829,6 +1837,22 @@ impl BridgeSupervisor {
             Some(json!(MCPServerDeleteRequest { name })),
             None,
         )?;
+        let envelope: MCPServerMutationResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope)
+    }
+
+    pub fn set_mcp_server_enabled(
+        &self,
+        request: MCPServerActivationRequest,
+        workspace_root: Option<&str>,
+    ) -> Result<MCPServerMutationResponse, String> {
+        let request_id = opaque_secret()?;
+        let path = mcp_path("/v1/mcp/servers/activation", workspace_root)?;
+        let response = self.request_json("POST", &path, Some(json!(request)), Some(&request_id))?;
         let envelope: MCPServerMutationResponse =
             serde_json::from_value(response).map_err(display_error)?;
         if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {

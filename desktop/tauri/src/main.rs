@@ -75,9 +75,9 @@ use bridge::{
     BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
     BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse, DeleteProviderConfigRequest,
     DesktopPreferences, HooksSettingsChange, HooksSettingsView, LegacySessionCatalogEntry,
-    MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse, MCPServerView,
-    MemorySettingsChange, MemorySettingsView, NetworkSettingsChange, NetworkSettingsView,
-    OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
+    MCPServerActivationRequest, MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse,
+    MCPServerView, MemorySettingsChange, MemorySettingsView, NetworkSettingsChange,
+    NetworkSettingsView, OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
     PendingSessionTitleRecovery, PermissionSettingsChange, PermissionSettingsView,
     ProviderConfigList, RenameSessionRequest, SandboxSettingsChange, SandboxSettingsView,
     SaveProviderConfigRequest, ScanImportCandidate, ScanImportSelection, SessionCatalogMetadata,
@@ -567,6 +567,15 @@ fn delete_mcp_server(
     workspace_root: Option<String>,
 ) -> Result<MCPServerMutationResponse, String> {
     supervisor.delete_mcp_server(request.name, workspace_root.as_deref())
+}
+
+#[tauri::command]
+fn set_mcp_server_enabled(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: MCPServerActivationRequest,
+    workspace_root: Option<String>,
+) -> Result<MCPServerMutationResponse, String> {
+    supervisor.set_mcp_server_enabled(request, workspace_root.as_deref())
 }
 
 #[tauri::command]
@@ -1798,6 +1807,7 @@ fn main() {
             list_mcp_servers,
             save_mcp_server,
             delete_mcp_server,
+            set_mcp_server_enabled,
             bridge_session_snapshot,
             bridge_session_history,
             bridge_session_previews,

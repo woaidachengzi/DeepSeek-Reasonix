@@ -147,6 +147,17 @@ async function main() {
   ok(text().includes("time"), "the saved server appears in the list");
   ok(text().includes("API_TOKEN"), "the list names the credential key it expects");
 
+  // Activation must be an independent mutation, including a visible state
+  // change, without rewriting the server or any write-only credential.
+  await act(async () => {
+    ok(click(mcpButtons("已启用")[0]), "the activation switch is present");
+    await settle();
+  });
+  const activation = bridgeCalls().find(call => call.name === "set_mcp_server_enabled");
+  eq((activation?.args as { name?: string; enabled?: boolean })?.enabled, false, "the switch sends disabled to the bridge");
+  ok(text().includes("已停用"), "the effective disabled state is visible");
+  ok(!text().includes(SECRET), "activation does not expose the credential");
+
   // Edit: the credential field starts empty and an omitted credential keeps the
   // stored one at the bridge.
   await act(async () => {
@@ -172,6 +183,7 @@ async function main() {
   const editServer = (edits[1]?.args as { server?: { env?: Record<string, string>; args?: string[] } } | undefined)?.server;
   eq(editServer?.env, undefined, "an untouched credential field is omitted, so the stored value stays");
   ok((editServer?.args ?? []).some(arg => arg.includes("Asia/Tokyo")), "the edited arguments are submitted");
+  ok(text().includes("已停用"), "editing keeps the activation state");
 
   // Delete.
   await act(async () => {

@@ -29,6 +29,7 @@ type mcpServerView struct {
 	AutoStart            *bool    `json:"autoStart,omitempty"`
 	Tier                 string   `json:"tier,omitempty"`
 	ManagedByPackage     bool     `json:"managedByPackage,omitempty"`
+	Enabled              bool     `json:"enabled"`
 }
 
 type mcpServerListResponse struct {
@@ -48,15 +49,31 @@ func (b *bridgeServer) listMCPServers(w http.ResponseWriter, r *http.Request) {
 		b.writeRuntimeError(w, err, "unable to read the MCP configuration")
 		return
 	}
-	servers := make([]mcpServerView, 0, len(cfg.Plugins))
-	for _, entry := range cfg.Plugins {
-		servers = append(servers, mcpServerViewFor(root, entry))
+	servers, err := mcpServerViews(root, cfg.Plugins)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to read MCP activation")
+		return
 	}
-	sort.SliceStable(servers, func(i, j int) bool { return servers[i].Name < servers[j].Name })
 	writeJSON(w, http.StatusOK, mcpServerListResponse{
 		ProtocolVersion: desktopbridge.ProtocolVersion,
 		Servers:         servers,
 	})
+}
+
+func mcpServerViews(root string, entries []appconfig.PluginEntry) ([]mcpServerView, error) {
+	activation := appconfig.DefaultMCPActivationStore()
+	servers := make([]mcpServerView, 0, len(entries))
+	for _, entry := range entries {
+		enabled, err := activation.IsEnabled(entry, root)
+		if err != nil {
+			return nil, err
+		}
+		view := mcpServerViewFor(root, entry)
+		view.Enabled = enabled
+		servers = append(servers, view)
+	}
+	sort.SliceStable(servers, func(i, j int) bool { return servers[i].Name < servers[j].Name })
+	return servers, nil
 }
 
 func mcpServerViewFor(root string, entry appconfig.PluginEntry) mcpServerView {
@@ -211,6 +228,45 @@ type mcpServerDeleteRequest struct {
 	Name string `json:"name"`
 }
 
+type mcpServerActivationRequest struct {
+	Name    string `json:"name"`
+	Enabled *bool  `json:"enabled"`
+}
+
+// setMCPServerEnabled updates the same activation store consulted when the
+// runtime builds a new session's MCP catalog. Package-managed servers may be
+// deactivated without changing their package-owned declaration.
+func (b *bridgeServer) setMCPServerEnabled(w http.ResponseWriter, r *http.Request) {
+	var request mcpServerActivationRequest
+	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid MCP activation request")
+		return
+	}
+	name := strings.TrimSpace(request.Name)
+	if name == "" || request.Enabled == nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "MCP server name and enabled state are required")
+		return
+	}
+	root := strings.TrimSpace(r.URL.Query().Get("workspaceRoot"))
+	cfg, err := appconfig.LoadForRootReadOnly(root)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to read the MCP configuration")
+		return
+	}
+	for _, entry := range cfg.Plugins {
+		if entry.Name != name {
+			continue
+		}
+		if err := appconfig.DefaultMCPActivationStore().SetServerEnabled(entry, root, *request.Enabled); err != nil {
+			b.writeRuntimeError(w, err, "unable to save MCP activation")
+			return
+		}
+		b.writeMCPServers(w, root, "", "activated", name)
+		return
+	}
+	writeProtocolError(w, http.StatusNotFound, "not_found", "no such MCP server")
+}
+
 type mcpServerMutationResponse struct {
 	ProtocolVersion int             `json:"protocolVersion"`
 	Status          string          `json:"status"`
@@ -271,11 +327,11 @@ func (b *bridgeServer) writeMCPServers(w http.ResponseWriter, root, path, status
 		b.writeRuntimeError(w, err, "unable to read the MCP configuration")
 		return
 	}
-	servers := make([]mcpServerView, 0, len(cfg.Plugins))
-	for _, entry := range cfg.Plugins {
-		servers = append(servers, mcpServerViewFor(root, entry))
+	servers, err := mcpServerViews(root, cfg.Plugins)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to read MCP activation")
+		return
 	}
-	sort.SliceStable(servers, func(i, j int) bool { return servers[i].Name < servers[j].Name })
 	response := mcpServerMutationResponse{
 		ProtocolVersion: desktopbridge.ProtocolVersion,
 		Status:          status,
