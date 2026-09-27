@@ -12,6 +12,7 @@ import { playSuccessChime, playAttentionChime, shouldPlayAttentionChimeForEvent 
 import logoWordmark from "../assets/logo-wordmark.svg";
 import { TauriSettings, type TauriSettingsTab } from "./TauriSettings";
 import { TauriStatusBar } from "./TauriStatusBar";
+import { useTauriDesktopLayout } from "./tauriDesktopLayout";
 import { observeTauriUsage, type TauriObservedUsage } from "./tauriObservedUsage";
 import { getTauriNotificationsEnabled, getTauriProgressMode, TAURI_PROGRESS_MODE_CHANGED } from "./tauriPreferences";
 import { handleTauriDragDropEvent, retainTauriDragDropListener } from "./dragDrop";
@@ -360,6 +361,7 @@ function PromptCard({ prompt, busy, selections, onApproval, onAskSelection, onAs
 }
 
 export function TauriSessionPreview() {
+  const desktopLayout = useTauriDesktopLayout();
   const [session, setSession] = useState<TauriBridgeSession | null>(null);
   const [tabs, setTabs] = useState<WorkbenchSessionTab[]>([]);
   const [unverifiedLegacyTabs, setUnverifiedLegacyTabs] = useState<WorkbenchSessionTab[]>([]);
@@ -2119,7 +2121,7 @@ export function TauriSessionPreview() {
   const activeProjectKey = workbenchProjectKey(currentWorkspace, platform);
 
   return (
-    <main className="tauri-shell" data-platform={platform}>
+    <main className="tauri-shell" data-platform={platform} data-desktop-layout={desktopLayout}>
       <aside className="tauri-sidebar" aria-label="会话导航">
         <div className="tauri-sidebar__drag" data-tauri-drag-region aria-hidden="true" />
         <div className="tauri-sidebar__brand"><img src={logoWordmark} alt="Reasonix" draggable={false} /><span>PREVIEW</span></div>

@@ -18,6 +18,7 @@ import { TauriHooksSettings } from "./TauriHooksSettings";
 import { TauriMemorySettings } from "./TauriMemorySettings";
 import { getTauriNotificationsEnabled, setTauriNotificationsEnabled, getTauriProgressMode, setTauriProgressMode, type TauriProgressMode } from "./tauriPreferences";
 import { TAURI_STATUS_BAR_ITEM_IDS, setTauriStatusBarPreferences, useTauriStatusBarPreferences, type TauriStatusBarItemId } from "./tauriStatusBarPreferences";
+import { setTauriDesktopLayout, useTauriDesktopLayout } from "./tauriDesktopLayout";
 import { getSuccessPreference, setSuccessPreference, getAttentionPreference, setAttentionPreference, getNotificationVolume, setNotificationVolume, playSuccessChime, playAttentionChime, type SoundWavPref } from "../lib/sound";
 
 interface TauriSettingsProps {
@@ -338,6 +339,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
 }
 
 function GeneralSettings({ notificationsEnabled, onNotificationsChange, appearance, onAppearanceChange, conversationWidth, onConversationWidthChange, textSize, onTextSizeChange, progressMode, onProgressModeChange, closeBehavior, onCloseBehaviorChange, closeLoading, closeSaving, closeError, approvalMode, onApprovalChange, approvalLoading, approvalSaving, approvalError, platform }: { notificationsEnabled: boolean; onNotificationsChange: (enabled: boolean) => void; appearance: TauriAppearance; onAppearanceChange: (next: TauriAppearance) => void; conversationWidth: ConversationWidth; onConversationWidthChange: (next: ConversationWidth) => void; textSize: TextSize; onTextSizeChange: (next: TextSize) => void; progressMode: TauriProgressMode; onProgressModeChange: (next: TauriProgressMode) => void; closeBehavior: TauriCloseBehavior; onCloseBehaviorChange: (behavior: TauriCloseBehavior) => void; closeLoading: boolean; closeSaving: boolean; closeError: string; approvalMode: TauriToolApprovalMode; onApprovalChange: (mode: TauriToolApprovalMode) => void; approvalLoading: boolean; approvalSaving: boolean; approvalError: string; platform: string }) {
+  const desktopLayout = useTauriDesktopLayout();
   const [soundExpanded, setSoundExpanded] = useState(false);
   const [statusItemsExpanded, setStatusItemsExpanded] = useState(false);
   const [successSound, setSuccessSound] = useState<SoundWavPref>(getSuccessPreference);
@@ -355,6 +357,7 @@ function GeneralSettings({ notificationsEnabled, onNotificationsChange, appearan
   };
   return <div className="tauri-settings-section tauri-settings-general">
     <h3>桌面与显示</h3><p className="tauri-settings-section-description">调整界面的显示方式。</p>
+    <div className="tauri-settings-field"><Monitor className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">桌面风格<small>工作台适合管理项目与会话；创作让当前内容更集中。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="桌面风格">{(["workbench", "creation"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={desktopLayout === option} className={`tauri-settings-radio${desktopLayout === option ? " is-active" : ""}`} onClick={() => setTauriDesktopLayout(option)}>{option === "workbench" ? "工作台" : "创作"}</button>)}</div></div>
     <div className="tauri-settings-field"><Monitor className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">外观模式<small>选择界面亮暗模式。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="外观模式">{(["auto", "light", "dark"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={appearance.mode === option} className={`tauri-settings-radio${appearance.mode === option ? " is-active" : ""}`} onClick={() => onAppearanceChange({ ...appearance, mode: option })}>{option === "auto" ? "跟随系统" : option === "light" ? "浅色" : "深色"}</button>)}</div></div>
     <h3>会话体验</h3><p className="tauri-settings-section-description">选择任务运行时与完成后的阅读方式。</p>
     <div className="tauri-settings-field"><PanelTop className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">对话宽度<small>调整消息内容的最大宽度。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="通用对话宽度">{(["standard", "full"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={conversationWidth === option} className={`tauri-settings-radio${conversationWidth === option ? " is-active" : ""}`} onClick={() => onConversationWidthChange(option)}>{option === "standard" ? "标准" : "宽屏"}</button>)}</div></div>

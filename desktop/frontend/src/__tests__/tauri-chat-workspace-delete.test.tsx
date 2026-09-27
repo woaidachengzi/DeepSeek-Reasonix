@@ -105,6 +105,7 @@ async function main() {
   const { act } = React;
   const { createRoot } = await import("react-dom/client");
   const { TauriSessionApp } = await import("../tauri/TauriChatWorkspace");
+  const { setTauriDesktopLayout } = await import("../tauri/tauriDesktopLayout");
 
   const root = createRoot(document.getElementById("root")!);
   await act(async () => {
@@ -116,6 +117,10 @@ async function main() {
   });
 
   console.log("\ntauri chat workspace — workspace, delete, and recovery flows");
+  eq(document.querySelector(".tauri-shell")?.getAttribute("data-desktop-layout"), "workbench", "workbench is the initial desktop layout");
+  await act(async () => { setTauriDesktopLayout("creation"); });
+  eq(document.querySelector(".tauri-shell")?.getAttribute("data-desktop-layout"), "creation", "desktop layout updates the workspace without a reload");
+  await act(async () => { setTauriDesktopLayout("workbench"); });
   ok(text().includes("待删除会话"), "the recent-session list renders the stored title");
   ok(text().includes("待完成删除") && text().includes("删除未完成"), "interrupted deletion is surfaced separately from ordinary sessions");
   eq(document.querySelectorAll(".tauri-session-row__delete").length, 5, "each regular or recovery row has a delete control");
