@@ -10,7 +10,7 @@ does not imply that the Go runtime lacks the underlying capability.
 | --- | --- | --- |
 | General | Partial | Appearance mode, conversation width, text size, standard/deep process disclosure, notifications, completion/attention sounds and volume, macOS close behavior, and new-session default tool approval work. Language, currency, and status bar controls are not wired. The bridge samples the saved approval default when it opens a fresh transcript and records the session posture after a completed snapshot. |
 | Model preferences | Partial | Default model is read and saved through the bridge for new conversations. Stable runtime model preferences and assignment controls are not present. |
-| Model services | Partial | Provider readiness and model counts are shown; required API keys can be saved to or deleted from the system keychain. Provider creation/editing is not available. |
+| Model services | Partial | Provider readiness and model counts are shown; required API keys can be saved to or deleted from the system keychain. Preview can add OpenAI Chat, Anthropic Messages, or Responses services and edit labels, endpoints, model lists, and defaults while preserving hidden advanced fields. Existing endpoints and credential identifiers are deliberately not returned to the WebView. Official preset templates, advanced provider controls, and deletion are not in settings yet. |
 | Usage statistics | Not in settings | No Preview settings view or verified usage data contract. |
 | Bots | Not in settings | No Preview bot-management view or verified mutation contract. |
 | MCP and tools | Partial | Global and project MCP servers can be listed, added, edited, and deleted through the native bridge. Other stable tool settings are not represented. |

@@ -27,6 +27,7 @@ let openedURL = "";
 let closeBehavior = "keep_running";
 let approvalMode = "auto";
 let defaultModel = "";
+let savedProviderInput: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean } | undefined;
 const summary = () => ({
   protocolVersion: 1,
   defaultModel,
@@ -34,7 +35,7 @@ const summary = () => ({
 });
 
 (dom.window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
-  async invoke(command: string, args?: { url?: string; behavior?: string; mode?: string; request?: { model?: string } }) {
+  async invoke(command: string, args?: { url?: string; behavior?: string; mode?: string; request?: { model?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean } }) {
     calls.push(command);
     switch (command) {
       case "preview_runtime_info":
@@ -43,6 +44,8 @@ const summary = () => ({
       case "provider_summary":
         if (failSummary) { failSummary = false; throw new Error("summary unavailable"); }
         return summary();
+      case "provider_configs": return { protocolVersion: 1, providers: [{ name: "demo", displayName: "Demo", kind: "openai", models: ["m"], default: "m" }] };
+      case "save_provider_config": savedProviderInput = args?.input; return { protocolVersion: 1, providers: [args?.input] };
       case "set_default_model": defaultModel = args?.request?.model ?? ""; return summary();
       case "platform_info": return "darwin";
       case "get_close_behavior": return closeBehavior;
@@ -171,6 +174,27 @@ await act(async () => {
 assert.equal(defaultModel, "demo/m", "default model is persisted through the bridge");
 await act(async () => { click("模型服务"); });
 assert.match(visibleText(), /已就绪/, ".env credential configures the provider");
+assert.match(visibleText(), /服务配置/, "provider configuration is editable from settings");
+await act(async () => { click("编辑"); });
+assert.equal(document.querySelector<HTMLInputElement>('.tauri-provider-editor-form input[placeholder="留空保留现有端点"]')?.value, "", "existing endpoint is not sent back to the WebView");
+await act(async () => { click("取消"); });
+await act(async () => { click("添加服务"); });
+const providerNameInput = document.querySelector<HTMLInputElement>('.tauri-provider-editor-form input[placeholder="例如 my-provider"]');
+const providerURLInput = document.querySelector<HTMLInputElement>('.tauri-provider-editor-form input[placeholder="https://example.com/v1"]');
+const providerModelsInput = document.querySelector<HTMLTextAreaElement>('.tauri-provider-editor-form textarea');
+assert.ok(providerNameInput && providerURLInput && providerModelsInput);
+await act(async () => {
+  Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(providerNameInput, "new-provider");
+  providerNameInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(providerURLInput, "https://provider.example/v1");
+  providerURLInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, "value")!.set!.call(providerModelsInput, "chat-model");
+  providerModelsInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+});
+await act(async () => { click("保存服务"); });
+assert.equal(savedProviderInput?.name, "new-provider", "provider creation reaches the native command");
+assert.equal(savedProviderInput?.models[0], "chat-model", "model IDs reach the native command");
+assert.equal(savedProviderInput?.useApiKey, true, "remote services default to credential support");
 await act(async () => { enterKey("secret-input-value"); });
 
 saveGate = new Promise(resolve => { releaseSave = resolve; });
@@ -185,7 +209,7 @@ await act(async () => { releaseSave?.(); });
 saveGate = null;
 assert.match(visibleText(), /已保存到钥匙串/);
 assert.equal(document.querySelector<HTMLInputElement>(".tauri-settings-apikey input")?.value, "", "successful save clears the entered secret");
-assert.equal(calls.filter(call => call === "provider_summary").length, 2, "save refreshes the provider summary");
+assert.equal(calls.filter(call => call === "provider_summary").length, 3, "save refreshes the provider summary");
 assert.equal(parentConfigured, true, "the model picker outside settings receives the saved status");
 assert.match(visibleText(), /应用到当前会话/, "saved key offers an explicit active-session update");
 await act(async () => { click("应用到当前会话"); });
@@ -195,7 +219,7 @@ assert.doesNotMatch(visibleText(), /应用到当前会话/, "successful update c
 await act(async () => { click("删除"); });
 assert.match(visibleText(), /钥匙串密钥已删除；其他凭据仍可用/, "delete reports the keychain scope when .env remains");
 assert.match(visibleText(), /已就绪/, "refreshed provider remains configured by .env");
-assert.equal(calls.filter(call => call === "provider_summary").length, 3, "delete refreshes the provider summary");
+assert.equal(calls.filter(call => call === "provider_summary").length, 4, "delete refreshes the provider summary");
 assert.equal(parentConfigured, true, "the model picker outside settings keeps the .env readiness");
 
 await act(async () => { click("删除"); });

@@ -222,6 +222,34 @@ export async function tauriProviderSummary(): Promise<TauriProviderSummary> {
   return invoke<TauriProviderSummary>("provider_summary");
 }
 
+export interface TauriProviderConfig {
+  name: string;
+  displayName: string;
+  kind: string;
+  models: string[];
+  default: string;
+}
+
+export interface TauriProviderConfigInput extends TauriProviderConfig {
+  baseUrl: string;
+  useApiKey: boolean;
+}
+
+export interface TauriProviderConfigList {
+  protocolVersion: number;
+  providers: TauriProviderConfig[];
+}
+
+export async function tauriProviderConfigs(): Promise<TauriProviderConfigList> {
+  requireTauri();
+  return invoke<TauriProviderConfigList>("provider_configs");
+}
+
+export async function saveTauriProviderConfig(input: TauriProviderConfigInput): Promise<TauriProviderConfigList> {
+  requireTauri();
+  return invoke<TauriProviderConfigList>("save_provider_config", { input });
+}
+
 export type TauriToolApprovalMode = "ask" | "auto" | "yolo";
 export interface TauriDesktopPreferences {
   protocolVersion: number;

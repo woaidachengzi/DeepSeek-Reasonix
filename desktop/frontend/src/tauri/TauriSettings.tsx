@@ -7,6 +7,7 @@ import { applyTextSize, getTextSize, TEXT_SIZES, type TextSize } from "../lib/te
 import { applyFontFamily, applyMonoFontFamily, FONT_FAMILIES, MONO_FONT_FAMILIES, getCustomFontName, getCustomMonoFontName, getFontFamily, getMonoFontFamily, setCustomFontName, setCustomMonoFontName, type FontFamily, type MonoFontFamily } from "../lib/fontFamily";
 import { applyTauriAppearance, readTauriAppearance, type TauriAppearance } from "./tauriAppearance";
 import { TauriMCPSettings } from "./TauriMCPSettings";
+import { TauriProviderEditor } from "./TauriProviderEditor";
 import { getTauriNotificationsEnabled, setTauriNotificationsEnabled, getTauriProgressMode, setTauriProgressMode, type TauriProgressMode } from "./tauriPreferences";
 import { getSuccessPreference, setSuccessPreference, getAttentionPreference, setAttentionPreference, getNotificationVolume, setNotificationVolume, playSuccessChime, playAttentionChime, type SoundWavPref } from "../lib/sound";
 
@@ -39,7 +40,7 @@ const SETTINGS_GROUPS = [
   { label: "偏好设置", items: [{ id: "general", label: "通用", description: "桌面与会话体验", icon: SlidersHorizontal }] },
   { label: "模型", items: [
     { id: "model", label: "模型偏好", description: "新对话的默认模型", icon: Globe },
-    { id: "providers", label: "模型服务", description: "提供方与钥匙串凭据", icon: Cable },
+    { id: "providers", label: "模型服务", description: "配置提供方与钥匙串凭据", icon: Cable },
   ] },
   { label: "集成与连接", items: [{ id: "mcp", label: "MCP", description: "管理工具服务器", icon: Server }] },
   { label: "运行与诊断", items: [{ id: "diagnostics", label: "运行诊断", description: "桥接状态与会话目录检查", icon: Activity }] },
@@ -54,7 +55,7 @@ const SETTINGS_GROUPS = [
 const SETTINGS_TITLES: Record<TauriSettingsTab, { title: string; description: string }> = {
   general: { title: "通用", description: "设置桌面体验和会话显示。" },
   model: { title: "模型偏好", description: "设置新对话使用的默认模型。" },
-  providers: { title: "模型服务", description: "查看提供方状态并管理钥匙串凭据。" },
+  providers: { title: "模型服务", description: "添加和编辑模型服务，管理钥匙串凭据。" },
   mcp: { title: "MCP 与工具", description: "连接并管理工作区可用的工具。" },
   diagnostics: { title: "运行诊断", description: "检查本地服务、会话目录和 Preview 的连接状态。" },
   appearance: { title: "外观", description: "调整主题、阅读布局和字体。" },
@@ -650,9 +651,10 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
   return (
     <div className="tauri-settings-section">
       <h3>模型提供方</h3>
-      <p className="tauri-settings-hint">在这里检查提供方状态并保存所需凭据。默认模型在“模型偏好”中选择。</p>
+      <p className="tauri-settings-hint">在这里配置服务并保存所需凭据。默认模型在“模型偏好”中选择。</p>
+      <TauriProviderEditor onSummaryChange={onProviderSummaryChange} />
       {providerSummary.providers.length === 0 ? (
-        <div className="tauri-settings-empty">未配置任何 Provider。请编辑 <code>~/.reasonix/config.toml</code> 添加 Provider 配置。</div>
+        <div className="tauri-settings-empty">当前没有模型服务。可通过上方的“添加服务”配置 Preview 独立资料。</div>
       ) : (
         <div className="tauri-settings-model-list">
           {providerSummary.providers.map(provider => (

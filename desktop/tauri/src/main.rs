@@ -75,11 +75,11 @@ use bridge::{
     BridgeWorkspaceChangesResponse, BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse,
     DesktopPreferences, LegacySessionCatalogEntry, MCPServerDeleteRequest, MCPServerInput,
     MCPServerMutationResponse, MCPServerView, OpenSessionRequest, PendingSessionDeleteCursor,
-    PendingSessionDeletePage, PendingSessionTitleRecovery, RenameSessionRequest,
-    ScanImportCandidate, ScanImportSelection, SessionCatalogMetadata, SessionDirectoryCursor,
-    SessionDirectoryEntry, SessionDirectoryPage, SessionFirstMessageTitle, SessionPreview,
-    SessionRequest, SubmitRequest, WorkspaceChangeDetailRequest, WorkspaceFileRequest,
-    WorkspaceRequest,
+    PendingSessionDeletePage, PendingSessionTitleRecovery, ProviderConfigList,
+    RenameSessionRequest, SaveProviderConfigRequest, ScanImportCandidate, ScanImportSelection,
+    SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage,
+    SessionFirstMessageTitle, SessionPreview, SessionRequest, SubmitRequest,
+    WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
 };
 use data_profile::{
     PreviewProfile, PreviewProfileStatus, ProfileImportResult, ProjectFoldersImportResult,
@@ -721,6 +721,19 @@ fn provider_summary(
     supervisor: State<'_, BridgeSupervisor>,
 ) -> Result<BridgeProviderSummaryResponse, String> {
     supervisor.provider_summary()
+}
+
+#[tauri::command]
+fn provider_configs(supervisor: State<'_, BridgeSupervisor>) -> Result<ProviderConfigList, String> {
+    supervisor.provider_configs()
+}
+
+#[tauri::command]
+fn save_provider_config(
+    supervisor: State<'_, BridgeSupervisor>,
+    input: SaveProviderConfigRequest,
+) -> Result<ProviderConfigList, String> {
+    supervisor.save_provider_config(input)
 }
 
 #[tauri::command]
@@ -1669,6 +1682,8 @@ fn main() {
             preview_profile_status,
             preview_runtime_info,
             provider_summary,
+            provider_configs,
+            save_provider_config,
             desktop_preferences,
             set_desktop_approval,
             set_default_model,

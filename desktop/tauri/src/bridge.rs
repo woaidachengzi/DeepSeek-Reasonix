@@ -428,6 +428,35 @@ pub struct BridgeHistory {
     pub total_messages: u64,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderConfigView {
+    pub name: String,
+    pub display_name: String,
+    pub kind: String,
+    pub models: Vec<String>,
+    pub default: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderConfigList {
+    pub protocol_version: u64,
+    pub providers: Vec<ProviderConfigView>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveProviderConfigRequest {
+    pub name: String,
+    pub display_name: String,
+    pub kind: String,
+    pub base_url: String,
+    pub models: Vec<String>,
+    pub default: String,
+    pub use_api_key: bool,
+}
+
 /// One MCP server as the host may see it. Credential material is write-only, so
 /// this carries the key names a server expects and never a value. Hand-written
 /// like the other host-owned payloads: the wire shape belongs to this host, not
@@ -1211,6 +1240,35 @@ impl BridgeSupervisor {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
         Ok(summary)
+    }
+
+    pub fn provider_configs(&self) -> Result<ProviderConfigList, String> {
+        let response = self.request_json("GET", "/v1/settings/provider-configs", None, None)?;
+        let configs: ProviderConfigList =
+            serde_json::from_value(response).map_err(display_error)?;
+        if configs.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(configs)
+    }
+
+    pub fn save_provider_config(
+        &self,
+        input: SaveProviderConfigRequest,
+    ) -> Result<ProviderConfigList, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/provider-configs",
+            Some(json!(input)),
+            Some(&request_id),
+        )?;
+        let configs: ProviderConfigList =
+            serde_json::from_value(response).map_err(display_error)?;
+        if configs.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(configs)
     }
 
     pub fn desktop_preferences(&self) -> Result<DesktopPreferences, String> {

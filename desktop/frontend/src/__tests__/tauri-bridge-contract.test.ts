@@ -269,6 +269,16 @@ const commands: CommandContract[] = [
     description: "tauriProviderSummary() invokes provider_summary with no args",
   },
   {
+    command: "provider_configs",
+    argKeys: [],
+    description: "tauriProviderConfigs() invokes provider_configs with no args",
+  },
+  {
+    command: "save_provider_config",
+    argKeys: ["input"],
+    description: "saveTauriProviderConfig() invokes save_provider_config with { input }",
+  },
+  {
     command: "set_default_model",
     argKeys: ["request"],
     description: "setTauriDefaultModel() invokes set_default_model with { request }",
