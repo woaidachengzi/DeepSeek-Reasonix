@@ -41,6 +41,8 @@ let network = { protocolVersion: 1, proxyMode: "auto", noProxy: "", proxyType: "
 let skills = { protocolVersion: 1, allowImplicitInvocation: true, skills: [{ name: "demo", description: "A test skill", invocation: "/demo", scope: "global", sourcePath: "/tmp/demo/SKILL.md", runAs: "inline", enabled: true }], sources: [] as { path: string; scope: string; status: string; enabled: boolean; configured: boolean }[] };
 let subagents = { protocolVersion: 1, defaultModel: "demo/m", subagentModel: "", subagentEffort: "", maxDepth: 2, maxConcurrency: 6, maxParallelWriters: 3, modelRefs: ["demo/m"], modelEfforts: { "demo/m": ["auto", "low", "high"] }, profiles: [{ name: "reviewer", description: "Reviews code", scope: "global", invocation: "/reviewer", configuredModel: "", configuredEffort: "" }] };
 let hooks = { protocolVersion: 1, scope: "global", path: "/preview/settings.json", projectRoot: "", revision: "r1", hooks: {} as Record<string, unknown>, events: ["PreToolUse", "Stop"] };
+let memory = { protocolVersion: 1, workspaceRoot: "/preview/project", storeDir: "/preview/memory", globalStoreDir: "/preview/global-memory", docs: [{ path: "/preview/project/AGENTS.md", scope: "project", body: "Old instruction.\n", revision: "r1" }], facts: [] as unknown[], archives: [] as unknown[], diagnostics: [] as string[] };
+let memoryNote = "";
 let savedProviderInput: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean } | undefined;
 const summary = () => ({
   protocolVersion: 1,
@@ -49,7 +51,7 @@ const summary = () => ({
 });
 
 (dom.window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
-  async invoke(command: string, args?: { scope?: string; workspaceRoot?: string; url?: string; behavior?: string; mode?: string; request?: { model?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string } }) {
+  async invoke(command: string, args?: { scope?: string; workspaceRoot?: string; url?: string; behavior?: string; mode?: string; request?: { model?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string } }) {
     calls.push(command);
     switch (command) {
       case "preview_runtime_info":
@@ -89,6 +91,12 @@ const summary = () => ({
       }
       case "hooks_settings": return { ...hooks, scope: args?.scope ?? "global" };
       case "change_hooks_settings": hooks = { ...hooks, revision: "r2", hooks: args?.change?.hooks ?? {} }; return { ...hooks };
+      case "memory_settings": return { ...memory };
+      case "change_memory_settings": {
+        if (args?.change?.action === "save_doc") memory = { ...memory, docs: memory.docs.map(doc => doc.path === args.change?.path ? { ...doc, body: args.change?.body ?? "", revision: "r2" } : doc) };
+        if (args?.change?.action === "quick_add") memoryNote = args.change.body ?? "";
+        return { ...memory };
+      }
       case "set_default_model": defaultModel = args?.request?.model ?? ""; return summary();
       case "platform_info": return "darwin";
       case "get_close_behavior": return closeBehavior;
@@ -360,4 +368,24 @@ assert.match(visibleText(), /读取设置失败/, "runtime refresh failure is vi
 await act(async () => { click("模型服务"); });
 assert.match(visibleText(), /已就绪/, "runtime failure does not block model settings");
 await act(async () => { retryRoot.unmount(); });
+const memoryRoot = createRoot(document.getElementById("root")!);
+await act(async () => { memoryRoot.render(<LocaleProvider><TauriSettings initialTab="memory" workspaceRoot="/preview/project" onClose={() => {}} /></LocaleProvider>); });
+assert.match(visibleText(), /Old instruction/, "memory document is read through the bridge");
+const memoryEditor = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="记忆文档"]');
+assert.ok(memoryEditor);
+await act(async () => {
+  Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, "value")!.set!.call(memoryEditor, "New instruction.");
+  memoryEditor.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+});
+await act(async () => { click("保存文档"); });
+assert.equal(memory.docs[0].body, "New instruction.", "memory document edit is persisted through the bridge");
+const noteInput = document.querySelector<HTMLInputElement>('input[aria-label="记忆笔记"]');
+assert.ok(noteInput);
+await act(async () => {
+  Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(noteInput, "Remember this.");
+  noteInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+});
+await act(async () => { click("追加"); });
+assert.equal(memoryNote, "Remember this.", "quick memory note is saved through the bridge");
+await act(async () => { memoryRoot.unmount(); });
 console.log("tauri settings API key flow passed");

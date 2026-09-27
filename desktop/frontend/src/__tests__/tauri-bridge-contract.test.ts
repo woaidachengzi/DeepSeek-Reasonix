@@ -344,6 +344,16 @@ const commands: CommandContract[] = [
     description: "changeTauriHooksSettings() invokes change_hooks_settings with { change }",
   },
   {
+    command: "memory_settings",
+    argKeys: ["workspaceRoot"],
+    description: "tauriMemorySettings() invokes memory_settings with { workspaceRoot }",
+  },
+  {
+    command: "change_memory_settings",
+    argKeys: ["change"],
+    description: "changeTauriMemorySettings() invokes change_memory_settings with { change }",
+  },
+  {
     command: "set_default_model",
     argKeys: ["request"],
     description: "setTauriDefaultModel() invokes set_default_model with { request }",

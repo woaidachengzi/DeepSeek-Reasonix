@@ -696,6 +696,23 @@
 .tauri-hooks-editor:focus-visible { border-color: var(--accent); }
 .tauri-hooks-settings .tauri-settings-actions { flex-wrap: wrap; }
 .tauri-hooks-settings .tauri-settings-actions > span { margin-right: auto; color: var(--fg-faint); font-size: 11px; }
+.tauri-memory-settings h3:not(:first-child) { margin-top: 30px; }
+.tauri-memory-doc-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; margin: 12px 0; }
+.tauri-memory-doc { min-width: 0; padding: 10px 12px; text-align: left; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--surface); color: var(--fg); cursor: pointer; }
+.tauri-memory-doc.is-active { border-color: var(--accent); background: var(--accent-soft); }
+.tauri-memory-doc strong, .tauri-memory-doc small { display: block; }
+.tauri-memory-doc small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 3px; color: var(--fg-faint); }
+.tauri-memory-path { margin: 10px 0 6px; overflow-wrap: anywhere; color: var(--fg-faint); font: 11px var(--font-mono); }
+.tauri-memory-editor { display: block; width: 100%; min-height: 230px; resize: vertical; padding: 14px; border: 1px solid var(--border-soft); border-radius: 9px; outline: none; background: var(--surface); color: var(--fg); font: 12px/1.6 var(--font-mono); }
+.tauri-memory-editor:focus-visible { border-color: var(--accent); }
+.tauri-memory-note-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.tauri-memory-note-row select, .tauri-memory-note-row input { padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface); color: var(--fg); }
+.tauri-memory-note-row input { flex: 1; min-width: 220px; }
+.tauri-memory-facts { display: grid; gap: 8px; margin: 12px 0; }
+.tauri-memory-fact { padding: 13px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--surface); }
+.tauri-memory-fact > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.tauri-memory-fact small { color: var(--fg-faint); }
+.tauri-memory-fact p { margin: 7px 0; white-space: pre-wrap; }
 @media (max-width: 1050px) { .tauri-permissions-rules { grid-template-columns: 1fr; } .tauri-permissions-rule-card p { min-height: 0; } }
 .tauri-settings-model-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tauri-settings-model-header strong { color: var(--fg); font-size: 12px; }

@@ -440,6 +440,38 @@ export async function changeTauriHooksSettings(change: TauriHooksChange): Promis
   return invoke<TauriHooksSettings>("change_hooks_settings", { change });
 }
 
+export interface TauriMemoryDoc { path: string; scope: string; body: string; revision: string }
+export interface TauriMemoryFact { id: string; revision: number; name: string; title: string; description: string; type: string; scope: string; body: string; freshness: string }
+export interface TauriMemoryArchive extends TauriMemoryFact { path: string; archivedAt: string }
+export interface TauriMemorySettings {
+  protocolVersion: number;
+  workspaceRoot: string;
+  storeDir: string;
+  globalStoreDir: string;
+  docs: TauriMemoryDoc[];
+  facts: TauriMemoryFact[];
+  archives: TauriMemoryArchive[];
+  diagnostics: string[];
+}
+export interface TauriMemoryChange {
+  workspaceRoot: string;
+  action: "save_doc" | "quick_add" | "archive" | "restore";
+  path: string;
+  revision: string;
+  body: string;
+  scope: string;
+  factId: string;
+  factRevision: number;
+}
+export async function tauriMemorySettings(workspaceRoot: string): Promise<TauriMemorySettings> {
+  requireTauri();
+  return invoke<TauriMemorySettings>("memory_settings", { workspaceRoot });
+}
+export async function changeTauriMemorySettings(change: TauriMemoryChange): Promise<TauriMemorySettings> {
+  requireTauri();
+  return invoke<TauriMemorySettings>("change_memory_settings", { change });
+}
+
 export type TauriToolApprovalMode = "ask" | "auto" | "yolo";
 export interface TauriDesktopPreferences {
   protocolVersion: number;

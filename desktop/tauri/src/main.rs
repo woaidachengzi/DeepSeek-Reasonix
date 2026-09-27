@@ -75,14 +75,15 @@ use bridge::{
     BridgeWorkspaceChangesResponse, BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse,
     DesktopPreferences, HooksSettingsChange, HooksSettingsView, LegacySessionCatalogEntry,
     MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse, MCPServerView,
-    NetworkSettingsChange, NetworkSettingsView, OpenSessionRequest, PendingSessionDeleteCursor,
-    PendingSessionDeletePage, PendingSessionTitleRecovery, PermissionSettingsChange,
-    PermissionSettingsView, ProviderConfigList, RenameSessionRequest, SandboxSettingsChange,
-    SandboxSettingsView, SaveProviderConfigRequest, ScanImportCandidate, ScanImportSelection,
-    SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage,
-    SessionFirstMessageTitle, SessionPreview, SessionRequest, SkillsSettingsChange,
-    SkillsSettingsView, SubagentSettingsChange, SubagentSettingsView, SubmitRequest,
-    WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
+    MemorySettingsChange, MemorySettingsView, NetworkSettingsChange, NetworkSettingsView,
+    OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
+    PendingSessionTitleRecovery, PermissionSettingsChange, PermissionSettingsView,
+    ProviderConfigList, RenameSessionRequest, SandboxSettingsChange, SandboxSettingsView,
+    SaveProviderConfigRequest, ScanImportCandidate, ScanImportSelection, SessionCatalogMetadata,
+    SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage, SessionFirstMessageTitle,
+    SessionPreview, SessionRequest, SkillsSettingsChange, SkillsSettingsView,
+    SubagentSettingsChange, SubagentSettingsView, SubmitRequest, WorkspaceChangeDetailRequest,
+    WorkspaceFileRequest, WorkspaceRequest,
 };
 use data_profile::{
     PreviewProfile, PreviewProfileStatus, ProfileImportResult, ProjectFoldersImportResult,
@@ -839,6 +840,22 @@ fn change_hooks_settings(
     change: HooksSettingsChange,
 ) -> Result<HooksSettingsView, String> {
     supervisor.change_hooks_settings(change)
+}
+
+#[tauri::command]
+fn memory_settings(
+    supervisor: State<'_, BridgeSupervisor>,
+    workspace_root: String,
+) -> Result<MemorySettingsView, String> {
+    supervisor.memory_settings(&workspace_root)
+}
+
+#[tauri::command]
+fn change_memory_settings(
+    supervisor: State<'_, BridgeSupervisor>,
+    change: MemorySettingsChange,
+) -> Result<MemorySettingsView, String> {
+    supervisor.change_memory_settings(change)
 }
 
 #[tauri::command]
@@ -1802,6 +1819,8 @@ fn main() {
             change_subagent_settings,
             hooks_settings,
             change_hooks_settings,
+            memory_settings,
+            change_memory_settings,
             desktop_preferences,
             set_desktop_approval,
             set_default_model,

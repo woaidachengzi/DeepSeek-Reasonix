@@ -14,6 +14,7 @@ import { TauriNetworkSettings } from "./TauriNetworkSettings";
 import { TauriSkillsSettings } from "./TauriSkillsSettings";
 import { TauriSubagentSettings } from "./TauriSubagentSettings";
 import { TauriHooksSettings } from "./TauriHooksSettings";
+import { TauriMemorySettings } from "./TauriMemorySettings";
 import { getTauriNotificationsEnabled, setTauriNotificationsEnabled, getTauriProgressMode, setTauriProgressMode, type TauriProgressMode } from "./tauriPreferences";
 import { getSuccessPreference, setSuccessPreference, getAttentionPreference, setAttentionPreference, getNotificationVolume, setNotificationVolume, playSuccessChime, playAttentionChime, type SoundWavPref } from "../lib/sound";
 
@@ -40,7 +41,7 @@ interface TauriSettingsProps {
   onRefreshCatalogAudit?: () => Promise<void>;
 }
 
-export type TauriSettingsTab = "general" | "appearance" | "model" | "providers" | "stats" | "mcp" | "skills" | "subagents" | "hooks" | "permissions" | "sandbox" | "network" | "diagnostics" | "data" | "shortcuts" | "about";
+export type TauriSettingsTab = "general" | "appearance" | "model" | "providers" | "stats" | "mcp" | "skills" | "subagents" | "hooks" | "memory" | "permissions" | "sandbox" | "network" | "diagnostics" | "data" | "shortcuts" | "about";
 
 const TauriUsageStatsPanel = lazy(() => import("../components/UsageStatsPanel").then(module => ({ default: module.UsageStatsPanel })));
 
@@ -53,6 +54,7 @@ const SETTINGS_GROUPS = [
   ] },
   { label: "集成与连接", items: [{ id: "mcp", label: "MCP", description: "管理工具服务器", icon: Server }] },
   { label: "能力扩展", items: [{ id: "skills", label: "Agent Skills", description: "管理技能与来源", icon: Sparkles }, { id: "subagents", label: "子智能体", description: "设置模型、并行限制与覆盖", icon: Users }] },
+  { label: "记忆与上下文", items: [{ id: "memory", label: "记忆", description: "管理说明文档与已保存的事实", icon: Database }] },
   { label: "安全与执行", items: [
     { id: "permissions", label: "权限", description: "写入决策与工具规则", icon: ShieldCheck },
     { id: "sandbox", label: "沙盒", description: "命令隔离与文件写入范围", icon: Box },
@@ -76,6 +78,7 @@ const SETTINGS_TITLES: Record<TauriSettingsTab, { title: string; description: st
   skills: { title: "Agent Skills", description: "管理当前工作区可发现的技能与来源。" },
   subagents: { title: "子智能体", description: "管理子智能体的运行默认值与按名称覆盖。" },
   hooks: { title: "Hooks", description: "配置会话与工具事件触发时运行的本地命令。" },
+  memory: { title: "记忆", description: "查看与编辑工作区说明文档，管理已保存的事实。" },
   permissions: { title: "权限", description: "设置工具的默认写入决策和规则。" },
   sandbox: { title: "沙盒", description: "设置命令隔离、网络访问和文件写入范围。" },
   network: { title: "网络", description: "设置 Preview 普通 HTTP 请求的代理方式。" },
@@ -303,6 +306,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
             {tab === "skills" && <TauriSkillsSettings workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "subagents" && <TauriSubagentSettings workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "hooks" && <TauriHooksSettings workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
+            {tab === "memory" && <TauriMemorySettings workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "permissions" && <TauriPermissionsSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "sandbox" && <TauriSandboxSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "network" && <TauriNetworkSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}

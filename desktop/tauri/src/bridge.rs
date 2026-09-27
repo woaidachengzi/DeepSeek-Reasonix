@@ -618,6 +618,65 @@ pub struct HooksSettingsChange {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MemoryDocView {
+    pub path: String,
+    pub scope: String,
+    pub body: String,
+    pub revision: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryFactView {
+    pub id: String,
+    pub revision: i32,
+    pub name: String,
+    pub title: String,
+    pub description: String,
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub scope: String,
+    pub body: String,
+    pub freshness: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryArchiveView {
+    #[serde(flatten)]
+    pub fact: MemoryFactView,
+    pub path: String,
+    pub archived_at: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemorySettingsView {
+    pub protocol_version: u64,
+    pub workspace_root: String,
+    pub store_dir: String,
+    pub global_store_dir: String,
+    pub docs: Vec<MemoryDocView>,
+    pub facts: Vec<MemoryFactView>,
+    pub archives: Vec<MemoryArchiveView>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemorySettingsChange {
+    pub workspace_root: String,
+    pub action: String,
+    pub path: String,
+    pub revision: String,
+    pub body: String,
+    pub scope: String,
+    pub fact_id: String,
+    pub fact_revision: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SubagentSettingsChange {
     pub workspace_root: String,
     pub action: String,
@@ -1630,6 +1689,37 @@ impl BridgeSupervisor {
             Some(&request_id),
         )?;
         let view: HooksSettingsView = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn memory_settings(&self, workspace_root: &str) -> Result<MemorySettingsView, String> {
+        let query = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("workspaceRoot", workspace_root)
+            .finish();
+        let response =
+            self.request_json("GET", &format!("/v1/settings/memory?{query}"), None, None)?;
+        let view: MemorySettingsView = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn change_memory_settings(
+        &self,
+        change: MemorySettingsChange,
+    ) -> Result<MemorySettingsView, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/memory",
+            Some(json!(change)),
+            Some(&request_id),
+        )?;
+        let view: MemorySettingsView = serde_json::from_value(response).map_err(display_error)?;
         if view.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
@@ -2867,12 +2957,12 @@ mod tests {
         validate_pending_session_deletes_page, validate_pending_session_title_recoveries,
         validate_session_directory_page, validate_session_directory_snapshot, verify_bridge_health,
         verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSupervisor,
-        EventStreamError, HooksSettingsView, OpenSessionRequest, PendingSessionDelete,
-        PendingSessionDeletesPageResponse, PendingSessionTitleRecoveriesResponse,
-        PendingSessionTitleRecovery, RenameSessionRequest, SessionCatalogMetadata,
-        SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage,
-        SessionInventoryResponse, SessionRequest, SubagentSettingsView, SubmitRequest,
-        PROTOCOL_VERSION,
+        EventStreamError, HooksSettingsView, MemorySettingsView, OpenSessionRequest,
+        PendingSessionDelete, PendingSessionDeletesPageResponse,
+        PendingSessionTitleRecoveriesResponse, PendingSessionTitleRecovery, RenameSessionRequest,
+        SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
+        SessionDirectoryPage, SessionInventoryResponse, SessionRequest, SubagentSettingsView,
+        SubmitRequest, PROTOCOL_VERSION,
     };
     use crate::{session_shadow, workbench_catalog::WorkbenchSession};
     use serde_json::json;
@@ -2910,6 +3000,18 @@ mod tests {
         .unwrap();
         assert_eq!(hooks.hooks["Stop"][0]["env"]["X"], "1");
         assert!(serde_json::to_value(hooks).unwrap().get("hooks").is_some());
+
+        let memory: MemorySettingsView = serde_json::from_value(json!({
+            "protocolVersion": 1, "workspaceRoot": "/tmp/p", "storeDir": "/tmp/m",
+            "globalStoreDir": "/tmp/g", "docs": [{"path":"/tmp/p/AGENTS.md", "scope":"project", "body":"hello", "revision":"abc"}],
+            "facts": [], "archives": [{"id":"mem-1", "revision":1, "name":"fact", "title":"Fact", "description":"", "type":"project", "scope":"project", "body":"body", "freshness":"fresh", "path":"/tmp/archive.md", "archivedAt":"2026-09-28T00:00:00Z"}],
+            "diagnostics": []
+        })).unwrap();
+        assert_eq!(memory.archives[0].fact.id, "mem-1");
+        assert_eq!(
+            serde_json::to_value(memory).unwrap()["archives"][0]["type"],
+            "project"
+        );
     }
 
     // Local `cargo test` has no built Go bridge, so the supervised lifecycle
