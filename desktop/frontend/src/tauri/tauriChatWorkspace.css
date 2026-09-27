@@ -554,6 +554,19 @@
 .tauri-settings-general .tauri-settings-field-label, .tauri-settings-general .tauri-settings-toggle > span { flex: 1; min-width: 0; }
 .tauri-settings-general .tauri-settings-field-label small { line-height: 1.5; }
 .tauri-settings-general .tauri-settings-radio-group { width: min(100%, 370px); min-width: min(100%, 370px); }
+.tauri-settings-sound { border-top: 1px solid var(--border-soft); }
+.tauri-settings-sound-toggle { display: flex; width: 100%; min-height: 76px; align-items: center; gap: 20px; padding: 12px 4px; border: 0; background: transparent; color: var(--fg); text-align: left; }
+.tauri-settings-sound-toggle > span:nth-last-child(2) { color: var(--fg-faint); font-size: 11px; }
+.tauri-settings-sound-toggle > svg:last-child { color: var(--fg-faint); transition: transform .15s; }
+.tauri-settings-sound-toggle[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }
+.tauri-settings-sound-body { padding: 0 0 12px 42px; }
+.tauri-settings-sound-row { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--border-soft); color: var(--fg-dim); font-size: 11px; }
+.tauri-settings-sound-row label { display: flex; flex: 1; align-items: center; justify-content: space-between; gap: 12px; }
+.tauri-settings-sound-row input[type="range"] { width: min(100%, 250px); accent-color: var(--accent); }
+.tauri-settings-sound-row output { min-width: 34px; text-align: right; }
+.tauri-settings-sound-row select { min-width: 160px; min-height: 32px; padding: 4px 8px; border: 1px solid var(--border-soft); border-radius: 7px; background: var(--surface); color: var(--fg); }
+.tauri-settings-sound-row > button { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid var(--border-soft); border-radius: 7px; background: var(--surface); color: var(--fg-dim); }
+.tauri-settings-sound-row > button:disabled { opacity: .45; }
 .tauri-settings-diagnostics h3:not(:first-child) { margin-top: 34px; }
 .tauri-settings-audit { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
 .tauri-settings-audit > div { display: grid; gap: 5px; padding: 12px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--surface); }

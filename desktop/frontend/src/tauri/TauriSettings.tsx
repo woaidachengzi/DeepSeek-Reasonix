@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Check, ArrowLeft, Search, Keyboard, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, Type, ShieldCheck, Power, Bell } from "lucide-react";
+import { Check, ArrowLeft, Search, Keyboard, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, Type, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown } from "lucide-react";
 import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, tauriDesktopPreferences, setTauriDesktopApproval, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
 import { THEME_STYLES, type Theme, type ThemeStyle } from "../lib/theme";
 import { applyConversationWidth, getCachedConversationWidth, type ConversationWidth } from "../lib/conversationWidth";
@@ -8,6 +8,7 @@ import { applyFontFamily, applyMonoFontFamily, FONT_FAMILIES, MONO_FONT_FAMILIES
 import { applyTauriAppearance, readTauriAppearance, type TauriAppearance } from "./tauriAppearance";
 import { TauriMCPSettings } from "./TauriMCPSettings";
 import { getTauriNotificationsEnabled, setTauriNotificationsEnabled, getTauriProgressMode, setTauriProgressMode, type TauriProgressMode } from "./tauriPreferences";
+import { getSuccessPreference, setSuccessPreference, getAttentionPreference, setAttentionPreference, getNotificationVolume, setNotificationVolume, playSuccessChime, playAttentionChime, type SoundWavPref } from "../lib/sound";
 
 interface TauriSettingsProps {
   onClose: () => void;
@@ -286,6 +287,10 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
 }
 
 function GeneralSettings({ notificationsEnabled, onNotificationsChange, appearance, onAppearanceChange, conversationWidth, onConversationWidthChange, textSize, onTextSizeChange, progressMode, onProgressModeChange, closeBehavior, onCloseBehaviorChange, closeLoading, closeSaving, closeError, approvalMode, onApprovalChange, approvalLoading, approvalSaving, approvalError, platform }: { notificationsEnabled: boolean; onNotificationsChange: (enabled: boolean) => void; appearance: TauriAppearance; onAppearanceChange: (next: TauriAppearance) => void; conversationWidth: ConversationWidth; onConversationWidthChange: (next: ConversationWidth) => void; textSize: TextSize; onTextSizeChange: (next: TextSize) => void; progressMode: TauriProgressMode; onProgressModeChange: (next: TauriProgressMode) => void; closeBehavior: TauriCloseBehavior; onCloseBehaviorChange: (behavior: TauriCloseBehavior) => void; closeLoading: boolean; closeSaving: boolean; closeError: string; approvalMode: TauriToolApprovalMode; onApprovalChange: (mode: TauriToolApprovalMode) => void; approvalLoading: boolean; approvalSaving: boolean; approvalError: string; platform: string }) {
+  const [soundExpanded, setSoundExpanded] = useState(false);
+  const [successSound, setSuccessSound] = useState<SoundWavPref>(getSuccessPreference);
+  const [attentionSound, setAttentionSound] = useState<SoundWavPref>(getAttentionPreference);
+  const [soundVolume, setSoundVolume] = useState(getNotificationVolume);
   return <div className="tauri-settings-section tauri-settings-general">
     <h3>桌面与显示</h3><p className="tauri-settings-section-description">调整界面的显示方式。</p>
     <div className="tauri-settings-field"><Monitor className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">桌面风格<small>选择界面亮暗模式。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="桌面风格">{(["auto", "light", "dark"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={appearance.mode === option} className={`tauri-settings-radio${appearance.mode === option ? " is-active" : ""}`} onClick={() => onAppearanceChange({ ...appearance, mode: option })}>{option === "auto" ? "跟随系统" : option === "light" ? "浅色" : "深色"}</button>)}</div></div>
@@ -299,7 +304,25 @@ function GeneralSettings({ notificationsEnabled, onNotificationsChange, appearan
     <div className="tauri-settings-field"><ShieldCheck className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">新会话默认审批<small>只影响之后创建的会话；Yolo 会跳过工具审批，计划与沙盒限制仍生效。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="新会话默认审批">{(["ask", "auto", "yolo"] as const).map(mode => <button key={mode} type="button" role="radio" aria-checked={approvalMode === mode} className={`tauri-settings-radio${approvalMode === mode ? " is-active" : ""}`} disabled={approvalLoading || approvalSaving} onClick={() => onApprovalChange(mode)}>{mode === "ask" ? "询问" : mode === "auto" ? "自动" : "Yolo"}</button>)}</div></div>
     {approvalError && <p className="tauri-diagnostic-error" role="alert">{approvalError}</p>}
     <label className="tauri-settings-toggle"><Bell className="tauri-settings-field-icon" size={18} /><span><strong>桌面通知</strong><small>回复完成或失败时发送系统通知。</small></span><input type="checkbox" checked={notificationsEnabled} onChange={event => onNotificationsChange(event.target.checked)} /></label>
+    <div className="tauri-settings-sound">
+      <button type="button" className="tauri-settings-sound-toggle" aria-expanded={soundExpanded} onClick={() => setSoundExpanded(open => !open)}><Volume2 className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">声音<small>设置完成和需要回答时的提醒音。</small></span><span>{successSound === "off" && attentionSound === "off" ? "已关闭" : "已自定义"}</span><ChevronDown size={15} aria-hidden="true" /></button>
+      {soundExpanded && <div className="tauri-settings-sound-body">
+        <label className="tauri-settings-sound-row">通知音量 <input type="range" min={0} max={100} value={soundVolume} aria-label="通知音量" onChange={event => setSoundVolume(setNotificationVolume(Number(event.target.value)))} /><output>{soundVolume}%</output></label>
+        <TauriSoundOption label="回复完成" value={successSound} onChange={next => { setSuccessSound(next); setSuccessPreference(next); playSuccessChime(); }} onPreview={playSuccessChime} />
+        <TauriSoundOption label="需要回答" value={attentionSound} onChange={next => { setAttentionSound(next); setAttentionPreference(next); playAttentionChime(); }} onPreview={playAttentionChime} />
+      </div>}
+    </div>
   </div>;
+}
+
+const SOUND_OPTIONS: { value: SoundWavPref; label: string }[] = [
+  { value: "off", label: "关闭" }, { value: "synth", label: "合成音" },
+  { value: "positive", label: "清亮" }, { value: "correct", label: "确认" },
+  { value: "start", label: "开始" }, { value: "back", label: "轻柔" },
+];
+
+function TauriSoundOption({ label, value, onChange, onPreview }: { label: string; value: SoundWavPref; onChange: (next: SoundWavPref) => void; onPreview: () => void }) {
+  return <div className="tauri-settings-sound-row"><label>{label}<select aria-label={`${label}提示音`} value={value} onChange={event => onChange(event.target.value as SoundWavPref)}>{SOUND_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><button type="button" aria-label={`试听${label}提示音`} disabled={value === "off"} onClick={onPreview}><Play size={14} /></button></div>;
 }
 
 function ShortcutSettings() {

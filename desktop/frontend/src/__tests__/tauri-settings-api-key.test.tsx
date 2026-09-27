@@ -143,6 +143,23 @@ const notificationToggle = document.querySelector<HTMLInputElement>(".tauri-sett
 assert.ok(notificationToggle, "general settings include desktop notifications");
 await act(async () => { notificationToggle.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true })); });
 assert.equal(localStorage.getItem("tauri-desktop-notifications"), "off", "notification preference is saved");
+const soundToggle = document.querySelector<HTMLButtonElement>('.tauri-settings-sound-toggle');
+assert.ok(soundToggle);
+await act(async () => { soundToggle.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true })); });
+const successSelect = document.querySelector<HTMLSelectElement>('select[aria-label="回复完成提示音"]');
+const attentionSelect = document.querySelector<HTMLSelectElement>('select[aria-label="需要回答提示音"]');
+const volumeSlider = document.querySelector<HTMLInputElement>('input[aria-label="通知音量"]');
+assert.ok(successSelect && attentionSelect && volumeSlider, "sound controls are available in General");
+await act(async () => { successSelect.value = "synth"; successSelect.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
+await act(async () => { attentionSelect.value = "positive"; attentionSelect.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
+await act(async () => {
+  Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(volumeSlider, "42");
+  volumeSlider.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  volumeSlider.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+});
+assert.equal(localStorage.getItem("notificationSoundSuccess"), "synth");
+assert.equal(localStorage.getItem("notificationSoundAttention"), "positive");
+assert.equal(localStorage.getItem("notificationSoundVolume"), "42");
 
 await act(async () => { click("模型偏好"); });
 const defaultModelSelect = document.querySelector<HTMLSelectElement>("#tauri-settings-default-model");

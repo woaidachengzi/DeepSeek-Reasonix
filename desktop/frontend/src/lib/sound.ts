@@ -171,7 +171,13 @@ function playSynthAttention(ctx: AudioContext, outputVolume: number): void {
 async function playWav(pref: WavSoundPref, volume: number, fallback: (ctx: AudioContext, outputVolume: number) => void): Promise<void> {
   const url = soundFilePath(pref);
   if (!url) return;
-  const ctx = new AudioContext();
+  let ctx: AudioContext;
+  try {
+    ctx = new AudioContext();
+  } catch {
+    // WebAudio can be unavailable in a WebView or during a headless render.
+    return;
+  }
   try {
     const buf = await loadBuffer(ctx, url);
     if (buf) {

@@ -8,6 +8,7 @@ import { QuestionJumpBar } from "../components/QuestionJumpBar";
 import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
 import { compactQuestionText, type QuestionAnchor } from "../lib/transcriptGrouping";
 import { LocaleProvider } from "../lib/i18n";
+import { playSuccessChime, playAttentionChime, shouldPlayAttentionChimeForEvent } from "../lib/sound";
 import logoWordmark from "../assets/logo-wordmark.svg";
 import { TauriSettings, type TauriSettingsTab } from "./TauriSettings";
 import { getTauriNotificationsEnabled, getTauriProgressMode, TAURI_PROGRESS_MODE_CHANGED } from "./tauriPreferences";
@@ -435,6 +436,7 @@ export function TauriSessionPreview() {
   const conversationRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const turnEpochRef = useRef(0);
+  const attentionChimeSeenRef = useRef(new Set<string>());
   const submitInFlightRef = useRef(false);
   const pendingDraftSubmissionRef = useRef<{ sessionId: string; text: string; paths: string[]; workspaceRoot?: string } | null>(null);
   const sessionPageRequestRef = useRef(false);
@@ -819,11 +821,19 @@ export function TauriSessionPreview() {
           setEvents(previous => [event, ...previous].slice(0, 100));
           if (event.eventKind === "turn_started") {
             turnEpochRef.current += 1;
+            // Prompt ids may restart when a controller is rebuilt between turns.
+            attentionChimeSeenRef.current.clear();
             setSession(previous => previous ? { ...previous, state: "running" } : previous);
             setLiveText("");
           }
           const incomingPrompt = tauriPromptFromEvent(event);
           if (incomingPrompt) {
+            if (incomingPrompt.kind === "approval" || incomingPrompt.kind === "ask") {
+              const soundEvent = incomingPrompt.kind === "approval"
+                ? { kind: "approval_request", tabId: session.id, approval: { id: incomingPrompt.id } }
+                : { kind: "ask_request", tabId: session.id, ask: { id: incomingPrompt.id } };
+              if (shouldPlayAttentionChimeForEvent(soundEvent, attentionChimeSeenRef.current)) playAttentionChime();
+            }
             setPendingPrompt(incomingPrompt);
             setPromptSelections({});
             setSession(previous => previous ? { ...previous, state: "paused" } : previous);
@@ -837,6 +847,7 @@ export function TauriSessionPreview() {
           const textDelta = tauriAssistantTextDelta(event);
           if (textDelta) setLiveText(previous => previous + textDelta);
           if (event.eventKind === "turn_done") {
+            if (!tauriTurnFailure(event)) playSuccessChime();
             const completionEpoch = ++turnEpochRef.current;
             const completionIsCurrent = () => active && turnEpochRef.current === completionEpoch;
             setPendingPrompt(null);

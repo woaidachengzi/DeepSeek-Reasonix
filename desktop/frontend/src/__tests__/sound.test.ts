@@ -109,6 +109,15 @@ Object.defineProperty(globalThis, "localStorage", {
 }
 
 {
+  Reflect.deleteProperty(globalThis, "AudioContext");
+  setNotificationVolume(DEFAULT_NOTIFICATION_VOLUME);
+  setSuccessPreference("positive");
+  let threw = false;
+  try { playSuccessChime(); } catch { threw = true; }
+  eq(threw, false, "WAV preference does not throw when WebAudio is unavailable");
+}
+
+{
   eq(attentionChimeEventKey({ kind: "approval_request", tabId: "tab-a", approval: { id: "approval-1" } }), "approval:tab-a:approval-1", "approval request builds a tab-scoped chime key");
   eq(attentionChimeEventKey({ kind: "ask_request", tabId: "tab-a", ask: { id: "ask-1" } }), "ask:tab-a:ask-1", "ask request builds a tab-scoped chime key");
   eq(attentionChimeEventKey({ kind: "approval_request", approval: { id: "approval-1" } }), "approval::approval-1", "legacy approval events without a tab still build a stable key");
