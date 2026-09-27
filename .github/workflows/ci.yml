@@ -642,6 +642,9 @@ jobs:
           test -x "$app_path/Contents/MacOS/reasonix-desktop-bridge"
           codesign --verify --deep --strict "$app_path"
 
+      - name: Smoke test packaged Preview startup and shutdown
+        run: python3 tools/tauri/smoke-packaged-app.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
+
   # Ubuntu 24.04 ships WebKitGTK 4.1 only. Keep this capability build separate
   # from the 22.04/4.0 leg so neither runtime becomes a distro whitelist.
   desktop-linux-webkit41:

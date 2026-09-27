@@ -1639,6 +1639,18 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("failed to build Reasonix Tauri host");
     app.run(|app, event| {
+        #[cfg(target_os = "macos")]
+        if matches!(event, tauri::RunEvent::Ready)
+            && std::env::var("REASONIX_TAURI_PACKAGE_SMOKE").as_deref() == Ok("1")
+        {
+            // The package smoke must exercise the ordinary setup and Exit path
+            // without depending on accessibility permissions or UI scripting.
+            let handle = app.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(8));
+                handle.exit(0);
+            });
+        }
         if matches!(event, tauri::RunEvent::Exit) {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = app.state::<PreviewWindowState>().save(&window);
