@@ -38,6 +38,7 @@ let defaultModel = "";
 const permissions = { protocolVersion: 1, mode: "ask", allow: [] as string[], ask: [] as string[], deny: [] as string[] };
 let sandbox = { protocolVersion: 1, bash: "enforce", network: true, workspaceRoot: "", allowWrite: [] as string[], platform: "darwin" };
 let network = { protocolVersion: 1, proxyMode: "auto", noProxy: "", proxyType: "socks5", proxyServer: "", proxyPort: 0, proxyUsername: "", proxyUrlSet: false, proxyPasswordSet: false };
+let skills = { protocolVersion: 1, allowImplicitInvocation: true, skills: [{ name: "demo", description: "A test skill", invocation: "/demo", scope: "global", sourcePath: "/tmp/demo/SKILL.md", runAs: "inline", enabled: true }], sources: [] as { path: string; scope: string; status: string; enabled: boolean; configured: boolean }[] };
 let savedProviderInput: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean } | undefined;
 const summary = () => ({
   protocolVersion: 1,
@@ -46,7 +47,7 @@ const summary = () => ({
 });
 
 (dom.window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
-  async invoke(command: string, args?: { url?: string; behavior?: string; mode?: string; request?: { model?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean }; change?: { action?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string } }) {
+  async invoke(command: string, args?: { workspaceRoot?: string; url?: string; behavior?: string; mode?: string; request?: { model?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string } }) {
     calls.push(command);
     switch (command) {
       case "preview_runtime_info":
@@ -72,6 +73,12 @@ const summary = () => ({
       case "change_sandbox_settings": sandbox = { ...sandbox, ...args?.change }; return { ...sandbox };
       case "network_settings": return { ...network };
       case "change_network_settings": network = { ...network, ...args?.change }; return { ...network };
+      case "skills_settings": return { ...skills };
+      case "change_skills_settings": {
+        if (args?.change?.action === "implicit") skills.allowImplicitInvocation = Boolean(args.change.enabled);
+        if (args?.change?.action === "skill" && args.change.name) skills.skills = skills.skills.map(item => item.name === args.change?.name ? { ...item, enabled: Boolean(args.change?.enabled) } : item);
+        return { ...skills };
+      }
       case "set_default_model": defaultModel = args?.request?.model ?? ""; return summary();
       case "platform_info": return "darwin";
       case "get_close_behavior": return closeBehavior;
@@ -224,6 +231,12 @@ assert.match(visibleText(), /代理模式/, "network editor is available in sett
 await act(async () => { click("直连"); });
 await act(async () => { click("保存网络设置"); });
 assert.equal(network.proxyMode, "off", "proxy mode is persisted through the bridge");
+await act(async () => { click("Agent Skills"); });
+assert.match(visibleText(), /A test skill/, "discovered skills appear in settings");
+const implicitSwitch = document.querySelector<HTMLInputElement>('input[aria-label="允许自动调用技能"]');
+assert.ok(implicitSwitch);
+await act(async () => { implicitSwitch.click(); });
+assert.equal(skills.allowImplicitInvocation, false, "implicit skill invocation is persisted through the bridge");
 await act(async () => { click("模型服务"); });
 assert.match(visibleText(), /已就绪/, ".env credential configures the provider");
 assert.match(visibleText(), /服务配置/, "provider configuration is editable from settings");

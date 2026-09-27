@@ -80,8 +80,8 @@ use bridge::{
     ProviderConfigList, RenameSessionRequest, SandboxSettingsChange, SandboxSettingsView,
     SaveProviderConfigRequest, ScanImportCandidate, ScanImportSelection, SessionCatalogMetadata,
     SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage, SessionFirstMessageTitle,
-    SessionPreview, SessionRequest, SubmitRequest, WorkspaceChangeDetailRequest,
-    WorkspaceFileRequest, WorkspaceRequest,
+    SessionPreview, SessionRequest, SkillsSettingsChange, SkillsSettingsView, SubmitRequest,
+    WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
 };
 use data_profile::{
     PreviewProfile, PreviewProfileStatus, ProfileImportResult, ProjectFoldersImportResult,
@@ -789,6 +789,22 @@ fn change_network_settings(
     change: NetworkSettingsChange,
 ) -> Result<NetworkSettingsView, String> {
     supervisor.change_network_settings(change)
+}
+
+#[tauri::command]
+fn skills_settings(
+    supervisor: State<'_, BridgeSupervisor>,
+    workspace_root: String,
+) -> Result<SkillsSettingsView, String> {
+    supervisor.skills_settings(&workspace_root)
+}
+
+#[tauri::command]
+fn change_skills_settings(
+    supervisor: State<'_, BridgeSupervisor>,
+    change: SkillsSettingsChange,
+) -> Result<SkillsSettingsView, String> {
+    supervisor.change_skills_settings(change)
 }
 
 #[tauri::command]
@@ -1746,6 +1762,8 @@ fn main() {
             change_sandbox_settings,
             network_settings,
             change_network_settings,
+            skills_settings,
+            change_skills_settings,
             desktop_preferences,
             set_desktop_approval,
             set_default_model,

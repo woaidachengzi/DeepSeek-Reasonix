@@ -528,6 +528,47 @@ pub struct NetworkSettingsChange {
     pub proxy_password: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillSettingsItem {
+    pub name: String,
+    pub description: String,
+    pub invocation: String,
+    pub scope: String,
+    pub source_path: String,
+    pub run_as: String,
+    pub enabled: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillSettingsSource {
+    pub path: String,
+    pub scope: String,
+    pub status: String,
+    pub enabled: bool,
+    pub configured: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillsSettingsView {
+    pub protocol_version: u64,
+    pub allow_implicit_invocation: bool,
+    pub skills: Vec<SkillSettingsItem>,
+    pub sources: Vec<SkillSettingsSource>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillsSettingsChange {
+    pub workspace_root: String,
+    pub action: String,
+    pub enabled: bool,
+    pub name: String,
+    pub path: String,
+}
+
 /// One MCP server as the host may see it. Credential material is write-only, so
 /// this carries the key names a server expects and never a value. Hand-written
 /// like the other host-owned payloads: the wire shape belongs to this host, not
@@ -1430,6 +1471,37 @@ impl BridgeSupervisor {
             Some(&request_id),
         )?;
         let view: NetworkSettingsView = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn skills_settings(&self, workspace_root: &str) -> Result<SkillsSettingsView, String> {
+        let query = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("workspaceRoot", workspace_root)
+            .finish();
+        let response =
+            self.request_json("GET", &format!("/v1/settings/skills?{query}"), None, None)?;
+        let view: SkillsSettingsView = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn change_skills_settings(
+        &self,
+        change: SkillsSettingsChange,
+    ) -> Result<SkillsSettingsView, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/skills",
+            Some(json!(change)),
+            Some(&request_id),
+        )?;
+        let view: SkillsSettingsView = serde_json::from_value(response).map_err(display_error)?;
         if view.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }

@@ -3,7 +3,7 @@
 This inventory compares the stable desktop settings navigation in
 `desktop/frontend/src/components/SettingsNavigation.tsx` with the Tauri Preview
 settings in `desktop/frontend/src/tauri/TauriSettings.tsx`. It records what the
-Preview settings UI actually reads or changes as of 2026-09-27. “Not in settings”
+Preview settings UI actually reads or changes as of 2026-09-28. “Not in settings”
 does not imply that the Go runtime lacks the underlying capability.
 
 | Stable section | Tauri Preview status | Current behavior / missing work |
@@ -15,7 +15,7 @@ does not imply that the Go runtime lacks the underlying capability.
 | Bots | Not in settings | No Preview bot-management view or verified mutation contract. |
 | MCP and tools | Partial | Global and project MCP servers can be listed, added, edited, and deleted through the native bridge. Other stable tool settings are not represented. |
 | Remote SSH | Not in settings | No Preview remote-management view or verified host contract. |
-| Agent Skills | Not in settings | No Preview skill-management view or verified mutation contract. |
+| Agent Skills | Partial | Preview discovers skills and sources for the selected workspace using the same skill store as the core runtime. The authenticated bridge saves global automatic-invocation policy, per-name enablement, and source additions/removals/toggles; an idle current session can explicitly reload. Stable folder picker, per-root skill inventory, project-scoped edits, and dependency/availability diagnostics are not present. |
 | Subagents | Not in settings | No Preview subagent-management view or verified mutation contract. |
 | Plugins | Not in settings | No Preview plugin-management view or verified mutation contract. |
 | Memory | Not in settings | No Preview memory-management view or verified mutation contract. |

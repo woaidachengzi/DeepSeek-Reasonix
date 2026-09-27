@@ -330,6 +330,49 @@ export async function changeTauriNetworkSettings(change: TauriNetworkChange): Pr
   return invoke<TauriNetworkSettings>("change_network_settings", { change });
 }
 
+export interface TauriSkillItem {
+  name: string;
+  description: string;
+  invocation: string;
+  scope: string;
+  sourcePath: string;
+  runAs: string;
+  enabled: boolean;
+}
+
+export interface TauriSkillSource {
+  path: string;
+  scope: string;
+  status: string;
+  enabled: boolean;
+  configured: boolean;
+}
+
+export interface TauriSkillsSettings {
+  protocolVersion: number;
+  allowImplicitInvocation: boolean;
+  skills: TauriSkillItem[];
+  sources: TauriSkillSource[];
+}
+
+export interface TauriSkillsChange {
+  workspaceRoot: string;
+  action: "implicit" | "skill" | "source" | "add_source" | "remove_source";
+  enabled: boolean;
+  name: string;
+  path: string;
+}
+
+export async function tauriSkillsSettings(workspaceRoot = ""): Promise<TauriSkillsSettings> {
+  requireTauri();
+  return invoke<TauriSkillsSettings>("skills_settings", { workspaceRoot });
+}
+
+export async function changeTauriSkillsSettings(change: TauriSkillsChange): Promise<TauriSkillsSettings> {
+  requireTauri();
+  return invoke<TauriSkillsSettings>("change_skills_settings", { change });
+}
+
 export type TauriToolApprovalMode = "ask" | "auto" | "yolo";
 export interface TauriDesktopPreferences {
   protocolVersion: number;

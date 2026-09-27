@@ -667,6 +667,16 @@
 .tauri-network-secret, .tauri-network-inline { display: flex; width: min(440px, 100%); align-items: center; gap: 8px; }
 .tauri-network-secret .tauri-settings-input, .tauri-network-inline .tauri-settings-input { min-width: 0; flex: 1; }
 .tauri-network-inline .tauri-settings-input:last-child { max-width: 90px; }
+.tauri-skills-settings h3:not(:first-child) { margin-top: 30px; }
+.tauri-skills-list { display: grid; gap: 7px; max-height: 390px; overflow: auto; }
+.tauri-skills-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface); }
+.tauri-skills-item > div { display: grid; min-width: 0; flex: 1; gap: 3px; overflow-wrap: anywhere; }
+.tauri-skills-item strong { color: var(--fg); font-size: 12px; }
+.tauri-skills-item span, .tauri-skills-item small { color: var(--fg-faint); font-size: 11px; }
+.tauri-skills-item input { width: 16px; height: 16px; accent-color: var(--accent); }
+.tauri-skills-add { display: flex; gap: 8px; margin-top: 12px; }
+.tauri-skills-add .tauri-settings-input { min-width: 0; width: min(100%, 400px); }
+.tauri-skills-search { width: min(100%, 360px); margin-bottom: 12px; }
 @media (max-width: 1050px) { .tauri-permissions-rules { grid-template-columns: 1fr; } .tauri-permissions-rule-card p { min-height: 0; } }
 .tauri-settings-model-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tauri-settings-model-header strong { color: var(--fg); font-size: 12px; }
