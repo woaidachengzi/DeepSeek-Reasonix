@@ -467,6 +467,8 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("POST /v1/settings/skills", b.authorized(b.idempotent(64<<10, b.changeSkillsSettings)))
 	mux.HandleFunc("GET /v1/settings/subagents", b.authorized(b.subagentSettings))
 	mux.HandleFunc("POST /v1/settings/subagents", b.authorized(b.idempotent(64<<10, b.changeSubagentSettings)))
+	mux.HandleFunc("GET /v1/settings/hooks", b.authorized(b.hooksSettings))
+	mux.HandleFunc("POST /v1/settings/hooks", b.authorized(b.idempotent(64<<10, b.changeHooksSettings)))
 	mux.HandleFunc("POST /v1/settings/default-model", b.authorized(b.idempotent(64<<10, b.setDefaultModel)))
 	mux.HandleFunc("GET /v1/settings/desktop", b.authorized(b.desktopPreferences))
 	mux.HandleFunc("POST /v1/settings/desktop/approval", b.authorized(b.idempotent(64<<10, b.setDesktopApproval)))
@@ -630,7 +632,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "provider_summary", "provider_configs", "save_provider_config", "usage_stats", "permission_settings", "set_permission_settings", "sandbox_settings", "set_sandbox_settings", "network_settings", "set_network_settings", "skills_settings", "set_skills_settings", "subagent_settings", "set_subagent_settings", "set_default_model", "desktop_preferences", "set_desktop_approval", "set_provider_key", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "session_scan_import_review_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "provider_configs", "save_provider_config", "usage_stats", "permission_settings", "set_permission_settings", "sandbox_settings", "set_sandbox_settings", "network_settings", "set_network_settings", "skills_settings", "set_skills_settings", "subagent_settings", "set_subagent_settings", "hooks_settings", "set_hooks_settings", "set_default_model", "desktop_preferences", "set_desktop_approval", "set_provider_key", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "session_scan_import_review_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
 	})
 }
 
@@ -793,6 +795,33 @@ func (b *bridgeServer) changeSubagentSettings(w http.ResponseWriter, r *http.Req
 	view, err := persistSubagentSettings(change)
 	if err != nil {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "subagent settings could not be saved")
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (b *bridgeServer) hooksSettings(w http.ResponseWriter, r *http.Request) {
+	view, err := loadHooksSettings(r.URL.Query().Get("scope"), r.URL.Query().Get("workspaceRoot"))
+	if err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "unable to read Preview hooks settings")
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (b *bridgeServer) changeHooksSettings(w http.ResponseWriter, r *http.Request) {
+	var change previewHooksSettingsChange
+	if err := decodeJSONBody(w, r, 64<<10, &change); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid hooks settings request")
+		return
+	}
+	view, err := persistHooksSettings(change)
+	if err != nil {
+		if errors.Is(err, errHooksSettingsConflict) {
+			writeProtocolError(w, http.StatusConflict, "conflict", err.Error())
+		} else {
+			writeProtocolError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, view)

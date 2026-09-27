@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
-import { Check, ArrowLeft, Search, Keyboard, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, Type, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles, Users } from "lucide-react";
+import { Check, ArrowLeft, Search, Keyboard, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, Type, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles, Users, Webhook } from "lucide-react";
 import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, tauriDesktopPreferences, setTauriDesktopApproval, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
 import { THEME_STYLES, type Theme, type ThemeStyle } from "../lib/theme";
 import { applyConversationWidth, getCachedConversationWidth, type ConversationWidth } from "../lib/conversationWidth";
@@ -13,6 +13,7 @@ import { TauriSandboxSettings } from "./TauriSandboxSettings";
 import { TauriNetworkSettings } from "./TauriNetworkSettings";
 import { TauriSkillsSettings } from "./TauriSkillsSettings";
 import { TauriSubagentSettings } from "./TauriSubagentSettings";
+import { TauriHooksSettings } from "./TauriHooksSettings";
 import { getTauriNotificationsEnabled, setTauriNotificationsEnabled, getTauriProgressMode, setTauriProgressMode, type TauriProgressMode } from "./tauriPreferences";
 import { getSuccessPreference, setSuccessPreference, getAttentionPreference, setAttentionPreference, getNotificationVolume, setNotificationVolume, playSuccessChime, playAttentionChime, type SoundWavPref } from "../lib/sound";
 
@@ -39,7 +40,7 @@ interface TauriSettingsProps {
   onRefreshCatalogAudit?: () => Promise<void>;
 }
 
-export type TauriSettingsTab = "general" | "appearance" | "model" | "providers" | "stats" | "mcp" | "skills" | "subagents" | "permissions" | "sandbox" | "network" | "diagnostics" | "data" | "shortcuts" | "about";
+export type TauriSettingsTab = "general" | "appearance" | "model" | "providers" | "stats" | "mcp" | "skills" | "subagents" | "hooks" | "permissions" | "sandbox" | "network" | "diagnostics" | "data" | "shortcuts" | "about";
 
 const TauriUsageStatsPanel = lazy(() => import("../components/UsageStatsPanel").then(module => ({ default: module.UsageStatsPanel })));
 
@@ -57,7 +58,7 @@ const SETTINGS_GROUPS = [
     { id: "sandbox", label: "沙盒", description: "命令隔离与文件写入范围", icon: Box },
     { id: "network", label: "网络", description: "代理与直连设置", icon: Globe },
   ] },
-  { label: "运行与诊断", items: [{ id: "diagnostics", label: "运行诊断", description: "桥接状态与会话目录检查", icon: Activity }] },
+  { label: "自动化与开发者", items: [{ id: "hooks", label: "Hooks", description: "管理事件触发的本地命令", icon: Webhook }, { id: "diagnostics", label: "运行诊断", description: "桥接状态与会话目录检查", icon: Activity }] },
   { label: "应用", items: [
     { id: "appearance", label: "外观", description: "主题、阅读布局与字体", icon: Palette },
     { id: "shortcuts", label: "快捷键", description: "查看键盘操作", icon: Keyboard },
@@ -74,6 +75,7 @@ const SETTINGS_TITLES: Record<TauriSettingsTab, { title: string; description: st
   mcp: { title: "MCP 与工具", description: "连接并管理工作区可用的工具。" },
   skills: { title: "Agent Skills", description: "管理当前工作区可发现的技能与来源。" },
   subagents: { title: "子智能体", description: "管理子智能体的运行默认值与按名称覆盖。" },
+  hooks: { title: "Hooks", description: "配置会话与工具事件触发时运行的本地命令。" },
   permissions: { title: "权限", description: "设置工具的默认写入决策和规则。" },
   sandbox: { title: "沙盒", description: "设置命令隔离、网络访问和文件写入范围。" },
   network: { title: "网络", description: "设置 Preview 普通 HTTP 请求的代理方式。" },
@@ -300,6 +302,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
             {tab === "mcp" && <TauriMCPSettings workspaceRoot={workspaceRoot} />}
             {tab === "skills" && <TauriSkillsSettings workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "subagents" && <TauriSubagentSettings workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
+            {tab === "hooks" && <TauriHooksSettings workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "permissions" && <TauriPermissionsSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "sandbox" && <TauriSandboxSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "network" && <TauriNetworkSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}

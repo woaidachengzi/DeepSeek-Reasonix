@@ -413,6 +413,33 @@ export async function changeTauriSubagentSettings(change: TauriSubagentChange): 
   return invoke<TauriSubagentSettings>("change_subagent_settings", { change });
 }
 
+export interface TauriHooksSettings {
+  protocolVersion: number;
+  scope: "global" | "project";
+  path: string;
+  projectRoot: string;
+  revision: string;
+  hooks: Record<string, unknown>;
+  events: string[];
+}
+
+export interface TauriHooksChange {
+  scope: "global" | "project";
+  workspaceRoot: string;
+  revision: string;
+  hooks: Record<string, unknown>;
+}
+
+export async function tauriHooksSettings(scope: "global" | "project", workspaceRoot = ""): Promise<TauriHooksSettings> {
+  requireTauri();
+  return invoke<TauriHooksSettings>("hooks_settings", { scope, workspaceRoot });
+}
+
+export async function changeTauriHooksSettings(change: TauriHooksChange): Promise<TauriHooksSettings> {
+  requireTauri();
+  return invoke<TauriHooksSettings>("change_hooks_settings", { change });
+}
+
 export type TauriToolApprovalMode = "ask" | "auto" | "yolo";
 export interface TauriDesktopPreferences {
   protocolVersion: number;

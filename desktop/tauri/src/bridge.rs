@@ -591,7 +591,29 @@ pub struct SubagentSettingsView {
     pub max_concurrency: i32,
     pub max_parallel_writers: i32,
     pub model_refs: Vec<String>,
+    pub model_efforts: std::collections::HashMap<String, Vec<String>>,
     pub profiles: Vec<SubagentProfileView>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HooksSettingsView {
+    pub protocol_version: u64,
+    pub scope: String,
+    pub path: String,
+    pub project_root: String,
+    pub revision: String,
+    pub hooks: Value,
+    pub events: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HooksSettingsChange {
+    pub scope: String,
+    pub workspace_root: String,
+    pub revision: String,
+    pub hooks: Value,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1572,6 +1594,42 @@ impl BridgeSupervisor {
             Some(&request_id),
         )?;
         let view: SubagentSettingsView = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn hooks_settings(
+        &self,
+        scope: &str,
+        workspace_root: &str,
+    ) -> Result<HooksSettingsView, String> {
+        let query = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("scope", scope)
+            .append_pair("workspaceRoot", workspace_root)
+            .finish();
+        let response =
+            self.request_json("GET", &format!("/v1/settings/hooks?{query}"), None, None)?;
+        let view: HooksSettingsView = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn change_hooks_settings(
+        &self,
+        change: HooksSettingsChange,
+    ) -> Result<HooksSettingsView, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/hooks",
+            Some(json!(change)),
+            Some(&request_id),
+        )?;
+        let view: HooksSettingsView = serde_json::from_value(response).map_err(display_error)?;
         if view.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
@@ -2809,11 +2867,12 @@ mod tests {
         validate_pending_session_deletes_page, validate_pending_session_title_recoveries,
         validate_session_directory_page, validate_session_directory_snapshot, verify_bridge_health,
         verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSupervisor,
-        EventStreamError, OpenSessionRequest, PendingSessionDelete,
+        EventStreamError, HooksSettingsView, OpenSessionRequest, PendingSessionDelete,
         PendingSessionDeletesPageResponse, PendingSessionTitleRecoveriesResponse,
         PendingSessionTitleRecovery, RenameSessionRequest, SessionCatalogMetadata,
         SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage,
-        SessionInventoryResponse, SessionRequest, SubmitRequest, PROTOCOL_VERSION,
+        SessionInventoryResponse, SessionRequest, SubagentSettingsView, SubmitRequest,
+        PROTOCOL_VERSION,
     };
     use crate::{session_shadow, workbench_catalog::WorkbenchSession};
     use serde_json::json;
@@ -2826,6 +2885,32 @@ mod tests {
         thread,
         time::Duration,
     };
+
+    #[test]
+    fn settings_wire_views_preserve_model_efforts_and_hooks() {
+        let subagents: SubagentSettingsView = serde_json::from_value(json!({
+            "protocolVersion": 1, "defaultModel": "local/chat", "subagentModel": "",
+            "subagentEffort": "", "maxDepth": 2, "maxConcurrency": 6,
+            "maxParallelWriters": 3, "modelRefs": ["local/chat"],
+            "modelEfforts": {"local/chat": ["auto", "low"]}, "profiles": []
+        }))
+        .unwrap();
+        assert_eq!(subagents.model_efforts["local/chat"], ["auto", "low"]);
+        assert!(serde_json::to_value(subagents)
+            .unwrap()
+            .get("modelEfforts")
+            .is_some());
+
+        let hooks: HooksSettingsView = serde_json::from_value(json!({
+            "protocolVersion": 1, "scope": "project", "path": "/tmp/p/.reasonix/settings.json",
+            "projectRoot": "/tmp/p", "revision": "abc",
+            "hooks": {"Stop": [{"command": "echo done", "env": {"X": "1"}}]},
+            "events": ["Stop"]
+        }))
+        .unwrap();
+        assert_eq!(hooks.hooks["Stop"][0]["env"]["X"], "1");
+        assert!(serde_json::to_value(hooks).unwrap().get("hooks").is_some());
+    }
 
     // Local `cargo test` has no built Go bridge, so the supervised lifecycle
     // tests are opt-in there. CI must provide the path: a missing binary fails
