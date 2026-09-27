@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 
 const dom = new JSDOM("<!doctype html><html><body><div id='root'></div></body></html>", { url: "http://localhost/", pretendToBeVisual: true });
-Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, Event: dom.window.Event, MouseEvent: dom.window.MouseEvent, IS_REACT_ACT_ENVIRONMENT: true });
+Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, Event: dom.window.Event, MouseEvent: dom.window.MouseEvent, localStorage: dom.window.localStorage, IS_REACT_ACT_ENVIRONMENT: true });
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
 (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri = true;
 (dom.window as unknown as { __TAURI__?: unknown }).__TAURI__ = { core: { invoke: () => Promise.resolve(null) } };
@@ -226,8 +226,10 @@ await act(async () => { root.unmount(); });
   { sessions: [{ sessionId: "before-race", title: "审计时的身份页" }], nextCursor: null, total: 1, source: "identity" },
   { sessions: [{ sessionId: "after-race", title: "漂移后的兼容页" }], nextCursor: null, total: 1, source: "legacy" },
 ];
+localStorage.setItem("reasonix.tauri.default-workspace.v1", "/work/persisted");
 root = createRoot(document.getElementById("root")!);
 await act(async () => { root.render(React.createElement(TauriSessionApp)); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.match(document.querySelector(".tauri-workspace-button")?.textContent ?? "", /\/work\/persisted/, "a new Preview window restores the saved default workspace");
 await act(async () => {
   document.querySelector<HTMLButtonElement>(".tauri-sidebar__new")?.click();
   const textarea = document.querySelector<HTMLTextAreaElement>(".tauri-composer textarea");
@@ -239,6 +241,7 @@ await act(async () => {
   await new Promise(resolve => setTimeout(resolve, 0));
 });
 assert.match(document.body.textContent ?? "", /漂移后的兼容页/);
+assert.ok(calls.some(call => call.name === "bridge_switch_session" && call.args.workspaceRoot === "/work/persisted"), "sidebar New uses the saved default workspace on first Send");
 assert.doesNotMatch(document.body.textContent ?? "", /审计时的身份页/);
 assert.match(document.body.textContent ?? "", /最多 50 条/);
 assert.ok(document.querySelector<HTMLButtonElement>('[aria-label="重新检查会话目录"]'));
@@ -312,5 +315,28 @@ await act(async () => {
 });
 assert.match(document.body.textContent ?? "", /加载完成的会话/);
 assert.doesNotMatch(document.body.textContent ?? "", /正在加载对话/);
+await act(async () => { root.unmount(); });
+
+// The native picker and Storage page edit a Preview-only default used by New.
+localStorage.removeItem("reasonix.tauri.default-workspace.v1");
+(globalThis as unknown as { __chosenWorkspaceRoot: string }).__chosenWorkspaceRoot = "/work/chosen";
+(globalThis as unknown as { __workbenchPages: unknown[] }).__workbenchPages = [
+  { sessions: [], nextCursor: null, total: 0, source: "identity" },
+];
+root = createRoot(document.getElementById("root")!);
+await act(async () => { root.render(React.createElement(TauriSessionApp)); await new Promise(resolve => setTimeout(resolve, 0)); });
+await act(async () => { document.querySelector<HTMLButtonElement>(".tauri-workspace-button")?.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.equal(localStorage.getItem("reasonix.tauri.default-workspace.v1"), "/work/chosen", "native workspace selection persists the Preview default");
+(globalThis as unknown as { __unavailableWorkspaceRoots: string[] }).__unavailableWorkspaceRoots = ["/work/chosen"];
+await act(async () => { document.querySelector<HTMLButtonElement>(".tauri-sidebar__diagnostics")?.click(); });
+await act(async () => { [...document.querySelectorAll<HTMLButtonElement>(".tauri-settings-nav-item")].find(button => button.textContent?.trim() === "存储")?.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.equal(document.querySelector<HTMLInputElement>('input[aria-label="新对话默认工作区"]')?.value, "/work/chosen", "Storage shows the saved default");
+assert.match(document.querySelector(".tauri-storage-path__warning")?.textContent ?? "", /文件夹当前不可用/, "Storage warns when the saved folder is unavailable");
+await act(async () => { [...document.querySelectorAll<HTMLButtonElement>(".tauri-storage-path__select")].find(button => button.textContent === "清除")?.click(); });
+assert.equal(localStorage.getItem("reasonix.tauri.default-workspace.v1"), null, "Storage can clear the default workspace");
+(globalThis as unknown as { __unavailableWorkspaceRoots: string[] }).__unavailableWorkspaceRoots = [];
+(globalThis as unknown as { __chosenWorkspaceRoot: string }).__chosenWorkspaceRoot = "/work/restored";
+await act(async () => { [...document.querySelectorAll<HTMLButtonElement>(".tauri-storage-path__select")].find(button => button.textContent === "选择")?.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.equal(localStorage.getItem("reasonix.tauri.default-workspace.v1"), "/work/restored", "Storage can select another default workspace");
 await act(async () => { root.unmount(); });
 console.log("tauri project navigation and legacy title backfill: OK");

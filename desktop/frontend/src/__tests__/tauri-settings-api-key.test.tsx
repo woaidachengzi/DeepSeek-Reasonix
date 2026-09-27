@@ -247,7 +247,8 @@ assert.equal(copiedPath, "/preview/state", "storage path copy uses the displayed
 failStorage = true;
 await act(async () => { document.querySelector<HTMLButtonElement>('.tauri-storage-settings .tauri-settings-data__heading button')?.click(); });
 assert.match(document.querySelector('.tauri-storage-settings [role="alert"]')?.textContent ?? "", /storage unavailable/, "storage refresh exposes bridge failures");
-assert.equal(document.querySelector('.tauri-storage-paths'), null, "failed refresh does not leave stale directories");
+assert.equal(document.querySelector<HTMLInputElement>('input[aria-label="状态目录"]'), null, "failed refresh does not leave stale core directories");
+assert.ok(document.querySelector<HTMLInputElement>('input[aria-label="新对话默认工作区"]'), "the local default workspace remains editable when the core directory query fails");
 await act(async () => { document.querySelector<HTMLButtonElement>('.tauri-storage-settings .tauri-settings-data__heading button')?.click(); });
 assert.equal(document.querySelector<HTMLInputElement>('input[aria-label="状态目录"]')?.value, "/preview/state", "storage paths recover after retry");
 assert.match(visibleText(), /\/preview\/home/, "data settings show the isolated preview directory");

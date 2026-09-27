@@ -15,6 +15,7 @@ import { detectShortcutPlatform, formatShortcutCombo } from "../lib/keyboardShor
 import { defaultTauriShortcut, matchesTauriShortcut, useTauriShortcuts } from "./tauriKeyboardShortcuts";
 import { TauriStatusBar } from "./TauriStatusBar";
 import { useTauriDesktopLayout } from "./tauriDesktopLayout";
+import { getTauriDefaultWorkspace, setTauriDefaultWorkspace } from "./tauriDefaultWorkspace";
 import { observeTauriUsage, type TauriObservedUsage } from "./tauriObservedUsage";
 import { getTauriNotificationsEnabled, getTauriProgressMode, TAURI_PROGRESS_MODE_CHANGED } from "./tauriPreferences";
 import { handleTauriDragDropEvent, retainTauriDragDropListener } from "./dragDrop";
@@ -392,7 +393,8 @@ export function TauriSessionPreview() {
   const [workspaceAvailability, setWorkspaceAvailability] = useState<Record<string, boolean | null>>({});
   const [collapsedProjects, setCollapsedProjects] = useState<Record<string, boolean>>(loadCollapsedProjectGroups);
   const [sessionSearch, setSessionSearch] = useState("");
-  const [workspaceRoot, setWorkspaceRoot] = useState("");
+  const [defaultWorkspace, setDefaultWorkspace] = useState(getTauriDefaultWorkspace);
+  const [workspaceRoot, setWorkspaceRoot] = useState(getTauriDefaultWorkspace);
   const [editingProjectRoot, setEditingProjectRoot] = useState<string | null>(null);
   const [projectTitleDraft, setProjectTitleDraft] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -1501,7 +1503,7 @@ export function TauriSessionPreview() {
     }
   }
 
-  function createSession(root = workspaceRoot) {
+  function createSession(root = defaultWorkspace) {
     if (isReadOnlyWorkbenchSource(sessionPageSource)) {
       setError("当前会话目录为只读来源；重新检查并核验通过后才能新建会话。");
       return;
@@ -1530,23 +1532,37 @@ export function TauriSessionPreview() {
     composerRef.current?.focus();
   }
 
-  async function chooseWorkspaceRoot() {
-    if (busy) return;
+  async function chooseDefaultWorkspace(): Promise<string | null> {
+    if (busy) return null;
     setBusy(true);
     setError("");
     try {
       const selected = await chooseTauriWorkspaceRoot();
       if (selected) {
+        setTauriDefaultWorkspace(selected);
+        setDefaultWorkspace(selected);
         setWorkspaceRoot(selected);
-        const result = await rememberTauriWorkbenchProjectFolder(selected);
-        setProjectFolders(result.folders.map(folder => ({ root: folder.root, title: folder.title })));
-        setProjectFoldersWarning(result.warning ?? "");
+        try {
+          const result = await rememberTauriWorkbenchProjectFolder(selected);
+          setProjectFolders(result.folders.map(folder => ({ root: folder.root, title: folder.title })));
+          setProjectFoldersWarning(result.warning ?? "");
+        } catch (cause) {
+          setProjectFoldersWarning(`默认工作区已保存，但项目列表未更新：${tauriMessageFrom(cause)}`);
+        }
       }
+      return selected;
     } catch (cause) {
       setError(tauriMessageFrom(cause));
+      throw cause;
     } finally {
       setBusy(false);
     }
+  }
+
+  function clearDefaultWorkspace() {
+    setTauriDefaultWorkspace("");
+    setDefaultWorkspace("");
+    if (!session) setWorkspaceRoot("");
   }
 
   async function saveProjectTitle(root: string) {
@@ -2256,7 +2272,7 @@ export function TauriSessionPreview() {
             <span data-tauri-drag-region>{session?.state === "running" ? "正在生成" : session?.state === "paused" ? "等待你的操作" : session ? "本地会话" : "Reasonix Preview"}</span>
           </div>
           <div className="tauri-topbar__actions">
-            <button type="button" className="tauri-workspace-button" onClick={() => void chooseWorkspaceRoot()} disabled={busy || session?.state === "running"} title={currentWorkspace ? `新对话默认工作区：${currentWorkspace}` : "选择工作区（用于新对话）"}>
+            <button type="button" className="tauri-workspace-button" onClick={() => { void chooseDefaultWorkspace().catch(() => {}); }} disabled={busy || session?.state === "running"} title={defaultWorkspace ? `新对话默认工作区：${defaultWorkspace}` : "选择工作区（用于新对话）"}>
               <FolderOpen size={15} /><span>{currentWorkspace || "选择工作区"}</span><ChevronDown size={13} />
             </button>
             <button type="button" className="tauri-icon-button tauri-workspace-tree-button" aria-label="浏览工作区文件" title="浏览工作区文件" onClick={toggleWorkspace} disabled={busy || !session}>
@@ -2324,7 +2340,7 @@ export function TauriSessionPreview() {
             <textarea ref={composerRef} value={prompt} onChange={event => setPrompt(event.target.value)} onKeyDown={event => {
               if (matchesTauriShortcut(event.nativeEvent, "send_message", detectShortcutPlatform())) { event.preventDefault(); void submit(); }
             }} placeholder={session?.state === "paused" ? "请先完成上方确认…" : session ? `继续聊聊你的问题…（${sendShortcutLabel} 发送）` : `输入问题，开始新对话…（${sendShortcutLabel} 发送）`} disabled={session?.state === "paused"} rows={3} />
-            <div className="tauri-composer__bottom"><span>{session?.workspaceRoot ? `当前对话工作区 · ${session.workspaceRoot}` : session ? "当前对话使用默认工作区" : currentWorkspace ? `新对话默认工作区 · ${currentWorkspace}` : "Preview 配置与稳定版相互隔离"}</span>
+            <div className="tauri-composer__bottom"><span>{session?.workspaceRoot ? `当前对话工作区 · ${session.workspaceRoot}` : session ? "当前对话使用默认工作区" : currentWorkspace ? `${currentWorkspace === defaultWorkspace ? "新对话默认工作区" : "新对话工作区"} · ${currentWorkspace}` : "Preview 配置与稳定版相互隔离"}</span>
               <div className="tauri-composer__actions">
                 <button className="tauri-attach-button" type="button" onClick={() => void addAttachments()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state !== "idle"))} aria-label="添加文件" title="从本机选择文件并附加到消息"><Paperclip size={16} /><span>添加文件</span></button>
                 {session?.state === "running" ? <button className="tauri-send-button is-stop" type="button" onClick={() => void cancel()} disabled={busy} aria-label="停止生成"><Square size={15} fill="currentColor" /></button> : <button className="tauri-send-button" type="button" onClick={() => void submit()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state === "paused")) || (!prompt.trim() && attachments.length === 0 && draftAttachmentPaths.length === 0)} aria-label="发送消息"><ArrowUp size={18} /></button>}
@@ -2387,7 +2403,7 @@ export function TauriSessionPreview() {
               </> : <p>{catalogAuditError || "正在分页读取身份目录并与旧目录比较…"}</p>}
               {profile?.managedProfile && <button type="button" className="tauri-diagnostic-action" onClick={() => void openScanImportReview()} disabled={busy || scanImportLoading}>扫描并审核未认领 transcript</button>}
             </section>
-            <section className="tauri-diagnostic-card"><h3>预览配置</h3><p>配置与会话保存在独立 Preview 目录，导入与备份入口位于设置的数据页。</p><button type="button" className="tauri-diagnostic-action" onClick={() => { setDiagnosticsOpen(false); setSettingsTab("data"); setSettingsOpen(true); }}>打开数据设置</button></section>
+            <section className="tauri-diagnostic-card"><h3>预览配置</h3><p>配置与会话保存在独立 Preview 目录，导入与备份入口位于设置的存储页。</p><button type="button" className="tauri-diagnostic-action" onClick={() => { setDiagnosticsOpen(false); setSettingsTab("data"); setSettingsOpen(true); }}>打开存储设置</button></section>
             <section className="tauri-diagnostic-card">
               <div className="tauri-diagnostic-card__heading"><h3>模型提供方</h3><button type="button" onClick={() => void tauriProviderSummary().then(setProviderSummary).catch(cause => setError(tauriMessageFrom(cause)))} disabled={busy}>刷新</button></div>
               {!providerSummary ? <p>正在读取 Preview 配置…</p> : <><p>默认模型只影响新对话；工作区 <code>reasonix.toml</code> 可能覆盖用户默认值。</p>{providerSummary.providers.length === 0 ? <p>当前没有配置提供方。</p> : <ul>{providerSummary.providers.map(provider => <li key={provider.name}><strong>{provider.displayName || provider.name}</strong><span>{provider.kind} · {provider.modelCount} 个模型 · {provider.configured ? "已就绪" : "缺少 API Key"}</span></li>)}</ul>}<small>密钥、环境变量名和服务端点不会传到界面。</small></>}
@@ -2452,7 +2468,7 @@ export function TauriSessionPreview() {
         </aside>
       </>}
 
-      {settingsOpen && <TauriSettings initialTab={settingsTab} workspaceRoot={currentWorkspace || undefined} profile={profile} importBusy={busy} bridgeStatus={status} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={error} onRestartBridge={restartBridge} onRefreshCatalogAudit={() => refreshCatalogAudit()} onRefreshProfile={refreshProfile} onImportStableProfile={importStableProfile} onImportStableProjectFolders={importStableProjectFolders} onScanUnclaimedSessions={() => void openScanImportReview()} onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionState={session?.state} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} />}
+      {settingsOpen && <TauriSettings initialTab={settingsTab} workspaceRoot={currentWorkspace || undefined} defaultWorkspace={defaultWorkspace} onChooseDefaultWorkspace={chooseDefaultWorkspace} onClearDefaultWorkspace={clearDefaultWorkspace} profile={profile} importBusy={busy} bridgeStatus={status} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={error} onRestartBridge={restartBridge} onRefreshCatalogAudit={() => refreshCatalogAudit()} onRefreshProfile={refreshProfile} onImportStableProfile={importStableProfile} onImportStableProjectFolders={importStableProjectFolders} onScanUnclaimedSessions={() => void openScanImportReview()} onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionState={session?.state} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} />}
     </main>
   );
 }

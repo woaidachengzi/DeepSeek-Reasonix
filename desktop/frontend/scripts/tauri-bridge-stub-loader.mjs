@@ -109,7 +109,7 @@ export function importTauriStableProjectFolders() {
   record("import_stable_project_folders");
   return Promise.resolve({ importedFile: "/tmp/desktop-projects.json", projectCount: 0 });
 }
-export function chooseTauriWorkspaceRoot() { return Promise.resolve(null); }
+export function chooseTauriWorkspaceRoot() { record("choose_workspace_root"); return Promise.resolve(globalThis.__chosenWorkspaceRoot ?? null); }
 export function chooseTauriSkillSourceDirectory() { return Promise.resolve(null); }
 export function chooseTauriAttachmentFiles() { return Promise.resolve([]); }
 

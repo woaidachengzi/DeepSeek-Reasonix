@@ -33,6 +33,9 @@ interface TauriSettingsProps {
   currentSessionHasAttachments?: boolean;
   onApplyToCurrentSession?: () => Promise<boolean>;
   workspaceRoot?: string;
+  defaultWorkspace?: string;
+  onChooseDefaultWorkspace?: () => Promise<string | null>;
+  onClearDefaultWorkspace?: () => void;
   initialTab?: TauriSettingsTab;
   profile?: TauriPreviewProfileStatus | null;
   onRefreshProfile?: () => Promise<void>;
@@ -146,7 +149,7 @@ const MONO_FONT_LABELS: Record<MonoFontFamily, string> = {
   custom: "自定义等宽字体",
 };
 
-export function TauriSettings({ onClose, onProviderSummaryChange, currentSessionState, currentSessionHasAttachments, onApplyToCurrentSession, workspaceRoot, initialTab = "general", profile, onRefreshProfile, onImportStableProfile, onImportStableProjectFolders, onScanUnclaimedSessions, importBusy, bridgeStatus, catalogAudit, catalogAuditError, sessionPageSource, hostError, onRestartBridge, onRefreshCatalogAudit }: TauriSettingsProps) {
+export function TauriSettings({ onClose, onProviderSummaryChange, currentSessionState, currentSessionHasAttachments, onApplyToCurrentSession, workspaceRoot, defaultWorkspace, onChooseDefaultWorkspace, onClearDefaultWorkspace, initialTab = "general", profile, onRefreshProfile, onImportStableProfile, onImportStableProjectFolders, onScanUnclaimedSessions, importBusy, bridgeStatus, catalogAudit, catalogAuditError, sessionPageSource, hostError, onRestartBridge, onRefreshCatalogAudit }: TauriSettingsProps) {
   const desktopLayout = useTauriDesktopLayout();
   const [tab, setTab] = useState<TauriSettingsTab>(initialTab);
   const [navQuery, setNavQuery] = useState("");
@@ -351,7 +354,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
             {tab === "sandbox" && <TauriSandboxSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "network" && <TauriNetworkSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "diagnostics" && <DiagnosticsSettings bridgeStatus={bridgeStatus} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={hostError} busy={Boolean(importBusy)} onRestartBridge={onRestartBridge} onRefreshCatalogAudit={onRefreshCatalogAudit} onOpenData={() => setTab("data")} onOpenProviders={() => setTab("providers")} />}
-            {tab === "data" && <><TauriStorageSettings workspaceRoot={workspaceRoot} /><DataSettings profile={profile} busy={Boolean(importBusy)} onRefreshProfile={onRefreshProfile} onImportStableProfile={onImportStableProfile} onImportStableProjectFolders={onImportStableProjectFolders} onScanUnclaimedSessions={onScanUnclaimedSessions} onClose={onClose} /></>}
+            {tab === "data" && <><TauriStorageSettings workspaceRoot={workspaceRoot} defaultWorkspace={defaultWorkspace} onChooseDefaultWorkspace={onChooseDefaultWorkspace} onClearDefaultWorkspace={onClearDefaultWorkspace} /><DataSettings profile={profile} busy={Boolean(importBusy)} onRefreshProfile={onRefreshProfile} onImportStableProfile={onImportStableProfile} onImportStableProjectFolders={onImportStableProjectFolders} onScanUnclaimedSessions={onScanUnclaimedSessions} onClose={onClose} /></>}
             {tab === "about" && (aboutLoading ? <div className="tauri-settings-loading">加载中…</div> : <>{aboutLoadError && <SettingsLoadError onRetry={loadSettings} />}{runtimeInfo && <AboutSettings runtimeInfo={runtimeInfo} platform={platform} onRefresh={loadSettings} />}</>)}
           </>}
         </div>
