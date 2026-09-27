@@ -247,7 +247,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
     }
   };
 
-  const handleModelRoleChange = async (role: "planner" | "vision", model: string) => {
+  const handleModelRoleChange = async (role: "planner" | "vision" | "search", model: string) => {
     if (modelSaving) return;
     setModelSaving(true);
     setModelSaveError("");
@@ -583,7 +583,7 @@ function DiagnosticsSettings({ bridgeStatus, catalogAudit, catalogAuditError, se
 function ModelPreferenceSettings({ providerSummary, onModelChange, onRoleChange, saving, error, onOpenProviders }: {
   providerSummary: TauriProviderSummary;
   onModelChange: (model: string) => void;
-  onRoleChange: (role: "planner" | "vision", model: string) => void;
+  onRoleChange: (role: "planner" | "vision" | "search", model: string) => void;
   saving: boolean;
   error: string;
   onOpenProviders: () => void;
@@ -591,40 +591,61 @@ function ModelPreferenceSettings({ providerSummary, onModelChange, onRoleChange,
   const available = providerSummary.providers.filter(provider => provider.configured && provider.models.length > 0);
   const modelRefs = available.flatMap(provider => provider.models.map(model => `${provider.name}/${model}`));
   const visionRefs = available.flatMap(provider => provider.visionModels.map(model => `${provider.name}/${model}`));
+  const searchRefs = available.flatMap(provider => provider.searchModels.map(model => `${provider.name}/${model}`));
   const currentAvailable = modelRefs.includes(providerSummary.defaultModel);
   const plannerAvailable = !providerSummary.plannerModel || modelRefs.includes(providerSummary.plannerModel);
   const visionAvailable = !providerSummary.visionModel || providerSummary.visionModel === "auto" || visionRefs.includes(providerSummary.visionModel);
+  const searchAvailable = !providerSummary.webSearchModel || providerSummary.webSearchModel === "auto" || searchRefs.includes(providerSummary.webSearchModel);
+  const connection = (ref: string, ready: boolean, empty: string) => {
+    if (!ref) return empty;
+    if (ref === "auto") return "自动选择";
+    if (!ready) return "连接不可用";
+    const provider = available.find(item => ref.startsWith(`${item.name}/`));
+    return provider?.displayName || provider?.name || "连接不可用";
+  };
   return <div className="tauri-settings-section tauri-model-settings">
-    <h3>新对话默认模型</h3>
+    <h3>模型分工</h3>
     <p>新会话读取 Preview 资料中的模型偏好。工作区的 <code>reasonix.toml</code> 可以覆盖这里的设置。</p>
     {available.length === 0 ? <div className="tauri-settings-empty">没有已就绪且提供模型列表的服务。请先配置模型服务。</div> : <>
-      <div className="tauri-settings-field">
+      <div className="tauri-model-settings__head" aria-hidden="true"><span>模型用途</span><span>使用模型</span><span>连接</span></div>
+      <div className="tauri-settings-field tauri-model-settings__row">
         <label className="tauri-settings-field-label" htmlFor="tauri-settings-default-model">默认模型<small>主会话运行任务时使用。</small></label>
         <select id="tauri-settings-default-model" className="tauri-settings-select" value={currentAvailable ? providerSummary.defaultModel : ""} disabled={saving} onChange={event => { if (event.target.value) onModelChange(event.target.value); }}>
           <option value="">选择模型…</option>
           {available.map(provider => <optgroup key={provider.name} label={provider.displayName || provider.name}>{provider.models.map(model => <option key={model} value={`${provider.name}/${model}`}>{model}</option>)}</optgroup>)}
         </select>
+        <span className="tauri-model-settings__connection">{connection(providerSummary.defaultModel, currentAvailable, "未指定")}</span>
       </div>
       {!currentAvailable && providerSummary.defaultModel && <p className="tauri-model-settings__stale">当前默认模型 {providerSummary.defaultModel} 暂不可用，请选择已就绪的模型。</p>}
-      <h3>模型分工</h3>
-      <p>规划与图片理解可使用独立模型；留空时遵循运行时默认行为。</p>
-      <div className="tauri-settings-field">
+      <div className="tauri-settings-field tauri-model-settings__row">
         <label className="tauri-settings-field-label" htmlFor="tauri-settings-planner-model">规划模型<small>用于 Plan、审批或目标启动时的规划步骤。</small></label>
         <select id="tauri-settings-planner-model" className="tauri-settings-select" value={providerSummary.plannerModel} disabled={saving} onChange={event => onRoleChange("planner", event.target.value)}>
           <option value="">不指定</option>
           {!plannerAvailable && <option value={providerSummary.plannerModel} disabled>{providerSummary.plannerModel}（不可用）</option>}
           {available.map(provider => <optgroup key={provider.name} label={provider.displayName || provider.name}>{provider.models.map(model => <option key={model} value={`${provider.name}/${model}`}>{model}</option>)}</optgroup>)}
         </select>
+        <span className="tauri-model-settings__connection">{connection(providerSummary.plannerModel, plannerAvailable, "跟随主会话")}</span>
       </div>
-      <div className="tauri-settings-field">
+      <div className="tauri-settings-field tauri-model-settings__row">
         <label className="tauri-settings-field-label" htmlFor="tauri-settings-vision-model">图片理解模型<small>当前模型无法处理图片时使用的备用模型。</small></label>
         <select id="tauri-settings-vision-model" className="tauri-settings-select" value={providerSummary.visionModel} disabled={saving} onChange={event => onRoleChange("vision", event.target.value)}>
           <option value="">不指定</option><option value="auto">自动选择</option>
           {!visionAvailable && <option value={providerSummary.visionModel} disabled>{providerSummary.visionModel}（不可用）</option>}
           {available.map(provider => provider.visionModels.length > 0 && <optgroup key={provider.name} label={provider.displayName || provider.name}>{provider.visionModels.map(model => <option key={model} value={`${provider.name}/${model}`}>{model}</option>)}</optgroup>)}
         </select>
+        <span className="tauri-model-settings__connection">{connection(providerSummary.visionModel, visionAvailable, "无")}</span>
       </div>
       {visionRefs.length === 0 && <p className="tauri-settings-hint">当前没有确认支持图片输入的已就绪模型；可以使用自动选择。</p>}
+      <div className="tauri-settings-field tauri-model-settings__row">
+        <label className="tauri-settings-field-label" htmlFor="tauri-settings-search-model">网页搜索模型<small>负责使用原生搜索协议获取网页来源。</small></label>
+        <select id="tauri-settings-search-model" className="tauri-settings-select" value={providerSummary.webSearchModel || "auto"} disabled={saving} onChange={event => onRoleChange("search", event.target.value)}>
+          <option value="auto">自动选择</option>
+          {!searchAvailable && <option value={providerSummary.webSearchModel} disabled>{providerSummary.webSearchModel}（不可用）</option>}
+          {available.map(provider => provider.searchModels.length > 0 && <optgroup key={provider.name} label={provider.displayName || provider.name}>{provider.searchModels.map(model => <option key={model} value={`${provider.name}/${model}`}>{model}</option>)}</optgroup>)}
+        </select>
+        <span className="tauri-model-settings__connection">{connection(providerSummary.webSearchModel || "auto", searchAvailable, "自动选择")}</span>
+      </div>
+      {searchRefs.length === 0 && <p className="tauri-settings-hint">当前没有已就绪且支持原生网页搜索的模型；自动模式仍会按运行时规则查找。</p>}
     </>}
     {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}
     <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" onClick={onOpenProviders}>管理模型服务</button></div>

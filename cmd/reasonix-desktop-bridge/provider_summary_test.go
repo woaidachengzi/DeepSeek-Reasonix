@@ -267,7 +267,7 @@ func TestModelRoleSettingsPersistWithCapabilityAndAccessChecks(t *testing.T) {
 future_root_option = "keep-root"
 
 [desktop]
-provider_access = ["local"]
+provider_access = ["local", "search"]
 
 [[providers]]
 name = "local"
@@ -285,6 +285,14 @@ base_url = "http://127.0.0.1:9124/v1"
 models = ["vision"]
 vision_models = ["vision"]
 default = "vision"
+
+[[providers]]
+name = "search"
+kind = "responses"
+base_url = "http://127.0.0.1:9125/v1"
+models = ["fast"]
+default = "fast"
+web_search = true
 `
 	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
 		t.Fatal(err)
@@ -310,6 +318,8 @@ default = "vision"
 		`{"role":"vision","model":"local/text"}`,
 		`{"role":"vision","model":"blocked/vision"}`,
 		`{"role":"planner","model":"blocked/vision"}`,
+		`{"role":"search","model":"local/text"}`,
+		`{"role":"search","model":"blocked/vision"}`,
 		`{"role":"other","model":"local/text"}`,
 	} {
 		if response := request(body, true); response.Code != http.StatusBadRequest {
@@ -319,6 +329,7 @@ default = "vision"
 	for _, body := range []string{
 		`{"role":"planner","model":"local/text"}`,
 		`{"role":"vision","model":"local/vision"}`,
+		`{"role":"search","model":"search/fast"}`,
 	} {
 		if response := request(body, true); response.Code != http.StatusOK {
 			t.Fatalf("save role %s = %d %s", body, response.Code, response.Body.String())
@@ -328,8 +339,8 @@ default = "vision"
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.Agent.PlannerModel != "local/text" || loaded.Agent.VisionModel != "local/vision" {
-		t.Fatalf("runtime role config: planner=%q vision=%q", loaded.Agent.PlannerModel, loaded.Agent.VisionModel)
+	if loaded.Agent.PlannerModel != "local/text" || loaded.Agent.VisionModel != "local/vision" || loaded.Agent.WebSearchModel != "search/fast" {
+		t.Fatalf("runtime role config: planner=%q vision=%q search=%q", loaded.Agent.PlannerModel, loaded.Agent.VisionModel, loaded.Agent.WebSearchModel)
 	}
 	stored, err := os.ReadFile(configPath)
 	if err != nil {
@@ -342,7 +353,7 @@ default = "vision"
 	if err != nil {
 		t.Fatal(err)
 	}
-	if summary.PlannerModel != "local/text" || summary.VisionModel != "local/vision" || len(summary.Providers) != 2 || !strings.EqualFold(strings.Join(summary.Providers[0].VisionModels, ","), "vision") || summary.Providers[1].Configured {
+	if summary.PlannerModel != "local/text" || summary.VisionModel != "local/vision" || summary.WebSearchModel != "search/fast" || len(summary.Providers) != 3 || !strings.EqualFold(strings.Join(summary.Providers[0].VisionModels, ","), "vision") || summary.Providers[1].Configured || strings.Join(summary.Providers[2].SearchModels, ",") != "fast" {
 		t.Fatalf("role summary: %#v", summary)
 	}
 	if response := request(`{"role":"vision","model":"auto"}`, true); response.Code != http.StatusOK {
@@ -350,6 +361,60 @@ default = "vision"
 	}
 	if response := request(`{"role":"planner","model":""}`, true); response.Code != http.StatusOK {
 		t.Fatalf("clear planner = %d %s", response.Code, response.Body.String())
+	}
+	if response := request(`{"role":"search","model":"auto"}`, true); response.Code != http.StatusOK {
+		t.Fatalf("automatic search = %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestSearchModelEditPreservesExistingComments(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	path := filepath.Join(home, "config.toml")
+	original := `# user's Preview configuration
+default_model = "search/fast"
+
+[agent]
+# keep search routing explanation
+web_search_model = "auto"
+future_agent_option = 42
+
+[[providers]]
+name = "search"
+kind = "responses"
+base_url = "http://127.0.0.1:9125/v1"
+api_key_env = "REASONIX_PREVIEW_SEARCH_TEST_KEY"
+models = ["fast"]
+default = "fast"
+web_search = true
+`
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".env"), []byte("REASONIX_PREVIEW_SEARCH_TEST_KEY=test-secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	summary, err := loadProviderSummary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summary.Providers) != 1 || !summary.Providers[0].Configured || strings.Join(summary.Providers[0].SearchModels, ",") != "fast" {
+		t.Fatalf("credential-backed search candidates: %#v", summary.Providers)
+	}
+	if encoded, err := json.Marshal(summary); err != nil || strings.Contains(string(encoded), "test-secret") {
+		t.Fatal("search summary exposed a credential")
+	}
+	if err := persistModelRole(setModelRoleRequest{Role: "search", Model: "search/fast"}); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"# user's Preview configuration", "# keep search routing explanation", "future_agent_option = 42", `web_search_model = "search/fast"`} {
+		if !strings.Contains(string(stored), want) {
+			t.Fatalf("search edit lost %q: %s", want, stored)
+		}
 	}
 }
 

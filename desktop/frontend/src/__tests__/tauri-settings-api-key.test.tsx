@@ -37,6 +37,7 @@ let approvalMode = "auto";
 let defaultModel = "";
 let plannerModel = "";
 let visionModel = "";
+let webSearchModel = "";
 const permissions = { protocolVersion: 1, mode: "ask", allow: [] as string[], ask: [] as string[], deny: [] as string[] };
 let sandbox = { protocolVersion: 1, bash: "enforce", network: true, workspaceRoot: "", allowWrite: [] as string[], platform: "darwin" };
 let network = { protocolVersion: 1, proxyMode: "auto", noProxy: "", proxyType: "socks5", proxyServer: "", proxyPort: 0, proxyUsername: "", proxyUrlSet: false, proxyPasswordSet: false };
@@ -54,7 +55,8 @@ const summary = () => ({
   defaultModel,
   plannerModel,
   visionModel,
-  providers: [{ name: "demo", displayName: "Demo", kind: "openai", modelCount: 1, models: ["m"], visionModels: ["m"], requiresKey: true, configured: keyPresent || envCredentialPresent }],
+  webSearchModel,
+  providers: [{ name: "demo", displayName: "Demo", kind: "openai", modelCount: 1, models: ["m"], visionModels: ["m"], searchModels: ["m"], requiresKey: true, configured: keyPresent || envCredentialPresent }],
 });
 
 (dom.window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
@@ -109,6 +111,7 @@ const summary = () => ({
       case "set_model_role": {
         if (args?.request?.role === "planner") plannerModel = args.request.model ?? "";
         if (args?.request?.role === "vision") visionModel = args.request.model ?? "";
+        if (args?.request?.role === "search") webSearchModel = args.request.model ?? "";
         return summary();
       }
       case "platform_info": return "darwin";
@@ -244,6 +247,10 @@ await act(async () => { plannerSelect.value = "demo/m"; plannerSelect.dispatchEv
 assert.equal(plannerModel, "demo/m", "planner model is persisted through the bridge");
 await act(async () => { visionSelect.value = "auto"; visionSelect.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
 assert.equal(visionModel, "auto", "vision routing is persisted through the bridge");
+const searchSelect = document.querySelector<HTMLSelectElement>("#tauri-settings-search-model");
+assert.ok(searchSelect, "web search has a model assignment control");
+await act(async () => { searchSelect.value = "demo/m"; searchSelect.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
+assert.equal(webSearchModel, "demo/m", "web search model is persisted through the bridge");
 await act(async () => { click("用量统计"); });
 assert.ok(document.querySelector(".usage-stats"), "Preview renders the stable usage chart panel");
 assert.ok(calls.includes("usage_stats"), "usage statistics read through the Tauri bridge");

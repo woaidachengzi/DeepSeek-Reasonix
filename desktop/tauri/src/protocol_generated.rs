@@ -151,6 +151,7 @@ pub struct BridgeProviderSummary {
     pub models: Vec<String>,
     pub name: String,
     pub requires_key: bool,
+    pub search_models: Vec<String>,
     pub vision_models: Vec<String>,
 }
 
@@ -162,6 +163,7 @@ pub struct BridgeProviderSummaryResponse {
     pub protocol_version: u64,
     pub providers: Vec<BridgeProviderSummary>,
     pub vision_model: String,
+    pub web_search_model: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

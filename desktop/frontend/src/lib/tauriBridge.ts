@@ -501,7 +501,7 @@ export async function setTauriDefaultModel(model: string): Promise<TauriProvider
   return invoke<TauriProviderSummary>("set_default_model", { request: { model } });
 }
 
-export async function setTauriModelRole(role: "planner" | "vision", model: string): Promise<TauriProviderSummary> {
+export async function setTauriModelRole(role: "planner" | "vision" | "search", model: string): Promise<TauriProviderSummary> {
   requireTauri();
   return invoke<TauriProviderSummary>("set_model_role", { request: { role, model } });
 }

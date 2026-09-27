@@ -14,6 +14,7 @@ type providerSummaryResponse struct {
 	DefaultModel    string                 `json:"defaultModel"`
 	PlannerModel    string                 `json:"plannerModel"`
 	VisionModel     string                 `json:"visionModel"`
+	WebSearchModel  string                 `json:"webSearchModel"`
 	Providers       []providerSummaryEntry `json:"providers"`
 }
 
@@ -23,6 +24,7 @@ type providerSummaryEntry struct {
 	Kind         string   `json:"kind"`
 	Models       []string `json:"models"`
 	VisionModels []string `json:"visionModels"`
+	SearchModels []string `json:"searchModels"`
 	ModelCount   int      `json:"modelCount"`
 	RequiresKey  bool     `json:"requiresKey"`
 	Configured   bool     `json:"configured"`
@@ -106,11 +108,15 @@ func loadProviderSummary() (providerSummaryResponse, error) {
 			models = []string{}
 		}
 		visionModels := make([]string, 0)
+		searchModels := make([]string, 0)
 		if configured {
 			for _, model := range models {
 				resolved, ok := cfg.ResolveModel(provider.Name + "/" + model)
 				if ok && visionResolver.Resolve(resolved).State == configpkg.CapabilitySupported {
 					visionModels = append(visionModels, model)
+				}
+				if _, err := cfg.ResolveWebSearchModel(provider.Name + "/" + model); err == nil {
+					searchModels = append(searchModels, model)
 				}
 			}
 		}
@@ -120,6 +126,7 @@ func loadProviderSummary() (providerSummaryResponse, error) {
 			Kind:         provider.Kind,
 			Models:       models,
 			VisionModels: visionModels,
+			SearchModels: searchModels,
 			ModelCount:   len(models),
 			RequiresKey:  requiresKey,
 			Configured:   configured,
@@ -131,12 +138,13 @@ func loadProviderSummary() (providerSummaryResponse, error) {
 		DefaultModel:    cfg.DefaultModel,
 		PlannerModel:    cfg.Agent.PlannerModel,
 		VisionModel:     cfg.Agent.VisionModel,
+		WebSearchModel:  cfg.Agent.WebSearchModel,
 		Providers:       providers,
 	}, nil
 }
 
 func persistModelRole(request setModelRoleRequest) error {
-	if request.Role != "planner" && request.Role != "vision" {
+	if request.Role != "planner" && request.Role != "vision" && request.Role != "search" {
 		return errDefaultModelUnavailable
 	}
 	ref := strings.TrimSpace(request.Model)
@@ -151,28 +159,52 @@ func persistModelRole(request setModelRoleRequest) error {
 		return fmt.Errorf("load Preview user config: %w", err)
 	}
 	baseline := cfg.ModelSettingsBaseline()
-	if ref != "" && !(request.Role == "vision" && strings.EqualFold(ref, "auto")) {
-		entry, ok := cfg.ResolveModel(ref)
-		if !ok || !providerAccessAllowed(cfg.Desktop.ProviderAccess, entry.Name) {
-			return errDefaultModelUnavailable
+	if ref != "" && !((request.Role == "vision" || request.Role == "search") && strings.EqualFold(ref, "auto")) {
+		if request.Role == "search" {
+			name, _, ok := strings.Cut(ref, "/")
+			if !ok || !providerAccessAllowed(cfg.Desktop.ProviderAccess, name) {
+				return errDefaultModelUnavailable
+			}
+			provider, ok := cfg.Provider(name)
+			if !ok {
+				return errDefaultModelUnavailable
+			}
+			provider.ResolveAPIKeyForRoot(".")
+			if _, err := cfg.ResolveWebSearchModel(ref); err != nil {
+				return errDefaultModelUnavailable
+			}
 		}
-		entry.ResolveAPIKeyForRoot(".")
-		if !entry.Configured() {
-			return errDefaultModelUnavailable
+		if request.Role != "search" {
+			entry, ok := cfg.ResolveModel(ref)
+			if !ok || !providerAccessAllowed(cfg.Desktop.ProviderAccess, entry.Name) {
+				return errDefaultModelUnavailable
+			}
+			entry.ResolveAPIKeyForRoot(".")
+			if !entry.Configured() {
+				return errDefaultModelUnavailable
+			}
+			if request.Role == "vision" && configpkg.NewModelCapabilityResolver().Resolve(entry).State != configpkg.CapabilitySupported {
+				return errDefaultModelUnavailable
+			}
+			ref = entry.Name + "/" + entry.Model
 		}
-		if request.Role == "vision" && configpkg.NewModelCapabilityResolver().Resolve(entry).State != configpkg.CapabilitySupported {
-			return errDefaultModelUnavailable
-		}
-		ref = entry.Name + "/" + entry.Model
 	}
 	if request.Role == "planner" {
 		// Desktop supports an explicit model ref for the planner role.
 		cfg.Agent.PlannerModel = ref
-	} else {
+	} else if request.Role == "vision" {
 		if strings.EqualFold(ref, "auto") {
 			ref = "auto"
 		}
 		cfg.Agent.VisionModel = ref
+	} else {
+		if err := cfg.SetWebSearchModel(ref); err != nil {
+			return errDefaultModelUnavailable
+		}
+		if err := cfg.SaveWebSearchModelTo(path); err != nil {
+			return fmt.Errorf("save Preview search model: %w", err)
+		}
+		return nil
 	}
 	if err := cfg.SaveModelSettingsTo(path, baseline); err != nil {
 		return fmt.Errorf("save Preview %s model: %w", request.Role, err)

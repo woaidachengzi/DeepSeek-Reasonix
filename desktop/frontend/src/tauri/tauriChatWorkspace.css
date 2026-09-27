@@ -558,11 +558,23 @@
 .tauri-settings-general .tauri-settings-field-label, .tauri-settings-general .tauri-settings-toggle > span { flex: 1; min-width: 0; }
 .tauri-settings-general .tauri-settings-field-label small { line-height: 1.5; }
 .tauri-settings-general .tauri-settings-radio-group { width: min(100%, 425px); min-width: min(100%, 425px); }
-.tauri-model-settings h3:not(:first-child) { margin-top: 34px; }
-.tauri-model-settings .tauri-settings-field { min-height: 76px; border-top: 1px solid var(--border-soft); border-bottom: 0; }
-.tauri-model-settings .tauri-settings-field-label { flex: 1; min-width: 0; }
-.tauri-model-settings .tauri-settings-select { width: min(100%, 425px); }
+.tauri-model-settings { container: tauri-model-settings / inline-size; }
+.tauri-model-settings__head, .tauri-model-settings .tauri-model-settings__row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(220px, 1.4fr) minmax(120px, .7fr); align-items: center; gap: 20px; }
+.tauri-model-settings__head { padding: 10px 4px; border-bottom: 1px solid var(--border-soft); color: var(--fg-faint); font-size: 11px; }
+.tauri-model-settings .tauri-model-settings__row { min-height: 76px; border: 0; border-bottom: 1px solid var(--border-soft); }
+.tauri-model-settings .tauri-settings-field-label { min-width: 0; }
+.tauri-model-settings .tauri-settings-select { width: 100%; min-width: 0; }
+.tauri-model-settings__connection { color: var(--fg-dim); font-size: 11px; overflow-wrap: anywhere; }
 .tauri-model-settings__stale { padding: 4px 0 0 4px; color: var(--err) !important; }
+@container tauri-model-settings (max-width: 760px) {
+  .tauri-model-settings__head { display: none; }
+  .tauri-model-settings .tauri-model-settings__row { grid-template-columns: minmax(120px, .8fr) minmax(160px, 1fr); }
+  .tauri-model-settings__connection { grid-column: 2; }
+}
+@container tauri-model-settings (max-width: 460px) {
+  .tauri-model-settings .tauri-model-settings__row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .tauri-model-settings__connection { grid-column: 1; }
+}
 .tauri-settings-sound { border-top: 1px solid var(--border-soft); }
 .tauri-settings-sound-toggle { display: flex; width: 100%; min-height: 76px; align-items: center; gap: 20px; padding: 12px 4px; border: 0; background: transparent; color: var(--fg); text-align: left; }
 .tauri-settings-sound-toggle > span:nth-last-child(2) { color: var(--fg-faint); font-size: 11px; }

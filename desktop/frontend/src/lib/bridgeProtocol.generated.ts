@@ -110,6 +110,7 @@ export interface BridgeProviderSummary {
   models: string[];
   name: string;
   requiresKey: boolean;
+  searchModels: string[];
   visionModels: string[];
 }
 
@@ -119,6 +120,7 @@ export interface BridgeProviderSummaryResponse {
   protocolVersion: number;
   providers: BridgeProviderSummary[];
   visionModel: string;
+  webSearchModel: string;
 }
 
 export interface BridgeRenameSessionRequest {
@@ -145,7 +147,7 @@ export interface BridgeSetDefaultModelRequest {
 
 export interface BridgeSetModelRoleRequest {
   model: string;
-  role: "planner" | "vision";
+  role: "planner" | "vision" | "search";
 }
 
 export interface BridgeSubmitRequest {
