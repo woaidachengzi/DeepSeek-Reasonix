@@ -92,6 +92,17 @@ const (
 	TitleLegacyUnknown TitleSource = "legacy_unknown"
 )
 
+// IsPlaceholderTitle recognizes only product defaults. A user-authority row
+// with one of these strings is still protected by SetTitle's source guard.
+func IsPlaceholderTitle(title string) bool {
+	switch title {
+	case "", "新的会话", "新对话", "新建对话":
+		return true
+	default:
+		return false
+	}
+}
+
 // TitleOperation is intentionally an action, not a caller-provided source.
 // This prevents a background generator from claiming user authority.
 type TitleOperation int
@@ -1709,7 +1720,7 @@ func (s *Store) SetTitle(ctx context.Context, id string, expectedRevision int64,
 		guard = "title_source IN ('fallback','generated') AND NOT EXISTS (SELECT 1 FROM session_title_intents WHERE session_id=sessions.id)"
 	case TitleFirstMessage:
 		source = TitleFallback
-		guard = "title_source='fallback' AND title='' AND NOT EXISTS (SELECT 1 FROM session_title_intents WHERE session_id=sessions.id)"
+		guard = "title_source IN ('fallback','legacy_unknown') AND title IN ('','新的会话','新对话','新建对话') AND NOT EXISTS (SELECT 1 FROM session_title_intents WHERE session_id=sessions.id)"
 	default:
 		return errors.New("invalid session title operation")
 	}

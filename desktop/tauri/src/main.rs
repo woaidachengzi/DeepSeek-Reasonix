@@ -123,6 +123,13 @@ struct WorkbenchProjectFoldersResponse {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct WorkbenchTitleBackfillResult {
+    sessions: Vec<WorkbenchSession>,
+    resolved_titles: Vec<SessionFirstMessageTitle>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct WorkbenchSessionPageEntry {
     session_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1341,22 +1348,26 @@ fn backfill_workbench_titles(
     supervisor: State<'_, BridgeSupervisor>,
     catalog: State<'_, WorkbenchCatalog>,
     titles: Vec<WorkbenchTitle>,
-) -> Result<Vec<WorkbenchSession>, String> {
+) -> Result<WorkbenchTitleBackfillResult, String> {
     // The identity directory can contain migrated sessions that are not yet
     // present in the host's bounded recent-session catalog. Backfill every
     // supplied identity title first; the bridge only fills fallback titles,
     // and catalog.fill_titles below remains a no-op for identity-only rows.
     let _sessions = catalog.list()?;
     let resolved = supervisor.backfill_session_titles(identity_title_backfill_request(titles))?;
-    catalog.fill_titles(
+    let sessions = catalog.fill_titles(
         resolved
-            .into_iter()
+            .iter()
             .map(|title| WorkbenchTitle {
-                session_id: title.session_id,
-                title: title.title,
+                session_id: title.session_id.clone(),
+                title: title.title.clone(),
             })
             .collect(),
-    )
+    )?;
+    Ok(WorkbenchTitleBackfillResult {
+        sessions,
+        resolved_titles: resolved,
+    })
 }
 
 fn identity_title_backfill_request(titles: Vec<WorkbenchTitle>) -> Vec<SessionFirstMessageTitle> {

@@ -8,13 +8,13 @@ Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, co
 (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri = true;
 (dom.window as unknown as { __TAURI__?: unknown }).__TAURI__ = { core: { invoke: () => Promise.resolve(null) } };
 (globalThis as unknown as { __workbenchSessions: unknown[]; __previewFirstUsers: Record<string, string>; __workbenchPages: unknown[] }).__workbenchSessions = [
-  { sessionId: "old-alpha", workspaceRoot: "/work/alpha" },
+  { sessionId: "old-alpha", workspaceRoot: "/work/alpha", title: "新的会话" },
   { sessionId: "recent-beta", workspaceRoot: "/work/beta", title: "Beta task" },
 ];
 (globalThis as unknown as { __workbenchPages: unknown[] }).__workbenchPages = [
   { sessions: [
     { sessionId: "missing-alpha", title: "丢失文件会话", workspaceRoot: "/work/alpha", state: "missing", missing: true },
-    { sessionId: "old-alpha", workspaceRoot: "/work/alpha" },
+    { sessionId: "old-alpha", workspaceRoot: "/work/alpha", title: "新的会话" },
     { sessionId: "recent-beta", workspaceRoot: "/work/beta", title: "Beta task" },
   ], nextCursor: { position: 3, id: "recent-beta", snapshotId: "a".repeat(64) }, total: 4, source: "identity" },
   { sessions: [{ sessionId: "older-gamma", workspaceRoot: "/work/gamma", title: "Gamma task" }], nextCursor: null, total: 3, source: "identity" },
@@ -36,6 +36,8 @@ assert.equal(document.querySelectorAll(".tauri-project-group").length, 3);
 assert.ok(document.querySelector<HTMLButtonElement>('[aria-label="切换到项目 Saved empty project（历史会话尚未加载，先加载更多）"]')?.disabled);
 assert.ok(document.querySelector('[aria-label="在 Saved empty project 中新建对话"]'));
 assert.match(document.body.textContent ?? "", /整理报告并加测试/);
+assert.ok((globalThis as unknown as { __tauriBridgeCalls: Array<{ name: string; args: { titles?: { sessionId: string; title: string }[] } }> }).__tauriBridgeCalls
+  .some(call => call.name === "backfill_workbench_titles" && call.args.titles?.some(item => item.sessionId === "old-alpha" && item.title === "整理报告并加测试")), "default session title is replaced from the first user turn");
 const calls = (globalThis as unknown as { __tauriBridgeCalls: Array<{ name: string; args: Record<string, string> }> }).__tauriBridgeCalls;
 assert.ok(calls.some(call => call.name === "workbench_project_folders"));
 assert.ok(calls.some(call => call.name === "bridge_session_previews"));
@@ -249,5 +251,28 @@ await act(async () => {
 });
 assert.doesNotMatch(document.body.textContent ?? "", /过时的身份续页/);
 assert.match(document.body.textContent ?? "", /最多 50 条/);
+await act(async () => { root.unmount(); });
+
+// A manual rename can win while the first-message backfill request is in
+// flight. Render the bridge's resolved title, never the stale candidate.
+(globalThis as unknown as { __workbenchSessions: unknown[] }).__workbenchSessions = [
+  { sessionId: "concurrent-rename", title: "新的会话", workspaceRoot: "/work/alpha" },
+];
+(globalThis as unknown as { __workbenchPages: unknown[] }).__workbenchPages = [
+  { sessions: [{ sessionId: "concurrent-rename", title: "新的会话", workspaceRoot: "/work/alpha" }], nextCursor: null, total: 1, source: "identity" },
+];
+(globalThis as unknown as { __previewFirstUsers: Record<string, string> }).__previewFirstUsers = {
+  "concurrent-rename": "首条消息建议标题",
+};
+(globalThis as unknown as { __backfillTitleOverrides: Record<string, string> }).__backfillTitleOverrides = {
+  "concurrent-rename": "用户手动标题",
+};
+(globalThis as unknown as { __sessionCatalogShadowResponses: unknown[] }).__sessionCatalogShadowResponses = [];
+root = createRoot(document.getElementById("root")!);
+await act(async () => { root.render(React.createElement(TauriSessionApp)); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.ok([...document.querySelectorAll<HTMLButtonElement>(".tauri-sidebar__session")]
+  .some(button => button.textContent?.includes("用户手动标题")));
+assert.ok(![...document.querySelectorAll<HTMLButtonElement>(".tauri-sidebar__session")]
+  .some(button => button.textContent?.includes("首条消息建议标题")));
 await act(async () => { root.unmount(); });
 console.log("tauri project navigation and legacy title backfill: OK");

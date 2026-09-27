@@ -157,7 +157,7 @@ import {
   type TauriProviderSummary,
   type TauriSessionShadowReport,
 } from "../lib/tauriBridge";
-import { groupWorkbenchSessions, titleFromFirstUser, workbenchProjectKey, type WorkbenchProjectFolder } from "./workbenchSessions";
+import { groupWorkbenchSessions, needsFirstMessageTitle, titleFromFirstUser, workbenchProjectKey, type WorkbenchProjectFolder } from "./workbenchSessions";
 import { sessionLifecycleFailure, sessionLifecycleNotice } from "./sessionLifecycleError";
 import {
   emptyMCPDraft,
@@ -635,21 +635,23 @@ export function TauriSessionPreview() {
         setSessionPageTitleMismatchCount(page.titleMismatchCount ?? null);
         setSessionPageMissingTranscriptCount(page.missingTranscriptCount ?? null);
         const missing = isIdentityPageSource(page.source)
-          ? page.sessions.filter(tab => !tauriSessionTitle(tab.title, "")).map(tab => tab.sessionId)
+          ? page.sessions.filter(tab => needsFirstMessageTitle(tab.title)).map(tab => tab.sessionId)
           : [];
         for (let offset = 0; active && offset < missing.length; offset += 50) {
           try {
             const previews = await tauriSessionPreviews(missing.slice(offset, offset + 50));
             if (!active) return;
             const titles = previews.flatMap(preview => {
-              const title = tauriSessionTitle(preview.title, "") || titleFromFirstUser(preview.firstUser ?? "");
+              const stored = tauriSessionTitle(preview.title, "");
+              const title = needsFirstMessageTitle(stored) ? titleFromFirstUser(preview.firstUser ?? "") : stored;
               return title ? [{ sessionId: preview.sessionId, title }] : [];
             });
             if (titles.length > 0) {
-              await backfillTauriWorkbenchTitles(titles);
+              const result = await backfillTauriWorkbenchTitles(titles);
+              const resolved = new Map(result.resolvedTitles.map(item => [item.sessionId, item.title]));
               if (active) setTabs(previous => previous.map(tab => {
-                const title = titles.find(item => item.sessionId === tab.sessionId)?.title;
-                return title ? { ...tab, title } : tab;
+                const title = resolved.get(tab.sessionId);
+                return title && needsFirstMessageTitle(tab.title) ? { ...tab, title } : tab;
               }));
             }
           } catch {
@@ -700,21 +702,23 @@ export function TauriSessionPreview() {
       setSessionPageTitleMismatchCount(page.titleMismatchCount ?? null);
       setSessionPageMissingTranscriptCount(page.missingTranscriptCount ?? null);
       const missing = isIdentityPageSource(page.source)
-        ? page.sessions.filter(tab => !tauriSessionTitle(tab.title, "")).map(tab => tab.sessionId)
+        ? page.sessions.filter(tab => needsFirstMessageTitle(tab.title)).map(tab => tab.sessionId)
         : [];
       for (let offset = 0; offset < missing.length; offset += 50) {
         try {
           const previews = await tauriSessionPreviews(missing.slice(offset, offset + 50));
           const titles = previews.flatMap(preview => {
-            const title = tauriSessionTitle(preview.title, "") || titleFromFirstUser(preview.firstUser ?? "");
+            const stored = tauriSessionTitle(preview.title, "");
+            const title = needsFirstMessageTitle(stored) ? titleFromFirstUser(preview.firstUser ?? "") : stored;
             return title ? [{ sessionId: preview.sessionId, title }] : [];
           });
           if (titles.length > 0) {
-            await backfillTauriWorkbenchTitles(titles);
+            const result = await backfillTauriWorkbenchTitles(titles);
+            const resolved = new Map(result.resolvedTitles.map(item => [item.sessionId, item.title]));
             if (revision !== sessionPageRevisionRef.current) return;
             setTabs(previous => previous.map(tab => {
-              const title = titles.find(item => item.sessionId === tab.sessionId)?.title;
-              return title ? { ...tab, title } : tab;
+              const title = resolved.get(tab.sessionId);
+              return title && needsFirstMessageTitle(tab.title) ? { ...tab, title } : tab;
             }));
           }
         } catch {
@@ -1763,17 +1767,22 @@ export function TauriSessionPreview() {
       if (sessionId !== session?.id) return;
       if (turnEpochRef.current === submitEpoch) setSession(submitted);
       if (firstTurn) await rememberSession({ ...submitted, workspaceRoot: root });
-      if (!tauriSessionTitle(submitted.title, "") && !tabs.find(tab => tab.sessionId === sessionId)?.title) {
-        const title = titleFromFirstUser(input);
+      if (needsFirstMessageTitle(submitted.title) && needsFirstMessageTitle(tabs.find(tab => tab.sessionId === sessionId)?.title)) {
+        let firstUser = firstTurn ? input : "";
+        if (!firstTurn) {
+          try { firstUser = (await tauriSessionPreviews([sessionId]))[0]?.firstUser ?? ""; }
+          catch { /* Title enrichment must not fail an accepted turn. */ }
+        }
+        const title = titleFromFirstUser(firstUser);
         if (title) {
           try {
-            const updated = await backfillTauriWorkbenchTitles([{ sessionId, title }]);
-            const resolvedTitle = updated.find(tab => tab.sessionId === sessionId)?.title ?? title;
+            const result = await backfillTauriWorkbenchTitles([{ sessionId, title }]);
+            const resolvedTitle = result.resolvedTitles.find(item => item.sessionId === sessionId)?.title;
             if (isIdentityPageSource(sessionPageSource)) {
-              setTabs(previous => previous.map(tab => tab.sessionId === sessionId ? { ...tab, title: resolvedTitle } : tab));
+              if (resolvedTitle) setTabs(previous => previous.map(tab => tab.sessionId === sessionId && needsFirstMessageTitle(tab.title) ? { ...tab, title: resolvedTitle } : tab));
               await refreshCatalogAudit();
             } else {
-              setTabs(previous => preserveWorkbenchLifecycle(updated, previous));
+              setTabs(previous => preserveWorkbenchLifecycle(result.sessions, previous));
             }
           } catch {
             // The turn was accepted; catalog enrichment must not report it as a failed send.

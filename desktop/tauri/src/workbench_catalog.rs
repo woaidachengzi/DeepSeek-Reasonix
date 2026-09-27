@@ -152,8 +152,8 @@ impl WorkbenchCatalog {
         Ok(updated)
     }
 
-    /// Fill missing legacy titles without changing the recent-use order or
-    /// overwriting explicit/manual titles (including a concurrent rename).
+    /// Fill missing or default legacy titles without changing recent-use order
+    /// or overwriting an explicit title (including a concurrent rename).
     pub fn fill_titles(
         &self,
         titles: Vec<WorkbenchTitle>,
@@ -170,10 +170,9 @@ impl WorkbenchCatalog {
                 title: Some(item.title.clone()),
                 workspace_root: None,
             })?;
-            if let Some(existing) = updated
-                .iter_mut()
-                .find(|entry| entry.session_id == item.session_id && entry.title.is_none())
-            {
+            if let Some(existing) = updated.iter_mut().find(|entry| {
+                entry.session_id == item.session_id && is_placeholder_title(entry.title.as_deref())
+            }) {
                 existing.title = Some(item.title);
             }
         }
@@ -183,6 +182,10 @@ impl WorkbenchCatalog {
         }
         Ok(state.sessions.clone())
     }
+}
+
+fn is_placeholder_title(title: Option<&str>) -> bool {
+    matches!(title, None | Some("" | "新的会话" | "新对话" | "新建对话"))
 }
 
 fn validate_session(session: &WorkbenchSession) -> Result<(), String> {
@@ -448,7 +451,7 @@ mod tests {
     }
 
     #[test]
-    fn fills_only_missing_titles_without_reordering_or_losing_them_on_open() {
+    fn fills_missing_and_placeholder_titles_without_reordering_or_replacing_manual_titles() {
         let root = tempfile::tempdir().expect("temp root");
         let path = root.path().join(CATALOG_FILE);
         let catalog = WorkbenchCatalog::at(path.clone());
@@ -460,6 +463,13 @@ mod tests {
                 workspace_root: None,
             })
             .expect("manual");
+        catalog
+            .remember(WorkbenchSession {
+                session_id: "placeholder".into(),
+                title: Some("新的会话".into()),
+                workspace_root: None,
+            })
+            .expect("placeholder");
         let filled = catalog
             .fill_titles(vec![
                 WorkbenchTitle {
@@ -469,6 +479,10 @@ mod tests {
                 WorkbenchTitle {
                     session_id: "manual".into(),
                     title: "Wrong title".into(),
+                },
+                WorkbenchTitle {
+                    session_id: "placeholder".into(),
+                    title: "Specific task".into(),
                 },
                 WorkbenchTitle {
                     session_id: "unknown".into(),
@@ -481,21 +495,22 @@ mod tests {
                 .iter()
                 .map(|entry| entry.session_id.as_str())
                 .collect::<Vec<_>>(),
-            vec!["manual", "older"]
+            vec!["placeholder", "manual", "older"]
         );
-        assert_eq!(filled[0].title.as_deref(), Some("My title"));
-        assert_eq!(filled[1].title.as_deref(), Some("First question"));
+        assert_eq!(filled[0].title.as_deref(), Some("Specific task"));
+        assert_eq!(filled[1].title.as_deref(), Some("My title"));
+        assert_eq!(filled[2].title.as_deref(), Some("First question"));
         let reopened = catalog.remember(session("older")).expect("reopen");
         assert_eq!(
             reopened
                 .iter()
                 .map(|entry| entry.session_id.as_str())
                 .collect::<Vec<_>>(),
-            vec!["manual", "older"]
+            vec!["placeholder", "manual", "older"]
         );
-        assert_eq!(reopened[1].title.as_deref(), Some("First question"));
+        assert_eq!(reopened[2].title.as_deref(), Some("First question"));
         assert_eq!(
-            WorkbenchCatalog::at(path).list().expect("reload")[1]
+            WorkbenchCatalog::at(path).list().expect("reload")[2]
                 .title
                 .as_deref(),
             Some("First question")

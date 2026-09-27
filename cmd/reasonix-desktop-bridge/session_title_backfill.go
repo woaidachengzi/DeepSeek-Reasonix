@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -24,9 +25,8 @@ type backfillSessionTitlesResponse struct {
 	Titles          []firstMessageTitle `json:"titles"`
 }
 
-// backfillSessionTitles copies only first-message fallback titles into the
-// identity directory. Explicit or previously generated titles are immutable
-// through this migration path.
+// backfillSessionTitles replaces only empty or default placeholder titles.
+// User-selected and previously generated titles are immutable through this path.
 func (b *bridgeServer) backfillSessionTitles(w http.ResponseWriter, r *http.Request) {
 	var request backfillSessionTitlesRequest
 	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
@@ -81,12 +81,26 @@ func (b *bridgeServer) backfillSessionTitles(w http.ResponseWriter, r *http.Requ
 		if !exists || record.State == sessionidentity.StateDeleting || record.State == sessionidentity.StateDeleted {
 			continue
 		}
-		if record.Title == "" && record.TitleSource == sessionidentity.TitleFallback {
+		if sessionidentity.IsPlaceholderTitle(record.Title) && !sessionidentity.IsPlaceholderTitle(item.Title) &&
+			(record.TitleSource == sessionidentity.TitleFallback || record.TitleSource == sessionidentity.TitleLegacyUnknown) {
 			if err := identities.SetTitle(r.Context(), item.SessionID, record.TitleRevision, item.Title, sessionidentity.TitleFirstMessage); err != nil {
-				b.writeRuntimeError(w, err, "unable to update a session identity title")
-				return
+				if !errors.Is(err, sessionidentity.ErrTitleConflict) && !errors.Is(err, sessionidentity.ErrTitleProtected) && !errors.Is(err, sessionidentity.ErrSessionNotFound) {
+					b.writeRuntimeError(w, err, "unable to update a session identity title")
+					return
+				}
+				// A manual rename or delete can win after Get. Report the
+				// authoritative row instead of failing the entire batch.
+				record, exists, err = identities.Get(r.Context(), item.SessionID)
+				if err != nil {
+					b.writeRuntimeError(w, err, "unable to read the session identity store")
+					return
+				}
+				if !exists || record.State == sessionidentity.StateDeleting || record.State == sessionidentity.StateDeleted {
+					continue
+				}
+			} else {
+				record.Title = item.Title
 			}
-			record.Title = item.Title
 		}
 		// Imported historical metadata can predate the host's catalog bounds.
 		// Keep it in SQLite, but never let one unsafe title make the host reject

@@ -98,6 +98,11 @@ export interface TauriWorkbenchSession {
   missing?: boolean;
 }
 
+export interface TauriWorkbenchTitleBackfillResult {
+  sessions: TauriWorkbenchSession[];
+  resolvedTitles: { sessionId: string; title: string }[];
+}
+
 export interface TauriPendingSessionDelete {
   id: string;
   title: string;
@@ -366,9 +371,9 @@ export async function tauriSessionPreviews(sessionIds: string[]): Promise<TauriS
   return invoke<TauriSessionPreview[]>("bridge_session_previews", { sessionIds });
 }
 
-export async function backfillTauriWorkbenchTitles(titles: { sessionId: string; title: string }[]): Promise<TauriWorkbenchSession[]> {
+export async function backfillTauriWorkbenchTitles(titles: { sessionId: string; title: string }[]): Promise<TauriWorkbenchTitleBackfillResult> {
   requireTauri();
-  return invoke<TauriWorkbenchSession[]>("backfill_workbench_titles", { titles });
+  return invoke<TauriWorkbenchTitleBackfillResult>("backfill_workbench_titles", { titles });
 }
 
 export async function rememberTauriWorkbenchSession(

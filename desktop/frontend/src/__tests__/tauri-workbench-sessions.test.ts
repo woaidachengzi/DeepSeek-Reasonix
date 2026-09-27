@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { groupWorkbenchSessions, titleFromFirstUser } from "../tauri/workbenchSessions";
+import { groupWorkbenchSessions, needsFirstMessageTitle, titleFromFirstUser } from "../tauri/workbenchSessions";
 
 const groups = groupWorkbenchSessions([
   { sessionId: "new-a", workspaceRoot: "/work/a/project", title: "Latest" },
@@ -32,4 +32,8 @@ assert.equal(titleFromFirstUser("修复登录失败\n请加回归测试"), "修�
 assert.equal(titleFromFirstUser("请处理 😀".repeat(30))?.endsWith("…"), true);
 assert.equal(titleFromFirstUser("   "), undefined);
 assert.equal(titleFromFirstUser("@.reasonix/attachments/report.pdf"), "文件对话");
+assert.equal(titleFromFirstUser("现在使用的这个模型，还需要搭配本地图片的mcp吗，/Users/jerry/vision-bridge"), "现在使用的这个模型，还需要搭配本地图片的mcp吗");
+assert.equal(needsFirstMessageTitle("新的会话"), true);
+assert.equal(needsFirstMessageTitle("新对话"), true);
+assert.equal(needsFirstMessageTitle("手动命名"), false);
 console.log("tauri workbench project grouping and first-turn titles: OK");

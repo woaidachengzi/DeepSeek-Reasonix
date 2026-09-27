@@ -118,8 +118,19 @@ export function groupWorkbenchSessions(
  * and line breaks are not shown as conversation names. Manual titles win. */
 export function titleFromFirstUser(content: string): string | undefined {
   const display = parseAttachmentRefsForDisplay(content);
-  const text = display.text.replace(/\p{Cc}+/gu, " ").replace(/\s+/g, " ").trim();
+  const text = display.text
+    .replace(/(?:file:\/\/)?\/(?:[^\s，。！？；;]+\/?)+/gu, " ")
+    .replace(/\p{Cc}+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!text) return display.attachments.length ? "文件对话" : undefined;
-  const runes = Array.from(text);
-  return runes.length > 48 ? `${runes.slice(0, 48).join("")}…` : text;
+  const sentence = text.split(/[。！？!?]/u, 1)[0].trim().replace(/[，,：:；;、\s]+$/u, "");
+  if (!sentence) return undefined;
+  const runes = Array.from(sentence);
+  return runes.length > 32 ? `${runes.slice(0, 32).join("").replace(/[，,：:；;、\s]+$/u, "")}…` : sentence;
+}
+
+export function needsFirstMessageTitle(title?: string): boolean {
+  const value = title?.trim() ?? "";
+  return value === "" || value === "新的会话" || value === "新对话" || value === "新建对话";
 }

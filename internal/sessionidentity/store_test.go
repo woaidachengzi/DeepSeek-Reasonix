@@ -1244,6 +1244,42 @@ func TestFallbackTitleCanBeDerivedThenGenerated(t *testing.T) {
 	}
 }
 
+func TestFirstMessageReplacesOnlyDefaultPlaceholder(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	path := filepath.Join(root, "sessions", "tauri-placeholder.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, filepath.Join(root, "identity.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := store.Import(ctx, root, []Candidate{{ID: "placeholder", Path: path, Title: "新的会话"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetTitle(ctx, "placeholder", 0, "检查模型图片能力", TitleFirstMessage); err != nil {
+		t.Fatal(err)
+	}
+	record, exists, err := store.Get(ctx, "placeholder")
+	if err != nil || !exists || record.Title != "检查模型图片能力" || record.TitleSource != TitleFallback {
+		t.Fatalf("replaced title = %+v, exists=%v, err=%v", record, exists, err)
+	}
+	if err := store.SetTitle(ctx, "placeholder", record.TitleRevision, "Other", TitleFirstMessage); !errors.Is(err, ErrTitleProtected) {
+		t.Fatalf("second replacement = %v", err)
+	}
+	if _, err := store.db.ExecContext(ctx, "UPDATE sessions SET title='新的会话', title_source='user' WHERE id='placeholder'"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetTitle(ctx, "placeholder", record.TitleRevision, "Must not replace", TitleFirstMessage); !errors.Is(err, ErrTitleProtected) {
+		t.Fatalf("manual placeholder replacement = %v", err)
+	}
+}
+
 func TestConcurrentTitleWritersCannotBothCommitSameRevision(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()

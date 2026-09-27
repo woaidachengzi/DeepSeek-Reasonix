@@ -51,6 +51,7 @@ func TestBackfillSessionTitlesOnlyFillsFallbackTitles(t *testing.T) {
 	}
 	for _, item := range []struct{ id, title string }{
 		{id: "needs-title"},
+		{id: "default-title", title: "新的会话"},
 		{id: "manual-title", title: "Chosen title"},
 	} {
 		path, err := sessionpath.TranscriptPath(sessionDir, item.id)
@@ -72,7 +73,7 @@ func TestBackfillSessionTitlesOnlyFillsFallbackTitles(t *testing.T) {
 
 	handler := newBridgeServer(testToken, "instance", nil).handler()
 	request := httptest.NewRequest(http.MethodPost, "/v1/sessions/titles/first-message", strings.NewReader(
-		`{"titles":[{"sessionId":"needs-title","title":"First question"},{"sessionId":"manual-title","title":"Must not replace"}]}`,
+		`{"titles":[{"sessionId":"needs-title","title":"First question"},{"sessionId":"default-title","title":"检查模型图片能力"},{"sessionId":"manual-title","title":"Must not replace"}]}`,
 	))
 	request.Header.Set("Authorization", "Bearer "+testToken)
 	response := httptest.NewRecorder()
@@ -90,6 +91,10 @@ func TestBackfillSessionTitlesOnlyFillsFallbackTitles(t *testing.T) {
 	filled, ok, err := identities.Get(context.Background(), "needs-title")
 	if err != nil || !ok || filled.Title != "First question" || filled.TitleSource != sessionidentity.TitleFallback {
 		t.Fatalf("fallback title = %#v ok=%v err=%v", filled, ok, err)
+	}
+	defaultTitle, ok, err := identities.Get(context.Background(), "default-title")
+	if err != nil || !ok || defaultTitle.Title != "检查模型图片能力" || defaultTitle.TitleSource != sessionidentity.TitleFallback {
+		t.Fatalf("default title = %#v ok=%v err=%v", defaultTitle, ok, err)
 	}
 	manual, ok, err := identities.Get(context.Background(), "manual-title")
 	if err != nil || !ok || manual.Title != "Chosen title" {

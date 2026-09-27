@@ -182,9 +182,18 @@ export function tauriSessionPreviews(sessionIds) {
 
 export function backfillTauriWorkbenchTitles(titles) {
   record("backfill_workbench_titles", { titles });
-  const byId = new Map(titles.map(item => [item.sessionId, item.title]));
-  globalThis.__workbenchSessions = (globalThis.__workbenchSessions ?? []).map(entry => ({ ...entry, title: entry.title ?? byId.get(entry.sessionId) }));
-  return Promise.resolve(globalThis.__workbenchSessions.slice());
+  const resolvedTitles = titles.map(item => ({
+    ...item,
+    title: globalThis.__backfillTitleOverrides?.[item.sessionId] ?? item.title,
+  }));
+  const byId = new Map(resolvedTitles.map(item => [item.sessionId, item.title]));
+  globalThis.__workbenchSessions = (globalThis.__workbenchSessions ?? []).map(entry => ({
+    ...entry,
+    title: [undefined, "", "新的会话", "新对话", "新建对话"].includes(entry.title)
+      ? byId.get(entry.sessionId) ?? entry.title
+      : entry.title,
+  }));
+  return Promise.resolve({ sessions: globalThis.__workbenchSessions.slice(), resolvedTitles });
 }
 
 export function rememberTauriWorkbenchSession(sessionId, workspaceRoot, title) {
