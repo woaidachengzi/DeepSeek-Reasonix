@@ -9,6 +9,28 @@ import (
 	"testing"
 )
 
+func TestSetEnabledIfRevisionRejectsStaleRegistration(t *testing.T) {
+	home := t.TempDir()
+	initial := InstalledPlugin{Name: "sample", Root: "plugins/sample", Enabled: true}
+	if err := Upsert(home, initial); err != nil {
+		t.Fatal(err)
+	}
+	revision := InstalledRevision(initial)
+	if err := SetEnabledIfRevision(home, "sample", revision, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetEnabledIfRevision(home, "sample", revision, true); err == nil {
+		t.Fatal("stale plugin revision accepted")
+	}
+	current, found, err := FindInstalled(home, "sample")
+	if err != nil || !found || current.Enabled {
+		t.Fatalf("saved plugin = %+v, found=%t, err=%v", current, found, err)
+	}
+	if err := SetEnabledIfRevision(home, "sample", InstalledRevision(current), true); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestStateConcurrentUpsertAndSetEnabled pins that concurrent load-modify-save
 // cycles on the state file don't clobber each other: every plugin upserted by a
 // racing goroutine must survive, with the enabled flag it was last given.

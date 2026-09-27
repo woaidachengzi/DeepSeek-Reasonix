@@ -43,6 +43,7 @@ let sandbox = { protocolVersion: 1, bash: "enforce", network: true, workspaceRoo
 let network = { protocolVersion: 1, proxyMode: "auto", noProxy: "", proxyType: "socks5", proxyServer: "", proxyPort: 0, proxyUsername: "", proxyUrlSet: false, proxyPasswordSet: false };
 let skills = { protocolVersion: 1, allowImplicitInvocation: true, globalAllowImplicitInvocation: true, projectOverrides: { implicit: false, skills: false, sources: false }, skills: [{ name: "demo", description: "A test skill", invocation: "/demo", scope: "global", sourcePath: "/tmp/demo/SKILL.md", runAs: "inline", enabled: true, requires: ["mcp-server:github"] }], sources: [{ path: "/tmp/skills", scope: "custom", status: "ok", enabled: true, configured: true, skillCount: 1 }] };
 let failSkills = false;
+let plugins = { protocolVersion: 1, plugins: [{ name: "sample", description: "A test plugin", version: "1.0", source: "local", root: "/preview/plugins/sample", manifestKind: "reasonix", enabled: true, status: "ready", issue: "", warningCount: 0, skills: 1, agents: 0, commands: 2, hooks: 0, mcpServers: 1, runtime: false, revision: "a".repeat(64) }] };
 let lastSkillScope = "";
 let subagents = { protocolVersion: 1, defaultModel: "demo/m", subagentModel: "", subagentEffort: "", maxDepth: 2, maxConcurrency: 6, maxParallelWriters: 3, modelRefs: ["demo/m"], modelEfforts: { "demo/m": ["auto", "low", "high"] }, profiles: [{ name: "reviewer", description: "Reviews code", scope: "global", invocation: "/reviewer", configuredModel: "", configuredEffort: "" }] };
 let savedSubagentProfile: { action?: string; scope?: string; profile?: { name: string; description: string; systemPrompt: string } } | undefined;
@@ -100,6 +101,8 @@ const summary = () => ({
       case "network_settings": return { ...network };
       case "change_network_settings": network = { ...network, ...args?.change }; return { ...network };
       case "skills_settings": if (failSkills) { failSkills = false; throw new Error("skill inventory unavailable"); } return { ...skills };
+      case "plugin_settings": return { ...plugins };
+      case "change_plugin_settings": plugins = { ...plugins, plugins: plugins.plugins.map(item => item.name === args?.change?.name ? { ...item, enabled: Boolean(args.change.enabled), revision: "b".repeat(64) } : item) }; return { ...plugins };
       case "change_skills_settings": {
         lastSkillScope = args?.change?.scope ?? "";
         if (args?.change?.action === "implicit") {
@@ -314,6 +317,13 @@ assert.match(visibleText(), /skill inventory unavailable/, "failed refresh shows
 assert.doesNotMatch(visibleText(), /A test skill/, "failed refresh does not keep a stale inventory");
 await act(async () => { click("重试读取"); });
 assert.match(visibleText(), /A test skill/, "retry loads the current inventory");
+await act(async () => { click("插件"); });
+assert.match(visibleText(), /A test plugin/, "installed plugin is listed in settings");
+assert.match(visibleText(), /1 技能/, "plugin contribution counts are shown");
+const pluginSwitch = document.querySelector<HTMLInputElement>('input[aria-label="启用插件 sample"]');
+assert.ok(pluginSwitch);
+await act(async () => { pluginSwitch.click(); });
+assert.equal(plugins.plugins[0].enabled, false, "plugin activation is saved through the bridge");
 await act(async () => { click("子智能体"); });
 assert.match(visibleText(), /Reviews code/, "discoverable subagent profiles appear in settings");
 await act(async () => { click("1 层"); });

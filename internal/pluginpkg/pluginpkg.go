@@ -6,6 +6,8 @@
 package pluginpkg
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -369,6 +371,40 @@ func SetEnabled(reasonixHome, name string, enabled bool) error {
 			st.Plugins[i].Enabled = enabled
 			return SaveState(reasonixHome, st)
 		}
+	}
+	return fmt.Errorf("plugin %q is not installed", name)
+}
+
+// InstalledRevision identifies the saved registration, including its current
+// enabled state. Settings clients use it to reject edits based on stale rows.
+func InstalledRevision(p InstalledPlugin) string {
+	raw, _ := json.Marshal(p)
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
+// SetEnabledIfRevision changes one installed plugin only when its registration
+// still matches the row the caller reviewed. The check and write share the
+// package's in-process state lock.
+func SetEnabledIfRevision(reasonixHome, name, revision string, enabled bool) error {
+	if !IsValidName(name) || revision == "" {
+		return fmt.Errorf("invalid plugin activation request")
+	}
+	stateMu.Lock()
+	defer stateMu.Unlock()
+	st, err := LoadState(reasonixHome)
+	if err != nil {
+		return err
+	}
+	for i := range st.Plugins {
+		if st.Plugins[i].Name != name {
+			continue
+		}
+		if InstalledRevision(st.Plugins[i]) != revision {
+			return fmt.Errorf("plugin %q changed since it was read; refresh and retry", name)
+		}
+		st.Plugins[i].Enabled = enabled
+		return SaveState(reasonixHome, st)
 	}
 	return fmt.Errorf("plugin %q is not installed", name)
 }

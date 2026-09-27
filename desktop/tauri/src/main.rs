@@ -80,12 +80,12 @@ use bridge::{
     MemorySettingsChange, MemorySettingsView, NetworkSettingsChange, NetworkSettingsView,
     OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
     PendingSessionTitleRecovery, PermissionSettingsChange, PermissionSettingsView,
-    ProviderConfigList, RenameSessionRequest, SandboxSettingsChange, SandboxSettingsView,
-    SaveProviderConfigRequest, ScanImportCandidate, ScanImportSelection, SessionCatalogMetadata,
-    SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage, SessionFirstMessageTitle,
-    SessionPreview, SessionRequest, SkillsSettingsChange, SkillsSettingsView,
-    SubagentSettingsChange, SubagentSettingsView, SubmitRequest, WorkspaceChangeDetailRequest,
-    WorkspaceFileRequest, WorkspaceRequest,
+    PluginSettingsChange, PluginSettingsView, ProviderConfigList, RenameSessionRequest,
+    SandboxSettingsChange, SandboxSettingsView, SaveProviderConfigRequest, ScanImportCandidate,
+    ScanImportSelection, SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
+    SessionDirectoryPage, SessionFirstMessageTitle, SessionPreview, SessionRequest,
+    SkillsSettingsChange, SkillsSettingsView, SubagentSettingsChange, SubagentSettingsView,
+    SubmitRequest, WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
 };
 use data_profile::{
     PreviewProfile, PreviewProfileStatus, ProfileImportResult, ProjectFoldersImportResult,
@@ -842,6 +842,19 @@ fn change_skills_settings(
     change: SkillsSettingsChange,
 ) -> Result<SkillsSettingsView, String> {
     supervisor.change_skills_settings(change)
+}
+
+#[tauri::command]
+fn plugin_settings(supervisor: State<'_, BridgeSupervisor>) -> Result<PluginSettingsView, String> {
+    supervisor.plugin_settings()
+}
+
+#[tauri::command]
+fn change_plugin_settings(
+    supervisor: State<'_, BridgeSupervisor>,
+    change: PluginSettingsChange,
+) -> Result<PluginSettingsView, String> {
+    supervisor.change_plugin_settings(change)
 }
 
 #[tauri::command]
@@ -1862,6 +1875,8 @@ fn main() {
             change_network_settings,
             skills_settings,
             change_skills_settings,
+            plugin_settings,
+            change_plugin_settings,
             subagent_settings,
             change_subagent_settings,
             hooks_settings,

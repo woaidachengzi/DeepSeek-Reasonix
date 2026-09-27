@@ -635,6 +635,43 @@ pub struct SkillsSettingsChange {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PluginSettingsItem {
+    pub name: String,
+    pub description: String,
+    pub version: String,
+    pub source: String,
+    pub root: String,
+    pub manifest_kind: String,
+    pub enabled: bool,
+    pub status: String,
+    pub issue: String,
+    pub warning_count: u64,
+    pub skills: u64,
+    pub agents: u64,
+    pub commands: u64,
+    pub hooks: u64,
+    pub mcp_servers: u64,
+    pub runtime: bool,
+    pub revision: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginSettingsView {
+    pub protocol_version: u64,
+    pub plugins: Vec<PluginSettingsItem>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginSettingsChange {
+    pub name: String,
+    pub revision: String,
+    pub enabled: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SubagentProfileView {
     pub name: String,
     pub description: String,
@@ -1802,6 +1839,33 @@ impl BridgeSupervisor {
             Some(&request_id),
         )?;
         let view: SkillsSettingsView = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn plugin_settings(&self) -> Result<PluginSettingsView, String> {
+        let response = self.request_json("GET", "/v1/settings/plugins", None, None)?;
+        let view: PluginSettingsView = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn change_plugin_settings(
+        &self,
+        change: PluginSettingsChange,
+    ) -> Result<PluginSettingsView, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/plugins",
+            Some(json!(change)),
+            Some(&request_id),
+        )?;
+        let view: PluginSettingsView = serde_json::from_value(response).map_err(display_error)?;
         if view.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
@@ -3207,11 +3271,12 @@ mod tests {
         verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSessionResponse,
         BridgeSupervisor, EventStreamError, HooksSettingsView, MemorySettingsView,
         OpenSessionRequest, PendingSessionDelete, PendingSessionDeletesPageResponse,
-        PendingSessionTitleRecoveriesResponse, PendingSessionTitleRecovery, ProviderConfigList,
-        RenameSessionRequest, SaveProviderConfigRequest, SessionCatalogMetadata,
-        SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage,
-        SessionInventoryResponse, SessionRequest, SkillsSettingsChange, SkillsSettingsView,
-        SubagentSettingsChange, SubagentSettingsView, SubmitRequest, PROTOCOL_VERSION,
+        PendingSessionTitleRecoveriesResponse, PendingSessionTitleRecovery, PluginSettingsChange,
+        PluginSettingsView, ProviderConfigList, RenameSessionRequest, SaveProviderConfigRequest,
+        SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
+        SessionDirectoryPage, SessionInventoryResponse, SessionRequest, SkillsSettingsChange,
+        SkillsSettingsView, SubagentSettingsChange, SubagentSettingsView, SubmitRequest,
+        PROTOCOL_VERSION,
     };
     use crate::{session_shadow, workbench_catalog::WorkbenchSession};
     use serde_json::json;
@@ -3278,6 +3343,29 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(serde_json::to_value(change).unwrap()["scope"], "project");
+
+        let plugins: PluginSettingsView = serde_json::from_value(json!({
+            "protocolVersion": 1,
+            "plugins": [{"name":"sample", "description":"Example", "version":"1.0",
+                "source":"remote", "root":"/tmp/plugins/sample", "manifestKind":"reasonix",
+                "enabled":true, "status":"ready", "issue":"", "warningCount":0,
+                "skills":1, "agents":0, "commands":2, "hooks":0, "mcpServers":1,
+                "runtime":false, "revision":"abc"}]
+        }))
+        .unwrap();
+        assert_eq!(plugins.plugins[0].mcp_servers, 1);
+        assert_eq!(
+            serde_json::to_value(plugins).unwrap()["plugins"][0]["warningCount"],
+            0
+        );
+        let plugin_change: PluginSettingsChange = serde_json::from_value(json!({
+            "name":"sample", "revision":"abc", "enabled":false
+        }))
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(plugin_change).unwrap()["enabled"],
+            false
+        );
 
         let subagents: SubagentSettingsView = serde_json::from_value(json!({
             "protocolVersion": 1, "defaultModel": "local/chat", "subagentModel": "",

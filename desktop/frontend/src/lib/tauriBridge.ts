@@ -423,6 +423,41 @@ export async function changeTauriSkillsSettings(change: TauriSkillsChange): Prom
   return invoke<TauriSkillsSettings>("change_skills_settings", { change });
 }
 
+export interface TauriPluginItem {
+  name: string;
+  description: string;
+  version: string;
+  source: "local" | "remote" | "package" | "unknown";
+  root: string;
+  manifestKind: string;
+  enabled: boolean;
+  status: "ready" | "invalid";
+  issue: string;
+  warningCount: number;
+  skills: number;
+  agents: number;
+  commands: number;
+  hooks: number;
+  mcpServers: number;
+  runtime: boolean;
+  revision: string;
+}
+
+export interface TauriPluginSettings {
+  protocolVersion: number;
+  plugins: TauriPluginItem[];
+}
+
+export async function tauriPluginSettings(): Promise<TauriPluginSettings> {
+  requireTauri();
+  return invoke<TauriPluginSettings>("plugin_settings");
+}
+
+export async function changeTauriPluginSettings(change: { name: string; revision: string; enabled: boolean }): Promise<TauriPluginSettings> {
+  requireTauri();
+  return invoke<TauriPluginSettings>("change_plugin_settings", { change });
+}
+
 export interface TauriSubagentProfile {
   name: string;
   description: string;
