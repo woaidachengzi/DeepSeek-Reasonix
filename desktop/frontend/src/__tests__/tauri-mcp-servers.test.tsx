@@ -1,9 +1,8 @@
 // Run: node --import ./scripts/css-stub-register.mjs --import ./scripts/svg-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-mcp-servers.test.tsx
 //
-// Drives the MCP server panel through the real DOM: add a server, verify the
+// Drives the MCP settings tab through the real DOM: add a server, verify the
 // credential value never comes back, edit it with the credential field left
-// empty, and delete it. The panel is reachable because the diagnostics overlay
-// stays mounted.
+// empty, and delete it.
 
 import { JSDOM } from "jsdom";
 
@@ -22,6 +21,7 @@ Object.assign(globalThis, {
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
 (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri = true;
 (dom.window as unknown as { __TAURI__?: unknown }).__TAURI__ = { core: { invoke: () => Promise.resolve(null) } };
+dom.window.confirm = () => true;
 
 let passed = 0;
 let failed = 0;
@@ -48,12 +48,11 @@ function text(): string {
   return document.body.textContent ?? "";
 }
 
-/** Buttons inside the MCP card whose label matches. */
+/** Buttons inside the MCP settings tab whose label matches. */
 function mcpButtons(label: string): HTMLButtonElement[] {
-  const cards = [...document.querySelectorAll<HTMLElement>(".tauri-diagnostic-card")];
-  const card = cards.find(entry => entry.querySelector("h3")?.textContent === "MCP 服务器");
-  if (!card) return [];
-  return [...card.querySelectorAll<HTMLButtonElement>("button")].filter(
+  const section = document.querySelector<HTMLElement>(".tauri-mcp-settings");
+  if (!section) return [];
+  return [...section.querySelectorAll<HTMLButtonElement>("button")].filter(
     button => (button.textContent ?? "").trim() === label,
   );
 }
@@ -108,23 +107,23 @@ async function main() {
     await settle();
   });
 
-  // The diagnostics overlay only mounts while it is open.
-  const openDiagnostics = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
-    button => (button.textContent ?? "").includes("运行状态"),
+  const openSettings = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+    button => (button.textContent ?? "").trim() === "设置",
   );
-  ok(click(openDiagnostics), "the diagnostics panel can be opened");
+  await act(async () => { ok(click(openSettings), "the settings panel can be opened"); });
+  await act(async () => { ok(click([...document.querySelectorAll<HTMLButtonElement>(".tauri-settings-nav-item")].find(button => button.textContent?.trim() === "MCP")), "the MCP tab can be opened"); });
   await act(async () => {
     await settle();
     await settle();
   });
 
   console.log("\ntauri MCP servers — panel");
-  ok(text().includes("MCP 服务器"), "the diagnostics panel has an MCP servers card");
+  ok(text().includes("MCP 服务器"), "the settings panel has an MCP servers tab");
   ok(text().includes("还没有配置 MCP 服务器"), "an empty profile says so");
 
   // Add: a stdio server with a credential value.
-  ok(click(mcpButtons("添加")[0]), "the add button is present");
   await act(async () => {
+    ok(click(mcpButtons("添加")[0]), "the add button is present");
     await settle();
   });
   await act(async () => {
@@ -150,8 +149,8 @@ async function main() {
 
   // Edit: the credential field starts empty and an omitted credential keeps the
   // stored one at the bridge.
-  ok(click(mcpButtons("编辑")[0]), "the edit button is present");
   await act(async () => {
+    ok(click(mcpButtons("编辑")[0]), "the edit button is present");
     await settle();
   });
   const envField = field("MCP 服务器环境变量") as HTMLTextAreaElement | null;
@@ -175,8 +174,8 @@ async function main() {
   ok((editServer?.args ?? []).some(arg => arg.includes("Asia/Tokyo")), "the edited arguments are submitted");
 
   // Delete.
-  ok(click(mcpButtons("删除")[0]), "the delete button is present");
   await act(async () => {
+    ok(click(mcpButtons("删除")[0]), "the delete button is present");
     await settle();
     await settle();
   });

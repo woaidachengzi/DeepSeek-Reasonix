@@ -21,6 +21,7 @@ let saveGate: Promise<void> | null = null;
 let releaseSave: (() => void) | undefined;
 let failSummary = false;
 let failSave = false;
+let failRuntime = false;
 const calls: string[] = [];
 let openedURL = "";
 const summary = () => ({
@@ -33,7 +34,9 @@ const summary = () => ({
   async invoke(command: string, args?: { url?: string }) {
     calls.push(command);
     switch (command) {
-      case "preview_runtime_info": return { previewVersion: "1", previewCommit: "unknown", previewDirty: false, stableVersion: "1", stableCommit: "test", tauriVersion: "2", bridgeProtocolVersion: 1, previewBuild: "test" };
+      case "preview_runtime_info":
+        if (failRuntime) { failRuntime = false; throw new Error("runtime unavailable"); }
+        return { previewVersion: "1", previewCommit: "unknown", previewDirty: false, stableVersion: "1", stableCommit: "test", tauriVersion: "2", bridgeProtocolVersion: 1, previewBuild: "test" };
       case "provider_summary":
         if (failSummary) { failSummary = false; throw new Error("summary unavailable"); }
         return summary();
@@ -61,12 +64,13 @@ const { createRoot } = await import("react-dom/client");
 const { TauriSettings } = await import("../tauri/TauriSettings");
 let parentConfigured: boolean | undefined;
 let applyCalls = 0;
+let profileImportCalls = 0;
 
 renderToString(<TauriSettings onClose={() => {}} />);
 assert.equal(calls.length, 0, "rendering settings does not start bridge work");
 
 const root = createRoot(document.getElementById("root")!);
-await act(async () => { root.render(<TauriSettings onClose={() => {}} onProviderSummaryChange={value => { parentConfigured = value.providers[0]?.configured; }} currentSessionState="idle" onApplyToCurrentSession={async () => { applyCalls += 1; return true; }} />); });
+await act(async () => { root.render(<TauriSettings onClose={() => {}} onProviderSummaryChange={value => { parentConfigured = value.providers[0]?.configured; }} currentSessionState="idle" onApplyToCurrentSession={async () => { applyCalls += 1; return true; }} profile={{ previewHome: "/preview/home", previewConfigExists: false, stableConfigExists: true, importAvailable: true, managedProfile: true }} onImportStableProfile={async () => { profileImportCalls += 1; return "已备份并导入配置"; }} />); });
 assert.equal(calls.filter(call => call === "provider_summary").length, 1, "settings load once after mount");
 assert.equal(parentConfigured, true, "the model picker outside settings receives the initial summary");
 
@@ -84,6 +88,32 @@ function enterKey(value: string) {
 }
 
 function visibleText() { return document.body.textContent ?? ""; }
+
+assert.match(visibleText(), /配色风格/, "appearance controls are available without opening the model tab");
+await act(async () => { click("深色"); });
+assert.equal(document.documentElement.getAttribute("data-theme"), "dark");
+assert.equal(localStorage.getItem("tauri-theme"), "dark");
+await act(async () => { click("跟随系统"); });
+assert.equal(document.documentElement.hasAttribute("data-theme"), false);
+await act(async () => { click("极光"); });
+assert.equal(document.documentElement.getAttribute("data-theme-style"), "aurora");
+assert.equal(localStorage.getItem("tauri-theme-style"), "aurora");
+await act(async () => { click("宽屏"); });
+assert.equal(document.documentElement.getAttribute("data-conversation-width"), "full");
+assert.equal(localStorage.getItem("reasonix-conv-width"), "full");
+await act(async () => { click("大"); });
+assert.equal(document.documentElement.getAttribute("data-text-size"), "large");
+assert.equal(localStorage.getItem("reasonix-text-size"), "large");
+await act(async () => { click("数据"); });
+assert.match(visibleText(), /\/preview\/home/, "data settings show the isolated preview directory");
+await act(async () => { click("复制稳定版配置（先备份）"); });
+assert.equal(profileImportCalls, 1);
+assert.match(visibleText(), /已备份并导入配置/, "data settings surface the import result");
+await act(async () => { click("通用"); });
+const notificationToggle = document.querySelector<HTMLInputElement>(".tauri-settings-toggle input");
+assert.ok(notificationToggle, "general settings include desktop notifications");
+await act(async () => { notificationToggle.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true })); });
+assert.equal(localStorage.getItem("tauri-desktop-notifications"), "off", "notification preference is saved");
 
 await act(async () => { click("模型"); });
 assert.match(visibleText(), /已就绪/, ".env credential configures the provider");
@@ -139,4 +169,19 @@ assert.equal(githubClick.defaultPrevented, true, "GitHub link does not navigate 
 assert.equal(openedURL, "https://github.com/esengine/DeepSeek-Reasonix", "GitHub link opens through the native host");
 
 await act(async () => { root.unmount(); });
+failSummary = true;
+const retryRoot = createRoot(document.getElementById("root")!);
+await act(async () => { retryRoot.render(<TauriSettings onClose={() => {}} />); });
+assert.match(visibleText(), /配色风格/, "appearance remains available when provider loading fails");
+await act(async () => { click("模型"); });
+assert.match(visibleText(), /读取设置失败/, "failed provider loading is actionable");
+await act(async () => { click("重试"); });
+assert.match(visibleText(), /已就绪/, "retry recovers the model settings");
+await act(async () => { click("关于"); });
+failRuntime = true;
+await act(async () => { click("刷新"); });
+assert.match(visibleText(), /读取设置失败/, "runtime refresh failure is visible");
+await act(async () => { click("模型"); });
+assert.match(visibleText(), /已就绪/, "runtime failure does not block model settings");
+await act(async () => { retryRoot.unmount(); });
 console.log("tauri settings API key flow passed");

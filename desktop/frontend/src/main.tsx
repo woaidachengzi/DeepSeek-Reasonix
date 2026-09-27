@@ -11,6 +11,7 @@ import { initFontFamily } from "./lib/fontFamily";
 import { initTextSize } from "./lib/textSize";
 import { initTypographyPreferences } from "./lib/typographyPreferences";
 import { initTheme } from "./lib/theme";
+import { initTauriAppearance } from "./tauri/tauriAppearance";
 import { initConversationWidth } from "./lib/conversationWidth";
 import appShellStylesheetURL from "./styles.css?url";
 
@@ -39,7 +40,8 @@ function initTypographyPlatform() {
 }
 
 initTypographyPlatform();
-initTheme();
+if (isTauriRuntime()) initTauriAppearance();
+else initTheme();
 initConversationWidth();
 initTextSize();
 initFontFamily();

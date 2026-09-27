@@ -9,7 +9,8 @@ import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
 import { compactQuestionText, type QuestionAnchor } from "../lib/transcriptGrouping";
 import { LocaleProvider } from "../lib/i18n";
 import logoWordmark from "../assets/logo-wordmark.svg";
-import { TauriSettings } from "./TauriSettings";
+import { TauriSettings, type TauriSettingsTab } from "./TauriSettings";
+import { getTauriNotificationsEnabled } from "./tauriPreferences";
 import { handleTauriDragDropEvent, retainTauriDragDropListener } from "./dragDrop";
 import { formatTauriWorkDuration, groupTauriHistory, type IndexedHistoryMessage } from "./historyPresentation";
 
@@ -110,9 +111,6 @@ import {
   tauriAssistantTextDelta,
   tauriComposerInput,
   tauriEventSummary,
-  deleteTauriMCPServer,
-  saveTauriMCPServer,
-  tauriMCPServers,
   tauriMessageFrom,
   tauriPromptAnsweredId,
   tauriPromptFromEvent,
@@ -135,7 +133,6 @@ import {
   tauriTurnFailure,
   tauriImportLegacySessionCatalog,
   tauriSessionCatalogShadow,
-  type TauriMCPServer,
   type TauriBridgeEvent,
   type TauriBridgeAttachment,
   type TauriBridgeHistory,
@@ -159,14 +156,6 @@ import {
 } from "../lib/tauriBridge";
 import { filterWorkbenchProjectGroups, groupWorkbenchSessions, needsFirstMessageTitle, titleFromFirstUser, workbenchProjectKey, type WorkbenchProjectFolder } from "./workbenchSessions";
 import { sessionLifecycleFailure, sessionLifecycleNotice } from "./sessionLifecycleError";
-import {
-  emptyMCPDraft,
-  mcpCredentialHint,
-  mcpDraftForEditing,
-  mcpDraftToInput,
-  mcpTransportSummary,
-  type MCPDraft,
-} from "./tauriMCPServers";
 import "./tauriChatWorkspace.css";
 
 interface WorkbenchSessionTab {
@@ -407,10 +396,6 @@ export function TauriSessionPreview() {
   const [scanImportError, setScanImportError] = useState("");
   const [runtimeInfo, setRuntimeInfo] = useState<TauriPreviewRuntimeInfo | null>(null);
   const [providerSummary, setProviderSummary] = useState<TauriProviderSummary | null>(null);
-  const [profileNotice, setProfileNotice] = useState("");
-  const [mcpServers, setMcpServers] = useState<TauriMCPServer[]>([]);
-  const [mcpNotice, setMcpNotice] = useState("");
-  const [mcpDraft, setMcpDraft] = useState<MCPDraft | null>(null);
   const [events, setEvents] = useState<TauriBridgeEvent[]>([]);
   const [history, setHistory] = useState<TauriBridgeHistory | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -426,6 +411,7 @@ export function TauriSessionPreview() {
   const [sessionPageCatalogWarning, setSessionPageCatalogWarning] = useState("");
   const catalogAuditRequestRef = useRef(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<TauriSettingsTab>("appearance");
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspacePath, setWorkspacePath] = useState("");
   const [workspaceEntries, setWorkspaceEntries] = useState<TauriWorkspaceEntry[]>([]);
@@ -611,7 +597,6 @@ export function TauriSessionPreview() {
     void tauriPreviewProfileStatus().then(setProfile).catch(error => setError(tauriMessageFrom(error)));
     void tauriPreviewRuntimeInfo().then(setRuntimeInfo).catch(error => setError(tauriMessageFrom(error)));
     void tauriProviderSummary().then(setProviderSummary).catch(error => setError(tauriMessageFrom(error)));
-    void tauriMCPServers().then(setMcpServers).catch(error => setMcpNotice(tauriMessageFrom(error)));
     let active = true;
     void (async () => {
       let importFailure = "";
@@ -850,9 +835,10 @@ export function TauriSessionPreview() {
             setPendingPrompt(null);
             setPromptSelections({});
             setSession(previous => previous ? { ...previous, state: "running" } : previous);
-            // Send notification if window is not focused
+            // The user can disable desktop notifications in Settings.
             void (async () => {
               try {
+                if (!getTauriNotificationsEnabled()) return;
                 const hasPermission = await isPermissionGranted();
                 if (!hasPermission) {
                   const permission = await requestPermission();
@@ -1945,45 +1931,52 @@ export function TauriSessionPreview() {
     }
   }
 
-  async function importStableProfile() {
-    if (!profile?.importAvailable || busy) return;
+  async function refreshProfile() {
+    setProfile(await tauriPreviewProfileStatus());
+  }
+
+  async function importStableProfile(): Promise<string> {
+    if (!profile?.importAvailable || busy) return "";
     const confirmed = window.confirm(
       `将 ${profile.stableConfig ?? "稳定版配置"} 复制到隔离的 Tauri Preview 配置目录？\n\n操作前会创建带时间戳的备份。不会复制会话、缓存、插件或 .env 文件，也不会修改稳定版。`,
     );
-    if (!confirmed) return;
+    if (!confirmed) return "";
     setBusy(true);
     setError("");
-    setProfileNotice("");
     try {
       const result = await importTauriStableProfile();
-      setProfileNotice(`已导入：${result.importedConfig}\n备份：${result.backupConfig}`);
-      setProfile(await tauriPreviewProfileStatus());
-      setProviderSummary(await tauriProviderSummary());
+      const [profileStatus, providers] = await Promise.allSettled([tauriPreviewProfileStatus(), tauriProviderSummary()]);
+      if (profileStatus.status === "fulfilled") setProfile(profileStatus.value);
+      if (providers.status === "fulfilled") setProviderSummary(providers.value);
+      const refreshWarning = profileStatus.status === "rejected" || providers.status === "rejected" ? "\n配置已导入，但状态刷新失败；可在设置页重试刷新。" : "";
+      return `已导入：${result.importedConfig}\n备份：${result.backupConfig}${refreshWarning}`;
     } catch (cause) {
-      setError(tauriMessageFrom(cause));
+      throw cause;
     } finally {
       setBusy(false);
     }
   }
 
-  async function importStableProjectFolders() {
-    if (!profile?.projectFoldersImportAvailable || busy) return;
+  async function importStableProjectFolders(): Promise<string> {
+    if (!profile?.projectFoldersImportAvailable || busy) return "";
     const confirmed = window.confirm(
       "将稳定版保存的项目文件夹名称和路径复制到隔离的 Tauri Preview？只导入文件夹清单，不导入会话、topic 或其他配置；不会修改稳定版。",
     );
-    if (!confirmed) return;
+    if (!confirmed) return "";
     setBusy(true);
     setError("");
-    setProfileNotice("");
     try {
       const result = await importTauriStableProjectFolders();
-      const folderResult = await tauriWorkbenchProjectFolders();
-      setProjectFolders(folderResult.folders.map(folder => ({ root: folder.root, title: folder.title })));
-      setProjectFoldersWarning(folderResult.warning ?? "");
-      setProfile(await tauriPreviewProfileStatus());
-      setProfileNotice(`已导入 ${result.projectCount} 个项目文件夹：\n${result.importedFile}`);
+      const [folders, profileStatus] = await Promise.allSettled([tauriWorkbenchProjectFolders(), tauriPreviewProfileStatus()]);
+      if (folders.status === "fulfilled") {
+        setProjectFolders(folders.value.folders.map(folder => ({ root: folder.root, title: folder.title })));
+        setProjectFoldersWarning(folders.value.warning ?? "");
+      }
+      if (profileStatus.status === "fulfilled") setProfile(profileStatus.value);
+      const refreshWarning = folders.status === "rejected" || profileStatus.status === "rejected" ? "\n文件夹已导入，但列表刷新失败；可重新打开设置检查。" : "";
+      return `已导入 ${result.projectCount} 个项目文件夹：\n${result.importedFile}${refreshWarning}`;
     } catch (cause) {
-      setError(tauriMessageFrom(cause));
+      throw cause;
     } finally {
       setBusy(false);
     }
@@ -2094,53 +2087,6 @@ export function TauriSessionPreview() {
 
   const currentWorkspace = workspaceRoot || session?.workspaceRoot || "";
   const activeProjectKey = workbenchProjectKey(currentWorkspace, platform);
-
-  async function refreshMCPServers() {
-    try {
-      setMcpServers(await tauriMCPServers(currentWorkspace || undefined));
-      setMcpNotice("");
-    } catch (cause) {
-      setMcpNotice(tauriMessageFrom(cause));
-    }
-  }
-
-  /** Credentials are write-only: an empty field keeps the stored value, so an
-   *  edit never requires retyping a token and never reveals one. */
-  async function saveMCPServer() {
-    if (!mcpDraft) return;
-    let input;
-    try {
-      input = mcpDraftToInput(mcpDraft);
-    } catch (cause) {
-      setMcpNotice(tauriMessageFrom(cause));
-      return;
-    }
-    setBusy(true);
-    try {
-      const result = await saveTauriMCPServer(input, currentWorkspace || undefined);
-      setMcpServers(result.servers);
-      setMcpDraft(null);
-      setMcpNotice("");
-    } catch (cause) {
-      setMcpNotice(tauriMessageFrom(cause));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function removeMCPServer(server: TauriMCPServer) {
-    setBusy(true);
-    try {
-      const result = await deleteTauriMCPServer(server.name, currentWorkspace || undefined);
-      setMcpServers(result.servers);
-      if (mcpDraft?.name === server.name) setMcpDraft(null);
-      setMcpNotice("");
-    } catch (cause) {
-      setMcpNotice(tauriMessageFrom(cause));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <main className="tauri-shell" data-platform={platform}>
@@ -2257,7 +2203,7 @@ export function TauriSessionPreview() {
         </nav>
         <div className="tauri-sidebar__footer">
           <span className={`tauri-health${status?.running ? " is-ready" : ""}`}><i />{status?.running ? "本地运行正常" : "正在连接本地服务…"}</span>
-          <button type="button" className="tauri-sidebar__diagnostics" onClick={() => setSettingsOpen(true)}><Settings size={15} />设置</button>
+          <button type="button" className="tauri-sidebar__diagnostics" onClick={() => { setSettingsTab("appearance"); setSettingsOpen(true); }}><Settings size={15} />设置</button>
           <button type="button" className="tauri-sidebar__diagnostics" onClick={() => setDiagnosticsOpen(true)}><Activity size={15} />运行状态</button>
         </div>
       </aside>
@@ -2408,40 +2354,15 @@ export function TauriSessionPreview() {
               </> : <p>{catalogAuditError || "正在分页读取身份目录并与旧目录比较…"}</p>}
               {profile?.managedProfile && <button type="button" className="tauri-diagnostic-action" onClick={() => void openScanImportReview()} disabled={busy || scanImportLoading}>扫描并审核未认领 transcript</button>}
             </section>
-            <section className="tauri-diagnostic-card">
-              <h3>预览配置</h3>
-              {profile ? <><p>配置与会话保存在独立预览目录：</p><code>{profile.previewHome}</code>{profile.importAvailable ? <><p>检测到稳定版配置。复制前会创建备份，不会改动稳定版。</p><button type="button" className="tauri-diagnostic-action" onClick={() => void importStableProfile()} disabled={busy}>复制稳定版配置（先备份）</button></> : <p>{profile.previewConfigExists ? "预览配置已存在，不会覆盖。" : profile.managedProfile ? "未发现可复制的稳定版配置。" : "检测到自定义 REASONIX_HOME，已停用自动导入。"}</p>}
-                {profile.projectFoldersImportAvailable ? <><p>可单独导入稳定版保存的实际项目文件夹；只复制根路径和显示名称。</p><button type="button" className="tauri-diagnostic-action" onClick={() => void importStableProjectFolders()} disabled={busy}>导入旧版项目文件夹</button></> : profile.projectFoldersFileExists ? <p>当前配置目录中已有项目文件夹清单。</p> : <p>{profile.managedProfile ? "没有可导入的稳定版项目文件夹清单。" : "自定义 REASONIX_HOME 下停用稳定版项目文件夹导入。"}</p>}
-              </> : <p>正在检查隔离配置…</p>}
-              {profileNotice && <p className="tauri-diagnostic-notice">{profileNotice}</p>}
-            </section>
+            <section className="tauri-diagnostic-card"><h3>预览配置</h3><p>配置与会话保存在独立 Preview 目录，导入与备份入口位于设置的数据页。</p><button type="button" className="tauri-diagnostic-action" onClick={() => { setDiagnosticsOpen(false); setSettingsTab("data"); setSettingsOpen(true); }}>打开数据设置</button></section>
             <section className="tauri-diagnostic-card">
               <div className="tauri-diagnostic-card__heading"><h3>模型提供方</h3><button type="button" onClick={() => void tauriProviderSummary().then(setProviderSummary).catch(cause => setError(tauriMessageFrom(cause)))} disabled={busy}>刷新</button></div>
               {!providerSummary ? <p>正在读取 Preview 配置…</p> : <><p>默认模型只影响新对话；工作区 <code>reasonix.toml</code> 可能覆盖用户默认值。</p>{providerSummary.providers.length === 0 ? <p>当前没有配置提供方。</p> : <ul>{providerSummary.providers.map(provider => <li key={provider.name}><strong>{provider.displayName || provider.name}</strong><span>{provider.kind} · {provider.modelCount} 个模型 · {provider.configured ? "已就绪" : "缺少 API Key"}</span></li>)}</ul>}<small>密钥、环境变量名和服务端点不会传到界面。</small></>}
             </section>
             <section className="tauri-diagnostic-card">
-              <div className="tauri-diagnostic-card__heading"><h3>MCP 服务器</h3><span><button type="button" onClick={() => void refreshMCPServers()} disabled={busy}>刷新</button><button type="button" onClick={() => setMcpDraft(emptyMCPDraft(currentWorkspace ? "project" : "global"))} disabled={busy || mcpDraft !== null}>添加</button></span></div>
-              {mcpNotice && <p className="tauri-diagnostic-error" role="alert">{mcpNotice}</p>}
-              <p>项目级写入工作区的 <code>reasonix.toml</code>，全局级写入用户配置。密钥只写不回传。</p>
-              {mcpServers.length === 0 ? <p>还没有配置 MCP 服务器。</p> : <ul className="tauri-mcp-list">{mcpServers.map(server => <li key={server.name}>
-                <div className="tauri-mcp-list__row"><strong>{server.name}</strong><span className="tauri-mcp-list__meta">{server.scope === "project" ? "项目" : server.scope === "global" ? "全局" : server.scope} · {server.type}</span></div>
-                <code className="tauri-mcp-list__transport">{mcpTransportSummary(server) || "—"}</code>
-                {mcpCredentialHint(server) && <small>{mcpCredentialHint(server)}</small>}
-                {server.managedByPackage && <small>由已安装插件包管理，不能在此修改。</small>}
-                <div className="tauri-mcp-list__actions"><button type="button" onClick={() => setMcpDraft(mcpDraftForEditing(server))} disabled={busy || server.managedByPackage}>编辑</button><button type="button" onClick={() => void removeMCPServer(server)} disabled={busy || server.managedByPackage}>删除</button></div>
-              </li>)}</ul>}
-              {mcpDraft && <form className="tauri-mcp-form" onSubmit={event => { event.preventDefault(); void saveMCPServer(); }}>
-                <label>名称<input value={mcpDraft.name} onChange={event => setMcpDraft({ ...mcpDraft, name: event.target.value })} disabled={mcpDraft.editing} aria-label="MCP 服务器名称" /></label>
-                <label>作用域<select value={mcpDraft.scope} onChange={event => setMcpDraft({ ...mcpDraft, scope: event.target.value === "project" ? "project" : "global" })} disabled={mcpDraft.editing}><option value="project">项目（写入工作区 reasonix.toml）</option><option value="global">全局（写入用户配置）</option></select></label>
-                <label>传输<select value={mcpDraft.type} onChange={event => setMcpDraft({ ...mcpDraft, type: event.target.value === "http" ? "http" : event.target.value === "sse" ? "sse" : "stdio" })}><option value="stdio">stdio</option><option value="http">http</option><option value="sse">sse</option></select></label>
-                {mcpDraft.type === "stdio" ? <>
-                  <label>命令<input value={mcpDraft.command} onChange={event => setMcpDraft({ ...mcpDraft, command: event.target.value })} placeholder="uvx" aria-label="MCP 服务器命令" /></label>
-                  <label>参数<input value={mcpDraft.args} onChange={event => setMcpDraft({ ...mcpDraft, args: event.target.value })} placeholder="mcp-server-time" aria-label="MCP 服务器参数" /></label>
-                </> : <label>URL<input value={mcpDraft.url} onChange={event => setMcpDraft({ ...mcpDraft, url: event.target.value })} placeholder="https://…" aria-label="MCP 服务器 URL" /></label>}
-                <label>环境变量<textarea value={mcpDraft.env} onChange={event => setMcpDraft({ ...mcpDraft, env: event.target.value })} rows={2} placeholder="KEY=value，每行一个；留空保持原值" aria-label="MCP 服务器环境变量" /></label>
-                <label>请求头<textarea value={mcpDraft.headers} onChange={event => setMcpDraft({ ...mcpDraft, headers: event.target.value })} rows={2} placeholder="Header=value，每行一个；留空保持原值" aria-label="MCP 服务器请求头" /></label>
-                <div className="tauri-mcp-form__actions"><button type="submit" disabled={busy}>{mcpDraft.editing ? "保存修改" : "添加服务器"}</button><button type="button" onClick={() => setMcpDraft(null)} disabled={busy}>取消</button></div>
-              </form>}
+              <h3>MCP 服务器</h3>
+              <p>在设置中管理全局和当前项目的 MCP 服务器。</p>
+              <button type="button" className="tauri-diagnostic-action" onClick={() => { setDiagnosticsOpen(false); setSettingsTab("mcp"); setSettingsOpen(true); }}>打开 MCP 设置</button>
             </section>
             <details className="tauri-diagnostic-card tauri-runtime-details"><summary>构建与版本详情</summary>{!runtimeInfo ? <p>正在读取构建信息…</p> : <dl><div><dt>稳定版基线</dt><dd>v{runtimeInfo.stableVersion} · {runtimeInfo.stableCommit.slice(0, 12)}</dd></div><div><dt>Preview / Tauri</dt><dd>v{runtimeInfo.previewVersion} · v{runtimeInfo.tauriVersion}</dd></div><div><dt>Preview 源码</dt><dd>{runtimeInfo.previewCommit === "unknown" ? "未知" : runtimeInfo.previewCommit.slice(0, 12)}{runtimeInfo.previewDirty && "（含未提交改动）"}</dd></div><div><dt>宿主构建时间</dt><dd>{runtimeInfo.previewBuild}</dd></div><div><dt>桥接协议</dt><dd>v{runtimeInfo.bridgeProtocolVersion}</dd></div><div><dt>Sidecar</dt><dd>{runtimeInfo.sidecarInstanceId ?? "未运行"}</dd></div>{session && <div><dt>会话 ID</dt><dd>{session.id}</dd></div>}{session && <div><dt>会话路径</dt><dd>{session.path}</dd></div>}{history && <div><dt>历史记录</dt><dd>{history.totalMessages} 条</dd></div>}<div><dt>事件游标</dt><dd>{sequence} · 最近 {events.length} 个事件</dd></div></dl>}</details>
             <details className="tauri-diagnostic-card tauri-event-details"><summary>桥接事件日志</summary>{events.length === 0 ? <p>开始一个对话后，这里会显示桥接事件。</p> : <ol>{events.map(event => <li key={event.sequence}><b>#{event.sequence} · {event.eventKind}</b><pre>{tauriEventSummary(event)}</pre></li>)}</ol>}</details>
@@ -2498,7 +2419,7 @@ export function TauriSessionPreview() {
         </aside>
       </>}
 
-      {settingsOpen && <TauriSettings onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionState={session?.state} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} />}
+      {settingsOpen && <TauriSettings initialTab={settingsTab} workspaceRoot={currentWorkspace || undefined} profile={profile} importBusy={busy} onRefreshProfile={refreshProfile} onImportStableProfile={importStableProfile} onImportStableProjectFolders={importStableProjectFolders} onScanUnclaimedSessions={() => void openScanImportReview()} onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionState={session?.state} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} />}
     </main>
   );
 }
