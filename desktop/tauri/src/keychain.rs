@@ -1,7 +1,8 @@
 use keyring::{Entry, Error as KeyringError};
-use serde_json::from_str;
+use serde_json::from_slice;
 use std::collections::HashMap;
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
@@ -10,6 +11,8 @@ use crate::bridge::{BridgeStatus, BridgeSupervisor};
 
 const SERVICE_NAME: &str = "com.reasonix.desktop";
 const LEGACY_FILE_NAME: &str = "keychain.dat";
+const MAX_LEGACY_FILE_BYTES: u64 = 1024 * 1024;
+const MAX_LEGACY_ENTRIES: usize = 256;
 const PROVIDER_API_KEY_PREFIX: &str = "api_key_";
 
 trait CredentialBackend: Send + Sync {
@@ -86,27 +89,65 @@ impl KeychainStore {
             .app_data_dir()
             .map_err(|e| format!("Failed to get app data dir: {e}"))?;
         let legacy_path = data_dir.join(LEGACY_FILE_NAME);
-
-        if legacy_path.is_file() {
-            self.migrate_legacy_file(&legacy_path)?;
-            fs::remove_file(&legacy_path)
-                .map_err(|e| format!("Failed to remove legacy keychain file: {e}"))?;
-        }
-
-        Ok(())
+        self.migrate_legacy_file(&legacy_path)
     }
 
     fn migrate_legacy_file(&self, path: &Path) -> Result<(), String> {
-        let content = fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read legacy keychain file: {e}"))?;
-        let entries: HashMap<String, String> =
-            from_str(&content).map_err(|e| format!("Failed to parse legacy keychain file: {e}"))?;
+        let metadata = match fs::symlink_metadata(path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(format!("Failed to inspect legacy keychain file: {error}")),
+        };
+        if metadata.file_type().is_symlink()
+            || !metadata.is_file()
+            || metadata.len() > MAX_LEGACY_FILE_BYTES
+        {
+            return Err("Legacy keychain file must be a regular file no larger than 1 MiB".into());
+        }
+        let mut file = fs::File::open(path)
+            .map_err(|error| format!("Failed to open legacy keychain file: {error}"))?;
+        let opened_metadata = file
+            .metadata()
+            .map_err(|error| format!("Failed to inspect opened legacy keychain file: {error}"))?;
+        let current_metadata = fs::symlink_metadata(path)
+            .map_err(|error| format!("Failed to reinspect legacy keychain file: {error}"))?;
+        if current_metadata.file_type().is_symlink()
+            || !current_metadata.is_file()
+            || !opened_metadata.is_file()
+            || opened_metadata.len() > MAX_LEGACY_FILE_BYTES
+            || !crate::workbench_projects::same_file_as_path(path, &file)
+                .map_err(|error| format!("Failed to verify legacy keychain file: {error}"))?
+        {
+            return Err("Legacy keychain file changed while opening".into());
+        }
+        let mut content = Vec::new();
+        file.by_ref()
+            .take(MAX_LEGACY_FILE_BYTES + 1)
+            .read_to_end(&mut content)
+            .map_err(|error| format!("Failed to read legacy keychain file: {error}"))?;
+        if content.len() as u64 > MAX_LEGACY_FILE_BYTES {
+            return Err("Legacy keychain file exceeds 1 MiB".into());
+        }
+        let entries: HashMap<String, String> = from_slice(&content)
+            .map_err(|error| format!("Failed to parse legacy keychain file: {error}"))?;
+        if entries.len() > MAX_LEGACY_ENTRIES
+            || entries.iter().any(|(key, value)| {
+                key.trim().is_empty() || key.len() > 256 || value.len() > 32 << 10
+            })
+        {
+            return Err("Legacy keychain file contains too many or oversized entries".into());
+        }
 
         for (key, value) in entries {
             self.save_secret(&key, &value)?;
         }
-
-        Ok(())
+        if !crate::workbench_projects::same_file_as_path(path, &file)
+            .map_err(|error| format!("Failed to verify migrated keychain file: {error}"))?
+        {
+            return Err("Legacy keychain file changed during migration".into());
+        }
+        fs::remove_file(path)
+            .map_err(|error| format!("Failed to remove legacy keychain file: {error}"))
     }
 
     pub fn save_secret(&self, key: &str, value: &str) -> Result<(), String> {
@@ -373,6 +414,68 @@ mod tests {
                 .expect("load migrated value"),
             Some("legacy-value".to_string())
         );
+        assert!(!path.exists(), "migrated plaintext file must be removed");
+    }
+
+    #[test]
+    fn missing_legacy_file_does_not_block_first_launch() {
+        let store = test_store();
+        let dir = tempdir().expect("temp dir");
+        store
+            .migrate_legacy_file(&dir.path().join(LEGACY_FILE_NAME))
+            .expect("fresh Preview profile has no legacy keychain file");
+    }
+
+    #[test]
+    fn rejects_oversized_legacy_file_without_importing_any_keys() {
+        let store = test_store();
+        let dir = tempdir().expect("temp dir");
+        let path = dir.path().join(LEGACY_FILE_NAME);
+        fs::File::create(&path)
+            .expect("create legacy file")
+            .set_len(MAX_LEGACY_FILE_BYTES + 1)
+            .expect("make oversized sparse file");
+
+        assert!(store.migrate_legacy_file(&path).is_err());
+        assert!(path.exists(), "failed migration must preserve its source");
+    }
+
+    #[test]
+    fn validates_every_legacy_entry_before_writing_credentials() {
+        let store = test_store();
+        let dir = tempdir().expect("temp dir");
+        let path = dir.path().join(LEGACY_FILE_NAME);
+        let content = serde_json::json!({
+            "api_key_valid": "valid-secret",
+            "api_key_oversized": "x".repeat((32 << 10) + 1),
+        });
+        fs::write(
+            &path,
+            serde_json::to_vec(&content).expect("serialize legacy file"),
+        )
+        .expect("write legacy file");
+
+        assert!(store.migrate_legacy_file(&path).is_err());
+        assert_eq!(store.load_secret("api_key_valid").expect("read key"), None);
+        assert!(path.exists(), "failed migration must preserve its source");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlinked_legacy_file_without_importing_target() {
+        use std::os::unix::fs::symlink;
+
+        let store = test_store();
+        let dir = tempdir().expect("temp dir");
+        let target = dir.path().join("other-secrets.json");
+        let path = dir.path().join(LEGACY_FILE_NAME);
+        fs::write(&target, r#"{"api_key_other":"unrelated-secret"}"#)
+            .expect("write unrelated file");
+        symlink(&target, &path).expect("create legacy symlink");
+
+        assert!(store.migrate_legacy_file(&path).is_err());
+        assert_eq!(store.load_secret("api_key_other").expect("read key"), None);
+        assert!(target.exists(), "symlink target must remain untouched");
     }
 
     #[test]
