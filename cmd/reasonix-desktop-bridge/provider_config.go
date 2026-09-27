@@ -66,15 +66,16 @@ type deleteProviderConfigRequest struct {
 }
 
 type saveProviderConfigRequest struct {
-	PresetID    string   `json:"presetId"`
-	Revision    string   `json:"revision"`
-	Name        string   `json:"name"`
-	DisplayName string   `json:"displayName"`
-	Kind        string   `json:"kind"`
-	BaseURL     string   `json:"baseUrl"`
-	Models      []string `json:"models"`
-	Default     string   `json:"default"`
-	UseAPIKey   bool     `json:"useApiKey"`
+	PresetID     string   `json:"presetId"`
+	PresetAction string   `json:"presetAction"`
+	Revision     string   `json:"revision"`
+	Name         string   `json:"name"`
+	DisplayName  string   `json:"displayName"`
+	Kind         string   `json:"kind"`
+	BaseURL      string   `json:"baseUrl"`
+	Models       []string `json:"models"`
+	Default      string   `json:"default"`
+	UseAPIKey    bool     `json:"useApiKey"`
 }
 
 var previewProviderName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$`)
@@ -125,12 +126,13 @@ func previewProviderPresets(cfg *configpkg.Config, revision string) []providerPr
 			group = preset.DisplayGroup
 		}
 		view := providerPresetView{ID: preset.ID, Label: preset.Label, Description: preset.Description, Group: group, Recommended: preset.Recommended, Revision: revision, Routes: make([]providerPresetRouteView, 0, len(preset.Entries))}
-		installed, conflict := 0, false
+		installed, modified, conflict := 0, false, false
 		for _, entry := range preset.Entries {
 			view.Routes = append(view.Routes, providerPresetRouteView{Name: entry.Name, Kind: entry.Kind, BaseURL: entry.BaseURL, Models: append([]string{}, entry.ModelList()...), Default: entry.DefaultModel()})
 			if existing, ok := cfg.Provider(entry.Name); ok {
 				if existing.PresetID == preset.ID {
 					installed++
+					modified = modified || previewPresetRouteModified(*existing, entry)
 				} else {
 					conflict = true
 				}
@@ -140,7 +142,11 @@ func previewProviderPresets(cfg *configpkg.Config, revision string) []providerPr
 		case conflict:
 			view.Status = "name_conflict"
 		case installed == len(preset.Entries):
-			view.Status = "installed"
+			if modified {
+				view.Status = "installed_modified"
+			} else {
+				view.Status = "installed"
+			}
 		case installed > 0:
 			view.Status = "partial"
 		default:
@@ -151,10 +157,20 @@ func previewProviderPresets(cfg *configpkg.Config, revision string) []providerPr
 	return views
 }
 
+func previewPresetRouteModified(existing, preset configpkg.ProviderEntry) bool {
+	return existing.Kind != preset.Kind || existing.BaseURL != preset.BaseURL || existing.ChatURL != preset.ChatURL ||
+		existing.RequestURL != preset.RequestURL || existing.AuthHeader != preset.AuthHeader ||
+		!slices.Equal(existing.ModelList(), preset.ModelList()) || existing.DefaultModel() != preset.DefaultModel() ||
+		existing.NoProxy != preset.NoProxy || existing.ContextWindow != preset.ContextWindow
+}
+
 func persistProviderPreset(input saveProviderConfigRequest, token string) error {
 	preset, ok := configpkg.CuratedProviderPreset(input.PresetID)
 	if !ok || len(preset.Entries) == 0 || len(preset.Entries) > 8 {
 		return fmt.Errorf("unknown or unsupported provider preset")
+	}
+	if input.PresetAction != "" && input.PresetAction != "add" && input.PresetAction != "reset" {
+		return fmt.Errorf("unsupported provider preset action")
 	}
 	unlock := configpkg.LockUserConfigEdits()
 	defer unlock()
@@ -174,6 +190,40 @@ func persistProviderPreset(input saveProviderConfigRequest, token string) error 
 		return err
 	}
 	baseline := cfg.ModelSettingsBaseline()
+	if input.PresetAction == "reset" {
+		for _, entry := range preset.Entries {
+			existing, ok := cfg.Provider(entry.Name)
+			if !ok || existing.PresetID != preset.ID {
+				return fmt.Errorf("preset reset requires every route to be installed from this preset")
+			}
+		}
+		for _, entry := range preset.Entries {
+			existing, _ := cfg.Provider(entry.Name)
+			entry.APIKeyEnv = existing.APIKeyEnv
+			if existing.DisplayName != "" {
+				entry.DisplayName = existing.DisplayName
+			} else if entry.DisplayName == "" {
+				entry.DisplayName = preset.Label
+			}
+			if err := cfg.UpsertProvider(entry); err != nil {
+				return err
+			}
+		}
+		if _, ok := cfg.ResolveModel(cfg.DefaultModel); !ok {
+			providerName, _, qualified := strings.Cut(cfg.DefaultModel, "/")
+			if qualified {
+				for _, entry := range preset.Entries {
+					if entry.Name == providerName {
+						if err := cfg.SetDefaultModel(entry.Name + "/" + entry.DefaultModel()); err != nil {
+							return err
+						}
+						break
+					}
+				}
+			}
+		}
+		return cfg.SaveUserSettingsDeltaTo(path, baseline)
+	}
 	missing := make([]configpkg.ProviderEntry, 0, len(preset.Entries))
 	for _, entry := range preset.Entries {
 		if existing, ok := cfg.Provider(entry.Name); ok {

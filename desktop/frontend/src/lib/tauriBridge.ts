@@ -261,7 +261,7 @@ export interface TauriProviderPreset {
   description: string;
   group: string;
   recommended: boolean;
-  status: "available" | "partial" | "installed" | "name_conflict";
+  status: "available" | "partial" | "installed" | "installed_modified" | "name_conflict";
   routes: TauriProviderPresetRoute[];
   revision: string;
 }
@@ -276,12 +276,15 @@ export async function saveTauriProviderConfig(input: TauriProviderConfigInput): 
   return invoke<TauriProviderConfigList>("save_provider_config", { input });
 }
 
-export async function installTauriProviderPreset(preset: TauriProviderPreset): Promise<TauriProviderConfigList> {
+async function changeTauriProviderPreset(preset: TauriProviderPreset, presetAction: "add" | "reset"): Promise<TauriProviderConfigList> {
   requireTauri();
   return invoke<TauriProviderConfigList>("save_provider_config", { input: {
-    presetId: preset.id, revision: preset.revision, name: "", displayName: "", kind: "", baseUrl: "", models: [], default: "", useApiKey: false,
+    presetId: preset.id, presetAction, revision: preset.revision, name: "", displayName: "", kind: "", baseUrl: "", models: [], default: "", useApiKey: false,
   } });
 }
+
+export const installTauriProviderPreset = (preset: TauriProviderPreset) => changeTauriProviderPreset(preset, "add");
+export const resetTauriProviderPreset = (preset: TauriProviderPreset) => changeTauriProviderPreset(preset, "reset");
 
 export async function deleteTauriProviderConfig(provider: TauriProviderConfig): Promise<TauriProviderConfigList> {
   requireTauri();

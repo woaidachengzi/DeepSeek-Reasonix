@@ -490,6 +490,8 @@ pub struct SaveProviderConfigRequest {
     #[serde(default)]
     pub preset_id: String,
     #[serde(default)]
+    pub preset_action: String,
+    #[serde(default)]
     pub revision: String,
     pub name: String,
     pub display_name: String,
@@ -3233,13 +3235,17 @@ mod tests {
             "https://api.xiaomimimo.com/v1"
         );
         let install: SaveProviderConfigRequest = serde_json::from_value(json!({
-            "presetId":"mimo-api", "revision":"abc", "name":"", "displayName":"", "kind":"",
+            "presetId":"mimo-api", "presetAction":"reset", "revision":"abc", "name":"", "displayName":"", "kind":"",
             "baseUrl":"", "models":[], "default":"", "useApiKey":false
         }))
         .unwrap();
         assert_eq!(
-            serde_json::to_value(install).unwrap()["presetId"],
+            serde_json::to_value(&install).unwrap()["presetId"],
             "mimo-api"
+        );
+        assert_eq!(
+            serde_json::to_value(install).unwrap()["presetAction"],
+            "reset"
         );
 
         let skills: SkillsSettingsView = serde_json::from_value(json!({

@@ -68,6 +68,7 @@ export function tauriProviderSummary() { return Promise.resolve({ protocolVersio
 export function tauriProviderConfigs() { return Promise.resolve({ protocolVersion: 1, providers: [] }); }
 export function saveTauriProviderConfig(input) { record("save_provider_config", { input }); return Promise.resolve({ protocolVersion: 1, providers: [input] }); }
 export function installTauriProviderPreset(preset) { record("save_provider_config", { input: { presetId: preset.id, revision: preset.revision } }); return Promise.resolve({ protocolVersion: 1, providers: [], presets: [] }); }
+export function resetTauriProviderPreset(preset) { record("save_provider_config", { input: { presetId: preset.id, presetAction: "reset", revision: preset.revision } }); return Promise.resolve({ protocolVersion: 1, providers: [], presets: [] }); }
 export function deleteTauriProviderConfig(provider) { record("delete_provider_config", { provider }); return Promise.resolve({ protocolVersion: 1, providers: [] }); }
 export function tauriUsageStats(request) { record("usage_stats", { request }); return Promise.resolve({ protocolVersion: 1, from: "2026-09-01", to: "2026-09-27", tokens: 0, requests: 0, turns: 0, cacheHit: 0, cacheMiss: 0, activeDays: 0, topModel: "", topProvider: "", daily: [], models: [], providers: [] }); }
 export function tauriPermissionSettings() { record("permission_settings"); return Promise.resolve({ protocolVersion: 1, mode: "ask", allow: [], ask: [], deny: [] }); }

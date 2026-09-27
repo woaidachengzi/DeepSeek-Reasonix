@@ -54,7 +54,9 @@ let deletedProviderRevision = "";
 let savedProviderInput: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean } | undefined;
 let savedPresetId = "";
 let presetInstalled = false;
-const providerPreset = () => ({ id: "mimo-api", label: "MiMo API", description: "MiMo direct API", group: "Xiaomi", recommended: false, status: presetInstalled ? "installed" : "available", revision: "r1", routes: [{ name: "mimo-api", kind: "openai", baseUrl: "https://api.xiaomimimo.com/v1", models: ["mimo-v2.5-pro"], default: "mimo-v2.5-pro" }] });
+let presetModified = false;
+let savedPresetAction = "";
+const providerPreset = () => ({ id: "mimo-api", label: "MiMo API", description: "MiMo direct API", group: "Xiaomi", recommended: false, status: presetInstalled ? presetModified ? "installed_modified" : "installed" : "available", revision: "r1", routes: [{ name: "mimo-api", kind: "openai", baseUrl: "https://api.xiaomimimo.com/v1", models: ["mimo-v2.5-pro"], default: "mimo-v2.5-pro" }] });
 const summary = () => ({
   protocolVersion: 1,
   defaultModel,
@@ -65,7 +67,7 @@ const summary = () => ({
 });
 
 (dom.window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
-  async invoke(command: string, args?: { scope?: string; workspaceRoot?: string; url?: string; behavior?: string; mode?: string; request?: { model?: string; role?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean; revision?: string; presetId?: string }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string; profile?: { name: string; description: string; systemPrompt: string } } }) {
+  async invoke(command: string, args?: { scope?: string; workspaceRoot?: string; url?: string; behavior?: string; mode?: string; request?: { model?: string; role?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean; revision?: string; presetId?: string; presetAction?: string }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string; profile?: { name: string; description: string; systemPrompt: string } } }) {
     calls.push(command);
     switch (command) {
       case "preview_runtime_info":
@@ -76,7 +78,7 @@ const summary = () => ({
         return summary();
       case "provider_configs": return { protocolVersion: 1, providers: [{ name: "demo", displayName: "Demo", kind: "openai", models: ["m"], default: "m", removable: allowDeleteProvider, revision: "r1" }], presets: [providerPreset()] };
       case "save_provider_config": {
-        if (args?.input?.presetId) { savedPresetId = args.input.presetId; presetInstalled = true; return { protocolVersion: 1, providers: [{ name: "demo", displayName: "Demo", kind: "openai", models: ["m"], default: "m", removable: false, revision: "r1" }], presets: [providerPreset()] }; }
+        if (args?.input?.presetId) { savedPresetId = args.input.presetId; savedPresetAction = args.input.presetAction ?? ""; presetInstalled = true; presetModified = savedPresetAction !== "reset"; return { protocolVersion: 1, providers: [{ name: "demo", displayName: "Demo", kind: "openai", models: ["m"], default: "m", removable: false, revision: "r1" }], presets: [providerPreset()] }; }
         savedProviderInput = args?.input;
         return { protocolVersion: 1, providers: [{ ...args?.input, removable: false }], presets: [providerPreset()] };
       }
@@ -343,6 +345,11 @@ await act(async () => { presetButton.click(); });
 assert.match(visibleText(), /api\.xiaomimimo\.com\/v1/, "preset endpoint is reviewed before installation");
 await act(async () => { click("添加预设"); });
 assert.equal(savedPresetId, "mimo-api", "reviewed preset ID reaches the bridge");
+await act(async () => { presetButton.click(); });
+await act(async () => { click("恢复预设配置"); });
+assert.notEqual(savedPresetAction, "reset", "reset requires another explicit click");
+await act(async () => { click("确认恢复预设"); });
+assert.equal(savedPresetAction, "reset", "preset reset reaches the bridge after confirmation");
 await act(async () => { click("编辑"); });
 assert.equal(document.querySelector<HTMLInputElement>('.tauri-provider-editor-form input[placeholder="留空保留现有端点"]')?.value, "", "existing endpoint is not sent back to the WebView");
 await act(async () => { click("取消"); });
@@ -377,7 +384,7 @@ await act(async () => { releaseSave?.(); });
 saveGate = null;
 assert.match(visibleText(), /已保存到钥匙串/);
 assert.equal(document.querySelector<HTMLInputElement>(".tauri-settings-apikey input")?.value, "", "successful save clears the entered secret");
-assert.equal(calls.filter(call => call === "provider_summary").length, 4, "save refreshes the provider summary");
+assert.equal(calls.filter(call => call === "provider_summary").length, 5, "save refreshes the provider summary");
 assert.equal(parentConfigured, true, "the model picker outside settings receives the saved status");
 assert.match(visibleText(), /应用到当前会话/, "saved key offers an explicit active-session update");
 await act(async () => { click("应用到当前会话"); });
@@ -387,7 +394,7 @@ assert.doesNotMatch(visibleText(), /应用到当前会话/, "successful update c
 await act(async () => { click("删除"); });
 assert.match(visibleText(), /钥匙串密钥已删除；其他凭据仍可用/, "delete reports the keychain scope when .env remains");
 assert.match(visibleText(), /已就绪/, "refreshed provider remains configured by .env");
-assert.equal(calls.filter(call => call === "provider_summary").length, 5, "delete refreshes the provider summary");
+assert.equal(calls.filter(call => call === "provider_summary").length, 6, "delete refreshes the provider summary");
 assert.equal(parentConfigured, true, "the model picker outside settings keeps the .env readiness");
 
 await act(async () => { click("删除"); });

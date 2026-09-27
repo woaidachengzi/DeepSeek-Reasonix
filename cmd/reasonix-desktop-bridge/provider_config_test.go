@@ -136,6 +136,59 @@ func TestPreviewPresetRefusesExistingProviderName(t *testing.T) {
 	t.Fatal("mimo preset missing")
 }
 
+func TestPreviewPresetResetRestoresCuratedRouteAndPreservesCredentialSource(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	revision, err := previewProviderConfigRevision(configpkg.UserConfigPath(), testToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := persistProviderPreset(saveProviderConfigRequest{PresetID: "mimo-api", Revision: revision}, testToken); err != nil {
+		t.Fatal(err)
+	}
+	if err := persistProviderConfig(saveProviderConfigRequest{Name: "mimo-api", DisplayName: "My MiMo", Kind: "openai", BaseURL: "https://custom.example/v1", Models: []string{"custom-chat"}, Default: "custom-chat"}); err != nil {
+		t.Fatal(err)
+	}
+	editable, err := configpkg.LoadForEditReadOnlyStrict(configpkg.UserConfigPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseline := editable.ModelSettingsBaseline()
+	if err := editable.SetDefaultModel("mimo-api/custom-chat"); err != nil {
+		t.Fatal(err)
+	}
+	if err := editable.SaveUserSettingsDeltaTo(configpkg.UserConfigPath(), baseline); err != nil {
+		t.Fatal(err)
+	}
+	view, err := loadProviderConfigs(testToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var preset providerPresetView
+	for _, item := range view.Presets {
+		if item.ID == "mimo-api" {
+			preset = item
+		}
+	}
+	if preset.Status != "installed_modified" {
+		t.Fatalf("edited preset status = %q", preset.Status)
+	}
+	input := saveProviderConfigRequest{PresetID: preset.ID, PresetAction: "reset", Revision: preset.Revision}
+	if err := persistProviderPreset(input, testToken); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := configpkg.LoadUserConfigReadOnly()
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, ok := cfg.Provider("mimo-api")
+	if !ok || entry.BaseURL != "https://api.xiaomimimo.com/v1" || entry.DefaultModel() != "mimo-v2.5-pro" || entry.APIKeyEnv != "MIMO_API_KEY" || entry.DisplayName != "My MiMo" || cfg.DefaultModel != "mimo-api/mimo-v2.5-pro" {
+		t.Fatalf("reset provider = %+v", entry)
+	}
+	if err := persistProviderPreset(input, testToken); err == nil {
+		t.Fatal("stale preset reset overwrote the new config")
+	}
+}
+
 func TestProviderConfigEditPreservesHiddenFieldsAndUsesPreviewProfile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("REASONIX_HOME", home)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { deleteTauriProviderConfig, installTauriProviderPreset, saveTauriProviderConfig, tauriMessageFrom, tauriProviderConfigs, tauriProviderSummary, type TauriProviderConfig, type TauriProviderConfigInput, type TauriProviderPreset, type TauriProviderSummary } from "../lib/tauriBridge";
+import { deleteTauriProviderConfig, installTauriProviderPreset, resetTauriProviderPreset, saveTauriProviderConfig, tauriMessageFrom, tauriProviderConfigs, tauriProviderSummary, type TauriProviderConfig, type TauriProviderConfigInput, type TauriProviderPreset, type TauriProviderSummary } from "../lib/tauriBridge";
 
 const EMPTY: TauriProviderConfigInput = { name: "", displayName: "", kind: "openai", baseUrl: "", models: [], default: "", useApiKey: true };
 
@@ -7,6 +7,7 @@ export function TauriProviderEditor({ onSummaryChange }: { onSummaryChange: (sum
   const [configs, setConfigs] = useState<TauriProviderConfig[]>([]);
   const [presets, setPresets] = useState<TauriProviderPreset[]>([]);
   const [selectedPreset, setSelectedPreset] = useState("");
+  const [resetArmed, setResetArmed] = useState("");
   const [presetQuery, setPresetQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<TauriProviderConfigInput | null>(null);
@@ -80,18 +81,19 @@ export function TauriProviderEditor({ onSummaryChange }: { onSummaryChange: (sum
     finally { setSaving(false); }
   };
 
-  const installPreset = async (preset: TauriProviderPreset) => {
-    if (saving || (preset.status !== "available" && preset.status !== "partial")) return;
+  const changePreset = async (preset: TauriProviderPreset, action: "add" | "reset") => {
+    if (saving || (action === "add" ? preset.status !== "available" && preset.status !== "partial" : preset.status !== "installed_modified")) return;
     setSaving(true);
     setError(""); setMessage("");
     try {
-      const view = await installTauriProviderPreset(preset);
+      const view = action === "reset" ? await resetTauriProviderPreset(preset) : await installTauriProviderPreset(preset);
       setConfigs(view.providers);
       setPresets(view.presets || []);
       setSelectedPreset("");
-      setMessage(`已添加“${preset.label}”。如果服务需要密钥，请在下方凭据设置中保存。`);
+      setResetArmed("");
+      setMessage(action === "reset" ? `已恢复“${preset.label}”的预设路由与模型配置；原有凭据设置已保留。` : `已添加“${preset.label}”。如果服务需要密钥，请在下方凭据设置中保存。`);
       try { onSummaryChange(await tauriProviderSummary()); }
-      catch { setError("预设已安装，但服务状态刷新失败。请重新打开设置。"); }
+      catch { setError("预设已保存，但服务状态刷新失败。请重新打开设置。"); }
     } catch (err) { setError(tauriMessageFrom(err)); }
     finally { setSaving(false); }
   };
@@ -102,8 +104,8 @@ export function TauriProviderEditor({ onSummaryChange }: { onSummaryChange: (sum
   return <div className="tauri-provider-editor">
     <div className="tauri-settings-model-header"><strong>服务预设</strong><span className="tauri-settings-hint">由 Reasonix 内置目录提供，安装后仍可编辑。</span></div>
     <input className="tauri-settings-input tauri-provider-preset-search" type="search" aria-label="搜索服务预设" placeholder="搜索服务或模型" value={presetQuery} onChange={event => setPresetQuery(event.target.value)} />
-    {loading ? <p className="tauri-settings-hint">正在加载预设…</p> : <div className="tauri-provider-presets">{visiblePresets.map(preset => <button key={preset.id} type="button" className={`tauri-provider-preset${selectedPreset === preset.id ? " is-selected" : ""}`} onClick={() => setSelectedPreset(preset.id)} aria-pressed={selectedPreset === preset.id} disabled={saving}><strong>{preset.label}{preset.recommended && <em>推荐</em>}</strong><small>{preset.group || "模型服务"} · {preset.routes.length} 条连接 · {preset.status === "installed" ? "已添加" : preset.status === "partial" ? "部分添加" : preset.status === "name_conflict" ? "名称冲突" : "可添加"}</small></button>)}{visiblePresets.length === 0 && <p>没有匹配的服务预设。</p>}</div>}
-    {reviewedPreset && <div className="tauri-provider-preset-review"><h4>确认添加：{reviewedPreset.label}</h4><p>{reviewedPreset.description}</p>{reviewedPreset.routes.map(route => <div key={route.name} className="tauri-provider-preset-route"><strong>{route.name}</strong><span>{route.kind} · {route.baseUrl}</span><small>{route.models.length} 个模型，默认 {route.default || route.models[0] || "未设置"}</small></div>)}{reviewedPreset.status === "name_conflict" && <p role="alert">已有同名的其他服务。请先检查现有配置。</p>}<div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" disabled={saving || reviewedPreset.status === "installed" || reviewedPreset.status === "name_conflict"} onClick={() => void installPreset(reviewedPreset)}>{reviewedPreset.status === "partial" ? "添加缺少的连接" : reviewedPreset.status === "installed" ? "已添加" : "添加预设"}</button><button type="button" className="tauri-settings-button" onClick={() => setSelectedPreset("")} disabled={saving}>收起详情</button></div></div>}
+    {loading ? <p className="tauri-settings-hint">正在加载预设…</p> : <div className="tauri-provider-presets">{visiblePresets.map(preset => <button key={preset.id} type="button" className={`tauri-provider-preset${selectedPreset === preset.id ? " is-selected" : ""}`} onClick={() => { setSelectedPreset(preset.id); setResetArmed(""); }} aria-pressed={selectedPreset === preset.id} disabled={saving}><strong>{preset.label}{preset.recommended && <em>推荐</em>}</strong><small>{preset.group || "模型服务"} · {preset.routes.length} 条连接 · {preset.status === "installed" ? "已添加" : preset.status === "installed_modified" ? "配置已修改" : preset.status === "partial" ? "部分添加" : preset.status === "name_conflict" ? "名称冲突" : "可添加"}</small></button>)}{visiblePresets.length === 0 && <p>没有匹配的服务预设。</p>}</div>}
+    {reviewedPreset && <div className="tauri-provider-preset-review"><h4>{reviewedPreset.status === "installed_modified" ? "恢复预设：" : "确认添加："}{reviewedPreset.label}</h4><p>{reviewedPreset.description}</p>{reviewedPreset.routes.map(route => <div key={route.name} className="tauri-provider-preset-route"><strong>{route.name}</strong><span>{route.kind} · {route.baseUrl}</span><small>{route.models.length} 个模型，默认 {route.default || route.models[0] || "未设置"}</small></div>)}{reviewedPreset.status === "name_conflict" && <p role="alert">已有同名的其他服务。请先检查现有配置。</p>}{reviewedPreset.status === "installed_modified" && <p>恢复会用上面的预设替换当前路由、模型及高级参数；原有凭据设置保留。</p>}<div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" disabled={saving || reviewedPreset.status === "installed" || reviewedPreset.status === "name_conflict"} onClick={() => { if (reviewedPreset.status === "installed_modified") { if (resetArmed === reviewedPreset.id) void changePreset(reviewedPreset, "reset"); else setResetArmed(reviewedPreset.id); } else void changePreset(reviewedPreset, "add"); }}>{reviewedPreset.status === "partial" ? "添加缺少的连接" : reviewedPreset.status === "installed_modified" ? resetArmed === reviewedPreset.id ? "确认恢复预设" : "恢复预设配置" : reviewedPreset.status === "installed" ? "已添加" : "添加预设"}</button><button type="button" className="tauri-settings-button" onClick={() => { setSelectedPreset(""); setResetArmed(""); }} disabled={saving}>收起详情</button></div></div>}
     <div className="tauri-settings-model-header"><strong>服务配置</strong><button type="button" className="tauri-settings-button" onClick={() => startEdit()} disabled={saving}>添加服务</button></div>
     <p className="tauri-settings-hint">支持 OpenAI Chat、Anthropic Messages 和 Responses 协议。端点与凭据不会显示在服务列表中。</p>
     {loading ? <p className="tauri-settings-hint">正在加载…</p> : configs.map(provider => <div className="tauri-provider-editor-row" key={provider.name}>
