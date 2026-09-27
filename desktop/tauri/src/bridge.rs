@@ -2,12 +2,16 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::TryRngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+#[cfg(any(debug_assertions, test))]
 use std::{
-    env, fs,
+    env,
+    process::{Child, Command, Stdio},
+};
+use std::{
+    fs,
     io::{BufRead, BufReader, Read, Write},
     net::{IpAddr, SocketAddr, TcpStream},
     path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
@@ -25,6 +29,7 @@ use tempfile::TempDir;
 use crate::workbench_projects::normalized_project_key;
 
 const BRIDGE_TOKEN_ENV: &str = "REASONIX_DESKTOP_BRIDGE_TOKEN";
+#[cfg(debug_assertions)]
 const BRIDGE_BINARY_ENV: &str = "REASONIX_DESKTOP_BRIDGE_BIN";
 const BUNDLED_BRIDGE_NAME: &str = "reasonix-desktop-bridge";
 const READY_TIMEOUT: Duration = Duration::from_secs(5);
@@ -512,12 +517,14 @@ struct BridgeProcess {
 
 #[derive(Clone, Debug)]
 enum BridgeLauncher {
+    #[cfg(any(debug_assertions, test))]
     Explicit(PathBuf),
     Bundled(tauri::AppHandle),
 }
 
 #[derive(Debug)]
 enum BridgeChild {
+    #[cfg(any(debug_assertions, test))]
     Explicit(Child),
     Bundled {
         child: Option<ShellCommandChild>,
@@ -546,6 +553,7 @@ impl BridgeLauncher {
             launch_id.into(),
         ];
         match self {
+            #[cfg(any(debug_assertions, test))]
             Self::Explicit(binary) => {
                 if !binary.is_file() {
                     return Err(format!(
@@ -586,6 +594,7 @@ impl BridgeLauncher {
 impl BridgeChild {
     fn is_running(&mut self) -> Result<bool, String> {
         match self {
+            #[cfg(any(debug_assertions, test))]
             Self::Explicit(child) => child
                 .try_wait()
                 .map(|status| status.is_none())
@@ -596,6 +605,7 @@ impl BridgeChild {
 
     fn kill(&mut self) -> Result<(), String> {
         match self {
+            #[cfg(any(debug_assertions, test))]
             Self::Explicit(child) => child.kill().map_err(display_error),
             Self::Bundled { child, .. } => child
                 .take()
@@ -631,15 +641,16 @@ struct ReadyFile {
 
 impl BridgeSupervisor {
     pub fn from_environment(app: tauri::AppHandle) -> Self {
-        match env::var_os(BRIDGE_BINARY_ENV) {
-            Some(binary) => Self::with_binary(PathBuf::from(binary)),
-            // Development always provides an explicit path. A packaged app has
-            // no shell PATH dependency: Tauri resolves this name beside its
-            // own executable after `bundle.externalBin` embeds it.
-            None => Self::with_launcher(BridgeLauncher::Bundled(app)),
+        #[cfg(debug_assertions)]
+        if let Some(binary) = env::var_os(BRIDGE_BINARY_ENV) {
+            return Self::with_binary(PathBuf::from(binary));
         }
+        // Release packages must use their signed, embedded sidecar even if a
+        // developer override remains in the launching shell's environment.
+        Self::with_launcher(BridgeLauncher::Bundled(app))
     }
 
+    #[cfg(any(debug_assertions, test))]
     fn with_binary(binary: PathBuf) -> Self {
         Self::with_launcher(BridgeLauncher::Explicit(binary))
     }

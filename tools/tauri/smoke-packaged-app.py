@@ -75,10 +75,11 @@ def smoke(app_path):
             "TMPDIR": str(temp),
             "REASONIX_HOME": str(root / "reasonix-home"),
             "REASONIX_TAURI_PACKAGE_SMOKE": "1",
+            # Release packages must ignore the development sidecar override.
+            "REASONIX_DESKTOP_BRIDGE_BIN": str(root / "nonexistent-sidecar"),
         })
         for key in (
             "REASONIX_STATE_HOME",
-            "REASONIX_DESKTOP_BRIDGE_BIN",
             "REASONIX_PREVIEW_SQLITE_EVENTS",
         ):
             env.pop(key, None)

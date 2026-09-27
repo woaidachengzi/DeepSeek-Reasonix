@@ -1,8 +1,8 @@
 # Reasonix Tauri host
 
 这是逐步替换 Wails shell 的 Tauri 2 host；它暂不替换稳定的 Go Agent、会话格式或
-现有前端 API。开发启动时 host 从 `REASONIX_DESKTOP_BRIDGE_BIN` 读取由构建流程提供的
-`reasonix-desktop-bridge` 可执行文件路径；打包启动时则由 Tauri 的 `externalBin` 从应用
+现有前端 API。开发构建启动时 host 从 `REASONIX_DESKTOP_BRIDGE_BIN` 读取由构建流程提供的
+`reasonix-desktop-bridge` 可执行文件路径；release 打包启动时忽略该开发覆盖，由 Tauri 的 `externalBin` 从应用
 包内定位同一个 bridge。两种路径都通过每次启动独有的 token、ready 文件和 launch nonce
 监管它。
 
