@@ -4,7 +4,8 @@
 现有前端 API。开发构建启动时 host 从 `REASONIX_DESKTOP_BRIDGE_BIN` 读取由构建流程提供的
 `reasonix-desktop-bridge` 可执行文件路径；release 打包启动时忽略该开发覆盖，由 Tauri 的 `externalBin` 从应用
 包内定位同一个 bridge。两种路径都通过每次启动独有的 token、ready 文件和 launch nonce
-监管它。token 经子进程 stdin 管道发送，不放在 macOS 进程列表可见的启动环境或命令行中。
+监管它。token 经子进程 stdin 管道发送，bridge 读完后关闭管道并将标准输入切到空设备；
+token 不放在 macOS 进程列表可见的启动环境或命令行中。
 
 ## 数据隔离
 

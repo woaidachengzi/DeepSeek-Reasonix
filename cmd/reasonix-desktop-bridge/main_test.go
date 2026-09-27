@@ -24,7 +24,7 @@ import (
 
 const testToken = "0123456789abcdef0123456789abcdef"
 
-func tokenStdin(t *testing.T, input string) {
+func tokenStdin(t *testing.T, input string) *os.File {
 	t.Helper()
 	reader, writer, err := os.Pipe()
 	if err != nil {
@@ -33,7 +33,11 @@ func tokenStdin(t *testing.T, input string) {
 	previous := os.Stdin
 	os.Stdin = reader
 	t.Cleanup(func() {
+		current := os.Stdin
 		os.Stdin = previous
+		if current != reader {
+			_ = current.Close()
+		}
 		_ = reader.Close()
 	})
 	if _, err := io.WriteString(writer, input); err != nil {
@@ -42,17 +46,24 @@ func tokenStdin(t *testing.T, input string) {
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
+	return reader
 }
 
 func TestBridgeTokenIsReadFromStdinAndLegacyEnvironmentIsCleared(t *testing.T) {
 	t.Setenv(tokenEnvironment, "ignored-legacy-value")
-	tokenStdin(t, testToken+"\n")
+	pipe := tokenStdin(t, testToken+"\n")
 	token, err := consumeBridgeToken()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if token != testToken || os.Getenv(tokenEnvironment) != "" {
 		t.Fatal("bridge token was not consumed from stdin or legacy environment was retained")
+	}
+	if _, err := pipe.Read(make([]byte, 1)); !errors.Is(err, os.ErrClosed) {
+		t.Fatalf("token pipe remained open after startup: %v", err)
+	}
+	if data, err := io.ReadAll(os.Stdin); err != nil || len(data) != 0 {
+		t.Fatalf("bridge stdin was not replaced with the empty device: bytes=%d err=%v", len(data), err)
 	}
 }
 

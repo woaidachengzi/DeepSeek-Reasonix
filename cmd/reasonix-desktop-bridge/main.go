@@ -108,6 +108,17 @@ func consumeBridgeToken() (string, error) {
 	if len(token) < 32 || !validRequestID(token) {
 		return "", errors.New("desktop bridge token from stdin is invalid")
 	}
+	// The bundled Tauri child handle keeps its pipe writer open for the process
+	// lifetime. Close our reader and replace stdin before the core can start a
+	// tool that reads from or inherits standard input.
+	if err := os.Stdin.Close(); err != nil {
+		return "", fmt.Errorf("close desktop bridge token pipe: %w", err)
+	}
+	input, err := os.Open(os.DevNull)
+	if err != nil {
+		return "", fmt.Errorf("replace desktop bridge stdin: %w", err)
+	}
+	os.Stdin = input
 	return token, nil
 }
 
