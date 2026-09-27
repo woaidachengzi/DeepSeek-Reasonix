@@ -42,6 +42,25 @@ const calls = (globalThis as unknown as { __tauriBridgeCalls: Array<{ name: stri
 assert.ok(calls.some(call => call.name === "workbench_project_folders"));
 assert.ok(calls.some(call => call.name === "bridge_session_previews"));
 assert.ok(calls.some(call => call.name === "backfill_workbench_titles"));
+const searchInput = document.querySelector<HTMLInputElement>('[aria-label="搜索会话和项目"]');
+assert.ok(searchInput);
+const searchFor = async (query: string) => {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(searchInput, query);
+    searchInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  });
+};
+await searchFor("Beta task");
+assert.ok(document.querySelector('.tauri-project-group[aria-label="beta"]'));
+assert.equal(document.querySelector('.tauri-project-group[aria-label="alpha"]'), null);
+assert.match(document.body.textContent ?? "", /仅搜索已加载的会话/);
+await searchFor("Gamma task");
+assert.match(document.body.textContent ?? "", /没有匹配的会话或项目/);
+await searchFor("Saved empty project");
+assert.ok(document.querySelector('.tauri-project-group[aria-label="Saved empty project"]'));
+await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="清除会话搜索"]')?.click(); });
+assert.equal(searchInput.value, "");
+assert.equal(document.querySelectorAll(".tauri-project-group").length, 3);
 const loadMore = document.querySelector<HTMLButtonElement>('[aria-label="加载更多会话"]');
 assert.ok(loadMore);
 await act(async () => { loadMore.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
@@ -190,6 +209,8 @@ await act(async () => {
   await new Promise(resolve => setTimeout(resolve, 0));
 });
 assert.match(document.body.textContent ?? "", /recent catalog unavailable/);
+assert.match(document.body.textContent ?? "", /会话列表暂不可用/);
+assert.doesNotMatch(document.body.textContent ?? "", /还没有对话，开始一个新话题吧/);
 assert.match(document.body.textContent ?? "", /待完成删除/);
 assert.ok(document.querySelector<HTMLButtonElement>('[aria-label="继续删除 独立恢复记录"]'));
 await act(async () => { root.unmount(); });
@@ -274,5 +295,22 @@ assert.ok([...document.querySelectorAll<HTMLButtonElement>(".tauri-sidebar__sess
   .some(button => button.textContent?.includes("用户手动标题")));
 assert.ok(![...document.querySelectorAll<HTMLButtonElement>(".tauri-sidebar__session")]
   .some(button => button.textContent?.includes("首条消息建议标题")));
+await act(async () => { root.unmount(); });
+
+// A pending initial request is a loading state, not an empty history.
+let resolveInitialPage!: (page: unknown) => void;
+const delayedInitialPage = new Promise<unknown>(resolve => { resolveInitialPage = resolve; });
+(globalThis as unknown as { __workbenchPages: unknown[] }).__workbenchPages = [delayedInitialPage];
+(globalThis as unknown as { __workbenchSessions: unknown[] }).__workbenchSessions = [];
+root = createRoot(document.getElementById("root")!);
+await act(async () => { root.render(React.createElement(TauriSessionApp)); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.match(document.body.textContent ?? "", /正在加载对话/);
+assert.doesNotMatch(document.body.textContent ?? "", /还没有对话，开始一个新话题吧/);
+await act(async () => {
+  resolveInitialPage({ sessions: [{ sessionId: "loaded", title: "加载完成的会话" }], nextCursor: null, total: 1, source: "identity" });
+  await new Promise(resolve => setTimeout(resolve, 0));
+});
+assert.match(document.body.textContent ?? "", /加载完成的会话/);
+assert.doesNotMatch(document.body.textContent ?? "", /正在加载对话/);
 await act(async () => { root.unmount(); });
 console.log("tauri project navigation and legacy title backfill: OK");

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { groupWorkbenchSessions, needsFirstMessageTitle, titleFromFirstUser } from "../tauri/workbenchSessions";
+import { filterWorkbenchProjectGroups, groupWorkbenchSessions, needsFirstMessageTitle, titleFromFirstUser } from "../tauri/workbenchSessions";
 
 const groups = groupWorkbenchSessions([
   { sessionId: "new-a", workspaceRoot: "/work/a/project", title: "Latest" },
@@ -27,6 +27,12 @@ assert.equal(savedFolders[0].label, "Pinned project title");
 assert.deepEqual(savedFolders[0].sessions.map(session => session.sessionId), ["active"]);
 assert.equal(savedFolders[1].label, "Empty project");
 assert.deepEqual(savedFolders[1].sessions, []);
+
+assert.deepEqual(filterWorkbenchProjectGroups(groups, "LATEST").map(group => [group.key, group.sessions.length]), [["/work/a/project", 1]]);
+assert.deepEqual(filterWorkbenchProjectGroups(groups, "project · b").map(group => [group.key, group.sessions.length]), [["/work/b/project", 1]]);
+assert.deepEqual(filterWorkbenchProjectGroups(savedFolders, "empty project").map(group => [group.key, group.sessions.length]), [["/work/empty", 0]]);
+assert.deepEqual(filterWorkbenchProjectGroups(groups, "not-found"), []);
+assert.equal(filterWorkbenchProjectGroups(groups, " ").length, groups.length);
 
 assert.equal(titleFromFirstUser("修复登录失败\n请加回归测试"), "修复登录失败 请加回归测试");
 assert.equal(titleFromFirstUser("请处理 😀".repeat(30))?.endsWith("…"), true);

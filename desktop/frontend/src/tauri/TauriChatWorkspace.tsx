@@ -1,5 +1,5 @@
 import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Copy, Eye, FileText, FolderOpen, FolderTree, GitBranch, MessageSquare, Paperclip, Pencil, Plus, Settings, Sparkles, Square, Trash2, X } from "lucide-react";
+import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Copy, Eye, FileText, FolderOpen, FolderTree, GitBranch, MessageSquare, Paperclip, Pencil, Plus, Search, Settings, Sparkles, Square, Trash2, X } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
@@ -157,7 +157,7 @@ import {
   type TauriProviderSummary,
   type TauriSessionShadowReport,
 } from "../lib/tauriBridge";
-import { groupWorkbenchSessions, needsFirstMessageTitle, titleFromFirstUser, workbenchProjectKey, type WorkbenchProjectFolder } from "./workbenchSessions";
+import { filterWorkbenchProjectGroups, groupWorkbenchSessions, needsFirstMessageTitle, titleFromFirstUser, workbenchProjectKey, type WorkbenchProjectFolder } from "./workbenchSessions";
 import { sessionLifecycleFailure, sessionLifecycleNotice } from "./sessionLifecycleError";
 import {
   emptyMCPDraft,
@@ -385,10 +385,12 @@ export function TauriSessionPreview() {
   const [sessionPageTitleMismatchCount, setSessionPageTitleMismatchCount] = useState<number | null>(null);
   const [sessionPageMissingTranscriptCount, setSessionPageMissingTranscriptCount] = useState<number | null>(null);
   const [sessionPageLoading, setSessionPageLoading] = useState(false);
+  const [sessionPageInitialLoading, setSessionPageInitialLoading] = useState(true);
   const [sessionPageNotice, setSessionPageNotice] = useState("");
   const [sessionPageError, setSessionPageError] = useState("");
   const [workspaceAvailability, setWorkspaceAvailability] = useState<Record<string, boolean | null>>({});
   const [collapsedProjects, setCollapsedProjects] = useState<Record<string, boolean>>(loadCollapsedProjectGroups);
+  const [sessionSearch, setSessionSearch] = useState("");
   const [workspaceRoot, setWorkspaceRoot] = useState("");
   const [editingProjectRoot, setEditingProjectRoot] = useState<string | null>(null);
   const [projectTitleDraft, setProjectTitleDraft] = useState("");
@@ -468,6 +470,8 @@ export function TauriSessionPreview() {
   const pendingSessionDeleteIDs = useMemo(() => new Set(pendingSessionDeletes.map(item => item.id)), [pendingSessionDeletes]);
   const visibleTabs = useMemo(() => tabs.filter(tab => !pendingSessionDeleteIDs.has(tab.sessionId)), [tabs, pendingSessionDeleteIDs]);
   const projectGroups = useMemo(() => groupWorkbenchSessions(visibleTabs, projectFolders, platform), [visibleTabs, projectFolders, platform]);
+  const searchedProjectGroups = useMemo(() => filterWorkbenchProjectGroups(projectGroups, sessionSearch), [projectGroups, sessionSearch]);
+  const searchingSessions = sessionSearch.trim().length > 0;
   const projectHistoryMayBeIncomplete = sessionPageCursor !== null || sessionPageSource === "legacy";
   const projectHistoryUnavailableHint = sessionPageSource === "legacy"
     ? "持久会话目录未核验，无法确认此项目是否还有历史会话；重新检查目录后再选择"
@@ -671,8 +675,12 @@ export function TauriSessionPreview() {
       } catch (cause) {
         if (active) {
           const importNotice = importFailure ? `；旧会话目录导入也失败：${importFailure}` : "";
-          setError(`读取最近对话失败：${tauriMessageFrom(cause)}${importNotice}`);
+          const message = `读取最近对话失败：${tauriMessageFrom(cause)}${importNotice}`;
+          setError(message);
+          setSessionPageError(message);
         }
+      } finally {
+        if (active) setSessionPageInitialLoading(false);
       }
     })();
     void tauriPlatformInfo().then(setPlatform).catch(() => {});
@@ -2142,6 +2150,11 @@ export function TauriSessionPreview() {
         <button className="tauri-sidebar__new" type="button" onClick={() => void createSession()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || switchingBlocked}>
           <Plus size={17} aria-hidden="true" /><span>新建对话</span><kbd>⌘ N</kbd>
         </button>
+        <div className="tauri-sidebar__search">
+          <Search size={15} aria-hidden="true" />
+          <input type="search" aria-label="搜索会话和项目" placeholder="搜索会话或项目" value={sessionSearch} onChange={event => setSessionSearch(event.target.value)} />
+          {sessionSearch && <button type="button" aria-label="清除会话搜索" onClick={() => setSessionSearch("")}><X size={14} /></button>}
+        </div>
         {pendingSessionDeletes.length > 0 && <>
           <div className="tauri-sidebar__section-title">待完成删除</div>
           <section className="tauri-pending-deletes" aria-label="待完成删除">
@@ -2181,21 +2194,24 @@ export function TauriSessionPreview() {
         </div>}
         <div className="tauri-sidebar__section-title">项目</div>
         {sessionPageCursor && <p className="tauri-sidebar__page-note" role="status">项目组会话数按当前已加载页统计；继续加载后数量可能变化。</p>}
+        {searchingSessions && sessionPageCursor && <p className="tauri-sidebar__page-note" role="status">仅搜索已加载的会话；加载更多后可找到更早的对话。</p>}
         {projectFoldersWarning && <div className="tauri-pending-deletes__error" role="status">
           <span>{projectFoldersWarning}</span>
           <button type="button" onClick={() => void reloadWorkbenchProjectFolders()} disabled={busy}>重试读取项目文件夹</button>
         </div>}
         <nav className="tauri-sidebar__sessions">
-          {projectGroups.length === 0 ? <p className="tauri-sidebar__empty">还没有对话，开始一个新话题吧。</p> : projectGroups.map(group => group.root ? (
+          {visibleTabs.length === 0 && sessionPageInitialLoading && <p className="tauri-sidebar__empty" role="status">正在加载对话…</p>}
+          {visibleTabs.length === 0 && !sessionPageInitialLoading && sessionPageError && <p className="tauri-sidebar__empty" role="status">会话列表暂不可用。</p>}
+          {searchedProjectGroups.length === 0 && !sessionPageInitialLoading && !sessionPageError ? <p className="tauri-sidebar__empty">{searchingSessions ? "没有匹配的会话或项目。" : "还没有对话，开始一个新话题吧。"}</p> : searchedProjectGroups.map(group => group.root ? (
             <section className="tauri-project-group" key={group.key} aria-label={group.label}>
               <div className="tauri-project-group__heading">
-                <button type="button" className="tauri-project-group__toggle" aria-label={`${collapsedProjects[group.key] ? "展开" : "收起"} ${group.label}`} aria-expanded={!collapsedProjects[group.key]} onClick={() => setCollapsedProjects(previous => {
+                <button type="button" className="tauri-project-group__toggle" aria-label={`${!searchingSessions && collapsedProjects[group.key] ? "展开" : "收起"} ${group.label}`} aria-expanded={searchingSessions || !collapsedProjects[group.key]} disabled={searchingSessions} onClick={() => setCollapsedProjects(previous => {
                   const next = { ...previous };
                   if (next[group.key]) delete next[group.key];
                   else next[group.key] = true;
                   return next;
                 })}>
-                  {collapsedProjects[group.key] ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                  {!searchingSessions && collapsedProjects[group.key] ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
                 </button>
                 {editingProjectRoot === group.root ? <form className="tauri-project-title-edit" onSubmit={event => { event.preventDefault(); void saveProjectTitle(group.root!); }}>
                   <input autoFocus maxLength={1024} value={projectTitleDraft} aria-label={`重命名项目 ${group.label}`} onChange={event => setProjectTitleDraft(event.target.value)} onKeyDown={event => { if (event.key === "Escape") setEditingProjectRoot(null); }} />
@@ -2205,7 +2221,7 @@ export function TauriSessionPreview() {
                 <button type="button" className="tauri-project-group__rename" aria-label={`重命名项目 ${group.label}`} title="重命名项目" disabled={busy || switchingBlocked || editingProjectRoot !== null} onClick={() => { setEditingProjectRoot(group.root || null); setProjectTitleDraft(group.title ?? ""); }}><Pencil size={12} /></button>
                 <button type="button" className="tauri-project-group__new" aria-label={`在 ${group.label} 中新建对话`} title={workspaceAvailability[group.root] === false ? "工作区不可用，无法在此处新建对话" : "在此项目新建对话"} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || switchingBlocked || workspaceAvailability[group.root] === false} onClick={() => void createSession(group.root || "")}><Plus size={14} /></button>
               </div>
-              {!collapsedProjects[group.key] && group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} busy={busy || isReadOnlyWorkbenchSource(sessionPageSource)} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} />)}
+              {(searchingSessions || !collapsedProjects[group.key]) && group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} busy={busy || isReadOnlyWorkbenchSource(sessionPageSource)} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} />)}
             </section>
           ) : group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} busy={busy || isReadOnlyWorkbenchSource(sessionPageSource)} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} />))}
           {sessionPageSource === "identity_unverified" && <p className="tauri-sidebar__page-note" role="status">

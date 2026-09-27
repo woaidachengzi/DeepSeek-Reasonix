@@ -35,6 +35,8 @@ Preview 已开始采用工作台导航壳层：最近会话按工作区文件夹
 bridge 的显式 `switch_session` 完成。首版 bridge 仍只拥有一个 Go Controller，因此只允许
 从 `idle` 会话切换；`running` 或 `paused` 的会话必须先结束或取消，绝不被 UI 静默替换。
 
+侧栏可按会话标题、项目名称或项目路径筛选当前已加载的会话；目录尚有分页时会提示搜索范围。首次读取会话目录期间显示加载状态，读取失败时显示错误，避免把尚未加载的历史误报为空。
+
 目前暴露给 WebView 的命令为 `bridge_status`、`restart_bridge`、`provider_summary`、`set_default_model`、`bridge_open_session`、
 `bridge_session_snapshot`、`bridge_session_history`、`bridge_submit` 和 `bridge_cancel`。
 token、loopback 端口和

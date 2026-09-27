@@ -114,6 +114,22 @@ export function groupWorkbenchSessions(
   return result;
 }
 
+/** Search only the groups already loaded into the Preview sidebar. A project
+ * match keeps its sessions visible; a session match keeps its project heading. */
+export function filterWorkbenchProjectGroups(
+  groups: readonly WorkbenchProjectGroup[],
+  query: string,
+): WorkbenchProjectGroup[] {
+  const needle = query.trim().normalize("NFKC").toLocaleLowerCase();
+  if (!needle) return [...groups];
+  const matches = (value?: string) => value?.normalize("NFKC").toLocaleLowerCase().includes(needle) ?? false;
+  return groups.flatMap(group => {
+    if (matches(group.label) || matches(group.root)) return [group];
+    const sessions = group.sessions.filter(session => matches(session.title));
+    return sessions.length > 0 ? [{ ...group, sessions }] : [];
+  });
+}
+
 /** A deterministic, local title from the first user turn. Attachment paths
  * and line breaks are not shown as conversation names. Manual titles win. */
 export function titleFromFirstUser(content: string): string | undefined {
