@@ -1004,6 +1004,14 @@ fn set_desktop_appearance(
 }
 
 #[tauri::command]
+fn set_desktop_language(
+    supervisor: State<'_, BridgeSupervisor>,
+    language: String,
+) -> Result<DesktopPreferences, String> {
+    supervisor.set_desktop_language(language)
+}
+
+#[tauri::command]
 fn set_default_model(
     supervisor: State<'_, BridgeSupervisor>,
     request: BridgeSetDefaultModelRequest,
@@ -2013,6 +2021,7 @@ fn main() {
             set_desktop_approval,
             set_desktop_terminal_theme,
             set_desktop_appearance,
+            set_desktop_language,
             set_default_model,
             set_model_role,
             import_stable_profile,

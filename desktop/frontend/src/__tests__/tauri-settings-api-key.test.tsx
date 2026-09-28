@@ -39,6 +39,7 @@ let openedURL = "";
 let closeBehavior = "keep_running";
 let zoomFactor = 1;
 let approvalMode = "auto";
+let desktopLanguage = "zh";
 let terminalTheme = "auto";
 let desktopTheme = "auto";
 let desktopThemeStyle = "";
@@ -166,10 +167,11 @@ const summary = () => ({
       case "set_close_behavior": closeBehavior = args?.behavior ?? closeBehavior; return closeBehavior;
       case "get_zoom_factor": return zoomFactor;
       case "set_zoom_factor": zoomFactor = args?.factor ?? zoomFactor; return zoomFactor;
-      case "desktop_preferences": return { protocolVersion: 1, defaultToolApprovalMode: approvalMode, terminalTheme, theme: desktopTheme, themeStyle: desktopThemeStyle, appearanceConfigured };
+      case "desktop_preferences": return { protocolVersion: 1, defaultToolApprovalMode: approvalMode, language: desktopLanguage, terminalTheme, theme: desktopTheme, themeStyle: desktopThemeStyle, appearanceConfigured };
       case "set_desktop_approval": approvalMode = args?.mode ?? approvalMode; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode };
       case "set_desktop_terminal_theme": terminalTheme = args?.theme ?? terminalTheme; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode, terminalTheme };
       case "set_desktop_appearance": desktopTheme = args?.theme ?? desktopTheme; desktopThemeStyle = args?.style ?? desktopThemeStyle; appearanceConfigured = true; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode, terminalTheme, theme: desktopTheme, themeStyle: desktopThemeStyle, appearanceConfigured };
+      case "set_desktop_language": desktopLanguage = args?.language ?? desktopLanguage; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode, language: desktopLanguage, terminalTheme, theme: desktopTheme, themeStyle: desktopThemeStyle, appearanceConfigured };
       case "open_external_url": openedURL = args?.url ?? ""; return;
       case "keychain_save":
         if (failSave) throw new Error("secret-in-error-message");
@@ -205,6 +207,7 @@ const root = createRoot(document.getElementById("root")!);
 await act(async () => { root.render(<LocaleProvider><TauriSettings initialTab="appearance" workspaceRoot="/preview/project" onClose={() => {}} onProviderSummaryChange={value => { parentConfigured = value.providers[0]?.configured; }} currentSessionState="idle" onApplyToCurrentSession={async () => { applyCalls += 1; return true; }} bridgeStatus={{ running: true, protocolVersion: 1 }} catalogAudit={{ legacyCount: 3, directoryCount: 3, matchedCount: 3, directoryOnlyCount: 0, missingFromDirectory: 0, retiredLegacyCount: 0, titleMismatches: 0, workspaceMismatches: 0, orderMismatches: 0, missingTranscripts: 0, physicalStateMismatches: 0, unclaimedTranscripts: 0, inventoryErrors: 0, legacyMatchesDirectory: true }} sessionPageSource="identity" onRestartBridge={async () => { restartCalls += 1; return true; }} onRefreshCatalogAudit={async () => { auditRefreshCalls += 1; }} profile={{ previewHome: "/preview/home", previewConfigExists: false, stableConfigExists: true, importAvailable: true, managedProfile: true }} onImportStableProfile={async () => { profileImportCalls += 1; return "已备份并导入配置"; }} /></LocaleProvider>); });
 assert.equal(calls.filter(call => call === "provider_summary").length, 1, "settings load once after mount");
 assert.equal(parentConfigured, true, "the model picker outside settings receives the initial summary");
+assert.equal(document.documentElement.lang, "zh-CN", "saved desktop language is restored when settings load");
 
 function click(label: string) {
   const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find(candidate => candidate.textContent?.trim() === label);
@@ -222,6 +225,16 @@ function enterKey(value: string) {
 function visibleText() { return document.body.textContent ?? ""; }
 
 assert.match(visibleText(), /配色风格/, "appearance controls are available without opening the model tab");
+await act(async () => { click("通用"); });
+await act(async () => { click("English"); });
+assert.equal(desktopLanguage, "en", "English desktop language is persisted through the Preview profile bridge");
+assert.equal(document.documentElement.lang, "en", "English updates the live UI locale");
+await act(async () => { click("中文"); });
+assert.equal(desktopLanguage, "zh", "desktop language is persisted through the Preview profile bridge");
+assert.equal(document.documentElement.lang, "zh-CN", "desktop language updates the live UI locale");
+await act(async () => { click("自动（跟随系统）"); });
+assert.equal(desktopLanguage, "", "desktop language can return to following the system");
+await act(async () => { click("外观"); });
 await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="终端主题"] button:nth-child(3)')?.click(); });
 assert.equal(terminalTheme, "dark", "terminal theme is saved through the Preview config bridge");
 assert.equal(document.documentElement.getAttribute("data-terminal-theme"), "dark", "terminal appearance updates immediately");

@@ -98,10 +98,11 @@ export function tauriMemorySettings(workspaceRoot) { record("memory_settings", {
 export function changeTauriMemorySettings(change) { record("change_memory_settings", { change }); return tauriMemorySettings(change.workspaceRoot); }
 export function setTauriDefaultModel() { return Promise.resolve({ protocolVersion: 1, providers: [] }); }
 export function setTauriModelRole(role, model) { record("set_model_role", { role, model }); return tauriProviderSummary(); }
-export function tauriDesktopPreferences() { return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: "auto", terminalTheme: "auto", theme: "auto", themeStyle: "", appearanceConfigured: false }); }
+export function tauriDesktopPreferences() { return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: "auto", language: "", terminalTheme: "auto", theme: "auto", themeStyle: "", appearanceConfigured: false }); }
 export function setTauriDesktopApproval(mode) { record("set_desktop_approval", { mode }); return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: mode }); }
 export function setTauriDesktopTerminalTheme(theme) { record("set_desktop_terminal_theme", { theme }); return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: "auto", terminalTheme: theme }); }
 export function setTauriDesktopAppearance(theme, style) { record("set_desktop_appearance", { theme, style }); return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: "auto", terminalTheme: "auto", theme, themeStyle: style, appearanceConfigured: true }); }
+export function setTauriDesktopLanguage(language) { record("set_desktop_language", { language }); return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: "auto", language, terminalTheme: "auto", theme: "auto", themeStyle: "", appearanceConfigured: false }); }
 export function tauriZoomFactor() { record("get_zoom_factor"); return Promise.resolve(1); }
 export function setTauriZoomFactor(factor) { record("set_zoom_factor", { factor }); return Promise.resolve(factor); }
 export function getTauriCloseBehavior() { return Promise.resolve("keep_running"); }

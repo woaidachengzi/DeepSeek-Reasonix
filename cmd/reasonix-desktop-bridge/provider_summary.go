@@ -42,6 +42,7 @@ type setModelRoleRequest struct {
 type desktopPreferencesResponse struct {
 	ProtocolVersion         int    `json:"protocolVersion"`
 	DefaultToolApprovalMode string `json:"defaultToolApprovalMode"`
+	Language                string `json:"language"`
 	TerminalTheme           string `json:"terminalTheme"`
 	Theme                   string `json:"theme"`
 	ThemeStyle              string `json:"themeStyle"`
@@ -60,11 +61,30 @@ func loadDesktopPreferences() (desktopPreferencesResponse, error) {
 	return desktopPreferencesResponse{
 		ProtocolVersion:         desktopbridge.ProtocolVersion,
 		DefaultToolApprovalMode: cfg.DesktopDefaultToolApprovalMode(),
+		Language:                cfg.DesktopLanguage(),
 		TerminalTheme:           cfg.DesktopTerminalTheme(),
 		Theme:                   cfg.DesktopTheme(),
 		ThemeStyle:              cfg.DesktopThemeStyle(),
 		AppearanceConfigured:    strings.TrimSpace(cfg.Desktop.Theme) != "" || strings.TrimSpace(cfg.Desktop.ThemeStyle) != "",
 	}, nil
+}
+
+func persistDesktopLanguage(language string) error {
+	unlock := configpkg.LockUserConfigEdits()
+	defer unlock()
+	path := configpkg.UserConfigPath()
+	if path == "" {
+		return fmt.Errorf("resolve Preview user config path")
+	}
+	cfg, err := configpkg.LoadForEditReadOnlyStrict(path)
+	if err != nil {
+		return err
+	}
+	baseline := cfg.ModelSettingsBaseline()
+	if err := cfg.SetDesktopLanguage(language); err != nil {
+		return err
+	}
+	return cfg.SaveUserSettingsDeltaTo(path, baseline)
 }
 
 func persistDesktopApprovalMode(mode string) error {

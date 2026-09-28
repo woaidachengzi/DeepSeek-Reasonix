@@ -7,7 +7,7 @@ import { Markdown } from "../components/Markdown";
 import { QuestionJumpBar } from "../components/QuestionJumpBar";
 import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
 import { compactQuestionText, type QuestionAnchor } from "../lib/transcriptGrouping";
-import { LocaleProvider } from "../lib/i18n";
+import { LocaleProvider, useI18n } from "../lib/i18n";
 import { playSuccessChime, playAttentionChime, shouldPlayAttentionChimeForEvent } from "../lib/sound";
 import { generativeMusic, isGenerativeMusicEnabled } from "../lib/generative-music";
 import logoWordmark from "../assets/logo-wordmark.svg";
@@ -368,6 +368,10 @@ function PromptCard({ prompt, busy, selections, onApproval, onAskSelection, onAs
 }
 
 export function TauriSessionPreview() {
+  const { pref: languagePref, setPref: setLanguagePref } = useI18n();
+  const languagePrefRef = useRef(languagePref);
+  languagePrefRef.current = languagePref;
+  const initialLanguagePrefRef = useRef(languagePref);
   const desktopLayout = useTauriDesktopLayout();
   const shortcutOverrides = useTauriShortcuts();
   const shortcutPlatform = detectShortcutPlatform();
@@ -507,9 +511,10 @@ export function TauriSessionPreview() {
           applyTauriAppearance({ mode: preferences.theme, style: preferences.themeStyle || "graphite" });
         }
       }
+      if (languagePrefRef.current === initialLanguagePrefRef.current) setLanguagePref(preferences.language);
     }).catch(() => {});
     return () => { active = false; unsubscribe(); };
-  }, []);
+  }, [setLanguagePref]);
 
   useEffect(() => {
     try {

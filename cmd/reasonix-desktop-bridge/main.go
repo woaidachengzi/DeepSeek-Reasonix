@@ -491,6 +491,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("POST /v1/settings/desktop/approval", b.authorized(b.idempotent(64<<10, b.setDesktopApproval)))
 	mux.HandleFunc("POST /v1/settings/desktop/terminal-theme", b.authorized(b.idempotent(64<<10, b.setDesktopTerminalTheme)))
 	mux.HandleFunc("POST /v1/settings/desktop/appearance", b.authorized(b.idempotent(64<<10, b.setDesktopAppearance)))
+	mux.HandleFunc("POST /v1/settings/desktop/language", b.authorized(b.idempotent(64<<10, b.setDesktopLanguage)))
 	mux.HandleFunc("POST /v1/settings/provider-key", b.authorized(b.idempotent(64<<10, b.setProviderKey)))
 	mux.HandleFunc("POST /v1/sessions:open", b.authorized(b.idempotent(64<<10, b.openSession)))
 	mux.HandleFunc("POST /v1/sessions:switch", b.authorized(b.idempotent(64<<10, b.switchSession)))
@@ -955,6 +956,21 @@ func (b *bridgeServer) setDesktopAppearance(w http.ResponseWriter, r *http.Reque
 	}
 	if err := persistDesktopAppearance(request.Theme, request.Style); err != nil {
 		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to save desktop appearance")
+		return
+	}
+	b.desktopPreferences(w, r)
+}
+
+func (b *bridgeServer) setDesktopLanguage(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		Language string `json:"language"`
+	}
+	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil || (request.Language != "" && request.Language != "en" && request.Language != "zh") {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid desktop language")
+		return
+	}
+	if err := persistDesktopLanguage(request.Language); err != nil {
+		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to save desktop language")
 		return
 	}
 	b.desktopPreferences(w, r)

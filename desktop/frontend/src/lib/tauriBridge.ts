@@ -23,6 +23,7 @@ import type {
 } from "./bridgeProtocol.generated";
 import type { TerminalThemePreference } from "./terminalTheme";
 import type { Theme, ThemeStyle } from "./theme";
+import type { LangPref } from "./i18n";
 
 export interface TauriBridgeStatus {
   running: boolean;
@@ -725,6 +726,7 @@ export type TauriToolApprovalMode = "ask" | "auto" | "yolo";
 export interface TauriDesktopPreferences {
   protocolVersion: number;
   defaultToolApprovalMode: TauriToolApprovalMode;
+  language: LangPref;
   terminalTheme: TerminalThemePreference;
   theme: Theme;
   themeStyle: ThemeStyle | "";
@@ -749,6 +751,11 @@ export async function setTauriDesktopTerminalTheme(theme: TerminalThemePreferenc
 export async function setTauriDesktopAppearance(theme: Theme, style: ThemeStyle): Promise<TauriDesktopPreferences> {
   requireTauri();
   return invoke<TauriDesktopPreferences>("set_desktop_appearance", { theme, style });
+}
+
+export async function setTauriDesktopLanguage(language: LangPref): Promise<TauriDesktopPreferences> {
+  requireTauri();
+  return invoke<TauriDesktopPreferences>("set_desktop_language", { language });
 }
 
 export async function tauriZoomFactor(): Promise<number> {

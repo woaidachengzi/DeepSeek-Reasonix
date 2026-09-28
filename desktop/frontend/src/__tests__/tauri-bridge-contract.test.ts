@@ -409,6 +409,11 @@ const commands: CommandContract[] = [
     description: "setTauriDesktopAppearance() invokes set_desktop_appearance with { theme, style }",
   },
   {
+    command: "set_desktop_language",
+    argKeys: ["language"],
+    description: "setTauriDesktopLanguage() invokes set_desktop_language with { language }",
+  },
+  {
     command: "get_close_behavior",
     argKeys: [],
     description: "getTauriCloseBehavior() invokes get_close_behavior with no args",

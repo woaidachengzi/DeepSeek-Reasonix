@@ -474,17 +474,19 @@ func TestDesktopApprovalEndpointPersistsNarrowChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := newBridgeServer(testToken, "instance").handler()
+	requestSequence := 0
 	call := func(method, endpoint, body string) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(method, endpoint, strings.NewReader(body))
 		request.Header.Set("Authorization", "Bearer "+testToken)
 		if method == http.MethodPost {
-			request.Header.Set(requestIDHeader, "desktop-settings-test"+strings.ReplaceAll(endpoint, "/", "-"))
+			requestSequence++
+			request.Header.Set(requestIDHeader, "desktop-settings-test"+strings.ReplaceAll(endpoint, "/", "-")+"-"+strconv.Itoa(requestSequence))
 		}
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, request)
 		return response
 	}
-	if got := call(http.MethodGet, "/v1/settings/desktop", ""); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"defaultToolApprovalMode":"ask"`) || !strings.Contains(got.Body.String(), `"terminalTheme":"auto"`) || !strings.Contains(got.Body.String(), `"appearanceConfigured":false`) {
+	if got := call(http.MethodGet, "/v1/settings/desktop", ""); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"defaultToolApprovalMode":"ask"`) || !strings.Contains(got.Body.String(), `"language":""`) || !strings.Contains(got.Body.String(), `"terminalTheme":"auto"`) || !strings.Contains(got.Body.String(), `"appearanceConfigured":false`) {
 		t.Fatalf("read: %d %s", got.Code, got.Body.String())
 	}
 	if got := call(http.MethodPost, "/v1/settings/desktop/approval", `{"mode":"yolo"}`); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"defaultToolApprovalMode":"yolo"`) {
@@ -496,11 +498,14 @@ func TestDesktopApprovalEndpointPersistsNarrowChange(t *testing.T) {
 	if got := call(http.MethodPost, "/v1/settings/desktop/appearance", `{"theme":"light","style":"aurora"}`); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"theme":"light"`) || !strings.Contains(got.Body.String(), `"themeStyle":"aurora"`) || !strings.Contains(got.Body.String(), `"appearanceConfigured":true`) {
 		t.Fatalf("save appearance: %d %s", got.Code, got.Body.String())
 	}
+	if got := call(http.MethodPost, "/v1/settings/desktop/language", `{"language":"en"}`); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"language":"en"`) {
+		t.Fatalf("save language: %d %s", got.Code, got.Body.String())
+	}
 	updated, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`default_tool_approval_mode = "yolo"`, `terminal_theme = "dark"`, `theme = "light"`, `theme_style = "aurora"`, `future_root_option = "keep-root"`, `future_desktop_option = "keep-desktop"`} {
+	for _, want := range []string{`default_tool_approval_mode = "yolo"`, `language = "en"`, `terminal_theme = "dark"`, `theme = "light"`, `theme_style = "aurora"`, `future_root_option = "keep-root"`, `future_desktop_option = "keep-desktop"`} {
 		if !strings.Contains(string(updated), want) {
 			t.Fatalf("saved config lost %q: %s", want, updated)
 		}
@@ -513,5 +518,8 @@ func TestDesktopApprovalEndpointPersistsNarrowChange(t *testing.T) {
 	}
 	if err := persistDesktopAppearance("light", "sepia"); err == nil {
 		t.Fatal("invalid appearance style was accepted")
+	}
+	if got := call(http.MethodPost, "/v1/settings/desktop/language", `{"language":"fr"}`); got.Code != http.StatusBadRequest {
+		t.Fatalf("invalid language status = %d, body = %s", got.Code, got.Body.String())
 	}
 }

@@ -54,6 +54,8 @@ pub struct DesktopPreferences {
     pub protocol_version: u64,
     pub default_tool_approval_mode: String,
     #[serde(default)]
+    pub language: String,
+    #[serde(default)]
     pub terminal_theme: String,
     #[serde(default)]
     pub theme: String,
@@ -2321,6 +2323,25 @@ impl BridgeSupervisor {
             "POST",
             "/v1/settings/desktop/appearance",
             Some(json!({"theme": theme, "style": style})),
+            Some(&request_id),
+        )?;
+        let preferences: DesktopPreferences =
+            serde_json::from_value(response).map_err(display_error)?;
+        if preferences.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(preferences)
+    }
+
+    pub fn set_desktop_language(&self, language: String) -> Result<DesktopPreferences, String> {
+        if !matches!(language.as_str(), "" | "en" | "zh") {
+            return Err("invalid desktop language".to_string());
+        }
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/desktop/language",
+            Some(json!({"language": language})),
             Some(&request_id),
         )?;
         let preferences: DesktopPreferences =
