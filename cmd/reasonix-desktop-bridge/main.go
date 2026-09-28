@@ -755,8 +755,8 @@ func (b *bridgeServer) changePermissionSettings(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, view)
 }
 
-func (b *bridgeServer) sandboxSettings(w http.ResponseWriter, _ *http.Request) {
-	view, err := loadSandboxSettings()
+func (b *bridgeServer) sandboxSettings(w http.ResponseWriter, r *http.Request) {
+	view, err := loadSandboxSettings(r.URL.Query().Get("workspaceRoot"))
 	if err != nil {
 		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read Preview sandbox settings")
 		return

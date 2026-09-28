@@ -340,13 +340,17 @@ export interface TauriSandboxSettings {
   workspaceRoot: string;
   allowWrite: string[];
   platform: string;
+  shell: string;
+  resolvedShell: string;
+  effectiveWriteRoots: string[];
+  effectiveRootsError: string;
 }
 
-export type TauriSandboxChange = Pick<TauriSandboxSettings, "bash" | "network" | "workspaceRoot" | "allowWrite">;
+export type TauriSandboxChange = Pick<TauriSandboxSettings, "bash" | "network" | "workspaceRoot" | "allowWrite"> & { shell?: string };
 
-export async function tauriSandboxSettings(): Promise<TauriSandboxSettings> {
+export async function tauriSandboxSettings(workspaceRoot?: string): Promise<TauriSandboxSettings> {
   requireTauri();
-  return invoke<TauriSandboxSettings>("sandbox_settings");
+  return invoke<TauriSandboxSettings>("sandbox_settings", workspaceRoot ? { workspaceRoot } : undefined);
 }
 
 export async function changeTauriSandboxSettings(change: TauriSandboxChange): Promise<TauriSandboxSettings> {

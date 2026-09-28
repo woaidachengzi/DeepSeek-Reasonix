@@ -42,7 +42,8 @@ let plannerModel = "";
 let visionModel = "";
 let webSearchModel = "";
 const permissions = { protocolVersion: 1, mode: "ask", allow: [] as string[], ask: [] as string[], deny: [] as string[] };
-let sandbox = { protocolVersion: 1, bash: "enforce", network: true, workspaceRoot: "", allowWrite: [] as string[], platform: "darwin" };
+let sandbox = { protocolVersion: 1, bash: "enforce", network: true, workspaceRoot: "", allowWrite: [] as string[], platform: "darwin", shell: "auto", resolvedShell: "bash", effectiveWriteRoots: ["/preview/project"], effectiveRootsError: "" };
+let sandboxQueryRoot = "";
 let network = { protocolVersion: 1, proxyMode: "auto", noProxy: "", proxyType: "socks5", proxyServer: "", proxyPort: 0, proxyUsername: "", proxyUrlSet: false, proxyPasswordSet: false };
 let skills = { protocolVersion: 1, allowImplicitInvocation: true, globalAllowImplicitInvocation: true, projectOverrides: { implicit: false, skills: false, sources: false }, skills: [{ name: "demo", description: "A test skill", invocation: "/demo", scope: "global", sourcePath: "/tmp/demo/SKILL.md", runAs: "inline", enabled: true, requires: ["mcp-server:github"], archiveRevision: "" }], sources: [{ path: "/tmp/skills", scope: "custom", status: "ok", enabled: true, configured: true, skillCount: 1 }], archivedSkills: [] as { name: string; scope: "global" | "project"; archiveId: string; path: string; revision: string }[] };
 let failSkills = false;
@@ -108,7 +109,7 @@ const summary = () => ({
         }
         return { ...permissions };
       }
-      case "sandbox_settings": return { ...sandbox };
+      case "sandbox_settings": sandboxQueryRoot = args?.workspaceRoot ?? ""; return { ...sandbox };
       case "change_sandbox_settings": sandbox = { ...sandbox, ...args?.change }; return { ...sandbox };
       case "network_settings": return { ...network };
       case "change_network_settings": network = { ...network, ...args?.change }; return { ...network };
@@ -377,10 +378,16 @@ await act(async () => {
 await act(async () => { click("添加"); });
 assert.deepEqual(permissions.deny, ["Bash(rm:*)"], "permission rule is persisted through the bridge");
 await act(async () => { click("沙盒"); });
-assert.match(visibleText(), /Bash 沙盒/, "sandbox editor is available in settings");
+assert.match(visibleText(), /命令与沙盒/, "sandbox editor is available in settings");
+assert.equal(sandboxQueryRoot, "/preview/project", "sandbox effective roots are queried for the current workspace");
+assert.match(visibleText(), /当前项目实际可写根/, "sandbox shows core-computed write roots");
+const shellSelect = document.querySelector<HTMLSelectElement>('select[aria-label="首选解释器"]');
+assert.ok(shellSelect, "shell preference is shown");
+await act(async () => { shellSelect.value = "bash"; shellSelect.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
 await act(async () => { click("关闭"); });
 await act(async () => { click("保存沙盒设置"); });
 assert.equal(sandbox.bash, "off", "sandbox mode is persisted through the bridge");
+assert.equal(sandbox.shell, "bash", "shell preference is persisted through the bridge");
 await act(async () => { click("网络"); });
 assert.match(visibleText(), /代理模式/, "network editor is available in settings");
 await act(async () => { click("直连"); });

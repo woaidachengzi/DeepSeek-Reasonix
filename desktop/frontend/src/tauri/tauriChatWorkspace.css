@@ -697,6 +697,7 @@
 .tauri-settings-radio.is-active { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); color: var(--accent); font-weight: 650; }
 .tauri-settings-select, .tauri-settings-input { width: min(250px, 100%); min-height: 34px; padding: 0 10px; border: 1px solid var(--border-soft); border-radius: 8px; outline: none; background: var(--surface); color: var(--fg); font-size: 12px; }
 .tauri-settings-select:focus-visible, .tauri-settings-input:focus-visible { border-color: var(--accent); }
+.tauri-sandbox-settings__resolved-shell { width: min(250px, 100%); color: var(--fg-dim); font-size: 12px; }
 .tauri-settings-style-heading { margin: 18px 0 10px; color: var(--fg-dim); font-size: 12px; }
 .tauri-settings-style-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .tauri-settings-style { display: flex; min-width: 0; align-items: center; gap: 9px; padding: 10px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--surface); color: var(--fg-dim); text-align: left; font-size: 11px; }

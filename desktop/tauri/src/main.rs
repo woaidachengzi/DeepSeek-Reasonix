@@ -809,8 +809,9 @@ fn change_permission_settings(
 #[tauri::command]
 fn sandbox_settings(
     supervisor: State<'_, BridgeSupervisor>,
+    workspace_root: Option<String>,
 ) -> Result<SandboxSettingsView, String> {
-    supervisor.sandbox_settings()
+    supervisor.sandbox_settings(workspace_root.as_deref())
 }
 
 #[tauri::command]

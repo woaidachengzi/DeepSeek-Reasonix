@@ -533,6 +533,14 @@ pub struct SandboxSettingsView {
     pub workspace_root: String,
     pub allow_write: Vec<String>,
     pub platform: String,
+    #[serde(default)]
+    pub shell: String,
+    #[serde(default)]
+    pub resolved_shell: String,
+    #[serde(default)]
+    pub effective_write_roots: Vec<String>,
+    #[serde(default)]
+    pub effective_roots_error: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -542,6 +550,8 @@ pub struct SandboxSettingsChange {
     pub network: bool,
     pub workspace_root: String,
     pub allow_write: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shell: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1895,8 +1905,20 @@ impl BridgeSupervisor {
         Ok(view)
     }
 
-    pub fn sandbox_settings(&self) -> Result<SandboxSettingsView, String> {
-        let response = self.request_json("GET", "/v1/settings/sandbox", None, None)?;
+    pub fn sandbox_settings(
+        &self,
+        workspace_root: Option<&str>,
+    ) -> Result<SandboxSettingsView, String> {
+        let path = match workspace_root.filter(|root| !root.is_empty()) {
+            Some(root) => {
+                let query = url::form_urlencoded::Serializer::new(String::new())
+                    .append_pair("workspaceRoot", root)
+                    .finish();
+                format!("/v1/settings/sandbox?{query}")
+            }
+            None => "/v1/settings/sandbox".to_string(),
+        };
+        let response = self.request_json("GET", &path, None, None)?;
         let view: SandboxSettingsView = serde_json::from_value(response).map_err(display_error)?;
         if view.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());
