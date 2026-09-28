@@ -209,9 +209,10 @@ assert.equal(calls.filter(call => call === "provider_summary").length, 1, "setti
 assert.equal(parentConfigured, true, "the model picker outside settings receives the initial summary");
 assert.equal(document.documentElement.lang, "zh-CN", "saved desktop language is restored when settings load");
 
-function click(label: string) {
-  const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find(candidate => candidate.textContent?.trim() === label);
-  assert.ok(button, `missing button: ${label}`);
+function click(label: string | string[]) {
+  const labels = Array.isArray(label) ? label : [label];
+  const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find(candidate => labels.includes(candidate.textContent?.trim() ?? ""));
+  assert.ok(button, `missing button: ${labels.join(" / ")}`);
   button.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
 }
 
@@ -225,7 +226,7 @@ function enterKey(value: string) {
 function visibleText() { return document.body.textContent ?? ""; }
 
 assert.match(visibleText(), /配色风格/, "appearance controls are available without opening the model tab");
-await act(async () => { click("通用"); });
+await act(async () => { click(["通用", "General"]); });
 await act(async () => { click("English"); });
 assert.equal(desktopLanguage, "en", "English desktop language is persisted through the Preview profile bridge");
 assert.equal(document.documentElement.lang, "en", "English updates the live UI locale");
@@ -234,7 +235,7 @@ assert.equal(desktopLanguage, "zh", "desktop language is persisted through the P
 assert.equal(document.documentElement.lang, "zh-CN", "desktop language updates the live UI locale");
 await act(async () => { click("自动（跟随系统）"); });
 assert.equal(desktopLanguage, "", "desktop language can return to following the system");
-await act(async () => { click("外观"); });
+await act(async () => { click(["外观", "Appearance"]); });
 await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="终端主题"] button:nth-child(3)')?.click(); });
 assert.equal(terminalTheme, "dark", "terminal theme is saved through the Preview config bridge");
 assert.equal(document.documentElement.getAttribute("data-terminal-theme"), "dark", "terminal appearance updates immediately");
@@ -248,15 +249,15 @@ assert.equal(document.querySelector(".tauri-settings-zoom__control output")?.tex
 await act(async () => { document.querySelector<HTMLButtonElement>(".tauri-settings-zoom__reset")?.click(); });
 assert.equal(zoomFactor, 1, "display zoom can be reset to the default");
 assert.ok(document.querySelector(".tauri-settings-sidebar .tauri-settings-nav"), "settings use a full-page sidebar");
-const settingsSearch = document.querySelector<HTMLInputElement>('input[aria-label="搜索设置"]');
+const settingsSearch = document.querySelector<HTMLInputElement>('input[aria-label="Search settings"]');
 assert.ok(settingsSearch, "the sidebar has settings search");
 await act(async () => {
-  Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(settingsSearch, "快捷键");
+  Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(settingsSearch, "Shortcuts");
   settingsSearch.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
 });
 assert.equal(document.querySelectorAll(".tauri-settings-nav-item").length, 1, "search filters navigation items");
-assert.match(document.querySelector(".tauri-settings-nav-item")?.textContent ?? "", /快捷键/);
-assert.match(document.querySelector(".tauri-settings-nav-item small")?.textContent ?? "", /录入、重置/, "search exposes the matched setting's purpose");
+assert.match(document.querySelector(".tauri-settings-nav-item")?.textContent ?? "", /Shortcuts/);
+assert.match(document.querySelector(".tauri-settings-nav-item small")?.textContent ?? "", /Keys & help/, "search exposes the matched setting's purpose");
 await act(async () => {
   Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(settingsSearch, "");
   settingsSearch.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
@@ -294,7 +295,7 @@ assert.equal(document.querySelector<HTMLInputElement>(".typography-settings__fol
 await act(async () => { click("全部恢复默认"); });
 assert.equal(document.documentElement.style.getPropertyValue("--typography-conversation-size"), "", "restoring defaults clears the rendered override");
 await act(async () => { document.querySelector<HTMLButtonElement>('.typography-settings__back')?.click(); });
-await act(async () => { click("存储"); });
+await act(async () => { click(["存储", "Storage & paths"]); });
 assert.equal(document.querySelector<HTMLInputElement>('input[aria-label="状态目录"]')?.value, "/preview/state", "storage page reads the effective core state directory");
 assert.equal(document.querySelector<HTMLInputElement>('input[aria-label="缓存目录"]')?.value, "/preview/cache", "storage page reads the effective core cache directory");
 await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="复制状态目录"]')?.click(); });
@@ -310,7 +311,7 @@ assert.match(visibleText(), /\/preview\/home/, "data settings show the isolated 
 await act(async () => { click("复制稳定版配置（先备份）"); });
 assert.equal(profileImportCalls, 1);
 assert.match(visibleText(), /已备份并导入配置/, "data settings surface the import result");
-await act(async () => { click("通用"); });
+await act(async () => { click(["通用", "General"]); });
 assert.deepEqual([...document.querySelectorAll(".tauri-settings-general > h3")].map(heading => heading.textContent), ["桌面体验", "会话体验", "系统行为"], "General follows the stable settings section order");
 assert.equal(document.querySelector('.tauri-settings-general [aria-label="外观模式"]'), null, "appearance controls are kept in the Appearance page");
 await act(async () => { document.querySelector<HTMLButtonElement>(".tauri-settings-sound-toggle")?.click(); });
@@ -380,7 +381,7 @@ assert.equal(localStorage.getItem("notificationSoundSuccess"), "synth");
 assert.equal(localStorage.getItem("notificationSoundAttention"), "positive");
 assert.equal(localStorage.getItem("notificationSoundVolume"), "42");
 
-await act(async () => { click("快捷键"); });
+await act(async () => { click(["快捷键", "Shortcuts"]); });
 const settingsShortcutKey = document.querySelector<HTMLButtonElement>('[data-tauri-shortcut-action="settings"]');
 assert.ok(settingsShortcutKey);
 await act(async () => { settingsShortcutKey.click(); });
@@ -397,7 +398,7 @@ assert.ok(resetSettingsShortcut);
 await act(async () => { resetSettingsShortcut.click(); });
 assert.equal(JSON.parse(localStorage.getItem("reasonix.tauri.shortcuts.v1")!).settings, undefined, "a shortcut can be reset individually");
 
-await act(async () => { click("模型偏好"); });
+await act(async () => { click(["模型偏好", "Model preferences"]); });
 const defaultModelSelect = document.querySelector<HTMLSelectElement>("#tauri-settings-default-model");
 assert.ok(defaultModelSelect, "default model has its own settings page");
 await act(async () => {
@@ -416,10 +417,10 @@ const searchSelect = document.querySelector<HTMLSelectElement>("#tauri-settings-
 assert.ok(searchSelect, "web search has a model assignment control");
 await act(async () => { searchSelect.value = "demo/m"; searchSelect.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
 assert.equal(webSearchModel, "demo/m", "web search model is persisted through the bridge");
-await act(async () => { click("用量统计"); });
+await act(async () => { click(["用量统计", "Usage stats"]); });
 assert.ok(document.querySelector(".usage-stats"), "Preview renders the stable usage chart panel");
 assert.ok(calls.includes("usage_stats"), "usage statistics read through the Tauri bridge");
-await act(async () => { click("权限"); });
+await act(async () => { click(["权限", "Permissions"]); });
 assert.match(visibleText(), /默认写入决策/, "permission editor is available in settings");
 await act(async () => { click("拒绝"); });
 assert.equal(permissions.mode, "deny", "writer fallback mode is persisted through the bridge");
@@ -431,7 +432,7 @@ await act(async () => {
 });
 await act(async () => { click("添加"); });
 assert.deepEqual(permissions.deny, ["Bash(rm:*)"], "permission rule is persisted through the bridge");
-await act(async () => { click("沙盒"); });
+await act(async () => { click(["沙盒", "Sandbox"]); });
 assert.match(visibleText(), /命令与沙盒/, "sandbox editor is available in settings");
 assert.equal(sandboxQueryRoot, "/preview/project", "sandbox effective roots are queried for the current workspace");
 assert.match(visibleText(), /当前项目实际可写根/, "sandbox shows core-computed write roots");
@@ -442,12 +443,12 @@ await act(async () => { click("关闭"); });
 await act(async () => { click("保存沙盒设置"); });
 assert.equal(sandbox.bash, "off", "sandbox mode is persisted through the bridge");
 assert.equal(sandbox.shell, "bash", "shell preference is persisted through the bridge");
-await act(async () => { click("网络"); });
+await act(async () => { click(["网络", "Network"]); });
 assert.match(visibleText(), /代理模式/, "network editor is available in settings");
 await act(async () => { click("直连"); });
 await act(async () => { click("保存网络设置"); });
 assert.equal(network.proxyMode, "off", "proxy mode is persisted through the bridge");
-await act(async () => { click("Agent Skills"); });
+await act(async () => { click(["Agent Skills", "Agent Skills"]); });
 assert.match(visibleText(), /A test skill/, "discovered skills appear in settings");
 assert.match(visibleText(), /1 个技能 · 可读取/, "source inventory count and status are shown");
 assert.match(visibleText(), /声明依赖：mcp-server:github（调用时检查）/, "declared dependencies are not presented as ready capabilities");
@@ -490,7 +491,7 @@ await act(async () => { click("全局"); });
 await act(async () => { click("恢复"); });
 assert.equal(restoredSkillArchiveId, "reviewed-skill--aabbccddeeffaabbccddeeff", "restore targets the selected backup identity");
 assert.doesNotMatch(visibleText(), /已备份的技能/, "restored skill leaves the backup list");
-await act(async () => { click("插件"); });
+await act(async () => { click(["插件", "Plugins"]); });
 assert.match(visibleText(), /A test plugin/, "installed plugin is listed in settings");
 assert.match(visibleText(), /1 技能/, "plugin contribution counts are shown");
 const pluginSwitch = document.querySelector<HTMLInputElement>('input[aria-label="启用插件 sample"]');
@@ -516,7 +517,7 @@ await act(async () => { click("移除"); });
 assert.match(visibleText(), /确认移除/, "plugin removal requires a second explicit click");
 await act(async () => { click("确认移除"); });
 assert.equal(removedPluginName, "sample", "plugin removal targets the reviewed registration");
-await act(async () => { click("子智能体"); });
+await act(async () => { click(["子智能体", "Subagents"]); });
 assert.match(visibleText(), /Reviews code/, "discoverable subagent profiles appear in settings");
 await act(async () => { click("1 层"); });
 assert.equal(subagents.maxDepth, 1, "subagent delegation depth is persisted through the bridge");
@@ -551,7 +552,7 @@ await act(async () => {
 });
 await act(async () => { click("保存 Hooks"); });
 assert.deepEqual(hooks.hooks, { Stop: [{ command: "echo done" }] }, "hooks JSON is saved through the bridge");
-await act(async () => { click("模型服务"); });
+await act(async () => { click(["模型服务", "Model services"]); });
 assert.match(visibleText(), /已就绪/, ".env credential configures the provider");
 assert.match(visibleText(), /服务配置/, "provider configuration is editable from settings");
 const presetButton = [...document.querySelectorAll<HTMLButtonElement>(".tauri-provider-preset")].find(button => button.textContent?.includes("MiMo API"));
@@ -627,7 +628,7 @@ await act(async () => { click("保存到钥匙串"); });
 assert.match(visibleText(), /保存失败/);
 assert.doesNotMatch(visibleText(), /secret-in-error-message/, "error details do not expose secrets");
 
-await act(async () => { click("运行诊断"); });
+await act(async () => { click(["运行诊断", "Diagnostics"]); });
 assert.match(visibleText(), /持久身份目录/, "diagnostics show the actual sidebar data source");
 assert.match(visibleText(), /运行中 · 协议 v1/, "diagnostics show bridge status");
 await act(async () => { click("重新检查"); });
@@ -650,7 +651,7 @@ failSummary = true;
 const retryRoot = createRoot(document.getElementById("root")!);
 await act(async () => { retryRoot.render(<LocaleProvider><TauriSettings onClose={() => {}} /></LocaleProvider>); });
 assert.match(visibleText(), /桌面风格/, "general settings remain available when provider loading fails");
-await act(async () => { click("模型服务"); });
+await act(async () => { click(["模型服务", "Model services"]); });
 assert.match(visibleText(), /读取设置失败/, "failed provider loading is actionable");
 await act(async () => { click("重试"); });
 assert.match(visibleText(), /已就绪/, "retry recovers the model settings");
@@ -658,7 +659,7 @@ await act(async () => { click("关于"); });
 failRuntime = true;
 await act(async () => { click("刷新"); });
 assert.match(visibleText(), /读取设置失败/, "runtime refresh failure is visible");
-await act(async () => { click("模型服务"); });
+await act(async () => { click(["模型服务", "Model services"]); });
 assert.match(visibleText(), /已就绪/, "runtime failure does not block model settings");
 await act(async () => { retryRoot.unmount(); });
 const memoryRoot = createRoot(document.getElementById("root")!);

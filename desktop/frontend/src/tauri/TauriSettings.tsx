@@ -3,7 +3,7 @@ import { Check, ArrowLeft, Search, X, Keyboard, Globe, Languages, Palette, Info,
 import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, tauriDesktopPreferences, setTauriDesktopApproval, setTauriDesktopTerminalTheme, setTauriDesktopAppearance, setTauriDesktopLanguage, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, tauriZoomFactor, setTauriZoomFactor, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
 import { applyTerminalThemePreference, normalizeTerminalThemePreference, type TerminalThemePreference } from "../lib/terminalTheme";
 import { THEME_STYLES, type Theme, type ThemeStyle } from "../lib/theme";
-import { useI18n, type LangPref } from "../lib/i18n";
+import { useI18n, useT, type LangPref, type Translator } from "../lib/i18n";
 import { applyConversationWidth, getCachedConversationWidth, type ConversationWidth } from "../lib/conversationWidth";
 import { applyTextSize, getTextSize, TEXT_SIZES, type TextSize } from "../lib/textSize";
 import { applyFontFamily, applyMonoFontFamily, FONT_FAMILIES, MONO_FONT_FAMILIES, getCustomFontName, getCustomMonoFontName, getFontFamily, getMonoFontFamily, setCustomFontName, setCustomMonoFontName, type FontFamily, type MonoFontFamily } from "../lib/fontFamily";
@@ -60,50 +60,50 @@ export type TauriSettingsTab = "general" | "appearance" | "model" | "providers" 
 
 const TauriUsageStatsPanel = lazy(() => import("../components/UsageStatsPanel").then(module => ({ default: module.UsageStatsPanel })));
 
-const SETTINGS_GROUPS = [
-  { label: "偏好设置", items: [{ id: "general", label: "通用", description: "桌面与会话体验", icon: SlidersHorizontal }] },
-  { label: "模型", items: [
-    { id: "model", label: "模型偏好", description: "新对话的默认与分工模型", icon: Globe },
-    { id: "providers", label: "模型服务", description: "配置提供方与钥匙串凭据", icon: Cable },
-    { id: "stats", label: "用量统计", description: "查看 Preview 的模型用量", icon: ChartNoAxesColumn },
+const SETTINGS_GROUPS = (t: Translator) => [
+  { label: t("settings.navGroup.preferences"), items: [{ id: "general", label: t("settings.tab.general"), description: t("settings.tabSub.general"), icon: SlidersHorizontal }] },
+  { label: t("settings.tab.models"), items: [
+    { id: "model", label: t("settings.models.preferences"), description: t("settings.tabSub.models"), icon: Globe },
+    { id: "providers", label: t("settings.models.services"), description: t("settings.tabSub.providers"), icon: Cable },
+    { id: "stats", label: t("settings.modelTab.stats"), description: t("settings.tabSub.models"), icon: ChartNoAxesColumn },
   ] },
-  { label: "集成与连接", items: [{ id: "mcp", label: "MCP 与工具", description: "管理工具服务器", icon: Server }] },
-  { label: "能力扩展", items: [{ id: "skills", label: "Agent Skills", description: "管理技能与来源", icon: Sparkles }, { id: "subagents", label: "子智能体", description: "设置模型、并行限制与覆盖", icon: Users }, { id: "plugins", label: "插件", description: "查看已安装插件及启用状态", icon: Package }] },
-  { label: "记忆与上下文", items: [{ id: "memory", label: "记忆", description: "管理说明文档与已保存的事实", icon: Database }] },
-  { label: "自动化与开发者", items: [{ id: "hooks", label: "Hooks", description: "管理事件触发的本地命令", icon: Webhook }, { id: "diagnostics", label: "运行诊断", description: "桥接状态与会话目录检查", icon: Activity }] },
-  { label: "安全与执行", items: [
-    { id: "permissions", label: "权限", description: "写入决策与工具规则", icon: ShieldCheck },
-    { id: "sandbox", label: "沙盒", description: "命令隔离与文件写入范围", icon: Box },
-    { id: "network", label: "网络", description: "代理与直连设置", icon: Globe },
+  { label: t("settings.navGroup.connections"), items: [{ id: "mcp", label: t("settings.tab.mcp"), description: t("settings.tabSub.mcp"), icon: Server }] },
+  { label: t("settings.navGroup.capabilities"), items: [{ id: "skills", label: t("settings.tab.skills"), description: t("settings.tabSub.skills"), icon: Sparkles }, { id: "subagents", label: t("settings.tab.subagents"), description: t("subagents.tabHint"), icon: Users }, { id: "plugins", label: t("settings.tab.plugins"), description: t("settings.tabSub.plugins"), icon: Package }] },
+  { label: t("settings.navGroup.context"), items: [{ id: "memory", label: t("settings.tab.memory"), description: t("settings.tabSub.memory"), icon: Database }] },
+  { label: t("settings.navGroup.automation"), items: [{ id: "hooks", label: t("settings.tab.hooks"), description: t("settings.tabSub.hooks"), icon: Webhook }, { id: "diagnostics", label: t("settings.tab.diagnostics"), description: t("settings.tabSub.diagnostics"), icon: Activity }] },
+  { label: t("settings.navGroup.security"), items: [
+    { id: "permissions", label: t("settings.tab.permissions"), description: t("settings.tabSub.permissions"), icon: ShieldCheck },
+    { id: "sandbox", label: t("settings.tab.sandbox"), description: t("settings.tabSub.sandbox"), icon: Box },
+    { id: "network", label: t("settings.tab.network"), description: t("settings.tabSub.network"), icon: Globe },
   ] },
-  { label: "应用", items: [
-    { id: "appearance", label: "外观", description: "主题、阅读布局与字体", icon: Palette },
-    { id: "shortcuts", label: "快捷键", description: "录入、重置并查看工作区按键", icon: Keyboard },
-    { id: "data", label: "存储", description: "存储目录与 Preview 数据迁移", icon: Database },
+  { label: t("settings.navGroup.application"), items: [
+    { id: "appearance", label: t("settings.tab.appearance"), description: t("settings.tabSub.appearance"), icon: Palette },
+    { id: "shortcuts", label: t("settings.tab.shortcuts"), description: t("settings.tabSub.shortcuts"), icon: Keyboard },
+    { id: "data", label: t("settings.tab.storage"), description: t("settings.tabSub.storage"), icon: Database },
     { id: "about", label: "关于", description: "版本与运行信息", icon: Info },
   ] },
 ] as const;
 
-const SETTINGS_TITLES: Record<TauriSettingsTab, { title: string; description: string }> = {
-  general: { title: "通用", description: "设置桌面体验和会话显示。" },
-  model: { title: "模型偏好", description: "设置新对话使用的默认模型与模型分工。" },
-  providers: { title: "模型服务", description: "添加和编辑模型服务，管理钥匙串凭据。" },
-  stats: { title: "用量统计", description: "查看 Preview 资料中已记录的 token 用量。" },
-  mcp: { title: "MCP 与工具", description: "连接并管理工作区可用的工具。" },
-  skills: { title: "Agent Skills", description: "管理当前工作区可发现的技能与来源。" },
-  plugins: { title: "插件", description: "查看 Preview 资料中的插件包与贡献。" },
-  subagents: { title: "子智能体", description: "管理子智能体的运行默认值与按名称覆盖。" },
-  hooks: { title: "Hooks", description: "配置会话与工具事件触发时运行的本地命令。" },
-  memory: { title: "记忆", description: "查看与编辑工作区说明文档，管理已保存的事实。" },
-  permissions: { title: "权限", description: "设置工具的默认写入决策和规则。" },
-  sandbox: { title: "沙盒", description: "设置命令隔离、网络访问和文件写入范围。" },
-  network: { title: "网络", description: "设置 Preview 普通 HTTP 请求的代理方式。" },
-  diagnostics: { title: "运行诊断", description: "检查本地服务、会话目录和 Preview 的连接状态。" },
-  appearance: { title: "外观", description: "调整主题、阅读布局和字体。" },
-  shortcuts: { title: "快捷键", description: "录入和重置 Preview 中可用的键盘操作。" },
-  data: { title: "存储", description: "查看存储路径和 Preview 数据迁移。" },
+const SETTINGS_TITLES = (t: Translator): Record<TauriSettingsTab, { title: string; description: string }> => ({
+  general: { title: t("settings.tab.general"), description: t("settings.tabSub.general") },
+  model: { title: t("settings.models.preferences"), description: t("settings.tabSub.models") },
+  providers: { title: t("settings.models.services"), description: t("settings.tabSub.providers") },
+  stats: { title: t("settings.modelTab.stats"), description: t("settings.tabSub.models") },
+  mcp: { title: t("settings.tab.mcp"), description: t("settings.tabSub.mcp") },
+  skills: { title: t("settings.tab.skills"), description: t("settings.tabSub.skills") },
+  plugins: { title: t("settings.tab.plugins"), description: t("settings.tabSub.plugins") },
+  subagents: { title: t("settings.tab.subagents"), description: t("subagents.tabHint") },
+  hooks: { title: t("settings.tab.hooks"), description: t("settings.tabSub.hooks") },
+  memory: { title: t("settings.tab.memory"), description: t("settings.tabSub.memory") },
+  permissions: { title: t("settings.tab.permissions"), description: t("settings.tabSub.permissions") },
+  sandbox: { title: t("settings.tab.sandbox"), description: t("settings.tabSub.sandbox") },
+  network: { title: t("settings.tab.network"), description: t("settings.tabSub.network") },
+  diagnostics: { title: t("settings.tab.diagnostics"), description: t("settings.tabSub.diagnostics") },
+  appearance: { title: t("settings.tab.appearance"), description: t("settings.tabSub.appearance") },
+  shortcuts: { title: t("settings.tab.shortcuts"), description: t("settings.tabSub.shortcuts") },
+  data: { title: t("settings.tab.storage"), description: t("settings.tabSub.storage") },
   about: { title: "关于", description: "版本、构建及运行环境。" },
-};
+});
 
 const STYLE_LABELS: Record<ThemeStyle, string> = {
   graphite: "石墨",
@@ -155,6 +155,7 @@ const MONO_FONT_LABELS: Record<MonoFontFamily, string> = {
 
 export function TauriSettings({ onClose, onProviderSummaryChange, currentSessionState, currentSessionHasAttachments, onApplyToCurrentSession, workspaceRoot, defaultWorkspace, onChooseDefaultWorkspace, onClearDefaultWorkspace, initialTab = "general", profile, onRefreshProfile, onImportStableProfile, onImportStableProjectFolders, onScanUnclaimedSessions, importBusy, bridgeStatus, catalogAudit, catalogAuditError, sessionPageSource, hostError, onRestartBridge, onRefreshCatalogAudit }: TauriSettingsProps) {
   const desktopLayout = useTauriDesktopLayout();
+  const t = useT();
   const { pref: languagePref, setPref: setLanguagePref } = useI18n();
   const [tab, setTab] = useState<TauriSettingsTab>(initialTab);
   const [navQuery, setNavQuery] = useState("");
@@ -386,18 +387,20 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
   };
 
   const query = navQuery.trim().toLocaleLowerCase();
-  const visibleGroups = SETTINGS_GROUPS.map(group => ({
+  const settingGroups = SETTINGS_GROUPS(t);
+  const settingTitles = SETTINGS_TITLES(t);
+  const visibleGroups = settingGroups.map(group => ({
     ...group,
     items: group.items.filter(item => !query || `${group.label} ${item.label} ${item.description}`.toLocaleLowerCase().includes(query)),
   })).filter(group => group.items.length > 0);
 
   return (
-    <section className="tauri-settings-overlay" data-desktop-layout={desktopLayout} aria-label="设置">
+    <section className="tauri-settings-overlay" data-desktop-layout={desktopLayout} aria-label={t("settings.title")}>
       <aside className="tauri-settings-sidebar">
         <div className="tauri-settings-titlebar" data-tauri-drag-region />
-        <button type="button" className="tauri-settings-back" onClick={onClose}><ArrowLeft size={17} /><span>返回工作区</span></button>
-        <label className="tauri-settings-search"><Search size={16} aria-hidden="true" /><input type="search" aria-label="搜索设置" placeholder="搜索设置" value={navQuery} onChange={event => setNavQuery(event.target.value)} />{navQuery && <button type="button" aria-label="清除设置搜索" onClick={() => setNavQuery("")}><X size={14} aria-hidden="true" /></button>}</label>
-        <nav className="tauri-settings-nav" aria-label="设置分类">
+        <button type="button" className="tauri-settings-back" onClick={onClose}><ArrowLeft size={17} /><span>{t("settings.backToWorkspace")}</span></button>
+        <label className="tauri-settings-search"><Search size={16} aria-hidden="true" /><input type="search" aria-label={t("settings.searchPlaceholder")} placeholder={t("settings.searchPlaceholder")} value={navQuery} onChange={event => setNavQuery(event.target.value)} />{navQuery && <button type="button" aria-label={t("settings.searchClear")} onClick={() => setNavQuery("")}><X size={14} aria-hidden="true" /></button>}</label>
+        <nav className="tauri-settings-nav" aria-label={t("settings.title")}>
           {visibleGroups.map(group => <div className="tauri-settings-nav-group" key={group.label}>
             <div className="tauri-settings-nav-label">{group.label}</div>
             {group.items.map(item => { const Icon = item.icon; return <button key={item.id} type="button" aria-current={tab === item.id ? "page" : undefined} className={`tauri-settings-nav-item${tab === item.id ? " is-active" : ""}`} onClick={() => setTab(item.id)} title={item.description}>
@@ -405,12 +408,12 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
               {query && <small>{item.description}</small>}
             </button>; })}
           </div>)}
-          {visibleGroups.length === 0 && <div className="tauri-settings-nav-empty" role="status">没有匹配的设置</div>}
+          {visibleGroups.length === 0 && <div className="tauri-settings-nav-empty" role="status">{t("settings.searchNoResults")}</div>}
         </nav>
       </aside>
       <div className="tauri-settings-panel">
         <div className="tauri-settings-content" data-tab={tab} key={tab}>
-          <div className="tauri-settings-page-heading"><h1>{SETTINGS_TITLES[tab].title}</h1><p>{SETTINGS_TITLES[tab].description}</p></div>
+          <div className="tauri-settings-page-heading"><h1>{settingTitles[tab].title}</h1><p>{settingTitles[tab].description}</p></div>
           {tab === "general" ? <GeneralSettings languagePref={languagePref} onLanguageChange={handleLanguageChange} languageSaving={languageSaving} languageError={languageError} notificationsEnabled={notificationsEnabled} onNotificationsChange={enabled => { setNotificationsEnabled(enabled); setTauriNotificationsEnabled(enabled); }} progressMode={progressMode} onProgressModeChange={next => { setProgressMode(next); setTauriProgressMode(next); }} closeBehavior={closeBehavior} onCloseBehaviorChange={handleCloseBehaviorChange} closeLoading={closeLoading} closeSaving={closeSaving} closeError={closeError} approvalMode={approvalMode} onApprovalChange={handleApprovalChange} approvalLoading={approvalLoading} approvalSaving={approvalSaving} approvalError={approvalError} platform={platform} currentSessionState={currentSessionState} /> : tab === "shortcuts" ? <ShortcutSettings /> : tab === "appearance" ? <AppearanceSettings appearance={appearance} onChange={handleAppearanceChange} appearanceSaving={appearanceSaving} appearanceError={appearanceError} conversationWidth={conversationWidth} onConversationWidthChange={handleConversationWidthChange} textSize={textSize} onTextSizeChange={handleTextSizeChange} fontFamily={fontFamily} onFontFamilyChange={handleFontFamilyChange} monoFontFamily={monoFontFamily} onMonoFontFamilyChange={handleMonoFontFamilyChange} customFontName={customFontName} onCustomFontChange={handleCustomFontChange} customMonoFontName={customMonoFontName} onCustomMonoFontChange={handleCustomMonoFontChange} terminalTheme={terminalTheme} onTerminalThemeChange={handleTerminalThemeChange} terminalThemeSaving={terminalThemeSaving} terminalThemeError={terminalThemeError} /> : <>
             {(tab === "model" || tab === "providers") && (modelLoading ? <div className="tauri-settings-loading">加载中…</div> : <>{modelLoadError && <SettingsLoadError onRetry={loadSettings} />}{providerSummary && (tab === "model" ? <ModelPreferenceSettings providerSummary={providerSummary} onModelChange={handleModelChange} onRoleChange={handleModelRoleChange} saving={modelSaving} error={modelSaveError} onOpenProviders={() => setTab("providers")} /> : <ProviderSettings providerSummary={providerSummary} onProviderSummaryChange={updateProviderSummary} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />)}</>)}
             {tab === "stats" && <Suspense fallback={<div className="tauri-settings-loading">加载中…</div>}><TauriUsageStatsPanel loadStats={tauriUsageStats} sources={["all", "desktop-tauri"]} /></Suspense>}

@@ -329,7 +329,7 @@ await act(async () => { document.querySelector<HTMLButtonElement>(".tauri-worksp
 assert.equal(localStorage.getItem("reasonix.tauri.default-workspace.v1"), "/work/chosen", "native workspace selection persists the Preview default");
 (globalThis as unknown as { __unavailableWorkspaceRoots: string[] }).__unavailableWorkspaceRoots = ["/work/chosen"];
 await act(async () => { document.querySelector<HTMLButtonElement>(".tauri-sidebar__diagnostics")?.click(); });
-await act(async () => { [...document.querySelectorAll<HTMLButtonElement>(".tauri-settings-nav-item")].find(button => button.textContent?.trim() === "存储")?.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
+await act(async () => { [...document.querySelectorAll<HTMLButtonElement>(".tauri-settings-nav-item")].find(button => ["存储", "Storage & paths"].includes(button.textContent?.trim() ?? ""))?.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
 assert.equal(document.querySelector<HTMLInputElement>('input[aria-label="新对话默认工作区"]')?.value, "/work/chosen", "Storage shows the saved default");
 assert.match(document.querySelector(".tauri-storage-path__warning")?.textContent ?? "", /文件夹当前不可用/, "Storage warns when the saved folder is unavailable");
 await act(async () => { [...document.querySelectorAll<HTMLButtonElement>(".tauri-storage-path__select")].find(button => button.textContent === "清除")?.click(); });

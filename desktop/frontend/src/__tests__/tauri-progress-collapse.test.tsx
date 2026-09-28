@@ -66,7 +66,7 @@ assert.ok(bridgeItem);
 await act(async () => { bridgeItem.click(); });
 assert.equal(statusBar()?.querySelector('[title^="本地服务："]'), null, "hiding an item removes its real status value");
 assert.equal(JSON.parse(localStorage.getItem("reasonix.tauri.status-bar.v1") ?? "null")?.style, "icon", "status bar preference persists");
-const shortcutsNav = [...document.querySelectorAll<HTMLButtonElement>(".tauri-settings-nav-item")].find(button => button.textContent?.includes("快捷键"));
+const shortcutsNav = [...document.querySelectorAll<HTMLButtonElement>(".tauri-settings-nav-item")].find(button => /快捷键|Shortcuts/.test(button.textContent ?? ""));
 assert.ok(shortcutsNav);
 await act(async () => { shortcutsNav.click(); });
 const settingsShortcut = document.querySelector<HTMLButtonElement>('[data-tauri-shortcut-action="settings"]');
@@ -79,7 +79,7 @@ await act(async () => { window.dispatchEvent(new dom.window.KeyboardEvent("keydo
 assert.equal(document.querySelector(".tauri-settings-overlay"), null, "replaced shortcut no longer opens settings");
 await act(async () => { window.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "o", ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true })); });
 assert.ok(document.querySelector(".tauri-settings-overlay"), "new shortcut opens settings in the live workspace");
-const shortcutNavAgain = [...document.querySelectorAll<HTMLButtonElement>(".tauri-settings-nav-item")].find(button => button.textContent?.includes("快捷键"));
+const shortcutNavAgain = [...document.querySelectorAll<HTMLButtonElement>(".tauri-settings-nav-item")].find(button => /快捷键|Shortcuts/.test(button.textContent ?? ""));
 assert.ok(shortcutNavAgain);
 await act(async () => { shortcutNavAgain.click(); });
 const newSessionRecorder = document.querySelector<HTMLButtonElement>('[data-tauri-shortcut-action="new_session"]');

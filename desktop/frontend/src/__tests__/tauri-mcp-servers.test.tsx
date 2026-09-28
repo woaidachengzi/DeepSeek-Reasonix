@@ -111,10 +111,10 @@ async function main() {
   });
 
   const openSettings = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
-    button => (button.textContent ?? "").trim() === "设置",
+    button => ["设置", "Settings"].includes((button.textContent ?? "").trim()),
   );
   await act(async () => { ok(click(openSettings), "the settings panel can be opened"); });
-  await act(async () => { ok(click([...document.querySelectorAll<HTMLButtonElement>(".tauri-settings-nav-item")].find(button => button.textContent?.trim() === "MCP 与工具")), "the MCP tab can be opened"); });
+  await act(async () => { ok(click([...document.querySelectorAll<HTMLButtonElement>(".tauri-settings-nav-item")].find(button => ["MCP 与工具", "MCP & Tools"].includes(button.textContent?.trim() ?? ""))), "the MCP tab can be opened"); });
   await act(async () => {
     await settle();
     await settle();

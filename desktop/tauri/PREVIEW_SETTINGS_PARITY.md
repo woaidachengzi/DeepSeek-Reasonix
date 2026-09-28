@@ -32,6 +32,9 @@ does not imply that the Go runtime lacks the underlying capability.
 The Preview settings shell now follows the saved Workbench or Creation desktop
 layout. Creation uses the stable version's narrower settings navigation and
 accent selection marker; search reveals each matching setting's purpose. The
+navigation groups, item labels, page headings and descriptions now use the
+stable locale catalog, including live switching between Chinese and English.
+Several Preview form labels and the About page remain Chinese-only.
 General page follows the stable form width and section order: desktop experience, session
 experience, then system behavior including sound and status bar controls.
 Theme, conversation width, and text size are edited in Appearance instead of
