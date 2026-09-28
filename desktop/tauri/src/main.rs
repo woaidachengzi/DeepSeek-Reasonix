@@ -1738,6 +1738,43 @@ fn set_close_behavior(
     Ok(behavior)
 }
 
+#[tauri::command]
+fn get_zoom_factor(preferences: State<'_, HostPreferences>) -> f64 {
+    preferences.zoom_factor()
+}
+
+#[tauri::command]
+fn set_zoom_factor(
+    window: tauri::WebviewWindow,
+    preferences: State<'_, HostPreferences>,
+    factor: f64,
+) -> Result<f64, String> {
+    let previous = preferences.zoom_factor();
+    preferences.set_zoom_factor(factor)?;
+    let applied = preferences.zoom_factor();
+    if let Err(error) = window.set_zoom(applied) {
+        let _ = preferences.set_zoom_factor(previous);
+        return Err(format!("apply WebView zoom: {error}"));
+    }
+    Ok(applied)
+}
+
+fn apply_menu_zoom(app: &tauri::AppHandle, factor: f64) {
+    let preferences = app.state::<HostPreferences>();
+    let previous = preferences.zoom_factor();
+    if let Err(error) = preferences.set_zoom_factor(factor) {
+        eprintln!("Reasonix could not save WebView zoom: {error}");
+        return;
+    }
+    let applied = preferences.zoom_factor();
+    if let Some(window) = app.get_webview_window("main") {
+        if let Err(error) = window.set_zoom(applied) {
+            let _ = preferences.set_zoom_factor(previous);
+            eprintln!("Reasonix could not apply WebView zoom: {error}");
+        }
+    }
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -1760,6 +1797,9 @@ fn main() {
                 WorkbenchProjectCatalog::for_app(app).map_err(std::io::Error::other)?;
             if let Some(window) = app.get_webview_window("main") {
                 window_state.restore(&window);
+                window
+                    .set_zoom(host_preferences.zoom_factor())
+                    .map_err(std::io::Error::other)?;
             }
             let profile =
                 data_profile::configure_preview_profile(app).map_err(std::io::Error::other)?;
@@ -1856,19 +1896,15 @@ fn main() {
                     }
                 }
                 "zoom_in" => {
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.eval("document.body.style.zoom = (parseFloat(document.body.style.zoom || '1') + 0.1).toString()");
-                    }
+                    let current = app.state::<HostPreferences>().zoom_factor();
+                    apply_menu_zoom(app, (current + 0.1).min(2.0));
                 }
                 "zoom_out" => {
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.eval("document.body.style.zoom = Math.max(0.5, parseFloat(document.body.style.zoom || '1') - 0.1).toString()");
-                    }
+                    let current = app.state::<HostPreferences>().zoom_factor();
+                    apply_menu_zoom(app, (current - 0.1).max(0.5));
                 }
                 "zoom_reset" => {
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.eval("document.body.style.zoom = '1'");
-                    }
+                    apply_menu_zoom(app, 1.0);
                 }
                 "minimize" => {
                     if let Some(window) = app.get_webview_window("main") {
@@ -1973,6 +2009,8 @@ fn main() {
             platform_info,
             get_close_behavior,
             set_close_behavior,
+            get_zoom_factor,
+            set_zoom_factor,
             open_external_url,
             keychain::keychain_save,
             keychain::keychain_delete

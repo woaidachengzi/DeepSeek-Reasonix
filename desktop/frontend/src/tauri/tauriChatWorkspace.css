@@ -692,6 +692,16 @@
 .tauri-settings-field-label small { color: var(--fg-faint); font-size: 10px; font-weight: 400; }
 .tauri-settings-typography-entry > div { display: grid; gap: 3px; }
 .tauri-settings-typography-entry p { margin: 0; color: var(--fg-faint); font-size: 11px; }
+.tauri-settings-zoom__copy { display: grid; flex: 1; gap: 4px; }
+.tauri-settings-zoom__copy small { color: var(--fg-faint); font-size: 11px; }
+.tauri-settings-zoom__error { color: var(--err); font-size: 11px; }
+.tauri-settings-zoom__control { display: flex; align-items: center; gap: 9px; }
+.tauri-settings-zoom__control input[type="range"] { width: clamp(120px, 18vw, 260px); accent-color: var(--accent); }
+.tauri-settings-zoom__control > button { min-width: 30px; height: 30px; padding: 0 7px; border: 1px solid var(--border-soft); border-radius: 7px; background: var(--surface); color: var(--fg-dim); }
+.tauri-settings-zoom__control > button:disabled { opacity: .48; }
+.tauri-settings-zoom__control output { min-width: 45px; color: var(--fg); font-size: 12px; font-variant-numeric: tabular-nums; text-align: center; }
+.tauri-settings-zoom__control > small { color: var(--fg-faint); font-size: 10px; }
+.tauri-settings-zoom__control > button.tauri-settings-zoom__reset { color: var(--accent); }
 .tauri-settings-content .typography-settings { height: auto; }
 @media (max-width: 950px) {
   .tauri-settings-content .typography-settings__workspace { grid-template-columns: minmax(0, 1fr); }

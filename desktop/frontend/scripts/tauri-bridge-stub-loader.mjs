@@ -100,6 +100,8 @@ export function setTauriDefaultModel() { return Promise.resolve({ protocolVersio
 export function setTauriModelRole(role, model) { record("set_model_role", { role, model }); return tauriProviderSummary(); }
 export function tauriDesktopPreferences() { return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: "auto" }); }
 export function setTauriDesktopApproval(mode) { record("set_desktop_approval", { mode }); return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: mode }); }
+export function tauriZoomFactor() { record("get_zoom_factor"); return Promise.resolve(1); }
+export function setTauriZoomFactor(factor) { record("set_zoom_factor", { factor }); return Promise.resolve(factor); }
 export function getTauriCloseBehavior() { return Promise.resolve("keep_running"); }
 export function setTauriCloseBehavior(behavior) { record("set_close_behavior", { behavior }); return Promise.resolve(behavior); }
 export function keychainSave(key, value) { record("keychain_save", { key, value }); return Promise.resolve(); }

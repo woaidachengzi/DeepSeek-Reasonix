@@ -37,6 +37,7 @@ let failStorage = false;
 const calls: string[] = [];
 let openedURL = "";
 let closeBehavior = "keep_running";
+let zoomFactor = 1;
 let approvalMode = "auto";
 let defaultModel = "";
 let plannerModel = "";
@@ -159,6 +160,8 @@ const summary = () => ({
       case "platform_info": return "darwin";
       case "get_close_behavior": return closeBehavior;
       case "set_close_behavior": closeBehavior = args?.behavior ?? closeBehavior; return closeBehavior;
+      case "get_zoom_factor": return zoomFactor;
+      case "set_zoom_factor": zoomFactor = args?.factor ?? zoomFactor; return zoomFactor;
       case "desktop_preferences": return { protocolVersion: 1, defaultToolApprovalMode: approvalMode };
       case "set_desktop_approval": approvalMode = args?.mode ?? approvalMode; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode };
       case "open_external_url": openedURL = args?.url ?? ""; return;
@@ -213,6 +216,12 @@ function enterKey(value: string) {
 function visibleText() { return document.body.textContent ?? ""; }
 
 assert.match(visibleText(), /配色风格/, "appearance controls are available without opening the model tab");
+assert.equal(document.querySelector(".tauri-settings-zoom__control output")?.textContent, "100%", "appearance reads the persisted host zoom factor");
+await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="放大界面"]')?.click(); });
+assert.equal(zoomFactor, 1.05, "display zoom is applied through the Tauri host");
+assert.equal(document.querySelector(".tauri-settings-zoom__control output")?.textContent, "105%", "display zoom reports the host-applied value");
+await act(async () => { document.querySelector<HTMLButtonElement>(".tauri-settings-zoom__reset")?.click(); });
+assert.equal(zoomFactor, 1, "display zoom can be reset to the default");
 assert.ok(document.querySelector(".tauri-settings-sidebar .tauri-settings-nav"), "settings use a full-page sidebar");
 const settingsSearch = document.querySelector<HTMLInputElement>('input[aria-label="搜索设置"]');
 assert.ok(settingsSearch, "the sidebar has settings search");

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Check, ArrowLeft, Search, X, Keyboard, Globe, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles, Users, Webhook, Package } from "lucide-react";
-import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, tauriDesktopPreferences, setTauriDesktopApproval, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
+import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, tauriDesktopPreferences, setTauriDesktopApproval, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, tauriZoomFactor, setTauriZoomFactor, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
 import { THEME_STYLES, type Theme, type ThemeStyle } from "../lib/theme";
 import { applyConversationWidth, getCachedConversationWidth, type ConversationWidth } from "../lib/conversationWidth";
 import { applyTextSize, getTextSize, TEXT_SIZES, type TextSize } from "../lib/textSize";
@@ -581,6 +581,7 @@ function AppearanceSettings({ appearance, onChange, conversationWidth, onConvers
           ))}
         </div>
       </div>
+      <DisplayZoomSetting />
       <div className="tauri-settings-field">
         <label htmlFor="tauri-settings-font">界面字体</label>
         <select id="tauri-settings-font" className="tauri-settings-select" value={fontFamily} onChange={event => onFontFamilyChange(event.target.value as FontFamily)}>
@@ -604,6 +605,56 @@ function AppearanceSettings({ appearance, onChange, conversationWidth, onConvers
       <div className="tauri-settings-field tauri-settings-typography-entry">
         <div><span className="tauri-settings-field-label">分区排版</span><p>分别设置界面、对话、输入框、代码和辅助文字的字体与字号。</p></div>
         <button type="button" className="tauri-settings-button" onClick={() => setTypographyOpen(true)}>自定义排版</button>
+      </div>
+    </div>
+  );
+}
+
+function DisplayZoomSetting() {
+  const [percent, setPercent] = useState(100);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const savedPercent = useRef(100);
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const request = useRef(0);
+
+  useEffect(() => {
+    let active = true;
+    void tauriZoomFactor().then(factor => {
+      const next = Math.round(factor * 100);
+      savedPercent.current = next;
+      if (active) { setPercent(next); setError(""); }
+    }).catch(() => { if (active) setError("无法读取显示缩放设置"); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; request.current += 1; };
+  }, []);
+
+  const update = (nextValue: number) => {
+    const next = Math.max(50, Math.min(200, Math.round(nextValue / 5) * 5));
+    const sequence = ++request.current;
+    setPercent(next);
+    setError("");
+    setSaving(true);
+    const task = saveQueue.current.catch(() => undefined).then(() => setTauriZoomFactor(next / 100));
+    saveQueue.current = task.then(() => undefined, () => undefined);
+    void task.then(factor => {
+      savedPercent.current = Math.round(factor * 100);
+      if (sequence === request.current) setPercent(savedPercent.current);
+    }).catch(() => {
+      if (sequence === request.current) { setPercent(savedPercent.current); setError("显示缩放保存失败"); }
+    }).finally(() => { if (sequence === request.current) setSaving(false); });
+  };
+
+  return (
+    <div className="tauri-settings-field tauri-settings-zoom">
+      <div className="tauri-settings-zoom__copy"><span className="tauri-settings-field-label">显示缩放</span><small>调整整个窗口的显示比例，菜单缩放也会同步。</small>{error && <span className="tauri-settings-zoom__error" role="alert">{error}</span>}</div>
+      <div className="tauri-settings-zoom__control">
+        <button type="button" aria-label="缩小界面" disabled={loading || percent <= 50} onClick={() => update(percent - 5)}>−</button>
+        <input aria-label="显示缩放" type="range" min="50" max="200" step="5" value={percent} disabled={loading} onChange={event => update(Number(event.target.value))} />
+        <button type="button" aria-label="放大界面" disabled={loading || percent >= 200} onClick={() => update(percent + 5)}>+</button>
+        <output>{percent}%</output>
+        <button type="button" className="tauri-settings-zoom__reset" disabled={loading || percent === 100} onClick={() => update(100)}>100%</button>
+        {saving && <small aria-live="polite">保存中</small>}
       </div>
     </div>
   );

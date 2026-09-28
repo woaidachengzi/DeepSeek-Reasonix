@@ -735,6 +735,16 @@ export async function setTauriDesktopApproval(mode: TauriToolApprovalMode): Prom
   return invoke<TauriDesktopPreferences>("set_desktop_approval", { mode });
 }
 
+export async function tauriZoomFactor(): Promise<number> {
+  requireTauri();
+  return invoke<number>("get_zoom_factor");
+}
+
+export async function setTauriZoomFactor(factor: number): Promise<number> {
+  requireTauri();
+  return invoke<number>("set_zoom_factor", { factor });
+}
+
 export async function setTauriDefaultModel(model: string): Promise<TauriProviderSummary> {
   requireTauri();
   return invoke<TauriProviderSummary>("set_default_model", { request: { model } });
