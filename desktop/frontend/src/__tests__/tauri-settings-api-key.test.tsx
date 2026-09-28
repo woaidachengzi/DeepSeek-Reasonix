@@ -427,9 +427,9 @@ assert.ok(document.querySelector(".usage-stats"), "Preview renders the stable us
 assert.ok(calls.includes("usage_stats"), "usage statistics read through the Tauri bridge");
 await act(async () => { click(["权限", "Permissions"]); });
 assert.match(visibleText(), /默认写入决策/, "permission editor is available in settings");
-await act(async () => { click("拒绝"); });
+await act(async () => { [...document.querySelectorAll<HTMLButtonElement>('.tauri-permissions-settings [role="radio"]')].find(button => /deny|阻止写操作/.test(button.textContent ?? ""))?.click(); });
 assert.equal(permissions.mode, "deny", "writer fallback mode is persisted through the bridge");
-const denyRuleInput = document.querySelector<HTMLInputElement>('input[aria-label="新增拒绝规则"]');
+const denyRuleInput = document.querySelector<HTMLInputElement>('input[aria-label="新增阻止规则"], input[aria-label="Add Block rule"], input[aria-label="新增阻止規則"]');
 assert.ok(denyRuleInput);
 await act(async () => {
   Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(denyRuleInput, "Bash(rm:*)");
@@ -437,6 +437,14 @@ await act(async () => {
 });
 await act(async () => { click("添加"); });
 assert.deepEqual(permissions.deny, ["Bash(rm:*)"], "permission rule is persisted through the bridge");
+await act(async () => { click(["通用", "General"]); });
+await act(async () => { click("English"); });
+await act(async () => { click(["Permissions", "权限"]); });
+assert.match(visibleText(), /Default writer decision/, "permission settings follow the active English locale");
+assert.ok(document.querySelector<HTMLInputElement>('input[aria-label="Add Block rule"]'), "permission rule labels are localized for assistive technology");
+await act(async () => { click(["General", "通用"]); });
+await act(async () => { click("中文"); });
+await act(async () => { click(["权限", "Permissions"]); });
 await act(async () => { click(["沙盒", "沙箱", "Sandbox"]); });
 assert.match(visibleText(), /命令与沙盒/, "sandbox editor is available in settings");
 assert.equal(sandboxQueryRoot, "/preview/project", "sandbox effective roots are queried for the current workspace");
