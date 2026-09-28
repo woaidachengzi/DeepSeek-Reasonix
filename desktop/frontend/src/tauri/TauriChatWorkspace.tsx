@@ -22,6 +22,7 @@ import { getTauriNotificationsEnabled, getTauriProgressMode, TAURI_PROGRESS_MODE
 import { handleTauriDragDropEvent, retainTauriDragDropListener } from "./dragDrop";
 import { formatTauriWorkDuration, groupTauriHistory, type IndexedHistoryMessage } from "./historyPresentation";
 import { applyTerminalThemePreference, onTerminalThemePreferenceChange } from "../lib/terminalTheme";
+import { applyTauriAppearance, readTauriAppearance } from "./tauriAppearance";
 
 /** Per-message error boundary to prevent one bad message from crashing the entire transcript. */
 class MessageErrorBoundary extends Component<{ children: ReactNode; index: number }, { hasError: boolean }> {
@@ -495,9 +496,17 @@ export function TauriSessionPreview() {
   useEffect(() => {
     let active = true;
     let changedLocally = false;
+    const initialAppearance = readTauriAppearance();
     const unsubscribe = onTerminalThemePreferenceChange(() => { changedLocally = true; });
     void tauriDesktopPreferences().then(preferences => {
-      if (active && !changedLocally) applyTerminalThemePreference(preferences.terminalTheme);
+      if (!active) return;
+      if (!changedLocally) applyTerminalThemePreference(preferences.terminalTheme);
+      if (preferences.appearanceConfigured) {
+        const currentAppearance = readTauriAppearance();
+        if (currentAppearance.mode === initialAppearance.mode && currentAppearance.style === initialAppearance.style) {
+          applyTauriAppearance({ mode: preferences.theme, style: preferences.themeStyle || "graphite" });
+        }
+      }
     }).catch(() => {});
     return () => { active = false; unsubscribe(); };
   }, []);

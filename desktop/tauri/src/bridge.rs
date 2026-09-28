@@ -55,6 +55,12 @@ pub struct DesktopPreferences {
     pub default_tool_approval_mode: String,
     #[serde(default)]
     pub terminal_theme: String,
+    #[serde(default)]
+    pub theme: String,
+    #[serde(default)]
+    pub theme_style: String,
+    #[serde(default)]
+    pub appearance_configured: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -2287,6 +2293,34 @@ impl BridgeSupervisor {
             "POST",
             "/v1/settings/desktop/terminal-theme",
             Some(json!({"theme": theme})),
+            Some(&request_id),
+        )?;
+        let preferences: DesktopPreferences =
+            serde_json::from_value(response).map_err(display_error)?;
+        if preferences.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(preferences)
+    }
+
+    pub fn set_desktop_appearance(
+        &self,
+        theme: String,
+        style: String,
+    ) -> Result<DesktopPreferences, String> {
+        if !matches!(theme.as_str(), "auto" | "dark" | "light")
+            || !matches!(
+                style.as_str(),
+                "" | "graphite" | "aurora" | "slate" | "carbon" | "nocturne" | "amber"
+            )
+        {
+            return Err("invalid desktop appearance".to_string());
+        }
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/desktop/appearance",
+            Some(json!({"theme": theme, "style": style})),
             Some(&request_id),
         )?;
         let preferences: DesktopPreferences =

@@ -490,6 +490,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("GET /v1/settings/storage", b.authorized(b.storageSettings))
 	mux.HandleFunc("POST /v1/settings/desktop/approval", b.authorized(b.idempotent(64<<10, b.setDesktopApproval)))
 	mux.HandleFunc("POST /v1/settings/desktop/terminal-theme", b.authorized(b.idempotent(64<<10, b.setDesktopTerminalTheme)))
+	mux.HandleFunc("POST /v1/settings/desktop/appearance", b.authorized(b.idempotent(64<<10, b.setDesktopAppearance)))
 	mux.HandleFunc("POST /v1/settings/provider-key", b.authorized(b.idempotent(64<<10, b.setProviderKey)))
 	mux.HandleFunc("POST /v1/sessions:open", b.authorized(b.idempotent(64<<10, b.openSession)))
 	mux.HandleFunc("POST /v1/sessions:switch", b.authorized(b.idempotent(64<<10, b.switchSession)))
@@ -934,6 +935,26 @@ func (b *bridgeServer) setDesktopTerminalTheme(w http.ResponseWriter, r *http.Re
 	}
 	if err := persistDesktopTerminalTheme(request.Theme); err != nil {
 		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to save desktop terminal theme")
+		return
+	}
+	b.desktopPreferences(w, r)
+}
+
+func (b *bridgeServer) setDesktopAppearance(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		Theme string `json:"theme"`
+		Style string `json:"style"`
+	}
+	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid desktop appearance")
+		return
+	}
+	if (request.Theme != "auto" && request.Theme != "dark" && request.Theme != "light") || (request.Style != "" && request.Style != "graphite" && request.Style != "aurora" && request.Style != "slate" && request.Style != "carbon" && request.Style != "nocturne" && request.Style != "amber") {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid desktop appearance")
+		return
+	}
+	if err := persistDesktopAppearance(request.Theme, request.Style); err != nil {
+		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to save desktop appearance")
 		return
 	}
 	b.desktopPreferences(w, r)

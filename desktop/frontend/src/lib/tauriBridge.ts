@@ -22,6 +22,7 @@ import type {
   BridgeWorkspaceChangeDetailResponse,
 } from "./bridgeProtocol.generated";
 import type { TerminalThemePreference } from "./terminalTheme";
+import type { Theme, ThemeStyle } from "./theme";
 
 export interface TauriBridgeStatus {
   running: boolean;
@@ -725,6 +726,9 @@ export interface TauriDesktopPreferences {
   protocolVersion: number;
   defaultToolApprovalMode: TauriToolApprovalMode;
   terminalTheme: TerminalThemePreference;
+  theme: Theme;
+  themeStyle: ThemeStyle | "";
+  appearanceConfigured: boolean;
 }
 
 export async function tauriDesktopPreferences(): Promise<TauriDesktopPreferences> {
@@ -740,6 +744,11 @@ export async function setTauriDesktopApproval(mode: TauriToolApprovalMode): Prom
 export async function setTauriDesktopTerminalTheme(theme: TerminalThemePreference): Promise<TauriDesktopPreferences> {
   requireTauri();
   return invoke<TauriDesktopPreferences>("set_desktop_terminal_theme", { theme });
+}
+
+export async function setTauriDesktopAppearance(theme: Theme, style: ThemeStyle): Promise<TauriDesktopPreferences> {
+  requireTauri();
+  return invoke<TauriDesktopPreferences>("set_desktop_appearance", { theme, style });
 }
 
 export async function tauriZoomFactor(): Promise<number> {

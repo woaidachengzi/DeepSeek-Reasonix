@@ -40,6 +40,9 @@ let closeBehavior = "keep_running";
 let zoomFactor = 1;
 let approvalMode = "auto";
 let terminalTheme = "auto";
+let desktopTheme = "auto";
+let desktopThemeStyle = "";
+let appearanceConfigured = false;
 let defaultModel = "";
 let plannerModel = "";
 let visionModel = "";
@@ -163,9 +166,10 @@ const summary = () => ({
       case "set_close_behavior": closeBehavior = args?.behavior ?? closeBehavior; return closeBehavior;
       case "get_zoom_factor": return zoomFactor;
       case "set_zoom_factor": zoomFactor = args?.factor ?? zoomFactor; return zoomFactor;
-      case "desktop_preferences": return { protocolVersion: 1, defaultToolApprovalMode: approvalMode, terminalTheme };
+      case "desktop_preferences": return { protocolVersion: 1, defaultToolApprovalMode: approvalMode, terminalTheme, theme: desktopTheme, themeStyle: desktopThemeStyle, appearanceConfigured };
       case "set_desktop_approval": approvalMode = args?.mode ?? approvalMode; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode };
       case "set_desktop_terminal_theme": terminalTheme = args?.theme ?? terminalTheme; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode, terminalTheme };
+      case "set_desktop_appearance": desktopTheme = args?.theme ?? desktopTheme; desktopThemeStyle = args?.style ?? desktopThemeStyle; appearanceConfigured = true; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode, terminalTheme, theme: desktopTheme, themeStyle: desktopThemeStyle, appearanceConfigured };
       case "open_external_url": openedURL = args?.url ?? ""; return;
       case "keychain_save":
         if (failSave) throw new Error("secret-in-error-message");
@@ -247,11 +251,13 @@ await act(async () => {
 await act(async () => { click("深色"); });
 assert.equal(document.documentElement.getAttribute("data-theme"), "dark");
 assert.equal(localStorage.getItem("tauri-theme"), "dark");
+assert.equal(desktopTheme, "dark", "appearance mode is persisted through the Preview profile bridge");
 await act(async () => { click("跟随系统"); });
 assert.equal(document.documentElement.hasAttribute("data-theme"), false);
 await act(async () => { click("极光"); });
 assert.equal(document.documentElement.getAttribute("data-theme-style"), "aurora");
 assert.equal(localStorage.getItem("tauri-theme-style"), "aurora");
+assert.equal(desktopThemeStyle, "aurora", "appearance style is persisted through the Preview profile bridge");
 await act(async () => { click("宽屏"); });
 assert.equal(document.documentElement.getAttribute("data-conversation-width"), "full");
 assert.equal(localStorage.getItem("reasonix-conv-width"), "full");

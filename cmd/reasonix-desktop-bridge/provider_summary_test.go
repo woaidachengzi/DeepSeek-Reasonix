@@ -484,7 +484,7 @@ func TestDesktopApprovalEndpointPersistsNarrowChange(t *testing.T) {
 		handler.ServeHTTP(response, request)
 		return response
 	}
-	if got := call(http.MethodGet, "/v1/settings/desktop", ""); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"defaultToolApprovalMode":"ask"`) || !strings.Contains(got.Body.String(), `"terminalTheme":"auto"`) {
+	if got := call(http.MethodGet, "/v1/settings/desktop", ""); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"defaultToolApprovalMode":"ask"`) || !strings.Contains(got.Body.String(), `"terminalTheme":"auto"`) || !strings.Contains(got.Body.String(), `"appearanceConfigured":false`) {
 		t.Fatalf("read: %d %s", got.Code, got.Body.String())
 	}
 	if got := call(http.MethodPost, "/v1/settings/desktop/approval", `{"mode":"yolo"}`); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"defaultToolApprovalMode":"yolo"`) {
@@ -493,11 +493,14 @@ func TestDesktopApprovalEndpointPersistsNarrowChange(t *testing.T) {
 	if got := call(http.MethodPost, "/v1/settings/desktop/terminal-theme", `{"theme":"dark"}`); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"terminalTheme":"dark"`) {
 		t.Fatalf("save terminal theme: %d %s", got.Code, got.Body.String())
 	}
+	if got := call(http.MethodPost, "/v1/settings/desktop/appearance", `{"theme":"light","style":"aurora"}`); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"theme":"light"`) || !strings.Contains(got.Body.String(), `"themeStyle":"aurora"`) || !strings.Contains(got.Body.String(), `"appearanceConfigured":true`) {
+		t.Fatalf("save appearance: %d %s", got.Code, got.Body.String())
+	}
 	updated, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`default_tool_approval_mode = "yolo"`, `terminal_theme = "dark"`, `future_root_option = "keep-root"`, `future_desktop_option = "keep-desktop"`} {
+	for _, want := range []string{`default_tool_approval_mode = "yolo"`, `terminal_theme = "dark"`, `theme = "light"`, `theme_style = "aurora"`, `future_root_option = "keep-root"`, `future_desktop_option = "keep-desktop"`} {
 		if !strings.Contains(string(updated), want) {
 			t.Fatalf("saved config lost %q: %s", want, updated)
 		}
@@ -507,5 +510,8 @@ func TestDesktopApprovalEndpointPersistsNarrowChange(t *testing.T) {
 	}
 	if err := persistDesktopTerminalTheme("sepia"); err == nil {
 		t.Fatal("invalid terminal theme was accepted")
+	}
+	if err := persistDesktopAppearance("light", "sepia"); err == nil {
+		t.Fatal("invalid appearance style was accepted")
 	}
 }

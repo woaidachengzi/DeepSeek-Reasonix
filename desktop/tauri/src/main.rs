@@ -995,6 +995,15 @@ fn set_desktop_terminal_theme(
 }
 
 #[tauri::command]
+fn set_desktop_appearance(
+    supervisor: State<'_, BridgeSupervisor>,
+    theme: String,
+    style: String,
+) -> Result<DesktopPreferences, String> {
+    supervisor.set_desktop_appearance(theme, style)
+}
+
+#[tauri::command]
 fn set_default_model(
     supervisor: State<'_, BridgeSupervisor>,
     request: BridgeSetDefaultModelRequest,
@@ -2003,6 +2012,7 @@ fn main() {
             desktop_preferences,
             set_desktop_approval,
             set_desktop_terminal_theme,
+            set_desktop_appearance,
             set_default_model,
             set_model_role,
             import_stable_profile,
