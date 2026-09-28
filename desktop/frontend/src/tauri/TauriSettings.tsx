@@ -3,7 +3,7 @@ import { Check, ArrowLeft, Search, X, Keyboard, Globe, Languages, Palette, Info,
 import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, tauriDesktopPreferences, setTauriDesktopApproval, setTauriDesktopTerminalTheme, setTauriDesktopAppearance, setTauriDesktopLanguage, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, tauriZoomFactor, setTauriZoomFactor, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
 import { applyTerminalThemePreference, normalizeTerminalThemePreference, type TerminalThemePreference } from "../lib/terminalTheme";
 import { THEME_STYLES, type Theme, type ThemeStyle } from "../lib/theme";
-import { useI18n, useT, type LangPref, type Translator } from "../lib/i18n";
+import { useI18n, useT, type DictKey, type LangPref, type Translator } from "../lib/i18n";
 import { applyConversationWidth, getCachedConversationWidth, type ConversationWidth } from "../lib/conversationWidth";
 import { applyTextSize, getTextSize, TEXT_SIZES, type TextSize } from "../lib/textSize";
 import { applyFontFamily, applyMonoFontFamily, FONT_FAMILIES, MONO_FONT_FAMILIES, getCustomFontName, getCustomMonoFontName, getFontFamily, getMonoFontFamily, setCustomFontName, setCustomMonoFontName, type FontFamily, type MonoFontFamily } from "../lib/fontFamily";
@@ -122,10 +122,10 @@ const TEXT_SIZE_LABELS: Record<TextSize, string> = {
   xxlarge: "最大",
 };
 
-const TAURI_STATUS_BAR_LABELS: Record<TauriStatusBarItemId, string> = {
-  workspace: "工作区", model: "默认模型", session: "当前会话",
-  observed_tokens: "已观测 token", turn_tokens: "本轮 token", context: "上下文",
-  compact: "压缩阈值", cache_hit: "会话缓存命中", bridge: "本地服务",
+const TAURI_STATUS_BAR_LABEL_KEYS: Record<TauriStatusBarItemId, DictKey> = {
+  workspace: "settings.statusBarItem.workspace", model: "settings.statusBarItem.model", session: "settings.statusBarItem.session",
+  observed_tokens: "settings.statusBarItem.observedTokens", turn_tokens: "settings.statusBarItem.turnTokens", context: "settings.statusBarItem.context",
+  compact: "settings.statusBarItem.compact", cache_hit: "settings.statusBarItem.cacheHit", bridge: "settings.statusBarItem.bridge",
 };
 
 const TAURI_SHORTCUT_LABELS: Record<TauriShortcutAction, { label: string; description: string }> = {
@@ -437,6 +437,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
 }
 
 function GeneralSettings({ languagePref, onLanguageChange, languageSaving, languageError, notificationsEnabled, onNotificationsChange, progressMode, onProgressModeChange, closeBehavior, onCloseBehaviorChange, closeLoading, closeSaving, closeError, approvalMode, onApprovalChange, approvalLoading, approvalSaving, approvalError, platform, currentSessionState }: { languagePref: LangPref; onLanguageChange: (language: LangPref) => void; languageSaving: boolean; languageError: string; notificationsEnabled: boolean; onNotificationsChange: (enabled: boolean) => void; progressMode: TauriProgressMode; onProgressModeChange: (next: TauriProgressMode) => void; closeBehavior: TauriCloseBehavior; onCloseBehaviorChange: (behavior: TauriCloseBehavior) => void; closeLoading: boolean; closeSaving: boolean; closeError: string; approvalMode: TauriToolApprovalMode; onApprovalChange: (mode: TauriToolApprovalMode) => void; approvalLoading: boolean; approvalSaving: boolean; approvalError: string; platform: string; currentSessionState?: "idle" | "running" | "paused" }) {
+  const t = useT();
   const desktopLayout = useTauriDesktopLayout();
   const [soundExpanded, setSoundExpanded] = useState(false);
   const [successSound, setSuccessSound] = useState<SoundWavPref>(getSuccessPreference);
@@ -453,46 +454,50 @@ function GeneralSettings({ languagePref, onLanguageChange, languageSaving, langu
     if (next !== "off" && typeof AudioContext !== "undefined") generativeMusic.playPreview(next);
   };
   return <div className="tauri-settings-section tauri-settings-general">
-    <h3>桌面体验</h3><p className="tauri-settings-section-description">选择桌面整体布局与交互方式。</p>
-    <div className="tauri-settings-field"><Monitor className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">桌面风格<small>工作台适合管理项目与会话；创作让当前内容更集中。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="桌面风格">{(["workbench", "creation"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={desktopLayout === option} className={`tauri-settings-radio${desktopLayout === option ? " is-active" : ""}`} onClick={() => setTauriDesktopLayout(option)}>{option === "workbench" ? "工作台" : "创作"}</button>)}</div></div>
-    <div className="tauri-settings-field"><Languages className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">语言<small>选择界面语言，自动跟随系统。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="语言">{(["", "zh", "en"] as const satisfies readonly LangPref[]).map(option => <button key={option || "auto"} type="button" role="radio" aria-checked={languagePref === option} disabled={languageSaving} className={`tauri-settings-radio${languagePref === option ? " is-active" : ""}`} onClick={() => onLanguageChange(option)}>{languagePref === option && <Check size={13} />}<span>{option === "" ? "自动（跟随系统）" : option === "zh" ? "中文" : "English"}</span></button>)}</div></div>
+    <h3>{t("settings.general.sectionAppearance")}</h3><p className="tauri-settings-section-description">{t("settings.general.desktopHint")}</p>
+    <div className="tauri-settings-field"><Monitor className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.desktopLayoutStyle")}<small>{t("settings.desktopLayoutStyleHint")}</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.desktopLayoutStyle")}>{(["workbench", "creation"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={desktopLayout === option} className={`tauri-settings-radio${desktopLayout === option ? " is-active" : ""}`} onClick={() => setTauriDesktopLayout(option)}>{t(option === "workbench" ? "settings.desktopLayoutStyle.workbench" : "settings.desktopLayoutStyle.creation")}</button>)}</div></div>
+    <div className="tauri-settings-field"><Languages className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.language")}<small>{t("settings.languageHint")}</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.language")}>{(["", "zh", "en"] as const satisfies readonly LangPref[]).map(option => <button key={option || "auto"} type="button" role="radio" aria-checked={languagePref === option} disabled={languageSaving} className={`tauri-settings-radio${languagePref === option ? " is-active" : ""}`} onClick={() => onLanguageChange(option)}>{languagePref === option && <Check size={13} />}<span>{option === "" ? t("settings.langAuto") : option === "zh" ? "中文" : "English"}</span></button>)}</div></div>
     {languageError && <p className="tauri-diagnostic-error" role="alert">{languageError}</p>}
-    <h3>会话体验</h3><p className="tauri-settings-section-description">选择任务运行时与完成后的阅读方式。</p>
-    <div className="tauri-settings-field"><span className="tauri-settings-field-label">会话体验<small>选择过程更新的默认展开状态，仍可逐项手动折叠。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="会话体验">{(["standard", "deep"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={progressMode === option} className={`tauri-settings-radio${progressMode === option ? " is-active" : ""}`} onClick={() => onProgressModeChange(option)}>{option === "standard" ? "标准" : "深入"}</button>)}</div></div>
-    <h3>系统行为</h3><p className="tauri-settings-section-description">控制窗口、工具审批与通知。</p>
-    {platform === "darwin" && <div className="tauri-settings-field"><Power className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">关闭窗口时<small>选择关闭主窗口后的运行方式。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="关闭窗口时">{(["keep_running", "quit"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={closeBehavior === option} className={`tauri-settings-radio${closeBehavior === option ? " is-active" : ""}`} disabled={closeLoading || closeSaving} onClick={() => onCloseBehaviorChange(option)}>{option === "keep_running" ? "保持后台运行" : "退出 Reasonix"}</button>)}</div></div>}
+    <h3>{t("settings.general.sectionConversation")}</h3><p className="tauri-settings-section-description">{t("settings.sessionExperienceHint")}</p>
+    <div className="tauri-settings-field"><span className="tauri-settings-field-label">{t("settings.sessionExperience")}<small>{progressMode === "standard" ? t("settings.sessionExperience.standardHint") : t("settings.sessionExperience.deepHint")}</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.sessionExperience")}>{(["standard", "deep"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={progressMode === option} className={`tauri-settings-radio${progressMode === option ? " is-active" : ""}`} onClick={() => onProgressModeChange(option)}>{t(option === "standard" ? "settings.sessionExperience.standard" : "settings.sessionExperience.deep")}</button>)}</div></div>
+    <h3>{t("settings.general.sectionSystem")}</h3><p className="tauri-settings-section-description">{t("settings.general.sectionSystemHint")}</p>
+    {platform === "darwin" && <div className="tauri-settings-field"><Power className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.closeBehavior")}<small>{t("settings.closeBehaviorHint")}</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.closeBehavior")}>{(["keep_running", "quit"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={closeBehavior === option} className={`tauri-settings-radio${closeBehavior === option ? " is-active" : ""}`} disabled={closeLoading || closeSaving} onClick={() => onCloseBehaviorChange(option)}>{t(option === "keep_running" ? "settings.closeBehavior.background" : "settings.closeBehavior.quit")}</button>)}</div></div>}
     {platform === "darwin" && closeError && <p className="tauri-diagnostic-error" role="alert">{closeError}</p>}
-    <div className="tauri-settings-field"><ShieldCheck className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">新会话默认审批<small>只影响之后创建的会话；Yolo 会跳过工具审批，计划与沙盒限制仍生效。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="新会话默认审批">{(["ask", "auto", "yolo"] as const).map(mode => <button key={mode} type="button" role="radio" aria-checked={approvalMode === mode} className={`tauri-settings-radio${approvalMode === mode ? " is-active" : ""}`} disabled={approvalLoading || approvalSaving} onClick={() => onApprovalChange(mode)}>{mode === "ask" ? "询问" : mode === "auto" ? "自动" : "Yolo"}</button>)}</div></div>
+    <div className="tauri-settings-field"><ShieldCheck className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.defaultToolApprovalMode")}<small>{t("settings.defaultToolApprovalModeHint")}</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.defaultToolApprovalMode")}>{(["ask", "auto", "yolo"] as const).map(mode => <button key={mode} type="button" role="radio" aria-checked={approvalMode === mode} className={`tauri-settings-radio${approvalMode === mode ? " is-active" : ""}`} disabled={approvalLoading || approvalSaving} onClick={() => onApprovalChange(mode)}>{t(mode === "ask" ? "settings.defaultToolApprovalMode.ask" : mode === "auto" ? "settings.defaultToolApprovalMode.auto" : "settings.defaultToolApprovalMode.yolo")}</button>)}</div></div>
     {approvalError && <p className="tauri-diagnostic-error" role="alert">{approvalError}</p>}
-    <label className="tauri-settings-toggle"><Bell className="tauri-settings-field-icon" size={18} /><span><strong>桌面通知</strong><small>回复完成或失败时发送系统通知。</small></span><input type="checkbox" checked={notificationsEnabled} onChange={event => onNotificationsChange(event.target.checked)} /></label>
+    <label className="tauri-settings-toggle"><Bell className="tauri-settings-field-icon" size={18} /><span><strong>{t("settings.general.notifications")}</strong><small>{t("settings.general.notificationsHint")}</small></span><input type="checkbox" checked={notificationsEnabled} onChange={event => onNotificationsChange(event.target.checked)} /></label>
     <div className="tauri-settings-sound">
-      <button type="button" className="tauri-settings-sound-toggle" aria-expanded={soundExpanded} onClick={() => setSoundExpanded(open => !open)}><Volume2 className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">声音<small>设置生成过程音乐、完成和需要回答时的提醒音。</small></span><span>{musicPreset === "off" && successSound === "off" && attentionSound === "off" ? "已关闭" : "已自定义"}</span><ChevronDown size={15} aria-hidden="true" /></button>
+      <button type="button" className="tauri-settings-sound-toggle" aria-expanded={soundExpanded} aria-label={soundExpanded ? t("settings.soundCollapse") : t("settings.soundExpand")} onClick={() => setSoundExpanded(open => !open)}><Volume2 className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.sound")}<small>{t("settings.soundHint")}</small></span><span>{musicPreset === "off" && successSound === "off" && attentionSound === "off" ? t("settings.soundStatus.allOff") : t("settings.soundStatus.custom")}</span><ChevronDown size={15} aria-hidden="true" /></button>
       {soundExpanded && <div className="tauri-settings-sound-body">
-        <div className="tauri-settings-sound-row"><label>生成过程音乐<select aria-label="生成过程音乐" value={musicPreset} onChange={event => changeMusicPreset(event.target.value as GenerativePreset)}>{MUSIC_PRESETS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><button type="button" aria-label="试听生成过程音乐" disabled={musicPreset === "off" || typeof AudioContext === "undefined"} onClick={() => { if (musicPreset !== "off") generativeMusic.playPreview(musicPreset); }}><Play size={14} /></button></div>
-        <label className="tauri-settings-sound-row">通知音量 <input type="range" min={0} max={100} value={soundVolume} aria-label="通知音量" onChange={event => setSoundVolume(setNotificationVolume(Number(event.target.value)))} /><output>{soundVolume}%</output></label>
-        <TauriSoundOption label="回复完成" value={successSound} onChange={next => { setSuccessSound(next); setSuccessPreference(next); playSuccessChime(); }} onPreview={playSuccessChime} />
-        <TauriSoundOption label="需要回答" value={attentionSound} onChange={next => { setAttentionSound(next); setAttentionPreference(next); playAttentionChime(); }} onPreview={playAttentionChime} />
+        <div className="tauri-settings-sound-row"><label>{t("settings.generativeMusicPreset")}<select aria-label={t("settings.generativeMusicPreset")} value={musicPreset} onChange={event => changeMusicPreset(event.target.value as GenerativePreset)}>{musicPresets(t).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><button type="button" aria-label={t("settings.generativeMusicPreview")} disabled={musicPreset === "off" || typeof AudioContext === "undefined"} onClick={() => { if (musicPreset !== "off") generativeMusic.playPreview(musicPreset); }}><Play size={14} /></button></div>
+        <label className="tauri-settings-sound-row">{t("settings.notificationVolume")} <input type="range" min={0} max={100} value={soundVolume} aria-label={t("settings.notificationVolume")} onChange={event => setSoundVolume(setNotificationVolume(Number(event.target.value)))} /><output>{soundVolume}%</output></label>
+        <TauriSoundOption t={t} label={t("settings.notificationSoundSuccess")} value={successSound} onChange={next => { setSuccessSound(next); setSuccessPreference(next); playSuccessChime(); }} onPreview={playSuccessChime} />
+        <TauriSoundOption t={t} label={t("settings.notificationSoundAttention")} value={attentionSound} onChange={next => { setAttentionSound(next); setAttentionPreference(next); playAttentionChime(); }} onPreview={playAttentionChime} />
       </div>}
     </div>
-    <div className="tauri-settings-field"><PanelTop className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">底部信息栏样式<small>切换工作区底部状态信息的显示方式。</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label="底部信息栏样式">{(["icon", "text"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={statusBar.style === option} className={`tauri-settings-radio${statusBar.style === option ? " is-active" : ""}`} onClick={() => setTauriStatusBarPreferences({ ...statusBar, style: option })}>{option === "icon" ? "图标版" : "文字版"}</button>)}</div></div>
-    <div className="tauri-settings-field tauri-settings-status-items"><Activity className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">信息栏显示项<small>上下文和缓存来自会话快照；token 用量仅统计当前同步阶段收到的事件。</small></span><StatusBarItemsEditor items={statusBar.items} availableItems={TAURI_STATUS_BAR_ITEM_IDS} busy={false} onChange={items => setTauriStatusBarPreferences({ ...statusBar, items })} itemLabel={id => TAURI_STATUS_BAR_LABELS[id]} /></div>
+    <div className="tauri-settings-field"><PanelTop className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.statusBarStyle")}<small>{t("settings.statusBarStyleHint")}</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.statusBarStyle")}>{(["icon", "text"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={statusBar.style === option} className={`tauri-settings-radio${statusBar.style === option ? " is-active" : ""}`} onClick={() => setTauriStatusBarPreferences({ ...statusBar, style: option })}>{t(option === "icon" ? "settings.statusBarStyle.icon" : "settings.statusBarStyle.text")}</button>)}</div></div>
+    <div className="tauri-settings-field tauri-settings-status-items"><Activity className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.statusBarItems")}<small>{t("settings.statusBarItemsHint")}</small></span><StatusBarItemsEditor items={statusBar.items} availableItems={TAURI_STATUS_BAR_ITEM_IDS} busy={false} onChange={items => setTauriStatusBarPreferences({ ...statusBar, items })} itemLabel={id => t(TAURI_STATUS_BAR_LABEL_KEYS[id])} /></div>
   </div>;
 }
 
-const SOUND_OPTIONS: { value: SoundWavPref; label: string }[] = [
-  { value: "off", label: "关闭" }, { value: "synth", label: "合成音" },
-  { value: "positive", label: "清亮" }, { value: "correct", label: "确认" },
-  { value: "start", label: "开始" }, { value: "back", label: "轻柔" },
-];
+const SOUND_OPTION_KEYS: Record<SoundWavPref, DictKey> = {
+  off: "settings.notificationSound.off", synth: "settings.notificationSound.synth",
+  positive: "settings.notificationSound.positive", correct: "settings.notificationSound.correct",
+  start: "settings.notificationSound.start", back: "settings.notificationSound.back",
+};
 
-const MUSIC_PRESETS: { value: GenerativePreset; label: string }[] = [
-  { value: "off", label: "关闭" }, { value: "ethereal", label: "空灵" },
-  { value: "classic", label: "经典" }, { value: "digital", label: "电子" },
-  { value: "retro", label: "复古" },
-];
+const MUSIC_PRESET_KEYS: Record<GenerativePreset, DictKey> = {
+  off: "settings.generativeMusic.off", ethereal: "settings.generativeMusic.presets.ethereal",
+  classic: "settings.generativeMusic.presets.classic", digital: "settings.generativeMusic.presets.digital",
+  retro: "settings.generativeMusic.presets.retro",
+};
 
-function TauriSoundOption({ label, value, onChange, onPreview }: { label: string; value: SoundWavPref; onChange: (next: SoundWavPref) => void; onPreview: () => void }) {
-  return <div className="tauri-settings-sound-row"><label>{label}<select aria-label={`${label}提示音`} value={value} onChange={event => onChange(event.target.value as SoundWavPref)}>{SOUND_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><button type="button" aria-label={`试听${label}提示音`} disabled={value === "off"} onClick={onPreview}><Play size={14} /></button></div>;
+function musicPresets(t: Translator) {
+  return (Object.entries(MUSIC_PRESET_KEYS) as [GenerativePreset, DictKey][]).map(([value, key]) => ({ value, label: t(key) }));
+}
+
+function TauriSoundOption({ t, label, value, onChange, onPreview }: { t: Translator; label: string; value: SoundWavPref; onChange: (next: SoundWavPref) => void; onPreview: () => void }) {
+  return <div className="tauri-settings-sound-row"><label>{label}<select aria-label={label} value={value} onChange={event => onChange(event.target.value as SoundWavPref)}>{(Object.entries(SOUND_OPTION_KEYS) as [SoundWavPref, DictKey][]).map(([optionValue, key]) => <option key={optionValue} value={optionValue}>{t(key)}</option>)}</select></label><button type="button" aria-label={`${t("settings.notificationSoundPreview")} · ${label}`} disabled={value === "off"} onClick={onPreview}><Play size={14} /></button></div>;
 }
 
 function ShortcutSettings() {
