@@ -316,9 +316,10 @@ for (const path of localeChunks) {
   // adding 128 / 150 B. Retain only the next one-decimal ceiling.
   // Those latest measurements leave 85 B (zh) and 37 B (zh-TW) at the old
   // limits. Diagnostics and About settings add 46 translated labels; the
-  // merged chunks measure 64.2 / 64.9 KiB. Keep a bounded 0.3 KiB buffer for
+  // merged chunks measured 64.4 / 65.1 KiB after the Storage page translation.
+  // Keep a bounded 0.4 KiB buffer for
   // Node/zlib output drift without trimming required settings copy.
-  const budget = 65.2 * 1024;
+  const budget = 65.5 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 
