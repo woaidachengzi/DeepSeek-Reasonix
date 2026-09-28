@@ -18,6 +18,7 @@ import { TauriHooksSettings } from "./TauriHooksSettings";
 import { TauriMemorySettings } from "./TauriMemorySettings";
 import { TauriStorageSettings } from "./TauriStorageSettings";
 import { StatusBarItemsEditor } from "../components/StatusBarItemsEditor";
+import { TypographySettings } from "../components/TypographySettings";
 import { comboFromKeyboardEvent, detectShortcutPlatform, formatShortcutCombo } from "../lib/keyboardShortcuts";
 import { TAURI_SHORTCUT_ACTIONS, getTauriShortcut, isValidTauriShortcut, resetTauriShortcuts, setTauriShortcut, tauriShortcutConflict, useTauriShortcuts, type TauriShortcutAction } from "./tauriKeyboardShortcuts";
 import "../components/SettingsPanel.css";
@@ -526,6 +527,12 @@ function AppearanceSettings({ appearance, onChange, conversationWidth, onConvers
   customMonoFontName: string;
   onCustomMonoFontChange: (name: string) => void;
 }) {
+  const [typographyOpen, setTypographyOpen] = useState(false);
+
+  if (typographyOpen) {
+    return <TypographySettings onBack={() => setTypographyOpen(false)} scrollContainerSelector=".tauri-settings-content" fixedChinese />;
+  }
+
   return (
     <div className="tauri-settings-section">
       <h3>外观</h3>
@@ -594,6 +601,10 @@ function AppearanceSettings({ appearance, onChange, conversationWidth, onConvers
         <label htmlFor="tauri-settings-custom-mono-font">等宽字体名称</label>
         <input id="tauri-settings-custom-mono-font" className="tauri-settings-input" value={customMonoFontName} onChange={event => onCustomMonoFontChange(event.target.value)} placeholder="输入已安装等宽字体的名称" />
       </div>}
+      <div className="tauri-settings-field tauri-settings-typography-entry">
+        <div><span className="tauri-settings-field-label">分区排版</span><p>分别设置界面、对话、输入框、代码和辅助文字的字体与字号。</p></div>
+        <button type="button" className="tauri-settings-button" onClick={() => setTypographyOpen(true)}>自定义排版</button>
+      </div>
     </div>
   );
 }

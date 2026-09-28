@@ -2,6 +2,7 @@ import { SettingsSelect } from "./SettingsSelect";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ChevronDown, ChevronRight, Minus, Plus, RotateCcw, Sparkles, Undo2, UserRound } from "lucide-react";
 import { useT } from "../lib/i18n";
+import { zh } from "../locales/zh";
 import {
   TYPOGRAPHY_REGIONS,
   TYPOGRAPHY_REGION_META,
@@ -37,8 +38,14 @@ const FONT_OPTIONS: Array<{ value: RegionFontFamily; key: Parameters<ReturnType<
 
 type PreviewTab = "body" | "reasoning" | "tools";
 
-export function TypographySettings({ onBack }: { onBack: () => void }) {
-  const t = useT();
+export function TypographySettings({ onBack, scrollContainerSelector = ".settings-center__content", fixedChinese = false }: { onBack: () => void; scrollContainerSelector?: string; fixedChinese?: boolean }) {
+  const contextualT = useT();
+  const t: ReturnType<typeof useT> = fixedChinese
+    ? (key, vars) => {
+      const value = zh[key];
+      return vars ? value.replace(/\{(\w+)\}/g, (_, name: string) => String(vars[name] ?? `{${name}}`)) : value;
+    }
+    : contextualT;
   const [selected, setSelected] = useState<TypographyRegion>("conversation");
   const [preferences, setPreferences] = useState<TypographyPreferences>(() => getTypographyPreferences());
   const [previewTab, setPreviewTab] = useState<PreviewTab>("body");
@@ -48,8 +55,8 @@ export function TypographySettings({ onBack }: { onBack: () => void }) {
   const meta = TYPOGRAPHY_REGION_META[selected];
 
   useLayoutEffect(() => {
-    document.querySelector<HTMLElement>(".settings-center__content")?.scrollTo({ top: 0 });
-  }, []);
+    document.querySelector<HTMLElement>(scrollContainerSelector)?.scrollTo?.({ top: 0 });
+  }, [scrollContainerSelector]);
   const presets = useMemo(
     () => Array.from(new Set([meta.baseSize, meta.baseSize + 2, meta.baseSize + 4, meta.baseSize + 6])).filter((n) => n <= meta.max),
     [meta],

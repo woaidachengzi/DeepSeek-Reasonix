@@ -690,6 +690,16 @@
 .tauri-settings-field label { color: var(--fg-dim); font-size: 12px; }
 .tauri-settings-field-label { display: grid; gap: 3px; color: var(--fg); font-size: 12px; font-weight: 600; }
 .tauri-settings-field-label small { color: var(--fg-faint); font-size: 10px; font-weight: 400; }
+.tauri-settings-typography-entry > div { display: grid; gap: 3px; }
+.tauri-settings-typography-entry p { margin: 0; color: var(--fg-faint); font-size: 11px; }
+.tauri-settings-content .typography-settings { height: auto; }
+@media (max-width: 950px) {
+  .tauri-settings-content .typography-settings__workspace { grid-template-columns: minmax(0, 1fr); }
+  .tauri-settings-content .typography-settings__regions { display: flex; gap: 4px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border-soft); }
+  .tauri-settings-content .typography-settings__regions-label { display: none; }
+  .tauri-settings-content .typography-settings__region { width: auto; min-width: max-content; }
+  .tauri-settings-content .typography-settings__region svg { display: none; }
+}
 .tauri-settings-value { color: var(--fg-faint); font-size: 11px; }
 .tauri-settings-radio-group { display: flex; width: min(100%, 330px); min-width: min(100%, 330px); flex-wrap: wrap; gap: 0; padding: 3px; border: 1px solid var(--border-soft); border-radius: 9px; }
 .tauri-settings-radio { display: flex; min-height: 32px; flex: 1; align-items: center; justify-content: center; gap: 5px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: var(--fg-dim); font-size: 11px; white-space: nowrap; transition: background .12s; }

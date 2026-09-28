@@ -14,6 +14,7 @@ Object.assign(globalThis, {
   document: dom.window.document,
   HTMLElement: dom.window.HTMLElement,
   Event: dom.window.Event,
+  CustomEvent: dom.window.CustomEvent,
   MouseEvent: dom.window.MouseEvent,
   localStorage: dom.window.localStorage,
   IS_REACT_ACT_ENVIRONMENT: true,
@@ -240,6 +241,23 @@ assert.equal(localStorage.getItem("reasonix-conv-width"), "full");
 await act(async () => { click("大"); });
 assert.equal(document.documentElement.getAttribute("data-text-size"), "large");
 assert.equal(localStorage.getItem("reasonix-text-size"), "large");
+await act(async () => { click("自定义排版"); });
+assert.ok(document.querySelector(".typography-settings__workspace"), "Preview opens the stable region typography editor");
+assert.match(document.querySelector(".typography-settings__header")?.textContent ?? "", /详细排版设置/, "the Preview editor keeps Chinese settings labels on an English OS");
+await act(async () => { document.querySelectorAll<HTMLButtonElement>(".typography-settings__region")[2]?.click(); });
+const followGlobal = document.querySelector<HTMLInputElement>(".typography-settings__follow input");
+assert.ok(followGlobal?.checked, "conversation typography initially follows the global setting");
+await act(async () => { followGlobal.click(); });
+assert.equal(document.documentElement.style.getPropertyValue("--typography-conversation-size"), "14px", "conversation text changes immediately");
+assert.equal(JSON.parse(localStorage.getItem("reasonix-region-typography-v1")!).conversation.followGlobal, false, "region typography persists for later launches");
+await act(async () => { document.querySelector<HTMLButtonElement>('.typography-settings__back')?.click(); });
+assert.ok(document.querySelector(".tauri-settings-typography-entry"), "the region editor returns to Preview appearance settings");
+await act(async () => { click("自定义排版"); });
+await act(async () => { document.querySelectorAll<HTMLButtonElement>(".typography-settings__region")[2]?.click(); });
+assert.equal(document.querySelector<HTMLInputElement>(".typography-settings__follow input")?.checked, false, "region typography survives reopening the editor");
+await act(async () => { click("全部恢复默认"); });
+assert.equal(document.documentElement.style.getPropertyValue("--typography-conversation-size"), "", "restoring defaults clears the rendered override");
+await act(async () => { document.querySelector<HTMLButtonElement>('.typography-settings__back')?.click(); });
 await act(async () => { click("存储"); });
 assert.equal(document.querySelector<HTMLInputElement>('input[aria-label="状态目录"]')?.value, "/preview/state", "storage page reads the effective core state directory");
 assert.equal(document.querySelector<HTMLInputElement>('input[aria-label="缓存目录"]')?.value, "/preview/cache", "storage page reads the effective core cache directory");
