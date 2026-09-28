@@ -399,6 +399,11 @@ const commands: CommandContract[] = [
     description: "setTauriDesktopApproval() invokes set_desktop_approval with { mode }",
   },
   {
+    command: "set_desktop_terminal_theme",
+    argKeys: ["theme"],
+    description: "setTauriDesktopTerminalTheme() invokes set_desktop_terminal_theme with { theme }",
+  },
+  {
     command: "get_close_behavior",
     argKeys: [],
     description: "getTauriCloseBehavior() invokes get_close_behavior with no args",

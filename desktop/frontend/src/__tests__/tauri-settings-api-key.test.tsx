@@ -39,6 +39,7 @@ let openedURL = "";
 let closeBehavior = "keep_running";
 let zoomFactor = 1;
 let approvalMode = "auto";
+let terminalTheme = "auto";
 let defaultModel = "";
 let plannerModel = "";
 let visionModel = "";
@@ -81,7 +82,7 @@ const summary = () => ({
 });
 
 (dom.window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
-  async invoke(command: string, args?: { scope?: string; source?: string; workspaceRoot?: string; url?: string; behavior?: string; mode?: string; request?: { model?: string; role?: string; source?: string; scope?: string; workspaceRoot?: string; name?: string; planId?: string; revision?: string; acceptRisk?: boolean }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean; revision?: string; presetId?: string; presetAction?: string }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string; profile?: { name: string; description: string; systemPrompt: string } } }) {
+  async invoke(command: string, args?: { scope?: string; source?: string; workspaceRoot?: string; url?: string; behavior?: string; mode?: string; theme?: string; request?: { model?: string; role?: string; source?: string; scope?: string; workspaceRoot?: string; name?: string; planId?: string; revision?: string; acceptRisk?: boolean }; input?: { name: string; displayName: string; kind: string; baseUrl: string; models: string[]; default: string; useApiKey: boolean; revision?: string; presetId?: string; presetAction?: string }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string; profile?: { name: string; description: string; systemPrompt: string } } }) {
     calls.push(command);
     switch (command) {
       case "preview_runtime_info":
@@ -162,8 +163,9 @@ const summary = () => ({
       case "set_close_behavior": closeBehavior = args?.behavior ?? closeBehavior; return closeBehavior;
       case "get_zoom_factor": return zoomFactor;
       case "set_zoom_factor": zoomFactor = args?.factor ?? zoomFactor; return zoomFactor;
-      case "desktop_preferences": return { protocolVersion: 1, defaultToolApprovalMode: approvalMode };
+      case "desktop_preferences": return { protocolVersion: 1, defaultToolApprovalMode: approvalMode, terminalTheme };
       case "set_desktop_approval": approvalMode = args?.mode ?? approvalMode; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode };
+      case "set_desktop_terminal_theme": terminalTheme = args?.theme ?? terminalTheme; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode, terminalTheme };
       case "open_external_url": openedURL = args?.url ?? ""; return;
       case "keychain_save":
         if (failSave) throw new Error("secret-in-error-message");
@@ -216,6 +218,12 @@ function enterKey(value: string) {
 function visibleText() { return document.body.textContent ?? ""; }
 
 assert.match(visibleText(), /配色风格/, "appearance controls are available without opening the model tab");
+await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="终端主题"] button:nth-child(3)')?.click(); });
+assert.equal(terminalTheme, "dark", "terminal theme is saved through the Preview config bridge");
+assert.equal(document.documentElement.getAttribute("data-terminal-theme"), "dark", "terminal appearance updates immediately");
+await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="终端主题"] button:first-child')?.click(); });
+assert.equal(terminalTheme, "auto", "terminal theme can return to following the app");
+assert.equal(document.documentElement.hasAttribute("data-terminal-theme"), false, "auto terminal appearance follows the app theme");
 assert.equal(document.querySelector(".tauri-settings-zoom__control output")?.textContent, "100%", "appearance reads the persisted host zoom factor");
 await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="放大界面"]')?.click(); });
 assert.equal(zoomFactor, 1.05, "display zoom is applied through the Tauri host");

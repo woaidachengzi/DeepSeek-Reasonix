@@ -21,6 +21,7 @@ import { observeTauriUsage, type TauriObservedUsage } from "./tauriObservedUsage
 import { getTauriNotificationsEnabled, getTauriProgressMode, TAURI_PROGRESS_MODE_CHANGED } from "./tauriPreferences";
 import { handleTauriDragDropEvent, retainTauriDragDropListener } from "./dragDrop";
 import { formatTauriWorkDuration, groupTauriHistory, type IndexedHistoryMessage } from "./historyPresentation";
+import { applyTerminalThemePreference, onTerminalThemePreferenceChange } from "../lib/terminalTheme";
 
 /** Per-message error boundary to prevent one bad message from crashing the entire transcript. */
 class MessageErrorBoundary extends Component<{ children: ReactNode; index: number }, { hasError: boolean }> {
@@ -141,6 +142,7 @@ import {
   tauriTurnFailure,
   tauriImportLegacySessionCatalog,
   tauriSessionCatalogShadow,
+  tauriDesktopPreferences,
   type TauriBridgeEvent,
   type TauriBridgeAttachment,
   type TauriBridgeHistory,
@@ -488,6 +490,16 @@ export function TauriSessionPreview() {
     const onProgressModeChanged = () => setProgressMode(getTauriProgressMode());
     window.addEventListener(TAURI_PROGRESS_MODE_CHANGED, onProgressModeChanged);
     return () => window.removeEventListener(TAURI_PROGRESS_MODE_CHANGED, onProgressModeChanged);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    let changedLocally = false;
+    const unsubscribe = onTerminalThemePreferenceChange(() => { changedLocally = true; });
+    void tauriDesktopPreferences().then(preferences => {
+      if (active && !changedLocally) applyTerminalThemePreference(preferences.terminalTheme);
+    }).catch(() => {});
+    return () => { active = false; unsubscribe(); };
   }, []);
 
   useEffect(() => {

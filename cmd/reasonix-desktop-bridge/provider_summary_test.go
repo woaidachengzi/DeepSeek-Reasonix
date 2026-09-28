@@ -478,28 +478,34 @@ func TestDesktopApprovalEndpointPersistsNarrowChange(t *testing.T) {
 		request := httptest.NewRequest(method, endpoint, strings.NewReader(body))
 		request.Header.Set("Authorization", "Bearer "+testToken)
 		if method == http.MethodPost {
-			request.Header.Set(requestIDHeader, "desktop-approval-test-0001")
+			request.Header.Set(requestIDHeader, "desktop-settings-test"+strings.ReplaceAll(endpoint, "/", "-"))
 		}
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, request)
 		return response
 	}
-	if got := call(http.MethodGet, "/v1/settings/desktop", ""); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"defaultToolApprovalMode":"ask"`) {
+	if got := call(http.MethodGet, "/v1/settings/desktop", ""); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"defaultToolApprovalMode":"ask"`) || !strings.Contains(got.Body.String(), `"terminalTheme":"auto"`) {
 		t.Fatalf("read: %d %s", got.Code, got.Body.String())
 	}
 	if got := call(http.MethodPost, "/v1/settings/desktop/approval", `{"mode":"yolo"}`); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"defaultToolApprovalMode":"yolo"`) {
 		t.Fatalf("save: %d %s", got.Code, got.Body.String())
 	}
+	if got := call(http.MethodPost, "/v1/settings/desktop/terminal-theme", `{"theme":"dark"}`); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"terminalTheme":"dark"`) {
+		t.Fatalf("save terminal theme: %d %s", got.Code, got.Body.String())
+	}
 	updated, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`default_tool_approval_mode = "yolo"`, `future_root_option = "keep-root"`, `future_desktop_option = "keep-desktop"`} {
+	for _, want := range []string{`default_tool_approval_mode = "yolo"`, `terminal_theme = "dark"`, `future_root_option = "keep-root"`, `future_desktop_option = "keep-desktop"`} {
 		if !strings.Contains(string(updated), want) {
 			t.Fatalf("saved config lost %q: %s", want, updated)
 		}
 	}
 	if err := persistDesktopApprovalMode("unsafe"); err == nil {
 		t.Fatal("invalid mode was accepted")
+	}
+	if err := persistDesktopTerminalTheme("sepia"); err == nil {
+		t.Fatal("invalid terminal theme was accepted")
 	}
 }

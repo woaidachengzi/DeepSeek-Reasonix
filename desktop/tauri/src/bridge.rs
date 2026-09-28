@@ -53,6 +53,8 @@ pub struct BridgeStatus {
 pub struct DesktopPreferences {
     pub protocol_version: u64,
     pub default_tool_approval_mode: String,
+    #[serde(default)]
+    pub terminal_theme: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -2266,6 +2268,25 @@ impl BridgeSupervisor {
             "POST",
             "/v1/settings/desktop/approval",
             Some(json!({"mode": mode})),
+            Some(&request_id),
+        )?;
+        let preferences: DesktopPreferences =
+            serde_json::from_value(response).map_err(display_error)?;
+        if preferences.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(preferences)
+    }
+
+    pub fn set_desktop_terminal_theme(&self, theme: String) -> Result<DesktopPreferences, String> {
+        if !matches!(theme.as_str(), "auto" | "dark" | "light") {
+            return Err("invalid desktop terminal theme".to_string());
+        }
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/desktop/terminal-theme",
+            Some(json!({"theme": theme})),
             Some(&request_id),
         )?;
         let preferences: DesktopPreferences =

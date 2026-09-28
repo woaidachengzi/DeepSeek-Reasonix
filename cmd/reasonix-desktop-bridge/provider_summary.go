@@ -42,6 +42,7 @@ type setModelRoleRequest struct {
 type desktopPreferencesResponse struct {
 	ProtocolVersion         int    `json:"protocolVersion"`
 	DefaultToolApprovalMode string `json:"defaultToolApprovalMode"`
+	TerminalTheme           string `json:"terminalTheme"`
 }
 
 type setDesktopApprovalRequest struct {
@@ -53,7 +54,11 @@ func loadDesktopPreferences() (desktopPreferencesResponse, error) {
 	if err != nil {
 		return desktopPreferencesResponse{}, err
 	}
-	return desktopPreferencesResponse{ProtocolVersion: desktopbridge.ProtocolVersion, DefaultToolApprovalMode: cfg.DesktopDefaultToolApprovalMode()}, nil
+	return desktopPreferencesResponse{
+		ProtocolVersion:         desktopbridge.ProtocolVersion,
+		DefaultToolApprovalMode: cfg.DesktopDefaultToolApprovalMode(),
+		TerminalTheme:           cfg.DesktopTerminalTheme(),
+	}, nil
 }
 
 func persistDesktopApprovalMode(mode string) error {
@@ -72,6 +77,27 @@ func persistDesktopApprovalMode(mode string) error {
 	}
 	baseline := cfg.ModelSettingsBaseline()
 	if err := cfg.SetDesktopDefaultToolApprovalMode(mode); err != nil {
+		return err
+	}
+	return cfg.SaveUserSettingsDeltaTo(path, baseline)
+}
+
+func persistDesktopTerminalTheme(theme string) error {
+	if theme != "auto" && theme != "dark" && theme != "light" {
+		return fmt.Errorf("invalid terminal theme")
+	}
+	unlock := configpkg.LockUserConfigEdits()
+	defer unlock()
+	path := configpkg.UserConfigPath()
+	if path == "" {
+		return fmt.Errorf("resolve Preview user config path")
+	}
+	cfg, err := configpkg.LoadForEditReadOnlyStrict(path)
+	if err != nil {
+		return err
+	}
+	baseline := cfg.ModelSettingsBaseline()
+	if err := cfg.SetDesktopTerminalTheme(theme); err != nil {
 		return err
 	}
 	return cfg.SaveUserSettingsDeltaTo(path, baseline)
