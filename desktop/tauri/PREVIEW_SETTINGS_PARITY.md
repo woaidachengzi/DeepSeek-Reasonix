@@ -35,7 +35,9 @@ accent selection marker; search reveals each matching setting's purpose. The
 navigation groups, item labels, page headings and descriptions now use the
 stable locale catalog, including live switching between Chinese and English.
 General, diagnostics, and About now use the shared locale catalog. Other
-Preview-specific forms still contain Chinese-only labels.
+Preview-specific forms still contain Chinese-only labels; the Storage page now
+uses the shared catalog for path labels, copy states, and default-workspace
+actions.
 General page follows the stable form width and section order: desktop experience, session
 experience, then system behavior including sound and status bar controls.
 Theme, conversation width, and text size are edited in Appearance instead of

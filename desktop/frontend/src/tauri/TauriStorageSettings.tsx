@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Copy, RefreshCw } from "lucide-react";
 import { tauriMessageFrom, tauriStorageSettings, tauriWorkspaceRootsAvailability, type TauriStorageSettings as StorageView } from "../lib/tauriBridge";
+import { useT } from "../lib/i18n";
 
 export function TauriStorageSettings({ workspaceRoot, defaultWorkspace = "", onChooseDefaultWorkspace, onClearDefaultWorkspace }: {
   workspaceRoot?: string;
@@ -8,6 +9,7 @@ export function TauriStorageSettings({ workspaceRoot, defaultWorkspace = "", onC
   onChooseDefaultWorkspace?: () => Promise<string | null>;
   onClearDefaultWorkspace?: () => void;
 }) {
+  const t = useT();
   const [view, setView] = useState<StorageView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -43,7 +45,7 @@ export function TauriStorageSettings({ workspaceRoot, defaultWorkspace = "", onC
     setCopied("");
     setError("");
     try { await navigator.clipboard.writeText(path); setCopied(label); }
-    catch { setError(`无法复制“${label}”，请手动选择路径。`); }
+    catch { setError(t("settings.storage.copyFailed", { label })); }
   };
   const chooseDefault = async () => {
     if (!onChooseDefaultWorkspace || actionBusy) return;
@@ -59,20 +61,22 @@ export function TauriStorageSettings({ workspaceRoot, defaultWorkspace = "", onC
     catch (cause) { setError(tauriMessageFrom(cause)); }
   };
   const paths = view ? [
-    { label: "当前工作区", value: workspaceRoot ?? "" },
-    { label: "Preview 配置目录", value: view.profilePath },
-    { label: "状态目录", value: view.statePath },
-    { label: "缓存目录", value: view.cachePath },
-    { label: "扩展目录", value: view.extensionsPath },
+    { label: t("settings.storage.currentWorkspace"), value: workspaceRoot ?? "" },
+    { label: t("settings.storage.profile"), value: view.profilePath },
+    { label: t("settings.storage.state"), value: view.statePath },
+    { label: t("settings.storageCache"), value: view.cachePath },
+    { label: t("settings.storageExtensions"), value: view.extensionsPath },
   ] : [];
 
-  return <section className="tauri-settings-section tauri-storage-settings" aria-label="存储位置">
-    <div className="tauri-settings-data__heading"><div><h3>存储位置</h3><p>默认工作区保存在 Preview；其余路径由正在运行的核心报告。</p></div><button type="button" className="tauri-settings-button" disabled={loading} onClick={() => void load()}><RefreshCw size={13} />刷新</button></div>
-    {loading && <div className="tauri-settings-loading">加载中…</div>}
+  const defaultWorkspaceLabel = t("settings.storage.defaultWorkspace");
+
+  return <section className="tauri-settings-section tauri-storage-settings" aria-label={t("settings.storageTitle")}>
+    <div className="tauri-settings-data__heading"><div><h3>{t("settings.storageTitle")}</h3><p>{t("settings.storage.previewHint")}</p></div><button type="button" className="tauri-settings-button" disabled={loading} onClick={() => void load()}><RefreshCw size={13} />{t("settings.storage.refresh")}</button></div>
+    {loading && <div className="tauri-settings-loading">{t("settings.loading")}</div>}
     <div className="tauri-storage-paths">
-      <div className="tauri-storage-path"><span>新对话默认工作区</span><div><input aria-label="新对话默认工作区" value={defaultWorkspace} readOnly placeholder="未设置" /><button type="button" aria-label="复制新对话默认工作区" title={copied === "新对话默认工作区" ? "已复制" : "复制路径"} disabled={!defaultWorkspace} onClick={() => void copy("新对话默认工作区", defaultWorkspace)}>{copied === "新对话默认工作区" ? <Check size={15} /> : <Copy size={15} />}</button>{onChooseDefaultWorkspace && <button type="button" className="tauri-storage-path__select" disabled={actionBusy} onClick={() => void chooseDefault()}>选择</button>}{onClearDefaultWorkspace && <button type="button" className="tauri-storage-path__select" disabled={actionBusy || !defaultWorkspace} onClick={clearDefault}>清除</button>}</div></div>
-      {defaultWorkspace && defaultWorkspaceAvailable === false && <p className="tauri-storage-path__warning" role="status">默认工作区文件夹当前不可用；新对话发送前请重新选择或清除。</p>}
-      {paths.map(({ label, value }) => <div className="tauri-storage-path" key={label}><span>{label}</span><div><input aria-label={label} value={value} readOnly placeholder="未设置" /><button type="button" aria-label={`复制${label}`} title={copied === label ? "已复制" : "复制路径"} disabled={!value} onClick={() => void copy(label, value)}>{copied === label ? <Check size={15} /> : <Copy size={15} />}</button></div></div>)}
+      <div className="tauri-storage-path"><span>{defaultWorkspaceLabel}</span><div><input aria-label={defaultWorkspaceLabel} value={defaultWorkspace} readOnly placeholder={t("settings.storage.unset")} /><button type="button" aria-label={t("settings.storage.copyLabel", { label: defaultWorkspaceLabel })} title={copied === defaultWorkspaceLabel ? t("settings.storage.copied") : t("settings.storage.copyPath")} disabled={!defaultWorkspace} onClick={() => void copy(defaultWorkspaceLabel, defaultWorkspace)}>{copied === defaultWorkspaceLabel ? <Check size={15} /> : <Copy size={15} />}</button>{onChooseDefaultWorkspace && <button type="button" className="tauri-storage-path__select" disabled={actionBusy} onClick={() => void chooseDefault()}>{t("settings.storage.choose")}</button>}{onClearDefaultWorkspace && <button type="button" className="tauri-storage-path__select" disabled={actionBusy || !defaultWorkspace} onClick={clearDefault}>{t("settings.storage.clear")}</button>}</div></div>
+      {defaultWorkspace && defaultWorkspaceAvailable === false && <p className="tauri-storage-path__warning" role="status">{t("settings.storage.unavailableWorkspace")}</p>}
+      {paths.map(({ label, value }) => <div className="tauri-storage-path" key={label}><span>{label}</span><div><input aria-label={label} value={value} readOnly placeholder={t("settings.storage.unset")} /><button type="button" aria-label={t("settings.storage.copyLabel", { label })} title={copied === label ? t("settings.storage.copied") : t("settings.storage.copyPath")} disabled={!value} onClick={() => void copy(label, value)}>{copied === label ? <Check size={15} /> : <Copy size={15} />}</button></div></div>)}
     </div>
     {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}
   </section>;
