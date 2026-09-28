@@ -80,7 +80,7 @@ const SETTINGS_GROUPS = (t: Translator) => [
     { id: "appearance", label: t("settings.tab.appearance"), description: t("settings.tabSub.appearance"), icon: Palette },
     { id: "shortcuts", label: t("settings.tab.shortcuts"), description: t("settings.tabSub.shortcuts"), icon: Keyboard },
     { id: "data", label: t("settings.tab.storage"), description: t("settings.tabSub.storage"), icon: Database },
-    { id: "about", label: "关于", description: "版本与运行信息", icon: Info },
+    { id: "about", label: t("settings.about.navLabel"), description: t("settings.about.hint"), icon: Info },
   ] },
 ] as const;
 
@@ -102,7 +102,7 @@ const SETTINGS_TITLES = (t: Translator): Record<TauriSettingsTab, { title: strin
   appearance: { title: t("settings.tab.appearance"), description: t("settings.tabSub.appearance") },
   shortcuts: { title: t("settings.tab.shortcuts"), description: t("settings.tabSub.shortcuts") },
   data: { title: t("settings.tab.storage"), description: t("settings.tabSub.storage") },
-  about: { title: "关于", description: "版本、构建及运行环境。" },
+  about: { title: t("settings.about.title"), description: t("settings.about.hint") },
 });
 
 const STYLE_LABELS: Record<ThemeStyle, string> = {
@@ -428,7 +428,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
             {tab === "network" && <TauriNetworkSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "diagnostics" && <DiagnosticsSettings bridgeStatus={bridgeStatus} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={hostError} busy={Boolean(importBusy)} onRestartBridge={onRestartBridge} onRefreshCatalogAudit={onRefreshCatalogAudit} onOpenData={() => setTab("data")} onOpenProviders={() => setTab("providers")} />}
             {tab === "data" && <><TauriStorageSettings workspaceRoot={workspaceRoot} defaultWorkspace={defaultWorkspace} onChooseDefaultWorkspace={onChooseDefaultWorkspace} onClearDefaultWorkspace={onClearDefaultWorkspace} /><DataSettings profile={profile} busy={Boolean(importBusy)} onRefreshProfile={onRefreshProfile} onImportStableProfile={onImportStableProfile} onImportStableProjectFolders={onImportStableProjectFolders} onScanUnclaimedSessions={onScanUnclaimedSessions} onClose={onClose} /></>}
-            {tab === "about" && (aboutLoading ? <div className="tauri-settings-loading">加载中…</div> : <>{aboutLoadError && <SettingsLoadError onRetry={loadSettings} />}{runtimeInfo && <AboutSettings runtimeInfo={runtimeInfo} platform={platform} onRefresh={loadSettings} />}</>)}
+            {tab === "about" && (aboutLoading ? <div className="tauri-settings-loading">{t("common.loading")}</div> : <>{aboutLoadError && <SettingsLoadError onRetry={loadSettings} />}{runtimeInfo && <AboutSettings runtimeInfo={runtimeInfo} platform={platform} onRefresh={loadSettings} />}</>)}
           </>}
         </div>
       </div>
@@ -586,7 +586,8 @@ function DataSettings({ profile, busy, onRefreshProfile, onImportStableProfile, 
 }
 
 function SettingsLoadError({ onRetry }: { onRetry: () => void }) {
-  return <div className="tauri-settings-load-error" role="alert">读取设置失败。<button type="button" className="tauri-settings-button" onClick={onRetry}><RefreshCw size={13} />重试</button></div>;
+  const t = useT();
+  return <div className="tauri-settings-load-error" role="alert">{t("settings.about.readFailed")}<button type="button" className="tauri-settings-button" onClick={onRetry}><RefreshCw size={13} />{t("settings.about.retry")}</button></div>;
 }
 
 function AppearanceSettings({ appearance, onChange, appearanceSaving, appearanceError, conversationWidth, onConversationWidthChange, textSize, onTextSizeChange, fontFamily, onFontFamilyChange, monoFontFamily, onMonoFontFamilyChange, customFontName, onCustomFontChange, customMonoFontName, onCustomMonoFontChange, terminalTheme, onTerminalThemeChange, terminalThemeSaving, terminalThemeError }: {
@@ -771,11 +772,12 @@ function DiagnosticsSettings({ bridgeStatus, catalogAudit, catalogAuditError, se
   onOpenData: () => void;
   onOpenProviders: () => void;
 }) {
+  const t = useT();
   const [restarting, setRestarting] = useState(false);
   const [checking, setChecking] = useState(false);
-  const [auditRefreshError, setAuditRefreshError] = useState("");
+  const [auditRefreshError, setAuditRefreshError] = useState(false);
   const [restartResult, setRestartResult] = useState<"ok" | "failed" | "">("");
-  const sourceLabel = sessionPageSource === "identity" ? "持久身份目录" : sessionPageSource === "partial_identity" ? "已核验身份目录（存在差异）" : sessionPageSource === "identity_unverified" ? "未核验身份目录（只读）" : sessionPageSource === "legacy" ? "本地兼容目录" : sessionPageSource === "cached" ? "上次审计快照" : "暂不可用";
+  const sourceLabel = t(sessionPageSource === "identity" ? "settings.diagnostics.source.identity" : sessionPageSource === "partial_identity" ? "settings.diagnostics.source.partialIdentity" : sessionPageSource === "identity_unverified" ? "settings.diagnostics.source.unverified" : sessionPageSource === "legacy" ? "settings.diagnostics.source.legacy" : sessionPageSource === "cached" ? "settings.diagnostics.source.cached" : "settings.diagnostics.source.unavailable");
   const restart = async () => {
     if (!onRestartBridge || restarting) return;
     setRestarting(true);
@@ -791,33 +793,33 @@ function DiagnosticsSettings({ bridgeStatus, catalogAudit, catalogAuditError, se
   const refreshAudit = async () => {
     if (!onRefreshCatalogAudit || checking) return;
     setChecking(true);
-    setAuditRefreshError("");
+    setAuditRefreshError(false);
     try {
       await onRefreshCatalogAudit();
     } catch {
-      setAuditRefreshError("会话目录检查失败，请重试。");
+      setAuditRefreshError(true);
     } finally {
       setChecking(false);
     }
   };
   return <div className="tauri-settings-section tauri-settings-diagnostics">
-    <h3>本地服务</h3>
-    <div className="tauri-settings-field"><span className="tauri-settings-field-label">桥接服务<small>负责运行 Preview 会话及连接模型服务。</small></span><span className={`tauri-settings-badge${bridgeStatus?.running ? " is-ready" : ""}`}>{bridgeStatus?.running ? `运行中 · 协议 v${bridgeStatus.protocolVersion ?? "?"}` : "未连接"}</span></div>
-    {onRestartBridge && <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" onClick={() => void restart()} disabled={busy || restarting}>重启桥接服务</button></div>}
-    {restartResult === "ok" && <p className="tauri-settings-data__notice" role="status">桥接服务已重启。</p>}
-    {restartResult === "failed" && <p className="tauri-diagnostic-error" role="alert">{hostError || "桥接服务未能重启，请稍后重试。"}</p>}
-    <h3>会话目录</h3>
-    <div className="tauri-settings-field"><span className="tauri-settings-field-label">当前侧栏数据源<small>切换到身份目录前会进行安全核验。</small></span><span className="tauri-settings-value">{sourceLabel}</span></div>
+    <h3>{t("settings.diagnostics.localService")}</h3>
+    <div className="tauri-settings-field"><span className="tauri-settings-field-label">{t("settings.diagnostics.bridge")}<small>{t("settings.diagnostics.bridgeHint")}</small></span><span className={`tauri-settings-badge${bridgeStatus?.running ? " is-ready" : ""}`}>{bridgeStatus?.running ? t("settings.diagnostics.bridgeRunning", { protocol: bridgeStatus.protocolVersion ?? "?" }) : t("settings.diagnostics.notConnected")}</span></div>
+    {onRestartBridge && <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" onClick={() => void restart()} disabled={busy || restarting}>{t("settings.diagnostics.restartBridge")}</button></div>}
+    {restartResult === "ok" && <p className="tauri-settings-data__notice" role="status">{t("settings.diagnostics.bridgeRestarted")}</p>}
+    {restartResult === "failed" && <p className="tauri-diagnostic-error" role="alert">{hostError || t("settings.diagnostics.bridgeRestartFailed")}</p>}
+    <h3>{t("settings.diagnostics.sessionCatalog")}</h3>
+    <div className="tauri-settings-field"><span className="tauri-settings-field-label">{t("settings.diagnostics.activeSource")}<small>{t("settings.diagnostics.sourceHint")}</small></span><span className="tauri-settings-value">{sourceLabel}</span></div>
     {catalogAudit ? <div className="tauri-settings-audit">
-      <div><span>旧目录</span><strong>{catalogAudit.legacyCount}</strong></div><div><span>身份目录</span><strong>{catalogAudit.directoryCount}</strong></div><div><span>匹配</span><strong>{catalogAudit.matchedCount}</strong></div><div><span>未认领文件</span><strong>{catalogAudit.unclaimedTranscripts}</strong></div>
-      <p>{catalogAudit.legacyMatchesDirectory ? "旧目录中可见会话与身份目录一致。" : `差异：身份库缺项 ${catalogAudit.missingFromDirectory}、标题 ${catalogAudit.titleMismatches}、工作区 ${catalogAudit.workspaceMismatches}、顺序 ${catalogAudit.orderMismatches}、磁盘状态 ${catalogAudit.physicalStateMismatches}、盘点错误 ${catalogAudit.inventoryErrors}。`}</p>
-    </div> : <p>{catalogAuditError || "正在检查会话目录…"}</p>}
+      <div><span>{t("settings.diagnostics.legacyCatalog")}</span><strong>{catalogAudit.legacyCount}</strong></div><div><span>{t("settings.diagnostics.identityCatalog")}</span><strong>{catalogAudit.directoryCount}</strong></div><div><span>{t("settings.diagnostics.matched")}</span><strong>{catalogAudit.matchedCount}</strong></div><div><span>{t("settings.diagnostics.unclaimed")}</span><strong>{catalogAudit.unclaimedTranscripts}</strong></div>
+      <p>{catalogAudit.legacyMatchesDirectory ? t("settings.diagnostics.catalogConsistent") : t("settings.diagnostics.catalogDifferences", { missing: catalogAudit.missingFromDirectory, titles: catalogAudit.titleMismatches, workspaces: catalogAudit.workspaceMismatches, order: catalogAudit.orderMismatches, disk: catalogAudit.physicalStateMismatches, errors: catalogAudit.inventoryErrors })}</p>
+    </div> : <p>{catalogAuditError || t("settings.diagnostics.catalogLoading")}</p>}
     {catalogAudit && catalogAuditError && <p className="tauri-diagnostic-error" role="alert">{catalogAuditError}</p>}
-    {auditRefreshError && <p className="tauri-diagnostic-error" role="alert">{auditRefreshError}</p>}
+    {auditRefreshError && <p className="tauri-diagnostic-error" role="alert">{t("settings.diagnostics.catalogCheckFailed")}</p>}
     <div className="tauri-settings-actions">
-      {onRefreshCatalogAudit && <button type="button" className="tauri-settings-button" onClick={() => void refreshAudit()} disabled={busy || checking}><RefreshCw size={13} />重新检查</button>}
-      <button type="button" className="tauri-settings-button" onClick={onOpenData}>打开数据设置</button>
-      <button type="button" className="tauri-settings-button" onClick={onOpenProviders}>打开模型服务</button>
+      {onRefreshCatalogAudit && <button type="button" className="tauri-settings-button" onClick={() => void refreshAudit()} disabled={busy || checking}><RefreshCw size={13} />{t("settings.diagnostics.recheck")}</button>}
+      <button type="button" className="tauri-settings-button" onClick={onOpenData}>{t("settings.diagnostics.openData")}</button>
+      <button type="button" className="tauri-settings-button" onClick={onOpenProviders}>{t("settings.diagnostics.openProviders")}</button>
     </div>
   </div>;
 }
@@ -1040,32 +1042,33 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
 }
 
 function AboutSettings({ runtimeInfo, platform, onRefresh }: { runtimeInfo: TauriPreviewRuntimeInfo | null; platform: string; onRefresh: () => void }) {
+  const t = useT();
   const [linkError, setLinkError] = useState(false);
   return (
     <div className="tauri-settings-section">
-      <h3>关于 Reasonix Tauri Preview</h3>
+      <h3>{t("settings.about.title")}</h3>
       {runtimeInfo ? (
         <div className="tauri-settings-about">
-          <div className="tauri-settings-about-row"><span>平台</span><span>{platform === "darwin" ? "macOS" : platform === "windows" ? "Windows" : platform === "linux" ? "Linux" : "未知"}</span></div>
-          <div className="tauri-settings-about-row"><span>Preview 版本</span><span>v{runtimeInfo.previewVersion}</span></div>
-          <div className="tauri-settings-about-row"><span>稳定版基线</span><span>v{runtimeInfo.stableVersion}</span></div>
-          <div className="tauri-settings-about-row"><span>Tauri</span><span>v{runtimeInfo.tauriVersion}</span></div>
-          <div className="tauri-settings-about-row"><span>桥接协议</span><span>v{runtimeInfo.bridgeProtocolVersion}</span></div>
-          <div className="tauri-settings-about-row"><span>构建时间</span><span>{runtimeInfo.previewBuild}</span></div>
-          <div className="tauri-settings-about-row"><span>Sidecar</span><span>{runtimeInfo.sidecarInstanceId ?? "未运行"}</span></div>
+          <div className="tauri-settings-about-row"><span>{t("settings.about.platform")}</span><span>{platform === "darwin" ? "macOS" : platform === "windows" ? "Windows" : platform === "linux" ? "Linux" : t("settings.about.unknownPlatform")}</span></div>
+          <div className="tauri-settings-about-row"><span>{t("settings.about.previewVersion")}</span><span>v{runtimeInfo.previewVersion}</span></div>
+          <div className="tauri-settings-about-row"><span>{t("settings.about.stableBaseline")}</span><span>v{runtimeInfo.stableVersion}</span></div>
+          <div className="tauri-settings-about-row"><span>{t("settings.about.tauri")}</span><span>v{runtimeInfo.tauriVersion}</span></div>
+          <div className="tauri-settings-about-row"><span>{t("settings.about.bridgeProtocol")}</span><span>v{runtimeInfo.bridgeProtocolVersion}</span></div>
+          <div className="tauri-settings-about-row"><span>{t("settings.about.buildTime")}</span><span>{runtimeInfo.previewBuild}</span></div>
+          <div className="tauri-settings-about-row"><span>{t("settings.about.sidecar")}</span><span>{runtimeInfo.sidecarInstanceId ?? t("settings.about.notRunning")}</span></div>
         </div>
       ) : (
-        <p>正在读取版本信息…</p>
+        <p>{t("settings.about.loading")}</p>
       )}
       <div className="tauri-settings-actions">
-        <button type="button" className="tauri-settings-button" onClick={onRefresh}><RefreshCw size={14} /> 刷新</button>
+        <button type="button" className="tauri-settings-button" onClick={onRefresh}><RefreshCw size={14} /> {t("settings.about.refresh")}</button>
         <a className="tauri-settings-button" href="https://github.com/esengine/DeepSeek-Reasonix" onClick={event => {
           event.preventDefault();
           setLinkError(false);
           void openTauriExternalURL(event.currentTarget.href).catch(() => setLinkError(true));
-        }}><ExternalLink size={14} /> GitHub</a>
+        }}><ExternalLink size={14} /> {t("settings.about.github")}</a>
       </div>
-      {linkError && <p role="alert">无法在系统浏览器中打开链接</p>}
+      {linkError && <p role="alert">{t("settings.about.openLinkFailed")}</p>}
     </div>
   );
 }

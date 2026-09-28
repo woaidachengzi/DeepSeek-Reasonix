@@ -634,6 +634,14 @@ assert.doesNotMatch(visibleText(), /secret-in-error-message/, "error details do 
 await act(async () => { click(["运行诊断", "诊断", "Diagnostics"]); });
 assert.match(visibleText(), /持久身份目录/, "diagnostics show the actual sidebar data source");
 assert.match(visibleText(), /运行中 · 协议 v1/, "diagnostics show bridge status");
+await act(async () => { click("通用"); });
+await act(async () => { click("English"); });
+await act(async () => { click("Diagnostics"); });
+assert.match(visibleText(), /Persistent identity catalog/, "diagnostics labels follow the active language");
+assert.match(visibleText(), /Running · protocol v1/, "bridge status is localized with its protocol value");
+await act(async () => { click("General"); });
+await act(async () => { click("中文"); });
+await act(async () => { click(["运行诊断", "诊断", "Diagnostics"]); });
 await act(async () => { click("重新检查"); });
 assert.equal(auditRefreshCalls, 1, "diagnostics refresh the catalog audit");
 await act(async () => { click("重启桥接服务"); });
@@ -641,6 +649,7 @@ assert.equal(restartCalls, 1, "diagnostics restart the existing bridge");
 assert.match(visibleText(), /桥接服务已重启/, "restart outcome is shown in settings");
 
 await act(async () => { click("关于"); });
+assert.match(visibleText(), /关于 Reasonix Tauri Preview/, "About page uses the locale catalog");
 const githubLink = document.querySelector<HTMLAnchorElement>('.tauri-settings-about a[href^="https://github.com/"]')
   ?? document.querySelector<HTMLAnchorElement>('.tauri-settings-actions a[href^="https://github.com/"]');
 assert.ok(githubLink, "About page has a GitHub link");
