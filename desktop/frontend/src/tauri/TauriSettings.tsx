@@ -159,6 +159,7 @@ const TAURI_SHORTCUT_LABELS: Record<TauriShortcutAction, { label: DictKey; descr
   new_session: { label: "shortcuts.action.newSession", description: "shortcuts.desc.newSession" },
   close_panel: { label: "shortcuts.action.closeTab", description: "shortcuts.desc.closeTab" },
   settings: { label: "shortcuts.action.settings", description: "shortcuts.desc.settings" },
+  command_palette: { label: "shortcuts.action.commandPalette", description: "shortcuts.desc.commandPalette" },
   diagnostics: { label: "settings.tab.diagnostics", description: "settings.tabSub.diagnostics" },
   toggle_sidebar: { label: "settings.tauriShortcut.toggleSidebar", description: "settings.tauriShortcut.toggleSidebarHint" },
   workspace_files: { label: "workspace.filesTab" },

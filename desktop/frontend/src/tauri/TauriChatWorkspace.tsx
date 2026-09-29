@@ -4,10 +4,11 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { Markdown } from "../components/Markdown";
+import { CommandPalette, type PaletteItem } from "../components/CommandPalette";
 import { QuestionJumpBar } from "../components/QuestionJumpBar";
 import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
 import { compactQuestionText, type QuestionAnchor } from "../lib/transcriptGrouping";
-import { LocaleProvider, useI18n, useT } from "../lib/i18n";
+import { LocaleProvider, useI18n, useT, type DictKey } from "../lib/i18n";
 import { applyTextSize, getTextSize, nextTextSize, DEFAULT_TEXT_SIZE } from "../lib/textSize";
 import { playSuccessChime, playAttentionChime, shouldPlayAttentionChimeForEvent } from "../lib/sound";
 import { generativeMusic, isGenerativeMusicEnabled } from "../lib/generative-music";
@@ -443,6 +444,7 @@ export function TauriSessionPreview() {
   const catalogAuditRequestRef = useRef(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<TauriSettingsTab>("general");
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [progressMode, setProgressMode] = useState(getTauriProgressMode);
   const [sidebarVisible, setSidebarVisible] = useState(getTauriSidebarVisible);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
@@ -489,6 +491,66 @@ export function TauriSessionPreview() {
   const [dragging, setDragging] = useState(false);
   const pendingSessionDeleteIDs = useMemo(() => new Set(pendingSessionDeletes.map(item => item.id)), [pendingSessionDeletes]);
   const visibleTabs = useMemo(() => tabs.filter(tab => !pendingSessionDeleteIDs.has(tab.sessionId)), [tabs, pendingSessionDeleteIDs]);
+  const commandPaletteItems = useMemo<PaletteItem[]>(() => {
+    const commandGroup = t("palette.group.commands");
+    const sessionGroup = t("palette.group.sessions");
+    const openSettingsTab = (tab: TauriSettingsTab) => {
+      setSettingsTab(tab);
+      setDiagnosticsOpen(false);
+      setSettingsOpen(true);
+    };
+    const settingsTabs: Array<{ tab: TauriSettingsTab; label: DictKey; keywords: string[] }> = [
+      { tab: "general", label: "settings.tab.general", keywords: ["general", "通用"] },
+      { tab: "appearance", label: "settings.tab.appearance", keywords: ["appearance", "theme", "外观", "主题"] },
+      { tab: "model", label: "settings.models.preferences", keywords: ["model", "模型"] },
+      { tab: "providers", label: "settings.models.services", keywords: ["provider", "service", "模型服务"] },
+      { tab: "stats", label: "settings.modelTab.stats", keywords: ["usage", "stats", "用量", "统计"] },
+      { tab: "bots", label: "settings.tab.bots", keywords: ["bot", "机器人"] },
+      { tab: "mcp", label: "settings.tab.mcp", keywords: ["mcp", "tools", "工具"] },
+      { tab: "remote", label: "settings.tab.remote", keywords: ["ssh", "remote", "远程"] },
+      { tab: "skills", label: "settings.tab.skills", keywords: ["skills", "技能"] },
+      { tab: "subagents", label: "settings.tab.subagents", keywords: ["subagent", "子智能体"] },
+      { tab: "plugins", label: "settings.tab.plugins", keywords: ["plugin", "插件"] },
+      { tab: "hooks", label: "settings.tab.hooks", keywords: ["hooks", "钩子"] },
+      { tab: "memory", label: "settings.tab.memory", keywords: ["memory", "记忆"] },
+      { tab: "permissions", label: "settings.tab.permissions", keywords: ["permissions", "权限"] },
+      { tab: "sandbox", label: "settings.tab.sandbox", keywords: ["sandbox", "沙箱"] },
+      { tab: "network", label: "settings.tab.network", keywords: ["network", "proxy", "网络", "代理"] },
+      { tab: "data", label: "settings.tab.storage", keywords: ["storage", "data", "存储"] },
+      { tab: "shortcuts", label: "settings.tab.shortcuts", keywords: ["shortcuts", "快捷键"] },
+      { tab: "updates", label: "settings.tab.updates", keywords: ["updates", "更新"] },
+      { tab: "about", label: "settings.about.navLabel", keywords: ["about", "版本"] },
+    ];
+    const commands: PaletteItem[] = [
+      { id: "tauri-command-new-session", group: commandGroup, title: t("palette.cmd.newSession"), icon: <Plus size={15} />, compact: true, keywords: ["new", "新建"], run: () => { setSettingsOpen(false); setDiagnosticsOpen(false); if (!busy && !switchingBlocked) void createSession(); } },
+      { id: "tauri-command-settings", group: commandGroup, title: t("palette.cmd.settings"), icon: <Settings size={15} />, compact: true, keywords: ["settings", "设置"], run: () => openSettingsTab("general") },
+      { id: "tauri-command-files", group: commandGroup, title: t("workspace.filesTab"), icon: <FolderTree size={15} />, compact: true, keywords: ["files", "workspace", "文件", "工作区"], run: () => { if (session && !busy) toggleWorkspace(); } },
+      { id: "tauri-command-diagnostics", group: commandGroup, title: t("settings.tab.diagnostics"), icon: <Activity size={15} />, compact: true, keywords: ["diagnostics", "运行状态", "诊断"], run: () => setDiagnosticsOpen(true) },
+      ...settingsTabs.map(({ tab, label, keywords }) => ({
+        id: `tauri-settings-${tab}`,
+        group: commandGroup,
+        title: t(label),
+        icon: <Settings size={15} />,
+        compact: true,
+        keywords,
+        run: () => openSettingsTab(tab),
+      })),
+    ];
+    const sessions: PaletteItem[] = (switchingBlocked ? [] : visibleTabs.filter(tab => !isMissingWorkbenchSession(tab) && !tab.deletionInterrupted).slice(0, 12)).map(tab => ({
+      id: `tauri-session-${tab.sessionId}`,
+      group: sessionGroup,
+      title: displayTitle(tab.title),
+      hint: tab.workspaceRoot,
+      keywords: [tab.title ?? "", tab.workspaceRoot ?? "", "session", "会话"],
+      run: () => {
+        if (isReadOnlyWorkbenchSource(sessionPageSource)) return;
+        setSettingsOpen(false);
+        setDiagnosticsOpen(false);
+        void activateSession(tab.sessionId, tab.workspaceRoot);
+      },
+    }));
+    return [...commands, ...sessions];
+  }, [t, busy, switchingBlocked, visibleTabs, session, sessionPageSource]);
   const projectGroups = useMemo(() => groupWorkbenchSessions(visibleTabs, projectFolders, platform), [visibleTabs, projectFolders, platform]);
   const searchedProjectGroups = useMemo(() => filterWorkbenchProjectGroups(projectGroups, sessionSearch), [projectGroups, sessionSearch]);
   const searchingSessions = sessionSearch.trim().length > 0;
@@ -615,13 +677,21 @@ export function TauriSessionPreview() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || (event.target instanceof HTMLElement && event.target.closest(".tauri-shortcut-key.is-recording"))) return;
+      const shortcutPlatform = detectShortcutPlatform();
+      if (matchesTauriShortcut(event, "command_palette", shortcutPlatform)) {
+        event.preventDefault();
+        setCommandPaletteOpen(open => !open);
+        return;
+      }
+      // The palette owns Escape and navigation keys; don't also trigger
+      // shortcuts in the workspace underneath its modal surface.
+      if (commandPaletteOpen) return;
       // Escape: Close open panels (no modifier required)
       if (event.key === "Escape") {
         if (settingsOpen) { setSettingsOpen(false); return; }
         if (diagnosticsOpen) { setDiagnosticsOpen(false); return; }
         if (workspaceOpen) { setWorkspaceOpen(false); return; }
       }
-      const shortcutPlatform = detectShortcutPlatform();
       if (matchesTauriShortcut(event, "close_panel", shortcutPlatform) && (settingsOpen || diagnosticsOpen || workspaceOpen)) {
         event.preventDefault();
         if (settingsOpen) setSettingsOpen(false);
@@ -712,7 +782,7 @@ export function TauriSessionPreview() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [busy, switchingBlocked, session, settingsOpen, diagnosticsOpen, workspaceOpen, visibleTabs]);
+  }, [busy, switchingBlocked, session, settingsOpen, diagnosticsOpen, workspaceOpen, commandPaletteOpen, visibleTabs]);
 
   useEffect(() => {
     void tauriBridgeStatus().then(setStatus).catch(error => setError(tauriMessageFrom(error)));
@@ -2410,6 +2480,7 @@ export function TauriSessionPreview() {
             <span data-tauri-drag-region>{session?.state === "running" ? "正在生成" : session?.state === "paused" ? "等待你的操作" : session ? "本地会话" : "Reasonix Preview"}</span>
           </div>
           <div className="tauri-topbar__actions">
+            <button type="button" className="tauri-icon-button" aria-label={t("shortcuts.action.commandPalette")} title={`${t("shortcuts.action.commandPalette")} (${formatShortcutCombo(shortcutOverrides.command_palette ?? defaultTauriShortcut("command_palette", shortcutPlatform), shortcutPlatform)})`} onClick={() => setCommandPaletteOpen(true)}><Search size={17} /></button>
             <button type="button" className="tauri-icon-button tauri-sidebar-toggle" aria-label={t(sidebarVisible ? "settings.tauriShortcut.hideSidebar" : "settings.tauriShortcut.showSidebar")} title={`${t(sidebarVisible ? "settings.tauriShortcut.hideSidebar" : "settings.tauriShortcut.showSidebar")} (${formatShortcutCombo(shortcutOverrides.toggle_sidebar ?? defaultTauriShortcut("toggle_sidebar", shortcutPlatform), shortcutPlatform)})`} aria-pressed={!sidebarVisible} onClick={() => setSidebarVisible(previous => { const next = !previous; setTauriSidebarVisible(next); return next; })}>
               {sidebarVisible ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}
             </button>
@@ -2609,6 +2680,7 @@ export function TauriSessionPreview() {
         </aside>
       </>}
 
+      <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} items={commandPaletteItems} placeholder={t("palette.placeholder")} emptyText={t("palette.empty")} />
       {settingsOpen && <TauriSettings key={settingsTab} initialTab={settingsTab} workspaceRoot={currentWorkspace || undefined} defaultWorkspace={defaultWorkspace} onChooseDefaultWorkspace={chooseDefaultWorkspace} onClearDefaultWorkspace={clearDefaultWorkspace} profile={profile} importBusy={busy} bridgeStatus={status} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={error} onRestartBridge={restartBridge} onRefreshCatalogAudit={() => refreshCatalogAudit()} onRefreshProfile={refreshProfile} onImportStableProfile={importStableProfile} onImportStableProjectFolders={importStableProjectFolders} onScanUnclaimedSessions={() => void openScanImportReview()} onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionId={session?.id} currentSessionState={session?.state} currentSessionModelRef={session?.modelRef} onCurrentSessionModelChange={changeCurrentSessionModel} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} />}
     </main>
   );
