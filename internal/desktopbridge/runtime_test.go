@@ -245,6 +245,9 @@ func (r *fakeRuntime) PrepareWorkspaceFileRevert(path string) (WorkspaceFileReve
 func (r *fakeRuntime) CommitWorkspaceFileRevert(string, string) (WorkspaceFileRevertResult, error) {
 	return WorkspaceFileRevertResult{}, nil
 }
+func (r *fakeRuntime) UndoWorkspaceFileRevert(string) (WorkspaceFileRevertResult, error) {
+	return WorkspaceFileRevertResult{}, nil
+}
 func (r *fakeRuntime) Submit(input string)                                       { r.submits = append(r.submits, input) }
 func (r *fakeRuntime) Cancel()                                                   { r.cancelCalls.Add(1) }
 func (r *fakeRuntime) Approve(string, bool)                                      {}

@@ -36,6 +36,7 @@
     { "$ref": "#/$defs/workspaceFileRevertPlan" },
     { "$ref": "#/$defs/workspaceFileRevertPlanResponse" },
     { "$ref": "#/$defs/workspaceFileRevertCommitRequest" },
+    { "$ref": "#/$defs/workspaceFileRevertUndoRequest" },
     { "$ref": "#/$defs/workspaceFileRevertResult" },
     { "$ref": "#/$defs/workspaceFileRevertResultResponse" },
     { "$ref": "#/$defs/submitRequest" },
@@ -579,6 +580,15 @@
       "properties": {
         "planId": { "type": "string", "minLength": 1 },
         "resolution": { "type": "string", "enum": ["", "overwrite_checkpoint"] }
+      },
+      "additionalProperties": false
+    },
+    "workspaceFileRevertUndoRequest": {
+      "title": "BridgeWorkspaceFileRevertUndoRequest",
+      "type": "object",
+      "required": ["transactionId"],
+      "properties": {
+        "transactionId": { "type": "string", "minLength": 1 }
       },
       "additionalProperties": false
     },

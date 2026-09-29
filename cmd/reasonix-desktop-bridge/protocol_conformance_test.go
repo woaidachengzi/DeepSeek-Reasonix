@@ -40,6 +40,7 @@ func TestGoDTOsMatchTheWireSchema(t *testing.T) {
 		{Name: "workspaceFileRevertPlan", Sample: desktopbridge.WorkspaceFileRevertPlan{}},
 		{Name: "workspaceFileRevertPlanResponse", Sample: workspaceFileRevertPlanResponse{}},
 		{Name: "workspaceFileRevertCommitRequest", Sample: workspaceFileRevertCommitRequest{}},
+		{Name: "workspaceFileRevertUndoRequest", Sample: workspaceFileRevertUndoRequest{}},
 		{Name: "workspaceFileRevertResult", Sample: desktopbridge.WorkspaceFileRevertResult{}},
 		{Name: "workspaceFileRevertResultResponse", Sample: workspaceFileRevertResultResponse{}},
 		{Name: "submitRequest", Sample: submitRequest{}},

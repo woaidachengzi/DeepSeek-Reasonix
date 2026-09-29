@@ -368,6 +368,10 @@ export interface BridgeWorkspaceFileRevertResultResponse {
   result: BridgeWorkspaceFileRevertResult;
 }
 
+export interface BridgeWorkspaceFileRevertUndoRequest {
+  transactionId: string;
+}
+
 export interface BridgeWorkspaceListResponse {
   entries: BridgeWorkspaceEntry[];
   path: string;

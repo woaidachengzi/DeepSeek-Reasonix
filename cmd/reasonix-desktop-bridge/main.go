@@ -657,6 +657,9 @@ func (b *bridgeServer) sessionCommand(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(path, ":workspace-file-revert-commit"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":workspace-file-revert-commit"))
 		b.idempotent(16<<10, b.workspaceFileRevertCommit)(w, r)
+	case strings.HasSuffix(path, ":workspace-file-revert-undo"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":workspace-file-revert-undo"))
+		b.idempotent(16<<10, b.workspaceFileRevertUndo)(w, r)
 	case strings.HasSuffix(path, ":cancel"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":cancel"))
 		b.cancel(w, r)
@@ -1257,6 +1260,10 @@ type workspaceFileRevertCommitRequest struct {
 	Resolution string `json:"resolution"`
 }
 
+type workspaceFileRevertUndoRequest struct {
+	TransactionID string `json:"transactionId"`
+}
+
 type workspaceListResponse struct {
 	ProtocolVersion int                            `json:"protocolVersion"`
 	Path            string                         `json:"path"`
@@ -1655,6 +1662,24 @@ func (b *bridgeServer) workspaceFileRevertCommit(w http.ResponseWriter, r *http.
 	result, err := b.runtimes.CommitWorkspaceFileRevert(r.PathValue("id"), request.PlanID, request.Resolution)
 	if err != nil {
 		b.writeRuntimeError(w, err, "unable to commit workspace file revert")
+		return
+	}
+	writeJSON(w, http.StatusOK, workspaceFileRevertResultResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Result: result})
+}
+
+func (b *bridgeServer) workspaceFileRevertUndo(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get(requestIDHeader) == "" {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "workspace file revert undo requires a request ID")
+		return
+	}
+	var request workspaceFileRevertUndoRequest
+	if err := decodeJSONBody(w, r, 16<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid workspace file revert undo request")
+		return
+	}
+	result, err := b.runtimes.UndoWorkspaceFileRevert(r.PathValue("id"), request.TransactionID)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to undo workspace file revert")
 		return
 	}
 	writeJSON(w, http.StatusOK, workspaceFileRevertResultResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Result: result})

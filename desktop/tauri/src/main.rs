@@ -108,7 +108,7 @@ use bridge::{
     SkillInstallResult, SkillsSettingsChange, SkillsSettingsView, SubagentProfileInput,
     SubagentSettingsChange, SubagentSettingsView, SubagentTryStatusView, SubmitRequest,
     WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceFileRevertCommitRequest,
-    WorkspaceRequest,
+    WorkspaceFileRevertUndoRequest, WorkspaceRequest,
 };
 use data_profile::{
     PreviewProfile, PreviewProfileStatus, ProfileImportResult, ProjectFoldersImportResult,
@@ -753,6 +753,14 @@ fn bridge_workspace_file_revert_commit(
     request: WorkspaceFileRevertCommitRequest,
 ) -> Result<BridgeWorkspaceFileRevertResultResponse, String> {
     supervisor.workspace_file_revert_commit(request)
+}
+
+#[tauri::command]
+fn bridge_workspace_file_revert_undo(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: WorkspaceFileRevertUndoRequest,
+) -> Result<BridgeWorkspaceFileRevertResultResponse, String> {
+    supervisor.workspace_file_revert_undo(request)
 }
 
 fn workspace_root_is_available(root: &str) -> Option<bool> {
@@ -3436,6 +3444,7 @@ fn main() {
             bridge_workspace_change_detail,
             bridge_workspace_file_revert_preview,
             bridge_workspace_file_revert_commit,
+            bridge_workspace_file_revert_undo,
             workspace_roots_availability,
             bridge_cancel,
             bridge_approve,

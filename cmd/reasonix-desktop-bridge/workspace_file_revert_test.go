@@ -95,6 +95,35 @@ func TestWorkspaceFileRevertRequiresExplicitConflictResolution(t *testing.T) {
 	if err != nil || string(content) != "before" {
 		t.Fatalf("restored content = %q err=%v", content, err)
 	}
+	if !result.UndoAvailable || result.TransactionID == "" {
+		t.Fatalf("restore did not produce an undo transaction: %+v", result)
+	}
+	if err := os.WriteFile(file, []byte("changed-after-restore"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	undo, err := runtime.UndoWorkspaceFileRevert(result.TransactionID)
+	if err != nil || undo.OK {
+		t.Fatalf("undo overwrote a later manual edit: result=%+v err=%v", undo, err)
+	}
+	content, err = os.ReadFile(file)
+	if err != nil || string(content) != "changed-after-restore" {
+		t.Fatalf("later manual edit was changed: %q err=%v", content, err)
+	}
+	if err := os.WriteFile(file, []byte("before"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	undo, err = runtime.UndoWorkspaceFileRevert(result.TransactionID)
+	if err != nil || !undo.OK {
+		t.Fatalf("undo restore: result=%+v err=%v", undo, err)
+	}
+	content, err = os.ReadFile(file)
+	if err != nil || string(content) != "manual" {
+		t.Fatalf("undo content = %q err=%v", content, err)
+	}
+	undo, err = runtime.UndoWorkspaceFileRevert(result.TransactionID)
+	if err != nil || undo.OK {
+		t.Fatalf("transaction was undone twice: result=%+v err=%v", undo, err)
+	}
 	if _, err := runtime.PrepareWorkspaceFileRevert("../outside.txt"); err == nil {
 		t.Fatal("path outside workspace was accepted")
 	}

@@ -469,6 +469,13 @@ pub struct WorkspaceFileRevertCommitRequest {
     pub resolution: String,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceFileRevertUndoRequest {
+    pub session_id: String,
+    pub transaction_id: String,
+}
+
 // The wire DTOs mirror docs/tauri/protocol/v1.schema.json through the generated
 // module; only the host-facing command payloads below stay hand-written.
 pub use crate::protocol_generated::{
@@ -486,7 +493,8 @@ pub use crate::protocol_generated::{
     BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
     BridgeWorkspaceFileRequest, BridgeWorkspaceFileResponse,
     BridgeWorkspaceFileRevertCommitRequest, BridgeWorkspaceFileRevertPlanResponse,
-    BridgeWorkspaceFileRevertResultResponse, BridgeWorkspaceListResponse, BridgeWorkspaceRequest,
+    BridgeWorkspaceFileRevertResultResponse, BridgeWorkspaceFileRevertUndoRequest,
+    BridgeWorkspaceListResponse, BridgeWorkspaceRequest,
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -3736,6 +3744,31 @@ impl BridgeSupervisor {
             Some(json!(BridgeWorkspaceFileRevertCommitRequest {
                 plan_id,
                 resolution: request.resolution,
+            })),
+            Some(&request_id),
+        )?;
+        let envelope: BridgeWorkspaceFileRevertResultResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope)
+    }
+
+    pub fn workspace_file_revert_undo(
+        &self,
+        request: WorkspaceFileRevertUndoRequest,
+    ) -> Result<BridgeWorkspaceFileRevertResultResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let transaction_id = session_path_component(&request.transaction_id)
+            .map_err(|_| "workspace file revert transaction ID is invalid".to_string())?;
+        let request_id = opaque_secret()?;
+        let path = format!("/v1/sessions/{session_id}:workspace-file-revert-undo");
+        let response = self.request_json(
+            "POST",
+            &path,
+            Some(json!(BridgeWorkspaceFileRevertUndoRequest {
+                transaction_id
             })),
             Some(&request_id),
         )?;

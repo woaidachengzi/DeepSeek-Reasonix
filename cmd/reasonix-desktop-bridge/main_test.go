@@ -95,6 +95,7 @@ type bridgeTestRuntime struct {
 	preview       desktopbridge.WorkspaceFilePreview
 	changes       desktopbridge.WorkspaceChanges
 	revertCommits int
+	revertUndos   int
 	metrics       desktopbridge.SessionMetrics
 	balance       *desktopbridge.SessionBalance
 	balanceErr    error
@@ -175,6 +176,10 @@ func (r *bridgeTestRuntime) PrepareWorkspaceFileRevert(path string) (desktopbrid
 }
 func (r *bridgeTestRuntime) CommitWorkspaceFileRevert(string, string) (desktopbridge.WorkspaceFileRevertResult, error) {
 	r.revertCommits++
+	return desktopbridge.WorkspaceFileRevertResult{OK: true, WrittenCount: 1}, nil
+}
+func (r *bridgeTestRuntime) UndoWorkspaceFileRevert(string) (desktopbridge.WorkspaceFileRevertResult, error) {
+	r.revertUndos++
 	return desktopbridge.WorkspaceFileRevertResult{OK: true, WrittenCount: 1}, nil
 }
 func (r *bridgeTestRuntime) Submit(input string)                                       { r.submits = append(r.submits, input) }
@@ -1470,5 +1475,23 @@ func TestBridgeServerWorkspaceFileRevertRequiresRequestIDAndDeduplicates(t *test
 	first, second := commit("revert-1"), commit("revert-1")
 	if first.Code != http.StatusOK || second.Code != http.StatusOK || first.Body.String() != second.Body.String() || runtime.revertCommits != 1 {
 		t.Fatalf("idempotent commit: first=%d second=%d calls=%d", first.Code, second.Code, runtime.revertCommits)
+	}
+	undo := func(requestID string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/v1/sessions/tab-revert:workspace-file-revert-undo", strings.NewReader(`{"transactionId":"tx-test"}`))
+		req.Header.Set("Authorization", "Bearer "+testToken)
+		req.Header.Set("Content-Type", "application/json")
+		if requestID != "" {
+			req.Header.Set(requestIDHeader, requestID)
+		}
+		result := httptest.NewRecorder()
+		handler.ServeHTTP(result, req)
+		return result
+	}
+	if response := undo(""); response.Code != http.StatusBadRequest || runtime.revertUndos != 0 {
+		t.Fatalf("undo without request ID: status=%d calls=%d", response.Code, runtime.revertUndos)
+	}
+	first, second = undo("undo-1"), undo("undo-1")
+	if first.Code != http.StatusOK || second.Code != http.StatusOK || first.Body.String() != second.Body.String() || runtime.revertUndos != 1 {
+		t.Fatalf("idempotent undo: first=%d second=%d calls=%d", first.Code, second.Code, runtime.revertUndos)
 	}
 }

@@ -487,6 +487,12 @@ pub struct BridgeWorkspaceFileRevertResultResponse {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceFileRevertUndoRequest {
+    pub transaction_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeWorkspaceListResponse {
     pub entries: Vec<BridgeWorkspaceEntry>,
     pub path: String,

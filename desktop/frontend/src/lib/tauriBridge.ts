@@ -1671,6 +1671,12 @@ export async function tauriWorkspaceFileRevertCommit(sessionId: string, planId: 
   return response.result;
 }
 
+export async function tauriWorkspaceFileRevertUndo(sessionId: string, transactionId: string): Promise<TauriWorkspaceFileRevertResult> {
+  requireTauri();
+  const response = await invoke<BridgeWorkspaceFileRevertResultResponse>("bridge_workspace_file_revert_undo", { request: { sessionId, transactionId } });
+  return response.result;
+}
+
 export async function cancelTauriBridge(sessionId: string): Promise<TauriBridgeSession> {
   requireTauri();
   return invoke<TauriBridgeSession>("bridge_cancel", { request: { sessionId } });

@@ -183,6 +183,7 @@ type Runtime interface {
 	WorkspaceChangeDetail(path string) (WorkspaceChangeDetail, error)
 	PrepareWorkspaceFileRevert(path string) (WorkspaceFileRevertPlan, error)
 	CommitWorkspaceFileRevert(planID, resolution string) (WorkspaceFileRevertResult, error)
+	UndoWorkspaceFileRevert(transactionID string) (WorkspaceFileRevertResult, error)
 	Submit(input string)
 	Cancel()
 	Approve(promptID string, allow bool)
@@ -940,6 +941,19 @@ func (m *RuntimeManager) CommitWorkspaceFileRevert(sessionID, planID, resolution
 		return WorkspaceFileRevertResult{}, ErrSessionNotFound
 	}
 	return m.runtime.CommitWorkspaceFileRevert(planID, resolution)
+}
+
+func (m *RuntimeManager) UndoWorkspaceFileRevert(sessionID, transactionID string) (WorkspaceFileRevertResult, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return WorkspaceFileRevertResult{}, ErrClosed
+	}
+	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
+		return WorkspaceFileRevertResult{}, ErrSessionNotFound
+	}
+	return m.runtime.UndoWorkspaceFileRevert(transactionID)
 }
 
 // Cancel asks the bridge-owned runtime to stop foreground work. It is safe to

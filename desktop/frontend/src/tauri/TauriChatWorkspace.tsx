@@ -137,6 +137,7 @@ import {
   tauriWorkspaceChangeDetail,
   tauriWorkspaceFileRevertPreview,
   tauriWorkspaceFileRevertCommit,
+  tauriWorkspaceFileRevertUndo,
   tauriBridgeHistory,
   tauriBridgeSnapshot,
   tauriBridgeStatus,
@@ -483,6 +484,7 @@ export function TauriSessionPreview() {
   const [workspaceFileRevertPlan, setWorkspaceFileRevertPlan] = useState<TauriWorkspaceFileRevertPlan | null>(null);
   const [workspaceFileRevertBusy, setWorkspaceFileRevertBusy] = useState(false);
   const [workspaceFileRevertMessage, setWorkspaceFileRevertMessage] = useState("");
+  const [workspaceFileRevertUndo, setWorkspaceFileRevertUndo] = useState<{ sessionId: string; transactionId: string; path: string } | null>(null);
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [error, setError] = useState("");
@@ -1537,6 +1539,7 @@ export function TauriSessionPreview() {
     workspaceFileRevertRequestRef.current += 1;
     setWorkspaceFileRevertPlan(null);
     setWorkspaceFileRevertMessage("");
+    setWorkspaceFileRevertUndo(null);
     setWorkspaceFileRevertBusy(false);
     setWorkspaceLoading(false);
     setWorkspaceChangesLoading(false);
@@ -1913,13 +1916,43 @@ export function TauriSessionPreview() {
       if (!isCurrent()) return;
       setWorkspaceFileRevertPlan(null);
       if (result.ok) {
+        setWorkspaceFileRevertUndo(result.undoAvailable && result.transactionId
+          ? { sessionId: sessionID, transactionId: result.transactionId, path: plan.path }
+          : null);
         await loadWorkspaceChanges();
         setWorkspaceFileRevertMessage(t("workspace.fileRevertDone"));
       } else {
-        setWorkspaceFileRevertMessage(`${t("workspace.fileRevertFailed")} ${result.error || ""}`.trim());
+        setWorkspaceFileRevertMessage(t("workspace.fileRevertFailed"));
       }
     } catch (cause) {
       if (isCurrent()) setWorkspaceFileRevertMessage(`${t("workspace.fileRevertFailed")} ${tauriMessageFrom(cause)}`);
+    } finally {
+      setWorkspaceFileRevertBusy(false);
+      setBusy(false);
+    }
+  }
+
+  async function undoWorkspaceFileRevert() {
+    const undo = workspaceFileRevertUndo;
+    if (!session || session.id !== undo?.sessionId || session.state !== "idle" || busy || workspaceFileRevertBusy) return;
+    const epoch = workspaceEpochRef.current;
+    const request = ++workspaceFileRevertRequestRef.current;
+    const isCurrent = () => workspaceEpochRef.current === epoch && workspaceFileRevertRequestRef.current === request;
+    setWorkspaceFileRevertBusy(true);
+    setBusy(true);
+    setWorkspaceFileRevertMessage("");
+    try {
+      const result = await tauriWorkspaceFileRevertUndo(undo.sessionId, undo.transactionId);
+      if (!isCurrent()) return;
+      if (result.ok) {
+        setWorkspaceFileRevertUndo(null);
+        await loadWorkspaceChanges();
+        setWorkspaceFileRevertMessage(t("workspace.fileRevertUndone"));
+      } else {
+        setWorkspaceFileRevertMessage(t("workspace.fileRevertUndoFailed"));
+      }
+    } catch (cause) {
+      if (isCurrent()) setWorkspaceFileRevertMessage(`${t("workspace.fileRevertUndoFailed")} ${tauriMessageFrom(cause)}`);
     } finally {
       setWorkspaceFileRevertBusy(false);
       setBusy(false);
@@ -2795,6 +2828,11 @@ export function TauriSessionPreview() {
               </section>}
               {workspaceFileRevertBusy && <p className="tauri-workspace-drawer__note">{t("workspace.fileRevertWorking")}</p>}
               {workspaceFileRevertMessage && <p role="status" className="tauri-workspace-drawer__note">{workspaceFileRevertMessage}</p>}
+              {workspaceFileRevertUndo && workspaceFileRevertUndo.sessionId === session?.id && <section className="tauri-workspace-revert" aria-label={t("workspace.fileRevertUndo")}>
+                <strong>{t("workspace.fileRevertUndo")}</strong><code>{workspaceFileRevertUndo.path}</code>
+                <p>{t("workspace.fileRevertUndoDescription")}</p>
+                <div><button type="button" className="tauri-diagnostic-action" onClick={() => void undoWorkspaceFileRevert()} disabled={workspaceFileRevertBusy || busy || session?.state !== "idle"}>{t("workspace.fileRevertUndo")}</button></div>
+              </section>}
               {workspaceFileRevertPlan && <section className="tauri-workspace-revert" aria-label={t("workspace.fileRevertReview")}>
                 <strong>{t("workspace.fileRevertReview")}</strong>
                 <code>{workspaceFileRevertPlan.path}</code>

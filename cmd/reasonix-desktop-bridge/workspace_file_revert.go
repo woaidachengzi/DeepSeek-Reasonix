@@ -24,9 +24,7 @@ func (r *controllerRuntime) PrepareWorkspaceFileRevert(path string) (desktopbrid
 }
 
 func (r *controllerRuntime) CommitWorkspaceFileRevert(planID, resolution string) (desktopbridge.WorkspaceFileRevertResult, error) {
-	if len(planID) == 0 || len(planID) > 128 || strings.IndexFunc(planID, func(char rune) bool {
-		return !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '-' || char == '_')
-	}) >= 0 {
+	if !validRevertID(planID) {
 		return desktopbridge.WorkspaceFileRevertResult{}, fmt.Errorf("invalid file revert plan ID")
 	}
 	var choice checkpoint.ConflictResolution
@@ -38,15 +36,33 @@ func (r *controllerRuntime) CommitWorkspaceFileRevert(planID, resolution string)
 		return desktopbridge.WorkspaceFileRevertResult{}, fmt.Errorf("invalid file revert resolution")
 	}
 	result, err := r.controller.CommitFileRevert(planID, choice)
+	return fileRevertResultView(result, err), nil
+}
+
+func (r *controllerRuntime) UndoWorkspaceFileRevert(transactionID string) (desktopbridge.WorkspaceFileRevertResult, error) {
+	if !validRevertID(transactionID) {
+		return desktopbridge.WorkspaceFileRevertResult{}, fmt.Errorf("invalid file revert transaction ID")
+	}
+	result, err := r.controller.UndoRewind(transactionID)
+	return fileRevertResultView(result, err), nil
+}
+
+func validRevertID(id string) bool {
+	return len(id) > 0 && len(id) <= 128 && strings.IndexFunc(id, func(char rune) bool {
+		return !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '-' || char == '_')
+	}) < 0
+}
+
+func fileRevertResultView(result checkpoint.RewindResult, err error) desktopbridge.WorkspaceFileRevertResult {
 	view := desktopbridge.WorkspaceFileRevertResult{
 		OK: result.OK, TransactionID: result.TransactionID, UndoAvailable: result.UndoAvailable,
 		WrittenCount: len(result.Written), DeletedCount: len(result.Deleted),
 		Conflicts: fileRevertConflictReasons(result.Conflicts),
 	}
 	if err != nil {
-		view.Error = "File changed or could not be restored. Preview it again before retrying."
+		view.Error = "The file changed or the operation is unavailable. Refresh workspace changes before retrying."
 	}
-	return view, nil
+	return view
 }
 
 func fileRevertConflictReasons(conflicts []checkpoint.RewindConflict) []string {
