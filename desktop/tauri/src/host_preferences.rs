@@ -389,10 +389,9 @@ impl HostPreferences {
             themes.push(theme.clone());
         }
         theme = validate_user_theme(theme)?;
-        themes
-            .iter_mut()
-            .find(|saved| saved.id == theme.id)
-            .map(|saved| *saved = theme.clone());
+        if let Some(saved) = themes.iter_mut().find(|saved| saved.id == theme.id) {
+            *saved = theme.clone();
+        }
 
         let asset_dir = self.asset_root.join(&theme.id);
         let staging_dir = self.asset_root.join(format!(".{}-save", theme.id));
@@ -447,10 +446,9 @@ impl HostPreferences {
         theme.task_background_asset_data_url = None;
         theme.clear_background = false;
         theme.clear_task_background = false;
-        themes
-            .iter_mut()
-            .find(|saved| saved.id == theme.id)
-            .map(|saved| *saved = theme.clone());
+        if let Some(saved) = themes.iter_mut().find(|saved| saved.id == theme.id) {
+            *saved = theme.clone();
+        }
         let had_assets = asset_dir.exists();
         if had_assets {
             if let Err(error) = fs::rename(&asset_dir, &backup_dir) {

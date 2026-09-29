@@ -69,6 +69,11 @@ styles. The Preview shortcut page now uses the shared locale catalog for its
 controls, action names, descriptions, recording state, and validation feedback.
 Missing stable categories above still have no Preview control or host implementation.
 
+Plugin theme image staging rejects existing symlinked cache directories and image
+files, and creates temporary images without replacing an existing path. This
+keeps a preexisting cache link from redirecting a theme write outside Preview
+app data.
+
 Bot configuration editing now has an authenticated read/write path, persists
 credentials outside the profile TOML, and refreshes the Preview bot runtime.
 Connection-level model, approval, and workspace preferences are now editable;

@@ -2308,6 +2308,20 @@ fn valid_plugin_theme_pack_id(id: &str) -> bool {
         && !id.contains("--")
 }
 
+fn ensure_plugin_theme_asset_directory(path: &Path) -> Result<(), String> {
+    match fs::create_dir(path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(error) => return Err(format!("create plugin theme asset directory: {error}")),
+    }
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| format!("inspect plugin theme asset directory: {error}"))?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err("plugin theme asset directory is not a regular directory".into());
+    }
+    Ok(())
+}
+
 fn stage_plugin_theme_asset(
     asset_root: &Path,
     plugin_name: &str,
@@ -2345,24 +2359,47 @@ fn stage_plugin_theme_asset(
         component(plugin_name),
         component(theme_id)
     ));
-    fs::create_dir_all(&directory)
-        .map_err(|error| format!("create plugin theme asset directory: {error}"))?;
-    let path = directory.join(format!("{prefix}.{extension}"));
     let _guard = ASSET_WRITE_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(parent) = asset_root.parent() {
+        ensure_plugin_theme_asset_directory(parent)?;
+    }
+    ensure_plugin_theme_asset_directory(asset_root)?;
+    ensure_plugin_theme_asset_directory(&directory)?;
+    let path = directory.join(format!("{prefix}.{extension}"));
+    match fs::symlink_metadata(&path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+            return Err("plugin theme asset is not a regular file".into());
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("inspect plugin theme asset: {error}")),
+    }
     if fs::read(&path).ok().as_deref() != Some(image_bytes) {
         static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
         let nonce = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
         let temporary = directory.join(format!(".{prefix}-{}-{nonce}.tmp", std::process::id()));
-        fs::write(&temporary, image_bytes)
-            .map_err(|error| format!("write plugin theme asset: {error}"))?;
-        if path.exists() {
-            fs::remove_file(&path)
-                .map_err(|error| format!("replace plugin theme asset: {error}"))?;
+        let write_result = (|| {
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temporary)
+                .map_err(|error| format!("create plugin theme asset temporary file: {error}"))?;
+            file.write_all(image_bytes)
+                .map_err(|error| format!("write plugin theme asset: {error}"))?;
+            drop(file);
+            if path.exists() {
+                fs::remove_file(&path)
+                    .map_err(|error| format!("replace plugin theme asset: {error}"))?;
+            }
+            fs::rename(&temporary, &path)
+                .map_err(|error| format!("publish plugin theme asset: {error}"))
+        })();
+        if write_result.is_err() {
+            let _ = fs::remove_file(&temporary);
         }
-        fs::rename(&temporary, &path)
-            .map_err(|error| format!("publish plugin theme asset: {error}"))?;
+        write_result?;
     }
     Ok(Some(path.to_string_lossy().into_owned()))
 }
@@ -2459,7 +2496,7 @@ fn read_theme_package(path: &Path) -> Result<host_preferences::UserTheme, String
     let file = File::open(path).map_err(|error| format!("open selected theme: {error}"))?;
     let mut archive =
         ZipArchive::new(file).map_err(|error| format!("invalid theme package: {error}"))?;
-    if archive.len() == 0 || archive.len() > 3 {
+    if archive.is_empty() || archive.len() > 3 {
         return Err("theme package must contain theme.json and at most two images".into());
     }
     let mut names = HashSet::new();
@@ -3097,6 +3134,63 @@ mod theme_package_tests {
             "background",
             Some("../../escape.png"),
             Some(bytes.as_slice()),
+        )
+        .is_err());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn plugin_theme_assets_reject_existing_symlink_directories_and_files() {
+        use std::os::unix::fs::symlink;
+
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let outside = tempfile::tempdir().expect("outside directory");
+        let asset_root = directory.path().join("theme-assets").join("plugin-themes");
+        fs::create_dir_all(asset_root.parent().expect("theme assets parent"))
+            .expect("create theme assets parent");
+        symlink(outside.path(), &asset_root).expect("link plugin theme assets outside Preview");
+        let image = vec![
+            0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0, b'I', b'H', b'D', b'R', 0,
+            0, 0, 1, 0, 0, 0, 1,
+        ];
+        assert!(stage_plugin_theme_asset(
+            &asset_root,
+            "plugin",
+            "theme",
+            "background",
+            Some("background.png"),
+            Some(&image),
+        )
+        .is_err());
+        assert_eq!(
+            fs::read_dir(outside.path())
+                .expect("inspect outside")
+                .count(),
+            0
+        );
+
+        fs::remove_file(&asset_root).expect("remove directory link");
+        let staged = stage_plugin_theme_asset(
+            &asset_root,
+            "plugin",
+            "theme",
+            "background",
+            Some("background.png"),
+            Some(&image),
+        )
+        .expect("stage regular asset")
+        .expect("asset path");
+        let outside_file = outside.path().join("background.png");
+        fs::write(&outside_file, &image).expect("write outside image");
+        fs::remove_file(&staged).expect("remove staged image");
+        symlink(&outside_file, &staged).expect("link image outside Preview");
+        assert!(stage_plugin_theme_asset(
+            &asset_root,
+            "plugin",
+            "theme",
+            "background",
+            Some("background.png"),
+            Some(&image),
         )
         .is_err());
     }
