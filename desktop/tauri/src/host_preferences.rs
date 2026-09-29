@@ -36,11 +36,17 @@ pub struct ThemeTokens {
     pub dark: BTreeMap<String, String>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UserTheme {
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub author: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub license: Option<String>,
     pub base_style: String,
     #[serde(default)]
     pub tokens: ThemeTokens,
@@ -48,6 +54,70 @@ pub struct UserTheme {
     pub density: String,
     #[serde(default = "default_corners")]
     pub corners: String,
+    #[serde(default)]
+    pub background: Option<ThemeBackground>,
+    #[serde(default)]
+    pub task_background: Option<ThemeSceneBackground>,
+    #[serde(skip)]
+    pub(crate) background_asset_bytes: Option<Vec<u8>>,
+    #[serde(skip)]
+    pub(crate) task_background_asset_bytes: Option<Vec<u8>>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ThemeBackground {
+    #[serde(default)]
+    pub image: String,
+    #[serde(default = "default_focus")]
+    pub focus_x: f64,
+    #[serde(default = "default_focus")]
+    pub focus_y: f64,
+    #[serde(default = "default_safe_area")]
+    pub safe_area: String,
+    #[serde(default = "default_full_opacity")]
+    pub home_opacity: f64,
+    #[serde(default = "default_task_opacity")]
+    pub task_opacity: f64,
+    #[serde(default = "default_overlay_strength")]
+    pub overlay_strength: f64,
+    #[serde(default)]
+    pub pane_opacity: Option<f64>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ThemeSceneBackground {
+    #[serde(default)]
+    pub image: String,
+    #[serde(default = "default_focus")]
+    pub focus_x: f64,
+    #[serde(default = "default_focus")]
+    pub focus_y: f64,
+    #[serde(default = "default_safe_area")]
+    pub safe_area: String,
+    #[serde(default = "default_task_opacity")]
+    pub opacity: f64,
+    #[serde(default = "default_overlay_strength")]
+    pub overlay_strength: f64,
+    #[serde(default)]
+    pub pane_opacity: Option<f64>,
+}
+
+fn default_focus() -> f64 {
+    0.5
+}
+fn default_safe_area() -> String {
+    "center".into()
+}
+fn default_full_opacity() -> f64 {
+    1.0
+}
+fn default_task_opacity() -> f64 {
+    0.28
+}
+fn default_overlay_strength() -> f64 {
+    0.62
 }
 
 fn default_density() -> String {
@@ -67,6 +137,7 @@ pub enum CloseBehavior {
 
 pub struct HostPreferences {
     path: PathBuf,
+    asset_root: PathBuf,
     preferences: Mutex<SavedPreferences>,
 }
 
@@ -94,6 +165,26 @@ impl Default for SavedPreferences {
     }
 }
 
+impl Default for UserTheme {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            name: String::new(),
+            author: None,
+            description: None,
+            license: None,
+            base_style: "graphite".into(),
+            tokens: ThemeTokens::default(),
+            density: default_density(),
+            corners: default_corners(),
+            background: None,
+            task_background: None,
+            background_asset_bytes: None,
+            task_background_asset_bytes: None,
+        }
+    }
+}
+
 fn default_zoom_factor() -> f64 {
     1.0
 }
@@ -107,9 +198,13 @@ impl HostPreferences {
         fs::create_dir_all(&directory)
             .map_err(|error| format!("create Tauri preferences directory: {error}"))?;
         let path = directory.join(FILE_NAME);
+        let asset_root = directory.join("theme-assets");
+        fs::create_dir_all(&asset_root)
+            .map_err(|error| format!("create theme asset directory: {error}"))?;
         let saved = read_preferences(&path).unwrap_or_default();
         Ok(Self {
             path,
+            asset_root,
             preferences: Mutex::new(saved),
         })
     }
@@ -217,13 +312,28 @@ impl HostPreferences {
     }
 
     pub fn save_user_theme(&self, theme: UserTheme) -> Result<UserTheme, String> {
-        let theme = validate_user_theme(theme)?;
+        let mut theme = validate_user_theme(theme)?;
         let mut current = self
             .preferences
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut themes = current.user_themes.clone();
         if let Some(index) = themes.iter().position(|existing| existing.id == theme.id) {
+            if theme.author.is_none() {
+                theme.author = themes[index].author.clone();
+            }
+            if theme.description.is_none() {
+                theme.description = themes[index].description.clone();
+            }
+            if theme.license.is_none() {
+                theme.license = themes[index].license.clone();
+            }
+            if theme.background.is_none() {
+                theme.background = themes[index].background.clone();
+            }
+            if theme.task_background.is_none() {
+                theme.task_background = themes[index].task_background.clone();
+            }
             themes[index] = theme.clone();
         } else {
             if themes.len() >= USER_THEME_LIMIT {
@@ -281,15 +391,79 @@ impl HostPreferences {
         }
         theme.id = id;
         let theme = validate_user_theme(theme)?;
+        let asset_dir = self.asset_root.join(&theme.id);
+        let staging_dir = self.asset_root.join(format!(".{}-import", theme.id));
+        if staging_dir.exists() {
+            fs::remove_dir_all(&staging_dir)
+                .map_err(|error| format!("clear staged theme assets: {error}"))?;
+        }
+        fs::create_dir_all(&staging_dir)
+            .map_err(|error| format!("prepare theme assets: {error}"))?;
+        let write_asset = |image: &str, bytes: &Option<Vec<u8>>| -> Result<(), String> {
+            if image.is_empty() {
+                return Ok(());
+            }
+            let bytes = bytes
+                .as_ref()
+                .ok_or_else(|| "theme image asset is missing".to_string())?;
+            let file = PathBuf::from(image);
+            if file.file_name().and_then(|name| name.to_str()) != Some(image) {
+                return Err("theme image name must be a plain file name".into());
+            }
+            fs::write(staging_dir.join(image), bytes)
+                .map_err(|error| format!("save theme image: {error}"))
+        };
+        let asset_result = (|| {
+            if let Some(background) = &theme.background {
+                write_asset(&background.image, &theme.background_asset_bytes)?;
+            }
+            if let Some(background) = &theme.task_background {
+                write_asset(&background.image, &theme.task_background_asset_bytes)?;
+            }
+            Ok::<_, String>(())
+        })();
+        if let Err(error) = asset_result {
+            let _ = fs::remove_dir_all(&staging_dir);
+            return Err(error);
+        }
+        if asset_dir.exists() {
+            let _ = fs::remove_dir_all(&staging_dir);
+            return Err("theme asset directory already exists".into());
+        }
+        if let Err(error) = fs::rename(&staging_dir, &asset_dir) {
+            let _ = fs::remove_dir_all(&staging_dir);
+            return Err(format!("publish theme assets: {error}"));
+        }
         let mut themes = current.user_themes.clone();
         themes.push(theme.clone());
         let next = SavedPreferences {
             user_themes: themes,
             ..current.clone()
         };
-        self.write_preferences(next.clone())?;
+        if let Err(error) = self.write_preferences(next.clone()) {
+            let _ = fs::remove_dir_all(&asset_dir);
+            return Err(error);
+        }
         *current = next;
         Ok(theme)
+    }
+
+    pub fn theme_asset_path(&self, theme: &UserTheme, image: &str) -> Option<PathBuf> {
+        let path = PathBuf::from(image);
+        if !safe_theme_id(&theme.id)
+            || image.is_empty()
+            || path.file_name().and_then(|name| name.to_str()) != Some(image)
+        {
+            return None;
+        }
+        let candidate = self.asset_root.join(&theme.id).join(path);
+        let root = self.asset_root.canonicalize().ok()?;
+        let resolved = candidate.canonicalize().ok()?;
+        if !resolved.starts_with(root) || !candidate.symlink_metadata().ok()?.file_type().is_file()
+        {
+            return None;
+        }
+        Some(resolved)
     }
 
     pub fn delete_user_theme(&self, id: &str) -> Result<(), String> {
@@ -317,6 +491,9 @@ impl HostPreferences {
         };
         self.write_preferences(next.clone())?;
         *current = next;
+        if safe_theme_id(id) {
+            let _ = fs::remove_dir_all(self.asset_root.join(id));
+        }
         Ok(())
     }
 
@@ -336,6 +513,16 @@ impl HostPreferences {
         }
         Ok(())
     }
+}
+
+fn safe_theme_id(id: &str) -> bool {
+    id.starts_with("user-")
+        && id.len() <= 64
+        && !id.ends_with('-')
+        && !id.contains("--")
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
 fn validate_user_theme(mut theme: UserTheme) -> Result<UserTheme, String> {
@@ -371,7 +558,81 @@ fn validate_user_theme(mut theme: UserTheme) -> Result<UserTheme, String> {
     }
     validate_theme_colors(&mut theme.tokens.light)?;
     validate_theme_colors(&mut theme.tokens.dark)?;
+    if let Some(background) = &theme.background {
+        validate_theme_image_ref(&background.image)?;
+        validate_scene_values(
+            background.focus_x,
+            background.focus_y,
+            background.home_opacity,
+            background.overlay_strength,
+            background.pane_opacity,
+        )?;
+        if !(0.0..=1.0).contains(&background.task_opacity)
+            || !matches!(background.safe_area.as_str(), "left" | "right" | "center")
+        {
+            return Err("invalid theme background settings".into());
+        }
+    }
+    if let Some(background) = &theme.task_background {
+        validate_theme_image_ref(&background.image)?;
+        validate_scene_values(
+            background.focus_x,
+            background.focus_y,
+            background.opacity,
+            background.overlay_strength,
+            background.pane_opacity,
+        )?;
+        if !matches!(background.safe_area.as_str(), "left" | "right" | "center") {
+            return Err("invalid task background settings".into());
+        }
+    }
+    if let (Some(home), Some(task)) = (&theme.background, &theme.task_background) {
+        if !home.image.is_empty() && home.image == task.image {
+            return Err("theme scenes must use separate image files".into());
+        }
+    }
     Ok(theme)
+}
+
+fn validate_theme_image_ref(image: &str) -> Result<(), String> {
+    if image.is_empty() {
+        return Ok(());
+    }
+    let path = PathBuf::from(image);
+    if path.file_name().and_then(|name| name.to_str()) != Some(image)
+        || image.contains("..")
+        || image.len() > 128
+        || !matches!(
+            image
+                .rsplit_once('.')
+                .map(|(_, ext)| ext.to_ascii_lowercase())
+                .as_deref(),
+            Some("png" | "jpg" | "jpeg" | "webp")
+        )
+        || !image
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+    {
+        return Err("invalid theme image reference".into());
+    }
+    Ok(())
+}
+
+fn validate_scene_values(
+    focus_x: f64,
+    focus_y: f64,
+    opacity: f64,
+    overlay: f64,
+    pane: Option<f64>,
+) -> Result<(), String> {
+    if [focus_x, focus_y, opacity, overlay]
+        .into_iter()
+        .chain(pane)
+        .any(|value| !value.is_finite() || !(0.0..=1.0).contains(&value))
+    {
+        return Err("theme image settings must be between 0 and 1".into());
+    }
+    Ok(())
 }
 
 fn validate_theme_colors(tokens: &mut BTreeMap<String, String>) -> Result<(), String> {
@@ -409,6 +670,7 @@ mod tests {
         let path = directory.path().join(FILE_NAME);
         let store = HostPreferences {
             path: path.clone(),
+            asset_root: directory.path().join("theme-assets"),
             preferences: Mutex::new(SavedPreferences::default()),
         };
         store
@@ -442,6 +704,7 @@ mod tests {
         let directory = tempfile::tempdir().expect("temporary directory");
         let store = HostPreferences {
             path: directory.path().join("missing").join(FILE_NAME),
+            asset_root: directory.path().join("theme-assets"),
             preferences: Mutex::new(SavedPreferences::default()),
         };
         assert!(store.set_close_behavior(CloseBehavior::Quit).is_err());
@@ -453,6 +716,7 @@ mod tests {
         let directory = tempfile::tempdir().expect("temporary directory");
         let store = HostPreferences {
             path: directory.path().join(FILE_NAME),
+            asset_root: directory.path().join("theme-assets"),
             preferences: Mutex::new(SavedPreferences::default()),
         };
         assert!(store.set_zoom_factor(f64::NAN).is_err());
@@ -466,6 +730,7 @@ mod tests {
         let path = directory.path().join(FILE_NAME);
         let store = HostPreferences {
             path: path.clone(),
+            asset_root: directory.path().join("theme-assets"),
             preferences: Mutex::new(SavedPreferences::default()),
         };
         assert!(store
@@ -486,6 +751,7 @@ mod tests {
         let path = directory.path().join(FILE_NAME);
         let store = HostPreferences {
             path: path.clone(),
+            asset_root: directory.path().join("theme-assets"),
             preferences: Mutex::new(SavedPreferences::default()),
         };
         let theme = UserTheme {
@@ -501,6 +767,7 @@ mod tests {
             },
             density: "comfortable".into(),
             corners: "soft".into(),
+            ..UserTheme::default()
         };
         assert_eq!(
             store
@@ -527,6 +794,7 @@ mod tests {
         let path = directory.path().join(FILE_NAME);
         let store = HostPreferences {
             path: path.clone(),
+            asset_root: directory.path().join("theme-assets"),
             preferences: Mutex::new(SavedPreferences::default()),
         };
         let imported = UserTheme {
@@ -536,6 +804,7 @@ mod tests {
             tokens: ThemeTokens::default(),
             density: "compact".into(),
             corners: "round".into(),
+            ..UserTheme::default()
         };
         let first = store
             .import_user_theme(imported.clone())
@@ -549,10 +818,50 @@ mod tests {
     }
 
     #[test]
+    fn imported_theme_assets_are_published_separately_from_preferences() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let asset_root = directory.path().join("theme-assets");
+        let store = HostPreferences {
+            path: directory.path().join(FILE_NAME),
+            asset_root: asset_root.clone(),
+            preferences: Mutex::new(SavedPreferences::default()),
+        };
+        let bytes = b"validated image bytes".to_vec();
+        let theme = UserTheme {
+            id: "background-pack".into(),
+            name: "Background Pack".into(),
+            background: Some(ThemeBackground {
+                image: "background.webp".into(),
+                focus_x: 0.5,
+                focus_y: 0.5,
+                safe_area: "center".into(),
+                home_opacity: 1.0,
+                task_opacity: 0.28,
+                overlay_strength: 0.62,
+                pane_opacity: None,
+            }),
+            background_asset_bytes: Some(bytes.clone()),
+            ..UserTheme::default()
+        };
+        let saved = store.import_user_theme(theme).expect("import image theme");
+        let image = store
+            .theme_asset_path(&saved, "background.webp")
+            .expect("safe asset path");
+        assert_eq!(fs::read(image).expect("read saved image"), bytes);
+        let persisted = read_preferences(&store.path).expect("read persisted theme");
+        assert_eq!(
+            persisted.user_themes[0].background.as_ref().unwrap().image,
+            "background.webp"
+        );
+        assert!(persisted.user_themes[0].background_asset_bytes.is_none());
+    }
+
+    #[test]
     fn custom_theme_rejects_paths_unknown_tokens_and_css_values() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let store = HostPreferences {
             path: directory.path().join(FILE_NAME),
+            asset_root: directory.path().join("theme-assets"),
             preferences: Mutex::new(SavedPreferences::default()),
         };
         let base = UserTheme {
@@ -562,6 +871,7 @@ mod tests {
             tokens: ThemeTokens::default(),
             density: "comfortable".into(),
             corners: "soft".into(),
+            ..UserTheme::default()
         };
         let mut path_theme = base.clone();
         path_theme.id = "user-../../settings".into();

@@ -1994,16 +1994,46 @@ fn set_active_theme_id(
 }
 
 #[tauri::command]
-fn list_user_themes(preferences: State<'_, HostPreferences>) -> Vec<UserTheme> {
-    preferences.user_themes()
+fn list_user_themes(preferences: State<'_, HostPreferences>) -> Vec<UserThemeView> {
+    preferences
+        .user_themes()
+        .into_iter()
+        .map(|theme| user_theme_view(&preferences, theme))
+        .collect()
 }
 
 #[tauri::command]
 fn save_user_theme(
     preferences: State<'_, HostPreferences>,
     theme: UserTheme,
-) -> Result<UserTheme, String> {
-    preferences.save_user_theme(theme)
+) -> Result<UserThemeView, String> {
+    let saved = preferences.save_user_theme(theme)?;
+    Ok(user_theme_view(&preferences, saved))
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UserThemeView {
+    #[serde(flatten)]
+    theme: UserTheme,
+    background_path: Option<String>,
+    task_background_path: Option<String>,
+}
+
+fn user_theme_view(preferences: &HostPreferences, theme: UserTheme) -> UserThemeView {
+    let image_path = |image: Option<&str>| {
+        image
+            .and_then(|image| preferences.theme_asset_path(&theme, image))
+            .map(|path| path.to_string_lossy().into_owned())
+    };
+    let background_path = image_path(theme.background.as_ref().map(|bg| bg.image.as_str()));
+    let task_background_path =
+        image_path(theme.task_background.as_ref().map(|bg| bg.image.as_str()));
+    UserThemeView {
+        theme,
+        background_path,
+        task_background_path,
+    }
 }
 
 #[tauri::command]
@@ -2029,9 +2059,9 @@ struct ThemePackageManifest {
     #[serde(default)]
     recipes: ThemePackageRecipes,
     #[serde(default)]
-    background: Option<serde_json::Value>,
+    background: Option<host_preferences::ThemeBackground>,
     #[serde(default)]
-    task_background: Option<serde_json::Value>,
+    task_background: Option<host_preferences::ThemeSceneBackground>,
 }
 
 #[derive(Default, Deserialize)]
@@ -2057,9 +2087,19 @@ struct ExportThemePackage<'a> {
     schema_version: u8,
     id: &'a str,
     name: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    author: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    license: Option<&'a str>,
     base_style: &'a str,
     tokens: &'a host_preferences::ThemeTokens,
     recipes: ExportThemeRecipes<'a>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    background: Option<&'a host_preferences::ThemeBackground>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    task_background: Option<&'a host_preferences::ThemeSceneBackground>,
 }
 
 #[derive(Serialize)]
@@ -2077,59 +2117,262 @@ fn selected_theme_path(
 }
 
 fn read_theme_package(path: &Path) -> Result<host_preferences::UserTheme, String> {
-    const MAX_PACKAGE_BYTES: u64 = 1 << 20;
-    const MAX_MANIFEST_BYTES: u64 = 256 << 10;
+    const MAX_PACKAGE_BYTES: u64 = 36 << 20;
+    const MAX_MANIFEST_BYTES: u64 = 1 << 20;
+    const MAX_IMAGE_BYTES: u64 = 16 << 20;
     let metadata =
         std::fs::metadata(path).map_err(|error| format!("read selected theme: {error}"))?;
     if metadata.len() > MAX_PACKAGE_BYTES {
-        return Err("theme package exceeds the 1 MiB import limit".into());
+        return Err("theme package exceeds the 36 MiB import limit".into());
     }
     let file = File::open(path).map_err(|error| format!("open selected theme: {error}"))?;
     let mut archive =
         ZipArchive::new(file).map_err(|error| format!("invalid theme package: {error}"))?;
-    if archive.len() != 1 {
-        return Err(
-            "this Preview build imports token-only theme packages; image assets are not supported"
-                .into(),
-        );
+    if archive.len() == 0 || archive.len() > 3 {
+        return Err("theme package must contain theme.json and at most two images".into());
     }
-    let manifest_file = archive
+    let mut names = HashSet::new();
+    for index in 0..archive.len() {
+        let entry = archive
+            .by_index(index)
+            .map_err(|error| format!("read theme entry: {error}"))?;
+        let name = entry.name();
+        if name.is_empty() || name.contains('/') || name.contains('\\') || entry.is_dir() {
+            return Err("theme package may only contain root-level files".into());
+        }
+        if !names.insert(name.to_ascii_lowercase()) {
+            return Err("theme package contains duplicate entry names".into());
+        }
+        if entry
+            .unix_mode()
+            .is_some_and(|mode| mode & 0o170000 == 0o120000)
+        {
+            return Err("theme package must not contain symlinks".into());
+        }
+        if name.eq_ignore_ascii_case("theme.json") {
+            if entry.size() > MAX_MANIFEST_BYTES {
+                return Err("theme manifest exceeds the 1 MiB import limit".into());
+            }
+        } else if !valid_theme_image_name(name) || entry.size() > MAX_IMAGE_BYTES {
+            return Err("theme package contains an unsupported or oversized image".into());
+        }
+    }
+    let mut bytes = Vec::new();
+    archive
         .by_name("theme.json")
-        .map_err(|_| "theme package is missing theme.json".to_string())?;
-    if manifest_file.size() > MAX_MANIFEST_BYTES {
-        return Err("theme manifest exceeds the 256 KiB import limit".into());
-    }
-    let mut bytes = Vec::with_capacity(manifest_file.size() as usize);
-    manifest_file
+        .map_err(|_| "theme package is missing theme.json".to_string())?
         .take(MAX_MANIFEST_BYTES + 1)
         .read_to_end(&mut bytes)
         .map_err(|error| format!("read theme manifest: {error}"))?;
     if bytes.len() as u64 > MAX_MANIFEST_BYTES {
-        return Err("theme manifest exceeds the 256 KiB import limit".into());
+        return Err("theme manifest exceeds the 1 MiB import limit".into());
     }
-    let manifest: ThemePackageManifest = serde_json::from_slice(&bytes)
+    let mut manifest: ThemePackageManifest = serde_json::from_slice(&bytes)
         .map_err(|error| format!("invalid theme manifest: {error}"))?;
     if !matches!(manifest.schema_version, 1 | 2) {
         return Err("unsupported theme package schema version".into());
     }
-    if manifest.background.is_some() || manifest.task_background.is_some() {
-        return Err("image backgrounds are not supported by this Preview build".into());
+    let home_name = manifest
+        .background
+        .as_ref()
+        .map(|bg| bg.image.clone())
+        .filter(|name| !name.is_empty());
+    let task_name = manifest
+        .task_background
+        .as_ref()
+        .map(|bg| bg.image.clone())
+        .filter(|name| !name.is_empty());
+    let mut declared = HashSet::new();
+    for image in [home_name.as_deref(), task_name.as_deref()]
+        .into_iter()
+        .flatten()
+    {
+        if !valid_theme_image_name(image) || !declared.insert(image.to_ascii_lowercase()) {
+            return Err("theme background image name is invalid or duplicated".into());
+        }
     }
-    let _metadata = (manifest.author, manifest.description, manifest.license);
+    let actual: HashSet<String> = names
+        .into_iter()
+        .filter(|name| name != "theme.json")
+        .collect();
+    if actual != declared {
+        return Err("theme package images must exactly match the manifest".into());
+    }
+    let read_asset = |name: &str, archive: &mut ZipArchive<File>| -> Result<Vec<u8>, String> {
+        let mut asset = Vec::new();
+        archive
+            .by_name(name)
+            .map_err(|_| format!("theme package is missing image {name}"))?
+            .take(MAX_IMAGE_BYTES + 1)
+            .read_to_end(&mut asset)
+            .map_err(|error| format!("read theme image: {error}"))?;
+        if asset.len() as u64 > MAX_IMAGE_BYTES {
+            return Err("theme image exceeds the 16 MiB import limit".into());
+        }
+        validate_theme_image(name, &asset)?;
+        Ok(asset)
+    };
+    let background_asset_bytes = home_name
+        .as_deref()
+        .map(|name| read_asset(name, &mut archive))
+        .transpose()?;
+    let task_background_asset_bytes = task_name
+        .as_deref()
+        .map(|name| read_asset(name, &mut archive))
+        .transpose()?;
+    if let (Some(background), Some(name)) = (manifest.background.as_mut(), home_name.as_deref()) {
+        background.image = canonical_theme_asset_name("background", name);
+    }
+    if let (Some(background), Some(name)) =
+        (manifest.task_background.as_mut(), task_name.as_deref())
+    {
+        background.image = canonical_theme_asset_name("background-task", name);
+    }
     Ok(host_preferences::UserTheme {
         id: manifest.id,
         name: manifest.name,
+        author: manifest.author,
+        description: manifest.description,
+        license: manifest.license,
         base_style: manifest.base_style,
         tokens: manifest.tokens,
         density: manifest.recipes.density,
         corners: manifest.recipes.corners,
+        background: manifest.background,
+        task_background: manifest.task_background,
+        background_asset_bytes,
+        task_background_asset_bytes,
     })
+}
+
+fn valid_theme_image_name(name: &str) -> bool {
+    name.len() <= 128
+        && !name.is_empty()
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+        && !name.contains("..")
+        && matches!(
+            name.rsplit_once('.')
+                .map(|(_, ext)| ext.to_ascii_lowercase())
+                .as_deref(),
+            Some("png" | "jpg" | "jpeg" | "webp")
+        )
+}
+
+fn canonical_theme_asset_name(prefix: &str, source: &str) -> String {
+    let extension = source
+        .rsplit_once('.')
+        .map(|(_, ext)| ext.to_ascii_lowercase())
+        .unwrap_or_else(|| "webp".into());
+    format!("{prefix}.{extension}")
+}
+
+fn validate_theme_image(name: &str, bytes: &[u8]) -> Result<(), String> {
+    if bytes.is_empty() || bytes.len() > 16 << 20 {
+        return Err("theme image is empty or exceeds 16 MiB".into());
+    }
+    let extension = name
+        .rsplit_once('.')
+        .map(|(_, ext)| ext.to_ascii_lowercase())
+        .unwrap_or_default();
+    let dimensions = if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a])
+        && extension == "png"
+        && bytes.len() >= 24
+        && &bytes[12..16] == b"IHDR"
+    {
+        (
+            u32::from_be_bytes(bytes[16..20].try_into().unwrap()),
+            u32::from_be_bytes(bytes[20..24].try_into().unwrap()),
+        )
+    } else if bytes.starts_with(&[0xff, 0xd8, 0xff]) && matches!(extension.as_str(), "jpg" | "jpeg")
+    {
+        jpeg_dimensions(bytes).ok_or_else(|| "invalid JPEG theme image".to_string())?
+    } else if bytes.len() >= 30
+        && &bytes[0..4] == b"RIFF"
+        && &bytes[8..12] == b"WEBP"
+        && extension == "webp"
+    {
+        webp_dimensions(bytes).ok_or_else(|| "invalid WebP theme image".to_string())?
+    } else {
+        return Err("theme image must be PNG, JPEG, or WebP with a matching extension".into());
+    };
+    if dimensions.0 == 0 || dimensions.1 == 0 || dimensions.0 > 8192 || dimensions.1 > 8192 {
+        return Err("theme image dimensions must be between 1 and 8192 pixels".into());
+    }
+    Ok(())
+}
+
+fn jpeg_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    let mut cursor = 2;
+    while cursor + 4 <= bytes.len() {
+        if bytes[cursor] != 0xff {
+            cursor += 1;
+            continue;
+        }
+        while cursor < bytes.len() && bytes[cursor] == 0xff {
+            cursor += 1;
+        }
+        let marker = *bytes.get(cursor)?;
+        cursor += 1;
+        if matches!(marker, 0xd8 | 0xd9 | 0x01 | 0xd0..=0xd7) {
+            continue;
+        }
+        let length = u16::from_be_bytes([*bytes.get(cursor)?, *bytes.get(cursor + 1)?]) as usize;
+        if length < 2 || cursor + length > bytes.len() {
+            return None;
+        }
+        if matches!(marker, 0xc0..=0xc3 | 0xc5..=0xc7 | 0xc9..=0xcb | 0xcd..=0xcf) {
+            return Some((
+                u16::from_be_bytes([*bytes.get(cursor + 5)?, *bytes.get(cursor + 6)?]) as u32,
+                u16::from_be_bytes([*bytes.get(cursor + 3)?, *bytes.get(cursor + 4)?]) as u32,
+            ));
+        }
+        cursor += length;
+    }
+    None
+}
+
+fn webp_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    match &bytes[12..16] {
+        b"VP8X" if bytes.len() >= 30 => Some((
+            1 + u32::from_le_bytes([bytes[24], bytes[25], bytes[26], 0]),
+            1 + u32::from_le_bytes([bytes[27], bytes[28], bytes[29], 0]),
+        )),
+        b"VP8L" if bytes.len() >= 25 && bytes[20] == 0x2f => {
+            let b0 = bytes[21] as u32;
+            let b1 = bytes[22] as u32;
+            let b2 = bytes[23] as u32;
+            let b3 = bytes[24] as u32;
+            Some((
+                1 + b0 + ((b1 & 0x3f) << 8),
+                1 + (b1 >> 6) + (b2 << 2) + ((b3 & 0x0f) << 10),
+            ))
+        }
+        b"VP8 " if bytes.len() >= 30 && bytes[23..26] == [0x9d, 0x01, 0x2a] => Some((
+            (u16::from_le_bytes([bytes[26], bytes[27]]) & 0x3fff) as u32,
+            (u16::from_le_bytes([bytes[28], bytes[29]]) & 0x3fff) as u32,
+        )),
+        _ => None,
+    }
 }
 
 fn write_theme_package(
     theme: &host_preferences::UserTheme,
+    asset_root: &Path,
     selected_path: PathBuf,
 ) -> Result<(), String> {
+    if !theme.id.starts_with("user-")
+        || theme.id.len() > 64
+        || theme.id.ends_with('-')
+        || theme.id.contains("--")
+        || !theme
+            .id
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+    {
+        return Err("invalid stored custom theme ID".into());
+    }
     let mut path = selected_path;
     if path.extension().and_then(|extension| extension.to_str()) != Some("reasonix-theme") {
         path.set_extension("reasonix-theme");
@@ -2143,12 +2386,17 @@ fn write_theme_package(
         schema_version: 2,
         id: &theme.id,
         name: &theme.name,
+        author: theme.author.as_deref(),
+        description: theme.description.as_deref(),
+        license: theme.license.as_deref(),
         base_style: &theme.base_style,
         tokens: &theme.tokens,
         recipes: ExportThemeRecipes {
             density: &theme.density,
             corners: &theme.corners,
         },
+        background: theme.background.as_ref(),
+        task_background: theme.task_background.as_ref(),
     };
     let bytes = serde_json::to_vec_pretty(&manifest)
         .map_err(|error| format!("serialize theme: {error}"))?;
@@ -2163,6 +2411,44 @@ fn write_theme_package(
         archive
             .write_all(&bytes)
             .map_err(|error| format!("write theme package: {error}"))?;
+        for image in [
+            theme.background.as_ref().map(|bg| bg.image.as_str()),
+            theme.task_background.as_ref().map(|bg| bg.image.as_str()),
+        ]
+        .into_iter()
+        .flatten()
+        .filter(|image| !image.is_empty())
+        {
+            if !valid_theme_image_name(image) {
+                return Err("invalid stored theme image name".into());
+            }
+            let image_candidate = asset_root.join(&theme.id).join(image);
+            let root = asset_root
+                .canonicalize()
+                .map_err(|error| format!("resolve theme asset directory: {error}"))?;
+            let image_path = image_candidate
+                .canonicalize()
+                .map_err(|error| format!("resolve stored theme image: {error}"))?;
+            if !image_path.starts_with(&root)
+                || !image_candidate
+                    .symlink_metadata()
+                    .is_ok_and(|metadata| metadata.file_type().is_file())
+            {
+                return Err("stored theme image is outside the theme asset directory".into());
+            }
+            let image_bytes = std::fs::read(&image_path)
+                .map_err(|error| format!("read stored theme image: {error}"))?;
+            validate_theme_image(image, &image_bytes)?;
+            archive
+                .start_file(
+                    image,
+                    SimpleFileOptions::default().compression_method(CompressionMethod::Deflated),
+                )
+                .map_err(|error| format!("add theme image: {error}"))?;
+            archive
+                .write_all(&image_bytes)
+                .map_err(|error| format!("write theme image: {error}"))?;
+        }
         archive
             .finish()
             .map_err(|error| format!("finish theme package: {error}"))?;
@@ -2181,7 +2467,7 @@ fn write_theme_package(
 async fn import_user_theme(
     app: tauri::AppHandle,
     preferences: State<'_, HostPreferences>,
-) -> Result<Option<host_preferences::UserTheme>, String> {
+) -> Result<Option<UserThemeView>, String> {
     let (sender, receiver) = std::sync::mpsc::channel();
     app.dialog()
         .file()
@@ -2196,7 +2482,9 @@ async fn import_user_theme(
         return Ok(None);
     };
     let theme = read_theme_package(&path)?;
-    preferences.import_user_theme(theme).map(Some)
+    preferences
+        .import_user_theme(theme)
+        .map(|theme| Some(user_theme_view(&preferences, theme)))
 }
 
 #[tauri::command]
@@ -2224,7 +2512,12 @@ async fn export_user_theme(
     let Some(path) = selected_theme_path(selected)? else {
         return Ok(false);
     };
-    write_theme_package(&theme, path)?;
+    let asset_root = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("resolve theme asset directory: {error}"))?
+        .join("theme-assets");
+    write_theme_package(&theme, &asset_root, path)?;
     Ok(true)
 }
 
@@ -2247,8 +2540,9 @@ mod theme_package_tests {
             },
             density: "compact".into(),
             corners: "round".into(),
+            ..UserTheme::default()
         };
-        write_theme_package(&theme, path.clone()).expect("export theme package");
+        write_theme_package(&theme, directory.path(), path.clone()).expect("export theme package");
         assert_eq!(
             read_theme_package(&path).expect("import theme package"),
             theme
@@ -2256,28 +2550,54 @@ mod theme_package_tests {
     }
 
     #[test]
-    fn import_rejects_theme_packages_with_image_entries() {
+    fn import_round_trips_theme_background_image_assets() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let path = directory.path().join("with-image.reasonix-theme");
         let file = File::create(&path).expect("create archive");
         let mut archive = ZipWriter::new(file);
         let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+        let mut image = vec![0; 24];
+        image[..8].copy_from_slice(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]);
+        image[12..16].copy_from_slice(b"IHDR");
+        image[16..20].copy_from_slice(&1_u32.to_be_bytes());
+        image[20..24].copy_from_slice(&1_u32.to_be_bytes());
         archive
             .start_file("theme.json", options)
             .expect("manifest entry");
         archive
             .write_all(
-                br#"{"schemaVersion":2,"id":"warm","name":"Warm","baseStyle":"carbon","tokens":{},"recipes":{"density":"comfortable","corners":"soft"},"background":{"image":"wallpaper.webp"}}"#,
+                br#"{"schemaVersion":2,"id":"warm","name":"Warm","baseStyle":"carbon","tokens":{},"recipes":{"density":"comfortable","corners":"soft"},"background":{"image":"wallpaper.png"}}"#,
             )
             .expect("manifest content");
         archive
-            .start_file("wallpaper.webp", options)
+            .start_file("wallpaper.png", options)
             .expect("image entry");
-        archive.write_all(b"image").expect("image bytes");
+        archive.write_all(&image).expect("image bytes");
         archive.finish().expect("finish archive");
 
-        let error = read_theme_package(&path).expect_err("image archive must be rejected");
-        assert!(error.contains("image assets are not supported"));
+        let mut imported = read_theme_package(&path).expect("image archive imports");
+        assert_eq!(
+            imported.background.as_ref().unwrap().image,
+            "background.png"
+        );
+        assert_eq!(imported.background_asset_bytes, Some(image));
+        imported.id = "user-warm".into();
+        let asset_root = directory.path().join("theme-assets");
+        let theme_asset_dir = asset_root.join("user-warm");
+        std::fs::create_dir_all(&theme_asset_dir).expect("create export asset directory");
+        std::fs::write(
+            theme_asset_dir.join("background.png"),
+            imported.background_asset_bytes.as_ref().unwrap(),
+        )
+        .expect("write export image asset");
+        let exported = directory.path().join("with-image-export.reasonix-theme");
+        write_theme_package(&imported, &asset_root, exported.clone()).expect("export image theme");
+        let round_trip = read_theme_package(&exported).expect("re-import image export");
+        assert_eq!(round_trip.background, imported.background);
+        assert_eq!(
+            round_trip.background_asset_bytes,
+            imported.background_asset_bytes
+        );
     }
 }
 

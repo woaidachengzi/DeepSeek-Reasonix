@@ -180,11 +180,16 @@ export function registerTrustedThemeBackgroundURLs(urls: readonly string[]): voi
   for (const raw of urls) {
     try {
       const parsed = new URL(raw, window.location.href);
-      if (parsed.origin !== window.location.origin) continue;
       const path = decodeURIComponent(parsed.pathname);
+      const tauriAssetOrigin = parsed.origin === "http://asset.localhost"
+        || parsed.origin === "https://asset.localhost"
+        || (parsed.protocol === "asset:" && parsed.hostname === "localhost");
+      const tauriUserAsset = tauriAssetOrigin
+        && /^\/.*\/theme-assets\/user-[a-z0-9-]+\/background(?:-task)?\.(?:png|jpe?g|webp)$/.test(path);
+      if (parsed.origin !== window.location.origin && !tauriUserAsset) continue;
       const viteDevOfficial = /\/desktop\/themes\/official\/official-[a-z0-9-]+\/background\.webp$/.test(path);
       const viteBuiltOfficial = /^\/assets\/background-[a-zA-Z0-9_-]+\.webp$/.test(path);
-      if (viteDevOfficial || viteBuiltOfficial) trustedBundledThemeBackgroundURLs.add(parsed.href);
+      if (viteDevOfficial || viteBuiltOfficial || tauriUserAsset) trustedBundledThemeBackgroundURLs.add(parsed.href);
     } catch {
       // Ignore malformed candidates; they remain outside the allow-list.
     }

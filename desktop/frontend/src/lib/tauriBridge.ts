@@ -1,4 +1,4 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { formatAttachmentRefForSubmit } from "./attachmentDisplay";
@@ -30,6 +30,7 @@ import type {
 import type { TerminalThemePreference } from "./terminalTheme";
 import type { Theme, ThemeStyle } from "./theme";
 import type { ThemePackView } from "./themePack";
+import { registerTrustedThemeBackgroundURLs } from "./themePack";
 import type { LangPref } from "./i18n";
 
 export interface TauriBridgeStatus {
@@ -1058,21 +1059,38 @@ export async function setTauriActiveThemeId(id: string): Promise<string> {
 interface TauriUserThemeRecord {
   id: string;
   name: string;
+  author?: string;
+  description?: string;
+  license?: string;
   baseStyle: string;
   tokens: ThemePackView["tokens"];
   density: string;
   corners: string;
+  background?: ThemePackView["background"];
+  taskBackground?: ThemePackView["taskBackground"];
+  backgroundPath?: string;
+  taskBackgroundPath?: string;
 }
 
 function userThemeView(theme: TauriUserThemeRecord): ThemePackView {
+  const backgroundUrl = theme.backgroundPath ? convertFileSrc(theme.backgroundPath) : "";
+  const taskBackgroundUrl = theme.taskBackgroundPath ? convertFileSrc(theme.taskBackgroundPath) : "";
+  registerTrustedThemeBackgroundURLs([backgroundUrl, taskBackgroundUrl]);
   return {
     id: theme.id,
     name: theme.name,
+    author: theme.author,
+    description: theme.description,
+    license: theme.license,
     baseStyle: theme.baseStyle,
     builtin: false,
     kind: "user",
     active: false,
-    hasBackground: false,
+    hasBackground: Boolean((backgroundUrl && theme.background) || (taskBackgroundUrl && theme.taskBackground)),
+    backgroundUrl: backgroundUrl || undefined,
+    taskBackgroundUrl: taskBackgroundUrl || undefined,
+    background: theme.background,
+    taskBackground: theme.taskBackground,
     tokens: theme.tokens,
     recipes: { density: theme.density, corners: theme.corners },
   };

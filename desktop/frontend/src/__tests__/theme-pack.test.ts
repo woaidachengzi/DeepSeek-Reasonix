@@ -248,9 +248,14 @@ ok(isSafeBackgroundURL("/__reasonix_theme_asset/my-theme/abc/background.png"), "
 ok(isSafeBackgroundURL("data:image/png;base64,aaa"), "data URL allowed");
 ok(!isSafeBackgroundURL("https://evil.example/bg.png"), "remote URL rejected");
 const bundledOfficialBackground = "http://127.0.0.1:5197/@fs/workspace/desktop/themes/official/official-rose-dawn/background.webp";
-registerTrustedThemeBackgroundURLs([bundledOfficialBackground, "https://evil.example/assets/background-fake.webp"]);
+const tauriUserThemeBackground = "http://asset.localhost/Users/jerry/Library/Application%20Support/io.reasonix.desktop.preview/theme-assets/user-night/background.png";
+const tauriSchemeThemeBackground = "asset://localhost/Users/jerry/.local/share/io.reasonix.desktop.preview/theme-assets/user-night/background-task.webp";
+registerTrustedThemeBackgroundURLs([bundledOfficialBackground, tauriUserThemeBackground, tauriSchemeThemeBackground, "https://evil.example/assets/background-fake.webp", "http://asset.localhost/Users/jerry/private/background.png"]);
 ok(isSafeBackgroundURL(bundledOfficialBackground), "registered same-origin official dev background allowed");
+ok(isSafeBackgroundURL(tauriUserThemeBackground), "registered Tauri app-data theme image allowed");
+ok(isSafeBackgroundURL(tauriSchemeThemeBackground), "registered Tauri asset-scheme theme image allowed");
 ok(!isSafeBackgroundURL("https://evil.example/assets/background-fake.webp"), "cross-origin bundled background rejected");
+ok(!isSafeBackgroundURL("http://asset.localhost/Users/jerry/private/background.png"), "unscoped Tauri asset path rejected");
 
 const draft = draftPackView({
   id: "preview-pack",
@@ -702,7 +707,7 @@ ok(stylesSource.includes("grid-template-columns: repeat(3, minmax(0, 1fr))"), "b
 ok(stylesSource.includes(".theme-gallery__preview-control"), "preview dimensions have labeled layout styling");
 ok(gallerySource.includes("settings.themeGallery.scenePreviewHint") && gallerySource.includes("theme-gallery__preview-help"), "scene preview explains home and workspace behavior");
 ok(localeZh.includes('"settings.themeGallery.sceneHome": "首页展示"') && localeZh.includes('"settings.themeGallery.sceneTask": "工作区展示"'), "scene options use explicit Chinese labels");
-ok(localeZh.includes('"settings.themeGallery.subtitle": "点击主题即可全局预览，应用后才会保存"'), "gallery explains click-to-preview and apply-to-save semantics");
+ok(localeZh.includes('"settings.themeGallery.subtitle": "选择主题查看预览，应用后才会启用并保存"'), "gallery explains click-to-preview and apply-to-save semantics");
 ok(
   localeEn.includes('"settings.themeGallery.restoreGraphite": "Restore Graphite appearance"') &&
     localeEn.includes("detailed typography are preserved"),

@@ -26,7 +26,11 @@
     ],
     "security": {
       "capabilities": ["main-window"],
-      "csp": "default-src 'self'; connect-src 'self' https://github.com https://api.github.com; img-src 'self' asset: data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/io.reasonix.desktop.preview/theme-assets/**/*"]
+      },
+      "csp": "default-src 'self'; connect-src 'self' https://github.com https://api.github.com; img-src 'self' asset: http://asset.localhost https://asset.localhost data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'"
     }
   },
   "bundle": {
