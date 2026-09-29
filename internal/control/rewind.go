@@ -242,6 +242,14 @@ func (c *Controller) commitRewindReady(store *checkpoint.Store, planID string, f
 	if !ok {
 		return checkpoint.RewindResult{OK: false, Error: "unknown or expired plan"}, fmt.Errorf("unknown or expired plan %q", planID)
 	}
+	if (plan.Scope == checkpoint.RewindCode || plan.Scope == checkpoint.RewindBoth) && !plan.CanFiles ||
+		(plan.Scope == checkpoint.RewindConversation || plan.Scope == checkpoint.RewindBoth) && !plan.CanConversation {
+		reason := plan.DisabledReason
+		if reason == "" {
+			reason = "rewind precheck failed"
+		}
+		return checkpoint.RewindResult{OK: false, Error: reason, Conflicts: plan.Conflicts, Coverage: plan.Coverage}, fmt.Errorf("%s", reason)
+	}
 	result := checkpoint.RewindResult{}
 	wantConv := !filesOnly && (plan.Scope == checkpoint.RewindConversation || plan.Scope == checkpoint.RewindBoth)
 	wantFiles := plan.Scope == checkpoint.RewindCode || plan.Scope == checkpoint.RewindBoth

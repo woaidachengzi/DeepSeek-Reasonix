@@ -94,6 +94,19 @@ func TestCodeRewindRequiresCoverageConfirmationAndPreservesConversation(t *testi
 	if err := os.WriteFile(filepath.Join(root, "b.txt"), []byte("manual"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	bothPlan, err := controller.PrepareRewind(1, control.RewindBoth)
+	if err != nil || bothPlan.CanFiles || !bothPlan.CanConversation {
+		t.Fatalf("conflicted combined preview = %+v err=%v", bothPlan, err)
+	}
+	if result, err := controller.CommitRewindInPlace(bothPlan.PlanID); err == nil || result.OK || result.ConversationForked {
+		t.Fatalf("conflicted combined rewind forked conversation: result=%+v err=%v", result, err)
+	}
+	if !reflect.DeepEqual(session.Snapshot(), conversationBefore) || controller.SessionPath() != sessionPath {
+		t.Fatal("conflicted combined rewind changed the active conversation")
+	}
+	if heads, err := agent.ListSessionHeads(sessionPath); err != nil || len(heads) != 1 {
+		t.Fatalf("conflicted combined rewind created a head: heads=%+v err=%v", heads, err)
+	}
 	result, err = runtime.CommitCodeRewind(plan.PlanID, true)
 	if err != nil || result.OK {
 		t.Fatalf("stale file rewind committed: result=%+v err=%v", result, err)
