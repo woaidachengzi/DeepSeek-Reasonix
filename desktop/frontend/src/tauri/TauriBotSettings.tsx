@@ -75,7 +75,7 @@ export function TauriBotSettings() {
   const saveChannelAllowlist = async (channelId: string, list: "users" | "groups" | "approvers" | "admins") => {
     const key = `channel:${channelId}:${list}`;
     const access = settings?.channels.find(channel => channel.id === channelId)?.access;
-    const raw = accessDrafts[key] ?? access?.[list].join("\n") ?? "";
+    const raw = accessDrafts[key] ?? joinBotAllowlist(access?.[list]);
     const values = [...new Set(raw.split(/[\n,，]/).map(value => value.trim()).filter(Boolean))];
     if (values.some(value => value.length > 512) || values.length > 100 || saving) {
       setError(t("settings.bots.allowlistInvalid"));
@@ -102,7 +102,7 @@ export function TauriBotSettings() {
 
   const saveAllowlist = async (platform: "qq" | "feishu" | "weixin" | "dingtalk", list: "users" | "groups" | "approvers" | "admins") => {
     const key = `${platform}.${list}`;
-    const raw = accessDrafts[key] ?? settings?.allowlist[platform][list].join("\n") ?? "";
+    const raw = accessDrafts[key] ?? joinBotAllowlist(settings?.allowlist?.[platform]?.[list]);
     const values = [...new Set(raw.split(/[\n,，]/).map(value => value.trim()).filter(Boolean))];
     if (values.some(value => value.length > 512) || values.length > 100 || saving) {
       setError(t("settings.bots.allowlistInvalid"));
@@ -163,7 +163,7 @@ export function TauriBotSettings() {
         <h4>{t((`settings.bots.channel.${platform}`) as "settings.bots.channel.qq" | "settings.bots.channel.feishu" | "settings.bots.channel.weixin" | "settings.bots.channel.dingtalk")}</h4>
         {(["users", "groups", "approvers", "admins"] as const).map(list => {
           const key = `${platform}.${list}`;
-          return <div className="tauri-bot-access-field" key={key}><label htmlFor={`bot-access-${key}`}>{t(`settings.bots.access.${list}` as "settings.bots.access.users" | "settings.bots.access.groups" | "settings.bots.access.approvers" | "settings.bots.access.admins")}</label><textarea id={`bot-access-${key}`} className="tauri-settings-input" rows={2} maxLength={102400} disabled={saving} value={accessDrafts[key] ?? settings.allowlist[platform][list].join("\n")} placeholder={t("settings.bots.allowlistPlaceholder")} onChange={event => setAccessDrafts(current => ({ ...current, [key]: event.target.value }))} /><button type="button" className="tauri-settings-button" disabled={saving} onClick={() => void saveAllowlist(platform, list)}>{t("settings.bots.saveAllowlist")}</button></div>;
+          return <div className="tauri-bot-access-field" key={key}><label htmlFor={`bot-access-${key}`}>{t(`settings.bots.access.${list}` as "settings.bots.access.users" | "settings.bots.access.groups" | "settings.bots.access.approvers" | "settings.bots.access.admins")}</label><textarea id={`bot-access-${key}`} className="tauri-settings-input" rows={2} maxLength={102400} disabled={saving} value={accessDrafts[key] ?? joinBotAllowlist(settings.allowlist?.[platform]?.[list])} placeholder={t("settings.bots.allowlistPlaceholder")} onChange={event => setAccessDrafts(current => ({ ...current, [key]: event.target.value }))} /><button type="button" className="tauri-settings-button" disabled={saving} onClick={() => void saveAllowlist(platform, list)}>{t("settings.bots.saveAllowlist")}</button></div>;
         })}
       </section>)}</div>
       <h3>{t("settings.bots.channelsTitle")}</h3>
@@ -206,7 +206,7 @@ export function TauriBotSettings() {
               </div>
               {access.allowAll ? <div className="tauri-bot-notice" role="alert"><ShieldAlert size={17} /><span>{t("settings.bots.allowAllWarning")}</span></div> : <div className="tauri-bot-channel-access__lists">{(["users", "groups", "approvers", "admins"] as const).map(list => {
                 const key = `channel:${channel.id}:${list}`;
-                return <div className="tauri-bot-access-field" key={key}><label htmlFor={`bot-channel-access-${channel.id}-${list}`}>{t(`settings.bots.access.${list}` as "settings.bots.access.users" | "settings.bots.access.groups" | "settings.bots.access.approvers" | "settings.bots.access.admins")}</label><textarea id={`bot-channel-access-${channel.id}-${list}`} className="tauri-settings-input" rows={2} maxLength={102400} disabled={saving} value={accessDrafts[key] ?? access[list].join("\n")} placeholder={t("settings.bots.allowlistPlaceholder")} onChange={event => setAccessDrafts(current => ({ ...current, [key]: event.target.value }))} /><button type="button" className="tauri-settings-button" disabled={saving} onClick={() => void saveChannelAllowlist(channel.id, list)}>{t("settings.bots.saveAllowlist")}</button></div>;
+                return <div className="tauri-bot-access-field" key={key}><label htmlFor={`bot-channel-access-${channel.id}-${list}`}>{t(`settings.bots.access.${list}` as "settings.bots.access.users" | "settings.bots.access.groups" | "settings.bots.access.approvers" | "settings.bots.access.admins")}</label><textarea id={`bot-channel-access-${channel.id}-${list}`} className="tauri-settings-input" rows={2} maxLength={102400} disabled={saving} value={accessDrafts[key] ?? joinBotAllowlist(access?.[list])} placeholder={t("settings.bots.allowlistPlaceholder")} onChange={event => setAccessDrafts(current => ({ ...current, [key]: event.target.value }))} /><button type="button" className="tauri-settings-button" disabled={saving} onClick={() => void saveChannelAllowlist(channel.id, list)}>{t("settings.bots.saveAllowlist")}</button></div>;
               })}</div>}
               <label className="tauri-settings-toggle"><ShieldAlert className="tauri-settings-field-icon" size={18} /><span><strong>{t("settings.bots.pairingEnabled")}</strong><small>{t("settings.bots.pairingHint")}</small></span><input type="checkbox" checked={access.pairingEnabled} disabled={saving} onChange={event => void saveChannelAccess({ action: "set_channel_pairing", channelId: channel.id, enabled: event.target.checked })} /></label>
             </div>
@@ -231,4 +231,10 @@ export function TauriBotSettings() {
       </section>)}</div> : <div className="tauri-settings-empty"><Activity size={18} /><span>{t("settings.bots.noAdapters")}</span></div>}
     </>}
   </div>;
+}
+
+function joinBotAllowlist(value: unknown): string {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string").join("\n")
+    : "";
 }

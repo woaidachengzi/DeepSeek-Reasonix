@@ -34,9 +34,14 @@ async function main() {
   const { act } = React;
   const { createRoot } = await import("react-dom/client");
   const { LocaleProvider } = await import("../lib/i18n");
+  const { tauriBotSettings } = await import("../lib/tauriBridge");
   const { TauriBotSettings } = await import("../tauri/TauriBotSettings");
+  await tauriBotSettings();
+  const malformedSettings = globalThis as typeof globalThis & { __botSettings?: { allowlist: Record<string, Record<string, unknown>> } };
+  malformedSettings.__botSettings!.allowlist.qq.users = null;
   const root = createRoot(document.getElementById("root")!);
   await act(async () => { root.render(React.createElement(LocaleProvider, null, React.createElement(TauriBotSettings))); await settle(); });
+  ok((document.getElementById("bot-access-qq.users") as HTMLTextAreaElement | null)?.value === "", "a null legacy allowlist renders as an empty list instead of crashing settings");
   ok(document.body.textContent?.includes("Degraded"), "runtime health is rendered from the bridge status");
   ok(document.body.textContent?.includes("feishu-lark") && document.body.textContent?.includes("4 messages received"), "adapter identity and counters are visible");
   ok(document.body.textContent?.includes("not connected to desktop session control"), "unsupported desktop command bridge is disclosed");
