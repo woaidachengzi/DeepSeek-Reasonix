@@ -1197,6 +1197,20 @@
 .tauri-theme-editor__mode{display:flex;gap:5px}.tauri-theme-editor__mode button{flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--fg-dim)}.tauri-theme-editor__mode button.is-active{border-color:var(--accent);color:var(--accent)}
 .tauri-theme-editor__token-group{display:grid;gap:6px}.tauri-theme-editor__token-group h4{margin:3px 0;color:var(--fg);font-size:var(--text-xs,.75rem)}.tauri-theme-editor__token-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.tauri-theme-editor__token{display:grid;gap:4px;min-width:0;color:var(--fg-dim);font-size:var(--text-xs,.75rem)}.tauri-theme-editor__token>span{display:flex;justify-content:space-between;gap:4px}.tauri-theme-editor__token code{color:var(--fg-faint)}.tauri-theme-editor__token>div{display:flex;gap:5px;min-width:0}.tauri-theme-editor__token input[type=color]{flex:none;width:30px;height:27px}.tauri-theme-editor__token input[type=text]{width:0;min-width:0;flex:1;padding:5px 6px}
 .tauri-theme-editor legend{padding:0 4px;color:var(--fg);font-weight:600}
+.tauri-theme-editor fieldset.tauri-theme-editor__scenes{gap:12px}
+.tauri-theme-editor__scenes>p{margin:0;color:var(--fg-faint);font-size:var(--text-xs,.75rem)}
+.tauri-theme-editor__scene{display:grid;gap:8px;padding:10px;border:1px solid var(--border-soft);border-radius:9px;background:var(--bg-soft)}
+.tauri-theme-editor__scene>header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.tauri-theme-editor__scene>header strong{color:var(--fg)}
+.tauri-theme-editor__scene>header p{margin:3px 0 0;color:var(--fg-faint);font-size:var(--text-xs,.75rem)}
+.tauri-theme-editor__scene-preview{height:70px;border:1px solid var(--border);border-radius:7px;background-position:center;background-size:cover}
+.tauri-theme-editor__upload{display:flex!important;justify-content:center!important;align-items:center;border:1px dashed var(--border);border-radius:7px;padding:8px;color:var(--fg-dim)!important;cursor:pointer}
+.tauri-theme-editor__upload input{display:none}
+.tauri-theme-editor__scene>label:not(.tauri-theme-editor__upload){display:grid;grid-template-columns:minmax(88px,1fr) minmax(90px,1.4fr) auto;gap:8px;align-items:center}
+.tauri-theme-editor__scene input[type=range]{width:100%;min-width:0;padding:0;border:0;background:transparent;accent-color:var(--accent)}
+.tauri-theme-editor__scene output{min-width:38px;text-align:right;color:var(--fg-faint);font-variant-numeric:tabular-nums}
+.tauri-theme-editor__scene select{grid-column:2/4;min-width:0;padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--fg)}
+.tauri-theme-editor__image-error{margin:0;color:var(--err);font-size:var(--text-xs,.75rem)}
 .tauri-theme-editor input[type=color]{width:34px;height:26px;padding:2px;border:1px solid var(--border);border-radius:6px;background:var(--bg)}
 .tauri-theme-editor__recipes{display:flex;gap:8px;flex-wrap:wrap}.tauri-theme-editor__recipes select{min-width:110px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)}
 .tauri-theme-editor>div{display:flex;gap:8px;flex-wrap:wrap}

@@ -62,6 +62,14 @@ pub struct UserTheme {
     pub(crate) background_asset_bytes: Option<Vec<u8>>,
     #[serde(skip)]
     pub(crate) task_background_asset_bytes: Option<Vec<u8>>,
+    #[serde(default, skip_serializing)]
+    pub(crate) background_asset_data_url: Option<String>,
+    #[serde(default, skip_serializing)]
+    pub(crate) task_background_asset_data_url: Option<String>,
+    #[serde(default, skip_serializing)]
+    pub(crate) clear_background: bool,
+    #[serde(default, skip_serializing)]
+    pub(crate) clear_task_background: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -85,6 +93,21 @@ pub struct ThemeBackground {
     pub pane_opacity: Option<f64>,
 }
 
+impl Default for ThemeBackground {
+    fn default() -> Self {
+        Self {
+            image: String::new(),
+            focus_x: 0.5,
+            focus_y: 0.5,
+            safe_area: "center".into(),
+            home_opacity: 1.0,
+            task_opacity: 0.28,
+            overlay_strength: 0.62,
+            pane_opacity: Some(0.5),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ThemeSceneBackground {
@@ -102,6 +125,20 @@ pub struct ThemeSceneBackground {
     pub overlay_strength: f64,
     #[serde(default)]
     pub pane_opacity: Option<f64>,
+}
+
+impl Default for ThemeSceneBackground {
+    fn default() -> Self {
+        Self {
+            image: String::new(),
+            focus_x: 0.5,
+            focus_y: 0.5,
+            safe_area: "center".into(),
+            opacity: 0.28,
+            overlay_strength: 0.62,
+            pane_opacity: Some(0.68),
+        }
+    }
 }
 
 fn default_focus() -> f64 {
@@ -181,6 +218,10 @@ impl Default for UserTheme {
             task_background: None,
             background_asset_bytes: None,
             task_background_asset_bytes: None,
+            background_asset_data_url: None,
+            task_background_asset_data_url: None,
+            clear_background: false,
+            clear_task_background: false,
         }
     }
 }
@@ -311,8 +352,7 @@ impl HostPreferences {
             .clone()
     }
 
-    pub fn save_user_theme(&self, theme: UserTheme) -> Result<UserTheme, String> {
-        let mut theme = validate_user_theme(theme)?;
+    pub fn save_user_theme(&self, mut theme: UserTheme) -> Result<UserTheme, String> {
         let mut current = self
             .preferences
             .lock()
@@ -328,10 +368,14 @@ impl HostPreferences {
             if theme.license.is_none() {
                 theme.license = themes[index].license.clone();
             }
-            if theme.background.is_none() {
+            if theme.clear_background {
+                theme.background = None;
+            } else if theme.background.is_none() {
                 theme.background = themes[index].background.clone();
             }
-            if theme.task_background.is_none() {
+            if theme.clear_task_background {
+                theme.task_background = None;
+            } else if theme.task_background.is_none() {
                 theme.task_background = themes[index].task_background.clone();
             }
             themes[index] = theme.clone();
@@ -343,12 +387,98 @@ impl HostPreferences {
             }
             themes.push(theme.clone());
         }
+        theme = validate_user_theme(theme)?;
+        themes
+            .iter_mut()
+            .find(|saved| saved.id == theme.id)
+            .map(|saved| *saved = theme.clone());
+
+        let asset_dir = self.asset_root.join(&theme.id);
+        let staging_dir = self.asset_root.join(format!(".{}-save", theme.id));
+        let backup_dir = self.asset_root.join(format!(".{}-backup", theme.id));
+        for temporary in [&staging_dir, &backup_dir] {
+            if temporary.exists() {
+                fs::remove_dir_all(temporary)
+                    .map_err(|error| format!("clear theme asset transaction: {error}"))?;
+            }
+        }
+        fs::create_dir_all(&staging_dir)
+            .map_err(|error| format!("prepare theme asset update: {error}"))?;
+        let old_theme = current
+            .user_themes
+            .iter()
+            .find(|existing| existing.id == theme.id);
+        let write_scene = |image: Option<&str>, bytes: Option<&Vec<u8>>| -> Result<(), String> {
+            let Some(image) = image.filter(|image| !image.is_empty()) else {
+                return Ok(());
+            };
+            let destination = staging_dir.join(image);
+            if let Some(bytes) = bytes {
+                fs::write(destination, bytes).map_err(|error| format!("stage theme image: {error}"))
+            } else if let Some(previous) =
+                old_theme.and_then(|old| self.theme_asset_path(old, image))
+            {
+                fs::copy(previous, destination)
+                    .map(|_| ())
+                    .map_err(|error| format!("preserve theme image: {error}"))
+            } else {
+                Err("theme image data is missing; choose the image again".into())
+            }
+        };
+        let asset_result = (|| {
+            write_scene(
+                theme.background.as_ref().map(|bg| bg.image.as_str()),
+                theme.background_asset_bytes.as_ref(),
+            )?;
+            write_scene(
+                theme.task_background.as_ref().map(|bg| bg.image.as_str()),
+                theme.task_background_asset_bytes.as_ref(),
+            )?;
+            Ok::<_, String>(())
+        })();
+        if let Err(error) = asset_result {
+            let _ = fs::remove_dir_all(&staging_dir);
+            return Err(error);
+        }
+        theme.background_asset_bytes = None;
+        theme.task_background_asset_bytes = None;
+        theme.background_asset_data_url = None;
+        theme.task_background_asset_data_url = None;
+        theme.clear_background = false;
+        theme.clear_task_background = false;
+        themes
+            .iter_mut()
+            .find(|saved| saved.id == theme.id)
+            .map(|saved| *saved = theme.clone());
+        let had_assets = asset_dir.exists();
+        if had_assets {
+            if let Err(error) = fs::rename(&asset_dir, &backup_dir) {
+                let _ = fs::remove_dir_all(&staging_dir);
+                return Err(format!("stage current theme assets: {error}"));
+            }
+        }
+        if let Err(error) = fs::rename(&staging_dir, &asset_dir) {
+            if had_assets {
+                let _ = fs::rename(&backup_dir, &asset_dir);
+            }
+            let _ = fs::remove_dir_all(&staging_dir);
+            return Err(format!("publish theme asset update: {error}"));
+        }
         let next = SavedPreferences {
             user_themes: themes,
             ..current.clone()
         };
-        self.write_preferences(next.clone())?;
+        if let Err(error) = self.write_preferences(next.clone()) {
+            let _ = fs::remove_dir_all(&asset_dir);
+            if had_assets {
+                let _ = fs::rename(&backup_dir, &asset_dir);
+            }
+            return Err(error);
+        }
         *current = next;
+        if had_assets {
+            let _ = fs::remove_dir_all(&backup_dir);
+        }
         Ok(theme)
     }
 
@@ -390,7 +520,7 @@ impl HostPreferences {
             suffix += 1;
         }
         theme.id = id;
-        let theme = validate_user_theme(theme)?;
+        let mut theme = validate_user_theme(theme)?;
         let asset_dir = self.asset_root.join(&theme.id);
         let staging_dir = self.asset_root.join(format!(".{}-import", theme.id));
         if staging_dir.exists() {
@@ -426,6 +556,8 @@ impl HostPreferences {
             let _ = fs::remove_dir_all(&staging_dir);
             return Err(error);
         }
+        theme.background_asset_bytes = None;
+        theme.task_background_asset_bytes = None;
         if asset_dir.exists() {
             let _ = fs::remove_dir_all(&staging_dir);
             return Err("theme asset directory already exists".into());
@@ -854,6 +986,45 @@ mod tests {
             "background.webp"
         );
         assert!(persisted.user_themes[0].background_asset_bytes.is_none());
+    }
+
+    #[test]
+    fn saving_a_theme_replaces_and_clears_scene_assets_transactionally() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let store = HostPreferences {
+            path: directory.path().join(FILE_NAME),
+            asset_root: directory.path().join("theme-assets"),
+            preferences: Mutex::new(SavedPreferences::default()),
+        };
+        let mut theme = UserTheme {
+            id: "user-wallpaper".into(),
+            name: "Wallpaper".into(),
+            ..UserTheme::default()
+        };
+        theme.background = Some(ThemeBackground {
+            image: "background.png".into(),
+            ..ThemeBackground::default()
+        });
+        theme.background_asset_bytes = Some(b"first image".to_vec());
+        let saved = store.save_user_theme(theme).expect("save first image");
+        let image_path = store
+            .theme_asset_path(&saved, "background.png")
+            .expect("first image path");
+        assert_eq!(fs::read(&image_path).unwrap(), b"first image");
+
+        let mut edited = saved.clone();
+        edited.background_asset_bytes = Some(b"replacement image".to_vec());
+        let saved = store.save_user_theme(edited).expect("replace image");
+        let image_path = store
+            .theme_asset_path(&saved, "background.png")
+            .expect("replacement image path");
+        assert_eq!(fs::read(&image_path).unwrap(), b"replacement image");
+
+        let mut cleared = saved;
+        cleared.clear_background = true;
+        let saved = store.save_user_theme(cleared).expect("clear image");
+        assert!(saved.background.is_none());
+        assert!(store.theme_asset_path(&saved, "background.png").is_none());
     }
 
     #[test]

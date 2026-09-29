@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { ArrowLeft, Check, Download, Trash2, Upload } from "lucide-react";
 import { ThemePreviewSurface } from "../components/ThemePreviewSurface";
 import { useT } from "../lib/i18n";
-import { isSafeHex, themePackKind, themeTokenKeys, type ThemePackTokens, type ThemePackView } from "../lib/themePack";
+import { defaultBackground, defaultTaskBackground, isSafeHex, themePackKind, themeTokenKeys, type ThemePackBackground, type ThemePackSceneBackground, type ThemePackTokens, type ThemePackView } from "../lib/themePack";
 import type { Theme, ThemeStyle } from "../lib/theme";
 import { tauriThemeCatalog } from "./tauriThemeCatalog";
 
@@ -17,8 +17,50 @@ const DEFAULT_THEME_TOKENS = {
   dark: { bg: "#151515", fg: "#f4f4f4", accent: "#ff6a45" },
 };
 
+export type UserThemeSaveInput = Pick<ThemePackView, "id" | "name" | "baseStyle" | "tokens" | "recipes"> & {
+  background?: ThemePackBackground | null;
+  taskBackground?: ThemePackSceneBackground | null;
+  backgroundDataUrl?: string;
+  taskBackgroundDataUrl?: string;
+  clearBackground?: boolean;
+  clearTaskBackground?: boolean;
+};
+
 function initialThemeTokens(pack: ThemePackView, mode: "light" | "dark"): Record<string, string> {
   return { ...DEFAULT_THEME_TOKENS[mode], ...pack.tokens[mode] };
+}
+
+function ThemeSceneEditor({
+  title, hint, imageUrl, opacity, paneOpacity, safeArea, onImage, onOpacity, onPaneOpacity, onSafeArea, onClear, disabled,
+}: {
+  title: string;
+  hint: string;
+  imageUrl: string;
+  opacity: number;
+  paneOpacity: number;
+  safeArea: string;
+  onImage: (file?: File) => void;
+  onOpacity: (value: number) => void;
+  onPaneOpacity: (value: number) => void;
+  onSafeArea: (value: "left" | "center" | "right") => void;
+  onClear: () => void;
+  disabled: boolean;
+}) {
+  const t = useT();
+  return <section className="tauri-theme-editor__scene">
+    <header><div><strong>{title}</strong><p>{hint}</p></div>
+      {imageUrl && <button type="button" className="btn btn--secondary" disabled={disabled} onClick={onClear}>{t("settings.themeLibrary.clearImage")}</button>}
+    </header>
+    {imageUrl && <div className="tauri-theme-editor__scene-preview" role="img" aria-label={title} style={{ backgroundImage: `url("${imageUrl}")` }} />}
+    <label className="tauri-theme-editor__upload"><Upload size={14} /><span>{t("settings.themeEditor.uploadPrompt")}</span>
+      <input type="file" accept="image/png,image/jpeg,image/webp" disabled={disabled} onChange={event => { onImage(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} />
+    </label>
+    <label><span>{t("settings.themeEditor.opacity")}</span><input type="range" min="0" max="1" step="0.05" value={opacity} disabled={disabled} onChange={event => onOpacity(Number(event.target.value))} /><output>{Math.round(opacity * 100)}%</output></label>
+    <label><span>{t("settings.themeEditor.paneOpacity")}</span><input type="range" min="0" max="1" step="0.05" value={paneOpacity} disabled={disabled} onChange={event => onPaneOpacity(Number(event.target.value))} /><output>{Math.round(paneOpacity * 100)}%</output></label>
+    <label><span>{t("settings.themeEditor.safeArea")}</span><select value={safeArea} disabled={disabled} onChange={event => onSafeArea(event.target.value as "left" | "center" | "right")}>
+      <option value="left">{t("settings.themeEditor.safeArea.left")}</option><option value="center">{t("settings.themeEditor.safeArea.center")}</option><option value="right">{t("settings.themeEditor.safeArea.right")}</option>
+    </select></label>
+  </section>;
 }
 
 export function TauriThemeGallery({
@@ -41,7 +83,7 @@ export function TauriThemeGallery({
   error: string;
   onBack: () => void;
   onApply: (id: string) => Promise<void>;
-  onSaveTheme: (theme: Pick<ThemePackView, "id" | "name" | "baseStyle" | "tokens" | "recipes">) => Promise<ThemePackView | null>;
+  onSaveTheme: (theme: UserThemeSaveInput) => Promise<ThemePackView | null>;
   onDeleteTheme: (id: string) => Promise<boolean>;
   onImportTheme: () => Promise<ThemePackView | null>;
   onExportTheme: (id: string) => Promise<boolean>;
@@ -60,6 +102,13 @@ export function TauriThemeGallery({
   const [tokenMode, setTokenMode] = useState<"light" | "dark">("dark");
   const [density, setDensity] = useState<"compact" | "comfortable">("comfortable");
   const [corners, setCorners] = useState<"square" | "soft" | "round">("soft");
+  const [background, setBackground] = useState<ThemePackBackground | null>(null);
+  const [backgroundDataUrl, setBackgroundDataUrl] = useState("");
+  const [taskBackground, setTaskBackground] = useState<ThemePackSceneBackground | null>(null);
+  const [taskBackgroundDataUrl, setTaskBackgroundDataUrl] = useState("");
+  const [clearBackground, setClearBackground] = useState(false);
+  const [clearTaskBackground, setClearTaskBackground] = useState(false);
+  const [imageError, setImageError] = useState("");
   const [deleteArmed, setDeleteArmed] = useState(false);
   const selected = packs.find((pack) => pack.id === selectedId) ?? packs[0];
   const official = packs.filter((pack) => themePackKind(pack) === "official");
@@ -81,6 +130,13 @@ export function TauriThemeGallery({
     setCorners(source.recipes.corners === "square" || source.recipes.corners === "round" ? source.recipes.corners : "soft");
     setLightTokens(initialThemeTokens(source, "light"));
     setDarkTokens(initialThemeTokens(source, "dark"));
+    setBackground(null);
+    setBackgroundDataUrl("");
+    setTaskBackground(null);
+    setTaskBackgroundDataUrl("");
+    setClearBackground(false);
+    setClearTaskBackground(false);
+    setImageError("");
     setTokenMode("dark");
     setEditing(true);
     setDeleteArmed(false);
@@ -94,6 +150,13 @@ export function TauriThemeGallery({
     setCorners(selected.recipes.corners === "square" || selected.recipes.corners === "round" ? selected.recipes.corners : "soft");
     setLightTokens(initialThemeTokens(selected, "light"));
     setDarkTokens(initialThemeTokens(selected, "dark"));
+    setBackground(selected.background ? { ...selected.background } : null);
+    setBackgroundDataUrl("");
+    setTaskBackground(selected.taskBackground ? { ...selected.taskBackground } : null);
+    setTaskBackgroundDataUrl("");
+    setClearBackground(false);
+    setClearTaskBackground(false);
+    setImageError("");
     setTokenMode("dark");
     setEditing(true);
     setDeleteArmed(false);
@@ -111,7 +174,11 @@ export function TauriThemeGallery({
     };
     setSaving(true);
     try {
-      const saved = await onSaveTheme({ id, name: themeName.trim(), baseStyle: selected.baseStyle, tokens, recipes: { ...selected.recipes, density, corners } });
+      const saved = await onSaveTheme({
+        id, name: themeName.trim(), baseStyle: selected.baseStyle, tokens, recipes: { ...selected.recipes, density, corners },
+        background, taskBackground, backgroundDataUrl: backgroundDataUrl || undefined, taskBackgroundDataUrl: taskBackgroundDataUrl || undefined,
+        clearBackground, clearTaskBackground,
+      });
       if (saved) {
         setSelectedId(saved.id);
         setEditing(false);
@@ -130,6 +197,28 @@ export function TauriThemeGallery({
     };
     if (tokenMode === "light") setLightTokens(update);
     else setDarkTokens(update);
+  };
+
+  const loadSceneImage = (scene: "home" | "task", file?: File) => {
+    if (!file) return;
+    if (file.size > 16 * 1024 * 1024) { setImageError(t("settings.themeEditor.imageTooLarge")); return; }
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) { setImageError(t("settings.themeEditor.imageFormatUnsupported")); return; }
+    const reader = new window.FileReader();
+    reader.onerror = () => setImageError(t("settings.themeEditor.imageReadFailed"));
+    reader.onload = () => {
+      if (typeof reader.result !== "string") { setImageError(t("settings.themeEditor.imageReadFailed")); return; }
+      setImageError("");
+      if (scene === "home") {
+        setBackground({ ...(background || defaultBackground()), image: "background.webp" });
+        setBackgroundDataUrl(reader.result);
+        setClearBackground(false);
+      } else {
+        setTaskBackground({ ...(taskBackground || defaultTaskBackground()), image: "background-task.webp" });
+        setTaskBackgroundDataUrl(reader.result);
+        setClearTaskBackground(false);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const deleteSelected = async () => {
@@ -230,7 +319,7 @@ export function TauriThemeGallery({
               <div className="tauri-theme-editor__mode" role="group" aria-label={t("settings.themeLibrary.fieldTokens")}>
                 {(["light", "dark"] as const).map(value => <button key={value} type="button" className={tokenMode === value ? "is-active" : ""} onClick={() => setTokenMode(value)}>{value === "light" ? t("settings.themeGallery.lightMode") : t("settings.themeGallery.darkMode")}</button>)}
               </div>
-              {TOKEN_GROUPS.map(group => <section className="tauri-theme-editor__token-group" key={group.label}>
+            {TOKEN_GROUPS.map(group => <section className="tauri-theme-editor__token-group" key={group.label}>
                 <h4>{t(group.label as never)}</h4>
                 <div className="tauri-theme-editor__token-grid">
                   {group.keys.filter(key => themeTokenKeys().includes(key)).map(key => {
@@ -244,6 +333,38 @@ export function TauriThemeGallery({
                   })}
                 </div>
               </section>)}
+            </fieldset>
+            <fieldset className="tauri-theme-editor__scenes"><legend>{t("settings.themeEditor.scenes")}</legend>
+              <p>{t("settings.themeEditor.scenesHint")}</p>
+              <ThemeSceneEditor
+                title={t("settings.themeEditor.homeBackground")}
+                hint={t("settings.themeEditor.homeBackgroundHint")}
+                imageUrl={backgroundDataUrl || (editingThemeId ? selected.backgroundUrl || "" : "")}
+                opacity={background?.homeOpacity ?? 1}
+                paneOpacity={background?.paneOpacity ?? 0.5}
+                safeArea={background?.safeArea || "center"}
+                onImage={(file) => loadSceneImage("home", file)}
+                onOpacity={(value) => setBackground(current => ({ ...(current || defaultBackground()), homeOpacity: value }))}
+                onPaneOpacity={(value) => setBackground(current => ({ ...(current || defaultBackground()), paneOpacity: value }))}
+                onSafeArea={(value) => setBackground(current => ({ ...(current || defaultBackground()), safeArea: value }))}
+                onClear={() => { setBackground(null); setBackgroundDataUrl(""); setClearBackground(true); }}
+                disabled={saving}
+              />
+              <ThemeSceneEditor
+                title={t("settings.themeEditor.taskBackground")}
+                hint={taskBackground ? t("settings.themeEditor.taskBackgroundHint") : t("settings.themeEditor.taskBackgroundFallback")}
+                imageUrl={taskBackgroundDataUrl || (editingThemeId ? selected.taskBackgroundUrl || "" : "") || backgroundDataUrl || (editingThemeId ? selected.backgroundUrl || "" : "")}
+                opacity={taskBackground?.opacity ?? background?.taskOpacity ?? 0.28}
+                paneOpacity={taskBackground?.paneOpacity ?? 0.68}
+                safeArea={taskBackground?.safeArea || background?.safeArea || "center"}
+                onImage={(file) => loadSceneImage("task", file)}
+                onOpacity={(value) => setTaskBackground(current => ({ ...(current || defaultTaskBackground()), opacity: value }))}
+                onPaneOpacity={(value) => setTaskBackground(current => ({ ...(current || defaultTaskBackground()), paneOpacity: value }))}
+                onSafeArea={(value) => setTaskBackground(current => ({ ...(current || defaultTaskBackground()), safeArea: value }))}
+                onClear={() => { setTaskBackground(null); setTaskBackgroundDataUrl(""); setClearTaskBackground(true); }}
+                disabled={saving}
+              />
+              {imageError && <p className="tauri-theme-editor__image-error" role="alert">{imageError}</p>}
             </fieldset>
             <label>{t("settings.themeLibrary.fieldRecipes")}<div className="tauri-theme-editor__recipes">
               <select aria-label={t("settings.themeEditor.density.comfortable")} value={density} onChange={event => setDensity(event.target.value as "compact" | "comfortable")}>

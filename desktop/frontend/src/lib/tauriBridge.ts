@@ -1102,16 +1102,30 @@ export async function tauriUserThemes(): Promise<ThemePackView[]> {
   return themes.map(userThemeView);
 }
 
-export async function saveTauriUserTheme(theme: Pick<ThemePackView, "id" | "name" | "baseStyle" | "tokens" | "recipes">): Promise<ThemePackView> {
+export async function saveTauriUserTheme(theme: Pick<ThemePackView, "id" | "name" | "baseStyle" | "tokens" | "recipes"> & Partial<Pick<ThemePackView, "author" | "description" | "license" | "background" | "taskBackground">> & {
+  backgroundDataUrl?: string;
+  taskBackgroundDataUrl?: string;
+  clearBackground?: boolean;
+  clearTaskBackground?: boolean;
+}): Promise<ThemePackView> {
   requireTauri();
   const saved = await invoke<TauriUserThemeRecord>("save_user_theme", {
     theme: {
       id: theme.id,
       name: theme.name,
+      author: theme.author,
+      description: theme.description,
+      license: theme.license,
       baseStyle: theme.baseStyle,
       tokens: theme.tokens,
       density: theme.recipes.density ?? "comfortable",
       corners: theme.recipes.corners ?? "soft",
+      background: theme.background,
+      taskBackground: theme.taskBackground,
+      backgroundAssetDataUrl: theme.backgroundDataUrl,
+      taskBackgroundAssetDataUrl: theme.taskBackgroundDataUrl,
+      clearBackground: theme.clearBackground,
+      clearTaskBackground: theme.clearTaskBackground,
     },
   });
   return userThemeView(saved);

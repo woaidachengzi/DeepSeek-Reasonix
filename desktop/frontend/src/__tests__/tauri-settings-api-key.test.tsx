@@ -46,6 +46,7 @@ let desktopTheme = "auto";
 let desktopThemeStyle = "";
 let activeThemeId = "";
 let userThemes: Array<Record<string, unknown>> = [];
+let savedThemePayload: Record<string, unknown> | undefined;
 let appearanceConfigured = false;
 let defaultModel = "";
 let plannerModel = "";
@@ -96,7 +97,7 @@ const summary = () => ({
 });
 
 (dom.window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
-  async invoke(command: string, args?: { scope?: string; source?: string; workspaceRoot?: string; currency?: string; url?: string; behavior?: string; mode?: string; theme?: string; request?: { model?: string; role?: string; reasoningLanguage?: "auto" | "zh" | "en"; compactRatioPercent?: number; source?: string; scope?: string; workspaceRoot?: string; name?: string; apiKey?: string; planId?: string; revision?: string; acceptRisk?: boolean; kind?: string; id?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; balanceUrl?: string; clearBalanceUrl?: boolean; models: string[]; default: string; useApiKey: boolean; revision?: string; presetId?: string; presetAction?: string }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string; profile?: { name: string; description: string; systemPrompt: string }; filterSubprocessEnv?: boolean; protectSensitiveFiles?: boolean } }) {
+  async invoke(command: string, args?: { scope?: string; source?: string; workspaceRoot?: string; currency?: string; url?: string; behavior?: string; mode?: string; theme?: string | { id?: string; [key: string]: unknown }; request?: { model?: string; role?: string; reasoningLanguage?: "auto" | "zh" | "en"; compactRatioPercent?: number; source?: string; scope?: string; workspaceRoot?: string; name?: string; apiKey?: string; planId?: string; revision?: string; acceptRisk?: boolean; kind?: string; id?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; balanceUrl?: string; clearBalanceUrl?: boolean; models: string[]; default: string; useApiKey: boolean; revision?: string; presetId?: string; presetAction?: string }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string; profile?: { name: string; description: string; systemPrompt: string }; filterSubprocessEnv?: boolean; protectSensitiveFiles?: boolean } }) {
     calls.push(command);
     switch (command) {
       case "preview_runtime_info":
@@ -198,7 +199,12 @@ const summary = () => ({
       case "get_active_theme_id": return activeThemeId;
       case "set_active_theme_id": activeThemeId = args?.id ?? ""; return activeThemeId;
       case "list_user_themes": return userThemes.map(theme => ({ ...theme }));
-      case "save_user_theme": userThemes = [...userThemes.filter(theme => theme.id !== args?.theme?.id), { ...args?.theme, density: args?.theme?.density ?? "comfortable", corners: args?.theme?.corners ?? "soft" }]; return { ...userThemes[userThemes.length - 1] };
+      case "save_user_theme": {
+        const payload = args?.theme && typeof args.theme === "object" ? args.theme : {};
+        savedThemePayload = payload;
+        userThemes = [...userThemes.filter(theme => theme.id !== payload.id), { ...payload, density: payload.density ?? "comfortable", corners: payload.corners ?? "soft" }];
+        return { ...userThemes[userThemes.length - 1] };
+      }
       case "delete_user_theme": userThemes = userThemes.filter(theme => theme.id !== args?.id); return;
       case "import_user_theme": {
         const imported = { id: "user-imported", name: "Imported Theme", baseStyle: "slate", tokens: { light: { accent: "#336699" }, dark: {} }, density: "compact", corners: "round" };
@@ -207,8 +213,8 @@ const summary = () => ({
       }
       case "export_user_theme": return true;
       case "set_desktop_approval": approvalMode = args?.mode ?? approvalMode; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode };
-      case "set_desktop_terminal_theme": terminalTheme = args?.theme ?? terminalTheme; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode, terminalTheme };
-      case "set_desktop_appearance": desktopTheme = args?.theme ?? desktopTheme; desktopThemeStyle = args?.style ?? desktopThemeStyle; appearanceConfigured = true; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode, terminalTheme, theme: desktopTheme, themeStyle: desktopThemeStyle, appearanceConfigured };
+      case "set_desktop_terminal_theme": terminalTheme = typeof args?.theme === "string" ? args.theme : terminalTheme; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode, terminalTheme };
+      case "set_desktop_appearance": desktopTheme = typeof args?.theme === "string" ? args.theme : desktopTheme; desktopThemeStyle = args?.style ?? desktopThemeStyle; appearanceConfigured = true; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode, terminalTheme, theme: desktopTheme, themeStyle: desktopThemeStyle, appearanceConfigured };
       case "set_desktop_language": desktopLanguage = args?.language ?? desktopLanguage; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode, language: desktopLanguage, displayCurrency, terminalTheme, theme: desktopTheme, themeStyle: desktopThemeStyle, appearanceConfigured };
       case "set_desktop_currency": displayCurrency = args?.currency ?? displayCurrency; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode, language: desktopLanguage, displayCurrency, terminalTheme, theme: desktopTheme, themeStyle: desktopThemeStyle, appearanceConfigured };
       case "open_external_url": openedURL = args?.url ?? ""; return;
@@ -369,7 +375,24 @@ const sidebarToken = [...document.querySelectorAll<HTMLElement>(".tauri-theme-ed
 assert.ok(sidebarToken, "custom themes expose the sidebar color token");
 Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(sidebarToken, "#445566AA");
 await act(async () => { sidebarToken.dispatchEvent(new dom.window.Event("input", { bubbles: true })); });
-await act(async () => { click("保存自定义主题"); });
+const sceneImageInputs = [...document.querySelectorAll<HTMLInputElement>(".tauri-theme-editor__scene input[type=file]")];
+assert.equal(sceneImageInputs.length, 2, "custom theme editor exposes separate home and workspace image controls");
+const pngHeader = new Uint8Array(24);
+pngHeader.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+pngHeader.set([0x49, 0x48, 0x44, 0x52], 12);
+pngHeader.set([0, 0, 0, 1, 0, 0, 0, 1], 16);
+const imageFile = new dom.window.File([pngHeader.buffer], "background.png", { type: "image/png" });
+Object.defineProperty(sceneImageInputs[0], "files", { configurable: true, value: [imageFile] });
+await act(async () => {
+  sceneImageInputs[0]!.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+  await new Promise(resolve => setTimeout(resolve, 25));
+});
+await act(async () => {
+  document.querySelector<HTMLFormElement>(".tauri-theme-editor")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+  await new Promise(resolve => setTimeout(resolve, 0));
+});
+assert.ok((savedThemePayload?.backgroundAssetDataUrl as string | undefined)?.startsWith("data:image/png;base64,"), "uploaded home background reaches the native theme storage command");
+assert.equal((savedThemePayload?.background as { image?: string } | undefined)?.image, "background.webp", "home scene settings accompany the uploaded image");
 assert.equal(userThemes.length, 1, "custom theme is saved in the native host preferences");
 assert.equal(userThemes[0]?.id, "user-my-preview-theme");
 assert.equal(userThemes[0]?.density, "compact", "theme density is persisted by the host");
@@ -381,7 +404,10 @@ const editedThemeName = document.querySelector<HTMLInputElement>('.tauri-theme-e
 assert.ok(editedThemeName, "a saved custom theme can be reopened for editing");
 Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(editedThemeName, "My Edited Theme");
 await act(async () => { editedThemeName.dispatchEvent(new dom.window.Event("input", { bubbles: true })); });
-await act(async () => { click("保存自定义主题"); });
+await act(async () => {
+  document.querySelector<HTMLFormElement>(".tauri-theme-editor")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+  await new Promise(resolve => setTimeout(resolve, 0));
+});
 assert.equal(userThemes.length, 1, "editing replaces the existing custom theme instead of duplicating it");
 assert.equal(userThemes[0]?.id, "user-my-preview-theme", "editing preserves the theme identity");
 assert.match(visibleText(), /My Edited Theme/);

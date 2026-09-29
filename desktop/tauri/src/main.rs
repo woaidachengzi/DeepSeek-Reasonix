@@ -60,6 +60,7 @@ pub(crate) mod test_env {
     }
 }
 
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
@@ -2005,10 +2006,54 @@ fn list_user_themes(preferences: State<'_, HostPreferences>) -> Vec<UserThemeVie
 #[tauri::command]
 fn save_user_theme(
     preferences: State<'_, HostPreferences>,
-    theme: UserTheme,
+    mut theme: UserTheme,
 ) -> Result<UserThemeView, String> {
+    if let Some(data_url) = theme.background_asset_data_url.take() {
+        let (extension, bytes) = decode_theme_image_data_url(&data_url)?;
+        let filename = format!("background.{extension}");
+        validate_theme_image(&filename, &bytes)?;
+        let mut background = theme.background.take().unwrap_or_default();
+        background.image = filename;
+        theme.background = Some(background);
+        theme.background_asset_bytes = Some(bytes);
+    }
+    if let Some(data_url) = theme.task_background_asset_data_url.take() {
+        let (extension, bytes) = decode_theme_image_data_url(&data_url)?;
+        let filename = format!("background-task.{extension}");
+        validate_theme_image(&filename, &bytes)?;
+        let mut background = theme.task_background.take().unwrap_or_default();
+        background.image = filename;
+        theme.task_background = Some(background);
+        theme.task_background_asset_bytes = Some(bytes);
+    }
     let saved = preferences.save_user_theme(theme)?;
     Ok(user_theme_view(&preferences, saved))
+}
+
+fn decode_theme_image_data_url(data_url: &str) -> Result<(String, Vec<u8>), String> {
+    const MAX_ENCODED_IMAGE: usize = ((16 << 20) * 4 / 3) + 8;
+    if data_url.len() > MAX_ENCODED_IMAGE {
+        return Err("theme image exceeds the 16 MiB limit".into());
+    }
+    let (extension, encoded) = if let Some(value) = data_url.strip_prefix("data:image/png;base64,")
+    {
+        ("png", value)
+    } else if let Some(value) = data_url.strip_prefix("data:image/jpeg;base64,") {
+        ("jpg", value)
+    } else if let Some(value) = data_url.strip_prefix("data:image/jpg;base64,") {
+        ("jpg", value)
+    } else if let Some(value) = data_url.strip_prefix("data:image/webp;base64,") {
+        ("webp", value)
+    } else {
+        return Err("theme image must be PNG, JPEG, or WebP".into());
+    };
+    let bytes = BASE64_STANDARD
+        .decode(encoded)
+        .map_err(|error| format!("decode theme image: {error}"))?;
+    if bytes.len() > 16 << 20 {
+        return Err("theme image exceeds the 16 MiB limit".into());
+    }
+    Ok((extension.into(), bytes))
 }
 
 #[derive(Serialize)]
@@ -2242,6 +2287,10 @@ fn read_theme_package(path: &Path) -> Result<host_preferences::UserTheme, String
         task_background: manifest.task_background,
         background_asset_bytes,
         task_background_asset_bytes,
+        background_asset_data_url: None,
+        task_background_asset_data_url: None,
+        clear_background: false,
+        clear_task_background: false,
     })
 }
 
@@ -2598,6 +2647,22 @@ mod theme_package_tests {
             round_trip.background_asset_bytes,
             imported.background_asset_bytes
         );
+    }
+
+    #[test]
+    fn theme_editor_image_data_urls_are_bounded_and_format_checked() {
+        let mut image = vec![0; 24];
+        image[..8].copy_from_slice(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]);
+        image[12..16].copy_from_slice(b"IHDR");
+        image[16..20].copy_from_slice(&1_u32.to_be_bytes());
+        image[20..24].copy_from_slice(&1_u32.to_be_bytes());
+        let data_url = format!("data:image/png;base64,{}", BASE64_STANDARD.encode(&image));
+        let (extension, decoded) = decode_theme_image_data_url(&data_url).expect("decode PNG URL");
+        assert_eq!(extension, "png");
+        validate_theme_image("background.png", &decoded)
+            .expect("validate PNG header and dimensions");
+        assert!(decode_theme_image_data_url("data:image/svg+xml;base64,PHN2Zy8+").is_err());
+        assert!(decode_theme_image_data_url("data:image/png;base64,not-base64!").is_err());
     }
 }
 

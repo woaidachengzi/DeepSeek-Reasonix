@@ -9,7 +9,7 @@ import { applyTextSize, getTextSize, TEXT_SIZES, type TextSize } from "../lib/te
 import { applyFontFamily, applyMonoFontFamily, FONT_FAMILIES, MONO_FONT_FAMILIES, getCustomFontName, getCustomMonoFontName, getFontFamily, getMonoFontFamily, setCustomFontName, setCustomMonoFontName, type FontFamily, type MonoFontFamily } from "../lib/fontFamily";
 import { applyTauriAppearance, readTauriAppearance, type TauriAppearance } from "./tauriAppearance";
 import { applyThemePack, clearThemePack, type ThemePackView } from "../lib/themePack";
-import { TauriThemeGallery } from "./TauriThemeGallery";
+import { TauriThemeGallery, type UserThemeSaveInput } from "./TauriThemeGallery";
 import { tauriThemePackById } from "./tauriThemeCatalog";
 import { TauriMCPSettings } from "./TauriMCPSettings";
 import { TauriProviderEditor } from "./TauriProviderEditor";
@@ -382,7 +382,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
     }
   };
 
-  const handleUserThemeSave = async (theme: Pick<ThemePackView, "id" | "name" | "baseStyle" | "tokens" | "recipes">): Promise<ThemePackView | null> => {
+  const handleUserThemeSave = async (theme: UserThemeSaveInput): Promise<ThemePackView | null> => {
     try {
       const saved = await saveTauriUserTheme(theme);
       setUserThemes(current => [...current.filter(item => item.id !== saved.id), saved]);
