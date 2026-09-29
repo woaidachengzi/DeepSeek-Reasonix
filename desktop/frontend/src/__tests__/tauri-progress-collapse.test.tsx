@@ -7,7 +7,10 @@ Object.assign(globalThis, { window: dom.window, document: dom.window.document, H
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
 (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri = true;
 (dom.window as unknown as { __TAURI__?: unknown }).__TAURI__ = { core: { invoke: () => Promise.resolve(null) } };
-(globalThis as unknown as { __workbenchSessions: unknown[] }).__workbenchSessions = [{ sessionId: "progress-session", title: "检查提交" }];
+(globalThis as unknown as { __workbenchSessions: unknown[] }).__workbenchSessions = [
+  { sessionId: "progress-session", title: "检查提交" },
+  { sessionId: "second-session", title: "第二个会话" },
+];
 (globalThis as unknown as { __tauriHistoryMessages: unknown[] }).__tauriHistoryMessages = [
   { role: "user", content: "检查提交" },
   { role: "assistant", content: "先查看工作区", workDurationMs: 5_000 },
@@ -21,13 +24,38 @@ const { createRoot } = await import("react-dom/client");
 const { TauriSessionApp } = await import("../tauri/TauriChatWorkspace");
 const root = createRoot(document.getElementById("root")!);
 await act(async () => { root.render(React.createElement(TauriSessionApp)); await new Promise(resolve => setTimeout(resolve, 0)); });
+const shell = document.querySelector<HTMLElement>(".tauri-shell");
+assert.ok(shell);
+assert.equal(shell.hasAttribute("data-sidebar-hidden"), false, "sidebar is visible by default");
+await act(async () => { window.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "b", ctrlKey: true, bubbles: true, cancelable: true })); });
+assert.equal(shell.getAttribute("data-sidebar-hidden"), "true", "the stable sidebar shortcut hides the navigation");
+assert.equal(localStorage.getItem("tauri-sidebar-visible"), "off", "sidebar visibility persists");
+await act(async () => { window.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "b", ctrlKey: true, bubbles: true, cancelable: true })); });
+assert.equal(shell.hasAttribute("data-sidebar-hidden"), false, "the stable sidebar shortcut restores the navigation");
+const sidebarToggle = document.querySelector<HTMLButtonElement>(".tauri-sidebar-toggle");
+assert.ok(sidebarToggle, "the top bar keeps a control available to restore a hidden sidebar");
+await act(async () => { sidebarToggle.click(); });
+assert.equal(shell.getAttribute("data-sidebar-hidden"), "true", "the top-bar control hides the sidebar");
+assert.equal(sidebarToggle.getAttribute("aria-pressed"), "true", "the top-bar control exposes its current state");
+await act(async () => { sidebarToggle.click(); });
+assert.equal(shell.hasAttribute("data-sidebar-hidden"), false, "the top-bar control restores the sidebar");
 const sessionButton = document.querySelector<HTMLButtonElement>(".tauri-sidebar__session");
 assert.ok(sessionButton);
 assert.equal(sessionButton.disabled, false, document.body.textContent ?? "");
+await act(async () => { window.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "=", ctrlKey: true, bubbles: true, cancelable: true })); });
+assert.equal(document.documentElement.getAttribute("data-text-size"), "large", "the stable increase-text shortcut applies immediately");
+await act(async () => { window.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "-", ctrlKey: true, bubbles: true, cancelable: true })); });
+assert.equal(document.documentElement.hasAttribute("data-text-size"), false, "the stable decrease-text shortcut applies immediately");
+await act(async () => { window.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "=", ctrlKey: true, bubbles: true, cancelable: true })); });
+await act(async () => { window.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "0", ctrlKey: true, bubbles: true, cancelable: true })); });
+assert.equal(document.documentElement.hasAttribute("data-text-size"), false, "the stable reset-text shortcut restores the default");
 await act(async () => {
   sessionButton.click();
   await new Promise(resolve => setTimeout(resolve, 0));
 });
+await act(async () => { window.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "2", ctrlKey: true, bubbles: true, cancelable: true })); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.ok((globalThis as unknown as { __tauriBridgeCalls: Array<{ name: string; args?: { sessionId?: string } }> }).__tauriBridgeCalls
+  .some(call => call.name === "bridge_switch_session" && call.args?.sessionId === "second-session"), "Ctrl+2 opens the second loaded conversation through the host bridge");
 
 const progress = document.querySelector<HTMLDetailsElement>(".tauri-progress");
 assert.ok(progress, "intermediate updates render inside a progress disclosure");

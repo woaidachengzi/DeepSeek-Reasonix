@@ -10,10 +10,17 @@ const { defaultTauriShortcut, getTauriShortcut, isValidTauriShortcut, matchesTau
 const key = (value: string, ctrl = false, shift = false) => new dom.window.KeyboardEvent("keydown", { key: value, ctrlKey: ctrl, shiftKey: shift });
 assert.deepEqual(defaultTauriShortcut("settings", "darwin"), { key: ",", meta: true });
 assert.deepEqual(defaultTauriShortcut("close_panel", "darwin"), { key: "w", meta: true });
+assert.deepEqual(defaultTauriShortcut("toggle_sidebar", "darwin"), { key: "b", meta: true }, "sidebar toggle follows the stable shortcut");
+assert.deepEqual(defaultTauriShortcut("workspace_files", "darwin"), { key: "f", meta: true, shift: true }, "workspace browser moves to avoid the stable sidebar shortcut");
+assert.deepEqual(defaultTauriShortcut("goto_session_1", "darwin"), { key: "1", meta: true }, "first session navigation follows the stable shortcut");
+assert.deepEqual(defaultTauriShortcut("goto_session_9", "linux"), { key: "9", ctrl: true }, "ninth session navigation follows the stable shortcut");
 assert.deepEqual(defaultTauriShortcut("open_appearance", "darwin"), { key: "a", meta: true, shift: true });
 assert.deepEqual(defaultTauriShortcut("open_model_services", "linux"), { key: "p", ctrl: true, shift: true });
+assert.deepEqual(defaultTauriShortcut("text_size_increase", "darwin"), { key: "=", meta: true }, "text size increase follows the stable shortcut");
+assert.deepEqual(defaultTauriShortcut("text_size_decrease", "linux"), { key: "-", ctrl: true }, "text size decrease follows the stable shortcut");
+assert.deepEqual(defaultTauriShortcut("text_size_reset", "windows"), { key: "0", ctrl: true }, "text size reset follows the stable shortcut");
 assert.equal(isValidTauriShortcut("open_usage_stats", { key: "u", ctrl: true, shift: true }), true);
-assert.equal(TAURI_SHORTCUT_ACTIONS.length, 27, "all Preview actions, including panel close and every settings page, can be configured");
+assert.equal(TAURI_SHORTCUT_ACTIONS.length, 40, "all Preview actions, including sidebar toggle, session navigation, panel close, text size and every settings page, can be configured");
 assert.equal(Object.keys(TAURI_SHORTCUT_TABS).length, 16, "every remaining settings page has a direct shortcut route");
 for (const action of TAURI_SHORTCUT_ACTIONS) {
   const combo = defaultTauriShortcut(action, "darwin");

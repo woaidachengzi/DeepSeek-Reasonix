@@ -48,6 +48,7 @@ export function TauriStatusBar({ workspace, sessionId, model, sessionState, brid
     session: sessionLabel ? { label: t("settings.statusBarItem.session"), value: sessionLabel, icon: MessageSquare } : null,
     observed_tokens: observedUsage ? { label: t("settings.statusBarItem.observedTokens"), value: observedUsage.tokens.toLocaleString(), icon: Activity } : null,
     turn_tokens: observedUsage ? { label: t("settings.statusBarItem.turnTokens"), value: observedUsage.turnTokens.toLocaleString(), icon: Activity } : null,
+    turn_tps: observedUsage ? { label: t("status.tpsLabel"), value: observedUsage.turnTps && observedUsage.turnTps > 0 ? observedUsage.turnTps < 1 ? "<1 t/s" : `${Math.round(observedUsage.turnTps)} t/s` : "-", icon: Activity, detail: t("status.tpsTitle") } : null,
     turn_output_tokens: observedUsage && observedUsage.turnOutputTokens > 0 ? { label: t("settings.statusBarItem.turnOutputTokens"), value: observedUsage.turnOutputTokens.toLocaleString(), icon: Activity } : null,
     turn_cache_tokens: observedUsage && observedUsage.turnCacheTokens > 0 ? { label: t("settings.statusBarItem.turnCacheTokens"), value: observedUsage.turnCacheTokens.toLocaleString(), icon: Activity } : null,
     turn_cost: observedUsage?.turnCostComplete && observedUsage.turnCost > 0 && observedUsage.turnCurrency ? { label: t("settings.statusBarItem.turnCost"), value: `≈${formatMoneyLocalized(observedUsage.turnCost, observedUsage.turnCurrency, { locale, empty: "dash" })}`, icon: Coins } : null,
@@ -55,7 +56,10 @@ export function TauriStatusBar({ workspace, sessionId, model, sessionState, brid
     session_cost: observedUsage?.costComplete && observedUsage.sessionCost > 0 && observedUsage.sessionCurrency ? { label: t("settings.statusBarItem.sessionCost"), value: `≈${formatMoneyLocalized(observedUsage.sessionCost, observedUsage.sessionCurrency, { locale, empty: "dash" })}`, icon: Coins } : null,
     context: context ? { label: t("settings.statusBarItem.context"), value: `${Math.round(context.contextUsedTokens / context.contextWindowTokens * 100)}%`, icon: Activity, detail: t("settings.statusBarItem.contextDetail", { used: context.contextUsedTokens.toLocaleString(), total: context.contextWindowTokens.toLocaleString() }) } : null,
     compact: context && context.compactThresholdPercent > 0 ? { label: t("settings.statusBarItem.compact"), value: `${context.compactThresholdPercent}%`, icon: Activity } : null,
-    cache_hit: cache ? { label: t("settings.statusBarItem.cacheHit"), value: `${Math.round(cache.cacheHitTokens / (cache.cacheHitTokens + cache.cacheMissTokens) * 100)}%`, icon: Activity, detail: t("settings.statusBarItem.cacheDetail", { hit: cache.cacheHitTokens.toLocaleString(), miss: cache.cacheMissTokens.toLocaleString() }) } : null,
+    cache: observedUsage?.latestCacheHitTokens !== null && observedUsage?.latestCacheHitTokens !== undefined && observedUsage.latestCacheMissTokens !== null
+      ? { label: t("status.cacheLabel"), value: `${((observedUsage.latestCacheHitTokens / (observedUsage.latestCacheHitTokens + observedUsage.latestCacheMissTokens)) * 100).toFixed(2)}%`, icon: Activity, detail: t("status.cacheTitle") }
+      : null,
+    cache_avg: cache ? { label: t("status.cacheAvgLabel"), value: `${((cache.cacheHitTokens / (cache.cacheHitTokens + cache.cacheMissTokens)) * 100).toFixed(2)}%`, icon: Activity, detail: `${t("status.cacheAvgTitle")} · ${t("settings.statusBarItem.cacheDetail", { hit: cache.cacheHitTokens.toLocaleString(), miss: cache.cacheMissTokens.toLocaleString() })}` } : null,
     bridge: { label: t("settings.statusBarItem.bridge"), value: bridgeRunning ? t("settings.statusBarItem.bridge.connected") : t("settings.statusBarItem.bridge.connecting"), icon: Activity },
   };
   const visible = items.flatMap(id => entries[id] ? [{ id, entry: entries[id] }] : []);

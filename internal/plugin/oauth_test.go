@@ -443,6 +443,9 @@ func TestHTTPMCPSerializesSharedRefreshTokenRotation(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if !HasHTTPMCPOAuthState(Spec{StateDir: stateDir}) {
+		t.Fatal("saved Reasonix OAuth state was not reported")
+	}
 	spec := Spec{Name: "remote", Type: "http", URL: server.URL + "/mcp", StateDir: stateDir}
 	first, err := newHTTPTransport(spec)
 	if err != nil {
@@ -637,6 +640,9 @@ func TestClearHTTPMCPOAuthRemovesOnlyReasonixState(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(stateDir, mcpOAuthStateFile)); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("OAuth state still exists or stat failed: %v", err)
+	}
+	if HasHTTPMCPOAuthState(Spec{StateDir: stateDir}) {
+		t.Fatal("cleared OAuth state was still reported as saved")
 	}
 	if got, err := os.ReadFile(neighbor); err != nil || string(got) != "keep" {
 		t.Fatalf("neighboring MCP state changed: data=%q err=%v", got, err)

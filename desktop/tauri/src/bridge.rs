@@ -99,6 +99,41 @@ pub struct MCPRuntimeActionResponse {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MCPOAuthRequest {
+    pub session_id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub flow_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPOAuthResponse {
+    pub protocol_version: u64,
+    pub flow_id: String,
+    #[serde(default)]
+    pub name: String,
+    pub status: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPClearAuthRequest {
+    pub session_id: String,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPClearAuthResponse {
+    pub protocol_version: u64,
+    pub name: String,
+    pub changed: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionPreview {
     pub session_id: String,
     #[serde(default)]
@@ -1296,6 +1331,10 @@ pub struct MCPServerView {
     pub tier: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub managed_by_package: Option<bool>,
+    #[serde(default)]
+    pub native_oauth_eligible: bool,
+    #[serde(default)]
+    pub authentication_saved: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -2955,6 +2994,88 @@ impl BridgeSupervisor {
         Ok(result)
     }
 
+    pub fn clear_mcp_authentication(
+        &self,
+        request: MCPClearAuthRequest,
+    ) -> Result<MCPClearAuthResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let name = request.name.trim();
+        if name.is_empty() || name.len() > 128 {
+            return Err("invalid MCP credential request".to_string());
+        }
+        let request_id = opaque_secret()?;
+        let path = format!("/v1/sessions/{session_id}/mcp/auth/clear");
+        let response = self.request_json(
+            "POST",
+            &path,
+            Some(json!({ "name": name })),
+            Some(&request_id),
+        )?;
+        let result: MCPClearAuthResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if result.protocol_version != u64::from(PROTOCOL_VERSION) || result.name != name {
+            return Err("desktop bridge MCP credential response is invalid".to_string());
+        }
+        Ok(result)
+    }
+
+    pub fn start_mcp_oauth(&self, request: MCPOAuthRequest) -> Result<MCPOAuthResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        if request.name.trim().is_empty() || request.name.trim().len() > 128 {
+            return Err("invalid MCP authorization request".to_string());
+        }
+        let request_id = opaque_secret()?;
+        let path = format!("/v1/sessions/{session_id}/mcp/oauth");
+        let response = self.request_json(
+            "POST",
+            &path,
+            Some(json!({ "name": request.name.trim() })),
+            Some(&request_id),
+        )?;
+        let result: MCPOAuthResponse = serde_json::from_value(response).map_err(display_error)?;
+        if result.protocol_version != u64::from(PROTOCOL_VERSION)
+            || result.name != request.name.trim()
+            || result.flow_id.is_empty()
+            || result.status != "pending"
+        {
+            return Err("desktop bridge MCP authorization response is invalid".to_string());
+        }
+        Ok(result)
+    }
+
+    pub fn mcp_oauth_status(&self, request: MCPOAuthRequest) -> Result<MCPOAuthResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let flow_id = mcp_oauth_flow_component(&request.flow_id)?;
+        let path = format!("/v1/sessions/{session_id}/mcp/oauth/{flow_id}");
+        let response = self.request_json("GET", &path, None, None)?;
+        let result: MCPOAuthResponse = serde_json::from_value(response).map_err(display_error)?;
+        if result.protocol_version != u64::from(PROTOCOL_VERSION)
+            || result.flow_id != request.flow_id
+            || !matches!(
+                result.status.as_str(),
+                "pending" | "complete" | "failed" | "canceled"
+            )
+        {
+            return Err("desktop bridge MCP authorization status is invalid".to_string());
+        }
+        Ok(result)
+    }
+
+    pub fn cancel_mcp_oauth(&self, request: MCPOAuthRequest) -> Result<MCPOAuthResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let flow_id = mcp_oauth_flow_component(&request.flow_id)?;
+        let path = format!("/v1/sessions/{session_id}/mcp/oauth/{flow_id}");
+        let response = self.request_json("DELETE", &path, None, None)?;
+        let result: MCPOAuthResponse = serde_json::from_value(response).map_err(display_error)?;
+        if result.protocol_version != u64::from(PROTOCOL_VERSION)
+            || result.flow_id != request.flow_id
+            || result.status != "canceled"
+        {
+            return Err("desktop bridge MCP authorization cancel response is invalid".to_string());
+        }
+        Ok(result)
+    }
+
     pub fn save_mcp_server(
         &self,
         input: MCPServerInput,
@@ -3911,6 +4032,14 @@ fn session_path_component(session_id: &str) -> Result<String, String> {
         return Err("desktop bridge session identifier is invalid".to_string());
     }
     Ok(session_id.to_string())
+}
+
+fn mcp_oauth_flow_component(flow_id: &str) -> Result<String, String> {
+    let flow_id = flow_id.trim();
+    if flow_id.len() != 48 || !flow_id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err("desktop bridge MCP authorization identifier is invalid".to_string());
+    }
+    Ok(flow_id.to_string())
 }
 
 fn prompt_id_component(prompt_id: &str) -> Result<String, String> {

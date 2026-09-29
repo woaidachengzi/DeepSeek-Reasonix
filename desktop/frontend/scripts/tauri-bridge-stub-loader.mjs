@@ -475,6 +475,29 @@ export function tauriMCPRuntimeAction(sessionId, name, action) {
   return Promise.resolve({ protocolVersion: 1, name, action, toolCount: action === "connect" ? 2 : 0 });
 }
 
+export function clearTauriMCPAuthentication(sessionId, name) {
+  record("clear_mcp_authentication", { request: { sessionId, name } });
+  globalThis.__mcpServers = (globalThis.__mcpServers ?? []).map(entry => entry.name === name
+    ? { ...entry, authenticationSaved: false, envKeys: [], headerKeys: [], runtimeStatus: "" }
+    : entry);
+  return Promise.resolve({ protocolVersion: 1, name, changed: true });
+}
+
+export function startTauriMCPOAuth(sessionId, name) {
+  record("start_mcp_oauth", { request: { sessionId, name } });
+  return Promise.resolve({ protocolVersion: 1, flowId: "a".repeat(48), name, status: "pending" });
+}
+
+export function tauriMCPOAuthStatus(sessionId, flowId) {
+  record("mcp_oauth_status", { request: { sessionId, flowId } });
+  return Promise.resolve({ protocolVersion: 1, flowId, name: "remote", status: "complete" });
+}
+
+export function cancelTauriMCPOAuth(sessionId, flowId) {
+  record("cancel_mcp_oauth", { request: { sessionId, flowId } });
+  return Promise.resolve({ protocolVersion: 1, flowId, status: "canceled" });
+}
+
 export function saveTauriMCPServer(server, workspaceRoot) {
   record("save_mcp_server", { server, workspaceRoot });
   const list = (globalThis.__mcpServers ?? []).filter(entry => entry.name !== server.name);

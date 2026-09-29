@@ -230,6 +230,18 @@ func ClearHTTPMCPOAuth(spec Spec) (bool, error) {
 	return reconcileHTTPMCPOAuth(spec, "")
 }
 
+// HasHTTPMCPOAuthState reports whether a regular Reasonix-owned OAuth state
+// file exists for the server. It intentionally exposes only presence, never
+// token or client-registration fields.
+func HasHTTPMCPOAuthState(spec Spec) bool {
+	path := mcpOAuthStatePath(spec.StateDir)
+	if path == "" {
+		return false
+	}
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular()
+}
+
 // ReconcileHTTPMCPOAuthAfterRemoval removes Reasonix-owned OAuth state after an
 // MCP declaration is removed, unless the remaining effective HTTP declaration
 // uses the same resource. Callers pass an empty remainingResource when no

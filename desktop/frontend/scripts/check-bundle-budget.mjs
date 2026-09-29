@@ -348,7 +348,9 @@ for (const path of localeChunks) {
   // Provider balance-URL editing adds retain/clear guidance; keep one tenth-KiB.
   // Current-session MCP connect/disconnect controls add localized action labels;
   // keep one more tenth-KiB for this bounded settings workflow.
-  const budget = 76.9 * 1024;
+  // MCP browser OAuth and explicit credential clearing add localized security
+  // states and confirmation copy; allow one additional tenth-KiB.
+  const budget = 77.1 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 

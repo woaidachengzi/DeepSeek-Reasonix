@@ -117,6 +117,42 @@ func TestMCPRuntimeStatusAddsOnlyDisplayMetadata(t *testing.T) {
 	}
 }
 
+func TestMCPServerViewExposesOnlyNativeOAuthEligibility(t *testing.T) {
+	eligible := mcpServerViewFor("", appconfig.PluginEntry{
+		Name: "remote", Type: "http", URL: "https://mcp.example.test/mcp",
+	})
+	if !eligible.NativeOAuthEligible {
+		t.Fatalf("secure unauthenticated Streamable HTTP server should allow native OAuth: %+v", eligible)
+	}
+	for _, entry := range []appconfig.PluginEntry{
+		{Name: "sse", Type: "sse", URL: "https://mcp.example.test/sse"},
+		{Name: "keyed", Type: "http", URL: "https://mcp.example.test/mcp", Headers: map[string]string{"Authorization": "Bearer secret"}},
+		{Name: "insecure", Type: "http", URL: "http://mcp.example.test/mcp"},
+	} {
+		if view := mcpServerViewFor("", entry); view.NativeOAuthEligible {
+			t.Fatalf("ineligible server exposed OAuth action: %+v", view)
+		}
+	}
+}
+
+func TestMCPServerViewReportsSavedAuthenticationWithoutReturningSecrets(t *testing.T) {
+	const secret = "renderer-must-never-see-this"
+	view := mcpServerViewFor("", appconfig.PluginEntry{
+		Name: "remote", Type: "http", URL: "https://mcp.example.test/mcp",
+		Headers: map[string]string{"Authorization": "Bearer " + secret},
+	})
+	if !view.AuthenticationSaved {
+		t.Fatal("expected the presence of configured authentication to be reported")
+	}
+	body, err := json.Marshal(view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), secret) {
+		t.Fatalf("MCP server view leaked credentials: %s", body)
+	}
+}
+
 // Credentials are write-only: the listing names the keys a server expects but
 // never returns a value.
 func TestMCPServersNeverReturnCredentialValues(t *testing.T) {

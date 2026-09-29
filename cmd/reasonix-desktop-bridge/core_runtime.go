@@ -3,12 +3,15 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
+	goRuntime "runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -25,7 +28,11 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/fileref"
 	"reasonix/internal/guardian"
+	"reasonix/internal/mcpdiag"
+	"reasonix/internal/mcplaunch"
+	"reasonix/internal/netclient"
 	"reasonix/internal/pathidentity"
+	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
 	"reasonix/internal/sessioncontext"
 	"reasonix/internal/sessionidentity"
@@ -382,7 +389,17 @@ type controllerRuntime struct {
 	deleting         atomic.Bool
 	deleted          atomic.Bool
 	removeArtifacts  func(string) error
+	oauthMu          sync.Mutex
+	oauthFlows       map[string]*mcpOAuthFlow
 }
+
+type mcpOAuthFlow struct {
+	view   desktopbridge.MCPAuthFlow
+	cancel context.CancelFunc
+}
+
+var desktopOpenMCPAuthURL = openMCPAuthURL
+var desktopAuthorizeMCP = plugin.AuthorizeHTTPMCP
 
 func (r *controllerRuntime) SessionPath() string { return r.controller.SessionPath() }
 func (r *controllerRuntime) ModelRef() string    { return r.controller.ModelRef() }
@@ -535,6 +552,206 @@ func (r *controllerRuntime) MCPRuntimeAction(name, action string) (int, error) {
 	default:
 		return 0, desktopbridge.ErrInvalidInput
 	}
+}
+
+func (r *controllerRuntime) ClearMCPAuthentication(name string) (bool, error) {
+	if r == nil || r.controller == nil {
+		return false, errors.New("MCP runtime is unavailable")
+	}
+	if r.State() != "idle" {
+		return false, errors.New("clearing MCP credentials requires an idle session")
+	}
+	name = strings.TrimSpace(name)
+	root := r.controller.WorkspaceRoot()
+	cfg, err := appconfig.LoadForRootReadOnly(root)
+	if err != nil {
+		return false, err
+	}
+	var entry *appconfig.PluginEntry
+	for i := range cfg.Plugins {
+		if cfg.Plugins[i].Name == name {
+			entry = &cfg.Plugins[i]
+			break
+		}
+	}
+	if entry == nil {
+		return false, fmt.Errorf("no configured MCP server named %q", name)
+	}
+	if entry.Source == appconfig.MCPSourcePluginPackage {
+		return false, errors.New("MCP server credentials are managed by an installed plugin package")
+	}
+	specs := boot.PluginSpecsForRootWithOptions([]appconfig.PluginEntry{*entry}, root, boot.PluginSpecOptions{
+		DefaultCallTimeout: 30 * time.Second,
+		ConfigSource:       string(entry.Source), StateHome: appconfig.ReasonixHomeDir(),
+		Network: cfg.Sandbox.Network,
+	})
+	if len(specs) != 1 {
+		return false, errors.New("MCP authentication state could not be located")
+	}
+	oauthChanged, err := plugin.ClearHTTPMCPOAuth(specs[0])
+	if err != nil {
+		return false, err
+	}
+	_, configChanged, _, err := appconfig.ClearPluginAuthenticationInSourceForRoot(root, name)
+	if err != nil {
+		return false, err
+	}
+	r.controller.DisconnectMCPServer(name)
+	if host := r.controller.Host(); host != nil {
+		host.ClearFailure(name)
+	}
+	r.markSnapshotPending()
+	return oauthChanged || configChanged, nil
+}
+
+func (r *controllerRuntime) StartMCPOAuth(name string) (string, error) {
+	if r == nil || r.controller == nil {
+		return "", errors.New("MCP runtime is unavailable")
+	}
+	if r.State() != "idle" {
+		return "", errors.New("MCP authorization requires an idle session")
+	}
+	name = strings.TrimSpace(name)
+	root := r.controller.WorkspaceRoot()
+	cfg, err := appconfig.LoadForRootReadOnly(root)
+	if err != nil {
+		return "", err
+	}
+	var entry *appconfig.PluginEntry
+	for i := range cfg.Plugins {
+		if cfg.Plugins[i].Name == name {
+			entry = &cfg.Plugins[i]
+			break
+		}
+	}
+	if entry == nil || !mcpdiag.CanUseHTTPMCPOAuth(entry.Type, entry.URL, mcpdiag.HasAuthConfig(entry.Headers, entry.Env, entry.URL)) {
+		return "", errors.New("MCP server is not eligible for browser authorization")
+	}
+	flowID, err := newMCPAuthFlowID()
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	flow := &mcpOAuthFlow{view: desktopbridge.MCPAuthFlow{ID: flowID, Name: name, Status: "pending"}, cancel: cancel}
+	r.oauthMu.Lock()
+	if r.oauthFlows == nil {
+		r.oauthFlows = map[string]*mcpOAuthFlow{}
+	}
+	for id, current := range r.oauthFlows {
+		if current.view.Status != "pending" {
+			delete(r.oauthFlows, id)
+		}
+	}
+	if len(r.oauthFlows) >= 4 {
+		r.oauthMu.Unlock()
+		cancel()
+		return "", errors.New("too many MCP authorization flows are active")
+	}
+	r.oauthFlows[flowID] = flow
+	r.oauthMu.Unlock()
+	go func() {
+		err := r.authorizeMCP(ctx, root, *entry)
+		cancel()
+		r.oauthMu.Lock()
+		defer r.oauthMu.Unlock()
+		current := r.oauthFlows[flowID]
+		if current == nil || current.view.Status != "pending" {
+			return
+		}
+		if err == nil {
+			current.view.Status = "complete"
+		} else if errors.Is(ctx.Err(), context.Canceled) {
+			current.view.Status = "canceled"
+		} else {
+			current.view.Status = "failed"
+		}
+	}()
+	return flowID, nil
+}
+
+func (r *controllerRuntime) authorizeMCP(ctx context.Context, root string, entry appconfig.PluginEntry) error {
+	cfg, err := appconfig.LoadForRootReadOnly(root)
+	if err != nil {
+		return err
+	}
+	httpClient, err := netclient.NewHTTPClient(cfg.NetworkProxySpec(), netclient.TransportOptions{})
+	if err != nil {
+		return err
+	}
+	specs := boot.PluginSpecsForRootWithOptions([]appconfig.PluginEntry{entry}, root, boot.PluginSpecOptions{
+		DefaultCallTimeout: time.Duration(cfg.MCPCallTimeoutSeconds()) * time.Second,
+		LaunchManager:      mcplaunch.ForWorkspace(appconfig.ReasonixHomeDir(), root),
+		ConfigSource:       string(entry.Source), StateHome: appconfig.ReasonixHomeDir(),
+		WriterRoots: cfg.WriteRootsForRoot(root), ForbidReadRoots: boot.RuntimeForbidReadRoots(cfg, root),
+		Network: cfg.Sandbox.Network, OAuthHTTPClient: httpClient,
+	})
+	if len(specs) != 1 {
+		return errors.New("MCP authorization settings could not be loaded")
+	}
+	return desktopAuthorizeMCP(ctx, specs[0], desktopOpenMCPAuthURL)
+}
+
+func (r *controllerRuntime) MCPOAuthStatus(flowID string) (desktopbridge.MCPAuthFlow, error) {
+	r.oauthMu.Lock()
+	defer r.oauthMu.Unlock()
+	flow := r.oauthFlows[flowID]
+	if flow == nil {
+		return desktopbridge.MCPAuthFlow{}, desktopbridge.ErrSessionNotFound
+	}
+	return flow.view, nil
+}
+
+func (r *controllerRuntime) CancelMCPOAuth(flowID string) error {
+	r.oauthMu.Lock()
+	defer r.oauthMu.Unlock()
+	flow := r.oauthFlows[flowID]
+	if flow == nil {
+		return desktopbridge.ErrSessionNotFound
+	}
+	if flow.view.Status != "pending" {
+		return errors.New("MCP authorization flow is already finished")
+	}
+	flow.view.Status = "canceled"
+	flow.cancel()
+	return nil
+}
+
+func (r *controllerRuntime) cancelMCPOAuthFlows() {
+	r.oauthMu.Lock()
+	defer r.oauthMu.Unlock()
+	for _, flow := range r.oauthFlows {
+		if flow.view.Status == "pending" {
+			flow.view.Status = "canceled"
+			flow.cancel()
+		}
+	}
+}
+
+func newMCPAuthFlowID() (string, error) {
+	var raw [24]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", raw[:]), nil
+}
+
+func openMCPAuthURL(rawURL string) error {
+	var command string
+	var args []string
+	switch goRuntime.GOOS {
+	case "darwin":
+		command, args = "open", []string{rawURL}
+	case "windows":
+		command, args = "rundll32", []string{"url.dll,FileProtocolHandler", rawURL}
+	default:
+		command, args = "xdg-open", []string{rawURL}
+	}
+	cmd := exec.Command(command, args...)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("unable to open the system browser: %w", err)
+	}
+	_ = cmd.Process.Release()
+	return nil
 }
 
 func truncateMCPStatusText(value string, limit int) string {
@@ -1071,6 +1288,7 @@ func (r *controllerRuntime) ReplayPendingPrompts() {
 }
 
 func (r *controllerRuntime) Shutdown() error {
+	r.cancelMCPOAuthFlows()
 	r.stopTurnSnapshotMonitor()
 	if r.deleting.Load() {
 		// A failed or interrupted sweep has already fenced this identity.

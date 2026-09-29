@@ -207,6 +207,29 @@ type MCPRuntimeActionProvider interface {
 	MCPRuntimeAction(name, action string) (int, error)
 }
 
+// MCPOAuthProvider runs browser-based authorization asynchronously for the
+// exact active session. OAuth tokens remain in the core's private state store.
+type MCPOAuthProvider interface {
+	StartMCPOAuth(name string) (string, error)
+	MCPOAuthStatus(flowID string) (MCPAuthFlow, error)
+	CancelMCPOAuth(flowID string) error
+}
+
+// MCPCredentialProvider clears only the selected server's Reasonix OAuth state
+// and configured static credentials, then removes that server from the active
+// session's Host.
+type MCPCredentialProvider interface {
+	ClearMCPAuthentication(name string) (bool, error)
+}
+
+// MCPAuthFlow is the renderer-safe projection of a browser authorization flow.
+// It never contains authorization URLs, tokens, or provider error text.
+type MCPAuthFlow struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
+}
+
 // SessionMetrics contains only current-session status values backed by the
 // active controller. Zero contextWindowTokens means no reliable gauge yet.
 type SessionMetrics struct {
@@ -651,6 +674,77 @@ func (m *RuntimeManager) MCPRuntimeAction(sessionID, name, action string) (int, 
 		return actionErr
 	})
 	return count, err
+}
+
+// StartMCPOAuth begins authorization for an idle exact session. The provider
+// returns immediately; the browser flow runs in its own bounded context.
+func (m *RuntimeManager) StartMCPOAuth(sessionID, name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || len(name) > 128 || strings.ContainsAny(name, "\r\n\x00") {
+		return "", ErrInvalidInput
+	}
+	var flowID string
+	_, err := m.withRuntimeError(sessionID, func(runtime Runtime) error {
+		if runtime.State() != "idle" {
+			return fmt.Errorf("%w: MCP authorization requires an idle session", ErrSessionConflict)
+		}
+		provider, ok := runtime.(MCPOAuthProvider)
+		if !ok {
+			return fmt.Errorf("%w: MCP authorization is unavailable", ErrSessionConflict)
+		}
+		var startErr error
+		flowID, startErr = provider.StartMCPOAuth(name)
+		return startErr
+	})
+	return flowID, err
+}
+
+// MCPOAuthStatus and CancelMCPOAuth bind polling and cancellation to the same
+// active session identity used to start the flow.
+func (m *RuntimeManager) MCPOAuthStatus(sessionID, flowID string) (MCPAuthFlow, error) {
+	var result MCPAuthFlow
+	_, err := m.withRuntimeError(sessionID, func(runtime Runtime) error {
+		provider, ok := runtime.(MCPOAuthProvider)
+		if !ok {
+			return fmt.Errorf("%w: MCP authorization is unavailable", ErrSessionConflict)
+		}
+		var statusErr error
+		result, statusErr = provider.MCPOAuthStatus(flowID)
+		return statusErr
+	})
+	return result, err
+}
+
+func (m *RuntimeManager) CancelMCPOAuth(sessionID, flowID string) error {
+	_, err := m.withRuntimeError(sessionID, func(runtime Runtime) error {
+		provider, ok := runtime.(MCPOAuthProvider)
+		if !ok {
+			return fmt.Errorf("%w: MCP authorization is unavailable", ErrSessionConflict)
+		}
+		return provider.CancelMCPOAuth(flowID)
+	})
+	return err
+}
+
+func (m *RuntimeManager) ClearMCPAuthentication(sessionID, name string) (bool, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || len(name) > 128 || strings.ContainsAny(name, "\r\n\x00") {
+		return false, ErrInvalidInput
+	}
+	var changed bool
+	_, err := m.withRuntimeError(sessionID, func(runtime Runtime) error {
+		if runtime.State() != "idle" {
+			return fmt.Errorf("%w: clearing MCP credentials requires an idle session", ErrSessionConflict)
+		}
+		provider, ok := runtime.(MCPCredentialProvider)
+		if !ok {
+			return fmt.Errorf("%w: MCP credential management is unavailable", ErrSessionConflict)
+		}
+		var clearErr error
+		changed, clearErr = provider.ClearMCPAuthentication(name)
+		return clearErr
+	})
+	return changed, err
 }
 
 // History returns the newest bounded page of the bridge-owned transcript. The

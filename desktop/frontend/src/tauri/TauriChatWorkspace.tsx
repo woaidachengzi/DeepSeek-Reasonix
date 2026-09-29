@@ -1,5 +1,5 @@
 import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Copy, Eye, FileText, FolderOpen, FolderTree, GitBranch, MessageSquare, Paperclip, Pencil, Plus, Search, Settings, Sparkles, Square, Trash2, X } from "lucide-react";
+import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Copy, Eye, FileText, FolderOpen, FolderTree, GitBranch, MessageSquare, Paperclip, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Settings, Sparkles, Square, Trash2, X } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
@@ -8,17 +8,18 @@ import { QuestionJumpBar } from "../components/QuestionJumpBar";
 import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
 import { compactQuestionText, type QuestionAnchor } from "../lib/transcriptGrouping";
 import { LocaleProvider, useI18n, useT } from "../lib/i18n";
+import { applyTextSize, getTextSize, nextTextSize, DEFAULT_TEXT_SIZE } from "../lib/textSize";
 import { playSuccessChime, playAttentionChime, shouldPlayAttentionChimeForEvent } from "../lib/sound";
 import { generativeMusic, isGenerativeMusicEnabled } from "../lib/generative-music";
 import logoWordmark from "../assets/logo-wordmark.svg";
 import { TauriSettings, type TauriSettingsTab } from "./TauriSettings";
 import { detectShortcutPlatform, formatShortcutCombo } from "../lib/keyboardShortcuts";
-import { defaultTauriShortcut, matchesTauriShortcut, TAURI_SHORTCUT_TABS, useTauriShortcuts, type TauriShortcutAction } from "./tauriKeyboardShortcuts";
+import { defaultTauriShortcut, matchesTauriShortcut, TAURI_SHORTCUT_ACTIONS, TAURI_SHORTCUT_TABS, useTauriShortcuts, type TauriShortcutAction } from "./tauriKeyboardShortcuts";
 import { TauriStatusBar } from "./TauriStatusBar";
 import { useTauriDesktopLayout } from "./tauriDesktopLayout";
 import { getTauriDefaultWorkspace, setTauriDefaultWorkspace } from "./tauriDefaultWorkspace";
 import { observeTauriUsage, type TauriObservedUsage } from "./tauriObservedUsage";
-import { getTauriNotificationsEnabled, getTauriProgressMode, TAURI_PROGRESS_MODE_CHANGED } from "./tauriPreferences";
+import { getTauriNotificationsEnabled, getTauriProgressMode, getTauriSidebarVisible, setTauriSidebarVisible, TAURI_PROGRESS_MODE_CHANGED } from "./tauriPreferences";
 import { handleTauriDragDropEvent, retainTauriDragDropListener } from "./dragDrop";
 import { formatTauriWorkDuration, groupTauriHistory, type IndexedHistoryMessage } from "./historyPresentation";
 import { applyTerminalThemePreference, onTerminalThemePreferenceChange } from "../lib/terminalTheme";
@@ -443,6 +444,7 @@ export function TauriSessionPreview() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<TauriSettingsTab>("general");
   const [progressMode, setProgressMode] = useState(getTauriProgressMode);
+  const [sidebarVisible, setSidebarVisible] = useState(getTauriSidebarVisible);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspacePath, setWorkspacePath] = useState("");
   const [workspaceEntries, setWorkspaceEntries] = useState<TauriWorkspaceEntry[]>([]);
@@ -638,6 +640,14 @@ export function TauriSessionPreview() {
         event.preventDefault();
         setDiagnosticsOpen(true);
       }
+      else if (matchesTauriShortcut(event, "toggle_sidebar", shortcutPlatform)) {
+        event.preventDefault();
+        setSidebarVisible(previous => {
+          const next = !previous;
+          setTauriSidebarVisible(next);
+          return next;
+        });
+      }
       else if (matchesTauriShortcut(event, "workspace_files", shortcutPlatform) && session) {
         event.preventDefault();
         toggleWorkspace();
@@ -666,7 +676,30 @@ export function TauriSessionPreview() {
         setSettingsTab("stats");
         setSettingsOpen(true);
       }
+      else if (matchesTauriShortcut(event, "text_size_increase", shortcutPlatform)) {
+        event.preventDefault();
+        applyTextSize(nextTextSize(getTextSize(), 1));
+      }
+      else if (matchesTauriShortcut(event, "text_size_decrease", shortcutPlatform)) {
+        event.preventDefault();
+        applyTextSize(nextTextSize(getTextSize(), -1));
+      }
+      else if (matchesTauriShortcut(event, "text_size_reset", shortcutPlatform)) {
+        event.preventDefault();
+        applyTextSize(DEFAULT_TEXT_SIZE);
+      }
       else {
+        const sessionShortcut = TAURI_SHORTCUT_ACTIONS.find(action => action.startsWith("goto_session_")
+          && matchesTauriShortcut(event, action, shortcutPlatform));
+        if (sessionShortcut) {
+          event.preventDefault();
+          if (!settingsOpen && !diagnosticsOpen && !workspaceOpen && !busy && !switchingBlocked) {
+            const position = Number(sessionShortcut.slice("goto_session_".length)) - 1;
+            const target = visibleTabs.filter(tab => !isMissingWorkbenchSession(tab))[position];
+            if (target && target.sessionId !== session?.id) void activateSession(target.sessionId, target.workspaceRoot);
+          }
+          return;
+        }
         const settingsTarget = Object.entries(TAURI_SHORTCUT_TABS).find(([action]) =>
           matchesTauriShortcut(event, action as TauriShortcutAction, shortcutPlatform),
         );
@@ -679,7 +712,7 @@ export function TauriSessionPreview() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [busy, switchingBlocked, session, settingsOpen, diagnosticsOpen, workspaceOpen]);
+  }, [busy, switchingBlocked, session, settingsOpen, diagnosticsOpen, workspaceOpen, visibleTabs]);
 
   useEffect(() => {
     void tauriBridgeStatus().then(setStatus).catch(error => setError(tauriMessageFrom(error)));
@@ -908,7 +941,9 @@ export function TauriSessionPreview() {
           lastSequence = event.sequence;
           setSequence(previous => Math.max(previous, event.sequence));
           setEvents(previous => [event, ...previous].slice(0, 100));
-          if (event.eventKind === "usage" || event.eventKind === "turn_started") setObservedUsage(previous => observeTauriUsage(previous, event));
+          if (event.eventKind === "usage" || event.eventKind === "turn_started" || event.eventKind === "stream_attempt" || event.eventKind === "turn_done") {
+            setObservedUsage(previous => observeTauriUsage(previous, event));
+          }
           if (event.eventKind === "turn_started") {
             turnEpochRef.current += 1;
             if (isGenerativeMusicEnabled()) generativeMusic.start();
@@ -2240,7 +2275,7 @@ export function TauriSessionPreview() {
   const activeProjectKey = workbenchProjectKey(currentWorkspace, platform);
 
   return (
-    <main className="tauri-shell" data-platform={platform} data-desktop-layout={desktopLayout}>
+    <main className="tauri-shell" data-platform={platform} data-desktop-layout={desktopLayout} data-sidebar-hidden={sidebarVisible ? undefined : "true"}>
       <aside className="tauri-sidebar" aria-label="会话导航">
         <div className="tauri-sidebar__drag" data-tauri-drag-region aria-hidden="true" />
         <div className="tauri-sidebar__brand"><img src={logoWordmark} alt="Reasonix" draggable={false} /><span>PREVIEW</span></div>
@@ -2375,6 +2410,9 @@ export function TauriSessionPreview() {
             <span data-tauri-drag-region>{session?.state === "running" ? "正在生成" : session?.state === "paused" ? "等待你的操作" : session ? "本地会话" : "Reasonix Preview"}</span>
           </div>
           <div className="tauri-topbar__actions">
+            <button type="button" className="tauri-icon-button tauri-sidebar-toggle" aria-label={t(sidebarVisible ? "settings.tauriShortcut.hideSidebar" : "settings.tauriShortcut.showSidebar")} title={`${t(sidebarVisible ? "settings.tauriShortcut.hideSidebar" : "settings.tauriShortcut.showSidebar")} (${formatShortcutCombo(shortcutOverrides.toggle_sidebar ?? defaultTauriShortcut("toggle_sidebar", shortcutPlatform), shortcutPlatform)})`} aria-pressed={!sidebarVisible} onClick={() => setSidebarVisible(previous => { const next = !previous; setTauriSidebarVisible(next); return next; })}>
+              {sidebarVisible ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}
+            </button>
             <button type="button" className="tauri-workspace-button" onClick={() => { void chooseDefaultWorkspace().catch(() => {}); }} disabled={busy || session?.state === "running"} title={defaultWorkspace ? `新对话默认工作区：${defaultWorkspace}` : "选择工作区（用于新对话）"}>
               <FolderOpen size={15} /><span>{currentWorkspace || "选择工作区"}</span><ChevronDown size={13} />
             </button>

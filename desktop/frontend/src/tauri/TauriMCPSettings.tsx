@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { deleteTauriMCPServer, resolveTauriMCPMarketplace, saveTauriMCPServer, searchTauriMCPMarketplace, setTauriMCPServerEnabled, tauriMCPRuntimeAction, tauriMCPServers, tauriMessageFrom, type TauriMCPMarketplace, type TauriMCPMarketplaceEntry, type TauriMCPServer } from "../lib/tauriBridge";
+import { cancelTauriMCPOAuth, clearTauriMCPAuthentication, deleteTauriMCPServer, resolveTauriMCPMarketplace, saveTauriMCPServer, searchTauriMCPMarketplace, setTauriMCPServerEnabled, startTauriMCPOAuth, tauriMCPOAuthStatus, tauriMCPRuntimeAction, tauriMCPServers, tauriMessageFrom, type TauriMCPOAuthFlow, type TauriMCPMarketplace, type TauriMCPMarketplaceEntry, type TauriMCPServer } from "../lib/tauriBridge";
 import { useT } from "../lib/i18n";
 import { emptyMCPDraft, mcpDraftForEditing, mcpDraftFromMarketplace, mcpDraftToInput, mcpTransportSummary, type MCPDraft } from "./tauriMCPServers";
 
@@ -47,6 +47,7 @@ export function TauriMCPSettings({ workspaceRoot, sessionId, currentSessionState
   const [pendingApply, setPendingApply] = useState(false);
   const [status, setStatus] = useState("");
   const [runtimeActionName, setRuntimeActionName] = useState("");
+  const [authFlow, setAuthFlow] = useState<TauriMCPOAuthFlow | null>(null);
   const [marketplaceOpen, setMarketplaceOpen] = useState(false);
   const [marketplaceQuery, setMarketplaceQuery] = useState("");
   const [marketplace, setMarketplace] = useState<TauriMCPMarketplace | null>(null);
@@ -82,6 +83,32 @@ export function TauriMCPSettings({ workspaceRoot, sessionId, currentSessionState
     void refresh();
     return () => { generation.current += 1; };
   }, [refresh]);
+
+  useEffect(() => {
+    if (!authFlow || !sessionId) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      try {
+        const result = await tauriMCPOAuthStatus(sessionId, authFlow.flowId);
+        if (!active) return;
+        if (result.status === "pending") {
+          timer = setTimeout(() => void poll(), 1200);
+          return;
+        }
+        setAuthFlow(null);
+        if (result.status === "complete") {
+          setStatus(t("settings.mcp.authorizationComplete"));
+          setServers(await tauriMCPServers(workspaceRoot));
+        } else if (result.status === "failed") setNotice(t("settings.mcp.authorizationFailed"));
+        else setStatus(t("settings.mcp.authorizationCanceled"));
+      } catch {
+        if (active) setAuthFlow(null);
+      }
+    };
+    timer = setTimeout(() => void poll(), 1200);
+    return () => { active = false; if (timer) clearTimeout(timer); };
+  }, [authFlow, sessionId, workspaceRoot, t]);
 
   const save = async () => {
     if (!draft || mutationBusy.current) return;
@@ -230,6 +257,57 @@ export function TauriMCPSettings({ workspaceRoot, sessionId, currentSessionState
     }
   };
 
+  const authorizeServer = async (server: TauriMCPServer) => {
+    if (!sessionId || !server.nativeOAuthEligible || mutationBusy.current || currentSessionState !== "idle" || currentSessionHasAttachments) return;
+    mutationBusy.current = true;
+    setBusy(true);
+    setNotice("");
+    setStatus("");
+    try {
+      setAuthFlow(await startTauriMCPOAuth(sessionId, server.name));
+    } catch {
+      setNotice(t("settings.mcp.authorizationFailed"));
+    } finally {
+      mutationBusy.current = false;
+      setBusy(false);
+    }
+  };
+
+  const cancelAuthorization = async () => {
+    if (!sessionId || !authFlow || mutationBusy.current) return;
+    mutationBusy.current = true;
+    setBusy(true);
+    try {
+      await cancelTauriMCPOAuth(sessionId, authFlow.flowId);
+      setAuthFlow(null);
+      setStatus(t("settings.mcp.authorizationCanceled"));
+    } catch {
+      setNotice(t("settings.mcp.authorizationFailed"));
+    } finally {
+      mutationBusy.current = false;
+      setBusy(false);
+    }
+  };
+
+  const clearAuthentication = async (server: TauriMCPServer) => {
+    if (!sessionId || !server.authenticationSaved || mutationBusy.current || authFlow || currentSessionState !== "idle" || currentSessionHasAttachments) return;
+    if (!window.confirm(t("settings.mcp.clearAuthConfirm", { name: server.name }))) return;
+    mutationBusy.current = true;
+    setBusy(true);
+    setNotice("");
+    try {
+      await clearTauriMCPAuthentication(sessionId, server.name);
+      setServers(await tauriMCPServers(workspaceRoot));
+      setPendingApply(false);
+      setStatus(t("settings.mcp.clearAuthDone"));
+    } catch (cause) {
+      setNotice(localizedMCPError(cause, t));
+    } finally {
+      mutationBusy.current = false;
+      setBusy(false);
+    }
+  };
+
   const applyCurrent = async () => {
     if (mutationBusy.current || currentSessionState !== "idle" || currentSessionHasAttachments || !onApplyToCurrentSession) return;
     mutationBusy.current = true;
@@ -255,6 +333,7 @@ export function TauriMCPSettings({ workspaceRoot, sessionId, currentSessionState
     </div>
     {notice && <p className="tauri-diagnostic-error" role="alert">{notice}</p>}
     {status && <p className="tauri-settings-hint" role="status">{status}</p>}
+    {authFlow?.status === "pending" && <p className="tauri-settings-hint" role="status">{t("settings.mcp.authorizing")} <button type="button" className="tauri-settings-button" onClick={() => void cancelAuthorization()} disabled={busy}>{t("settings.mcp.cancelAuthorization")}</button></p>}
     {marketplaceOpen ? <div className="tauri-mcp-marketplace">
       <h4>{t("settings.mcp.registryTitle")}</h4><p>{t("settings.mcp.registryDescription")}</p>
       <form className="tauri-mcp-marketplace__search" onSubmit={event => { event.preventDefault(); void browseMarketplace(marketplaceQuery); }}><input type="search" aria-label={t("settings.mcp.searchRegistryLabel")} placeholder={t("settings.mcp.searchRegistryPlaceholder")} value={marketplaceQuery} onChange={event => setMarketplaceQuery(event.target.value)} /><button type="submit" disabled={busy}>{t("settings.mcp.search")}</button></form>
@@ -267,7 +346,7 @@ export function TauriMCPSettings({ workspaceRoot, sessionId, currentSessionState
       {server.runtimeStatus === "connected" && (server.toolList?.length ?? 0) > 0 && <details className="tauri-mcp-list__tools"><summary>{t("settings.mcp.viewTools")}</summary><ul>{server.toolList?.map(tool => <li key={tool.name}><strong>{tool.name}</strong>{tool.description && <span>{tool.description}</span>}</li>)}</ul></details>}
       {credentialHint(server, t) && <small>{credentialHint(server, t)}</small>}
       {server.managedByPackage && <small>{t("settings.mcp.managedByPlugin")}</small>}
-      <div className="tauri-mcp-list__actions"><button type="button" className="tauri-mcp-list__toggle" role="switch" aria-checked={server.enabled} aria-label={`${server.name} ${server.enabled ? t("caps.pluginEnabled") : t("caps.pluginDisabled")}`} onClick={() => void toggle(server)} disabled={busy}>{server.enabled ? t("caps.pluginEnabled") : t("caps.pluginDisabled")}</button>{sessionId && server.enabled && <><button type="button" onClick={() => void changeRuntimeConnection(server, "connect")} disabled={busy || currentSessionState !== "idle" || currentSessionHasAttachments}>{runtimeActionName === server.name ? t("settings.mcp.runtimeChanging") : server.runtimeStatus === "connected" ? t("settings.mcp.reconnectCurrent") : t("settings.mcp.connectCurrent")}</button>{server.runtimeStatus === "connected" && <button type="button" onClick={() => void changeRuntimeConnection(server, "disconnect")} disabled={busy || currentSessionState !== "idle" || currentSessionHasAttachments}>{t("settings.mcp.disconnectCurrent")}</button>}</>}<button type="button" onClick={() => setDraft(mcpDraftForEditing(server))} disabled={busy || server.managedByPackage}>{t("common.edit")}</button><button type="button" onClick={() => void remove(server)} disabled={busy || server.managedByPackage}>{t("common.delete")}</button></div>
+      <div className="tauri-mcp-list__actions"><button type="button" className="tauri-mcp-list__toggle" role="switch" aria-checked={server.enabled} aria-label={`${server.name} ${server.enabled ? t("caps.pluginEnabled") : t("caps.pluginDisabled")}`} onClick={() => void toggle(server)} disabled={busy}>{server.enabled ? t("caps.pluginEnabled") : t("caps.pluginDisabled")}</button>{sessionId && server.enabled && <>{server.nativeOAuthEligible && <button type="button" onClick={() => void authorizeServer(server)} disabled={busy || Boolean(authFlow) || currentSessionState !== "idle" || currentSessionHasAttachments}>{t("settings.mcp.authorize")}</button>}<button type="button" onClick={() => void changeRuntimeConnection(server, "connect")} disabled={busy || currentSessionState !== "idle" || currentSessionHasAttachments}>{runtimeActionName === server.name ? t("settings.mcp.runtimeChanging") : server.runtimeStatus === "connected" ? t("settings.mcp.reconnectCurrent") : t("settings.mcp.connectCurrent")}</button>{server.runtimeStatus === "connected" && <button type="button" onClick={() => void changeRuntimeConnection(server, "disconnect")} disabled={busy || currentSessionState !== "idle" || currentSessionHasAttachments}>{t("settings.mcp.disconnectCurrent")}</button>}</>}{sessionId && server.authenticationSaved && !server.managedByPackage && <button type="button" onClick={() => void clearAuthentication(server)} disabled={busy || Boolean(authFlow) || currentSessionState !== "idle" || currentSessionHasAttachments}>{t("settings.mcp.clearAuth")}</button>}<button type="button" onClick={() => setDraft(mcpDraftForEditing(server))} disabled={busy || server.managedByPackage}>{t("common.edit")}</button><button type="button" onClick={() => void remove(server)} disabled={busy || server.managedByPackage}>{t("common.delete")}</button></div>
     </li>)}</ul>}
     {draft && <form className="tauri-mcp-form" onSubmit={event => { event.preventDefault(); void save(); }}>
       <label>{t("settings.mcp.nameLabel")}<input value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} disabled={draft.editing || busy} aria-label={t("settings.mcp.nameLabel")} /></label>

@@ -1,5 +1,6 @@
 const NOTIFICATIONS_KEY = "tauri-desktop-notifications";
 const PROGRESS_MODE_KEY = "tauri-progress-mode";
+const SIDEBAR_VISIBLE_KEY = "tauri-sidebar-visible";
 export const TAURI_PROGRESS_MODE_CHANGED = "tauri-progress-mode-changed";
 export type TauriProgressMode = "standard" | "deep";
 let sessionValue: boolean | null = null;
@@ -22,6 +23,22 @@ export function setTauriProgressMode(mode: TauriProgressMode): void {
     // The live preference still applies when WebView storage is unavailable.
   }
   if (typeof window !== "undefined") window.dispatchEvent(new Event(TAURI_PROGRESS_MODE_CHANGED));
+}
+
+export function getTauriSidebarVisible(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_VISIBLE_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export function setTauriSidebarVisible(visible: boolean): void {
+  try {
+    localStorage.setItem(SIDEBAR_VISIBLE_KEY, visible ? "on" : "off");
+  } catch {
+    // The current-window toggle still applies if WebView storage is unavailable.
+  }
 }
 
 export function getTauriNotificationsEnabled(): boolean {

@@ -73,7 +73,11 @@ export type TauriSettingsTab = "general" | "appearance" | "model" | "providers" 
 const TauriUsageStatsPanel = lazy(() => import("../components/UsageStatsPanel").then(module => ({ default: module.UsageStatsPanel })));
 
 const SETTINGS_GROUPS = (t: Translator) => [
-  { label: t("settings.navGroup.preferences"), items: [{ id: "general", label: t("settings.tab.general"), description: t("settings.tabSub.general"), icon: SlidersHorizontal }] },
+  { label: t("settings.navGroup.preferences"), items: [{ id: "general", label: t("settings.tab.general"), description: t("settings.tabSub.general"), searchTerms: [
+    "settings.desktopLayoutStyle", "settings.language", "settings.currency", "settings.sessionExperience",
+    "settings.closeBehavior", "settings.defaultToolApprovalMode", "settings.general.notifications",
+    "settings.sound", "settings.statusBarStyle", "settings.statusBarItems",
+  ].map(key => t(key as DictKey)).join(" "), icon: SlidersHorizontal }] },
   { label: t("settings.tab.models"), items: [
     { id: "model", label: t("settings.models.preferences"), description: t("settings.tabSub.models"), icon: Globe },
     { id: "providers", label: t("settings.models.services"), description: t("settings.tabSub.providers"), icon: Cable },
@@ -141,7 +145,8 @@ const TEXT_SIZE_LABEL_KEYS: Record<TextSize, DictKey> = {
 const TAURI_STATUS_BAR_LABEL_KEYS: Record<TauriStatusBarItemId, DictKey> = {
   workspace: "settings.statusBarItem.workspace", model: "settings.statusBarItem.model", balance: "settings.statusBarItem.balance", session: "settings.statusBarItem.session",
   observed_tokens: "settings.statusBarItem.observedTokens", turn_tokens: "settings.statusBarItem.turnTokens", turn_output_tokens: "settings.statusBarItem.turnOutputTokens", turn_cache_tokens: "settings.statusBarItem.turnCacheTokens", turn_cost: "settings.statusBarItem.turnCost", session_turns: "settings.statusBarItem.sessionTurns", context: "settings.statusBarItem.context",
-  session_cost: "settings.statusBarItem.sessionCost", compact: "settings.statusBarItem.compact", cache_hit: "settings.statusBarItem.cacheHit", bridge: "settings.statusBarItem.bridge",
+  turn_tps: "status.tpsLabel",
+  session_cost: "settings.statusBarItem.sessionCost", compact: "settings.statusBarItem.compact", cache: "status.cacheLabel", cache_avg: "status.cacheAvgLabel", bridge: "settings.statusBarItem.bridge",
 };
 
 const TAURI_COMPACT_RATIO_PRESETS = [
@@ -155,6 +160,7 @@ const TAURI_SHORTCUT_LABELS: Record<TauriShortcutAction, { label: DictKey; descr
   close_panel: { label: "shortcuts.action.closeTab", description: "shortcuts.desc.closeTab" },
   settings: { label: "shortcuts.action.settings", description: "shortcuts.desc.settings" },
   diagnostics: { label: "settings.tab.diagnostics", description: "settings.tabSub.diagnostics" },
+  toggle_sidebar: { label: "settings.tauriShortcut.toggleSidebar", description: "settings.tauriShortcut.toggleSidebarHint" },
   workspace_files: { label: "workspace.filesTab" },
   refresh_session: { label: "settings.tauriShortcut.refreshSession", description: "settings.tauriShortcut.refreshSessionHint" },
   send_message: { label: "shortcuts.action.composerSend", description: "shortcuts.desc.composerSend" },
@@ -178,6 +184,18 @@ const TAURI_SHORTCUT_LABELS: Record<TauriShortcutAction, { label: DictKey; descr
   open_shortcuts: { label: "settings.tab.shortcuts", description: "settings.tabSub.shortcuts" },
   open_updates: { label: "settings.tab.updates", description: "settings.tabSub.updates" },
   open_about: { label: "settings.about.navLabel", description: "settings.about.hint" },
+  goto_session_1: { label: "shortcuts.action.topicGoto1", description: "shortcuts.desc.topicGoto" },
+  goto_session_2: { label: "shortcuts.action.topicGoto2", description: "shortcuts.desc.topicGoto" },
+  goto_session_3: { label: "shortcuts.action.topicGoto3", description: "shortcuts.desc.topicGoto" },
+  goto_session_4: { label: "shortcuts.action.topicGoto4", description: "shortcuts.desc.topicGoto" },
+  goto_session_5: { label: "shortcuts.action.topicGoto5", description: "shortcuts.desc.topicGoto" },
+  goto_session_6: { label: "shortcuts.action.topicGoto6", description: "shortcuts.desc.topicGoto" },
+  goto_session_7: { label: "shortcuts.action.topicGoto7", description: "shortcuts.desc.topicGoto" },
+  goto_session_8: { label: "shortcuts.action.topicGoto8", description: "shortcuts.desc.topicGoto" },
+  goto_session_9: { label: "shortcuts.action.topicGoto9", description: "shortcuts.desc.topicGoto" },
+  text_size_increase: { label: "shortcuts.action.textSizeIncrease", description: "shortcuts.desc.textSizeIncrease" },
+  text_size_decrease: { label: "shortcuts.action.textSizeDecrease", description: "shortcuts.desc.textSizeDecrease" },
+  text_size_reset: { label: "shortcuts.action.textSizeReset", description: "shortcuts.desc.textSizeReset" },
 };
 
 const FONT_LABEL_KEYS: Record<FontFamily, DictKey> = {
@@ -571,7 +589,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
   const settingTitles = SETTINGS_TITLES(t);
   const visibleGroups = settingGroups.map(group => ({
     ...group,
-    items: group.items.filter(item => !query || `${group.label} ${item.label} ${item.description}`.toLocaleLowerCase().includes(query)),
+    items: group.items.filter(item => !query || `${group.label} ${item.label} ${item.description} ${"searchTerms" in item ? item.searchTerms : ""}`.toLocaleLowerCase().includes(query)),
   })).filter(group => group.items.length > 0);
 
   return (

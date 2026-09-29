@@ -26,6 +26,39 @@ type fakeMCPRuntime struct {
 	actions []string
 }
 
+type fakeMCPOAuthRuntime struct {
+	*fakeRuntime
+	flow MCPAuthFlow
+}
+
+type fakeMCPCredentialRuntime struct {
+	*fakeRuntime
+	cleared []string
+}
+
+func (r *fakeMCPCredentialRuntime) ClearMCPAuthentication(name string) (bool, error) {
+	r.cleared = append(r.cleared, name)
+	return true, nil
+}
+
+func (r *fakeMCPOAuthRuntime) StartMCPOAuth(name string) (string, error) {
+	r.flow = MCPAuthFlow{ID: "0123456789abcdef", Name: name, Status: "pending"}
+	return r.flow.ID, nil
+}
+func (r *fakeMCPOAuthRuntime) MCPOAuthStatus(id string) (MCPAuthFlow, error) {
+	if id != r.flow.ID {
+		return MCPAuthFlow{}, ErrSessionNotFound
+	}
+	return r.flow, nil
+}
+func (r *fakeMCPOAuthRuntime) CancelMCPOAuth(id string) error {
+	if id != r.flow.ID {
+		return ErrSessionNotFound
+	}
+	r.flow.Status = "canceled"
+	return nil
+}
+
 func (r *fakeMCPRuntime) MCPRuntimeAction(name, action string) (int, error) {
 	r.actions = append(r.actions, action+":"+name)
 	return 3, nil
@@ -106,6 +139,57 @@ func TestMCPRuntimeActionRequiresMatchingIdleSession(t *testing.T) {
 	}
 	if got := strings.Join(runtime.actions, ","); got != "connect:github" {
 		t.Fatalf("runtime actions = %q, want only the accepted action", got)
+	}
+}
+
+func TestMCPOAuthFlowIsBoundToTheMatchingIdleSession(t *testing.T) {
+	runtime := &fakeMCPOAuthRuntime{fakeRuntime: &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}}
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(context.Context, OpenRequest) (Runtime, error) { return runtime, nil }))
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a", WorkspaceRoot: "/work/a"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.StartMCPOAuth("other", "github"); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("wrong session start error = %v, want not found", err)
+	}
+	runtime.state = "running"
+	if _, err := manager.StartMCPOAuth("a", "github"); !errors.Is(err, ErrSessionConflict) {
+		t.Fatalf("running session start error = %v, want conflict", err)
+	}
+	runtime.state = "idle"
+	flowID, err := manager.StartMCPOAuth("a", "github")
+	if err != nil || flowID != runtime.flow.ID {
+		t.Fatalf("matching session start = %q, error %v", flowID, err)
+	}
+	if _, err := manager.MCPOAuthStatus("other", flowID); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("wrong session poll error = %v, want not found", err)
+	}
+	if err := manager.CancelMCPOAuth("a", flowID); err != nil {
+		t.Fatal(err)
+	}
+	if flow, err := manager.MCPOAuthStatus("a", flowID); err != nil || flow.Status != "canceled" {
+		t.Fatalf("matching session status = %+v, error %v", flow, err)
+	}
+}
+
+func TestClearMCPAuthenticationRequiresMatchingIdleSession(t *testing.T) {
+	runtime := &fakeMCPCredentialRuntime{fakeRuntime: &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}}
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(context.Context, OpenRequest) (Runtime, error) { return runtime, nil }))
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a", WorkspaceRoot: "/work/a"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.ClearMCPAuthentication("other", "github"); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("wrong session clear error = %v, want not found", err)
+	}
+	runtime.state = "running"
+	if _, err := manager.ClearMCPAuthentication("a", "github"); !errors.Is(err, ErrSessionConflict) {
+		t.Fatalf("running session clear error = %v, want conflict", err)
+	}
+	runtime.state = "idle"
+	if changed, err := manager.ClearMCPAuthentication("a", "github"); err != nil || !changed {
+		t.Fatalf("matching session clear = changed %t, error %v", changed, err)
+	}
+	if got := strings.Join(runtime.cleared, ","); got != "github" {
+		t.Fatalf("clear calls = %q, want only the accepted action", got)
 	}
 }
 

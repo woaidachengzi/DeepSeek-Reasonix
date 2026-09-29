@@ -8,6 +8,7 @@ const testDir = dirname(fileURLToPath(import.meta.url));
 const styles = readFileSync(resolve(testDir, "../styles.css"), "utf8");
 const managementStyles = readFileSync(resolve(testDir, "../components/ManagementPageShell.css"), "utf8");
 const panelStyles = readFileSync(resolve(testDir, "../components/SettingsPanel.css"), "utf8");
+const tauriStyles = readFileSync(resolve(testDir, "../tauri/tauriChatWorkspace.css"), "utf8");
 
 let passed = 0;
 let failed = 0;
@@ -53,6 +54,17 @@ eq(declaration(settingsCenter, "grid-template-columns"), "clamp(220px, 20.5vw, 3
 
 const generalPage = ruleBlock(panelStyles, ".settings-page--general");
 eq(declaration(generalPage, "container"), "settings-general / inline-size", "general settings respond to their available content width");
+
+const tauriGeneralFallbackStart = tauriStyles.indexOf("@media (max-width: 980px)");
+const tauriGeneralFallbackEnd = tauriStyles.indexOf("@media (max-width: 760px)", tauriGeneralFallbackStart);
+const tauriGeneralFallback = tauriStyles.slice(tauriGeneralFallbackStart, tauriGeneralFallbackEnd);
+const tauriCompactGeneralField = ruleBlock(tauriGeneralFallback, ".tauri-settings-general .tauri-settings-field");
+eq(declaration(tauriCompactGeneralField, "flex-direction"), "column", "Preview general settings follow Stable's compact 980px field layout");
+eq(
+  tauriGeneralFallback.includes(".tauri-settings-general .tauri-settings-general-options.settings-options--field") && tauriGeneralFallback.includes("width: min(520px, 100%)"),
+  true,
+  "Preview general choices shrink to the content pane on compact windows",
+);
 
 const generalContainerStart = panelStyles.indexOf("@container settings-general (max-width: 620px)");
 const generalFallbackStart = panelStyles.indexOf("@media (max-width: 980px)", generalContainerStart);

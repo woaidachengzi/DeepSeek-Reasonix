@@ -256,7 +256,7 @@ async function main() {
 
   (globalThis as unknown as { __mcpServers: Array<Record<string, unknown>> }).__mcpServers = [{
     name: "remote", enabled: true, type: "http", source: "user_config", scope: "global",
-    configPath: "/tmp/config.toml", url: "https://mcp.example.test/mcp", runtimeStatus: "failed", errorKind: "connection",
+    configPath: "/tmp/config.toml", url: "https://mcp.example.test/mcp", runtimeStatus: "failed", errorKind: "connection", nativeOAuthEligible: true, authenticationSaved: true,
   }];
   const activeRoot = createRoot(document.getElementById("root")!);
   await act(async () => {
@@ -265,6 +265,25 @@ async function main() {
     ));
     await settle();
   });
+  await act(async () => {
+    ok(click(mcpButtons("Authorize in browser")[0]), "eligible Streamable HTTP servers offer browser authorization");
+    await settle();
+  });
+  const authStart = bridgeCalls().find(call => call.name === "start_mcp_oauth");
+  const authRequest = (authStart?.args as { request?: { sessionId?: string; name?: string } } | undefined)?.request;
+  eq(authRequest?.sessionId, "active-session", "OAuth start is scoped to the displayed session ID");
+  eq(authRequest?.name, "remote", "OAuth start identifies the selected server");
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 1250)); await settle(); });
+  ok(text().includes("Authorization saved."), "completed browser authorization refreshes settings without auto-connecting");
+  await act(async () => {
+    ok(click(mcpButtons("Clear saved auth")[0]), "saved static or OAuth credentials can be cleared explicitly");
+    await settle();
+    await settle();
+  });
+  const authClear = bridgeCalls().find(call => call.name === "clear_mcp_authentication");
+  const clearRequest = (authClear?.args as { request?: { sessionId?: string; name?: string } } | undefined)?.request;
+  eq(clearRequest?.sessionId, "active-session", "credential clearing is scoped to the displayed session ID");
+  eq(clearRequest?.name, "remote", "credential clearing targets only the selected server");
   await act(async () => {
     ok(click(mcpButtons("Connect to current session")[0]), "a failed enabled server can be connected to the active session");
     await settle();

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -98,6 +99,8 @@ type bridgeTestRuntime struct {
 	balanceErr    error
 	balanceCalls  int
 	mcpActions    []string
+	mcpAuthFlow   desktopbridge.MCPAuthFlow
+	mcpAuthClears []string
 	recall        desktopbridge.MemoryRecallView
 }
 
@@ -111,6 +114,27 @@ func (r *bridgeTestRuntime) SessionBalance(context.Context) (*desktopbridge.Sess
 func (r *bridgeTestRuntime) MCPRuntimeAction(name, action string) (int, error) {
 	r.mcpActions = append(r.mcpActions, action+":"+name)
 	return 2, nil
+}
+func (r *bridgeTestRuntime) StartMCPOAuth(name string) (string, error) {
+	r.mcpAuthFlow = desktopbridge.MCPAuthFlow{ID: "flow-test", Name: name, Status: "pending"}
+	return r.mcpAuthFlow.ID, nil
+}
+func (r *bridgeTestRuntime) MCPOAuthStatus(id string) (desktopbridge.MCPAuthFlow, error) {
+	if id != r.mcpAuthFlow.ID {
+		return desktopbridge.MCPAuthFlow{}, desktopbridge.ErrSessionNotFound
+	}
+	return r.mcpAuthFlow, nil
+}
+func (r *bridgeTestRuntime) CancelMCPOAuth(id string) error {
+	if id != r.mcpAuthFlow.ID {
+		return desktopbridge.ErrSessionNotFound
+	}
+	r.mcpAuthFlow.Status = "canceled"
+	return nil
+}
+func (r *bridgeTestRuntime) ClearMCPAuthentication(name string) (bool, error) {
+	r.mcpAuthClears = append(r.mcpAuthClears, name)
+	return true, nil
 }
 func (r *bridgeTestRuntime) MemoryRecall() desktopbridge.MemoryRecallView { return r.recall }
 func (r *bridgeTestRuntime) Title() string                                { return r.title }
@@ -244,6 +268,44 @@ func TestSessionMCPRuntimeActionIsAuthorizedAndActiveSessionScoped(t *testing.T)
 	}
 	if strings.Join(runtime.mcpActions, ",") != "connect:github" {
 		t.Fatalf("runtime actions = %#v", runtime.mcpActions)
+	}
+}
+
+func TestSessionMCPCredentialClearIsAuthorizedIdleAndSessionScoped(t *testing.T) {
+	runtime := &bridgeTestRuntime{path: "/tmp/mcp-clear-session.jsonl", state: "idle"}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) { return runtime, nil }))
+	if _, err := manager.Open(context.Background(), desktopbridge.OpenRequest{SessionID: "mcp-clear-session"}); err != nil {
+		t.Fatal(err)
+	}
+	bridge := newBridgeServer(testToken, "instance-mcp-clear", manager)
+	counter := 0
+	request := func(sessionID string, authorized bool) *httptest.ResponseRecorder {
+		counter++
+		req := httptest.NewRequest(http.MethodPost, "/v1/sessions/"+sessionID+"/mcp/auth/clear", strings.NewReader(`{"name":"github"}`))
+		if authorized {
+			req.Header.Set("Authorization", "Bearer "+testToken)
+			req.Header.Set(requestIDHeader, fmt.Sprintf("mcp-clear-%d", counter))
+		}
+		response := httptest.NewRecorder()
+		bridge.handler().ServeHTTP(response, req)
+		return response
+	}
+	if got := request("mcp-clear-session", false); got.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthorized clear status = %d, body=%s", got.Code, got.Body.String())
+	}
+	if got := request("another-session", true); got.Code != http.StatusNotFound {
+		t.Fatalf("mismatched session clear status = %d, body=%s", got.Code, got.Body.String())
+	}
+	runtime.state = "running"
+	if got := request("mcp-clear-session", true); got.Code != http.StatusConflict {
+		t.Fatalf("running session clear status = %d, body=%s", got.Code, got.Body.String())
+	}
+	runtime.state = "idle"
+	if got := request("mcp-clear-session", true); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"changed":true`) {
+		t.Fatalf("active session clear status = %d, body=%s", got.Code, got.Body.String())
+	}
+	if strings.Join(runtime.mcpAuthClears, ",") != "github" {
+		t.Fatalf("credential clear calls = %#v", runtime.mcpAuthClears)
 	}
 }
 

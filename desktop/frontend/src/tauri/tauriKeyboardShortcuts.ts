@@ -6,6 +6,7 @@ export const TAURI_SHORTCUT_ACTIONS = [
   "close_panel",
   "settings",
   "diagnostics",
+  "toggle_sidebar",
   "workspace_files",
   "refresh_session",
   "send_message",
@@ -29,6 +30,18 @@ export const TAURI_SHORTCUT_ACTIONS = [
   "open_shortcuts",
   "open_updates",
   "open_about",
+  "goto_session_1",
+  "goto_session_2",
+  "goto_session_3",
+  "goto_session_4",
+  "goto_session_5",
+  "goto_session_6",
+  "goto_session_7",
+  "goto_session_8",
+  "goto_session_9",
+  "text_size_increase",
+  "text_size_decrease",
+  "text_size_reset",
 ] as const;
 export type TauriShortcutAction = typeof TAURI_SHORTCUT_ACTIONS[number];
 export const TAURI_SHORTCUT_TABS = {
@@ -110,7 +123,8 @@ export function defaultTauriShortcut(action: TauriShortcutAction, platform: Shor
     close_panel: "w",
     settings: ",",
     diagnostics: ".",
-    workspace_files: "b",
+    toggle_sidebar: "b",
+    workspace_files: "f",
     refresh_session: "r",
     send_message: "Enter",
     open_appearance: "a",
@@ -133,10 +147,24 @@ export function defaultTauriShortcut(action: TauriShortcutAction, platform: Shor
     open_shortcuts: "k",
     open_updates: "v",
     open_about: "i",
+    goto_session_1: "1",
+    goto_session_2: "2",
+    goto_session_3: "3",
+    goto_session_4: "4",
+    goto_session_5: "5",
+    goto_session_6: "6",
+    goto_session_7: "7",
+    goto_session_8: "8",
+    goto_session_9: "9",
+    text_size_increase: "=",
+    text_size_decrease: "-",
+    text_size_reset: "0",
   };
   const key = defaults[action];
   const modifier = platform === "darwin" ? { meta: true } : { ctrl: true };
-  return action.startsWith("open_") ? { key, ...modifier, shift: true } : { key, ...modifier };
+  return action.startsWith("open_") || action === "workspace_files"
+    ? { key, ...modifier, shift: true }
+    : { key, ...modifier };
 }
 
 export function getTauriShortcut(action: TauriShortcutAction, platform: ShortcutPlatform): ShortcutCombo {

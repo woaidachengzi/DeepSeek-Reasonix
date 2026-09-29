@@ -531,6 +531,10 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("GET /v1/sessions/{id}/snapshot", b.authorized(b.sessionSnapshot))
 	mux.HandleFunc("GET /v1/sessions/{id}/balance", b.authorized(b.sessionBalance))
 	mux.HandleFunc("POST /v1/sessions/{id}/mcp/runtime", b.authorized(b.idempotent(64<<10, b.sessionMCPRuntimeAction)))
+	mux.HandleFunc("POST /v1/sessions/{id}/mcp/auth/clear", b.authorized(b.idempotent(64<<10, b.sessionMCPClearAuthentication)))
+	mux.HandleFunc("POST /v1/sessions/{id}/mcp/oauth", b.authorized(b.idempotent(64<<10, b.sessionMCPOAuthStart)))
+	mux.HandleFunc("GET /v1/sessions/{id}/mcp/oauth/{flow}", b.authorized(b.sessionMCPOAuthStatus))
+	mux.HandleFunc("DELETE /v1/sessions/{id}/mcp/oauth/{flow}", b.authorized(b.sessionMCPOAuthCancel))
 	mux.HandleFunc("GET /v1/sessions/{id}/history", b.authorized(b.sessionHistory))
 	mux.HandleFunc("GET /v1/sessions/snapshot", b.authorized(b.sessionDirectorySnapshot))
 	mux.HandleFunc("GET /v1/sessions/shadow-snapshot", b.authorized(b.sessionShadowSnapshot))
@@ -1341,6 +1345,77 @@ func (b *bridgeServer) sessionMCPRuntimeAction(w http.ResponseWriter, r *http.Re
 		"name":            strings.TrimSpace(request.Name),
 		"action":          request.Action,
 		"toolCount":       count,
+	})
+}
+
+type sessionMCPClearAuthenticationRequest struct {
+	Name string `json:"name"`
+}
+
+func (b *bridgeServer) sessionMCPClearAuthentication(w http.ResponseWriter, r *http.Request) {
+	var request sessionMCPClearAuthenticationRequest
+	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid MCP credential request")
+		return
+	}
+	changed, err := b.runtimes.ClearMCPAuthentication(r.PathValue("id"), request.Name)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to clear MCP authentication")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"protocolVersion": desktopbridge.ProtocolVersion,
+		"name":            strings.TrimSpace(request.Name),
+		"changed":         changed,
+	})
+}
+
+type sessionMCPOAuthStartRequest struct {
+	Name string `json:"name"`
+}
+
+func (b *bridgeServer) sessionMCPOAuthStart(w http.ResponseWriter, r *http.Request) {
+	var request sessionMCPOAuthStartRequest
+	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid MCP authorization request")
+		return
+	}
+	flowID, err := b.runtimes.StartMCPOAuth(r.PathValue("id"), request.Name)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to start MCP authorization")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"protocolVersion": desktopbridge.ProtocolVersion,
+		"flowId":          flowID,
+		"name":            strings.TrimSpace(request.Name),
+		"status":          "pending",
+	})
+}
+
+func (b *bridgeServer) sessionMCPOAuthStatus(w http.ResponseWriter, r *http.Request) {
+	flow, err := b.runtimes.MCPOAuthStatus(r.PathValue("id"), r.PathValue("flow"))
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to read MCP authorization status")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"protocolVersion": desktopbridge.ProtocolVersion,
+		"flowId":          flow.ID,
+		"name":            flow.Name,
+		"status":          flow.Status,
+	})
+}
+
+func (b *bridgeServer) sessionMCPOAuthCancel(w http.ResponseWriter, r *http.Request) {
+	if err := b.runtimes.CancelMCPOAuth(r.PathValue("id"), r.PathValue("flow")); err != nil {
+		b.writeRuntimeError(w, err, "unable to cancel MCP authorization")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"protocolVersion": desktopbridge.ProtocolVersion,
+		"flowId":          r.PathValue("flow"),
+		"status":          "canceled",
 	})
 }
 

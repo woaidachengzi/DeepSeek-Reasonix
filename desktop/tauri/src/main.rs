@@ -81,8 +81,9 @@ use bridge::{
     BridgeSupervisor, BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
     BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse, DeleteProviderConfigRequest,
     DesktopPreferences, DiscoverProviderModelsRequest, DiscoveredProviderModels,
-    HooksSettingsChange, HooksSettingsView, LegacySessionCatalogEntry, MCPMarketplaceEntry,
-    MCPMarketplaceResponse, MCPRuntimeActionRequest, MCPRuntimeActionResponse,
+    HooksSettingsChange, HooksSettingsView, LegacySessionCatalogEntry, MCPClearAuthRequest,
+    MCPClearAuthResponse, MCPMarketplaceEntry, MCPMarketplaceResponse, MCPOAuthRequest,
+    MCPOAuthResponse, MCPRuntimeActionRequest, MCPRuntimeActionResponse,
     MCPServerActivationRequest, MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse,
     MCPServerView, MemorySettingsChange, MemorySettingsView, MemorySuggestionAcceptance,
     MemorySuggestionAcceptanceRequest, MemorySuggestionsView, NetworkSettingsChange,
@@ -579,6 +580,38 @@ fn mcp_runtime_action(
     request: MCPRuntimeActionRequest,
 ) -> Result<MCPRuntimeActionResponse, String> {
     supervisor.mcp_runtime_action(request)
+}
+
+#[tauri::command]
+fn clear_mcp_authentication(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: MCPClearAuthRequest,
+) -> Result<MCPClearAuthResponse, String> {
+    supervisor.clear_mcp_authentication(request)
+}
+
+#[tauri::command]
+fn start_mcp_oauth(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: MCPOAuthRequest,
+) -> Result<MCPOAuthResponse, String> {
+    supervisor.start_mcp_oauth(request)
+}
+
+#[tauri::command]
+fn mcp_oauth_status(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: MCPOAuthRequest,
+) -> Result<MCPOAuthResponse, String> {
+    supervisor.mcp_oauth_status(request)
+}
+
+#[tauri::command]
+fn cancel_mcp_oauth(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: MCPOAuthRequest,
+) -> Result<MCPOAuthResponse, String> {
+    supervisor.cancel_mcp_oauth(request)
 }
 
 #[tauri::command]
@@ -2427,6 +2460,10 @@ fn main() {
             bridge_pending_session_title_recoveries,
             list_mcp_servers,
             mcp_runtime_action,
+            clear_mcp_authentication,
+            start_mcp_oauth,
+            mcp_oauth_status,
+            cancel_mcp_oauth,
             save_mcp_server,
             delete_mcp_server,
             set_mcp_server_enabled,

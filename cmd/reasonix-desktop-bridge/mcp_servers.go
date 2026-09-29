@@ -8,6 +8,8 @@ import (
 
 	appconfig "reasonix/internal/config"
 	"reasonix/internal/desktopbridge"
+	"reasonix/internal/mcpdiag"
+	"reasonix/internal/plugin"
 )
 
 // mcpServerView is the only shape in which an MCP server reaches the renderer.
@@ -29,6 +31,8 @@ type mcpServerView struct {
 	AutoStart            *bool                          `json:"autoStart,omitempty"`
 	Tier                 string                         `json:"tier,omitempty"`
 	ManagedByPackage     bool                           `json:"managedByPackage,omitempty"`
+	NativeOAuthEligible  bool                           `json:"nativeOAuthEligible,omitempty"`
+	AuthenticationSaved  bool                           `json:"authenticationSaved"`
 	Enabled              bool                           `json:"enabled"`
 	RuntimeStatus        string                         `json:"runtimeStatus,omitempty"`
 	ToolCount            int                            `json:"toolCount,omitempty"`
@@ -129,6 +133,9 @@ func mcpServerViewFor(root string, entry appconfig.PluginEntry) mcpServerView {
 	if view.Type == "" {
 		view.Type = "stdio"
 	}
+	view.NativeOAuthEligible = mcpdiag.CanUseHTTPMCPOAuth(view.Type, view.URL, mcpdiag.HasAuthConfig(entry.Headers, entry.Env, entry.URL))
+	stateDir := plugin.MCPStateDir(appconfig.ReasonixHomeDir(), root, entry.Name)
+	view.AuthenticationSaved = mcpdiag.HasAuthConfig(entry.Headers, entry.Env, entry.URL) || plugin.HasHTTPMCPOAuthState(plugin.Spec{StateDir: stateDir})
 	return view
 }
 

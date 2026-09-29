@@ -333,6 +333,16 @@ await act(async () => {
   Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(settingsSearch, "");
   settingsSearch.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
 });
+await act(async () => {
+  Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(settingsSearch, "关闭窗口时");
+  settingsSearch.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+});
+assert.equal(document.querySelectorAll(".tauri-settings-nav-item").length, 1, "search matches General settings by a field label");
+assert.match(document.querySelector(".tauri-settings-nav-item")?.textContent ?? "", /通用/, "field search navigates to its settings page");
+await act(async () => {
+  Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(settingsSearch, "");
+  settingsSearch.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+});
 await act(async () => { click("深色"); });
 assert.equal(document.documentElement.getAttribute("data-theme"), "dark");
 assert.equal(localStorage.getItem("tauri-theme"), "dark");
@@ -452,7 +462,7 @@ await act(async () => { document.querySelector<HTMLButtonElement>(".tauri-settin
 const statusEditorToggle = document.querySelector<HTMLButtonElement>(".status-bar-items-editor__toggle");
 assert.ok(statusEditorToggle, "Preview uses the full status bar item editor");
 await act(async () => { statusEditorToggle.click(); });
-assert.equal(document.querySelectorAll('[data-statusbar-setting-item]').length, 15, "only metrics with a Preview data source are offered");
+assert.equal(document.querySelectorAll('[data-statusbar-setting-item]').length, 17, "only metrics with a Preview data source are offered");
 assert.ok(document.querySelector('[data-statusbar-setting-item="turn_output_tokens"]'), "reported output tokens can be enabled");
 assert.ok(document.querySelector('[data-statusbar-setting-item="turn_cache_tokens"]'), "reported cache tokens can be enabled");
 const bridgeStatusToggle = document.querySelector<HTMLInputElement>('[data-statusbar-setting-item="bridge"] input[type="checkbox"]');
@@ -466,7 +476,7 @@ assert.deepEqual(JSON.parse(localStorage.getItem("reasonix.tauri.status-bar.v1")
 const restoreStatusItems = [...document.querySelectorAll<HTMLButtonElement>(".status-bar-items-editor__action")].find(button => /恢复默认|Restore default/.test(button.textContent ?? ""));
 assert.ok(restoreStatusItems);
 await act(async () => { restoreStatusItems.click(); });
-assert.equal(JSON.parse(localStorage.getItem("reasonix.tauri.status-bar.v1")!).items.length, 15, "Preview status items can be restored");
+assert.equal(JSON.parse(localStorage.getItem("reasonix.tauri.status-bar.v1")!).items.length, 17, "Preview status items can be restored");
 assert.equal(document.querySelector('[aria-label="桌面风格"] [aria-checked="true"]')?.textContent, "工作台");
 await act(async () => { click("创作"); });
 assert.equal(localStorage.getItem("reasonix.tauri.desktop-layout.v1"), "creation", "desktop layout survives restart");

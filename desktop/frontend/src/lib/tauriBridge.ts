@@ -1157,6 +1157,8 @@ export interface TauriMCPServer {
   autoStart?: boolean;
   tier?: string;
   managedByPackage?: boolean;
+  nativeOAuthEligible?: boolean;
+  authenticationSaved?: boolean;
 }
 
 export interface TauriMCPServerInput {
@@ -1189,6 +1191,19 @@ export interface TauriMCPRuntimeActionResponse {
   toolCount: number;
 }
 
+export interface TauriMCPClearAuthResponse {
+  protocolVersion: number;
+  name: string;
+  changed: boolean;
+}
+
+export interface TauriMCPOAuthFlow {
+  protocolVersion: number;
+  flowId: string;
+  name: string;
+  status: "pending" | "complete" | "failed" | "canceled";
+}
+
 export async function tauriMCPServers(workspaceRoot?: string): Promise<TauriMCPServer[]> {
   requireTauri();
   return invoke<TauriMCPServer[]>("list_mcp_servers", { workspaceRoot });
@@ -1201,6 +1216,26 @@ export async function tauriMCPRuntimeAction(
 ): Promise<TauriMCPRuntimeActionResponse> {
   requireTauri();
   return invoke<TauriMCPRuntimeActionResponse>("mcp_runtime_action", { request: { sessionId, name, action } });
+}
+
+export async function clearTauriMCPAuthentication(sessionId: string, name: string): Promise<TauriMCPClearAuthResponse> {
+  requireTauri();
+  return invoke<TauriMCPClearAuthResponse>("clear_mcp_authentication", { request: { sessionId, name } });
+}
+
+export async function startTauriMCPOAuth(sessionId: string, name: string): Promise<TauriMCPOAuthFlow> {
+  requireTauri();
+  return invoke<TauriMCPOAuthFlow>("start_mcp_oauth", { request: { sessionId, name } });
+}
+
+export async function tauriMCPOAuthStatus(sessionId: string, flowId: string): Promise<TauriMCPOAuthFlow> {
+  requireTauri();
+  return invoke<TauriMCPOAuthFlow>("mcp_oauth_status", { request: { sessionId, flowId } });
+}
+
+export async function cancelTauriMCPOAuth(sessionId: string, flowId: string): Promise<TauriMCPOAuthFlow> {
+  requireTauri();
+  return invoke<TauriMCPOAuthFlow>("cancel_mcp_oauth", { request: { sessionId, flowId } });
 }
 
 export async function saveTauriMCPServer(
