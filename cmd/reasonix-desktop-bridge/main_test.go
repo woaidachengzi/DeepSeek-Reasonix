@@ -94,6 +94,7 @@ type bridgeTestRuntime struct {
 	workspace     desktopbridge.WorkspaceList
 	preview       desktopbridge.WorkspaceFilePreview
 	changes       desktopbridge.WorkspaceChanges
+	revertCommits int
 	metrics       desktopbridge.SessionMetrics
 	balance       *desktopbridge.SessionBalance
 	balanceErr    error
@@ -168,6 +169,13 @@ func (r *bridgeTestRuntime) ReadWorkspaceFile(path string) (desktopbridge.Worksp
 func (r *bridgeTestRuntime) WorkspaceChanges() desktopbridge.WorkspaceChanges { return r.changes }
 func (r *bridgeTestRuntime) WorkspaceChangeDetail(string) (desktopbridge.WorkspaceChangeDetail, error) {
 	return desktopbridge.WorkspaceChangeDetail{Source: "git", Diff: "@@ -1 +1 @@\n-old\n+new"}, nil
+}
+func (r *bridgeTestRuntime) PrepareWorkspaceFileRevert(path string) (desktopbridge.WorkspaceFileRevertPlan, error) {
+	return desktopbridge.WorkspaceFileRevertPlan{Path: path, PlanID: "plan-test", CanFiles: true}, nil
+}
+func (r *bridgeTestRuntime) CommitWorkspaceFileRevert(string, string) (desktopbridge.WorkspaceFileRevertResult, error) {
+	r.revertCommits++
+	return desktopbridge.WorkspaceFileRevertResult{OK: true, WrittenCount: 1}, nil
 }
 func (r *bridgeTestRuntime) Submit(input string)                                       { r.submits = append(r.submits, input) }
 func (r *bridgeTestRuntime) Cancel()                                                   { r.cancelCalls++ }
@@ -1419,5 +1427,48 @@ func TestBridgeServerReturnsWorkspaceChangesAndDetail(t *testing.T) {
 	}
 	if detail.ProtocolVersion != desktopbridge.ProtocolVersion || detail.Detail.Source != "git" || !strings.Contains(detail.Detail.Diff, "+new") {
 		t.Fatalf("workspace change detail response = %#v", detail)
+	}
+}
+
+func TestBridgeServerWorkspaceFileRevertRequiresRequestIDAndDeduplicates(t *testing.T) {
+	runtime := &bridgeTestRuntime{path: "/tmp/reasonix-session", state: "idle"}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		return runtime, nil
+	}))
+	bridge := newBridgeServer(testToken, "instance", manager)
+	handler := bridge.handler()
+	request := httptest.NewRequest(http.MethodPost, "/v1/sessions:open", strings.NewReader(`{"sessionId":"tab-revert"}`))
+	request.Header.Set("Authorization", "Bearer "+testToken)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("open status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	preview := httptest.NewRequest(http.MethodPost, "/v1/sessions/tab-revert:workspace-file-revert-preview", strings.NewReader(`{"path":"notes.txt"}`))
+	preview.Header.Set("Authorization", "Bearer "+testToken)
+	preview.Header.Set("Content-Type", "application/json")
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, preview)
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"planId":"plan-test"`) {
+		t.Fatalf("preview status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	commit := func(requestID string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/v1/sessions/tab-revert:workspace-file-revert-commit", strings.NewReader(`{"planId":"plan-test","resolution":""}`))
+		req.Header.Set("Authorization", "Bearer "+testToken)
+		req.Header.Set("Content-Type", "application/json")
+		if requestID != "" {
+			req.Header.Set(requestIDHeader, requestID)
+		}
+		result := httptest.NewRecorder()
+		handler.ServeHTTP(result, req)
+		return result
+	}
+	if response := commit(""); response.Code != http.StatusBadRequest || runtime.revertCommits != 0 {
+		t.Fatalf("commit without request ID: status=%d calls=%d", response.Code, runtime.revertCommits)
+	}
+	first, second := commit("revert-1"), commit("revert-1")
+	if first.Code != http.StatusOK || second.Code != http.StatusOK || first.Body.String() != second.Body.String() || runtime.revertCommits != 1 {
+		t.Fatalf("idempotent commit: first=%d second=%d calls=%d", first.Code, second.Code, runtime.revertCommits)
 	}
 }

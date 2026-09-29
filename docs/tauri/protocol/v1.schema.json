@@ -33,6 +33,11 @@
     { "$ref": "#/$defs/workspaceChangeDetailRequest" },
     { "$ref": "#/$defs/workspaceChangeDetail" },
     { "$ref": "#/$defs/workspaceChangeDetailResponse" },
+    { "$ref": "#/$defs/workspaceFileRevertPlan" },
+    { "$ref": "#/$defs/workspaceFileRevertPlanResponse" },
+    { "$ref": "#/$defs/workspaceFileRevertCommitRequest" },
+    { "$ref": "#/$defs/workspaceFileRevertResult" },
+    { "$ref": "#/$defs/workspaceFileRevertResultResponse" },
     { "$ref": "#/$defs/submitRequest" },
     { "$ref": "#/$defs/approvalRequest" },
     { "$ref": "#/$defs/askAnswer" },
@@ -540,6 +545,65 @@
       "properties": {
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
         "detail": { "$ref": "#/$defs/workspaceChangeDetail" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceFileRevertPlan": {
+      "title": "BridgeWorkspaceFileRevertPlan",
+      "type": "object",
+      "required": ["path", "canFiles"],
+      "properties": {
+        "planId": { "type": "string" },
+        "path": { "type": "string" },
+        "canFiles": { "type": "boolean" },
+        "disabledReason": { "type": "string" },
+        "conflicts": { "type": "array", "items": { "type": "string" } },
+        "legacy": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceFileRevertPlanResponse": {
+      "title": "BridgeWorkspaceFileRevertPlanResponse",
+      "type": "object",
+      "required": ["protocolVersion", "plan"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "plan": { "$ref": "#/$defs/workspaceFileRevertPlan" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceFileRevertCommitRequest": {
+      "title": "BridgeWorkspaceFileRevertCommitRequest",
+      "type": "object",
+      "required": ["planId", "resolution"],
+      "properties": {
+        "planId": { "type": "string", "minLength": 1 },
+        "resolution": { "type": "string", "enum": ["", "overwrite_checkpoint"] }
+      },
+      "additionalProperties": false
+    },
+    "workspaceFileRevertResult": {
+      "title": "BridgeWorkspaceFileRevertResult",
+      "type": "object",
+      "required": ["ok", "undoAvailable", "writtenCount", "deletedCount"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "transactionId": { "type": "string" },
+        "undoAvailable": { "type": "boolean" },
+        "writtenCount": { "type": "integer", "minimum": 0 },
+        "deletedCount": { "type": "integer", "minimum": 0 },
+        "error": { "type": "string" },
+        "conflicts": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "workspaceFileRevertResultResponse": {
+      "title": "BridgeWorkspaceFileRevertResultResponse",
+      "type": "object",
+      "required": ["protocolVersion", "result"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "result": { "$ref": "#/$defs/workspaceFileRevertResult" }
       },
       "additionalProperties": false
     },

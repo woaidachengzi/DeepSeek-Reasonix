@@ -443,6 +443,50 @@ pub struct BridgeWorkspaceFileResponse {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceFileRevertCommitRequest {
+    pub plan_id: String,
+    pub resolution: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceFileRevertPlan {
+    pub can_files: bool,
+    pub conflicts: Option<Vec<String>>,
+    pub disabled_reason: Option<String>,
+    pub legacy: Option<bool>,
+    pub path: String,
+    pub plan_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceFileRevertPlanResponse {
+    pub plan: BridgeWorkspaceFileRevertPlan,
+    pub protocol_version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceFileRevertResult {
+    pub conflicts: Option<Vec<String>>,
+    pub deleted_count: u64,
+    pub error: Option<String>,
+    pub ok: bool,
+    pub transaction_id: Option<String>,
+    pub undo_available: bool,
+    pub written_count: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceFileRevertResultResponse {
+    pub protocol_version: u64,
+    pub result: BridgeWorkspaceFileRevertResult,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeWorkspaceListResponse {
     pub entries: Vec<BridgeWorkspaceEntry>,
     pub path: String,

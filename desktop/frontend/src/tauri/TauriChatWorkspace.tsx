@@ -135,6 +135,8 @@ import {
   tauriWorkspaceFile,
   tauriWorkspaceChanges,
   tauriWorkspaceChangeDetail,
+  tauriWorkspaceFileRevertPreview,
+  tauriWorkspaceFileRevertCommit,
   tauriBridgeHistory,
   tauriBridgeSnapshot,
   tauriBridgeStatus,
@@ -183,6 +185,7 @@ import {
   type TauriWorkspaceFilePreview,
   type TauriWorkspaceChanges,
   type TauriWorkspaceChangeDetail,
+  type TauriWorkspaceFileRevertPlan,
   type TauriPreviewProfileStatus,
   type TauriPreviewRuntimeInfo,
   type TauriProviderSummary,
@@ -477,6 +480,9 @@ export function TauriSessionPreview() {
   const [workspaceChangeDetail, setWorkspaceChangeDetail] = useState<TauriWorkspaceChangeDetail | null>(null);
   const [workspaceChangeDetailPath, setWorkspaceChangeDetailPath] = useState("");
   const [workspaceChangeDetailLoading, setWorkspaceChangeDetailLoading] = useState(false);
+  const [workspaceFileRevertPlan, setWorkspaceFileRevertPlan] = useState<TauriWorkspaceFileRevertPlan | null>(null);
+  const [workspaceFileRevertBusy, setWorkspaceFileRevertBusy] = useState(false);
+  const [workspaceFileRevertMessage, setWorkspaceFileRevertMessage] = useState("");
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [error, setError] = useState("");
@@ -499,6 +505,7 @@ export function TauriSessionPreview() {
   const workspaceChangesRequestRef = useRef(0);
   const workspacePreviewRequestRef = useRef(0);
   const workspaceDetailRequestRef = useRef(0);
+  const workspaceFileRevertRequestRef = useRef(0);
   const [activeQuestion, setActiveQuestion] = useState<number | null>(null);
   const switchingBlocked = Boolean(session && session.state !== "idle");
   const [platform, setPlatform] = useState<string>("");
@@ -1527,6 +1534,10 @@ export function TauriSessionPreview() {
 
   function invalidateWorkspaceRequests() {
     workspaceEpochRef.current += 1;
+    workspaceFileRevertRequestRef.current += 1;
+    setWorkspaceFileRevertPlan(null);
+    setWorkspaceFileRevertMessage("");
+    setWorkspaceFileRevertBusy(false);
     setWorkspaceLoading(false);
     setWorkspaceChangesLoading(false);
     setWorkspacePreviewLoading(false);
@@ -1826,6 +1837,9 @@ export function TauriSessionPreview() {
     const request = ++workspaceChangesRequestRef.current;
     const isCurrent = () => workspaceEpochRef.current === epoch && workspaceChangesRequestRef.current === request;
     workspaceDetailRequestRef.current += 1;
+    workspaceFileRevertRequestRef.current += 1;
+    setWorkspaceFileRevertPlan(null);
+    setWorkspaceFileRevertMessage("");
     setWorkspaceChangesLoading(true);
     setWorkspaceChangeDetailLoading(false);
     setWorkspaceChangeDetail(null);
@@ -1847,6 +1861,9 @@ export function TauriSessionPreview() {
     const epoch = workspaceEpochRef.current;
     const request = ++workspaceDetailRequestRef.current;
     const isCurrent = () => workspaceEpochRef.current === epoch && workspaceDetailRequestRef.current === request;
+    workspaceFileRevertRequestRef.current += 1;
+    setWorkspaceFileRevertPlan(null);
+    setWorkspaceFileRevertMessage("");
     setWorkspaceChangeDetailLoading(true);
     setWorkspaceChangeDetail(null);
     setWorkspaceError("");
@@ -1863,6 +1880,52 @@ export function TauriSessionPreview() {
     }
   }
 
+  async function previewWorkspaceFileRevert(path: string) {
+    if (!session || session.state !== "idle" || busy || workspaceFileRevertBusy) return;
+    const sessionID = session.id;
+    const epoch = workspaceEpochRef.current;
+    const request = ++workspaceFileRevertRequestRef.current;
+    const isCurrent = () => workspaceEpochRef.current === epoch && workspaceFileRevertRequestRef.current === request;
+    setWorkspaceFileRevertBusy(true);
+    setWorkspaceFileRevertMessage("");
+    try {
+      const plan = await tauriWorkspaceFileRevertPreview(sessionID, path);
+      if (isCurrent()) setWorkspaceFileRevertPlan(plan);
+    } catch (cause) {
+      if (isCurrent()) setWorkspaceFileRevertMessage(`${t("workspace.fileRevertPreviewFailed")} ${tauriMessageFrom(cause)}`);
+    } finally {
+      if (isCurrent()) setWorkspaceFileRevertBusy(false);
+    }
+  }
+
+  async function commitWorkspaceFileRevert() {
+    const plan = workspaceFileRevertPlan;
+    if (!session || session.state !== "idle" || busy || workspaceFileRevertBusy || !plan?.canFiles || !plan.planId) return;
+    const sessionID = session.id;
+    const epoch = workspaceEpochRef.current;
+    const request = ++workspaceFileRevertRequestRef.current;
+    const isCurrent = () => workspaceEpochRef.current === epoch && workspaceFileRevertRequestRef.current === request;
+    setWorkspaceFileRevertBusy(true);
+    setBusy(true);
+    setWorkspaceFileRevertMessage("");
+    try {
+      const result = await tauriWorkspaceFileRevertCommit(sessionID, plan.planId, plan.conflicts?.length ? "overwrite_checkpoint" : "");
+      if (!isCurrent()) return;
+      setWorkspaceFileRevertPlan(null);
+      if (result.ok) {
+        await loadWorkspaceChanges();
+        setWorkspaceFileRevertMessage(t("workspace.fileRevertDone"));
+      } else {
+        setWorkspaceFileRevertMessage(`${t("workspace.fileRevertFailed")} ${result.error || ""}`.trim());
+      }
+    } catch (cause) {
+      if (isCurrent()) setWorkspaceFileRevertMessage(`${t("workspace.fileRevertFailed")} ${tauriMessageFrom(cause)}`);
+    } finally {
+      setWorkspaceFileRevertBusy(false);
+      setBusy(false);
+    }
+  }
+
   function toggleWorkspace() {
     if (!session || busy) return;
     const nextOpen = !workspaceOpen;
@@ -1871,6 +1934,9 @@ export function TauriSessionPreview() {
   }
 
   function showWorkspaceView(view: "files" | "changes") {
+    workspaceFileRevertRequestRef.current += 1;
+    setWorkspaceFileRevertPlan(null);
+    setWorkspaceFileRevertMessage("");
     setWorkspaceView(view);
     setWorkspaceError("");
     if (view === "files") {
@@ -2724,7 +2790,18 @@ export function TauriSessionPreview() {
               {workspaceChangeDetailLoading && <div className="tauri-workspace-preview__loading">正在读取差异…</div>}
               {workspaceChangeDetail && <section className="tauri-workspace-preview" aria-label="文件差异">
                 <header><div><strong>{workspaceChangeDetailPath}</strong><span>{workspaceChangeDetail.source === "session" ? "本轮会话" : "Git"} · {workspaceChangeDetail.added ?? 0} 新增 · {workspaceChangeDetail.removed ?? 0} 删除{workspaceChangeDetail.truncated ? " · 已截断" : ""}</span></div><button type="button" className="tauri-diagnostic-action" onClick={() => insertWorkspacePath(workspaceChangeDetailPath)}><Eye size={13} /> 引用文件</button></header>
+                {workspaceChanges?.files.find(change => change.path === workspaceChangeDetailPath)?.canSessionRevert && <button type="button" className="tauri-diagnostic-action" onClick={() => void previewWorkspaceFileRevert(workspaceChangeDetailPath)} disabled={workspaceFileRevertBusy || busy || session?.state !== "idle"}>{t("workspace.revertSessionFileShort")}</button>}
                 {workspaceChangeDetail.binary ? <p className="tauri-workspace-preview__binary">这是二进制变更，无法显示文本差异。</p> : <pre>{workspaceChangeDetail.diff || "（没有可显示的文本差异）"}</pre>}
+              </section>}
+              {workspaceFileRevertBusy && <p className="tauri-workspace-drawer__note">{t("workspace.fileRevertWorking")}</p>}
+              {workspaceFileRevertMessage && <p role="status" className="tauri-workspace-drawer__note">{workspaceFileRevertMessage}</p>}
+              {workspaceFileRevertPlan && <section className="tauri-workspace-revert" aria-label={t("workspace.fileRevertReview")}>
+                <strong>{t("workspace.fileRevertReview")}</strong>
+                <code>{workspaceFileRevertPlan.path}</code>
+                <p>{t("workspace.revertSessionFile")}</p>
+                {!workspaceFileRevertPlan.canFiles && <p role="alert">{t("workspace.fileRevertUnavailable")} {workspaceFileRevertPlan.disabledReason || ""}</p>}
+                {workspaceFileRevertPlan.conflicts && workspaceFileRevertPlan.conflicts.length > 0 && <p role="alert">{t("workspace.fileRevertConflictNotice")} {workspaceFileRevertPlan.conflicts.join(", ")}</p>}
+                <div><button type="button" className="tauri-diagnostic-action" onClick={() => setWorkspaceFileRevertPlan(null)} disabled={workspaceFileRevertBusy}>{t("workspace.fileRevertCancel")}</button>{workspaceFileRevertPlan.canFiles && <button type="button" className="tauri-diagnostic-action" onClick={() => void commitWorkspaceFileRevert()} disabled={workspaceFileRevertBusy || busy || session?.state !== "idle"}>{workspaceFileRevertPlan.conflicts?.length ? t("workspace.fileRevertOverwrite") : t("workspace.fileRevertConfirm")}</button>}</div>
               </section>}
               <p className="tauri-workspace-drawer__hint">变更来自 Git 或本轮会话检查点；点击文件查看受限差异。</p>
             </>}

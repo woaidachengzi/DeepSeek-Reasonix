@@ -85,13 +85,15 @@ use bridge::{
     BridgeSession, BridgeSessionBalanceResponse, BridgeSetAgentPreferenceRequest,
     BridgeSetDefaultModelRequest, BridgeSetModelRoleRequest, BridgeSetSessionModelRequest,
     BridgeSnapshot, BridgeStatus, BridgeSupervisor, BridgeWorkspaceChangeDetailResponse,
-    BridgeWorkspaceChangesResponse, BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse,
-    DeleteProviderConfigRequest, DesktopPreferences, DiscoverProviderModelsRequest,
-    DiscoveredProviderModels, HooksSettingsChange, HooksSettingsView, LegacySessionCatalogEntry,
-    MCPClearAuthRequest, MCPClearAuthResponse, MCPMarketplaceEntry, MCPMarketplaceResponse,
-    MCPOAuthRequest, MCPOAuthResponse, MCPRuntimeActionRequest, MCPRuntimeActionResponse,
-    MCPServerActivationRequest, MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse,
-    MCPServerView, MemorySettingsChange, MemorySettingsView, MemorySuggestionAcceptance,
+    BridgeWorkspaceChangesResponse, BridgeWorkspaceFileResponse,
+    BridgeWorkspaceFileRevertPlanResponse, BridgeWorkspaceFileRevertResultResponse,
+    BridgeWorkspaceListResponse, DeleteProviderConfigRequest, DesktopPreferences,
+    DiscoverProviderModelsRequest, DiscoveredProviderModels, HooksSettingsChange,
+    HooksSettingsView, LegacySessionCatalogEntry, MCPClearAuthRequest, MCPClearAuthResponse,
+    MCPMarketplaceEntry, MCPMarketplaceResponse, MCPOAuthRequest, MCPOAuthResponse,
+    MCPRuntimeActionRequest, MCPRuntimeActionResponse, MCPServerActivationRequest,
+    MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse, MCPServerView,
+    MemorySettingsChange, MemorySettingsView, MemorySuggestionAcceptance,
     MemorySuggestionAcceptanceRequest, MemorySuggestionsView, NetworkSettingsChange,
     NetworkSettingsView, OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
     PendingSessionTitleRecovery, PermissionSettingsChange, PermissionSettingsView,
@@ -105,7 +107,8 @@ use bridge::{
     SkillArchiveRequest, SkillArchiveResult, SkillInstallPlan, SkillInstallRequest,
     SkillInstallResult, SkillsSettingsChange, SkillsSettingsView, SubagentProfileInput,
     SubagentSettingsChange, SubagentSettingsView, SubagentTryStatusView, SubmitRequest,
-    WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
+    WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceFileRevertCommitRequest,
+    WorkspaceRequest,
 };
 use data_profile::{
     PreviewProfile, PreviewProfileStatus, ProfileImportResult, ProjectFoldersImportResult,
@@ -734,6 +737,22 @@ fn bridge_workspace_change_detail(
     request: WorkspaceChangeDetailRequest,
 ) -> Result<BridgeWorkspaceChangeDetailResponse, String> {
     supervisor.workspace_change_detail(request)
+}
+
+#[tauri::command]
+fn bridge_workspace_file_revert_preview(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: WorkspaceChangeDetailRequest,
+) -> Result<BridgeWorkspaceFileRevertPlanResponse, String> {
+    supervisor.workspace_file_revert_preview(request)
+}
+
+#[tauri::command]
+fn bridge_workspace_file_revert_commit(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: WorkspaceFileRevertCommitRequest,
+) -> Result<BridgeWorkspaceFileRevertResultResponse, String> {
+    supervisor.workspace_file_revert_commit(request)
 }
 
 fn workspace_root_is_available(root: &str) -> Option<bool> {
@@ -3415,6 +3434,8 @@ fn main() {
             bridge_workspace_file,
             bridge_workspace_changes,
             bridge_workspace_change_detail,
+            bridge_workspace_file_revert_preview,
+            bridge_workspace_file_revert_commit,
             workspace_roots_availability,
             bridge_cancel,
             bridge_approve,

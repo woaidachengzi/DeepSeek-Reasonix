@@ -57,6 +57,7 @@ interface CommandContract {
 //   bridge_session_snapshot, bridge_session_balance, bridge_session_history, bridge_submit, bridge_cancel,
 //   bridge_attach_file, bridge_workspace, bridge_workspace_file,
 //   bridge_workspace_changes, bridge_workspace_change_detail,
+//   bridge_workspace_file_revert_preview, bridge_workspace_file_revert_commit,
 //   bridge_approve, bridge_answer_question, bridge_answer_mcp_interaction,
 //   bridge_replay_pending_prompts,
 //   bridge_start_events, preview_profile_status, preview_runtime_info, import_stable_profile,
@@ -73,13 +74,23 @@ interface CommandContract {
 //   tauriPendingSessionTitleRecoveries,
 //   tauriBridgeSnapshot, tauriSessionBalance, tauriBridgeHistory, submitTauriBridge, cancelTauriBridge,
 //   attachTauriFile, tauriWorkspace, tauriWorkspaceFile, tauriWorkspaceChanges,
-//   tauriWorkspaceChangeDetail,
+//   tauriWorkspaceChangeDetail, tauriWorkspaceFileRevertPreview, tauriWorkspaceFileRevertCommit,
 //   startTauriBridgeEvents, tauriPreviewProfileStatus,
 //   tauriPreviewRuntimeInfo, importTauriStableProfile, tauriWorkbenchSessions, tauriWorkbenchSessionPage,
 //   rememberTauriWorkbenchSession, forgetTauriWorkbenchSession, tauriProviderSummary
 //   setTauriDefaultModel, setTauriModelRole
 
 const commands: CommandContract[] = [
+  {
+    command: "bridge_workspace_file_revert_preview",
+    argKeys: ["request"],
+    description: "tauriWorkspaceFileRevertPreview() invokes the read-only restore preview",
+  },
+  {
+    command: "bridge_workspace_file_revert_commit",
+    argKeys: ["request"],
+    description: "tauriWorkspaceFileRevertCommit() invokes the explicit restore commit",
+  },
   {
     command: "bridge_pending_session_deletes_page",
     argKeys: ["cursor"],

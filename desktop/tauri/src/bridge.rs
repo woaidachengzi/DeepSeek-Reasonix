@@ -461,6 +461,14 @@ pub struct WorkspaceChangeDetailRequest {
     pub path: String,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceFileRevertCommitRequest {
+    pub session_id: String,
+    pub plan_id: String,
+    pub resolution: String,
+}
+
 // The wire DTOs mirror docs/tauri/protocol/v1.schema.json through the generated
 // module; only the host-facing command payloads below stay hand-written.
 pub use crate::protocol_generated::{
@@ -476,8 +484,9 @@ pub use crate::protocol_generated::{
     BridgeSessionResponse, BridgeSetAgentPreferenceRequest, BridgeSetDefaultModelRequest,
     BridgeSetModelRoleRequest, BridgeSetSessionModelRequest, BridgeWorkspaceChangeDetailRequest,
     BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
-    BridgeWorkspaceFileRequest, BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse,
-    BridgeWorkspaceRequest,
+    BridgeWorkspaceFileRequest, BridgeWorkspaceFileResponse,
+    BridgeWorkspaceFileRevertCommitRequest, BridgeWorkspaceFileRevertPlanResponse,
+    BridgeWorkspaceFileRevertResultResponse, BridgeWorkspaceListResponse, BridgeWorkspaceRequest,
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -3674,6 +3683,63 @@ impl BridgeSupervisor {
             None,
         )?;
         let envelope: BridgeWorkspaceChangeDetailResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope)
+    }
+
+    pub fn workspace_file_revert_preview(
+        &self,
+        request: WorkspaceChangeDetailRequest,
+    ) -> Result<BridgeWorkspaceFileRevertPlanResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        if request.path.trim().is_empty()
+            || request.path.len() > 4096
+            || request.path.contains('\0')
+        {
+            return Err("workspace file revert path is invalid".to_string());
+        }
+        let path = format!("/v1/sessions/{session_id}:workspace-file-revert-preview");
+        let response = self.request_json(
+            "POST",
+            &path,
+            Some(json!(BridgeWorkspaceChangeDetailRequest {
+                path: request.path
+            })),
+            None,
+        )?;
+        let envelope: BridgeWorkspaceFileRevertPlanResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope)
+    }
+
+    pub fn workspace_file_revert_commit(
+        &self,
+        request: WorkspaceFileRevertCommitRequest,
+    ) -> Result<BridgeWorkspaceFileRevertResultResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let plan_id = session_path_component(&request.plan_id)
+            .map_err(|_| "workspace file revert plan ID is invalid".to_string())?;
+        if !matches!(request.resolution.as_str(), "" | "overwrite_checkpoint") {
+            return Err("workspace file revert resolution is invalid".to_string());
+        }
+        let request_id = opaque_secret()?;
+        let path = format!("/v1/sessions/{session_id}:workspace-file-revert-commit");
+        let response = self.request_json(
+            "POST",
+            &path,
+            Some(json!(BridgeWorkspaceFileRevertCommitRequest {
+                plan_id,
+                resolution: request.resolution,
+            })),
+            Some(&request_id),
+        )?;
+        let envelope: BridgeWorkspaceFileRevertResultResponse =
             serde_json::from_value(response).map_err(display_error)?;
         if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());

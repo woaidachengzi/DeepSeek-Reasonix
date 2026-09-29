@@ -500,6 +500,12 @@
 .tauri-workspace-preview > header button { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; }
 .tauri-workspace-preview pre { max-height: 280px; overflow: auto; margin: 0; padding: 8px; border-radius: 6px; background: color-mix(in srgb, var(--bg) 75%, #000); color: var(--fg-dim); font: 10px/1.5 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .tauri-workspace-preview__binary { margin: 0; color: var(--fg-faint); font-size: 10px; line-height: 1.5; }
+.tauri-workspace-revert { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--fg-dim); font-size: 10px; line-height: 1.5; }
+.tauri-workspace-revert strong { color: var(--fg); font-size: 11px; }
+.tauri-workspace-revert code { overflow-wrap: anywhere; color: var(--fg); }
+.tauri-workspace-revert p { margin: 0; }
+.tauri-workspace-revert [role="alert"] { color: #d96a66; }
+.tauri-workspace-revert > div { display: flex; justify-content: flex-end; gap: 6px; }
 
 .tauri-diagnostics__scrim { position: fixed; z-index: 20; inset: 0; border: 0; background: color-mix(in srgb, #000 24%, transparent); }
 .tauri-diagnostics { position: fixed; z-index: 21; inset: 0 0 0 auto; display: flex; width: min(410px, 92vw); flex-direction: column; border-left: 1px solid var(--border); background: var(--bg); box-shadow: -18px 0 45px color-mix(in srgb, #000 18%, transparent); animation: tauri-drawer-in .2s ease both; }

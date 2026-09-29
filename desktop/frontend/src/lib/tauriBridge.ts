@@ -32,6 +32,8 @@ import type {
   BridgeWorkspaceFileResponse,
   BridgeWorkspaceChangesResponse,
   BridgeWorkspaceChangeDetailResponse,
+  BridgeWorkspaceFileRevertPlanResponse,
+  BridgeWorkspaceFileRevertResultResponse,
 } from "./bridgeProtocol.generated";
 import type { TerminalThemePreference } from "./terminalTheme";
 import type { Theme, ThemeStyle } from "./theme";
@@ -57,6 +59,8 @@ export type TauriWorkspaceList = BridgeWorkspaceListResponse;
 export type TauriWorkspaceFilePreview = BridgeWorkspaceFileResponse["preview"];
 export type TauriWorkspaceChanges = BridgeWorkspaceChangesResponse["changes"];
 export type TauriWorkspaceChangeDetail = BridgeWorkspaceChangeDetailResponse["detail"];
+export type TauriWorkspaceFileRevertPlan = BridgeWorkspaceFileRevertPlanResponse["plan"];
+export type TauriWorkspaceFileRevertResult = BridgeWorkspaceFileRevertResultResponse["result"];
 
 /** Exposes only user-visible answer deltas; reasoning and other event text stay private. */
 export function tauriAssistantTextDelta(event: Pick<TauriBridgeEvent, "eventKind" | "payload">): string {
@@ -1653,6 +1657,18 @@ export async function tauriWorkspaceChangeDetail(sessionId: string, path: string
   requireTauri();
   const response = await invoke<BridgeWorkspaceChangeDetailResponse>("bridge_workspace_change_detail", { request: { sessionId, path } });
   return response.detail;
+}
+
+export async function tauriWorkspaceFileRevertPreview(sessionId: string, path: string): Promise<TauriWorkspaceFileRevertPlan> {
+  requireTauri();
+  const response = await invoke<BridgeWorkspaceFileRevertPlanResponse>("bridge_workspace_file_revert_preview", { request: { sessionId, path } });
+  return response.plan;
+}
+
+export async function tauriWorkspaceFileRevertCommit(sessionId: string, planId: string, resolution: "" | "overwrite_checkpoint"): Promise<TauriWorkspaceFileRevertResult> {
+  requireTauri();
+  const response = await invoke<BridgeWorkspaceFileRevertResultResponse>("bridge_workspace_file_revert_commit", { request: { sessionId, planId, resolution } });
+  return response.result;
 }
 
 export async function cancelTauriBridge(sessionId: string): Promise<TauriBridgeSession> {

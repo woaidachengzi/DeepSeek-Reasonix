@@ -334,6 +334,40 @@ export interface BridgeWorkspaceFileResponse {
   protocolVersion: number;
 }
 
+export interface BridgeWorkspaceFileRevertCommitRequest {
+  planId: string;
+  resolution: "" | "overwrite_checkpoint";
+}
+
+export interface BridgeWorkspaceFileRevertPlan {
+  canFiles: boolean;
+  conflicts?: string[];
+  disabledReason?: string;
+  legacy?: boolean;
+  path: string;
+  planId?: string;
+}
+
+export interface BridgeWorkspaceFileRevertPlanResponse {
+  plan: BridgeWorkspaceFileRevertPlan;
+  protocolVersion: number;
+}
+
+export interface BridgeWorkspaceFileRevertResult {
+  conflicts?: string[];
+  deletedCount: number;
+  error?: string;
+  ok: boolean;
+  transactionId?: string;
+  undoAvailable: boolean;
+  writtenCount: number;
+}
+
+export interface BridgeWorkspaceFileRevertResultResponse {
+  protocolVersion: number;
+  result: BridgeWorkspaceFileRevertResult;
+}
+
 export interface BridgeWorkspaceListResponse {
   entries: BridgeWorkspaceEntry[];
   path: string;

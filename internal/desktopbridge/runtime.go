@@ -136,6 +136,25 @@ type WorkspaceChangeDetail struct {
 	Truncated bool   `json:"truncated,omitempty"`
 }
 
+type WorkspaceFileRevertPlan struct {
+	PlanID         string   `json:"planId,omitempty"`
+	Path           string   `json:"path"`
+	CanFiles       bool     `json:"canFiles"`
+	DisabledReason string   `json:"disabledReason,omitempty"`
+	Conflicts      []string `json:"conflicts,omitempty"`
+	Legacy         bool     `json:"legacy,omitempty"`
+}
+
+type WorkspaceFileRevertResult struct {
+	OK            bool     `json:"ok"`
+	TransactionID string   `json:"transactionId,omitempty"`
+	UndoAvailable bool     `json:"undoAvailable"`
+	WrittenCount  int      `json:"writtenCount"`
+	DeletedCount  int      `json:"deletedCount"`
+	Error         string   `json:"error,omitempty"`
+	Conflicts     []string `json:"conflicts,omitempty"`
+}
+
 // HistoryView is the latest bounded page of display-safe messages. StartIndex
 // and TotalMessages refer to the projected (not raw provider) transcript.
 type HistoryView struct {
@@ -162,6 +181,8 @@ type Runtime interface {
 	ReadWorkspaceFile(path string) (WorkspaceFilePreview, error)
 	WorkspaceChanges() WorkspaceChanges
 	WorkspaceChangeDetail(path string) (WorkspaceChangeDetail, error)
+	PrepareWorkspaceFileRevert(path string) (WorkspaceFileRevertPlan, error)
+	CommitWorkspaceFileRevert(planID, resolution string) (WorkspaceFileRevertResult, error)
 	Submit(input string)
 	Cancel()
 	Approve(promptID string, allow bool)
@@ -893,6 +914,32 @@ func (m *RuntimeManager) WorkspaceChangeDetail(sessionID, path string) (Workspac
 		return WorkspaceChangeDetail{}, ErrSessionNotFound
 	}
 	return m.runtime.WorkspaceChangeDetail(path)
+}
+
+func (m *RuntimeManager) PrepareWorkspaceFileRevert(sessionID, path string) (WorkspaceFileRevertPlan, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return WorkspaceFileRevertPlan{}, ErrClosed
+	}
+	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
+		return WorkspaceFileRevertPlan{}, ErrSessionNotFound
+	}
+	return m.runtime.PrepareWorkspaceFileRevert(path)
+}
+
+func (m *RuntimeManager) CommitWorkspaceFileRevert(sessionID, planID, resolution string) (WorkspaceFileRevertResult, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return WorkspaceFileRevertResult{}, ErrClosed
+	}
+	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
+		return WorkspaceFileRevertResult{}, ErrSessionNotFound
+	}
+	return m.runtime.CommitWorkspaceFileRevert(planID, resolution)
 }
 
 // Cancel asks the bridge-owned runtime to stop foreground work. It is safe to

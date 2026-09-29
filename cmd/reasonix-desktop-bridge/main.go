@@ -651,6 +651,12 @@ func (b *bridgeServer) sessionCommand(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(path, ":workspace-change-detail"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":workspace-change-detail"))
 		b.workspaceChangeDetail(w, r)
+	case strings.HasSuffix(path, ":workspace-file-revert-preview"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":workspace-file-revert-preview"))
+		b.workspaceFileRevertPreview(w, r)
+	case strings.HasSuffix(path, ":workspace-file-revert-commit"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":workspace-file-revert-commit"))
+		b.idempotent(16<<10, b.workspaceFileRevertCommit)(w, r)
 	case strings.HasSuffix(path, ":cancel"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":cancel"))
 		b.cancel(w, r)
@@ -1246,6 +1252,11 @@ type workspaceChangeDetailRequest struct {
 	Path string `json:"path"`
 }
 
+type workspaceFileRevertCommitRequest struct {
+	PlanID     string `json:"planId"`
+	Resolution string `json:"resolution"`
+}
+
 type workspaceListResponse struct {
 	ProtocolVersion int                            `json:"protocolVersion"`
 	Path            string                         `json:"path"`
@@ -1266,6 +1277,16 @@ type workspaceChangesResponse struct {
 type workspaceChangeDetailResponse struct {
 	ProtocolVersion int                                 `json:"protocolVersion"`
 	Detail          desktopbridge.WorkspaceChangeDetail `json:"detail"`
+}
+
+type workspaceFileRevertPlanResponse struct {
+	ProtocolVersion int                                   `json:"protocolVersion"`
+	Plan            desktopbridge.WorkspaceFileRevertPlan `json:"plan"`
+}
+
+type workspaceFileRevertResultResponse struct {
+	ProtocolVersion int                                     `json:"protocolVersion"`
+	Result          desktopbridge.WorkspaceFileRevertResult `json:"result"`
 }
 
 type attachmentResponse struct {
@@ -1605,6 +1626,38 @@ func (b *bridgeServer) workspaceChangeDetail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	writeJSON(w, http.StatusOK, workspaceChangeDetailResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Detail: detail})
+}
+
+func (b *bridgeServer) workspaceFileRevertPreview(w http.ResponseWriter, r *http.Request) {
+	var request workspaceChangeDetailRequest
+	if err := decodeJSONBody(w, r, 16<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid workspace file revert preview request")
+		return
+	}
+	plan, err := b.runtimes.PrepareWorkspaceFileRevert(r.PathValue("id"), request.Path)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to prepare workspace file revert")
+		return
+	}
+	writeJSON(w, http.StatusOK, workspaceFileRevertPlanResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Plan: plan})
+}
+
+func (b *bridgeServer) workspaceFileRevertCommit(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get(requestIDHeader) == "" {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "workspace file revert requires a request ID")
+		return
+	}
+	var request workspaceFileRevertCommitRequest
+	if err := decodeJSONBody(w, r, 16<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid workspace file revert commit request")
+		return
+	}
+	result, err := b.runtimes.CommitWorkspaceFileRevert(r.PathValue("id"), request.PlanID, request.Resolution)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to commit workspace file revert")
+		return
+	}
+	writeJSON(w, http.StatusOK, workspaceFileRevertResultResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Result: result})
 }
 
 func decodeJSONBody(w http.ResponseWriter, r *http.Request, maxBytes int64, target any) error {
