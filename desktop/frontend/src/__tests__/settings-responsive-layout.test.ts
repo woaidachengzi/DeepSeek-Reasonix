@@ -51,6 +51,9 @@ eq(declaration(caption, "background"), "var(--bg-soft)", "caption controls blend
 eq(declaration(caption, "border"), "0", "workspace borders do not leak into the settings caption");
 const settingsCenter = ruleBlock(panelStyles, ".settings-center");
 eq(declaration(settingsCenter, "grid-template-columns"), "clamp(220px, 20.5vw, 304px) minmax(0, 1fr)", "settings navigation remains readable without consuming the content pane");
+const stableFormPage = ruleBlock(panelStyles, ".settings-page--form");
+const tauriGeneralPageWidth = ruleBlock(tauriStyles, '.tauri-settings-content[data-tab="general"] > *');
+eq(declaration(tauriGeneralPageWidth, "max-width"), declaration(stableFormPage, "max-width"), "Preview general settings match Stable's form width");
 
 const generalPage = ruleBlock(panelStyles, ".settings-page--general");
 eq(declaration(generalPage, "container"), "settings-general / inline-size", "general settings respond to their available content width");
