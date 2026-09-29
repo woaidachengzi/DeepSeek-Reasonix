@@ -248,6 +248,13 @@ func (r *fakeRuntime) CommitWorkspaceFileRevert(string, string) (WorkspaceFileRe
 func (r *fakeRuntime) UndoWorkspaceFileRevert(string) (WorkspaceFileRevertResult, error) {
 	return WorkspaceFileRevertResult{}, nil
 }
+func (r *fakeRuntime) WorkspaceCheckpoints() []WorkspaceCheckpointView { return nil }
+func (r *fakeRuntime) PrepareCodeRewind(int) (WorkspaceCodeRewindPlan, error) {
+	return WorkspaceCodeRewindPlan{}, nil
+}
+func (r *fakeRuntime) CommitCodeRewind(string, bool) (WorkspaceFileRevertResult, error) {
+	return WorkspaceFileRevertResult{}, nil
+}
 func (r *fakeRuntime) Submit(input string)                                       { r.submits = append(r.submits, input) }
 func (r *fakeRuntime) Cancel()                                                   { r.cancelCalls.Add(1) }
 func (r *fakeRuntime) Approve(string, bool)                                      {}

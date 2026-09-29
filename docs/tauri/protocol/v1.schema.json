@@ -39,6 +39,12 @@
     { "$ref": "#/$defs/workspaceFileRevertUndoRequest" },
     { "$ref": "#/$defs/workspaceFileRevertResult" },
     { "$ref": "#/$defs/workspaceFileRevertResultResponse" },
+    { "$ref": "#/$defs/workspaceCheckpointView" },
+    { "$ref": "#/$defs/workspaceCheckpointsResponse" },
+    { "$ref": "#/$defs/codeRewindPreviewRequest" },
+    { "$ref": "#/$defs/workspaceCodeRewindPlan" },
+    { "$ref": "#/$defs/codeRewindPlanResponse" },
+    { "$ref": "#/$defs/codeRewindCommitRequest" },
     { "$ref": "#/$defs/submitRequest" },
     { "$ref": "#/$defs/approvalRequest" },
     { "$ref": "#/$defs/askAnswer" },
@@ -614,6 +620,74 @@
       "properties": {
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
         "result": { "$ref": "#/$defs/workspaceFileRevertResult" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceCheckpointView": {
+      "title": "BridgeWorkspaceCheckpointView",
+      "type": "object",
+      "required": ["turn", "prompt", "time", "turnFileCount"],
+      "properties": {
+        "turn": { "type": "integer", "minimum": 0 },
+        "prompt": { "type": "string" },
+        "time": { "type": "integer" },
+        "turnFileCount": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "workspaceCheckpointsResponse": {
+      "title": "BridgeWorkspaceCheckpointsResponse",
+      "type": "object",
+      "required": ["protocolVersion", "checkpoints"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "checkpoints": { "type": "array", "items": { "$ref": "#/$defs/workspaceCheckpointView" } }
+      },
+      "additionalProperties": false
+    },
+    "codeRewindPreviewRequest": {
+      "title": "BridgeCodeRewindPreviewRequest",
+      "type": "object",
+      "required": ["turn"],
+      "properties": { "turn": { "type": "integer", "minimum": 0 } },
+      "additionalProperties": false
+    },
+    "workspaceCodeRewindPlan": {
+      "title": "BridgeWorkspaceCodeRewindPlan",
+      "type": "object",
+      "required": ["turn", "canFiles", "fileCount", "files", "filesTruncated", "coverage", "coverageGaps", "requiresCoverageConfirmation", "conflicts"],
+      "properties": {
+        "planId": { "type": "string" },
+        "turn": { "type": "integer", "minimum": 0 },
+        "canFiles": { "type": "boolean" },
+        "fileCount": { "type": "integer", "minimum": 0 },
+        "files": { "type": "array", "items": { "type": "string" } },
+        "filesTruncated": { "type": "boolean" },
+        "coverage": { "type": "string" },
+        "coverageGaps": { "type": "array", "items": { "type": "string" } },
+        "requiresCoverageConfirmation": { "type": "boolean" },
+        "disabledReason": { "type": "string" },
+        "conflicts": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "codeRewindPlanResponse": {
+      "title": "BridgeCodeRewindPlanResponse",
+      "type": "object",
+      "required": ["protocolVersion", "plan"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "plan": { "$ref": "#/$defs/workspaceCodeRewindPlan" }
+      },
+      "additionalProperties": false
+    },
+    "codeRewindCommitRequest": {
+      "title": "BridgeCodeRewindCommitRequest",
+      "type": "object",
+      "required": ["planId", "confirmPartialCoverage"],
+      "properties": {
+        "planId": { "type": "string", "minLength": 1 },
+        "confirmPartialCoverage": { "type": "boolean" }
       },
       "additionalProperties": false
     },

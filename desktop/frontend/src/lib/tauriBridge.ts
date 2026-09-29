@@ -34,6 +34,8 @@ import type {
   BridgeWorkspaceChangeDetailResponse,
   BridgeWorkspaceFileRevertPlanResponse,
   BridgeWorkspaceFileRevertResultResponse,
+  BridgeWorkspaceCheckpointsResponse,
+  BridgeCodeRewindPlanResponse,
 } from "./bridgeProtocol.generated";
 import type { TerminalThemePreference } from "./terminalTheme";
 import type { Theme, ThemeStyle } from "./theme";
@@ -61,6 +63,8 @@ export type TauriWorkspaceChanges = BridgeWorkspaceChangesResponse["changes"];
 export type TauriWorkspaceChangeDetail = BridgeWorkspaceChangeDetailResponse["detail"];
 export type TauriWorkspaceFileRevertPlan = BridgeWorkspaceFileRevertPlanResponse["plan"];
 export type TauriWorkspaceFileRevertResult = BridgeWorkspaceFileRevertResultResponse["result"];
+export type TauriWorkspaceCheckpoint = BridgeWorkspaceCheckpointsResponse["checkpoints"][number];
+export type TauriCodeRewindPlan = BridgeCodeRewindPlanResponse["plan"];
 
 /** Exposes only user-visible answer deltas; reasoning and other event text stay private. */
 export function tauriAssistantTextDelta(event: Pick<TauriBridgeEvent, "eventKind" | "payload">): string {
@@ -1674,6 +1678,24 @@ export async function tauriWorkspaceFileRevertCommit(sessionId: string, planId: 
 export async function tauriWorkspaceFileRevertUndo(sessionId: string, transactionId: string): Promise<TauriWorkspaceFileRevertResult> {
   requireTauri();
   const response = await invoke<BridgeWorkspaceFileRevertResultResponse>("bridge_workspace_file_revert_undo", { request: { sessionId, transactionId } });
+  return response.result;
+}
+
+export async function tauriWorkspaceCheckpoints(sessionId: string): Promise<TauriWorkspaceCheckpoint[]> {
+  requireTauri();
+  const response = await invoke<BridgeWorkspaceCheckpointsResponse>("bridge_workspace_checkpoints", { request: { sessionId } });
+  return response.checkpoints;
+}
+
+export async function tauriCodeRewindPreview(sessionId: string, turn: number): Promise<TauriCodeRewindPlan> {
+  requireTauri();
+  const response = await invoke<BridgeCodeRewindPlanResponse>("bridge_code_rewind_preview", { request: { sessionId, turn } });
+  return response.plan;
+}
+
+export async function tauriCodeRewindCommit(sessionId: string, planId: string, confirmPartialCoverage: boolean): Promise<TauriWorkspaceFileRevertResult> {
+  requireTauri();
+  const response = await invoke<BridgeWorkspaceFileRevertResultResponse>("bridge_code_rewind_commit", { request: { sessionId, planId, confirmPartialCoverage } });
   return response.result;
 }
 

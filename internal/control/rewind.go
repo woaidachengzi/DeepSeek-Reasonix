@@ -150,6 +150,23 @@ func (c *Controller) CommitRewind(planID string) (checkpoint.RewindResult, error
 	return c.commitRewind(planID, false)
 }
 
+// CommitCodeRewind accepts only a prepared file-only plan and requires explicit
+// acknowledgement when checkpoint coverage cannot account for every mutation.
+func (c *Controller) CommitCodeRewind(planID string, confirmPartialCoverage bool) (checkpoint.RewindResult, error) {
+	store := c.checkpoints.storeRef()
+	if store == nil {
+		return checkpoint.RewindResult{}, c.rewindFail(fmt.Errorf("checkpoints unavailable"))
+	}
+	plan, ok := store.PeekPlan(planID)
+	if !ok || plan.Scope != checkpoint.RewindCode {
+		return checkpoint.RewindResult{}, c.rewindFail(fmt.Errorf("unknown file rewind plan"))
+	}
+	if RewindPlanRequiresConfirmation(plan) && !confirmPartialCoverage {
+		return checkpoint.RewindResult{}, c.rewindFail(ErrRewindCoverageConfirmationRequired)
+	}
+	return c.CommitRewind(planID)
+}
+
 // CommitRewindInPlace commits a prepared plan and moves this controller onto
 // the rewound conversation: a new head of the same schema-2 log, or the fork
 // file for a schema-1 session. Desktop tabs use it so the tab stays put.

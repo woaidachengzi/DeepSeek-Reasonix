@@ -155,6 +155,27 @@ type WorkspaceFileRevertResult struct {
 	Conflicts     []string `json:"conflicts,omitempty"`
 }
 
+type WorkspaceCheckpointView struct {
+	Turn          int    `json:"turn"`
+	Prompt        string `json:"prompt"`
+	Time          int64  `json:"time"`
+	TurnFileCount int    `json:"turnFileCount"`
+}
+
+type WorkspaceCodeRewindPlan struct {
+	PlanID                       string   `json:"planId,omitempty"`
+	Turn                         int      `json:"turn"`
+	CanFiles                     bool     `json:"canFiles"`
+	FileCount                    int      `json:"fileCount"`
+	Files                        []string `json:"files"`
+	FilesTruncated               bool     `json:"filesTruncated"`
+	Coverage                     string   `json:"coverage"`
+	CoverageGaps                 []string `json:"coverageGaps"`
+	RequiresCoverageConfirmation bool     `json:"requiresCoverageConfirmation"`
+	DisabledReason               string   `json:"disabledReason,omitempty"`
+	Conflicts                    []string `json:"conflicts"`
+}
+
 // HistoryView is the latest bounded page of display-safe messages. StartIndex
 // and TotalMessages refer to the projected (not raw provider) transcript.
 type HistoryView struct {
@@ -184,6 +205,9 @@ type Runtime interface {
 	PrepareWorkspaceFileRevert(path string) (WorkspaceFileRevertPlan, error)
 	CommitWorkspaceFileRevert(planID, resolution string) (WorkspaceFileRevertResult, error)
 	UndoWorkspaceFileRevert(transactionID string) (WorkspaceFileRevertResult, error)
+	WorkspaceCheckpoints() []WorkspaceCheckpointView
+	PrepareCodeRewind(turn int) (WorkspaceCodeRewindPlan, error)
+	CommitCodeRewind(planID string, confirmPartialCoverage bool) (WorkspaceFileRevertResult, error)
 	Submit(input string)
 	Cancel()
 	Approve(promptID string, allow bool)
@@ -954,6 +978,45 @@ func (m *RuntimeManager) UndoWorkspaceFileRevert(sessionID, transactionID string
 		return WorkspaceFileRevertResult{}, ErrSessionNotFound
 	}
 	return m.runtime.UndoWorkspaceFileRevert(transactionID)
+}
+
+func (m *RuntimeManager) WorkspaceCheckpoints(sessionID string) ([]WorkspaceCheckpointView, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return nil, ErrClosed
+	}
+	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
+		return nil, ErrSessionNotFound
+	}
+	return m.runtime.WorkspaceCheckpoints(), nil
+}
+
+func (m *RuntimeManager) PrepareCodeRewind(sessionID string, turn int) (WorkspaceCodeRewindPlan, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return WorkspaceCodeRewindPlan{}, ErrClosed
+	}
+	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
+		return WorkspaceCodeRewindPlan{}, ErrSessionNotFound
+	}
+	return m.runtime.PrepareCodeRewind(turn)
+}
+
+func (m *RuntimeManager) CommitCodeRewind(sessionID, planID string, confirmPartialCoverage bool) (WorkspaceFileRevertResult, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return WorkspaceFileRevertResult{}, ErrClosed
+	}
+	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
+		return WorkspaceFileRevertResult{}, ErrSessionNotFound
+	}
+	return m.runtime.CommitCodeRewind(planID, confirmPartialCoverage)
 }
 
 // Cancel asks the bridge-owned runtime to stop foreground work. It is safe to

@@ -660,6 +660,15 @@ func (b *bridgeServer) sessionCommand(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(path, ":workspace-file-revert-undo"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":workspace-file-revert-undo"))
 		b.idempotent(16<<10, b.workspaceFileRevertUndo)(w, r)
+	case strings.HasSuffix(path, ":checkpoints"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":checkpoints"))
+		b.workspaceCheckpoints(w, r)
+	case strings.HasSuffix(path, ":code-rewind-preview"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":code-rewind-preview"))
+		b.codeRewindPreview(w, r)
+	case strings.HasSuffix(path, ":code-rewind-commit"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":code-rewind-commit"))
+		b.idempotent(16<<10, b.codeRewindCommit)(w, r)
 	case strings.HasSuffix(path, ":cancel"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":cancel"))
 		b.cancel(w, r)
@@ -1264,6 +1273,15 @@ type workspaceFileRevertUndoRequest struct {
 	TransactionID string `json:"transactionId"`
 }
 
+type codeRewindPreviewRequest struct {
+	Turn int `json:"turn"`
+}
+
+type codeRewindCommitRequest struct {
+	PlanID                 string `json:"planId"`
+	ConfirmPartialCoverage bool   `json:"confirmPartialCoverage"`
+}
+
 type workspaceListResponse struct {
 	ProtocolVersion int                            `json:"protocolVersion"`
 	Path            string                         `json:"path"`
@@ -1294,6 +1312,16 @@ type workspaceFileRevertPlanResponse struct {
 type workspaceFileRevertResultResponse struct {
 	ProtocolVersion int                                     `json:"protocolVersion"`
 	Result          desktopbridge.WorkspaceFileRevertResult `json:"result"`
+}
+
+type workspaceCheckpointsResponse struct {
+	ProtocolVersion int                                     `json:"protocolVersion"`
+	Checkpoints     []desktopbridge.WorkspaceCheckpointView `json:"checkpoints"`
+}
+
+type codeRewindPlanResponse struct {
+	ProtocolVersion int                                   `json:"protocolVersion"`
+	Plan            desktopbridge.WorkspaceCodeRewindPlan `json:"plan"`
 }
 
 type attachmentResponse struct {
@@ -1680,6 +1708,47 @@ func (b *bridgeServer) workspaceFileRevertUndo(w http.ResponseWriter, r *http.Re
 	result, err := b.runtimes.UndoWorkspaceFileRevert(r.PathValue("id"), request.TransactionID)
 	if err != nil {
 		b.writeRuntimeError(w, err, "unable to undo workspace file revert")
+		return
+	}
+	writeJSON(w, http.StatusOK, workspaceFileRevertResultResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Result: result})
+}
+
+func (b *bridgeServer) workspaceCheckpoints(w http.ResponseWriter, r *http.Request) {
+	checkpoints, err := b.runtimes.WorkspaceCheckpoints(r.PathValue("id"))
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to list checkpoints")
+		return
+	}
+	writeJSON(w, http.StatusOK, workspaceCheckpointsResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Checkpoints: checkpoints})
+}
+
+func (b *bridgeServer) codeRewindPreview(w http.ResponseWriter, r *http.Request) {
+	var request codeRewindPreviewRequest
+	if err := decodeJSONBody(w, r, 16<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid code rewind preview request")
+		return
+	}
+	plan, err := b.runtimes.PrepareCodeRewind(r.PathValue("id"), request.Turn)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to prepare code rewind")
+		return
+	}
+	writeJSON(w, http.StatusOK, codeRewindPlanResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Plan: plan})
+}
+
+func (b *bridgeServer) codeRewindCommit(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get(requestIDHeader) == "" {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "code rewind requires a request ID")
+		return
+	}
+	var request codeRewindCommitRequest
+	if err := decodeJSONBody(w, r, 16<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid code rewind commit request")
+		return
+	}
+	result, err := b.runtimes.CommitCodeRewind(r.PathValue("id"), request.PlanID, request.ConfirmPartialCoverage)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to commit code rewind")
 		return
 	}
 	writeJSON(w, http.StatusOK, workspaceFileRevertResultResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Result: result})

@@ -78,22 +78,23 @@ use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 
 use bridge::{
     AnswerMCPInteractionRequest, AnswerQuestionRequest, ApproveRequest, AttachFileRequest,
-    BridgeAttachment, BridgeDeleteSessionResponse, BridgeHistory, BridgeProjectFolder,
-    BridgeProviderSummaryResponse, BridgeRemoteBrowseRequest, BridgeRemoteBrowseResponse,
-    BridgeRemoteDisconnectRequest, BridgeRemoteDisconnectResponse, BridgeRemoteFilePreviewRequest,
-    BridgeRemoteFilePreviewResponse, BridgeRemoteFileSaveRequest, BridgeRemoteFileSaveResponse,
-    BridgeSession, BridgeSessionBalanceResponse, BridgeSetAgentPreferenceRequest,
-    BridgeSetDefaultModelRequest, BridgeSetModelRoleRequest, BridgeSetSessionModelRequest,
-    BridgeSnapshot, BridgeStatus, BridgeSupervisor, BridgeWorkspaceChangeDetailResponse,
-    BridgeWorkspaceChangesResponse, BridgeWorkspaceFileResponse,
+    BridgeAttachment, BridgeCodeRewindPlanResponse, BridgeDeleteSessionResponse, BridgeHistory,
+    BridgeProjectFolder, BridgeProviderSummaryResponse, BridgeRemoteBrowseRequest,
+    BridgeRemoteBrowseResponse, BridgeRemoteDisconnectRequest, BridgeRemoteDisconnectResponse,
+    BridgeRemoteFilePreviewRequest, BridgeRemoteFilePreviewResponse, BridgeRemoteFileSaveRequest,
+    BridgeRemoteFileSaveResponse, BridgeSession, BridgeSessionBalanceResponse,
+    BridgeSetAgentPreferenceRequest, BridgeSetDefaultModelRequest, BridgeSetModelRoleRequest,
+    BridgeSetSessionModelRequest, BridgeSnapshot, BridgeStatus, BridgeSupervisor,
+    BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
+    BridgeWorkspaceCheckpointsResponse, BridgeWorkspaceFileResponse,
     BridgeWorkspaceFileRevertPlanResponse, BridgeWorkspaceFileRevertResultResponse,
-    BridgeWorkspaceListResponse, DeleteProviderConfigRequest, DesktopPreferences,
-    DiscoverProviderModelsRequest, DiscoveredProviderModels, HooksSettingsChange,
-    HooksSettingsView, LegacySessionCatalogEntry, MCPClearAuthRequest, MCPClearAuthResponse,
-    MCPMarketplaceEntry, MCPMarketplaceResponse, MCPOAuthRequest, MCPOAuthResponse,
-    MCPRuntimeActionRequest, MCPRuntimeActionResponse, MCPServerActivationRequest,
-    MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse, MCPServerView,
-    MemorySettingsChange, MemorySettingsView, MemorySuggestionAcceptance,
+    BridgeWorkspaceListResponse, CodeRewindCommitRequest, CodeRewindPreviewRequest,
+    DeleteProviderConfigRequest, DesktopPreferences, DiscoverProviderModelsRequest,
+    DiscoveredProviderModels, HooksSettingsChange, HooksSettingsView, LegacySessionCatalogEntry,
+    MCPClearAuthRequest, MCPClearAuthResponse, MCPMarketplaceEntry, MCPMarketplaceResponse,
+    MCPOAuthRequest, MCPOAuthResponse, MCPRuntimeActionRequest, MCPRuntimeActionResponse,
+    MCPServerActivationRequest, MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse,
+    MCPServerView, MemorySettingsChange, MemorySettingsView, MemorySuggestionAcceptance,
     MemorySuggestionAcceptanceRequest, MemorySuggestionsView, NetworkSettingsChange,
     NetworkSettingsView, OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
     PendingSessionTitleRecovery, PermissionSettingsChange, PermissionSettingsView,
@@ -761,6 +762,30 @@ fn bridge_workspace_file_revert_undo(
     request: WorkspaceFileRevertUndoRequest,
 ) -> Result<BridgeWorkspaceFileRevertResultResponse, String> {
     supervisor.workspace_file_revert_undo(request)
+}
+
+#[tauri::command]
+fn bridge_workspace_checkpoints(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: SessionRequest,
+) -> Result<BridgeWorkspaceCheckpointsResponse, String> {
+    supervisor.workspace_checkpoints(request)
+}
+
+#[tauri::command]
+fn bridge_code_rewind_preview(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: CodeRewindPreviewRequest,
+) -> Result<BridgeCodeRewindPlanResponse, String> {
+    supervisor.code_rewind_preview(request)
+}
+
+#[tauri::command]
+fn bridge_code_rewind_commit(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: CodeRewindCommitRequest,
+) -> Result<BridgeWorkspaceFileRevertResultResponse, String> {
+    supervisor.code_rewind_commit(request)
 }
 
 fn workspace_root_is_available(root: &str) -> Option<bool> {
@@ -3445,6 +3470,9 @@ fn main() {
             bridge_workspace_file_revert_preview,
             bridge_workspace_file_revert_commit,
             bridge_workspace_file_revert_undo,
+            bridge_workspace_checkpoints,
+            bridge_code_rewind_preview,
+            bridge_code_rewind_commit,
             workspace_roots_availability,
             bridge_cancel,
             bridge_approve,

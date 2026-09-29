@@ -80,30 +80,31 @@ func TestBridgeTokenDoesNotFallBackToEnvironment(t *testing.T) {
 }
 
 type bridgeTestRuntime struct {
-	path          string
-	title         string
-	state         string
-	modelRef      string
-	history       []desktopbridge.HistoryMessage
-	submits       []string
-	attachCalls   int
-	renameCalls   int
-	deleteCalls   int
-	cancelCalls   int
-	shutdownCalls int
-	workspace     desktopbridge.WorkspaceList
-	preview       desktopbridge.WorkspaceFilePreview
-	changes       desktopbridge.WorkspaceChanges
-	revertCommits int
-	revertUndos   int
-	metrics       desktopbridge.SessionMetrics
-	balance       *desktopbridge.SessionBalance
-	balanceErr    error
-	balanceCalls  int
-	mcpActions    []string
-	mcpAuthFlow   desktopbridge.MCPAuthFlow
-	mcpAuthClears []string
-	recall        desktopbridge.MemoryRecallView
+	path                string
+	title               string
+	state               string
+	modelRef            string
+	history             []desktopbridge.HistoryMessage
+	submits             []string
+	attachCalls         int
+	renameCalls         int
+	deleteCalls         int
+	cancelCalls         int
+	shutdownCalls       int
+	workspace           desktopbridge.WorkspaceList
+	preview             desktopbridge.WorkspaceFilePreview
+	changes             desktopbridge.WorkspaceChanges
+	revertCommits       int
+	revertUndos         int
+	codeRewindConfirmed bool
+	metrics             desktopbridge.SessionMetrics
+	balance             *desktopbridge.SessionBalance
+	balanceErr          error
+	balanceCalls        int
+	mcpActions          []string
+	mcpAuthFlow         desktopbridge.MCPAuthFlow
+	mcpAuthClears       []string
+	recall              desktopbridge.MemoryRecallView
 }
 
 func (r *bridgeTestRuntime) SessionPath() string                          { return r.path }
@@ -180,6 +181,17 @@ func (r *bridgeTestRuntime) CommitWorkspaceFileRevert(string, string) (desktopbr
 }
 func (r *bridgeTestRuntime) UndoWorkspaceFileRevert(string) (desktopbridge.WorkspaceFileRevertResult, error) {
 	r.revertUndos++
+	return desktopbridge.WorkspaceFileRevertResult{OK: true, WrittenCount: 1}, nil
+}
+func (r *bridgeTestRuntime) WorkspaceCheckpoints() []desktopbridge.WorkspaceCheckpointView {
+	return []desktopbridge.WorkspaceCheckpointView{{Turn: 1, Prompt: "edit", TurnFileCount: 1}}
+}
+func (r *bridgeTestRuntime) PrepareCodeRewind(turn int) (desktopbridge.WorkspaceCodeRewindPlan, error) {
+	return desktopbridge.WorkspaceCodeRewindPlan{PlanID: "plan-code", Turn: turn, CanFiles: true, FileCount: 1, Files: []string{"notes.txt"}}, nil
+}
+func (r *bridgeTestRuntime) CommitCodeRewind(_ string, confirmed bool) (desktopbridge.WorkspaceFileRevertResult, error) {
+	r.revertCommits++
+	r.codeRewindConfirmed = confirmed
 	return desktopbridge.WorkspaceFileRevertResult{OK: true, WrittenCount: 1}, nil
 }
 func (r *bridgeTestRuntime) Submit(input string)                                       { r.submits = append(r.submits, input) }
@@ -1493,5 +1505,45 @@ func TestBridgeServerWorkspaceFileRevertRequiresRequestIDAndDeduplicates(t *test
 	first, second = undo("undo-1"), undo("undo-1")
 	if first.Code != http.StatusOK || second.Code != http.StatusOK || first.Body.String() != second.Body.String() || runtime.revertUndos != 1 {
 		t.Fatalf("idempotent undo: first=%d second=%d calls=%d", first.Code, second.Code, runtime.revertUndos)
+	}
+}
+
+func TestBridgeServerCodeRewindRoutesAreScopedAndDeduplicated(t *testing.T) {
+	runtime := &bridgeTestRuntime{path: "/tmp/reasonix-session", state: "idle"}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		return runtime, nil
+	}))
+	handler := newBridgeServer(testToken, "instance", manager).handler()
+	call := func(path, body, requestID string) *httptest.ResponseRecorder {
+		request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		request.Header.Set("Authorization", "Bearer "+testToken)
+		request.Header.Set("Content-Type", "application/json")
+		if requestID != "" {
+			request.Header.Set(requestIDHeader, requestID)
+		}
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		return recorder
+	}
+	if response := call("/v1/sessions:open", `{"sessionId":"tab-code"}`, ""); response.Code != http.StatusOK {
+		t.Fatalf("open status=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := call("/v1/sessions/other:checkpoints", "", ""); response.Code != http.StatusNotFound {
+		t.Fatalf("other session checkpoints status=%d", response.Code)
+	}
+	if response := call("/v1/sessions/tab-code:checkpoints", "", ""); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"turnFileCount":1`) {
+		t.Fatalf("checkpoints status=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := call("/v1/sessions/tab-code:code-rewind-preview", `{"turn":1}`, ""); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"planId":"plan-code"`) {
+		t.Fatalf("preview status=%d body=%s", response.Code, response.Body.String())
+	}
+	path := "/v1/sessions/tab-code:code-rewind-commit"
+	body := `{"planId":"plan-code","confirmPartialCoverage":true}`
+	if response := call(path, body, ""); response.Code != http.StatusBadRequest || runtime.revertCommits != 0 {
+		t.Fatalf("commit without request ID: status=%d calls=%d", response.Code, runtime.revertCommits)
+	}
+	first, second := call(path, body, "code-1"), call(path, body, "code-1")
+	if first.Code != http.StatusOK || second.Code != http.StatusOK || first.Body.String() != second.Body.String() || runtime.revertCommits != 1 || !runtime.codeRewindConfirmed {
+		t.Fatalf("idempotent code rewind: first=%d second=%d calls=%d confirmed=%v", first.Code, second.Code, runtime.revertCommits, runtime.codeRewindConfirmed)
 	}
 }

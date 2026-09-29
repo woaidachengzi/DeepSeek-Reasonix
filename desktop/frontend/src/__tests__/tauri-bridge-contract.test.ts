@@ -96,6 +96,9 @@ const commands: CommandContract[] = [
     argKeys: ["request"],
     description: "tauriWorkspaceFileRevertUndo() invokes the last restore undo",
   },
+  { command: "bridge_workspace_checkpoints", argKeys: ["request"], description: "tauriWorkspaceCheckpoints() lists session checkpoints" },
+  { command: "bridge_code_rewind_preview", argKeys: ["request"], description: "tauriCodeRewindPreview() reviews files from a checkpoint" },
+  { command: "bridge_code_rewind_commit", argKeys: ["request"], description: "tauriCodeRewindCommit() submits a confirmed file rewind" },
   {
     command: "bridge_pending_session_deletes_page",
     argKeys: ["cursor"],

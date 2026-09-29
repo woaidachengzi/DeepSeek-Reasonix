@@ -472,6 +472,30 @@ export function tauriWorkspaceChangeDetail(sessionId, path) {
   record("bridge_workspace_change_detail", { sessionId, path });
   return globalThis.__workspaceDetailHandler?.(sessionId, path) ?? Promise.resolve({ source: "" });
 }
+export function tauriWorkspaceFileRevertPreview(sessionId, path) {
+  record("bridge_workspace_file_revert_preview", { sessionId, path });
+  return globalThis.__workspaceFileRevertPreviewHandler?.(sessionId, path) ?? Promise.resolve({ path, canFiles: false });
+}
+export function tauriWorkspaceFileRevertCommit(sessionId, planId, resolution) {
+  record("bridge_workspace_file_revert_commit", { sessionId, planId, resolution });
+  return globalThis.__workspaceFileRevertCommitHandler?.(sessionId, planId, resolution) ?? Promise.resolve({ ok: false });
+}
+export function tauriWorkspaceFileRevertUndo(sessionId, transactionId) {
+  record("bridge_workspace_file_revert_undo", { sessionId, transactionId });
+  return globalThis.__workspaceFileRevertUndoHandler?.(sessionId, transactionId) ?? Promise.resolve({ ok: false });
+}
+export function tauriWorkspaceCheckpoints(sessionId) {
+  record("bridge_workspace_checkpoints", { sessionId });
+  return globalThis.__workspaceCheckpointsHandler?.(sessionId) ?? Promise.resolve([]);
+}
+export function tauriCodeRewindPreview(sessionId, turn) {
+  record("bridge_code_rewind_preview", { sessionId, turn });
+  return globalThis.__codeRewindPreviewHandler?.(sessionId, turn) ?? Promise.resolve({ turn, canFiles: false, fileCount: 0, files: [], coverageGaps: [], conflicts: [] });
+}
+export function tauriCodeRewindCommit(sessionId, planId, confirmPartialCoverage) {
+  record("bridge_code_rewind_commit", { sessionId, planId, confirmPartialCoverage });
+  return globalThis.__codeRewindCommitHandler?.(sessionId, planId, confirmPartialCoverage) ?? Promise.resolve({ ok: false });
+}
 
 export function startTauriBridgeEvents() {
   record("bridge_start_events");

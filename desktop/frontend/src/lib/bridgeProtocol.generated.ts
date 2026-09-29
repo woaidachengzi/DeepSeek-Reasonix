@@ -32,6 +32,20 @@ export interface BridgeAttachmentResponse {
   protocolVersion: number;
 }
 
+export interface BridgeCodeRewindCommitRequest {
+  confirmPartialCoverage: boolean;
+  planId: string;
+}
+
+export interface BridgeCodeRewindPlanResponse {
+  plan: BridgeWorkspaceCodeRewindPlan;
+  protocolVersion: number;
+}
+
+export interface BridgeCodeRewindPreviewRequest {
+  turn: number;
+}
+
 export interface BridgeDeleteSessionResponse {
   deleted: boolean;
   protocolVersion: number;
@@ -308,6 +322,32 @@ export interface BridgeWorkspaceChanges {
 export interface BridgeWorkspaceChangesResponse {
   changes: BridgeWorkspaceChanges;
   protocolVersion: number;
+}
+
+export interface BridgeWorkspaceCheckpointView {
+  prompt: string;
+  time: number;
+  turn: number;
+  turnFileCount: number;
+}
+
+export interface BridgeWorkspaceCheckpointsResponse {
+  checkpoints: BridgeWorkspaceCheckpointView[];
+  protocolVersion: number;
+}
+
+export interface BridgeWorkspaceCodeRewindPlan {
+  canFiles: boolean;
+  conflicts: string[];
+  coverage: string;
+  coverageGaps: string[];
+  disabledReason?: string;
+  fileCount: number;
+  files: string[];
+  filesTruncated: boolean;
+  planId?: string;
+  requiresCoverageConfirmation: boolean;
+  turn: number;
 }
 
 export interface BridgeWorkspaceEntry {

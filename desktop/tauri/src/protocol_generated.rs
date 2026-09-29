@@ -51,6 +51,26 @@ pub struct BridgeAttachmentResponse {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeCodeRewindCommitRequest {
+    pub confirm_partial_coverage: bool,
+    pub plan_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeCodeRewindPlanResponse {
+    pub plan: BridgeWorkspaceCodeRewindPlan,
+    pub protocol_version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeCodeRewindPreviewRequest {
+    pub turn: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeDeleteSessionResponse {
     pub deleted: bool,
     pub protocol_version: u64,
@@ -407,6 +427,38 @@ pub struct BridgeWorkspaceChanges {
 pub struct BridgeWorkspaceChangesResponse {
     pub changes: BridgeWorkspaceChanges,
     pub protocol_version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceCheckpointView {
+    pub prompt: String,
+    pub time: u64,
+    pub turn: u64,
+    pub turn_file_count: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceCheckpointsResponse {
+    pub checkpoints: Vec<BridgeWorkspaceCheckpointView>,
+    pub protocol_version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceCodeRewindPlan {
+    pub can_files: bool,
+    pub conflicts: Vec<String>,
+    pub coverage: String,
+    pub coverage_gaps: Vec<String>,
+    pub disabled_reason: Option<String>,
+    pub file_count: u64,
+    pub files: Vec<String>,
+    pub files_truncated: bool,
+    pub plan_id: Option<String>,
+    pub requires_coverage_confirmation: bool,
+    pub turn: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
