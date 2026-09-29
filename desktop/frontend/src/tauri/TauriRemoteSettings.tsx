@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { browseTauriRemoteHost, changeTauriRemoteSettings, connectTauriRemoteHost, disconnectTauriRemoteHost, scanTauriRemoteSSHConfig, tauriMessageFrom, tauriRemoteSettings, type TauriRemoteHostInput, type TauriRemoteSettings, type TauriRemoteConnectResponse } from "../lib/tauriBridge";
-import type { BridgeRemoteBrowseResponse } from "../lib/bridgeProtocol.generated";
+import { browseTauriRemoteHost, changeTauriRemoteSettings, connectTauriRemoteHost, disconnectTauriRemoteHost, previewTauriRemoteFile, saveTauriRemoteFile, scanTauriRemoteSSHConfig, tauriMessageFrom, tauriRemoteSettings, type TauriRemoteHostInput, type TauriRemoteSettings, type TauriRemoteConnectResponse } from "../lib/tauriBridge";
+import type { BridgeRemoteBrowseResponse, BridgeRemoteFilePreviewResponse, BridgeRemoteFileSaveRequest } from "../lib/bridgeProtocol.generated";
 import { useT } from "../lib/i18n";
 
 const EMPTY_HOST: TauriRemoteHostInput = {
@@ -34,10 +34,19 @@ export function TauriRemoteSettings() {
   const [fixedName, setFixedName] = useState(false);
   const [connecting, setConnecting] = useState("");
   const [connectionStates, setConnectionStates] = useState<Record<string, TauriRemoteConnectResponse>>({});
+  const [credentialAttempts, setCredentialAttempts] = useState<Record<string, { password: string; passphrase: string }>>({});
   const [browsingHost, setBrowsingHost] = useState("");
   const [browseListing, setBrowseListing] = useState<BridgeRemoteBrowseResponse | null>(null);
   const [browseBusy, setBrowseBusy] = useState(false);
   const [browseError, setBrowseError] = useState(false);
+  const [remotePreview, setRemotePreview] = useState<BridgeRemoteFilePreviewResponse | null>(null);
+  const [remoteDraft, setRemoteDraft] = useState("");
+  const [remotePreviewBusy, setRemotePreviewBusy] = useState(false);
+  const [remotePreviewError, setRemotePreviewError] = useState(false);
+  const [remoteSaveBusy, setRemoteSaveBusy] = useState(false);
+  const [remoteSaveError, setRemoteSaveError] = useState(false);
+  const hasUnsavedRemoteDraft = Boolean(remotePreview && remoteDraft !== remotePreview.content);
+  const confirmDiscardRemoteDraft = () => !hasUnsavedRemoteDraft || window.confirm(t("settings.remote.discardEditsConfirm"));
 
   const reload = () => {
     setLoading(true);
@@ -75,13 +84,16 @@ export function TauriRemoteSettings() {
     finally { setBusy(false); }
   };
 
-  const connect = async (name: string, trustFingerprint?: string) => {
+  const connect = async (name: string, trustFingerprint?: string, attempt?: { password: string; passphrase: string }) => {
     if (connecting) return;
     setConnecting(name); setError(""); setNotice("");
     try {
-      const result = await connectTauriRemoteHost({ name, ...(trustFingerprint ? { trustFingerprint } : {}) });
+      const result = await connectTauriRemoteHost({ name, ...(trustFingerprint ? { trustFingerprint } : {}), ...(attempt?.password ? { password: attempt.password } : {}), ...(attempt?.passphrase ? { passphrase: attempt.passphrase } : {}) });
       setConnectionStates(current => ({ ...current, [name]: result }));
-      if (result.status === "connected") setNotice(t("settings.remote.connected", { host: result.host || name }));
+      if (result.status === "connected") {
+        setCredentialAttempts(current => Object.fromEntries(Object.entries(current).filter(([host]) => host !== name)));
+        setNotice(t("settings.remote.connected", { host: result.host || name }));
+      }
     } catch (err) { setError(tauriMessageFrom(err)); }
     finally { setConnecting(""); }
   };
@@ -92,25 +104,53 @@ export function TauriRemoteSettings() {
     try {
       await disconnectTauriRemoteHost(name);
       setConnectionStates(current => Object.fromEntries(Object.entries(current).filter(([key]) => key !== name)));
+      setCredentialAttempts(current => Object.fromEntries(Object.entries(current).filter(([host]) => host !== name)));
       setNotice(t("settings.remote.disconnected", { host: name }));
     } catch (err) { setError(tauriMessageFrom(err)); }
     finally { setConnecting(""); }
   };
 
-  const loadRemoteDirectory = async (name: string, path?: string) => {
-    setBrowseBusy(true); setBrowseError(false);
+  const loadRemoteDirectory = async (name: string, path?: string, discardConfirmed = false) => {
+    if (!discardConfirmed && !confirmDiscardRemoteDraft()) return;
+    setBrowseBusy(true); setBrowseError(false); setRemotePreview(null); setRemotePreviewError(false);
     try { setBrowseListing(await browseTauriRemoteHost(name, path)); }
     catch { setBrowseError(true); }
     finally { setBrowseBusy(false); }
   };
 
+  const loadRemotePreview = async (name: string, path: string) => {
+    if (!confirmDiscardRemoteDraft()) return;
+    setRemotePreviewBusy(true); setRemotePreviewError(false);
+    setRemoteSaveError(false);
+    try {
+      const result = await previewTauriRemoteFile(name, path);
+      setRemotePreview(result);
+      setRemoteDraft(result.content);
+    }
+    catch { setRemotePreview(null); setRemotePreviewError(true); }
+    finally { setRemotePreviewBusy(false); }
+  };
+
+  const saveRemoteDraft = async () => {
+    if (!remotePreview || remotePreview.kind !== "text" || remotePreview.truncated || remoteDraft === remotePreview.content || remoteSaveBusy) return;
+    setRemoteSaveBusy(true); setRemoteSaveError(false);
+    const request: BridgeRemoteFileSaveRequest = { name: browsingHost, path: remotePreview.path, revision: remotePreview.revision, content: remoteDraft };
+    try {
+      const saved = await saveTauriRemoteFile(request);
+      setRemotePreview(current => current ? { ...current, path: saved.path, content: remoteDraft, revision: saved.revision } : current);
+      setNotice(t("settings.remote.fileSaved"));
+    } catch { setRemoteSaveError(true); }
+    finally { setRemoteSaveBusy(false); }
+  };
+
   const beginBrowse = async (name: string, path?: string) => {
-    setBrowsingHost(name); setBrowseListing(null); setBrowseError(false);
-    await loadRemoteDirectory(name, path);
+    if (!confirmDiscardRemoteDraft()) return;
+    setBrowsingHost(name); setBrowseListing(null); setBrowseError(false); setRemotePreview(null); setRemotePreviewError(false);
+    await loadRemoteDirectory(name, path, true);
   };
 
   const chooseRemoteDirectory = () => {
-    if (!browseListing) return;
+    if (!browseListing || !confirmDiscardRemoteDraft()) return;
     setDraft(current => ({ ...current, workspace: browseListing.path }));
     setBrowsingHost(""); setBrowseListing(null);
   };
@@ -144,6 +184,12 @@ export function TauriRemoteSettings() {
             {connection?.status === "connected" && <small role="status">{t("settings.remote.connectionVerified", { fingerprint: connection.fingerprint || "" })}</small>}
             {connection?.status === "host_key_confirmation" && <div className="tauri-remote-host-confirm" role="group" aria-label={t("settings.remote.hostKeyTitle")}><small>{t("settings.remote.hostKeyPrompt", { host: connection.host || host.name, keyType: connection.keyType || "SSH", address: connection.address || "" })}</small><code>{connection.fingerprint}</code><button type="button" className="tauri-settings-button" disabled={Boolean(connecting)} onClick={() => void connect(host.name, connection.fingerprint)}>{t("settings.remote.trustAndConnect")}</button></div>}
             {connection?.status === "failed" && <small role="alert">{t(errorKey)}</small>}
+            {connection?.status === "failed" && connection.message === "authentication_failed" && <div className="tauri-remote-credential-prompt" role="group" aria-label={t("settings.remote.credentialsPromptTitle")}>
+              <p>{t("settings.remote.credentialsPromptHint")}</p>
+              <label htmlFor={`remote-password-${host.name}`}>{t("settings.remote.password")}<input id={`remote-password-${host.name}`} className="tauri-settings-input" type="password" autoComplete="new-password" value={credentialAttempts[host.name]?.password ?? ""} onChange={event => { const password = event.currentTarget.value; setCredentialAttempts(current => ({ ...current, [host.name]: { password, passphrase: current[host.name]?.passphrase ?? "" } })); }} /></label>
+              <label htmlFor={`remote-passphrase-${host.name}`}>{t("settings.remote.passphrase")}<input id={`remote-passphrase-${host.name}`} className="tauri-settings-input" type="password" autoComplete="new-password" value={credentialAttempts[host.name]?.passphrase ?? ""} onChange={event => { const passphrase = event.currentTarget.value; setCredentialAttempts(current => ({ ...current, [host.name]: { password: current[host.name]?.password ?? "", passphrase } })); }} /></label>
+              <button type="button" className="tauri-settings-button" disabled={Boolean(connecting)} onClick={() => void connect(host.name, undefined, credentialAttempts[host.name] ?? { password: "", passphrase: "" })}>{connecting === host.name ? t("settings.remote.connecting") : t("settings.remote.retryCredentials")}</button>
+            </div>}
           </div>
           <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" disabled={Boolean(connecting) || busy} onClick={() => void connect(host.name)}>{connecting === host.name ? t("settings.remote.connecting") : t(connection?.status === "connected" ? "settings.remote.connectedAction" : "settings.remote.connect")}</button>{connection?.status === "connected" && <button type="button" className="tauri-settings-button" disabled={Boolean(connecting)} onClick={() => void disconnect(host.name)}>{t("settings.remote.disconnect")}</button>}<button type="button" className="tauri-settings-button" disabled={busy || Boolean(connecting)} onClick={() => beginEdit(editableHost(host), true)}>{t("common.edit")}</button><button type="button" className="tauri-settings-button tauri-settings-button--danger" disabled={busy || Boolean(connecting)} onClick={() => setPendingRemove(host)}>{t("common.delete")}</button></div>
           </section>;
@@ -174,11 +220,14 @@ export function TauriRemoteSettings() {
         <h3 id="remote-browser-title">{t("settings.remote.browserTitle", { host: browsingHost })}</h3>
         {browseListing && <><div className="tauri-remote-browser-toolbar"><code title={browseListing.path}>{browseListing.path}</code><div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" disabled={browseBusy || browseListing.parentPath === browseListing.path} onClick={() => void loadRemoteDirectory(browsingHost, browseListing.parentPath)}>{t("settings.remote.parentDirectory")}</button><button type="button" className="tauri-settings-button" disabled={browseBusy} onClick={chooseRemoteDirectory}>{t("settings.remote.selectDirectory")}</button></div></div>
           {browseListing.truncated && <p className="tauri-settings-muted">{t("settings.remote.listTruncated")}</p>}
-          <div className="tauri-remote-browser-list" aria-busy={browseBusy}>{browseListing.entries.map(entry => entry.isDir ? <button key={entry.path} type="button" className="tauri-remote-browser-entry" disabled={browseBusy} onClick={() => void loadRemoteDirectory(browsingHost, entry.path)}><span>▸ {entry.name}</span><small>{entry.symlink ? t("settings.remote.symlink") : t("settings.remote.directory")}</small></button> : <div key={entry.path} className="tauri-remote-browser-entry tauri-remote-browser-entry--file"><span>{entry.name}</span><small>{t("settings.remote.fileSize", { size: entry.size })}</small></div>)}</div>
+          <div className="tauri-remote-browser-list" aria-busy={browseBusy}>{browseListing.entries.map(entry => entry.isDir ? <button key={entry.path} type="button" className="tauri-remote-browser-entry" disabled={browseBusy} onClick={() => void loadRemoteDirectory(browsingHost, entry.path)}><span>▸ {entry.name}</span><small>{entry.symlink ? t("settings.remote.symlink") : t("settings.remote.directory")}</small></button> : <button key={entry.path} type="button" className="tauri-remote-browser-entry tauri-remote-browser-entry--file" disabled={browseBusy || remotePreviewBusy} onClick={() => void loadRemotePreview(browsingHost, entry.path)}><span>{entry.name}</span><small>{t("settings.remote.fileSize", { size: entry.size })}</small></button>)}</div>
+          {remotePreviewBusy && <p role="status">{t("settings.remote.previewLoading")}</p>}
+          {remotePreviewError && <p className="tauri-diagnostic-error" role="alert">{t("settings.remote.previewFailed")}</p>}
+          {remotePreview && <section className="tauri-remote-file-preview" aria-label={t("settings.remote.previewTitle")}><header><code title={remotePreview.path}>{remotePreview.path}</code><span>{remotePreview.kind === "binary" ? t("settings.remote.binaryFile") : t("settings.remote.textFile")}</span></header>{remotePreview.kind === "binary" ? <p>{t("settings.remote.binaryPreviewUnsupported")}</p> : <textarea aria-label={t("settings.remote.previewTitle")} value={remoteDraft} readOnly={remotePreview.truncated} onChange={event => setRemoteDraft(event.currentTarget.value)} />}{remotePreview.truncated && <p>{t("settings.remote.previewTruncated")}</p>}{remoteSaveError && <p className="tauri-diagnostic-error" role="alert">{t("settings.remote.saveFailed")}</p>}{remotePreview.kind === "text" && !remotePreview.truncated && <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" disabled={remoteSaveBusy || remoteDraft === remotePreview.content} onClick={() => void saveRemoteDraft()}>{remoteSaveBusy ? t("settings.remote.savingFile") : t("settings.remote.saveFile")}</button></div>}</section>}
           {browseListing.entries.length === 0 && <p className="tauri-settings-muted">{t("settings.remote.emptyDirectory")}</p>}</>}
         {browseBusy && <p role="status">{t("settings.remote.browsing")}</p>}
         {browseError && <p className="tauri-diagnostic-error" role="alert">{t("settings.remote.browseFailed")}</p>}
-        <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" onClick={() => { setBrowsingHost(""); setBrowseListing(null); }}>{t("common.cancel")}</button></div>
+        <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" onClick={() => { if (!confirmDiscardRemoteDraft()) return; setBrowsingHost(""); setBrowseListing(null); setRemotePreview(null); }}>{t("common.cancel")}</button></div>
       </section></div>}
     </>}
     {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}

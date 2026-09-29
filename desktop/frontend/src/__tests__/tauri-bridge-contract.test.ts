@@ -297,8 +297,8 @@ const commands: CommandContract[] = [
   },
   {
     command: "provider_summary",
-    argKeys: [],
-    description: "tauriProviderSummary() invokes provider_summary with no args",
+    argKeys: ["scope", "workspaceRoot"],
+    description: "tauriProviderSummary() invokes provider_summary with an optional workspace scope",
   },
   {
     command: "provider_configs",
@@ -444,6 +444,21 @@ const commands: CommandContract[] = [
     command: "storage_settings",
     argKeys: [],
     description: "tauriStorageSettings() invokes storage_settings with no args",
+  },
+  {
+    command: "capability_diagnostics",
+    argKeys: ["workspaceRoot", "includeSessionRuntime"],
+    description: "tauriCapabilityDiagnostics() scopes the read-only report to the selected workspace",
+  },
+  {
+    command: "runtime_doctor",
+    argKeys: [],
+    description: "tauriRuntimeDoctor() reads the process-wide extension runtime doctor report",
+  },
+  {
+    command: "export_frontend_diagnostics",
+    argKeys: ["payload"],
+    description: "exportTauriFrontendDiagnostics() uses the native save dialog for a sanitized report",
   },
   {
     command: "set_desktop_approval",
@@ -647,6 +662,7 @@ eq(commands.find(c => c.command === "bridge_status")?.argKeys.length, 0, "bridge
 eq(commands.find(c => c.command === "restart_bridge")?.argKeys.length, 0, "restart_bridge has no args");
 eq(commands.find(c => c.command === "preview_profile_status")?.argKeys.length, 0, "preview_profile_status has no args");
 eq(commands.find(c => c.command === "preview_runtime_info")?.argKeys.length, 0, "preview_runtime_info has no args");
+eq(commands.find(c => c.command === "runtime_doctor")?.argKeys.length, 0, "runtime_doctor has no args");
 ok(
   commands.find(c => c.command === "import_stable_profile")?.argKeys.includes("confirmed"),
   "import_stable_profile requires explicit confirmation",

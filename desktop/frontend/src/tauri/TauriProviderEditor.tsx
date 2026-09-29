@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { deleteTauriProviderConfig, discoverTauriProviderModels, installTauriProviderPreset, resetTauriProviderPreset, saveTauriProviderConfig, tauriMessageFrom, tauriProviderConfigs, tauriProviderSummary, type TauriProviderConfig, type TauriProviderConfigInput, type TauriProviderPreset, type TauriProviderSummary } from "../lib/tauriBridge";
 import { useT } from "../lib/i18n";
 
-const EMPTY: TauriProviderConfigInput = { name: "", displayName: "", kind: "openai", baseUrl: "", balanceUrl: "", clearBalanceUrl: false, balanceUrlSet: false, models: [], default: "", useApiKey: true };
+const EMPTY: TauriProviderConfigInput = { name: "", displayName: "", kind: "openai", baseUrl: "", modelsUrl: "", clearModelsUrl: false, modelsUrlSet: false, noProxy: false, contextWindow: 0, responsesMode: "", balanceUrl: "", clearBalanceUrl: false, balanceUrlSet: false, models: [], default: "", useApiKey: true };
 
 export function TauriProviderEditor({ onSummaryChange }: { onSummaryChange: (summary: TauriProviderSummary) => void }) {
   const t = useT();
@@ -29,7 +29,7 @@ export function TauriProviderEditor({ onSummaryChange }: { onSummaryChange: (sum
   const startEdit = (provider?: TauriProviderConfig) => {
     setError("");
     setMessage("");
-    setEditing(provider ? { ...provider, baseUrl: "", balanceUrl: "", clearBalanceUrl: false, useApiKey: false } : { ...EMPTY });
+    setEditing(provider ? { ...provider, baseUrl: "", modelsUrl: "", clearModelsUrl: false, balanceUrl: "", clearBalanceUrl: false, useApiKey: false } : { ...EMPTY });
     setEditingExisting(Boolean(provider));
     setModelText(provider?.models.join("\n") ?? "");
   };
@@ -59,7 +59,16 @@ export function TauriProviderEditor({ onSummaryChange }: { onSummaryChange: (sum
         }
       } catch { setError(t("settings.previewProvider.error.invalidEndpoint")); return; }
     }
-    const input: TauriProviderConfigInput = { name: editing.name, displayName: editing.displayName, kind: editing.kind, baseUrl: editing.baseUrl, balanceUrl: editing.balanceUrl, clearBalanceUrl: editing.clearBalanceUrl, balanceUrlSet: editing.balanceUrlSet, models, default: models.includes(editing.default) ? editing.default : models[0], useApiKey: editing.useApiKey };
+    if (editing.modelsUrl.trim()) {
+      try {
+        const endpoint = new URL(editing.modelsUrl.trim());
+        const loopback = endpoint.hostname === "localhost" || endpoint.hostname.endsWith(".localhost") || endpoint.hostname === "127.0.0.1" || endpoint.hostname === "[::1]";
+        if (!endpoint.hostname || endpoint.username || endpoint.password || endpoint.search || endpoint.hash || (endpoint.protocol !== "https:" && !(endpoint.protocol === "http:" && loopback))) {
+          setError(t("settings.previewProvider.error.secureEndpoint")); return;
+        }
+      } catch { setError(t("settings.previewProvider.error.invalidEndpoint")); return; }
+    }
+    const input: TauriProviderConfigInput = { name: editing.name, displayName: editing.displayName, kind: editing.kind, baseUrl: editing.baseUrl, modelsUrl: editing.modelsUrl, clearModelsUrl: editing.clearModelsUrl, modelsUrlSet: editing.modelsUrlSet, noProxy: editing.noProxy, contextWindow: editing.contextWindow, responsesMode: editing.responsesMode, balanceUrl: editing.balanceUrl, clearBalanceUrl: editing.clearBalanceUrl, balanceUrlSet: editing.balanceUrlSet, models, default: models.includes(editing.default) ? editing.default : models[0], useApiKey: editing.useApiKey };
     setSaving(true);
     setError("");
     try {
@@ -169,6 +178,13 @@ export function TauriProviderEditor({ onSummaryChange }: { onSummaryChange: (sum
       <label>{t("settings.previewProvider.models")}<textarea rows={4} value={modelText} disabled={saving || discoveringModels} onChange={event => setModelText(event.target.value)} /></label>
       {editingExisting && <button type="button" className="tauri-settings-button" onClick={() => void discoverModels()} disabled={saving || discoveringModels}>{discoveringModels ? t("settings.previewProvider.discoveringModels") : t("settings.previewProvider.discoverModels")}</button>}
       {modelText.trim() && <label>{t("settings.previewProvider.defaultModel")}<select value={editing.default && modelText.split(/\r?\n|,/).map(value => value.trim()).includes(editing.default) ? editing.default : modelText.split(/\r?\n|,/).map(value => value.trim()).filter(Boolean)[0] ?? ""} disabled={saving} onChange={event => setEditing({ ...editing, default: event.target.value })}>{modelText.split(/\r?\n|,/).map(value => value.trim()).filter(Boolean).map(model => <option key={model} value={model}>{model}</option>)}</select></label>}
+      <details className="tauri-provider-advanced"><summary>{t("settings.previewProvider.advanced")}</summary><div className="tauri-provider-advanced__body">
+        <label>{t("settings.providerContextWindow")}<input type="number" min={0} max={10000000} value={editing.contextWindow} disabled={saving} onChange={event => setEditing({ ...editing, contextWindow: Number(event.target.value) || 0 })} /></label>
+        <label className="tauri-provider-editor-checkbox"><input type="checkbox" checked={editing.noProxy} disabled={saving} onChange={event => setEditing({ ...editing, noProxy: event.target.checked })} />{t("settings.providerNoProxy")}</label><p className="tauri-settings-hint">{t("settings.providerNoProxyHint")}</p>
+        {editing.kind === "responses" && <label>{t("settings.previewProvider.responsesMode")}<select value={editing.responsesMode || ""} disabled={saving} onChange={event => setEditing({ ...editing, responsesMode: event.target.value })}><option value="">{t("settings.previewProvider.responsesAuto")}</option><option value="stateless">{t("settings.previewProvider.responsesStateless")}</option><option value="stateful">{t("settings.previewProvider.responsesStateful")}</option></select></label>}
+        <label>{t("settings.previewProvider.modelsEndpoint")}<input value={editing.modelsUrl} disabled={saving || editing.clearModelsUrl} placeholder={editing.modelsUrlSet && editingExisting ? t("settings.previewProvider.keepModelsEndpoint") : t("settings.previewProvider.modelsEndpointPlaceholder")} onChange={event => setEditing({ ...editing, modelsUrl: event.target.value })} /></label>
+        {editingExisting && editing.modelsUrlSet && <label className="tauri-provider-editor-checkbox"><input type="checkbox" checked={editing.clearModelsUrl} disabled={saving} onChange={event => setEditing({ ...editing, clearModelsUrl: event.target.checked, modelsUrl: "" })} />{t("settings.previewProvider.clearModelsEndpoint")}</label>}
+      </div></details>
       {!editingExisting && <label className="tauri-provider-editor-checkbox"><input type="checkbox" checked={editing.useApiKey} disabled={saving} onChange={event => setEditing({ ...editing, useApiKey: event.target.checked })} />{t("settings.previewProvider.requiresAPIKey")}</label>}
       <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" onClick={() => void save()} disabled={saving}>{saving ? t("settings.previewProvider.saving") : t("settings.previewProvider.saveService")}</button><button type="button" className="tauri-settings-button" onClick={() => setEditing(null)} disabled={saving}>{t("common.cancel")}</button></div>
     </div>}

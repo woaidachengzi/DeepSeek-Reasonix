@@ -14,6 +14,7 @@ Object.assign(globalThis, {
   MouseEvent: dom.window.MouseEvent,
   IS_REACT_ACT_ENVIRONMENT: true,
 });
+dom.window.confirm = () => true;
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
 
 let passed = 0;
@@ -56,7 +57,7 @@ async function main() {
   if (passphrase) typeInto(passphrase, "private-passphrase");
   await act(async () => { click("Save"); await settle(); await settle(); });
   const calls = (globalThis as typeof globalThis & {
-    __tauriBridgeCalls: { name: string; args: { change?: { host?: { name?: string; host?: string; workspace?: string; useSSHConfig?: boolean } }; request?: { trustFingerprint?: string } } }[];
+    __tauriBridgeCalls: { name: string; args: { change?: { host?: { name?: string; host?: string; workspace?: string; useSSHConfig?: boolean } }; request?: { trustFingerprint?: string; password?: string; passphrase?: string } } }[];
   }).__tauriBridgeCalls;
   const save = calls.find(call => call.name === "change_remote_settings")?.args.change?.host;
   ok(save?.name === "gpu" && save.host === "gpu" && save.useSSHConfig === true, "saving the imported alias persists the SSH-config flag");
@@ -73,13 +74,61 @@ async function main() {
   const connectCalls = calls.filter(call => call.name === "connect_remote_host");
   ok(connectCalls.length === 2 && connectCalls[1]?.args.request?.trustFingerprint === "SHA256:trusted-test", "host key is trusted only after confirming the displayed fingerprint");
   ok(document.body.textContent?.includes("Connection verified"), "verified connection status is shown on the host card");
+  await act(async () => { click("Disconnect"); await settle(); });
+  (globalThis as typeof globalThis & { __remoteConnectResults?: unknown[] }).__remoteConnectResults = [
+    { protocolVersion: 1, status: "failed", message: "authentication_failed" },
+    { protocolVersion: 1, status: "connected", host: "gpu", fingerprint: "SHA256:trusted-test" },
+  ];
+  await act(async () => { click("Connect"); await settle(); });
+  ok(document.querySelector(".tauri-remote-credential-prompt") !== null, "authentication failure offers an explicit temporary credential prompt");
+  const passwordPrompt = document.querySelector<HTMLInputElement>("#remote-password-gpu");
+  const passphrasePrompt = document.querySelector<HTMLInputElement>("#remote-passphrase-gpu");
+  if (passwordPrompt) typeInto(passwordPrompt, "one-time-password");
+  if (passphrasePrompt) typeInto(passphrasePrompt, "one-time-passphrase");
+  const configWritesBeforeCredentialRetry = calls.filter(call => call.name === "change_remote_settings").length;
+  await act(async () => { click("Retry with credentials"); await settle(); await settle(); });
+  const finalConnectCall = calls.filter(call => call.name === "connect_remote_host").at(-1);
+  ok(finalConnectCall?.args.request?.password === "one-time-password" && finalConnectCall.args.request.passphrase === "one-time-passphrase", "temporary password and key passphrase are sent only with the retry request");
+  ok(calls.filter(call => call.name === "change_remote_settings").length === configWritesBeforeCredentialRetry, "temporary SSH credentials are not written to host settings");
+  ok(!document.querySelector("#remote-password-gpu") && document.body.textContent?.includes("Connection verified"), "successful retry clears the temporary credential form");
   (globalThis as typeof globalThis & { __remoteBrowseResults?: unknown[] }).__remoteBrowseResults = [
     { protocolVersion: 1, path: "/srv/workspace", parentPath: "/srv", entries: [{ name: "project", path: "/srv/workspace/project", isDir: true, symlink: false, size: 0, modTime: 0 }, { name: "README.md", path: "/srv/workspace/README.md", isDir: false, symlink: false, size: 12, modTime: 0 }], truncated: false },
     { protocolVersion: 1, path: "/srv/workspace/project", parentPath: "/srv/workspace", entries: [], truncated: false },
   ];
+  (globalThis as typeof globalThis & { __remotePreviewResults?: unknown[] }).__remotePreviewResults = [
+    { protocolVersion: 1, path: "/srv/workspace/README.md", kind: "text", content: "# Remote project\nPreview text", revision: "original-revision", truncated: false },
+  ];
   await act(async () => { click("Edit"); await settle(); });
   await act(async () => { click("Browse folders"); await settle(); await settle(); });
   ok(document.body.textContent?.includes("README.md") && document.body.textContent?.includes("project"), "remote SFTP browser shows files and navigable folders");
+  const remoteFile = document.querySelector<HTMLButtonElement>(".tauri-remote-browser-entry--file");
+  await act(async () => { remoteFile?.click(); await settle(); });
+  ok(document.body.textContent?.includes("# Remote project") && document.body.textContent?.includes("Text file"), "selecting a remote text file shows its bounded preview");
+  const previewCall = (globalThis as typeof globalThis & { __tauriBridgeCalls: { name: string; args: { name?: string; path?: string } }[] }).__tauriBridgeCalls.find(call => call.name === "preview_remote_file");
+  ok(previewCall?.args.name === "gpu" && previewCall.args.path === "/srv/workspace/README.md", "remote preview reads only the selected file from the connected host");
+  const remoteEditor = document.querySelector<HTMLTextAreaElement>(".tauri-remote-file-preview textarea");
+  if (remoteEditor) {
+    Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, "value")?.set?.call(remoteEditor, "# Updated remotely\nSaved text");
+    remoteEditor.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  }
+  await act(async () => { click("Save remote file"); await settle(); });
+  const saveCall = (globalThis as typeof globalThis & { __tauriBridgeCalls: { name: string; args: { request?: { name?: string; path?: string; revision?: string; content?: string } } }[] }).__tauriBridgeCalls.find(call => call.name === "save_remote_file");
+  ok(saveCall?.args.request?.name === "gpu" && saveCall.args.request.path === "/srv/workspace/README.md" && saveCall.args.request.revision === "original-revision" && saveCall.args.request.content === "# Updated remotely\nSaved text", "saving sends the original revision and edited text to the connected host");
+  ok(document.body.textContent?.includes("Remote file saved."), "successful remote save is confirmed");
+  const savedEditor = document.querySelector<HTMLTextAreaElement>(".tauri-remote-file-preview textarea");
+  (globalThis as typeof globalThis & { __remoteSaveError?: Error }).__remoteSaveError = new Error("remote_file_changed");
+  if (savedEditor) {
+    Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, "value")?.set?.call(savedEditor, "unsaved draft");
+    savedEditor.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  }
+  await act(async () => { click("Save remote file"); await settle(); });
+  ok(document.body.textContent?.includes("file may have changed") && document.querySelector<HTMLTextAreaElement>(".tauri-remote-file-preview textarea")?.value === "unsaved draft", "a conflict keeps the user's unsaved draft and asks them to reload");
+  delete (globalThis as typeof globalThis & { __remoteSaveError?: Error }).__remoteSaveError;
+  let discardPrompts = 0;
+  dom.window.confirm = () => { discardPrompts += 1; return false; };
+  await act(async () => { click("Browse folders"); await settle(); });
+  ok(discardPrompts === 1 && document.querySelector<HTMLTextAreaElement>(".tauri-remote-file-preview textarea")?.value === "unsaved draft" && document.body.textContent?.includes("/srv/workspace/README.md"), "declining a browser switch preserves the unsaved remote draft");
+  dom.window.confirm = () => true;
   const projectFolder = document.querySelector<HTMLButtonElement>(".tauri-remote-browser-entry:not(.tauri-remote-browser-entry--file)");
   await act(async () => { projectFolder?.click(); await settle(); await settle(); });
   ok(document.body.textContent?.includes("/srv/workspace/project"), "remote browser navigates into a selected folder");

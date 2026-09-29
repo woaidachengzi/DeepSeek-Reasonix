@@ -52,6 +52,10 @@ type providerConfigView struct {
 	Kind          string   `json:"kind"`
 	Models        []string `json:"models"`
 	Default       string   `json:"default"`
+	ModelsURLSet  bool     `json:"modelsUrlSet"`
+	NoProxy       bool     `json:"noProxy"`
+	ContextWindow int      `json:"contextWindow"`
+	ResponsesMode string   `json:"responsesMode"`
 	BalanceURLSet bool     `json:"balanceUrlSet"`
 	Removable     bool     `json:"removable"`
 	Revision      string   `json:"revision"`
@@ -141,6 +145,11 @@ type saveProviderConfigRequest struct {
 	DisplayName     string   `json:"displayName"`
 	Kind            string   `json:"kind"`
 	BaseURL         string   `json:"baseUrl"`
+	ModelsURL       string   `json:"modelsUrl"`
+	ClearModelsURL  bool     `json:"clearModelsUrl"`
+	NoProxy         *bool    `json:"noProxy"`
+	ContextWindow   *int     `json:"contextWindow"`
+	ResponsesMode   *string  `json:"responsesMode"`
 	BalanceURL      string   `json:"balanceUrl"`
 	ClearBalanceURL bool     `json:"clearBalanceUrl"`
 	Models          []string `json:"models"`
@@ -179,6 +188,8 @@ func loadProviderConfigs(token string) (providerConfigList, error) {
 		view.Providers = append(view.Providers, providerConfigView{
 			Name: entry.Name, DisplayName: entry.DisplayName, Kind: entry.Kind,
 			Models: append([]string(nil), entry.ModelList()...), Default: entry.Default,
+			ModelsURLSet: strings.TrimSpace(entry.ModelsURL) != "", NoProxy: entry.NoProxy,
+			ContextWindow: entry.ContextWindow, ResponsesMode: entry.ResponsesMode,
 			BalanceURLSet: strings.TrimSpace(entry.BalanceURL) != "",
 			Removable:     !configpkg.IsOfficialDeepSeekProvider(entry),
 			Revision:      revision,
@@ -385,9 +396,17 @@ func validateProviderConfigInput(input *saveProviderConfigRequest) error {
 	input.Kind = strings.ToLower(strings.TrimSpace(input.Kind))
 	input.BaseURL = strings.TrimSpace(input.BaseURL)
 	input.BalanceURL = strings.TrimSpace(input.BalanceURL)
+	input.ModelsURL = strings.TrimSpace(input.ModelsURL)
+	if input.ResponsesMode != nil {
+		value := strings.ToLower(strings.TrimSpace(*input.ResponsesMode))
+		input.ResponsesMode = &value
+	}
 	input.Default = strings.TrimSpace(input.Default)
 	if input.ClearBalanceURL && input.BalanceURL != "" {
 		return fmt.Errorf("choose a balance URL or clear the saved URL")
+	}
+	if input.ClearModelsURL && input.ModelsURL != "" {
+		return fmt.Errorf("choose a model discovery URL or clear the saved URL")
 	}
 	if !previewProviderName.MatchString(input.Name) {
 		return fmt.Errorf("provider name must use letters, digits, hyphens, or underscores")
@@ -424,6 +443,17 @@ func validateProviderConfigInput(input *saveProviderConfigRequest) error {
 		if err := validateProviderURL(input.BalanceURL); err != nil {
 			return fmt.Errorf("balance URL %w", err)
 		}
+	}
+	if input.ModelsURL != "" {
+		if err := validateProviderURL(input.ModelsURL); err != nil {
+			return fmt.Errorf("model discovery URL %w", err)
+		}
+	}
+	if input.ContextWindow != nil && (*input.ContextWindow < 0 || *input.ContextWindow > 10_000_000) {
+		return fmt.Errorf("context window must be between 0 and 10000000")
+	}
+	if input.ResponsesMode != nil && *input.ResponsesMode != "" && *input.ResponsesMode != "auto" && *input.ResponsesMode != "stateless" && *input.ResponsesMode != "stateful" {
+		return fmt.Errorf("invalid Responses API mode")
 	}
 	return nil
 }
@@ -489,6 +519,20 @@ func persistProviderConfig(input saveProviderConfigRequest) error {
 		entry.BalanceURL = ""
 	} else if input.BalanceURL != "" {
 		entry.BalanceURL = input.BalanceURL
+	}
+	if input.ClearModelsURL {
+		entry.ModelsURL = ""
+	} else if input.ModelsURL != "" {
+		entry.ModelsURL = input.ModelsURL
+	}
+	if input.NoProxy != nil {
+		entry.NoProxy = *input.NoProxy
+	}
+	if input.ContextWindow != nil {
+		entry.ContextWindow = *input.ContextWindow
+	}
+	if entry.Kind == "responses" && input.ResponsesMode != nil {
+		entry.ResponsesMode = *input.ResponsesMode
 	}
 	entry.Model = input.Models[0]
 	entry.Models = append([]string(nil), input.Models...)

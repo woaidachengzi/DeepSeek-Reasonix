@@ -469,6 +469,16 @@ func (t *installSourceTool) applyInstallPluginPackage(ctx context.Context, req r
 			return err
 		}
 	}
+	enabled := true
+	if req.Replace {
+		previous, found, stateErr := pluginpkg.FindInstalled(t.reasonixHome, act.Name)
+		if stateErr != nil {
+			return stateErr
+		}
+		if found {
+			enabled = previous.Enabled
+		}
+	}
 	installed := pluginpkg.InstalledPlugin{
 		Name:         act.Name,
 		Source:       act.Source,
@@ -476,7 +486,7 @@ func (t *installSourceTool) applyInstallPluginPackage(ctx context.Context, req r
 		Version:      pkg.Manifest.Version,
 		Description:  pkg.Manifest.Description,
 		ManifestKind: pkg.ManifestKind,
-		Enabled:      true,
+		Enabled:      enabled,
 		Commit:       strings.ToLower(strings.TrimSpace(commit)),
 	}
 	if act.Mode == "link" {
@@ -714,15 +724,29 @@ func (t *installSourceTool) applyRemovePluginPackage(req request, act *action) e
 			}
 		}
 	}
-	// Only the canonical one-level managed install belongs to Reasonix. A
-	// linked/external root or a symlinked plugins parent is registration-only.
+	// Only the canonical one-level managed install or the exact link stub
+	// created for a linked install belongs to Reasonix. Never follow a link or
+	// remove an external root, and do not mutate a symlinked plugins parent.
 	pluginsDir := pluginpkg.PluginsDir(t.reasonixHome)
 	managedRoot := pluginpkg.InstallRoot(t.reasonixHome, installed.Name)
-	if filepath.Clean(root) == filepath.Clean(managedRoot) {
-		info, err := os.Lstat(pluginsDir)
-		if err == nil && info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
+	info, err := os.Lstat(pluginsDir)
+	if err == nil && info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
+		if filepath.Clean(root) == filepath.Clean(managedRoot) {
 			if err := os.RemoveAll(root); err != nil {
 				return err
+			}
+		} else if linkInfo, err := os.Lstat(managedRoot); err == nil && linkInfo.Mode()&os.ModeSymlink != 0 {
+			target, readErr := os.Readlink(managedRoot)
+			if readErr != nil {
+				return readErr
+			}
+			if !filepath.IsAbs(target) {
+				target = filepath.Join(pluginsDir, target)
+			}
+			if filepath.Clean(target) == filepath.Clean(root) {
+				if err := os.Remove(managedRoot); err != nil {
+					return err
+				}
 			}
 		}
 	}

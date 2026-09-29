@@ -11,8 +11,37 @@ import (
 	"testing"
 
 	configpkg "reasonix/internal/config"
+	"reasonix/internal/remote"
 	"reasonix/internal/remote/sshtest"
 )
+
+func TestPreviewRemoteAuthPromptOverridesStoredCredentialOnlyForAttempt(t *testing.T) {
+	passwordKey := "REASONIX_TEST_SSH_PASSWORD"
+	passphraseKey := "REASONIX_TEST_SSH_PASSPHRASE"
+	t.Setenv(passwordKey, "saved-password")
+	t.Setenv(passphraseKey, "saved-passphrase")
+	host := remote.ResolvedHost{PasswordEnv: passwordKey, PassphraseEnv: passphraseKey}
+
+	auth := previewRemoteAuth(host, "temporary-password", "temporary-passphrase")
+	password, err := auth.Password()
+	if err != nil || password != "temporary-password" {
+		t.Fatalf("temporary password override = %q, %v", password, err)
+	}
+	passphrase, err := auth.Passphrase()
+	if err != nil || passphrase != "temporary-passphrase" {
+		t.Fatalf("temporary passphrase override = %q, %v", passphrase, err)
+	}
+
+	storedAuth := previewRemoteAuth(host, "", "")
+	password, err = storedAuth.Password()
+	if err != nil || password != "saved-password" {
+		t.Fatalf("stored password fallback = %q, %v", password, err)
+	}
+	passphrase, err = storedAuth.Passphrase()
+	if err != nil || passphrase != "saved-passphrase" {
+		t.Fatalf("stored passphrase fallback = %q, %v", passphrase, err)
+	}
+}
 
 func TestPreviewRemoteConnectRequiresAndPersistsExplicitHostKeyTrust(t *testing.T) {
 	home := t.TempDir()
@@ -116,6 +145,86 @@ func TestPreviewRemoteConnectRequiresAndPersistsExplicitHostKeyTrust(t *testing.
 	}
 	if listing.Path == "" || listing.ParentPath == "" || len(listing.Entries) != 2 || !listing.Entries[0].IsDir || listing.Entries[1].Name != "README.md" {
 		t.Fatalf("remote listing = %#v", listing)
+	}
+	previewBody, _ := json.Marshal(remotePreviewRequest{Name: "loopback", Path: listing.Entries[1].Path})
+	previewReq := httptest.NewRequest(http.MethodPost, "/v1/settings/remote/preview", strings.NewReader(string(previewBody)))
+	previewReq.Header.Set("Content-Type", "application/json")
+	previewReq.Header.Set("Authorization", "Bearer "+testToken)
+	previewResponse := httptest.NewRecorder()
+	bridge.handler().ServeHTTP(previewResponse, previewReq)
+	if previewResponse.Code != http.StatusOK {
+		t.Fatalf("preview remote text file: %d %s", previewResponse.Code, previewResponse.Body.String())
+	}
+	var preview remotePreviewResponse
+	if err := json.Unmarshal(previewResponse.Body.Bytes(), &preview); err != nil {
+		t.Fatal(err)
+	}
+	if preview.Kind != "text" || preview.Content != "remote workspace" || preview.Truncated || preview.Path != listing.Entries[1].Path {
+		t.Fatalf("remote file preview = %#v", preview)
+	}
+	if preview.Revision != remoteContentRevision([]byte("remote workspace")) {
+		t.Fatalf("remote preview revision = %q", preview.Revision)
+	}
+	saveBody, _ := json.Marshal(remoteSaveRequest{Name: "loopback", Path: preview.Path, Revision: preview.Revision, Content: "updated remote text"})
+	saveReq := httptest.NewRequest(http.MethodPost, "/v1/settings/remote/save", strings.NewReader(string(saveBody)))
+	saveReq.Header.Set("Content-Type", "application/json")
+	saveReq.Header.Set("Authorization", "Bearer "+testToken)
+	saveResponse := httptest.NewRecorder()
+	bridge.handler().ServeHTTP(saveResponse, saveReq)
+	if saveResponse.Code != http.StatusOK {
+		t.Fatalf("save remote text file: %d %s", saveResponse.Code, saveResponse.Body.String())
+	}
+	var saved remoteSaveResponse
+	if err := json.Unmarshal(saveResponse.Body.Bytes(), &saved); err != nil {
+		t.Fatal(err)
+	}
+	if saved.Path != preview.Path || saved.Revision != remoteContentRevision([]byte("updated remote text")) {
+		t.Fatalf("remote save response = %#v", saved)
+	}
+	updatedFile, err := os.ReadFile(filepath.Join(remoteRoot, "README.md"))
+	if err != nil || string(updatedFile) != "updated remote text" {
+		t.Fatalf("remote file contents after save = %q, err=%v", updatedFile, err)
+	}
+	updatedInfo, err := os.Stat(filepath.Join(remoteRoot, "README.md"))
+	if err != nil || updatedInfo.Mode().Perm() != 0o644 {
+		t.Fatalf("remote file mode after save = %v, err=%v", updatedInfo, err)
+	}
+	staleBody, _ := json.Marshal(remoteSaveRequest{Name: "loopback", Path: preview.Path, Revision: preview.Revision, Content: "stale overwrite"})
+	staleReq := httptest.NewRequest(http.MethodPost, "/v1/settings/remote/save", strings.NewReader(string(staleBody)))
+	staleReq.Header.Set("Content-Type", "application/json")
+	staleReq.Header.Set("Authorization", "Bearer "+testToken)
+	staleResponse := httptest.NewRecorder()
+	bridge.handler().ServeHTTP(staleResponse, staleReq)
+	if staleResponse.Code != http.StatusConflict {
+		t.Fatalf("stale remote save status = %d, want 409: %s", staleResponse.Code, staleResponse.Body.String())
+	}
+	startSaves := make(chan struct{})
+	saveResults := make(chan int, 2)
+	for _, content := range []string{"parallel update A", "parallel update B"} {
+		go func(content string) {
+			<-startSaves
+			body, _ := json.Marshal(remoteSaveRequest{Name: "loopback", Path: saved.Path, Revision: saved.Revision, Content: content})
+			req := httptest.NewRequest(http.MethodPost, "/v1/settings/remote/save", strings.NewReader(string(body)))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+testToken)
+			response := httptest.NewRecorder()
+			bridge.handler().ServeHTTP(response, req)
+			saveResults <- response.Code
+		}(content)
+	}
+	close(startSaves)
+	firstSave, secondSave := <-saveResults, <-saveResults
+	if !((firstSave == http.StatusOK && secondSave == http.StatusConflict) || (secondSave == http.StatusOK && firstSave == http.StatusConflict)) {
+		t.Fatalf("concurrent saves accepted the same revision: statuses %d and %d", firstSave, secondSave)
+	}
+	previewBody, _ = json.Marshal(remotePreviewRequest{Name: "loopback", Path: listing.Path})
+	previewReq = httptest.NewRequest(http.MethodPost, "/v1/settings/remote/preview", strings.NewReader(string(previewBody)))
+	previewReq.Header.Set("Content-Type", "application/json")
+	previewReq.Header.Set("Authorization", "Bearer "+testToken)
+	previewResponse = httptest.NewRecorder()
+	bridge.handler().ServeHTTP(previewResponse, previewReq)
+	if previewResponse.Code != http.StatusBadRequest {
+		t.Fatalf("directory preview status = %d, want 400: %s", previewResponse.Code, previewResponse.Body.String())
 	}
 
 	disconnectBody, _ := json.Marshal(remoteDisconnectRequest{Name: "loopback"})

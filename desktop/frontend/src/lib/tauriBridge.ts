@@ -2,7 +2,9 @@ import { convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { formatAttachmentRefForSubmit } from "./attachmentDisplay";
-import type { UsageStatsRange, UsageStatsRequest } from "./types";
+import { t } from "./i18n";
+import type { CapabilityDiagnosticsReport, RuntimeDoctorReport, UsageStatsRange, UsageStatsRequest } from "./types";
+import type { FrontendDiagnosticPayload } from "./frontendDiagnostics";
 import type {
   BridgeAnswerQuestionRequest,
   BridgeApprovalRequest,
@@ -18,6 +20,10 @@ import type {
   BridgeProviderModelProbeResponse,
   BridgeRemoteBrowseRequest,
   BridgeRemoteBrowseResponse,
+  BridgeRemoteFilePreviewRequest,
+  BridgeRemoteFilePreviewResponse,
+  BridgeRemoteFileSaveRequest,
+  BridgeRemoteFileSaveResponse,
   BridgeRemoteDisconnectResponse,
   BridgeSetAgentPreferenceRequest,
   BridgeSession,
@@ -298,6 +304,21 @@ export async function tauriStorageSettings(): Promise<TauriStorageSettings> {
   return invoke<TauriStorageSettings>("storage_settings");
 }
 
+export async function tauriCapabilityDiagnostics(workspaceRoot = "", includeSessionRuntime = false): Promise<CapabilityDiagnosticsReport> {
+  requireTauri();
+  return invoke<CapabilityDiagnosticsReport>("capability_diagnostics", { workspaceRoot, includeSessionRuntime });
+}
+
+export async function tauriRuntimeDoctor(): Promise<RuntimeDoctorReport> {
+  requireTauri();
+  return invoke<RuntimeDoctorReport>("runtime_doctor");
+}
+
+export async function exportTauriFrontendDiagnostics(payload: FrontendDiagnosticPayload): Promise<boolean> {
+  requireTauri();
+  return invoke<boolean>("export_frontend_diagnostics", { payload });
+}
+
 export async function tauriRemoteSettings(): Promise<TauriRemoteSettings> {
   requireTauri();
   return invoke<TauriRemoteSettings>("remote_settings");
@@ -348,6 +369,18 @@ export interface TauriBotChannelSettings {
   access?: TauriBotConnectionAccess;
 }
 
+export interface TauriBotRoute {
+  connectionId: string;
+  platform: "" | "qq" | "feishu" | "weixin" | "dingtalk";
+  chatType: "" | "dm" | "group" | "guild" | "direct" | "thread";
+  chatId: string;
+  userId: string;
+  threadId: string;
+  model: string;
+  toolApprovalMode: "" | "ask" | "auto" | "yolo";
+  workspaceRoot: string;
+}
+
 export interface TauriBotConnectionAccess {
   enabled: boolean;
   allowAll: boolean;
@@ -362,8 +395,17 @@ export interface TauriBotSettings {
   protocolVersion: number;
   configPath: string;
   enabled: boolean;
+  maxSteps: number;
+  debounceMs: number;
+  queueMode: "steer" | "followup" | "collect" | "interrupt";
+  queueCap: number;
+  queueDrop: "summarize" | "old" | "new";
+  ignoreSelfMessages: boolean;
+  selfUserIds: Record<"qq" | "feishu" | "weixin" | "dingtalk", string[]>;
   accessControlConfigured: boolean;
   pairingEnabled: boolean;
+  pairingRequestTtlMinutes: number;
+  pairingMaxPendingPerPlatform: number;
   allowlistEnabled: boolean;
   allowAll: boolean;
   allowlist: Record<"qq" | "feishu" | "weixin" | "dingtalk", {
@@ -373,10 +415,14 @@ export interface TauriBotSettings {
     admins: string[];
   }>;
   channels: TauriBotChannelSettings[];
+  routes: TauriBotRoute[];
 }
 
 export type TauriBotSettingsChange =
   | { action: "set_enabled"; enabled: boolean }
+  | { action: "set_gateway_runtime"; maxSteps?: number; debounceMs?: number; queueMode?: TauriBotSettings["queueMode"]; queueCap?: number; queueDrop?: TauriBotSettings["queueDrop"]; ignoreSelfMessages?: boolean; pairingRequestTtlMinutes?: number; pairingMaxPendingPerPlatform?: number }
+  | { action: "set_self_user_ids"; platform: "qq" | "feishu" | "weixin" | "dingtalk"; values: string[] }
+  | { action: "set_routes"; routes: TauriBotRoute[] }
   | { action: "set_channel_enabled"; channelId: string; enabled: boolean }
   | { action: "set_pairing"; enabled: boolean }
   | { action: "set_allow_all"; enabled: boolean }
@@ -428,14 +474,25 @@ export async function browseTauriRemoteHost(name: string, path?: string): Promis
   return invoke<BridgeRemoteBrowseResponse>("browse_remote_host", { request });
 }
 
+export async function previewTauriRemoteFile(name: string, path: string): Promise<BridgeRemoteFilePreviewResponse> {
+  requireTauri();
+  const request: BridgeRemoteFilePreviewRequest = { name, path };
+  return invoke<BridgeRemoteFilePreviewResponse>("preview_remote_file", { request });
+}
+
+export async function saveTauriRemoteFile(request: BridgeRemoteFileSaveRequest): Promise<BridgeRemoteFileSaveResponse> {
+  requireTauri();
+  return invoke<BridgeRemoteFileSaveResponse>("save_remote_file", { request });
+}
+
 export async function tauriPreviewRuntimeInfo(): Promise<TauriPreviewRuntimeInfo> {
   requireTauri();
   return invoke<TauriPreviewRuntimeInfo>("preview_runtime_info");
 }
 
-export async function tauriProviderSummary(): Promise<TauriProviderSummary> {
+export async function tauriProviderSummary(workspaceRoot?: string, scope: "global" | "project" = "global"): Promise<TauriProviderSummary> {
   requireTauri();
-  return invoke<TauriProviderSummary>("provider_summary");
+  return invoke<TauriProviderSummary>("provider_summary", { scope, ...(workspaceRoot ? { workspaceRoot } : {}) });
 }
 
 export interface TauriProviderConfig {
@@ -444,6 +501,10 @@ export interface TauriProviderConfig {
   kind: string;
   models: string[];
   default: string;
+  modelsUrlSet: boolean;
+  noProxy: boolean;
+  contextWindow: number;
+  responsesMode: string;
   balanceUrlSet: boolean;
   removable: boolean;
   revision: string;
@@ -451,6 +512,8 @@ export interface TauriProviderConfig {
 
 export type TauriProviderConfigInput = Omit<TauriProviderConfig, "removable" | "revision"> & {
   baseUrl: string;
+  modelsUrl: string;
+  clearModelsUrl: boolean;
   balanceUrl: string;
   clearBalanceUrl: boolean;
   useApiKey: boolean;
@@ -596,15 +659,19 @@ export interface TauriSandboxSettings {
   platform: string;
   shell: string;
   resolvedShell: string;
+  effectiveShell?: string;
+  shellReloadRequired?: boolean;
+  shellCapabilities?: Array<{ id: string; variant?: string; available: boolean; path?: string; source?: string; reason?: string }>;
+  gitCapability?: { id: string; variant?: string; available: boolean; path?: string; source?: string; reason?: string } | null;
   effectiveWriteRoots: string[];
   effectiveRootsError: string;
 }
 
 export type TauriSandboxChange = Pick<TauriSandboxSettings, "bash" | "network" | "workspaceRoot" | "allowWrite"> & { shell?: string };
 
-export async function tauriSandboxSettings(workspaceRoot?: string): Promise<TauriSandboxSettings> {
+export async function tauriSandboxSettings(workspaceRoot?: string, sessionId?: string): Promise<TauriSandboxSettings> {
   requireTauri();
-  return invoke<TauriSandboxSettings>("sandbox_settings", workspaceRoot ? { workspaceRoot } : undefined);
+  return invoke<TauriSandboxSettings>("sandbox_settings", workspaceRoot || sessionId ? { workspaceRoot, sessionId } : undefined);
 }
 
 export async function changeTauriSandboxSettings(change: TauriSandboxChange): Promise<TauriSandboxSettings> {
@@ -766,9 +833,11 @@ export interface TauriPluginItem {
   description: string;
   version: string;
   source: "local" | "remote" | "package" | "unknown";
+  updateSource?: string;
   root: string;
   manifestKind: string;
   enabled: boolean;
+  linked: boolean;
   status: "ready" | "invalid";
   issue: string;
   warningCount: number;
@@ -776,6 +845,7 @@ export interface TauriPluginItem {
   agents: number;
   commands: number;
   hooks: number;
+  hookDetails?: Array<{ event: string; match?: string; contextFile?: string; description?: string }>;
   mcpServers: number;
   runtime: boolean;
   revision: string;
@@ -786,6 +856,16 @@ export interface TauriPluginSettings {
   plugins: TauriPluginItem[];
 }
 
+export interface TauriPluginDoctorView {
+  protocolVersion: number;
+  name: string;
+  compatibility: string;
+  mappedCapabilities: string[];
+  skippedCapabilities: { capability: string; path: string; reason: string }[];
+  warnings: string[];
+  error: string;
+}
+
 export async function tauriPluginSettings(): Promise<TauriPluginSettings> {
   requireTauri();
   return invoke<TauriPluginSettings>("plugin_settings");
@@ -794,6 +874,11 @@ export async function tauriPluginSettings(): Promise<TauriPluginSettings> {
 export async function changeTauriPluginSettings(change: { name: string; revision: string; enabled: boolean }): Promise<TauriPluginSettings> {
   requireTauri();
   return invoke<TauriPluginSettings>("change_plugin_settings", { change });
+}
+
+export async function tauriPluginDoctor(name: string): Promise<TauriPluginDoctorView> {
+  requireTauri();
+  return invoke<TauriPluginDoctorView>("plugin_doctor", { name });
 }
 
 export interface TauriPluginInstallPlanAction {
@@ -817,6 +902,7 @@ export interface TauriPluginInstallPlanAction {
 export interface TauriPluginInstallPlan {
   protocolVersion: number;
   planId: string;
+  mode: "copy" | "link";
   actions: TauriPluginInstallPlanAction[];
   warningCount: number;
   warnings: string[];
@@ -829,12 +915,12 @@ export interface TauriPluginOperationResult {
   settings: TauriPluginSettings;
 }
 
-export async function planTauriPluginInstall(source: string): Promise<TauriPluginInstallPlan> {
+export async function planTauriPluginInstall(source: string, mode: "copy" | "link" = "copy", update?: { name: string; revision: string }): Promise<TauriPluginInstallPlan> {
   requireTauri();
-  return invoke<TauriPluginInstallPlan>("plan_plugin_install", { source });
+  return invoke<TauriPluginInstallPlan>("plan_plugin_install", { source, mode, replace: Boolean(update), expectedName: update?.name ?? "", expectedRevision: update?.revision ?? "" });
 }
 
-export async function installTauriPlugin(request: { source: string; planId: string; acceptRisk: boolean }): Promise<TauriPluginOperationResult> {
+export async function installTauriPlugin(request: { source: string; mode: "copy" | "link"; planId: string; acceptRisk: boolean; replace?: boolean; expectedName?: string; expectedRevision?: string }): Promise<TauriPluginOperationResult> {
   requireTauri();
   return invoke<TauriPluginOperationResult>("install_plugin", { request });
 }
@@ -912,6 +998,27 @@ export async function tauriSubagentSettings(workspaceRoot = ""): Promise<TauriSu
 export async function changeTauriSubagentSettings(change: TauriSubagentChange): Promise<TauriSubagentSettings> {
   requireTauri();
   return invoke<TauriSubagentSettings>("change_subagent_settings", { change });
+}
+
+export async function tryTauriSubagentProfile(workspaceRoot: string, input: TauriSubagentProfileInput, task: string): Promise<string> {
+  requireTauri();
+  return invoke<string>("try_subagent_profile", { workspaceRoot, input, task });
+}
+
+export interface TauriSubagentTryStatus {
+  protocolVersion: number;
+  running: boolean;
+  output: string;
+}
+
+export async function tauriSubagentProfileTryStatus(): Promise<TauriSubagentTryStatus> {
+  requireTauri();
+  return invoke<TauriSubagentTryStatus>("subagent_profile_try_status");
+}
+
+export async function cancelTauriSubagentProfileTry(): Promise<void> {
+  requireTauri();
+  await invoke("cancel_subagent_profile_try");
 }
 
 export interface TauriHooksSettings {
@@ -1156,20 +1263,20 @@ export async function exportTauriUserTheme(id: string): Promise<boolean> {
   return invoke<boolean>("export_user_theme", { id });
 }
 
-export async function setTauriDefaultModel(model: string): Promise<TauriProviderSummary> {
+export async function setTauriDefaultModel(model: string, scope: "global" | "project" = "global", workspaceRoot?: string): Promise<TauriProviderSummary> {
   requireTauri();
-  return invoke<TauriProviderSummary>("set_default_model", { request: { model } });
+  return invoke<TauriProviderSummary>("set_default_model", { request: { model, scope, ...(workspaceRoot ? { workspaceRoot } : {}) } });
 }
 
-export async function setTauriModelRole(role: "planner" | "vision" | "search", model: string): Promise<TauriProviderSummary> {
+export async function setTauriModelRole(role: "planner" | "vision" | "search", model: string, scope: "global" | "project" = "global", workspaceRoot?: string): Promise<TauriProviderSummary> {
   requireTauri();
-  return invoke<TauriProviderSummary>("set_model_role", { request: { role, model } });
+  return invoke<TauriProviderSummary>("set_model_role", { request: { role, model, scope, ...(workspaceRoot ? { workspaceRoot } : {}) } });
 }
 
-export async function setTauriAgentPreference(request: BridgeSetAgentPreferenceRequest): Promise<TauriProviderSummary> {
+export async function setTauriAgentPreference(request: Pick<BridgeSetAgentPreferenceRequest, "reasoningLanguage" | "compactRatioPercent">, scope: "global" | "project" = "global", workspaceRoot?: string): Promise<TauriProviderSummary> {
   requireTauri();
   if (Object.keys(request).length !== 1) throw new Error("Choose one agent preference at a time.");
-  return invoke<TauriProviderSummary>("set_agent_preferences", { request });
+  return invoke<TauriProviderSummary>("set_agent_preferences", { request: { ...request, scope, ...(workspaceRoot ? { workspaceRoot } : {}) } });
 }
 
 /** One MCP server as the renderer may see it. Credentials are write-only: the
@@ -1195,6 +1302,7 @@ export interface TauriMCPServer {
   headerKeys?: string[];
   startupTimeoutSeconds?: number;
   callTimeoutSeconds?: number;
+  toolTimeoutSeconds?: Record<string, number>;
   autoStart?: boolean;
   tier?: string;
   managedByPackage?: boolean;
@@ -1213,6 +1321,9 @@ export interface TauriMCPServerInput {
   env?: Record<string, string>;
   url?: string;
   headers?: Record<string, string>;
+  startupTimeoutSeconds?: number;
+  callTimeoutSeconds?: number;
+  toolTimeoutSeconds?: Record<string, number>;
   autoStart?: boolean;
   tier?: string;
 }
@@ -1734,7 +1845,18 @@ export function newTauriSessionId(): string {
 }
 
 export function tauriMessageFrom(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  const message = error instanceof Error ? error.message : String(error);
+  const localizedErrors: Record<string, Parameters<typeof t>[0]> = {
+    "旧版项目文件夹清单暂不可用；当前仅显示 Tauri 本地保存的文件夹。": "settings.data.legacyProjectFoldersUnavailable",
+    "Tauri 本地项目文件夹清单暂不可用；当前仅显示旧版项目来源。": "settings.data.tauriProjectFoldersUnavailable",
+    "旧版与 Tauri 本地项目文件夹清单都暂不可用，已保存的空项目文件夹可能未显示。": "settings.data.allProjectFoldersUnavailable",
+    "旧会话兼容目录无法读取；当前仅显示未核验的持久目录，不能据此操作会话。修复目录后重启 Preview 并重新检查。": "settings.data.legacySessionCatalogUnavailable",
+    "审核导入只在隔离的 Preview profile 中开放": "settings.data.previewProfileRequired",
+    "每项都需要明确确认标题和项目归属": "settings.data.confirmTitleAndProject",
+    "插件文件缺失或格式不兼容": "settings.plugins.packageInvalid",
+  };
+  const key = localizedErrors[message];
+  return key ? t(key) : message;
 }
 
 export function tauriEventSummary(event: { payload: unknown }): string {

@@ -13,6 +13,9 @@ export interface MCPDraft {
   /** KEY=value per line; empty keeps the stored credentials untouched. */
   env: string;
   headers: string;
+  startupTimeoutSeconds: number;
+  callTimeoutSeconds: number;
+  toolTimeoutSeconds: string;
   editing: boolean;
   managedByPackage: boolean;
 }
@@ -27,6 +30,9 @@ export function emptyMCPDraft(scope: "project" | "global"): MCPDraft {
     url: "",
     env: "",
     headers: "",
+    startupTimeoutSeconds: 0,
+    callTimeoutSeconds: 0,
+    toolTimeoutSeconds: "{}",
     editing: false,
     managedByPackage: false,
   };
@@ -65,6 +71,9 @@ export function mcpDraftForEditing(server: TauriMCPServer): MCPDraft {
     // which keys exist and waits for a replacement.
     env: "",
     headers: "",
+    startupTimeoutSeconds: server.startupTimeoutSeconds ?? 0,
+    callTimeoutSeconds: server.callTimeoutSeconds ?? 0,
+    toolTimeoutSeconds: JSON.stringify(server.toolTimeoutSeconds ?? {}, null, 2),
     editing: true,
     managedByPackage: Boolean(server.managedByPackage),
   };
@@ -140,5 +149,24 @@ export function mcpDraftToInput(draft: MCPDraft): TauriMCPServerInput {
   if (env) input.env = env;
   const headers = parseCredentialLines(draft.headers);
   if (headers) input.headers = headers;
+  if (!Number.isSafeInteger(draft.startupTimeoutSeconds) || draft.startupTimeoutSeconds < 0) {
+    throw new Error("settings.mcp.error.startupTimeout");
+  }
+  input.startupTimeoutSeconds = draft.startupTimeoutSeconds;
+  if (!Number.isSafeInteger(draft.callTimeoutSeconds) || draft.callTimeoutSeconds < 0) {
+    throw new Error("settings.mcp.error.callTimeout");
+  }
+  input.callTimeoutSeconds = draft.callTimeoutSeconds;
+  let toolTimeoutSeconds: unknown;
+  try { toolTimeoutSeconds = JSON.parse(draft.toolTimeoutSeconds.trim() || "{}"); }
+  catch { throw new Error("settings.mcp.error.toolTimeoutJson"); }
+  if (!toolTimeoutSeconds || typeof toolTimeoutSeconds !== "object" || Array.isArray(toolTimeoutSeconds)) {
+    throw new Error("settings.mcp.error.toolTimeoutObject");
+  }
+  const timeoutEntries = Object.entries(toolTimeoutSeconds);
+  if (timeoutEntries.some(([tool, seconds]) => !tool.trim() || !Number.isSafeInteger(seconds) || Number(seconds) < 0)) {
+    throw new Error("settings.mcp.error.toolTimeoutValues");
+  }
+  input.toolTimeoutSeconds = Object.fromEntries(timeoutEntries as [string, number][]);
   return input;
 }

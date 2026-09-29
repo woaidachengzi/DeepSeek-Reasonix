@@ -117,6 +117,40 @@ func TestMCPRuntimeStatusAddsOnlyDisplayMetadata(t *testing.T) {
 	}
 }
 
+func TestMCPServerTimeoutOverridesRoundTripAndCanBeCleared(t *testing.T) {
+	handler, _ := mcpTestBridge(t)
+	projectRoot := t.TempDir()
+	add := mcpRequest(t, handler, http.MethodPost, "/v1/mcp/servers?workspaceRoot="+projectRoot,
+		`{"scope":"project","name":"search","type":"stdio","command":"search-mcp","startupTimeoutSeconds":90,"callTimeoutSeconds":45,"toolTimeoutSeconds":{"search":120}}`)
+	if add.Code != http.StatusOK {
+		t.Fatalf("add status = %d, body = %s", add.Code, add.Body.String())
+	}
+	listed := decodeMCPList(t, mcpRequest(t, handler, http.MethodGet, "/v1/mcp/servers?workspaceRoot="+projectRoot, ""))
+	if len(listed.Servers) != 1 || listed.Servers[0].StartupTimeoutSecond != 90 || listed.Servers[0].CallTimeoutSecond != 45 || listed.Servers[0].ToolTimeoutSeconds["search"] != 120 {
+		t.Fatalf("listed timeout overrides = %+v", listed.Servers)
+	}
+	cfg, err := appconfig.LoadForRootReadOnly(projectRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Plugins) != 1 || cfg.Plugins[0].StartupTimeoutSeconds != 90 || cfg.Plugins[0].CallTimeoutSeconds != 45 || cfg.Plugins[0].ToolTimeoutSeconds["search"] != 120 {
+		t.Fatalf("persisted timeout overrides = %+v", cfg.Plugins)
+	}
+
+	clear := mcpRequest(t, handler, http.MethodPost, "/v1/mcp/servers?workspaceRoot="+projectRoot,
+		`{"scope":"project","name":"search","type":"stdio","command":"search-mcp","startupTimeoutSeconds":0,"callTimeoutSeconds":0,"toolTimeoutSeconds":{}}`)
+	if clear.Code != http.StatusOK {
+		t.Fatalf("clear status = %d, body = %s", clear.Code, clear.Body.String())
+	}
+	cfg, err = appconfig.LoadForRootReadOnly(projectRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Plugins) != 1 || cfg.Plugins[0].StartupTimeoutSeconds != 0 || cfg.Plugins[0].CallTimeoutSeconds != 0 || len(cfg.Plugins[0].ToolTimeoutSeconds) != 0 {
+		t.Fatalf("cleared timeout overrides = %+v", cfg.Plugins)
+	}
+}
+
 func TestMCPServerViewExposesOnlyNativeOAuthEligibility(t *testing.T) {
 	eligible := mcpServerViewFor("", appconfig.PluginEntry{
 		Name: "remote", Type: "http", URL: "https://mcp.example.test/mcp",

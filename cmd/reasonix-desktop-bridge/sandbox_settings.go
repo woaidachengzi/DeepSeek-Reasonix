@@ -12,16 +12,20 @@ import (
 )
 
 type sandboxSettingsView struct {
-	ProtocolVersion     int      `json:"protocolVersion"`
-	Bash                string   `json:"bash"`
-	Network             bool     `json:"network"`
-	WorkspaceRoot       string   `json:"workspaceRoot"`
-	AllowWrite          []string `json:"allowWrite"`
-	Platform            string   `json:"platform"`
-	Shell               string   `json:"shell"`
-	ResolvedShell       string   `json:"resolvedShell"`
-	EffectiveWriteRoots []string `json:"effectiveWriteRoots"`
-	EffectiveRootsError string   `json:"effectiveRootsError,omitempty"`
+	ProtocolVersion     int                          `json:"protocolVersion"`
+	Bash                string                       `json:"bash"`
+	Network             bool                         `json:"network"`
+	WorkspaceRoot       string                       `json:"workspaceRoot"`
+	AllowWrite          []string                     `json:"allowWrite"`
+	Platform            string                       `json:"platform"`
+	Shell               string                       `json:"shell"`
+	ResolvedShell       string                       `json:"resolvedShell"`
+	EffectiveShell      string                       `json:"effectiveShell,omitempty"`
+	ShellReloadRequired bool                         `json:"shellReloadRequired"`
+	ShellCapabilities   []sandbox.ShellCapability    `json:"shellCapabilities"`
+	GitCapability       sandbox.ExecutableCapability `json:"gitCapability"`
+	EffectiveWriteRoots []string                     `json:"effectiveWriteRoots"`
+	EffectiveRootsError string                       `json:"effectiveRootsError,omitempty"`
 }
 
 type sandboxSettingsChange struct {
@@ -54,6 +58,8 @@ func sandboxSettingsFromConfig(cfg *configpkg.Config) sandboxSettingsView {
 		Platform:            runtime.GOOS,
 		Shell:               prefer,
 		ResolvedShell:       resolvedName,
+		ShellCapabilities:   sandbox.ShellCapabilitiesForConfig(prefer, cfg.Tools.Shell.Path),
+		GitCapability:       sandbox.GitCapabilityForConfig(prefer, cfg.Tools.Shell.Path),
 		EffectiveWriteRoots: []string{},
 	}
 }

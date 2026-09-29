@@ -1,9 +1,18 @@
 const NOTIFICATIONS_KEY = "tauri-desktop-notifications";
+const NOTIFICATION_EVENTS_KEY = "tauri-desktop-notification-events";
 const PROGRESS_MODE_KEY = "tauri-progress-mode";
 const SIDEBAR_VISIBLE_KEY = "tauri-sidebar-visible";
 export const TAURI_PROGRESS_MODE_CHANGED = "tauri-progress-mode-changed";
 export type TauriProgressMode = "standard" | "deep";
 let sessionValue: boolean | null = null;
+export type TauriNotificationKind = "turn_done" | "approval_request" | "ask_request";
+export type TauriNotificationEvents = Record<TauriNotificationKind, boolean>;
+const DEFAULT_NOTIFICATION_EVENTS: TauriNotificationEvents = {
+  turn_done: true,
+  approval_request: true,
+  ask_request: true,
+};
+let notificationEventsValue: TauriNotificationEvents | null = null;
 let progressSessionValue: TauriProgressMode | null = null;
 
 export function getTauriProgressMode(): TauriProgressMode {
@@ -57,4 +66,37 @@ export function setTauriNotificationsEnabled(enabled: boolean): void {
   } catch {
     // Keep the UI usable when WebView storage is unavailable.
   }
+}
+
+export function getTauriNotificationEvents(): TauriNotificationEvents {
+  if (notificationEventsValue !== null) return { ...notificationEventsValue };
+  try {
+    const raw = localStorage.getItem(NOTIFICATION_EVENTS_KEY);
+    if (!raw) return { ...DEFAULT_NOTIFICATION_EVENTS };
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return { ...DEFAULT_NOTIFICATION_EVENTS };
+    const value = parsed as Partial<TauriNotificationEvents>;
+    return {
+      turn_done: typeof value.turn_done === "boolean" ? value.turn_done : true,
+      approval_request: typeof value.approval_request === "boolean" ? value.approval_request : true,
+      ask_request: typeof value.ask_request === "boolean" ? value.ask_request : true,
+    };
+  } catch {
+    return { ...DEFAULT_NOTIFICATION_EVENTS };
+  }
+}
+
+export function setTauriNotificationEvent(kind: TauriNotificationKind, enabled: boolean): TauriNotificationEvents {
+  const next = { ...getTauriNotificationEvents(), [kind]: enabled };
+  notificationEventsValue = next;
+  try {
+    localStorage.setItem(NOTIFICATION_EVENTS_KEY, JSON.stringify(next));
+  } catch {
+    // The current window still uses the updated preference if storage is unavailable.
+  }
+  return { ...next };
+}
+
+export function isTauriNotificationEnabled(kind: TauriNotificationKind): boolean {
+  return getTauriNotificationsEnabled() && getTauriNotificationEvents()[kind];
 }

@@ -1,3 +1,4 @@
+import { CircleAlert, CircleCheck } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { changeTauriSandboxSettings, tauriMessageFrom, tauriSandboxSettings, type TauriSandboxChange, type TauriSandboxSettings } from "../lib/tauriBridge";
 import { useT } from "../lib/i18n";
@@ -5,8 +6,9 @@ import { useT } from "../lib/i18n";
 type SandboxDraft = Required<TauriSandboxChange>;
 const SHELL_OPTIONS = ["auto", "bash", "powershell", "pwsh"] as const;
 
-export function TauriSandboxSettings({ workspaceRoot, currentSessionState, currentSessionHasAttachments, onApplyToCurrentSession }: {
+export function TauriSandboxSettings({ workspaceRoot, sessionId, currentSessionState, currentSessionHasAttachments, onApplyToCurrentSession }: {
   workspaceRoot?: string;
+  sessionId?: string;
   currentSessionState?: "idle" | "running" | "paused";
   currentSessionHasAttachments?: boolean;
   onApplyToCurrentSession?: () => Promise<boolean>;
@@ -25,11 +27,11 @@ export function TauriSandboxSettings({ workspaceRoot, currentSessionState, curre
   const reload = useCallback(() => {
     setLoading(true);
     setError("");
-    void tauriSandboxSettings(workspaceRoot).then(next => {
+    void tauriSandboxSettings(workspaceRoot, sessionId).then(next => {
       setView(next);
       setDraft({ bash: next.bash, network: next.network, workspaceRoot: next.workspaceRoot, allowWrite: next.allowWrite, shell: next.shell });
     }).catch(err => { setView(null); setDraft(null); setError(tauriMessageFrom(err)); }).finally(() => setLoading(false));
-  }, [workspaceRoot]);
+  }, [workspaceRoot, sessionId]);
   useEffect(() => { reload(); }, [reload]);
 
   const addPath = (event: FormEvent<HTMLFormElement>) => {
@@ -50,8 +52,8 @@ export function TauriSandboxSettings({ workspaceRoot, currentSessionState, curre
       const saved = await changeTauriSandboxSettings({ ...draft, shell: draft.shell === view?.shell ? undefined : draft.shell });
       let next = saved;
       let refreshWarning = "";
-      if (workspaceRoot) {
-        try { next = await tauriSandboxSettings(workspaceRoot); }
+      if (workspaceRoot || sessionId) {
+        try { next = await tauriSandboxSettings(workspaceRoot, sessionId); }
         catch (cause) { refreshWarning = ` ${t("settings.sandbox.refreshFailed", { error: tauriMessageFrom(cause) })}`; }
       }
       setView(next);
@@ -71,6 +73,7 @@ export function TauriSandboxSettings({ workspaceRoot, currentSessionState, curre
       if (await onApplyToCurrentSession()) {
         setPendingApply(false);
         setNotice(t("settings.permission.applied"));
+        reload();
       } else setError(t("settings.permission.applyFailed"));
     } catch { setError(t("settings.permission.applyFailed")); }
     finally { busyRef.current = false; setBusy(false); }
@@ -83,6 +86,14 @@ export function TauriSandboxSettings({ workspaceRoot, currentSessionState, curre
     {loading ? <div className="tauri-settings-loading">{t("common.loading")}</div> : view && draft ? <>
       <div className="tauri-settings-field"><span className="tauri-settings-field-label">{t("settings.shellInterpreter")}<small>{t("settings.sandbox.shellHint")}</small></span><select className="tauri-settings-input" aria-label={t("settings.shellInterpreter")} value={draft.shell} disabled={busy} onChange={event => setDraft({ ...draft, shell: event.target.value })}>{!SHELL_OPTIONS.includes(draft.shell as typeof SHELL_OPTIONS[number]) && <option value={draft.shell}>{t("settings.sandbox.unknownShell", { shell: draft.shell })}</option>}<option value="auto">{t("settings.shellAuto")}</option><option value="bash">{t("settings.shellBash")}</option><option value="powershell">{t("settings.shellPowershell")}</option><option value="pwsh">{t("settings.shellPwsh")}</option></select></div>
       <div className="tauri-settings-field"><span className="tauri-settings-field-label">{t("settings.resolvedShell")}<small>{t("settings.sandbox.detectionHint")}</small></span><output className="tauri-sandbox-settings__resolved-shell">{view.resolvedShell || t("settings.shellNotDetected")}</output></div>
+      {sessionId && <div className="tauri-settings-field"><span className="tauri-settings-field-label">{t("settings.effectiveShell")}</span><div className="tauri-sandbox-settings__effective-shell"><output>{view.effectiveShell ? shellCapabilityLabel(view.effectiveShell, t) : t("settings.shellNotDetected")}</output>{view.shellReloadRequired && <button type="button" className="tauri-settings-button" disabled={busy || currentSessionState !== "idle" || currentSessionHasAttachments || !onApplyToCurrentSession} onClick={() => void applyCurrent()}>{t("settings.shellReloadNow")}</button>}</div></div>}
+      <div className="tauri-settings-field"><span className="tauri-settings-field-label">{t("settings.shellDetection")}</span><div className="tauri-sandbox-settings__detection" aria-label={t("settings.shellDetection")}>
+        {[...(view.shellCapabilities ?? []), ...(view.gitCapability ? [view.gitCapability] : [])].map(capability => <div className="tauri-sandbox-settings__detection-row" key={capability.id}>
+          {capability.available ? <CircleCheck size={14} aria-hidden="true" /> : <CircleAlert size={14} aria-hidden="true" />}
+          <span>{shellCapabilityLabel(capability.id, t)}</span>
+          <small>{capability.available ? capability.path ? t("settings.shellDetectedAt", { path: capability.path }) : t("settings.shellDetected") : t("settings.shellNotDetected")}</small>
+        </div>)}
+      </div></div>
       <div className="tauri-settings-field"><span className="tauri-settings-field-label">{t("settings.bashSandbox")}<small>{view.platform === "windows" ? t("settings.bashUnavailableWindows") : t("settings.sandbox.isolationHint")}</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.bashSandbox")}>{(["enforce", "off"] as const).map(mode => <button key={mode} type="button" role="radio" aria-checked={draft.bash === mode} className={`tauri-settings-radio${draft.bash === mode ? " is-active" : ""}`} disabled={busy || view.platform === "windows"} onClick={() => setDraft({ ...draft, bash: mode })}>{mode === "enforce" ? t("settings.bashEnforceShort") : t("settings.bashOffShort")}</button>)}</div></div>
       <div className="tauri-settings-field"><span className="tauri-settings-field-label">{t("settings.allowNetwork")}<small>{t("settings.sandbox.networkHint")}</small></span><label><input type="checkbox" aria-label={t("settings.allowNetwork")} checked={draft.network} disabled={busy} onChange={event => setDraft({ ...draft, network: event.target.checked })} /></label></div>
       <h3>{t("settings.effectiveWriteRoots")}</h3>
@@ -95,4 +106,16 @@ export function TauriSandboxSettings({ workspaceRoot, currentSessionState, curre
     {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
   </div>;
+}
+
+function shellCapabilityLabel(id: string, t: ReturnType<typeof useT>): string {
+  switch (id) {
+    case "git": return t("settings.gitCapability");
+    case "zsh": return t("settings.shellCapabilityZsh");
+    case "sh": return t("settings.shellCapabilitySh");
+    case "git-bash": return t("settings.effectiveShellGitBash");
+    case "powershell": return t("settings.effectiveShellPowershell");
+    case "pwsh": return t("settings.effectiveShellPwsh");
+    default: return t("settings.effectiveShellBash");
+  }
 }

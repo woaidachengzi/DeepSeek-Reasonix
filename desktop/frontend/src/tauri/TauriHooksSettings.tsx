@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { changeTauriHooksSettings, tauriHooksSettings, tauriMessageFrom, type TauriHooksSettings as HooksView } from "../lib/tauriBridge";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { changeTauriHooksSettings, tauriHooksSettings, tauriPluginSettings, tauriMessageFrom, type TauriHooksSettings as HooksView, type TauriPluginItem } from "../lib/tauriBridge";
 import { useT, type Translator } from "../lib/i18n";
 
 type HookScope = "global" | "project";
@@ -27,11 +27,12 @@ function formatHooks(hooks: Record<string, unknown>): string {
   return JSON.stringify({ hooks }, null, 2);
 }
 
-export function TauriHooksSettings({ workspaceRoot = "", currentSessionState, currentSessionHasAttachments, onApplyToCurrentSession }: {
+export function TauriHooksSettings({ workspaceRoot = "", currentSessionState, currentSessionHasAttachments, onApplyToCurrentSession, onOpenPlugins }: {
   workspaceRoot?: string;
   currentSessionState?: "idle" | "running" | "paused";
   currentSessionHasAttachments?: boolean;
   onApplyToCurrentSession?: () => Promise<boolean>;
+  onOpenPlugins?: () => void;
 }) {
   const t = useT();
   const [scope, setScope] = useState<HookScope>("global");
@@ -42,7 +43,29 @@ export function TauriHooksSettings({ workspaceRoot = "", currentSessionState, cu
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [pendingApply, setPendingApply] = useState(false);
+  const [plugins, setPlugins] = useState<TauriPluginItem[]>([]);
+  const [pluginsLoading, setPluginsLoading] = useState(true);
+  const [pluginsError, setPluginsError] = useState("");
   const busyRef = useRef(false);
+  const pluginRequest = useRef(0);
+
+  const reloadPluginHooks = useCallback(() => {
+    const current = ++pluginRequest.current;
+    setPluginsLoading(true);
+    setPluginsError("");
+    void tauriPluginSettings().then(next => {
+      if (pluginRequest.current === current) setPlugins(next.plugins);
+    }).catch(err => {
+      if (pluginRequest.current === current) setPluginsError(tauriMessageFrom(err));
+    }).finally(() => {
+      if (pluginRequest.current === current) setPluginsLoading(false);
+    });
+  }, []);
+
+  useEffect(() => {
+    reloadPluginHooks();
+    return () => { pluginRequest.current += 1; };
+  }, [reloadPluginHooks]);
 
   const reload = async (nextScope: HookScope) => {
     setLoading(true);
@@ -116,6 +139,8 @@ export function TauriHooksSettings({ workspaceRoot = "", currentSessionState, cu
     finally { busyRef.current = false; setBusy(false); }
   };
 
+  const pluginHookPackages = plugins.filter(plugin => plugin.hooks > 0 || (plugin.hookDetails?.length ?? 0) > 0);
+
   return <div className="tauri-settings-section tauri-hooks-settings">
     <h3>{t("settings.hooks.scopeTitle")}</h3><p>{t("settings.hooks.description")}</p>
     <div className="tauri-settings-field"><span className="tauri-settings-field-label">{t("settings.hooks.scope")}<small>{t("settings.hooks.scopeHint")}</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.hooks.scopeAria")}>{(["global", "project"] as const).map(value => <button key={value} type="button" role="radio" aria-checked={scope === value} className={`tauri-settings-radio${scope === value ? " is-active" : ""}`} disabled={busy || (value === "project" && !workspaceRoot)} onClick={() => { if (!dirty || window.confirm(t("settings.hooks.confirmDiscard"))) setScope(value); }}>{value === "global" ? t("settings.hooks.global") : t("settings.hooks.project")}</button>)}</div></div>
@@ -127,6 +152,13 @@ export function TauriHooksSettings({ workspaceRoot = "", currentSessionState, cu
       <textarea className="tauri-hooks-editor" aria-label={t("settings.hooks.editorAria")} spellCheck={false} value={text} disabled={busy} onChange={event => { setText(event.target.value); setError(""); setNotice(""); }} />
       <p>{t("settings.hooks.availableEvents", { events: view.events.join("、") })}</p>
       <div className="tauri-settings-actions"><span role="status">{dirty ? t("settings.hooks.unsaved") : t("settings.hooks.saved")}</span><button type="button" className="tauri-settings-button" disabled={busy || !dirty} onClick={() => { setText(formatHooks(view.hooks)); setError(""); }}>{t("settings.hooks.discard")}</button><button type="button" className="tauri-settings-button" disabled={busy || !dirty} onClick={() => void save()}>{t("settings.hooks.save")}</button><button type="button" className="tauri-settings-button" disabled={busy} onClick={() => { if (!dirty || window.confirm(t("settings.hooks.confirmDiscard"))) void reload(scope); }}>{t("settings.hooks.reload")}</button>{pendingApply && currentSessionState && onApplyToCurrentSession && <button type="button" className="tauri-settings-button" disabled={busy || currentSessionState !== "idle" || currentSessionHasAttachments} onClick={() => void applyCurrent()}>{t("settings.hooks.applyCurrent")}</button>}</div>
+      <section className="tauri-hooks-plugin-inventory" aria-labelledby="tauri-hooks-plugin-title">
+        <div className="tauri-hooks-plugin-heading"><div><h3 id="tauri-hooks-plugin-title">{t("settings.hooks.pluginTitle")}</h3><p>{t("settings.hooks.pluginDescription")}</p></div><div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" disabled={pluginsLoading} onClick={reloadPluginHooks}>{t("settings.plugins.refresh")}</button>{onOpenPlugins && <button type="button" className="tauri-settings-button" onClick={onOpenPlugins}>{t("settings.tab.plugins")}</button>}</div></div>
+        {pluginsLoading ? <div className="tauri-settings-loading">{t("settings.hooks.loading")}</div> : pluginsError ? <div className="tauri-settings-load-error" role="alert"><span>{pluginsError}</span><button type="button" className="tauri-settings-button" onClick={reloadPluginHooks}>{t("settings.hooks.retry")}</button></div> : pluginHookPackages.length ? <div className="tauri-hooks-plugin-list">{pluginHookPackages.map(plugin => <article className="tauri-hooks-plugin" key={plugin.name}>
+          <div className="tauri-hooks-plugin__header"><strong>{plugin.name}</strong><span className={plugin.enabled ? "is-enabled" : "is-disabled"}>{t(plugin.enabled ? "settings.plugins.enabled" : "settings.plugins.disabled")}</span><small>{t("settings.plugins.hooksCount", { count: plugin.hooks })}</small></div>
+          {plugin.hookDetails?.length ? <ul>{plugin.hookDetails.map((hook, index) => <li key={`${hook.event}-${hook.match ?? ""}-${index}`}><strong>{hook.event}</strong>{hook.match && <code>{hook.match}</code>}{hook.description && <span>{hook.description}</span>}{hook.contextFile && <small>{hook.contextFile}</small>}</li>)}</ul> : <p>{t("settings.hooks.pluginDetailsUnavailable")}</p>}
+        </article>)}</div> : <p role="status">{t("settings.hooks.pluginNone")}</p>}
+      </section>
     </> : <button type="button" className="tauri-settings-button" onClick={() => void reload(scope)}>{t("settings.hooks.retry")}</button>}
     {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}

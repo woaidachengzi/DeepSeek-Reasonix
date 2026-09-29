@@ -12,6 +12,7 @@ const dom = new JSDOM("<!doctype html><html><body><div id='root'></div></body></
 Object.assign(globalThis, {
   window: dom.window,
   document: dom.window.document,
+  Element: dom.window.Element,
   HTMLElement: dom.window.HTMLElement,
   Event: dom.window.Event,
   CustomEvent: dom.window.CustomEvent,
@@ -22,6 +23,7 @@ Object.assign(globalThis, {
 });
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
 let copiedPath = "";
+let exportedFrontendDiagnostics: unknown;
 Object.defineProperty(dom.window.navigator, "clipboard", { value: { writeText: async (value: string) => { copiedPath = value; } }, configurable: true });
 class TestResizeObserver { observe() {} unobserve() {} disconnect() {} }
 globalThis.ResizeObserver = TestResizeObserver as unknown as typeof ResizeObserver;
@@ -35,6 +37,7 @@ let failSave = false;
 let failRuntime = false;
 let failStorage = false;
 const calls: string[] = [];
+const capabilityDiagnosticsCalls: { workspaceRoot?: string; includeSessionRuntime?: boolean }[] = [];
 let openedURL = "";
 let closeBehavior = "keep_running";
 let zoomFactor = 1;
@@ -54,14 +57,17 @@ let visionModel = "";
 let webSearchModel = "";
 let reasoningLanguage: "auto" | "zh" | "en" = "auto";
 let compactRatioPercent = 80;
+let projectModelPreferences = { defaultModel: "demo/new", plannerModel: "", visionModel: "", webSearchModel: "auto", reasoningLanguage: "zh" as "auto" | "zh" | "en", compactRatioPercent: 70 };
+let lastModelPreferenceRequest: Record<string, unknown> | undefined;
 const permissions = { protocolVersion: 1, scope: "global" as "global" | "project", mode: "ask", allow: [] as string[], ask: [] as string[], deny: [] as string[], projectOverrides: { mode: false, allow: false, ask: false, deny: false } };
 const secretsSettings = { protocolVersion: 1, filterSubprocessEnv: false, protectSensitiveFiles: false };
-let sandbox = { protocolVersion: 1, bash: "enforce", network: true, workspaceRoot: "", allowWrite: [] as string[], platform: "darwin", shell: "auto", resolvedShell: "bash", effectiveWriteRoots: ["/preview/project"], effectiveRootsError: "" };
+let sandbox = { protocolVersion: 1, bash: "enforce", network: true, workspaceRoot: "", allowWrite: [] as string[], platform: "darwin", shell: "auto", resolvedShell: "bash", shellCapabilities: [{ id: "bash", available: true, path: "/bin/bash" }, { id: "zsh", available: true, path: "/bin/zsh" }, { id: "sh", available: true, path: "/bin/sh" }], gitCapability: { id: "git", available: true, path: "/usr/bin/git" }, effectiveWriteRoots: ["/preview/project"], effectiveRootsError: "" };
 let sandboxQueryRoot = "";
+let sandboxQuerySession = "";
 let network = { protocolVersion: 1, proxyMode: "auto", noProxy: "", proxyType: "socks5", proxyServer: "", proxyPort: 0, proxyUsername: "", proxyUrlSet: false, proxyPasswordSet: false };
-let skills = { protocolVersion: 1, allowImplicitInvocation: true, globalAllowImplicitInvocation: true, projectOverrides: { implicit: false, skills: false, sources: false }, skills: [{ name: "demo", description: "A test skill", invocation: "/demo", scope: "global", sourcePath: "/tmp/demo/SKILL.md", runAs: "inline", enabled: true, requires: ["mcp-server:github"], archiveRevision: "" }], sources: [{ path: "/tmp/skills", scope: "custom", status: "ok", enabled: true, configured: true, skillCount: 1 }], archivedSkills: [] as { name: string; scope: "global" | "project"; archiveId: string; path: string; revision: string }[] };
+let skills = { protocolVersion: 1, allowImplicitInvocation: true, globalAllowImplicitInvocation: true, projectOverrides: { implicit: false, skills: false, sources: false }, skills: [{ name: "demo", description: "A test skill", invocation: "/demo", scope: "global", sourcePath: "/tmp/skills/demo/SKILL.md", runAs: "inline", enabled: true, requires: ["mcp-server:github"], archiveRevision: "" }], sources: [{ path: "/tmp/skills", scope: "custom", status: "ok", enabled: true, configured: true, skillCount: 1 }], archivedSkills: [] as { name: string; scope: "global" | "project"; archiveId: string; path: string; revision: string }[] };
 let failSkills = false;
-let plugins = { protocolVersion: 1, plugins: [{ name: "sample", description: "A test plugin", version: "1.0", source: "local", root: "/preview/plugins/sample", manifestKind: "reasonix", enabled: true, status: "ready", issue: "", warningCount: 0, skills: 1, agents: 0, commands: 2, hooks: 0, mcpServers: 1, runtime: false, revision: "a".repeat(64) }] };
+let plugins = { protocolVersion: 1, plugins: [{ name: "sample", description: "A test plugin", version: "1.0", source: "local", root: "/preview/plugins/sample", manifestKind: "reasonix", enabled: true, status: "ready", issue: "", warningCount: 0, skills: 1, agents: 0, commands: 2, hooks: 1, hookDetails: [{ event: "PreToolUse", match: "Bash", description: "Review shell commands", contextFile: "hooks/policy.md" }], mcpServers: 1, runtime: false, revision: "a".repeat(64) }] };
 let installedPluginSource = "";
 let removedPluginName = "";
 let lastSkillScope = "";
@@ -69,7 +75,7 @@ let installedSkillSource = "";
 let installedSkillScope = "";
 let archivedSkillRevision = "";
 let restoredSkillArchiveId = "";
-let subagents = { protocolVersion: 1, defaultModel: "demo/m", subagentModel: "", subagentEffort: "", maxDepth: 2, maxConcurrency: 6, maxParallelWriters: 3, modelRefs: ["demo/m"], modelEfforts: { "demo/m": ["auto", "low", "high"] }, profiles: [{ name: "reviewer", description: "Reviews code", scope: "global", invocation: "/reviewer", configuredModel: "", configuredEffort: "" }] };
+let subagents = { protocolVersion: 1, defaultModel: "demo/m", subagentModel: "", subagentEffort: "", maxDepth: 2, maxConcurrency: 6, maxParallelWriters: 3, modelRefs: ["demo/m"], modelEfforts: { "demo/m": ["auto", "low", "high"] }, profiles: [{ name: "reviewer", description: "Reviews code", scope: "global", invocation: "/reviewer", invocationMode: "manual", configuredModel: "", configuredEffort: "" }] };
 let savedSubagentProfile: { action?: string; scope?: string; profile?: { name: string; description: string; systemPrompt: string } } | undefined;
 let hooks = { protocolVersion: 1, scope: "global", path: "/preview/settings.json", projectRoot: "", revision: "r1", hooks: {} as Record<string, unknown>, events: ["PreToolUse", "Stop"] };
 let memory = { protocolVersion: 1, workspaceRoot: "/preview/project", storeDir: "/preview/memory", globalStoreDir: "/preview/global-memory", docs: [{ path: "/preview/project/AGENTS.md", scope: "project", body: "Old instruction.\n", revision: "r1" }], facts: [{ id: "memory-fact", revision: 2, createdAt: "2026-09-01T00:00:00Z", updatedAt: "2026-09-02T00:00:00Z", name: "project-fact", title: "Project fact", description: "Current description", type: "project", scope: "project", body: "Current body", freshness: "fresh" }], archives: [] as unknown[], revisions: [] as unknown[], diagnostics: [] as string[], lastRecall: { query: "language preference", hits: [{ id: "memory-fact", revision: 2, name: "project-fact", title: "Project fact", type: "project", scope: "project", score: 0.9, freshness: "fresh", reason: "matched recent context", snippet: "Reply in Chinese." }], omitted: 0, charBudget: 480, usedChars: 18 } };
@@ -78,36 +84,54 @@ let memoryNote = "";
 let allowDeleteProvider = false;
 let deletedProviderName = "";
 let deletedProviderRevision = "";
-let savedProviderInput: { name: string; displayName: string; kind: string; baseUrl: string; balanceUrl?: string; clearBalanceUrl?: boolean; models: string[]; default: string; useApiKey: boolean } | undefined;
+let savedProviderInput: { name: string; displayName: string; kind: string; baseUrl: string; modelsUrl?: string; clearModelsUrl?: boolean; noProxy?: boolean; contextWindow?: number; responsesMode?: string; balanceUrl?: string; clearBalanceUrl?: boolean; models: string[]; default: string; useApiKey: boolean } | undefined;
 let savedPresetId = "";
 let presetInstalled = false;
 let presetModified = false;
 let savedPresetAction = "";
 let lastProbeRequest: { name: string; model: string; apiKey?: string } | null = null;
 const providerPreset = () => ({ id: "mimo-api", label: "MiMo API", description: "MiMo direct API", group: "Xiaomi", recommended: false, status: presetInstalled ? presetModified ? "installed_modified" : "installed" : "available", revision: "r1", routes: [{ name: "mimo-api", kind: "openai", baseUrl: "https://api.xiaomimimo.com/v1", models: ["mimo-v2.5-pro"], default: "mimo-v2.5-pro" }] });
-const summary = () => ({
+const summary = (scope = "global") => ({
   protocolVersion: 1,
-  defaultModel,
-  plannerModel,
-  visionModel,
-  webSearchModel,
-  reasoningLanguage,
-  compactRatioPercent,
+  scope,
+  defaultModel: scope === "project" ? projectModelPreferences.defaultModel : defaultModel,
+  plannerModel: scope === "project" ? projectModelPreferences.plannerModel : plannerModel,
+  visionModel: scope === "project" ? projectModelPreferences.visionModel : visionModel,
+  webSearchModel: scope === "project" ? projectModelPreferences.webSearchModel : webSearchModel,
+  reasoningLanguage: scope === "project" ? projectModelPreferences.reasoningLanguage : reasoningLanguage,
+  compactRatioPercent: scope === "project" ? projectModelPreferences.compactRatioPercent : compactRatioPercent,
   providers: [{ name: "demo", displayName: "Demo", kind: "openai", modelCount: 2, models: ["m", "new"], visionModels: ["m"], searchModels: ["m"], requiresKey: true, configured: keyPresent || envCredentialPresent }],
 });
 
 (dom.window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
-  async invoke(command: string, args?: { scope?: string; source?: string; workspaceRoot?: string; currency?: string; url?: string; behavior?: string; mode?: string; theme?: string | { id?: string; [key: string]: unknown }; request?: { model?: string; role?: string; reasoningLanguage?: "auto" | "zh" | "en"; compactRatioPercent?: number; source?: string; scope?: string; workspaceRoot?: string; name?: string; apiKey?: string; planId?: string; revision?: string; acceptRisk?: boolean; kind?: string; id?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; balanceUrl?: string; clearBalanceUrl?: boolean; models: string[]; default: string; useApiKey: boolean; revision?: string; presetId?: string; presetAction?: string }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string; profile?: { name: string; description: string; systemPrompt: string }; filterSubprocessEnv?: boolean; protectSensitiveFiles?: boolean } }) {
+  async invoke(command: string, args?: { payload?: unknown; scope?: string; source?: string; workspaceRoot?: string; currency?: string; url?: string; behavior?: string; mode?: string; theme?: string | { id?: string; [key: string]: unknown }; request?: { model?: string; role?: string; reasoningLanguage?: "auto" | "zh" | "en"; compactRatioPercent?: number; source?: string; scope?: string; workspaceRoot?: string; name?: string; apiKey?: string; planId?: string; revision?: string; acceptRisk?: boolean; kind?: string; id?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; modelsUrl?: string; clearModelsUrl?: boolean; noProxy?: boolean; contextWindow?: number; responsesMode?: string; balanceUrl?: string; clearBalanceUrl?: boolean; models: string[]; default: string; useApiKey: boolean; revision?: string; presetId?: string; presetAction?: string }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string; profile?: { name: string; description: string; systemPrompt: string }; filterSubprocessEnv?: boolean; protectSensitiveFiles?: boolean } }) {
     calls.push(command);
     switch (command) {
+      case "capability_diagnostics":
+        capabilityDiagnosticsCalls.push({ workspaceRoot: args?.workspaceRoot, includeSessionRuntime: (args as { includeSessionRuntime?: boolean } | undefined)?.includeSessionRuntime });
+        return {
+          schema_version: 1,
+          root: args?.workspaceRoot ?? "<workspace>",
+          live: false,
+          summary: { errors: 0, warnings: 0, infos: 0, instructions: 0, skills: 0, commands: 0, hooks: 0, plugins: 0, mcp_servers: 0 },
+          instructions: { docs: [] },
+          skills: { roots: [], entries: [], winners: 0, shadowed: 0 },
+          commands: { roots: [], entries: [], winners: 0, shadowed: 0 },
+          hooks: { trusted_project: false, project_defines_hooks: false, sources: [], entries: [] },
+          plugins: { packages: [] },
+          mcp: { servers: (args as { includeSessionRuntime?: boolean } | undefined)?.includeSessionRuntime ? [{ name: "github", effective: true, transport: "stdio", start_intent: "automatic", runtime_status: "connected", tool_count: 1, tools: [{ name: "search_issues" }] }] : [] },
+          issues: [],
+        };
+      case "runtime_doctor": return { text: "runtime status: unavailable\\n", publishedGeneration: 0, allowResume: true, cleanRollback: true, hasIrreversible: false, noOpRebuilds: 0, fullRebuilds: 0, subgraphRebuilds: 0, staleDrops: 0, admissionRejected: 0, runtimeOwnerFallbacks: 0 };
+      case "export_frontend_diagnostics": exportedFrontendDiagnostics = args?.payload; return true;
       case "preview_runtime_info":
         if (failRuntime) { failRuntime = false; throw new Error("runtime unavailable"); }
         return { previewVersion: "1", previewCommit: "unknown", previewDirty: false, stableVersion: "1", stableCommit: "test", tauriVersion: "2", bridgeProtocolVersion: 1, previewBuild: "test" };
       case "provider_summary":
         if (failSummary) { failSummary = false; throw new Error("summary unavailable"); }
-        return summary();
+        return summary(args?.scope ?? "global");
       case "test_provider_model": lastProbeRequest = args?.request as { name: string; model: string; apiKey?: string }; return { protocolVersion: 1, latencyMillis: 123 };
-      case "provider_configs": return { protocolVersion: 1, providers: [{ name: "demo", displayName: "Demo", kind: "openai", models: ["m"], default: "m", balanceUrlSet: false, removable: allowDeleteProvider, revision: "r1" }], presets: [providerPreset()] };
+      case "provider_configs": return { protocolVersion: 1, providers: [{ name: "demo", displayName: "Demo", kind: "openai", models: ["m"], default: "m", modelsUrlSet: false, noProxy: false, contextWindow: 0, responsesMode: "", balanceUrlSet: false, removable: allowDeleteProvider, revision: "r1" }], presets: [providerPreset()] };
       case "save_provider_config": {
         if (args?.input?.presetId) { savedPresetId = args.input.presetId; savedPresetAction = args.input.presetAction ?? ""; presetInstalled = true; presetModified = savedPresetAction !== "reset"; return { protocolVersion: 1, providers: [{ name: "demo", displayName: "Demo", kind: "openai", models: ["m"], default: "m", removable: false, revision: "r1" }], presets: [providerPreset()] }; }
         savedProviderInput = args?.input;
@@ -134,7 +158,7 @@ const summary = () => ({
         }
         return { ...permissions };
       }
-      case "sandbox_settings": sandboxQueryRoot = args?.workspaceRoot ?? ""; return { ...sandbox };
+      case "sandbox_settings": sandboxQueryRoot = args?.workspaceRoot ?? ""; sandboxQuerySession = args?.sessionId ?? ""; return { ...sandbox, effectiveShell: "zsh", shellReloadRequired: true };
       case "change_sandbox_settings": sandbox = { ...sandbox, ...args?.change }; return { ...sandbox };
       case "network_settings": return { ...network };
       case "change_network_settings": network = { ...network, ...args?.change }; return { ...network };
@@ -178,17 +202,28 @@ const summary = () => ({
         if (args?.change?.action === "restore_revision") memory = { ...memory, facts: memory.facts.map(fact => fact.id === args.change?.factId ? { ...fact, revision: 3, body: "Previous body" } : fact), revisions: [] };
         return { ...memory };
       }
-      case "set_default_model": defaultModel = args?.request?.model ?? ""; return summary();
+      case "set_default_model": {
+        lastModelPreferenceRequest = { ...args?.request };
+        if (args?.request?.scope === "project") projectModelPreferences.defaultModel = args.request.model ?? "";
+        else defaultModel = args?.request?.model ?? "";
+        return summary(args?.request?.scope ?? "global");
+      }
       case "set_model_role": {
-        if (args?.request?.role === "planner") plannerModel = args.request.model ?? "";
-        if (args?.request?.role === "vision") visionModel = args.request.model ?? "";
-        if (args?.request?.role === "search") webSearchModel = args.request.model ?? "";
-        return summary();
+        lastModelPreferenceRequest = { ...args?.request };
+        const target = args?.request?.scope === "project" ? projectModelPreferences : { plannerModel, visionModel, webSearchModel };
+        if (args?.request?.role === "planner") target.plannerModel = args.request.model ?? "";
+        if (args?.request?.role === "vision") target.visionModel = args.request.model ?? "";
+        if (args?.request?.role === "search") target.webSearchModel = args.request.model ?? "";
+        if (args?.request?.scope !== "project") { plannerModel = target.plannerModel; visionModel = target.visionModel; webSearchModel = target.webSearchModel; }
+        return summary(args?.request?.scope ?? "global");
       }
       case "set_agent_preferences": {
-        if (args?.request?.reasoningLanguage) reasoningLanguage = args.request.reasoningLanguage;
-        if (typeof args?.request?.compactRatioPercent === "number") compactRatioPercent = args.request.compactRatioPercent;
-        return summary();
+        lastModelPreferenceRequest = { ...args?.request };
+        const target = args?.request?.scope === "project" ? projectModelPreferences : { reasoningLanguage, compactRatioPercent };
+        if (args?.request?.reasoningLanguage) target.reasoningLanguage = args.request.reasoningLanguage;
+        if (typeof args?.request?.compactRatioPercent === "number") target.compactRatioPercent = args.request.compactRatioPercent;
+        if (args?.request?.scope !== "project") { reasoningLanguage = target.reasoningLanguage; compactRatioPercent = target.compactRatioPercent; }
+        return summary(args?.request?.scope ?? "global");
       }
       case "platform_info": return "win32";
       case "get_close_behavior": return closeBehavior;
@@ -251,7 +286,7 @@ renderToString(<LocaleProvider><TauriSettings onClose={() => {}} /></LocaleProvi
 assert.equal(calls.length, 0, "rendering settings does not start bridge work");
 
 const root = createRoot(document.getElementById("root")!);
-await act(async () => { root.render(<LocaleProvider><TauriSettings initialTab="appearance" workspaceRoot="/preview/project" onClose={() => {}} onProviderSummaryChange={value => { parentConfigured = value.providers[0]?.configured; }} currentSessionState="idle" currentSessionModelRef="demo/m" onCurrentSessionModelChange={async model => { sessionModelChanges.push(model); return true; }} onApplyToCurrentSession={async () => { applyCalls += 1; return true; }} bridgeStatus={{ running: true, protocolVersion: 1 }} catalogAudit={{ legacyCount: 3, directoryCount: 3, matchedCount: 3, directoryOnlyCount: 0, missingFromDirectory: 0, titleMismatches: 0, workspaceMismatches: 0, orderMismatches: 0, missingTranscripts: 0, physicalStateMismatches: 0, unclaimedTranscripts: 0, inventoryErrors: 0, legacyMatchesDirectory: true }} sessionPageSource="identity" onRestartBridge={async () => { restartCalls += 1; return true; }} onRefreshCatalogAudit={async () => { auditRefreshCalls += 1; }} profile={{ previewHome: "/preview/home", previewConfigExists: false, stableConfigExists: true, importAvailable: true, managedProfile: true }} onImportStableProfile={async () => { profileImportCalls += 1; return "已备份并导入配置"; }} onScanUnclaimedSessions={() => {}} /></LocaleProvider>); });
+await act(async () => { root.render(<LocaleProvider><TauriSettings initialTab="appearance" workspaceRoot="/preview/project" onClose={() => {}} onProviderSummaryChange={value => { parentConfigured = value.providers[0]?.configured; }} currentSessionId="session-preview" currentSessionState="idle" currentSessionModelRef="demo/m" onCurrentSessionModelChange={async model => { sessionModelChanges.push(model); return true; }} onApplyToCurrentSession={async () => { applyCalls += 1; return true; }} bridgeStatus={{ running: true, protocolVersion: 1 }} catalogAudit={{ legacyCount: 3, directoryCount: 3, matchedCount: 3, directoryOnlyCount: 0, missingFromDirectory: 0, titleMismatches: 0, workspaceMismatches: 0, orderMismatches: 0, missingTranscripts: 0, physicalStateMismatches: 0, unclaimedTranscripts: 0, inventoryErrors: 0, legacyMatchesDirectory: true }} sessionPageSource="identity" onRestartBridge={async () => { restartCalls += 1; return true; }} onRefreshCatalogAudit={async () => { auditRefreshCalls += 1; return; }} profile={{ previewHome: "/preview/home", previewConfigExists: false, stableConfigExists: true, importAvailable: true, managedProfile: true }} onImportStableProfile={async () => { profileImportCalls += 1; return "已备份并导入配置"; }} onScanUnclaimedSessions={() => {}} /></LocaleProvider>); });
 assert.equal(calls.filter(call => call === "provider_summary").length, 1, `settings load once after mount (${JSON.stringify(calls)})`);
 assert.equal(parentConfigured, true, "the model picker outside settings receives the initial summary");
 assert.equal(document.documentElement.lang, "zh-CN", "saved desktop language is restored when settings load");
@@ -274,6 +309,11 @@ function visibleText() { return document.body.textContent ?? ""; }
 
 assert.match(visibleText(), /视觉风格/, "appearance controls are available without opening the model tab");
 await act(async () => { click(["通用", "General"]); });
+const notificationEvents = [...document.querySelectorAll<HTMLInputElement>(".tauri-settings-notification-events input[type=checkbox]")];
+assert.equal(notificationEvents.length, 3, "General exposes separate completion, approval, and question notifications");
+assert.ok(notificationEvents.every(input => input.checked), "the three notification event types default to enabled");
+await act(async () => { notificationEvents[1].click(); });
+assert.equal(JSON.parse(localStorage.getItem("tauri-desktop-notification-events") ?? "{}").approval_request, false, "approval notifications persist separately from other event notifications");
 await act(async () => { click("English"); });
 assert.equal(desktopLanguage, "en", "English desktop language is persisted through the Preview profile bridge");
 assert.equal(document.documentElement.lang, "en", "English updates the live UI locale");
@@ -584,6 +624,28 @@ const searchSelect = document.querySelector<HTMLSelectElement>("#tauri-settings-
 assert.ok(searchSelect, "web search has a model assignment control");
 await act(async () => { searchSelect.value = "demo/m"; searchSelect.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
 assert.equal(webSearchModel, "demo/m", "web search model is persisted through the bridge");
+const projectScope = document.querySelector<HTMLButtonElement>('[aria-label="Model preference scope"] [role="radio"][aria-checked="false"]');
+assert.ok(projectScope, "model preferences can be scoped to the current workspace");
+await act(async () => { projectScope.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.equal(document.querySelector<HTMLSelectElement>("#tauri-settings-default-model")?.value, "demo/new", "switching to project scope loads that workspace's effective model preferences");
+const projectDefaultModelSelect = document.querySelector<HTMLSelectElement>("#tauri-settings-default-model");
+assert.ok(projectDefaultModelSelect);
+await act(async () => { projectDefaultModelSelect.value = "demo/m"; projectDefaultModelSelect.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
+assert.equal(projectModelPreferences.defaultModel, "demo/m", "project default model is persisted independently");
+assert.equal(defaultModel, "demo/m", "saving a project default does not change the global default");
+assert.equal(lastModelPreferenceRequest?.scope, "project", "project model writes include their scope");
+assert.equal(lastModelPreferenceRequest?.workspaceRoot, "/preview/project", "project model writes are bound to the active workspace");
+const projectPlannerSelect = document.querySelector<HTMLSelectElement>("#tauri-settings-planner-model");
+assert.ok(projectPlannerSelect);
+await act(async () => { projectPlannerSelect.value = "demo/m"; projectPlannerSelect.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
+assert.equal(projectModelPreferences.plannerModel, "demo/m", "project role model saves through the scoped bridge request");
+assert.equal(plannerModel, "demo/m", "saving a project role model does not change the global role model");
+await act(async () => { click("Chinese"); });
+assert.equal(projectModelPreferences.reasoningLanguage, "zh", "project agent preferences save through the project scope");
+assert.equal(reasoningLanguage, "auto", "saving a project agent preference does not change the global preference");
+const globalScope = document.querySelector<HTMLButtonElement>('[aria-label="Model preference scope"] [role="radio"][aria-checked="false"]');
+assert.ok(globalScope);
+await act(async () => { globalScope.click(); });
 const advancedModelAssignments = document.querySelector<HTMLDetailsElement>(".tauri-model-settings__advanced");
 assert.ok(advancedModelAssignments, "advanced subagent assignments are grouped under the model preferences page");
 assert.equal(advancedModelAssignments.open, false, "advanced assignments stay collapsed by default");
@@ -640,6 +702,12 @@ await act(async () => { click(["沙盒", "沙箱", "Sandbox"]); });
 assert.match(visibleText(), /沙箱与工作区/, "sandbox editor is available in settings");
 assert.equal(sandboxQueryRoot, "/preview/project", "sandbox effective roots are queried for the current workspace");
 assert.match(visibleText(), /实际可写根/, "sandbox shows core-computed write roots");
+assert.match(visibleText(), /Shell 检测|Shell 偵測/, "sandbox reports the detected host shell inventory");
+assert.match(visibleText(), /\/bin\/bash/, "sandbox shows the resolved executable path from the host capability inventory");
+assert.match(visibleText(), /\/usr\/bin\/git/, "sandbox shows Git from the same host capability inventory");
+assert.equal(sandboxQuerySession, "session-preview", "sandbox requests the bound shell for the exact active session");
+assert.match(visibleText(), /当前会话使用/, "sandbox displays the active controller's bound shell");
+assert.match(visibleText(), /重新加载当前会话/, "sandbox offers the stable-style reload action when the saved shell differs");
 const shellSelect = document.querySelector<HTMLSelectElement>('select[aria-label="Shell 解释器"], select[aria-label="Shell interpreter"]');
 assert.ok(shellSelect, "shell preference is shown");
 await act(async () => { shellSelect.value = "bash"; shellSelect.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
@@ -681,7 +749,13 @@ await act(async () => { click("中文"); });
 await act(async () => { click(["Agent Skills", "Agent Skills"]); });
 assert.match(visibleText(), /A test skill/, "discovered skills appear in settings");
 assert.match(visibleText(), /1 个技能 · 可读取/, "source inventory count and status are shown");
-assert.match(visibleText(), /声明依赖：mcp-server:github（调用时检查）/, "declared dependencies are not presented as ready capabilities");
+const sourceInventoryToggle = document.querySelector<HTMLButtonElement>('[data-skill-source="/tmp/skills"]');
+assert.ok(sourceInventoryToggle, "a skill source can expand its discovered entries");
+await act(async () => { sourceInventoryToggle.click(); });
+assert.match(document.querySelector(".tauri-skill-source-inventory__items")?.textContent ?? "", /A test skill/, "source expansion browses the skills found under that directory");
+assert.match(visibleText(), /声明依赖：mcp-server:github/, "skill capabilities retain their declared requirement IDs");
+assert.match(visibleText(), /当前会话已就绪：mcp-server:github/, "a configured connected server is identified as ready for this matching session");
+assert.ok(capabilityDiagnosticsCalls.some(call => call.workspaceRoot === "/preview/project" && call.includeSessionRuntime === true), "skill readiness is checked against the current session Host without starting MCP");
 const implicitSwitch = document.querySelector<HTMLInputElement>('input[aria-label="允许自动调用技能"]');
 assert.ok(implicitSwitch);
 await act(async () => { implicitSwitch.click(); });
@@ -792,7 +866,18 @@ await act(async () => { click("English"); });
 await act(async () => { click(["Hooks", "钩子"]); });
 assert.match(visibleText(), /Configuration scope/, "Hooks settings follow the selected English locale");
 assert.match(visibleText(), /Format and validate/, "Hooks editor actions follow the selected English locale");
+assert.match(visibleText(), /Hooks from installed plugins/, "Hooks page shows imported plugin hook diagnostics");
+assert.match(visibleText(), /PreToolUse.*Bash/s, "plugin hook event and matcher are visible");
+assert.match(visibleText(), /Review shell commands/, "plugin hook description is visible");
+assert.doesNotMatch(visibleText(), /private-command|secret-value/, "plugin hook command strings are not shown");
 assert.ok(document.querySelector('textarea[aria-label="Hooks JSON"]'), "Hooks editor has a localized accessible name");
+const pluginJump = document.querySelector<HTMLButtonElement>(".tauri-hooks-plugin-heading .tauri-settings-actions button:last-child");
+assert.ok(pluginJump);
+await act(async () => { pluginJump.click(); });
+assert.match(visibleText(), /Installed plugins|已安装插件/, "plugin hook inventory links to plugin management");
+await act(async () => { click(["General", "通用"]); });
+await act(async () => { click("English"); });
+await act(async () => { click(["Hooks", "钩子"]); });
 await act(async () => { click(["General", "通用"]); });
 await act(async () => { click("中文"); });
 await act(async () => { click(["钩子", "Hooks"]); });
@@ -853,7 +938,15 @@ const providerNameInput = document.querySelector<HTMLInputElement>('.tauri-provi
 const providerURLInput = document.querySelector<HTMLInputElement>('.tauri-provider-editor-form input[placeholder="https://example.com/v1"]');
 const providerBalanceURLInput = document.querySelectorAll<HTMLInputElement>(".tauri-provider-editor-form label input")[3];
 const providerModelsInput = document.querySelector<HTMLTextAreaElement>('.tauri-provider-editor-form textarea');
+const providerProtocolInput = document.querySelector<HTMLSelectElement>('.tauri-provider-editor-form label select');
 assert.ok(providerNameInput && providerURLInput && providerBalanceURLInput && providerModelsInput);
+assert.ok(providerProtocolInput);
+const providerAdvanced = document.querySelector<HTMLDetailsElement>(".tauri-provider-advanced");
+assert.ok(providerAdvanced);
+await act(async () => { providerAdvanced.querySelector("summary")?.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true })); });
+const contextWindowInput = providerAdvanced.querySelector<HTMLInputElement>('input[type="number"]');
+const noProxyInput = providerAdvanced.querySelector<HTMLInputElement>('input[type="checkbox"]');
+assert.ok(contextWindowInput && noProxyInput);
 await act(async () => {
   Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(providerNameInput, "new-provider");
   providerNameInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
@@ -863,11 +956,30 @@ await act(async () => {
   providerBalanceURLInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
   Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, "value")!.set!.call(providerModelsInput, "chat-model");
   providerModelsInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(contextWindowInput, "65536");
+  contextWindowInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  noProxyInput.click();
+  Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, "value")!.set!.call(providerProtocolInput, "responses");
+  providerProtocolInput.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+});
+const responsesModeInput = providerAdvanced.querySelector<HTMLSelectElement>("select");
+const modelsEndpointInput = [...providerAdvanced.querySelectorAll<HTMLInputElement>('input:not([type="checkbox"]):not([type="number"])')][0];
+assert.ok(responsesModeInput && modelsEndpointInput);
+await act(async () => {
+  Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, "value")!.set!.call(responsesModeInput, "stateful");
+  responsesModeInput.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+  Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(modelsEndpointInput, "https://provider.example/models");
+  modelsEndpointInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
 });
 await act(async () => { click("保存服务"); });
 assert.equal(savedProviderInput?.name, "new-provider", "provider creation reaches the native command");
 assert.equal(savedProviderInput?.models[0], "chat-model", "model IDs reach the native command");
 assert.equal(savedProviderInput?.balanceUrl, "https://provider.example/account/balance", "balance endpoint reaches the native command");
+assert.equal(savedProviderInput?.contextWindow, 65536, "provider context window reaches the native command");
+assert.equal(savedProviderInput?.noProxy, true, "provider proxy bypass setting reaches the native command");
+assert.equal(savedProviderInput?.kind, "responses", "the selected provider protocol reaches the native command");
+assert.equal(savedProviderInput?.responsesMode, "stateful", "Responses API context mode reaches the native command");
+assert.equal(savedProviderInput?.modelsUrl, "https://provider.example/models", "provider-specific model discovery endpoint reaches the native command");
 assert.equal(savedProviderInput?.useApiKey, true, "remote services default to credential support");
 await act(async () => { enterKey("secret-input-value"); });
 
@@ -883,7 +995,7 @@ await act(async () => { releaseSave?.(); });
 saveGate = null;
 assert.match(visibleText(), /已保存到钥匙串/);
 assert.equal(document.querySelector<HTMLInputElement>(".tauri-settings-apikey input")?.value, "", "successful save clears the entered secret");
-assert.equal(calls.filter(call => call === "provider_summary").length, 5, "save refreshes the provider summary");
+assert.equal(calls.filter(call => call === "provider_summary").length, 6, "save refreshes the provider summary");
 assert.equal(parentConfigured, true, "the model picker outside settings receives the saved status");
 assert.match(visibleText(), /应用到当前会话/, "saved key offers an explicit active-session update");
 await act(async () => { click("应用到当前会话"); });
@@ -893,7 +1005,7 @@ assert.doesNotMatch(visibleText(), /应用到当前会话/, "successful update c
 await act(async () => { click(["删除", "Delete"]); });
 assert.match(visibleText(), /钥匙串密钥已删除；其他凭据仍可用/, "delete reports the keychain scope when .env remains");
 assert.match(visibleText(), /已就绪/, "refreshed provider remains configured by .env");
-assert.equal(calls.filter(call => call === "provider_summary").length, 6, "delete refreshes the provider summary");
+assert.equal(calls.filter(call => call === "provider_summary").length, 7, "delete refreshes the provider summary");
 assert.equal(parentConfigured, true, "the model picker outside settings keeps the .env readiness");
 
 await act(async () => { click("删除"); });
@@ -914,10 +1026,21 @@ assert.doesNotMatch(visibleText(), /secret-in-error-message/, "error details do 
 await act(async () => { click(["运行诊断", "诊断", "Diagnostics"]); });
 assert.match(visibleText(), /持久身份目录/, "diagnostics show the actual sidebar data source");
 assert.match(visibleText(), /运行中 · 协议 v1/, "diagnostics show bridge status");
+assert.match(visibleText(), /能力诊断/, "diagnostics include the shared capability report");
+assert.ok(capabilityDiagnosticsCalls.some(call => call.workspaceRoot === "/preview/project" && call.includeSessionRuntime === false), "capability diagnostics use the selected workspace and remain static until runtime is requested");
+assert.ok(calls.includes("runtime_doctor"), "diagnostics also load the shared process-wide Runtime Doctor report");
 await act(async () => { click("通用"); });
 await act(async () => { click("English"); });
 await act(async () => { click("Diagnostics"); });
 assert.match(visibleText(), /Persistent identity catalog/, "diagnostics labels follow the active language");
+const diagnosticsControl = document.querySelector<HTMLElement>('[data-testid="frontend-diagnostics"]');
+assert.ok(diagnosticsControl, "Tauri diagnostics expose the privacy-filtered frontend recorder");
+await act(async () => { diagnosticsControl?.querySelector<HTMLButtonElement>(".frontend-diagnostics__toggle")?.click(); });
+assert.equal(diagnosticsControl?.querySelector(".frontend-diagnostics__toggle")?.getAttribute("aria-checked"), "true", "the frontend recorder can start in Preview");
+await act(async () => { document.querySelector<HTMLElement>('[data-testid="frontend-diagnostics"] .frontend-diagnostics__toggle')?.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true })); await Promise.resolve(); });
+assert.ok(calls.includes("export_frontend_diagnostics"), "the Tauri recorder exports through its native save command");
+assert.equal((exportedFrontendDiagnostics as { schemaVersion?: number } | undefined)?.schemaVersion, 2, "the exported trace preserves the sanitized diagnostics schema");
+assert.doesNotMatch(JSON.stringify(exportedFrontendDiagnostics), /secret-input-value|PRIVATE_TEXT|PRIVATE_TOKEN/, "Tauri export does not include form values or private text");
 assert.match(visibleText(), /Running · protocol v1/, "bridge status is localized with its protocol value");
 await act(async () => { click("General"); });
 await act(async () => { click("中文"); });

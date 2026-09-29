@@ -12,6 +12,7 @@ export const TAURI_SHORTCUT_ACTIONS = [
   "workspace_files",
   "refresh_session",
   "send_message",
+  "composer_newline",
   "open_appearance",
   "open_model_preferences",
   "open_model_services",
@@ -86,6 +87,7 @@ function normalizeCombo(value: unknown): ShortcutCombo | null {
 }
 
 function validForAction(action: TauriShortcutAction, combo: ShortcutCombo): boolean {
+  if (action === "composer_newline") return combo.key === "Enter" && combo.shift === true;
   // All Preview shortcuts require a primary modifier, so typing and native
   // textarea editing remain outside the application shortcut layer.
   if (!combo.meta && !combo.ctrl) return false;
@@ -131,6 +133,7 @@ export function defaultTauriShortcut(action: TauriShortcutAction, platform: Shor
     workspace_files: "f",
     refresh_session: "r",
     send_message: "Enter",
+    composer_newline: "Enter",
     open_appearance: "a",
     open_model_preferences: "m",
     open_model_services: "p",
@@ -166,6 +169,7 @@ export function defaultTauriShortcut(action: TauriShortcutAction, platform: Shor
   };
   const key = defaults[action];
   const modifier = platform === "darwin" ? { meta: true } : { ctrl: true };
+  if (action === "composer_newline") return { key, shift: true };
   return action.startsWith("open_") || action === "workspace_files"
     ? { key, ...modifier, shift: true }
     : action === "show_shortcuts"

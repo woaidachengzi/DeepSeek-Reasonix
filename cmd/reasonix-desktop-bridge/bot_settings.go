@@ -14,15 +14,37 @@ import (
 )
 
 type botSettingsView struct {
-	ProtocolVersion         int                      `json:"protocolVersion"`
-	ConfigPath              string                   `json:"configPath"`
-	Enabled                 bool                     `json:"enabled"`
-	AccessControlConfigured bool                     `json:"accessControlConfigured"`
-	PairingEnabled          bool                     `json:"pairingEnabled"`
-	AllowlistEnabled        bool                     `json:"allowlistEnabled"`
-	AllowAll                bool                     `json:"allowAll"`
-	Allowlist               map[string]botAccessList `json:"allowlist"`
-	Channels                []botChannelSettings     `json:"channels"`
+	ProtocolVersion          int                      `json:"protocolVersion"`
+	ConfigPath               string                   `json:"configPath"`
+	Enabled                  bool                     `json:"enabled"`
+	MaxSteps                 int                      `json:"maxSteps"`
+	DebounceMs               int                      `json:"debounceMs"`
+	QueueMode                string                   `json:"queueMode"`
+	QueueCap                 int                      `json:"queueCap"`
+	QueueDrop                string                   `json:"queueDrop"`
+	IgnoreSelfMessages       bool                     `json:"ignoreSelfMessages"`
+	SelfUserIDs              map[string][]string      `json:"selfUserIds"`
+	AccessControlConfigured  bool                     `json:"accessControlConfigured"`
+	PairingEnabled           bool                     `json:"pairingEnabled"`
+	PairingRequestTTLMinutes int                      `json:"pairingRequestTtlMinutes"`
+	PairingMaxPending        int                      `json:"pairingMaxPendingPerPlatform"`
+	AllowlistEnabled         bool                     `json:"allowlistEnabled"`
+	AllowAll                 bool                     `json:"allowAll"`
+	Allowlist                map[string]botAccessList `json:"allowlist"`
+	Channels                 []botChannelSettings     `json:"channels"`
+	Routes                   []botRouteSettings       `json:"routes"`
+}
+
+type botRouteSettings struct {
+	ConnectionID     string `json:"connectionId"`
+	Platform         string `json:"platform"`
+	ChatType         string `json:"chatType"`
+	ChatID           string `json:"chatId"`
+	UserID           string `json:"userId"`
+	ThreadID         string `json:"threadId"`
+	Model            string `json:"model"`
+	ToolApprovalMode string `json:"toolApprovalMode"`
+	WorkspaceRoot    string `json:"workspaceRoot"`
 }
 
 type botAccessList struct {
@@ -60,18 +82,27 @@ type botChannelSettings struct {
 }
 
 type botSettingsChange struct {
-	Action           string   `json:"action"`
-	Enabled          bool     `json:"enabled"`
-	ChannelID        string   `json:"channelId,omitempty"`
-	Platform         string   `json:"platform,omitempty"`
-	List             string   `json:"list,omitempty"`
-	Mode             string   `json:"mode,omitempty"`
-	Values           []string `json:"values,omitempty"`
-	Identity         string   `json:"identity,omitempty"`
-	Secret           string   `json:"secret,omitempty"`
-	Model            *string  `json:"model,omitempty"`
-	ToolApprovalMode *string  `json:"toolApprovalMode,omitempty"`
-	WorkspaceRoot    *string  `json:"workspaceRoot,omitempty"`
+	Action                   string             `json:"action"`
+	Enabled                  bool               `json:"enabled"`
+	ChannelID                string             `json:"channelId,omitempty"`
+	Platform                 string             `json:"platform,omitempty"`
+	List                     string             `json:"list,omitempty"`
+	Mode                     string             `json:"mode,omitempty"`
+	Values                   []string           `json:"values,omitempty"`
+	Identity                 string             `json:"identity,omitempty"`
+	Secret                   string             `json:"secret,omitempty"`
+	Model                    *string            `json:"model,omitempty"`
+	ToolApprovalMode         *string            `json:"toolApprovalMode,omitempty"`
+	WorkspaceRoot            *string            `json:"workspaceRoot,omitempty"`
+	MaxSteps                 *int               `json:"maxSteps,omitempty"`
+	DebounceMs               *int               `json:"debounceMs,omitempty"`
+	QueueMode                *string            `json:"queueMode,omitempty"`
+	QueueCap                 *int               `json:"queueCap,omitempty"`
+	QueueDrop                *string            `json:"queueDrop,omitempty"`
+	IgnoreSelfMessages       *bool              `json:"ignoreSelfMessages,omitempty"`
+	PairingRequestTTLMinutes *int               `json:"pairingRequestTtlMinutes,omitempty"`
+	PairingMaxPending        *int               `json:"pairingMaxPendingPerPlatform,omitempty"`
+	Routes                   []botRouteSettings `json:"routes,omitempty"`
 }
 
 func readBotSettings() (botSettingsView, error) {
@@ -82,10 +113,18 @@ func readBotSettings() (botSettingsView, error) {
 	view := botSettingsView{
 		ProtocolVersion: desktopbridge.ProtocolVersion,
 		ConfigPath:      appconfig.UserConfigPath(), Enabled: cfg.Bot.Enabled,
-		AccessControlConfigured: botruntime.BotConfigHasAccessControl(cfg.Bot),
-		PairingEnabled:          cfg.Bot.Pairing.Enabled,
-		AllowlistEnabled:        cfg.Bot.Allowlist.Enabled,
-		AllowAll:                cfg.Bot.Allowlist.AllowAll,
+		MaxSteps: cfg.Bot.MaxSteps, DebounceMs: cfg.Bot.DebounceMs, QueueMode: cfg.Bot.QueueMode,
+		QueueCap: cfg.Bot.QueueCap, QueueDrop: cfg.Bot.QueueDrop, IgnoreSelfMessages: cfg.Bot.IgnoreSelfMessages,
+		SelfUserIDs: map[string][]string{
+			"qq": botStringList(cfg.Bot.SelfUserIDs.QQ), "feishu": botStringList(cfg.Bot.SelfUserIDs.Feishu),
+			"weixin": botStringList(cfg.Bot.SelfUserIDs.Weixin), "dingtalk": botStringList(cfg.Bot.SelfUserIDs.Dingtalk),
+		},
+		AccessControlConfigured:  botruntime.BotConfigHasAccessControl(cfg.Bot),
+		PairingEnabled:           cfg.Bot.Pairing.Enabled,
+		PairingRequestTTLMinutes: cfg.Bot.Pairing.RequestTTLMinutes,
+		PairingMaxPending:        cfg.Bot.Pairing.MaxPendingPerPlatform,
+		AllowlistEnabled:         cfg.Bot.Allowlist.Enabled,
+		AllowAll:                 cfg.Bot.Allowlist.AllowAll,
 		Allowlist: map[string]botAccessList{
 			"qq":       {Users: botStringList(cfg.Bot.Allowlist.QQUsers), Groups: botStringList(cfg.Bot.Allowlist.QQGroups), Approvers: botStringList(cfg.Bot.Allowlist.QQApprovers), Admins: botStringList(cfg.Bot.Allowlist.QQAdmins)},
 			"feishu":   {Users: botStringList(cfg.Bot.Allowlist.FeishuUsers), Groups: botStringList(cfg.Bot.Allowlist.FeishuGroups), Approvers: botStringList(cfg.Bot.Allowlist.FeishuApprovers), Admins: botStringList(cfg.Bot.Allowlist.FeishuAdmins)},
@@ -114,6 +153,14 @@ func readBotSettings() (botSettingsView, error) {
 			Enabled: connection.Enabled, Status: strings.TrimSpace(connection.Status), CredentialsSet: credentialSet, Access: botConnectionAccess(connection.Access),
 			CredentialMissing: !credentialSet, CredentialIdentity: firstNonEmpty(connection.Credential.AppID, connection.Credential.AccountID),
 			Model: connection.Model, ToolApprovalMode: connection.ToolApprovalMode, WorkspaceRoot: connection.WorkspaceRoot, RuntimeSettings: true,
+		})
+	}
+	view.Routes = make([]botRouteSettings, 0, len(cfg.Bot.Routes))
+	for _, route := range cfg.Bot.Routes {
+		view.Routes = append(view.Routes, botRouteSettings{
+			ConnectionID: route.ConnectionID, Platform: route.Platform, ChatType: route.ChatType,
+			ChatID: route.ChatID, UserID: route.UserID, ThreadID: route.ThreadID, Model: route.Model,
+			ToolApprovalMode: route.ToolApprovalMode, WorkspaceRoot: route.WorkspaceRoot,
 		})
 	}
 	return view, nil
@@ -158,8 +205,54 @@ func firstNonEmpty(values ...string) string {
 func changeBotSettings(change botSettingsChange) (botSettingsView, error) {
 	change.Action = strings.TrimSpace(change.Action)
 	change.ChannelID = strings.TrimSpace(change.ChannelID)
-	if change.Action != "set_enabled" && change.Action != "set_channel_enabled" && change.Action != "set_credentials" && change.Action != "set_pairing" && change.Action != "set_allowlist" && change.Action != "set_allow_all" && change.Action != "set_channel_access_mode" && change.Action != "set_channel_pairing" && change.Action != "set_channel_allowlist" && change.Action != "set_channel_runtime" {
+	if change.Action != "set_enabled" && change.Action != "set_channel_enabled" && change.Action != "set_credentials" && change.Action != "set_pairing" && change.Action != "set_allowlist" && change.Action != "set_allow_all" && change.Action != "set_channel_access_mode" && change.Action != "set_channel_pairing" && change.Action != "set_channel_allowlist" && change.Action != "set_channel_runtime" && change.Action != "set_gateway_runtime" && change.Action != "set_self_user_ids" && change.Action != "set_routes" {
 		return botSettingsView{}, fmt.Errorf("invalid bot settings action")
+	}
+	if change.Action == "set_routes" {
+		if len(change.Routes) > 200 {
+			return botSettingsView{}, fmt.Errorf("too many bot routes")
+		}
+		for _, route := range change.Routes {
+			if !validBotRoute(route) {
+				return botSettingsView{}, fmt.Errorf("invalid bot route")
+			}
+		}
+	}
+	if change.Action == "set_gateway_runtime" {
+		if change.MaxSteps == nil && change.DebounceMs == nil && change.QueueMode == nil && change.QueueCap == nil && change.QueueDrop == nil && change.IgnoreSelfMessages == nil && change.PairingRequestTTLMinutes == nil && change.PairingMaxPending == nil {
+			return botSettingsView{}, fmt.Errorf("empty bot runtime settings request")
+		}
+		if change.MaxSteps != nil && (*change.MaxSteps < 0 || *change.MaxSteps > 100000) ||
+			change.DebounceMs != nil && (*change.DebounceMs < 0 || *change.DebounceMs > 60000) ||
+			change.QueueCap != nil && (*change.QueueCap < 0 || *change.QueueCap > 10000) ||
+			change.PairingRequestTTLMinutes != nil && (*change.PairingRequestTTLMinutes < 0 || *change.PairingRequestTTLMinutes > 525600) ||
+			change.PairingMaxPending != nil && (*change.PairingMaxPending < 0 || *change.PairingMaxPending > 10000) {
+			return botSettingsView{}, fmt.Errorf("bot runtime setting is outside its supported range")
+		}
+		if change.QueueMode != nil {
+			switch strings.TrimSpace(*change.QueueMode) {
+			case "steer", "followup", "collect", "interrupt":
+			default:
+				return botSettingsView{}, fmt.Errorf("invalid bot queue mode")
+			}
+		}
+		if change.QueueDrop != nil {
+			switch strings.TrimSpace(*change.QueueDrop) {
+			case "summarize", "old", "new":
+			default:
+				return botSettingsView{}, fmt.Errorf("invalid bot queue overflow policy")
+			}
+		}
+	}
+	if change.Action == "set_self_user_ids" {
+		if !validBotAccessPlatform(change.Platform) || len(change.Values) > 100 {
+			return botSettingsView{}, fmt.Errorf("invalid bot self user ID request")
+		}
+		for _, value := range change.Values {
+			if value = strings.TrimSpace(value); value == "" || len(value) > 512 {
+				return botSettingsView{}, fmt.Errorf("bot self user IDs must be 1–512 characters")
+			}
+		}
 	}
 	if change.Action == "set_channel_runtime" {
 		if change.ChannelID == "" || change.Model == nil && change.ToolApprovalMode == nil && change.WorkspaceRoot == nil {
@@ -199,6 +292,70 @@ func changeBotSettings(change botSettingsChange) (botSettingsView, error) {
 		return botSettingsView{}, fmt.Errorf("bot identity and credential are required")
 	}
 	err := appconfig.EditUserConfigWithCredentialsStrict(func(cfg *appconfig.Config) ([]appconfig.CredentialChange, error) {
+		if change.Action == "set_routes" {
+			routes := make([]appconfig.BotRouteConfig, 0, len(change.Routes))
+			for _, route := range change.Routes {
+				route.ConnectionID = strings.TrimSpace(route.ConnectionID)
+				route.Platform = strings.TrimSpace(route.Platform)
+				route.ChatType = strings.TrimSpace(route.ChatType)
+				route.ChatID = strings.TrimSpace(route.ChatID)
+				route.UserID = strings.TrimSpace(route.UserID)
+				route.ThreadID = strings.TrimSpace(route.ThreadID)
+				route.Model = strings.TrimSpace(route.Model)
+				route.ToolApprovalMode = strings.TrimSpace(route.ToolApprovalMode)
+				route.WorkspaceRoot = strings.TrimSpace(route.WorkspaceRoot)
+				if botRouteHasValue(route) {
+					routes = append(routes, appconfig.BotRouteConfig{
+						ConnectionID: route.ConnectionID, Platform: route.Platform, ChatType: route.ChatType,
+						ChatID: route.ChatID, UserID: route.UserID, ThreadID: route.ThreadID, Model: route.Model,
+						ToolApprovalMode: route.ToolApprovalMode, WorkspaceRoot: route.WorkspaceRoot,
+					})
+				}
+			}
+			cfg.Bot.Routes = routes
+			return nil, nil
+		}
+		if change.Action == "set_gateway_runtime" {
+			if change.MaxSteps != nil {
+				cfg.Bot.MaxSteps = *change.MaxSteps
+			}
+			if change.DebounceMs != nil {
+				cfg.Bot.DebounceMs = *change.DebounceMs
+			}
+			if change.QueueMode != nil {
+				cfg.Bot.QueueMode = strings.TrimSpace(*change.QueueMode)
+			}
+			if change.QueueCap != nil {
+				cfg.Bot.QueueCap = *change.QueueCap
+			}
+			if change.QueueDrop != nil {
+				cfg.Bot.QueueDrop = strings.TrimSpace(*change.QueueDrop)
+			}
+			if change.IgnoreSelfMessages != nil {
+				cfg.Bot.IgnoreSelfMessages = *change.IgnoreSelfMessages
+			}
+			if change.PairingRequestTTLMinutes != nil {
+				cfg.Bot.Pairing.RequestTTLMinutes = *change.PairingRequestTTLMinutes
+			}
+			if change.PairingMaxPending != nil {
+				cfg.Bot.Pairing.MaxPendingPerPlatform = *change.PairingMaxPending
+			}
+			return nil, nil
+		}
+		if change.Action == "set_self_user_ids" {
+			values := normalizeBotAccessValues(change.Values)
+			switch change.Platform {
+			case "qq":
+				cfg.Bot.SelfUserIDs.QQ = values
+			case "feishu":
+				cfg.Bot.SelfUserIDs.Feishu = values
+			case "weixin":
+				cfg.Bot.SelfUserIDs.Weixin = values
+			case "dingtalk":
+				cfg.Bot.SelfUserIDs.Dingtalk = values
+			}
+			return nil, nil
+		}
 		if change.Action == "set_pairing" {
 			cfg.Bot.Pairing.Enabled = change.Enabled
 			return nil, nil
@@ -330,6 +487,35 @@ func changeBotSettings(change botSettingsChange) (botSettingsView, error) {
 		return botSettingsView{}, err
 	}
 	return readBotSettings()
+}
+
+func validBotRoute(route botRouteSettings) bool {
+	for _, value := range []string{route.ConnectionID, route.Platform, route.ChatType, route.ChatID, route.UserID, route.ThreadID, route.Model, route.ToolApprovalMode} {
+		if len(value) > 512 || strings.ContainsAny(value, "\r\n\x00") {
+			return false
+		}
+	}
+	if len(route.WorkspaceRoot) > 4096 || strings.ContainsRune(route.WorkspaceRoot, '\x00') {
+		return false
+	}
+	if route.Platform != "" && !validBotAccessPlatform(route.Platform) {
+		return false
+	}
+	switch route.ChatType {
+	case "", "dm", "group", "guild", "direct", "thread":
+	default:
+		return false
+	}
+	switch strings.TrimSpace(route.ToolApprovalMode) {
+	case "", "ask", "auto", "yolo":
+	default:
+		return false
+	}
+	return true
+}
+
+func botRouteHasValue(route botRouteSettings) bool {
+	return strings.TrimSpace(route.ConnectionID+route.Platform+route.ChatType+route.ChatID+route.UserID+route.ThreadID+route.Model+route.ToolApprovalMode+route.WorkspaceRoot) != ""
 }
 
 func validBotAccessPlatform(value string) bool {

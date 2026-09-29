@@ -179,6 +179,7 @@ pub struct BridgeProviderSummaryResponse {
     pub protocol_version: u64,
     pub providers: Vec<BridgeProviderSummary>,
     pub reasoning_language: String,
+    pub scope: String,
     pub vision_model: String,
     pub web_search_model: String,
 }
@@ -248,6 +249,41 @@ pub struct BridgeRemoteDisconnectResponse {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteFilePreviewRequest {
+    pub name: String,
+    pub path: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteFilePreviewResponse {
+    pub content: String,
+    pub kind: String,
+    pub path: String,
+    pub protocol_version: u64,
+    pub revision: String,
+    pub truncated: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteFileSaveRequest {
+    pub content: String,
+    pub name: String,
+    pub path: String,
+    pub revision: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteFileSaveResponse {
+    pub path: String,
+    pub protocol_version: u64,
+    pub revision: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeRenameSessionRequest {
     pub title: String,
 }
@@ -287,12 +323,16 @@ pub struct BridgeSessionResponse {
 pub struct BridgeSetAgentPreferenceRequest {
     pub compact_ratio_percent: Option<f64>,
     pub reasoning_language: Option<String>,
+    pub scope: Option<String>,
+    pub workspace_root: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeSetDefaultModelRequest {
     pub model: String,
+    pub scope: Option<String>,
+    pub workspace_root: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -300,6 +340,8 @@ pub struct BridgeSetDefaultModelRequest {
 pub struct BridgeSetModelRoleRequest {
     pub model: String,
     pub role: String,
+    pub scope: Option<String>,
+    pub workspace_root: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

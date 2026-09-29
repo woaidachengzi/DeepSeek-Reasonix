@@ -23,8 +23,14 @@ const FRONTEND_COPY: Record<Locale, { title: string; hint: string }> = {
 
 export function DiagnosticsSettingsPage({
   onNavigate,
+  capabilityDiagnostics,
+  runtimeDoctorProvider,
+  showFrontendRecording = true,
 }: {
   onNavigate?: (tab: SettingsTab) => void;
+  capabilityDiagnostics?: (includeSessionRuntime: boolean) => Promise<CapabilityDiagnosticsReport>;
+  runtimeDoctorProvider?: (() => Promise<RuntimeDoctorReport>) | null;
+  showFrontendRecording?: boolean;
 }) {
   const t = useT();
   const { locale } = useI18n();
@@ -53,12 +59,16 @@ export function DiagnosticsSettingsPage({
     setLoading(true);
     setError(null);
     try {
-      const next = normalizeDiagnosticsReport(await app.CapabilityDiagnostics(runtime));
+      const diagnosticsQuery = capabilityDiagnostics ?? ((includeRuntime: boolean) => app.CapabilityDiagnostics(includeRuntime));
+      const next = normalizeDiagnosticsReport(await diagnosticsQuery(runtime));
       let doctor: RuntimeDoctorReport | null = null;
-      try {
-        doctor = await app.RuntimeDoctor();
-      } catch {
-        doctor = null;
+      const doctorQuery = runtimeDoctorProvider === undefined ? () => app.RuntimeDoctor() : runtimeDoctorProvider;
+      if (doctorQuery) {
+        try {
+          doctor = await doctorQuery();
+        } catch {
+          doctor = null;
+        }
       }
       // Last-request-wins: ignore stale responses after rapid refresh/toggle.
       if (seq !== loadSeq.current) return;
@@ -74,7 +84,7 @@ export function DiagnosticsSettingsPage({
         setLoading(false);
       }
     }
-  }, []);
+  }, [capabilityDiagnostics, runtimeDoctorProvider]);
 
   useEffect(() => {
     void load(includeRuntime);
@@ -135,7 +145,7 @@ export function DiagnosticsSettingsPage({
 
       <p className="diag-page__hint">{t("diag.hint")}</p>
 
-      <section className="diag-section diag-section--frontend" data-testid="frontend-diagnostics-settings">
+      {showFrontendRecording && <section className="diag-section diag-section--frontend" data-testid="frontend-diagnostics-settings">
         <div className="diag-section__body diag-section__body--frontend">
           <div className="diag-frontend-recording__copy">
             <strong>{frontendCopy.title}</strong>
@@ -143,7 +153,7 @@ export function DiagnosticsSettingsPage({
           </div>
           <FrontendDiagnosticsControl embedded />
         </div>
-      </section>
+      </section>}
 
       {loading && !report && <div className="empty">{t("settings.loading")}</div>}
       {error && <div className="settings-error" role="alert">{error}</div>}

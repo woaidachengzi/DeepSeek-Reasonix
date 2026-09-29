@@ -19,8 +19,9 @@ assert.deepEqual(defaultTauriShortcut("open_model_services", "linux"), { key: "p
 assert.deepEqual(defaultTauriShortcut("text_size_increase", "darwin"), { key: "=", meta: true }, "text size increase follows the stable shortcut");
 assert.deepEqual(defaultTauriShortcut("text_size_decrease", "linux"), { key: "-", ctrl: true }, "text size decrease follows the stable shortcut");
 assert.deepEqual(defaultTauriShortcut("text_size_reset", "windows"), { key: "0", ctrl: true }, "text size reset follows the stable shortcut");
+assert.deepEqual(defaultTauriShortcut("composer_newline", "darwin"), { key: "Enter", shift: true }, "composer newline follows the stable Shift+Enter shortcut");
 assert.equal(isValidTauriShortcut("open_usage_stats", { key: "u", ctrl: true, shift: true }), true);
-assert.equal(TAURI_SHORTCUT_ACTIONS.length, 42, "all Preview actions, including command palette, keyboard help, sidebar toggle, session navigation, panel close, text size and every settings page, can be configured");
+assert.equal(TAURI_SHORTCUT_ACTIONS.length, 43, "all Preview actions, including command palette, keyboard help, sidebar toggle, session navigation, panel close, composer newline, text size and every settings page, can be configured");
 assert.equal(Object.keys(TAURI_SHORTCUT_TABS).length, 16, "every remaining settings page has a direct shortcut route");
 for (const action of TAURI_SHORTCUT_ACTIONS) {
   const combo = defaultTauriShortcut(action, "darwin");
@@ -36,6 +37,8 @@ assert.equal(localStorage.getItem("reasonix.customShortcuts"), null, "stable sho
 assert.equal(tauriShortcutConflict("new_session", { key: "q", ctrl: true, shift: true }, "linux"), "settings");
 assert.equal(setTauriShortcut("new_session", { key: "q", ctrl: true, shift: true }, "linux"), false, "conflicting shortcuts cannot be saved");
 assert.equal(isValidTauriShortcut("send_message", { key: "o", ctrl: true }), false, "send stays on Enter");
+assert.equal(isValidTauriShortcut("composer_newline", { key: "Enter", shift: true }), true, "newline accepts the safe Shift+Enter chord without a global modifier");
+assert.equal(isValidTauriShortcut("composer_newline", { key: "o", ctrl: true, shift: true }), false, "newline remains bound to Enter");
 assert.equal(isValidTauriShortcut("settings", { key: "o" }), false, "plain typing cannot become a global shortcut");
 
 localStorage.setItem("reasonix.tauri.shortcuts.v1", JSON.stringify({ settings: { key: "p", ctrl: true } }));

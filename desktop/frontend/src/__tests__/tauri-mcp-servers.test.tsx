@@ -145,9 +145,13 @@ async function main() {
 
   const saved = bridgeCalls().find(call => call.name === "save_mcp_server");
   ok(saved !== undefined, "the form reached the save command");
-  const savedServer = (saved?.args as { server?: { name?: string; env?: Record<string, string>; scope?: string } } | undefined)?.server;
+  type SavedMCPServer = { name?: string; env?: Record<string, string>; scope?: string; startupTimeoutSeconds?: number; callTimeoutSeconds?: number; toolTimeoutSeconds?: Record<string, number> };
+  const savedServer = (saved?.args as { server?: SavedMCPServer } | undefined)?.server;
   eq(savedServer?.name, "time", "the save carries the server name");
   eq(savedServer?.env?.API_TOKEN, SECRET, "the credential the user typed is submitted once");
+  eq(savedServer?.callTimeoutSeconds, 0, "the global MCP call timeout fallback is explicit");
+  eq(savedServer?.startupTimeoutSeconds, 0, "the global MCP startup timeout fallback is explicit");
+  eq(JSON.stringify(savedServer?.toolTimeoutSeconds), "{}", "new servers start with no per-tool timeout overrides");
   ok(!text().includes(SECRET), "the credential is never rendered back");
   ok(text().includes("time"), "the saved server appears in the list");
   ok(text().includes("API_TOKEN"), "the list names the credential key it expects");
@@ -174,9 +178,13 @@ async function main() {
   const nameField = field("名称") as HTMLInputElement | null;
   eq(nameField?.value, "time", "editing prefills the server name");
   ok(nameField?.disabled, "the name is fixed while editing");
+  eq((field("单次工具调用超时（秒）") as HTMLInputElement | null)?.value, "0", "editing shows the persisted server timeout");
 
   await act(async () => {
     typeInto(field("参数") as HTMLInputElement, "mcp-server-time --local-timezone=Asia/Tokyo");
+    typeInto(field("单次工具调用超时（秒）") as HTMLInputElement, "45");
+    typeInto(field("服务器启动超时（秒）") as HTMLInputElement, "90");
+    typeInto(field("按工具覆盖超时（JSON）") as HTMLTextAreaElement, '{"search":120}');
   });
   await act(async () => {
     click(mcpButtons("保存修改")[0]);
@@ -185,10 +193,14 @@ async function main() {
   });
   const edits = bridgeCalls().filter(call => call.name === "save_mcp_server");
   eq(edits.length, 2, "the edit reached the save command");
-  const editServer = (edits[1]?.args as { server?: { env?: Record<string, string>; args?: string[] } } | undefined)?.server;
+  const editServer = (edits[1]?.args as { server?: SavedMCPServer & { args?: string[] } } | undefined)?.server;
   eq(editServer?.env, undefined, "an untouched credential field is omitted, so the stored value stays");
   ok((editServer?.args ?? []).some(arg => arg.includes("Asia/Tokyo")), "the edited arguments are submitted");
+  eq(editServer?.callTimeoutSeconds, 45, "the per-server call timeout is saved through the Tauri bridge");
+  eq(editServer?.startupTimeoutSeconds, 90, "the server startup timeout is saved through the Tauri bridge");
+  eq(editServer?.toolTimeoutSeconds?.search, 120, "the per-tool timeout override is saved through the Tauri bridge");
   ok(text().includes("已停用"), "editing keeps the activation state");
+  ok(text().includes("启动 90 秒") && text().includes("调用 45 秒") && text().includes("工具覆盖 1 项"), "the server list summarizes saved timeout policy");
 
   // Delete.
   await act(async () => {

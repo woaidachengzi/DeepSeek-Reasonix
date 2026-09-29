@@ -132,6 +132,7 @@ export interface BridgeProviderSummaryResponse {
   protocolVersion: number;
   providers: BridgeProviderSummary[];
   reasoningLanguage: "auto" | "zh" | "en";
+  scope: "global" | "project";
   visionModel: string;
   webSearchModel: string;
 }
@@ -185,6 +186,33 @@ export interface BridgeRemoteDisconnectResponse {
   protocolVersion: number;
 }
 
+export interface BridgeRemoteFilePreviewRequest {
+  name: string;
+  path: string;
+}
+
+export interface BridgeRemoteFilePreviewResponse {
+  content: string;
+  kind: "text" | "binary";
+  path: string;
+  protocolVersion: number;
+  revision: string;
+  truncated: boolean;
+}
+
+export interface BridgeRemoteFileSaveRequest {
+  content: string;
+  name: string;
+  path: string;
+  revision: string;
+}
+
+export interface BridgeRemoteFileSaveResponse {
+  path: string;
+  protocolVersion: number;
+  revision: string;
+}
+
 export interface BridgeRenameSessionRequest {
   title: string;
 }
@@ -216,15 +244,21 @@ export interface BridgeSessionResponse {
 export interface BridgeSetAgentPreferenceRequest {
   compactRatioPercent?: number;
   reasoningLanguage?: "auto" | "zh" | "en";
+  scope?: "global" | "project";
+  workspaceRoot?: string;
 }
 
 export interface BridgeSetDefaultModelRequest {
   model: string;
+  scope?: "global" | "project";
+  workspaceRoot?: string;
 }
 
 export interface BridgeSetModelRoleRequest {
   model: string;
   role: "planner" | "vision" | "search";
+  scope?: "global" | "project";
+  workspaceRoot?: string;
 }
 
 export interface BridgeSetSessionModelRequest {

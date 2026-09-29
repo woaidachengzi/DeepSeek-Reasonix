@@ -74,9 +74,32 @@ type fakeModelRuntime struct {
 	model string
 }
 
-func (r *fakeModelRuntime) ModelRef() string { return r.model }
+type fakeShellRuntime struct {
+	*fakeRuntime
+	shell string
+}
+
+func (r *fakeModelRuntime) ModelRef() string   { return r.model }
+func (r *fakeShellRuntime) BoundShell() string { return r.shell }
 
 func (r *fakeMetricsRuntime) SessionMetrics() SessionMetrics { return r.metrics }
+
+func TestBoundShellRequiresMatchingActiveSession(t *testing.T) {
+	runtime := &fakeShellRuntime{fakeRuntime: &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}, shell: "bash"}
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(context.Context, OpenRequest) (Runtime, error) { return runtime, nil }))
+	if _, ok := manager.BoundShell("a"); ok {
+		t.Fatal("bound shell reported before opening a session")
+	}
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a", WorkspaceRoot: "/work/a"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := manager.BoundShell("b"); ok {
+		t.Fatal("bound shell leaked to a different session ID")
+	}
+	if shell, ok := manager.BoundShell("a"); !ok || shell != "bash" {
+		t.Fatalf("matching bound shell = %q, available=%t", shell, ok)
+	}
+}
 
 func TestSessionMetricsRequireMatchingActiveID(t *testing.T) {
 	runtime := &fakeMetricsRuntime{fakeRuntime: &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}, metrics: SessionMetrics{ContextUsedTokens: 300, ContextWindowTokens: 1000}}

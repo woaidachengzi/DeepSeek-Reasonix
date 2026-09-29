@@ -93,7 +93,9 @@
       "type": "object",
       "required": ["model"],
       "properties": {
-        "model": { "type": "string", "minLength": 1 }
+        "model": { "type": "string", "minLength": 1 },
+        "scope": { "type": "string", "enum": ["global", "project"] },
+        "workspaceRoot": { "type": "string", "maxLength": 4096 }
       },
       "additionalProperties": false
     },
@@ -189,13 +191,62 @@
       },
       "additionalProperties": false
     },
+    "remoteFilePreviewRequest": {
+      "title": "BridgeRemoteFilePreviewRequest",
+      "type": "object",
+      "required": ["name", "path"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "path": { "type": "string", "minLength": 1, "maxLength": 4096 }
+      },
+      "additionalProperties": false
+    },
+    "remoteFilePreviewResponse": {
+      "title": "BridgeRemoteFilePreviewResponse",
+      "type": "object",
+      "required": ["protocolVersion", "path", "kind", "content", "revision", "truncated"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "path": { "type": "string" },
+        "kind": { "type": "string", "enum": ["text", "binary"] },
+        "content": { "type": "string" },
+        "revision": { "type": "string", "maxLength": 64 },
+        "truncated": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "remoteFileSaveRequest": {
+      "title": "BridgeRemoteFileSaveRequest",
+      "type": "object",
+      "required": ["name", "path", "revision", "content"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "revision": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "content": { "type": "string", "maxLength": 1048576 }
+      },
+      "additionalProperties": false
+    },
+    "remoteFileSaveResponse": {
+      "title": "BridgeRemoteFileSaveResponse",
+      "type": "object",
+      "required": ["protocolVersion", "path", "revision"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "path": { "type": "string" },
+        "revision": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
     "setModelRoleRequest": {
       "title": "BridgeSetModelRoleRequest",
       "type": "object",
       "required": ["role", "model"],
       "properties": {
         "role": { "type": "string", "enum": ["planner", "vision", "search"] },
-        "model": { "type": "string" }
+        "model": { "type": "string" },
+        "scope": { "type": "string", "enum": ["global", "project"] },
+        "workspaceRoot": { "type": "string", "maxLength": 4096 }
       },
       "additionalProperties": false
     },
@@ -203,19 +254,22 @@
       "title": "BridgeSetAgentPreferenceRequest",
       "type": "object",
       "minProperties": 1,
-      "maxProperties": 1,
+      "maxProperties": 3,
       "properties": {
         "reasoningLanguage": { "enum": ["auto", "zh", "en"] },
-        "compactRatioPercent": { "type": "number", "minimum": 30, "maximum": 85, "multipleOf": 0.1 }
+        "compactRatioPercent": { "type": "number", "minimum": 30, "maximum": 85, "multipleOf": 0.1 },
+        "scope": { "type": "string", "enum": ["global", "project"] },
+        "workspaceRoot": { "type": "string", "maxLength": 4096 }
       },
       "additionalProperties": false
     },
     "providerSummaryResponse": {
       "title": "BridgeProviderSummaryResponse",
       "type": "object",
-      "required": ["protocolVersion", "defaultModel", "plannerModel", "visionModel", "webSearchModel", "reasoningLanguage", "compactRatioPercent", "providers"],
+      "required": ["protocolVersion", "scope", "defaultModel", "plannerModel", "visionModel", "webSearchModel", "reasoningLanguage", "compactRatioPercent", "providers"],
       "properties": {
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "scope": { "type": "string", "enum": ["global", "project"] },
         "defaultModel": { "type": "string" },
         "plannerModel": { "type": "string" },
         "visionModel": { "type": "string" },

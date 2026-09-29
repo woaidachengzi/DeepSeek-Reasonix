@@ -21,7 +21,7 @@ import { TauriStatusBar } from "./TauriStatusBar";
 import { useTauriDesktopLayout } from "./tauriDesktopLayout";
 import { getTauriDefaultWorkspace, setTauriDefaultWorkspace } from "./tauriDefaultWorkspace";
 import { observeTauriUsage, type TauriObservedUsage } from "./tauriObservedUsage";
-import { getTauriNotificationsEnabled, getTauriProgressMode, getTauriSidebarVisible, setTauriSidebarVisible, TAURI_PROGRESS_MODE_CHANGED } from "./tauriPreferences";
+import { isTauriNotificationEnabled, getTauriProgressMode, getTauriSidebarVisible, setTauriSidebarVisible, TAURI_PROGRESS_MODE_CHANGED, type TauriNotificationKind } from "./tauriPreferences";
 import { handleTauriDragDropEvent, retainTauriDragDropListener } from "./dragDrop";
 import { formatTauriWorkDuration, groupTauriHistory, type IndexedHistoryMessage } from "./historyPresentation";
 import { applyTerminalThemePreference, onTerminalThemePreferenceChange } from "../lib/terminalTheme";
@@ -40,6 +40,20 @@ class MessageErrorBoundary extends Component<{ children: ReactNode; index: numbe
       </div>;
     }
     return this.props.children;
+  }
+}
+
+async function sendTauriSystemNotification(kind: TauriNotificationKind, title: string, body: string): Promise<void> {
+  if (!isTauriNotificationEnabled(kind)) return;
+  try {
+    const hasPermission = await isPermissionGranted();
+    if (!hasPermission) {
+      const permission = await requestPermission();
+      if (permission !== "granted") return;
+    }
+    sendNotification({ title, body });
+  } catch {
+    // System notifications are best-effort and must not interrupt a session.
   }
 }
 
@@ -472,6 +486,7 @@ export function TauriSessionPreview() {
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const turnEpochRef = useRef(0);
   const attentionChimeSeenRef = useRef(new Set<string>());
+  const notificationPromptSeenRef = useRef(new Set<string>());
   const submitInFlightRef = useRef(false);
   const pendingDraftSubmissionRef = useRef<{ sessionId: string; text: string; paths: string[]; workspaceRoot?: string } | null>(null);
   const sessionPageRequestRef = useRef(false);
@@ -827,7 +842,7 @@ export function TauriSessionPreview() {
         setUnverifiedLegacyTabs(page.unverifiedLegacySessions ?? []);
         setSessionPageCursor(page.nextCursor ?? null);
         setSessionPageSource(page.source);
-        setSessionPageCatalogWarning(page.catalogWarning ?? "");
+        setSessionPageCatalogWarning(page.catalogWarning ? tauriMessageFrom(page.catalogWarning) : "");
         setSessionPageDirectoryCount(page.shadowDirectoryCount ?? (page.source === "identity" ? page.total : null));
         setSessionPageUnclaimedCount(page.unclaimedTranscriptCount ?? null);
         setSessionPageTitleMismatchCount(page.titleMismatchCount ?? null);
@@ -898,7 +913,7 @@ export function TauriSessionPreview() {
       });
       setSessionPageCursor(page.nextCursor ?? null);
       setSessionPageSource(page.source);
-      setSessionPageCatalogWarning(page.catalogWarning ?? "");
+      setSessionPageCatalogWarning(page.catalogWarning ? tauriMessageFrom(page.catalogWarning) : "");
       setSessionPageDirectoryCount(page.shadowDirectoryCount ?? (page.source === "identity" ? page.total : null));
       setSessionPageUnclaimedCount(page.unclaimedTranscriptCount ?? null);
       setSessionPageTitleMismatchCount(page.titleMismatchCount ?? null);
@@ -939,7 +954,7 @@ export function TauriSessionPreview() {
         setUnverifiedLegacyTabs(page.unverifiedLegacySessions ?? []);
         setSessionPageCursor(page.nextCursor ?? null);
         setSessionPageSource(page.source);
-        setSessionPageCatalogWarning(page.catalogWarning ?? "");
+        setSessionPageCatalogWarning(page.catalogWarning ? tauriMessageFrom(page.catalogWarning) : "");
         setSessionPageDirectoryCount(page.shadowDirectoryCount ?? (page.source === "identity" ? page.total : null));
         setSessionPageUnclaimedCount(page.unclaimedTranscriptCount ?? null);
         setSessionPageTitleMismatchCount(page.titleMismatchCount ?? null);
@@ -1036,16 +1051,27 @@ export function TauriSessionPreview() {
             if (isGenerativeMusicEnabled()) generativeMusic.start();
             // Prompt ids may restart when a controller is rebuilt between turns.
             attentionChimeSeenRef.current.clear();
+            notificationPromptSeenRef.current.clear();
             setSession(previous => previous ? { ...previous, state: "running" } : previous);
             setLiveText("");
           }
           const incomingPrompt = tauriPromptFromEvent(event);
           if (incomingPrompt) {
             if (incomingPrompt.kind === "approval" || incomingPrompt.kind === "ask") {
+              const notificationKind = incomingPrompt.kind === "approval" ? "approval_request" : "ask_request";
               const soundEvent = incomingPrompt.kind === "approval"
                 ? { kind: "approval_request", tabId: session.id, approval: { id: incomingPrompt.id } }
                 : { kind: "ask_request", tabId: session.id, ask: { id: incomingPrompt.id } };
               if (shouldPlayAttentionChimeForEvent(soundEvent, attentionChimeSeenRef.current)) playAttentionChime();
+              const notificationKey = `${notificationKind}:${incomingPrompt.id}`;
+              if (!notificationPromptSeenRef.current.has(notificationKey)) {
+                notificationPromptSeenRef.current.add(notificationKey);
+                void sendTauriSystemNotification(
+                  notificationKind,
+                  "Reasonix",
+                  t(`settings.notificationEvents.${notificationKind}` as DictKey),
+                );
+              }
             }
             setPendingPrompt(incomingPrompt);
             setPromptSelections({});
@@ -1068,24 +1094,10 @@ export function TauriSessionPreview() {
             setPendingPrompt(null);
             setPromptSelections({});
             setSession(previous => previous ? { ...previous, state: "running" } : previous);
-            // The user can disable desktop notifications in Settings.
-            void (async () => {
-              try {
-                if (!getTauriNotificationsEnabled()) return;
-                const hasPermission = await isPermissionGranted();
-                if (!hasPermission) {
-                  const permission = await requestPermission();
-                  if (permission !== "granted") return;
-                }
-                const failure = tauriTurnFailure(event);
-                sendNotification({
-                  title: "Reasonix",
-                  body: failure ? `生成失败：${failure}` : "回复已完成",
-                });
-              } catch {
-                // Notification is best-effort
-              }
-            })();
+            const failure = tauriTurnFailure(event);
+            void sendTauriSystemNotification("turn_done", "Reasonix", failure
+              ? t("notifications.turnFailed", { error: failure })
+              : t("notifications.turnComplete"));
             void (async () => {
               // Refresh state and transcript independently. A transcript parse
               // failure must not prevent state reconciliation. The core can
@@ -1281,7 +1293,7 @@ export function TauriSessionPreview() {
       setUnverifiedLegacyTabs(page.unverifiedLegacySessions ?? []);
       setSessionPageCursor(page.nextCursor ?? null);
       setSessionPageSource(page.source);
-      setSessionPageCatalogWarning(page.catalogWarning ?? "");
+      setSessionPageCatalogWarning(page.catalogWarning ? tauriMessageFrom(page.catalogWarning) : "");
       setSessionPageDirectoryCount(page.shadowDirectoryCount ?? (page.source === "identity" ? page.total : null));
       setSessionPageUnclaimedCount(page.unclaimedTranscriptCount ?? null);
       setSessionPageTitleMismatchCount(page.titleMismatchCount ?? null);
@@ -1375,7 +1387,7 @@ export function TauriSessionPreview() {
       const result = await tauriWorkbenchProjectFolders();
       if (!isActive()) return;
       setProjectFolders(result.folders.map(folder => ({ root: folder.root, title: folder.title })));
-      setProjectFoldersWarning(result.warning ?? "");
+      setProjectFoldersWarning(result.warning ? tauriMessageFrom(result.warning) : "");
     } catch (cause) {
       if (!isActive()) return;
       setProjectFoldersWarning(`读取项目文件夹失败：${tauriMessageFrom(cause)}`);
@@ -1430,7 +1442,7 @@ export function TauriSessionPreview() {
         setUnverifiedLegacyTabs(page.unverifiedLegacySessions ?? []);
         setSessionPageCursor(page.nextCursor ?? null);
         setSessionPageSource(page.source);
-        setSessionPageCatalogWarning(page.catalogWarning ?? "");
+        setSessionPageCatalogWarning(page.catalogWarning ? tauriMessageFrom(page.catalogWarning) : "");
         setSessionPageDirectoryCount(page.shadowDirectoryCount ?? null);
         setSessionPageUnclaimedCount(page.unclaimedTranscriptCount ?? null);
         setSessionPageTitleMismatchCount(page.titleMismatchCount ?? null);
@@ -1474,7 +1486,7 @@ export function TauriSessionPreview() {
           setTabs(previous => preserveWorkbenchLifecycle(sessions, previous));
           setSessionPageCursor(cursor);
           setSessionPageSource(page.source);
-          setSessionPageCatalogWarning(page.catalogWarning ?? "");
+          setSessionPageCatalogWarning(page.catalogWarning ? tauriMessageFrom(page.catalogWarning) : "");
           setSessionPageDirectoryCount(page.shadowDirectoryCount ?? page.total);
           setSessionPageUnclaimedCount(page.unclaimedTranscriptCount ?? null);
           setSessionPageTitleMismatchCount(page.titleMismatchCount ?? null);
@@ -1568,7 +1580,7 @@ export function TauriSessionPreview() {
         try {
           const result = await rememberTauriWorkbenchProjectFolder(openedRoot);
           setProjectFolders(result.folders.map(folder => ({ root: folder.root, title: folder.title })));
-          setProjectFoldersWarning(result.warning ?? "");
+          setProjectFoldersWarning(result.warning ? tauriMessageFrom(result.warning) : "");
         } catch (cause) {
           setError(`对话已打开，但无法保存项目文件夹：${tauriMessageFrom(cause)}`);
         }
@@ -1747,7 +1759,7 @@ export function TauriSessionPreview() {
         try {
           const result = await rememberTauriWorkbenchProjectFolder(selected);
           setProjectFolders(result.folders.map(folder => ({ root: folder.root, title: folder.title })));
-          setProjectFoldersWarning(result.warning ?? "");
+          setProjectFoldersWarning(result.warning ? tauriMessageFrom(result.warning) : "");
         } catch (cause) {
           setProjectFoldersWarning(`默认工作区已保存，但项目列表未更新：${tauriMessageFrom(cause)}`);
         }
@@ -1774,7 +1786,7 @@ export function TauriSessionPreview() {
     try {
       const result = await renameTauriWorkbenchProjectFolder(root, projectTitleDraft);
       setProjectFolders(result.folders.map(folder => ({ root: folder.root, title: folder.title })));
-      setProjectFoldersWarning(result.warning ?? "");
+      setProjectFoldersWarning(result.warning ? tauriMessageFrom(result.warning) : "");
       setEditingProjectRoot(null);
     } catch (cause) {
       setError(tauriMessageFrom(cause));
@@ -1885,6 +1897,15 @@ export function TauriSessionPreview() {
   function insertWorkspacePath(path: string) {
     const reference = `@${path}`;
     setPrompt(previous => previous.trim() ? `${previous.trim()}\n\n${reference}` : reference);
+  }
+
+  function insertSubagentInvocation(command: string) {
+    setPrompt(previous => {
+      const current = previous.trimEnd();
+      return current ? `${current}\n\n${command}` : command;
+    });
+    setSettingsOpen(false);
+    window.requestAnimationFrame(() => composerRef.current?.focus());
   }
 
   function insertWorkspaceReference(entry: TauriWorkspaceEntry) {
@@ -2219,7 +2240,7 @@ export function TauriSessionPreview() {
       const [folders, profileStatus] = await Promise.allSettled([tauriWorkbenchProjectFolders(), tauriPreviewProfileStatus()]);
       if (folders.status === "fulfilled") {
         setProjectFolders(folders.value.folders.map(folder => ({ root: folder.root, title: folder.title })));
-        setProjectFoldersWarning(folders.value.warning ?? "");
+        setProjectFoldersWarning(folders.value.warning ? tauriMessageFrom(folders.value.warning) : "");
       }
       if (profileStatus.status === "fulfilled") setProfile(profileStatus.value);
       const refreshWarning = folders.status === "rejected" || profileStatus.status === "rejected" ? `\n${t("settings.data.foldersRefreshWarning")}` : "";
@@ -2567,7 +2588,21 @@ export function TauriSessionPreview() {
               <button type="button" onClick={() => setDraftAttachmentPaths(previous => previous.filter((_, itemIndex) => itemIndex !== index))} disabled={busy} aria-label={`移除待发送文件 ${path.split(/[\\/]/).pop() || path}`}><X size={13} /></button>
             </div>)}</div>}
             <textarea ref={composerRef} value={prompt} onChange={event => setPrompt(event.target.value)} onKeyDown={event => {
-              if (matchesTauriShortcut(event.nativeEvent, "send_message", detectShortcutPlatform())) { event.preventDefault(); void submit(); }
+              const native = event.nativeEvent;
+              if (native.isComposing || native.keyCode === 229) return;
+              if (matchesTauriShortcut(native, "composer_newline", detectShortcutPlatform())) {
+                event.preventDefault();
+                const textarea = event.currentTarget;
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                const next = prompt.slice(0, start) + "\n" + prompt.slice(end);
+                setPrompt(next);
+                requestAnimationFrame(() => {
+                  textarea.setSelectionRange(start + 1, start + 1);
+                });
+                return;
+              }
+              if (matchesTauriShortcut(native, "send_message", detectShortcutPlatform())) { event.preventDefault(); void submit(); }
             }} placeholder={session?.state === "paused" ? "请先完成上方确认…" : session ? `继续聊聊你的问题…（${sendShortcutLabel} 发送）` : `输入问题，开始新对话…（${sendShortcutLabel} 发送）`} disabled={session?.state === "paused"} rows={3} />
             <div className="tauri-composer__bottom"><span>{session?.workspaceRoot ? `当前对话工作区 · ${session.workspaceRoot}` : session ? "当前对话使用默认工作区" : currentWorkspace ? `${currentWorkspace === defaultWorkspace ? "新对话默认工作区" : "新对话工作区"} · ${currentWorkspace}` : "Preview 配置与稳定版相互隔离"}</span>
               <div className="tauri-composer__actions">
@@ -2699,7 +2734,7 @@ export function TauriSessionPreview() {
 
       <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} items={commandPaletteItems} placeholder={t("palette.placeholder")} emptyText={t("palette.empty")} />
       <ShortcutsCheatsheet open={shortcutsHelpOpen} platform={shortcutPlatform} onClose={() => setShortcutsHelpOpen(false)} t={t} items={shortcutHelpItems} />
-      {settingsOpen && <TauriSettings key={settingsTab} initialTab={settingsTab} workspaceRoot={currentWorkspace || undefined} defaultWorkspace={defaultWorkspace} onChooseDefaultWorkspace={chooseDefaultWorkspace} onClearDefaultWorkspace={clearDefaultWorkspace} profile={profile} importBusy={busy} bridgeStatus={status} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={error} onRestartBridge={restartBridge} onRefreshCatalogAudit={() => refreshCatalogAudit()} onRefreshProfile={refreshProfile} onImportStableProfile={importStableProfile} onImportStableProjectFolders={importStableProjectFolders} onScanUnclaimedSessions={() => void openScanImportReview()} onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionId={session?.id} currentSessionState={session?.state} currentSessionModelRef={session?.modelRef} onCurrentSessionModelChange={changeCurrentSessionModel} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} />}
+      {settingsOpen && <TauriSettings key={settingsTab} initialTab={settingsTab} workspaceRoot={currentWorkspace || undefined} defaultWorkspace={defaultWorkspace} onChooseDefaultWorkspace={chooseDefaultWorkspace} onClearDefaultWorkspace={clearDefaultWorkspace} profile={profile} importBusy={busy} bridgeStatus={status} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={error} onRestartBridge={restartBridge} onRefreshCatalogAudit={() => refreshCatalogAudit()} onRefreshProfile={refreshProfile} onImportStableProfile={importStableProfile} onImportStableProjectFolders={importStableProjectFolders} onScanUnclaimedSessions={() => void openScanImportReview()} onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionId={session?.id} currentSessionState={session?.state} currentSessionModelRef={session?.modelRef} onCurrentSessionModelChange={changeCurrentSessionModel} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} onUseSubagentInChat={insertSubagentInvocation} />}
     </main>
   );
 }

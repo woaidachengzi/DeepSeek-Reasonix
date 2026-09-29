@@ -238,6 +238,83 @@ func TestBotSettingsPersistConnectionRuntimePreferences(t *testing.T) {
 	}
 }
 
+func TestBotGatewayRuntimeSettingsRoundTrip(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	cfg := appconfig.Default()
+	if err := cfg.SaveTo(appconfig.UserConfigPath()); err != nil {
+		t.Fatalf("save isolated profile: %v", err)
+	}
+	maxSteps, debounce, queueCap, ttl, pending := 42, 2500, 12, 90, 7
+	queueMode, queueDrop := "collect", "old"
+	ignoreSelf := false
+	view, err := changeBotSettings(botSettingsChange{
+		Action: "set_gateway_runtime", MaxSteps: &maxSteps, DebounceMs: &debounce,
+		QueueMode: &queueMode, QueueCap: &queueCap, QueueDrop: &queueDrop,
+		IgnoreSelfMessages: &ignoreSelf, PairingRequestTTLMinutes: &ttl, PairingMaxPending: &pending,
+	})
+	if err != nil {
+		t.Fatalf("save gateway runtime settings: %v", err)
+	}
+	if view.MaxSteps != maxSteps || view.DebounceMs != debounce || view.QueueMode != queueMode || view.QueueCap != queueCap || view.QueueDrop != queueDrop || view.IgnoreSelfMessages || view.PairingRequestTTLMinutes != ttl || view.PairingMaxPending != pending {
+		t.Fatalf("settings view did not round-trip gateway runtime values: %+v", view)
+	}
+	ids, err := changeBotSettings(botSettingsChange{Action: "set_self_user_ids", Platform: "qq", Values: []string{" self-a ", "self-a", "self-b"}})
+	if err != nil {
+		t.Fatalf("save self user IDs: %v", err)
+	}
+	if got := strings.Join(ids.SelfUserIDs["qq"], ","); got != "self-a,self-b" {
+		t.Fatalf("QQ self IDs = %q", got)
+	}
+	saved, err := appconfig.LoadForEditReadOnlyStrict(appconfig.UserConfigPath())
+	if err != nil {
+		t.Fatalf("reload saved profile: %v", err)
+	}
+	if saved.Bot.MaxSteps != maxSteps || saved.Bot.DebounceMs != debounce || saved.Bot.QueueMode != queueMode || saved.Bot.QueueCap != queueCap || saved.Bot.QueueDrop != queueDrop || saved.Bot.IgnoreSelfMessages || saved.Bot.Pairing.RequestTTLMinutes != ttl || saved.Bot.Pairing.MaxPendingPerPlatform != pending || strings.Join(saved.Bot.SelfUserIDs.QQ, ",") != "self-a,self-b" {
+		t.Fatalf("gateway runtime values were not persisted: %+v", saved.Bot)
+	}
+	invalidMode := "unsafe"
+	if _, err := changeBotSettings(botSettingsChange{Action: "set_gateway_runtime", QueueMode: &invalidMode}); err == nil {
+		t.Fatal("invalid queue mode unexpectedly accepted")
+	}
+}
+
+func TestBotRoutesRoundTripAndRejectInvalidRules(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	cfg := appconfig.Default()
+	if err := cfg.SaveTo(appconfig.UserConfigPath()); err != nil {
+		t.Fatalf("save isolated profile: %v", err)
+	}
+	routes := []botRouteSettings{{
+		ConnectionID: "feishu-lark", Platform: "feishu", ChatType: "group", ChatID: "oc-group",
+		WorkspaceRoot: "/tmp/project", Model: "openai/gpt-5", ToolApprovalMode: "auto",
+	}}
+	view, err := changeBotSettings(botSettingsChange{Action: "set_routes", Routes: routes})
+	if err != nil {
+		t.Fatalf("save bot routes: %v", err)
+	}
+	if len(view.Routes) != 1 || view.Routes[0] != routes[0] {
+		t.Fatalf("routes did not round-trip through settings view: %+v", view.Routes)
+	}
+	saved, err := appconfig.LoadForEditReadOnlyStrict(appconfig.UserConfigPath())
+	if err != nil {
+		t.Fatalf("reload saved profile: %v", err)
+	}
+	if len(saved.Bot.Routes) != 1 || saved.Bot.Routes[0].WorkspaceRoot != "/tmp/project" || saved.Bot.Routes[0].Model != "openai/gpt-5" || saved.Bot.Routes[0].ToolApprovalMode != "auto" {
+		t.Fatalf("route configuration not persisted: %+v", saved.Bot.Routes)
+	}
+	invalid := []botRouteSettings{{Platform: "unknown"}}
+	if _, err := changeBotSettings(botSettingsChange{Action: "set_routes", Routes: invalid}); err == nil {
+		t.Fatal("invalid route platform unexpectedly accepted")
+	}
+	if _, err := changeBotSettings(botSettingsChange{Action: "set_routes"}); err != nil {
+		t.Fatalf("clear all routes: %v", err)
+	}
+	cleared, err := appconfig.LoadForEditReadOnlyStrict(appconfig.UserConfigPath())
+	if err != nil || len(cleared.Bot.Routes) != 0 {
+		t.Fatalf("route clear left stale rules: routes=%+v err=%v", cleared.Bot.Routes, err)
+	}
+}
+
 func TestBotCredentialSaveStoresSecretOutsideProfileAndNeverReturnsIt(t *testing.T) {
 	t.Setenv("REASONIX_HOME", t.TempDir())
 	cfg := appconfig.Default()

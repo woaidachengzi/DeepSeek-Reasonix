@@ -59,6 +59,12 @@ path = "/bin/bash"
 	if view.Bash != "off" || view.Network || view.WorkspaceRoot != "/tmp/project" || len(view.AllowWrite) != 1 || view.AllowWrite[0] != "/tmp/extra" || view.Platform != runtime.GOOS || view.Shell != "bash" || view.ResolvedShell == "" {
 		t.Fatalf("sandbox view = %#v", view)
 	}
+	if len(view.ShellCapabilities) == 0 || view.GitCapability.ID != "git" {
+		t.Fatalf("sandbox response omitted the host capability inventory: %#v", view)
+	}
+	if _, err := json.Marshal(view); err != nil {
+		t.Fatalf("sandbox capability inventory is not serializable: %v", err)
+	}
 	project := filepath.Join(home, "project")
 	if err := os.Mkdir(project, 0o700); err != nil {
 		t.Fatal(err)

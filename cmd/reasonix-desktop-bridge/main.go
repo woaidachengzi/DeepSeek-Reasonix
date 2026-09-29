@@ -74,6 +74,8 @@ type bridgeServer struct {
 	requestIDs         *idempotencyLedger
 	remoteSessions     *previewRemoteSessions
 	packageOpsMu       sync.Mutex
+	subagentTryMu      sync.Mutex
+	subagentTryRun     *subagentTryRun
 	cacheIdentityReads bool
 	identityReadMu     sync.Mutex
 	identityReadStore  *sessionidentity.Store
@@ -486,11 +488,15 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("POST /v1/settings/skills/restore", b.authorized(b.idempotent(64<<10, b.restoreSkill)))
 	mux.HandleFunc("GET /v1/settings/plugins", b.authorized(b.pluginSettings))
 	mux.HandleFunc("POST /v1/settings/plugins", b.authorized(b.idempotent(64<<10, b.changePluginSettings)))
+	mux.HandleFunc("POST /v1/settings/plugins/doctor", b.authorized(b.pluginDoctor))
 	mux.HandleFunc("POST /v1/settings/plugins/plan", b.authorized(b.planPluginInstall))
 	mux.HandleFunc("POST /v1/settings/plugins/install", b.authorized(b.idempotent(64<<10, b.installPlugin)))
 	mux.HandleFunc("POST /v1/settings/plugins/remove", b.authorized(b.idempotent(64<<10, b.removePlugin)))
 	mux.HandleFunc("GET /v1/settings/subagents", b.authorized(b.subagentSettings))
 	mux.HandleFunc("POST /v1/settings/subagents", b.authorized(b.idempotent(256<<10, b.changeSubagentSettings)))
+	mux.HandleFunc("POST /v1/settings/subagents/try", b.authorized(b.trySubagentProfile))
+	mux.HandleFunc("GET /v1/settings/subagents/try/status", b.authorized(b.subagentProfileTryStatus))
+	mux.HandleFunc("POST /v1/settings/subagents/try/cancel", b.authorized(b.cancelSubagentProfileTry))
 	mux.HandleFunc("GET /v1/settings/hooks", b.authorized(b.hooksSettings))
 	mux.HandleFunc("POST /v1/settings/hooks", b.authorized(b.idempotent(64<<10, b.changeHooksSettings)))
 	mux.HandleFunc("GET /v1/settings/memory", b.authorized(b.memorySettings))
@@ -503,11 +509,15 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("POST /v1/settings/agent-preferences", b.authorized(b.idempotent(64<<10, b.setAgentPreferences)))
 	mux.HandleFunc("GET /v1/settings/desktop", b.authorized(b.desktopPreferences))
 	mux.HandleFunc("GET /v1/settings/storage", b.authorized(b.storageSettings))
+	mux.HandleFunc("GET /v1/settings/diagnostics/capabilities", b.authorized(b.capabilityDiagnostics))
+	mux.HandleFunc("GET /v1/settings/diagnostics/runtime", b.authorized(b.runtimeDoctor))
 	mux.HandleFunc("GET /v1/settings/remote", b.authorized(b.remoteSettings))
 	mux.HandleFunc("POST /v1/settings/remote/scan", b.authorized(b.scanRemoteSSHConfig))
 	mux.HandleFunc("POST /v1/settings/remote/connect", b.authorized(b.connectRemoteHost))
 	mux.HandleFunc("POST /v1/settings/remote/disconnect", b.authorized(b.disconnectRemoteHost))
 	mux.HandleFunc("POST /v1/settings/remote/browse", b.authorized(b.browseRemoteHost))
+	mux.HandleFunc("POST /v1/settings/remote/preview", b.authorized(b.previewRemoteFile))
+	mux.HandleFunc("POST /v1/settings/remote/save", b.authorized(b.saveRemoteFile))
 	mux.HandleFunc("POST /v1/settings/remote/hosts", b.authorized(b.idempotent(64<<10, b.changeRemoteSettings)))
 	mux.HandleFunc("GET /v1/settings/bots", b.authorized(b.botSettings))
 	mux.HandleFunc("POST /v1/settings/bots", b.authorized(b.idempotent(64<<10, b.changeBotSettings)))
@@ -686,12 +696,12 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "provider_summary", "provider_configs", "save_provider_config", "delete_provider_config", "discover_provider_models", "provider_model_probe", "usage_stats", "storage_settings", "permission_settings", "set_permission_settings", "secrets_settings", "set_secrets_settings", "sandbox_settings", "set_sandbox_settings", "network_settings", "set_network_settings", "skills_settings", "set_skills_settings", "plan_skill_install", "install_skill", "archive_skill", "restore_skill", "plugin_settings", "set_plugin_settings", "plan_plugin_install", "install_plugin", "remove_plugin", "subagent_settings", "set_subagent_settings", "hooks_settings", "set_hooks_settings", "memory_settings", "set_memory_settings", "memory_suggestions", "accept_memory_suggestion", "set_default_model", "set_session_model", "set_model_role", "set_agent_preferences", "desktop_preferences", "set_desktop_approval", "set_provider_key", "bot_settings", "set_bot_settings", "bot_runtime_status", "remote_ssh_probe", "remote_ssh_connect", "remote_ssh_disconnect", "remote_workspace_browse", "open_session", "switch_session", "session_snapshot", "session_balance", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "mcp_server_activation", "mcp_runtime_action", "mcp_marketplace", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "session_scan_import_review_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "provider_configs", "save_provider_config", "delete_provider_config", "discover_provider_models", "provider_model_probe", "usage_stats", "storage_settings", "permission_settings", "set_permission_settings", "secrets_settings", "set_secrets_settings", "sandbox_settings", "set_sandbox_settings", "network_settings", "set_network_settings", "skills_settings", "set_skills_settings", "plan_skill_install", "install_skill", "archive_skill", "restore_skill", "plugin_settings", "set_plugin_settings", "plugin_doctor", "plan_plugin_install", "install_plugin", "remove_plugin", "subagent_settings", "set_subagent_settings", "try_subagent", "subagent_try_status", "cancel_subagent_try", "hooks_settings", "set_hooks_settings", "memory_settings", "set_memory_settings", "memory_suggestions", "accept_memory_suggestion", "set_default_model", "set_session_model", "set_model_role", "set_agent_preferences", "desktop_preferences", "set_desktop_approval", "set_provider_key", "bot_settings", "set_bot_settings", "bot_runtime_status", "remote_ssh_probe", "remote_ssh_connect", "remote_ssh_disconnect", "remote_workspace_browse", "remote_file_preview", "remote_file_save", "open_session", "switch_session", "session_snapshot", "session_balance", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "mcp_server_activation", "mcp_runtime_action", "mcp_marketplace", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "session_scan_import_review_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
 	})
 }
 
-func (b *bridgeServer) providerSummary(w http.ResponseWriter, _ *http.Request) {
-	summary, err := loadProviderSummary()
+func (b *bridgeServer) providerSummary(w http.ResponseWriter, r *http.Request) {
+	summary, err := loadProviderSummaryForScope(r.URL.Query().Get("scope"), r.URL.Query().Get("workspaceRoot"))
 	if err != nil {
 		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read provider summary")
 		return
@@ -835,6 +845,12 @@ func (b *bridgeServer) sandboxSettings(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read Preview sandbox settings")
 		return
+	}
+	if sessionID := strings.TrimSpace(r.URL.Query().Get("sessionId")); sessionID != "" {
+		if shell, active := b.runtimes.BoundShell(sessionID); active {
+			view.EffectiveShell = shell
+			view.ShellReloadRequired = shell != view.ResolvedShell
+		}
 	}
 	writeJSON(w, http.StatusOK, view)
 }
@@ -1081,7 +1097,7 @@ func (b *bridgeServer) setDefaultModel(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid default model request")
 		return
 	}
-	if err := persistDefaultModel(request.Model); err != nil {
+	if err := persistDefaultModelForScope(request.Model, request.Scope, request.WorkspaceRoot); err != nil {
 		if errors.Is(err, errDefaultModelUnavailable) {
 			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "selected model is not configured and ready")
 			return
@@ -1089,7 +1105,7 @@ func (b *bridgeServer) setDefaultModel(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to save the Preview default model")
 		return
 	}
-	summary, err := loadProviderSummary()
+	summary, err := loadProviderSummaryForScope(request.Scope, request.WorkspaceRoot)
 	if err != nil {
 		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read provider summary")
 		return
@@ -1111,7 +1127,7 @@ func (b *bridgeServer) setModelRole(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to save the Preview model role")
 		return
 	}
-	summary, err := loadProviderSummary()
+	summary, err := loadProviderSummaryForScope(request.Scope, request.WorkspaceRoot)
 	if err != nil {
 		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read provider summary")
 		return
@@ -1129,14 +1145,14 @@ func (b *bridgeServer) setAgentPreferences(w http.ResponseWriter, r *http.Reques
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "agent preference could not be saved")
 		return
 	}
-	if request.ReasoningLanguage != "" && b.runtimes != nil {
+	if request.ReasoningLanguage != "" && request.Scope != "project" && b.runtimes != nil {
 		if session, active := b.runtimes.Snapshot(); active && session.WorkspaceRoot != "" {
 			if effective, err := appconfig.LoadForRootWithoutCredentialsReadOnly(session.WorkspaceRoot); err == nil {
 				b.runtimes.SetReasoningLanguage(session.ID, effective.ReasoningLanguage())
 			}
 		}
 	}
-	summary, err := loadProviderSummary()
+	summary, err := loadProviderSummaryForScope(request.Scope, request.WorkspaceRoot)
 	if err != nil {
 		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read agent preferences")
 		return

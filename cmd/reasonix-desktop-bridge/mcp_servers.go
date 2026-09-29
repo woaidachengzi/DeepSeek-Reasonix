@@ -28,6 +28,7 @@ type mcpServerView struct {
 	HeaderKeys           []string                       `json:"headerKeys,omitempty"`
 	StartupTimeoutSecond int                            `json:"startupTimeoutSeconds,omitempty"`
 	CallTimeoutSecond    int                            `json:"callTimeoutSeconds,omitempty"`
+	ToolTimeoutSeconds   map[string]int                 `json:"toolTimeoutSeconds,omitempty"`
 	AutoStart            *bool                          `json:"autoStart,omitempty"`
 	Tier                 string                         `json:"tier,omitempty"`
 	ManagedByPackage     bool                           `json:"managedByPackage,omitempty"`
@@ -126,6 +127,7 @@ func mcpServerViewFor(root string, entry appconfig.PluginEntry) mcpServerView {
 		HeaderKeys:           sortedKeys(entry.Headers),
 		StartupTimeoutSecond: entry.StartupTimeoutSeconds,
 		CallTimeoutSecond:    entry.CallTimeoutSeconds,
+		ToolTimeoutSeconds:   entry.ToolTimeoutSeconds,
 		AutoStart:            entry.AutoStart,
 		Tier:                 entry.Tier,
 		ManagedByPackage:     entry.Source == appconfig.MCPSourcePluginPackage,
@@ -173,12 +175,15 @@ type mcpServerUpsertRequest struct {
 	// Args and Env are pointers so "absent" is distinguishable from "empty":
 	// omitting a field keeps the stored value, sending an empty map clears it,
 	// and credentials are never read back to be echoed.
-	Args      *[]string          `json:"args,omitempty"`
-	Env       *map[string]string `json:"env,omitempty"`
-	URL       string             `json:"url,omitempty"`
-	Headers   *map[string]string `json:"headers,omitempty"`
-	AutoStart *bool              `json:"autoStart,omitempty"`
-	Tier      *string            `json:"tier,omitempty"`
+	Args                  *[]string          `json:"args,omitempty"`
+	Env                   *map[string]string `json:"env,omitempty"`
+	URL                   string             `json:"url,omitempty"`
+	Headers               *map[string]string `json:"headers,omitempty"`
+	AutoStart             *bool              `json:"autoStart,omitempty"`
+	Tier                  *string            `json:"tier,omitempty"`
+	StartupTimeoutSeconds *int               `json:"startupTimeoutSeconds,omitempty"`
+	CallTimeoutSeconds    *int               `json:"callTimeoutSeconds,omitempty"`
+	ToolTimeoutSeconds    *map[string]int    `json:"toolTimeoutSeconds,omitempty"`
 }
 
 // upsertMCPServer adds a server, or edits the one with the same name in the
@@ -253,6 +258,18 @@ func (b *bridgeServer) upsertMCPServer(w http.ResponseWriter, r *http.Request) {
 	}
 	if request.Tier != nil {
 		entry.Tier = strings.TrimSpace(*request.Tier)
+	}
+	if request.StartupTimeoutSeconds != nil {
+		entry.StartupTimeoutSeconds = *request.StartupTimeoutSeconds
+	}
+	if request.CallTimeoutSeconds != nil {
+		entry.CallTimeoutSeconds = *request.CallTimeoutSeconds
+	}
+	if request.ToolTimeoutSeconds != nil {
+		entry.ToolTimeoutSeconds = make(map[string]int, len(*request.ToolTimeoutSeconds))
+		for tool, seconds := range *request.ToolTimeoutSeconds {
+			entry.ToolTimeoutSeconds[tool] = seconds
+		}
 	}
 
 	path, err := appconfig.UpsertPluginInSourceForRoot(root, entry)

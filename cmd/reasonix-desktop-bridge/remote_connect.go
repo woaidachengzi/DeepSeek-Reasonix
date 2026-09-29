@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"path"
@@ -9,11 +11,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	configpkg "reasonix/internal/config"
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/netclient"
 	"reasonix/internal/remote"
+	"reasonix/internal/remote/sftpfs"
 )
 
 type remoteConnectRequest struct {
@@ -65,8 +69,36 @@ type remoteBrowseResponse struct {
 	Truncated       bool                `json:"truncated"`
 }
 
+type remotePreviewRequest struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+type remotePreviewResponse struct {
+	ProtocolVersion int    `json:"protocolVersion"`
+	Path            string `json:"path"`
+	Kind            string `json:"kind"`
+	Content         string `json:"content"`
+	Revision        string `json:"revision"`
+	Truncated       bool   `json:"truncated"`
+}
+
+type remoteSaveRequest struct {
+	Name     string `json:"name"`
+	Path     string `json:"path"`
+	Revision string `json:"revision"`
+	Content  string `json:"content"`
+}
+
+type remoteSaveResponse struct {
+	ProtocolVersion int    `json:"protocolVersion"`
+	Path            string `json:"path"`
+	Revision        string `json:"revision"`
+}
+
 type previewRemoteSessions struct {
 	mu      sync.Mutex
+	saveMu  sync.Mutex
 	clients map[string]*remote.Client
 	peers   map[string]remote.HostKeyQuestion
 }
@@ -322,19 +354,159 @@ func (b *bridgeServer) browseRemoteHost(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, out)
 }
 
+func (b *bridgeServer) previewRemoteFile(w http.ResponseWriter, r *http.Request) {
+	var input remotePreviewRequest
+	if err := decodeJSONBody(w, r, 12<<10, &input); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid remote file request")
+		return
+	}
+	input.Name = strings.TrimSpace(input.Name)
+	input.Path = strings.TrimSpace(input.Path)
+	if !previewProviderName.MatchString(input.Name) || input.Path == "" || len(input.Path) > 4096 || strings.ContainsRune(input.Path, '\x00') {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid remote file request")
+		return
+	}
+	client, _ := b.remoteSessions.get(input.Name)
+	if client == nil || client.Status().Status != remote.StatusConnected {
+		writeProtocolError(w, http.StatusConflict, "conflict", "remote host is not connected")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+	defer cancel()
+	fsys, err := client.SFTP()
+	if err != nil {
+		writeProtocolError(w, http.StatusBadGateway, "remote_preview_failed", "could not open remote file service")
+		return
+	}
+	resolved, err := fsys.RealPath(ctx, input.Path)
+	if err != nil {
+		writeProtocolError(w, http.StatusBadGateway, "remote_preview_failed", "could not resolve remote file")
+		return
+	}
+	entry, err := fsys.Stat(ctx, resolved)
+	if err != nil || entry.IsDir || !entry.Mode.IsRegular() {
+		writeProtocolError(w, http.StatusBadRequest, "remote_preview_failed", "remote path is not a readable file")
+		return
+	}
+	const maxPreviewBytes = int64(1 << 20)
+	data, truncated, kind, err := fsys.ReadFile(ctx, resolved, maxPreviewBytes)
+	if err != nil {
+		writeProtocolError(w, http.StatusBadGateway, "remote_preview_failed", "could not read remote file")
+		return
+	}
+	kindName := "text"
+	content := string(data)
+	revision := ""
+	if kind != sftpfs.KindText {
+		kindName = "binary"
+		content = ""
+	} else {
+		revision = remoteContentRevision(data)
+	}
+	writeJSON(w, http.StatusOK, remotePreviewResponse{
+		ProtocolVersion: desktopbridge.ProtocolVersion,
+		Path:            resolved,
+		Kind:            kindName,
+		Content:         content,
+		Revision:        revision,
+		Truncated:       truncated,
+	})
+}
+
+func (b *bridgeServer) saveRemoteFile(w http.ResponseWriter, r *http.Request) {
+	var input remoteSaveRequest
+	if err := decodeJSONBody(w, r, (6<<20)+16<<10, &input); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid remote file save request")
+		return
+	}
+	input.Name = strings.TrimSpace(input.Name)
+	input.Path = strings.TrimSpace(input.Path)
+	if !previewProviderName.MatchString(input.Name) || input.Path == "" || len(input.Path) > 4096 || strings.ContainsRune(input.Path, '\x00') || len(input.Content) > 1<<20 || !utf8.ValidString(input.Content) || strings.ContainsRune(input.Content, '\x00') {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid remote file save request")
+		return
+	}
+	if len(input.Revision) != sha256.Size*2 {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid remote file revision")
+		return
+	}
+	if _, err := hex.DecodeString(input.Revision); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid remote file revision")
+		return
+	}
+	if b.remoteSessions == nil {
+		writeProtocolError(w, http.StatusConflict, "conflict", "remote host is not connected")
+		return
+	}
+	// Keep the revision check and replacement in one bridge-local critical
+	// section so two Preview saves cannot both accept the same old revision.
+	b.remoteSessions.saveMu.Lock()
+	defer b.remoteSessions.saveMu.Unlock()
+	client, _ := b.remoteSessions.get(input.Name)
+	if client == nil || client.Status().Status != remote.StatusConnected {
+		writeProtocolError(w, http.StatusConflict, "conflict", "remote host is not connected")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	fsys, err := client.SFTP()
+	if err != nil {
+		writeProtocolError(w, http.StatusBadGateway, "remote_save_failed", "could not open remote file service")
+		return
+	}
+	resolved, err := fsys.RealPath(ctx, input.Path)
+	if err != nil {
+		writeProtocolError(w, http.StatusBadGateway, "remote_save_failed", "could not resolve remote file")
+		return
+	}
+	entry, err := fsys.Stat(ctx, resolved)
+	if err != nil || entry.IsDir || !entry.Mode.IsRegular() {
+		writeProtocolError(w, http.StatusBadRequest, "remote_save_failed", "remote path is not a regular file")
+		return
+	}
+	current, truncated, kind, err := fsys.ReadFile(ctx, resolved, 1<<20)
+	if err != nil {
+		writeProtocolError(w, http.StatusBadGateway, "remote_save_failed", "could not read remote file")
+		return
+	}
+	if truncated || kind != sftpfs.KindText {
+		writeProtocolError(w, http.StatusConflict, "remote_file_changed", "remote file is no longer an editable text file")
+		return
+	}
+	if remoteContentRevision(current) != strings.ToLower(input.Revision) {
+		writeProtocolError(w, http.StatusConflict, "remote_file_changed", "remote file changed since it was loaded")
+		return
+	}
+	if err := fsys.WriteFileAtomic(ctx, resolved, []byte(input.Content), entry.Mode.Perm()); err != nil {
+		writeProtocolError(w, http.StatusBadGateway, "remote_save_failed", "could not save remote file")
+		return
+	}
+	writeJSON(w, http.StatusOK, remoteSaveResponse{
+		ProtocolVersion: desktopbridge.ProtocolVersion,
+		Path:            resolved,
+		Revision:        remoteContentRevision([]byte(input.Content)),
+	})
+}
+
+func remoteContentRevision(data []byte) string {
+	digest := sha256.Sum256(data)
+	return hex.EncodeToString(digest[:])
+}
+
 func previewRemoteAuth(host remote.ResolvedHost, requestPassword, requestPassphrase string) remote.AuthOptions {
 	auth := remote.AuthOptions{}
-	if host.PasswordEnv != "" {
+	if requestPassword != "" {
+		// A credential prompt is strictly per connection attempt; it may
+		// override a stale stored credential without editing Preview config.
+		auth.Password = func() (string, error) { return requestPassword, nil }
+	} else if host.PasswordEnv != "" {
 		key := host.PasswordEnv
 		auth.Password = func() (string, error) { return configpkg.ResolveCredential(key).Value, nil }
-	} else if requestPassword != "" {
-		auth.Password = func() (string, error) { return requestPassword, nil }
 	}
-	if host.PassphraseEnv != "" {
+	if requestPassphrase != "" {
+		auth.Passphrase = func() (string, error) { return requestPassphrase, nil }
+	} else if host.PassphraseEnv != "" {
 		key := host.PassphraseEnv
 		auth.Passphrase = func() (string, error) { return configpkg.ResolveCredential(key).Value, nil }
-	} else if requestPassphrase != "" {
-		auth.Passphrase = func() (string, error) { return requestPassphrase, nil }
 	}
 	return auth
 }

@@ -20,6 +20,11 @@ function localizedMCPError(cause: unknown, t: ReturnType<typeof useT>): string {
   if (source === "http/sse 服务器需要填写 URL") return t("settings.mcp.error.urlRequired");
   if (source === "参数 JSON 格式无效") return t("settings.mcp.error.invalidArgsJson");
   if (source === "参数必须是字符串数组") return t("settings.mcp.error.argsMustBeStrings");
+  if (source === "settings.mcp.error.startupTimeout") return t("settings.mcp.error.startupTimeout");
+  if (source === "settings.mcp.error.callTimeout") return t("settings.mcp.error.callTimeout");
+  if (source === "settings.mcp.error.toolTimeoutJson") return t("settings.mcp.error.toolTimeoutJson");
+  if (source === "settings.mcp.error.toolTimeoutObject") return t("settings.mcp.error.toolTimeoutObject");
+  if (source === "settings.mcp.error.toolTimeoutValues") return t("settings.mcp.error.toolTimeoutValues");
   return message;
 }
 
@@ -343,6 +348,7 @@ export function TauriMCPSettings({ workspaceRoot, sessionId, currentSessionState
       <div className="tauri-mcp-list__row"><strong>{server.name}</strong><span className="tauri-mcp-list__meta">{server.scope === "project" ? t("caps.projectServerBadge") : server.scope === "global" ? t("caps.sourceUser") : server.scope} · {server.type}</span></div>
       <small className={`tauri-mcp-list__runtime${server.runtimeStatus === "failed" ? " is-error" : ""}`}>{runtimeSummary(server, t)}{server.errorKind ? ` · ${server.errorKind}` : ""}</small>
       <code className="tauri-mcp-list__transport">{mcpTransportSummary(server) || "—"}</code>
+      {(server.startupTimeoutSeconds || server.callTimeoutSeconds || Object.keys(server.toolTimeoutSeconds ?? {}).length > 0) && <small>{t("settings.mcp.timeoutSummary", { startup: server.startupTimeoutSeconds ?? 0, call: server.callTimeoutSeconds ?? 0, tools: Object.keys(server.toolTimeoutSeconds ?? {}).length })}</small>}
       {server.runtimeStatus === "connected" && (server.toolList?.length ?? 0) > 0 && <details className="tauri-mcp-list__tools"><summary>{t("settings.mcp.viewTools")}</summary><ul>{server.toolList?.map(tool => <li key={tool.name}><strong>{tool.name}</strong>{tool.description && <span>{tool.description}</span>}</li>)}</ul></details>}
       {credentialHint(server, t) && <small>{credentialHint(server, t)}</small>}
       {server.managedByPackage && <small>{t("settings.mcp.managedByPlugin")}</small>}
@@ -355,6 +361,9 @@ export function TauriMCPSettings({ workspaceRoot, sessionId, currentSessionState
       {draft.type === "stdio" ? <><label>{t("settings.mcp.commandLabel")}<input value={draft.command} onChange={event => setDraft({ ...draft, command: event.target.value })} placeholder="uvx" aria-label={t("settings.mcp.commandLabel")} disabled={busy} /></label><label>{t("settings.mcp.argumentsLabel")}<input value={draft.args} onChange={event => setDraft({ ...draft, args: event.target.value })} placeholder="mcp-server-time" aria-label={t("settings.mcp.argumentsLabel")} disabled={busy} /></label></> : <label>URL<input value={draft.url} onChange={event => setDraft({ ...draft, url: event.target.value })} placeholder="https://…" aria-label="URL" disabled={busy} /></label>}
       <label>{t("settings.mcp.environmentVariables")}<textarea value={draft.env} onChange={event => setDraft({ ...draft, env: event.target.value })} rows={2} placeholder={t("settings.mcp.keyValuePlaceholder")} aria-label={t("settings.mcp.environmentVariables")} disabled={busy} /></label>
       <label>{t("settings.mcp.requestHeaders")}<textarea value={draft.headers} onChange={event => setDraft({ ...draft, headers: event.target.value })} rows={2} placeholder={t("settings.mcp.headerPlaceholder")} aria-label={t("settings.mcp.requestHeaders")} disabled={busy} /></label>
+      <label>{t("settings.mcp.startupTimeout")}<input type="number" min={0} step={1} value={draft.startupTimeoutSeconds} onChange={event => setDraft({ ...draft, startupTimeoutSeconds: Number(event.target.value) })} aria-label={t("settings.mcp.startupTimeout")} disabled={busy} /><small>{t("settings.mcp.startupTimeoutHint")}</small></label>
+      <label>{t("settings.mcp.callTimeout")}<input type="number" min={0} step={1} value={draft.callTimeoutSeconds} onChange={event => setDraft({ ...draft, callTimeoutSeconds: Number(event.target.value) })} aria-label={t("settings.mcp.callTimeout")} disabled={busy} /><small>{t("settings.mcp.callTimeoutHint")}</small></label>
+      <label>{t("settings.mcp.toolTimeouts")}<textarea value={draft.toolTimeoutSeconds} onChange={event => setDraft({ ...draft, toolTimeoutSeconds: event.target.value })} rows={3} placeholder={'{ "search": 120 }'} aria-label={t("settings.mcp.toolTimeouts")} disabled={busy} /><small>{t("settings.mcp.toolTimeoutsHint")}</small></label>
       <div className="tauri-mcp-form__actions"><button type="submit" disabled={busy}>{draft.editing ? t("settings.mcp.saveChanges") : t("settings.mcp.addServer")}</button><button type="button" onClick={() => setDraft(null)} disabled={busy}>{t("common.cancel")}</button></div>
     </form>}
   </section>;

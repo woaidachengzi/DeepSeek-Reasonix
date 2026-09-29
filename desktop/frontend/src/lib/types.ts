@@ -1726,6 +1726,7 @@ export interface CapabilityDiagnosticsReport {
       package_owner?: string;
       transport: string;
       start_intent: string;
+      effective: boolean;
       command?: string;
       url_host?: string;
       env_keys?: string[];

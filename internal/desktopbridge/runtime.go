@@ -177,6 +177,13 @@ type RuntimeModelProvider interface {
 	ModelRef() string
 }
 
+// RuntimeShellProvider exposes only the interpreter identity bound to the
+// active controller generation. The executable path is kept out of this live
+// session view; the settings inventory reports host paths separately.
+type RuntimeShellProvider interface {
+	BoundShell() string
+}
+
 // MCPRuntimeTool is display-safe metadata from the active session's MCP Host.
 // It deliberately excludes tool schemas, arguments, results, and credentials.
 type MCPRuntimeTool struct {
@@ -569,6 +576,22 @@ func (m *RuntimeManager) Snapshot() (SessionView, bool) {
 	view := m.view
 	view.State = m.runtime.State()
 	return view, true
+}
+
+// BoundShell reports the interpreter captured by the exact active session's
+// controller. It never falls back to another session or to current config.
+func (m *RuntimeManager) BoundShell(sessionID string) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed || m.runtime == nil || m.view.ID != sessionID {
+		return "", false
+	}
+	provider, ok := m.runtime.(RuntimeShellProvider)
+	if !ok {
+		return "", false
+	}
+	shell := provider.BoundShell()
+	return shell, shell != ""
 }
 
 // SessionMetrics returns metrics only for the exact active session ID.

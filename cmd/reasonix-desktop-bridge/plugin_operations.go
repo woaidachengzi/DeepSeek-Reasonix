@@ -15,9 +15,13 @@ import (
 )
 
 type previewPluginInstallRequest struct {
-	Source     string `json:"source"`
-	PlanID     string `json:"planId"`
-	AcceptRisk bool   `json:"acceptRisk"`
+	Source           string `json:"source"`
+	Mode             string `json:"mode"`
+	PlanID           string `json:"planId"`
+	AcceptRisk       bool   `json:"acceptRisk"`
+	Replace          bool   `json:"replace"`
+	ExpectedName     string `json:"expectedName"`
+	ExpectedRevision string `json:"expectedRevision"`
 }
 
 type previewPluginRemoveRequest struct {
@@ -78,6 +82,7 @@ type previewPluginPlanAction struct {
 type previewPluginInstallPlan struct {
 	ProtocolVersion int                       `json:"protocolVersion"`
 	PlanID          string                    `json:"planId"`
+	Mode            string                    `json:"mode"`
 	Actions         []previewPluginPlanAction `json:"actions"`
 	WarningCount    int                       `json:"warningCount"`
 	Warnings        []string                  `json:"warnings"`
@@ -120,6 +125,17 @@ func validPreviewPluginSource(source string) bool {
 	return validPreviewGitHubSource(source)
 }
 
+func normalizedPreviewPluginMode(mode string) (string, bool) {
+	switch strings.TrimSpace(mode) {
+	case "", "copy":
+		return "copy", true
+	case "link":
+		return "link", true
+	default:
+		return "", false
+	}
+}
+
 func validPreviewGitHubSource(source string) bool {
 	u, err := url.Parse(source)
 	if err != nil || u.Scheme != "https" || u.Hostname() != "github.com" || u.Port() != "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
@@ -129,17 +145,39 @@ func validPreviewGitHubSource(source string) bool {
 	return len(parts) >= 2 && parts[0] != "" && parts[1] != ""
 }
 
-func previewPluginToolRequest(source string, apply bool, planID string) json.RawMessage {
+func previewPluginToolRequest(source, mode string, replace, apply bool, planID string) json.RawMessage {
 	raw, _ := json.Marshal(map[string]any{
-		"source": source, "kind": "plugin", "scope": "global", "mode": "copy", "replace": false,
+		"source": source, "kind": "plugin", "scope": "global", "mode": mode, "replace": replace,
 		"apply": apply, "planId": planID,
 	})
 	return raw
 }
 
-func planPreviewPlugin(r *http.Request, source string) (installPluginToolResponse, bool) {
+func validatePreviewPluginUpdate(input previewPluginInstallRequest) (pluginpkg.InstalledPlugin, bool) {
+	if !input.Replace {
+		return pluginpkg.InstalledPlugin{}, input.ExpectedName == "" && input.ExpectedRevision == ""
+	}
+	name := strings.TrimSpace(input.ExpectedName)
+	if input.Mode != "" && input.Mode != "copy" || !pluginpkg.IsValidName(name) || len(input.ExpectedRevision) != 64 {
+		return pluginpkg.InstalledPlugin{}, false
+	}
+	current, found, err := pluginpkg.FindInstalled(appconfig.ReasonixHomeDir(), name)
+	if err != nil || !found || pluginpkg.InstalledRevision(current) != input.ExpectedRevision {
+		return pluginpkg.InstalledPlugin{}, false
+	}
+	if filepath.Clean(pluginpkg.ResolveRoot(appconfig.ReasonixHomeDir(), current.Root)) != filepath.Clean(pluginpkg.InstallRoot(appconfig.ReasonixHomeDir(), name)) {
+		return pluginpkg.InstalledPlugin{}, false
+	}
+	return current, true
+}
+
+func planPreviewPlugin(r *http.Request, source, mode string) (installPluginToolResponse, bool) {
+	return planPreviewPluginWithReplace(r, source, mode, false)
+}
+
+func planPreviewPluginWithReplace(r *http.Request, source, mode string, replace bool) (installPluginToolResponse, bool) {
 	tool := installsource.NewTool(installsource.Options{})
-	out, err := tool.Execute(r.Context(), previewPluginToolRequest(source, false, ""))
+	out, err := tool.Execute(r.Context(), previewPluginToolRequest(source, mode, replace, false, ""))
 	if err != nil || len(out) > 2<<20 {
 		return installPluginToolResponse{}, false
 	}
@@ -162,16 +200,31 @@ func (b *bridgeServer) planPluginInstall(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	input.Source = strings.TrimSpace(input.Source)
-	if !validPreviewPluginSource(input.Source) {
+	mode, validMode := normalizedPreviewPluginMode(input.Mode)
+	if !validMode || !validPreviewPluginSource(input.Source) || mode == "link" && !filepath.IsAbs(input.Source) {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_source", "select a local plugin folder or a public GitHub repository")
 		return
 	}
-	plan, ok := planPreviewPlugin(r, input.Source)
+	if input.Replace {
+		if _, ok := validatePreviewPluginUpdate(input); !ok {
+			writeProtocolError(w, http.StatusConflict, "plugin_changed", "plugin changed or selected replacement target no longer matches; refresh and retry")
+			return
+		}
+	} else if input.ExpectedName != "" || input.ExpectedRevision != "" {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "unexpected plugin update identity")
+		return
+	}
+	input.Mode = mode
+	plan, ok := planPreviewPluginWithReplace(r, input.Source, input.Mode, input.Replace)
 	if !ok {
 		writeProtocolError(w, http.StatusBadRequest, "plan_failed", "plugin source could not be reviewed")
 		return
 	}
-	view := previewPluginInstallPlan{ProtocolVersion: desktopbridge.ProtocolVersion, PlanID: plan.PlanID, Actions: []previewPluginPlanAction{}, WarningCount: len(plan.Warnings), Warnings: previewPlanWarnings(plan.Warnings)}
+	if input.Replace && (len(plan.Actions) != 1 || plan.Actions[0].Name != input.ExpectedName) {
+		writeProtocolError(w, http.StatusBadRequest, "update_target_mismatch", "update source does not contain the selected plugin")
+		return
+	}
+	view := previewPluginInstallPlan{ProtocolVersion: desktopbridge.ProtocolVersion, PlanID: plan.PlanID, Mode: input.Mode, Actions: []previewPluginPlanAction{}, WarningCount: len(plan.Warnings), Warnings: previewPlanWarnings(plan.Warnings)}
 	for _, action := range plan.Actions {
 		item := previewPluginPlanAction{
 			Name: action.Name, Version: action.Version, ManifestKind: action.ManifestKind,
@@ -198,25 +251,43 @@ func (b *bridgeServer) installPlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.Source = strings.TrimSpace(input.Source)
-	if !validPreviewPluginSource(input.Source) || !strings.HasPrefix(input.PlanID, "sha256:") {
+	mode, validMode := normalizedPreviewPluginMode(input.Mode)
+	if !validMode || !validPreviewPluginSource(input.Source) || mode == "link" && !filepath.IsAbs(input.Source) || !strings.HasPrefix(input.PlanID, "sha256:") {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "review the plugin plan before installing")
 		return
 	}
+	input.Mode = mode
 	b.packageOpsMu.Lock()
 	defer b.packageOpsMu.Unlock()
-	plan, ok := planPreviewPlugin(r, input.Source)
+	var previous pluginpkg.InstalledPlugin
+	if input.Replace {
+		var valid bool
+		previous, valid = validatePreviewPluginUpdate(input)
+		if !valid {
+			writeProtocolError(w, http.StatusConflict, "plugin_changed", "plugin changed or selected replacement target no longer matches; refresh and review again")
+			return
+		}
+	} else if input.ExpectedName != "" || input.ExpectedRevision != "" {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "unexpected plugin update identity")
+		return
+	}
+	plan, ok := planPreviewPluginWithReplace(r, input.Source, input.Mode, input.Replace)
 	if !ok || plan.PlanID != input.PlanID {
 		writeProtocolError(w, http.StatusConflict, "plan_changed", "plugin plan changed; review it again")
 		return
 	}
 	for _, action := range plan.Actions {
+		if input.Replace && (len(plan.Actions) != 1 || action.Name != input.ExpectedName) {
+			writeProtocolError(w, http.StatusBadRequest, "update_target_mismatch", "update source does not contain the selected plugin")
+			return
+		}
 		if action.RiskLevel == "high" && !input.AcceptRisk {
 			writeProtocolError(w, http.StatusBadRequest, "risk_not_accepted", "confirm the high-risk plugin plan before installing")
 			return
 		}
 	}
 	tool := installsource.NewTool(installsource.Options{})
-	out, err := tool.Execute(r.Context(), previewPluginToolRequest(input.Source, true, input.PlanID))
+	out, err := tool.Execute(r.Context(), previewPluginToolRequest(input.Source, input.Mode, input.Replace, true, input.PlanID))
 	if err != nil || len(out) > 2<<20 {
 		writeProtocolError(w, http.StatusConflict, "install_failed", "plugin installation failed or the reviewed plan changed")
 		return
@@ -231,6 +302,18 @@ func (b *bridgeServer) installPlugin(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, http.StatusInternalServerError, "read_failed", "plugin installation finished but inventory could not be read")
 		return
 	}
+	if input.Replace && !previous.Enabled {
+		current := findPreviewPlugin(settings, previous.Name)
+		if current == nil || pluginpkg.SetEnabledIfRevision(appconfig.ReasonixHomeDir(), previous.Name, current.Revision, false) != nil {
+			writeProtocolError(w, http.StatusConflict, "activation_restore_failed", "plugin updated but its prior disabled state could not be restored")
+			return
+		}
+		settings, readErr = loadPreviewPluginSettings()
+		if readErr != nil {
+			writeProtocolError(w, http.StatusInternalServerError, "read_failed", "plugin updated but inventory could not be read")
+			return
+		}
+	}
 	failedNames := []string{}
 	for _, action := range result.Actions {
 		if action.Status == "failed" {
@@ -238,6 +321,15 @@ func (b *bridgeServer) installPlugin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, previewPluginOperationResult{ProtocolVersion: desktopbridge.ProtocolVersion, Status: result.Status, FailedNames: failedNames, Settings: settings})
+}
+
+func findPreviewPlugin(settings previewPluginSettings, name string) *previewPluginView {
+	for i := range settings.Plugins {
+		if settings.Plugins[i].Name == name {
+			return &settings.Plugins[i]
+		}
+	}
+	return nil
 }
 
 func (b *bridgeServer) removePlugin(w http.ResponseWriter, r *http.Request) {

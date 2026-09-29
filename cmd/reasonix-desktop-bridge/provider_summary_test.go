@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -119,6 +120,122 @@ default = "deepseek-chat"
 	}
 	if strings.Contains(string(encoded), secretValue) {
 		t.Fatalf("provider summary leaked a credential value: %s", encoded)
+	}
+}
+
+func TestProjectModelPreferencesStayInWorkspaceConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	globalConfig := `default_model = "local/chat"
+reasoning_language = "en"
+
+[agent]
+compact_ratio = 0.8
+planner_model = "local/chat"
+
+[[providers]]
+name = "local"
+kind = "openai"
+base_url = "http://127.0.0.1:1234/v1"
+models = ["chat", "vision-chat"]
+default = "chat"
+`
+	globalPath := filepath.Join(home, "config.toml")
+	if err := os.WriteFile(globalPath, []byte(globalConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	globalBefore, err := os.ReadFile(globalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace := filepath.Join(t.TempDir(), "project")
+	if err := os.MkdirAll(workspace, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	projectPath := filepath.Join(workspace, "reasonix.toml")
+	projectConfig := "[agent]\nreasoning_language = \"zh\"\ncompact_ratio = 0.7\n\n[permissions]\nmode = \"ask\"\n"
+	if err := os.WriteFile(projectPath, []byte(projectConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := loadProviderSummaryForScope("project", workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Scope != "project" || got.DefaultModel != "local/chat" || got.ReasoningLanguage != "zh" || got.CompactRatioPercent != 70 {
+		t.Fatalf("project summary did not resolve workspace overrides: %#v", got)
+	}
+	bridge := newBridgeServer(testToken, "instance-project-model-test")
+	query := url.Values{"scope": {"project"}, "workspaceRoot": {workspace}}
+	getRequest := httptest.NewRequest(http.MethodGet, "/v1/providers?"+query.Encode(), nil)
+	getRequest.Header.Set("Authorization", "Bearer "+testToken)
+	getResponse := httptest.NewRecorder()
+	bridge.handler().ServeHTTP(getResponse, getRequest)
+	if getResponse.Code != http.StatusOK {
+		t.Fatalf("scoped summary status = %d, body = %s", getResponse.Code, getResponse.Body.String())
+	}
+	var routeSummary providerSummaryResponse
+	if err := json.NewDecoder(getResponse.Body).Decode(&routeSummary); err != nil {
+		t.Fatal(err)
+	}
+	if routeSummary.Scope != "project" || routeSummary.ReasoningLanguage != "zh" {
+		t.Fatalf("scoped summary route returned the wrong config: %#v", routeSummary)
+	}
+	setBody, err := json.Marshal(setDefaultModelRequest{Model: "local/vision-chat", Scope: "project", WorkspaceRoot: workspace})
+	if err != nil {
+		t.Fatal(err)
+	}
+	setRequest := httptest.NewRequest(http.MethodPost, "/v1/settings/default-model", strings.NewReader(string(setBody)))
+	setRequest.Header.Set("Authorization", "Bearer "+testToken)
+	setRequest.Header.Set("Content-Type", "application/json")
+	setRequest.Header.Set(requestIDHeader, "project-model-default-test")
+	setResponse := httptest.NewRecorder()
+	bridge.handler().ServeHTTP(setResponse, setRequest)
+	if setResponse.Code != http.StatusOK {
+		t.Fatalf("project default-model status = %d, body = %s", setResponse.Code, setResponse.Body.String())
+	}
+	var setSummary providerSummaryResponse
+	if err := json.NewDecoder(setResponse.Body).Decode(&setSummary); err != nil {
+		t.Fatal(err)
+	}
+	if setSummary.Scope != "project" || setSummary.DefaultModel != "local/vision-chat" {
+		t.Fatalf("project default-model response = %#v", setSummary)
+	}
+	if err := persistDefaultModelForScope("local/vision-chat", "project", workspace); err != nil {
+		t.Fatalf("save project default model: %v", err)
+	}
+	if err := persistModelRole(setModelRoleRequest{Role: "planner", Model: "local/vision-chat", Scope: "project", WorkspaceRoot: workspace}); err != nil {
+		t.Fatalf("save project planner model: %v", err)
+	}
+	if err := persistAgentPreferences(setAgentPreferenceRequest{ReasoningLanguage: "en", Scope: "project", WorkspaceRoot: workspace}); err != nil {
+		t.Fatalf("save project reasoning language: %v", err)
+	}
+	if err := persistAgentPreferences(setAgentPreferenceRequest{CompactRatioPercent: 75, Scope: "project", WorkspaceRoot: workspace}); err != nil {
+		t.Fatalf("save project compaction threshold: %v", err)
+	}
+
+	got, err = loadProviderSummaryForScope("project", workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.DefaultModel != "local/vision-chat" || got.PlannerModel != "local/vision-chat" || got.ReasoningLanguage != "en" || got.CompactRatioPercent != 75 {
+		t.Fatalf("saved project preferences were not read back: %#v", got)
+	}
+	projectAfter, err := os.ReadFile(projectPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, preserved := range []string{"[permissions]", `mode = "ask"`} {
+		if !strings.Contains(string(projectAfter), preserved) {
+			t.Fatalf("project edit lost unrelated setting %q: %s", preserved, projectAfter)
+		}
+	}
+	globalAfter, err := os.ReadFile(globalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(globalAfter) != string(globalBefore) {
+		t.Fatalf("project model preference edits changed global configuration:\nbefore:\n%s\nafter:\n%s", globalBefore, globalAfter)
 	}
 }
 

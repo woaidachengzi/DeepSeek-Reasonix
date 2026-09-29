@@ -1,13 +1,23 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { archiveTauriSkill, changeTauriSkillsSettings, chooseTauriSkillSourceDirectory, installTauriSkill, planTauriSkillInstall, restoreTauriSkill, tauriMessageFrom, tauriSkillsSettings, type TauriArchivedSkill, type TauriSkillInstallPlan, type TauriSkillInstallRequest, type TauriSkillItem, type TauriSkillsChange, type TauriSkillsSettings } from "../lib/tauriBridge";
+import { archiveTauriSkill, changeTauriSkillsSettings, chooseTauriSkillSourceDirectory, installTauriSkill, planTauriSkillInstall, restoreTauriSkill, tauriCapabilityDiagnostics, tauriMessageFrom, tauriSkillsSettings, type TauriArchivedSkill, type TauriSkillInstallPlan, type TauriSkillInstallRequest, type TauriSkillItem, type TauriSkillSource, type TauriSkillsChange, type TauriSkillsSettings } from "../lib/tauriBridge";
 import { useT } from "../lib/i18n";
 import type { DictKey } from "../locales/en";
+import type { CapabilityDiagnosticsReport } from "../lib/types";
+import { assessSkillRequirements, type SkillRequirementState } from "./tauriSkillReadiness";
 
 const sourceStatusKeys: Record<string, DictKey> = {
   ok: "settings.skills.status.readable",
   missing: "settings.skills.status.missing",
   "not-directory": "settings.skills.status.notDirectory",
   unreadable: "settings.skills.status.unreadable",
+};
+
+const readinessKeys: Record<SkillRequirementState, DictKey> = {
+  ready: "settings.skills.requirement.ready",
+  missing: "settings.skills.requirement.missing",
+  disabled: "settings.skills.requirement.disabled",
+  failed: "settings.skills.requirement.failed",
+  unknown: "settings.skills.requirement.unknown",
 };
 
 export function TauriSkillsSettings({ workspaceRoot = "", currentSessionState, currentSessionHasAttachments, onApplyToCurrentSession }: {
@@ -18,6 +28,8 @@ export function TauriSkillsSettings({ workspaceRoot = "", currentSessionState, c
 }) {
   const t = useT();
   const [view, setView] = useState<TauriSkillsSettings | null>(null);
+  const [capabilityReport, setCapabilityReport] = useState<CapabilityDiagnosticsReport | null>(null);
+  const [readinessCheckFailed, setReadinessCheckFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -29,6 +41,8 @@ export function TauriSkillsSettings({ workspaceRoot = "", currentSessionState, c
   const [acceptRisk, setAcceptRisk] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState("");
   const [scope, setScope] = useState<"global" | "project">("global");
+  const [expandedSources, setExpandedSources] = useState<Set<string>>(() => new Set());
+  const [allSourceSkills, setAllSourceSkills] = useState<Set<string>>(() => new Set());
   const [pendingApply, setPendingApply] = useState(false);
   const busyRef = useRef(false);
   const reloadRequest = useRef(0);
@@ -37,13 +51,44 @@ export function TauriSkillsSettings({ workspaceRoot = "", currentSessionState, c
     const request = ++reloadRequest.current;
     setLoading(true);
     setView(null);
+    setCapabilityReport(null);
+    setReadinessCheckFailed(false);
     setError("");
-    void tauriSkillsSettings(workspaceRoot).then(next => { if (request === reloadRequest.current) setView(next); })
+    const readiness = workspaceRoot
+      ? tauriCapabilityDiagnostics(workspaceRoot, true).then(report => ({ report, failed: false })).catch(() => ({ report: null, failed: true }))
+      : Promise.resolve({ report: null, failed: false });
+    void Promise.all([tauriSkillsSettings(workspaceRoot), readiness]).then(([next, dependencyStatus]) => {
+      if (request !== reloadRequest.current) return;
+      setView(next);
+      setCapabilityReport(dependencyStatus.report);
+      setReadinessCheckFailed(dependencyStatus.failed);
+    })
       .catch(err => { if (request === reloadRequest.current) setError(tauriMessageFrom(err)); })
       .finally(() => { if (request === reloadRequest.current) setLoading(false); });
   };
+
+  const refreshReadiness = async () => {
+    const request = reloadRequest.current;
+    if (!workspaceRoot) {
+      setCapabilityReport(null);
+      setReadinessCheckFailed(false);
+      return;
+    }
+    setReadinessCheckFailed(false);
+    try {
+      const report = await tauriCapabilityDiagnostics(workspaceRoot, true);
+      if (request === reloadRequest.current) setCapabilityReport(report);
+    } catch {
+      if (request === reloadRequest.current) {
+        setCapabilityReport(null);
+        setReadinessCheckFailed(true);
+      }
+    }
+  };
   useEffect(() => {
     if (!workspaceRoot) setScope("global");
+    setExpandedSources(new Set());
+    setAllSourceSkills(new Set());
     setInstallPlan(null);
     setAcceptRisk(false);
     setArchiveTarget("");
@@ -60,6 +105,7 @@ export function TauriSkillsSettings({ workspaceRoot = "", currentSessionState, c
     try {
       const next = await changeTauriSkillsSettings({ workspaceRoot, scope, action, enabled, name, path });
       setView(next);
+      void refreshReadiness();
       setPendingApply(true);
       setNotice(t("settings.skills.saved", { scope: t(scope === "project" ? "settings.skills.scope.project" : "settings.skills.scope.global") }));
       if (action === "add_source") setSourcePath("");
@@ -110,6 +156,7 @@ export function TauriSkillsSettings({ workspaceRoot = "", currentSessionState, c
     try {
       const result = await installTauriSkill({ ...installPlan.request, planId: installPlan.detail.planId, acceptRisk });
       setView(result.settings);
+      void refreshReadiness();
       setInstallPlan(null);
       if (result.status !== "failed") { setInstallSource(""); setPendingApply(true); }
       setNotice(result.status === "done" ? t("settings.skills.installed") : t(result.status === "failed" ? "settings.skills.installFailed" : "settings.skills.installPartial", { names: result.failedNames.join(", ") || t("settings.skills.unknownSkill") }));
@@ -125,6 +172,7 @@ export function TauriSkillsSettings({ workspaceRoot = "", currentSessionState, c
     try {
       const result = await archiveTauriSkill({ name: item.name, scope: item.scope, workspaceRoot, archiveId: "", revision: item.archiveRevision });
       setView(result.settings);
+      void refreshReadiness();
       setArchiveTarget("");
       setPendingApply(true);
       setNotice(t("settings.skills.archived", { path: result.backupPath }));
@@ -140,6 +188,7 @@ export function TauriSkillsSettings({ workspaceRoot = "", currentSessionState, c
     try {
       const result = await restoreTauriSkill({ name: item.name, scope: item.scope, workspaceRoot, archiveId: item.archiveId, revision: item.revision });
       setView(result.settings);
+      void refreshReadiness();
       setPendingApply(true);
       setNotice(t("settings.skills.restored", { name: item.name }));
     } catch (err) { setError(t("settings.skills.restoreFailed", { reason: tauriMessageFrom(err) })); }
@@ -161,6 +210,7 @@ export function TauriSkillsSettings({ workspaceRoot = "", currentSessionState, c
   };
 
   const filtered = view?.skills.filter(item => `${item.name} ${item.invocation} ${item.description} ${item.scope} ${item.sourcePath}`.toLowerCase().includes(query.trim().toLowerCase())) ?? [];
+  const skillsForSource = (source: TauriSkillSource) => view?.skills.filter(item => skillPathBelongsToSource(item.sourcePath, source.path)) ?? [];
   const archivedInScope = view?.archivedSkills?.filter(item => item.scope === scope) ?? [];
   const implicitEnabled = scope === "global" ? (view?.globalAllowImplicitInvocation ?? view?.allowImplicitInvocation) : view?.allowImplicitInvocation;
   const scopeLabel = (value: string) => t(value === "project" ? "settings.skills.scope.project" : value === "global" ? "settings.skills.scope.global" : value === "custom" ? "settings.skills.scope.custom" : "settings.skills.scope.builtin");
@@ -198,11 +248,26 @@ export function TauriSkillsSettings({ workspaceRoot = "", currentSessionState, c
       </section>}
       <h3>{t("settings.skills.sourcesTitle")}</h3>
       <p>{t("settings.skills.sourcesDescription")}</p>
-      <div className="tauri-skills-list">{view.sources.map(source => <div className="tauri-skills-item" key={source.path}>
-        <div><strong>{source.path}</strong><small>{scopeLabel(source.scope)} · {t("settings.skills.count", { count: source.skillCount ?? 0 })} · {t(sourceStatusKeys[source.status] ?? "settings.skills.status.unknown", { status: source.status })}{source.configuredGlobal ? " · " + t("settings.skills.customGlobal") : ""}{source.configuredProject ? " · " + t("settings.skills.customProject") : ""}</small>{source.status !== "ok" && source.status !== "missing" && <span className="tauri-skills-warning">{t("settings.skills.sourceUnavailable")}</span>}</div>
-        <label><input type="checkbox" aria-label={t("settings.skills.sourceEnabledAria", { path: source.path })} checked={scope === "global" ? (source.globalEnabled ?? source.enabled) : source.enabled} disabled={busy} onChange={event => void change("source", event.target.checked, "", source.path)} /></label>
-        {(scope === "global" ? (source.configuredGlobal ?? source.configured) : source.configuredProject) && <button type="button" className="tauri-settings-button" disabled={busy} onClick={() => void change("remove_source", false, "", source.path)}>{t("settings.skills.remove")}</button>}
-      </div>)}</div>
+      <div className="tauri-skills-list">{view.sources.map(source => {
+        const sourceSkills = skillsForSource(source);
+        const expanded = expandedSources.has(source.path);
+        const showAll = allSourceSkills.has(source.path);
+        const visibleSkills = showAll ? sourceSkills : sourceSkills.slice(0, 5);
+        return <div className="tauri-skills-item tauri-skills-source-item" key={source.path}>
+          <div className="tauri-skills-source-item__top">
+            <div><strong>{source.path}</strong><small>{scopeLabel(source.scope)} · {t("settings.skills.count", { count: source.skillCount ?? 0 })} · {t(sourceStatusKeys[source.status] ?? "settings.skills.status.unknown", { status: source.status })}{source.configuredGlobal ? " · " + t("settings.skills.customGlobal") : ""}{source.configuredProject ? " · " + t("settings.skills.customProject") : ""}</small>{source.status !== "ok" && source.status !== "missing" && <span className="tauri-skills-warning">{t("settings.skills.sourceUnavailable")}</span>}</div>
+            <div className="tauri-skills-source-item__actions"><label><input type="checkbox" aria-label={t("settings.skills.sourceEnabledAria", { path: source.path })} checked={scope === "global" ? (source.globalEnabled ?? source.enabled) : source.enabled} disabled={busy} onChange={event => void change("source", event.target.checked, "", source.path)} /></label>
+              {(scope === "global" ? (source.configuredGlobal ?? source.configured) : source.configuredProject) && <button type="button" className="tauri-settings-button" disabled={busy} onClick={() => void change("remove_source", false, "", source.path)}>{t("settings.skills.remove")}</button>}
+            </div>
+          </div>
+          {sourceSkills.length > 0 && <div className="tauri-skill-source-inventory">
+            <button type="button" className="tauri-skill-source-inventory__toggle" data-skill-source={source.path} aria-expanded={expanded} onClick={() => setExpandedSources(current => { const next = new Set(current); if (next.has(source.path)) next.delete(source.path); else next.add(source.path); return next; })}>{expanded ? t("caps.hideSkills") : t("caps.showSkills")} · {sourceSkills.length}</button>
+            {expanded && <div className="tauri-skill-source-inventory__items">{visibleSkills.map((item, index) => <article key={`${item.name}:${item.scope}:${index}`}><strong>{item.invocation || item.name}</strong>{item.description && <span>{item.description}</span>}<small>{scopeLabel(item.scope)} · {runAsLabel(item.runAs)}</small></article>)}
+              {sourceSkills.length > 5 && <button type="button" className="tauri-skill-source-inventory__more" onClick={() => setAllSourceSkills(current => { const next = new Set(current); if (next.has(source.path)) next.delete(source.path); else next.add(source.path); return next; })}>{showAll ? t("common.collapse") : t("caps.skillRootShowAllSkills", { count: sourceSkills.length })}</button>}
+            </div>}
+          </div>}
+        </div>;
+      })}</div>
       <form className="tauri-skills-add" onSubmit={addSource}>
         <input className="tauri-settings-input" aria-label={t("settings.skills.addSourceAria")} value={sourcePath} maxLength={4096} disabled={busy} placeholder={t("settings.skills.directoryPath")} onChange={event => setSourcePath(event.target.value)} />
         <button type="button" className="tauri-settings-button" disabled={busy} onClick={() => void chooseSource()}>{t("settings.skills.chooseDirectory")}</button>
@@ -212,7 +277,7 @@ export function TauriSkillsSettings({ workspaceRoot = "", currentSessionState, c
       <p>{t("settings.skills.listDescription", { count: view.skills.length })}</p>
       <input className="tauri-settings-input tauri-skills-search" type="search" aria-label={t("settings.skills.searchAria")} value={query} placeholder={t("settings.skills.searchPlaceholder")} onChange={event => setQuery(event.target.value)} />
       <div className="tauri-skills-list">{filtered.length ? filtered.map((item, index) => <div className="tauri-skills-item" key={item.name + "-" + item.sourcePath + "-" + index}>
-        <div><strong>{item.invocation || item.name}</strong><span>{item.description}</span><small>{scopeLabel(item.scope)} · {runAsLabel(item.runAs)}{item.sourcePath && item.sourcePath !== "(builtin)" ? " · " + item.sourcePath : ""}</small>{item.requires?.length > 0 && <small>{t("settings.skills.declaredRequirements", { requirements: item.requires.join(", ") })}</small>}{archiveTarget === item.scope + ":" + item.name && <small className="tauri-skills-warning">{t("settings.skills.archivePrompt")}</small>}</div>
+        <div><strong>{item.invocation || item.name}</strong><span>{item.description}</span><small>{scopeLabel(item.scope)} · {runAsLabel(item.runAs)}{item.sourcePath && item.sourcePath !== "(builtin)" ? " · " + item.sourcePath : ""}</small>{item.requires?.length > 0 && <><small>{t("settings.skills.declaredRequirements", { requirements: item.requires.join(", ") })}</small><div className="tauri-skill-readiness">{assessSkillRequirements(item.requires, capabilityReport).map(({ requirement, state }) => <small key={requirement} className={state === "ready" ? "tauri-skill-readiness__ready" : "tauri-skills-warning"}>{t(readinessKeys[state], { requirement })}</small>)}{readinessCheckFailed && <small className="tauri-skills-warning">{t("settings.skills.readinessUnavailable")}</small>}</div></>}{archiveTarget === item.scope + ":" + item.name && <small className="tauri-skills-warning">{t("settings.skills.archivePrompt")}</small>}</div>
         <label><input type="checkbox" aria-label={t("settings.skills.skillEnabledAria", { name: item.name })} checked={scope === "global" ? (item.globalEnabled ?? item.enabled) : item.enabled} disabled={busy} onChange={event => void change("skill", event.target.checked, item.name)} /></label>
         {item.archiveRevision && item.scope === scope && (archiveTarget === item.scope + ":" + item.name
           ? <div className="tauri-skills-archive-actions"><button type="button" className="tauri-settings-button" disabled={busy} onClick={() => setArchiveTarget("")}>{t("common.cancel")}</button><button type="button" className="tauri-settings-button" disabled={busy} onClick={() => void archiveSkill(item)}>{t("settings.skills.confirmArchive")}</button></div>
@@ -224,4 +289,11 @@ export function TauriSkillsSettings({ workspaceRoot = "", currentSessionState, c
     {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
   </div>;
+}
+
+function skillPathBelongsToSource(skillPath: string, sourcePath: string): boolean {
+  const normalize = (value: string) => value.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  const root = normalize(sourcePath);
+  const path = normalize(skillPath);
+  return Boolean(root && path && path.startsWith(root + "/"));
 }

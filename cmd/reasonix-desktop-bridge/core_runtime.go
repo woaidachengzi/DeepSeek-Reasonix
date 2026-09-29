@@ -403,6 +403,7 @@ var desktopAuthorizeMCP = plugin.AuthorizeHTTPMCP
 
 func (r *controllerRuntime) SessionPath() string { return r.controller.SessionPath() }
 func (r *controllerRuntime) ModelRef() string    { return r.controller.ModelRef() }
+func (r *controllerRuntime) BoundShell() string  { return r.controller.BoundShell().Kind.String() }
 
 func (r *controllerRuntime) SessionMetrics() desktopbridge.SessionMetrics {
 	used, window := r.controller.ContextSnapshot()

@@ -13,6 +13,8 @@ import (
 	configpkg "reasonix/internal/config"
 )
 
+func providerTestPtr[T any](value T) *T { return &value }
+
 func TestPreviewProviderPresetCatalogAndReviewedInstall(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("REASONIX_HOME", home)
@@ -288,9 +290,13 @@ provider_access = ["custom"]
 [[providers]]
 name = "custom"
 display_name = "Old label"
-kind = "openai"
+kind = "responses"
 base_url = "https://example.com/v1"
 api_key_env = "CUSTOM_SECRET_KEY"
+models_url = "https://example.com/models"
+no_proxy = true
+context_window = 32768
+responses_mode = "stateful"
 models = ["old"]
 default = "old"
 future_provider_field = "keep"
@@ -319,13 +325,16 @@ X-Private-Header = "hidden-value"
 		if len(view.Providers) != 1 || view.Providers[0].Name != "custom" || view.Providers[0].DisplayName != "Old label" {
 			t.Fatalf("configs = %#v", view)
 		}
+		if !view.Providers[0].ModelsURLSet || !view.Providers[0].NoProxy || view.Providers[0].ContextWindow != 32768 {
+			t.Fatalf("advanced provider settings = %#v", view.Providers[0])
+		}
 		for _, secret := range []string{"example.com", "CUSTOM_SECRET_KEY", "hidden-value"} {
 			if strings.Contains(got.Body.String(), secret) {
 				t.Fatalf("config response leaked %q", secret)
 			}
 		}
 	}
-	request := httptest.NewRequest(http.MethodPost, "/v1/settings/provider-configs", strings.NewReader(`{"name":"custom","displayName":"Updated label","kind":"openai","baseUrl":"","models":["old","new"],"default":"old","useApiKey":false}`))
+	request := httptest.NewRequest(http.MethodPost, "/v1/settings/provider-configs", strings.NewReader(`{"name":"custom","displayName":"Updated label","kind":"responses","baseUrl":"","modelsUrl":"https://example.com/model-list","noProxy":false,"contextWindow":65536,"responsesMode":"stateless","models":["old","new"],"default":"old","useApiKey":false}`))
 	request.Header.Set("Authorization", "Bearer "+testToken)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set(requestIDHeader, "provider-config-edit-1")
@@ -342,6 +351,33 @@ X-Private-Header = "hidden-value"
 		if !strings.Contains(string(raw), preserved) {
 			t.Fatalf("edited config lost %q: %s", preserved, raw)
 		}
+	}
+	saved, err := configpkg.LoadForEditReadOnlyStrict(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, ok := saved.Provider("custom")
+	if !ok || provider.ModelsURL != "https://example.com/model-list" || provider.NoProxy || provider.ContextWindow != 65536 || provider.ResponsesMode != "stateless" {
+		t.Fatalf("advanced provider edit not persisted: %#v", provider)
+	}
+	// A config save from an older Preview client omits advanced request fields.
+	// Those fields must remain intact instead of resetting to Go zero values.
+	legacyRequest := httptest.NewRequest(http.MethodPost, "/v1/settings/provider-configs", strings.NewReader(`{"name":"custom","displayName":"Legacy edit","kind":"responses","baseUrl":"","models":["old","new"],"default":"old","useApiKey":false}`))
+	legacyRequest.Header.Set("Authorization", "Bearer "+testToken)
+	legacyRequest.Header.Set("Content-Type", "application/json")
+	legacyRequest.Header.Set(requestIDHeader, "provider-config-edit-legacy-client")
+	legacyResponse := httptest.NewRecorder()
+	bridge.handler().ServeHTTP(legacyResponse, legacyRequest)
+	if legacyResponse.Code != http.StatusOK {
+		t.Fatalf("legacy edit: %d %s", legacyResponse.Code, legacyResponse.Body.String())
+	}
+	saved, err = configpkg.LoadForEditReadOnlyStrict(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, ok = saved.Provider("custom")
+	if !ok || provider.ModelsURL != "https://example.com/model-list" || provider.NoProxy || provider.ContextWindow != 65536 || provider.ResponsesMode != "stateless" {
+		t.Fatalf("legacy edit reset omitted advanced provider settings: %#v", provider)
 	}
 	if got := get("/v1/settings/provider-configs"); !strings.Contains(got.Body.String(), "new") || strings.Contains(got.Body.String(), "hidden-value") {
 		t.Fatalf("post-edit config view: %s", got.Body.String())
@@ -361,6 +397,21 @@ func TestProviderConfigInputRejectsUnsafeEndpoints(t *testing.T) {
 	input.BaseURL = "http://127.0.0.1:11434/v1"
 	if err := validateProviderConfigInput(&input); err != nil {
 		t.Fatalf("rejected local provider: %v", err)
+	}
+	input = base
+	input.ModelsURL = "http://remote.example/models"
+	if err := validateProviderConfigInput(&input); err == nil {
+		t.Fatal("accepted insecure remote model discovery URL")
+	}
+	input = base
+	input.ContextWindow = providerTestPtr(10_000_001)
+	if err := validateProviderConfigInput(&input); err == nil {
+		t.Fatal("accepted out-of-range context window")
+	}
+	input = base
+	input.ResponsesMode = providerTestPtr("unexpected")
+	if err := validateProviderConfigInput(&input); err == nil {
+		t.Fatal("accepted unknown Responses mode")
 	}
 }
 

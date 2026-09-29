@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"path/filepath"
 	"strings"
 
 	configpkg "reasonix/internal/config"
@@ -12,6 +13,7 @@ import (
 
 type providerSummaryResponse struct {
 	ProtocolVersion     int                    `json:"protocolVersion"`
+	Scope               string                 `json:"scope"`
 	DefaultModel        string                 `json:"defaultModel"`
 	PlannerModel        string                 `json:"plannerModel"`
 	VisionModel         string                 `json:"visionModel"`
@@ -34,7 +36,9 @@ type providerSummaryEntry struct {
 }
 
 type setDefaultModelRequest struct {
-	Model string `json:"model"`
+	Model         string `json:"model"`
+	Scope         string `json:"scope,omitempty"`
+	WorkspaceRoot string `json:"workspaceRoot,omitempty"`
 }
 
 type setSessionModelRequest struct {
@@ -42,13 +46,17 @@ type setSessionModelRequest struct {
 }
 
 type setModelRoleRequest struct {
-	Role  string `json:"role"`
-	Model string `json:"model"`
+	Role          string `json:"role"`
+	Model         string `json:"model"`
+	Scope         string `json:"scope,omitempty"`
+	WorkspaceRoot string `json:"workspaceRoot,omitempty"`
 }
 
 type setAgentPreferenceRequest struct {
 	ReasoningLanguage   string  `json:"reasoningLanguage,omitempty"`
 	CompactRatioPercent float64 `json:"compactRatioPercent,omitempty"`
+	Scope               string  `json:"scope,omitempty"`
+	WorkspaceRoot       string  `json:"workspaceRoot,omitempty"`
 }
 
 type desktopPreferencesResponse struct {
@@ -198,16 +206,38 @@ var errDefaultModelUnavailable = errors.New("selected model is not configured an
 // keys, headers, and all provider-specific extension data. The configured
 // model IDs are included only because the host needs them for model selection.
 func loadProviderSummary() (providerSummaryResponse, error) {
-	cfg, err := configpkg.LoadUserConfigReadOnly()
+	return loadProviderSummaryForScope("global", "")
+}
+
+func loadProviderSummaryForScope(scope, workspaceRoot string) (providerSummaryResponse, error) {
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		scope = "global"
+	}
+	if scope != "global" && scope != "project" {
+		return providerSummaryResponse{}, fmt.Errorf("invalid model settings scope")
+	}
+	root := "."
+	var cfg *configpkg.Config
+	var err error
+	if scope == "project" {
+		root, err = normalizeSkillsWorkspace(workspaceRoot)
+		if err != nil || root == "" {
+			return providerSummaryResponse{}, fmt.Errorf("project model settings require a valid workspace")
+		}
+		cfg, err = configpkg.LoadForRootReadOnly(root)
+	} else {
+		cfg, err = configpkg.LoadUserConfigReadOnly()
+	}
 	if err != nil {
-		return providerSummaryResponse{}, fmt.Errorf("load user provider configuration: %w", err)
+		return providerSummaryResponse{}, fmt.Errorf("load %s provider configuration: %w", scope, err)
 	}
 	providers := make([]providerSummaryEntry, 0, len(cfg.Providers))
 	visionResolver := configpkg.NewModelCapabilityResolver()
 	for i := range cfg.Providers {
 		provider := &cfg.Providers[i]
 		requiresKey := provider.RequiresAPIKey()
-		provider.ResolveAPIKeyForRoot(".")
+		provider.ResolveAPIKeyForRoot(root)
 		configured := (!requiresKey || provider.Configured()) && providerAccessAllowed(cfg.Desktop.ProviderAccess, provider.Name)
 		models := provider.ModelList()
 		if models == nil {
@@ -241,6 +271,7 @@ func loadProviderSummary() (providerSummaryResponse, error) {
 	}
 	return providerSummaryResponse{
 		ProtocolVersion:     desktopbridge.ProtocolVersion,
+		Scope:               scope,
 		DefaultModel:        cfg.DefaultModel,
 		PlannerModel:        cfg.Agent.PlannerModel,
 		VisionModel:         cfg.Agent.VisionModel,
@@ -254,6 +285,25 @@ func loadProviderSummary() (providerSummaryResponse, error) {
 func persistAgentPreferences(request setAgentPreferenceRequest) error {
 	if (request.ReasoningLanguage == "") == (request.CompactRatioPercent == 0) {
 		return fmt.Errorf("exactly one agent preference must be provided")
+	}
+	scope, root, err := normalizeModelSettingsScope(request.Scope, request.WorkspaceRoot)
+	if err != nil {
+		return err
+	}
+	if scope == "project" {
+		if request.ReasoningLanguage != "" && request.ReasoningLanguage != "auto" && request.ReasoningLanguage != "zh" && request.ReasoningLanguage != "en" {
+			return fmt.Errorf("invalid reasoning language")
+		}
+		if request.CompactRatioPercent != 0 && !validCompactRatioPercent(request.CompactRatioPercent) {
+			return fmt.Errorf("compact ratio percent must be between 30 and 85 in 0.1 increments")
+		}
+		path := filepath.Join(root, "reasonix.toml")
+		return configpkg.EditProjectConfigFileWithoutCredentials(path, func(cfg *configpkg.Config) error {
+			if request.ReasoningLanguage != "" {
+				return cfg.SetReasoningLanguage(request.ReasoningLanguage)
+			}
+			return cfg.SetCompactRatio(request.CompactRatioPercent / 100)
+		})
 	}
 	unlock := configpkg.LockUserConfigEdits()
 	defer unlock()
@@ -271,7 +321,7 @@ func persistAgentPreferences(request setAgentPreferenceRequest) error {
 			return err
 		}
 	} else {
-		if request.CompactRatioPercent < 30 || request.CompactRatioPercent > 85 || math.Abs(request.CompactRatioPercent*10-math.Round(request.CompactRatioPercent*10)) > 1e-7 {
+		if !validCompactRatioPercent(request.CompactRatioPercent) {
 			return fmt.Errorf("compact ratio percent must be between 30 and 85 in 0.1 increments")
 		}
 		if err := cfg.SetCompactRatio(float64(request.CompactRatioPercent) / 100); err != nil {
@@ -281,11 +331,57 @@ func persistAgentPreferences(request setAgentPreferenceRequest) error {
 	return cfg.SaveUserSettingsDeltaTo(path, baseline)
 }
 
+func validCompactRatioPercent(percent float64) bool {
+	return percent >= 30 && percent <= 85 && math.Abs(percent*10-math.Round(percent*10)) <= 1e-7
+}
+
+func normalizeModelSettingsScope(scope, workspaceRoot string) (string, string, error) {
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		scope = "global"
+	}
+	if scope == "global" {
+		return scope, "", nil
+	}
+	if scope != "project" {
+		return "", "", fmt.Errorf("invalid model settings scope")
+	}
+	root, err := normalizeSkillsWorkspace(workspaceRoot)
+	if err != nil || root == "" {
+		return "", "", fmt.Errorf("project model settings require a valid workspace")
+	}
+	return scope, root, nil
+}
+
 func persistModelRole(request setModelRoleRequest) error {
 	if request.Role != "planner" && request.Role != "vision" && request.Role != "search" {
 		return errDefaultModelUnavailable
 	}
 	ref := strings.TrimSpace(request.Model)
+	scope, root, err := normalizeModelSettingsScope(request.Scope, request.WorkspaceRoot)
+	if err != nil {
+		return err
+	}
+	if scope == "project" {
+		cfg, err := configpkg.LoadForRootReadOnly(root)
+		if err != nil {
+			return errDefaultModelUnavailable
+		}
+		if err := validateModelRole(cfg, request.Role, ref, root); err != nil {
+			return err
+		}
+		return configpkg.EditProjectConfigFileWithoutCredentials(filepath.Join(root, "reasonix.toml"), func(projectCfg *configpkg.Config) error {
+			switch request.Role {
+			case "planner":
+				projectCfg.Agent.PlannerModel = ref
+			case "vision":
+				projectCfg.Agent.VisionModel = ref
+			case "search":
+				projectCfg.Agent.WebSearchModel = ref
+			}
+			return nil
+		})
+	}
 	unlock := configpkg.LockUserConfigEdits()
 	defer unlock()
 	path := configpkg.UserConfigPath()
@@ -350,6 +446,39 @@ func persistModelRole(request setModelRoleRequest) error {
 	return nil
 }
 
+func validateModelRole(cfg *configpkg.Config, role, ref, root string) error {
+	if ref == "" || (role == "vision" || role == "search") && strings.EqualFold(ref, "auto") {
+		return nil
+	}
+	if role == "search" {
+		name, _, ok := strings.Cut(ref, "/")
+		if !ok || !providerAccessAllowed(cfg.Desktop.ProviderAccess, name) {
+			return errDefaultModelUnavailable
+		}
+		provider, ok := cfg.Provider(name)
+		if !ok {
+			return errDefaultModelUnavailable
+		}
+		provider.ResolveAPIKeyForRoot(root)
+		if _, err := cfg.ResolveWebSearchModel(ref); err != nil {
+			return errDefaultModelUnavailable
+		}
+		return nil
+	}
+	entry, ok := cfg.ResolveModel(ref)
+	if !ok || !providerAccessAllowed(cfg.Desktop.ProviderAccess, entry.Name) {
+		return errDefaultModelUnavailable
+	}
+	entry.ResolveAPIKeyForRoot(root)
+	if !entry.Configured() {
+		return errDefaultModelUnavailable
+	}
+	if role == "vision" && configpkg.NewModelCapabilityResolver().Resolve(entry).State != configpkg.CapabilitySupported {
+		return errDefaultModelUnavailable
+	}
+	return nil
+}
+
 func updateProviderKey(request setProviderKeyRequest) error {
 	name := strings.TrimSpace(request.ProviderName)
 	if name == "" {
@@ -385,9 +514,36 @@ func updateProviderKey(request setProviderKeyRequest) error {
 // narrow model-settings writer. It changes new-session behavior only; the
 // currently open controller and its conversation are left untouched.
 func persistDefaultModel(ref string) error {
+	return persistDefaultModelForScope(ref, "global", "")
+}
+
+func persistDefaultModelForScope(ref, requestedScope, workspaceRoot string) error {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
 		return errDefaultModelUnavailable
+	}
+	scope, root, err := normalizeModelSettingsScope(requestedScope, workspaceRoot)
+	if err != nil {
+		return err
+	}
+	if scope == "project" {
+		cfg, err := configpkg.LoadForRootReadOnly(root)
+		if err != nil {
+			return errDefaultModelUnavailable
+		}
+		entry, ok := cfg.ResolveModel(ref)
+		if !ok || !providerAccessAllowed(cfg.Desktop.ProviderAccess, entry.Name) {
+			return errDefaultModelUnavailable
+		}
+		entry.ResolveAPIKeyForRoot(root)
+		if !entry.Configured() {
+			return errDefaultModelUnavailable
+		}
+		resolved := entry.Name + "/" + entry.Model
+		return configpkg.EditProjectConfigFileWithoutCredentials(filepath.Join(root, "reasonix.toml"), func(projectCfg *configpkg.Config) error {
+			projectCfg.DefaultModel = resolved
+			return nil
+		})
 	}
 	unlock := configpkg.LockUserConfigEdits()
 	defer unlock()

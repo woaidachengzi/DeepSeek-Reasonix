@@ -3796,6 +3796,7 @@ function makeMockApp(): AppBindings {
             name: s.name,
             transport: s.transport || "stdio",
             start_intent: s.startIntent === "off" ? "off" : "automatic",
+            effective: s.startIntent !== "off",
             source: "toml",
             runtime_status: includeSessionRuntime ? s.status || "connected" : undefined,
             tool_count: s.tools,

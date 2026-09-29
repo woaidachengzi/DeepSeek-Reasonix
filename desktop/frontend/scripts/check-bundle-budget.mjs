@@ -352,7 +352,16 @@ for (const path of localeChunks) {
   // states and confirmation copy; allow one additional tenth-KiB.
   // Network settings localize proxy modes, secret retention, and current-session
   // application; allow 0.2 KiB for this security-sensitive guidance.
-  const budget = 77.3 * 1024;
+  // Skill dependency readiness adds localized ready/missing/disabled/failed
+  // states; allow one further 0.2 KiB for the three-language settings copy.
+  // MCP startup/call/per-tool timeout controls add the next bounded 0.3 KiB.
+  // Remote text-file preview and explicit edit/save add localized binary,
+  // conflict, and truncation guidance; keep a bounded 0.3 KiB allowance.
+  // Notification event controls add three localized settings and prompt notices.
+  // Settings and workspace diagnostics now localize seven core bridge warnings.
+  // Keep the corresponding locale growth within a further 0.3 KiB.
+  // Plugin hook inventory adds four localized labels with a 0.1 KiB ceiling.
+  const budget = 78.9 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 

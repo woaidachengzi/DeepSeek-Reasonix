@@ -3,6 +3,7 @@ import { Activity, Download, Flag, X } from "lucide-react";
 import { app } from "../lib/bridge";
 import { useToast } from "../lib/toast";
 import { useI18n, type Locale } from "../lib/i18n";
+import { exportTauriFrontendDiagnostics, isTauriDesktop } from "../lib/tauriBridge";
 import {
   frontendDiagnosticSample,
   frontendDiagnostics,
@@ -97,6 +98,10 @@ export function FrontendDiagnosticsControl({
     setExporting(true);
     try {
       const payload = frontendDiagnostics.stop();
+      if (isTauriDesktop()) {
+        if (await exportTauriFrontendDiagnostics(payload)) frontendDiagnostics.reset();
+        return;
+      }
       const path = await app.PickExportFile(defaultFilename(payload.manifest.reportId), "application/json");
       if (path) {
         await app.SaveExportFile(path, JSON.stringify(payload, null, 2), false);

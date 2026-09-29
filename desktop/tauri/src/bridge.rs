@@ -471,9 +471,10 @@ pub use crate::protocol_generated::{
     BridgeProjectFolder, BridgeProjectFoldersResponse, BridgeProviderModelProbeRequest,
     BridgeProviderModelProbeResponse, BridgeProviderSummaryResponse, BridgeRemoteBrowseRequest,
     BridgeRemoteBrowseResponse, BridgeRemoteDisconnectRequest, BridgeRemoteDisconnectResponse,
-    BridgeRenameSessionRequest, BridgeSession, BridgeSessionMetrics, BridgeSessionResponse,
-    BridgeSetAgentPreferenceRequest, BridgeSetDefaultModelRequest, BridgeSetModelRoleRequest,
-    BridgeSetSessionModelRequest, BridgeWorkspaceChangeDetailRequest,
+    BridgeRemoteFilePreviewRequest, BridgeRemoteFilePreviewResponse, BridgeRemoteFileSaveRequest,
+    BridgeRemoteFileSaveResponse, BridgeRenameSessionRequest, BridgeSession, BridgeSessionMetrics,
+    BridgeSessionResponse, BridgeSetAgentPreferenceRequest, BridgeSetDefaultModelRequest,
+    BridgeSetModelRoleRequest, BridgeSetSessionModelRequest, BridgeWorkspaceChangeDetailRequest,
     BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
     BridgeWorkspaceFileRequest, BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse,
     BridgeWorkspaceRequest,
@@ -673,9 +674,32 @@ pub struct SandboxSettingsView {
     #[serde(default)]
     pub resolved_shell: String,
     #[serde(default)]
+    pub effective_shell: String,
+    #[serde(default)]
+    pub shell_reload_required: bool,
+    #[serde(default)]
+    pub shell_capabilities: Vec<ShellCapabilityView>,
+    #[serde(default)]
+    pub git_capability: Option<ShellCapabilityView>,
+    #[serde(default)]
     pub effective_write_roots: Vec<String>,
     #[serde(default)]
     pub effective_roots_error: String,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShellCapabilityView {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variant: Option<String>,
+    pub available: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -957,9 +981,13 @@ pub struct PluginSettingsItem {
     pub description: String,
     pub version: String,
     pub source: String,
+    #[serde(default)]
+    pub update_source: String,
     pub root: String,
     pub manifest_kind: String,
     pub enabled: bool,
+    #[serde(default)]
+    pub linked: bool,
     pub status: String,
     pub issue: String,
     pub warning_count: u64,
@@ -986,6 +1014,27 @@ pub struct PluginThemeItem {
 pub struct PluginSettingsView {
     pub protocol_version: u64,
     pub plugins: Vec<PluginSettingsItem>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginCompatibilityIssue {
+    pub capability: String,
+    #[serde(default)]
+    pub path: String,
+    pub reason: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginDoctorView {
+    pub protocol_version: u64,
+    pub name: String,
+    pub compatibility: String,
+    pub mapped_capabilities: Vec<String>,
+    pub skipped_capabilities: Vec<PluginCompatibilityIssue>,
+    pub warnings: Vec<String>,
+    pub error: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1021,6 +1070,8 @@ pub struct PluginInstallPlanAction {
 pub struct PluginInstallPlan {
     pub protocol_version: u64,
     pub plan_id: String,
+    #[serde(default)]
+    pub mode: String,
     pub actions: Vec<PluginInstallPlanAction>,
     pub warning_count: u64,
     #[serde(default)]
@@ -1031,8 +1082,16 @@ pub struct PluginInstallPlan {
 #[serde(rename_all = "camelCase")]
 pub struct PluginInstallRequest {
     pub source: String,
+    #[serde(default)]
+    pub mode: String,
     pub plan_id: String,
     pub accept_risk: bool,
+    #[serde(default)]
+    pub replace: bool,
+    #[serde(default)]
+    pub expected_name: String,
+    #[serde(default)]
+    pub expected_revision: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1083,6 +1142,21 @@ pub struct SubagentProfileInput {
     pub effort: String,
     pub allowed_tools: Vec<String>,
     pub read_only: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubagentTryResponse {
+    pub protocol_version: u64,
+    pub result: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubagentTryStatusView {
+    pub protocol_version: u64,
+    pub running: bool,
+    pub output: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1335,6 +1409,12 @@ pub struct MCPServerView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub header_keys: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub startup_timeout_seconds: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub call_timeout_seconds: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_timeout_seconds: Option<std::collections::BTreeMap<String, u32>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auto_start: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tier: Option<String>,
@@ -1378,6 +1458,12 @@ pub struct MCPServerInput {
     pub url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub headers: Option<std::collections::BTreeMap<String, String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub startup_timeout_seconds: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub call_timeout_seconds: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_timeout_seconds: Option<std::collections::BTreeMap<String, u32>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auto_start: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1454,6 +1540,67 @@ pub struct BridgeSupervisor {
     launcher: BridgeLauncher,
     process: Mutex<Option<BridgeProcess>>,
     events: Mutex<Option<EventForwarder>>,
+}
+
+#[derive(Clone)]
+pub struct BridgeSubagentTryClient {
+    address: SocketAddr,
+    token: String,
+}
+
+impl BridgeSubagentTryClient {
+    pub fn subagent_profile_try_status(&self) -> Result<SubagentTryStatusView, String> {
+        let response = request_json_with_timeout(
+            self.address,
+            &self.token,
+            "GET",
+            "/v1/settings/subagents/try/status",
+            None,
+            None,
+            Duration::from_secs(5),
+        )?;
+        let view: SubagentTryStatusView =
+            serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn try_subagent_profile(
+        &self,
+        workspace_root: &str,
+        input: SubagentProfileInput,
+        task: &str,
+    ) -> Result<String, String> {
+        let response = request_json_with_timeout(
+            self.address,
+            &self.token,
+            "POST",
+            "/v1/settings/subagents/try",
+            Some(json!({ "workspaceRoot": workspace_root, "input": input, "task": task })),
+            None,
+            Duration::from_secs(180),
+        )?;
+        let view: SubagentTryResponse = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view.result)
+    }
+
+    pub fn cancel_subagent_profile_try(&self) -> Result<(), String> {
+        request_json_with_timeout(
+            self.address,
+            &self.token,
+            "POST",
+            "/v1/settings/subagents/try/cancel",
+            Some(json!({})),
+            None,
+            Duration::from_secs(5),
+        )?;
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -2188,6 +2335,21 @@ impl BridgeSupervisor {
         Ok(summary)
     }
 
+    pub fn provider_summary_for_scope(
+        &self,
+        scope: &str,
+        workspace_root: Option<&str>,
+    ) -> Result<BridgeProviderSummaryResponse, String> {
+        let path = provider_summary_path(scope, workspace_root)?;
+        let response = self.request_json("GET", &path, None, None)?;
+        let summary: BridgeProviderSummaryResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if summary.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(summary)
+    }
+
     pub fn provider_configs(&self) -> Result<ProviderConfigList, String> {
         let response = self.request_json("GET", "/v1/settings/provider-configs", None, None)?;
         let configs: ProviderConfigList =
@@ -2273,6 +2435,34 @@ impl BridgeSupervisor {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
         Ok(response)
+    }
+
+    pub fn capability_diagnostics(
+        &self,
+        workspace_root: &str,
+        include_session_runtime: bool,
+    ) -> Result<Value, String> {
+        let query = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("workspaceRoot", workspace_root)
+            .append_pair(
+                "includeSessionRuntime",
+                if include_session_runtime {
+                    "true"
+                } else {
+                    "false"
+                },
+            )
+            .finish();
+        self.request_json(
+            "GET",
+            &format!("/v1/settings/diagnostics/capabilities?{query}"),
+            None,
+            None,
+        )
+    }
+
+    pub fn runtime_doctor(&self) -> Result<Value, String> {
+        self.request_json("GET", "/v1/settings/diagnostics/runtime", None, None)
     }
 
     pub fn remote_settings(&self) -> Result<RemoteSettingsView, String> {
@@ -2399,6 +2589,42 @@ impl BridgeSupervisor {
         Ok(result)
     }
 
+    pub fn preview_remote_file(
+        &self,
+        request: BridgeRemoteFilePreviewRequest,
+    ) -> Result<BridgeRemoteFilePreviewResponse, String> {
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/remote/preview",
+            Some(json!(request)),
+            None,
+        )?;
+        let result: BridgeRemoteFilePreviewResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if result.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(result)
+    }
+
+    pub fn save_remote_file(
+        &self,
+        request: BridgeRemoteFileSaveRequest,
+    ) -> Result<BridgeRemoteFileSaveResponse, String> {
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/remote/save",
+            Some(json!(request)),
+            None,
+        )?;
+        let result: BridgeRemoteFileSaveResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if result.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(result)
+    }
+
     pub fn permission_settings(
         &self,
         workspace_root: String,
@@ -2477,15 +2703,20 @@ impl BridgeSupervisor {
     pub fn sandbox_settings(
         &self,
         workspace_root: Option<&str>,
+        session_id: Option<&str>,
     ) -> Result<SandboxSettingsView, String> {
-        let path = match workspace_root.filter(|root| !root.is_empty()) {
-            Some(root) => {
-                let query = url::form_urlencoded::Serializer::new(String::new())
-                    .append_pair("workspaceRoot", root)
-                    .finish();
-                format!("/v1/settings/sandbox?{query}")
-            }
-            None => "/v1/settings/sandbox".to_string(),
+        let mut query = url::form_urlencoded::Serializer::new(String::new());
+        if let Some(root) = workspace_root.filter(|root| !root.is_empty()) {
+            query.append_pair("workspaceRoot", root);
+        }
+        if let Some(id) = session_id.filter(|id| !id.is_empty()) {
+            query.append_pair("sessionId", id);
+        }
+        let query = query.finish();
+        let path = if query.is_empty() {
+            "/v1/settings/sandbox".to_string()
+        } else {
+            format!("/v1/settings/sandbox?{query}")
         };
         let response = self.request_json("GET", &path, None, None)?;
         let view: SandboxSettingsView = serde_json::from_value(response).map_err(display_error)?;
@@ -2662,11 +2893,32 @@ impl BridgeSupervisor {
         Ok(view)
     }
 
-    pub fn plan_plugin_install(&self, source: &str) -> Result<PluginInstallPlan, String> {
+    pub fn plugin_doctor(&self, name: &str) -> Result<PluginDoctorView, String> {
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/plugins/doctor",
+            Some(json!({"name": name})),
+            None,
+        )?;
+        let view: PluginDoctorView = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn plan_plugin_install(
+        &self,
+        source: &str,
+        mode: &str,
+        replace: bool,
+        expected_name: &str,
+        expected_revision: &str,
+    ) -> Result<PluginInstallPlan, String> {
         let response = self.request_json_slow(
             "POST",
             "/v1/settings/plugins/plan",
-            Some(json!({"source": source})),
+            Some(json!({"source": source, "mode": mode, "replace": replace, "expectedName": expected_name, "expectedRevision": expected_revision})),
             None,
         )?;
         let view: PluginInstallPlan = serde_json::from_value(response).map_err(display_error)?;
@@ -2747,6 +2999,11 @@ impl BridgeSupervisor {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
         Ok(view)
+    }
+
+    pub fn subagent_try_client(&self) -> Result<BridgeSubagentTryClient, String> {
+        let (address, token) = self.event_connection()?;
+        Ok(BridgeSubagentTryClient { address, token })
     }
 
     pub fn hooks_settings(
@@ -3174,7 +3431,11 @@ impl BridgeSupervisor {
         let response = self.request_json(
             "POST",
             "/v1/settings/default-model",
-            Some(json!({ "model": request.model })),
+            Some(json!({
+                "model": request.model,
+                "scope": request.scope,
+                "workspaceRoot": request.workspace_root,
+            })),
             Some(&request_id),
         )?;
         let summary: BridgeProviderSummaryResponse =
@@ -3193,7 +3454,12 @@ impl BridgeSupervisor {
         let response = self.request_json(
             "POST",
             "/v1/settings/model-role",
-            Some(json!({ "role": request.role, "model": request.model })),
+            Some(json!({
+                "role": request.role,
+                "model": request.model,
+                "scope": request.scope,
+                "workspaceRoot": request.workspace_root,
+            })),
             Some(&request_id),
         )?;
         let summary: BridgeProviderSummaryResponse =
@@ -3215,6 +3481,12 @@ impl BridgeSupervisor {
         };
         let mut payload = serde_json::Map::new();
         payload.insert(key.to_string(), value);
+        if let Some(scope) = request.scope {
+            payload.insert("scope".to_string(), json!(scope));
+        }
+        if let Some(workspace_root) = request.workspace_root {
+            payload.insert("workspaceRoot".to_string(), json!(workspace_root));
+        }
         let request_id = opaque_secret()?;
         let response = self.request_json(
             "POST",
@@ -4084,6 +4356,26 @@ fn mcp_path(base: &str, workspace_root: Option<&str>) -> Result<String, String> 
     Ok(format!("{base}?workspaceRoot={encoded}"))
 }
 
+fn provider_summary_path(scope: &str, workspace_root: Option<&str>) -> Result<String, String> {
+    if scope != "global" && scope != "project" {
+        return Err("desktop bridge model settings scope is invalid".to_string());
+    }
+    let mut query = url::form_urlencoded::Serializer::new(String::new());
+    query.append_pair("scope", scope);
+    if scope == "project" {
+        let root = workspace_root
+            .filter(|root| !root.trim().is_empty())
+            .ok_or_else(|| {
+                "desktop bridge project model settings require a workspace".to_string()
+            })?;
+        if root.len() > 4096 || root.contains('\0') {
+            return Err("desktop bridge workspace path is invalid".to_string());
+        }
+        query.append_pair("workspaceRoot", root);
+    }
+    Ok(format!("/v1/providers?{}", query.finish()))
+}
+
 fn session_directory_path(
     limit: u16,
     cursor: Option<&SessionDirectoryCursor>,
@@ -4417,8 +4709,8 @@ fn display_error(error: impl std::fmt::Display) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        open_event_stream, parse_json_response, read_bounded_response, request_json,
-        session_directory_path, session_path_component, validate_attachment,
+        open_event_stream, parse_json_response, provider_summary_path, read_bounded_response,
+        request_json, session_directory_path, session_path_component, validate_attachment,
         validate_pending_session_deletes_page, validate_pending_session_title_recoveries,
         validate_session_directory_page, validate_session_directory_snapshot, verify_bridge_health,
         verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSessionBalanceResponse,
@@ -4434,6 +4726,7 @@ mod tests {
         SkillsSettingsChange, SkillsSettingsView, SubagentSettingsChange, SubagentSettingsView,
         SubmitRequest, PROTOCOL_VERSION,
     };
+    use crate::SandboxSettingsView;
     use crate::{session_shadow, workbench_catalog::WorkbenchSession};
     use serde_json::json;
     use std::{
@@ -4445,6 +4738,48 @@ mod tests {
         thread,
         time::Duration,
     };
+
+    #[test]
+    fn sandbox_settings_wire_view_preserves_shell_inventory() {
+        let view: SandboxSettingsView = serde_json::from_value(json!({
+            "protocolVersion": 1,
+            "bash": "off",
+            "network": true,
+            "workspaceRoot": "",
+            "allowWrite": [],
+            "platform": "darwin",
+            "shell": "auto",
+            "resolvedShell": "zsh",
+            "effectiveShell": "bash",
+            "shellReloadRequired": true,
+            "shellCapabilities": [
+                {"id":"bash", "variant":"system", "available":true,
+                    "path":"/bin/bash", "source":"standard-path"},
+                {"id":"zsh", "variant":"system", "available":false,
+                    "reason":"not-found"}
+            ],
+            "gitCapability": {"id":"git", "available":true,
+                "path":"/usr/bin/git", "source":"path"},
+            "effectiveWriteRoots": []
+        }))
+        .unwrap();
+
+        assert_eq!(view.shell_capabilities.len(), 2);
+        assert_eq!(
+            view.shell_capabilities[0].path.as_deref(),
+            Some("/bin/bash")
+        );
+        assert_eq!(
+            view.shell_capabilities[1].reason.as_deref(),
+            Some("not-found")
+        );
+        assert_eq!(view.git_capability.as_ref().unwrap().id, "git");
+        assert_eq!(view.effective_shell, "bash");
+        assert!(view.shell_reload_required);
+        let encoded = serde_json::to_value(view).unwrap();
+        assert_eq!(encoded["shellCapabilities"][0]["source"], "standard-path");
+        assert_eq!(encoded["gitCapability"]["path"], "/usr/bin/git");
+    }
 
     #[test]
     fn settings_wire_views_preserve_model_efforts_and_hooks() {
@@ -4855,6 +5190,21 @@ mod tests {
             })
             .is_err()
         );
+    }
+
+    #[test]
+    fn provider_summary_path_scopes_and_encodes_workspace() {
+        assert_eq!(
+            provider_summary_path("global", None).unwrap(),
+            "/v1/providers?scope=global"
+        );
+        assert_eq!(
+            provider_summary_path("project", Some("/work/a b")).unwrap(),
+            "/v1/providers?scope=project&workspaceRoot=%2Fwork%2Fa+b"
+        );
+        assert!(provider_summary_path("project", None).is_err());
+        assert!(provider_summary_path("other", Some("/work")).is_err());
+        assert!(provider_summary_path("project", Some(&"x".repeat(4097))).is_err());
     }
 
     #[test]

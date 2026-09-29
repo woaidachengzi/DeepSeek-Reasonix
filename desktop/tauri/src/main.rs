@@ -80,30 +80,32 @@ use bridge::{
     AnswerMCPInteractionRequest, AnswerQuestionRequest, ApproveRequest, AttachFileRequest,
     BridgeAttachment, BridgeDeleteSessionResponse, BridgeHistory, BridgeProjectFolder,
     BridgeProviderSummaryResponse, BridgeRemoteBrowseRequest, BridgeRemoteBrowseResponse,
-    BridgeRemoteDisconnectRequest, BridgeRemoteDisconnectResponse, BridgeSession,
-    BridgeSessionBalanceResponse, BridgeSetAgentPreferenceRequest, BridgeSetDefaultModelRequest,
-    BridgeSetModelRoleRequest, BridgeSetSessionModelRequest, BridgeSnapshot, BridgeStatus,
-    BridgeSupervisor, BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
-    BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse, DeleteProviderConfigRequest,
-    DesktopPreferences, DiscoverProviderModelsRequest, DiscoveredProviderModels,
-    HooksSettingsChange, HooksSettingsView, LegacySessionCatalogEntry, MCPClearAuthRequest,
-    MCPClearAuthResponse, MCPMarketplaceEntry, MCPMarketplaceResponse, MCPOAuthRequest,
-    MCPOAuthResponse, MCPRuntimeActionRequest, MCPRuntimeActionResponse,
+    BridgeRemoteDisconnectRequest, BridgeRemoteDisconnectResponse, BridgeRemoteFilePreviewRequest,
+    BridgeRemoteFilePreviewResponse, BridgeRemoteFileSaveRequest, BridgeRemoteFileSaveResponse,
+    BridgeSession, BridgeSessionBalanceResponse, BridgeSetAgentPreferenceRequest,
+    BridgeSetDefaultModelRequest, BridgeSetModelRoleRequest, BridgeSetSessionModelRequest,
+    BridgeSnapshot, BridgeStatus, BridgeSupervisor, BridgeWorkspaceChangeDetailResponse,
+    BridgeWorkspaceChangesResponse, BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse,
+    DeleteProviderConfigRequest, DesktopPreferences, DiscoverProviderModelsRequest,
+    DiscoveredProviderModels, HooksSettingsChange, HooksSettingsView, LegacySessionCatalogEntry,
+    MCPClearAuthRequest, MCPClearAuthResponse, MCPMarketplaceEntry, MCPMarketplaceResponse,
+    MCPOAuthRequest, MCPOAuthResponse, MCPRuntimeActionRequest, MCPRuntimeActionResponse,
     MCPServerActivationRequest, MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse,
     MCPServerView, MemorySettingsChange, MemorySettingsView, MemorySuggestionAcceptance,
     MemorySuggestionAcceptanceRequest, MemorySuggestionsView, NetworkSettingsChange,
     NetworkSettingsView, OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
     PendingSessionTitleRecovery, PermissionSettingsChange, PermissionSettingsView,
-    PluginInstallPlan, PluginInstallRequest, PluginOperationResult, PluginRemoveRequest,
-    PluginSettingsChange, PluginSettingsView, ProviderConfigList, RemoteConnectRequest,
-    RemoteConnectResponse, RemoteSSHConfigScanView, RemoteSettingsChange, RemoteSettingsView,
-    RenameSessionRequest, SandboxSettingsChange, SandboxSettingsView, SaveProviderConfigRequest,
-    ScanImportCandidate, ScanImportSelection, SecretsSettingsChange, SecretsSettingsView,
-    SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage,
-    SessionFirstMessageTitle, SessionPreview, SessionRequest, SkillArchiveRequest,
-    SkillArchiveResult, SkillInstallPlan, SkillInstallRequest, SkillInstallResult,
-    SkillsSettingsChange, SkillsSettingsView, SubagentSettingsChange, SubagentSettingsView,
-    SubmitRequest, WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
+    PluginDoctorView, PluginInstallPlan, PluginInstallRequest, PluginOperationResult,
+    PluginRemoveRequest, PluginSettingsChange, PluginSettingsView, ProviderConfigList,
+    RemoteConnectRequest, RemoteConnectResponse, RemoteSSHConfigScanView, RemoteSettingsChange,
+    RemoteSettingsView, RenameSessionRequest, SandboxSettingsChange, SandboxSettingsView,
+    SaveProviderConfigRequest, ScanImportCandidate, ScanImportSelection, SecretsSettingsChange,
+    SecretsSettingsView, SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
+    SessionDirectoryPage, SessionFirstMessageTitle, SessionPreview, SessionRequest,
+    SkillArchiveRequest, SkillArchiveResult, SkillInstallPlan, SkillInstallRequest,
+    SkillInstallResult, SkillsSettingsChange, SkillsSettingsView, SubagentProfileInput,
+    SubagentSettingsChange, SubagentSettingsView, SubagentTryStatusView, SubmitRequest,
+    WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
 };
 use data_profile::{
     PreviewProfile, PreviewProfileStatus, ProfileImportResult, ProjectFoldersImportResult,
@@ -825,8 +827,13 @@ fn preview_runtime_info(supervisor: State<'_, BridgeSupervisor>) -> PreviewRunti
 #[tauri::command]
 fn provider_summary(
     supervisor: State<'_, BridgeSupervisor>,
+    scope: Option<String>,
+    workspace_root: Option<String>,
 ) -> Result<BridgeProviderSummaryResponse, String> {
-    supervisor.provider_summary()
+    match scope.as_deref().unwrap_or("global") {
+        "global" => supervisor.provider_summary(),
+        scope => supervisor.provider_summary_for_scope(scope, workspace_root.as_deref()),
+    }
 }
 
 #[tauri::command]
@@ -869,6 +876,20 @@ fn usage_stats(
 #[tauri::command]
 fn storage_settings(supervisor: State<'_, BridgeSupervisor>) -> Result<serde_json::Value, String> {
     supervisor.storage_settings()
+}
+
+#[tauri::command]
+fn capability_diagnostics(
+    supervisor: State<'_, BridgeSupervisor>,
+    workspace_root: String,
+    include_session_runtime: bool,
+) -> Result<serde_json::Value, String> {
+    supervisor.capability_diagnostics(&workspace_root, include_session_runtime)
+}
+
+#[tauri::command]
+fn runtime_doctor(supervisor: State<'_, BridgeSupervisor>) -> Result<serde_json::Value, String> {
+    supervisor.runtime_doctor()
 }
 
 #[tauri::command]
@@ -916,6 +937,22 @@ fn browse_remote_host(
 }
 
 #[tauri::command]
+fn preview_remote_file(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: BridgeRemoteFilePreviewRequest,
+) -> Result<BridgeRemoteFilePreviewResponse, String> {
+    supervisor.preview_remote_file(request)
+}
+
+#[tauri::command]
+fn save_remote_file(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: BridgeRemoteFileSaveRequest,
+) -> Result<BridgeRemoteFileSaveResponse, String> {
+    supervisor.save_remote_file(request)
+}
+
+#[tauri::command]
 fn permission_settings(
     supervisor: State<'_, BridgeSupervisor>,
     workspace_root: Option<String>,
@@ -950,8 +987,9 @@ fn change_secrets_settings(
 fn sandbox_settings(
     supervisor: State<'_, BridgeSupervisor>,
     workspace_root: Option<String>,
+    session_id: Option<String>,
 ) -> Result<SandboxSettingsView, String> {
-    supervisor.sandbox_settings(workspace_root.as_deref())
+    supervisor.sandbox_settings(workspace_root.as_deref(), session_id.as_deref())
 }
 
 #[tauri::command]
@@ -1062,6 +1100,14 @@ fn change_plugin_settings(
         .map(plugin_settings_without_theme_paths)
 }
 
+#[tauri::command]
+fn plugin_doctor(
+    supervisor: State<'_, BridgeSupervisor>,
+    name: String,
+) -> Result<PluginDoctorView, String> {
+    supervisor.plugin_doctor(&name)
+}
+
 fn plugin_settings_without_theme_paths(mut view: PluginSettingsView) -> PluginSettingsView {
     for plugin in &mut view.plugins {
         plugin.themes.clear();
@@ -1073,8 +1119,12 @@ fn plugin_settings_without_theme_paths(mut view: PluginSettingsView) -> PluginSe
 fn plan_plugin_install(
     supervisor: State<'_, BridgeSupervisor>,
     source: String,
+    mode: String,
+    replace: bool,
+    expected_name: String,
+    expected_revision: String,
 ) -> Result<PluginInstallPlan, String> {
-    supervisor.plan_plugin_install(&source)
+    supervisor.plan_plugin_install(&source, &mode, replace, &expected_name, &expected_revision)
 }
 
 #[tauri::command]
@@ -1107,6 +1157,41 @@ fn change_subagent_settings(
     change: SubagentSettingsChange,
 ) -> Result<SubagentSettingsView, String> {
     supervisor.change_subagent_settings(change)
+}
+
+#[tauri::command]
+async fn try_subagent_profile(
+    supervisor: State<'_, BridgeSupervisor>,
+    workspace_root: String,
+    input: SubagentProfileInput,
+    task: String,
+) -> Result<String, String> {
+    let client = supervisor.subagent_try_client()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        client.try_subagent_profile(&workspace_root, input, &task)
+    })
+    .await
+    .map_err(|error| format!("subagent try task failed: {error}"))?
+}
+
+#[tauri::command]
+async fn subagent_profile_try_status(
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<SubagentTryStatusView, String> {
+    let client = supervisor.subagent_try_client()?;
+    tauri::async_runtime::spawn_blocking(move || client.subagent_profile_try_status())
+        .await
+        .map_err(|error| format!("subagent try status query failed: {error}"))?
+}
+
+#[tauri::command]
+async fn cancel_subagent_profile_try(
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<(), String> {
+    let client = supervisor.subagent_try_client()?;
+    tauri::async_runtime::spawn_blocking(move || client.cancel_subagent_profile_try())
+        .await
+        .map_err(|error| format!("subagent try cancellation failed: {error}"))?
 }
 
 #[tauri::command]
@@ -2771,6 +2856,121 @@ async fn export_user_theme(
     Ok(true)
 }
 
+fn frontend_diagnostics_export_filename(payload: &serde_json::Value) -> Result<String, String> {
+    const MAX_EXPORT_BYTES: usize = 8 << 20;
+    let schema_version = payload
+        .get("schemaVersion")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| "frontend diagnostics schema version is missing".to_string())?;
+    if schema_version != 1 && schema_version != 2 {
+        return Err("frontend diagnostics schema version is unsupported".to_string());
+    }
+    let report_id = payload
+        .pointer("/manifest/reportId")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| "frontend diagnostics report ID is missing".to_string())?;
+    if !payload
+        .get("events")
+        .is_some_and(serde_json::Value::is_array)
+    {
+        return Err("frontend diagnostics events are missing".to_string());
+    }
+    let encoded = serde_json::to_vec_pretty(payload).map_err(|error| error.to_string())?;
+    if encoded.len() > MAX_EXPORT_BYTES {
+        return Err("frontend diagnostics report exceeds the 8 MiB export limit".to_string());
+    }
+    let suffix: String = report_id
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric() || *character == '-')
+        .take(8)
+        .collect();
+    let suffix = if suffix.is_empty() { "trace" } else { &suffix };
+    Ok(format!("reasonix-frontend-diagnostics-{suffix}.json"))
+}
+
+fn write_frontend_diagnostics_export(
+    path: &Path,
+    payload: &serde_json::Value,
+) -> Result<(), String> {
+    frontend_diagnostics_export_filename(payload)?;
+    let encoded = serde_json::to_vec_pretty(payload).map_err(|error| error.to_string())?;
+    fs::write(path, encoded).map_err(|error| format!("write frontend diagnostics report: {error}"))
+}
+
+#[tauri::command]
+async fn export_frontend_diagnostics(
+    app: tauri::AppHandle,
+    payload: serde_json::Value,
+) -> Result<bool, String> {
+    let filename = frontend_diagnostics_export_filename(&payload)?;
+    let (sender, receiver) = std::sync::mpsc::channel();
+    app.dialog()
+        .file()
+        .add_filter("JSON diagnostics", &["json"])
+        .set_file_name(filename)
+        .save_file(move |selection| {
+            let _ = sender.send(selection);
+        });
+    let selected = tauri::async_runtime::spawn_blocking(move || receiver.recv().unwrap_or(None))
+        .await
+        .map_err(|error| format!("diagnostics export picker failed: {error}"))?;
+    let Some(path) = selected_theme_path(selected)? else {
+        return Ok(false);
+    };
+    write_frontend_diagnostics_export(&path, &payload)?;
+    Ok(true)
+}
+
+#[cfg(test)]
+mod frontend_diagnostics_export_tests {
+    use super::*;
+
+    fn payload() -> serde_json::Value {
+        serde_json::json!({
+            "schemaVersion": 2,
+            "manifest": { "reportId": "0123456789abcdef", "createdAt": "2026-09-30T00:00:00Z" },
+            "summary": { "eventCount": 1 },
+            "events": [{ "t": 0, "type": "start" }]
+        })
+    }
+
+    #[test]
+    fn export_name_uses_only_a_bounded_safe_report_id() {
+        let mut report = payload();
+        report["manifest"]["reportId"] = serde_json::Value::String("../private path/abcdef".into());
+        assert_eq!(
+            frontend_diagnostics_export_filename(&report).unwrap(),
+            "reasonix-frontend-diagnostics-privatep.json"
+        );
+    }
+
+    #[test]
+    fn export_rejects_unknown_schema_and_oversized_payload() {
+        let mut report = payload();
+        report["schemaVersion"] = serde_json::Value::from(99);
+        assert!(frontend_diagnostics_export_filename(&report).is_err());
+
+        let mut report = payload();
+        report["events"] =
+            serde_json::Value::Array(vec![serde_json::Value::String("x".repeat((8 << 20) + 1))]);
+        assert!(frontend_diagnostics_export_filename(&report)
+            .unwrap_err()
+            .contains("8 MiB"));
+    }
+
+    #[test]
+    fn export_writes_json_to_the_user_selected_path() {
+        let directory = tempfile::tempdir().expect("temporary export directory");
+        let path = directory.path().join("trace.json");
+        let report = payload();
+        write_frontend_diagnostics_export(&path, &report).expect("write selected report path");
+        let saved: serde_json::Value =
+            serde_json::from_slice(&fs::read(path).expect("read report"))
+                .expect("parse exported report");
+        assert_eq!(saved, report);
+    }
+}
+
 #[cfg(test)]
 mod theme_package_tests {
     use super::*;
@@ -3137,12 +3337,16 @@ fn main() {
             discover_provider_models,
             usage_stats,
             storage_settings,
+            capability_diagnostics,
+            runtime_doctor,
             remote_settings,
             scan_remote_ssh_config,
             change_remote_settings,
             connect_remote_host,
             disconnect_remote_host,
             browse_remote_host,
+            preview_remote_file,
+            save_remote_file,
             permission_settings,
             change_permission_settings,
             secrets_settings,
@@ -3162,11 +3366,15 @@ fn main() {
             restore_skill,
             plugin_settings,
             change_plugin_settings,
+            plugin_doctor,
             plan_plugin_install,
             install_plugin,
             remove_plugin,
             subagent_settings,
             change_subagent_settings,
+            try_subagent_profile,
+            subagent_profile_try_status,
+            cancel_subagent_profile_try,
             hooks_settings,
             change_hooks_settings,
             memory_settings,
@@ -3206,6 +3414,7 @@ fn main() {
             delete_user_theme,
             import_user_theme,
             export_user_theme,
+            export_frontend_diagnostics,
             open_external_url,
             keychain::keychain_save,
             keychain::keychain_delete
