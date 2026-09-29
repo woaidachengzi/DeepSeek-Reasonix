@@ -350,7 +350,9 @@ for (const path of localeChunks) {
   // keep one more tenth-KiB for this bounded settings workflow.
   // MCP browser OAuth and explicit credential clearing add localized security
   // states and confirmation copy; allow one additional tenth-KiB.
-  const budget = 77.1 * 1024;
+  // Network settings localize proxy modes, secret retention, and current-session
+  // application; allow 0.2 KiB for this security-sensitive guidance.
+  const budget = 77.3 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 
