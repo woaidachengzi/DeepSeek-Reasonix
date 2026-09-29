@@ -190,7 +190,7 @@ const summary = () => ({
         if (typeof args?.request?.compactRatioPercent === "number") compactRatioPercent = args.request.compactRatioPercent;
         return summary();
       }
-      case "platform_info": return "darwin";
+      case "platform_info": return "win32";
       case "get_close_behavior": return closeBehavior;
       case "set_close_behavior": closeBehavior = args?.behavior ?? closeBehavior; return closeBehavior;
       case "get_zoom_factor": return zoomFactor;
@@ -469,6 +469,7 @@ assert.equal(profileImportCalls, 1);
 assert.match(visibleText(), /已备份并导入配置/, "data settings surface the import result");
 await act(async () => { click(["通用", "General"]); });
 assert.deepEqual([...document.querySelectorAll(".tauri-settings-general > .settings-section > .settings-section__head .settings-section__title")].map(heading => heading.textContent), ["桌面与语言", "会话体验", "系统行为"], "General follows the stable settings section order");
+assert.ok(document.querySelector('[aria-label="关闭窗口时"]'), "close-to-tray behavior remains available on Windows");
 assert.equal(document.querySelector('.tauri-settings-general [aria-label="外观模式"]'), null, "appearance controls are kept in the Appearance page");
 await act(async () => { document.querySelector<HTMLButtonElement>(".tauri-settings-sound-toggle")?.click(); });
 const musicPresetSelect = document.querySelector<HTMLSelectElement>('select[aria-label="音乐预设"]');

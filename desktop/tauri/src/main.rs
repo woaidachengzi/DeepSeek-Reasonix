@@ -2743,8 +2743,6 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // macOS keeps running by default; the Preview preference can opt into quitting.
-            #[cfg(target_os = "macos")]
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
                 match window.app_handle().state::<HostPreferences>().close_behavior() {
