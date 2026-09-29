@@ -3,6 +3,7 @@ import {
   resolvedShortcutCombo,
   shortcutDefinitions,
   type ShortcutPlatform,
+  type ShortcutCombo,
   type ShortcutSection,
 } from "../lib/keyboardShortcuts";
 import type { DictKey, Translator } from "../lib/i18n";
@@ -18,25 +19,47 @@ const SECTION_LABEL_KEYS: Record<ShortcutSection, DictKey> = {
   help: "shortcuts.section.help",
 };
 
+export type ShortcutCheatsheetItem = {
+  action: string;
+  section: ShortcutSection;
+  labelKey: DictKey;
+  descriptionKey?: DictKey;
+  combo: ShortcutCombo;
+};
+
 export function ShortcutsCheatsheet({
   open,
   platform,
   onClose,
   t,
+  items,
 }: {
   open: boolean;
   platform: ShortcutPlatform;
   onClose: () => void;
   t: Translator;
+  items?: readonly ShortcutCheatsheetItem[];
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const groups = useMemo(() => {
+    if (items) {
+      return SECTION_ORDER.map((section) => ({
+        section,
+        items: items.filter((item) => item.section === section),
+      })).filter((group) => group.items.length > 0);
+    }
     return SECTION_ORDER.map((section) => ({
       section,
-      items: shortcutDefinitions().filter((definition) => definition.section === section),
+      items: shortcutDefinitions().filter((definition) => definition.section === section).map((definition) => ({
+        action: definition.action,
+        section: definition.section,
+        labelKey: definition.labelKey,
+        descriptionKey: definition.descriptionKey,
+        combo: resolvedShortcutCombo(definition.action, platform),
+      })),
     })).filter((group) => group.items.length > 0);
-  }, []);
+  }, [items, platform]);
 
   useEffect(() => {
     if (open) {
@@ -86,14 +109,10 @@ export function ShortcutsCheatsheet({
               <div className="shortcuts-cheatsheet__list">
                 {group.items.map((definition) => (
                   <div className="shortcuts-cheatsheet__row" key={definition.action}>
-                    <ShortcutComboDisplay
-                      as="kbd"
-                      combo={resolvedShortcutCombo(definition.action, platform)}
-                      platform={platform}
-                    />
+                    <ShortcutComboDisplay as="kbd" combo={definition.combo} platform={platform} />
                     <div>
                       <strong>{t(definition.labelKey)}</strong>
-                      <span className="shortcuts-cheatsheet__desc">{t(definition.descriptionKey)}</span>
+                      {definition.descriptionKey && <span className="shortcuts-cheatsheet__desc">{t(definition.descriptionKey)}</span>}
                     </div>
                   </div>
                 ))}

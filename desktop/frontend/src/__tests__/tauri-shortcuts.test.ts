@@ -20,7 +20,7 @@ assert.deepEqual(defaultTauriShortcut("text_size_increase", "darwin"), { key: "=
 assert.deepEqual(defaultTauriShortcut("text_size_decrease", "linux"), { key: "-", ctrl: true }, "text size decrease follows the stable shortcut");
 assert.deepEqual(defaultTauriShortcut("text_size_reset", "windows"), { key: "0", ctrl: true }, "text size reset follows the stable shortcut");
 assert.equal(isValidTauriShortcut("open_usage_stats", { key: "u", ctrl: true, shift: true }), true);
-assert.equal(TAURI_SHORTCUT_ACTIONS.length, 41, "all Preview actions, including command palette, sidebar toggle, session navigation, panel close, text size and every settings page, can be configured");
+assert.equal(TAURI_SHORTCUT_ACTIONS.length, 42, "all Preview actions, including command palette, keyboard help, sidebar toggle, session navigation, panel close, text size and every settings page, can be configured");
 assert.equal(Object.keys(TAURI_SHORTCUT_TABS).length, 16, "every remaining settings page has a direct shortcut route");
 for (const action of TAURI_SHORTCUT_ACTIONS) {
   const combo = defaultTauriShortcut(action, "darwin");

@@ -1,10 +1,11 @@
 import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Copy, Eye, FileText, FolderOpen, FolderTree, GitBranch, MessageSquare, Paperclip, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Settings, Sparkles, Square, Trash2, X } from "lucide-react";
+import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Copy, Eye, FileText, FolderOpen, FolderTree, GitBranch, Keyboard, MessageSquare, Paperclip, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Settings, Sparkles, Square, Trash2, X } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { Markdown } from "../components/Markdown";
 import { CommandPalette, type PaletteItem } from "../components/CommandPalette";
+import { ShortcutsCheatsheet, type ShortcutCheatsheetItem } from "../components/ShortcutsCheatsheet";
 import { QuestionJumpBar } from "../components/QuestionJumpBar";
 import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
 import { compactQuestionText, type QuestionAnchor } from "../lib/transcriptGrouping";
@@ -13,9 +14,9 @@ import { applyTextSize, getTextSize, nextTextSize, DEFAULT_TEXT_SIZE } from "../
 import { playSuccessChime, playAttentionChime, shouldPlayAttentionChimeForEvent } from "../lib/sound";
 import { generativeMusic, isGenerativeMusicEnabled } from "../lib/generative-music";
 import logoWordmark from "../assets/logo-wordmark.svg";
-import { TauriSettings, type TauriSettingsTab } from "./TauriSettings";
-import { detectShortcutPlatform, formatShortcutCombo } from "../lib/keyboardShortcuts";
-import { defaultTauriShortcut, matchesTauriShortcut, TAURI_SHORTCUT_ACTIONS, TAURI_SHORTCUT_TABS, useTauriShortcuts, type TauriShortcutAction } from "./tauriKeyboardShortcuts";
+import { TAURI_SHORTCUT_LABELS, TauriSettings, type TauriSettingsTab } from "./TauriSettings";
+import { detectShortcutPlatform, formatShortcutCombo, type ShortcutSection } from "../lib/keyboardShortcuts";
+import { defaultTauriShortcut, getTauriShortcut, matchesTauriShortcut, TAURI_SHORTCUT_ACTIONS, TAURI_SHORTCUT_TABS, useTauriShortcuts, type TauriShortcutAction } from "./tauriKeyboardShortcuts";
 import { TauriStatusBar } from "./TauriStatusBar";
 import { useTauriDesktopLayout } from "./tauriDesktopLayout";
 import { getTauriDefaultWorkspace, setTauriDefaultWorkspace } from "./tauriDefaultWorkspace";
@@ -445,6 +446,7 @@ export function TauriSessionPreview() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<TauriSettingsTab>("general");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
   const [progressMode, setProgressMode] = useState(getTauriProgressMode);
   const [sidebarVisible, setSidebarVisible] = useState(getTauriSidebarVisible);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
@@ -491,6 +493,14 @@ export function TauriSessionPreview() {
   const [dragging, setDragging] = useState(false);
   const pendingSessionDeleteIDs = useMemo(() => new Set(pendingSessionDeletes.map(item => item.id)), [pendingSessionDeletes]);
   const visibleTabs = useMemo(() => tabs.filter(tab => !pendingSessionDeleteIDs.has(tab.sessionId)), [tabs, pendingSessionDeleteIDs]);
+  const shortcutHelpItems = useMemo<ShortcutCheatsheetItem[]>(() => TAURI_SHORTCUT_ACTIONS.map(action => {
+    const section: ShortcutSection = action === "show_shortcuts" ? "help"
+      : action === "workspace_files" || action === "diagnostics" ? "tools"
+        : action === "new_session" || action === "send_message" || action.startsWith("goto_session_") ? "session"
+          : action === "settings" || action === "command_palette" || action === "close_panel" ? "global" : "view";
+    const label = TAURI_SHORTCUT_LABELS[action];
+    return { action, section, labelKey: label.label, descriptionKey: label.description, combo: getTauriShortcut(action, shortcutPlatform) };
+  }), [shortcutOverrides, shortcutPlatform]);
   const commandPaletteItems = useMemo<PaletteItem[]>(() => {
     const commandGroup = t("palette.group.commands");
     const sessionGroup = t("palette.group.sessions");
@@ -524,6 +534,7 @@ export function TauriSessionPreview() {
     const commands: PaletteItem[] = [
       { id: "tauri-command-new-session", group: commandGroup, title: t("palette.cmd.newSession"), icon: <Plus size={15} />, compact: true, keywords: ["new", "新建"], run: () => { setSettingsOpen(false); setDiagnosticsOpen(false); if (!busy && !switchingBlocked) void createSession(); } },
       { id: "tauri-command-settings", group: commandGroup, title: t("palette.cmd.settings"), icon: <Settings size={15} />, compact: true, keywords: ["settings", "设置"], run: () => openSettingsTab("general") },
+      { id: "tauri-command-shortcuts", group: commandGroup, title: t("shortcuts.action.showShortcuts"), icon: <Keyboard size={15} />, compact: true, keywords: ["shortcuts", "keyboard", "快捷键"], run: () => setShortcutsHelpOpen(true) },
       { id: "tauri-command-files", group: commandGroup, title: t("workspace.filesTab"), icon: <FolderTree size={15} />, compact: true, keywords: ["files", "workspace", "文件", "工作区"], run: () => { if (!session || busy) return; setSettingsOpen(false); setDiagnosticsOpen(false); setWorkspaceView("files"); setWorkspaceOpen(true); void loadWorkspace(workspacePath); } },
       { id: "tauri-command-diagnostics", group: commandGroup, title: t("settings.tab.diagnostics"), icon: <Activity size={15} />, compact: true, keywords: ["diagnostics", "运行状态", "诊断"], run: () => { setSettingsOpen(false); setDiagnosticsOpen(true); } },
       ...settingsTabs.map(({ tab, label, keywords }) => ({
@@ -686,6 +697,12 @@ export function TauriSessionPreview() {
       // The palette owns Escape and navigation keys; don't also trigger
       // shortcuts in the workspace underneath its modal surface.
       if (commandPaletteOpen) return;
+      if (shortcutsHelpOpen) return;
+      if (matchesTauriShortcut(event, "show_shortcuts", shortcutPlatform)) {
+        event.preventDefault();
+        setShortcutsHelpOpen(true);
+        return;
+      }
       // Escape: Close open panels (no modifier required)
       if (event.key === "Escape") {
         if (settingsOpen) { setSettingsOpen(false); return; }
@@ -782,7 +799,7 @@ export function TauriSessionPreview() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [busy, switchingBlocked, session, settingsOpen, diagnosticsOpen, workspaceOpen, commandPaletteOpen, visibleTabs]);
+  }, [busy, switchingBlocked, session, settingsOpen, diagnosticsOpen, workspaceOpen, commandPaletteOpen, shortcutsHelpOpen, visibleTabs]);
 
   useEffect(() => {
     void tauriBridgeStatus().then(setStatus).catch(error => setError(tauriMessageFrom(error)));
@@ -2681,6 +2698,7 @@ export function TauriSessionPreview() {
       </>}
 
       <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} items={commandPaletteItems} placeholder={t("palette.placeholder")} emptyText={t("palette.empty")} />
+      <ShortcutsCheatsheet open={shortcutsHelpOpen} platform={shortcutPlatform} onClose={() => setShortcutsHelpOpen(false)} t={t} items={shortcutHelpItems} />
       {settingsOpen && <TauriSettings key={settingsTab} initialTab={settingsTab} workspaceRoot={currentWorkspace || undefined} defaultWorkspace={defaultWorkspace} onChooseDefaultWorkspace={chooseDefaultWorkspace} onClearDefaultWorkspace={clearDefaultWorkspace} profile={profile} importBusy={busy} bridgeStatus={status} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={error} onRestartBridge={restartBridge} onRefreshCatalogAudit={() => refreshCatalogAudit()} onRefreshProfile={refreshProfile} onImportStableProfile={importStableProfile} onImportStableProjectFolders={importStableProjectFolders} onScanUnclaimedSessions={() => void openScanImportReview()} onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionId={session?.id} currentSessionState={session?.state} currentSessionModelRef={session?.modelRef} onCurrentSessionModelChange={changeCurrentSessionModel} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} />}
     </main>
   );

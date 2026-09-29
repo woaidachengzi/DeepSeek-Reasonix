@@ -6,6 +6,7 @@ export const TAURI_SHORTCUT_ACTIONS = [
   "close_panel",
   "settings",
   "command_palette",
+  "show_shortcuts",
   "diagnostics",
   "toggle_sidebar",
   "workspace_files",
@@ -124,6 +125,7 @@ export function defaultTauriShortcut(action: TauriShortcutAction, platform: Shor
     close_panel: "w",
     settings: ",",
     command_palette: "k",
+    show_shortcuts: "?",
     diagnostics: ".",
     toggle_sidebar: "b",
     workspace_files: "f",
@@ -166,6 +168,8 @@ export function defaultTauriShortcut(action: TauriShortcutAction, platform: Shor
   const modifier = platform === "darwin" ? { meta: true } : { ctrl: true };
   return action.startsWith("open_") || action === "workspace_files"
     ? { key, ...modifier, shift: true }
+    : action === "show_shortcuts"
+      ? { key, ...modifier, shift: true }
     : { key, ...modifier };
 }
 

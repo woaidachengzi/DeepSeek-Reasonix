@@ -155,11 +155,12 @@ const TAURI_COMPACT_RATIO_PRESETS = [
   [85, "settings.compactRatioPreset.85", "settings.compactRatioPresetEffect.85"],
 ] as const satisfies readonly (readonly [number, DictKey, DictKey])[];
 
-const TAURI_SHORTCUT_LABELS: Record<TauriShortcutAction, { label: DictKey; description?: DictKey }> = {
+export const TAURI_SHORTCUT_LABELS: Record<TauriShortcutAction, { label: DictKey; description?: DictKey }> = {
   new_session: { label: "shortcuts.action.newSession", description: "shortcuts.desc.newSession" },
   close_panel: { label: "shortcuts.action.closeTab", description: "shortcuts.desc.closeTab" },
   settings: { label: "shortcuts.action.settings", description: "shortcuts.desc.settings" },
   command_palette: { label: "shortcuts.action.commandPalette", description: "shortcuts.desc.commandPalette" },
+  show_shortcuts: { label: "shortcuts.action.showShortcuts", description: "shortcuts.desc.showShortcuts" },
   diagnostics: { label: "settings.tab.diagnostics", description: "settings.tabSub.diagnostics" },
   toggle_sidebar: { label: "settings.tauriShortcut.toggleSidebar", description: "settings.tauriShortcut.toggleSidebarHint" },
   workspace_files: { label: "workspace.filesTab" },
