@@ -524,8 +524,8 @@ export function TauriSessionPreview() {
     const commands: PaletteItem[] = [
       { id: "tauri-command-new-session", group: commandGroup, title: t("palette.cmd.newSession"), icon: <Plus size={15} />, compact: true, keywords: ["new", "新建"], run: () => { setSettingsOpen(false); setDiagnosticsOpen(false); if (!busy && !switchingBlocked) void createSession(); } },
       { id: "tauri-command-settings", group: commandGroup, title: t("palette.cmd.settings"), icon: <Settings size={15} />, compact: true, keywords: ["settings", "设置"], run: () => openSettingsTab("general") },
-      { id: "tauri-command-files", group: commandGroup, title: t("workspace.filesTab"), icon: <FolderTree size={15} />, compact: true, keywords: ["files", "workspace", "文件", "工作区"], run: () => { if (session && !busy) toggleWorkspace(); } },
-      { id: "tauri-command-diagnostics", group: commandGroup, title: t("settings.tab.diagnostics"), icon: <Activity size={15} />, compact: true, keywords: ["diagnostics", "运行状态", "诊断"], run: () => setDiagnosticsOpen(true) },
+      { id: "tauri-command-files", group: commandGroup, title: t("workspace.filesTab"), icon: <FolderTree size={15} />, compact: true, keywords: ["files", "workspace", "文件", "工作区"], run: () => { if (!session || busy) return; setSettingsOpen(false); setDiagnosticsOpen(false); setWorkspaceView("files"); setWorkspaceOpen(true); void loadWorkspace(workspacePath); } },
+      { id: "tauri-command-diagnostics", group: commandGroup, title: t("settings.tab.diagnostics"), icon: <Activity size={15} />, compact: true, keywords: ["diagnostics", "运行状态", "诊断"], run: () => { setSettingsOpen(false); setDiagnosticsOpen(true); } },
       ...settingsTabs.map(({ tab, label, keywords }) => ({
         id: `tauri-settings-${tab}`,
         group: commandGroup,
@@ -536,7 +536,7 @@ export function TauriSessionPreview() {
         run: () => openSettingsTab(tab),
       })),
     ];
-    const sessions: PaletteItem[] = (switchingBlocked ? [] : visibleTabs.filter(tab => !isMissingWorkbenchSession(tab) && !tab.deletionInterrupted).slice(0, 12)).map(tab => ({
+    const sessions: PaletteItem[] = (busy || switchingBlocked || isReadOnlyWorkbenchSource(sessionPageSource) ? [] : visibleTabs.filter(tab => !isMissingWorkbenchSession(tab) && !tab.deletionInterrupted)).map(tab => ({
       id: `tauri-session-${tab.sessionId}`,
       group: sessionGroup,
       title: displayTitle(tab.title),
@@ -550,7 +550,7 @@ export function TauriSessionPreview() {
       },
     }));
     return [...commands, ...sessions];
-  }, [t, busy, switchingBlocked, visibleTabs, session, sessionPageSource]);
+  }, [t, busy, switchingBlocked, visibleTabs, session, sessionPageSource, defaultWorkspace, workspacePath]);
   const projectGroups = useMemo(() => groupWorkbenchSessions(visibleTabs, projectFolders, platform), [visibleTabs, projectFolders, platform]);
   const searchedProjectGroups = useMemo(() => filterWorkbenchProjectGroups(projectGroups, sessionSearch), [projectGroups, sessionSearch]);
   const searchingSessions = sessionSearch.trim().length > 0;
