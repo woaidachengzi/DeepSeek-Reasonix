@@ -1442,7 +1442,7 @@ fn workbench_session_page(
     // only, with session actions disabled.
     let legacy_sessions_result = catalog.list();
     let catalog_warning = legacy_sessions_result.as_ref().err().map(|_| {
-        "旧会话兼容目录无法读取；当前仅显示未核验的持久目录，不能据此操作会话。修复目录后重启 Preview 并重新检查。"
+        "旧会话兼容目录无法读取；当前仅显示未核验的持久目录，不能据此操作会话。修复目录后重新检查会话目录。"
     });
     let legacy_catalog_readable = catalog_warning.is_none();
     let legacy_sessions = legacy_sessions_result.unwrap_or_default();

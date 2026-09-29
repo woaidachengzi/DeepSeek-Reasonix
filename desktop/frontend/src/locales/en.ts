@@ -2021,7 +2021,7 @@ export const en = {
   "settings.data.legacyProjectFoldersUnavailable": "The older project folder list is unavailable; showing only folders saved by Tauri.",
   "settings.data.tauriProjectFoldersUnavailable": "Tauri's project folder list is unavailable; showing only projects from the older source.",
   "settings.data.allProjectFoldersUnavailable": "Both project folder lists are unavailable; saved empty project folders may be missing.",
-  "settings.data.legacySessionCatalogUnavailable": "The legacy session catalog is unreadable. Only unverified saved identities are shown, and session actions are disabled. Repair the catalog, restart Preview, and check again.",
+  "settings.data.legacySessionCatalogUnavailable": "The legacy session catalog is unreadable. Only unverified saved identities are shown, and session actions are disabled. Repair the catalog, then recheck the session directory.",
   "settings.data.previewProfileRequired": "Session import is available only in an isolated Preview profile.",
   "settings.data.confirmTitleAndProject": "Confirm a title and project for every selected session.",
   "settings.data.reviewSessions": "Review unclaimed sessions",

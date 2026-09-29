@@ -84,10 +84,22 @@ impl WorkbenchCatalog {
     }
 
     pub fn list(&self) -> Result<Vec<WorkbenchSession>, String> {
-        let state = self
+        let mut state = self
             .state
             .lock()
             .map_err(|_| "workbench catalog lock is unavailable".to_string())?;
+        if state.load_error.is_some() {
+            match read_sessions(&self.path) {
+                Ok(sessions) => {
+                    state.sessions = sessions;
+                    state.load_error = None;
+                }
+                Err(error) => {
+                    state.load_error = Some(error.clone());
+                    return Err(error);
+                }
+            }
+        }
         state.ensure_loaded()?;
         Ok(state.sessions.clone())
     }
@@ -538,6 +550,33 @@ mod tests {
         );
         assert!(catalog.remember(session("new-session")).is_err());
         assert_eq!(fs::read(path).expect("preserve corrupt catalog"), corrupt);
+    }
+
+    #[test]
+    fn reloads_session_catalog_after_startup_read_failure_is_repaired() {
+        let root = tempfile::tempdir().expect("temp root");
+        let path = root.path().join(CATALOG_FILE);
+        fs::write(&path, b"not json").expect("write corrupt catalog");
+        let catalog = WorkbenchCatalog::at(path.clone());
+
+        assert_eq!(
+            catalog.list(),
+            Err("workbench session catalog is not valid JSON".to_string())
+        );
+        assert!(catalog.remember(session("new-session")).is_err());
+
+        let repaired = vec![session("recovered")];
+        fs::write(&path, serde_json::to_vec(&repaired).expect("encode repair"))
+            .expect("repair catalog");
+        assert_eq!(catalog.list().expect("retry after repair"), repaired);
+        assert_eq!(
+            catalog
+                .remember(session("new-session"))
+                .expect("write after repair")
+                .len(),
+            2
+        );
+        assert_eq!(WorkbenchCatalog::at(path).list().expect("reload").len(), 2);
     }
 
     #[test]

@@ -1607,7 +1607,7 @@ export const zhTW: Record<DictKey, string> = {
   "settings.data.legacyProjectFoldersUnavailable": "舊版專案資料夾清單目前無法使用；目前僅顯示由 Tauri 儲存的資料夾。",
   "settings.data.tauriProjectFoldersUnavailable": "Tauri 專案資料夾清單目前無法使用；目前僅顯示舊版來源中的專案。",
   "settings.data.allProjectFoldersUnavailable": "舊版和 Tauri 專案資料夾清單目前都無法使用；已儲存的空專案資料夾可能未顯示。",
-  "settings.data.legacySessionCatalogUnavailable": "舊版工作階段目錄無法讀取。目前僅顯示未核驗的已儲存身分，並停用工作階段操作。修復目錄、重新啟動 Preview 後再檢查。",
+  "settings.data.legacySessionCatalogUnavailable": "舊版工作階段目錄無法讀取。目前僅顯示未核驗的已儲存身分，並停用工作階段操作。修復目錄後，重新檢查工作階段目錄。",
   "settings.data.previewProfileRequired": "僅可在隔離的 Preview 設定中匯入工作階段。",
   "settings.data.confirmTitleAndProject": "請為每個選取的工作階段確認標題和專案歸屬。",
   "settings.data.reviewSessions": "審核未認領工作階段",

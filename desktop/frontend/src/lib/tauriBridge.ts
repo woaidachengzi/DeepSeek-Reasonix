@@ -1850,7 +1850,7 @@ export function tauriMessageFrom(error: unknown): string {
     "旧版项目文件夹清单暂不可用；当前仅显示 Tauri 本地保存的文件夹。": "settings.data.legacyProjectFoldersUnavailable",
     "Tauri 本地项目文件夹清单暂不可用；当前仅显示旧版项目来源。": "settings.data.tauriProjectFoldersUnavailable",
     "旧版与 Tauri 本地项目文件夹清单都暂不可用，已保存的空项目文件夹可能未显示。": "settings.data.allProjectFoldersUnavailable",
-    "旧会话兼容目录无法读取；当前仅显示未核验的持久目录，不能据此操作会话。修复目录后重启 Preview 并重新检查。": "settings.data.legacySessionCatalogUnavailable",
+    "旧会话兼容目录无法读取；当前仅显示未核验的持久目录，不能据此操作会话。修复目录后重新检查会话目录。": "settings.data.legacySessionCatalogUnavailable",
     "审核导入只在隔离的 Preview profile 中开放": "settings.data.previewProfileRequired",
     "每项都需要明确确认标题和项目归属": "settings.data.confirmTitleAndProject",
     "插件文件缺失或格式不兼容": "settings.plugins.packageInvalid",

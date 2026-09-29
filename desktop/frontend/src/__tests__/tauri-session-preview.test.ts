@@ -72,7 +72,7 @@ eq(tauriMessageFrom("插件文件缺失或格式不兼容"), "Plugin files are m
 eq(tauriMessageFrom("旧版项目文件夹清单暂不可用；当前仅显示 Tauri 本地保存的文件夹。"), "The older project folder list is unavailable; showing only folders saved by Tauri.", "legacy project folder warnings use the active locale");
 eq(tauriMessageFrom("Tauri 本地项目文件夹清单暂不可用；当前仅显示旧版项目来源。"), "Tauri's project folder list is unavailable; showing only projects from the older source.", "Tauri project folder warnings use the active locale");
 eq(tauriMessageFrom("旧版与 Tauri 本地项目文件夹清单都暂不可用，已保存的空项目文件夹可能未显示。"), "Both project folder lists are unavailable; saved empty project folders may be missing.", "combined project folder warnings use the active locale");
-eq(tauriMessageFrom("旧会话兼容目录无法读取；当前仅显示未核验的持久目录，不能据此操作会话。修复目录后重启 Preview 并重新检查。"), "The legacy session catalog is unreadable. Only unverified saved identities are shown, and session actions are disabled. Repair the catalog, restart Preview, and check again.", "session catalog warnings use the active locale");
+eq(tauriMessageFrom("旧会话兼容目录无法读取；当前仅显示未核验的持久目录，不能据此操作会话。修复目录后重新检查会话目录。"), "The legacy session catalog is unreadable. Only unverified saved identities are shown, and session actions are disabled. Repair the catalog, then recheck the session directory.", "session catalog warnings use the active locale");
 
 // ---------------------------------------------------------------------------
 // Tests: tauriEventSummary
