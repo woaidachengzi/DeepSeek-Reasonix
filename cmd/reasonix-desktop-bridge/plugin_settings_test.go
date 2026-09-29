@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -19,8 +20,30 @@ func TestPreviewPluginSettingsReadToggleAndRejectStaleOrInvalid(t *testing.T) {
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	manifest := `{"apiVersion":"reasonix.io/plugin/v2","name":"sample","description":"A package"}`
+	manifest := `{"apiVersion":"reasonix.io/plugin/v2","name":"sample","description":"A package","contributes":{"themes":["themes/*.reasonix-theme"]}}`
 	if err := os.WriteFile(filepath.Join(root, pluginpkg.NativeManifest), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	themeDir := filepath.Join(root, "themes")
+	if err := os.MkdirAll(themeDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	themeFile, err := os.Create(filepath.Join(themeDir, "neon.reasonix-theme"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive := zip.NewWriter(themeFile)
+	entry, err := archive.Create("theme.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := entry.Write([]byte(`{"schemaVersion":2,"id":"neon","name":"Neon","baseStyle":"graphite"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := themeFile.Close(); err != nil {
 		t.Fatal(err)
 	}
 	if err := pluginpkg.Upsert(home, pluginpkg.InstalledPlugin{Name: "sample", Root: "plugins/sample", Source: "https://secret@example.com/plugin.git", Enabled: true}); err != nil {
@@ -62,6 +85,9 @@ func TestPreviewPluginSettingsReadToggleAndRejectStaleOrInvalid(t *testing.T) {
 	if len(initial.Plugins) != 1 || initial.Plugins[0].Status != "ready" || initial.Plugins[0].Source != "remote" || !initial.Plugins[0].Enabled {
 		t.Fatalf("initial plugin = %+v", initial.Plugins)
 	}
+	if len(initial.Plugins[0].Themes) != 1 || initial.Plugins[0].Themes[0].Name != "neon" || !strings.HasPrefix(initial.Plugins[0].Themes[0].Path, root+string(filepath.Separator)) {
+		t.Fatalf("enabled plugin themes = %+v", initial.Plugins[0].Themes)
+	}
 	change := func(id, revision string, enabled bool) *httptest.ResponseRecorder {
 		body, _ := json.Marshal(previewPluginChange{Name: "sample", Revision: revision, Enabled: enabled})
 		return request(http.MethodPost, string(body), id, true)
@@ -69,8 +95,12 @@ func TestPreviewPluginSettingsReadToggleAndRejectStaleOrInvalid(t *testing.T) {
 	if got := change("plugin-disable", initial.Plugins[0].Revision, false); got.Code != http.StatusOK {
 		t.Fatalf("disable: %d %s", got.Code, got.Body.String())
 	}
-	if read().Plugins[0].Enabled {
+	disabled := read().Plugins[0]
+	if disabled.Enabled {
 		t.Fatal("plugin remained enabled")
+	}
+	if len(disabled.Themes) != 0 {
+		t.Fatalf("disabled plugin still contributed themes: %+v", disabled.Themes)
 	}
 	if got := change("plugin-stale", initial.Plugins[0].Revision, true); got.Code != http.StatusConflict {
 		t.Fatalf("stale revision: %d", got.Code)

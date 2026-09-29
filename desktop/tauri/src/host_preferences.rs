@@ -329,6 +329,7 @@ impl HostPreferences {
         if !id.is_empty()
             && !OFFICIAL_THEMES.contains(&id)
             && !current.user_themes.iter().any(|theme| theme.id == id)
+            && !valid_plugin_theme_id(id)
         {
             return Err("unknown theme id".to_string());
         }
@@ -647,6 +648,30 @@ impl HostPreferences {
     }
 }
 
+fn valid_plugin_theme_id(id: &str) -> bool {
+    let Some(rest) = id.strip_prefix("plugin:") else {
+        return false;
+    };
+    let Some((plugin, theme)) = rest.split_once(':') else {
+        return false;
+    };
+    let valid_plugin_name = !plugin.is_empty()
+        && plugin.len() <= 64
+        && plugin.as_bytes()[0].is_ascii_alphanumeric()
+        && plugin
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte));
+    let valid_theme_id = !theme.is_empty()
+        && theme.len() <= 64
+        && theme.as_bytes()[0].is_ascii_lowercase()
+        && theme
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+        && !theme.ends_with('-')
+        && !theme.contains("--");
+    valid_plugin_name && valid_theme_id
+}
+
 fn safe_theme_id(id: &str) -> bool {
     id.starts_with("user-")
         && id.len() <= 64
@@ -657,7 +682,7 @@ fn safe_theme_id(id: &str) -> bool {
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
-fn validate_user_theme(mut theme: UserTheme) -> Result<UserTheme, String> {
+pub(crate) fn validate_user_theme(mut theme: UserTheme) -> Result<UserTheme, String> {
     let id = theme.id.trim();
     if !id.starts_with("user-")
         || id.len() > 64
@@ -875,6 +900,18 @@ mod tests {
         let saved = read_preferences(&path).expect("read saved theme");
         assert_eq!(saved.active_theme_id, "official-rose-dawn");
         assert_eq!(saved.zoom_factor, 1.0);
+        store
+            .set_active_theme_id("plugin:sample:neon-night".into())
+            .expect("save contributed theme id");
+        assert_eq!(
+            read_preferences(&path)
+                .expect("read contributed theme")
+                .active_theme_id,
+            "plugin:sample:neon-night"
+        );
+        assert!(store
+            .set_active_theme_id("plugin:../sample:neon-night".into())
+            .is_err());
     }
 
     #[test]

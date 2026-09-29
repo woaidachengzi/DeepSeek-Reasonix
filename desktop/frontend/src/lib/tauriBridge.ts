@@ -1070,6 +1070,8 @@ interface TauriUserThemeRecord {
   taskBackground?: ThemePackView["taskBackground"];
   backgroundPath?: string;
   taskBackgroundPath?: string;
+  kind?: ThemePackView["kind"];
+  pluginName?: string;
 }
 
 function userThemeView(theme: TauriUserThemeRecord): ThemePackView {
@@ -1084,8 +1086,9 @@ function userThemeView(theme: TauriUserThemeRecord): ThemePackView {
     license: theme.license,
     baseStyle: theme.baseStyle,
     builtin: false,
-    kind: "user",
+    kind: theme.kind ?? "user",
     active: false,
+    pluginName: theme.pluginName,
     hasBackground: Boolean((backgroundUrl && theme.background) || (taskBackgroundUrl && theme.taskBackground)),
     backgroundUrl: backgroundUrl || undefined,
     taskBackgroundUrl: taskBackgroundUrl || undefined,
@@ -1099,6 +1102,12 @@ function userThemeView(theme: TauriUserThemeRecord): ThemePackView {
 export async function tauriUserThemes(): Promise<ThemePackView[]> {
   requireTauri();
   const themes = await invoke<TauriUserThemeRecord[]>("list_user_themes");
+  return themes.map(userThemeView);
+}
+
+export async function tauriPluginThemes(): Promise<ThemePackView[]> {
+  requireTauri();
+  const themes = await invoke<TauriUserThemeRecord[]>("list_plugin_themes");
   return themes.map(userThemeView);
 }
 

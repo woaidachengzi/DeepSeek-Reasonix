@@ -11,23 +11,29 @@ import (
 )
 
 type previewPluginView struct {
-	Name         string `json:"name"`
-	Description  string `json:"description"`
-	Version      string `json:"version"`
-	Source       string `json:"source"`
-	Root         string `json:"root"`
-	ManifestKind string `json:"manifestKind"`
-	Enabled      bool   `json:"enabled"`
-	Status       string `json:"status"`
-	Issue        string `json:"issue"`
-	WarningCount int    `json:"warningCount"`
-	Skills       int    `json:"skills"`
-	Agents       int    `json:"agents"`
-	Commands     int    `json:"commands"`
-	Hooks        int    `json:"hooks"`
-	MCPServers   int    `json:"mcpServers"`
-	Runtime      bool   `json:"runtime"`
-	Revision     string `json:"revision"`
+	Name         string               `json:"name"`
+	Description  string               `json:"description"`
+	Version      string               `json:"version"`
+	Source       string               `json:"source"`
+	Root         string               `json:"root"`
+	ManifestKind string               `json:"manifestKind"`
+	Enabled      bool                 `json:"enabled"`
+	Status       string               `json:"status"`
+	Issue        string               `json:"issue"`
+	WarningCount int                  `json:"warningCount"`
+	Skills       int                  `json:"skills"`
+	Agents       int                  `json:"agents"`
+	Commands     int                  `json:"commands"`
+	Hooks        int                  `json:"hooks"`
+	MCPServers   int                  `json:"mcpServers"`
+	Themes       []previewPluginTheme `json:"themes"`
+	Runtime      bool                 `json:"runtime"`
+	Revision     string               `json:"revision"`
+}
+
+type previewPluginTheme struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
 }
 
 type previewPluginSettings struct {
@@ -66,6 +72,14 @@ func loadPreviewPluginSettings() (previewPluginSettings, error) {
 			item.Skills, item.Agents, item.Commands = summary.Skills, summary.Agents, summary.Commands
 			item.Hooks, item.MCPServers, item.Runtime = summary.Hooks, summary.MCPServers, summary.Runtime
 			item.WarningCount = len(warnings)
+			if item.Enabled {
+				for _, theme := range pkg.Inventory().Themes {
+					item.Themes = append(item.Themes, previewPluginTheme{Name: theme.Name, Path: theme.Path})
+				}
+			}
+		}
+		if item.Themes == nil {
+			item.Themes = []previewPluginTheme{}
 		}
 		view.Plugins = append(view.Plugins, item)
 	}

@@ -167,6 +167,7 @@ export function tauriActiveThemeId() { record("get_active_theme_id"); return Pro
 export function setTauriActiveThemeId(id) { record("set_active_theme_id", { id }); activeThemeId = id; return Promise.resolve(id); }
 let userThemes = [];
 export function tauriUserThemes() { record("list_user_themes"); return Promise.resolve(userThemes.map(theme => ({ ...theme }))); }
+export function tauriPluginThemes() { record("list_plugin_themes"); return Promise.resolve((globalThis.__tauriPluginThemes ?? []).map(theme => ({ ...theme }))); }
 export function saveTauriUserTheme(theme) { record("save_user_theme", { theme }); userThemes = [...userThemes.filter(item => item.id !== theme.id), { ...theme, kind: "user", builtin: false, active: false, hasBackground: false }]; return Promise.resolve({ ...userThemes[userThemes.length - 1] }); }
 export function deleteTauriUserTheme(id) { record("delete_user_theme", { id }); userThemes = userThemes.filter(theme => theme.id !== id); return Promise.resolve(); }
 export function importTauriUserTheme() { record("import_user_theme"); return Promise.resolve(globalThis.__importedTauriTheme ?? null); }

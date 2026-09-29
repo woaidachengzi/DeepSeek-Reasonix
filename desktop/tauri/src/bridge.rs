@@ -968,8 +968,17 @@ pub struct PluginSettingsItem {
     pub commands: u64,
     pub hooks: u64,
     pub mcp_servers: u64,
+    #[serde(default, skip_serializing)]
+    pub themes: Vec<PluginThemeItem>,
     pub runtime: bool,
     pub revision: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginThemeItem {
+    pub name: String,
+    pub path: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

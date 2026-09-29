@@ -114,6 +114,7 @@ export function TauriThemeGallery({
   const official = packs.filter((pack) => themePackKind(pack) === "official");
   const base = packs.filter((pack) => themePackKind(pack) === "base");
   const mine = packs.filter((pack) => themePackKind(pack) === "user");
+  const pluginThemes = packs.filter((pack) => themePackKind(pack) === "plugin");
   const isActive = selected.id === (activeThemeId || baseStyle);
   const title = (pack: ThemePackView) => pack.nameKey ? t(pack.nameKey as never) : pack.name;
   const description = (pack: ThemePackView) => pack.descriptionKey ? t(pack.descriptionKey as never) : pack.description || "";
@@ -273,6 +274,7 @@ export function TauriThemeGallery({
       {active && <div className="theme-gallery-card__status">{t("settings.themeGallery.current")}</div>}
       {kind === "official" && <div className="theme-gallery-card__license">{t("settings.themeGallery.kindOfficial")}</div>}
       {kind === "user" && <div className="theme-gallery-card__license">{t("settings.themeGallery.kindUser")}</div>}
+      {kind === "plugin" && <div className="theme-gallery-card__license">{t("settings.themeGallery.kindPlugin", { name: pack.pluginName ?? t("settings.themeGallery.kindPluginUnknown") })}</div>}
     </button>;
   };
 
@@ -302,13 +304,17 @@ export function TauriThemeGallery({
           <div className="theme-gallery__section-head"><h3>{t("settings.themeGallery.sectionMine")}</h3><span>{mine.length}</span></div>
           {mine.map(renderCard)}
         </section>
+        <section className="theme-gallery__grid-section" role="group" aria-label={t("settings.themeGallery.kindPluginUnknown")}>
+          <div className="theme-gallery__section-head"><h3>{t("settings.themeGallery.kindPluginUnknown")}</h3><span>{pluginThemes.length}</span></div>
+          {pluginThemes.map(renderCard)}
+        </section>
       </div>
       <aside className="theme-gallery__detail" aria-live="polite">
         <div className="theme-gallery__detail-preview"><ThemePreviewSurface pack={selected} mode={previewMode} scene={scene} /></div>
           <div className="theme-gallery__detail-meta">
           <div className="theme-gallery__detail-head">
             <div className="theme-gallery__detail-title-row"><h3 className="theme-gallery__detail-name">{title(selected)}</h3>
-              <span className="theme-gallery__badge">{themePackKind(selected) === "official" ? t("settings.themeGallery.kindOfficial") : themePackKind(selected) === "user" ? t("settings.themeGallery.kindUser") : t("settings.themeGallery.kindBase")}</span>
+              <span className="theme-gallery__badge">{themePackKind(selected) === "official" ? t("settings.themeGallery.kindOfficial") : themePackKind(selected) === "user" ? t("settings.themeGallery.kindUser") : themePackKind(selected) === "plugin" ? t("settings.themeGallery.kindPlugin", { name: selected.pluginName ?? t("settings.themeGallery.kindPluginUnknown") }) : t("settings.themeGallery.kindBase")}</span>
               {isActive && <span className="theme-gallery__detail-status"><Check size={12} />{t("settings.themeLibrary.active")}</span>}
             </div>
           </div>

@@ -64,10 +64,14 @@ use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
+    fs,
     fs::File,
     io::{Read, Write},
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex,
+    },
 };
 use tauri_plugin_dialog::DialogExt;
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
@@ -1043,7 +1047,9 @@ fn restore_skill(
 
 #[tauri::command]
 fn plugin_settings(supervisor: State<'_, BridgeSupervisor>) -> Result<PluginSettingsView, String> {
-    supervisor.plugin_settings()
+    supervisor
+        .plugin_settings()
+        .map(plugin_settings_without_theme_paths)
 }
 
 #[tauri::command]
@@ -1051,7 +1057,16 @@ fn change_plugin_settings(
     supervisor: State<'_, BridgeSupervisor>,
     change: PluginSettingsChange,
 ) -> Result<PluginSettingsView, String> {
-    supervisor.change_plugin_settings(change)
+    supervisor
+        .change_plugin_settings(change)
+        .map(plugin_settings_without_theme_paths)
+}
+
+fn plugin_settings_without_theme_paths(mut view: PluginSettingsView) -> PluginSettingsView {
+    for plugin in &mut view.plugins {
+        plugin.themes.clear();
+    }
+    view
 }
 
 #[tauri::command]
@@ -1987,11 +2002,28 @@ fn get_active_theme_id(preferences: State<'_, HostPreferences>) -> String {
 
 #[tauri::command]
 fn set_active_theme_id(
+    app: tauri::AppHandle,
+    supervisor: State<'_, BridgeSupervisor>,
     preferences: State<'_, HostPreferences>,
     id: String,
 ) -> Result<String, String> {
+    if id.starts_with("plugin:")
+        && !load_plugin_theme_views(&app, &supervisor)?
+            .iter()
+            .any(|theme| theme.theme.id == id)
+    {
+        return Err("plugin theme is unavailable; enable its plugin and refresh".into());
+    }
     preferences.set_active_theme_id(id.clone())?;
     Ok(preferences.active_theme_id())
+}
+
+#[tauri::command]
+fn list_plugin_themes(
+    app: tauri::AppHandle,
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<Vec<UserThemeView>, String> {
+    load_plugin_theme_views(&app, &supervisor)
 }
 
 #[tauri::command]
@@ -2063,6 +2095,9 @@ struct UserThemeView {
     theme: UserTheme,
     background_path: Option<String>,
     task_background_path: Option<String>,
+    kind: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    plugin_name: Option<String>,
 }
 
 fn user_theme_view(preferences: &HostPreferences, theme: UserTheme) -> UserThemeView {
@@ -2078,7 +2113,173 @@ fn user_theme_view(preferences: &HostPreferences, theme: UserTheme) -> UserTheme
         theme,
         background_path,
         task_background_path,
+        kind: "user",
+        plugin_name: None,
     }
+}
+
+fn load_plugin_theme_views(
+    app: &tauri::AppHandle,
+    supervisor: &BridgeSupervisor,
+) -> Result<Vec<UserThemeView>, String> {
+    let plugins = supervisor.plugin_settings()?;
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("resolve Preview data directory: {error}"))?;
+    let asset_root = app_data.join("theme-assets").join("plugin-themes");
+    let mut views = Vec::new();
+    for plugin in plugins
+        .plugins
+        .into_iter()
+        .filter(|plugin| plugin.enabled && plugin.status == "ready")
+    {
+        let root = match Path::new(&plugin.root).canonicalize() {
+            Ok(root) => root,
+            Err(_) => continue,
+        };
+        for contribution in plugin.themes {
+            let source = Path::new(&contribution.path);
+            let metadata = match fs::symlink_metadata(source) {
+                Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => {
+                    metadata
+                }
+                _ => continue,
+            };
+            if metadata.len() > (36 << 20) {
+                continue;
+            }
+            let source = match canonical_plugin_theme_file(&root, source) {
+                Some(source) => source,
+                _ => continue,
+            };
+            let mut theme = match read_theme_package(&source) {
+                Ok(theme) => theme,
+                Err(_) => continue,
+            };
+            let source_theme_id = theme.id.clone();
+            if !valid_plugin_theme_pack_id(&source_theme_id) {
+                continue;
+            }
+            theme.id = "user-plugin-validation".into();
+            theme = match host_preferences::validate_user_theme(theme) {
+                Ok(theme) => theme,
+                Err(_) => continue,
+            };
+            theme.id = format!("plugin:{}:{}", plugin.name, source_theme_id);
+            let background_path = stage_plugin_theme_asset(
+                &asset_root,
+                &plugin.name,
+                &source_theme_id,
+                "background",
+                theme
+                    .background
+                    .as_ref()
+                    .map(|background| background.image.as_str()),
+                theme.background_asset_bytes.as_deref(),
+            )?;
+            let task_background_path = stage_plugin_theme_asset(
+                &asset_root,
+                &plugin.name,
+                &source_theme_id,
+                "background-task",
+                theme
+                    .task_background
+                    .as_ref()
+                    .map(|background| background.image.as_str()),
+                theme.task_background_asset_bytes.as_deref(),
+            )?;
+            views.push(UserThemeView {
+                theme,
+                background_path,
+                task_background_path,
+                kind: "plugin",
+                plugin_name: Some(plugin.name.clone()),
+            });
+        }
+    }
+    views.sort_by(|left, right| left.theme.id.cmp(&right.theme.id));
+    views.dedup_by(|left, right| left.theme.id == right.theme.id);
+    Ok(views)
+}
+
+fn canonical_plugin_theme_file(root: &Path, source: &Path) -> Option<PathBuf> {
+    let metadata = fs::symlink_metadata(source).ok()?;
+    if !metadata.is_file() || metadata.file_type().is_symlink() {
+        return None;
+    }
+    let source = source.canonicalize().ok()?;
+    source.starts_with(root).then_some(source)
+}
+
+fn valid_plugin_theme_pack_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 64
+        && id.as_bytes()[0].is_ascii_lowercase()
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+        && !id.ends_with('-')
+        && !id.contains("--")
+}
+
+fn stage_plugin_theme_asset(
+    asset_root: &Path,
+    plugin_name: &str,
+    theme_id: &str,
+    prefix: &str,
+    image_name: Option<&str>,
+    image_bytes: Option<&[u8]>,
+) -> Result<Option<String>, String> {
+    static ASSET_WRITE_LOCK: Mutex<()> = Mutex::new(());
+    let (Some(image_name), Some(image_bytes)) =
+        (image_name.filter(|name| !name.is_empty()), image_bytes)
+    else {
+        return Ok(None);
+    };
+    if !valid_theme_image_name(image_name) {
+        return Err("plugin theme image name is invalid".into());
+    }
+    validate_theme_image(image_name, image_bytes)?;
+    let extension = image_name
+        .rsplit_once('.')
+        .map(|(_, ext)| ext.to_ascii_lowercase())
+        .ok_or_else(|| "plugin theme image has no extension".to_string())?;
+    if !matches!(extension.as_str(), "png" | "jpg" | "jpeg" | "webp") {
+        return Err("plugin theme image extension is unsupported".into());
+    }
+    let component = |value: &str| {
+        value
+            .as_bytes()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    };
+    let directory = asset_root.join(format!(
+        "{}-{}",
+        component(plugin_name),
+        component(theme_id)
+    ));
+    fs::create_dir_all(&directory)
+        .map_err(|error| format!("create plugin theme asset directory: {error}"))?;
+    let path = directory.join(format!("{prefix}.{extension}"));
+    let _guard = ASSET_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if fs::read(&path).ok().as_deref() != Some(image_bytes) {
+        static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
+        let nonce = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
+        let temporary = directory.join(format!(".{prefix}-{}-{nonce}.tmp", std::process::id()));
+        fs::write(&temporary, image_bytes)
+            .map_err(|error| format!("write plugin theme asset: {error}"))?;
+        if path.exists() {
+            fs::remove_file(&path)
+                .map_err(|error| format!("replace plugin theme asset: {error}"))?;
+        }
+        fs::rename(&temporary, &path)
+            .map_err(|error| format!("publish plugin theme asset: {error}"))?;
+    }
+    Ok(Some(path.to_string_lossy().into_owned()))
 }
 
 #[tauri::command]
@@ -2664,6 +2865,60 @@ mod theme_package_tests {
         assert!(decode_theme_image_data_url("data:image/svg+xml;base64,PHN2Zy8+").is_err());
         assert!(decode_theme_image_data_url("data:image/png;base64,not-base64!").is_err());
     }
+
+    #[test]
+    fn plugin_theme_ids_and_cached_assets_are_scoped() {
+        assert!(valid_plugin_theme_pack_id("neon-night"));
+        assert!(!valid_plugin_theme_pack_id("../escape"));
+        assert!(!valid_plugin_theme_pack_id("Neon"));
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let mut bytes = vec![0; 24];
+        bytes[..8].copy_from_slice(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]);
+        bytes[12..16].copy_from_slice(b"IHDR");
+        bytes[16..20].copy_from_slice(&1_u32.to_be_bytes());
+        bytes[20..24].copy_from_slice(&1_u32.to_be_bytes());
+        let path = stage_plugin_theme_asset(
+            directory.path(),
+            "theme-plugin",
+            "neon-night",
+            "background",
+            Some("background.png"),
+            Some(bytes.as_slice()),
+        )
+        .expect("stage plugin theme asset")
+        .expect("theme asset path");
+        let path = PathBuf::from(path);
+        assert!(path.starts_with(directory.path()));
+        assert_eq!(fs::read(path).expect("read staged asset"), bytes);
+        assert!(stage_plugin_theme_asset(
+            directory.path(),
+            "theme-plugin",
+            "neon-night",
+            "background",
+            Some("../../escape.png"),
+            Some(bytes.as_slice()),
+        )
+        .is_err());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn plugin_theme_files_must_be_regular_files_inside_the_plugin_root() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let plugin_root = directory.path().join("plugin");
+        let themes = plugin_root.join("themes");
+        fs::create_dir_all(&themes).expect("create plugin themes directory");
+        let regular = themes.join("theme.reasonix-theme");
+        fs::write(&regular, b"theme").expect("write theme file");
+        let escaped = directory.path().join("outside.reasonix-theme");
+        fs::write(&escaped, b"outside").expect("write outside file");
+        let link = themes.join("linked.reasonix-theme");
+        std::os::unix::fs::symlink(&escaped, &link).expect("create theme symlink");
+        let canonical_root = plugin_root.canonicalize().expect("canonical plugin root");
+        assert!(canonical_plugin_theme_file(&canonical_root, &regular).is_some());
+        assert!(canonical_plugin_theme_file(&canonical_root, &link).is_none());
+        assert!(canonical_plugin_theme_file(&canonical_root, &escaped).is_none());
+    }
 }
 
 fn apply_menu_zoom(app: &tauri::AppHandle, factor: f64) {
@@ -2945,6 +3200,7 @@ fn main() {
             set_zoom_factor,
             get_active_theme_id,
             set_active_theme_id,
+            list_plugin_themes,
             list_user_themes,
             save_user_theme,
             delete_user_theme,
