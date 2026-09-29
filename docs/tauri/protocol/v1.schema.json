@@ -6,7 +6,17 @@
   "oneOf": [
     { "$ref": "#/$defs/health" },
     { "$ref": "#/$defs/providerSummaryResponse" },
+    { "$ref": "#/$defs/providerModelProbeRequest" },
+    { "$ref": "#/$defs/providerModelProbeResponse" },
     { "$ref": "#/$defs/setDefaultModelRequest" },
+    { "$ref": "#/$defs/setSessionModelRequest" },
+    { "$ref": "#/$defs/remoteConnectRequest" },
+    { "$ref": "#/$defs/remoteConnectResponse" },
+    { "$ref": "#/$defs/remoteDisconnectRequest" },
+    { "$ref": "#/$defs/remoteDisconnectResponse" },
+    { "$ref": "#/$defs/remoteBrowseRequest" },
+    { "$ref": "#/$defs/remoteBrowseResponse" },
+    { "$ref": "#/$defs/setAgentPreferenceRequest" },
     { "$ref": "#/$defs/openSessionRequest" },
     { "$ref": "#/$defs/renameSessionRequest" },
     { "$ref": "#/$defs/deleteSessionResponse" },
@@ -45,6 +55,7 @@
         "path": { "type": "string", "minLength": 1 },
         "title": { "type": "string", "minLength": 1, "maxLength": 120 },
         "workspaceRoot": { "type": "string" },
+        "modelRef": { "type": "string", "minLength": 1 },
         "state": { "enum": ["idle", "running", "paused"] }
       },
       "additionalProperties": false
@@ -86,6 +97,98 @@
       },
       "additionalProperties": false
     },
+    "setSessionModelRequest": {
+      "title": "BridgeSetSessionModelRequest",
+      "type": "object",
+      "required": ["model"],
+      "properties": {
+        "model": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "remoteConnectRequest": {
+      "title": "BridgeRemoteConnectRequest",
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "trustFingerprint": { "type": "string", "maxLength": 256 },
+        "password": { "type": "string", "maxLength": 4096 },
+        "passphrase": { "type": "string", "maxLength": 4096 }
+      },
+      "additionalProperties": false
+    },
+    "remoteConnectResponse": {
+      "title": "BridgeRemoteConnectResponse",
+      "type": "object",
+      "required": ["protocolVersion", "status"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "status": { "enum": ["connected", "host_key_confirmation", "failed"] },
+        "host": { "type": "string" },
+        "address": { "type": "string" },
+        "keyType": { "type": "string" },
+        "fingerprint": { "type": "string" },
+        "message": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "remoteDisconnectRequest": {
+      "title": "BridgeRemoteDisconnectRequest",
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 64 }
+      },
+      "additionalProperties": false
+    },
+    "remoteDisconnectResponse": {
+      "title": "BridgeRemoteDisconnectResponse",
+      "type": "object",
+      "required": ["protocolVersion", "disconnected", "name"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "disconnected": { "type": "boolean", "const": true },
+        "name": { "type": "string", "minLength": 1, "maxLength": 64 }
+      },
+      "additionalProperties": false
+    },
+    "remoteBrowseRequest": {
+      "title": "BridgeRemoteBrowseRequest",
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "path": { "type": "string", "maxLength": 4096 }
+      },
+      "additionalProperties": false
+    },
+    "remoteBrowseEntry": {
+      "type": "object",
+      "required": ["name", "path", "isDir", "symlink", "size", "modTime"],
+      "properties": {
+        "name": { "type": "string" },
+        "path": { "type": "string" },
+        "isDir": { "type": "boolean" },
+        "symlink": { "type": "boolean" },
+        "size": { "type": "integer" },
+        "modTime": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "remoteBrowseResponse": {
+      "title": "BridgeRemoteBrowseResponse",
+      "type": "object",
+      "required": ["protocolVersion", "path", "parentPath", "entries", "truncated"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "path": { "type": "string" },
+        "parentPath": { "type": "string" },
+        "entries": { "type": "array", "items": { "$ref": "#/$defs/remoteBrowseEntry" } },
+        "truncated": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
     "setModelRoleRequest": {
       "title": "BridgeSetModelRoleRequest",
       "type": "object",
@@ -96,17 +199,51 @@
       },
       "additionalProperties": false
     },
+    "setAgentPreferenceRequest": {
+      "title": "BridgeSetAgentPreferenceRequest",
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "properties": {
+        "reasoningLanguage": { "enum": ["auto", "zh", "en"] },
+        "compactRatioPercent": { "type": "number", "minimum": 30, "maximum": 85, "multipleOf": 0.1 }
+      },
+      "additionalProperties": false
+    },
     "providerSummaryResponse": {
       "title": "BridgeProviderSummaryResponse",
       "type": "object",
-      "required": ["protocolVersion", "defaultModel", "plannerModel", "visionModel", "webSearchModel", "providers"],
+      "required": ["protocolVersion", "defaultModel", "plannerModel", "visionModel", "webSearchModel", "reasoningLanguage", "compactRatioPercent", "providers"],
       "properties": {
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
         "defaultModel": { "type": "string" },
         "plannerModel": { "type": "string" },
         "visionModel": { "type": "string" },
         "webSearchModel": { "type": "string" },
+        "reasoningLanguage": { "enum": ["auto", "zh", "en"] },
+        "compactRatioPercent": { "type": "number", "minimum": 30, "maximum": 90, "multipleOf": 0.1 },
         "providers": { "type": "array", "items": { "$ref": "#/$defs/providerSummary" } }
+      },
+      "additionalProperties": false
+    },
+    "providerModelProbeRequest": {
+      "title": "BridgeProviderModelProbeRequest",
+      "type": "object",
+      "required": ["name", "model"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "model": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "apiKey": { "type": "string", "maxLength": 16384 }
+      },
+      "additionalProperties": false
+    },
+    "providerModelProbeResponse": {
+      "title": "BridgeProviderModelProbeResponse",
+      "type": "object",
+      "required": ["protocolVersion", "latencyMillis"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "latencyMillis": { "type": "integer", "minimum": 0 }
       },
       "additionalProperties": false
     },

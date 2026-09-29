@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -76,6 +77,91 @@ func TestPreviewProviderPresetCatalogAndReviewedInstall(t *testing.T) {
 	}
 	if got := request(http.MethodPost, body, "preset-stale", true); got.Code != http.StatusBadRequest {
 		t.Fatalf("stale install status = %d", got.Code)
+	}
+}
+
+func TestPreviewDiscoversModelsFromSavedProviderWithoutReturningCredentials(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			t.Errorf("unexpected model catalog path %q", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer private-test-key" {
+			t.Errorf("model catalog did not receive saved credential")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"model-z"},{"id":"model-a"}]}`))
+	}))
+	defer server.Close()
+	config := `[[providers]]
+name = "saved-provider"
+display_name = "Saved Provider"
+kind = "openai"
+base_url = "` + server.URL + `/v1"
+api_key_env = "PREVIEW_DISCOVERY_API_KEY"
+models = ["existing"]
+default = "existing"
+
+[desktop]
+provider_access = ["saved-provider"]
+`
+	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := configpkg.StoreCredentialLines([]string{"PREVIEW_DISCOVERY_API_KEY=private-test-key"}); err != nil {
+		t.Fatalf("save test credential: %v", err)
+	}
+	view, err := loadProviderConfigs(testToken)
+	if err != nil || len(view.Providers) != 1 {
+		t.Fatalf("load provider config: providers=%d err=%v", len(view.Providers), err)
+	}
+	bridge := newBridgeServer(testToken, "instance-provider-discovery")
+	request := func(input discoverProviderModelsRequest, authorized bool) *httptest.ResponseRecorder {
+		body, err := json.Marshal(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := httptest.NewRequest(http.MethodPost, "/v1/settings/provider-configs/discover-models", strings.NewReader(string(body)))
+		r.Header.Set("Content-Type", "application/json")
+		if authorized {
+			r.Header.Set("Authorization", "Bearer "+testToken)
+		}
+		w := httptest.NewRecorder()
+		bridge.handler().ServeHTTP(w, r)
+		return w
+	}
+	provider := view.Providers[0]
+	if got := request(discoverProviderModelsRequest{Name: provider.Name, Revision: provider.Revision}, false); got.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthorized discovery status = %d", got.Code)
+	}
+	response := request(discoverProviderModelsRequest{Name: provider.Name, Revision: provider.Revision}, true)
+	if response.Code != http.StatusOK {
+		t.Fatalf("discovery status = %d: %s", response.Code, response.Body.String())
+	}
+	var result discoverProviderModelsResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Models) != 2 || result.Models[0] != "model-a" || result.Models[1] != "model-z" {
+		t.Fatalf("discovered models = %#v", result.Models)
+	}
+	if strings.Contains(response.Body.String(), "private-test-key") || strings.Contains(response.Body.String(), server.URL) {
+		t.Fatalf("discovery response leaked credentials or endpoint: %s", response.Body.String())
+	}
+	stale := request(discoverProviderModelsRequest{Name: provider.Name, Revision: "stale"}, true)
+	if stale.Code != http.StatusConflict {
+		t.Fatalf("stale discovery status = %d: %s", stale.Code, stale.Body.String())
+	}
+	// Discovery only previews results; the saved model list remains untouched.
+	after, err := configpkg.LoadUserConfigReadOnly()
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved, _ := after.Provider(provider.Name)
+	if !slices.Equal(saved.ModelList(), []string{"existing"}) {
+		t.Fatalf("discovery changed saved model list: %#v", saved.ModelList())
 	}
 }
 
@@ -312,6 +398,80 @@ models = ["old"]
 	}
 	if !strings.Contains(string(raw), `provider_access = ["local", "custom-remote"]`) {
 		t.Fatalf("new provider not added to desktop access: %s", raw)
+	}
+}
+
+func TestPreviewProviderBalanceURLSavePreserveClearAndRedact(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	input := saveProviderConfigRequest{Name: "balance-demo", DisplayName: "Balance Demo", Kind: "openai", BaseURL: "https://provider.example/v1", BalanceURL: "https://provider.example/account/balance", Models: []string{"chat"}, Default: "chat"}
+	if err := persistProviderConfig(input); err != nil {
+		t.Fatal(err)
+	}
+	view, err := loadProviderConfigs(testToken)
+	if err != nil || len(view.Providers) < 1 {
+		t.Fatalf("load provider config: view=%+v err=%v", view, err)
+	}
+	var balanceView *providerConfigView
+	for i := range view.Providers {
+		if view.Providers[i].Name == input.Name {
+			balanceView = &view.Providers[i]
+		}
+	}
+	if balanceView == nil || !balanceView.BalanceURLSet {
+		t.Fatalf("saved balance URL was not reflected in redacted view: %+v", view.Providers)
+	}
+	rawView, _ := json.Marshal(view)
+	if strings.Contains(string(rawView), input.BalanceURL) {
+		t.Fatalf("provider view disclosed balance URL: %s", rawView)
+	}
+	input.BaseURL = ""
+	input.BalanceURL = ""
+	if err := persistProviderConfig(input); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := configpkg.LoadUserConfigReadOnly()
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved, _ := cfg.Provider(input.Name)
+	if saved.BalanceURL != "https://provider.example/account/balance" {
+		t.Fatalf("blank editor field changed saved balance URL: %q", saved.BalanceURL)
+	}
+	input.ClearBalanceURL = true
+	if err := persistProviderConfig(input); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = configpkg.LoadUserConfigReadOnly()
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved, _ = cfg.Provider(input.Name)
+	if saved.BalanceURL != "" {
+		t.Fatalf("clear action left balance URL configured: %q", saved.BalanceURL)
+	}
+}
+
+func TestPreviewProviderBalanceURLValidation(t *testing.T) {
+	base := saveProviderConfigRequest{Name: "balance-demo", Kind: "openai", Models: []string{"chat"}, Default: "chat"}
+	for _, tc := range []struct {
+		name string
+		url  string
+		want bool
+	}{
+		{name: "https", url: "https://provider.example/balance", want: true},
+		{name: "loopback", url: "http://127.0.0.1:8123/balance", want: true},
+		{name: "remote http", url: "http://provider.example/balance"},
+		{name: "embedded credentials", url: "https://user:secret@provider.example/balance"},
+		{name: "query parameters", url: "https://provider.example/balance?key=secret"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := base
+			input.BalanceURL = tc.url
+			err := validateProviderConfigInput(&input)
+			if (err == nil) != tc.want {
+				t.Fatalf("validate balance URL %q err=%v, want valid=%v", tc.url, err, tc.want)
+			}
+		})
 	}
 }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	configpkg "reasonix/internal/config"
@@ -10,12 +11,14 @@ import (
 )
 
 type providerSummaryResponse struct {
-	ProtocolVersion int                    `json:"protocolVersion"`
-	DefaultModel    string                 `json:"defaultModel"`
-	PlannerModel    string                 `json:"plannerModel"`
-	VisionModel     string                 `json:"visionModel"`
-	WebSearchModel  string                 `json:"webSearchModel"`
-	Providers       []providerSummaryEntry `json:"providers"`
+	ProtocolVersion     int                    `json:"protocolVersion"`
+	DefaultModel        string                 `json:"defaultModel"`
+	PlannerModel        string                 `json:"plannerModel"`
+	VisionModel         string                 `json:"visionModel"`
+	WebSearchModel      string                 `json:"webSearchModel"`
+	ReasoningLanguage   string                 `json:"reasoningLanguage"`
+	CompactRatioPercent float64                `json:"compactRatioPercent"`
+	Providers           []providerSummaryEntry `json:"providers"`
 }
 
 type providerSummaryEntry struct {
@@ -34,15 +37,25 @@ type setDefaultModelRequest struct {
 	Model string `json:"model"`
 }
 
+type setSessionModelRequest struct {
+	Model string `json:"model"`
+}
+
 type setModelRoleRequest struct {
 	Role  string `json:"role"`
 	Model string `json:"model"`
+}
+
+type setAgentPreferenceRequest struct {
+	ReasoningLanguage   string  `json:"reasoningLanguage,omitempty"`
+	CompactRatioPercent float64 `json:"compactRatioPercent,omitempty"`
 }
 
 type desktopPreferencesResponse struct {
 	ProtocolVersion         int    `json:"protocolVersion"`
 	DefaultToolApprovalMode string `json:"defaultToolApprovalMode"`
 	Language                string `json:"language"`
+	DisplayCurrency         string `json:"displayCurrency"`
 	TerminalTheme           string `json:"terminalTheme"`
 	Theme                   string `json:"theme"`
 	ThemeStyle              string `json:"themeStyle"`
@@ -51,6 +64,10 @@ type desktopPreferencesResponse struct {
 
 type setDesktopApprovalRequest struct {
 	Mode string `json:"mode"`
+}
+
+type setDesktopCurrencyRequest struct {
+	Currency string `json:"currency"`
 }
 
 func loadDesktopPreferences() (desktopPreferencesResponse, error) {
@@ -62,11 +79,30 @@ func loadDesktopPreferences() (desktopPreferencesResponse, error) {
 		ProtocolVersion:         desktopbridge.ProtocolVersion,
 		DefaultToolApprovalMode: cfg.DesktopDefaultToolApprovalMode(),
 		Language:                cfg.DesktopLanguage(),
+		DisplayCurrency:         cfg.DisplayCurrencyPref(),
 		TerminalTheme:           cfg.DesktopTerminalTheme(),
 		Theme:                   cfg.DesktopTheme(),
 		ThemeStyle:              cfg.DesktopThemeStyle(),
 		AppearanceConfigured:    strings.TrimSpace(cfg.Desktop.Theme) != "" || strings.TrimSpace(cfg.Desktop.ThemeStyle) != "",
 	}, nil
+}
+
+func persistDesktopCurrency(currency string) error {
+	unlock := configpkg.LockUserConfigEdits()
+	defer unlock()
+	path := configpkg.UserConfigPath()
+	if path == "" {
+		return fmt.Errorf("resolve Preview user config path")
+	}
+	cfg, err := configpkg.LoadForEditReadOnlyStrict(path)
+	if err != nil {
+		return err
+	}
+	baseline := cfg.ModelSettingsBaseline()
+	if err := cfg.SetDisplayCurrency(currency); err != nil {
+		return err
+	}
+	return cfg.SaveUserSettingsDeltaTo(path, baseline)
 }
 
 func persistDesktopLanguage(language string) error {
@@ -204,13 +240,45 @@ func loadProviderSummary() (providerSummaryResponse, error) {
 		providers = append(providers, entry)
 	}
 	return providerSummaryResponse{
-		ProtocolVersion: desktopbridge.ProtocolVersion,
-		DefaultModel:    cfg.DefaultModel,
-		PlannerModel:    cfg.Agent.PlannerModel,
-		VisionModel:     cfg.Agent.VisionModel,
-		WebSearchModel:  cfg.Agent.WebSearchModel,
-		Providers:       providers,
+		ProtocolVersion:     desktopbridge.ProtocolVersion,
+		DefaultModel:        cfg.DefaultModel,
+		PlannerModel:        cfg.Agent.PlannerModel,
+		VisionModel:         cfg.Agent.VisionModel,
+		WebSearchModel:      cfg.Agent.WebSearchModel,
+		ReasoningLanguage:   cfg.ReasoningLanguage(),
+		CompactRatioPercent: math.Round(cfg.Agent.CompactRatio*1000) / 10,
+		Providers:           providers,
 	}, nil
+}
+
+func persistAgentPreferences(request setAgentPreferenceRequest) error {
+	if (request.ReasoningLanguage == "") == (request.CompactRatioPercent == 0) {
+		return fmt.Errorf("exactly one agent preference must be provided")
+	}
+	unlock := configpkg.LockUserConfigEdits()
+	defer unlock()
+	path := configpkg.UserConfigPath()
+	if path == "" {
+		return fmt.Errorf("resolve Preview user config path")
+	}
+	cfg, err := configpkg.LoadForEditReadOnlyStrict(path)
+	if err != nil {
+		return fmt.Errorf("load Preview user config: %w", err)
+	}
+	baseline := cfg.ModelSettingsBaseline()
+	if request.ReasoningLanguage != "" {
+		if err := cfg.SetReasoningLanguage(request.ReasoningLanguage); err != nil {
+			return err
+		}
+	} else {
+		if request.CompactRatioPercent < 30 || request.CompactRatioPercent > 85 || math.Abs(request.CompactRatioPercent*10-math.Round(request.CompactRatioPercent*10)) > 1e-7 {
+			return fmt.Errorf("compact ratio percent must be between 30 and 85 in 0.1 increments")
+		}
+		if err := cfg.SetCompactRatio(float64(request.CompactRatioPercent) / 100); err != nil {
+			return err
+		}
+	}
+	return cfg.SaveUserSettingsDeltaTo(path, baseline)
 }
 
 func persistModelRole(request setModelRoleRequest) error {
@@ -348,6 +416,26 @@ func persistDefaultModel(ref string) error {
 		return fmt.Errorf("save Preview default model")
 	}
 	return nil
+}
+
+func resolveConfiguredSessionModel(workspaceRoot, ref string) (string, error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return "", errDefaultModelUnavailable
+	}
+	cfg, err := configpkg.LoadForRoot(workspaceRoot)
+	if err != nil {
+		return "", errDefaultModelUnavailable
+	}
+	entry, ok := cfg.ResolveModel(ref)
+	if !ok || !providerAccessAllowed(cfg.Desktop.ProviderAccess, entry.Name) {
+		return "", errDefaultModelUnavailable
+	}
+	entry.ResolveAPIKeyForRoot(".")
+	if !entry.Configured() {
+		return "", errDefaultModelUnavailable
+	}
+	return entry.Name + "/" + entry.Model, nil
 }
 
 func providerAccessAllowed(access []string, provider string) bool {

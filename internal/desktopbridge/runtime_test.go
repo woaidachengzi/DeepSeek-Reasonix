@@ -23,12 +23,25 @@ type fakeRuntime struct {
 type fakeMCPRuntime struct {
 	*fakeRuntime
 	servers []MCPRuntimeServer
+	actions []string
+}
+
+func (r *fakeMCPRuntime) MCPRuntimeAction(name, action string) (int, error) {
+	r.actions = append(r.actions, action+":"+name)
+	return 3, nil
 }
 
 type fakeMetricsRuntime struct {
 	*fakeRuntime
 	metrics SessionMetrics
 }
+
+type fakeModelRuntime struct {
+	*fakeRuntime
+	model string
+}
+
+func (r *fakeModelRuntime) ModelRef() string { return r.model }
 
 func (r *fakeMetricsRuntime) SessionMetrics() SessionMetrics { return r.metrics }
 
@@ -69,6 +82,30 @@ func TestMCPStatusOnlyReadsMatchingActiveWorkspace(t *testing.T) {
 	servers, active := manager.MCPStatus("/work/a")
 	if !active || len(servers) != 1 || servers[0].Name != "time" {
 		t.Fatalf("matching workspace status = %+v, active=%t", servers, active)
+	}
+}
+
+func TestMCPRuntimeActionRequiresMatchingIdleSession(t *testing.T) {
+	runtime := &fakeMCPRuntime{fakeRuntime: &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}}
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(context.Context, OpenRequest) (Runtime, error) { return runtime, nil }))
+	if _, err := manager.MCPRuntimeAction("a", "github", "connect"); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("action before open error = %v, want not found", err)
+	}
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a", WorkspaceRoot: "/work/a"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.MCPRuntimeAction("other", "github", "connect"); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("wrong session action error = %v, want not found", err)
+	}
+	if count, err := manager.MCPRuntimeAction("a", "github", "connect"); err != nil || count != 3 {
+		t.Fatalf("matching session action = count %d, error %v", count, err)
+	}
+	runtime.state = "running"
+	if _, err := manager.MCPRuntimeAction("a", "github", "disconnect"); !errors.Is(err, ErrSessionConflict) {
+		t.Fatalf("running session action error = %v, want conflict", err)
+	}
+	if got := strings.Join(runtime.actions, ","); got != "connect:github" {
+		t.Fatalf("runtime actions = %q, want only the accepted action", got)
 	}
 }
 
@@ -131,6 +168,91 @@ func TestRuntimeManagerSubmitsAndCancelsOwnedSession(t *testing.T) {
 	}
 	if _, err := manager.Submit("a", "   "); !errors.Is(err, ErrInvalidInput) {
 		t.Fatalf("blank input error = %v", err)
+	}
+}
+
+func TestRuntimeManagerSetSessionModelReopensSameSession(t *testing.T) {
+	opened := []string{}
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(_ context.Context, request OpenRequest) (Runtime, error) {
+		opened = append(opened, request.ModelRef)
+		return &fakeModelRuntime{fakeRuntime: &fakeRuntime{path: "/sessions/a.jsonl", state: "idle", title: "Conversation"}, model: request.ModelRef}, nil
+	}))
+	initial, err := manager.Open(context.Background(), OpenRequest{SessionID: "a", WorkspaceRoot: "/work/a", ModelRef: "provider/old"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if initial.ModelRef != "provider/old" {
+		t.Fatalf("initial model = %q", initial.ModelRef)
+	}
+
+	updated, err := manager.SetSessionModel(context.Background(), "a", "provider/new")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ID != "a" || updated.WorkspaceRoot != "/work/a" || updated.Path != initial.Path || updated.ModelRef != "provider/new" {
+		t.Fatalf("updated session = %+v", updated)
+	}
+	if strings.Join(opened, ",") != "provider/old,provider/new" {
+		t.Fatalf("factory opened models = %#v", opened)
+	}
+}
+
+func TestRuntimeManagerDoesNotSwitchModelDuringActiveTurn(t *testing.T) {
+	runtime := &fakeModelRuntime{fakeRuntime: &fakeRuntime{path: "/sessions/a.jsonl", state: "running"}, model: "provider/old"}
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(context.Context, OpenRequest) (Runtime, error) { return runtime, nil }))
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a", ModelRef: "provider/old"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.SetSessionModel(context.Background(), "a", "provider/new"); !errors.Is(err, ErrSessionConflict) {
+		t.Fatalf("active-turn model switch error = %v", err)
+	}
+	if runtime.shutdownCalls.Load() != 0 {
+		t.Fatalf("active runtime shut down %d times", runtime.shutdownCalls.Load())
+	}
+}
+
+func TestRuntimeManagerSetSessionModelRestoresOldModelAfterFailure(t *testing.T) {
+	opened := []string{}
+	targetErr := errors.New("target build failed")
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(_ context.Context, request OpenRequest) (Runtime, error) {
+		opened = append(opened, request.ModelRef)
+		if request.ModelRef == "provider/new" {
+			return nil, targetErr
+		}
+		return &fakeModelRuntime{fakeRuntime: &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}, model: request.ModelRef}, nil
+	}))
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a", WorkspaceRoot: "/work/a", ModelRef: "provider/old"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.SetSessionModel(context.Background(), "a", "provider/new"); !errors.Is(err, targetErr) || !errors.Is(err, ErrSessionModelSwitch) || !strings.Contains(err.Error(), "previous model restored") {
+		t.Fatalf("model switch error = %v", err)
+	}
+	view, ok := manager.Snapshot()
+	if !ok || view.ID != "a" || view.ModelRef != "provider/old" || view.State != "idle" {
+		t.Fatalf("recovered snapshot = %+v, available=%t", view, ok)
+	}
+	if strings.Join(opened, ",") != "provider/old,provider/new,provider/old" {
+		t.Fatalf("factory opened models = %#v", opened)
+	}
+}
+
+func TestRuntimeManagerReportsSessionModelRecoveryFailure(t *testing.T) {
+	opened := 0
+	manager := NewRuntimeManager(RuntimeFactoryFunc(func(_ context.Context, request OpenRequest) (Runtime, error) {
+		opened++
+		if opened > 1 {
+			return nil, errors.New("injected rebuild failure")
+		}
+		return &fakeModelRuntime{fakeRuntime: &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}, model: request.ModelRef}, nil
+	}))
+	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a", WorkspaceRoot: "/work/a", ModelRef: "provider/old"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.SetSessionModel(context.Background(), "a", "provider/new"); !errors.Is(err, ErrSessionModelRecover) {
+		t.Fatalf("model switch recovery error = %v", err)
+	}
+	if _, ok := manager.Snapshot(); ok {
+		t.Fatal("manager should not expose a runtime after both the target and restoration fail")
 	}
 }
 

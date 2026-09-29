@@ -1,13 +1,16 @@
-import { useState, useCallback, useEffect, useRef, lazy, Suspense, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { Check, ArrowLeft, Search, X, Keyboard, Globe, Languages, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles, Users, Webhook, Package } from "lucide-react";
-import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, tauriDesktopPreferences, setTauriDesktopApproval, setTauriDesktopTerminalTheme, setTauriDesktopAppearance, setTauriDesktopLanguage, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, tauriZoomFactor, setTauriZoomFactor, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
-import { applyTerminalThemePreference, normalizeTerminalThemePreference, type TerminalThemePreference } from "../lib/terminalTheme";
+import { useState, useCallback, useEffect, useRef, lazy, Suspense, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { Check, ArrowLeft, Search, X, Keyboard, Globe, Languages, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles, Users, Webhook, Package, Bot } from "lucide-react";
+import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, setTauriAgentPreference, testTauriProviderModel, tauriDesktopPreferences, tauriActiveThemeId, setTauriActiveThemeId, tauriUserThemes, saveTauriUserTheme, deleteTauriUserTheme, importTauriUserTheme, exportTauriUserTheme, setTauriDesktopApproval, setTauriDesktopTerminalTheme, setTauriDesktopAppearance, setTauriDesktopLanguage, setTauriDesktopCurrency, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, tauriZoomFactor, setTauriZoomFactor, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
+import { applyTerminalThemePreference, normalizeTerminalThemePreference, getCustomTerminalPalette, setCustomTerminalPalette, DEFAULT_TERMINAL_PALETTE, type TerminalPalette, type TerminalPaletteKey, type TerminalThemePreference } from "../lib/terminalTheme";
 import { THEME_STYLES, type Theme, type ThemeStyle } from "../lib/theme";
 import { useI18n, useT, type DictKey, type LangPref, type Translator } from "../lib/i18n";
 import { applyConversationWidth, getCachedConversationWidth, type ConversationWidth } from "../lib/conversationWidth";
 import { applyTextSize, getTextSize, TEXT_SIZES, type TextSize } from "../lib/textSize";
 import { applyFontFamily, applyMonoFontFamily, FONT_FAMILIES, MONO_FONT_FAMILIES, getCustomFontName, getCustomMonoFontName, getFontFamily, getMonoFontFamily, setCustomFontName, setCustomMonoFontName, type FontFamily, type MonoFontFamily } from "../lib/fontFamily";
 import { applyTauriAppearance, readTauriAppearance, type TauriAppearance } from "./tauriAppearance";
+import { applyThemePack, clearThemePack, type ThemePackView } from "../lib/themePack";
+import { TauriThemeGallery } from "./TauriThemeGallery";
+import { tauriThemePackById } from "./tauriThemeCatalog";
 import { TauriMCPSettings } from "./TauriMCPSettings";
 import { TauriProviderEditor } from "./TauriProviderEditor";
 import { TauriPermissionsSettings } from "./TauriPermissionsSettings";
@@ -19,14 +22,20 @@ import { TauriSubagentSettings } from "./TauriSubagentSettings";
 import { TauriHooksSettings } from "./TauriHooksSettings";
 import { TauriMemorySettings } from "./TauriMemorySettings";
 import { TauriStorageSettings } from "./TauriStorageSettings";
+import { TauriRemoteSettings } from "./TauriRemoteSettings";
+import { TauriBotSettings } from "./TauriBotSettings";
 import { StatusBarItemsEditor } from "../components/StatusBarItemsEditor";
 import { TypographySettings } from "../components/TypographySettings";
+import { SettingsSection } from "../components/SettingsForm";
+import { SettingsOptions } from "../components/SettingsOptions";
 import { comboFromKeyboardEvent, detectShortcutPlatform, formatShortcutCombo } from "../lib/keyboardShortcuts";
 import { TAURI_SHORTCUT_ACTIONS, getTauriShortcut, isValidTauriShortcut, resetTauriShortcuts, setTauriShortcut, tauriShortcutConflict, useTauriShortcuts, type TauriShortcutAction } from "./tauriKeyboardShortcuts";
 import "../components/SettingsPanel.css";
+import "../components/CompactRatioSettings.css";
 import { getTauriNotificationsEnabled, setTauriNotificationsEnabled, getTauriProgressMode, setTauriProgressMode, type TauriProgressMode } from "./tauriPreferences";
 import { TAURI_STATUS_BAR_ITEM_IDS, setTauriStatusBarPreferences, useTauriStatusBarPreferences, type TauriStatusBarItemId } from "./tauriStatusBarPreferences";
 import { setTauriDesktopLayout, useTauriDesktopLayout } from "./tauriDesktopLayout";
+import { COMPACT_RATIO_MAX_PERCENT, COMPACT_RATIO_MIN_PERCENT } from "../lib/compactRatio";
 import { getSuccessPreference, setSuccessPreference, getAttentionPreference, setAttentionPreference, getNotificationVolume, setNotificationVolume, playSuccessChime, playAttentionChime, type SoundWavPref } from "../lib/sound";
 import { generativeMusic, getGenerativePreset, setGenerativePreset, type GenerativePreset } from "../lib/generative-music";
 
@@ -34,8 +43,11 @@ interface TauriSettingsProps {
   onClose: () => void;
   onProviderSummaryChange?: (summary: TauriProviderSummary) => void;
   currentSessionState?: "idle" | "running" | "paused";
+  currentSessionId?: string;
   currentSessionHasAttachments?: boolean;
   onApplyToCurrentSession?: () => Promise<boolean>;
+  currentSessionModelRef?: string;
+  onCurrentSessionModelChange?: (model: string) => Promise<boolean>;
   workspaceRoot?: string;
   defaultWorkspace?: string;
   onChooseDefaultWorkspace?: () => Promise<string | null>;
@@ -56,7 +68,7 @@ interface TauriSettingsProps {
   onRefreshCatalogAudit?: () => Promise<void>;
 }
 
-export type TauriSettingsTab = "general" | "appearance" | "model" | "providers" | "stats" | "mcp" | "skills" | "subagents" | "plugins" | "hooks" | "memory" | "permissions" | "sandbox" | "network" | "diagnostics" | "data" | "shortcuts" | "about";
+export type TauriSettingsTab = "general" | "appearance" | "model" | "providers" | "stats" | "bots" | "mcp" | "remote" | "skills" | "subagents" | "plugins" | "hooks" | "memory" | "permissions" | "sandbox" | "network" | "diagnostics" | "data" | "shortcuts" | "updates" | "about";
 
 const TauriUsageStatsPanel = lazy(() => import("../components/UsageStatsPanel").then(module => ({ default: module.UsageStatsPanel })));
 
@@ -67,7 +79,7 @@ const SETTINGS_GROUPS = (t: Translator) => [
     { id: "providers", label: t("settings.models.services"), description: t("settings.tabSub.providers"), icon: Cable },
     { id: "stats", label: t("settings.modelTab.stats"), description: t("settings.tabSub.models"), icon: ChartNoAxesColumn },
   ] },
-  { label: t("settings.navGroup.connections"), items: [{ id: "mcp", label: t("settings.tab.mcp"), description: t("settings.tabSub.mcp"), icon: Server }] },
+  { label: t("settings.navGroup.connections"), items: [{ id: "bots", label: t("settings.tab.bots"), description: t("settings.tabSub.bots"), icon: Bot }, { id: "mcp", label: t("settings.tab.mcp"), description: t("settings.tabSub.mcp"), icon: Server }, { id: "remote", label: t("settings.tab.remote"), description: t("settings.tabSub.remote"), icon: Cable }] },
   { label: t("settings.navGroup.capabilities"), items: [{ id: "skills", label: t("settings.tab.skills"), description: t("settings.tabSub.skills"), icon: Sparkles }, { id: "subagents", label: t("settings.tab.subagents"), description: t("subagents.tabHint"), icon: Users }, { id: "plugins", label: t("settings.tab.plugins"), description: t("settings.tabSub.plugins"), icon: Package }] },
   { label: t("settings.navGroup.context"), items: [{ id: "memory", label: t("settings.tab.memory"), description: t("settings.tabSub.memory"), icon: Database }] },
   { label: t("settings.navGroup.automation"), items: [{ id: "hooks", label: t("settings.tab.hooks"), description: t("settings.tabSub.hooks"), icon: Webhook }, { id: "diagnostics", label: t("settings.tab.diagnostics"), description: t("settings.tabSub.diagnostics"), icon: Activity }] },
@@ -80,6 +92,7 @@ const SETTINGS_GROUPS = (t: Translator) => [
     { id: "appearance", label: t("settings.tab.appearance"), description: t("settings.tabSub.appearance"), icon: Palette },
     { id: "shortcuts", label: t("settings.tab.shortcuts"), description: t("settings.tabSub.shortcuts"), icon: Keyboard },
     { id: "data", label: t("settings.tab.storage"), description: t("settings.tabSub.storage"), icon: Database },
+    { id: "updates", label: t("settings.tab.updates"), description: t("settings.tabSub.updates"), icon: RefreshCw },
     { id: "about", label: t("settings.about.navLabel"), description: t("settings.about.hint"), icon: Info },
   ] },
 ] as const;
@@ -89,7 +102,9 @@ const SETTINGS_TITLES = (t: Translator): Record<TauriSettingsTab, { title: strin
   model: { title: t("settings.models.preferences"), description: t("settings.tabSub.models") },
   providers: { title: t("settings.models.services"), description: t("settings.tabSub.providers") },
   stats: { title: t("settings.modelTab.stats"), description: t("settings.tabSub.models") },
+  bots: { title: t("settings.tab.bots"), description: t("settings.pageDesc.bots") },
   mcp: { title: t("settings.tab.mcp"), description: t("settings.tabSub.mcp") },
+  remote: { title: t("settings.tab.remote"), description: t("settings.tabSub.remote") },
   skills: { title: t("settings.tab.skills"), description: t("settings.tabSub.skills") },
   plugins: { title: t("settings.tab.plugins"), description: t("settings.tabSub.plugins") },
   subagents: { title: t("settings.tab.subagents"), description: t("subagents.tabHint") },
@@ -102,60 +117,90 @@ const SETTINGS_TITLES = (t: Translator): Record<TauriSettingsTab, { title: strin
   appearance: { title: t("settings.tab.appearance"), description: t("settings.tabSub.appearance") },
   shortcuts: { title: t("settings.tab.shortcuts"), description: t("settings.tabSub.shortcuts") },
   data: { title: t("settings.tab.storage"), description: t("settings.tabSub.storage") },
+  updates: { title: t("settings.tab.updates"), description: t("settings.tabSub.updates") },
   about: { title: t("settings.about.title"), description: t("settings.about.hint") },
 });
 
-const STYLE_LABELS: Record<ThemeStyle, string> = {
-  graphite: "石墨",
-  aurora: "极光",
-  slate: "岩蓝",
-  carbon: "碳黑",
-  nocturne: "夜曲",
-  amber: "琥珀",
+const STYLE_LABEL_KEYS: Record<ThemeStyle, DictKey> = {
+  graphite: "settings.style.graphite.zh",
+  aurora: "settings.style.aurora.zh",
+  slate: "settings.style.slate.zh",
+  carbon: "settings.style.carbon.zh",
+  nocturne: "settings.style.nocturne.zh",
+  amber: "settings.style.amber.zh",
 };
 
-const TEXT_SIZE_LABELS: Record<TextSize, string> = {
-  small: "小",
-  default: "默认",
-  large: "大",
-  xlarge: "更大",
-  xxlarge: "最大",
+const TEXT_SIZE_LABEL_KEYS: Record<TextSize, DictKey> = {
+  small: "settings.textSizeSmall",
+  default: "settings.textSizeDefault",
+  large: "settings.textSizeLarge",
+  xlarge: "settings.textSizeXLarge",
+  xxlarge: "settings.textSizeXXLarge",
 };
 
 const TAURI_STATUS_BAR_LABEL_KEYS: Record<TauriStatusBarItemId, DictKey> = {
-  workspace: "settings.statusBarItem.workspace", model: "settings.statusBarItem.model", session: "settings.statusBarItem.session",
-  observed_tokens: "settings.statusBarItem.observedTokens", turn_tokens: "settings.statusBarItem.turnTokens", context: "settings.statusBarItem.context",
-  compact: "settings.statusBarItem.compact", cache_hit: "settings.statusBarItem.cacheHit", bridge: "settings.statusBarItem.bridge",
+  workspace: "settings.statusBarItem.workspace", model: "settings.statusBarItem.model", balance: "settings.statusBarItem.balance", session: "settings.statusBarItem.session",
+  observed_tokens: "settings.statusBarItem.observedTokens", turn_tokens: "settings.statusBarItem.turnTokens", turn_output_tokens: "settings.statusBarItem.turnOutputTokens", turn_cache_tokens: "settings.statusBarItem.turnCacheTokens", turn_cost: "settings.statusBarItem.turnCost", session_turns: "settings.statusBarItem.sessionTurns", context: "settings.statusBarItem.context",
+  session_cost: "settings.statusBarItem.sessionCost", compact: "settings.statusBarItem.compact", cache_hit: "settings.statusBarItem.cacheHit", bridge: "settings.statusBarItem.bridge",
 };
 
-const TAURI_SHORTCUT_LABELS: Record<TauriShortcutAction, { label: string; description: string }> = {
-  new_session: { label: "新建对话", description: "回到新对话并选择工作区。" },
-  settings: { label: "打开设置", description: "打开设置页。" },
-  diagnostics: { label: "运行状态", description: "查看本地服务与运行信息。" },
-  workspace_files: { label: "工作区文件", description: "打开当前对话的文件面板。" },
-  refresh_session: { label: "刷新当前对话", description: "重新读取当前对话的历史记录。" },
-  send_message: { label: "发送消息", description: "在输入框中发送消息；只能使用带主修饰键的 Enter。" },
+const TAURI_COMPACT_RATIO_PRESETS = [
+  [70, "settings.compactRatioPreset.70", "settings.compactRatioPresetEffect.70"],
+  [80, "settings.compactRatioPreset.80", "settings.compactRatioPresetEffect.80"],
+  [85, "settings.compactRatioPreset.85", "settings.compactRatioPresetEffect.85"],
+] as const satisfies readonly (readonly [number, DictKey, DictKey])[];
+
+const TAURI_SHORTCUT_LABELS: Record<TauriShortcutAction, { label: DictKey; description?: DictKey }> = {
+  new_session: { label: "shortcuts.action.newSession", description: "shortcuts.desc.newSession" },
+  close_panel: { label: "shortcuts.action.closeTab", description: "shortcuts.desc.closeTab" },
+  settings: { label: "shortcuts.action.settings", description: "shortcuts.desc.settings" },
+  diagnostics: { label: "settings.tab.diagnostics", description: "settings.tabSub.diagnostics" },
+  workspace_files: { label: "workspace.filesTab" },
+  refresh_session: { label: "settings.tauriShortcut.refreshSession", description: "settings.tauriShortcut.refreshSessionHint" },
+  send_message: { label: "shortcuts.action.composerSend", description: "shortcuts.desc.composerSend" },
+  open_appearance: { label: "settings.tab.appearance", description: "settings.tabSub.appearance" },
+  open_model_preferences: { label: "settings.models.preferences", description: "settings.tabSub.models" },
+  open_model_services: { label: "settings.models.services", description: "settings.tabSub.providers" },
+  open_usage_stats: { label: "settings.modelTab.stats", description: "settings.pageDesc.model-stats" },
+  open_general: { label: "settings.tab.general", description: "settings.tabSub.general" },
+  open_bots: { label: "settings.tab.bots", description: "settings.tabSub.bots" },
+  open_mcp: { label: "settings.tab.mcp", description: "settings.tabSub.mcp" },
+  open_remote: { label: "settings.tab.remote", description: "settings.tabSub.remote" },
+  open_skills: { label: "settings.tab.skills", description: "settings.tabSub.skills" },
+  open_plugins: { label: "settings.tab.plugins", description: "settings.tabSub.plugins" },
+  open_subagents: { label: "settings.tab.subagents", description: "subagents.tabHint" },
+  open_hooks: { label: "settings.tab.hooks", description: "settings.tabSub.hooks" },
+  open_memory: { label: "settings.tab.memory", description: "settings.tabSub.memory" },
+  open_permissions: { label: "settings.tab.permissions", description: "settings.tabSub.permissions" },
+  open_sandbox: { label: "settings.tab.sandbox", description: "settings.tabSub.sandbox" },
+  open_network: { label: "settings.tab.network", description: "settings.tabSub.network" },
+  open_storage: { label: "settings.tab.storage", description: "settings.tabSub.storage" },
+  open_shortcuts: { label: "settings.tab.shortcuts", description: "settings.tabSub.shortcuts" },
+  open_updates: { label: "settings.tab.updates", description: "settings.tabSub.updates" },
+  open_about: { label: "settings.about.navLabel", description: "settings.about.hint" },
 };
 
-const FONT_LABELS: Record<FontFamily, string> = {
-  system: "系统默认",
-  yahei: "微软雅黑",
-  pingfang: "苹方",
-  noto: "思源黑体",
-  custom: "自定义字体",
+const FONT_LABEL_KEYS: Record<FontFamily, DictKey> = {
+  system: "settings.fontFamilySystem",
+  yahei: "settings.fontFamilyYaHei",
+  pingfang: "settings.fontFamilyPingFang",
+  noto: "settings.fontFamilyNoto",
+  custom: "settings.fontFamilyCustomName",
 };
 
-const MONO_FONT_LABELS: Record<MonoFontFamily, string> = {
-  system: "系统默认",
-  cascadia: "Cascadia Code",
-  jetbrains: "JetBrains Mono",
-  sfmono: "SF Mono",
-  custom: "自定义等宽字体",
+const MONO_FONT_LABEL_KEYS: Record<MonoFontFamily, DictKey> = {
+  system: "settings.monoFontFamilySystem",
+  cascadia: "settings.monoFontFamilyCascadia",
+  jetbrains: "settings.monoFontFamilyJetBrains",
+  sfmono: "settings.monoFontFamilySFMono",
+  custom: "settings.monoFontFamilyCustomName",
 };
 
-export function TauriSettings({ onClose, onProviderSummaryChange, currentSessionState, currentSessionHasAttachments, onApplyToCurrentSession, workspaceRoot, defaultWorkspace, onChooseDefaultWorkspace, onClearDefaultWorkspace, initialTab = "general", profile, onRefreshProfile, onImportStableProfile, onImportStableProjectFolders, onScanUnclaimedSessions, importBusy, bridgeStatus, catalogAudit, catalogAuditError, sessionPageSource, hostError, onRestartBridge, onRefreshCatalogAudit }: TauriSettingsProps) {
+export function TauriSettings({ onClose, onProviderSummaryChange, currentSessionState, currentSessionId, currentSessionModelRef, onCurrentSessionModelChange, currentSessionHasAttachments, onApplyToCurrentSession, workspaceRoot, defaultWorkspace, onChooseDefaultWorkspace, onClearDefaultWorkspace, initialTab = "general", profile, onRefreshProfile, onImportStableProfile, onImportStableProjectFolders, onScanUnclaimedSessions, importBusy, bridgeStatus, catalogAudit, catalogAuditError, sessionPageSource, hostError, onRestartBridge, onRefreshCatalogAudit }: TauriSettingsProps) {
   const desktopLayout = useTauriDesktopLayout();
   const t = useT();
+  const translatorRef = useRef(t);
+  translatorRef.current = t;
   const { pref: languagePref, setPref: setLanguagePref } = useI18n();
   const [tab, setTab] = useState<TauriSettingsTab>(initialTab);
   const [navQuery, setNavQuery] = useState("");
@@ -184,9 +229,14 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
   const appearanceDirty = useRef(false);
   const [languageSaving, setLanguageSaving] = useState(false);
   const [languageError, setLanguageError] = useState("");
+  const [displayCurrency, setDisplayCurrency] = useState<"" | "CNY" | "USD">("");
+  const [currencySaving, setCurrencySaving] = useState(false);
+  const [currencyError, setCurrencyError] = useState("");
   const languageDirty = useRef(false);
   const loadRequest = useRef(0);
   const [appearance, setAppearance] = useState<TauriAppearance>(readTauriAppearance);
+  const [activeThemeId, setActiveThemeId] = useState("");
+  const [userThemes, setUserThemes] = useState<ThemePackView[]>([]);
   const [conversationWidth, setConversationWidth] = useState<ConversationWidth>(getCachedConversationWidth);
   const [textSize, setTextSize] = useState<TextSize>(getTextSize);
   const [fontFamily, setFontFamily] = useState<FontFamily>(getFontFamily);
@@ -227,11 +277,11 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
     );
     void getTauriCloseBehavior().then(
       behavior => { if (request === loadRequest.current) { setCloseBehavior(behavior); setCloseError(""); setCloseLoading(false); } },
-      () => { if (request === loadRequest.current) { setCloseError("无法读取关闭窗口设置"); setCloseLoading(false); } },
+      () => { if (request === loadRequest.current) { setCloseError(translatorRef.current("settings.errorUnknown")); setCloseLoading(false); } },
     );
-    void tauriDesktopPreferences().then(
-      value => { if (request === loadRequest.current) { setApprovalMode(value.defaultToolApprovalMode); setApprovalError(""); setTerminalTheme(normalizeTerminalThemePreference(value.terminalTheme)); applyTerminalThemePreference(value.terminalTheme); setTerminalThemeError(""); if (value.appearanceConfigured && !appearanceDirty.current) { const next = { mode: value.theme, style: THEME_STYLES.includes(value.themeStyle as ThemeStyle) ? value.themeStyle as ThemeStyle : "graphite" }; setAppearance(next); applyTauriAppearance(next); } if (!languageDirty.current) setLanguagePref(value.language); setApprovalLoading(false); } },
-      () => { if (request === loadRequest.current) { setApprovalError("无法读取默认审批设置"); setApprovalLoading(false); } },
+    void Promise.all([tauriDesktopPreferences(), tauriActiveThemeId(), tauriUserThemes()]).then(
+      ([value, themeId, savedThemes]) => { if (request === loadRequest.current) { setApprovalMode(value.defaultToolApprovalMode); setApprovalError(""); setTerminalTheme(normalizeTerminalThemePreference(value.terminalTheme)); applyTerminalThemePreference(value.terminalTheme); setTerminalThemeError(""); if (value.appearanceConfigured && !appearanceDirty.current) { const next = { mode: value.theme, style: THEME_STYLES.includes(value.themeStyle as ThemeStyle) ? value.themeStyle as ThemeStyle : "graphite" }; setAppearance(next); applyTauriAppearance(next); } setUserThemes(savedThemes); setActiveThemeId(themeId); const pack = tauriThemePackById(themeId) ?? savedThemes.find(theme => theme.id === themeId) ?? null; if (pack) applyThemePack(pack); else clearThemePack(); if (!languageDirty.current) setLanguagePref(value.language); setDisplayCurrency(value.displayCurrency); setCurrencyError(""); setApprovalLoading(false); } },
+      () => { if (request === loadRequest.current) { setApprovalError(translatorRef.current("settings.errorUnknown")); setApprovalLoading(false); } },
     );
   }, [setLanguagePref, updateProviderSummary]);
 
@@ -253,12 +303,114 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
       const persisted = { mode: saved.theme, style: THEME_STYLES.includes(saved.themeStyle as ThemeStyle) ? saved.themeStyle as ThemeStyle : "graphite" };
       setAppearance(persisted);
       applyTauriAppearance(persisted);
+      const activePack = tauriThemePackById(activeThemeId) ?? userThemes.find(theme => theme.id === activeThemeId) ?? null;
+      if (activePack) applyThemePack(activePack);
     } catch {
       setAppearance(previous);
       applyTauriAppearance(previous);
-      setAppearanceError("无法保存外观设置，请重试");
+      const previousPack = tauriThemePackById(activeThemeId) ?? userThemes.find(theme => theme.id === activeThemeId) ?? null;
+      if (previousPack) applyThemePack(previousPack);
+      setAppearanceError(t("settings.errorUnknown"));
     } finally {
       setAppearanceSaving(false);
+    }
+  };
+
+  const handleThemeApply = async (id: string) => {
+    if (appearanceSaving) return false;
+    const previousThemeId = activeThemeId;
+    const previousAppearance = appearance;
+    setAppearanceSaving(true);
+    setAppearanceError("");
+    try {
+      if (THEME_STYLES.includes(id as ThemeStyle)) {
+        const updated = await setTauriDesktopAppearance(appearance.mode, id as ThemeStyle);
+        let saved: string;
+        try {
+          saved = await setTauriActiveThemeId("");
+        } catch (error) {
+          await setTauriDesktopAppearance(previousAppearance.mode, previousAppearance.style).catch(() => undefined);
+          throw error;
+        }
+        const next = { mode: updated.theme, style: updated.themeStyle as ThemeStyle };
+        setActiveThemeId(saved);
+        setAppearance(next);
+        applyTauriAppearance(next);
+        clearThemePack();
+      } else {
+        const pack = tauriThemePackById(id) ?? userThemes.find(theme => theme.id === id) ?? null;
+        if (!pack) throw new Error("unknown theme");
+        const saved = await setTauriActiveThemeId(id);
+        setActiveThemeId(saved);
+        applyThemePack(pack);
+      }
+      return true;
+    } catch {
+      await Promise.all([
+        setTauriActiveThemeId(previousThemeId).catch(() => previousThemeId),
+        setTauriDesktopAppearance(previousAppearance.mode, previousAppearance.style).catch(() => undefined),
+      ]);
+      setActiveThemeId(previousThemeId);
+      setAppearance(previousAppearance);
+      applyTauriAppearance(previousAppearance);
+      const previousPack = tauriThemePackById(previousThemeId) ?? userThemes.find(theme => theme.id === previousThemeId) ?? null;
+      if (previousPack) applyThemePack(previousPack); else clearThemePack();
+      setAppearanceError(t("settings.errorUnknown"));
+      return false;
+    } finally {
+      setAppearanceSaving(false);
+    }
+  };
+
+  const handleUserThemeSave = async (theme: Pick<ThemePackView, "id" | "name" | "baseStyle" | "tokens" | "recipes">): Promise<ThemePackView | null> => {
+    try {
+      const saved = await saveTauriUserTheme(theme);
+      setUserThemes(current => [...current.filter(item => item.id !== saved.id), saved]);
+      setAppearanceError("");
+      return saved;
+    } catch {
+      setAppearanceError(t("settings.themeGallery.themeSaveFailed"));
+      return null;
+    }
+  };
+
+  const handleUserThemeDelete = async (id: string): Promise<boolean> => {
+    try {
+      await deleteTauriUserTheme(id);
+      setUserThemes(current => current.filter(theme => theme.id !== id));
+      if (activeThemeId === id) {
+        setActiveThemeId("");
+        applyTauriAppearance(appearance);
+        clearThemePack();
+      }
+      setAppearanceError("");
+      return true;
+    } catch {
+      setAppearanceError(t("settings.themeGallery.themeDeleteFailed"));
+      return false;
+    }
+  };
+
+  const handleUserThemeImport = async (): Promise<ThemePackView | null> => {
+    try {
+      const imported = await importTauriUserTheme();
+      if (imported) setUserThemes(current => [...current, imported]);
+      setAppearanceError("");
+      return imported;
+    } catch {
+      setAppearanceError(t("settings.themeGallery.themeImportFailed"));
+      return null;
+    }
+  };
+
+  const handleUserThemeExport = async (id: string): Promise<boolean> => {
+    try {
+      const exported = await exportTauriUserTheme(id);
+      setAppearanceError("");
+      return exported;
+    } catch {
+      setAppearanceError(t("settings.themeGallery.themeExportFailed"));
+      return false;
     }
   };
 
@@ -274,10 +426,25 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
       setLanguagePref(saved.language);
     } catch {
       setLanguagePref(previous);
-      setLanguageError("无法保存语言设置，请重试");
+      setLanguageError(t("settings.errorUnknown"));
     } finally {
       setLanguageSaving(false);
     }
+  };
+
+  const handleDisplayCurrencyChange = async (next: "" | "CNY" | "USD") => {
+    if (currencySaving || next === displayCurrency) return;
+    const previous = displayCurrency;
+    setDisplayCurrency(next);
+    setCurrencySaving(true);
+    setCurrencyError("");
+    try {
+      const saved = await setTauriDesktopCurrency(next);
+      setDisplayCurrency(saved.displayCurrency);
+    } catch {
+      setDisplayCurrency(previous);
+      setCurrencyError(t("settings.currencySaveFailed"));
+    } finally { setCurrencySaving(false); }
   };
 
   const handleConversationWidthChange = (next: ConversationWidth) => {
@@ -319,7 +486,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
       const updated = await setTauriDefaultModel(model);
       updateProviderSummary(updated);
     } catch {
-      setModelSaveError("默认模型保存失败，请重试");
+      setModelSaveError(t("settings.errorUnknown"));
     } finally {
       setModelSaving(false);
     }
@@ -332,7 +499,20 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
     try {
       updateProviderSummary(await setTauriModelRole(role, model));
     } catch {
-      setModelSaveError("模型分工保存失败，请检查服务与模型能力后重试");
+      setModelSaveError(t("settings.errorUnknown"));
+    } finally {
+      setModelSaving(false);
+    }
+  };
+
+  const handleAgentPreferenceChange = async (request: { reasoningLanguage?: "auto" | "zh" | "en"; compactRatioPercent?: number }) => {
+    if (modelSaving) return;
+    setModelSaving(true);
+    setModelSaveError("");
+    try {
+      updateProviderSummary(await setTauriAgentPreference(request));
+    } catch {
+      setModelSaveError(t("settings.errorUnknown"));
     } finally {
       setModelSaving(false);
     }
@@ -345,7 +525,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
     try {
       setCloseBehavior(await setTauriCloseBehavior(behavior));
     } catch {
-      setCloseError("保存失败，请重试");
+      setCloseError(t("settings.errorUnknown"));
     } finally {
       setCloseSaving(false);
     }
@@ -359,7 +539,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
       const updated = await setTauriDesktopApproval(mode);
       setApprovalMode(updated.defaultToolApprovalMode);
     } catch {
-      setApprovalError("默认审批设置保存失败，请重试");
+      setApprovalError(t("settings.errorUnknown"));
     } finally {
       setApprovalSaving(false);
     }
@@ -380,7 +560,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
     } catch {
       setTerminalTheme(previous);
       applyTerminalThemePreference(previous);
-      setTerminalThemeError("终端主题保存失败");
+      setTerminalThemeError(t("settings.errorUnknown"));
     } finally {
       setTerminalThemeSaving(false);
     }
@@ -414,21 +594,24 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
       <div className="tauri-settings-panel">
         <div className="tauri-settings-content" data-tab={tab} key={tab}>
           <div className="tauri-settings-page-heading"><h1>{settingTitles[tab].title}</h1><p>{settingTitles[tab].description}</p></div>
-          {tab === "general" ? <GeneralSettings languagePref={languagePref} onLanguageChange={handleLanguageChange} languageSaving={languageSaving} languageError={languageError} notificationsEnabled={notificationsEnabled} onNotificationsChange={enabled => { setNotificationsEnabled(enabled); setTauriNotificationsEnabled(enabled); }} progressMode={progressMode} onProgressModeChange={next => { setProgressMode(next); setTauriProgressMode(next); }} closeBehavior={closeBehavior} onCloseBehaviorChange={handleCloseBehaviorChange} closeLoading={closeLoading} closeSaving={closeSaving} closeError={closeError} approvalMode={approvalMode} onApprovalChange={handleApprovalChange} approvalLoading={approvalLoading} approvalSaving={approvalSaving} approvalError={approvalError} platform={platform} currentSessionState={currentSessionState} /> : tab === "shortcuts" ? <ShortcutSettings /> : tab === "appearance" ? <AppearanceSettings appearance={appearance} onChange={handleAppearanceChange} appearanceSaving={appearanceSaving} appearanceError={appearanceError} conversationWidth={conversationWidth} onConversationWidthChange={handleConversationWidthChange} textSize={textSize} onTextSizeChange={handleTextSizeChange} fontFamily={fontFamily} onFontFamilyChange={handleFontFamilyChange} monoFontFamily={monoFontFamily} onMonoFontFamilyChange={handleMonoFontFamilyChange} customFontName={customFontName} onCustomFontChange={handleCustomFontChange} customMonoFontName={customMonoFontName} onCustomMonoFontChange={handleCustomMonoFontChange} terminalTheme={terminalTheme} onTerminalThemeChange={handleTerminalThemeChange} terminalThemeSaving={terminalThemeSaving} terminalThemeError={terminalThemeError} /> : <>
-            {(tab === "model" || tab === "providers") && (modelLoading ? <div className="tauri-settings-loading">加载中…</div> : <>{modelLoadError && <SettingsLoadError onRetry={loadSettings} />}{providerSummary && (tab === "model" ? <ModelPreferenceSettings providerSummary={providerSummary} onModelChange={handleModelChange} onRoleChange={handleModelRoleChange} saving={modelSaving} error={modelSaveError} onOpenProviders={() => setTab("providers")} /> : <ProviderSettings providerSummary={providerSummary} onProviderSummaryChange={updateProviderSummary} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />)}</>)}
-            {tab === "stats" && <Suspense fallback={<div className="tauri-settings-loading">加载中…</div>}><TauriUsageStatsPanel loadStats={tauriUsageStats} sources={["all", "desktop-tauri"]} /></Suspense>}
-            {tab === "mcp" && <TauriMCPSettings workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
+          {tab === "general" ? <GeneralSettings languagePref={languagePref} onLanguageChange={handleLanguageChange} languageSaving={languageSaving} languageError={languageError} displayCurrency={displayCurrency} onDisplayCurrencyChange={handleDisplayCurrencyChange} currencySaving={currencySaving} currencyError={currencyError} notificationsEnabled={notificationsEnabled} onNotificationsChange={enabled => { setNotificationsEnabled(enabled); setTauriNotificationsEnabled(enabled); }} progressMode={progressMode} onProgressModeChange={next => { setProgressMode(next); setTauriProgressMode(next); }} closeBehavior={closeBehavior} onCloseBehaviorChange={handleCloseBehaviorChange} closeLoading={closeLoading} closeSaving={closeSaving} closeError={closeError} approvalMode={approvalMode} onApprovalChange={handleApprovalChange} approvalLoading={approvalLoading} approvalSaving={approvalSaving} approvalError={approvalError} platform={platform} currentSessionState={currentSessionState} /> : tab === "shortcuts" ? <ShortcutSettings /> : tab === "appearance" ? <AppearanceSettings appearance={appearance} onChange={handleAppearanceChange} appearanceSaving={appearanceSaving} appearanceError={appearanceError} activeThemeId={activeThemeId} userThemes={userThemes} onThemeApply={handleThemeApply} onUserThemeSave={handleUserThemeSave} onUserThemeDelete={handleUserThemeDelete} onUserThemeImport={handleUserThemeImport} onUserThemeExport={handleUserThemeExport} conversationWidth={conversationWidth} onConversationWidthChange={handleConversationWidthChange} textSize={textSize} onTextSizeChange={handleTextSizeChange} fontFamily={fontFamily} onFontFamilyChange={handleFontFamilyChange} monoFontFamily={monoFontFamily} onMonoFontFamilyChange={handleMonoFontFamilyChange} customFontName={customFontName} onCustomFontChange={handleCustomFontChange} customMonoFontName={customMonoFontName} onCustomMonoFontChange={handleCustomMonoFontChange} terminalTheme={terminalTheme} onTerminalThemeChange={handleTerminalThemeChange} terminalThemeSaving={terminalThemeSaving} terminalThemeError={terminalThemeError} /> : <>
+            {(tab === "model" || tab === "providers") && (modelLoading ? <div className="tauri-settings-loading">{t("settings.loading")}</div> : <>{modelLoadError && <SettingsLoadError onRetry={loadSettings} />}{providerSummary && (tab === "model" ? <ModelPreferenceSettings providerSummary={providerSummary} workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionModelRef={currentSessionModelRef} onCurrentSessionModelChange={onCurrentSessionModelChange} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} onModelChange={handleModelChange} onRoleChange={handleModelRoleChange} onAgentPreferenceChange={handleAgentPreferenceChange} saving={modelSaving} error={modelSaveError} onOpenProviders={() => setTab("providers")} /> : <ProviderSettings providerSummary={providerSummary} onProviderSummaryChange={updateProviderSummary} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />)}</>)}
+            {tab === "stats" && <Suspense fallback={<div className="tauri-settings-loading">{t("settings.loading")}</div>}><TauriUsageStatsPanel loadStats={tauriUsageStats} sources={["all", "desktop-tauri"]} /></Suspense>}
+            {tab === "bots" && <TauriBotSettings />}
+            {tab === "mcp" && <TauriMCPSettings workspaceRoot={workspaceRoot} sessionId={currentSessionId} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
+            {tab === "remote" && <TauriRemoteSettings />}
             {tab === "skills" && <TauriSkillsSettings workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "plugins" && <TauriPluginSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "subagents" && <TauriSubagentSettings workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "hooks" && <TauriHooksSettings workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "memory" && <TauriMemorySettings workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
-            {tab === "permissions" && <TauriPermissionsSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
+            {tab === "permissions" && <TauriPermissionsSettings workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "sandbox" && <TauriSandboxSettings workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "network" && <TauriNetworkSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "diagnostics" && <DiagnosticsSettings bridgeStatus={bridgeStatus} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={hostError} busy={Boolean(importBusy)} onRestartBridge={onRestartBridge} onRefreshCatalogAudit={onRefreshCatalogAudit} onOpenData={() => setTab("data")} onOpenProviders={() => setTab("providers")} />}
             {tab === "data" && <><TauriStorageSettings workspaceRoot={workspaceRoot} defaultWorkspace={defaultWorkspace} onChooseDefaultWorkspace={onChooseDefaultWorkspace} onClearDefaultWorkspace={onClearDefaultWorkspace} /><DataSettings profile={profile} busy={Boolean(importBusy)} onRefreshProfile={onRefreshProfile} onImportStableProfile={onImportStableProfile} onImportStableProjectFolders={onImportStableProjectFolders} onScanUnclaimedSessions={onScanUnclaimedSessions} onClose={onClose} /></>}
             {tab === "about" && (aboutLoading ? <div className="tauri-settings-loading">{t("common.loading")}</div> : <>{aboutLoadError && <SettingsLoadError onRetry={loadSettings} />}{runtimeInfo && <AboutSettings runtimeInfo={runtimeInfo} platform={platform} onRefresh={loadSettings} />}</>)}
+            {tab === "updates" && runtimeInfo && <TauriUpdatesSettings runtimeInfo={runtimeInfo} />}
           </>}
         </div>
       </div>
@@ -436,7 +619,13 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
   );
 }
 
-function GeneralSettings({ languagePref, onLanguageChange, languageSaving, languageError, notificationsEnabled, onNotificationsChange, progressMode, onProgressModeChange, closeBehavior, onCloseBehaviorChange, closeLoading, closeSaving, closeError, approvalMode, onApprovalChange, approvalLoading, approvalSaving, approvalError, platform, currentSessionState }: { languagePref: LangPref; onLanguageChange: (language: LangPref) => void; languageSaving: boolean; languageError: string; notificationsEnabled: boolean; onNotificationsChange: (enabled: boolean) => void; progressMode: TauriProgressMode; onProgressModeChange: (next: TauriProgressMode) => void; closeBehavior: TauriCloseBehavior; onCloseBehaviorChange: (behavior: TauriCloseBehavior) => void; closeLoading: boolean; closeSaving: boolean; closeError: string; approvalMode: TauriToolApprovalMode; onApprovalChange: (mode: TauriToolApprovalMode) => void; approvalLoading: boolean; approvalSaving: boolean; approvalError: string; platform: string; currentSessionState?: "idle" | "running" | "paused" }) {
+function TauriSettingsChoice<T extends string>({ ariaLabel, value, options, disabled, onChange }: { ariaLabel: string; value: T; options: Array<{ value: T; label: ReactNode }>; disabled?: boolean; onChange: (value: T) => void }) {
+  return <SettingsOptions layout="field" className="tauri-settings-general-options" role="radiogroup" aria-label={ariaLabel}>
+    {options.map(option => <button key={option.value} type="button" role="radio" aria-checked={value === option.value} className={`set-seg__btn${value === option.value ? " set-seg__btn--on" : ""}`} disabled={disabled} onClick={() => onChange(option.value)}>{option.label}</button>)}
+  </SettingsOptions>;
+}
+
+function GeneralSettings({ languagePref, onLanguageChange, languageSaving, languageError, displayCurrency, onDisplayCurrencyChange, currencySaving, currencyError, notificationsEnabled, onNotificationsChange, progressMode, onProgressModeChange, closeBehavior, onCloseBehaviorChange, closeLoading, closeSaving, closeError, approvalMode, onApprovalChange, approvalLoading, approvalSaving, approvalError, platform, currentSessionState }: { languagePref: LangPref; onLanguageChange: (language: LangPref) => void; languageSaving: boolean; languageError: string; displayCurrency: "" | "CNY" | "USD"; onDisplayCurrencyChange: (currency: "" | "CNY" | "USD") => void; currencySaving: boolean; currencyError: string; notificationsEnabled: boolean; onNotificationsChange: (enabled: boolean) => void; progressMode: TauriProgressMode; onProgressModeChange: (next: TauriProgressMode) => void; closeBehavior: TauriCloseBehavior; onCloseBehaviorChange: (behavior: TauriCloseBehavior) => void; closeLoading: boolean; closeSaving: boolean; closeError: string; approvalMode: TauriToolApprovalMode; onApprovalChange: (mode: TauriToolApprovalMode) => void; approvalLoading: boolean; approvalSaving: boolean; approvalError: string; platform: string; currentSessionState?: "idle" | "running" | "paused" }) {
   const t = useT();
   const desktopLayout = useTauriDesktopLayout();
   const [soundExpanded, setSoundExpanded] = useState(false);
@@ -453,17 +642,21 @@ function GeneralSettings({ languagePref, onLanguageChange, languageSaving, langu
     else generativeMusic.start(next);
     if (next !== "off" && typeof AudioContext !== "undefined") generativeMusic.playPreview(next);
   };
-  return <div className="tauri-settings-section tauri-settings-general">
-    <h3>{t("settings.general.sectionAppearance")}</h3><p className="tauri-settings-section-description">{t("settings.general.desktopHint")}</p>
-    <div className="tauri-settings-field"><Monitor className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.desktopLayoutStyle")}<small>{t("settings.desktopLayoutStyleHint")}</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.desktopLayoutStyle")}>{(["workbench", "creation"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={desktopLayout === option} className={`tauri-settings-radio${desktopLayout === option ? " is-active" : ""}`} onClick={() => setTauriDesktopLayout(option)}>{t(option === "workbench" ? "settings.desktopLayoutStyle.workbench" : "settings.desktopLayoutStyle.creation")}</button>)}</div></div>
-    <div className="tauri-settings-field"><Languages className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.language")}<small>{t("settings.languageHint")}</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.language")}>{(["", "zh", "en"] as const satisfies readonly LangPref[]).map(option => <button key={option || "auto"} type="button" role="radio" aria-checked={languagePref === option} disabled={languageSaving} className={`tauri-settings-radio${languagePref === option ? " is-active" : ""}`} onClick={() => onLanguageChange(option)}>{languagePref === option && <Check size={13} />}<span>{option === "" ? t("settings.langAuto") : option === "zh" ? "中文" : "English"}</span></button>)}</div></div>
+  return <div className="tauri-settings-section tauri-settings-general settings-page settings-page--general">
+    <SettingsSection title={t("settings.general.sectionAppearance")} description={t("settings.general.desktopHint")}>
+    <div className="tauri-settings-field"><Monitor className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.desktopLayoutStyle")}<small>{t("settings.desktopLayoutStyleHint")}</small></span><TauriSettingsChoice ariaLabel={t("settings.desktopLayoutStyle")} value={desktopLayout} options={[{ value: "workbench", label: t("settings.desktopLayoutStyle.workbench") }, { value: "creation", label: t("settings.desktopLayoutStyle.creation") }]} onChange={setTauriDesktopLayout} /></div>
+    <div className="tauri-settings-field"><Languages className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.language")}<small>{t("settings.languageHint")}</small></span><TauriSettingsChoice ariaLabel={t("settings.language")} value={languagePref} disabled={languageSaving} options={[{ value: "", label: t("settings.langAuto") }, { value: "zh", label: "中文" }, { value: "en", label: "English" }]} onChange={onLanguageChange} /></div>
     {languageError && <p className="tauri-diagnostic-error" role="alert">{languageError}</p>}
-    <h3>{t("settings.general.sectionConversation")}</h3><p className="tauri-settings-section-description">{t("settings.sessionExperienceHint")}</p>
-    <div className="tauri-settings-field"><span className="tauri-settings-field-label">{t("settings.sessionExperience")}<small>{progressMode === "standard" ? t("settings.sessionExperience.standardHint") : t("settings.sessionExperience.deepHint")}</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.sessionExperience")}>{(["standard", "deep"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={progressMode === option} className={`tauri-settings-radio${progressMode === option ? " is-active" : ""}`} onClick={() => onProgressModeChange(option)}>{t(option === "standard" ? "settings.sessionExperience.standard" : "settings.sessionExperience.deep")}</button>)}</div></div>
-    <h3>{t("settings.general.sectionSystem")}</h3><p className="tauri-settings-section-description">{t("settings.general.sectionSystemHint")}</p>
-    {platform === "darwin" && <div className="tauri-settings-field"><Power className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.closeBehavior")}<small>{t("settings.closeBehaviorHint")}</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.closeBehavior")}>{(["keep_running", "quit"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={closeBehavior === option} className={`tauri-settings-radio${closeBehavior === option ? " is-active" : ""}`} disabled={closeLoading || closeSaving} onClick={() => onCloseBehaviorChange(option)}>{t(option === "keep_running" ? "settings.closeBehavior.background" : "settings.closeBehavior.quit")}</button>)}</div></div>}
+    <div className="tauri-settings-field"><span className="tauri-settings-field-label">{t("settings.currency")}<small>{t("settings.currencyHint")}</small></span><TauriSettingsChoice ariaLabel={t("settings.currency")} value={displayCurrency} disabled={currencySaving} options={[{ value: "", label: t("settings.currencyAuto") }, { value: "CNY", label: "CNY" }, { value: "USD", label: "USD" }]} onChange={onDisplayCurrencyChange} /></div>
+    {currencyError && <p className="tauri-diagnostic-error" role="alert">{currencyError}</p>}
+    </SettingsSection>
+    <SettingsSection title={t("settings.general.sectionConversation")} description={t("settings.sessionExperienceHint")}>
+    <div className="tauri-settings-field"><span className="tauri-settings-field-label">{t("settings.sessionExperience")}<small>{progressMode === "standard" ? t("settings.sessionExperience.standardHint") : t("settings.sessionExperience.deepHint")}</small></span><TauriSettingsChoice ariaLabel={t("settings.sessionExperience")} value={progressMode} options={[{ value: "standard", label: t("settings.sessionExperience.standard") }, { value: "deep", label: t("settings.sessionExperience.deep") }]} onChange={onProgressModeChange} /></div>
+    </SettingsSection>
+    <SettingsSection title={t("settings.general.sectionSystem")} description={t("settings.general.sectionSystemHint")}>
+    {platform === "darwin" && <div className="tauri-settings-field"><Power className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.closeBehavior")}<small>{t("settings.closeBehaviorHint")}</small></span><TauriSettingsChoice ariaLabel={t("settings.closeBehavior")} value={closeBehavior} disabled={closeLoading || closeSaving} options={[{ value: "keep_running", label: t("settings.closeBehavior.background") }, { value: "quit", label: t("settings.closeBehavior.quit") }]} onChange={onCloseBehaviorChange} /></div>}
     {platform === "darwin" && closeError && <p className="tauri-diagnostic-error" role="alert">{closeError}</p>}
-    <div className="tauri-settings-field"><ShieldCheck className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.defaultToolApprovalMode")}<small>{t("settings.defaultToolApprovalModeHint")}</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.defaultToolApprovalMode")}>{(["ask", "auto", "yolo"] as const).map(mode => <button key={mode} type="button" role="radio" aria-checked={approvalMode === mode} className={`tauri-settings-radio${approvalMode === mode ? " is-active" : ""}`} disabled={approvalLoading || approvalSaving} onClick={() => onApprovalChange(mode)}>{t(mode === "ask" ? "settings.defaultToolApprovalMode.ask" : mode === "auto" ? "settings.defaultToolApprovalMode.auto" : "settings.defaultToolApprovalMode.yolo")}</button>)}</div></div>
+    <div className="tauri-settings-field"><ShieldCheck className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.defaultToolApprovalMode")}<small>{t("settings.defaultToolApprovalModeHint")}</small></span><TauriSettingsChoice ariaLabel={t("settings.defaultToolApprovalMode")} value={approvalMode} disabled={approvalLoading || approvalSaving} options={[{ value: "ask", label: t("settings.defaultToolApprovalMode.ask") }, { value: "auto", label: t("settings.defaultToolApprovalMode.auto") }, { value: "yolo", label: t("settings.defaultToolApprovalMode.yolo") }]} onChange={onApprovalChange} /></div>
     {approvalError && <p className="tauri-diagnostic-error" role="alert">{approvalError}</p>}
     <label className="tauri-settings-toggle"><Bell className="tauri-settings-field-icon" size={18} /><span><strong>{t("settings.general.notifications")}</strong><small>{t("settings.general.notificationsHint")}</small></span><input type="checkbox" checked={notificationsEnabled} onChange={event => onNotificationsChange(event.target.checked)} /></label>
     <div className="tauri-settings-sound">
@@ -475,8 +668,9 @@ function GeneralSettings({ languagePref, onLanguageChange, languageSaving, langu
         <TauriSoundOption t={t} label={t("settings.notificationSoundAttention")} value={attentionSound} onChange={next => { setAttentionSound(next); setAttentionPreference(next); playAttentionChime(); }} onPreview={playAttentionChime} />
       </div>}
     </div>
-    <div className="tauri-settings-field"><PanelTop className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.statusBarStyle")}<small>{t("settings.statusBarStyleHint")}</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.statusBarStyle")}>{(["icon", "text"] as const).map(option => <button key={option} type="button" role="radio" aria-checked={statusBar.style === option} className={`tauri-settings-radio${statusBar.style === option ? " is-active" : ""}`} onClick={() => setTauriStatusBarPreferences({ ...statusBar, style: option })}>{t(option === "icon" ? "settings.statusBarStyle.icon" : "settings.statusBarStyle.text")}</button>)}</div></div>
+    <div className="tauri-settings-field"><PanelTop className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.statusBarStyle")}<small>{t("settings.statusBarStyleHint")}</small></span><TauriSettingsChoice ariaLabel={t("settings.statusBarStyle")} value={statusBar.style} options={[{ value: "icon", label: t("settings.statusBarStyle.icon") }, { value: "text", label: t("settings.statusBarStyle.text") }]} onChange={style => setTauriStatusBarPreferences({ ...statusBar, style })} /></div>
     <div className="tauri-settings-field tauri-settings-status-items"><Activity className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.statusBarItems")}<small>{t("settings.statusBarItemsHint")}</small></span><StatusBarItemsEditor items={statusBar.items} availableItems={TAURI_STATUS_BAR_ITEM_IDS} busy={false} onChange={items => setTauriStatusBarPreferences({ ...statusBar, items })} itemLabel={id => t(TAURI_STATUS_BAR_LABEL_KEYS[id])} /></div>
+    </SettingsSection>
   </div>;
 }
 
@@ -501,6 +695,7 @@ function TauriSoundOption({ t, label, value, onChange, onPreview }: { t: Transla
 }
 
 function ShortcutSettings() {
+  const t = useT();
   const platform = detectShortcutPlatform();
   const overrides = useTauriShortcuts();
   const [recording, setRecording] = useState<TauriShortcutAction | null>(null);
@@ -516,28 +711,34 @@ function ShortcutSettings() {
     if (!combo) return;
     event.preventDefault(); event.stopPropagation();
     if (!isValidTauriShortcut(action, combo)) {
-      setFeedback(action === "send_message" ? "发送消息需要主修饰键 + Enter。" : "请使用包含 ⌘ 或 Ctrl 的组合键。");
+      setFeedback(action === "send_message"
+        ? t("settings.shortcutsEnterOnly", { action: t(TAURI_SHORTCUT_LABELS[action].label) })
+        : t("settings.tauriShortcut.primaryModifier"));
       return;
     }
     const conflict = tauriShortcutConflict(action, combo, platform);
     if (conflict) {
-      setFeedback(`与“${TAURI_SHORTCUT_LABELS[conflict].label}”的快捷键冲突。`);
+      setFeedback(t("settings.shortcutsConflict", {
+        action: t(TAURI_SHORTCUT_LABELS[action].label),
+        conflict: t(TAURI_SHORTCUT_LABELS[conflict].label),
+      }));
       return;
     }
     setTauriShortcut(action, combo, platform);
     setRecording(null); setFeedback("");
   };
   return <div className="tauri-settings-section">
-    <div className="tauri-shortcuts-heading"><div><h3>工作区快捷键</h3><p>点击按键录入新组合；设置只保存在 Preview，并立即生效。</p></div><button type="button" className="tauri-settings-button" onClick={() => { resetTauriShortcuts(); setRecording(null); setFeedback(""); }} disabled={Object.keys(overrides).length === 0}>全部恢复默认</button></div>
+    <div className="tauri-shortcuts-heading"><div><h3>{t("settings.shortcutsTitle")}</h3><p>{t("settings.shortcutsHint")}</p></div><button type="button" className="tauri-settings-button" onClick={() => { resetTauriShortcuts(); setRecording(null); setFeedback(""); }} disabled={Object.keys(overrides).length === 0}>{t("settings.shortcutsResetAll")}</button></div>
     {feedback && <p className="tauri-diagnostic-error" role="alert">{feedback}</p>}
     <div className="tauri-settings-shortcuts">
       {TAURI_SHORTCUT_ACTIONS.map(action => {
         const info = TAURI_SHORTCUT_LABELS[action];
+        const label = t(info.label);
         const keys = formatShortcutCombo(getTauriShortcut(action, platform), platform);
         const active = recording === action;
-        return <div key={action} className="tauri-shortcut-row"><span><strong>{info.label}</strong><small>{info.description}</small></span><div className="tauri-shortcut-row__actions"><button type="button" className={`tauri-shortcut-key${active ? " is-recording" : ""}`} data-tauri-shortcut-action={action} aria-label={active ? `正在录入${info.label}` : `${info.label}：${keys}`} aria-pressed={active} onClick={event => { setRecording(action); setFeedback(""); event.currentTarget.focus(); }} onBlur={() => { if (active) setRecording(null); }} onKeyDown={event => { if (active) record(action, event); }}>{active ? "请按组合键" : <kbd>{keys}</kbd>}</button><button type="button" className="tauri-shortcut-reset" disabled={!overrides[action]} onClick={() => { setTauriShortcut(action, null, platform); setFeedback(""); }}>重置</button></div></div>;
+        return <div key={action} className="tauri-shortcut-row"><span><strong>{label}</strong>{info.description && <small>{t(info.description)}</small>}</span><div className="tauri-shortcut-row__actions"><button type="button" className={`tauri-shortcut-key${active ? " is-recording" : ""}`} data-tauri-shortcut-action={action} aria-label={active ? `${t("settings.shortcutsRecording")} · ${label}` : `${label}: ${keys}`} aria-pressed={active} onClick={event => { setRecording(action); setFeedback(""); event.currentTarget.focus(); }} onBlur={() => { if (active) setRecording(null); }} onKeyDown={event => { if (active) record(action, event); }}>{active ? t("settings.shortcutsRecording") : <kbd>{keys}</kbd>}</button><button type="button" className="tauri-shortcut-reset" disabled={!overrides[action]} onClick={() => { setTauriShortcut(action, null, platform); setFeedback(""); }}>{t("settings.shortcutsReset")}</button></div></div>;
       })}
-      <div className="tauri-shortcut-row"><span><strong>关闭面板</strong><small>保留系统常用的 Esc 操作，不能改键。</small></span><kbd>Esc</kbd></div>
+      <div className="tauri-shortcut-row"><span><strong>{t("settings.tauriShortcut.closePanel")}</strong></span><kbd>Esc</kbd></div>
     </div>
   </div>;
 }
@@ -551,6 +752,7 @@ function DataSettings({ profile, busy, onRefreshProfile, onImportStableProfile, 
   onScanUnclaimedSessions?: () => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
@@ -570,16 +772,16 @@ function DataSettings({ profile, busy, onRefreshProfile, onImportStableProfile, 
   };
   const disabled = busy || actionBusy;
   return <div className="tauri-settings-section tauri-settings-data">
-    <div className="tauri-settings-data__heading"><div><h3>预览数据</h3><p>Preview 使用独立的配置和会话目录。</p></div>{onRefreshProfile && <button type="button" className="tauri-settings-button" onClick={() => void run(onRefreshProfile)} disabled={disabled}><RefreshCw size={13} />刷新</button>}</div>
+    <div className="tauri-settings-data__heading"><div><h3>{t("settings.data.previewTitle")}</h3><p>{t("settings.data.previewDescription")}</p></div>{onRefreshProfile && <button type="button" className="tauri-settings-button" onClick={() => void run(onRefreshProfile)} disabled={disabled}><RefreshCw size={13} />{t("settings.data.refresh")}</button>}</div>
     {profile ? <>
-      <div className="tauri-settings-data__path"><span>配置目录</span><code>{profile.previewHome}</code></div>
+      <div className="tauri-settings-data__path"><span>{t("settings.data.configDirectory")}</span><code>{profile.previewHome}</code></div>
       <div className="tauri-settings-data__actions">
-        <h4>从正式版导入</h4>
-        {profile.importAvailable ? <><p>复制稳定版配置前会创建带时间戳的备份，不会修改稳定版。</p><button type="button" className="tauri-settings-button" onClick={() => onImportStableProfile && void run(onImportStableProfile)} disabled={disabled || !onImportStableProfile}>复制稳定版配置（先备份）</button></> : <p>{profile.previewConfigExists ? "预览配置已存在，不会覆盖。" : profile.managedProfile ? "未发现可复制的稳定版配置。" : "检测到自定义 REASONIX_HOME，已停用自动导入。"}</p>}
-        {profile.projectFoldersImportAvailable ? <><p>可单独导入正式版保存的项目文件夹名称和路径。</p><button type="button" className="tauri-settings-button" onClick={() => onImportStableProjectFolders && void run(onImportStableProjectFolders)} disabled={disabled || !onImportStableProjectFolders}>导入旧版项目文件夹</button></> : <p>{profile.projectFoldersFileExists ? "当前配置目录中已有项目文件夹清单。" : profile.managedProfile ? "没有可导入的项目文件夹清单。" : "自定义 REASONIX_HOME 下停用项目文件夹导入。"}</p>}
+        <h4>{t("settings.data.importTitle")}</h4>
+        {profile.importAvailable ? <><p>{t("settings.data.importProfileHint")}</p><button type="button" className="tauri-settings-button" onClick={() => onImportStableProfile && void run(onImportStableProfile)} disabled={disabled || !onImportStableProfile}>{t("settings.data.importProfile")}</button></> : <p>{profile.previewConfigExists ? t("settings.data.profileExists") : profile.managedProfile ? t("settings.data.stableConfigMissing") : t("settings.data.customHomeDisabled")}</p>}
+        {profile.projectFoldersImportAvailable ? <><p>{t("settings.data.importFoldersHint")}</p><button type="button" className="tauri-settings-button" onClick={() => onImportStableProjectFolders && void run(onImportStableProjectFolders)} disabled={disabled || !onImportStableProjectFolders}>{t("settings.data.importFolders")}</button></> : <p>{profile.projectFoldersFileExists ? t("settings.data.foldersExist") : profile.managedProfile ? t("settings.data.foldersMissing") : t("settings.data.customHomeFoldersDisabled")}</p>}
       </div>
-      {profile.managedProfile && onScanUnclaimedSessions && <div className="tauri-settings-data__actions"><h4>会话目录</h4><p>审核尚未登记的 transcript，确认标题和项目后导入。</p><button type="button" className="tauri-settings-button" onClick={() => { onClose(); onScanUnclaimedSessions(); }} disabled={disabled}>扫描并审核未认领会话</button></div>}
-    </> : <p className="tauri-settings-loading">尚未读取到预览配置。可点击刷新重试。</p>}
+      {profile.managedProfile && onScanUnclaimedSessions && <div className="tauri-settings-data__actions"><h4>{t("settings.data.sessionsTitle")}</h4><p>{t("settings.data.sessionsHint")}</p><button type="button" className="tauri-settings-button" onClick={() => { onClose(); onScanUnclaimedSessions(); }} disabled={disabled}>{t("settings.data.reviewSessions")}</button></div>}
+    </> : <p className="tauri-settings-loading">{t("settings.data.notLoaded")}</p>}
     {notice && <p className="tauri-settings-data__notice" role="status">{notice}</p>}
     {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}
   </div>;
@@ -590,11 +792,18 @@ function SettingsLoadError({ onRetry }: { onRetry: () => void }) {
   return <div className="tauri-settings-load-error" role="alert">{t("settings.about.readFailed")}<button type="button" className="tauri-settings-button" onClick={onRetry}><RefreshCw size={13} />{t("settings.about.retry")}</button></div>;
 }
 
-function AppearanceSettings({ appearance, onChange, appearanceSaving, appearanceError, conversationWidth, onConversationWidthChange, textSize, onTextSizeChange, fontFamily, onFontFamilyChange, monoFontFamily, onMonoFontFamilyChange, customFontName, onCustomFontChange, customMonoFontName, onCustomMonoFontChange, terminalTheme, onTerminalThemeChange, terminalThemeSaving, terminalThemeError }: {
+function AppearanceSettings({ appearance, onChange, appearanceSaving, appearanceError, activeThemeId, userThemes, onThemeApply, onUserThemeSave, onUserThemeDelete, onUserThemeImport, onUserThemeExport, conversationWidth, onConversationWidthChange, textSize, onTextSizeChange, fontFamily, onFontFamilyChange, monoFontFamily, onMonoFontFamilyChange, customFontName, onCustomFontChange, customMonoFontName, onCustomMonoFontChange, terminalTheme, onTerminalThemeChange, terminalThemeSaving, terminalThemeError }: {
   appearance: TauriAppearance;
   onChange: (next: TauriAppearance) => void;
   appearanceSaving: boolean;
   appearanceError: string;
+  activeThemeId: string;
+  userThemes: ThemePackView[];
+  onThemeApply: (id: string) => Promise<boolean>;
+  onUserThemeSave: (theme: Pick<ThemePackView, "id" | "name" | "baseStyle" | "tokens" | "recipes">) => Promise<ThemePackView | null>;
+  onUserThemeDelete: (id: string) => Promise<boolean>;
+  onUserThemeImport: () => Promise<ThemePackView | null>;
+  onUserThemeExport: (id: string) => Promise<boolean>;
   conversationWidth: ConversationWidth;
   onConversationWidthChange: (next: ConversationWidth) => void;
   textSize: TextSize;
@@ -612,105 +821,151 @@ function AppearanceSettings({ appearance, onChange, appearanceSaving, appearance
   terminalThemeSaving: boolean;
   terminalThemeError: string;
 }) {
+  const t = useT();
   const [typographyOpen, setTypographyOpen] = useState(false);
+  const [themeGalleryOpen, setThemeGalleryOpen] = useState(false);
+  const [customPalette, setCustomPalette] = useState(getCustomTerminalPalette);
 
   if (typographyOpen) {
-    return <TypographySettings onBack={() => setTypographyOpen(false)} scrollContainerSelector=".tauri-settings-content" fixedChinese />;
+    return <TypographySettings onBack={() => setTypographyOpen(false)} scrollContainerSelector=".tauri-settings-content" />;
+  }
+  if (themeGalleryOpen) {
+    return <TauriThemeGallery mode={appearance.mode} baseStyle={appearance.style} activeThemeId={activeThemeId} userThemes={userThemes} error={appearanceError} onBack={() => setThemeGalleryOpen(false)} onApply={async id => { if (await onThemeApply(id)) setThemeGalleryOpen(false); }} onSaveTheme={onUserThemeSave} onDeleteTheme={onUserThemeDelete} onImportTheme={onUserThemeImport} onExportTheme={onUserThemeExport} />;
   }
 
   return (
-    <div className="tauri-settings-section">
-      <h3>外观</h3>
-      <p>更改会立即应用，并在下次启动时保留。</p>
+    <div className="tauri-settings-section tauri-settings-appearance">
+      <div className="tauri-settings-style-heading">{t("settings.appearance.sectionTheme")}</div>
+      <div className="tauri-settings-theme-gallery-entry">
+        <span className="tauri-settings-field-label">{t("settings.themeGallery.title")}<small>{t("settings.themeGallery.subtitle")}</small></span>
+        <button type="button" className="btn btn--secondary" onClick={() => setThemeGalleryOpen(true)}>{t("settings.themeGallery.browse")} <ArrowLeft size={14} className="tauri-settings-theme-gallery-entry__arrow" /></button>
+      </div>
       <div className="tauri-settings-field">
-        <span className="tauri-settings-field-label">模式</span>
-        <div className="tauri-settings-radio-group" role="radiogroup" aria-label="外观模式">
+        <Palette className="tauri-settings-field-icon" size={18} />
+        <span className="tauri-settings-field-label">{t("settings.theme")}<small>{t("settings.appearance.themeHint")}</small></span>
+        <div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.theme")}>
           {(["auto", "light", "dark"] as const satisfies readonly Theme[]).map(option => (
             <button key={option} type="button" role="radio" aria-checked={appearance.mode === option} disabled={appearanceSaving} className={`tauri-settings-radio${appearance.mode === option ? " is-active" : ""}`} onClick={() => onChange({ ...appearance, mode: option })}>
               {appearance.mode === option && <Check size={13} />}
-              <span>{option === "light" ? "浅色" : option === "dark" ? "深色" : "跟随系统"}</span>
+              <span>{option === "light" ? t("settings.themeLight") : option === "dark" ? t("settings.themeDark") : t("settings.themeAuto")}</span>
             </button>
           ))}
         </div>
       </div>
-      <div className="tauri-settings-style-heading">配色风格</div>
-      <div className="tauri-settings-style-grid" role="radiogroup" aria-label="配色风格">
+      <div className="tauri-settings-style-heading tauri-settings-style-heading--field">{t("settings.themeStyle")}<small>{t("settings.appearance.styleHint")}</small></div>
+      <div className="tauri-settings-style-grid" role="radiogroup" aria-label={t("settings.themeStyle")}>
         {THEME_STYLES.map(style => (
-          <button key={style} type="button" role="radio" aria-checked={appearance.style === style} disabled={appearanceSaving} className={`tauri-settings-style${appearance.style === style ? " is-active" : ""}`} onClick={() => onChange({ ...appearance, style })}>
+            <button key={style} type="button" role="radio" aria-checked={!activeThemeId && appearance.style === style} disabled={appearanceSaving} className={`tauri-settings-style${!activeThemeId && appearance.style === style ? " is-active" : ""}`} onClick={() => onThemeApply(style)}>
             <span className="tauri-settings-style-swatches" data-style={style} aria-hidden="true"><i /><i /><i /></span>
-            <span>{STYLE_LABELS[style]}</span>
+            <span>{t(STYLE_LABEL_KEYS[style])}</span>
             {appearance.style === style && <Check size={13} />}
           </button>
         ))}
       </div>
       {appearanceError && <p className="tauri-settings-zoom__error" role="alert">{appearanceError}</p>}
       <div className="tauri-settings-field tauri-settings-terminal-theme">
-        <span className="tauri-settings-field-label">终端主题</span>
+        <PanelTop className="tauri-settings-field-icon" size={18} />
+        <span className="tauri-settings-field-label">{t("settings.terminalTheme")}<small>{t("settings.appearance.terminalHint")}</small></span>
         <div className="tauri-settings-terminal-theme__controls">
-          <div className="tauri-settings-radio-group" role="radiogroup" aria-label="终端主题">
+          <div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.terminalTheme")}>
             {(["auto", "light", "dark"] as const).map(option => (
               <button key={option} type="button" role="radio" aria-checked={terminalTheme === option} disabled={terminalThemeSaving} className={`tauri-settings-radio${terminalTheme === option ? " is-active" : ""}`} onClick={() => onTerminalThemeChange(option)}>
                 {terminalTheme === option && <Check size={13} />}
-                <span>{option === "auto" ? "跟随应用" : option === "light" ? "浅色" : "深色"}</span>
+              <span>{option === "auto" ? t("settings.terminalThemeAuto") : option === "light" ? t("settings.terminalThemeLight") : t("settings.terminalThemeDark")}</span>
               </button>
             ))}
           </div>
           {terminalThemeError && <small className="tauri-settings-zoom__error" role="alert">{terminalThemeError}</small>}
         </div>
       </div>
-      <div className="tauri-settings-style-heading">阅读布局</div>
+      <details className="tauri-terminal-palette">
+        <summary><span><strong>{t("settings.terminalPalette.title")}</strong><small>{t("settings.terminalPalette.hint")}</small></span><ChevronDown size={15} aria-hidden="true" /></summary>
+        <div className="tauri-terminal-palette__body">
+          <label className="tauri-terminal-palette__toggle"><input type="checkbox" checked={customPalette.enabled} onChange={event => {
+            const next = { ...customPalette, enabled: event.target.checked };
+            setCustomPalette(next);
+            setCustomTerminalPalette(next.colors, next.enabled);
+          }} /><span>{t("settings.terminalPalette.enable")}</span></label>
+          <div className="tauri-terminal-palette__grid">
+            {(Object.keys(DEFAULT_TERMINAL_PALETTE) as TerminalPaletteKey[]).map(key => <label key={key} className="tauri-terminal-palette__color">
+              <span>{key}</span><input aria-label={key} type="color" value={customPalette.colors[key]} onChange={event => {
+                const colors: TerminalPalette = { ...customPalette.colors, [key]: event.target.value };
+                const next = { ...customPalette, colors };
+                setCustomPalette(next);
+                setCustomTerminalPalette(colors, next.enabled);
+              }} />
+            </label>)}
+          </div>
+          <button type="button" className="tauri-settings-button" onClick={() => {
+            const next = { enabled: false, colors: { ...DEFAULT_TERMINAL_PALETTE } };
+            setCustomPalette(next);
+            setCustomTerminalPalette(next.colors, false);
+          }}>{t("settings.terminalPalette.reset")}</button>
+        </div>
+      </details>
+      <div className="tauri-settings-style-heading">{t("settings.appearance.sectionConversation")}</div>
       <div className="tauri-settings-field">
-        <span className="tauri-settings-field-label">对话宽度</span>
-        <div className="tauri-settings-radio-group" role="radiogroup" aria-label="对话宽度">
+        <Monitor className="tauri-settings-field-icon" size={18} />
+        <span className="tauri-settings-field-label">{t("settings.conversationWidth")}<small>{t("settings.appearance.widthHint")}</small></span>
+        <div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.conversationWidth")}>
           {(["standard", "full"] as const).map(option => (
             <button key={option} type="button" role="radio" aria-checked={conversationWidth === option} className={`tauri-settings-radio${conversationWidth === option ? " is-active" : ""}`} onClick={() => onConversationWidthChange(option)}>
               {conversationWidth === option && <Check size={13} />}
-              <span>{option === "standard" ? "标准" : "宽屏"}</span>
+              <span>{option === "standard" ? t("settings.conversationWidthStandard") : t("settings.conversationWidthFull")}</span>
             </button>
           ))}
         </div>
       </div>
       <div className="tauri-settings-field">
-        <span className="tauri-settings-field-label">对话字号</span>
-        <div className="tauri-settings-radio-group" role="radiogroup" aria-label="对话字号">
+        <PanelTop className="tauri-settings-field-icon" size={18} />
+        <span className="tauri-settings-field-label">{t("settings.textSize")}<small>{t("settings.appearance.textSizeHint")}</small></span>
+        <div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.textSize")}>
           {TEXT_SIZES.map(size => (
             <button key={size} type="button" role="radio" aria-checked={textSize === size} className={`tauri-settings-radio${textSize === size ? " is-active" : ""}`} onClick={() => onTextSizeChange(size)}>
               {textSize === size && <Check size={13} />}
-              <span>{TEXT_SIZE_LABELS[size]}</span>
+              <span>{t(TEXT_SIZE_LABEL_KEYS[size])}</span>
             </button>
           ))}
         </div>
       </div>
       <DisplayZoomSetting />
+      <div className="tauri-settings-style-heading">{t("settings.appearance.sectionTypography")}</div>
       <div className="tauri-settings-field">
-        <label htmlFor="tauri-settings-font">界面字体</label>
+        <Languages className="tauri-settings-field-icon" size={18} />
+        <label htmlFor="tauri-settings-font" className="tauri-settings-field-label">{t("settings.fontFamily")}<small>{t("settings.appearance.fontHint")}</small></label>
         <select id="tauri-settings-font" className="tauri-settings-select" value={fontFamily} onChange={event => onFontFamilyChange(event.target.value as FontFamily)}>
-          {FONT_FAMILIES.map(font => <option key={font} value={font}>{FONT_LABELS[font]}</option>)}
+          {FONT_FAMILIES.map(font => <option key={font} value={font}>{t(FONT_LABEL_KEYS[font])}</option>)}
         </select>
       </div>
       {fontFamily === "custom" && <div className="tauri-settings-field">
-        <label htmlFor="tauri-settings-custom-font">字体名称</label>
-        <input id="tauri-settings-custom-font" className="tauri-settings-input" value={customFontName} onChange={event => onCustomFontChange(event.target.value)} placeholder="输入已安装字体的名称" />
+        <span className="tauri-settings-field-icon" />
+        <label htmlFor="tauri-settings-custom-font" className="tauri-settings-field-label">{t("settings.fontFamilyCustomName")}</label>
+        <input id="tauri-settings-custom-font" className="tauri-settings-input" value={customFontName} onChange={event => onCustomFontChange(event.target.value)} placeholder={t("settings.fontFamilyCustomPlaceholder")} />
       </div>}
       <div className="tauri-settings-field">
-        <label htmlFor="tauri-settings-mono-font">代码字体</label>
+        <Keyboard className="tauri-settings-field-icon" size={18} />
+        <label htmlFor="tauri-settings-mono-font" className="tauri-settings-field-label">{t("settings.monoFontFamily")}<small>{t("settings.appearance.monoFontHint")}</small></label>
         <select id="tauri-settings-mono-font" className="tauri-settings-select" value={monoFontFamily} onChange={event => onMonoFontFamilyChange(event.target.value as MonoFontFamily)}>
-          {MONO_FONT_FAMILIES.map(font => <option key={font} value={font}>{MONO_FONT_LABELS[font]}</option>)}
+          {MONO_FONT_FAMILIES.map(font => <option key={font} value={font}>{t(MONO_FONT_LABEL_KEYS[font])}</option>)}
         </select>
       </div>
       {monoFontFamily === "custom" && <div className="tauri-settings-field">
-        <label htmlFor="tauri-settings-custom-mono-font">等宽字体名称</label>
-        <input id="tauri-settings-custom-mono-font" className="tauri-settings-input" value={customMonoFontName} onChange={event => onCustomMonoFontChange(event.target.value)} placeholder="输入已安装等宽字体的名称" />
+        <span className="tauri-settings-field-icon" />
+        <label htmlFor="tauri-settings-custom-mono-font" className="tauri-settings-field-label">{t("settings.monoFontFamilyCustomName")}</label>
+        <input id="tauri-settings-custom-mono-font" className="tauri-settings-input" value={customMonoFontName} onChange={event => onCustomMonoFontChange(event.target.value)} placeholder={t("settings.monoFontFamilyCustomPlaceholder")} />
       </div>}
       <div className="tauri-settings-field tauri-settings-typography-entry">
-        <div><span className="tauri-settings-field-label">分区排版</span><p>分别设置界面、对话、输入框、代码和辅助文字的字体与字号。</p></div>
-        <button type="button" className="tauri-settings-button" onClick={() => setTypographyOpen(true)}>自定义排版</button>
+        <div><span className="tauri-settings-field-label">{t("settings.typography.title")}</span><p>{t("settings.typography.entrySummary")}</p></div>
+        <button type="button" className="tauri-settings-button" onClick={() => setTypographyOpen(true)}>{t("settings.typography.open")}</button>
       </div>
     </div>
   );
 }
 
 function DisplayZoomSetting() {
+  const t = useT();
+  const translatorRef = useRef(t);
+  translatorRef.current = t;
   const [percent, setPercent] = useState(100);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -725,7 +980,7 @@ function DisplayZoomSetting() {
       const next = Math.round(factor * 100);
       savedPercent.current = next;
       if (active) { setPercent(next); setError(""); }
-    }).catch(() => { if (active) setError("无法读取显示缩放设置"); }).finally(() => { if (active) setLoading(false); });
+    }).catch(() => { if (active) setError(translatorRef.current("settings.errorUnknown")); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; request.current += 1; };
   }, []);
 
@@ -741,20 +996,20 @@ function DisplayZoomSetting() {
       savedPercent.current = Math.round(factor * 100);
       if (sequence === request.current) setPercent(savedPercent.current);
     }).catch(() => {
-      if (sequence === request.current) { setPercent(savedPercent.current); setError("显示缩放保存失败"); }
+      if (sequence === request.current) { setPercent(savedPercent.current); setError(t("settings.errorUnknown")); }
     }).finally(() => { if (sequence === request.current) setSaving(false); });
   };
 
   return (
     <div className="tauri-settings-field tauri-settings-zoom">
-      <div className="tauri-settings-zoom__copy"><span className="tauri-settings-field-label">显示缩放</span><small>调整整个窗口的显示比例，菜单缩放也会同步。</small>{error && <span className="tauri-settings-zoom__error" role="alert">{error}</span>}</div>
+      <div className="tauri-settings-zoom__copy"><span className="tauri-settings-field-label">{t("settings.displayZoom")}</span>{error && <span className="tauri-settings-zoom__error" role="alert">{error}</span>}</div>
       <div className="tauri-settings-zoom__control">
-        <button type="button" aria-label="缩小界面" disabled={loading || percent <= 50} onClick={() => update(percent - 5)}>−</button>
-        <input aria-label="显示缩放" type="range" min="50" max="200" step="5" value={percent} disabled={loading} onChange={event => update(Number(event.target.value))} />
-        <button type="button" aria-label="放大界面" disabled={loading || percent >= 200} onClick={() => update(percent + 5)}>+</button>
+        <button type="button" aria-label={t("settings.displayZoomDecrease")} disabled={loading || percent <= 50} onClick={() => update(percent - 5)}>−</button>
+        <input aria-label={t("settings.displayZoom")} type="range" min="50" max="200" step="5" value={percent} disabled={loading} onChange={event => update(Number(event.target.value))} />
+        <button type="button" aria-label={t("settings.displayZoomIncrease")} disabled={loading || percent >= 200} onClick={() => update(percent + 5)}>+</button>
         <output>{percent}%</output>
-        <button type="button" className="tauri-settings-zoom__reset" disabled={loading || percent === 100} onClick={() => update(100)}>100%</button>
-        {saving && <small aria-live="polite">保存中</small>}
+        <button type="button" className="tauri-settings-zoom__reset" aria-label={t("settings.displayZoomReset")} disabled={loading || percent === 100} onClick={() => update(100)}>100%</button>
+        {saving && <small aria-live="polite">{t("common.loading")}</small>}
       </div>
     </div>
   );
@@ -824,14 +1079,39 @@ function DiagnosticsSettings({ bridgeStatus, catalogAudit, catalogAuditError, se
   </div>;
 }
 
-function ModelPreferenceSettings({ providerSummary, onModelChange, onRoleChange, saving, error, onOpenProviders }: {
+function ModelPreferenceSettings({ providerSummary, workspaceRoot, currentSessionState, currentSessionModelRef, onCurrentSessionModelChange, currentSessionHasAttachments, onApplyToCurrentSession, onModelChange, onRoleChange, onAgentPreferenceChange, saving, error, onOpenProviders }: {
   providerSummary: TauriProviderSummary;
+  workspaceRoot?: string;
+  currentSessionState?: "idle" | "running" | "paused";
+  currentSessionModelRef?: string;
+  onCurrentSessionModelChange?: (model: string) => Promise<boolean>;
+  currentSessionHasAttachments?: boolean;
+  onApplyToCurrentSession?: () => Promise<boolean>;
   onModelChange: (model: string) => void;
   onRoleChange: (role: "planner" | "vision" | "search", model: string) => void;
+  onAgentPreferenceChange: (request: { reasoningLanguage?: "auto" | "zh" | "en"; compactRatioPercent?: number }) => void;
   saving: boolean;
   error: string;
   onOpenProviders: () => void;
 }) {
+  const t = useT();
+  const [sessionModelSaving, setSessionModelSaving] = useState(false);
+  const [sessionModelError, setSessionModelError] = useState("");
+  const [sessionModelNotice, setSessionModelNotice] = useState("");
+  const [compactRatioDraft, setCompactRatioDraft] = useState(String(providerSummary.compactRatioPercent));
+  const [compactRatioCustomEditing, setCompactRatioCustomEditing] = useState(false);
+  const compactRatioCustomInputRef = useRef<HTMLInputElement>(null);
+  const compactRatioCancelBlurRef = useRef(false);
+  const compactRatioPreset = TAURI_COMPACT_RATIO_PRESETS.find(([percent]) => Math.abs(providerSummary.compactRatioPercent - percent) < 0.0001);
+  const compactRatioDraftPercent = Number(compactRatioDraft);
+  const compactRatioDraftValid = compactRatioDraft !== ""
+    && Number.isFinite(compactRatioDraftPercent)
+    && compactRatioDraftPercent >= COMPACT_RATIO_MIN_PERCENT
+    && compactRatioDraftPercent <= COMPACT_RATIO_MAX_PERCENT
+    && Math.abs(compactRatioDraftPercent * 10 - Math.round(compactRatioDraftPercent * 10)) < 0.0001;
+  useEffect(() => {
+    if (!compactRatioCustomEditing) setCompactRatioDraft(compactRatioPreset ? "" : String(providerSummary.compactRatioPercent));
+  }, [compactRatioCustomEditing, compactRatioPreset, providerSummary.compactRatioPercent]);
   const available = providerSummary.providers.filter(provider => provider.configured && provider.models.length > 0);
   const modelRefs = available.flatMap(provider => provider.models.map(model => `${provider.name}/${model}`));
   const visionRefs = available.flatMap(provider => provider.visionModels.map(model => `${provider.name}/${model}`));
@@ -842,57 +1122,183 @@ function ModelPreferenceSettings({ providerSummary, onModelChange, onRoleChange,
   const searchAvailable = !providerSummary.webSearchModel || providerSummary.webSearchModel === "auto" || searchRefs.includes(providerSummary.webSearchModel);
   const connection = (ref: string, ready: boolean, empty: string) => {
     if (!ref) return empty;
-    if (ref === "auto") return "自动选择";
-    if (!ready) return "连接不可用";
+    if (ref === "auto") return t("settings.connectionAutomatic");
+    if (!ready) return t("settings.modelPrefs.connectionUnavailable");
     const provider = available.find(item => ref.startsWith(`${item.name}/`));
-    return provider?.displayName || provider?.name || "连接不可用";
+    return provider?.displayName || provider?.name || t("settings.modelPrefs.connectionUnavailable");
   };
-  return <div className="tauri-settings-section tauri-model-settings">
-    <h3>模型分工</h3>
-    <p>新会话读取 Preview 资料中的模型偏好。工作区的 <code>reasonix.toml</code> 可以覆盖这里的设置。</p>
-    {available.length === 0 ? <div className="tauri-settings-empty">没有已就绪且提供模型列表的服务。请先配置模型服务。</div> : <>
-      <div className="tauri-model-settings__head" aria-hidden="true"><span>模型用途</span><span>使用模型</span><span>连接</span></div>
+  const changeCurrentSessionModel = async (model: string) => {
+    if (!model || !onCurrentSessionModelChange || sessionModelSaving) return;
+    setSessionModelSaving(true);
+    setSessionModelError("");
+    setSessionModelNotice("");
+    try {
+      if (await onCurrentSessionModelChange(model)) setSessionModelNotice(t("settings.modelPrefs.sessionModelChanged"));
+      else setSessionModelError(t("settings.modelPrefs.sessionModelChangeFailed"));
+    } catch {
+      setSessionModelError(t("settings.modelPrefs.sessionModelChangeFailed"));
+    } finally {
+      setSessionModelSaving(false);
+    }
+  };
+  const selectCompactRatioPreset = (percent: number) => {
+    if (document.activeElement === compactRatioCustomInputRef.current) {
+      compactRatioCancelBlurRef.current = true;
+      compactRatioCustomInputRef.current?.blur();
+    }
+    setCompactRatioCustomEditing(false);
+    if (Math.abs(providerSummary.compactRatioPercent - percent) >= 0.0001) onAgentPreferenceChange({ compactRatioPercent: percent });
+  };
+  const focusCompactRatioCustom = () => {
+    setCompactRatioCustomEditing(true);
+    requestAnimationFrame(() => compactRatioCustomInputRef.current?.focus());
+  };
+  const commitCompactRatioDraft = (rawValue: string) => {
+    const percent = Number(rawValue);
+    const valid = rawValue !== ""
+      && Number.isFinite(percent)
+      && percent >= COMPACT_RATIO_MIN_PERCENT
+      && percent <= COMPACT_RATIO_MAX_PERCENT
+      && Math.abs(percent * 10 - Math.round(percent * 10)) < 0.0001;
+    if (!valid && rawValue !== "") return;
+    if (!valid || saving) {
+      setCompactRatioCustomEditing(false);
+      return;
+    }
+    if (Math.abs(percent - providerSummary.compactRatioPercent) >= 0.0001) onAgentPreferenceChange({ compactRatioPercent: percent });
+    setCompactRatioCustomEditing(false);
+  };
+  return <div className="tauri-settings-section tauri-model-settings model-preferences">
+    <SettingsSection className="tauri-model-settings__section" title={t("settings.modelAssignment")} description={t("settings.modelPrefs.description", { config: "reasonix.toml" })}>
+    {currentSessionState !== undefined && onCurrentSessionModelChange && <>
+      <div className="tauri-settings-field tauri-model-settings__current-session">
+        <label className="tauri-settings-field-label" htmlFor="tauri-settings-current-session-model">{t("settings.modelPrefs.currentSessionModel")}<small>{t("settings.modelPrefs.currentSessionModelHint")}</small></label>
+        <select id="tauri-settings-current-session-model" className="tauri-settings-select" value={currentSessionModelRef || ""} disabled={saving || sessionModelSaving || currentSessionState !== "idle" || currentSessionHasAttachments} onChange={event => void changeCurrentSessionModel(event.target.value)}>
+          {!currentSessionModelRef && <option value="">{t("settings.modelPrefs.sessionModelUnavailable")}</option>}
+          {currentSessionModelRef && !modelRefs.includes(currentSessionModelRef) && <option value={currentSessionModelRef} disabled>{currentSessionModelRef} ({t("settings.modelPrefs.unavailable")})</option>}
+          {available.map(provider => <optgroup key={provider.name} label={provider.displayName || provider.name}>{provider.models.map(model => <option key={model} value={`${provider.name}/${model}`}>{model}</option>)}</optgroup>)}
+        </select>
+        <span className="tauri-model-settings__connection">{sessionModelSaving ? t("common.loading") : connection(currentSessionModelRef || "", Boolean(currentSessionModelRef && modelRefs.includes(currentSessionModelRef)), t("settings.modelPrefs.sessionModelUnavailable"))}</span>
+      </div>
+      {sessionModelError && <p className="tauri-diagnostic-error" role="alert">{sessionModelError}</p>}
+      {sessionModelNotice && <p className="tauri-settings-data__notice" role="status">{sessionModelNotice}</p>}
+    </>}
+    {available.length === 0 ? <div className="tauri-settings-empty">{t("settings.modelPrefs.noAvailableProviders")}</div> : <>
+      <div className="tauri-model-settings__head" aria-hidden="true"><span>{t("settings.modelPurpose")}</span><span>{t("settings.modelUsage")}</span><span>{t("settings.modelConnection")}</span></div>
       <div className="tauri-settings-field tauri-model-settings__row">
-        <label className="tauri-settings-field-label" htmlFor="tauri-settings-default-model">默认模型<small>主会话运行任务时使用。</small></label>
+        <label className="tauri-settings-field-label" htmlFor="tauri-settings-default-model">{t("settings.defaultModel")}<small>{t("settings.defaultModelHint")}</small></label>
         <select id="tauri-settings-default-model" className="tauri-settings-select" value={currentAvailable ? providerSummary.defaultModel : ""} disabled={saving} onChange={event => { if (event.target.value) onModelChange(event.target.value); }}>
-          <option value="">选择模型…</option>
+          <option value="">{t("settings.modelPrefs.choose")}</option>
           {available.map(provider => <optgroup key={provider.name} label={provider.displayName || provider.name}>{provider.models.map(model => <option key={model} value={`${provider.name}/${model}`}>{model}</option>)}</optgroup>)}
         </select>
-        <span className="tauri-model-settings__connection">{connection(providerSummary.defaultModel, currentAvailable, "未指定")}</span>
+        <span className="tauri-model-settings__connection">{connection(providerSummary.defaultModel, currentAvailable, t("common.none"))}</span>
       </div>
-      {!currentAvailable && providerSummary.defaultModel && <p className="tauri-model-settings__stale">当前默认模型 {providerSummary.defaultModel} 暂不可用，请选择已就绪的模型。</p>}
+      {!currentAvailable && providerSummary.defaultModel && <p className="tauri-model-settings__stale">{t("settings.modelPrefs.staleDefault", { model: providerSummary.defaultModel })}</p>}
       <div className="tauri-settings-field tauri-model-settings__row">
-        <label className="tauri-settings-field-label" htmlFor="tauri-settings-planner-model">规划模型<small>用于 Plan、审批或目标启动时的规划步骤。</small></label>
+        <label className="tauri-settings-field-label" htmlFor="tauri-settings-planner-model">{t("settings.plannerModel")}<small>{t("settings.modelPrefs.plannerHint")}</small></label>
         <select id="tauri-settings-planner-model" className="tauri-settings-select" value={providerSummary.plannerModel} disabled={saving} onChange={event => onRoleChange("planner", event.target.value)}>
-          <option value="">不指定</option>
-          {!plannerAvailable && <option value={providerSummary.plannerModel} disabled>{providerSummary.plannerModel}（不可用）</option>}
+          <option value="">{t("settings.plannerNone")}</option>
+          {!plannerAvailable && <option value={providerSummary.plannerModel} disabled>{providerSummary.plannerModel} ({t("settings.modelPrefs.unavailable")})</option>}
           {available.map(provider => <optgroup key={provider.name} label={provider.displayName || provider.name}>{provider.models.map(model => <option key={model} value={`${provider.name}/${model}`}>{model}</option>)}</optgroup>)}
         </select>
-        <span className="tauri-model-settings__connection">{connection(providerSummary.plannerModel, plannerAvailable, "跟随主会话")}</span>
+        <span className="tauri-model-settings__connection">{connection(providerSummary.plannerModel, plannerAvailable, t("settings.connectionFollowSession"))}</span>
       </div>
       <div className="tauri-settings-field tauri-model-settings__row">
-        <label className="tauri-settings-field-label" htmlFor="tauri-settings-vision-model">图片理解模型<small>当前模型无法处理图片时使用的备用模型。</small></label>
+        <label className="tauri-settings-field-label" htmlFor="tauri-settings-vision-model">{t("settings.imageUnderstandingModel")}<small>{t("settings.modelPrefs.visionHint")}</small></label>
         <select id="tauri-settings-vision-model" className="tauri-settings-select" value={providerSummary.visionModel} disabled={saving} onChange={event => onRoleChange("vision", event.target.value)}>
-          <option value="">不指定</option><option value="auto">自动选择</option>
-          {!visionAvailable && <option value={providerSummary.visionModel} disabled>{providerSummary.visionModel}（不可用）</option>}
+          <option value="">{t("common.none")}</option><option value="auto">{t("settings.connectionAutomatic")}</option>
+          {!visionAvailable && <option value={providerSummary.visionModel} disabled>{providerSummary.visionModel} ({t("settings.modelPrefs.unavailable")})</option>}
           {available.map(provider => provider.visionModels.length > 0 && <optgroup key={provider.name} label={provider.displayName || provider.name}>{provider.visionModels.map(model => <option key={model} value={`${provider.name}/${model}`}>{model}</option>)}</optgroup>)}
         </select>
-        <span className="tauri-model-settings__connection">{connection(providerSummary.visionModel, visionAvailable, "无")}</span>
+        <span className="tauri-model-settings__connection">{connection(providerSummary.visionModel, visionAvailable, t("common.none"))}</span>
       </div>
-      {visionRefs.length === 0 && <p className="tauri-settings-hint">当前没有确认支持图片输入的已就绪模型；可以使用自动选择。</p>}
+      {visionRefs.length === 0 && <p className="tauri-settings-hint">{t("settings.modelPrefs.noVisionModels")}</p>}
       <div className="tauri-settings-field tauri-model-settings__row">
-        <label className="tauri-settings-field-label" htmlFor="tauri-settings-search-model">网页搜索模型<small>负责使用原生搜索协议获取网页来源。</small></label>
+        <label className="tauri-settings-field-label" htmlFor="tauri-settings-search-model">{t("settings.webSearchModel")}<small>{t("settings.modelPrefs.searchHint")}</small></label>
         <select id="tauri-settings-search-model" className="tauri-settings-select" value={providerSummary.webSearchModel || "auto"} disabled={saving} onChange={event => onRoleChange("search", event.target.value)}>
-          <option value="auto">自动选择</option>
-          {!searchAvailable && <option value={providerSummary.webSearchModel} disabled>{providerSummary.webSearchModel}（不可用）</option>}
+          <option value="auto">{t("settings.connectionAutomatic")}</option>
+          {!searchAvailable && <option value={providerSummary.webSearchModel} disabled>{providerSummary.webSearchModel} ({t("settings.modelPrefs.unavailable")})</option>}
           {available.map(provider => provider.searchModels.length > 0 && <optgroup key={provider.name} label={provider.displayName || provider.name}>{provider.searchModels.map(model => <option key={model} value={`${provider.name}/${model}`}>{model}</option>)}</optgroup>)}
         </select>
-        <span className="tauri-model-settings__connection">{connection(providerSummary.webSearchModel || "auto", searchAvailable, "自动选择")}</span>
+        <span className="tauri-model-settings__connection">{connection(providerSummary.webSearchModel || "auto", searchAvailable, t("settings.connectionAutomatic"))}</span>
       </div>
-      {searchRefs.length === 0 && <p className="tauri-settings-hint">当前没有已就绪且支持原生网页搜索的模型；自动模式仍会按运行时规则查找。</p>}
+      {searchRefs.length === 0 && <p className="tauri-settings-hint">{t("settings.modelPrefs.noSearchModels")}</p>}
     </>}
+    <details className="tauri-model-settings__advanced">
+      <summary>{t("settings.subagents.defaultsTitle")}<ChevronDown size={15} aria-hidden="true" /></summary>
+      <p>{t("settings.subagents.defaultsDescription")}</p>
+      <TauriSubagentSettings defaultsOnly workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />
+    </details>
+    </SettingsSection>
+    <SettingsSection className="tauri-model-settings__section tauri-model-settings__section--behavior" title={t("settings.modelPrefs.agentBehaviorTitle")} description={t("settings.modelPrefs.agentBehaviorHint")}>
+    <div className="tauri-settings-field">
+      <span className="tauri-settings-field-label">{t("settings.reasoningLanguage")}<small>{t("settings.reasoningLanguageHint")}</small></span>
+      <TauriSettingsChoice ariaLabel={t("settings.reasoningLanguage")} value={providerSummary.reasoningLanguage} disabled={saving} options={(["auto", "zh", "en"] as const).map(language => ({ value: language, label: t(`settings.reasoningLanguage.${language}` as DictKey) }))} onChange={reasoningLanguage => onAgentPreferenceChange({ reasoningLanguage })} />
+    </div>
+    <div className="tauri-settings-field tauri-model-settings__ratio-field">
+      <div className="tauri-settings-field-label">{t("settings.compactRatio")}<small>{t("settings.compactRatioHint")}</small></div>
+      <div className="compact-ratio-controls">
+        <fieldset className="compact-ratio-choice-list">
+          <legend className="sr-only">{t("settings.compactRatio")}</legend>
+          {TAURI_COMPACT_RATIO_PRESETS.map(([percent, labelKey, effectKey]) => {
+            const selected = Math.abs(providerSummary.compactRatioPercent - percent) < 0.0001;
+            const [valueLabel, name] = t(labelKey).split(" · ");
+            return <div key={percent} className="compact-ratio-choice" data-selected={selected || undefined}>
+              <label className="compact-ratio-choice__row" onClick={() => { if (selected && !saving) selectCompactRatioPreset(percent); }}>
+                <input type="radio" name="tauri-settings-compact-ratio" value={percent} checked={selected} disabled={saving} aria-label={t(labelKey)} onChange={() => selectCompactRatioPreset(percent)} />
+                <span className="compact-ratio-choice__name">{name}</span>
+                <span className="compact-ratio-choice__percent">{valueLabel}</span>
+                <span className="compact-ratio-choice__effect">— {t(effectKey)}</span>
+                {percent === 80 && <span className="compact-ratio-choice__badge">{t("settings.recommended")}</span>}
+              </label>
+            </div>;
+          })}
+          <div className="compact-ratio-choice" data-selected={!compactRatioPreset || undefined}>
+            <div className="compact-ratio-choice__row compact-ratio-choice__row--custom">
+              <input id="tauri-settings-compact-ratio-custom-choice" type="radio" name="tauri-settings-compact-ratio" value="custom" checked={!compactRatioPreset} disabled={saving} aria-label={t("settings.compactRatioCustomOption")} onChange={focusCompactRatioCustom} />
+              <label className="compact-ratio-choice__name" htmlFor="tauri-settings-compact-ratio-custom-choice">{t("settings.typography.customized")}</label>
+              <label className="compact-ratio-choice__inline-input" htmlFor="tauri-settings-compact-ratio-custom">
+                <input
+                  ref={compactRatioCustomInputRef}
+                  id="tauri-settings-compact-ratio-custom"
+                  type="number"
+                  min={COMPACT_RATIO_MIN_PERCENT}
+                  max={COMPACT_RATIO_MAX_PERCENT}
+                  step={0.1}
+                  inputMode="decimal"
+                  value={compactRatioDraft}
+                  placeholder={t("settings.compactRatioCustomPlaceholder")}
+                  disabled={saving}
+                  aria-label={t("settings.compactRatioCustomAria")}
+                  aria-invalid={compactRatioDraft !== "" && !compactRatioDraftValid}
+                  onFocus={() => setCompactRatioCustomEditing(true)}
+                  onInput={event => setCompactRatioDraft(event.currentTarget.value)}
+                  onBlur={event => {
+                    if (compactRatioCancelBlurRef.current) { compactRatioCancelBlurRef.current = false; return; }
+                    commitCompactRatioDraft(event.currentTarget.value);
+                  }}
+                  onKeyDown={event => {
+                    if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); }
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      compactRatioCancelBlurRef.current = true;
+                      setCompactRatioDraft(compactRatioPreset ? "" : String(providerSummary.compactRatioPercent));
+                      setCompactRatioCustomEditing(false);
+                      event.currentTarget.blur();
+                    }
+                  }}
+                />
+                <span aria-hidden="true">%</span>
+              </label>
+            </div>
+          </div>
+        </fieldset>
+        <p className="tauri-settings-hint">{t("settings.compactRatioCustomHint")}</p>
+      </div>
+    </div>
     {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}
-    <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" onClick={onOpenProviders}>管理模型服务</button></div>
+    <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" onClick={onOpenProviders}>{t("settings.webSearchModelConnections")}</button></div>
+    </SettingsSection>
   </div>;
 }
 
@@ -903,11 +1309,15 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
   currentSessionHasAttachments?: boolean;
   onApplyToCurrentSession?: () => Promise<boolean>;
 }) {
+  const t = useT();
   const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({});
   const [showApiKey, setShowApiKey] = useState<Record<string, boolean>>({});
   const [keyStatus, setKeyStatus] = useState<Record<string, { message: string; error: boolean } | null>>({});
   const [keyBusy, setKeyBusy] = useState(false);
   const [pendingApply, setPendingApply] = useState<Record<string, boolean>>({});
+  const [probeModels, setProbeModels] = useState<Record<string, string>>({});
+  const [probeBusy, setProbeBusy] = useState<Record<string, boolean>>({});
+  const [probeStatus, setProbeStatus] = useState<Record<string, { message: string; error: boolean } | null>>({});
   const keyBusyRef = useRef(false);
   const statusTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const mounted = useRef(false);
@@ -956,12 +1366,12 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
         const summary = await tauriProviderSummary();
         if (mounted.current) onProviderSummaryChange(summary);
         const configured = summary.providers.find(provider => provider.name === providerName)?.configured;
-        showStatus(providerName, action === "save" ? "已保存到钥匙串" : !deleted ? "钥匙串中没有密钥" : configured ? "钥匙串密钥已删除；其他凭据仍可用" : "钥匙串密钥已删除");
+        showStatus(providerName, action === "save" ? t("settings.previewProvider.keySaved") : !deleted ? t("settings.previewProvider.keyMissing") : configured ? t("settings.previewProvider.keyDeletedOther") : t("settings.previewProvider.keyDeleted"));
       } catch {
-        showStatus(providerName, action === "save" ? "已保存到钥匙串；配置状态刷新失败" : deleted ? "钥匙串密钥已删除；配置状态刷新失败" : "钥匙串中没有密钥；配置状态刷新失败", true);
+        showStatus(providerName, action === "save" ? t("settings.previewProvider.keySavedRefreshFailed") : deleted ? t("settings.previewProvider.keyDeletedRefreshFailed") : t("settings.previewProvider.keyMissingRefreshFailed"), true);
       }
     } catch {
-      showStatus(providerName, action === "save" ? "保存失败" : "删除失败", true);
+      showStatus(providerName, action === "save" ? t("settings.models.keySaveFailed") : t("settings.previewProvider.keyDeleteFailed"), true);
     } finally {
       keyBusyRef.current = false;
       if (mounted.current) setKeyBusy(false);
@@ -977,55 +1387,81 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
       if (applied && mounted.current) {
         setPendingApply({});
       }
-      showStatus(providerName, applied ? "当前会话已更新" : "当前会话未能更新，请在诊断面板重试", !applied);
+      showStatus(providerName, applied ? t("settings.permission.applied") : t("settings.permission.applyFailed"), !applied);
     } catch {
-      showStatus(providerName, "当前会话未能更新，请在诊断面板重试", true);
+      showStatus(providerName, t("settings.permission.applyFailed"), true);
     } finally {
       keyBusyRef.current = false;
       if (mounted.current) setKeyBusy(false);
     }
   };
 
+  const handleProviderProbe = async (provider: TauriProviderSummary["providers"][number]) => {
+    const model = probeModels[provider.name] || provider.models[0] || "";
+    if (!model || probeBusy[provider.name]) return;
+    setProbeBusy(prev => ({ ...prev, [provider.name]: true }));
+    setProbeStatus(prev => ({ ...prev, [provider.name]: null }));
+    try {
+      const result = await testTauriProviderModel({ name: provider.name, model, apiKey: apiKeyInputs[provider.name] || undefined });
+      setProbeStatus(prev => ({ ...prev, [provider.name]: { message: t("settings.previewProvider.probeSuccess", { latency: result.latencyMillis }), error: false } }));
+    } catch {
+      setProbeStatus(prev => ({ ...prev, [provider.name]: { message: t("settings.previewProvider.probeFailed"), error: true } }));
+    } finally {
+      setProbeBusy(prev => ({ ...prev, [provider.name]: false }));
+    }
+  };
+
   return (
     <div className="tauri-settings-section">
-      <h3>模型提供方</h3>
-      <p className="tauri-settings-hint">在这里配置服务并保存所需凭据。默认模型在“模型偏好”中选择。</p>
+      <h3>{t("settings.models.services")}</h3>
+      <p className="tauri-settings-hint">{t("settings.previewProvider.pageHint")}</p>
       <TauriProviderEditor onSummaryChange={onProviderSummaryChange} />
       {providerSummary.providers.length === 0 ? (
-        <div className="tauri-settings-empty">当前没有模型服务。可通过上方的“添加服务”配置 Preview 独立资料。</div>
+        <div className="tauri-settings-empty">{t("settings.previewProvider.noServices")}</div>
       ) : (
         <div className="tauri-settings-model-list">
           {providerSummary.providers.map(provider => (
             <div key={provider.name} className="tauri-settings-model-card">
               <div className="tauri-settings-model-header">
                 <strong>{provider.displayName || provider.name}</strong>
-                <span className={`tauri-settings-badge${provider.configured ? " is-ready" : ""}`}>{provider.configured ? "已就绪" : "未配置"}</span>
+                <span className={`tauri-settings-badge${provider.configured ? " is-ready" : ""}`}>{provider.configured ? t("settings.previewProvider.ready") : t("settings.previewProvider.notConfigured")}</span>
               </div>
-              <p className="tauri-settings-model-meta">{provider.kind} · {provider.modelCount} 个模型</p>
+              <p className="tauri-settings-model-meta">{provider.kind} · {t("settings.previewProvider.modelCount", { count: provider.modelCount })}</p>
+              <div className="tauri-settings-provider-probe">
+                <label>{t("settings.previewProvider.probeModel")}
+                  <select className="tauri-settings-input" aria-label={t("settings.previewProvider.probeModelFor", { name: provider.displayName || provider.name })} value={probeModels[provider.name] || provider.models[0] || ""} disabled={probeBusy[provider.name] || provider.models.length === 0} onChange={event => setProbeModels(prev => ({ ...prev, [provider.name]: event.target.value }))}>
+                    {provider.models.length === 0 && <option value="">{t("settings.modelPrefs.choose")}</option>}
+                    {provider.models.map(model => <option key={model} value={model}>{model}</option>)}
+                  </select>
+                </label>
+                <button type="button" className="tauri-settings-button" disabled={probeBusy[provider.name] || provider.models.length === 0} onClick={() => void handleProviderProbe(provider)}>{probeBusy[provider.name] ? t("settings.previewProvider.probeRunning") : t("settings.previewProvider.probe")}</button>
+                {probeStatus[provider.name] && <span role={probeStatus[provider.name]?.error ? "alert" : "status"} className={`tauri-settings-provider-probe-status${probeStatus[provider.name]?.error ? " is-error" : ""}`}>{probeStatus[provider.name]?.message}</span>}
+              </div>
               {provider.requiresKey && (
                 <div className="tauri-settings-apikey">
                   <div className="tauri-settings-apikey-input">
                     <Key size={13} />
                     <input
                       type={showApiKey[provider.name] ? "text" : "password"}
-                      placeholder={provider.configured ? "已配置（钥匙串或其他凭据来源）" : "输入 API Key…"}
+                      aria-label={t("settings.previewProvider.apiKeyFor", { name: provider.displayName || provider.name })}
+                      placeholder={provider.configured ? t("settings.previewProvider.credentialConfigured") : t("settings.previewProvider.enterAPIKey")}
                       value={apiKeyInputs[provider.name] ?? ""}
                       onChange={e => setApiKeyInputs(prev => ({ ...prev, [provider.name]: e.target.value }))}
                     />
-                    <button type="button" onClick={() => setShowApiKey(prev => ({ ...prev, [provider.name]: !prev[provider.name] }))}>
+                    <button type="button" aria-label={t(showApiKey[provider.name] ? "settings.previewProvider.hideAPIKey" : "settings.previewProvider.showAPIKey")} onClick={() => setShowApiKey(prev => ({ ...prev, [provider.name]: !prev[provider.name] }))}>
                       {showApiKey[provider.name] ? <EyeOff size={13} /> : <Eye size={13} />}
                     </button>
                   </div>
                   <div className="tauri-settings-apikey-actions">
                     <button type="button" className="tauri-settings-button" onClick={() => void handleApiKeyAction(provider.name, "save")} disabled={keyBusy || !apiKeyInputs[provider.name]}>
-                      保存到钥匙串
+                      {t("settings.previewProvider.saveKey")}
                     </button>
                     <button type="button" className="tauri-settings-button tauri-settings-button--danger" onClick={() => void handleApiKeyAction(provider.name, "delete")} disabled={keyBusy}>
-                      删除
+                      {t("common.delete")}
                     </button>
                     {pendingApply[provider.name] && currentSessionState && onApplyToCurrentSession && (
-                      <button type="button" className="tauri-settings-button" onClick={() => void handleApplyToCurrentSession(provider.name)} disabled={keyBusy || currentSessionState !== "idle" || currentSessionHasAttachments} title={currentSessionState !== "idle" ? "请等待当前回合结束" : currentSessionHasAttachments ? "请先处理待发送的附件" : undefined}>
-                        应用到当前会话
+                      <button type="button" className="tauri-settings-button" onClick={() => void handleApplyToCurrentSession(provider.name)} disabled={keyBusy || currentSessionState !== "idle" || currentSessionHasAttachments} title={currentSessionState !== "idle" ? t("common.busyHint") : currentSessionHasAttachments ? t("settings.previewProvider.resolveAttachments") : undefined}>
+                        {t("settings.permission.applyCurrent")}
                       </button>
                     )}
                     {keyStatus[provider.name] && <span className={`tauri-settings-apikey-status${keyStatus[provider.name]?.error ? " is-error" : " is-success"}`}>{keyStatus[provider.name]?.message}</span>}
@@ -1036,7 +1472,7 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
           ))}
         </div>
       )}
-      <p className="tauri-settings-hint">在此保存的 API Key 存储在系统钥匙串中，对新会话生效；当前会话可在诊断面板重启桥接服务后继续使用。删除钥匙串密钥后，其他凭据来源仍可能使提供方保持就绪。</p>
+      <p className="tauri-settings-hint">{t("settings.previewProvider.keychainHint")}</p>
     </div>
   );
 }
@@ -1067,6 +1503,32 @@ function AboutSettings({ runtimeInfo, platform, onRefresh }: { runtimeInfo: Taur
           setLinkError(false);
           void openTauriExternalURL(event.currentTarget.href).catch(() => setLinkError(true));
         }}><ExternalLink size={14} /> {t("settings.about.github")}</a>
+      </div>
+      {linkError && <p role="alert">{t("settings.about.openLinkFailed")}</p>}
+    </div>
+  );
+}
+
+function TauriUpdatesSettings({ runtimeInfo }: { runtimeInfo: TauriPreviewRuntimeInfo }) {
+  const t = useT();
+  const [linkError, setLinkError] = useState(false);
+  const open = (url: string) => {
+    setLinkError(false);
+    void openTauriExternalURL(url).catch(() => setLinkError(true));
+  };
+  return (
+    <div className="tauri-settings-section tauri-updates-settings">
+      <h3>{t("settings.tab.updates")}</h3>
+      <p>{t("settings.tabSub.updates")}</p>
+      <div className="tauri-settings-about">
+        <div className="tauri-settings-about-row"><span>{t("settings.about.previewVersion")}</span><span>v{runtimeInfo.previewVersion}</span></div>
+        <div className="tauri-settings-about-row"><span>{t("settings.about.stableBaseline")}</span><span>v{runtimeInfo.stableVersion}</span></div>
+      </div>
+      <div className="tauri-updates-settings-notice" role="note">{t("settings.updates.previewUpdaterUnavailable")}</div>
+      <div className="tauri-settings-actions">
+        <button type="button" className="tauri-settings-button" onClick={() => open("https://reasonix.io/?download=desktop#start")}><ExternalLink size={14} /> {t("updater.officialDownload")}</button>
+        <button type="button" className="tauri-settings-button" onClick={() => open("https://reasonix.io/changelog/")}><ExternalLink size={14} /> {t("changelog.openWeb")}</button>
+        <button type="button" className="tauri-settings-button" onClick={() => open("https://github.com/esengine/DeepSeek-Reasonix/issues/new/choose")}><ExternalLink size={14} /> {t("feedback.submitIssue")}</button>
       </div>
       {linkError && <p role="alert">{t("settings.about.openLinkFailed")}</p>}
     </div>

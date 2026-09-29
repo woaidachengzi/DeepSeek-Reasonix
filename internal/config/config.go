@@ -81,12 +81,58 @@ type Config struct {
 	// settings UI intentionally owns even when their value equals the built-in
 	// default. It is transient edit metadata and is never serialized directly.
 	explicitProjectSkillKeys map[string]bool
-	stagedModelCredentials   []string
-	editLoadErr              error
+	// explicitProjectPermissionKeys preserves empty/default permission values
+	// that intentionally override a user's global policy.
+	explicitProjectPermissionKeys map[string]bool
+	stagedModelCredentials        []string
+	editLoadErr                   error
 	// loadWarnings are non-fatal issues observed while loading config (corrupt
 	// user/project files recovered via last-known-good or defaults). They never
 	// rewrite the original file; the UI may surface them for doctor repair.
 	loadWarnings []string
+}
+
+// KeepProjectPermissionKey marks one permission field as an intentional
+// project override, including an empty/default value.
+func (c *Config) KeepProjectPermissionKey(key string) error {
+	key = strings.TrimSpace(key)
+	switch key {
+	case "mode", "allow", "ask", "deny":
+	default:
+		return fmt.Errorf("unknown project permission key %q", key)
+	}
+	if c.explicitProjectPermissionKeys == nil {
+		c.explicitProjectPermissionKeys = make(map[string]bool)
+	}
+	c.explicitProjectPermissionKeys[key] = true
+	return nil
+}
+
+// ProjectPermissionKeyDeclared reports whether a project file explicitly
+// owns a permission field, including an empty/default override.
+func (c *Config) ProjectPermissionKeyDeclared(key string) bool {
+	if c == nil {
+		return false
+	}
+	if c.explicitProjectPermissionKeys[key] {
+		return true
+	}
+	switch key {
+	case "mode":
+		return c.Permissions.Mode != Default().Permissions.Mode
+	case "allow":
+		return len(c.Permissions.Allow) > 0
+	case "ask":
+		return len(c.Permissions.Ask) > 0
+	case "deny":
+		return len(c.Permissions.Deny) > 0
+	default:
+		return false
+	}
+}
+
+func (c *Config) keepsProjectPermissionKey(key string) bool {
+	return c != nil && c.explicitProjectPermissionKeys[key]
 }
 
 // KeepProjectSkillKey marks a skill field as an intentional project override.

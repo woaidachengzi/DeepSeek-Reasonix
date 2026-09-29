@@ -45,10 +45,11 @@ var (
 
 const redactedValue = "[redacted]"
 
-// Runtime toggles for the opt-in protection layers, set once by the
-// composition root from the user-global [secrets] config section. Package
-// globals are safe here because [secrets] cannot be overridden per-project:
-// every concurrent workspace in one process shares the same user setting.
+// Runtime toggles for the opt-in protection layers. The composition root loads
+// them from the user-global [secrets] config section; the authenticated Preview
+// settings bridge can update them after persisting a change. Package globals
+// are correct because [secrets] cannot be overridden per-project: every
+// concurrent workspace in one process shares the same user setting.
 var (
 	filterSubprocessEnvEnabled   atomic.Bool
 	protectSensitiveFilesEnabled atomic.Bool

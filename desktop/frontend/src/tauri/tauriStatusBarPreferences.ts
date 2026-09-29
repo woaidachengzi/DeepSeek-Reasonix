@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-export const TAURI_STATUS_BAR_ITEM_IDS = ["workspace", "model", "session", "observed_tokens", "turn_tokens", "context", "compact", "cache_hit", "bridge"] as const;
+export const TAURI_STATUS_BAR_ITEM_IDS = ["workspace", "model", "balance", "session", "observed_tokens", "turn_tokens", "turn_output_tokens", "turn_cache_tokens", "turn_cost", "session_turns", "session_cost", "context", "compact", "cache_hit", "bridge"] as const;
 export type TauriStatusBarItemId = typeof TAURI_STATUS_BAR_ITEM_IDS[number];
 export type TauriStatusBarStyle = "icon" | "text";
 export interface TauriStatusBarPreferences {

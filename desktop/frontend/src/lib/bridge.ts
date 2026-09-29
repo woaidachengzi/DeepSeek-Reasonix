@@ -1,5 +1,7 @@
 import { makeMockModelSettingsBindings, type ModelSettingsBindings } from "./modelSettingsBridge";
 import { mockProviderTemplate, mockPreset, mockBundlePreset, mockKimiAPIModels, mockLongCatModels, mockTokenRhythmModels, mockTokenRhythmModelOverrides, mockMiMoV25Models, mockMiniMaxModels, mockGLMAPIModels, mockGLMCodingModels, mockGLMAnthropicModels, mockQwenAPIModels, mockQwenPlanModels, mockQwenPlanVisionModels, mockStepFunModels, mockOpenCodeGoModels, mockNovitaModels, mockGMIModels, mockVercelModels, mockOllamaCloudModels } from "./mockProviderTemplates";
+import { COMPACT_RATIO_MAX_PERCENT, COMPACT_RATIO_MIN_PERCENT } from "./compactRatio";
+export { COMPACT_RATIO_MAX_PERCENT, COMPACT_RATIO_MIN_PERCENT } from "./compactRatio";
 // Wails and the browser mock share this React-to-Go contract.
 // @ts-ignore generated locally; fresh checkouts use the disabled drift check below.
 import type * as GeneratedApp from "../../wailsjs/go/main/App";
@@ -156,7 +158,6 @@ import type {
 } from "./types";
 import { browserPreviewShellSupport } from "./shellSupportPreview";
 export * from "./remoteTabEvents";
-export const COMPACT_RATIO_MIN_PERCENT = 30, COMPACT_RATIO_MAX_PERCENT = 85;
 
 export interface DesktopShellStatusView {
   trayState: "probing" | "ready" | "unavailable";

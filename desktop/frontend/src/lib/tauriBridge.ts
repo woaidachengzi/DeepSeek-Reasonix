@@ -14,6 +14,12 @@ import type {
   BridgeMCPInteractionAnswerRequest,
   BridgeProjectFolder,
   BridgeProviderSummaryResponse,
+  BridgeProviderModelProbeRequest,
+  BridgeProviderModelProbeResponse,
+  BridgeRemoteBrowseRequest,
+  BridgeRemoteBrowseResponse,
+  BridgeRemoteDisconnectResponse,
+  BridgeSetAgentPreferenceRequest,
   BridgeSession,
   BridgeSessionMetrics,
   BridgeWorkspaceListResponse,
@@ -23,6 +29,7 @@ import type {
 } from "./bridgeProtocol.generated";
 import type { TerminalThemePreference } from "./terminalTheme";
 import type { Theme, ThemeStyle } from "./theme";
+import type { ThemePackView } from "./themePack";
 import type { LangPref } from "./i18n";
 
 export interface TauriBridgeStatus {
@@ -81,6 +88,64 @@ export interface TauriStorageSettings {
   statePath: string;
   cachePath: string;
   extensionsPath: string;
+}
+
+export interface TauriRemoteHost {
+  name: string;
+  host: string;
+  port: number;
+  user: string;
+  identityFile: string;
+  proxyJump: string;
+  workspace: string;
+  serveInstall: string;
+  credentialMode: string;
+  useSSHConfig: boolean;
+  passwordSet: boolean;
+  passphraseSet: boolean;
+}
+
+export interface TauriRemoteSettings {
+  protocolVersion: number;
+  configPath: string;
+  sshConfigPath: string;
+  hosts: TauriRemoteHost[];
+}
+
+export interface TauriRemoteSSHConfigScan {
+  protocolVersion: number;
+  configPath: string;
+  aliases: { alias: string }[];
+}
+
+export interface TauriRemoteHostInput extends Omit<TauriRemoteHost, "passwordSet" | "passphraseSet"> {
+  passwordAction?: "keep" | "replace" | "clear";
+  password?: string;
+  passphraseAction?: "keep" | "replace" | "clear";
+  passphrase?: string;
+}
+
+export interface TauriRemoteSettingsChange {
+  action: "upsert" | "remove";
+  name?: string;
+  host?: TauriRemoteHostInput;
+}
+
+export interface TauriRemoteConnectRequest {
+  name: string;
+  trustFingerprint?: string;
+  password?: string;
+  passphrase?: string;
+}
+
+export interface TauriRemoteConnectResponse {
+  protocolVersion: number;
+  status: "connected" | "host_key_confirmation" | "failed";
+  host?: string;
+  address?: string;
+  keyType?: string;
+  fingerprint?: string;
+  message?: string;
 }
 
 export interface TauriProfileImportResult {
@@ -232,6 +297,136 @@ export async function tauriStorageSettings(): Promise<TauriStorageSettings> {
   return invoke<TauriStorageSettings>("storage_settings");
 }
 
+export async function tauriRemoteSettings(): Promise<TauriRemoteSettings> {
+  requireTauri();
+  return invoke<TauriRemoteSettings>("remote_settings");
+}
+
+export interface TauriBotAdapterHealth {
+  id: string;
+  platform: string;
+  domain?: string;
+  name?: string;
+  status: string;
+  started_at?: string;
+  last_message_at?: string;
+  last_send_at?: string;
+  last_error_at?: string;
+  last_error?: string;
+  messages: number;
+  sends: number;
+  send_errors: number;
+  closed: boolean;
+}
+
+export interface TauriBotRuntimeStatus {
+  protocolVersion: number;
+  running: boolean;
+  status: "stopped" | "blocked" | "starting" | "running" | "degraded" | "error" | string;
+  message: string;
+  connections: number;
+  startedAt?: string;
+  adapterHealth?: TauriBotAdapterHealth[];
+  desktopBridgeAvailable: boolean;
+}
+
+export interface TauriBotChannelSettings {
+  id: string;
+  platform: string;
+  domain?: string;
+  label: string;
+  enabled: boolean;
+  status: string;
+  credentialsSet: boolean;
+  credentialMissing: boolean;
+  credentialIdentity?: string;
+  model?: string;
+  toolApprovalMode?: string;
+  workspaceRoot?: string;
+  runtimeSettings: boolean;
+  access?: TauriBotConnectionAccess;
+}
+
+export interface TauriBotConnectionAccess {
+  enabled: boolean;
+  allowAll: boolean;
+  pairingEnabled: boolean;
+  users: string[];
+  groups: string[];
+  approvers: string[];
+  admins: string[];
+}
+
+export interface TauriBotSettings {
+  protocolVersion: number;
+  configPath: string;
+  enabled: boolean;
+  accessControlConfigured: boolean;
+  pairingEnabled: boolean;
+  allowlistEnabled: boolean;
+  allowAll: boolean;
+  allowlist: Record<"qq" | "feishu" | "weixin" | "dingtalk", {
+    users: string[];
+    groups: string[];
+    approvers: string[];
+    admins: string[];
+  }>;
+  channels: TauriBotChannelSettings[];
+}
+
+export type TauriBotSettingsChange =
+  | { action: "set_enabled"; enabled: boolean }
+  | { action: "set_channel_enabled"; channelId: string; enabled: boolean }
+  | { action: "set_pairing"; enabled: boolean }
+  | { action: "set_allow_all"; enabled: boolean }
+  | { action: "set_allowlist"; platform: "qq" | "feishu" | "weixin" | "dingtalk"; list: "users" | "groups" | "approvers" | "admins"; values: string[] }
+  | { action: "set_channel_access_mode"; channelId: string; mode: "trusted" | "everyone" }
+  | { action: "set_channel_pairing"; channelId: string; enabled: boolean }
+  | { action: "set_channel_allowlist"; channelId: string; list: "users" | "groups" | "approvers" | "admins"; values: string[] }
+  | { action: "set_channel_runtime"; channelId: string; model?: string; toolApprovalMode?: "" | "ask" | "auto" | "yolo"; workspaceRoot?: string }
+  | { action: "set_credentials"; channelId: string; identity: string; secret: string };
+
+export async function tauriBotSettings(): Promise<TauriBotSettings> {
+  requireTauri();
+  return invoke<TauriBotSettings>("bot_settings");
+}
+
+export async function changeTauriBotSettings(change: TauriBotSettingsChange): Promise<TauriBotSettings> {
+  requireTauri();
+  return invoke<TauriBotSettings>("change_bot_settings", { change });
+}
+
+export async function tauriBotRuntimeStatus(): Promise<TauriBotRuntimeStatus> {
+  requireTauri();
+  return invoke<TauriBotRuntimeStatus>("bot_runtime_status");
+}
+
+export async function scanTauriRemoteSSHConfig(): Promise<TauriRemoteSSHConfigScan> {
+  requireTauri();
+  return invoke<TauriRemoteSSHConfigScan>("scan_remote_ssh_config");
+}
+
+export async function changeTauriRemoteSettings(change: TauriRemoteSettingsChange): Promise<TauriRemoteSettings> {
+  requireTauri();
+  return invoke<TauriRemoteSettings>("change_remote_settings", { change });
+}
+
+export async function connectTauriRemoteHost(request: TauriRemoteConnectRequest): Promise<TauriRemoteConnectResponse> {
+  requireTauri();
+  return invoke<TauriRemoteConnectResponse>("connect_remote_host", { request });
+}
+
+export async function disconnectTauriRemoteHost(name: string): Promise<BridgeRemoteDisconnectResponse> {
+  requireTauri();
+  return invoke<BridgeRemoteDisconnectResponse>("disconnect_remote_host", { request: { name } });
+}
+
+export async function browseTauriRemoteHost(name: string, path?: string): Promise<BridgeRemoteBrowseResponse> {
+  requireTauri();
+  const request: BridgeRemoteBrowseRequest = { name, ...(path ? { path } : {}) };
+  return invoke<BridgeRemoteBrowseResponse>("browse_remote_host", { request });
+}
+
 export async function tauriPreviewRuntimeInfo(): Promise<TauriPreviewRuntimeInfo> {
   requireTauri();
   return invoke<TauriPreviewRuntimeInfo>("preview_runtime_info");
@@ -248,12 +443,15 @@ export interface TauriProviderConfig {
   kind: string;
   models: string[];
   default: string;
+  balanceUrlSet: boolean;
   removable: boolean;
   revision: string;
 }
 
 export type TauriProviderConfigInput = Omit<TauriProviderConfig, "removable" | "revision"> & {
   baseUrl: string;
+  balanceUrl: string;
+  clearBalanceUrl: boolean;
   useApiKey: boolean;
 };
 
@@ -261,6 +459,26 @@ export interface TauriProviderConfigList {
   protocolVersion: number;
   providers: TauriProviderConfig[];
   presets: TauriProviderPreset[];
+}
+
+export interface TauriSessionBalance {
+  available: boolean;
+  display: string;
+}
+
+export interface TauriSessionBalanceResponse {
+  protocolVersion: number;
+  balance: TauriSessionBalance | null;
+}
+
+export async function tauriSessionBalance(sessionId: string): Promise<TauriSessionBalanceResponse> {
+  requireTauri();
+  return invoke<TauriSessionBalanceResponse>("bridge_session_balance", { request: { sessionId } });
+}
+
+export interface TauriDiscoveredProviderModels {
+  protocolVersion: number;
+  models: string[];
 }
 
 export interface TauriProviderPresetRoute {
@@ -285,6 +503,16 @@ export interface TauriProviderPreset {
 export async function tauriProviderConfigs(): Promise<TauriProviderConfigList> {
   requireTauri();
   return invoke<TauriProviderConfigList>("provider_configs");
+}
+
+export async function discoverTauriProviderModels(provider: Pick<TauriProviderConfig, "name" | "revision">): Promise<TauriDiscoveredProviderModels> {
+  requireTauri();
+  return invoke<TauriDiscoveredProviderModels>("discover_provider_models", { input: { name: provider.name, revision: provider.revision } });
+}
+
+export async function testTauriProviderModel(request: BridgeProviderModelProbeRequest): Promise<BridgeProviderModelProbeResponse> {
+  requireTauri();
+  return invoke<BridgeProviderModelProbeResponse>("test_provider_model", { request });
 }
 
 export async function saveTauriProviderConfig(input: TauriProviderConfigInput): Promise<TauriProviderConfigList> {
@@ -317,23 +545,45 @@ export type TauriPermissionMode = "ask" | "allow" | "deny";
 export type TauriPermissionList = "allow" | "ask" | "deny";
 export interface TauriPermissionSettings {
   protocolVersion: number;
+  scope: "global" | "project";
   mode: TauriPermissionMode;
   allow: string[];
   ask: string[];
   deny: string[];
+  projectOverrides: { mode: boolean; allow: boolean; ask: boolean; deny: boolean };
 }
-export type TauriPermissionChange =
-  | { action: "mode"; mode: TauriPermissionMode }
-  | { action: "add" | "remove"; list: TauriPermissionList; rule: string };
+export type TauriPermissionScope = "global" | "project";
+export type TauriPermissionChange = ({ action: "mode"; mode: TauriPermissionMode } | { action: "add" | "remove"; list: TauriPermissionList; rule: string }) & { scope?: TauriPermissionScope; workspaceRoot?: string };
 
-export async function tauriPermissionSettings(): Promise<TauriPermissionSettings> {
+export async function tauriPermissionSettings(workspaceRoot?: string): Promise<TauriPermissionSettings> {
   requireTauri();
-  return invoke<TauriPermissionSettings>("permission_settings");
+  return invoke<TauriPermissionSettings>("permission_settings", { workspaceRoot: workspaceRoot ?? "" });
 }
 
 export async function changeTauriPermissionSettings(change: TauriPermissionChange): Promise<TauriPermissionSettings> {
   requireTauri();
   return invoke<TauriPermissionSettings>("change_permission_settings", { change });
+}
+
+export interface TauriSecretsSettings {
+  protocolVersion: number;
+  filterSubprocessEnv: boolean;
+  protectSensitiveFiles: boolean;
+}
+
+export interface TauriSecretsSettingsChange {
+  filterSubprocessEnv?: boolean;
+  protectSensitiveFiles?: boolean;
+}
+
+export async function tauriSecretsSettings(): Promise<TauriSecretsSettings> {
+  requireTauri();
+  return invoke<TauriSecretsSettings>("secrets_settings");
+}
+
+export async function changeTauriSecretsSettings(change: TauriSecretsSettingsChange): Promise<TauriSecretsSettings> {
+  requireTauri();
+  return invoke<TauriSecretsSettings>("change_secrets_settings", { change });
 }
 
 export interface TauriSandboxSettings {
@@ -691,8 +941,10 @@ export async function changeTauriHooksSettings(change: TauriHooksChange): Promis
 }
 
 export interface TauriMemoryDoc { path: string; scope: string; body: string; revision: string }
-export interface TauriMemoryFact { id: string; revision: number; name: string; title: string; description: string; type: string; scope: string; body: string; freshness: string }
+export interface TauriMemoryFact { id: string; revision: number; createdAt: string; updatedAt: string; name: string; title: string; description: string; type: string; scope: string; body: string; freshness: string }
 export interface TauriMemoryArchive extends TauriMemoryFact { path: string; archivedAt: string }
+export interface TauriMemoryRecallHit { id: string; revision: number; name: string; title?: string; type: string; scope: string; score: number; freshness: string; reason: string; snippet: string }
+export interface TauriMemoryRecall { query: string; hits: TauriMemoryRecallHit[]; omitted: number; charBudget: number; usedChars: number; suppressed?: string }
 export interface TauriMemorySettings {
   protocolVersion: number;
   workspaceRoot: string;
@@ -701,18 +953,29 @@ export interface TauriMemorySettings {
   docs: TauriMemoryDoc[];
   facts: TauriMemoryFact[];
   archives: TauriMemoryArchive[];
+  revisions: TauriMemoryFact[];
   diagnostics: string[];
+  lastRecall: TauriMemoryRecall;
 }
 export interface TauriMemoryChange {
   workspaceRoot: string;
-  action: "save_doc" | "quick_add" | "archive" | "restore";
+  action: "save_doc" | "quick_add" | "archive" | "restore" | "load_revisions" | "restore_revision" | "save_fact";
   path: string;
   revision: string;
   body: string;
   scope: string;
   factId: string;
   factRevision: number;
+  historyRevision: number;
+  name?: string;
+  title?: string;
+  description?: string;
+  type?: string;
 }
+export interface TauriMemorySuggestion { id: string; name: string; title: string; description: string; type: string; scope: string; body: string; reason: string; evidence: string[] }
+export interface TauriSkillSuggestion { id: string; name: string; description: string; scope: string; body: string; reason: string; evidence: string[] }
+export interface TauriMemorySuggestions { memories: TauriMemorySuggestion[]; skills: TauriSkillSuggestion[]; generatedAt: string; available: boolean; source: string }
+export interface TauriMemorySuggestionAcceptance { path: string; suggestions: TauriMemorySuggestions }
 export async function tauriMemorySettings(workspaceRoot: string): Promise<TauriMemorySettings> {
   requireTauri();
   return invoke<TauriMemorySettings>("memory_settings", { workspaceRoot });
@@ -721,12 +984,21 @@ export async function changeTauriMemorySettings(change: TauriMemoryChange): Prom
   requireTauri();
   return invoke<TauriMemorySettings>("change_memory_settings", { change });
 }
+export async function tauriMemorySuggestions(workspaceRoot: string): Promise<TauriMemorySuggestions> {
+  requireTauri();
+  return invoke<TauriMemorySuggestions>("memory_suggestions", { workspaceRoot });
+}
+export async function acceptTauriMemorySuggestion(workspaceRoot: string, kind: "memory" | "skill", id: string): Promise<TauriMemorySuggestionAcceptance> {
+  requireTauri();
+  return invoke<TauriMemorySuggestionAcceptance>("accept_memory_suggestion", { request: { workspaceRoot, kind, id } });
+}
 
 export type TauriToolApprovalMode = "ask" | "auto" | "yolo";
 export interface TauriDesktopPreferences {
   protocolVersion: number;
   defaultToolApprovalMode: TauriToolApprovalMode;
   language: LangPref;
+  displayCurrency: "" | "CNY" | "USD";
   terminalTheme: TerminalThemePreference;
   theme: Theme;
   themeStyle: ThemeStyle | "";
@@ -758,6 +1030,11 @@ export async function setTauriDesktopLanguage(language: LangPref): Promise<Tauri
   return invoke<TauriDesktopPreferences>("set_desktop_language", { language });
 }
 
+export async function setTauriDesktopCurrency(currency: "" | "CNY" | "USD"): Promise<TauriDesktopPreferences> {
+  requireTauri();
+  return invoke<TauriDesktopPreferences>("set_desktop_currency", { currency });
+}
+
 export async function tauriZoomFactor(): Promise<number> {
   requireTauri();
   return invoke<number>("get_zoom_factor");
@@ -768,6 +1045,76 @@ export async function setTauriZoomFactor(factor: number): Promise<number> {
   return invoke<number>("set_zoom_factor", { factor });
 }
 
+export async function tauriActiveThemeId(): Promise<string> {
+  requireTauri();
+  return invoke<string>("get_active_theme_id");
+}
+
+export async function setTauriActiveThemeId(id: string): Promise<string> {
+  requireTauri();
+  return invoke<string>("set_active_theme_id", { id });
+}
+
+interface TauriUserThemeRecord {
+  id: string;
+  name: string;
+  baseStyle: string;
+  tokens: ThemePackView["tokens"];
+  density: string;
+  corners: string;
+}
+
+function userThemeView(theme: TauriUserThemeRecord): ThemePackView {
+  return {
+    id: theme.id,
+    name: theme.name,
+    baseStyle: theme.baseStyle,
+    builtin: false,
+    kind: "user",
+    active: false,
+    hasBackground: false,
+    tokens: theme.tokens,
+    recipes: { density: theme.density, corners: theme.corners },
+  };
+}
+
+export async function tauriUserThemes(): Promise<ThemePackView[]> {
+  requireTauri();
+  const themes = await invoke<TauriUserThemeRecord[]>("list_user_themes");
+  return themes.map(userThemeView);
+}
+
+export async function saveTauriUserTheme(theme: Pick<ThemePackView, "id" | "name" | "baseStyle" | "tokens" | "recipes">): Promise<ThemePackView> {
+  requireTauri();
+  const saved = await invoke<TauriUserThemeRecord>("save_user_theme", {
+    theme: {
+      id: theme.id,
+      name: theme.name,
+      baseStyle: theme.baseStyle,
+      tokens: theme.tokens,
+      density: theme.recipes.density ?? "comfortable",
+      corners: theme.recipes.corners ?? "soft",
+    },
+  });
+  return userThemeView(saved);
+}
+
+export async function deleteTauriUserTheme(id: string): Promise<void> {
+  requireTauri();
+  return invoke<void>("delete_user_theme", { id });
+}
+
+export async function importTauriUserTheme(): Promise<ThemePackView | null> {
+  requireTauri();
+  const imported = await invoke<TauriUserThemeRecord | null>("import_user_theme");
+  return imported ? userThemeView(imported) : null;
+}
+
+export async function exportTauriUserTheme(id: string): Promise<boolean> {
+  requireTauri();
+  return invoke<boolean>("export_user_theme", { id });
+}
+
 export async function setTauriDefaultModel(model: string): Promise<TauriProviderSummary> {
   requireTauri();
   return invoke<TauriProviderSummary>("set_default_model", { request: { model } });
@@ -776,6 +1123,12 @@ export async function setTauriDefaultModel(model: string): Promise<TauriProvider
 export async function setTauriModelRole(role: "planner" | "vision" | "search", model: string): Promise<TauriProviderSummary> {
   requireTauri();
   return invoke<TauriProviderSummary>("set_model_role", { request: { role, model } });
+}
+
+export async function setTauriAgentPreference(request: BridgeSetAgentPreferenceRequest): Promise<TauriProviderSummary> {
+  requireTauri();
+  if (Object.keys(request).length !== 1) throw new Error("Choose one agent preference at a time.");
+  return invoke<TauriProviderSummary>("set_agent_preferences", { request });
 }
 
 /** One MCP server as the renderer may see it. Credentials are write-only: the
@@ -829,9 +1182,25 @@ export interface TauriMCPServerMutation {
   servers: TauriMCPServer[];
 }
 
+export interface TauriMCPRuntimeActionResponse {
+  protocolVersion: number;
+  name: string;
+  action: "connect" | "disconnect";
+  toolCount: number;
+}
+
 export async function tauriMCPServers(workspaceRoot?: string): Promise<TauriMCPServer[]> {
   requireTauri();
   return invoke<TauriMCPServer[]>("list_mcp_servers", { workspaceRoot });
+}
+
+export async function tauriMCPRuntimeAction(
+  sessionId: string,
+  name: string,
+  action: "connect" | "disconnect",
+): Promise<TauriMCPRuntimeActionResponse> {
+  requireTauri();
+  return invoke<TauriMCPRuntimeActionResponse>("mcp_runtime_action", { request: { sessionId, name, action } });
 }
 
 export async function saveTauriMCPServer(
@@ -1030,6 +1399,11 @@ export async function openTauriBridgeSession(sessionId: string, workspaceRoot?: 
 export async function switchTauriBridgeSession(sessionId: string, workspaceRoot?: string): Promise<TauriBridgeSession> {
   requireTauri();
   return invoke<TauriBridgeSession>("bridge_switch_session", { request: { sessionId, workspaceRoot } });
+}
+
+export async function setTauriBridgeSessionModel(sessionId: string, model: string): Promise<TauriBridgeSession> {
+  requireTauri();
+  return invoke<TauriBridgeSession>("bridge_set_session_model", { sessionId, request: { model } });
 }
 
 export async function renameTauriBridgeSession(sessionId: string, title: string): Promise<TauriBridgeSession> {

@@ -56,6 +56,8 @@ pub struct DesktopPreferences {
     #[serde(default)]
     pub language: String,
     #[serde(default)]
+    pub display_currency: String,
+    #[serde(default)]
     pub terminal_theme: String,
     #[serde(default)]
     pub theme: String,
@@ -76,6 +78,23 @@ pub struct SubmitRequest {
 #[serde(rename_all = "camelCase")]
 pub struct SessionRequest {
     pub session_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPRuntimeActionRequest {
+    pub session_id: String,
+    pub name: String,
+    pub action: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPRuntimeActionResponse {
+    pub protocol_version: u64,
+    pub name: String,
+    pub action: String,
+    pub tool_count: u32,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -414,9 +433,12 @@ pub use crate::protocol_generated::{
     BridgeAttachFileRequest as AttachFileRequest, BridgeAttachment, BridgeAttachmentResponse,
     BridgeDeleteSessionResponse, BridgeEvent, BridgeHistoryMessage, BridgeHistoryResponse,
     BridgeMCPInteractionAnswerRequest, BridgeOpenSessionRequest as OpenSessionRequest,
-    BridgeProjectFolder, BridgeProjectFoldersResponse, BridgeProviderSummaryResponse,
+    BridgeProjectFolder, BridgeProjectFoldersResponse, BridgeProviderModelProbeRequest,
+    BridgeProviderModelProbeResponse, BridgeProviderSummaryResponse, BridgeRemoteBrowseRequest,
+    BridgeRemoteBrowseResponse, BridgeRemoteDisconnectRequest, BridgeRemoteDisconnectResponse,
     BridgeRenameSessionRequest, BridgeSession, BridgeSessionMetrics, BridgeSessionResponse,
-    BridgeSetDefaultModelRequest, BridgeSetModelRoleRequest, BridgeWorkspaceChangeDetailRequest,
+    BridgeSetAgentPreferenceRequest, BridgeSetDefaultModelRequest, BridgeSetModelRoleRequest,
+    BridgeSetSessionModelRequest, BridgeWorkspaceChangeDetailRequest,
     BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
     BridgeWorkspaceFileRequest, BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse,
     BridgeWorkspaceRequest,
@@ -428,6 +450,20 @@ pub struct BridgeSnapshot {
     pub sequence: u64,
     pub session: BridgeSession,
     pub metrics: Option<BridgeSessionMetrics>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeSessionBalanceView {
+    pub available: bool,
+    pub display: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeSessionBalanceResponse {
+    pub protocol_version: u64,
+    pub balance: Option<BridgeSessionBalanceView>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -448,6 +484,8 @@ pub struct ProviderConfigView {
     pub kind: String,
     pub models: Vec<String>,
     pub default: String,
+    #[serde(default)]
+    pub balance_url_set: bool,
     pub removable: bool,
     pub revision: String,
 }
@@ -469,6 +507,20 @@ pub struct ProviderConfigList {
     pub protocol_version: u64,
     pub providers: Vec<ProviderConfigView>,
     pub presets: Vec<ProviderPresetView>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoverProviderModelsRequest {
+    pub name: String,
+    pub revision: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveredProviderModels {
+    pub protocol_version: u64,
+    pub models: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -507,6 +559,10 @@ pub struct SaveProviderConfigRequest {
     pub display_name: String,
     pub kind: String,
     pub base_url: String,
+    #[serde(default)]
+    pub balance_url: String,
+    #[serde(default)]
+    pub clear_balance_url: bool,
     pub models: Vec<String>,
     pub default: String,
     pub use_api_key: bool,
@@ -516,10 +572,23 @@ pub struct SaveProviderConfigRequest {
 #[serde(rename_all = "camelCase")]
 pub struct PermissionSettingsView {
     pub protocol_version: u64,
+    #[serde(default)]
+    pub scope: String,
     pub mode: String,
     pub allow: Vec<String>,
     pub ask: Vec<String>,
     pub deny: Vec<String>,
+    #[serde(default)]
+    pub project_overrides: PermissionProjectOverrides,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionProjectOverrides {
+    pub mode: bool,
+    pub allow: bool,
+    pub ask: bool,
+    pub deny: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -527,11 +596,32 @@ pub struct PermissionSettingsView {
 pub struct PermissionSettingsChange {
     pub action: String,
     #[serde(default)]
+    pub scope: String,
+    #[serde(default)]
+    pub workspace_root: String,
+    #[serde(default)]
     pub mode: String,
     #[serde(default)]
     pub list: String,
     #[serde(default)]
     pub rule: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SecretsSettingsView {
+    pub protocol_version: u64,
+    pub filter_subprocess_env: bool,
+    pub protect_sensitive_files: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SecretsSettingsChange {
+    #[serde(default)]
+    pub filter_subprocess_env: Option<bool>,
+    #[serde(default)]
+    pub protect_sensitive_files: Option<bool>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -591,6 +681,108 @@ pub struct NetworkSettingsChange {
     pub proxy_url: String,
     pub proxy_password_action: String,
     pub proxy_password: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteSettingsHost {
+    pub name: String,
+    pub host: String,
+    pub port: i32,
+    pub user: String,
+    pub identity_file: String,
+    pub proxy_jump: String,
+    pub workspace: String,
+    pub serve_install: String,
+    pub credential_mode: String,
+    pub use_ssh_config: bool,
+    pub password_set: bool,
+    pub passphrase_set: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteSettingsView {
+    pub protocol_version: u64,
+    pub config_path: String,
+    pub ssh_config_path: String,
+    pub hosts: Vec<RemoteSettingsHost>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteSSHConfigAlias {
+    pub alias: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteSSHConfigScanView {
+    pub protocol_version: u64,
+    pub config_path: String,
+    pub aliases: Vec<RemoteSSHConfigAlias>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteSettingsHostInput {
+    pub name: String,
+    pub host: String,
+    pub port: i32,
+    pub user: String,
+    pub identity_file: String,
+    pub proxy_jump: String,
+    pub workspace: String,
+    pub serve_install: String,
+    pub credential_mode: String,
+    pub use_ssh_config: bool,
+    #[serde(default)]
+    pub password_action: String,
+    #[serde(default)]
+    pub password: String,
+    #[serde(default)]
+    pub passphrase_action: String,
+    #[serde(default)]
+    pub passphrase: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteSettingsChange {
+    pub action: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub host: Option<RemoteSettingsHostInput>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteConnectRequest {
+    pub name: String,
+    #[serde(default)]
+    pub trust_fingerprint: String,
+    #[serde(default)]
+    pub password: String,
+    #[serde(default)]
+    pub passphrase: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteConnectResponse {
+    pub protocol_version: u64,
+    pub status: String,
+    #[serde(default)]
+    pub host: String,
+    #[serde(default)]
+    pub address: String,
+    #[serde(default)]
+    pub key_type: String,
+    #[serde(default)]
+    pub fingerprint: String,
+    #[serde(default)]
+    pub message: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -899,6 +1091,10 @@ pub struct MemoryDocView {
 pub struct MemoryFactView {
     pub id: String,
     pub revision: i32,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub updated_at: String,
     pub name: String,
     pub title: String,
     pub description: String,
@@ -918,6 +1114,36 @@ pub struct MemoryArchiveView {
     pub archived_at: String,
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryRecallHitView {
+    pub id: String,
+    pub revision: i32,
+    pub name: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub scope: String,
+    pub score: f64,
+    pub freshness: String,
+    pub reason: String,
+    pub snippet: String,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryRecallView {
+    pub query: String,
+    #[serde(default)]
+    pub hits: Vec<MemoryRecallHitView>,
+    pub omitted: i32,
+    pub char_budget: i32,
+    pub used_chars: i32,
+    #[serde(default)]
+    pub suppressed: String,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MemorySettingsView {
@@ -928,7 +1154,11 @@ pub struct MemorySettingsView {
     pub docs: Vec<MemoryDocView>,
     pub facts: Vec<MemoryFactView>,
     pub archives: Vec<MemoryArchiveView>,
+    #[serde(default)]
+    pub revisions: Vec<MemoryFactView>,
     pub diagnostics: Vec<String>,
+    #[serde(default)]
+    pub last_recall: MemoryRecallView,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -942,6 +1172,68 @@ pub struct MemorySettingsChange {
     pub scope: String,
     pub fact_id: String,
     pub fact_revision: i32,
+    #[serde(default)]
+    pub history_revision: i32,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default, rename = "type")]
+    pub fact_type: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemorySuggestionView {
+    pub id: String,
+    pub name: String,
+    pub title: String,
+    pub description: String,
+    #[serde(rename = "type")]
+    pub fact_type: String,
+    pub scope: String,
+    pub body: String,
+    pub reason: String,
+    pub evidence: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillSuggestionView {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub scope: String,
+    pub body: String,
+    pub reason: String,
+    pub evidence: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemorySuggestionsView {
+    pub memories: Vec<MemorySuggestionView>,
+    pub skills: Vec<SkillSuggestionView>,
+    pub generated_at: String,
+    pub available: bool,
+    pub source: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemorySuggestionAcceptance {
+    pub path: String,
+    pub suggestions: MemorySuggestionsView,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemorySuggestionAcceptanceRequest {
+    pub workspace_root: String,
+    pub kind: String,
+    pub id: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1384,6 +1676,22 @@ impl BridgeSupervisor {
         .map(|envelope| envelope.session)
     }
 
+    pub fn set_session_model(
+        &self,
+        session_id: &str,
+        request: BridgeSetSessionModelRequest,
+    ) -> Result<BridgeSession, String> {
+        let session_id = session_path_component(session_id)?;
+        let request_id = opaque_secret()?;
+        self.request_session(
+            "POST",
+            &format!("/v1/sessions/{session_id}/model"),
+            Some(json!({ "model": request.model })),
+            Some(&request_id),
+        )
+        .map(|envelope| envelope.session)
+    }
+
     pub fn rename_session(&self, request: RenameSessionRequest) -> Result<BridgeSession, String> {
         let session_id = session_path_component(&request.session_id)?;
         let request_id = opaque_secret()?;
@@ -1782,6 +2090,21 @@ impl BridgeSupervisor {
         })
     }
 
+    pub fn session_balance(
+        &self,
+        request: SessionRequest,
+    ) -> Result<BridgeSessionBalanceResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let path = format!("/v1/sessions/{session_id}/balance");
+        let response = self.request_json("GET", &path, None, None)?;
+        let balance: BridgeSessionBalanceResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if balance.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(balance)
+    }
+
     pub fn history(&self, request: SessionRequest) -> Result<BridgeHistory, String> {
         let session_id = session_path_component(&request.session_id)?;
         let path = format!("/v1/sessions/{session_id}/history");
@@ -1865,6 +2188,24 @@ impl BridgeSupervisor {
         Ok(configs)
     }
 
+    pub fn discover_provider_models(
+        &self,
+        input: DiscoverProviderModelsRequest,
+    ) -> Result<DiscoveredProviderModels, String> {
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/provider-configs/discover-models",
+            Some(json!(input)),
+            None,
+        )?;
+        let result: DiscoveredProviderModels =
+            serde_json::from_value(response).map_err(display_error)?;
+        if result.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(result)
+    }
+
     pub fn usage_stats(&self, request: Value) -> Result<Value, String> {
         let response =
             self.request_json("POST", "/v1/settings/usage-stats", Some(request), None)?;
@@ -1886,8 +2227,151 @@ impl BridgeSupervisor {
         Ok(response)
     }
 
-    pub fn permission_settings(&self) -> Result<PermissionSettingsView, String> {
-        let response = self.request_json("GET", "/v1/settings/permissions", None, None)?;
+    pub fn remote_settings(&self) -> Result<RemoteSettingsView, String> {
+        let response = self.request_json("GET", "/v1/settings/remote", None, None)?;
+        let view: RemoteSettingsView = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn bot_runtime_status(&self) -> Result<Value, String> {
+        let response = self.request_json("GET", "/v1/settings/bots/runtime", None, None)?;
+        if response.get("protocolVersion").and_then(Value::as_u64)
+            != Some(u64::from(PROTOCOL_VERSION))
+        {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(response)
+    }
+
+    pub fn bot_settings(&self) -> Result<Value, String> {
+        let response = self.request_json("GET", "/v1/settings/bots", None, None)?;
+        if response.get("protocolVersion").and_then(Value::as_u64)
+            != Some(u64::from(PROTOCOL_VERSION))
+        {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(response)
+    }
+
+    pub fn change_bot_settings(&self, change: Value) -> Result<Value, String> {
+        let request_id = opaque_secret()?;
+        let response =
+            self.request_json("POST", "/v1/settings/bots", Some(change), Some(&request_id))?;
+        if response.get("protocolVersion").and_then(Value::as_u64)
+            != Some(u64::from(PROTOCOL_VERSION))
+        {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(response)
+    }
+
+    pub fn scan_remote_ssh_config(&self) -> Result<RemoteSSHConfigScanView, String> {
+        let response =
+            self.request_json("POST", "/v1/settings/remote/scan", Some(json!({})), None)?;
+        let view: RemoteSSHConfigScanView =
+            serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn change_remote_settings(
+        &self,
+        change: RemoteSettingsChange,
+    ) -> Result<RemoteSettingsView, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/remote/hosts",
+            Some(json!(change)),
+            Some(&request_id),
+        )?;
+        let view: RemoteSettingsView = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn connect_remote_host(
+        &self,
+        request: RemoteConnectRequest,
+    ) -> Result<RemoteConnectResponse, String> {
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/remote/connect",
+            Some(json!(request)),
+            None,
+        )?;
+        let result: RemoteConnectResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if result.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(result)
+    }
+
+    pub fn disconnect_remote_host(
+        &self,
+        request: BridgeRemoteDisconnectRequest,
+    ) -> Result<BridgeRemoteDisconnectResponse, String> {
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/remote/disconnect",
+            Some(json!(request)),
+            None,
+        )?;
+        let result: BridgeRemoteDisconnectResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if result.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(result)
+    }
+
+    pub fn browse_remote_host(
+        &self,
+        request: BridgeRemoteBrowseRequest,
+    ) -> Result<BridgeRemoteBrowseResponse, String> {
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/remote/browse",
+            Some(json!(request)),
+            None,
+        )?;
+        let result: BridgeRemoteBrowseResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if result.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(result)
+    }
+
+    pub fn permission_settings(
+        &self,
+        workspace_root: String,
+    ) -> Result<PermissionSettingsView, String> {
+        let query = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair(
+                "scope",
+                if workspace_root.trim().is_empty() {
+                    "global"
+                } else {
+                    "project"
+                },
+            )
+            .append_pair("workspaceRoot", &workspace_root)
+            .finish();
+        let response = self.request_json(
+            "GET",
+            &format!("/v1/settings/permissions?{query}"),
+            None,
+            None,
+        )?;
         let view: PermissionSettingsView =
             serde_json::from_value(response).map_err(display_error)?;
         if view.protocol_version != u64::from(PROTOCOL_VERSION) {
@@ -1909,6 +2393,33 @@ impl BridgeSupervisor {
         )?;
         let view: PermissionSettingsView =
             serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn secrets_settings(&self) -> Result<SecretsSettingsView, String> {
+        let response = self.request_json("GET", "/v1/settings/secrets", None, None)?;
+        let view: SecretsSettingsView = serde_json::from_value(response).map_err(display_error)?;
+        if view.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(view)
+    }
+
+    pub fn change_secrets_settings(
+        &self,
+        change: SecretsSettingsChange,
+    ) -> Result<SecretsSettingsView, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/secrets",
+            Some(json!(change)),
+            Some(&request_id),
+        )?;
+        let view: SecretsSettingsView = serde_json::from_value(response).map_err(display_error)?;
         if view.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
@@ -2257,6 +2768,36 @@ impl BridgeSupervisor {
         Ok(view)
     }
 
+    pub fn memory_suggestions(
+        &self,
+        workspace_root: &str,
+    ) -> Result<MemorySuggestionsView, String> {
+        let query = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("workspaceRoot", workspace_root)
+            .finish();
+        let response = self.request_json(
+            "GET",
+            &format!("/v1/settings/memory/suggestions?{query}"),
+            None,
+            None,
+        )?;
+        serde_json::from_value(response).map_err(display_error)
+    }
+
+    pub fn accept_memory_suggestion(
+        &self,
+        request: MemorySuggestionAcceptanceRequest,
+    ) -> Result<MemorySuggestionAcceptance, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/memory/suggestions/accept",
+            Some(json!(request)),
+            Some(&request_id),
+        )?;
+        serde_json::from_value(response).map_err(display_error)
+    }
+
     pub fn desktop_preferences(&self) -> Result<DesktopPreferences, String> {
         let response = self.request_json("GET", "/v1/settings/desktop", None, None)?;
         let preferences: DesktopPreferences =
@@ -2352,6 +2893,25 @@ impl BridgeSupervisor {
         Ok(preferences)
     }
 
+    pub fn set_desktop_currency(&self, currency: String) -> Result<DesktopPreferences, String> {
+        if !matches!(currency.as_str(), "" | "CNY" | "USD") {
+            return Err("invalid desktop display currency".to_string());
+        }
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/desktop/currency",
+            Some(json!({"currency": currency})),
+            Some(&request_id),
+        )?;
+        let preferences: DesktopPreferences =
+            serde_json::from_value(response).map_err(display_error)?;
+        if preferences.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(preferences)
+    }
+
     /// Lists the effective MCP servers for a workspace. Credentials never cross
     /// this boundary: the bridge returns key names only.
     pub fn mcp_servers(&self, workspace_root: Option<&str>) -> Result<Vec<MCPServerView>, String> {
@@ -2363,6 +2923,36 @@ impl BridgeSupervisor {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
         Ok(envelope.servers)
+    }
+
+    pub fn mcp_runtime_action(
+        &self,
+        request: MCPRuntimeActionRequest,
+    ) -> Result<MCPRuntimeActionResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        if request.name.trim().is_empty()
+            || request.name.trim().len() > 128
+            || !matches!(request.action.as_str(), "connect" | "disconnect")
+        {
+            return Err("invalid MCP runtime action".to_string());
+        }
+        let request_id = opaque_secret()?;
+        let path = format!("/v1/sessions/{session_id}/mcp/runtime");
+        let response = self.request_json(
+            "POST",
+            &path,
+            Some(json!({ "name": request.name.trim(), "action": request.action })),
+            Some(&request_id),
+        )?;
+        let result: MCPRuntimeActionResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if result.protocol_version != u64::from(PROTOCOL_VERSION)
+            || result.name != request.name.trim()
+            || result.action != request.action
+        {
+            return Err("desktop bridge MCP runtime action response is invalid".to_string());
+        }
+        Ok(result)
     }
 
     pub fn save_mcp_server(
@@ -2484,6 +3074,32 @@ impl BridgeSupervisor {
         Ok(summary)
     }
 
+    pub fn set_agent_preferences(
+        &self,
+        request: BridgeSetAgentPreferenceRequest,
+    ) -> Result<BridgeProviderSummaryResponse, String> {
+        let (key, value) = match (request.reasoning_language, request.compact_ratio_percent) {
+            (Some(language), None) => ("reasoningLanguage", json!(language)),
+            (None, Some(percent)) => ("compactRatioPercent", json!(percent)),
+            _ => return Err("exactly one agent preference must be provided".to_string()),
+        };
+        let mut payload = serde_json::Map::new();
+        payload.insert(key.to_string(), value);
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/agent-preferences",
+            Some(serde_json::Value::Object(payload)),
+            Some(&request_id),
+        )?;
+        let summary: BridgeProviderSummaryResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if summary.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(summary)
+    }
+
     /// Synchronize a provider key into the sidecar's private memory. The key
     /// is sent only over the authenticated loopback bridge; it is never added
     /// to a process environment or returned to the WebView.
@@ -2512,6 +3128,29 @@ impl BridgeSupervisor {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
         Ok(summary)
+    }
+
+    pub fn test_provider_model(
+        &self,
+        request: BridgeProviderModelProbeRequest,
+    ) -> Result<BridgeProviderModelProbeResponse, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/provider-model-probe",
+            Some(json!({
+                "name": request.name,
+                "model": request.model,
+                "apiKey": request.api_key.unwrap_or_default(),
+            })),
+            Some(&request_id),
+        )?;
+        let result: BridgeProviderModelProbeResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if result.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(result)
     }
 
     pub fn submit(&self, request: SubmitRequest) -> Result<BridgeSession, String> {
@@ -3644,12 +4283,13 @@ mod tests {
         session_directory_path, session_path_component, validate_attachment,
         validate_pending_session_deletes_page, validate_pending_session_title_recoveries,
         validate_session_directory_page, validate_session_directory_snapshot, verify_bridge_health,
-        verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSessionResponse,
-        BridgeSupervisor, EventStreamError, HooksSettingsView, MemorySettingsView,
-        OpenSessionRequest, PendingSessionDelete, PendingSessionDeletesPageResponse,
-        PendingSessionTitleRecoveriesResponse, PendingSessionTitleRecovery, PluginInstallPlan,
-        PluginInstallRequest, PluginOperationResult, PluginRemoveRequest, PluginSettingsChange,
-        PluginSettingsView, ProviderConfigList, RenameSessionRequest, SaveProviderConfigRequest,
+        verify_ready, wait_for_exit, BridgeAttachment, BridgeEvent, BridgeSessionBalanceResponse,
+        BridgeSessionResponse, BridgeSupervisor, EventStreamError, HooksSettingsView,
+        MemorySettingsView, OpenSessionRequest, PendingSessionDelete,
+        PendingSessionDeletesPageResponse, PendingSessionTitleRecoveriesResponse,
+        PendingSessionTitleRecovery, PluginInstallPlan, PluginInstallRequest,
+        PluginOperationResult, PluginRemoveRequest, PluginSettingsChange, PluginSettingsView,
+        ProviderConfigList, RenameSessionRequest, SaveProviderConfigRequest,
         SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
         SessionDirectoryPage, SessionInventoryResponse, SessionRequest, SkillArchiveRequest,
         SkillArchiveResult, SkillInstallPlan, SkillInstallRequest, SkillInstallResult,
@@ -4459,6 +5099,25 @@ mod tests {
         let metrics = response.metrics.expect("metrics preserved");
         assert_eq!(metrics.context_used_tokens, 2400);
         assert_eq!(metrics.cache_hit_tokens, 300);
+    }
+
+    #[test]
+    fn session_balance_contract_is_display_only_and_optional() {
+        let response: BridgeSessionBalanceResponse = serde_json::from_value(json!({
+            "protocolVersion": 1,
+            "balance": { "available": true, "display": "¥12.34" }
+        }))
+        .expect("decode session balance");
+        let balance = response.balance.expect("configured balance");
+        assert!(balance.available);
+        assert_eq!(balance.display, "¥12.34");
+
+        let unconfigured: BridgeSessionBalanceResponse = serde_json::from_value(json!({
+            "protocolVersion": 1,
+            "balance": null
+        }))
+        .expect("decode missing balance");
+        assert!(unconfigured.balance.is_none());
     }
 
     #[test]

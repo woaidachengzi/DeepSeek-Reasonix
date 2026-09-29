@@ -22,6 +22,8 @@ var (
 	ErrInvalidWorkspacePath = errors.New("desktop bridge workspace path is invalid")
 	ErrInvalidTitle         = errors.New("desktop bridge session title is invalid")
 	ErrSessionNotFound      = errors.New("desktop bridge session was not found")
+	ErrSessionModelSwitch   = errors.New("desktop bridge session model could not be switched")
+	ErrSessionModelRecover  = errors.New("desktop bridge session model switch recovery failed")
 )
 
 // OpenRequest identifies the one local session the first bridge release owns.
@@ -30,6 +32,8 @@ var (
 type OpenRequest struct {
 	SessionID     string
 	WorkspaceRoot string
+	// ModelRef is an optional per-session override. Empty follows effective config.
+	ModelRef string
 }
 
 // SessionView is transport-safe runtime metadata. It intentionally excludes
@@ -39,6 +43,7 @@ type SessionView struct {
 	Path          string `json:"path"`
 	Title         string `json:"title,omitempty"`
 	WorkspaceRoot string `json:"workspaceRoot,omitempty"`
+	ModelRef      string `json:"modelRef,omitempty"`
 	State         string `json:"state"`
 }
 
@@ -166,6 +171,12 @@ type Runtime interface {
 	Shutdown() error
 }
 
+// RuntimeModelProvider exposes the current controller model when it can be
+// identified. It is optional so host-neutral test runtimes remain lightweight.
+type RuntimeModelProvider interface {
+	ModelRef() string
+}
+
 // MCPRuntimeTool is display-safe metadata from the active session's MCP Host.
 // It deliberately excludes tool schemas, arguments, results, and credentials.
 type MCPRuntimeTool struct {
@@ -190,6 +201,12 @@ type MCPRuntimeStatusProvider interface {
 	MCPRuntimeStatus() []MCPRuntimeServer
 }
 
+// MCPRuntimeActionProvider exposes explicit current-session connect/disconnect
+// actions without widening the base Runtime contract used by headless hosts.
+type MCPRuntimeActionProvider interface {
+	MCPRuntimeAction(name, action string) (int, error)
+}
+
 // SessionMetrics contains only current-session status values backed by the
 // active controller. Zero contextWindowTokens means no reliable gauge yet.
 type SessionMetrics struct {
@@ -203,6 +220,56 @@ type SessionMetrics struct {
 // SessionMetricsProvider is optional for runtimes that can read these values.
 type SessionMetricsProvider interface {
 	SessionMetrics() SessionMetrics
+}
+
+// SessionBalance is an optional wallet readout from the active runtime. It
+// contains only display-safe fields and never includes the endpoint or key.
+type SessionBalance struct {
+	Available bool   `json:"available"`
+	Display   string `json:"display"`
+}
+
+// SessionBalanceProvider is optional because many runtimes/providers do not
+// expose a wallet balance.
+type SessionBalanceProvider interface {
+	SessionBalance(context.Context) (*SessionBalance, error)
+}
+
+// MemoryRecallHit is the safe settings-panel projection of one automatically
+// recalled memory. It intentionally omits local filesystem paths.
+type MemoryRecallHit struct {
+	ID        string  `json:"id"`
+	Revision  int     `json:"revision"`
+	Name      string  `json:"name"`
+	Title     string  `json:"title,omitempty"`
+	Type      string  `json:"type"`
+	Scope     string  `json:"scope"`
+	Score     float64 `json:"score"`
+	Freshness string  `json:"freshness"`
+	Reason    string  `json:"reason"`
+	Snippet   string  `json:"snippet"`
+}
+
+// MemoryRecallView reports the latest automatic recall from the active
+// in-memory controller. This is a live-session view, not persisted history.
+type MemoryRecallView struct {
+	Query      string            `json:"query"`
+	Hits       []MemoryRecallHit `json:"hits"`
+	Omitted    int               `json:"omitted"`
+	CharBudget int               `json:"charBudget"`
+	UsedChars  int               `json:"usedChars"`
+	Suppressed string            `json:"suppressed,omitempty"`
+}
+
+// MemoryRecallProvider is optional for runtimes that own memory recall state.
+type MemoryRecallProvider interface {
+	MemoryRecall() MemoryRecallView
+}
+
+// ReasoningLanguageProvider applies the configured visible-reasoning language
+// to an already-running controller.
+type ReasoningLanguageProvider interface {
+	SetReasoningLanguage(string)
 }
 
 // RuntimeFactory builds a core runtime only after an authenticated open request.
@@ -365,6 +432,95 @@ func (m *RuntimeManager) Switch(ctx context.Context, request OpenRequest) (Sessi
 	return SessionView{}, fmt.Errorf("open target desktop bridge session: %w; previous session restored", err)
 }
 
+// SetSessionModel rebuilds the active controller for the same transcript with
+// an explicit model override. The old controller is durably shut down first;
+// if constructing the replacement fails, the previous model is reopened.
+func (m *RuntimeManager) SetSessionModel(ctx context.Context, sessionID, modelRef string) (SessionView, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	modelRef = strings.TrimSpace(modelRef)
+	if sessionID == "" || modelRef == "" {
+		return SessionView{}, ErrInvalidInput
+	}
+
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return SessionView{}, ErrClosed
+	}
+	if m.runtime == nil || m.view.ID != sessionID {
+		m.mu.Unlock()
+		return SessionView{}, ErrSessionNotFound
+	}
+	if m.opening {
+		m.mu.Unlock()
+		return SessionView{}, ErrOpenInProgress
+	}
+	if state := m.runtime.State(); state != "idle" {
+		m.mu.Unlock()
+		return SessionView{}, fmt.Errorf("%w: active session %q is %s", ErrSessionConflict, sessionID, state)
+	}
+	previous := m.runtime
+	previousRequest := OpenRequest{SessionID: m.view.ID, WorkspaceRoot: m.view.WorkspaceRoot, ModelRef: m.view.ModelRef}
+	if previousRequest.ModelRef == "" {
+		if provider, ok := previous.(RuntimeModelProvider); ok {
+			previousRequest.ModelRef = strings.TrimSpace(provider.ModelRef())
+		}
+	}
+	if previousRequest.ModelRef == modelRef {
+		view := m.view
+		m.mu.Unlock()
+		return view, nil
+	}
+	factory := m.factory
+	if factory == nil {
+		m.mu.Unlock()
+		return SessionView{}, errors.New("desktop bridge runtime factory is not configured")
+	}
+	request := previousRequest
+	request.ModelRef = modelRef
+	m.runtime = nil
+	m.view = SessionView{}
+	m.opening = true
+	m.mu.Unlock()
+
+	if err := previous.Shutdown(); err != nil {
+		m.finishOpen(nil, SessionView{})
+		return SessionView{}, fmt.Errorf("%w: close active session: %v", ErrSessionModelRecover, err)
+	}
+	runtime, view, err := buildRuntime(ctx, factory, request)
+	if err == nil {
+		if m.finishOpen(runtime, view) {
+			return view, nil
+		}
+		_ = runtime.Shutdown()
+		return SessionView{}, ErrClosed
+	}
+
+	m.mu.Lock()
+	closed := m.closed
+	m.mu.Unlock()
+	if closed {
+		m.finishOpen(nil, SessionView{})
+		return SessionView{}, ErrClosed
+	}
+	recoveryCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	recovered, recoveredView, recoveryErr := buildRuntime(recoveryCtx, factory, previousRequest)
+	if recoveryErr != nil {
+		m.finishOpen(nil, SessionView{})
+		return SessionView{}, errors.Join(
+			ErrSessionModelRecover,
+			fmt.Errorf("switch active session model: %w", err),
+			fmt.Errorf("restore previous session model: %w", recoveryErr),
+		)
+	}
+	if !m.finishOpen(recovered, recoveredView) {
+		_ = recovered.Shutdown()
+		return SessionView{}, ErrClosed
+	}
+	return SessionView{}, errors.Join(ErrSessionModelSwitch, fmt.Errorf("switch active session model: %w; previous model restored", err))
+}
+
 // validSessionID keeps the bridge's public ID safe for hosts that derive a
 // deterministic session filename. The Rust host already applies this rule;
 // enforcing it here keeps direct loopback callers from widening that boundary.
@@ -406,6 +562,55 @@ func (m *RuntimeManager) SessionMetrics(sessionID string) (SessionMetrics, bool)
 	return provider.SessionMetrics(), true
 }
 
+// SessionBalance queries the active controller only for its exact session ID.
+// The runtime call happens outside the manager lock because it can perform IO.
+func (m *RuntimeManager) SessionBalance(ctx context.Context, sessionID string) (*SessionBalance, bool, error) {
+	m.mu.Lock()
+	if m.closed || m.runtime == nil || m.view.ID != sessionID {
+		m.mu.Unlock()
+		return nil, false, nil
+	}
+	provider, ok := m.runtime.(SessionBalanceProvider)
+	m.mu.Unlock()
+	if !ok {
+		return nil, true, nil
+	}
+	balance, err := provider.SessionBalance(ctx)
+	return balance, true, err
+}
+
+// MemoryRecall returns the active session's latest recall only when both its
+// identity and workspace match. This prevents settings for another project
+// from displaying unrelated session activity.
+func (m *RuntimeManager) MemoryRecall(sessionID, workspaceRoot string) (MemoryRecallView, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed || m.runtime == nil || m.view.ID != sessionID || m.view.WorkspaceRoot != strings.TrimSpace(workspaceRoot) {
+		return MemoryRecallView{}, false
+	}
+	provider, ok := m.runtime.(MemoryRecallProvider)
+	if !ok {
+		return MemoryRecallView{}, false
+	}
+	return provider.MemoryRecall(), true
+}
+
+// SetReasoningLanguage updates only the matching active session when its core
+// runtime supports live language changes.
+func (m *RuntimeManager) SetReasoningLanguage(sessionID, language string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed || m.runtime == nil || m.view.ID != sessionID {
+		return false
+	}
+	provider, ok := m.runtime.(ReasoningLanguageProvider)
+	if !ok {
+		return false
+	}
+	provider.SetReasoningLanguage(language)
+	return true
+}
+
 // MCPStatus reads only the current session's Host and only for its workspace.
 // A different selected project must never inherit the active session's status.
 func (m *RuntimeManager) MCPStatus(workspaceRoot string) ([]MCPRuntimeServer, bool) {
@@ -419,6 +624,33 @@ func (m *RuntimeManager) MCPStatus(workspaceRoot string) ([]MCPRuntimeServer, bo
 		return nil, false
 	}
 	return provider.MCPRuntimeStatus(), true
+}
+
+// MCPRuntimeAction applies a connect or disconnect to the exact active session.
+// The active session identity check prevents a delayed settings action from
+// mutating a different conversation after navigation.
+func (m *RuntimeManager) MCPRuntimeAction(sessionID, name, action string) (int, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || len(name) > 128 || strings.ContainsAny(name, "\r\n\x00") {
+		return 0, ErrInvalidInput
+	}
+	if action != "connect" && action != "disconnect" {
+		return 0, ErrInvalidInput
+	}
+	var count int
+	_, err := m.withRuntimeError(sessionID, func(runtime Runtime) error {
+		if runtime.State() != "idle" {
+			return fmt.Errorf("%w: MCP connection changes require an idle session", ErrSessionConflict)
+		}
+		provider, ok := runtime.(MCPRuntimeActionProvider)
+		if !ok {
+			return fmt.Errorf("%w: MCP runtime actions are unavailable", ErrSessionConflict)
+		}
+		var actionErr error
+		count, actionErr = provider.MCPRuntimeAction(name, action)
+		return actionErr
+	})
+	return count, err
 }
 
 // History returns the newest bounded page of the bridge-owned transcript. The
@@ -715,7 +947,13 @@ func buildRuntime(ctx context.Context, factory RuntimeFactory, request OpenReque
 		Path:          path,
 		Title:         runtime.Title(),
 		WorkspaceRoot: request.WorkspaceRoot,
+		ModelRef:      request.ModelRef,
 		State:         runtime.State(),
+	}
+	if provider, ok := runtime.(RuntimeModelProvider); ok {
+		if modelRef := strings.TrimSpace(provider.ModelRef()); modelRef != "" {
+			view.ModelRef = modelRef
+		}
 	}
 	return runtime, view, nil
 }

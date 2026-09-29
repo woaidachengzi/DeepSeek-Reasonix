@@ -56,6 +56,28 @@ func (f *FS) Close() error {
 	return f.client.Close()
 }
 
+// ResolvePath returns the server's canonical path for a directory. SFTP does
+// not expand a tilde in requests, so "~" and "~/..." are resolved relative to
+// the authenticated user's home directory before asking the server to resolve
+// symlinks and dot segments.
+func (f *FS) ResolvePath(ctx context.Context, p string) (string, error) {
+	return run(ctx, func() (string, error) {
+		p = strings.TrimSpace(p)
+		if p == "" || p == "~" || strings.HasPrefix(p, "~/") {
+			home, err := f.client.RealPath(".")
+			if err != nil {
+				return "", err
+			}
+			if p == "" || p == "~" {
+				p = home
+			} else {
+				p = path.Join(home, strings.TrimPrefix(p, "~/"))
+			}
+		}
+		return f.client.RealPath(p)
+	})
+}
+
 // run executes op in a goroutine and honors ctx cancellation. pkg/sftp has no
 // context-aware API; on cancellation we abandon (not abort) the in-flight op —
 // it completes in the background and its result is discarded.

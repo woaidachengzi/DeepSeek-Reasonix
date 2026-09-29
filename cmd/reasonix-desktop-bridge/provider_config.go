@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -12,6 +13,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	configpkg "reasonix/internal/config"
 	"reasonix/internal/desktopbridge"
@@ -45,16 +47,82 @@ type providerPresetView struct {
 }
 
 type providerConfigView struct {
-	Name        string   `json:"name"`
-	DisplayName string   `json:"displayName"`
-	Kind        string   `json:"kind"`
-	Models      []string `json:"models"`
-	Default     string   `json:"default"`
-	Removable   bool     `json:"removable"`
-	Revision    string   `json:"revision"`
+	Name          string   `json:"name"`
+	DisplayName   string   `json:"displayName"`
+	Kind          string   `json:"kind"`
+	Models        []string `json:"models"`
+	Default       string   `json:"default"`
+	BalanceURLSet bool     `json:"balanceUrlSet"`
+	Removable     bool     `json:"removable"`
+	Revision      string   `json:"revision"`
 }
 
 var errPreviewProviderChanged = errors.New("provider settings changed; reload before deleting")
+var errPreviewProviderDiscoveryChanged = errors.New("provider settings changed; reload before discovering models")
+
+type discoverProviderModelsRequest struct {
+	Name     string `json:"name"`
+	Revision string `json:"revision"`
+}
+
+type discoverProviderModelsResponse struct {
+	ProtocolVersion int      `json:"protocolVersion"`
+	Models          []string `json:"models"`
+}
+
+func discoverSavedProviderModels(input discoverProviderModelsRequest, token string) (discoverProviderModelsResponse, error) {
+	if !previewProviderName.MatchString(input.Name) {
+		return discoverProviderModelsResponse{}, fmt.Errorf("invalid provider identity")
+	}
+	unlock := configpkg.LockUserConfigEdits()
+	path := configpkg.UserConfigPath()
+	if path == "" {
+		unlock()
+		return discoverProviderModelsResponse{}, fmt.Errorf("Preview profile unavailable")
+	}
+	revision, err := previewProviderConfigRevision(path, token)
+	if err != nil || input.Revision == "" || !hmac.Equal([]byte(revision), []byte(input.Revision)) {
+		unlock()
+		return discoverProviderModelsResponse{}, errPreviewProviderDiscoveryChanged
+	}
+	cfg, err := configpkg.LoadUserConfigReadOnly()
+	if err != nil {
+		unlock()
+		return discoverProviderModelsResponse{}, fmt.Errorf("unable to load provider settings")
+	}
+	entry, found := cfg.Provider(input.Name)
+	if !found || !providerAccessAllowed(cfg.Desktop.ProviderAccess, input.Name) {
+		unlock()
+		return discoverProviderModelsResponse{}, fmt.Errorf("provider is unavailable")
+	}
+	entry.ResolveAPIKeyForRoot(".")
+	if !entry.Configured() {
+		unlock()
+		return discoverProviderModelsResponse{}, fmt.Errorf("provider is not configured")
+	}
+	proxy := cfg.NetworkProxySpec()
+	unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	models, err := entry.FetchModelsWithProxy(ctx, proxy)
+	if err != nil {
+		// Fetch errors may contain endpoint or transport details. Keep them in
+		// the local bridge log only; never return credentials or provider URLs.
+		return discoverProviderModelsResponse{}, fmt.Errorf("model discovery failed; check the saved endpoint and credentials")
+	}
+	if len(models) > 500 {
+		models = models[:500]
+	}
+	// Do not return a catalog fetched against a config that changed mid-request.
+	unlock = configpkg.LockUserConfigEdits()
+	defer unlock()
+	currentRevision, err := previewProviderConfigRevision(path, token)
+	if err != nil || !hmac.Equal([]byte(currentRevision), []byte(input.Revision)) {
+		return discoverProviderModelsResponse{}, errPreviewProviderDiscoveryChanged
+	}
+	return discoverProviderModelsResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Models: models}, nil
+}
 
 type deleteProviderConfigRequest struct {
 	Name        string   `json:"name"`
@@ -66,16 +134,18 @@ type deleteProviderConfigRequest struct {
 }
 
 type saveProviderConfigRequest struct {
-	PresetID     string   `json:"presetId"`
-	PresetAction string   `json:"presetAction"`
-	Revision     string   `json:"revision"`
-	Name         string   `json:"name"`
-	DisplayName  string   `json:"displayName"`
-	Kind         string   `json:"kind"`
-	BaseURL      string   `json:"baseUrl"`
-	Models       []string `json:"models"`
-	Default      string   `json:"default"`
-	UseAPIKey    bool     `json:"useApiKey"`
+	PresetID        string   `json:"presetId"`
+	PresetAction    string   `json:"presetAction"`
+	Revision        string   `json:"revision"`
+	Name            string   `json:"name"`
+	DisplayName     string   `json:"displayName"`
+	Kind            string   `json:"kind"`
+	BaseURL         string   `json:"baseUrl"`
+	BalanceURL      string   `json:"balanceUrl"`
+	ClearBalanceURL bool     `json:"clearBalanceUrl"`
+	Models          []string `json:"models"`
+	Default         string   `json:"default"`
+	UseAPIKey       bool     `json:"useApiKey"`
 }
 
 var previewProviderName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$`)
@@ -109,8 +179,9 @@ func loadProviderConfigs(token string) (providerConfigList, error) {
 		view.Providers = append(view.Providers, providerConfigView{
 			Name: entry.Name, DisplayName: entry.DisplayName, Kind: entry.Kind,
 			Models: append([]string(nil), entry.ModelList()...), Default: entry.Default,
-			Removable: !configpkg.IsOfficialDeepSeekProvider(entry),
-			Revision:  revision,
+			BalanceURLSet: strings.TrimSpace(entry.BalanceURL) != "",
+			Removable:     !configpkg.IsOfficialDeepSeekProvider(entry),
+			Revision:      revision,
 		})
 	}
 	return view, nil
@@ -313,7 +384,11 @@ func validateProviderConfigInput(input *saveProviderConfigRequest) error {
 	input.DisplayName = strings.TrimSpace(input.DisplayName)
 	input.Kind = strings.ToLower(strings.TrimSpace(input.Kind))
 	input.BaseURL = strings.TrimSpace(input.BaseURL)
+	input.BalanceURL = strings.TrimSpace(input.BalanceURL)
 	input.Default = strings.TrimSpace(input.Default)
+	if input.ClearBalanceURL && input.BalanceURL != "" {
+		return fmt.Errorf("choose a balance URL or clear the saved URL")
+	}
 	if !previewProviderName.MatchString(input.Name) {
 		return fmt.Errorf("provider name must use letters, digits, hyphens, or underscores")
 	}
@@ -341,15 +416,25 @@ func validateProviderConfigInput(input *saveProviderConfigRequest) error {
 		return fmt.Errorf("default model must appear in the model list")
 	}
 	if input.BaseURL != "" {
-		u, err := url.Parse(input.BaseURL)
-		if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-			return fmt.Errorf("endpoint must be a URL without embedded credentials or query")
+		if err := validateProviderURL(input.BaseURL); err != nil {
+			return fmt.Errorf("endpoint %w", err)
 		}
-		if u.Scheme != "https" {
-			if u.Scheme != "http" || !isLoopbackHost(u.Hostname()) {
-				return fmt.Errorf("endpoint must use HTTPS or loopback HTTP")
-			}
+	}
+	if input.BalanceURL != "" {
+		if err := validateProviderURL(input.BalanceURL); err != nil {
+			return fmt.Errorf("balance URL %w", err)
 		}
+	}
+	return nil
+}
+
+func validateProviderURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return fmt.Errorf("must be a URL without embedded credentials or query")
+	}
+	if u.Scheme != "https" && (u.Scheme != "http" || !isLoopbackHost(u.Hostname())) {
+		return fmt.Errorf("must use HTTPS or loopback HTTP")
 	}
 	return nil
 }
@@ -399,6 +484,11 @@ func persistProviderConfig(input saveProviderConfigRequest) error {
 		// An explicit new endpoint must not retain a hidden request override.
 		entry.ChatURL = ""
 		entry.RequestURL = ""
+	}
+	if input.ClearBalanceURL {
+		entry.BalanceURL = ""
+	} else if input.BalanceURL != "" {
+		entry.BalanceURL = input.BalanceURL
 	}
 	entry.Model = input.Models[0]
 	entry.Models = append([]string(nil), input.Models...)

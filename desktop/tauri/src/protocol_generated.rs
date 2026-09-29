@@ -143,6 +143,21 @@ pub struct BridgeProjectFoldersResponse {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeProviderModelProbeRequest {
+    pub api_key: Option<String>,
+    pub model: String,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeProviderModelProbeResponse {
+    pub latency_millis: u64,
+    pub protocol_version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeProviderSummary {
     pub configured: bool,
     pub display_name: Option<String>,
@@ -158,12 +173,77 @@ pub struct BridgeProviderSummary {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeProviderSummaryResponse {
+    pub compact_ratio_percent: f64,
     pub default_model: String,
     pub planner_model: String,
     pub protocol_version: u64,
     pub providers: Vec<BridgeProviderSummary>,
+    pub reasoning_language: String,
     pub vision_model: String,
     pub web_search_model: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteBrowseEntry {
+    pub is_dir: bool,
+    pub mod_time: u64,
+    pub name: String,
+    pub path: String,
+    pub size: u64,
+    pub symlink: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteBrowseRequest {
+    pub name: String,
+    pub path: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteBrowseResponse {
+    pub entries: Vec<BridgeRemoteBrowseEntry>,
+    pub parent_path: String,
+    pub path: String,
+    pub protocol_version: u64,
+    pub truncated: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteConnectRequest {
+    pub name: String,
+    pub passphrase: Option<String>,
+    pub password: Option<String>,
+    pub trust_fingerprint: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteConnectResponse {
+    pub address: Option<String>,
+    pub fingerprint: Option<String>,
+    pub host: Option<String>,
+    pub key_type: Option<String>,
+    pub message: Option<String>,
+    pub protocol_version: u64,
+    pub status: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteDisconnectRequest {
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteDisconnectResponse {
+    pub disconnected: bool,
+    pub name: String,
+    pub protocol_version: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -176,6 +256,7 @@ pub struct BridgeRenameSessionRequest {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeSession {
     pub id: String,
+    pub model_ref: Option<String>,
     pub path: String,
     pub state: String,
     pub title: Option<String>,
@@ -203,6 +284,13 @@ pub struct BridgeSessionResponse {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeSetAgentPreferenceRequest {
+    pub compact_ratio_percent: Option<f64>,
+    pub reasoning_language: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeSetDefaultModelRequest {
     pub model: String,
 }
@@ -212,6 +300,12 @@ pub struct BridgeSetDefaultModelRequest {
 pub struct BridgeSetModelRoleRequest {
     pub model: String,
     pub role: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeSetSessionModelRequest {
+    pub model: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

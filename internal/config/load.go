@@ -749,6 +749,7 @@ func loadForEditStrict(path string, loadCredentials, persistMigrations bool) (*C
 		return nil, err
 	}
 	markExplicitDefaultProjectSkillKeys(cfg, path, meta)
+	markExplicitProjectPermissionKeys(cfg, path, meta)
 	changed := normalizeConfigForEdit(cfg)
 	if persistMigrations && changed && strings.TrimSpace(path) != "" {
 		if _, err := os.Stat(path); err == nil {
@@ -759,6 +760,22 @@ func loadForEditStrict(path string, loadCredentials, persistMigrations bool) (*C
 	}
 	return cfg, nil
 }
+
+func markExplicitProjectPermissionKeys(c *Config, path string, meta toml.MetaData) {
+	if c == nil || isUserConfigPath(path) {
+		return
+	}
+	for _, key := range projectPermissionKeys {
+		if meta.IsDefined("permissions", key) {
+			if c.explicitProjectPermissionKeys == nil {
+				c.explicitProjectPermissionKeys = make(map[string]bool)
+			}
+			c.explicitProjectPermissionKeys[key] = true
+		}
+	}
+}
+
+var projectPermissionKeys = [...]string{"mode", "allow", "ask", "deny"}
 
 // markExplicitDefaultProjectSkillKeys preserves project skill fields that are
 // explicitly present in a file but equal the built-in default. Without this

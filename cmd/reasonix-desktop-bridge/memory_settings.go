@@ -32,6 +32,8 @@ type previewMemoryDoc struct {
 type previewMemoryFact struct {
 	ID          string `json:"id"`
 	Revision    int    `json:"revision"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
 	Name        string `json:"name"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
@@ -48,25 +50,32 @@ type previewMemoryArchive struct {
 }
 
 type previewMemorySettingsView struct {
-	ProtocolVersion int                    `json:"protocolVersion"`
-	WorkspaceRoot   string                 `json:"workspaceRoot"`
-	StoreDir        string                 `json:"storeDir"`
-	GlobalStoreDir  string                 `json:"globalStoreDir"`
-	Docs            []previewMemoryDoc     `json:"docs"`
-	Facts           []previewMemoryFact    `json:"facts"`
-	Archives        []previewMemoryArchive `json:"archives"`
-	Diagnostics     []string               `json:"diagnostics"`
+	ProtocolVersion int                            `json:"protocolVersion"`
+	WorkspaceRoot   string                         `json:"workspaceRoot"`
+	StoreDir        string                         `json:"storeDir"`
+	GlobalStoreDir  string                         `json:"globalStoreDir"`
+	Docs            []previewMemoryDoc             `json:"docs"`
+	Facts           []previewMemoryFact            `json:"facts"`
+	Archives        []previewMemoryArchive         `json:"archives"`
+	Revisions       []previewMemoryFact            `json:"revisions"`
+	Diagnostics     []string                       `json:"diagnostics"`
+	LastRecall      desktopbridge.MemoryRecallView `json:"lastRecall"`
 }
 
 type previewMemorySettingsChange struct {
-	WorkspaceRoot string `json:"workspaceRoot"`
-	Action        string `json:"action"` // save_doc | quick_add | archive | restore
-	Path          string `json:"path"`
-	Revision      string `json:"revision"`
-	Body          string `json:"body"`
-	Scope         string `json:"scope"`
-	FactID        string `json:"factId"`
-	FactRevision  int    `json:"factRevision"`
+	WorkspaceRoot   string `json:"workspaceRoot"`
+	Action          string `json:"action"` // save_doc | quick_add | archive | restore | load_revisions | restore_revision
+	Path            string `json:"path"`
+	Revision        string `json:"revision"`
+	Body            string `json:"body"`
+	Scope           string `json:"scope"`
+	FactID          string `json:"factId"`
+	FactRevision    int    `json:"factRevision"`
+	HistoryRevision int    `json:"historyRevision"`
+	Name            string `json:"name"`
+	Title           string `json:"title"`
+	Description     string `json:"description"`
+	Type            string `json:"type"`
 }
 
 func loadMemorySetForPreview(workspaceRoot string) (*memory.Set, string, error) {
@@ -108,10 +117,17 @@ func readPreviewMemoryDoc(path string) (string, string, error) {
 
 func previewMemoryFactFromCore(f memory.Memory) previewMemoryFact {
 	return previewMemoryFact{
-		ID: f.ID, Revision: f.Revision, Name: f.Name, Title: f.Title,
+		ID: f.ID, Revision: f.Revision, CreatedAt: memoryTimestamp(f.CreatedAt), UpdatedAt: memoryTimestamp(f.UpdatedAt), Name: f.Name, Title: f.Title,
 		Description: f.Description, Type: string(f.Type), Scope: string(f.Scope),
 		Body: f.Body, Freshness: memory.FreshnessFor(f, time.Now().UTC()),
 	}
+}
+
+func memoryTimestamp(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339Nano)
 }
 
 func loadPreviewMemorySettings(workspaceRoot string) (previewMemorySettingsView, error) {
@@ -123,7 +139,8 @@ func loadPreviewMemorySettings(workspaceRoot string) (previewMemorySettingsView,
 		ProtocolVersion: desktopbridge.ProtocolVersion, WorkspaceRoot: root,
 		StoreDir: set.Store.Dir, GlobalStoreDir: set.Store.GlobalDir,
 		Docs: []previewMemoryDoc{}, Facts: []previewMemoryFact{},
-		Archives: []previewMemoryArchive{}, Diagnostics: []string{},
+		Archives: []previewMemoryArchive{}, Revisions: []previewMemoryFact{}, Diagnostics: []string{},
+		LastRecall: desktopbridge.MemoryRecallView{Hits: []desktopbridge.MemoryRecallHit{}},
 	}
 	seen := map[string]bool{}
 	addDoc := func(path, scope string) error {
@@ -171,7 +188,7 @@ func loadPreviewMemorySettings(workspaceRoot string) (previewMemorySettingsView,
 }
 
 func persistPreviewMemorySettings(change previewMemorySettingsChange) (previewMemorySettingsView, error) {
-	if len(change.Body) > maxPreviewMemoryDocBytes || len(change.Path) > 4096 || len(change.FactID) > 256 {
+	if len(change.Body) > maxPreviewMemoryDocBytes || len(change.Path) > 4096 || len(change.FactID) > 256 || len(change.Name) > 256 || len(change.Title) > 1024 || len(change.Description) > 4096 {
 		return previewMemorySettingsView{}, fmt.Errorf("memory setting is too large")
 	}
 	set, root, err := loadMemorySetForPreview(change.WorkspaceRoot)
@@ -240,6 +257,56 @@ func persistPreviewMemorySettings(change previewMemorySettingsChange) (previewMe
 			return previewMemorySettingsView{}, errPreviewMemoryChanged
 		}
 		if _, err := set.Store.Archive(change.FactID); err != nil {
+			return previewMemorySettingsView{}, err
+		}
+	case "save_fact":
+		if strings.TrimSpace(change.FactID) == "" || change.FactRevision < 1 {
+			return previewMemorySettingsView{}, fmt.Errorf("memory fact identity is required")
+		}
+		fact, found := set.Store.Read(change.FactID)
+		if !found || fact.Revision != change.FactRevision {
+			return previewMemorySettingsView{}, errPreviewMemoryChanged
+		}
+		name := strings.TrimSpace(change.Name)
+		if name == "" || strings.TrimSpace(change.Description) == "" || strings.TrimSpace(change.Body) == "" {
+			return previewMemorySettingsView{}, fmt.Errorf("memory name, description, and body are required")
+		}
+		_, err := set.Store.SaveWithOptions(memory.Memory{
+			ID: fact.ID, Name: name, Title: strings.TrimSpace(change.Title),
+			Description: strings.TrimSpace(change.Description), Type: memory.NormalizeType(change.Type),
+			Scope: fact.Scope, Body: strings.TrimSpace(change.Body),
+		}, memory.SaveOptions{ExpectedRevision: fact.Revision, RequireExpectedRevision: true})
+		if err != nil {
+			if strings.Contains(err.Error(), "revision conflict") {
+				return previewMemorySettingsView{}, errPreviewMemoryChanged
+			}
+			return previewMemorySettingsView{}, err
+		}
+	case "load_revisions":
+		if strings.TrimSpace(change.FactID) == "" {
+			return previewMemorySettingsView{}, fmt.Errorf("memory fact identity is required")
+		}
+		fact, found := set.Store.Read(change.FactID)
+		if !found || change.FactRevision > 0 && fact.Revision != change.FactRevision {
+			return previewMemorySettingsView{}, errPreviewMemoryChanged
+		}
+		next, err := loadPreviewMemorySettings(root)
+		if err != nil {
+			return previewMemorySettingsView{}, err
+		}
+		for _, revision := range set.Store.Revisions(fact.ID) {
+			next.Revisions = append(next.Revisions, previewMemoryFactFromCore(revision))
+		}
+		return next, nil
+	case "restore_revision":
+		if strings.TrimSpace(change.FactID) == "" || change.FactRevision < 1 || change.HistoryRevision < 1 {
+			return previewMemorySettingsView{}, fmt.Errorf("memory revision identity is required")
+		}
+		fact, found := set.Store.Read(change.FactID)
+		if !found || fact.Revision != change.FactRevision {
+			return previewMemorySettingsView{}, errPreviewMemoryChanged
+		}
+		if _, err := set.Store.Restore(fact.ID, change.HistoryRevision); err != nil {
 			return previewMemorySettingsView{}, err
 		}
 	case "restore":

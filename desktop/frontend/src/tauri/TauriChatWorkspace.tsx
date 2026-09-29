@@ -7,13 +7,13 @@ import { Markdown } from "../components/Markdown";
 import { QuestionJumpBar } from "../components/QuestionJumpBar";
 import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
 import { compactQuestionText, type QuestionAnchor } from "../lib/transcriptGrouping";
-import { LocaleProvider, useI18n } from "../lib/i18n";
+import { LocaleProvider, useI18n, useT } from "../lib/i18n";
 import { playSuccessChime, playAttentionChime, shouldPlayAttentionChimeForEvent } from "../lib/sound";
 import { generativeMusic, isGenerativeMusicEnabled } from "../lib/generative-music";
 import logoWordmark from "../assets/logo-wordmark.svg";
 import { TauriSettings, type TauriSettingsTab } from "./TauriSettings";
 import { detectShortcutPlatform, formatShortcutCombo } from "../lib/keyboardShortcuts";
-import { defaultTauriShortcut, matchesTauriShortcut, useTauriShortcuts } from "./tauriKeyboardShortcuts";
+import { defaultTauriShortcut, matchesTauriShortcut, TAURI_SHORTCUT_TABS, useTauriShortcuts, type TauriShortcutAction } from "./tauriKeyboardShortcuts";
 import { TauriStatusBar } from "./TauriStatusBar";
 import { useTauriDesktopLayout } from "./tauriDesktopLayout";
 import { getTauriDefaultWorkspace, setTauriDefaultWorkspace } from "./tauriDefaultWorkspace";
@@ -23,6 +23,8 @@ import { handleTauriDragDropEvent, retainTauriDragDropListener } from "./dragDro
 import { formatTauriWorkDuration, groupTauriHistory, type IndexedHistoryMessage } from "./historyPresentation";
 import { applyTerminalThemePreference, onTerminalThemePreferenceChange } from "../lib/terminalTheme";
 import { applyTauriAppearance, readTauriAppearance } from "./tauriAppearance";
+import { applyThemePack } from "../lib/themePack";
+import { tauriThemePackById } from "./tauriThemeCatalog";
 
 /** Per-message error boundary to prevent one bad message from crashing the entire transcript. */
 class MessageErrorBoundary extends Component<{ children: ReactNode; index: number }, { hasError: boolean }> {
@@ -108,6 +110,7 @@ import {
   restartTauriBridge,
   replayTauriPendingPrompts,
   setTauriDefaultModel,
+  setTauriBridgeSessionModel,
   startTauriBridgeEvents,
   submitTauriBridge,
   switchTauriBridgeSession,
@@ -144,6 +147,8 @@ import {
   tauriImportLegacySessionCatalog,
   tauriSessionCatalogShadow,
   tauriDesktopPreferences,
+  tauriActiveThemeId,
+  tauriUserThemes,
   type TauriBridgeEvent,
   type TauriBridgeAttachment,
   type TauriBridgeHistory,
@@ -369,6 +374,7 @@ function PromptCard({ prompt, busy, selections, onApproval, onAskSelection, onAs
 
 export function TauriSessionPreview() {
   const { pref: languagePref, setPref: setLanguagePref } = useI18n();
+  const t = useT();
   const languagePrefRef = useRef(languagePref);
   languagePrefRef.current = languagePref;
   const initialLanguagePrefRef = useRef(languagePref);
@@ -502,7 +508,7 @@ export function TauriSessionPreview() {
     let changedLocally = false;
     const initialAppearance = readTauriAppearance();
     const unsubscribe = onTerminalThemePreferenceChange(() => { changedLocally = true; });
-    void tauriDesktopPreferences().then(preferences => {
+    void Promise.all([tauriDesktopPreferences(), tauriActiveThemeId(), tauriUserThemes()]).then(([preferences, themeId, userThemes]) => {
       if (!active) return;
       if (!changedLocally) applyTerminalThemePreference(preferences.terminalTheme);
       if (preferences.appearanceConfigured) {
@@ -511,6 +517,8 @@ export function TauriSessionPreview() {
           applyTauriAppearance({ mode: preferences.theme, style: preferences.themeStyle || "graphite" });
         }
       }
+      const themePack = tauriThemePackById(themeId) ?? userThemes.find(theme => theme.id === themeId) ?? null;
+      if (themePack) applyThemePack(themePack);
       if (languagePrefRef.current === initialLanguagePrefRef.current) setLanguagePref(preferences.language);
     }).catch(() => {});
     return () => { active = false; unsubscribe(); };
@@ -612,7 +620,13 @@ export function TauriSessionPreview() {
         if (workspaceOpen) { setWorkspaceOpen(false); return; }
       }
       const shortcutPlatform = detectShortcutPlatform();
-      if (matchesTauriShortcut(event, "new_session", shortcutPlatform) && !busy && !switchingBlocked) {
+      if (matchesTauriShortcut(event, "close_panel", shortcutPlatform) && (settingsOpen || diagnosticsOpen || workspaceOpen)) {
+        event.preventDefault();
+        if (settingsOpen) setSettingsOpen(false);
+        else if (diagnosticsOpen) setDiagnosticsOpen(false);
+        else setWorkspaceOpen(false);
+      }
+      else if (matchesTauriShortcut(event, "new_session", shortcutPlatform) && !busy && !switchingBlocked) {
         event.preventDefault();
         void createSession();
       }
@@ -631,6 +645,36 @@ export function TauriSessionPreview() {
       else if (matchesTauriShortcut(event, "refresh_session", shortcutPlatform) && session && !busy) {
         event.preventDefault();
         void refreshHistory();
+      }
+      else if (matchesTauriShortcut(event, "open_appearance", shortcutPlatform)) {
+        event.preventDefault();
+        setSettingsTab("appearance");
+        setSettingsOpen(true);
+      }
+      else if (matchesTauriShortcut(event, "open_model_preferences", shortcutPlatform)) {
+        event.preventDefault();
+        setSettingsTab("model");
+        setSettingsOpen(true);
+      }
+      else if (matchesTauriShortcut(event, "open_model_services", shortcutPlatform)) {
+        event.preventDefault();
+        setSettingsTab("providers");
+        setSettingsOpen(true);
+      }
+      else if (matchesTauriShortcut(event, "open_usage_stats", shortcutPlatform)) {
+        event.preventDefault();
+        setSettingsTab("stats");
+        setSettingsOpen(true);
+      }
+      else {
+        const settingsTarget = Object.entries(TAURI_SHORTCUT_TABS).find(([action]) =>
+          matchesTauriShortcut(event, action as TauriShortcutAction, shortcutPlatform),
+        );
+        if (settingsTarget) {
+          event.preventDefault();
+          setSettingsTab(settingsTarget[1] as TauriSettingsTab);
+          setSettingsOpen(true);
+        }
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -2021,7 +2065,7 @@ export function TauriSessionPreview() {
   async function importStableProfile(): Promise<string> {
     if (!profile?.importAvailable || busy) return "";
     const confirmed = window.confirm(
-      `将 ${profile.stableConfig ?? "稳定版配置"} 复制到隔离的 Tauri Preview 配置目录？\n\n操作前会创建带时间戳的备份。不会复制会话、缓存、插件或 .env 文件，也不会修改稳定版。`,
+      t("settings.data.confirmProfileImport", { path: profile.stableConfig ?? t("settings.data.stableProfile") }),
     );
     if (!confirmed) return "";
     setBusy(true);
@@ -2031,8 +2075,8 @@ export function TauriSessionPreview() {
       const [profileStatus, providers] = await Promise.allSettled([tauriPreviewProfileStatus(), tauriProviderSummary()]);
       if (profileStatus.status === "fulfilled") setProfile(profileStatus.value);
       if (providers.status === "fulfilled") setProviderSummary(providers.value);
-      const refreshWarning = profileStatus.status === "rejected" || providers.status === "rejected" ? "\n配置已导入，但状态刷新失败；可在设置页重试刷新。" : "";
-      return `已导入：${result.importedConfig}\n备份：${result.backupConfig}${refreshWarning}`;
+      const refreshWarning = profileStatus.status === "rejected" || providers.status === "rejected" ? `\n${t("settings.data.profileRefreshWarning")}` : "";
+      return `${t("settings.data.profileImported", { path: result.importedConfig })}\n${t("settings.data.backupCreated", { path: result.backupConfig })}${refreshWarning}`;
     } catch (cause) {
       throw cause;
     } finally {
@@ -2043,7 +2087,7 @@ export function TauriSessionPreview() {
   async function importStableProjectFolders(): Promise<string> {
     if (!profile?.projectFoldersImportAvailable || busy) return "";
     const confirmed = window.confirm(
-      "将稳定版保存的项目文件夹名称和路径复制到隔离的 Tauri Preview？只导入文件夹清单，不导入会话、topic 或其他配置；不会修改稳定版。",
+      t("settings.data.confirmFoldersImport"),
     );
     if (!confirmed) return "";
     setBusy(true);
@@ -2056,8 +2100,8 @@ export function TauriSessionPreview() {
         setProjectFoldersWarning(folders.value.warning ?? "");
       }
       if (profileStatus.status === "fulfilled") setProfile(profileStatus.value);
-      const refreshWarning = folders.status === "rejected" || profileStatus.status === "rejected" ? "\n文件夹已导入，但列表刷新失败；可重新打开设置检查。" : "";
-      return `已导入 ${result.projectCount} 个项目文件夹：\n${result.importedFile}${refreshWarning}`;
+      const refreshWarning = folders.status === "rejected" || profileStatus.status === "rejected" ? `\n${t("settings.data.foldersRefreshWarning")}` : "";
+      return `${t("settings.data.foldersImported", { count: result.projectCount })}\n${result.importedFile}${refreshWarning}`;
     } catch (cause) {
       throw cause;
     } finally {
@@ -2159,6 +2203,29 @@ export function TauriSessionPreview() {
       setProviderSummary(await setTauriDefaultModel(model));
     } catch (cause) {
       setError(tauriMessageFrom(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeCurrentSessionModel(model: string): Promise<boolean> {
+    if (!session || !model || busy || session.state !== "idle" || attachments.length > 0) return false;
+    setBusy(true);
+    setError("");
+    try {
+      const updated = await setTauriBridgeSessionModel(session.id, model);
+      setSession(updated);
+      await rememberSession(updated);
+      try {
+        const snapshot = await tauriBridgeSnapshot(updated.id);
+        setSessionMetrics(snapshot.metrics ? { sessionId: updated.id, metrics: snapshot.metrics } : null);
+      } catch {
+        // The controller replacement succeeded; a metrics refresh can be retried separately.
+      }
+      return true;
+    } catch (cause) {
+      setError(tauriMessageFrom(cause));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -2385,7 +2452,7 @@ export function TauriSessionPreview() {
           </div>
           <p className="tauri-composer-hint">Reasonix 可能会出错，请核对重要信息。<button type="button" onClick={() => setDiagnosticsOpen(true)}>预览版说明</button></p>
         </footer>
-        <TauriStatusBar workspace={currentWorkspace} model={providerSummary?.defaultModel} sessionState={session?.state} bridgeRunning={status?.running} observedUsage={observedUsage?.sessionId === session?.id ? observedUsage : null} sessionMetrics={sessionMetrics && sessionMetrics.sessionId === session?.id ? sessionMetrics.metrics : null} />
+        <TauriStatusBar workspace={currentWorkspace} sessionId={session?.id} model={providerSummary?.defaultModel} sessionState={session?.state} bridgeRunning={status?.running} observedUsage={observedUsage?.sessionId === session?.id ? observedUsage : null} sessionMetrics={sessionMetrics && sessionMetrics.sessionId === session?.id ? sessionMetrics.metrics : null} />
       </section>
 
       {scanImportOpen && <>
@@ -2504,7 +2571,7 @@ export function TauriSessionPreview() {
         </aside>
       </>}
 
-      {settingsOpen && <TauriSettings initialTab={settingsTab} workspaceRoot={currentWorkspace || undefined} defaultWorkspace={defaultWorkspace} onChooseDefaultWorkspace={chooseDefaultWorkspace} onClearDefaultWorkspace={clearDefaultWorkspace} profile={profile} importBusy={busy} bridgeStatus={status} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={error} onRestartBridge={restartBridge} onRefreshCatalogAudit={() => refreshCatalogAudit()} onRefreshProfile={refreshProfile} onImportStableProfile={importStableProfile} onImportStableProjectFolders={importStableProjectFolders} onScanUnclaimedSessions={() => void openScanImportReview()} onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionState={session?.state} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} />}
+      {settingsOpen && <TauriSettings key={settingsTab} initialTab={settingsTab} workspaceRoot={currentWorkspace || undefined} defaultWorkspace={defaultWorkspace} onChooseDefaultWorkspace={chooseDefaultWorkspace} onClearDefaultWorkspace={clearDefaultWorkspace} profile={profile} importBusy={busy} bridgeStatus={status} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={error} onRestartBridge={restartBridge} onRefreshCatalogAudit={() => refreshCatalogAudit()} onRefreshProfile={refreshProfile} onImportStableProfile={importStableProfile} onImportStableProjectFolders={importStableProjectFolders} onScanUnclaimedSessions={() => void openScanImportReview()} onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionId={session?.id} currentSessionState={session?.state} currentSessionModelRef={session?.modelRef} onCurrentSessionModelChange={changeCurrentSessionModel} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} />}
     </main>
   );
 }

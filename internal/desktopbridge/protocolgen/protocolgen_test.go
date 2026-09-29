@@ -114,7 +114,7 @@ func TestGenerateRejectsUnsupportedConstructs(t *testing.T) {
 		t.Fatal("Generate accepted an array without items")
 	}
 
-	writeFile(t, root, SchemaPath, `{"$defs":{"thing":{"type":"number"}}}`)
+	writeFile(t, root, SchemaPath, `{"$defs":{"thing":{"type":"null"}}}`)
 	if _, err := Generate(root); err == nil {
 		t.Fatal("Generate accepted an unsupported type")
 	}
@@ -122,6 +122,27 @@ func TestGenerateRejectsUnsupportedConstructs(t *testing.T) {
 	writeFile(t, root, SchemaPath, `{"$defs":{"thing":{"$ref":"#/other/thing"}}}`)
 	if _, err := Generate(root); err == nil {
 		t.Fatal("Generate accepted an unsupported $ref")
+	}
+}
+
+func TestGenerateSupportsFloatingPointNumbers(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, SchemaPath, `{"$defs":{"thing":{"title":"Thing","type":"object","properties":{"value":{"type":"number"}}}}}`)
+	artifacts, err := Generate(root)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	for _, artifact := range artifacts {
+		switch artifact.Path {
+		case TypeScriptArtifactPath:
+			if !strings.Contains(string(artifact.Data), "value?: number;") {
+				t.Errorf("TypeScript number field missing:\n%s", artifact.Data)
+			}
+		case RustArtifactPath:
+			if !strings.Contains(string(artifact.Data), "pub value: Option<f64>,") {
+				t.Errorf("Rust number field missing:\n%s", artifact.Data)
+			}
+		}
 	}
 }
 

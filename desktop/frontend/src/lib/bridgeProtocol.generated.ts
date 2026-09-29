@@ -102,6 +102,17 @@ export interface BridgeProjectFoldersResponse {
   protocolVersion: number;
 }
 
+export interface BridgeProviderModelProbeRequest {
+  apiKey?: string;
+  model: string;
+  name: string;
+}
+
+export interface BridgeProviderModelProbeResponse {
+  latencyMillis: number;
+  protocolVersion: number;
+}
+
 export interface BridgeProviderSummary {
   configured: boolean;
   displayName?: string;
@@ -115,12 +126,63 @@ export interface BridgeProviderSummary {
 }
 
 export interface BridgeProviderSummaryResponse {
+  compactRatioPercent: number;
   defaultModel: string;
   plannerModel: string;
   protocolVersion: number;
   providers: BridgeProviderSummary[];
+  reasoningLanguage: "auto" | "zh" | "en";
   visionModel: string;
   webSearchModel: string;
+}
+
+export interface BridgeRemoteBrowseEntry {
+  isDir: boolean;
+  modTime: number;
+  name: string;
+  path: string;
+  size: number;
+  symlink: boolean;
+}
+
+export interface BridgeRemoteBrowseRequest {
+  name: string;
+  path?: string;
+}
+
+export interface BridgeRemoteBrowseResponse {
+  entries: BridgeRemoteBrowseEntry[];
+  parentPath: string;
+  path: string;
+  protocolVersion: number;
+  truncated: boolean;
+}
+
+export interface BridgeRemoteConnectRequest {
+  name: string;
+  passphrase?: string;
+  password?: string;
+  trustFingerprint?: string;
+}
+
+export interface BridgeRemoteConnectResponse {
+  address?: string;
+  fingerprint?: string;
+  host?: string;
+  keyType?: string;
+  message?: string;
+  protocolVersion: number;
+  status: "connected" | "host_key_confirmation" | "failed";
+}
+
+export interface BridgeRemoteDisconnectRequest {
+  name: string;
+}
+
+export interface BridgeRemoteDisconnectResponse {
+  disconnected: boolean;
+  name: string;
+  protocolVersion: number;
 }
 
 export interface BridgeRenameSessionRequest {
@@ -129,6 +191,7 @@ export interface BridgeRenameSessionRequest {
 
 export interface BridgeSession {
   id: string;
+  modelRef?: string;
   path: string;
   state: "idle" | "running" | "paused";
   title?: string;
@@ -150,6 +213,11 @@ export interface BridgeSessionResponse {
   session: BridgeSession;
 }
 
+export interface BridgeSetAgentPreferenceRequest {
+  compactRatioPercent?: number;
+  reasoningLanguage?: "auto" | "zh" | "en";
+}
+
 export interface BridgeSetDefaultModelRequest {
   model: string;
 }
@@ -157,6 +225,10 @@ export interface BridgeSetDefaultModelRequest {
 export interface BridgeSetModelRoleRequest {
   model: string;
   role: "planner" | "vision" | "search";
+}
+
+export interface BridgeSetSessionModelRequest {
+  model: string;
 }
 
 export interface BridgeSubmitRequest {

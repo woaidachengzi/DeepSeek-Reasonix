@@ -46,6 +46,19 @@ func TestBotConfigHasAccessControlDingtalk(t *testing.T) {
 	}
 }
 
+func TestBotConfigHasAccessControlForDisabledConnectionWithSavedPolicy(t *testing.T) {
+	bc := config.BotConfig{
+		Connections: []config.BotConnectionConfig{{
+			ID:      "feishu-lark",
+			Enabled: false,
+			Access:  config.BotAccessConfig{Enabled: true, Users: []string{"trusted-user"}},
+		}},
+	}
+	if !BotConfigHasAccessControl(bc) {
+		t.Fatal("saved access policy on a disabled connection should pass the configuration gate before channel activation")
+	}
+}
+
 // TestMergeLegacyDingtalkChannel: 直配 [bot.dingtalk]（无 [[bot.connections]]）
 // 时，模型/权限/工作目录必须合成进 Channels 与 ConnectionChannels，否则 CLI
 // bot 模式忽略这些运行选项（与桌面端 legacy 钉钉通道同路径）。

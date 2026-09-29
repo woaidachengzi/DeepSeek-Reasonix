@@ -5,18 +5,29 @@ const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http:
 Object.assign(globalThis, { window: dom.window, document: dom.window.document, localStorage: dom.window.localStorage });
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
 
-const { defaultTauriShortcut, getTauriShortcut, isValidTauriShortcut, matchesTauriShortcut, resetTauriShortcuts, setTauriShortcut, tauriShortcutConflict } = await import("../tauri/tauriKeyboardShortcuts");
+const { defaultTauriShortcut, getTauriShortcut, isValidTauriShortcut, matchesTauriShortcut, resetTauriShortcuts, setTauriShortcut, tauriShortcutConflict, TAURI_SHORTCUT_ACTIONS, TAURI_SHORTCUT_TABS } = await import("../tauri/tauriKeyboardShortcuts");
 
 const key = (value: string, ctrl = false, shift = false) => new dom.window.KeyboardEvent("keydown", { key: value, ctrlKey: ctrl, shiftKey: shift });
 assert.deepEqual(defaultTauriShortcut("settings", "darwin"), { key: ",", meta: true });
+assert.deepEqual(defaultTauriShortcut("close_panel", "darwin"), { key: "w", meta: true });
+assert.deepEqual(defaultTauriShortcut("open_appearance", "darwin"), { key: "a", meta: true, shift: true });
+assert.deepEqual(defaultTauriShortcut("open_model_services", "linux"), { key: "p", ctrl: true, shift: true });
+assert.equal(isValidTauriShortcut("open_usage_stats", { key: "u", ctrl: true, shift: true }), true);
+assert.equal(TAURI_SHORTCUT_ACTIONS.length, 27, "all Preview actions, including panel close and every settings page, can be configured");
+assert.equal(Object.keys(TAURI_SHORTCUT_TABS).length, 16, "every remaining settings page has a direct shortcut route");
+for (const action of TAURI_SHORTCUT_ACTIONS) {
+  const combo = defaultTauriShortcut(action, "darwin");
+  assert.equal(isValidTauriShortcut(action, combo), true, `${action} has a valid default binding`);
+  assert.equal(tauriShortcutConflict(action, combo, "darwin"), null, `${action} default does not conflict`);
+}
 assert.equal(matchesTauriShortcut(key(",", true), "settings", "linux"), true);
-assert.equal(setTauriShortcut("settings", { key: "o", ctrl: true, shift: true }, "linux"), true);
+assert.equal(setTauriShortcut("settings", { key: "q", ctrl: true, shift: true }, "linux"), true);
 assert.equal(matchesTauriShortcut(key(",", true), "settings", "linux"), false, "old binding stops firing immediately");
-assert.equal(matchesTauriShortcut(key("o", true, true), "settings", "linux"), true, "new binding works immediately");
-assert.equal(JSON.parse(localStorage.getItem("reasonix.tauri.shortcuts.v1")!).settings.key, "o", "Preview shortcut is saved separately");
+assert.equal(matchesTauriShortcut(key("q", true, true), "settings", "linux"), true, "new binding works immediately");
+assert.equal(JSON.parse(localStorage.getItem("reasonix.tauri.shortcuts.v1")!).settings.key, "q", "Preview shortcut is saved separately");
 assert.equal(localStorage.getItem("reasonix.customShortcuts"), null, "stable shortcut preferences are untouched");
-assert.equal(tauriShortcutConflict("new_session", { key: "o", ctrl: true, shift: true }, "linux"), "settings");
-assert.equal(setTauriShortcut("new_session", { key: "o", ctrl: true, shift: true }, "linux"), false, "conflicting shortcuts cannot be saved");
+assert.equal(tauriShortcutConflict("new_session", { key: "q", ctrl: true, shift: true }, "linux"), "settings");
+assert.equal(setTauriShortcut("new_session", { key: "q", ctrl: true, shift: true }, "linux"), false, "conflicting shortcuts cannot be saved");
 assert.equal(isValidTauriShortcut("send_message", { key: "o", ctrl: true }), false, "send stays on Enter");
 assert.equal(isValidTauriShortcut("settings", { key: "o" }), false, "plain typing cannot become a global shortcut");
 

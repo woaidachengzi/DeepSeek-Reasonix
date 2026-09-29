@@ -82,3 +82,63 @@ models = ["chat"]
 		t.Fatalf("invalid change mutated config: %v", err)
 	}
 }
+
+func TestPreviewProjectPermissionEditInheritsGlobalRulesAndStaysProjectScoped(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	globalPath := filepath.Join(home, "config.toml")
+	global := `[permissions]
+mode = "ask"
+allow = ["Bash(existing:*)"]
+deny = ["Bash(rm:*)"]
+`
+	if err := os.WriteFile(globalPath, []byte(global), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(home, "project")
+	if err := os.Mkdir(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	projectPath := filepath.Join(root, "reasonix.toml")
+	project := `[permissions]
+ask = ["Edit(src/**)"]
+`
+	if err := os.WriteFile(projectPath, []byte(project), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	view, err := persistPermissionChange(permissionSettingsChange{
+		Action: "add", Scope: "project", WorkspaceRoot: root, List: "allow", Rule: "Bash(go test:*)",
+	})
+	if err != nil {
+		t.Fatalf("save project rule: %v", err)
+	}
+	if view.Scope != "project" || !view.ProjectOverrides.Allow || view.ProjectOverrides.Mode || len(view.Allow) != 2 || view.Allow[0] != "Bash(existing:*)" || view.Allow[1] != "Bash(go test:*)" {
+		t.Fatalf("project permission view = %#v", view)
+	}
+	if len(view.Ask) != 1 || view.Ask[0] != "Edit(src/**)" || len(view.Deny) != 1 || view.Deny[0] != "Bash(rm:*)" {
+		t.Fatalf("project edit did not preserve inherited/explicit lists: %#v", view)
+	}
+	projectRaw, err := os.ReadFile(projectPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(projectRaw), "default_model") || !strings.Contains(string(projectRaw), `allow = ["Bash(existing:*)", "Bash(go test:*)"]`) || !strings.Contains(string(projectRaw), `ask = ["Edit(src/**)"]`) {
+		t.Fatalf("project config did not contain a minimal permission override: %s", projectRaw)
+	}
+	globalRaw, err := os.ReadFile(globalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(globalRaw) != global {
+		t.Fatalf("global config changed during project save: %s", globalRaw)
+	}
+	view, err = persistPermissionChange(permissionSettingsChange{
+		Action: "remove", Scope: "project", WorkspaceRoot: root, List: "allow", Rule: "Bash(existing:*)",
+	})
+	if err != nil {
+		t.Fatalf("remove inherited rule from project override: %v", err)
+	}
+	if len(view.Allow) != 1 || view.Allow[0] != "Bash(go test:*)" || !view.ProjectOverrides.Allow {
+		t.Fatalf("project override did not retain deliberate removal: %#v", view)
+	}
+}

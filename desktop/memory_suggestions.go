@@ -15,6 +15,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/memory"
+	"reasonix/internal/memorysuggest"
 	"reasonix/internal/provider"
 	"reasonix/internal/skill"
 )
@@ -27,37 +28,13 @@ const (
 // MemorySuggestion is a user-confirmed candidate for an active saved memory.
 // It is generated read-only from recent local history and only persisted through
 // AcceptMemorySuggestion.
-type MemorySuggestion struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Type        string   `json:"type"`
-	Scope       string   `json:"scope"`
-	Body        string   `json:"body"`
-	Reason      string   `json:"reason"`
-	Evidence    []string `json:"evidence"`
-}
+type MemorySuggestion = memorysuggest.MemorySuggestion
 
 // SkillSuggestion is a user-confirmed candidate for a reusable skill.
-type SkillSuggestion struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Scope       string   `json:"scope"`
-	Body        string   `json:"body"`
-	Reason      string   `json:"reason"`
-	Evidence    []string `json:"evidence"`
-}
+type SkillSuggestion = memorysuggest.SkillSuggestion
 
 // MemorySuggestionsView is the desktop Memory page's suggestion payload.
-type MemorySuggestionsView struct {
-	Memories    []MemorySuggestion `json:"memories"`
-	Skills      []SkillSuggestion  `json:"skills"`
-	GeneratedAt string             `json:"generatedAt"`
-	Available   bool               `json:"available"`
-	Source      string             `json:"source"`
-}
+type MemorySuggestionsView = memorysuggest.MemorySuggestionsView
 
 type suggestionSession struct {
 	Path     string
@@ -112,10 +89,8 @@ func (a *App) MemorySuggestionsForTab(tabID string) MemorySuggestionsView {
 	view.Available = true
 	view.Source = "local-history"
 
-	sessions := loadSuggestionSessions(sessionDir, suggestionSessionLimit)
-	view.Memories = suggestMemories(set, sessions)
-	view.Skills = suggestSkills(workspaceRoot, ctrl.AllSkills(), sessions)
-	return view
+	sessions := memorysuggest.LoadSessions(sessionDir, suggestionSessionLimit, nil)
+	return memorysuggest.Generate(set, workspaceRoot, ctrl.AllSkills(), sessions)
 }
 
 func emptyMemorySuggestionsView() MemorySuggestionsView {

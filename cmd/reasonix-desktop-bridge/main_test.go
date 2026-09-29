@@ -82,6 +82,7 @@ type bridgeTestRuntime struct {
 	path          string
 	title         string
 	state         string
+	modelRef      string
 	history       []desktopbridge.HistoryMessage
 	submits       []string
 	attachCalls   int
@@ -93,10 +94,25 @@ type bridgeTestRuntime struct {
 	preview       desktopbridge.WorkspaceFilePreview
 	changes       desktopbridge.WorkspaceChanges
 	metrics       desktopbridge.SessionMetrics
+	balance       *desktopbridge.SessionBalance
+	balanceErr    error
+	balanceCalls  int
+	mcpActions    []string
+	recall        desktopbridge.MemoryRecallView
 }
 
 func (r *bridgeTestRuntime) SessionPath() string                          { return r.path }
+func (r *bridgeTestRuntime) ModelRef() string                             { return r.modelRef }
 func (r *bridgeTestRuntime) SessionMetrics() desktopbridge.SessionMetrics { return r.metrics }
+func (r *bridgeTestRuntime) SessionBalance(context.Context) (*desktopbridge.SessionBalance, error) {
+	r.balanceCalls++
+	return r.balance, r.balanceErr
+}
+func (r *bridgeTestRuntime) MCPRuntimeAction(name, action string) (int, error) {
+	r.mcpActions = append(r.mcpActions, action+":"+name)
+	return 2, nil
+}
+func (r *bridgeTestRuntime) MemoryRecall() desktopbridge.MemoryRecallView { return r.recall }
 func (r *bridgeTestRuntime) Title() string                                { return r.title }
 func (r *bridgeTestRuntime) State() string                                { return r.state }
 func (r *bridgeTestRuntime) Rename(title string) error {
@@ -170,8 +186,110 @@ func TestHealthReturnsProtocolAndCapabilities(t *testing.T) {
 	for _, capability := range got.Capabilities {
 		found[capability] = true
 	}
-	if !found["provider_summary"] || !found["set_default_model"] || !found["attach_file"] || !found["rename_session"] || !found["delete_session"] || !found["session_catalog_sync"] || !found["session_directory_snapshot_v1"] || !found["session_directory_snapshot_full_v1"] || !found["session_delete_recovery_list_v1"] || !found["session_title_intent_v1"] || !found["session_title_recovery_list_v1"] {
+	if !found["provider_summary"] || !found["discover_provider_models"] || !found["set_secrets_settings"] || !found["set_default_model"] || !found["set_session_model"] || !found["attach_file"] || !found["rename_session"] || !found["delete_session"] || !found["session_catalog_sync"] || !found["session_directory_snapshot_v1"] || !found["session_directory_snapshot_full_v1"] || !found["session_delete_recovery_list_v1"] || !found["session_title_intent_v1"] || !found["session_title_recovery_list_v1"] || !found["session_balance"] || !found["mcp_runtime_action"] {
 		t.Fatalf("health capabilities %v do not include provider model settings", got.Capabilities)
+	}
+}
+
+func TestSessionBalanceIsAuthorizedAndScopedToActiveSession(t *testing.T) {
+	runtime := &bridgeTestRuntime{path: "/tmp/wallet-session.jsonl", state: "idle", balance: &desktopbridge.SessionBalance{Available: true, Display: "¥12.34"}}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) { return runtime, nil }))
+	if _, err := manager.Open(context.Background(), desktopbridge.OpenRequest{SessionID: "wallet-session"}); err != nil {
+		t.Fatal(err)
+	}
+	bridge := newBridgeServer(testToken, "instance-wallet", manager)
+	request := func(id string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/v1/sessions/"+id+"/balance", nil)
+		req.Header.Set("Authorization", "Bearer "+testToken)
+		response := httptest.NewRecorder()
+		bridge.handler().ServeHTTP(response, req)
+		return response
+	}
+	if got := request("wallet-session"); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"display":"¥12.34"`) {
+		t.Fatalf("balance status = %d, body = %s", got.Code, got.Body.String())
+	}
+	if strings.Contains(request("another-session").Body.String(), "¥12.34") {
+		t.Fatal("balance leaked to a different session")
+	}
+	if runtime.balanceCalls != 1 {
+		t.Fatalf("balance queried %d times; mismatched session must not invoke provider", runtime.balanceCalls)
+	}
+}
+
+func TestSessionMCPRuntimeActionIsAuthorizedAndActiveSessionScoped(t *testing.T) {
+	runtime := &bridgeTestRuntime{path: "/tmp/mcp-session.jsonl", state: "idle"}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(context.Context, desktopbridge.OpenRequest) (desktopbridge.Runtime, error) { return runtime, nil }))
+	if _, err := manager.Open(context.Background(), desktopbridge.OpenRequest{SessionID: "mcp-session"}); err != nil {
+		t.Fatal(err)
+	}
+	bridge := newBridgeServer(testToken, "instance-mcp", manager)
+	request := func(sessionID, action string, authorized bool) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/v1/sessions/"+sessionID+"/mcp/runtime", strings.NewReader(`{"name":"github","action":"`+action+`"}`))
+		if authorized {
+			req.Header.Set("Authorization", "Bearer "+testToken)
+			req.Header.Set(requestIDHeader, "mcp-"+sessionID+"-"+action)
+		}
+		response := httptest.NewRecorder()
+		bridge.handler().ServeHTTP(response, req)
+		return response
+	}
+	if got := request("mcp-session", "connect", false); got.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthorized status = %d, body=%s", got.Code, got.Body.String())
+	}
+	if got := request("another-session", "connect", true); got.Code != http.StatusNotFound {
+		t.Fatalf("mismatched active session status = %d, body=%s", got.Code, got.Body.String())
+	}
+	if got := request("mcp-session", "connect", true); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"toolCount":2`) {
+		t.Fatalf("active action status = %d, body=%s", got.Code, got.Body.String())
+	}
+	if strings.Join(runtime.mcpActions, ",") != "connect:github" {
+		t.Fatalf("runtime actions = %#v", runtime.mcpActions)
+	}
+}
+
+func TestSetSessionModelRebuildsAndDeduplicatesTheCurrentSession(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	workspace := t.TempDir()
+	contents := `default_model = "local/a"
+
+[[providers]]
+name = "local"
+kind = "openai"
+base_url = "http://127.0.0.1:1234/v1"
+models = ["a", "b"]
+default = "a"
+`
+	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	opened := []string{}
+	manager := desktopbridge.NewRuntimeManager(desktopbridge.RuntimeFactoryFunc(func(_ context.Context, request desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+		opened = append(opened, request.ModelRef)
+		return &bridgeTestRuntime{path: "/tmp/model-session.jsonl", state: "idle", modelRef: request.ModelRef}, nil
+	}))
+	if _, err := manager.Open(context.Background(), desktopbridge.OpenRequest{SessionID: "model-session", WorkspaceRoot: workspace, ModelRef: "local/a"}); err != nil {
+		t.Fatal(err)
+	}
+	bridge := newBridgeServer(testToken, "instance", manager)
+	request := func() *httptest.ResponseRecorder {
+		response := httptest.NewRecorder()
+		httpRequest := httptest.NewRequest(http.MethodPost, "/v1/sessions/model-session/model", strings.NewReader(`{"model":"local/b"}`))
+		httpRequest.Header.Set("Authorization", "Bearer "+testToken)
+		httpRequest.Header.Set(requestIDHeader, "switch-model-request")
+		bridge.handler().ServeHTTP(response, httpRequest)
+		return response
+	}
+	first := request()
+	if first.Code != http.StatusOK || !strings.Contains(first.Body.String(), `"modelRef":"local/b"`) {
+		t.Fatalf("model switch status = %d, body = %s", first.Code, first.Body.String())
+	}
+	replay := request()
+	if replay.Code != http.StatusOK || replay.Body.String() != first.Body.String() {
+		t.Fatalf("model switch replay status = %d, body = %s", replay.Code, replay.Body.String())
+	}
+	if strings.Join(opened, ",") != "local/a,local/b" {
+		t.Fatalf("runtime models opened = %#v; request replay must not rebuild twice", opened)
 	}
 }
 

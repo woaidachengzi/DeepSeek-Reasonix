@@ -19,6 +19,7 @@ Object.assign(globalThis, {
   IS_REACT_ACT_ENVIRONMENT: true,
 });
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
+Object.defineProperty(dom.window.navigator, "language", { value: "zh-CN", configurable: true });
 (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri = true;
 (dom.window as unknown as { __TAURI__?: unknown }).__TAURI__ = { core: { invoke: () => Promise.resolve(null) } };
 dom.window.confirm = () => true;
@@ -97,6 +98,7 @@ async function main() {
   const { act } = React;
   const { createRoot } = await import("react-dom/client");
   const { TauriSessionApp } = await import("../tauri/TauriChatWorkspace");
+  const { TauriMCPSettings } = await import("../tauri/TauriMCPSettings");
   const { mcpDraftFromMarketplace, mcpDraftToInput } = await import("../tauri/tauriMCPServers");
   const packageDraft = mcpDraftFromMarketplace({name:"io.example/package",suggestedName:"package",installable:true,transport:"stdio",command:"npx",args:["--yes","name with spaces"]}, [], "global");
   eq(JSON.stringify(mcpDraftToInput(packageDraft).args), JSON.stringify(["--yes","name with spaces"]), "Registry package argument boundaries survive the reviewed form");
@@ -122,7 +124,7 @@ async function main() {
 
   console.log("\ntauri MCP servers — panel");
   ok(text().includes("MCP 服务器"), "the settings panel has an MCP servers tab");
-  ok(text().includes("还没有配置 MCP 服务器"), "an empty profile says so");
+  ok(text().includes("尚未配置服务器"), "an empty profile says so");
 
   // Add: a stdio server with a credential value.
   await act(async () => {
@@ -130,10 +132,10 @@ async function main() {
     await settle();
   });
   await act(async () => {
-    typeInto(field("MCP 服务器名称") as HTMLInputElement, "time");
-    typeInto(field("MCP 服务器命令") as HTMLInputElement, "uvx");
-    typeInto(field("MCP 服务器参数") as HTMLInputElement, "mcp-server-time");
-    typeInto(field("MCP 服务器环境变量") as HTMLTextAreaElement, `TIMEZONE=Asia/Shanghai\nAPI_TOKEN=${SECRET}`);
+    typeInto(field("名称") as HTMLInputElement, "time");
+    typeInto(field("命令") as HTMLInputElement, "uvx");
+    typeInto(field("参数") as HTMLInputElement, "mcp-server-time");
+    typeInto(field("环境变量") as HTMLTextAreaElement, `TIMEZONE=Asia/Shanghai\nAPI_TOKEN=${SECRET}`);
   });
   await act(async () => {
     click(mcpButtons("添加服务器")[0]);
@@ -167,14 +169,14 @@ async function main() {
     ok(click(mcpButtons("编辑")[0]), "the edit button is present");
     await settle();
   });
-  const envField = field("MCP 服务器环境变量") as HTMLTextAreaElement | null;
+  const envField = field("环境变量") as HTMLTextAreaElement | null;
   eq(envField?.value, "", "editing never prefills a credential");
-  const nameField = field("MCP 服务器名称") as HTMLInputElement | null;
+  const nameField = field("名称") as HTMLInputElement | null;
   eq(nameField?.value, "time", "editing prefills the server name");
   ok(nameField?.disabled, "the name is fixed while editing");
 
   await act(async () => {
-    typeInto(field("MCP 服务器参数") as HTMLInputElement, "mcp-server-time --local-timezone=Asia/Tokyo");
+    typeInto(field("参数") as HTMLInputElement, "mcp-server-time --local-timezone=Asia/Tokyo");
   });
   await act(async () => {
     click(mcpButtons("保存修改")[0]);
@@ -195,7 +197,7 @@ async function main() {
     await settle();
   });
   ok(bridgeCalls().some(call => call.name === "delete_mcp_server"), "the delete reached the delete command");
-  ok(text().includes("还没有配置 MCP 服务器"), "the list is empty again");
+  ok(text().includes("尚未配置服务器"), "the list is empty again");
 
   await act(async () => {
     ok(click(mcpButtons("浏览目录")[0]), "the official directory can be opened");
@@ -207,8 +209,8 @@ async function main() {
     await settle();
   });
   ok(bridgeCalls().some(call => call.name === "resolve_mcp_marketplace"), "the entry is re-resolved before preparing a draft");
-  eq((field("MCP 服务器名称") as HTMLInputElement | null)?.value, "remote", "the new draft uses the suggested local name");
-  eq((field("MCP 服务器 URL") as HTMLInputElement | null)?.value, "https://mcp.example.test/mcp", "the new draft contains the resolved URL");
+  eq((field("名称") as HTMLInputElement | null)?.value, "remote", "the new draft uses the suggested local name");
+  eq((field("URL") as HTMLInputElement | null)?.value, "https://mcp.example.test/mcp", "the new draft contains the resolved URL");
   await act(async () => {
     ok(click(mcpButtons("添加服务器")[0]), "the reviewed Registry draft can be saved");
     await settle();
@@ -223,7 +225,7 @@ async function main() {
     click(mcpButtons("刷新")[0]);
     await settle();
   });
-  ok(text().includes("当前会话已连接 · 1 项工具"), "the active session Host status is displayed");
+  ok(text().includes("本会话已连接 · 1 项工具"), "the active session Host status is displayed");
   await act(async () => {
     click(document.querySelector<HTMLElement>(".tauri-mcp-list__tools summary") ?? undefined);
   });
@@ -233,6 +235,55 @@ async function main() {
   await act(async () => {
     root.unmount();
   });
+
+  const { LocaleProvider, useI18n } = await import("../lib/i18n");
+  function ForceEnglish() {
+    const { setPref } = useI18n();
+    React.useEffect(() => setPref("en"), [setPref]);
+    return null;
+  }
+  (globalThis as unknown as { __mcpServers: unknown[] }).__mcpServers = [];
+  const englishRoot = createRoot(document.getElementById("root")!);
+  await act(async () => {
+    englishRoot.render(React.createElement(LocaleProvider, null,
+      React.createElement(React.Fragment, null, React.createElement(ForceEnglish), React.createElement(TauriMCPSettings)),
+    ));
+    await settle();
+    await settle();
+  });
+  ok(text().includes("MCP servers") && text().includes("No servers configured yet."), "the complete MCP settings page follows the selected English locale");
+  await act(async () => { englishRoot.unmount(); });
+
+  (globalThis as unknown as { __mcpServers: Array<Record<string, unknown>> }).__mcpServers = [{
+    name: "remote", enabled: true, type: "http", source: "user_config", scope: "global",
+    configPath: "/tmp/config.toml", url: "https://mcp.example.test/mcp", runtimeStatus: "failed", errorKind: "connection",
+  }];
+  const activeRoot = createRoot(document.getElementById("root")!);
+  await act(async () => {
+    activeRoot.render(React.createElement(LocaleProvider, null,
+      React.createElement(React.Fragment, null, React.createElement(ForceEnglish), React.createElement(TauriMCPSettings, { sessionId: "active-session", currentSessionState: "idle" })),
+    ));
+    await settle();
+  });
+  await act(async () => {
+    ok(click(mcpButtons("Connect to current session")[0]), "a failed enabled server can be connected to the active session");
+    await settle();
+    await settle();
+  });
+  const runtimeAction = bridgeCalls().find(call => call.name === "mcp_runtime_action");
+  const runtimeRequest = (runtimeAction?.args as { request?: { sessionId?: string; name?: string; action?: string } } | undefined)?.request;
+  eq(runtimeRequest?.sessionId, "active-session", "the runtime operation is scoped to the displayed session ID");
+  eq(runtimeRequest?.action, "connect", "connect is separate from the persisted activation toggle");
+  ok(text().includes("Connected to this session · 2 tools"), "connecting refreshes the active session status and tool count");
+  await act(async () => {
+    ok(click(mcpButtons("Disconnect this session")[0]), "a connected MCP can be disconnected from only this session");
+    await settle();
+    await settle();
+  });
+  const runtimeActions = bridgeCalls().filter(call => call.name === "mcp_runtime_action");
+  eq((runtimeActions[1]?.args as { request?: { action?: string } } | undefined)?.request?.action, "disconnect", "disconnect is an explicit runtime action");
+  ok(!text().includes("Connected to this session · 2 tools"), "disconnect refreshes the current session status");
+  await act(async () => { activeRoot.unmount(); });
 
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);

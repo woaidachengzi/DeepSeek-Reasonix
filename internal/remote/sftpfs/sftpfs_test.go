@@ -54,6 +54,13 @@ func TestSFTPListStatRead(t *testing.T) {
 	}
 	fsys := dialFS(t, root)
 	ctx := context.Background()
+	resolvedHome, err := fsys.ResolvePath(ctx, "~")
+	wantHome, _ := filepath.EvalSymlinks(root)
+	gotInfo, gotInfoErr := os.Stat(resolvedHome)
+	wantInfo, wantInfoErr := os.Stat(wantHome)
+	if err != nil || gotInfoErr != nil || wantInfoErr != nil || !os.SameFile(gotInfo, wantInfo) {
+		t.Fatalf("ResolvePath(~) = %q, %v; want path to %q", resolvedHome, err, wantHome)
+	}
 
 	entries, err := fsys.List(ctx, root)
 	if err != nil {

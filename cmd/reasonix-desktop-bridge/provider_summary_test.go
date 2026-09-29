@@ -486,7 +486,7 @@ func TestDesktopApprovalEndpointPersistsNarrowChange(t *testing.T) {
 		handler.ServeHTTP(response, request)
 		return response
 	}
-	if got := call(http.MethodGet, "/v1/settings/desktop", ""); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"defaultToolApprovalMode":"ask"`) || !strings.Contains(got.Body.String(), `"language":""`) || !strings.Contains(got.Body.String(), `"terminalTheme":"auto"`) || !strings.Contains(got.Body.String(), `"appearanceConfigured":false`) {
+	if got := call(http.MethodGet, "/v1/settings/desktop", ""); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"defaultToolApprovalMode":"ask"`) || !strings.Contains(got.Body.String(), `"language":""`) || !strings.Contains(got.Body.String(), `"displayCurrency":""`) || !strings.Contains(got.Body.String(), `"terminalTheme":"auto"`) || !strings.Contains(got.Body.String(), `"appearanceConfigured":false`) {
 		t.Fatalf("read: %d %s", got.Code, got.Body.String())
 	}
 	if got := call(http.MethodPost, "/v1/settings/desktop/approval", `{"mode":"yolo"}`); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"defaultToolApprovalMode":"yolo"`) {
@@ -501,11 +501,14 @@ func TestDesktopApprovalEndpointPersistsNarrowChange(t *testing.T) {
 	if got := call(http.MethodPost, "/v1/settings/desktop/language", `{"language":"en"}`); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"language":"en"`) {
 		t.Fatalf("save language: %d %s", got.Code, got.Body.String())
 	}
+	if got := call(http.MethodPost, "/v1/settings/desktop/currency", `{"currency":"CNY"}`); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"displayCurrency":"CNY"`) {
+		t.Fatalf("save display currency: %d %s", got.Code, got.Body.String())
+	}
 	updated, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`default_tool_approval_mode = "yolo"`, `language = "en"`, `terminal_theme = "dark"`, `theme = "light"`, `theme_style = "aurora"`, `future_root_option = "keep-root"`, `future_desktop_option = "keep-desktop"`} {
+	for _, want := range []string{`default_tool_approval_mode = "yolo"`, `language = "en"`, `currency = "CNY"`, `display_currency = "CNY"`, `terminal_theme = "dark"`, `theme = "light"`, `theme_style = "aurora"`, `future_root_option = "keep-root"`, `future_desktop_option = "keep-desktop"`} {
 		if !strings.Contains(string(updated), want) {
 			t.Fatalf("saved config lost %q: %s", want, updated)
 		}
@@ -519,7 +522,62 @@ func TestDesktopApprovalEndpointPersistsNarrowChange(t *testing.T) {
 	if err := persistDesktopAppearance("light", "sepia"); err == nil {
 		t.Fatal("invalid appearance style was accepted")
 	}
+	if err := persistDesktopCurrency("EUR"); err == nil {
+		t.Fatal("unsupported display currency was accepted")
+	}
 	if got := call(http.MethodPost, "/v1/settings/desktop/language", `{"language":"fr"}`); got.Code != http.StatusBadRequest {
 		t.Fatalf("invalid language status = %d, body = %s", got.Code, got.Body.String())
+	}
+}
+
+func TestAgentPreferencesEndpointPersistsAndValidatesPreviewValues(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	path := filepath.Join(home, "config.toml")
+	initial := "[agent]\nreasoning_language = \"auto\"\ncompact_ratio = 0.8\nfuture_agent_option = \"keep-agent\"\n"
+	if err := os.WriteFile(path, []byte(initial), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	handler := newBridgeServer(testToken, "agent-preferences").handler()
+	requestID := 0
+	call := func(body string) *httptest.ResponseRecorder {
+		t.Helper()
+		requestID++
+		req := httptest.NewRequest(http.MethodPost, "/v1/settings/agent-preferences", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+testToken)
+		req.Header.Set(requestIDHeader, "agent-preference-"+strconv.Itoa(requestID))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+	if got := call(`{"reasoningLanguage":"zh"}`); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"reasoningLanguage":"zh"`) || !strings.Contains(got.Body.String(), `"compactRatioPercent":80`) {
+		t.Fatalf("reasoning language save = %d %s", got.Code, got.Body.String())
+	}
+	if got := call(`{"compactRatioPercent":75}`); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"compactRatioPercent":75`) {
+		t.Fatalf("compact ratio save = %d %s", got.Code, got.Body.String())
+	}
+	if got := call(`{"compactRatioPercent":75.5}`); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"compactRatioPercent":75.5`) {
+		t.Fatalf("fractional compact ratio save = %d %s", got.Code, got.Body.String())
+	}
+	beforeInvalid, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, invalid := range []string{`{}`, `{"reasoningLanguage":"fr"}`, `{"compactRatioPercent":91}`, `{"compactRatioPercent":85.1}`, `{"compactRatioPercent":75.55}`, `{"reasoningLanguage":"en","compactRatioPercent":70}`} {
+		if got := call(invalid); got.Code != http.StatusBadRequest {
+			t.Fatalf("invalid agent setting %s status = %d: %s", invalid, got.Code, got.Body.String())
+		}
+	}
+	afterInvalid, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(afterInvalid) != string(beforeInvalid) {
+		t.Fatal("invalid agent settings changed the config")
+	}
+	for _, preserved := range []string{`reasoning_language = "zh"`, `compact_ratio = 0.755`, `future_agent_option = "keep-agent"`} {
+		if !strings.Contains(string(afterInvalid), preserved) {
+			t.Fatalf("saved agent config lost %q: %s", preserved, afterInvalid)
+		}
 	}
 }

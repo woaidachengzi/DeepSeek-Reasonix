@@ -72,11 +72,13 @@ type bridgeServer struct {
 	runtimes           *desktopbridge.RuntimeManager
 	events             *desktopbridge.EventStream
 	requestIDs         *idempotencyLedger
+	remoteSessions     *previewRemoteSessions
 	packageOpsMu       sync.Mutex
 	cacheIdentityReads bool
 	identityReadMu     sync.Mutex
 	identityReadStore  *sessionidentity.Store
 	mcpRegistry        *mcpregistry.Client
+	botRuntime         *previewBotRuntime
 }
 
 func main() {
@@ -186,6 +188,9 @@ func run(ctx context.Context, cfg config, token string) (runErr error) {
 		}
 	}()
 	bridge := newBridgeServerWithEvents(token, instanceID, manager, events)
+	bridge.botRuntime.refreshAsync(ctx)
+	defer bridge.botRuntime.stop()
+	defer bridge.remoteSessions.closeAll()
 	bridge.cacheIdentityReads = true
 	defer bridge.closeIdentityReadStore()
 	ready := readyFile{
@@ -255,6 +260,8 @@ func newBridgeServerWithEvents(token, instanceID string, manager *desktopbridge.
 		runtimes:          manager,
 		events:            events,
 		requestIDs:        newIdempotencyLedger(maxRequestIDs),
+		botRuntime:        newPreviewBotRuntime(),
+		remoteSessions:    newPreviewRemoteSessions(),
 	}
 }
 
@@ -460,9 +467,13 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("GET /v1/settings/provider-configs", b.authorized(b.providerConfigs))
 	mux.HandleFunc("POST /v1/settings/provider-configs", b.authorized(b.idempotent(64<<10, b.saveProviderConfig)))
 	mux.HandleFunc("POST /v1/settings/provider-configs/delete", b.authorized(b.idempotent(64<<10, b.deleteProviderConfig)))
+	mux.HandleFunc("POST /v1/settings/provider-configs/discover-models", b.authorized(b.discoverProviderModels))
+	mux.HandleFunc("POST /v1/settings/provider-model-probe", b.authorized(b.testProviderModel))
 	mux.HandleFunc("POST /v1/settings/usage-stats", b.authorized(b.usageStats))
 	mux.HandleFunc("GET /v1/settings/permissions", b.authorized(b.permissionSettings))
 	mux.HandleFunc("POST /v1/settings/permissions", b.authorized(b.idempotent(64<<10, b.changePermissionSettings)))
+	mux.HandleFunc("GET /v1/settings/secrets", b.authorized(b.secretsSettings))
+	mux.HandleFunc("POST /v1/settings/secrets", b.authorized(b.idempotent(64<<10, b.changeSecretsSettings)))
 	mux.HandleFunc("GET /v1/settings/sandbox", b.authorized(b.sandboxSettings))
 	mux.HandleFunc("POST /v1/settings/sandbox", b.authorized(b.idempotent(64<<10, b.changeSandboxSettings)))
 	mux.HandleFunc("GET /v1/settings/network", b.authorized(b.networkSettings))
@@ -484,14 +495,28 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("POST /v1/settings/hooks", b.authorized(b.idempotent(64<<10, b.changeHooksSettings)))
 	mux.HandleFunc("GET /v1/settings/memory", b.authorized(b.memorySettings))
 	mux.HandleFunc("POST /v1/settings/memory", b.authorized(b.idempotent(3<<20, b.changeMemorySettings)))
+	mux.HandleFunc("GET /v1/settings/memory/suggestions", b.authorized(b.memorySuggestions))
+	mux.HandleFunc("POST /v1/settings/memory/suggestions/accept", b.authorized(b.idempotent(16<<10, b.acceptMemorySuggestion)))
 	mux.HandleFunc("POST /v1/settings/default-model", b.authorized(b.idempotent(64<<10, b.setDefaultModel)))
+	mux.HandleFunc("POST /v1/sessions/{id}/model", b.authorized(b.idempotent(64<<10, b.setSessionModel)))
 	mux.HandleFunc("POST /v1/settings/model-role", b.authorized(b.idempotent(64<<10, b.setModelRole)))
+	mux.HandleFunc("POST /v1/settings/agent-preferences", b.authorized(b.idempotent(64<<10, b.setAgentPreferences)))
 	mux.HandleFunc("GET /v1/settings/desktop", b.authorized(b.desktopPreferences))
 	mux.HandleFunc("GET /v1/settings/storage", b.authorized(b.storageSettings))
+	mux.HandleFunc("GET /v1/settings/remote", b.authorized(b.remoteSettings))
+	mux.HandleFunc("POST /v1/settings/remote/scan", b.authorized(b.scanRemoteSSHConfig))
+	mux.HandleFunc("POST /v1/settings/remote/connect", b.authorized(b.connectRemoteHost))
+	mux.HandleFunc("POST /v1/settings/remote/disconnect", b.authorized(b.disconnectRemoteHost))
+	mux.HandleFunc("POST /v1/settings/remote/browse", b.authorized(b.browseRemoteHost))
+	mux.HandleFunc("POST /v1/settings/remote/hosts", b.authorized(b.idempotent(64<<10, b.changeRemoteSettings)))
+	mux.HandleFunc("GET /v1/settings/bots", b.authorized(b.botSettings))
+	mux.HandleFunc("POST /v1/settings/bots", b.authorized(b.idempotent(64<<10, b.changeBotSettings)))
+	mux.HandleFunc("GET /v1/settings/bots/runtime", b.authorized(b.botRuntimeStatus))
 	mux.HandleFunc("POST /v1/settings/desktop/approval", b.authorized(b.idempotent(64<<10, b.setDesktopApproval)))
 	mux.HandleFunc("POST /v1/settings/desktop/terminal-theme", b.authorized(b.idempotent(64<<10, b.setDesktopTerminalTheme)))
 	mux.HandleFunc("POST /v1/settings/desktop/appearance", b.authorized(b.idempotent(64<<10, b.setDesktopAppearance)))
 	mux.HandleFunc("POST /v1/settings/desktop/language", b.authorized(b.idempotent(64<<10, b.setDesktopLanguage)))
+	mux.HandleFunc("POST /v1/settings/desktop/currency", b.authorized(b.idempotent(64<<10, b.setDesktopCurrency)))
 	mux.HandleFunc("POST /v1/settings/provider-key", b.authorized(b.idempotent(64<<10, b.setProviderKey)))
 	mux.HandleFunc("POST /v1/sessions:open", b.authorized(b.idempotent(64<<10, b.openSession)))
 	mux.HandleFunc("POST /v1/sessions:switch", b.authorized(b.idempotent(64<<10, b.switchSession)))
@@ -504,6 +529,8 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("GET /v1/sessions/deletion-recovery/page", b.authorized(b.pendingSessionDeletesPage))
 	mux.HandleFunc("GET /v1/sessions/title-recovery", b.authorized(b.pendingSessionTitleRecoveries))
 	mux.HandleFunc("GET /v1/sessions/{id}/snapshot", b.authorized(b.sessionSnapshot))
+	mux.HandleFunc("GET /v1/sessions/{id}/balance", b.authorized(b.sessionBalance))
+	mux.HandleFunc("POST /v1/sessions/{id}/mcp/runtime", b.authorized(b.idempotent(64<<10, b.sessionMCPRuntimeAction)))
 	mux.HandleFunc("GET /v1/sessions/{id}/history", b.authorized(b.sessionHistory))
 	mux.HandleFunc("GET /v1/sessions/snapshot", b.authorized(b.sessionDirectorySnapshot))
 	mux.HandleFunc("GET /v1/sessions/shadow-snapshot", b.authorized(b.sessionShadowSnapshot))
@@ -655,7 +682,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "provider_summary", "provider_configs", "save_provider_config", "delete_provider_config", "usage_stats", "storage_settings", "permission_settings", "set_permission_settings", "sandbox_settings", "set_sandbox_settings", "network_settings", "set_network_settings", "skills_settings", "set_skills_settings", "plan_skill_install", "install_skill", "archive_skill", "restore_skill", "plugin_settings", "set_plugin_settings", "plan_plugin_install", "install_plugin", "remove_plugin", "subagent_settings", "set_subagent_settings", "hooks_settings", "set_hooks_settings", "memory_settings", "set_memory_settings", "set_default_model", "set_model_role", "desktop_preferences", "set_desktop_approval", "set_provider_key", "open_session", "switch_session", "session_snapshot", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "mcp_server_activation", "mcp_marketplace", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "session_scan_import_review_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "provider_configs", "save_provider_config", "delete_provider_config", "discover_provider_models", "provider_model_probe", "usage_stats", "storage_settings", "permission_settings", "set_permission_settings", "secrets_settings", "set_secrets_settings", "sandbox_settings", "set_sandbox_settings", "network_settings", "set_network_settings", "skills_settings", "set_skills_settings", "plan_skill_install", "install_skill", "archive_skill", "restore_skill", "plugin_settings", "set_plugin_settings", "plan_plugin_install", "install_plugin", "remove_plugin", "subagent_settings", "set_subagent_settings", "hooks_settings", "set_hooks_settings", "memory_settings", "set_memory_settings", "memory_suggestions", "accept_memory_suggestion", "set_default_model", "set_session_model", "set_model_role", "set_agent_preferences", "desktop_preferences", "set_desktop_approval", "set_provider_key", "bot_settings", "set_bot_settings", "bot_runtime_status", "remote_ssh_probe", "remote_ssh_connect", "remote_ssh_disconnect", "remote_workspace_browse", "open_session", "switch_session", "session_snapshot", "session_balance", "session_history", "rename_session", "delete_session", "attach_file", "workspace_list", "workspace_file_preview", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "mcp_server_activation", "mcp_runtime_action", "mcp_marketplace", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "session_scan_import_review_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
 	})
 }
 
@@ -675,6 +702,24 @@ func (b *bridgeServer) providerConfigs(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
+}
+
+func (b *bridgeServer) discoverProviderModels(w http.ResponseWriter, r *http.Request) {
+	var input discoverProviderModelsRequest
+	if err := decodeJSONBody(w, r, 8<<10, &input); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid model discovery request")
+		return
+	}
+	result, err := discoverSavedProviderModels(input, b.token)
+	if err != nil {
+		if errors.Is(err, errPreviewProviderDiscoveryChanged) {
+			writeProtocolError(w, http.StatusConflict, "conflict", "provider settings changed; reload before discovering models")
+		} else {
+			writeProtocolError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (b *bridgeServer) saveProviderConfig(w http.ResponseWriter, r *http.Request) {
@@ -735,8 +780,8 @@ func (b *bridgeServer) usageStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-func (b *bridgeServer) permissionSettings(w http.ResponseWriter, _ *http.Request) {
-	view, err := loadPermissionSettings()
+func (b *bridgeServer) permissionSettings(w http.ResponseWriter, r *http.Request) {
+	view, err := loadPermissionSettings(r.URL.Query().Get("workspaceRoot"), r.URL.Query().Get("scope"))
 	if err != nil {
 		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read Preview permission settings")
 		return
@@ -753,6 +798,29 @@ func (b *bridgeServer) changePermissionSettings(w http.ResponseWriter, r *http.R
 	view, err := persistPermissionChange(change)
 	if err != nil {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "permission settings could not be saved")
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (b *bridgeServer) secretsSettings(w http.ResponseWriter, _ *http.Request) {
+	view, err := loadSecretsSettings()
+	if err != nil {
+		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read Preview secrets settings")
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (b *bridgeServer) changeSecretsSettings(w http.ResponseWriter, r *http.Request) {
+	var change secretsSettingsChange
+	if err := decodeJSONBody(w, r, 8<<10, &change); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid Preview secrets settings request")
+		return
+	}
+	view, err := persistSecretsSettings(change)
+	if err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "Preview secrets settings could not be saved")
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
@@ -878,12 +946,25 @@ func (b *bridgeServer) changeHooksSettings(w http.ResponseWriter, r *http.Reques
 }
 
 func (b *bridgeServer) memorySettings(w http.ResponseWriter, r *http.Request) {
-	view, err := loadPreviewMemorySettings(r.URL.Query().Get("workspaceRoot"))
+	workspaceRoot := r.URL.Query().Get("workspaceRoot")
+	view, err := loadPreviewMemorySettings(workspaceRoot)
 	if err != nil {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "unable to read Preview memory settings")
 		return
 	}
+	b.attachActiveMemoryRecall(&view)
 	writeJSON(w, http.StatusOK, view)
+}
+
+func (b *bridgeServer) attachActiveMemoryRecall(view *previewMemorySettingsView) {
+	if view == nil || b.runtimes == nil {
+		return
+	}
+	if session, ok := b.runtimes.Snapshot(); ok {
+		if recall, active := b.runtimes.MemoryRecall(session.ID, view.WorkspaceRoot); active {
+			view.LastRecall = recall
+		}
+	}
 }
 
 func (b *bridgeServer) changeMemorySettings(w http.ResponseWriter, r *http.Request) {
@@ -901,6 +982,7 @@ func (b *bridgeServer) changeMemorySettings(w http.ResponseWriter, r *http.Reque
 		}
 		return
 	}
+	b.attachActiveMemoryRecall(&view)
 	writeJSON(w, http.StatusOK, view)
 }
 
@@ -976,6 +1058,19 @@ func (b *bridgeServer) setDesktopLanguage(w http.ResponseWriter, r *http.Request
 	b.desktopPreferences(w, r)
 }
 
+func (b *bridgeServer) setDesktopCurrency(w http.ResponseWriter, r *http.Request) {
+	var request setDesktopCurrencyRequest
+	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid desktop display currency")
+		return
+	}
+	if err := persistDesktopCurrency(request.Currency); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "unable to save desktop display currency")
+		return
+	}
+	b.desktopPreferences(w, r)
+}
+
 func (b *bridgeServer) setDefaultModel(w http.ResponseWriter, r *http.Request) {
 	var request setDefaultModelRequest
 	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
@@ -1015,6 +1110,31 @@ func (b *bridgeServer) setModelRole(w http.ResponseWriter, r *http.Request) {
 	summary, err := loadProviderSummary()
 	if err != nil {
 		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read provider summary")
+		return
+	}
+	writeJSON(w, http.StatusOK, summary)
+}
+
+func (b *bridgeServer) setAgentPreferences(w http.ResponseWriter, r *http.Request) {
+	var request setAgentPreferenceRequest
+	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid agent preference request")
+		return
+	}
+	if err := persistAgentPreferences(request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "agent preference could not be saved")
+		return
+	}
+	if request.ReasoningLanguage != "" && b.runtimes != nil {
+		if session, active := b.runtimes.Snapshot(); active && session.WorkspaceRoot != "" {
+			if effective, err := appconfig.LoadForRootWithoutCredentialsReadOnly(session.WorkspaceRoot); err == nil {
+				b.runtimes.SetReasoningLanguage(session.ID, effective.ReasoningLanguage())
+			}
+		}
+	}
+	summary, err := loadProviderSummary()
+	if err != nil {
+		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read agent preferences")
 		return
 	}
 	writeJSON(w, http.StatusOK, summary)
@@ -1184,6 +1304,76 @@ func (b *bridgeServer) sessionSnapshot(w http.ResponseWriter, r *http.Request) {
 		response["metrics"] = metrics
 	}
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (b *bridgeServer) sessionBalance(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("id")
+	balance, found, err := b.runtimes.SessionBalance(r.Context(), sessionID)
+	if err != nil {
+		writeProtocolError(w, http.StatusBadGateway, "balance_unavailable", "wallet balance is unavailable")
+		return
+	}
+	if !found {
+		writeProtocolError(w, http.StatusNotFound, "not_found", "desktop bridge session not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "balance": balance})
+}
+
+type sessionMCPRuntimeActionRequest struct {
+	Name   string `json:"name"`
+	Action string `json:"action"`
+}
+
+func (b *bridgeServer) sessionMCPRuntimeAction(w http.ResponseWriter, r *http.Request) {
+	var request sessionMCPRuntimeActionRequest
+	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid MCP runtime action")
+		return
+	}
+	count, err := b.runtimes.MCPRuntimeAction(r.PathValue("id"), request.Name, request.Action)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to change the current session MCP connection")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"protocolVersion": desktopbridge.ProtocolVersion,
+		"name":            strings.TrimSpace(request.Name),
+		"action":          request.Action,
+		"toolCount":       count,
+	})
+}
+
+func (b *bridgeServer) setSessionModel(w http.ResponseWriter, r *http.Request) {
+	var request setSessionModelRequest
+	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid session model request")
+		return
+	}
+	active, ok := b.runtimes.Snapshot()
+	if !ok || active.ID != r.PathValue("id") {
+		writeProtocolError(w, http.StatusNotFound, "not_found", "desktop bridge session not found")
+		return
+	}
+	model, err := resolveConfiguredSessionModel(active.WorkspaceRoot, request.Model)
+	if err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "model_unavailable", "model is not configured for this workspace")
+		return
+	}
+	view, err := b.runtimes.SetSessionModel(r.Context(), active.ID, model)
+	if err != nil {
+		if errors.Is(err, desktopbridge.ErrSessionModelSwitch) {
+			writeProtocolError(w, http.StatusBadGateway, "model_switch_failed", "model could not be started; the previous session model was restored")
+			return
+		}
+		if errors.Is(err, desktopbridge.ErrSessionModelRecover) {
+			writeProtocolError(w, http.StatusInternalServerError, "session_model_recovery_failed", "model switch failed and the previous session could not be restored")
+			return
+		}
+		b.writeRuntimeError(w, err, "unable to change the active session model")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})
 }
 
 func (b *bridgeServer) sessionHistory(w http.ResponseWriter, r *http.Request) {
@@ -1418,6 +1608,10 @@ func (b *bridgeServer) writeRuntimeError(w http.ResponseWriter, err error, messa
 		status, code = http.StatusNotFound, "not_found"
 	case errors.Is(err, desktopbridge.ErrClosed):
 		status, code = http.StatusServiceUnavailable, "shutting_down"
+	case errors.Is(err, desktopbridge.ErrSessionModelRecover):
+		status, code = http.StatusInternalServerError, "session_model_recovery_failed"
+	case errors.Is(err, desktopbridge.ErrSessionModelSwitch):
+		status, code = http.StatusBadGateway, "model_switch_failed"
 	}
 	writeProtocolError(w, status, code, message)
 }

@@ -26,9 +26,12 @@ const { applyTheme } = await import("../lib/theme");
 const {
   applyTerminalThemePreference,
   createTerminalThemeSaveQueue,
+  DEFAULT_TERMINAL_PALETTE,
+  getCustomTerminalPalette,
   getResolvedTerminalTheme,
   normalizeTerminalThemePreference,
   onTerminalThemePreferenceChange,
+  setCustomTerminalPalette,
   terminalThemeForElement,
 } = await import("../lib/terminalTheme");
 
@@ -97,6 +100,17 @@ assert.ok(
   contrastRatio(darkTerminalTheme.selectionForeground!, darkTerminalTheme.selectionBackground!) >= 4.5,
   "dark terminal selection text meets WCAG AA contrast",
 );
+
+const customColors = { ...DEFAULT_TERMINAL_PALETTE, background: "#123456", foreground: "#f0f0f0", selectionBackground: "#eeeeee", red: "#ff0000" };
+setCustomTerminalPalette(customColors, true);
+const customized = terminalThemeForElement(document.createElement("div"));
+assert.equal(customized.background, "#123456", "enabled custom palette overrides terminal surface colors");
+assert.equal(customized.foreground, "#f0f0f0");
+assert.equal(customized.red, "#ff0000", "custom ANSI colors apply to open terminals");
+assert.equal(customized.selectionForeground, "#000000", "selection text chooses a contrasting foreground");
+assert.equal(getCustomTerminalPalette().enabled, true);
+setCustomTerminalPalette(DEFAULT_TERMINAL_PALETTE, false);
+assert.equal(terminalThemeForElement(document.createElement("div")).background, "#111315", "reset restores automatic theme colors");
 
 let releaseFirstSave!: () => void;
 const firstSaveGate = new Promise<void>((resolve) => { releaseFirstSave = resolve; });

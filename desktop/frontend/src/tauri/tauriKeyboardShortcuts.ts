@@ -1,8 +1,54 @@
 import { useSyncExternalStore } from "react";
 import { comboFromKeyboardEvent, type ShortcutCombo, type ShortcutPlatform } from "../lib/keyboardShortcuts";
 
-export const TAURI_SHORTCUT_ACTIONS = ["new_session", "settings", "diagnostics", "workspace_files", "refresh_session", "send_message"] as const;
+export const TAURI_SHORTCUT_ACTIONS = [
+  "new_session",
+  "close_panel",
+  "settings",
+  "diagnostics",
+  "workspace_files",
+  "refresh_session",
+  "send_message",
+  "open_appearance",
+  "open_model_preferences",
+  "open_model_services",
+  "open_usage_stats",
+  "open_general",
+  "open_bots",
+  "open_mcp",
+  "open_remote",
+  "open_skills",
+  "open_plugins",
+  "open_subagents",
+  "open_hooks",
+  "open_memory",
+  "open_permissions",
+  "open_sandbox",
+  "open_network",
+  "open_storage",
+  "open_shortcuts",
+  "open_updates",
+  "open_about",
+] as const;
 export type TauriShortcutAction = typeof TAURI_SHORTCUT_ACTIONS[number];
+export const TAURI_SHORTCUT_TABS = {
+  open_general: "general",
+  open_bots: "bots",
+  open_mcp: "mcp",
+  open_remote: "remote",
+  open_skills: "skills",
+  open_plugins: "plugins",
+  open_subagents: "subagents",
+  open_hooks: "hooks",
+  open_memory: "memory",
+  open_permissions: "permissions",
+  open_sandbox: "sandbox",
+  open_network: "network",
+  open_storage: "data",
+  open_shortcuts: "shortcuts",
+  open_updates: "updates",
+  open_about: "about",
+} as const satisfies Partial<Record<TauriShortcutAction, string>>;
 type Overrides = Partial<Record<TauriShortcutAction, ShortcutCombo>>;
 
 const STORAGE_KEY = "reasonix.tauri.shortcuts.v1";
@@ -59,8 +105,38 @@ if (typeof window !== "undefined") {
 }
 
 export function defaultTauriShortcut(action: TauriShortcutAction, platform: ShortcutPlatform): ShortcutCombo {
-  const key = { new_session: "n", settings: ",", diagnostics: ".", workspace_files: "b", refresh_session: "r", send_message: "Enter" }[action];
-  return platform === "darwin" ? { key, meta: true } : { key, ctrl: true };
+  const defaults: Record<TauriShortcutAction, string> = {
+    new_session: "n",
+    close_panel: "w",
+    settings: ",",
+    diagnostics: ".",
+    workspace_files: "b",
+    refresh_session: "r",
+    send_message: "Enter",
+    open_appearance: "a",
+    open_model_preferences: "m",
+    open_model_services: "p",
+    open_usage_stats: "u",
+    open_general: "o",
+    open_bots: "b",
+    open_mcp: "c",
+    open_remote: "r",
+    open_skills: "s",
+    open_plugins: "g",
+    open_subagents: "d",
+    open_hooks: "h",
+    open_memory: "y",
+    open_permissions: "x",
+    open_sandbox: "z",
+    open_network: "w",
+    open_storage: "t",
+    open_shortcuts: "k",
+    open_updates: "v",
+    open_about: "i",
+  };
+  const key = defaults[action];
+  const modifier = platform === "darwin" ? { meta: true } : { ctrl: true };
+  return action.startsWith("open_") ? { key, ...modifier, shift: true } : { key, ...modifier };
 }
 
 export function getTauriShortcut(action: TauriShortcutAction, platform: ShortcutPlatform): ShortcutCombo {

@@ -319,7 +319,36 @@ for (const path of localeChunks) {
   // merged chunks measure 64.6 / 65.4 KiB after the Storage and Permissions
   // translations. Keep a bounded 0.4 KiB buffer for Node/zlib output drift
   // without trimming required settings copy.
-  const budget = 65.8 * 1024;
+  // Preview data import now localizes profile/folder import states, prompts,
+  // backup receipts, and transcript-review actions (about 0.6 KiB gzip on
+  // zh-TW). Keep the full safety explanation and a bounded cross-platform
+  // margin for the added settings workflow.
+  // The Preview bot runtime and credential editor add localized state, safety,
+  // and credential labels (about 0.2 KiB gzip on zh-TW). Keep those controls
+  // clear without widening the limit beyond the measured settings copy.
+  // Bot allowlist and pairing controls add platform/role labels and validation
+  // guidance in all three locales. The translated bundle now needs another
+  // bounded 0.5 KiB for those actual controls.
+  // Model services, skill management, and subagent profiles now have complete
+  // Memory suggestion preview, model discovery, and sensitive-data controls add
+  // the remaining localized settings workflow. Keep a bounded 0.8 KiB margin
+  // over zh-TW.
+  // The persisted Preview theme editor adds its labels and error states; keep
+  // the next two tenth-KiB ceiling for the complete appearance workflow.
+  // Provider model connection probes add a small set of three-locale labels;
+  // keep the next tenth-KiB ceiling for this user-facing test flow.
+  // SSH connect verification adds localized fingerprint confirmation and
+  // status labels; allow one tenth-KiB for the explicit trust flow.
+  // SFTP browsing, folder selection, and persistent connect controls add the
+  // next two localized action/status groups.
+  // Status bar output/cache-token metrics add translated labels and scoped
+  // explanations; allow the next two tenth-KiB while keeping the ratchet tight.
+  // Current-session model switching adds its guardrails and recovery messages
+  // to the settings workflow; allow one more tenth-KiB for the three locales.
+  // Provider balance-URL editing adds retain/clear guidance; keep one tenth-KiB.
+  // Current-session MCP connect/disconnect controls add localized action labels;
+  // keep one more tenth-KiB for this bounded settings workflow.
+  const budget = 76.9 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 

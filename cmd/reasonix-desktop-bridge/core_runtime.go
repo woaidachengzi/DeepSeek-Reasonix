@@ -54,6 +54,7 @@ func newControllerFactory(events *desktopbridge.EventStream) *controllerFactory 
 func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
 	opts := f.base
 	opts.WorkspaceRoot = request.WorkspaceRoot
+	opts.Model = strings.TrimSpace(request.ModelRef)
 	if f.events != nil {
 		opts.Sink = f.events.Sink(request.SessionID)
 	} else if opts.Sink == nil {
@@ -384,6 +385,7 @@ type controllerRuntime struct {
 }
 
 func (r *controllerRuntime) SessionPath() string { return r.controller.SessionPath() }
+func (r *controllerRuntime) ModelRef() string    { return r.controller.ModelRef() }
 
 func (r *controllerRuntime) SessionMetrics() desktopbridge.SessionMetrics {
 	used, window := r.controller.ContextSnapshot()
@@ -393,6 +395,34 @@ func (r *controllerRuntime) SessionMetrics() desktopbridge.SessionMetrics {
 		CompactThresholdPercent: max(0, min(100, int(r.controller.CompactRatio()*100))),
 		CacheHitTokens:          max(0, hit), CacheMissTokens: max(0, miss),
 	}
+}
+
+func (r *controllerRuntime) SessionBalance(ctx context.Context) (*desktopbridge.SessionBalance, error) {
+	balance, err := r.controller.Balance(ctx)
+	if err != nil || balance == nil {
+		return nil, err
+	}
+	return &desktopbridge.SessionBalance{Available: balance.Available, Display: balance.Display()}, nil
+}
+
+func (r *controllerRuntime) MemoryRecall() desktopbridge.MemoryRecallView {
+	trace := r.controller.LastMemoryRecall()
+	view := desktopbridge.MemoryRecallView{
+		Query: trace.Query, Hits: []desktopbridge.MemoryRecallHit{}, Omitted: trace.Omitted,
+		CharBudget: trace.CharBudget, UsedChars: trace.UsedChars, Suppressed: trace.Suppressed,
+	}
+	for _, hit := range trace.Hits {
+		view.Hits = append(view.Hits, desktopbridge.MemoryRecallHit{
+			ID: hit.Memory.ID, Revision: hit.Memory.Revision, Name: hit.Memory.Name,
+			Title: hit.Memory.Title, Type: string(hit.Memory.Type), Scope: string(hit.Memory.Scope),
+			Score: hit.Score, Freshness: hit.Freshness, Reason: hit.Reason, Snippet: hit.Snippet,
+		})
+	}
+	return view
+}
+
+func (r *controllerRuntime) SetReasoningLanguage(language string) {
+	r.controller.SetReasoningLanguage(language)
 }
 
 // MCPRuntimeStatus projects only current Host diagnostics. Reading this never
@@ -454,6 +484,57 @@ func (r *controllerRuntime) MCPRuntimeStatus() []desktopbridge.MCPRuntimeServer 
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
+}
+
+// MCPRuntimeAction controls one MCP connection for this controller only. The
+// durable activation preference is checked for connects and is never changed
+// by this session-level action.
+func (r *controllerRuntime) MCPRuntimeAction(name, action string) (int, error) {
+	if r == nil || r.controller == nil {
+		return 0, errors.New("MCP runtime is unavailable")
+	}
+	if r.State() != "idle" {
+		return 0, errors.New("MCP connection changes require an idle session")
+	}
+	name = strings.TrimSpace(name)
+	cfg, err := appconfig.LoadForRootReadOnly(r.controller.WorkspaceRoot())
+	if err != nil {
+		return 0, err
+	}
+	var entry *appconfig.PluginEntry
+	for i := range cfg.Plugins {
+		if cfg.Plugins[i].Name == name {
+			entry = &cfg.Plugins[i]
+			break
+		}
+	}
+	if entry == nil {
+		return 0, fmt.Errorf("no configured MCP server named %q", name)
+	}
+	switch action {
+	case "connect":
+		enabled, err := appconfig.DefaultMCPActivationStore().IsEnabled(*entry, r.controller.WorkspaceRoot())
+		if err != nil {
+			return 0, err
+		}
+		if !enabled {
+			return 0, fmt.Errorf("MCP server %q is disabled in settings", name)
+		}
+		r.controller.DisconnectMCPServer(name)
+		count, err := r.controller.ConnectConfiguredMCPServer(name)
+		if err != nil {
+			return 0, err
+		}
+		if host := r.controller.Host(); host != nil {
+			host.ClearFailure(name)
+		}
+		return count, nil
+	case "disconnect":
+		r.controller.DisconnectMCPServer(name)
+		return 0, nil
+	default:
+		return 0, desktopbridge.ErrInvalidInput
+	}
 }
 
 func truncateMCPStatusText(value string, limit int) string {

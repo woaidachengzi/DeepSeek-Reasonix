@@ -1118,25 +1118,25 @@ func RenderTOMLProjectDelta(c *Config) string {
 	}
 
 	// [permissions]
-	if !reflect.DeepEqual(c.Permissions, d.Permissions) {
+	if !reflect.DeepEqual(c.Permissions, d.Permissions) || c.keepsProjectPermissionKey("mode") || c.keepsProjectPermissionKey("allow") || c.keepsProjectPermissionKey("ask") || c.keepsProjectPermissionKey("deny") {
 		b.WriteString("[permissions]\n")
 		mode := c.Permissions.Mode
 		if mode == "" {
 			mode = "ask"
 		}
-		if mode != "ask" {
+		if mode != d.Permissions.Mode || c.keepsProjectPermissionKey("mode") {
 			fmt.Fprintf(&b, "mode = %q\n", mode)
 		}
 		if c.Permissions.AllowDynamicBash {
 			b.WriteString("allow_dynamic_bash = true\n")
 		}
-		if len(c.Permissions.Deny) > 0 {
+		if len(c.Permissions.Deny) > 0 || c.keepsProjectPermissionKey("deny") {
 			fmt.Fprintf(&b, "deny = %s\n", renderStringArray(c.Permissions.Deny))
 		}
-		if len(c.Permissions.Allow) > 0 {
+		if len(c.Permissions.Allow) > 0 || c.keepsProjectPermissionKey("allow") {
 			fmt.Fprintf(&b, "allow = %s\n", renderStringArray(c.Permissions.Allow))
 		}
-		if len(c.Permissions.Ask) > 0 {
+		if len(c.Permissions.Ask) > 0 || c.keepsProjectPermissionKey("ask") {
 			fmt.Fprintf(&b, "ask = %s\n", renderStringArray(c.Permissions.Ask))
 		}
 		b.WriteString("\n")

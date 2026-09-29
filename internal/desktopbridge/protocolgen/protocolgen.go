@@ -178,6 +178,8 @@ func (g *generator) typeOf(raw json.RawMessage, hint string) (string, string, er
 		return "boolean", "bool", nil
 	case "integer":
 		return "number", "u64", nil
+	case "number":
+		return "number", "f64", nil
 	case "array":
 		if len(n.Items) == 0 {
 			return "", "", fmt.Errorf("array declares no items")

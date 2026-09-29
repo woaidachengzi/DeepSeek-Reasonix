@@ -2131,6 +2131,38 @@ func TestSaveToExistingProjectPreservesExplicitSkillDefaults(t *testing.T) {
 	}
 }
 
+func TestSaveToExistingProjectPreservesExplicitEmptyPermissionOverride(t *testing.T) {
+	projectPath := filepath.Join(t.TempDir(), "reasonix.toml")
+	if err := os.WriteFile(projectPath, []byte("[permissions]\nallow = [\"Bash(project:*)\"]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadForEditReadOnlyStrict(projectPath)
+	if err != nil {
+		t.Fatalf("load project config: %v", err)
+	}
+	cfg.Permissions.Allow = nil
+	if err := cfg.KeepProjectPermissionKey("allow"); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.SaveTo(projectPath); err != nil {
+		t.Fatalf("save explicit empty permission override: %v", err)
+	}
+	body, err := os.ReadFile(projectPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "allow = []") {
+		t.Fatalf("explicit empty permission override was lost: %s", body)
+	}
+	fresh, err := LoadForEditReadOnlyStrict(projectPath)
+	if err != nil {
+		t.Fatalf("reload project config: %v", err)
+	}
+	if !fresh.ProjectPermissionKeyDeclared("allow") || len(fresh.Permissions.Allow) != 0 {
+		t.Fatalf("empty project override was not retained: %+v", fresh.Permissions)
+	}
+}
+
 func TestUnrelatedProjectSavePreservesExplicitDefaultSkillOverride(t *testing.T) {
 	projectPath := filepath.Join(t.TempDir(), "reasonix.toml")
 	if err := os.WriteFile(projectPath, []byte("[skills]\ndisable_implicit_invocation = false\n\n[permissions]\nmode = \"ask\"\n"), 0o644); err != nil {

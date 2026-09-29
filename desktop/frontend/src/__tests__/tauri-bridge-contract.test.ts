@@ -49,11 +49,12 @@ interface CommandContract {
 // Rust commands from desktop/tauri/src/main.rs:
 //   bridge_status, restart_bridge, bridge_open_session,
 //   bridge_switch_session,
+//   bridge_set_session_model,
 //   bridge_rename_session,
 //   bridge_delete_session,
 //   bridge_pending_session_deletes_page,
 //   bridge_pending_session_title_recoveries,
-//   bridge_session_snapshot, bridge_session_history, bridge_submit, bridge_cancel,
+//   bridge_session_snapshot, bridge_session_balance, bridge_session_history, bridge_submit, bridge_cancel,
 //   bridge_attach_file, bridge_workspace, bridge_workspace_file,
 //   bridge_workspace_changes, bridge_workspace_change_detail,
 //   bridge_approve, bridge_answer_question, bridge_answer_mcp_interaction,
@@ -65,11 +66,12 @@ interface CommandContract {
 // Frontend adapters from desktop/frontend/src/lib/tauriBridge.ts:
 //   tauriBridgeStatus, restartTauriBridge, openTauriBridgeSession,
 //   switchTauriBridgeSession,
+//   setTauriBridgeSessionModel,
 //   renameTauriBridgeSession,
 //   deleteTauriBridgeSession,
 //   tauriPendingSessionDeletesPage,
 //   tauriPendingSessionTitleRecoveries,
-//   tauriBridgeSnapshot, tauriBridgeHistory, submitTauriBridge, cancelTauriBridge,
+//   tauriBridgeSnapshot, tauriSessionBalance, tauriBridgeHistory, submitTauriBridge, cancelTauriBridge,
 //   attachTauriFile, tauriWorkspace, tauriWorkspaceFile, tauriWorkspaceChanges,
 //   tauriWorkspaceChangeDetail,
 //   startTauriBridgeEvents, tauriPreviewProfileStatus,
@@ -109,6 +111,11 @@ const commands: CommandContract[] = [
     description: "switchTauriBridgeSession() invokes bridge_switch_session with { request }",
   },
   {
+    command: "bridge_set_session_model",
+    argKeys: ["sessionId", "request"],
+    description: "setTauriBridgeSessionModel() invokes bridge_set_session_model with { sessionId, request }",
+  },
+  {
     command: "bridge_rename_session",
     argKeys: ["request"],
     description: "renameTauriBridgeSession() invokes bridge_rename_session with { request }",
@@ -122,6 +129,16 @@ const commands: CommandContract[] = [
     command: "bridge_session_snapshot",
     argKeys: ["request"],
     description: "tauriBridgeSnapshot() invokes bridge_session_snapshot with { request }",
+  },
+  {
+    command: "bridge_session_balance",
+    argKeys: ["request"],
+    description: "tauriSessionBalance() invokes bridge_session_balance with { request }",
+  },
+  {
+    command: "mcp_runtime_action",
+    argKeys: ["request"],
+    description: "tauriMCPRuntimeAction() invokes the active-session scoped runtime command",
   },
   {
     command: "bridge_session_history",
@@ -299,19 +316,34 @@ const commands: CommandContract[] = [
     description: "deleteTauriProviderConfig() invokes delete_provider_config with { input }",
   },
   {
+    command: "discover_provider_models",
+    argKeys: ["input"],
+    description: "discoverTauriProviderModels() invokes discover_provider_models with { input }",
+  },
+  {
     command: "usage_stats",
     argKeys: ["request"],
     description: "tauriUsageStats() invokes usage_stats with { request }",
   },
   {
     command: "permission_settings",
-    argKeys: [],
-    description: "tauriPermissionSettings() invokes permission_settings with no args",
+    argKeys: ["workspaceRoot"],
+    description: "tauriPermissionSettings() invokes permission_settings with { workspaceRoot }",
   },
   {
     command: "change_permission_settings",
     argKeys: ["change"],
     description: "changeTauriPermissionSettings() invokes change_permission_settings with { change }",
+  },
+  {
+    command: "secrets_settings",
+    argKeys: [],
+    description: "tauriSecretsSettings() invokes secrets_settings with no args",
+  },
+  {
+    command: "change_secrets_settings",
+    argKeys: ["change"],
+    description: "changeTauriSecretsSettings() invokes change_secrets_settings with { change }",
   },
   {
     command: "sandbox_settings",
@@ -374,6 +406,16 @@ const commands: CommandContract[] = [
     description: "changeTauriMemorySettings() invokes change_memory_settings with { change }",
   },
   {
+    command: "memory_suggestions",
+    argKeys: ["workspaceRoot"],
+    description: "tauriMemorySuggestions() invokes memory_suggestions with { workspaceRoot }",
+  },
+  {
+    command: "accept_memory_suggestion",
+    argKeys: ["request"],
+    description: "acceptTauriMemorySuggestion() invokes accept_memory_suggestion with { request }",
+  },
+  {
     command: "set_default_model",
     argKeys: ["request"],
     description: "setTauriDefaultModel() invokes set_default_model with { request }",
@@ -382,6 +424,16 @@ const commands: CommandContract[] = [
     command: "set_model_role",
     argKeys: ["request"],
     description: "setTauriModelRole() invokes set_model_role with { request }",
+  },
+  {
+    command: "set_agent_preferences",
+    argKeys: ["request"],
+    description: "setTauriAgentPreference() invokes set_agent_preferences with { request }",
+  },
+  {
+    command: "test_provider_model",
+    argKeys: ["request"],
+    description: "testTauriProviderModel() invokes test_provider_model with { request }",
   },
   {
     command: "desktop_preferences",
@@ -412,6 +464,11 @@ const commands: CommandContract[] = [
     command: "set_desktop_language",
     argKeys: ["language"],
     description: "setTauriDesktopLanguage() invokes set_desktop_language with { language }",
+  },
+  {
+    command: "set_desktop_currency",
+    argKeys: ["currency"],
+    description: "setTauriDesktopCurrency() invokes set_desktop_currency with { currency }",
   },
   {
     command: "get_close_behavior",
@@ -481,6 +538,11 @@ ok(
 );
 
 ok(
+  commands.find(c => c.command === "bridge_set_session_model")?.argKeys.join(",") === "sessionId,request",
+  "bridge_set_session_model has sessionId and request args",
+);
+
+ok(
   commands.find(c => c.command === "bridge_rename_session")?.argKeys.includes("request"),
   "bridge_rename_session has request arg",
 );
@@ -513,6 +575,20 @@ ok(
 ok(
   commands.find(c => c.command === "bridge_session_snapshot")?.argKeys.includes("request"),
   "bridge_session_snapshot has request arg",
+);
+
+ok(
+  commands.find(c => c.command === "bridge_session_balance")?.argKeys.includes("request"),
+  "bridge_session_balance exposes the session-scoped balance command",
+);
+ok(
+  /v1\/sessions\/\{session_id\}\/balance/.test(bridgeSource),
+  "session balance stays scoped to the exact session path",
+);
+ok(
+  /v1\/sessions\/\{session_id\}\/mcp\/runtime/.test(bridgeSource) &&
+    /pub fn mcp_runtime_action\(/.test(bridgeSource),
+  "MCP runtime actions are routed through the active session bridge path",
 );
 
 // bridge_session_history expects { request: { sessionId } }
@@ -625,12 +701,13 @@ for (const [field, requirement] of Object.entries(runtimeInfoShape)) {
 }
 
 // BridgeSession in Rust (from protocol_generated.rs):
-//   { id: String, path: String, state: String, workspaceRoot: Option<String> }
-const sessionShape = { id: "required", path: "required", state: "required", workspaceRoot: "optional" };
+//   { id: String, path: String, state: String, workspaceRoot: Option<String>, modelRef: Option<String> }
+const sessionShape = { id: "required", path: "required", state: "required", workspaceRoot: "optional", modelRef: "optional" };
 eq(sessionShape.id, "required", "BridgeSession.id is required");
 eq(sessionShape.path, "required", "BridgeSession.path is required");
 eq(sessionShape.state, "required", "BridgeSession.state is required");
 eq(sessionShape.workspaceRoot, "optional", "BridgeSession.workspaceRoot is optional");
+eq(sessionShape.modelRef, "optional", "BridgeSession.modelRef is optional");
 
 // BridgeSnapshot: { sequence: u64, session: BridgeSession }
 const snapshotShape = { sequence: "required", session: "required" };

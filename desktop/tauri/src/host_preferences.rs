@@ -1,9 +1,61 @@
-use std::{fs, io::Write, path::PathBuf, sync::Mutex};
+use std::{collections::BTreeMap, fs, io::Write, path::PathBuf, sync::Mutex};
 
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
 
 const FILE_NAME: &str = "host-preferences.json";
+const USER_THEME_LIMIT: usize = 48;
+const THEME_TOKENS: &[&str] = &[
+    "bg",
+    "bgSoft",
+    "bgElev",
+    "panel",
+    "sidebar",
+    "chat",
+    "workspace",
+    "workspaceFiles",
+    "border",
+    "borderSoft",
+    "fg",
+    "fgDim",
+    "fgFaint",
+    "accent",
+    "accentFg",
+    "ok",
+    "warn",
+    "err",
+];
+const BASE_STYLES: &[&str] = &["graphite", "aurora", "slate", "carbon", "nocturne", "amber"];
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ThemeTokens {
+    #[serde(default)]
+    pub light: BTreeMap<String, String>,
+    #[serde(default)]
+    pub dark: BTreeMap<String, String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UserTheme {
+    pub id: String,
+    pub name: String,
+    pub base_style: String,
+    #[serde(default)]
+    pub tokens: ThemeTokens,
+    #[serde(default = "default_density")]
+    pub density: String,
+    #[serde(default = "default_corners")]
+    pub corners: String,
+}
+
+fn default_density() -> String {
+    "comfortable".into()
+}
+fn default_corners() -> String {
+    "soft".into()
+}
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -18,13 +70,17 @@ pub struct HostPreferences {
     preferences: Mutex<SavedPreferences>,
 }
 
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SavedPreferences {
     #[serde(default)]
     close_behavior: CloseBehavior,
     #[serde(default = "default_zoom_factor")]
     zoom_factor: f64,
+    #[serde(default)]
+    active_theme_id: String,
+    #[serde(default)]
+    user_themes: Vec<UserTheme>,
 }
 
 impl Default for SavedPreferences {
@@ -32,6 +88,8 @@ impl Default for SavedPreferences {
         Self {
             close_behavior: CloseBehavior::default(),
             zoom_factor: default_zoom_factor(),
+            active_theme_id: String::new(),
+            user_themes: Vec::new(),
         }
     }
 }
@@ -73,9 +131,9 @@ impl HostPreferences {
         }
         let next = SavedPreferences {
             close_behavior: behavior,
-            ..*current
+            ..current.clone()
         };
-        self.write_preferences(next)?;
+        self.write_preferences(next.clone())?;
         *current = next;
         Ok(())
     }
@@ -101,9 +159,163 @@ impl HostPreferences {
         }
         let next = SavedPreferences {
             zoom_factor: snapped,
-            ..*current
+            ..current.clone()
         };
-        self.write_preferences(next)?;
+        self.write_preferences(next.clone())?;
+        *current = next;
+        Ok(())
+    }
+
+    pub fn active_theme_id(&self) -> String {
+        self.preferences
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .active_theme_id
+            .clone()
+    }
+
+    pub fn set_active_theme_id(&self, id: String) -> Result<(), String> {
+        const OFFICIAL_THEMES: &[&str] = &[
+            "official-rose-dawn",
+            "official-fortune-forge",
+            "official-crimson-horizon",
+            "official-sage-breeze",
+            "official-spark-notebook",
+            "official-violet-starlight",
+            "official-cyan-stage",
+            "official-noir-gold",
+        ];
+        let id = id.trim();
+        let mut current = self
+            .preferences
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !id.is_empty()
+            && !OFFICIAL_THEMES.contains(&id)
+            && !current.user_themes.iter().any(|theme| theme.id == id)
+        {
+            return Err("unknown theme id".to_string());
+        }
+        if current.active_theme_id == id {
+            return Ok(());
+        }
+        let next = SavedPreferences {
+            active_theme_id: id.to_string(),
+            ..current.clone()
+        };
+        self.write_preferences(next.clone())?;
+        *current = next;
+        Ok(())
+    }
+
+    pub fn user_themes(&self) -> Vec<UserTheme> {
+        self.preferences
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .user_themes
+            .clone()
+    }
+
+    pub fn save_user_theme(&self, theme: UserTheme) -> Result<UserTheme, String> {
+        let theme = validate_user_theme(theme)?;
+        let mut current = self
+            .preferences
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut themes = current.user_themes.clone();
+        if let Some(index) = themes.iter().position(|existing| existing.id == theme.id) {
+            themes[index] = theme.clone();
+        } else {
+            if themes.len() >= USER_THEME_LIMIT {
+                return Err(format!(
+                    "at most {USER_THEME_LIMIT} custom themes are supported"
+                ));
+            }
+            themes.push(theme.clone());
+        }
+        let next = SavedPreferences {
+            user_themes: themes,
+            ..current.clone()
+        };
+        self.write_preferences(next.clone())?;
+        *current = next;
+        Ok(theme)
+    }
+
+    pub fn import_user_theme(&self, mut theme: UserTheme) -> Result<UserTheme, String> {
+        let source_id = theme.id.to_ascii_lowercase();
+        let mut slug = String::new();
+        let mut separator = false;
+        for character in source_id.chars() {
+            if character.is_ascii_alphanumeric() {
+                if separator && !slug.is_empty() {
+                    slug.push('-');
+                }
+                separator = false;
+                slug.push(character);
+            } else {
+                separator = true;
+            }
+            if slug.len() >= 48 {
+                break;
+            }
+        }
+        let slug = slug.trim_matches('-');
+        let slug = if slug.is_empty() { "imported" } else { slug };
+        let base_id = format!("user-{slug}");
+
+        let mut current = self
+            .preferences
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if current.user_themes.len() >= USER_THEME_LIMIT {
+            return Err(format!(
+                "at most {USER_THEME_LIMIT} custom themes are supported"
+            ));
+        }
+        let mut id = base_id.clone();
+        let mut suffix = 2_u32;
+        while current.user_themes.iter().any(|existing| existing.id == id) {
+            id = format!("{base_id}-{suffix}");
+            suffix += 1;
+        }
+        theme.id = id;
+        let theme = validate_user_theme(theme)?;
+        let mut themes = current.user_themes.clone();
+        themes.push(theme.clone());
+        let next = SavedPreferences {
+            user_themes: themes,
+            ..current.clone()
+        };
+        self.write_preferences(next.clone())?;
+        *current = next;
+        Ok(theme)
+    }
+
+    pub fn delete_user_theme(&self, id: &str) -> Result<(), String> {
+        let mut current = self
+            .preferences
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let themes: Vec<_> = current
+            .user_themes
+            .iter()
+            .filter(|theme| theme.id != id)
+            .cloned()
+            .collect();
+        if themes.len() == current.user_themes.len() {
+            return Err("custom theme not found".to_string());
+        }
+        let next = SavedPreferences {
+            user_themes: themes,
+            active_theme_id: if current.active_theme_id == id {
+                String::new()
+            } else {
+                current.active_theme_id.clone()
+            },
+            ..current.clone()
+        };
+        self.write_preferences(next.clone())?;
         *current = next;
         Ok(())
     }
@@ -124,6 +336,62 @@ impl HostPreferences {
         }
         Ok(())
     }
+}
+
+fn validate_user_theme(mut theme: UserTheme) -> Result<UserTheme, String> {
+    let id = theme.id.trim();
+    if !id.starts_with("user-")
+        || id.len() > 64
+        || !id
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+    {
+        return Err("custom theme id must start with user- and contain lowercase letters, digits, and hyphens".to_string());
+    }
+    if id.ends_with('-') || id.contains("--") {
+        return Err("invalid custom theme id".to_string());
+    }
+    theme.id = id.to_string();
+    theme.name = theme.name.trim().to_string();
+    if theme.name.is_empty()
+        || theme.name.chars().count() > 64
+        || theme.name.chars().any(char::is_control)
+    {
+        return Err("custom theme name must contain 1–64 printable characters".to_string());
+    }
+    theme.base_style = theme.base_style.trim().to_ascii_lowercase();
+    if !BASE_STYLES.contains(&theme.base_style.as_str()) {
+        return Err("invalid custom theme base style".to_string());
+    }
+    if !matches!(theme.density.as_str(), "compact" | "comfortable") {
+        return Err("invalid theme density".to_string());
+    }
+    if !matches!(theme.corners.as_str(), "square" | "soft" | "round") {
+        return Err("invalid theme corner style".to_string());
+    }
+    validate_theme_colors(&mut theme.tokens.light)?;
+    validate_theme_colors(&mut theme.tokens.dark)?;
+    Ok(theme)
+}
+
+fn validate_theme_colors(tokens: &mut BTreeMap<String, String>) -> Result<(), String> {
+    if tokens.len() > THEME_TOKENS.len() {
+        return Err("too many theme color tokens".to_string());
+    }
+    for (key, color) in tokens.iter_mut() {
+        if !THEME_TOKENS.contains(&key.as_str()) {
+            return Err(format!("unknown theme color token: {key}"));
+        }
+        let value = color.trim();
+        let digits = value.strip_prefix('#').unwrap_or("");
+        if !(digits.len() == 6 || digits.len() == 8)
+            || !digits.bytes().all(|byte| byte.is_ascii_hexdigit())
+        {
+            return Err(format!("theme color {key} must be #RRGGBB or #RRGGBBAA"));
+        }
+        *color = value.to_ascii_lowercase();
+    }
+    Ok(())
 }
 
 fn read_preferences(path: &std::path::Path) -> Option<SavedPreferences> {
@@ -190,5 +458,126 @@ mod tests {
         assert!(store.set_zoom_factor(f64::NAN).is_err());
         assert!(store.set_zoom_factor(2.1).is_err());
         assert_eq!(store.zoom_factor(), 1.0);
+    }
+
+    #[test]
+    fn active_official_theme_survives_restart_and_rejects_untrusted_ids() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join(FILE_NAME);
+        let store = HostPreferences {
+            path: path.clone(),
+            preferences: Mutex::new(SavedPreferences::default()),
+        };
+        assert!(store
+            .set_active_theme_id("../../settings.json".into())
+            .is_err());
+        assert_eq!(store.active_theme_id(), "");
+        store
+            .set_active_theme_id("official-rose-dawn".into())
+            .expect("save official theme");
+        let saved = read_preferences(&path).expect("read saved theme");
+        assert_eq!(saved.active_theme_id, "official-rose-dawn");
+        assert_eq!(saved.zoom_factor, 1.0);
+    }
+
+    #[test]
+    fn custom_theme_is_validated_persisted_activated_and_deleted() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join(FILE_NAME);
+        let store = HostPreferences {
+            path: path.clone(),
+            preferences: Mutex::new(SavedPreferences::default()),
+        };
+        let theme = UserTheme {
+            id: "user-warm-night".into(),
+            name: "Warm Night".into(),
+            base_style: "carbon".into(),
+            tokens: ThemeTokens {
+                light: BTreeMap::new(),
+                dark: BTreeMap::from([
+                    ("accent".into(), "#d9b45b".into()),
+                    ("bg".into(), "#0d0b09".into()),
+                ]),
+            },
+            density: "comfortable".into(),
+            corners: "soft".into(),
+        };
+        assert_eq!(
+            store
+                .save_user_theme(theme.clone())
+                .expect("save user theme"),
+            theme
+        );
+        store
+            .set_active_theme_id("user-warm-night".into())
+            .expect("activate user theme");
+        let restored = read_preferences(&path).expect("read custom theme");
+        assert_eq!(restored.user_themes, vec![theme]);
+        assert_eq!(restored.active_theme_id, "user-warm-night");
+        store
+            .delete_user_theme("user-warm-night")
+            .expect("delete theme");
+        assert!(store.user_themes().is_empty());
+        assert_eq!(store.active_theme_id(), "");
+    }
+
+    #[test]
+    fn imported_theme_gets_a_safe_unique_preview_id() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join(FILE_NAME);
+        let store = HostPreferences {
+            path: path.clone(),
+            preferences: Mutex::new(SavedPreferences::default()),
+        };
+        let imported = UserTheme {
+            id: "Warm Night / v2".into(),
+            name: "Warm Night".into(),
+            base_style: "carbon".into(),
+            tokens: ThemeTokens::default(),
+            density: "compact".into(),
+            corners: "round".into(),
+        };
+        let first = store
+            .import_user_theme(imported.clone())
+            .expect("import theme");
+        let second = store
+            .import_user_theme(imported)
+            .expect("import duplicate as copy");
+        assert_eq!(first.id, "user-warm-night-v2");
+        assert_eq!(second.id, "user-warm-night-v2-2");
+        assert_eq!(read_preferences(&path).unwrap().user_themes.len(), 2);
+    }
+
+    #[test]
+    fn custom_theme_rejects_paths_unknown_tokens_and_css_values() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let store = HostPreferences {
+            path: directory.path().join(FILE_NAME),
+            preferences: Mutex::new(SavedPreferences::default()),
+        };
+        let base = UserTheme {
+            id: "user-safe".into(),
+            name: "Safe".into(),
+            base_style: "graphite".into(),
+            tokens: ThemeTokens::default(),
+            density: "comfortable".into(),
+            corners: "soft".into(),
+        };
+        let mut path_theme = base.clone();
+        path_theme.id = "user-../../settings".into();
+        assert!(store.save_user_theme(path_theme).is_err());
+        let mut unknown_token = base.clone();
+        unknown_token
+            .tokens
+            .dark
+            .insert("custom".into(), "#000000".into());
+        assert!(store.save_user_theme(unknown_token).is_err());
+        let mut css_value = base;
+        css_value
+            .tokens
+            .dark
+            .insert("bg".into(), "url(https://example.test)".into());
+        assert!(store.save_user_theme(css_value).is_err());
+        assert!(store.user_themes().is_empty());
     }
 }

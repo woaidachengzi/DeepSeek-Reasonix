@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { changeTauriPluginSettings, chooseTauriPluginDirectory, installTauriPlugin, planTauriPluginInstall, removeTauriPlugin, tauriMessageFrom, tauriPluginSettings, type TauriPluginInstallPlan, type TauriPluginItem, type TauriPluginSettings as PluginView } from "../lib/tauriBridge";
-
-const sourceLabels: Record<TauriPluginItem["source"], string> = {
-  local: "本地来源", remote: "远程来源", package: "软件包来源", unknown: "未知来源",
-};
+import { useT } from "../lib/i18n";
 
 export function TauriPluginSettings({ currentSessionState, currentSessionHasAttachments, onApplyToCurrentSession }: {
   currentSessionState?: "idle" | "running" | "paused";
   currentSessionHasAttachments?: boolean;
   onApplyToCurrentSession?: () => Promise<boolean>;
 }) {
+  const t = useT();
   const [view, setView] = useState<PluginView | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -49,7 +47,7 @@ export function TauriPluginSettings({ currentSessionState, currentSessionHasAtta
       const next = await changeTauriPluginSettings({ name: item.name, revision: item.revision, enabled });
       setView(next);
       setPendingApply(true);
-      setNotice(`插件 ${item.name} 已${enabled ? "启用" : "停用"}；新会话会读取更新后的状态。`);
+      setNotice(t(enabled ? "settings.plugins.enabledNotice" : "settings.plugins.disabledNotice", { name: item.name }));
     } catch (err) {
       setError(tauriMessageFrom(err));
     } finally {
@@ -78,7 +76,7 @@ export function TauriPluginSettings({ currentSessionState, currentSessionHasAtta
     try {
       const detail = await planTauriPluginInstall(candidate);
       setPlan({ source: candidate, detail });
-    } catch (err) { setError(`无法生成插件安装预览：${tauriMessageFrom(err)}`); }
+    } catch (err) { setError(`${t("settings.plugins.previewFailed")}: ${tauriMessageFrom(err)}`); }
     finally { busyRef.current = false; setBusy(false); }
   };
 
@@ -94,8 +92,8 @@ export function TauriPluginSettings({ currentSessionState, currentSessionHasAtta
       setPlan(null);
       setSource("");
       setPendingApply(true);
-      setNotice(result.status === "done" ? "插件已安装；新会话会读取更新后的插件。" : `部分插件已安装；失败：${result.failedNames.join("、") || "未知插件"}。请检查清单后重新预览。`);
-    } catch (err) { setError(`安装失败或来源已变化，请重新预览：${tauriMessageFrom(err)}`); }
+      setNotice(result.status === "done" ? t("settings.plugins.installedNotice") : t("settings.plugins.partialInstallNotice", { names: result.failedNames.join("、") || t("settings.plugins.unknownPlugin") }));
+    } catch (err) { setError(`${t("settings.plugins.installFailed")}: ${tauriMessageFrom(err)}`); }
     finally { busyRef.current = false; setBusy(false); }
   };
 
@@ -109,8 +107,8 @@ export function TauriPluginSettings({ currentSessionState, currentSessionHasAtta
       setView(result.settings);
       setRemoveConfirmation("");
       setPendingApply(true);
-      setNotice(`插件 ${item.name} 已移除；新会话会读取更新后的插件清单。`);
-    } catch (err) { setError(`移除失败，请刷新清单后重试：${tauriMessageFrom(err)}`); }
+      setNotice(t("settings.plugins.removedNotice", { name: item.name }));
+    } catch (err) { setError(`${t("settings.plugins.removeFailed")}: ${tauriMessageFrom(err)}`); }
     finally { busyRef.current = false; setBusy(false); }
   };
 
@@ -122,45 +120,45 @@ export function TauriPluginSettings({ currentSessionState, currentSessionHasAtta
     try {
       if (await onApplyToCurrentSession()) {
         setPendingApply(false);
-        setNotice("当前会话已重新载入插件状态。");
-      } else setError("当前会话未能更新，请在运行诊断中重试。");
-    } catch { setError("当前会话未能更新，请在运行诊断中重试。"); }
+        setNotice(t("settings.plugins.applied"));
+      } else setError(t("settings.plugins.applyFailed"));
+    } catch { setError(t("settings.plugins.applyFailed")); }
     finally { busyRef.current = false; setBusy(false); }
   };
 
   const filtered = view?.plugins.filter(item => `${item.name} ${item.description} ${item.source}`.toLowerCase().includes(query.trim().toLowerCase())) ?? [];
   return <div className="tauri-settings-section tauri-plugin-settings">
-    <h3>已安装插件</h3>
-    <p>查看 Preview 资料中的插件包及其贡献。启用或停用会保存到插件清单，新会话据此加载技能、命令、Hooks 和 MCP 服务。</p>
-    {loading ? <div className="tauri-settings-loading">加载中…</div> : view ? <>
+    <h3>{t("settings.plugins.title")}</h3>
+    <p>{t("settings.plugins.description")}</p>
+    {loading ? <div className="tauri-settings-loading">{t("settings.plugins.loading")}</div> : view ? <>
       <form className="tauri-plugin-install-form" onSubmit={event => void reviewSource(event)}>
-        <label htmlFor="tauri-plugin-source">添加插件<small>选择本地插件目录，或填写公开 GitHub 仓库地址。先预览安装内容，再决定是否安装。</small></label>
-        <div><input id="tauri-plugin-source" className="tauri-settings-input" value={source} maxLength={4096} disabled={busy} placeholder="绝对目录路径或 https://github.com/…" onChange={event => { setSource(event.target.value); setPlan(null); setAcceptRisk(false); }} /><button className="tauri-settings-button" type="button" disabled={busy} onClick={() => void chooseSource()}>选择目录</button><button className="tauri-settings-button" type="submit" disabled={busy || !source.trim()}>预览安装</button></div>
+        <label htmlFor="tauri-plugin-source">{t("settings.plugins.addPlugin")}<small>{t("settings.plugins.addHint")}</small></label>
+        <div><input id="tauri-plugin-source" className="tauri-settings-input" value={source} maxLength={4096} disabled={busy} placeholder={t("settings.plugins.sourcePlaceholder")} onChange={event => { setSource(event.target.value); setPlan(null); setAcceptRisk(false); }} /><button className="tauri-settings-button" type="button" disabled={busy} onClick={() => void chooseSource()}>{t("settings.plugins.chooseDirectory")}</button><button className="tauri-settings-button" type="submit" disabled={busy || !source.trim()}>{t("settings.plugins.previewInstall")}</button></div>
       </form>
-      {plan && <section className="tauri-plugin-plan" aria-label="插件安装预览">
-        <h4>安装预览</h4>
-        <p>来源：{plan.source}。以下插件将复制到 Preview 资料；确认前不会写入安装目录。</p>
+      {plan && <section className="tauri-plugin-plan" aria-label={t("settings.plugins.previewAria")}>
+        <h4>{t("settings.plugins.previewTitle")}</h4>
+        <p>{t("settings.plugins.previewSource", { source: plan.source })}</p>
         {plan.detail.actions.map(action => <div className="tauri-plugin-plan__action" key={action.name}>
-          <strong>{action.name}</strong><small>{action.version || "未标注版本"} · {action.manifestKind} · {action.riskLevel === "high" ? "高风险" : action.riskLevel === "medium" ? "中风险" : "低风险"}</small>
-          <span>{action.skills} 技能 · {action.agents} 子智能体 · {action.commands} 命令 · {action.hooks} Hooks · {action.mcpServers} MCP · {action.prompts} 提示模板 · {action.themes} 主题</span>
-          {action.runtime && <p className="tauri-plugin-plan__risk">完整信任运行时：{action.runtimeCommand || "未标注命令"}。它可读取会话和环境，并在本机执行操作。{action.intercepts.length > 0 && ` 拦截：${action.intercepts.join("、")}。`}{action.replaces.length > 0 && ` 替换：${action.replaces.join("、")}。`}</p>}
-          {!action.runtime && action.riskLevel === "high" && <p className="tauri-plugin-plan__risk">包含会话 Hooks 或 MCP 服务，启用后可在会话中运行命令或提供工具。</p>}
+          <strong>{action.name}</strong><small>{action.version || t("settings.plugins.unversioned")} · {action.manifestKind} · {t(`settings.plugins.risk.${action.riskLevel}`)}</small>
+          <span>{t("settings.plugins.contributionCounts", { skills: action.skills, agents: action.agents, commands: action.commands, hooks: action.hooks, mcp: action.mcpServers, prompts: action.prompts, themes: action.themes })}</span>
+          {action.runtime && <p className="tauri-plugin-plan__risk">{t("settings.plugins.runtimeWarning", { command: action.runtimeCommand || t("settings.plugins.unlabeledCommand") })}{action.intercepts.length > 0 && ` ${t("settings.plugins.intercepts", { items: action.intercepts.join("、") })}`}{action.replaces.length > 0 && ` ${t("settings.plugins.replaces", { items: action.replaces.join("、") })}`}</p>}
+          {!action.runtime && action.riskLevel === "high" && <p className="tauri-plugin-plan__risk">{t("settings.plugins.highRiskWarning")}</p>}
         </div>)}
-        {plan.detail.warningCount > 0 && <div className="tauri-install-warnings"><strong>{plan.detail.warningCount} 项兼容提示</strong>{plan.detail.warnings.map((warning, index) => <p key={index}>{warning}</p>)}{plan.detail.warningCount > plan.detail.warnings.length && <p>其余提示未显示；请直接检查插件来源。</p>}</div>}
-        {plan.detail.actions.some(action => action.riskLevel === "high") && <label className="tauri-plugin-plan__ack"><input type="checkbox" checked={acceptRisk} disabled={busy} onChange={event => setAcceptRisk(event.target.checked)} />我已了解高风险插件可在本机执行命令</label>}
-        <div className="tauri-plugin-plan__actions"><button className="tauri-settings-button" type="button" disabled={busy} onClick={() => setPlan(null)}>取消</button><button className="tauri-settings-button" type="button" disabled={busy || plan.detail.actions.some(action => action.riskLevel === "high") && !acceptRisk} onClick={() => void installReviewed()}>安装已预览插件</button></div>
+        {plan.detail.warningCount > 0 && <div className="tauri-install-warnings"><strong>{t("settings.plugins.compatibilityWarnings", { count: plan.detail.warningCount })}</strong>{plan.detail.warnings.map((warning, index) => <p key={index}>{warning}</p>)}{plan.detail.warningCount > plan.detail.warnings.length && <p>{t("settings.plugins.moreWarnings")}</p>}</div>}
+        {plan.detail.actions.some(action => action.riskLevel === "high") && <label className="tauri-plugin-plan__ack"><input type="checkbox" checked={acceptRisk} disabled={busy} onChange={event => setAcceptRisk(event.target.checked)} />{t("settings.plugins.riskAcknowledgement")}</label>}
+        <div className="tauri-plugin-plan__actions"><button className="tauri-settings-button" type="button" disabled={busy} onClick={() => setPlan(null)}>{t("settings.plugins.cancel")}</button><button className="tauri-settings-button" type="button" disabled={busy || plan.detail.actions.some(action => action.riskLevel === "high") && !acceptRisk} onClick={() => void installReviewed()}>{t("settings.plugins.installReviewed")}</button></div>
       </section>}
-      <div className="tauri-plugin-toolbar"><span>共 {view.plugins.length} 个插件</span><input className="tauri-settings-input" type="search" aria-label="搜索插件" placeholder="搜索插件" value={query} onChange={event => setQuery(event.target.value)} /><button className="tauri-settings-button" type="button" disabled={busy} onClick={reload}>刷新</button></div>
+      <div className="tauri-plugin-toolbar"><span>{t("settings.plugins.pluginCount", { count: view.plugins.length })}</span><input className="tauri-settings-input" type="search" aria-label={t("settings.plugins.searchAria")} placeholder={t("settings.plugins.searchPlaceholder")} value={query} onChange={event => setQuery(event.target.value)} /><button className="tauri-settings-button" type="button" disabled={busy} onClick={reload}>{t("settings.plugins.refresh")}</button></div>
       <div className="tauri-plugin-list">{filtered.length ? filtered.map(item => <article className="tauri-plugin-card" key={item.name}>
-        <div className="tauri-plugin-card__heading"><div><strong>{item.name}</strong><small>{item.version || "未标注版本"} · {sourceLabels[item.source] ?? item.source} · {item.manifestKind || "未知格式"}</small></div><label><input type="checkbox" role="switch" aria-label={`启用插件 ${item.name}`} checked={item.enabled} disabled={busy || item.status !== "ready" && !item.enabled} onChange={event => void setEnabled(item, event.target.checked)} />{item.enabled ? "已启用" : "已停用"}</label></div>
+        <div className="tauri-plugin-card__heading"><div><strong>{item.name}</strong><small>{item.version || t("settings.plugins.unversioned")} · {t(`settings.plugins.source.${item.source}`)} · {item.manifestKind || t("settings.plugins.unknownFormat")}</small></div><label><input type="checkbox" role="switch" aria-label={t("settings.plugins.enableAria", { name: item.name })} checked={item.enabled} disabled={busy || item.status !== "ready" && !item.enabled} onChange={event => void setEnabled(item, event.target.checked)} />{item.enabled ? t("settings.plugins.enabled") : t("settings.plugins.disabled")}</label></div>
         {item.description && <p>{item.description}</p>}
         <small className="tauri-plugin-card__root">{item.root}</small>
-        <div className="tauri-plugin-card__counts">{item.status === "ready" ? <><span>{item.skills} 技能</span><span>{item.agents} 子智能体</span><span>{item.commands} 命令</span><span>{item.hooks} Hooks</span><span>{item.mcpServers} MCP</span>{item.runtime && <span>运行时</span>}</> : <span className="tauri-plugin-card__error">{item.issue || "插件不可用"}</span>}</div>
-        {item.warningCount > 0 && <small>{item.warningCount} 项兼容提示</small>}
-        <div className="tauri-plugin-card__actions">{removeConfirmation === item.name ? <><small>将移除登记及 Preview 管理的复制目录；外部来源文件保留。</small><button className="tauri-settings-button" type="button" disabled={busy} onClick={() => setRemoveConfirmation("")}>取消</button><button className="tauri-settings-button" type="button" disabled={busy} onClick={() => void removeInstalled(item)}>确认移除</button></> : <button className="tauri-settings-button" type="button" disabled={busy} onClick={() => setRemoveConfirmation(item.name)}>移除</button>}</div>
-      </article>) : <p>{query ? "没有匹配的插件。" : "Preview 资料中尚未安装插件。"}</p>}</div>
-      {pendingApply && currentSessionState && onApplyToCurrentSession && <button className="tauri-settings-button" type="button" disabled={busy || currentSessionState !== "idle" || currentSessionHasAttachments} onClick={() => void applyCurrent()}>应用到当前会话</button>}
-    </> : <button type="button" className="tauri-settings-button" onClick={reload}>重试读取</button>}
+        <div className="tauri-plugin-card__counts">{item.status === "ready" ? <><span>{t("settings.plugins.skillsCount", { count: item.skills })}</span><span>{t("settings.plugins.agentsCount", { count: item.agents })}</span><span>{t("settings.plugins.commandsCount", { count: item.commands })}</span><span>{t("settings.plugins.hooksCount", { count: item.hooks })}</span><span>{t("settings.plugins.mcpCount", { count: item.mcpServers })}</span>{item.runtime && <span>{t("settings.plugins.runtime")}</span>}</> : <span className="tauri-plugin-card__error">{item.issue || t("settings.plugins.unavailable")}</span>}</div>
+        {item.warningCount > 0 && <small>{t("settings.plugins.compatibilityWarnings", { count: item.warningCount })}</small>}
+        <div className="tauri-plugin-card__actions">{removeConfirmation === item.name ? <><small>{t("settings.plugins.removeScope")}</small><button className="tauri-settings-button" type="button" disabled={busy} onClick={() => setRemoveConfirmation("")}>{t("settings.plugins.cancel")}</button><button className="tauri-settings-button" type="button" disabled={busy} onClick={() => void removeInstalled(item)}>{t("settings.plugins.confirmRemove")}</button></> : <button className="tauri-settings-button" type="button" disabled={busy} onClick={() => setRemoveConfirmation(item.name)}>{t("settings.plugins.remove")}</button>}</div>
+      </article>) : <p>{query ? t("settings.plugins.noMatches") : t("settings.plugins.noneInstalled")}</p>}</div>
+      {pendingApply && currentSessionState && onApplyToCurrentSession && <button className="tauri-settings-button" type="button" disabled={busy || currentSessionState !== "idle" || currentSessionHasAttachments} onClick={() => void applyCurrent()}>{t("settings.plugins.applyCurrent")}</button>}
+    </> : <button type="button" className="tauri-settings-button" onClick={reload}>{t("settings.plugins.retry")}</button>}
     {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
   </div>;

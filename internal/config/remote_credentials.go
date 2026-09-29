@@ -79,13 +79,33 @@ func UnusedGeneratedRemoteCredentialChanges(c *Config, candidates []string) []Cr
 // slots as one recoverable operation. Credential writes happen before SaveTo;
 // any later failure restores every touched slot, keeping plaintext out of TOML.
 func EditUserConfigWithCredentials(mutate func(*Config) ([]CredentialChange, error)) error {
+	return editUserConfigWithCredentials(mutate, false)
+}
+
+// EditUserConfigWithCredentialsStrict is the recoverable counterpart for
+// desktop settings surfaces. It refuses to replace malformed TOML with
+// defaults while keeping credential and config changes in one transaction.
+func EditUserConfigWithCredentialsStrict(mutate func(*Config) ([]CredentialChange, error)) error {
+	return editUserConfigWithCredentials(mutate, true)
+}
+
+func editUserConfigWithCredentials(mutate func(*Config) ([]CredentialChange, error), strict bool) error {
 	unlock := LockUserConfigEdits()
 	defer unlock()
 	path := UserConfigPath()
 	if strings.TrimSpace(path) == "" {
 		return fmt.Errorf("cannot resolve user config path")
 	}
-	cfg := LoadForEdit(path)
+	var cfg *Config
+	if strict {
+		var err error
+		cfg, err = LoadForEditReadOnlyStrict(path)
+		if err != nil {
+			return err
+		}
+	} else {
+		cfg = LoadForEdit(path)
+	}
 	if cfg == nil {
 		cfg = Default()
 	}

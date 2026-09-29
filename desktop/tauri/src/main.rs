@@ -60,40 +60,49 @@ pub(crate) mod test_env {
     }
 }
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
-    path::Path,
+    fs::File,
+    io::{Read, Write},
+    path::{Path, PathBuf},
     sync::Mutex,
 };
+use tauri_plugin_dialog::DialogExt;
+use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 
 use bridge::{
     AnswerMCPInteractionRequest, AnswerQuestionRequest, ApproveRequest, AttachFileRequest,
     BridgeAttachment, BridgeDeleteSessionResponse, BridgeHistory, BridgeProjectFolder,
-    BridgeProviderSummaryResponse, BridgeSession, BridgeSetDefaultModelRequest,
-    BridgeSetModelRoleRequest, BridgeSnapshot, BridgeStatus, BridgeSupervisor,
-    BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
+    BridgeProviderSummaryResponse, BridgeRemoteBrowseRequest, BridgeRemoteBrowseResponse,
+    BridgeRemoteDisconnectRequest, BridgeRemoteDisconnectResponse, BridgeSession,
+    BridgeSessionBalanceResponse, BridgeSetAgentPreferenceRequest, BridgeSetDefaultModelRequest,
+    BridgeSetModelRoleRequest, BridgeSetSessionModelRequest, BridgeSnapshot, BridgeStatus,
+    BridgeSupervisor, BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
     BridgeWorkspaceFileResponse, BridgeWorkspaceListResponse, DeleteProviderConfigRequest,
-    DesktopPreferences, HooksSettingsChange, HooksSettingsView, LegacySessionCatalogEntry,
-    MCPMarketplaceEntry, MCPMarketplaceResponse, MCPServerActivationRequest,
-    MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse, MCPServerView,
-    MemorySettingsChange, MemorySettingsView, NetworkSettingsChange, NetworkSettingsView,
-    OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
+    DesktopPreferences, DiscoverProviderModelsRequest, DiscoveredProviderModels,
+    HooksSettingsChange, HooksSettingsView, LegacySessionCatalogEntry, MCPMarketplaceEntry,
+    MCPMarketplaceResponse, MCPRuntimeActionRequest, MCPRuntimeActionResponse,
+    MCPServerActivationRequest, MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse,
+    MCPServerView, MemorySettingsChange, MemorySettingsView, MemorySuggestionAcceptance,
+    MemorySuggestionAcceptanceRequest, MemorySuggestionsView, NetworkSettingsChange,
+    NetworkSettingsView, OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
     PendingSessionTitleRecovery, PermissionSettingsChange, PermissionSettingsView,
     PluginInstallPlan, PluginInstallRequest, PluginOperationResult, PluginRemoveRequest,
-    PluginSettingsChange, PluginSettingsView, ProviderConfigList, RenameSessionRequest,
-    SandboxSettingsChange, SandboxSettingsView, SaveProviderConfigRequest, ScanImportCandidate,
-    ScanImportSelection, SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
-    SessionDirectoryPage, SessionFirstMessageTitle, SessionPreview, SessionRequest,
-    SkillArchiveRequest, SkillArchiveResult, SkillInstallPlan, SkillInstallRequest,
-    SkillInstallResult, SkillsSettingsChange, SkillsSettingsView, SubagentSettingsChange,
-    SubagentSettingsView, SubmitRequest, WorkspaceChangeDetailRequest, WorkspaceFileRequest,
-    WorkspaceRequest,
+    PluginSettingsChange, PluginSettingsView, ProviderConfigList, RemoteConnectRequest,
+    RemoteConnectResponse, RemoteSSHConfigScanView, RemoteSettingsChange, RemoteSettingsView,
+    RenameSessionRequest, SandboxSettingsChange, SandboxSettingsView, SaveProviderConfigRequest,
+    ScanImportCandidate, ScanImportSelection, SecretsSettingsChange, SecretsSettingsView,
+    SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry, SessionDirectoryPage,
+    SessionFirstMessageTitle, SessionPreview, SessionRequest, SkillArchiveRequest,
+    SkillArchiveResult, SkillInstallPlan, SkillInstallRequest, SkillInstallResult,
+    SkillsSettingsChange, SkillsSettingsView, SubagentSettingsChange, SubagentSettingsView,
+    SubmitRequest, WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceRequest,
 };
 use data_profile::{
     PreviewProfile, PreviewProfileStatus, ProfileImportResult, ProjectFoldersImportResult,
 };
-use host_preferences::{CloseBehavior, HostPreferences};
+use host_preferences::{CloseBehavior, HostPreferences, UserTheme};
 use runtime_info::PreviewRuntimeInfo;
 use session_shadow::SessionShadowReport;
 use tauri::{Manager, State};
@@ -517,6 +526,15 @@ fn bridge_switch_session(
 }
 
 #[tauri::command]
+fn bridge_set_session_model(
+    supervisor: State<'_, BridgeSupervisor>,
+    session_id: String,
+    request: BridgeSetSessionModelRequest,
+) -> Result<BridgeSession, String> {
+    supervisor.set_session_model(&session_id, request)
+}
+
+#[tauri::command]
 fn bridge_rename_session(
     supervisor: State<'_, BridgeSupervisor>,
     request: RenameSessionRequest,
@@ -553,6 +571,14 @@ fn list_mcp_servers(
     workspace_root: Option<String>,
 ) -> Result<Vec<MCPServerView>, String> {
     supervisor.mcp_servers(workspace_root.as_deref())
+}
+
+#[tauri::command]
+fn mcp_runtime_action(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: MCPRuntimeActionRequest,
+) -> Result<MCPRuntimeActionResponse, String> {
+    supervisor.mcp_runtime_action(request)
 }
 
 #[tauri::command]
@@ -604,6 +630,14 @@ fn bridge_session_snapshot(
     request: SessionRequest,
 ) -> Result<BridgeSnapshot, String> {
     supervisor.snapshot(request)
+}
+
+#[tauri::command]
+fn bridge_session_balance(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: SessionRequest,
+) -> Result<BridgeSessionBalanceResponse, String> {
+    supervisor.session_balance(request)
 }
 
 #[tauri::command]
@@ -779,6 +813,14 @@ fn delete_provider_config(
 }
 
 #[tauri::command]
+fn discover_provider_models(
+    supervisor: State<'_, BridgeSupervisor>,
+    input: DiscoverProviderModelsRequest,
+) -> Result<DiscoveredProviderModels, String> {
+    supervisor.discover_provider_models(input)
+}
+
+#[tauri::command]
 fn usage_stats(
     supervisor: State<'_, BridgeSupervisor>,
     request: serde_json::Value,
@@ -792,10 +834,55 @@ fn storage_settings(supervisor: State<'_, BridgeSupervisor>) -> Result<serde_jso
 }
 
 #[tauri::command]
+fn remote_settings(supervisor: State<'_, BridgeSupervisor>) -> Result<RemoteSettingsView, String> {
+    supervisor.remote_settings()
+}
+
+#[tauri::command]
+fn scan_remote_ssh_config(
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<RemoteSSHConfigScanView, String> {
+    supervisor.scan_remote_ssh_config()
+}
+
+#[tauri::command]
+fn change_remote_settings(
+    supervisor: State<'_, BridgeSupervisor>,
+    change: RemoteSettingsChange,
+) -> Result<RemoteSettingsView, String> {
+    supervisor.change_remote_settings(change)
+}
+
+#[tauri::command]
+fn connect_remote_host(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: RemoteConnectRequest,
+) -> Result<RemoteConnectResponse, String> {
+    supervisor.connect_remote_host(request)
+}
+
+#[tauri::command]
+fn disconnect_remote_host(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: BridgeRemoteDisconnectRequest,
+) -> Result<BridgeRemoteDisconnectResponse, String> {
+    supervisor.disconnect_remote_host(request)
+}
+
+#[tauri::command]
+fn browse_remote_host(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: BridgeRemoteBrowseRequest,
+) -> Result<BridgeRemoteBrowseResponse, String> {
+    supervisor.browse_remote_host(request)
+}
+
+#[tauri::command]
 fn permission_settings(
     supervisor: State<'_, BridgeSupervisor>,
+    workspace_root: Option<String>,
 ) -> Result<PermissionSettingsView, String> {
-    supervisor.permission_settings()
+    supervisor.permission_settings(workspace_root.unwrap_or_default())
 }
 
 #[tauri::command]
@@ -804,6 +891,21 @@ fn change_permission_settings(
     change: PermissionSettingsChange,
 ) -> Result<PermissionSettingsView, String> {
     supervisor.change_permission_settings(change)
+}
+
+#[tauri::command]
+fn secrets_settings(
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<SecretsSettingsView, String> {
+    supervisor.secrets_settings()
+}
+
+#[tauri::command]
+fn change_secrets_settings(
+    supervisor: State<'_, BridgeSupervisor>,
+    change: SecretsSettingsChange,
+) -> Result<SecretsSettingsView, String> {
+    supervisor.change_secrets_settings(change)
 }
 
 #[tauri::command]
@@ -827,6 +929,26 @@ fn network_settings(
     supervisor: State<'_, BridgeSupervisor>,
 ) -> Result<NetworkSettingsView, String> {
     supervisor.network_settings()
+}
+
+#[tauri::command]
+fn bot_runtime_status(
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<serde_json::Value, String> {
+    supervisor.bot_runtime_status()
+}
+
+#[tauri::command]
+fn bot_settings(supervisor: State<'_, BridgeSupervisor>) -> Result<serde_json::Value, String> {
+    supervisor.bot_settings()
+}
+
+#[tauri::command]
+fn change_bot_settings(
+    supervisor: State<'_, BridgeSupervisor>,
+    change: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    supervisor.change_bot_settings(change)
 }
 
 #[tauri::command]
@@ -972,6 +1094,22 @@ fn change_memory_settings(
 }
 
 #[tauri::command]
+fn memory_suggestions(
+    supervisor: State<'_, BridgeSupervisor>,
+    workspace_root: String,
+) -> Result<MemorySuggestionsView, String> {
+    supervisor.memory_suggestions(&workspace_root)
+}
+
+#[tauri::command]
+fn accept_memory_suggestion(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: MemorySuggestionAcceptanceRequest,
+) -> Result<MemorySuggestionAcceptance, String> {
+    supervisor.accept_memory_suggestion(request)
+}
+
+#[tauri::command]
 fn desktop_preferences(
     supervisor: State<'_, BridgeSupervisor>,
 ) -> Result<DesktopPreferences, String> {
@@ -1012,6 +1150,14 @@ fn set_desktop_language(
 }
 
 #[tauri::command]
+fn set_desktop_currency(
+    supervisor: State<'_, BridgeSupervisor>,
+    currency: String,
+) -> Result<DesktopPreferences, String> {
+    supervisor.set_desktop_currency(currency)
+}
+
+#[tauri::command]
 fn set_default_model(
     supervisor: State<'_, BridgeSupervisor>,
     request: BridgeSetDefaultModelRequest,
@@ -1025,6 +1171,22 @@ fn set_model_role(
     request: BridgeSetModelRoleRequest,
 ) -> Result<BridgeProviderSummaryResponse, String> {
     supervisor.set_model_role(request)
+}
+
+#[tauri::command]
+fn set_agent_preferences(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: BridgeSetAgentPreferenceRequest,
+) -> Result<BridgeProviderSummaryResponse, String> {
+    supervisor.set_agent_preferences(request)
+}
+
+#[tauri::command]
+fn test_provider_model(
+    request: protocol_generated::BridgeProviderModelProbeRequest,
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<protocol_generated::BridgeProviderModelProbeResponse, String> {
+    supervisor.test_provider_model(request)
 }
 
 #[tauri::command]
@@ -1784,6 +1946,308 @@ fn set_zoom_factor(
     Ok(applied)
 }
 
+#[tauri::command]
+fn get_active_theme_id(preferences: State<'_, HostPreferences>) -> String {
+    preferences.active_theme_id()
+}
+
+#[tauri::command]
+fn set_active_theme_id(
+    preferences: State<'_, HostPreferences>,
+    id: String,
+) -> Result<String, String> {
+    preferences.set_active_theme_id(id.clone())?;
+    Ok(preferences.active_theme_id())
+}
+
+#[tauri::command]
+fn list_user_themes(preferences: State<'_, HostPreferences>) -> Vec<UserTheme> {
+    preferences.user_themes()
+}
+
+#[tauri::command]
+fn save_user_theme(
+    preferences: State<'_, HostPreferences>,
+    theme: UserTheme,
+) -> Result<UserTheme, String> {
+    preferences.save_user_theme(theme)
+}
+
+#[tauri::command]
+fn delete_user_theme(preferences: State<'_, HostPreferences>, id: String) -> Result<(), String> {
+    preferences.delete_user_theme(&id)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ThemePackageManifest {
+    schema_version: u8,
+    id: String,
+    name: String,
+    #[serde(default)]
+    author: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    license: Option<String>,
+    base_style: String,
+    #[serde(default)]
+    tokens: host_preferences::ThemeTokens,
+    #[serde(default)]
+    recipes: ThemePackageRecipes,
+    #[serde(default)]
+    background: Option<serde_json::Value>,
+    #[serde(default)]
+    task_background: Option<serde_json::Value>,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ThemePackageRecipes {
+    #[serde(default = "default_theme_density")]
+    density: String,
+    #[serde(default = "default_theme_corners")]
+    corners: String,
+}
+
+fn default_theme_density() -> String {
+    "comfortable".into()
+}
+
+fn default_theme_corners() -> String {
+    "soft".into()
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExportThemePackage<'a> {
+    schema_version: u8,
+    id: &'a str,
+    name: &'a str,
+    base_style: &'a str,
+    tokens: &'a host_preferences::ThemeTokens,
+    recipes: ExportThemeRecipes<'a>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExportThemeRecipes<'a> {
+    density: &'a str,
+    corners: &'a str,
+}
+
+fn selected_theme_path(
+    file: Option<tauri_plugin_dialog::FilePath>,
+) -> Result<Option<PathBuf>, String> {
+    file.map(|selected| selected.into_path().map_err(|error| error.to_string()))
+        .transpose()
+}
+
+fn read_theme_package(path: &Path) -> Result<host_preferences::UserTheme, String> {
+    const MAX_PACKAGE_BYTES: u64 = 1 << 20;
+    const MAX_MANIFEST_BYTES: u64 = 256 << 10;
+    let metadata =
+        std::fs::metadata(path).map_err(|error| format!("read selected theme: {error}"))?;
+    if metadata.len() > MAX_PACKAGE_BYTES {
+        return Err("theme package exceeds the 1 MiB import limit".into());
+    }
+    let file = File::open(path).map_err(|error| format!("open selected theme: {error}"))?;
+    let mut archive =
+        ZipArchive::new(file).map_err(|error| format!("invalid theme package: {error}"))?;
+    if archive.len() != 1 {
+        return Err(
+            "this Preview build imports token-only theme packages; image assets are not supported"
+                .into(),
+        );
+    }
+    let manifest_file = archive
+        .by_name("theme.json")
+        .map_err(|_| "theme package is missing theme.json".to_string())?;
+    if manifest_file.size() > MAX_MANIFEST_BYTES {
+        return Err("theme manifest exceeds the 256 KiB import limit".into());
+    }
+    let mut bytes = Vec::with_capacity(manifest_file.size() as usize);
+    manifest_file
+        .take(MAX_MANIFEST_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("read theme manifest: {error}"))?;
+    if bytes.len() as u64 > MAX_MANIFEST_BYTES {
+        return Err("theme manifest exceeds the 256 KiB import limit".into());
+    }
+    let manifest: ThemePackageManifest = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("invalid theme manifest: {error}"))?;
+    if !matches!(manifest.schema_version, 1 | 2) {
+        return Err("unsupported theme package schema version".into());
+    }
+    if manifest.background.is_some() || manifest.task_background.is_some() {
+        return Err("image backgrounds are not supported by this Preview build".into());
+    }
+    let _metadata = (manifest.author, manifest.description, manifest.license);
+    Ok(host_preferences::UserTheme {
+        id: manifest.id,
+        name: manifest.name,
+        base_style: manifest.base_style,
+        tokens: manifest.tokens,
+        density: manifest.recipes.density,
+        corners: manifest.recipes.corners,
+    })
+}
+
+fn write_theme_package(
+    theme: &host_preferences::UserTheme,
+    selected_path: PathBuf,
+) -> Result<(), String> {
+    let mut path = selected_path;
+    if path.extension().and_then(|extension| extension.to_str()) != Some("reasonix-theme") {
+        path.set_extension("reasonix-theme");
+    }
+    let parent = path
+        .parent()
+        .ok_or_else(|| "invalid export destination".to_string())?;
+    let mut temporary = tempfile::NamedTempFile::new_in(parent)
+        .map_err(|error| format!("prepare theme export: {error}"))?;
+    let manifest = ExportThemePackage {
+        schema_version: 2,
+        id: &theme.id,
+        name: &theme.name,
+        base_style: &theme.base_style,
+        tokens: &theme.tokens,
+        recipes: ExportThemeRecipes {
+            density: &theme.density,
+            corners: &theme.corners,
+        },
+    };
+    let bytes = serde_json::to_vec_pretty(&manifest)
+        .map_err(|error| format!("serialize theme: {error}"))?;
+    {
+        let mut archive = ZipWriter::new(temporary.as_file_mut());
+        archive
+            .start_file(
+                "theme.json",
+                SimpleFileOptions::default().compression_method(CompressionMethod::Deflated),
+            )
+            .map_err(|error| format!("create theme package: {error}"))?;
+        archive
+            .write_all(&bytes)
+            .map_err(|error| format!("write theme package: {error}"))?;
+        archive
+            .finish()
+            .map_err(|error| format!("finish theme package: {error}"))?;
+    }
+    temporary
+        .as_file()
+        .sync_all()
+        .map_err(|error| format!("sync theme package: {error}"))?;
+    temporary
+        .persist(&path)
+        .map_err(|error| format!("save theme package: {}", error.error))?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn import_user_theme(
+    app: tauri::AppHandle,
+    preferences: State<'_, HostPreferences>,
+) -> Result<Option<host_preferences::UserTheme>, String> {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    app.dialog()
+        .file()
+        .add_filter("Reasonix Theme", &["reasonix-theme"])
+        .pick_file(move |selection| {
+            let _ = sender.send(selection);
+        });
+    let selected = tauri::async_runtime::spawn_blocking(move || receiver.recv().unwrap_or(None))
+        .await
+        .map_err(|error| format!("theme picker failed: {error}"))?;
+    let Some(path) = selected_theme_path(selected)? else {
+        return Ok(None);
+    };
+    let theme = read_theme_package(&path)?;
+    preferences.import_user_theme(theme).map(Some)
+}
+
+#[tauri::command]
+async fn export_user_theme(
+    app: tauri::AppHandle,
+    preferences: State<'_, HostPreferences>,
+    id: String,
+) -> Result<bool, String> {
+    let theme = preferences
+        .user_themes()
+        .into_iter()
+        .find(|theme| theme.id == id)
+        .ok_or_else(|| "custom theme not found".to_string())?;
+    let (sender, receiver) = std::sync::mpsc::channel();
+    app.dialog()
+        .file()
+        .add_filter("Reasonix Theme", &["reasonix-theme"])
+        .set_file_name(format!("{}.reasonix-theme", theme.id))
+        .save_file(move |selection| {
+            let _ = sender.send(selection);
+        });
+    let selected = tauri::async_runtime::spawn_blocking(move || receiver.recv().unwrap_or(None))
+        .await
+        .map_err(|error| format!("theme picker failed: {error}"))?;
+    let Some(path) = selected_theme_path(selected)? else {
+        return Ok(false);
+    };
+    write_theme_package(&theme, path)?;
+    Ok(true)
+}
+
+#[cfg(test)]
+mod theme_package_tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn exported_reasonix_theme_round_trips_tokens_and_recipes() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("warm-night.reasonix-theme");
+        let theme = host_preferences::UserTheme {
+            id: "user-warm-night".into(),
+            name: "Warm Night".into(),
+            base_style: "carbon".into(),
+            tokens: host_preferences::ThemeTokens {
+                light: BTreeMap::from([("accent".into(), "#6a4614".into())]),
+                dark: BTreeMap::from([("bg".into(), "#15120d".into())]),
+            },
+            density: "compact".into(),
+            corners: "round".into(),
+        };
+        write_theme_package(&theme, path.clone()).expect("export theme package");
+        assert_eq!(
+            read_theme_package(&path).expect("import theme package"),
+            theme
+        );
+    }
+
+    #[test]
+    fn import_rejects_theme_packages_with_image_entries() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("with-image.reasonix-theme");
+        let file = File::create(&path).expect("create archive");
+        let mut archive = ZipWriter::new(file);
+        let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+        archive
+            .start_file("theme.json", options)
+            .expect("manifest entry");
+        archive
+            .write_all(
+                br#"{"schemaVersion":2,"id":"warm","name":"Warm","baseStyle":"carbon","tokens":{},"recipes":{"density":"comfortable","corners":"soft"},"background":{"image":"wallpaper.webp"}}"#,
+            )
+            .expect("manifest content");
+        archive
+            .start_file("wallpaper.webp", options)
+            .expect("image entry");
+        archive.write_all(b"image").expect("image bytes");
+        archive.finish().expect("finish archive");
+
+        let error = read_theme_package(&path).expect_err("image archive must be rejected");
+        assert!(error.contains("image assets are not supported"));
+    }
+}
+
 fn apply_menu_zoom(app: &tauri::AppHandle, factor: f64) {
     let preferences = app.state::<HostPreferences>();
     let previous = preferences.zoom_factor();
@@ -1956,17 +2420,20 @@ fn main() {
             restart_bridge,
             bridge_open_session,
             bridge_switch_session,
+            bridge_set_session_model,
             bridge_rename_session,
             bridge_delete_session,
             bridge_pending_session_deletes_page,
             bridge_pending_session_title_recoveries,
             list_mcp_servers,
+            mcp_runtime_action,
             save_mcp_server,
             delete_mcp_server,
             set_mcp_server_enabled,
             search_mcp_marketplace,
             resolve_mcp_marketplace,
             bridge_session_snapshot,
+            bridge_session_balance,
             bridge_session_history,
             bridge_session_previews,
             bridge_session_catalog_shadow,
@@ -1992,13 +2459,25 @@ fn main() {
             provider_configs,
             save_provider_config,
             delete_provider_config,
+            discover_provider_models,
             usage_stats,
             storage_settings,
+            remote_settings,
+            scan_remote_ssh_config,
+            change_remote_settings,
+            connect_remote_host,
+            disconnect_remote_host,
+            browse_remote_host,
             permission_settings,
             change_permission_settings,
+            secrets_settings,
+            change_secrets_settings,
             sandbox_settings,
             change_sandbox_settings,
             network_settings,
+            bot_runtime_status,
+            bot_settings,
+            change_bot_settings,
             change_network_settings,
             skills_settings,
             change_skills_settings,
@@ -2017,13 +2496,18 @@ fn main() {
             change_hooks_settings,
             memory_settings,
             change_memory_settings,
+            memory_suggestions,
+            accept_memory_suggestion,
             desktop_preferences,
             set_desktop_approval,
             set_desktop_terminal_theme,
             set_desktop_appearance,
             set_desktop_language,
+            set_desktop_currency,
             set_default_model,
             set_model_role,
+            set_agent_preferences,
+            test_provider_model,
             import_stable_profile,
             import_stable_project_folders,
             workbench_sessions,
@@ -2039,6 +2523,13 @@ fn main() {
             set_close_behavior,
             get_zoom_factor,
             set_zoom_factor,
+            get_active_theme_id,
+            set_active_theme_id,
+            list_user_themes,
+            save_user_theme,
+            delete_user_theme,
+            import_user_theme,
+            export_user_theme,
             open_external_url,
             keychain::keychain_save,
             keychain::keychain_delete

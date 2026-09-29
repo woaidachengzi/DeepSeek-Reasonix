@@ -476,7 +476,10 @@ func BotConfigHasAccessControl(bc config.BotConfig) bool {
 		return true
 	}
 	for _, conn := range bc.Connections {
-		if conn.Enabled && BotAccessActive(conn.Access) {
+		// A configured but currently disabled connection may be enabled from the
+		// settings UI after its own access policy is saved. It is safe to count
+		// that policy here: no adapter starts until the channel itself is enabled.
+		if BotAccessActive(conn.Access) {
 			return true
 		}
 	}
