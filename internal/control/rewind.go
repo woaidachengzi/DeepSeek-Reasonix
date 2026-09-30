@@ -167,6 +167,46 @@ func (c *Controller) CommitCodeRewind(planID string, confirmPartialCoverage bool
 	return c.CommitRewind(planID)
 }
 
+// CanRewindConversationInPlace reports whether a conversation rewind keeps the
+// transcript path bound to this controller.
+func (c *Controller) CanRewindConversationInPlace() bool {
+	return c.headBranchSession() != nil
+}
+
+// CommitConversationRewindInPlace accepts only a conversation-only plan on a
+// schema-2 session whose current head can be switched without changing paths.
+func (c *Controller) CommitConversationRewindInPlace(planID string) (checkpoint.RewindResult, error) {
+	if !c.CanRewindConversationInPlace() {
+		return checkpoint.RewindResult{}, c.rewindFail(fmt.Errorf("conversation rewind requires an in-log session head"))
+	}
+	store := c.checkpoints.storeRef()
+	if store == nil {
+		return checkpoint.RewindResult{}, c.rewindFail(fmt.Errorf("checkpoints unavailable"))
+	}
+	plan, ok := store.PeekPlan(planID)
+	if !ok || plan.Scope != checkpoint.RewindConversation {
+		return checkpoint.RewindResult{}, c.rewindFail(fmt.Errorf("unknown conversation rewind plan"))
+	}
+	return c.CommitRewindInPlace(planID)
+}
+
+// UndoConversationRewindHead returns from an empty rewind head to its parent.
+func (c *Controller) UndoConversationRewindHead(headID string) error {
+	if headID == "" || !c.CanRewindConversationInPlace() {
+		return c.rewindFail(fmt.Errorf("conversation rewind head is unavailable"))
+	}
+	if err := c.beginRotation(); err != nil {
+		return c.rewindFail(err)
+	}
+	defer c.endRotation()
+	current, ok := c.SessionHead()
+	if !ok || current.HeadID != headID || !c.undoHeadRewind() {
+		return c.rewindFail(fmt.Errorf("conversation rewind can no longer be undone"))
+	}
+	atomic.AddInt64(&c.sessionRevision, 1)
+	return nil
+}
+
 // CommitRewindInPlace commits a prepared plan and moves this controller onto
 // the rewound conversation: a new head of the same schema-2 log, or the fork
 // file for a schema-1 session. Desktop tabs use it so the tab stays put.

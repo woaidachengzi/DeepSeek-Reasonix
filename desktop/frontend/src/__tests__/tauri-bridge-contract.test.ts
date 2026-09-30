@@ -99,6 +99,9 @@ const commands: CommandContract[] = [
   { command: "bridge_workspace_checkpoints", argKeys: ["request"], description: "tauriWorkspaceCheckpoints() lists session checkpoints" },
   { command: "bridge_code_rewind_preview", argKeys: ["request"], description: "tauriCodeRewindPreview() reviews files from a checkpoint" },
   { command: "bridge_code_rewind_commit", argKeys: ["request"], description: "tauriCodeRewindCommit() submits a confirmed file rewind" },
+  { command: "bridge_conversation_rewind_preview", argKeys: ["request"], description: "tauriConversationRewindPreview() reviews a conversation fork" },
+  { command: "bridge_conversation_rewind_commit", argKeys: ["request"], description: "tauriConversationRewindCommit() creates a conversation head" },
+  { command: "bridge_conversation_rewind_undo", argKeys: ["request"], description: "tauriConversationRewindUndo() returns to the parent head" },
   {
     command: "bridge_pending_session_deletes_page",
     argKeys: ["cursor"],

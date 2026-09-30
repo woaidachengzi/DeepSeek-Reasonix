@@ -29,6 +29,19 @@ interface CheckpointCopy {
   confirm: string;
   done: string;
   failed: string;
+  working: string;
+  conversation: {
+    action: string;
+    review: string;
+    description: string;
+    unavailable: string;
+    confirm: string;
+    done: string;
+    failed: string;
+    undo: string;
+    undoDescription: string;
+    undone: string;
+  };
 }
 
 export const tauriWorkspaceRecoveryCopy: Record<Locale, CheckpointCopy> = {
@@ -59,6 +72,19 @@ export const tauriWorkspaceRecoveryCopy: Record<Locale, CheckpointCopy> = {
     confirm: "Restore listed files",
     done: "Workspace files restored. The conversation is unchanged.",
     failed: "Could not restore the workspace files. Refresh checkpoints and review the plan again.",
+    working: "Checking or restoring checkpoint…",
+    conversation: {
+      action: "Rewind conversation",
+      review: "Review conversation rewind",
+      description: "Starts a new conversation version before this turn. Workspace files stay as they are.",
+      unavailable: "This conversation cannot be rewound here. Choose a checkpoint with a conversation boundary; the stable app can handle older session formats.",
+      confirm: "Create conversation version",
+      done: "Conversation rewound to a new version. Workspace files are unchanged.",
+      failed: "Could not rewind the conversation. Refresh checkpoints and review it again.",
+      undo: "Return to previous conversation",
+      undoDescription: "Available until a message is added to the new version.",
+      undone: "Returned to the previous conversation.",
+    },
   },
   zh: {
     fileRevert: {
@@ -87,6 +113,19 @@ export const tauriWorkspaceRecoveryCopy: Record<Locale, CheckpointCopy> = {
     confirm: "恢复所列文件",
     done: "工作区文件已恢复，对话记录未更改。",
     failed: "无法恢复工作区文件，请刷新检查点并重新确认。",
+    working: "正在检查或恢复检查点…",
+    conversation: {
+      action: "回滚对话",
+      review: "确认对话回滚",
+      description: "在此轮开始前创建新的对话版本；工作区文件保持不变。",
+      unavailable: "当前无法回滚此对话，请选择有对话边界的检查点；旧格式会话可使用稳定版处理。",
+      confirm: "创建对话版本",
+      done: "已创建回滚后的对话版本，工作区文件未更改。",
+      failed: "无法回滚对话，请刷新检查点并重新确认。",
+      undo: "返回原对话版本",
+      undoDescription: "在新版本继续发送消息前可返回原对话。",
+      undone: "已返回原对话版本。",
+    },
   },
   "zh-TW": {
     fileRevert: {
@@ -115,5 +154,18 @@ export const tauriWorkspaceRecoveryCopy: Record<Locale, CheckpointCopy> = {
     confirm: "還原所列檔案",
     done: "工作區檔案已還原，對話紀錄未變更。",
     failed: "無法還原工作區檔案，請重新整理檢查點並再次確認。",
+    working: "正在檢查或還原檢查點…",
+    conversation: {
+      action: "回復對話",
+      review: "確認對話回復",
+      description: "在此輪開始前建立新的對話版本；工作區檔案保持不變。",
+      unavailable: "目前無法回復此對話，請選擇有對話邊界的檢查點；舊格式會話可使用穩定版處理。",
+      confirm: "建立對話版本",
+      done: "已建立回復後的對話版本，工作區檔案未變更。",
+      failed: "無法回復對話，請重新整理檢查點並再次確認。",
+      undo: "返回原對話版本",
+      undoDescription: "在新版本繼續傳送訊息前可返回原對話。",
+      undone: "已返回原對話版本。",
+    },
   },
 };

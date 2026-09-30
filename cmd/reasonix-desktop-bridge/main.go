@@ -669,6 +669,15 @@ func (b *bridgeServer) sessionCommand(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(path, ":code-rewind-commit"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":code-rewind-commit"))
 		b.idempotent(16<<10, b.codeRewindCommit)(w, r)
+	case strings.HasSuffix(path, ":conversation-rewind-preview"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":conversation-rewind-preview"))
+		b.conversationRewindPreview(w, r)
+	case strings.HasSuffix(path, ":conversation-rewind-commit"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":conversation-rewind-commit"))
+		b.idempotent(16<<10, b.conversationRewindCommit)(w, r)
+	case strings.HasSuffix(path, ":conversation-rewind-undo"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":conversation-rewind-undo"))
+		b.idempotent(16<<10, b.conversationRewindUndo)(w, r)
 	case strings.HasSuffix(path, ":cancel"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":cancel"))
 		b.cancel(w, r)

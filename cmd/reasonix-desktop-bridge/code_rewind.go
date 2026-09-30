@@ -60,3 +60,43 @@ func (r *controllerRuntime) CommitCodeRewind(planID string, confirmPartialCovera
 	result, err := r.controller.CommitCodeRewind(planID, confirmPartialCoverage)
 	return fileRevertResultView(result, err), nil
 }
+
+func (r *controllerRuntime) PrepareConversationRewind(turn int) (desktopbridge.WorkspaceConversationRewindPlan, error) {
+	if turn < 0 {
+		return desktopbridge.WorkspaceConversationRewindPlan{}, fmt.Errorf("invalid checkpoint turn")
+	}
+	if !r.controller.CanRewindConversationInPlace() {
+		return desktopbridge.WorkspaceConversationRewindPlan{
+			Turn: turn, DisabledReason: "this session format cannot switch conversation heads within its transcript",
+		}, nil
+	}
+	plan, err := r.controller.PrepareRewind(turn, control.RewindConversation)
+	if err != nil {
+		return desktopbridge.WorkspaceConversationRewindPlan{}, err
+	}
+	return desktopbridge.WorkspaceConversationRewindPlan{
+		PlanID: plan.PlanID, Turn: plan.Turn, CanConversation: plan.CanConversation,
+		DisabledReason: plan.DisabledReason,
+	}, nil
+}
+
+func (r *controllerRuntime) CommitConversationRewind(planID string) (desktopbridge.WorkspaceConversationRewindResult, error) {
+	if !validRevertID(planID) {
+		return desktopbridge.WorkspaceConversationRewindResult{}, fmt.Errorf("invalid conversation rewind plan ID")
+	}
+	result, err := r.controller.CommitConversationRewindInPlace(planID)
+	return desktopbridge.WorkspaceConversationRewindResult{
+		OK: result.OK, ConversationForked: result.ConversationForked,
+		HeadID: result.Branch, Error: result.Error,
+	}, err
+}
+
+func (r *controllerRuntime) UndoConversationRewind(headID string) (desktopbridge.WorkspaceConversationRewindResult, error) {
+	if !validRevertID(headID) {
+		return desktopbridge.WorkspaceConversationRewindResult{}, fmt.Errorf("invalid conversation rewind head ID")
+	}
+	if err := r.controller.UndoConversationRewindHead(headID); err != nil {
+		return desktopbridge.WorkspaceConversationRewindResult{}, err
+	}
+	return desktopbridge.WorkspaceConversationRewindResult{OK: true}, nil
+}

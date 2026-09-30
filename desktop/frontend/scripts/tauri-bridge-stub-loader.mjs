@@ -496,6 +496,18 @@ export function tauriCodeRewindCommit(sessionId, planId, confirmPartialCoverage)
   record("bridge_code_rewind_commit", { sessionId, planId, confirmPartialCoverage });
   return globalThis.__codeRewindCommitHandler?.(sessionId, planId, confirmPartialCoverage) ?? Promise.resolve({ ok: false });
 }
+export function tauriConversationRewindPreview(sessionId, turn) {
+  record("bridge_conversation_rewind_preview", { sessionId, turn });
+  return globalThis.__conversationRewindPreviewHandler?.(sessionId, turn) ?? Promise.resolve({ turn, canConversation: false });
+}
+export function tauriConversationRewindCommit(sessionId, planId) {
+  record("bridge_conversation_rewind_commit", { sessionId, planId });
+  return globalThis.__conversationRewindCommitHandler?.(sessionId, planId) ?? Promise.resolve({ ok: false, conversationForked: false });
+}
+export function tauriConversationRewindUndo(sessionId, headId) {
+  record("bridge_conversation_rewind_undo", { sessionId, headId });
+  return globalThis.__conversationRewindUndoHandler?.(sessionId, headId) ?? Promise.resolve({ ok: false, conversationForked: false });
+}
 
 export function startTauriBridgeEvents() {
   record("bridge_start_events");

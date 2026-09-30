@@ -71,6 +71,38 @@ pub struct BridgeCodeRewindPreviewRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeConversationRewindCommitRequest {
+    pub plan_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeConversationRewindPlanResponse {
+    pub plan: BridgeWorkspaceConversationRewindPlan,
+    pub protocol_version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeConversationRewindPreviewRequest {
+    pub turn: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeConversationRewindResultResponse {
+    pub protocol_version: u64,
+    pub result: BridgeWorkspaceConversationRewindResult,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeConversationRewindUndoRequest {
+    pub head_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeDeleteSessionResponse {
     pub deleted: bool,
     pub protocol_version: u64,
@@ -459,6 +491,24 @@ pub struct BridgeWorkspaceCodeRewindPlan {
     pub plan_id: Option<String>,
     pub requires_coverage_confirmation: bool,
     pub turn: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceConversationRewindPlan {
+    pub can_conversation: bool,
+    pub disabled_reason: Option<String>,
+    pub plan_id: Option<String>,
+    pub turn: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceConversationRewindResult {
+    pub conversation_forked: bool,
+    pub error: Option<String>,
+    pub head_id: Option<String>,
+    pub ok: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -79,6 +79,7 @@ use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 use bridge::{
     AnswerMCPInteractionRequest, AnswerQuestionRequest, ApproveRequest, AttachFileRequest,
     BridgeAttachment, BridgeCodeRewindPlanResponse, BridgeDeleteSessionResponse, BridgeHistory,
+    BridgeConversationRewindPlanResponse, BridgeConversationRewindResultResponse,
     BridgeProjectFolder, BridgeProviderSummaryResponse, BridgeRemoteBrowseRequest,
     BridgeRemoteBrowseResponse, BridgeRemoteDisconnectRequest, BridgeRemoteDisconnectResponse,
     BridgeRemoteFilePreviewRequest, BridgeRemoteFilePreviewResponse, BridgeRemoteFileSaveRequest,
@@ -89,6 +90,7 @@ use bridge::{
     BridgeWorkspaceCheckpointsResponse, BridgeWorkspaceFileResponse,
     BridgeWorkspaceFileRevertPlanResponse, BridgeWorkspaceFileRevertResultResponse,
     BridgeWorkspaceListResponse, CodeRewindCommitRequest, CodeRewindPreviewRequest,
+    ConversationRewindCommitRequest, ConversationRewindPreviewRequest, ConversationRewindUndoRequest,
     DeleteProviderConfigRequest, DesktopPreferences, DiscoverProviderModelsRequest,
     DiscoveredProviderModels, HooksSettingsChange, HooksSettingsView, LegacySessionCatalogEntry,
     MCPClearAuthRequest, MCPClearAuthResponse, MCPMarketplaceEntry, MCPMarketplaceResponse,
@@ -786,6 +788,30 @@ fn bridge_code_rewind_commit(
     request: CodeRewindCommitRequest,
 ) -> Result<BridgeWorkspaceFileRevertResultResponse, String> {
     supervisor.code_rewind_commit(request)
+}
+
+#[tauri::command]
+fn bridge_conversation_rewind_preview(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: ConversationRewindPreviewRequest,
+) -> Result<BridgeConversationRewindPlanResponse, String> {
+    supervisor.conversation_rewind_preview(request)
+}
+
+#[tauri::command]
+fn bridge_conversation_rewind_commit(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: ConversationRewindCommitRequest,
+) -> Result<BridgeConversationRewindResultResponse, String> {
+    supervisor.conversation_rewind_commit(request)
+}
+
+#[tauri::command]
+fn bridge_conversation_rewind_undo(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: ConversationRewindUndoRequest,
+) -> Result<BridgeConversationRewindResultResponse, String> {
+    supervisor.conversation_rewind_undo(request)
 }
 
 fn workspace_root_is_available(root: &str) -> Option<bool> {
@@ -3473,6 +3499,9 @@ fn main() {
             bridge_workspace_checkpoints,
             bridge_code_rewind_preview,
             bridge_code_rewind_commit,
+            bridge_conversation_rewind_preview,
+            bridge_conversation_rewind_commit,
+            bridge_conversation_rewind_undo,
             workspace_roots_availability,
             bridge_cancel,
             bridge_approve,

@@ -46,6 +46,28 @@ export interface BridgeCodeRewindPreviewRequest {
   turn: number;
 }
 
+export interface BridgeConversationRewindCommitRequest {
+  planId: string;
+}
+
+export interface BridgeConversationRewindPlanResponse {
+  plan: BridgeWorkspaceConversationRewindPlan;
+  protocolVersion: number;
+}
+
+export interface BridgeConversationRewindPreviewRequest {
+  turn: number;
+}
+
+export interface BridgeConversationRewindResultResponse {
+  protocolVersion: number;
+  result: BridgeWorkspaceConversationRewindResult;
+}
+
+export interface BridgeConversationRewindUndoRequest {
+  headId: string;
+}
+
 export interface BridgeDeleteSessionResponse {
   deleted: boolean;
   protocolVersion: number;
@@ -348,6 +370,20 @@ export interface BridgeWorkspaceCodeRewindPlan {
   planId?: string;
   requiresCoverageConfirmation: boolean;
   turn: number;
+}
+
+export interface BridgeWorkspaceConversationRewindPlan {
+  canConversation: boolean;
+  disabledReason?: string;
+  planId?: string;
+  turn: number;
+}
+
+export interface BridgeWorkspaceConversationRewindResult {
+  conversationForked: boolean;
+  error?: string;
+  headId?: string;
+  ok: boolean;
 }
 
 export interface BridgeWorkspaceEntry {

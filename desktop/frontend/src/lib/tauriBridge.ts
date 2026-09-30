@@ -36,6 +36,8 @@ import type {
   BridgeWorkspaceFileRevertResultResponse,
   BridgeWorkspaceCheckpointsResponse,
   BridgeCodeRewindPlanResponse,
+  BridgeConversationRewindPlanResponse,
+  BridgeConversationRewindResultResponse,
 } from "./bridgeProtocol.generated";
 import type { TerminalThemePreference } from "./terminalTheme";
 import type { Theme, ThemeStyle } from "./theme";
@@ -65,6 +67,8 @@ export type TauriWorkspaceFileRevertPlan = BridgeWorkspaceFileRevertPlanResponse
 export type TauriWorkspaceFileRevertResult = BridgeWorkspaceFileRevertResultResponse["result"];
 export type TauriWorkspaceCheckpoint = BridgeWorkspaceCheckpointsResponse["checkpoints"][number];
 export type TauriCodeRewindPlan = BridgeCodeRewindPlanResponse["plan"];
+export type TauriConversationRewindPlan = BridgeConversationRewindPlanResponse["plan"];
+export type TauriConversationRewindResult = BridgeConversationRewindResultResponse["result"];
 
 /** Exposes only user-visible answer deltas; reasoning and other event text stay private. */
 export function tauriAssistantTextDelta(event: Pick<TauriBridgeEvent, "eventKind" | "payload">): string {
@@ -1696,6 +1700,24 @@ export async function tauriCodeRewindPreview(sessionId: string, turn: number): P
 export async function tauriCodeRewindCommit(sessionId: string, planId: string, confirmPartialCoverage: boolean): Promise<TauriWorkspaceFileRevertResult> {
   requireTauri();
   const response = await invoke<BridgeWorkspaceFileRevertResultResponse>("bridge_code_rewind_commit", { request: { sessionId, planId, confirmPartialCoverage } });
+  return response.result;
+}
+
+export async function tauriConversationRewindPreview(sessionId: string, turn: number): Promise<TauriConversationRewindPlan> {
+  requireTauri();
+  const response = await invoke<BridgeConversationRewindPlanResponse>("bridge_conversation_rewind_preview", { request: { sessionId, turn } });
+  return response.plan;
+}
+
+export async function tauriConversationRewindCommit(sessionId: string, planId: string): Promise<TauriConversationRewindResult> {
+  requireTauri();
+  const response = await invoke<BridgeConversationRewindResultResponse>("bridge_conversation_rewind_commit", { request: { sessionId, planId } });
+  return response.result;
+}
+
+export async function tauriConversationRewindUndo(sessionId: string, headId: string): Promise<TauriConversationRewindResult> {
+  requireTauri();
+  const response = await invoke<BridgeConversationRewindResultResponse>("bridge_conversation_rewind_undo", { request: { sessionId, headId } });
   return response.result;
 }
 

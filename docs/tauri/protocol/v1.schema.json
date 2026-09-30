@@ -45,6 +45,13 @@
     { "$ref": "#/$defs/workspaceCodeRewindPlan" },
     { "$ref": "#/$defs/codeRewindPlanResponse" },
     { "$ref": "#/$defs/codeRewindCommitRequest" },
+    { "$ref": "#/$defs/conversationRewindPreviewRequest" },
+    { "$ref": "#/$defs/workspaceConversationRewindPlan" },
+    { "$ref": "#/$defs/conversationRewindPlanResponse" },
+    { "$ref": "#/$defs/conversationRewindCommitRequest" },
+    { "$ref": "#/$defs/conversationRewindUndoRequest" },
+    { "$ref": "#/$defs/workspaceConversationRewindResult" },
+    { "$ref": "#/$defs/conversationRewindResultResponse" },
     { "$ref": "#/$defs/submitRequest" },
     { "$ref": "#/$defs/approvalRequest" },
     { "$ref": "#/$defs/askAnswer" },
@@ -688,6 +695,71 @@
       "properties": {
         "planId": { "type": "string", "minLength": 1 },
         "confirmPartialCoverage": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "conversationRewindPreviewRequest": {
+      "title": "BridgeConversationRewindPreviewRequest",
+      "type": "object",
+      "required": ["turn"],
+      "properties": { "turn": { "type": "integer", "minimum": 0 } },
+      "additionalProperties": false
+    },
+    "workspaceConversationRewindPlan": {
+      "title": "BridgeWorkspaceConversationRewindPlan",
+      "type": "object",
+      "required": ["turn", "canConversation"],
+      "properties": {
+        "planId": { "type": "string" },
+        "turn": { "type": "integer", "minimum": 0 },
+        "canConversation": { "type": "boolean" },
+        "disabledReason": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "conversationRewindPlanResponse": {
+      "title": "BridgeConversationRewindPlanResponse",
+      "type": "object",
+      "required": ["protocolVersion", "plan"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "plan": { "$ref": "#/$defs/workspaceConversationRewindPlan" }
+      },
+      "additionalProperties": false
+    },
+    "conversationRewindCommitRequest": {
+      "title": "BridgeConversationRewindCommitRequest",
+      "type": "object",
+      "required": ["planId"],
+      "properties": { "planId": { "type": "string", "minLength": 1 } },
+      "additionalProperties": false
+    },
+    "conversationRewindUndoRequest": {
+      "title": "BridgeConversationRewindUndoRequest",
+      "type": "object",
+      "required": ["headId"],
+      "properties": { "headId": { "type": "string", "minLength": 1 } },
+      "additionalProperties": false
+    },
+    "workspaceConversationRewindResult": {
+      "title": "BridgeWorkspaceConversationRewindResult",
+      "type": "object",
+      "required": ["ok", "conversationForked"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "conversationForked": { "type": "boolean" },
+        "headId": { "type": "string" },
+        "error": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "conversationRewindResultResponse": {
+      "title": "BridgeConversationRewindResultResponse",
+      "type": "object",
+      "required": ["protocolVersion", "result"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "result": { "$ref": "#/$defs/workspaceConversationRewindResult" }
       },
       "additionalProperties": false
     },

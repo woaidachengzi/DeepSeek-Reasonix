@@ -491,12 +491,36 @@ pub struct CodeRewindCommitRequest {
     pub confirm_partial_coverage: bool,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationRewindPreviewRequest {
+    pub session_id: String,
+    pub turn: u64,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationRewindCommitRequest {
+    pub session_id: String,
+    pub plan_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationRewindUndoRequest {
+    pub session_id: String,
+    pub head_id: String,
+}
+
 // The wire DTOs mirror docs/tauri/protocol/v1.schema.json through the generated
 // module; only the host-facing command payloads below stay hand-written.
 pub use crate::protocol_generated::{
     BridgeAnswerQuestionRequest, BridgeApprovalRequest, BridgeAskAnswer,
     BridgeAttachFileRequest as AttachFileRequest, BridgeAttachment, BridgeAttachmentResponse,
     BridgeCodeRewindCommitRequest, BridgeCodeRewindPlanResponse, BridgeCodeRewindPreviewRequest,
+    BridgeConversationRewindCommitRequest, BridgeConversationRewindPlanResponse,
+    BridgeConversationRewindPreviewRequest, BridgeConversationRewindResultResponse,
+    BridgeConversationRewindUndoRequest,
     BridgeDeleteSessionResponse, BridgeEvent, BridgeHistoryMessage, BridgeHistoryResponse,
     BridgeMCPInteractionAnswerRequest, BridgeOpenSessionRequest as OpenSessionRequest,
     BridgeProjectFolder, BridgeProjectFoldersResponse, BridgeProviderModelProbeRequest,
@@ -3850,6 +3874,72 @@ impl BridgeSupervisor {
             Some(&request_id),
         )?;
         let envelope: BridgeWorkspaceFileRevertResultResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope)
+    }
+
+    pub fn conversation_rewind_preview(
+        &self,
+        request: ConversationRewindPreviewRequest,
+    ) -> Result<BridgeConversationRewindPlanResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let path = format!("/v1/sessions/{session_id}:conversation-rewind-preview");
+        let response = self.request_json(
+            "POST",
+            &path,
+            Some(json!(BridgeConversationRewindPreviewRequest { turn: request.turn })),
+            None,
+        )?;
+        let envelope: BridgeConversationRewindPlanResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope)
+    }
+
+    pub fn conversation_rewind_commit(
+        &self,
+        request: ConversationRewindCommitRequest,
+    ) -> Result<BridgeConversationRewindResultResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let plan_id = session_path_component(&request.plan_id)
+            .map_err(|_| "conversation rewind plan ID is invalid".to_string())?;
+        let request_id = opaque_secret()?;
+        let path = format!("/v1/sessions/{session_id}:conversation-rewind-commit");
+        let response = self.request_json(
+            "POST",
+            &path,
+            Some(json!(BridgeConversationRewindCommitRequest { plan_id })),
+            Some(&request_id),
+        )?;
+        let envelope: BridgeConversationRewindResultResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope)
+    }
+
+    pub fn conversation_rewind_undo(
+        &self,
+        request: ConversationRewindUndoRequest,
+    ) -> Result<BridgeConversationRewindResultResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let head_id = session_path_component(&request.head_id)
+            .map_err(|_| "conversation rewind head ID is invalid".to_string())?;
+        let request_id = opaque_secret()?;
+        let path = format!("/v1/sessions/{session_id}:conversation-rewind-undo");
+        let response = self.request_json(
+            "POST",
+            &path,
+            Some(json!(BridgeConversationRewindUndoRequest { head_id })),
+            Some(&request_id),
+        )?;
+        let envelope: BridgeConversationRewindResultResponse =
             serde_json::from_value(response).map_err(display_error)?;
         if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());

@@ -24,6 +24,11 @@ const state = globalThis as typeof globalThis & {
   __codeRewindPreviewHandler?: () => Promise<object>;
   __codeRewindCommitHandler?: () => Promise<object>;
   __workspaceFileRevertUndoHandler?: () => Promise<object>;
+  __conversationRewindPreviewHandler?: () => Promise<object>;
+  __conversationRewindCommitHandler?: () => Promise<object>;
+  __conversationRewindUndoHandler?: () => Promise<object>;
+  __tauriHistoryMessages?: Array<{ role: string; content: string }>;
+  __historyGate?: Promise<void>;
   __tauriBridgeCalls?: Array<{ name: string; args: Record<string, unknown> }>;
 };
 state.__workbenchSessions = [{ sessionId: "tauri-code-rewind", title: "回滚测试", workspaceRoot: "/tmp/ws" }];
@@ -34,6 +39,24 @@ state.__codeRewindPreviewHandler = async () => ({
 });
 state.__codeRewindCommitHandler = async () => ({ ok: true, transactionId: "tx-code", undoAvailable: true, writtenCount: 2, deletedCount: 0 });
 state.__workspaceFileRevertUndoHandler = async () => ({ ok: true, undoAvailable: false, writtenCount: 2, deletedCount: 0 });
+state.__tauriHistoryMessages = [
+  { role: "system", content: "system" }, { role: "user", content: "start" },
+  { role: "assistant", content: "first answer" }, { role: "user", content: "edit two files" },
+  { role: "assistant", content: "later answer" },
+];
+state.__conversationRewindPreviewHandler = async () => ({ planId: "plan-conversation", turn: 1, canConversation: true });
+state.__conversationRewindCommitHandler = async () => {
+  state.__tauriHistoryMessages = state.__tauriHistoryMessages?.slice(0, 3);
+  return { ok: true, conversationForked: true, headId: "rewind-head" };
+};
+state.__conversationRewindUndoHandler = async () => {
+  state.__tauriHistoryMessages = [
+    { role: "system", content: "system" }, { role: "user", content: "start" },
+    { role: "assistant", content: "first answer" }, { role: "user", content: "edit two files" },
+    { role: "assistant", content: "later answer" },
+  ];
+  return { ok: true, conversationForked: false };
+};
 
 const React = await import("react");
 const { act } = React;
@@ -69,5 +92,26 @@ check(commit?.args.confirmPartialCoverage === true && commit.args.planId === "pl
 check(document.body.textContent?.includes("Workspace files restored"), "success should be visible");
 await act(async () => { click(button("Undo workspace restore")); await settle(); await settle(); });
 check(state.__tauriBridgeCalls?.some(call => call.name === "bridge_workspace_file_revert_undo" && call.args.transactionId === "tx-code"), "undo should target the committed transaction");
+state.__conversationRewindPreviewHandler = async () => ({ turn: 1, canConversation: false, disabledReason: "legacy session format" });
+await act(async () => { click(button("Rewind conversation")); await settle(); });
+check(document.body.textContent?.includes("This conversation cannot be rewound here"), "unsupported session should explain the disabled action");
+check(!button("Create conversation version"), "unsupported session must not offer commit");
+state.__conversationRewindPreviewHandler = async () => ({ planId: "plan-conversation", turn: 1, canConversation: true });
+await act(async () => { click(button("Rewind conversation")); await settle(); });
+check(document.body.textContent?.includes("Workspace files stay as they are"), "conversation preview should explain file scope");
+check(!state.__tauriBridgeCalls?.some(call => call.name === "bridge_conversation_rewind_commit"), "conversation preview must not commit");
+await act(async () => { click(button("Create conversation version")); await settle(); await settle(); });
+check(state.__tauriBridgeCalls?.some(call => call.name === "bridge_conversation_rewind_commit" && call.args.planId === "plan-conversation"), "conversation commit should use previewed plan");
+check(!document.body.textContent?.includes("later answer"), "conversation rewind should refresh the visible history");
+await act(async () => { click(button("Return to previous conversation")); await settle(); await settle(); });
+check(state.__tauriBridgeCalls?.some(call => call.name === "bridge_conversation_rewind_undo" && call.args.headId === "rewind-head"), "conversation undo should target the committed head");
+check(document.body.textContent?.includes("later answer"), "conversation undo should refresh the original history");
+state.__historyGate = Promise.reject(new Error("history unavailable"));
+void state.__historyGate.catch(() => {});
+await act(async () => { click(button("Rewind conversation")); await settle(); });
+await act(async () => { click(button("Create conversation version")); await settle(); await settle(); });
+check(!document.body.textContent?.includes("later answer"), "failed history refresh must not keep the old conversation visible");
+check(document.body.textContent?.includes("history unavailable"), "failed history refresh should explain the missing transcript");
+state.__historyGate = undefined;
 await act(async () => { root.unmount(); });
 process.stdout.write("tauri code rewind UI: passed\n");

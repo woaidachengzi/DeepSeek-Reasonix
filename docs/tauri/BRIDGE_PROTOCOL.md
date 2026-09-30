@@ -64,6 +64,9 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 检查点列表 | `POST /v1/sessions/{sessionId}:checkpoints` | 只读；最多返回最近 50 个检查点，提示词预览有长度限制 |
 | 多文件代码回滚预览 | `POST /v1/sessions/{sessionId}:code-rewind-preview` | 只读；返回该轮及以后受影响的文件、冲突与覆盖缺口 |
 | 多文件代码回滚提交 | `POST /v1/sessions/{sessionId}:code-rewind-commit` | `X-Reasonix-Request-ID` 去重；只接受 `code` 方案；项目覆盖缺口须显式确认，提交重新校验文件 |
+| 对话回滚预览 | `POST /v1/sessions/{sessionId}:conversation-rewind-preview` | 只读；只允许同一 transcript 内可切换 head 的会话，旧格式返回禁用原因 |
+| 对话回滚提交 | `POST /v1/sessions/{sessionId}:conversation-rewind-commit` | `X-Reasonix-Request-ID` 去重；只接受 `conversation` 方案，在同一 transcript 创建新 head，文件不变 |
+| 返回原对话 | `POST /v1/sessions/{sessionId}:conversation-rewind-undo` | `X-Reasonix-Request-ID` 去重；只接受当前尚未追加消息的 rewind head ID |
 | 提交 | `POST /v1/sessions/{sessionId}:submit` | `X-Reasonix-Request-ID` 去重 |
 | 取消 | `POST /v1/sessions/{sessionId}:cancel` | 是 |
 | 工具审批 | `POST /v1/sessions/{sessionId}:approve` | 可安全重试 |

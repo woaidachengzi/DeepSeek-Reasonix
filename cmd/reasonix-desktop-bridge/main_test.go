@@ -80,31 +80,33 @@ func TestBridgeTokenDoesNotFallBackToEnvironment(t *testing.T) {
 }
 
 type bridgeTestRuntime struct {
-	path                string
-	title               string
-	state               string
-	modelRef            string
-	history             []desktopbridge.HistoryMessage
-	submits             []string
-	attachCalls         int
-	renameCalls         int
-	deleteCalls         int
-	cancelCalls         int
-	shutdownCalls       int
-	workspace           desktopbridge.WorkspaceList
-	preview             desktopbridge.WorkspaceFilePreview
-	changes             desktopbridge.WorkspaceChanges
-	revertCommits       int
-	revertUndos         int
-	codeRewindConfirmed bool
-	metrics             desktopbridge.SessionMetrics
-	balance             *desktopbridge.SessionBalance
-	balanceErr          error
-	balanceCalls        int
-	mcpActions          []string
-	mcpAuthFlow         desktopbridge.MCPAuthFlow
-	mcpAuthClears       []string
-	recall              desktopbridge.MemoryRecallView
+	path                      string
+	title                     string
+	state                     string
+	modelRef                  string
+	history                   []desktopbridge.HistoryMessage
+	submits                   []string
+	attachCalls               int
+	renameCalls               int
+	deleteCalls               int
+	cancelCalls               int
+	shutdownCalls             int
+	workspace                 desktopbridge.WorkspaceList
+	preview                   desktopbridge.WorkspaceFilePreview
+	changes                   desktopbridge.WorkspaceChanges
+	revertCommits             int
+	revertUndos               int
+	codeRewindConfirmed       bool
+	conversationRewindCommits int
+	conversationRewindUndos   int
+	metrics                   desktopbridge.SessionMetrics
+	balance                   *desktopbridge.SessionBalance
+	balanceErr                error
+	balanceCalls              int
+	mcpActions                []string
+	mcpAuthFlow               desktopbridge.MCPAuthFlow
+	mcpAuthClears             []string
+	recall                    desktopbridge.MemoryRecallView
 }
 
 func (r *bridgeTestRuntime) SessionPath() string                          { return r.path }
@@ -193,6 +195,17 @@ func (r *bridgeTestRuntime) CommitCodeRewind(_ string, confirmed bool) (desktopb
 	r.revertCommits++
 	r.codeRewindConfirmed = confirmed
 	return desktopbridge.WorkspaceFileRevertResult{OK: true, WrittenCount: 1}, nil
+}
+func (r *bridgeTestRuntime) PrepareConversationRewind(turn int) (desktopbridge.WorkspaceConversationRewindPlan, error) {
+	return desktopbridge.WorkspaceConversationRewindPlan{PlanID: "plan-conversation", Turn: turn, CanConversation: true}, nil
+}
+func (r *bridgeTestRuntime) CommitConversationRewind(string) (desktopbridge.WorkspaceConversationRewindResult, error) {
+	r.conversationRewindCommits++
+	return desktopbridge.WorkspaceConversationRewindResult{OK: true, ConversationForked: true, HeadID: "rewind-head"}, nil
+}
+func (r *bridgeTestRuntime) UndoConversationRewind(string) (desktopbridge.WorkspaceConversationRewindResult, error) {
+	r.conversationRewindUndos++
+	return desktopbridge.WorkspaceConversationRewindResult{OK: true}, nil
 }
 func (r *bridgeTestRuntime) Submit(input string)                                       { r.submits = append(r.submits, input) }
 func (r *bridgeTestRuntime) Cancel()                                                   { r.cancelCalls++ }

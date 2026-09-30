@@ -149,4 +149,127 @@ func TestCodeRewindRequiresCoverageConfirmationAndPreservesConversation(t *testi
 			t.Fatalf("undone %s = %q err=%v", name, content, err)
 		}
 	}
+	conversationPreview, err := runtime.PrepareConversationRewind(1)
+	if err != nil || !conversationPreview.CanConversation || conversationPreview.PlanID == "" {
+		t.Fatalf("conversation preview = %+v err=%v", conversationPreview, err)
+	}
+	if result, err := runtime.CommitConversationRewind(plan.PlanID); err == nil || result.OK {
+		t.Fatalf("code plan accepted by conversation endpoint: result=%+v err=%v", result, err)
+	}
+	conversationResult, err := runtime.CommitConversationRewind(conversationPreview.PlanID)
+	if err != nil || !conversationResult.OK || !conversationResult.ConversationForked || conversationResult.HeadID == "" {
+		t.Fatalf("conversation rewind = %+v err=%v", conversationResult, err)
+	}
+	if controller.SessionPath() != sessionPath || len(session.Snapshot()) != 3 {
+		t.Fatalf("conversation rewind changed path or kept later messages: path=%q messages=%d", controller.SessionPath(), len(session.Snapshot()))
+	}
+	if history := runtime.History(); len(history) != 2 || history[1].Content != "done" {
+		t.Fatalf("conversation history after rewind = %+v", history)
+	}
+	if heads, err := agent.ListSessionHeads(sessionPath); err != nil || len(heads) != 2 || !heads[1].Selected {
+		t.Fatalf("conversation rewind heads = %+v err=%v", heads, err)
+	}
+	for _, name := range []string{"a.txt", "b.txt"} {
+		content, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil || string(content) != "after" {
+			t.Fatalf("conversation rewind changed %s = %q err=%v", name, content, err)
+		}
+	}
+	if result, err := runtime.UndoConversationRewind("wrong-head"); err == nil || result.OK {
+		t.Fatalf("wrong head undid conversation: result=%+v err=%v", result, err)
+	}
+	if result, err := runtime.UndoConversationRewind(conversationResult.HeadID); err != nil || !result.OK {
+		t.Fatalf("undo conversation = %+v err=%v", result, err)
+	}
+	if !reflect.DeepEqual(session.Snapshot(), conversationBefore) || controller.SessionPath() != sessionPath {
+		t.Fatal("undo did not restore the original conversation on the same path")
+	}
+	if history := runtime.History(); len(history) != 4 || history[3].Content != "done" {
+		t.Fatalf("conversation history after undo = %+v", history)
+	}
+	reloaded, err := agent.LoadSession(sessionPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reloaded.Snapshot()) != len(conversationBefore) {
+		t.Fatalf("persisted conversation after undo = %d messages", len(reloaded.Snapshot()))
+	}
+	if result, err := runtime.UndoConversationRewind(conversationResult.HeadID); err == nil || result.OK {
+		t.Fatalf("repeated undo succeeded: result=%+v err=%v", result, err)
+	}
+	continuedPlan, err := runtime.PrepareConversationRewind(1)
+	if err != nil || !continuedPlan.CanConversation {
+		t.Fatalf("continued conversation preview = %+v err=%v", continuedPlan, err)
+	}
+	continued, err := runtime.CommitConversationRewind(continuedPlan.PlanID)
+	if err != nil || !continued.OK {
+		t.Fatalf("continued conversation rewind = %+v err=%v", continued, err)
+	}
+	session.Add(provider.Message{Role: provider.RoleUser, Content: "continue here"})
+	if err := controller.Snapshot(); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := runtime.UndoConversationRewind(continued.HeadID); err == nil || result.OK {
+		t.Fatalf("continued head was undone: result=%+v err=%v", result, err)
+	}
+	if controller.SessionPath() != sessionPath || session.Snapshot()[3].Content != "continue here" {
+		t.Fatal("failed undo disturbed the continued conversation")
+	}
+}
+
+func TestConversationRewindRejectsFileBranchPolicyBeforeMutation(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "session.jsonl")
+	session := agent.NewSession("sys")
+	session.Add(provider.Message{Role: provider.RoleUser, Content: "hello"})
+	if err := session.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	ag := agent.New(nil, nil, session, agent.Options{}, event.Discard)
+	controller := control.New(control.Options{
+		Executor: ag, Runner: ag, Sink: event.Discard, SessionDir: dir,
+		SessionPath: path, FileBranchesOnly: true,
+	})
+	t.Cleanup(controller.Close)
+	runtime := &controllerRuntime{controller: controller}
+	preview, err := runtime.PrepareConversationRewind(0)
+	if err != nil || preview.CanConversation || preview.DisabledReason == "" || preview.PlanID != "" {
+		t.Fatalf("file-branch preview = %+v err=%v", preview, err)
+	}
+	if result, err := runtime.CommitConversationRewind("valid-plan-id"); err == nil || result.OK {
+		t.Fatalf("file-branch commit = %+v err=%v", result, err)
+	}
+	if controller.SessionPath() != path {
+		t.Fatalf("file-branch policy changed session path to %q", controller.SessionPath())
+	}
+}
+
+func TestConversationRewindPreviewDisablesSchemaOneSession(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "legacy.jsonl")
+	legacy := "{\"role\":\"system\",\"content\":\"sys\"}\n{\"role\":\"user\",\"content\":\"hello\"}\n"
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	session, err := agent.LoadSession(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := session.Head(); ok {
+		t.Fatal("legacy fixture unexpectedly has a schema-2 head")
+	}
+	ag := agent.New(nil, nil, session, agent.Options{}, event.Discard)
+	controller := control.New(control.Options{Executor: ag, Runner: ag, Sink: event.Discard, SessionDir: dir, SessionPath: path})
+	t.Cleanup(controller.Close)
+	runtime := &controllerRuntime{controller: controller}
+	preview, err := runtime.PrepareConversationRewind(0)
+	if err != nil || preview.CanConversation || preview.PlanID != "" || preview.DisabledReason == "" {
+		t.Fatalf("legacy conversation preview = %+v err=%v", preview, err)
+	}
+	if result, err := runtime.CommitConversationRewind("valid-plan-id"); err == nil || result.OK {
+		t.Fatalf("legacy conversation commit = %+v err=%v", result, err)
+	}
+	if controller.SessionPath() != path || len(session.Snapshot()) != 2 {
+		t.Fatal("legacy conversation changed despite disabled preview")
+	}
 }
