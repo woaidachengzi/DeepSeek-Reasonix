@@ -153,3 +153,11 @@ bundle ID 的测试 `.app`；托管和显式 profile 的真实启动 smoke 均�
 前端构建、Tauri 回归、36 项打包契约、161 项真实 bridge Rust 回归和严格 clippy 通过。
 本地 ad-hoc 签名校验及两种档案的真实包级 smoke 通过，增加只读 macOS 原生通知授权查询；
 未执行授权弹窗、真实通知显示或点击，相关 UI 验收继续保留。
+
+2026-09-30 Global 工作区切片从干净提交
+`065b1ae5f676e38a1f84a2a1bfab8f08a85bd7cc` 构建正式 Preview `.app`。
+Rust 163 项、Go bridge/运行时/协议、前端 Tauri 回归、生产构建、严格 clippy、Go vet
+与 Wails Global 能力基线通过；严格本地 ad-hoc 签名及两种档案包级 smoke 通过，
+增加实际 Global 会话目录解析及 `0700` 权限检查。未执行外部应用 UI 交互。
+旧 rootless 会话在旧启动目录创建的文件不自动搬迁，其文件引用/附件/检查点兼容
+仍需验收，详见迁移清单。
