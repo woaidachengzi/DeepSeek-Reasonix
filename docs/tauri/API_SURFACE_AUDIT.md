@@ -111,6 +111,8 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 - 本机 macOS 27.0.1 实际探测停在焦点前提：`firstResponderAccepted=true, keyWindow=false, applicationActive=false, windowVisible=true, applicationHidden=false`。先使用产品共享托盘/Dock/单实例恢复路径并等待状态，再在 opt-in 探测中加入当前 [NSApplication activate](https://developer.apple.com/documentation/appkit/nsapplication/activate%28%29?changes=la%2Cla) 请求，结果仍相同；没有跳过激活条件或继续执行编辑动作。此结果不能判定产品编辑缺陷，也不能标记 responder 编辑或物理按键通过；应待实际桌面能够激活 Preview 后复验，避免在相同外部状态下重复重试。
 - 最新源码的真实 Go bridge Rust 189 项通过、2 项默认忽略，严格 clippy、格式和 Python 语法通过；默认 34 个原生场景与干净提交完整包另行复验。独立 `--edit` 保持显式失败门禁，未作为已通过场景加入默认统计或 CI；macOS D 与 E 整体尚未完成。
 - 随后从干净提交 `f7c30746ff42aeafc6f09a8140def8c0a5ab8277` 完整构建 arm64 macOS `.app`，构建源码标识无 dirty 标记；前端生产门禁/现有体积预算、Go sidecar、Rust host 与严格本地 ad-hoc 签名通过。同一包的默认 34 个原生场景、三个配置导入/重启场景及两种档案生命周期全部通过，实际通知授权只读查询、Global 工作区、私有凭据身份、鉴权拒绝和退出无残留同时核对；构建与验收后工作树干净。此轮完整包复核没有重复运行已被同一激活条件阻断的独立编辑门禁，也未执行正式 Developer ID 签名/公证。
+- 对首实例启动方式作独立比较：复用干净代码提交 `1cb40d135b5e3be7fed9d7134d364d518223d64c` 的同一 `.app`，以 `/usr/bin/open -n -W` 经 LaunchServices 启动首个宿主，传入私有 HOME/TMPDIR/core/cache 和 opt-in 阶段。通过私有 ready 根目录对应的 sidecar 父 PID 确认实际宿主，继续运行现有鉴权、档案环境和窗口断言；运行前拒绝已运行 Preview 及 launchd 的非空 state override。窗口 exercise、最大化重启和普通窗口重启三个前置阶段通过，`menu-editing` 仍报告相同的 inactive/key-window 状态，未执行后续编辑动作。失败路径确认原剪贴板全部格式恢复，测试宿主与 sidecar 已清理。这排除了“仅将首实例改为 LaunchServices 启动即可通过”的假设，不能据此排除应用缺陷或断定系统权限是原因。
+- 本地包 Info.plist 未设置 `LSUIElement`/`LSBackgroundOnly`，锁定的 Tao 0.35.3 默认激活策略为 Regular，产品源码没有覆盖；这只是静态检查，未证明实际应用已激活。此次比较没有修改产品、放宽焦点条件、增加默认通过场景或推进 E；下一次交互验收应先确认实际桌面能将 Preview 激活并成为 key window。
 
 #### D：macOS 系统剪贴板与 WKWebView 权限（2026-10-01）
 
