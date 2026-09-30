@@ -54,6 +54,7 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 删除 MCP 服务器 | `DELETE /v1/mcp/servers?workspaceRoot=<path>` | 否；不存在返回 `not_found` |
 | 可见历史 | `GET /v1/sessions/{sessionId}/history` | 是 |
 | 附加文件 | `POST /v1/sessions/{sessionId}:attach` | `X-Reasonix-Request-ID` 去重 |
+| 当前会话本地工作区 | `GET /v1/sessions/{sessionId}/workspace-target` | 只读且仅允许当前会话；返回 runtime 实际目录供 Rust 原生打开，Global 项目归属仍为空 |
 | 工作区目录（逐层） | `POST /v1/sessions/{sessionId}:workspace` | 是 |
 | 工作区文件预览 | `POST /v1/sessions/{sessionId}:workspace-file` | 是；仅返回受限文本或二进制标记 |
 | 工作区变更（Git + 本轮会话检查点） | `POST /v1/sessions/{sessionId}:workspace-changes` | 是；来源显式标记 |
@@ -153,3 +154,17 @@ v1 的 `payload` 保持为有类型对象但 Schema 暂允许附加字段，以�
 wire 镜像，`-check` 在 CI 中拒绝漂移。Go 侧 DTO 由其自身持有：Go 是 wire 格式的
 生产者，Schema 描述它而非反向生成它。host 自身的 command 载荷（`BridgeStatus`、
 `BridgeSnapshot`）不属于 wire 协议，仍手写。
+
+## Global 会话本地工作区
+
+未指定 `workspaceRoot` 的 Preview 会话使用当前 `REASONIX_HOME/global-workspace`，
+目录按需创建为 `0700`，已有普通目录保留，文件或符号链接拒绝作为隐式默认目录。
+与 Wails Global 工作区约定一致，默认托管档案仍位于 Preview 私有数据根；
+不会把进程启动目录或安装目录作为默认项目。显式项目的目录保持原选择。
+
+`session.workspaceRoot` 与会话目录中的 root 仍表示项目归属；Global 保持空值，
+不把此实现目录写进侧栏项目、会话身份记录或导入元数据。
+原生打开采用新只读 `workspace-target`，在 runtime ownership 锁内查询实际目录，
+拒绝未知、已切换、关闭或未实现此能力的 runtime，且不创建/切换会话。
+响应为 `protocolVersion/sessionId/workspaceRoot`；Rust 校验版本、身份、绝对路径和
+当前目录存在性，WebView 只提交会话 ID 与固定安装应用 ID。

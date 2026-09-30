@@ -562,6 +562,7 @@ pub use crate::protocol_generated::{
     BridgeWorkspaceFileResponse, BridgeWorkspaceFileRevertCommitRequest,
     BridgeWorkspaceFileRevertPlanResponse, BridgeWorkspaceFileRevertResultResponse,
     BridgeWorkspaceFileRevertUndoRequest, BridgeWorkspaceListResponse, BridgeWorkspaceRequest,
+    BridgeWorkspaceTargetResponse,
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -3689,6 +3690,23 @@ impl BridgeSupervisor {
         validate_attachment(envelope.attachment)
     }
 
+    pub fn workspace_target(
+        &self,
+        session_id: &str,
+    ) -> Result<BridgeWorkspaceTargetResponse, String> {
+        let session_id = session_path_component(session_id)?;
+        let response = self.request_json(
+            "GET",
+            &format!("/v1/sessions/{session_id}/workspace-target"),
+            None,
+            None,
+        )?;
+        let target: BridgeWorkspaceTargetResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        validate_workspace_target(&target, &session_id)?;
+        Ok(target)
+    }
+
     pub fn workspace(
         &self,
         request: WorkspaceRequest,
@@ -4744,6 +4762,22 @@ fn decode_chunked_body(mut body: &[u8]) -> Result<Vec<u8>, String> {
     }
 }
 
+fn validate_workspace_target(
+    target: &BridgeWorkspaceTargetResponse,
+    requested: &str,
+) -> Result<(), String> {
+    if target.protocol_version != u64::from(PROTOCOL_VERSION)
+        || target.session_id != requested
+        || target.workspace_root.trim().is_empty()
+        || target.workspace_root.len() > 4096
+        || target.workspace_root.chars().any(char::is_control)
+        || !Path::new(&target.workspace_root).is_absolute()
+    {
+        return Err("desktop bridge workspace target is invalid; reload the session".into());
+    }
+    Ok(())
+}
+
 fn session_path_component(session_id: &str) -> Result<String, String> {
     let session_id = session_id.trim();
     if session_id.is_empty()
@@ -5168,6 +5202,7 @@ mod tests {
         SkillsSettingsChange, SkillsSettingsView, SubagentSettingsChange, SubagentSettingsView,
         SubmitRequest, PROTOCOL_VERSION,
     };
+    use super::{validate_workspace_target, BridgeWorkspaceTargetResponse};
     use crate::SandboxSettingsView;
     use crate::{session_shadow, workbench_catalog::WorkbenchSession};
     use serde_json::json;
@@ -5180,6 +5215,7 @@ mod tests {
         thread,
         time::Duration,
     };
+    use std::{fs, path::Path};
 
     #[test]
     fn sandbox_settings_wire_view_preserves_shell_inventory() {
@@ -6189,6 +6225,92 @@ mod tests {
         assert!(std::fs::read_to_string(home.path().join("config.toml"))
             .unwrap()
             .contains("future = \"keep\""));
+    }
+
+    #[test]
+    fn workspace_target_rejects_untrusted_response_fields() {
+        let root = tempfile::tempdir().unwrap();
+        let valid = json!({ "protocolVersion": 1, "sessionId": "current", "workspaceRoot": root.path().to_str().unwrap() });
+        let target: BridgeWorkspaceTargetResponse = serde_json::from_value(valid.clone()).unwrap();
+        assert!(validate_workspace_target(&target, "current").is_ok());
+        for (key, value) in [
+            ("protocolVersion", json!(2)),
+            ("sessionId", json!("different")),
+            ("workspaceRoot", json!("relative")),
+            ("workspaceRoot", json!("")),
+            ("workspaceRoot", json!("/private/\nroot")),
+            ("workspaceRoot", json!("/".repeat(4097))),
+        ] {
+            let mut invalid = valid.clone();
+            invalid[key] = value;
+            let target: BridgeWorkspaceTargetResponse = serde_json::from_value(invalid).unwrap();
+            assert!(validate_workspace_target(&target, "current").is_err());
+        }
+    }
+
+    #[test]
+    fn real_bridge_workspace_target_resolves_global_project_restart_and_unowned_sessions() {
+        let Some(binary) = bridge_under_test() else {
+            return;
+        };
+        let _env = crate::test_env::guard();
+        let profile = tempfile::tempdir().unwrap();
+        env::set_var("REASONIX_HOME", profile.path());
+        env::set_var("REASONIX_STATE_HOME", profile.path());
+        env::set_var("REASONIX_CACHE_HOME", profile.path());
+        let supervisor = BridgeSupervisor::with_binary(binary);
+        supervisor.start().unwrap();
+        let global = OpenSessionRequest {
+            session_id: "global-opener-test".into(),
+            workspace_root: None,
+        };
+        let session = supervisor.open_session(global.clone()).unwrap();
+        assert!(
+            session.workspace_root.is_none(),
+            "Global remains unassigned to a project"
+        );
+        let target = supervisor.workspace_target(&session.id).unwrap();
+        assert_eq!(
+            Path::new(&target.workspace_root),
+            profile
+                .path()
+                .join("global-workspace")
+                .canonicalize()
+                .unwrap()
+        );
+        assert!(supervisor.workspace_target("unowned").is_err());
+        let project = profile.path().join("project");
+        fs::create_dir(&project).unwrap();
+        supervisor
+            .switch_session(OpenSessionRequest {
+                session_id: "project-opener-test".into(),
+                workspace_root: Some(project.to_string_lossy().into()),
+            })
+            .unwrap();
+        assert_eq!(
+            Path::new(
+                &supervisor
+                    .workspace_target("project-opener-test")
+                    .unwrap()
+                    .workspace_root
+            ),
+            project.canonicalize().unwrap()
+        );
+        assert!(
+            supervisor.workspace_target(&session.id).is_err(),
+            "old session cannot expose the new runtime path"
+        );
+        supervisor.stop().unwrap();
+        supervisor.start().unwrap();
+        supervisor.open_session(global).unwrap();
+        assert_eq!(
+            supervisor
+                .workspace_target(&session.id)
+                .unwrap()
+                .workspace_root,
+            target.workspace_root
+        );
+        supervisor.stop().unwrap();
     }
 
     #[test]

@@ -218,8 +218,14 @@ def smoke_once(host_binary, sidecar_binary, identifier, managed):
             notification_status = json.loads((temp / "reasonix-native-notification-smoke.json").read_text())
             if notification_status.get("permission") not in {"not_determined", "denied", "granted", "provisional"} or notification_status.get("clickSupported") is not True:
                 raise RuntimeError("packaged native notification permission query failed")
+            workspace_target = json.loads((temp / "reasonix-global-workspace-smoke.json").read_text())
+            global_workspace = expected_home / "global-workspace"
+            if workspace_target.get("protocolVersion") != 1 or workspace_target.get("sessionId") != "tauri-package-workspace-smoke" or workspace_target.get("workspaceRoot") != str(global_workspace.resolve()):
+                raise RuntimeError("packaged Global workspace escaped the current profile")
+            if not global_workspace.is_dir() or global_workspace.is_symlink() or global_workspace.stat().st_mode & 0o777 != 0o700:
+                raise RuntimeError("packaged Global workspace is not a private directory")
             profile = "managed" if managed else "explicit"
-            print(f"packaged Preview {profile} profile, private credential identity, native notification authorization, sidecar readiness, and shutdown: OK")
+            print(f"packaged Preview {profile} profile, private credential identity, native notification authorization, Global workspace, sidecar readiness, and shutdown: OK")
             return credential_identity
         finally:
             if host.poll() is None:

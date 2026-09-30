@@ -1,10 +1,11 @@
 //! Native document actions. Renderer input is a path or an installed-app ID,
 //! never an executable name or command line. Save destinations come from the
 //! OS dialog and are replaced atomically without truncating the source.
-use crate::bridge::{BridgeSession, BridgeSupervisor, SessionRequest};
+use crate::bridge::BridgeSupervisor;
 use crate::opener_catalog::{
     cached_views, installed_openers, resolved_preference, selected_opener, OpenersView,
 };
+use crate::protocol_generated::BridgeWorkspaceTargetResponse;
 use std::{
     fs::{self, File},
     io,
@@ -389,18 +390,18 @@ fn launch_with_opener(
         .map_err(|error| error.to_string())
 }
 
-fn session_workspace(session: BridgeSession, requested: &str) -> Result<Option<PathBuf>, String> {
-    if session.id != requested {
+fn session_workspace(
+    target: BridgeWorkspaceTargetResponse,
+    requested: &str,
+) -> Result<PathBuf, String> {
+    if target.session_id != requested {
         return Err("session workspace identity changed; reload the session".into());
     }
-    let Some(root) = session.workspace_root.filter(|root| !root.is_empty()) else {
-        return Ok(None);
-    };
-    let root = document_path(&root, true)?;
+    let root = document_path(&target.workspace_root, true)?;
     if !root.is_dir() {
         return Err("session workspace is no longer a directory; choose another workspace".into());
     }
-    Ok(Some(root))
+    Ok(root)
 }
 
 #[tauri::command]
@@ -411,16 +412,7 @@ pub async fn workspace_external_openers(
     main_window(&window)?;
     tauri::async_runtime::spawn_blocking(move || {
         let supervisor = window.state::<BridgeSupervisor>();
-        let snapshot = supervisor.snapshot(SessionRequest {
-            session_id: session_id.clone(),
-        })?;
-        if session_workspace(snapshot.session, &session_id)?.is_none() {
-            return Ok(OpenersView {
-                openers: vec![],
-                preferred: String::new(),
-                workspace_openable: false,
-            });
-        }
+        session_workspace(supervisor.workspace_target(&session_id)?, &session_id)?;
         let preferred = supervisor.desktop_preferences()?.external_opener;
         let openers = cached_views();
         let selected = openers
@@ -448,13 +440,10 @@ pub async fn open_workspace_external(
 ) -> Result<(), String> {
     main_window(&window)?;
     tauri::async_runtime::spawn_blocking(move || {
-        let snapshot = window
+        let target = window
             .state::<BridgeSupervisor>()
-            .snapshot(SessionRequest {
-                session_id: session_id.clone(),
-            })?;
-        let root = session_workspace(snapshot.session, &session_id)?
-            .ok_or("session has no local workspace; choose a workspace first")?;
+            .workspace_target(&session_id)?;
+        let root = session_workspace(target, &session_id)?;
         launch_with_opener(&window, root, &id)
     })
     .await
@@ -469,23 +458,18 @@ mod tests {
     #[test]
     fn workspace_launch_uses_authoritative_session_identity_and_existing_directory() {
         let root = tempfile::tempdir().unwrap();
-        let session = |id: &str, workspace: Option<String>| BridgeSession {
-            id: id.into(),
-            path: "/session".into(),
-            state: "idle".into(),
-            title: None,
-            model_ref: None,
-            workspace_root: workspace,
+        let session = |id: &str, workspace: Option<String>| BridgeWorkspaceTargetResponse {
+            protocol_version: 1,
+            session_id: id.into(),
+            workspace_root: workspace.unwrap_or_default(),
         };
         let path = root.path().to_str().unwrap().to_string();
         assert_eq!(
             session_workspace(session("source", Some(path.clone())), "source").unwrap(),
-            Some(root.path().canonicalize().unwrap())
+            root.path().canonicalize().unwrap()
         );
         assert!(session_workspace(session("switched", Some(path.clone())), "source").is_err());
-        assert!(session_workspace(session("source", None), "source")
-            .unwrap()
-            .is_none());
+        assert!(session_workspace(session("source", None), "source").is_err());
         let file = root.path().join("document.md");
         fs::write(&file, "document").unwrap();
         assert!(session_workspace(

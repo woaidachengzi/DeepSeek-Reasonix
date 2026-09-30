@@ -24,6 +24,7 @@
     { "$ref": "#/$defs/attachmentResponse" },
     { "$ref": "#/$defs/workspaceRequest" },
     { "$ref": "#/$defs/workspaceListResponse" },
+    { "$ref": "#/$defs/workspaceTargetResponse" },
     { "$ref": "#/$defs/workspaceFileRequest" },
     { "$ref": "#/$defs/workspaceFilePreview" },
     { "$ref": "#/$defs/workspaceFileResponse" },
@@ -438,6 +439,17 @@
         "attachment": { "$ref": "#/$defs/attachment" }
       },
       "additionalProperties": false
+    },
+    "workspaceTargetResponse": {
+      "type": "object",
+      "required": ["protocolVersion", "sessionId", "workspaceRoot"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "sessionId": { "$ref": "#/$defs/sessionId" },
+        "workspaceRoot": { "type": "string", "minLength": 1, "maxLength": 4096 }
+      },
+      "additionalProperties": false,
+      "title": "BridgeWorkspaceTargetResponse"
     },
     "workspaceRequest": {
       "title": "BridgeWorkspaceRequest",

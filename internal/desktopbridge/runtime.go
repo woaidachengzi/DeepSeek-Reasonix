@@ -47,6 +47,17 @@ type SessionView struct {
 	State         string `json:"state"`
 }
 
+// WorkspaceTarget is the live runtime's directory, separate from project
+// catalog metadata: a Global conversation has no project assignment.
+type WorkspaceTarget struct {
+	SessionID     string `json:"sessionId"`
+	WorkspaceRoot string `json:"workspaceRoot"`
+}
+
+type RuntimeWorkspaceProvider interface {
+	LocalWorkspace() (string, error)
+}
+
 // HistoryMessage is the deliberately small, display-safe transcript projection
 // the bridge may return to a desktop host. It must never contain provider
 // reasoning, tool arguments/results, system prompts, image data, or other
@@ -883,9 +894,34 @@ func (m *RuntimeManager) AttachFile(sessionID, path string) (AttachmentView, err
 	return m.runtime.AttachFile(path)
 }
 
-// Workspace lists one directory in the owned session workspace. Keeping the
-// manager lock across the call prevents a session switch or shutdown from
-// racing the runtime's workspace root.
+// WorkspaceTarget resolves the live runtime under the ownership lock so a
+// concurrent switch or shutdown cannot substitute another session's directory.
+func (m *RuntimeManager) WorkspaceTarget(sessionID string) (WorkspaceTarget, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return WorkspaceTarget{}, ErrClosed
+	}
+	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
+		return WorkspaceTarget{}, ErrSessionNotFound
+	}
+	provider, ok := m.runtime.(RuntimeWorkspaceProvider)
+	if !ok {
+		return WorkspaceTarget{}, ErrInvalidWorkspacePath
+	}
+	root, err := provider.LocalWorkspace()
+	if err != nil {
+		return WorkspaceTarget{}, err
+	}
+	if strings.TrimSpace(root) == "" {
+		return WorkspaceTarget{}, ErrInvalidWorkspacePath
+	}
+	return WorkspaceTarget{SessionID: m.view.ID, WorkspaceRoot: root}, nil
+}
+
+// Workspace lists one directory in the owned session workspace under the same
+// lock as session switching and shutdown.
 func (m *RuntimeManager) Workspace(sessionID, path string) (WorkspaceList, error) {
 	sessionID = strings.TrimSpace(sessionID)
 	m.mu.Lock()

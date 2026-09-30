@@ -713,3 +713,11 @@ pub struct BridgeWorkspaceListResponse {
 pub struct BridgeWorkspaceRequest {
     pub path: String,
 }
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceTargetResponse {
+    pub protocol_version: u64,
+    pub session_id: String,
+    pub workspace_root: String,
+}

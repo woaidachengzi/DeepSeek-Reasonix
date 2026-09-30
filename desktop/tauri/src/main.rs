@@ -3759,6 +3759,30 @@ fn main() {
                         );
                     }
                     let path = marker.ok_or("notification smoke marker directory unavailable")?;
+                    let supervisor = handle.state::<BridgeSupervisor>();
+                    let session = supervisor.open_session(OpenSessionRequest {
+                        session_id: "tauri-package-workspace-smoke".into(),
+                        workspace_root: None,
+                    })?;
+                    let target = supervisor.workspace_target(&session.id)?;
+                    let expected = handle
+                        .state::<PreviewProfile>()
+                        .home()
+                        .join("global-workspace")
+                        .canonicalize()
+                        .map_err(|_| "Global smoke workspace unavailable")?;
+                    if session.workspace_root.is_some()
+                        || std::path::Path::new(&target.workspace_root) != expected
+                    {
+                        return Err("Global smoke workspace escaped the current profile".into());
+                    }
+                    let target_bytes = serde_json::to_vec(&target)
+                        .map_err(|_| "Global smoke status encoding failed")?;
+                    std::fs::write(
+                        path.with_file_name("reasonix-global-workspace-smoke.json"),
+                        target_bytes,
+                    )
+                    .map_err(|_| "Global smoke status write failed")?;
                     let bytes = serde_json::to_vec(&status)
                         .map_err(|_| "notification smoke status encoding failed")?;
                     std::fs::write(path, bytes)

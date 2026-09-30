@@ -540,3 +540,9 @@ export interface BridgeWorkspaceListResponse {
 export interface BridgeWorkspaceRequest {
   path: string;
 }
+
+export interface BridgeWorkspaceTargetResponse {
+  protocolVersion: number;
+  sessionId: string;
+  workspaceRoot: string;
+}

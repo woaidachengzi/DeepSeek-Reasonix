@@ -3140,7 +3140,7 @@ export function TauriSessionPreview() {
             <span data-tauri-drag-region>{session?.state === "running" ? "正在生成" : session?.state === "paused" ? "等待你的操作" : session ? "本地会话" : "Reasonix Preview"}</span>
           </div>
           <div className="tauri-topbar__actions">
-            {session?.workspaceRoot && <ExternalOpener key={session.id} tabId={session.id} dismissSignal={settingsOpen ? 1 : 0} bridge={tauriExternalOpenerBridge} />}
+            {session && <ExternalOpener key={session.id} tabId={session.id} dismissSignal={settingsOpen ? 1 : 0} bridge={tauriExternalOpenerBridge} />}
             <button type="button" className="tauri-icon-button" aria-label={t("shortcuts.action.commandPalette")} title={`${t("shortcuts.action.commandPalette")} (${formatShortcutCombo(shortcutOverrides.command_palette ?? defaultTauriShortcut("command_palette", shortcutPlatform), shortcutPlatform)})`} onClick={() => setCommandPaletteOpen(true)}><Search size={17} /></button>
             <button type="button" className="tauri-icon-button tauri-sidebar-toggle" aria-label={t(sidebarVisible ? "settings.tauriShortcut.hideSidebar" : "settings.tauriShortcut.showSidebar")} title={`${t(sidebarVisible ? "settings.tauriShortcut.hideSidebar" : "settings.tauriShortcut.showSidebar")} (${formatShortcutCombo(shortcutOverrides.toggle_sidebar ?? defaultTauriShortcut("toggle_sidebar", shortcutPlatform), shortcutPlatform)})`} aria-pressed={!sidebarVisible} onClick={() => setSidebarVisible(previous => { const next = !previous; setTauriSidebarVisible(next); return next; })}>
               {sidebarVisible ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}

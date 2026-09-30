@@ -61,6 +61,15 @@ func newControllerFactory(events *desktopbridge.EventStream) *controllerFactory 
 func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
 	opts := f.base
 	opts.WorkspaceRoot = request.WorkspaceRoot
+	if strings.TrimSpace(opts.WorkspaceRoot) == "" {
+		// Global sessions share the profile's stable workspace, as in Wails.
+		// Never expose the sidecar's incidental launch directory as a project.
+		root, err := previewGlobalWorkspace()
+		if err != nil {
+			return nil, err
+		}
+		opts.WorkspaceRoot = root
+	}
 	opts.Model = strings.TrimSpace(request.ModelRef)
 	if f.events != nil {
 		opts.Sink = f.events.Sink(request.SessionID)
@@ -400,6 +409,43 @@ type mcpOAuthFlow struct {
 
 var desktopOpenMCPAuthURL = openMCPAuthURL
 var desktopAuthorizeMCP = plugin.AuthorizeHTTPMCP
+
+func previewGlobalWorkspace() (string, error) {
+	home := appconfig.ReasonixHomeDir()
+	if strings.TrimSpace(home) == "" {
+		return "", desktopbridge.ErrInvalidWorkspacePath
+	}
+	root, err := filepath.Abs(filepath.Join(home, "global-workspace"))
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		return "", err
+	}
+	info, err := os.Lstat(root)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return "", desktopbridge.ErrInvalidWorkspacePath
+	}
+	return filepath.EvalSymlinks(root)
+}
+
+func (r *controllerRuntime) LocalWorkspace() (string, error) {
+	_, root, _, err := r.resolveWorkspacePath("")
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(root)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", desktopbridge.ErrInvalidWorkspacePath
+	}
+	return root, nil
+}
 
 func (r *controllerRuntime) SessionPath() string { return r.controller.SessionPath() }
 func (r *controllerRuntime) ModelRef() string    { return r.controller.ModelRef() }
