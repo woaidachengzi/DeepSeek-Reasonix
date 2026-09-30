@@ -96,10 +96,11 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 #### D：macOS 安装包配置导入、重启与原件保护（2026-10-01）
 
 - 新增 `smoke-profile-import.py` 和仅显式测试环境启用的原生入口；临时 HOME 内分别构造正式版和 Preview 档案，调用与设置页相同的确认入口。验证未确认时拒绝写入，配置先备份后导入，项目只复制 root/title，sessions/cache/plugins/`.env` 及旧会话/排序元数据未被复制；导入文件与备份权限为 0600，重复导入不覆盖、不增加备份，显式 `REASONIX_HOME` 不提供自动导入。
-- 实际 Go bridge 立即读取导入的 Provider/默认模型；通过实际设置接口修改 Preview 默认模型，再重启 sidecar 和完整 `.app`，修改保留且凭据档案身份稳定。外部 runner 对比 host 的初始/最终 sidecar 身份，要求原进程退出、新进程唯一、未认证请求被拒绝以及最终 sidecar/readiness 清理。正式版整个测试树的字节、权限、修改时间与原始基线一致，配置备份也保持原字节。
+- 实际 Go bridge 立即读取导入的 Provider/默认模型；通过实际设置接口修改 Preview 默认模型，再重启 sidecar 和完整 `.app`，修改保留且凭据档案身份稳定。外部 runner 对比 host 的初始/最终 sidecar 身份，要求原进程退出、新进程唯一、未认证请求被拒绝以及最终 sidecar/readiness 清理。正式版测试树的文件集合及文件字节、权限、修改时间与原始基线一致，配置备份也保持原字节。
 - 额外使用本地 1.38.3 CLI 构造其自身有效配置，Preview 退出后由相同二进制再次查询 currency，要求能读取原目录且整个正式版测试树不变。二进制 SHA-256 为 `400f6370943e861c04e5b81b78a932e08f79923a02d4c3852a2c9973e75b4d13`，版本输出 `reasonix v1.38.3`，Go build metadata 的 revision 为 `2185b8e8ff8abb2166bf8e55df0694d05a0f9d76` 且 `vcs.modified=true`；这是可定位的本地旧版兼容证据，不能作为正式发布 artifact 或旧 Wails GUI 已认证的证明。
 - 第一轮旧版检查正确发现其查询前的主题初始化 `config.Load()` 会升级手写稀疏配置并改写文件。现在先由旧版构造有效配置，再保存原件基线；Preview 及最后旧版查询后的原件不变断言保留。未修改旧版行为或产品导入规则，未将旧版自己的初始化写入归因于 Preview。
 - 标准探测包的 import/restore/explicit 三个场景通过；带旧版原生配置的相同三个场景及最后查询也通过。使用真实 bridge 的 Rust 全量 189 项通过、2 项默认忽略；严格 clippy、Rust 格式、Python 语法和 CI YAML 解析通过。macOS CI 加入标准包级导入门禁，远端结果待确认；探测包复用已有前端/sidecar，干净提交完整生产包另行记录。
+- 随后从干净提交 `ccfa44177a1b5a68d9945b4d74464f85fd3ab81d` 完整构建 arm64 macOS `.app`，前端生产门禁/现有体积预算、Go sidecar 和 Rust host 通过。同一包的严格本地 ad-hoc 签名、标准三个导入场景、旧版配置三个场景及最后查询、原有 24 个原生场景和两种档案启动/退出 smoke 全部通过。窗口及启动脚本还注入不相关的验收环境变量，验证清除后独立运行；原生通知授权查询、Global 工作区、凭据身份、鉴权拒绝和退出无残留同时通过。构建与验收后工作树干净，正式签名/公证仍未执行。
 - 程序化宿主入口不证明 WebView 设置页实际点击、旧 Wails GUI/目录锁、旧会话附件/检查点或全量数据恢复已验收；正式 Developer ID 签名/公证和其他 macOS D 待办保留，E 继续等待 D 验收且 Preview 稳定。
 
 #### D：macOS 运行任务时关闭、后台完成与原生退出（2026-10-01）
