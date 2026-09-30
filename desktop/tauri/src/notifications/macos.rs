@@ -1,4 +1,4 @@
-use super::{NotificationState, Permission, CLICK_EVENT, DELIVERY_ERROR};
+use super::{NotificationState, Permission, DELIVERY_ERROR};
 use block2::{DynBlock, RcBlock};
 use objc2::{
     define_class, msg_send,
@@ -19,7 +19,6 @@ use std::{
     sync::{mpsc, Arc},
     time::Duration,
 };
-use tauri::Emitter;
 
 struct DelegateIvars {
     app: tauri::AppHandle,
@@ -58,13 +57,7 @@ define_class!(
             // SAFETY: Apple's exported NSString constant lives for the process.
             if &*response.actionIdentifier() == unsafe { UNNotificationDefaultActionIdentifier } {
                 let token = response.notification().request().identifier().to_string();
-                if self.ivars().state.receive(&token) {
-                    let app = self.ivars().app.clone();
-                    let focus_app = app.clone();
-                    let _ =
-                        app.run_on_main_thread(move || crate::tray::show_main_window(&focus_app));
-                    let _ = app.emit(CLICK_EVENT, ());
-                }
+                self.ivars().state.activate(&self.ivars().app, &token);
             }
             completion.call(());
         }

@@ -727,13 +727,17 @@ jobs:
 
       - name: Clippy Linux native host
         working-directory: desktop/tauri
-        run: cargo clippy --locked -- -D warnings
+        run: cargo clippy --locked --tests -- -D warnings
 
       - name: Test Linux native host against a real bridge
         working-directory: desktop/tauri
         env:
           REASONIX_TAURI_BRIDGE_TEST_BIN: ${{ runner.temp }}/reasonix-desktop-bridge
         run: dbus-run-session -- cargo test --locked
+
+      - name: Test XDG notification delivery and lifecycle on an isolated real bus
+        working-directory: desktop/tauri
+        run: cargo test --locked notifications::xdg::dbus_tests::real_broker_covers_delivery_actions_owner_restart_failure_and_shutdown -- --ignored
 
   # Ubuntu 24.04 ships WebKitGTK 4.1 only. Keep this capability build separate
   # from the 22.04/4.0 leg so neither runtime becomes a distro whitelist.

@@ -74,11 +74,11 @@ desktop API contract (保留 app/event helper 的调用形状)
 | D：窗口与多显示器 | 保存普通窗口位置和显示器缩放，最大化/最小化不覆盖普通尺寸；按当前工作区限制恢复位置，移除外接屏后回到主屏。状态文件原子替换，兼容旧尺寸文件。窗口几何回归通过。 | 真实不同缩放显示器、拔插外接屏、最大化退出再恢复验收。 |
 | D：托盘与退出 | 托盘有显示/退出菜单；托盘、Dock 重开及单实例唤起均恢复最小化窗口。退出沿用 supervisor 停止路径。 | 真实托盘点击、关闭后后台任务、Cmd+Q/托盘退出及第二实例唤起验收。 |
 | D：对话框与链接 | 现有 Tauri 选择器保留；共享外部链接及本地文档 adapter 已接入 Rust host。Markdown 默认打开、定位、另存为及指定已安装应用均走原生入口，错误不退回 browser mock。文档可执行目标拒绝、特殊路径、取消保存、源文件别名保护及权限拒绝已有回归。外部链接支持 HTTP(S)/受限 mailto，OAuth 入口仅接受 HTTP(S)。 | macOS 已增加系统应用注册查询、Spotlight 自定义安装位置和原生 64×64 图标；项目会话顶部选择器已接入配置偏好与卸载回退。Linux 已增加 XDG desktop entry 发现、GIO 原生启动、六类终端目录策略和有界 PNG 图标转换，共用逻辑回归通过；Linux 原生分支编译/图标/GUI 验收待执行。Windows 已增加 App Paths、安装目录/Toolbox 发现、终端目录策略和原生 PNG 图标代码；共用逻辑与 Win32 API 类型检查通过，Windows 原生 host 编译/注册表/图标/GUI 验收待执行；Global 会话已接入档案内稳定目录与会话身份查询。系统对话框、浏览器/邮件、指定应用的真实 UI 交互及 OAuth 仍需验收。 |
-| D：通知与钥匙串 | macOS 通知改为原生 UserNotifications：读取实际授权、报告发送失败、点击恢复对应会话；冷启动队列、档案隔离、失效会话与重复点击已有回归。凭据按持久档案身份隔离；设置页显式迁移旧 Preview 凭据，保留原件并拒绝覆盖。迁移/保存/删除与重启串行，写入及桥接同步失败回滚；macOS 原生隔离读写、真实 bridge 迁移/重启/删除及不落盘回归通过。 | 真实系统通知授权拒绝、通知显示与前后台/冷启动点击、钥匙串锁定/授权拒绝、原生设置页迁移操作仍待验收。Windows/Linux 通知授权读取和点击回调、凭据后端仍待补齐/验收。 |
+| D：通知与钥匙串 | macOS 通知改为原生 UserNotifications：读取实际授权、报告发送失败、点击恢复对应会话；冷启动队列、档案隔离、失效会话与重复点击已有回归。Linux 已接入 XDG 服务/能力查询、实际发送与运行中点击；独立真实 D-Bus 联调通过，授权无标准查询时报告 unknown。凭据按持久档案身份隔离；设置页显式迁移旧 Preview 凭据，保留原件并拒绝覆盖。迁移/保存/删除与重启串行，写入及桥接同步失败回滚；macOS 原生隔离读写、真实 bridge 迁移/重启/删除及不落盘回归通过。 | 真实系统通知授权拒绝、横幅显示与前后台/冷启动点击、钥匙串锁定/授权拒绝、原生设置页迁移操作仍待验收。Linux native host、桌面环境/Wayland 焦点及冷启动点击待验收/补齐；Windows 原生授权读取/点击和 Windows/Linux 凭据后端仍待补齐/验收。 |
 | D：单实例与数据保护 | Tauri 单实例及独立默认 Preview 数据目录已存在。当前 Wails 与 bridge 启动均持有配置/状态两处目录锁；共享任一目录都会拒绝第二个写入宿主，目录别名去重，失败释放已取锁。真实 bridge/Wails 拒绝启动测试及配置原件/备份回退回归通过。导入页在操作前展示来源、目标目录与回退说明。 | 未参与目录锁协议的旧稳定版仍需兼容性验收；不能将当前两个宿主的测试推广为所有历史二进制互斥。真实 Wails 单实例通知/唤起、完整安装包导入与回退操作仍待验收。 |
 | E：remote host / bot / updater / 管理页 | remote host 与 bot 已有部分设置/bridge 接口；updater 插件已注册。 | D 验收后对照 Wails 逐项审计和补齐；特别是当前“检查更新”仍是说明对话框，插件注册不能视为更新流程完成。 |
 
-累计门禁：`pnpm test:clipboard`、输入框剪贴板回归、terminal selection、`pnpm test:tauri`、`pnpm build`，以及使用真实 Go bridge 的 Rust 测试（最新 Windows 共用逻辑切片 181 项通过，另有前轮 1 项显式 macOS 原生钥匙串测试通过）。最新 Windows 共用逻辑切片已从干净提交 `53c05ce5d9b588fc6178223a08ebb622355a8e57` 通过 `pnpm tauri:build -- --bundles app` 构建与本地 ad-hoc 签名；`tools/tauri/smoke-packaged-app.py` 在临时 HOME 分别验证默认和显式数据目录、私有凭据身份、真实 macOS 通知授权查询、实际 Global 工作区解析与私有目录权限、sidecar 就绪、未认证请求拒绝以及退出无残留。此 smoke 没有执行菜单/托盘等 UI 点击；两次桌面自动化分别超时和报 ScreenCaptureKit `SCStreamErrorDomain -3811`，所以真实 UI 验收保留待办。本地 ad-hoc 签名不是正式发布签名/公证。
+累计门禁：`pnpm test:clipboard`、输入框剪贴板回归、terminal selection、`pnpm test:tauri`、`pnpm build`，以及使用真实 Go bridge 的 Rust 测试（最新 XDG 通知切片 189 项通过、2 项默认忽略；其中 1 项独立真实 D-Bus 联调已显式通过，另有前轮 1 项显式 macOS 原生钥匙串测试通过）。最近包级验证仍为 Windows 共用逻辑切片：从干净提交 `53c05ce5d9b588fc6178223a08ebb622355a8e57` 通过 `pnpm tauri:build -- --bundles app` 构建与本地 ad-hoc 签名；`tools/tauri/smoke-packaged-app.py` 在临时 HOME 分别验证默认和显式数据目录、私有凭据身份、真实 macOS 通知授权查询、实际 Global 工作区解析与私有目录权限、sidecar 就绪、未认证请求拒绝以及退出无残留。此 smoke 没有执行菜单/托盘等 UI 点击；两次桌面自动化分别超时和报 ScreenCaptureKit `SCStreamErrorDomain -3811`，所以真实 UI 验收保留待办。本地 ad-hoc 签名不是正式发布签名/公证。
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
@@ -111,10 +111,20 @@ desktop API contract (保留 app/event helper 的调用形状)
 - 从干净提交 `b81abf555f63d2ef8fbd2280dfec74107af90c02` 完成 macOS Preview `.app` 构建及本地严格 ad-hoc 签名校验；默认托管/显式临时档案包级 smoke 均通过，包含凭据身份隔离、原生通知授权查询、实际 Global 工作区、sidecar readiness、未鉴权请求拒绝及正常退出无残留。生产前端构建的类型/分层/权限/滚动门禁与 bundle budget 同时通过。此包用于已有 macOS host 的回归验证，不覆盖 Linux native 分支或真实桌面应用启动；本地签名也不等同正式签名/公证。
 - 新增 `desktop-tauri-linux` Ubuntu 24.04 门禁，配置 GTK/WebKitGTK/GIO/SVG loader 依赖、真实 bridge、严格 clippy 和 `dbus-run-session` 下的全量 Rust 测试；另有 Linux 专属 SVG 缩放/PNG 编码/坏输入回归。**门禁尚未远端执行**，不能声明 Linux 编译或原生图标测试已经通过。Linux GUI/包级验收、复杂 terminal wrapper/Flatpak 安装路径、完整主题继承仍待验证或完善；Windows 已在下一切片增加实现，原生 host 编译/注册表/图标/桌面环境验收继续保留。D/E 目标保持进行中。
 
+#### D：Linux XDG 通知能力、运行中点击与退出清理（2026-09-30）
+
+- 对照 Wails `internal/notify/sender_linux.go` 的 `notify-send` 基线，Linux 改为 Rust 直接调用 [XDG 通知协议](https://specifications.freedesktop.org/notification/latest/protocol.html) 的 `GetCapabilities` / `Notify`。未连接总线或无可用通知服务时报告 `unavailable`；服务可用时授权为 `unknown`，不把服务存在或 `actions` 能力当成用户已授权。Linux 没有协议内的标准授权/DND 查询或授权弹窗，此限制保持可见。
+- `clickSupported` 取决于实际 `actions` 能力和已安装的回调。发送前先订阅通知信号，通知服务的唯一 owner、对象路径及接口均严格匹配；仅接受当前 ID 的 `default` 点击，忽略其他按钮、伪造发送者和坏消息。关闭、重复点击、意外 ID 复用、TTL 和容量上限均有保护；点击通过现有档案 token 映射、权威会话查询和主线程窗口恢复路径，不执行任务。后续能力查询或发送失败保留已成功通知的点击映射；服务 owner 替换或连接断开则清理旧 ID。
+- 每个 host 懒创建一个通知 worker，不为每条通知创建阻塞等待线程。命令队列限 16 项，两类信号队列分别限 64 / 16 项，映射最多 256 项 / 7 天；单次 D-Bus 调用限 2 秒，整条命令含排队期限 5 秒、调用方等待最多 6 秒。过期命令不派发；应用退出先关闭队列、取消在途请求、释放回调并 join worker，连接关闭限 2 秒，再进入已有 sidecar 停止路径。
+- 状态接口改为读取后端实际点击能力，macOS 未打包/不可用进程不再仅因编译目标而显示支持点击；macOS delegate 复用共享的点击恢复实现。前端五个专用通知命令、固定三语提示、权限范围与隐私字段限制继续沿用；Linux 不发送会话 ID、路径、凭据或任意正文，随机 token 仅保存在当前档案。
+- 新增 7 项 XDG 单元回归和 1 项后端能力回归。另有 1 项显式联调，在 macOS 临时目录从[官方 D-Bus 1.14.10 源码](https://dbus.freedesktop.org/releases/dbus/dbus-1.14.10.tar.xz)构建测试 daemon 并启动独立私有总线，覆盖无服务、缺少 actions、真实 Notify 参数与静音 hint、回复前点击、伪造/重复/关闭后的点击、服务重启及 ID 复用、能力查询/提交失败不丢失已有点击、真实请求卡住后的超时恢复和退出取消。测试不连接用户的 session bus，也不显示系统通知。
+- 真实 Go bridge 的全量 Rust 回归 **189 项通过、2 项默认忽略**（独立 D-Bus 联调已另行显式通过；原生钥匙串 smoke 前轮已显式执行）；严格 clippy（含测试）、`pnpm test:tauri`、CI YAML 解析通过。Linux CI 已增加显式独立总线联调，并将 clippy 扩展至测试代码；**远端门禁仍未执行**。
+- 本轮仅完成协议与运行中点击实现/联调；Linux 完整 native host 编译、GNOME/KDE 横幅及通知中心操作、Wayland activation token/窗口焦点、安装包与冷启动点击仍待验收或补齐。Windows 原生授权与点击仍待改造，macOS 真实授权/横幅/点击仍待现场验收；D 尚未完成，E 继续等待 D 稳定。
+
 #### D：原生通知授权、发送与点击定位（2026-09-30）
 
-- 对照 Wails `internal/notify` 的固定事件提示，macOS 改用 [Apple UserNotifications](https://developer.apple.com/documentation/usernotifications/unusernotificationcenter) 读取真实授权状态并等待提交结果；仅 `not_determined` 请求授权，拒绝后不重复弹窗。设置页分别显示用户开关与系统授权；错误使用固定解决提示，不输出系统诊断。未打包开发进程报告不可用，不借用 Terminal 身份。Windows/Linux 使用 `notify-rust` 同步提交并返回错误，授权暂为 `unknown`、点击能力为 false，不能据此声称已获系统授权。
-- 删除旧通知插件的前后端依赖、注册及三个通用权限；五个专用命令均限定主窗口。发送只接受当前会话身份、事件类型、语言与失败布尔值，拒绝任意标题/正文。系统仅收到固定三语提示和随机 token，不含问题、工具参数、原始错误、工作区路径或凭据；点击只导航，不审批、不回答、不提交任务。前端保留通知总开关、事件开关与声音偏好。
+- 对照 Wails `internal/notify` 的固定事件提示，macOS 改用 [Apple UserNotifications](https://developer.apple.com/documentation/usernotifications/unusernotificationcenter) 读取真实授权状态并等待提交结果；仅 `not_determined` 请求授权，拒绝后不重复弹窗。设置页分别显示用户开关与系统授权；错误使用固定解决提示，不输出系统诊断。未打包开发进程报告不可用，不借用 Terminal 身份。Windows 使用 `notify-rust` 同步提交并返回错误，授权暂为 `unknown`、点击能力为 false；Linux 后续已接入 XDG 实际服务/能力查询和运行中点击，详见上一节，均不能据此声称已获系统授权。
+- 删除旧通知插件的前后端依赖、注册及三个通用权限；五个专用命令均限定主窗口。发送只接受当前会话身份、事件类型、语言与失败布尔值，拒绝任意标题/正文。系统仅收到固定三语提示、应用标识及平台通知身份，不含问题、工具参数、原始错误、工作区路径或凭据；点击只导航，不审批、不回答、不提交任务。前端保留通知总开关、事件开关与声音偏好。
 - token 到会话的映射在当前 core profile 内原子写入 `tauri-notification-targets.json`，Unix 权限 `0600`，与持久凭据档案身份匹配；最多 256 项 / 128 KiB / 7 天。重复 token、损坏、符号链接与外来档案拒绝读取且不覆盖原文件。提交结果不确定时保留映射，确认点击后才删除；持久写入失败保留队列供重试。
 - 原生 delegate 在 WebView 就绪前安装并持有，点击队列限 32 项；前端先注册监听再读队列，忙碌/只读页面保留目标，恢复可用时再处理。host 依据当前权威目录及待删除清单解析工作区；缺失/待删除会话跳过且不创建，分页验证未完成则保留。复用现有会话切换流程，同会话只关闭面板并显示对话，卸载后不消费异步回复。
 - 回归包括授权拒绝不重问、固定提示与隐私字段拒绝、发送不确定失败、档案重启与隔离、TTL/大小/损坏/权限/符号链接、确认失败回滚，以及真实 Go bridge 的权威目录解析与未知会话不创建。前端覆盖队列去重、忙碌推迟、目标不匹配、切换失败、卸载与确认失败；实际 React 工作区另测冷启动权威路径、已删除会话、同会话关闭设置、监听卸载且零审批/回答/提交。设置页另测只读查询、授权处理中防重复、拒绝状态与开关分别保存。

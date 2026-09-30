@@ -3797,6 +3797,10 @@ fn main() {
             });
         }
         if matches!(event, tauri::RunEvent::Exit) {
+            if let Some(state) = app.try_state::<std::sync::Arc<notifications::NotificationState>>()
+            {
+                state.shutdown();
+            }
             if let Some(window) = app.get_webview_window("main") {
                 let _ = app.state::<PreviewWindowState>().save(&window);
             }

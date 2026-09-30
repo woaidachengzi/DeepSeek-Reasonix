@@ -14,6 +14,9 @@ use std::{
 use tauri::Manager;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(all(unix, any(target_os = "linux", test)))]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+mod xdg;
 
 const FILE: &str = "tauri-notification-targets.json";
 const LIMIT: u64 = 128 * 1024;
@@ -23,6 +26,7 @@ const STORAGE_ERROR: &str =
     "notification targets are unavailable; check permissions or restore a valid profile";
 const DELIVERY_ERROR: &str =
     "notification delivery failed; check system notification settings and retry";
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 const CLICK_EVENT: &str = "host:notification-clicked";
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -127,22 +131,45 @@ pub struct NotificationStatus {
 }
 
 trait Backend: Send + Sync {
-    fn permission(&self, request: bool) -> Result<Permission, String>;
+    fn status(&self, request: bool) -> Result<NotificationStatus, String>;
     fn send(&self, token: &str, body: &str) -> Result<(), String>;
+    fn install(
+        &self,
+        _app: &tauri::AppHandle,
+        _state: std::sync::Weak<NotificationState>,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+    fn shutdown(&self) {}
 }
 struct PlatformBackend {
+    #[cfg(not(target_os = "linux"))]
     identifier: String,
+    #[cfg(target_os = "linux")]
+    xdg: xdg::XdgBackend,
 }
 impl Backend for PlatformBackend {
-    fn permission(&self, request: bool) -> Result<Permission, String> {
+    fn status(&self, request: bool) -> Result<NotificationStatus, String> {
         #[cfg(target_os = "macos")]
         {
-            macos::permission(&self.identifier, request)
+            let permission = macos::permission(&self.identifier, request)?;
+            Ok(NotificationStatus {
+                permission,
+                click_supported: permission != Permission::Unavailable,
+            })
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(target_os = "linux")]
         {
             let _ = request;
-            Ok(Permission::Unknown)
+            Ok(self.xdg.status())
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        {
+            let _ = request;
+            Ok(NotificationStatus {
+                permission: Permission::Unknown,
+                click_supported: false,
+            })
         }
     }
     fn send(&self, token: &str, body: &str) -> Result<(), String> {
@@ -150,7 +177,11 @@ impl Backend for PlatformBackend {
         {
             macos::send(&self.identifier, token, body)
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(target_os = "linux")]
+        {
+            self.xdg.send(token, body)
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
         {
             // This backend reports the actual OS request result. Native action
             // wiring on these platforms remains an explicit migration gate.
@@ -169,6 +200,30 @@ impl Backend for PlatformBackend {
                 .map_err(|_| DELIVERY_ERROR.to_string())
         }
     }
+    fn install(
+        &self,
+        app: &tauri::AppHandle,
+        state: std::sync::Weak<NotificationState>,
+    ) -> Result<(), String> {
+        #[cfg(target_os = "linux")]
+        {
+            let app = app.clone();
+            self.xdg.set_callback(Arc::new(move |token| {
+                if let Some(state) = state.upgrade() {
+                    state.activate(&app, token);
+                }
+            }))
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            let _ = (app, state);
+            Ok(())
+        }
+    }
+    fn shutdown(&self) {
+        #[cfg(target_os = "linux")]
+        self.xdg.shutdown();
+    }
 }
 
 pub struct NotificationState {
@@ -186,7 +241,10 @@ impl NotificationState {
         Arc::new(Self::new(
             profile.home(),
             Arc::new(PlatformBackend {
+                #[cfg(not(target_os = "linux"))]
                 identifier: identifier.into(),
+                #[cfg(target_os = "linux")]
+                xdg: xdg::XdgBackend::new(identifier),
             }),
         ))
     }
@@ -206,6 +264,11 @@ impl NotificationState {
         }
     }
     pub fn install(app: &tauri::AppHandle, state: &Arc<Self>) {
+        if state.backend.install(app, Arc::downgrade(state)).is_err() {
+            eprintln!(
+                "Reasonix native notification listener unavailable; restart Preview to retry"
+            );
+        }
         #[cfg(target_os = "macos")]
         if let Err(_error) = macos::install(app, Arc::clone(state)) {
             // Unbundled development executables cannot own a notification
@@ -219,10 +282,19 @@ impl NotificationState {
     }
     pub(crate) fn permission(&self, request: bool) -> Result<NotificationStatus, String> {
         let _guard = self.authorization.lock().map_err(|_| DELIVERY_ERROR)?;
-        Ok(NotificationStatus {
-            permission: self.backend.permission(request)?,
-            click_supported: cfg!(target_os = "macos"),
-        })
+        self.backend.status(request)
+    }
+    pub fn shutdown(&self) {
+        self.backend.shutdown();
+    }
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    fn activate(&self, app: &tauri::AppHandle, token: &str) {
+        use tauri::Emitter;
+        if self.receive(token) {
+            let focus = app.clone();
+            let _ = app.run_on_main_thread(move || crate::tray::show_main_window(&focus));
+            let _ = app.emit(CLICK_EVENT, ());
+        }
     }
     fn deliver(&self, request: &NotificationRequest) -> Result<(), String> {
         if !valid_session(&request.session_id) {
@@ -232,9 +304,9 @@ impl NotificationState {
         // One authorization dialog at a time. A denied state is never asked
         // repeatedly; not_determined is the only state that may prompt.
         let _guard = self.authorization.lock().map_err(|_| DELIVERY_ERROR)?;
-        let mut permission = self.backend.permission(false)?;
+        let mut permission = self.backend.status(false)?.permission;
         if permission == Permission::NotDetermined {
-            permission = self.backend.permission(true)?;
+            permission = self.backend.status(true)?.permission;
         }
         if !permission.can_deliver() {
             return Err(DELIVERY_ERROR.into());
@@ -292,6 +364,7 @@ impl NotificationState {
         temp.persist(&self.path).map_err(|_| STORAGE_ERROR)?;
         Ok(())
     }
+    #[cfg(any(target_os = "macos", target_os = "linux", test))]
     fn receive(&self, token: &str) -> bool {
         let Ok(mut state) = self.registry.lock() else {
             return false;
@@ -577,6 +650,7 @@ mod tests {
         permission: Mutex<Permission>,
         requested: AtomicUsize,
         fail: AtomicBool,
+        clicks: AtomicBool,
         sent: Mutex<Vec<(String, String)>>,
     }
     impl FakeBackend {
@@ -585,18 +659,22 @@ mod tests {
                 permission: Mutex::new(permission),
                 requested: AtomicUsize::new(0),
                 fail: AtomicBool::new(false),
+                clicks: AtomicBool::new(false),
                 sent: Mutex::new(vec![]),
             })
         }
     }
     impl Backend for FakeBackend {
-        fn permission(&self, request: bool) -> Result<Permission, String> {
+        fn status(&self, request: bool) -> Result<NotificationStatus, String> {
             let mut permission = self.permission.lock().unwrap();
             if request && *permission == Permission::NotDetermined {
                 self.requested.fetch_add(1, Ordering::SeqCst);
                 *permission = Permission::Granted;
             }
-            Ok(*permission)
+            Ok(NotificationStatus {
+                permission: *permission,
+                click_supported: self.clicks.load(Ordering::SeqCst),
+            })
         }
         fn send(&self, token: &str, body: &str) -> Result<(), String> {
             self.sent.lock().unwrap().push((token.into(), body.into()));
@@ -614,6 +692,17 @@ mod tests {
             language: Language::Zh,
             failed: false,
         }
+    }
+    #[test]
+    fn click_capability_comes_from_backend_instead_of_compile_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let backend = FakeBackend::new(Permission::Unknown);
+        let state = NotificationState::new(dir.path(), backend.clone());
+        assert!(!state.permission(false).unwrap().click_supported);
+        backend.clicks.store(true, Ordering::SeqCst);
+        let status = state.permission(false).unwrap();
+        assert!(status.click_supported);
+        assert_eq!(status.permission, Permission::Unknown);
     }
     #[test]
     fn permission_is_truthful_denial_does_not_reprompt_and_payload_is_fixed() {
