@@ -94,6 +94,13 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：macOS 剩余验收条件核对（2026-10-01）
+
+- 当前工作树的 D 表仍保留原生编辑/第二实例焦点、真实菜单/托盘/对话框/外部应用、通知授权及点击、钥匙串拒绝、外观视觉和不同缩放显示器拔插等未完成验收；官方旧 GUI 的文本历史回退通过没有关闭这些门禁。E 仍须等 D 验收及 Preview 稳定。
+- 用只读 AppKit 查询核对当前环境：`NSWorkspace.shared.frontmostApplication` 返回 Codex，`NSScreen.screens` 只有一台、`backingScaleFactor=2`。没有读窗口内容或截图，也没有启动正常用户档案；此查询不证明 Preview 已激活或完整桌面交互权限可用。单显示器环境无法证明不同缩放外接屏拔插通过。
+- 当前 SDK `NSApplication.h` 明确说明 `activate()` 不保证立即或最终激活，并建议前台应用先让出激活权；`NSRunningApplication.h` 说明 `activateIgnoringOtherApps` 在 macOS 14 后不再生效。本轮没有用新的强制激活重试或降低 inactive/key-window 断言制造通过，原生编辑/第二实例测试保持未完成。已请求人工协助将隔离 Preview 激活及提供外接屏；未收到答复不能视为同意延期或验收通过。
+- 当前 `internal/profilegate` 和实际 bridge 启动仍按配置/状态目录取得生命周期锁；原计划官方基线 `fa018e4` 源码没有该 gate/锁名。已通过的旧版会话 writer 租约与新宿主目录锁是两个验证范围，不能将文本回退通过推广为所有历史二进制已遵守新协议。历史宿主目录互斥及完整附件/检查点回退继续保留。
+
 #### D：macOS 官方 Wails 实际历史与 Preview 回退（2026-10-01）
 
 - 新增可复跑 `tools/tauri/smoke-legacy-rollback.py`。要求原生 arm64 macOS、Swift 编译器、已验证的官方 Desktop/CLI 1.38.3；启动前固定核对三个旧版可执行文件 SHA-256、bundle 身份/版本及旧/新 `.app` 严格签名，拒绝已运行的旧 GUI/Preview。官方 plist 以 DOCTYPE 开头，按实际 XML 格式解析；没有重新签名或修改旧版包。测试不继承用户凭据环境，使用 owner-only 临时 HOME/core/state/cache；失败保留私有测试记录，成功清理。
