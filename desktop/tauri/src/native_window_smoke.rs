@@ -315,6 +315,7 @@ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
     let directory = marker_directory()?;
     match phase {
         "exercise" => exercise(app, &directory)?,
+        "menu-shortcuts" => crate::native_menu_smoke::shortcuts(app)?,
         "menu-settings-hidden" | "menu-settings-minimized" | "menu-settings-app-hidden" => {
             crate::native_menu_smoke::settings(app, phase)?
         }

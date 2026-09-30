@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { comboFromKeyboardEvent, type ShortcutCombo, type ShortcutPlatform } from "../lib/keyboardShortcuts";
+import macosMenuShortcuts from "./macosMenuShortcuts.json";
 
 export const TAURI_SHORTCUT_ACTIONS = [
   "new_session",
@@ -70,6 +71,7 @@ type Overrides = Partial<Record<TauriShortcutAction, ShortcutCombo>>;
 const STORAGE_KEY = "reasonix.tauri.shortcuts.v1";
 const EMPTY_OVERRIDES: Overrides = {};
 const actionSet = new Set<string>(TAURI_SHORTCUT_ACTIONS);
+const nativeCombos = [...macosMenuShortcuts.required, ...macosMenuShortcuts.optional];
 const subscribers = new Set<() => void>();
 let current: Overrides | null = null;
 
@@ -78,7 +80,7 @@ function normalizeCombo(value: unknown): ShortcutCombo | null {
   const record = value as Record<string, unknown>;
   if (typeof record.key !== "string" || !record.key || ["Meta", "Control", "Alt", "Shift"].includes(record.key)) return null;
   return {
-    key: record.key.length === 1 ? record.key.toLowerCase() : record.key,
+    key: record.key === " " ? "Space" : record.key.length === 1 ? record.key.toLowerCase() : record.key,
     ctrl: record.ctrl === true,
     meta: record.meta === true,
     alt: record.alt === true,
@@ -178,12 +180,21 @@ export function defaultTauriShortcut(action: TauriShortcutAction, platform: Shor
 }
 
 export function getTauriShortcut(action: TauriShortcutAction, platform: ShortcutPlatform): ShortcutCombo {
-  return readOverrides()[action] ?? defaultTauriShortcut(action, platform);
+  const override = readOverrides()[action];
+  // Older Preview preferences could capture a native menu chord. Keep the
+  // stored preference available for reset, but never dispatch that binding.
+  return override && !nativeTauriShortcutConflict(override, platform)
+    ? override : defaultTauriShortcut(action, platform);
 }
 
 function sameCombo(left: ShortcutCombo, right: ShortcutCombo): boolean {
   return left.key === right.key && Boolean(left.ctrl) === Boolean(right.ctrl) && Boolean(left.meta) === Boolean(right.meta)
     && Boolean(left.alt) === Boolean(right.alt) && Boolean(left.shift) === Boolean(right.shift);
+}
+
+export function nativeTauriShortcutConflict(combo: ShortcutCombo, platform: ShortcutPlatform): boolean {
+  const normalized = normalizeCombo(combo);
+  return platform === "darwin" && Boolean(normalized && nativeCombos.some(native => sameCombo(native, normalized)));
 }
 
 export function tauriShortcutConflict(action: TauriShortcutAction, combo: ShortcutCombo, platform: ShortcutPlatform): TauriShortcutAction | null {
@@ -198,7 +209,9 @@ export function isValidTauriShortcut(action: TauriShortcutAction, combo: Shortcu
 export function setTauriShortcut(action: TauriShortcutAction, combo: ShortcutCombo | null, platform: ShortcutPlatform): boolean {
   if (!actionSet.has(action)) return false;
   const normalized = combo ? normalizeCombo(combo) : null;
-  if (combo && (!normalized || !validForAction(action, normalized) || tauriShortcutConflict(action, normalized, platform))) return false;
+  if (combo && (!normalized || !validForAction(action, normalized))) return false;
+  const target = normalized ?? defaultTauriShortcut(action, platform);
+  if (nativeTauriShortcutConflict(target, platform) || tauriShortcutConflict(action, target, platform)) return false;
   const next = { ...readOverrides() };
   if (normalized && !sameCombo(normalized, defaultTauriShortcut(action, platform))) next[action] = normalized;
   else delete next[action];
@@ -216,7 +229,7 @@ export function resetTauriShortcuts(): void {
 
 export function matchesTauriShortcut(event: KeyboardEvent, action: TauriShortcutAction, platform: ShortcutPlatform): boolean {
   const combo = comboFromKeyboardEvent(event);
-  return Boolean(combo && sameCombo(combo, getTauriShortcut(action, platform)));
+  return Boolean(combo && !nativeTauriShortcutConflict(combo, platform) && sameCombo(combo, getTauriShortcut(action, platform)));
 }
 
 export function useTauriShortcuts(): Overrides {

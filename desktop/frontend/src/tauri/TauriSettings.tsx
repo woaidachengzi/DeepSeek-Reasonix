@@ -29,7 +29,7 @@ import { TypographySettings } from "../components/TypographySettings";
 import { SettingsSection } from "../components/SettingsForm";
 import { SettingsOptions } from "../components/SettingsOptions";
 import { comboFromKeyboardEvent, detectShortcutPlatform, formatShortcutCombo } from "../lib/keyboardShortcuts";
-import { TAURI_SHORTCUT_ACTIONS, getTauriShortcut, isValidTauriShortcut, resetTauriShortcuts, setTauriShortcut, tauriShortcutConflict, useTauriShortcuts, type TauriShortcutAction } from "./tauriKeyboardShortcuts";
+import { TAURI_SHORTCUT_ACTIONS, defaultTauriShortcut, getTauriShortcut, isValidTauriShortcut, nativeTauriShortcutConflict, resetTauriShortcuts, setTauriShortcut, tauriShortcutConflict, useTauriShortcuts, type TauriShortcutAction } from "./tauriKeyboardShortcuts";
 import "../components/SettingsPanel.css";
 import "../components/CompactRatioSettings.css";
 import { getTauriNotificationsEnabled, getTauriNotificationEvents, setTauriNotificationEvent, setTauriNotificationsEnabled, getTauriProgressMode, setTauriProgressMode, type TauriNotificationKind, type TauriProgressMode } from "./tauriPreferences";
@@ -788,6 +788,10 @@ function ShortcutSettings() {
     const combo = comboFromKeyboardEvent(event.nativeEvent);
     if (!combo) return;
     event.preventDefault(); event.stopPropagation();
+    if (nativeTauriShortcutConflict(combo, platform)) {
+      setFeedback(t("settings.tauriShortcut.nativeConflict"));
+      return;
+    }
     if (!isValidTauriShortcut(action, combo)) {
       setFeedback(action === "send_message"
         ? t("settings.shortcutsEnterOnly", { action: t(TAURI_SHORTCUT_LABELS[action].label) })
@@ -805,6 +809,18 @@ function ShortcutSettings() {
     setTauriShortcut(action, combo, platform);
     setRecording(null); setFeedback("");
   };
+  const reset = (action: TauriShortcutAction) => {
+    const conflict = tauriShortcutConflict(action, defaultTauriShortcut(action, platform), platform);
+    if (conflict) {
+      setFeedback(t("settings.shortcutsConflict", {
+        action: t(TAURI_SHORTCUT_LABELS[action].label),
+        conflict: t(TAURI_SHORTCUT_LABELS[conflict].label),
+      }));
+      return;
+    }
+    setTauriShortcut(action, null, platform);
+    setRecording(null); setFeedback("");
+  };
   return <div className="tauri-settings-section">
     <div className="tauri-shortcuts-heading"><div><h3>{t("settings.shortcutsTitle")}</h3><p>{t("settings.shortcutsHint")}</p></div><button type="button" className="tauri-settings-button" onClick={() => { resetTauriShortcuts(); setRecording(null); setFeedback(""); }} disabled={Object.keys(overrides).length === 0}>{t("settings.shortcutsResetAll")}</button></div>
     {feedback && <p className="tauri-diagnostic-error" role="alert">{feedback}</p>}
@@ -814,7 +830,7 @@ function ShortcutSettings() {
         const label = t(info.label);
         const keys = formatShortcutCombo(getTauriShortcut(action, platform), platform);
         const active = recording === action;
-        return <div key={action} className="tauri-shortcut-row"><span><strong>{label}</strong>{info.description && <small>{t(info.description)}</small>}</span><div className="tauri-shortcut-row__actions"><button type="button" className={`tauri-shortcut-key${active ? " is-recording" : ""}`} data-tauri-shortcut-action={action} aria-label={active ? `${t("settings.shortcutsRecording")} · ${label}` : `${label}: ${keys}`} aria-pressed={active} onClick={event => { setRecording(action); setFeedback(""); event.currentTarget.focus(); }} onBlur={() => { if (active) setRecording(null); }} onKeyDown={event => { if (active) record(action, event); }}>{active ? t("settings.shortcutsRecording") : <kbd>{keys}</kbd>}</button><button type="button" className="tauri-shortcut-reset" disabled={!overrides[action]} onClick={() => { setTauriShortcut(action, null, platform); setFeedback(""); }}>{t("settings.shortcutsReset")}</button></div></div>;
+        return <div key={action} className="tauri-shortcut-row"><span><strong>{label}</strong>{info.description && <small>{t(info.description)}</small>}</span><div className="tauri-shortcut-row__actions"><button type="button" className={`tauri-shortcut-key${active ? " is-recording" : ""}`} data-tauri-shortcut-action={action} aria-label={active ? `${t("settings.shortcutsRecording")} · ${label}` : `${label}: ${keys}`} aria-pressed={active} onClick={event => { setRecording(action); setFeedback(""); event.currentTarget.focus(); }} onBlur={() => { if (active) setRecording(null); }} onKeyDown={event => { if (active) record(action, event); }}>{active ? t("settings.shortcutsRecording") : <kbd>{keys}</kbd>}</button><button type="button" className="tauri-shortcut-reset" disabled={!overrides[action]} onClick={() => reset(action)}>{t("settings.shortcutsReset")}</button></div></div>;
       })}
       <div className="tauri-shortcut-row"><span><strong>{t("settings.tauriShortcut.closePanel")}</strong></span><kbd>Esc</kbd></div>
     </div>

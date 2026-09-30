@@ -5,7 +5,8 @@ const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http:
 Object.assign(globalThis, { window: dom.window, document: dom.window.document, localStorage: dom.window.localStorage });
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
 
-const { defaultTauriShortcut, getTauriShortcut, isValidTauriShortcut, matchesTauriShortcut, resetTauriShortcuts, setTauriShortcut, tauriShortcutConflict, TAURI_SHORTCUT_ACTIONS, TAURI_SHORTCUT_TABS } = await import("../tauri/tauriKeyboardShortcuts");
+const { defaultTauriShortcut, getTauriShortcut, isValidTauriShortcut, matchesTauriShortcut, nativeTauriShortcutConflict, resetTauriShortcuts, setTauriShortcut, tauriShortcutConflict, TAURI_SHORTCUT_ACTIONS, TAURI_SHORTCUT_TABS } = await import("../tauri/tauriKeyboardShortcuts");
+const { default: nativeShortcuts } = await import("../tauri/macosMenuShortcuts.json");
 
 const key = (value: string, ctrl = false, shift = false) => new dom.window.KeyboardEvent("keydown", { key: value, ctrlKey: ctrl, shiftKey: shift });
 assert.deepEqual(defaultTauriShortcut("settings", "darwin"), { key: ",", meta: true });
@@ -46,5 +47,37 @@ dom.window.dispatchEvent(new dom.window.StorageEvent("storage", { key: "reasonix
 assert.equal(getTauriShortcut("settings", "linux").key, "p", "another window's saved preference is observed");
 resetTauriShortcuts();
 assert.equal(matchesTauriShortcut(key(",", true), "settings", "linux"), true, "reset restores the default");
+
+for (const native of [...nativeShortcuts.required, ...nativeShortcuts.optional]) {
+  assert.equal(nativeTauriShortcutConflict(native, "darwin"), true, `${native.title} stays native`);
+  assert.equal(setTauriShortcut("settings", native, "darwin"), false, `${native.title} cannot be saved as a Preview shortcut`);
+  const event = new dom.window.KeyboardEvent("keydown", {
+    key: native.key, metaKey: native.meta, ctrlKey: "ctrl" in native && native.ctrl,
+    altKey: "alt" in native && native.alt, shiftKey: "shift" in native && native.shift,
+  });
+  for (const action of TAURI_SHORTCUT_ACTIONS) {
+    assert.equal(matchesTauriShortcut(event, action, "darwin"), false, `${native.title} never dispatches ${action}`);
+  }
+}
+assert.equal(nativeTauriShortcutConflict({ key: "C", meta: true }, "darwin"), true, "native chords are case normalized");
+assert.equal(nativeTauriShortcutConflict({ key: " ", meta: true }, "darwin"), true, "AppKit's raw space key matches the normalized keyboard event");
+assert.equal(nativeTauriShortcutConflict({ key: "c", meta: true, shift: true }, "darwin"), false, "a different modifier combination is not over-reserved");
+assert.equal(nativeTauriShortcutConflict({ key: "r", meta: true }, "darwin"), false, "refresh stays configurable after removing native Reload's accelerator");
+assert.equal(matchesTauriShortcut(new dom.window.KeyboardEvent("keydown", { key: "r", metaKey: true }), "refresh_session", "darwin"), true);
+
+localStorage.setItem("reasonix.tauri.shortcuts.v1", JSON.stringify({ settings: { key: "q", meta: true } }));
+dom.window.dispatchEvent(new dom.window.StorageEvent("storage", { key: "reasonix.tauri.shortcuts.v1" }));
+assert.deepEqual(getTauriShortcut("settings", "darwin"), defaultTauriShortcut("settings", "darwin"), "legacy native conflicts fall back to the safe default");
+assert.equal(matchesTauriShortcut(new dom.window.KeyboardEvent("keydown", { key: "q", metaKey: true }), "settings", "darwin"), false, "legacy native chords never dispatch a Preview action");
+assert.equal(JSON.parse(localStorage.getItem("reasonix.tauri.shortcuts.v1")!).settings.key, "q", "rehydration does not overwrite legacy preferences");
+
+resetTauriShortcuts();
+assert.equal(setTauriShortcut("settings", { key: "q", meta: true, shift: true }, "darwin"), true);
+assert.equal(setTauriShortcut("new_session", { key: ",", meta: true }, "darwin"), true);
+assert.equal(setTauriShortcut("settings", null, "darwin"), false, "individual reset cannot create a duplicate default binding");
+assert.equal(getTauriShortcut("settings", "darwin").key, "q", "failed reset preserves the active binding");
+assert.equal(setTauriShortcut("new_session", null, "darwin"), true);
+assert.equal(setTauriShortcut("settings", null, "darwin"), true, "reset works once the original chord is free");
+resetTauriShortcuts();
 
 console.log("tauri shortcuts: OK");

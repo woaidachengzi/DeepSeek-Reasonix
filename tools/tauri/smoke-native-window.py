@@ -160,7 +160,7 @@ def smoke(app_path, include_focus=False):
             (root / "home").mkdir()
             (root / "tmp").mkdir()
             phases = ["exercise", "restore-maximized", "restore-normal", "application-hide", "background-close"]
-            phases.extend(["menu-settings-hidden", "menu-settings-minimized", "menu-settings-app-hidden"])
+            phases.extend(["menu-shortcuts", "menu-settings-hidden", "menu-settings-minimized", "menu-settings-app-hidden"])
             if include_focus:
                 phases.append("second-instance")
             phases.append("close-quit")

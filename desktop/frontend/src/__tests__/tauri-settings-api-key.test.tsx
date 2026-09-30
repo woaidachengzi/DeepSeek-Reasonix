@@ -639,6 +639,28 @@ assert.ok(resetSettingsShortcut);
 await act(async () => { resetSettingsShortcut.click(); });
 assert.equal(JSON.parse(localStorage.getItem("reasonix.tauri.shortcuts.v1")!).settings, undefined, "a shortcut can be reset individually");
 
+const originalPlatform = dom.window.navigator.platform;
+Object.defineProperty(dom.window.navigator, "platform", { value: "MacIntel", configurable: true });
+await act(async () => { settingsShortcutKey.click(); });
+await act(async () => { settingsShortcutKey.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "c", metaKey: true, bubbles: true, cancelable: true })); });
+assert.match(document.querySelector('[role="alert"]')?.textContent ?? "", /macOS.*换一个快捷键/, "macOS native menu conflict explains how to resolve it");
+assert.equal(settingsShortcutKey.classList.contains("is-recording"), true, "native rejection keeps recording available for a replacement chord");
+assert.equal(JSON.parse(localStorage.getItem("reasonix.tauri.shortcuts.v1")!).settings, undefined, "native conflict is not persisted");
+await act(async () => { settingsShortcutKey.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "q", metaKey: true, shiftKey: true, bubbles: true, cancelable: true })); });
+assert.equal(JSON.parse(localStorage.getItem("reasonix.tauri.shortcuts.v1")!).settings.key, "q", "a non-native replacement chord is saved");
+assert.equal(document.querySelector('[role="alert"]'), null, "successful replacement clears the error");
+await act(async () => { newSessionShortcutKey.click(); });
+await act(async () => { newSessionShortcutKey.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: ",", metaKey: true, bubbles: true, cancelable: true })); });
+await act(async () => { resetSettingsShortcut.click(); });
+assert.match(document.querySelector('[role="alert"]')?.textContent ?? "", /冲突/, "individual reset reports a default binding already assigned to another action");
+assert.equal(JSON.parse(localStorage.getItem("reasonix.tauri.shortcuts.v1")!).settings.key, "q", "failed reset preserves the saved binding");
+const resetAllShortcuts = document.querySelector<HTMLButtonElement>(".tauri-shortcuts-heading button");
+assert.ok(resetAllShortcuts);
+await act(async () => { resetAllShortcuts.click(); });
+assert.equal(localStorage.getItem("reasonix.tauri.shortcuts.v1"), null, "reset all resolves custom/default collisions");
+assert.equal(document.querySelector('[role="alert"]'), null, "reset all clears conflict feedback");
+Object.defineProperty(dom.window.navigator, "platform", { value: originalPlatform, configurable: true });
+
 await act(async () => { click(["通用", "General"]); });
 await act(async () => { click("English"); });
 await act(async () => { click(["模型偏好", "Model preferences"]); });

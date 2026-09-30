@@ -2064,6 +2064,7 @@ export const en = {
   "settings.tauriShortcut.hideSidebar": "Hide sidebar",
   "settings.tauriShortcut.showSidebar": "Show sidebar",
   "settings.tauriShortcut.primaryModifier": "Use a shortcut that includes ⌘ or Ctrl.",
+  "settings.tauriShortcut.nativeConflict": "This shortcut is used by a macOS menu. Choose another shortcut.",
   "settings.tauriShortcut.closePanel": "Close panel",
   "settings.closeBehavior": "When closing window",
   "settings.closeBehaviorHint": "Choose whether Reasonix keeps running after its main window closes.",

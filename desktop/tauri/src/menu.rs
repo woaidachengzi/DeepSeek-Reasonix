@@ -51,12 +51,7 @@ pub fn build_app_menu(
         .build()?;
 
     let view_menu = SubmenuBuilder::new(handle, "View")
-        .item(
-            &MenuItemBuilder::new("Reload")
-                .id("reload")
-                .accelerator("CmdOrCtrl+R")
-                .build(handle)?,
-        )
+        .item(&MenuItemBuilder::new("Reload").id("reload").build(handle)?)
         .separator()
         .item(&PredefinedMenuItem::fullscreen(handle, None)?)
         .separator()

@@ -1,0 +1,19 @@
+{
+  "required": [
+    { "title": "Quit Reasonix", "key": "q", "meta": true },
+    { "title": "Hide Reasonix", "key": "h", "meta": true },
+    { "title": "Hide Others", "key": "h", "meta": true, "alt": true },
+    { "title": "Undo", "key": "z", "meta": true },
+    { "title": "Redo", "key": "z", "meta": true, "shift": true },
+    { "title": "Cut", "key": "x", "meta": true },
+    { "title": "Copy", "key": "c", "meta": true },
+    { "title": "Paste", "key": "v", "meta": true },
+    { "title": "Select All", "key": "a", "meta": true },
+    { "title": "Minimize", "key": "m", "meta": true },
+    { "title": "Toggle Full Screen", "key": "f", "meta": true, "ctrl": true }
+  ],
+  "optional": [
+    { "title": "Emoji & Symbols", "key": "Space", "meta": true },
+    { "title": "Emoji & Symbols", "key": "Space", "meta": true, "ctrl": true }
+  ]
+}

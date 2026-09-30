@@ -1644,6 +1644,7 @@ export const zhTW: Record<DictKey, string> = {
   "settings.tauriShortcut.hideSidebar": "隱藏側邊欄",
   "settings.tauriShortcut.showSidebar": "顯示側邊欄",
   "settings.tauriShortcut.primaryModifier": "含 ⌘ 或 Ctrl。",
+  "settings.tauriShortcut.nativeConflict": "此組合鍵已由 macOS 選單使用，請換一個快捷鍵。",
   "settings.tauriShortcut.closePanel": "關閉",
   "settings.closeBehavior": "關閉視窗時",
   "settings.closeBehaviorHint": "選擇關閉主視窗後 Reasonix 是否繼續執行。",

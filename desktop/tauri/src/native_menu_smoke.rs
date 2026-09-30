@@ -7,7 +7,8 @@ use std::sync::{
 };
 
 use objc2::MainThreadMarker;
-use objc2_app_kit::{NSApplication, NSMenu};
+use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSMenu};
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, EventId, Listener, WebviewWindow};
 
 use crate::native_window_smoke::{on_main, wait_for};
@@ -44,6 +45,112 @@ fn invoke_settings(menu: &NSMenu, depth: usize) -> Result<bool, String> {
         }
     }
     Ok(false)
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+struct NativeShortcut {
+    title: String,
+    key: String,
+    #[serde(default)]
+    meta: bool,
+    #[serde(default)]
+    ctrl: bool,
+    #[serde(default)]
+    alt: bool,
+    #[serde(default)]
+    shift: bool,
+}
+
+#[derive(Deserialize)]
+struct ShortcutContract {
+    required: Vec<NativeShortcut>,
+    optional: Vec<NativeShortcut>,
+}
+
+impl NativeShortcut {
+    fn same_combo(&self, other: &Self) -> bool {
+        self.key == other.key
+            && self.meta == other.meta
+            && self.ctrl == other.ctrl
+            && self.alt == other.alt
+            && self.shift == other.shift
+    }
+}
+
+fn collect_shortcuts(
+    menu: &NSMenu,
+    depth: usize,
+    shortcuts: &mut Vec<NativeShortcut>,
+) -> Result<(), String> {
+    if depth > 3 || !(0..=128).contains(&menu.numberOfItems()) {
+        return Err("native menu exceeds acceptance bounds".into());
+    }
+    for index in 0..menu.numberOfItems() {
+        let item = menu.itemAtIndex(index).ok_or("native menu item missing")?;
+        let raw_key = item.keyEquivalent().to_string();
+        let flags = item.keyEquivalentModifierMask();
+        // Preview bindings require Cmd or Ctrl. macOS also adds Fn/typing
+        // chords that cannot be assigned through that configuration layer.
+        if !raw_key.is_empty()
+            && flags.intersects(NSEventModifierFlags::Command | NSEventModifierFlags::Control)
+        {
+            let key = if raw_key == " " {
+                "Space".into()
+            } else {
+                raw_key
+            };
+            shortcuts.push(NativeShortcut {
+                title: item.title().to_string(),
+                key,
+                meta: flags.contains(NSEventModifierFlags::Command),
+                ctrl: flags.contains(NSEventModifierFlags::Control),
+                alt: flags.contains(NSEventModifierFlags::Option),
+                shift: flags.contains(NSEventModifierFlags::Shift),
+            });
+        }
+        if let Some(submenu) = item.submenu() {
+            collect_shortcuts(&submenu, depth + 1, shortcuts)?;
+        }
+    }
+    Ok(())
+}
+
+pub fn shortcuts(app: &AppHandle) -> Result<(), String> {
+    let expected: ShortcutContract = serde_json::from_str(include_str!(
+        "../../frontend/src/tauri/macosMenuShortcuts.json"
+    ))
+    .map_err(|_| "invalid shared macOS shortcut contract")?;
+    let actual = on_main(app, |_, _| {
+        let application =
+            NSApplication::sharedApplication(MainThreadMarker::new().ok_or("not main thread")?);
+        let menu = application
+            .mainMenu()
+            .ok_or("installed native menu missing")?;
+        let mut shortcuts = Vec::new();
+        collect_shortcuts(&menu, 0, &mut shortcuts)?;
+        Ok(shortcuts)
+    })?;
+    // AppKit supplements menus depending on macOS version and input settings.
+    // Required application roles must exist; every actual primary-modifier
+    // chord, including optional OS items, must be reserved by the frontend.
+    // OS item titles may be localized, so optional entries match by chord.
+    if expected
+        .required
+        .iter()
+        .any(|required| !actual.contains(required))
+        || actual.iter().any(|installed| {
+            !expected.required.contains(installed)
+                && !expected
+                    .optional
+                    .iter()
+                    .any(|optional| optional.same_combo(installed))
+        })
+    {
+        return Err(format!(
+            "installed menu shortcuts differ from frontend reservation; actual={actual:?}"
+        ));
+    }
+    Ok(())
 }
 
 pub fn settings(app: &AppHandle, phase: &str) -> Result<(), String> {
