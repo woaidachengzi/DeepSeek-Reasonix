@@ -7,6 +7,8 @@ mod host_preferences;
 mod keychain;
 mod local_paths;
 mod menu;
+#[cfg(target_os = "macos")]
+mod native_window_smoke;
 mod notifications;
 mod opener_catalog;
 mod protocol_generated;
@@ -3734,6 +3736,10 @@ fn main() {
         #[cfg(target_os = "macos")]
         if matches!(event, tauri::RunEvent::Reopen { .. }) {
             tray::show_main_window(app);
+        }
+        #[cfg(target_os = "macos")]
+        if matches!(event, tauri::RunEvent::Ready) {
+            native_window_smoke::start_if_requested(app);
         }
         #[cfg(target_os = "macos")]
         if matches!(event, tauri::RunEvent::Ready)

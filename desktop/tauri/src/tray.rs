@@ -5,11 +5,23 @@ use tauri::{
 };
 
 pub fn show_main_window(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
+    let handle = app.clone();
+    // Singleton callbacks arrive on a worker thread. Restore the application
+    // and its window together on the native UI thread; showing an NSWindow
+    // alone does not undo the macOS application's Hide action.
+    let _ = app.run_on_main_thread(move || {
+        #[cfg(target_os = "macos")]
+        if let Some(main_thread) = objc2::MainThreadMarker::new() {
+            if objc2_app_kit::NSApplication::sharedApplication(main_thread).isHidden() {
+                let _ = handle.show();
+            }
+        }
+        if let Some(window) = handle.get_webview_window("main") {
+            let _ = window.unminimize();
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    });
 }
 
 pub fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

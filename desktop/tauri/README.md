@@ -135,6 +135,20 @@ host/sidecar 可执行文件及代码签名。包级 smoke 分别在临时 HOME 
 集成测试使用临时 profile，bundle 使用开发签名；正式发布仍需
 实际发布二进制兼容认证、Developer ID 签名与公证，以及停写后的真实数据恢复演练。
 
+原生窗口包级验收使用同一临时档案连续启动真实 `.app`，分别检查尺寸/位置、窗口隐藏和
+最小化恢复、最大化重启后取消最大化、普通窗口重启、应用隐藏/取消隐藏、关闭后继续运行及
+关闭即退出。默认和显式 core 档案分别执行，核对凭据身份稳定、实际 sidecar 鉴权与退出清理：
+
+```bash
+python3 tools/tauri/smoke-native-window.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
+```
+
+该脚本拒绝操作已运行的同标识 Preview，使用原生宿主 API，不依赖屏幕录制权限。
+第二实例键盘焦点使用额外的严格门禁 `--focus`，通过 LaunchServices 打开真实第二个进程，
+同时要求原窗口可见、几何正确且 `is_focused()` 为真，原 sidecar 保持唯一。当前本机焦点
+门禁尚未通过；默认窗口门禁通过不能代替该项验收，也不代表菜单/托盘点击、键盘编辑或
+显示器拔插已经验收。macOS CI 已接入默认窗口门禁，远端执行结果待确认。
+
 2026-09-27 本机以独立 bundle ID 构建并 ad-hoc 签名测试包，包级 smoke 两种 profile 都通过：host 从临时 HOME
 读取应用数据、启动包内 sidecar、验证实际继承的环境和 ready 文件，并在正常退出后清理子进程和临时目录。
 旧测试包的托管模式曾被该门禁准确检出继承外部缓存覆盖；重建当前代码后通过。该测试包
