@@ -1,34 +1,36 @@
-use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+#[cfg(target_os = "macos")]
+use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 
+/// Match the Wails baseline: macOS uses native responder-chain edit roles.
+/// Ordinary items with Cmd+C/V accelerators consume the keys without editing.
+#[cfg(target_os = "macos")]
 pub fn build_app_menu(
     app: &tauri::App,
 ) -> Result<tauri::menu::Menu<tauri::Wry>, Box<dyn std::error::Error + Send + Sync>> {
     let handle = app.handle();
-
-    let about = MenuItemBuilder::new("About Reasonix")
-        .id("about")
-        .build(handle)?;
-    let check_updates = MenuItemBuilder::new("Check for Updates…")
-        .id("check_updates")
-        .build(handle)?;
-
     let app_menu = SubmenuBuilder::new(handle, "Reasonix")
-        .item(&about)
-        .separator()
-        .item(&check_updates)
-        .separator()
         .item(
-            &MenuItemBuilder::new("Hide Reasonix")
-                .id("hide")
-                .accelerator("CmdOrCtrl+H")
+            &MenuItemBuilder::new("About Reasonix")
+                .id("about")
+                .build(handle)?,
+        )
+        .separator()
+        // The frontend owns configurable shortcuts, including Settings and
+        // text size. Do not install fixed native accelerators for these items.
+        .item(
+            &MenuItemBuilder::new("Settings…")
+                .id("settings")
                 .build(handle)?,
         )
         .item(
-            &MenuItemBuilder::new("Hide Others")
-                .id("hide_others")
-                .accelerator("CmdOrCtrl+Alt+H")
+            &MenuItemBuilder::new("Check for Updates…")
+                .id("check_updates")
                 .build(handle)?,
         )
+        .separator()
+        .item(&PredefinedMenuItem::hide(handle, Some("Hide Reasonix"))?)
+        .item(&PredefinedMenuItem::hide_others(handle, None)?)
+        .item(&PredefinedMenuItem::show_all(handle, None)?)
         .separator()
         .item(
             &MenuItemBuilder::new("Quit Reasonix")
@@ -39,43 +41,13 @@ pub fn build_app_menu(
         .build()?;
 
     let edit_menu = SubmenuBuilder::new(handle, "Edit")
-        .item(
-            &MenuItemBuilder::new("Undo")
-                .id("undo")
-                .accelerator("CmdOrCtrl+Z")
-                .build(handle)?,
-        )
-        .item(
-            &MenuItemBuilder::new("Redo")
-                .id("redo")
-                .accelerator("CmdOrCtrl+Shift+Z")
-                .build(handle)?,
-        )
+        .item(&PredefinedMenuItem::undo(handle, None)?)
+        .item(&PredefinedMenuItem::redo(handle, None)?)
         .separator()
-        .item(
-            &MenuItemBuilder::new("Cut")
-                .id("cut")
-                .accelerator("CmdOrCtrl+X")
-                .build(handle)?,
-        )
-        .item(
-            &MenuItemBuilder::new("Copy")
-                .id("copy")
-                .accelerator("CmdOrCtrl+C")
-                .build(handle)?,
-        )
-        .item(
-            &MenuItemBuilder::new("Paste")
-                .id("paste")
-                .accelerator("CmdOrCtrl+V")
-                .build(handle)?,
-        )
-        .item(
-            &MenuItemBuilder::new("Select All")
-                .id("select_all")
-                .accelerator("CmdOrCtrl+A")
-                .build(handle)?,
-        )
+        .item(&PredefinedMenuItem::cut(handle, None)?)
+        .item(&PredefinedMenuItem::copy(handle, None)?)
+        .item(&PredefinedMenuItem::paste(handle, None)?)
+        .item(&PredefinedMenuItem::select_all(handle, None)?)
         .build()?;
 
     let view_menu = SubmenuBuilder::new(handle, "View")
@@ -85,62 +57,41 @@ pub fn build_app_menu(
                 .accelerator("CmdOrCtrl+R")
                 .build(handle)?,
         )
-        .item(
-            &MenuItemBuilder::new("Force Reload")
-                .id("force_reload")
-                .accelerator("CmdOrCtrl+Shift+R")
-                .build(handle)?,
-        )
         .separator()
-        .item(
-            &MenuItemBuilder::new("Toggle Full Screen")
-                .id("toggle_fullscreen")
-                .accelerator("Ctrl+Cmd+F")
-                .build(handle)?,
-        )
+        .item(&PredefinedMenuItem::fullscreen(handle, None)?)
         .separator()
         .item(
             &MenuItemBuilder::new("Zoom In")
                 .id("zoom_in")
-                .accelerator("CmdOrCtrl+=")
                 .build(handle)?,
         )
         .item(
             &MenuItemBuilder::new("Zoom Out")
                 .id("zoom_out")
-                .accelerator("CmdOrCtrl+-")
                 .build(handle)?,
         )
         .item(
             &MenuItemBuilder::new("Reset Zoom")
                 .id("zoom_reset")
-                .accelerator("CmdOrCtrl+0")
                 .build(handle)?,
         )
         .build()?;
 
     let window_menu = SubmenuBuilder::new(handle, "Window")
-        .item(
-            &MenuItemBuilder::new("Minimize")
-                .id("minimize")
-                .accelerator("CmdOrCtrl+M")
-                .build(handle)?,
-        )
-        .item(&MenuItemBuilder::new("Zoom").id("zoom").build(handle)?)
+        .item(&PredefinedMenuItem::minimize(handle, None)?)
+        .item(&PredefinedMenuItem::maximize(handle, Some("Zoom"))?)
         .separator()
         .item(
-            &MenuItemBuilder::new("Bring All to Front")
-                .id("bring_all_to_front")
+            &MenuItemBuilder::new("Show Reasonix")
+                .id("show_main_window")
                 .build(handle)?,
         )
         .build()?;
 
-    let menu = MenuBuilder::new(handle)
+    Ok(MenuBuilder::new(handle)
         .item(&app_menu)
         .item(&edit_menu)
         .item(&view_menu)
         .item(&window_menu)
-        .build()?;
-
-    Ok(menu)
+        .build()?)
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Copy, RefreshCw } from "lucide-react";
 import { tauriMessageFrom, tauriStorageSettings, tauriWorkspaceRootsAvailability, type TauriStorageSettings as StorageView } from "../lib/tauriBridge";
 import { useT } from "../lib/i18n";
+import { writeClipboardText } from "../lib/clipboard";
 
 export function TauriStorageSettings({ workspaceRoot, defaultWorkspace = "", onChooseDefaultWorkspace, onClearDefaultWorkspace }: {
   workspaceRoot?: string;
@@ -44,7 +45,7 @@ export function TauriStorageSettings({ workspaceRoot, defaultWorkspace = "", onC
   const copy = async (label: string, path: string) => {
     setCopied("");
     setError("");
-    try { await navigator.clipboard.writeText(path); setCopied(label); }
+    try { if (!await writeClipboardText(path)) throw new Error("clipboard unavailable"); setCopied(label); }
     catch { setError(t("settings.storage.copyFailed", { label })); }
   };
   const chooseDefault = async () => {

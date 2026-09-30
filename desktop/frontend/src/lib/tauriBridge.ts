@@ -1828,6 +1828,11 @@ export function onTauriBridgeResyncRequired(callback: () => void): Promise<Unlis
   return listen("bridge:resync-required", callback);
 }
 
+export function onTauriOpenSettings(callback: () => void): Promise<UnlistenFn> {
+  requireTauri();
+  return listen("host:open-settings", callback);
+}
+
 export async function tauriPlatformInfo(): Promise<string> {
   requireTauri();
   return invoke<string>("platform_info");

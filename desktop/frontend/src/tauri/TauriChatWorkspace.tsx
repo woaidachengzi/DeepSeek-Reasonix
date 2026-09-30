@@ -1,9 +1,11 @@
 import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Copy, Eye, FileText, FolderOpen, FolderTree, GitBranch, Keyboard, MessageSquare, Paperclip, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Settings, Sparkles, Square, Trash2, X } from "lucide-react";
+import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Eye, FileText, FolderOpen, FolderTree, GitBranch, Keyboard, MessageSquare, Paperclip, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Settings, Sparkles, Square, Trash2, X } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { Markdown } from "../components/Markdown";
+import { CopyButton } from "../components/CopyButton";
+import { onTauriOpenSettings } from "../lib/tauriBridge";
 import { CommandPalette, type PaletteItem } from "../components/CommandPalette";
 import { ShortcutsCheatsheet, type ShortcutCheatsheetItem } from "../components/ShortcutsCheatsheet";
 import { QuestionJumpBar } from "../components/QuestionJumpBar";
@@ -78,7 +80,7 @@ function HistoryMessageArticle({ entry, sessionId, questionId }: {
       </div>
       {message.role === "user" && <div className="tauri-message__meta">
         {createdAt && <time dateTime={createdAt.toISOString()}>{createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>}
-        <button type="button" aria-label="复制消息" title="复制消息" onClick={() => { void navigator.clipboard?.writeText(message.content).catch(() => {}); }}><Copy size={14} /></button>
+        <CopyButton text={message.content} label="复制消息" showInlineLabel={false} />
       </div>}
     </article>
   </MessageErrorBoundary>;
@@ -739,6 +741,15 @@ export function TauriSessionPreview() {
     conversation.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
     setActiveQuestion(question.turn);
   }
+
+  useEffect(() => {
+    let active = true;
+    let unlisten: UnlistenFn | undefined;
+    void onTauriOpenSettings(() => {
+      if (active) { setSettingsTab("general"); setSettingsOpen(true); }
+    }).then(off => { if (active) unlisten = off; else off(); }).catch(() => {});
+    return () => { active = false; unlisten?.(); };
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

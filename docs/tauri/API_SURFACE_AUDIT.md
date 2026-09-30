@@ -59,9 +59,28 @@ desktop API contract (保留 app/event helper 的调用形状)
 | B：核心稳定性 | Provider、历史、工作区预览/变更和回滚切片已接入；检查点与 Git 变更面板现于回合空闲确认后自动刷新。 | 继续补齐工作区文件与 diff 的交互覆盖，并在真实 Preview 窗口验证跨会话、异常和大目录状态。 |
 | C：进程与工具 | MCP 服务器/运行时及插件设置已有 bridge 和 Preview 界面；Go MCP/插件测试、前端 MCP/工作区测试以及使用真实 bridge 的 Rust 测试通过。 | shell/terminal、Browser、worktree 的 Preview 入口与生命周期测试尚未接通；MCP/插件仍需真实打包进程验证。 |
 
-当前只推进 A、B、C。D 的 host 能力与 E 的后置功能保持后续顺序；本表不把测试切片视为整组完成。
+本轮 A、B、C 验证不代表整组完成；下列 D→E 改造继续保留这些发布缺口。
 
 本次验证：`pnpm build`（含绑定契约、lint、类型检查和 bundle 门禁）、`pnpm test:tauri`、`pnpm test:mcp-app`、`pnpm test:workspace`、`go test ./cmd/reasonix-desktop-bridge -run 'Test.*(MCP|Plugin)' -count=1`，以及设置 `REASONIX_TAURI_BRIDGE_TEST_BIN` 后的 `cargo test --locked --manifest-path desktop/tauri/Cargo.toml`（124 项通过）。这些门禁验证源码和测试进程，尚未代替真实安装包验收。
+
+### D→E 改造与验收目标（2026-09-30，进行中）
+
+按 D→E 顺序推进。D 验收且 Preview 稳定后再推进 E；正式发布和默认下载项切换另行授权。
+
+| 项目 | 当前实现与验证 | 待完成验收或改造 |
+| --- | --- | --- |
+| D：菜单与快捷键 | macOS 编辑项改为 Tauri 原生 responder-chain 角色；设置菜单接入 Preview 设置事件并测试卸载清理。沿用 Wails 基线，Windows/Linux 不显示 macOS 菜单。固定原生菜单不再占用可配置的设置和文字大小快捷键。 | 真实 WebView 的撤销/重做、剪切/复制/粘贴、全选、隐藏其他应用、全屏与快捷键冲突验收。 |
+| D：剪贴板 | 接入官方 clipboard-manager，主窗口仅允许读写文本；共享写入/读取路径覆盖 Tauri、浏览器与 Wails。消息、存储路径、hooks 路径及输入框复用；复制成功反馈等待实际写入成功。原生调用模拟、拒绝/忙碌回退、失败剪切不删文本、空剪贴板不覆盖选择与成功反馈测试通过。 | 真实系统剪贴板与 WebView 交互验收。 |
+| D：窗口与多显示器 | 保存普通窗口位置和显示器缩放，最大化/最小化不覆盖普通尺寸；按当前工作区限制恢复位置，移除外接屏后回到主屏。状态文件原子替换，兼容旧尺寸文件。窗口几何回归通过。 | 真实不同缩放显示器、拔插外接屏、最大化退出再恢复验收。 |
+| D：托盘与退出 | 托盘有显示/退出菜单；托盘、Dock 重开及单实例唤起均恢复最小化窗口。退出沿用 supervisor 停止路径。 | 真实托盘点击、关闭后后台任务、Cmd+Q/托盘退出及第二实例唤起验收。 |
+| D：对话框与链接 | 现有 Tauri 选择器及受限 HTTP(S) Rust 打开命令保留。 | 按业务入口补齐并验收取消、无权限、特殊路径和 OAuth。 |
+| D：通知与钥匙串 | 现有系统通知、事件开关及凭据同步保留；Rust 相关回归通过。 | 权限拒绝、后台通知及点击定位；真实钥匙串不可用、迁移与回退。 |
+| D：单实例与数据保护 | Tauri 单实例及独立默认 Preview 数据目录已存在；本次安装包验证默认/显式目录启动退出。 | 显式共享目录的 Wails/Tauri 写入互斥、备份回退全流程验收；单实例插件本身不能证明跨宿主互斥。 |
+| E：remote host / bot / updater / 管理页 | remote host 与 bot 已有部分设置/bridge 接口；updater 插件已注册。 | D 验收后对照 Wails 逐项审计和补齐；特别是当前“检查更新”仍是说明对话框，插件注册不能视为更新流程完成。 |
+
+本轮门禁：`pnpm test:clipboard`、输入框剪贴板回归、terminal selection、`pnpm test:tauri`、`pnpm build`，以及使用真实 Go bridge 的 Rust 测试（127 项通过）。`pnpm tauri:build -- --bundles app` 构建并本地 ad-hoc 签名；`tools/tauri/smoke-packaged-app.py` 在临时 HOME 分别验证默认和显式数据目录、sidecar 就绪、未认证请求拒绝以及退出无残留。此 smoke 没有执行菜单/托盘等 UI 点击；两次桌面自动化分别超时和报 ScreenCaptureKit `SCStreamErrorDomain -3811`，所以真实 UI 验收保留待办。本地 ad-hoc 签名不是正式发布签名/公证。
+
+剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
 ### 旧格式对话分叉切片验证（2026-09-30）
 

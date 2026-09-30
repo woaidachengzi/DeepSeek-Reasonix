@@ -38,6 +38,7 @@ const state = globalThis as typeof globalThis & {
   __historyGate?: Promise<void>;
   __tauriBridgeCalls?: Array<{ name: string; args: Record<string, unknown> }>;
   __emitBridgeEvent?: (event: object) => void;
+  __openNativeSettings?: () => void;
 };
 state.__workbenchSessions = [{ sessionId: "tauri-code-rewind", title: "回滚测试", workspaceRoot: "/tmp/ws" }];
 state.__workspaceCheckpointsHandler = async () => [{ turn: 1, prompt: "edit two files", time: 1, turnFileCount: 2 }];
@@ -230,5 +231,8 @@ await act(async () => { click(document.querySelector('.tauri-workspace-tree-butt
 await act(async () => { click(button("Checkpoints")); await settle(); await settle(); });
 check(document.body.textContent?.includes("child checkpoint"), "new session loads its own checkpoints");
 check(![...document.querySelectorAll(".tauri-workspace-change-entry")].some(row => row.textContent?.includes("edit two files")), "source session checkpoints do not leak into a child");
+await act(async () => { state.__openNativeSettings?.(); await settle(); });
+check(Boolean(document.querySelector(".tauri-settings-overlay")), "native Settings menu opens the Preview settings surface");
 await act(async () => { root.unmount(); });
+check(!state.__openNativeSettings, "native settings subscription is removed when the workspace unmounts");
 process.stdout.write("tauri code rewind UI: passed\n");

@@ -13,6 +13,8 @@ mod window_state;
 mod workbench_catalog;
 mod workbench_projects;
 
+use tauri::Emitter;
+
 #[cfg(test)]
 pub(crate) mod test_env {
     use std::sync::{Mutex, MutexGuard};
@@ -3363,13 +3365,11 @@ fn apply_menu_zoom(app: &tauri::AppHandle, factor: f64) {
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // When a second instance is launched, focus the existing window
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            tray::show_main_window(app);
         }))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
@@ -3382,6 +3382,7 @@ fn main() {
                 WorkbenchProjectCatalog::for_app(app).map_err(std::io::Error::other)?;
             if let Some(window) = app.get_webview_window("main") {
                 window_state.restore(&window);
+                window_state.capture(&window);
                 window
                     .set_zoom(host_preferences.zoom_factor())
                     .map_err(std::io::Error::other)?;
@@ -3390,9 +3391,12 @@ fn main() {
                 data_profile::configure_preview_profile(app).map_err(std::io::Error::other)?;
             let supervisor = BridgeSupervisor::from_environment(app.handle().clone());
 
-            let menu = menu::build_app_menu(app)
-                .map_err(|e| std::io::Error::other(e.to_string()))?;
-            app.set_menu(menu)?;
+            #[cfg(target_os = "macos")]
+            {
+                let menu = menu::build_app_menu(app)
+                    .map_err(|e| std::io::Error::other(e.to_string()))?;
+                app.set_menu(menu)?;
+            }
 
             tray::create_tray(app)
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
@@ -3421,6 +3425,14 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_)) {
+                if let (Some(state), Some(webview)) = (
+                    window.app_handle().try_state::<PreviewWindowState>(),
+                    window.app_handle().get_webview_window("main"),
+                ) {
+                    state.capture(&webview);
+                }
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
                 match window.app_handle().state::<HostPreferences>().close_behavior() {
@@ -3434,6 +3446,14 @@ fn main() {
                 "quit" => {
                     // Cmd+Q: actually quit the application
                     app.exit(0);
+                }
+                "settings" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.emit("host:open-settings", ());
+                    }
+                }
+                "show_main_window" => {
+                    tray::show_main_window(app);
                 }
                 "about" => {
                     let version = env!("CARGO_PKG_VERSION");
@@ -3496,15 +3516,6 @@ fn main() {
                 }
                 "hide" => {
                     let _ = app.hide();
-                }
-                "hide_others" => {
-                    // macOS-only: hide other applications
-                    #[cfg(target_os = "macos")]
-                    {
-                        // Tauri doesn't expose hide_others directly; we rely on
-                        // the native menu accelerator to handle this via macOS.
-                        // The menu item with Cmd+Alt+H triggers the system behavior.
-                    }
                 }
                 _ => {}
             }
@@ -3660,6 +3671,10 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("failed to build Reasonix Tauri host");
     app.run(|app, event| {
+        #[cfg(target_os = "macos")]
+        if matches!(event, tauri::RunEvent::Reopen { .. }) {
+            tray::show_main_window(app);
+        }
         #[cfg(target_os = "macos")]
         if matches!(event, tauri::RunEvent::Ready)
             && std::env::var("REASONIX_TAURI_PACKAGE_SMOKE").as_deref() == Ok("1")

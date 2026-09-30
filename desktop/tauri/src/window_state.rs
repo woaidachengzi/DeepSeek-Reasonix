@@ -1,4 +1,4 @@
-use std::{fs, io, io::Write, path::PathBuf};
+use std::{fs, io, io::Write, path::PathBuf, sync::Mutex};
 
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, WebviewWindow};
@@ -8,24 +8,77 @@ const MIN_WIDTH: u32 = 900;
 const MIN_HEIGHT: u32 = 620;
 const MAX_DIMENSION: u32 = 16_384;
 
-/// Non-sensitive host state. It deliberately lives outside `REASONIX_HOME`:
-/// resetting or importing the Go core profile must not alter window behaviour.
+/// Host state stays outside REASONIX_HOME. Keep normal geometry in memory so
+/// maximizing, minimizing or hiding cannot replace it with transient bounds.
 pub struct PreviewWindowState {
     path: PathBuf,
+    normal: Mutex<Option<SavedWindowState>>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 struct SavedWindowState {
     width: u32,
     height: u32,
     maximized: bool,
+    #[serde(default)]
+    x: Option<i32>,
+    #[serde(default)]
+    y: Option<i32>,
+    #[serde(default)]
+    scale_factor: Option<f64>,
 }
 
 impl SavedWindowState {
     fn is_valid(&self) -> bool {
         (MIN_WIDTH..=MAX_DIMENSION).contains(&self.width)
             && (MIN_HEIGHT..=MAX_DIMENSION).contains(&self.height)
+            && self
+                .scale_factor
+                .is_none_or(|scale| scale.is_finite() && (0.5..=8.0).contains(&scale))
     }
+}
+
+struct WorkArea {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    scale: f64,
+}
+
+/// Require a reachable title bar on a connected monitor. Missing monitors and
+/// old size-only files fall back to the primary monitor, with bounded position.
+fn restored_bounds(state: &SavedWindowState, areas: &[WorkArea]) -> Option<(i32, i32, u32, u32)> {
+    let saved_position = state.x.zip(state.y);
+    let target = saved_position
+        .and_then(|(x, y)| {
+            areas.iter().find(|area| {
+                let right = i64::from(area.x) + i64::from(area.width);
+                let bottom = i64::from(area.y) + i64::from(area.height);
+                i64::from(x) + 96 <= right
+                    && i64::from(x) + i64::from(state.width) > i64::from(area.x) + 96
+                    && i64::from(y) >= i64::from(area.y)
+                    && i64::from(y) + 32 <= bottom
+            })
+        })
+        .or_else(|| areas.first())?;
+    let ratio = state.scale_factor.map_or(1.0, |scale| target.scale / scale);
+    let width = ((f64::from(state.width) * ratio).round() as u32)
+        .min(target.width)
+        .max((f64::from(MIN_WIDTH) * target.scale).round() as u32);
+    let height = ((f64::from(state.height) * ratio).round() as u32)
+        .min(target.height)
+        .max((f64::from(MIN_HEIGHT) * target.scale).round() as u32);
+    let (x, y) = saved_position.unwrap_or((target.x, target.y));
+    // Use i64: monitor coordinates can be negative, and saved positions are untrusted.
+    let max_x = i64::from(target.x) + i64::from(target.width.saturating_sub(width));
+    let max_y = i64::from(target.y) + i64::from(target.height.saturating_sub(height));
+    Some((
+        i64::from(x).clamp(i64::from(target.x), max_x) as i32,
+        i64::from(y).clamp(i64::from(target.y), max_y) as i32,
+        width,
+        height,
+    ))
 }
 
 impl PreviewWindowState {
@@ -40,121 +93,238 @@ impl PreviewWindowState {
                 directory.display()
             )
         })?;
-        Ok(Self {
-            path: directory.join(STATE_FILE),
-        })
+        let path = directory.join(STATE_FILE);
+        let normal = Mutex::new(read_state(&path));
+        Ok(Self { path, normal })
     }
 
-    /// Restoration is best-effort: an old, corrupt, or unreasonable state must
-    /// never keep the Preview from starting or produce an unusable tiny window.
     pub fn restore(&self, window: &WebviewWindow) {
-        let Some(state) = self.read() else {
+        let state = self
+            .normal
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let Some(state) = state else {
             return;
         };
-
+        let mut monitors = window.available_monitors().unwrap_or_default();
+        if let Ok(Some(primary)) = window.primary_monitor() {
+            monitors.retain(|monitor| monitor.position() != primary.position());
+            monitors.insert(0, primary);
+        }
+        let areas: Vec<_> = monitors
+            .iter()
+            .map(|monitor| {
+                let area = monitor.work_area();
+                WorkArea {
+                    x: area.position.x,
+                    y: area.position.y,
+                    width: area.size.width,
+                    height: area.size.height,
+                    scale: monitor.scale_factor(),
+                }
+            })
+            .collect();
+        if let Some((x, y, width, height)) = restored_bounds(&state, &areas) {
+            let _ = window.set_size(tauri::PhysicalSize::new(width, height));
+            let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+        }
         if state.maximized {
             let _ = window.maximize();
-        } else {
-            let _ = window.set_size(tauri::PhysicalSize::new(state.width, state.height));
+        }
+    }
+
+    pub fn capture(&self, window: &WebviewWindow) {
+        if window.is_minimized().unwrap_or(true) || window.is_fullscreen().unwrap_or(true) {
+            return;
+        }
+        let Ok(maximized) = window.is_maximized() else {
+            return;
+        };
+        let mut normal = self.normal.lock().unwrap_or_else(|e| e.into_inner());
+        if maximized {
+            if let Some(state) = normal.as_mut() {
+                state.maximized = true;
+            }
+            return;
+        }
+        let (Ok(size), Ok(position), Ok(scale)) = (
+            window.inner_size(),
+            window.outer_position(),
+            window.scale_factor(),
+        ) else {
+            return;
+        };
+        let state = SavedWindowState {
+            width: size.width,
+            height: size.height,
+            maximized,
+            x: Some(position.x),
+            y: Some(position.y),
+            scale_factor: Some(scale),
+        };
+        if state.is_valid() {
+            *normal = Some(state);
         }
     }
 
     pub fn save(&self, window: &WebviewWindow) -> Result<(), String> {
-        let size = window
-            .inner_size()
-            .map_err(|error| format!("read main window size: {error}"))?;
-        let state = SavedWindowState {
-            width: size.width,
-            height: size.height,
-            maximized: window
-                .is_maximized()
-                .map_err(|error| format!("read main window maximized state: {error}"))?,
-        };
-
-        if !state.is_valid() {
+        self.capture(window);
+        let state = self
+            .normal
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let Some(state) = state else {
             return Ok(());
-        }
+        };
         let encoded = serde_json::to_vec(&state)
             .map_err(|error| format!("encode main window state: {error}"))?;
         write_state(&self.path, &encoded)
             .map_err(|error| format!("write main window state {}: {error}", self.path.display()))
     }
+}
 
-    fn read(&self) -> Option<SavedWindowState> {
-        serde_json::from_slice::<SavedWindowState>(&fs::read(&self.path).ok()?)
-            .ok()
-            .filter(SavedWindowState::is_valid)
-    }
+fn read_state(path: &std::path::Path) -> Option<SavedWindowState> {
+    serde_json::from_slice::<SavedWindowState>(&fs::read(path).ok()?)
+        .ok()
+        .filter(SavedWindowState::is_valid)
 }
 
 fn write_state(path: &std::path::Path, encoded: &[u8]) -> io::Result<()> {
-    let mut file = fs::OpenOptions::new()
-        .create(true)
-        .truncate(true)
-        .write(true)
-        .open(path)?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| io::Error::other("window state has no parent"))?;
+    let mut file = tempfile::NamedTempFile::new_in(parent)?;
     file.write_all(encoded)?;
-    file.sync_all()
+    file.as_file().sync_all()?;
+    file.persist(path).map_err(|error| error.error)?;
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn accepts_only_sensible_window_sizes() {
-        assert!(SavedWindowState {
+    fn state() -> SavedWindowState {
+        SavedWindowState {
             width: 1280,
             height: 820,
             maximized: false,
+            x: None,
+            y: None,
+            scale_factor: None,
         }
-        .is_valid());
+    }
+    fn area(x: i32, y: i32, width: u32, height: u32, scale: f64) -> WorkArea {
+        WorkArea {
+            x,
+            y,
+            width,
+            height,
+            scale,
+        }
+    }
+
+    #[test]
+    fn accepts_only_sensible_window_sizes_and_scales() {
+        assert!(state().is_valid());
         assert!(!SavedWindowState {
             width: MIN_WIDTH - 1,
-            height: MIN_HEIGHT,
-            maximized: false,
+            ..state()
         }
         .is_valid());
         assert!(!SavedWindowState {
-            width: MAX_DIMENSION + 1,
-            height: MIN_HEIGHT,
-            maximized: false,
+            height: MAX_DIMENSION + 1,
+            ..state()
+        }
+        .is_valid());
+        assert!(!SavedWindowState {
+            scale_factor: Some(f64::NAN),
+            ..state()
         }
         .is_valid());
     }
 
     #[test]
-    fn persists_and_reloads_valid_state() {
-        let root = tempfile::tempdir().expect("temp root");
-        let store = PreviewWindowState {
-            path: root.path().join(STATE_FILE),
-        };
+    fn persists_and_reads_old_size_only_state() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(STATE_FILE);
         let expected = SavedWindowState {
-            width: 1440,
-            height: 900,
-            maximized: true,
+            x: Some(-1200),
+            y: Some(50),
+            scale_factor: Some(2.0),
+            ..state()
         };
-
-        write_state(
-            &store.path,
-            &serde_json::to_vec(&expected).expect("encode state"),
-        )
-        .expect("write state");
-
-        assert_eq!(store.read(), Some(expected));
+        write_state(&path, &serde_json::to_vec(&expected).unwrap()).unwrap();
+        assert_eq!(read_state(&path), Some(expected));
+        fs::write(&path, r#"{"width":1440,"height":900,"maximized":true}"#).unwrap();
+        assert_eq!(
+            read_state(&path),
+            Some(SavedWindowState {
+                width: 1440,
+                height: 900,
+                maximized: true,
+                ..state()
+            })
+        );
     }
 
     #[test]
     fn ignores_corrupt_or_unreasonable_state() {
-        let root = tempfile::tempdir().expect("temp root");
-        let store = PreviewWindowState {
-            path: root.path().join(STATE_FILE),
-        };
-        fs::write(&store.path, "not json").expect("write corrupt state");
-        assert_eq!(store.read(), None);
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(STATE_FILE);
+        fs::write(&path, "not json").unwrap();
+        assert_eq!(read_state(&path), None);
+        fs::write(&path, r#"{"width":1,"height":1,"maximized":false}"#).unwrap();
+        assert_eq!(read_state(&path), None);
+    }
 
-        fs::write(&store.path, r#"{"width":1,"height":1,"maximized":false}"#)
-            .expect("write unreasonable state");
-        assert_eq!(store.read(), None);
+    #[test]
+    fn restores_negative_coordinates_on_a_connected_secondary_monitor() {
+        let state = SavedWindowState {
+            x: Some(-1400),
+            y: Some(70),
+            ..state()
+        };
+        assert_eq!(
+            restored_bounds(
+                &state,
+                &[
+                    area(0, 25, 1920, 1055, 1.0),
+                    area(-1920, 25, 1920, 1055, 1.0)
+                ]
+            ),
+            Some((-1400, 70, 1280, 820))
+        );
+    }
+
+    #[test]
+    fn disconnected_monitor_and_extreme_coordinates_return_to_primary_work_area() {
+        for (x, y) in [(-2500, 50), (i32::MAX, i32::MIN)] {
+            let state = SavedWindowState {
+                x: Some(x),
+                y: Some(y),
+                ..state()
+            };
+            let (x, y, width, height) =
+                restored_bounds(&state, &[area(0, 25, 1920, 1055, 1.0)]).unwrap();
+            assert!((0..=640).contains(&x) && (25..=260).contains(&y));
+            assert_eq!((width, height), (1280, 820));
+        }
+    }
+
+    #[test]
+    fn keeps_logical_size_when_restoring_on_a_different_display_scale() {
+        let state = SavedWindowState {
+            width: 2560,
+            height: 1640,
+            scale_factor: Some(2.0),
+            ..state()
+        };
+        assert_eq!(
+            restored_bounds(&state, &[area(0, 25, 1920, 1055, 1.0)]),
+            Some((0, 25, 1280, 820))
+        );
+        assert_eq!(restored_bounds(&state, &[]), None);
     }
 }

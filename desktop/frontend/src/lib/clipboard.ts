@@ -1,8 +1,18 @@
-// Clipboard writes for the desktop shell: the async Clipboard API when the
-// webview grants it, the Wails runtime bridge when it does not, and a hidden
-// textarea + execCommand as the last resort.
+import { isTauri } from "@tauri-apps/api/core";
+
+// Native Tauri clipboard access is limited to text in the main window. Browser
+// and Wails keep their existing fallbacks; only explicit user actions read it.
 
 export async function writeClipboardText(value: string): Promise<boolean> {
+  if (isTauri()) {
+    try {
+      const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
+      await writeText(value);
+      return true;
+    } catch {
+      // A temporarily unavailable native clipboard can use browser fallbacks.
+    }
+  }
   try {
     if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(value);
@@ -19,6 +29,32 @@ export async function writeClipboardText(value: string): Promise<boolean> {
     // Bridge missing or failed — fall through to execCommand.
   }
   return fallbackCopyText(value);
+}
+
+export async function readClipboardText(): Promise<string> {
+  if (isTauri()) {
+    try {
+      const { readText } = await import("@tauri-apps/plugin-clipboard-manager");
+      return await readText();
+    } catch {
+      // Try the WebView and Wails fallback when native access fails.
+    }
+  }
+  try {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
+      return await navigator.clipboard.readText();
+    }
+  } catch {
+    // Permission denied or unavailable.
+  }
+  try {
+    if (typeof window !== "undefined" && window.runtime?.ClipboardGetText) {
+      return await window.runtime.ClipboardGetText();
+    }
+  } catch {
+    // No readable clipboard source.
+  }
+  return "";
 }
 
 // execCommand("copy") needs a selected editable element, so this selects a

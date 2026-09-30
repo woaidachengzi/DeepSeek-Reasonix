@@ -21,7 +21,7 @@ import { cacheGeneration, loadOlder } from "../lib/composerHistory";
 import { sessionTurnsLabel } from "../lib/sessionTurnsPresentation";
 import { useI18n, type Translator } from "../lib/i18n";
 import { detectShortcutPlatform, formatShortcutCombo, isReservedComposerHistoryShortcut, matchesShortcut, useShortcutComboLabel } from "../lib/keyboardShortcuts";
-import { fallbackCopyText } from "../lib/clipboard";
+import { readClipboardText, writeClipboardText } from "../lib/clipboard";
 import {
   commandAvailableAtSlashPosition,
   commandUsesStructuredInvocation,
@@ -2637,27 +2637,12 @@ export function Composer({
       focusInputRange(selection.from, selection.to, selection.afterInvocationId);
       return;
     }
-    try {
-      await navigator.clipboard.writeText(selection.selected);
-    } catch {
-      // Fall back to Wails desktop runtime, then execCommand
-      try {
-        if (typeof window !== "undefined" && (await window.runtime?.ClipboardSetText?.(selection.selected))) {
-          /* ok */
-        } else if (!fallbackCopyText(selection.selected)) {
-          // Every clipboard path failed. Cutting now would delete text that
-          // never reached the clipboard, so keep the draft intact.
-          if (sourceDraftKey === activeDraftKeyRef.current) {
-            focusInputRange(selection.from, selection.to, selection.afterInvocationId);
-          }
-          return;
-        }
-      } catch {
-        if (sourceDraftKey === activeDraftKeyRef.current) {
-          focusInputRange(selection.from, selection.to, selection.afterInvocationId);
-        }
-        return;
+    if (!await writeClipboardText(selection.selected)) {
+      // Never cut text that did not reach the clipboard.
+      if (sourceDraftKey === activeDraftKeyRef.current) {
+        focusInputRange(selection.from, selection.to, selection.afterInvocationId);
       }
+      return;
     }
     if (cut) {
       const beforeEdit = composerEditSnapshot(sourceDraftKey, { start: selection.from, end: selection.to });
@@ -2689,14 +2674,8 @@ export function Composer({
       /* clipboard.read() not supported or permission denied; fall through */
     }
 
-    if (!navigator.clipboard?.readText) {
-      if (sourceDraftKey === activeDraftKeyRef.current) {
-        focusInputRange(selection.from, selection.to, selection.afterInvocationId);
-      }
-      return;
-    }
     try {
-      const pasted = await navigator.clipboard.readText();
+      const pasted = await readClipboardText();
       if (pasted === "") {
         // Match the keyboard paste handler: an empty text read means "nothing
         // to insert" (empty clipboard, files, or unsupported types) — never

@@ -1,3 +1,5 @@
+import { readClipboardText } from "./clipboard";
+
 export type TerminalSelectionPoint = { left: number; top: number };
 
 export type TerminalSelectionOperation<T> = {
@@ -135,22 +137,7 @@ export function handleTerminalCopyKey(input: {
   return { intercepted: true, text: input.getSelection() };
 }
 
-// Async clipboard reads need the webview's Clipboard API permission; the Wails
-// runtime bridge is the fallback, mirroring writeClipboardText's ladder.
+// Keep terminal reads on the same native/browser/Wails clipboard path.
 export async function readTerminalClipboardText(): Promise<string> {
-  try {
-    if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
-      return await navigator.clipboard.readText();
-    }
-  } catch {
-    // Permission denied or unavailable — try the bridge.
-  }
-  try {
-    if (typeof window !== "undefined" && window.runtime?.ClipboardGetText) {
-      return await window.runtime.ClipboardGetText();
-    }
-  } catch {
-    // Bridge missing or failed.
-  }
-  return "";
+  return readClipboardText();
 }

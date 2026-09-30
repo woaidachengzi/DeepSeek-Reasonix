@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { writeClipboardText } from "../lib/clipboard";
 import { changeTauriHooksSettings, tauriHooksSettings, tauriPluginSettings, tauriMessageFrom, type TauriHooksSettings as HooksView, type TauriPluginItem } from "../lib/tauriBridge";
 import { useT, type Translator } from "../lib/i18n";
 
@@ -101,8 +102,7 @@ export function TauriHooksSettings({ workspaceRoot = "", currentSessionState, cu
   const copyPath = async () => {
     if (!view?.path) return;
     try {
-      if (!navigator.clipboard?.writeText) throw new Error(t("settings.hooks.clipboardUnavailable"));
-      await navigator.clipboard.writeText(view.path);
+      if (!await writeClipboardText(view.path)) throw new Error(t("settings.hooks.clipboardUnavailable"));
       setNotice(t("settings.hooks.pathCopied"));
       setError("");
     } catch { setError(t("settings.hooks.pathCopyFailed")); }
