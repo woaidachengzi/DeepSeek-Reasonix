@@ -2,11 +2,15 @@
 use serde::Serialize;
 use std::path::PathBuf;
 
+#[cfg(all(unix, any(target_os = "linux", test)))]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub(crate) mod linux;
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenerView {
     pub(crate) id: &'static str,
-    pub(crate) name: &'static str,
+    pub(crate) name: String,
     pub(crate) kind: &'static str,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub(crate) icon_data_url: String,
@@ -22,6 +26,10 @@ pub struct OpenersView {
 pub(crate) struct OpenerSpec {
     pub(crate) view: OpenerView,
     pub(crate) target: PathBuf,
+    #[cfg(target_os = "linux")]
+    pub(crate) linux_launch: linux::Launch,
+    #[cfg(target_os = "linux")]
+    pub(crate) icon_source: Option<PathBuf>,
 }
 
 pub(crate) fn selected_opener(specs: Vec<OpenerSpec>, id: &str) -> Result<OpenerSpec, String> {
@@ -127,7 +135,7 @@ fn discover_openers() -> Vec<OpenerSpec> {
                 Some(OpenerSpec {
                     view: OpenerView {
                         id,
-                        name,
+                        name: (*name).into(),
                         kind,
                         icon_data_url: String::new(),
                     },
@@ -136,7 +144,25 @@ fn discover_openers() -> Vec<OpenerSpec> {
             })
             .collect()
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    {
+        linux::Discovery::from_environment()
+            .discover()
+            .into_iter()
+            .map(|app| OpenerSpec {
+                view: OpenerView {
+                    id: app.id,
+                    name: app.name,
+                    kind: app.kind,
+                    icon_data_url: String::new(),
+                },
+                target: app.target,
+                linux_launch: app.launch,
+                icon_source: app.icon,
+            })
+            .collect()
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         let paths = std::env::var_os("PATH")
             .map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
@@ -217,7 +243,7 @@ fn discover_openers() -> Vec<OpenerSpec> {
                 Some(OpenerSpec {
                     view: OpenerView {
                         id,
-                        name,
+                        name: (*name).into(),
                         kind,
                         icon_data_url: String::new(),
                     },
@@ -274,6 +300,14 @@ pub(crate) fn views_with_icons(specs: Vec<OpenerSpec>) -> Vec<OpenerView> {
             #[cfg(target_os = "macos")]
             {
                 spec.view.icon_data_url = mac_application_icon(&spec.target).unwrap_or_default();
+            }
+            #[cfg(target_os = "linux")]
+            {
+                spec.view.icon_data_url = spec
+                    .icon_source
+                    .as_deref()
+                    .and_then(linux::icon_data_url)
+                    .unwrap_or_default();
             }
             spec.view
         })
@@ -431,11 +465,15 @@ mod tests {
         OpenerSpec {
             view: OpenerView {
                 id,
-                name: id,
+                name: id.into(),
                 kind,
                 icon_data_url: String::new(),
             },
             target: PathBuf::from("/native/app"),
+            #[cfg(target_os = "linux")]
+            linux_launch: linux::Launch::Path,
+            #[cfg(target_os = "linux")]
+            icon_source: None,
         }
     }
     #[test]

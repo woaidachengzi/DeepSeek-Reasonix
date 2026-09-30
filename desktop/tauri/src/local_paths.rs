@@ -363,31 +363,51 @@ fn launch_with_opener(
     } else {
         selected_opener(specs, id)?
     };
-    let launch = if spec.view.kind == "terminal" && path.is_file() {
-        path.parent().ok_or("file has no parent folder")?
-    } else {
-        &path
-    };
-    #[cfg(target_os = "macos")]
-    if spec.view.id == "ghostty" {
-        // Ghostty needs its explicit working-directory argument; handing
-        // it a directory document would not open a terminal there.
-        let mut child = std::process::Command::new("/usr/bin/open")
-            .arg("-na")
-            .arg(&spec.target)
-            .arg("--args")
-            .arg(format!("--working-directory={}", path_text(launch)?))
-            .spawn()
-            .map_err(|error| error.to_string())?;
-        std::thread::spawn(move || {
-            let _ = child.wait();
-        });
-        return Ok(());
+    #[cfg(target_os = "linux")]
+    {
+        let command = crate::opener_catalog::linux::command(
+            &spec.target,
+            &spec.linux_launch,
+            &path,
+            spec.view.kind == "terminal",
+        )?;
+        crate::opener_catalog::linux::launch(
+            command,
+            matches!(
+                spec.linux_launch,
+                crate::opener_catalog::linux::Launch::Gio(_)
+                    | crate::opener_catalog::linux::Launch::GioOpen
+            ) || spec.view.kind == "file-manager",
+        )
     }
-    window
-        .opener()
-        .open_path(path_text(launch)?, Some(path_text(&spec.target)?))
-        .map_err(|error| error.to_string())
+    #[cfg(not(target_os = "linux"))]
+    {
+        let launch = if spec.view.kind == "terminal" && path.is_file() {
+            path.parent().ok_or("file has no parent folder")?
+        } else {
+            &path
+        };
+        #[cfg(target_os = "macos")]
+        if spec.view.id == "ghostty" {
+            // Ghostty needs its explicit working-directory argument; handing
+            // it a directory document would not open a terminal there.
+            let mut child = std::process::Command::new("/usr/bin/open")
+                .arg("-na")
+                .arg(&spec.target)
+                .arg("--args")
+                .arg(format!("--working-directory={}", path_text(launch)?))
+                .spawn()
+                .map_err(|error| error.to_string())?;
+            std::thread::spawn(move || {
+                let _ = child.wait();
+            });
+            return Ok(());
+        }
+        window
+            .opener()
+            .open_path(path_text(launch)?, Some(path_text(&spec.target)?))
+            .map_err(|error| error.to_string())
+    }
 }
 
 fn session_workspace(
@@ -680,11 +700,15 @@ mod tests {
             vec![OpenerSpec {
                 view: OpenerView {
                     id: "vscode",
-                    name: "VS Code",
+                    name: "VS Code".into(),
                     kind: "editor",
                     icon_data_url: String::new(),
                 },
                 target: PathBuf::from("/Applications/Visual Studio Code.app"),
+                #[cfg(target_os = "linux")]
+                linux_launch: crate::opener_catalog::linux::Launch::Path,
+                #[cfg(target_os = "linux")]
+                icon_source: None,
             }]
         };
         for id in [

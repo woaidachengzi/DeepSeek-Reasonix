@@ -645,6 +645,52 @@ jobs:
       - name: Smoke test packaged Preview startup and shutdown
         run: python3 tools/tauri/smoke-packaged-app.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
 
+  # Compile the Tauri Linux host and exercise its native GIO/Pixbuf branches.
+  # This does not replace an interactive Linux desktop/package acceptance run.
+  desktop-tauri-linux:
+    needs: changes
+    if: always() && (github.event_name != 'pull_request' || needs.changes.outputs.desktop != 'false')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Install Linux Tauri and native image dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dbus-daemon dbus-bin libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev librsvg2-common patchelf
+
+      - name: Build the Go desktop bridge
+        run: |
+          bridge_target="$(rustc --print host-tuple)"
+          mkdir -p desktop/tauri/binaries
+          go build -trimpath -o "$RUNNER_TEMP/reasonix-desktop-bridge" ./cmd/reasonix-desktop-bridge
+          cp "$RUNNER_TEMP/reasonix-desktop-bridge" "desktop/tauri/binaries/reasonix-desktop-bridge-${bridge_target}"
+
+      - name: Check Rust formatting
+        working-directory: desktop/tauri
+        run: cargo fmt --check
+
+      - name: Clippy Linux native host
+        working-directory: desktop/tauri
+        run: cargo clippy --locked -- -D warnings
+
+      - name: Test Linux native host against a real bridge
+        working-directory: desktop/tauri
+        env:
+          REASONIX_TAURI_BRIDGE_TEST_BIN: ${{ runner.temp }}/reasonix-desktop-bridge
+        run: dbus-run-session -- cargo test --locked
+
   # Ubuntu 24.04 ships WebKitGTK 4.1 only. Keep this capability build separate
   # from the 22.04/4.0 leg so neither runtime becomes a distro whitelist.
   desktop-linux-webkit41:

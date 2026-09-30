@@ -39,3 +39,7 @@ objc2-user-notifications = { version = "0.3.2", default-features = false, featur
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 notify-rust = "4.18.0"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gio = "0.18.4"
+gdk-pixbuf = "0.18.5"
