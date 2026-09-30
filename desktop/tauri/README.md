@@ -158,6 +158,12 @@ python3 tools/tauri/smoke-native-window.py 'desktop/tauri/target/release/bundle/
 smoke 均通过；同时通过前端 Tauri 回归与使用真实 bridge 的 189 项 Rust 回归（2 项默认忽略）。
 第二实例焦点严格门禁失败，真实界面点击与正式签名/公证继续保留待办。
 
+2026-10-01 设置菜单修复从干净提交 `6284dd44cbd663cb68c69613b6c668bf05fdb415` 完整构建
+macOS `.app`；严格本地 ad-hoc 签名校验、两种档案共 20 个原生窗口/Settings/关闭场景及
+原有包级启动/退出 smoke 均通过，构建与验收后工作树干净。Rust 使用真实 bridge 的 189 项
+回归、严格 clippy 与前端 Tauri 回归通过。原生 Settings 动作验证宿主事件和窗口恢复，
+不代表 WebView 设置覆盖层、键盘编辑或第二实例焦点已完成现场验收。
+
 2026-09-27 本机以独立 bundle ID 构建并 ad-hoc 签名测试包，包级 smoke 两种 profile 都通过：host 从临时 HOME
 读取应用数据、启动包内 sidecar、验证实际继承的环境和 ready 文件，并在正常退出后清理子进程和临时目录。
 旧测试包的托管模式曾被该门禁准确检出继承外部缓存覆盖；重建当前代码后通过。该测试包
