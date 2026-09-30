@@ -1,15 +1,19 @@
 use keyring::{Entry, Error as KeyringError};
-use serde_json::from_slice;
+use serde::de::{MapAccess, Visitor};
+use serde::{Deserialize, Deserializer};
 use std::collections::HashMap;
+use std::fmt;
 use std::fs;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
 use crate::bridge::{BridgeStatus, BridgeSupervisor};
 
-const SERVICE_NAME: &str = "com.reasonix.desktop";
+const LEGACY_SERVICE_NAME: &str = "com.reasonix.desktop";
+const STORAGE_ERROR: &str =
+    "system credential storage is unavailable; unlock it or check application access permissions";
 const LEGACY_FILE_NAME: &str = "keychain.dat";
 const MAX_LEGACY_FILE_BYTES: u64 = 1024 * 1024;
 const MAX_LEGACY_ENTRIES: usize = 256;
@@ -21,39 +25,65 @@ trait CredentialBackend: Send + Sync {
     fn delete(&self, key: &str) -> Result<bool, String>;
 }
 
-struct PlatformCredentialBackend;
+struct PlatformCredentialBackend {
+    service: String,
+}
 
 impl PlatformCredentialBackend {
-    fn entry(key: &str) -> Result<Entry, String> {
+    fn entry(&self, key: &str) -> Result<Entry, String> {
         if key.trim().is_empty() {
             return Err("Keychain key must not be empty".to_string());
         }
 
-        Entry::new(SERVICE_NAME, key).map_err(|e| format!("Failed to open keychain entry: {e}"))
+        Entry::new(&self.service, key).map_err(credential_error)
     }
 }
 
 impl CredentialBackend for PlatformCredentialBackend {
     fn save(&self, key: &str, value: &str) -> Result<(), String> {
-        Self::entry(key)?
+        self.entry(key)?
             .set_password(value)
-            .map_err(|e| format!("Failed to save keychain entry: {e}"))
+            .map_err(credential_error)
     }
 
     fn load(&self, key: &str) -> Result<Option<String>, String> {
-        match Self::entry(key)?.get_password() {
+        match self.entry(key)?.get_password() {
             Ok(value) => Ok(Some(value)),
             Err(KeyringError::NoEntry) => Ok(None),
-            Err(e) => Err(format!("Failed to load keychain entry: {e}")),
+            Err(e) => Err(credential_error(e)),
         }
     }
 
     fn delete(&self, key: &str) -> Result<bool, String> {
-        match Self::entry(key)?.delete_credential() {
+        match self.entry(key)?.delete_credential() {
             Ok(()) => Ok(true),
             Err(KeyringError::NoEntry) => Ok(false),
-            Err(e) => Err(format!("Failed to delete keychain entry: {e}")),
+            Err(e) => Err(credential_error(e)),
         }
+    }
+}
+
+// Never expose platform errors: Ambiguous embeds debug credentials and a
+// platform failure may include sensitive attributes in its diagnostic text.
+fn credential_error(error: KeyringError) -> String {
+    match error {
+        KeyringError::BadEncoding(_) => "credential encoding is invalid; replace the saved credential".into(),
+        KeyringError::Ambiguous(_) => "credential identity is ambiguous; resolve duplicate entries in the system credential store".into(),
+        KeyringError::TooLong(_, _) | KeyringError::Invalid(_, _) => "credential attributes are invalid; check the provider name and key".into(),
+        _ => STORAGE_ERROR.into(),
+    }
+}
+
+struct UnavailableCredentialBackend(String);
+impl CredentialBackend for UnavailableCredentialBackend {
+    fn save(&self, _: &str, _: &str) -> Result<(), String> {
+        Err(self.0.clone())
+    }
+    fn load(&self, _: &str) -> Result<Option<String>, String> {
+        Err(self.0.clone())
+    }
+    fn delete(&self, _: &str) -> Result<bool, String> {
+        Err(self.0.clone())
     }
 }
 
@@ -65,13 +95,31 @@ impl CredentialBackend for PlatformCredentialBackend {
 pub struct KeychainStore {
     backend: Arc<dyn CredentialBackend>,
     provider_sync: Mutex<()>,
+    legacy_backend: Arc<dyn CredentialBackend>,
+    legacy_path: Option<PathBuf>,
 }
 
 impl KeychainStore {
-    pub fn new() -> Self {
+    pub fn for_profile(
+        profile: &crate::data_profile::PreviewProfile,
+        app: &tauri::AppHandle,
+    ) -> Self {
+        let backend: Arc<dyn CredentialBackend> =
+            match crate::credential_namespace::service_for_profile(profile.home()) {
+                Ok(service) => Arc::new(PlatformCredentialBackend { service }),
+                Err(error) => Arc::new(UnavailableCredentialBackend(error)),
+            };
         Self {
-            backend: Arc::new(PlatformCredentialBackend),
+            backend,
             provider_sync: Mutex::new(()),
+            legacy_backend: Arc::new(PlatformCredentialBackend {
+                service: LEGACY_SERVICE_NAME.into(),
+            }),
+            legacy_path: app
+                .path()
+                .app_data_dir()
+                .ok()
+                .map(|path| path.join(LEGACY_FILE_NAME)),
         }
     }
 
@@ -80,23 +128,18 @@ impl KeychainStore {
         Self {
             backend,
             provider_sync: Mutex::new(()),
+            legacy_backend: Arc::new(MemoryCredentialBackendUnavailable),
+            legacy_path: None,
         }
     }
 
-    pub fn initialize(&self, app: &tauri::AppHandle) -> Result<(), String> {
-        let data_dir = app
-            .path()
-            .app_data_dir()
-            .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-        let legacy_path = data_dir.join(LEGACY_FILE_NAME);
-        self.migrate_legacy_file(&legacy_path)
-    }
-
-    fn migrate_legacy_file(&self, path: &Path) -> Result<(), String> {
+    fn read_legacy_file(path: &Path) -> Result<HashMap<String, String>, String> {
         let metadata = match fs::symlink_metadata(path) {
             Ok(metadata) => metadata,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-            Err(error) => return Err(format!("Failed to inspect legacy keychain file: {error}")),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(HashMap::new()),
+            Err(_) => {
+                return Err("legacy credential file is unavailable; check file permissions".into())
+            }
         };
         if metadata.file_type().is_symlink()
             || !metadata.is_file()
@@ -105,18 +148,18 @@ impl KeychainStore {
             return Err("Legacy keychain file must be a regular file no larger than 1 MiB".into());
         }
         let mut file = fs::File::open(path)
-            .map_err(|error| format!("Failed to open legacy keychain file: {error}"))?;
+            .map_err(|_| "legacy credential file is unavailable; check file permissions")?;
         let opened_metadata = file
             .metadata()
-            .map_err(|error| format!("Failed to inspect opened legacy keychain file: {error}"))?;
+            .map_err(|_| "legacy credential file is unavailable; check file permissions")?;
         let current_metadata = fs::symlink_metadata(path)
-            .map_err(|error| format!("Failed to reinspect legacy keychain file: {error}"))?;
+            .map_err(|_| "legacy credential file is unavailable; check file permissions")?;
         if current_metadata.file_type().is_symlink()
             || !current_metadata.is_file()
             || !opened_metadata.is_file()
             || opened_metadata.len() > MAX_LEGACY_FILE_BYTES
             || !crate::workbench_projects::same_file_as_path(path, &file)
-                .map_err(|error| format!("Failed to verify legacy keychain file: {error}"))?
+                .map_err(|_| "legacy credential file is unavailable; check file permissions")?
         {
             return Err("Legacy keychain file changed while opening".into());
         }
@@ -124,30 +167,77 @@ impl KeychainStore {
         file.by_ref()
             .take(MAX_LEGACY_FILE_BYTES + 1)
             .read_to_end(&mut content)
-            .map_err(|error| format!("Failed to read legacy keychain file: {error}"))?;
+            .map_err(|_| "legacy credential file is unavailable; check file permissions")?;
         if content.len() as u64 > MAX_LEGACY_FILE_BYTES {
             return Err("Legacy keychain file exceeds 1 MiB".into());
         }
-        let entries: HashMap<String, String> = from_slice(&content)
-            .map_err(|error| format!("Failed to parse legacy keychain file: {error}"))?;
+        let entries = serde_json::from_slice::<UniqueLegacyEntries>(&content)
+            .map_err(|_| "legacy credential file is invalid; repair it or re-enter the key")?
+            .0;
         if entries.len() > MAX_LEGACY_ENTRIES
             || entries.iter().any(|(key, value)| {
-                key.trim().is_empty() || key.len() > 256 || value.len() > 32 << 10
+                key.trim().is_empty()
+                    || key.len() > 256
+                    || key.chars().any(char::is_control)
+                    || value.len() > 32 << 10
+                    || value.contains('\0')
             })
         {
             return Err("Legacy keychain file contains too many or oversized entries".into());
         }
 
-        for (key, value) in entries {
-            self.save_secret(&key, &value)?;
+        Ok(entries)
+    }
+
+    fn import_legacy_with_sync<F>(&self, key: &str, sync: F) -> Result<(), String>
+    where
+        F: Fn(&str, Option<&str>) -> Result<(), String>,
+    {
+        let _guard = self
+            .provider_sync
+            .lock()
+            .map_err(|_| "provider credential lock is unavailable")?;
+        let provider =
+            provider_name_for_key(key)?.ok_or("only provider API keys may be migrated")?;
+        if self.load_secret(key)?.is_some() {
+            return Err(
+                "the profile already has a credential; migration cannot overwrite it".into(),
+            );
         }
-        if !crate::workbench_projects::same_file_as_path(path, &file)
-            .map_err(|error| format!("Failed to verify migrated keychain file: {error}"))?
-        {
-            return Err("Legacy keychain file changed during migration".into());
+        let entries = self
+            .legacy_path
+            .as_deref()
+            .map(Self::read_legacy_file)
+            .transpose()?
+            .unwrap_or_default();
+        let value = match entries.get(key) {
+            Some(value) => value.clone(),
+            None => self
+                .legacy_backend
+                .load(key)?
+                .ok_or("no old Preview credential was found; re-enter the provider key")?,
+        };
+        if value.trim().is_empty() || value.contains('\0') || value.len() > 32 << 10 {
+            return Err("legacy provider credential is invalid; re-enter the provider key".into());
         }
-        fs::remove_file(path)
-            .map_err(|error| format!("Failed to remove legacy keychain file: {error}"))
+        // No old store or file is modified, even after successful migration.
+        self.mutate_secret_unlocked(key, Some(&value), |name, value| {
+            debug_assert_eq!(name, provider);
+            sync(name, value)
+        })
+        .map(|_| ())
+    }
+
+    pub fn import_legacy_provider_key(
+        &self,
+        supervisor: &BridgeSupervisor,
+        provider: &str,
+    ) -> Result<(), String> {
+        require_provider(supervisor, provider)?;
+        self.import_legacy_with_sync(
+            &format!("{PROVIDER_API_KEY_PREFIX}{provider}"),
+            |name, value| supervisor.set_provider_key(name, value).map(|_| ()),
+        )
     }
 
     pub fn save_secret(&self, key: &str, value: &str) -> Result<(), String> {
@@ -212,24 +302,40 @@ impl KeychainStore {
     where
         F: Fn(&str, Option<&str>) -> Result<(), String>,
     {
-        let provider_name = provider_name_for_key(key)?
-            .ok_or_else(|| "only provider API keys may be changed from the window".to_string())?;
-        if value.is_some_and(|v| v.trim().is_empty() || v.len() > 32 << 10) {
-            return Err("provider API key is invalid".to_string());
-        }
         let _guard = self
             .provider_sync
             .lock()
             .map_err(|_| "provider credential lock is unavailable")?;
+        self.mutate_secret_unlocked(key, value, sync)
+    }
+
+    fn mutate_secret_unlocked<F>(
+        &self,
+        key: &str,
+        value: Option<&str>,
+        sync: F,
+    ) -> Result<bool, String>
+    where
+        F: Fn(&str, Option<&str>) -> Result<(), String>,
+    {
+        let provider_name = provider_name_for_key(key)?
+            .ok_or_else(|| "only provider API keys may be changed from the window".to_string())?;
+        if value.is_some_and(|v| v.trim().is_empty() || v.contains('\0') || v.len() > 32 << 10) {
+            return Err("provider API key is invalid".to_string());
+        }
         let previous = self.load_secret(key)?;
-        let deleted = match value {
-            Some(value) => {
-                self.save_secret(key, value)?;
-                false
-            }
-            None => self.delete_secret(key)?,
+        let written = match value {
+            Some(value) => self.save_secret(key, value).map(|_| false),
+            None => self.delete_secret(key),
         };
-        if let Err(error) = sync(provider_name, value) {
+        let deleted = match written {
+            Ok(deleted) => deleted,
+            Err(_) => {
+                restore_secret(self, key, previous.as_deref()).map_err(|_| "credential write failed and rollback could not be confirmed; unlock credential storage and retry")?;
+                return Err("credential write failed; unlock credential storage or check application access".into());
+            }
+        };
+        if sync(provider_name, value).is_err() {
             restore_secret(self, key, previous.as_deref()).map_err(|_| {
                 "provider key synchronization failed and keychain rollback could not be confirmed"
                     .to_string()
@@ -237,11 +343,13 @@ impl KeychainStore {
             // A timed-out response can still have applied in the bridge.
             // Reconcile its memory with the restored keychain when reachable.
             if sync(provider_name, previous.as_deref()).is_err() {
-                return Err(format!(
-                    "{error}; bridge credential recovery could not be confirmed; restart the bridge"
-                ));
+                return Err(
+                    "bridge credential recovery could not be confirmed; restart the bridge".into(),
+                );
             }
-            return Err(error);
+            return Err(
+                "provider credential synchronization failed; restart the bridge and retry".into(),
+            );
         }
         Ok(deleted)
     }
@@ -252,6 +360,8 @@ impl KeychainStore {
         key: &str,
         value: &str,
     ) -> Result<(), String> {
+        let name = provider_name_for_key(key)?.ok_or("only provider API keys may be changed")?;
+        require_provider(supervisor, name)?;
         self.mutate_secret_with_sync(key, Some(value), |name, value| {
             supervisor.set_provider_key(name, value).map(|_| ())
         })
@@ -263,6 +373,8 @@ impl KeychainStore {
         supervisor: &BridgeSupervisor,
         key: &str,
     ) -> Result<bool, String> {
+        let name = provider_name_for_key(key)?.ok_or("only provider API keys may be changed")?;
+        require_provider(supervisor, name)?;
         self.mutate_secret_with_sync(key, None, |name, value| {
             supervisor.set_provider_key(name, value).map(|_| ())
         })
@@ -273,7 +385,12 @@ fn provider_name_for_key(key: &str) -> Result<Option<&str>, String> {
     let Some(provider_name) = key.strip_prefix(PROVIDER_API_KEY_PREFIX) else {
         return Ok(None);
     };
-    if provider_name.is_empty() || provider_name.trim() != provider_name {
+    if provider_name.is_empty()
+        || key.len() > 256
+        || provider_name.trim() != provider_name
+        || provider_name.chars().any(char::is_control)
+        || provider_name.contains(['/', '\\'])
+    {
         return Err("provider key name is invalid".to_string());
     }
     Ok(Some(provider_name))
@@ -287,22 +404,105 @@ fn restore_secret(store: &KeychainStore, key: &str, previous: Option<&str>) -> R
 }
 
 #[tauri::command]
-pub fn keychain_save(
-    state: tauri::State<'_, KeychainStore>,
-    supervisor: tauri::State<'_, BridgeSupervisor>,
+pub async fn keychain_save(
+    window: tauri::WebviewWindow,
     key: String,
     value: String,
 ) -> Result<(), String> {
-    state.save_and_sync_provider_key(&supervisor, &key, &value)
+    credential_window(window.label())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        window.state::<KeychainStore>().save_and_sync_provider_key(
+            &window.state::<BridgeSupervisor>(),
+            &key,
+            &value,
+        )
+    })
+    .await
+    .map_err(|_| "credential operation failed; retry saving")?
+}
+#[tauri::command]
+pub async fn keychain_delete(window: tauri::WebviewWindow, key: String) -> Result<bool, String> {
+    credential_window(window.label())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        window
+            .state::<KeychainStore>()
+            .delete_and_sync_provider_key(&window.state::<BridgeSupervisor>(), &key)
+    })
+    .await
+    .map_err(|_| "credential operation failed; retry deleting")?
+}
+#[tauri::command]
+pub async fn keychain_import_legacy(
+    window: tauri::WebviewWindow,
+    provider: String,
+) -> Result<(), String> {
+    credential_window(window.label())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        window
+            .state::<KeychainStore>()
+            .import_legacy_provider_key(&window.state::<BridgeSupervisor>(), &provider)
+    })
+    .await
+    .map_err(|_| "credential operation failed; retry migration")?
+}
+fn credential_window(label: &str) -> Result<(), String> {
+    if label != "main" {
+        return Err("credential operations require the main window".into());
+    }
+    Ok(())
+}
+fn require_provider(supervisor: &BridgeSupervisor, provider: &str) -> Result<(), String> {
+    provider_name_for_key(&format!("{PROVIDER_API_KEY_PREFIX}{provider}"))?;
+    if !supervisor
+        .provider_summary()?
+        .providers
+        .iter()
+        .any(|item| item.name == provider && item.requires_key)
+    {
+        return Err(
+            "provider is unavailable or does not require a credential; reload provider settings"
+                .into(),
+        );
+    }
+    Ok(())
 }
 
-#[tauri::command]
-pub fn keychain_delete(
-    state: tauri::State<'_, KeychainStore>,
-    supervisor: tauri::State<'_, BridgeSupervisor>,
-    key: String,
-) -> Result<bool, String> {
-    state.delete_and_sync_provider_key(&supervisor, &key)
+struct UniqueLegacyEntries(HashMap<String, String>);
+impl<'de> Deserialize<'de> for UniqueLegacyEntries {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct EntriesVisitor;
+        impl<'de> Visitor<'de> for EntriesVisitor {
+            type Value = UniqueLegacyEntries;
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("unique bounded credential entries")
+            }
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+                let mut entries = HashMap::new();
+                while let Some((key, value)) = map.next_entry::<String, String>()? {
+                    if entries.len() >= MAX_LEGACY_ENTRIES || entries.insert(key, value).is_some() {
+                        return Err(serde::de::Error::custom("invalid credential entries"));
+                    }
+                }
+                Ok(UniqueLegacyEntries(entries))
+            }
+        }
+        deserializer.deserialize_map(EntriesVisitor)
+    }
+}
+
+#[cfg(test)]
+struct MemoryCredentialBackendUnavailable;
+#[cfg(test)]
+impl CredentialBackend for MemoryCredentialBackendUnavailable {
+    fn save(&self, _: &str, _: &str) -> Result<(), String> {
+        unreachable!()
+    }
+    fn load(&self, _: &str) -> Result<Option<String>, String> {
+        Ok(None)
+    }
+    fn delete(&self, _: &str) -> Result<bool, String> {
+        unreachable!()
+    }
 }
 
 #[cfg(test)]
@@ -404,31 +604,34 @@ mod tests {
         let store = test_store();
         let dir = tempdir().expect("temp dir");
         let path = dir.path().join(LEGACY_FILE_NAME);
-        fs::write(&path, r#"{"legacy-key":"legacy-value"}"#).expect("legacy file");
-
-        store.migrate_legacy_file(&path).expect("migrate");
+        let mut store = store;
+        store.legacy_path = Some(path.clone());
+        fs::write(&path, r#"{"api_key_demo":"legacy-value"}"#).unwrap();
+        store
+            .import_legacy_with_sync("api_key_demo", |_, _| Ok(()))
+            .expect("migrate");
 
         assert_eq!(
             store
-                .load_secret("legacy-key")
+                .load_secret("api_key_demo")
                 .expect("load migrated value"),
             Some("legacy-value".to_string())
         );
-        assert!(!path.exists(), "migrated plaintext file must be removed");
+        assert!(
+            path.exists(),
+            "explicit migration must preserve the old profile source"
+        );
     }
 
     #[test]
     fn missing_legacy_file_does_not_block_first_launch() {
-        let store = test_store();
         let dir = tempdir().expect("temp dir");
-        store
-            .migrate_legacy_file(&dir.path().join(LEGACY_FILE_NAME))
+        KeychainStore::read_legacy_file(&dir.path().join(LEGACY_FILE_NAME))
             .expect("fresh Preview profile has no legacy keychain file");
     }
 
     #[test]
     fn rejects_oversized_legacy_file_without_importing_any_keys() {
-        let store = test_store();
         let dir = tempdir().expect("temp dir");
         let path = dir.path().join(LEGACY_FILE_NAME);
         fs::File::create(&path)
@@ -436,7 +639,7 @@ mod tests {
             .set_len(MAX_LEGACY_FILE_BYTES + 1)
             .expect("make oversized sparse file");
 
-        assert!(store.migrate_legacy_file(&path).is_err());
+        assert!(KeychainStore::read_legacy_file(&path).is_err());
         assert!(path.exists(), "failed migration must preserve its source");
     }
 
@@ -455,7 +658,7 @@ mod tests {
         )
         .expect("write legacy file");
 
-        assert!(store.migrate_legacy_file(&path).is_err());
+        assert!(KeychainStore::read_legacy_file(&path).is_err());
         assert_eq!(store.load_secret("api_key_valid").expect("read key"), None);
         assert!(path.exists(), "failed migration must preserve its source");
     }
@@ -473,7 +676,7 @@ mod tests {
             .expect("write unrelated file");
         symlink(&target, &path).expect("create legacy symlink");
 
-        assert!(store.migrate_legacy_file(&path).is_err());
+        assert!(KeychainStore::read_legacy_file(&path).is_err());
         assert_eq!(store.load_secret("api_key_other").expect("read key"), None);
         assert!(target.exists(), "symlink target must remain untouched");
     }
@@ -486,6 +689,13 @@ mod tests {
         );
         assert!(provider_name_for_key("api_key_ ").is_err());
         assert_eq!(provider_name_for_key("other_key_deepseek").unwrap(), None);
+        for name in ["商汤", "通义千问", "Local Gateway", "9router"] {
+            assert_eq!(
+                provider_name_for_key(&format!("api_key_{name}")).unwrap(),
+                Some(name),
+                "imported Wails provider identities remain compatible"
+            );
+        }
     }
 
     #[test]
@@ -532,5 +742,398 @@ mod tests {
             store.load_secret("api_key_deepseek").expect("load"),
             Some("old-secret".to_string())
         );
+    }
+
+    #[test]
+    fn explicit_import_keeps_legacy_store_and_refuses_overwrite() {
+        let old = Arc::new(MemoryCredentialBackend::default());
+        old.save("api_key_demo", "old-secret").unwrap();
+        old.save("api_key_other", "other-secret").unwrap();
+        let mut store = test_store();
+        store.legacy_backend = old.clone();
+        store
+            .import_legacy_with_sync("api_key_demo", |name, value| {
+                assert_eq!(name, "demo");
+                assert_eq!(value, Some("old-secret"));
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(
+            old.load("api_key_demo").unwrap().as_deref(),
+            Some("old-secret")
+        );
+        assert_eq!(store.load_secret("api_key_other").unwrap(), None);
+        store.save_secret("api_key_demo", "user-secret").unwrap();
+        assert!(store
+            .import_legacy_with_sync("api_key_demo", |_, _| panic!("no overwrite"))
+            .is_err());
+        assert_eq!(
+            store.load_secret("api_key_demo").unwrap().as_deref(),
+            Some("user-secret")
+        );
+    }
+
+    #[test]
+    fn malformed_legacy_file_and_missing_or_denied_legacy_store_leave_target_empty() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join(LEGACY_FILE_NAME);
+        let mut store = test_store();
+        store.legacy_path = Some(path.clone());
+        for json in [
+            r#"{"api_key_demo":"first","api_key_demo":"second"}"#,
+            r#"{"api_key_demo":"first","bad\u0000name":"second"}"#,
+            r#"{"api_key_demo":"first","other":"bad\u0000value"}"#,
+            r#"{"api_key_demo":"first","other":1}"#,
+        ] {
+            fs::write(&path, json).unwrap();
+            assert!(store
+                .import_legacy_with_sync("api_key_demo", |_, _| panic!("invalid source"))
+                .is_err());
+            assert_eq!(store.load_secret("api_key_demo").unwrap(), None);
+            assert_eq!(fs::read_to_string(&path).unwrap(), json);
+        }
+        fs::remove_file(&path).unwrap();
+        assert!(store
+            .import_legacy_with_sync("api_key_demo", |_, _| panic!("missing source"))
+            .is_err());
+        store.legacy_backend = Arc::new(UnavailableCredentialBackend(STORAGE_ERROR.into()));
+        assert!(store
+            .import_legacy_with_sync("api_key_demo", |_, _| panic!("denied source"))
+            .is_err());
+        assert_eq!(store.load_secret("api_key_demo").unwrap(), None);
+        store
+            .mutate_secret_with_sync("api_key_demo", Some("manual-secret"), |_, _| Ok(()))
+            .unwrap();
+    }
+
+    #[test]
+    fn import_bridge_failure_removes_target_and_preserves_source() {
+        let old = Arc::new(MemoryCredentialBackend::default());
+        old.save("api_key_demo", "old-secret").unwrap();
+        let mut store = test_store();
+        store.legacy_backend = old.clone();
+        let values = Mutex::new(Vec::new());
+        let error = store
+            .import_legacy_with_sync("api_key_demo", |_, value| {
+                let mut calls = values.lock().unwrap();
+                calls.push(value.map(str::to_owned));
+                if calls.len() == 1 {
+                    Err("secret-in-error".into())
+                } else {
+                    Ok(())
+                }
+            })
+            .unwrap_err();
+        assert!(!error.contains("secret-in-error"));
+        assert_eq!(
+            *values.lock().unwrap(),
+            vec![Some("old-secret".into()), None]
+        );
+        assert_eq!(store.load_secret("api_key_demo").unwrap(), None);
+        assert_eq!(
+            old.load("api_key_demo").unwrap().as_deref(),
+            Some("old-secret")
+        );
+    }
+
+    struct UncertainBackend {
+        memory: MemoryCredentialBackend,
+        fail_next: std::sync::atomic::AtomicBool,
+    }
+    impl CredentialBackend for UncertainBackend {
+        fn save(&self, key: &str, value: &str) -> Result<(), String> {
+            self.memory.save(key, value)?;
+            if self
+                .fail_next
+                .swap(false, std::sync::atomic::Ordering::SeqCst)
+            {
+                return Err("applied-secret-diagnostic".into());
+            }
+            Ok(())
+        }
+        fn load(&self, key: &str) -> Result<Option<String>, String> {
+            self.memory.load(key)
+        }
+        fn delete(&self, key: &str) -> Result<bool, String> {
+            let deleted = self.memory.delete(key)?;
+            if self
+                .fail_next
+                .swap(false, std::sync::atomic::Ordering::SeqCst)
+            {
+                return Err("deleted-secret-diagnostic".into());
+            }
+            Ok(deleted)
+        }
+    }
+
+    #[test]
+    fn uncertain_native_write_or_delete_rolls_back_before_bridge_sync() {
+        let backend = Arc::new(UncertainBackend {
+            memory: MemoryCredentialBackend::default(),
+            fail_next: std::sync::atomic::AtomicBool::new(false),
+        });
+        let store = KeychainStore::with_backend(backend.clone());
+        for previous in [None, Some("previous")] {
+            restore_secret(&store, "api_key_demo", previous).unwrap();
+            for value in [Some("next"), None] {
+                backend
+                    .fail_next
+                    .store(true, std::sync::atomic::Ordering::SeqCst);
+                let error = store
+                    .mutate_secret_with_sync("api_key_demo", value, |_, _| {
+                        panic!("native write failed")
+                    })
+                    .unwrap_err();
+                assert!(!error.contains("secret-diagnostic"));
+                assert_eq!(
+                    store.load_secret("api_key_demo").unwrap().as_deref(),
+                    previous
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn import_and_manual_save_are_serialized_without_lost_user_write() {
+        let old = Arc::new(MemoryCredentialBackend::default());
+        old.save("api_key_demo", "old-secret").unwrap();
+        let mut store = test_store();
+        store.legacy_backend = old;
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let release = Mutex::new(release_rx);
+        std::thread::scope(|scope| {
+            let import = scope.spawn(|| {
+                store.import_legacy_with_sync("api_key_demo", |_, _| {
+                    started_tx.send(()).unwrap();
+                    release.lock().unwrap().recv().unwrap();
+                    Ok(())
+                })
+            });
+            started_rx.recv().unwrap();
+            assert!(store.provider_sync.try_lock().is_err());
+            let save = scope.spawn(|| {
+                store.mutate_secret_with_sync("api_key_demo", Some("manual-secret"), |_, _| Ok(()))
+            });
+            release_tx.send(()).unwrap();
+            import.join().unwrap().unwrap();
+            save.join().unwrap().unwrap();
+        });
+        assert_eq!(
+            store.load_secret("api_key_demo").unwrap().as_deref(),
+            Some("manual-secret")
+        );
+        assert!(store
+            .import_legacy_with_sync("api_key_demo", |_, _| panic!(
+                "cannot overwrite manual save"
+            ))
+            .is_err());
+    }
+
+    #[test]
+    fn error_categories_never_echo_platform_attributes_and_windows_are_scoped() {
+        for error in [
+            KeyringError::PlatformFailure(Box::new(std::io::Error::other("sensitive-sentinel"))),
+            KeyringError::BadEncoding(b"sensitive-sentinel".to_vec()),
+            KeyringError::Invalid("sensitive-sentinel".into(), "sensitive-sentinel".into()),
+            KeyringError::TooLong("sensitive-sentinel".into(), 1),
+            KeyringError::Ambiguous(vec![]),
+        ] {
+            assert!(!credential_error(error).contains("sensitive-sentinel"));
+        }
+        assert!(credential_window("main").is_ok());
+        for label in ["settings", "remote", "", "main "] {
+            assert!(credential_window(label).is_err());
+        }
+        for name in ["", "path/name", " bad", "bad ", "bad\0name", "bad\nname"] {
+            assert!(provider_name_for_key(&format!("api_key_{name}")).is_err());
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "explicit native Keychain smoke; unique temporary namespaces and dummy values only"]
+    fn native_keychain_profile_isolation_and_cleanup() {
+        struct Cleanup(Vec<PlatformCredentialBackend>);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                for backend in &self.0 {
+                    let _ = backend.delete("api_key_smoke");
+                }
+            }
+        }
+        let root = tempdir().unwrap();
+        let cleanup = Cleanup(vec![
+            PlatformCredentialBackend {
+                service: crate::credential_namespace::service_for_profile(
+                    &root.path().join("first"),
+                )
+                .unwrap(),
+            },
+            PlatformCredentialBackend {
+                service: crate::credential_namespace::service_for_profile(
+                    &root.path().join("second"),
+                )
+                .unwrap(),
+            },
+        ]);
+        let first = &cleanup.0[0];
+        let second = &cleanup.0[1];
+        assert_eq!(first.load("api_key_smoke").unwrap(), None);
+        first
+            .save("api_key_smoke", "dummy-only-smoke-value")
+            .unwrap();
+        assert_eq!(second.load("api_key_smoke").unwrap(), None);
+        assert_eq!(
+            first.load("api_key_smoke").unwrap().as_deref(),
+            Some("dummy-only-smoke-value")
+        );
+        second
+            .save("api_key_smoke", "second-dummy-smoke-value")
+            .unwrap();
+        first
+            .save("api_key_smoke", "replacement-dummy-smoke-value")
+            .unwrap();
+        assert!(first.delete("api_key_smoke").unwrap());
+        assert_eq!(first.load("api_key_smoke").unwrap(), None);
+        assert_eq!(
+            second.load("api_key_smoke").unwrap().as_deref(),
+            Some("second-dummy-smoke-value")
+        );
+        assert!(second.delete("api_key_smoke").unwrap());
+        assert!(!second.delete("api_key_smoke").unwrap());
+    }
+
+    #[test]
+    fn real_bridge_import_save_restart_and_delete_keep_credentials_out_of_files() {
+        let Some(binary) = std::env::var_os("REASONIX_TAURI_BRIDGE_TEST_BIN") else {
+            assert!(
+                std::env::var_os("CI").is_none(),
+                "real bridge binary required in CI"
+            );
+            return;
+        };
+        let _env = crate::test_env::guard();
+        let home = tempdir().unwrap();
+        std::env::set_var("REASONIX_HOME", home.path());
+        std::env::set_var("REASONIX_STATE_HOME", home.path());
+        std::env::set_var("REASONIX_CACHE_HOME", home.path());
+        let config = r#"default_model = "keychain-test-provider/chat"
+[[providers]]
+name = "keychain-test-provider"
+kind = "openai"
+base_url = "https://provider.invalid/v1"
+api_key_env = "REASONIX_KEYCHAIN_INTEGRATION_TEST_KEY"
+models = ["chat"]
+default = "chat"
+[[providers]]
+name = "旧版服务"
+kind = "openai"
+base_url = "https://provider.invalid/v1"
+api_key_env = "REASONIX_KEYCHAIN_UNICODE_TEST_KEY"
+models = ["chat"]
+default = "chat"
+"#;
+        fs::write(home.path().join("config.toml"), config).unwrap();
+        let old = Arc::new(MemoryCredentialBackend::default());
+        old.save(
+            "api_key_keychain-test-provider",
+            "dummy-legacy-integration-key",
+        )
+        .unwrap();
+        let mut store = test_store();
+        store.legacy_backend = old.clone();
+        let supervisor = BridgeSupervisor::with_binary(PathBuf::from(binary));
+        supervisor.start().unwrap();
+        let ready = || {
+            supervisor
+                .provider_summary()
+                .unwrap()
+                .providers
+                .iter()
+                .find(|p| p.name == "keychain-test-provider")
+                .unwrap()
+                .configured
+        };
+        assert!(!ready());
+        store
+            .save_and_sync_provider_key(
+                &supervisor,
+                "api_key_旧版服务",
+                "dummy-unicode-integration-key",
+            )
+            .unwrap();
+        assert!(
+            supervisor
+                .provider_summary()
+                .unwrap()
+                .providers
+                .iter()
+                .find(|p| p.name == "旧版服务")
+                .unwrap()
+                .configured
+        );
+        assert!(store
+            .delete_and_sync_provider_key(&supervisor, "api_key_旧版服务")
+            .unwrap());
+        assert!(store
+            .import_legacy_provider_key(&supervisor, "unknown-provider")
+            .is_err());
+        assert_eq!(store.load_secret("api_key_unknown-provider").unwrap(), None);
+        store
+            .import_legacy_provider_key(&supervisor, "keychain-test-provider")
+            .unwrap();
+        assert!(ready());
+        assert_eq!(
+            old.load("api_key_keychain-test-provider")
+                .unwrap()
+                .as_deref(),
+            Some("dummy-legacy-integration-key")
+        );
+        store
+            .save_and_sync_provider_key(
+                &supervisor,
+                "api_key_keychain-test-provider",
+                "dummy-new-integration-key",
+            )
+            .unwrap();
+        assert!(ready());
+        assert!(store.restart_bridge(&supervisor).unwrap().running);
+        assert!(
+            ready(),
+            "restarted sidecar restores keys from scoped backend"
+        );
+        assert!(store
+            .delete_and_sync_provider_key(&supervisor, "api_key_keychain-test-provider")
+            .unwrap());
+        assert!(!ready());
+        assert!(store.restart_bridge(&supervisor).unwrap().running);
+        assert!(
+            !ready(),
+            "deleted key is never resurrected from legacy storage"
+        );
+        supervisor.stop().unwrap();
+        assert_eq!(
+            fs::read_to_string(home.path().join("config.toml")).unwrap(),
+            config
+        );
+        fn check_files(dir: &Path) {
+            for entry in fs::read_dir(dir).unwrap() {
+                let entry = entry.unwrap();
+                let kind = entry.file_type().unwrap();
+                if kind.is_dir() {
+                    check_files(&entry.path());
+                } else if kind.is_file() {
+                    let bytes = fs::read(entry.path()).unwrap();
+                    assert!(!bytes
+                        .windows(b"dummy-legacy-integration-key".len())
+                        .any(|slice| slice == b"dummy-legacy-integration-key"));
+                    assert!(!bytes
+                        .windows(b"dummy-new-integration-key".len())
+                        .any(|slice| slice == b"dummy-new-integration-key"));
+                }
+            }
+        }
+        check_files(home.path());
     }
 }

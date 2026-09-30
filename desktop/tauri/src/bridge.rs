@@ -1853,7 +1853,7 @@ impl BridgeSupervisor {
     }
 
     #[cfg(any(debug_assertions, test))]
-    fn with_binary(binary: PathBuf) -> Self {
+    pub(crate) fn with_binary(binary: PathBuf) -> Self {
         Self::with_launcher(BridgeLauncher::Explicit(binary))
     }
 

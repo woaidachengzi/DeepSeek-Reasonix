@@ -529,6 +529,11 @@ const commands: CommandContract[] = [
     description: "keychainSave() invokes keychain_save with { key, value }",
   },
   {
+    command: "keychain_import_legacy",
+    argKeys: ["provider"],
+    description: "keychainImportLegacy() invokes keychain_import_legacy with only the provider",
+  },
+  {
     command: "keychain_delete",
     argKeys: ["key"],
     description: "keychainDelete() invokes keychain_delete with { key }",

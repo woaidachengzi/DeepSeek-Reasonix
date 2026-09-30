@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod bridge;
+mod credential_namespace;
 mod data_profile;
 mod host_preferences;
 mod keychain;
@@ -3444,8 +3445,7 @@ fn main() {
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
 
             // Initialize keychain store
-            let keychain = keychain::KeychainStore::new();
-            keychain.initialize(app.handle()).map_err(std::io::Error::other)?;
+            let keychain = keychain::KeychainStore::for_profile(&profile, app.handle());
 
             supervisor.start().map_err(std::io::Error::other)?;
             if let Err(error) = keychain.restore_provider_api_keys(&supervisor) {
@@ -3717,6 +3717,7 @@ fn main() {
             local_paths::open_workspace_external,
             local_paths::open_local_path_with,
             keychain::keychain_save,
+            keychain::keychain_import_legacy,
             keychain::keychain_delete
         ])
         .build(tauri::generate_context!())

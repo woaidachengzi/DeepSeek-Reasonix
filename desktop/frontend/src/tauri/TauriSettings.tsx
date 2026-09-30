@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { Check, ArrowLeft, Search, X, Keyboard, Globe, Languages, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles, Users, Webhook, Package, Bot } from "lucide-react";
-import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, setTauriAgentPreference, testTauriProviderModel, tauriDesktopPreferences, tauriActiveThemeId, setTauriActiveThemeId, tauriUserThemes, tauriPluginThemes, saveTauriUserTheme, deleteTauriUserTheme, importTauriUserTheme, exportTauriUserTheme, setTauriDesktopApproval, setTauriDesktopTerminalTheme, setTauriDesktopAppearance, setTauriDesktopLanguage, setTauriDesktopCurrency, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, tauriZoomFactor, setTauriZoomFactor, keychainSave, keychainDelete, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, tauriCapabilityDiagnostics, tauriRuntimeDoctor, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
+import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, setTauriAgentPreference, testTauriProviderModel, tauriDesktopPreferences, tauriActiveThemeId, setTauriActiveThemeId, tauriUserThemes, tauriPluginThemes, saveTauriUserTheme, deleteTauriUserTheme, importTauriUserTheme, exportTauriUserTheme, setTauriDesktopApproval, setTauriDesktopTerminalTheme, setTauriDesktopAppearance, setTauriDesktopLanguage, setTauriDesktopCurrency, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, tauriZoomFactor, setTauriZoomFactor, keychainSave, keychainDelete, keychainImportLegacy, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, tauriCapabilityDiagnostics, tauriRuntimeDoctor, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
 import { applyTerminalThemePreference, normalizeTerminalThemePreference, getCustomTerminalPalette, setCustomTerminalPalette, DEFAULT_TERMINAL_PALETTE, type TerminalPalette, type TerminalPaletteKey, type TerminalThemePreference } from "../lib/terminalTheme";
 import { THEME_STYLES, type Theme, type ThemeStyle } from "../lib/theme";
 import { useI18n, useT, type DictKey, type LangPref, type Translator } from "../lib/i18n";
@@ -1435,7 +1435,7 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
     statusTimers.current.set(providerName, timer);
   };
 
-  const handleApiKeyAction = async (providerName: string, action: "save" | "delete") => {
+  const handleApiKeyAction = async (providerName: string, action: "save" | "delete" | "import") => {
     const key = apiKeyInputs[providerName];
     if (keyBusyRef.current || (action === "save" && !key)) return;
     keyBusyRef.current = true;
@@ -1447,23 +1447,24 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
     try {
       let deleted = false;
       if (action === "save") await keychainSave(`api_key_${providerName}`, key);
+      else if (action === "import") await keychainImportLegacy(providerName);
       else deleted = await keychainDelete(`api_key_${providerName}`);
       if (action === "save" && mounted.current) {
         setApiKeyInputs(prev => ({ ...prev, [providerName]: prev[providerName] === key ? "" : prev[providerName] }));
       }
-      if (mounted.current && (action === "save" || deleted)) {
+      if (mounted.current && (action !== "delete" || deleted)) {
         setPendingApply(prev => ({ ...prev, [providerName]: true }));
       }
       try {
         const summary = await tauriProviderSummary();
         if (mounted.current) onProviderSummaryChange(summary);
         const configured = summary.providers.find(provider => provider.name === providerName)?.configured;
-        showStatus(providerName, action === "save" ? t("settings.previewProvider.keySaved") : !deleted ? t("settings.previewProvider.keyMissing") : configured ? t("settings.previewProvider.keyDeletedOther") : t("settings.previewProvider.keyDeleted"));
+        showStatus(providerName, action !== "delete" ? t("settings.previewProvider.keySaved") : !deleted ? t("settings.previewProvider.keyMissing") : configured ? t("settings.previewProvider.keyDeletedOther") : t("settings.previewProvider.keyDeleted"));
       } catch {
-        showStatus(providerName, action === "save" ? t("settings.previewProvider.keySavedRefreshFailed") : deleted ? t("settings.previewProvider.keyDeletedRefreshFailed") : t("settings.previewProvider.keyMissingRefreshFailed"), true);
+        showStatus(providerName, action !== "delete" ? t("settings.previewProvider.keySavedRefreshFailed") : deleted ? t("settings.previewProvider.keyDeletedRefreshFailed") : t("settings.previewProvider.keyMissingRefreshFailed"), true);
       }
     } catch {
-      showStatus(providerName, action === "save" ? t("settings.models.keySaveFailed") : t("settings.previewProvider.keyDeleteFailed"), true);
+      showStatus(providerName, action === "save" ? t("settings.models.keySaveFailed") : action === "import" ? t("settings.previewProvider.keyImportFailed") : t("settings.previewProvider.keyDeleteFailed"), true);
     } finally {
       keyBusyRef.current = false;
       if (mounted.current) setKeyBusy(false);
@@ -1547,6 +1548,9 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
                   <div className="tauri-settings-apikey-actions">
                     <button type="button" className="tauri-settings-button" onClick={() => void handleApiKeyAction(provider.name, "save")} disabled={keyBusy || !apiKeyInputs[provider.name]}>
                       {t("settings.previewProvider.saveKey")}
+                    </button>
+                    <button type="button" className="tauri-settings-button" onClick={() => void handleApiKeyAction(provider.name, "import")} disabled={keyBusy}>
+                      {t("settings.previewProvider.importLegacyKey")}
                     </button>
                     <button type="button" className="tauri-settings-button tauri-settings-button--danger" onClick={() => void handleApiKeyAction(provider.name, "delete")} disabled={keyBusy}>
                       {t("common.delete")}

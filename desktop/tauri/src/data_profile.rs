@@ -118,6 +118,10 @@ fn disable_managed_event_store() {
 }
 
 impl PreviewProfile {
+    pub(crate) fn home(&self) -> &Path {
+        &self.home
+    }
+
     pub fn status(&self) -> PreviewProfileStatus {
         let stable_config_exists = self
             .stable_config

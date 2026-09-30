@@ -2033,3 +2033,9 @@ export async function keychainDelete(key: string): Promise<boolean> {
   requireTauri();
   return invoke<boolean>("keychain_delete", { key });
 }
+
+/** Copy this provider's old Preview credential without overwriting or deleting it. */
+export async function keychainImportLegacy(provider: string): Promise<void> {
+  requireTauri();
+  await invoke<void>("keychain_import_legacy", { provider });
+}

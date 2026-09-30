@@ -204,6 +204,7 @@ export function setTauriZoomFactor(factor) { record("set_zoom_factor", { factor 
 export function getTauriCloseBehavior() { return Promise.resolve("keep_running"); }
 export function setTauriCloseBehavior(behavior) { record("set_close_behavior", { behavior }); return Promise.resolve(behavior); }
 export function keychainSave(key, value) { record("keychain_save", { key, value }); return Promise.resolve(); }
+export function keychainImportLegacy(provider) { record("keychain_import_legacy", { provider }); return Promise.resolve(); }
 export function keychainDelete(key) { record("keychain_delete", { key }); return Promise.resolve(true); }
 export function importTauriStableProfile() { return Promise.resolve({ importedConfig: "", backupConfig: "" }); }
 export function importTauriStableProjectFolders() {

@@ -122,6 +122,27 @@ def check_sidecar_profile(pid, expected_home, managed, cache_home):
         raise RuntimeError("explicit sidecar profile environment is incorrect")
 
 
+def check_credential_profile(home):
+    identities = []
+    for name in ("tauri-credential-profile.json", "tauri-credential-profile.backup.json"):
+        path = home / name
+        metadata = path.lstat()
+        if path.is_symlink() or not path.is_file() or metadata.st_size > 512:
+            raise RuntimeError("credential profile metadata must be a bounded regular file")
+        if metadata.st_mode & 0o777 != 0o600:
+            raise RuntimeError("credential profile metadata is not private")
+        identity = json.loads(path.read_text())
+        if set(identity) != {"version", "id"} or identity["version"] != 1:
+            raise RuntimeError("credential profile metadata contains unexpected attributes")
+        profile_id = identity["id"]
+        if not isinstance(profile_id, str) or len(profile_id) != 32 or any(c not in "0123456789abcdef" for c in profile_id):
+            raise RuntimeError("credential profile metadata has an invalid identity")
+        identities.append(profile_id)
+    if identities[0] != identities[1]:
+        raise RuntimeError("credential profile metadata backup does not match")
+    return identities[0]
+
+
 def smoke_once(host_binary, sidecar_binary, identifier, managed):
     with tempfile.TemporaryDirectory(prefix="reasonix-tauri-package-smoke-") as root_string:
         root = Path(root_string)
@@ -173,6 +194,7 @@ def smoke_once(host_binary, sidecar_binary, identifier, managed):
                         raise RuntimeError("Tauri app data escaped the temporary HOME")
                     if managed and not expected_home.is_dir():
                         raise RuntimeError("managed Preview home was not created inside app data")
+                    credential_identity = check_credential_profile(expected_home)
                     check_sidecar_profile(sidecar_pid, expected_home, managed, cache_home)
                     check_unauthenticated_health(address)
                     break
@@ -194,7 +216,8 @@ def smoke_once(host_binary, sidecar_binary, identifier, managed):
             if list(temp.glob("reasonix-tauri-bridge-*/ready.json")):
                 raise RuntimeError("sidecar readiness directory survived host exit")
             profile = "managed" if managed else "explicit"
-            print(f"packaged Preview {profile} profile, sidecar readiness, and shutdown: OK")
+            print(f"packaged Preview {profile} profile, private credential identity, sidecar readiness, and shutdown: OK")
+            return credential_identity
         finally:
             if host.poll() is None:
                 host.kill()
@@ -224,8 +247,9 @@ def smoke(app_path):
         raise RuntimeError("package has no bundle identifier")
     if matching_package_is_running(identifier):
         raise RuntimeError("a Preview with this bundle identifier is already running; close it before the smoke")
-    for managed in (True, False):
-        smoke_once(host_binary, sidecar_binary, identifier, managed)
+    identities = [smoke_once(host_binary, sidecar_binary, identifier, managed) for managed in (True, False)]
+    if identities[0] == identities[1]:
+        raise RuntimeError("independently created profiles share a credential identity")
 
 
 if __name__ == "__main__":

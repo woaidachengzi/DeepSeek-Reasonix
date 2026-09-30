@@ -34,6 +34,8 @@ let saveGate: Promise<void> | null = null;
 let releaseSave: (() => void) | undefined;
 let failSummary = false;
 let failSave = false;
+let failImport = false;
+const importRequests: Record<string, unknown>[] = [];
 let failRuntime = false;
 let failStorage = false;
 const calls: string[] = [];
@@ -258,6 +260,13 @@ const summary = (scope = "global") => ({
         if (saveGate) await saveGate;
         keyPresent = true;
         return;
+      case "keychain_import_legacy": {
+        importRequests.push(args ?? {});
+        if (failImport || keyPresent) throw new Error("secret-in-migration-error");
+        if (saveGate) await saveGate;
+        keyPresent = true;
+        return;
+      }
       case "keychain_delete": {
         const deleted = keyPresent;
         keyPresent = false;
@@ -1025,6 +1034,45 @@ failSave = true;
 await act(async () => { click("保存到钥匙串"); });
 assert.match(visibleText(), /保存失败/);
 assert.doesNotMatch(visibleText(), /secret-in-error-message/, "error details do not expose secrets");
+
+// Import is explicit, never transmits a credential, and keeps an unsaved input.
+failSave = false;
+const summaryCountBeforeImport = calls.filter(call => call === "provider_summary").length;
+await act(async () => { click("迁移旧凭据"); });
+assert.equal(keyPresent, true, "import refusal preserves an already saved credential");
+assert.match(visibleText(), /迁移失败/);
+assert.equal(calls.filter(call => call === "provider_summary").length, summaryCountBeforeImport, "failed migration does not report a saved key");
+assert.doesNotMatch(visibleText(), /secret-in-migration-error/, "migration errors hide sensitive host diagnostics");
+assert.equal(document.querySelector<HTMLInputElement>(".tauri-settings-apikey input")?.value, "secret-input-value", "failed migration preserves the entered value");
+await act(async () => { click("删除"); });
+await act(async () => { click("应用到当前会话"); });
+const saveCountBeforeImport = calls.filter(call => call === "keychain_save").length;
+const deleteCountBeforeImport = calls.filter(call => call === "keychain_delete").length;
+const importCountBeforeGate = importRequests.length;
+saveGate = new Promise(resolve => { releaseSave = resolve; });
+await act(async () => {
+  click("迁移旧凭据");
+  click("迁移旧凭据");
+  click("保存到钥匙串");
+  click("删除");
+});
+assert.equal(importRequests.length, importCountBeforeGate + 1, "repeated migration starts one operation");
+assert.equal(calls.filter(call => call === "keychain_save").length, saveCountBeforeImport, "save cannot race with migration");
+assert.equal(calls.filter(call => call === "keychain_delete").length, deleteCountBeforeImport, "delete cannot race with migration");
+assert.deepEqual(importRequests.at(-1), { provider: "demo" }, "only the selected provider identity crosses IPC");
+await act(async () => { releaseSave?.(); });
+saveGate = null;
+assert.equal(keyPresent, true, "migration updates native credential readiness");
+assert.equal(document.querySelector<HTMLInputElement>(".tauri-settings-apikey input")?.value, "secret-input-value", "migration never discards an unsaved input");
+assert.match(visibleText(), /已保存到钥匙串/);
+assert.match(visibleText(), /应用到当前会话/, "migrated credential offers the active-session update");
+await act(async () => { click("删除"); });
+failImport = true;
+await act(async () => { click("迁移旧凭据"); });
+assert.equal(keyPresent, false, "failed import leaves the destination empty");
+assert.match(visibleText(), /迁移失败/);
+assert.doesNotMatch(visibleText(), /secret-in-migration-error/);
+failImport = false;
 
 await act(async () => { click(["运行诊断", "诊断", "Diagnostics"]); });
 assert.match(visibleText(), /持久身份目录/, "diagnostics show the actual sidebar data source");
