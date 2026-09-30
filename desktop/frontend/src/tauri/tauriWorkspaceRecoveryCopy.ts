@@ -30,6 +30,7 @@ interface CheckpointCopy {
   done: string;
   failed: string;
   working: string;
+  heads: { title: string; current: string; switch: string; switched: string; failed: string; main: string; rewind: string; fork: string; concurrent: string };
   conversation: {
     action: string;
     review: string;
@@ -73,6 +74,7 @@ export const tauriWorkspaceRecoveryCopy: Record<Locale, CheckpointCopy> = {
     done: "Workspace files restored. The conversation is unchanged.",
     failed: "Could not restore the workspace files. Refresh checkpoints and review the plan again.",
     working: "Checking or restoring checkpoint…",
+    heads: { title: "Conversation versions", current: "Current", switch: "Switch", switched: "Conversation version switched. Workspace files are unchanged.", failed: "Could not switch conversation version. Refresh versions and try again.", main: "Original", rewind: "Rewound", fork: "Branch", concurrent: "Parallel" },
     conversation: {
       action: "Rewind conversation",
       review: "Review conversation rewind",
@@ -114,6 +116,7 @@ export const tauriWorkspaceRecoveryCopy: Record<Locale, CheckpointCopy> = {
     done: "工作区文件已恢复，对话记录未更改。",
     failed: "无法恢复工作区文件，请刷新检查点并重新确认。",
     working: "正在检查或恢复检查点…",
+    heads: { title: "对话版本", current: "当前", switch: "切换", switched: "已切换对话版本，工作区文件未更改。", failed: "无法切换对话版本，请刷新版本后重试。", main: "原始", rewind: "回滚", fork: "分支", concurrent: "并行" },
     conversation: {
       action: "回滚对话",
       review: "确认对话回滚",
@@ -155,6 +158,7 @@ export const tauriWorkspaceRecoveryCopy: Record<Locale, CheckpointCopy> = {
     done: "工作區檔案已還原，對話紀錄未變更。",
     failed: "無法還原工作區檔案，請重新整理檢查點並再次確認。",
     working: "正在檢查或還原檢查點…",
+    heads: { title: "對話版本", current: "目前", switch: "切換", switched: "已切換對話版本，工作區檔案未變更。", failed: "無法切換對話版本，請重新整理版本後再試。", main: "原始", rewind: "回溯", fork: "分支", concurrent: "並行" },
     conversation: {
       action: "回復對話",
       review: "確認對話回復",

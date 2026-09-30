@@ -49,4 +49,22 @@ func TestBridgeServerConversationRewindRoutesAreScopedAndDeduplicated(t *testing
 	if first.Code != http.StatusOK || second.Code != http.StatusOK || first.Body.String() != second.Body.String() || runtime.conversationRewindUndos != 1 {
 		t.Fatalf("idempotent conversation undo: first=%d second=%d calls=%d", first.Code, second.Code, runtime.conversationRewindUndos)
 	}
+	list := httptest.NewRequest(http.MethodPost, "/v1/sessions/tab-conversation:session-heads", nil)
+	list.Header.Set("Authorization", "Bearer "+testToken)
+	listed := httptest.NewRecorder()
+	handler.ServeHTTP(listed, list)
+	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), `"id":"rewind-head"`) {
+		t.Fatalf("head list status=%d body=%s", listed.Code, listed.Body.String())
+	}
+	switchPath := "/v1/sessions/tab-conversation:session-head-switch"
+	if response := call(switchPath, `{"headId":"rewind-head"}`, ""); response.Code != http.StatusBadRequest {
+		t.Fatalf("switch without request ID: status=%d", response.Code)
+	}
+	first, second = call(switchPath, `{"headId":"rewind-head"}`, "head-switch-1"), call(switchPath, `{"headId":"rewind-head"}`, "head-switch-1")
+	if first.Code != http.StatusOK || second.Code != http.StatusOK || runtime.sessionHeadSwitches != 1 {
+		t.Fatalf("idempotent head switch: first=%d second=%d calls=%d", first.Code, second.Code, runtime.sessionHeadSwitches)
+	}
+	if response := call("/v1/sessions/other:session-head-switch", `{"headId":"main"}`, "head-switch-2"); response.Code != http.StatusNotFound {
+		t.Fatalf("other session switch status=%d", response.Code)
+	}
 }

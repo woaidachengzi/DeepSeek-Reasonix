@@ -678,6 +678,12 @@ func (b *bridgeServer) sessionCommand(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(path, ":conversation-rewind-undo"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":conversation-rewind-undo"))
 		b.idempotent(16<<10, b.conversationRewindUndo)(w, r)
+	case strings.HasSuffix(path, ":session-heads"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":session-heads"))
+		b.sessionHeads(w, r)
+	case strings.HasSuffix(path, ":session-head-switch"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":session-head-switch"))
+		b.idempotent(16<<10, b.sessionHeadSwitch)(w, r)
 	case strings.HasSuffix(path, ":cancel"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":cancel"))
 		b.cancel(w, r)

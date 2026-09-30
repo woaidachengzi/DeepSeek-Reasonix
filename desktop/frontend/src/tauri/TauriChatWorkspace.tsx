@@ -145,6 +145,8 @@ import {
   tauriConversationRewindPreview,
   tauriConversationRewindCommit,
   tauriConversationRewindUndo,
+  tauriSessionHeads,
+  tauriSessionHeadSwitch,
   tauriBridgeHistory,
   tauriBridgeSnapshot,
   tauriBridgeStatus,
@@ -197,6 +199,7 @@ import {
   type TauriWorkspaceCheckpoint,
   type TauriCodeRewindPlan,
   type TauriConversationRewindPlan,
+  type TauriSessionHead,
   type TauriPreviewProfileStatus,
   type TauriPreviewRuntimeInfo,
   type TauriProviderSummary,
@@ -502,6 +505,7 @@ export function TauriSessionPreview() {
   const [codeRewindCoverageConfirmed, setCodeRewindCoverageConfirmed] = useState(false);
   const [conversationRewindPlan, setConversationRewindPlan] = useState<TauriConversationRewindPlan | null>(null);
   const [conversationRewindUndo, setConversationRewindUndo] = useState<{ sessionId: string; headId: string } | null>(null);
+  const [sessionHeads, setSessionHeads] = useState<TauriSessionHead[]>([]);
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [error, setError] = useState("");
@@ -1561,6 +1565,7 @@ export function TauriSessionPreview() {
     setCodeRewindCoverageConfirmed(false);
     setConversationRewindPlan(null);
     setConversationRewindUndo(null);
+    setSessionHeads([]);
     setWorkspaceFileRevertMessage("");
     setWorkspaceFileRevertUndo(null);
     setWorkspaceFileRevertBusy(false);
@@ -1894,10 +1899,17 @@ export function TauriSessionPreview() {
     setConversationRewindPlan(null);
     setWorkspaceError("");
     try {
-      const checkpoints = await tauriWorkspaceCheckpoints(sessionID);
-      if (isCurrent()) setWorkspaceCheckpoints(checkpoints);
+      const [checkpoints, heads] = await Promise.all([tauriWorkspaceCheckpoints(sessionID), tauriSessionHeads(sessionID)]);
+      if (isCurrent()) {
+        setWorkspaceCheckpoints(checkpoints);
+        setSessionHeads(heads);
+      }
     } catch (cause) {
-      if (isCurrent()) setWorkspaceError(tauriMessageFrom(cause));
+      if (isCurrent()) {
+        setWorkspaceCheckpoints([]);
+        setSessionHeads([]);
+        setWorkspaceError(tauriMessageFrom(cause));
+      }
     } finally {
       if (isCurrent()) setWorkspaceCheckpointsLoading(false);
     }
@@ -2059,6 +2071,38 @@ export function TauriSessionPreview() {
       await loadWorkspaceCheckpoints();
     } catch (cause) {
       if (isCurrent()) setWorkspaceFileRevertMessage(`${recoveryCopy.conversation.failed} ${tauriMessageFrom(cause)}`);
+    } finally {
+      if (isCurrent()) {
+        setWorkspaceFileRevertBusy(false);
+        setBusy(false);
+      }
+    }
+  }
+
+  async function switchSessionHead(headID: string) {
+    if (!session || session.state !== "idle" || busy || workspaceFileRevertBusy) return;
+    const sessionID = session.id;
+    const epoch = workspaceEpochRef.current;
+    const request = ++workspaceFileRevertRequestRef.current;
+    const isCurrent = () => workspaceEpochRef.current === epoch && workspaceFileRevertRequestRef.current === request;
+    setWorkspaceFileRevertBusy(true);
+    setBusy(true);
+    setWorkspaceFileRevertMessage("");
+    try {
+      await tauriSessionHeadSwitch(sessionID, headID);
+      if (!isCurrent()) return;
+      setConversationRewindUndo(null);
+      setConversationRewindPlan(null);
+      setCodeRewindPlan(null);
+      setWorkspaceFileRevertMessage(recoveryCopy.heads.switched);
+      try {
+        await reloadConversationAfterRewind(sessionID);
+      } catch (cause) {
+        setHistoryError(tauriMessageFrom(cause));
+      }
+      await loadWorkspaceCheckpoints();
+    } catch (cause) {
+      if (isCurrent()) setWorkspaceFileRevertMessage(`${recoveryCopy.heads.failed} ${tauriMessageFrom(cause)}`);
     } finally {
       if (isCurrent()) {
         setWorkspaceFileRevertBusy(false);
@@ -3071,6 +3115,13 @@ export function TauriSessionPreview() {
               </section>}
               <p className="tauri-workspace-drawer__hint">变更来自 Git 或本轮会话检查点；点击文件查看受限差异。</p>
             </> : <>
+              {sessionHeads.length > 0 && <section className="tauri-workspace-revert" aria-label={recoveryCopy.heads.title}>
+                <strong>{recoveryCopy.heads.title}</strong>
+                <ul className="tauri-workspace-revert__files tauri-session-heads">{sessionHeads.map(head => <li key={head.id}>
+                  <span>{head.name || (head.kind === "main" ? recoveryCopy.heads.main : head.kind === "rewind" ? recoveryCopy.heads.rewind : head.kind === "concurrent" ? recoveryCopy.heads.concurrent : recoveryCopy.heads.fork)} · {head.preview || head.id} · {head.messageCount}</span>
+                  {head.selected ? <small>{recoveryCopy.heads.current}</small> : <button type="button" className="tauri-diagnostic-action" onClick={() => void switchSessionHead(head.id)} disabled={busy || workspaceFileRevertBusy || session?.state !== "idle"}>{recoveryCopy.heads.switch}</button>}
+                </li>)}</ul>
+              </section>}
               {workspaceCheckpointsLoading ? <div className="tauri-workspace-drawer__loading">{t("workspace.loadingChanges")}</div> : workspaceCheckpoints.length === 0 ? <div className="tauri-workspace-drawer__empty">{recoveryCopy.empty}</div> : <ul className="tauri-workspace-drawer__entries">
                 {[...workspaceCheckpoints].reverse().map(checkpoint => <li key={checkpoint.turn}><button type="button" className="tauri-workspace-entry tauri-workspace-change-entry" onClick={() => void previewCodeRewind(checkpoint.turn)} disabled={busy || workspaceFileRevertBusy || session?.state !== "idle"}>
                   <span className="tauri-workspace-entry__icon"><FileText size={15} /></span><span className="tauri-workspace-entry__name">#{checkpoint.turn} · {checkpoint.prompt || "—"}</span><small>{checkpoint.turnFileCount} {t("workspace.filesTab")}</small>

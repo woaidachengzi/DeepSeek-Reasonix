@@ -78,25 +78,26 @@ use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 
 use bridge::{
     AnswerMCPInteractionRequest, AnswerQuestionRequest, ApproveRequest, AttachFileRequest,
-    BridgeAttachment, BridgeCodeRewindPlanResponse, BridgeDeleteSessionResponse, BridgeHistory,
-    BridgeConversationRewindPlanResponse, BridgeConversationRewindResultResponse,
+    BridgeAttachment, BridgeCodeRewindPlanResponse, BridgeConversationRewindPlanResponse,
+    BridgeConversationRewindResultResponse, BridgeDeleteSessionResponse, BridgeHistory,
     BridgeProjectFolder, BridgeProviderSummaryResponse, BridgeRemoteBrowseRequest,
     BridgeRemoteBrowseResponse, BridgeRemoteDisconnectRequest, BridgeRemoteDisconnectResponse,
     BridgeRemoteFilePreviewRequest, BridgeRemoteFilePreviewResponse, BridgeRemoteFileSaveRequest,
     BridgeRemoteFileSaveResponse, BridgeSession, BridgeSessionBalanceResponse,
-    BridgeSetAgentPreferenceRequest, BridgeSetDefaultModelRequest, BridgeSetModelRoleRequest,
-    BridgeSetSessionModelRequest, BridgeSnapshot, BridgeStatus, BridgeSupervisor,
-    BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
-    BridgeWorkspaceCheckpointsResponse, BridgeWorkspaceFileResponse,
-    BridgeWorkspaceFileRevertPlanResponse, BridgeWorkspaceFileRevertResultResponse,
-    BridgeWorkspaceListResponse, CodeRewindCommitRequest, CodeRewindPreviewRequest,
-    ConversationRewindCommitRequest, ConversationRewindPreviewRequest, ConversationRewindUndoRequest,
-    DeleteProviderConfigRequest, DesktopPreferences, DiscoverProviderModelsRequest,
-    DiscoveredProviderModels, HooksSettingsChange, HooksSettingsView, LegacySessionCatalogEntry,
-    MCPClearAuthRequest, MCPClearAuthResponse, MCPMarketplaceEntry, MCPMarketplaceResponse,
-    MCPOAuthRequest, MCPOAuthResponse, MCPRuntimeActionRequest, MCPRuntimeActionResponse,
-    MCPServerActivationRequest, MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse,
-    MCPServerView, MemorySettingsChange, MemorySettingsView, MemorySuggestionAcceptance,
+    BridgeSessionHeadSwitchResponse, BridgeSessionHeadsResponse, BridgeSetAgentPreferenceRequest,
+    BridgeSetDefaultModelRequest, BridgeSetModelRoleRequest, BridgeSetSessionModelRequest,
+    BridgeSnapshot, BridgeStatus, BridgeSupervisor, BridgeWorkspaceChangeDetailResponse,
+    BridgeWorkspaceChangesResponse, BridgeWorkspaceCheckpointsResponse,
+    BridgeWorkspaceFileResponse, BridgeWorkspaceFileRevertPlanResponse,
+    BridgeWorkspaceFileRevertResultResponse, BridgeWorkspaceListResponse, CodeRewindCommitRequest,
+    CodeRewindPreviewRequest, ConversationRewindCommitRequest, ConversationRewindPreviewRequest,
+    ConversationRewindUndoRequest, DeleteProviderConfigRequest, DesktopPreferences,
+    DiscoverProviderModelsRequest, DiscoveredProviderModels, HooksSettingsChange,
+    HooksSettingsView, LegacySessionCatalogEntry, MCPClearAuthRequest, MCPClearAuthResponse,
+    MCPMarketplaceEntry, MCPMarketplaceResponse, MCPOAuthRequest, MCPOAuthResponse,
+    MCPRuntimeActionRequest, MCPRuntimeActionResponse, MCPServerActivationRequest,
+    MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse, MCPServerView,
+    MemorySettingsChange, MemorySettingsView, MemorySuggestionAcceptance,
     MemorySuggestionAcceptanceRequest, MemorySuggestionsView, NetworkSettingsChange,
     NetworkSettingsView, OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
     PendingSessionTitleRecovery, PermissionSettingsChange, PermissionSettingsView,
@@ -106,8 +107,8 @@ use bridge::{
     RemoteSettingsView, RenameSessionRequest, SandboxSettingsChange, SandboxSettingsView,
     SaveProviderConfigRequest, ScanImportCandidate, ScanImportSelection, SecretsSettingsChange,
     SecretsSettingsView, SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
-    SessionDirectoryPage, SessionFirstMessageTitle, SessionPreview, SessionRequest,
-    SkillArchiveRequest, SkillArchiveResult, SkillInstallPlan, SkillInstallRequest,
+    SessionDirectoryPage, SessionFirstMessageTitle, SessionHeadSwitchRequest, SessionPreview,
+    SessionRequest, SkillArchiveRequest, SkillArchiveResult, SkillInstallPlan, SkillInstallRequest,
     SkillInstallResult, SkillsSettingsChange, SkillsSettingsView, SubagentProfileInput,
     SubagentSettingsChange, SubagentSettingsView, SubagentTryStatusView, SubmitRequest,
     WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceFileRevertCommitRequest,
@@ -812,6 +813,22 @@ fn bridge_conversation_rewind_undo(
     request: ConversationRewindUndoRequest,
 ) -> Result<BridgeConversationRewindResultResponse, String> {
     supervisor.conversation_rewind_undo(request)
+}
+
+#[tauri::command]
+fn bridge_session_heads(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: SessionRequest,
+) -> Result<BridgeSessionHeadsResponse, String> {
+    supervisor.session_heads(request)
+}
+
+#[tauri::command]
+fn bridge_session_head_switch(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: SessionHeadSwitchRequest,
+) -> Result<BridgeSessionHeadSwitchResponse, String> {
+    supervisor.session_head_switch(request)
 }
 
 fn workspace_root_is_available(root: &str) -> Option<bool> {
@@ -3502,6 +3519,8 @@ fn main() {
             bridge_conversation_rewind_preview,
             bridge_conversation_rewind_commit,
             bridge_conversation_rewind_undo,
+            bridge_session_heads,
+            bridge_session_head_switch,
             workspace_roots_availability,
             bridge_cancel,
             bridge_approve,

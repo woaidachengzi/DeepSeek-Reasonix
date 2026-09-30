@@ -38,6 +38,8 @@ import type {
   BridgeCodeRewindPlanResponse,
   BridgeConversationRewindPlanResponse,
   BridgeConversationRewindResultResponse,
+  BridgeSessionHeadsResponse,
+  BridgeSessionHeadSwitchResponse,
 } from "./bridgeProtocol.generated";
 import type { TerminalThemePreference } from "./terminalTheme";
 import type { Theme, ThemeStyle } from "./theme";
@@ -69,6 +71,7 @@ export type TauriWorkspaceCheckpoint = BridgeWorkspaceCheckpointsResponse["check
 export type TauriCodeRewindPlan = BridgeCodeRewindPlanResponse["plan"];
 export type TauriConversationRewindPlan = BridgeConversationRewindPlanResponse["plan"];
 export type TauriConversationRewindResult = BridgeConversationRewindResultResponse["result"];
+export type TauriSessionHead = BridgeSessionHeadsResponse["heads"][number];
 
 /** Exposes only user-visible answer deltas; reasoning and other event text stay private. */
 export function tauriAssistantTextDelta(event: Pick<TauriBridgeEvent, "eventKind" | "payload">): string {
@@ -1719,6 +1722,18 @@ export async function tauriConversationRewindUndo(sessionId: string, headId: str
   requireTauri();
   const response = await invoke<BridgeConversationRewindResultResponse>("bridge_conversation_rewind_undo", { request: { sessionId, headId } });
   return response.result;
+}
+
+export async function tauriSessionHeads(sessionId: string): Promise<TauriSessionHead[]> {
+  requireTauri();
+  const response = await invoke<BridgeSessionHeadsResponse>("bridge_session_heads", { request: { sessionId } });
+  return response.heads;
+}
+
+export async function tauriSessionHeadSwitch(sessionId: string, headId: string): Promise<void> {
+  requireTauri();
+  const response = await invoke<BridgeSessionHeadSwitchResponse>("bridge_session_head_switch", { request: { sessionId, headId } });
+  if (!response.ok) throw new Error("conversation version switch failed");
 }
 
 export async function cancelTauriBridge(sessionId: string): Promise<TauriBridgeSession> {

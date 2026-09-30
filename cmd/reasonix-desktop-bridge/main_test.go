@@ -99,6 +99,7 @@ type bridgeTestRuntime struct {
 	codeRewindConfirmed       bool
 	conversationRewindCommits int
 	conversationRewindUndos   int
+	sessionHeadSwitches       int
 	metrics                   desktopbridge.SessionMetrics
 	balance                   *desktopbridge.SessionBalance
 	balanceErr                error
@@ -206,6 +207,13 @@ func (r *bridgeTestRuntime) CommitConversationRewind(string) (desktopbridge.Work
 func (r *bridgeTestRuntime) UndoConversationRewind(string) (desktopbridge.WorkspaceConversationRewindResult, error) {
 	r.conversationRewindUndos++
 	return desktopbridge.WorkspaceConversationRewindResult{OK: true}, nil
+}
+func (r *bridgeTestRuntime) SessionHeads() ([]desktopbridge.SessionHeadView, error) {
+	return []desktopbridge.SessionHeadView{{ID: "main", Kind: "main", MessageCount: 2, Selected: r.sessionHeadSwitches == 0}, {ID: "rewind-head", Kind: "rewind", MessageCount: 1, Selected: r.sessionHeadSwitches > 0}}, nil
+}
+func (r *bridgeTestRuntime) SwitchSessionHead(string) error {
+	r.sessionHeadSwitches++
+	return nil
 }
 func (r *bridgeTestRuntime) Submit(input string)                                       { r.submits = append(r.submits, input) }
 func (r *bridgeTestRuntime) Cancel()                                                   { r.cancelCalls++ }

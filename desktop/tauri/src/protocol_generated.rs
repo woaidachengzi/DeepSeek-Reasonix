@@ -353,6 +353,38 @@ pub struct BridgeSession {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeSessionHeadSwitchRequest {
+    pub head_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeSessionHeadSwitchResponse {
+    pub ok: bool,
+    pub protocol_version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeSessionHeadView {
+    pub id: String,
+    pub kind: String,
+    pub message_count: u64,
+    pub name: Option<String>,
+    pub parent_id: Option<String>,
+    pub preview: Option<String>,
+    pub selected: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeSessionHeadsResponse {
+    pub heads: Vec<BridgeSessionHeadView>,
+    pub protocol_version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeSessionMetrics {
     pub cache_hit_tokens: u64,
     pub cache_miss_tokens: u64,

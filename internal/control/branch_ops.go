@@ -461,3 +461,51 @@ func (c *Controller) SessionHead() (agent.HeadRef, bool) {
 	}
 	return c.executor.Session().Head()
 }
+
+// SessionHeads lists the versions in this controller's current log. Older
+// session formats have no in-log heads and return an empty list.
+func (c *Controller) SessionHeads() ([]agent.SessionHead, error) {
+	if !c.CanRewindConversationInPlace() {
+		return nil, nil
+	}
+	if err := c.Snapshot(); err != nil {
+		return nil, err
+	}
+	heads, err := agent.ListSessionHeads(c.SessionPath())
+	if err != nil {
+		return nil, err
+	}
+	if ref, ok := c.SessionHead(); ok {
+		for i := range heads {
+			heads[i].Selected = heads[i].ID == ref.HeadID
+		}
+	}
+	return heads, nil
+}
+
+// SwitchSessionHead can only select a live head in the current transcript.
+// It never follows a file branch or changes the controller's session path.
+func (c *Controller) SwitchSessionHead(headID string) error {
+	if headID == "" || !c.CanRewindConversationInPlace() {
+		return c.rewindFail(fmt.Errorf("session head is unavailable"))
+	}
+	if err := c.beginRotation(); err != nil {
+		return c.rewindFail(err)
+	}
+	defer c.endRotation()
+	heads, err := c.SessionHeads()
+	if err != nil {
+		return c.rewindFail(err)
+	}
+	for _, head := range heads {
+		if head.ID != headID || head.Retired {
+			continue
+		}
+		if head.Selected {
+			return nil
+		}
+		_, err := c.switchHeadInPlace(agent.BranchInfo{HeadID: headID, BranchMeta: agent.BranchMeta{ID: headID}})
+		return err
+	}
+	return c.rewindFail(fmt.Errorf("session head %q not found", headID))
+}

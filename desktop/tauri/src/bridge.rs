@@ -512,6 +512,13 @@ pub struct ConversationRewindUndoRequest {
     pub head_id: String,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionHeadSwitchRequest {
+    pub session_id: String,
+    pub head_id: String,
+}
+
 // The wire DTOs mirror docs/tauri/protocol/v1.schema.json through the generated
 // module; only the host-facing command payloads below stay hand-written.
 pub use crate::protocol_generated::{
@@ -520,21 +527,22 @@ pub use crate::protocol_generated::{
     BridgeCodeRewindCommitRequest, BridgeCodeRewindPlanResponse, BridgeCodeRewindPreviewRequest,
     BridgeConversationRewindCommitRequest, BridgeConversationRewindPlanResponse,
     BridgeConversationRewindPreviewRequest, BridgeConversationRewindResultResponse,
-    BridgeConversationRewindUndoRequest,
-    BridgeDeleteSessionResponse, BridgeEvent, BridgeHistoryMessage, BridgeHistoryResponse,
-    BridgeMCPInteractionAnswerRequest, BridgeOpenSessionRequest as OpenSessionRequest,
-    BridgeProjectFolder, BridgeProjectFoldersResponse, BridgeProviderModelProbeRequest,
+    BridgeConversationRewindUndoRequest, BridgeDeleteSessionResponse, BridgeEvent,
+    BridgeHistoryMessage, BridgeHistoryResponse, BridgeMCPInteractionAnswerRequest,
+    BridgeOpenSessionRequest as OpenSessionRequest, BridgeProjectFolder,
+    BridgeProjectFoldersResponse, BridgeProviderModelProbeRequest,
     BridgeProviderModelProbeResponse, BridgeProviderSummaryResponse, BridgeRemoteBrowseRequest,
     BridgeRemoteBrowseResponse, BridgeRemoteDisconnectRequest, BridgeRemoteDisconnectResponse,
     BridgeRemoteFilePreviewRequest, BridgeRemoteFilePreviewResponse, BridgeRemoteFileSaveRequest,
-    BridgeRemoteFileSaveResponse, BridgeRenameSessionRequest, BridgeSession, BridgeSessionMetrics,
-    BridgeSessionResponse, BridgeSetAgentPreferenceRequest, BridgeSetDefaultModelRequest,
-    BridgeSetModelRoleRequest, BridgeSetSessionModelRequest, BridgeWorkspaceChangeDetailRequest,
-    BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
-    BridgeWorkspaceCheckpointsResponse, BridgeWorkspaceFileRequest, BridgeWorkspaceFileResponse,
-    BridgeWorkspaceFileRevertCommitRequest, BridgeWorkspaceFileRevertPlanResponse,
-    BridgeWorkspaceFileRevertResultResponse, BridgeWorkspaceFileRevertUndoRequest,
-    BridgeWorkspaceListResponse, BridgeWorkspaceRequest,
+    BridgeRemoteFileSaveResponse, BridgeRenameSessionRequest, BridgeSession,
+    BridgeSessionHeadSwitchRequest, BridgeSessionHeadSwitchResponse, BridgeSessionHeadsResponse,
+    BridgeSessionMetrics, BridgeSessionResponse, BridgeSetAgentPreferenceRequest,
+    BridgeSetDefaultModelRequest, BridgeSetModelRoleRequest, BridgeSetSessionModelRequest,
+    BridgeWorkspaceChangeDetailRequest, BridgeWorkspaceChangeDetailResponse,
+    BridgeWorkspaceChangesResponse, BridgeWorkspaceCheckpointsResponse, BridgeWorkspaceFileRequest,
+    BridgeWorkspaceFileResponse, BridgeWorkspaceFileRevertCommitRequest,
+    BridgeWorkspaceFileRevertPlanResponse, BridgeWorkspaceFileRevertResultResponse,
+    BridgeWorkspaceFileRevertUndoRequest, BridgeWorkspaceListResponse, BridgeWorkspaceRequest,
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -3890,7 +3898,9 @@ impl BridgeSupervisor {
         let response = self.request_json(
             "POST",
             &path,
-            Some(json!(BridgeConversationRewindPreviewRequest { turn: request.turn })),
+            Some(json!(BridgeConversationRewindPreviewRequest {
+                turn: request.turn
+            })),
             None,
         )?;
         let envelope: BridgeConversationRewindPlanResponse =
@@ -3940,6 +3950,44 @@ impl BridgeSupervisor {
             Some(&request_id),
         )?;
         let envelope: BridgeConversationRewindResultResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope)
+    }
+
+    pub fn session_heads(
+        &self,
+        request: SessionRequest,
+    ) -> Result<BridgeSessionHeadsResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let path = format!("/v1/sessions/{session_id}:session-heads");
+        let response = self.request_json("POST", &path, None, None)?;
+        let envelope: BridgeSessionHeadsResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope)
+    }
+
+    pub fn session_head_switch(
+        &self,
+        request: SessionHeadSwitchRequest,
+    ) -> Result<BridgeSessionHeadSwitchResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let head_id = session_path_component(&request.head_id)
+            .map_err(|_| "conversation version ID is invalid".to_string())?;
+        let request_id = opaque_secret()?;
+        let path = format!("/v1/sessions/{session_id}:session-head-switch");
+        let response = self.request_json(
+            "POST",
+            &path,
+            Some(json!(BridgeSessionHeadSwitchRequest { head_id })),
+            Some(&request_id),
+        )?;
+        let envelope: BridgeSessionHeadSwitchResponse =
             serde_json::from_value(response).map_err(display_error)?;
         if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());

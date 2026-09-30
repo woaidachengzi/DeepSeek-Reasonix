@@ -52,6 +52,10 @@
     { "$ref": "#/$defs/conversationRewindUndoRequest" },
     { "$ref": "#/$defs/workspaceConversationRewindResult" },
     { "$ref": "#/$defs/conversationRewindResultResponse" },
+    { "$ref": "#/$defs/sessionHeadView" },
+    { "$ref": "#/$defs/sessionHeadsResponse" },
+    { "$ref": "#/$defs/sessionHeadSwitchRequest" },
+    { "$ref": "#/$defs/sessionHeadSwitchResponse" },
     { "$ref": "#/$defs/submitRequest" },
     { "$ref": "#/$defs/approvalRequest" },
     { "$ref": "#/$defs/askAnswer" },
@@ -760,6 +764,48 @@
       "properties": {
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
         "result": { "$ref": "#/$defs/workspaceConversationRewindResult" }
+      },
+      "additionalProperties": false
+    },
+    "sessionHeadView": {
+      "title": "BridgeSessionHeadView",
+      "type": "object",
+      "required": ["id", "kind", "messageCount", "selected"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string" },
+        "name": { "type": "string" },
+        "parentId": { "type": "string" },
+        "preview": { "type": "string" },
+        "messageCount": { "type": "integer", "minimum": 0 },
+        "selected": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "sessionHeadsResponse": {
+      "title": "BridgeSessionHeadsResponse",
+      "type": "object",
+      "required": ["protocolVersion", "heads"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "heads": { "type": "array", "items": { "$ref": "#/$defs/sessionHeadView" } }
+      },
+      "additionalProperties": false
+    },
+    "sessionHeadSwitchRequest": {
+      "title": "BridgeSessionHeadSwitchRequest",
+      "type": "object",
+      "required": ["headId"],
+      "properties": { "headId": { "type": "string", "minLength": 1 } },
+      "additionalProperties": false
+    },
+    "sessionHeadSwitchResponse": {
+      "title": "BridgeSessionHeadSwitchResponse",
+      "type": "object",
+      "required": ["protocolVersion", "ok"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "ok": { "type": "boolean" }
       },
       "additionalProperties": false
     },

@@ -508,6 +508,9 @@
 .tauri-workspace-revert > div { display: flex; justify-content: flex-end; gap: 6px; }
 .tauri-workspace-revert__files { max-height: 170px; overflow: auto; margin: 0; padding: 6px 8px 6px 24px; border: 1px solid var(--border-soft); border-radius: 6px; }
 .tauri-workspace-revert__files li { margin: 2px 0; overflow-wrap: anywhere; }
+.tauri-session-heads li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.tauri-session-heads li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tauri-session-heads li small { color: var(--fg-faint); }
 .tauri-workspace-revert__confirmation { display: flex; align-items: flex-start; gap: 6px; color: var(--fg); }
 
 .tauri-diagnostics__scrim { position: fixed; z-index: 20; inset: 0; border: 0; background: color-mix(in srgb, #000 24%, transparent); }

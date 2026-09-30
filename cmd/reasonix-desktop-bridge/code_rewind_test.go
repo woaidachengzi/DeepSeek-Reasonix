@@ -215,6 +215,32 @@ func TestCodeRewindRequiresCoverageConfirmationAndPreservesConversation(t *testi
 	if controller.SessionPath() != sessionPath || session.Snapshot()[3].Content != "continue here" {
 		t.Fatal("failed undo disturbed the continued conversation")
 	}
+	versions, err := runtime.SessionHeads()
+	if err != nil || len(versions) != 2 || !versions[1].Selected {
+		t.Fatalf("continued versions = %+v err=%v", versions, err)
+	}
+	if err := runtime.SwitchSessionHead(agent.SessionMainHead); err != nil {
+		t.Fatalf("switch to original: %v", err)
+	}
+	if controller.SessionPath() != sessionPath || !reflect.DeepEqual(session.Snapshot(), conversationBefore) {
+		t.Fatal("switching to original changed path or returned wrong messages")
+	}
+	if err := runtime.SwitchSessionHead(continued.HeadID); err != nil {
+		t.Fatalf("switch to continued version: %v", err)
+	}
+	if controller.SessionPath() != sessionPath || session.Snapshot()[3].Content != "continue here" {
+		t.Fatal("switching back lost the continued version")
+	}
+	reopened, err := agent.LoadSession(sessionPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if head, ok := reopened.Head(); !ok || head.HeadID != continued.HeadID || reopened.Snapshot()[3].Content != "continue here" {
+		t.Fatal("reopening did not retain the selected conversation version")
+	}
+	if err := runtime.SwitchSessionHead("missing-head"); err == nil {
+		t.Fatal("unknown head was accepted")
+	}
 }
 
 func TestConversationRewindRejectsFileBranchPolicyBeforeMutation(t *testing.T) {
@@ -268,6 +294,12 @@ func TestConversationRewindPreviewDisablesSchemaOneSession(t *testing.T) {
 	}
 	if result, err := runtime.CommitConversationRewind("valid-plan-id"); err == nil || result.OK {
 		t.Fatalf("legacy conversation commit = %+v err=%v", result, err)
+	}
+	if heads, err := runtime.SessionHeads(); err != nil || len(heads) != 0 {
+		t.Fatalf("legacy heads = %+v err=%v", heads, err)
+	}
+	if err := runtime.SwitchSessionHead("main"); err == nil {
+		t.Fatal("legacy session accepted an in-log head switch")
 	}
 	if controller.SessionPath() != path || len(session.Snapshot()) != 2 {
 		t.Fatal("legacy conversation changed despite disabled preview")

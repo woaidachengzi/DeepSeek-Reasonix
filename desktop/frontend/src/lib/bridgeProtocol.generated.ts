@@ -262,6 +262,30 @@ export interface BridgeSession {
   workspaceRoot?: string;
 }
 
+export interface BridgeSessionHeadSwitchRequest {
+  headId: string;
+}
+
+export interface BridgeSessionHeadSwitchResponse {
+  ok: boolean;
+  protocolVersion: number;
+}
+
+export interface BridgeSessionHeadView {
+  id: string;
+  kind: string;
+  messageCount: number;
+  name?: string;
+  parentId?: string;
+  preview?: string;
+  selected: boolean;
+}
+
+export interface BridgeSessionHeadsResponse {
+  heads: BridgeSessionHeadView[];
+  protocolVersion: number;
+}
+
 export interface BridgeSessionMetrics {
   cacheHitTokens: number;
   cacheMissTokens: number;

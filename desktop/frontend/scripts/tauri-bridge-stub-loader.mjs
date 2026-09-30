@@ -508,6 +508,14 @@ export function tauriConversationRewindUndo(sessionId, headId) {
   record("bridge_conversation_rewind_undo", { sessionId, headId });
   return globalThis.__conversationRewindUndoHandler?.(sessionId, headId) ?? Promise.resolve({ ok: false, conversationForked: false });
 }
+export function tauriSessionHeads(sessionId) {
+  record("bridge_session_heads", { sessionId });
+  return globalThis.__sessionHeadsHandler?.(sessionId) ?? Promise.resolve([]);
+}
+export function tauriSessionHeadSwitch(sessionId, headId) {
+  record("bridge_session_head_switch", { sessionId, headId });
+  return globalThis.__sessionHeadSwitchHandler?.(sessionId, headId) ?? Promise.resolve();
+}
 
 export function startTauriBridgeEvents() {
   record("bridge_start_events");

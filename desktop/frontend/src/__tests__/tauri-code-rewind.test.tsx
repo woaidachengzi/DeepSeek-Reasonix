@@ -27,6 +27,8 @@ const state = globalThis as typeof globalThis & {
   __conversationRewindPreviewHandler?: () => Promise<object>;
   __conversationRewindCommitHandler?: () => Promise<object>;
   __conversationRewindUndoHandler?: () => Promise<object>;
+  __sessionHeadsHandler?: () => Promise<object[]>;
+  __sessionHeadSwitchHandler?: (_sessionId: string, headId: string) => Promise<void>;
   __tauriHistoryMessages?: Array<{ role: string; content: string }>;
   __historyGate?: Promise<void>;
   __tauriBridgeCalls?: Array<{ name: string; args: Record<string, unknown> }>;
@@ -106,11 +108,29 @@ check(!document.body.textContent?.includes("later answer"), "conversation rewind
 await act(async () => { click(button("Return to previous conversation")); await settle(); await settle(); });
 check(state.__tauriBridgeCalls?.some(call => call.name === "bridge_conversation_rewind_undo" && call.args.headId === "rewind-head"), "conversation undo should target the committed head");
 check(document.body.textContent?.includes("later answer"), "conversation undo should refresh the original history");
+let selectedHead = "main";
+state.__sessionHeadsHandler = async () => [
+  { id: "main", kind: "main", preview: "later answer", messageCount: 5, selected: selectedHead === "main" },
+  { id: "rewind-head", kind: "rewind", preview: "continued version", messageCount: 4, selected: selectedHead === "rewind-head" },
+];
+state.__sessionHeadSwitchHandler = async (_sessionId, headId) => {
+  selectedHead = headId;
+  state.__tauriHistoryMessages = headId === "main"
+    ? [{ role: "system", content: "system" }, { role: "user", content: "start" }, { role: "assistant", content: "first answer" }, { role: "user", content: "edit two files" }, { role: "assistant", content: "later answer" }]
+    : [{ role: "system", content: "system" }, { role: "user", content: "start" }, { role: "assistant", content: "first answer" }, { role: "user", content: "continued version" }];
+};
+await act(async () => { click(button("刷新")); await settle(); });
+check(document.body.textContent?.includes("continued version"), "version list should show saved heads");
+await act(async () => { click(document.querySelector('[aria-label="Conversation versions"] li:nth-child(2) button')); await settle(); await settle(); });
+check(state.__tauriBridgeCalls?.some(call => call.name === "bridge_session_head_switch" && call.args.headId === "rewind-head"), "version switch should target a head ID");
+check(!document.querySelector(".tauri-transcript")?.textContent?.includes("later answer"), "version switch should replace the visible transcript");
+await act(async () => { click(document.querySelector('[aria-label="Conversation versions"] li:first-child button')); await settle(); await settle(); });
+check(document.body.textContent?.includes("later answer"), "switching back should restore the original transcript");
 state.__historyGate = Promise.reject(new Error("history unavailable"));
 void state.__historyGate.catch(() => {});
 await act(async () => { click(button("Rewind conversation")); await settle(); });
 await act(async () => { click(button("Create conversation version")); await settle(); await settle(); });
-check(!document.body.textContent?.includes("later answer"), "failed history refresh must not keep the old conversation visible");
+check(!document.querySelector(".tauri-transcript")?.textContent?.includes("later answer"), "failed history refresh must not keep the old conversation visible");
 check(document.body.textContent?.includes("history unavailable"), "failed history refresh should explain the missing transcript");
 state.__historyGate = undefined;
 await act(async () => { root.unmount(); });
