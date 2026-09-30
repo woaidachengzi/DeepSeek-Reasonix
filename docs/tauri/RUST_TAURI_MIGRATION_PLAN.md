@@ -180,9 +180,10 @@ host 入口集中在 `app` Proxy 与事件订阅 helper 中。在它之上再包
 代码，不增加边界，因此不引入该层。
 
 Tauri adapter 落在 `desktop/frontend/src/lib/tauriBridge.ts`，只覆盖已迁移的最小
-命令面。代价是退出条件目前**未达成**：`bridge.ts` 仍 `import type` 生成的 Wails
-类型，运行时仍经 `window.go.main.App`。该条件随功能面逐个迁移收敛，不是一次性
-切换。
+命令面。共享的 `bridge.ts` 已移除对本地生成 Wails 类型文件的依赖；构建时从 Go
+`App` 方法与 TypeScript `AppBindings` 校验方法名，mock 仍由类型检查约束。
+Wails adapter 运行时仍经 `window.go.main.App`，前端其余直接 runtime 调用仍需按
+功能面迁移；因此 Phase 1 的完整退出条件尚未达成。
 
 ### Phase 2 — Go desktop bridge（不引入 Tauri UI）
 

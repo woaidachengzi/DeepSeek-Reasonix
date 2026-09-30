@@ -21,6 +21,7 @@ Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, co
 const state = globalThis as typeof globalThis & {
   __workbenchSessions?: Array<{ sessionId: string; title: string; workspaceRoot: string }>;
   __workspaceCheckpointsHandler?: (sessionId: string) => Promise<object[]>;
+  __workspaceChangesHandler?: (sessionId: string) => Promise<object>;
   __codeRewindPreviewHandler?: () => Promise<object>;
   __codeRewindCommitHandler?: () => Promise<object>;
   __workspaceFileRevertUndoHandler?: () => Promise<object>;
@@ -106,6 +107,26 @@ await act(async () => {
   await settle(); await settle();
 });
 check(document.body.textContent?.includes("new checkpoint"), "confirmed idle turn refreshes checkpoint rows without a manual click");
+state.__workspaceChangesHandler = async () => ({ gitAvailable: true, files: [{ path: "before.txt", gitStatus: "M", sources: ["git"] }] });
+await act(async () => { click(button("变更")); await settle(); });
+check(document.body.textContent?.includes("before.txt"), "changes view initially shows existing worktree state");
+let releaseStaleChanges: ((changes: object) => void) | undefined;
+state.__workspaceChangesHandler = () => new Promise(resolve => { releaseStaleChanges = resolve; });
+await act(async () => { click(button("刷新")); await settle(); });
+await act(async () => {
+  state.__emitBridgeEvent?.({ sessionId: "tauri-code-rewind", sequence: 3, eventKind: "turn_started", payload: { kind: "turn_started" } });
+  await settle();
+});
+check(!document.querySelector(".tauri-workspace-change-entry"), "running turn clears stale worktree changes");
+await act(async () => { releaseStaleChanges?.({ gitAvailable: true, files: [{ path: "stale.txt", gitStatus: "M", sources: ["git"] }] }); await settle(); });
+check(!document.body.textContent?.includes("stale.txt"), "late changes response cannot repopulate a running turn");
+state.__workspaceChangesHandler = async () => ({ gitAvailable: true, files: [{ path: "after.txt", gitStatus: "M", sources: ["git"] }] });
+await act(async () => {
+  state.__emitBridgeEvent?.({ sessionId: "tauri-code-rewind", sequence: 4, eventKind: "turn_done", payload: { kind: "turn_done", status: "completed" } });
+  await settle(); await settle();
+});
+check(document.body.textContent?.includes("after.txt"), "confirmed idle turn refreshes worktree changes without a manual click");
+await act(async () => { click(button("Checkpoints")); await settle(); });
 await act(async () => { click([...document.querySelectorAll(".tauri-workspace-change-entry")].find(row => row.textContent?.includes("edit two files"))); await settle(); });
 await act(async () => {
   const checkbox = document.querySelector<HTMLInputElement>('.tauri-workspace-revert__confirmation input');

@@ -1901,6 +1901,24 @@ export function TauriSessionPreview() {
     }
   }
 
+  useEffect(() => {
+    if (!workspaceOpen || workspaceView !== "changes") return;
+    if (!session || session.state !== "idle") {
+      workspaceChangesRequestRef.current += 1;
+      workspaceDetailRequestRef.current += 1;
+      workspaceFileRevertRequestRef.current += 1;
+      setWorkspaceChangesLoading(false);
+      setWorkspaceChangeDetailLoading(false);
+      setWorkspaceFileRevertBusy(false);
+      setWorkspaceChanges(null);
+      setWorkspaceChangeDetail(null);
+      setWorkspaceFileRevertPlan(null);
+      return;
+    }
+    void loadWorkspaceChanges();
+    return () => { workspaceChangesRequestRef.current += 1; };
+  }, [workspaceOpen, workspaceView, session?.id, session?.state]);
+
   async function loadWorkspaceCheckpoints() {
     if (!session) return;
     const sessionID = session.id;
@@ -2430,8 +2448,7 @@ export function TauriSessionPreview() {
     const nextOpen = !workspaceOpen;
     setWorkspaceOpen(nextOpen);
     if (nextOpen) {
-      if (workspaceView === "changes") void loadWorkspaceChanges();
-      else if (workspaceView === "files") void loadWorkspace(workspacePath);
+      if (workspaceView === "files") void loadWorkspace(workspacePath);
     }
   }
 
@@ -2458,7 +2475,6 @@ export function TauriSessionPreview() {
       setWorkspaceLoading(false);
       setWorkspacePreviewLoading(false);
       setWorkspacePreview(null);
-      void loadWorkspaceChanges();
     } else {
       workspaceListRequestRef.current += 1;
       workspaceChangesRequestRef.current += 1;

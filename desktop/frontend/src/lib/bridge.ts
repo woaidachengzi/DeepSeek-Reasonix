@@ -2,9 +2,8 @@ import { makeMockModelSettingsBindings, type ModelSettingsBindings } from "./mod
 import { mockProviderTemplate, mockPreset, mockBundlePreset, mockKimiAPIModels, mockLongCatModels, mockTokenRhythmModels, mockTokenRhythmModelOverrides, mockMiMoV25Models, mockMiniMaxModels, mockGLMAPIModels, mockGLMCodingModels, mockGLMAnthropicModels, mockQwenAPIModels, mockQwenPlanModels, mockQwenPlanVisionModels, mockStepFunModels, mockOpenCodeGoModels, mockNovitaModels, mockGMIModels, mockVercelModels, mockOllamaCloudModels } from "./mockProviderTemplates";
 import { COMPACT_RATIO_MAX_PERCENT, COMPACT_RATIO_MIN_PERCENT } from "./compactRatio";
 export { COMPACT_RATIO_MAX_PERCENT, COMPACT_RATIO_MIN_PERCENT } from "./compactRatio";
-// Wails and the browser mock share this React-to-Go contract.
-// @ts-ignore generated locally; fresh checkouts use the disabled drift check below.
-import type * as GeneratedApp from "../../wailsjs/go/main/App";
+// Wails and the browser mock share this React-to-Go contract. The build checks
+// its method names against desktop/App Go methods without generated Wails files.
 import type { InvocationRequest } from "./invocationDisplay";
 import type { FollowupBindings } from "./pendingFollowup";
 import { addBreadcrumb } from "./breadcrumbs";
@@ -177,10 +176,8 @@ function stripLegacyGoalBudgetFlags(arg: string): string {
   return parts.join(" ");
 }
 
-// AppBindings is derived from the Wails-generated Go → TS method signatures, so
-// the compiler catches drift between the Go binding surface and the frontend mock.
-// Run `wails generate module` after adding/renaming a bound method on App, then
-// `pnpm typecheck` to verify the mock still satisfies the contract.
+// AppBindings method names are checked against the Go App surface by
+// scripts/check-wails-binding-contract.mjs; TypeScript checks the browser mock.
 //
 // Types for native-feel bindings, used only by AppBindings and the dev mock.
 interface NativeConfirmRequest {
@@ -199,8 +196,7 @@ interface DesktopWindowState {
   y: number;
   maximised: boolean;
 }
-// AppBindings is the hand-written React-to-Go contract. _CheckGeneratedBindings
-// catches generated methods missing here; update this interface and typecheck.
+// AppBindings is the hand-written React-to-Go contract.
 export interface AppBindings extends ModelSettingsBindings, SessionCatalogBindings, ProjectTreeOrganizationBindings, HistoryCatalogBindings, TaskCatalogBindings, BlankProjectBindings, QualityFloorBindings, SessionTitleBindings, ScrollDiagnosticBindings, RemoteProjectBindings, MCPAppBindings, PinnedContextBindings, FollowupBindings {
   Platform(): Promise<string>;
   MinimiseMainWindow(): Promise<void>;
@@ -570,7 +566,7 @@ export interface AppBindings extends ModelSettingsBindings, SessionCatalogBindin
   SetDefaultToolApprovalMode(mode: string): Promise<void>;
   SetDefaultAutoRecoveryCheckpoint(enabled: boolean): Promise<void>;
 
-  RenameProviderConnections: typeof GeneratedApp.RenameProviderConnections;
+  RenameProviderConnections(names: string[], displayName: string): Promise<void>;
   SaveProvider(p: ProviderView): Promise<void>;
   SetProviderWebSearch(names: string[], enabled: boolean): Promise<void>;
   SaveProviderModelCatalogs(updates: ProviderModelCatalogUpdate[]): Promise<string[]>;
@@ -756,26 +752,6 @@ export interface AppBindings extends ModelSettingsBindings, SessionCatalogBindin
   ScanRemoteLegacyWorkbenchData(): Promise<RemoteLegacyWorkbenchData>;
   CleanRemoteLegacyWorkbenchData(target: "mirrors" | "trust"): Promise<void>;
 }
-// Compile-time drift check. Exclude<A, B> extracts keys in A that are missing
-// from B. If that set is non-empty, AssertNever<non-never> fails with
-// "Type 'X' does not satisfy the constraint 'never'".
-// _CheckGenToApp errors mean a generated Go method has no TS counterpart.
-// These compare method *names* only; full signature checking isn't possible here
-// because local types (types.ts) use plain interfaces while generated types
-// (models.ts) use classes with a convertValues prototype method. The structural
-// mismatch would produce false positives. Method-arity and parameter-order drift
-// are caught at the call sites by tsc when components invoke app.<method>(...).
-type AssertNever<T extends never> = T;
-type GeneratedAppKeys = keyof typeof GeneratedApp;
-type GeneratedAppMissing =
-  string extends GeneratedAppKeys ? true :
-  number extends GeneratedAppKeys ? true :
-  symbol extends GeneratedAppKeys ? true :
-  false;
-export type _CheckGenToApp = AssertNever<
-  GeneratedAppMissing extends true ? never : Exclude<GeneratedAppKeys, keyof AppBindings>
->;
-
 interface WailsRuntime {
   EventsOn(name: string, cb: (...data: unknown[]) => void): () => void;
   BrowserOpenURL(url: string): void;
