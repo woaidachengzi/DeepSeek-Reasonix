@@ -218,8 +218,21 @@ python3 tools/tauri/smoke-profile-import.py 'desktop/tauri/target/release/bundle
 历史目录互斥或完整会话附件回退。版本、摘要和边界详见迁移清单。
 
 官方 Wails `desktop-v1.38.3` 归档也已核对完整大小、SHA-256 与沙箱外严格
-Developer ID 签名；旧 GUI 的隔离启动探测尚未完成会话就绪与回退阶段，仍不计为
-兼容验收通过。本轮平台范围仅为 macOS，Windows/Linux 等有测试环境后恢复。
+Developer ID 签名；进一步使用官方 CLI 生成真实文本历史后，旧 GUI 在 Preview 导入/
+重启前后的会话租约、拒绝第二 writer、原生退出及原历史字节保护均已通过。
+空会话的 JSONL 延迟保存，不能用其文件出现作为旧 GUI 启动就绪条件。
+
+独立旧版回退门禁需要原生 arm64 macOS、Swift 编译器和已取得的官方 1.38.3 二进制，
+固定摘要拒绝本地修改版本。成功清理临时档案，失败保留私有记录；不代替完整附件/
+检查点、真实 GUI 点击、物理按键或宿主目录生命周期互斥验收：
+
+```sh
+python3 tools/tauri/smoke-legacy-rollback.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app' \
+  --legacy-app '/absolute/path/to/official/Reasonix.app' \
+  --legacy-cli '/absolute/path/to/official/reasonix'
+```
+
+本轮平台范围仅为 macOS，Windows/Linux 等有测试环境后恢复。
 
 2026-10-01 从干净提交 `91cbff49cbe10a0faab0a7570d880bad87ffc126` 完整构建 macOS `.app`，
 严格本地 ad-hoc 签名校验、两种临时档案共 14 个原生窗口/关闭场景和原有包级启动/退出
