@@ -361,7 +361,10 @@ for (const path of localeChunks) {
   // Settings and workspace diagnostics now localize seven core bridge warnings.
   // Keep the corresponding locale growth within a further 0.3 KiB.
   // Plugin hook inventory adds four localized labels with a 0.1 KiB ceiling.
-  const budget = 78.9 * 1024;
+  // Native notification authorization, denied/provisional states and separate
+  // delivery/navigation recovery add five localized captions. zh stays within
+  // its existing cap; zh-TW needs the next bounded 0.2 KiB for this UI surface.
+  const budget = (name.startsWith("zh-TW-") ? 79.1 : 78.9) * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 

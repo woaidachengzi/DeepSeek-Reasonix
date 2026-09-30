@@ -2039,3 +2039,33 @@ export async function keychainImportLegacy(provider: string): Promise<void> {
   requireTauri();
   await invoke<void>("keychain_import_legacy", { provider });
 }
+
+
+export type TauriNotificationPermission = "not_determined" | "denied" | "granted" | "provisional" | "unknown" | "unavailable";
+export interface TauriNotificationStatus { permission: TauriNotificationPermission; clickSupported: boolean }
+export interface TauriNotificationClick { token: string; sessionId: string }
+export interface TauriNotificationTarget { sessionId: string; workspaceRoot?: string | null }
+export function tauriNotificationPermission(request = false): Promise<TauriNotificationStatus> {
+  requireTauri();
+  return invoke("notification_permission", { request });
+}
+export async function sendTauriSystemNotification(request: { sessionId: string; kind: "turn_done" | "approval_request" | "ask_request"; language: "en" | "zh" | "zh-TW"; failed?: boolean }): Promise<void> {
+  requireTauri();
+  await invoke("send_system_notification", { request });
+}
+export function pendingTauriNotificationClicks(): Promise<TauriNotificationClick[]> {
+  requireTauri();
+  return invoke("pending_notification_clicks");
+}
+export function resolveTauriNotificationClick(token: string): Promise<TauriNotificationTarget | null> {
+  requireTauri();
+  return invoke("resolve_notification_click", { token });
+}
+export async function acknowledgeTauriNotificationClick(token: string): Promise<void> {
+  requireTauri();
+  await invoke("acknowledge_notification_click", { token });
+}
+export function onTauriNotificationClick(callback: () => void): Promise<UnlistenFn> {
+  requireTauri();
+  return listen("host:notification-clicked", callback);
+}

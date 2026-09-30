@@ -45,8 +45,9 @@ Tauri `bridge:event` 和故障时的 `bridge:connection-error` 事件转发给 W
 
 `provider_summary` 只投影 Preview 私有配置中的 Provider 名称/类型、模型 ID、模型数量、默认模型和凭据就绪布尔值；不把服务 URL、凭据变量名、请求 headers 或密钥传入 WebView。`set_default_model` 复用 Go 配置库校验和窄写入，只影响新会话，现有会话不会被重建。
 系统钥匙串中的 Provider API key 只可通过保存和删除命令修改；WebView 无读取凭据值的命令，且不能用这些命令修改其他钥匙串条目。
-早期 Preview 的 `keychain.dat` 只在它是普通文件且不超过 1 MiB 时迁移；所有条目先校验，再写入系统钥匙串。
-迁移成功后删除明文文件，校验或写入失败则保留原文件以供恢复。
+凭据服务按 core profile 的持久随机身份隔离。早期 Preview 的 `keychain.dat` 不自动迁移；
+设置页只显式复制选中的有效 Provider 凭据，保留原文件和旧原生服务，已有目标则拒绝覆盖。
+来源必须是普通文件且不超过 1 MiB；所有条目先校验，写入和桥接同步失败则回滚。
 `desktop/frontend/src/lib/tauriBridge.ts` 已为上述小范围命令提供类型化适配器，只会在
 Tauri WebView 中激活；现有 `desktop/frontend/src/lib/bridge.ts` 仍是 Wails 默认实现，直到
 对应功能面完成迁移。Tauri WebView 现会渲染 `TauriSessionPreview` 聊天工作台：左侧项目与
@@ -67,10 +68,16 @@ Preview 的 Runtime details 面板显示冻结的 1.38.3 基线与提交、当�
 版本，因此界面不会把 instance ID 伪装成版本号。
 
 选择 workspace 时，Preview 只提供系统目录选择器；`main-window` capability 只授予
-事件监听、窗口拖动、系统文件选择器与通知所需的命令，不授予文件读写、保存对话框、shell、
+事件监听、窗口拖动、系统文件选择器与文本剪贴板命令，不授予通用文件读写、保存对话框、shell、
 更新器、托盘或菜单调用权限。选中的路径仍会通过既有 bridge 的 workspace 校验，
 取消选择不会改变当前输入。
 MCP 授权链接和“关于”页链接由 host 校验为不含 URL 用户名/密码的 HTTP(S) 地址后交给系统浏览器；WebView 不获得通用 shell 权限。
+
+macOS 系统通知通过限定主窗口的专用 host 命令读取实际授权并返回提交错误，
+只发送固定事件提示。点击使用档案内的随机 token 映射，由 host 重新核实会话与工作区；
+前端忙碌时保留点击，同会话返回对话，失效会话不创建。未打包开发进程报告不可用。
+Windows/Linux 暂仅支持提交及错误反馈，授权状态为未知，点击回调仍待补齐。
+当前实现、回归证据及真实系统 UI 待验收项见 [迁移清单](../../docs/tauri/API_SURFACE_AUDIT.md)。
 
 开发环境还需要满足前端锁定的 Node 24 与 pnpm 10。使用前端目录中的本地 Tauri CLI
 启动，脚本会把 Go sidecar 构建到被忽略的 `desktop/tauri/target/sidecar-dev/`，并仅向

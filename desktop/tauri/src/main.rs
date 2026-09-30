@@ -7,6 +7,7 @@ mod host_preferences;
 mod keychain;
 mod local_paths;
 mod menu;
+mod notifications;
 mod opener_catalog;
 mod protocol_generated;
 mod runtime_info;
@@ -3415,7 +3416,6 @@ fn main() {
             tray::show_main_window(app);
         }))
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let window_state = PreviewWindowState::for_app(app)?;
             let host_preferences = HostPreferences::for_app(app).map_err(std::io::Error::other)?;
@@ -3455,6 +3455,9 @@ fn main() {
                 // startup or a user saves the key again.
                 eprintln!("Reasonix could not restore system keychain credentials: {error}");
             }
+            let notifications = notifications::NotificationState::for_profile(&profile, &app.config().identifier);
+            app.manage(std::sync::Arc::clone(&notifications));
+            notifications::NotificationState::install(app.handle(), &notifications);
             app.manage(keychain);
 
             app.manage(supervisor);
@@ -3716,6 +3719,11 @@ fn main() {
             local_paths::workspace_external_openers,
             local_paths::open_workspace_external,
             local_paths::open_local_path_with,
+            notifications::notification_permission,
+            notifications::send_system_notification,
+            notifications::pending_notification_clicks,
+            notifications::acknowledge_notification_click,
+            notifications::resolve_notification_click,
             keychain::keychain_save,
             keychain::keychain_import_legacy,
             keychain::keychain_delete
@@ -3735,6 +3743,31 @@ fn main() {
             // without depending on accessibility permissions or UI scripting.
             let handle = app.clone();
             std::thread::spawn(move || {
+                let native_status = handle
+                    .state::<std::sync::Arc<notifications::NotificationState>>()
+                    .permission(false);
+                let marker = std::env::var_os("TMPDIR")
+                    .map(std::path::PathBuf::from)
+                    .map(|dir| dir.join("reasonix-native-notification-smoke.json"));
+                let verified = native_status.and_then(|status| {
+                    if matches!(
+                        status.permission,
+                        notifications::Permission::Unavailable | notifications::Permission::Unknown
+                    ) {
+                        return Err(
+                            "packaged native notification authorization is unavailable".into()
+                        );
+                    }
+                    let path = marker.ok_or("notification smoke marker directory unavailable")?;
+                    let bytes = serde_json::to_vec(&status)
+                        .map_err(|_| "notification smoke status encoding failed")?;
+                    std::fs::write(path, bytes)
+                        .map_err(|_| "notification smoke status write failed".to_string())
+                });
+                if verified.is_err() {
+                    handle.exit(2);
+                    return;
+                }
                 std::thread::sleep(std::time::Duration::from_secs(8));
                 handle.exit(0);
             });

@@ -2,7 +2,8 @@ import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type 
 import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Eye, FileText, FolderOpen, FolderTree, GitBranch, Keyboard, MessageSquare, Paperclip, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Settings, Sparkles, Square, Trash2, X } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
+import { sendTauriSystemNotification } from "../lib/tauriBridge";
+import { useTauriNotificationClicks } from "./tauriNotifications";
 import { Markdown } from "../components/Markdown";
 import { ExternalOpener } from "../components/ExternalOpener";
 import { tauriExternalOpenerBridge } from "./tauriExternalOpener";
@@ -14,7 +15,7 @@ import { QuestionJumpBar } from "../components/QuestionJumpBar";
 import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
 import { compactQuestionText, type QuestionAnchor } from "../lib/transcriptGrouping";
 import { LocaleProvider, useI18n, useT, type DictKey } from "../lib/i18n";
-import { ToastProvider } from "../lib/toast";
+import { ToastProvider, useToast } from "../lib/toast";
 import { applyTextSize, getTextSize, nextTextSize, DEFAULT_TEXT_SIZE } from "../lib/textSize";
 import { playSuccessChime, playAttentionChime, shouldPlayAttentionChimeForEvent } from "../lib/sound";
 import { generativeMusic, isGenerativeMusicEnabled } from "../lib/generative-music";
@@ -49,19 +50,6 @@ class MessageErrorBoundary extends Component<{ children: ReactNode; index: numbe
   }
 }
 
-async function sendTauriSystemNotification(kind: TauriNotificationKind, title: string, body: string): Promise<void> {
-  if (!isTauriNotificationEnabled(kind)) return;
-  try {
-    const hasPermission = await isPermissionGranted();
-    if (!hasPermission) {
-      const permission = await requestPermission();
-      if (permission !== "granted") return;
-    }
-    sendNotification({ title, body });
-  } catch {
-    // System notifications are best-effort and must not interrupt a session.
-  }
-}
 
 function HistoryMessageArticle({ entry, sessionId, questionId }: {
   entry: IndexedHistoryMessage;
@@ -419,6 +407,10 @@ function PromptCard({ prompt, busy, selections, onApproval, onAskSelection, onAs
 export function TauriSessionPreview() {
   const { locale, pref: languagePref, setPref: setLanguagePref } = useI18n();
   const t = useT();
+  const { showToast } = useToast();
+  const notificationFailureShown = useRef(false);
+  const notificationLocale = useRef(locale);
+  useLayoutEffect(() => { notificationLocale.current = locale; }, [locale]);
   const recoveryCopy = tauriWorkspaceRecoveryCopy[locale];
   const languagePrefRef = useRef(languagePref);
   languagePrefRef.current = languagePref;
@@ -546,6 +538,16 @@ export function TauriSessionPreview() {
   const workspaceCheckpointsRequestRef = useRef(0);
   const [activeQuestion, setActiveQuestion] = useState<number | null>(null);
   const switchingBlocked = Boolean(session && session.state !== "idle");
+  useTauriNotificationClicks({
+    canOpen: click => click.sessionId === session?.id || (!busy && !switchingBlocked && !isReadOnlyWorkbenchSource(sessionPageSource)),
+    open: async target => {
+      setSettingsOpen(false); setDiagnosticsOpen(false); setWorkspaceOpen(false);
+      if (target.sessionId === session?.id) return true;
+      return activateSession(target.sessionId, target.workspaceRoot ?? undefined);
+    },
+    unavailable: () => showToast(t("composer.sessionContextReadFailed"), "warn"),
+    failed: () => showToast(t("notifications.openFailed"), "warn"),
+  }, { busy, blocked: switchingBlocked, source: sessionPageSource, sessionId: session?.id });
   const [platform, setPlatform] = useState<string>("");
   // Optimistic user message: displayed immediately after submit, cleared when history loads
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
@@ -1094,6 +1096,17 @@ export function TauriSessionPreview() {
         let lastSequence = snapshot.sequence;
         offEvent = await onTauriBridgeEvent(event => {
           if (!active || resyncRequested || event.sessionId !== session.id || event.sequence <= lastSequence) return;
+          const notify = (kind: TauriNotificationKind, failed = false) => {
+            if (!isTauriNotificationEnabled(kind)) return;
+            void sendTauriSystemNotification({ sessionId: session.id, kind, language: notificationLocale.current, failed }).then(() => {
+              if (active) notificationFailureShown.current = false;
+            }).catch(() => {
+              if (active && !notificationFailureShown.current) {
+                notificationFailureShown.current = true;
+                showToast(t("notifications.deliveryFailed"), "warn");
+              }
+            });
+          };
           lastSequence = event.sequence;
           setSequence(previous => Math.max(previous, event.sequence));
           setEvents(previous => [event, ...previous].slice(0, 100));
@@ -1120,11 +1133,7 @@ export function TauriSessionPreview() {
               const notificationKey = `${notificationKind}:${incomingPrompt.id}`;
               if (!notificationPromptSeenRef.current.has(notificationKey)) {
                 notificationPromptSeenRef.current.add(notificationKey);
-                void sendTauriSystemNotification(
-                  notificationKind,
-                  "Reasonix",
-                  t(`settings.notificationEvents.${notificationKind}` as DictKey),
-                );
+                notify(notificationKind);
               }
             }
             setPendingPrompt(incomingPrompt);
@@ -1149,9 +1158,7 @@ export function TauriSessionPreview() {
             setPromptSelections({});
             setSession(previous => previous ? { ...previous, state: "running" } : previous);
             const failure = tauriTurnFailure(event);
-            void sendTauriSystemNotification("turn_done", "Reasonix", failure
-              ? t("notifications.turnFailed", { error: failure })
-              : t("notifications.turnComplete"));
+            notify("turn_done", Boolean(failure));
             void (async () => {
               // Refresh state and transcript independently. A transcript parse
               // failure must not prevent state reconciliation. The core can
@@ -1609,9 +1616,9 @@ export function TauriSessionPreview() {
       setError(sessionPageSource === "unavailable"
         ? "会话目录尚未通过检查；读取成功后才能打开会话。"
         : "当前会话目录为只读来源；重新检查并核验通过后才能打开会话。");
-      return;
+      return false;
     }
-    if (!id) return setError("缺少会话 ID");
+    if (!id) { setError("缺少会话 ID"); return false; }
     setBusy(true);
     setError("");
     try {
@@ -1660,8 +1667,10 @@ export function TauriSessionPreview() {
       await reloadPendingSessionTitleRecoveries();
       setStreamRevision(previous => previous + 1);
       setStatus(await tauriBridgeStatus());
+      return true;
     } catch (cause) {
       setError(sessionLifecycleNotice(cause) ?? tauriMessageFrom(cause));
+      return false;
     } finally {
       setBusy(false);
     }

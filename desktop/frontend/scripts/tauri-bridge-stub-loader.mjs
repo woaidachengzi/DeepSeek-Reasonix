@@ -633,4 +633,11 @@ export function resolveTauriMCPMarketplace(name) {
 export function tauriAssistantTextDelta() { return ""; }
 export function tauriComposerInput(prompt, attachments) { return prompt.trim(); }
 export function tauriEventSummary(event) { return JSON.stringify(event.payload); }
+
+export function tauriNotificationPermission(request = false) { record("notification_permission", { request }); return Promise.resolve({ permission: "granted", clickSupported: true }); }
+export function sendTauriSystemNotification(request) { record("send_system_notification", { request }); return Promise.resolve(); }
+export function pendingTauriNotificationClicks() { return Promise.resolve((globalThis.__notificationClicks ?? []).slice()); }
+export function resolveTauriNotificationClick(token) { record("resolve_notification_click", { token }); return Promise.resolve(globalThis.__notificationTargets?.[token] ?? null); }
+export function acknowledgeTauriNotificationClick(token) { record("acknowledge_notification_click", { token }); globalThis.__notificationClicks = (globalThis.__notificationClicks ?? []).filter(click => click.token !== token); return Promise.resolve(); }
+export function onTauriNotificationClick(callback) { const listeners = globalThis.__notificationClickListeners ??= new Set(); listeners.add(callback); return Promise.resolve(() => listeners.delete(callback)); }
 `;

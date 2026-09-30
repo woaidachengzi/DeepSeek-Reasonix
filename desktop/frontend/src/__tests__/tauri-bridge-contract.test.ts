@@ -523,6 +523,11 @@ const commands: CommandContract[] = [
     argKeys: ["behavior"],
     description: "setTauriCloseBehavior() invokes set_close_behavior with { behavior }",
   },
+  { command: "notification_permission", argKeys: ["request"], description: "native notification_permission boundary" },
+  { command: "send_system_notification", argKeys: ["request"], description: "native send_system_notification boundary" },
+  { command: "pending_notification_clicks", argKeys: [], description: "native pending_notification_clicks boundary" },
+  { command: "resolve_notification_click", argKeys: ["token"], description: "native resolve_notification_click boundary" },
+  { command: "acknowledge_notification_click", argKeys: ["token"], description: "native acknowledge_notification_click boundary" },
   {
     command: "keychain_save",
     argKeys: ["key", "value"],

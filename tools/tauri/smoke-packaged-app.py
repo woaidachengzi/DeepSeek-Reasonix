@@ -215,8 +215,11 @@ def smoke_once(host_binary, sidecar_binary, identifier, managed):
                 raise RuntimeError("packaged sidecar survived host exit")
             if list(temp.glob("reasonix-tauri-bridge-*/ready.json")):
                 raise RuntimeError("sidecar readiness directory survived host exit")
+            notification_status = json.loads((temp / "reasonix-native-notification-smoke.json").read_text())
+            if notification_status.get("permission") not in {"not_determined", "denied", "granted", "provisional"} or notification_status.get("clickSupported") is not True:
+                raise RuntimeError("packaged native notification permission query failed")
             profile = "managed" if managed else "explicit"
-            print(f"packaged Preview {profile} profile, private credential identity, sidecar readiness, and shutdown: OK")
+            print(f"packaged Preview {profile} profile, private credential identity, native notification authorization, sidecar readiness, and shutdown: OK")
             return credential_identity
         finally:
             if host.poll() is None:

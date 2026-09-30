@@ -37,6 +37,10 @@ let failSave = false;
 let failImport = false;
 const importRequests: Record<string, unknown>[] = [];
 let failRuntime = false;
+let failNotificationPermission = false;
+const notificationPermissionRequests: boolean[] = [];
+let permissionGate: Promise<void> | null = null;
+let releasePermission: (() => void) | undefined;
 let failStorage = false;
 const calls: string[] = [];
 const capabilityDiagnosticsCalls: { workspaceRoot?: string; includeSessionRuntime?: boolean }[] = [];
@@ -255,6 +259,12 @@ const summary = (scope = "global") => ({
       case "set_desktop_language": desktopLanguage = args?.language ?? desktopLanguage; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode, language: desktopLanguage, displayCurrency, terminalTheme, theme: desktopTheme, themeStyle: desktopThemeStyle, appearanceConfigured };
       case "set_desktop_currency": displayCurrency = args?.currency ?? displayCurrency; return { protocolVersion: 1, defaultToolApprovalMode: approvalMode, language: desktopLanguage, displayCurrency, terminalTheme, theme: desktopTheme, themeStyle: desktopThemeStyle, appearanceConfigured };
       case "open_external_url": openedURL = args?.url ?? ""; return;
+      case "notification_permission": {
+        notificationPermissionRequests.push(args?.request === true);
+        if (permissionGate) await permissionGate;
+        if (failNotificationPermission) throw new Error("private-notification-platform-error");
+        return { permission: "denied", clickSupported: true };
+      }
       case "keychain_save":
         if (failSave) throw new Error("secret-in-error-message");
         if (saveGate) await saveGate;
@@ -321,6 +331,26 @@ await act(async () => { click(["通用", "General"]); });
 const notificationEvents = [...document.querySelectorAll<HTMLInputElement>(".tauri-settings-notification-events input[type=checkbox]")];
 assert.equal(notificationEvents.length, 3, "General exposes separate completion, approval, and question notifications");
 assert.ok(notificationEvents.every(input => input.checked), "the three notification event types default to enabled");
+assert.match(document.querySelector('[data-testid="system-notification-permission"]')?.textContent ?? "", /已被系统拒绝/, "Settings reports actual OS denial instead of claiming permission is granted");
+assert.ok(notificationPermissionRequests.every(request => !request), "mounting Settings only reads authorization");
+const masterNotificationToggle = document.querySelector<HTMLInputElement>(".tauri-settings-toggle input");
+assert.ok(masterNotificationToggle);
+await act(async () => { masterNotificationToggle.click(); });
+permissionGate = new Promise(resolve => { releasePermission = resolve; });
+await act(async () => { masterNotificationToggle.click(); masterNotificationToggle.click(); });
+assert.equal(notificationPermissionRequests.filter(Boolean).length, 1, "enabling sends one explicit authorization request");
+assert.equal(masterNotificationToggle.disabled, true, "the authorization operation cannot be duplicated");
+await act(async () => { releasePermission?.(); });
+permissionGate = null;
+assert.equal(masterNotificationToggle.checked, true, "the saved notification preference remains independent of OS authorization");
+assert.match(document.querySelector('[data-testid="system-notification-permission"]')?.textContent ?? "", /已被系统拒绝/);
+await act(async () => { masterNotificationToggle.click(); });
+failNotificationPermission = true;
+await act(async () => { masterNotificationToggle.click(); });
+assert.match(document.querySelector('[data-testid="system-notification-permission"]')?.textContent ?? "", /暂不可用/);
+assert.doesNotMatch(visibleText(), /private-notification-platform-error/, "native permission errors do not expose diagnostics");
+failNotificationPermission = false;
+
 await act(async () => { notificationEvents[1].click(); });
 assert.equal(JSON.parse(localStorage.getItem("tauri-desktop-notification-events") ?? "{}").approval_request, false, "approval notifications persist separately from other event notifications");
 await act(async () => { click("English"); });

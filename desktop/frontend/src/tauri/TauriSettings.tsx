@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { Check, ArrowLeft, Search, X, Keyboard, Globe, Languages, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles, Users, Webhook, Package, Bot } from "lucide-react";
-import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, setTauriAgentPreference, testTauriProviderModel, tauriDesktopPreferences, tauriActiveThemeId, setTauriActiveThemeId, tauriUserThemes, tauriPluginThemes, saveTauriUserTheme, deleteTauriUserTheme, importTauriUserTheme, exportTauriUserTheme, setTauriDesktopApproval, setTauriDesktopTerminalTheme, setTauriDesktopAppearance, setTauriDesktopLanguage, setTauriDesktopCurrency, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, tauriZoomFactor, setTauriZoomFactor, keychainSave, keychainDelete, keychainImportLegacy, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, tauriCapabilityDiagnostics, tauriRuntimeDoctor, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
+import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, setTauriAgentPreference, testTauriProviderModel, tauriDesktopPreferences, tauriActiveThemeId, setTauriActiveThemeId, tauriUserThemes, tauriPluginThemes, saveTauriUserTheme, deleteTauriUserTheme, importTauriUserTheme, exportTauriUserTheme, setTauriDesktopApproval, setTauriDesktopTerminalTheme, setTauriDesktopAppearance, setTauriDesktopLanguage, setTauriDesktopCurrency, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, tauriZoomFactor, setTauriZoomFactor, keychainSave, keychainDelete, keychainImportLegacy, tauriNotificationPermission, type TauriNotificationPermission, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, tauriCapabilityDiagnostics, tauriRuntimeDoctor, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
 import { applyTerminalThemePreference, normalizeTerminalThemePreference, getCustomTerminalPalette, setCustomTerminalPalette, DEFAULT_TERMINAL_PALETTE, type TerminalPalette, type TerminalPaletteKey, type TerminalThemePreference } from "../lib/terminalTheme";
 import { THEME_STYLES, type Theme, type ThemeStyle } from "../lib/theme";
 import { useI18n, useT, type DictKey, type LangPref, type Translator } from "../lib/i18n";
@@ -672,6 +672,38 @@ function GeneralSettings({ languagePref, onLanguageChange, languageSaving, langu
   const [soundExpanded, setSoundExpanded] = useState(false);
   const [successSound, setSuccessSound] = useState<SoundWavPref>(getSuccessPreference);
   const [attentionSound, setAttentionSound] = useState<SoundWavPref>(getAttentionPreference);
+  const [notificationPermission, setNotificationPermission] = useState<TauriNotificationPermission>("unknown");
+  const [notificationPermissionBusy, setNotificationPermissionBusy] = useState(false);
+  const notificationActive = useRef(false);
+  const notificationRequest = useRef(0);
+  const notificationRequestBusy = useRef(false);
+  useEffect(() => {
+    notificationActive.current = true;
+    const request = ++notificationRequest.current;
+    void tauriNotificationPermission().then(status => { if (notificationActive.current && notificationRequest.current === request) setNotificationPermission(status.permission); }).catch(() => { if (notificationActive.current && notificationRequest.current === request) setNotificationPermission("unavailable"); });
+    return () => { notificationActive.current = false; notificationRequest.current += 1; };
+  }, []);
+  const changeNotifications = async (enabled: boolean) => {
+    if (notificationRequestBusy.current) return;
+    onNotificationsChange(enabled);
+    if (!enabled) return;
+    notificationRequestBusy.current = true;
+    const request = ++notificationRequest.current;
+    setNotificationPermissionBusy(true);
+    try {
+      const status = await tauriNotificationPermission(true);
+      if (notificationActive.current && notificationRequest.current === request) setNotificationPermission(status.permission);
+    } catch {
+      if (notificationActive.current && notificationRequest.current === request) setNotificationPermission("unavailable");
+    } finally {
+      notificationRequestBusy.current = false;
+      if (notificationActive.current && notificationRequest.current === request) setNotificationPermissionBusy(false);
+    }
+  };
+  const notificationPermissionLabel: Record<TauriNotificationPermission, DictKey> = {
+    granted: "settings.soundStatus.enabled", provisional: "notifications.provisional", not_determined: "notifications.notDetermined",
+    denied: "notifications.denied", unknown: "task.runtime.unknown", unavailable: "settings.diagnostics.source.unavailable",
+  };
   const [soundVolume, setSoundVolume] = useState(getNotificationVolume);
   const [musicPreset, setMusicPreset] = useState<GenerativePreset>(getGenerativePreset);
   const statusBar = useTauriStatusBarPreferences();
@@ -699,7 +731,8 @@ function GeneralSettings({ languagePref, onLanguageChange, languageSaving, langu
     {closeError && <p className="tauri-diagnostic-error" role="alert">{closeError}</p>}
     <div className="tauri-settings-field"><ShieldCheck className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.defaultToolApprovalMode")}<small>{t("settings.defaultToolApprovalModeHint")}</small></span><TauriSettingsChoice ariaLabel={t("settings.defaultToolApprovalMode")} value={approvalMode} disabled={approvalLoading || approvalSaving} options={[{ value: "ask", label: t("settings.defaultToolApprovalMode.ask") }, { value: "auto", label: t("settings.defaultToolApprovalMode.auto") }, { value: "yolo", label: t("settings.defaultToolApprovalMode.yolo") }]} onChange={onApprovalChange} /></div>
     {approvalError && <p className="tauri-diagnostic-error" role="alert">{approvalError}</p>}
-    <label className="tauri-settings-toggle"><Bell className="tauri-settings-field-icon" size={18} /><span><strong>{t("settings.general.notifications")}</strong><small>{t("settings.general.notificationsHint")}</small></span><input type="checkbox" checked={notificationsEnabled} onChange={event => onNotificationsChange(event.target.checked)} /></label>
+    <label className="tauri-settings-toggle"><Bell className="tauri-settings-field-icon" size={18} /><span><strong>{t("settings.general.notifications")}</strong><small>{t("settings.general.notificationsHint")}</small></span><input type="checkbox" checked={notificationsEnabled} disabled={notificationPermissionBusy} onChange={event => void changeNotifications(event.target.checked)} /></label>
+    <p className="tauri-settings-hint" role="status" data-testid="system-notification-permission">{t("settings.general.notifications")} · {t(notificationPermissionLabel[notificationPermission])}</p>
     <div className="tauri-settings-notification-events" aria-label={t("settings.notificationEvents")}>
       <h4>{t("settings.notificationEvents")}</h4>
       {(["turn_done", "approval_request", "ask_request"] as const).map(kind => <label className="tauri-settings-toggle" key={kind}><span><strong>{t(`settings.notificationEvents.${kind}` as DictKey)}</strong></span><input type="checkbox" checked={notificationEvents[kind]} onChange={() => onNotificationEventChange(kind)} /></label>)}
