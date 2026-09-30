@@ -17,7 +17,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-struct Geometry {
+pub(crate) struct Geometry {
     width: u32,
     height: u32,
     x: i32,
@@ -117,7 +117,11 @@ fn save(app: &AppHandle) -> Result<(), String> {
     })
 }
 
-fn verify_geometry(app: &AppHandle, stage: &'static str, expected: Geometry) -> Result<(), String> {
+pub(crate) fn verify_geometry(
+    app: &AppHandle,
+    stage: &'static str,
+    expected: Geometry,
+) -> Result<(), String> {
     let target = expected.clone();
     wait_for(app, stage, move |window| {
         Ok(ordinary(window)? && target.matches(&Geometry::read(window)?))
@@ -230,7 +234,7 @@ fn exercise(app: &AppHandle, directory: &std::path::Path) -> Result<(), String> 
     save(app)
 }
 
-fn expected_geometry(directory: &std::path::Path) -> Result<Geometry, String> {
+pub(crate) fn expected_geometry(directory: &std::path::Path) -> Result<Geometry, String> {
     serde_json::from_slice(
         &std::fs::read(directory.join("reasonix-native-window-normal.json"))
             .map_err(|_| "read expected normal geometry")?,
@@ -380,7 +384,16 @@ pub fn start_if_requested(app: &AppHandle) {
     };
     let handle = app.clone();
     std::thread::spawn(move || {
-        let result = if phase == "close-quit" || phase == "restore-close-quit" {
+        let result = if phase == "task-background-menu-quit" {
+            match marker_directory()
+                .and_then(|directory| crate::native_task_smoke::run(&handle, &directory, &phase))
+            {
+                // Only the real installed native menu action may exit a
+                // successful task-lifecycle acceptance, never this runner.
+                Ok(()) => return,
+                Err(error) => Err(error),
+            }
+        } else if phase == "close-quit" || phase == "restore-close-quit" {
             match close_to_quit(&handle, &phase) {
                 // Do not call app.exit here: only the close-preference handler
                 // may terminate a successful close-to-quit acceptance.

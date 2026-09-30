@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Verify macOS windows, Settings menu actions and close in a private profile.
+"""Verify macOS windows, native menus and task lifecycle in a private profile.
 
 Uses real Tauri window APIs, installed AppKit Settings menu actions, and the
 shared tray/Dock/single-instance show path. Settings checks the host event,
 not the rendered WebView settings overlay.
+Tasks stream through the real Go core and a bounded loopback provider. Native
+close must preserve background progress; the installed Quit menu must clean up
+the active stream, host and sidecar without a runner-driven successful exit.
 The --focus gate additionally requires a real second process to restore focus;
 it remains a strict separate acceptance condition when activation is unavailable.
 Does not prove menu/tray clicks, keyboard editing, or display unplugging.
@@ -11,6 +14,7 @@ All state is confined to a temporary HOME; no existing Preview is operated.
 """
 
 import importlib.util
+from contextlib import nullcontext
 import json
 import os
 from pathlib import Path
@@ -27,6 +31,11 @@ spec = importlib.util.spec_from_file_location(
 )
 package = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(package)
+task_spec = importlib.util.spec_from_file_location(
+    "native_task_provider", Path(__file__).with_name("native-task-provider.py")
+)
+task_provider = importlib.util.module_from_spec(task_spec)
+task_spec.loader.exec_module(task_provider)
 
 
 def verify_saved_state(app_data, temporary, maximized):
@@ -41,7 +50,7 @@ def verify_saved_state(app_data, temporary, maximized):
         raise RuntimeError("native transition overwrote saved normal display scale")
 
 
-def launch(host_binary, sidecar_binary, root, identifier, managed, phase):
+def launch(host_binary, sidecar_binary, root, identifier, managed, phase, provider=None):
     home, temporary = root / "home", root / "tmp"
     app_data = home / "Library/Application Support" / identifier
     core_home = app_data / "reasonix-core" if managed else root / "core"
@@ -75,6 +84,7 @@ def launch(host_binary, sidecar_binary, root, identifier, managed, phase):
                 package.check_unauthenticated_health(address)
                 package.check_sidecar_profile(sidecar_pid, core_home, managed, root / "cache")
                 identity = package.check_credential_profile(core_home)
+                ready_identity = json.loads(ready[0].read_text())
                 break
             if host.poll() is not None:
                 raise RuntimeError("native window host exited before sidecar inspection")
@@ -112,10 +122,23 @@ def launch(host_binary, sidecar_binary, root, identifier, managed, phase):
             if live_sidecars != [sidecar_pid]:
                 raise RuntimeError("second instance created or replaced the sidecar")
             package.check_unauthenticated_health(address)
-        try:
-            exit_code = host.wait(timeout=45)
-        except subprocess.TimeoutExpired as error:
-            raise RuntimeError("native window host did not exit") from error
+        def inspect_live_task():
+            if host.poll() is not None or package.own_sidecars(temporary, sidecar_binary) != [sidecar_pid]:
+                raise RuntimeError("background native task replaced or exited its host/sidecar")
+            if not ready[0].is_file():
+                raise RuntimeError("background native task removed readiness")
+            if json.loads(ready[0].read_text()) != ready_identity:
+                raise RuntimeError("background native task replaced its sidecar instance")
+            package.check_unauthenticated_health(address)
+
+        deadline = time.monotonic() + 45
+        while host.poll() is None and time.monotonic() < deadline:
+            if provider:
+                provider.pump(inspect_live_task)
+            time.sleep(0.05)
+        if host.poll() is None:
+            raise RuntimeError("native window host did not exit")
+        exit_code = host.wait(timeout=5)
         result = json.loads(result_path.read_text())
         if result.get("phase") != phase or result.get("ok") is not True or exit_code != 0:
             raise RuntimeError(f"{phase}: {result.get('error', 'native acceptance failed')}")
@@ -125,6 +148,8 @@ def launch(host_binary, sidecar_binary, root, identifier, managed, phase):
         if package.is_alive(sidecar_pid) or list(temporary.glob("reasonix-tauri-bridge-*/ready.json")):
             raise RuntimeError("native window host left sidecar/readiness after exit")
         verify_saved_state(app_data, temporary, phase == "exercise")
+        if provider:
+            provider.verify()
         print(f"native macOS window {('managed' if managed else 'explicit')} {phase}: OK")
         return identity
     finally:
@@ -161,12 +186,17 @@ def smoke(app_path, include_focus=False):
             (root / "tmp").mkdir()
             phases = ["exercise", "restore-maximized", "restore-normal", "application-hide", "background-close"]
             phases.extend(["menu-shortcuts", "menu-settings-hidden", "menu-settings-minimized", "menu-settings-app-hidden"])
+            phases.append("task-background-menu-quit")
             if include_focus:
                 phases.append("second-instance")
             phases.append("close-quit")
             phases.append("restore-close-quit")
-            identities = [launch(host_binary, sidecar_binary, root, identifier, managed, phase)
-                          for phase in phases]
+            identities = []
+            for phase in phases:
+                core_home = root / "home/Library/Application Support" / identifier / "reasonix-core" if managed else root / "core"
+                fixture = task_provider.NativeTaskProvider(core_home, root / "tmp") if phase == "task-background-menu-quit" else nullcontext()
+                with fixture as provider:
+                    identities.append(launch(host_binary, sidecar_binary, root, identifier, managed, phase, provider))
             if len(set(identities)) != 1:
                 raise RuntimeError("restarts changed the native profile credential identity")
 

@@ -10,6 +10,8 @@ mod menu;
 #[cfg(target_os = "macos")]
 mod native_menu_smoke;
 #[cfg(target_os = "macos")]
+mod native_task_smoke;
+#[cfg(target_os = "macos")]
 mod native_window_smoke;
 mod notifications;
 mod opener_catalog;

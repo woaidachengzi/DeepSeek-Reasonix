@@ -23,28 +23,42 @@ impl Drop for SettingsListener {
     }
 }
 
-fn invoke_settings(menu: &NSMenu, depth: usize) -> Result<bool, String> {
+fn invoke_named(menu: &NSMenu, title: &str, depth: usize) -> Result<bool, String> {
     if depth > 3 || !(0..=128).contains(&menu.numberOfItems()) {
         return Err("native menu exceeds acceptance bounds".into());
     }
     for index in 0..menu.numberOfItems() {
         let item = menu.itemAtIndex(index).ok_or("native menu item missing")?;
-        if item.title().to_string() == "Settings…" {
+        if item.title().to_string() == title {
             // performActionForItemAtIndex does not perform automatic validation.
             // Check the actual installed item's state before sending its action.
             if !item.isEnabled() {
-                return Err("native settings menu is disabled".into());
+                return Err("native acceptance menu is disabled".into());
             }
             menu.performActionForItemAtIndex(index);
             return Ok(true);
         }
         if let Some(submenu) = item.submenu() {
-            if invoke_settings(&submenu, depth + 1)? {
+            if invoke_named(&submenu, title, depth + 1)? {
                 return Ok(true);
             }
         }
     }
     Ok(false)
+}
+
+pub(crate) fn invoke(app: &AppHandle, title: &'static str) -> Result<(), String> {
+    on_main(app, move |_, _| {
+        let application =
+            NSApplication::sharedApplication(MainThreadMarker::new().ok_or("not main thread")?);
+        let menu = application
+            .mainMenu()
+            .ok_or("installed native menu missing")?;
+        if !invoke_named(&menu, title, 0)? {
+            return Err("installed acceptance menu missing".into());
+        }
+        Ok(())
+    })
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -227,17 +241,7 @@ pub fn settings(app: &AppHandle, phase: &str) -> Result<(), String> {
         }
         _ => return Err("unknown settings acceptance phase".into()),
     }
-    on_main(app, |_, _| {
-        let application =
-            NSApplication::sharedApplication(MainThreadMarker::new().ok_or("not main thread")?);
-        let menu = application
-            .mainMenu()
-            .ok_or("installed native menu missing")?;
-        if !invoke_settings(&menu, 0)? {
-            return Err("installed settings menu missing".into());
-        }
-        Ok(())
-    })?;
+    invoke(app, "Settings…")?;
     let observed = Arc::clone(&delivered);
     wait_for(app, "native settings event delivery", move |_| {
         Ok(observed.load(Ordering::SeqCst) > 0)
