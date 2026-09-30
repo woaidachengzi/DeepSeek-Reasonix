@@ -3184,6 +3184,7 @@ dependencies = [
  "objc2-foundation",
  "objc2-user-notifications",
  "percent-encoding",
+ "png 0.18.1",
  "rand",
  "same-file",
  "serde",
@@ -3198,6 +3199,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tempfile",
  "url",
+ "windows-sys 0.61.2",
  "zip",
 ]
 

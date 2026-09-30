@@ -380,7 +380,13 @@ fn launch_with_opener(
             ) || spec.view.kind == "file-manager",
         )
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "windows")]
+    {
+        let plan =
+            crate::opener_catalog::windows::launch_plan(&spec.target, spec.windows_mode, &path)?;
+        crate::opener_catalog::windows::native::launch(plan)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     {
         let launch = if spec.view.kind == "terminal" && path.is_file() {
             path.parent().ok_or("file has no parent folder")?
@@ -709,6 +715,10 @@ mod tests {
                 linux_launch: crate::opener_catalog::linux::Launch::Path,
                 #[cfg(target_os = "linux")]
                 icon_source: None,
+                #[cfg(target_os = "windows")]
+                windows_mode: crate::opener_catalog::windows::Mode::Path,
+                #[cfg(target_os = "windows")]
+                windows_icon: PathBuf::from("/native/app"),
             }]
         };
         for id in [

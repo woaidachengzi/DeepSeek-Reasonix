@@ -73,7 +73,7 @@ desktop API contract (保留 app/event helper 的调用形状)
 | D：剪贴板 | 接入官方 clipboard-manager，主窗口仅允许读写文本；共享写入/读取路径覆盖 Tauri、浏览器与 Wails。消息、存储路径、hooks 路径及输入框复用；复制成功反馈等待实际写入成功。原生调用模拟、拒绝/忙碌回退、失败剪切不删文本、空剪贴板不覆盖选择与成功反馈测试通过。 | 真实系统剪贴板与 WebView 交互验收。 |
 | D：窗口与多显示器 | 保存普通窗口位置和显示器缩放，最大化/最小化不覆盖普通尺寸；按当前工作区限制恢复位置，移除外接屏后回到主屏。状态文件原子替换，兼容旧尺寸文件。窗口几何回归通过。 | 真实不同缩放显示器、拔插外接屏、最大化退出再恢复验收。 |
 | D：托盘与退出 | 托盘有显示/退出菜单；托盘、Dock 重开及单实例唤起均恢复最小化窗口。退出沿用 supervisor 停止路径。 | 真实托盘点击、关闭后后台任务、Cmd+Q/托盘退出及第二实例唤起验收。 |
-| D：对话框与链接 | 现有 Tauri 选择器保留；共享外部链接及本地文档 adapter 已接入 Rust host。Markdown 默认打开、定位、另存为及指定已安装应用均走原生入口，错误不退回 browser mock。文档可执行目标拒绝、特殊路径、取消保存、源文件别名保护及权限拒绝已有回归。外部链接支持 HTTP(S)/受限 mailto，OAuth 入口仅接受 HTTP(S)。 | macOS 已增加系统应用注册查询、Spotlight 自定义安装位置和原生 64×64 图标；项目会话顶部选择器已接入配置偏好与卸载回退。Linux 已增加 XDG desktop entry 发现、GIO 原生启动、六类终端目录策略和有界 PNG 图标转换，共用逻辑回归通过；Linux 原生分支编译/图标/GUI 验收待执行。Windows 仍需补齐 App Paths、安装目录发现、终端启动策略和原生图标；Global 会话已接入档案内稳定目录与会话身份查询。系统对话框、浏览器/邮件、指定应用的真实 UI 交互及 OAuth 仍需验收。 |
+| D：对话框与链接 | 现有 Tauri 选择器保留；共享外部链接及本地文档 adapter 已接入 Rust host。Markdown 默认打开、定位、另存为及指定已安装应用均走原生入口，错误不退回 browser mock。文档可执行目标拒绝、特殊路径、取消保存、源文件别名保护及权限拒绝已有回归。外部链接支持 HTTP(S)/受限 mailto，OAuth 入口仅接受 HTTP(S)。 | macOS 已增加系统应用注册查询、Spotlight 自定义安装位置和原生 64×64 图标；项目会话顶部选择器已接入配置偏好与卸载回退。Linux 已增加 XDG desktop entry 发现、GIO 原生启动、六类终端目录策略和有界 PNG 图标转换，共用逻辑回归通过；Linux 原生分支编译/图标/GUI 验收待执行。Windows 已增加 App Paths、安装目录/Toolbox 发现、终端目录策略和原生 PNG 图标代码；共用逻辑与 Win32 API 类型检查通过，Windows 原生 host 编译/注册表/图标/GUI 验收待执行；Global 会话已接入档案内稳定目录与会话身份查询。系统对话框、浏览器/邮件、指定应用的真实 UI 交互及 OAuth 仍需验收。 |
 | D：通知与钥匙串 | macOS 通知改为原生 UserNotifications：读取实际授权、报告发送失败、点击恢复对应会话；冷启动队列、档案隔离、失效会话与重复点击已有回归。凭据按持久档案身份隔离；设置页显式迁移旧 Preview 凭据，保留原件并拒绝覆盖。迁移/保存/删除与重启串行，写入及桥接同步失败回滚；macOS 原生隔离读写、真实 bridge 迁移/重启/删除及不落盘回归通过。 | 真实系统通知授权拒绝、通知显示与前后台/冷启动点击、钥匙串锁定/授权拒绝、原生设置页迁移操作仍待验收。Windows/Linux 通知授权读取和点击回调、凭据后端仍待补齐/验收。 |
 | D：单实例与数据保护 | Tauri 单实例及独立默认 Preview 数据目录已存在。当前 Wails 与 bridge 启动均持有配置/状态两处目录锁；共享任一目录都会拒绝第二个写入宿主，目录别名去重，失败释放已取锁。真实 bridge/Wails 拒绝启动测试及配置原件/备份回退回归通过。导入页在操作前展示来源、目标目录与回退说明。 | 未参与目录锁协议的旧稳定版仍需兼容性验收；不能将当前两个宿主的测试推广为所有历史二进制互斥。真实 Wails 单实例通知/唤起、完整安装包导入与回退操作仍待验收。 |
 | E：remote host / bot / updater / 管理页 | remote host 与 bot 已有部分设置/bridge 接口；updater 插件已注册。 | D 验收后对照 Wails 逐项审计和补齐；特别是当前“检查更新”仍是说明对话框，插件注册不能视为更新流程完成。 |
@@ -89,7 +89,16 @@ desktop API contract (保留 app/event helper 的调用形状)
 - 顶栏对所有已有会话查询能力，未发送草稿不显示。Rust 仍只接受会话 ID 与安装应用 ID，重新读取实际目录并验证响应版本/身份/绝对路径/边界与目录存在性；前端不推断 cwd 或传入任意 launch root。缺失目录或卸载应用失败时不给此前会话保留打开入口。
 - 定向回归已通过：Go 的鉴权/所有权、不同档案、项目/Global 切换、内容保留与重启、默认目录文件/符号链接拒绝、关闭/不支持 provider；Rust 的不可信响应拒绝与真实 sidecar Global/项目/重启/旧会话拒绝；React 工作区的 Global 入口、仅身份跨 IPC、切换不可用目标后旧按钮消失。`pnpm test:tauri`、生产构建、Go 运行时/协议/sidecar 全量回归、Rust 全量（163 项通过、1 项原生钥匙串测试默认忽略）与严格 clippy 通过；Wails Global 目录能力基线、协议生成校验与 Go vet 通过；从干净提交 `065b1ae5f676e38a1f84a2a1bfab8f08a85bd7cc` 构建 `.app` 并通过本地严格 ad-hoc 签名校验，默认/显式档案包级 smoke 均通过，实际 sidecar 创建 Global 会话并解析当前档案内的 `0700` 目录，原生授权查询、鉴权拒绝及退出无残留同时通过。未启动外部系统应用。
 - 此变更为没有显式 root 的会话设定稳定默认目录；旧 Preview 曾在启动 cwd 创建的文件不会自动搬迁，原文件保持原位。未记录实际旧目录的 rootless 会话需要单独做文件引用/附件/检查点兼容验收；不能把本轮新建/重启测试推广为旧会话完整迁移已通过。
-- 真实系统应用启动及其目录/参数交互仍待现场验收；Linux 原生编译与桌面环境验收、Windows 完整应用发现/图标/终端策略继续保留。D/E 目标保持进行中。
+- 真实系统应用启动及其目录/参数交互仍待现场验收；Linux 原生编译与桌面环境验收、Windows 原生 host 编译/注册表/图标/桌面环境验收继续保留。D/E 目标保持进行中。
+
+#### D：Windows 应用发现、原生终端与图标（2026-09-30）
+
+- 对照 Wails `external_opener_windows.go` 的 18 个编辑器/Explorer/终端身份，Rust 从绝对 PATH、[App Paths](https://learn.microsoft.com/en-us/windows/win32/shell/app-registration) 的 HKCU/HKLM 查询、默认安装目录及有界 JetBrains/Toolbox 版本目录发现应用。注册表只读，按用户优先查询 64/32 位视图；仅 `REG_SZ`/`REG_EXPAND_SZ`，限制读取体积，后者使用 Windows 原生环境变量展开。带引号的绝对 executable 路径可用，命令行尾缀、损坏/缺失值、脚本、非文件和相对路径拒绝。实际打开重新发现以处理卸载。
+- Windows Terminal 通过直接进程参数 `-d` 打开实际目录，文件使用父目录；PowerShell/Command Prompt 使用 [ShellExecuteExW](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecuteexw) 直接打开程序，`lpDirectory` 保留原目录且不传参数串。没有 `cmd /c start` 或提升权限 verb。独立 STA 线程平衡 COM 初始化，提交失败返回固定解决提示，启用 NO_UI 避免重复系统错误对话框；进程由后台回收，Shell 调用不索取进程句柄。提交成功不代表实际目录/窗口已验收。
+- 沿用 Wails 的 Explorer 行为：目录以 `explore` 和尾部目录分隔符打开，避免同名 `.lnk` 抢先解析；文档保持系统关联打开。工作目录、固定程序路径和参数只留在宿主，前端仍仅传会话身份/已安装应用 ID，未增加通用 WebView launch/registry 权限。
+- [SHGetFileInfoW](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shgetfileinfow) 获取原生图标，32×32 DIB 分别对黑/白背景绘制并 flush 后重建 RGBA，编码为最多 64 KiB 的 PNG。owned icon/DC/bitmap/selection 由 scope guard 释放并先恢复 GDI 选中对象。Windows Terminal 优先真实包图标，其次可渲染的 PowerShell 图标，再回退零字节 execution alias；保护目录不可读视为正常缺失。
+- 新增 9 项共用逻辑回归，覆盖固定目录、PATH/注册表/安装目录顺序、卸载、32 位安装目录/Toolbox 版本树、字面根目录和扫描边界、坏注册值、终端别名图标回退、含空格/中文/`& % ^ ()` 的目录参数、目录与同名快捷方式、透明度重建及实际 PNG 解码。真实 bridge 的 Rust 全量回归 **181 项通过、1 项原生钥匙串测试默认忽略**；严格 clippy（含测试）、`pnpm test:tauri` 与 CI YAML 解析通过。独立临时 crate 在本机直接导入 Win32 实现及测试，以锁定的 windows-sys 0.61.2/png 0.18.1 做严格类型/lint 检查通过；该检查不链接或调用 Windows DLL，不证明 Windows host 或原生测试已通过。
+- 新增 `desktop-tauri-windows` 门禁，配置真实 Go bridge、完整 native host 编译/严格 clippy/回归。Windows 专属回归包含实际 Explorer 图标、Shell 提交失败和独立临时 HKCU App Paths 的环境展开/删除恢复，不启动真实交互式控制台。**门禁尚未远端执行**；Windows 原生 host、SDK 运行、完整安装包/Explorer/终端/Unicode目录交互，以及 Linux 门禁和 GUI 验收仍待执行。D 尚未完整验收，E 按目标继续等待 D 稳定。
 
 #### D：Linux 应用发现、终端目录与原生图标（2026-09-30）
 
@@ -99,7 +108,7 @@ desktop API contract (保留 app/event helper 的调用形状)
 - 图标支持安装条目的绝对资源与有界主题/`pixmaps` 查找；含点的主题图标名称不误当扩展名，拒绝相对目录穿越、超大及无效内容。Linux 使用已锁定的 GdkPixbuf 0.18.5/GIO 0.18.4 原生加载器，把最多 1 MiB 输入转为最长边 64 像素、最多 64 KiB 的 PNG；不把 raw SVG、file URL 或 native 路径交给 WebView。本实现为固定尺寸/目录的有界查找，并非完整桌面主题继承引擎。
 - 新增 9 项可在本机执行的共用逻辑回归，覆盖 XDG 优先级/默认值、用户覆盖、动作段隔离、TryExec、GIO 参数、卸载/执行权限、定制终端路径、特殊工作目录、图标点名/越界/体积及启动失败。真实 Go bridge 的 Rust 全量回归 **172 项通过、1 项原生钥匙串测试默认忽略**；严格 clippy（含测试）、`pnpm test:tauri` 与 CI YAML 解析通过。本机为 macOS，这些结果不包含 Linux 条件编译的 GIO/Pixbuf/native host 分支。
 - 从干净提交 `b81abf555f63d2ef8fbd2280dfec74107af90c02` 完成 macOS Preview `.app` 构建及本地严格 ad-hoc 签名校验；默认托管/显式临时档案包级 smoke 均通过，包含凭据身份隔离、原生通知授权查询、实际 Global 工作区、sidecar readiness、未鉴权请求拒绝及正常退出无残留。生产前端构建的类型/分层/权限/滚动门禁与 bundle budget 同时通过。此包用于已有 macOS host 的回归验证，不覆盖 Linux native 分支或真实桌面应用启动；本地签名也不等同正式签名/公证。
-- 新增 `desktop-tauri-linux` Ubuntu 24.04 门禁，配置 GTK/WebKitGTK/GIO/SVG loader 依赖、真实 bridge、严格 clippy 和 `dbus-run-session` 下的全量 Rust 测试；另有 Linux 专属 SVG 缩放/PNG 编码/坏输入回归。**门禁尚未远端执行**，不能声明 Linux 编译或原生图标测试已经通过。Linux GUI/包级验收、复杂 terminal wrapper/Flatpak 安装路径、完整主题继承仍待验证或完善；Windows App Paths/安装目录、控制台启动与原生图标继续改造。D/E 目标保持进行中。
+- 新增 `desktop-tauri-linux` Ubuntu 24.04 门禁，配置 GTK/WebKitGTK/GIO/SVG loader 依赖、真实 bridge、严格 clippy 和 `dbus-run-session` 下的全量 Rust 测试；另有 Linux 专属 SVG 缩放/PNG 编码/坏输入回归。**门禁尚未远端执行**，不能声明 Linux 编译或原生图标测试已经通过。Linux GUI/包级验收、复杂 terminal wrapper/Flatpak 安装路径、完整主题继承仍待验证或完善；Windows 已在下一切片增加实现，原生 host 编译/注册表/图标/桌面环境验收继续保留。D/E 目标保持进行中。
 
 #### D：原生通知授权、发送与点击定位（2026-09-30）
 
@@ -138,7 +147,7 @@ desktop API contract (保留 app/event helper 的调用形状)
 - 本机已验证 Finder/Terminal 真实目录与 64×64 PNG 图标、包含换行/中文的自定义索引路径、会话身份与目录保护。Go 定向测试验证未知配置项保留、坏输入/未鉴权不写入、去重冲突、写入失败保留原件及重启后读取；Rust 真实 sidecar 验证偏好往返保存及重启恢复。
 - 前端原生 adapter/菜单/工作区选择器回归、共享链接 61 项、Wails 本地文档 20 项、共享应用选择器 32 项及跨会话偏好 4 项通过；`pnpm test:tauri`、完整 `pnpm build`、Wails 原生应用目录/图标/偏好定向测试、协议生成校验、Go vet、Rust 144 项与严格 clippy 通过。顶栏沿用固定高度且未修改 transcript viewport writer。
 - 本切片 `.app` 构建及本地 ad-hoc 签名完成；此前另一份 Preview 已退出，安装包 smoke 已在默认托管与显式 profile 两种临时目录中独立通过：sidecar 就绪、继承环境清理、未鉴权 health 拒绝、正常退出与无残留。未操作用户原 profile，未将该启动测试当作应用菜单或系统程序的 UI 点击验收。
-- 剩余：Linux 原生编译与桌面环境验收、Windows 完整应用发现/原生图标/终端策略；真实 WebView/系统应用交互，以及完整 D 现场验收。不能据此标记 D/E 完成。
+- 剩余：Linux 原生编译与桌面环境验收、Windows 原生 host 编译/注册表/图标/桌面环境验收；真实 WebView/系统应用交互，以及完整 D 现场验收。不能据此标记 D/E 完成。
 
 #### D：本地文档打开、定位与另存为（2026-09-30）
 

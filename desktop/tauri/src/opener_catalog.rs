@@ -6,6 +6,10 @@ use std::path::PathBuf;
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub(crate) mod linux;
 
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub(crate) mod windows;
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenerView {
@@ -30,6 +34,10 @@ pub(crate) struct OpenerSpec {
     pub(crate) linux_launch: linux::Launch,
     #[cfg(target_os = "linux")]
     pub(crate) icon_source: Option<PathBuf>,
+    #[cfg(target_os = "windows")]
+    pub(crate) windows_mode: windows::Mode,
+    #[cfg(target_os = "windows")]
+    pub(crate) windows_icon: PathBuf,
 }
 
 pub(crate) fn selected_opener(specs: Vec<OpenerSpec>, id: &str) -> Result<OpenerSpec, String> {
@@ -162,7 +170,25 @@ fn discover_openers() -> Vec<OpenerSpec> {
             })
             .collect()
     }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    #[cfg(target_os = "windows")]
+    {
+        windows::Discovery::from_environment()
+            .discover(windows::native::app_path)
+            .into_iter()
+            .map(|app| OpenerSpec {
+                view: OpenerView {
+                    id: app.id,
+                    name: app.name.into(),
+                    kind: app.kind,
+                    icon_data_url: String::new(),
+                },
+                target: app.target,
+                windows_mode: app.mode,
+                windows_icon: app.icon,
+            })
+            .collect()
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {
         let paths = std::env::var_os("PATH")
             .map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
@@ -308,6 +334,11 @@ pub(crate) fn views_with_icons(specs: Vec<OpenerSpec>) -> Vec<OpenerView> {
                     .as_deref()
                     .and_then(linux::icon_data_url)
                     .unwrap_or_default();
+            }
+            #[cfg(target_os = "windows")]
+            {
+                spec.view.icon_data_url =
+                    windows::native::icon_data_url(&spec.windows_icon).unwrap_or_default();
             }
             spec.view
         })
@@ -474,6 +505,10 @@ mod tests {
             linux_launch: linux::Launch::Path,
             #[cfg(target_os = "linux")]
             icon_source: None,
+            #[cfg(target_os = "windows")]
+            windows_mode: windows::Mode::Path,
+            #[cfg(target_os = "windows")]
+            windows_icon: PathBuf::from("/native/app"),
         }
     }
     #[test]

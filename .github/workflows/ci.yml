@@ -645,6 +645,50 @@ jobs:
       - name: Smoke test packaged Preview startup and shutdown
         run: python3 tools/tauri/smoke-packaged-app.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
 
+  # Compile and exercise the Win32 registry/icon branches on Windows itself.
+  # Interactive consoles and Explorer navigation still need desktop acceptance.
+  desktop-tauri-windows:
+    needs: changes
+    if: always() && (github.event_name != 'pull_request' || needs.changes.outputs.desktop != 'false')
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Build the Go desktop bridge
+        shell: pwsh
+        run: |
+          $bridgeTarget = rustc --print host-tuple
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force desktop/tauri/binaries | Out-Null
+          go build -trimpath -o "$env:RUNNER_TEMP/reasonix-desktop-bridge.exe" ./cmd/reasonix-desktop-bridge
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item "$env:RUNNER_TEMP/reasonix-desktop-bridge.exe" "desktop/tauri/binaries/reasonix-desktop-bridge-$bridgeTarget.exe"
+
+      - name: Check Rust formatting
+        working-directory: desktop/tauri
+        run: cargo fmt --check
+
+      - name: Clippy Windows native host
+        working-directory: desktop/tauri
+        run: cargo clippy --locked --tests -- -D warnings
+
+      - name: Test Windows native host against a real bridge
+        working-directory: desktop/tauri
+        env:
+          REASONIX_TAURI_BRIDGE_TEST_BIN: ${{ runner.temp }}/reasonix-desktop-bridge.exe
+        run: cargo test --locked
+
   # Compile the Tauri Linux host and exercise its native GIO/Pixbuf branches.
   # This does not replace an interactive Linux desktop/package acceptance run.
   desktop-tauri-linux:
