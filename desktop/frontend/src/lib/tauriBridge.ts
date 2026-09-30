@@ -1124,6 +1124,7 @@ export async function acceptTauriMemorySuggestion(workspaceRoot: string, kind: "
 
 export type TauriToolApprovalMode = "ask" | "auto" | "yolo";
 export interface TauriDesktopPreferences {
+  externalOpener?: string;
   protocolVersion: number;
   defaultToolApprovalMode: TauriToolApprovalMode;
   language: LangPref;

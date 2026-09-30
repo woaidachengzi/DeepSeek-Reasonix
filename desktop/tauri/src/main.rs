@@ -6,6 +6,7 @@ mod host_preferences;
 mod keychain;
 mod local_paths;
 mod menu;
+mod opener_catalog;
 mod protocol_generated;
 mod runtime_info;
 mod session_shadow;
@@ -3711,6 +3712,9 @@ fn main() {
             local_paths::reveal_local_path,
             local_paths::save_local_path_as,
             local_paths::local_path_openers,
+            local_paths::set_preferred_external_opener,
+            local_paths::workspace_external_openers,
+            local_paths::open_workspace_external,
             local_paths::open_local_path_with,
             keychain::keychain_save,
             keychain::keychain_delete

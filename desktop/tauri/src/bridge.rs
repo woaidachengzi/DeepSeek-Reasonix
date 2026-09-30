@@ -51,6 +51,8 @@ pub struct BridgeStatus {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopPreferences {
+    #[serde(default)]
+    pub external_opener: String,
     pub protocol_version: u64,
     pub default_tool_approval_mode: String,
     #[serde(default)]
@@ -3195,6 +3197,22 @@ impl BridgeSupervisor {
         Ok(preferences)
     }
 
+    pub fn set_desktop_external_opener(&self, id: &str) -> Result<DesktopPreferences, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/desktop/external-opener",
+            Some(json!({"id": id})),
+            Some(&request_id),
+        )?;
+        let preferences: DesktopPreferences =
+            serde_json::from_value(response).map_err(display_error)?;
+        if preferences.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".into());
+        }
+        Ok(preferences)
+    }
+
     pub fn set_desktop_approval(&self, mode: String) -> Result<DesktopPreferences, String> {
         if !matches!(mode.as_str(), "ask" | "auto" | "yolo") {
             return Err("invalid desktop approval mode".to_string());
@@ -6131,6 +6149,46 @@ mod tests {
         // The forward_events loop checks `event.protocol_version != u64::from(PROTOCOL_VERSION)`
         // and skips events that don't match. This test documents that contract.
         assert_ne!(event.protocol_version, u64::from(super::PROTOCOL_VERSION));
+    }
+
+    #[test]
+    fn opener_preference_roundtrips_and_survives_real_sidecar_restart() {
+        let Some(binary) = bridge_under_test() else {
+            return;
+        };
+        let _env = crate::test_env::guard();
+        let home = tempfile::tempdir().unwrap();
+        env::set_var("REASONIX_HOME", home.path());
+        env::set_var("REASONIX_STATE_HOME", home.path());
+        std::fs::write(
+            home.path().join("config.toml"),
+            "future = \"keep\"\n[desktop]\nexternal_opener = \"finder\"\n",
+        )
+        .unwrap();
+        let supervisor = BridgeSupervisor::with_binary(binary);
+        supervisor.start().unwrap();
+        assert_eq!(
+            supervisor.desktop_preferences().unwrap().external_opener,
+            "finder"
+        );
+        assert_eq!(
+            supervisor
+                .set_desktop_external_opener("vscode")
+                .unwrap()
+                .external_opener,
+            "vscode"
+        );
+        assert!(supervisor.set_desktop_external_opener("/bin/sh").is_err());
+        supervisor.stop().unwrap();
+        supervisor.start().unwrap();
+        assert_eq!(
+            supervisor.desktop_preferences().unwrap().external_opener,
+            "vscode"
+        );
+        supervisor.stop().unwrap();
+        assert!(std::fs::read_to_string(home.path().join("config.toml"))
+            .unwrap()
+            .contains("future = \"keep\""));
     }
 
     #[test]

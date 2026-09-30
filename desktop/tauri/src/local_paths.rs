@@ -1,12 +1,16 @@
 //! Native document actions. Renderer input is a path or an installed-app ID,
 //! never an executable name or command line. Save destinations come from the
 //! OS dialog and are replaced atomically without truncating the source.
-use serde::Serialize;
+use crate::bridge::{BridgeSession, BridgeSupervisor, SessionRequest};
+use crate::opener_catalog::{
+    cached_views, installed_openers, resolved_preference, selected_opener, OpenersView,
+};
 use std::{
     fs::{self, File},
     io,
     path::{Path, PathBuf},
 };
+use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
@@ -283,201 +287,47 @@ pub async fn save_local_path_as(
     .map_err(|error| error.to_string())?
 }
 
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OpenerView {
-    id: &'static str,
-    name: &'static str,
-    kind: &'static str,
-}
-#[derive(Serialize)]
-pub struct OpenersView {
-    openers: Vec<OpenerView>,
-    preferred: String,
-}
-struct OpenerSpec {
-    view: OpenerView,
-    target: PathBuf,
-}
-
-fn selected_opener(specs: Vec<OpenerSpec>, id: &str) -> Result<OpenerSpec, String> {
-    specs
-        .into_iter()
-        .find(|spec| spec.view.id == id)
-        .ok_or_else(|| "selected application is no longer installed; choose another opener".into())
-}
-
-// Fixed native catalog: the renderer can only select an ID that is currently
-// installed. Keep filesystem launch paths and launch arguments out of the UI.
-fn installed_openers() -> Vec<OpenerSpec> {
-    #[cfg(target_os = "macos")]
-    {
-        let mut roots = vec![
-            PathBuf::from("/Applications"),
-            PathBuf::from("/System/Applications"),
-            PathBuf::from("/System/Applications/Utilities"),
-            PathBuf::from("/System/Library/CoreServices"),
-        ];
-        if let Some(home) = std::env::var_os("HOME") {
-            roots.push(PathBuf::from(home).join("Applications"));
-        }
-        let candidates: &[(&str, &str, &str, &[&str])] = &[
-            ("vscode", "VS Code", "editor", &["Visual Studio Code"]),
-            (
-                "vscode-insiders",
-                "VS Code Insiders",
-                "editor",
-                &["Visual Studio Code - Insiders"],
-            ),
-            ("cursor", "Cursor", "editor", &["Cursor"]),
-            ("finder", "Finder", "file-manager", &["Finder"]),
-            ("terminal", "Terminal", "terminal", &["Terminal"]),
-            ("iterm", "iTerm2", "terminal", &["iTerm", "iTerm2"]),
-            ("ghostty", "Ghostty", "terminal", &["Ghostty"]),
-            ("xcode", "Xcode", "editor", &["Xcode"]),
-            (
-                "android-studio",
-                "Android Studio",
-                "editor",
-                &["Android Studio"],
-            ),
-            ("goland", "GoLand", "editor", &["GoLand"]),
-            ("pycharm", "PyCharm", "editor", &["PyCharm", "PyCharm CE"]),
-            (
-                "intellij-idea",
-                "IntelliJ IDEA",
-                "editor",
-                &[
-                    "IntelliJ IDEA",
-                    "IntelliJ IDEA Ultimate",
-                    "IntelliJ IDEA CE",
-                ],
-            ),
-            ("webstorm", "WebStorm", "editor", &["WebStorm"]),
-            ("datagrip", "DataGrip", "editor", &["DataGrip"]),
-            ("codebuddy", "CodeBuddy", "editor", &["CodeBuddy"]),
-            ("windsurf", "Windsurf", "editor", &["Windsurf"]),
-            ("zed", "Zed", "editor", &["Zed"]),
-            ("sublime-text", "Sublime Text", "editor", &["Sublime Text"]),
-            ("kiro", "Kiro", "editor", &["Kiro"]),
-        ];
-        candidates
-            .iter()
-            .filter_map(|(id, name, kind, aliases)| {
-                let target = aliases
-                    .iter()
-                    .flat_map(|alias| {
-                        roots
-                            .iter()
-                            .map(move |root| root.join(format!("{alias}.app")))
-                    })
-                    .find(|path| path.is_dir())?;
-                Some(OpenerSpec {
-                    view: OpenerView { id, name, kind },
-                    target,
-                })
-            })
-            .collect()
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let paths = std::env::var_os("PATH")
-            .map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
-            .unwrap_or_default();
-        let candidates: &[(&str, &str, &str, &[&str])] = &[
-            ("vscode", "VS Code", "editor", &["code", "Code.exe"]),
-            (
-                "vscode-insiders",
-                "VS Code Insiders",
-                "editor",
-                &["code-insiders", "Code - Insiders.exe"],
-            ),
-            ("cursor", "Cursor", "editor", &["cursor", "Cursor.exe"]),
-            (
-                "android-studio",
-                "Android Studio",
-                "editor",
-                &["android-studio", "studio", "studio64.exe"],
-            ),
-            (
-                "goland",
-                "GoLand",
-                "editor",
-                &["goland", "goland.sh", "goland64.exe"],
-            ),
-            (
-                "pycharm",
-                "PyCharm",
-                "editor",
-                &["pycharm", "pycharm.sh", "pycharm64.exe"],
-            ),
-            (
-                "intellij-idea",
-                "IntelliJ IDEA",
-                "editor",
-                &["idea", "idea.sh", "idea64.exe"],
-            ),
-            (
-                "webstorm",
-                "WebStorm",
-                "editor",
-                &["webstorm", "webstorm.sh", "webstorm64.exe"],
-            ),
-            (
-                "datagrip",
-                "DataGrip",
-                "editor",
-                &["datagrip", "datagrip.sh", "datagrip64.exe"],
-            ),
-            (
-                "codebuddy",
-                "CodeBuddy",
-                "editor",
-                &["codebuddy", "CodeBuddy.exe"],
-            ),
-            (
-                "windsurf",
-                "Windsurf",
-                "editor",
-                &["windsurf", "Windsurf.exe"],
-            ),
-            ("zed", "Zed", "editor", &["zed", "zed.exe"]),
-            (
-                "sublime-text",
-                "Sublime Text",
-                "editor",
-                &["subl", "sublime_text", "sublime_text.exe"],
-            ),
-            ("kiro", "Kiro", "editor", &["kiro", "Kiro.exe"]),
-        ];
-        candidates
-            .iter()
-            .filter_map(|(id, name, kind, aliases)| {
-                let target = aliases
-                    .iter()
-                    .flat_map(|alias| paths.iter().map(move |root| root.join(alias)))
-                    .find(|path| path.is_file())?;
-                Some(OpenerSpec {
-                    view: OpenerView { id, name, kind },
-                    target,
-                })
-            })
-            .collect()
-    }
-}
-
 #[tauri::command]
 pub async fn local_path_openers(window: tauri::WebviewWindow) -> Result<OpenersView, String> {
     main_window(&window)?;
-    tauri::async_runtime::spawn_blocking(|| OpenersView {
-        openers: installed_openers()
-            .into_iter()
-            .map(|spec| spec.view)
-            .collect(),
-        preferred: String::new(),
+    tauri::async_runtime::spawn_blocking(move || {
+        let preferred = window
+            .state::<BridgeSupervisor>()
+            .desktop_preferences()?
+            .external_opener;
+        let openers = cached_views();
+        let selected = openers
+            .iter()
+            .find(|view| view.id == preferred)
+            .or_else(|| openers.iter().find(|view| view.kind == "file-manager"))
+            .or_else(|| openers.first())
+            .map(|view| view.id)
+            .unwrap_or("");
+        Ok(OpenersView {
+            preferred: selected.into(),
+            openers,
+            workspace_openable: false,
+        })
     })
     .await
-    .map_err(|error| error.to_string())
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn set_preferred_external_opener(
+    window: tauri::WebviewWindow,
+    id: String,
+) -> Result<(), String> {
+    main_window(&window)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let spec = selected_opener(installed_openers(), &id)?;
+        window
+            .state::<BridgeSupervisor>()
+            .set_desktop_external_opener(spec.view.id)?;
+        Ok(())
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -489,32 +339,123 @@ pub async fn open_local_path_with(
     main_window(&window)?;
     tauri::async_runtime::spawn_blocking(move || {
         let path = document_path(&path, true)?;
-        let spec = selected_opener(installed_openers(), &id)?;
-        let launch = if spec.view.kind == "terminal" && path.is_file() {
-            path.parent().ok_or("file has no parent folder")?
-        } else {
-            &path
-        };
-        #[cfg(target_os = "macos")]
-        if spec.view.id == "ghostty" {
-            // Ghostty needs its explicit working-directory argument; handing
-            // it a directory document would not open a terminal there.
-            let mut child = std::process::Command::new("/usr/bin/open")
-                .arg("-na")
-                .arg(&spec.target)
-                .arg("--args")
-                .arg(format!("--working-directory={}", launch.display()))
-                .spawn()
-                .map_err(|error| error.to_string())?;
-            std::thread::spawn(move || {
-                let _ = child.wait();
+        launch_with_opener(&window, path, &id)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+fn launch_with_opener(
+    window: &tauri::WebviewWindow,
+    path: PathBuf,
+    id: &str,
+) -> Result<(), String> {
+    let specs = installed_openers();
+    let spec = if id.trim().is_empty() {
+        let preferred = window
+            .state::<BridgeSupervisor>()
+            .desktop_preferences()?
+            .external_opener;
+        resolved_preference(&specs, &preferred)
+            .cloned()
+            .ok_or("no installed opener is available")?
+    } else {
+        selected_opener(specs, id)?
+    };
+    let launch = if spec.view.kind == "terminal" && path.is_file() {
+        path.parent().ok_or("file has no parent folder")?
+    } else {
+        &path
+    };
+    #[cfg(target_os = "macos")]
+    if spec.view.id == "ghostty" {
+        // Ghostty needs its explicit working-directory argument; handing
+        // it a directory document would not open a terminal there.
+        let mut child = std::process::Command::new("/usr/bin/open")
+            .arg("-na")
+            .arg(&spec.target)
+            .arg("--args")
+            .arg(format!("--working-directory={}", path_text(launch)?))
+            .spawn()
+            .map_err(|error| error.to_string())?;
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
+        return Ok(());
+    }
+    window
+        .opener()
+        .open_path(path_text(launch)?, Some(path_text(&spec.target)?))
+        .map_err(|error| error.to_string())
+}
+
+fn session_workspace(session: BridgeSession, requested: &str) -> Result<Option<PathBuf>, String> {
+    if session.id != requested {
+        return Err("session workspace identity changed; reload the session".into());
+    }
+    let Some(root) = session.workspace_root.filter(|root| !root.is_empty()) else {
+        return Ok(None);
+    };
+    let root = document_path(&root, true)?;
+    if !root.is_dir() {
+        return Err("session workspace is no longer a directory; choose another workspace".into());
+    }
+    Ok(Some(root))
+}
+
+#[tauri::command]
+pub async fn workspace_external_openers(
+    window: tauri::WebviewWindow,
+    session_id: String,
+) -> Result<OpenersView, String> {
+    main_window(&window)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let supervisor = window.state::<BridgeSupervisor>();
+        let snapshot = supervisor.snapshot(SessionRequest {
+            session_id: session_id.clone(),
+        })?;
+        if session_workspace(snapshot.session, &session_id)?.is_none() {
+            return Ok(OpenersView {
+                openers: vec![],
+                preferred: String::new(),
+                workspace_openable: false,
             });
-            return Ok(());
         }
-        window
-            .opener()
-            .open_path(path_text(launch)?, Some(path_text(&spec.target)?))
-            .map_err(|error| error.to_string())
+        let preferred = supervisor.desktop_preferences()?.external_opener;
+        let openers = cached_views();
+        let selected = openers
+            .iter()
+            .find(|view| view.id == preferred)
+            .or_else(|| openers.iter().find(|view| view.kind == "file-manager"))
+            .or_else(|| openers.first())
+            .map(|view| view.id)
+            .unwrap_or("");
+        Ok(OpenersView {
+            preferred: selected.into(),
+            openers,
+            workspace_openable: true,
+        })
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn open_workspace_external(
+    window: tauri::WebviewWindow,
+    session_id: String,
+    id: String,
+) -> Result<(), String> {
+    main_window(&window)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let snapshot = window
+            .state::<BridgeSupervisor>()
+            .snapshot(SessionRequest {
+                session_id: session_id.clone(),
+            })?;
+        let root = session_workspace(snapshot.session, &session_id)?
+            .ok_or("session has no local workspace; choose a workspace first")?;
+        launch_with_opener(&window, root, &id)
     })
     .await
     .map_err(|error| error.to_string())?
@@ -523,6 +464,44 @@ pub async fn open_local_path_with(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::opener_catalog::{OpenerSpec, OpenerView};
+
+    #[test]
+    fn workspace_launch_uses_authoritative_session_identity_and_existing_directory() {
+        let root = tempfile::tempdir().unwrap();
+        let session = |id: &str, workspace: Option<String>| BridgeSession {
+            id: id.into(),
+            path: "/session".into(),
+            state: "idle".into(),
+            title: None,
+            model_ref: None,
+            workspace_root: workspace,
+        };
+        let path = root.path().to_str().unwrap().to_string();
+        assert_eq!(
+            session_workspace(session("source", Some(path.clone())), "source").unwrap(),
+            Some(root.path().canonicalize().unwrap())
+        );
+        assert!(session_workspace(session("switched", Some(path.clone())), "source").is_err());
+        assert!(session_workspace(session("source", None), "source")
+            .unwrap()
+            .is_none());
+        let file = root.path().join("document.md");
+        fs::write(&file, "document").unwrap();
+        assert!(session_workspace(
+            session("source", Some(file.to_string_lossy().into())),
+            "source"
+        )
+        .is_err());
+        assert!(session_workspace(
+            session(
+                "source",
+                Some(root.path().join("missing").to_string_lossy().into())
+            ),
+            "source"
+        )
+        .is_err());
+    }
 
     #[test]
     fn documents_with_spaces_unicode_and_shell_characters_are_paths() {
@@ -719,6 +698,7 @@ mod tests {
                     id: "vscode",
                     name: "VS Code",
                     kind: "editor",
+                    icon_data_url: String::new(),
                 },
                 target: PathBuf::from("/Applications/Visual Studio Code.app"),
             }]

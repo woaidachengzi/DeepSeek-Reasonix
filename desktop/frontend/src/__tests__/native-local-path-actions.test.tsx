@@ -59,4 +59,41 @@ host.isTauri = false;
 await app.OpenLocalPath(source);
 assert.equal(wailsCalls, 1, "Wails binding still resolves after switching out of Tauri");
 await act(async () => { root.unmount(); });
-console.log("native local document open/reveal/save adapters and menu actions: OK");
+// Exercise the visible workspace chooser against the same native adapter.
+host.isTauri = true;
+const { ExternalOpener } = await import("../components/ExternalOpener");
+const { tauriExternalOpenerBridge } = await import("../tauri/tauriExternalOpener");
+let preferred = "finder";
+win.__TAURI_INTERNALS__ = { invoke: async (command, args) => {
+  calls.push({ command, args });
+  if (command === failCommand) throw new Error("cannot save preference; check profile permissions");
+  if (command === "workspace_external_openers") return { openers: [{ id: "finder", name: "Finder", kind: "file-manager" }, { id: "vscode", name: "VS Code", kind: "editor", iconDataUrl: "data:image/png;base64,AAAA" }], preferred, workspaceOpenable: true };
+  if (command === "set_preferred_external_opener") preferred = args?.id as string;
+} };
+const container = document.createElement("div");
+document.body.append(container);
+const chooser = createRoot(container);
+await act(async () => { chooser.render(React.createElement(ToastProvider, null, React.createElement(ExternalOpener, { tabId: "session-a", dismissSignal: 0, bridge: tauriExternalOpenerBridge }))); });
+assert.deepEqual(calls.at(-1), { command: "workspace_external_openers", args: { sessionId: "session-a" } });
+async function chooseApp(label: string) {
+  await act(async () => { container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!.click(); });
+  const option = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find(option => option.textContent?.includes(label));
+  assert.ok(option);
+  await act(async () => { option.click(); });
+}
+await chooseApp("VS Code");
+assert.ok(calls.some(call => call.command === "open_workspace_external" && call.args?.sessionId === "session-a" && call.args?.id === "vscode"));
+assert.deepEqual(calls.at(-1), { command: "set_preferred_external_opener", args: { id: "vscode" } });
+assert.ok(container.querySelector<HTMLButtonElement>(".external-opener__primary")?.ariaLabel?.includes("VS Code"));
+assert.ok(container.querySelector(".external-opener__primary img"), "native application icons are rendered");
+failCommand = "open_workspace_external";
+await chooseApp("Finder");
+assert.equal(preferred, "vscode", "failed launch must not persist a default");
+failCommand = "set_preferred_external_opener";
+await chooseApp("Finder");
+assert.equal(preferred, "vscode", "failed persistence keeps the actual preference");
+assert.ok(document.querySelector(".toast--error")?.textContent?.includes("check profile permissions"));
+assert.equal(wailsCalls, 1, "workspace launch and preference errors never fall back to Wails");
+assert.ok(calls.filter(call => call.command === "open_workspace_external" || call.command === "workspace_external_openers").every(call => !Object.prototype.hasOwnProperty.call(call.args ?? {}, "path") && !Object.prototype.hasOwnProperty.call(call.args ?? {}, "workspaceRoot")), "workspace roots and programs stay in the host");
+await act(async () => { chooser.unmount(); });
+console.log("native local document and workspace openers, icons and preference actions: OK");

@@ -60,6 +60,7 @@ type setAgentPreferenceRequest struct {
 }
 
 type desktopPreferencesResponse struct {
+	ExternalOpener          string `json:"externalOpener"`
 	ProtocolVersion         int    `json:"protocolVersion"`
 	DefaultToolApprovalMode string `json:"defaultToolApprovalMode"`
 	Language                string `json:"language"`
@@ -85,6 +86,7 @@ func loadDesktopPreferences() (desktopPreferencesResponse, error) {
 	}
 	return desktopPreferencesResponse{
 		ProtocolVersion:         desktopbridge.ProtocolVersion,
+		ExternalOpener:          cfg.DesktopExternalOpener(),
 		DefaultToolApprovalMode: cfg.DesktopDefaultToolApprovalMode(),
 		Language:                cfg.DesktopLanguage(),
 		DisplayCurrency:         cfg.DisplayCurrencyPref(),
@@ -604,4 +606,24 @@ func providerAccessAllowed(access []string, provider string) bool {
 		}
 	}
 	return false
+}
+
+// Host installation detection stays in Rust; the bridge persists only a stable
+// preference ID using the shared config lock and narrow TOML delta writer.
+func persistDesktopExternalOpener(id string) error {
+	unlock := configpkg.LockUserConfigEdits()
+	defer unlock()
+	path := configpkg.UserConfigPath()
+	if path == "" {
+		return fmt.Errorf("resolve Preview user config path")
+	}
+	cfg, err := configpkg.LoadForEditReadOnlyStrict(path)
+	if err != nil {
+		return err
+	}
+	baseline := cfg.ModelSettingsBaseline()
+	if err := cfg.SetDesktopExternalOpener(id); err != nil {
+		return err
+	}
+	return cfg.SaveUserSettingsDeltaTo(path, baseline)
 }
