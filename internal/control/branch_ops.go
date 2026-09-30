@@ -60,6 +60,9 @@ func (c *Controller) forkNamedReadyToPath(turn int, name string, switchToFork bo
 	if !hasBound {
 		return "", c.rewindFail(fmt.Errorf("fork unavailable for turn %d (resumed session)", turn))
 	}
+	if _, dag := c.SessionHead(); dag && !c.CheckpointHasBoundary(turn) {
+		return "", c.rewindFail(fmt.Errorf("checkpoint is not verified on this conversation version"))
+	}
 	if sess := c.headBranchSession(); sess != nil && switchToFork {
 		return c.forkHeadReady(sess, turn, boundary, name, kind)
 	}
@@ -136,10 +139,24 @@ func (c *Controller) CheckpointHasBoundary(turn int) bool {
 	if !ok {
 		return false
 	}
-	// After compaction or a head switch the key may point past the current
-	// message log; treat those turns as "no boundary" so the UI can disable
-	// the button. Len is lock-guarded for the frontend goroutines calling this.
-	return boundary <= c.executor.Session().Len()
+	messages := c.executor.Session().Snapshot()
+	if boundary > len(messages) {
+		return false
+	}
+	if _, dag := c.SessionHead(); !dag {
+		return true
+	}
+	if boundary == len(messages) {
+		return false
+	}
+	store := c.checkpoints.storeRef()
+	id := store.BoundaryMessageID(turn)
+	if id == "" && c.executor.Session().HeadCount() == 1 &&
+		agent.IsUserAuthoredTurnMessage(messages[boundary]) && messages[boundary].ID != "" {
+		store.BindTurnMessage(turn, messages[boundary].ID)
+		id = messages[boundary].ID
+	}
+	return id != "" && messages[boundary].ID == id
 }
 
 // Branch copies the current conversation into a child branch and switches to it.

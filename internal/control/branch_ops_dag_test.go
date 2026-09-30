@@ -138,6 +138,73 @@ func TestForkAtTurnCreatesRewindHeadInSameLog(t *testing.T) {
 	}
 }
 
+func TestCheckpointBoundaryStaysWithItsConversationHead(t *testing.T) {
+	c, sess, path := newSchemaTwoBranchController(t)
+	c.beginCheckpoint(t.Context(), "second prompt")
+	sess.Add(provider.Message{Role: provider.RoleUser, Content: "second prompt"})
+	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "second answer"})
+	if err := c.Snapshot(); err != nil {
+		t.Fatal(err)
+	}
+	metas := c.Checkpoints() // Binds a checkpoint created before message IDs were stored.
+	if len(metas) != 1 || metas[0].MessageID == "" {
+		t.Fatalf("checkpoint has no message identity: %+v", metas)
+	}
+	turn := metas[0].Turn
+	mainID := agent.BranchID(path)
+	plan, err := c.PrepareRewind(turn, RewindConversation)
+	if err != nil || !plan.CanConversation || plan.PlanID == "" {
+		t.Fatalf("main rewind plan = %+v err=%v", plan, err)
+	}
+	forkID, err := c.ForkNamed(turn, "alternative")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess.Add(provider.Message{Role: provider.RoleUser, Content: "different prompt"})
+	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "different answer"})
+	if err := c.Snapshot(); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Checkpoints(); len(got) != 0 || c.CheckpointHasBoundary(turn) {
+		t.Fatalf("foreign checkpoint visible on fork: %+v", got)
+	}
+	if preview, err := c.PrepareRewind(turn, RewindConversation); err != nil || preview.PlanID != "" || preview.CanConversation {
+		t.Fatalf("foreign checkpoint got rewind plan: %+v err=%v", preview, err)
+	}
+	if result, err := c.CommitRewind(plan.PlanID); err == nil || result.OK {
+		t.Fatalf("plan from main committed on fork: %+v err=%v", result, err)
+	}
+	if _, err := c.ForkNamed(turn, "invalid"); err == nil {
+		t.Fatal("fork accepted checkpoint from a different head")
+	}
+	if got := sess.Snapshot(); len(got) != 5 || got[3].Content != "different prompt" {
+		t.Fatalf("foreign checkpoint changed fork: %+v", got)
+	}
+	if _, err := c.SwitchBranch(mainID); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Checkpoints(); len(got) != 1 || got[0].MessageID != metas[0].MessageID {
+		t.Fatalf("main checkpoint missing after switch: %+v", got)
+	}
+	c.Close()
+	reloaded, err := agent.LoadSession(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exec := agent.New(nil, nil, reloaded, agent.Options{}, event.Discard)
+	reopened := New(Options{Executor: exec, SessionDir: filepath.Dir(path), SessionPath: path, Sink: event.Discard})
+	t.Cleanup(reopened.Close)
+	if got := reopened.Checkpoints(); len(got) != 1 || got[0].MessageID != metas[0].MessageID {
+		t.Fatalf("persisted main checkpoint missing: %+v", got)
+	}
+	if _, err := reopened.SwitchBranch(forkID); err != nil {
+		t.Fatal(err)
+	}
+	if got := reopened.Checkpoints(); len(got) != 0 || reopened.CheckpointHasBoundary(turn) {
+		t.Fatalf("foreign checkpoint reappeared after reopen: %+v", got)
+	}
+}
+
 func TestFileBranchesOnlyKeepsFileBranchesForSchemaTwo(t *testing.T) {
 	dir := t.TempDir()
 	exec := agent.New(nil, nil, agent.NewSession("sys"), agent.Options{}, event.Discard)

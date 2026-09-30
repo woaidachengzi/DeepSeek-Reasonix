@@ -109,6 +109,10 @@ func (c *Controller) PrepareRewind(turn int, scope RewindScope) (checkpoint.Rewi
 	if !c.checkpoints.enabled() || c.executor == nil {
 		return checkpoint.RewindPlan{}, c.rewindFail(fmt.Errorf("checkpoints unavailable"))
 	}
+	if _, dag := c.SessionHead(); dag && !c.CheckpointHasBoundary(turn) {
+		return checkpoint.RewindPlan{Turn: turn, Scope: checkpoint.RewindScope(scope),
+			DisabledReason: "checkpoint is not verified on this conversation version"}, nil
+	}
 	if err := c.beginRotation(); err != nil {
 		if errors.Is(err, errTurnRunningRotation) {
 			return checkpoint.RewindPlan{}, c.rewindFail(fmt.Errorf("cannot rewind while a turn is running"))
@@ -331,6 +335,10 @@ func (c *Controller) commitRewindReady(store *checkpoint.Store, planID string, f
 	plan, ok := store.PeekPlan(planID)
 	if !ok {
 		return checkpoint.RewindResult{OK: false, Error: "unknown or expired plan"}, fmt.Errorf("unknown or expired plan %q", planID)
+	}
+	if _, dag := c.SessionHead(); dag && !c.CheckpointHasBoundary(plan.Turn) {
+		return checkpoint.RewindResult{OK: false, Error: "checkpoint is not verified on this conversation version"},
+			fmt.Errorf("checkpoint is not verified on this conversation version")
 	}
 	if (plan.Scope == checkpoint.RewindCode || plan.Scope == checkpoint.RewindBoth) && !plan.CanFiles ||
 		(plan.Scope == checkpoint.RewindConversation || plan.Scope == checkpoint.RewindBoth) && !plan.CanConversation {

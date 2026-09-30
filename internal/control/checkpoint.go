@@ -161,6 +161,7 @@ func (c *Controller) validatedCheckpointTurn(completion *guardedTurnCompletion) 
 		(message.CreatedAt > 0 && candidate.openedAt > 0 && message.CreatedAt < candidate.openedAt) {
 		return nil
 	}
+	candidate.store.BindTurnMessage(candidate.turn, message.ID)
 	turn := candidate.turn
 	return &turn
 }
@@ -195,6 +196,28 @@ func (m *checkpointManager) boundary(turn int) (int, bool) {
 	defer m.mu.Unlock()
 	b, ok := m.bound[turn]
 	return b, ok
+}
+
+func (c *Controller) bindLatestCheckpointMessage() {
+	if c.executor == nil || c.executor.Session() == nil {
+		return
+	}
+	c.checkpoints.mu.Lock()
+	turn := c.checkpoints.turn - 1
+	boundary, ok := c.checkpoints.bound[turn]
+	store := c.checkpoints.store
+	c.checkpoints.mu.Unlock()
+	if !ok || store == nil {
+		return
+	}
+	messages := c.executor.Session().Snapshot()
+	if boundary < 0 || boundary >= len(messages) {
+		return
+	}
+	message := messages[boundary]
+	if message.ID != "" && agent.IsUserAuthoredTurnMessage(message) {
+		store.BindTurnMessage(turn, message.ID)
+	}
 }
 
 // list returns the checkpoint metadata (nil when disabled).

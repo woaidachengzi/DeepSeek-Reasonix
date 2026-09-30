@@ -76,6 +76,7 @@ type Checkpoint struct {
 	Time               time.Time      `json:"time"`
 	Prompt             string         `json:"prompt"`
 	MsgIndex           int            `json:"msgIndex"`
+	MessageID          string         `json:"messageId,omitempty"`
 	SessionID          string         `json:"sessionId,omitempty"`
 	Files              []FileSnap     `json:"files"`
 	Coverage           Coverage       `json:"coverage,omitempty"`
@@ -129,6 +130,8 @@ func (c *Checkpoint) revisions() []FileRevision {
 // Meta is the picker-facing summary of a checkpoint (no file contents).
 type Meta struct {
 	Turn               int
+	MsgIndex           int
+	MessageID          string
 	Time               time.Time
 	Prompt             string
 	Paths              []string
@@ -306,6 +309,36 @@ func (s *Store) Bounds() map[int]int {
 		m[s.cur.Turn] = s.cur.MsgIndex
 	}
 	return m
+}
+
+// BindTurnMessage records the actual user message occupying a turn boundary.
+func (s *Store) BindTurnMessage(turn int, messageID string) {
+	if s == nil || messageID == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, checkpoint := range s.all() {
+		if checkpoint.Turn == turn && (checkpoint.MessageID == "" || checkpoint.MessageID == messageID) {
+			checkpoint.MessageID = messageID
+			s.persistBestEffort(checkpoint)
+			return
+		}
+	}
+}
+
+func (s *Store) BoundaryMessageID(turn int) string {
+	if s == nil {
+		return ""
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, checkpoint := range s.all() {
+		if checkpoint.Turn == turn {
+			return checkpoint.MessageID
+		}
+	}
+	return ""
 }
 
 // Snapshot records the pre-edit state of the file a writer is about to change.
@@ -676,6 +709,8 @@ func (s *Store) List() []Meta {
 		}
 		meta := Meta{
 			Turn:               c.Turn,
+			MsgIndex:           c.MsgIndex,
+			MessageID:          c.MessageID,
 			Time:               c.Time,
 			Prompt:             c.Prompt,
 			Paths:              paths,

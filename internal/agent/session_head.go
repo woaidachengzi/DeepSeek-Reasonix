@@ -74,6 +74,15 @@ func (s *Session) Head() (HeadRef, bool) {
 	return s.head.ref, s.head.dag
 }
 
+func (s *Session) HeadCount() int {
+	if s == nil {
+		return 0
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.head.headCount
+}
+
 // DrainHeadEvents returns and clears the head events recorded by saves.
 func (s *Session) DrainHeadEvents() []HeadEvent {
 	if s == nil {

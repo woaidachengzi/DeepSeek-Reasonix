@@ -2101,6 +2101,7 @@ func (c *Controller) runReady(ctx context.Context, input string) (err error) {
 	var marker agent.InFlightTurnMeta
 	defer func() { c.finishInFlightTurn(startMessages, marker) }()
 	c.beginCheckpoint(ctx, rawInput)
+	defer c.bindLatestCheckpointMessage()
 	if c.guardianSess != nil {
 		c.guardianSess.ResetTurn()
 	}
@@ -3313,10 +3314,18 @@ const (
 // readable — they were recorded composed.
 func (c *Controller) Checkpoints() []checkpoint.Meta {
 	metas := c.checkpoints.list()
-	for i := range metas {
-		metas[i].Prompt = StripComposePrefixes(metas[i].Prompt)
+	visible := metas[:0]
+	for _, meta := range metas {
+		if _, dag := c.SessionHead(); dag && !c.CheckpointHasBoundary(meta.Turn) {
+			continue
+		}
+		if store := c.checkpoints.storeRef(); store != nil {
+			meta.MessageID = store.BoundaryMessageID(meta.Turn)
+		}
+		meta.Prompt = StripComposePrefixes(meta.Prompt)
+		visible = append(visible, meta)
 	}
-	return metas
+	return visible
 }
 
 func (c *Controller) CheckpointFileState(path string) (checkpoint.FileState, bool) {

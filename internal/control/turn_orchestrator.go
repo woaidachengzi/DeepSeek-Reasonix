@@ -143,6 +143,7 @@ func (o *turnOrchestrator) runSubagentSkillTurns(ctx context.Context, skills []s
 	// the user's own text — never the composed provider input with its
 	// transient <response-language>/<reasoning-language>/memory/hook blocks.
 	c.beginCheckpoint(ctx, firstNonEmpty(raw, task))
+	defer c.bindLatestCheckpointMessage()
 	if c.guardianSess != nil {
 		c.guardianSess.ResetTurn()
 	}
@@ -254,6 +255,7 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 	// surface in the rewind picker or be prefilled into the composer.
 	if !turn.synthetic {
 		c.beginCheckpoint(ctx, firstNonEmpty(turn.raw, turn.input))
+		defer c.bindLatestCheckpointMessage()
 	}
 	if c.guardianSess != nil {
 		c.guardianSess.ResetTurn()

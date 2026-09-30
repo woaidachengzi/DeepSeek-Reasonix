@@ -244,6 +244,29 @@ func TestCodeRewindRequiresCoverageConfirmationAndPreservesConversation(t *testi
 	if err := runtime.SwitchSessionHead("missing-head"); err == nil {
 		t.Fatal("unknown head was accepted")
 	}
+	if checkpoints := runtime.WorkspaceCheckpoints(); len(checkpoints) != 0 {
+		t.Fatalf("foreign checkpoint appeared on continued version: %+v", checkpoints)
+	}
+	foreignPlan, err := runtime.PrepareCombinedRewind(1)
+	if err != nil || foreignPlan.CanFiles || foreignPlan.CanConversation || foreignPlan.PlanID != "" {
+		t.Fatalf("foreign checkpoint was accepted: %+v err=%v", foreignPlan, err)
+	}
+	if err := runtime.SwitchSessionHead(agent.SessionMainHead); err != nil {
+		t.Fatalf("switch to checkpoint's version: %v", err)
+	}
+	planAcrossSwitch, err := runtime.PrepareCodeRewind(1)
+	if err != nil || !planAcrossSwitch.CanFiles {
+		t.Fatalf("code plan before head switch = %+v err=%v", planAcrossSwitch, err)
+	}
+	if err := runtime.SwitchSessionHead(continued.HeadID); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := runtime.CommitCodeRewind(planAcrossSwitch.PlanID, true); err != nil || result.OK {
+		t.Fatalf("plan from another head committed: %+v err=%v", result, err)
+	}
+	if err := runtime.SwitchSessionHead(agent.SessionMainHead); err != nil {
+		t.Fatal(err)
+	}
 	combinedPlan, err := runtime.PrepareCombinedRewind(1)
 	if err != nil || !combinedPlan.CanFiles || !combinedPlan.CanConversation || !combinedPlan.RequiresCoverageConfirmation {
 		t.Fatalf("combined preview = %+v err=%v", combinedPlan, err)
@@ -251,7 +274,7 @@ func TestCodeRewindRequiresCoverageConfirmationAndPreservesConversation(t *testi
 	if result, err := runtime.CommitCombinedRewind(combinedPlan.PlanID, false); err != nil || result.OK {
 		t.Fatalf("unconfirmed combined rewind = %+v err=%v", result, err)
 	}
-	if len(session.Snapshot()) != 4 {
+	if len(session.Snapshot()) != 5 {
 		t.Fatal("unconfirmed combined rewind changed conversation")
 	}
 	combinedResult, err := runtime.CommitCombinedRewind(combinedPlan.PlanID, true)
@@ -269,7 +292,7 @@ func TestCodeRewindRequiresCoverageConfirmationAndPreservesConversation(t *testi
 	if undo, err := runtime.UndoWorkspaceFileRevert(combinedResult.TransactionID); err != nil || !undo.OK {
 		t.Fatalf("undo combined file transaction = %+v err=%v", undo, err)
 	}
-	if head, ok := controller.SessionHead(); !ok || head.HeadID != continued.HeadID {
+	if head, ok := controller.SessionHead(); !ok || head.HeadID != agent.SessionMainHead {
 		t.Fatalf("combined undo did not return to previous head: %+v", head)
 	}
 	continuedCombinedPlan, err := runtime.PrepareCombinedRewind(1)
@@ -290,7 +313,7 @@ func TestCodeRewindRequiresCoverageConfirmationAndPreservesConversation(t *testi
 	if head, ok := controller.SessionHead(); !ok || head.HeadID != continuedCombined.HeadID {
 		t.Fatalf("file undo switched continued head: %+v", head)
 	}
-	if err := runtime.SwitchSessionHead(continued.HeadID); err != nil {
+	if err := runtime.SwitchSessionHead(agent.SessionMainHead); err != nil {
 		t.Fatalf("return to earlier version: %v", err)
 	}
 	stalePlan, err := runtime.PrepareCombinedRewind(1)
