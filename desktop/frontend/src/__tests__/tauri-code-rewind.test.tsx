@@ -20,7 +20,7 @@ Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, co
 
 const state = globalThis as typeof globalThis & {
   __workbenchSessions?: Array<{ sessionId: string; title: string; workspaceRoot: string }>;
-  __workspaceCheckpointsHandler?: () => Promise<object[]>;
+  __workspaceCheckpointsHandler?: (sessionId: string) => Promise<object[]>;
   __codeRewindPreviewHandler?: () => Promise<object>;
   __codeRewindCommitHandler?: () => Promise<object>;
   __workspaceFileRevertUndoHandler?: () => Promise<object>;
@@ -36,6 +36,7 @@ const state = globalThis as typeof globalThis & {
   __tauriHistoryMessages?: Array<{ role: string; content: string }>;
   __historyGate?: Promise<void>;
   __tauriBridgeCalls?: Array<{ name: string; args: Record<string, unknown> }>;
+  __emitBridgeEvent?: (event: object) => void;
 };
 state.__workbenchSessions = [{ sessionId: "tauri-code-rewind", title: "回滚测试", workspaceRoot: "/tmp/ws" }];
 state.__workspaceCheckpointsHandler = async () => [{ turn: 1, prompt: "edit two files", time: 1, turnFileCount: 2 }];
@@ -85,6 +86,27 @@ await act(async () => { click([...document.querySelectorAll(".tauri-workspace-ch
 check(document.body.textContent?.includes("a.txt") && document.body.textContent?.includes("b.txt"), "preview should list affected files");
 check(button("Restore listed files")?.disabled, "partial coverage requires an explicit checkbox");
 check(!state.__tauriBridgeCalls?.some(call => call.name === "bridge_code_rewind_commit"), "preview must not commit");
+let releaseStaleCheckpoints: ((checkpoints: object[]) => void) | undefined;
+state.__workspaceCheckpointsHandler = () => new Promise(resolve => { releaseStaleCheckpoints = resolve; });
+await act(async () => { click(button("刷新")); await settle(); });
+await act(async () => {
+  state.__emitBridgeEvent?.({ sessionId: "tauri-code-rewind", sequence: 1, eventKind: "turn_started", payload: { kind: "turn_started" } });
+  await settle();
+});
+check(!document.querySelector(".tauri-workspace-change-entry"), "running turn clears stale checkpoint rows");
+check(!button("Restore listed files"), "running turn clears the old rewind plan");
+await act(async () => { releaseStaleCheckpoints?.([{ turn: 99, prompt: "stale checkpoint", time: 1, turnFileCount: 1 }]); await settle(); });
+check(!document.querySelector(".tauri-workspace-change-entry"), "late checkpoint response cannot repopulate a running turn");
+state.__workspaceCheckpointsHandler = async () => [
+  { turn: 1, prompt: "edit two files", time: 1, turnFileCount: 2 },
+  { turn: 2, prompt: "new checkpoint", time: 2, turnFileCount: 1 },
+];
+await act(async () => {
+  state.__emitBridgeEvent?.({ sessionId: "tauri-code-rewind", sequence: 2, eventKind: "turn_done", payload: { kind: "turn_done", status: "completed" } });
+  await settle(); await settle();
+});
+check(document.body.textContent?.includes("new checkpoint"), "confirmed idle turn refreshes checkpoint rows without a manual click");
+await act(async () => { click([...document.querySelectorAll(".tauri-workspace-change-entry")].find(row => row.textContent?.includes("edit two files"))); await settle(); });
 await act(async () => {
   const checkbox = document.querySelector<HTMLInputElement>('.tauri-workspace-revert__confirmation input');
   check(checkbox, "coverage confirmation should be shown");
@@ -180,5 +202,12 @@ check(document.body.textContent?.includes("The original conversation and workspa
 await act(async () => { click(button("Create and open fork")); await settle(); await settle(); });
 check(state.__tauriBridgeCalls?.some(call => call.name === "bridge_legacy_fork_commit" && call.args.planId === "plan-legacy"), "legacy commit must use the previewed plan");
 check(state.__tauriBridgeCalls?.some(call => call.name === "bridge_switch_session" && call.args.sessionId === "tauri-child"), "legacy fork must open the registered child");
+state.__workspaceCheckpointsHandler = async sessionId => sessionId === "tauri-child"
+  ? [{ turn: 3, prompt: "child checkpoint", time: 3, turnFileCount: 0 }]
+  : [{ turn: 1, prompt: "edit two files", time: 1, turnFileCount: 2 }];
+await act(async () => { click(document.querySelector('.tauri-workspace-tree-button')); await settle(); });
+await act(async () => { click(button("Checkpoints")); await settle(); await settle(); });
+check(document.body.textContent?.includes("child checkpoint"), "new session loads its own checkpoints");
+check(![...document.querySelectorAll(".tauri-workspace-change-entry")].some(row => row.textContent?.includes("edit two files")), "source session checkpoints do not leak into a child");
 await act(async () => { root.unmount(); });
 process.stdout.write("tauri code rewind UI: passed\n");

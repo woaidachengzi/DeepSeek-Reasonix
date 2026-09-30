@@ -1576,6 +1576,7 @@ export function TauriSessionPreview() {
     setLegacyForkPlan(null);
     setConversationRewindUndo(null);
     setSessionHeads([]);
+    setWorkspaceCheckpoints([]);
     setCombinedRewindPlan(null);
     setCombinedCoverageConfirmed(false);
     setCombinedRewindUndo(null);
@@ -1930,6 +1931,26 @@ export function TauriSessionPreview() {
       if (isCurrent()) setWorkspaceCheckpointsLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (!workspaceOpen || workspaceView !== "checkpoints") return;
+    if (!session || session.state !== "idle") {
+      workspaceCheckpointsRequestRef.current += 1;
+      workspaceFileRevertRequestRef.current += 1;
+      setWorkspaceCheckpointsLoading(false);
+      setWorkspaceFileRevertBusy(false);
+      setWorkspaceCheckpoints([]);
+      setCodeRewindPlan(null);
+      setCodeRewindCoverageConfirmed(false);
+      setConversationRewindPlan(null);
+      setLegacyForkPlan(null);
+      setCombinedRewindPlan(null);
+      setCombinedCoverageConfirmed(false);
+      return;
+    }
+    void loadWorkspaceCheckpoints();
+    return () => { workspaceCheckpointsRequestRef.current += 1; };
+  }, [workspaceOpen, workspaceView, session?.id, session?.state]);
 
   async function previewCodeRewind(turn: number) {
     if (!session || session.state !== "idle" || busy || workspaceFileRevertBusy) return;
@@ -2409,9 +2430,8 @@ export function TauriSessionPreview() {
     const nextOpen = !workspaceOpen;
     setWorkspaceOpen(nextOpen);
     if (nextOpen) {
-      if (workspaceView === "checkpoints") void loadWorkspaceCheckpoints();
-      else if (workspaceView === "changes") void loadWorkspaceChanges();
-      else void loadWorkspace(workspacePath);
+      if (workspaceView === "changes") void loadWorkspaceChanges();
+      else if (workspaceView === "files") void loadWorkspace(workspacePath);
     }
   }
 
@@ -2448,7 +2468,6 @@ export function TauriSessionPreview() {
       setWorkspaceChangesLoading(false);
       setWorkspacePreviewLoading(false);
       setWorkspaceChangeDetailLoading(false);
-      void loadWorkspaceCheckpoints();
     }
   }
 
