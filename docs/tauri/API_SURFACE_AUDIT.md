@@ -99,6 +99,7 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 - 增加独立 `--dialogs` / `dialog-cancel` 安装包门禁，使用既有临时 HOME/core/TMPDIR 和档案检查。宿主调用实际 `save_local_path_as`、`export_frontend_diagnostics`、`import_user_theme` 及相同官方插件的目录选择 API；明确观察当前进程唯一可见的 NSSavePanel/NSOpenPanel，核对类型及保存文件名后调用实际 AppKit `cancel`，不伪造插件 callback 的 None 或选中路径。
 - 每次取消均要求生产回调返回预期空路径/false/None，实际面板关闭；主题列表不变、私有源文件内容/mtime/权限不变且没有额外文件。测试仅操作本次私有宿主的面板，存在其他可见面板、多面板、错误类型/文件名、超时或取消不一致时失败；无新增 renderer 命令/权限。仅为已锁定 objc2-app-kit 0.3.2 显式启用 Open/SavePanel 类型 feature，未新增依赖版本。
 - 原生探测包的托管/显式档案均通过：每档案三个窗口前置阶段及一个包含四种取消操作的阶段，共八个阶段；鉴权拒绝、实际档案继承、跨重启凭据身份、窗口持久几何和退出无残留同步检查。探测构建复用上一干净包的前端和当前 sidecar，仅重建原生 host，不能代替干净源码完整生产构建。当前源码/真实 Go bridge 的 Rust 193 项通过、2 项默认忽略，严格 clippy、格式、Python 语法和 diff 检查通过；完整包另行记录。
+- 随后从干净提交 `bad820b01c5c2e3882133777fb3f9e729f047f88` 完整构建 arm64 macOS `.app`，源码标识无 dirty 标记；前端生产门禁/现有体积预算、Go sidecar、Rust host 和严格本地 ad-hoc 签名校验通过。同一包的 `--dialogs` 门禁共 42 个阶段全部通过（两种档案各 20 个原有阶段及一个四类面板取消阶段），两种档案的标准包启动/退出 smoke 也通过；实际通知授权只读查询、Global 工作区、私有凭据身份、401 鉴权拒绝和无残留同步检查。构建和包级验收后工作树干净。macOS CI 的原生门禁已加入 `--dialogs`，YAML 与步骤参数检查通过，远端执行结果仍待确认；未运行仍受激活状态阻断的 `--edit`/`--focus`，也未执行正式 Developer ID 签名/公证。
 - 此验收证明原生面板/取消动作与生产返回路径，不证明用户鼠标/键盘、文件/目录实际选中、确认覆盖保存、系统错误或 WebView 按钮已通过。编辑焦点、其他 macOS D 交互及 A/B/C 缺口保留，E 仍等待 D 验收和 Preview 稳定；Windows/Linux 继续延期。
 
 #### D：macOS 对话框异常与诊断导出原件保护（2026-10-01）

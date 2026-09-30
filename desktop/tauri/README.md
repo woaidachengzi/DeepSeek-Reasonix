@@ -185,6 +185,7 @@ python3 tools/tauri/smoke-native-window.py 'desktop/tauri/target/release/bundle/
 私有文件名。要求生产回调返回取消结果、面板关闭、主题未导入、原文件内容/时间戳/
 权限不变且无额外文件，沿用鉴权、档案身份和退出清理检查。不伪造插件回调或选中
 路径，不增加 renderer 权限；这不证明鼠标/键盘取消、实际选择/保存或系统错误已验收。
+macOS CI 已加入该门禁，本机干净包的 42 个阶段通过，远端 CI 结果待确认。
 
 ```sh
 python3 tools/tauri/smoke-native-window.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app' --dialogs

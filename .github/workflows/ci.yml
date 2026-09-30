@@ -645,8 +645,8 @@ jobs:
       - name: Smoke test packaged Preview startup and shutdown
         run: python3 tools/tauri/smoke-packaged-app.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
 
-      - name: Verify native macOS window restore and close preferences
-        run: python3 tools/tauri/smoke-native-window.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
+      - name: Verify native macOS windows and dialog cancellation
+        run: python3 tools/tauri/smoke-native-window.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app' --dialogs
 
       - name: Verify packaged macOS config import and restart isolation
         run: python3 tools/tauri/smoke-profile-import.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
