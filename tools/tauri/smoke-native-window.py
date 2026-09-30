@@ -11,6 +11,8 @@ The --focus gate additionally requires a real second process to restore focus;
 it remains a strict separate acceptance condition when activation is unavailable.
 The --edit gate requires an active main key window and tests installed edit
 roles against disposable WKWebView textareas, including native undo/redo.
+The --dialogs gate cancels actual AppKit document/diagnostics/import/folder
+panels and verifies production callbacks; it does not simulate mouse clicks.
 Does not prove menu/tray clicks, physical keyboard editing, or display unplugging.
 All state is confined to a temporary HOME; no existing Preview is operated.
 """
@@ -176,7 +178,7 @@ def launch(host_binary, sidecar_binary, root, identifier, managed, phase, provid
                 pass
 
 
-def smoke(app_path, include_focus=False, include_edit=False):
+def smoke(app_path, include_focus=False, include_edit=False, include_dialogs=False):
     app = Path(app_path).resolve()
     host_binary = app / "Contents/MacOS/reasonix-tauri"
     sidecar_binary = app / "Contents/MacOS/reasonix-desktop-bridge"
@@ -199,6 +201,8 @@ def smoke(app_path, include_focus=False, include_edit=False):
             phases.extend(["appearance-dark", "restore-appearance-dark", "restore-appearance-light", "restore-appearance-auto"])
             phases.extend(["appearance-rollback", "restore-appearance-rollback"])
             phases.append("clipboard-native")
+            if include_dialogs:
+                phases.append("dialog-cancel")
             if include_edit:
                 phases.append("menu-editing")
             if include_focus:
@@ -222,10 +226,12 @@ if __name__ == "__main__":
     parser.add_argument("app")
     parser.add_argument("--focus", action="store_true")
     parser.add_argument("--edit", action="store_true")
+    parser.add_argument("--dialogs", action="store_true")
     args = parser.parse_args()
     if sys.platform != "darwin":
         raise SystemExit("this acceptance requires macOS")
     try:
-        smoke(args.app, include_focus=args.focus, include_edit=args.edit)
+        smoke(args.app, include_focus=args.focus, include_edit=args.edit,
+              include_dialogs=args.dialogs)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         raise SystemExit(f"native macOS window smoke failed: {error}") from error

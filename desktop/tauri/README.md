@@ -179,7 +179,18 @@ selector 和 nil target，调用前执行菜单验证。临时 textarea 的值/�
 python3 tools/tauri/smoke-native-window.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app' --edit
 ```
 
-当前本机 macOS 27.0.1 的门禁停在严格焦点前提：responder 接受、窗口可见且应用未隐藏，
+真实系统对话框取消使用独立 `--dialogs` 门禁，每档案增加一个 `dialog-cancel`
+阶段。宿主分别调用实际文档另存为、诊断导出、主题导入和目录选择入口，观察当前
+进程唯一可见的 NSSavePanel/NSOpenPanel 后调用 AppKit cancel；保存面板还核对
+私有文件名。要求生产回调返回取消结果、面板关闭、主题未导入、原文件内容/时间戳/
+权限不变且无额外文件，沿用鉴权、档案身份和退出清理检查。不伪造插件回调或选中
+路径，不增加 renderer 权限；这不证明鼠标/键盘取消、实际选择/保存或系统错误已验收。
+
+```sh
+python3 tools/tauri/smoke-native-window.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app' --dialogs
+```
+
+当前本机 macOS 27.0.1 的原生编辑 `--edit` 门禁停在严格焦点前提：responder 接受、窗口可见且应用未隐藏，
 但应用 inactive、key window 不存在。产品共享恢复路径及显式当前 AppKit activate 请求
 都未建立激活；尚未执行后续编辑动作，不能标记为通过，也不能据此确定产品编辑有缺陷。
 待桌面能够实际激活 Preview 后再运行；默认门禁通过不能覆盖该项。

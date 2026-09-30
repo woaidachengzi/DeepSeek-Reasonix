@@ -320,6 +320,7 @@ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
     match phase {
         "exercise" => exercise(app, &directory)?,
         "menu-shortcuts" => crate::native_menu_smoke::shortcuts(app)?,
+        "dialog-cancel" => crate::native_dialog_smoke::run(app, &directory)?,
         "clipboard-native" | "menu-editing" => crate::native_clipboard_smoke::run(app, &directory)?,
         "appearance-dark"
         | "appearance-rollback-unconfigured"
