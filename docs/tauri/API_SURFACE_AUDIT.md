@@ -87,12 +87,26 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 | D：托盘与退出 | 托盘有显示/退出菜单；托盘、Dock 重开及单实例唤起共用主线程恢复入口，补上 macOS 应用取消隐藏。退出沿用 supervisor 停止路径。真实包原生 CloseRequested 验证关闭后继续运行、关闭即退出、偏好重启恢复与 sidecar 清理；应用隐藏/取消隐藏也已验证。实际 Go 流式任务在关闭后继续产生事件并完成历史保存；原生 Show 菜单恢复几何，Quit 菜单在第二个任务运行中退出并清理上游及 sidecar。 | 真实托盘点击、物理 Cmd+Q/托盘退出及 Dock 重开仍待验收。程序化原生菜单动作不能代替按键/点击；第二实例恢复可见已观察到，但键盘焦点严格门禁未通过，不能标记完整唤起已验收。 |
 | D：对话框与链接 | 现有 Tauri 选择器保留；共享外部链接及本地文档 adapter 已接入 Rust host。Markdown 默认打开、定位、另存为及指定已安装应用均走原生入口，错误不退回 browser mock。文档可执行目标拒绝、特殊路径、取消保存、源文件别名保护及权限拒绝已有回归。外部链接支持 HTTP(S)/受限 mailto，OAuth 入口仅接受 HTTP(S)。 | macOS 已增加系统应用注册查询、Spotlight 自定义安装位置和原生 64×64 图标；项目会话顶部选择器已接入配置偏好与卸载回退。Linux 已增加 XDG desktop entry 发现、GIO 原生启动、六类终端目录策略和有界 PNG 图标转换，共用逻辑回归通过；Linux 原生分支编译/图标/GUI 验收待执行。Windows 已增加 App Paths、安装目录/Toolbox 发现、终端目录策略和原生 PNG 图标代码；共用逻辑与 Win32 API 类型检查通过，Windows 原生 host 编译/注册表/图标/GUI 验收待执行；Global 会话已接入档案内稳定目录与会话身份查询。系统对话框、浏览器/邮件、指定应用的真实 UI 交互及 OAuth 仍需验收。 |
 | D：通知与钥匙串 | macOS 通知改为原生 UserNotifications：读取实际授权、报告发送失败、点击恢复对应会话；冷启动队列、档案隔离、失效会话与重复点击已有回归。Linux 已接入 XDG 服务/能力查询、实际发送与运行中点击；独立真实 D-Bus 联调通过，授权无标准查询时报告 unknown。凭据按持久档案身份隔离；设置页显式迁移旧 Preview 凭据，保留原件并拒绝覆盖。迁移/保存/删除与重启串行，写入及桥接同步失败回滚；macOS 原生隔离读写、真实 bridge 迁移/重启/删除及不落盘回归通过。 | 真实系统通知授权拒绝、横幅显示与前后台/冷启动点击、钥匙串锁定/授权拒绝、原生设置页迁移操作仍待验收。Linux native host、桌面环境/Wayland 焦点及冷启动点击待验收/补齐；Windows 原生授权读取/点击和 Windows/Linux 凭据后端仍待补齐/验收。 |
-| D：单实例与数据保护 | Tauri 单实例及独立默认 Preview 数据目录已存在。当前 Wails 与 bridge 启动均持有配置/状态两处目录锁；共享任一目录都会拒绝第二个写入宿主，目录别名去重，失败释放已取锁。真实 bridge/Wails 拒绝启动测试及配置原件/备份回退回归通过。导入页在操作前展示来源、目标目录与回退说明；真实包宿主入口的配置/项目目录导入、Preview 修改/重启、原件及备份保护和显式目录拒绝导入通过，本地旧版 CLI 可再次读取原目录。 | 未参与目录锁协议的旧稳定版仍需兼容性验收；不能将当前两个宿主的测试推广为所有历史二进制互斥。本地旧版 CLI 来自有修改的 1.38.3 工作区，不证明正式发布二进制/Wails GUI 已认证。真实 Wails 单实例通知/唤起、设置页导入点击与完整会话/数据回退操作仍待验收。 |
+| D：单实例与数据保护 | Tauri 单实例及独立默认 Preview 数据目录已存在。当前 Wails 与 bridge 启动均持有配置/状态两处目录锁；共享任一目录都会拒绝第二个写入宿主，目录别名去重，失败释放已取锁。真实 bridge/Wails 拒绝启动测试及配置原件/备份回退回归通过。导入页在操作前展示来源、目标目录与回退说明；真实包宿主入口的配置/项目目录导入、Preview 修改/重启、原件及备份保护和显式目录拒绝导入通过；经官方发布 SHA-256 和干净基线提交核对的原生 arm64 CLI 1.38.3，已通过导入/重启后的原目录回读及原件保护验收。 | 未参与目录锁协议的旧稳定版仍需兼容性验收；不能将当前两个宿主的测试推广为所有历史二进制互斥。官方 CLI 的配置回读通过不证明旧 Wails GUI 或完整历史数据回退已认证。真实 Wails 单实例通知/唤起、设置页导入点击与完整会话/数据回退操作仍待验收。 |
 | E：remote host / bot / updater / 管理页 | remote host 与 bot 已有部分设置/bridge 接口；updater 插件已注册。macOS 菜单改为“Updates…”说明入口，如实提示 Preview 尚无更新检查并给出手动下载地址，移除没有实现依据的“启动时自动检查”文案。 | D 验收后对照 Wails 逐项审计和补齐；当前更新入口仍是说明对话框，插件注册不能视为更新流程完成。 |
 
 累计门禁：`pnpm test:clipboard`、输入框剪贴板回归、terminal selection、`pnpm test:tauri`、`pnpm build`，以及使用真实 Go bridge 的 Rust 测试（最新 XDG 通知切片 189 项通过、2 项默认忽略；其中 1 项独立真实 D-Bus 联调已显式通过，另有前轮 1 项显式 macOS 原生钥匙串测试通过）。最新 XDG 通知切片已从干净提交 `f8aba01793814b7119c4de7829bf747e42a94d53` 通过 `pnpm tauri:build -- --bundles app` 构建与本地 ad-hoc 签名；`tools/tauri/smoke-packaged-app.py` 在临时 HOME 分别验证默认和显式数据目录、私有凭据身份、真实 macOS 通知授权查询、实际 Global 工作区解析与私有目录权限、sidecar 就绪、未认证请求拒绝以及退出无残留。此 smoke 没有执行菜单/托盘等 UI 点击；两次桌面自动化分别超时和报 ScreenCaptureKit `SCStreamErrorDomain -3811`，所以真实 UI 验收保留待办。本地 ad-hoc 签名不是正式发布签名/公证。
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
+
+#### D：macOS 官方 CLI 1.38.3 配置兼容与回退（2026-10-01）
+
+- 官方 `v1.38.3` arm64 CLI 归档经断点续传完整取得；17,110,738 字节及 SHA-256 `2077cc26cb4d3b2ebc1c980cdeb08d26072c291ee70b529c28085087fec537bd` 与官方 release API 资产元数据一致。校验通过后只提取唯一的常规文件 `reasonix`，拒绝链接/异常路径并使用私有目录与 `0700` 权限，没有安装、替换 `/Applications` 或执行不完整下载。提取后二进制 SHA-256 为 `49be12faf150879a1da58fb539871c26b6077fe2d45ffe3ad105bfb541d5a091`；Go metadata 显示 go1.26.6、GOARCH=arm64、原计划基线 `fa018e4109268c912063c8cc619302fccdb57d74` 和 `vcs.modified=false`，不再使用有修改的工作区二进制作官方证据。
+- 在临时 HOME 的正式版/Preview 档案中运行既有 `smoke-profile-import.py --legacy-cli`。先由该官方 CLI 构造其有效配置，再保存原件基线；实际 Preview 包依次执行 import、restore、explicit 三个阶段，包含项目目录导入、真实 bridge 读取/修改、sidecar 替换重启、整包重启、备份保护、拒绝重复导入和显式档案导入。三个阶段全部通过，跨重启凭据身份与鉴权拒绝、正常退出及无 sidecar/readiness 残留同时检查。
+- Preview 退出后，官方旧 CLI 的 `config currency` 查询仍返回原 CNY，正式版测试树的字节摘要、权限和 mtime 全部不变；原配置、项目 metadata、旧 sessions/cache/plugins 哨兵和 `.env` 保留。配置/项目备份保持私有且未被 Preview 修改覆盖，导入仅复制声明的 root/title。验收包为干净提交 `b920717ffeeaf6d0e8fb65af7c2d8c3564b4e6e3` 的完整 arm64 `.app`，未为了旧版测试重建或放宽产品导入规则。
+- 此证据确认官方 CLI 的配置兼容和原目录回读，不证明所有旧配置组合、历史会话附件/检查点、Wails GUI 操作或历史原生进程的目录互斥通过。对基线源码的只读核对还确认其有短期配置编辑锁，但不能将其当成本次新增的完整宿主生命周期目录锁。官方 Wails 桌面归档已取得并核对，见下一节；D 的真实 UI、编辑焦点、显示器/通知/钥匙串交互及 E 门禁仍保留，正式发布签名/公证尚未执行。
+
+#### D：macOS 官方 Wails 1.38.3 归档核对（2026-10-01）
+
+- 官方 `desktop-v1.38.3` arm64 zip 经续传完整取得，88,965,850 字节及 SHA-256 `532b84dfd7691fa5ec006f88cf6937614b84cdf553d5498a722134d3d4e3a241` 与官方 release API 元数据一致。只在 owner-only 临时目录解压；拒绝链接、重复/异常路径及超限数据。Python 和系统 `ditto` 两种解压结果逐文件字节均与已校验归档一致，没有替换已安装的应用或重新签名。
+- 归档内 `.app` 为 arm64/x86_64 universal，标识 `com.wails.reasonix-desktop`，版本 1.38.3；主程序链接版本和 revision 为 `v1.38.3`、`fa018e4109268c912063c8cc619302fccdb57d74`。主程序 SHA-256 为 `869b02d8f8a92f5847c1728923fde7153d931e105f26fd2926bfa8feeb863650`，内嵌 CLI 为 `5b1ab31424d45c8bf3cfe6a60b11da527df2252aee963d1c0c56352f57945962`。不据此增加 Intel Mac 验收范围，本机仍只验证 arm64 macOS。
+- 两种解压结果在沙箱外的 `codesign --verify --deep --strict` 均返回 0；显示 Developer ID Application 证书链、TeamIdentifier `2S2W4BZFKM` 与 stapled notarization ticket。首次沙箱内校验返回 invalid signature 且 Authority unavailable，在相同文件的沙箱外校验中恢复正常；不能将该结果报告为官方归档签名损坏。此处只确认签名校验与票据存在，未进行独立 Gatekeeper/公证服务联网验收，也不证明新 Preview 已正式签名或公证。
+- 私有 HOME/core/state/cache、无用户凭据及 loopback provider 的旧版启动探测写出了原模型的 Global tab 状态，但等待实际会话文件的严格阶段未通过；Preview 导入及旧 GUI 的后续回读/原生退出阶段未执行，未计入 Wails GUI 兼容通过。探测曾修正 macOS 临时目录路径别名及空会话路径的等待逻辑；没有修改旧版二进制或放宽产品导入规则。旧 Wails GUI、目录互斥与完整历史会话/附件/检查点回退仍待验收。
 
 #### D：macOS 选择自动化约束与旧版安装包基线（2026-10-01）
 

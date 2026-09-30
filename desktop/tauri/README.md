@@ -211,6 +211,16 @@ python3 tools/tauri/smoke-profile-import.py 'desktop/tauri/target/release/bundle
 原件。该验收不代替设置页真实点击、旧 Wails GUI/目录锁或完整会话回退验收。macOS CI
 执行三个标准场景，不依赖开发机上的旧版二进制；远端执行结果待确认。
 
+2026-10-01 已使用官方 CLI `v1.38.3` 原生 arm64 发布包完成同一门禁，三个导入/
+重启/显式档案阶段和最后旧版回读均通过，原件字节、权限、mtime 不变。归档校验值
+与官方 release API 一致，二进制构建信息对应基线 `fa018e4`、`vcs.modified=false`。
+这补充了前轮有修改工作区 CLI 的证据，范围仍是配置回读，未代替旧 Wails GUI/
+历史目录互斥或完整会话附件回退。版本、摘要和边界详见迁移清单。
+
+官方 Wails `desktop-v1.38.3` 归档也已核对完整大小、SHA-256 与沙箱外严格
+Developer ID 签名；旧 GUI 的隔离启动探测尚未完成会话就绪与回退阶段，仍不计为
+兼容验收通过。本轮平台范围仅为 macOS，Windows/Linux 等有测试环境后恢复。
+
 2026-10-01 从干净提交 `91cbff49cbe10a0faab0a7570d880bad87ffc126` 完整构建 macOS `.app`，
 严格本地 ad-hoc 签名校验、两种临时档案共 14 个原生窗口/关闭场景和原有包级启动/退出
 smoke 均通过；同时通过前端 Tauri 回归与使用真实 bridge 的 189 项 Rust 回归（2 项默认忽略）。
