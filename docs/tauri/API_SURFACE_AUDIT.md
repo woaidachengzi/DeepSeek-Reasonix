@@ -94,6 +94,13 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：macOS 选择自动化约束与旧版安装包基线（2026-10-01）
+
+- 试验性文件选择/保存探测在保存确认之前读到非预期目标 URL，阶段失败，未执行 Save/OK，也未计入通过。当前 Apple SDK 的 `AppKit.framework/Headers/NSSavePanel.h` 明确限制 `directoryURL` 与 `nameFieldStringValue` 只能在 configuration phase 设置，且 NSOpenPanel 不使用文件名属性；目录解析还可能异步完成。面板显示后修改这些属性的驱动不能作为实际用户选择的可靠证明，已全部撤回。本轮没有加入 `dialog-select` 阶段或放宽原生选择断言；`--dialogs` 及 CI 仍保持原先已通过的四种取消阶段，共 42 个阶段。选择/保存、覆盖确认和物理交互仍需要真实 UI 验收。
+- 只读核对 `/Applications/Reasonix.app`：Info.plist 标记 1.38.3，严格签名校验通过但为本地 ad-hoc；内嵌 CLI 的 Go 构建信息为 `vcs.revision=2185b8e8ff8abb2166bf8e55df0694d05a0f9d76`、`vcs.modified=true`，Wails 主程序链接的 revision 也是该提交。CLI SHA-256 为 `8289154ee604d7bed0a1df2415650c6eed1fb5226f45883b27c5785c936118cd`，主程序为 `31b9e70e8efabd314c4bc327c8c2c4e1644652beab3760a1092eb297b3a2d0a9`；未启动、替换或修改该安装包。这不是已确认的官方历史二进制验收基线。
+- 实时读取 [官方 Desktop 1.38.3 发布记录](https://github.com/esengine/DeepSeek-Reasonix/releases/tag/desktop-v1.38.3) 及 GitHub release API，正式 tag 对应原计划的 `fa018e4`；官方 arm64 zip 资产大小 88,965,850，SHA-256 为 `532b84dfd7691fa5ec006f88cf6937614b84cdf553d5498a722134d3d4e3a241`。首次下载到私有临时目录因网络低速在 180 秒后返回 curl 28，只取得 1,965,769 字节；不完整归档未解压或执行。另取得官方 CLI `v1.38.3` 的 arm64 tar.gz 元数据：17,110,738 字节，SHA-256 `2077cc26cb4d3b2ebc1c980cdeb08d26072c291ee70b529c28085087fec537bd`，用于后续校验与隔离配置兼容测试；资产元数据或开始下载不能视为旧版测试通过。
+- 撤回试验后，从干净提交 `b920717ffeeaf6d0e8fb65af7c2d8c3564b4e6e3` 重新完整构建 arm64 Preview `.app`，前端生产门禁/体积预算、当前 Go sidecar、Rust host、严格本地 ad-hoc 签名通过；同一包的托管/显式档案启动/退出 smoke 通过，实际通知授权只读查询、Global 工作区、私有凭据身份、401 鉴权拒绝与退出无残留同时核对。工作树在构建和验收后干净；本轮没有扩大以前 42 个原生阶段的证明范围，未执行正式签名/公证。D 和 E 保持未完成。
+
 #### D：macOS 实际系统对话框取消（2026-10-01）
 
 - 增加独立 `--dialogs` / `dialog-cancel` 安装包门禁，使用既有临时 HOME/core/TMPDIR 和档案检查。宿主调用实际 `save_local_path_as`、`export_frontend_diagnostics`、`import_user_theme` 及相同官方插件的目录选择 API；明确观察当前进程唯一可见的 NSSavePanel/NSOpenPanel，核对类型及保存文件名后调用实际 AppKit `cancel`，不伪造插件 callback 的 None 或选中路径。
