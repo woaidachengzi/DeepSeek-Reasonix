@@ -147,3 +147,9 @@ bundle ID 的测试 `.app`；托管和显式 profile 的真实启动 smoke 均�
 
 2026-09-27 标题回填与并发保护提交 `cb752b831f1e198f2f62b4d4060b036618b69352` 也从干净 worktree
 重建为正式 Preview `.app`；前端构建预算、严格签名校验和两种 profile 的真实包级 smoke 均通过。
+
+2026-09-30 原生通知授权与会话定位切片从干净提交
+`cedc0c7d6d0a3925a5cd14fc1e7fbf4995dea310` 构建正式 Preview 标识 `.app`；
+前端构建、Tauri 回归、36 项打包契约、161 项真实 bridge Rust 回归和严格 clippy 通过。
+本地 ad-hoc 签名校验及两种档案的真实包级 smoke 通过，增加只读 macOS 原生通知授权查询；
+未执行授权弹窗、真实通知显示或点击，相关 UI 验收继续保留。
