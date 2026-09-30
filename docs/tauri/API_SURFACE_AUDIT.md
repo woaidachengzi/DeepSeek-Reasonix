@@ -78,7 +78,7 @@ desktop API contract (保留 app/event helper 的调用形状)
 | D：单实例与数据保护 | Tauri 单实例及独立默认 Preview 数据目录已存在。当前 Wails 与 bridge 启动均持有配置/状态两处目录锁；共享任一目录都会拒绝第二个写入宿主，目录别名去重，失败释放已取锁。真实 bridge/Wails 拒绝启动测试及配置原件/备份回退回归通过。导入页在操作前展示来源、目标目录与回退说明。 | 未参与目录锁协议的旧稳定版仍需兼容性验收；不能将当前两个宿主的测试推广为所有历史二进制互斥。真实 Wails 单实例通知/唤起、完整安装包导入与回退操作仍待验收。 |
 | E：remote host / bot / updater / 管理页 | remote host 与 bot 已有部分设置/bridge 接口；updater 插件已注册。 | D 验收后对照 Wails 逐项审计和补齐；特别是当前“检查更新”仍是说明对话框，插件注册不能视为更新流程完成。 |
 
-累计门禁：`pnpm test:clipboard`、输入框剪贴板回归、terminal selection、`pnpm test:tauri`、`pnpm build`，以及使用真实 Go bridge 的 Rust 测试（最新 Linux 共用逻辑切片 172 项通过，另有前轮 1 项显式 macOS 原生钥匙串测试通过）。最新 Linux 共用逻辑切片已从干净提交 `b81abf555f63d2ef8fbd2280dfec74107af90c02` 通过 `pnpm tauri:build -- --bundles app` 构建与本地 ad-hoc 签名；`tools/tauri/smoke-packaged-app.py` 在临时 HOME 分别验证默认和显式数据目录、私有凭据身份、真实 macOS 通知授权查询、实际 Global 工作区解析与私有目录权限、sidecar 就绪、未认证请求拒绝以及退出无残留。此 smoke 没有执行菜单/托盘等 UI 点击；两次桌面自动化分别超时和报 ScreenCaptureKit `SCStreamErrorDomain -3811`，所以真实 UI 验收保留待办。本地 ad-hoc 签名不是正式发布签名/公证。
+累计门禁：`pnpm test:clipboard`、输入框剪贴板回归、terminal selection、`pnpm test:tauri`、`pnpm build`，以及使用真实 Go bridge 的 Rust 测试（最新 Windows 共用逻辑切片 181 项通过，另有前轮 1 项显式 macOS 原生钥匙串测试通过）。最新 Windows 共用逻辑切片已从干净提交 `53c05ce5d9b588fc6178223a08ebb622355a8e57` 通过 `pnpm tauri:build -- --bundles app` 构建与本地 ad-hoc 签名；`tools/tauri/smoke-packaged-app.py` 在临时 HOME 分别验证默认和显式数据目录、私有凭据身份、真实 macOS 通知授权查询、实际 Global 工作区解析与私有目录权限、sidecar 就绪、未认证请求拒绝以及退出无残留。此 smoke 没有执行菜单/托盘等 UI 点击；两次桌面自动化分别超时和报 ScreenCaptureKit `SCStreamErrorDomain -3811`，所以真实 UI 验收保留待办。本地 ad-hoc 签名不是正式发布签名/公证。
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
@@ -98,6 +98,7 @@ desktop API contract (保留 app/event helper 的调用形状)
 - 沿用 Wails 的 Explorer 行为：目录以 `explore` 和尾部目录分隔符打开，避免同名 `.lnk` 抢先解析；文档保持系统关联打开。工作目录、固定程序路径和参数只留在宿主，前端仍仅传会话身份/已安装应用 ID，未增加通用 WebView launch/registry 权限。
 - [SHGetFileInfoW](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shgetfileinfow) 获取原生图标，32×32 DIB 分别对黑/白背景绘制并 flush 后重建 RGBA，编码为最多 64 KiB 的 PNG。owned icon/DC/bitmap/selection 由 scope guard 释放并先恢复 GDI 选中对象。Windows Terminal 优先真实包图标，其次可渲染的 PowerShell 图标，再回退零字节 execution alias；保护目录不可读视为正常缺失。
 - 新增 9 项共用逻辑回归，覆盖固定目录、PATH/注册表/安装目录顺序、卸载、32 位安装目录/Toolbox 版本树、字面根目录和扫描边界、坏注册值、终端别名图标回退、含空格/中文/`& % ^ ()` 的目录参数、目录与同名快捷方式、透明度重建及实际 PNG 解码。真实 bridge 的 Rust 全量回归 **181 项通过、1 项原生钥匙串测试默认忽略**；严格 clippy（含测试）、`pnpm test:tauri` 与 CI YAML 解析通过。独立临时 crate 在本机直接导入 Win32 实现及测试，以锁定的 windows-sys 0.61.2/png 0.18.1 做严格类型/lint 检查通过；该检查不链接或调用 Windows DLL，不证明 Windows host 或原生测试已通过。
+- 从干净提交 `53c05ce5d9b588fc6178223a08ebb622355a8e57` 完成 macOS Preview `.app` 生产构建与严格本地 ad-hoc 签名校验；默认托管和显式临时档案包级 smoke 均通过，包括凭据身份、原生 macOS 通知授权查询、实际 Global 工作区、sidecar 就绪/鉴权拒绝及退出无残留。前端类型、分层、权限、滚动门禁和 bundle budget 同时通过。此包验证既有 macOS 行为，不包含 Windows DLL/原生 host/GUI 验收；正式签名/公证仍未完成。
 - 新增 `desktop-tauri-windows` 门禁，配置真实 Go bridge、完整 native host 编译/严格 clippy/回归。Windows 专属回归包含实际 Explorer 图标、Shell 提交失败和独立临时 HKCU App Paths 的环境展开/删除恢复，不启动真实交互式控制台。**门禁尚未远端执行**；Windows 原生 host、SDK 运行、完整安装包/Explorer/终端/Unicode目录交互，以及 Linux 门禁和 GUI 验收仍待执行。D 尚未完整验收，E 按目标继续等待 D 稳定。
 
 #### D：Linux 应用发现、终端目录与原生图标（2026-09-30）
