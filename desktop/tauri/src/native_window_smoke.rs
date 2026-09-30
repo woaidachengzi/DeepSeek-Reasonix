@@ -320,6 +320,10 @@ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
     match phase {
         "exercise" => exercise(app, &directory)?,
         "menu-shortcuts" => crate::native_menu_smoke::shortcuts(app)?,
+        "appearance-dark"
+        | "restore-appearance-dark"
+        | "restore-appearance-light"
+        | "restore-appearance-auto" => crate::native_appearance_smoke::run(app, phase)?,
         "menu-settings-hidden" | "menu-settings-minimized" | "menu-settings-app-hidden" => {
             crate::native_menu_smoke::settings(app, phase)?
         }

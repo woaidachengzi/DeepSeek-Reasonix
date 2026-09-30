@@ -188,6 +188,7 @@ def smoke(app_path, include_focus=False):
             phases = ["exercise", "restore-maximized", "restore-normal", "application-hide", "background-close"]
             phases.extend(["menu-shortcuts", "menu-settings-hidden", "menu-settings-minimized", "menu-settings-app-hidden"])
             phases.append("task-background-menu-quit")
+            phases.extend(["appearance-dark", "restore-appearance-dark", "restore-appearance-light", "restore-appearance-auto"])
             if include_focus:
                 phases.append("second-instance")
             phases.append("close-quit")

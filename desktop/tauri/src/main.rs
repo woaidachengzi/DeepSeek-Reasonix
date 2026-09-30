@@ -8,6 +8,10 @@ mod keychain;
 mod local_paths;
 mod menu;
 #[cfg(target_os = "macos")]
+mod native_appearance;
+#[cfg(target_os = "macos")]
+mod native_appearance_smoke;
+#[cfg(target_os = "macos")]
 mod native_menu_smoke;
 #[cfg(target_os = "macos")]
 mod native_profile_smoke;
@@ -1388,9 +1392,19 @@ fn accept_memory_suggestion(
 
 #[tauri::command]
 fn desktop_preferences(
+    app: tauri::AppHandle,
     supervisor: State<'_, BridgeSupervisor>,
 ) -> Result<DesktopPreferences, String> {
-    supervisor.desktop_preferences()
+    #[cfg(target_os = "macos")]
+    {
+        app.state::<native_appearance::NativeAppearance>()
+            .sync(&app, &supervisor)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+        supervisor.desktop_preferences()
+    }
 }
 
 #[tauri::command]
@@ -1411,11 +1425,21 @@ fn set_desktop_terminal_theme(
 
 #[tauri::command]
 fn set_desktop_appearance(
+    app: tauri::AppHandle,
     supervisor: State<'_, BridgeSupervisor>,
     theme: String,
     style: String,
 ) -> Result<DesktopPreferences, String> {
-    supervisor.set_desktop_appearance(theme, style)
+    #[cfg(target_os = "macos")]
+    {
+        app.state::<native_appearance::NativeAppearance>()
+            .save(&app, &supervisor, theme, style)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+        supervisor.set_desktop_appearance(theme, style)
+    }
 }
 
 #[tauri::command]
@@ -3456,6 +3480,14 @@ fn main() {
             let keychain = keychain::KeychainStore::for_profile(&profile, app.handle());
 
             supervisor.start().map_err(std::io::Error::other)?;
+            #[cfg(target_os = "macos")]
+            {
+                let appearance = native_appearance::NativeAppearance::default();
+                if appearance.sync(app.handle(), &supervisor).is_err() {
+                    eprintln!("Reasonix could not restore the native appearance; retry appearance settings or restart Preview.");
+                }
+                app.manage(appearance);
+            }
             if let Err(error) = keychain.restore_provider_api_keys(&supervisor) {
                 // A native credential service can be temporarily unavailable.
                 // Keep the app usable with its existing file-backed settings;

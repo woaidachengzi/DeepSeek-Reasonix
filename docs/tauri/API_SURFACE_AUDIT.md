@@ -56,7 +56,7 @@ desktop API contract (保留 app/event helper 的调用形状)
 | 组别 | 当前已验证 | 下一个缺口 |
 | --- | --- | --- |
 | A：PoC 必需 | 精简 bridge、会话/事件链路已存在；构建从 Go `App` 源码核对 587 个方法与 TypeScript `AppBindings`，不再依赖本地生成的 Wails 类型；Rust 测试已用本次构建的真实 bridge 验证启动、退出、重启和会话读取。 | 当前提交的真实安装包回归；其余 Wails runtime 直连按功能面迁移。 |
-| B：核心稳定性 | Provider、历史、工作区预览/变更和回滚切片已接入；检查点与 Git 变更面板现于回合空闲确认后自动刷新。 | 继续补齐工作区文件与 diff 的交互覆盖，并在真实 Preview 窗口验证跨会话、异常和大目录状态。 |
+| B：核心稳定性 | Provider、历史、工作区预览/变更和回滚切片已接入；检查点与 Git 变更面板现于回合空闲确认后自动刷新。 | 继续补齐工作区文件与 diff 的交互覆盖，并在真实 Preview 窗口验证跨会话、异常和大目录状态。2026-10-01 源码核对发现 Markdown 图片 resolver 尚未接入 Tauri，旧 Global 文件引用/附件图片仍需迁移与验收。 |
 | C：进程与工具 | MCP 服务器/运行时及插件设置已有 bridge 和 Preview 界面；Go MCP/插件测试、前端 MCP/工作区测试以及使用真实 bridge 的 Rust 测试通过。 | shell/terminal、Browser、worktree 的 Preview 入口与生命周期测试尚未接通；MCP/插件仍需真实打包进程验证。 |
 
 本轮 A、B、C 验证不代表整组完成；下列 D→E 改造继续保留这些发布缺口。
@@ -83,6 +83,7 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 | D：菜单与快捷键 | macOS 编辑项改为 Tauri 原生 responder-chain 角色；设置菜单先恢复主窗口并发出设置事件。Reload 移除 Cmd+R，保留给可配置的会话刷新；设置和文字大小也不安装固定原生组合。原生编辑/退出/隐藏/最小化/全屏及系统 Emoji 组合禁止保存为 Preview 动作；旧冲突组合回落默认值，单项重置校验默认组合占用。真实 AppKit 菜单组合与共享保留表、设置菜单动作、组件与独立 Chrome 页面回归通过。 | 真实 WKWebView 的撤销/重做、剪切/复制/粘贴、全选、隐藏其他应用、全屏与可配置快捷键按键路由仍待验收；程序化原生菜单动作和 Chrome 页面回归不代替用户原生交互。 |
 | D：剪贴板 | 接入官方 clipboard-manager，主窗口仅允许读写文本；共享写入/读取路径覆盖 Tauri、浏览器与 Wails。消息、存储路径、hooks 路径及输入框复用；复制成功反馈等待实际写入成功。原生调用模拟、拒绝/忙碌回退、失败剪切不删文本、空剪贴板不覆盖选择与成功反馈测试通过。 | 真实系统剪贴板与 WebView 交互验收。 |
 | D：窗口与多显示器 | 保存普通窗口位置和显示器缩放，最大化/最小化不覆盖普通尺寸；按当前工作区限制恢复位置，移除外接屏后回到主屏。状态文件原子替换，兼容旧尺寸文件。窗口几何回归通过；真实 macOS `.app` 原生 API 已验证窗口隐藏/最小化恢复、最大化退出后重启与取消最大化、普通尺寸/位置重启恢复。 | 真实不同缩放显示器与拔插外接屏验收。原生 API 验证不代替窗口按钮/菜单的实际点击。 |
+| D：原生窗口外观 | macOS 保存/读取外观偏好及启动恢复同步到 Tauri 原生应用主题；串行处理避免旧读取覆盖新外观，保存拒绝时不修改原生主题。真实 AppKit dark/light/auto 与整包重启、非法主题/样式保持不变的验收通过。 | 设置页实际点击与标题栏视觉验收、系统明暗切换和原生更新失败后的回滚故障注入仍待执行。 |
 | D：托盘与退出 | 托盘有显示/退出菜单；托盘、Dock 重开及单实例唤起共用主线程恢复入口，补上 macOS 应用取消隐藏。退出沿用 supervisor 停止路径。真实包原生 CloseRequested 验证关闭后继续运行、关闭即退出、偏好重启恢复与 sidecar 清理；应用隐藏/取消隐藏也已验证。实际 Go 流式任务在关闭后继续产生事件并完成历史保存；原生 Show 菜单恢复几何，Quit 菜单在第二个任务运行中退出并清理上游及 sidecar。 | 真实托盘点击、物理 Cmd+Q/托盘退出及 Dock 重开仍待验收。程序化原生菜单动作不能代替按键/点击；第二实例恢复可见已观察到，但键盘焦点严格门禁未通过，不能标记完整唤起已验收。 |
 | D：对话框与链接 | 现有 Tauri 选择器保留；共享外部链接及本地文档 adapter 已接入 Rust host。Markdown 默认打开、定位、另存为及指定已安装应用均走原生入口，错误不退回 browser mock。文档可执行目标拒绝、特殊路径、取消保存、源文件别名保护及权限拒绝已有回归。外部链接支持 HTTP(S)/受限 mailto，OAuth 入口仅接受 HTTP(S)。 | macOS 已增加系统应用注册查询、Spotlight 自定义安装位置和原生 64×64 图标；项目会话顶部选择器已接入配置偏好与卸载回退。Linux 已增加 XDG desktop entry 发现、GIO 原生启动、六类终端目录策略和有界 PNG 图标转换，共用逻辑回归通过；Linux 原生分支编译/图标/GUI 验收待执行。Windows 已增加 App Paths、安装目录/Toolbox 发现、终端目录策略和原生 PNG 图标代码；共用逻辑与 Win32 API 类型检查通过，Windows 原生 host 编译/注册表/图标/GUI 验收待执行；Global 会话已接入档案内稳定目录与会话身份查询。系统对话框、浏览器/邮件、指定应用的真实 UI 交互及 OAuth 仍需验收。 |
 | D：通知与钥匙串 | macOS 通知改为原生 UserNotifications：读取实际授权、报告发送失败、点击恢复对应会话；冷启动队列、档案隔离、失效会话与重复点击已有回归。Linux 已接入 XDG 服务/能力查询、实际发送与运行中点击；独立真实 D-Bus 联调通过，授权无标准查询时报告 unknown。凭据按持久档案身份隔离；设置页显式迁移旧 Preview 凭据，保留原件并拒绝覆盖。迁移/保存/删除与重启串行，写入及桥接同步失败回滚；macOS 原生隔离读写、真实 bridge 迁移/重启/删除及不落盘回归通过。 | 真实系统通知授权拒绝、横幅显示与前后台/冷启动点击、钥匙串锁定/授权拒绝、原生设置页迁移操作仍待验收。Linux native host、桌面环境/Wayland 焦点及冷启动点击待验收/补齐；Windows 原生授权读取/点击和 Windows/Linux 凭据后端仍待补齐/验收。 |
@@ -92,6 +93,15 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 累计门禁：`pnpm test:clipboard`、输入框剪贴板回归、terminal selection、`pnpm test:tauri`、`pnpm build`，以及使用真实 Go bridge 的 Rust 测试（最新 XDG 通知切片 189 项通过、2 项默认忽略；其中 1 项独立真实 D-Bus 联调已显式通过，另有前轮 1 项显式 macOS 原生钥匙串测试通过）。最新 XDG 通知切片已从干净提交 `f8aba01793814b7119c4de7829bf747e42a94d53` 通过 `pnpm tauri:build -- --bundles app` 构建与本地 ad-hoc 签名；`tools/tauri/smoke-packaged-app.py` 在临时 HOME 分别验证默认和显式数据目录、私有凭据身份、真实 macOS 通知授权查询、实际 Global 工作区解析与私有目录权限、sidecar 就绪、未认证请求拒绝以及退出无残留。此 smoke 没有执行菜单/托盘等 UI 点击；两次桌面自动化分别超时和报 ScreenCaptureKit `SCStreamErrorDomain -3811`，所以真实 UI 验收保留待办。本地 ad-hoc 签名不是正式发布签名/公证。
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
+
+#### D：macOS 原生外观同步与重启恢复（2026-10-01）
+
+- 对照 Wails `theme.ts` 的原生 WindowSet*Theme 调用，Preview 的 `set_desktop_appearance` 原仅更新 Go 配置；页面使用 CSS 明暗模式，原生窗口未同步。真实探测包保存 dark 后，AppKit DarkAqua 严格门禁失败，不能将配置保存成功视为原生外观更新成功。
+- 新增仅 macOS 的 `NativeAppearance`，启动、读取偏好和成功保存后使用 Tauri `set_theme` 同步原生外观。读取和保存串行；Go 校验/写入拒绝时不修改原生主题。原生更新返回错误时尝试恢复原偏好和外观，恢复失败则提示重启读取已保存外观；启动恢复失败保留可用应用并提示重试。未增加 renderer 窗口权限、直接 AppKit 写入或修改前端主题布局。
+- Tauri 的 [setTheme](https://v2.tauri.app/reference/javascript/api/namespacewindow/#settheme) 在 macOS 作用于整个应用；auto 传 None，依 [Apple NSApplication.appearance](https://developer.apple.com/documentation/appkit/nsapplication/appearance?changes=_2_5&language=objc) 清除显式外观并继承系统。原生门禁读取实际 `NSApplication.appearance`，dark/light 要求 DarkAqua/Aqua，auto 要求 nil；不以当前系统颜色相同放行。重启检查在测试主动发送设置命令前读取原生属性，随后再保存下一模式，未改写系统全局外观。
+- 默认托管和显式 core 档案各 16 个原生场景通过，共 32 个：原有 12 个，加 dark 保存、dark/light/auto 三种重启恢复。每阶段非法 theme/style 均拒绝，原配置与 AppKit 外观不变；普通窗口几何、凭据身份、真实鉴权和退出清理同时检查。探测包复用既有前端/sidecar；使用真实 bridge 的 Rust 189 项通过、2 项默认忽略，严格 clippy、格式和 Python 语法通过。干净提交完整包另行记录。
+- 本轮为实际 AppKit 属性和配置持久化验收，未验证设置页物理点击、标题栏截图、系统明暗切换或原生失败回滚的故障注入。第二实例焦点、托盘/通知/对话框交互及其他 macOS D 待办保留；E 等待 D 验收且 Preview 稳定。
+- 同次 runtime 直连审计还确认 A/B/C 图片缺口：`hasMarkdownImageResolver` 只检测 Wails binding，`app` Proxy 没有 Tauri 图片入口，Preview 消息也未设置 `MarkdownImageTabContext`。本地/旧工作区图片会回落到普通 URL，远程图片也未接入 Wails 的受限代理。后续须按实际会话/工作区授权迁移 resolver、数据/类型/尺寸限制和远程代理边界，再验证旧 Global 附件与文件引用；不能放宽 CSP 或通用文件权限代替迁移，也不能宣称 A/B/C 已完成。
 
 #### D：macOS 安装包配置导入、重启与原件保护（2026-10-01）
 
