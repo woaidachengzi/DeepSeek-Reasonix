@@ -56,6 +56,12 @@
     { "$ref": "#/$defs/sessionHeadsResponse" },
     { "$ref": "#/$defs/sessionHeadSwitchRequest" },
     { "$ref": "#/$defs/sessionHeadSwitchResponse" },
+    { "$ref": "#/$defs/combinedRewindPreviewRequest" },
+    { "$ref": "#/$defs/workspaceCombinedRewindPlan" },
+    { "$ref": "#/$defs/combinedRewindPlanResponse" },
+    { "$ref": "#/$defs/combinedRewindCommitRequest" },
+    { "$ref": "#/$defs/workspaceCombinedRewindResult" },
+    { "$ref": "#/$defs/combinedRewindResultResponse" },
     { "$ref": "#/$defs/submitRequest" },
     { "$ref": "#/$defs/approvalRequest" },
     { "$ref": "#/$defs/askAnswer" },
@@ -806,6 +812,81 @@
       "properties": {
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
         "ok": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "combinedRewindPreviewRequest": {
+      "title": "BridgeCombinedRewindPreviewRequest",
+      "type": "object",
+      "required": ["turn"],
+      "properties": { "turn": { "type": "integer", "minimum": 0 } },
+      "additionalProperties": false
+    },
+    "workspaceCombinedRewindPlan": {
+      "title": "BridgeWorkspaceCombinedRewindPlan",
+      "type": "object",
+      "required": ["turn", "canFiles", "canConversation", "fileCount", "files", "filesTruncated", "coverageGaps", "requiresCoverageConfirmation", "conflicts"],
+      "properties": {
+        "planId": { "type": "string" },
+        "turn": { "type": "integer", "minimum": 0 },
+        "canFiles": { "type": "boolean" },
+        "canConversation": { "type": "boolean" },
+        "fileCount": { "type": "integer", "minimum": 0 },
+        "files": { "type": "array", "items": { "type": "string" } },
+        "filesTruncated": { "type": "boolean" },
+        "coverageGaps": { "type": "array", "items": { "type": "string" } },
+        "requiresCoverageConfirmation": { "type": "boolean" },
+        "conflicts": { "type": "array", "items": { "type": "string" } },
+        "disabledReason": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "combinedRewindPlanResponse": {
+      "title": "BridgeCombinedRewindPlanResponse",
+      "type": "object",
+      "required": ["protocolVersion", "plan"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "plan": { "$ref": "#/$defs/workspaceCombinedRewindPlan" }
+      },
+      "additionalProperties": false
+    },
+    "combinedRewindCommitRequest": {
+      "title": "BridgeCombinedRewindCommitRequest",
+      "type": "object",
+      "required": ["planId", "confirmPartialCoverage"],
+      "properties": {
+        "planId": { "type": "string", "minLength": 1 },
+        "confirmPartialCoverage": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceCombinedRewindResult": {
+      "title": "BridgeWorkspaceCombinedRewindResult",
+      "type": "object",
+      "required": ["ok", "partial", "conversationForked", "filesRestored", "undoAvailable", "writtenCount", "deletedCount", "conflicts"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "partial": { "type": "boolean" },
+        "conversationForked": { "type": "boolean" },
+        "headId": { "type": "string" },
+        "filesRestored": { "type": "boolean" },
+        "transactionId": { "type": "string" },
+        "undoAvailable": { "type": "boolean" },
+        "writtenCount": { "type": "integer", "minimum": 0 },
+        "deletedCount": { "type": "integer", "minimum": 0 },
+        "conflicts": { "type": "array", "items": { "type": "string" } },
+        "error": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "combinedRewindResultResponse": {
+      "title": "BridgeCombinedRewindResultResponse",
+      "type": "object",
+      "required": ["protocolVersion", "result"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "result": { "$ref": "#/$defs/workspaceCombinedRewindResult" }
       },
       "additionalProperties": false
     },

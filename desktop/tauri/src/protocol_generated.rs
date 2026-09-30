@@ -71,6 +71,33 @@ pub struct BridgeCodeRewindPreviewRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeCombinedRewindCommitRequest {
+    pub confirm_partial_coverage: bool,
+    pub plan_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeCombinedRewindPlanResponse {
+    pub plan: BridgeWorkspaceCombinedRewindPlan,
+    pub protocol_version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeCombinedRewindPreviewRequest {
+    pub turn: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeCombinedRewindResultResponse {
+    pub protocol_version: u64,
+    pub result: BridgeWorkspaceCombinedRewindResult,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeConversationRewindCommitRequest {
     pub plan_id: String,
 }
@@ -523,6 +550,38 @@ pub struct BridgeWorkspaceCodeRewindPlan {
     pub plan_id: Option<String>,
     pub requires_coverage_confirmation: bool,
     pub turn: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceCombinedRewindPlan {
+    pub can_conversation: bool,
+    pub can_files: bool,
+    pub conflicts: Vec<String>,
+    pub coverage_gaps: Vec<String>,
+    pub disabled_reason: Option<String>,
+    pub file_count: u64,
+    pub files: Vec<String>,
+    pub files_truncated: bool,
+    pub plan_id: Option<String>,
+    pub requires_coverage_confirmation: bool,
+    pub turn: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceCombinedRewindResult {
+    pub conflicts: Vec<String>,
+    pub conversation_forked: bool,
+    pub deleted_count: u64,
+    pub error: Option<String>,
+    pub files_restored: bool,
+    pub head_id: Option<String>,
+    pub ok: bool,
+    pub partial: bool,
+    pub transaction_id: Option<String>,
+    pub undo_available: bool,
+    pub written_count: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

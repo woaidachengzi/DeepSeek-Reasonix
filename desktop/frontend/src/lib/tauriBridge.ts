@@ -40,6 +40,8 @@ import type {
   BridgeConversationRewindResultResponse,
   BridgeSessionHeadsResponse,
   BridgeSessionHeadSwitchResponse,
+  BridgeCombinedRewindPlanResponse,
+  BridgeCombinedRewindResultResponse,
 } from "./bridgeProtocol.generated";
 import type { TerminalThemePreference } from "./terminalTheme";
 import type { Theme, ThemeStyle } from "./theme";
@@ -72,6 +74,8 @@ export type TauriCodeRewindPlan = BridgeCodeRewindPlanResponse["plan"];
 export type TauriConversationRewindPlan = BridgeConversationRewindPlanResponse["plan"];
 export type TauriConversationRewindResult = BridgeConversationRewindResultResponse["result"];
 export type TauriSessionHead = BridgeSessionHeadsResponse["heads"][number];
+export type TauriCombinedRewindPlan = BridgeCombinedRewindPlanResponse["plan"];
+export type TauriCombinedRewindResult = BridgeCombinedRewindResultResponse["result"];
 
 /** Exposes only user-visible answer deltas; reasoning and other event text stay private. */
 export function tauriAssistantTextDelta(event: Pick<TauriBridgeEvent, "eventKind" | "payload">): string {
@@ -1734,6 +1738,18 @@ export async function tauriSessionHeadSwitch(sessionId: string, headId: string):
   requireTauri();
   const response = await invoke<BridgeSessionHeadSwitchResponse>("bridge_session_head_switch", { request: { sessionId, headId } });
   if (!response.ok) throw new Error("conversation version switch failed");
+}
+
+export async function tauriCombinedRewindPreview(sessionId: string, turn: number): Promise<TauriCombinedRewindPlan> {
+  requireTauri();
+  const response = await invoke<BridgeCombinedRewindPlanResponse>("bridge_combined_rewind_preview", { request: { sessionId, turn } });
+  return response.plan;
+}
+
+export async function tauriCombinedRewindCommit(sessionId: string, planId: string, confirmPartialCoverage: boolean): Promise<TauriCombinedRewindResult> {
+  requireTauri();
+  const response = await invoke<BridgeCombinedRewindResultResponse>("bridge_combined_rewind_commit", { request: { sessionId, planId, confirmPartialCoverage } });
+  return response.result;
 }
 
 export async function cancelTauriBridge(sessionId: string): Promise<TauriBridgeSession> {

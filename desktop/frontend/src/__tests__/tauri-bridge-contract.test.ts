@@ -104,6 +104,8 @@ const commands: CommandContract[] = [
   { command: "bridge_conversation_rewind_undo", argKeys: ["request"], description: "tauriConversationRewindUndo() returns to the parent head" },
   { command: "bridge_session_heads", argKeys: ["request"], description: "tauriSessionHeads() lists conversation versions" },
   { command: "bridge_session_head_switch", argKeys: ["request"], description: "tauriSessionHeadSwitch() selects a version in the same transcript" },
+  { command: "bridge_combined_rewind_preview", argKeys: ["request"], description: "tauriCombinedRewindPreview() reviews both scopes" },
+  { command: "bridge_combined_rewind_commit", argKeys: ["request"], description: "tauriCombinedRewindCommit() commits a combined rewind" },
   {
     command: "bridge_pending_session_deletes_page",
     argKeys: ["cursor"],

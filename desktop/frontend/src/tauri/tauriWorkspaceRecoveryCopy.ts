@@ -31,6 +31,7 @@ interface CheckpointCopy {
   failed: string;
   working: string;
   heads: { title: string; current: string; switch: string; switched: string; failed: string; main: string; rewind: string; fork: string; concurrent: string };
+  combined: { action: string; review: string; description: string; unavailable: string; confirm: string; done: string; partial: string; failed: string; undo: string; undoDescription: string; undone: string; undoFilesOnly: string; undoSelectionUnknown: string; undoFailed: string };
   conversation: {
     action: string;
     review: string;
@@ -75,6 +76,7 @@ export const tauriWorkspaceRecoveryCopy: Record<Locale, CheckpointCopy> = {
     failed: "Could not restore the workspace files. Refresh checkpoints and review the plan again.",
     working: "Checking or restoring checkpoint…",
     heads: { title: "Conversation versions", current: "Current", switch: "Switch", switched: "Conversation version switched. Workspace files are unchanged.", failed: "Could not switch conversation version. Refresh versions and try again.", main: "Original", rewind: "Rewound", fork: "Branch", concurrent: "Parallel" },
+    combined: { action: "Rewind both", review: "Review files and conversation", description: "Creates a new conversation version and restores listed files. If files change before commit, only the conversation may be rewound.", unavailable: "This checkpoint cannot rewind both files and conversation. Resolve conflicts or choose another checkpoint.", confirm: "Rewind files and conversation", done: "Conversation version created and workspace files restored.", partial: "Conversation version created, but file restore did not complete. Check workspace files and refresh checkpoints before retrying.", failed: "Could not rewind files and conversation. Refresh checkpoints and review the plan again.", undo: "Undo combined rewind", undoDescription: "Restores the files. Also returns to the previous conversation if no message was added to the new version.", undone: "Files restored and previous conversation selected.", undoFilesOnly: "Files restored. The continued conversation version remains selected; use conversation versions to switch.", undoSelectionUnknown: "Files restored. Refresh conversation versions to confirm the selected version.", undoFailed: "Could not undo the combined rewind. Refresh checkpoints and review the files before retrying." },
     conversation: {
       action: "Rewind conversation",
       review: "Review conversation rewind",
@@ -117,6 +119,7 @@ export const tauriWorkspaceRecoveryCopy: Record<Locale, CheckpointCopy> = {
     failed: "无法恢复工作区文件，请刷新检查点并重新确认。",
     working: "正在检查或恢复检查点…",
     heads: { title: "对话版本", current: "当前", switch: "切换", switched: "已切换对话版本，工作区文件未更改。", failed: "无法切换对话版本，请刷新版本后重试。", main: "原始", rewind: "回滚", fork: "分支", concurrent: "并行" },
+    combined: { action: "同时回滚", review: "确认文件与对话回滚", description: "创建新的对话版本并恢复所列文件。若提交前文件又发生变化，可能只有对话完成回滚。", unavailable: "此检查点无法同时回滚文件和对话，请解决冲突或选择其他检查点。", confirm: "回滚文件与对话", done: "已创建对话版本并恢复工作区文件。", partial: "已创建对话版本，但文件恢复未完成。请检查工作区文件并刷新检查点后重试。", failed: "无法同时回滚文件和对话，请刷新检查点并重新确认。", undo: "撤销组合回滚", undoDescription: "恢复文件；若新对话版本尚未添加消息，也会返回原对话。", undone: "文件已恢复，并返回原对话。", undoFilesOnly: "文件已恢复；继续过的对话版本仍为当前版本，可从对话版本列表切换。", undoSelectionUnknown: "文件已恢复，请刷新对话版本以确认当前版本。", undoFailed: "无法撤销组合回滚，请刷新检查点并检查文件后重试。" },
     conversation: {
       action: "回滚对话",
       review: "确认对话回滚",
@@ -159,6 +162,7 @@ export const tauriWorkspaceRecoveryCopy: Record<Locale, CheckpointCopy> = {
     failed: "無法還原工作區檔案，請重新整理檢查點並再次確認。",
     working: "正在檢查或還原檢查點…",
     heads: { title: "對話版本", current: "目前", switch: "切換", switched: "已切換對話版本，工作區檔案未變更。", failed: "無法切換對話版本，請重新整理版本後再試。", main: "原始", rewind: "回溯", fork: "分支", concurrent: "並行" },
+    combined: { action: "同時回溯", review: "確認檔案與對話回溯", description: "建立新的對話版本並還原所列檔案。若提交前檔案再次變更，可能只有對話完成回溯。", unavailable: "此檢查點無法同時回溯檔案和對話，請解決衝突或選擇其他檢查點。", confirm: "回溯檔案與對話", done: "已建立對話版本並還原工作區檔案。", partial: "已建立對話版本，但檔案還原未完成。請檢查工作區檔案並重新整理檢查點後再試。", failed: "無法同時回溯檔案和對話，請重新整理檢查點並再次確認。", undo: "復原組合回溯", undoDescription: "還原檔案；若新對話版本尚未新增訊息，也會返回原對話。", undone: "檔案已還原，並返回原對話。", undoFilesOnly: "檔案已還原；繼續過的對話版本仍為目前版本，可從對話版本清單切換。", undoSelectionUnknown: "檔案已還原，請重新整理對話版本以確認目前版本。", undoFailed: "無法復原組合回溯，請重新整理檢查點並檢查檔案後重試。" },
     conversation: {
       action: "回復對話",
       review: "確認對話回復",

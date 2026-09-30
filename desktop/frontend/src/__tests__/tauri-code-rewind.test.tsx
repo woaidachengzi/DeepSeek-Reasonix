@@ -29,6 +29,8 @@ const state = globalThis as typeof globalThis & {
   __conversationRewindUndoHandler?: () => Promise<object>;
   __sessionHeadsHandler?: () => Promise<object[]>;
   __sessionHeadSwitchHandler?: (_sessionId: string, headId: string) => Promise<void>;
+  __combinedRewindPreviewHandler?: () => Promise<object>;
+  __combinedRewindCommitHandler?: () => Promise<object>;
   __tauriHistoryMessages?: Array<{ role: string; content: string }>;
   __historyGate?: Promise<void>;
   __tauriBridgeCalls?: Array<{ name: string; args: Record<string, unknown> }>;
@@ -126,6 +128,36 @@ check(state.__tauriBridgeCalls?.some(call => call.name === "bridge_session_head_
 check(!document.querySelector(".tauri-transcript")?.textContent?.includes("later answer"), "version switch should replace the visible transcript");
 await act(async () => { click(document.querySelector('[aria-label="Conversation versions"] li:first-child button')); await settle(); await settle(); });
 check(document.body.textContent?.includes("later answer"), "switching back should restore the original transcript");
+state.__combinedRewindPreviewHandler = async () => ({ planId: "plan-both", turn: 1, canFiles: true, canConversation: true, fileCount: 2, files: ["a.txt", "b.txt"], filesTruncated: false, coverageGaps: ["bash_side_effect"], requiresCoverageConfirmation: true, conflicts: [] });
+state.__combinedRewindCommitHandler = async () => {
+  state.__tauriHistoryMessages = state.__tauriHistoryMessages?.slice(0, 3);
+  selectedHead = "combined-head";
+  return { ok: true, partial: false, conversationForked: true, filesRestored: true, headId: "combined-head", transactionId: "tx-both", undoAvailable: true, writtenCount: 2, deletedCount: 0, conflicts: [] };
+};
+await act(async () => { click(button("Rewind both")); await settle(); });
+check(button("Rewind files and conversation")?.disabled, "combined rewind requires coverage confirmation");
+await act(async () => { document.querySelector<HTMLInputElement>('[aria-label="Review files and conversation"] input[type="checkbox"]')?.click(); await settle(); });
+await act(async () => { click(button("Rewind files and conversation")); await settle(); await settle(); });
+check(state.__tauriBridgeCalls?.some(call => call.name === "bridge_combined_rewind_commit" && call.args.planId === "plan-both" && call.args.confirmPartialCoverage === true), "combined commit should use confirmed plan");
+check(!document.querySelector(".tauri-transcript")?.textContent?.includes("later answer"), "combined rewind should refresh conversation");
+check(Boolean(button("Undo combined rewind")), "combined result should offer its own undo");
+state.__workspaceFileRevertUndoHandler = async () => {
+  selectedHead = "main";
+  state.__tauriHistoryMessages = [{ role: "system", content: "system" }, { role: "user", content: "start" }, { role: "assistant", content: "first answer" }, { role: "user", content: "edit two files" }, { role: "assistant", content: "later answer" }];
+  return { ok: true, undoAvailable: false, writtenCount: 2, deletedCount: 0 };
+};
+await act(async () => { click(button("Undo combined rewind")); await settle(); await settle(); });
+check(state.__tauriBridgeCalls?.some(call => call.name === "bridge_workspace_file_revert_undo" && call.args.transactionId === "tx-both"), "combined undo should target its file transaction");
+check(document.querySelector(".tauri-transcript")?.textContent?.includes("later answer"), "combined undo should refresh original history");
+state.__combinedRewindCommitHandler = async () => {
+  state.__tauriHistoryMessages = state.__tauriHistoryMessages?.slice(0, 3);
+  return { ok: true, partial: true, conversationForked: true, filesRestored: false, headId: "partial-head", undoAvailable: false, writtenCount: 0, deletedCount: 0, conflicts: ["file_changed"], error: "file conflicts detected" };
+};
+await act(async () => { click(button("Rewind both")); await settle(); });
+await act(async () => { document.querySelector<HTMLInputElement>('[aria-label="Review files and conversation"] input[type="checkbox"]')?.click(); await settle(); });
+await act(async () => { click(button("Rewind files and conversation")); await settle(); await settle(); });
+check(document.body.textContent?.includes("Conversation version created, but file restore did not complete"), "partial commit should explain the uncertain file result");
+check(!button("Undo combined rewind"), "partial commit must not offer a file transaction undo");
 state.__historyGate = Promise.reject(new Error("history unavailable"));
 void state.__historyGate.catch(() => {});
 await act(async () => { click(button("Rewind conversation")); await settle(); });

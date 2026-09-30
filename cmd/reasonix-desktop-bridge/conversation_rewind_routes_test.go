@@ -67,4 +67,18 @@ func TestBridgeServerConversationRewindRoutesAreScopedAndDeduplicated(t *testing
 	if response := call("/v1/sessions/other:session-head-switch", `{"headId":"main"}`, "head-switch-2"); response.Code != http.StatusNotFound {
 		t.Fatalf("other session switch status=%d", response.Code)
 	}
+	if response := call("/v1/sessions/other:combined-rewind-preview", `{"turn":1}`, ""); response.Code != http.StatusNotFound {
+		t.Fatalf("other session combined preview status=%d", response.Code)
+	}
+	if response := call("/v1/sessions/tab-conversation:combined-rewind-preview", `{"turn":1}`, ""); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"planId":"plan-both"`) {
+		t.Fatalf("combined preview status=%d body=%s", response.Code, response.Body.String())
+	}
+	combinedPath := "/v1/sessions/tab-conversation:combined-rewind-commit"
+	if response := call(combinedPath, `{"planId":"plan-both","confirmPartialCoverage":true}`, ""); response.Code != http.StatusBadRequest {
+		t.Fatalf("combined commit without request ID status=%d", response.Code)
+	}
+	first, second = call(combinedPath, `{"planId":"plan-both","confirmPartialCoverage":true}`, "both-1"), call(combinedPath, `{"planId":"plan-both","confirmPartialCoverage":true}`, "both-1")
+	if first.Code != http.StatusOK || second.Code != http.StatusOK || first.Body.String() != second.Body.String() || runtime.combinedRewindCommits != 1 || !runtime.combinedConfirmed {
+		t.Fatalf("combined commit dedupe: first=%d second=%d calls=%d confirmed=%v", first.Code, second.Code, runtime.combinedRewindCommits, runtime.combinedConfirmed)
+	}
 }

@@ -147,6 +147,8 @@ import {
   tauriConversationRewindUndo,
   tauriSessionHeads,
   tauriSessionHeadSwitch,
+  tauriCombinedRewindPreview,
+  tauriCombinedRewindCommit,
   tauriBridgeHistory,
   tauriBridgeSnapshot,
   tauriBridgeStatus,
@@ -200,6 +202,7 @@ import {
   type TauriCodeRewindPlan,
   type TauriConversationRewindPlan,
   type TauriSessionHead,
+  type TauriCombinedRewindPlan,
   type TauriPreviewProfileStatus,
   type TauriPreviewRuntimeInfo,
   type TauriProviderSummary,
@@ -506,6 +509,9 @@ export function TauriSessionPreview() {
   const [conversationRewindPlan, setConversationRewindPlan] = useState<TauriConversationRewindPlan | null>(null);
   const [conversationRewindUndo, setConversationRewindUndo] = useState<{ sessionId: string; headId: string } | null>(null);
   const [sessionHeads, setSessionHeads] = useState<TauriSessionHead[]>([]);
+  const [combinedRewindPlan, setCombinedRewindPlan] = useState<TauriCombinedRewindPlan | null>(null);
+  const [combinedCoverageConfirmed, setCombinedCoverageConfirmed] = useState(false);
+  const [combinedRewindUndo, setCombinedRewindUndo] = useState<{ sessionId: string; transactionId: string; headId: string } | null>(null);
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [error, setError] = useState("");
@@ -1566,6 +1572,9 @@ export function TauriSessionPreview() {
     setConversationRewindPlan(null);
     setConversationRewindUndo(null);
     setSessionHeads([]);
+    setCombinedRewindPlan(null);
+    setCombinedCoverageConfirmed(false);
+    setCombinedRewindUndo(null);
     setWorkspaceFileRevertMessage("");
     setWorkspaceFileRevertUndo(null);
     setWorkspaceFileRevertBusy(false);
@@ -1897,6 +1906,8 @@ export function TauriSessionPreview() {
     setCodeRewindPlan(null);
     setCodeRewindCoverageConfirmed(false);
     setConversationRewindPlan(null);
+    setCombinedRewindPlan(null);
+    setCombinedCoverageConfirmed(false);
     setWorkspaceError("");
     try {
       const [checkpoints, heads] = await Promise.all([tauriWorkspaceCheckpoints(sessionID), tauriSessionHeads(sessionID)]);
@@ -1925,6 +1936,7 @@ export function TauriSessionPreview() {
     setCodeRewindPlan(null);
     setCodeRewindCoverageConfirmed(false);
     setConversationRewindPlan(null);
+    setCombinedRewindPlan(null);
     setWorkspaceFileRevertMessage("");
     try {
       const plan = await tauriCodeRewindPreview(sessionID, turn);
@@ -1999,6 +2011,7 @@ export function TauriSessionPreview() {
     setWorkspaceFileRevertBusy(true);
     setCodeRewindPlan(null);
     setConversationRewindPlan(null);
+    setCombinedRewindPlan(null);
     setWorkspaceFileRevertMessage("");
     try {
       const plan = await tauriConversationRewindPreview(sessionID, turn);
@@ -2079,6 +2092,117 @@ export function TauriSessionPreview() {
     }
   }
 
+  async function previewCombinedRewind(turn: number) {
+    if (!session || session.state !== "idle" || busy || workspaceFileRevertBusy) return;
+    const sessionID = session.id;
+    const epoch = workspaceEpochRef.current;
+    const request = ++workspaceFileRevertRequestRef.current;
+    const isCurrent = () => workspaceEpochRef.current === epoch && workspaceFileRevertRequestRef.current === request;
+    setWorkspaceFileRevertBusy(true);
+    setCodeRewindPlan(null);
+    setConversationRewindPlan(null);
+    setCombinedRewindPlan(null);
+    setCombinedCoverageConfirmed(false);
+    setWorkspaceFileRevertMessage("");
+    try {
+      const plan = await tauriCombinedRewindPreview(sessionID, turn);
+      if (isCurrent()) setCombinedRewindPlan(plan);
+    } catch (cause) {
+      if (isCurrent()) setWorkspaceFileRevertMessage(`${recoveryCopy.combined.failed} ${tauriMessageFrom(cause)}`);
+    } finally {
+      if (isCurrent()) setWorkspaceFileRevertBusy(false);
+    }
+  }
+
+  async function commitCombinedRewind() {
+    const plan = combinedRewindPlan;
+    if (!session || session.state !== "idle" || busy || workspaceFileRevertBusy || !plan?.canFiles || !plan.canConversation || !plan.planId || (plan.requiresCoverageConfirmation && !combinedCoverageConfirmed)) return;
+    const sessionID = session.id;
+    const epoch = workspaceEpochRef.current;
+    const request = ++workspaceFileRevertRequestRef.current;
+    const isCurrent = () => workspaceEpochRef.current === epoch && workspaceFileRevertRequestRef.current === request;
+    setWorkspaceFileRevertBusy(true);
+    setBusy(true);
+    setWorkspaceFileRevertMessage("");
+    try {
+      const result = await tauriCombinedRewindCommit(sessionID, plan.planId, combinedCoverageConfirmed);
+      if (!isCurrent()) return;
+      setCombinedRewindPlan(null);
+      if (!result.ok) {
+        setWorkspaceFileRevertMessage(`${recoveryCopy.combined.failed} ${result.error || result.conflicts.join(", ")}`);
+        return;
+      }
+      if (!result.conversationForked || !result.headId) {
+        setWorkspaceFileRevertMessage(recoveryCopy.combined.failed);
+        return;
+      }
+      setWorkspaceFileRevertUndo(null);
+      if (result.partial) {
+        setCombinedRewindUndo(null);
+        setConversationRewindUndo({ sessionId: sessionID, headId: result.headId });
+        setWorkspaceFileRevertMessage(recoveryCopy.combined.partial);
+      } else {
+        setConversationRewindUndo(null);
+        setCombinedRewindUndo(result.undoAvailable && result.transactionId
+          ? { sessionId: sessionID, transactionId: result.transactionId, headId: result.headId }
+          : null);
+        setWorkspaceFileRevertMessage(recoveryCopy.combined.done);
+      }
+      try {
+        await reloadConversationAfterRewind(sessionID);
+      } catch (cause) {
+        setHistoryError(tauriMessageFrom(cause));
+      }
+      await loadWorkspaceCheckpoints();
+    } catch (cause) {
+      if (isCurrent()) setWorkspaceFileRevertMessage(`${recoveryCopy.combined.failed} ${tauriMessageFrom(cause)}`);
+    } finally {
+      if (isCurrent()) {
+        setWorkspaceFileRevertBusy(false);
+        setBusy(false);
+      }
+    }
+  }
+
+  async function undoCombinedRewind() {
+    const undo = combinedRewindUndo;
+    if (!session || session.state !== "idle" || busy || workspaceFileRevertBusy || !undo || undo.sessionId !== session.id) return;
+    const epoch = workspaceEpochRef.current;
+    const request = ++workspaceFileRevertRequestRef.current;
+    const isCurrent = () => workspaceEpochRef.current === epoch && workspaceFileRevertRequestRef.current === request;
+    setWorkspaceFileRevertBusy(true);
+    setBusy(true);
+    try {
+      const result = await tauriWorkspaceFileRevertUndo(undo.sessionId, undo.transactionId);
+      if (!isCurrent()) return;
+      if (!result.ok) {
+        setWorkspaceFileRevertMessage(`${recoveryCopy.combined.undoFailed} ${result.error || ""}`);
+        return;
+      }
+      setCombinedRewindUndo(null);
+      try {
+        await reloadConversationAfterRewind(undo.sessionId);
+      } catch (cause) {
+        setHistoryError(tauriMessageFrom(cause));
+      }
+      try {
+        const heads = await tauriSessionHeads(undo.sessionId);
+        if (isCurrent()) setWorkspaceFileRevertMessage(heads.some(head => head.id === undo.headId && head.selected)
+          ? recoveryCopy.combined.undoFilesOnly : recoveryCopy.combined.undone);
+      } catch {
+        if (isCurrent()) setWorkspaceFileRevertMessage(recoveryCopy.combined.undoSelectionUnknown);
+      }
+      await loadWorkspaceCheckpoints();
+    } catch (cause) {
+      if (isCurrent()) setWorkspaceFileRevertMessage(`${recoveryCopy.combined.undoFailed} ${tauriMessageFrom(cause)}`);
+    } finally {
+      if (isCurrent()) {
+        setWorkspaceFileRevertBusy(false);
+        setBusy(false);
+      }
+    }
+  }
+
   async function switchSessionHead(headID: string) {
     if (!session || session.state !== "idle" || busy || workspaceFileRevertBusy) return;
     const sessionID = session.id;
@@ -2092,8 +2216,10 @@ export function TauriSessionPreview() {
       await tauriSessionHeadSwitch(sessionID, headID);
       if (!isCurrent()) return;
       setConversationRewindUndo(null);
+      setCombinedRewindUndo(null);
       setConversationRewindPlan(null);
       setCodeRewindPlan(null);
+      setCombinedRewindPlan(null);
       setWorkspaceFileRevertMessage(recoveryCopy.heads.switched);
       try {
         await reloadConversationAfterRewind(sessionID);
@@ -2230,6 +2356,8 @@ export function TauriSessionPreview() {
     setCodeRewindPlan(null);
     setCodeRewindCoverageConfirmed(false);
     setConversationRewindPlan(null);
+    setCombinedRewindPlan(null);
+    setCombinedCoverageConfirmed(false);
     setWorkspaceFileRevertMessage("");
     setWorkspaceView(view);
     setWorkspaceError("");
@@ -3125,7 +3253,7 @@ export function TauriSessionPreview() {
               {workspaceCheckpointsLoading ? <div className="tauri-workspace-drawer__loading">{t("workspace.loadingChanges")}</div> : workspaceCheckpoints.length === 0 ? <div className="tauri-workspace-drawer__empty">{recoveryCopy.empty}</div> : <ul className="tauri-workspace-drawer__entries">
                 {[...workspaceCheckpoints].reverse().map(checkpoint => <li key={checkpoint.turn}><button type="button" className="tauri-workspace-entry tauri-workspace-change-entry" onClick={() => void previewCodeRewind(checkpoint.turn)} disabled={busy || workspaceFileRevertBusy || session?.state !== "idle"}>
                   <span className="tauri-workspace-entry__icon"><FileText size={15} /></span><span className="tauri-workspace-entry__name">#{checkpoint.turn} · {checkpoint.prompt || "—"}</span><small>{checkpoint.turnFileCount} {t("workspace.filesTab")}</small>
-                </button><button type="button" className="tauri-diagnostic-action" onClick={() => void previewConversationRewind(checkpoint.turn)} disabled={busy || workspaceFileRevertBusy || session?.state !== "idle"}>{recoveryCopy.conversation.action}</button></li>)}
+                </button><button type="button" className="tauri-diagnostic-action" onClick={() => void previewConversationRewind(checkpoint.turn)} disabled={busy || workspaceFileRevertBusy || session?.state !== "idle"}>{recoveryCopy.conversation.action}</button><button type="button" className="tauri-diagnostic-action" onClick={() => void previewCombinedRewind(checkpoint.turn)} disabled={busy || workspaceFileRevertBusy || session?.state !== "idle"}>{recoveryCopy.combined.action}</button></li>)}
               </ul>}
               {workspaceFileRevertBusy && <p className="tauri-workspace-drawer__note">{recoveryCopy.working}</p>}
               {workspaceFileRevertMessage && <p role="status" className="tauri-workspace-drawer__note">{workspaceFileRevertMessage}</p>}
@@ -3144,7 +3272,17 @@ export function TauriSessionPreview() {
                 {!conversationRewindPlan.canConversation && <p role="alert">{recoveryCopy.conversation.unavailable} {conversationRewindPlan.disabledReason || ""}</p>}
                 <div><button type="button" className="tauri-diagnostic-action" onClick={() => setConversationRewindPlan(null)} disabled={workspaceFileRevertBusy}>{recoveryCopy.fileRevert.cancel}</button>{conversationRewindPlan.canConversation && <button type="button" className="tauri-diagnostic-action" onClick={() => void commitConversationRewind()} disabled={workspaceFileRevertBusy || busy || session?.state !== "idle"}>{recoveryCopy.conversation.confirm}</button>}</div>
               </section>}
+              {combinedRewindPlan && <section className="tauri-workspace-revert" aria-label={recoveryCopy.combined.review}>
+                <strong>{recoveryCopy.combined.review} · #{combinedRewindPlan.turn}</strong>
+                <p>{recoveryCopy.combined.description}</p>
+                <p>{combinedRewindPlan.fileCount} {t("workspace.filesTab")}{combinedRewindPlan.filesTruncated ? ` · ${combinedRewindPlan.files.length}/${combinedRewindPlan.fileCount}` : ""}</p>
+                {combinedRewindPlan.files.length > 0 && <ul className="tauri-workspace-revert__files">{combinedRewindPlan.files.map(path => <li key={path}><code>{path}</code></li>)}</ul>}
+                {(!combinedRewindPlan.canFiles || !combinedRewindPlan.canConversation) && <p role="alert">{recoveryCopy.combined.unavailable} {combinedRewindPlan.disabledReason || combinedRewindPlan.conflicts.join(", ")}</p>}
+                {combinedRewindPlan.requiresCoverageConfirmation && <><p role="alert">{recoveryCopy.coverageWarning} {combinedRewindPlan.coverageGaps.join(", ")}</p><label className="tauri-workspace-revert__confirmation"><input type="checkbox" checked={combinedCoverageConfirmed} onChange={event => setCombinedCoverageConfirmed(event.target.checked)} />{recoveryCopy.coverageConfirm}</label></>}
+                <div><button type="button" className="tauri-diagnostic-action" onClick={() => setCombinedRewindPlan(null)} disabled={workspaceFileRevertBusy}>{recoveryCopy.fileRevert.cancel}</button>{combinedRewindPlan.canFiles && combinedRewindPlan.canConversation && <button type="button" className="tauri-diagnostic-action" onClick={() => void commitCombinedRewind()} disabled={workspaceFileRevertBusy || busy || session?.state !== "idle" || (combinedRewindPlan.requiresCoverageConfirmation && !combinedCoverageConfirmed)}>{recoveryCopy.combined.confirm}</button>}</div>
+              </section>}
               {conversationRewindUndo?.sessionId === session?.id && <section className="tauri-workspace-revert" aria-label={recoveryCopy.conversation.undo}><strong>{recoveryCopy.conversation.undo}</strong><p>{recoveryCopy.conversation.undoDescription}</p><div><button type="button" className="tauri-diagnostic-action" onClick={() => void undoConversationRewind()} disabled={workspaceFileRevertBusy || busy || session?.state !== "idle"}>{recoveryCopy.conversation.undo}</button></div></section>}
+              {combinedRewindUndo?.sessionId === session?.id && <section className="tauri-workspace-revert" aria-label={recoveryCopy.combined.undo}><strong>{recoveryCopy.combined.undo}</strong><p>{recoveryCopy.combined.undoDescription}</p><div><button type="button" className="tauri-diagnostic-action" onClick={() => void undoCombinedRewind()} disabled={workspaceFileRevertBusy || busy || session?.state !== "idle"}>{recoveryCopy.combined.undo}</button></div></section>}
               {workspaceFileRevertUndo?.sessionId === session?.id && <section className="tauri-workspace-revert" aria-label={recoveryCopy.fileRevert.undo}><strong>{recoveryCopy.fileRevert.undo}</strong><p>{recoveryCopy.fileRevert.undoDescription}</p><div><button type="button" className="tauri-diagnostic-action" onClick={() => void undoWorkspaceFileRevert()} disabled={workspaceFileRevertBusy || busy || session?.state !== "idle"}>{recoveryCopy.fileRevert.undo}</button></div></section>}
             </>}
           </div>

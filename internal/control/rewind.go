@@ -190,6 +190,26 @@ func (c *Controller) CommitConversationRewindInPlace(planID string) (checkpoint.
 	return c.CommitRewindInPlace(planID)
 }
 
+// CommitCombinedRewindInPlace accepts only a both-scope plan on a session
+// whose conversation fork stays in the current transcript.
+func (c *Controller) CommitCombinedRewindInPlace(planID string, confirmPartialCoverage bool) (checkpoint.RewindResult, error) {
+	if !c.CanRewindConversationInPlace() {
+		return checkpoint.RewindResult{}, c.rewindFail(fmt.Errorf("combined rewind requires an in-log session head"))
+	}
+	store := c.checkpoints.storeRef()
+	if store == nil {
+		return checkpoint.RewindResult{}, c.rewindFail(fmt.Errorf("checkpoints unavailable"))
+	}
+	plan, ok := store.PeekPlan(planID)
+	if !ok || plan.Scope != checkpoint.RewindBoth {
+		return checkpoint.RewindResult{}, c.rewindFail(fmt.Errorf("unknown combined rewind plan"))
+	}
+	if RewindPlanRequiresConfirmation(plan) && !confirmPartialCoverage {
+		return checkpoint.RewindResult{}, c.rewindFail(ErrRewindCoverageConfirmationRequired)
+	}
+	return c.CommitRewindInPlace(planID)
+}
+
 // UndoConversationRewindHead returns from an empty rewind head to its parent.
 func (c *Controller) UndoConversationRewindHead(headID string) error {
 	if headID == "" || !c.CanRewindConversationInPlace() {

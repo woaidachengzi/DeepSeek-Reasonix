@@ -156,6 +156,9 @@ func TestCodeRewindRequiresCoverageConfirmationAndPreservesConversation(t *testi
 	if result, err := runtime.CommitConversationRewind(plan.PlanID); err == nil || result.OK {
 		t.Fatalf("code plan accepted by conversation endpoint: result=%+v err=%v", result, err)
 	}
+	if result, err := runtime.CommitCombinedRewind(conversationPreview.PlanID, true); err != nil || result.OK {
+		t.Fatalf("conversation plan accepted by combined endpoint: result=%+v err=%v", result, err)
+	}
 	conversationResult, err := runtime.CommitConversationRewind(conversationPreview.PlanID)
 	if err != nil || !conversationResult.OK || !conversationResult.ConversationForked || conversationResult.HeadID == "" {
 		t.Fatalf("conversation rewind = %+v err=%v", conversationResult, err)
@@ -241,6 +244,75 @@ func TestCodeRewindRequiresCoverageConfirmationAndPreservesConversation(t *testi
 	if err := runtime.SwitchSessionHead("missing-head"); err == nil {
 		t.Fatal("unknown head was accepted")
 	}
+	combinedPlan, err := runtime.PrepareCombinedRewind(1)
+	if err != nil || !combinedPlan.CanFiles || !combinedPlan.CanConversation || !combinedPlan.RequiresCoverageConfirmation {
+		t.Fatalf("combined preview = %+v err=%v", combinedPlan, err)
+	}
+	if result, err := runtime.CommitCombinedRewind(combinedPlan.PlanID, false); err != nil || result.OK {
+		t.Fatalf("unconfirmed combined rewind = %+v err=%v", result, err)
+	}
+	if len(session.Snapshot()) != 4 {
+		t.Fatal("unconfirmed combined rewind changed conversation")
+	}
+	combinedResult, err := runtime.CommitCombinedRewind(combinedPlan.PlanID, true)
+	if err != nil || !combinedResult.OK || combinedResult.Partial || !combinedResult.ConversationForked || !combinedResult.FilesRestored || !combinedResult.UndoAvailable || combinedResult.HeadID == "" {
+		t.Fatalf("combined commit = %+v err=%v", combinedResult, err)
+	}
+	if controller.SessionPath() != sessionPath || len(session.Snapshot()) != 3 {
+		t.Fatal("combined commit changed session path or kept later messages")
+	}
+	for _, name := range []string{"a.txt", "b.txt"} {
+		if data, err := os.ReadFile(filepath.Join(root, name)); err != nil || string(data) != "before" {
+			t.Fatalf("combined restore %s = %q err=%v", name, data, err)
+		}
+	}
+	if undo, err := runtime.UndoWorkspaceFileRevert(combinedResult.TransactionID); err != nil || !undo.OK {
+		t.Fatalf("undo combined file transaction = %+v err=%v", undo, err)
+	}
+	if head, ok := controller.SessionHead(); !ok || head.HeadID != continued.HeadID {
+		t.Fatalf("combined undo did not return to previous head: %+v", head)
+	}
+	continuedCombinedPlan, err := runtime.PrepareCombinedRewind(1)
+	if err != nil || !continuedCombinedPlan.CanFiles || !continuedCombinedPlan.CanConversation {
+		t.Fatalf("continued combined preview = %+v err=%v", continuedCombinedPlan, err)
+	}
+	continuedCombined, err := runtime.CommitCombinedRewind(continuedCombinedPlan.PlanID, true)
+	if err != nil || !continuedCombined.OK || continuedCombined.Partial {
+		t.Fatalf("continued combined commit = %+v err=%v", continuedCombined, err)
+	}
+	session.Add(provider.Message{Role: provider.RoleUser, Content: "keep this version"})
+	if err := controller.Snapshot(); err != nil {
+		t.Fatal(err)
+	}
+	if undo, err := runtime.UndoWorkspaceFileRevert(continuedCombined.TransactionID); err != nil || !undo.OK {
+		t.Fatalf("undo files on continued head = %+v err=%v", undo, err)
+	}
+	if head, ok := controller.SessionHead(); !ok || head.HeadID != continuedCombined.HeadID {
+		t.Fatalf("file undo switched continued head: %+v", head)
+	}
+	if err := runtime.SwitchSessionHead(continued.HeadID); err != nil {
+		t.Fatalf("return to earlier version: %v", err)
+	}
+	stalePlan, err := runtime.PrepareCombinedRewind(1)
+	if err != nil || !stalePlan.CanFiles || !stalePlan.CanConversation {
+		t.Fatalf("stale combined preview = %+v err=%v", stalePlan, err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("manual edit"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	partial, err := runtime.CommitCombinedRewind(stalePlan.PlanID, true)
+	if err != nil || !partial.OK || !partial.Partial || !partial.ConversationForked || partial.FilesRestored || partial.HeadID == "" {
+		t.Fatalf("partial combined rewind = %+v err=%v", partial, err)
+	}
+	if partial.Error == "" || strings.Contains(partial.Error, root) || controller.SessionPath() != sessionPath {
+		t.Fatalf("partial result leaked a path or changed transcript identity: %+v", partial)
+	}
+	if data, err := os.ReadFile(filepath.Join(root, "a.txt")); err != nil || string(data) != "manual edit" {
+		t.Fatalf("partial rewind overwrote manual edit: %q err=%v", data, err)
+	}
+	if _, err := runtime.UndoConversationRewind(partial.HeadID); err != nil {
+		t.Fatalf("return after partial combined rewind: %v", err)
+	}
 }
 
 func TestConversationRewindRejectsFileBranchPolicyBeforeMutation(t *testing.T) {
@@ -294,6 +366,9 @@ func TestConversationRewindPreviewDisablesSchemaOneSession(t *testing.T) {
 	}
 	if result, err := runtime.CommitConversationRewind("valid-plan-id"); err == nil || result.OK {
 		t.Fatalf("legacy conversation commit = %+v err=%v", result, err)
+	}
+	if plan, err := runtime.PrepareCombinedRewind(0); err != nil || plan.CanFiles || plan.CanConversation || plan.PlanID != "" {
+		t.Fatalf("legacy combined preview = %+v err=%v", plan, err)
 	}
 	if heads, err := runtime.SessionHeads(); err != nil || len(heads) != 0 {
 		t.Fatalf("legacy heads = %+v err=%v", heads, err)

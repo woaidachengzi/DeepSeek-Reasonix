@@ -519,12 +519,29 @@ pub struct SessionHeadSwitchRequest {
     pub head_id: String,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CombinedRewindPreviewRequest {
+    pub session_id: String,
+    pub turn: u64,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CombinedRewindCommitRequest {
+    pub session_id: String,
+    pub plan_id: String,
+    pub confirm_partial_coverage: bool,
+}
+
 // The wire DTOs mirror docs/tauri/protocol/v1.schema.json through the generated
 // module; only the host-facing command payloads below stay hand-written.
 pub use crate::protocol_generated::{
     BridgeAnswerQuestionRequest, BridgeApprovalRequest, BridgeAskAnswer,
     BridgeAttachFileRequest as AttachFileRequest, BridgeAttachment, BridgeAttachmentResponse,
     BridgeCodeRewindCommitRequest, BridgeCodeRewindPlanResponse, BridgeCodeRewindPreviewRequest,
+    BridgeCombinedRewindCommitRequest, BridgeCombinedRewindPlanResponse,
+    BridgeCombinedRewindPreviewRequest, BridgeCombinedRewindResultResponse,
     BridgeConversationRewindCommitRequest, BridgeConversationRewindPlanResponse,
     BridgeConversationRewindPreviewRequest, BridgeConversationRewindResultResponse,
     BridgeConversationRewindUndoRequest, BridgeDeleteSessionResponse, BridgeEvent,
@@ -3988,6 +4005,54 @@ impl BridgeSupervisor {
             Some(&request_id),
         )?;
         let envelope: BridgeSessionHeadSwitchResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope)
+    }
+
+    pub fn combined_rewind_preview(
+        &self,
+        request: CombinedRewindPreviewRequest,
+    ) -> Result<BridgeCombinedRewindPlanResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let path = format!("/v1/sessions/{session_id}:combined-rewind-preview");
+        let response = self.request_json(
+            "POST",
+            &path,
+            Some(json!(BridgeCombinedRewindPreviewRequest {
+                turn: request.turn
+            })),
+            None,
+        )?;
+        let envelope: BridgeCombinedRewindPlanResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope)
+    }
+
+    pub fn combined_rewind_commit(
+        &self,
+        request: CombinedRewindCommitRequest,
+    ) -> Result<BridgeCombinedRewindResultResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let plan_id = session_path_component(&request.plan_id)
+            .map_err(|_| "combined rewind plan ID is invalid".to_string())?;
+        let request_id = opaque_secret()?;
+        let path = format!("/v1/sessions/{session_id}:combined-rewind-commit");
+        let response = self.request_json(
+            "POST",
+            &path,
+            Some(json!(BridgeCombinedRewindCommitRequest {
+                plan_id,
+                confirm_partial_coverage: request.confirm_partial_coverage,
+            })),
+            Some(&request_id),
+        )?;
+        let envelope: BridgeCombinedRewindResultResponse =
             serde_json::from_value(response).map_err(display_error)?;
         if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());

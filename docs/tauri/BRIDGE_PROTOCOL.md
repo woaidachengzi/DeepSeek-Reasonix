@@ -69,6 +69,8 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 返回原对话 | `POST /v1/sessions/{sessionId}:conversation-rewind-undo` | `X-Reasonix-Request-ID` 去重；只接受当前尚未追加消息的 rewind head ID |
 | 对话版本列表 | `POST /v1/sessions/{sessionId}:session-heads` | 只读；返回当前 transcript 的 schema-2 活跃 head，旧格式为空列表；限制展示数量和预览长度 |
 | 切换对话版本 | `POST /v1/sessions/{sessionId}:session-head-switch` | `X-Reasonix-Request-ID` 去重；只接受当前 transcript 内的活跃 head ID，路径和工作区文件不变 |
+| 组合回滚预览 | `POST /v1/sessions/{sessionId}:combined-rewind-preview` | 只读；同时检查会话边界、文件冲突及覆盖缺口，旧格式会话返回禁用原因 |
+| 组合回滚提交 | `POST /v1/sessions/{sessionId}:combined-rewind-commit` | `X-Reasonix-Request-ID` 去重；只接受 `both` 方案及所需覆盖确认；结果区分全部成功与文件事务未完成的部分成功 |
 | 提交 | `POST /v1/sessions/{sessionId}:submit` | `X-Reasonix-Request-ID` 去重 |
 | 取消 | `POST /v1/sessions/{sessionId}:cancel` | 是 |
 | 工具审批 | `POST /v1/sessions/{sessionId}:approve` | 可安全重试 |

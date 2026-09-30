@@ -78,7 +78,8 @@ use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 
 use bridge::{
     AnswerMCPInteractionRequest, AnswerQuestionRequest, ApproveRequest, AttachFileRequest,
-    BridgeAttachment, BridgeCodeRewindPlanResponse, BridgeConversationRewindPlanResponse,
+    BridgeAttachment, BridgeCodeRewindPlanResponse, BridgeCombinedRewindPlanResponse,
+    BridgeCombinedRewindResultResponse, BridgeConversationRewindPlanResponse,
     BridgeConversationRewindResultResponse, BridgeDeleteSessionResponse, BridgeHistory,
     BridgeProjectFolder, BridgeProviderSummaryResponse, BridgeRemoteBrowseRequest,
     BridgeRemoteBrowseResponse, BridgeRemoteDisconnectRequest, BridgeRemoteDisconnectResponse,
@@ -90,7 +91,8 @@ use bridge::{
     BridgeWorkspaceChangesResponse, BridgeWorkspaceCheckpointsResponse,
     BridgeWorkspaceFileResponse, BridgeWorkspaceFileRevertPlanResponse,
     BridgeWorkspaceFileRevertResultResponse, BridgeWorkspaceListResponse, CodeRewindCommitRequest,
-    CodeRewindPreviewRequest, ConversationRewindCommitRequest, ConversationRewindPreviewRequest,
+    CodeRewindPreviewRequest, CombinedRewindCommitRequest, CombinedRewindPreviewRequest,
+    ConversationRewindCommitRequest, ConversationRewindPreviewRequest,
     ConversationRewindUndoRequest, DeleteProviderConfigRequest, DesktopPreferences,
     DiscoverProviderModelsRequest, DiscoveredProviderModels, HooksSettingsChange,
     HooksSettingsView, LegacySessionCatalogEntry, MCPClearAuthRequest, MCPClearAuthResponse,
@@ -829,6 +831,22 @@ fn bridge_session_head_switch(
     request: SessionHeadSwitchRequest,
 ) -> Result<BridgeSessionHeadSwitchResponse, String> {
     supervisor.session_head_switch(request)
+}
+
+#[tauri::command]
+fn bridge_combined_rewind_preview(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: CombinedRewindPreviewRequest,
+) -> Result<BridgeCombinedRewindPlanResponse, String> {
+    supervisor.combined_rewind_preview(request)
+}
+
+#[tauri::command]
+fn bridge_combined_rewind_commit(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: CombinedRewindCommitRequest,
+) -> Result<BridgeCombinedRewindResultResponse, String> {
+    supervisor.combined_rewind_commit(request)
 }
 
 fn workspace_root_is_available(root: &str) -> Option<bool> {
@@ -3521,6 +3539,8 @@ fn main() {
             bridge_conversation_rewind_undo,
             bridge_session_heads,
             bridge_session_head_switch,
+            bridge_combined_rewind_preview,
+            bridge_combined_rewind_commit,
             workspace_roots_availability,
             bridge_cancel,
             bridge_approve,

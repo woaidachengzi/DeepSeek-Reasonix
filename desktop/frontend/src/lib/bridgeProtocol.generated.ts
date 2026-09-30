@@ -46,6 +46,25 @@ export interface BridgeCodeRewindPreviewRequest {
   turn: number;
 }
 
+export interface BridgeCombinedRewindCommitRequest {
+  confirmPartialCoverage: boolean;
+  planId: string;
+}
+
+export interface BridgeCombinedRewindPlanResponse {
+  plan: BridgeWorkspaceCombinedRewindPlan;
+  protocolVersion: number;
+}
+
+export interface BridgeCombinedRewindPreviewRequest {
+  turn: number;
+}
+
+export interface BridgeCombinedRewindResultResponse {
+  protocolVersion: number;
+  result: BridgeWorkspaceCombinedRewindResult;
+}
+
 export interface BridgeConversationRewindCommitRequest {
   planId: string;
 }
@@ -394,6 +413,34 @@ export interface BridgeWorkspaceCodeRewindPlan {
   planId?: string;
   requiresCoverageConfirmation: boolean;
   turn: number;
+}
+
+export interface BridgeWorkspaceCombinedRewindPlan {
+  canConversation: boolean;
+  canFiles: boolean;
+  conflicts: string[];
+  coverageGaps: string[];
+  disabledReason?: string;
+  fileCount: number;
+  files: string[];
+  filesTruncated: boolean;
+  planId?: string;
+  requiresCoverageConfirmation: boolean;
+  turn: number;
+}
+
+export interface BridgeWorkspaceCombinedRewindResult {
+  conflicts: string[];
+  conversationForked: boolean;
+  deletedCount: number;
+  error?: string;
+  filesRestored: boolean;
+  headId?: string;
+  ok: boolean;
+  partial: boolean;
+  transactionId?: string;
+  undoAvailable: boolean;
+  writtenCount: number;
 }
 
 export interface BridgeWorkspaceConversationRewindPlan {

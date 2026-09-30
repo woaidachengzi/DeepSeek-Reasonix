@@ -100,6 +100,8 @@ type bridgeTestRuntime struct {
 	conversationRewindCommits int
 	conversationRewindUndos   int
 	sessionHeadSwitches       int
+	combinedRewindCommits     int
+	combinedConfirmed         bool
 	metrics                   desktopbridge.SessionMetrics
 	balance                   *desktopbridge.SessionBalance
 	balanceErr                error
@@ -214,6 +216,14 @@ func (r *bridgeTestRuntime) SessionHeads() ([]desktopbridge.SessionHeadView, err
 func (r *bridgeTestRuntime) SwitchSessionHead(string) error {
 	r.sessionHeadSwitches++
 	return nil
+}
+func (r *bridgeTestRuntime) PrepareCombinedRewind(turn int) (desktopbridge.WorkspaceCombinedRewindPlan, error) {
+	return desktopbridge.WorkspaceCombinedRewindPlan{PlanID: "plan-both", Turn: turn, CanFiles: true, CanConversation: true, FileCount: 1, Files: []string{"notes.txt"}, CoverageGaps: []string{}, Conflicts: []string{}}, nil
+}
+func (r *bridgeTestRuntime) CommitCombinedRewind(_ string, confirmed bool) (desktopbridge.WorkspaceCombinedRewindResult, error) {
+	r.combinedRewindCommits++
+	r.combinedConfirmed = confirmed
+	return desktopbridge.WorkspaceCombinedRewindResult{OK: true, ConversationForked: true, FilesRestored: true, HeadID: "combined-head", Conflicts: []string{}}, nil
 }
 func (r *bridgeTestRuntime) Submit(input string)                                       { r.submits = append(r.submits, input) }
 func (r *bridgeTestRuntime) Cancel()                                                   { r.cancelCalls++ }
