@@ -81,25 +81,25 @@ use bridge::{
     BridgeAttachment, BridgeCodeRewindPlanResponse, BridgeCombinedRewindPlanResponse,
     BridgeCombinedRewindResultResponse, BridgeConversationRewindPlanResponse,
     BridgeConversationRewindResultResponse, BridgeDeleteSessionResponse, BridgeHistory,
-    BridgeProjectFolder, BridgeProviderSummaryResponse, BridgeRemoteBrowseRequest,
-    BridgeRemoteBrowseResponse, BridgeRemoteDisconnectRequest, BridgeRemoteDisconnectResponse,
-    BridgeRemoteFilePreviewRequest, BridgeRemoteFilePreviewResponse, BridgeRemoteFileSaveRequest,
-    BridgeRemoteFileSaveResponse, BridgeSession, BridgeSessionBalanceResponse,
-    BridgeSessionHeadSwitchResponse, BridgeSessionHeadsResponse, BridgeSetAgentPreferenceRequest,
-    BridgeSetDefaultModelRequest, BridgeSetModelRoleRequest, BridgeSetSessionModelRequest,
-    BridgeSnapshot, BridgeStatus, BridgeSupervisor, BridgeWorkspaceChangeDetailResponse,
-    BridgeWorkspaceChangesResponse, BridgeWorkspaceCheckpointsResponse,
-    BridgeWorkspaceFileResponse, BridgeWorkspaceFileRevertPlanResponse,
-    BridgeWorkspaceFileRevertResultResponse, BridgeWorkspaceListResponse, CodeRewindCommitRequest,
-    CodeRewindPreviewRequest, CombinedRewindCommitRequest, CombinedRewindPreviewRequest,
-    ConversationRewindCommitRequest, ConversationRewindPreviewRequest,
-    ConversationRewindUndoRequest, DeleteProviderConfigRequest, DesktopPreferences,
-    DiscoverProviderModelsRequest, DiscoveredProviderModels, HooksSettingsChange,
-    HooksSettingsView, LegacySessionCatalogEntry, MCPClearAuthRequest, MCPClearAuthResponse,
-    MCPMarketplaceEntry, MCPMarketplaceResponse, MCPOAuthRequest, MCPOAuthResponse,
-    MCPRuntimeActionRequest, MCPRuntimeActionResponse, MCPServerActivationRequest,
-    MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse, MCPServerView,
-    MemorySettingsChange, MemorySettingsView, MemorySuggestionAcceptance,
+    BridgeLegacyConversationForkResultResponse, BridgeProjectFolder, BridgeProviderSummaryResponse,
+    BridgeRemoteBrowseRequest, BridgeRemoteBrowseResponse, BridgeRemoteDisconnectRequest,
+    BridgeRemoteDisconnectResponse, BridgeRemoteFilePreviewRequest,
+    BridgeRemoteFilePreviewResponse, BridgeRemoteFileSaveRequest, BridgeRemoteFileSaveResponse,
+    BridgeSession, BridgeSessionBalanceResponse, BridgeSessionHeadSwitchResponse,
+    BridgeSessionHeadsResponse, BridgeSetAgentPreferenceRequest, BridgeSetDefaultModelRequest,
+    BridgeSetModelRoleRequest, BridgeSetSessionModelRequest, BridgeSnapshot, BridgeStatus,
+    BridgeSupervisor, BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
+    BridgeWorkspaceCheckpointsResponse, BridgeWorkspaceFileResponse,
+    BridgeWorkspaceFileRevertPlanResponse, BridgeWorkspaceFileRevertResultResponse,
+    BridgeWorkspaceListResponse, CodeRewindCommitRequest, CodeRewindPreviewRequest,
+    CombinedRewindCommitRequest, CombinedRewindPreviewRequest, ConversationRewindCommitRequest,
+    ConversationRewindPreviewRequest, ConversationRewindUndoRequest, DeleteProviderConfigRequest,
+    DesktopPreferences, DiscoverProviderModelsRequest, DiscoveredProviderModels,
+    HooksSettingsChange, HooksSettingsView, LegacySessionCatalogEntry, MCPClearAuthRequest,
+    MCPClearAuthResponse, MCPMarketplaceEntry, MCPMarketplaceResponse, MCPOAuthRequest,
+    MCPOAuthResponse, MCPRuntimeActionRequest, MCPRuntimeActionResponse,
+    MCPServerActivationRequest, MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse,
+    MCPServerView, MemorySettingsChange, MemorySettingsView, MemorySuggestionAcceptance,
     MemorySuggestionAcceptanceRequest, MemorySuggestionsView, NetworkSettingsChange,
     NetworkSettingsView, OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
     PendingSessionTitleRecovery, PermissionSettingsChange, PermissionSettingsView,
@@ -847,6 +847,22 @@ fn bridge_combined_rewind_commit(
     request: CombinedRewindCommitRequest,
 ) -> Result<BridgeCombinedRewindResultResponse, String> {
     supervisor.combined_rewind_commit(request)
+}
+
+#[tauri::command]
+fn bridge_legacy_fork_preview(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: ConversationRewindPreviewRequest,
+) -> Result<BridgeConversationRewindPlanResponse, String> {
+    supervisor.legacy_fork_preview(request)
+}
+
+#[tauri::command]
+fn bridge_legacy_fork_commit(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: ConversationRewindCommitRequest,
+) -> Result<BridgeLegacyConversationForkResultResponse, String> {
+    supervisor.legacy_fork_commit(request)
 }
 
 fn workspace_root_is_available(root: &str) -> Option<bool> {
@@ -3541,6 +3557,8 @@ fn main() {
             bridge_session_head_switch,
             bridge_combined_rewind_preview,
             bridge_combined_rewind_commit,
+            bridge_legacy_fork_preview,
+            bridge_legacy_fork_commit,
             workspace_roots_availability,
             bridge_cancel,
             bridge_approve,

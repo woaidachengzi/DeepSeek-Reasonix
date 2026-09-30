@@ -46,6 +46,10 @@ func (c *Controller) forkNamed(turn int, name string, switchToFork bool) (string
 // gets a new head in its own log (head id returned); every other case still
 // creates a new session file (path returned).
 func (c *Controller) forkNamedReady(turn int, name string, switchToFork bool, kind string) (string, error) {
+	return c.forkNamedReadyToPath(turn, name, switchToFork, kind, "")
+}
+
+func (c *Controller) forkNamedReadyToPath(turn int, name string, switchToFork bool, kind, targetPath string) (string, error) {
 	if c.executor == nil {
 		return "", c.rewindFail(fmt.Errorf("checkpoints unavailable"))
 	}
@@ -62,8 +66,10 @@ func (c *Controller) forkNamedReady(turn int, name string, switchToFork bool, ki
 
 	// Persist the current conversation first so the branch point survives, then
 	// seed a fresh session with the messages up to the fork and switch to it.
-	if err := c.Snapshot(); err != nil {
-		slog.Warn("controller: pre-fork snapshot", "err", err)
+	if targetPath == "" {
+		if err := c.Snapshot(); err != nil {
+			slog.Warn("controller: pre-fork snapshot", "err", err)
+		}
 	}
 	parentPath := c.SessionPath()
 	parentID := agent.BranchID(parentPath)
@@ -75,7 +81,10 @@ func (c *Controller) forkNamedReady(turn int, name string, switchToFork bool, ki
 	sess := agent.NewSession("")
 	sess.Messages = forked
 
-	newPath := agent.NewSessionPath(c.sessionDir, c.label)
+	newPath := targetPath
+	if newPath == "" {
+		newPath = agent.NewSessionPath(c.sessionDir, c.label)
+	}
 	if err := sess.SaveIfAbsent(newPath); err != nil {
 		return "", c.rewindFail(err)
 	}

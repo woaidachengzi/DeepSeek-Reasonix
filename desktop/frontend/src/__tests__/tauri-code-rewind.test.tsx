@@ -27,6 +27,8 @@ const state = globalThis as typeof globalThis & {
   __conversationRewindPreviewHandler?: () => Promise<object>;
   __conversationRewindCommitHandler?: () => Promise<object>;
   __conversationRewindUndoHandler?: () => Promise<object>;
+  __legacyForkPreviewHandler?: () => Promise<object>;
+  __legacyForkCommitHandler?: () => Promise<object>;
   __sessionHeadsHandler?: () => Promise<object[]>;
   __sessionHeadSwitchHandler?: (_sessionId: string, headId: string) => Promise<void>;
   __combinedRewindPreviewHandler?: () => Promise<object>;
@@ -165,5 +167,18 @@ await act(async () => { click(button("Create conversation version")); await sett
 check(!document.querySelector(".tauri-transcript")?.textContent?.includes("later answer"), "failed history refresh must not keep the old conversation visible");
 check(document.body.textContent?.includes("history unavailable"), "failed history refresh should explain the missing transcript");
 state.__historyGate = undefined;
+state.__legacyForkPreviewHandler = async () => ({ turn: 1, canConversation: false, disabledReason: "new session format" });
+await act(async () => { click(button("Fork older conversation")); await settle(); });
+check(!button("Create and open fork"), "unsupported format must not offer a legacy fork commit");
+state.__legacyForkPreviewHandler = async () => ({ planId: "plan-legacy", turn: 1, canConversation: true });
+state.__legacyForkCommitHandler = async () => {
+  state.__workbenchSessions = [{ sessionId: "tauri-child", title: "Fork", workspaceRoot: "/tmp/ws" }, ...state.__workbenchSessions!];
+  return { ok: true, sessionId: "tauri-child" };
+};
+await act(async () => { click(button("Fork older conversation")); await settle(); });
+check(document.body.textContent?.includes("The original conversation and workspace files stay unchanged"), "legacy preview must explain its scope");
+await act(async () => { click(button("Create and open fork")); await settle(); await settle(); });
+check(state.__tauriBridgeCalls?.some(call => call.name === "bridge_legacy_fork_commit" && call.args.planId === "plan-legacy"), "legacy commit must use the previewed plan");
+check(state.__tauriBridgeCalls?.some(call => call.name === "bridge_switch_session" && call.args.sessionId === "tauri-child"), "legacy fork must open the registered child");
 await act(async () => { root.unmount(); });
 process.stdout.write("tauri code rewind UI: passed\n");

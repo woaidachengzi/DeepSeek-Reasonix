@@ -545,9 +545,9 @@ pub use crate::protocol_generated::{
     BridgeConversationRewindCommitRequest, BridgeConversationRewindPlanResponse,
     BridgeConversationRewindPreviewRequest, BridgeConversationRewindResultResponse,
     BridgeConversationRewindUndoRequest, BridgeDeleteSessionResponse, BridgeEvent,
-    BridgeHistoryMessage, BridgeHistoryResponse, BridgeMCPInteractionAnswerRequest,
-    BridgeOpenSessionRequest as OpenSessionRequest, BridgeProjectFolder,
-    BridgeProjectFoldersResponse, BridgeProviderModelProbeRequest,
+    BridgeHistoryMessage, BridgeHistoryResponse, BridgeLegacyConversationForkResultResponse,
+    BridgeMCPInteractionAnswerRequest, BridgeOpenSessionRequest as OpenSessionRequest,
+    BridgeProjectFolder, BridgeProjectFoldersResponse, BridgeProviderModelProbeRequest,
     BridgeProviderModelProbeResponse, BridgeProviderSummaryResponse, BridgeRemoteBrowseRequest,
     BridgeRemoteBrowseResponse, BridgeRemoteDisconnectRequest, BridgeRemoteDisconnectResponse,
     BridgeRemoteFilePreviewRequest, BridgeRemoteFilePreviewResponse, BridgeRemoteFileSaveRequest,
@@ -4053,6 +4053,51 @@ impl BridgeSupervisor {
             Some(&request_id),
         )?;
         let envelope: BridgeCombinedRewindResultResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope)
+    }
+
+    pub fn legacy_fork_preview(
+        &self,
+        request: ConversationRewindPreviewRequest,
+    ) -> Result<BridgeConversationRewindPlanResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let path = format!("/v1/sessions/{session_id}:legacy-fork-preview");
+        let response = self.request_json(
+            "POST",
+            &path,
+            Some(json!(BridgeConversationRewindPreviewRequest {
+                turn: request.turn
+            })),
+            None,
+        )?;
+        let envelope: BridgeConversationRewindPlanResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope)
+    }
+
+    pub fn legacy_fork_commit(
+        &self,
+        request: ConversationRewindCommitRequest,
+    ) -> Result<BridgeLegacyConversationForkResultResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let plan_id = session_path_component(&request.plan_id)
+            .map_err(|_| "legacy conversation fork plan ID is invalid".to_string())?;
+        let request_id = opaque_secret()?;
+        let path = format!("/v1/sessions/{session_id}:legacy-fork-commit");
+        let response = self.request_json(
+            "POST",
+            &path,
+            Some(json!(BridgeConversationRewindCommitRequest { plan_id })),
+            Some(&request_id),
+        )?;
+        let envelope: BridgeLegacyConversationForkResultResponse =
             serde_json::from_value(response).map_err(display_error)?;
         if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());

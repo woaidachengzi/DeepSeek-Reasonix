@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"sync/atomic"
 
 	"reasonix/internal/agent"
@@ -208,6 +209,35 @@ func (c *Controller) CommitCombinedRewindInPlace(planID string, confirmPartialCo
 		return checkpoint.RewindResult{}, c.rewindFail(ErrRewindCoverageConfirmationRequired)
 	}
 	return c.CommitRewindInPlace(planID)
+}
+
+// CommitLegacyConversationFork creates a detached child at a caller-owned
+// path after revalidating a conversation-only plan. The parent stays current.
+func (c *Controller) CommitLegacyConversationFork(planID, targetPath string) error {
+	if _, dag := c.SessionHead(); dag || targetPath == "" || filepath.Clean(targetPath) != targetPath ||
+		filepath.Dir(targetPath) != filepath.Clean(c.SessionDir()) || filepath.Ext(targetPath) != ".jsonl" {
+		return c.rewindFail(fmt.Errorf("legacy conversation fork target is invalid"))
+	}
+	if err := c.beginRotation(); err != nil {
+		return c.rewindFail(err)
+	}
+	defer c.endRotation()
+	store := c.checkpoints.storeRef()
+	if store == nil {
+		return c.rewindFail(fmt.Errorf("checkpoints unavailable"))
+	}
+	if err := store.ValidatePlanSessionRevision(planID, atomic.LoadInt64(&c.sessionRevision)); err != nil {
+		return c.rewindFail(err)
+	}
+	plan, ok := store.PeekPlan(planID)
+	if !ok || plan.Scope != checkpoint.RewindConversation || !plan.CanConversation {
+		return c.rewindFail(fmt.Errorf("legacy conversation fork plan is unavailable"))
+	}
+	if _, err := c.forkNamedReadyToPath(plan.Turn, "", false, agent.HeadKindRewind, targetPath); err != nil {
+		return err
+	}
+	_ = store.DiscardPlan(planID)
+	return nil
 }
 
 // UndoConversationRewindHead returns from an empty rewind head to its parent.

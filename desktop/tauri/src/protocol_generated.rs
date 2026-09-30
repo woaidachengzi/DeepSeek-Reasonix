@@ -193,6 +193,21 @@ pub struct BridgeHistoryResponse {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeLegacyConversationForkResult {
+    pub error: Option<String>,
+    pub ok: bool,
+    pub session_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeLegacyConversationForkResultResponse {
+    pub protocol_version: u64,
+    pub result: BridgeLegacyConversationForkResult,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeMCPInteractionAnswerRequest {
     pub action: String,
     pub content: Option<Value>,

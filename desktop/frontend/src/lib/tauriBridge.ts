@@ -42,6 +42,7 @@ import type {
   BridgeSessionHeadSwitchResponse,
   BridgeCombinedRewindPlanResponse,
   BridgeCombinedRewindResultResponse,
+  BridgeLegacyConversationForkResultResponse,
 } from "./bridgeProtocol.generated";
 import type { TerminalThemePreference } from "./terminalTheme";
 import type { Theme, ThemeStyle } from "./theme";
@@ -76,6 +77,7 @@ export type TauriConversationRewindResult = BridgeConversationRewindResultRespon
 export type TauriSessionHead = BridgeSessionHeadsResponse["heads"][number];
 export type TauriCombinedRewindPlan = BridgeCombinedRewindPlanResponse["plan"];
 export type TauriCombinedRewindResult = BridgeCombinedRewindResultResponse["result"];
+export type TauriLegacyConversationForkResult = BridgeLegacyConversationForkResultResponse["result"];
 
 /** Exposes only user-visible answer deltas; reasoning and other event text stay private. */
 export function tauriAssistantTextDelta(event: Pick<TauriBridgeEvent, "eventKind" | "payload">): string {
@@ -1749,6 +1751,18 @@ export async function tauriCombinedRewindPreview(sessionId: string, turn: number
 export async function tauriCombinedRewindCommit(sessionId: string, planId: string, confirmPartialCoverage: boolean): Promise<TauriCombinedRewindResult> {
   requireTauri();
   const response = await invoke<BridgeCombinedRewindResultResponse>("bridge_combined_rewind_commit", { request: { sessionId, planId, confirmPartialCoverage } });
+  return response.result;
+}
+
+export async function tauriLegacyForkPreview(sessionId: string, turn: number): Promise<TauriConversationRewindPlan> {
+  requireTauri();
+  const response = await invoke<BridgeConversationRewindPlanResponse>("bridge_legacy_fork_preview", { request: { sessionId, turn } });
+  return response.plan;
+}
+
+export async function tauriLegacyForkCommit(sessionId: string, planId: string): Promise<TauriLegacyConversationForkResult> {
+  requireTauri();
+  const response = await invoke<BridgeLegacyConversationForkResultResponse>("bridge_legacy_fork_commit", { request: { sessionId, planId } });
   return response.result;
 }
 

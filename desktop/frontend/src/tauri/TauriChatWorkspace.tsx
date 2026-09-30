@@ -145,6 +145,8 @@ import {
   tauriConversationRewindPreview,
   tauriConversationRewindCommit,
   tauriConversationRewindUndo,
+  tauriLegacyForkPreview,
+  tauriLegacyForkCommit,
   tauriSessionHeads,
   tauriSessionHeadSwitch,
   tauriCombinedRewindPreview,
@@ -507,6 +509,7 @@ export function TauriSessionPreview() {
   const [codeRewindPlan, setCodeRewindPlan] = useState<TauriCodeRewindPlan | null>(null);
   const [codeRewindCoverageConfirmed, setCodeRewindCoverageConfirmed] = useState(false);
   const [conversationRewindPlan, setConversationRewindPlan] = useState<TauriConversationRewindPlan | null>(null);
+  const [legacyForkPlan, setLegacyForkPlan] = useState<TauriConversationRewindPlan | null>(null);
   const [conversationRewindUndo, setConversationRewindUndo] = useState<{ sessionId: string; headId: string } | null>(null);
   const [sessionHeads, setSessionHeads] = useState<TauriSessionHead[]>([]);
   const [combinedRewindPlan, setCombinedRewindPlan] = useState<TauriCombinedRewindPlan | null>(null);
@@ -1570,6 +1573,7 @@ export function TauriSessionPreview() {
     setCodeRewindPlan(null);
     setCodeRewindCoverageConfirmed(false);
     setConversationRewindPlan(null);
+    setLegacyForkPlan(null);
     setConversationRewindUndo(null);
     setSessionHeads([]);
     setCombinedRewindPlan(null);
@@ -1906,6 +1910,7 @@ export function TauriSessionPreview() {
     setCodeRewindPlan(null);
     setCodeRewindCoverageConfirmed(false);
     setConversationRewindPlan(null);
+    setLegacyForkPlan(null);
     setCombinedRewindPlan(null);
     setCombinedCoverageConfirmed(false);
     setWorkspaceError("");
@@ -1936,6 +1941,7 @@ export function TauriSessionPreview() {
     setCodeRewindPlan(null);
     setCodeRewindCoverageConfirmed(false);
     setConversationRewindPlan(null);
+    setLegacyForkPlan(null);
     setCombinedRewindPlan(null);
     setWorkspaceFileRevertMessage("");
     try {
@@ -2011,6 +2017,7 @@ export function TauriSessionPreview() {
     setWorkspaceFileRevertBusy(true);
     setCodeRewindPlan(null);
     setConversationRewindPlan(null);
+    setLegacyForkPlan(null);
     setCombinedRewindPlan(null);
     setWorkspaceFileRevertMessage("");
     try {
@@ -2020,6 +2027,63 @@ export function TauriSessionPreview() {
       if (isCurrent()) setWorkspaceFileRevertMessage(`${recoveryCopy.conversation.failed} ${tauriMessageFrom(cause)}`);
     } finally {
       if (isCurrent()) setWorkspaceFileRevertBusy(false);
+    }
+  }
+
+  async function previewLegacyFork(turn: number) {
+    if (!session || session.state !== "idle" || busy || workspaceFileRevertBusy) return;
+    const sessionID = session.id;
+    const epoch = workspaceEpochRef.current;
+    const request = ++workspaceFileRevertRequestRef.current;
+    const isCurrent = () => workspaceEpochRef.current === epoch && workspaceFileRevertRequestRef.current === request;
+    setWorkspaceFileRevertBusy(true);
+    setCodeRewindPlan(null);
+    setConversationRewindPlan(null);
+    setLegacyForkPlan(null);
+    setCombinedRewindPlan(null);
+    setWorkspaceFileRevertMessage("");
+    try {
+      const plan = await tauriLegacyForkPreview(sessionID, turn);
+      if (isCurrent()) setLegacyForkPlan(plan);
+    } catch (cause) {
+      if (isCurrent()) setWorkspaceFileRevertMessage(`${recoveryCopy.legacyFork.failed} ${tauriMessageFrom(cause)}`);
+    } finally {
+      if (isCurrent()) setWorkspaceFileRevertBusy(false);
+    }
+  }
+
+  async function commitLegacyFork() {
+    const plan = legacyForkPlan;
+    if (!session || session.state !== "idle" || busy || workspaceFileRevertBusy || !plan?.canConversation || !plan.planId) return;
+    const sessionID = session.id;
+    const root = session.workspaceRoot;
+    const epoch = workspaceEpochRef.current;
+    const request = ++workspaceFileRevertRequestRef.current;
+    const isCurrent = () => workspaceEpochRef.current === epoch && workspaceFileRevertRequestRef.current === request;
+    setWorkspaceFileRevertBusy(true);
+    setBusy(true);
+    setWorkspaceFileRevertMessage("");
+    try {
+      const result = await tauriLegacyForkCommit(sessionID, plan.planId);
+      if (!isCurrent()) return;
+      setLegacyForkPlan(null);
+      if (!result.ok || !result.sessionId) {
+        setWorkspaceFileRevertMessage(`${recoveryCopy.legacyFork.failed} ${result.error || ""}`);
+        return;
+      }
+      const nextPageRequest = ++catalogAuditRequestRef.current;
+      await reloadFirstWorkbenchSessionPage(nextPageRequest, isCurrent);
+      if (!isCurrent()) return;
+      setBusy(false);
+      setWorkspaceFileRevertBusy(false);
+      await activateSession(result.sessionId, root);
+    } catch (cause) {
+      if (isCurrent()) setWorkspaceFileRevertMessage(`${recoveryCopy.legacyFork.failed} ${tauriMessageFrom(cause)}`);
+    } finally {
+      if (isCurrent()) {
+        setWorkspaceFileRevertBusy(false);
+        setBusy(false);
+      }
     }
   }
 
@@ -2101,6 +2165,7 @@ export function TauriSessionPreview() {
     setWorkspaceFileRevertBusy(true);
     setCodeRewindPlan(null);
     setConversationRewindPlan(null);
+    setLegacyForkPlan(null);
     setCombinedRewindPlan(null);
     setCombinedCoverageConfirmed(false);
     setWorkspaceFileRevertMessage("");
@@ -2356,6 +2421,7 @@ export function TauriSessionPreview() {
     setCodeRewindPlan(null);
     setCodeRewindCoverageConfirmed(false);
     setConversationRewindPlan(null);
+    setLegacyForkPlan(null);
     setCombinedRewindPlan(null);
     setCombinedCoverageConfirmed(false);
     setWorkspaceFileRevertMessage("");
@@ -3253,7 +3319,7 @@ export function TauriSessionPreview() {
               {workspaceCheckpointsLoading ? <div className="tauri-workspace-drawer__loading">{t("workspace.loadingChanges")}</div> : workspaceCheckpoints.length === 0 ? <div className="tauri-workspace-drawer__empty">{recoveryCopy.empty}</div> : <ul className="tauri-workspace-drawer__entries">
                 {[...workspaceCheckpoints].reverse().map(checkpoint => <li key={checkpoint.turn}><button type="button" className="tauri-workspace-entry tauri-workspace-change-entry" onClick={() => void previewCodeRewind(checkpoint.turn)} disabled={busy || workspaceFileRevertBusy || session?.state !== "idle"}>
                   <span className="tauri-workspace-entry__icon"><FileText size={15} /></span><span className="tauri-workspace-entry__name">#{checkpoint.turn} · {checkpoint.prompt || "—"}</span><small>{checkpoint.turnFileCount} {t("workspace.filesTab")}</small>
-                </button><button type="button" className="tauri-diagnostic-action" onClick={() => void previewConversationRewind(checkpoint.turn)} disabled={busy || workspaceFileRevertBusy || session?.state !== "idle"}>{recoveryCopy.conversation.action}</button><button type="button" className="tauri-diagnostic-action" onClick={() => void previewCombinedRewind(checkpoint.turn)} disabled={busy || workspaceFileRevertBusy || session?.state !== "idle"}>{recoveryCopy.combined.action}</button></li>)}
+                </button><button type="button" className="tauri-diagnostic-action" onClick={() => void previewConversationRewind(checkpoint.turn)} disabled={busy || workspaceFileRevertBusy || session?.state !== "idle"}>{recoveryCopy.conversation.action}</button><button type="button" className="tauri-diagnostic-action" onClick={() => void previewLegacyFork(checkpoint.turn)} disabled={busy || workspaceFileRevertBusy || session?.state !== "idle"}>{recoveryCopy.legacyFork.action}</button><button type="button" className="tauri-diagnostic-action" onClick={() => void previewCombinedRewind(checkpoint.turn)} disabled={busy || workspaceFileRevertBusy || session?.state !== "idle"}>{recoveryCopy.combined.action}</button></li>)}
               </ul>}
               {workspaceFileRevertBusy && <p className="tauri-workspace-drawer__note">{recoveryCopy.working}</p>}
               {workspaceFileRevertMessage && <p role="status" className="tauri-workspace-drawer__note">{workspaceFileRevertMessage}</p>}
@@ -3271,6 +3337,12 @@ export function TauriSessionPreview() {
                 <p>{recoveryCopy.conversation.description}</p>
                 {!conversationRewindPlan.canConversation && <p role="alert">{recoveryCopy.conversation.unavailable} {conversationRewindPlan.disabledReason || ""}</p>}
                 <div><button type="button" className="tauri-diagnostic-action" onClick={() => setConversationRewindPlan(null)} disabled={workspaceFileRevertBusy}>{recoveryCopy.fileRevert.cancel}</button>{conversationRewindPlan.canConversation && <button type="button" className="tauri-diagnostic-action" onClick={() => void commitConversationRewind()} disabled={workspaceFileRevertBusy || busy || session?.state !== "idle"}>{recoveryCopy.conversation.confirm}</button>}</div>
+              </section>}
+              {legacyForkPlan && <section className="tauri-workspace-revert" aria-label={recoveryCopy.legacyFork.review}>
+                <strong>{recoveryCopy.legacyFork.review} · #{legacyForkPlan.turn}</strong>
+                <p>{recoveryCopy.legacyFork.description}</p>
+                {!legacyForkPlan.canConversation && <p role="alert">{recoveryCopy.legacyFork.unavailable} {legacyForkPlan.disabledReason || ""}</p>}
+                <div><button type="button" className="tauri-diagnostic-action" onClick={() => setLegacyForkPlan(null)} disabled={workspaceFileRevertBusy}>{recoveryCopy.fileRevert.cancel}</button>{legacyForkPlan.canConversation && <button type="button" className="tauri-diagnostic-action" onClick={() => void commitLegacyFork()} disabled={workspaceFileRevertBusy || busy || session?.state !== "idle"}>{recoveryCopy.legacyFork.confirm}</button>}</div>
               </section>}
               {combinedRewindPlan && <section className="tauri-workspace-revert" aria-label={recoveryCopy.combined.review}>
                 <strong>{recoveryCopy.combined.review} · #{combinedRewindPlan.turn}</strong>

@@ -136,6 +136,17 @@ export interface BridgeHistoryResponse {
   totalMessages: number;
 }
 
+export interface BridgeLegacyConversationForkResult {
+  error?: string;
+  ok: boolean;
+  sessionId?: string;
+}
+
+export interface BridgeLegacyConversationForkResultResponse {
+  protocolVersion: number;
+  result: BridgeLegacyConversationForkResult;
+}
+
 export interface BridgeMCPInteractionAnswerRequest {
   action: "accept" | "decline" | "cancel";
   content?: Record<string, unknown>;

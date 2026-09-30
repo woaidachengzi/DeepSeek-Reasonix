@@ -102,6 +102,8 @@ const commands: CommandContract[] = [
   { command: "bridge_conversation_rewind_preview", argKeys: ["request"], description: "tauriConversationRewindPreview() reviews a conversation fork" },
   { command: "bridge_conversation_rewind_commit", argKeys: ["request"], description: "tauriConversationRewindCommit() creates a conversation head" },
   { command: "bridge_conversation_rewind_undo", argKeys: ["request"], description: "tauriConversationRewindUndo() returns to the parent head" },
+  { command: "bridge_legacy_fork_preview", argKeys: ["request"], description: "tauriLegacyForkPreview() reviews a separate older conversation fork" },
+  { command: "bridge_legacy_fork_commit", argKeys: ["request"], description: "tauriLegacyForkCommit() creates a registered child session" },
   { command: "bridge_session_heads", argKeys: ["request"], description: "tauriSessionHeads() lists conversation versions" },
   { command: "bridge_session_head_switch", argKeys: ["request"], description: "tauriSessionHeadSwitch() selects a version in the same transcript" },
   { command: "bridge_combined_rewind_preview", argKeys: ["request"], description: "tauriCombinedRewindPreview() reviews both scopes" },

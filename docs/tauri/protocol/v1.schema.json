@@ -62,6 +62,8 @@
     { "$ref": "#/$defs/combinedRewindCommitRequest" },
     { "$ref": "#/$defs/workspaceCombinedRewindResult" },
     { "$ref": "#/$defs/combinedRewindResultResponse" },
+    { "$ref": "#/$defs/legacyConversationForkResult" },
+    { "$ref": "#/$defs/legacyConversationForkResultResponse" },
     { "$ref": "#/$defs/submitRequest" },
     { "$ref": "#/$defs/approvalRequest" },
     { "$ref": "#/$defs/askAnswer" },
@@ -887,6 +889,27 @@
       "properties": {
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
         "result": { "$ref": "#/$defs/workspaceCombinedRewindResult" }
+      },
+      "additionalProperties": false
+    },
+    "legacyConversationForkResult": {
+      "title": "BridgeLegacyConversationForkResult",
+      "type": "object",
+      "required": ["ok"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "sessionId": { "type": "string" },
+        "error": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "legacyConversationForkResultResponse": {
+      "title": "BridgeLegacyConversationForkResultResponse",
+      "type": "object",
+      "required": ["protocolVersion", "result"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "result": { "$ref": "#/$defs/legacyConversationForkResult" }
       },
       "additionalProperties": false
     },

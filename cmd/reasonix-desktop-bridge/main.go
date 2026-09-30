@@ -690,6 +690,12 @@ func (b *bridgeServer) sessionCommand(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(path, ":combined-rewind-commit"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":combined-rewind-commit"))
 		b.idempotent(16<<10, b.combinedRewindCommit)(w, r)
+	case strings.HasSuffix(path, ":legacy-fork-preview"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":legacy-fork-preview"))
+		b.legacyForkPreview(w, r)
+	case strings.HasSuffix(path, ":legacy-fork-commit"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":legacy-fork-commit"))
+		b.idempotent(16<<10, b.legacyForkCommit)(w, r)
 	case strings.HasSuffix(path, ":cancel"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":cancel"))
 		b.cancel(w, r)

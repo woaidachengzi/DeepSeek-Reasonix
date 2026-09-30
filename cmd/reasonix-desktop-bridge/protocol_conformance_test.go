@@ -66,6 +66,8 @@ func TestGoDTOsMatchTheWireSchema(t *testing.T) {
 		{Name: "combinedRewindCommitRequest", Sample: combinedRewindCommitRequest{}},
 		{Name: "workspaceCombinedRewindResult", Sample: desktopbridge.WorkspaceCombinedRewindResult{}},
 		{Name: "combinedRewindResultResponse", Sample: combinedRewindResultResponse{}},
+		{Name: "legacyConversationForkResult", Sample: desktopbridge.LegacyConversationForkResult{}},
+		{Name: "legacyConversationForkResultResponse", Sample: legacyConversationForkResultResponse{}},
 		{Name: "submitRequest", Sample: submitRequest{}},
 		{Name: "approvalRequest", Sample: approveRequest{}},
 		{Name: "askAnswer", Sample: desktopbridge.AskAnswer{}},

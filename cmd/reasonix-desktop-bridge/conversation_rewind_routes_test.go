@@ -70,6 +70,20 @@ func TestBridgeServerConversationRewindRoutesAreScopedAndDeduplicated(t *testing
 	if response := call("/v1/sessions/other:combined-rewind-preview", `{"turn":1}`, ""); response.Code != http.StatusNotFound {
 		t.Fatalf("other session combined preview status=%d", response.Code)
 	}
+	if response := call("/v1/sessions/other:legacy-fork-preview", `{"turn":1}`, ""); response.Code != http.StatusNotFound {
+		t.Fatalf("other session legacy preview status=%d", response.Code)
+	}
+	if response := call("/v1/sessions/tab-conversation:legacy-fork-preview", `{"turn":1}`, ""); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"planId":"plan-legacy"`) {
+		t.Fatalf("legacy preview status=%d body=%s", response.Code, response.Body.String())
+	}
+	legacyPath := "/v1/sessions/tab-conversation:legacy-fork-commit"
+	if response := call(legacyPath, `{"planId":"plan-legacy"}`, ""); response.Code != http.StatusBadRequest || runtime.legacyForkCommits != 0 {
+		t.Fatalf("legacy commit without request ID: status=%d calls=%d", response.Code, runtime.legacyForkCommits)
+	}
+	legacyFirst, legacyRetry := call(legacyPath, `{"planId":"plan-legacy"}`, "legacy-1"), call(legacyPath, `{"planId":"plan-legacy"}`, "legacy-1")
+	if legacyFirst.Code != http.StatusOK || legacyRetry.Code != http.StatusOK || legacyFirst.Body.String() != legacyRetry.Body.String() || runtime.legacyForkCommits != 1 {
+		t.Fatalf("legacy commit dedupe: first=%d retry=%d calls=%d", legacyFirst.Code, legacyRetry.Code, runtime.legacyForkCommits)
+	}
 	if response := call("/v1/sessions/tab-conversation:combined-rewind-preview", `{"turn":1}`, ""); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"planId":"plan-both"`) {
 		t.Fatalf("combined preview status=%d body=%s", response.Code, response.Body.String())
 	}

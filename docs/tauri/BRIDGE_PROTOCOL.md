@@ -66,6 +66,8 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 多文件代码回滚提交 | `POST /v1/sessions/{sessionId}:code-rewind-commit` | `X-Reasonix-Request-ID` 去重；只接受 `code` 方案；项目覆盖缺口须显式确认，提交重新校验文件 |
 | 对话回滚预览 | `POST /v1/sessions/{sessionId}:conversation-rewind-preview` | 只读；只允许同一 transcript 内可切换 head 的会话，旧格式返回禁用原因 |
 | 对话回滚提交 | `POST /v1/sessions/{sessionId}:conversation-rewind-commit` | `X-Reasonix-Request-ID` 去重；只接受 `conversation` 方案，在同一 transcript 创建新 head，文件不变 |
+| 旧格式对话分叉预览 | `POST /v1/sessions/{sessionId}:legacy-fork-preview` | 只读；仅接受旧格式会话的检查点对话边界 |
+| 旧格式对话分叉提交 | `POST /v1/sessions/{sessionId}:legacy-fork-commit` | `X-Reasonix-Request-ID` 去重；创建新会话文件并登记独立身份，原会话和工作区文件不变 |
 | 返回原对话 | `POST /v1/sessions/{sessionId}:conversation-rewind-undo` | `X-Reasonix-Request-ID` 去重；只接受当前尚未追加消息的 rewind head ID |
 | 对话版本列表 | `POST /v1/sessions/{sessionId}:session-heads` | 只读；返回当前 transcript 的 schema-2 活跃 head，旧格式为空列表；限制展示数量和预览长度 |
 | 切换对话版本 | `POST /v1/sessions/{sessionId}:session-head-switch` | `X-Reasonix-Request-ID` 去重；只接受当前 transcript 内的活跃 head ID，路径和工作区文件不变 |
@@ -84,7 +86,7 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 
 单文件恢复沿用 core 的两阶段检查点事务。预览不会写入文件；提交会重新校验方案与文件指纹，旧方案和会话运行中的提交会失败。会话首次修改后文件再次变化时，界面须显示覆盖风险，并让用户在最终操作中显式选择 `overwrite_checkpoint`。`keep_current` 由界面取消表示。恢复成功后若 core 返回可撤销事务 ID，界面提供一次撤销入口；撤销前重新核对文件指纹，后续手工修改会使撤销失败。bridge 只回传相对路径、冲突原因和恢复数量，不回传原始文件内容或绝对路径。此功能只恢复一个由当前会话检查点持有的文件，不回退对话历史。
 
-检查点页接入 core 的 `RewindCode` 事务。预览列出该轮及以后被捕获的文件，最多展示 60 条路径，同时返回完整计数；发现文件冲突时禁用提交，不提供多文件强制覆盖。项目覆盖缺口允许提交前必须勾选风险确认，bridge 再次检查该标志；没有确认时即使绕开前端也不能提交。成功的代码回滚可经前述撤销事务入口恢复操作前文件，且不改变对话历史。对话分叉或对话与文件组合回滚仍未接入 Preview。
+检查点页接入 core 的 `RewindCode` 事务。预览列出该轮及以后被捕获的文件，最多展示 60 条路径，同时返回完整计数；发现文件冲突时禁用提交，不提供多文件强制覆盖。项目覆盖缺口允许提交前必须勾选风险确认，bridge 再次检查该标志；没有确认时即使绕开前端也不能提交。成功的代码回滚可经前述撤销事务入口恢复操作前文件，且不改变对话历史。对话回滚、组合回滚和旧格式独立会话分叉均已接入 Preview。
 
 MCP 服务器管理按“列表 → 新增 → 编辑/删除”拆分。`GET /v1/mcp/servers` 返回每个服务器的 `name / type / source / scope / configPath / command / args / url / envKeys / headerKeys / autoStart / tier / managedByPackage / nativeOAuthEligible / authenticationSaved`：**凭据只写不回传**——`envKeys` 与 `headerKeys` 只给出该服务器期望的键名，任何值都不会进入响应。`scope=project` 的写入由 `workspaceRoot` 选定的 `reasonix.toml`，`scope=global` 写入用户配置；已有条目按内核记录的真实来源写回，不会把项目级服务器提升为全局。`POST` 的 `args` / `env` / `headers` 用“字段省略 = 保留原值、显式空对象 = 清空”的语义，因此编辑不需要重输密钥；由已安装插件包管理的服务器会被拒绝修改。删除会从拥有该声明的配置文件移除，名称不存在时返回 `not_found`。当前会话连接动作支持已启用服务器的重连与断开：请求必须带当前会话 ID，空闲检查在宿主和 runtime 两层执行；操作不更改持久启用项，断开只影响当前会话，连接返回工具数量而不返回工具 schema 或凭据。符合内核资格检查的 Streamable HTTP MCP 可启动系统浏览器 OAuth PKCE 授权，流程由当前 runtime 管理，令牌仅写入 Reasonix 私有状态；Tauri 查询到的只有流程 ID、服务器名和脱敏状态。完成授权后需要用户显式连接 MCP，不会自动改变当前会话工具集。设置页可清除已保存的静态凭据和私有 OAuth 状态，此操作要求当前会话空闲，按真实配置来源写入并断开当前 Host 中该服务器。
 
