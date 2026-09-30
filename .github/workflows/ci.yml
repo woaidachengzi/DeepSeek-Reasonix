@@ -648,6 +648,9 @@ jobs:
       - name: Verify native macOS window restore and close preferences
         run: python3 tools/tauri/smoke-native-window.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
 
+      - name: Verify packaged macOS config import and restart isolation
+        run: python3 tools/tauri/smoke-profile-import.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
+
   # Compile and exercise the Win32 registry/icon branches on Windows itself.
   # Interactive consoles and Explorer navigation still need desktop acceptance.
   desktop-tauri-windows:

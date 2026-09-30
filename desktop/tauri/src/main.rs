@@ -10,6 +10,8 @@ mod menu;
 #[cfg(target_os = "macos")]
 mod native_menu_smoke;
 #[cfg(target_os = "macos")]
+mod native_profile_smoke;
+#[cfg(target_os = "macos")]
 mod native_task_smoke;
 #[cfg(target_os = "macos")]
 mod native_window_smoke;
@@ -3745,6 +3747,7 @@ fn main() {
         #[cfg(target_os = "macos")]
         if matches!(event, tauri::RunEvent::Ready) {
             native_window_smoke::start_if_requested(app);
+            native_profile_smoke::start_if_requested(app);
         }
         #[cfg(target_os = "macos")]
         if matches!(event, tauri::RunEvent::Ready)

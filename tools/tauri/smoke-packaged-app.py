@@ -154,6 +154,8 @@ def smoke_once(host_binary, sidecar_binary, identifier, managed):
         expected_home = app_data / "reasonix-core" if managed else root / "reasonix-home"
         cache_home = root / "reasonix-cache"
         env = os.environ.copy()
+        env.pop("REASONIX_TAURI_PROFILE_SMOKE", None)
+        env.pop("REASONIX_TAURI_NATIVE_WINDOW_SMOKE", None)
         env.update({
             "HOME": str(home),
             "TMPDIR": str(temp),

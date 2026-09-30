@@ -157,6 +157,21 @@ python3 tools/tauri/smoke-native-window.py 'desktop/tauri/target/release/bundle/
 门禁尚未通过；默认窗口门禁通过不能代替该项验收，也不代表菜单/托盘点击、键盘编辑或
 显示器拔插已经验收。macOS CI 已接入默认窗口门禁，远端执行结果待确认。
 
+配置导入包级验收使用临时 HOME 中的正式版和 Preview 档案，调用设置页同一已确认宿主入口。
+验证配置/项目目录导入、真实 bridge 读取、Preview 修改默认模型后 sidecar 重启、整包重启
+恢复、备份与原件保护、拒绝覆盖/显式目录导入及退出清理。原件比较包含字节、权限和修改
+时间；项目仅导入 root/title，不复制旧会话排序、sessions/cache/plugins 或 `.env`。
+
+```bash
+python3 tools/tauri/smoke-profile-import.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
+# Optional: construct a valid legacy fixture, then verify it remains readable.
+python3 tools/tauri/smoke-profile-import.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app' --legacy-cli /absolute/path/to/legacy/reasonix
+```
+
+可选旧版 CLI 会在保存基线前自行升级测试配置；Preview 退出后的旧版查询必须不再改写
+原件。该验收不代替设置页真实点击、旧 Wails GUI/目录锁或完整会话回退验收。macOS CI
+执行三个标准场景，不依赖开发机上的旧版二进制；远端执行结果待确认。
+
 2026-10-01 从干净提交 `91cbff49cbe10a0faab0a7570d880bad87ffc126` 完整构建 macOS `.app`，
 严格本地 ad-hoc 签名校验、两种临时档案共 14 个原生窗口/关闭场景和原有包级启动/退出
 smoke 均通过；同时通过前端 Tauri 回归与使用真实 bridge 的 189 项 Rust 回归（2 项默认忽略）。

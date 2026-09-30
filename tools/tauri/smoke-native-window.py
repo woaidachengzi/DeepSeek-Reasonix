@@ -60,7 +60,8 @@ def launch(host_binary, sidecar_binary, root, identifier, managed, phase, provid
     instance_marker.unlink(missing_ok=True)
     env = os.environ.copy()
     for key in ("REASONIX_HOME", "REASONIX_STATE_HOME", "REASONIX_CACHE_HOME",
-                "REASONIX_PREVIEW_SQLITE_EVENTS", "REASONIX_TAURI_PACKAGE_SMOKE"):
+                "REASONIX_PREVIEW_SQLITE_EVENTS", "REASONIX_TAURI_PACKAGE_SMOKE",
+                "REASONIX_TAURI_PROFILE_SMOKE"):
         env.pop(key, None)
     env.update({"HOME": str(home), "TMPDIR": str(temporary),
                 "REASONIX_TAURI_NATIVE_WINDOW_SMOKE": phase,

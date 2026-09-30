@@ -86,12 +86,21 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 | D：托盘与退出 | 托盘有显示/退出菜单；托盘、Dock 重开及单实例唤起共用主线程恢复入口，补上 macOS 应用取消隐藏。退出沿用 supervisor 停止路径。真实包原生 CloseRequested 验证关闭后继续运行、关闭即退出、偏好重启恢复与 sidecar 清理；应用隐藏/取消隐藏也已验证。实际 Go 流式任务在关闭后继续产生事件并完成历史保存；原生 Show 菜单恢复几何，Quit 菜单在第二个任务运行中退出并清理上游及 sidecar。 | 真实托盘点击、物理 Cmd+Q/托盘退出及 Dock 重开仍待验收。程序化原生菜单动作不能代替按键/点击；第二实例恢复可见已观察到，但键盘焦点严格门禁未通过，不能标记完整唤起已验收。 |
 | D：对话框与链接 | 现有 Tauri 选择器保留；共享外部链接及本地文档 adapter 已接入 Rust host。Markdown 默认打开、定位、另存为及指定已安装应用均走原生入口，错误不退回 browser mock。文档可执行目标拒绝、特殊路径、取消保存、源文件别名保护及权限拒绝已有回归。外部链接支持 HTTP(S)/受限 mailto，OAuth 入口仅接受 HTTP(S)。 | macOS 已增加系统应用注册查询、Spotlight 自定义安装位置和原生 64×64 图标；项目会话顶部选择器已接入配置偏好与卸载回退。Linux 已增加 XDG desktop entry 发现、GIO 原生启动、六类终端目录策略和有界 PNG 图标转换，共用逻辑回归通过；Linux 原生分支编译/图标/GUI 验收待执行。Windows 已增加 App Paths、安装目录/Toolbox 发现、终端目录策略和原生 PNG 图标代码；共用逻辑与 Win32 API 类型检查通过，Windows 原生 host 编译/注册表/图标/GUI 验收待执行；Global 会话已接入档案内稳定目录与会话身份查询。系统对话框、浏览器/邮件、指定应用的真实 UI 交互及 OAuth 仍需验收。 |
 | D：通知与钥匙串 | macOS 通知改为原生 UserNotifications：读取实际授权、报告发送失败、点击恢复对应会话；冷启动队列、档案隔离、失效会话与重复点击已有回归。Linux 已接入 XDG 服务/能力查询、实际发送与运行中点击；独立真实 D-Bus 联调通过，授权无标准查询时报告 unknown。凭据按持久档案身份隔离；设置页显式迁移旧 Preview 凭据，保留原件并拒绝覆盖。迁移/保存/删除与重启串行，写入及桥接同步失败回滚；macOS 原生隔离读写、真实 bridge 迁移/重启/删除及不落盘回归通过。 | 真实系统通知授权拒绝、横幅显示与前后台/冷启动点击、钥匙串锁定/授权拒绝、原生设置页迁移操作仍待验收。Linux native host、桌面环境/Wayland 焦点及冷启动点击待验收/补齐；Windows 原生授权读取/点击和 Windows/Linux 凭据后端仍待补齐/验收。 |
-| D：单实例与数据保护 | Tauri 单实例及独立默认 Preview 数据目录已存在。当前 Wails 与 bridge 启动均持有配置/状态两处目录锁；共享任一目录都会拒绝第二个写入宿主，目录别名去重，失败释放已取锁。真实 bridge/Wails 拒绝启动测试及配置原件/备份回退回归通过。导入页在操作前展示来源、目标目录与回退说明。 | 未参与目录锁协议的旧稳定版仍需兼容性验收；不能将当前两个宿主的测试推广为所有历史二进制互斥。真实 Wails 单实例通知/唤起、完整安装包导入与回退操作仍待验收。 |
+| D：单实例与数据保护 | Tauri 单实例及独立默认 Preview 数据目录已存在。当前 Wails 与 bridge 启动均持有配置/状态两处目录锁；共享任一目录都会拒绝第二个写入宿主，目录别名去重，失败释放已取锁。真实 bridge/Wails 拒绝启动测试及配置原件/备份回退回归通过。导入页在操作前展示来源、目标目录与回退说明；真实包宿主入口的配置/项目目录导入、Preview 修改/重启、原件及备份保护和显式目录拒绝导入通过，本地旧版 CLI 可再次读取原目录。 | 未参与目录锁协议的旧稳定版仍需兼容性验收；不能将当前两个宿主的测试推广为所有历史二进制互斥。本地旧版 CLI 来自有修改的 1.38.3 工作区，不证明正式发布二进制/Wails GUI 已认证。真实 Wails 单实例通知/唤起、设置页导入点击与完整会话/数据回退操作仍待验收。 |
 | E：remote host / bot / updater / 管理页 | remote host 与 bot 已有部分设置/bridge 接口；updater 插件已注册。macOS 菜单改为“Updates…”说明入口，如实提示 Preview 尚无更新检查并给出手动下载地址，移除没有实现依据的“启动时自动检查”文案。 | D 验收后对照 Wails 逐项审计和补齐；当前更新入口仍是说明对话框，插件注册不能视为更新流程完成。 |
 
 累计门禁：`pnpm test:clipboard`、输入框剪贴板回归、terminal selection、`pnpm test:tauri`、`pnpm build`，以及使用真实 Go bridge 的 Rust 测试（最新 XDG 通知切片 189 项通过、2 项默认忽略；其中 1 项独立真实 D-Bus 联调已显式通过，另有前轮 1 项显式 macOS 原生钥匙串测试通过）。最新 XDG 通知切片已从干净提交 `f8aba01793814b7119c4de7829bf747e42a94d53` 通过 `pnpm tauri:build -- --bundles app` 构建与本地 ad-hoc 签名；`tools/tauri/smoke-packaged-app.py` 在临时 HOME 分别验证默认和显式数据目录、私有凭据身份、真实 macOS 通知授权查询、实际 Global 工作区解析与私有目录权限、sidecar 就绪、未认证请求拒绝以及退出无残留。此 smoke 没有执行菜单/托盘等 UI 点击；两次桌面自动化分别超时和报 ScreenCaptureKit `SCStreamErrorDomain -3811`，所以真实 UI 验收保留待办。本地 ad-hoc 签名不是正式发布签名/公证。
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
+
+#### D：macOS 安装包配置导入、重启与原件保护（2026-10-01）
+
+- 新增 `smoke-profile-import.py` 和仅显式测试环境启用的原生入口；临时 HOME 内分别构造正式版和 Preview 档案，调用与设置页相同的确认入口。验证未确认时拒绝写入，配置先备份后导入，项目只复制 root/title，sessions/cache/plugins/`.env` 及旧会话/排序元数据未被复制；导入文件与备份权限为 0600，重复导入不覆盖、不增加备份，显式 `REASONIX_HOME` 不提供自动导入。
+- 实际 Go bridge 立即读取导入的 Provider/默认模型；通过实际设置接口修改 Preview 默认模型，再重启 sidecar 和完整 `.app`，修改保留且凭据档案身份稳定。外部 runner 对比 host 的初始/最终 sidecar 身份，要求原进程退出、新进程唯一、未认证请求被拒绝以及最终 sidecar/readiness 清理。正式版整个测试树的字节、权限、修改时间与原始基线一致，配置备份也保持原字节。
+- 额外使用本地 1.38.3 CLI 构造其自身有效配置，Preview 退出后由相同二进制再次查询 currency，要求能读取原目录且整个正式版测试树不变。二进制 SHA-256 为 `400f6370943e861c04e5b81b78a932e08f79923a02d4c3852a2c9973e75b4d13`，版本输出 `reasonix v1.38.3`，Go build metadata 的 revision 为 `2185b8e8ff8abb2166bf8e55df0694d05a0f9d76` 且 `vcs.modified=true`；这是可定位的本地旧版兼容证据，不能作为正式发布 artifact 或旧 Wails GUI 已认证的证明。
+- 第一轮旧版检查正确发现其查询前的主题初始化 `config.Load()` 会升级手写稀疏配置并改写文件。现在先由旧版构造有效配置，再保存原件基线；Preview 及最后旧版查询后的原件不变断言保留。未修改旧版行为或产品导入规则，未将旧版自己的初始化写入归因于 Preview。
+- 标准探测包的 import/restore/explicit 三个场景通过；带旧版原生配置的相同三个场景及最后查询也通过。使用真实 bridge 的 Rust 全量 189 项通过、2 项默认忽略；严格 clippy、Rust 格式、Python 语法和 CI YAML 解析通过。macOS CI 加入标准包级导入门禁，远端结果待确认；探测包复用已有前端/sidecar，干净提交完整生产包另行记录。
+- 程序化宿主入口不证明 WebView 设置页实际点击、旧 Wails GUI/目录锁、旧会话附件/检查点或全量数据恢复已验收；正式 Developer ID 签名/公证和其他 macOS D 待办保留，E 继续等待 D 验收且 Preview 稳定。
 
 #### D：macOS 运行任务时关闭、后台完成与原生退出（2026-10-01）
 
