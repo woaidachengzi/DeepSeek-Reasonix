@@ -12,6 +12,8 @@ mod native_appearance;
 #[cfg(target_os = "macos")]
 mod native_appearance_smoke;
 #[cfg(target_os = "macos")]
+mod native_clipboard_smoke;
+#[cfg(target_os = "macos")]
 mod native_menu_smoke;
 #[cfg(target_os = "macos")]
 mod native_profile_smoke;
@@ -3437,6 +3439,12 @@ fn apply_menu_zoom(app: &tauri::AppHandle, factor: f64) {
 
 fn main() {
     let app = tauri::Builder::default()
+        .on_page_load(|webview, payload| {
+            #[cfg(target_os = "macos")]
+            native_clipboard_smoke::observe(webview, payload);
+            #[cfg(not(target_os = "macos"))]
+            let _ = (webview, payload);
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::Builder::new()
@@ -3449,6 +3457,8 @@ fn main() {
         }))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            app.manage(native_clipboard_smoke::ClipboardSmokeState::default());
             let window_state = PreviewWindowState::for_app(app)?;
             let host_preferences = HostPreferences::for_app(app).map_err(std::io::Error::other)?;
             let workbench_catalog =

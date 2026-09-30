@@ -36,6 +36,11 @@ task_spec = importlib.util.spec_from_file_location(
 )
 task_provider = importlib.util.module_from_spec(task_spec)
 task_spec.loader.exec_module(task_provider)
+clipboard_spec = importlib.util.spec_from_file_location(
+    "native_clipboard_fixture", Path(__file__).with_name("native-clipboard-fixture.py")
+)
+clipboard_fixture = importlib.util.module_from_spec(clipboard_spec)
+clipboard_spec.loader.exec_module(clipboard_fixture)
 
 
 def verify_saved_state(app_data, temporary, maximized):
@@ -189,6 +194,7 @@ def smoke(app_path, include_focus=False):
             phases.extend(["menu-shortcuts", "menu-settings-hidden", "menu-settings-minimized", "menu-settings-app-hidden"])
             phases.append("task-background-menu-quit")
             phases.extend(["appearance-dark", "restore-appearance-dark", "restore-appearance-light", "restore-appearance-auto"])
+            phases.append("clipboard-native")
             if include_focus:
                 phases.append("second-instance")
             phases.append("close-quit")
@@ -197,6 +203,8 @@ def smoke(app_path, include_focus=False):
             for phase in phases:
                 core_home = root / "home/Library/Application Support" / identifier / "reasonix-core" if managed else root / "core"
                 fixture = task_provider.NativeTaskProvider(core_home, root / "tmp") if phase == "task-background-menu-quit" else nullcontext()
+                if phase == "clipboard-native":
+                    fixture = clipboard_fixture.NativeClipboardFixture(root / "tmp")
                 with fixture as provider:
                     identities.append(launch(host_binary, sidecar_binary, root, identifier, managed, phase, provider))
             if len(set(identities)) != 1:
