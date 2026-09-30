@@ -78,7 +78,7 @@ desktop API contract (保留 app/event helper 的调用形状)
 | D：单实例与数据保护 | Tauri 单实例及独立默认 Preview 数据目录已存在。当前 Wails 与 bridge 启动均持有配置/状态两处目录锁；共享任一目录都会拒绝第二个写入宿主，目录别名去重，失败释放已取锁。真实 bridge/Wails 拒绝启动测试及配置原件/备份回退回归通过。导入页在操作前展示来源、目标目录与回退说明。 | 未参与目录锁协议的旧稳定版仍需兼容性验收；不能将当前两个宿主的测试推广为所有历史二进制互斥。真实 Wails 单实例通知/唤起、完整安装包导入与回退操作仍待验收。 |
 | E：remote host / bot / updater / 管理页 | remote host 与 bot 已有部分设置/bridge 接口；updater 插件已注册。 | D 验收后对照 Wails 逐项审计和补齐；特别是当前“检查更新”仍是说明对话框，插件注册不能视为更新流程完成。 |
 
-累计门禁：`pnpm test:clipboard`、输入框剪贴板回归、terminal selection、`pnpm test:tauri`、`pnpm build`，以及使用真实 Go bridge 的 Rust 测试（最新 Global 工作区切片 163 项通过，另有前轮 1 项显式 macOS 原生钥匙串测试通过）。最新 Global 工作区切片已从干净提交 `065b1ae5f676e38a1f84a2a1bfab8f08a85bd7cc` 通过 `pnpm tauri:build -- --bundles app` 构建与本地 ad-hoc 签名；`tools/tauri/smoke-packaged-app.py` 在临时 HOME 分别验证默认和显式数据目录、私有凭据身份、真实 macOS 通知授权查询、实际 Global 工作区解析与私有目录权限、sidecar 就绪、未认证请求拒绝以及退出无残留。此 smoke 没有执行菜单/托盘等 UI 点击；两次桌面自动化分别超时和报 ScreenCaptureKit `SCStreamErrorDomain -3811`，所以真实 UI 验收保留待办。本地 ad-hoc 签名不是正式发布签名/公证。
+累计门禁：`pnpm test:clipboard`、输入框剪贴板回归、terminal selection、`pnpm test:tauri`、`pnpm build`，以及使用真实 Go bridge 的 Rust 测试（最新 Linux 共用逻辑切片 172 项通过，另有前轮 1 项显式 macOS 原生钥匙串测试通过）。最新 Linux 共用逻辑切片已从干净提交 `b81abf555f63d2ef8fbd2280dfec74107af90c02` 通过 `pnpm tauri:build -- --bundles app` 构建与本地 ad-hoc 签名；`tools/tauri/smoke-packaged-app.py` 在临时 HOME 分别验证默认和显式数据目录、私有凭据身份、真实 macOS 通知授权查询、实际 Global 工作区解析与私有目录权限、sidecar 就绪、未认证请求拒绝以及退出无残留。此 smoke 没有执行菜单/托盘等 UI 点击；两次桌面自动化分别超时和报 ScreenCaptureKit `SCStreamErrorDomain -3811`，所以真实 UI 验收保留待办。本地 ad-hoc 签名不是正式发布签名/公证。
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
@@ -98,6 +98,7 @@ desktop API contract (保留 app/event helper 的调用形状)
 - GIO/目录启动器最长等待 3 秒，及时退出失败返回固定解决提示；持续运行的处理器和终端/编辑器由后台回收进程。成功表示启动已提交，不代表实际窗口、文件或目录已验收。
 - 图标支持安装条目的绝对资源与有界主题/`pixmaps` 查找；含点的主题图标名称不误当扩展名，拒绝相对目录穿越、超大及无效内容。Linux 使用已锁定的 GdkPixbuf 0.18.5/GIO 0.18.4 原生加载器，把最多 1 MiB 输入转为最长边 64 像素、最多 64 KiB 的 PNG；不把 raw SVG、file URL 或 native 路径交给 WebView。本实现为固定尺寸/目录的有界查找，并非完整桌面主题继承引擎。
 - 新增 9 项可在本机执行的共用逻辑回归，覆盖 XDG 优先级/默认值、用户覆盖、动作段隔离、TryExec、GIO 参数、卸载/执行权限、定制终端路径、特殊工作目录、图标点名/越界/体积及启动失败。真实 Go bridge 的 Rust 全量回归 **172 项通过、1 项原生钥匙串测试默认忽略**；严格 clippy（含测试）、`pnpm test:tauri` 与 CI YAML 解析通过。本机为 macOS，这些结果不包含 Linux 条件编译的 GIO/Pixbuf/native host 分支。
+- 从干净提交 `b81abf555f63d2ef8fbd2280dfec74107af90c02` 完成 macOS Preview `.app` 构建及本地严格 ad-hoc 签名校验；默认托管/显式临时档案包级 smoke 均通过，包含凭据身份隔离、原生通知授权查询、实际 Global 工作区、sidecar readiness、未鉴权请求拒绝及正常退出无残留。生产前端构建的类型/分层/权限/滚动门禁与 bundle budget 同时通过。此包用于已有 macOS host 的回归验证，不覆盖 Linux native 分支或真实桌面应用启动；本地签名也不等同正式签名/公证。
 - 新增 `desktop-tauri-linux` Ubuntu 24.04 门禁，配置 GTK/WebKitGTK/GIO/SVG loader 依赖、真实 bridge、严格 clippy 和 `dbus-run-session` 下的全量 Rust 测试；另有 Linux 专属 SVG 缩放/PNG 编码/坏输入回归。**门禁尚未远端执行**，不能声明 Linux 编译或原生图标测试已经通过。Linux GUI/包级验收、复杂 terminal wrapper/Flatpak 安装路径、完整主题继承仍待验证或完善；Windows App Paths/安装目录、控制台启动与原生图标继续改造。D/E 目标保持进行中。
 
 #### D：原生通知授权、发送与点击定位（2026-09-30）
