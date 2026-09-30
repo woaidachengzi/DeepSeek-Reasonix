@@ -49,7 +49,7 @@ impl Geometry {
     }
 }
 
-fn on_main<T: Send + 'static>(
+pub(crate) fn on_main<T: Send + 'static>(
     app: &AppHandle,
     action: impl FnOnce(&AppHandle, &WebviewWindow) -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
@@ -68,7 +68,7 @@ fn on_main<T: Send + 'static>(
         .map_err(|_| "native main thread timeout")?
 }
 
-fn wait_for(
+pub(crate) fn wait_for(
     app: &AppHandle,
     stage: &'static str,
     predicate: impl Fn(&WebviewWindow) -> Result<bool, String> + Send + Sync + 'static,
@@ -315,6 +315,9 @@ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
     let directory = marker_directory()?;
     match phase {
         "exercise" => exercise(app, &directory)?,
+        "menu-settings-hidden" | "menu-settings-minimized" | "menu-settings-app-hidden" => {
+            crate::native_menu_smoke::settings(app, phase)?
+        }
         "application-hide" => application_hide(app, &directory)?,
         "background-close" => background_close(app, &directory, false)?,
         "second-instance" => background_close(app, &directory, true)?,

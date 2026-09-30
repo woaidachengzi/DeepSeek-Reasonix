@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Verify macOS native window state and close preferences in a private profile.
+"""Verify macOS windows, Settings menu actions and close in a private profile.
 
-Uses real Tauri window APIs and the shared tray/Dock/single-instance show path.
+Uses real Tauri window APIs, installed AppKit Settings menu actions, and the
+shared tray/Dock/single-instance show path. Settings checks the host event,
+not the rendered WebView settings overlay.
 The --focus gate additionally requires a real second process to restore focus;
 it remains a strict separate acceptance condition when activation is unavailable.
 Does not prove menu/tray clicks, keyboard editing, or display unplugging.
@@ -158,6 +160,7 @@ def smoke(app_path, include_focus=False):
             (root / "home").mkdir()
             (root / "tmp").mkdir()
             phases = ["exercise", "restore-maximized", "restore-normal", "application-hide", "background-close"]
+            phases.extend(["menu-settings-hidden", "menu-settings-minimized", "menu-settings-app-hidden"])
             if include_focus:
                 phases.append("second-instance")
             phases.append("close-quit")

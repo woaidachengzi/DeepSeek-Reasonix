@@ -8,6 +8,8 @@ mod keychain;
 mod local_paths;
 mod menu;
 #[cfg(target_os = "macos")]
+mod native_menu_smoke;
+#[cfg(target_os = "macos")]
 mod native_window_smoke;
 mod notifications;
 mod opener_catalog;
@@ -3495,6 +3497,7 @@ fn main() {
                     app.exit(0);
                 }
                 "settings" => {
+                    tray::show_main_window(app);
                     if let Some(window) = app.get_webview_window("main") {
                         let _ = window.emit("host:open-settings", ());
                     }
@@ -3521,12 +3524,12 @@ fn main() {
                 "check_updates" => {
                     let version = env!("CARGO_PKG_VERSION");
                     let msg = format!(
-                        "Current version: {version}\n\nAuto-update checks are performed at startup.\nTo manually check, restart the application."
+                        "Current version: {version}\n\nUpdate checks are not available in Tauri Preview yet.\nFor released versions and manual downloads, visit:\nhttps://github.com/esengine/DeepSeek-Reasonix/releases"
                     );
                     let dialog = tauri_plugin_dialog::DialogExt::dialog(app);
                     let _ = dialog
                         .message(&msg)
-                        .title("Check for Updates")
+                        .title("Updates")
                         .kind(tauri_plugin_dialog::MessageDialogKind::Info)
                         .blocking_show();
                 }

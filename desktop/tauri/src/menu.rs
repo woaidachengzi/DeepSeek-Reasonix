@@ -23,7 +23,7 @@ pub fn build_app_menu(
                 .build(handle)?,
         )
         .item(
-            &MenuItemBuilder::new("Check for Updates…")
+            &MenuItemBuilder::new("Updates…")
                 .id("check_updates")
                 .build(handle)?,
         )
