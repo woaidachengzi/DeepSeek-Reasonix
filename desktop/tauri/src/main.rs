@@ -14,6 +14,8 @@ mod native_appearance_smoke;
 #[cfg(target_os = "macos")]
 mod native_clipboard_smoke;
 #[cfg(target_os = "macos")]
+mod native_edit_smoke;
+#[cfg(target_os = "macos")]
 mod native_menu_smoke;
 #[cfg(target_os = "macos")]
 mod native_profile_smoke;

@@ -320,7 +320,7 @@ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
     match phase {
         "exercise" => exercise(app, &directory)?,
         "menu-shortcuts" => crate::native_menu_smoke::shortcuts(app)?,
-        "clipboard-native" => crate::native_clipboard_smoke::run(app, &directory)?,
+        "clipboard-native" | "menu-editing" => crate::native_clipboard_smoke::run(app, &directory)?,
         "appearance-dark"
         | "restore-appearance-dark"
         | "restore-appearance-light"

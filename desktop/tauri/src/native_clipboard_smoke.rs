@@ -26,8 +26,10 @@ pub struct ClipboardSmokeState {
 impl Default for ClipboardSmokeState {
     fn default() -> Self {
         Self {
-            enabled: std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref()
-                == Ok("clipboard-native"),
+            enabled: matches!(
+                std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref(),
+                Ok("clipboard-native" | "menu-editing")
+            ),
             main_loaded: AtomicBool::new(false),
             active: Mutex::new(None),
         }
@@ -220,6 +222,9 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
             Ok(window)
         })?);
         receipt(&receive, "native-clipboard-denied", "denied-ok")?;
+        if std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref() == Ok("menu-editing") {
+            crate::native_edit_smoke::run(app, nonce)?;
+        }
         if app
             .clipboard()
             .read_text()

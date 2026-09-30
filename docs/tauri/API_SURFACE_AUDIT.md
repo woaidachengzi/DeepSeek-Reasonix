@@ -80,7 +80,7 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 | 项目 | 当前实现与验证 | 待完成验收或改造 |
 | --- | --- | --- |
-| D：菜单与快捷键 | macOS 编辑项改为 Tauri 原生 responder-chain 角色；设置菜单先恢复主窗口并发出设置事件。Reload 移除 Cmd+R，保留给可配置的会话刷新；设置和文字大小也不安装固定原生组合。原生编辑/退出/隐藏/最小化/全屏及系统 Emoji 组合禁止保存为 Preview 动作；旧冲突组合回落默认值，单项重置校验默认组合占用。真实 AppKit 菜单组合与共享保留表、设置菜单动作、组件与独立 Chrome 页面回归通过。 | 真实 WKWebView 的撤销/重做、剪切/复制/粘贴、全选、隐藏其他应用、全屏与可配置快捷键按键路由仍待验收；程序化原生菜单动作和 Chrome 页面回归不代替用户原生交互。 |
+| D：菜单与快捷键 | macOS 编辑项改为 Tauri 原生 responder-chain 角色；设置菜单先恢复主窗口并发出设置事件。Reload 移除 Cmd+R，保留给可配置的会话刷新；设置和文字大小也不安装固定原生组合。原生编辑/退出/隐藏/最小化/全屏及系统 Emoji 组合禁止保存为 Preview 动作；旧冲突组合回落默认值，单项重置校验默认组合占用。真实 AppKit 菜单组合与共享保留表、设置菜单动作、组件与独立 Chrome 页面回归通过。新增独立 `--edit` 原生编辑门禁。 | `--edit` 当前停在应用 inactive/key window 缺失的严格前提，后续 WKWebView 撤销/重做、剪切/复制/粘贴、全选未验收；隐藏其他应用、全屏与可配置快捷键按键路由仍待验收。程序化原生菜单动作和 Chrome 页面回归不代替用户原生交互。 |
 | D：剪贴板 | 接入官方 clipboard-manager，主窗口仅允许读写文本；共享写入/读取路径覆盖 Tauri、浏览器与 Wails。消息、存储路径、hooks 路径及输入框复用；复制成功反馈等待实际写入成功。原生调用模拟、拒绝/忙碌回退、失败剪切不删文本、空剪贴板不覆盖选择与成功反馈测试通过。实际 macOS WKWebView IPC 与系统文本读写通过；主窗口图片读取及无权限的同源隐藏窗口读写均拒绝，独立系统值/代次核对和完整原件恢复通过。 | 输入框/消息复制按钮、物理 Cmd+C/V、原生 responder 编辑、选择与失败反馈的真实 UI 交互仍待验收。 |
 | D：窗口与多显示器 | 保存普通窗口位置和显示器缩放，最大化/最小化不覆盖普通尺寸；按当前工作区限制恢复位置，移除外接屏后回到主屏。状态文件原子替换，兼容旧尺寸文件。窗口几何回归通过；真实 macOS `.app` 原生 API 已验证窗口隐藏/最小化恢复、最大化退出后重启与取消最大化、普通尺寸/位置重启恢复。 | 真实不同缩放显示器与拔插外接屏验收。原生 API 验证不代替窗口按钮/菜单的实际点击。 |
 | D：原生窗口外观 | macOS 保存/读取外观偏好及启动恢复同步到 Tauri 原生应用主题；串行处理避免旧读取覆盖新外观，保存拒绝时不修改原生主题。真实 AppKit dark/light/auto 与整包重启、非法主题/样式保持不变的验收通过。 | 设置页实际点击与标题栏视觉验收、系统明暗切换和原生更新失败后的回滚故障注入仍待执行。 |
@@ -93,6 +93,13 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 累计门禁：`pnpm test:clipboard`、输入框剪贴板回归、terminal selection、`pnpm test:tauri`、`pnpm build`，以及使用真实 Go bridge 的 Rust 测试（最新 XDG 通知切片 189 项通过、2 项默认忽略；其中 1 项独立真实 D-Bus 联调已显式通过，另有前轮 1 项显式 macOS 原生钥匙串测试通过）。最新 XDG 通知切片已从干净提交 `f8aba01793814b7119c4de7829bf747e42a94d53` 通过 `pnpm tauri:build -- --bundles app` 构建与本地 ad-hoc 签名；`tools/tauri/smoke-packaged-app.py` 在临时 HOME 分别验证默认和显式数据目录、私有凭据身份、真实 macOS 通知授权查询、实际 Global 工作区解析与私有目录权限、sidecar 就绪、未认证请求拒绝以及退出无残留。此 smoke 没有执行菜单/托盘等 UI 点击；两次桌面自动化分别超时和报 ScreenCaptureKit `SCStreamErrorDomain -3811`，所以真实 UI 验收保留待办。本地 ad-hoc 签名不是正式发布签名/公证。
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
+
+#### D：macOS 原生 responder 编辑严格门禁（2026-10-01，未通过）
+
+- 新增独立 `--edit` / `menu-editing` 阶段，继续使用临时档案和完整系统剪贴板保护。通过 Tauri `with_webview` 在实际 WKWebView 中建立一次性 textarea，只有固定字符串状态通过 WKJavaScript completion 回传；不读出原剪贴板、不新增 renderer 命令或权限，也不修改产品输入框或 transcript。macOS 直接使用已锁定的 objc2-web-kit 0.3.2 类型，不新增依赖版本。
+- 严格要求实际应用 active、主 NSWindow 为 key window 且 WKWebView 接受 first responder。然后核对已安装六类编辑菜单的 selector/nil target，更新实际菜单验证，再发出菜单动作；AppKit 的 nil target 沿 responder chain 分派，参考 [Apple sendAction](https://developer.apple.com/documentation/appkit/nsapplication/sendaction%28_%3Ato%3Afrom%3A%29?language=objc)。复制和剪切前写入不同的唯一 canary，动作后必须读回所选文本；粘贴要求文本与 input 事件，原生撤销/重做及全选要求值/选择范围匹配。该门禁不以剪贴板旧值相同、普通 JS 设置文本或固定 target 代替原生编辑成功。
+- 本机 macOS 27.0.1 实际探测停在焦点前提：`firstResponderAccepted=true, keyWindow=false, applicationActive=false, windowVisible=true, applicationHidden=false`。先使用产品共享托盘/Dock/单实例恢复路径并等待状态，再在 opt-in 探测中加入当前 [NSApplication activate](https://developer.apple.com/documentation/appkit/nsapplication/activate%28%29?changes=la%2Cla) 请求，结果仍相同；没有跳过激活条件或继续执行编辑动作。此结果不能判定产品编辑缺陷，也不能标记 responder 编辑或物理按键通过；应待实际桌面能够激活 Preview 后复验，避免在相同外部状态下重复重试。
+- 最新源码的真实 Go bridge Rust 189 项通过、2 项默认忽略，严格 clippy、格式和 Python 语法通过；默认 34 个原生场景与干净提交完整包另行复验。独立 `--edit` 保持显式失败门禁，未作为已通过场景加入默认统计或 CI；macOS D 与 E 整体尚未完成。
 
 #### D：macOS 系统剪贴板与 WKWebView 权限（2026-10-01）
 

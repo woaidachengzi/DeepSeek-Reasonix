@@ -23,13 +23,24 @@ impl Drop for SettingsListener {
     }
 }
 
-fn invoke_named(menu: &NSMenu, title: &str, depth: usize) -> Result<bool, String> {
+fn invoke_named(
+    menu: &NSMenu,
+    title: &str,
+    depth: usize,
+    action: Option<objc2::runtime::Sel>,
+) -> Result<bool, String> {
     if depth > 3 || !(0..=128).contains(&menu.numberOfItems()) {
         return Err("native menu exceeds acceptance bounds".into());
     }
     for index in 0..menu.numberOfItems() {
         let item = menu.itemAtIndex(index).ok_or("native menu item missing")?;
         if item.title().to_string() == title {
+            if let Some(action) = action {
+                if item.action() != Some(action) || item.target().is_some() {
+                    return Err("installed edit menu is not a native responder role".into());
+                }
+                menu.update();
+            }
             // performActionForItemAtIndex does not perform automatic validation.
             // Check the actual installed item's state before sending its action.
             if !item.isEnabled() {
@@ -39,7 +50,7 @@ fn invoke_named(menu: &NSMenu, title: &str, depth: usize) -> Result<bool, String
             return Ok(true);
         }
         if let Some(submenu) = item.submenu() {
-            if invoke_named(&submenu, title, depth + 1)? {
+            if invoke_named(&submenu, title, depth + 1, action)? {
                 return Ok(true);
             }
         }
@@ -54,11 +65,35 @@ pub(crate) fn invoke(app: &AppHandle, title: &'static str) -> Result<(), String>
         let menu = application
             .mainMenu()
             .ok_or("installed native menu missing")?;
-        if !invoke_named(&menu, title, 0)? {
+        if !invoke_named(&menu, title, 0, None)? {
             return Err("installed acceptance menu missing".into());
         }
         Ok(())
     })
+}
+
+pub(crate) fn edit(app: &AppHandle, title: &'static str) -> Result<(), String> {
+    let action = match title {
+        "Undo" => objc2::sel!(undo:),
+        "Redo" => objc2::sel!(redo:),
+        "Cut" => objc2::sel!(cut:),
+        "Copy" => objc2::sel!(copy:),
+        "Paste" => objc2::sel!(paste:),
+        "Select All" => objc2::sel!(selectAll:),
+        _ => return Err("unknown native edit role".into()),
+    };
+    on_main(app, move |_, _| {
+        let application =
+            NSApplication::sharedApplication(MainThreadMarker::new().ok_or("not main thread")?);
+        let menu = application
+            .mainMenu()
+            .ok_or("installed native menu missing")?;
+        if !invoke_named(&menu, title, 0, Some(action))? {
+            return Err("installed edit menu missing".into());
+        }
+        Ok(())
+    })
+    .map_err(|error| format!("native {title}: {error}"))
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]

@@ -55,6 +55,9 @@ class NativeClipboardFixture(AbstractContextManager):
                 shutil.copy2(self.marker, recovery / "owned.json")
             raise RuntimeError(f"clipboard restoration failed; private recovery snapshot retained at {recovery}")
         self.snapshot.unlink(missing_ok=True)
+        if exc_type is not None:
+            state = "original formats preserved" if result.returncode == 0 else "new contents preserved"
+            print(f"native clipboard preservation after failed phase: {state}")
         if result.returncode == 2 and exc_type is None:
             raise RuntimeError("clipboard changed during acceptance; current contents preserved")
         return False

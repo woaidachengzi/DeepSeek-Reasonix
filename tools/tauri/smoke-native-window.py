@@ -9,10 +9,13 @@ close must preserve background progress; the installed Quit menu must clean up
 the active stream, host and sidecar without a runner-driven successful exit.
 The --focus gate additionally requires a real second process to restore focus;
 it remains a strict separate acceptance condition when activation is unavailable.
-Does not prove menu/tray clicks, keyboard editing, or display unplugging.
+The --edit gate requires an active main key window and tests installed edit
+roles against disposable WKWebView textareas, including native undo/redo.
+Does not prove menu/tray clicks, physical keyboard editing, or display unplugging.
 All state is confined to a temporary HOME; no existing Preview is operated.
 """
 
+import argparse
 import importlib.util
 from contextlib import nullcontext
 import json
@@ -173,7 +176,7 @@ def launch(host_binary, sidecar_binary, root, identifier, managed, phase, provid
                 pass
 
 
-def smoke(app_path, include_focus=False):
+def smoke(app_path, include_focus=False, include_edit=False):
     app = Path(app_path).resolve()
     host_binary = app / "Contents/MacOS/reasonix-tauri"
     sidecar_binary = app / "Contents/MacOS/reasonix-desktop-bridge"
@@ -195,6 +198,8 @@ def smoke(app_path, include_focus=False):
             phases.append("task-background-menu-quit")
             phases.extend(["appearance-dark", "restore-appearance-dark", "restore-appearance-light", "restore-appearance-auto"])
             phases.append("clipboard-native")
+            if include_edit:
+                phases.append("menu-editing")
             if include_focus:
                 phases.append("second-instance")
             phases.append("close-quit")
@@ -203,7 +208,7 @@ def smoke(app_path, include_focus=False):
             for phase in phases:
                 core_home = root / "home/Library/Application Support" / identifier / "reasonix-core" if managed else root / "core"
                 fixture = task_provider.NativeTaskProvider(core_home, root / "tmp") if phase == "task-background-menu-quit" else nullcontext()
-                if phase == "clipboard-native":
+                if phase in ("clipboard-native", "menu-editing"):
                     fixture = clipboard_fixture.NativeClipboardFixture(root / "tmp")
                 with fixture as provider:
                     identities.append(launch(host_binary, sidecar_binary, root, identifier, managed, phase, provider))
@@ -212,9 +217,14 @@ def smoke(app_path, include_focus=False):
 
 
 if __name__ == "__main__":
-    if sys.platform != "darwin" or len(sys.argv) not in (2, 3) or (len(sys.argv) == 3 and sys.argv[2] != "--focus"):
-        raise SystemExit("usage on macOS: smoke-native-window.py PATH_TO_APP [--focus]")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("app")
+    parser.add_argument("--focus", action="store_true")
+    parser.add_argument("--edit", action="store_true")
+    args = parser.parse_args()
+    if sys.platform != "darwin":
+        raise SystemExit("this acceptance requires macOS")
     try:
-        smoke(sys.argv[1], include_focus=len(sys.argv) == 3)
+        smoke(args.app, include_focus=args.focus, include_edit=args.edit)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         raise SystemExit(f"native macOS window smoke failed: {error}") from error

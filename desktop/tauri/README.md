@@ -164,6 +164,22 @@ python3 tools/tauri/smoke-native-window.py 'desktop/tauri/target/release/bundle/
 门禁尚未通过；默认窗口门禁通过不能代替该项验收，也不代表菜单/托盘点击、键盘编辑或
 显示器拔插已经验收。macOS CI 已接入默认窗口门禁，远端执行结果待确认。
 
+原生 responder 编辑另有严格门禁 `--edit`：默认 34 个场景之外，每档案增加一个
+`menu-editing` 阶段。它复用完整剪贴板保护，要求应用 active、主窗口是实际 key window
+且 WKWebView 接受 first responder；核对已安装 Copy/Paste/Cut/Select All/Undo/Redo 的
+selector 和 nil target，调用前执行菜单验证。临时 textarea 的值/选择、粘贴 input 事件、
+剪贴板独立读回及粘贴/剪切后的原生撤销重做都必须匹配；Copy/Cut 前先种入不同的唯一
+测试值，不能因旧剪贴板内容相同而误通过。此项不是物理按键、鼠标或产品输入框验收。
+
+```bash
+python3 tools/tauri/smoke-native-window.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app' --edit
+```
+
+当前本机 macOS 27.0.1 的门禁停在严格焦点前提：responder 接受、窗口可见且应用未隐藏，
+但应用 inactive、key window 不存在。产品共享恢复路径及显式当前 AppKit activate 请求
+都未建立激活；尚未执行后续编辑动作，不能标记为通过，也不能据此确定产品编辑有缺陷。
+待桌面能够实际激活 Preview 后再运行；默认门禁通过不能覆盖该项。
+
 配置导入包级验收使用临时 HOME 中的正式版和 Preview 档案，调用设置页同一已确认宿主入口。
 验证配置/项目目录导入、真实 bridge 读取、Preview 修改默认模型后 sidecar 重启、整包重启
 恢复、备份与原件保护、拒绝覆盖/显式目录导入及退出清理。原件比较包含字节、权限和修改
