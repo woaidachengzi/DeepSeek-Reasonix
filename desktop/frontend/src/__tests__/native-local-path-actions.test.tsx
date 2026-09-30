@@ -1,0 +1,62 @@
+import assert from "node:assert/strict";
+import { JSDOM } from "jsdom";
+
+const dom = new JSDOM("<!doctype html><html><body><div id='root'></div></body></html>", { url: "https://reasonix.local/" });
+Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, localStorage: dom.window.localStorage, IS_REACT_ACT_ENVIRONMENT: true });
+const host = globalThis as typeof globalThis & { isTauri?: boolean };
+const win = window as unknown as { go?: unknown; __TAURI_INTERNALS__?: { invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown> } };
+let wailsCalls = 0;
+win.go = { main: { App: new Proxy({}, { get: () => async () => { wailsCalls++; } }) } };
+const calls: { command: string; args?: Record<string, unknown> }[] = [];
+let failCommand = "";
+let savedPath = "";
+host.isTauri = true;
+win.__TAURI_INTERNALS__ = { invoke: async (command, args) => {
+  calls.push({ command, args });
+  if (command === failCommand) throw new Error("cannot access document; check path permissions");
+  if (command === "local_path_openers") return { openers: [{ id: "vscode", name: "VS Code", kind: "editor" }], preferred: "" };
+  if (command === "save_local_path_as") return savedPath;
+} };
+const React = await import("react");
+const { act } = React;
+const { createRoot } = await import("react-dom/client");
+const { RichMarkdownLink } = await import("../components/githubLink");
+const { ToastProvider } = await import("../lib/toast");
+const { app } = await import("../lib/bridge");
+const root = createRoot(document.getElementById("root")!);
+const source = "/tmp/中文 ' document.md";
+await act(async () => { root.render(React.createElement(ToastProvider, null, React.createElement(RichMarkdownLink, { href: new URL(`file://${source}`).href, children: "Document" }))); });
+const anchor = document.querySelector("a")!;
+await act(async () => { anchor.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true })); });
+assert.deepEqual(calls.at(-1), { command: "open_local_path", args: { path: source } });
+await act(async () => { anchor.dispatchEvent(new dom.window.MouseEvent("auxclick", { button: 1, bubbles: true, cancelable: true })); });
+assert.equal(calls.at(-1)?.command, "open_local_path", "middle click uses the host without WebView navigation");
+
+async function select(label: string) {
+  await act(async () => { anchor.dispatchEvent(new dom.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 15, clientY: 15 })); });
+  const action = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(item => item.textContent?.includes(label));
+  assert.ok(action, `missing native menu action: ${label}`);
+  await act(async () => { action.click(); });
+}
+await select("VS Code");
+assert.deepEqual(calls.at(-1), { command: "open_local_path_with", args: { path: source, id: "vscode" } }, "only an installed-app ID crosses the adapter");
+await select("Reveal");
+assert.deepEqual(calls.at(-1), { command: "reveal_local_path", args: { path: source } });
+await select("Save as");
+assert.deepEqual(calls.at(-1), { command: "save_local_path_as", args: { path: source } });
+assert.equal(document.querySelector(".toast--info"), null, "canceled native save must not show success");
+savedPath = "/tmp/target.md";
+await select("Save as");
+assert.ok(document.querySelector(".toast--info")?.textContent?.includes(savedPath), "completed native save reports the actual destination");
+failCommand = "open_local_path";
+await act(async () => { anchor.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true })); });
+assert.ok(document.querySelector(".toast--error")?.textContent?.includes("check path permissions"), "default-open failures are visible");
+failCommand = "save_local_path_as";
+await assert.rejects(app.SaveLocalPathAs(source), /check path permissions/);
+assert.equal(wailsCalls, 0, "native errors never fall back to a Wails binding or browser mock");
+failCommand = "";
+host.isTauri = false;
+await app.OpenLocalPath(source);
+assert.equal(wailsCalls, 1, "Wails binding still resolves after switching out of Tauri");
+await act(async () => { root.unmount(); });
+console.log("native local document open/reveal/save adapters and menu actions: OK");

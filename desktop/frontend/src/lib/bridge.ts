@@ -7,6 +7,7 @@ export { COMPACT_RATIO_MAX_PERCENT, COMPACT_RATIO_MIN_PERCENT } from "./compactR
 import type { InvocationRequest } from "./invocationDisplay";
 import type { FollowupBindings } from "./pendingFollowup";
 import { addBreadcrumb } from "./breadcrumbs";
+import { nativeLocalPathBinding } from "./nativeLocalPaths";
 import { maybeShare } from "./queryCoalesce";
 import { makeMockSessionCatalogBindings } from "./sessionCatalogBridge";
 import { makeMockHistoryCatalogBindings, type HistoryCatalogBindings } from "./historyCatalogBridge";
@@ -1129,6 +1130,8 @@ function elapsedMs(startedAt: number): number {
 
 export const app: AppBindings = new Proxy({} as AppBindings, {
   get(_t, prop) {
+    const native = nativeLocalPathBinding(String(prop));
+    if (native) return native;
     const target = realApp() ?? getMock();
     const v = (target as unknown as Record<string, unknown>)[String(prop)];
     if (typeof v !== "function") return v;

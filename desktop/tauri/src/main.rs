@@ -4,6 +4,7 @@ mod bridge;
 mod data_profile;
 mod host_preferences;
 mod keychain;
+mod local_paths;
 mod menu;
 mod protocol_generated;
 mod runtime_info;
@@ -76,6 +77,7 @@ use std::{
     },
 };
 use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_opener::OpenerExt;
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 
 use bridge::{
@@ -125,7 +127,6 @@ use host_preferences::{CloseBehavior, HostPreferences, UserTheme};
 use runtime_info::PreviewRuntimeInfo;
 use session_shadow::SessionShadowReport;
 use tauri::{Manager, State};
-use tauri_plugin_shell::ShellExt;
 use window_state::PreviewWindowState;
 use workbench_catalog::{WorkbenchCatalog, WorkbenchSession, WorkbenchTitle};
 use workbench_projects::{normalized_project_key, WorkbenchProjectCatalog};
@@ -2199,19 +2200,17 @@ fn validated_external_link(value: &str) -> Result<String, String> {
 }
 
 #[tauri::command]
-#[allow(deprecated)]
 fn open_external_link(app: tauri::AppHandle, url: String) -> Result<(), String> {
-    app.shell()
-        .open(validated_external_link(&url)?, None)
+    app.opener()
+        .open_url(validated_external_link(&url)?, None::<&str>)
         .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-#[allow(deprecated)] // The pinned shell plugin provides native URL opening until opener is adopted.
 fn open_external_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
     let url = validated_external_url(&url)?;
-    app.shell()
-        .open(url, None)
+    app.opener()
+        .open_url(url, None::<&str>)
         .map_err(|error| error.to_string())
 }
 
@@ -3404,8 +3403,11 @@ fn apply_menu_zoom(app: &tauri::AppHandle, factor: f64) {
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::Builder::new()
+            .open_js_links_on_click(false)
+            .build())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // When a second instance is launched, focus the existing window
             tray::show_main_window(app);
@@ -3705,6 +3707,11 @@ fn main() {
             export_frontend_diagnostics,
             open_external_url,
             open_external_link,
+            local_paths::open_local_path,
+            local_paths::reveal_local_path,
+            local_paths::save_local_path_as,
+            local_paths::local_path_openers,
+            local_paths::open_local_path_with,
             keychain::keychain_save,
             keychain::keychain_delete
         ])

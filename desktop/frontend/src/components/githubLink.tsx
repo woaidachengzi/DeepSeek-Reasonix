@@ -110,17 +110,6 @@ function LinkMark({ kind }: { kind: LinkIconKind }) {
   return <ExternalLink aria-hidden="true" size={13} strokeWidth={2} />;
 }
 
-function openLink(href: string | undefined) {
-  const local = localPathFromHref(href);
-  if (local !== null) {
-    // Local paths (linkified plain text or explicit file:/// links) open in
-    // the OS default app via the native binding, never in the system browser.
-    void app.OpenLocalPath(local).catch(() => {});
-    return;
-  }
-  if (href) openExternal(href);
-}
-
 function localPathErrorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -192,6 +181,12 @@ function LocalPathMarkdownLink({
   const [openers, setOpeners] = useState<ExternalOpenersView>({ openers: [], preferred: "" });
 
   const closeMenu = useCallback(() => setMenuPoint(null), []);
+  const openDefault = useCallback(() => {
+    closeMenu();
+    void app.OpenLocalPath(path).catch(error => {
+      showToast(t("externalOpener.failed", { name: t("externalOpener.openDefault"), error: localPathErrorText(error) }), "error");
+    });
+  }, [closeMenu, path, showToast]);
   const openerRequestRef = useRef(0);
   const mountedRef = useRef(true);
   const refreshOpeners = useCallback(() => {
@@ -235,7 +230,7 @@ function LocalPathMarkdownLink({
         label: t("externalOpener.openDefault"),
         onSelect: () => {
           closeMenu();
-          openLink(href);
+          openDefault();
         },
       },
       ...(openerItems.length > 0
@@ -278,7 +273,7 @@ function LocalPathMarkdownLink({
         },
       },
     ];
-  }, [closeMenu, href, openWith, openers.openers, path, showToast]);
+  }, [closeMenu, openDefault, openWith, openers.openers, path, showToast]);
 
   return (
     <>
@@ -288,12 +283,12 @@ function LocalPathMarkdownLink({
         onClick={(event) => {
           event.preventDefault();
           closeMenu();
-          openLink(href);
+          openDefault();
         }}
         onAuxClick={(event) => {
           if (event.button !== 1) return;
           event.preventDefault();
-          openLink(href);
+          openDefault();
         }}
         onMouseDown={(event) => {
           if (event.button === 1) event.preventDefault();
