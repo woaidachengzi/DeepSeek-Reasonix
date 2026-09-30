@@ -2156,6 +2156,9 @@ fn platform_info() -> &'static str {
 }
 
 fn validated_external_url(value: &str) -> Result<String, String> {
+    if value.len() > 16 << 10 || value.chars().any(char::is_control) {
+        return Err("external link is invalid".into());
+    }
     let url = url::Url::parse(value).map_err(|_| "external link is invalid")?;
     if !matches!(url.scheme(), "http" | "https")
         || url.host_str().is_none()
@@ -2165,6 +2168,42 @@ fn validated_external_url(value: &str) -> Result<String, String> {
         return Err("external link must be an HTTP(S) URL without userinfo".into());
     }
     Ok(url.into())
+}
+
+// Markdown includes email links as well as web links. Keep this distinct from
+// OAuth/browser actions, which accept only HTTP(S), and never allow arbitrary
+// application schemes or mail-client attachment parameters.
+fn validated_external_link(value: &str) -> Result<String, String> {
+    let url = url::Url::parse(value).map_err(|_| "external link is invalid")?;
+    if url.scheme() != "mailto" {
+        return validated_external_url(value);
+    }
+    if value.len() > 16 << 10
+        || value.chars().any(char::is_control)
+        || url.host_str().is_some()
+        || url.fragment().is_some()
+        || ["%0a", "%0d", "%00"]
+            .iter()
+            .any(|encoded| url.path().to_ascii_lowercase().contains(encoded))
+        || url.query_pairs().any(|(name, value)| {
+            let name = name.to_ascii_lowercase();
+            !matches!(name.as_str(), "subject" | "body" | "cc" | "bcc")
+                || value
+                    .chars()
+                    .any(|c| c == '\0' || (name != "body" && c.is_control()))
+        })
+    {
+        return Err("email link must use standard recipients, subject and body fields".into());
+    }
+    Ok(url.into())
+}
+
+#[tauri::command]
+#[allow(deprecated)]
+fn open_external_link(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    app.shell()
+        .open(validated_external_link(&url)?, None)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -3665,6 +3704,7 @@ fn main() {
             export_user_theme,
             export_frontend_diagnostics,
             open_external_url,
+            open_external_link,
             keychain::keychain_save,
             keychain::keychain_delete
         ])
@@ -3698,7 +3738,7 @@ fn main() {
 
 #[cfg(test)]
 mod external_url_tests {
-    use super::validated_external_url;
+    use super::{validated_external_link, validated_external_url};
 
     #[test]
     fn accepts_web_links_and_rejects_credentials_and_local_files() {
@@ -3719,6 +3759,38 @@ mod external_url_tests {
         ] {
             assert!(validated_external_url(value).is_err(), "accepted {value}");
         }
+    }
+
+    #[test]
+    fn markdown_email_links_use_only_the_mail_handler() {
+        for link in [
+            "mailto:support@example.test",
+            "mailto:one@example.test,two@example.test?cc=other@example.test&subject=Help&body=Line%201%0ALine%202",
+            "mailto:?subject=Help",
+            "https://example.test/中文?state=abc",
+        ] {
+            assert!(validated_external_link(link).is_ok(), "rejected {link}");
+        }
+        for link in [
+            "mailto://example.test/path",
+            "mailto:support@example.test?attach=file:///etc/passwd",
+            "mailto:support@example.test?subject=Help%0ABcc:other@example.test",
+            "mailto:support%0D%0ABcc:other@example.test",
+            "mailto:support@example.test#fragment",
+            "mailto:support@example.test?body=%00",
+            "file:///tmp/private",
+            "vscode://file/tmp/private",
+            "javascript:alert(1)",
+            "https://user:secret@example.test",
+            "https://example.test/\npath",
+        ] {
+            assert!(validated_external_link(link).is_err(), "accepted {link}");
+        }
+        assert!(validated_external_url("mailto:support@example.test").is_err());
+        assert!(
+            validated_external_link(&format!("https://example.test/{}", "x".repeat(16 << 10)))
+                .is_err()
+        );
     }
 }
 

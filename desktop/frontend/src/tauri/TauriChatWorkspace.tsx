@@ -12,6 +12,7 @@ import { QuestionJumpBar } from "../components/QuestionJumpBar";
 import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
 import { compactQuestionText, type QuestionAnchor } from "../lib/transcriptGrouping";
 import { LocaleProvider, useI18n, useT, type DictKey } from "../lib/i18n";
+import { ToastProvider } from "../lib/toast";
 import { applyTextSize, getTextSize, nextTextSize, DEFAULT_TEXT_SIZE } from "../lib/textSize";
 import { playSuccessChime, playAttentionChime, shouldPlayAttentionChimeForEvent } from "../lib/sound";
 import { generativeMusic, isGenerativeMusicEnabled } from "../lib/generative-music";
@@ -3418,7 +3419,7 @@ export function TauriSessionPreview() {
 export function TauriSessionApp() {
   return (
     <LocaleProvider>
-      <TauriSessionPreview />
+      <ToastProvider><TauriSessionPreview /></ToastProvider>
     </LocaleProvider>
   );
 }

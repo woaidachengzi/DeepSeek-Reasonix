@@ -243,6 +243,52 @@ clipboardWrites.splice(4);
   clipboardSucceeds = true;
 }
 
+// 9. Tauri must use the host for the same Markdown click/menu gestures.
+// A failed host open never navigates a new WebView or reuses a Wails binding.
+{
+  const host = globalThis as typeof globalThis & { isTauri?: boolean };
+  const nativeWindow = window as unknown as { __TAURI_INTERNALS__?: { invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown> } };
+  const nativeCalls: { command: string; url: unknown }[] = [];
+  let rejectOpen = false;
+  let browserCalls = 0;
+  const wailsCalls = browsed.length;
+  window.open = () => { browserCalls++; return null; };
+  host.isTauri = true;
+  nativeWindow.__TAURI_INTERNALS__ = { invoke: async (command, args) => {
+    if (command === "plugin:clipboard-manager|write_text") { clipboardWrites.push(args?.text as string); return; }
+    nativeCalls.push({ command, url: args?.url });
+    if (rejectOpen) throw new Error("private OAuth state must not reach the toast");
+  } };
+  const web = "https://example.com/中文?state=oauth-test";
+  const { anchor, container } = await renderLink(web);
+  await act(async () => {
+    const event = new window.MouseEvent("click", { bubbles: true, cancelable: true });
+    anchor.dispatchEvent(event);
+    ok(event.defaultPrevented, "Tauri Markdown click prevents WebView navigation");
+  });
+  ok(nativeCalls[0]?.command === "open_external_link" && nativeCalls[0]?.url === web,
+    "Tauri Markdown click sends the original URL to the validated Rust opener");
+  await act(async () => { anchor.dispatchEvent(new window.MouseEvent("auxclick", { button: 1, bubbles: true, cancelable: true })); });
+  ok(nativeCalls.length === 2, "middle click also uses the native opener");
+  const mail = await renderLink("mailto:support@example.com?subject=Help");
+  await openContextMenu(mail.anchor);
+  await clickMenuItem("Compose email");
+  ok(nativeCalls[2]?.url === "mailto:support@example.com?subject=Help", "email menu uses the same host entry");
+  rejectOpen = true;
+  await act(async () => { anchor.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true })); });
+  const recoveryCopy = container.querySelector<HTMLButtonElement>(".toast--error button");
+  ok(recoveryCopy?.textContent === "Copy link", "failed native opens offer a copy-link recovery");
+  await act(async () => { recoveryCopy?.click(); });
+  ok(clipboardWrites.at(-1) === web, "recovery copies the original link for opening in another app");
+  ok(!container.textContent?.includes("private OAuth"), "opener failures do not expose internal error payloads");
+  ok(browserCalls === 0 && browsed.length === wailsCalls, "native refusal has no browser or Wails fallback");
+  host.isTauri = false;
+  delete nativeWindow.__TAURI_INTERNALS__;
+  delete (window as unknown as Record<string, unknown>).runtime;
+  const { openExternal } = await import("../lib/externalLinks");
+  ok(await openExternal("https://example.com/dev") && browserCalls === 1, "browser development keeps its external-tab path");
+}
+
 await act(async () => {
   for (const root of roots) root.unmount();
 });

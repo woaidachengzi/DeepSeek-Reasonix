@@ -132,6 +132,7 @@ function richLinkMenuItems(
   github: GitHubLinkInfo | null,
   closeMenu: () => void,
   copyText: (text: string) => void,
+  open: () => void,
 ): ContextMenuItem[] {
   const isMail = classifyLinkIcon(href) === "mail";
   let copyTarget = href;
@@ -156,7 +157,7 @@ function richLinkMenuItems(
       label: isMail ? t("richLink.composeEmail") : t("richLink.openInBrowser"),
       onSelect: () => {
         closeMenu();
-        openExternal(href);
+        open();
       },
     },
     { type: "separator", key: "open-separator" },
@@ -339,9 +340,17 @@ export function RichMarkdownLink({
       else showToast(t("richLink.copyFailed"), "error");
     });
   }, [closeMenu, showToast]);
+  const open = useCallback(() => {
+    if (!href) return;
+    void openExternal(href).then(opened => {
+      if (!opened) showToast(t("settings.about.openLinkFailed"), "error", {
+        actionLabel: t("richLink.copyLink"), onAction: () => copyText(href),
+      });
+    });
+  }, [copyText, href, showToast]);
   const menuItems = useMemo(
-    () => richLinkMenuItems(href ?? "", github, closeMenu, copyText),
-    [closeMenu, copyText, github, href],
+    () => richLinkMenuItems(href ?? "", github, closeMenu, copyText, open),
+    [closeMenu, copyText, github, href, open],
   );
   const openMenu = (event: ReactMouseEvent<HTMLAnchorElement> | ReactKeyboardEvent<HTMLAnchorElement>) => {
     event.preventDefault();
@@ -360,12 +369,12 @@ export function RichMarkdownLink({
   const handlers = {
     onClick: (event: ReactMouseEvent<HTMLAnchorElement>) => {
       event.preventDefault();
-      openLink(href);
+      open();
     },
     onAuxClick: (event: ReactMouseEvent<HTMLAnchorElement>) => {
       if (event.button !== 1) return;
       event.preventDefault();
-      openLink(href);
+      open();
     },
     onMouseDown: (event: ReactMouseEvent<HTMLAnchorElement>) => {
       if (event.button === 1) event.preventDefault();

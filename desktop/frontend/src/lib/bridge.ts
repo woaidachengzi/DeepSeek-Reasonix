@@ -1160,16 +1160,7 @@ export const app: AppBindings = new Proxy({} as AppBindings, {
   },
 });
 
-// openExternal opens a URL in the system browser (so links in rendered markdown
-// don't navigate the webview away from the app). Falls back to window.open in the
-// browser dev mock.
-export function openExternal(url: string): void {
-  if (typeof window !== "undefined" && window.runtime?.BrowserOpenURL) {
-    window.runtime.BrowserOpenURL(url);
-  } else if (typeof window !== "undefined") {
-    window.open(url, "_blank", "noopener");
-  }
-}
+export { openExternal } from "./externalLinks";
 
 // --- browser dev mock --------------------------------------------------------
 
