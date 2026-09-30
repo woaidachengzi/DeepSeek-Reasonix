@@ -2692,6 +2692,14 @@ fn selected_theme_path(
         .transpose()
 }
 
+fn receive_file_dialog_selection(
+    receiver: std::sync::mpsc::Receiver<Option<tauri_plugin_dialog::FilePath>>,
+) -> Result<Option<tauri_plugin_dialog::FilePath>, String> {
+    receiver
+        .recv()
+        .map_err(|_| "file dialog closed unexpectedly; retry selecting a file".into())
+}
+
 fn read_theme_package(path: &Path) -> Result<host_preferences::UserTheme, String> {
     const MAX_PACKAGE_BYTES: u64 = 36 << 20;
     const MAX_MANIFEST_BYTES: u64 = 1 << 20;
@@ -3055,9 +3063,10 @@ async fn import_user_theme(
         .pick_file(move |selection| {
             let _ = sender.send(selection);
         });
-    let selected = tauri::async_runtime::spawn_blocking(move || receiver.recv().unwrap_or(None))
-        .await
-        .map_err(|error| format!("theme picker failed: {error}"))?;
+    let selected =
+        tauri::async_runtime::spawn_blocking(move || receive_file_dialog_selection(receiver))
+            .await
+            .map_err(|_| "file dialog task failed; retry selecting a file")??;
     let Some(path) = selected_theme_path(selected)? else {
         return Ok(None);
     };
@@ -3086,9 +3095,10 @@ async fn export_user_theme(
         .save_file(move |selection| {
             let _ = sender.send(selection);
         });
-    let selected = tauri::async_runtime::spawn_blocking(move || receiver.recv().unwrap_or(None))
-        .await
-        .map_err(|error| format!("theme picker failed: {error}"))?;
+    let selected =
+        tauri::async_runtime::spawn_blocking(move || receive_file_dialog_selection(receiver))
+            .await
+            .map_err(|_| "file dialog task failed; retry selecting a file")??;
     let Some(path) = selected_theme_path(selected)? else {
         return Ok(false);
     };
@@ -3139,7 +3149,25 @@ fn write_frontend_diagnostics_export(
 ) -> Result<(), String> {
     frontend_diagnostics_export_filename(payload)?;
     let encoded = serde_json::to_vec_pretty(payload).map_err(|error| error.to_string())?;
-    fs::write(path, encoded).map_err(|error| format!("write frontend diagnostics report: {error}"))
+    let parent = path
+        .parent()
+        .ok_or("invalid export destination; choose a file in a writable folder")?;
+    // Match the other native Save As paths: complete and sync a private sibling
+    // before replacing the chosen name. Never truncate an existing report or
+    // follow its symlink to modify another file.
+    let mut temporary = tempfile::NamedTempFile::new_in(parent)
+        .map_err(|_| "cannot prepare diagnostics export; choose a writable folder")?;
+    temporary
+        .write_all(&encoded)
+        .map_err(|_| "cannot write diagnostics export; check free space and retry")?;
+    temporary
+        .as_file()
+        .sync_all()
+        .map_err(|_| "cannot finish diagnostics export; check free space and retry")?;
+    temporary
+        .persist(path)
+        .map_err(|_| "cannot save diagnostics export; choose a writable file destination")?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -3156,9 +3184,10 @@ async fn export_frontend_diagnostics(
         .save_file(move |selection| {
             let _ = sender.send(selection);
         });
-    let selected = tauri::async_runtime::spawn_blocking(move || receiver.recv().unwrap_or(None))
-        .await
-        .map_err(|error| format!("diagnostics export picker failed: {error}"))?;
+    let selected =
+        tauri::async_runtime::spawn_blocking(move || receive_file_dialog_selection(receiver))
+            .await
+            .map_err(|_| "file dialog task failed; retry selecting a file")??;
     let Some(path) = selected_theme_path(selected)? else {
         return Ok(false);
     };
@@ -3213,6 +3242,103 @@ mod frontend_diagnostics_export_tests {
             serde_json::from_slice(&fs::read(path).expect("read report"))
                 .expect("parse exported report");
         assert_eq!(saved, report);
+    }
+
+    #[test]
+    fn invalid_report_and_failed_publish_preserve_existing_destinations() {
+        let directory = tempfile::tempdir().unwrap();
+        let destination = directory.path().join("existing.json");
+        fs::write(&destination, b"previous report").unwrap();
+        let mut invalid = payload();
+        invalid["schemaVersion"] = serde_json::Value::from(99);
+        assert!(write_frontend_diagnostics_export(&destination, &invalid).is_err());
+        assert_eq!(fs::read(&destination).unwrap(), b"previous report");
+
+        let folder = directory.path().join("selected-folder");
+        fs::create_dir(&folder).unwrap();
+        fs::write(folder.join("keep.json"), b"must remain").unwrap();
+        let error = write_frontend_diagnostics_export(&folder, &payload()).unwrap_err();
+        assert_eq!(
+            error,
+            "cannot save diagnostics export; choose a writable file destination"
+        );
+        assert_eq!(fs::read(folder.join("keep.json")).unwrap(), b"must remain");
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 2);
+
+        let missing = directory.path().join("missing/report.json");
+        assert!(write_frontend_diagnostics_export(&missing, &payload()).is_err());
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 2);
+        write_frontend_diagnostics_export(&destination, &payload()).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&fs::read(destination).unwrap()).unwrap(),
+            payload()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn exported_diagnostics_are_private_even_when_replacing_a_public_report() {
+        use std::os::unix::fs::PermissionsExt;
+        let directory = tempfile::tempdir().unwrap();
+        let destination = directory.path().join("public.json");
+        fs::write(&destination, b"previous public report").unwrap();
+        fs::set_permissions(&destination, fs::Permissions::from_mode(0o644)).unwrap();
+        write_frontend_diagnostics_export(&destination, &payload()).unwrap();
+        assert_eq!(
+            fs::metadata(destination).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn export_replaces_selected_alias_without_modifying_other_file_names() {
+        use std::os::unix::fs::symlink;
+        let directory = tempfile::tempdir().unwrap();
+        let original = directory.path().join("existing.json");
+        fs::write(&original, b"original private report").unwrap();
+        let selected = directory.path().join("selected.json");
+        symlink(&original, &selected).unwrap();
+        write_frontend_diagnostics_export(&selected, &payload()).unwrap();
+        assert_eq!(fs::read(&original).unwrap(), b"original private report");
+        assert!(fs::symlink_metadata(&selected).unwrap().is_file());
+
+        let hardlink = directory.path().join("linked.json");
+        fs::hard_link(&original, &hardlink).unwrap();
+        write_frontend_diagnostics_export(&hardlink, &payload()).unwrap();
+        assert_eq!(fs::read(&original).unwrap(), b"original private report");
+    }
+}
+
+#[cfg(test)]
+mod file_dialog_selection_tests {
+    use super::*;
+
+    #[test]
+    fn selected_path_and_explicit_cancel_are_distinct_from_callback_failure() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("selected ' 中文.json");
+        let (sender, receiver) = std::sync::mpsc::channel();
+        sender
+            .send(Some(tauri_plugin_dialog::FilePath::Path(path.clone())))
+            .unwrap();
+        drop(sender);
+        assert_eq!(
+            selected_theme_path(receive_file_dialog_selection(receiver).unwrap()).unwrap(),
+            Some(path)
+        );
+
+        let (sender, receiver) = std::sync::mpsc::channel();
+        sender.send(None).unwrap();
+        drop(sender);
+        assert!(receive_file_dialog_selection(receiver).unwrap().is_none());
+
+        let (sender, receiver) = std::sync::mpsc::channel();
+        drop(sender);
+        assert_eq!(
+            receive_file_dialog_selection(receiver).unwrap_err(),
+            "file dialog closed unexpectedly; retry selecting a file"
+        );
     }
 }
 
