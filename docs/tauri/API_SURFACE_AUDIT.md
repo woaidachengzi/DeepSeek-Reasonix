@@ -75,12 +75,21 @@ desktop API contract (保留 app/event helper 的调用形状)
 | D：托盘与退出 | 托盘有显示/退出菜单；托盘、Dock 重开及单实例唤起均恢复最小化窗口。退出沿用 supervisor 停止路径。 | 真实托盘点击、关闭后后台任务、Cmd+Q/托盘退出及第二实例唤起验收。 |
 | D：对话框与链接 | 现有 Tauri 选择器及受限 HTTP(S) Rust 打开命令保留。 | 按业务入口补齐并验收取消、无权限、特殊路径和 OAuth。 |
 | D：通知与钥匙串 | 现有系统通知、事件开关及凭据同步保留；Rust 相关回归通过。 | 权限拒绝、后台通知及点击定位；真实钥匙串不可用、迁移与回退。 |
-| D：单实例与数据保护 | Tauri 单实例及独立默认 Preview 数据目录已存在；本次安装包验证默认/显式目录启动退出。 | 显式共享目录的 Wails/Tauri 写入互斥、备份回退全流程验收；单实例插件本身不能证明跨宿主互斥。 |
+| D：单实例与数据保护 | Tauri 单实例及独立默认 Preview 数据目录已存在。当前 Wails 与 bridge 启动均持有配置/状态两处目录锁；共享任一目录都会拒绝第二个写入宿主，目录别名去重，失败释放已取锁。真实 bridge/Wails 拒绝启动测试及配置原件/备份回退回归通过。导入页在操作前展示来源、目标目录与回退说明。 | 未参与目录锁协议的旧稳定版仍需兼容性验收；不能将当前两个宿主的测试推广为所有历史二进制互斥。真实 Wails 单实例通知/唤起、完整安装包导入与回退操作仍待验收。 |
 | E：remote host / bot / updater / 管理页 | remote host 与 bot 已有部分设置/bridge 接口；updater 插件已注册。 | D 验收后对照 Wails 逐项审计和补齐；特别是当前“检查更新”仍是说明对话框，插件注册不能视为更新流程完成。 |
 
 本轮门禁：`pnpm test:clipboard`、输入框剪贴板回归、terminal selection、`pnpm test:tauri`、`pnpm build`，以及使用真实 Go bridge 的 Rust 测试（127 项通过）。`pnpm tauri:build -- --bundles app` 构建并本地 ad-hoc 签名；`tools/tauri/smoke-packaged-app.py` 在临时 HOME 分别验证默认和显式数据目录、sidecar 就绪、未认证请求拒绝以及退出无残留。此 smoke 没有执行菜单/托盘等 UI 点击；两次桌面自动化分别超时和报 ScreenCaptureKit `SCStreamErrorDomain -3811`，所以真实 UI 验收保留待办。本地 ad-hoc 签名不是正式发布签名/公证。
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
+
+#### D：配置/状态目录互斥与回退验证（2026-09-30）
+
+- `profilegate.TryAcquireDesktop` 同时保护配置 home 和独立 state home；canonical/文件身份去重避免符号链接及不区分大小写卷上的重复取锁。竞争失败会释放先前取到的目录锁，正常退出与进程崩溃沿用 OS 锁释放机制。
+- bridge 在身份库迁移、listener 和后台运行时启动前取锁；Wails 在诊断与主运行时初始化前取锁，持有至 `wails.Run` 返回。冲突启动移除绑定及 startup/shutdown 写入回调，保留原生 single-instance handoff 并在 DOM ready 退出。
+- 使用本次构建的真实 bridge，验证 Wails 目录所有者能拒绝“共享配置、不同状态”的第二个进程，且未发布 readiness、未修改配置。使用本次构建的原生 Wails，验证目录被占用时自动退出，原配置不变，未初始化 sessions。
+- Rust 导入回归覆盖 Preview 配置被修改后，正式版原件与时间戳备份仍保持原内容。回退方法是在退出 Preview 后重新打开 Wails 原目录；Preview 中的新数据不会自动回写，配置备份不是完整会话备份。
+- 门禁：Go profilegate/bridge 启动测试、Wails profile/single-instance 测试（提供 `REASONIX_TAURI_BRIDGE_TEST_BIN` 与 `REASONIX_WAILS_PROFILE_TEST_BIN`），前端构建及 `pnpm test:tauri`，使用真实 bridge 的 Rust 测试（128 项通过）。旧版兼容与真实 UI 待验项继续保留，D/E 目标未完成。
+- 当前改动的 `.app` 已重新构建并本地签名，打包 bridge 也已通过上述真实互斥测试；完整 host smoke 因另一份 release-candidate Preview 正在运行而触发单实例转交、在 readiness 前正常退出，未通过本轮启动/退出验收。脚本现在在启动前检查同 bundle identifier 的其他 `.app` 副本，避免误唤起正在使用的应用；须待该实例退出后重跑。上一轮 smoke 的结果不作为本次安装包通过证据。
 
 ### 旧格式对话分叉切片验证（2026-09-30）
 

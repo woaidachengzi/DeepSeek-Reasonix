@@ -820,10 +820,12 @@ function DataSettings({ profile, busy, onRefreshProfile, onImportStableProfile, 
     <div className="tauri-settings-data__heading"><div><h3>{t("settings.data.previewTitle")}</h3><p>{t("settings.data.previewDescription")}</p></div>{onRefreshProfile && <button type="button" className="tauri-settings-button" onClick={() => void run(onRefreshProfile)} disabled={disabled}><RefreshCw size={13} />{t("settings.data.refresh")}</button>}</div>
     {profile ? <>
       <div className="tauri-settings-data__path"><span>{t("settings.data.configDirectory")}</span><code>{profile.previewHome}</code></div>
+      {profile.stableConfig && <div className="tauri-settings-data__path"><span>{t("settings.data.stableConfig")}</span><code>{profile.stableConfig}</code></div>}
       <div className="tauri-settings-data__actions">
         <h4>{t("settings.data.importTitle")}</h4>
         {profile.importAvailable ? <><p>{t("settings.data.importProfileHint")}</p><button type="button" className="tauri-settings-button" onClick={() => onImportStableProfile && void run(onImportStableProfile)} disabled={disabled || !onImportStableProfile}>{t("settings.data.importProfile")}</button></> : <p>{profile.previewConfigExists ? t("settings.data.profileExists") : profile.managedProfile ? t("settings.data.stableConfigMissing") : t("settings.data.customHomeDisabled")}</p>}
         {profile.projectFoldersImportAvailable ? <><p>{t("settings.data.importFoldersHint")}</p><button type="button" className="tauri-settings-button" onClick={() => onImportStableProjectFolders && void run(onImportStableProjectFolders)} disabled={disabled || !onImportStableProjectFolders}>{t("settings.data.importFolders")}</button></> : <p>{profile.projectFoldersFileExists ? t("settings.data.foldersExist") : profile.managedProfile ? t("settings.data.foldersMissing") : t("settings.data.customHomeFoldersDisabled")}</p>}
+        {profile.managedProfile && <p>{t("settings.data.rollbackHint")}</p>}
       </div>
       {profile.managedProfile && onScanUnclaimedSessions && <div className="tauri-settings-data__actions"><h4>{t("settings.data.sessionsTitle")}</h4><p>{t("settings.data.sessionsHint")}</p><button type="button" className="tauri-settings-button" onClick={() => { onClose(); onScanUnclaimedSessions(); }} disabled={disabled}>{t("settings.data.reviewSessions")}</button></div>}
     </> : <p className="tauri-settings-loading">{t("settings.data.notLoaded")}</p>}

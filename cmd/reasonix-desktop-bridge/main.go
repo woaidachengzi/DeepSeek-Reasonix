@@ -146,7 +146,7 @@ func run(ctx context.Context, cfg config, token string) (runErr error) {
 	if sessionDir == "" {
 		return errors.New("session profile root is unavailable")
 	}
-	releaseProfile, err := profilegate.TryAcquire(filepath.Dir(sessionDir))
+	releaseProfile, err := profilegate.TryAcquireDesktop(appconfig.ReasonixHomeDir(), filepath.Dir(sessionDir))
 	if err != nil {
 		return fmt.Errorf("session profile ownership: %w", err)
 	}

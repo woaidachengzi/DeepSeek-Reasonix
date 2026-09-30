@@ -2818,7 +2818,7 @@ export function TauriSessionPreview() {
   async function importStableProfile(): Promise<string> {
     if (!profile?.importAvailable || busy) return "";
     const confirmed = window.confirm(
-      t("settings.data.confirmProfileImport", { path: profile.stableConfig ?? t("settings.data.stableProfile") }),
+      t("settings.data.confirmProfileImport", { path: profile.stableConfig ?? t("settings.data.stableProfile"), target: profile.previewHome }),
     );
     if (!confirmed) return "";
     setBusy(true);

@@ -547,6 +547,30 @@ mod tests {
     }
 
     #[test]
+    fn returning_to_stable_keeps_original_and_backup_after_preview_edits() {
+        let root = tempfile::tempdir().expect("temp root");
+        let stable = root.path().join("stable/config.toml");
+        fs::create_dir_all(stable.parent().unwrap()).unwrap();
+        let original = "default_model = \"stable-model\"\n";
+        fs::write(&stable, original).unwrap();
+        let profile = managed_profile(root.path().join("preview"), stable.clone());
+        fs::create_dir_all(&profile.home).unwrap();
+        let imported = profile.import_stable_config().unwrap();
+        fs::write(
+            &imported.imported_config,
+            "default_model = \"preview-model\"\n",
+        )
+        .unwrap();
+        assert_eq!(fs::read_to_string(&stable).unwrap(), original);
+        assert_eq!(
+            fs::read_to_string(&imported.backup_config).unwrap(),
+            original
+        );
+        assert!(profile.import_stable_config().is_err());
+        assert_eq!(fs::read_to_string(&stable).unwrap(), original);
+    }
+
+    #[test]
     fn import_rejects_oversized_config_before_creating_a_backup() {
         let root = tempfile::tempdir().expect("temp root");
         let stable = root.path().join("stable/config.toml");

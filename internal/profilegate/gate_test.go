@@ -191,3 +191,87 @@ func TestProfileGateChildProcess(t *testing.T) {
 	}
 	release()
 }
+
+func TestDesktopOwnershipCoversConfigAndStateIndependently(t *testing.T) {
+	configRoot, stateRoot := t.TempDir(), t.TempDir()
+	release, err := TryAcquireDesktop(configRoot, stateRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	for _, roots := range [][2]string{{configRoot, t.TempDir()}, {t.TempDir(), stateRoot}} {
+		if _, err := TryAcquireDesktop(roots[0], roots[1]); !errors.Is(err, ErrHeld) {
+			t.Fatalf("shared config or state was accepted: %v", err)
+		}
+	}
+	release()
+	release()
+	next, err := TryAcquireDesktop(configRoot, stateRoot)
+	if err != nil {
+		t.Fatalf("desktop ownership not released: %v", err)
+	}
+	next()
+}
+
+func TestDesktopOwnershipDeduplicatesCanonicalAliases(t *testing.T) {
+	root := t.TempDir()
+	alias := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(root, alias); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	release, err := TryAcquireDesktop(root, alias)
+	if err != nil {
+		t.Fatalf("same root locked twice: %v", err)
+	}
+	release()
+}
+
+func TestDesktopOwnershipDeduplicatesCaseAliasesOnInsensitiveFilesystem(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "MixedCaseProfile")
+	alias := filepath.Join(base, "mixedcaseprofile")
+	if err := os.Mkdir(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	rootInfo, err := os.Stat(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	aliasInfo, err := os.Stat(alias)
+	if err != nil || !os.SameFile(rootInfo, aliasInfo) {
+		t.Skip("filesystem distinguishes path case")
+	}
+	for _, roots := range [][2]string{
+		{root, alias},
+		{filepath.Join(base, "FreshCaseProfile"), filepath.Join(base, "freshcaseprofile")},
+	} {
+		release, err := TryAcquireDesktop(roots[0], roots[1])
+		if err != nil {
+			t.Fatalf("same directory locked twice through case aliases: %v", err)
+		}
+		release()
+	}
+}
+
+func TestDesktopOwnershipFailureReleasesEarlierRoot(t *testing.T) {
+	base := t.TempDir()
+	first, second := filepath.Join(base, "a"), filepath.Join(base, "b")
+	releaseSecond, err := TryAcquire(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer releaseSecond()
+	if _, err := TryAcquireDesktop(first, second); !errors.Is(err, ErrHeld) {
+		t.Fatalf("got %v", err)
+	}
+	releaseFirst, err := TryAcquire(first)
+	if err != nil {
+		t.Fatalf("failed acquisition retained earlier root: %v", err)
+	}
+	releaseFirst()
+	for _, roots := range [][2]string{{"", first}, {first, ""}} {
+		if _, err := TryAcquireDesktop(roots[0], roots[1]); err == nil {
+			t.Fatal("missing config/state root accepted")
+		}
+	}
+}

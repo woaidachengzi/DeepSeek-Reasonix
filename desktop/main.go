@@ -111,9 +111,6 @@ func main() {
 	if handled, exitCode := maybeRunMacUpdateHandoff(os.Args[1:]); handled {
 		os.Exit(exitCode)
 	}
-	capturePreviousFatalCrash()
-	installFatalCrashOutput()
-
 	launch := parseDesktopLaunchArgs(os.Args[1:])
 	if maybeRelaunchPrimaryIfSuperseded(launch) {
 		return
@@ -126,6 +123,7 @@ func main() {
 	dragAndDrop := &options.DragAndDrop{EnableFileDrop: true}
 	bindings := []any{app}
 	remoteWindow := launch.RemoteWindowTicket != ""
+	var profileErr error
 
 	if remoteWindow {
 		// A remote web child window: a second Reasonix process that hosts the
@@ -148,8 +146,15 @@ func main() {
 		dragAndDrop = &options.DragAndDrop{DisableWebViewDrop: true}
 		bindings = nil
 	} else {
-		preparePrimaryDesktopRuntime(app)
-		defer app.releaseDesktopDiagnosticsOwnership()
+		var releaseProfile func()
+		releaseProfile, profileErr = acquireDesktopProfiles()
+		if profileErr == nil {
+			defer releaseProfile()
+			capturePreviousFatalCrash()
+			installFatalCrashOutput()
+			preparePrimaryDesktopRuntime(app)
+			defer app.releaseDesktopDiagnosticsOwnership()
+		}
 	}
 
 	width, height := initialDesktopWindowSize(remoteWindow)
@@ -159,7 +164,7 @@ func main() {
 	// Other platforms provide a no-op implementation.
 	scheduleWebKitSignalHandlerRepair()
 
-	err := wails.Run(&options.App{
+	appOptions := &options.App{
 		Title:     title,
 		Width:     width,
 		Height:    height,
@@ -225,7 +230,12 @@ func main() {
 			// access /dev/dri.
 			WebviewGpuPolicy: linuxWebviewGpuPolicy(linuxDRIRenderNodeGlob),
 		},
-	})
+	}
+	if profileErr != nil {
+		println("Error: Reasonix data is already in use or cannot be locked. Close the other Reasonix process or choose a separate profile, then retry:", profileErr.Error())
+		refuseDesktopProfileStartup(appOptions)
+	}
+	err := wails.Run(appOptions)
 	if err != nil {
 		println("Error:", err.Error())
 	}

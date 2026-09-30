@@ -48,6 +48,25 @@ def is_alive(pid):
         return False
 
 
+def matching_package_is_running(identifier):
+    # The macOS single-instance channel is shared by copies of the same app,
+    # including release-candidate worktrees. Do not launch a smoke that would
+    # focus an unrelated running copy instead of starting an isolated host.
+    marker = ".app/Contents/MacOS/reasonix-tauri"
+    for _, _, command in processes():
+        prefix, separator, suffix = command.partition(marker)
+        if not separator or (suffix and not suffix.startswith(" ")):
+            continue
+        plist = Path(prefix + ".app") / "Contents/Info.plist"
+        try:
+            with plist.open("rb") as file:
+                if plistlib.load(file).get("CFBundleIdentifier") == identifier:
+                    return True
+        except (OSError, ValueError, plistlib.InvalidFileException):
+            continue
+    return False
+
+
 def check_ready(path):
     payload = json.loads(path.read_text())
     if payload.get("protocolVersion") != 1 or not payload.get("sidecarInstanceId"):
@@ -203,8 +222,8 @@ def smoke(app_path):
         identifier = plistlib.load(file).get("CFBundleIdentifier")
     if not isinstance(identifier, str) or not identifier:
         raise RuntimeError("package has no bundle identifier")
-    if any(command.startswith(str(host_binary)) for _, _, command in processes()):
-        raise RuntimeError("this Preview package is already running; close it before the smoke")
+    if matching_package_is_running(identifier):
+        raise RuntimeError("a Preview with this bundle identifier is already running; close it before the smoke")
     for managed in (True, False):
         smoke_once(host_binary, sidecar_binary, identifier, managed)
 

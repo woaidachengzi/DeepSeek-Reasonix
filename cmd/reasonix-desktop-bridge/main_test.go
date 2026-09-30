@@ -1137,6 +1137,7 @@ func TestRunPublishesReadyHealthAndShutdown(t *testing.T) {
 
 func TestRunRejectsSecondProfileOwnerBeforePublishingReady(t *testing.T) {
 	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
 	t.Setenv("REASONIX_STATE_HOME", root)
 	release, err := profilegate.TryAcquire(root)
 	if err != nil {
@@ -1197,6 +1198,7 @@ func TestRunRejectsSecondProfileOwnerFromAnotherProcess(t *testing.T) {
 	command := exec.Command(os.Args[0], "-test.run=^TestRunProfileGateChildProcess$")
 	command.Env = append(os.Environ(),
 		"REASONIX_BRIDGE_PROFILE_GATE_CHILD=1",
+		"REASONIX_HOME="+root,
 		"REASONIX_STATE_HOME="+root,
 		"REASONIX_BRIDGE_PROFILE_GATE_READY="+readyPath,
 	)
