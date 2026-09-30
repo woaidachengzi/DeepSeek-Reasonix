@@ -206,6 +206,13 @@ arm64 macOS `.app`；严格本地 ad-hoc 签名、三个标准导入场景、三
 本地旧版 CLI 的 `vcs.modified=true`，不证明正式发布 artifact、Wails GUI/目录锁、完整
 会话回退或设置页物理点击已认证；证据与 SHA-256 见迁移清单。
 
+2026-10-01 原生外观修复从干净提交 `f6f38bd32aaeac24dc159e6ea24c5c7b6b8d51c4` 完整构建
+arm64 macOS `.app`；严格本地 ad-hoc 签名、32 个原生场景、三个配置导入场景及两种档案
+启动/退出 smoke 全部通过，工作树干净。保存 dark/light/auto 后读取实际 AppKit 外观，
+整包重启恢复，auto 要求清除显式外观；非法 theme/style 保持原配置和原生属性。
+189 项真实 bridge 回归、严格 clippy 与生产门禁通过；真实界面/系统外观切换和原生失败
+回滚的故障注入仍待验收。同次审计新增 Markdown 图片 resolver 的 A/B/C 发布缺口，见清单。
+
 2026-09-27 本机以独立 bundle ID 构建并 ad-hoc 签名测试包，包级 smoke 两种 profile 都通过：host 从临时 HOME
 读取应用数据、启动包内 sidecar、验证实际继承的环境和 ready 文件，并在正常退出后清理子进程和临时目录。
 旧测试包的托管模式曾被该门禁准确检出继承外部缓存覆盖；重建当前代码后通过。该测试包

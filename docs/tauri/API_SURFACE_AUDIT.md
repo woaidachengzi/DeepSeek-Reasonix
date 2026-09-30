@@ -100,6 +100,7 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 - 新增仅 macOS 的 `NativeAppearance`，启动、读取偏好和成功保存后使用 Tauri `set_theme` 同步原生外观。读取和保存串行；Go 校验/写入拒绝时不修改原生主题。原生更新返回错误时尝试恢复原偏好和外观，恢复失败则提示重启读取已保存外观；启动恢复失败保留可用应用并提示重试。未增加 renderer 窗口权限、直接 AppKit 写入或修改前端主题布局。
 - Tauri 的 [setTheme](https://v2.tauri.app/reference/javascript/api/namespacewindow/#settheme) 在 macOS 作用于整个应用；auto 传 None，依 [Apple NSApplication.appearance](https://developer.apple.com/documentation/appkit/nsapplication/appearance?changes=_2_5&language=objc) 清除显式外观并继承系统。原生门禁读取实际 `NSApplication.appearance`，dark/light 要求 DarkAqua/Aqua，auto 要求 nil；不以当前系统颜色相同放行。重启检查在测试主动发送设置命令前读取原生属性，随后再保存下一模式，未改写系统全局外观。
 - 默认托管和显式 core 档案各 16 个原生场景通过，共 32 个：原有 12 个，加 dark 保存、dark/light/auto 三种重启恢复。每阶段非法 theme/style 均拒绝，原配置与 AppKit 外观不变；普通窗口几何、凭据身份、真实鉴权和退出清理同时检查。探测包复用既有前端/sidecar；使用真实 bridge 的 Rust 189 项通过、2 项默认忽略，严格 clippy、格式和 Python 语法通过。干净提交完整包另行记录。
+- 随后从干净提交 `f6f38bd32aaeac24dc159e6ea24c5c7b6b8d51c4` 完整构建 arm64 macOS `.app`；前端生产门禁/现有体积预算、Go sidecar 和 Rust host 通过。同一包的严格本地 ad-hoc 签名、32 个原生场景、三个配置导入/重启场景及两种档案启动/退出 smoke 全部通过；实际通知授权只读查询、Global 工作区、私有凭据身份、鉴权拒绝和退出无残留同时通过。构建与验收后工作树干净，正式 Developer ID 签名/公证仍未执行。
 - 本轮为实际 AppKit 属性和配置持久化验收，未验证设置页物理点击、标题栏截图、系统明暗切换或原生失败回滚的故障注入。第二实例焦点、托盘/通知/对话框交互及其他 macOS D 待办保留；E 等待 D 验收且 Preview 稳定。
 - 同次 runtime 直连审计还确认 A/B/C 图片缺口：`hasMarkdownImageResolver` 只检测 Wails binding，`app` Proxy 没有 Tauri 图片入口，Preview 消息也未设置 `MarkdownImageTabContext`。本地/旧工作区图片会回落到普通 URL，远程图片也未接入 Wails 的受限代理。后续须按实际会话/工作区授权迁移 resolver、数据/类型/尺寸限制和远程代理边界，再验证旧 Global 附件与文件引用；不能放宽 CSP 或通用文件权限代替迁移，也不能宣称 A/B/C 已完成。
 
