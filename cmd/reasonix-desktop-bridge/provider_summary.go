@@ -193,6 +193,66 @@ func persistDesktopAppearance(theme, style string) error {
 	return cfg.SaveUserSettingsDeltaTo(path, baseline)
 }
 
+// This restore is private to the authenticated native host. A normal setter
+// cannot represent an unset appearance; rollback must also retain that state.
+type desktopAppearanceSnapshot struct {
+	Theme      string `json:"theme"`
+	Style      string `json:"style"`
+	Configured bool   `json:"configured"`
+}
+
+type restoreDesktopAppearanceRequest struct {
+	Expected desktopAppearanceSnapshot `json:"expected"`
+	Previous desktopAppearanceSnapshot `json:"previous"`
+}
+
+func (r restoreDesktopAppearanceRequest) valid() bool {
+	return r.Expected.Configured && validAppearanceSnapshot(r.Expected) && validAppearanceSnapshot(r.Previous)
+}
+
+var errDesktopAppearanceChanged = errors.New("desktop appearance changed before rollback")
+
+func validAppearanceSnapshot(value desktopAppearanceSnapshot) bool {
+	if value.Theme != "auto" && value.Theme != "dark" && value.Theme != "light" {
+		return false
+	}
+	if !value.Configured && (value.Theme != "auto" || value.Style != "") {
+		return false
+	}
+	// A previous preference can contain a supported legacy Wails style that
+	// the Preview's ordinary settings picker does not offer.
+	cfg := &configpkg.Config{}
+	cfg.Desktop.ThemeStyle = value.Style
+	return cfg.DesktopThemeStyle() == value.Style
+}
+
+func restoreDesktopAppearance(request restoreDesktopAppearanceRequest) error {
+	if !request.valid() {
+		return fmt.Errorf("invalid desktop appearance rollback")
+	}
+	unlock := configpkg.LockUserConfigEdits()
+	defer unlock()
+	path := configpkg.UserConfigPath()
+	if path == "" {
+		return fmt.Errorf("resolve Preview user config path")
+	}
+	cfg, err := configpkg.LoadForEditReadOnlyStrict(path)
+	if err != nil {
+		return err
+	}
+	configured := strings.TrimSpace(cfg.Desktop.Theme) != "" || strings.TrimSpace(cfg.Desktop.ThemeStyle) != ""
+	if cfg.DesktopTheme() != request.Expected.Theme || cfg.DesktopThemeStyle() != request.Expected.Style || configured != request.Expected.Configured {
+		return errDesktopAppearanceChanged
+	}
+	baseline := cfg.ModelSettingsBaseline()
+	if request.Previous.Configured {
+		cfg.Desktop.Theme, cfg.Desktop.ThemeStyle = request.Previous.Theme, request.Previous.Style
+	} else {
+		cfg.Desktop.Theme, cfg.Desktop.ThemeStyle = "", ""
+	}
+	return cfg.SaveUserSettingsDeltaTo(path, baseline)
+}
+
 // setProviderKeyRequest is private to the native host/sidecar boundary. The
 // WebView never receives the bridge token and cannot call this endpoint.
 type setProviderKeyRequest struct {

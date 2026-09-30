@@ -526,6 +526,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("POST /v1/settings/desktop/approval", b.authorized(b.idempotent(64<<10, b.setDesktopApproval)))
 	mux.HandleFunc("POST /v1/settings/desktop/terminal-theme", b.authorized(b.idempotent(64<<10, b.setDesktopTerminalTheme)))
 	mux.HandleFunc("POST /v1/settings/desktop/appearance", b.authorized(b.idempotent(64<<10, b.setDesktopAppearance)))
+	mux.HandleFunc("POST /v1/settings/desktop/appearance/restore", b.authorized(b.idempotent(64<<10, b.restoreDesktopAppearance)))
 	mux.HandleFunc("POST /v1/settings/desktop/language", b.authorized(b.idempotent(64<<10, b.setDesktopLanguage)))
 	mux.HandleFunc("POST /v1/settings/desktop/currency", b.authorized(b.idempotent(64<<10, b.setDesktopCurrency)))
 	mux.HandleFunc("POST /v1/settings/provider-key", b.authorized(b.idempotent(64<<10, b.setProviderKey)))
@@ -1126,6 +1127,23 @@ func (b *bridgeServer) setDesktopAppearance(w http.ResponseWriter, r *http.Reque
 	}
 	if err := persistDesktopAppearance(request.Theme, request.Style); err != nil {
 		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to save desktop appearance")
+		return
+	}
+	b.desktopPreferences(w, r)
+}
+
+func (b *bridgeServer) restoreDesktopAppearance(w http.ResponseWriter, r *http.Request) {
+	var request restoreDesktopAppearanceRequest
+	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil || !request.valid() {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid desktop appearance rollback")
+		return
+	}
+	if err := restoreDesktopAppearance(request); err != nil {
+		if errors.Is(err, errDesktopAppearanceChanged) {
+			writeProtocolError(w, http.StatusConflict, "conflict", "desktop appearance changed before rollback")
+		} else {
+			writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to restore desktop appearance")
+		}
 		return
 	}
 	b.desktopPreferences(w, r)

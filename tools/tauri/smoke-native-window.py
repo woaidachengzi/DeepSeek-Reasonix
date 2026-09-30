@@ -193,10 +193,11 @@ def smoke(app_path, include_focus=False, include_edit=False):
             root = Path(directory)
             (root / "home").mkdir()
             (root / "tmp").mkdir()
-            phases = ["exercise", "restore-maximized", "restore-normal", "application-hide", "background-close"]
+            phases = ["exercise", "restore-maximized", "restore-normal", "appearance-rollback-unconfigured", "application-hide", "background-close"]
             phases.extend(["menu-shortcuts", "menu-settings-hidden", "menu-settings-minimized", "menu-settings-app-hidden"])
             phases.append("task-background-menu-quit")
             phases.extend(["appearance-dark", "restore-appearance-dark", "restore-appearance-light", "restore-appearance-auto"])
+            phases.extend(["appearance-rollback", "restore-appearance-rollback"])
             phases.append("clipboard-native")
             if include_edit:
                 phases.append("menu-editing")

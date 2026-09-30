@@ -3280,6 +3280,27 @@ impl BridgeSupervisor {
         Ok(preferences)
     }
 
+    pub fn restore_desktop_appearance(
+        &self,
+        previous: &DesktopPreferences,
+        expected: &DesktopPreferences,
+    ) -> Result<DesktopPreferences, String> {
+        let snapshot = |value: &DesktopPreferences| json!({"theme":value.theme,"style":value.theme_style,"configured":value.appearance_configured});
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/desktop/appearance/restore",
+            Some(json!({"previous": snapshot(previous),"expected":snapshot(expected)})),
+            Some(&request_id),
+        )?;
+        let preferences: DesktopPreferences =
+            serde_json::from_value(response).map_err(display_error)?;
+        if preferences.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".into());
+        }
+        Ok(preferences)
+    }
+
     pub fn set_desktop_language(&self, language: String) -> Result<DesktopPreferences, String> {
         if !matches!(language.as_str(), "" | "en" | "zh") {
             return Err("invalid desktop language".to_string());

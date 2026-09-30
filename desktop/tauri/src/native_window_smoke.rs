@@ -322,6 +322,9 @@ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
         "menu-shortcuts" => crate::native_menu_smoke::shortcuts(app)?,
         "clipboard-native" | "menu-editing" => crate::native_clipboard_smoke::run(app, &directory)?,
         "appearance-dark"
+        | "appearance-rollback-unconfigured"
+        | "appearance-rollback"
+        | "restore-appearance-rollback"
         | "restore-appearance-dark"
         | "restore-appearance-light"
         | "restore-appearance-auto" => crate::native_appearance_smoke::run(app, phase)?,

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	fileencoding "reasonix/internal/fileutil/encoding"
@@ -51,6 +52,12 @@ func (c *Config) SaveUserSettingsDeltaTo(path, baseline string) error {
 		if _, err := toml.Decode(input.body, input.dest); err != nil {
 			return err
 		}
+	}
+	// Rendering shows the resolved "auto" default, but an unset stored theme
+	// must remain unset. In particular a failed first native appearance update
+	// must not turn the implicit preference into an explicit user selection.
+	if desktop, ok := after["desktop"].(map[string]any); ok && strings.TrimSpace(c.Desktop.Theme) == "" {
+		delete(desktop, "theme")
 	}
 	mergeModelSettingsDelta(doc, before, after)
 	var encoded bytes.Buffer

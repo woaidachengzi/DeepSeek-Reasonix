@@ -10,7 +10,10 @@ pub struct NativeAppearance {
     update: Mutex<()>,
 }
 
-fn apply(app: &AppHandle, theme: &str) -> Result<(), String> {
+pub(crate) const RESTORED_ERROR: &str = "The native appearance could not be updated; the previous appearance was restored. Retry the change.";
+pub(crate) const RECOVERY_ERROR: &str = "The saved appearance and native window could not be synchronized. Restart Preview to reload the saved appearance.";
+
+pub(crate) fn apply(app: &AppHandle, theme: &str) -> Result<(), String> {
     let theme = match theme {
         "" | "auto" => None,
         "light" => Some(Theme::Light),
@@ -47,28 +50,45 @@ impl NativeAppearance {
         theme: String,
         style: String,
     ) -> Result<DesktopPreferences, String> {
+        self.save_with(
+            supervisor,
+            theme,
+            style,
+            |theme, style| supervisor.set_desktop_appearance(theme, style),
+            |previous, expected| supervisor.restore_desktop_appearance(previous, expected),
+            |theme| apply(app, theme),
+        )
+    }
+
+    // Native package fault injection uses these ports around the same locked
+    // transaction. They are private Rust calls, never renderer commands.
+    pub(crate) fn save_with(
+        &self,
+        supervisor: &BridgeSupervisor,
+        theme: String,
+        style: String,
+        mut store: impl FnMut(String, String) -> Result<DesktopPreferences, String>,
+        mut restore: impl FnMut(
+            &DesktopPreferences,
+            &DesktopPreferences,
+        ) -> Result<DesktopPreferences, String>,
+        mut native_update: impl FnMut(&str) -> Result<(), String>,
+    ) -> Result<DesktopPreferences, String> {
         let _update = self
             .update
             .lock()
             .map_err(|_| "native appearance lock failed")?;
         let previous = supervisor.desktop_preferences()?;
         // Rejected validation or persistence performs no native update.
-        let preferences = supervisor.set_desktop_appearance(theme, style)?;
-        if apply(app, &preferences.theme).is_err() {
-            let restored = supervisor.set_desktop_appearance(
-                if previous.theme.is_empty() {
-                    "auto".into()
-                } else {
-                    previous.theme
-                },
-                previous.theme_style,
-            );
+        let preferences = store(theme, style)?;
+        if native_update(&preferences.theme).is_err() {
+            let restored = restore(&previous, &preferences);
             if let Ok(restored) = restored {
-                if apply(app, &restored.theme).is_ok() {
-                    return Err("The native appearance could not be updated; the previous appearance was restored. Retry the change.".into());
+                if native_update(&restored.theme).is_ok() {
+                    return Err(RESTORED_ERROR.into());
                 }
             }
-            return Err("The saved appearance and native window could not be synchronized. Restart Preview to reload the saved appearance.".into());
+            return Err(RECOVERY_ERROR.into());
         }
         Ok(preferences)
     }
