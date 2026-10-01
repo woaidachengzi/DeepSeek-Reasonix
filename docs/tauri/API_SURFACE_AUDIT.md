@@ -99,6 +99,14 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：macOS 导入主题图片修复后的真实包验收（2026-10-01）
+
+- 从干净提交 `9972828f480ad56e09a09fb1b5cb6c97b97bf05c` 完整构建前端、当前 sidecar 和 arm64 macOS `.app`，生产检查/contract/budget 及本地 ad-hoc 签名通过；日志 `/private/tmp/reasonix-theme-import-package-build.log`，未进行正式签名/公证。
+- 托管普通私有档案实际 Cancel 返回画廊、Go To Folder 选择当前中文/空格源包、Open 导入后，首页显示赤曜新城图片，工作区显示鼠尾草清风图片；两张预览截图和切换通过。重复实际导入同一包后“我的主题”变为 2，独立核对 `user-ui-import`/`user-ui-import-2` 的完整 metadata、颜色和两张图片逐字节，首次主题未被修改。实际导入 schemaVersion=99 包返回“主题导入失败。”，原画廊保留；完整偏好字节/权限/mtime_ns/inode、主题和源原件不变。错误提示当前没有解决步骤，文案仍需补齐。
+- 实际 Cmd+Q 后正常退出、身份与 core 原件及 sidecar/readiness 清理通过；普通重启后实际重新进入画廊，两份主题卡片均有图片，原使用中的石墨保持。实际分别点击两张卡片，每份首页/工作区图片均显示正确，未应用主题。托管 **5 项文件检查及两次正常 UI 生命周期通过**。
+- 显式普通私有档案实际画廊初始零自定义主题，实际取消 Import 返回后独立 cancel 检查通过。再次打开 Import，在 Go To Folder 改为显式源包并 Return 后，捕捉连续报 ScreenCaptureKit `-3812`；宿主/sidecar 仍在，重读及 reset 后绑定同一宿主也失败。没有继续点击 Open，未计入导入/重复/无效/重启。仅 SIGTERM 自有宿主，runner exit 1；其源原件不变、自定义主题仍为零，sidecar/readiness 清理通过，**不能计作正常退出或显式完整 UI 通过**。
+- 日志 `/private/tmp/reasonix-theme-import-fixed-ui.log`、控制与私有失败夹具保留；独立确认托管两次及显式一次的六个自有 PID 均退出，两种 tmp 的 readiness 目录为 0。仅托管已补齐主题导入图片/重启验收，不把整体 runner 失败改记为通过，不推断资产修复解决捕捉或窗口最小化问题。显式验收、实际主题应用、文档另存为及其余 D、A/B/C、E、正式发布门禁继续保留，外接屏和 Windows/Linux 延期。
+
 #### D：macOS 导入主题图片缺口及资产目录修复（2026-10-01）
 
 - `de8afeeec` 普通托管私有档案实际取消 Import，画廊保持零自定义主题；再次通过真实 Open/Go To Folder 选择含中文和空格的私有包，显示 `Imported UI Theme`，但首页/工作区预览均没有图片。两张 WebP 已落盘，独立检查确认 metadata、规范化颜色、canonical 文件名和源图片字节正确，原件未变；**图片实际显示未通过**，未执行重复导入、无效包或重启。

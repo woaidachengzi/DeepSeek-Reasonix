@@ -491,6 +491,13 @@ runner 只核对有界磁盘证据和私有宿主生命周期，图片显示及�
 identifier 的 asset scope，并增加当前 Tauri FsScope 的允许/拒绝回归；完整包 UI 另验。
 现有偏好 `0644` 可在私有 HOME 中接受，权限、原件及无效导入/重启不变检查保持。
 
+干净 `9972828f4` 已完整重建；托管实际 Cancel/双图片导入/重复导入/无效包/重启五项
+文件检查及两次正常生命周期通过，重启后两张卡片分别显示正确首页/工作区图。
+显式仅实际 cancel 通过，Go To Folder 返回后捕捉连续 `-3812`，未点击 Open；同宿主
+重新绑定失败后只终止自有宿主，整体 runner exit 1。日志
+`/private/tmp/reasonix-theme-import-fixed-ui.log`，失败夹具/控制保留。六个自有进程及
+readiness 均独立确认已清理；显式完整验收及窗口稳定性仍未通过。
+
 
 macOS 受管 bridge 跟随实际 kernel parent 生命周期。宿主异常退出时取消任务/HTTP/SSE，
 处理宿主日志管道断开产生的 SIGPIPE，并释放目录锁、清理自己的 readiness 文件和空目录。
