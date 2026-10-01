@@ -1726,7 +1726,7 @@ impl BridgeLauncher {
         launch_id: &str,
         token: &str,
     ) -> Result<BridgeChild, String> {
-        let args = [
+        let args = vec![
             "--listen".into(),
             "127.0.0.1:0".into(),
             "--ready-file".into(),
@@ -1734,6 +1734,12 @@ impl BridgeLauncher {
             "--launch-id".into(),
             launch_id.into(),
         ];
+        #[cfg(target_os = "macos")]
+        let args = {
+            let mut args = args;
+            args.extend(["--host-pid".into(), std::process::id().to_string().into()]);
+            args
+        };
         // macOS ps exposes a child's launch environment even after Go unsets
         // it. Deliver the token over stdin and neutralize any inherited value.
         let token_line = format!("{token}\n");

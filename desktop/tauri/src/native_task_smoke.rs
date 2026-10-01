@@ -89,6 +89,38 @@ fn submit(app: &AppHandle, supervisor: &BridgeSupervisor, id: &str) -> Result<()
     Ok(())
 }
 
+pub fn host_death(app: &AppHandle, directory: &Path) -> Result<(), String> {
+    const ID: &str = "native-host-death-task";
+    let started = Arc::new(AtomicBool::new(false));
+    let observed = Arc::clone(&started);
+    let id = app.listen("bridge:event", move |event| {
+        if serde_json::from_str::<BridgeEvent>(event.payload()).is_ok_and(|envelope| {
+            envelope.protocol_version == u64::from(crate::bridge::PROTOCOL_VERSION)
+                && envelope.session_id == ID
+                && envelope.event_kind == "text"
+                && envelope.payload.get("text").and_then(|text| text.as_str()) == Some(BEFORE_CLOSE)
+        }) {
+            observed.store(true, Ordering::SeqCst);
+        }
+    });
+    let _listener = EventListener {
+        app: app.clone(),
+        id,
+    };
+    let supervisor = app.state::<BridgeSupervisor>();
+    submit(app, &supervisor, ID)?;
+    wait_task("host-death actual streamed task", || {
+        Ok(started.load(Ordering::SeqCst) && running(&supervisor, ID)?)
+    })?;
+    std::fs::write(directory.join("reasonix-native-task-host-death.json"),
+        serde_json::json!({"phase":"task-host-death", "hostPid": std::process::id(), "taskRunning":true, "observedText":true}).to_string())
+        .map_err(|_| "publish host-death task state")?;
+    // The external runner must kill its own confirmed host. A timeout exits as
+    // a failed probe, never as successful native termination acceptance.
+    std::thread::sleep(Duration::from_secs(30));
+    Err("external host termination did not arrive".into())
+}
+
 pub fn run(app: &AppHandle, directory: &Path, phase: &str) -> Result<(), String> {
     let expected = expected_geometry(directory)?;
     verify_geometry(app, "normal window before background task", expected)?;

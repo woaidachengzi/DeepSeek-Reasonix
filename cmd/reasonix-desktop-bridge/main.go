@@ -42,6 +42,7 @@ type config struct {
 	listen    string
 	readyFile string
 	launchID  string
+	hostPID   int
 }
 
 type readyFile struct {
@@ -88,6 +89,7 @@ func main() {
 	flag.StringVar(&cfg.listen, "listen", "127.0.0.1:0", "loopback address to listen on")
 	flag.StringVar(&cfg.readyFile, "ready-file", "", "owner-only readiness file path")
 	flag.StringVar(&cfg.launchID, "launch-id", "", "opaque host-generated launch identifier")
+	flag.IntVar(&cfg.hostPID, "host-pid", 0, "macOS native parent process whose lifetime owns this bridge")
 	flag.Parse()
 
 	token, err := consumeBridgeToken()
@@ -130,6 +132,14 @@ func consumeBridgeToken() (string, error) {
 }
 
 func run(ctx context.Context, cfg config, token string) (runErr error) {
+	ctx, stopHostWatch, err := hostLifetimeContext(ctx, cfg.hostPID)
+	if err != nil {
+		return err
+	}
+	defer stopHostWatch()
+	if cfg.hostPID != 0 && ctx.Err() != nil {
+		return ctx.Err()
+	}
 	if cfg.readyFile == "" {
 		return errors.New("--ready-file is required")
 	}
@@ -204,17 +214,31 @@ func run(ctx context.Context, cfg config, token string) (runErr error) {
 	if err := writeReadyFile(cfg.readyFile, ready); err != nil {
 		return err
 	}
-	defer removeReadyFile(cfg.readyFile, instanceID)
+	var ownedReadyParent os.FileInfo
+	if cfg.hostPID != 0 {
+		ownedReadyParent = nativeReadinessParent(cfg.readyFile)
+	}
+	defer func() {
+		if removeReadyFile(cfg.readyFile, instanceID) && ownedReadyParent != nil {
+			removeNativeReadinessParent(cfg.readyFile, ownedReadyParent)
+		}
+	}()
 
 	server := &http.Server{
 		Handler:           bridge.handler(),
 		ReadHeaderTimeout: 5 * time.Second,
+		BaseContext:       func(net.Listener) context.Context { return ctx },
 	}
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.Serve(listener) }()
 
 	select {
 	case <-ctx.Done():
+		// Parent loss cancels HTTP handlers and the active core/provider before
+		// waiting for the listener to drain, then runs the existing cleanup.
+		if err := manager.Shutdown(); err != nil {
+			runErr = fmt.Errorf("close session after host exit: %w", err)
+		}
 	case <-bridge.shutdownRequested:
 	case err := <-serveErr:
 		if !errors.Is(err, http.ErrServerClosed) {
@@ -226,12 +250,13 @@ func run(ctx context.Context, cfg config, token string) (runErr error) {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("graceful shutdown: %w", err)
+		_ = server.Close()
+		return errors.Join(runErr, fmt.Errorf("graceful shutdown: %w", err))
 	}
 	if err := <-serveErr; err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("serve after shutdown: %w", err)
 	}
-	return nil
+	return runErr
 }
 
 func requireLoopbackAddress(address string) error {
@@ -1985,13 +2010,14 @@ func writeReadyFile(path string, ready readyFile) error {
 	return nil
 }
 
-func removeReadyFile(path, instanceID string) {
+func removeReadyFile(path, instanceID string) bool {
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return
+		return false
 	}
 	var ready readyFile
 	if json.Unmarshal(content, &ready) == nil && ready.SidecarInstanceID == instanceID {
-		_ = os.Remove(path)
+		return os.Remove(path) == nil
 	}
+	return false
 }

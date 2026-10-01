@@ -10,7 +10,7 @@ import time
 
 
 class NativeTaskProvider(AbstractContextManager):
-    def __init__(self, core_home, temporary):
+    def __init__(self, core_home, temporary, host_death=False):
         self.core_home, self.temporary = Path(core_home), Path(temporary)
         self.stop = threading.Event()
         self.closed = threading.Event()
@@ -18,6 +18,7 @@ class NativeTaskProvider(AbstractContextManager):
         self.requests = 0
         self.error = None
         self.lock = threading.Lock()
+        self.host_death = host_death
         fixture = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -52,7 +53,7 @@ class NativeTaskProvider(AbstractContextManager):
                         self.wfile.write(("data: " + json.dumps(payload) + "\n\n").encode())
                         self.wfile.flush()
 
-                    if number == 1:
+                    if number == 1 and not fixture.host_death:
                         send("native-before-close ")
                         fixture.wait_control("reasonix-native-task-allow-progress.json")
                         send("native-after-close ")
@@ -62,7 +63,7 @@ class NativeTaskProvider(AbstractContextManager):
                         self.wfile.flush()
                         fixture.completed.set()
                     else:
-                        send("native-before-quit")
+                        send("native-before-close " if fixture.host_death else "native-before-quit")
                         deadline = time.monotonic() + 30
                         while not fixture.stop.is_set() and time.monotonic() < deadline:
                             readable, _, _ = select.select([self.connection], [], [], 0.1)
@@ -118,6 +119,10 @@ class NativeTaskProvider(AbstractContextManager):
     def verify(self):
         if self.error or self.requests != 2 or not self.completed.is_set() or not self.closed.wait(timeout=3):
             raise RuntimeError("native task did not complete in background and disconnect on quit")
+
+    def verify_host_death(self):
+        if self.error or self.requests != 1 or self.completed.is_set() or not self.closed.wait(timeout=3):
+            raise RuntimeError("host death did not disconnect the actual active provider stream")
 
     def __exit__(self, *_):
         self.stop.set()
