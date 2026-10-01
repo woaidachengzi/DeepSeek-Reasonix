@@ -203,6 +203,7 @@ pub fn shortcuts(app: &AppHandle) -> Result<(), String> {
 }
 
 pub fn settings(app: &AppHandle, phase: &str) -> Result<(), String> {
+    crate::native_window_smoke::record(app, "settings-ready")?;
     let delivered = Arc::new(AtomicUsize::new(0));
     let counter = Arc::clone(&delivered);
     let (window, id) = on_main(app, move |_, window| {
@@ -236,6 +237,7 @@ pub fn settings(app: &AppHandle, phase: &str) -> Result<(), String> {
             && !NSApplication::sharedApplication(MainThreadMarker::new().ok_or("not main thread")?)
                 .isHidden())
     })?;
+    crate::native_window_smoke::record(app, "settings-shown")?;
 
     match phase {
         "menu-settings-hidden" => {
@@ -255,6 +257,7 @@ pub fn settings(app: &AppHandle, phase: &str) -> Result<(), String> {
                     .minimize()
                     .map_err(|_| "minimize settings window".into())
             })?;
+            crate::native_window_smoke::record(app, "settings-minimize-requested")?;
             wait_for(app, "minimized settings window", |window| {
                 window
                     .is_minimized()

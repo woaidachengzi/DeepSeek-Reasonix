@@ -3573,6 +3573,8 @@ fn main() {
     let app = tauri::Builder::default()
         .on_page_load(|webview, payload| {
             #[cfg(target_os = "macos")]
+            native_window_smoke::observe(webview, payload);
+            #[cfg(target_os = "macos")]
             native_clipboard_smoke::observe(webview, payload);
             #[cfg(target_os = "macos")]
             native_link_smoke::observe(webview, payload);
@@ -3591,6 +3593,8 @@ fn main() {
         }))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            app.manage(native_window_smoke::WindowSmokeState::default());
             #[cfg(target_os = "macos")]
             app.manage(native_clipboard_smoke::ClipboardSmokeState::default());
             #[cfg(target_os = "macos")]

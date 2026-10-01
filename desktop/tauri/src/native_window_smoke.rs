@@ -3,18 +3,98 @@
 
 use std::{
     path::PathBuf,
-    sync::mpsc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     time::{Duration, Instant},
 };
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, WebviewWindow};
+use tauri::{AppHandle, Manager, Webview, WebviewWindow};
 
 use crate::{
     host_preferences::{CloseBehavior, HostPreferences},
     tray,
     window_state::PreviewWindowState,
 };
+
+/// Read-only startup evidence for opt-in native acceptance. No renderer API.
+pub struct WindowSmokeState {
+    enabled: bool,
+    main_loaded: AtomicBool,
+}
+
+impl Default for WindowSmokeState {
+    fn default() -> Self {
+        Self {
+            enabled: std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").is_ok(),
+            main_loaded: AtomicBool::new(false),
+        }
+    }
+}
+
+pub fn observe(webview: &Webview, payload: &tauri::webview::PageLoadPayload<'_>) {
+    let Some(state) = webview.app_handle().try_state::<WindowSmokeState>() else {
+        return;
+    };
+    if state.enabled
+        && webview.label() == "main"
+        && payload.url().scheme() == "tauri"
+        && payload.event() == tauri::webview::PageLoadEvent::Finished
+    {
+        state.main_loaded.store(true, Ordering::SeqCst);
+    }
+}
+
+pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, String> {
+    use objc2_app_kit::{NSApplication, NSWindow, NSWindowStyleMask};
+    let mtm = objc2::MainThreadMarker::new().ok_or("snapshot not on main thread")?;
+    let pointer = window
+        .ns_window()
+        .map_err(|_| "read native window handle")?;
+    if pointer.is_null() {
+        return Err("native window handle missing".into());
+    }
+    // SAFETY: Tauri owns this live NSWindow; this read-only snapshot runs on
+    // the main thread and does not retain the pointer beyond the window borrow.
+    let native = unsafe { &*pointer.cast::<NSWindow>() };
+    let application = NSApplication::sharedApplication(mtm);
+    Ok(serde_json::json!({
+        "geometry": Geometry::read(window)?,
+        "visible": window.is_visible().map_err(|_| "read visibility")?,
+        "minimized": window.is_minimized().map_err(|_| "read minimized state")?,
+        "maximized": window.is_maximized().map_err(|_| "read maximized state")?,
+        "focused": window.is_focused().map_err(|_| "read focused state")?,
+        "applicationHidden": application.isHidden(),
+        "applicationActive": application.isActive(),
+        "nativeKeyWindow": native.isKeyWindow(),
+        "nativeMainWindow": native.isMainWindow(),
+        "nativeCanBecomeKey": native.canBecomeKeyWindow(),
+        "nativeOnActiveSpace": native.isOnActiveSpace(),
+        "nativeMiniaturizable": native.styleMask().contains(NSWindowStyleMask::Miniaturizable),
+        "nativeMiniaturized": native.isMiniaturized(),
+        "nativeVisible": native.isVisible(),
+        "mainPageFinished": window.app_handle().try_state::<WindowSmokeState>()
+            .is_some_and(|state| state.main_loaded.load(Ordering::SeqCst)),
+    }))
+}
+
+pub(crate) fn record(app: &AppHandle, stage: &'static str) -> Result<(), String> {
+    use std::io::Write;
+    let value = on_main(app, |_, window| snapshot(window))?;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(marker_directory()?.join("reasonix-native-window-trace.jsonl"))
+        .map_err(|_| "open private window trace")?;
+    writeln!(
+        file,
+        "{}",
+        serde_json::json!({"stage": stage, "state": value})
+    )
+    .map_err(|_| "write private window trace".into())
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct Geometry {
@@ -81,17 +161,7 @@ pub(crate) fn wait_for(
             return Ok(());
         }
         if Instant::now() >= deadline {
-            let actual = on_main(app, |_, window| {
-                Ok(serde_json::json!({
-                    "geometry": Geometry::read(window)?,
-                    "visible": window.is_visible().map_err(|_| "read visibility")?,
-                    "minimized": window.is_minimized().map_err(|_| "read minimized state")?,
-                    "maximized": window.is_maximized().map_err(|_| "read maximized state")?,
-                "focused": window.is_focused().map_err(|_| "read focused state")?,
-                "applicationHidden": objc2_app_kit::NSApplication::sharedApplication(objc2::MainThreadMarker::new().ok_or("not main thread")?).isHidden(),
-                "applicationActive": objc2_app_kit::NSApplication::sharedApplication(objc2::MainThreadMarker::new().ok_or("not main thread")?).isActive(),
-                }))
-            });
+            let actual = on_main(app, |_, window| snapshot(window));
             return Err(format!("native window timeout: {stage}; actual={actual:?}"));
         }
         std::thread::sleep(Duration::from_millis(50));
