@@ -294,6 +294,12 @@ token 读取前及读取后尚未启动 core。kernel exit 0、清理、原件�
 同一新包完整窗口门禁为 31/46：托管 23 项全过，显式在 Settings 最小化前提停止。
 新增固定计数证明该失败没有额外恢复/Reopen 请求；最小化根因仍待定位。
 
+同包的普通托管私有产品输入框已通过实际 CUA Cmd+C/X/V：剪切后为空、粘贴后
+精确文本恢复；独立 AppKit helper 核对系统值和代次。清除测试草稿后实际 Cmd+Q
+退出码 0，档案身份/原件保护和 sidecar/ready 目录清理通过，所有原剪贴板格式已恢复。
+仅覆盖输入框，不推广为消息复制按钮、错误反馈、上下文菜单或显式档案全部 UI。
+本轮 Cmd+M 的 AX 观察不足以确认最小化，仍保留严格原生门禁失败。
+
 原生 responder 编辑另有严格门禁 `--edit`：默认 40 个场景之外，每档案增加一个
 `menu-editing` 阶段。它复用完整剪贴板保护，要求应用 active、主窗口是实际 key window
 且 WKWebView 接受 first responder；核对已安装 Copy/Paste/Cut/Select All/Undo/Redo 的
