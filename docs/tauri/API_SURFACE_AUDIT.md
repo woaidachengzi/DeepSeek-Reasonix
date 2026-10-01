@@ -96,6 +96,13 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：macOS 指定应用启动失败反馈（2026-10-01）
+
+- 对照 Wails `darwinExternalOpenerCommand` 与 Tauri `launch_with_opener`：两者的 Ghostty 路径均使用 `/usr/bin/open -na ... --args --working-directory=...`；Tauri 原专用分支在 spawn 后立即返回成功并后台忽略退出码。实际 LaunchServices 拒绝损坏应用时，调用方仍会收到成功。
+- macOS Ghostty 分支现等待系统启动器完成交接，检查非零退出码并返回“问题 + 重新选择已安装应用”的错误。最多等待 10 秒；超时/等待错误只结束并回收本次启动器，不能关闭已运行的目标应用或用户终端。参数仍独立传递，标准输入/输出/错误不进入 UI，不增加任意命令入口。
+- 新增真实 LaunchServices 拒绝不可启动私有 `.app`、启动器零退出码及超时回收的三项 Rust 回归；使用真实 Go bridge 的完整 Rust 196 项通过、2 项按原计划忽略。`tools/tauri/smoke-native-app-failure.py` 在私有 HOME 内创建声明了缺失 executable 的 Ghostty 测试 bundle，经生产 catalog、本地文件校验和主 WKWebView IPC 测试未知 ID/实际启动拒绝；宿主先确认 catalog 目标恰好为私有测试 bundle，否则停止，不能操作真实已安装 Ghostty。包级执行结果待后续记录。
+- 私有文档路径包含中文、换行、引号和 `$`，失败后检查内容、mtime/权限不变；两种档案分别核对 sidecar 鉴权、凭据身份、正常退出和清理。该门禁不证明真实 Finder/编辑器/终端正常打开、终端 cwd、物理点击或界面错误 toast 已渲染；相关 macOS D 待办保留，Windows/Linux 和外接屏仍按用户要求延期。
+
 #### D：macOS 默认浏览器实际打开验收（2026-10-01）
 
 - 新增 `tools/tauri/smoke-native-links.py` 与仅在 opt-in `external-browser` 阶段运行的宿主探测。主 WKWebView 经实际 IPC 调用现有 `open_external_link` / `open_external_url`，拒绝文件/应用 scheme、userinfo、NUL、邮件附件参数及 OAuth 邮件入口，再由系统默认浏览器打开两个私有 loopback canary 页面。

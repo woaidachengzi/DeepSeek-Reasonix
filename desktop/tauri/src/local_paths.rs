@@ -397,22 +397,100 @@ fn launch_with_opener(
         if spec.view.id == "ghostty" {
             // Ghostty needs its explicit working-directory argument; handing
             // it a directory document would not open a terminal there.
-            let mut child = std::process::Command::new("/usr/bin/open")
+            let mut command = std::process::Command::new("/usr/bin/open");
+            command
                 .arg("-na")
                 .arg(&spec.target)
                 .arg("--args")
-                .arg(format!("--working-directory={}", path_text(launch)?))
-                .spawn()
-                .map_err(|error| error.to_string())?;
-            std::thread::spawn(move || {
-                let _ = child.wait();
-            });
-            return Ok(());
+                .arg(format!("--working-directory={}", path_text(launch)?));
+            // open hands off to LaunchServices and then exits. Wait for that
+            // handoff, not for the GUI application, so a broken bundle cannot
+            // report success merely because the launcher process was spawned.
+            return macos_launch::run(command, std::time::Duration::from_secs(10));
         }
         window
             .opener()
             .open_path(path_text(launch)?, Some(path_text(&spec.target)?))
             .map_err(|error| error.to_string())
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod macos_launch {
+    use std::{
+        process::{Command, Stdio},
+        time::{Duration, Instant},
+    };
+
+    pub(super) fn run(mut command: Command, timeout: Duration) -> Result<(), String> {
+        const FAILED: &str =
+            "cannot open selected application; choose an installed application and retry";
+        let mut child = command
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|_| FAILED)?;
+        let deadline = Instant::now() + timeout;
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    return if status.success() {
+                        Ok(())
+                    } else {
+                        Err(FAILED.into())
+                    }
+                }
+                Ok(None) if Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(20))
+                }
+                result => {
+                    // Only our launcher is stopped, never the target app or
+                    // unrelated terminal sessions. Always reap the child.
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(if result.is_err() {
+                        FAILED
+                    } else {
+                        "opening selected application timed out; check the application and retry"
+                    }
+                    .into());
+                }
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        #[test]
+        fn actual_launchservices_rejection_is_not_success() {
+            let root = tempfile::tempdir().unwrap();
+            let app = root.path().join("Ghostty 中文\n\"$.app");
+            std::fs::create_dir_all(app.join("Contents/MacOS")).unwrap();
+            std::fs::write(app.join("Contents/Info.plist"), b"<?xml version=\"1.0\"?><plist version=\"1.0\"><dict><key>CFBundleExecutable</key><string>missing-executable</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>").unwrap();
+            let mut command = Command::new("/usr/bin/open");
+            command
+                .arg("-na")
+                .arg(app)
+                .arg("--args")
+                .arg("--working-directory=/private/tmp");
+            assert!(run(command, Duration::from_secs(5))
+                .unwrap_err()
+                .contains("choose an installed application"));
+        }
+        #[test]
+        fn successful_handoff_is_accepted() {
+            assert!(run(Command::new("/usr/bin/true"), Duration::from_secs(2)).is_ok());
+        }
+        #[test]
+        fn stuck_owned_launcher_is_bounded_and_reaped() {
+            let mut command = Command::new("/bin/sleep");
+            command.arg("10");
+            assert!(run(command, Duration::from_millis(20))
+                .unwrap_err()
+                .contains("timed out"));
+        }
     }
 }
 

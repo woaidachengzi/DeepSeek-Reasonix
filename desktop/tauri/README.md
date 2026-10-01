@@ -183,6 +183,17 @@ python3 tools/tauri/smoke-native-links.py 'desktop/tauri/target/release/bundle/m
 及普通包生命周期验收；正式 Developer ID 签名/公证仍待完成。
 2026-10-01 用户仅延期不同缩放显示器/外接屏拔插测试，其余 macOS D 门禁仍保留。
 
+指定应用失败反馈另有独立门禁：
+
+```bash
+python3 tools/tauri/smoke-native-app-failure.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
+```
+
+它在私有 HOME 创建缺少 executable 的测试 Ghostty bundle，先严格确认生产 catalog
+解析到该私有目标，再经主 WKWebView IPC 要求未知应用 ID 和真实 LaunchServices 拒绝
+均返回错误；核对特殊文档路径的内容/权限/mtime 不变和两种档案的退出清理。
+不会操作真实已安装 Ghostty，也不代替正常应用打开、终端 cwd 或物理 UI 验收。
+
 原生 responder 编辑另有严格门禁 `--edit`：默认 40 个场景之外，每档案增加一个
 `menu-editing` 阶段。它复用完整剪贴板保护，要求应用 active、主窗口是实际 key window
 且 WKWebView 接受 first responder；核对已安装 Copy/Paste/Cut/Select All/Undo/Redo 的

@@ -1,5 +1,5 @@
-//! Opt-in main WKWebView IPC -> production opener -> actual default browser.
-//! Only private loopback canaries are opened; no renderer command is added.
+//! Opt-in main WKWebView IPC -> production external browser/application entry.
+//! Only private canaries are used; no renderer command is added.
 use std::{
     path::Path,
     sync::{
@@ -17,8 +17,10 @@ pub struct LinkSmokeState {
 }
 
 pub fn observe(webview: &Webview, payload: &tauri::webview::PageLoadPayload<'_>) {
-    if std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref() != Ok("external-browser")
-        || webview.label() != "main"
+    if !matches!(
+        std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref(),
+        Ok("external-browser" | "external-app-failure")
+    ) || webview.label() != "main"
         || payload.url().scheme() != "tauri"
         || payload.url().host_str() != Some("localhost")
     {
@@ -70,11 +72,17 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
         .filter(|nonce| nonce.len() == 32 && nonce.bytes().all(|byte| byte.is_ascii_hexdigit()))
         .ok_or("invalid link nonce")?
         .to_string();
-    let port = control
-        .get("port")
-        .and_then(|value| value.as_u64())
-        .filter(|port| *port > 0 && *port <= u16::MAX as u64)
-        .ok_or("invalid loopback port")?;
+    let application_failure = std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref()
+        == Ok("external-app-failure");
+    let port = if application_failure {
+        0
+    } else {
+        control
+            .get("port")
+            .and_then(|value| value.as_u64())
+            .filter(|port| *port > 0 && *port <= u16::MAX as u64)
+            .ok_or("invalid loopback port")?
+    };
     let (send, receive) = mpsc::sync_channel(1);
     *app.state::<LinkSmokeState>()
         .active
@@ -88,7 +96,33 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
         }
         std::thread::sleep(Duration::from_millis(25));
     }
-    let source = r#"(async () => {
+    let source = if application_failure {
+        let expected = std::path::PathBuf::from(std::env::var_os("HOME").ok_or("private HOME missing")?)
+            .join("Applications/Ghostty.app").canonicalize().map_err(|_| "private invalid bundle missing")?;
+        let selected = crate::opener_catalog::selected_opener(crate::opener_catalog::installed_openers(), "ghostty")?;
+        if selected.target != expected {
+            return Err("Ghostty catalog does not resolve to the private fixture; no application was operated".into());
+        }
+        let path = directory.join("document 中文\n\"$.md");
+        let path = path.to_str().ok_or("private document is not UTF-8")?;
+        r#"(async () => {
+            const receipt = new URL(location.href);
+            receipt.searchParams.set('native_link_nonce', __NONCE__);
+            const invoke = window.__TAURI_INTERNALS__.invoke;
+            const rejected = async id => {
+                try { await invoke('open_local_path_with', {path: __PATH__, id}); return ''; }
+                catch (error) { return String(error); }
+            };
+            try {
+                const missing = await rejected('reasonix-not-installed-canary');
+                const broken = await rejected('ghostty');
+                receipt.searchParams.set('native_link_result',
+                    missing.includes('no longer installed') && broken.includes('cannot open selected application; choose an installed application and retry')
+                    ? 'ok' : 'failed');
+            } catch { receipt.searchParams.set('native_link_result', 'failed'); }
+            location.replace(receipt.href);
+        })();"#.replace("__PATH__", &serde_json::to_string(path).map_err(|_| "encode private document path")?)
+    } else { r#"(async () => {
         const nonce = __NONCE__, base = __BASE__;
         const report = result => {
             const receipt = new URL(location.href);
@@ -115,7 +149,7 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
             }
             report('ok');
         } catch { report('failed'); }
-    })();"#
+    })();"#.to_string() }
         .replace("__NONCE__", &serde_json::to_string(&nonce).map_err(|_| "encode link nonce")?)
         .replace("__BASE__", &serde_json::to_string(&format!("http://127.0.0.1:{port}/{nonce}")).map_err(|_| "encode loopback URL")?);
     crate::native_window_smoke::on_main(app, move |_, window| {
@@ -128,6 +162,9 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
         .map_err(|_| "main link IPC timed out")?
     {
         return Err("main link validation/native opener failed".into());
+    }
+    if application_failure {
+        return Ok(());
     }
     let deadline = Instant::now() + Duration::from_secs(15);
     loop {
