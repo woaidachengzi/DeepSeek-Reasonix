@@ -91,6 +91,8 @@ func main() {
 	flag.StringVar(&cfg.launchID, "launch-id", "", "opaque host-generated launch identifier")
 	flag.IntVar(&cfg.hostPID, "host-pid", 0, "macOS native parent process whose lifetime owns this bridge")
 	flag.Parse()
+	stopPipeGuard := nativeOutputPipeGuard(cfg.hostPID)
+	defer stopPipeGuard()
 
 	token, err := consumeBridgeToken()
 	if err == nil {

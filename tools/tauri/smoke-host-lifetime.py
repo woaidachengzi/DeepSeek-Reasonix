@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import select
 import stat
 import subprocess
 import sys
@@ -60,6 +61,7 @@ def smoke(app_path):
                 success = False
                 host = None
                 owned_sidecar = None
+                exit_monitor = None
                 try:
                     with fixture as provider:
                         env = dict(environment, HOME=str(home), TMPDIR=str(temporary))
@@ -105,14 +107,28 @@ def smoke(app_path):
                         if host.poll() is not None or package.own_sidecars(temporary, sidecar_binary) != [owned_sidecar] or process_identity(owned_sidecar) != sidecar_identity:
                             raise RuntimeError("process identity changed before host termination")
                         (root / "owned-processes.json").write_text(json.dumps({"host": host.pid, "sidecar": owned_sidecar}))
+                        exit_monitor = select.kqueue()
+                        # NOTE_EXITSTATUS (0x04000000) is defined by the macOS
+                        # SDK sys/event.h; the confirmed same-UID child may be
+                        # observed without signalling it or reading its output.
+                        exit_monitor.control([select.kevent(owned_sidecar, filter=select.KQ_FILTER_PROC,
+                            flags=select.KQ_EV_ADD | select.KQ_EV_ONESHOT,
+                            fflags=select.KQ_NOTE_EXIT | 0x04000000)], 0, 0)
                         host.send_signal(termination)
                         if host.wait(timeout=5) != -termination:
                             raise RuntimeError("host did not terminate from the requested signal")
+                        exits = exit_monitor.control([], 1, 12)
+                        if len(exits) != 1 or exits[0].ident != owned_sidecar or not exits[0].fflags & select.KQ_NOTE_EXIT:
+                            raise RuntimeError("sidecar did not publish a kernel exit receipt")
+                        status = exits[0].data
+                        print(f"Sidecar kernel exit: signalled={os.WIFSIGNALED(status)}, signal={os.WTERMSIG(status) if os.WIFSIGNALED(status) else 0}, exitCode={os.WEXITSTATUS(status) if os.WIFEXITED(status) else -1}", flush=True)
                         cleanup_deadline = time.monotonic() + 12
                         while (package.is_alive(owned_sidecar) or list(temporary.glob("reasonix-tauri-bridge-*"))) and time.monotonic() < cleanup_deadline:
                             time.sleep(0.05)
                         if package.is_alive(owned_sidecar) or package.own_sidecars(temporary, sidecar_binary) or list(temporary.glob("reasonix-tauri-bridge-*")):
                             raise RuntimeError(f"native host termination cleanup failed: sidecarAlive={package.is_alive(owned_sidecar)}, readinessDirectories={len(list(temporary.glob('reasonix-tauri-bridge-*')))}")
+                        if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 0:
+                            raise RuntimeError("sidecar did not complete its own normal cleanup after host death")
                         if active:
                             provider.verify_host_death() # Before the fixture closes its server.
                         if protected(paths) != originals:
@@ -129,6 +145,8 @@ def smoke(app_path):
                         success = True
                         print(f"native macOS host lifetime {'managed' if managed else 'explicit'} {termination.name} {'streaming' if active else 'idle'}: cleanup, originals and same-profile restart OK", flush=True)
                 finally:
+                    if exit_monitor is not None:
+                        exit_monitor.close()
                     if host is not None and host.poll() is None:
                         host.kill()
                         host.wait(timeout=5)
