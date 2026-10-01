@@ -57,7 +57,9 @@ def check_source_receipt(receipt, expected_reads=None):
         raise RuntimeError('Private nonpersistent legacy source receipt missing/invalid')
 
 
-def smoke(app_path, control_path, seconds):
+def smoke(app_path, control_path, seconds, profile='both'):
+    if profile not in ('both', 'managed', 'explicit'):
+        raise ValueError('Unknown UI migration profile mode')
     app = Path(app_path).resolve()
     identifier = plistlib.loads((app / 'Contents/Info.plist').read_bytes())['CFBundleIdentifier']
     if identifier != 'io.reasonix.desktop.preview' or package.matching_package_is_running(identifier):
@@ -70,8 +72,10 @@ def smoke(app_path, control_path, seconds):
     control = Path(control_path).resolve()
     success = False
     roots = []
+    passed = 0
     try:
-        for managed in (True, False):
+        modes = (True, False) if profile == 'both' else (profile == 'managed',)
+        for managed in modes:
             root = Path(tempfile.mkdtemp(prefix='reasonix-ui-migration-' + ('managed-' if managed else 'explicit-'), dir='/private/tmp')).resolve()
             root.chmod(0o700)
             roots.append(root)
@@ -93,7 +97,9 @@ def smoke(app_path, control_path, seconds):
                 env = environment | {'HOME': str(root / 'home'), 'TMPDIR': str(root / 'tmp'),
                                      'REASONIX_TAURI_LEGACY_UI_SMOKE': 'private-source'}
                 if not managed:
-                    env |= {'REASONIX_HOME': str(core), 'REASONIX_STATE_HOME': str(core), 'REASONIX_CACHE_HOME': str(root / 'cache')}
+                    # Match the explicit-profile contract: REASONIX_HOME
+                    # selects its state; do not add a separate state override.
+                    env |= {'REASONIX_HOME': str(core), 'REASONIX_CACHE_HOME': str(root / 'cache')}
                 host = subprocess.Popen([str(host_binary)], env=env, stdout=subprocess.DEVNULL,
                                         stderr=subprocess.DEVNULL, start_new_session=True)
                 sidecar = None
@@ -130,6 +136,7 @@ def smoke(app_path, control_path, seconds):
                     if any(original(path) != value for path, value in originals.items()):
                         raise RuntimeError('UI migration changed its source or protected original')
                     check_source_receipt(receipt)
+                    passed += 1
                     print(f"UI phase {phase}: private source, identity, originals and normal quit cleanup OK", flush=True)
                 finally:
                     if host.poll() is None:
@@ -141,7 +148,7 @@ def smoke(app_path, control_path, seconds):
                         except ProcessLookupError:
                             pass
         success = True
-        print('Six ordinary UI lifecycles and source-isolation checks passed; native UI evidence must confirm import/restore behavior.', flush=True)
+        print(f'{passed} ordinary UI lifecycles and source-isolation checks passed; native UI evidence must confirm import/restore behavior.', flush=True)
     finally:
         if success:
             control.unlink(missing_ok=True)
@@ -156,7 +163,9 @@ if __name__ == '__main__':
     parser.add_argument('app')
     parser.add_argument('--control', default='/private/tmp/reasonix-ui-migration-control.json')
     parser.add_argument('--seconds', type=int, default=300, choices=range(60, 901))
+    parser.add_argument('--profile', choices=('both', 'managed', 'explicit'), default='both',
+                        help='run both profile modes, or only an independently unfinished mode')
     args = parser.parse_args()
     if sys.platform != 'darwin':
         raise SystemExit('This acceptance requires macOS')
-    smoke(args.app, args.control, args.seconds)
+    smoke(args.app, args.control, args.seconds, profile=args.profile)
