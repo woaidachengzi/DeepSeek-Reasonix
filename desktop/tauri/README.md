@@ -248,7 +248,19 @@ python3 -B tools/tauri/smoke-native-ui-storage.py 'desktop/tauri/target/release/
 同 origin 文档/bridge 权限与普通生命周期均通过；Rust 198 项通过、2 项既有忽略。
 UI 存储门禁核对实际工作区按钮重启渲染、跨档案返回及仅清理自有 canary，不清空系统
 WebKit 仓库。旧 `tauri://localhost` 共享 UI 偏好保留，新 origin 首次启动使用默认偏好；
-显式旧偏好迁移和回退尚待实现/验收。此前通知准备在发消息前停止，尚无横幅/点击证据。
+当前包已接入设置→存储与路径→旧 Preview 界面偏好：显式只读预览、核对确认导入和
+带记录的撤回。仅迁移 22 个固定界面 key，先保存回退记录再写入，保留源记录及后续修改；
+读取隐藏窗口不运行产品 UI，没有 capability，关闭偏好仅作用于主窗口。
+
+```bash
+python3 -B tools/tauri/smoke-native-ui-legacy-read.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
+```
+
+干净包 `3225f43c3` 的两种档案重复旧 UI 只读 IPC、读取窗口销毁、双窗口权限与
+普通生命周期均通过；实际设置页预览、未确认按钮禁用及当前工作区不变通过 CUA 验证。
+合成偏好导入/撤回、重挂载恢复和存储失败保护的组件回归通过，Rust 199 项通过/2 项忽略。
+完整真实 UI 导入及撤回仍待受控私有来源验收；异常强制终止宿主后的 sidecar 清理需补齐。
+此前通知准备在发消息前停止，尚无横幅/点击证据。
 本地 ad-hoc 签名不等于正式签名/公证；外接屏延期和其他发布门禁见迁移清单最新记录。
 
 原生 responder 编辑另有严格门禁 `--edit`：默认 40 个场景之外，每档案增加一个
