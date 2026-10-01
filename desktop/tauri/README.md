@@ -408,13 +408,18 @@ Developer ID 签名；进一步使用官方 CLI 生成真实文本历史后，�
 空会话的 JSONL 延迟保存，不能用其文件出现作为旧 GUI 启动就绪条件。
 
 独立旧版回退门禁需要原生 arm64 macOS、Swift 编译器和已取得的官方 1.38.3 二进制，
-固定摘要拒绝本地修改版本。成功清理临时档案，失败保留私有记录；不代替完整附件/
-检查点、真实 GUI 点击、物理按键或宿主目录生命周期互斥验收：
+固定摘要拒绝本地修改版本。成功清理临时档案，失败保留私有记录；默认覆盖文本
+历史，`--workspace-data` 另外覆盖私有 Global 文件/文本与图片引用、实际文件编辑及
+检查点：旧版鉴权 loopback serve 完成引用解析，Preview 导入/重启不改原件；旧版
+恢复后再次解析/编辑并生成第二检查点，实际最新代码回滚恢复文件。旧版随后向早期
+检查点回滚会以 `file conflicts detected` 拒绝，门禁核对该拒绝没有修改文件或历史；
+不能据此认定连续跨检查点回滚通过。两种模式均不代替图片渲染/像素送模型、完整
+历史数据、真实 GUI 点击、物理按键或宿主目录生命周期互斥验收：
 
 ```sh
 python3 tools/tauri/smoke-legacy-rollback.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app' \
   --legacy-app '/absolute/path/to/official/Reasonix.app' \
-  --legacy-cli '/absolute/path/to/official/reasonix'
+  --legacy-cli '/absolute/path/to/official/reasonix' --workspace-data
 ```
 
 本轮平台范围仅为 macOS，Windows/Linux 等有测试环境后恢复。
