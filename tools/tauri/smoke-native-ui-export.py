@@ -1,0 +1,242 @@
+#!/usr/bin/env python3
+"""Own ordinary Preview launches for actual diagnostic Save/Cancel/Replace UI.
+
+In each private profile, start/mark a frontend trace through Settings >
+Diagnostics. Export and cancel the real panel; --record cancel checks no file.
+Export the retained trace to outputFile; --record new-save checks the actual
+report. Start/mark another trace, select the same name and cancel Replace;
+--record overwrite-cancel checks the original bytes/metadata are untouched.
+Export the retained second trace, accept Replace, --record overwrite, then
+Cmd+Q. File/lifecycle assertions never replace actual panel/feedback evidence.
+"""
+import argparse
+import importlib.util
+import json
+import os
+from pathlib import Path
+import plistlib
+import re
+import shutil
+import signal
+import stat
+import subprocess
+import sys
+import time
+import uuid
+
+sys.dont_write_bytecode = True
+spec = importlib.util.spec_from_file_location('package', Path(__file__).with_name('smoke-packaged-app.py'))
+package = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(package)
+STEPS = ('cancel', 'new-save', 'overwrite-cancel', 'overwrite')
+
+
+def private_file(path, maximum):
+    info = path.lstat()
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+            or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size > maximum):
+        raise RuntimeError('Export acceptance file is not an owned bounded private regular file')
+    return info
+
+
+def original(path):
+    info = path.lstat()
+    return path.read_bytes(), info.st_mode, info.st_mtime_ns, info.st_ino
+
+
+def report(path):
+    private_file(path, 8 << 20)
+    data = json.loads(path.read_bytes())
+    if not isinstance(data, dict) or not isinstance(data.get('manifest'), dict):
+        raise RuntimeError('Actual exported report schema/identity/user marker is invalid')
+    events = data.get('events')
+    identifier = data.get('manifest', {}).get('reportId')
+    if (type(data.get('schemaVersion')) is not int or data['schemaVersion'] != 2
+            or not isinstance(identifier, str) or not 1 <= len(identifier) <= 128
+            or not isinstance(events, list) or not events
+            or not any(isinstance(event, dict) and event.get('type') == 'marker' for event in events)):
+        raise RuntimeError('Actual exported report schema/identity/user marker is invalid')
+    return identifier
+
+
+def record(step, control_path):
+    if step not in STEPS:
+        raise ValueError('Unknown export acceptance step')
+    control = Path(control_path)
+    private_file(control, 8192)
+    state = json.loads(control.read_text())
+    root = Path(state['root'])
+    if (root.parent != Path('/private/tmp') or root.resolve() != root
+            or not re.fullmatch(r'reasonix-native-ui-export-[0-9a-f]{32}', root.name)
+            or type(state['managed']) is not bool):
+        raise RuntimeError('Export UI control does not identify a private fixture')
+    mode = root / ('managed' if state['managed'] else 'explicit')
+    output = mode / '报告 测试'
+    for directory in (root, mode, output):
+        info = directory.lstat()
+        if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid()
+                or stat.S_IMODE(info.st_mode) != 0o700):
+            raise RuntimeError('Export UI directory is not an owned private ordinary directory')
+    target = output / '报告 副本.json'
+    if state['outputFile'] != str(target) or state['phase'] != step:
+        raise RuntimeError('Export UI step/path does not match the current phase')
+    if any(type(state[key]) is not int or not package.is_alive(state[key])
+           for key in ('hostPid', 'sidecarPid')):
+        raise RuntimeError('Export UI fixture is no longer live')
+    receipt = mode / 'ui-export-receipt.json'
+    prior = {'steps': []}
+    has_receipt = receipt.exists() or receipt.is_symlink()
+    if has_receipt:
+        private_file(receipt, 8192)
+        prior = json.loads(receipt.read_text())
+    index = STEPS.index(step)
+    if prior['steps'] != list(STEPS[:index]):
+        raise RuntimeError('Export UI receipt order is invalid')
+    backup = mode / 'first-export-original.json'
+    if step == 'cancel':
+        if list(output.iterdir()):
+            raise RuntimeError('Cancelled save unexpectedly wrote an output')
+    else:
+        if set(output.iterdir()) != {target}:
+            raise RuntimeError('Export left unexpected output files')
+        identifier = report(target)
+        if step == 'new-save':
+            private_file(target, 8 << 20)
+            backup.touch(mode=0o600, exist_ok=False)
+            backup.write_bytes(target.read_bytes())
+            info = target.stat()
+            prior |= {'firstId': identifier, 'firstMode': info.st_mode,
+                      'firstMtime': info.st_mtime_ns, 'firstInode': info.st_ino}
+        else:
+            private_file(backup, 8 << 20)
+            if step == 'overwrite-cancel':
+                info = target.stat()
+                if (target.read_bytes() != backup.read_bytes()
+                        or (info.st_mode, info.st_mtime_ns, info.st_ino)
+                        != (prior['firstMode'], prior['firstMtime'], prior['firstInode'])):
+                    raise RuntimeError('Cancelled Replace changed the original export')
+            elif identifier == prior['firstId'] or target.read_bytes() == backup.read_bytes():
+                raise RuntimeError('Accepted Replace did not publish the second report')
+    prior['steps'].append(step)
+    if not has_receipt:
+        receipt.touch(mode=0o600, exist_ok=False)
+    receipt.write_text(json.dumps(prior))
+    state['phase'] = STEPS[index + 1] if index + 1 < len(STEPS) else 'complete'
+    control.write_text(json.dumps(state))
+    print(f'Actual output check {step} passed; panel/feedback evidence remains separate', flush=True)
+
+
+def smoke(app_path, control_path, seconds, profile):
+    if profile not in ('managed', 'explicit', 'both') or not 60 <= seconds <= 900:
+        raise ValueError('Invalid export UI profile/duration')
+    control = Path(control_path)
+    if control.parent != Path('/private/tmp') or control.parent.resolve() != control.parent:
+        raise ValueError('Export UI control must be directly inside /private/tmp')
+    app = Path(app_path).resolve()
+    identifier = plistlib.loads((app / 'Contents/Info.plist').read_bytes())['CFBundleIdentifier']
+    if identifier != 'io.reasonix.desktop.preview' or package.matching_package_is_running(identifier):
+        raise RuntimeError('Preview missing or already running')
+    subprocess.run(['/usr/bin/codesign', '--verify', '--deep', '--strict', str(app)], check=True, capture_output=True)
+    host_binary = app / 'Contents/MacOS/reasonix-tauri'
+    sidecar_binary = app / 'Contents/MacOS/reasonix-desktop-bridge'
+    environment = {key: value for key, value in os.environ.items()
+                   if key in ('PATH', 'USER', 'LOGNAME', 'LANG', 'LC_ALL', '__CF_USER_TEXT_ENCODING')}
+    root = Path('/private/tmp') / ('reasonix-native-ui-export-' + uuid.uuid4().hex)
+    root.mkdir(mode=0o700)
+    success, passed = False, 0
+    try:
+        # Refuse existing controls, including symlinks, before launching any host.
+        control.touch(mode=0o600, exist_ok=False)
+        modes = (True, False) if profile == 'both' else (profile == 'managed',)
+        for managed in modes:
+            mode = root / ('managed' if managed else 'explicit')
+            mode.mkdir(mode=0o700)
+            for name in ('home', 'tmp', '报告 测试'):
+                (mode / name).mkdir(mode=0o700)
+            core = mode / 'home/Library/Application Support' / identifier / 'reasonix-core' if managed else mode / 'core'
+            core.mkdir(parents=True, mode=0o700)
+            canary = core / 'ui-export-original.canary'
+            canary.touch(mode=0o600)
+            canary.write_bytes(b'private export original\n')
+            before = original(canary)
+            env = environment | {'HOME': str(mode / 'home'), 'TMPDIR': str(mode / 'tmp')}
+            if not managed:
+                env |= {'REASONIX_HOME': str(core), 'REASONIX_CACHE_HOME': str(mode / 'cache')}
+            host = subprocess.Popen([str(host_binary)], env=env, stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL, start_new_session=True)
+            sidecar = None
+            try:
+                deadline = time.monotonic() + 25
+                while host.poll() is None and time.monotonic() < deadline:
+                    ready = list((mode / 'tmp').glob('reasonix-tauri-bridge-*/ready.json'))
+                    children = package.own_sidecars(mode / 'tmp', sidecar_binary)
+                    if len(ready) == len(children) == 1:
+                        sidecar = children[0]
+                        package.check_unauthenticated_health(package.check_ready(ready[0]))
+                        package.check_sidecar_profile(sidecar, core, managed, mode / 'cache')
+                        identity = package.check_credential_profile(core)
+                        break
+                    time.sleep(0.05)
+                else:
+                    raise RuntimeError('Ordinary export UI host did not start')
+                control.write_text(json.dumps({'root': str(root), 'managed': managed, 'hostPid': host.pid,
+                                               'sidecarPid': sidecar, 'phase': 'cancel',
+                                               'outputFile': str(mode / '报告 测试/报告 副本.json')}))
+                control.chmod(0o600)
+                print(f"Ordinary {'managed' if managed else 'explicit'} export UI ready", flush=True)
+                if host.wait(timeout=seconds) != 0:
+                    raise RuntimeError('Export UI host did not quit normally')
+                deadline = time.monotonic() + 5
+                while package.is_alive(sidecar) and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                if (package.is_alive(sidecar) or package.own_sidecars(mode / 'tmp', sidecar_binary)
+                        or list((mode / 'tmp').glob('reasonix-tauri-bridge-*'))):
+                    raise RuntimeError('Export UI quit left sidecar/readiness')
+                receipt = mode / 'ui-export-receipt.json'
+                private_file(receipt, 8192)
+                state = json.loads(receipt.read_text())
+                target = mode / '报告 测试/报告 副本.json'
+                if state['steps'] != list(STEPS) or report(target) == state['firstId']:
+                    raise RuntimeError('Export UI steps were incomplete')
+                if original(canary) != before or package.check_credential_profile(core) != identity:
+                    raise RuntimeError('Export UI changed its protected original/profile identity')
+                passed += 1
+                print('Four actual output checks, original/identity protection and normal quit cleanup passed', flush=True)
+            finally:
+                if host.poll() is None:
+                    os.killpg(host.pid, signal.SIGKILL)
+                    host.wait(timeout=5)
+                deadline = time.monotonic() + 5
+                while package.own_sidecars(mode / 'tmp', sidecar_binary) and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                for pid in package.own_sidecars(mode / 'tmp', sidecar_binary):
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+        success = True
+        print(f'{passed} ordinary export UI lifecycles passed; native panel/UI evidence is separate', flush=True)
+    finally:
+        if success:
+            control.unlink(missing_ok=True)
+            shutil.rmtree(root)
+        else:
+            print('Private failed export fixture retained:', root, flush=True)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('app', nargs='?')
+    parser.add_argument('--control', default='/private/tmp/reasonix-ui-export-control.json')
+    parser.add_argument('--seconds', type=int, default=600, choices=range(60, 901), metavar='SECONDS')
+    parser.add_argument('--profile', choices=('managed', 'explicit', 'both'), default='both')
+    parser.add_argument('--record', choices=STEPS)
+    args = parser.parse_args()
+    if sys.platform != 'darwin':
+        raise SystemExit('This acceptance requires macOS')
+    if args.record:
+        record(args.record, args.control)
+    elif args.app:
+        smoke(args.app, args.control, args.seconds, args.profile)
+    else:
+        parser.error('app is required unless --record is provided')

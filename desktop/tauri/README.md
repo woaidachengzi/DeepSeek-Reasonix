@@ -407,6 +407,38 @@ sidecar/readiness 清理及原剪贴板完整恢复通过。日志为
 组合输入和窗口稳定性继续保留。
 本地 ad-hoc 签名不等于正式签名/公证；外接屏延期和其他发布门禁见迁移清单最新记录。
 
+普通产品的诊断导出 Save/Cancel/Replace 可独立验收：
+
+```bash
+python3 -B tools/tauri/smoke-native-ui-export.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app' --profile both --seconds 600
+# 每步先完成真实面板/页面操作，再登记实际输出检查。
+python3 -B tools/tauri/smoke-native-ui-export.py --record cancel
+python3 -B tools/tauri/smoke-native-ui-export.py --record new-save
+python3 -B tools/tauri/smoke-native-ui-export.py --record overwrite-cancel
+python3 -B tools/tauri/smoke-native-ui-export.py --record overwrite
+```
+
+控制文件 `/private/tmp/reasonix-ui-export-control.json` 给出当前自有 PID、phase 和 outputFile。
+确认进程存活再绑定应用，进入设置→诊断，实际启用记录、添加标记并停止导出。第一次
+取消真实 Save 面板，确认页面仍“待导出”；再次导出同一报告到 outputFile，确认保存后
+页面恢复未记录。然后开始另一份记录、添加标记、导出同名文件，取消真实 Replace 提示，
+再取消返回的 Save 面板；确认保留待导出报告。最后再次导出该报告、接受 Replace 并
+确认未记录状态，再实际 Cmd+Q。每步严格依序 record；不能只写回执就当面板通过。
+路径/名称含中文和空格，使用实际 Go To Folder/Save As 字段；换档案须核对路径，避免
+沿用系统面板记住的上一档案目录。`--profile managed|explicit|both` 默认 both；非默认
+`--control` 必须位于 `/private/tmp` 且在启动前不存在，并同样传给所有 record。
+
+runner 仅接受当前用户 nonce 私有普通 0700 目录和有界普通 0600 控制/回执/报告，拒绝
+符号链接、外部目标、跳步和失效进程。取消不得生成文件；新保存核对 schemaVersion=2、
+报告身份和实际 marker，并私有备份；取消覆盖要求原报告字节/权限/mtime_ns/inode 完全
+不变，接受覆盖要求第二报告 ID/内容不同且无额外输出。退出后核对原件/档案身份、正常
+退出码和 sidecar/readiness 清理，成功夹具删除。命令不会操作 UI，也不读写系统剪贴板。
+`ada308408` 同一生产包已由 CUA 完成两种普通档案的实际面板和状态验收，共两次正常
+生命周期/八项文件检查通过；日志 `/private/tmp/reasonix-diagnostic-export-ui.log`，成功
+目录/控制及四个自有进程均独立确认清理。Python AST 和 10 项有界拒绝检查通过；新增
+故障清理分支未另外注入。本地文档/主题另存为、系统实际写入拒绝、其他 D 和窗口稳定性
+待办继续保留；该项不代表正式发布签名/公证通过。
+
 macOS 受管 bridge 跟随实际 kernel parent 生命周期。宿主异常退出时取消任务/HTTP/SSE，
 处理宿主日志管道断开产生的 SIGPIPE，并释放目录锁、清理自己的 readiness 文件和空目录。
 不带 `--host-pid` 的独立 bridge 客户端行为保留。
