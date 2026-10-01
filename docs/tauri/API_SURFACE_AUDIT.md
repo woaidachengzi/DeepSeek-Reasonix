@@ -92,11 +92,24 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 | D：通知与钥匙串 | macOS 通知改为原生 UserNotifications：读取实际授权、报告发送失败、点击恢复对应会话；冷启动队列、档案隔离、失效会话与重复点击已有回归。Linux 已接入 XDG 服务/能力查询、实际发送与运行中点击；独立真实 D-Bus 联调通过，授权无标准查询时报告 unknown。凭据按持久档案身份隔离；设置页显式迁移旧 Preview 凭据，保留原件并拒绝覆盖。迁移/保存/删除与重启串行，写入及桥接同步失败回滚；macOS 原生隔离读写、真实 bridge 迁移/重启/删除及不落盘回归通过。 | 真实系统通知授权拒绝、横幅显示与前后台/冷启动点击、钥匙串锁定/授权拒绝、原生设置页迁移操作仍待验收。Linux native host、桌面环境/Wayland 焦点及冷启动点击待验收/补齐；Windows 原生授权读取/点击和 Windows/Linux 凭据后端仍待补齐/验收。 |
 | D：界面存储档案隔离 | macOS 生产包使用持久档案身份绑定 UI origin，防止 WKWebView 默认数据仓库在不同 HOME/core 间混用默认工作区和界面偏好；同档案重启和目录迁移保留 origin。干净包 `673c30023` 的托管/显式档案共 18 个真实 WKWebView 阶段通过，含实际产品工作区渲染恢复、两个档案交替重启及测试值清理。 | 已提供设置→存储与路径中的显式旧偏好预览/确认导入/撤回；22 项固定 UI key，完整回退记录先于写入，后续修改通过值比较保留。真实旧 origin 只读 IPC、重复窗口销毁和实际预览 UI 已通过；合成偏好的导入/组件重挂载/撤回与写入失败已有回归，完整真实 UI 导入及撤回仍待私有来源夹具验收。开发 URL 不变，范围为 macOS 生产包。 |
 | D：单实例与数据保护 | Tauri 单实例及独立默认 Preview 数据目录已存在。当前 Wails 与 bridge 启动均持有配置/状态两处目录锁；共享任一目录都会拒绝第二个写入宿主，目录别名去重，失败释放已取锁。真实 bridge/Wails 拒绝启动测试及配置原件/备份回退回归通过。导入页在操作前展示来源、目标目录与回退说明；真实包宿主入口的配置/项目目录导入、Preview 修改/重启、原件及备份保护和显式目录拒绝导入通过；经官方发布 SHA-256 和干净基线提交核对的原生 arm64 CLI 1.38.3，已通过导入/重启后的原目录回读及原件保护验收；官方旧 Wails GUI 的单份真实文本历史恢复、会话 writer 租约和原生退出回退也已通过。 | 未参与目录锁协议的旧稳定版仍需兼容性验收；不能将当前两个宿主的测试推广为所有历史二进制互斥。官方旧 GUI 验收覆盖单份文本历史，不能推广为全部历史配置/附件/检查点或宿主目录生命周期互斥已通过。真实 Wails 单实例通知/唤起、设置页导入点击与完整会话/数据回退操作仍待验收。 |
+| D：强制宿主退出 | macOS bridge 校验并跟随实际父进程，宿主丢失时停止自己的任务/HTTP/SSE，处理断开日志管道的 SIGPIPE，释放锁及清理匹配 readiness 文件和同 inode 的空私有目录。干净包 `715f8743c` 的两种档案 × SIGTERM/SIGKILL × 空闲/实际流式任务共 8 项通过；kernel 确认 sidecar 正常退出码 0，实际上游断开、原件保护与同档案重启通过。 | 启动/token 握手前的强制终止与临时目录回收仍需单独验收；同包完整窗口门禁在 exercise 最小化前提停止，保留待定位。异常退出通过不代替全部正常窗口/物理 UI 验收。 |
 | E：remote host / bot / updater / 管理页 | remote host 与 bot 已有部分设置/bridge 接口；updater 插件已注册。macOS 菜单改为“Updates…”说明入口，如实提示 Preview 尚无更新检查并给出手动下载地址，移除没有实现依据的“启动时自动检查”文案。 | D 验收后对照 Wails 逐项审计和补齐；当前更新入口仍是说明对话框，插件注册不能视为更新流程完成。 |
 
 累计门禁：`pnpm test:clipboard`、输入框剪贴板回归、terminal selection、`pnpm test:tauri`、`pnpm build`，以及使用真实 Go bridge 的 Rust 测试（最新 XDG 通知切片 189 项通过、2 项默认忽略；其中 1 项独立真实 D-Bus 联调已显式通过，另有前轮 1 项显式 macOS 原生钥匙串测试通过）。最新 XDG 通知切片已从干净提交 `f8aba01793814b7119c4de7829bf747e42a94d53` 通过 `pnpm tauri:build -- --bundles app` 构建与本地 ad-hoc 签名；`tools/tauri/smoke-packaged-app.py` 在临时 HOME 分别验证默认和显式数据目录、私有凭据身份、真实 macOS 通知授权查询、实际 Global 工作区解析与私有目录权限、sidecar 就绪、未认证请求拒绝以及退出无残留。此 smoke 没有执行菜单/托盘等 UI 点击；两次桌面自动化分别超时和报 ScreenCaptureKit `SCStreamErrorDomain -3811`，所以真实 UI 验收保留待办。本地 ad-hoc 签名不是正式发布签名/公证。
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
+
+#### D：macOS 强制宿主退出后的 sidecar 生命周期（2026-10-01）
+
+- macOS 原生 launcher 现在传递实际宿主 PID。Go bridge 在创建档案/就绪文件前检查 kernel parent 身份，并持续观察父子关系；宿主退出或被 SIGKILL 后取消自己的 HTTP/SSE 上下文，先停止实际任务，再关闭 listener、释放目录锁及执行清理。不向其他 PID 发信号，也不通过 PID 存在性判断所有权；没有 `--host-pid` 的独立 bridge 客户端行为保留。没有新增 renderer 命令或 capability。
+- Rust 创建的 readiness 目录显式设为 0700；bridge 只在成功移除匹配 instance ID 的 ready 文件后，移除同用户、同 inode、非别名且仍为空的原目录。最初包使用 tempfile 默认 0755，安全清理拒绝该目录；修复创建权限，没有放宽所有权条件或递归删除。
+- 流式强制退出的第二个真实缺陷由 kernel 退出回执确认：宿主关闭了日志管道 reader，Go 在清理期间写 stderr 被 SIGPIPE(13) 终止。仅实际 macOS 受管 bridge 使用 `signal.Notify(SIGPIPE)`，让写入返回 EPIPE 并完成清理。真实子进程回归证明普通进程仍按默认 SIGPIPE 退出、受管写入返回 EPIPE、exec 的 shell 没有继承忽略 SIGPIPE 的行为；未使用会影响子工具的 `signal.Ignore`。
+- 新增 `smoke-host-lifetime.py`。干净提交 `715f8743c83392ccbe4c02c1807d4958ae01b89b` 全量构建前端、Go sidecar 与 arm64 `.app`，contract/budget 和严格本地 ad-hoc 签名通过。同一包 **8 项全部通过**：托管/显式档案 × SIGTERM/SIGKILL × 空闲/实际流式任务。先核实自有宿主/直属 sidecar 的 UID、出生身份和完整路径，只终止持有进程句柄的宿主；kernel kqueue 对每个 sidecar 确认正常退出码 0。实际 provider 连接在 fixture 停止前断开，sidecar、ready 文件和目录均清理；原文件内容/权限/mtime 保持，同档案重启保留持久身份并成功获取目录锁。runner 的失败强制清理不计为验收。
+- 完整 Go bridge 回归、涉及宿主观察/目录保护/SIGPIPE 的 race 回归、严格 Rust clippy/fmt 通过；使用此包实际 Go sidecar 的 Rust **199 项通过、2 项既有忽略**。普通安装包生命周期两种档案通过，实际通知授权均为 granted。
+- 此包完整 `--dialogs --edit --focus` 窗口门禁在首个 `exercise` 的最小化前提停止：实际 applicationActive=true、nativeMiniaturizable=true，但 minimized/nativeMiniaturized=false，主窗口不是 key/main。保留失败记录，不放宽断言、不将旧包 46 项通过推广到新包，也不能推断与本次 Go 生命周期修复的因果关系。窗口最小化稳定性继续定位。
+- 同包另外独立执行 **10 个正常阶段全部通过**（每档案菜单组合、后台真实流式任务/Menu Quit、clipboard-native、四类 AppKit 面板取消、严格 menu-editing）。先启动并正常退出，读取原生保存的实际普通窗口 frame，供任务原有严格前后几何检查使用；没有伪造几何回执或取消任务断言。真实关闭后流继续、历史完成、菜单恢复及第二个运行任务中的 Quit/provider 断开通过；编辑/剪贴板沿用原件恢复保护。该独立验收不覆盖最小化/最大化恢复或第二实例焦点，不算完整 46 项通过。成功 fixture 已清理。
+- 三次早期强制退出失败的私有 fixture 已逐份核对 owner-only 目录、记录的宿主/sidecar PID 均不存在且无关联 sidecar 后清理；固定失败与 kernel SIGPIPE 诊断日志保留。没有操作用户档案或未知进程。
+- 8 项覆盖 **readiness 完成后的**空闲和流式宿主丢失；token/启动握手完成前的强制终止与临时目录回收仍需单独验收。完整旧 UI 偏好导入/撤回、实际通知横幅/点击、其他 D、A/B/C、E 及正式签名/公证门禁继续保留。外接屏与 Windows/Linux 按用户要求延期。
 
 #### D：macOS 旧界面偏好显式迁移与撤回（2026-10-01）
 

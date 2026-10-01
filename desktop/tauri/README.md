@@ -259,9 +259,26 @@ python3 -B tools/tauri/smoke-native-ui-legacy-read.py 'desktop/tauri/target/rele
 干净包 `3225f43c3` 的两种档案重复旧 UI 只读 IPC、读取窗口销毁、双窗口权限与
 普通生命周期均通过；实际设置页预览、未确认按钮禁用及当前工作区不变通过 CUA 验证。
 合成偏好导入/撤回、重挂载恢复和存储失败保护的组件回归通过，Rust 199 项通过/2 项忽略。
-完整真实 UI 导入及撤回仍待受控私有来源验收；异常强制终止宿主后的 sidecar 清理需补齐。
+完整真实 UI 导入及撤回仍待受控私有来源验收。
 此前通知准备在发消息前停止，尚无横幅/点击证据。
 本地 ad-hoc 签名不等于正式签名/公证；外接屏延期和其他发布门禁见迁移清单最新记录。
+
+macOS 受管 bridge 跟随实际 kernel parent 生命周期。宿主异常退出时取消任务/HTTP/SSE，
+处理宿主日志管道断开产生的 SIGPIPE，并释放目录锁、清理自己的 readiness 文件和空目录。
+不带 `--host-pid` 的独立 bridge 客户端行为保留。
+
+```bash
+python3 -B tools/tauri/smoke-host-lifetime.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
+```
+
+干净包 `715f8743c` 的 8 项全部通过：两种私有档案 × SIGTERM/SIGKILL × 空闲/实际流式任务。
+runner 只终止已核实的自有宿主；kernel 确认 sidecar 正常退出码 0，provider 实际断开，
+ready 文件/目录清理、原件保护和同档案重启通过。握手完成前的强制终止还需单独验收。
+普通包生命周期两种档案和使用新 sidecar 的 Rust 199 项通过/2 项忽略。
+本轮完整窗口门禁停在 `exercise` 的最小化前提，尚未全部通过，保留为独立待办。
+独立正常路径每档案 5 项、共 10 阶段通过：菜单组合、真实后台任务/Menu Quit、
+系统剪贴板、四类面板取消及严格原生编辑。任务使用实际保存窗口 frame 检查恢复；
+不覆盖最小化/最大化或第二实例焦点，不替代完整窗口门禁。
 
 原生 responder 编辑另有严格门禁 `--edit`：默认 40 个场景之外，每档案增加一个
 `menu-editing` 阶段。它复用完整剪贴板保护，要求应用 active、主窗口是实际 key window
