@@ -2,11 +2,14 @@ import type { ThemePackView } from "../lib/themePack";
 import { registerTrustedThemeBackgroundURLs } from "../lib/themePack";
 import { THEME_STYLES, type ThemeStyle } from "../lib/theme";
 
-const manifestFiles = (typeof import.meta.glob === "function" ? import.meta.glob("../../../themes/official/*/theme.json", {
+// Vite expands glob calls at compile time; there is no runtime glob function.
+// Its compile-time MODE distinguishes bundled/dev modules from direct Node
+// component imports, which intentionally have no bundled asset catalog.
+const manifestFiles = (import.meta.env?.MODE ? import.meta.glob("../../../themes/official/*/theme.json", {
   eager: true,
   import: "default",
 }) : {}) as Record<string, Record<string, unknown>>;
-const assetFiles = (typeof import.meta.glob === "function" ? import.meta.glob("../../../themes/official/*/*.webp", {
+const assetFiles = (import.meta.env?.MODE ? import.meta.glob("../../../themes/official/*/*.webp", {
   eager: true,
   query: "?url",
   import: "default",

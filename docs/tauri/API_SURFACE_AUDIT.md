@@ -99,6 +99,15 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：macOS 主题导出现场缺口与官方主题目录修复（2026-10-01）
+
+- 继续复用 `ada308408` 包，普通导出 runner 增加 `--scenario theme`。只通过实际设置→外观→浏览主题创建无图片的石墨自定义主题 `Reasonix UI Theme`，第二版沿实际编辑入口更名为 `Reasonix UI Theme Revised`；固定 ID、明暗 bg/fg/accent、密度/圆角及无图片 ZIP 清单由独立文件检查核对。保留原取消、新保存、取消覆盖字节/权限/mtime/inode、接受覆盖内容更新及退出保护，不增加前端/native 权限。
+- 托管普通档案在点击设置后的捕捉连续报 ScreenCaptureKit `-3812`，同一宿主仍存活、重读及重新绑定失败，未执行主题验收。仅终止自有宿主，输出/验收回执均不存在；失败日志 `/private/tmp/reasonix-theme-export-ui.log`。不重跑已失败的托管 UI，仅推进尚未执行的显式档案。
+- 显式普通档案已实际创建并保存主题，首次实际 Save 面板取消后主题和导出/编辑按钮保留；再次通过实际 Go To Folder 选择当前私有目录、保存 `主题 副本.reasonix-theme`，独立 ZIP/完整固定字段/0600 权限检查通过，原包私有备份完成。然后实际编辑并保存第二版名称，导出同名文件实际显示系统 Cancel/Replace 提示。点击 Cancel 后捕捉连续报 `-3812`，同一宿主存活，第一份导出字节不变；未观察返回 Save 面板/完成取消回调，也未执行 Replace，**仅 cancel/new-save 两项文件检查通过，完整 UI 生命周期及覆盖流程未通过**。日志 `/private/tmp/reasonix-theme-export-explicit-ui.log`；两份失败夹具/控制及原包保留。自有宿主和 sidecar 均已退出，readiness 目录均为 0，失败 finally 的 parent-loss 等待清理在本轮非正常退出路径实际核对；不视为正常退出通过。
+- 实际画廊同时显示“旗舰主题 0”。对照磁盘八套官方 manifest/背景/预览资源，新增 `test:tauri-theme-catalog` 使用当前 Vite 的真正 client 构建与执行，复现官方目录为空。根因是 `typeof import.meta.glob === "function"` 运行时判断：Vite 已将 glob 调用编译为导入对象，运行时没有该函数，故资源虽打包但被跳过。改用编译时 MODE 区分 Vite 模块与不展开 glob 的直接 Node 组件测试，不改变资产路径、主题 ID 或 URL 权限。参考 [Vite glob import 文档](https://vite.dev/guide/features.html#glob-import)。
+- 修复后的独立 Vite client 门禁已通过八套完整官方主题 ID/manifest、16 张源图片与实际输出逐字节比较、当前主题选择及默认基础主题状态；背景必须在同 origin 内精确登记，外部 origin/未登记背景仍拒绝。测试将实际编译产物放入具有正确浏览器 module URL 的 VM，未改写产物，不将此当作 rendered UI。首轮资产验证误用 Node file: module URL，后续修正 VM module origin 及跨 realm 比较；该测试工具误差不计为产品失败。门禁加入 `pnpm test:tauri`，完整 Tauri 组件/adapter 回归及 TypeScript typecheck 均通过；Python AST、固定主题包有效样本/四项拒绝检查和 diff 检查通过。真实 macOS 重建与修复后画廊 UI 另行记录。
+- 主题导出覆盖、实际主题导入/图片/重启、文档另存为和窗口稳定性仍待验收；不因两项文件检查、目录构建门禁或捕捉错误而标记完整 D/E 或正式发布通过。外接屏及 Windows/Linux 延期范围保持。
+
 #### D：macOS 诊断导出的实际另存为、取消与覆盖（2026-10-01）
 
 - 复用干净 native 提交 `ada308408038e9e9771abb60880d5c022352d4d9` 的完整生产包，不修改产品前端/native、权限或重建。新增普通包 runner `smoke-native-ui-export.py`，只管理托管/显式私有档案、实际导出文件检查和退出；不启用原生窗口探针，不代替用户操作 Save 面板。通过 CUA 在设置→诊断实际启用前端记录、添加标记及停止导出，没有模型请求或消息发送。

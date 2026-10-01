@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Own ordinary Preview launches for actual diagnostic Save/Cancel/Replace UI.
+"""Own ordinary Preview launches for actual export Save/Cancel/Replace UI.
 
 In each private profile, start/mark a frontend trace through Settings >
 Diagnostics. Export and cancel the real panel; --record cancel checks no file.
@@ -8,6 +8,11 @@ report. Start/mark another trace, select the same name and cancel Replace;
 --record overwrite-cancel checks the original bytes/metadata are untouched.
 Export the retained second trace, accept Replace, --record overwrite, then
 Cmd+Q. File/lifecycle assertions never replace actual panel/feedback evidence.
+
+For --scenario theme, use Settings > Appearance > Browse Themes, create the
+image-free graphite-based theme named THEME_NAMES[0], then export/cancel/save.
+Edit the same theme name to THEME_NAMES[1] before checking Cancel/Replace.
+--record derives its scenario from the owned live control, not a CLI override.
 """
 import argparse
 import importlib.util
@@ -23,12 +28,14 @@ import subprocess
 import sys
 import time
 import uuid
+import zipfile
 
 sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location('package', Path(__file__).with_name('smoke-packaged-app.py'))
 package = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(package)
 STEPS = ('cancel', 'new-save', 'overwrite-cancel', 'overwrite')
+THEME_NAMES = ('Reasonix UI Theme', 'Reasonix UI Theme Revised')
 
 
 def private_file(path, maximum):
@@ -44,8 +51,28 @@ def original(path):
     return path.read_bytes(), info.st_mode, info.st_mtime_ns, info.st_ino
 
 
-def report(path):
+def report(path, scenario='diagnostics'):
     private_file(path, 8 << 20)
+    if scenario == 'theme':
+        with zipfile.ZipFile(path) as archive:
+            if archive.namelist() != ['theme.json'] or archive.getinfo('theme.json').file_size > 1 << 20:
+                raise RuntimeError('Actual image-free theme export archive is invalid')
+            data = json.loads(archive.read('theme.json'))
+        if (not isinstance(data, dict) or type(data.get('schemaVersion')) is not int
+                or data['schemaVersion'] != 2 or data.get('id') != 'user-reasonix-ui-theme'
+                or data.get('name') not in THEME_NAMES or data.get('baseStyle') != 'graphite'
+                or not isinstance(data.get('tokens'), dict)
+                or data.get('recipes') != {'density': 'comfortable', 'corners': 'soft'}
+                or data.get('background') or data.get('taskBackground')):
+            raise RuntimeError('Actual theme export manifest is invalid')
+        for mode, expected in (('light', {'bg': '#fcf8ee', 'fg': '#2a241b', 'accent': '#7a5a16'}),
+                               ('dark', {'bg': '#151515', 'fg': '#f4f4f4', 'accent': '#ff6a45'})):
+            tokens = data['tokens'].get(mode)
+            if not isinstance(tokens, dict) or any(tokens.get(key) != value for key, value in expected.items()):
+                raise RuntimeError('Actual theme export lost its prepared tokens')
+        return data['name']
+    if scenario != 'diagnostics':
+        raise ValueError('Unknown export acceptance scenario')
     data = json.loads(path.read_bytes())
     if not isinstance(data, dict) or not isinstance(data.get('manifest'), dict):
         raise RuntimeError('Actual exported report schema/identity/user marker is invalid')
@@ -71,13 +98,16 @@ def record(step, control_path):
             or type(state['managed']) is not bool):
         raise RuntimeError('Export UI control does not identify a private fixture')
     mode = root / ('managed' if state['managed'] else 'explicit')
+    scenario = state.get('scenario', 'diagnostics')
+    if scenario not in ('diagnostics', 'theme'):
+        raise RuntimeError('Export UI scenario is invalid')
     output = mode / '报告 测试'
     for directory in (root, mode, output):
         info = directory.lstat()
         if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid()
                 or stat.S_IMODE(info.st_mode) != 0o700):
             raise RuntimeError('Export UI directory is not an owned private ordinary directory')
-    target = output / '报告 副本.json'
+    target = output / ('主题 副本.reasonix-theme' if scenario == 'theme' else '报告 副本.json')
     if state['outputFile'] != str(target) or state['phase'] != step:
         raise RuntimeError('Export UI step/path does not match the current phase')
     if any(type(state[key]) is not int or not package.is_alive(state[key])
@@ -99,8 +129,10 @@ def record(step, control_path):
     else:
         if set(output.iterdir()) != {target}:
             raise RuntimeError('Export left unexpected output files')
-        identifier = report(target)
+        identifier = report(target, scenario)
         if step == 'new-save':
+            if scenario == 'theme' and identifier != THEME_NAMES[0]:
+                raise RuntimeError('First export did not publish the created theme')
             private_file(target, 8 << 20)
             backup.touch(mode=0o600, exist_ok=False)
             backup.write_bytes(target.read_bytes())
@@ -126,9 +158,11 @@ def record(step, control_path):
     print(f'Actual output check {step} passed; panel/feedback evidence remains separate', flush=True)
 
 
-def smoke(app_path, control_path, seconds, profile):
+def smoke(app_path, control_path, seconds, profile, scenario='diagnostics'):
     if profile not in ('managed', 'explicit', 'both') or not 60 <= seconds <= 900:
         raise ValueError('Invalid export UI profile/duration')
+    if scenario not in ('diagnostics', 'theme'):
+        raise ValueError('Invalid export UI scenario')
     control = Path(control_path)
     if control.parent != Path('/private/tmp') or control.parent.resolve() != control.parent:
         raise ValueError('Export UI control must be directly inside /private/tmp')
@@ -181,7 +215,9 @@ def smoke(app_path, control_path, seconds, profile):
                     raise RuntimeError('Ordinary export UI host did not start')
                 control.write_text(json.dumps({'root': str(root), 'managed': managed, 'hostPid': host.pid,
                                                'sidecarPid': sidecar, 'phase': 'cancel',
-                                               'outputFile': str(mode / '报告 测试/报告 副本.json')}))
+                                               'scenario': scenario,
+                                               'themeNames': list(THEME_NAMES) if scenario == 'theme' else [],
+                                               'outputFile': str(mode / '报告 测试' / ('主题 副本.reasonix-theme' if scenario == 'theme' else '报告 副本.json'))}))
                 control.chmod(0o600)
                 print(f"Ordinary {'managed' if managed else 'explicit'} export UI ready", flush=True)
                 if host.wait(timeout=seconds) != 0:
@@ -195,8 +231,8 @@ def smoke(app_path, control_path, seconds, profile):
                 receipt = mode / 'ui-export-receipt.json'
                 private_file(receipt, 8192)
                 state = json.loads(receipt.read_text())
-                target = mode / '报告 测试/报告 副本.json'
-                if state['steps'] != list(STEPS) or report(target) == state['firstId']:
+                target = mode / '报告 测试' / ('主题 副本.reasonix-theme' if scenario == 'theme' else '报告 副本.json')
+                if state['steps'] != list(STEPS) or report(target, scenario) == state['firstId']:
                     raise RuntimeError('Export UI steps were incomplete')
                 if original(canary) != before or package.check_credential_profile(core) != identity:
                     raise RuntimeError('Export UI changed its protected original/profile identity')
@@ -230,6 +266,7 @@ if __name__ == '__main__':
     parser.add_argument('--control', default='/private/tmp/reasonix-ui-export-control.json')
     parser.add_argument('--seconds', type=int, default=600, choices=range(60, 901), metavar='SECONDS')
     parser.add_argument('--profile', choices=('managed', 'explicit', 'both'), default='both')
+    parser.add_argument('--scenario', choices=('diagnostics', 'theme'), default='diagnostics')
     parser.add_argument('--record', choices=STEPS)
     args = parser.parse_args()
     if sys.platform != 'darwin':
@@ -237,6 +274,6 @@ if __name__ == '__main__':
     if args.record:
         record(args.record, args.control)
     elif args.app:
-        smoke(args.app, args.control, args.seconds, args.profile)
+        smoke(args.app, args.control, args.seconds, args.profile, args.scenario)
     else:
         parser.error('app is required unless --record is provided')

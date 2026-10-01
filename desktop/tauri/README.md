@@ -439,6 +439,30 @@ runner 仅接受当前用户 nonce 私有普通 0700 目录和有界普通 0600 
 故障清理分支未另外注入。本地文档/主题另存为、系统实际写入拒绝、其他 D 和窗口稳定性
 待办继续保留；该项不代表正式发布签名/公证通过。
 
+主题导出可用同一普通 runner 的 `--scenario theme`，默认仍为 diagnostics：
+
+```bash
+python3 -B tools/tauri/smoke-native-ui-export.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app' --scenario theme --profile both --seconds 600
+# 非默认控制文件必须传给每一次 record；失败控制不会被下次启动覆盖。
+```
+
+实际进入设置→外观→浏览主题，创建基于石墨、无图片的 `Reasonix UI Theme`，不要应用或
+删除主题。依次实际取消/新保存，编辑同一主题更名 `Reasonix UI Theme Revised`，再执行
+取消覆盖/确认覆盖。四项 record 命令与 diagnostics 相同，从当前私有控制读取场景，
+不接受另传场景绕过断言。主题目标为当前私有目录的 `主题 副本.reasonix-theme`；ZIP 必须
+只有有界 theme.json，schemaVersion=2，ID/名称/明暗颜色/密度/圆角匹配固定 UI 样本。
+
+`ada308408` 托管 UI 在设置点击后捕捉失败；显式实际创建/编辑及 cancel/new-save 两项
+文件检查完成，但覆盖取消后捕捉失败，未执行确认覆盖，完整生命周期不计通过。失败
+日志 `/private/tmp/reasonix-theme-export-ui.log`、
+`/private/tmp/reasonix-theme-export-explicit-ui.log`，两份私有夹具/控制/原包保留；自有进程
+退出、readiness 目录清理通过。主题覆盖/导入/图片及重启验收继续保留。
+
+实际 UI 显示旗舰主题 0 后，新增 `pnpm test:tauri-theme-catalog` 复现并修复 glob 的运行时
+判断错误。该门禁执行实际 Vite client 构建产物，核对所有八套主题、16 张资产字节、选中
+状态及安全 URL 登记；直接 Node 组件测试不能代替这项。原生包重建和修复后 UI 证据
+见迁移清单；D/E 与正式发布门禁保持。
+
 macOS 受管 bridge 跟随实际 kernel parent 生命周期。宿主异常退出时取消任务/HTTP/SSE，
 处理宿主日志管道断开产生的 SIGPIPE，并释放目录锁、清理自己的 readiness 文件和空目录。
 不带 `--host-pid` 的独立 bridge 客户端行为保留。
