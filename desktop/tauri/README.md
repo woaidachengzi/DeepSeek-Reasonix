@@ -498,6 +498,13 @@ identifier 的 asset scope，并增加当前 Tauri FsScope 的允许/拒绝回�
 `/private/tmp/reasonix-theme-import-fixed-ui.log`，失败夹具/控制保留。六个自有进程及
 readiness 均独立确认已清理；显式完整验收及窗口稳定性仍未通过。
 
+`851111594` 中英文主题导入失败提示已增加处理步骤，完整 Tauri 前端回归和干净
+macOS 包构建通过。新托管实际取消通过，第二次路径面板捕捉再次 `-3812`，新文案
+原生 UI 尚未验收；失败日志 `/private/tmp/reasonix-theme-import-feedback-ui.log`，原件
+及进程/readiness 清理已独立核对。另用 IAB 渲染当前真实设置组件和产品样式，中英
+提示、失败后取消清除、成功重试恢复及 900×620 长文案可读性通过；IPC 为固定样本，
+仅计组件 QA。证据 `/private/tmp/reasonix-theme-feedback-browser-9fg8wcnz/qa-evidence.json`。
+
 
 macOS 受管 bridge 跟随实际 kernel parent 生命周期。宿主异常退出时取消任务/HTTP/SSE，
 处理宿主日志管道断开产生的 SIGPIPE，并释放目录锁、清理自己的 readiness 文件和空目录。

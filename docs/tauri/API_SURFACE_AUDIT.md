@@ -103,6 +103,9 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 - 托管真实无效包已显示错误，但只有“主题导入失败。”。中英提示增加可执行解决步骤：使用 Reasonix 导出的主题包，并确认文件完整、可读取后重试。沿用现有安全提示，不展示 native 错误中的私有路径/内容；没有改变包校验、取消、持久化或权限。
 - 完整 `pnpm test:tauri`（含真实 Vite 官方目录构建、设置组件及 adapter）和 diff 检查通过；日志 `/private/tmp/reasonix-theme-import-feedback-tests.log`。此为文案修改，未新增镜像测试；新包实际显示另行核对，不将组件或构建结果当作实际 macOS 对话框验收。
+- 从干净 `8511115940d4362ee413b6aa1c1e2ee49f3b8ddf` 完整重建前端/sidecar/arm64 macOS 包，生产检查、contract、budget 及本地 ad-hoc 签名通过；日志 `/private/tmp/reasonix-theme-import-feedback-package-build.log`。新托管普通档案实际 Cancel 返回及独立原件检查通过；第二次 Open 后 Cmd+Shift+G 捕捉连续报 `-3812`，未观察到路径面板、未选择/导入无效包，新文案的系统对话框 UI 未验收。仅结束自有宿主，runner exit 1；日志 `/private/tmp/reasonix-theme-import-feedback-ui.log`。失败控制/夹具保留，回执只有 cancel；独立确认主题为零、源原件不变、自有两个 PID 和 readiness 已清理，不计作正常退出。
+- 原生捕捉失败后，使用 CUA 的 IAB 浏览器和本机临时 Vite 页面渲染当前真实 `TauriSettings`/`TauriThemeGallery`、adapter、字典及产品样式；IPC 是明确的固定失败/取消/成功样本，不调用 native 或读取用户档案。中英各实际浏览主题→失败提示→取消清除错误/零主题→再次失败→成功重试清除错误/新增一个主题，导入按钮保持可用，native 样本中的私有错误未展示。标题和 URL 正确，页面非空、无框架覆盖及相关 console error/warn，1280×820 桌面截图通过；900×620 最小 macOS 窗口的英文提示完整滚动可读，client/scroll 宽高相同，没有文本溢出。首次临时页面漏载宿主样式，补载完整样式后重验；不计为产品布局问题。
+- 浏览器证据保存在 `/private/tmp/reasonix-theme-feedback-browser-9fg8wcnz/qa-evidence.json`，截图为同目录 `zh-error.png`、`en-error.png`、`en-minimum-window.png`；临时标签已关闭、viewport override 恢复、本轮本机服务已停止。此结果仅验证组件渲染及失败后恢复，不能替代 macOS Open/Save、实际主题持久化或原生窗口稳定性；相关 D/发布待办保持，外接屏及 Windows/Linux 继续延期。
 
 #### D：macOS 导入主题图片修复后的真实包验收（2026-10-01）
 
