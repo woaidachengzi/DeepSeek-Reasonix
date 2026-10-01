@@ -19,7 +19,7 @@ pub struct LinkSmokeState {
 pub fn observe(webview: &Webview, payload: &tauri::webview::PageLoadPayload<'_>) {
     if !matches!(
         std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref(),
-        Ok("external-browser" | "external-app-failure")
+        Ok("external-browser" | "external-app-failure" | "external-terminal")
     ) || webview.label() != "main"
         || payload.url().scheme() != "tauri"
         || payload.url().host_str() != Some("localhost")
@@ -74,7 +74,9 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
         .to_string();
     let application_failure = std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref()
         == Ok("external-app-failure");
-    let port = if application_failure {
+    let terminal =
+        std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref() == Ok("external-terminal");
+    let port = if application_failure || terminal {
         0
     } else {
         control
@@ -122,6 +124,28 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
             } catch { receipt.searchParams.set('native_link_result', 'failed'); }
             location.replace(receipt.href);
         })();"#.replace("__PATH__", &serde_json::to_string(path).map_err(|_| "encode private document path")?)
+    } else if terminal {
+        let expected = std::path::Path::new("/System/Applications/Utilities/Terminal.app")
+            .canonicalize().map_err(|_| "system Terminal missing")?;
+        let selected = crate::opener_catalog::selected_opener(crate::opener_catalog::installed_openers(), "terminal")?;
+        if selected.target != expected {
+            return Err("Terminal catalog target is not the system application".into());
+        }
+        let root = directory.join("workspace 中文\n\"$");
+        let file = root.join("document.md");
+        let root = serde_json::to_string(root.to_str().ok_or("invalid private workspace path")?).map_err(|_| "encode workspace path")?;
+        let file = serde_json::to_string(file.to_str().ok_or("invalid private document path")?).map_err(|_| "encode document path")?;
+        r#"(async () => {
+            const receipt = new URL(location.href);
+            receipt.searchParams.set('native_link_nonce', __NONCE__);
+            try {
+                const invoke = window.__TAURI_INTERNALS__.invoke;
+                await invoke('open_local_path_with', {path: __ROOT__, id: 'terminal'});
+                await invoke('open_local_path_with', {path: __FILE__, id: 'terminal'});
+                receipt.searchParams.set('native_link_result', 'ok');
+            } catch { receipt.searchParams.set('native_link_result', 'failed'); }
+            location.replace(receipt.href);
+        })();"#.replace("__ROOT__", &root).replace("__FILE__", &file)
     } else { r#"(async () => {
         const nonce = __NONCE__, base = __BASE__;
         const report = result => {
@@ -165,6 +189,20 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
     }
     if application_failure {
         return Ok(());
+    }
+    if terminal {
+        let deadline = Instant::now() + Duration::from_secs(15);
+        loop {
+            if std::fs::read_to_string(directory.join("reasonix-native-terminal.receipt"))
+                .is_ok_and(|value| value == nonce)
+            {
+                return Ok(());
+            }
+            if Instant::now() >= deadline {
+                return Err("actual Terminal shell cwd receipt timed out".into());
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
     }
     let deadline = Instant::now() + Duration::from_secs(15);
     loop {

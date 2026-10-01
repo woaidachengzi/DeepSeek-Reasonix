@@ -196,6 +196,18 @@ python3 tools/tauri/smoke-native-app-failure.py 'desktop/tauri/target/release/bu
 2026-10-01 干净提交 `c83f947e5` 的本地 ad-hoc 包已通过两种私有档案的实际主 IPC
 启动拒绝门禁；同包默认浏览器门禁也已复验通过。
 
+系统 Terminal 实际工作目录使用独立门禁（需要本机 Clang/SDK）：
+
+```bash
+python3 tools/tauri/smoke-native-terminal.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
+```
+
+主 WKWebView 通过原有指定应用入口打开私有目录及其文档，要求两个新系统 Terminal
+shell 的原始 kernel cwd 精确匹配包含中文/换行/引号/`$` 的目录。独立私有 helper
+使用 macOS libproc，核对同用户 UID，不读取终端文本/命令参数，不依赖截图或 Apple Events。
+回收前重新核对 PID 出生时间、祖先链、可执行名称和 cwd；可能留下可手动关闭的已结束
+测试窗口。该门禁不代替其他应用、物理菜单点击或项目/Global 会话的 UI 打开验收。
+
 原生 responder 编辑另有严格门禁 `--edit`：默认 40 个场景之外，每档案增加一个
 `menu-editing` 阶段。它复用完整剪贴板保护，要求应用 active、主窗口是实际 key window
 且 WKWebView 接受 first responder；核对已安装 Copy/Paste/Cut/Select All/Undo/Redo 的

@@ -96,6 +96,13 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：macOS 实际 Terminal 工作目录验收入口（2026-10-01）
+
+- 对照 Wails 和 Tauri 的 macOS 系统 Terminal 路径：通过系统 `/usr/bin/open -a` 打开目录，文档目标先转换为所属目录。新增 `tools/tauri/smoke-native-terminal.py`，由真实 Preview 主 WKWebView IPC 分别打开私有目录及其中的文档，要求两个新系统 Terminal shell 的实际 kernel cwd 均为该目录；并非只核对生成的命令参数。
+- 目录包含中文、换行、引号和 `$`。本机 `lsof -F0` 仍把路径内换行显示成转义文本，不能用于原始字节判定；新增独立私有 C helper，用当前 SDK 的 `proc_pidinfo(PROC_PIDVNODEPATHINFO)` 读取原始 cwd，最多接收 64 个显式 PID，先检查同用户 UID，输出有界 PID/NUL/path/NUL 字段。测试进程独立特殊路径探测已通过，未弱化路径相等断言。
+- runner 只筛选启动前不存在、实际系统 Terminal 祖先链下的 shell，核对出生时间、可执行名称及私有 cwd，成功后只回收本次 shell；身份/目录改变时停止回收并保留私有记录。可能留下可手动关闭的已结束测试窗口，不操作既有窗口或请求 Apple Events/录屏权限。两种私有档案另验 sidecar 鉴权、凭据身份、原文档内容/权限/mtime 和宿主退出清理。真实包执行结果待后续记录。
+- 本门禁不证明 Finder/其他终端/编辑器、物理快捷键、工作区选择器点击或项目/Global 会话的整条 UI 打开流程；原生编辑/焦点和其余 D 待办保留，外接屏及 Windows/Linux 继续延期，E 仍等待 D 验收和 Preview 稳定。
+
 #### D：macOS 指定应用启动失败反馈（2026-10-01）
 
 - 对照 Wails `darwinExternalOpenerCommand` 与 Tauri `launch_with_opener`：两者的 Ghostty 路径均使用 `/usr/bin/open -na ... --args --working-directory=...`；Tauri 原专用分支在 spawn 后立即返回成功并后台忽略退出码。实际 LaunchServices 拒绝损坏应用时，调用方仍会收到成功。
