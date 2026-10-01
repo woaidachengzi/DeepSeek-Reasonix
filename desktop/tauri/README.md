@@ -235,8 +235,21 @@ Cmd+M 后原生 Settings 点击恢复、中文/空格目录与文本文件面板
 后续干净诊断包 `e3e030586` 的完整 `--dialogs --edit --focus` 46 阶段全过，
 包括两种档案的原生编辑和第二实例严格焦点；普通生命周期的系统授权实读均为 granted。
 这是当前包的通过证据，不能推断旧包最小化失败的环境原因。
-全新私有 HOME/core 的产品 UI 随后仍继承了旧默认工作区，已确认 WKWebView 本地存储
-缺少档案隔离；通知准备在发消息前停止，优先修复这条边界。参见迁移清单最新记录。
+全新私有 HOME/core 曾继承旧默认工作区：macOS WebKit 默认存储不随 HOME 切换。
+干净生产包 `673c30023` 已按持久档案身份绑定 `reasonix-preview` UI origin，主窗口
+导航限定当前档案，协议只提供编译资产并保留 Tauri MIME/CSP；没有新增文件或网络权限。
+同档案重启/目录移动保留 origin，不同档案隔离；开发服务器 URL 不变。
+
+```bash
+python3 -B tools/tauri/smoke-native-ui-storage.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
+```
+
+同一包 18 个 UI 存储阶段、完整 `--dialogs --edit --focus` 46 阶段、两种档案的
+同 origin 文档/bridge 权限与普通生命周期均通过；Rust 198 项通过、2 项既有忽略。
+UI 存储门禁核对实际工作区按钮重启渲染、跨档案返回及仅清理自有 canary，不清空系统
+WebKit 仓库。旧 `tauri://localhost` 共享 UI 偏好保留，新 origin 首次启动使用默认偏好；
+显式旧偏好迁移和回退尚待实现/验收。此前通知准备在发消息前停止，尚无横幅/点击证据。
+本地 ad-hoc 签名不等于正式签名/公证；外接屏延期和其他发布门禁见迁移清单最新记录。
 
 原生 responder 编辑另有严格门禁 `--edit`：默认 40 个场景之外，每档案增加一个
 `menu-editing` 阶段。它复用完整剪贴板保护，要求应用 active、主窗口是实际 key window
