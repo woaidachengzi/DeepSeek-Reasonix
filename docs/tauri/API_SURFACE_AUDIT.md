@@ -99,6 +99,14 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：macOS 导入主题图片缺口及资产目录修复（2026-10-01）
+
+- `de8afeeec` 普通托管私有档案实际取消 Import，画廊保持零自定义主题；再次通过真实 Open/Go To Folder 选择含中文和空格的私有包，显示 `Imported UI Theme`，但首页/工作区预览均没有图片。两张 WebP 已落盘，独立检查确认 metadata、规范化颜色、canonical 文件名和源图片字节正确，原件未变；**图片实际显示未通过**，未执行重复导入、无效包或重启。
+- 根因是 asset protocol 的 `$APPDATA` 已包含当前 bundle identifier，配置又添加一次标识，实际主题路径被拒绝。修正为 `$APPDATA/theme-assets/**/*`，仍只开放应用主题资产。使用当前 Tauri 实际路径解析及 FsScope 的回归先复现旧配置拒绝图片，修复后首页/工作区资产可读；偏好、core 凭据、目录穿越、隐藏目录、其他应用和临时目录均拒绝。mock runtime 测试不读写用户档案，不代替 WebView 实际加载。
+- 新增普通 `smoke-native-ui-theme-import.py`，使用既有两套官方 WebP 构造私有有效/无效包。独立核对实际取消/导入/同 ID 再导入/无效包/重启的顺序、固定 metadata 和颜色、图片逐字节、无 staging 残留、首次主题保护、无效导入及重启不改变完整偏好、源原件与 core canary 的身份/内容及正常退出。命令不操作 UI。首轮 record 的偏好 `0600` 假设错误：产品现有结果为 `0644`，父级 HOME 为私有 `0700`；工具调整为仅接受自有普通有界 `0600/0644` 偏好，仍保存精确权限/mtime/inode，控制/源包/回执的 `0600` 门禁保持。manifest 大写颜色按产品规则小写后比较，原件字节不变，不将工具误差归为产品失败。
+- 首轮仅 cancel 文件检查计入回执；实际 Cmd+Q 正常退出、sidecar/readiness 清理后，runner 因步骤不完整正确失败，夹具和日志 `/private/tmp/reasonix-theme-import-ui.log` 保留，两个 PID 已独立确认退出。没有应用/删除主题或改动用户数据。新配置完整包及图片 UI 仍待执行，窗口稳定性、其余 D、A/B/C、E 和正式签名/公证保持；外接屏及 Windows/Linux 继续延期。
+- 本轮当前 Go bridge 重新构建，设置正确 `REASONIX_TAURI_BRIDGE_TEST_BIN` 的 Rust 回归 **203 项通过、2 项既有忽略**；日志 `/private/tmp/reasonix-theme-scope-rust-tests.log`。锁定离线严格 clippy、fmt/diff、Python AST、真实源图片夹具及四项偏好权限/符号链接/源原件拒绝检查通过。测试 feature 仅在 dev-dependency 启用，不进入生产包。
+
 #### D：macOS 官方主题恢复及两种档案的主题导出验收（2026-10-01）
 
 - 从干净提交 `de8afeeeccbffa0160835511a56a2538fb7f8f56` 完整执行 `pnpm tauri:build -- --bundles app`，前端生产检查、TypeScript、Wails contract、CSS/主题 token、bundle budget、sidecar 和 arm64 `.app` 构建通过，源记录无 dirty，本地 ad-hoc 签名严格核对通过；日志 `/private/tmp/reasonix-official-theme-package-build.log`。未修改系统设置或新增文件/网络权限，未进行正式签名/公证。

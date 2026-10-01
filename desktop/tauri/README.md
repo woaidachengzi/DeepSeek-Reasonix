@@ -471,6 +471,26 @@ budget、sidecar/arm64 包和本地严格签名核对通过；日志
 和四个自有进程已独立核对清理，原件及身份保持。旧包捕捉失败仍单独保留，不以此推断
 捕捉错误根因已解决。实际主题导入/图片/应用重启、文档另存为和窗口稳定性仍待验收。
 
+主题导入的普通私有档案 runner：
+
+```bash
+python3 -B tools/tauri/smoke-native-ui-theme-import.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app' --profile both --seconds 900 --control /private/tmp/reasonix-theme-import-new-control.json
+python3 -B tools/tauri/smoke-native-ui-theme-import.py --record cancel --control /private/tmp/reasonix-theme-import-new-control.json
+# 实际操作后按顺序 record import、duplicate、invalid；Cmd+Q 后同档案自动重启。
+# 实际重新进入画廊核对两份主题及首页/工作区图片，再 record restart，Cmd+Q。
+# 每次 record 均传同一 --control；失败控制和夹具不覆盖。
+```
+
+实际 Import 先取消，再选择当前控制的 sourceFile，重复导入该包，再导入 invalidFile
+并观察错误。两份主题名均为 `Imported UI Theme`，ID 分别为 `user-ui-import` 和
+`user-ui-import-2`；首页/工作区使用不同的现有官方 WebP。不要应用/删除主题。
+runner 只核对有界磁盘证据和私有宿主生命周期，图片显示及错误提示必须单独观察。
+完整流程为两种档案各导入与重启，共四次正常生命周期。
+
+首轮 `de8afeeec` 托管实际导入成功但两张预览不显示，未通过。已修正重复 bundle
+identifier 的 asset scope，并增加当前 Tauri FsScope 的允许/拒绝回归；完整包 UI 另验。
+现有偏好 `0644` 可在私有 HOME 中接受，权限、原件及无效导入/重启不变检查保持。
+
 
 macOS 受管 bridge 跟随实际 kernel parent 生命周期。宿主异常退出时取消任务/HTTP/SSE，
 处理宿主日志管道断开产生的 SIGPIPE，并释放目录锁、清理自己的 readiness 文件和空目录。

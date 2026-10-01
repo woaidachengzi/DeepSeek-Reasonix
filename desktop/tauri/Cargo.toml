@@ -55,6 +55,7 @@ windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graph
 
 [dev-dependencies]
 png = "0.18.1"
+tauri = { version = "2", features = ["test"] }
 
 [target.'cfg(unix)'.dev-dependencies]
 async-channel = "2.5.0"

@@ -38,6 +38,8 @@ mod opener_catalog;
 mod protocol_generated;
 mod runtime_info;
 mod session_shadow;
+#[cfg(test)]
+mod theme_asset_scope_tests;
 mod tray;
 #[cfg(target_os = "macos")]
 mod ui_origin;
