@@ -373,7 +373,38 @@ runner 依次启动 managed/explicit 两个私有普通宿主，不启用原生�
 `ada308408` 同一生产包两种档案的按钮、禁用状态、成功反馈及实际 Cmd+V 均已由 CUA
 验证，两次正常退出、身份/原件/清理及原剪贴板恢复通过；日志
 `/private/tmp/reasonix-path-clipboard-ui.log`。其他路径、消息、上下文菜单、实际失败反馈和
-显式输入框完整 Copy/Cut 链路仍待验收，窗口稳定性未因此变为通过。
+输入框键盘/右键完整编辑另见下方最新验收；其他路径与实际失败反馈仍待完成，窗口稳定性未因此变为通过。
+
+实际产品输入框的键盘和 WebKit 原生右键编辑可用同一 runner 的 edit 场景：
+
+```bash
+python3 -B tools/tauri/smoke-native-ui-clipboard.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app' --scenario edit --profile both --seconds 600
+# 每次实际 Copy/Cut 前记录代次；随后执行真实按键或菜单点击。
+python3 -B tools/tauri/smoke-native-ui-clipboard.py --record checkpoint
+# 实际 Copy/Cut 后必须核对精确值和严格新代次；检查点成功后消费。
+python3 -B tools/tauri/smoke-native-ui-clipboard.py --record claim
+# 实际 Paste 后核对系统内容及代次未改写，并另行核对产品输入框完整值。
+python3 -B tools/tauri/smoke-native-ui-clipboard.py --record verify
+```
+
+用控制文件的 expectedText 在真实空输入框准备测试文字，确认实际完整值后分别执行
+Cmd+A/C/X/V 和右键 Copy/Cut/Paste；每次 Copy/Cut 都需 checkpoint→真实操作→claim，
+不能因为旧剪贴板已有同样文字而通过。`--record` 校验私有文件/目录、固定命令和进程
+存活，只写私有代次回执，既不启动应用，也不写系统剪贴板。非默认 `--control` 必须同样
+传给每次 record。`--profile managed|explicit|both` 可单独推进未完成档案，输出实际完成数。
+源文字含中文、空格和 emoji；必要时用 CUA 输入框 setValue 准备，不以此证明输入法或
+自动键入 Unicode。剪切后要求空值/发送禁用，空菜单 Copy/Cut 禁用、Paste 可用；粘贴后
+核对完整文字。最后实际全选删除清空草稿，再 Cmd+Q，不发送消息。
+
+`ada308408` 包两种普通档案已由 CUA 完成这些实际键盘/菜单动作，全部八次 Copy/Cut
+的新代次/精确值、四次 Paste 的实际恢复/系统值代次保持通过；两次正常退出、身份/原件/
+sidecar/readiness 清理及原剪贴板完整恢复通过。日志为
+`/private/tmp/reasonix-composer-clipboard-explicit-ui.log`、
+`/private/tmp/reasonix-composer-clipboard-managed-ui.log`。成功夹具删除。
+首次托管观察失败的 `-3812` 及非正常退出不计通过，夹具和残留 bridge 目录保留；原剪贴板
+未改写且自有进程已退出。失败 finally 现先等待 parent-loss watcher 最多五秒，再回收自有
+残留 sidecar；该新增故障清理分支尚未实际故障验收。消息/其他路径/实际失败反馈、IME/
+组合输入和窗口稳定性继续保留。
 本地 ad-hoc 签名不等于正式签名/公证；外接屏延期和其他发布门禁见迁移清单最新记录。
 
 macOS 受管 bridge 跟随实际 kernel parent 生命周期。宿主异常退出时取消任务/HTTP/SSE，

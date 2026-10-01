@@ -88,16 +88,35 @@ func perform(_ args: [String], _ board: NSPasteboard) throws {
     let ownValues = snapshot.ownedPath == nil ? [expected, expected + "-denied"] : [expected]
     let marker = URL(fileURLWithPath: args[3])
     let owned = try? JSONSerialization.jsonObject(with: Data(contentsOf: marker)) as? [String: Any]
-    if args[1] == "claim" {
+    let checkpoint = marker.appendingPathExtension("before.json")
+    if args[1] == "checkpoint" {
+        // Record only the system generation immediately before a real UI
+        // Copy/Cut. Keep the previous ownership receipt intact for recovery.
+        let count = board.changeCount
+        try JSONSerialization.data(withJSONObject: ["nonce": snapshot.nonce, "count": count])
+            .write(to: checkpoint, options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: checkpoint.path)
+        guard board.changeCount == count else { throw Failure.changed }
+        return
+    }
+    if args[1] == "claim" || args[1] == "claim-after" {
         // Physical UI copy/cut has no native smoke receipt. Claim only this
         // unique fixture value and its unchanged system generation, without
         // writing the pasteboard or printing any original clipboard data.
         let count = board.changeCount
+        if args[1] == "claim-after" {
+            guard let bytes = try? Data(contentsOf: checkpoint), bytes.count <= 8192,
+                  let before = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],
+                  before["nonce"] as? String == snapshot.nonce,
+                  let prior = before["count"] as? Int else { throw Failure.invalid }
+            guard count > prior else { throw Failure.changed }
+        }
         guard board.string(forType: .string) == ownValues[0], try items(board).count == 1,
               board.changeCount == count else { throw Failure.changed }
         try JSONSerialization.data(withJSONObject: ["nonce": snapshot.nonce, "count": count])
             .write(to: marker, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: marker.path)
+        if args[1] == "claim-after" { try FileManager.default.removeItem(at: checkpoint) }
         return
     }
     if args[1] == "verify" {
@@ -204,6 +223,17 @@ func selftest(_ path: String) throws {
     try perform(["helper", "claim", backup, pathMarker], board)
     guard board.changeCount == pathCount else { throw Failure.changed }
     try perform(["helper", "verify", backup, pathMarker], board)
+    try perform(["helper", "checkpoint", backup, pathMarker], board)
+    let noWriteCount = board.changeCount
+    do { try perform(["helper", "claim-after", backup, pathMarker], board); throw Failure.invalid }
+    catch Failure.changed {}
+    guard board.changeCount == noWriteCount else { throw Failure.changed }
+    // Same text only counts as another Copy/Cut after a real new generation.
+    board.clearContents(); guard board.setString(expected.path, forType: .string) else { throw Failure.invalid }
+    try perform(["helper", "claim-after", backup, pathMarker], board)
+    try perform(["helper", "verify", backup, pathMarker], board)
+    do { try perform(["helper", "claim-after", backup, pathMarker], board); throw Failure.changed }
+    catch Failure.invalid {}
     try perform(["helper", "restore", backup, pathMarker], board)
     guard try items(board) == rich else { throw Failure.restore }
     try perform(["helper", "capture-path", backup, source.path], board)
