@@ -60,7 +60,8 @@ def verify_saved_state(app_data, temporary, maximized):
         raise RuntimeError("native transition overwrote saved normal display scale")
 
 
-def launch(host_binary, sidecar_binary, root, identifier, managed, phase, provider=None):
+def launch(host_binary, sidecar_binary, root, identifier, managed, phase, provider=None,
+           verify_window_state=True, environment=None):
     home, temporary = root / "home", root / "tmp"
     app_data = home / "Library/Application Support" / identifier
     core_home = app_data / "reasonix-core" if managed else root / "core"
@@ -68,7 +69,7 @@ def launch(host_binary, sidecar_binary, root, identifier, managed, phase, provid
     result_path.unlink(missing_ok=True)
     instance_marker = temporary / "reasonix-native-window-awaiting-instance.json"
     instance_marker.unlink(missing_ok=True)
-    env = os.environ.copy()
+    env = dict(os.environ if environment is None else environment)
     for key in ("REASONIX_HOME", "REASONIX_STATE_HOME", "REASONIX_CACHE_HOME",
                 "REASONIX_PREVIEW_SQLITE_EVENTS", "REASONIX_TAURI_PACKAGE_SMOKE",
                 "REASONIX_TAURI_PROFILE_SMOKE"):
@@ -158,7 +159,8 @@ def launch(host_binary, sidecar_binary, root, identifier, managed, phase, provid
             time.sleep(0.05)
         if package.is_alive(sidecar_pid) or list(temporary.glob("reasonix-tauri-bridge-*/ready.json")):
             raise RuntimeError("native window host left sidecar/readiness after exit")
-        verify_saved_state(app_data, temporary, phase == "exercise")
+        if verify_window_state:
+            verify_saved_state(app_data, temporary, phase == "exercise")
         if provider:
             provider.verify()
         print(f"native macOS window {('managed' if managed else 'explicit')} {phase}: OK")

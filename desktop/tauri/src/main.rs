@@ -18,6 +18,8 @@ mod native_dialog_smoke;
 #[cfg(target_os = "macos")]
 mod native_edit_smoke;
 #[cfg(target_os = "macos")]
+mod native_link_smoke;
+#[cfg(target_os = "macos")]
 mod native_menu_smoke;
 #[cfg(target_os = "macos")]
 mod native_profile_smoke;
@@ -3572,6 +3574,8 @@ fn main() {
         .on_page_load(|webview, payload| {
             #[cfg(target_os = "macos")]
             native_clipboard_smoke::observe(webview, payload);
+            #[cfg(target_os = "macos")]
+            native_link_smoke::observe(webview, payload);
             #[cfg(not(target_os = "macos"))]
             let _ = (webview, payload);
         })
@@ -3589,6 +3593,8 @@ fn main() {
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.manage(native_clipboard_smoke::ClipboardSmokeState::default());
+            #[cfg(target_os = "macos")]
+            app.manage(native_link_smoke::LinkSmokeState::default());
             let window_state = PreviewWindowState::for_app(app)?;
             let host_preferences = HostPreferences::for_app(app).map_err(std::io::Error::other)?;
             let workbench_catalog =

@@ -168,6 +168,19 @@ python3 tools/tauri/smoke-native-window.py 'desktop/tauri/target/release/bundle/
 门禁尚未通过；默认窗口门禁通过不能代替该项验收，也不代表菜单/托盘点击、键盘编辑或
 显示器拔插已经验收。macOS CI 已接入默认窗口门禁，远端执行结果待确认。
 
+浏览器链路有独立门禁，不依赖外接屏或 Preview 键盘焦点：
+
+```bash
+python3 tools/tauri/smoke-native-links.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
+```
+
+它在默认和显式私有档案下，通过主 WKWebView IPC 验证两个现有链接入口的非法 URL
+拒绝，再实际打开默认浏览器，并要求两个本机 canary 页请求到达、宿主/sidecar 正常退出。
+不加载外部资源、不继承用户凭据环境、不增加 renderer 命令或权限，也不关闭既有浏览器
+标签页；新建的测试标签页可手动关闭。失败保留私有记录，成功删除测试档案。
+这项不代替真实点击、邮件客户端、OAuth 登录/回调或页面视觉验收。
+2026-10-01 用户仅延期不同缩放显示器/外接屏拔插测试，其余 macOS D 门禁仍保留。
+
 原生 responder 编辑另有严格门禁 `--edit`：默认 40 个场景之外，每档案增加一个
 `menu-editing` 阶段。它复用完整剪贴板保护，要求应用 active、主窗口是实际 key window
 且 WKWebView 接受 first responder；核对已安装 Copy/Paste/Cut/Select All/Undo/Redo 的
