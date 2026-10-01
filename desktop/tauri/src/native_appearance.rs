@@ -20,6 +20,8 @@ pub(crate) fn apply(app: &AppHandle, theme: &str) -> Result<(), String> {
         "dark" => Some(Theme::Dark),
         _ => return Err("invalid native appearance".into()),
     };
+    #[cfg(target_os = "macos")]
+    crate::native_window_smoke::observe_appearance_request(app);
     app.get_webview_window("main")
         .ok_or("native appearance window unavailable")?
         .set_theme(theme)

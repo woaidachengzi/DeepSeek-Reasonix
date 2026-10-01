@@ -2,14 +2,17 @@
 //! The Python runner supplies a temporary HOME and reuses it across restarts.
 
 use std::{
+    cell::RefCell,
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
-        mpsc,
+        mpsc, Arc, Mutex,
     },
     time::{Duration, Instant},
 };
 
+use objc2::{rc::Retained, runtime::ProtocolObject};
+use objc2_foundation::NSObjectProtocol;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, Webview, WebviewWindow};
 
@@ -26,6 +29,130 @@ pub struct WindowSmokeState {
     restore_requested: AtomicUsize,
     restore_completed: AtomicUsize,
     reopened: AtomicUsize,
+    transitions: Arc<WindowTransitions>,
+}
+
+const TRANSITIONS: [&str; 6] = [
+    "will-miniaturize",
+    "did-miniaturize",
+    "did-deminiaturize",
+    "became-key",
+    "resigned-key",
+    "appearance-request",
+];
+
+#[derive(Default)]
+struct WindowTransitions {
+    record: Mutex<TransitionRecord>,
+}
+
+#[derive(Clone, Default)]
+struct TransitionRecord {
+    counts: [usize; 6],
+    recent: Vec<&'static str>,
+}
+
+impl WindowTransitions {
+    fn note(&self, index: usize) {
+        if let Ok(mut record) = self.record.lock() {
+            record.counts[index] += 1;
+            if record.recent.len() == 32 {
+                record.recent.remove(0);
+            }
+            record.recent.push(TRANSITIONS[index]);
+        }
+    }
+}
+
+thread_local! {
+    // Registration/removal and retained observer tokens stay on the AppKit
+    // main thread. The blocks capture only thread-safe diagnostic counters.
+    static WINDOW_OBSERVERS: RefCell<Vec<Retained<ProtocolObject<dyn NSObjectProtocol>>>> = const { RefCell::new(Vec::new()) };
+}
+
+fn install_window_observers(app: &AppHandle) -> Result<(), String> {
+    use block2::RcBlock;
+    use objc2_app_kit::{
+        NSWindow, NSWindowDidBecomeKeyNotification, NSWindowDidDeminiaturizeNotification,
+        NSWindowDidMiniaturizeNotification, NSWindowDidResignKeyNotification,
+        NSWindowWillMiniaturizeNotification,
+    };
+    use objc2_foundation::{NSNotification, NSNotificationCenter};
+    objc2::MainThreadMarker::new().ok_or("window observers require the main thread")?;
+    let window = app
+        .get_webview_window("main")
+        .ok_or("observer window missing")?;
+    let pointer = window
+        .ns_window()
+        .map_err(|_| "observer window handle unavailable")?;
+    if pointer.is_null() {
+        return Err("observer window handle missing".into());
+    }
+    let state = app.state::<WindowSmokeState>();
+    // SAFETY: This live Tauri NSWindow is borrowed only while registering its
+    // filters on the main thread. Callbacks never dereference native pointers.
+    let native = unsafe { &*pointer.cast::<NSWindow>() };
+    let names = unsafe {
+        [
+            NSWindowWillMiniaturizeNotification,
+            NSWindowDidMiniaturizeNotification,
+            NSWindowDidDeminiaturizeNotification,
+            NSWindowDidBecomeKeyNotification,
+            NSWindowDidResignKeyNotification,
+        ]
+    };
+    WINDOW_OBSERVERS.with(|observers| {
+        let mut observers = observers.borrow_mut();
+        if !observers.is_empty() {
+            return Err("window observers already registered".into());
+        }
+        let center = NSNotificationCenter::defaultCenter();
+        for (index, name) in names.into_iter().enumerate() {
+            let counters = Arc::clone(&state.transitions);
+            let callback =
+                RcBlock::new(move |_: std::ptr::NonNull<NSNotification>| counters.note(index));
+            // SAFETY: The filter is the live main NSWindow, no operation queue
+            // is supplied, and the callback owns only Send + Sync counters.
+            let observer = unsafe {
+                center.addObserverForName_object_queue_usingBlock(
+                    Some(name),
+                    Some(native),
+                    None,
+                    &callback,
+                )
+            };
+            observers.push(observer);
+        }
+        Ok(())
+    })
+}
+
+pub(crate) fn stop_window_observers() {
+    if objc2::MainThreadMarker::new().is_none() {
+        return;
+    }
+    WINDOW_OBSERVERS.with(|observers| {
+        let mut observers = observers.borrow_mut();
+        if observers.is_empty() {
+            return;
+        }
+        let center = objc2_foundation::NSNotificationCenter::defaultCenter();
+        for observer in observers.drain(..) {
+            // SAFETY: Exactly the tokens returned by this notification center,
+            // removed on the same main thread before they are released.
+            unsafe {
+                center.removeObserver((*observer).as_ref());
+            }
+        }
+    });
+}
+
+pub(crate) fn observe_appearance_request(app: &AppHandle) {
+    if let Some(state) = app.try_state::<WindowSmokeState>() {
+        if state.enabled {
+            state.transitions.note(5);
+        }
+    }
 }
 
 impl Default for WindowSmokeState {
@@ -36,6 +163,7 @@ impl Default for WindowSmokeState {
             restore_requested: AtomicUsize::new(0),
             restore_completed: AtomicUsize::new(0),
             reopened: AtomicUsize::new(0),
+            transitions: Arc::new(WindowTransitions::default()),
         }
     }
 }
@@ -92,6 +220,13 @@ pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, Stri
     // the main thread and does not retain the pointer beyond the window borrow.
     let native = unsafe { &*pointer.cast::<NSWindow>() };
     let application = NSApplication::sharedApplication(mtm);
+    let state = window.app_handle().state::<WindowSmokeState>();
+    let transitions = state
+        .transitions
+        .record
+        .lock()
+        .map_err(|_| "native transition record unavailable")?
+        .clone();
     Ok(serde_json::json!({
         "geometry": Geometry::read(window)?,
         "visible": window.is_visible().map_err(|_| "read visibility")?,
@@ -107,6 +242,14 @@ pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, Stri
         "nativeMiniaturizable": native.styleMask().contains(NSWindowStyleMask::Miniaturizable),
         "nativeMiniaturized": native.isMiniaturized(),
         "nativeVisible": native.isVisible(),
+        "nativeStyleMask": native.styleMask().bits(),
+        "willMiniaturize": transitions.counts[0],
+        "didMiniaturize": transitions.counts[1],
+        "didDeminiaturize": transitions.counts[2],
+        "becameKey": transitions.counts[3],
+        "resignedKey": transitions.counts[4],
+        "appearanceRequests": transitions.counts[5],
+        "nativeTransitions": transitions.recent,
         "restoreRequests": window.app_handle().try_state::<WindowSmokeState>()
             .map(|state| state.restore_requested.load(Ordering::SeqCst)),
         "restoreCompletions": window.app_handle().try_state::<WindowSmokeState>()
@@ -510,6 +653,11 @@ pub fn start_if_requested(app: &AppHandle) {
     let Ok(phase) = std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE") else {
         return;
     };
+    if install_window_observers(app).is_err() {
+        eprintln!("Native window acceptance observers could not be installed.");
+        app.exit(2);
+        return;
+    }
     let handle = app.clone();
     std::thread::spawn(move || {
         let result = if phase == "task-background-menu-quit" {

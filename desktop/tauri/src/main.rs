@@ -4065,6 +4065,8 @@ fn main() {
             });
         }
         if matches!(event, tauri::RunEvent::Exit) {
+            #[cfg(target_os = "macos")]
+            native_window_smoke::stop_window_observers();
             if let Some(state) = app.try_state::<std::sync::Arc<notifications::NotificationState>>()
             {
                 state.shutdown();
