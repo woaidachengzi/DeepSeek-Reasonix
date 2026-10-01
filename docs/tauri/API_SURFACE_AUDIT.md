@@ -96,6 +96,13 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：自定义 native/bridge 主调用窗口边界（2026-10-01）
+
+- 现有 8 个文档/工作区应用命令已在各自入口校验 `window.label()==main`；增加真实主/第二 WKWebView IPC 探测后，实际同源第二窗口通过这 8 项拒绝，却能调用 `desktop_preferences`。探测只丢弃返回值并发布固定 `unexpected-native-access` 状态，不保存偏好内容；该结果不能视为远端页面获得权限，当前 Tauri 对非本地来源仍执行 ACL 检查。
+- 当前锁定 Tauri 2.11.6 的 `webview/mod.rs` 明确区分插件、有 app ACL manifest 和远端来源的 ACL；当前项目只有 `main-window` 插件 capability，没有 app ACL manifest。现已在唯一自定义 `invoke_handler` 总入口按 Tauri 注入的 `invoke.message.webview_ref().label()` 校验主窗口，其他窗口固定拒绝后停止分发，覆盖已注册 native/bridge 命令；前端传入 `window:'main'` 不能伪造调用者。插件继续先走 Tauri 的插件/ACL 分支，现有主窗口权限未扩大。
+- 新增 `tools/tauri/smoke-document-scope.py`：主窗口真实 IPC 要求直接可执行文档及其符号链接别名在默认/指定应用入口均拒绝，并读取实际 Finder/Terminal PNG catalog；同源隐藏窗口测试 8 个文档命令及桌面偏好/bridge 状态拒绝。独立控制 nonce 与原生窗口标签共同绑定回执，隐藏窗口不能提供主窗口通过回执。私有原文档、可执行 canary 和别名的内容/权限/mtime 保持，且 executable 未执行；未增加 renderer 命令或权限。修复后真实包结果待后续记录。
+- 首个 native-only 私有探测未启用依赖的 `tauri/custom-protocol`，停在主页面加载前提，不是权限验收结果；按生产特性重建并复用原前端/sidecar 后，实际复现第二窗口的偏好调用未被拒绝。此私有探测包不能替代修复后的干净全量 `.app`；普通 Preview 包没有被该副本替换。该门禁不证明 Finder/编辑器打开、对话框实际选中、物理点击或全部会话/资源边界，其他 D、A/B/C 与 E 门禁保留。
+
 #### D：macOS 实际 Terminal 工作目录验收（2026-10-01）
 
 - 对照 Wails 和 Tauri 的 macOS 系统 Terminal 路径：通过系统 `/usr/bin/open -a` 打开目录，文档目标先转换为所属目录。新增 `tools/tauri/smoke-native-terminal.py`，由真实 Preview 主 WKWebView IPC 分别打开私有目录及其中的文档，要求两个新系统 Terminal shell 的实际 kernel cwd 均为该目录；并非只核对生成的命令参数。

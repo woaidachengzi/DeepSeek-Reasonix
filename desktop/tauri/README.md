@@ -210,6 +210,19 @@ shell 的原始 kernel cwd 精确匹配包含中文/换行/引号/`$` 的目录�
 2026-10-01 干净提交 `a9217f828` 的本地 ad-hoc 包已通过两种档案的实际系统 Terminal
 目录/文档入口和 kernel cwd 验收；每档案均要求两个新会话根 shell，排除启动子 shell。
 
+自定义 native/bridge 命令总入口要求 Tauri 注入的原生调用窗口为 `main`；其他窗口
+在命令分发前被拒绝，前端参数不能伪造窗口身份。插件仍执行原有 capability 检查。
+真实调用窗口和可执行文档边界使用独立门禁：
+
+```bash
+python3 -B tools/tauri/smoke-document-scope.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
+```
+
+主窗口必须拒绝可执行文档及其符号链接别名，同时能读取真实系统应用 catalog。
+同源隐藏 WKWebView 必须拒绝 8 个文档/工作区应用命令以及偏好/bridge 状态查询，即使
+传入伪造的 `window:'main'`。检查原文件内容/权限/mtime、未执行 executable、宿主及
+sidecar 清理；失败保留私有记录。这项不代替正常 Finder/编辑器打开或物理对话框操作。
+
 原生 responder 编辑另有严格门禁 `--edit`：默认 40 个场景之外，每档案增加一个
 `menu-editing` 阶段。它复用完整剪贴板保护，要求应用 active、主窗口是实际 key window
 且 WKWebView 接受 first responder；核对已安装 Copy/Paste/Cut/Select All/Undo/Redo 的

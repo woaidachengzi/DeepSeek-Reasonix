@@ -3752,7 +3752,8 @@ fn main() {
                 _ => {}
             }
         })
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler({
+            let handler: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
             bridge_status,
             restart_bridge,
             bridge_open_session,
@@ -3914,7 +3915,19 @@ fn main() {
             keychain::keychain_save,
             keychain::keychain_import_legacy,
             keychain::keychain_delete
-        ])
+            ];
+            move |invoke: tauri::ipc::Invoke<tauri::Wry>| {
+                // Plugin commands keep their capability checks. Every custom
+                // native/bridge command belongs to the trusted main window;
+                // derive caller identity from Tauri, never renderer arguments.
+                if invoke.message.webview_ref().label() != "main" {
+                    invoke.resolver.reject("native application commands require the main window");
+                    true
+                } else {
+                    handler(invoke)
+                }
+            }
+        })
         .build(tauri::generate_context!())
         .expect("failed to build Reasonix Tauri host");
     app.run(|app, event| {

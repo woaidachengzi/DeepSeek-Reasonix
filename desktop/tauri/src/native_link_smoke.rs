@@ -8,19 +8,30 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use tauri::{AppHandle, Manager, Webview};
+use tauri::{AppHandle, Manager, Webview, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 #[derive(Default)]
 pub struct LinkSmokeState {
     loaded: AtomicBool,
-    active: Mutex<Option<(String, mpsc::SyncSender<bool>)>>,
+    active: Mutex<Option<Context>>,
+}
+struct Context {
+    nonce: String,
+    send: mpsc::SyncSender<Receipt>,
+}
+struct Receipt {
+    label: String,
+    status: String,
 }
 
 pub fn observe(webview: &Webview, payload: &tauri::webview::PageLoadPayload<'_>) {
     if !matches!(
         std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref(),
-        Ok("external-browser" | "external-app-failure" | "external-terminal")
-    ) || webview.label() != "main"
+        Ok("external-browser" | "external-app-failure" | "external-terminal" | "document-scope")
+    ) || !(webview.label() == "main"
+        || (webview.label() == "native-document-denied"
+            && std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref()
+                == Ok("document-scope")))
         || payload.url().scheme() != "tauri"
         || payload.url().host_str() != Some("localhost")
     {
@@ -29,23 +40,33 @@ pub fn observe(webview: &Webview, payload: &tauri::webview::PageLoadPayload<'_>)
     let Some(state) = webview.app_handle().try_state::<LinkSmokeState>() else {
         return;
     };
-    if payload.event() == tauri::webview::PageLoadEvent::Finished {
+    if payload.event() == tauri::webview::PageLoadEvent::Finished && webview.label() == "main" {
         state.loaded.store(true, Ordering::SeqCst);
     }
     if payload.event() == tauri::webview::PageLoadEvent::Started {
         let Ok(active) = state.active.lock() else {
             return;
         };
-        let Some((nonce, send)) = active.as_ref() else {
+        let Some(context) = active.as_ref() else {
             return;
         };
         if payload.url().as_str().len() > 4096 {
             return;
         }
         let pairs: std::collections::HashMap<_, _> = payload.url().query_pairs().collect();
-        if pairs.get("native_link_nonce").map(|value| value.as_ref()) == Some(nonce.as_str()) {
+        if pairs.get("native_link_nonce").map(|value| value.as_ref())
+            == Some(context.nonce.as_str())
+        {
             if let Some(status) = pairs.get("native_link_result") {
-                let _ = send.try_send(status == "ok");
+                if matches!(
+                    status.as_ref(),
+                    "ok" | "failed" | "unexpected-native-access"
+                ) {
+                    let _ = context.send.try_send(Receipt {
+                        label: webview.label().into(),
+                        status: status.to_string(),
+                    });
+                }
             }
         }
     }
@@ -58,6 +79,74 @@ impl Drop for Scope {
             *active = None;
         }
     }
+}
+
+struct HiddenWindow(WebviewWindow);
+impl Drop for HiddenWindow {
+    fn drop(&mut self) {
+        let _ = self.0.destroy();
+    }
+}
+
+fn document_script(directory: &Path, nonce: &str, denied: bool) -> Result<String, String> {
+    let args = serde_json::json!({
+        "document": directory.join("document 中文\n\"$.md"),
+        "executable": directory.join("executable-canary.sh"),
+        "alias": directory.join("alias.md"),
+    });
+    Ok(r#"(async () => {
+        const nonce = __NONCE__, denied = __DENIED__, paths = __PATHS__;
+        if (new URL(location.href).searchParams.get('native_link_nonce') === nonce && new URL(location.href).searchParams.has('native_link_result')) return;
+        const report = result => {
+            const receipt = new URL(location.href);
+            receipt.searchParams.set('native_link_nonce', nonce);
+            receipt.searchParams.set('native_link_result', result);
+            location.replace(receipt.href);
+        };
+        try {
+            const deadline = Date.now() + 12000;
+            while (!window.__TAURI_INTERNALS__?.invoke) {
+                if (Date.now() >= deadline) throw new Error('IPC unavailable');
+                await new Promise(resolve => setTimeout(resolve, 25));
+            }
+            const invoke = window.__TAURI_INTERNALS__.invoke;
+            const rejected = async (command, args, expected) => {
+                try { await invoke(command, args); throw new Error('accepted forbidden action: ' + command); }
+                catch (error) { if (!String(error).includes(expected)) throw error; }
+            };
+            if (denied) {
+                const actions = [
+                    ['open_local_path', {path: paths.document}],
+                    ['reveal_local_path', {path: paths.document}],
+                    ['save_local_path_as', {path: paths.document}],
+                    ['local_path_openers', {}],
+                    ['set_preferred_external_opener', {id: 'finder'}],
+                    ['open_local_path_with', {path: paths.document, id: 'finder'}],
+                    ['workspace_external_openers', {sessionId: 'private-denied-' + nonce}],
+                    ['open_workspace_external', {sessionId: 'private-denied-' + nonce, id: 'finder'}],
+                    ['desktop_preferences', {}],
+                    ['bridge_status', {}],
+                ];
+                for (const [command, args] of actions) {
+                    // Extra renderer input cannot impersonate the injected
+                    // native caller window used by each command's guard.
+                    await rejected(command, {...args, window: 'main'}, 'require the main window');
+                }
+            } else {
+                for (const path of [paths.executable, paths.alias]) {
+                    await rejected('open_local_path', {path}, 'cannot open an executable target');
+                    await rejected('open_local_path_with', {path, id: 'finder'}, 'cannot open an executable target');
+                }
+                const catalog = await invoke('local_path_openers');
+                for (const id of ['finder', 'terminal']) {
+                    if (!catalog.openers.some(item => item.id === id && item.iconDataUrl.startsWith('data:image/png;base64,'))) throw new Error('native catalog missing');
+                }
+            }
+            report('ok');
+        } catch (error) { report(String(error).includes('accepted forbidden action: desktop_preferences') ? 'unexpected-native-access' : 'failed'); }
+    })();"#.replace("__NONCE__", &serde_json::to_string(nonce).map_err(|_| "encode scope nonce")?)
+        .replace("__DENIED__", if denied { "true" } else { "false" })
+        .replace("__PATHS__", &args.to_string()))
 }
 
 pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
@@ -76,7 +165,9 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
         == Ok("external-app-failure");
     let terminal =
         std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref() == Ok("external-terminal");
-    let port = if application_failure || terminal {
+    let document_scope =
+        std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref() == Ok("document-scope");
+    let port = if application_failure || terminal || document_scope {
         0
     } else {
         control
@@ -89,7 +180,10 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
     *app.state::<LinkSmokeState>()
         .active
         .lock()
-        .map_err(|_| "link probe lock failed")? = Some((nonce.clone(), send));
+        .map_err(|_| "link probe lock failed")? = Some(Context {
+        nonce: nonce.clone(),
+        send,
+    });
     let _scope = Scope(app.clone());
     let deadline = Instant::now() + Duration::from_secs(12);
     while !app.state::<LinkSmokeState>().loaded.load(Ordering::SeqCst) {
@@ -98,7 +192,9 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
         }
         std::thread::sleep(Duration::from_millis(25));
     }
-    let source = if application_failure {
+    let source = if document_scope {
+        document_script(directory, &nonce, false)?
+    } else if application_failure {
         let expected = std::path::PathBuf::from(std::env::var_os("HOME").ok_or("private HOME missing")?)
             .join("Applications/Ghostty.app").canonicalize().map_err(|_| "private invalid bundle missing")?;
         let selected = crate::opener_catalog::selected_opener(crate::opener_catalog::installed_openers(), "ghostty")?;
@@ -181,11 +277,39 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
             .eval(&source)
             .map_err(|_| "evaluate main link IPC".into())
     })?;
-    if !receive
+    let main_receipt = receive
         .recv_timeout(Duration::from_secs(15))
-        .map_err(|_| "main link IPC timed out")?
-    {
+        .map_err(|_| "main link IPC timed out")?;
+    if main_receipt.label != "main" || main_receipt.status != "ok" {
         return Err("main link validation/native opener failed".into());
+    }
+    if document_scope {
+        let script = document_script(directory, &nonce, true)?;
+        let _hidden = HiddenWindow(crate::native_window_smoke::on_main(
+            app,
+            move |handle, _| {
+                WebviewWindowBuilder::new(
+                    handle,
+                    "native-document-denied",
+                    WebviewUrl::App("index.html".into()),
+                )
+                .visible(false)
+                .focused(false)
+                .initialization_script(script)
+                .build()
+                .map_err(|_| "create document caller scope probe".into())
+            },
+        )?);
+        let hidden_receipt = receive
+            .recv_timeout(Duration::from_secs(15))
+            .map_err(|_| "hidden document scope IPC timed out")?;
+        if hidden_receipt.label != "native-document-denied" || hidden_receipt.status != "ok" {
+            return Err(format!(
+                "hidden document/native caller scope was not rejected: {}",
+                hidden_receipt.status
+            ));
+        }
+        return Ok(());
     }
     if application_failure {
         return Ok(());
