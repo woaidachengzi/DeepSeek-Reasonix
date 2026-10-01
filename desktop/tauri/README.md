@@ -193,6 +193,8 @@ python3 tools/tauri/smoke-native-app-failure.py 'desktop/tauri/target/release/bu
 解析到该私有目标，再经主 WKWebView IPC 要求未知应用 ID 和真实 LaunchServices 拒绝
 均返回错误；核对特殊文档路径的内容/权限/mtime 不变和两种档案的退出清理。
 不会操作真实已安装 Ghostty，也不代替正常应用打开、终端 cwd 或物理 UI 验收。
+2026-10-01 干净提交 `c83f947e5` 的本地 ad-hoc 包已通过两种私有档案的实际主 IPC
+启动拒绝门禁；同包默认浏览器门禁也已复验通过。
 
 原生 responder 编辑另有严格门禁 `--edit`：默认 40 个场景之外，每档案增加一个
 `menu-editing` 阶段。它复用完整剪贴板保护，要求应用 active、主窗口是实际 key window
