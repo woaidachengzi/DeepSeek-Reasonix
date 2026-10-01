@@ -34,13 +34,18 @@ impl Default for WindowSmokeState {
     }
 }
 
+pub(crate) fn page_finished(app: &AppHandle) -> bool {
+    app.try_state::<WindowSmokeState>()
+        .is_some_and(|state| state.main_loaded.load(Ordering::SeqCst))
+}
+
 pub fn observe(webview: &Webview, payload: &tauri::webview::PageLoadPayload<'_>) {
     let Some(state) = webview.app_handle().try_state::<WindowSmokeState>() else {
         return;
     };
     if state.enabled
         && webview.label() == "main"
-        && payload.url().scheme() == "tauri"
+        && crate::ui_origin::matches(webview.app_handle(), payload.url())
         && payload.event() == tauri::webview::PageLoadEvent::Finished
     {
         state.main_loaded.store(true, Ordering::SeqCst);
@@ -390,6 +395,9 @@ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
     match phase {
         "exercise" => exercise(app, &directory)?,
         "menu-shortcuts" => crate::native_menu_smoke::shortcuts(app)?,
+        "ui-store-empty" | "ui-store-seed" | "ui-store-restore" | "ui-store-clear" => {
+            crate::native_ui_storage_smoke::run(app, &directory, phase)?
+        }
         "dialog-cancel" => crate::native_dialog_smoke::run(app, &directory)?,
         "external-browser" | "external-app-failure" | "external-terminal" | "document-scope" => {
             crate::native_link_smoke::run(app, &directory)?

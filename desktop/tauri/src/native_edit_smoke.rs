@@ -15,7 +15,7 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 
 use crate::{native_menu_smoke, native_window_smoke::on_main};
 
-fn evaluate(app: &AppHandle, source: String) -> Result<bool, String> {
+pub(crate) fn evaluate(app: &AppHandle, source: String) -> Result<bool, String> {
     let (send, receive) = mpsc::sync_channel(1);
     on_main(app, move |_, window| {
         window

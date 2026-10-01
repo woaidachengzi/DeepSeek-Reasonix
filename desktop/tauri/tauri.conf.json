@@ -13,6 +13,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "Reasonix",
         "width": 1280,
         "height": 820,

@@ -8,7 +8,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use tauri::{AppHandle, Manager, Webview, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, Webview, WebviewWindow, WebviewWindowBuilder};
 
 #[derive(Default)]
 pub struct LinkSmokeState {
@@ -32,8 +32,7 @@ pub fn observe(webview: &Webview, payload: &tauri::webview::PageLoadPayload<'_>)
         || (webview.label() == "native-document-denied"
             && std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref()
                 == Ok("document-scope")))
-        || payload.url().scheme() != "tauri"
-        || payload.url().host_str() != Some("localhost")
+        || !crate::ui_origin::matches(webview.app_handle(), payload.url())
     {
         return;
     }
@@ -291,7 +290,7 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
                 WebviewWindowBuilder::new(
                     handle,
                     "native-document-denied",
-                    WebviewUrl::App("index.html".into()),
+                    crate::ui_origin::webview_url(handle)?,
                 )
                 .visible(false)
                 .focused(false)

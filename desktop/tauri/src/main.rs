@@ -26,6 +26,8 @@ mod native_profile_smoke;
 #[cfg(target_os = "macos")]
 mod native_task_smoke;
 #[cfg(target_os = "macos")]
+mod native_ui_storage_smoke;
+#[cfg(target_os = "macos")]
 mod native_window_smoke;
 mod notifications;
 mod opener_catalog;
@@ -33,6 +35,8 @@ mod protocol_generated;
 mod runtime_info;
 mod session_shadow;
 mod tray;
+#[cfg(target_os = "macos")]
+mod ui_origin;
 mod window_state;
 mod workbench_catalog;
 mod workbench_projects;
@@ -3571,6 +3575,15 @@ fn apply_menu_zoom(app: &tauri::AppHandle, factor: f64) {
 
 fn main() {
     let app = tauri::Builder::default()
+        .register_uri_scheme_protocol("reasonix-preview", |context, request| {
+            #[cfg(target_os = "macos")]
+            { ui_origin::asset_response(context.app_handle(), request) }
+            #[cfg(not(target_os = "macos"))]
+            {
+                let _ = (context, request);
+                tauri::http::Response::builder().status(403).body(Vec::<u8>::new()).unwrap()
+            }
+        })
         .on_page_load(|webview, payload| {
             #[cfg(target_os = "macos")]
             native_window_smoke::observe(webview, payload);
@@ -3599,6 +3612,29 @@ fn main() {
             app.manage(native_clipboard_smoke::ClipboardSmokeState::default());
             #[cfg(target_os = "macos")]
             app.manage(native_link_smoke::LinkSmokeState::default());
+            let profile =
+                data_profile::configure_preview_profile(app).map_err(std::io::Error::other)?;
+            #[cfg(target_os = "macos")]
+            {
+                let origin = ui_origin::PreviewUiOrigin::for_profile(profile.home())
+                    .map_err(std::io::Error::other)?;
+                app.manage(origin);
+            }
+            let mut main_config = app.config().app.windows.iter()
+                .find(|config| config.label == "main")
+                .ok_or_else(|| std::io::Error::other("main window configuration missing"))?
+                .clone();
+            #[cfg(all(target_os = "macos", not(debug_assertions)))]
+            { main_config.url = ui_origin::webview_url(app.handle()).map_err(std::io::Error::other)?; }
+            // Keep the established dev-server URL on development builds.
+            let _ = &mut main_config;
+            let main_builder = tauri::WebviewWindowBuilder::from_config(app, &main_config)?;
+            #[cfg(all(target_os = "macos", not(debug_assertions)))]
+            let main_builder = {
+                let origin = app.state::<ui_origin::PreviewUiOrigin>().inner().clone();
+                main_builder.on_navigation(move |url| origin.matches(url))
+            };
+            main_builder.build()?;
             let window_state = PreviewWindowState::for_app(app)?;
             let host_preferences = HostPreferences::for_app(app).map_err(std::io::Error::other)?;
             let workbench_catalog =
@@ -3612,8 +3648,6 @@ fn main() {
                     .set_zoom(host_preferences.zoom_factor())
                     .map_err(std::io::Error::other)?;
             }
-            let profile =
-                data_profile::configure_preview_profile(app).map_err(std::io::Error::other)?;
             let supervisor = BridgeSupervisor::from_environment(app.handle().clone());
 
             #[cfg(target_os = "macos")]

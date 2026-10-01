@@ -9,7 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use tauri::{AppHandle, Manager, Webview, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, Webview, WebviewWindow, WebviewWindowBuilder};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 
 use crate::native_window_smoke::on_main;
@@ -45,7 +45,7 @@ pub fn observe(webview: &Webview, payload: &tauri::webview::PageLoadPayload<'_>)
     }
     if payload.event() == tauri::webview::PageLoadEvent::Finished
         && webview.label() == "main"
-        && payload.url().scheme() == "tauri"
+        && crate::ui_origin::matches(webview.app_handle(), payload.url())
     {
         state.main_loaded.store(true, Ordering::SeqCst);
         return;
@@ -63,7 +63,7 @@ pub fn observe(webview: &Webview, payload: &tauri::webview::PageLoadPayload<'_>)
     if url.as_str().len() > 4096 {
         return;
     }
-    if url.scheme() != "tauri" || url.host_str() != Some("localhost") {
+    if !crate::ui_origin::matches(webview.app_handle(), url) {
         return;
     }
     let pairs: std::collections::HashMap<_, _> = url.query_pairs().collect();
@@ -118,7 +118,7 @@ fn script(nonce: &str, denied: bool) -> String {
         };
         const started = Date.now();
         const ready = async () => {
-            if (!window.__TAURI_INTERNALS__?.invoke || location.protocol !== 'tauri:') {
+            if (!window.__TAURI_INTERNALS__?.invoke || location.protocol !== 'reasonix-preview:') {
                 if (Date.now() - started < 12000) { setTimeout(ready, 25); return; }
                 report(denied ? 'denied-failed' : 'main-failed'); return;
             }
@@ -212,7 +212,7 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
             let window = WebviewWindowBuilder::new(
                 handle,
                 "native-clipboard-denied",
-                WebviewUrl::App("index.html".into()),
+                crate::ui_origin::webview_url(handle)?,
             )
             .visible(false)
             .focused(false)
