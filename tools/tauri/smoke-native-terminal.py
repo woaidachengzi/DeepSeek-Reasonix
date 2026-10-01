@@ -50,6 +50,11 @@ def shell_candidates(rows, baseline):
             if parent in terminals:
                 selected[pid] = row
                 break
+            # Startup/configuration commands can temporarily spawn another
+            # shell on the same tty/cwd. Count the Terminal session's root
+            # shell, not every descendant shell in that session.
+            if Path(rows[parent][2]).name.lstrip("-") in ("zsh", "bash", "sh", "fish"):
+                break
             visited.add(parent)
             parent = rows[parent][0]
     if len(selected) > 64:
@@ -96,7 +101,7 @@ class TerminalReceipts:
         self.owned = {}
         self.nonce = secrets.token_hex(16)
         control = temporary / "reasonix-native-link-control.json"
-        control.write_text(json.dumps({"nonce": self.nonce}))
+        control.write_text(json.dumps({"nonce": self.nonce, "baselinePids": sorted(self.baseline)}))
         control.chmod(0o600)
 
     def current(self):
@@ -115,6 +120,9 @@ class TerminalReceipts:
             if pid in self.owned and self.owned[pid] != row:
                 raise RuntimeError("observed test shell identity changed")
             self.owned.setdefault(pid, row)
+        ownership = self.temporary / "reasonix-native-terminal-owned.json"
+        ownership.write_text(json.dumps(self.owned))
+        ownership.chmod(0o600)
         if len(current) == 2:
             receipt = self.temporary / "reasonix-native-terminal.receipt"
             receipt.write_text(self.nonce)

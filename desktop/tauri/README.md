@@ -207,6 +207,8 @@ shell 的原始 kernel cwd 精确匹配包含中文/换行/引号/`$` 的目录�
 使用 macOS libproc，核对同用户 UID，不读取终端文本/命令参数，不依赖截图或 Apple Events。
 回收前重新核对 PID 出生时间、祖先链、可执行名称和 cwd；可能留下可手动关闭的已结束
 测试窗口。该门禁不代替其他应用、物理菜单点击或项目/Global 会话的 UI 打开验收。
+2026-10-01 干净提交 `a9217f828` 的本地 ad-hoc 包已通过两种档案的实际系统 Terminal
+目录/文档入口和 kernel cwd 验收；每档案均要求两个新会话根 shell，排除启动子 shell。
 
 原生 responder 编辑另有严格门禁 `--edit`：默认 40 个场景之外，每档案增加一个
 `menu-editing` 阶段。它复用完整剪贴板保护，要求应用 active、主窗口是实际 key window
