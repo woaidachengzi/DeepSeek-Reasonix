@@ -222,6 +222,9 @@ python3 -B tools/tauri/smoke-document-scope.py 'desktop/tauri/target/release/bun
 同源隐藏 WKWebView 必须拒绝 8 个文档/工作区应用命令以及偏好/bridge 状态查询，即使
 传入伪造的 `window:'main'`。检查原文件内容/权限/mtime、未执行 executable、宿主及
 sidecar 清理；失败保留私有记录。这项不代替正常 Finder/编辑器打开或物理对话框操作。
+2026-10-01 干净提交 `2cbed72bb` 的本地 ad-hoc 包已通过两种档案的双 WKWebView
+权限门禁及独立剪贴板插件 ACL/原件恢复；本轮 42 阶段回归在最小化设置窗口前提停止，
+尚不能标记全部通过，详见迁移清单。
 
 原生 responder 编辑另有严格门禁 `--edit`：默认 40 个场景之外，每档案增加一个
 `menu-editing` 阶段。它复用完整剪贴板保护，要求应用 active、主窗口是实际 key window
