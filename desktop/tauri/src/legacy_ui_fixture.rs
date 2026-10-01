@@ -107,7 +107,7 @@ fn read(directory: &Path) -> Result<Fixture, String> {
                 control.workspace,
             ),
             ("tauri-progress-mode".into(), "deep".into()),
-            ("reasonix-text-size".into(), "18".into()),
+            ("reasonix-text-size".into(), "large".into()),
         ]),
     })
 }
