@@ -209,6 +209,10 @@ python3 tools/tauri/smoke-native-notifications.py 'desktop/tauri/target/release/
 授权未开启时失败且不主动请求授权。此门禁不经过 renderer IPC，不证明可见横幅、
 物理通知点击、冷启动点击或真实系统拒绝，相关交互验收继续保留。
 
+2026-10-01 干净提交 `67e7fcd8b` 的真实 arm64 包已通过两种私有档案的 6 次实际送达：
+2 次 active=true、4 次 hidden=true/active=false，固定标题/正文、精确清理、原件与重启
+身份均保持。横幅视觉和实际点击仍待执行；不能将此切片作为全部通知能力通过。
+
 指定应用失败反馈另有独立门禁：
 
 ```bash
