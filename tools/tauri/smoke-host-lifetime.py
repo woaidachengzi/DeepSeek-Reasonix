@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -77,6 +78,8 @@ def smoke(app_path):
                                 package.check_unauthenticated_health(package.check_ready(ready[0]))
                                 package.check_sidecar_profile(owned_sidecar, core, managed, root / "cache")
                                 credential = package.check_credential_profile(core)
+                                if stat.S_IMODE(ready[0].parent.stat().st_mode) != 0o700:
+                                    raise RuntimeError("native readiness directory is not private")
                                 break
                             time.sleep(0.05)
                         else:
@@ -109,7 +112,7 @@ def smoke(app_path):
                         while (package.is_alive(owned_sidecar) or list(temporary.glob("reasonix-tauri-bridge-*"))) and time.monotonic() < cleanup_deadline:
                             time.sleep(0.05)
                         if package.is_alive(owned_sidecar) or package.own_sidecars(temporary, sidecar_binary) or list(temporary.glob("reasonix-tauri-bridge-*")):
-                            raise RuntimeError("sidecar or owned readiness directory survived native host termination")
+                            raise RuntimeError(f"native host termination cleanup failed: sidecarAlive={package.is_alive(owned_sidecar)}, readinessDirectories={len(list(temporary.glob('reasonix-tauri-bridge-*')))}")
                         if active:
                             provider.verify_host_death() # Before the fixture closes its server.
                         if protected(paths) != originals:

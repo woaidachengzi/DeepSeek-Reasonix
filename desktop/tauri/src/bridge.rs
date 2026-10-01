@@ -4276,10 +4276,14 @@ impl BridgeSupervisor {
     }
 
     fn spawn_bridge(&self) -> Result<BridgeProcess, String> {
-        let ready_directory = tempfile::Builder::new()
-            .prefix("reasonix-tauri-bridge-")
-            .tempdir()
-            .map_err(display_error)?;
+        let mut ready_builder = tempfile::Builder::new();
+        ready_builder.prefix("reasonix-tauri-bridge-");
+        #[cfg(target_os = "macos")]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            ready_builder.permissions(std::fs::Permissions::from_mode(0o700));
+        }
+        let ready_directory = ready_builder.tempdir().map_err(display_error)?;
         let ready_file = ready_directory.path().join("ready.json");
         let token = opaque_secret()?;
         let launch_id = opaque_secret()?;
