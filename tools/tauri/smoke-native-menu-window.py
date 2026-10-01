@@ -21,7 +21,9 @@ windows = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(windows)
 
 
-def smoke(app_path):
+def smoke(app_path, api_startups=0):
+    if not 0 <= api_startups <= 5:
+        raise ValueError("API startup sample count must be between zero and five")
     app = Path(app_path).resolve()
     host, sidecar = (app / "Contents/MacOS" / name for name in ("reasonix-tauri", "reasonix-desktop-bridge"))
     if not host.is_file() or not sidecar.is_file():
@@ -41,24 +43,36 @@ def smoke(app_path):
             root.chmod(0o700)
             for name in ("home", "tmp"):
                 (root / name).mkdir(mode=0o700)
-            identity = windows.launch(host, sidecar, root, identifier, managed,
-                                      "menu-settings-native-minimized", verify_window_state=False,
-                                      environment=environment)
-            windows.print_window_trace(root / "tmp")
-            restarted = windows.launch(host, sidecar, root, identifier, managed,
-                                       "menu-shortcuts", verify_window_state=False, environment=environment)
-            if restarted != identity or list((root / "tmp").glob("reasonix-tauri-bridge-*")):
-                raise RuntimeError("native menu gate left readiness or changed the profile identity")
+            # Independent samples, not retries: any failed startup fails the
+            # gate immediately. Keep the original window API predicate intact.
+            phases = (["menu-settings-minimized"] * api_startups
+                      + ["menu-settings-native-minimized", "menu-shortcuts"])
+            identity = None
+            for phase in phases:
+                current = windows.launch(host, sidecar, root, identifier, managed,
+                                         phase, verify_window_state=False, environment=environment)
+                if identity is None:
+                    identity = current
+                elif current != identity:
+                    raise RuntimeError("native menu/startup gate changed the profile identity")
+                if phase != "menu-shortcuts":
+                    windows.print_window_trace(root / "tmp")
+                if list((root / "tmp").glob("reasonix-tauri-bridge-*")):
+                    raise RuntimeError("native menu/startup gate left readiness directories")
     print("Installed Minimize role, actual AppKit lifecycle events, Settings restoration and restart: OK")
+    if api_startups:
+        print(f"Original Tauri API startup samples: {api_startups * 2} passed; no failed sample was retried")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("app")
+    parser.add_argument("--api-startups", type=int, choices=range(6), default=0,
+                        help="also run this many independent original-API startups per profile (no retries)")
     args = parser.parse_args()
     if sys.platform != "darwin":
         raise SystemExit("this gate requires macOS")
     try:
-        smoke(args.app)
+        smoke(args.app, api_startups=args.api_startups)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         raise SystemExit(f"native macOS menu window gate failed: {error}") from error
