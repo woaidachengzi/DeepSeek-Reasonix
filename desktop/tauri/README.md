@@ -160,6 +160,18 @@ Show 菜单恢复窗口，再运行第二个任务并通过实际 Quit 菜单退
 python3 tools/tauri/smoke-native-window.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
 ```
 
+菜单组合、剪贴板 IPC、严格原生编辑和面板取消也可独立运行，避免窗口最小化失败
+阻止收集这些项目的证据：
+
+```bash
+python3 tools/tauri/smoke-native-window.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app' --independent --edit --dialogs
+```
+
+此切片在两种新私有档案各运行 4 项，共 8 项，保留真实 AppKit/WKWebView、active/key
+焦点、权限拒绝、完整剪贴板恢复、档案身份和宿主/sidecar 清理断言。它不执行窗口几何、
+最小化、Settings 恢复或任务/退出菜单场景，不能作为完整窗口门禁通过；默认门禁不变。
+`--focus` 需要前置保存的窗口几何，不能与 `--independent` 组合。
+
 该脚本拒绝操作已运行的同标识 Preview，使用原生宿主 API，不依赖屏幕录制权限。
 菜单动作检查不能代替真实鼠标/键盘操作或 WebView 设置界面的渲染验收。测试先确认窗口的
 隐藏/显示转换，再建立严格的最小化前提；启动就绪后直接最小化未成功的时序仍保留记录。

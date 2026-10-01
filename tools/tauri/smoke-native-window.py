@@ -14,6 +14,9 @@ roles against disposable WKWebView textareas, including native undo/redo.
 The --dialogs gate cancels actual AppKit document/diagnostics/import/folder
 panels and verifies production callbacks; it does not simulate mouse clicks.
 Does not prove menu/tray clicks, physical keyboard editing, or display unplugging.
+The --independent slice runs menu contracts and clipboard IPC, plus requested
+edit/dialog gates, in fresh private profiles without the geometry prerequisites.
+It is separate evidence; passing it does not pass the complete window gate.
 All state is confined to a temporary HOME; no existing Preview is operated.
 """
 
@@ -219,7 +222,10 @@ def launch(host_binary, sidecar_binary, root, identifier, managed, phase, provid
                 pass
 
 
-def smoke(app_path, include_focus=False, include_edit=False, include_dialogs=False):
+def smoke(app_path, include_focus=False, include_edit=False, include_dialogs=False,
+          independent=False):
+    if independent and include_focus:
+        raise ValueError("--focus requires the complete window gate and its saved geometry")
     app = Path(app_path).resolve()
     host_binary = app / "Contents/MacOS/reasonix-tauri"
     sidecar_binary = app / "Contents/MacOS/reasonix-desktop-bridge"
@@ -236,20 +242,24 @@ def smoke(app_path, include_focus=False, include_edit=False, include_dialogs=Fal
             root = Path(directory)
             (root / "home").mkdir()
             (root / "tmp").mkdir()
-            phases = ["exercise", "restore-maximized", "restore-normal", "appearance-rollback-unconfigured", "application-hide", "background-close"]
-            phases.extend(["menu-shortcuts", "menu-settings-hidden", "menu-settings-minimized", "menu-settings-app-hidden"])
-            phases.append("task-background-menu-quit")
-            phases.extend(["appearance-dark", "restore-appearance-dark", "restore-appearance-light", "restore-appearance-auto"])
-            phases.extend(["appearance-rollback", "restore-appearance-rollback"])
-            phases.append("clipboard-native")
+            if independent:
+                phases = ["menu-shortcuts", "clipboard-native"]
+            else:
+                phases = ["exercise", "restore-maximized", "restore-normal", "appearance-rollback-unconfigured", "application-hide", "background-close"]
+                phases.extend(["menu-shortcuts", "menu-settings-hidden", "menu-settings-minimized", "menu-settings-app-hidden"])
+                phases.append("task-background-menu-quit")
+                phases.extend(["appearance-dark", "restore-appearance-dark", "restore-appearance-light", "restore-appearance-auto"])
+                phases.extend(["appearance-rollback", "restore-appearance-rollback"])
+                phases.append("clipboard-native")
             if include_dialogs:
                 phases.append("dialog-cancel")
             if include_edit:
                 phases.append("menu-editing")
             if include_focus:
                 phases.append("second-instance")
-            phases.append("close-quit")
-            phases.append("restore-close-quit")
+            if not independent:
+                phases.append("close-quit")
+                phases.append("restore-close-quit")
             identities = []
             for phase in phases:
                 core_home = root / "home/Library/Application Support" / identifier / "reasonix-core" if managed else root / "core"
@@ -257,9 +267,12 @@ def smoke(app_path, include_focus=False, include_edit=False, include_dialogs=Fal
                 if phase in ("clipboard-native", "menu-editing"):
                     fixture = clipboard_fixture.NativeClipboardFixture(root / "tmp")
                 with fixture as provider:
-                    identities.append(launch(host_binary, sidecar_binary, root, identifier, managed, phase, provider))
+                    identities.append(launch(host_binary, sidecar_binary, root, identifier, managed,
+                                             phase, provider, verify_window_state=not independent))
             if len(set(identities)) != 1:
                 raise RuntimeError("restarts changed the native profile credential identity")
+    if independent:
+        print("independent menu/clipboard slice passed; complete window acceptance remains separate")
 
 
 if __name__ == "__main__":
@@ -268,11 +281,13 @@ if __name__ == "__main__":
     parser.add_argument("--focus", action="store_true")
     parser.add_argument("--edit", action="store_true")
     parser.add_argument("--dialogs", action="store_true")
+    parser.add_argument("--independent", action="store_true",
+                        help="run menu/clipboard and requested edit/dialog gates without window transitions")
     args = parser.parse_args()
     if sys.platform != "darwin":
         raise SystemExit("this acceptance requires macOS")
     try:
         smoke(args.app, include_focus=args.focus, include_edit=args.edit,
-              include_dialogs=args.dialogs)
+              include_dialogs=args.dialogs, independent=args.independent)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         raise SystemExit(f"native macOS window smoke failed: {error}") from error
