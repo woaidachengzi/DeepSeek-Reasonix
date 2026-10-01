@@ -94,10 +94,7 @@ func main() {
 	stopPipeGuard := nativeOutputPipeGuard(cfg.hostPID)
 	defer stopPipeGuard()
 
-	token, err := consumeBridgeToken()
-	if err == nil {
-		err = run(context.Background(), cfg, token)
-	}
+	err := runFromStdin(context.Background(), cfg)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "reasonix desktop bridge:", err)
 		os.Exit(1)
@@ -108,11 +105,21 @@ func main() {
 // Clear any inherited legacy environment value before starting the core, so
 // it cannot leak to subprocesses or act as an alternate authentication source.
 func consumeBridgeToken() (string, error) {
+	return consumeBridgeTokenContext(context.Background())
+}
+
+func consumeBridgeTokenContext(ctx context.Context) (string, error) {
 	if err := os.Unsetenv(tokenEnvironment); err != nil {
 		return "", fmt.Errorf("clear desktop bridge token from process environment: %w", err)
 	}
-	line, err := bufio.NewReader(io.LimitReader(os.Stdin, 129)).ReadString('\n')
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	line, err := readBridgeTokenLine(ctx, os.Stdin)
 	if err != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
 		return "", fmt.Errorf("read desktop bridge token from stdin: %w", err)
 	}
 	token := strings.TrimSuffix(line, "\n")
@@ -133,12 +140,65 @@ func consumeBridgeToken() (string, error) {
 	return token, nil
 }
 
-func run(ctx context.Context, cfg config, token string) (runErr error) {
+func readBridgeTokenLine(ctx context.Context, input io.ReadCloser) (string, error) {
+	stopClose := context.AfterFunc(ctx, func() { _ = input.Close() })
+	defer stopClose()
+	line, err := bufio.NewReader(io.LimitReader(input, 129)).ReadString('\n')
+	if err != nil && ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	return line, err
+}
+
+// Establish parent lifetime before the bounded stdin handshake. The launch
+// lease permits only its own empty private directory to be reclaimed even if
+// the host died before this process could observe its original kernel parent.
+func runFromStdin(ctx context.Context, cfg config) error {
+	lease := nativeLaunchLease(cfg)
+	defer lease.cleanup()
+	if err := nativeStartupBeforeHostCheck(cfg, lease); err != nil {
+		return err
+	}
+	ctx, stopHostWatch, err := hostLifetimeContext(ctx, cfg.hostPID)
+	if err != nil {
+		if lease.hostGone(cfg.hostPID) {
+			return nil
+		}
+		return err
+	}
+	defer stopHostWatch()
+	if err := nativeStartupBoundary(ctx, cfg, lease, "startup-before-token"); err != nil {
+		return err
+	}
+	token, err := consumeBridgeTokenContext(ctx)
+	if err != nil {
+		if lease.hostGone(cfg.hostPID) {
+			return nil
+		}
+		return err
+	}
+	if ctx.Err() == nil {
+		err = nativeStartupBoundary(ctx, cfg, lease, "startup-before-ready")
+		if err == nil && ctx.Err() == nil {
+			err = runWithContext(ctx, cfg, token)
+		}
+	}
+	if lease.hostGone(cfg.hostPID) && (err == nil || errors.Is(err, context.Canceled)) {
+		return nil
+	}
+	return err
+}
+
+func run(ctx context.Context, cfg config, token string) error {
 	ctx, stopHostWatch, err := hostLifetimeContext(ctx, cfg.hostPID)
 	if err != nil {
 		return err
 	}
 	defer stopHostWatch()
+	return runWithContext(ctx, cfg, token)
+}
+
+func runWithContext(ctx context.Context, cfg config, token string) (runErr error) {
 	if cfg.hostPID != 0 && ctx.Err() != nil {
 		return ctx.Err()
 	}

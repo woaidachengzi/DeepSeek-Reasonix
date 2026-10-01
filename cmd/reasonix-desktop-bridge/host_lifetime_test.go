@@ -2,11 +2,60 @@ package main
 
 import (
 	"context"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+type observedTokenInput struct {
+	io.ReadCloser
+	reads chan struct{}
+}
+
+func (input observedTokenInput) Read(data []byte) (int, error) {
+	input.reads <- struct{}{}
+	return input.ReadCloser.Read(data)
+}
+
+func TestTokenHandshakeCancellationClosesOnlyItsOwnInput(t *testing.T) {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = reader.Close(); _ = writer.Close() })
+	if _, err := writer.Write([]byte("unfinished-token")); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	finished := make(chan error, 1)
+	reads := make(chan struct{}, 2)
+	go func() { _, err := readBridgeTokenLine(ctx, observedTokenInput{reader, reads}); finished <- err }()
+	// The first read consumes the partial line; the second is now blocked on
+	// the still-open pipe. Cancellation must actually interrupt that read.
+	for range 2 {
+		select {
+		case <-reads:
+		case <-time.After(time.Second):
+			t.Fatal("partial token input did not reach its blocked read")
+		}
+	}
+	cancel()
+	select {
+	case err := <-finished:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("partial token handshake did not cancel: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("partial token handshake stayed blocked")
+	}
+	if _, err := reader.Read(make([]byte, 1)); !errors.Is(err, os.ErrClosed) {
+		t.Fatal("cancelled token pipe remained open")
+	}
+}
 
 func TestHostLifetimeCancelsOnReparentingAndStopsAfterNormalExit(t *testing.T) {
 	for _, reparent := range []bool{false, true} {

@@ -4,7 +4,7 @@
 use std::{
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         mpsc,
     },
     time::{Duration, Instant},
@@ -23,6 +23,9 @@ use crate::{
 pub struct WindowSmokeState {
     enabled: bool,
     main_loaded: AtomicBool,
+    restore_requested: AtomicUsize,
+    restore_completed: AtomicUsize,
+    reopened: AtomicUsize,
 }
 
 impl Default for WindowSmokeState {
@@ -30,6 +33,30 @@ impl Default for WindowSmokeState {
         Self {
             enabled: std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").is_ok(),
             main_loaded: AtomicBool::new(false),
+            restore_requested: AtomicUsize::new(0),
+            restore_completed: AtomicUsize::new(0),
+            reopened: AtomicUsize::new(0),
+        }
+    }
+}
+
+pub(crate) fn observe_restore(app: &AppHandle, completed: bool) {
+    if let Some(state) = app.try_state::<WindowSmokeState>() {
+        if state.enabled {
+            let counter = if completed {
+                &state.restore_completed
+            } else {
+                &state.restore_requested
+            };
+            counter.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+}
+
+pub(crate) fn observe_reopen(app: &AppHandle) {
+    if let Some(state) = app.try_state::<WindowSmokeState>() {
+        if state.enabled {
+            state.reopened.fetch_add(1, Ordering::SeqCst);
         }
     }
 }
@@ -80,6 +107,12 @@ pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, Stri
         "nativeMiniaturizable": native.styleMask().contains(NSWindowStyleMask::Miniaturizable),
         "nativeMiniaturized": native.isMiniaturized(),
         "nativeVisible": native.isVisible(),
+        "restoreRequests": window.app_handle().try_state::<WindowSmokeState>()
+            .map(|state| state.restore_requested.load(Ordering::SeqCst)),
+        "restoreCompletions": window.app_handle().try_state::<WindowSmokeState>()
+            .map(|state| state.restore_completed.load(Ordering::SeqCst)),
+        "reopenEvents": window.app_handle().try_state::<WindowSmokeState>()
+            .map(|state| state.reopened.load(Ordering::SeqCst)),
         "mainPageFinished": window.app_handle().try_state::<WindowSmokeState>()
             .is_some_and(|state| state.main_loaded.load(Ordering::SeqCst)),
     }))
@@ -215,6 +248,7 @@ pub(crate) fn verify_geometry(
 }
 
 fn exercise(app: &AppHandle, directory: &std::path::Path) -> Result<(), String> {
+    record(app, "exercise-ready")?;
     on_main(app, |handle, _| {
         tray::show_main_window(handle);
         Ok(())
@@ -278,12 +312,14 @@ fn exercise(app: &AppHandle, directory: &std::path::Path) -> Result<(), String> 
         Ok(())
     })?;
     verify_geometry(app, "shown geometry", normal.clone())?;
+    record(app, "exercise-shown")?;
 
     on_main(app, |_, window| {
         window
             .minimize()
             .map_err(|_| "minimize native window".into())
     })?;
+    record(app, "exercise-minimize-requested")?;
     wait_for(app, "minimized window", |window| {
         window
             .is_minimized()

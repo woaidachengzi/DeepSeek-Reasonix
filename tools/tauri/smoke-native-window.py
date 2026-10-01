@@ -73,7 +73,8 @@ def print_window_trace(temporary):
                   "applicationActive", "applicationHidden", "nativeKeyWindow",
                   "nativeMainWindow", "nativeCanBecomeKey", "nativeOnActiveSpace",
                   "nativeMiniaturizable", "nativeMiniaturized", "nativeVisible")
-        stages = {"settings-ready", "settings-shown", "settings-minimize-requested"}
+        stages = {"settings-ready", "settings-shown", "settings-minimize-requested",
+                  "exercise-ready", "exercise-shown", "exercise-minimize-requested"}
         for line in lines:
             item = json.loads(line)
             if not isinstance(item, dict) or item.get("stage") not in stages:
@@ -82,6 +83,8 @@ def print_window_trace(temporary):
             if not isinstance(state, dict):
                 continue
             status = {key: state[key] for key in fields if type(state.get(key)) is bool}
+            status.update({key: state[key] for key in ("restoreRequests", "restoreCompletions", "reopenEvents")
+                           if type(state.get(key)) is int and 0 <= state[key] <= 1000})
             print("native window trace: " + json.dumps({"stage": item["stage"], "state": status}), flush=True)
     except (OSError, UnicodeError, ValueError, TypeError):
         # A missing/malformed diagnostic must not replace the original failure.

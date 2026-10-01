@@ -8,6 +8,22 @@ import (
 	"time"
 )
 
+type startupLease struct {
+	directory string
+	remove    func()
+	lost      func(int) bool
+}
+
+func (lease *startupLease) cleanup() {
+	if lease != nil {
+		lease.remove()
+	}
+}
+
+func (lease *startupLease) hostGone(pid int) bool {
+	return lease != nil && lease.lost(pid)
+}
+
 // --host-pid is supplied only by the macOS native launcher. Compare the
 // kernel-reported parent, not PID existence: after parent loss/reparenting,
 // PID reuse cannot make an unrelated process own this sidecar. No process is

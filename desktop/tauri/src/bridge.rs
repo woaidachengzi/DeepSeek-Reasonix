@@ -1719,6 +1719,23 @@ struct EventForwarder {
     handle: thread::JoinHandle<()>,
 }
 
+#[cfg(target_os = "macos")]
+fn write_native_launch_lease(directory: &Path, launch_id: &str) -> Result<(), String> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(directory.join("launch-owner.json"))
+        .map_err(display_error)?;
+    let record = serde_json::to_vec(&json!({
+        "hostPid": std::process::id(),
+        "launchId": launch_id,
+    }))
+    .map_err(display_error)?;
+    file.write_all(&record).map_err(display_error)
+}
+
 impl BridgeLauncher {
     fn spawn(
         &self,
@@ -4287,6 +4304,8 @@ impl BridgeSupervisor {
         let ready_file = ready_directory.path().join("ready.json");
         let token = opaque_secret()?;
         let launch_id = opaque_secret()?;
+        #[cfg(target_os = "macos")]
+        write_native_launch_lease(ready_directory.path(), &launch_id)?;
         let mut child = self.launcher.spawn(&ready_file, &launch_id, &token)?;
 
         let ready = wait_for_ready(&mut child, &ready_file, &launch_id).inspect_err(|_| {

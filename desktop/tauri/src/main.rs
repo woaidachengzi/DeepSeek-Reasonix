@@ -3995,6 +3995,7 @@ fn main() {
     app.run(|app, event| {
         #[cfg(target_os = "macos")]
         if matches!(event, tauri::RunEvent::Reopen { .. }) {
+            native_window_smoke::observe_reopen(app);
             tray::show_main_window(app);
         }
         #[cfg(target_os = "macos")]

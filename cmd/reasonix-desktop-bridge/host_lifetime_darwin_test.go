@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -10,6 +12,99 @@ import (
 	"syscall"
 	"testing"
 )
+
+func leasedStartup(t *testing.T, pid int) (config, string) {
+	t.Helper()
+	parent := filepath.Join(t.TempDir(), "reasonix-tauri-bridge-startup")
+	if err := os.Mkdir(parent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config{hostPID: pid, launchID: testToken, readyFile: filepath.Join(parent, "ready.json"), listen: "127.0.0.1:0"}
+	record, err := json.Marshal(nativeLeaseRecord{HostPID: pid, LaunchID: cfg.launchID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(parent, "launch-owner.json"), record, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return cfg, parent
+}
+
+func TestStartupLeaseReclaimsBeforeTokenOrReadyWithoutCoreWrites(t *testing.T) {
+	// A lease's recorded parent no longer matches the kernel parent, including
+	// the reparenting/PID-reuse startup path. Refusal must precede stdin/core.
+	cfg, parent := leasedStartup(t, os.Getpid())
+	root := filepath.Join(t.TempDir(), "missing-core")
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	if err := runFromStdin(context.Background(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(parent); !os.IsNotExist(err) {
+		t.Fatal("leased empty startup directory remains")
+	}
+	if _, err := os.Lstat(root); !os.IsNotExist(err) {
+		t.Fatal("lost parent created core state")
+	}
+}
+
+func TestStartupLeaseRejectsMismatchesAndProtectsReplacementAndOtherFiles(t *testing.T) {
+	for _, change := range []string{"id", "pid", "mode", "alias", "replacement", "other-file"} {
+		t.Run(change, func(t *testing.T) {
+			cfg, parent := leasedStartup(t, os.Getppid())
+			marker := filepath.Join(parent, "launch-owner.json")
+			lease := nativeLaunchLease(cfg)
+			if lease == nil {
+				t.Fatal("valid startup lease rejected")
+			}
+			switch change {
+			case "id":
+				cfg.launchID = "different-0123456789abcdef0123456789abcdef"
+			case "pid":
+				cfg.hostPID = os.Getpid()
+			case "mode":
+				if err := os.Chmod(marker, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			case "alias":
+				if err := os.Rename(marker, marker+"-original"); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(marker+"-original", marker); err != nil {
+					t.Fatal(err)
+				}
+			case "replacement":
+				if err := os.Rename(parent, parent+"-original"); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Mkdir(parent, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			case "other-file":
+				if err := os.WriteFile(filepath.Join(parent, "keep"), []byte("original"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if change == "id" || change == "pid" || change == "mode" || change == "alias" {
+				if nativeLaunchLease(cfg) != nil {
+					t.Fatal("invalid startup lease accepted")
+				}
+				if change == "id" || change == "pid" {
+					return
+				}
+			}
+			lease.cleanup()
+			if _, err := os.Lstat(parent); err != nil {
+				t.Fatal("protected startup directory removed")
+			}
+			if change == "other-file" {
+				if data, err := os.ReadFile(filepath.Join(parent, "keep")); err != nil || string(data) != "original" {
+					t.Fatal("another startup file changed")
+				}
+			}
+		})
+	}
+}
 
 func TestNativeOutputPipeGuardAllowsCleanupWithoutChangingExecSignals(t *testing.T) {
 	for _, mode := range []string{"default", "guarded"} {

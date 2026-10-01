@@ -5,6 +5,8 @@ use tauri::{
 };
 
 pub fn show_main_window(app: &tauri::AppHandle) {
+    #[cfg(target_os = "macos")]
+    crate::native_window_smoke::observe_restore(app, false);
     let handle = app.clone();
     // Singleton callbacks arrive on a worker thread. Restore the application
     // and its window together on the native UI thread; showing an NSWindow
@@ -21,6 +23,8 @@ pub fn show_main_window(app: &tauri::AppHandle) {
             let _ = window.show();
             let _ = window.set_focus();
         }
+        #[cfg(target_os = "macos")]
+        crate::native_window_smoke::observe_restore(&handle, true);
     });
 }
 
