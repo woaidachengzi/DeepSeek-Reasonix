@@ -60,6 +60,34 @@ def verify_saved_state(app_data, temporary, maximized):
         raise RuntimeError("native transition overwrote saved normal display scale")
 
 
+def print_window_trace(temporary):
+    """Keep bounded, fixed-status evidence before TemporaryDirectory cleanup."""
+    path = temporary / "reasonix-native-window-trace.jsonl"
+    try:
+        with path.open("rb") as file:
+            data = file.read(16_385)
+        lines = data.decode("utf-8").splitlines()
+        if len(data) > 16_384 or len(lines) > 4:
+            return
+        fields = ("mainPageFinished", "focused", "minimized", "visible",
+                  "applicationActive", "applicationHidden", "nativeKeyWindow",
+                  "nativeMainWindow", "nativeCanBecomeKey", "nativeOnActiveSpace",
+                  "nativeMiniaturizable", "nativeMiniaturized", "nativeVisible")
+        stages = {"settings-ready", "settings-shown", "settings-minimize-requested"}
+        for line in lines:
+            item = json.loads(line)
+            if not isinstance(item, dict) or item.get("stage") not in stages:
+                continue
+            state = item.get("state")
+            if not isinstance(state, dict):
+                continue
+            status = {key: state[key] for key in fields if type(state.get(key)) is bool}
+            print("native window trace: " + json.dumps({"stage": item["stage"], "state": status}), flush=True)
+    except (OSError, UnicodeError, ValueError, TypeError):
+        # A missing/malformed diagnostic must not replace the original failure.
+        pass
+
+
 def launch(host_binary, sidecar_binary, root, identifier, managed, phase, provider=None,
            verify_window_state=True, environment=None):
     home, temporary = root / "home", root / "tmp"
@@ -67,6 +95,7 @@ def launch(host_binary, sidecar_binary, root, identifier, managed, phase, provid
     core_home = app_data / "reasonix-core" if managed else root / "core"
     result_path = temporary / "reasonix-native-window-result.json"
     result_path.unlink(missing_ok=True)
+    (temporary / "reasonix-native-window-trace.jsonl").unlink(missing_ok=True)
     instance_marker = temporary / "reasonix-native-window-awaiting-instance.json"
     instance_marker.unlink(missing_ok=True)
     env = dict(os.environ if environment is None else environment)
@@ -153,6 +182,7 @@ def launch(host_binary, sidecar_binary, root, identifier, managed, phase, provid
         exit_code = host.wait(timeout=5)
         result = json.loads(result_path.read_text())
         if result.get("phase") != phase or result.get("ok") is not True or exit_code != 0:
+            print_window_trace(temporary)
             raise RuntimeError(f"{phase}: {result.get('error', 'native acceptance failed')}")
         cleanup_deadline = time.monotonic() + 5
         while package.is_alive(sidecar_pid) and time.monotonic() < cleanup_deadline:

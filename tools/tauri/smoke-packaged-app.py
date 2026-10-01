@@ -227,7 +227,7 @@ def smoke_once(host_binary, sidecar_binary, identifier, managed):
             if not global_workspace.is_dir() or global_workspace.is_symlink() or global_workspace.stat().st_mode & 0o777 != 0o700:
                 raise RuntimeError("packaged Global workspace is not a private directory")
             profile = "managed" if managed else "explicit"
-            print(f"packaged Preview {profile} profile, private credential identity, native notification authorization, Global workspace, sidecar readiness, and shutdown: OK")
+            print(f"packaged Preview {profile} profile, private credential identity, native notification authorization ({notification_status['permission']}), Global workspace, sidecar readiness, and shutdown: OK")
             return credential_identity
         finally:
             if host.poll() is None:
