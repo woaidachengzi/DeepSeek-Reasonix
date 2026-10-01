@@ -45,6 +45,18 @@ func perform(_ args: [String], _ board: NSPasteboard) throws {
                      "reasonix-native-clipboard-" + snapshot.nonce + "-denied"]
     let marker = URL(fileURLWithPath: args[3])
     let owned = try? JSONSerialization.jsonObject(with: Data(contentsOf: marker)) as? [String: Any]
+    if args[1] == "claim" {
+        // Physical UI copy/cut has no native smoke receipt. Claim only this
+        // unique fixture value and its unchanged system generation, without
+        // writing the pasteboard or printing any original clipboard data.
+        let count = board.changeCount
+        guard board.string(forType: .string) == ownValues[0], try items(board).count == 1,
+              board.changeCount == count else { throw Failure.changed }
+        try JSONSerialization.data(withJSONObject: ["nonce": snapshot.nonce, "count": count])
+            .write(to: marker, options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: marker.path)
+        return
+    }
     if args[1] == "verify" {
         guard value == ownValues[0], owned?["nonce"] as? String == snapshot.nonce,
               owned?["count"] as? Int == board.changeCount else { throw Failure.changed }
@@ -81,7 +93,9 @@ func selftest(_ path: String) throws {
     let args = ["helper", "capture", path, nonce]
     try perform(args, board)
     board.clearContents(); guard board.setString("reasonix-native-clipboard-" + nonce, forType: .string) else { throw Failure.invalid }
-    try JSONSerialization.data(withJSONObject: ["nonce": nonce, "count": board.changeCount]).write(to: URL(fileURLWithPath: marker))
+    let claimCount = board.changeCount
+    try perform(["helper", "claim", path, marker], board)
+    guard board.changeCount == claimCount else { throw Failure.changed }
     try perform(["helper", "verify", path, marker], board)
     try perform(["helper", "restore", path, marker], board)
     guard try items(board) == original else { throw Failure.restore }
@@ -92,6 +106,8 @@ func selftest(_ path: String) throws {
     do { try perform(["helper", "restore", path, marker], board); throw Failure.invalid }
     catch Failure.changed {}
     guard board.string(forType: .string) == "external-change" else { throw Failure.restore }
+    do { try perform(["helper", "claim", path, marker], board); throw Failure.invalid }
+    catch Failure.changed {}
     try perform(args, board)
     board.clearContents(); guard board.setString("reasonix-native-clipboard-" + nonce, forType: .string) else { throw Failure.invalid }
     try perform(["helper", "restore", path, path + ".absent"], board)

@@ -280,6 +280,20 @@ ready 文件/目录清理、原件保护和同档案重启通过。握手完成�
 系统剪贴板、四类面板取消及严格原生编辑。任务使用实际保存窗口 frame 检查恢复；
 不覆盖最小化/最大化或第二实例焦点，不替代完整窗口门禁。
 
+启动阶段另有门禁：Rust 在 spawn 前发布私有、无认证 token 的启动记录，Go 在读取
+stdin token 前观察实际 kernel parent，取消可打断半截 token 读取。清理仅作用于
+匹配记录/instance ID 和原 inode 的空 0700 目录；不删除替换目录或其他原件。
+
+```bash
+python3 -B tools/tauri/smoke-native-startup.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
+```
+
+干净包 `30a93592d` 的 12 项通过：两种档案 × SIGTERM/SIGKILL × 父校验前、
+token 读取前及读取后尚未启动 core。kernel exit 0、清理、原件与同档案重启通过；
+同一新包就绪后 8 项也复验通过。范围为 sidecar 已经启动，不覆盖 spawn 前全部目录回收。
+同一新包完整窗口门禁为 31/46：托管 23 项全过，显式在 Settings 最小化前提停止。
+新增固定计数证明该失败没有额外恢复/Reopen 请求；最小化根因仍待定位。
+
 原生 responder 编辑另有严格门禁 `--edit`：默认 40 个场景之外，每档案增加一个
 `menu-editing` 阶段。它复用完整剪贴板保护，要求应用 active、主窗口是实际 key window
 且 WKWebView 接受 first responder；核对已安装 Copy/Paste/Cut/Select All/Undo/Redo 的
