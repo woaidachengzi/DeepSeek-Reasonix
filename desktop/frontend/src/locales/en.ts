@@ -2939,7 +2939,7 @@ export const en = {
   "settings.themeGallery.deleteThemeConfirm": "Delete this custom theme?",
   "settings.themeGallery.themeSaveFailed": "Could not save the custom theme.",
   "settings.themeGallery.themeDeleteFailed": "Could not delete the custom theme.",
-  "settings.themeGallery.themeImportFailed": "Theme import failed.",
+  "settings.themeGallery.themeImportFailed": "Theme import failed. Use a theme package exported by Reasonix, check that the file is complete and readable, then try again.",
   "settings.themeGallery.themeExportFailed": "Theme export failed.",
   "settings.themeGallery.browse": "Browse themes",
   "settings.themeGallery.createCopy": "Create copy",

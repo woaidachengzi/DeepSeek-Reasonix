@@ -2941,7 +2941,7 @@ export const zh: Record<DictKey, string> = {
   "settings.themeGallery.deleteThemeConfirm": "要删除这个自定义主题吗？",
   "settings.themeGallery.themeSaveFailed": "自定义主题保存失败。",
   "settings.themeGallery.themeDeleteFailed": "自定义主题删除失败。",
-  "settings.themeGallery.themeImportFailed": "主题导入失败。",
+  "settings.themeGallery.themeImportFailed": "主题导入失败。请使用 Reasonix 导出的主题包，并确认文件完整、可读取后重试。",
   "settings.themeGallery.themeExportFailed": "主题导出失败。",
   "settings.themeGallery.subtitle": "选择主题查看预览，应用后才会启用并保存",
   "settings.themeGallery.browse": "浏览主题",
