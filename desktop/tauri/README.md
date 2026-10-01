@@ -462,6 +462,15 @@ python3 -B tools/tauri/smoke-native-ui-export.py 'desktop/tauri/target/release/b
 判断错误。该门禁执行实际 Vite client 构建产物，核对所有八套主题、16 张资产字节、选中
 状态及安全 URL 登记；直接 Node 组件测试不能代替这项。原生包重建和修复后 UI 证据
 见迁移清单；D/E 与正式发布门禁保持。
+新包已从干净 `de8afeeeccbffa0160835511a56a2538fb7f8f56` 完整构建，生产检查、bundle
+budget、sidecar/arm64 包和本地严格签名核对通过；日志
+`/private/tmp/reasonix-official-theme-package-build.log`。两种普通档案的实际画廊均显示
+八套旗舰主题及图片，托管实际点击赤曜新城卡片后的详情/背景预览也通过。两种档案
+实际创建/编辑无图片主题及 Save/Cancel/Replace 全流程完成，共两次正常生命周期/
+八项文件检查通过；日志 `/private/tmp/reasonix-theme-fixed-ui.log`。成功 nonce 目录/控制
+和四个自有进程已独立核对清理，原件及身份保持。旧包捕捉失败仍单独保留，不以此推断
+捕捉错误根因已解决。实际主题导入/图片/应用重启、文档另存为和窗口稳定性仍待验收。
+
 
 macOS 受管 bridge 跟随实际 kernel parent 生命周期。宿主异常退出时取消任务/HTTP/SSE，
 处理宿主日志管道断开产生的 SIGPIPE，并释放目录锁、清理自己的 readiness 文件和空目录。
