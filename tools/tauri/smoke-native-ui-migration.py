@@ -17,6 +17,7 @@ from pathlib import Path
 import plistlib
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -32,6 +33,28 @@ spec.loader.exec_module(package)
 def original(path):
     info = path.stat()
     return path.read_bytes(), info.st_mode, info.st_mtime_ns
+
+
+def prepare_source(root):
+    workspace = root / '旧界面 工作区'
+    workspace.mkdir(mode=0o700)
+    source = root / 'tmp/reasonix-native-legacy-ui-source.json'
+    source.touch(mode=0o600)
+    source.write_text(json.dumps({'nonce': uuid.uuid4().hex, 'workspace': str(workspace)}))
+    return source
+
+
+def check_source_receipt(receipt, expected_reads=None):
+    info = receipt.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o777 != 0o600 or info.st_uid != os.geteuid() or info.st_size > 1024:
+        raise RuntimeError('Private nonpersistent legacy source receipt is not an owned bounded ordinary file')
+    with receipt.open('rb') as file:
+        data = json.loads(file.read(1025))
+    reads = data.get('readCount')
+    if (data.get('nonPersistent') is not True or type(data.get('valueCount')) is not int
+            or data['valueCount'] != 3 or type(reads) is not int or not 1 <= reads <= 100
+            or (expected_reads is not None and reads != expected_reads)):
+        raise RuntimeError('Private nonpersistent legacy source receipt missing/invalid')
 
 
 def smoke(app_path, control_path, seconds):
@@ -52,19 +75,21 @@ def smoke(app_path, control_path, seconds):
             root = Path(tempfile.mkdtemp(prefix='reasonix-ui-migration-' + ('managed-' if managed else 'explicit-'), dir='/private/tmp')).resolve()
             root.chmod(0o700)
             roots.append(root)
-            for name in ('home', 'tmp', '旧界面 工作区'):
+            for name in ('home', 'tmp'):
                 (root / name).mkdir(mode=0o700)
             core = root / 'home/Library/Application Support' / identifier / 'reasonix-core' if managed else root / 'core'
             core.mkdir(parents=True, mode=0o700)
-            source = root / 'tmp/reasonix-native-legacy-ui-source.json'
-            source.touch(mode=0o600)
-            source.write_text(json.dumps({'nonce': uuid.uuid4().hex, 'workspace': str(root / '旧界面 工作区')}))
+            source = prepare_source(root)
             canary = core / 'ui-migration-original.canary'
             canary.touch(mode=0o600)
             canary.write_bytes(b'private original\n')
             originals = {path: original(path) for path in (source, canary)}
             identity = None
             for phase in ('before-import', 'after-import', 'after-undo'):
+                receipt = root / 'tmp/reasonix-native-legacy-ui-receipt.json'
+                # Every launch must perform its own real read. A previous
+                # launch's receipt cannot satisfy the restart acceptance.
+                receipt.unlink(missing_ok=True)
                 env = environment | {'HOME': str(root / 'home'), 'TMPDIR': str(root / 'tmp'),
                                      'REASONIX_TAURI_LEGACY_UI_SMOKE': 'private-source'}
                 if not managed:
@@ -104,10 +129,7 @@ def smoke(app_path, control_path, seconds):
                         raise RuntimeError('UI migration quit left sidecar/readiness')
                     if any(original(path) != value for path, value in originals.items()):
                         raise RuntimeError('UI migration changed its source or protected original')
-                    receipt = root / 'tmp/reasonix-native-legacy-ui-receipt.json'
-                    data = json.loads(receipt.read_text())
-                    if receipt.is_symlink() or receipt.stat().st_mode & 0o777 != 0o600 or data.get('nonPersistent') is not True or data.get('valueCount') != 3 or not 1 <= data.get('readCount', 0) <= 100:
-                        raise RuntimeError('Private nonpersistent legacy source receipt missing/invalid')
+                    check_source_receipt(receipt)
                     print(f"UI phase {phase}: private source, identity, originals and normal quit cleanup OK", flush=True)
                 finally:
                     if host.poll() is None:

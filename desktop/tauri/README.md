@@ -312,7 +312,26 @@ python3 -B tools/tauri/smoke-native-ui-legacy-read.py 'desktop/tauri/target/rele
 干净包 `3225f43c3` 的两种档案重复旧 UI 只读 IPC、读取窗口销毁、双窗口权限与
 普通生命周期均通过；实际设置页预览、未确认按钮禁用及当前工作区不变通过 CUA 验证。
 合成偏好导入/撤回、重挂载恢复和存储失败保护的组件回归通过，Rust 199 项通过/2 项忽略。
-完整真实 UI 导入及撤回仍待受控私有来源验收。
+完整真实 UI 导入及撤回仍待受控私有来源验收。当前已提供以下两个入口：
+
+```bash
+# 只读三项固定测试偏好；两种档案各重启一次，要求每次新回执和正常退出。
+python3 -B tools/tauri/smoke-native-ui-legacy-read.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app' --private-source
+# 普通产品 UI 的六次生命周期，需操作员实际预览、确认、导入/撤回及 Cmd+Q。
+python3 -B tools/tauri/smoke-native-ui-migration.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app' --seconds 600
+```
+
+私有来源限定为当前用户拥有的 0700 测试目录、0600 控制文件；固定工作区、深入模式和
+`large` 字号仅写入已核对 `isPersistent()==false` 且为空的隐藏 WKWebView 数据仓库，
+不修改系统共享旧 origin。`--private-source` 的实际主 IPC、三项精确值、读取窗口销毁和
+重启身份/原件保护门禁在 `f72a9b7a2` 包 **4 次启动/8 次读取通过**；不带标志的正常旧
+origin 只读门禁也通过。完整 UI runner 每次启动移除旧回执，三次均需重新预览。
+托管档案先导入前预览/确认/导入并退出，再验证重启值/预览/撤回并退出，最后验证默认值、
+回退记录消失/预览但不再导入并退出；随后对显式档案重复。控制 JSON 给出自有 PID 和阶段，
+绑定原生 UI 前需确认进程仍存活，退出后不可再次读取旧应用绑定。
+runner 成功只证明来源、身份、原件和退出检查，UI 应用/恢复必须另有实际界面证据。
+首次字号夹具 `18` 已纠正；有效枚举重跑遇 ScreenCaptureKit 捕捉错误并清理自有进程，
+六次实际 UI 流程仍未通过，详见迁移清单最新记录。
 此前通知准备在发消息前停止，尚无横幅/点击证据。
 本地 ad-hoc 签名不等于正式签名/公证；外接屏延期和其他发布门禁见迁移清单最新记录。
 
