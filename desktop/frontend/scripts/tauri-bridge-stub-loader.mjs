@@ -62,6 +62,7 @@ export function newTauriSessionId() { return "tauri-stub-session"; }
 export function tauriBridgeStatus() { record("bridge_status"); return Promise.resolve({ running: true, protocolVersion: 1 }); }
 export function restartTauriBridge() { record("restart_bridge"); return Promise.resolve({ running: true, protocolVersion: 1 }); }
 export function previewProfileStatus() { return Promise.resolve({ previewHome: "/tmp", previewConfigExists: true, stableConfigExists: false, importAvailable: false, managedProfile: true }); }
+export function tauriLegacyUiPreferences() { record("legacy_ui_preferences"); return globalThis.__legacyUiReadError ? Promise.reject(new Error("Legacy preview failed; retry")) : Promise.resolve(globalThis.__legacyUiSnapshot ?? { source: "tauri://localhost", values: {} }); }
 export function tauriPreviewProfileStatus() { return previewProfileStatus(); }
 export function tauriPreviewRuntimeInfo() { return Promise.resolve({ stableVersion: "1.38.3", stableCommit: "test", previewVersion: "0.1.0", previewCommit: "unknown", previewDirty: false, tauriVersion: "2", previewBuild: "test-build", bridgeProtocolVersion: 1 }); }
 export function openTauriExternalURL(url) { record("open_external_url", { url }); return Promise.resolve(); }

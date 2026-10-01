@@ -5,6 +5,8 @@ mod credential_namespace;
 mod data_profile;
 mod host_preferences;
 mod keychain;
+#[cfg(target_os = "macos")]
+mod legacy_ui_preferences;
 mod local_paths;
 mod menu;
 #[cfg(target_os = "macos")]
@@ -976,6 +978,26 @@ fn bridge_start_events(
 #[tauri::command]
 fn preview_profile_status(profile: State<'_, PreviewProfile>) -> PreviewProfileStatus {
     profile.status()
+}
+
+#[tauri::command]
+async fn legacy_ui_preferences(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "macos")]
+    {
+        tauri::async_runtime::spawn_blocking(move || {
+            legacy_ui_preferences::read(&app).and_then(|snapshot| {
+                serde_json::to_value(snapshot)
+                    .map_err(|_| "Could not prepare UI preference preview; retry".into())
+            })
+        })
+        .await
+        .map_err(|_| "UI preference preview stopped; retry".to_string())?
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+        Err("Old UI preference preview is available only on macOS".into())
+    }
 }
 
 #[tauri::command]
@@ -3694,6 +3716,7 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if window.label() != "main" { return; }
             if matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_)) {
                 if let (Some(state), Some(webview)) = (
                     window.app_handle().try_state::<PreviewWindowState>(),
@@ -3849,6 +3872,7 @@ fn main() {
             bridge_replay_pending_prompts,
             bridge_start_events,
             preview_profile_status,
+            legacy_ui_preferences,
             preview_runtime_info,
             provider_summary,
             provider_configs,

@@ -16,6 +16,60 @@ struct Control {
     workspace: String,
 }
 
+pub fn legacy_read(app: &AppHandle) -> Result<(), String> {
+    crate::native_window_smoke::wait_for(
+        app,
+        "profile UI loaded before legacy preview",
+        |window| {
+            Ok(crate::native_window_smoke::page_finished(
+                window.app_handle(),
+            ))
+        },
+    )?;
+    app.state::<crate::host_preferences::HostPreferences>()
+        .set_close_behavior(crate::host_preferences::CloseBehavior::Quit)?;
+    // Use the actual main IPC twice. Only a fixed result is returned to the
+    // runner; legacy paths/preferences never enter logs or private files.
+    let script = r#"(() => {
+      window.__reasonixLegacyReadProbe = 'pending';
+      (async () => {
+        const origin = location.origin;
+        const one = await window.__TAURI_INTERNALS__.invoke('legacy_ui_preferences');
+        const two = await window.__TAURI_INTERNALS__.invoke('legacy_ui_preferences');
+        if (one.source !== 'tauri://localhost' || JSON.stringify(one) !== JSON.stringify(two)
+            || location.origin !== origin || !origin.startsWith('reasonix-preview://')) throw new Error('receipt');
+        window.__reasonixLegacyReadProbe = 'ok';
+      })().catch(() => { window.__reasonixLegacyReadProbe = 'failed'; });
+      return 'edit-ok';
+    })()"#;
+    if !crate::native_edit_smoke::evaluate(app, script.into())? {
+        return Err("legacy preview did not start".into());
+    }
+    let deadline = Instant::now() + Duration::from_secs(25);
+    loop {
+        if crate::native_edit_smoke::evaluate(
+            app,
+            "window.__reasonixLegacyReadProbe === 'ok' ? 'edit-ok' : 'edit-pending'".into(),
+        )? {
+            break;
+        }
+        if Instant::now() >= deadline {
+            return Err("actual main IPC legacy UI preview failed".into());
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    crate::native_window_smoke::wait_for(app, "legacy reader destroyed", |window| {
+        Ok(window
+            .app_handle()
+            .get_webview_window("legacy-ui-preference-reader")
+            .is_none()
+            && crate::ui_origin::matches(
+                window.app_handle(),
+                &window.url().map_err(|_| "read main origin")?,
+            ))
+    })
+}
+
 pub fn run(app: &AppHandle, directory: &Path, phase: &str) -> Result<(), String> {
     let file = std::fs::File::open(directory.join("reasonix-native-ui-storage-control.json"))
         .map_err(|_| "UI storage control missing")?;

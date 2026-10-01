@@ -79,7 +79,7 @@ def smoke(app_path):
                 shutil.rmtree(root)
             else:
                 print(f"Private failure fixture retained: {root}", file=sys.stderr)
-    print("Main executable/alias rejection, eight document plus two bridge caller denials, originals and cleanup: OK")
+    print("Main executable/alias rejection, eight document plus three query caller denials, originals and cleanup: OK")
 
 
 if __name__ == "__main__":

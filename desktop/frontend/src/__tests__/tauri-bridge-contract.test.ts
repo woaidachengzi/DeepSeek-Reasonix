@@ -81,6 +81,7 @@ interface CommandContract {
 //   setTauriDefaultModel, setTauriModelRole
 
 const commands: CommandContract[] = [
+  { command: "legacy_ui_preferences", argKeys: [], description: "tauriLegacyUiPreferences() previews allowlisted old UI values without a caller-selected origin" },
   {
     command: "bridge_workspace_file_revert_preview",
     argKeys: ["request"],

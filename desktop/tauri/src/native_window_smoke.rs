@@ -395,6 +395,7 @@ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
     match phase {
         "exercise" => exercise(app, &directory)?,
         "menu-shortcuts" => crate::native_menu_smoke::shortcuts(app)?,
+        "ui-legacy-read" => crate::native_ui_storage_smoke::legacy_read(app)?,
         "ui-store-empty" | "ui-store-seed" | "ui-store-restore" | "ui-store-clear" => {
             crate::native_ui_storage_smoke::run(app, &directory, phase)?
         }

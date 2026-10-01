@@ -22,6 +22,7 @@ import { TauriSubagentSettings } from "./TauriSubagentSettings";
 import { TauriHooksSettings } from "./TauriHooksSettings";
 import { TauriMemorySettings } from "./TauriMemorySettings";
 import { TauriStorageSettings } from "./TauriStorageSettings";
+import { TauriLegacyUiPreferences } from "./TauriLegacyUiPreferences";
 import { TauriRemoteSettings } from "./TauriRemoteSettings";
 import { TauriBotSettings } from "./TauriBotSettings";
 import { StatusBarItemsEditor } from "../components/StatusBarItemsEditor";
@@ -878,6 +879,7 @@ function DataSettings({ profile, busy, onRefreshProfile, onImportStableProfile, 
       </div>
       {profile.managedProfile && onScanUnclaimedSessions && <div className="tauri-settings-data__actions"><h4>{t("settings.data.sessionsTitle")}</h4><p>{t("settings.data.sessionsHint")}</p><button type="button" className="tauri-settings-button" onClick={() => { onClose(); onScanUnclaimedSessions(); }} disabled={disabled}>{t("settings.data.reviewSessions")}</button></div>}
     </> : <p className="tauri-settings-loading">{t("settings.data.notLoaded")}</p>}
+    <TauriLegacyUiPreferences disabled={disabled} />
     {notice && <p className="tauri-settings-data__notice" role="status">{notice}</p>}
     {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}
   </div>;

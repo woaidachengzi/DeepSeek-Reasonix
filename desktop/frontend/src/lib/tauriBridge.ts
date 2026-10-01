@@ -320,6 +320,11 @@ export async function tauriPreviewProfileStatus(): Promise<TauriPreviewProfileSt
   return invoke<TauriPreviewProfileStatus>("preview_profile_status");
 }
 
+export async function tauriLegacyUiPreferences(): Promise<unknown> {
+  requireTauri();
+  return invoke<unknown>("legacy_ui_preferences");
+}
+
 export async function tauriStorageSettings(): Promise<TauriStorageSettings> {
   requireTauri();
   return invoke<TauriStorageSettings>("storage_settings");

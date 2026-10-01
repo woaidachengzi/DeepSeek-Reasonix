@@ -1226,6 +1226,10 @@
 .tauri-settings-data__path { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--surface); }
 .tauri-settings-data__path span { color: var(--fg-faint); font-size: 11px; }
 .tauri-settings-data__path code { overflow-wrap: anywhere; color: var(--fg); font: 11px/1.5 var(--font-mono); }
+.tauri-settings-ui-migration-values { display: grid; gap: 8px; }
+.tauri-settings-ui-migration-values dt { color: var(--fg-faint); font-size: 11px; }
+.tauri-settings-ui-migration-values dd { margin: 0; min-width: 0; max-height: 160px; overflow: auto; }
+.tauri-settings-ui-migration-values code { white-space: pre-wrap; }
 .tauri-settings-data__actions { display: grid; justify-items: start; gap: 7px; margin-top: 18px; }
 .tauri-settings-data__actions h4 { margin: 0; color: var(--fg); font-size: 12px; }
 .tauri-settings-data__actions p { margin: 0; }

@@ -125,6 +125,7 @@ fn document_script(directory: &Path, nonce: &str, denied: bool) -> Result<String
                     ['open_workspace_external', {sessionId: 'private-denied-' + nonce, id: 'finder'}],
                     ['desktop_preferences', {}],
                     ['bridge_status', {}],
+                    ['legacy_ui_preferences', {}],
                 ];
                 for (const [command, args] of actions) {
                     // Extra renderer input cannot impersonate the injected
