@@ -157,6 +157,78 @@ pub(super) fn send(identifier: &str, token: &str, body: &str) -> Result<(), Stri
         _ => Err(DELIVERY_ERROR.into()),
     }
 }
+
+// Only the opt-in, private-profile package gate owns these receipts. Neither
+// querying nor cleanup is a renderer command; cleanup never removes all items.
+pub(super) struct DeliveryReceipt {
+    center: Retained<UNUserNotificationCenter>,
+    token: String,
+}
+impl DeliveryReceipt {
+    pub(super) fn new(identifier: &str, token: String) -> Result<Self, String> {
+        Ok(Self {
+            center: center(identifier)?,
+            token,
+        })
+    }
+    pub(super) fn delivered(&self, expected: Option<&'static str>) -> Result<bool, String> {
+        use objc2_foundation::NSArray;
+        let (sender, receiver) = mpsc::sync_channel(1);
+        let token = self.token.clone();
+        let block = RcBlock::new(move |items: NonNull<NSArray<UNNotification>>| {
+            // SAFETY: Apple's array and its notifications remain valid for
+            // the callback. Only a boolean/fixed error crosses the channel.
+            let items = unsafe { items.as_ref() };
+            let result = (|| {
+                if items.count() > 2048 {
+                    return Err(
+                        "native delivered notification query exceeds acceptance bounds".into(),
+                    );
+                }
+                let mut found = false;
+                for item in items {
+                    let request = item.request();
+                    if request.identifier().to_string() != token {
+                        continue;
+                    }
+                    if found {
+                        return Err("native delivered notification identifier is duplicated".into());
+                    }
+                    found = true;
+                    if let Some(body) = expected {
+                        let content = request.content();
+                        if content.title().to_string() != "Reasonix"
+                            || content.body().to_string() != body
+                        {
+                            return Err("native delivered notification caption differs from the fixed contract".into());
+                        }
+                    }
+                }
+                Ok(found)
+            })();
+            let _ = sender.try_send(result);
+        });
+        self.center
+            .getDeliveredNotificationsWithCompletionHandler(&block);
+        receiver
+            .recv_timeout(Duration::from_secs(5))
+            .map_err(|_| "native delivered notification query timed out")?
+    }
+    pub(super) fn remove(&self) {
+        let identifiers =
+            objc2_foundation::NSArray::from_retained_slice(&[NSString::from_str(&self.token)]);
+        self.center
+            .removePendingNotificationRequestsWithIdentifiers(&identifiers);
+        self.center
+            .removeDeliveredNotificationsWithIdentifiers(&identifiers);
+    }
+}
+impl Drop for DeliveryReceipt {
+    fn drop(&mut self) {
+        self.remove();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

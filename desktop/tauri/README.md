@@ -195,6 +195,20 @@ python3 tools/tauri/smoke-native-links.py 'desktop/tauri/target/release/bundle/m
 及普通包生命周期验收；正式 Developer ID 签名/公证仍待完成。
 2026-10-01 用户仅延期不同缩放显示器/外接屏拔插测试，其余 macOS D 门禁仍保留。
 
+通知提交与实际 Notification Center 送达有独立 macOS 门禁：
+
+```bash
+python3 tools/tauri/smoke-native-notifications.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
+```
+
+该门禁只使用已有系统授权；在托管/显式新私有档案各经生产 host 命令发送 3 类固定
+提示，通过 UserNotifications 查询自己生成的 identifier 及实际标题/正文，移除并确认
+该 identifier 不再送达。后两次发送先确认应用已隐藏；第一次发送如实记录是否 active，
+不强制激活，也不默认视为前台。清理只针对本次随机 token，不移除其他通知；
+不打印已有通知或 token。还核对 canary 原件、sidecar/readiness 清理及同档案重启身份。
+授权未开启时失败且不主动请求授权。此门禁不经过 renderer IPC，不证明可见横幅、
+物理通知点击、冷启动点击或真实系统拒绝，相关交互验收继续保留。
+
 指定应用失败反馈另有独立门禁：
 
 ```bash

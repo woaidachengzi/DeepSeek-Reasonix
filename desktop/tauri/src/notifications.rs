@@ -480,6 +480,141 @@ fn valid_session(id: &str) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || b"_-".contains(&byte))
 }
+
+/// Actual production host command -> OS acceptance -> Notification Center
+/// receipt. Does not synthesize a click or prove a visible banner.
+#[cfg(target_os = "macos")]
+pub(crate) fn delivery_smoke(app: &tauri::AppHandle) -> Result<(), String> {
+    use std::time::{Duration, Instant};
+    let state = app.state::<Arc<NotificationState>>();
+    let status = state.permission(false)?;
+    if !matches!(
+        status.permission,
+        Permission::Granted | Permission::Provisional
+    ) {
+        return Err("native notification delivery gate requires existing system authorization; no permission request was made".into());
+    }
+    // Refuse existing targets before creating test notifications. The gate's
+    // OS cleanup may only use freshly generated tokens from this invocation.
+    {
+        let registry = state.registry.lock().map_err(|_| STORAGE_ERROR)?;
+        if !registry
+            .as_ref()
+            .map_err(|_| STORAGE_ERROR)?
+            .targets
+            .is_empty()
+        {
+            return Err(
+                "native notification delivery gate requires a fresh private profile".into(),
+            );
+        }
+    }
+    let session_id = format!("native-notification-{}", random_token()?);
+    app.state::<BridgeSupervisor>()
+        .open_session(crate::bridge::OpenSessionRequest {
+            session_id: session_id.clone(),
+            workspace_root: None,
+        })
+        .map_err(|_| "prepare private notification session")?;
+    let mut receipts = Vec::new();
+    for (index, kind) in [
+        NotificationKind::TurnDone,
+        NotificationKind::ApprovalRequest,
+        NotificationKind::AskRequest,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        if index == 1 {
+            crate::native_window_smoke::on_main(app, |handle, _| {
+                handle
+                    .hide()
+                    .map_err(|_| "hide private notification application".into())
+            })?;
+            crate::native_window_smoke::wait_for(app, "notification application hidden", |_| {
+                Ok(objc2_app_kit::NSApplication::sharedApplication(
+                    objc2::MainThreadMarker::new()
+                        .ok_or("notification state not on main thread")?,
+                )
+                .isHidden())
+            })?;
+        }
+        let (active, hidden) = crate::native_window_smoke::on_main(app, |_, _| {
+            let application = objc2_app_kit::NSApplication::sharedApplication(
+                objc2::MainThreadMarker::new().ok_or("notification state not on main thread")?,
+            );
+            Ok((application.isActive(), application.isHidden()))
+        })?;
+        let request = NotificationRequest {
+            session_id: session_id.clone(),
+            kind,
+            language: Language::Zh,
+            failed: false,
+        };
+        let caption = request.body();
+        let window = app
+            .get_webview_window("main")
+            .ok_or("notification acceptance window missing")?;
+        let result = tauri::async_runtime::block_on(send_system_notification(window, request));
+        // A submission timeout is uncertain delivery. Recover the generated
+        // target even on that error, then remove only its exact OS identifier.
+        let token = {
+            let registry = state.registry.lock().map_err(|_| STORAGE_ERROR)?;
+            registry
+                .as_ref()
+                .map_err(|_| STORAGE_ERROR)?
+                .targets
+                .last()
+                .filter(|target| target.session_id == session_id)
+                .map(|target| target.token.clone())
+        };
+        let receipt = token
+            .map(|token| macos::DeliveryReceipt::new(&app.config().identifier, token))
+            .transpose()?;
+        result?;
+        let receipt = receipt.ok_or("notification acceptance target missing")?;
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !receipt.delivered(Some(caption))? {
+            if Instant::now() >= deadline {
+                return Err(
+                    "notification accepted by the OS but not found in Notification Center".into(),
+                );
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        receipt.remove();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while receipt.delivered(None)? {
+            if Instant::now() >= deadline {
+                return Err("owned delivered notification did not disappear after cleanup".into());
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        receipts.push(serde_json::json!({"kind":kind, "applicationActive":active,
+            "applicationHidden":hidden, "delivered":true, "removed":true}));
+    }
+    use std::os::unix::fs::OpenOptionsExt;
+    let temporary = std::env::var_os("TMPDIR")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute() && path.is_dir())
+        .ok_or("private notification receipt directory missing")?;
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(temporary.join("reasonix-native-notification-delivery.json"))
+        .map_err(|_| "create private notification receipts")?;
+    let bytes = serde_json::to_vec(
+        &serde_json::json!({"permission":status.permission, "receipts":receipts}),
+    )
+    .map_err(|_| "encode private notification receipts")?;
+    file.write_all(&bytes)
+        .map_err(|_| "write private notification receipts")?;
+    file.sync_all()
+        .map_err(|_| "sync private notification receipts")?;
+    Ok(())
+}
+
 fn fresh(created: u64, now: u64) -> bool {
     created <= now.saturating_add(60) && now.saturating_sub(created) <= TTL
 }
