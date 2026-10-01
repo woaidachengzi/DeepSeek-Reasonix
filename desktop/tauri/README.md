@@ -179,6 +179,8 @@ python3 tools/tauri/smoke-native-links.py 'desktop/tauri/target/release/bundle/m
 不加载外部资源、不继承用户凭据环境、不增加 renderer 命令或权限，也不关闭既有浏览器
 标签页；新建的测试标签页可手动关闭。失败保留私有记录，成功删除测试档案。
 这项不代替真实点击、邮件客户端、OAuth 登录/回调或页面视觉验收。
+2026-10-01 从干净提交 `185b7223d` 构建的本地 ad-hoc 包，已通过此门禁两种档案
+及普通包生命周期验收；正式 Developer ID 签名/公证仍待完成。
 2026-10-01 用户仅延期不同缩放显示器/外接屏拔插测试，其余 macOS D 门禁仍保留。
 
 原生 responder 编辑另有严格门禁 `--edit`：默认 40 个场景之外，每档案增加一个

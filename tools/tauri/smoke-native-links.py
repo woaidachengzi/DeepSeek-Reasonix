@@ -79,8 +79,11 @@ class BrowserReceipts:
         self.thread.start()
         return self
 
-    def pump(self, inspect):
-        inspect()
+    def pump(self, _inspect):
+        # Receipts are handled by the server thread. Unlike a streaming task,
+        # links may finish and exit between the runner's poll and a live check.
+        # launch() still requires the result, normal exit and complete cleanup.
+        pass
 
     def verify(self):
         if self.errors or self.seen != {"open_external_link", "open_external_url"}:
