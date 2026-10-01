@@ -6,6 +6,8 @@ mod data_profile;
 mod host_preferences;
 mod keychain;
 #[cfg(target_os = "macos")]
+mod legacy_ui_fixture;
+#[cfg(target_os = "macos")]
 mod legacy_ui_preferences;
 mod local_paths;
 mod menu;

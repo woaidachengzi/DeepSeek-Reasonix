@@ -74,6 +74,8 @@ pub fn read(app: &AppHandle) -> Result<Snapshot, String> {
     if cfg!(debug_assertions) {
         return Err("Old UI preferences can only be previewed in the packaged macOS app".into());
     }
+    let fixture = crate::legacy_ui_fixture::load()?;
+    let private_source = fixture.is_some();
     let (loaded, wait_load) = mpsc::sync_channel(1);
     let _reader = main(app, move |handle| {
         let asset = handle
@@ -90,6 +92,7 @@ pub fn read(app: &AppHandle) -> Result<Snapshot, String> {
             LABEL,
             WebviewUrl::App("legacy-ui-store.html".into()),
         )
+        .incognito(private_source)
         .visible(false)
         .focused(false)
         .on_navigation(|url| url.as_str() == "tauri://localhost/legacy-ui-store.html")
@@ -109,10 +112,16 @@ pub fn read(app: &AppHandle) -> Result<Snapshot, String> {
         .recv_timeout(Duration::from_secs(10))
         .map_err(|_| "Old UI preference preview did not load; retry")?;
     let (send, receive) = mpsc::sync_channel(1);
+    let seed = fixture
+        .as_ref()
+        .map(|fixture| fixture.seed_script())
+        .transpose()?
+        .unwrap_or_default();
     let script = format!(
         r#"(() => {{
       if (location.origin !== '{SOURCE}' || document.title !== 'Legacy UI preference reader'
           || document.body.children.length !== 0) throw new Error('origin');
+      {seed}
       const values = {{}}; for (const key of {KEYS}) {{
         const value = localStorage.getItem(key); if (value !== null) values[key] = value;
       }} return JSON.stringify({{ source: '{SOURCE}', values }});
@@ -134,6 +143,12 @@ pub fn read(app: &AppHandle) -> Result<Snapshot, String> {
             // SAFETY: Tauri supplies this live WKWebView on the main thread;
             // the callback copies only a bounded NSString before returning.
             let view = unsafe { &*platform.inner().cast::<WKWebView>() };
+            // This check happens before any seed writes. The real shared
+            // default store is never seeded, even if the builder regresses.
+            if fixture.is_some() && unsafe { view.configuration().websiteDataStore().isPersistent() } {
+                let _ = send.try_send(Err("Private UI source requires a nonpersistent WKWebView".into()));
+                return;
+            }
             let completed = RcBlock::new(move |value: *mut AnyObject, error: *mut NSError| {
                 let result = if !error.is_null() {
                     Err("Old UI preferences are unavailable; retry or choose preferences manually".into())
@@ -142,6 +157,10 @@ pub fn read(app: &AppHandle) -> Result<Snapshot, String> {
                         .filter(|value| value.length() <= LIMIT)
                         .ok_or_else(|| "Old UI preference preview is invalid; choose preferences manually".to_string())
                         .and_then(|value| validate(&value.to_string()))
+                        .and_then(|snapshot| {
+                            if let Some(fixture) = &fixture { fixture.receipt(&snapshot.values)?; }
+                            Ok(snapshot)
+                        })
                 };
                 let _ = send.try_send(result);
             });
