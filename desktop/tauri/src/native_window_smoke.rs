@@ -217,7 +217,10 @@ pub fn observe(webview: &Webview, payload: &tauri::webview::PageLoadPayload<'_>)
 }
 
 pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, String> {
-    use objc2_app_kit::{NSApplication, NSWindow, NSWindowStyleMask};
+    use objc2_app_kit::{
+        NSApplication, NSApplicationOcclusionState, NSRunningApplication, NSWindow,
+        NSWindowOcclusionState, NSWindowStyleMask,
+    };
     let mtm = objc2::MainThreadMarker::new().ok_or("snapshot not on main thread")?;
     let pointer = window
         .ns_window()
@@ -229,6 +232,7 @@ pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, Stri
     // the main thread and does not retain the pointer beyond the window borrow.
     let native = unsafe { &*pointer.cast::<NSWindow>() };
     let application = NSApplication::sharedApplication(mtm);
+    let running = NSRunningApplication::currentApplication();
     let state = window.app_handle().state::<WindowSmokeState>();
     let transitions = state
         .transitions
@@ -244,6 +248,9 @@ pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, Stri
         "focused": window.is_focused().map_err(|_| "read focused state")?,
         "applicationHidden": application.isHidden(),
         "applicationActive": application.isActive(),
+        "applicationFinishedLaunching": running.isFinishedLaunching(),
+        "runningApplicationActive": running.isActive(),
+        "applicationOcclusionVisible": application.occlusionState().contains(NSApplicationOcclusionState::Visible),
         "nativeKeyWindow": native.isKeyWindow(),
         "nativeMainWindow": native.isMainWindow(),
         "nativeCanBecomeKey": native.canBecomeKeyWindow(),
@@ -251,6 +258,7 @@ pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, Stri
         "nativeMiniaturizable": native.styleMask().contains(NSWindowStyleMask::Miniaturizable),
         "nativeMiniaturized": native.isMiniaturized(),
         "nativeVisible": native.isVisible(),
+        "nativeOcclusionVisible": native.occlusionState().contains(NSWindowOcclusionState::Visible),
         "nativeStyleMask": native.styleMask().bits(),
         "willMiniaturize": transitions.counts[0],
         "didMiniaturize": transitions.counts[1],

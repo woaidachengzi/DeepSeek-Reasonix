@@ -75,7 +75,9 @@ def print_window_trace(temporary):
         fields = ("mainPageFinished", "focused", "minimized", "visible",
                   "applicationActive", "applicationHidden", "nativeKeyWindow",
                   "nativeMainWindow", "nativeCanBecomeKey", "nativeOnActiveSpace",
-                  "nativeMiniaturizable", "nativeMiniaturized", "nativeVisible")
+                  "nativeMiniaturizable", "nativeMiniaturized", "nativeVisible",
+                  "applicationFinishedLaunching", "runningApplicationActive",
+                  "applicationOcclusionVisible", "nativeOcclusionVisible")
         stages = {"settings-ready", "settings-shown", "settings-minimize-requested", "settings-minimized",
                   "exercise-ready", "exercise-shown", "exercise-minimize-requested"}
         for line in lines:
