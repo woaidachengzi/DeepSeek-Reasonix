@@ -9,12 +9,13 @@ import uuid
 
 
 class NativeClipboardFixture(AbstractContextManager):
-    def __init__(self, temporary):
+    def __init__(self, temporary, expected_path=None, nonce=None):
         self.temporary = Path(temporary)
         self.snapshot = self.temporary / "clipboard-original.plist"
         self.marker = self.temporary / "reasonix-native-clipboard-owned.json"
         self.binary = self.temporary / "clipboard-snapshot"
-        self.nonce = uuid.uuid4().hex
+        self.nonce = nonce or uuid.uuid4().hex
+        self.expected_path = expected_path
 
     def command(self, action, argument):
         return subprocess.run([str(self.binary), action, str(self.snapshot), str(argument)],
@@ -30,7 +31,13 @@ class NativeClipboardFixture(AbstractContextManager):
         if self.command("selftest", self.marker).returncode:
             raise RuntimeError("clipboard restoration safeguards failed in a private named pasteboard; no system clipboard write performed")
         self.marker.unlink(missing_ok=True)
-        if self.command("capture", self.nonce).returncode:
+        action, argument = 'capture', self.nonce
+        if self.expected_path is not None:
+            control = self.temporary / 'reasonix-native-ui-clipboard-path.json'
+            control.touch(mode=0o600)
+            control.write_text(json.dumps({'nonce': self.nonce, 'path': str(self.expected_path)}))
+            action, argument = 'capture-path', control
+        if self.command(action, argument).returncode:
             raise RuntimeError("current clipboard cannot be completely preserved within acceptance bounds; no clipboard write was performed")
         (self.temporary / "reasonix-native-clipboard-control.json").write_text(json.dumps({"nonce": self.nonce}))
         return self

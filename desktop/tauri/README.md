@@ -350,6 +350,30 @@ runner 成功只证明来源、身份、原件和退出检查，UI 应用/恢复
 托管完成后的显式夹具环境检查曾失败，移除多余 state 变量后仅重跑未完成显式三阶段通过；
 不把设置失败或全部 22 项/异常 UI 当作通过。详见迁移清单最新记录。
 此前通知准备在发消息前停止，尚无横幅/点击证据。
+
+普通档案的存储路径复制 UI 可独立验收：
+
+```bash
+python3 -B tools/tauri/smoke-native-ui-clipboard.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app' --seconds 600
+```
+
+runner 依次启动 managed/explicit 两个私有普通宿主，不启用原生窗口探针；控制文件
+`/private/tmp/reasonix-ui-clipboard-control.json` 给出自有 PID、预期配置路径及只读 claim
+命令。确认进程仍存活后绑定实际应用，进入设置→存储与路径，核对空工作区复制禁用，
+实际点击配置目录复制按钮。立即执行该阶段的 claim 命令核对系统精确文本与代次，再
+核对“已复制”反馈；返回空输入框，用实际 Cmd+V 验证完整路径，最后 Cmd+Q。不要发送
+消息，也不要用 CUA paste 替代系统粘贴。退出后不可查询已退出的应用绑定；下一档案需
+核对新 PID 并重新绑定。runner 的系统/生命周期通过不能代替实际 UI 证据。
+
+系统复制前完整备份有界多格式剪贴板；路径来源限制在当前用户拥有的 nonce 私有档案，
+拒绝符号链接、外部路径和公开控制文件。已展示路径的恢复必须同时匹配精确值、nonce
+和独立登记的 changeCount；重新复制同样文字也视为外部变化，保留当前内容并报失败。
+保护规则先在私有命名 pasteboard 自测。正常退出后原剪贴板每项/类型/顺序/字节均须恢复
+并独立验证；成功夹具自动删除，失败夹具保留且清理自有进程，日志不输出原剪贴板。
+`ada308408` 同一生产包两种档案的按钮、禁用状态、成功反馈及实际 Cmd+V 均已由 CUA
+验证，两次正常退出、身份/原件/清理及原剪贴板恢复通过；日志
+`/private/tmp/reasonix-path-clipboard-ui.log`。其他路径、消息、上下文菜单、实际失败反馈和
+显式输入框完整 Copy/Cut 链路仍待验收，窗口稳定性未因此变为通过。
 本地 ad-hoc 签名不等于正式签名/公证；外接屏延期和其他发布门禁见迁移清单最新记录。
 
 macOS 受管 bridge 跟随实际 kernel parent 生命周期。宿主异常退出时取消任务/HTTP/SSE，
