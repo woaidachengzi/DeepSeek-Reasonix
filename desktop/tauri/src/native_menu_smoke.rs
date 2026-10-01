@@ -96,6 +96,34 @@ pub(crate) fn edit(app: &AppHandle, title: &'static str) -> Result<(), String> {
     .map_err(|error| format!("native {title}: {error}"))
 }
 
+fn minimize_from_menu(app: &AppHandle) -> Result<(), String> {
+    on_main(app, |_, window| {
+        let application = NSApplication::sharedApplication(
+            MainThreadMarker::new().ok_or("native minimize menu not on main thread")?,
+        );
+        let pointer = window
+            .ns_window()
+            .map_err(|_| "native minimize window unavailable")?;
+        if !application.isActive()
+            || !application.keyWindow().is_some_and(|key| {
+                std::ptr::eq(
+                    std::ptr::from_ref(&*key).cast::<std::ffi::c_void>(),
+                    pointer.cast_const(),
+                )
+            })
+        {
+            return Err("native minimize menu requires the actual active main key window".into());
+        }
+        let menu = application
+            .mainMenu()
+            .ok_or("native minimize menu missing")?;
+        if !invoke_named(&menu, "Minimize", 0, Some(objc2::sel!(performMiniaturize:)))? {
+            return Err("installed native Minimize role missing".into());
+        }
+        Ok(())
+    })
+}
+
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 struct NativeShortcut {
     title: String,
@@ -251,18 +279,34 @@ pub fn settings(app: &AppHandle, phase: &str) -> Result<(), String> {
                     .map_err(|_| "read visibility".into())
             })?;
         }
-        "menu-settings-minimized" => {
-            on_main(app, |_, window| {
-                window
-                    .minimize()
-                    .map_err(|_| "minimize settings window".into())
-            })?;
+        "menu-settings-minimized" | "menu-settings-native-minimized" => {
+            if phase == "menu-settings-native-minimized" {
+                minimize_from_menu(app)?;
+            } else {
+                on_main(app, |_, window| {
+                    window
+                        .minimize()
+                        .map_err(|_| "minimize settings window".into())
+                })?;
+            }
             crate::native_window_smoke::record(app, "settings-minimize-requested")?;
             wait_for(app, "minimized settings window", |window| {
                 window
                     .is_minimized()
                     .map_err(|_| "read minimized state".into())
             })?;
+            crate::native_window_smoke::record(app, "settings-minimized")?;
+            if phase == "menu-settings-native-minimized" {
+                wait_for(app, "native menu minimization events", |window| {
+                    let state = crate::native_window_smoke::snapshot(window)?;
+                    Ok(state["willMiniaturize"]
+                        .as_u64()
+                        .is_some_and(|value| value > 0)
+                        && state["didMiniaturize"]
+                            .as_u64()
+                            .is_some_and(|value| value > 0))
+                })?;
+            }
         }
         "menu-settings-app-hidden" => {
             on_main(app, |handle, _| {
@@ -290,6 +334,15 @@ pub fn settings(app: &AppHandle, phase: &str) -> Result<(), String> {
             && !NSApplication::sharedApplication(MainThreadMarker::new().ok_or("not main thread")?)
                 .isHidden())
     })?;
+    if phase == "menu-settings-native-minimized" {
+        wait_for(app, "native menu deminiaturization event", |window| {
+            Ok(
+                crate::native_window_smoke::snapshot(window)?["didDeminiaturize"]
+                    .as_u64()
+                    .is_some_and(|value| value > 0),
+            )
+        })?;
+    }
     // The listener stays live until all asynchronous native restoration checks
     // finish. Do not turn duplicate menu events into an apparent single success.
     // Access it via the callback's shared counter rather than the event payload.

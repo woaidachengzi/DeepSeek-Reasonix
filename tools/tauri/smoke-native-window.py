@@ -76,7 +76,7 @@ def print_window_trace(temporary):
                   "applicationActive", "applicationHidden", "nativeKeyWindow",
                   "nativeMainWindow", "nativeCanBecomeKey", "nativeOnActiveSpace",
                   "nativeMiniaturizable", "nativeMiniaturized", "nativeVisible")
-        stages = {"settings-ready", "settings-shown", "settings-minimize-requested",
+        stages = {"settings-ready", "settings-shown", "settings-minimize-requested", "settings-minimized",
                   "exercise-ready", "exercise-shown", "exercise-minimize-requested"}
         for line in lines:
             item = json.loads(line)
@@ -86,12 +86,12 @@ def print_window_trace(temporary):
             if not isinstance(state, dict):
                 continue
             status = {key: state[key] for key in fields if type(state.get(key)) is bool}
-            status.update({key: state[key] for key in ("restoreRequests", "restoreCompletions", "reopenEvents", "willMiniaturize", "didMiniaturize", "didDeminiaturize", "becameKey", "resignedKey", "appearanceRequests")
+            status.update({key: state[key] for key in ("restoreRequests", "restoreCompletions", "reopenEvents", "willMiniaturize", "didMiniaturize", "didDeminiaturize", "becameKey", "resignedKey", "appearanceRequests", "appearanceSkipped")
                            if type(state.get(key)) is int and 0 <= state[key] <= 1000})
             if type(state.get("nativeStyleMask")) is int and 0 <= state["nativeStyleMask"] < 2**32:
                 status["nativeStyleMask"] = state["nativeStyleMask"]
             transitions = state.get("nativeTransitions")
-            known = {"will-miniaturize", "did-miniaturize", "did-deminiaturize", "became-key", "resigned-key", "appearance-request"}
+            known = {"will-miniaturize", "did-miniaturize", "did-deminiaturize", "became-key", "resigned-key", "appearance-request", "appearance-skipped"}
             if type(transitions) is list and len(transitions) <= 32 and all(type(item) is str and item in known for item in transitions):
                 status["nativeTransitions"] = transitions
             print("native window trace: " + json.dumps({"stage": item["stage"], "state": status}), flush=True)

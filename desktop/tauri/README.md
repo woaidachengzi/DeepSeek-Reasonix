@@ -172,6 +172,23 @@ python3 tools/tauri/smoke-native-window.py 'desktop/tauri/target/release/bundle/
 最小化、Settings 恢复或任务/退出菜单场景，不能作为完整窗口门禁通过；默认门禁不变。
 `--focus` 需要前置保存的窗口几何，不能与 `--independent` 组合。
 
+已安装的 macOS 原生 Minimize 菜单有独立角色门禁：
+
+```bash
+python3 tools/tauri/smoke-native-menu-window.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app'
+```
+
+它核对实际 active/main key window、已安装 `performMiniaturize:` responder 角色、真实
+最小化状态及 AppKit Will/Did Miniaturize 事件，再调用 Settings 恢复并要求 Did
+Deminiaturize 事件和恰好一次设置事件；两种新私有档案还核对同档案重启身份与退出清理。
+此门禁不调用 Tauri 的最小化 API；完整窗口 API/几何门禁继续保留，原生菜单动作也不
+等同于物理点击或按键。
+
+macOS 外观同步先在主线程核对实际 NSApplication 显式/有效外观及 Tauri 缓存，已符合
+请求时跳过重复设置。auto 必须是显式 nil 且缓存符合有效系统主题，不能把显式浅色当作
+auto；显式选择和过期缓存仍需更新。超时后的查询回调只读，不会产生延迟主题写入。
+此收敛不代表窗口最小化根因已定位，完整窗口门禁仍须验证。
+
 该脚本拒绝操作已运行的同标识 Preview，使用原生宿主 API，不依赖屏幕录制权限。
 菜单动作检查不能代替真实鼠标/键盘操作或 WebView 设置界面的渲染验收。测试先确认窗口的
 隐藏/显示转换，再建立严格的最小化前提；启动就绪后直接最小化未成功的时序仍保留记录。

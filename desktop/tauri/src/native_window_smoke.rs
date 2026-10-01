@@ -32,13 +32,14 @@ pub struct WindowSmokeState {
     transitions: Arc<WindowTransitions>,
 }
 
-const TRANSITIONS: [&str; 6] = [
+const TRANSITIONS: [&str; 7] = [
     "will-miniaturize",
     "did-miniaturize",
     "did-deminiaturize",
     "became-key",
     "resigned-key",
     "appearance-request",
+    "appearance-skipped",
 ];
 
 #[derive(Default)]
@@ -48,7 +49,7 @@ struct WindowTransitions {
 
 #[derive(Clone, Default)]
 struct TransitionRecord {
-    counts: [usize; 6],
+    counts: [usize; 7],
     recent: Vec<&'static str>,
 }
 
@@ -155,6 +156,14 @@ pub(crate) fn observe_appearance_request(app: &AppHandle) {
     }
 }
 
+pub(crate) fn observe_appearance_skip(app: &AppHandle) {
+    if let Some(state) = app.try_state::<WindowSmokeState>() {
+        if state.enabled {
+            state.transitions.note(6);
+        }
+    }
+}
+
 impl Default for WindowSmokeState {
     fn default() -> Self {
         Self {
@@ -249,6 +258,7 @@ pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, Stri
         "becameKey": transitions.counts[3],
         "resignedKey": transitions.counts[4],
         "appearanceRequests": transitions.counts[5],
+        "appearanceSkipped": transitions.counts[6],
         "nativeTransitions": transitions.recent,
         "restoreRequests": window.app_handle().try_state::<WindowSmokeState>()
             .map(|state| state.restore_requested.load(Ordering::SeqCst)),
@@ -592,9 +602,10 @@ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
         | "restore-appearance-dark"
         | "restore-appearance-light"
         | "restore-appearance-auto" => crate::native_appearance_smoke::run(app, phase)?,
-        "menu-settings-hidden" | "menu-settings-minimized" | "menu-settings-app-hidden" => {
-            crate::native_menu_smoke::settings(app, phase)?
-        }
+        "menu-settings-hidden"
+        | "menu-settings-minimized"
+        | "menu-settings-native-minimized"
+        | "menu-settings-app-hidden" => crate::native_menu_smoke::settings(app, phase)?,
         "application-hide" => application_hide(app, &directory)?,
         "background-close" => background_close(app, &directory, false)?,
         "second-instance" => background_close(app, &directory, true)?,
