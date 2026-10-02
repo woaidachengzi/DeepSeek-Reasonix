@@ -99,6 +99,14 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：Hooks 工作区切换的异步请求归属修复（2026-10-02）
+
+- 核对实际 Hooks 设置消费者：原先只阻止旧剪贴板结果写文本/反馈，工作区变化后 busy 仍由旧请求占有；save/apply/manual reload 没有一致的上下文归属。专项回归在旧代码确定失败：新工作区编辑器仍 disabled，日志 `/private/tmp/reasonix-hooks-request-before.log`。
+- 产品 `3fc6eb16e` 在 scope/workspaceRoot 提交时使旧请求失效、释放旧上下文 busy、清除旧视图/反馈与 pendingApply；加载使用统一 latest-request fence，复制/粘贴/保存/应用使用操作代次，各自仅释放所属 busy。手动刷新也同步持有 busy，避免刷新时进入并发编辑/剪贴板/保存；卸载使旧结果失效。旧保存结果不能替换新工作区 view/text/revision/path，也不能显示成功或解除新请求的锁。已进入原生或后端的操作仍可在原上下文完成，不宣称取消系统剪贴板写入或后端保存/应用。
+- 专项 adapter 回归通过：旧 paste 完成不改新 draft、不解除新 paste busy；旧 save 完成不改新 view/path/draft、不显示旧保存成功、不解除新 clipboard busy；旧 manual reload 不覆盖最新工作区加载。原生 JSON Copy/Paste、拒绝/空值草稿保护和零 browser fallback 原断言保留。日志 `/private/tmp/reasonix-hooks-request-after.log`。最终源码完整 `pnpm test:tauri` exit 0，日志 `/private/tmp/reasonix-hooks-request-tauri-final-tests.log`。
+- 完整 macOS 候选构建 exit 0，类型/587-method 契约/体积门禁、Go sidecar/arm64 host 与 ad-hoc 签名通过，日志 `/private/tmp/reasonix-hooks-request-build.log`。普通非测试 Preview host/sidecar 仍存活，本轮没有终止或操作它，也未启动需要同标识空闲的私有原生验收。因此本次组件竞态回归不等于实际 Hooks 物理 UI 或新包 native smoke 通过；前轮包级结果保留对应产品提交，不转记为此包通过。
+- D 继续进行：完整窗口最小化稳定性、托盘/Dock、实际通知点击/拒绝与钥匙串交互、旧版共享目录互斥决策及其他物理项未结案；B 图片/旧历史、C 工具生命周期、E 和正式 Developer ID/公证/发布授权门禁保留。
+
 #### D：当前候选的宿主生命周期与存储复制 UI 复验（2026-10-02）
 
 - 同一产品 `af7cf185d` 生产包（本轮开始 HEAD `8d6c06b85` 为证据提交）重新执行独立宿主丢失验收 **20/20 通过**。`smoke-host-lifetime.py` 两种私有档案 × TERM/KILL × 空闲/真实流式共 8 项，日志 `/private/tmp/reasonix-current-candidate-host-lifetime.log`；`smoke-native-startup.py` 两种档案 × TERM/KILL × 父进程检查前/token 前/token 后 ready 前共 12 项，日志 `/private/tmp/reasonix-current-candidate-startup-lifetime.log`。kernel sidecar 回执均为正常退出码 0；实际上游断开、目录锁/启动记录清理、原件保护及同档案重启通过。只终止已核实的自有宿主，不扩大为 spawn 前目录回收或完整窗口通过。

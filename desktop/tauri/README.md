@@ -1030,3 +1030,15 @@ D/E/发布门禁保持。
 已停止操作且未关闭该普通实例；只确认自有夹具清理，不声称全局无 Preview。
 后续退出后只读取 runner/进程回执，每次 UI 输入前核对自有存活 PID 和私有 origin。
 当前显式档案物理复验、实际失败反馈、完整窗口最小化稳定性及其余发布门禁保留。
+
+
+2026-10-02 Hooks 异步归属修复 `3fc6eb16e`：scope/工作区切换与卸载使旧
+加载/复制/粘贴/保存/应用结果失效；旧完成只可释放自己的 busy，不能替换新
+view/path/draft 或显示旧成功，手动刷新同步持锁。已发出的系统/后端操作不能撤销。
+专项回归先在旧代码失败，修复后旧 paste/save/reload 与新上下文/新 busy 竞争通过；
+日志 `/private/tmp/reasonix-hooks-request-before.log`、
+`/private/tmp/reasonix-hooks-request-after.log`。最终完整 Tauri 回归与 macOS 包构建
+通过，日志 `/private/tmp/reasonix-hooks-request-tauri-final-tests.log`、
+`/private/tmp/reasonix-hooks-request-build.log`。普通 Preview 仍运行，本轮没有启动
+私有 native smoke 或操作该普通实例；实际 Hooks UI/拒绝和新包原生验收仍待完成。
+本地 ad-hoc 签名未公证，完整 D/A/B/C/E 与正式发布门禁保留。
