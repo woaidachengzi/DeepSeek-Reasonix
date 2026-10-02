@@ -797,3 +797,14 @@ Rust 163 项、Go bridge/运行时/协议、前端 Tauri 回归、生产构建�
 `smoke-profile-import.py` 的 import/restore/explicit 三阶段通过，包括新目录权限、
 稳定原件/备份保持和退出清理。日志 `/private/tmp/reasonix-backup-root-package-import.log`。
 这不等同旧官方 Wails 已遵守新目录锁，也不代替设置页物理导入或已知截图故障的修复。
+
+
+2026-10-02 Hooks JSON 剪贴板：Copy/Paste 使用共享原生文本入口，不再直接依赖
+`navigator.clipboard`。复制等待实际写入后显示成功；读取拒绝/空剪贴板保持草稿，
+异步旧 workspace/scope 结果不覆盖当前编辑器；不保存配置或执行 hooks。编辑器使用
+新增严格读取入口，其他调用者的空串读取契约保持。新组件回归已纳入 `pnpm test:tauri`，
+并覆盖系统调用样本、拒绝/空值和上下文变化。真实 Hooks 按钮点击与完整系统剪贴板
+恢复另验，组件回归不代替 macOS 物理 UI；现有文本 ACL 与回退策略不变。
+生产代码 `912c87a4e` 的完整 macOS 构建及双档案独立菜单/剪贴板门禁 4/4 通过，
+实际文本 IPC、权限拒绝、系统剪贴板原件恢复及退出清理通过；日志
+`/private/tmp/reasonix-hooks-clipboard-native.log`。不扩大为 Hooks 物理点击或完整窗口稳定性。
