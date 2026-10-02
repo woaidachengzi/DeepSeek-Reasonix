@@ -24,6 +24,7 @@ import argparse
 import importlib.util
 from contextlib import nullcontext
 import json
+import math
 import os
 from pathlib import Path
 import plistlib
@@ -96,6 +97,24 @@ def print_window_trace(temporary):
                            if type(state.get(key)) is int and 0 <= state[key] <= 1000})
             if type(state.get("nativeStyleMask")) is int and 0 <= state["nativeStyleMask"] < 2**32:
                 status["nativeStyleMask"] = state["nativeStyleMask"]
+            for key in ("applicationActivationPolicy", "runningActivationPolicy"):
+                if type(state.get(key)) is int and 0 <= state[key] <= 2:
+                    status[key] = state[key]
+            monitors = state.get("monitors")
+            if type(monitors) is list and len(monitors) <= 8 and all(
+                type(monitor) is dict
+                and all(type(monitor.get(key)) is int and abs(monitor[key]) <= 1_000_000
+                        for key in ("x", "y"))
+                and all(type(monitor.get(key)) is int and 0 < monitor[key] <= 100_000
+                        for key in ("width", "height"))
+                and type(monitor.get("scale")) in (int, float)
+                and math.isfinite(monitor["scale"]) and 0 < monitor["scale"] <= 16
+                for monitor in monitors
+            ):
+                status["monitors"] = [
+                    {key: monitor[key] for key in ("x", "y", "width", "height", "scale")}
+                    for monitor in monitors
+                ]
             transitions = state.get("nativeTransitions")
             known = {"will-miniaturize", "did-miniaturize", "did-deminiaturize", "became-key", "resigned-key", "appearance-request", "appearance-skipped"}
             if type(transitions) is list and len(transitions) <= 32 and all(type(item) is str and item in known for item in transitions):

@@ -233,6 +233,22 @@ pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, Stri
     let native = unsafe { &*pointer.cast::<NSWindow>() };
     let application = NSApplication::sharedApplication(mtm);
     let running = NSRunningApplication::currentApplication();
+    let monitors: Vec<_> = window
+        .available_monitors()
+        .map_err(|_| "read connected monitors")?
+        .iter()
+        .take(8)
+        .map(|monitor| {
+            let area = monitor.work_area();
+            serde_json::json!({
+                "x": area.position.x,
+                "y": area.position.y,
+                "width": area.size.width,
+                "height": area.size.height,
+                "scale": monitor.scale_factor(),
+            })
+        })
+        .collect();
     let state = window.app_handle().state::<WindowSmokeState>();
     let transitions = state
         .transitions
@@ -242,12 +258,15 @@ pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, Stri
         .clone();
     Ok(serde_json::json!({
         "geometry": Geometry::read(window)?,
+        "monitors": monitors,
         "visible": window.is_visible().map_err(|_| "read visibility")?,
         "minimized": window.is_minimized().map_err(|_| "read minimized state")?,
         "maximized": window.is_maximized().map_err(|_| "read maximized state")?,
         "focused": window.is_focused().map_err(|_| "read focused state")?,
         "applicationHidden": application.isHidden(),
         "applicationActive": application.isActive(),
+        "applicationActivationPolicy": application.activationPolicy().0,
+        "runningActivationPolicy": running.activationPolicy().0,
         "applicationFinishedLaunching": running.isFinishedLaunching(),
         "applicationRunning": application.isRunning(),
         "applicationModalWindowPresent": application.modalWindow().is_some(),
