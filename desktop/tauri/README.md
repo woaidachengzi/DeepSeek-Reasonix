@@ -1066,3 +1066,12 @@ unminimize/show/focus；已可见窗口点击不再隐藏。右键菜单/退出�
 通过原 81203.2 上限，未调整预算。最终完整 macOS 构建通过，日志
 `/private/tmp/reasonix-keychain-feedback-final-build.log`。普通 Preview 仍运行，
 没有操作用户钥匙串/普通窗口；真实 OS 锁定/拒绝/迁移点击和新包 smoke 继续待验。
+
+
+2026-10-02 当前 `253abf30a` 包 sidecar 的独立钥匙串事务复验 **22 通过**，
+包括真实 bridge 的迁移/保存/重启/删除/不落盘及单 Provider 读取失败后的其余恢复；
+日志 `/private/tmp/reasonix-current-keychain-transactions.log`。默认忽略的 macOS
+原生 test 已独立显式执行 **1/1 通过**，两份临时随机 service/固定假值实际读写、
+隔离、替换、删除及重复删除缺失通过，日志 `/private/tmp/reasonix-current-keychain-native.log`。
+原生测试只操作自有身份；普通 Preview 原 PID 保持，未操作窗口或真实用户凭据。
+该结果不替代包级设置页迁移、实际 OS 锁定/拒绝/重新授权 UI，相关门禁保持待验。

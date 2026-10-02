@@ -99,6 +99,13 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：普通 Preview 运行期间的独立钥匙串复验（2026-10-02）
+
+- 当前 HEAD `8c4a43296`（证据提交），候选产品 `253abf30a`。普通 host/sidecar PID 仍为 16939/16944，故本轮不启动同 bundle 的包级 UI 夹具，也未操作或关闭普通窗口。当前 `.app` 内实际 `reasonix-desktop-bridge` 作为 `REASONIX_TAURI_BRIDGE_TEST_BIN`，运行 `cargo test --locked --manifest-path desktop/tauri/Cargo.toml keychain::tests:: -- --test-threads=1`，**22 通过、1 原生测试按默认忽略**；日志 `/private/tmp/reasonix-current-keychain-transactions.log`。
+- 其中两项真实 bridge 测试确实执行：迁移/保存/重启/删除的私有配置原件与密钥不落盘，以及单个 credential read 失败后继续恢复其余条目。后端模拟专项覆盖不确定写入/删除先回滚再同步、桥接响应失败恢复两边状态、迁移失败移除目标并保留来源、symlink/超量/异常条目拒绝和命名 Provider 限制。模拟拒绝不记为真实 OS 拒绝。
+- 随后单独显式运行 `cargo test --locked --manifest-path desktop/tauri/Cargo.toml keychain::tests::native_keychain_profile_isolation_and_cleanup -- --ignored --exact --test-threads=1`，**1/1 通过**；日志 `/private/tmp/reasonix-current-keychain-native.log`。实际 macOS backend 以临时目录生成两份随机 service 身份和固定假值，验证缺失、写入、读回、跨档案不可见、替换、精确删除和重复删除返回缺失；原生断言及 Drop 仅清理这两份自有服务的固定测试 key，不访问真实用户现有条目。
+- 测后只读进程核对仍仅普通 host/sidecar 原 PID，未发现额外测试 bridge。独立测试进程/临时 Provider 不等于打包应用设置页实际迁移、原生权限弹窗、系统钥匙串锁定或拒绝/重新授权通过；这些物理门禁、完整窗口稳定性、其余 D/A/B/C/E/正式发布门禁保持。目标继续进行，不因普通窗口运行把整个目标标记 blocked。
+
 #### D：钥匙串失败反馈与恢复步骤（2026-10-02）
 
 - 实际 ProviderSettings 的 showStatus 原先给所有结果安装 2 秒清除计时器，保存/删除/迁移拒绝和“写入成功但 summary 刷新失败”的恢复提示均会消失。受控时钟专项回归旧代码确定失败（tick 2001 后保存失败不再可见），日志 `/private/tmp/reasonix-keychain-feedback-before.log`。
