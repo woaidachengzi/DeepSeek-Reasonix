@@ -61,16 +61,10 @@ pub fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error + S
                     ..
                 }
             ) {
-                let app = tray.app_handle();
-                if let Some(window) = app.get_webview_window("main") {
-                    if window.is_visible().unwrap_or(false)
-                        && !window.is_minimized().unwrap_or(false)
-                    {
-                        let _ = window.hide();
-                    } else {
-                        show_main_window(app);
-                    }
-                }
+                // Match the stable shell's primary tap: open/restore, even
+                // when already visible. Use the same application-unhide and
+                // window-focus path as the Show menu, Dock and singleton.
+                show_main_window(tray.app_handle());
             }
         })
         .build(app)?;
