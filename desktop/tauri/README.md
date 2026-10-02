@@ -860,3 +860,10 @@ runtime 选项使旧复制失效，pending 禁止重复操作，卸载清理计�
 完整邮件/OAuth、D/E 和正式发布验收。
 同包双档案独立菜单/剪贴板 4/4 通过，最小权限拒绝、原剪贴板恢复和退出清理通过，
 日志 `/private/tmp/reasonix-mermaid-native-clipboard.log`，独立确认无 Preview 残留。
+
+2026-10-02 当前 `1b6a7706d` 包完整窗口门禁 `--dialogs --edit --focus` 46/46
+通过（两档案各 23 项），日志 `/private/tmp/reasonix-mermaid-full-window.log`，独立
+确认无 Preview 残留。历史最小化偶发根因仍未知。新私有托管档案的保存写入拒绝 UI
+补验首次绑定/同宿主只读重绑仍报 ScreenCaptureKit `-3811`，未输入或保存；只停止
+确认自有宿主，sidecar/ready 清理、原件和只读目标目录保护通过。失败现场和日志
+`/private/tmp/reasonix-write-denied-mermaid-ui.log` 保留，不计正常 Cmd+Q 或 UI 通过。
