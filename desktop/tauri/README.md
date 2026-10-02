@@ -477,6 +477,25 @@ budget、sidecar/arm64 包和本地严格签名核对通过；日志
 和四个自有进程已独立核对清理，原件及身份保持。旧包捕捉失败仍单独保留，不以此推断
 捕捉错误根因已解决。实际主题导入/图片/应用重启、文档另存为和窗口稳定性仍待验收。
 
+本地文件另存为也可使用同一普通 runner：
+
+```bash
+python3 -B tools/tauri/smoke-native-ui-export.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app' --scenario document --profile both --seconds 900 --control /private/tmp/reasonix-document-save-ui-control.json
+```
+
+读取当前 0600 控制里的固定 `prompt`，通过真实空输入框发送。唯一 provider 是本轮
+`127.0.0.1` 服务，固定回复 Original A/B 两个私有文件链接；不使用外部模型或用户凭据。
+实际右键 Original A→另存为，先 Cancel 并 `--record cancel`，再到 `outputFile` 目录
+新保存并 `--record new-save`。改用 Original B，选择同名目标取消 Replace，再取消保存
+面板，执行 `--record overwrite-cancel`；再次保存并确认 Replace，执行 `--record overwrite`。
+所有 record 都须传相同 `--control`，最后实际 Cmd+Q；第二档案重复相同流程。
+源目录/输出名包含中文和空格；两份原件的字节/权限/mtime/inode 始终保护，输出必须依次
+为 A/B，取消覆盖保持已有副本的全部元数据。成功清理自有进程、服务和私有档案，失败
+保留现场并返回非零。该命令管理夹具，不能替代实际面板和成功/取消反馈验收。
+2026-10-02 当前 `851111594` 普通包两种档案已完成上述真实 UI，共两次正常退出/八项
+文件检查，日志 `/private/tmp/reasonix-document-save-ui.log`。同文件/实际写入拒绝反馈和
+Finder/editor 等操作另行验收，既有 theme/diagnostics 默认行为保持。
+
 主题导入的普通私有档案 runner：
 
 ```bash

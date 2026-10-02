@@ -13,8 +13,12 @@ For --scenario theme, use Settings > Appearance > Browse Themes, create the
 image-free graphite-based theme named THEME_NAMES[0], then export/cancel/save.
 Edit the same theme name to THEME_NAMES[1] before checking Cancel/Replace.
 --record derives its scenario from the owned live control, not a CLI override.
+For --scenario document, send the published fixed prompt to the loopback-only
+provider. Original A is used for cancel/new-save; Original B for Cancel/Replace
+to the same output. Neither prepared source is changed by the runner or UI.
 """
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -34,6 +38,9 @@ sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location('package', Path(__file__).with_name('smoke-packaged-app.py'))
 package = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(package)
+document_spec = importlib.util.spec_from_file_location('document_provider', Path(__file__).with_name('native-document-provider.py'))
+documents = importlib.util.module_from_spec(document_spec)
+document_spec.loader.exec_module(documents)
 STEPS = ('cancel', 'new-save', 'overwrite-cancel', 'overwrite')
 THEME_NAMES = ('Reasonix UI Theme', 'Reasonix UI Theme Revised')
 
@@ -51,8 +58,29 @@ def original(path):
     return path.read_bytes(), info.st_mode, info.st_mtime_ns, info.st_ino
 
 
+def document_sources(mode):
+    return [mode / '原件 文件' / f'原件 {letter}.md' for letter in ('A', 'B')]
+
+
+def fingerprint(path):
+    private_file(path, 4096)
+    info = path.stat()
+    return {'sha256': hashlib.sha256(path.read_bytes()).hexdigest(), 'mode': info.st_mode,
+            'mtime': info.st_mtime_ns, 'inode': info.st_ino}
+
+
+def output_name(scenario):
+    return {'theme': '主题 副本.reasonix-theme', 'diagnostics': '报告 副本.json',
+            'document': '文档 副本.md'}[scenario]
+
+
 def report(path, scenario='diagnostics'):
     private_file(path, 8 << 20)
+    if scenario == 'document':
+        data = path.read_bytes()
+        if data not in documents.CONTENTS:
+            raise RuntimeError('Saved document differs from both prepared originals')
+        return 'AB'[documents.CONTENTS.index(data)]
     if scenario == 'theme':
         with zipfile.ZipFile(path) as archive:
             if archive.namelist() != ['theme.json'] or archive.getinfo('theme.json').file_size > 1 << 20:
@@ -99,7 +127,7 @@ def record(step, control_path):
         raise RuntimeError('Export UI control does not identify a private fixture')
     mode = root / ('managed' if state['managed'] else 'explicit')
     scenario = state.get('scenario', 'diagnostics')
-    if scenario not in ('diagnostics', 'theme'):
+    if scenario not in ('diagnostics', 'theme', 'document'):
         raise RuntimeError('Export UI scenario is invalid')
     output = mode / '报告 测试'
     for directory in (root, mode, output):
@@ -107,12 +135,22 @@ def record(step, control_path):
         if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid()
                 or stat.S_IMODE(info.st_mode) != 0o700):
             raise RuntimeError('Export UI directory is not an owned private ordinary directory')
-    target = output / ('主题 副本.reasonix-theme' if scenario == 'theme' else '报告 副本.json')
+    target = output / output_name(scenario)
     if state['outputFile'] != str(target) or state['phase'] != step:
         raise RuntimeError('Export UI step/path does not match the current phase')
     if any(type(state[key]) is not int or not package.is_alive(state[key])
            for key in ('hostPid', 'sidecarPid')):
         raise RuntimeError('Export UI fixture is no longer live')
+    if scenario == 'document':
+        info = (mode / '原件 文件').lstat()
+        if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid()
+                or stat.S_IMODE(info.st_mode) != 0o700):
+            raise RuntimeError('Document source directory is not private')
+        sources = document_sources(mode)
+        if (state.get('sourceFiles') != [str(path) for path in sources]
+                or [fingerprint(path) for path in sources] != state.get('sourceFingerprints')
+                or [path.read_bytes() for path in sources] != list(documents.CONTENTS)):
+            raise RuntimeError('Document source protection failed')
     receipt = mode / 'ui-export-receipt.json'
     prior = {'steps': []}
     has_receipt = receipt.exists() or receipt.is_symlink()
@@ -131,6 +169,8 @@ def record(step, control_path):
             raise RuntimeError('Export left unexpected output files')
         identifier = report(target, scenario)
         if step == 'new-save':
+            if scenario == 'document' and identifier != 'A':
+                raise RuntimeError('First Save As did not copy Original A')
             if scenario == 'theme' and identifier != THEME_NAMES[0]:
                 raise RuntimeError('First export did not publish the created theme')
             private_file(target, 8 << 20)
@@ -161,7 +201,7 @@ def record(step, control_path):
 def smoke(app_path, control_path, seconds, profile, scenario='diagnostics'):
     if profile not in ('managed', 'explicit', 'both') or not 60 <= seconds <= 900:
         raise ValueError('Invalid export UI profile/duration')
-    if scenario not in ('diagnostics', 'theme'):
+    if scenario not in ('diagnostics', 'theme', 'document'):
         raise ValueError('Invalid export UI scenario')
     control = Path(control_path)
     if control.parent != Path('/private/tmp') or control.parent.resolve() != control.parent:
@@ -193,13 +233,25 @@ def smoke(app_path, control_path, seconds, profile, scenario='diagnostics'):
             canary.touch(mode=0o600)
             canary.write_bytes(b'private export original\n')
             before = original(canary)
+            provider = None
+            sources, source_fingerprints = [], []
+            if scenario == 'document':
+                (mode / '原件 文件').mkdir(mode=0o700)
+                sources = document_sources(mode)
+                for path, data in zip(sources, documents.CONTENTS):
+                    path.touch(mode=0o600, exist_ok=False)
+                    path.write_bytes(data)
+                source_fingerprints = [fingerprint(path) for path in sources]
             env = environment | {'HOME': str(mode / 'home'), 'TMPDIR': str(mode / 'tmp')}
             if not managed:
                 env |= {'REASONIX_HOME': str(core), 'REASONIX_CACHE_HOME': str(mode / 'cache')}
-            host = subprocess.Popen([str(host_binary)], env=env, stdout=subprocess.DEVNULL,
-                                    stderr=subprocess.DEVNULL, start_new_session=True)
+            host = None
             sidecar = None
             try:
+                if scenario == 'document':
+                    provider = documents.DocumentProvider(core, sources)
+                host = subprocess.Popen([str(host_binary)], env=env, stdout=subprocess.DEVNULL,
+                                        stderr=subprocess.DEVNULL, start_new_session=True)
                 deadline = time.monotonic() + 25
                 while host.poll() is None and time.monotonic() < deadline:
                     ready = list((mode / 'tmp').glob('reasonix-tauri-bridge-*/ready.json'))
@@ -216,8 +268,11 @@ def smoke(app_path, control_path, seconds, profile, scenario='diagnostics'):
                 control.write_text(json.dumps({'root': str(root), 'managed': managed, 'hostPid': host.pid,
                                                'sidecarPid': sidecar, 'phase': 'cancel',
                                                'scenario': scenario,
+                                               'sourceFiles': [str(path) for path in sources],
+                                               'sourceFingerprints': source_fingerprints,
+                                               'prompt': documents.PROMPT if scenario == 'document' else '',
                                                'themeNames': list(THEME_NAMES) if scenario == 'theme' else [],
-                                               'outputFile': str(mode / '报告 测试' / ('主题 副本.reasonix-theme' if scenario == 'theme' else '报告 副本.json'))}))
+                                               'outputFile': str(mode / '报告 测试' / output_name(scenario))}))
                 control.chmod(0o600)
                 print(f"Ordinary {'managed' if managed else 'explicit'} export UI ready", flush=True)
                 if host.wait(timeout=seconds) != 0:
@@ -231,15 +286,18 @@ def smoke(app_path, control_path, seconds, profile, scenario='diagnostics'):
                 receipt = mode / 'ui-export-receipt.json'
                 private_file(receipt, 8192)
                 state = json.loads(receipt.read_text())
-                target = mode / '报告 测试' / ('主题 副本.reasonix-theme' if scenario == 'theme' else '报告 副本.json')
+                target = mode / '报告 测试' / output_name(scenario)
                 if state['steps'] != list(STEPS) or report(target, scenario) == state['firstId']:
                     raise RuntimeError('Export UI steps were incomplete')
                 if original(canary) != before or package.check_credential_profile(core) != identity:
                     raise RuntimeError('Export UI changed its protected original/profile identity')
+                if scenario == 'document' and (provider.requests != 1 or provider.error
+                                               or [fingerprint(path) for path in sources] != source_fingerprints):
+                    raise RuntimeError('Document provider or source protection did not pass')
                 passed += 1
                 print('Four actual output checks, original/identity protection and normal quit cleanup passed', flush=True)
             finally:
-                if host.poll() is None:
+                if host is not None and host.poll() is None:
                     os.killpg(host.pid, signal.SIGKILL)
                     host.wait(timeout=5)
                 deadline = time.monotonic() + 5
@@ -250,6 +308,8 @@ def smoke(app_path, control_path, seconds, profile, scenario='diagnostics'):
                         os.kill(pid, signal.SIGKILL)
                     except ProcessLookupError:
                         pass
+                if provider is not None:
+                    provider.close()
         success = True
         print(f'{passed} ordinary export UI lifecycles passed; native panel/UI evidence is separate', flush=True)
     finally:
@@ -266,7 +326,7 @@ if __name__ == '__main__':
     parser.add_argument('--control', default='/private/tmp/reasonix-ui-export-control.json')
     parser.add_argument('--seconds', type=int, default=600, choices=range(60, 901), metavar='SECONDS')
     parser.add_argument('--profile', choices=('managed', 'explicit', 'both'), default='both')
-    parser.add_argument('--scenario', choices=('diagnostics', 'theme'), default='diagnostics')
+    parser.add_argument('--scenario', choices=('diagnostics', 'theme', 'document'), default='diagnostics')
     parser.add_argument('--record', choices=STEPS)
     args = parser.parse_args()
     if sys.platform != 'darwin':
