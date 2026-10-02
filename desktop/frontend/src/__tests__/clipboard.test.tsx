@@ -28,12 +28,32 @@ assert.equal(await writeClipboardText("中文\nline two"), true);
 assert.equal(await readClipboardText(), "中文\nline two");
 assert.equal(browserCalls, 0, "Tauri uses native text access even when the WebView Clipboard API is denied");
 
-win.__TAURI_INTERNALS__.invoke = async () => { throw new Error("native clipboard busy"); };
-win.runtime = { ClipboardSetText: async value => { nativeText = value; return true; }, ClipboardGetText: async () => nativeText };
-assert.equal(await writeClipboardText("fallback"), true);
-assert.equal(await readClipboardText(), "fallback", "a failed native clipboard can fall back to the Wails bridge");
+let wailsCalls = 0, legacyCopyCalls = 0;
+Object.defineProperty(navigator, "clipboard", { configurable: true, value: {
+  writeText: async () => { browserCalls++; },
+  readText: async () => { browserCalls++; return "browser secret"; },
+} });
+win.runtime = { ClipboardSetText: async value => { wailsCalls++; nativeText = value; return true; }, ClipboardGetText: async () => { wailsCalls++; return "Wails secret"; } };
+Object.defineProperty(document, "execCommand", { configurable: true, value: () => { legacyCopyCalls++; return true; } });
+for (const reason of ["clipboard-manager read_text not allowed", "native clipboard busy"]) {
+  win.__TAURI_INTERNALS__.invoke = async () => { throw new Error(reason); };
+  assert.equal(await writeClipboardText("refused write"), false, "Tauri write refusal is terminal");
+  assert.equal(await readClipboardText(), "", "forgiving Tauri read refuses fallback data");
+  await assert.rejects(readClipboardTextOrThrow(), new RegExp(reason), "strict Tauri read preserves refusal");
+}
+assert.equal(browserCalls, 0, "Tauri refusal cannot switch to browser permissions");
+assert.equal(wailsCalls, 0, "Tauri refusal cannot reach another host bridge");
+assert.equal(legacyCopyCalls, 0, "Tauri refusal cannot use execCommand");
+assert.equal(document.querySelector("textarea"), null, "refusal never creates a fallback textarea");
 
 host.isTauri = false;
+Object.defineProperty(navigator, "clipboard", { configurable: true, value: {
+  writeText: async () => { throw new Error("browser denied"); },
+  readText: async () => { throw new Error("browser denied"); },
+} });
+assert.equal(await writeClipboardText("Wails fallback"), true, "Wails retains its native bridge fallback");
+assert.equal(await readClipboardText(), "Wails secret");
+assert.equal(wailsCalls, 2);
 delete win.runtime;
 const focused = document.getElementById("focus") as HTMLInputElement;
 focused.focus();

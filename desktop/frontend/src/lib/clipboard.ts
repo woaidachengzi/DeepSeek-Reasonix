@@ -10,7 +10,9 @@ export async function writeClipboardText(value: string): Promise<boolean> {
       await writeText(value);
       return true;
     } catch {
-      // A temporarily unavailable native clipboard can use browser fallbacks.
+      // Preserve the native capability boundary, including transient failures.
+      // A user may retry; another transport must not bypass this refusal.
+      return false;
     }
   }
   try {
@@ -41,12 +43,10 @@ export async function readClipboardText(): Promise<string> {
 // forgiving empty-string contract above.
 export async function readClipboardTextOrThrow(): Promise<string> {
   if (isTauri()) {
-    try {
-      const { readText } = await import("@tauri-apps/plugin-clipboard-manager");
-      return await readText();
-    } catch {
-      // Try the WebView and Wails fallback when native access fails.
-    }
+    const { readText } = await import("@tauri-apps/plugin-clipboard-manager");
+    // A denial must propagate to strict editors. The forgiving wrapper above
+    // still returns empty text without exposing fallback clipboard contents.
+    return await readText();
   }
   try {
     if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
