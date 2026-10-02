@@ -66,4 +66,44 @@ const ackFailure = new NotificationClickPump({ ...deps, acknowledge: async () =>
 await ackFailure.wake();
 assert.equal(errors, 2, "ack failure is surfaced without leaking the native error");
 assert.equal(queued.length, 1, "failed ack retains a recoverable click");
+// A native signal can arrive while an older pending() snapshot is in flight.
+// Its empty result must not swallow the only wake for the newly queued click.
+let releaseEmpty!: () => void;
+const emptySnapshot = new Promise<typeof queued>(resolve => { releaseEmpty = () => resolve([]); });
+let pendingQueries = 0;
+let racedOpens = 0;
+let racedAcks = 0;
+let racedQueue = [click];
+const emptyRace = new NotificationClickPump({
+  ...deps,
+  pending: async () => ++pendingQueries === 1 ? emptySnapshot : racedQueue,
+  open: async () => { racedOpens += 1; return true; },
+  acknowledge: async () => { racedAcks += 1; racedQueue = []; },
+});
+const emptyInFlight = emptyRace.wake();
+await ticks();
+await emptyRace.wake();
+releaseEmpty();
+await emptyInFlight;
+await ticks();
+assert.equal(racedOpens, 1, "a native wake during an empty snapshot opens the newly queued click");
+assert.equal(racedAcks, 1, "the raced click is acknowledged once without a readiness change");
+
+// A coalesced event must not create a tight retry loop after storage failure.
+let releaseFailure!: () => void;
+const failedSnapshot = new Promise<typeof queued>((_resolve, reject) => { releaseFailure = () => reject(new Error("private-storage-error")); });
+let failureQueries = 0;
+let failureReports = 0;
+const failureRace = new NotificationClickPump({
+  ...deps,
+  pending: async () => { failureQueries += 1; return failedSnapshot; },
+  failed: () => { failureReports += 1; },
+});
+const failureInFlight = failureRace.wake();
+await failureRace.wake();
+releaseFailure();
+await failureInFlight;
+await ticks();
+assert.equal(failureQueries, 1, "a failed query waits for a later real wake");
+assert.equal(failureReports, 1);
 console.log("Tauri notification click lifecycle passed");

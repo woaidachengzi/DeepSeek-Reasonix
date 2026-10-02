@@ -25,7 +25,7 @@ export class NotificationClickPump {
     if (this.stopped) return;
     if (this.draining) { this.wakeAgain = true; return; }
     this.draining = true;
-    let progressed = false;
+    let failed = false;
     try {
       // Native bounds the queue to 32; take a fresh head after each ack so
       // signals arriving during navigation cannot restore stale targets.
@@ -41,14 +41,15 @@ export class NotificationClickPump {
         } else this.dependencies.unavailable();
         await this.dependencies.acknowledge(click.token);
         if (this.stopped) return;
-        progressed = true;
       }
     } catch {
       if (!this.stopped) this.dependencies.failed();
-      progressed = false; // A bridge/storage failure needs a later real wake.
+      failed = true; // A bridge/storage failure needs a later real wake.
     } finally {
       this.draining = false;
-      if (!this.stopped && progressed && this.wakeAgain) void this.wake();
+      // A signal received during an empty snapshot or a readiness check still
+      // owns a fresh query, even when this drain acknowledged nothing.
+      if (!this.stopped && !failed && this.wakeAgain) void this.wake();
     }
   }
 }
