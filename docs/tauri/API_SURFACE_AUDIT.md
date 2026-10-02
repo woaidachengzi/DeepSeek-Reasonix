@@ -99,6 +99,13 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：诊断报告原生复制与异步反馈（2026-10-02）
+
+- 对照 Wails 1.38.3，诊断页复制仍直接调用 `navigator.clipboard.writeText`，失败写入诊断加载错误。该组件由 Tauri 设置页实际消费。新增真实组件回归在修复前失败：WebView 拒绝时原生剪贴板没有收到报告，日志 `/private/tmp/reasonix-diagnostics-copy-before.log`；未使用的 `InlineDiff` 不作为当前 Tauri 入口完成证据。
+- 产品 `81b229d4a` 将诊断 JSON 复制接入共享 `writeClipboardText`，成功反馈等待实际原生结果；失败清除旧成功提示并显示三语“无法复制诊断报告/稍后重试”，复制错误与报告加载错误独立。pending 禁止重复复制；刷新或切换 runtime 选项使旧请求失效，旧完成不得标记新报告已复制，卸载使请求失效并清理反馈计时器。保留原报告规范化/脱敏流程，没有新增自动读取或 capability。
+- 新真实组件/native adapter 回归覆盖浏览器拒绝时原生写入、原生 busy 后成功反馈清除与内部错误隐藏、pending 禁用、刷新前旧复制完成拒绝以及独立加载错误，浏览器写入调用数为 0。已纳入完整 `pnpm test:tauri`；新定向、原诊断页测试和完整 Tauri 回归均通过，日志 `/private/tmp/reasonix-diagnostics-copy-after.log`、`/private/tmp/reasonix-diagnostics-existing-tests.log`、`/private/tmp/reasonix-diagnostics-tauri-tests.log`。组件样本不等同真实设置页点击或系统剪贴板验收。
+- `81b229d4a` 的完整生产构建通过，类型/contract/budget、sidecar/arm64 宿主及本地 ad-hoc 签名通过，三语文案未增加预算，日志 `/private/tmp/reasonix-diagnostics-native-build.log`。新包双档案独立菜单/原生剪贴板 **4/4 通过**，主窗口文本读写、图片拒绝及无权限同源 WebView 文本拒绝、系统剪贴板原件恢复、身份/退出清理通过，日志 `/private/tmp/reasonix-diagnostics-native-clipboard.log`；独立确认无 Preview 实例残留。原生链路和组件消费者分别验证，未扩大为诊断设置页物理点击或完整窗口稳定性已验；D/E 和正式签名/公证继续待验，用户明确延期项保持。
+
 #### D：搜索来源原生打开与复制（2026-10-02）
 
 - 对照 Wails 1.38.3 的 `SearchSourcesPanel`，当前共享组件仍使用普通 `target=_blank` 默认跳转和 `navigator.clipboard?.writeText`；它由消息/搜索脚注实际消费，未覆盖 Tauri 原生打开与文本剪贴板边界。新增真实组件回归修复前失败：点击没有阻止 WebView 默认导航，日志 `/private/tmp/reasonix-search-sources-before.log`。

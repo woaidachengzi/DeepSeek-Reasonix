@@ -835,3 +835,11 @@ WebView 默认导航；复制使用原生文本封装，显示实际成败，打
 两种私有档案的新包原生链接拒绝与默认浏览器本机回执通过，日志
 `/private/tmp/reasonix-search-sources-native-links.log`。这不代替消息中来源物理点击
 验收；ScreenCaptureKit 观察问题及其余 D/E、正式发布门禁继续保留。
+
+2026-10-02 诊断报告复制：实际 Tauri 设置消费者改用共享原生文本入口，成功反馈
+等待实际完成；拒绝清除旧成功并提示重试，复制错误不覆盖报告加载错误。刷新/切换
+runtime 选项使旧复制失效，pending 禁止重复操作，卸载清理计时器和请求。
+新增真实组件回归、原诊断测试及完整 `test:tauri` 通过；产品 `81b229d4a` 完整
+生产构建和双档案独立菜单/剪贴板 4/4 通过，权限拒绝、系统原件恢复及退出清理通过，
+日志 `/private/tmp/reasonix-diagnostics-native-clipboard.log`。没有增加 capability 或
+自动读取；此证据不代替真实诊断设置页点击、其他 D/E 或正式发布验收。
