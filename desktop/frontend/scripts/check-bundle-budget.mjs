@@ -364,7 +364,11 @@ for (const path of localeChunks) {
   // Native notification authorization, denied/provisional states and separate
   // delivery/navigation recovery add five localized captions. zh stays within
   // its existing cap; zh-TW needs the next bounded 0.2 KiB for this UI surface.
-  const budget = (name.startsWith("zh-TW-") ? 79.1 : 78.9) * 1024;
+  // Three Save As recovery messages add 109 gzip bytes to zh-TW (81047
+  // bytes versus 80938 with only those keys removed). The prior ceiling is
+  // exceeded by 49 bytes; keep the complete source/destination recovery copy
+  // with a bounded 0.1 KiB locale allowance. zh remains within its cap.
+  const budget = (name.startsWith("zh-TW-") ? 79.2 : 78.9) * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 
