@@ -512,6 +512,22 @@ Missing source→另存为，要求即时源文件不可用提示且没有 Save 
 通过，日志 `/private/tmp/reasonix-document-errors-fixed-ui.log`。原件/身份/退出清理保持，
 成功夹具及自有进程已独立核对清理；目录/真实系统读取或写入拒绝另行验收。
 
+真实源读取权限拒绝有独立切片：
+
+```bash
+python3 -B tools/tauri/smoke-native-ui-export.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app' --scenario document-permissions --profile both --seconds 600 --control /private/tmp/reasonix-document-permissions-ui-control.json
+```
+
+runner 将 Original A 设为 mode-000，启动前要求当前用户路径打开实际 PermissionError，
+能绕过权限时拒绝验收。唯一固定回环 provider 仍只生成文件链接。实际发送固定提示，
+右键 Original A→另存为，要求源不可读取提示、无保存面板，然后
+`--record read-denied --control /private/tmp/reasonix-document-permissions-ui-control.json`，
+实际 Cmd+Q；第二档案重复。记录时核对不可读原件的 mode/inode/mtime/size、第二原件
+完整指纹和零输出；退出后通过只留在 runner 的原只读描述符确认第一原件精确字节。
+不会恢复文件权限或把描述符交给应用。`5882a249d` 普通包两种档案已通过两次实际读取
+拒绝与正常退出，日志 `/private/tmp/reasonix-document-permissions-ui.log`。写入拒绝等
+剩余范围另行验收，默认正常导出及其他错误切片阶段不变。
+
 主题导入的普通私有档案 runner：
 
 ```bash
