@@ -99,6 +99,14 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：搜索来源原生打开与复制（2026-10-02）
+
+- 对照 Wails 1.38.3 的 `SearchSourcesPanel`，当前共享组件仍使用普通 `target=_blank` 默认跳转和 `navigator.clipboard?.writeText`；它由消息/搜索脚注实际消费，未覆盖 Tauri 原生打开与文本剪贴板边界。新增真实组件回归修复前失败：点击没有阻止 WebView 默认导航，日志 `/private/tmp/reasonix-search-sources-before.log`。
+- 搜索来源接入既有 `openExternal` 与 `writeClipboardText`，普通点击、Command 点击和中键点击均阻止默认导航并打开系统浏览器；原生拒绝不会改用浏览器 transport。复制等待实际结果提供成功/失败提示，打开失败提供复制链接操作，复用已有三语文案且不暴露内部错误。来源 HTTP(S) 过滤/去重与原消息数据保持，不增加 capability 或导航权限；Wails/browser 使用共享封装的现有宿主分流。
+- 新回归覆盖真实组件的三种激活、规范化后的原生参数、危险来源过滤、实际复制成功、打开拒绝后的复制恢复及复制拒绝，浏览器替代 transport 调用数为 0。已纳入 `pnpm test:external-links`（也由 `test:tauri` 调用），新增定向与完整外链回归通过，日志 `/private/tmp/reasonix-search-sources-after.log`、`/private/tmp/reasonix-search-sources-external-tests.log`。完整生产构建（类型/contract/budget、sidecar/arm64 host、本地 ad-hoc 签名）通过，日志 `/private/tmp/reasonix-search-sources-native-build.log`。
+- 新包两种私有档案实际 WKWebView 原生打开命令、非法协议/userinfo/mail 参数拒绝及默认系统浏览器本机回执通过，日志 `/private/tmp/reasonix-search-sources-native-links.log`，正常退出和成功现场清理通过。这是组件与真实原生链路的分层证据，未执行生产消息中的搜索来源物理点击；不扩展为该物理 UI、mail/OAuth、历史画面采集故障、完整 D/E 或正式发布已验收。
+- 同一包双档案基础 smoke 通过：私有凭据身份、通知授权查询、Global 工作区、sidecar readiness、未认证请求拒绝和退出清理，日志 `/private/tmp/reasonix-search-sources-package-smoke.log`；独立确认无 Preview 实例残留。签名仍为本地 ad-hoc，正式签名/公证未完成。
+
 #### D：当前剪贴板包完整窗口门禁与 UI 观察阻塞（2026-10-02）
 
 - 当前产品 `7a83505ce` 的普通生产包执行 `smoke-native-window.py --dialogs --edit --focus`，**46/46 通过**（托管/显式各 23 项），日志 `/private/tmp/reasonix-window-boundary-current.log`。包含严格最小化/恢复、设置恢复、后台流式任务、外观恢复/回滚、原生编辑/剪贴板、面板取消、第二实例焦点和退出重启；没有放宽断言或重试失败阶段。此前偶发最小化失败根因仍未确定，本次通过不能作为稳定性修复或正式发布放行。

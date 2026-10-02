@@ -3,10 +3,23 @@ import { ChevronRight } from "lucide-react";
 import { useT } from "../lib/i18n";
 import { normalizeSearchSources } from "../lib/searchSourcesPresentation";
 import type { SearchSource } from "../lib/searchSources";
+import { openExternal } from "../lib/externalLinks";
+import { writeClipboardText } from "../lib/clipboard";
+import { useToast } from "../lib/toast";
 
 export function SearchSourcesPanel({ sources }: { sources?: SearchSource[] }) {
   const t = useT();
+  const { showToast } = useToast();
   const [open, setOpen] = useState(false);
+  const copyLink = async (href: string) => {
+    const copied = await writeClipboardText(href);
+    showToast(t(copied ? "richLink.copied" : "richLink.copyFailed"), copied ? "info" : "error");
+  };
+  const openLink = async (href: string) => {
+    if (!await openExternal(href)) showToast(t("settings.about.openLinkFailed"), "error", {
+      actionLabel: t("sources.copyLink"), onAction: () => { void copyLink(href); },
+    });
+  };
   const presentation = normalizeSearchSources(sources);
   if (presentation.visible.length === 0) return null;
 
@@ -40,6 +53,15 @@ export function SearchSourcesPanel({ sources }: { sources?: SearchSource[] }) {
                 target="_blank"
                 rel="noreferrer noopener"
                 title={t("sources.open")}
+                onClick={(event) => {
+                  event.preventDefault();
+                  void openLink(source.href);
+                }}
+                onAuxClick={(event) => {
+                  if (event.button !== 1) return;
+                  event.preventDefault();
+                  void openLink(source.href);
+                }}
               >
                 <span className="msg-search-source__title">{source.title}</span>
                 <span className="msg-search-source__url">
@@ -55,7 +77,7 @@ export function SearchSourcesPanel({ sources }: { sources?: SearchSource[] }) {
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
-                  void navigator.clipboard?.writeText(source.href);
+                  void copyLink(source.href);
                 }}
               >
                 <span aria-hidden="true">⧉</span>

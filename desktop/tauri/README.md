@@ -827,3 +827,11 @@ execCommand。可通过用户重试恢复；Wails/browser 模式的原有回退�
 原件字节及元数据保持、零输出；失败现场和日志
 `/private/tmp/reasonix-write-denied-after-window-ui.log` 保留。该测试主动停止不是正常
 Cmd+Q 验收或应用自行崩溃；物理 UI 验收仍需恢复可靠的观察能力。
+
+2026-10-02 搜索来源：链接点击（含 Command/中键）使用原生外部链接封装，禁止
+WebView 默认导航；复制使用原生文本封装，显示实际成败，打开失败提供复制恢复。
+不增加权限，原生拒绝不走浏览器回退，来源过滤/去重保持。真实组件回归修复前失败、
+修复后通过，已纳入 `test:external-links`；完整外链回归与生产构建通过。
+两种私有档案的新包原生链接拒绝与默认浏览器本机回执通过，日志
+`/private/tmp/reasonix-search-sources-native-links.log`。这不代替消息中来源物理点击
+验收；ScreenCaptureKit 观察问题及其余 D/E、正式发布门禁继续保留。
