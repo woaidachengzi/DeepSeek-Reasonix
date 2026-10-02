@@ -80,4 +80,15 @@ assert.equal(setTauriShortcut("new_session", null, "darwin"), true);
 assert.equal(setTauriShortcut("settings", null, "darwin"), true, "reset works once the original chord is free");
 resetTauriShortcuts();
 
+for (const action of TAURI_SHORTCUT_ACTIONS) {
+  const combo = defaultTauriShortcut(action, "darwin");
+  for (const composition of [{ isComposing: true }, { keyCode: 229 }]) {
+    const event = new dom.window.KeyboardEvent("keydown", {
+      key: combo.key, metaKey: combo.meta, ctrlKey: combo.ctrl,
+      altKey: combo.alt, shiftKey: combo.shift, ...composition,
+    });
+    assert.equal(matchesTauriShortcut(event, action, "darwin"), false, `${action} leaves composition keys to the input method`);
+  }
+}
+
 console.log("tauri shortcuts: OK");

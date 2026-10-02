@@ -42,11 +42,24 @@ await act(async () => {
 assert.equal(switches().length, 1, "a deleted target does not create or switch a session");
 assert.equal(fixture.__notificationClicks.length, 0, "a stale target does not block the queue");
 
+for (const composition of [{ isComposing: true }, { keyCode: 229 }]) {
+  const event = new dom.window.KeyboardEvent("keydown", { key: ",", ctrlKey: true, bubbles: true, cancelable: true, ...composition });
+  await act(async () => { document.dispatchEvent(event); await settle(); });
+  assert.equal(document.querySelector('.tauri-settings-overlay'), null, "IME keys do not open the underlying settings surface");
+  assert.equal(event.defaultPrevented, false, "the input method retains the composition key");
+}
 await act(async () => {
   document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: ",", ctrlKey: true, bubbles: true }));
   await settle();
 });
 assert.ok(document.querySelector('.tauri-settings-overlay'), "settings opens before the same-session notification");
+for (const composition of [{ isComposing: true }, { keyCode: 229 }]) {
+  await act(async () => {
+    document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, ...composition }));
+    await settle();
+  });
+  assert.ok(document.querySelector('.tauri-settings-overlay'), "IME cancellation does not close settings");
+}
 await act(async () => {
   fixture.__notificationClicks = [{ token: "same-session", sessionId: "notification-session" }];
   fixture.__notificationTargets["same-session"] = { sessionId: "notification-session", workspaceRoot: "/canonical/project" };

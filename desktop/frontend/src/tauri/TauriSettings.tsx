@@ -30,7 +30,7 @@ import { TypographySettings } from "../components/TypographySettings";
 import { SettingsSection } from "../components/SettingsForm";
 import { SettingsOptions } from "../components/SettingsOptions";
 import { comboFromKeyboardEvent, detectShortcutPlatform, formatShortcutCombo } from "../lib/keyboardShortcuts";
-import { TAURI_SHORTCUT_ACTIONS, defaultTauriShortcut, getTauriShortcut, isValidTauriShortcut, nativeTauriShortcutConflict, resetTauriShortcuts, setTauriShortcut, tauriShortcutConflict, useTauriShortcuts, type TauriShortcutAction } from "./tauriKeyboardShortcuts";
+import { TAURI_SHORTCUT_ACTIONS, defaultTauriShortcut, getTauriShortcut, isTauriCompositionKey, isValidTauriShortcut, nativeTauriShortcutConflict, resetTauriShortcuts, setTauriShortcut, tauriShortcutConflict, useTauriShortcuts, type TauriShortcutAction } from "./tauriKeyboardShortcuts";
 import "../components/SettingsPanel.css";
 import "../components/CompactRatioSettings.css";
 import { getTauriNotificationsEnabled, getTauriNotificationEvents, setTauriNotificationEvent, setTauriNotificationsEnabled, getTauriProgressMode, setTauriProgressMode, type TauriNotificationKind, type TauriProgressMode } from "./tauriPreferences";
@@ -780,6 +780,7 @@ function ShortcutSettings() {
   const [recording, setRecording] = useState<TauriShortcutAction | null>(null);
   const [feedback, setFeedback] = useState("");
   const record = (action: TauriShortcutAction, event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (isTauriCompositionKey(event.nativeEvent)) return;
     if (event.key === "Escape") {
       event.preventDefault(); event.stopPropagation();
       setRecording(null); setFeedback("");

@@ -22,7 +22,7 @@ import { generativeMusic, isGenerativeMusicEnabled } from "../lib/generative-mus
 import logoWordmark from "../assets/logo-wordmark.svg";
 import { TAURI_SHORTCUT_LABELS, TauriSettings, type TauriSettingsTab } from "./TauriSettings";
 import { detectShortcutPlatform, formatShortcutCombo, type ShortcutSection } from "../lib/keyboardShortcuts";
-import { defaultTauriShortcut, getTauriShortcut, matchesTauriShortcut, TAURI_SHORTCUT_ACTIONS, TAURI_SHORTCUT_TABS, useTauriShortcuts, type TauriShortcutAction } from "./tauriKeyboardShortcuts";
+import { defaultTauriShortcut, getTauriShortcut, isTauriCompositionKey, matchesTauriShortcut, TAURI_SHORTCUT_ACTIONS, TAURI_SHORTCUT_TABS, useTauriShortcuts, type TauriShortcutAction } from "./tauriKeyboardShortcuts";
 import { TauriStatusBar } from "./TauriStatusBar";
 import { useTauriDesktopLayout } from "./tauriDesktopLayout";
 import { getTauriDefaultWorkspace, setTauriDefaultWorkspace } from "./tauriDefaultWorkspace";
@@ -758,7 +758,7 @@ export function TauriSessionPreview() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || (event.target instanceof HTMLElement && event.target.closest(".tauri-shortcut-key.is-recording"))) return;
+      if (isTauriCompositionKey(event) || event.defaultPrevented || (event.target instanceof HTMLElement && event.target.closest(".tauri-shortcut-key.is-recording"))) return;
       const shortcutPlatform = detectShortcutPlatform();
       if (matchesTauriShortcut(event, "command_palette", shortcutPlatform)) {
         event.preventDefault();
@@ -3212,7 +3212,7 @@ export function TauriSessionPreview() {
             </div>)}</div>}
             <textarea ref={composerRef} value={prompt} onChange={event => setPrompt(event.target.value)} onKeyDown={event => {
               const native = event.nativeEvent;
-              if (native.isComposing || native.keyCode === 229) return;
+              if (isTauriCompositionKey(native)) return;
               if (matchesTauriShortcut(native, "composer_newline", detectShortcutPlatform())) {
                 event.preventDefault();
                 const textarea = event.currentTarget;

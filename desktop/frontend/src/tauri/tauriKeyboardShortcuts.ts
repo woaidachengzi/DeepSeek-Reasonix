@@ -228,8 +228,13 @@ export function resetTauriShortcuts(): void {
 }
 
 export function matchesTauriShortcut(event: KeyboardEvent, action: TauriShortcutAction, platform: ShortcutPlatform): boolean {
+  if (isTauriCompositionKey(event)) return false;
   const combo = comboFromKeyboardEvent(event);
   return Boolean(combo && !nativeTauriShortcutConflict(combo, platform) && sameCombo(combo, getTauriShortcut(action, platform)));
+}
+
+export function isTauriCompositionKey(event: Pick<KeyboardEvent, "isComposing" | "keyCode">): boolean {
+  return event.isComposing || event.keyCode === 229;
 }
 
 export function useTauriShortcuts(): Overrides {

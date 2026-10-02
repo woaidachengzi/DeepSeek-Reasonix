@@ -630,6 +630,16 @@ const settingsShortcutKey = document.querySelector<HTMLButtonElement>('[data-tau
 assert.ok(settingsShortcutKey);
 await act(async () => { settingsShortcutKey.click(); });
 assert.equal(document.activeElement, settingsShortcutKey, "Preview shortcut recorder receives keyboard focus");
+for (const composition of [{ isComposing: true }, { keyCode: 229 }]) {
+  for (const key of ["q", "Escape"]) {
+    const before = localStorage.getItem("reasonix.tauri.shortcuts.v1");
+    const event = new dom.window.KeyboardEvent("keydown", { key, ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true, ...composition });
+    await act(async () => { settingsShortcutKey.dispatchEvent(event); });
+    assert.equal(settingsShortcutKey.classList.contains("is-recording"), true, "IME keys do not finish shortcut recording");
+    assert.equal(localStorage.getItem("reasonix.tauri.shortcuts.v1"), before, "IME keys do not replace the saved binding");
+    assert.equal(event.defaultPrevented, false, "shortcut recording leaves composition to the input method");
+  }
+}
 await act(async () => { settingsShortcutKey.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "q", ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true })); });
 assert.equal(JSON.parse(localStorage.getItem("reasonix.tauri.shortcuts.v1")!).settings.key, "q", "shortcut recording saves to Preview preferences");
 const newSessionShortcutKey = document.querySelector<HTMLButtonElement>('[data-tauri-shortcut-action="new_session"]');
