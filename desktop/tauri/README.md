@@ -1005,3 +1005,14 @@ PageLoad::Finished，沿用 5 秒上限和活动 key/真实最小化断言。cli
 清理通过，日志 `/private/tmp/reasonix-notification-batch-native-delivery.log`；无 Preview
 残留。依赖层批次模拟与 OS 送达分别记证据，横幅/物理点击/冷启动/拒绝恢复和其余
 D/E/发布门禁保持。
+
+
+2026-10-02 当前包旧版回退复验：同一 `af7cf185d` macOS 生产构建包与固定摘要
+官方 Desktop/CLI 1.38.3，在生成私有目录执行 `smoke-legacy-rollback.py --workspace-data`
+全部规定阶段通过，日志 `/private/tmp/reasonix-current-candidate-legacy-rollback.log`。
+旧 GUI 前后两次原历史/同会话 writer 拒绝/原生退出、Preview 配置导入/重启/显式
+三阶段原件保护、旧版 Global 文件/文本+图片引用与附件/检查点、回退后真实续聊及
+第二检查点通过。最新代码检查点实际恢复 preimage；更早冲突拒绝不算回退成功。
+独立确认两种宿主退出、成功夹具删除。此证据不等于完整旧历史已迁入 Preview、
+图片像素传模型、旧客户端共享目录并发或物理导入/回退 UI 已验收。当前仍不能正式发布；
+完整窗口稳定性、物理 D、B 图片/历史迁移、C 工具生命周期、E 和正式签名/公证继续待验。
