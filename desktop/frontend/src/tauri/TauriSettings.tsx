@@ -1480,6 +1480,9 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
     const previousTimer = statusTimers.current.get(providerName);
     if (previousTimer) clearTimeout(previousTimer);
     setKeyStatus(prev => ({ ...prev, [providerName]: { message, error } }));
+    // Refusals and partial-success recovery steps stay visible until the
+    // next explicit action; only ordinary success feedback expires.
+    if (error) { statusTimers.current.delete(providerName); return; }
     const timer = setTimeout(() => {
       statusTimers.current.delete(providerName);
       setKeyStatus(prev => ({ ...prev, [providerName]: null }));
@@ -1516,7 +1519,7 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
         showStatus(providerName, action !== "delete" ? t("settings.previewProvider.keySavedRefreshFailed") : deleted ? t("settings.previewProvider.keyDeletedRefreshFailed") : t("settings.previewProvider.keyMissingRefreshFailed"), true);
       }
     } catch {
-      showStatus(providerName, action === "save" ? t("settings.models.keySaveFailed") : action === "import" ? t("settings.previewProvider.keyImportFailed") : t("settings.previewProvider.keyDeleteFailed"), true);
+      showStatus(providerName, action === "save" ? t("settings.previewProvider.keySaveFailed") : action === "import" ? t("settings.previewProvider.keyImportFailed") : t("settings.previewProvider.keyDeleteFailed"), true);
     } finally {
       keyBusyRef.current = false;
       if (mounted.current) setKeyBusy(false);
@@ -1612,7 +1615,7 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
                         {t("settings.permission.applyCurrent")}
                       </button>
                     )}
-                    {keyStatus[provider.name] && <span className={`tauri-settings-apikey-status${keyStatus[provider.name]?.error ? " is-error" : " is-success"}`}>{keyStatus[provider.name]?.message}</span>}
+                    {keyStatus[provider.name] && <span role={keyStatus[provider.name]?.error ? "alert" : "status"} className={`tauri-settings-apikey-status${keyStatus[provider.name]?.error ? " is-error" : " is-success"}`}>{keyStatus[provider.name]?.message}</span>}
                   </div>
                 </div>
               )}

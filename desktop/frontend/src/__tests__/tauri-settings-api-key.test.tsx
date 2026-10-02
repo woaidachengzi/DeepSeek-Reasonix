@@ -1,5 +1,6 @@
 // Run: tsx src/__tests__/tauri-settings-api-key.test.tsx
 import assert from "node:assert/strict";
+import { mock } from "node:test";
 import { registerHooks } from "node:module";
 import { JSDOM } from "jsdom";
 
@@ -1059,6 +1060,7 @@ assert.equal(savedProviderInput?.modelsUrl, "https://provider.example/models", "
 assert.equal(savedProviderInput?.useApiKey, true, "remote services default to credential support");
 await act(async () => { enterKey("secret-input-value"); });
 
+mock.timers.enable({ apis: ["setTimeout"] });
 saveGate = new Promise(resolve => { releaseSave = resolve; });
 await act(async () => {
   click("保存到钥匙串");
@@ -1074,6 +1076,10 @@ assert.equal(document.querySelector<HTMLInputElement>(".tauri-settings-apikey in
 assert.equal(calls.filter(call => call === "provider_summary").length, 6, "save refreshes the provider summary");
 assert.equal(parentConfigured, true, "the model picker outside settings receives the saved status");
 assert.match(visibleText(), /应用到当前会话/, "saved key offers an explicit active-session update");
+assert.equal(document.querySelector(".tauri-settings-apikey-status")?.getAttribute("role"), "status");
+await act(async () => { mock.timers.tick(2001); });
+assert.doesNotMatch(visibleText(), /已保存到钥匙串/, "ordinary success still expires");
+mock.timers.reset();
 await act(async () => { click("应用到当前会话"); });
 assert.equal(applyCalls, 1, "active-session update is user initiated");
 assert.doesNotMatch(visibleText(), /应用到当前会话/, "successful update clears the pending action");
@@ -1088,15 +1094,25 @@ await act(async () => { click("删除"); });
 assert.match(visibleText(), /钥匙串中没有密钥/, "repeated delete does not claim a key was removed");
 
 await act(async () => { enterKey("secret-input-value"); });
+mock.timers.enable({ apis: ["setTimeout"] });
 failSummary = true;
 await act(async () => { click("保存到钥匙串"); });
 assert.match(visibleText(), /已保存到钥匙串；配置状态刷新失败/, "refresh failure does not misreport a successful save");
+await act(async () => { mock.timers.tick(2001); });
+assert.match(visibleText(), /已保存到钥匙串；配置状态刷新失败/, "partial success recovery instructions remain visible");
+assert.match(visibleText(), /关闭并重新打开设置/);
+mock.timers.reset();
 assert.doesNotMatch(visibleText(), /secret-input-value|secret-in-error-message/, "status never includes secrets");
 
 await act(async () => { enterKey("secret-input-value"); });
+mock.timers.enable({ apis: ["setTimeout"] });
 failSave = true;
 await act(async () => { click("保存到钥匙串"); });
 assert.match(visibleText(), /保存失败/);
+await act(async () => { mock.timers.tick(2001); });
+assert.match(visibleText(), /保存失败/, "credential failure stays visible after the success timeout");
+assert.equal(document.querySelector(".tauri-settings-apikey-status")?.getAttribute("role"), "alert", "credential refusal is announced as an error");
+mock.timers.reset();
 assert.doesNotMatch(visibleText(), /secret-in-error-message/, "error details do not expose secrets");
 
 // Import is explicit, never transmits a credential, and keeps an unsaved input.
@@ -1105,6 +1121,7 @@ const summaryCountBeforeImport = calls.filter(call => call === "provider_summary
 await act(async () => { click("迁移旧凭据"); });
 assert.equal(keyPresent, true, "import refusal preserves an already saved credential");
 assert.match(visibleText(), /迁移失败/);
+assert.doesNotMatch(visibleText(), /密钥保存失败/, "the next explicit action replaces previous failure feedback");
 assert.equal(calls.filter(call => call === "provider_summary").length, summaryCountBeforeImport, "failed migration does not report a saved key");
 assert.doesNotMatch(visibleText(), /secret-in-migration-error/, "migration errors hide sensitive host diagnostics");
 assert.equal(document.querySelector<HTMLInputElement>(".tauri-settings-apikey input")?.value, "secret-input-value", "failed migration preserves the entered value");
