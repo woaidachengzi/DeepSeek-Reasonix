@@ -20,6 +20,9 @@ const MAX_LEGACY_ENTRIES: usize = 256;
 const PROVIDER_API_KEY_PREFIX: &str = "api_key_";
 
 trait CredentialBackend: Send + Sync {
+    fn availability_error(&self) -> Option<&str> {
+        None
+    }
     fn save(&self, key: &str, value: &str) -> Result<(), String>;
     fn load(&self, key: &str) -> Result<Option<String>, String>;
     fn delete(&self, key: &str) -> Result<bool, String>;
@@ -76,6 +79,9 @@ fn credential_error(error: KeyringError) -> String {
 
 struct UnavailableCredentialBackend(String);
 impl CredentialBackend for UnavailableCredentialBackend {
+    fn availability_error(&self) -> Option<&str> {
+        Some(&self.0)
+    }
     fn save(&self, _: &str, _: &str) -> Result<(), String> {
         Err(self.0.clone())
     }
@@ -277,6 +283,12 @@ impl KeychainStore {
         &self,
         supervisor: &BridgeSupervisor,
     ) -> Result<(), String> {
+        // A missing/corrupt profile identity disables the whole backend. Keep
+        // its metadata recovery instruction instead of treating it as one
+        // bad entry or making unnecessary sidecar requests.
+        if let Some(error) = self.backend.availability_error() {
+            return Err(error.into());
+        }
         let summary = supervisor.provider_summary()?;
         let mut incomplete = false;
         for provider in summary.providers {
@@ -1019,6 +1031,19 @@ mod tests {
         );
         assert!(second.delete("api_key_smoke").unwrap());
         assert!(!second.delete("api_key_smoke").unwrap());
+    }
+
+    #[test]
+    fn unavailable_profile_preserves_recovery_instruction_without_bridge_access() {
+        let recovery = "credential profile identity is unavailable; restore its metadata backup or check profile permissions";
+        let store =
+            KeychainStore::with_backend(Arc::new(UnavailableCredentialBackend(recovery.into())));
+        let supervisor = BridgeSupervisor::with_binary(PathBuf::from("/no-test-bridge"));
+        assert_eq!(
+            store.restore_provider_api_keys(&supervisor).unwrap_err(),
+            recovery
+        );
+        assert!(!supervisor.status().running);
     }
 
     #[test]
