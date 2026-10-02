@@ -99,6 +99,14 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：当前候选完整源码回归汇总（2026-10-02）
+
+- 本轮开始 HEAD `5fe64f202` 为证据提交，实际候选生产提交 `ad3eb7070`；没有产品源码改动或重打包。使用该 `.app` 内的 `reasonix-desktop-bridge` 显式设置 `REASONIX_TAURI_BRIDGE_TEST_BIN`，运行完整 `cargo test --locked --manifest-path desktop/tauri/Cargo.toml -- --test-threads=1`，**215 通过、0 失败、2 默认忽略**，日志 `/private/tmp/reasonix-current-candidate-rust-full.log`。
+- 已核对输出，真实 bridge 启动/停止、会话目录/游标/顺序同步、Global/project/重启工作区解析、钥匙串迁移/保存/重启/删除和单 Provider 恢复失败隔离、通知真实会话路由与删除目标拒绝确实执行。受控 bundled child 回执、窗口状态/跨屏算法、源文件替换保护、通知队首溢出及权限/备份/资源作用域回归也纳入同次完整 suite。macOS Finder/Terminal 原生 catalog 和 64×64 PNG 图标读取检查通过，但没有打开这些应用或执行真实用户点击。
+- 两项忽略分别是显式 macOS 私有服务钥匙串 smoke 和独立 D-Bus broker smoke。前者最近在 `253abf30a` 来源的独立测试已实际通过，证据保留该轮归属，不把本次忽略写成通过；后者按用户 Windows/Linux 延期范围保留，不能视为 Linux 平台验收。显式传入包内 bridge 后的真实 integration 通过不推广为普通 Preview UI 已通过。
+- 同一最终工作树完整 `pnpm test:tauri` **exit 0**，日志 `/private/tmp/reasonix-current-candidate-tauri-full.log`；包括设置/Provider/钥匙串反馈、Hooks 和存储剪贴板竞态、消息/导航、通知生命周期、工作区 opener 与 external-links 全部现有回归。该 suite 使用 adapter/stub/组件环境，不代替物理按键、OS 弹窗和当前包实际菜单/托盘/通知点击。
+- 测后只读进程核对仍仅普通 Preview host/sidecar 原 PID 16939/16944，没有额外测试 sidecar；没有操作/关闭普通窗口。当前候选完整 macOS 构建与签名证据仍为 `/private/tmp/reasonix-notification-head-build.log`（ad-hoc、未公证）。完整窗口最近仍在 Settings 最小化前提失败；当前包尚未复跑该门禁和相关原生 UI。D 未结案，E 保持 D 验收后推进；旧版共享目录互斥决策、B 图片/历史、C 工具生命周期及正式 Developer ID/公证/发布授权门禁保留。
+
 #### D：通知容量溢出时保护正在处理的队首（2026-10-02）
 
 - 本轮先追踪生产窗口事件/restore/show 调用：Moved/Resized 仅 capture，窗口状态 restore 仅 setup；未找到抵消最小化请求的具体生产恢复事件证据，也未放宽最小化门禁。普通 Preview 原进程仍运行，未操作/关闭它。

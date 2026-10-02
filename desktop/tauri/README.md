@@ -1102,3 +1102,12 @@ unminimize/show/focus；已可见窗口点击不再隐藏。右键菜单/退出�
 仍为有界队列，超量等待项可被淘汰；不保证所有超量点击保留，不扩大 ACK 权限。
 普通 Preview 未被操作，新包实际 OS 送达/横幅/点击仍未复验；最小化根因未确认，
 其余 D/A/B/C/E 与正式签名/公证/发布门禁保留。
+
+
+2026-10-02 当前候选 `ad3eb7070` 的完整 Rust suite 使用包内 sidecar **215 通过、
+2 默认忽略**，真实 bridge 生命周期/工作区/会话/钥匙串/通知路由实际执行；日志
+`/private/tmp/reasonix-current-candidate-rust-full.log`。显式 macOS 钥匙串和 D-Bus 两项
+默认忽略各自保留既有独立证据/延期范围，不记为本次通过。最终工作树完整 Tauri
+前端 suite exit 0，日志 `/private/tmp/reasonix-current-candidate-tauri-full.log`。
+测试 sidecar 无额外残留，普通 Preview 原进程未被操作。完整源码回归不代替当前包
+窗口/托盘/通知等物理 UI；最小化失败、其他 D/A/B/C/E 及正式发布门禁仍保留。
