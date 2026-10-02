@@ -2849,6 +2849,7 @@ export const zhTW: Record<DictKey, string> = {
   "undoRewind.undo": "撤回",
   "undoRewind.confirm": "確認撤回？",
   "msg.copied": "已複製",
+  "msg.copyFailed": "無法複製內容。請稍後重試，或手動選取文字複製。",
 
   // 工具卡片摘要
   "tool.stepOne": "{n} 步",

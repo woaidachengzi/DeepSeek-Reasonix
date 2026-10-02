@@ -3890,6 +3890,7 @@ export const en = {
   "undoRewind.undo": "Undo",
   "undoRewind.confirm": "Confirm undo?",
   "msg.copied": "Copied",
+  "msg.copyFailed": "Could not copy. Try again or select and copy the text manually.",
 
   // tool card summaries
   "tool.stepOne": "{n} step",

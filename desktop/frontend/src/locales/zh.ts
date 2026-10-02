@@ -3893,6 +3893,7 @@ export const zh: Record<DictKey, string> = {
   "undoRewind.undo": "撤回",
   "undoRewind.confirm": "确认撤回？",
   "msg.copied": "已复制",
+  "msg.copyFailed": "无法复制内容。请稍后重试，或手动选择文本复制。",
 
   // 工具卡片摘要
   "tool.stepOne": "{n} 步",
