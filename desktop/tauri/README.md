@@ -984,3 +984,13 @@ PageLoad::Finished，沿用 5 秒上限和活动 key/真实最小化断言。cli
 `/private/tmp/reasonix-display-overlap-package-after.log`。失败现场保留、成功夹具删除，
 无 Preview 残留。本轮两屏均 2×，混合缩放/实际拔插/物理拖动与最小化稳定性仍待验，
 不将此修复推广为完整 D/E 或发布通过。
+
+
+2026-10-02 存储复制反馈修复：`a8b06f7ea` 为实际 Tauri 存储页增加同步重复请求
+拦截和来源/请求代次；旧异步结果不能给新路径显示已复制、旧错误或解除新请求忙碌。
+刷新/路径/语言变化与卸载使旧反馈失效；加载错误独立保留，已进入 native 的写入不
+宣称可撤销。专项回归先复现重复写入，再验证修复、拒绝、来源竞争、刷新错误与零回退；
+完整 Tauri/共享剪贴板回归及 macOS 构建通过。当前包独立原生菜单/文本 IPC 两档案
+4/4 通过，日志 `/private/tmp/reasonix-storage-copy-native-clipboard.log`，原剪贴板恢复、
+无 Preview 残留。组件模拟和实际 native ACL 门禁不能代替存储页物理点击/拒绝 UI；
+最小化稳定性、其余 D/E 和发布门禁仍待完成，桌面观察工具仍超时。

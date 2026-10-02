@@ -99,6 +99,14 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：存储路径复制的重复请求与来源反馈修复（2026-10-02）
+
+- 当前桌面 inventory 再次 10 秒超时，没有执行物理 UI。转而核对实际 Tauri 存储页：复制没有同步请求锁；来源变化/刷新后，旧异步完成仍可设置同一行的已复制图标或错误。新增回归在旧代码确定失败，连续两次同一事件批次点击产生两次 native 写入（期望一次），日志 `/private/tmp/reasonix-storage-copy-before.log`。
+- 存储复制现在用同步请求锁和请求代次控制忙碌状态；当前工作区、默认工作区、存储快照/语言变更、刷新或卸载均使旧反馈失效。旧完成不能标记新路径成功、显示旧错误或解除新请求忙碌；已经进入 native 的写入无法撤销，不宣称取消了系统写入。复制错误与加载/选择错误分别保存，旧复制完成不能清除刷新失败。保留原生文本 helper、当前标题/ARIA 和行布局，不新增权限或 browser/Wails 回退。
+- 专项 adapter 回归通过，覆盖原生正确路径、拒绝后清除成功/标准解决提示/不泄露原始拒绝、同步重复点击一次写入、旧来源完成不标记新来源/不解除新忙碌、刷新失败保留与零浏览器回退；日志 `/private/tmp/reasonix-storage-copy-after.log`。该回归已加入 `pnpm test:tauri`，完整 Tauri 回归和共享 native/browser/Wails 剪贴板回归 exit 0，日志 `/private/tmp/reasonix-storage-copy-tauri-tests.log`、`/private/tmp/reasonix-storage-copy-clipboard-tests.log`。
+- 产品提交 `a8b06f7ea` 完整 macOS 构建通过，日志 `/private/tmp/reasonix-storage-copy-build.log`（类型/contract/budget、Go sidecar/arm64 host 与本地 ad-hoc 签名）。当前包两种私有档案的独立原生菜单/剪贴板 **4/4 通过**，实际 WKWebView 文本读写、主窗口图片拒绝/未授权同源窗口读写拒绝、私有身份/正常退出与完整原剪贴板恢复通过，日志 `/private/tmp/reasonix-storage-copy-native-clipboard.log`；独立确认无 Preview 残留。
+- 专项组件测试为 adapter 模拟，包门禁验证实际 native ACL/IPC，均不代替存储页物理点击、真实拒绝 UI 或完整窗口验收。不同缩放/拔插/物理拖动、最小化稳定性、其他物理 D、旧版目录互斥决策、A/B/C/E 与正式发布门禁保持；前轮跨屏修复 8/8 独立证据保留，Windows/Linux 继续延期。
+
 #### D：跨屏窗口恢复选错主屏的产品修复（2026-10-02）
 
 - 发现生产 `restored_bounds` 按显示器顺序选择首个可见标题栏区域。主屏优先排序导致大部分标题栏在副屏、少部分伸入主屏的窗口被选到主屏，之后边界约束把它移回主屏。负坐标跨屏回归先在旧逻辑失败（实际 x=0、期望副屏约束后的 x=-1280），日志 `/private/tmp/reasonix-display-overlap-before.log`。
