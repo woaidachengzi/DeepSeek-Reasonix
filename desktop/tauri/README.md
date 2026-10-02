@@ -850,3 +850,13 @@ runtime 选项使旧复制失效，pending 禁止重复操作，卸载清理计�
 `/private/tmp/reasonix-legacy-profile-gate-negative.log`；这是明确失败证据，不是验收
 通过，也不证明旧 Wails GUI 的全部写入路径。默认 Preview 独立目录保持，不能把
 当前 Wails/bridge 的新锁推广为历史二进制已参与；生产包与历史回退验收范围保持。
+
+2026-10-02 Mermaid 外部链接：修复右键 auxclick 误打开，仅左键/中键打开；原生
+拒绝给出三语失败反馈和复制链接恢复，复制使用共享文本入口，拒绝不走浏览器回退。
+反馈更新保持原 SVG DOM，不重置缩放状态。新增真实组件回归在修复前失败，修复后
+通过；原 Mermaid 渲染 105/105 和完整外链回归通过，已纳入 `test:external-links`。
+产品 `1b6a7706d` 完整生产构建、双档案实际原生浏览器回执/协议拒绝通过，日志
+`/private/tmp/reasonix-mermaid-native-links.log`。这不代替消息中图表的物理点击或
+完整邮件/OAuth、D/E 和正式发布验收。
+同包双档案独立菜单/剪贴板 4/4 通过，最小权限拒绝、原剪贴板恢复和退出清理通过，
+日志 `/private/tmp/reasonix-mermaid-native-clipboard.log`，独立确认无 Preview 残留。

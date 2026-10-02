@@ -99,6 +99,14 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：Mermaid 链接鼠标动作与原生拒绝恢复（2026-10-02）
+
+- 核对 Wails 1.38.3 与当前 Mermaid 消费者：SVG `onAuxClick` 不区分中键/右键，右键释放会调用外部打开；原生封装返回 false 后没有用户反馈。新增真实组件回归在修复前失败，右键实际调用数为 1 而非 0，日志 `/private/tmp/reasonix-mermaid-native-before.log`。
+- 产品 `1b6a7706d` 将 auxclick 限定为中键，保留左键/中键默认导航阻止和原生打开；内部片段/过滤后的危险协议不送入 opener。打开拒绝使用现有三语错误与“复制链接”恢复，复制复用共享文本入口并报告实际成败，原生拒绝不使用浏览器回退，也不暴露内部错误。Toast 更新复用同一个 innerHTML 对象，保留 SVG DOM 与缩放状态；不变更协议允许范围或 capability。
+- 新真实组件/native adapter 回归覆盖右键零打开、左/中键 IPC 参数、片段与危险来源拒绝、打开失败反馈、原生复制恢复成功/拒绝、浏览器 transport 零调用和失败反馈时原 SVG 节点保持连接。新定向回归、原 Mermaid 渲染 **105/105** 与完整外链回归通过，日志 `/private/tmp/reasonix-mermaid-native-after.log`、`/private/tmp/reasonix-mermaid-rendering-tests.log`、`/private/tmp/reasonix-mermaid-external-tests.log`；新测试纳入 `test:external-links`，因此也由 `test:tauri` 调用。该组件证据不是实际消息中图表的物理点击验收。
+- `1b6a7706d` 完整生产构建通过，类型/contract/budget、sidecar/arm64 宿主与本地 ad-hoc 签名通过，日志 `/private/tmp/reasonix-mermaid-native-build.log`。新包双档案实际 WKWebView 原生打开、非法协议/userinfo/mail 参数拒绝、默认浏览器本机页面回执及退出清理通过，日志 `/private/tmp/reasonix-mermaid-native-links.log`。该原生链路与上述组件分别验证；不扩大为图表物理点击、邮件客户端或 OAuth 完整交互通过。
+- 同包双档案独立菜单/原生剪贴板 **4/4 通过**，主窗口文本读写/图片拒绝、同源受限 WebView 文本拒绝、系统剪贴板完整原件恢复、身份保持及退出清理通过，日志 `/private/tmp/reasonix-mermaid-native-clipboard.log`；独立确认无 Preview 实例残留。完整窗口稳定性和物理 UI 仍待验，历史共享目录并发的延期选择尚无答复，未自行减少 D/E 目标范围。
+
 #### D：官方旧版目录锁负向探测（2026-10-02）
 
 - 新增 `tools/tauri/probe-legacy-profile-gate.py`，只允许固定已核验 SHA-256 的官方 arm64 1.38.3 CLI（独立发行或 Desktop 内附），不启动用户档案、Wails GUI 或网络 provider。生成私有 HOME/config/state/cache，持有 config/state 两处 `.reasonix-session-profile.lock` 的 macOS 排他 flock，并以独立文件描述符确认两处均拒绝第二个锁参与者。
