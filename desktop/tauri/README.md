@@ -1016,3 +1016,17 @@ D/E/发布门禁保持。
 独立确认两种宿主退出、成功夹具删除。此证据不等于完整旧历史已迁入 Preview、
 图片像素传模型、旧客户端共享目录并发或物理导入/回退 UI 已验收。当前仍不能正式发布；
 完整窗口稳定性、物理 D、B 图片/历史迁移、C 工具生命周期、E 和正式签名/公证继续待验。
+
+
+2026-10-02 当前 `af7cf185d` 候选包的独立宿主丢失 **20/20** 复验通过：
+两种私有档案的 TERM/KILL 空闲/流式 8 项，以及父检查前/token 前/ready 前
+启动边界 12 项；kernel sidecar 均正常退出码 0，原件/锁/启动清理与同档案重启通过。
+日志 `/private/tmp/reasonix-current-candidate-host-lifetime.log`、
+`/private/tmp/reasonix-current-candidate-startup-lifetime.log`。
+当前托管普通私有档案的配置路径按钮/已复制反馈/精确系统代次、实际 Cmd+V、
+清空输入及 Cmd+Q 也通过，原剪贴板逐项恢复、成功夹具删除；日志
+`/private/tmp/reasonix-current-candidate-ui-second-observation.log`。首个 60 秒超时
+夹具不记通过。退出后已退出应用绑定的只读 AX 查询返回了新的普通档案窗口，
+已停止操作且未关闭该普通实例；只确认自有夹具清理，不声称全局无 Preview。
+后续退出后只读取 runner/进程回执，每次 UI 输入前核对自有存活 PID 和私有 origin。
+当前显式档案物理复验、实际失败反馈、完整窗口最小化稳定性及其余发布门禁保留。
