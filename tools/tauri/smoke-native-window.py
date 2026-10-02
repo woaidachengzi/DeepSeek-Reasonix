@@ -82,7 +82,8 @@ def print_window_trace(temporary):
                   "applicationRunning", "applicationModalWindowPresent",
                   "nativeAttachedSheet", "nativeIsSheet", "nativeInLiveResize")
         stages = {"settings-ready", "settings-shown", "settings-minimize-requested", "settings-minimized",
-                  "exercise-ready", "exercise-shown", "exercise-minimize-requested"}
+                  "exercise-ready", "exercise-shown", "exercise-minimize-requested",
+                  "edit-focus-ready", "edit-focus-restored", "edit-focus-failed"}
         for line in lines:
             item = json.loads(line)
             if not isinstance(item, dict) or item.get("stage") not in stages:

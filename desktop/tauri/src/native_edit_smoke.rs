@@ -69,6 +69,7 @@ fn check(app: &AppHandle, stage: &str, expression: &str) -> Result<(), String> {
 }
 
 fn focus(app: &AppHandle) -> Result<(), String> {
+    let _ = crate::native_window_smoke::record(app, "edit-focus-ready");
     // Use the same asynchronous restoration path as tray/Dock/second instance.
     // AppKit activation is not established merely by ordering a window front.
     crate::tray::show_main_window(app);
@@ -82,6 +83,7 @@ fn focus(app: &AppHandle) -> Result<(), String> {
         }
         Ok(())
     })?;
+    let _ = crate::native_window_smoke::record(app, "edit-focus-restored");
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         let actual = focus_state(app)?;
@@ -89,6 +91,7 @@ fn focus(app: &AppHandle) -> Result<(), String> {
             return Ok(());
         }
         if Instant::now() >= deadline {
+            let _ = crate::native_window_smoke::record(app, "edit-focus-failed");
             return Err(format!("native WKWebView could not become the active key-window responder; firstResponderAccepted={}, keyWindow={}, applicationActive={}, windowVisible={}, applicationHidden={}",actual.0,actual.1,actual.2,actual.3,actual.4));
         }
         std::thread::sleep(Duration::from_millis(25));
