@@ -896,3 +896,12 @@ test:tauri 修复后通过，覆盖 43 个动作两种 IME 标记、设置录制
 CUA 只读 inventory 查询仍超时，未输入；真实 macOS 候选输入/取消和物理自定义
 快捷键验收继续保留，不以组件或基础启动检查替代。其余 D/E、旧版目录互斥和正式
 发布门禁保持。
+
+2026-10-02 消息复制反馈：产品 `79e3adac6` 的共享 CopyButton 不再保留失败前的
+成功状态；原生拒绝提供三语重试/手动复制提示，待处理双击合并，来源变化/卸载
+隔离旧生成与写入结果。clipboard 修复前回归失败，修复后及完整 test:tauri 通过，
+日志 `/private/tmp/reasonix-copy-button-after.log`、
+`/private/tmp/reasonix-copy-button-tauri-tests.log`。同提交完整 macOS 构建及双档案
+独立菜单/剪贴板 4/4 通过，日志 `/private/tmp/reasonix-copy-button-build.log`、
+`/private/tmp/reasonix-copy-button-native-clipboard.log`；原剪贴板恢复且无 Preview
+残留。这不替代物理消息按钮/实际 OS 拒绝反馈或完整窗口验收，D/E 及发布门禁保留。

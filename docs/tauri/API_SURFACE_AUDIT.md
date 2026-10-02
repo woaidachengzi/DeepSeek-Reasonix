@@ -99,6 +99,14 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：消息复制失败与异步内容边界（2026-10-02）
+
+- Tauri 消息直接复用 `CopyButton`，原生剪贴板入口已接入，但写入拒绝被静默忽略，且前次成功状态仍可能显示。新增回归修复前失败：第二次失败后 copied class 仍为 true，日志 `/private/tmp/reasonix-copy-button-before.log`。
+- 产品 `79e3adac6` 在每次复制开始时清除前次成功、等待期间禁用并合并重复点击；失败显示三语“重试/手动选择复制”toast 和可访问提示，不显示底层错误。来源 text/getText 替换或卸载使旧请求失效：延迟生成的旧文本不写剪贴板，已提交的旧写入返回不标记新内容成功，旧请求不释放新请求状态。成功定时器随来源变化/卸载清理；不增加权限或原生拒绝后的浏览器/Wails 回退。
+- `pnpm test:clipboard` 通过，覆盖前次成功后失败清除、实际 clipboard-manager invoke 拒绝提示、待处理双击只写一次、内容替换 fence、过期异步生成零写入和 fallback 零调用，日志 `/private/tmp/reasonix-copy-button-after.log`；完整 `pnpm test:tauri`（含共享代码/图表/外链与工作区回归）通过，日志 `/private/tmp/reasonix-copy-button-tauri-tests.log`。这不等于 macOS 消息按钮物理点击、OS 实际拒绝或整项 D 已验收；这些待办继续保留。
+- 核对独立 Wails 1.38.3 基线的 CopyButton，保留其浏览器开发/Wails 回退需求；当前共享 clipboard 回归仍验证这些宿主分支，Tauri 拒绝继续终止。当前产品完整 macOS 构建通过（类型/contract/budget、sidecar、arm64 宿主和本地 ad-hoc 签名），日志 `/private/tmp/reasonix-copy-button-build.log`；不是正式签名/公证。
+- 同包双档案独立菜单/剪贴板门禁 **4/4 通过**，包含实际原生文本读写、最小权限拒绝、原剪贴板恢复和退出清理，日志 `/private/tmp/reasonix-copy-button-native-clipboard.log`；独立确认无 Preview 残留。这是宿主切片，不是当前包完整窗口或实际消息 UI 操作通过；D/E、旧版目录互斥及其他发布门禁继续保留。
+
 #### D：组合输入与配置快捷键边界（2026-10-02）
 
 - 核对发现消息输入框已有 IME 保护，但 Tauri 全局快捷键匹配、面板 Escape 和设置页录制未检查组合输入。新增匹配回归修复前明确失败：`isComposing` 的 new_session 组合仍返回 true，日志 `/private/tmp/reasonix-shortcut-ime-before.log`。额外独立工作区样本的修复前挂载停滞并终止，不计通过，也不将停滞归因为产品；之后将面板检查放回原有工作区回归夹具。
