@@ -953,3 +953,13 @@ LaunchServices 编辑探测通过，运行期策略 Regular=0、应用/key windo
 4/4 通过，日志 `/private/tmp/reasonix-secondary-display-package-smoke.log`。
 不同缩放、实际拔插、物理拖动/WebView 和完整窗口稳定性仍待验，观察工具仍超时，
 不将 API 几何通过标为物理 UI 全通过；其余 D/E/发布门禁及 Windows/Linux 延期保持。
+
+
+2026-10-02 最小化前提对照：`f43825cc9` 为 Settings 两种最小化路径增加真实活动
+应用/key window 等待，沿用 5 秒上限和原生事件断言；trace 固定最多 5 行/16 KiB。
+严格 clippy、字段边界检查和完整构建通过，但完整窗口仍托管 8 项后失败，显式未开始，
+日志 `/private/tmp/reasonix-settings-key-precondition-full-window.log`。新快照证明请求前
+确为活动 key window；独立真实 Minimize 菜单也最小化失败，日志
+`/private/tmp/reasonix-settings-native-role-probe.log`。等待 key 并未修复问题，失败不限于
+Tauri minimize API。两份现场无自有进程/启动记录残留；未据此认定系统或产品根因，
+已请求其他应用的最小化对照，完整 D/E 和发布门禁保持。
