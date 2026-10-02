@@ -99,6 +99,14 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：钥匙串失败反馈与恢复步骤（2026-10-02）
+
+- 实际 ProviderSettings 的 showStatus 原先给所有结果安装 2 秒清除计时器，保存/删除/迁移拒绝和“写入成功但 summary 刷新失败”的恢复提示均会消失。受控时钟专项回归旧代码确定失败（tick 2001 后保存失败不再可见），日志 `/private/tmp/reasonix-keychain-feedback-before.log`。
+- 产品 `247212b09` 仅普通成功反馈按原 2 秒到期；错误/部分成功恢复提示保留至下一次显式操作或页面卸载。失败状态 role=alert，成功 role=status；新操作仍清除旧反馈/计时器。三语言补充钥匙串解锁/应用访问权限/重试步骤；保存失败使用专用 Preview key，不修改 Wails 共享保存失败文案。summary 刷新失败保留已保存/已删除/未找到的真实结果，并提示关闭、重开设置刷新；已核对生产 settingsOpen 条件确实卸载/重建设置页。原始错误与凭据仍不进入反馈，现有请求锁、后端钥匙串事务和权限不变。
+- 专项 adapter 回归通过：普通成功仍过期且 role=status；保存失败及部分成功刷新失败超过 2 秒仍可见，失败 role=alert；下一次迁移操作替换旧保存失败；原有拒绝/草稿保留/不泄露诊断、重复保存/迁移互斥及删除 .env 后仍 configured 等断言保留。日志 `/private/tmp/reasonix-keychain-feedback-after.log`；完整 `pnpm test:tauri` exit 0，日志 `/private/tmp/reasonix-keychain-feedback-tauri-tests.log`。
+- 首次包构建在繁体 locale 预算失败：81206 gzip bytes 超现有 81203.2 上限，日志 `/private/tmp/reasonix-keychain-feedback-build.log`。`253abf30a` 精简重复繁体措辞但保留解决步骤，新 chunk 为 81197 bytes，未调整预算。最终完整 macOS 构建 exit 0，类型/587-method 契约/体积、Go sidecar/arm64 host/ad-hoc 签名通过，日志 `/private/tmp/reasonix-keychain-feedback-final-build.log`。
+- 普通 Preview 仍存活，本轮没有操作、关闭或锁定用户钥匙串，也未启动私有 native smoke。该组件回归不代替真实钥匙串锁定/OS 授权拒绝/迁移点击验收；新包原生/物理 D、最小化稳定性、A/B/C/E 与正式签名/公证/发布门禁继续保留。
+
 #### D：托盘主点击对齐稳定宿主（2026-10-02）
 
 - 对照当前 Wails `desktop/tray.go` 的 `SetOnTapped` 与 `desktop/tray_common.go::showFromTray`：主点击始终走打开/恢复入口，secondary click 留给系统菜单。Tauri 原主点击却按 visible/minimized 切换，窗口已可见时 hide，存在迁移行为差异；仅凭窗口 visible 也不能表达完整应用隐藏/恢复语义。不宣称已物理复现 macOS app-hidden 下的具体错误。

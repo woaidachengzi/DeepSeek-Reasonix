@@ -1052,3 +1052,17 @@ unminimize/show/focus；已可见窗口点击不再隐藏。右键菜单/退出�
 普通 Preview 仍运行，已请求保存工作后退出，未操作/关闭它；本轮没有私有原生 smoke。
 实际托盘点击、Show/Quit、隐藏/最小化恢复和 Dock 仍待验，不将编译视为物理通过。
 其他 D/A/B/C/E、完整窗口稳定性与正式签名/公证/发布门禁保留。
+
+
+2026-10-02 钥匙串反馈 `247212b09`：失败和已写入但刷新失败的恢复提示保留至
+下次显式操作/卸载，以 role=alert 呈现；普通成功仍 2 秒清除并用 role=status。
+三语言补充解锁/访问权限/重试及关闭、重开设置刷新步骤，原始错误/密钥不进提示。
+受控时钟回归旧代码失败，修复后普通成功过期、错误持久、下次操作替换与原有
+草稿/互斥/原件保护断言通过；完整 Tauri 回归 exit 0。日志
+`/private/tmp/reasonix-keychain-feedback-before.log`、
+`/private/tmp/reasonix-keychain-feedback-after.log`、
+`/private/tmp/reasonix-keychain-feedback-tauri-tests.log`。
+首次构建繁体 locale 超预算 2.8 bytes；`253abf30a` 精简重复措辞后 81197 bytes
+通过原 81203.2 上限，未调整预算。最终完整 macOS 构建通过，日志
+`/private/tmp/reasonix-keychain-feedback-final-build.log`。普通 Preview 仍运行，
+没有操作用户钥匙串/普通窗口；真实 OS 锁定/拒绝/迁移点击和新包 smoke 继续待验。
