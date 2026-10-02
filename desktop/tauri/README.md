@@ -916,3 +916,14 @@ CUA 只读 inventory 查询仍超时，未输入；真实 macOS 候选输入/取
 重启通过，日志 `/private/tmp/reasonix-sidecar-terminal-host-lifetime.log`；无 Preview
 残留。事件回归不是实际 OS 管道故障注入，不代替物理菜单/托盘或完整窗口验收；
 D/E、历史旧版互斥和正式发布门禁继续保留。
+
+2026-10-02 当前产品 `c0e3871c5` 完整窗口门禁为 19/46，在托管原生编辑前提
+停止（firstResponderAccepted true，但 applicationActive/keyWindow false），显式
+档案未开始，日志 `/private/tmp/reasonix-sidecar-terminal-full-window.log`。
+只读诊断 `ad0d62200` clippy、固定字段 parser 和完整生产构建通过；新托管独立
+编辑切片 2/3，再次焦点失败，日志 `/private/tmp/reasonix-edit-focus-trace-probe.log`。
+实际启动/page 已完成、可 key 且在活动 Space，无 modal/sheet/live resize；恢复
+请求/完成 1/1，但无 became-key，应用/窗口 occlusion-visible false。根因未确定，
+没有改激活动作、等待或断言，不把切片或历史 46/46 替代当前完整通过。两次原
+剪贴板恢复且无宿主/sidecar/启动记录残留，失败现场保留。真实 UI、历史旧版互斥、
+其余 D/E 和正式发布门禁保持。
