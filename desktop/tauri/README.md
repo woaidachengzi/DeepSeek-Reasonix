@@ -963,3 +963,11 @@ LaunchServices 编辑探测通过，运行期策略 Regular=0、应用/key windo
 `/private/tmp/reasonix-settings-native-role-probe.log`。等待 key 并未修复问题，失败不限于
 Tauri minimize API。两份现场无自有进程/启动记录残留；未据此认定系统或产品根因，
 已请求其他应用的最小化对照，完整 D/E 和发布门禁保持。
+
+
+2026-10-02 页面完成后对照：`63984aca9` Settings 验收统一等待可信主页面
+PageLoad::Finished，沿用 5 秒上限和活动 key/真实最小化断言。clippy 与完整构建通过；
+独立私有最小化切片仍失败，日志 `/private/tmp/reasonix-settings-page-ready-probe.log`。
+请求前页面完成/活动/key 均 true，仍无最小化事件；页面初始化未完成不能单独解释问题。
+没有重跑完整门禁，也不记作产品修复；现场无进程/启动记录残留，最新完整 8 项后失败
+与其余 D/E/发布门禁保持。
