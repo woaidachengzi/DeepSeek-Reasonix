@@ -867,3 +867,12 @@ runtime 选项使旧复制失效，pending 禁止重复操作，卸载清理计�
 补验首次绑定/同宿主只读重绑仍报 ScreenCaptureKit `-3811`，未输入或保存；只停止
 确认自有宿主，sidecar/ready 清理、原件和只读目标目录保护通过。失败现场和日志
 `/private/tmp/reasonix-write-denied-mermaid-ui.log` 保留，不计正常 Cmd+Q 或 UI 通过。
+
+2026-10-02 凭据恢复：单个 Provider 的读取/同步失败不再阻断其他有效条目恢复，
+部分恢复返回固定重试指引，不返回名称、密钥或底层诊断。全局身份损坏保留恢复
+元数据备份的原指引，恢复函数不访问 sidecar；原生存储及保存/删除/迁移回滚保持。
+修复前真实 sidecar 回归已复现后续有效 Provider 未恢复；最终相关回归 22 通过、
+1 原生 OS 测试默认忽略，覆盖部分重启、后续恢复和档案不落盘密钥，严格 clippy
+通过。最终产品 `ebae594f4` 完整生产构建、双档案包级启动/身份/权限/退出通过，
+日志 `/private/tmp/reasonix-keychain-partial-final-package-smoke.log`，独立确认无残留。
+故障样本不等同真实 OS 锁定/拒绝或迁移 UI 验收，D/E 和正式发布门禁继续保留。
