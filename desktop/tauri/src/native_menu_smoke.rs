@@ -232,6 +232,12 @@ pub fn shortcuts(app: &AppHandle) -> Result<(), String> {
 
 pub fn settings(app: &AppHandle, phase: &str) -> Result<(), String> {
     crate::native_window_smoke::record(app, "settings-ready")?;
+    // RunEvent::Ready precedes WKWebView navigation completion. Exercise the
+    // settings interaction after the trusted main page has actually loaded,
+    // as an initialized UI, rather than during WebView construction.
+    wait_for(app, "settings main page loaded", |window| {
+        Ok(crate::native_window_smoke::snapshot(window)?["mainPageFinished"] == true)
+    })?;
     let delivered = Arc::new(AtomicUsize::new(0));
     let counter = Arc::clone(&delivered);
     let (window, id) = on_main(app, move |_, window| {
