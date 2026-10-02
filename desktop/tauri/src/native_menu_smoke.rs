@@ -280,6 +280,19 @@ pub fn settings(app: &AppHandle, phase: &str) -> Result<(), String> {
             })?;
         }
         "menu-settings-minimized" | "menu-settings-native-minimized" => {
+            // AppKit presentation is asynchronous: visibility alone can be
+            // true before the restored window becomes key. Require the same
+            // real active-window precondition as the installed Minimize role
+            // before either API path requests its native transition.
+            wait_for(
+                app,
+                "active key settings window before minimizing",
+                |window| {
+                    let state = crate::native_window_smoke::snapshot(window)?;
+                    Ok(state["applicationActive"] == true && state["nativeKeyWindow"] == true)
+                },
+            )?;
+            crate::native_window_smoke::record(app, "settings-minimize-ready")?;
             if phase == "menu-settings-native-minimized" {
                 minimize_from_menu(app)?;
             } else {

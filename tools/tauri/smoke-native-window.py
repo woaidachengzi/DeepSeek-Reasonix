@@ -72,7 +72,7 @@ def print_window_trace(temporary):
         with path.open("rb") as file:
             data = file.read(16_385)
         lines = data.decode("utf-8").splitlines()
-        if len(data) > 16_384 or len(lines) > 4:
+        if len(data) > 16_384 or len(lines) > 5:
             return
         fields = ("mainPageFinished", "focused", "minimized", "visible",
                   "applicationActive", "applicationHidden", "nativeKeyWindow",
@@ -83,7 +83,7 @@ def print_window_trace(temporary):
                   "applicationRunning", "applicationModalWindowPresent",
                   "nativeAttachedSheet", "nativeIsSheet", "nativeInLiveResize")
         stages = {"display-secondary-placed", "display-secondary-restored",
-                  "settings-ready", "settings-shown", "settings-minimize-requested", "settings-minimized",
+                  "settings-ready", "settings-shown", "settings-minimize-ready", "settings-minimize-requested", "settings-minimized",
                   "exercise-ready", "exercise-shown", "exercise-minimize-requested",
                   "edit-focus-ready", "edit-focus-restored", "edit-focus-failed"}
         for line in lines:
