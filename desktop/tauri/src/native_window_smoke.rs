@@ -611,10 +611,71 @@ fn background_close(
     save(app)
 }
 
+fn secondary_display(app: &AppHandle, directory: &std::path::Path) -> Result<(), String> {
+    let expected = on_main(app, |_, window| {
+        let primary = window
+            .primary_monitor()
+            .map_err(|_| "read primary display")?
+            .ok_or("no primary display")?;
+        let secondary = window
+            .available_monitors()
+            .map_err(|_| "read connected displays")?
+            .into_iter()
+            .find(|monitor| monitor.position() != primary.position())
+            .ok_or("no connected secondary display")?;
+        let work = secondary.work_area();
+        let scale = secondary.scale_factor();
+        let logical_width = 1000.0_f64.min(f64::from(work.size.width) / scale);
+        let logical_height = 700.0_f64.min(f64::from(work.size.height) / scale);
+        if logical_width < 900.0 || logical_height < 620.0 {
+            return Err(
+                "secondary display work area is below the application's minimum size".into(),
+            );
+        }
+        let width = (logical_width * scale).round() as u32;
+        let height = (logical_height * scale).round() as u32;
+        let expected = Geometry {
+            width,
+            height,
+            x: work.position.x + (work.size.width.saturating_sub(width) / 2) as i32,
+            y: work.position.y + (work.size.height.saturating_sub(height) / 2) as i32,
+            scale,
+        };
+        window
+            .unmaximize()
+            .map_err(|_| "unmaximize secondary display window")?;
+        window
+            .set_position(tauri::PhysicalPosition::new(expected.x, expected.y))
+            .map_err(|_| "move to secondary display")?;
+        window
+            .set_size(tauri::LogicalSize::new(logical_width, logical_height))
+            .map_err(|_| "resize on secondary display")?;
+        Ok(expected)
+    })?;
+    verify_geometry(app, "secondary display placement", expected.clone())?;
+    std::fs::write(
+        directory.join("reasonix-native-window-normal.json"),
+        serde_json::to_vec(&expected).map_err(|_| "encode secondary geometry")?,
+    )
+    .map_err(|_| "write secondary geometry")?;
+    save(app)?;
+    record(app, "display-secondary-placed")
+}
+
 fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
     let directory = marker_directory()?;
     match phase {
         "exercise" => exercise(app, &directory)?,
+        "display-secondary" => secondary_display(app, &directory)?,
+        "display-restore-secondary" => {
+            verify_geometry(
+                app,
+                "restored secondary display",
+                expected_geometry(&directory)?,
+            )?;
+            save(app)?;
+            record(app, "display-secondary-restored")?;
+        }
         "menu-shortcuts" => crate::native_menu_smoke::shortcuts(app)?,
         "notification-delivery" => crate::notifications::delivery_smoke(app)?,
         "task-host-death" => crate::native_task_smoke::host_death(app, &directory)?,
