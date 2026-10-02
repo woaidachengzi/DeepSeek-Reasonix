@@ -99,6 +99,13 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：macOS 文档另存为错误路径与解决步骤（2026-10-02）
+
+- `smoke-native-ui-export.py --scenario document-errors` 在普通私有档案用唯一回环服务生成实际文件链接，固定两阶段 same-source/missing-source。源文件和中文/空格目录持续保护；同文件必须实际 Save→Replace→应用错误，缺失源必须实际菜单调用后即时错误且没有保存面板；每阶段回执要求原件指纹不变、源目录只含两份原件、输出为空，错误切片与四阶段正常保存分别计数。
+- 干净 `851111594` 生产包两种普通档案的两种拒绝 **4 项真实操作/2 次正常退出全部通过**。确认覆盖源文件后 native 拒绝，缺失文件在打开面板前拒绝；回执保护、core canary/身份、host/sidecar/readiness 清理和成功夹具删除通过。日志 `/private/tmp/reasonix-document-errors-ui.log`。托管绑定加载后的捕捉一次 `-3811`、显式输入后的观察一次 `-3812`，后续只读 AX 成功确认当前状态，没有重复输入/发送或重启宿主。
+- 实际错误提示复现“无法使用 另存为… 打开”并夹杂英文。保存分支改用保存专属文案：同源目标提示改用其他文件名/位置；源无法访问/读取提示确认存在及读取权限；其他失败保留错误内容并提示可写位置。两种字典同步，已知源错误不展示 OS 细节或私有路径；打开/显示动作及 native 原子复制/校验/权限不变。现有真实菜单组件/adapter 回归新增 native 同源、Wails 同源措辞、缺失/读取拒绝、其他失败恢复提示，`pnpm test:external-links` 全部通过，日志 `/private/tmp/reasonix-document-errors-tests.log`。新包文案实际显示待重建后验证，不以旧包原件保护通过替代。
+- 实际系统写入拒绝、源目录/读取权限拒绝的原生 UI、Finder/editor 打开、窗口偶发最小化、主题显式导入及其他 D/A/B/C、E、正式签名/公证仍待验收；外接屏与 Windows/Linux 延期保持。
+
 #### D：macOS 本地文档另存为实际 UI 验收（2026-10-02）
 
 - 对照冻结 Wails `desktop/external_opener.go::SaveLocalPathAs`：操作从本地文件链接菜单进入，保存面板默认源目录/文件名，取消返回空路径且没有成功提示；正常保存按源权限复制，源文件不变，覆盖经过系统确认。Tauri 现有 `local_paths.rs` 已使用打开的源文件、同 inode/硬链接/符号链接别名拒绝及原子临时文件替换。本轮产品代码/权限未修改，也未重新构建；复用干净 `8511115940d4362ee413b6aa1c1e2ee49f3b8ddf` 的真实生产包。

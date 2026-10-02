@@ -9,11 +9,12 @@ let wailsCalls = 0;
 win.go = { main: { App: new Proxy({}, { get: () => async () => { wailsCalls++; } }) } };
 const calls: { command: string; args?: Record<string, unknown> }[] = [];
 let failCommand = "";
+let failMessage = "cannot access document; check path permissions";
 let savedPath = "";
 host.isTauri = true;
 win.__TAURI_INTERNALS__ = { invoke: async (command, args) => {
   calls.push({ command, args });
-  if (command === failCommand) throw new Error("cannot access document; check path permissions");
+  if (command === failCommand) throw new Error(failMessage);
   if (command === "local_path_openers") return { openers: [{ id: "vscode", name: "VS Code", kind: "editor" }], preferred: "" };
   if (command === "save_local_path_as") return savedPath;
 } };
@@ -53,6 +54,19 @@ await act(async () => { anchor.dispatchEvent(new dom.window.MouseEvent("click", 
 assert.ok(document.querySelector(".toast--error")?.textContent?.includes("check path permissions"), "default-open failures are visible");
 failCommand = "save_local_path_as";
 await assert.rejects(app.SaveLocalPathAs(source), /check path permissions/);
+for (const [failure, expected] of [
+  ["destination is the source file; choose another path", "Choose a different name or location"],
+  ["destination is the same as the source", "Choose a different name or location"],
+  ["cannot access document: No such file or directory (os error 2); check the path and permissions", "Check that it still exists"],
+  ["cannot read source: Permission denied; check file permissions", "have read permission"],
+  ["cannot save document: disk full", "Choose a writable location"],
+] as const) {
+  failMessage = failure;
+  await select("Save as");
+  const toast = [...document.querySelectorAll(".toast--error")].at(-1)?.textContent ?? "";
+  assert.ok(toast.includes(expected), `Save As reports recovery for ${failure}`);
+  assert.ok(!toast.includes("Could not open"), "saving never uses the open-action failure label");
+}
 assert.equal(wailsCalls, 0, "native errors never fall back to a Wails binding or browser mock");
 failCommand = "";
 host.isTauri = false;

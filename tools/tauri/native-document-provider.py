@@ -8,7 +8,7 @@ CONTENTS = (b'Reasonix native document original A\n', b'Reasonix native document
 
 
 class DocumentProvider:
-    def __init__(self, core, sources):
+    def __init__(self, core, sources, errors=False):
         self.requests, self.error = 0, None
         fixture = self
 
@@ -37,6 +37,8 @@ class DocumentProvider:
                     self.end_headers()
                     text = '\n\n'.join(f'[Original {letter}]({path.as_uri()})'
                                        for letter, path in zip(('A', 'B'), sources))
+                    if errors:
+                        text += f'\n\n[Missing source]({(sources[0].parent / "不存在.md").as_uri()})'
                     for delta, finish in (({'role': 'assistant', 'content': text}, None), ({}, 'stop')):
                         payload = {'choices': [{'index': 0, 'delta': delta, 'finish_reason': finish}]}
                         self.wfile.write(('data: ' + json.dumps(payload) + '\n\n').encode())

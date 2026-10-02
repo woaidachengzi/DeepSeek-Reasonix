@@ -496,6 +496,20 @@ python3 -B tools/tauri/smoke-native-ui-export.py 'desktop/tauri/target/release/b
 文件检查，日志 `/private/tmp/reasonix-document-save-ui.log`。同文件/实际写入拒绝反馈和
 Finder/editor 等操作另行验收，既有 theme/diagnostics 默认行为保持。
 
+另存为的源文件错误切片：
+
+```bash
+python3 -B tools/tauri/smoke-native-ui-export.py 'desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app' --scenario document-errors --profile both --seconds 900 --control /private/tmp/reasonix-document-errors-ui-control.json
+```
+
+发送同一固定提示，实际右键 Original A→另存为，保留源目录/源文件名，实际 Save→Replace，
+要求应用拒绝且显示源目标相同的解决步骤，执行 `--record same-source`。实际右键
+Missing source→另存为，要求即时源文件不可用提示且没有 Save 面板，执行
+`--record missing-source`，再实际 Cmd+Q；record 必须指定同一 `--control`。
+每阶段要求两份源指纹不变、源目录无新增文件、输出为空；不会将“没有输出”单独认定为
+错误提示/面板验收。两档案共四项拒绝，两次正常生命周期。`851111594` 的原生保护与
+旧文案已实际验证，新提示是否在生产包显示以迁移清单最新记录为准。
+
 主题导入的普通私有档案 runner：
 
 ```bash

@@ -114,6 +114,18 @@ function localPathErrorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function localPathSaveErrorText(error: unknown): string {
+  const message = localPathErrorText(error);
+  if (message === "destination is the source file; choose another path"
+    || message === "destination is the same as the source") {
+    return t("externalOpener.saveSameSource");
+  }
+  if (message.startsWith("cannot access document:") || message.startsWith("cannot read source:")) {
+    return t("externalOpener.saveSourceUnavailable");
+  }
+  return t("externalOpener.saveFailed", { error: message });
+}
+
 // Menu actions transform information the link already carries (open, copy,
 // derive a compact reference); no network or async work is introduced here.
 function richLinkMenuItems(
@@ -268,7 +280,7 @@ function LocalPathMarkdownLink({
               showToast(t("externalOpener.saved", { path: savedPath }), "info");
             }
           }).catch((error) => {
-            showToast(t("externalOpener.failed", { name: t("externalOpener.saveAs"), error: localPathErrorText(error) }), "error");
+            showToast(localPathSaveErrorText(error), "error");
           });
         },
       },

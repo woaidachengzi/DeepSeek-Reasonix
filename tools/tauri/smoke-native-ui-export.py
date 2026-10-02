@@ -16,6 +16,8 @@ Edit the same theme name to THEME_NAMES[1] before checking Cancel/Replace.
 For --scenario document, send the published fixed prompt to the loopback-only
 provider. Original A is used for cancel/new-save; Original B for Cancel/Replace
 to the same output. Neither prepared source is changed by the runner or UI.
+The document-errors slice requires actual same-source Replace rejection followed
+by Missing source rejection without a Save panel. Neither may write any file.
 """
 import argparse
 import hashlib
@@ -42,6 +44,7 @@ document_spec = importlib.util.spec_from_file_location('document_provider', Path
 documents = importlib.util.module_from_spec(document_spec)
 document_spec.loader.exec_module(documents)
 STEPS = ('cancel', 'new-save', 'overwrite-cancel', 'overwrite')
+ERROR_STEPS = ('same-source', 'missing-source')
 THEME_NAMES = ('Reasonix UI Theme', 'Reasonix UI Theme Revised')
 
 
@@ -71,7 +74,7 @@ def fingerprint(path):
 
 def output_name(scenario):
     return {'theme': '主题 副本.reasonix-theme', 'diagnostics': '报告 副本.json',
-            'document': '文档 副本.md'}[scenario]
+            'document': '文档 副本.md', 'document-errors': '文档 副本.md'}[scenario]
 
 
 def report(path, scenario='diagnostics'):
@@ -115,7 +118,7 @@ def report(path, scenario='diagnostics'):
 
 
 def record(step, control_path):
-    if step not in STEPS:
+    if step not in STEPS + ERROR_STEPS:
         raise ValueError('Unknown export acceptance step')
     control = Path(control_path)
     private_file(control, 8192)
@@ -127,7 +130,7 @@ def record(step, control_path):
         raise RuntimeError('Export UI control does not identify a private fixture')
     mode = root / ('managed' if state['managed'] else 'explicit')
     scenario = state.get('scenario', 'diagnostics')
-    if scenario not in ('diagnostics', 'theme', 'document'):
+    if scenario not in ('diagnostics', 'theme', 'document', 'document-errors'):
         raise RuntimeError('Export UI scenario is invalid')
     output = mode / '报告 测试'
     for directory in (root, mode, output):
@@ -141,7 +144,7 @@ def record(step, control_path):
     if any(type(state[key]) is not int or not package.is_alive(state[key])
            for key in ('hostPid', 'sidecarPid')):
         raise RuntimeError('Export UI fixture is no longer live')
-    if scenario == 'document':
+    if scenario in ('document', 'document-errors'):
         info = (mode / '原件 文件').lstat()
         if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid()
                 or stat.S_IMODE(info.st_mode) != 0o700):
@@ -151,17 +154,22 @@ def record(step, control_path):
                 or [fingerprint(path) for path in sources] != state.get('sourceFingerprints')
                 or [path.read_bytes() for path in sources] != list(documents.CONTENTS)):
             raise RuntimeError('Document source protection failed')
+        if set((mode / '原件 文件').iterdir()) != set(sources):
+            raise RuntimeError('Document source directory changed')
     receipt = mode / 'ui-export-receipt.json'
     prior = {'steps': []}
     has_receipt = receipt.exists() or receipt.is_symlink()
     if has_receipt:
         private_file(receipt, 8192)
         prior = json.loads(receipt.read_text())
-    index = STEPS.index(step)
-    if prior['steps'] != list(STEPS[:index]):
+    steps = ERROR_STEPS if scenario == 'document-errors' else STEPS
+    if step not in steps:
+        raise RuntimeError('Step does not belong to the controlled scenario')
+    index = steps.index(step)
+    if prior['steps'] != list(steps[:index]):
         raise RuntimeError('Export UI receipt order is invalid')
     backup = mode / 'first-export-original.json'
-    if step == 'cancel':
+    if step == 'cancel' or scenario == 'document-errors':
         if list(output.iterdir()):
             raise RuntimeError('Cancelled save unexpectedly wrote an output')
     else:
@@ -193,7 +201,7 @@ def record(step, control_path):
     if not has_receipt:
         receipt.touch(mode=0o600, exist_ok=False)
     receipt.write_text(json.dumps(prior))
-    state['phase'] = STEPS[index + 1] if index + 1 < len(STEPS) else 'complete'
+    state['phase'] = steps[index + 1] if index + 1 < len(steps) else 'complete'
     control.write_text(json.dumps(state))
     print(f'Actual output check {step} passed; panel/feedback evidence remains separate', flush=True)
 
@@ -201,7 +209,7 @@ def record(step, control_path):
 def smoke(app_path, control_path, seconds, profile, scenario='diagnostics'):
     if profile not in ('managed', 'explicit', 'both') or not 60 <= seconds <= 900:
         raise ValueError('Invalid export UI profile/duration')
-    if scenario not in ('diagnostics', 'theme', 'document'):
+    if scenario not in ('diagnostics', 'theme', 'document', 'document-errors'):
         raise ValueError('Invalid export UI scenario')
     control = Path(control_path)
     if control.parent != Path('/private/tmp') or control.parent.resolve() != control.parent:
@@ -235,7 +243,7 @@ def smoke(app_path, control_path, seconds, profile, scenario='diagnostics'):
             before = original(canary)
             provider = None
             sources, source_fingerprints = [], []
-            if scenario == 'document':
+            if scenario in ('document', 'document-errors'):
                 (mode / '原件 文件').mkdir(mode=0o700)
                 sources = document_sources(mode)
                 for path, data in zip(sources, documents.CONTENTS):
@@ -248,8 +256,8 @@ def smoke(app_path, control_path, seconds, profile, scenario='diagnostics'):
             host = None
             sidecar = None
             try:
-                if scenario == 'document':
-                    provider = documents.DocumentProvider(core, sources)
+                if scenario in ('document', 'document-errors'):
+                    provider = documents.DocumentProvider(core, sources, errors=scenario == 'document-errors')
                 host = subprocess.Popen([str(host_binary)], env=env, stdout=subprocess.DEVNULL,
                                         stderr=subprocess.DEVNULL, start_new_session=True)
                 deadline = time.monotonic() + 25
@@ -266,11 +274,11 @@ def smoke(app_path, control_path, seconds, profile, scenario='diagnostics'):
                 else:
                     raise RuntimeError('Ordinary export UI host did not start')
                 control.write_text(json.dumps({'root': str(root), 'managed': managed, 'hostPid': host.pid,
-                                               'sidecarPid': sidecar, 'phase': 'cancel',
+                                               'sidecarPid': sidecar, 'phase': 'same-source' if scenario == 'document-errors' else 'cancel',
                                                'scenario': scenario,
                                                'sourceFiles': [str(path) for path in sources],
                                                'sourceFingerprints': source_fingerprints,
-                                               'prompt': documents.PROMPT if scenario == 'document' else '',
+                                               'prompt': documents.PROMPT if scenario in ('document', 'document-errors') else '',
                                                'themeNames': list(THEME_NAMES) if scenario == 'theme' else [],
                                                'outputFile': str(mode / '报告 测试' / output_name(scenario))}))
                 control.chmod(0o600)
@@ -287,15 +295,21 @@ def smoke(app_path, control_path, seconds, profile, scenario='diagnostics'):
                 private_file(receipt, 8192)
                 state = json.loads(receipt.read_text())
                 target = mode / '报告 测试' / output_name(scenario)
-                if state['steps'] != list(STEPS) or report(target, scenario) == state['firstId']:
+                steps = ERROR_STEPS if scenario == 'document-errors' else STEPS
+                if state['steps'] != list(steps):
                     raise RuntimeError('Export UI steps were incomplete')
+                if scenario == 'document-errors':
+                    if list(target.parent.iterdir()) or set((mode / '原件 文件').iterdir()) != set(sources):
+                        raise RuntimeError('Rejected document action wrote unexpected files')
+                elif report(target, scenario) == state['firstId']:
+                    raise RuntimeError('Export UI replacement was incomplete')
                 if original(canary) != before or package.check_credential_profile(core) != identity:
                     raise RuntimeError('Export UI changed its protected original/profile identity')
-                if scenario == 'document' and (provider.requests != 1 or provider.error
+                if scenario in ('document', 'document-errors') and (provider.requests != 1 or provider.error
                                                or [fingerprint(path) for path in sources] != source_fingerprints):
                     raise RuntimeError('Document provider or source protection did not pass')
                 passed += 1
-                print('Four actual output checks, original/identity protection and normal quit cleanup passed', flush=True)
+                print(f'{len(steps)} actual output checks, original/identity protection and normal quit cleanup passed', flush=True)
             finally:
                 if host is not None and host.poll() is None:
                     os.killpg(host.pid, signal.SIGKILL)
@@ -326,8 +340,8 @@ if __name__ == '__main__':
     parser.add_argument('--control', default='/private/tmp/reasonix-ui-export-control.json')
     parser.add_argument('--seconds', type=int, default=600, choices=range(60, 901), metavar='SECONDS')
     parser.add_argument('--profile', choices=('managed', 'explicit', 'both'), default='both')
-    parser.add_argument('--scenario', choices=('diagnostics', 'theme', 'document'), default='diagnostics')
-    parser.add_argument('--record', choices=STEPS)
+    parser.add_argument('--scenario', choices=('diagnostics', 'theme', 'document', 'document-errors'), default='diagnostics')
+    parser.add_argument('--record', choices=STEPS + ERROR_STEPS)
     args = parser.parse_args()
     if sys.platform != 'darwin':
         raise SystemExit('This acceptance requires macOS')
