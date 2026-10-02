@@ -8,7 +8,7 @@ Object.assign(globalThis, { window: dom.window, document: dom.window.document, H
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
 const host = globalThis as typeof globalThis & { isTauri?: boolean };
 const win = window as unknown as { __TAURI_INTERNALS__?: { invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown> }; runtime?: { ClipboardSetText?: (text: string) => Promise<boolean>; ClipboardGetText?: () => Promise<string> } };
-const { readClipboardText, writeClipboardText } = await import("../lib/clipboard");
+const { readClipboardText, readClipboardTextOrThrow, writeClipboardText } = await import("../lib/clipboard");
 const { CopyButton } = await import("../components/CopyButton");
 const { LocaleProvider } = await import("../lib/i18n");
 
@@ -44,6 +44,7 @@ assert.equal(document.querySelector("textarea"), null, "fallback removes its tem
 Object.defineProperty(document, "execCommand", { configurable: true, value: () => { throw new Error("denied"); } });
 assert.equal(await writeClipboardText("cannot copy"), false, "all clipboard failures return false");
 assert.equal(await readClipboardText(), "", "unreadable clipboard does not overwrite a selected draft with invented text");
+await assert.rejects(readClipboardTextOrThrow(), /unavailable/, "editors can distinguish denied access from an empty clipboard");
 
 const root = createRoot(document.getElementById("root")!);
 await act(async () => { root.render(<LocaleProvider><CopyButton text="copy result" /></LocaleProvider>); });

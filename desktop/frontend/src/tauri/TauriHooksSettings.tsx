@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { writeClipboardText } from "../lib/clipboard";
+import { readClipboardTextOrThrow, writeClipboardText } from "../lib/clipboard";
 import { changeTauriHooksSettings, tauriHooksSettings, tauriPluginSettings, tauriMessageFrom, type TauriHooksSettings as HooksView, type TauriPluginItem } from "../lib/tauriBridge";
 import { useT, type Translator } from "../lib/i18n";
 
@@ -49,6 +49,11 @@ export function TauriHooksSettings({ workspaceRoot = "", currentSessionState, cu
   const [pluginsError, setPluginsError] = useState("");
   const busyRef = useRef(false);
   const pluginRequest = useRef(0);
+  const clipboardRequest = useRef(0);
+  useEffect(() => {
+    clipboardRequest.current += 1;
+    return () => { clipboardRequest.current += 1; };
+  }, [scope, workspaceRoot]);
 
   const reloadPluginHooks = useCallback(() => {
     const current = ++pluginRequest.current;
@@ -99,13 +104,36 @@ export function TauriHooksSettings({ workspaceRoot = "", currentSessionState, cu
     try { setText(formatHooks(parseHooksEditor(text, view.events, t))); setError(""); }
     catch (err) { setError(tauriMessageFrom(err)); }
   };
-  const copyPath = async () => {
-    if (!view?.path) return;
+  const copy = async (value: string, success: string, failure: string) => {
+    if (busyRef.current) return;
+    const request = ++clipboardRequest.current;
+    busyRef.current = true;
+    setBusy(true);
+    setError("");
+    setNotice("");
     try {
-      if (!await writeClipboardText(view.path)) throw new Error(t("settings.hooks.clipboardUnavailable"));
-      setNotice(t("settings.hooks.pathCopied"));
-      setError("");
-    } catch { setError(t("settings.hooks.pathCopyFailed")); }
+      if (!await writeClipboardText(value)) throw new Error("clipboard unavailable");
+      if (request === clipboardRequest.current) setNotice(success);
+    } catch {
+      if (request === clipboardRequest.current) setError(failure);
+    } finally { busyRef.current = false; setBusy(false); }
+  };
+  const copyPath = () => {
+    if (view?.path) return copy(view.path, t("settings.hooks.pathCopied"), t("settings.hooks.pathCopyFailed"));
+  };
+  const paste = async () => {
+    if (busyRef.current) return;
+    const request = ++clipboardRequest.current;
+    busyRef.current = true;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const value = await readClipboardTextOrThrow();
+      if (request === clipboardRequest.current && value) setText(value);
+    } catch {
+      if (request === clipboardRequest.current) setError(t("settings.hooks.pasteFailed"));
+    } finally { busyRef.current = false; setBusy(false); }
   };
   const save = async () => {
     if (!view || busyRef.current) return;
@@ -148,7 +176,7 @@ export function TauriHooksSettings({ workspaceRoot = "", currentSessionState, cu
     {loading ? <div className="tauri-settings-loading">{t("settings.hooks.loading")}</div> : view ? <>
       <div className="tauri-settings-field"><span className="tauri-settings-field-label">{t("settings.hooks.configFile")}<small>{t("settings.hooks.configHint")}</small></span><div className="tauri-hooks-path-control"><code className="tauri-hooks-path" title={view.path}>{view.path}</code><button type="button" className="tauri-settings-button" disabled={busy || !view.path} onClick={() => void copyPath()}>{t("settings.hooks.copyPath")}</button></div></div>
       <h3>{t("settings.hooks.editorTitle")}</h3><p>{t("settings.hooks.editorDescription")}</p>
-      <div className="tauri-hooks-toolbar"><button type="button" className="tauri-settings-button" disabled={busy} onClick={format}>{t("settings.hooks.formatCheck")}</button><button type="button" className="tauri-settings-button" disabled={busy} onClick={() => void navigator.clipboard?.writeText(text).then(() => setNotice(t("settings.hooks.jsonCopied")), () => setError(t("settings.hooks.copyFailed")))}>{t("settings.hooks.copy")}</button><button type="button" className="tauri-settings-button" disabled={busy} onClick={() => void navigator.clipboard?.readText().then(value => { setText(value); setError(""); }, () => setError(t("settings.hooks.pasteFailed")))}>{t("settings.hooks.paste")}</button></div>
+      <div className="tauri-hooks-toolbar"><button type="button" className="tauri-settings-button" disabled={busy} onClick={format}>{t("settings.hooks.formatCheck")}</button><button type="button" className="tauri-settings-button" disabled={busy} onClick={() => void copy(text, t("settings.hooks.jsonCopied"), t("settings.hooks.copyFailed"))}>{t("settings.hooks.copy")}</button><button type="button" className="tauri-settings-button" disabled={busy} onClick={() => void paste()}>{t("settings.hooks.paste")}</button></div>
       <textarea className="tauri-hooks-editor" aria-label={t("settings.hooks.editorAria")} spellCheck={false} value={text} disabled={busy} onChange={event => { setText(event.target.value); setError(""); setNotice(""); }} />
       <p>{t("settings.hooks.availableEvents", { events: view.events.join("、") })}</p>
       <div className="tauri-settings-actions"><span role="status">{dirty ? t("settings.hooks.unsaved") : t("settings.hooks.saved")}</span><button type="button" className="tauri-settings-button" disabled={busy || !dirty} onClick={() => { setText(formatHooks(view.hooks)); setError(""); }}>{t("settings.hooks.discard")}</button><button type="button" className="tauri-settings-button" disabled={busy || !dirty} onClick={() => void save()}>{t("settings.hooks.save")}</button><button type="button" className="tauri-settings-button" disabled={busy} onClick={() => { if (!dirty || window.confirm(t("settings.hooks.confirmDiscard"))) void reload(scope); }}>{t("settings.hooks.reload")}</button>{pendingApply && currentSessionState && onApplyToCurrentSession && <button type="button" className="tauri-settings-button" disabled={busy || currentSessionState !== "idle" || currentSessionHasAttachments} onClick={() => void applyCurrent()}>{t("settings.hooks.applyCurrent")}</button>}</div>

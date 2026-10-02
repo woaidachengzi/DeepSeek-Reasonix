@@ -32,6 +32,14 @@ export async function writeClipboardText(value: string): Promise<boolean> {
 }
 
 export async function readClipboardText(): Promise<string> {
+  try { return await readClipboardTextOrThrow(); }
+  catch { return ""; }
+}
+
+// Editors must distinguish a genuine empty clipboard from failed access so a
+// denial cannot erase an existing draft. Existing input callers keep the
+// forgiving empty-string contract above.
+export async function readClipboardTextOrThrow(): Promise<string> {
   if (isTauri()) {
     try {
       const { readText } = await import("@tauri-apps/plugin-clipboard-manager");
@@ -54,7 +62,7 @@ export async function readClipboardText(): Promise<string> {
   } catch {
     // No readable clipboard source.
   }
-  return "";
+  throw new Error("clipboard text is unavailable");
 }
 
 // execCommand("copy") needs a selected editable element, so this selects a
