@@ -1042,3 +1042,13 @@ view/path/draft 或显示旧成功，手动刷新同步持锁。已发出的系�
 `/private/tmp/reasonix-hooks-request-build.log`。普通 Preview 仍运行，本轮没有启动
 私有 native smoke 或操作该普通实例；实际 Hooks UI/拒绝和新包原生验收仍待完成。
 本地 ad-hoc 签名未公证，完整 D/A/B/C/E 与正式发布门禁保留。
+
+
+2026-10-02 托盘主点击 `55fd3a7d7` 对齐稳定 Wails：Left/Up 始终走
+主线程 show_main_window，与 Show 菜单/Dock/第二实例共用应用 unhide、窗口
+unminimize/show/focus；已可见窗口点击不再隐藏。右键菜单/退出过滤和关闭偏好保留。
+严格 Rust clippy 与完整 macOS 候选构建通过，日志
+`/private/tmp/reasonix-tray-open-clippy.log`、`/private/tmp/reasonix-tray-open-build.log`。
+普通 Preview 仍运行，已请求保存工作后退出，未操作/关闭它；本轮没有私有原生 smoke。
+实际托盘点击、Show/Quit、隐藏/最小化恢复和 Dock 仍待验，不将编译视为物理通过。
+其他 D/A/B/C/E、完整窗口稳定性与正式签名/公证/发布门禁保留。
