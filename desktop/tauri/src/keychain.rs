@@ -278,16 +278,33 @@ impl KeychainStore {
         supervisor: &BridgeSupervisor,
     ) -> Result<(), String> {
         let summary = supervisor.provider_summary()?;
+        let mut incomplete = false;
         for provider in summary.providers {
             if !provider.requires_key {
                 continue;
             }
             let key = format!("{PROVIDER_API_KEY_PREFIX}{}", provider.name);
-            if let Some(value) = self.load_secret(&key)? {
-                supervisor.set_provider_key(&provider.name, Some(&value))?;
+            match self.load_secret(&key) {
+                Ok(Some(value)) => {
+                    if supervisor
+                        .set_provider_key(&provider.name, Some(&value))
+                        .is_err()
+                    {
+                        incomplete = true;
+                    }
+                }
+                Ok(None) => {}
+                Err(_) => incomplete = true,
             }
         }
-        Ok(())
+        if incomplete {
+            // One unavailable entry must not disable other providers. Keep
+            // the store authoritative and report partial restoration without
+            // exposing provider names, values or backend diagnostics.
+            Err("some provider credentials could not be restored; unlock credential storage or check application access, then restart the bridge".into())
+        } else {
+            Ok(())
+        }
     }
 
     /// The keychain is authoritative. A bridge update can fail after the
@@ -1002,6 +1019,166 @@ mod tests {
         );
         assert!(second.delete("api_key_smoke").unwrap());
         assert!(!second.delete("api_key_smoke").unwrap());
+    }
+
+    #[test]
+    fn real_bridge_restore_continues_after_one_credential_read_failure() {
+        let Some(binary) = std::env::var_os("REASONIX_TAURI_BRIDGE_TEST_BIN") else {
+            assert!(
+                std::env::var_os("CI").is_none(),
+                "real bridge binary required in CI"
+            );
+            return;
+        };
+        struct FailingEntry {
+            values: MemoryCredentialBackend,
+            fail: std::sync::atomic::AtomicBool,
+        }
+        impl CredentialBackend for FailingEntry {
+            fn save(&self, key: &str, value: &str) -> Result<(), String> {
+                self.values.save(key, value)
+            }
+            fn delete(&self, key: &str) -> Result<bool, String> {
+                self.values.delete(key)
+            }
+            fn load(&self, key: &str) -> Result<Option<String>, String> {
+                if key == "api_key_first" && self.fail.load(std::sync::atomic::Ordering::SeqCst) {
+                    return Err("private backend failure detail".into());
+                }
+                self.values.load(key)
+            }
+        }
+        let _env = crate::test_env::guard();
+        let home = tempdir().unwrap();
+        for name in [
+            "REASONIX_HOME",
+            "REASONIX_STATE_HOME",
+            "REASONIX_CACHE_HOME",
+        ] {
+            std::env::set_var(name, home.path());
+        }
+        let config = r#"default_model = "first/chat"
+[[providers]]
+name = "first"
+kind = "openai"
+base_url = "https://provider.invalid/v1"
+api_key_env = "REASONIX_KEYCHAIN_PARTIAL_FIRST"
+models = ["chat"]
+default = "chat"
+[[providers]]
+name = "second"
+kind = "openai"
+base_url = "https://provider.invalid/v1"
+api_key_env = "REASONIX_KEYCHAIN_PARTIAL_SECOND"
+models = ["chat"]
+default = "chat"
+"#;
+        fs::write(home.path().join("config.toml"), config).unwrap();
+        let backend = Arc::new(FailingEntry {
+            values: MemoryCredentialBackend::default(),
+            fail: std::sync::atomic::AtomicBool::new(true),
+        });
+        backend
+            .save("api_key_first", "dummy-partial-first")
+            .unwrap();
+        backend
+            .save("api_key_second", "dummy-partial-second")
+            .unwrap();
+        let store = KeychainStore::with_backend(backend.clone());
+        let supervisor = BridgeSupervisor::with_binary(PathBuf::from(binary));
+        supervisor.start().unwrap();
+        let outcome = store.restore_provider_api_keys(&supervisor);
+        let summary = supervisor.provider_summary().unwrap();
+        supervisor.stop().unwrap();
+        assert!(
+            outcome.is_err(),
+            "partial restoration must not report full success"
+        );
+        assert!(
+            !summary
+                .providers
+                .iter()
+                .find(|p| p.name == "first")
+                .unwrap()
+                .configured
+        );
+        assert!(
+            summary
+                .providers
+                .iter()
+                .find(|p| p.name == "second")
+                .unwrap()
+                .configured,
+            "one failed entry must not prevent a later valid provider from restoring"
+        );
+        assert!(!outcome
+            .unwrap_err()
+            .contains("private backend failure detail"));
+        backend
+            .fail
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        supervisor.start().unwrap();
+        store.restore_provider_api_keys(&supervisor).unwrap();
+        let restored = supervisor.provider_summary().unwrap();
+        backend
+            .fail
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        let restart = store.restart_bridge(&supervisor);
+        let running = supervisor.status().running;
+        let partial_restart = supervisor.provider_summary().unwrap();
+        supervisor.stop().unwrap();
+        assert!(restored
+            .providers
+            .iter()
+            .all(|p| !p.requires_key || p.configured));
+        assert!(
+            restart.is_err(),
+            "partial restart restore must not claim full success"
+        );
+        assert!(running, "unaffected providers keep a usable sidecar");
+        assert!(
+            !partial_restart
+                .providers
+                .iter()
+                .find(|p| p.name == "first")
+                .unwrap()
+                .configured
+        );
+        assert!(
+            partial_restart
+                .providers
+                .iter()
+                .find(|p| p.name == "second")
+                .unwrap()
+                .configured
+        );
+        assert_eq!(
+            fs::read_to_string(home.path().join("config.toml")).unwrap(),
+            config
+        );
+        assert_eq!(
+            backend.values.load("api_key_first").unwrap().as_deref(),
+            Some("dummy-partial-first")
+        );
+        assert_eq!(
+            backend.values.load("api_key_second").unwrap().as_deref(),
+            Some("dummy-partial-second")
+        );
+        fn check_files(directory: &Path) {
+            for entry in fs::read_dir(directory).unwrap() {
+                let entry = entry.unwrap();
+                if entry.file_type().unwrap().is_dir() {
+                    check_files(&entry.path());
+                } else if entry.file_type().unwrap().is_file() {
+                    assert!(
+                        !String::from_utf8_lossy(&fs::read(entry.path()).unwrap())
+                            .contains("dummy-partial-"),
+                        "restored credentials must not be persisted into profile files"
+                    );
+                }
+            }
+        }
+        check_files(home.path());
     }
 
     #[test]

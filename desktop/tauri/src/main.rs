@@ -3701,8 +3701,8 @@ fn main() {
             if let Err(error) = keychain.restore_provider_api_keys(&supervisor) {
                 // A native credential service can be temporarily unavailable.
                 // Keep the app usable with its existing file-backed settings;
-                // the provider will simply remain unavailable until the next
-                // startup or a user saves the key again.
+                // affected credentials remain unavailable until the next
+                // startup or a user saves them again; other entries restore.
                 eprintln!("Reasonix could not restore system keychain credentials: {error}");
             }
             let notifications = notifications::NotificationState::for_profile(&profile, &app.config().identifier);
