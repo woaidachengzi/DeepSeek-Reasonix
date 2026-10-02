@@ -927,3 +927,14 @@ D/E、历史旧版互斥和正式发布门禁继续保留。
 没有改激活动作、等待或断言，不把切片或历史 46/46 替代当前完整通过。两次原
 剪贴板恢复且无宿主/sidecar/启动记录残留，失败现场保留。真实 UI、历史旧版互斥、
 其余 D/E 和正式发布门禁保持。
+
+2026-10-02 LaunchServices 激活对照：新增独立 `probe-edit-launch-services.py`，
+同一诊断包由 open -n -W 启动，显式生成私有 HOME/config/state/cache；核对私有
+launch-owner、kernel 父子归属、身份、鉴权拒绝与空 token。首次 state 验证前提
+不匹配停止，不计产品结果；改为核对本探测的显式私有 state，未改正常 smoke。
+最终实际桌面启动仍原生编辑焦点失败，日志
+`/private/tmp/reasonix-edit-launch-services-final-probe.log`；page/启动完成、可 key/
+活动 Space、无模态/sheet，恢复 1/1、无 became-key，应用激活/key window/occlusion
+均 false。缺少直接启动的桌面上下文不能解释全部失败，根因仍未知。原剪贴板恢复
+且无进程/启动记录残留，失败现场保留。open 等待器不是宿主退出码；当前完整窗口
+19/46、物理 UI、其余 D/E 及正式发布门禁保持，不将诊断当作验收通过。

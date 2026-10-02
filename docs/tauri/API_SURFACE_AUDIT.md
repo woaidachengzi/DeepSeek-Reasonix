@@ -99,6 +99,14 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：LaunchServices 桌面启动的编辑激活对照（2026-10-02）
+
+- 新增 `probe-edit-launch-services.py` 独立诊断：用 `/usr/bin/open -n -W` 启动同一 `ad0d62200` macOS 包，显式固定生成的 HOME/config/state/cache 四处私有目录；从私有 launch-owner + kernel 进程关系确认宿主和 sidecar，核对私有凭据身份、未鉴权拒绝和空 token，不打印环境。复用严格原生编辑探测及多格式剪贴板保护，失败仅清理确认自有宿主，在恢复剪贴板前等待自有进程停止；保留失败现场。`open -W` 不是实际宿主 exit code，该诊断不会替代原完整门禁。
+- 第一次探测在复用正常 smoke 的“不可有 state override”前提处停止，日志 `/private/tmp/reasonix-edit-launch-services-probe.log`；这是探测前提不匹配，不计产品/激活验收。诊断随后单独核对有意设置的私有 state 路径，未修改正常 smoke 的断言或任何产品代码。
+- 最终对照 **失败**，日志 `/private/tmp/reasonix-edit-launch-services-final-probe.log`，私有现场 `/private/tmp/reasonix-edit-launch-services-tct95jkg`。实际 LaunchServices host/sidecar 归属、profile/token 和 readiness 检查后，原生编辑仍出现与直接启动相同的状态：启动/page 完成、可 key/活动 Space、无模态/sheet/实时调整，恢复请求/完成 1/1，无 became-key，applicationActive/keyWindow/occlusion-visible 为 false。因此不能将缺少直接启动的 LaunchServices 上下文作为唯一解释；系统/产品根因仍未证明。
+- 两次桌面探测原剪贴板格式核对恢复，独立确认没有 Preview/sidecar/ready/launch-owner 残留。诊断脚本语法及 diff 检查通过；当前包完整窗口 19/46 和原生编辑焦点失败保持，未放宽激活前提、改为后台编辑或用程序化回执冒充物理 UI。D→E、实际 UI、旧版目录互斥与正式发布门禁继续保留。
+- 追加静态核对当前包 Info.plist：LSUIElement、LSBackgroundOnly、NSPrincipalClass 均未设置，CFBundleExecutable 为 reasonix-tauri；仓库没有显式 activation-policy 设置。这不证明运行期激活策略或桌面状态正常。已请求用户确认当前会话是否登录解锁且其他应用可正常前台，未收到答复前不据此认定环境原因。
+
 #### D：当前包完整窗口门禁的原生编辑焦点失败（2026-10-02）
 
 - 当前产品 `c0e3871c5` 完整 `--dialogs --edit --focus` 在托管档案第 20 阶段 menu-editing 停止，**19/46** 完成，显式档案未开始；日志 `/private/tmp/reasonix-sidecar-terminal-full-window.log`。设置隐藏/最小化/应用隐藏恢复、后台任务菜单退出、外观重启回滚、剪贴板和对话框取消等前置通过不等于完整窗口通过，也不能用此前 `1b6a7706d` 的 46/46 替代当前包。
