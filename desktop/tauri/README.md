@@ -938,3 +938,18 @@ launch-owner、kernel 父子归属、身份、鉴权拒绝与空 token。首次 
 均 false。缺少直接启动的桌面上下文不能解释全部失败，根因仍未知。原剪贴板恢复
 且无进程/启动记录残留，失败现场保留。open 等待器不是宿主退出码；当前完整窗口
 19/46、物理 UI、其余 D/E 及正式发布门禁保持，不将诊断当作验收通过。
+
+
+2026-10-02 外接屏恢复：原生 API 已识别两块 2× 屏幕（主屏工作区
+0,60,3840,1966；副屏 -3840,60,3840,2100）。`b96367355` 的独立
+LaunchServices 编辑探测通过，运行期策略 Regular=0、应用/key window 已激活；
+完整窗口复测仍在托管第 9 项设置最小化前提失败，前 8 项通过，显式未开始。
+日志 `/private/tmp/reasonix-monitor-policy-launch-probe.log` 与
+`/private/tmp/reasonix-external-display-full-window.log`；历史失败根因未据此证明。
+新增真实副屏定位/重启验收：
+`python3 -B tools/tauri/smoke-native-displays.py <macOS app>`。
+只在 opt-in 验收模式操作私有窗口，两种档案核对实际位置/尺寸/缩放、生产保存文件、
+整包重启及身份/退出清理；`f51979947` 严格 clippy 和完整构建通过，真实包
+4/4 通过，日志 `/private/tmp/reasonix-secondary-display-package-smoke.log`。
+不同缩放、实际拔插、物理拖动/WebView 和完整窗口稳定性仍待验，观察工具仍超时，
+不将 API 几何通过标为物理 UI 全通过；其余 D/E/发布门禁及 Windows/Linux 延期保持。
