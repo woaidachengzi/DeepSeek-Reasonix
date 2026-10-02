@@ -1088,3 +1088,17 @@ unminimize/show/focus；已可见窗口点击不再隐藏。右键菜单/退出�
 身份校验不能锁住外部 writer，不承诺同 inode 内容变化的一致快照或彻底消除最终
 校验/rename 外部竞态。本轮未执行新包真实 Save/Replace 面板，普通 Preview 未被操作；
 物理 D 和其余发布门禁保留。
+
+
+2026-10-02 通知队首保护 `ad3eb7070`：32 pending 溢出原先淘汰正在处理的
+队首，256 target 溢出也会移除其映射；两个旧代码回归均确定失败。现在保留首个
+有效 pending/映射，淘汰其他最旧候选；清除过期/无映射 pending，容量与 TTL 不变。
+最终 9 项 Rust 通知回归、真实 bridge 路由/不重建、前端点击回归、严格 clippy 和
+完整 macOS 包构建通过。日志 `/private/tmp/reasonix-notification-head-before.log`、
+`/private/tmp/reasonix-notification-target-head-before.log`、
+`/private/tmp/reasonix-notification-head-final-tests.log`、
+`/private/tmp/reasonix-notification-head-frontend.log`、
+`/private/tmp/reasonix-notification-head-clippy.log`、`/private/tmp/reasonix-notification-head-build.log`。
+仍为有界队列，超量等待项可被淘汰；不保证所有超量点击保留，不扩大 ACK 权限。
+普通 Preview 未被操作，新包实际 OS 送达/横幅/点击仍未复验；最小化根因未确认，
+其余 D/A/B/C/E 与正式签名/公证/发布门禁保留。
