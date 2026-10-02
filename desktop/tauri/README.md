@@ -994,3 +994,14 @@ PageLoad::Finished，沿用 5 秒上限和活动 key/真实最小化断言。cli
 4/4 通过，日志 `/private/tmp/reasonix-storage-copy-native-clipboard.log`，原剪贴板恢复、
 无 Preview 残留。组件模拟和实际 native ACL 门禁不能代替存储页物理点击/拒绝 UI；
 最小化稳定性、其余 D/E 和发布门禁仍待完成，桌面观察工具仍超时。
+
+
+2026-10-02 通知批次交接修复：`af7cf185d` 解决处理首批 32 条期间补入的点击
+在批次结束后遗留的问题。原生 32 条是同时排队上限；完整确认一批后 consumer 会
+继续一次 fresh query，空队列/不可导航/停止/故障仍停止，故障不自动重试。
+专项回归旧代码实际只确认 32 次；修复后原队列始终 ≤32，补入点击在 33 次打开/
+各 token 一次确认后处理完成，最后一次空查询停止。完整 Tauri 回归和 macOS 构建通过。
+当前包两种档案各 3 条通知的实际 OS 提交/固定文案/隐藏发送/精确删除/原件与重启
+清理通过，日志 `/private/tmp/reasonix-notification-batch-native-delivery.log`；无 Preview
+残留。依赖层批次模拟与 OS 送达分别记证据，横幅/物理点击/冷启动/拒绝恢复和其余
+D/E/发布门禁保持。

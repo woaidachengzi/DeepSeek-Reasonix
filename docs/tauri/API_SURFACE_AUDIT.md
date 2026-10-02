@@ -99,6 +99,14 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：通知点击队列补入后的批次交接修复（2026-10-02）
+
+- 核对原生 registry：32 是同时排队上限，处理点击期间可补入新 token；前端却在累计确认 32 条后直接停止。实际模拟中首条确认腾出位置后补入第 33 个点击并调用 consumer.wake()，随后 fresh-head 查询消费了 coalesced wake 标志；首批结束仍留有已收到点击，没有后续唤醒。专项回归确定失败（32 次 ack、期望 33），日志 `/private/tmp/reasonix-notification-batch-before.log`；整个队列始终不超过 32，不是虚构超界输入。
+- consumer 现在统计成功确认数；完整确认一批后继续一次 fresh query，处理补入的点击，直到空队列/不可导航/停止/故障。原生队列上限、权限、目标身份、单 consumer、失败保留和停止规则未改；故障后的 coalesced wake 仍不会造成自动重试环。专项回归验证 33 次打开和唯一确认、最终空队列及总计 34 次 pending 查询（最后一次为空），也保留已存在的空快照竞争、停止、导航拒绝、目标不匹配、失败 ack/查询无重试环回归，日志 `/private/tmp/reasonix-notification-batch-after.log`。
+- 完整 `pnpm test:tauri` exit 0，日志 `/private/tmp/reasonix-notification-batch-tauri-tests.log`；随后专项增加打开次数断言再次通过。产品提交 `af7cf185d` 完整 macOS 构建通过（类型/contract/budget、Go sidecar/arm64 host 与本地 ad-hoc 签名），日志 `/private/tmp/reasonix-notification-batch-build.log`。
+- 当前包两种私有档案的实际 macOS 通知提交/系统 delivered 查询全部通过：每种 3 条固定文案，其中 2 条应用隐藏时发送，精确删除本次通知、原件保持、同档案重启、身份及正常退出/sidecar/启动记录清理；日志 `/private/tmp/reasonix-notification-batch-native-delivery.log`，独立确认无 Preview 残留。该 native 门禁不运行用户点击 pump，不将实际送达等同于批次 UI 集成通过。
+- 批次回归为依赖层模拟；通知横幅、实际前后台/冷启动点击、授权拒绝恢复仍待物理验收。最小化稳定性、不同缩放/拔插/物理拖动、旧版目录互斥决策及其余 D/A/B/C/E/正式发布门禁保留。
+
 #### D：存储路径复制的重复请求与来源反馈修复（2026-10-02）
 
 - 当前桌面 inventory 再次 10 秒超时，没有执行物理 UI。转而核对实际 Tauri 存储页：复制没有同步请求锁；来源变化/刷新后，旧异步完成仍可设置同一行的已复制图标或错误。新增回归在旧代码确定失败，连续两次同一事件批次点击产生两次 native 写入（期望一次），日志 `/private/tmp/reasonix-storage-copy-before.log`。
