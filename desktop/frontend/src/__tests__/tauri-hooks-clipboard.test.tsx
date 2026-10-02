@@ -9,10 +9,16 @@ let browserCalls = 0;
 Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { browserCalls++; throw new Error("WebView denied"); }, readText: async () => { browserCalls++; throw new Error("WebView denied"); } } });
 Object.defineProperty(document, "execCommand", { value: () => false, configurable: true });
 let clipboard = "", denied = false, deferRead = false;
+let deferLoad = false, deferSave = false;
+let delayedLoad: ((value: unknown) => void) | undefined;
+let delayedSave: ((value: unknown) => void) | undefined;
+const hooksView = (command: string, path = "/private/settings.json") => ({ protocolVersion: 1, scope: "global", path, revision: "r1", events: ["Stop"], hooks: { Stop: [{ command }] } });
 let delayedRead: ((value: string) => void) | undefined;
 const calls: string[] = [];
 (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = { invoke: async (command: string, args?: { text?: string; scope?: string; workspaceRoot?: string }) => {
   calls.push(command);
+  if (command === "hooks_settings" && deferLoad) return new Promise(resolve => { delayedLoad = resolve; });
+  if (command === "change_hooks_settings" && deferSave) return new Promise(resolve => { delayedSave = resolve; });
   if (command === "hooks_settings") return { protocolVersion: 1, scope: args?.scope ?? "global", path: "/private/settings.json", revision: "r1", events: ["Stop"], hooks: args?.workspaceRoot ? { Stop: [{ command: "new workspace" }] } : {} };
   if (command === "plugin_settings") return { protocolVersion: 1, plugins: [] };
   if (command.startsWith("plugin:clipboard-manager|")) {
@@ -55,10 +61,54 @@ assert.equal(editor().disabled, true, "pending native paste prevents conflicting
 assert.ok(delayedRead);
 await render("/new workspace");
 const nextDraft = editor().value;
+assert.equal(editor().disabled, false, "new workspace releases only the previous context busy lease");
+const previousRead = delayedRead!;
+await click("paste");
+const currentRead = delayedRead!;
+assert.notEqual(currentRead, previousRead);
 assert.ok(nextDraft.includes("new workspace"));
-await act(async () => { delayedRead!("stale clipboard result"); });
+await act(async () => { previousRead("stale clipboard result"); });
 assert.equal(editor().value, nextDraft, "previous-workspace paste cannot overwrite the new context");
+assert.equal(editor().disabled, true, "old completion cannot release the current paste busy lease");
+await act(async () => { currentRead("current clipboard result"); });
+assert.equal(editor().value, "current clipboard result");
 assert.equal(editor().disabled, false);
 assert.ok(!calls.includes("change_hooks_settings"), "clipboard operations never persist or execute hook commands");
+// An old save may finish in its original backend context, but its UI result
+// cannot overwrite another workspace or release that workspace's pending paste.
+const action = async (key: "save" | "reload") => { await act(async () => {
+  const button = [...document.querySelectorAll<HTMLButtonElement>(".tauri-settings-actions button")].find(button => button.textContent === t(`settings.hooks.${key}`));
+  assert.ok(button); assert.equal(button.disabled, false); button.click();
+}); };
+deferRead = false;
+clipboard = '{"hooks":{"Stop":[{"command":"saved old workspace"}]}}';
+await click("paste");
+deferSave = true;
+await action("save");
+assert.ok(delayedSave);
+await render("/save replacement");
+const replacementDraft = editor().value;
+deferRead = true;
+await click("paste");
+const replacementRead = delayedRead!;
+await act(async () => { delayedSave!(hooksView("saved old workspace", "/private/old-settings.json")); });
+assert.equal(editor().value, replacementDraft, "old save does not replace new workspace hooks");
+assert.equal(editor().disabled, true, "old save cannot unlock new clipboard request");
+assert.ok(!document.body.textContent?.includes("/private/old-settings.json"));
+assert.ok(!document.body.textContent?.includes(t("settings.hooks.savedNotice")));
+await act(async () => { replacementRead(replacementDraft); });
+
+// Refresh and the automatic context load share the same latest-request fence.
+deferLoad = true;
+await action("reload");
+assert.ok(delayedLoad);
+deferLoad = false;
+await render("/refresh replacement");
+const refreshDraft = editor().value;
+await act(async () => { delayedLoad!(hooksView("stale refresh", "/private/stale-refresh.json")); });
+assert.equal(editor().value, refreshDraft, "old manual reload cannot replace the latest context load");
+assert.ok(!document.body.textContent?.includes("/private/stale-refresh.json"));
+assert.equal(editor().disabled, false);
+assert.equal(browserCalls, 0);
 await act(async () => { root.unmount(); });
-console.log("Hooks native JSON clipboard, denial/empty draft protection and stale workspace completion: OK");
+console.log("Hooks native JSON clipboard, denial/empty draft protection and stale clipboard/save/refresh ownership: OK");

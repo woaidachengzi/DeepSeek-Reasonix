@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { readClipboardTextOrThrow, writeClipboardText } from "../lib/clipboard";
 import { changeTauriHooksSettings, tauriHooksSettings, tauriPluginSettings, tauriMessageFrom, type TauriHooksSettings as HooksView, type TauriPluginItem } from "../lib/tauriBridge";
 import { useT, type Translator } from "../lib/i18n";
@@ -49,10 +49,23 @@ export function TauriHooksSettings({ workspaceRoot = "", currentSessionState, cu
   const [pluginsError, setPluginsError] = useState("");
   const busyRef = useRef(false);
   const pluginRequest = useRef(0);
-  const clipboardRequest = useRef(0);
-  useEffect(() => {
-    clipboardRequest.current += 1;
-    return () => { clipboardRequest.current += 1; };
+  const operationRequest = useRef(0);
+  const loadRequest = useRef(0);
+  useLayoutEffect(() => {
+    operationRequest.current += 1;
+    loadRequest.current += 1;
+    busyRef.current = false;
+    setBusy(false);
+    setView(null);
+    setText("");
+    setLoading(true);
+    setError("");
+    setNotice("");
+    setPendingApply(false);
+    return () => {
+      operationRequest.current += 1;
+      loadRequest.current += 1;
+    };
   }, [scope, workspaceRoot]);
 
   const reloadPluginHooks = useCallback(() => {
@@ -73,30 +86,32 @@ export function TauriHooksSettings({ workspaceRoot = "", currentSessionState, cu
     return () => { pluginRequest.current += 1; };
   }, [reloadPluginHooks]);
 
-  const reload = async (nextScope: HookScope) => {
+  const reload = useCallback(async (nextScope: HookScope) => {
+    if (busyRef.current) return;
+    const request = ++loadRequest.current;
+    const operation = ++operationRequest.current;
+    busyRef.current = true;
+    setBusy(true);
     setLoading(true);
     setError("");
+    setNotice("");
     try {
       const next = await tauriHooksSettings(nextScope, workspaceRoot);
+      if (request !== loadRequest.current) return;
       setView(next);
       setText(formatHooks(next.hooks));
-      setNotice("");
-    } catch (err) { setView(null); setError(tauriMessageFrom(err)); }
-    finally { setLoading(false); }
-  };
+    } catch (err) {
+      if (request === loadRequest.current) { setView(null); setError(tauriMessageFrom(err)); }
+    } finally {
+      if (request === loadRequest.current) setLoading(false);
+      if (operation === operationRequest.current) { busyRef.current = false; setBusy(false); }
+    }
+  }, [workspaceRoot]);
 
   useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError("");
-    void tauriHooksSettings(scope, workspaceRoot).then(next => {
-      if (!active) return;
-      setView(next);
-      setText(formatHooks(next.hooks));
-    }).catch(err => { if (active) { setView(null); setError(tauriMessageFrom(err)); } })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [scope, workspaceRoot]);
+    void reload(scope);
+    return () => { loadRequest.current += 1; };
+  }, [scope, reload]);
 
   const dirty = Boolean(view && text !== formatHooks(view.hooks));
   const format = () => {
@@ -106,65 +121,78 @@ export function TauriHooksSettings({ workspaceRoot = "", currentSessionState, cu
   };
   const copy = async (value: string, success: string, failure: string) => {
     if (busyRef.current) return;
-    const request = ++clipboardRequest.current;
+    const request = ++operationRequest.current;
     busyRef.current = true;
     setBusy(true);
     setError("");
     setNotice("");
     try {
       if (!await writeClipboardText(value)) throw new Error("clipboard unavailable");
-      if (request === clipboardRequest.current) setNotice(success);
+      if (request === operationRequest.current) setNotice(success);
     } catch {
-      if (request === clipboardRequest.current) setError(failure);
-    } finally { busyRef.current = false; setBusy(false); }
+      if (request === operationRequest.current) setError(failure);
+    } finally {
+      if (request === operationRequest.current) { busyRef.current = false; setBusy(false); }
+    }
   };
   const copyPath = () => {
     if (view?.path) return copy(view.path, t("settings.hooks.pathCopied"), t("settings.hooks.pathCopyFailed"));
   };
   const paste = async () => {
     if (busyRef.current) return;
-    const request = ++clipboardRequest.current;
+    const request = ++operationRequest.current;
     busyRef.current = true;
     setBusy(true);
     setError("");
     setNotice("");
     try {
       const value = await readClipboardTextOrThrow();
-      if (request === clipboardRequest.current && value) setText(value);
+      if (request === operationRequest.current && value) setText(value);
     } catch {
-      if (request === clipboardRequest.current) setError(t("settings.hooks.pasteFailed"));
-    } finally { busyRef.current = false; setBusy(false); }
+      if (request === operationRequest.current) setError(t("settings.hooks.pasteFailed"));
+    } finally {
+      if (request === operationRequest.current) { busyRef.current = false; setBusy(false); }
+    }
   };
   const save = async () => {
     if (!view || busyRef.current) return;
     let hooks: Record<string, unknown>;
     try { hooks = parseHooksEditor(text, view.events, t); }
     catch (err) { setError(tauriMessageFrom(err)); return; }
+    const request = ++operationRequest.current;
     busyRef.current = true;
     setBusy(true);
     setError("");
     setNotice("");
     try {
       const next = await changeTauriHooksSettings({ scope, workspaceRoot, revision: view.revision, hooks });
+      if (request !== operationRequest.current) return;
       setView(next);
       setText(formatHooks(next.hooks));
       setPendingApply(true);
       setNotice(t("settings.hooks.savedNotice"));
-    } catch (err) { setError(tauriMessageFrom(err)); }
-    finally { busyRef.current = false; setBusy(false); }
+    } catch (err) { if (request === operationRequest.current) setError(tauriMessageFrom(err)); }
+    finally {
+      if (request === operationRequest.current) { busyRef.current = false; setBusy(false); }
+    }
   };
   const applyCurrent = async () => {
     if (!onApplyToCurrentSession || currentSessionState !== "idle" || currentSessionHasAttachments || busyRef.current) return;
+    const request = ++operationRequest.current;
     busyRef.current = true;
     setBusy(true);
     setError("");
     try {
-      if (await onApplyToCurrentSession()) {
+      const applied = await onApplyToCurrentSession();
+      if (request !== operationRequest.current) return;
+      if (applied) {
         setPendingApply(false);
         setNotice(t("settings.hooks.applied"));
       } else setError(t("settings.hooks.applyFailed"));
-    } catch { setError(t("settings.hooks.applyFailed")); }
-    finally { busyRef.current = false; setBusy(false); }
+    } catch { if (request === operationRequest.current) setError(t("settings.hooks.applyFailed")); }
+    finally {
+      if (request === operationRequest.current) { busyRef.current = false; setBusy(false); }
+    }
   };
 
   const pluginHookPackages = plugins.filter(plugin => plugin.hooks > 0 || (plugin.hookDetails?.length ?? 0) > 0);
