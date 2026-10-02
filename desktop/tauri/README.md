@@ -507,8 +507,10 @@ python3 -B tools/tauri/smoke-native-ui-export.py 'desktop/tauri/target/release/b
 Missing source→另存为，要求即时源文件不可用提示且没有 Save 面板，执行
 `--record missing-source`，再实际 Cmd+Q；record 必须指定同一 `--control`。
 每阶段要求两份源指纹不变、源目录无新增文件、输出为空；不会将“没有输出”单独认定为
-错误提示/面板验收。两档案共四项拒绝，两次正常生命周期。`851111594` 的原生保护与
-旧文案已实际验证，新提示是否在生产包显示以迁移清单最新记录为准。
+错误提示/面板验收。两档案共四项拒绝，两次正常生命周期。`851111594` 的原生保护与旧文案已实际验证；
+从干净 `5882a249d` 完整生产构建的新包，两种档案四项真实拒绝及简体中文解决步骤也已
+通过，日志 `/private/tmp/reasonix-document-errors-fixed-ui.log`。原件/身份/退出清理保持，
+成功夹具及自有进程已独立核对清理；目录/真实系统读取或写入拒绝另行验收。
 
 主题导入的普通私有档案 runner：
 
