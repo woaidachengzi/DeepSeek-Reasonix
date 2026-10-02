@@ -3,7 +3,10 @@ import { createPortal } from "react-dom";
 import { AlertCircle, Code2, Maximize2, Minimize2, Play, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { CopyButton } from "./CopyButton";
 import { createMermaidPanZoom, type MermaidPanZoomInstance, type MermaidPanZoomOptions } from "./mermaidPanZoom";
-import { openExternal } from "../lib/bridge";
+import { openExternal } from "../lib/externalLinks";
+import { writeClipboardText } from "../lib/clipboard";
+import { useToast } from "../lib/toast";
+import { useT } from "../lib/i18n";
 import { markdownImageSource } from "../lib/markdownImage";
 
 interface MermaidDiagramProps {
@@ -657,15 +660,28 @@ function MermaidBody({
 }
 
 function SvgPreview({ refEl, svg }: { refEl: RefObject<HTMLDivElement | null>; svg: string }) {
+  // Toast context updates must not replace the live SVG/pan-zoom DOM.
+  const renderedSvg = useMemo(() => ({ __html: svg }), [svg]);
+  const { showToast } = useToast();
+  const t = useT();
+  const copyLink = useCallback(async (href: string) => {
+    const copied = await writeClipboardText(href);
+    showToast(t(copied ? "richLink.copied" : "richLink.copyFailed"), copied ? "info" : "error");
+  }, [showToast, t]);
   const openAnchor = useCallback((event: React.MouseEvent) => {
+    if (event.type === "auxclick" && event.button !== 1) return;
     const target = event.target;
     if (!(target instanceof Element)) return;
     const anchor = target.closest("a");
     const href = anchor ? getMermaidAnchorHref(anchor) : null;
     if (!href) return;
     event.preventDefault();
-    if (isOpenableMermaidHref(href)) openExternal(href);
-  }, []);
+    if (isOpenableMermaidHref(href)) void openExternal(href).then(opened => {
+      if (!opened) showToast(t("settings.about.openLinkFailed"), "error", {
+        actionLabel: t("richLink.copyLink"), onAction: () => { void copyLink(href); },
+      });
+    });
+  }, [copyLink, showToast, t]);
 
   const preventMiddleButtonNavigation = useCallback((event: React.MouseEvent) => {
     if (event.button !== 1) return;
@@ -678,7 +694,7 @@ function SvgPreview({ refEl, svg }: { refEl: RefObject<HTMLDivElement | null>; s
       <div
         className="mermaid-diagram__preview"
         ref={refEl}
-        dangerouslySetInnerHTML={{ __html: svg }}
+        dangerouslySetInnerHTML={renderedSvg}
         onClick={openAnchor}
         onAuxClick={openAnchor}
         onMouseDown={preventMiddleButtonNavigation}
