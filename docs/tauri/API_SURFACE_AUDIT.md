@@ -99,6 +99,13 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：组合输入与配置快捷键边界（2026-10-02）
+
+- 核对发现消息输入框已有 IME 保护，但 Tauri 全局快捷键匹配、面板 Escape 和设置页录制未检查组合输入。新增匹配回归修复前明确失败：`isComposing` 的 new_session 组合仍返回 true，日志 `/private/tmp/reasonix-shortcut-ime-before.log`。额外独立工作区样本的修复前挂载停滞并终止，不计通过，也不将停滞归因为产品；之后将面板检查放回原有工作区回归夹具。
+- 产品 `c07a78ac3` 共用 `isComposing || keyCode === 229` 检查，覆盖匹配、全局面板 Escape、快捷键录制和原输入框入口。IME 事件保持未 preventDefault，不触发应用动作、不结束录制或覆盖保存绑定；不修改系统输入法、保留组合表或稳定版偏好。完整 `pnpm test:tauri` 通过，覆盖 43 个动作两种 IME 标记、真实设置组件录制与普通组合键保存、工作区面板保持和普通设置路由，日志 `/private/tmp/reasonix-shortcut-ime-tauri-tests.log`。
+- 原生观察工具本轮 `cua.getState()` 只读查询 10 秒超时并重置 kernel，未绑定/启动 Preview、未发送输入。它不证明用户输入法故障，不能替代 macOS 实际候选输入/取消或自定义物理组合键验收；这些 D 门禁及 D→E 顺序继续保留。
+- 同提交完整 macOS 包构建和托管/显式两档案基础 smoke 通过：类型/contract/budget、私有凭据身份、实际通知授权查询、Global 工作区、sidecar readiness/未认证拒绝及退出清理；独立确认无 Preview 残留。日志 `/private/tmp/reasonix-shortcut-ime-build.log`、`/private/tmp/reasonix-shortcut-ime-package-smoke.log`。本地 ad-hoc 签名不等于正式签名/公证，此 smoke 不发送 IME 或快捷键，不把当前包基础检查推广为完整窗口/物理路由已通过。
+
 #### D：通知点击查询与新事件交错（2026-10-02）
 
 - 前端 `NotificationClickPump` 查询期间收到真实点击唤醒，但在途查询返回旧空快照时，原逻辑因没有 acknowledge 进展而丢弃唤醒；点击仍留在原生队列，却可能直到下一次 readiness 改变才处理。确定性回归在修复前失败（实际打开 0 次、预期 1 次），日志 `/private/tmp/reasonix-notification-wake-before.log`。

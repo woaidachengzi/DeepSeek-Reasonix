@@ -886,3 +886,13 @@ runtime 选项使旧复制失效，pending 禁止重复操作，卸载清理计�
 `/private/tmp/reasonix-notification-wake-package-smoke.log`；独立确认无 Preview 残留。
 这不等同真实通知横幅、点击、冷启动和 OS 拒绝恢复通过；旧版互斥、其余 D/E 与
 正式签名/公证门禁继续保留。
+
+2026-10-02 组合输入快捷键保护：产品 `c07a78ac3` 将输入框已有的 isComposing/229
+检查共用到 Tauri 匹配、全局 Escape 和设置录制入口。匹配回归修复前失败；完整
+test:tauri 修复后通过，覆盖 43 个动作两种 IME 标记、设置录制不改绑定和工作区
+面板保持，日志 `/private/tmp/reasonix-shortcut-ime-tauri-tests.log`。同提交完整生产
+构建及双档案基础 smoke 通过，日志 `/private/tmp/reasonix-shortcut-ime-build.log`、
+`/private/tmp/reasonix-shortcut-ime-package-smoke.log`；独立确认无 Preview 残留。
+CUA 只读 inventory 查询仍超时，未输入；真实 macOS 候选输入/取消和物理自定义
+快捷键验收继续保留，不以组件或基础启动检查替代。其余 D/E、旧版目录互斥和正式
+发布门禁保持。
