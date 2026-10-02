@@ -563,6 +563,17 @@ macOS 包构建通过。新托管实际取消通过，第二次路径面板捕�
 仅计组件 QA。证据 `/private/tmp/reasonix-theme-feedback-browser-9fg8wcnz/qa-evidence.json`。
 
 
+2026-10-02 当前干净 `5882a249d` 生产包已用新私有显式档案补齐上述五阶段及两次正常
+UI 生命周期：实际 Cancel/双图片导入/重复导入/无效包提示/重启；两份主题逐张选择并
+切换首页/工作区图片均恢复，偏好、原件、身份及退出清理通过。日志
+`/private/tmp/reasonix-theme-explicit-oct02.log`；重启截图
+`/private/tmp/reasonix-theme-explicit-restart-second-home.png` 与
+`/private/tmp/reasonix-theme-explicit-restart-second-task.png`。四个自有 PID 已独立确认退出，
+成功夹具/控制删除。重复导入后的两次 `-3812` 观察由同宿主只读截图/AX 恢复，未重复
+执行导入；显式导入待验项关闭，当前中文失败提示原生验收通过。托管仍引用此前
+`9972828f4` 成功记录，历史失败保留；捕捉根因、窗口稳定性与主题应用仍待验。
+
+
 macOS 受管 bridge 跟随实际 kernel parent 生命周期。宿主异常退出时取消任务/HTTP/SSE，
 处理宿主日志管道断开产生的 SIGPIPE，并释放目录锁、清理自己的 readiness 文件和空目录。
 不带 `--host-pid` 的独立 bridge 客户端行为保留。
