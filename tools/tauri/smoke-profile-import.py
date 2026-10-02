@@ -106,6 +106,9 @@ def launch(app, identifier, root, phase, configuration):
             backups = list((core / "backups").glob("*/config.toml"))
             if len(backups) != 1 or backups[0].read_bytes() != configuration:
                 raise RuntimeError("Preview edits/restart changed or duplicated the stable config backup")
+            for directory in (core / "backups", backups[0].parent):
+                if directory.is_symlink() or not directory.is_dir() or directory.stat().st_mode & 0o777 != 0o700:
+                    raise RuntimeError("config backup directory is not an ordinary private directory")
             expected = {"projects": [{"root": str(root / "project 中文 & spaces"), "title": "Private project"}]}
             if json.loads((core / "desktop-projects.json").read_text()) != expected:
                 raise RuntimeError("folder import copied legacy session/order metadata")

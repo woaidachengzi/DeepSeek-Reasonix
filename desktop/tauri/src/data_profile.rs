@@ -404,15 +404,26 @@ impl PreviewProfile {
             .map_err(|error| format!("read system clock for config backup: {error}"))?
             .as_millis();
         let root = self.home.join("backups");
-        fs::create_dir_all(&root).map_err(|error| {
-            format!(
-                "create preview backup directory {}: {error}",
-                root.display()
-            )
-        })?;
+        match create_private_directory(&root) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => {
+                return Err(format!(
+                    "create preview backup directory {}: {error}",
+                    root.display()
+                ))
+            }
+        }
+        let metadata = fs::symlink_metadata(&root)
+            .map_err(|error| format!("inspect preview backup directory: {error}"))?;
+        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            return Err(
+                "preview backup location must be an ordinary directory inside the profile".into(),
+            );
+        }
         for suffix in 0..100_u8 {
             let candidate = root.join(format!("stable-config-{millis}-{suffix}"));
-            match fs::create_dir(&candidate) {
+            match create_private_directory(&candidate) {
                 Ok(()) => return Ok(candidate),
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
                 Err(error) => {
@@ -425,6 +436,16 @@ impl PreviewProfile {
         }
         Err("could not allocate a unique preview config backup directory".into())
     }
+}
+
+fn create_private_directory(path: &Path) -> std::io::Result<()> {
+    let mut builder = fs::DirBuilder::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder.create(path)
 }
 
 fn explicit_reasonix_home() -> Option<PathBuf> {
@@ -539,6 +560,18 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
+            for directory in [
+                profile.home.join("backups"),
+                Path::new(&result.backup_config)
+                    .parent()
+                    .unwrap()
+                    .to_path_buf(),
+            ] {
+                assert_eq!(
+                    fs::metadata(directory).unwrap().permissions().mode() & 0o777,
+                    0o700
+                );
+            }
             for path in [&result.imported_config, &result.backup_config] {
                 let mode = fs::metadata(path)
                     .expect("private imported file")
@@ -548,6 +581,40 @@ mod tests {
             }
         }
         assert!(!stable.starts_with(&profile.home));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn import_rejects_redirected_backup_root_without_external_writes() {
+        use std::os::unix::fs::symlink;
+        let root = tempfile::tempdir().unwrap();
+        let stable = root.path().join("stable.toml");
+        fs::write(&stable, b"default_model = \"stable\"\n").unwrap();
+        let before = fs::read(&stable).unwrap();
+        let profile = managed_profile(root.path().join("preview"), stable.clone());
+        fs::create_dir(&profile.home).unwrap();
+        let outside = root.path().join("outside");
+        fs::create_dir(&outside).unwrap();
+        symlink(&outside, profile.home.join("backups")).unwrap();
+        assert!(profile.import_stable_config().is_err());
+        assert_eq!(fs::read(&stable).unwrap(), before);
+        assert_eq!(fs::read_dir(&outside).unwrap().count(), 0);
+        assert!(!profile.config_path().exists());
+    }
+
+    #[test]
+    fn import_rejects_non_directory_backup_root_without_changing_files() {
+        let root = tempfile::tempdir().unwrap();
+        let stable = root.path().join("stable.toml");
+        fs::write(&stable, b"default_model = \"stable\"\n").unwrap();
+        let profile = managed_profile(root.path().join("preview"), stable.clone());
+        fs::create_dir(&profile.home).unwrap();
+        let backup_root = profile.home.join("backups");
+        fs::write(&backup_root, b"existing original").unwrap();
+        assert!(profile.import_stable_config().is_err());
+        assert_eq!(fs::read(&backup_root).unwrap(), b"existing original");
+        assert_eq!(fs::read(&stable).unwrap(), b"default_model = \"stable\"\n");
+        assert!(!profile.config_path().exists());
     }
 
     #[test]
