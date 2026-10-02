@@ -52,14 +52,25 @@ fn restored_bounds(state: &SavedWindowState, areas: &[WorkArea]) -> Option<(i32,
     let saved_position = state.x.zip(state.y);
     let target = saved_position
         .and_then(|(x, y)| {
-            areas.iter().find(|area| {
-                let right = i64::from(area.x) + i64::from(area.width);
-                let bottom = i64::from(area.y) + i64::from(area.height);
-                i64::from(x) + 96 <= right
-                    && i64::from(x) + i64::from(state.width) > i64::from(area.x) + 96
-                    && i64::from(y) >= i64::from(area.y)
-                    && i64::from(y) + 32 <= bottom
-            })
+            areas
+                .iter()
+                .filter_map(|area| {
+                    let left = i64::from(area.x);
+                    let right = left + i64::from(area.width);
+                    let bottom = i64::from(area.y) + i64::from(area.height);
+                    let saved_left = i64::from(x);
+                    let saved_right = saved_left + i64::from(state.width);
+                    let overlap = saved_right.min(right) - saved_left.max(left);
+                    (overlap >= 96
+                        && i64::from(y) >= i64::from(area.y)
+                        && i64::from(y) + 32 <= bottom)
+                        .then_some((area, overlap))
+                })
+                // A straddling window must not move to the primary display
+                // merely because a small part of its title bar touches it.
+                // min_by_key retains the first (primary) area on equal scores.
+                .min_by_key(|(_, overlap)| std::cmp::Reverse(*overlap))
+                .map(|(area, _)| area)
         })
         .or_else(|| areas.first())?;
     let ratio = state.scale_factor.map_or(1.0, |scale| target.scale / scale);
@@ -295,6 +306,59 @@ mod tests {
                 ]
             ),
             Some((-1400, 70, 1280, 820))
+        );
+    }
+
+    #[test]
+    fn restores_straddling_window_to_display_with_most_visible_title_bar() {
+        let saved = SavedWindowState {
+            x: Some(-800),
+            y: Some(70),
+            scale_factor: Some(1.0),
+            ..state()
+        };
+        assert_eq!(
+            restored_bounds(
+                &saved,
+                &[
+                    area(0, 25, 1920, 1055, 1.0),
+                    area(-1920, 25, 1920, 1055, 1.0),
+                ]
+            ),
+            Some((-1280, 70, 1280, 820))
+        );
+        let saved = SavedWindowState {
+            x: Some(1800),
+            ..saved
+        };
+        assert_eq!(
+            restored_bounds(
+                &saved,
+                &[
+                    area(0, 25, 1920, 1055, 1.0),
+                    area(1920, 25, 3840, 2110, 2.0),
+                ]
+            ),
+            Some((1920, 70, 2560, 1640))
+        );
+    }
+
+    #[test]
+    fn equal_title_bar_overlap_prefers_primary_display() {
+        let saved = SavedWindowState {
+            x: Some(1280),
+            y: Some(70),
+            ..state()
+        };
+        assert_eq!(
+            restored_bounds(
+                &saved,
+                &[
+                    area(0, 25, 1920, 1055, 1.0),
+                    area(1920, 25, 1920, 1055, 1.0),
+                ]
+            ),
+            Some((640, 70, 1280, 820))
         );
     }
 
