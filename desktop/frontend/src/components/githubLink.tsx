@@ -120,7 +120,7 @@ function localPathSaveErrorText(error: unknown): string {
     || message === "destination is the same as the source") {
     return t("externalOpener.saveSameSource");
   }
-  if (message.startsWith("cannot access document:") || message.startsWith("cannot read source:")) {
+  if (message.startsWith("cannot access document:") || message.startsWith("cannot read source:") || message.startsWith("source file changed;")) {
     return t("externalOpener.saveSourceUnavailable");
   }
   if (/^cannot (?:create destination|save document):.*(?:Permission denied|Operation not permitted|os error (?:13|1)\b)/i.test(message)) {

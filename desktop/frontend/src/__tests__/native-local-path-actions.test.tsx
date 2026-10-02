@@ -57,8 +57,9 @@ await assert.rejects(app.SaveLocalPathAs(source), /check path permissions/);
 for (const [failure, expected] of [
   ["destination is the source file; choose another path", "Choose a different name or location"],
   ["destination is the same as the source", "Choose a different name or location"],
-  ["cannot access document: No such file or directory (os error 2); check the path and permissions", "Check that it still exists"],
-  ["cannot read source: Permission denied; check file permissions", "have read permission"],
+  ["cannot access document: No such file or directory (os error 2); check the path and permissions", "Reopen it"],
+  ["cannot read source: Permission denied; check file permissions", "read permission"],
+  ["source file changed; reopen the document and retry saving", "Reopen it"],
   ['cannot create destination: Permission denied (os error 13) at path "/private/tmp/.tmp-secret"; choose a writable folder', "Choose a folder you have permission"],
   ["cannot save document: Operation not permitted (os error 1); choose a writable destination", "Choose a folder you have permission"],
   ["cannot save document: disk full", "Choose a writable location"],

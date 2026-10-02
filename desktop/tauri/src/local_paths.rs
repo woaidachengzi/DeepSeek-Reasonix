@@ -205,7 +205,18 @@ fn destination_is_source(file: &File, target: &Path) -> Result<bool, String> {
     }
 }
 
-fn copy_to_selected_destination(mut file: File, target: Option<PathBuf>) -> Result<String, String> {
+fn verify_save_source(source: &Path, file: &File) -> Result<(), String> {
+    if !crate::workbench_projects::same_file_as_path(source, file).unwrap_or(false) {
+        return Err("source file changed; reopen the document and retry saving".into());
+    }
+    Ok(())
+}
+
+fn copy_to_selected_destination(
+    source: &Path,
+    mut file: File,
+    target: Option<PathBuf>,
+) -> Result<String, String> {
     let Some(target) = target else {
         return Ok(String::new());
     };
@@ -214,6 +225,7 @@ fn copy_to_selected_destination(mut file: File, target: Option<PathBuf>) -> Resu
             .to_str()
             .ok_or("destination path is not valid UTF-8")?,
     )?;
+    verify_save_source(source, &file)?;
     if destination_is_source(&file, &target)? {
         return Err("destination is the source file; choose another path".into());
     }
@@ -240,6 +252,7 @@ fn copy_to_selected_destination(mut file: File, target: Option<PathBuf>) -> Resu
         .as_file()
         .sync_all()
         .map_err(|error| error.to_string())?;
+    verify_save_source(source, &file)?;
     if destination_is_source(&file, &target)? {
         return Err("destination is the source file; choose another path".into());
     }
@@ -282,7 +295,7 @@ pub async fn save_local_path_as(
             .map_err(|_| "save dialog closed unexpectedly; retry saving")?
             .map(|selected| selected.into_path().map_err(|error| error.to_string()))
             .transpose()?;
-        copy_to_selected_destination(file, selected)
+        copy_to_selected_destination(&source, file, selected)
     })
     .await
     .map_err(|error| error.to_string())?
@@ -687,14 +700,20 @@ mod tests {
         fs::write(&source, "original").unwrap();
         let source_file = || File::open(&source).unwrap();
         assert_eq!(
-            copy_to_selected_destination(source_file(), None).unwrap(),
+            copy_to_selected_destination(&source, source_file(), None).unwrap(),
             ""
         );
-        assert!(copy_to_selected_destination(source_file(), Some(source.clone())).is_err());
         assert!(
-            copy_to_selected_destination(source_file(), Some(root.path().to_path_buf())).is_err()
+            copy_to_selected_destination(&source, source_file(), Some(source.clone())).is_err()
         );
         assert!(copy_to_selected_destination(
+            &source,
+            source_file(),
+            Some(root.path().to_path_buf())
+        )
+        .is_err());
+        assert!(copy_to_selected_destination(
+            &source,
             source_file(),
             Some(root.path().join("missing/file.md"))
         )
@@ -708,11 +727,56 @@ mod tests {
         let target = root.path().join("copy ' 中文.md");
         fs::write(&target, "previous destination").unwrap();
         assert_eq!(
-            copy_to_selected_destination(source_file(), Some(target.clone())).unwrap(),
+            copy_to_selected_destination(&source, source_file(), Some(target.clone())).unwrap(),
             target.to_str().unwrap()
         );
         assert_eq!(fs::read_to_string(&target).unwrap(), "original");
         assert_eq!(fs::read_to_string(&source).unwrap(), "original");
+    }
+
+    #[test]
+    fn save_refuses_replaced_source_while_dialog_was_open() {
+        let root = tempfile::tempdir().unwrap();
+        let source = root.path().join("source.md");
+        let original = root.path().join("original-inode.md");
+        fs::write(&source, "original opened content").unwrap();
+        let file = File::open(&source).unwrap();
+        fs::rename(&source, &original).unwrap();
+        fs::write(&source, "new source must remain").unwrap();
+        assert_eq!(
+            copy_to_selected_destination(&source, file.try_clone().unwrap(), None).unwrap(),
+            ""
+        );
+        let other = root.path().join("other.md");
+        fs::write(&other, "existing destination must remain").unwrap();
+        for target in [&source, &other] {
+            let error = copy_to_selected_destination(
+                &source,
+                file.try_clone().unwrap(),
+                Some(target.clone()),
+            )
+            .unwrap_err();
+            assert!(error.starts_with("source file changed;"));
+        }
+        assert_eq!(
+            fs::read_to_string(&other).unwrap(),
+            "existing destination must remain"
+        );
+        assert_eq!(
+            fs::read_to_string(&source).unwrap(),
+            "new source must remain"
+        );
+        assert_eq!(
+            fs::read_to_string(&original).unwrap(),
+            "original opened content"
+        );
+        assert_eq!(fs::read_dir(root.path()).unwrap().count(), 3);
+        let (_, reopened) = save_source(source.to_str().unwrap()).unwrap();
+        copy_to_selected_destination(&source, reopened, Some(other.clone())).unwrap();
+        assert_eq!(
+            fs::read_to_string(&other).unwrap(),
+            "new source must remain"
+        );
     }
 
     #[test]
@@ -722,10 +786,12 @@ mod tests {
         let alias = root.path().join("alias.md");
         fs::write(&source, "must remain").unwrap();
         fs::hard_link(&source, &alias).unwrap();
-        assert!(
-            copy_to_selected_destination(File::open(&source).unwrap(), Some(alias.clone()))
-                .is_err()
-        );
+        assert!(copy_to_selected_destination(
+            &source,
+            File::open(&source).unwrap(),
+            Some(alias.clone())
+        )
+        .is_err());
         assert_eq!(fs::read_to_string(&alias).unwrap(), "must remain");
         assert!(destination_is_source(&File::open(source).unwrap(), &alias).unwrap());
     }
@@ -740,9 +806,13 @@ mod tests {
         fs::write(&source, "private document").unwrap();
         fs::set_permissions(&source, fs::Permissions::from_mode(0o600)).unwrap();
         symlink(&source, &alias).unwrap();
-        assert!(copy_to_selected_destination(File::open(&source).unwrap(), Some(alias)).is_err());
+        assert!(
+            copy_to_selected_destination(&source, File::open(&source).unwrap(), Some(alias))
+                .is_err()
+        );
         let target = root.path().join("copy.md");
-        copy_to_selected_destination(File::open(&source).unwrap(), Some(target.clone())).unwrap();
+        copy_to_selected_destination(&source, File::open(&source).unwrap(), Some(target.clone()))
+            .unwrap();
         assert_eq!(
             fs::metadata(target).unwrap().permissions().mode() & 0o777,
             0o600
