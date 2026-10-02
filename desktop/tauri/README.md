@@ -808,3 +808,13 @@ Rust 163 项、Go bridge/运行时/协议、前端 Tauri 回归、生产构建�
 生产代码 `912c87a4e` 的完整 macOS 构建及双档案独立菜单/剪贴板门禁 4/4 通过，
 实际文本 IPC、权限拒绝、系统剪贴板原件恢复及退出清理通过；日志
 `/private/tmp/reasonix-hooks-clipboard-native.log`。不扩大为 Hooks 物理点击或完整窗口稳定性。
+
+
+2026-10-02 剪贴板拒绝边界：在 Tauri 中，原生文本写入拒绝返回 false，严格读取
+传播拒绝，兼容读取仍为空串；原生拒绝/native busy 均不尝试浏览器、Wails 或
+execCommand。可通过用户重试恢复；Wails/browser 模式的原有回退保持。
+`pnpm test:clipboard` 覆盖可成功替代 transport 的零调用和原有模式兼容，完整
+`pnpm test:tauri` 通过；设置页测试夹具已明确响应原生插件命令，原路径断言不降。
+当前 `7a83505ce` 生产包双档案独立菜单/clipboard-native 4/4 通过，权限拒绝及
+系统剪贴板原件恢复、退出清理通过；日志 `/private/tmp/reasonix-clipboard-boundary-native.log`。
+原生 ACL 与 helper 拒绝后零回退分别由真实包/组件回归证明，不当作物理失败 UI 验收。

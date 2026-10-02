@@ -23,6 +23,7 @@ Object.assign(globalThis, {
 });
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
 let copiedPath = "";
+let copiedHooksPath = "";
 let exportedFrontendDiagnostics: unknown;
 Object.defineProperty(dom.window.navigator, "clipboard", { value: { writeText: async (value: string) => { copiedPath = value; } }, configurable: true });
 class TestResizeObserver { observe() {} unobserve() {} disconnect() {} }
@@ -113,6 +114,8 @@ const summary = (scope = "global") => ({
   async invoke(command: string, args?: { payload?: unknown; scope?: string; source?: string; workspaceRoot?: string; currency?: string; url?: string; behavior?: string; mode?: string; theme?: string | { id?: string; [key: string]: unknown }; request?: { model?: string; role?: string; reasoningLanguage?: "auto" | "zh" | "en"; compactRatioPercent?: number; source?: string; scope?: string; workspaceRoot?: string; name?: string; apiKey?: string; planId?: string; revision?: string; acceptRisk?: boolean; kind?: string; id?: string }; input?: { name: string; displayName: string; kind: string; baseUrl: string; modelsUrl?: string; clearModelsUrl?: boolean; noProxy?: boolean; contextWindow?: number; responsesMode?: string; balanceUrl?: string; clearBalanceUrl?: boolean; models: string[]; default: string; useApiKey: boolean; revision?: string; presetId?: string; presetAction?: string }; change?: { action?: string; enabled?: boolean; name?: string; path?: string; mode?: string; list?: "allow" | "ask" | "deny"; rule?: string; bash?: string; network?: boolean; workspaceRoot?: string; allowWrite?: string[]; proxyMode?: string; noProxy?: string; proxyType?: string; proxyServer?: string; proxyPort?: number; proxyUsername?: string; proxyUrlAction?: string; proxyPasswordAction?: string; value?: string; number?: number; revision?: string; hooks?: Record<string, unknown>; scope?: string; body?: string; profile?: { name: string; description: string; systemPrompt: string }; filterSubprocessEnv?: boolean; protectSensitiveFiles?: boolean } }) {
     calls.push(command);
     switch (command) {
+      case "plugin:clipboard-manager|write_text": copiedPath = (args as { text?: string })?.text ?? ""; copiedHooksPath = copiedPath; return;
+      case "plugin:clipboard-manager|read_text": return copiedPath;
       case "capability_diagnostics":
         capabilityDiagnosticsCalls.push({ workspaceRoot: args?.workspaceRoot, includeSessionRuntime: (args as { includeSessionRuntime?: boolean } | undefined)?.includeSessionRuntime });
         return {
@@ -945,8 +948,7 @@ await act(async () => { click(["Hooks", "钩子"]); });
 await act(async () => { click(["General", "通用"]); });
 await act(async () => { click("中文"); });
 await act(async () => { click(["钩子", "Hooks"]); });
-let copiedHooksPath = "";
-Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (value: string) => { copiedHooksPath = value; } } });
+Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new Error("WebView clipboard unavailable"); } } });
 await act(async () => { click("复制路径"); });
 assert.equal(copiedHooksPath, "/preview/settings.json", "hooks path copy uses the current bridge path");
 const hooksEditor = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Hooks JSON"]');
