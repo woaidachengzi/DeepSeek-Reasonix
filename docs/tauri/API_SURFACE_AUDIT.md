@@ -99,6 +99,12 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：sidecar 退出回执与日志错误分离（2026-10-02）
+
+- 核对当前锁定版本 `tauri-plugin-shell 2.3.6` 的事件定义与 pipe reader，`CommandEvent::Error` 同时用于等待或 stdout/stderr 读取错误，并不证明子进程已退出。原 bundled monitor 收到 Error 或通道关闭均把 running 标志清零，可能过早放弃现有子进程状态。事件回归修复前 **1 失败、1 通过**，日志 `/private/tmp/reasonix-sidecar-terminal-before.log`；不计为原生 OS 故障验收。
+- 产品 `c0e3871c5` 仅在明确 `Terminated` 回执后清零；读取错误或通道关闭无回执时保留当前子进程所有权，不输出底层诊断，不因不确定证据放行另一次 spawn。实际句柄的 shutdown/kill 路径、父进程监督与目录锁保持。三项事件序列回归通过（错误后无回执、错误后真实终止事件、无回执关闭通道），日志 `/private/tmp/reasonix-sidecar-terminal-after.log`；严格 `cargo clippy --all-targets -- -D warnings` 通过，日志 `/private/tmp/reasonix-sidecar-terminal-clippy.log`。
+- 同提交完整 macOS 包构建、托管/显式双档案正常启动与退出 smoke 通过，日志 `/private/tmp/reasonix-sidecar-terminal-build.log`、`/private/tmp/reasonix-sidecar-terminal-package-smoke.log`。同包宿主 TERM/KILL × idle/streaming × 两档案 **8/8 通过**，kernel 实际确认八次 sidecar 正常退出码 0，就绪/启动记录和目录锁清理、原件保护及同档案重启通过，日志 `/private/tmp/reasonix-sidecar-terminal-host-lifetime.log`；独立确认无 Preview 残留。受控 shell Error 序列不是实际 OS pipe 故障注入，基础/异常退出 smoke 不代替全部物理菜单/托盘或当前包完整窗口验收；其余 D/E、旧版互斥和正式发布门禁保留。
+
 #### D：消息复制失败与异步内容边界（2026-10-02）
 
 - Tauri 消息直接复用 `CopyButton`，原生剪贴板入口已接入，但写入拒绝被静默忽略，且前次成功状态仍可能显示。新增回归修复前失败：第二次失败后 copied class 仍为 true，日志 `/private/tmp/reasonix-copy-button-before.log`。

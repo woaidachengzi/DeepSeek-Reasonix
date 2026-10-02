@@ -905,3 +905,14 @@ CUA 只读 inventory 查询仍超时，未输入；真实 macOS 候选输入/取
 独立菜单/剪贴板 4/4 通过，日志 `/private/tmp/reasonix-copy-button-build.log`、
 `/private/tmp/reasonix-copy-button-native-clipboard.log`；原剪贴板恢复且无 Preview
 残留。这不替代物理消息按钮/实际 OS 拒绝反馈或完整窗口验收，D/E 及发布门禁保留。
+
+2026-10-02 sidecar 退出回执：产品 `c0e3871c5` 不再把 shell Error 或无回执通道
+关闭当成进程退出，保留实际子进程状态，只有 Terminated 清零。Error 可来自管道
+读取失败已按锁定 shell 2.3.6 源码核对；事件序列修复前 1 失败、1 通过，修复后
+3/3 通过及严格 clippy 通过。完整 macOS 构建和双档案正常退出通过，日志
+`/private/tmp/reasonix-sidecar-terminal-build.log`、
+`/private/tmp/reasonix-sidecar-terminal-package-smoke.log`。当前包宿主 TERM/KILL、
+空闲/流式双档案 8/8 通过，kernel 八次 sidecar exitCode 0、锁/ready 清理及同档案
+重启通过，日志 `/private/tmp/reasonix-sidecar-terminal-host-lifetime.log`；无 Preview
+残留。事件回归不是实际 OS 管道故障注入，不代替物理菜单/托盘或完整窗口验收；
+D/E、历史旧版互斥和正式发布门禁继续保留。
