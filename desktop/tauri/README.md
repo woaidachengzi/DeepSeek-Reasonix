@@ -843,3 +843,10 @@ runtime 选项使旧复制失效，pending 禁止重复操作，卸载清理计�
 生产构建和双档案独立菜单/剪贴板 4/4 通过，权限拒绝、系统原件恢复及退出清理通过，
 日志 `/private/tmp/reasonix-diagnostics-native-clipboard.log`。没有增加 capability 或
 自动读取；此证据不代替真实诊断设置页点击、其他 D/E 或正式发布验收。
+
+2026-10-02 历史目录互斥负向探测：`probe-legacy-profile-gate.py` 核验固定官方
+1.38.3 CLI 摘要，在生成的私有 config/state 目录持有两处当前排他锁，独立确认
+第二个参与者无法取锁。旧 CLI 仍实际把 CNY 配置改成 USD，探测 exit 1，日志
+`/private/tmp/reasonix-legacy-profile-gate-negative.log`；这是明确失败证据，不是验收
+通过，也不证明旧 Wails GUI 的全部写入路径。默认 Preview 独立目录保持，不能把
+当前 Wails/bridge 的新锁推广为历史二进制已参与；生产包与历史回退验收范围保持。

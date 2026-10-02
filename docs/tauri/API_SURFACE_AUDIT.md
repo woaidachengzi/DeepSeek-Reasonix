@@ -99,6 +99,13 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：官方旧版目录锁负向探测（2026-10-02）
+
+- 新增 `tools/tauri/probe-legacy-profile-gate.py`，只允许固定已核验 SHA-256 的官方 arm64 1.38.3 CLI（独立发行或 Desktop 内附），不启动用户档案、Wails GUI 或网络 provider。生成私有 HOME/config/state/cache，持有 config/state 两处 `.reasonix-session-profile.lock` 的 macOS 排他 flock，并以独立文件描述符确认两处均拒绝第二个锁参与者。
+- 官方 Desktop 内附 CLI 在两锁持续持有期间，`config currency USD` **仍退出 0，并把生成的 CNY 配置实际修改为 USD**；探测按设计 exit 1，日志 `/private/tmp/reasonix-legacy-profile-gate-negative.log`。这证明旧 CLI 配置写入忽略新增宿主目录锁，属于互斥失败证据，不是通过。生成夹具由 finally 清理，未修改旧二进制、用户配置或原验收断言。
+- 当前 Wails/bridge 的两目录生命周期锁与旧会话租约不能据此推广为历史宿主已互斥；该探测未执行 GUI 生命周期或会话/附件写入，也不保证整个旧目录的一致快照。不能只新增锁文件就补上未参与协议的历史程序；历史共享目录并发、旧版停机后的完整回退仍需按各自范围验收。保持默认 Preview 独立目录，不提前放行 D/E 或正式发布。
+- 本轮通过 CUA 重新枚举桌面，`getState` 30 秒观察超时并重置会话，没有启动或操作 Preview，也没有推断用户锁屏/权限根因；生产包仍为 `81b229d4a`，画面观察与真实 UI 验收继续保留。
+
 #### D：诊断报告原生复制与异步反馈（2026-10-02）
 
 - 对照 Wails 1.38.3，诊断页复制仍直接调用 `navigator.clipboard.writeText`，失败写入诊断加载错误。该组件由 Tauri 设置页实际消费。新增真实组件回归在修复前失败：WebView 拒绝时原生剪贴板没有收到报告，日志 `/private/tmp/reasonix-diagnostics-copy-before.log`；未使用的 `InlineDiff` 不作为当前 Tauri 入口完成证据。
