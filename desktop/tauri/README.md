@@ -818,3 +818,12 @@ execCommand。可通过用户重试恢复；Wails/browser 模式的原有回退�
 当前 `7a83505ce` 生产包双档案独立菜单/clipboard-native 4/4 通过，权限拒绝及
 系统剪贴板原件恢复、退出清理通过；日志 `/private/tmp/reasonix-clipboard-boundary-native.log`。
 原生 ACL 与 helper 拒绝后零回退分别由真实包/组件回归证明，不当作物理失败 UI 验收。
+
+2026-10-02 同一 `7a83505ce` 生产包完整窗口门禁 `--dialogs --edit --focus`
+46/46 通过（两种档案各 23 项），日志 `/private/tmp/reasonix-window-boundary-current.log`。
+包含此前易失败的最小化恢复，但历史偶发根因仍未确定，稳定性与正式发布保持待验。
+随后保存写入拒绝提示的普通 UI 补验首次绑定仍遇 ScreenCaptureKit `-3811`，未输入或
+执行保存，不能计 UI 通过。只终止自有宿主，确认 host/sidecar 退出、ready 清理、
+原件字节及元数据保持、零输出；失败现场和日志
+`/private/tmp/reasonix-write-denied-after-window-ui.log` 保留。该测试主动停止不是正常
+Cmd+Q 验收或应用自行崩溃；物理 UI 验收仍需恢复可靠的观察能力。

@@ -99,6 +99,12 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：当前剪贴板包完整窗口门禁与 UI 观察阻塞（2026-10-02）
+
+- 当前产品 `7a83505ce` 的普通生产包执行 `smoke-native-window.py --dialogs --edit --focus`，**46/46 通过**（托管/显式各 23 项），日志 `/private/tmp/reasonix-window-boundary-current.log`。包含严格最小化/恢复、设置恢复、后台流式任务、外观恢复/回滚、原生编辑/剪贴板、面板取消、第二实例焦点和退出重启；没有放宽断言或重试失败阶段。此前偶发最小化失败根因仍未确定，本次通过不能作为稳定性修复或正式发布放行。
+- 随后新建普通托管档案补验 `document-write-denied`，首次 CUA 绑定仍报 ScreenCaptureKit `-3811`，没有输入、保存或 UI 回执，新中文提示仍未完成真实 UI 验收。日志 `/private/tmp/reasonix-write-denied-after-window-ui.log`、控制 `/private/tmp/reasonix-write-denied-after-window-control.json`、失败现场 `/private/tmp/reasonix-native-ui-export-300f27df691645b89810312066077f0c` 保留。只向已确认自有宿主 74606 发送 SIGTERM；独立确认宿主/sidecar 74618 均退出、ready/launch-owner 文件清理、零输出且两个原件的字节和元数据不变。runner exit 1 来自测试主动停止，不能认定为应用自行崩溃或正常 Cmd+Q 通过。
+- 观察失败限制物理 UI 验收，独立窗口 API 门禁仍可推进。Hooks 物理操作、保存失败提示、托盘/通知等真实 UI、历史 Wails 目录互斥及其余迁移门禁继续待验；外接屏和 Windows/Linux 延期保持，E 与正式发布不提前放行。
+
 #### D：Tauri 剪贴板原生拒绝终止边界（2026-10-02）
 
 - 上轮 Hooks 入口收敛属于实际进展。对照主窗口 capability（仅文本 read/write）及现有受限 WebView 门禁，发现共享 clipboard helper 在 Tauri 原生拒绝后仍尝试 `navigator.clipboard`、Wails runtime 或 `execCommand`。新增回归提供可成功的替代 transport，修复前实际返回 true 而非 false，日志 `/private/tmp/reasonix-clipboard-boundary-before.log`，不能把它当作通过。
