@@ -26,6 +26,7 @@ export class NotificationClickPump {
     if (this.draining) { this.wakeAgain = true; return; }
     this.draining = true;
     let failed = false;
+    let acknowledged = 0;
     try {
       // Native bounds the queue to 32; take a fresh head after each ack so
       // signals arriving during navigation cannot restore stale targets.
@@ -40,6 +41,7 @@ export class NotificationClickPump {
           if (!this.dependencies.canOpen(click) || !await this.dependencies.open(target) || this.stopped) return;
         } else this.dependencies.unavailable();
         await this.dependencies.acknowledge(click.token);
+        acknowledged += 1;
         if (this.stopped) return;
       }
     } catch {
@@ -49,7 +51,10 @@ export class NotificationClickPump {
       this.draining = false;
       // A signal received during an empty snapshot or a readiness check still
       // owns a fresh query, even when this drain acknowledged nothing.
-      if (!this.stopped && !failed && this.wakeAgain) void this.wake();
+      // The native limit bounds simultaneous queued clicks, not the total
+      // arriving during navigation. A fully acknowledged batch owns one more
+      // fresh query so a refilled queue cannot wait for an unrelated signal.
+      if (!this.stopped && !failed && (this.wakeAgain || acknowledged === 32)) void this.wake();
     }
   }
 }

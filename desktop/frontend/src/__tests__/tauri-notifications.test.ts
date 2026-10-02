@@ -106,4 +106,32 @@ await failureInFlight;
 await ticks();
 assert.equal(failureQueries, 1, "a failed query waits for a later real wake");
 assert.equal(failureReports, 1);
+
+// The native queue never exceeds 32, but a new click can refill a slot while
+// this consumer is draining its first batch. Its coalesced signal must not
+// leave that click waiting forever once the per-batch limit is reached.
+let batchQueue = Array.from({ length: 32 }, (_, index) => ({ ...click, token: `batch-${index}` }));
+const batchAcknowledged: string[] = [];
+const batchOpensBefore = opens;
+let batchQueries = 0;
+let batch!: NotificationClickPump;
+batch = new NotificationClickPump({
+  ...deps,
+  pending: async () => { batchQueries++; assert.ok(batchQueue.length <= 32); return [...batchQueue]; },
+  acknowledge: async token => {
+    assert.equal(batchQueue.shift()?.token, token);
+    batchAcknowledged.push(token);
+    if (batchAcknowledged.length === 1) {
+      batchQueue.push({ ...click, token: "batch-refill" });
+      await batch.wake();
+    }
+  },
+});
+await batch.wake();
+await ticks();
+assert.equal(batchAcknowledged.length, 33, "a click refilling the bounded native queue is consumed after the first batch");
+assert.equal(opens - batchOpensBefore, 33, "each refilled click is opened before acknowledgement");
+assert.equal(new Set(batchAcknowledged).size, 33, "each click is acknowledged once");
+assert.equal(batchQueue.length, 0);
+assert.equal(batchQueries, 34, "the continued batch stops after one empty query");
 console.log("Tauri notification click lifecycle passed");
