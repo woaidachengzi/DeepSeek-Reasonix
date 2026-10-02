@@ -1075,3 +1075,16 @@ unminimize/show/focus；已可见窗口点击不再隐藏。右键菜单/退出�
 隔离、替换、删除及重复删除缺失通过，日志 `/private/tmp/reasonix-current-keychain-native.log`。
 原生测试只操作自有身份；普通 Preview 原 PID 保持，未操作窗口或真实用户凭据。
 该结果不替代包级设置页迁移、实际 OS 锁定/拒绝/重新授权 UI，相关门禁保持待验。
+
+
+2026-10-02 另存为源替换保护 `033803e32`：系统面板期间源路径被替换后，
+旧句柄 inode 比较不足以拒绝覆盖新源。新增确定性回归旧代码失败；生产复制前和
+最终提交前核对原源路径仍指向已打开句柄，无法确认则拒绝并提示重新打开。
+取消、已有目标/源字节保护、无临时残留和重新打开后的正常保存，以及既有文件
+动作共 12 项 Rust 回归通过；严格 clippy、完整 external-links 回归和 macOS 包构建
+通过，日志 `/private/tmp/reasonix-save-source-before.log`、
+`/private/tmp/reasonix-save-source-after.log`、`/private/tmp/reasonix-save-source-clippy.log`、
+`/private/tmp/reasonix-save-source-final-links.log`、`/private/tmp/reasonix-save-source-build.log`。
+身份校验不能锁住外部 writer，不承诺同 inode 内容变化的一致快照或彻底消除最终
+校验/rename 外部竞态。本轮未执行新包真实 Save/Replace 面板，普通 Preview 未被操作；
+物理 D 和其余发布门禁保留。

@@ -99,6 +99,14 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：另存为期间源路径替换的原件保护（2026-10-02）
+
+- `save_local_path_as` 原先在打开系统面板前保留源 File；保存时仅比较目标与旧句柄 inode。面板期间源路径被 rename/替换后，新源 inode 与旧句柄不同，选择原源路径可错误覆盖新原件。临时目录的确定性回归旧逻辑失败（本应拒绝却返回成功），日志 `/private/tmp/reasonix-save-source-before.log`，没有操作用户文件或系统面板。
+- 产品 `033803e32` 将初始解析的源路径保留至复制事务，在复制前及临时文件 sync 后/最终 persist 前核对源路径仍指向已打开句柄；替换、删除或无法确认身份均拒绝，提示重新打开文档再保存。取消仍直接返回空结果；原有 hardlink/symlink 源别名拒绝、目录拒绝、权限复制和原子替换保持。此为两个边界上的身份校验，不是外部程序写入锁，不承诺同 inode 内容并发修改的一致快照或消除最终校验与 rename 之间所有外部竞态。
+- 12 项 Rust local_paths 回归通过，日志 `/private/tmp/reasonix-save-source-after.log`；新增场景核对取消无写入、替换后原源与另一已有目标均拒绝并保留字节、无临时文件残留、重新打开新源后正常保存。严格 all-targets clippy exit 0，日志 `/private/tmp/reasonix-save-source-clippy.log`。
+- shared Markdown Save As 把固定 source-changed 错误与源不可读错误映射为三语言“重新打开并检查读取权限”的恢复提示，不展示临时路径；不增加权限或回退 transport。首轮 external-links 回归因旧文案断言失败，更新到当前恢复语义后完整 `pnpm test:external-links` exit 0，日志 `/private/tmp/reasonix-save-source-final-links.log`，含新增错误映射及已有原生拒绝/零 Wails fallback、偏好并发保护。
+- 完整 macOS 候选构建 exit 0，类型/587-method 契约/体积门禁（未改预算）、Go sidecar/arm64 host/ad-hoc 签名通过，日志 `/private/tmp/reasonix-save-source-build.log`。本轮未操作仍运行的普通 Preview，未执行新包的实际 Save/Replace 面板或物理源替换复验；历史面板结果保留各自提交归属。D 窗口/托盘/通知/钥匙串物理门禁、旧版目录互斥、A/B/C/E 与正式签名/公证/发布门禁继续待完成。
+
 #### D：普通 Preview 运行期间的独立钥匙串复验（2026-10-02）
 
 - 当前 HEAD `8c4a43296`（证据提交），候选产品 `253abf30a`。普通 host/sidecar PID 仍为 16939/16944，故本轮不启动同 bundle 的包级 UI 夹具，也未操作或关闭普通窗口。当前 `.app` 内实际 `reasonix-desktop-bridge` 作为 `REASONIX_TAURI_BRIDGE_TEST_BIN`，运行 `cargo test --locked --manifest-path desktop/tauri/Cargo.toml keychain::tests:: -- --test-threads=1`，**22 通过、1 原生测试按默认忽略**；日志 `/private/tmp/reasonix-current-keychain-transactions.log`。
