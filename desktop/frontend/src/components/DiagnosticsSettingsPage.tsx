@@ -5,6 +5,7 @@ import { asArray } from "../lib/array";
 import { useI18n, useT, type Locale } from "../lib/i18n";
 import type { CapabilityDiagnosticsReport, CapabilityIssue, RuntimeDoctorReport, SettingsTab } from "../lib/types";
 import { FrontendDiagnosticsControl } from "./FrontendDiagnosticsControl";
+import { writeClipboardText } from "../lib/clipboard";
 
 const FRONTEND_COPY: Record<Locale, { title: string; hint: string }> = {
   en: {
@@ -41,6 +42,11 @@ export function DiagnosticsSettingsPage({
   const [error, setError] = useState<string | null>(null);
   const [includeRuntime, setIncludeRuntime] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
+  const [copyBusy, setCopyBusy] = useState(false);
+  const copyRequest = useRef(0);
+  const copyPending = useRef(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({
     issues: true,
     runtime: true,
@@ -56,6 +62,13 @@ export function DiagnosticsSettingsPage({
 
   const load = useCallback(async (runtime: boolean) => {
     const seq = ++loadSeq.current;
+    copyRequest.current++;
+    copyPending.current = false;
+    if (copiedTimer.current !== null) clearTimeout(copiedTimer.current);
+    copiedTimer.current = null;
+    setCopyBusy(false);
+    setCopied(false);
+    setCopyError(false);
     setLoading(true);
     setError(null);
     try {
@@ -90,6 +103,12 @@ export function DiagnosticsSettingsPage({
     void load(includeRuntime);
   }, [includeRuntime, load]);
 
+  useEffect(() => () => {
+    loadSeq.current++;
+    copyRequest.current++;
+    if (copiedTimer.current !== null) clearTimeout(copiedTimer.current);
+  }, []);
+
   const issuesBySeverity = useMemo(() => {
     const groups: Record<string, CapabilityIssue[]> = { error: [], warning: [], info: [] };
     for (const issue of report?.issues ?? []) {
@@ -100,13 +119,30 @@ export function DiagnosticsSettingsPage({
   }, [report]);
 
   const copyJSON = async () => {
-    if (!report) return;
+    if (!report || loading || copyPending.current) return;
+    const request = ++copyRequest.current;
+    copyPending.current = true;
+    setCopyBusy(true);
+    setCopied(false);
+    setCopyError(false);
+    if (copiedTimer.current !== null) clearTimeout(copiedTimer.current);
+    copiedTimer.current = null;
     try {
-      await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
+      const success = await writeClipboardText(JSON.stringify(report, null, 2));
+      if (request !== copyRequest.current) return;
+      if (!success) { setCopyError(true); return; }
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
+      copiedTimer.current = setTimeout(() => {
+        if (request === copyRequest.current) setCopied(false);
+        copiedTimer.current = null;
+      }, 1500);
     } catch {
-      setError(t("diag.copyFailed"));
+      if (request === copyRequest.current) setCopyError(true);
+    } finally {
+      if (request === copyRequest.current) {
+        copyPending.current = false;
+        setCopyBusy(false);
+      }
     }
   };
 
@@ -136,7 +172,7 @@ export function DiagnosticsSettingsPage({
             {loading ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
             <span>{t("diag.refresh")}</span>
           </button>
-          <button type="button" className="btn btn--ghost" onClick={() => void copyJSON()} disabled={!report}>
+          <button type="button" className="btn btn--ghost" onClick={() => void copyJSON()} disabled={!report || loading || copyBusy} aria-busy={copyBusy}>
             <Clipboard size={14} />
             <span>{copied ? t("diag.copied") : t("diag.copyJson")}</span>
           </button>
@@ -157,6 +193,7 @@ export function DiagnosticsSettingsPage({
 
       {loading && !report && <div className="empty">{t("settings.loading")}</div>}
       {error && <div className="settings-error" role="alert">{error}</div>}
+      {copyError && <div className="settings-error" role="alert">{t("diag.copyFailed")}</div>}
 
       {report && (
         <>

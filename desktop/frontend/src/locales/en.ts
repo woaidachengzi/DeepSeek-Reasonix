@@ -1912,7 +1912,7 @@ export const en = {
   "diag.refresh": "Refresh",
   "diag.copyJson": "Copy redacted JSON",
   "diag.copied": "Copied",
-  "diag.copyFailed": "Could not copy to clipboard",
+  "diag.copyFailed": "Could not copy the diagnostic report. Please try again.",
   "diag.errors": "Errors",
   "diag.warnings": "Warnings",
   "diag.infos": "Info",

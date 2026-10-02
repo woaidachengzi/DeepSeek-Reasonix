@@ -3447,7 +3447,7 @@ export const zhTW: Record<DictKey, string> = {
   "diag.refresh": "重新整理",
   "diag.copyJson": "複製脫敏 JSON",
   "diag.copied": "已複製",
-  "diag.copyFailed": "無法複製到剪貼簿",
+  "diag.copyFailed": "無法複製診斷報告。請稍後重試。",
   "diag.errors": "錯誤",
   "diag.warnings": "警告",
   "diag.infos": "資訊",

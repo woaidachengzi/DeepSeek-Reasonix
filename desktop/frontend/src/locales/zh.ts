@@ -1914,7 +1914,7 @@ export const zh: Record<DictKey, string> = {
   "diag.refresh": "刷新",
   "diag.copyJson": "复制脱敏 JSON",
   "diag.copied": "已复制",
-  "diag.copyFailed": "无法复制到剪贴板",
+  "diag.copyFailed": "无法复制诊断报告。请稍后重试。",
   "diag.errors": "错误",
   "diag.warnings": "警告",
   "diag.infos": "信息",
