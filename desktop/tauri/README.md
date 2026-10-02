@@ -172,6 +172,12 @@ python3 tools/tauri/smoke-native-window.py 'desktop/tauri/target/release/bundle/
 最小化、Settings 恢复或任务/退出菜单场景，不能作为完整窗口门禁通过；默认门禁不变。
 `--focus` 需要前置保存的窗口几何，不能与 `--independent` 组合。
 
+定位某一种档案时可追加 `--profile managed` 或 `--profile explicit`；默认仍为
+`--profile both`。单档案通过不能代替两种档案完整通过。每个阶段立即输出结果，
+全部成功后删除该档案；失败仍返回非零，并在清理自有进程后保留 0700 私有目录及
+原生结果/trace，输出现场路径和已完成阶段数。保留的档案包含测试凭据，只用于本地诊断，
+不要作为公开附件。这些选项不改变窗口动作、超时、重试或成功断言。
+
 已安装的 macOS 原生 Minimize 菜单有独立角色门禁：
 
 ```bash

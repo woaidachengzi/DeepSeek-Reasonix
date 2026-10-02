@@ -28,6 +28,7 @@ import os
 from pathlib import Path
 import plistlib
 import signal
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -209,7 +210,7 @@ def launch(host_binary, sidecar_binary, root, identifier, managed, phase, provid
             verify_saved_state(app_data, temporary, phase == "exercise")
         if provider:
             provider.verify()
-        print(f"native macOS window {('managed' if managed else 'explicit')} {phase}: OK")
+        print(f"native macOS window {('managed' if managed else 'explicit')} {phase}: OK", flush=True)
         return identity
     finally:
         if second is not None and second.poll() is None:
@@ -227,7 +228,9 @@ def launch(host_binary, sidecar_binary, root, identifier, managed, phase, provid
 
 
 def smoke(app_path, include_focus=False, include_edit=False, include_dialogs=False,
-          independent=False):
+          independent=False, profile="both"):
+    if profile not in ("both", "managed", "explicit"):
+        raise ValueError("profile must be both, managed or explicit")
     if independent and include_focus:
         raise ValueError("--focus requires the complete window gate and its saved geometry")
     app = Path(app_path).resolve()
@@ -241,11 +244,15 @@ def smoke(app_path, include_focus=False, include_edit=False, include_dialogs=Fal
         raise RuntimeError("package bundle identifier missing")
     if package.matching_package_is_running(identifier):
         raise RuntimeError("a Preview with this identifier is running; close it before acceptance")
-    for managed in (True, False):
-        with tempfile.TemporaryDirectory(prefix="reasonix-native-window-smoke-") as directory:
-            root = Path(directory)
-            (root / "home").mkdir()
-            (root / "tmp").mkdir()
+    profiles = (True, False) if profile == "both" else (profile == "managed",)
+    for managed in profiles:
+        root = Path(tempfile.mkdtemp(prefix="reasonix-native-window-smoke-", dir="/private/tmp"))
+        root.chmod(0o700)
+        success = False
+        completed = 0
+        try:
+            (root / "home").mkdir(mode=0o700)
+            (root / "tmp").mkdir(mode=0o700)
             if independent:
                 phases = ["menu-shortcuts", "clipboard-native"]
             else:
@@ -273,8 +280,21 @@ def smoke(app_path, include_focus=False, include_edit=False, include_dialogs=Fal
                 with fixture as provider:
                     identities.append(launch(host_binary, sidecar_binary, root, identifier, managed,
                                              phase, provider, verify_window_state=not independent))
+                    completed += 1
             if len(set(identities)) != 1:
                 raise RuntimeError("restarts changed the native profile credential identity")
+            success = True
+            print(f"native macOS window {('managed' if managed else 'explicit')}: "
+                  f"{completed}/{len(phases)} stages passed", flush=True)
+        finally:
+            if success:
+                shutil.rmtree(root)
+            else:
+                # launch() already reaps only this fixture's host/sidecars.
+                # Retain the exact failed startup state for diagnosis; never
+                # treat earlier stages or an independent slice as a full pass.
+                print(f"Private window failure fixture retained: {root}; "
+                      f"completed stages: {completed}", file=sys.stderr, flush=True)
     if independent:
         print("independent menu/clipboard slice passed; complete window acceptance remains separate")
 
@@ -287,11 +307,13 @@ if __name__ == "__main__":
     parser.add_argument("--dialogs", action="store_true")
     parser.add_argument("--independent", action="store_true",
                         help="run menu/clipboard and requested edit/dialog gates without window transitions")
+    parser.add_argument("--profile", choices=("both", "managed", "explicit"), default="both",
+                        help="select an isolated profile; default still requires both profiles")
     args = parser.parse_args()
     if sys.platform != "darwin":
         raise SystemExit("this acceptance requires macOS")
     try:
         smoke(args.app, include_focus=args.focus, include_edit=args.edit,
-              include_dialogs=args.dialogs, independent=args.independent)
+              include_dialogs=args.dialogs, independent=args.independent, profile=args.profile)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         raise SystemExit(f"native macOS window smoke failed: {error}") from error
