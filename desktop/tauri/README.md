@@ -528,6 +528,21 @@ runner 将 Original A 设为 mode-000，启动前要求当前用户路径打开�
 拒绝与正常退出，日志 `/private/tmp/reasonix-document-permissions-ui.log`。写入拒绝等
 剩余范围另行验收，默认正常导出及其他错误切片阶段不变。
 
+文档目的地写入拒绝使用 `smoke-native-ui-export.py --scenario document-write-denied`。
+该切片的源 A/B 可读，目标为 0500 目录；启动前实际创建必须得到 PermissionError。
+发送控制中的固定提示，实际 Original A→另存为→Go To 指定输出目录→Save，观察
+写入拒绝提示后 `--record write-denied`，Cmd+Q。两种档案各一阶段，要求目标权限、
+mtime/inode 保持、零输出和源完整指纹不变；正常退出验收后才恢复私有目录权限以清理。
+基线 `5882a249d` 两种档案均通过，日志 `/private/tmp/reasonix-write-denied-ui.log`；
+`30c311130` 新三语提示的完整生产构建和双档案包级 smoke 通过；当前实际托管首次
+绑定连续 `-3811`，重置采集会话仍失败，新提示原生复验未完成。只终止自有进程组并
+保留现场/控制和日志 `/private/tmp/reasonix-write-denied-fixed-ui.log`。无 UI 回执/输出，
+两个 PID 已退出，但组信号包含 sidecar，失败现场保留 readiness 文件；这不是正常退出
+或应用自行崩溃的证据，不以组件回归或包级 smoke 代替提示验收。
+当前包追加单独宿主异常退出门禁 8/8 通过，覆盖两种档案、SIGTERM/SIGKILL、空闲/
+真实流式任务，sidecar 正常退出与 readiness 清理、同档案重启通过；日志
+`/private/tmp/reasonix-write-denied-host-lifetime.log`。
+
 主题导入的普通私有档案 runner：
 
 ```bash
