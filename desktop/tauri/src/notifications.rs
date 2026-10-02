@@ -318,7 +318,18 @@ impl NotificationState {
             let mut targets = registry.targets.clone();
             targets.retain(|target| fresh(target.created, now()));
             if targets.len() >= MAX_TARGETS {
-                targets.remove(0);
+                // The single consumer may be navigating the fresh pending
+                // head. Retain its mapping until ack; evict the oldest other
+                // target, keeping the existing storage bound.
+                let head = registry
+                    .pending
+                    .iter()
+                    .find(|token| targets.iter().any(|target| &target.token == *token));
+                let oldest_other = targets
+                    .iter()
+                    .position(|target| Some(&target.token) != head)
+                    .ok_or(STORAGE_ERROR)?;
+                targets.remove(oldest_other);
             }
             targets.push(Target {
                 token: token.clone(),
@@ -380,8 +391,18 @@ impl NotificationState {
         {
             return false;
         }
+        // Expired/evicted mappings are not visible to pending() and cannot
+        // own the consumer head. Prune them before applying the queue bound.
+        registry.pending.retain(|queued| {
+            registry
+                .targets
+                .iter()
+                .any(|target| &target.token == queued && fresh(target.created, now()))
+        });
         if registry.pending.len() >= 32 {
-            registry.pending.pop_front();
+            // Keep the head the single consumer may already be resolving;
+            // replace the oldest waiting click instead of invalidating ack.
+            registry.pending.remove(1);
         }
         registry.pending.push_back(token.into());
         true
@@ -865,6 +886,67 @@ mod tests {
         assert!(serde_json::from_value::<NotificationRequest>(serde_json::json!({"sessionId":"session-one", "kind":"turn_done", "language":"zh", "body":"private-raw-error"})).is_err());
         assert!(main_window("remote").is_err());
     }
+    #[test]
+    fn full_click_queue_preserves_the_consumers_head_until_ack() {
+        let dir = tempfile::tempdir().unwrap();
+        let backend = FakeBackend::new(Permission::Granted);
+        let state = NotificationState::new(dir.path(), backend.clone());
+        for _ in 0..33 {
+            state.deliver(&request("session-one")).unwrap();
+        }
+        let tokens: Vec<_> = backend
+            .sent
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|item| item.0.clone())
+            .collect();
+        for token in &tokens[..32] {
+            assert!(state.receive(token));
+        }
+        let head = state.pending().unwrap()[0].token.clone();
+        assert!(state.receive(&tokens[32]));
+        let pending = state.pending().unwrap();
+        assert_eq!(pending.len(), 32);
+        assert_eq!(
+            pending[0].token, head,
+            "a new click cannot evict the head already being navigated"
+        );
+        assert_eq!(pending.last().unwrap().token, tokens[32]);
+        state.acknowledge(&head).unwrap();
+        for click in state.pending().unwrap() {
+            state.acknowledge(&click.token).unwrap();
+        }
+        assert!(state.pending().unwrap().is_empty());
+        assert!(
+            !state.receive(&head),
+            "head acknowledgement remains durable"
+        );
+    }
+
+    #[test]
+    fn target_registry_overflow_keeps_the_pending_consumers_head() {
+        let dir = tempfile::tempdir().unwrap();
+        let backend = FakeBackend::new(Permission::Granted);
+        let state = NotificationState::new(dir.path(), backend.clone());
+        state.deliver(&request("session-one")).unwrap();
+        let head = backend.sent.lock().unwrap()[0].0.clone();
+        assert!(state.receive(&head));
+        for _ in 0..MAX_TARGETS {
+            state.deliver(&request("session-two")).unwrap();
+        }
+        let stored: RegistryFile =
+            serde_json::from_slice(&fs::read(dir.path().join(FILE)).unwrap()).unwrap();
+        assert_eq!(
+            stored.targets.len(),
+            MAX_TARGETS,
+            "head protection does not raise the registry bound"
+        );
+        assert_eq!(state.pending().unwrap()[0].token, head);
+        state.acknowledge(&head).unwrap();
+        assert!(state.pending().unwrap().is_empty());
+    }
+
     #[test]
     fn cold_start_clicks_restore_only_matching_profile_and_ack_is_durable() {
         let root = tempfile::tempdir().unwrap();
