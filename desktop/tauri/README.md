@@ -789,3 +789,11 @@ Rust 163 项、Go bridge/运行时/协议、前端 Tauri 回归、生产构建�
 增加实际 Global 会话目录解析及 `0700` 权限检查。未执行外部应用 UI 交互。
 旧 rootless 会话在旧启动目录创建的文件不自动搬迁，其文件引用/附件/检查点兼容
 仍需验收，详见迁移清单。
+
+
+2026-10-02 配置备份目录保护：`backups` 若为符号链接或非目录，导入拒绝；Unix
+新建备份根/批次用 0700，配置与备份保持 0600。修复前重定向回归失败，修复后
+配置档案 13 项及严格 clippy 通过；从干净 `05cf57e1d` 完整构建后，真实包
+`smoke-profile-import.py` 的 import/restore/explicit 三阶段通过，包括新目录权限、
+稳定原件/备份保持和退出清理。日志 `/private/tmp/reasonix-backup-root-package-import.log`。
+这不等同旧官方 Wails 已遵守新目录锁，也不代替设置页物理导入或已知截图故障的修复。
