@@ -876,3 +876,13 @@ runtime 选项使旧复制失效，pending 禁止重复操作，卸载清理计�
 通过。最终产品 `ebae594f4` 完整生产构建、双档案包级启动/身份/权限/退出通过，
 日志 `/private/tmp/reasonix-keychain-partial-final-package-smoke.log`，独立确认无残留。
 故障样本不等同真实 OS 锁定/拒绝或迁移 UI 验收，D/E 和正式发布门禁继续保留。
+
+2026-10-02 通知点击竞态：在途 pending 查询返回旧空快照时，不再丢弃期间收到的
+真实点击唤醒。新增确定性回归修复前失败、修复后通过；存储失败不循环重试，原单
+消费者、卸载 fence、导航失败保留点击及持久 ack 规则保持。完整 test:tauri 通过，
+日志 `/private/tmp/reasonix-notification-wake-tauri-tests.log`。产品 `2e4837c26` 完整
+生产包构建和托管/显式双档案基础 smoke 通过，日志
+`/private/tmp/reasonix-notification-wake-build.log`、
+`/private/tmp/reasonix-notification-wake-package-smoke.log`；独立确认无 Preview 残留。
+这不等同真实通知横幅、点击、冷启动和 OS 拒绝恢复通过；旧版互斥、其余 D/E 与
+正式签名/公证门禁继续保留。

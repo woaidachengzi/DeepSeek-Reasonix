@@ -99,6 +99,12 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
 
+#### D：通知点击查询与新事件交错（2026-10-02）
+
+- 前端 `NotificationClickPump` 查询期间收到真实点击唤醒，但在途查询返回旧空快照时，原逻辑因没有 acknowledge 进展而丢弃唤醒；点击仍留在原生队列，却可能直到下一次 readiness 改变才处理。确定性回归在修复前失败（实际打开 0 次、预期 1 次），日志 `/private/tmp/reasonix-notification-wake-before.log`。
+- 产品 `2e4837c26` 保留查询期间收到的新唤醒，空快照或 readiness 检查提前返回后仍发起一次新查询；桥接/存储异常继续等待下一次真实唤醒，不形成失败重试循环。原有单消费者、卸载 fence、拒绝导航不 ack、冷启动队列和持久 ack 规则保持。新增竞态及故障不循环回归通过，日志 `/private/tmp/reasonix-notification-wake-after.log`；完整 `pnpm test:tauri` 通过，日志 `/private/tmp/reasonix-notification-wake-tauri-tests.log`。
+- 同提交完整 macOS 生产包构建通过（类型/contract/budget、sidecar、arm64 宿主和本地 ad-hoc 签名），日志 `/private/tmp/reasonix-notification-wake-build.log`。同包托管/显式两档案基础 smoke 通过：私有凭据身份、真实通知授权查询、Global 工作区、sidecar readiness/未认证请求拒绝及退出清理，日志 `/private/tmp/reasonix-notification-wake-package-smoke.log`；独立确认无 Preview 残留。此确定性前端竞态证据不等于真实通知横幅/点击/冷启动或 OS 拒绝恢复已验收；D/E、旧版目录互斥及正式发布门禁继续保留。
+
 #### D：Provider 凭据部分恢复失败隔离（2026-10-02）
 
 - 对照 Wails 基线按 Provider 解析凭据的流程，Tauri 原生凭据恢复遇到任一 load/sync 错误即停止；有效的后续条目也不会恢复。新增真实 Go sidecar 回归修复前失败：第一个故障条目后的有效第二 Provider 仍未配置，日志 `/private/tmp/reasonix-keychain-read-failure-before.log`。较早同一用例先暴露了故障样本原始错误返回，日志 `/private/tmp/reasonix-keychain-partial-before.log`；调整断言顺序明确捕获主恢复缺口，不计失败为通过。
