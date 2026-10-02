@@ -1843,17 +1843,25 @@ impl BridgeChild {
 }
 
 fn watch_bundled_child(
+    events: tauri::async_runtime::Receiver<CommandEvent>,
+    running: Arc<AtomicBool>,
+) {
+    tauri::async_runtime::spawn(monitor_bundled_child(events, running));
+}
+
+async fn monitor_bundled_child(
     mut events: tauri::async_runtime::Receiver<CommandEvent>,
     running: Arc<AtomicBool>,
 ) {
-    tauri::async_runtime::spawn(async move {
-        while let Some(event) = events.recv().await {
-            if matches!(event, CommandEvent::Terminated(_) | CommandEvent::Error(_)) {
-                break;
-            }
+    while let Some(event) = events.recv().await {
+        if matches!(event, CommandEvent::Terminated(_)) {
+            running.store(false, Ordering::Release);
+            return;
         }
-        running.store(false, Ordering::Release);
-    });
+    }
+    // Error also represents stdout/stderr read failures. A closed event
+    // channel supplies no terminal receipt either. Keep ownership of the
+    // exact child instead of permitting another spawn on uncertain evidence.
 }
 
 #[derive(Debug, Deserialize)]
@@ -5266,6 +5274,69 @@ mod tests {
         time::Duration,
     };
     use std::{fs, path::Path};
+
+    #[test]
+    fn bundled_child_output_errors_do_not_prove_process_exit() {
+        tauri::async_runtime::block_on(async {
+            let (sender, receiver) = tauri::async_runtime::channel(4);
+            sender
+                .send(tauri_plugin_shell::process::CommandEvent::Error(
+                    "private-pipe-error".into(),
+                ))
+                .await
+                .unwrap();
+            sender
+                .send(tauri_plugin_shell::process::CommandEvent::Stdout(
+                    b"still alive".to_vec(),
+                ))
+                .await
+                .unwrap();
+            drop(sender);
+            let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+            super::monitor_bundled_child(receiver, running.clone()).await;
+            assert!(
+                running.load(std::sync::atomic::Ordering::Acquire),
+                "pipe error or lost event channel cannot confirm child exit"
+            );
+        });
+    }
+
+    #[test]
+    fn bundled_child_terminal_receipt_after_output_error_confirms_exit() {
+        tauri::async_runtime::block_on(async {
+            let (sender, receiver) = tauri::async_runtime::channel(4);
+            sender
+                .send(tauri_plugin_shell::process::CommandEvent::Error(
+                    "private-pipe-error".into(),
+                ))
+                .await
+                .unwrap();
+            sender
+                .send(tauri_plugin_shell::process::CommandEvent::Terminated(
+                    tauri_plugin_shell::process::TerminatedPayload {
+                        code: Some(0),
+                        signal: None,
+                    },
+                ))
+                .await
+                .unwrap();
+            drop(sender);
+            let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+            super::monitor_bundled_child(receiver, running.clone()).await;
+            assert!(!running.load(std::sync::atomic::Ordering::Acquire));
+        });
+    }
+
+    #[test]
+    fn bundled_child_closed_channel_without_receipt_keeps_child_owned() {
+        tauri::async_runtime::block_on(async {
+            let (sender, receiver) = tauri::async_runtime::channel(1);
+            drop(sender);
+            let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+            super::monitor_bundled_child(receiver, running.clone()).await;
+            assert!(running.load(std::sync::atomic::Ordering::Acquire));
+        });
+    }
 
     #[test]
     fn sandbox_settings_wire_view_preserves_shell_inventory() {
