@@ -59,12 +59,15 @@ for (const [failure, expected] of [
   ["destination is the same as the source", "Choose a different name or location"],
   ["cannot access document: No such file or directory (os error 2); check the path and permissions", "Check that it still exists"],
   ["cannot read source: Permission denied; check file permissions", "have read permission"],
+  ['cannot create destination: Permission denied (os error 13) at path "/private/tmp/.tmp-secret"; choose a writable folder', "Choose a folder you have permission"],
+  ["cannot save document: Operation not permitted (os error 1); choose a writable destination", "Choose a folder you have permission"],
   ["cannot save document: disk full", "Choose a writable location"],
 ] as const) {
   failMessage = failure;
   await select("Save as");
   const toast = [...document.querySelectorAll(".toast--error")].at(-1)?.textContent ?? "";
   assert.ok(toast.includes(expected), `Save As reports recovery for ${failure}`);
+  assert.ok(!toast.includes(".tmp-secret"), "known write denial hides the internal temporary path");
   assert.ok(!toast.includes("Could not open"), "saving never uses the open-action failure label");
 }
 assert.equal(wailsCalls, 0, "native errors never fall back to a Wails binding or browser mock");

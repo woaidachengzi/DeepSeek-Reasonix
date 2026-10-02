@@ -123,6 +123,9 @@ function localPathSaveErrorText(error: unknown): string {
   if (message.startsWith("cannot access document:") || message.startsWith("cannot read source:")) {
     return t("externalOpener.saveSourceUnavailable");
   }
+  if (/^cannot (?:create destination|save document):.*(?:Permission denied|Operation not permitted|os error (?:13|1)\b)/i.test(message)) {
+    return t("externalOpener.saveWriteDenied");
+  }
   return t("externalOpener.saveFailed", { error: message });
 }
 

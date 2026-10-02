@@ -21,6 +21,9 @@ by Missing source rejection without a Save panel. Neither may write any file.
 The document-permissions slice makes Original A mode-000 before launching the
 host. The runner holds a read descriptor to verify its bytes after normal quit;
 the application must refuse opening the source before showing a Save panel.
+The document-write-denied slice uses a readable/searchable mode-500 destination.
+The OS must refuse actual Save there; observe the native error then cancel the
+panel if it remains open. The write-denied receipt requires zero output files.
 """
 import argparse
 import hashlib
@@ -49,6 +52,7 @@ document_spec.loader.exec_module(documents)
 STEPS = ('cancel', 'new-save', 'overwrite-cancel', 'overwrite')
 ERROR_STEPS = ('same-source', 'missing-source')
 PERMISSION_STEPS = ('read-denied',)
+WRITE_STEPS = ('write-denied',)
 THEME_NAMES = ('Reasonix UI Theme', 'Reasonix UI Theme Revised')
 
 
@@ -84,18 +88,26 @@ def permission_source_metadata(path):
     return {'mode': info.st_mode, 'mtime': info.st_mtime_ns, 'inode': info.st_ino, 'size': info.st_size}
 
 
+def destination_metadata(path):
+    info = path.lstat()
+    if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid()
+            or stat.S_IMODE(info.st_mode) != 0o500):
+        raise RuntimeError('Destination is not an owned ordinary mode-500 directory')
+    return {'mode': info.st_mode, 'mtime': info.st_mtime_ns, 'inode': info.st_ino}
+
+
 def document_fingerprints(mode, scenario):
     a, b = document_sources(mode)
     return [permission_source_metadata(a) if scenario == 'document-permissions' else fingerprint(a), fingerprint(b)]
 
 
 def scenario_steps(scenario):
-    return PERMISSION_STEPS if scenario == 'document-permissions' else ERROR_STEPS if scenario == 'document-errors' else STEPS
+    return WRITE_STEPS if scenario == 'document-write-denied' else PERMISSION_STEPS if scenario == 'document-permissions' else ERROR_STEPS if scenario == 'document-errors' else STEPS
 
 
 def output_name(scenario):
     return {'theme': '主题 副本.reasonix-theme', 'diagnostics': '报告 副本.json',
-            'document': '文档 副本.md', 'document-errors': '文档 副本.md', 'document-permissions': '文档 副本.md'}[scenario]
+            'document': '文档 副本.md', 'document-errors': '文档 副本.md', 'document-permissions': '文档 副本.md', 'document-write-denied': '文档 副本.md'}[scenario]
 
 
 def report(path, scenario='diagnostics'):
@@ -139,7 +151,7 @@ def report(path, scenario='diagnostics'):
 
 
 def record(step, control_path):
-    if step not in STEPS + ERROR_STEPS + PERMISSION_STEPS:
+    if step not in STEPS + ERROR_STEPS + PERMISSION_STEPS + WRITE_STEPS:
         raise ValueError('Unknown export acceptance step')
     control = Path(control_path)
     private_file(control, 8192)
@@ -151,21 +163,23 @@ def record(step, control_path):
         raise RuntimeError('Export UI control does not identify a private fixture')
     mode = root / ('managed' if state['managed'] else 'explicit')
     scenario = state.get('scenario', 'diagnostics')
-    if scenario not in ('diagnostics', 'theme', 'document', 'document-errors', 'document-permissions'):
+    if scenario not in ('diagnostics', 'theme', 'document', 'document-errors', 'document-permissions', 'document-write-denied'):
         raise RuntimeError('Export UI scenario is invalid')
     output = mode / '报告 测试'
     for directory in (root, mode, output):
         info = directory.lstat()
         if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid()
-                or stat.S_IMODE(info.st_mode) != 0o700):
+                or stat.S_IMODE(info.st_mode) != (0o500 if directory == output and scenario == 'document-write-denied' else 0o700)):
             raise RuntimeError('Export UI directory is not an owned private ordinary directory')
+    if scenario == 'document-write-denied' and destination_metadata(output) != state.get('destinationMetadata'):
+        raise RuntimeError('Destination denial directory changed')
     target = output / output_name(scenario)
     if state['outputFile'] != str(target) or state['phase'] != step:
         raise RuntimeError('Export UI step/path does not match the current phase')
     if any(type(state[key]) is not int or not package.is_alive(state[key])
            for key in ('hostPid', 'sidecarPid')):
         raise RuntimeError('Export UI fixture is no longer live')
-    if scenario in ('document', 'document-errors', 'document-permissions'):
+    if scenario in ('document', 'document-errors', 'document-permissions', 'document-write-denied'):
         info = (mode / '原件 文件').lstat()
         if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid()
                 or stat.S_IMODE(info.st_mode) != 0o700):
@@ -191,7 +205,7 @@ def record(step, control_path):
     if prior['steps'] != list(steps[:index]):
         raise RuntimeError('Export UI receipt order is invalid')
     backup = mode / 'first-export-original.json'
-    if step == 'cancel' or scenario in ('document-errors', 'document-permissions'):
+    if step == 'cancel' or scenario in ('document-errors', 'document-permissions', 'document-write-denied'):
         if list(output.iterdir()):
             raise RuntimeError('Cancelled save unexpectedly wrote an output')
     else:
@@ -231,7 +245,7 @@ def record(step, control_path):
 def smoke(app_path, control_path, seconds, profile, scenario='diagnostics'):
     if profile not in ('managed', 'explicit', 'both') or not 60 <= seconds <= 900:
         raise ValueError('Invalid export UI profile/duration')
-    if scenario not in ('diagnostics', 'theme', 'document', 'document-errors', 'document-permissions'):
+    if scenario not in ('diagnostics', 'theme', 'document', 'document-errors', 'document-permissions', 'document-write-denied'):
         raise ValueError('Invalid export UI scenario')
     control = Path(control_path)
     if control.parent != Path('/private/tmp') or control.parent.resolve() != control.parent:
@@ -266,7 +280,7 @@ def smoke(app_path, control_path, seconds, profile, scenario='diagnostics'):
             provider = None
             protected_source = None
             sources, source_fingerprints = [], []
-            if scenario in ('document', 'document-errors', 'document-permissions'):
+            if scenario in ('document', 'document-errors', 'document-permissions', 'document-write-denied'):
                 (mode / '原件 文件').mkdir(mode=0o700)
                 sources = document_sources(mode)
                 for path, data in zip(sources, documents.CONTENTS):
@@ -284,13 +298,23 @@ def smoke(app_path, control_path, seconds, profile, scenario='diagnostics'):
                         protected_source.close()
                         raise RuntimeError('Runner bypasses source permissions; no host launched')
                 source_fingerprints = document_fingerprints(mode, scenario)
+            if scenario == 'document-write-denied':
+                output = mode / '报告 测试'
+                output.chmod(0o500)
+                try:
+                    with (output / 'write-permission-probe').open('xb'):
+                        pass
+                except PermissionError:
+                    pass
+                else:
+                    raise RuntimeError('Runner bypasses destination permissions; no host launched')
             env = environment | {'HOME': str(mode / 'home'), 'TMPDIR': str(mode / 'tmp')}
             if not managed:
                 env |= {'REASONIX_HOME': str(core), 'REASONIX_CACHE_HOME': str(mode / 'cache')}
             host = None
             sidecar = None
             try:
-                if scenario in ('document', 'document-errors', 'document-permissions'):
+                if scenario in ('document', 'document-errors', 'document-permissions', 'document-write-denied'):
                     provider = documents.DocumentProvider(core, sources, errors=scenario == 'document-errors')
                 host = subprocess.Popen([str(host_binary)], env=env, stdout=subprocess.DEVNULL,
                                         stderr=subprocess.DEVNULL, start_new_session=True)
@@ -310,9 +334,10 @@ def smoke(app_path, control_path, seconds, profile, scenario='diagnostics'):
                 control.write_text(json.dumps({'root': str(root), 'managed': managed, 'hostPid': host.pid,
                                                'sidecarPid': sidecar, 'phase': scenario_steps(scenario)[0],
                                                'scenario': scenario,
+                                               'destinationMetadata': destination_metadata(mode / '报告 测试') if scenario == 'document-write-denied' else None,
                                                'sourceFiles': [str(path) for path in sources],
                                                'sourceFingerprints': source_fingerprints,
-                                               'prompt': documents.PROMPT if scenario in ('document', 'document-errors', 'document-permissions') else '',
+                                               'prompt': documents.PROMPT if scenario in ('document', 'document-errors', 'document-permissions', 'document-write-denied') else '',
                                                'themeNames': list(THEME_NAMES) if scenario == 'theme' else [],
                                                'outputFile': str(mode / '报告 测试' / output_name(scenario))}))
                 control.chmod(0o600)
@@ -332,20 +357,25 @@ def smoke(app_path, control_path, seconds, profile, scenario='diagnostics'):
                 steps = scenario_steps(scenario)
                 if state['steps'] != list(steps):
                     raise RuntimeError('Export UI steps were incomplete')
-                if scenario in ('document-errors', 'document-permissions'):
+                if scenario in ('document-errors', 'document-permissions', 'document-write-denied'):
                     if list(target.parent.iterdir()) or set((mode / '原件 文件').iterdir()) != set(sources):
                         raise RuntimeError('Rejected document action wrote unexpected files')
                 elif report(target, scenario) == state['firstId']:
                     raise RuntimeError('Export UI replacement was incomplete')
                 if original(canary) != before or package.check_credential_profile(core) != identity:
                     raise RuntimeError('Export UI changed its protected original/profile identity')
-                if scenario in ('document', 'document-errors', 'document-permissions') and (provider.requests != 1 or provider.error
+                if scenario in ('document', 'document-errors', 'document-permissions', 'document-write-denied') and (provider.requests != 1 or provider.error
                                                or document_fingerprints(mode, scenario) != source_fingerprints):
                     raise RuntimeError('Document provider or source protection did not pass')
                 if protected_source is not None:
                     protected_source.seek(0)
                     if protected_source.read() != documents.CONTENTS[0]:
                         raise RuntimeError('Unreadable source contents changed')
+                if scenario == 'document-write-denied':
+                    initial_control = json.loads(control.read_text())
+                    if destination_metadata(target.parent) != initial_control['destinationMetadata']:
+                        raise RuntimeError('Destination denial permissions changed')
+                    target.parent.chmod(0o700)
                 passed += 1
                 print(f'{len(steps)} actual output checks, original/identity protection and normal quit cleanup passed', flush=True)
             finally:
@@ -380,8 +410,8 @@ if __name__ == '__main__':
     parser.add_argument('--control', default='/private/tmp/reasonix-ui-export-control.json')
     parser.add_argument('--seconds', type=int, default=600, choices=range(60, 901), metavar='SECONDS')
     parser.add_argument('--profile', choices=('managed', 'explicit', 'both'), default='both')
-    parser.add_argument('--scenario', choices=('diagnostics', 'theme', 'document', 'document-errors', 'document-permissions'), default='diagnostics')
-    parser.add_argument('--record', choices=STEPS + ERROR_STEPS + PERMISSION_STEPS)
+    parser.add_argument('--scenario', choices=('diagnostics', 'theme', 'document', 'document-errors', 'document-permissions', 'document-write-denied'), default='diagnostics')
+    parser.add_argument('--record', choices=STEPS + ERROR_STEPS + PERMISSION_STEPS + WRITE_STEPS)
     args = parser.parse_args()
     if sys.platform != 'darwin':
         raise SystemExit('This acceptance requires macOS')

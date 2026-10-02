@@ -300,6 +300,7 @@ export const en = {
   "externalOpener.saved": "Saved to {path}",
   "externalOpener.saveSameSource": "The destination is the source file. Choose a different name or location and try again.",
   "externalOpener.saveSourceUnavailable": "Could not read the source file. Check that it still exists and that you have read permission, then try again.",
+  "externalOpener.saveWriteDenied": "Could not write to this location. Choose a folder you have permission to write to and try again.",
   "externalOpener.saveFailed": "Could not save the file: {error}. Choose a writable location and try again.",
   "externalOpener.persistFailed": "Opened, but could not save {name} as default: {error}",
   "richLink.menuAriaLabel": "Link actions",

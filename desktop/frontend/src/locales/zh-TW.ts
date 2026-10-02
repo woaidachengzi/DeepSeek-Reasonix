@@ -3126,6 +3126,7 @@ export const zhTW: Record<DictKey, string> = {
   "externalOpener.saved": "已儲存到 {path}",
   "externalOpener.saveSameSource": "目標檔案是原檔案。請選擇其他檔案名稱或儲存位置後重試。",
   "externalOpener.saveSourceUnavailable": "無法讀取來源檔案。請確認檔案仍然存在且有讀取權限後重試。",
+  "externalOpener.saveWriteDenied": "無法寫入儲存位置。請選擇有寫入權限的資料夾後重試。",
   "externalOpener.saveFailed": "檔案另存新檔失敗：{error}。請選擇可寫入的儲存位置後重試。",
   "externalOpener.persistFailed": "已開啟，但無法將 {name} 儲存為預設：{error}",
   "richLink.menuAriaLabel": "連結操作",

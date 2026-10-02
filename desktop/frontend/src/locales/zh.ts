@@ -301,6 +301,7 @@ export const zh: Record<DictKey, string> = {
   "externalOpener.saved": "已保存到 {path}",
   "externalOpener.saveSameSource": "目标文件是原文件。请选择其他文件名或保存位置后重试。",
   "externalOpener.saveSourceUnavailable": "无法读取源文件。请确认文件仍然存在且有读取权限后重试。",
+  "externalOpener.saveWriteDenied": "无法写入保存位置。请选择有写入权限的文件夹后重试。",
   "externalOpener.saveFailed": "文件另存为失败：{error}。请选择可写的保存位置后重试。",
   "externalOpener.persistFailed": "已打开，但无法将 {name} 保存为默认：{error}",
   "richLink.menuAriaLabel": "链接操作",
