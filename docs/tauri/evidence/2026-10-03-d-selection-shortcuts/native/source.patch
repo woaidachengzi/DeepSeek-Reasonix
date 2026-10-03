@@ -1,0 +1,306 @@
+diff --git a/desktop/frontend/src/__tests__/tauri-progress-collapse.test.tsx b/desktop/frontend/src/__tests__/tauri-progress-collapse.test.tsx
+index 88bdc4730..2fc2f66f8 100644
+--- a/desktop/frontend/src/__tests__/tauri-progress-collapse.test.tsx
++++ b/desktop/frontend/src/__tests__/tauri-progress-collapse.test.tsx
+@@ -47,7 +47,7 @@ assert.ok(document.querySelector(".tauri-diagnostics"));
+ await act(async () => { document.querySelector<HTMLButtonElement>('.tauri-diagnostics__header [aria-label="关闭"]')?.click(); });
+ await act(async () => { window.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "?", ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true })); });
+ assert.ok(document.querySelector(".shortcuts-cheatsheet"), "the stable shortcut-help chord opens the Preview-specific shortcut sheet");
+-assert.equal(document.querySelectorAll(".shortcuts-cheatsheet__row").length, 43, "the help sheet lists exactly the configurable Preview actions");
++assert.equal(document.querySelectorAll(".shortcuts-cheatsheet__row").length, 44, "the help sheet lists exactly the configurable Preview actions");
+ await act(async () => { document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); });
+ assert.equal(document.querySelector(".shortcuts-cheatsheet"), null, "Escape closes keyboard help");
+ const sidebarToggle = document.querySelector<HTMLButtonElement>(".tauri-sidebar-toggle");
+diff --git a/desktop/frontend/src/__tests__/tauri-selection-add.test.tsx b/desktop/frontend/src/__tests__/tauri-selection-add.test.tsx
+index c88860815..1873ce69b 100644
+--- a/desktop/frontend/src/__tests__/tauri-selection-add.test.tsx
++++ b/desktop/frontend/src/__tests__/tauri-selection-add.test.tsx
+@@ -13,6 +13,8 @@ const React = await import("react");
+ const { act } = React;
+ const { createRoot } = await import("react-dom/client");
+ const { TauriSessionApp } = await import("../tauri/TauriChatWorkspace");
++const { setTauriShortcut, resetTauriShortcuts } = await import("../tauri/tauriKeyboardShortcuts");
++const { detectShortcutPlatform } = await import("../lib/keyboardShortcuts");
+ const { splitSelectedTextContext } = await import("../lib/selectedTextContext");
+ const root = createRoot(document.getElementById("root")!);
+ await act(async () => { root.render(React.createElement(TauriSessionApp)); await new Promise(resolve => setTimeout(resolve, 40)); });
+@@ -52,7 +54,24 @@ assert.equal(document.querySelectorAll(".tauri-composer .composer-context > *").
+ await act(async () => { document.querySelector<HTMLButtonElement>(".composer-context__remove")!.click(); });
+ assert.equal(document.querySelector(".tauri-composer .composer-context"), null, "the selection reference can be removed");
+ const finalAdd = await selectAnswer();
+-await act(async () => { finalAdd.click(); });
++const platform = detectShortcutPlatform();
++const primary = platform === "darwin" ? { metaKey: true } : { ctrlKey: true };
++const primaryCombo = platform === "darwin" ? { meta: true } : { ctrl: true };
++localStorage.setItem("reasonix.customShortcuts", JSON.stringify({ "selection.addToChat": { key: "j", ...primaryCombo } }));
++await act(async () => { assert.equal(setTauriShortcut("add_selection", { key: "l", ...primaryCombo, shift: true }, platform), true); });
++assert.ok(finalAdd.textContent!.includes("L"), "selection menu reflects the Preview binding");
++const press = async (key: string, extra = {}) => act(async () => { document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...primary, ...extra })); });
++await press("l");
++await press("j");
++await press("l", { shiftKey: true, isComposing: true });
++await press("l", { shiftKey: true, keyCode: 229 });
++assert.equal(document.querySelector(".tauri-composer .composer-context"), null, "old/Wails bindings and IME do not add a reference");
++await press("l", { shiftKey: true });
++assert.equal(document.querySelectorAll(".tauri-composer .composer-context > *").length, 1, "new Preview binding adds the visible selection");
++assert.equal(composer.value, "my request");
++assert.ok(JSON.parse(localStorage.getItem("reasonix.tauri.shortcuts.v1")!).add_selection.shift, "remapping persists separately");
++await act(async () => { resetTauriShortcuts(); });
++assert.equal(JSON.parse(localStorage.getItem("reasonix.customShortcuts")!)["selection.addToChat"].key, "j", "Preview reset leaves Wails settings intact");
+ let rejectSend!: () => void;
+ const bridgeFixture = globalThis as typeof globalThis & { __submitGate?: Promise<never> };
+ bridgeFixture.__submitGate = new Promise((_, reject) => { rejectSend = () => reject(new Error("owned send failure")); });
+diff --git a/desktop/frontend/src/__tests__/tauri-shortcuts.test.ts b/desktop/frontend/src/__tests__/tauri-shortcuts.test.ts
+index 8ab7d426a..634fb2ac1 100644
+--- a/desktop/frontend/src/__tests__/tauri-shortcuts.test.ts
++++ b/desktop/frontend/src/__tests__/tauri-shortcuts.test.ts
+@@ -22,7 +22,7 @@ assert.deepEqual(defaultTauriShortcut("text_size_decrease", "linux"), { key: "-"
+ assert.deepEqual(defaultTauriShortcut("text_size_reset", "windows"), { key: "0", ctrl: true }, "text size reset follows the stable shortcut");
+ assert.deepEqual(defaultTauriShortcut("composer_newline", "darwin"), { key: "Enter", shift: true }, "composer newline follows the stable Shift+Enter shortcut");
+ assert.equal(isValidTauriShortcut("open_usage_stats", { key: "u", ctrl: true, shift: true }), true);
+-assert.equal(TAURI_SHORTCUT_ACTIONS.length, 43, "all Preview actions, including command palette, keyboard help, sidebar toggle, session navigation, panel close, composer newline, text size and every settings page, can be configured");
++assert.equal(TAURI_SHORTCUT_ACTIONS.length, 44, "all Preview actions, including command palette, keyboard help, sidebar toggle, session navigation, panel close, composer newline, text size and every settings page, can be configured");
+ assert.equal(Object.keys(TAURI_SHORTCUT_TABS).length, 16, "every remaining settings page has a direct shortcut route");
+ for (const action of TAURI_SHORTCUT_ACTIONS) {
+   const combo = defaultTauriShortcut(action, "darwin");
+@@ -92,3 +92,8 @@ for (const action of TAURI_SHORTCUT_ACTIONS) {
+ }
+ 
+ console.log("tauri shortcuts: OK");
++
++resetTauriShortcuts();
++assert.deepEqual(defaultTauriShortcut("add_selection", "darwin"), { key: "l", meta: true });
++assert.equal(setTauriShortcut("add_selection", { key: "r", meta: true }, "darwin"), false, "selection cannot take the refresh binding");
++assert.equal(setTauriShortcut("add_selection", { key: "c", meta: true }, "darwin"), false, "selection cannot take native Copy");
+diff --git a/desktop/frontend/src/components/TranscriptSelectionMenu.tsx b/desktop/frontend/src/components/TranscriptSelectionMenu.tsx
+index b764646fa..5a7d2d533 100644
+--- a/desktop/frontend/src/components/TranscriptSelectionMenu.tsx
++++ b/desktop/frontend/src/components/TranscriptSelectionMenu.tsx
+@@ -12,6 +12,8 @@ import {
+   onShortcutsChanged,
+   resolvedShortcutCombo,
+   useGlobalShortcut,
++  type ShortcutCombo,
++  type ShortcutPlatform,
+ } from "../lib/keyboardShortcuts";
+ import { useT } from "../lib/i18n";
+ import { transcriptSelectionStore } from "../lib/transcriptSelectionStore";
+@@ -77,10 +79,15 @@ export function TranscriptSelectionMenu({
+   enabled = true,
+   resetKey,
+   onAddToChat,
++  addToChatShortcut,
+ }: {
+   enabled?: boolean;
+   resetKey?: string | number;
+   onAddToChat?: (text: string) => void;
++  addToChatShortcut?: {
++    combo: ShortcutCombo;
++    matches: (event: KeyboardEvent, platform: ShortcutPlatform) => boolean;
++  };
+ }) {
+   const t = useT();
+   const { showToast } = useToast();
+@@ -106,9 +113,9 @@ export function TranscriptSelectionMenu({
+   const [shortcutRevision, setShortcutRevision] = useState(0);
+   useEffect(() => onShortcutsChanged(() => setShortcutRevision((value) => value + 1)), []);
+   const addShortcut = useMemo(
+-    () => formatShortcutCombo(resolvedShortcutCombo("selection.addToChat", shortcutPlatform), shortcutPlatform),
++    () => formatShortcutCombo(addToChatShortcut?.combo ?? resolvedShortcutCombo("selection.addToChat", shortcutPlatform), shortcutPlatform),
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+-    [shortcutPlatform, shortcutRevision],
++    [shortcutPlatform, shortcutRevision, addToChatShortcut?.combo],
+   );
+ 
+   const closeAction = useCallback(() => {
+@@ -211,6 +218,7 @@ export function TranscriptSelectionMenu({
+     () => { void addSelectionToChat(); },
+     [],
+     Boolean(action) && enabled && Boolean(onAddToChat),
++    addToChatShortcut?.matches,
+   );
+ 
+   useLayoutEffect(() => {
+diff --git a/desktop/frontend/src/lib/keyboardShortcuts.ts b/desktop/frontend/src/lib/keyboardShortcuts.ts
+index 75679b848..f17ae6286 100644
+--- a/desktop/frontend/src/lib/keyboardShortcuts.ts
++++ b/desktop/frontend/src/lib/keyboardShortcuts.ts
+@@ -506,6 +506,7 @@ export function useGlobalShortcut(
+   handler: (event: globalThis.KeyboardEvent) => void,
+   deps: DependencyList = [],
+   enabled = true,
++  matchesBinding?: (event: globalThis.KeyboardEvent, platform: ShortcutPlatform) => boolean,
+ ): void {
+   const definition = shortcutDefinition(action);
+   useEffect(() => {
+@@ -523,14 +524,14 @@ export function useGlobalShortcut(
+       // Cmd/Ctrl+Z. Keep that legacy binding outside editors, but never let it
+       // intercept the platform undo/redo chord while text is being edited.
+       if (editableTarget && isReservedComposerHistoryShortcut(event, platform)) return;
+-      if (!matchesShortcut(event, action, platform)) return;
++      if (!(matchesBinding ? matchesBinding(event, platform) : matchesShortcut(event, action, platform))) return;
+       if (definition.preventDefault !== false) event.preventDefault();
+       handler(event);
+     };
+     document.addEventListener("keydown", onKey, { capture: true });
+     return () => document.removeEventListener("keydown", onKey, { capture: true });
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+-  }, [action, enabled, handler, ...deps]);
++  }, [action, enabled, handler, matchesBinding, ...deps]);
+ }
+ 
+ // useShortcutComboLabel resolves an action's current combo as display text
+diff --git a/desktop/frontend/src/tauri/TauriChatWorkspace.tsx b/desktop/frontend/src/tauri/TauriChatWorkspace.tsx
+index 9e16ded09..7794eedca 100644
+--- a/desktop/frontend/src/tauri/TauriChatWorkspace.tsx
++++ b/desktop/frontend/src/tauri/TauriChatWorkspace.tsx
+@@ -419,6 +419,8 @@ function PromptCard({ prompt, busy, selections, onApproval, onAskSelection, onAs
+   </section>;
+ }
+ 
++const matchesSelectionShortcut = (event: KeyboardEvent, platform: ReturnType<typeof detectShortcutPlatform>) => matchesTauriShortcut(event, "add_selection", platform);
++
+ export function TauriSessionPreview() {
+   const { locale, pref: languagePref, setPref: setLanguagePref } = useI18n();
+   const t = useT();
+@@ -598,7 +600,7 @@ export function TauriSessionPreview() {
+   const shortcutHelpItems = useMemo<ShortcutCheatsheetItem[]>(() => TAURI_SHORTCUT_ACTIONS.map(action => {
+     const section: ShortcutSection = action === "show_shortcuts" ? "help"
+       : action === "workspace_files" || action === "diagnostics" ? "tools"
+-        : action === "new_session" || action === "send_message" || action.startsWith("goto_session_") ? "session"
++        : action === "new_session" || action === "send_message" || action === "add_selection" || action.startsWith("goto_session_") ? "session"
+           : action === "settings" || action === "command_palette" || action === "close_panel" ? "global" : "view";
+     const label = TAURI_SHORTCUT_LABELS[action];
+     return { action, section, labelKey: label.label, descriptionKey: label.description, combo: getTauriShortcut(action, shortcutPlatform) };
+@@ -3474,9 +3476,10 @@ export function TauriSessionPreview() {
+ 
+       <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} items={commandPaletteItems} placeholder={t("palette.placeholder")} emptyText={t("palette.empty")} />
+       <Suspense fallback={null}><TranscriptSelectionMenu
+-        enabled={Boolean(session && !settingsOpen && !diagnosticsOpen && !workspaceOpen && !commandPaletteOpen)}
++        enabled={Boolean(session && !settingsOpen && !diagnosticsOpen && !workspaceOpen && !commandPaletteOpen && !shortcutsHelpOpen)}
+         resetKey={session?.id ?? "tauri-empty"}
+         onAddToChat={addSelectedText}
++        addToChatShortcut={{ combo: getTauriShortcut("add_selection", shortcutPlatform), matches: matchesSelectionShortcut }}
+       /></Suspense>
+       <ShortcutsCheatsheet open={shortcutsHelpOpen} platform={shortcutPlatform} onClose={() => setShortcutsHelpOpen(false)} t={t} items={shortcutHelpItems} />
+       {settingsOpen && <TauriSettings key={settingsTab} initialTab={settingsTab} workspaceRoot={currentWorkspace || undefined} defaultWorkspace={defaultWorkspace} onChooseDefaultWorkspace={chooseDefaultWorkspace} onClearDefaultWorkspace={clearDefaultWorkspace} profile={profile} importBusy={busy} bridgeStatus={status} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={error} onRestartBridge={restartBridge} onRefreshCatalogAudit={() => refreshCatalogAudit()} onRefreshProfile={refreshProfile} onImportStableProfile={importStableProfile} onImportStableProjectFolders={importStableProjectFolders} onScanUnclaimedSessions={() => void openScanImportReview()} onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionId={session?.id} currentSessionState={session?.state} currentSessionModelRef={session?.modelRef} onCurrentSessionModelChange={changeCurrentSessionModel} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} onUseSubagentInChat={insertSubagentInvocation} />}
+diff --git a/desktop/frontend/src/tauri/TauriSettings.tsx b/desktop/frontend/src/tauri/TauriSettings.tsx
+index 4f13b0a27..ea381aa43 100644
+--- a/desktop/frontend/src/tauri/TauriSettings.tsx
++++ b/desktop/frontend/src/tauri/TauriSettings.tsx
+@@ -169,6 +169,7 @@ export const TAURI_SHORTCUT_LABELS: Record<TauriShortcutAction, { label: DictKey
+   workspace_files: { label: "workspace.filesTab" },
+   refresh_session: { label: "settings.tauriShortcut.refreshSession", description: "settings.tauriShortcut.refreshSessionHint" },
+   send_message: { label: "shortcuts.action.composerSend", description: "shortcuts.desc.composerSend" },
++  add_selection: { label: "shortcuts.action.addSelectionToChat", description: "shortcuts.desc.addSelectionToChat" },
+   composer_newline: { label: "shortcuts.action.composerNewline", description: "shortcuts.desc.composerNewline" },
+   open_appearance: { label: "settings.tab.appearance", description: "settings.tabSub.appearance" },
+   open_model_preferences: { label: "settings.models.preferences", description: "settings.tabSub.models" },
+diff --git a/desktop/frontend/src/tauri/tauriKeyboardShortcuts.ts b/desktop/frontend/src/tauri/tauriKeyboardShortcuts.ts
+index 8dd0709d7..4ac82699f 100644
+--- a/desktop/frontend/src/tauri/tauriKeyboardShortcuts.ts
++++ b/desktop/frontend/src/tauri/tauriKeyboardShortcuts.ts
+@@ -14,6 +14,7 @@ export const TAURI_SHORTCUT_ACTIONS = [
+   "refresh_session",
+   "send_message",
+   "composer_newline",
++  "add_selection",
+   "open_appearance",
+   "open_model_preferences",
+   "open_model_services",
+@@ -136,6 +137,7 @@ export function defaultTauriShortcut(action: TauriShortcutAction, platform: Shor
+     refresh_session: "r",
+     send_message: "Enter",
+     composer_newline: "Enter",
++    add_selection: "l",
+     open_appearance: "a",
+     open_model_preferences: "m",
+     open_model_services: "p",
+diff --git a/desktop/tauri/src/native_ui_message_copy_smoke.rs b/desktop/tauri/src/native_ui_message_copy_smoke.rs
+index bb6158598..86010bbfc 100644
+--- a/desktop/tauri/src/native_ui_message_copy_smoke.rs
++++ b/desktop/tauri/src/native_ui_message_copy_smoke.rs
+@@ -117,6 +117,24 @@ pub fn run(app: &AppHandle, directory: &Path, send_selection: bool) -> Result<()
+     )
+     .map_err(|_| "record owned clipboard generation")?;
+     check(app, "document.getSelection()?.isCollapsed && !document.querySelector('.context-menu') ? 'edit-ok' : 'edit-pending'".into(), "successful copy release")?;
++    if send_selection {
++        if !crate::native_edit_smoke::evaluate(app, "document.dispatchEvent(new KeyboardEvent('keydown', {key:'k',metaKey:true,shiftKey:true,bubbles:true,cancelable:true})); 'edit-ok'".into())? {
++            return Err("open actual shortcut settings".into());
++        }
++        check(app, "document.querySelector('[data-tauri-shortcut-action=add_selection]') ? 'edit-ok' : 'edit-pending'".into(), "selection settings row")?;
++        if !crate::native_edit_smoke::evaluate(app, "document.querySelector('[data-tauri-shortcut-action=add_selection]').click(); 'edit-ok'".into())? {
++            return Err("record actual selection shortcut".into());
++        }
++        check(app, "document.querySelector('[data-tauri-shortcut-action=add_selection].is-recording') ? 'edit-ok' : 'edit-pending'".into(), "shortcut recorder ready")?;
++        if !crate::native_edit_smoke::evaluate(app, "document.querySelector('[data-tauri-shortcut-action=add_selection]').dispatchEvent(new KeyboardEvent('keydown', {key:'l',metaKey:true,shiftKey:true,bubbles:true,cancelable:true})); 'edit-ok'".into())? {
++            return Err("save actual selection shortcut".into());
++        }
++        check(app, "(() => { const saved = JSON.parse(localStorage.getItem('reasonix.tauri.shortcuts.v1') || '{}').add_selection; return saved?.key === 'l' && saved.meta === true && saved.shift === true && !document.querySelector('[data-tauri-shortcut-action=add_selection].is-recording') ? 'edit-ok' : 'edit-pending'; })()".into(), "selection shortcut saved")?;
++        if !crate::native_edit_smoke::evaluate(app, "document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape',bubbles:true,cancelable:true})); 'edit-ok'".into())? {
++            return Err("close shortcut settings".into());
++        }
++        check(app, "!document.querySelector('.tauri-settings-overlay') ? 'edit-ok' : 'edit-pending'".into(), "shortcut settings closed")?;
++    }
+     let select_for_chat = format!(
+         r#"(() => {{
+       const editor = document.querySelector('.tauri-composer textarea');
+@@ -166,7 +184,11 @@ pub fn run(app: &AppHandle, directory: &Path, send_selection: bool) -> Result<()
+         return Err("reselect actual message for selection shortcut".into());
+     }
+     check(app, "document.querySelector('.transcript-selection-action[data-state=open] button:not(:disabled)') ? 'edit-ok' : 'edit-pending'".into(), "selection shortcut armed")?;
+-    if !crate::native_edit_smoke::evaluate(app, "(() => { const event = new KeyboardEvent('keydown', {key:'l',metaKey:true,bubbles:true,cancelable:true}); document.dispatchEvent(event); return event.defaultPrevented ? 'edit-ok' : 'edit-pending'; })()".into())? {
++    if send_selection && !crate::native_edit_smoke::evaluate(app, "(() => { const event = new KeyboardEvent('keydown', {key:'l',metaKey:true,bubbles:true,cancelable:true}); document.dispatchEvent(event); return !event.defaultPrevented && !document.getSelection().isCollapsed ? 'edit-ok' : 'edit-pending'; })()".into())? {
++        return Err("old selection shortcut still claimed after remap".into());
++    }
++    let shortcut = format!("(() => {{ const event = new KeyboardEvent('keydown', {{key:'l',metaKey:true,shiftKey:{send_selection},bubbles:true,cancelable:true}}); document.dispatchEvent(event); return event.defaultPrevented ? 'edit-ok' : 'edit-pending'; }})()");
++    if !crate::native_edit_smoke::evaluate(app, shortcut)? {
+         return Err("rendered selection Cmd+L was not claimed".into());
+     }
+     check(app, "document.getSelection().isCollapsed && document.querySelectorAll('.tauri-composer .composer-context__name').length === 1 ? 'edit-ok' : 'edit-pending'".into(), "selection shortcut deduplicates")?;
+@@ -195,13 +217,14 @@ pub fn run(app: &AppHandle, directory: &Path, send_selection: bool) -> Result<()
+         check(app, format!("[...document.querySelectorAll('.tauri-message.is-assistant .md')].some(node => node.textContent.trim() === {answer}) ? 'edit-ok' : 'edit-pending'"), "actual quoted provider response")?;
+         check(app, format!("[...document.querySelectorAll('.tauri-message__selection summary')].some(node => node.textContent === {literal}) && !document.querySelector('.tauri-composer .composer-context__name') ? 'edit-ok' : 'edit-pending'"), "accepted reference displayed and consumed")?;
+         std::fs::write(directory.join("reasonix-native-selection-send-result.json"),
+-            serde_json::json!({"ok":true,"providerResponse":true,"historyReference":true,"draftConsumed":true}).to_string())
++            serde_json::json!({"ok":true,"providerResponse":true,"historyReference":true,"draftConsumed":true,"configuredShortcut":true,"oldBindingInactive":true}).to_string())
+             .map_err(|_| "record selection submit")?;
+     }
+     Ok(())
+ }
+ 
+ pub fn reopen(app: &AppHandle, directory: &Path) -> Result<(), String> {
++    check(app, "(() => { const saved = JSON.parse(localStorage.getItem('reasonix.tauri.shortcuts.v1') || '{}').add_selection; return saved?.key === 'l' && saved.meta === true && saved.shift === true ? 'edit-ok' : 'edit-pending'; })()".into(), "reopened configured selection shortcut")?;
+     let nonce = fixture_nonce(directory)?;
+     let text = serde_json::to_string(&format!("reasonix-native-clipboard-{nonce}"))
+         .map_err(|_| "encode reopened selection")?;
+@@ -230,7 +253,7 @@ pub fn reopen(app: &AppHandle, directory: &Path) -> Result<(), String> {
+         "reopened quoted history without protocol text or draft replay",
+     )?;
+     std::fs::write(directory.join("reasonix-native-selection-reopen-result.json"),
+-        serde_json::json!({"ok":true,"historyReference":true,"protocolTextHidden":true,"noDraftReplay":true}).to_string())
++        serde_json::json!({"ok":true,"historyReference":true,"protocolTextHidden":true,"noDraftReplay":true,"configuredShortcutPersisted":true}).to_string())
+         .map_err(|_| "record reopened reference")?;
+     Ok(())
+ }
+diff --git a/tools/tauri/smoke-native-message-copy.py b/tools/tauri/smoke-native-message-copy.py
+index af1544bc6..9356f14a3 100644
+--- a/tools/tauri/smoke-native-message-copy.py
++++ b/tools/tauri/smoke-native-message-copy.py
+@@ -125,14 +125,14 @@ def smoke(app_path, send_selection=False):
+                 if send_selection:
+                     for name in ('send', 'provider'):
+                         receipt = json.loads((root / f'tmp/reasonix-native-selection-{name}-result.json').read_text())
+-                        if receipt.get('ok') is not True:
++                        if receipt.get('ok') is not True or (name == 'send' and any(receipt.get(key) is not True for key in ('configuredShortcut', 'oldBindingInactive'))):
+                             raise RuntimeError('selection send/provider receipt failed')
+                         print(f"Native {'managed' if managed else 'explicit'} selection {name} receipt: " + json.dumps(receipt), flush=True)
+             if send_selection:
+                 windows.launch(app / 'Contents/MacOS/reasonix-tauri', app / 'Contents/MacOS/reasonix-desktop-bridge',
+                                root, identifier, managed, 'ui-selection-reopen', verify_window_state=False, launch_services=True)
+                 receipt = json.loads((root / 'tmp/reasonix-native-selection-reopen-result.json').read_text())
+-                if any(receipt.get(name) is not True for name in ('ok', 'historyReference', 'protocolTextHidden', 'noDraftReplay')) or state != expected_state:
++                if any(receipt.get(name) is not True for name in ('ok', 'historyReference', 'protocolTextHidden', 'noDraftReplay', 'configuredShortcutPersisted')) or state != expected_state:
+                     raise RuntimeError('reopened selection history or provider request count differs')
+                 print(f"Native {'managed' if managed else 'explicit'} selection reopen receipt: " + json.dumps(receipt), flush=True)
+             success = True

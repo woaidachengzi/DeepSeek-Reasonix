@@ -1,0 +1,26 @@
+Executable=/private/tmp/reasonix-d-selection-shortcuts-installed-yl6bd48p/Reasonix Tauri Preview.app/Contents/MacOS/reasonix-tauri
+Identifier=io.reasonix.desktop.preview
+Format=app bundle with Mach-O thin (arm64)
+CodeDirectory v=20500 size=62780 flags=0x10002(adhoc,runtime) hashes=1951+7 location=embedded
+VersionPlatform=1
+VersionMin=720896
+VersionSDK=983552
+Hash type=sha256 size=32
+CandidateCDHash sha256=fb7d07453301f08da4be2508384426bfe98d8fd9
+CandidateCDHashFull sha256=fb7d07453301f08da4be2508384426bfe98d8fd9be79c69b9bf6d57b7734fb4c
+Hash choices=sha256
+CMSDigest=fb7d07453301f08da4be2508384426bfe98d8fd9be79c69b9bf6d57b7734fb4c
+CMSDigestType=2
+Executable Segment base=0
+Executable Segment limit=26476544
+Executable Segment flags=0x1
+Page size=16384
+CDHash=fb7d07453301f08da4be2508384426bfe98d8fd9
+Signature=adhoc
+Info.plist entries=14
+TeamIdentifier=not set
+Runtime Version=15.2.0
+Sealed Resources version=2 rules=13 files=2
+Internal requirements count=0 size=12
+Total signatures=1
+Chosen signature=1

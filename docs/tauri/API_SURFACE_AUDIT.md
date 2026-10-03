@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-03）
 
+**最新 b1f7f210 选区配置生产接入/失败保留：** [源码与实际新包证据](evidence/2026-10-03-d-selection-shortcuts/README.md)。新增第44项add_selection，Tauri独立配置同时驱动共享菜单标签/触发，原生冲突/IME/遮盖保护；Wails默认路径保持。完整Tauri/transcript、实际设置流组件回归、Rust231/5ignored、strict clippy及构建/DMG安装签名通过。新包实际设置录键前置完成后Add action超时，kernel2；未执行第二轮/配置重启，不称已验收。失败后CG观察count0，但缺当时帧时序，不归因锁屏。独立package/failure-exit/lifetime三组通过、签名与清理保持；其他D/当前包回退不继承b6，D未完成/E未开启，A/B/C与正式签名公证缺口保留。
+
 **最新 b6f7003f 完整窗口失败/零显示器补验：** [原始失败及条件证据](evidence/2026-10-03-d-zero-display-window/README.md)。完整矩阵在 managed exercise 后因缺失窗口存档失败（外层0阶段接受，explicit未启动），原生最小化Will/Did各1、kernel0，时序monitors=[]；不改断言、不记48/48。随后真实CG零活跃显示器条件下两档案旧几何保护/清理通过，独立tray-language共6阶段、startup共12项通过；同候选累计17个程序门禁，但显示器重新活跃恢复及物理UI仍待验。签名/摘要与自身进程清理保持；D未完成/E未开启，历史窗口与A/B/C/签名公证缺口保留。
 
 **最新 b6f7003f 选区实际发送/历史重开与 D 补验：** [当前包证据与 review 检查点](evidence/2026-10-03-d-selection-send-reopen/README.md)。两档案实际引用第二轮由本机 fake provider 严格验证共享 quoted-context，恰好两请求；普通退出后重开持久化历史，内部协议隐藏、草稿消费且不重放。当前包 14 个不同程序门禁、实际配置备份应用/官方 CLI 回读及官方 Wails 历史/Global 附件/检查点回退通过；Rust231/5ignored、strict clippy、构建/DMG安装与签名/清理通过。零显示器门禁前置条件失败，原队列 profile 未运行，后续独立 profile 通过；物理输入未确认、CUA 报 Mac 锁定，监控超时与清理已保留。完整48阶段、钥匙串/权限交互等不继承旧包。D 未完成/E 未开启，A/B/C 和正式签名公证缺口保留，未授权发布或默认下载切换。下列为历史候选证据，各自通过范围不自动继承。

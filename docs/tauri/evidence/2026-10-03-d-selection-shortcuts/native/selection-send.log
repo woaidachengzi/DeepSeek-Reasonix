@@ -1,0 +1,17 @@
+LaunchServices native kernel exit: {"phase": "ui-selection-send", "pid": 43155, "rawKernelStatus": 512, "exitCode": 2, "signaled": false}
+Failed private message fixture retained: /private/tmp/reasonix-native-message-copy-ngxysjuc
+native clipboard preservation after failed phase: original formats preserved
+Traceback (most recent call last):
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-native-message-copy.py", line 157, in <module>
+    smoke(args.app, args.selection_send)
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-native-message-copy.py", line 112, in smoke
+    windows.launch(app / "Contents/MacOS/reasonix-tauri", app / "Contents/MacOS/reasonix-desktop-bridge",
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                   root, identifier, managed, "ui-selection-send" if send_selection else "ui-message-copy", fixture,
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                   verify_window_state=False, launch_services=True)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-native-window.py", line 242, in launch
+    raise RuntimeError(f"{phase}: {result.get('error', 'native acceptance failed')}")
+RuntimeError: ui-selection-send: rendered message copy did not settle: Add to Chat action

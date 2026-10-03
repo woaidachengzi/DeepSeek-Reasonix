@@ -1,0 +1,9 @@
+{
+  "app": "/private/tmp/reasonix-d-selection-shortcuts-installed-yl6bd48p/Reasonix Tauri Preview.app",
+  "dmg": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri Preview_0.1.0_aarch64.dmg",
+  "dmgSha256": "836f127bdb7d0d650bb57e1b8aabde2a52601965f795c2816298161367bff9d1",
+  "artifactSha256": {
+    "reasonix-tauri": "b1f7f210931a9523459e2d90530ca950d39d35de4fe22c44cd537cb6418749e1",
+    "reasonix-desktop-bridge": "d3439788d0c0fb0841795e723eb0b29113968d4ff9a3cb8cb45abb4a786f56e4"
+  }
+}
