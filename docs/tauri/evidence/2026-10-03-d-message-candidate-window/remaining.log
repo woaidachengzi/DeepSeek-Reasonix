@@ -1,0 +1,7 @@
+LaunchServices native kernel exit: {"phase": "second-instance", "pid": 16140, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit second-instance: OK
+LaunchServices native kernel exit: {"phase": "close-quit", "pid": 16161, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit close-quit: OK
+LaunchServices native kernel exit: {"phase": "restore-close-quit", "pid": 16175, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit restore-close-quit: OK
+Independent explicit remaining nonclipboard phases and identity/signature: OK

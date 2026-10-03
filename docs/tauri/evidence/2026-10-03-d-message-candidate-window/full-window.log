@@ -1,0 +1,105 @@
+LaunchServices native kernel exit: {"phase": "exercise", "pid": 14854, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed exercise: OK
+LaunchServices native kernel exit: {"phase": "restore-maximized", "pid": 14873, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed restore-maximized: OK
+LaunchServices native kernel exit: {"phase": "restore-normal", "pid": 14895, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed restore-normal: OK
+LaunchServices native kernel exit: {"phase": "appearance-rollback-unconfigured", "pid": 14921, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed appearance-rollback-unconfigured: OK
+LaunchServices native kernel exit: {"phase": "application-hide", "pid": 14948, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed application-hide: OK
+LaunchServices native kernel exit: {"phase": "background-close", "pid": 14967, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed background-close: OK
+LaunchServices native kernel exit: {"phase": "menu-shortcuts", "pid": 14983, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed menu-shortcuts: OK
+LaunchServices native kernel exit: {"phase": "menu-settings-hidden", "pid": 15006, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed menu-settings-hidden: OK
+LaunchServices native kernel exit: {"phase": "menu-settings-minimized", "pid": 15055, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed menu-settings-minimized: OK
+LaunchServices native kernel exit: {"phase": "menu-settings-app-hidden", "pid": 15071, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed menu-settings-app-hidden: OK
+LaunchServices native kernel exit: {"phase": "task-background-menu-quit", "pid": 15091, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed task-background-menu-quit: OK
+LaunchServices native kernel exit: {"phase": "appearance-dark", "pid": 15120, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed appearance-dark: OK
+LaunchServices native kernel exit: {"phase": "restore-appearance-dark", "pid": 15142, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed restore-appearance-dark: OK
+LaunchServices native kernel exit: {"phase": "restore-appearance-light", "pid": 15158, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed restore-appearance-light: OK
+LaunchServices native kernel exit: {"phase": "restore-appearance-auto", "pid": 15180, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed restore-appearance-auto: OK
+LaunchServices native kernel exit: {"phase": "appearance-rollback", "pid": 15200, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed appearance-rollback: OK
+LaunchServices native kernel exit: {"phase": "restore-appearance-rollback", "pid": 15218, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed restore-appearance-rollback: OK
+LaunchServices native kernel exit: {"phase": "clipboard-native", "pid": 15279, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed clipboard-native: OK
+LaunchServices native kernel exit: {"phase": "dialog-cancel", "pid": 15301, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed dialog-cancel: OK
+LaunchServices native kernel exit: {"phase": "tray-language", "pid": 15383, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed tray-language: OK
+LaunchServices native kernel exit: {"phase": "menu-editing", "pid": 15404, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed menu-editing: OK
+LaunchServices native kernel exit: {"phase": "second-instance", "pid": 15423, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed second-instance: OK
+LaunchServices native kernel exit: {"phase": "close-quit", "pid": 15444, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed close-quit: OK
+LaunchServices native kernel exit: {"phase": "restore-close-quit", "pid": 15464, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed restore-close-quit: OK
+native macOS window managed: 24/24 stages passed
+LaunchServices native kernel exit: {"phase": "exercise", "pid": 15480, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit exercise: OK
+LaunchServices native kernel exit: {"phase": "restore-maximized", "pid": 15499, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit restore-maximized: OK
+LaunchServices native kernel exit: {"phase": "restore-normal", "pid": 15515, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit restore-normal: OK
+LaunchServices native kernel exit: {"phase": "appearance-rollback-unconfigured", "pid": 15564, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit appearance-rollback-unconfigured: OK
+LaunchServices native kernel exit: {"phase": "application-hide", "pid": 15582, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit application-hide: OK
+LaunchServices native kernel exit: {"phase": "background-close", "pid": 15598, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit background-close: OK
+LaunchServices native kernel exit: {"phase": "menu-shortcuts", "pid": 15617, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit menu-shortcuts: OK
+LaunchServices native kernel exit: {"phase": "menu-settings-hidden", "pid": 15633, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit menu-settings-hidden: OK
+LaunchServices native kernel exit: {"phase": "menu-settings-minimized", "pid": 15653, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit menu-settings-minimized: OK
+LaunchServices native kernel exit: {"phase": "menu-settings-app-hidden", "pid": 15669, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit menu-settings-app-hidden: OK
+LaunchServices native kernel exit: {"phase": "task-background-menu-quit", "pid": 15697, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit task-background-menu-quit: OK
+LaunchServices native kernel exit: {"phase": "appearance-dark", "pid": 15726, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit appearance-dark: OK
+LaunchServices native kernel exit: {"phase": "restore-appearance-dark", "pid": 15742, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit restore-appearance-dark: OK
+LaunchServices native kernel exit: {"phase": "restore-appearance-light", "pid": 15762, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit restore-appearance-light: OK
+LaunchServices native kernel exit: {"phase": "restore-appearance-auto", "pid": 15782, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit restore-appearance-auto: OK
+LaunchServices native kernel exit: {"phase": "appearance-rollback", "pid": 15800, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit appearance-rollback: OK
+LaunchServices native kernel exit: {"phase": "restore-appearance-rollback", "pid": 15816, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit restore-appearance-rollback: OK
+LaunchServices native kernel exit: {"phase": "clipboard-native", "pid": 15867, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit clipboard-native: OK
+LaunchServices native kernel exit: {"phase": "dialog-cancel", "pid": 15887, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit dialog-cancel: OK
+LaunchServices native kernel exit: {"phase": "tray-language", "pid": 15925, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit tray-language: OK
+Private window failure fixture retained: /private/tmp/reasonix-native-window-smoke-56bucily; completed stages: 20
+Traceback (most recent call last):
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/trace-native-window.py", line 76, in <module>
+    main()
+    ~~~~^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/trace-native-window.py", line 71, in main
+    windows.smoke(app, include_focus=True, include_edit=True, include_dialogs=True,
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                  launch_services=True)
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-native-window.py", line 328, in smoke
+    with fixture as provider:
+         ^^^^^^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/native-clipboard-fixture.py", line 41, in __enter__
+    raise RuntimeError("current clipboard cannot be completely preserved within acceptance bounds; no clipboard write was performed")
+RuntimeError: current clipboard cannot be completely preserved within acceptance bounds; no clipboard write was performed

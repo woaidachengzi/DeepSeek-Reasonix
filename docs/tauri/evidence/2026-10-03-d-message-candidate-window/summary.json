@@ -1,0 +1,47 @@
+{
+  "matrix": {
+    "managed": {
+      "completed": 24,
+      "passed": 24,
+      "totalPlanned": 24
+    },
+    "explicit": {
+      "completed": 20,
+      "passed": 20,
+      "totalPlanned": 24
+    }
+  },
+  "remaining": {
+    "scope": "Independent remaining nonclipboard phases on retained explicit fixture; not a full uninterrupted 48-stage pass",
+    "root": "/private/tmp/reasonix-native-window-smoke-56bucily",
+    "artifactSha256": {
+      "reasonix-tauri": "f259ddc90191a09d7f5418b30579c6c9ca89e754e9ad456ccf5001d241ee7ca3",
+      "reasonix-desktop-bridge": "156f1d447b179408fd2a803ee496d1be96d31a8c9b870f0deb637d02b3335311"
+    },
+    "phases": [
+      {
+        "phase": "second-instance",
+        "status": "passed"
+      },
+      {
+        "phase": "close-quit",
+        "status": "passed"
+      },
+      {
+        "phase": "restore-close-quit",
+        "status": "passed"
+      }
+    ]
+  },
+  "physicalUI": {
+    "status": "not-run",
+    "reason": "CUA getState timed out after 30 seconds; kernel reset"
+  },
+  "readonlyClipboardPreflight": {
+    "exitCode": 1,
+    "systemClipboardWrite": false,
+    "diagnostic": "AppKit reports invalid UTI content; snapshot unavailable or exceeds acceptance bounds",
+    "scope": "Subsequent current-state check, not proof of the earlier failing capture return code"
+  },
+  "observerBinarySha256": "a28a7fa73dcd8df91764a5a9e3daf4f6c7a2fc625a8d6acd483350680435bbd6"
+}

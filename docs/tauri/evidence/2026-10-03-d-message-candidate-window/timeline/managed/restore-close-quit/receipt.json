@@ -1,0 +1,8 @@
+{
+  "phase": "restore-close-quit",
+  "root": "/private/tmp/reasonix-native-window-smoke-hnujwkd2",
+  "startedUnixMs": 1791026584742,
+  "passed": true,
+  "finishedUnixMs": 1791026588466,
+  "observerExit": -15
+}

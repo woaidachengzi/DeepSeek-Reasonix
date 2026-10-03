@@ -1,0 +1,57 @@
+diff --git a/tools/tauri/native-clipboard-fixture.py b/tools/tauri/native-clipboard-fixture.py
+index 8890f9b04..d256ccb4c 100644
+--- a/tools/tauri/native-clipboard-fixture.py
++++ b/tools/tauri/native-clipboard-fixture.py
+@@ -37,8 +37,17 @@ class NativeClipboardFixture(AbstractContextManager):
+             control.touch(mode=0o600)
+             control.write_text(json.dumps({'nonce': self.nonce, 'path': str(self.expected_path)}))
+             action, argument = 'capture-path', control
+-        if self.command(action, argument).returncode:
+-            raise RuntimeError("current clipboard cannot be completely preserved within acceptance bounds; no clipboard write was performed")
++        capture = self.command(action, argument)
++        if capture.returncode:
++            # Report only a fixed category, never helper stderr or clipboard
++            # content. Ownership changes and failed format round-trips are
++            # different prerequisites from an unavailable/bounded snapshot.
++            reason = {
++                1: "snapshot unavailable or exceeds acceptance bounds",
++                2: "clipboard changed during snapshot",
++                3: "original formats cannot round-trip exactly",
++            }.get(capture.returncode, "snapshot helper failed")
++            raise RuntimeError(f"current clipboard preflight refused: {reason} (exit {capture.returncode}); no clipboard write was performed")
+         (self.temporary / "reasonix-native-clipboard-control.json").write_text(json.dumps({"nonce": self.nonce}))
+         return self
+ 
+diff --git a/tools/tauri/test_native_clipboard_fixture.py b/tools/tauri/test_native_clipboard_fixture.py
+index 31b0b385f..76848d7e9 100644
+--- a/tools/tauri/test_native_clipboard_fixture.py
++++ b/tools/tauri/test_native_clipboard_fixture.py
+@@ -17,6 +17,28 @@ spec.loader.exec_module(fixture_module)
+ 
+ 
+ class ClipboardRecoveryTests(unittest.TestCase):
++    def test_snapshot_refusal_reports_fixed_category_without_content_or_write(self):
++        for status, reason in ((1, "snapshot unavailable"), (2, "clipboard changed"),
++                               (3, "cannot round-trip"), (9, "snapshot helper failed")):
++            with self.subTest(status=status), tempfile.TemporaryDirectory(dir="/private/tmp") as temporary:
++                fixture = fixture_module.NativeClipboardFixture(temporary)
++                fixture.binary.touch()
++                calls = []
++
++                def command(action, argument):
++                    calls.append(action)
++                    return subprocess.CompletedProcess([], 0 if action == "selftest" else status,
++                                                       stderr="private clipboard content must not escape")
++
++                fixture.command = command
++                with self.assertRaisesRegex(RuntimeError, reason) as error:
++                    fixture.__enter__()
++                self.assertNotIn("private clipboard", str(error.exception))
++                self.assertIn(f"exit {status}", str(error.exception))
++                self.assertIn("no clipboard write was performed", str(error.exception))
++                self.assertEqual(calls, ["selftest", "capture"])
++                self.assertFalse((Path(temporary) / "reasonix-native-clipboard-control.json").exists())
++
+     def exercise(self, status, interrupted):
+         with tempfile.TemporaryDirectory(dir="/private/tmp") as temporary:
+             root = Path(temporary)
