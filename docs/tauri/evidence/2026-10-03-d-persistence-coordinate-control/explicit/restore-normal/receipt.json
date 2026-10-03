@@ -1,0 +1,9 @@
+{
+  "phase": "restore-normal",
+  "managed": false,
+  "root": "/private/tmp/reasonix-persistence-timeline-5bk662v2",
+  "startedUnixMs": 1791022224684,
+  "passed": true,
+  "finishedUnixMs": 1791022228295,
+  "observerExit": -15
+}

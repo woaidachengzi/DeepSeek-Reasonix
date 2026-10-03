@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-03）
 
+**2px坐标定位补充：** [固定历史种子坐标对照](evidence/2026-10-03-d-persistence-coordinate-control/README.md)在原74安装包上分别运行managed/explicit的restore-normal与second-instance，4/4、kernel exit0，精确保存y344不变；只读窗口边界与scale2一致。锁定Tao的尺寸/位置设置异步投递，当前restore立即解除pending存在过渡捕获可能，尚未证明因果；未补偿偏移，历史y342/失焦未关闭，D未完成/E未开启。
+
 **完整窗口时序补充：** [74fefe10逐阶段只读时序](evidence/2026-10-03-d-full-window-timeline/README.md)使用原完整矩阵与精确断言，managed24/24、explicit24/24，本次48/48与全部kernel exit0，签名和进程清理通过。两种单实例阶段均记录第二退出后主激活。生产源码未改，历史失焦/2px漂移与失败实验仍保留，不能称根因修复或稳定性达标；D未完成/E未开启。
 
 **最新 review 检查点：** [单实例退出协调实验](evidence/2026-10-03-d-singleton-exit-review/README.md)存在跨档案同 Bundle ID 常驻实例阻塞恢复的 P1 缺陷，生产改动已撤回，保留完整源码。实验 f120f29d 构建/安装签名、源码回归、独立8阶段及 package/startup/failure-exit通过；完整窗口managed完成21阶段后second-instance失败/kernel2、restoreRequests/Completions=0，explicit与lifetime未运行。未证明故障根因或2px问题修复；74仍为此前候选，D未完成/E未开启。

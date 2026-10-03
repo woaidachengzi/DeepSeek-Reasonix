@@ -1,0 +1,9 @@
+{
+  "phase": "second-instance",
+  "managed": true,
+  "root": "/private/tmp/reasonix-persistence-timeline-4yaewn8n",
+  "startedUnixMs": 1791022220611,
+  "passed": true,
+  "finishedUnixMs": 1791022224681,
+  "observerExit": -15
+}
