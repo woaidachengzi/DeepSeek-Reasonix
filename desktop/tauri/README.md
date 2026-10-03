@@ -1,6 +1,6 @@
 # Reasonix Tauri host
 
-最新状态：[e7f5f9ae 恢复队列边界修复](../../docs/tauri/evidence/2026-10-03-d-restore-queue-boundary/README.md)。排队期间保留正常窗口缓存；当前包5组程序门禁、完整窗口48/48、定向8/8与sidecar生命周期8项通过。其余D门禁和新包备份/旧Wails回退待继续，历史间歇失焦与2px尚未关闭，D未完成/E未开启。下列带日期的窗口描述为历史现场，不直接代表当前候选。
+最新状态：[e7f5f9ae 当前包补验](../../docs/tauri/evidence/2026-10-03-d-restore-queue-continuation/README.md)。同包13组程序门禁通过（完整窗口48/48），原生.env私有fixture与官方Wails历史/附件/检查点及实际配置备份回退通过。真实权限/物理UI、多显示器拔插、旧钥匙串服务、任意旧目录互斥和历史窗口间歇问题仍待验，D未完成/E未开启，A/B/C及正式签名公证仍阻碍发布。下列带日期的描述为历史现场，不直接代表当前候选。
 
 2026-10-02 实际窗口验收可用 `python3 tools/tauri/probe-launch-services-profile.py <installed-app> --interactive --observe`。
 在全新私有档案启动并观察最多 300 秒；仅该显式模式启用只读原生窗口快照，

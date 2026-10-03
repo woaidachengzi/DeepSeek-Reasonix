@@ -1,0 +1,6 @@
+{"root": "/private/tmp/reasonix-restore-queue-keychain-xuyw7j0_", "passed": false, "normalUnchanged": true}
+Traceback (most recent call last):
+  File "/private/tmp/reasonix-restore-queue-native-env-runner.py", line 40, in <module>
+    if native.returncode!=0:raise RuntimeError('native Wails env import test failed; original log preserved')
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: native Wails env import test failed; original log preserved

@@ -1,0 +1,8 @@
+
+running 1 test
+test keychain::tests::native_wails_env_import_restart_delete_preserves_original ... owned-native-env: authenticated source mapping verified
+owned-native-env: OS import/refusal/restart/delete and originals preserved
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 231 filtered out; finished in 0.53s
+

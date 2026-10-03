@@ -1,0 +1,12 @@
+{
+  "legacyCliSha256": "5b1ab31424d45c8bf3cfe6a60b11da527df2252aee963d1c0c56352f57945962",
+  "backupSha256": "30c2e6c6771f68e26613c91ca621e07471dc369998ec7419de1013ea0e61b36b",
+  "restoredSha256": "30c2e6c6771f68e26613c91ca621e07471dc369998ec7419de1013ea0e61b36b",
+  "restoredDefaultModel": "native-import/alpha",
+  "legacyExitCode": 0,
+  "legacyStdout": "currency = \"CNY\" (display: CNY)\n",
+  "legacyStderr": "",
+  "restoredTreeUnchanged": true,
+  "previewAndBackupTreeUnchanged": true,
+  "previewStoppedBeforeRestore": true
+}

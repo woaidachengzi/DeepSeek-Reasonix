@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-03）
 
+**当前候选补验：** [e7f5f9ae边界/原生fixture/官方回退](evidence/2026-10-03-d-restore-queue-continuation/README.md)新增8组程序门禁通过，同包共13组（前批窗口48/48）；双屏8项、通知OS六条送达与精确清理通过。原生全局.env迁移使用当前源码测试二进制+当前安装sidecar实际1/1通过；初次fixture前缀保护拒绝保留，修正前缀后全新fixture通过。当前包官方历史/附件/检查点/code rewind与实际配置备份应用回读通过，两app签名/无运行实例。权限/物理UI、钥匙串授权取消/旧服务、任意旧目录互斥及窗口历史失败仍未关闭，D未完成/E未开启，A/B/C及正式签名公证仍阻碍发布。
+
 **当前恢复修复候选：** [e7f5f9ae恢复队列边界](evidence/2026-10-03-d-restore-queue-boundary/README.md)保留pending至主队列setter后完成，阻止重入并提前注册状态；真实断言捕获过渡2560×1640/x640/y142后目标2000×1400/x920/y344，旧缓存保持。源码227项/clippy及app/DMG安装签名通过；定向8/8、当前包package/startup/failure-exit/window/lifetime五组通过，完整窗口48/48、生命周期8项。历史间歇失焦/2px未关闭，不继承74其他门禁和回退；新包其余D、备份回退/授权/物理UI待继续，D未完成/E未开启。
 
 **2px坐标定位补充：** [固定历史种子坐标对照](evidence/2026-10-03-d-persistence-coordinate-control/README.md)在原74安装包上分别运行managed/explicit的restore-normal与second-instance，4/4、kernel exit0，精确保存y344不变；只读窗口边界与scale2一致。锁定Tao的尺寸/位置设置异步投递，当前restore立即解除pending存在过渡捕获可能，尚未证明因果；未补偿偏移，历史y342/失焦未关闭，D未完成/E未开启。
