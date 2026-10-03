@@ -1,0 +1,51 @@
+diff --git a/tools/tauri/smoke-profile-import.py b/tools/tauri/smoke-profile-import.py
+index 6a22c67dc..b7ac46da7 100644
+--- a/tools/tauri/smoke-profile-import.py
++++ b/tools/tauri/smoke-profile-import.py
+@@ -7,6 +7,7 @@ This is not acceptance of the historical Wails GUI or its directory locks.
+ """
+ 
+ import argparse
++from contextlib import contextmanager
+ import hashlib
+ import importlib.util
+ import json
+@@ -14,6 +15,7 @@ import os
+ from pathlib import Path
+ import plistlib
+ import signal
++import shutil
+ import subprocess
+ import sys
+ import tempfile
+@@ -141,13 +143,28 @@ def launch(app, identifier, root, phase, configuration):
+                 pass
+ 
+ 
+-def smoke(app_path, legacy_cli=None):
++@contextmanager
++def private_fixture(retain_failed=False):
++    root = Path(tempfile.mkdtemp(prefix="reasonix-profile-smoke-"))
++    try:
++        yield root
++    except BaseException:
++        if retain_failed:
++            print(f"Failed private profile fixture retained: {root}", file=sys.stderr, flush=True)
++        else:
++            shutil.rmtree(root)
++        raise
++    else:
++        shutil.rmtree(root)
++
++
++def smoke(app_path, legacy_cli=None, *, retain_failed=False):
+     app = Path(app_path).resolve()
+     with (app / "Contents/Info.plist").open("rb") as file:
+         identifier = plistlib.load(file)["CFBundleIdentifier"]
+     if package.matching_package_is_running(identifier):
+         raise RuntimeError("a Preview with this identifier is running; close it before acceptance")
+-    with tempfile.TemporaryDirectory(prefix="reasonix-profile-smoke-") as directory:
++    with private_fixture(retain_failed) as directory:
+         root = Path(directory)
+         for name in ("home", "tmp", "project 中文 & spaces"):
+             (root / name).mkdir()

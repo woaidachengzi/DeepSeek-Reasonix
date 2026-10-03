@@ -1,0 +1,21 @@
+{
+  "preview": {
+    "reasonix-tauri": "ecac5751dde271a1c2d4c5cb758e76ad80da5be991d98a348f365e979b1f7248",
+    "reasonix-desktop-bridge": "db15d5210d7008e8bb38baab27d06fdd5e7462a47d9dceea9fd9a390cf952805"
+  },
+  "official": {
+    "reasonix": "5b1ab31424d45c8bf3cfe6a60b11da527df2252aee963d1c0c56352f57945962",
+    "reasonix-desktop": "869b02d8f8a92f5847c1728923fde7153d931e105f26fd2926bfa8feeb863650"
+  },
+  "postcheck": {
+    "previewAndOfficialDigestsUnchanged": true,
+    "strictSignatures": true,
+    "matchingAppsStopped": true,
+    "successfulLegacyFixtureCleaned": true,
+    "matchingBundleIdentifiers": [
+      "io.reasonix.desktop.preview",
+      "com.wails.reasonix-desktop"
+    ],
+    "correctedEarlierPreviewIdentifier": "Earlier assertion used com.reasonix.desktop.preview; authoritative plist identifies io.reasonix.desktop.preview, now checked."
+  }
+}

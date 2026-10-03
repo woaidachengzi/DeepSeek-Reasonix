@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-03）
 
+**当前 ecac5751 全屏/回退补验：** [同包新证据](evidence/2026-10-03-d-initial-presentation-fullscreen-rollback/README.md)两档案各5阶段一次通过，真实AppKit全屏进入/退出did各1、2000×1400/x920/y344精确往返，普通存档原字节/重启/身份保持。当前包实际配置备份应用与官方CLI回读、官方Wails历史/Global附件/检查点回退实际通过，原树与两包摘要/签名保持；错误Preview ID的初次退出检查已保留并从真实plist纠正复验。新增可重跑备份门禁和失败夹具保留，1项Python回归/真实三阶段通过。当前已覆盖回退范围有验证路径，但不代替完整资料/物理UI、任意旧目录互斥或Preview图片兼容；其他D/历史间歇稳定性及A/B/C/正式签名公证仍待完成，D未完成/E未开启。
+
 **隐藏启动生产改造 / review 检查点：** [ecac5751 首次呈现](evidence/2026-10-03-d-initial-presentation/README.md)按 Wails 基线初始隐藏，可信主页面 Finished 与宿主 Ready 联合呈现；早期 Show 合并、重复完成不重开，退出取消排队动作并在执行前再检查。四项状态回归加入，Rust231/5ignored、strict clippy、构建/DMG安装签名通过。同包 package/startup/failure-exit/lifetime 四组与原窗口矩阵 **48/48（两档案各24）** 一次通过，原断言/容差未变、kernel0，原始回执/时序完整归档。单次通过不关闭历史偶发窗口问题；页面未 Finished 的可见恢复、物理 UI/其他 D 与当前包实际官方回退仍待验，全屏不继承旧包。D 未完成/E 未开启，无发布或默认下载授权。
 
 **原exercise两因素对照：** [f6bc6f89页面/Show组合](evidence/2026-10-03-d-minimize-exercise-factors/README.md)新增opt-in分支，原路径/断言不变；八例6过2失败，managed单Show未等页面与explicit原双Show路径均最小化失败/kernel2、Will/Did=0，原始回执完整保留。等页面四例通过，不等也两例通过；不能证明页面根因，重复Show不是必要失败条件。Wails隐藏启动/domReady呈现与当前页面未完成已可操作窗口的差异已核对，下一项收敛可信页面/初始化完成的一次性呈现和启动期请求归属，不仅改测试。当前包Rust227/5ignored、strict clippy、构建/安装签名和package/failure-exit/lifetime三组通过；历史最小化、物理UI/其他D及当前包官方回退仍未关闭，E未开启。

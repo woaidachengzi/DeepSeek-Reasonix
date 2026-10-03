@@ -1,6 +1,6 @@
 # Reasonix Tauri host
 
-最新状态：[e7f5f9ae 当前包补验](../../docs/tauri/evidence/2026-10-03-d-restore-queue-continuation/README.md)。同包13组程序门禁通过（完整窗口48/48），原生.env私有fixture与官方Wails历史/附件/检查点及实际配置备份回退通过。真实权限/物理UI、多显示器拔插、旧钥匙串服务、任意旧目录互斥和历史窗口间歇问题仍待验，D未完成/E未开启，A/B/C及正式签名公证仍阻碍发布。下列带日期的描述为历史现场，不直接代表当前候选。
+最新状态：[ecac5751 隐藏启动及48项窗口回归](../../docs/tauri/evidence/2026-10-03-d-initial-presentation/README.md)、[同包全屏与官方回退](../../docs/tauri/evidence/2026-10-03-d-initial-presentation-fullscreen-rollback/README.md)。可信主页面和宿主就绪后呈现，退出取消排队显示；同包窗口48/48、package/startup/failure-exit/lifetime四组、双档案全屏进入/退出/精确恢复，以及官方Wails历史/附件/检查点和实际配置备份回退通过。不继承旧包原生.env、通知或权限等结果。页面加载失败的可见恢复、真实权限/物理UI、多显示器拔插、旧钥匙串服务、任意旧目录互斥和历史窗口间歇问题仍待验，D未完成/E未开启，A/B/C及正式签名公证仍阻碍发布。下列带日期描述为历史现场，不直接代表当前候选。
 
 2026-10-02 实际窗口验收可用 `python3 tools/tauri/probe-launch-services-profile.py <installed-app> --interactive --observe`。
 在全新私有档案启动并观察最多 300 秒；仅该显式模式启用只读原生窗口快照，
@@ -16,6 +16,8 @@
 token 不放在 macOS 进程列表可见的启动环境或命令行中。
 
 ## 当前平台范围
+
+当前安装包的实际配置备份回退可用 `python3 tools/tauri/smoke-backup-rollback.py '<installed-app>' --legacy-cli '<official-1.38.3-app>/Contents/MacOS/reasonix' --output /private/tmp/new-backup-evidence` 验收（Python 3.11+）。只接受官方内嵌 CLI 固定摘要；备份应用到独立私有目录，验证旧 CLI 回读、原配置/备份保持及正常退出。失败保留私有夹具、成功清理，不修改用户档案，也不代替完整资料或物理 GUI 回退。
 
 安装包 D 门禁可用 `python3 -B tools/tauri/verify-installed-d.py '/path/to/Reasonix Tauri Preview.app' --output /private/tmp/new-evidence` 从仓库根串行复验。
 可用 `--gates dialog-cancel package` 独立复验原生面板取消与正常启动退出；该切片包含菜单/文本剪贴板前置检查，不绕过或替代完整窗口门禁。摘要计算兼容系统 Python 3.9。
