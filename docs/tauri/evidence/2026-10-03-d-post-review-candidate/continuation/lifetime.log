@@ -1,0 +1,24 @@
+Sidecar kernel exit: signalled=False, signal=0, exitCode=0
+native macOS window managed menu-shortcuts: OK
+native macOS host lifetime managed SIGTERM idle: cleanup, originals and same-profile restart OK
+Sidecar kernel exit: signalled=False, signal=0, exitCode=0
+native macOS window managed menu-shortcuts: OK
+native macOS host lifetime managed SIGTERM streaming: cleanup, originals and same-profile restart OK
+Sidecar kernel exit: signalled=False, signal=0, exitCode=0
+native macOS window managed menu-shortcuts: OK
+native macOS host lifetime managed SIGKILL idle: cleanup, originals and same-profile restart OK
+Sidecar kernel exit: signalled=False, signal=0, exitCode=0
+native macOS window managed menu-shortcuts: OK
+native macOS host lifetime managed SIGKILL streaming: cleanup, originals and same-profile restart OK
+Sidecar kernel exit: signalled=False, signal=0, exitCode=0
+native macOS window explicit menu-shortcuts: OK
+native macOS host lifetime explicit SIGTERM idle: cleanup, originals and same-profile restart OK
+Sidecar kernel exit: signalled=False, signal=0, exitCode=0
+native macOS window explicit menu-shortcuts: OK
+native macOS host lifetime explicit SIGTERM streaming: cleanup, originals and same-profile restart OK
+Sidecar kernel exit: signalled=False, signal=0, exitCode=0
+native macOS window explicit menu-shortcuts: OK
+native macOS host lifetime explicit SIGKILL idle: cleanup, originals and same-profile restart OK
+Sidecar kernel exit: signalled=False, signal=0, exitCode=0
+native macOS window explicit menu-shortcuts: OK
+native macOS host lifetime explicit SIGKILL streaming: cleanup, originals and same-profile restart OK

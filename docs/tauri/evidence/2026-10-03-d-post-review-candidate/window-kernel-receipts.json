@@ -1,0 +1,324 @@
+[
+  {
+    "phase": "exercise",
+    "pid": 86548,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "restore-maximized",
+    "pid": 86566,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "restore-normal",
+    "pid": 86582,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "appearance-rollback-unconfigured",
+    "pid": 86600,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "application-hide",
+    "pid": 86616,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "background-close",
+    "pid": 86636,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "menu-shortcuts",
+    "pid": 86654,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "menu-settings-hidden",
+    "pid": 86670,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "menu-settings-minimized",
+    "pid": 86686,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "menu-settings-app-hidden",
+    "pid": 86706,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "task-background-menu-quit",
+    "pid": 86726,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "appearance-dark",
+    "pid": 86761,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "restore-appearance-dark",
+    "pid": 86776,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "restore-appearance-light",
+    "pid": 86797,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "restore-appearance-auto",
+    "pid": 86824,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "appearance-rollback",
+    "pid": 86845,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "restore-appearance-rollback",
+    "pid": 86893,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "clipboard-native",
+    "pid": 86928,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "dialog-cancel",
+    "pid": 86957,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "tray-language",
+    "pid": 86997,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "menu-editing",
+    "pid": 87017,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "second-instance",
+    "pid": 87036,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "close-quit",
+    "pid": 87056,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "restore-close-quit",
+    "pid": 87073,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "exercise",
+    "pid": 87091,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "restore-maximized",
+    "pid": 87115,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "restore-normal",
+    "pid": 87135,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "appearance-rollback-unconfigured",
+    "pid": 87153,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "application-hide",
+    "pid": 87169,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "background-close",
+    "pid": 87186,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "menu-shortcuts",
+    "pid": 87203,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "menu-settings-hidden",
+    "pid": 87221,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "menu-settings-minimized",
+    "pid": 87242,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "menu-settings-app-hidden",
+    "pid": 87257,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "task-background-menu-quit",
+    "pid": 87280,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "appearance-dark",
+    "pid": 87308,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "restore-appearance-dark",
+    "pid": 87353,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "restore-appearance-light",
+    "pid": 87370,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "restore-appearance-auto",
+    "pid": 87387,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "appearance-rollback",
+    "pid": 87405,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "restore-appearance-rollback",
+    "pid": 87423,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "clipboard-native",
+    "pid": 87464,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "dialog-cancel",
+    "pid": 87483,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "tray-language",
+    "pid": 87518,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "menu-editing",
+    "pid": 87539,
+    "rawKernelStatus": 0,
+    "exitCode": 0,
+    "signaled": false
+  },
+  {
+    "phase": "second-instance",
+    "pid": 87565,
+    "rawKernelStatus": 512,
+    "exitCode": 2,
+    "signaled": false
+  }
+]

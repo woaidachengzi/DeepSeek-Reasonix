@@ -1,0 +1,14 @@
+LaunchServices native kernel exit: {"phase": "second-instance", "pid": 88440, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed second-instance: OK
+{"root": "/private/tmp/reasonix-single-instance-control-cy55mbm4", "managed": true, "passed": true}
+LaunchServices native kernel exit: {"phase": "second-instance", "pid": 88461, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+{"root": "/private/tmp/reasonix-single-instance-control-26b249p2", "managed": false, "passed": false}
+Traceback (most recent call last):
+  File "/private/tmp/reasonix-post-review-single-instance-control.py", line 17, in <module>
+    identity=windows.launch(app/'Contents/MacOS/reasonix-tauri',app/'Contents/MacOS/reasonix-desktop-bridge',root,identifier,managed,'second-instance',launch_services=True)
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-native-window.py", line 249, in launch
+    verify_saved_state(app_data, temporary, phase == "exercise")
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-native-window.py", line 68, in verify_saved_state
+    raise RuntimeError(f"native transition overwrote saved normal {key}")
+RuntimeError: native transition overwrote saved normal y

@@ -1,0 +1,94 @@
+LaunchServices native kernel exit: {"phase": "exercise", "pid": 86548, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed exercise: OK
+LaunchServices native kernel exit: {"phase": "restore-maximized", "pid": 86566, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed restore-maximized: OK
+LaunchServices native kernel exit: {"phase": "restore-normal", "pid": 86582, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed restore-normal: OK
+LaunchServices native kernel exit: {"phase": "appearance-rollback-unconfigured", "pid": 86600, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed appearance-rollback-unconfigured: OK
+LaunchServices native kernel exit: {"phase": "application-hide", "pid": 86616, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed application-hide: OK
+LaunchServices native kernel exit: {"phase": "background-close", "pid": 86636, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed background-close: OK
+LaunchServices native kernel exit: {"phase": "menu-shortcuts", "pid": 86654, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed menu-shortcuts: OK
+LaunchServices native kernel exit: {"phase": "menu-settings-hidden", "pid": 86670, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed menu-settings-hidden: OK
+LaunchServices native kernel exit: {"phase": "menu-settings-minimized", "pid": 86686, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed menu-settings-minimized: OK
+LaunchServices native kernel exit: {"phase": "menu-settings-app-hidden", "pid": 86706, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed menu-settings-app-hidden: OK
+LaunchServices native kernel exit: {"phase": "task-background-menu-quit", "pid": 86726, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed task-background-menu-quit: OK
+LaunchServices native kernel exit: {"phase": "appearance-dark", "pid": 86761, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed appearance-dark: OK
+LaunchServices native kernel exit: {"phase": "restore-appearance-dark", "pid": 86776, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed restore-appearance-dark: OK
+LaunchServices native kernel exit: {"phase": "restore-appearance-light", "pid": 86797, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed restore-appearance-light: OK
+LaunchServices native kernel exit: {"phase": "restore-appearance-auto", "pid": 86824, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed restore-appearance-auto: OK
+LaunchServices native kernel exit: {"phase": "appearance-rollback", "pid": 86845, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed appearance-rollback: OK
+LaunchServices native kernel exit: {"phase": "restore-appearance-rollback", "pid": 86893, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed restore-appearance-rollback: OK
+LaunchServices native kernel exit: {"phase": "clipboard-native", "pid": 86928, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed clipboard-native: OK
+LaunchServices native kernel exit: {"phase": "dialog-cancel", "pid": 86957, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed dialog-cancel: OK
+LaunchServices native kernel exit: {"phase": "tray-language", "pid": 86997, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed tray-language: OK
+LaunchServices native kernel exit: {"phase": "menu-editing", "pid": 87017, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed menu-editing: OK
+LaunchServices native kernel exit: {"phase": "second-instance", "pid": 87036, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed second-instance: OK
+LaunchServices native kernel exit: {"phase": "close-quit", "pid": 87056, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed close-quit: OK
+LaunchServices native kernel exit: {"phase": "restore-close-quit", "pid": 87073, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed restore-close-quit: OK
+native macOS window managed: 24/24 stages passed
+LaunchServices native kernel exit: {"phase": "exercise", "pid": 87091, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit exercise: OK
+LaunchServices native kernel exit: {"phase": "restore-maximized", "pid": 87115, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit restore-maximized: OK
+LaunchServices native kernel exit: {"phase": "restore-normal", "pid": 87135, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit restore-normal: OK
+LaunchServices native kernel exit: {"phase": "appearance-rollback-unconfigured", "pid": 87153, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit appearance-rollback-unconfigured: OK
+LaunchServices native kernel exit: {"phase": "application-hide", "pid": 87169, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit application-hide: OK
+LaunchServices native kernel exit: {"phase": "background-close", "pid": 87186, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit background-close: OK
+LaunchServices native kernel exit: {"phase": "menu-shortcuts", "pid": 87203, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit menu-shortcuts: OK
+LaunchServices native kernel exit: {"phase": "menu-settings-hidden", "pid": 87221, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit menu-settings-hidden: OK
+LaunchServices native kernel exit: {"phase": "menu-settings-minimized", "pid": 87242, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit menu-settings-minimized: OK
+LaunchServices native kernel exit: {"phase": "menu-settings-app-hidden", "pid": 87257, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit menu-settings-app-hidden: OK
+LaunchServices native kernel exit: {"phase": "task-background-menu-quit", "pid": 87280, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit task-background-menu-quit: OK
+LaunchServices native kernel exit: {"phase": "appearance-dark", "pid": 87308, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit appearance-dark: OK
+LaunchServices native kernel exit: {"phase": "restore-appearance-dark", "pid": 87353, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit restore-appearance-dark: OK
+LaunchServices native kernel exit: {"phase": "restore-appearance-light", "pid": 87370, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit restore-appearance-light: OK
+LaunchServices native kernel exit: {"phase": "restore-appearance-auto", "pid": 87387, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit restore-appearance-auto: OK
+LaunchServices native kernel exit: {"phase": "appearance-rollback", "pid": 87405, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit appearance-rollback: OK
+LaunchServices native kernel exit: {"phase": "restore-appearance-rollback", "pid": 87423, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit restore-appearance-rollback: OK
+LaunchServices native kernel exit: {"phase": "clipboard-native", "pid": 87464, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit clipboard-native: OK
+LaunchServices native kernel exit: {"phase": "dialog-cancel", "pid": 87483, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit dialog-cancel: OK
+LaunchServices native kernel exit: {"phase": "tray-language", "pid": 87518, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit tray-language: OK
+LaunchServices native kernel exit: {"phase": "menu-editing", "pid": 87539, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit menu-editing: OK
+LaunchServices native kernel exit: {"phase": "second-instance", "pid": 87565, "rawKernelStatus": 512, "exitCode": 2, "signaled": false}
+Private window failure fixture retained: /private/tmp/reasonix-native-window-smoke-a58fr_b0; completed stages: 21
+native macOS window smoke failed: second-instance: native window timeout: second instance focus and geometry; actual=Ok(Object {"appearanceRequests": Number(2), "appearanceSkipped": Number(2), "applicationActivationPolicy": Number(0), "applicationActive": Bool(false), "applicationBecameActive": Number(2), "applicationFinishedLaunching": Bool(true), "applicationHidden": Bool(false), "applicationModalWindowPresent": Bool(false), "applicationOcclusionVisible": Bool(true), "applicationResignedActive": Number(2), "applicationRunning": Bool(true), "becameKey": Number(3), "didDeminiaturize": Number(0), "didMiniaturize": Number(0), "focused": Bool(false), "geometry": Object {"height": Number(1400), "scale": Number(2.0), "width": Number(2000), "x": Number(920), "y": Number(344)}, "mainPageFinished": Bool(true), "maximized": Bool(false), "minimized": Bool(false), "monitors": Array [Object {"height": Number(1966), "scale": Number(2.0), "width": Number(3840), "x": Number(0), "y": Number(60)}, Object {"height": Number(2100), "scale": Number(2.0), "width": Number(3840), "x": Number(-3840), "y": Number(60)}], "nativeAttachedSheet": Bool(false), "nativeCanBecomeKey": Bool(true), "nativeInLiveResize": Bool(false), "nativeIsSheet": Bool(false), "nativeKeyWindow": Bool(false), "nativeMainWindow": Bool(false), "nativeMiniaturizable": Bool(true), "nativeMiniaturized": Bool(false), "nativeOcclusionVisible": Bool(true), "nativeOnActiveSpace": Bool(true), "nativeStyleMask": Number(32783), "nativeTimedTransitions": Array [Object {"elapsedMs": Number(147), "transition": String("appearance-request")}, Object {"elapsedMs": Number(147), "transition": String("appearance-skipped")}, Object {"elapsedMs": Number(165), "transition": String("resigned-key")}, Object {"elapsedMs": Number(184), "transition": String("became-key")}, Object {"elapsedMs": Number(184), "transition": String("application-became-active")}, Object {"elapsedMs": Number(203), "transition": String("resigned-key")}, Object {"elapsedMs": Number(203), "transition": String("application-resigned-active")}, Object {"elapsedMs": Number(234), "transition": String("occlusion-changed")}, Object {"elapsedMs": Number(251), "transition": String("occlusion-changed")}, Object {"elapsedMs": Number(564), "transition": String("became-key")}, Object {"elapsedMs": Number(570), "transition": String("resigned-key")}, Object {"elapsedMs": Number(600), "transition": String("became-key")}, Object {"elapsedMs": Number(601), "transition": String("application-became-active")}, Object {"elapsedMs": Number(602), "transition": String("occlusion-changed")}, Object {"elapsedMs": Number(602), "transition": String("resigned-key")}, Object {"elapsedMs": Number(603), "transition": String("application-resigned-active")}, Object {"elapsedMs": Number(855), "transition": String("appearance-request")}, Object {"elapsedMs": Number(855), "transition": String("appearance-skipped")}], "nativeTransitions": Array [String("appearance-request"), String("appearance-skipped"), String("resigned-key"), String("became-key"), String("application-became-active"), String("resigned-key"), String("application-resigned-active"), String("occlusion-changed"), String("occlusion-changed"), String("became-key"), String("resigned-key"), String("became-key"), String("application-became-active"), String("occlusion-changed"), String("resigned-key"), String("application-resigned-active"), String("appearance-request"), String("appearance-skipped")], "nativeVisible": Bool(true), "nativeWindowLevel": Number(0), "nativeWindowNumber": Number(8980), "occlusionChanges": Number(3), "reopenEvents": Number(0), "resignedKey": Number(4), "restoreCompletions": Number(1), "restoreRequests": Number(1), "runningActivationPolicy": Number(0), "runningApplicationActive": Bool(false), "visible": Bool(true), "willMiniaturize": Number(0)})

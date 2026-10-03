@@ -1,5 +1,7 @@
 # Reasonix Tauri host
 
+最新状态：[371a731af 的真实安装候选 74fefe10](../../docs/tauri/evidence/2026-10-03-d-post-review-candidate/README.md)。12 组程序门禁与当前包回退通过；完整窗口托管24/24、显式单实例失焦失败，独立对照另有2px持久化差异。原生全局凭据fixture链路通过，系统授权与物理UI仍待验，D未完成/E未开启。下面带日期的窗口描述是历史现场，不直接代表当前候选。
+
 2026-10-02 实际窗口验收可用 `python3 tools/tauri/probe-launch-services-profile.py <installed-app> --interactive --observe`。
 在全新私有档案启动并观察最多 300 秒；仅该显式模式启用只读原生窗口快照，
 不替用户操作窗口。真实 Quit 后用确切 PID 的 kernel 回执核对退出码与 sidecar/ready 清理，
