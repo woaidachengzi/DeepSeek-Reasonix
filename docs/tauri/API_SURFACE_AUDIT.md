@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-03）
 
+**同包时序观测：** [74fefe10前台/单实例时序](evidence/2026-10-03-d-activation-timeline/README.md)未改生产代码；首版managed四阶段通过，explicit单实例复现短暂key约15ms后失焦/kernel2。首版getter因未服务run loop可能陈旧，不作归因。修正只读事件观察器后explicit四阶段通过，收到第二实例退出及主实例随后激活；尚缺修正版失败时序，不能视为修复/48阶段通过。下一项检验退出事件协调，2px问题仍待定位，D未完成/E未开启。
+
 **单实例定位补充：** [协作激活实验](evidence/2026-10-03-d-singleton-handoff-control/README.md)源码回归/clippy及构建安装通过，但实验cb85c6b5在managed前三阶段通过后second-instance仍失焦/kernel2，explicit未运行；无效生产改动已撤回，源码恢复此前提交，实验包不晋升候选。CUA超时；只读最终控制台已登录/onConsole，锁定字段缺失，测试后前台为另一应用，不能推定失败因果。下一步按失败PID/时序捕获前台切换及2px持久化差异；当前74的验收范围不变，D未完成/E未开启。
 
 **最新真实安装候选：** [提交后 74fefe10 验收](evidence/2026-10-03-d-post-review-candidate/README.md)，源码371a731af，sidecar16e3761d/DMGb3a4555f，构建、只读复制安装、严格签名通过；12个不同程序门禁、双屏8项、当前包官方历史/附件/检查点及实际配置备份回退通过。全局 `.env` 迁移在当前安装sidecar与原生私有钥匙串fixture中实际1/1通过，系统授权/设置页/跨档案仍待验。完整window托管24/24、显式完成21阶段后second-instance失焦/kernel2；独立同阶段managed通过，explicit原生exit0但精确持久化y344→342拒绝，均保留。下一项优先定位这两个窗口观测，不继承旧c71的48/48。D未完成/E未开启。

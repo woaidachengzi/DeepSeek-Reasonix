@@ -1,0 +1,9 @@
+{
+  "artifactSha256": {
+    "reasonix-tauri": "74fefe10fb3b8a8be689f58c1eef6505a6252c47a0bd4a474f8a35c4328cbae8",
+    "reasonix-desktop-bridge": "16e3761d616c6bc751acd4a3250d4f7b2851ac985ecd2d3f5219e21d4423d093"
+  },
+  "signatureStrictPassed": true,
+  "previewAndObserversRemaining": false,
+  "readinessRemaining": false
+}

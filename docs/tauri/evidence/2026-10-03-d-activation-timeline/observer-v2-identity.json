@@ -1,0 +1,6 @@
+{
+  "sourceHead": "75a9857ea830d73a6afabfda2e36a9f4057263f2",
+  "observerSourceSha256": "59a71199fe0d7bc133cb5b4d4d67832bd956fb4b18e080dcdfcb78efa1485f4c",
+  "observerBinarySha256": "c04c54d1f93dfc20abd8419c4fb2abaf5dbd5c0f28abecc05097663d07da0815",
+  "scope": "Read-only metadata plus original four-stage native acceptance; no production change or full gate pass."
+}
