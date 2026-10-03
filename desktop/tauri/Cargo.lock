@@ -3176,6 +3176,7 @@ dependencies = [
  "async-io",
  "base64 0.22.1",
  "block2",
+ "dispatch2",
  "futures-lite",
  "gdk-pixbuf",
  "gio",

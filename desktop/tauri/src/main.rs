@@ -3635,14 +3635,23 @@ fn setup_preview(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     };
     main_builder.build()?;
     let window_state = PreviewWindowState::for_app(app)?;
+    // Register before a queued native restore can complete or reenter setup.
+    app.manage(window_state);
     let host_preferences = HostPreferences::for_app(app).map_err(std::io::Error::other)?;
     let workbench_catalog =
         WorkbenchCatalog::for_app(app).map_err(std::io::Error::other)?;
     let project_catalog =
         WorkbenchProjectCatalog::for_app(app).map_err(std::io::Error::other)?;
     if let Some(window) = app.get_webview_window("main") {
+        let window_state = app.state::<PreviewWindowState>();
         window_state.restore(&window);
         window_state.capture(&window);
+        #[cfg(target_os = "macos")]
+        if std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref() == Ok("restore-normal") {
+            window_state.verify_pending_capture().map_err(std::io::Error::other)?;
+            native_window_smoke::record(app.handle(), "restore-capture-fenced")
+                .map_err(std::io::Error::other)?;
+        }
         window
             .set_zoom(host_preferences.zoom_factor())
             .map_err(std::io::Error::other)?;
@@ -3685,7 +3694,6 @@ fn setup_preview(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
 
     app.manage(supervisor);
     app.manage(profile);
-    app.manage(window_state);
     app.manage(host_preferences);
     app.manage(workbench_catalog);
     app.manage(project_catalog);

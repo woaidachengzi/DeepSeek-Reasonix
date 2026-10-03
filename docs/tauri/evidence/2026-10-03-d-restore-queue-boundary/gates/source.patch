@@ -1,0 +1,159 @@
+diff --git a/desktop/tauri/Cargo.lock b/desktop/tauri/Cargo.lock
+index 371bb8525..be34052c4 100644
+--- a/desktop/tauri/Cargo.lock
++++ b/desktop/tauri/Cargo.lock
+@@ -3176,6 +3176,7 @@ dependencies = [
+  "async-io",
+  "base64 0.22.1",
+  "block2",
++ "dispatch2",
+  "futures-lite",
+  "gdk-pixbuf",
+  "gio",
+diff --git a/desktop/tauri/Cargo.toml b/desktop/tauri/Cargo.toml
+index 6fade418f..628de1a81 100644
+--- a/desktop/tauri/Cargo.toml
++++ b/desktop/tauri/Cargo.toml
+@@ -29,6 +29,7 @@ percent-encoding = "2"
+ tauri-plugin-shell = "2.3.6"
+ 
+ [target.'cfg(target_os = "macos")'.dependencies]
++dispatch2 = "0.3.1"
+ objc2 = "0.6.4"
+ objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSApplication", "NSRunningApplication", "NSAppearance", "NSResponder", "NSWindow", "NSView", "NSPasteboard", "NSMenu", "NSMenuItem", "NSEvent", "NSWorkspace", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSGraphicsContext", "NSOpenPanel", "NSSavePanel", "objc2-core-graphics"] }
+ objc2-web-kit = { version = "0.3.2", default-features = false, features = ["std", "WKWebView", "WKWebViewConfiguration", "WKWebsiteDataStore", "block2", "objc2-app-kit"] }
+diff --git a/desktop/tauri/src/main.rs b/desktop/tauri/src/main.rs
+index 47d77dba0..ee3b1b0f2 100644
+--- a/desktop/tauri/src/main.rs
++++ b/desktop/tauri/src/main.rs
+@@ -3635,14 +3635,23 @@ fn setup_preview(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
+     };
+     main_builder.build()?;
+     let window_state = PreviewWindowState::for_app(app)?;
++    // Register before a queued native restore can complete or reenter setup.
++    app.manage(window_state);
+     let host_preferences = HostPreferences::for_app(app).map_err(std::io::Error::other)?;
+     let workbench_catalog =
+         WorkbenchCatalog::for_app(app).map_err(std::io::Error::other)?;
+     let project_catalog =
+         WorkbenchProjectCatalog::for_app(app).map_err(std::io::Error::other)?;
+     if let Some(window) = app.get_webview_window("main") {
++        let window_state = app.state::<PreviewWindowState>();
+         window_state.restore(&window);
+         window_state.capture(&window);
++        #[cfg(target_os = "macos")]
++        if std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref() == Ok("restore-normal") {
++            window_state.verify_pending_capture().map_err(std::io::Error::other)?;
++            native_window_smoke::record(app.handle(), "restore-capture-fenced")
++                .map_err(std::io::Error::other)?;
++        }
+         window
+             .set_zoom(host_preferences.zoom_factor())
+             .map_err(std::io::Error::other)?;
+@@ -3685,7 +3694,6 @@ fn setup_preview(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
+ 
+     app.manage(supervisor);
+     app.manage(profile);
+-    app.manage(window_state);
+     app.manage(host_preferences);
+     app.manage(workbench_catalog);
+     app.manage(project_catalog);
+diff --git a/desktop/tauri/src/window_state.rs b/desktop/tauri/src/window_state.rs
+index 516dc8f96..0279c7345 100644
+--- a/desktop/tauri/src/window_state.rs
++++ b/desktop/tauri/src/window_state.rs
+@@ -22,6 +22,8 @@ pub struct PreviewWindowState {
+     path: PathBuf,
+     normal: Mutex<Option<SavedWindowState>>,
+     restore_pending: AtomicBool,
++    #[cfg(target_os = "macos")]
++    restore_queued: AtomicBool,
+ }
+ 
+ #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+@@ -121,10 +123,18 @@ impl PreviewWindowState {
+             path,
+             normal,
+             restore_pending,
++            #[cfg(target_os = "macos")]
++            restore_queued: AtomicBool::new(false),
+         })
+     }
+ 
+     pub fn restore(&self, window: &WebviewWindow) {
++        // The runtime handles setters inline only on its UI thread. On macOS
++        // Tao then submits the actual AppKit mutations to the main queue.
++        #[cfg(target_os = "macos")]
++        if objc2::MainThreadMarker::new().is_none() {
++            return;
++        }
+         if !self.restore_pending.load(Ordering::SeqCst) {
+             return;
+         }
+@@ -162,6 +172,10 @@ impl PreviewWindowState {
+                 }
+             })
+             .collect();
++        #[cfg(target_os = "macos")]
++        if self.restore_queued.swap(true, Ordering::SeqCst) {
++            return;
++        }
+         if let Some((x, y, width, height)) = restored_bounds(&state, &areas) {
+             if window
+                 .set_size(tauri::PhysicalSize::new(width, height))
+@@ -170,12 +184,34 @@ impl PreviewWindowState {
+                     .set_position(tauri::PhysicalPosition::new(x, y))
+                     .is_err()
+             {
++                #[cfg(target_os = "macos")]
++                self.restore_queued.store(false, Ordering::SeqCst);
+                 return;
+             }
+         }
+         if state.maximized && window.maximize().is_err() {
++            #[cfg(target_os = "macos")]
++            self.restore_queued.store(false, Ordering::SeqCst);
+             return;
+         }
++        #[cfg(target_os = "macos")]
++        {
++            let window = window.clone();
++            // Queue behind Tao's size, position and maximization mutations.
++            // Until this boundary, capture/save must retain the original normal
++            // geometry. Reentrant focus/resize events must not enqueue it twice.
++            dispatch2::DispatchQueue::main().exec_async(move || {
++                if let Some(state) = window.app_handle().try_state::<PreviewWindowState>() {
++                    state.restore_pending.store(false, Ordering::SeqCst);
++                    state.restore_queued.store(false, Ordering::SeqCst);
++                    state.capture(&window);
++                    if std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref() == Ok("restore-normal") {
++                        let _ = crate::native_window_smoke::record(window.app_handle(), "restore-queue-drained");
++                    }
++                }
++            });
++        }
++        #[cfg(not(target_os = "macos"))]
+         self.restore_pending.store(false, Ordering::SeqCst);
+     }
+ 
+@@ -235,6 +271,20 @@ impl PreviewWindowState {
+         write_state(&self.path, &encoded)
+             .map_err(|error| format!("write main window state {}: {error}", self.path.display()))
+     }
++
++    /// Opt-in native regression: setup captured while Tao's mutations are queued.
++    #[cfg(target_os = "macos")]
++    pub(crate) fn verify_pending_capture(&self) -> Result<(), String> {
++        let cached = self.normal.lock().unwrap_or_else(|e| e.into_inner()).clone();
++        if !self.restore_pending.load(Ordering::SeqCst)
++            || !self.restore_queued.load(Ordering::SeqCst)
++            || cached.is_none()
++            || cached != read_state(&self.path)
++        {
++            return Err("queued restore allowed capture to replace the saved normal geometry".into());
++        }
++        Ok(())
++    }
+ }
+ 
+ fn read_state(path: &std::path::Path) -> Option<SavedWindowState> {

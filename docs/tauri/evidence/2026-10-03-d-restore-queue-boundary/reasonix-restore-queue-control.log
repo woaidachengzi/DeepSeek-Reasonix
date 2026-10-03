@@ -1,0 +1,18 @@
+LaunchServices native kernel exit: {"phase": "exercise", "pid": 4020, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed exercise: OK
+LaunchServices native kernel exit: {"phase": "restore-maximized", "pid": 4045, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed restore-maximized: OK
+LaunchServices native kernel exit: {"phase": "restore-normal", "pid": 4063, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed restore-normal: OK
+LaunchServices native kernel exit: {"phase": "second-instance", "pid": 4084, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed second-instance: OK
+{"root": "/private/tmp/reasonix-restore-queue-control-53d9qgwq", "managed": true, "passed": true}
+LaunchServices native kernel exit: {"phase": "exercise", "pid": 4105, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit exercise: OK
+LaunchServices native kernel exit: {"phase": "restore-maximized", "pid": 4122, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit restore-maximized: OK
+LaunchServices native kernel exit: {"phase": "restore-normal", "pid": 4167, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit restore-normal: OK
+LaunchServices native kernel exit: {"phase": "second-instance", "pid": 4185, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit second-instance: OK
+{"root": "/private/tmp/reasonix-restore-queue-control-gbg3bfm0", "managed": false, "passed": true}

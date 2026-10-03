@@ -1,0 +1,19 @@
+# macOS 恢复排队完成后才开放窗口捕获
+
+修复已确认的状态边界：Tauri运行时在UI线程直接处理setter，但Tao0.35.3再将AppKit尺寸、位置和最大化操作异步投递到主队列。此前restore()在这些调用返回时便解除restore_pending，setup立即capture可能缓存初始窗口而不是保存的正常几何。并不声称此为所有历史失焦或2px漂移的根因。
+
+现在限定macOS restore在UI线程执行；设置restore_queued阻止重入focus/resize重复恢复，setter拒绝时解除queued并保留pending；设置后在同一主串行队列排入一次完成回调，完成之前capture/save保留旧正常值。回调开放捕获并读取最终窗口。没有定时器、轮询重试、偏移补偿或放宽容差。window_state先注册到App管理再发起恢复，避免队列回调或setup重入无法取得状态。Windows/Linux路径保持原先行为（用户已延期）。dispatch2为原锁文件已存在0.3.1，仅添加直接依赖，没有新增renderer命令或capability。
+
+原生restore-normal新增明确断言：setup调用capture时必须仍pending/queued且缓存与原保存JSON一致；否则启动失败。实际双档案记录restore-capture-fenced时读到2560×1640/x640/y142，restore-queue-drained后才读到目标2000×1400/x920/y344。保护旧缓存的断言通过，这证明排队期间确有不同几何，并证明此边界受到验收；尚不证明历史y342属于同一原因。边界trace在两个control/phase-receipts/restore-normal。正常用户流程不运行此断言/trace，沿用既有opt-in native smoke环境。
+
+## 当前包与验证
+
+源码HEAD5b9f21a16加4个生产文件未提交差异，固定source.patch在gates内；源码回归strict clippy通过，Rust227 passed /5 ignored，Rust真实bridge测试使用此前同版Go源sidecar，不能当新sidecar专项验收。完整app/DMG构建和本地ad-hoc签名、只读DMG复制安装通过。host e7f5f9ae76c5f64c2330dc83082e292da66b35f4834abcb2f4dc930d4bbd6a7a，sidecar45c469eab915637650996dd94861213b4edbcd6267937f86e92f5a4a55a6ce83，DMGdecaeb013a46457e8f61c8ecf5c863ffb27299299b8c7ef703efabdb53e842a1，完整身份和位置见install.json。
+
+先行managed/explicit各exercise/restore-maximized/restore-normal/second-instance，8/8通过，保持同一凭据身份与精确持久化，8个真实宿主kernel exit0。随后冻结当前源码/脚本/安装包运行5组：package、startup、failure-exit、window、lifetime全部通过。window为原完整LaunchServices矩阵managed24/24+explicit24/24（含菜单/clipboard/dialog cancel/tray/edit/singleton/close/restart），48个原宿主kernel exit0；不是带观察器重复挑选的成功子集。startup 12个中断与原目录保持/重启通过；lifetime 8项双档案SIGTERM/SIGKILL idle/streaming清理与重启通过，sidecar退出均0。最后严格签名通过，无匹配Preview实例。精确原生日志、冻结工具和源码patch均归档；不复制HOME、私有钥匙串、用户剪贴板或程序二进制。
+
+## Review与验收边界
+
+完成回调只使用Send的Tauri窗口句柄，在主队列取得已注册App状态；不使用unsafe Send/AppKit对象跨线程。queued保护在所有setter错误路径释放，pending继续阻止覆盖；无活动显示器时保持原早返回，原保存值不被重写。实际最大化与普通恢复、边界断言、完整矩阵及退出生命周期通过。源码diffcheck与manifest校验通过，本轮生产改动保留并可提交。
+
+当前e7候选只具以上5组当前包验收，不能继承74/c71的其他门禁/钥匙串fixture/官方回退证据；其他D门禁、当前包备份与旧Wails回退仍须继续。历史间歇单实例失焦及2px精确持久化失败不删除，不宣布长期稳定或全部根因修复。D未完成/E未开启；物理菜单/快捷键/IME、权限与钥匙串授权、多显示器拔插/pending、其他A/B/C缺口按主清单保留。正式签名公证、发布与默认下载仍未授权；未发布、推送或切换下载。

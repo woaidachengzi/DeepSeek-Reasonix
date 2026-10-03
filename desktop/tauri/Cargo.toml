@@ -29,6 +29,7 @@ percent-encoding = "2"
 tauri-plugin-shell = "2.3.6"
 
 [target.'cfg(target_os = "macos")'.dependencies]
+dispatch2 = "0.3.1"
 objc2 = "0.6.4"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSApplication", "NSRunningApplication", "NSAppearance", "NSResponder", "NSWindow", "NSView", "NSPasteboard", "NSMenu", "NSMenuItem", "NSEvent", "NSWorkspace", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSGraphicsContext", "NSOpenPanel", "NSSavePanel", "objc2-core-graphics"] }
 objc2-web-kit = { version = "0.3.2", default-features = false, features = ["std", "WKWebView", "WKWebViewConfiguration", "WKWebsiteDataStore", "block2", "objc2-app-kit"] }

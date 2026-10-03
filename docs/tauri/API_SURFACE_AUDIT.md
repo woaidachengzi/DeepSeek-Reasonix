@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-03）
 
+**当前恢复修复候选：** [e7f5f9ae恢复队列边界](evidence/2026-10-03-d-restore-queue-boundary/README.md)保留pending至主队列setter后完成，阻止重入并提前注册状态；真实断言捕获过渡2560×1640/x640/y142后目标2000×1400/x920/y344，旧缓存保持。源码227项/clippy及app/DMG安装签名通过；定向8/8、当前包package/startup/failure-exit/window/lifetime五组通过，完整窗口48/48、生命周期8项。历史间歇失焦/2px未关闭，不继承74其他门禁和回退；新包其余D、备份回退/授权/物理UI待继续，D未完成/E未开启。
+
 **2px坐标定位补充：** [固定历史种子坐标对照](evidence/2026-10-03-d-persistence-coordinate-control/README.md)在原74安装包上分别运行managed/explicit的restore-normal与second-instance，4/4、kernel exit0，精确保存y344不变；只读窗口边界与scale2一致。锁定Tao的尺寸/位置设置异步投递，当前restore立即解除pending存在过渡捕获可能，尚未证明因果；未补偿偏移，历史y342/失焦未关闭，D未完成/E未开启。
 
 **完整窗口时序补充：** [74fefe10逐阶段只读时序](evidence/2026-10-03-d-full-window-timeline/README.md)使用原完整矩阵与精确断言，managed24/24、explicit24/24，本次48/48与全部kernel exit0，签名和进程清理通过。两种单实例阶段均记录第二退出后主激活。生产源码未改，历史失焦/2px漂移与失败实验仍保留，不能称根因修复或稳定性达标；D未完成/E未开启。
