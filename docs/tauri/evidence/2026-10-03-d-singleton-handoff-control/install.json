@@ -1,0 +1,9 @@
+{
+  "app": "/private/tmp/reasonix-d-singleton-handoff-installed-27izy5u7/Reasonix Tauri Preview.app",
+  "dmg": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri Preview_0.1.0_aarch64.dmg",
+  "dmgSha256": "ee881a1d06b08acfbe2f879ae2d1f0fbb2e25333ce1ac6f6a4d92c73e95b24ad",
+  "artifactSha256": {
+    "reasonix-tauri": "cb85c6b52aa7a82f8cd5e74e2a06297a98c4aea928236c4afc2a34111ee5511c",
+    "reasonix-desktop-bridge": "26939f1bfac4d46ded6541e1d6315a05dfcdcc7146b611b5c31f14eb8cc7de50"
+  }
+}

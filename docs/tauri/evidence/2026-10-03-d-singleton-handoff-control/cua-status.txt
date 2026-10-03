@@ -1,0 +1,1 @@
+cua.getState timeout after 34.8785 seconds; kernel reset. Not evidence of screen lock. No retry or UI automation performed.

@@ -1,0 +1,37 @@
+warning: `/Users/jerry/.cargo/config` is deprecated in favor of `config.toml`
+  |
+  = help: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+warning: `/Users/jerry/.cargo/config` is deprecated in favor of `config.toml`
+  |
+  = help: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+   Compiling reasonix-tauri v0.1.0 (/Users/jerry/temp/app/reasonix-tauri/desktop/tauri)
+error[E0599]: no method named `processIdentifier` found for reference `&objc2::rc::Retained<objc2_app_kit::NSRunningApplication>` in the current scope
+  --> src/single_instance_activation.rs:19:14
+   |
+19 |         peer.processIdentifier() != std::process::id() as i32
+   |              ^^^^^^^^^^^^^^^^^ method not found in `&objc2::rc::Retained<objc2_app_kit::NSRunningApplication>`
+
+error[E0283]: type annotations needed for `tauri::plugin::PluginApi<tauri_runtime_wry::Wry<tauri::EventLoopMessage>, _>`
+    --> src/main.rs:3726:26
+     |
+3725 |         .plugin(tauri::plugin::Builder::new("singleton-activation")
+     |                 ---------------------- type must be known at this point
+3726 |             .setup(|app, _| {
+     |                          ^
+     |
+     = note: cannot satisfy `_: _::_serde::de::DeserializeOwned`
+note: required by a bound in `tauri::plugin::Builder`
+    --> /Users/jerry/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/tauri-2.11.6/src/plugin.rs:264:35
+     |
+ 264 | pub struct Builder<R: Runtime, C: DeserializeOwned = ()> {
+     |                                   ^^^^^^^^^^^^^^^^ required by this bound in `Builder`
+help: consider giving this closure parameter an explicit type, where the type for type parameter `C` is specified
+     |
+3726 |             .setup(|app, _: tauri::plugin::PluginApi<_, C>| {
+     |                           ++++++++++++++++++++++++++++++++
+
+Some errors have detailed explanations: E0283, E0599.
+For more information about an error, try `rustc --explain E0283`.
+error: could not compile `reasonix-tauri` (bin "reasonix-tauri") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `reasonix-tauri` (bin "reasonix-tauri" test) due to 2 previous errors

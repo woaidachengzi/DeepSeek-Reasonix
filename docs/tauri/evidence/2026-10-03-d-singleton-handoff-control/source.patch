@@ -1,0 +1,73 @@
+diff --git a/desktop/tauri/Cargo.lock b/desktop/tauri/Cargo.lock
+index 371bb8525..f344aa0be 100644
+--- a/desktop/tauri/Cargo.lock
++++ b/desktop/tauri/Cargo.lock
+@@ -2519,6 +2519,7 @@ checksum = "d49e936b501e5c5bf01fda3a9452ff86dc3ea98ad5f283e1455153142d97518c"
+ dependencies = [
+  "bitflags 2.13.2",
+  "block2",
++ "libc",
+  "objc2",
+  "objc2-core-foundation",
+  "objc2-core-graphics",
+diff --git a/desktop/tauri/Cargo.toml b/desktop/tauri/Cargo.toml
+index 6fade418f..f2a24e569 100644
+--- a/desktop/tauri/Cargo.toml
++++ b/desktop/tauri/Cargo.toml
+@@ -30,7 +30,7 @@ tauri-plugin-shell = "2.3.6"
+ 
+ [target.'cfg(target_os = "macos")'.dependencies]
+ objc2 = "0.6.4"
+-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSApplication", "NSRunningApplication", "NSAppearance", "NSResponder", "NSWindow", "NSView", "NSPasteboard", "NSMenu", "NSMenuItem", "NSEvent", "NSWorkspace", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSGraphicsContext", "NSOpenPanel", "NSSavePanel", "objc2-core-graphics"] }
++objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "libc", "NSApplication", "NSRunningApplication", "NSAppearance", "NSResponder", "NSWindow", "NSView", "NSPasteboard", "NSMenu", "NSMenuItem", "NSEvent", "NSWorkspace", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSGraphicsContext", "NSOpenPanel", "NSSavePanel", "objc2-core-graphics"] }
+ objc2-web-kit = { version = "0.3.2", default-features = false, features = ["std", "WKWebView", "WKWebViewConfiguration", "WKWebsiteDataStore", "block2", "objc2-app-kit"] }
+ objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSURL", "NSData", "NSDictionary", "NSGeometry", "NSBundle", "NSError", "NSObject", "NSArray", "NSNotification", "NSOperation", "block2"] }
+ objc2-core-graphics = { version = "0.3.2", default-features = false, features = ["std", "CGBitmapContext", "CGColorSpace", "CGContext", "CGGeometry", "CGImage"] }
+diff --git a/desktop/tauri/src/main.rs b/desktop/tauri/src/main.rs
+index 47d77dba0..42e97cd8f 100644
+--- a/desktop/tauri/src/main.rs
++++ b/desktop/tauri/src/main.rs
+@@ -38,6 +38,8 @@ mod opener_catalog;
+ mod protocol_generated;
+ mod runtime_info;
+ mod session_shadow;
++#[cfg(target_os = "macos")]
++mod single_instance_activation;
+ #[cfg(test)]
+ mod theme_asset_scope_tests;
+ mod tray;
+@@ -3720,6 +3722,15 @@ fn main() {
+             .open_js_links_on_click(false)
+             .build())
+         .plugin(tauri_plugin_clipboard_manager::init())
++        .plugin(tauri::plugin::Builder::<tauri::Wry, ()>::new("singleton-activation")
++            .setup(|app, _| {
++                #[cfg(target_os = "macos")]
++                single_instance_activation::yield_to_existing(&app.config().identifier);
++                #[cfg(not(target_os = "macos"))]
++                let _ = app;
++                Ok(())
++            })
++            .build())
+         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+             // When a second instance is launched, focus the existing window
+             tray::show_main_window(app);
+diff --git a/desktop/tauri/src/tray.rs b/desktop/tauri/src/tray.rs
+index 69c37c433..f6cb9d985 100644
+--- a/desktop/tauri/src/tray.rs
++++ b/desktop/tauri/src/tray.rs
+@@ -53,6 +53,14 @@ pub fn show_main_window(app: &tauri::AppHandle) {
+             let _ = window.unminimize();
+             let _ = window.show();
+             let _ = window.set_focus();
++            #[cfg(target_os = "macos")]
++            if let Some(main_thread) = objc2::MainThreadMarker::new() {
++                let application = objc2_app_kit::NSApplication::sharedApplication(main_thread);
++                use objc2_foundation::NSObjectProtocol;
++                if application.respondsToSelector(objc2::sel!(activate)) {
++                    application.activate();
++                }
++            }
+         }
+         #[cfg(target_os = "macos")]
+         crate::native_window_smoke::observe_restore(&handle, true);
