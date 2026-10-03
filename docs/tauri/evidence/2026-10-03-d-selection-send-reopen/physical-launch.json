@@ -1,0 +1,10 @@
+{
+  "app": "/private/tmp/reasonix-d-selection-send-installed-17bg3tz9/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-launch-services-rviz9fng",
+  "identifier": "io.reasonix.desktop.preview",
+  "pid": 37262,
+  "sidecarPid": 37269,
+  "openerPid": 37260,
+  "profile": "explicit",
+  "interactive": true
+}

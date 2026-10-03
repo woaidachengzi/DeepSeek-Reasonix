@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-inactive-display-window-state.py", line 80, in <module>
+    smoke(args.app.resolve())
+    ~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-inactive-display-window-state.py", line 38, in smoke
+    require_inactive_displays()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-inactive-display-window-state.py", line 34, in require_inactive_displays
+    raise RuntimeError("zero active CoreGraphics displays required; conditional gate is not applicable")
+RuntimeError: zero active CoreGraphics displays required; conditional gate is not applicable

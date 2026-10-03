@@ -1,0 +1,8 @@
+{"app": "/private/tmp/reasonix-d-selection-send-installed-17bg3tz9/Reasonix Tauri Preview.app", "root": "/private/tmp/reasonix-launch-services-rviz9fng", "identifier": "io.reasonix.desktop.preview", "pid": 37262, "sidecarPid": 37269, "openerPid": 37260, "profile": "explicit", "interactive": true}
+Traceback (most recent call last):
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/probe-launch-services-profile.py", line 244, in <module>
+    identities = [launch(app, identifier, managed, options.interactive, options.observe, options.failure_exit, options.wait_seconds, options.reuse_root, options.native_phase)
+                  ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/probe-launch-services-profile.py", line 161, in launch
+    raise RuntimeError("LaunchServices host did not publish an exit receipt")
+RuntimeError: LaunchServices host did not publish an exit receipt

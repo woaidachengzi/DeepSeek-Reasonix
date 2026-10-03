@@ -1,6 +1,6 @@
 # Reasonix Tauri host
 
-最新状态：[b4cbb6be 选区引用与当前包验收](../../docs/tauri/evidence/2026-10-03-d-selection-reference/README.md)。Tauri实际聊天入口接入引用卡片、草稿隔离、去重/移除和quoted-context格式；组件发送/失败保留通过，当前包实际按钮/synthetic Cmd+L与完整剪贴板恢复、五组程序门禁及原窗口48/48通过。真实第二轮引用provider请求、物理UI/配置快捷键和其他D仍待验，不继承此前ecac的官方回退或旧包权限/钥匙串/通知结果。D未完成/E未开启，A/B/C及正式签名公证仍阻碍发布。下列带日期描述为历史现场，不直接代表当前候选。
+最新状态：[b6f7003f 实际引用发送/历史重开及 D 补验](../../docs/tauri/evidence/2026-10-03-d-selection-send-reopen/README.md)。两档案实际第二轮引用由本机 fake provider 验证共享 quoted-context，普通退出重开后历史保持、协议隐藏且草稿不重放。当前包14个程序门禁、实际备份应用及官方 Wails 历史/附件/检查点回退通过；Rust231/5ignored、strict clippy、构建/安装签名与清理通过。零显示器前置条件失败、物理输入未确认且 Mac 锁定；本包完整48阶段/权限钥匙串交互等仍待验。D未完成/E未开启，A/B/C及正式签名公证仍阻碍发布。下列带日期描述为历史现场，不直接代表当前候选。
 
 2026-10-02 实际窗口验收可用 `python3 tools/tauri/probe-launch-services-profile.py <installed-app> --interactive --observe`。
 在全新私有档案启动并观察最多 300 秒；仅该显式模式启用只读原生窗口快照，

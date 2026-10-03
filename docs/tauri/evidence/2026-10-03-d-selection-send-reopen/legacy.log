@@ -1,0 +1,9 @@
+Private history test root: /private/tmp/reasonix-official-wails-history-jpdh9f4l
+official Wails before-Preview: original history, live session writer refusal, native quit and cleanup: OK
+packaged macOS profile import, real bridge settings, private files, and cleanup: OK
+packaged macOS profile restore, real bridge settings, private files, and cleanup: OK
+packaged macOS profile explicit, real bridge settings, private files, and cleanup: OK
+official Wails after-Preview: original history, live session writer refusal, native quit and cleanup: OK
+Official Global file/text+image references and edit checkpoints survived Preview; real legacy resume/second checkpoint: OK
+Official legacy latest code rewind restored the actual preimage; earlier conflict refused, transcript/attachments preserved, no provider request: OK
+Official old GUI history rollback, config readback and Preview full original protection: OK

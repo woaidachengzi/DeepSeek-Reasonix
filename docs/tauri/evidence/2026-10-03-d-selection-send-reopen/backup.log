@@ -1,0 +1,5 @@
+packaged macOS profile import, real bridge settings, private files, and cleanup: OK
+packaged macOS profile restore, real bridge settings, private files, and cleanup: OK
+packaged macOS profile explicit, real bridge settings, private files, and cleanup: OK
+legacy CLI read-only stable config compatibility after Preview exit: OK
+Actual config backup applied, official CLI readback and original preservation: OK

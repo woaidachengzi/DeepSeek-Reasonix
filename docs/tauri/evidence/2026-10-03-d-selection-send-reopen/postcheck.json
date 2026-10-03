@@ -1,0 +1,14 @@
+{
+  "artifactSha256": {
+    "reasonix-tauri": "b6f7003fb08ab9a6cf8229eafefebb0764ffac3b12fadcfe30367209b96df613",
+    "reasonix-desktop-bridge": "28a5c67da9208fb809fe601f35444436bd2fd835ed342b46b5f3b3bd51c3cf18"
+  },
+  "matchingBundleIdentifiers": [
+    "io.reasonix.desktop.preview",
+    "com.wails.reasonix-desktop"
+  ],
+  "strictSignatures": true,
+  "matchingAppsStopped": true,
+  "physicalFixtureRetained": true,
+  "physicalSidecarsRemaining": []
+}

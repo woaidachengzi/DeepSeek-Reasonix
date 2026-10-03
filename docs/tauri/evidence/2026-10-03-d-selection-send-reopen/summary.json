@@ -1,0 +1,78 @@
+{
+  "native": [
+    {
+      "name": "selection-send",
+      "status": "passed"
+    },
+    {
+      "name": "package",
+      "status": "passed"
+    },
+    {
+      "name": "fullscreen",
+      "status": "passed"
+    },
+    {
+      "name": "dialog-cancel",
+      "status": "passed"
+    },
+    {
+      "name": "failure-exit",
+      "status": "passed"
+    },
+    {
+      "name": "lifetime",
+      "status": "passed"
+    }
+  ],
+  "boundaries": [
+    {
+      "name": "app-data-boundary",
+      "status": "passed"
+    },
+    {
+      "name": "boundary",
+      "status": "passed"
+    },
+    {
+      "name": "explicit-boundary",
+      "status": "passed"
+    },
+    {
+      "name": "parent-resolution",
+      "status": "passed"
+    },
+    {
+      "name": "identity",
+      "status": "passed"
+    },
+    {
+      "name": "inactive-display-state",
+      "status": "failed"
+    },
+    {
+      "name": "profile",
+      "status": "not-run"
+    }
+  ],
+  "services": [
+    {
+      "name": "profile",
+      "status": "passed"
+    },
+    {
+      "name": "notifications",
+      "status": "passed"
+    },
+    {
+      "name": "displays",
+      "status": "passed"
+    }
+  ],
+  "limits": [
+    "inactive-display-state: failed conditional preflight, zero-active-display condition absent",
+    "original boundaries profile: not-run; separate services profile subsequently passed",
+    "physical UI: Mac locked, unaccepted; no successful physical Quit",
+    "complete original window 48-stage matrix not run on b6"
+  ]
+}

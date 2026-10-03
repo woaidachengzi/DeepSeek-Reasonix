@@ -1,0 +1,10 @@
+application data managed legacy-link: expected startup refusal, originals and no sidecar/readiness OK
+application data managed outside-link: expected startup refusal, originals and no sidecar/readiness OK
+application data managed dangling-link: expected startup refusal, originals and no sidecar/readiness OK
+application data managed regular-file: expected startup refusal, originals and no sidecar/readiness OK
+application data managed legacy-parent: expected startup refusal, originals and no sidecar/readiness OK
+application data explicit legacy-link: expected startup refusal, originals and no sidecar/readiness OK
+application data explicit outside-link: expected startup refusal, originals and no sidecar/readiness OK
+application data explicit dangling-link: expected startup refusal, originals and no sidecar/readiness OK
+application data explicit regular-file: expected startup refusal, originals and no sidecar/readiness OK
+application data explicit legacy-parent: expected startup refusal, originals and no sidecar/readiness OK

@@ -1,0 +1,74 @@
+[
+  {
+    "profile": "managed",
+    "kind": "Add to Chat",
+    "clipboardGenerationPreserved": true,
+    "clipboardTextPreserved": true,
+    "composerFocused": true,
+    "deduplicated": true,
+    "draftPreserved": true,
+    "ok": true,
+    "selectionReference": true,
+    "selectionShortcut": true
+  },
+  {
+    "profile": "managed",
+    "kind": "selection send",
+    "draftConsumed": true,
+    "historyReference": true,
+    "ok": true,
+    "providerResponse": true
+  },
+  {
+    "profile": "managed",
+    "kind": "selection provider",
+    "ok": true,
+    "requests": 2,
+    "quotedContextVerified": true,
+    "inputSha256": "ed29c752fba7938290ec2bdc5e648fb664c791110a52e3f1b075a6334af06609"
+  },
+  {
+    "profile": "managed",
+    "kind": "selection reopen",
+    "historyReference": true,
+    "noDraftReplay": true,
+    "ok": true,
+    "protocolTextHidden": true
+  },
+  {
+    "profile": "explicit",
+    "kind": "Add to Chat",
+    "clipboardGenerationPreserved": true,
+    "clipboardTextPreserved": true,
+    "composerFocused": true,
+    "deduplicated": true,
+    "draftPreserved": true,
+    "ok": true,
+    "selectionReference": true,
+    "selectionShortcut": true
+  },
+  {
+    "profile": "explicit",
+    "kind": "selection send",
+    "draftConsumed": true,
+    "historyReference": true,
+    "ok": true,
+    "providerResponse": true
+  },
+  {
+    "profile": "explicit",
+    "kind": "selection provider",
+    "ok": true,
+    "requests": 2,
+    "quotedContextVerified": true,
+    "inputSha256": "9ab779d740e41dae432a1badb2812ec5f53691013272ef78ae741ed2cae8b22f"
+  },
+  {
+    "profile": "explicit",
+    "kind": "selection reopen",
+    "historyReference": true,
+    "noDraftReplay": true,
+    "ok": true,
+    "protocolTextHidden": true
+  }
+]

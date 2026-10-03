@@ -1,0 +1,18 @@
+LaunchServices native kernel exit: {"phase": "ui-selection-send", "pid": 36263, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed ui-selection-send: OK
+Native managed Add to Chat receipt: {"clipboardGenerationPreserved": true, "clipboardTextPreserved": true, "composerFocused": true, "deduplicated": true, "draftPreserved": true, "ok": true, "selectionReference": true, "selectionShortcut": true}
+Native managed selection send receipt: {"draftConsumed": true, "historyReference": true, "ok": true, "providerResponse": true}
+Native managed selection provider receipt: {"ok": true, "requests": 2, "quotedContextVerified": true, "inputSha256": "ed29c752fba7938290ec2bdc5e648fb664c791110a52e3f1b075a6334af06609"}
+LaunchServices native kernel exit: {"phase": "ui-selection-reopen", "pid": 36294, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed ui-selection-reopen: OK
+Native managed selection reopen receipt: {"historyReference": true, "noDraftReplay": true, "ok": true, "protocolTextHidden": true}
+Actual managed rendered message/menu/OS text, 2 provider calls and clipboard restoration: OK
+LaunchServices native kernel exit: {"phase": "ui-selection-send", "pid": 36331, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit ui-selection-send: OK
+Native explicit Add to Chat receipt: {"clipboardGenerationPreserved": true, "clipboardTextPreserved": true, "composerFocused": true, "deduplicated": true, "draftPreserved": true, "ok": true, "selectionReference": true, "selectionShortcut": true}
+Native explicit selection send receipt: {"draftConsumed": true, "historyReference": true, "ok": true, "providerResponse": true}
+Native explicit selection provider receipt: {"ok": true, "requests": 2, "quotedContextVerified": true, "inputSha256": "9ab779d740e41dae432a1badb2812ec5f53691013272ef78ae741ed2cae8b22f"}
+LaunchServices native kernel exit: {"phase": "ui-selection-reopen", "pid": 36370, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit ui-selection-reopen: OK
+Native explicit selection reopen receipt: {"historyReference": true, "noDraftReplay": true, "ok": true, "protocolTextHidden": true}
+Actual explicit rendered message/menu/OS text, 2 provider calls and clipboard restoration: OK

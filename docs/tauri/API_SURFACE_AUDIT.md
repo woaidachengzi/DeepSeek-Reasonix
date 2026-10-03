@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-03）
 
+**最新 b6f7003f 选区实际发送/历史重开与 D 补验：** [当前包证据与 review 检查点](evidence/2026-10-03-d-selection-send-reopen/README.md)。两档案实际引用第二轮由本机 fake provider 严格验证共享 quoted-context，恰好两请求；普通退出后重开持久化历史，内部协议隐藏、草稿消费且不重放。当前包 14 个不同程序门禁、实际配置备份应用/官方 CLI 回读及官方 Wails 历史/Global 附件/检查点回退通过；Rust231/5ignored、strict clippy、构建/DMG安装与签名/清理通过。零显示器门禁前置条件失败，原队列 profile 未运行，后续独立 profile 通过；物理输入未确认、CUA 报 Mac 锁定，监控超时与清理已保留。完整48阶段、钥匙串/权限交互等不继承旧包。D 未完成/E 未开启，A/B/C 和正式签名公证缺口保留，未授权发布或默认下载切换。下列为历史候选证据，各自通过范围不自动继承。
+
 **当前 b4cbb6be 选区引用生产接入：** [实际入口与同包回归](evidence/2026-10-03-d-selection-reference/README.md)对照Wails引用卡片而非追加指令，接入共享normalize/quoted-context格式、去重/移除、会话隔离/切回和失败保留；历史UI隐藏内部JSON。React真实入口stub-submit回归、完整Tauri及transcript、Rust231/5ignored、strict clippy和实际构建/安装签名通过。同包message-copy/package/fullscreen/failure-exit/lifetime五组及原窗口 **48/48** 一次通过；两档案实际按钮/synthetic Cmd+L与OS clipboard generation保持、原件恢复通过。实际provider只接收首个nonce问题，第二轮引用provider接收/历史重开和物理/配置快捷键仍待验；其他native权限/通知/钥匙串/显示器及当前包实际官方回退不继承旧包。D未完成/E未开启，历史窗口稳定性及A/B/C/正式签名公证仍待完成。
 
 **当前 ecac5751 全屏/回退补验：** [同包新证据](evidence/2026-10-03-d-initial-presentation-fullscreen-rollback/README.md)两档案各5阶段一次通过，真实AppKit全屏进入/退出did各1、2000×1400/x920/y344精确往返，普通存档原字节/重启/身份保持。当前包实际配置备份应用与官方CLI回读、官方Wails历史/Global附件/检查点回退实际通过，原树与两包摘要/签名保持；错误Preview ID的初次退出检查已保留并从真实plist纠正复验。新增可重跑备份门禁和失败夹具保留，1项Python回归/真实三阶段通过。当前已覆盖回退范围有验证路径，但不代替完整资料/物理UI、任意旧目录互斥或Preview图片兼容；其他D/历史间歇稳定性及A/B/C/正式签名公证仍待完成，D未完成/E未开启。

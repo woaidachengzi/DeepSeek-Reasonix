@@ -1,0 +1,29 @@
+{
+  "scope": "CUA requests and readonly snapshots; physical input delivery unconfirmed",
+  "app": "/private/tmp/reasonix-d-selection-send-installed-17bg3tz9/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-launch-services-rviz9fng",
+  "pid": 37262,
+  "actions": [
+    {
+      "method": "getApp",
+      "result": "Reasonix AX tree returned"
+    },
+    {
+      "method": "click",
+      "element": 51,
+      "target": "minimize button",
+      "result": "There has been no change in the accessibility tree for Window: Reasonix."
+    },
+    {
+      "method": "performSecondaryAction",
+      "element": 0,
+      "action": "Raise",
+      "followup": "getAXStateAndScreenshot",
+      "result": "The Mac is locked and automatic unlock could not unlock it. Ask the user to unlock the Mac manually before continuing."
+    }
+  ],
+  "inputDeliveryConfirmed": false,
+  "minimizeAccepted": false,
+  "monitorExit": "Timeout: LaunchServices host did not publish an exit receipt; own fixture cleanup, not physical Quit",
+  "pending": "User asked to unlock Mac; no reply received"
+}
