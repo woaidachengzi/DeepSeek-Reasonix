@@ -1,0 +1,22 @@
+{
+  "scope": "Independent fullscreen slice on retained explicit fixture; initial explicit exercise minimize failure remains",
+  "root": "/private/tmp/reasonix-native-fullscreen-ofeh6dsq",
+  "artifactSha256": {
+    "reasonix-tauri": "22ee53cbfe6324f63a1f63d73d477cb3017be21cd5866ee4dfab1f50efc20e35",
+    "reasonix-desktop-bridge": "6f7f6352af9eed4043abe9600b6ad80712088d9363b4a94d69d824628035e447"
+  },
+  "phases": [
+    {
+      "phase": "restore-normal",
+      "status": "passed"
+    },
+    {
+      "phase": "menu-fullscreen",
+      "status": "passed"
+    },
+    {
+      "phase": "restore-normal",
+      "status": "passed"
+    }
+  ]
+}

@@ -72,6 +72,25 @@ pub(crate) fn invoke(app: &AppHandle, title: &'static str) -> Result<(), String>
     })
 }
 
+pub(crate) fn fullscreen(app: &AppHandle) -> Result<(), String> {
+    on_main(app, |_, window| {
+        let application = NSApplication::sharedApplication(
+            MainThreadMarker::new().ok_or("fullscreen menu not on main thread")?,
+        );
+        let pointer = window.ns_window().map_err(|_| "fullscreen window unavailable")?;
+        if !application.isActive() || !application.keyWindow().is_some_and(|key| {
+            std::ptr::eq(std::ptr::from_ref(&*key).cast::<std::ffi::c_void>(), pointer.cast_const())
+        }) {
+            return Err("fullscreen menu requires the active main key window".into());
+        }
+        let menu = application.mainMenu().ok_or("fullscreen menu missing")?;
+        if !invoke_named(&menu, "Toggle Full Screen", 0, Some(objc2::sel!(toggleFullScreen:)))? {
+            return Err("installed native fullscreen role missing".into());
+        }
+        Ok(())
+    })
+}
+
 pub(crate) fn edit(app: &AppHandle, title: &'static str) -> Result<(), String> {
     let action = match title {
         "Undo" => objc2::sel!(undo:),

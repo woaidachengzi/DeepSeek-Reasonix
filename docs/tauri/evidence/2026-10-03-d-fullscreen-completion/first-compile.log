@@ -1,0 +1,26 @@
+warning: `/Users/jerry/.cargo/config` is deprecated in favor of `config.toml`
+  |
+  = help: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+warning: `/Users/jerry/.cargo/config` is deprecated in favor of `config.toml`
+  |
+  = help: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+   Compiling reasonix-tauri v0.1.0 (/Users/jerry/temp/app/reasonix-tauri/desktop/tauri)
+error: recursion limit reached while expanding `$crate::json_internal!`
+   --> src/native_window_smoke.rs:304:24
+    |
+304 |       let mut snapshot = serde_json::json!({
+    |  ________________________^
+305 | |         "geometry": Geometry::read(window)?,
+306 | |         "monitors": monitors,
+307 | |         "visible": window.is_visible().map_err(|_| "read visibility")?,
+...   |
+353 | |             .is_some_and(|state| state.main_loaded.load(Ordering::SeqCst)),
+354 | |     });
+    | |______^
+    |
+    = help: consider increasing the recursion limit by adding a `#![recursion_limit = "256"]` attribute to your crate (`reasonix_tauri`)
+    = note: this error originates in the macro `$crate::json_internal` which comes from the expansion of the macro `serde_json::json` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: could not compile `reasonix-tauri` (bin "reasonix-tauri") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `reasonix-tauri` (bin "reasonix-tauri" test) due to 1 previous error

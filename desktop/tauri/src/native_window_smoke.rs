@@ -32,7 +32,7 @@ pub struct WindowSmokeState {
     transitions: Arc<WindowTransitions>,
 }
 
-const TRANSITIONS: [&str; 10] = [
+const TRANSITIONS: [&str; 14] = [
     "will-miniaturize",
     "did-miniaturize",
     "did-deminiaturize",
@@ -43,6 +43,10 @@ const TRANSITIONS: [&str; 10] = [
     "occlusion-changed",
     "application-became-active",
     "application-resigned-active",
+    "will-enter-fullscreen",
+    "did-enter-fullscreen",
+    "will-exit-fullscreen",
+    "did-exit-fullscreen",
 ];
 
 struct WindowTransitions {
@@ -58,7 +62,7 @@ impl Default for WindowTransitions {
 
 #[derive(Clone, Default)]
 struct TransitionRecord {
-    counts: [usize; 10],
+    counts: [usize; 14],
     recent: Vec<&'static str>,
     timed: Vec<serde_json::Value>,
 }
@@ -92,6 +96,8 @@ fn install_window_observers(app: &AppHandle) -> Result<(), String> {
         NSWindow, NSWindowDidBecomeKeyNotification, NSWindowDidDeminiaturizeNotification,
         NSWindowDidMiniaturizeNotification, NSWindowDidResignKeyNotification,
         NSWindowWillMiniaturizeNotification,
+        NSWindowWillEnterFullScreenNotification, NSWindowDidEnterFullScreenNotification,
+        NSWindowWillExitFullScreenNotification, NSWindowDidExitFullScreenNotification,
         NSWindowDidChangeOcclusionStateNotification,
         NSApplication, NSApplicationDidBecomeActiveNotification,
         NSApplicationDidResignActiveNotification,
@@ -119,6 +125,10 @@ fn install_window_observers(app: &AppHandle) -> Result<(), String> {
             (3, NSWindowDidBecomeKeyNotification),
             (4, NSWindowDidResignKeyNotification),
             (7, NSWindowDidChangeOcclusionStateNotification),
+            (10, NSWindowWillEnterFullScreenNotification),
+            (11, NSWindowDidEnterFullScreenNotification),
+            (12, NSWindowWillExitFullScreenNotification),
+            (13, NSWindowDidExitFullScreenNotification),
         ]
     };
     WINDOW_OBSERVERS.with(|observers| {
@@ -337,6 +347,12 @@ pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, Stri
             .is_some_and(|state| state.main_loaded.load(Ordering::SeqCst)),
     });
     let presentation = serde_json::json!({
+        "nativeFullscreen": native.styleMask().contains(NSWindowStyleMask::FullScreen),
+        "fullscreen": window.is_fullscreen().map_err(|_| "read fullscreen state")?,
+        "willEnterFullscreen": transitions.counts[10],
+        "didEnterFullscreen": transitions.counts[11],
+        "willExitFullscreen": transitions.counts[12],
+        "didExitFullscreen": transitions.counts[13],
         "nativeWindowNumber": native.windowNumber(),
         "nativeWindowLevel": native.level(),
         "nativeTimedTransitions": transitions.timed,
@@ -714,6 +730,53 @@ fn secondary_display(app: &AppHandle, directory: &std::path::Path) -> Result<(),
     record(app, "display-secondary-placed")
 }
 
+fn fullscreen(app: &AppHandle, directory: &std::path::Path) -> Result<(), String> {
+    let normal = expected_geometry(directory)?;
+    verify_geometry(app, "ordinary geometry before fullscreen", normal.clone())?;
+    wait_for(app, "loaded active main window before fullscreen", |window| {
+        let state = snapshot(window)?;
+        Ok(page_finished(window.app_handle())
+            && state["applicationActive"] == true
+            && state["nativeKeyWindow"] == true
+            && state["nativeFullscreen"] == false
+            && state["fullscreen"] == false)
+    })?;
+    save(app)?;
+    let state_path = app.path().app_data_dir().map_err(|_| "resolve fullscreen state")?
+        .join("window-state.json");
+    let before = std::fs::read(&state_path).map_err(|_| "read pre-fullscreen state")?;
+    let (entered, exited) = on_main(app, |_, window| {
+        let state = snapshot(window)?;
+        Ok((state["didEnterFullscreen"].as_u64().ok_or("missing enter count")?,
+            state["didExitFullscreen"].as_u64().ok_or("missing exit count")?))
+    })?;
+    record(app, "fullscreen-before")?;
+    crate::native_menu_smoke::fullscreen(app)?;
+    wait_for(app, "native fullscreen entry completed", move |window| {
+        let state = snapshot(window)?;
+        Ok(state["nativeFullscreen"] == true && state["fullscreen"] == true
+            && state["didEnterFullscreen"].as_u64() == Some(entered + 1))
+    })?;
+    record(app, "fullscreen-entered")?;
+    save(app)?;
+    if std::fs::read(&state_path).map_err(|_| "read fullscreen saved state")? != before {
+        return Err("fullscreen replaced the ordinary saved frame".into());
+    }
+    crate::native_menu_smoke::fullscreen(app)?;
+    wait_for(app, "native fullscreen exit completed", move |window| {
+        let state = snapshot(window)?;
+        Ok(state["nativeFullscreen"] == false && state["fullscreen"] == false
+            && state["didExitFullscreen"].as_u64() == Some(exited + 1))
+    })?;
+    verify_geometry(app, "exact geometry after fullscreen exit", normal)?;
+    record(app, "fullscreen-exited")?;
+    save(app)?;
+    if std::fs::read(&state_path).map_err(|_| "read post-fullscreen saved state")? != before {
+        return Err("fullscreen exit changed ordinary persisted frame".into());
+    }
+    Ok(())
+}
+
 fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
     let directory = marker_directory()?;
     match phase {
@@ -729,6 +792,7 @@ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
             record(app, "display-secondary-restored")?;
         }
         "menu-shortcuts" => crate::native_menu_smoke::shortcuts(app)?,
+        "menu-fullscreen" => fullscreen(app, &directory)?,
         "tray-language" => {
             let before = app.state::<crate::bridge::BridgeSupervisor>().desktop_preferences()?.language;
             for (locale, expected) in [("en", ("Open", "Quit")), ("zh", ("打开", "退出")), ("zh-TW", ("打开", "退出"))] {

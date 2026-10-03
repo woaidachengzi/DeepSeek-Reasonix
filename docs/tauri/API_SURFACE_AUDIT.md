@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-03）
 
+**当前全屏探针包：** [22ee53cb全屏完成与精确恢复](evidence/2026-10-03-d-fullscreen-completion/README.md)新增opt-in真实AppKit角色、FullScreen位/四通知/普通存档保护门禁，不改生产行为/权限。首轮托管五阶段通过，显式exercise最小化失败/kernel2、will/did=0，显式全屏当时未执行，整组保持failed；同包同保留档案的独立显式restore/fullscreen/restore三项通过，两档案进入3840×2160后精确回2000×1400/x920/y344、did-enter/exit各1、存档原字节/重启保持。同包package/failure-exit/lifetime另三组通过；Rust227/5ignored、strict clippy及app/DMG安装签名通过。首次宏递归编译失败保留；失败fixture复用前漏复制result/trace的证据限制明确记录，原日志/kernel保留，工具新增失败快照及回归。最小化/历史稳定性、物理UI、其他D及当前包回退仍未通过，不继承旧候选，E未开启。
+
 **当前候选窗口补验：** [f259ddc9完整矩阵与前置中断](evidence/2026-10-03-d-message-candidate-window/README.md)原矩阵托管24/24、显式前20项通过（44阶段kernel0），menu-editing前剪贴板完整保存保护拒绝；剩余4项当时未执行，不记完整48/48。当前只读capture确认不可读取格式，但原次具体helper状态未保存，不能事后归因。固定包/保留显式fixture的单实例与close/restore三项独立3/3通过，精确几何/身份和签名保持；menu-editing仍待安全前置。捕获错误新增固定分类及5项Python回归，不改保护或生产窗口代码。CUA再次30秒超时；现有矩阵不含全屏，下一步单独补完整fullscreen状态/结束通知/精确恢复，物理UI与历史稳定性、其他D及当前包回退仍未完成，E未开启。
 
 **最新 review/本地提交检查点：** [f259ddc9 实际消息选区复制](evidence/2026-10-03-d-message-selection-copy/README.md)已接入真实 Tauri 聊天入口的 lazy 共享菜单与正文选择边界；原生拒绝保留选区且无浏览器回退，Tauri Add to Chat 尚未接入。完整 transcript（菜单88项）、Tauri、Rust227项/5ignored与strict clippy、app/DMG构建安装签名通过。首包探针过早读取异步复制结果导致kernel2，原源码/失败/身份保留；修正等待后全新包双档案实际消息→菜单→OS剪贴板及原件恢复通过，当前包message-copy/package/startup/lifetime四组通过（启动12、生命周期8）。不继承e7的其余门禁/官方回退，完整窗口/其他服务/现场UI与授权仍待验；D未完成/E未开启，A/B/C和正式签名公证缺口保留。

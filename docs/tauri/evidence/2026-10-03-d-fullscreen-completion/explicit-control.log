@@ -1,0 +1,7 @@
+LaunchServices native kernel exit: {"phase": "restore-normal", "pid": 18552, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit restore-normal: OK
+LaunchServices native kernel exit: {"phase": "menu-fullscreen", "pid": 18574, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit menu-fullscreen: OK
+LaunchServices native kernel exit: {"phase": "restore-normal", "pid": 18593, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit restore-normal: OK
+Independent explicit fullscreen/persistence/restart and identity/signature: OK
