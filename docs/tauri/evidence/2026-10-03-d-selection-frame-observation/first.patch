@@ -1,0 +1,88 @@
+diff --git a/desktop/tauri/src/native_ui_message_copy_smoke.rs b/desktop/tauri/src/native_ui_message_copy_smoke.rs
+index 86010bbfc..eaa4222f5 100644
+--- a/desktop/tauri/src/native_ui_message_copy_smoke.rs
++++ b/desktop/tauri/src/native_ui_message_copy_smoke.rs
+@@ -21,6 +21,58 @@ fn check(app: &AppHandle, script: String, stage: &str) -> Result<(), String> {
+     }
+ }
+ 
++// Opt-in fixed-schema observations only: no transcript/editor content is returned.
++fn observe_selection(app: &AppHandle, directory: &Path) -> Result<(), String> {
++    use block2::RcBlock;
++    use objc2::runtime::AnyObject;
++    use objc2_foundation::{NSError, NSObjectProtocol, NSString};
++    use objc2_web_kit::WKWebView;
++    let (send, receive) = std::sync::mpsc::sync_channel(1);
++    crate::native_window_smoke::on_main(app, move |_, window| {
++        window.with_webview(move |platform| {
++            // SAFETY: Tauri's live main WKWebView is evaluated on its UI thread.
++            let webview = unsafe { &*platform.inner().cast::<WKWebView>() };
++            let completed = RcBlock::new(move |value: *mut AnyObject, error: *mut NSError| {
++                let result = if !error.is_null() {
++                    Err("selection observation evaluation failed".to_string())
++                } else {
++                    let text = unsafe { value.as_ref() }
++                        .and_then(|value| value.downcast_ref::<NSString>())
++                        .map(|value| value.to_string());
++                    text.filter(|value| value.len() <= 4096)
++                        .ok_or_else(|| "selection observation invalid".to_string())
++                };
++                let _ = send.try_send(result);
++            });
++            let script = r#"JSON.stringify((() => {
++              const selection = document.getSelection();
++              const transcript = document.querySelector('.tauri-transcript');
++              const action = document.querySelector('.transcript-selection-action');
++              return {frameCallback: window.__reasonixSelectionFrame === true,
++                documentVisible: document.visibilityState === 'visible',
++                documentFocused: document.hasFocus(),
++                selectionCollapsed: !selection || selection.isCollapsed,
++                selectionLength: selection?.toString().length || 0,
++                anchorInTranscript: !!transcript?.contains(selection?.anchorNode),
++                focusInTranscript: !!transcript?.contains(selection?.focusNode),
++                editorFocused: document.activeElement === document.querySelector('.tauri-composer textarea'),
++                settingsPresent: !!document.querySelector('.tauri-settings-overlay'),
++                modalPresent: !!document.querySelector('[aria-modal=true]'),
++                actionPresent: !!action,
++                actionOpen: action?.dataset.state === 'open',
++                actionDisabled: !!action?.querySelector('button:disabled')};
++            })())"#;
++            unsafe { webview.evaluateJavaScript_completionHandler(&NSString::from_str(script), Some(&completed)); }
++        }).map_err(|_| "schedule selection observation".into())
++    })?;
++    let text = receive.recv_timeout(Duration::from_secs(5))
++        .map_err(|_| "selection observation timed out")??;
++    let value: serde_json::Value = serde_json::from_str(&text)
++        .map_err(|_| "selection observation malformed")?;
++    std::fs::write(directory.join("reasonix-native-selection-observation.json"), value.to_string())
++        .map_err(|_| "record selection observation".into())
++}
++
+ fn fixture_nonce(directory: &Path) -> Result<String, String> {
+     let file = std::fs::File::open(directory.join("reasonix-native-clipboard-control.json"))
+         .map_err(|_| "message clipboard fixture missing")?;
+@@ -135,6 +187,10 @@ pub fn run(app: &AppHandle, directory: &Path, send_selection: bool) -> Result<()
+         }
+         check(app, "!document.querySelector('.tauri-settings-overlay') ? 'edit-ok' : 'edit-pending'".into(), "shortcut settings closed")?;
+     }
++    crate::native_window_smoke::record(app, "selection-before-request")?;
++    if !crate::native_edit_smoke::evaluate(app, "window.__reasonixSelectionFrame = false; requestAnimationFrame(() => { window.__reasonixSelectionFrame = true; }); 'edit-ok'".into())? {
++        return Err("register selection frame observation".into());
++    }
+     let select_for_chat = format!(
+         r#"(() => {{
+       const editor = document.querySelector('.tauri-composer textarea');
+@@ -151,7 +207,12 @@ pub fn run(app: &AppHandle, directory: &Path, send_selection: bool) -> Result<()
+     if !crate::native_edit_smoke::evaluate(app, select_for_chat)? {
+         return Err("select actual message for Add to Chat".into());
+     }
+-    check(app, "document.querySelector('.transcript-selection-action[data-state=open] button:not(:disabled)') ? 'edit-ok' : 'edit-pending'".into(), "Add to Chat action")?;
++    crate::native_window_smoke::record(app, "selection-requested")?;
++    let action_result = check(app, "document.querySelector('.transcript-selection-action[data-state=open] button:not(:disabled)') ? 'edit-ok' : 'edit-pending'".into(), "Add to Chat action");
++    // Capture the first terminal observation before the runner exits/cleans up.
++    observe_selection(app, directory)?;
++    crate::native_window_smoke::record(app, if action_result.is_ok() { "selection-action-ready" } else { "selection-action-failed" })?;
++    action_result?;
+     if !crate::native_edit_smoke::evaluate(
+         app,
+         "document.querySelector('.transcript-selection-action button').click(); 'edit-ok'".into(),

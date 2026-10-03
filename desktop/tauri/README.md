@@ -1,6 +1,6 @@
 # Reasonix Tauri host
 
-最新状态：[b1f7f210 选区配置接入与新包失败保留](../../docs/tauri/evidence/2026-10-03-d-selection-shortcuts/README.md)。第44项add_selection接入独立配置、菜单提示及触发；完整Tauri/transcript、实际设置流组件回归、Rust231/5ignored、strict clippy与构建/安装签名通过。新包实际录键前置后Add action超时，第二轮/重启配置未验；独立打包/异常退出/生命周期三门禁通过。D未完成/E未开启，不继承b6其他门禁或回退，A/B/C及正式签名公证仍阻碍发布。下列带日期描述为历史现场，不直接代表当前候选。
+最新状态：[43dc4305 选区失败终态诊断](../../docs/tauri/evidence/2026-10-03-d-selection-frame-observation/README.md)。生产未改；opt-in记录实际失败时页面hidden/无焦点、无活跃显示器、独立帧回调未执行和选区折叠，原断言保持失败。不在不可见环境重复选区验收。Rust231/5ignored、strict clippy、构建/安装签名、独立打包/异常退出/生命周期及当前包配置备份应用/官方CLI回读通过；其他D/官方GUI回退不继承旧包。D未完成/E未开启，A/B/C与正式签名公证仍阻碍发布。下列带日期描述为历史现场，不直接代表当前候选。
 
 当前窗口补验：[完整矩阵失败与零显示器保护](../../docs/tauri/evidence/2026-10-03-d-zero-display-window/README.md)。b6首阶段原生最小化成功但零活跃显示器期间无新存档，整组保持失败；两档案实际零显示器旧状态保护、托盘语言6阶段及启动终止12项通过。同包累计17个程序门禁，恢复活跃显示器后完整矩阵及物理UI仍待验。
 2026-10-02 实际窗口验收可用 `python3 tools/tauri/probe-launch-services-profile.py <installed-app> --interactive --observe`。

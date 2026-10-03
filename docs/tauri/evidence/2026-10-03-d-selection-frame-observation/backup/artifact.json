@@ -1,0 +1,9 @@
+{
+  "app": "/private/tmp/reasonix-d-selection-observation-installed-ujm5lp1u/Reasonix Tauri Preview.app",
+  "artifactSha256": {
+    "reasonix-tauri": "43dc43050b8e7638863caf91f22f8bde2974c1a7b9cef9911f4adf48f59cba48",
+    "reasonix-desktop-bridge": "bdbb0753c881c9198e4f7e953b87aba60e8b10332513758bbd67388c3defb11a"
+  },
+  "legacyCliSha256": "5b1ab31424d45c8bf3cfe6a60b11da527df2252aee963d1c0c56352f57945962",
+  "scope": "Actual single config backup application and read-only official CLI recovery"
+}
