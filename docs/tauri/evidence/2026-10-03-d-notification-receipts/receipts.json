@@ -1,0 +1,62 @@
+[
+  {
+    "originalPreserved": true,
+    "permission": "granted",
+    "profile": "managed",
+    "readinessRemaining": false,
+    "receipts": [
+      {
+        "applicationActive": true,
+        "applicationHidden": false,
+        "delivered": true,
+        "kind": "turn_done",
+        "removed": true
+      },
+      {
+        "applicationActive": false,
+        "applicationHidden": true,
+        "delivered": true,
+        "kind": "approval_request",
+        "removed": true
+      },
+      {
+        "applicationActive": false,
+        "applicationHidden": true,
+        "delivered": true,
+        "kind": "ask_request",
+        "removed": true
+      }
+    ],
+    "sameProfileIdentityAfterRestart": true
+  },
+  {
+    "originalPreserved": true,
+    "permission": "granted",
+    "profile": "explicit",
+    "readinessRemaining": false,
+    "receipts": [
+      {
+        "applicationActive": true,
+        "applicationHidden": false,
+        "delivered": true,
+        "kind": "turn_done",
+        "removed": true
+      },
+      {
+        "applicationActive": false,
+        "applicationHidden": true,
+        "delivered": true,
+        "kind": "approval_request",
+        "removed": true
+      },
+      {
+        "applicationActive": false,
+        "applicationHidden": true,
+        "delivered": true,
+        "kind": "ask_request",
+        "removed": true
+      }
+    ],
+    "sameProfileIdentityAfterRestart": true
+  }
+]

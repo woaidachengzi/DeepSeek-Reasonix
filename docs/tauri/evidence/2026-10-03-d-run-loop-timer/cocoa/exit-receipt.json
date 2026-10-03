@@ -1,0 +1,12 @@
+{
+  "delegate": "keep",
+  "application": "tao",
+  "kind": "cocoa",
+  "action": "run-loop-timer",
+  "root": "/private/tmp/reasonix-tauri-run-loop-timer-6mim12fj/keep-tao-cocoa-standard-run-loop-timer",
+  "style": "standard",
+  "hostPid": 21959,
+  "kernelExitCode": 2,
+  "openExitCode": 0,
+  "expectedCode": 2
+}

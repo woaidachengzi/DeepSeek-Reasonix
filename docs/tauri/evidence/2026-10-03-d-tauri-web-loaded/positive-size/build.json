@@ -1,0 +1,11 @@
+{
+  "app": "/private/tmp/reasonix-cocoa-positive-size-control/Private Cocoa Control.app",
+  "binarySha256": "3e22038c24a6c6b8332c057878fb2cff4241f1e39e6a828ea2a309c6f1ca331a",
+  "effectiveEntitlements": {
+    "com.apple.security.cs.allow-dyld-environment-variables": true,
+    "com.apple.security.cs.allow-jit": true,
+    "com.apple.security.cs.allow-unsigned-executable-memory": true,
+    "com.apple.security.files.user-selected.read-write": true,
+    "com.apple.security.network.client": true
+  }
+}

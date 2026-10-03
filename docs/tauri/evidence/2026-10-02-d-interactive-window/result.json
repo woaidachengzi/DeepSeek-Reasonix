@@ -1,0 +1,32 @@
+{
+  "packageProfiles": 2,
+  "packageExitCode": 0,
+  "interactiveQuitExitCode": 0,
+  "hostPid": 78115,
+  "sidecarPid": 78123,
+  "privateRoot": "/private/tmp/reasonix-launch-services-lolc3af_",
+  "minimize": {
+    "result": "failed",
+    "actions": [
+      "Cmd+M",
+      "minimize button",
+      "Window > Minimize"
+    ],
+    "willMiniaturize": 0,
+    "didMiniaturize": 0,
+    "nativeMiniaturized": false
+  },
+  "fullscreen": {
+    "entryNativeStyleMask": 49167,
+    "exitVerified": false,
+    "shortcutAndMenuDidNotClearFullScreenBit": true
+  },
+  "sidecarRemaining": false,
+  "readyRemaining": false,
+  "Daccepted": false,
+  "Estarted": false,
+  "clippy": "passed after needless-borrow fix",
+  "build": "passed",
+  "signature": "ad-hoc strict verification passed",
+  "formalRelease": false
+}

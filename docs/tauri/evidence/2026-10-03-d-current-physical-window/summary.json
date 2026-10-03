@@ -1,0 +1,72 @@
+{
+  "artifactSha256": {
+    "Contents/MacOS/reasonix-tauri": "249dfd15d5b28a0dac67879143af181f494967f061d3e4f98b6731d54bade598",
+    "Contents/MacOS/reasonix-desktop-bridge": "29d985c7af09baefec4308339429eabfe921896c47db6f4c30584b742b7efd39",
+    "Contents/Info.plist": "ce61cb6c5ba4a9f35217dc964292e23371d37a554354a5ecce233b09dc08904d"
+  },
+  "pid": 23796,
+  "sidecarPid": 23804,
+  "profile": "explicit",
+  "minimizeObserved": {
+    "after-menu-minimize.json": {
+      "nativeVisible": true,
+      "nativeMiniaturized": false,
+      "willMiniaturize": 0,
+      "didMiniaturize": 0,
+      "didDeminiaturize": 0,
+      "applicationActive": true,
+      "nativeKeyWindow": false
+    },
+    "after-yellow-minimize.json": {
+      "nativeVisible": true,
+      "nativeMiniaturized": false,
+      "willMiniaturize": 0,
+      "didMiniaturize": 0,
+      "didDeminiaturize": 0,
+      "applicationActive": false,
+      "nativeKeyWindow": false
+    },
+    "after-cmd-m.json": {
+      "nativeVisible": true,
+      "nativeMiniaturized": false,
+      "willMiniaturize": 0,
+      "didMiniaturize": 0,
+      "didDeminiaturize": 0,
+      "applicationActive": true,
+      "nativeKeyWindow": false
+    },
+    "after-cmd-m-retry-after-guard.json": {
+      "nativeVisible": true,
+      "nativeMiniaturized": false,
+      "willMiniaturize": 0,
+      "didMiniaturize": 0,
+      "didDeminiaturize": 0,
+      "applicationActive": true,
+      "nativeKeyWindow": false
+    }
+  },
+  "fullscreenKeyboardPassed": true,
+  "fullscreenRestoredGeometry": {
+    "height": 1640,
+    "scale": 2.0,
+    "width": 2560,
+    "x": -3200,
+    "y": 176
+  },
+  "inputGuard": "One Cmd+M attempt after fullscreen was rejected for user app change; refreshed getAXState before one new attempt. Rejected attempt is not counted as executed.",
+  "screenshotObservation": "CUA screenshot shows a purple sharing-shaped control in the normal top-left traffic-light area while AX still exposes minimize/fullscreen/close. Owner and cause unverified; actual yellow-button hit cannot be asserted. No unrelated screenshots archived.",
+  "actions": [
+    "Window menu → Minimize AX item (performMiniaturize:)",
+    "AX minimize button click attempt",
+    "Composer focus + Cmd+M",
+    "View menu → Toggle Full Screen attempt (no native fullscreen observed)",
+    "Ctrl+Cmd+F actual enter → exit, exact native geometry/style restoration",
+    "One guarded Cmd+M, state refresh, one new Cmd+M",
+    "Cmd+Q; no dead binding read"
+  ],
+  "kernelExit": 0,
+  "cleanup": {
+    "sidecarRemaining": false,
+    "readyRemaining": false
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "README.md": "b5a3cb69afcafee7489b2e0a72076239b4002bf027043a58850e88d63748b0b6",
+  "frontend-build.log": "6c7f2e406b420bdabc49ebc6c218233fd5cc59b3b2c7b6f13f23fc5479724613",
+  "gates.log": "6b66f8ab14d10c7297352abe3f4531b3224f1f437ac10354a450d62b85b377f8",
+  "install.json": "2d748fd6a354ee0ae43889244c5e00bc6c9f7a0ce85af6699a1690d76c0463db",
+  "install.log": "04c93769cbd2e54602bc7dfdd1be972a56b3401b466e50e008b9fa90a6d502f1",
+  "installer.py": "9a8ca936f46af6660849787c3cb300b19a6f9f5426ca48ba77b0493535e844a0",
+  "package-build.log": "1aa7e77c149faa74dad4c4e434c09ac19f2f38838d97f1e83708781200e930b6",
+  "smoke-native-window.py": "886ca1c2d70d00818d66f7d3b7bd2fb586ec15cda7053b2a0ff4a8a2ed50acce",
+  "source.patch": "879f5cb8f31dfbde6fc61aba8b99251c9921ca25964d233d116a6a2c422ab75f",
+  "tauri-appearance-tests.log": "c79c07fd8150f9bd3c6caaa2e17b825e69a9bee5ce521818aaed7c1862ad76e3",
+  "tests-tsx-ipc-failed.log": "016b8cea33f536d92ad38d769b67524b8e72932c73c94c976260580213a0111d",
+  "theme-pack-tests.log": "55b9af0e3e08e7a02f61205b5c8bb9b6f0357ef068333db88c2ad0926c4ed1c1",
+  "theme.ts": "ae6b682415d212e085de61d7fca0cb17f37dfff8c8003a6353df538ce7bc72ce",
+  "verify-installed-d.py": "a4f2e94a2f78c8905ef329d64bf2e784b63026d9e3e2f74f7cd881d2a31b2a0a",
+  "wails-baseline-appearance-excerpts.txt": "03322c9533f34bda9d486fd13d68c6e5025869170fbc7727a8c12378ad5d1a7f",
+  "wailsDesktopRuntime.ts": "9a6744df82c62a295ab441b36b99a0fc6f6f350ff591de45450a9f397ef821fb"
+}

@@ -1,0 +1,12 @@
+{
+  "legacyUnchanged": true,
+  "legacyAfter": {
+    "sha256": "eb1d4e29c78efb88cc5e8e9b7a626d6dfb4aff42e5a8662330230ddbb5a6eeab",
+    "size": 77,
+    "mode": "0o600",
+    "mtimeNs": 1791000833207986229
+  },
+  "credentialIdentity": "6f918d3836c17f38b2b19fed293fd062",
+  "deletedNativeItemQueryExitCode": 44,
+  "queryIncludedSecretOutput": false
+}

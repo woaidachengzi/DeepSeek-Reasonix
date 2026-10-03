@@ -1,0 +1,30 @@
+
+  // Sync the native window theme (title bar, traffic lights) to match.
+  const runtime = typeof window !== "undefined" ? window.runtime : undefined;
+  if (runtime) {
+    syncAutoThemeBackgroundListener(theme);
+    if (theme === "auto") {
+      runtime.WindowSetSystemDefaultTheme?.();
+    } else if (theme === "light") {
+      runtime.WindowSetLightTheme?.();
+    } else if (theme === "dark") {
+      runtime.WindowSetDarkTheme?.();
+    }
+    syncNativeWindowBackground(theme);
+  }
+
+  void options;
+}
+
+function syncNativeWindowBackground(theme: Theme): void {
+  const runtime = typeof window !== "undefined" ? window.runtime : undefined;
+  if (!runtime?.WindowSetBackgroundColour) return;
+  const resolved = getResolvedTheme(theme);
+  if (resolved === "light") {
+    // Light shell: matches graphite --bg (#f4f3ef).
+    runtime.WindowSetBackgroundColour(244, 243, 239, 255);
+  } else {
+    // Dark shell: matches :root --bg (#090a0c).
+    runtime.WindowSetBackgroundColour(9, 10, 12, 255);
+  }
+}

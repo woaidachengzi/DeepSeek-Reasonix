@@ -1,0 +1,5 @@
+/private/tmp/reasonix-phase-old-binary-yqwbmuqu/Reasonix Window Baseline.app/Contents/MacOS/window-baseline: replacing existing signature
+/private/tmp/reasonix-phase-old-binary-yqwbmuqu/Reasonix Window Baseline.app: replacing existing signature
+{"app": "/private/tmp/reasonix-phase-old-binary-yqwbmuqu/Reasonix Window Baseline.app", "binarySha256": "9365791ba119ca01132de2cc53d62b70e54954c7f2fb63781a9ab543eb9230d5", "base": "/private/tmp/reasonix-phase-old-binary-yqwbmuqu"}
+{"delegate": "keep", "application": "tao", "kind": "tauri", "action": "phase-timer", "root": "/private/tmp/reasonix-phase-old-binary-yqwbmuqu/keep-tao-tauri-overlay-phase-timer", "style": "overlay", "hostPid": 22819, "kernelExitCode": 0, "openExitCode": 0, "expectedCode": 0}
+{"style": "overlay", "root": "/private/tmp/reasonix-phase-old-binary-yqwbmuqu/keep-tao-tauri-overlay-phase-timer", "pid": 22819, "exitCode": 0, "precondition": true, "minimized": true, "restored": true}

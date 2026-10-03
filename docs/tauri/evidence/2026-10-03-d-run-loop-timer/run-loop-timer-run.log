@@ -1,0 +1,5 @@
+/private/tmp/reasonix-tauri-run-loop-timer-6mim12fj/Reasonix Window Baseline.app/Contents/MacOS/window-baseline: replacing existing signature
+/private/tmp/reasonix-tauri-run-loop-timer-6mim12fj/Reasonix Window Baseline.app: replacing existing signature
+{"app": "/private/tmp/reasonix-tauri-run-loop-timer-6mim12fj/Reasonix Window Baseline.app", "binarySha256": "650f2b60da3a2cfb04f089a6b18ebccf13c008177d4be019ec2bc3fe248536af", "base": "/private/tmp/reasonix-tauri-run-loop-timer-6mim12fj"}
+{"delegate": "keep", "application": "tao", "kind": "cocoa", "action": "run-loop-timer", "root": "/private/tmp/reasonix-tauri-run-loop-timer-6mim12fj/keep-tao-cocoa-standard-run-loop-timer", "style": "standard", "hostPid": 21959, "kernelExitCode": 2, "openExitCode": 0, "expectedCode": 2}
+{"style": "standard", "root": "/private/tmp/reasonix-tauri-run-loop-timer-6mim12fj/keep-tao-cocoa-standard-run-loop-timer", "pid": 21959, "exitCode": 2, "precondition": true, "minimized": false, "restored": false}

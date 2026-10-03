@@ -1,0 +1,10 @@
+{
+  "fixture": "/private/tmp/reasonix-locked-keychain-pikhkolf",
+  "scope": "Owned fixed fake source only, never normal credentials",
+  "metadataExitCode": 0,
+  "ownedSourceCount": 1,
+  "explicitUnlockExitCode": 0,
+  "sourceReadExitCode": 0,
+  "fixedDummyExact": true,
+  "normalUnchanged": true
+}

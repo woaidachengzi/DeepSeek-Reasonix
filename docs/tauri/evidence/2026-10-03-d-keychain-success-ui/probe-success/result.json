@@ -1,0 +1,39 @@
+{
+  "create": {
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "privateDefault": {
+    "exitCode": 0,
+    "stdout": "    \"/private/tmp/reasonix-private-keychain-4xka5sd4/home/Library/Keychains/fixture.keychain-db\"\n",
+    "stderr": ""
+  },
+  "privateSearch": {
+    "exitCode": 0,
+    "stdout": "    \"/private/tmp/reasonix-private-keychain-4xka5sd4/home/Library/Keychains/fixture.keychain-db\"\n",
+    "stderr": ""
+  },
+  "addDummy": {
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "findDummyInFixture": {
+    "exitCode": 0,
+    "stdout": "keychain: \"/private/tmp/reasonix-private-keychain-4xka5sd4/home/Library/Keychains/fixture.keychain-db\"\nversion: 512\nclass: \"genp\"\nattributes:\n    0x00000007 <blob>=\"reasonix-private-probe-only\"\n    0x00000008 <blob>=<NULL>\n    \"acct\"<blob>=\"dummy\"\n    \"cdat\"<timedate>=0x32303236313030333032343831315A00  \"20261003024811Z\\000\"\n    \"crtr\"<uint32>=<NULL>\n    \"cusi\"<sint32>=<NULL>\n    \"desc\"<blob>=<NULL>\n    \"gena\"<blob>=<NULL>\n    \"icmt\"<blob>=<NULL>\n    \"invi\"<sint32>=<NULL>\n    \"mdat\"<timedate>=0x32303236313030333032343831315A00  \"20261003024811Z\\000\"\n    \"nega\"<sint32>=<NULL>\n    \"prot\"<blob>=<NULL>\n    \"scrp\"<sint32>=<NULL>\n    \"svce\"<blob>=\"reasonix-private-probe-only\"\n    \"type\"<uint32>=<NULL>\n",
+    "stderr": ""
+  },
+  "deleteDummy": {
+    "exitCode": 0,
+    "stdout": "keychain: \"/private/tmp/reasonix-private-keychain-4xka5sd4/home/Library/Keychains/fixture.keychain-db\"\nversion: 512\nclass: \"genp\"\nattributes:\n    0x00000007 <blob>=\"reasonix-private-probe-only\"\n    0x00000008 <blob>=<NULL>\n    \"acct\"<blob>=\"dummy\"\n    \"cdat\"<timedate>=0x32303236313030333032343831315A00  \"20261003024811Z\\000\"\n    \"crtr\"<uint32>=<NULL>\n    \"cusi\"<sint32>=<NULL>\n    \"desc\"<blob>=<NULL>\n    \"gena\"<blob>=<NULL>\n    \"icmt\"<blob>=<NULL>\n    \"invi\"<sint32>=<NULL>\n    \"mdat\"<timedate>=0x32303236313030333032343831315A00  \"20261003024811Z\\000\"\n    \"nega\"<sint32>=<NULL>\n    \"prot\"<blob>=<NULL>\n    \"scrp\"<sint32>=<NULL>\n    \"svce\"<blob>=\"reasonix-private-probe-only\"\n    \"type\"<uint32>=<NULL>\n",
+    "stderr": "password has been deleted.\n"
+  },
+  "missingDummy": {
+    "exitCode": 44,
+    "stdout": "",
+    "stderr": "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain.\n"
+  },
+  "passed": true,
+  "normalUnchanged": true
+}

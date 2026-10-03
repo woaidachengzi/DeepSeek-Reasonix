@@ -1,0 +1,48 @@
+{
+  "source": "Transcript of CUA actions and returned AX/screenshot observations; no screenshot files exported",
+  "hostPid": 39384,
+  "sidecarPid": 39391,
+  "profile": "explicit",
+  "origin": "reasonix-preview://930716c119b29b442010b77b7256ab18.localhost/",
+  "hostSha256": "d1c9fd5a0106019a8c20d1c93ccfca0ca5406c2d4a3e03cd594b8499e41e687c",
+  "actions": [
+    {
+      "action": "Window > Minimize click",
+      "status": "inconclusive",
+      "observed": "small transformed window screenshot twice; AX retained standard window. Read-only CG metadata main window 4675 bounds 1280x820 and isOnscreen true; no authoritative isMiniaturized property recorded."
+    },
+    {
+      "action": "Window > Show Reasonix click",
+      "status": "observed",
+      "observed": "normal complete 2560x1640 window screenshot and main HTML focus restored"
+    },
+    {
+      "action": "super+comma",
+      "status": "passed",
+      "observed": "settings container and settings controls added to AX tree"
+    },
+    {
+      "action": "View > Toggle Full Screen click",
+      "status": "passed",
+      "observed": "3840x2160 full-screen settings screenshot; close/minimize/full-screen titlebar buttons absent from AX"
+    },
+    {
+      "action": "ctrl+super+f",
+      "status": "passed",
+      "observed": "2560x1640 normal settings window with titlebar controls returned to AX"
+    },
+    {
+      "action": "Reasonix Tauri Preview > Quit Reasonix click",
+      "status": "passed",
+      "observed": "kernel exit0/open exit0/sidecar and ready absent"
+    }
+  ],
+  "notCovered": [
+    "physical minimize final native state",
+    "tray clicks",
+    "Dock reopen",
+    "display unplug/drag/mixed scale",
+    "IME and configurable shortcuts",
+    "full D/E acceptance"
+  ]
+}

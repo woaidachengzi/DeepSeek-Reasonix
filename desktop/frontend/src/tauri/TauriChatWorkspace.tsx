@@ -104,6 +104,7 @@ import {
   attachTauriFile,
   chooseTauriAttachmentFiles,
   chooseTauriWorkspaceRoot,
+  setTauriTrayLocale,
   deleteTauriBridgeSession,
   forgetTauriWorkbenchSession,
   importTauriStableProjectFolders,
@@ -408,6 +409,15 @@ export function TauriSessionPreview() {
   const { locale, pref: languagePref, setPref: setLanguagePref } = useI18n();
   const t = useT();
   const { showToast } = useToast();
+  useEffect(() => {
+    let active = true;
+    void setTauriTrayLocale(locale).catch(() => {
+      if (active) showToast(locale === "en"
+        ? "Could not update the tray language. Restart Preview and retry."
+        : "托盘语言未能更新，请重启 Preview 后重试。", "warn");
+    });
+    return () => { active = false; };
+  }, [locale, showToast]);
   const notificationFailureShown = useRef(false);
   const notificationLocale = useRef(locale);
   useLayoutEffect(() => { notificationLocale.current = locale; }, [locale]);

@@ -1,0 +1,9 @@
+/private/tmp/reasonix-tauri-window-baseline-6383e4_w/Reasonix Window Baseline.app/Contents/MacOS/window-baseline: replacing existing signature
+/private/tmp/reasonix-tauri-window-baseline-6383e4_w/Reasonix Window Baseline.app: replacing existing signature
+{"app": "/private/tmp/reasonix-tauri-window-baseline-6383e4_w/Reasonix Window Baseline.app", "binarySha256": "41e5bbe8fc968abee54b56b4f043e690ef61a6a50df34d62f6c68ba7c1d0069f", "base": "/private/tmp/reasonix-tauri-window-baseline-6383e4_w"}
+{"delegate": "keep", "application": "tao", "kind": "cocoa", "action": "direct", "root": "/private/tmp/reasonix-tauri-window-baseline-6383e4_w/keep-tao-cocoa-standard-direct", "style": "standard", "hostPid": 5699, "kernelExitCode": 2, "openExitCode": 0, "expectedCode": 2}
+Traceback (most recent call last):
+  File "/private/tmp/reasonix-run-delegate-baseline.py", line 46, in <module>
+    assert result['precondition'] is True,'baseline activation/page precondition failed'
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: baseline activation/page precondition failed

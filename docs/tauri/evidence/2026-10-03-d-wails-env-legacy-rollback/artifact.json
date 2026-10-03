@@ -1,0 +1,10 @@
+{
+  "app": "/private/tmp/reasonix-d-explicit-boundary-installed-acm_slth/Reasonix Tauri Preview.app",
+  "legacyApp": "/private/tmp/reasonix-official-window-baseline/extracted/Reasonix.app",
+  "sha256": {
+    "/private/tmp/reasonix-d-explicit-boundary-installed-acm_slth/Reasonix Tauri Preview.app/Contents/MacOS/reasonix-tauri": "c71ab66c727b1dc71854a993ba232f6515975328f684e365d3fc9bef801f2707",
+    "/private/tmp/reasonix-d-explicit-boundary-installed-acm_slth/Reasonix Tauri Preview.app/Contents/MacOS/reasonix-desktop-bridge": "94207d451469c99cd25439e8107244f4a19a5c6da349668a111db98fa911a9fd",
+    "/private/tmp/reasonix-official-window-baseline/extracted/Reasonix.app/Contents/MacOS/reasonix-desktop": "869b02d8f8a92f5847c1728923fde7153d931e105f26fd2926bfa8feeb863650",
+    "/private/tmp/reasonix-official-window-baseline/extracted/Reasonix.app/Contents/MacOS/reasonix": "5b1ab31424d45c8bf3cfe6a60b11da527df2252aee963d1c0c56352f57945962"
+  }
+}

@@ -1,0 +1,116 @@
+{
+  "sourceHead": "64c745c1a4aa6bc1eccc45c70be9b1a54d7165c4",
+  "dirty": true,
+  "app": "/private/tmp/reasonix-d-root-accepted-t4_lgkuh/Reasonix Tauri Preview.app",
+  "dmg": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri Preview_0.1.0_aarch64.dmg",
+  "sha256": {
+    "Reasonix Tauri Preview_0.1.0_aarch64.dmg": "00ba7049e367908697affa352c0d81b268cfbf6ceca3b690bf45ca2100f4b3aa",
+    "reasonix-tauri": "9676735e7a5a046de9592d7d633fb9cf632280159b3a8d5081f6f430f23cf220",
+    "reasonix-desktop-bridge": "29d985c7af09baefec4308339429eabfe921896c47db6f4c30584b742b7efd39"
+  },
+  "gates": [
+    {
+      "name": "boundary",
+      "exitCode": 0,
+      "log": "boundary.log"
+    },
+    {
+      "name": "package",
+      "exitCode": 0,
+      "log": "package.log"
+    },
+    {
+      "name": "profile",
+      "exitCode": 0,
+      "log": "profile.log"
+    },
+    {
+      "name": "startup",
+      "exitCode": 0,
+      "log": "startup.log"
+    }
+  ],
+  "sourcePatchSha256": "94f29f140b945276cfb86f677dd0904f54faa844886ab88e9c83f383acf74013",
+  "sourcePatch": "source.patch",
+  "runnerSha256": "ac0c24fff73d7547bf04886e7b5b8011fd6469dc7528199af12b4df82a4db0e5",
+  "checks": [
+    {
+      "name": "unit-before",
+      "exitCode": 101,
+      "expectedExitCode": 101,
+      "log": "unit-before.log"
+    },
+    {
+      "name": "unit-after",
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "log": "unit-after.log"
+    },
+    {
+      "name": "rust-full",
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "log": "rust-full.log"
+    },
+    {
+      "name": "clippy",
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "log": "clippy.log"
+    },
+    {
+      "name": "build",
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "log": "build.log"
+    },
+    {
+      "name": "native-before",
+      "exitCode": 1,
+      "expectedExitCode": 1,
+      "log": "native-before.log"
+    },
+    {
+      "name": "native-build-handler-only",
+      "exitCode": 1,
+      "expectedExitCode": 1,
+      "log": "native-build-handler-only.log"
+    }
+  ],
+  "intermediatePackage": {
+    "sha256": {
+      "Reasonix Tauri Preview_0.1.0_aarch64.dmg": "65d6671e2d9c0ff0b4614ea97fded3e369a74648c6c1aa205f1125c4f7255478",
+      "reasonix-tauri": "499c4e544ef8b6e149a8d2eb2e13838533c878bb42dd2487f71605c23e7da47d",
+      "reasonix-desktop-bridge": "29d985c7af09baefec4308339429eabfe921896c47db6f4c30584b742b7efd39"
+    },
+    "gates": [
+      {
+        "name": "window",
+        "exitCode": 0,
+        "log": "intermediate-window.log"
+      },
+      {
+        "name": "lifetime",
+        "exitCode": 0,
+        "log": "intermediate-lifetime.log"
+      }
+    ],
+    "scope": "root directory guard before graceful setup refusal; these gates do not certify the final package"
+  },
+  "oldPackageObservation": {
+    "fixture": "/private/tmp/reasonix-managed-boundary-x7qcgnar",
+    "legacyConfigChanged": true,
+    "previewCredentialIdentityCreatedInLegacy": true,
+    "scope": "private dummy originals only; previous 2026-10-02-d-installed-host-events package"
+  },
+  "signature": "ad-hoc; codesign --verify --deep --strict passed; not notarized",
+  "scope": {
+    "managedLeaf": "rejects linked/dangling/non-directory reasonix-core during setup; new root 0700",
+    "explicitRoots": "unchanged; arbitrary old lock-unaware writers not certified",
+    "externalRenameRaces": "not an open-directory lifetime lock against arbitrary external replacement",
+    "physicalUi": "current cua.getState timed out and reset kernel; no new physical interaction acceptance",
+    "D": "incomplete",
+    "E": "not advanced",
+    "release": "not authorized or published"
+  }
+}

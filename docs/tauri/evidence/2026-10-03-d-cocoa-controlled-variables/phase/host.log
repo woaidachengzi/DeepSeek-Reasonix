@@ -1,0 +1,5 @@
+{"active":true,"elapsedMs":114,"events":["key"],"key":true,"minimized":false,"occlusionVisible":false,"stage":"ready","visible":true}
+{"active":true,"elapsedMs":114,"events":["key"],"key":true,"minimized":false,"occlusionVisible":false,"stage":"loaded","visible":true}
+{"active":true,"elapsedMs":164,"events":["key","resign-key","key"],"key":true,"minimized":false,"occlusionVisible":false,"stage":"minimize-ready","visible":true}
+{"active":true,"elapsedMs":165,"events":["key","resign-key","key"],"key":true,"minimized":false,"occlusionVisible":false,"stage":"minimize-requested","visible":true}
+{"active":true,"elapsedMs":5215,"events":["key","resign-key","key","resign-key","occlusion","occlusion"],"key":false,"minimized":false,"occlusionVisible":false,"stage":"failed-mini","visible":true}

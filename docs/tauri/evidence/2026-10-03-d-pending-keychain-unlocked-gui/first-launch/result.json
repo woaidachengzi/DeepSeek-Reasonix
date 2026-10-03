@@ -1,0 +1,15 @@
+{
+  "app": "/private/tmp/reasonix-d-keychain-pending-installed-_r6bt14n/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-launch-services-rfzgwuxu",
+  "identifier": "io.reasonix.desktop.preview",
+  "pid": 37831,
+  "sidecarPid": 37838,
+  "openerPid": 37829,
+  "profile": "explicit",
+  "interactive": true,
+  "exitCode": 0,
+  "expectedExitCode": 0,
+  "openExitCode": 0,
+  "sidecarRemaining": false,
+  "readyRemaining": false
+}

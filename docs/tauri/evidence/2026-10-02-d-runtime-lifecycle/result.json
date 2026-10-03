@@ -1,0 +1,76 @@
+{
+  "app": "/private/tmp/reasonix-d-runtime-installed-gm1mgpy_/Reasonix Tauri Preview.app",
+  "dmg": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri Preview_0.1.0_aarch64.dmg",
+  "sha256": {
+    "Reasonix Tauri Preview_0.1.0_aarch64.dmg": "ac67d694544d42016ccb9e7dc0fdd63a28dd58231ce6e41b2872030057b7282f",
+    "reasonix-tauri": "b95b38c0e35d66c964bc370b621a46c9d69116b7408a7c7567f4c715abc17734",
+    "reasonix-desktop-bridge": "29d985c7af09baefec4308339429eabfe921896c47db6f4c30584b742b7efd39"
+  },
+  "sourceHead": "64c745c1a4aa6bc1eccc45c70be9b1a54d7165c4",
+  "dirty": true,
+  "gates": [
+    {
+      "name": "clipboard-menu",
+      "script": "smoke-native-window.py",
+      "args": [
+        "--independent"
+      ],
+      "exitCode": 0,
+      "log": "clipboard-menu.log"
+    },
+    {
+      "name": "package",
+      "script": "smoke-packaged-app.py",
+      "args": [],
+      "exitCode": 0,
+      "log": "package.log"
+    }
+  ],
+  "sourcePatchSha256": "3d3ce58a01db1b2f7a467de41dac195705199df7a8e2495d674121622b707c28",
+  "untrackedProductionSources": [
+    {
+      "path": "desktop/frontend/src/lib/wailsDesktopRuntime.ts",
+      "snapshot": "wailsDesktopRuntime.ts",
+      "sha256": "4e5d176622bd6ced0484ba728066bc737cd170b8656134a4bac8a74f7d64e012"
+    }
+  ],
+  "checks": [
+    {
+      "name": "window-ordering-before",
+      "exitCode": 1,
+      "expectedExitCode": 1,
+      "log": "window-before.log"
+    },
+    {
+      "name": "window-ordering-after",
+      "exitCode": 0,
+      "log": "window-after.log"
+    },
+    {
+      "name": "clipboard-unit",
+      "exitCode": 0,
+      "log": "clipboard-unit.log"
+    },
+    {
+      "name": "full-test-typecheck",
+      "exitCode": 0,
+      "log": "typecheck.log"
+    },
+    {
+      "name": "production-build",
+      "exitCode": 0,
+      "log": "build.log"
+    }
+  ],
+  "scope": "Legacy Wails runtime convergence and cancellation of undispatched geometry observations. Native clipboard/menu independent slice only; does not pass complete window gate or D.",
+  "logSha256": {
+    "window-before.log": "4e1d43a7316b0f7f91f1c67505e6af2e7cdb375faeb55768b9d6abd8762e3bba",
+    "clipboard-menu.log": "c40e8b1bb37378200d4985a66b037ed99537e095cc330c58faec5791173750d9",
+    "typecheck.log": "37bed87a25bb00230fa47d394d75a54ebb7ce4b7d23dff4ae83b86db4489f354",
+    "window-after.log": "17df4fe8746738ac164bceedf9fd3058f7c818751acd2dc83f966b40d39cd879",
+    "clipboard-unit.log": "89007236ff3f5b6b4f6c0e1e44ea480031ed184b50a85f22894179bd51b3817e",
+    "install.log": "1b594952bfd5cb1323b73cc246088c73bf189389b795ddb9d9e6593a244d5040",
+    "package.log": "4b85583120aec904ed26d39455e98df4ec9b16bcda4b8b4436a40a2f08ca5ccc",
+    "build.log": "e924622315b272f7ddb876d86707f4c7fd97f39492f5e90d29451b45660551d7"
+  }
+}

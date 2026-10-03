@@ -1,0 +1,48 @@
+[
+  {
+    "name": "managed-fresh",
+    "seed": null,
+    "root": "/private/tmp/reasonix-d295-geometry-control-wkvewpmz/managed-fresh",
+    "status": "passed",
+    "remainingSidecars": [],
+    "remainingReadiness": 0
+  },
+  {
+    "name": "managed-seeded",
+    "seed": {
+      "width": 2000,
+      "height": 1400,
+      "maximized": false,
+      "x": 920,
+      "y": 344,
+      "scale_factor": 2.0
+    },
+    "root": "/private/tmp/reasonix-d295-geometry-control-wkvewpmz/managed-seeded",
+    "status": "passed",
+    "remainingSidecars": [],
+    "remainingReadiness": 0
+  },
+  {
+    "name": "explicit-seeded",
+    "seed": {
+      "width": 2000,
+      "height": 1400,
+      "maximized": false,
+      "x": 920,
+      "y": 344,
+      "scale_factor": 2.0
+    },
+    "root": "/private/tmp/reasonix-d295-geometry-control-wkvewpmz/explicit-seeded",
+    "status": "passed",
+    "remainingSidecars": [],
+    "remainingReadiness": 0
+  },
+  {
+    "name": "explicit-fresh",
+    "seed": null,
+    "root": "/private/tmp/reasonix-d295-geometry-control-wkvewpmz/explicit-fresh",
+    "status": "passed",
+    "remainingSidecars": [],
+    "remainingReadiness": 0
+  }
+]

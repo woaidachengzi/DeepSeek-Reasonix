@@ -1,0 +1,12 @@
+  PASS  a newer request waits for the in-flight capture and persistence
+  PASS  both distinct observations are persisted
+  PASS  the newest observation is written last
+  PASS  the newest maximised state is preserved
+  PASS  an unchanged observation is deduplicated after persistence succeeds
+  PASS  a disposed capture cannot overwrite the replacement mount's geometry
+  PASS  disposal stops the remaining native reads and queued captures
+  PASS  a disposed saver ignores subsequent requests
+  PASS  browser without a host does not manufacture a geometry runtime
+  PASS  incomplete geometry capability starts no capture
+  PASS  late Wails runtime injection is discovered at use time
+  PASS  geometry adapter preserves the host method receiver

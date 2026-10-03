@@ -1,0 +1,39 @@
+import hashlib,importlib.util,json,os,shutil,subprocess,sys,tomllib
+from pathlib import Path
+sys.dont_write_bytecode=True
+repo=Path('/Users/jerry/temp/app/reasonix-tauri')
+spec=importlib.util.spec_from_file_location('profile',repo/'tools/tauri/smoke-profile-import.py');profile=importlib.util.module_from_spec(spec);spec.loader.exec_module(profile)
+app=Path('/private/tmp/reasonix-d-explicit-boundary-installed-0facty1u/Reasonix Tauri Preview.app')
+legacy=Path('/private/tmp/reasonix-official-window-baseline/extracted/Reasonix.app/Contents/MacOS/reasonix')
+assert hashlib.sha256(legacy.read_bytes()).hexdigest()=='5b1ab31424d45c8bf3cfe6a60b11da527df2252aee963d1c0c56352f57945962','official legacy CLI differs'
+output=repo/'docs/tauri/evidence/2026-10-03-d-a62-backup-apply-legacy-control'
+output.mkdir(mode=0o700,exist_ok=False)
+original_launch=profile.launch
+receipts=[]
+def launch(app_path,identifier,root,phase,configuration):
+ if phase=='explicit':
+  assert not profile.package.matching_package_is_running(identifier),'Preview must be stopped before backup restore'
+  core=root/'home/Library/Application Support'/identifier/'reasonix-core'
+  assert not profile.package.own_sidecars(root/'tmp',app/'Contents/MacOS/reasonix-desktop-bridge')
+  backups=list((core/'backups').glob('*/config.toml'));assert len(backups)==1
+  backup=backups[0];before=profile.tree(core)
+  assert backup.read_bytes()==configuration and not backup.is_symlink()
+  restored_home=root/'rollback-home';restored_home.mkdir(mode=0o700)
+  restored=restored_home/'.reasonix';restored.mkdir(mode=0o700)
+  target=restored/'config.toml';shutil.copyfile(backup,target);target.chmod(0o600)
+  assert target.read_bytes()==backup.read_bytes()
+  assert tomllib.loads(target.read_text())['default_model']=='native-import/alpha'
+  target_before=profile.tree(restored)
+  env={k:os.environ[k] for k in ('PATH','USER','LOGNAME','LANG') if k in os.environ}
+  env.update(HOME=str(restored_home),REASONIX_HOME=str(restored),REASONIX_STATE_HOME=str(restored),REASONIX_CACHE_HOME=str(root/'rollback-cache'),HTTP_PROXY='http://127.0.0.1:9',HTTPS_PROXY='http://127.0.0.1:9',ALL_PROXY='http://127.0.0.1:9')
+  result=subprocess.run([str(legacy),'config','currency'],env=env,cwd=root,text=True,capture_output=True,timeout=15)
+  receipt={'legacyCliSha256':hashlib.sha256(legacy.read_bytes()).hexdigest(),'backupSha256':hashlib.sha256(backup.read_bytes()).hexdigest(),'restoredSha256':hashlib.sha256(target.read_bytes()).hexdigest(),'restoredDefaultModel':tomllib.loads(target.read_text())['default_model'],'legacyExitCode':result.returncode,'legacyStdout':result.stdout,'legacyStderr':result.stderr,'restoredTreeUnchanged':profile.tree(restored)==target_before,'previewAndBackupTreeUnchanged':profile.tree(core)==before,'previewStoppedBeforeRestore':True}
+  (output/'rollback-receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
+  assert result.returncode==0 and 'currency = "CNY"' in result.stdout
+  assert receipt['restoredTreeUnchanged'] and receipt['previewAndBackupTreeUnchanged']
+  receipts.append(receipt)
+ return original_launch(app_path,identifier,root,phase,configuration)
+profile.launch=launch
+profile.smoke(str(app),str(legacy))
+assert len(receipts)==1
+print('Actual imported backup applied to separate private legacy profile; official CLI read-only recovery and original preservation: OK',flush=True)

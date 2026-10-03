@@ -1,0 +1,15 @@
+{
+  "app": "/private/tmp/reasonix-d-host-exit-installed-xg2eq0h_/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-launch-services-7vzt8_lz",
+  "identifier": "io.reasonix.desktop.preview",
+  "pid": 83807,
+  "sidecarPid": 83845,
+  "openerPid": 83805,
+  "profile": "managed",
+  "interactive": false,
+  "exitCode": 2,
+  "expectedExitCode": 2,
+  "openExitCode": 0,
+  "sidecarRemaining": false,
+  "readyRemaining": false
+}

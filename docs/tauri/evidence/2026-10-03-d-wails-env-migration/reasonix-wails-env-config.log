@@ -1,0 +1,4 @@
+# ./internal/config
+open /Users/jerry/Library/Caches/go-build/c3/c3e9bdb7137893e0c7547a7600e99fd6df84a2f2fba695f214c133a00817bd34-a: operation not permitted
+FAIL	./internal/config [setup failed]
+FAIL

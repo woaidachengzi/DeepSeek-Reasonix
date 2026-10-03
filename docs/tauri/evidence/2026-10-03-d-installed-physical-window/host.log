@@ -1,0 +1,2 @@
+Reasonix could not restore system keychain credentials: some provider credentials could not be restored; unlock credential storage or check application access, then restart the bridge
+2026-10-03 09:24:21.553 reasonix-tauri[17006:258935] TSM AdjustCapsLockLEDForKeyTransitionHandling - _ISSetPhysicalKeyboardCapsLockLED Inhibit

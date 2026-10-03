@@ -1,0 +1,9 @@
+/private/tmp/reasonix-tauri-window-baseline-inzlrny8/Reasonix Window Baseline.app/Contents/MacOS/window-baseline: replacing existing signature
+/private/tmp/reasonix-tauri-window-baseline-inzlrny8/Reasonix Window Baseline.app: replacing existing signature
+{"app": "/private/tmp/reasonix-tauri-window-baseline-inzlrny8/Reasonix Window Baseline.app", "binarySha256": "8a251dc29d74798d4e9d8f39e841a235d5d6a1ca0bf68bef27ba180d2766a6ed", "base": "/private/tmp/reasonix-tauri-window-baseline-inzlrny8"}
+{"style": "standard", "hostPid": 79500, "kernelExitCode": 0, "openExitCode": 0, "expectedCode": 2}
+Traceback (most recent call last):
+  File "/private/tmp/reasonix-run-window-baseline.py", line 41, in <module>
+    assert code==expected,'baseline kernel exit receipt mismatch'
+           ^^^^^^^^^^^^^^
+AssertionError: baseline kernel exit receipt mismatch

@@ -1,0 +1,114 @@
+{
+  "root": "/private/tmp/reasonix-cocoa-identity-control-huqpwsbf",
+  "app": "/private/tmp/reasonix-cocoa-identity-control-huqpwsbf/Private Cocoa Control.app",
+  "pid": 16382,
+  "kernelExitCode": 0,
+  "openExitCode": 0,
+  "binarySha256": "693a5730df8d3e4bd85dcd99cb326f494aa80ceffc1b14a958d85c218c272012",
+  "passed": true,
+  "records": [
+    {
+      "active": true,
+      "elapsedMs": 135,
+      "events": [
+        "key"
+      ],
+      "key": true,
+      "minimized": false,
+      "occlusionVisible": false,
+      "stage": "ready",
+      "visible": true
+    },
+    {
+      "active": true,
+      "elapsedMs": 288,
+      "events": [
+        "key",
+        "occlusion"
+      ],
+      "key": true,
+      "minimized": false,
+      "occlusionVisible": true,
+      "stage": "loaded",
+      "visible": true
+    },
+    {
+      "active": true,
+      "elapsedMs": 336,
+      "events": [
+        "key",
+        "occlusion",
+        "resign-key",
+        "key",
+        "occlusion"
+      ],
+      "key": true,
+      "minimized": false,
+      "occlusionVisible": false,
+      "stage": "minimize-ready",
+      "visible": true
+    },
+    {
+      "active": true,
+      "elapsedMs": 336,
+      "events": [
+        "key",
+        "occlusion",
+        "resign-key",
+        "key",
+        "occlusion"
+      ],
+      "key": true,
+      "minimized": false,
+      "occlusionVisible": false,
+      "stage": "minimize-requested",
+      "visible": true
+    },
+    {
+      "active": true,
+      "elapsedMs": 862,
+      "events": [
+        "key",
+        "occlusion",
+        "resign-key",
+        "key",
+        "occlusion",
+        "will-mini",
+        "resign-key",
+        "did-mini",
+        "occlusion",
+        "occlusion"
+      ],
+      "key": false,
+      "minimized": true,
+      "occlusionVisible": false,
+      "stage": "minimized",
+      "visible": false
+    },
+    {
+      "active": true,
+      "elapsedMs": 1517,
+      "events": [
+        "key",
+        "occlusion",
+        "resign-key",
+        "key",
+        "occlusion",
+        "will-mini",
+        "resign-key",
+        "did-mini",
+        "occlusion",
+        "occlusion",
+        "key",
+        "did-demini",
+        "occlusion",
+        "occlusion"
+      ],
+      "key": true,
+      "minimized": false,
+      "occlusionVisible": false,
+      "stage": "passed",
+      "visible": true
+    }
+  ]
+}

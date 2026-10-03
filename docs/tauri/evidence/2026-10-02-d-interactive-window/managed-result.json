@@ -1,0 +1,13 @@
+{
+  "app": "/private/tmp/reasonix-d-interactive-installed-tks3iqss/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-launch-services-5mcul202",
+  "identifier": "io.reasonix.desktop.preview",
+  "pid": 78012,
+  "sidecarPid": 78027,
+  "openerPid": 78010,
+  "profile": "managed",
+  "interactive": false,
+  "exitCode": 0,
+  "sidecarRemaining": false,
+  "readyRemaining": false
+}

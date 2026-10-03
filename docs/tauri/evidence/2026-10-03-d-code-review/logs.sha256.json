@@ -1,0 +1,18 @@
+{
+  "build.log": "50fe0a0f0eaad8eea7ec0a95c0d049229e4fcccad580536f3b1def9817764d85",
+  "clipboard-fixture.log": "e73c3805f810fdcf3d0167ced7085c48306c9482a952ffb710551d230cdb3e51",
+  "clipboard.log": "3be54d03ac8ef88cc04ceea85afce5b0447b4f12160985fc436acfb8c4b5fd13",
+  "clippy-final.log": "29d63c7c4a457e55e5b3bd4ea5b2978e6e8331a6d01983b3ef827c28e69a8aaa",
+  "frontend-final.log": "9b0d59e4b6329306a0cf9772320df75756268bcfead94849b32137d218e32f7c",
+  "frontend-host.log": "18a7673a3f75e4fd9666a85e5dec0af10455ce3d802c5e3738ac31757d4c7e34",
+  "frontend.log": "9d4f2138f147b2fd1538c3ccfa158264ace2a009d4e59cf21d58dfc2edb05ef2",
+  "go-packages.log": "fb3718530123c280ca1cbb6674e0d7fb5086671238e9609d142b8f5115cf056c",
+  "go.log": "d8a2aa5d3968aaca88e2e4c7f93d42f6b182b64ca8143ec47fddbd76ced1c6fb",
+  "native-env-test-build.log": "d23fb9c8f2fda702badeb74988e3d412a4e52e08e3f4f0da85849456281b40fb",
+  "rust-final.log": "a24fcbd0dfd3a45e8d1419454165886bb8a46b614d2d7b75cb29e41833de764b",
+  "rust-host-final.log": "61d54c1b916c2688de7ecdc88a92636a692070448ad2f4883b11c52c788a6390",
+  "rust.log": "d407d779f1f8dbb0510f294831e21aaa0caf6fd4a55d7efcbb195d07f456a1d2",
+  "typecheck.log": "c8365eb77a70033e1c469c8c828030b7236cb4a4539f47725bdaa775b9d036d7",
+  "window-state-final.log": "6a9f33d8e4366b3d0cd60f57a1811a35c531080c144b233f11bd556292b5efde",
+  "window-state.log": "d020dcd286832efe74edc7207af30a62936823a17766d15f377a242a198d32c7"
+}

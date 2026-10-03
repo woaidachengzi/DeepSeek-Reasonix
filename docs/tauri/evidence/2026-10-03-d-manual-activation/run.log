@@ -1,0 +1,9 @@
+/private/tmp/reasonix-tauri-window-baseline-lsh8zpf9/Reasonix Window Baseline.app/Contents/MacOS/window-baseline: replacing existing signature
+/private/tmp/reasonix-tauri-window-baseline-lsh8zpf9/Reasonix Window Baseline.app: replacing existing signature
+{"app": "/private/tmp/reasonix-tauri-window-baseline-lsh8zpf9/Reasonix Window Baseline.app", "binarySha256": "57955cbd13ed18d3c67b62f47f7a3cc594bad8d426431721c8f42029a83afb50", "base": "/private/tmp/reasonix-tauri-window-baseline-lsh8zpf9"}
+{"manualReadyRoot": "/private/tmp/reasonix-tauri-window-baseline-lsh8zpf9/keep-tao-cocoa-standard-direct", "hostPid": 6133, "app": "/private/tmp/reasonix-tauri-window-baseline-lsh8zpf9/Reasonix Window Baseline.app", "delegate": "keep"}
+Traceback (most recent call last):
+  File "/private/tmp/reasonix-run-manual-activation.py", line 44, in <module>
+    expected=0 if result['restored'] and result['precondition'] else 2
+                  ~~~~~~^^^^^^^^^^^^
+KeyError: 'restored'

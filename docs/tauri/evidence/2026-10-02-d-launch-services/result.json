@@ -1,0 +1,28 @@
+{
+  "app": "/private/tmp/reasonix-d-tray-caller-installed-9fwl55vz/Reasonix Tauri Preview.app",
+  "hostSha256": "317d96bb0df1806bf23a09ac83439084a36604fd8fb35fa072e23c62ec5f39fb",
+  "sidecarSha256": "29d985c7af09baefec4308339429eabfe921896c47db6f4c30584b742b7efd39",
+  "packageProfilesPassed": [
+    "managed",
+    "explicit"
+  ],
+  "uiChecks": {
+    "fileChoose": "passed: actual file panel Open produced one canary.txt pending attachment",
+    "cancelWithAttachment": "passed: existing pending attachment and empty prompt retained",
+    "removeDraftAttachment": "passed: chip removed and Send disabled; fixed source unchanged",
+    "cmdQ": "passed: original confirmed private host/sidecar/opener exited, no ready files; no shell signal issued to these private PIDs"
+  },
+  "observationBoundary": "Post-Quit CUA window observation showed a different origin/default profile. Stop; no further UI actions; exact copied-test-artifact replacement PID and its child were cleaned by SIGTERM. Cleanup is separate from original private Cmd+Q acceptance. No default-profile data preservation claim.",
+  "scope": "Single explicit private UI profile, new-conversation queued path only; no model request, persisted session attachment copying, actual minimized state, tray popup, mixed scale, or full D/E acceptance.",
+  "artifactSha256": {
+    "probe-launch-services-profile.py": "0adafe03b4bccd7dc871d65b8df2fc66cf9eced681b6d57918a1acae9b2305cc",
+    "ui-launch.json": "a9a137eb926a8f22451d81a499d5ef2565628ad6484bcbc00a629bf34ad0f3f5",
+    "package-managed.json": "154476b491907eb48ab17fdae72559ac4bb24961ab2022c9c4c07e4f1869ed98",
+    "package-first.log": "103205fa01b77de9184537a74ffd1bd55384e65f10c36ca660b3a5d84dc5b112",
+    "package-explicit.json": "94632e3f236a514f97c2f3d289305c46b22393eed45afa023a3f35891a5bb0d1",
+    "ui-postquit.json": "84cec269a74e64dd7f359278b20c1d19d4bdd1df5687d20572e64e671b7fc1eb",
+    "canary.txt": "0122f4513999112b90dab997e2f3fd05822d2404aa8e0dc3c92e189b26499a95",
+    "package.log": "226914a87d4ed05d59eac92b355dd073629479e310fc29a3d87db54b6a3bf158",
+    "observation-cleanup.json": "9e8a7cfbf69f276515f9e7aedd822308c8247f6b0d7e35d9b569850b2d52a643"
+  }
+}

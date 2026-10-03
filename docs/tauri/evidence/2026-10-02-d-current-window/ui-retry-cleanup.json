@@ -1,0 +1,8 @@
+{
+  "app": "/private/tmp/reasonix-d-runtime-installed-gm1mgpy_/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-d-interactive-fb47zy0z",
+  "identifier": "io.reasonix.desktop.preview",
+  "pid": 68832,
+  "observation": "Fresh CUA session getApp failed with ScreenCaptureKit -3811; no file dialog action issued",
+  "cleanup": "Exact guarded private host SIGTERM; no host, sidecar or ready file remains; not UI Quit acceptance"
+}

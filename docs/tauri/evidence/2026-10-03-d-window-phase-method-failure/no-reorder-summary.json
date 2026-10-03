@@ -1,0 +1,50 @@
+[
+  {
+    "case": "0-cocoa",
+    "minimized": false,
+    "restored": false,
+    "precondition": true
+  },
+  {
+    "case": "1-tauri",
+    "minimized": false,
+    "restored": false,
+    "precondition": true
+  },
+  {
+    "case": "2-cocoa",
+    "minimized": false,
+    "restored": false,
+    "precondition": true
+  },
+  {
+    "case": "3-tauri",
+    "minimized": false,
+    "restored": false,
+    "precondition": true
+  },
+  {
+    "case": "4-cocoa",
+    "minimized": false,
+    "restored": false,
+    "precondition": true
+  },
+  {
+    "case": "5-tauri",
+    "minimized": false,
+    "restored": false,
+    "precondition": true
+  },
+  {
+    "case": "6-cocoa",
+    "minimized": false,
+    "restored": false,
+    "precondition": true
+  },
+  {
+    "case": "7-tauri",
+    "minimized": false,
+    "restored": false,
+    "precondition": true
+  }
+]

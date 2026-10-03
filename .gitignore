@@ -84,3 +84,6 @@ site/.generated/
 # Committed pointer at REASONIX.md; overrides a global CLAUDE.md ignore rule.
 !/CLAUDE.md
 .gocache/
+
+# Native acceptance Python bytecode cache
+/tools/tauri/__pycache__/

@@ -1,0 +1,8 @@
+Private identity failure fixture retained: /private/tmp/reasonix-identity-refusal-mygsxved
+Traceback (most recent call last):
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-profile-identity-refusal.py", line 120, in <module>
+    smoke(sys.argv[1])
+    ~~~~~^^^^^^^^^^^^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-profile-identity-refusal.py", line 78, in smoke
+    raise RuntimeError(f"identity refusal must exit normally with recovery instructions: exit={process.returncode}, expectedMessage={expected}")
+RuntimeError: identity refusal must exit normally with recovery instructions: exit=-6, expectedMessage=True

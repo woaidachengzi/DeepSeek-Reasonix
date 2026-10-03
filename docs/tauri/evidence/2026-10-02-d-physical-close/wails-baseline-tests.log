@@ -1,0 +1,3 @@
+# reasonix/desktop.test
+ld: warning: ignoring duplicate libraries: '-lobjc'
+ok  	reasonix/desktop	0.904s

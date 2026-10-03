@@ -1,0 +1,46 @@
+{
+  "root": "/private/tmp/reasonix-cocoa-identical-control-ran882ps",
+  "app": "/private/tmp/reasonix-cocoa-identical-control-ran882ps/Private Identical Cocoa Control.app",
+  "pid": 16321,
+  "kernelExitCode": 1,
+  "openExitCode": 0,
+  "binarySha256": "62628630f5e8815c82505e06f764748a29a65d08f4f65c454b659a91a3b52655",
+  "passed": false,
+  "records": [
+    {
+      "active": false,
+      "elapsedMs": 121,
+      "events": [],
+      "key": false,
+      "minimized": false,
+      "occlusionVisible": false,
+      "stage": "ready",
+      "visible": true
+    },
+    {
+      "active": false,
+      "elapsedMs": 273,
+      "events": [
+        "occlusion"
+      ],
+      "key": false,
+      "minimized": false,
+      "occlusionVisible": true,
+      "stage": "loaded",
+      "visible": true
+    },
+    {
+      "active": false,
+      "elapsedMs": 5322,
+      "events": [
+        "occlusion",
+        "occlusion"
+      ],
+      "key": false,
+      "minimized": false,
+      "occlusionVisible": false,
+      "stage": "failed-key",
+      "visible": true
+    }
+  ]
+}

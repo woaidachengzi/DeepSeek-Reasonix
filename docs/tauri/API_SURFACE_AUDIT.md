@@ -67,6 +67,411 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 按 D→E 顺序推进。D 验收且 Preview 稳定后再推进 E；正式发布和默认下载项切换另行授权。
 
+#### 当前候选验收索引（2026-10-03）
+
+**提交前 review 更新：** [代码审查与当前源码回归](evidence/2026-10-03-d-code-review/README.md)修复三个凭据来源拒绝覆盖的一致性、来源 FIFO 竞态，并隔离归档 Go 包；前端构建、Go/前端回归、真实 bridge Rust 227 项与 strict clippy 通过。新增原生 .env 测试已编译但 ignored/未执行。以下 c71 已安装包证据属于旧固定身份，不能覆盖本轮修改；新包构建/安装 smoke 待继续，D 未完成/E 未开启。
+
+当前实际安装候选为 `c71ab66c727b1dc71854a993ba232f6515975328f684e365d3fc9bef801f2707`；sidecar `94207d45`、DMG `7b6a7a5f`，构建/只读复制安装/严格签名通过，当前包15个不同程序门禁通过；[真实.app启动完整窗口](evidence/2026-10-03-d-c71-launch-services-window-fixed/README.md)双档案48/48通过，全部kernel exit0、清理与持久身份保持。[启动方式对照](evidence/2026-10-03-d-c71-activation-context-control/README.md)四次Settings/API和原生菜单最小化恢复通过；原裸宿主启动8阶段后焦点失败与首轮适配器空环境参数拒绝均保留，不推断所有历史失败根因。零活动显示器条件门禁不适用，pending复活与物理UI仍待验。[Wails 全局 .env 迁移](evidence/2026-10-03-d-wails-env-migration/README.md)源码已实现、兼容旧官方 provider/UTF-16，Go配置及25项真实sidecar凭据事务回归通过（内存凭据后端）；[首轮](evidence/2026-10-03-d-wails-env-package-run/README.md)、[续跑](evidence/2026-10-03-d-wails-env-package-continuation/README.md)与[双屏8项](evidence/2026-10-03-d-wails-env-displays/README.md)保留精确结果；[官方Wails历史/附件/检查点回退](evidence/2026-10-03-d-wails-env-legacy-rollback/README.md)、[配置备份实际恢复](evidence/2026-10-03-d-wails-env-backup-apply-legacy-control/README.md)当前包通过，测试后两包严格签名通过且无匹配运行实例。不继承a62通过，真实OS全局来源迁移/系统授权与物理UI仍待验，D未完成/E未开启。
+
+前一 a62f8d6d 候选：
+[隐藏 WebView 权限验收扩展](evidence/2026-10-03-d-native-permission-expansion/README.md)已构建/只读复制安装/严格签名通过，生产权限行为未改；真实隐藏 IPC 检查6个自定义命令与伪造 main 参数、对话框插件拒绝，[新包八组门禁](evidence/2026-10-03-d-native-permission-package-run/README.md)全部通过；6命令×普通/伪造main双档案共24次固定caller拒绝、隐藏dialog/text插件拒绝、原剪贴板完整恢复及AppKit取消通过。[新包服务/生命周期六组](evidence/2026-10-03-d-a62-services-lifecycle-run/README.md)、[官方Wails历史/附件/检查点回退](evidence/2026-10-03-d-a62-legacy-rollback/README.md)与[配置备份实际应用](evidence/2026-10-03-d-a62-backup-apply-legacy-control/README.md)均实际通过。完整窗口、显示器恢复后pending与其余GUI尚未在新包复验；不继承前包通过为当前验收。D未完成/E未开启。
+
+上一实际安装候选为 `7ac271422cee864ac7a296a1b0e9504370148efc359c2904e857bd36b205acb5`；sidecar `cd726201`、DMG `5ac3d738`。
+[零活动显示器延迟恢复修复](evidence/2026-10-03-d-deferred-window-restore-change/README.md)的源码、8项窗口状态回归、strict clippy、app/DMG 构建、只读复制安装/严格签名通过；新包双档案原生反例保护通过，窗口种子不再从副屏横坐标改写为主屏。[新包七项门禁](evidence/2026-10-03-d-deferred-window-package-run/README.md)全部通过，包含新增条件门禁与原六项基础包门禁。[新包单实例/启动拒绝/lifetime三组](evidence/2026-10-03-d-deferred-window-lifecycle-run/README.md)通过，sidecar异常退出8/8；[官方Wails历史/Global附件/检查点真实回退](evidence/2026-10-03-d-7ac-legacy-rollback/README.md)及[当前包配置备份实际应用/旧CLI回读](evidence/2026-10-03-d-7ac-backup-apply-legacy-control/README.md)通过；分别保留范围，不据此放行图片渲染或任意自定义目录互斥。[新包原生服务四组](evidence/2026-10-03-d-7ac-native-services-run/README.md)通过：双档案菜单/剪贴板与真实AppKit取消、托盘语言、默认浏览器双入口和OS通知投递/移除/重启。活动显示器恢复后 pending 完成、完整窗口与其余 GUI 尚未在新包复验；此修复不证明最小化根因或 D 完成，E 未开启。
+
+上一实际安装候选为 `cbb590ba4a2dd45afa322508387ddc07383993550bd9a48e17fedb4fc617a384`；sidecar `cd726201`、DMG `82e90085`。
+[Wails 旧钥匙串入口/回归/构建及原生失败证据](evidence/2026-10-03-d-wails-keyring-change/README.md)、[新包六项门禁](evidence/2026-10-03-d-wails-keyring-package-run/README.md)。六项全部通过；Wails provider→APIKeyEnv 由鉴权 core 映射，前端不能提交任意账号，旧 Preview/Wails 入口分开；拒绝覆盖、同步回滚、固定错误/草稿保护通过源码回归。五次私有原生测试均在读取假来源时失败，最近 status=-25293，不能算实际 Wails 导入通过，现代全局 `.env`（StageModelCredentialLocked生成REASONIX_CONNECTION_*_KEY、UserCredentialsPath指向Reasonix home/.env）迁移当时尚未实现，后续已补源码入口与回归，见[全局来源迁移](evidence/2026-10-03-d-wails-env-migration/README.md)，实际OS导入仍待验；配置导入明确不复制.env，系统授权/取消仍待验。[私有来源CLI读取对照](evidence/2026-10-03-d-wails-source-cli-control/README.md)精确dummy/exit0，而原生仍未通过；不据此推定根因。
+[新包单实例/启动拒绝/lifetime](evidence/2026-10-03-d-wails-keyring-lifecycle-run/README.md)三组全部通过；后者双档案 × idle/streaming × SIGTERM/SIGKILL 共8项，kernel 确认 sidecar exit0、同档案重启/原件保持/清理通过。[新包完整窗口](evidence/2026-10-03-d-cbb-window-run/README.md)首个 managed exercise 最小化失败，completed stages=0；原生服务与 GUI 尚未复验。新发现零活动显示器时保存的副屏坐标被缓存主屏覆盖，[延迟恢复修复](evidence/2026-10-03-d-deferred-window-restore-change/README.md)源码/8项几何回归/clippy通过，新7ac27142包已构建，双档案反例保护通过；其余门禁以当前索引为准；最小化根因未确认。D 未完成/E 未开启。用户提供浏览器已到达本机验收页的截图，仅作可见结果确认，不能绑定新候选身份。
+上一 `0e607a62` 的[宿主应用数据根保护修复/构建](evidence/2026-10-03-d-host-app-data-boundary-change/README.md)、[六项门禁](evidence/2026-10-03-d-host-app-data-boundary-package-run/README.md)通过。不是任意跨版本自定义目录互斥或实际应用备份证明。
+上一d295[真实文件选择及取消](evidence/2026-10-03-d295-real-file-dialog/README.md)通过；目录确认时 CUA 报告 Mac 锁定，目录成功与重启持久化未证实。
+上一实际安装候选为 `d29503c849e5303eca92054bc8a6d4010e2bee1eaea90deb07d6ccc54a9c0822`；sidecar `29d985c7`、DMG `29091590`。
+[父路径解析修复/构建安装](evidence/2026-10-03-d-explicit-parent-resolution/README.md)、[上一d295五项门禁](evidence/2026-10-03-d-explicit-parent-package-run/result.json)：parent-resolution/explicit-boundary/package/boundary/profile全部通过。alias/../home的Rust凭据身份和Go工作区实际位置一致，正式版原件保持；默认正式版目录重叠拒绝及双档案普通运行/配置修改持久化与备份保护通过。不是任意跨版本共享目录互斥或实际应用备份证明。
+655真实父路径夹具exit2且原树新增元数据已复现并修正；首版d904环境路径检查失败也保留。
+上一d295[八阶段独立最小化切片](evidence/2026-10-03-d295-minimize-controls/README.md)通过：双档案原API独立启动各两次、原生菜单和快捷键；保持原超时及原生断言，不代表物理点击或完整流程稳定。其完整窗口失败记录另列。
+上一d295[identity/lifetime/startup通过、完整窗口首项失败](evidence/2026-10-03-d295-window-lifecycle-run/README.md)：managed exercise调整尺寸、隐藏/显示后的最小化超时，原生未最小化且无will/didMiniaturize；completed stages=0，后续及explicit完整流程未运行。无剩余Preview/现场进程，失败夹具保留。655[完整窗口第9项失败](evidence/2026-10-03-d-explicit-boundary-window-lifecycle/README.md)也保留，根因未确认。GUI及其余门禁未完成，D未完成/E未开启。
+
+上一d295[几何四样本对照](evidence/2026-10-03-d295-geometry-control/README.md)均通过，不能解释完整流程失败；[实际窗口操作](evidence/2026-10-03-d295-physical-window/README.md)菜单和黄色按钮最小化均未完成，原生未最小化且无will/did事件；实际全屏/快捷键退出/原尺寸恢复和正常Quit通过（显式档案）。不据变形截图判定根因。
+上一d295[原生服务三组复验](evidence/2026-10-03-d295-native-services-fixed-run/README.md)通过：双档案独立菜单/剪贴板/实际AppKit取消、默认浏览器双入口请求、六次OS通知投递/移除/重启。首轮剪贴板恢复工具交换UTF8/UTF16格式顺序的[失败](evidence/2026-10-03-d295-native-services-run/README.md)保留，[顺序恢复与预检修复](evidence/2026-10-03-d-clipboard-type-order-fix/README.md)保持完整有序字节比较且回归通过。不是全部剪贴板GUI、真实选择保存、通知点击/权限恢复验收。
+
+下表是上一 `d1c9fd5a` 候选的功能切片和尚未关闭的功能门禁，不能继承为新7ac27142候选已验收。新7ac27142候选窗口、lifetime/startup、GUI钥匙串/剪贴板及其他门禁须复验；d295的窗口失败保留。历史失败和待办均保留。
+
+| 要求 | 上一d1候选证据及范围 | 未完成门禁 |
+| --- | --- | --- |
+| 构建、最小权限与 sidecar 退出 | 上一d1候选 app/DMG 与 strict ad-hoc 签名、双私有档案 package、就绪后 8 次闲置/流式 SIGTERM/SIGKILL 与重启清理通过；capability 仍限主窗口文本剪贴板、打开对话框、事件监听/取消和拖动 | 正式签名/公证；独立剪贴板实际图片/隐藏调用方拒绝及原件恢复通过；其他自定义命令权限不能仅据静态 capability 认定通过 |
+| 数据目录、身份与备份回退 | 上一d1候选边界、身份、导入后修改持久化及备份保护、启动异常、对话框取消与托盘语言七项通过，见[分项门禁](evidence/2026-10-03-d-pending-profile-permission-run/result.json)，以其逐项状态为准 | profile的restore阶段仅检查修改后重启保持，不是应用备份；历史官方Wails未参与新目录锁协议，显式共享目录互斥仍有缺口；上一d1候选[单份配置备份实际应用/官方旧CLI回读](evidence/2026-10-03-d-backup-apply-legacy-control/README.md)已通过；完整历史数据回退与设置页导入点击待验 |
+| 菜单、快捷键、剪贴板、窗口与多显示器 | 上一d1候选[首轮完整窗口48/48](evidence/2026-10-03-d-pending-window-run/result.json)和[重复48/48](evidence/2026-10-03-d-pending-window-repeat/README.md)通过；[实际Cmd+逗号/全屏菜单/退出全屏按键](evidence/2026-10-03-d-pending-window-physical/README.md)通过。600完整窗口第9项失败、独立Cocoa复现仍保留，未认定根因或修复 | 长期稳定性、物理最小化最终状态（本次截图/AX不足）、IME/可配置快捷键、遗漏复制入口、不同缩放/拔插/物理拖动待验 |
+| 托盘、关闭与退出 | 上一d1候选生命周期退出及两轮完整窗口矩阵通过；上一d1候选实际Quit菜单点击kernel/open0、无sidecar/ready残留；既有旧包证据保留 | 实际托盘点击、Dock重开及其余物理关闭路径待验；程序动作不等于物理点击 |
+| 文件/目录对话框与外部链接 | 现有入口/边界实现与组件回归保留；Chrome 用户截图只证明本机 canary 显示 | 上一d1候选对应原生包/GUI选取取消与真实来源点击、邮件/OAuth未全验 |
+| 通知 | 原生权限/送达与点击路由已实现；旧包实际送达记录保留 | 上一d1候选六次实际送达、横幅/点击、授权拒绝/恢复、冷启动完整链路待验 |
+| 钥匙串 | 上一d1候选源代码原生私有锁定/拒绝/解锁恢复通过；600 explicit迁移/重启/删除通过；上一d1候选等待提示组件回归通过；上一d1候选 d1 [预先解锁 explicit GUI 保存/替换成功反馈、重启就绪且不回显、删除与退出](evidence/2026-10-03-d-pending-keychain-unlocked-gui/README.md)通过 | 替换值未原生读回；上一d1候选 GUI 等待提示、managed跨档案GUI、系统授权取消待验；CUA禁止SecurityAgent，需人工完成该取消切片；旧Preview迁移不等于Wails服务迁移 |
+| E 全部能力 | remote host/bot部分接口和页面已在，但未按E逐项验收；updater目前为说明/手动下载入口 | D验收且Preview稳定后再推进remote host、bot、updater与复杂管理页；插件注册不能算更新流程完成 |
+| A/B/C 与发布 | 本文前部已列明发布缺口；本轮D切片未关闭A/B/C | A合同/事件错误覆盖，B历史/Markdown图片与检查点等完整兼容，C终端/Browser/worktree/MCP插件真实生命周期；正式发布/默认下载切换须新授权 |
+
+以下日期条目保留历史实施和失败现场。当前索引与逐包回执优先用于评估本候选，不能把累计局部通过计为D/E完成。
+
+**2026-10-03 父路径解析与655窗口失败：** Rust/Go alias/..元数据位置差异源码及655真实包复现失败，词法路径对齐且不改环境后19回归/Clippy/完整构建、新d295五组真实门禁通过。655窗口第9阶段再次失败，原trace/夹具保留，不用d1旧成功替代。详见当前索引与[修复证据](evidence/2026-10-03-d-explicit-parent-resolution/README.md)，D未完成/E未开启。
+
+**2026-10-03 显式正式版目录边界：** 新655候选增加启动前默认正式版目录重叠拒绝，18项回归/Clippy/完整构建及当前四组真实包门禁通过；首版路径改写package失败保留并已修正。已知默认根保护不能替代任意历史自定义根互斥，新包其他功能仍待复验，详见当前索引及[实施证据](evidence/2026-10-03-d-explicit-boundary-change/README.md)。
+
+**2026-10-03 当前托管路径复制 GUI：** d1 原始私有 clipboard path 夹具，实际配置目录按钮反馈已复制，精确系统文本/代次 claim 通过，空默认/当前工作区复制禁用；Cmd+V 完整路径匹配，清空草稿后 Cmd+Q 正常退出。原件/身份与 sidecar/readiness 清理、原剪贴板条目顺序/类型/字节完整恢复通过。[脚本与操作观察](evidence/2026-10-03-d-pending-path-copy-ui/README.md)保存，未复制用户原剪贴板快照到证据目录。仅 managed 配置目录实测，不替代 explicit、消息/hooks、真实拒绝或 IME 验收；本轮未改生产代码，D未完成/E未开启。
+
+**2026-10-03 当前窗口重复与实际操作：** d1 原始完整窗口矩阵再次managed24/24、explicit24/24通过，当前两轮共96阶段，不放宽断言或增加重试。实际设置快捷键、全屏菜单进入/Ctrl+Cmd+F退出、Quit菜单退出与sidecar清理通过。实际Minimize截图是缩小变换画面，AX/WindowServer元数据不足以确认最终原生最小化状态，标为inconclusive，Show恢复完整主窗口。[重复矩阵](evidence/2026-10-03-d-pending-window-repeat/README.md)与[物理操作记录](evidence/2026-10-03-d-pending-window-physical/README.md)保存。未改窗口生产代码，未确认历史间歇根因已修复；D其余门禁仍待验，E未开启。
+
+**2026-10-03 当前候选钥匙串 GUI：** 预先解锁新私有 fixture.keychain，d1 explicit 设置页实际保存、替换均显示成功/就绪并清空输入；同 app/root 正常重启身份保持、就绪且不回显。实际删除显示已删除/未配置，指定私有 service/account 元数据查询 exit44；旧 Preview 原件 hash/mode/mtime 保持，两次 CmdQ kernel/open0、无 sidecar/ready 残留。[操作观察与退出证据](evidence/2026-10-03-d-pending-keychain-unlocked-gui/README.md)保存。未原生读回替换值，未验 managed/跨档案 GUI、系统授权取消、pending 提示真实 GUI 或删除后再次 GUI 重启；本次成功不能抹除旧锁定等待失败。D 未完成，E 未开启。
+
+**2026-10-03 当前独立门禁与窗口/备份应用：** d1c9fd5a boundary/identity/profile/startup/failure-exit/dialog-cancel/tray-language七项通过，
+profile restore仅修改后重启与备份保护，已更正此前过宽“备份回退”表述。
+[当前48/48窗口](evidence/2026-10-03-d-pending-window-run/README.md)本轮通过，历史间歇失败不抹除、未认定原生根因已修复。
+另将本候选真实备份实际应用到另一私有旧版配置目录，官方1.38.3 CLI摘要先验、CNY回读0、恢复文件/Preview备份/原件保持，
+[独立应用证据](evidence/2026-10-03-d-backup-apply-legacy-control/README.md)保存。
+单份配置CLI回退不能算历史GUI/会话附件/全部检查点/目录锁兼容已通过。D物理交互、重复稳定性、钥匙串授权取消及其余门禁仍未完，E未开启。
+
+**2026-10-03 钥匙串等待反馈与新候选：** 600真实设置页保存假值持续pending；精确PID仍活，
+采样定位SecKeychainAddGenericPassword等待，指定私有钥匙串locked，解锁后未完成。
+CUA明确禁止SecurityAgent，未查看/取消弹窗；CmdQ kernel0/open0/无sidecar或ready残留。
+补三语请求处理中提示，60秒待决保留草稿/一次写入/完成替换回归通过，未加重试或放宽权限。
+[现场、源码及构建](evidence/2026-10-03-d-keychain-pending-recovery/README.md)保存，普通DMG失败保留后重建成功。
+新host d1c9fd5a，sidecar29d985c7，DMG2be16391，从只读DMG私有安装strict签名通过；
+[同包package/lifetime](evidence/2026-10-03-d-keychain-pending-package-run/result.json)均通过。
+新提示真实GUI、保存/替换/重启、授权取消未验；新候选完整窗口矩阵未验，600已知失败不抹除。
+D未完成/E未开启，未正式发布或切换默认下载。
+
+**2026-10-03 原生钥匙串锁定/恢复：** 新ignored测试受私有HOME/默认钥匙串/无符号链接门禁保护，
+生产PlatformCredentialBackend实际锁定读/替换/删除均拒绝且脱敏；解锁原值保持，替换/删除恢复。
+两个全新夹具各1/1通过，正常用户default/search/偏好hash前后不变；首次45秒超时仍保留。
+[源码、隔离回执与失败](evidence/2026-10-03-d-native-keychain-lock-recovery/README.md)保存。
+最终普通回归23通过/2ignored、离线构建与tests Clippy通过。仅测试进程禁可选交互，生产授权不变；
+不算600包真实GUI锁定/用户取消、managed隔离或Wails服务迁移验收。窗口仍失败，D未完成/E未开启。
+
+**2026-10-03 纯 Cocoa 呈现对照：** 独立 Swift/AppKit/WKWebView，无 Tauri/Tao，
+相同尺寸/有效权限，固定 loaded/none/loaded/none 四次同二进制私有启动。
+loaded 重排两次 min/demini 原生状态和通知通过；none 两次 active/key 请求后 failed-mini，kernel1/open0。
+[源码、构建与内核回执](evidence/2026-10-03-d-pure-cocoa-reorder-control/README.md)保存。
+因此不能把全部失败归于 Tauri/Tao 事件循环；顺序环境变量仍未控、重排也不是稳定修复，未改生产。
+当前600候选窗口门禁仍失败，D未通过/E未开启。
+
+**2026-10-03 失败现场方法与呈现生命周期对照：** 同一私有诊断二进制 ebcf416b，
+loaded 重排组 Cocoa4/4、Tauri3/4通过；Tauri失败时 active/key/visible/可最小化/屏幕存在，
+请求前后及最终 miniaturize/performMiniaturize/deminiaturize 实现均与 NSWindow 相同。
+去掉诊断重排后两种窗口8/8失败、原生最小化通知均未出现，不能把问题限定为 TaoWindow 覆盖，
+也不能将重排视为稳定修复。两组顺序运行存在环境未控变量。
+[完整16次回执与源码](evidence/2026-10-03-d-window-phase-method-failure/README.md)保存，
+修正不存在getter后离线 build/clippy通过，初始编译失败保留。生产未改，当前候选窗口门禁失败仍有效，D未通过/E未开启。
+
+**2026-10-03 当前窗口失败与方法只读对照：** 60076bd5 完整 window 门禁 managed 前 8 项通过，
+第 9 项 menu-settings-minimized 失败，后续及 explicit 未执行；请求前 loaded/active/key/visible 前提成立。
+[当前候选失败现场](evidence/2026-10-03-d-current-window-keychain-copy/README.md)保留。
+同一私有诊断二进制 Cocoa 两次通过、Tauri 一次失败一次通过；新增只读方法比较后四次均通过，
+miniaturize/performMiniaturize/deminiaturize 在成功路径均继承 NSWindow，未取得失败时比较结果。
+[对照源码与完整回执](evidence/2026-10-03-d-window-method-comparison/README.md)保存，离线 build/clippy 通过。
+生产未改、未放宽门禁，不将诊断正样本视为修复；D 未通过，E 未开启。
+
+**2026-10-03 当前包钥匙串真实重启/删除：** 60076bd5新explicit私有HOME，真实迁移假值成功；
+已有与缺失旧凭据新恢复文案均实际验收。两次同包同档案重启身份保持：首次恢复已就绪，实际删除/重复删除后，
+下次启动仍未配置且不自动重导入。指定私有keychain/profile/account只读查询确认项目不存在，旧文件hash/mode/mtime保持。
+[三轮实际UI与退出证据](evidence/2026-10-03-d-current-keychain-restart-delete/README.md)保存，三次CmdQ0/open0/无残留；
+strict签名/hosthash保持。normal默认/搜索列表/偏好hash与较早基线一致，未读取真实密码。
+managed、UI保存/替换、跨档案GUI隔离、锁定/拒绝和Wails服务兼容尚未验；D未完成，E未开启。
+
+**2026-10-03 钥匙串迁移拒绝恢复修复：** import返回固定脱敏错误码，设置页中/繁/英分别说明已有不可覆盖/缺失旧凭据，
+未知平台错误保持通用恢复；Rust23通过/1忽略、设置页回归及frontend生产门禁通过。真实app/DMG构建与只读安装strict签名通过，
+新host60076bd5（sidecar29d985c7）；[源码/构建/失败现场](evidence/2026-10-03-d-keychain-import-recovery/README.md)和
+[新包门禁](evidence/2026-10-03-d-keychain-copy-package-run/result.json)保存。旧249同档案重启身份保持但CUA两次app/一次inventory超时，
+独立确认为live后精确SIGTERM清理signal15/无残留，不算UI恢复/删除通过。启动器受限复用与旧成功回执失效已补齐。
+新提示GUI、钥匙串重启/删除/锁定等待验，旧249通过不升级为600结果；D未完成，E未开启。
+
+**2026-10-03 当前包私有钥匙串成功迁移：** 249dfd15新explicit私有HOME，隔离探针实际写/查/删通过，
+normal HOME默认/搜索列表与偏好摘要前后不变；普通sandbox创建错误保留。真实设置页旧Preview假值迁移
+显示已就绪/已保存，空输入框不回显，旧文件hash/mode/mtime保持；再次迁移拒绝但通用错误文案不准确。
+[成功迁移与隔离证据](evidence/2026-10-03-d-keychain-success-ui/README.md)及CmdQ0/无残留已保存。
+同档案重启、实际删除、锁定/拒绝、managed和Wails服务兼容仍未验；D未完成，E未开启。
+
+**2026-10-03 浏览器用户确认：** 用户回复“浏览器打开了”，截图显示 Chrome 本机 `open_external_url`
+验收页已渲染。[用户确认记录](evidence/2026-10-03-d-browser-user-confirmation/README.md)补入外链可见结果证据。
+随后用户再次提供 `open_external_link` 验收页截图并确认已可用；结合双入口实际回执，此浏览器打开检查已通过，停止无关改动后的重复测试，仅在相关逻辑/权限/运行环境变化或新失败时复验。
+成功夹具端口/nonce 未归档，无法对应准确档案或候选 hash；不把旧包门禁升级为当前包全部外链验收。
+不涵盖来源真实点击、mailto/OAuth 或所有入口；D 其余验收未完成，E 未开启。
+
+**2026-10-03 当前通知/钥匙串负向界面：** 同249dfd15两轮通知门禁通过，验收工具新增白名单receipt输出，
+[逐条六次送达](evidence/2026-10-03-d-notification-receipts/receipts.json)含2次actual active和4次hidden/非active、精确清理/重启保护；未改变门禁或OS设置。
+当前源码真实macOS随机命名空间Keychain测试1/1通过；当前包新explicit设置页迁移旧假值实际失败并持续恢复提示，
+只读查询证明私有HOME无默认Keychain（normal HOME存在），旧文件hash/mode/mtime保持，CmdQ0/无残留。
+[钥匙串负向UI证据](evidence/2026-10-03-d-keychain-unavailable-ui/README.md)不算锁定/授权拒绝或成功迁移；
+旧Preview服务/夹具不等于Wails reasonix服务凭据兼容性。D其余权限/点击/稳定性未完成，E未开启。
+
+**2026-10-03 当前候选实际窗口复验：** 249dfd15新explicit私有档案，菜单/按钮/CmdM尝试后
+均无原生minimized或will/did-mini/demini；截图按钮区存在紫色共享形状控件但来源/因果未验证，
+不宣称实际黄色按钮命中或selector内部计数。View菜单全屏尝试未生效；Ctrl+Cmd+F真实进入/退出，
+原生fullscreen位与几何精确恢复。一次防过期拦截后刷新状态才继续；CmdQ kernel0/open0、无残留。
+[当前包实际交互证据](evidence/2026-10-03-d-current-physical-window/README.md)保存；
+本快捷键全屏切片不代表菜单/最小化/稳定性通过，生产未改，D/E未完成。
+
+**2026-10-03 当前候选窗口全矩阵复验：** 249dfd15签名/摘要前后相同，既有未改完整window门禁，
+managed24/24通过；explicit8项通过，第9项menu-settings-minimized未进入原生最小化，总runner1。
+[当前包完整失败回执与现场](evidence/2026-10-03-d-current-window-after-phase/README.md)保存；
+explicit后续阶段未执行，managed不能替代explicit，重复启动稳定性仍失败。生产代码未改，D未通过/E未开启。
+
+**2026-10-03 状态阶段最小化对照：** 私有example按loaded/key/mini/demini推进，要求瞬时前提和原生通知。
+Cocoa+WK两次通过；Tauri overlay初次失败，后同二进制重跑及保留代理的新采样版也通过。
+[完整时序/失败/重跑证据](evidence/2026-10-03-d-state-phase-window/README.md)保存；
+移除NSWindow代理不是已证明修复，生产未改。原生状态前后不稳定根因仍未确定，
+当前249dfd15完整窗口门禁独立复验，不借诊断正样本关闭D。
+
+**2026-10-03 AppKit run-loop timer 调度对照：** 私有 example 新增50ms单次原生定时器，
+默认feature离线release构建与Clippy通过。同二进制650f2b60的Cocoa+WK/loaded reorder及Tauri overlay
+均满足激活/可见/页面前提，mini/demini各执行一次仍无原生最小化（kernel2/open0）；
+紧接复验Swift Cocoa正对照收到will-mini/did-mini/did-demini且kernel0/open0。
+[调度对照证据](evidence/2026-10-03-d-run-loop-timer/README.md)保留失败与正对照；
+不能归因为Tauri事件循环，下一步控制加载完成后的激活/调用时序。生产代码/权限未变，D/E未完成。
+
+**2026-10-03 当前真实包目录/文件/保存对话框交互：** 249dfd15隔离explicit档案，
+CUA实际目录Open与文件Open返回精确私有路径/待发送附件；取消保持原选择，附件清空。
+诊断Save选择含中文/空格/&目录，0600有效JSON；覆盖警告Cancel保持原件hash/mode/mtime，
+Replace写出不同有效0600JSON且首份备份保留。Cmd+Q kernel0/open0、sidecar/readiness无残留。
+[真实选择与保存证据](evidence/2026-10-03-d-dialog-physical-selection/README.md)已保存；
+仅此explicit单文件/目录/诊断入口切片，不代替所有入口、多选/失败/托管矩阵或Wails ZIP格式等价性。
+D窗口/权限其余验收保持未完成，E未推进。
+
+**2026-10-03 原生主题runtime边界收敛：** 对照Wails1.38.3，将四类WindowSet主题/背景调用
+移入窄Wails adapter，theme.ts不再直连runtime。主题308项、Tauri appearance回归、frontend生产门禁通过；
+当前249dfd15完整app/DMG、只读安装/strict ad-hoc签名通过，同包package通过，
+新增appearance切片沿用既有Rust断言，两档案各7/7主题切换/重启/拒绝/失败回退阶段通过，
+凭据身份稳定、正常退出与无sidecar/readiness残留。
+[源码/构建证据](evidence/2026-10-03-d-theme-boundary/README.md)及
+[当前包门禁](evidence/2026-10-03-d-theme-boundary-run/result.json)已保存；tsx sandbox IPC失败保留。
+前包窗口全屏/退出切片不得直接沿用；最小化和其余D矩阵尚未通过，E未推进。
+
+**2026-10-03 Wails sender 对照与官方包恢复：** 冻结 Wails v2.13.0 Minimise 使用nil sender，
+私有 Tauri direct nil 对照满足激活/加载前提仍失败（kernel2/open0），
+[证据](evidence/2026-10-03-d-wails-sender-control/README.md)已保存，生产未改。
+官方Desktop1.38.3归档重新完整下载、固定摘要及strict签名通过，隔离GUI已启动；
+菜单最小化后的AX树不足以证明其状态；可见状态确认待补，180秒观察超时无正常退出回执，
+opener已结束但TERM后host仍存活；重新监视确切PID并实际Cmd+Q取得kernel0，
+原runner超时仍保留，最小化未计通过，
+[基线记录](evidence/2026-10-03-d-official-window-baseline/README.md)保留。D未结案。
+
+**2026-10-03 当前真实包原生交互：** `bfb47fd8` 同一隔离explicit进程，CUA Window→Minimize、
+黄色按钮及Cmd+M尝试后 nativeMiniaturized=false、无will/did-mini事件；最小化未通过。
+View菜单全屏进入/退出实际通过，FullScreen样式位出现/消失、几何精确恢复；Cmd+Q
+kernel0/open0，sidecar/readiness清理。仅此菜单全屏切片通过，未代替整个窗口稳定性或按钮/快捷键矩阵。
+[真实交互证据](evidence/2026-10-03-d-installed-physical-window/README.md)已保存；生产源码未改，D保持未完成。
+
+**2026-10-03 Tauri Cocoa/WKWebView 完成后显示对照：** 私有 example 加入真实
+非持久 WKWebView；相同二进制 none/loaded 两份都满足页面完成/激活/key前提，
+loaded 重新显示执行，mini/demini仍失败（kernel2/open0）。release/Clippy通过。
+通过 Swift 样本改1280×820仍通过，延迟样本 failed-key无有效最小化调用；
+[四份原始证据](evidence/2026-10-03-d-tauri-web-loaded/README.md)已保存。
+不将实验当生产修复；后续转实际菜单/按钮与程序调用对照，D 未结案。
+
+**2026-10-03 Cocoa 新构建与启动身份复核：** 原通过 Swift 源码的新身份样本 failed-key，
+采用通过样本身份的新构建通过全部 mini/demini 原生事件；同身份空窗口样本前提未成立。
+[三组原始证据](evidence/2026-10-03-d-cocoa-startup-identity/README.md)已保存，不能认定身份是根因，
+也不能用前提失败样本比较最小化。下一步直接控制 Tauri 私有样本的 WKWebView 完成后显示条件。
+生产行为未改，D 窗口与稳定性门禁保持未完成。
+
+**2026-10-03 Cocoa 变量控制纠正调查范围：** 普通 NSApplication 空窗口在与 Tauri
+样本对齐的内容/尺寸/节奏下同样失败（激活前提成立、kernel2）。单独增加 WKWebView、
+改用 Timer、缩小尺寸仍失败；orderOut 样本激活前提未成立，移除 WKWebView 的阶段式
+样本 failed-mini。原先通过的 Cocoa 二进制同轮复跑仍通过。
+[七组证据](evidence/2026-10-03-d-cocoa-controlled-variables/README.md)已保留，不能直接归因于 Tauri
+事件循环；下一步控制 WKWebView 完成后显示与调度组合。生产行为未改，D 未完成。
+
+**2026-10-03 原生窗口事件采样：** 独立 example 增加目标 NSWindow 通知监听，
+release/Clippy 通过。激活前提成立的样本仍失败（kernel 2/open 0），最小化调用后
+收到 resign-key，恢复后收到 key/occlusion，未收到 will-mini/did-mini/did-demini。
+[源码与事件证据](evidence/2026-10-03-d-window-native-events/README.md)已保存；生产代码未改。
+两类对照仍有 WKWebView 内容与调度差异，具体根因尚未证实，继续控制这些变量。
+
+**2026-10-03 当前环境窗口有效失败：** 独立 Cocoa 对照通过后重新构建 Tauri example，
+保留 TaoApp/delegate 的独立 Cocoa NSWindow 满足激活/key/visible/pageLoaded 前提，
+原生 mini/demini 各执行一次但 minimized 始终 false，kernel exit 2、open exit 0。
+[失败证据](evidence/2026-10-03-d-current-tauri-window/README.md)已保存；runner 成功采集不等于窗口通过。
+生产窗口未修改，具体根因未证实，D 窗口门禁仍未通过。
+
+**2026-10-03 外链同包独立复验：** 当前 `bfb47fd8` 候选在默认浏览器 Chrome 已运行的环境下，
+托管/显式档案各两个原生入口均收到真实浏览器回执并正常清理；用户截图确认本机验收页已渲染。
+[复验结果](evidence/2026-10-03-d-links-handler-run/result.json)与
+[handler 查询和用户确认](evidence/2026-10-03-d-browser-handler-recheck/README.md)已保存。
+前次超时仍保留、根因未确认，未宣布 Preview 稳定或 D 完成。
+同轮[独立 Cocoa 对照](evidence/2026-10-03-d-current-cocoa-activation/README.md)重新构建并通过
+激活/key、原生最小化与恢复（kernel/open exit 均 0），Tauri 窗口问题继续单独定位。
+
+**2026-10-03 外链 runtime 收敛：** BrowserOpenURL 直连移入窄 Wails adapter，Tauri
+入口与拒绝不回退保持；外链回归及生产前端门禁通过，新 `bfb47fd8` app/DMG 构建与
+只读安装/strict ad-hoc 签名通过。同包 failure-exit/package 通过；links 首个托管档案
+没有收到实际浏览器 loopback 回执而失败，显式未开始，顺序 lifetime 未运行；另开独立
+同包 lifetime 门禁，结果见其记录。外链失败原因未确认，不能沿用旧包通过。
+独立同包 lifetime 八种组合全部通过，未覆盖或撤销外链失败。
+同包 gate 终态见
+[程序门禁](evidence/2026-10-03-d-external-boundary-run/result.json)，
+[源码与构建证据](evidence/2026-10-03-d-external-boundary/README.md)保留工具链首次拒绝及后续通过。
+未完成窗口/权限验收，D 未结案、E 未推进。
+
+**2026-10-03 实际激活尝试未完成：** 独立诊断样本等待 CUA 点击后再启动采样；UI 绑定
+异常长时间 -10005 超时，应用自身 60 秒期限结束，确切 PID 已退出，没有实际点击。
+超时结果字段缺失导致 runner 解析失败且未保存 kernel 回执，源码/runner 已修复，
+未将其记为窗口通过；[失败证据](evidence/2026-10-03-d-manual-activation/README.md)保留。
+窗口 UI 路径暂未取得有效结果，继续可执行的 D adapter/源码与包级回归，未延期窗口要求。
+
+**2026-10-03 delegate 对照前提失败：** 独立 example 的两份 keep 与一份 none 样本均
+visible=true 但 active/key=false；实际 delegate 存在/缺失已逐快照核对，kernel=2、
+runner=1，全部退出。没有形成有效最小化比较，不能排除或证明 delegate 根因。
+下一步检查应用激活；[原始失败证据](evidence/2026-10-03-d-delegate-control/README.md)保留。
+生产包未改，D 未结案、E 未推进。
+
+**2026-10-03 应用类对照：** 独立 example 的同一二进制在 TaoApp 与普通 NSApplication
+两种实际应用类下，普通 Cocoa 窗口都满足 active/key/visible 前提、请求执行 1/1，
+但最小化失败且 kernel=2。TaoApp 子类不是复现的必要条件；delegate/事件循环等仍待区分。
+生产 host 未改，参见 [应用类对照证据](evidence/2026-10-03-d-application-class-control/README.md)。
+完整 D→E 目标已重新建立，D 未结案、E 未推进。
+
+**2026-10-02 macOS 后台关闭基线修复：** Wails 使用 application hide，Tauri 原先仅 window
+hide。现改为 macOS AppHandle.hide；原生 smoke 明确要求隐藏/取消隐藏应用。新 `15fcd43b`
+app/DMG、Clippy、strict ad-hoc 签名通过；实际关闭 hidden=true、sidecar 保留，实际
+Window→Show Reasonix 后 hidden=false、恢复完成 1/1、Reopen=0；实际 Cmd+Q 清理通过。
+同新包错误退出两档案=2、正常 package 两档案=0、异常生命周期 8/8 均通过。
+AX 读取/重新绑定未恢复；Dock/SystemUIServer 绑定超时，手动 Dock/托盘未验收。
+首次 DMG 失败未定位原因，正确入口 verbose 与最终重建通过，全部保留。
+见 [应用隐藏修复证据](evidence/2026-10-02-d-application-background-close/README.md)
+及同包 [程序门禁](evidence/2026-10-02-d-app-hide-installed-run/result.json)。D 未结案、E 未推进。
+
+**2026-10-02 实际关闭按钮：** 同 `e0fc4d12` 包的两个私有档案验证默认后台关闭
+隐藏窗口并保留进程，以及真实设置页切换 `quit`、落盘后点击原生关闭按钮，kernel/open=0、
+sidecar/ready 无残留。后台样本的 AX 读取触发了 Reopen，不能计为手动 Dock/托盘恢复。
+首轮 300 秒等待超时保留；工具增加显式 1..900 秒交互等待，普通门禁默认不变。
+Rust host preferences 10 项与 Wails 关闭/恢复基线回归通过；实际活动回合关闭、安装包
+同档案重启、手动 Dock/托盘恢复和窗口失败仍未验收。
+见 [实际关闭证据](evidence/2026-10-02-d-physical-close/README.md)。D 未结案、E 未推进。
+
+**2026-10-02 实际键盘剪贴板：** 同 `e0fc4d12` 新私有样本通过实际 Cmd+C/X/V、
+精确 canary/generation、草稿清空、Cmd+Q=0 与该轮开始时的所有剪贴板格式恢复。
+首轮因 canary 文本建议变化/选择工具错误及超时失败；旧夹具在保留变化后的内容时
+误删备份，原剪贴板未恢复且不能从夹具取回，已说明并保留证据。已修复失败时独立
+恢复副本保留，假数据回归旧两项失败/新三项通过；后续通过不覆盖首轮影响。
+见 [键盘与恢复工具证据](evidence/2026-10-02-d-keyboard-clipboard/README.md)。D 未结案、E 未推进。
+
+**2026-10-02 生产退出码修复：** 旧 `9d58aae0` 明确 native 错误 marker/请求 exit(2)
+却实际 kernel=0；新 host 用 run_return 完成原清理后报告明确请求码。新 `e0fc4d12`
+app/DMG、Clippy、strict ad-hoc 签名通过；两档案错误 kernel=2、正常 package=0、
+异常生命周期 8/8 和实际 Cmd+Q kernel=0/无 sidecar/ready 均通过。
+`failure-exit` 加入默认安装包门禁。参见 [退出码修复证据](evidence/2026-10-02-d-host-exit-code/README.md)。
+窗口失败与完整 D/E 验收未解决，不发布、不切换默认下载。
+
+**2026-10-02 主队列窗口对照：** 同二进制 Cocoa direct/main-queue 均满足前提、
+动作执行 1/1，但最小化失败；Tauri 普通栏前提不满足，Overlay 未运行。
+没有证明只改主队列调度能修复窗口，参见 [主队列证据](evidence/2026-10-02-d-mainqueue-window/README.md)。
+
+**2026-10-02 Cocoa/Tauri 应用上下文对照：** 普通 Cocoa NSWindow（无 Tauri 窗口子类/
+delegate）在 Tauri 应用事件循环中仍复现最小化失败，active/key/visible 前提满足；
+独立 Cocoa/WKWebView 当前复跑通过，minos/SDK/entitlement 对齐后仍通过。复现不需
+Tauri 窗口子类，但尚未定位应用 delegate、事件循环操作时机或其他宿主上下文差异。
+首轮前提失败保留；生产 host 未改。
+见 [Cocoa/Tauri 上下文证据](evidence/2026-10-02-d-cocoa-tauri-loop/README.md)。D 未结案，E 未推进。
+
+**2026-10-02 同依赖最小 Tauri 对照：** 独立、固定页面、无 sidecar/产品设置的
+普通和 Overlay 标题栏均在页面 Finished/active/key/visible 前提满足后复现原生
+最小化失败，两个最终诊断退出回执=2。业务页、sidecar、恢复路径和覆盖标题栏
+不是复现的必要条件，仍未定位 Tauri/Tao 窗口或事件循环的具体原因。首轮夹具
+退出码不传播已修正，仅改变 example，不改生产 host。
+见 [最小 Tauri 证据](evidence/2026-10-02-d-tauri-window-baseline/README.md)。D 未结案，E 未推进。
+
+**2026-10-02 实际窗口只读观察与退出回执：** 新 `9d58aae0` 包完成 app/DMG、
+strict ad-hoc 签名和两种私有 LaunchServices package 复验。实际 Cmd+Q 的确切
+PID kernel 退出码 0，sidecar/ready 无残留，退出后不再读取失效 UI binding。
+实际 Cmd+M、按钮和 Window 菜单最小化均无 Will/Did 事件且 native minimized=false；
+全屏进入有原生状态，但退出操作未清除 FullScreen 位。这两项不判通过，仍需定位。
+见 [实际窗口证据](evidence/2026-10-02-d-interactive-window/README.md)。D 未结案，E 未推进。
+
+**2026-10-02 正常 LaunchServices 与实际文件确认：** 同一 `317d96bb` 包两种私有
+档案经 open/LaunchServices 正常启动、实际目录/401/身份及 kernel 正常退出核对
+通过。新的显式 UI 档案通过实际文件 Open 后出现待发送 chip、再次 Cancel 保留
+附件、移除草稿及实际 Cmd+Q（私有 host/sidecar/open 全部退出且原件不变）。
+退出后 CUA 观察转到新默认档案，立即停止操作并清理精确测试副本；不声称默认
+档案数据无写入，后续退出观察改用已确认 PID。首轮夹具错误、范围与证据见
+[LaunchServices 与文件确认](evidence/2026-10-02-d-launch-services/README.md)。D 未结案，E 未推进。
+
+**2026-10-02 最新验收探针包：托盘 IPC caller。** host `317d96bb` 仅扩展 opt-in probe，
+真实主 WKWebView 新命令成功，真实隐藏第二窗口的正常/伪造来源请求均由主窗口
+custom guard 拒绝；两档案菜单/剪贴板/语言 6/6、正常 package、clippy 与完整
+app/DMG 通过。原生产策略未改；48+8+8 仍归属前一 `4d2a6865` 包。范围、摘要
+及后续正常 LaunchServices 启动验证见 [caller 证据](evidence/2026-10-02-d-tray-caller/README.md)。
+物理验收和偶发窗口失败根因仍保留，D 未结案，E 未推进。
+
+**2026-10-02 托盘语言候选同包完整复验：** `4d2a6865` 的完整窗口 48/48、
+异常退出 8/8、双屏 8/8 均通过，包摘要/签名和验收依赖一致。未执行 CUA 操作；
+不撤回前包失败或推断根因已解决。实际弹出/点击和不同缩放/拔插仍待验，详见
+[同包窗口与生命周期](evidence/2026-10-02-d-tray-current-window/README.md)。新增命令的真实第二 WebView caller 检查正在另批构建，未转记为此包已验。
+
+**2026-10-02 最新候选：托盘语言基线补齐。** host `4d2a6865` 接入已解析 UI 语言的
+runtime-only 托盘标题同步，Auto 不改写持久化语言，未知输入拒绝，更新失败显示
+重试提示；主窗口 custom caller 限制和 capability 保留。完整前端、Auto/错误反馈
+组件回归、测试类型检查、clippy 与生产 app/DMG 通过；真实只读安装包两档案
+菜单/剪贴板/语言 6/6 及正常 package smoke 通过。标题读取为 Tauri 菜单项缓存，
+不代替实际托盘弹出/点击。新包完整 48 阶段窗口等未复验，前包失败保留，详见
+[托盘语言证据](evidence/2026-10-02-d-tray-language/README.md)。D 未验收，E 未推进。
+
+**2026-10-02 当前候选独立异常退出：** 同一 `b95b38c0` 包的托管/显式 × 空闲/实际流式
+任务 × SIGTERM/SIGKILL 共 8/8 通过，sidecar kernel 正常退出、上游断开、原件及
+重启身份检查通过。独立运行不覆盖完整窗口批次中 lifetime 未执行的记录；runner
+另补齐未跟踪生产代码快照及摘要，详见 [同包退出证据](evidence/2026-10-02-d-current-lifetime/README.md)。
+
+**2026-10-02 当前候选完整窗口仍失败：** `b95b38c0` 托管档案 23/23 全通过，显式
+前 8 项通过后 Settings 最小化前提失败，合计 31/46；后续串行 lifetime 未执行。
+请求时真实 active/key/occlusion 可见且主页面完成，Will/Did 最小化仍为 0，随后失活；
+未确认根因，也不将成功档案推广为稳定。新 CUA 会话绑定仍报 -3811，文件确认未操作；
+失败现场、原始诊断、同包摘要及私有清理见 [完整窗口证据](evidence/2026-10-02-d-current-window/README.md)。D 仍未验收。
+
+**2026-10-02 当前包原生取消路径：** `b95b38c0` 同包托管/显式档案各三个独立阶段
+通过，共 6/6，包含菜单、文本剪贴板及文档保存/诊断导出/主题导入/目录选择四类
+实际面板取消；后续两档案 package smoke 也通过，摘要与严格签名复核一致。
+串行 runner 支持独立 `dialog-cancel`，且修复 Python 3.9 摘要兼容。范围和初次初始化
+失败见 [同包取消证据](evidence/2026-10-02-d-current-dialog-cancel-run/README.md)。不代替选中/保存成功或完整窗口门禁。
+
+**2026-10-02 最新候选物理交互补验：** 同一 `b95b38c0` 安装包的显式私有档案
+通过实际 Cmd+, Settings、目录选择、附件文件取消与完整 host 重启后的工作区恢复。
+文件确认后观察被 ScreenCaptureKit -3811 打断，重新绑定仍失败；实际最小化操作
+仅有 AX/单窗口截屏，不能据此确认状态，仍待核实。私有进程经精确路径核对后
+SIGTERM 清理无残留，不能代替 UI Quit。详见 [实际对话框证据](evidence/2026-10-02-d-interactive-dialogs/README.md)。
+原生窗口失败与其余物理待验仍阻塞 D，E 未推进。
+
+**2026-10-02 最新候选：遗留 runtime 收敛与窗口保存取消。** host `b95b38c0e35d66c964bc370b621a46c9d69116b7408a7c7567f4c715abc17734`
+将 Wails 窗口几何和文本剪贴板访问收敛到轻量适配器；hook 卸载取消尚未提交的旧
+观察/排队捕获，旧逻辑的三个确定性失败修复后通过，剪贴板及完整测试类型检查通过。
+生产 app/DMG 构建和真实只读安装、独立菜单/剪贴板 4/4、正常双档案 package smoke
+通过。本轮不撤回已发送的保存请求，也不改变 Tauri 窗口策略或解决最小化；完整窗口
+未复验，失败与物理待验项仍阻塞 D。源码补丁、新适配器快照和范围见
+[runtime 生命周期证据](evidence/2026-10-02-d-runtime-lifecycle/README.md)。E 未推进。
+
+**2026-10-02 前一直接调用诊断包：窗口仍失败。** host `de4f88c88dc80f3757b577315dbe9d42b8f75134e914851065a70bae34d814f5`
+在实际主线程绕过 Tauri 调度和菜单 responder 直接调用 NSWindow，托管首次最小化
+仍失败，显式未开始；正常两档案 package smoke、clippy 与生产 app/DMG 通过。
+独立最小 Cocoa/WKWebView 对照通过，不能将失败视为系统完全无法最小化；当前
+Stage Manager 只读状态为开启，未修改，也未确认其为原因。详情见
+[直接 NSWindow 对照](evidence/2026-10-02-d-direct-minimize/README.md)。D 仍未验收。
+
+**2026-10-02 前一呈现诊断包：窗口仍失败。** host `c29beab60b5b30e7634b2ff2114b4dfe189ec673e44324fb13ae487d8d8b5bbf`
+增加 opt-in 遮挡/应用激活事件及单调时间诊断，完整生产 app/DMG、clippy、正常两档案
+package smoke 通过；独立原 API 和可见呈现探针均未通过。原 API 请求时已有 key/激活/
+可见状态，仍没有最小化事件；可见呈现探针在前提阶段失败，未请求最小化。前一安装包
+的真实 Minimize responder 也失败。未修改生产恢复策略、未替换原门禁，也未解释根因；
+详见 [原生呈现证据](evidence/2026-10-02-d-minimize-presentation/README.md)。
+
+**2026-10-02 前一候选：启动身份拒绝修复，窗口门禁仍失败。** 已安装 host
+`49e8b9cda038bd5f002178079aa3895690dbff3ee1d8489334dd0c8b60fedd1a` 将返回的 setup
+错误集中处理为正常非零退出；身份损坏/冲突/链接的两档案拒绝与备份恢复 6/6、
+默认目录拒绝、配置导入、启动中断 12/12、独立异常退出 8/8 通过；完整 Rust
+218 通过、2 默认忽略，clippy 与生产 app/DMG 构建通过。完整窗口在托管 8 项后
+Settings 最小化前提失败，显式未开始；没有转记上一包成功或重跑覆盖失败。
+源码、当前包摘要及失败/成功证据见 [启动恢复证据](evidence/2026-10-02-d-startup-refusal/README.md)。
+物理交互及窗口稳定性仍未验收，D 未结案，E 未推进。
+
+**2026-10-02 前一候选同包复验（持续目标已建立）：** 已安装 host `9676735e7a5a046de9592d7d633fb9cf632280159b3a8d5081f6f430f23cf220`
+已通过完整窗口 46/46、就绪后异常退出 8/8、双屏 8/8、两档案外链与六条通知送达；
+官方 Wails 1.38.3 私有历史/附件/最新检查点回退通过，显式原生钥匙串测试 1/1 通过。
+这补齐最终包的证据归属，不解释历史偶发窗口失败，也不代替下方物理交互待验项；D 未结案，E 未推进。
+下表和后文保留历史包记录，该包摘要、精确范围及可复跑串行 runner 见
+[同包验收证据](evidence/2026-10-02-d-current-candidate/README.md)。A/B/C 与签名/公证及发布授权缺口保留。
+
 **当前平台范围（2026-09-30 用户确认）：本轮只推进 macOS。** Windows 和 Linux 因缺少实际测试环境，改造及原生验收均延期，不作为本轮 D/E 完成或 macOS 发布候选的阻塞项。此前已提交的跨平台实现和验证记录保留，不能据此宣称 Windows/Linux 已受支持；本轮尚未提交的 Windows 通知改动已撤回。下方历史记录中的跨平台待办转入延期范围，后续有环境再恢复。
 
 **外接屏范围调整（2026-10-02 用户确认已打开）：恢复连接显示器的原生定位与重启验收。** 当前应用识别到两块 2× 缩放屏幕；不同缩放、实际拔插与物理拖动仍未验收，需在相应条件可用时继续。2026-10-01 的延期及既有单屏证据保留为历史记录；Windows/Linux 继续延期，D→E 顺序和正式发布门禁保留。
@@ -85,7 +490,7 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 | D：菜单与快捷键 | macOS 编辑项改为 Tauri 原生 responder-chain 角色；设置菜单先恢复主窗口并发出设置事件。Reload 移除 Cmd+R，保留给可配置的会话刷新；设置和文字大小也不安装固定原生组合。原生编辑/退出/隐藏/最小化/全屏及系统 Emoji 组合禁止保存为 Preview 动作；旧冲突组合回落默认值，单项重置校验默认组合占用。真实 AppKit 菜单组合与共享保留表、设置菜单动作、组件与独立 Chrome 页面回归通过。新增独立 `--edit` 原生编辑门禁。私有真实包的产品输入框通过 CUA 原生按键验证输入、全选删除、撤销/重做；实际 Edit→Redo 点击与最小化后的 Settings 点击也通过。 | 干净包 `e3e030586` 两种档案的严格 `--edit` 已通过：真实 key window、WKWebView responder、选择及 Copy/Paste/Cut/Select All/Undo/Redo 和完整剪贴板恢复。托管私有普通档案的产品输入框 Cmd+C/X/V 已由 CUA 原生按键及独立系统代次核对通过；两种普通私有档案的配置目录实际按钮/成功反馈/输入框 Cmd+V 已通过；两种普通私有档案的实际输入框 Cmd+A/C/X/V 与 WebKit 右键 Copy/Cut/Paste 已通过精确文字、操作前后系统代次和原件恢复验收；消息菜单、实际失败反馈、IME/组合输入、隐藏其他应用、全屏与可配置快捷键路由仍待验收。程序化原生菜单动作和 Chrome 页面回归不代替用户原生交互。 |
 | D：剪贴板 | 接入官方 clipboard-manager，主窗口仅允许读写文本；Tauri 原生拒绝后不再使用浏览器/Wails/execCommand 回退；Hooks JSON Copy/Paste 已从浏览器直连收敛到共享文本入口，拒绝/空值/旧 workspace 结果保护草稿，组件回归通过；共享写入/读取路径覆盖 Tauri、浏览器与 Wails。消息、存储路径、hooks 路径及输入框复用；复制成功反馈等待实际写入成功。原生调用模拟、拒绝/忙碌回退、失败剪切不删文本、空剪贴板不覆盖选择与成功反馈测试通过。实际 macOS WKWebView IPC 与系统文本读写通过；主窗口图片读取及无权限的同源隐藏窗口读写均拒绝，独立系统值/代次核对和完整原件恢复通过。 | 托管私有普通档案的输入框 Cmd+C/X/V 已通过实际 CUA 原生按键：剪切清空、粘贴精确文本恢复、系统值/代次及剪贴板原件恢复；`ada308408` 包两种普通私有档案的配置目录按钮、空工作区禁用状态、已复制反馈及输入框 Cmd+V 已通过实际 CUA 操作和系统值/代次核对，原剪贴板完整恢复；两种普通档案的输入框实际 Cmd+A/C/X/V 与 WebKit 右键 Copy/Cut/Paste 及空值禁用状态也已通过，Copy/Cut 要求严格新代次；其他存储/hooks 路径、消息复制/菜单、实际失败反馈和 IME/组合输入仍待验收。 |
 | D：自定义命令权限 | 自定义 native/bridge 总入口按 Tauri 原生调用者限制为主窗口，插件保持独立 capability；真实包双 WKWebView 在两种档案通过主窗口 catalog/可执行目标拒绝、第二窗口 8 个文档和 2 个 bridge 查询拒绝、伪造 window 参数无效及原件/退出保护；剪贴板插件 ACL 和完整原件恢复也通过。 | 不能推广为全部会话/资源权限、MCP iframe、物理交互或其他平台已验收；`2cbed72bb` 的 42 阶段曾在最小化前提停止；后续诊断包 `e3e030586` 的完整 46 阶段已通过，仍不推断旧失败原因。 |
-| D：窗口与多显示器 | 保存普通窗口位置和显示器缩放，最大化/最小化不覆盖普通尺寸；按当前工作区限制恢复位置，移除外接屏后回到主屏。状态文件原子替换，兼容旧尺寸文件。窗口几何回归通过；真实 macOS `.app` 原生 API 已验证窗口隐藏/最小化恢复、最大化退出后重启与取消最大化、普通尺寸/位置重启恢复。私有包已通过实际最小化按钮、Cmd+M 及原生 Settings 点击恢复窗口/渲染设置页。 | 2026-10-02 外接屏已恢复可用，原生 API 识别两块 2× 屏幕；当前 `37674eea7` 实际副屏定位/普通重启及跨屏恢复/再次重启两种档案 8/8 通过，不同缩放/拔插/物理拖动未标记通过；历史诊断包 `e3e030586` 的 46 阶段曾全过，`30a93592d` 为 31/46；`5f153aae7` 为 8/46、`67e7fcd8b` 为 31/46；新包 `6d405f8f8` 的完整 46 项及两种档案原生菜单曾通过，但追加原生菜单/原 API 首个托管启动均再次失败。两次外观请求都已跳过写入、恢复请求/完成各 1、Reopen=0，仍无 Will/Did Miniaturize 或 Did Deminiaturize。最新 `67c36323c` 的 4 个 API 启动样本及两种原生菜单曾通过，但完整门禁首项失败；追加只读模态/调整诊断的 `ada308408` 为 23/46，显式首项失败，实际启动已完成且无模态/sheet/实时调整。2026-10-02 `851111594`、`7a83505ce` 及 `1b6a7706d` 生产包的独立完整门禁各 46/46 曾通过；`c0e3871c5` 完整门禁曾为 19/46；`b96367355` 及最近完整门禁的 `f43825cc9` 在两块屏幕已连接后仍失败：托管前 8 项通过，随后设置最小化前提超时，显式档案未开始，见下方记录。历史及当前偶发失败根因仍未确定，窗口稳定性未验收，未放宽断言。 |
+| D：窗口与多显示器 | 保存普通窗口位置和显示器缩放，最大化/最小化不覆盖普通尺寸；按当前工作区限制恢复位置，移除外接屏后回到主屏。状态文件原子替换，兼容旧尺寸文件。窗口几何回归通过；真实 macOS `.app` 原生 API 已验证窗口隐藏/最小化恢复、最大化退出后重启与取消最大化、普通尺寸/位置重启恢复。私有包已通过实际最小化按钮、Cmd+M 及原生 Settings 点击恢复窗口/渲染设置页。 | 2026-10-02 外接屏已恢复可用，原生 API 识别两块 2× 屏幕；当前 `37674eea7` 实际副屏定位/普通重启及跨屏恢复/再次重启两种档案 8/8 通过，不同缩放/拔插/物理拖动未标记通过；历史诊断包 `e3e030586` 的 46 阶段曾全过，`30a93592d` 为 31/46；`5f153aae7` 为 8/46、`67e7fcd8b` 为 31/46；新包 `6d405f8f8` 的完整 46 项及两种档案原生菜单曾通过，但追加原生菜单/原 API 首个托管启动均再次失败。两次外观请求都已跳过写入、恢复请求/完成各 1、Reopen=0，仍无 Will/Did Miniaturize 或 Did Deminiaturize。最新 `67c36323c` 的 4 个 API 启动样本及两种原生菜单曾通过，但完整门禁首项失败；追加只读模态/调整诊断的 `ada308408` 为 23/46，显式首项失败，实际启动已完成且无模态/sheet/实时调整。2026-10-02 `851111594`、`7a83505ce` 及 `1b6a7706d` 生产包的独立完整门禁各 46/46 曾通过；`c0e3871c5` 完整门禁曾为 19/46；`b96367355` 及最近完整门禁的 `f43825cc9` 在两块屏幕已连接后仍失败：托管前 8 项通过，随后设置最小化前提超时，显式档案未开始，见下方记录。历史及当前偶发失败根因仍未确定，本轮上一候选和修复后 DMG 临时安装包的完整门禁分别 46/46 通过，新安装包双屏恢复 8/8 通过；历史偶发失败根因仍未解决，窗口稳定性未结案，未放宽断言。 |
 | D：原生窗口外观 | macOS 保存/读取外观偏好及启动恢复同步到 Tauri 原生应用主题；串行处理避免旧读取覆盖新外观，保存拒绝时不修改原生主题。真实 AppKit dark/light/auto 与整包重启、非法主题/样式保持不变的验收通过。已修复首次 native 失败回滚将未配置外观变为显式 auto 的问题；鉴权 CAS 回滚保留未配置/旧样式并拒绝过期写入。真实 Go/AppKit 故障注入及不完整原生回滚后的整包启动恢复通过。设置页深色模式实际点击、选中状态及整窗深色渲染已通过。修复 Vite glob 编译条件后，真实 `de8afeeec` 包的两种档案均显示八套官方主题和图片，托管实际官方主题选择与背景预览已通过。`9972828f4` 托管普通档案的双图片主题导入、重复副本、无效包原件保护及两份主题重启预览通过；显式历史捕捉失败保留记录；当前 `5882a249d` 显式普通档案已补齐五阶段、双图片与两次正常退出，见下方记录。 | 原生标题栏细节、系统明暗切换、真实系统/磁盘错误导致的失败路径仍待执行；端口错误注入不等同于系统真实拒绝。 |
 | D：托盘与退出 | 托盘有显示/退出菜单；主点击已对齐 Wails 始终打开/恢复窗口，移除可见时反向隐藏；托盘、Dock 重开及单实例唤起共用主线程恢复入口，补上 macOS 应用取消隐藏。退出沿用 supervisor 停止路径。真实包原生 CloseRequested 验证关闭后继续运行、关闭即退出、偏好重启恢复与 sidecar 清理；应用隐藏/取消隐藏也已验证。实际 Go 流式任务在关闭后继续产生事件并完成历史保存；原生 Show 菜单恢复几何，Quit 菜单在第二个任务运行中退出并清理上游及 sidecar。CUA 原生 Cmd+Q 和设置关闭即退出后实际窗口关闭按钮均已验证退出码 0、sidecar/readiness 清理。 | 真实托盘点击、人工物理按键/托盘退出及 Dock 重开仍待验收。程序化原生菜单动作不能代替按键/点击；新包两种档案的第二实例严格焦点门禁已通过；实际 Dock/托盘交互仍待验收。 |
 | D：对话框与链接 | 现有 Tauri 选择器保留；共享外部链接及本地文档 adapter 已接入 Rust host。Markdown 默认打开、定位、另存为及指定已安装应用均走原生入口，错误不退回 browser mock。文档可执行目标拒绝、特殊路径、取消保存、源文件别名保护及权限拒绝已有回归。外部链接支持 HTTP(S)/受限 mailto，OAuth 入口仅接受 HTTP(S)。真实 macOS 包的主 WKWebView IPC 非法 URL 拒绝及两个原生入口打开默认浏览器、本机页面请求和退出清理已在默认/显式私有档案通过；Ghostty 专用入口已补上系统启动器退出码/超时反馈，实际不可启动私有应用的主 IPC 错误及原件保护门禁通过；系统 Terminal 的目录/文档入口已在真实包两种档案核对两个新会话的实际 kernel cwd 和清理。 | macOS 已增加系统应用注册查询、Spotlight 自定义安装位置和原生 64×64 图标；项目会话顶部选择器已接入配置偏好与卸载回退。Linux 已增加 XDG desktop entry 发现、GIO 原生启动、六类终端目录策略和有界 PNG 图标转换，共用逻辑回归通过；Linux 原生分支编译/图标/GUI 验收待执行。Windows 已增加 App Paths、安装目录/Toolbox 发现、终端目录策略和原生 PNG 图标代码；共用逻辑与 Win32 API 类型检查通过，Windows 原生 host 编译/注册表/图标/GUI 验收待执行；Global 会话已接入档案内稳定目录与会话身份查询。实际 AppKit 目录选择已验证中文/空格路径、默认工作区/项目显示及重启恢复，实际文件选择已验证文本附件显示为待发送。两种普通私有档案的诊断导出实际 Save/Cancel/Replace 面板已通过：中文/空格文件名、新保存、取消覆盖原件保护及确认覆盖；新包 `de8afeeec` 的两种普通档案已通过实际创建/编辑无图片主题、导出 Save/Cancel/Replace、旧包字节/权限/mtime/inode 保护及正常退出清理；`9972828f4` 托管普通档案的实际主题 Cancel/双图片导入/重复导入/无效包/重启及两次正常退出通过；显式历史捕捉失败保留记录，当前 `5882a249d` 已补齐五阶段、双图片重启及两次正常退出。当前 `851111594` 普通包两种私有档案的本地文档另存为实际 Cancel/Save/Cancel Replace/Replace 已完成，共两次正常生命周期/八项文件检查；原件和副本取消保护通过。当前 `5882a249d` 两种档案的同源/缺失源拒绝、mode-000 源实际读取拒绝及中文解决步骤已实际通过；0500 目的地真实写入拒绝与零输出/原件保护两档案通过，新简明提示原生复验待完成；实际应用主题、文档源目录拒绝及新写入拒绝提示原生复验、浏览器/邮件、指定应用的真实 UI 交互及 OAuth 仍需验收。 |
@@ -98,6 +503,23 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安�
 累计门禁：`pnpm test:clipboard`、输入框剪贴板回归、terminal selection、`pnpm test:tauri`、`pnpm build`，以及使用真实 Go bridge 的 Rust 测试（最新 XDG 通知切片 189 项通过、2 项默认忽略；其中 1 项独立真实 D-Bus 联调已显式通过，另有前轮 1 项显式 macOS 原生钥匙串测试通过）。最新 XDG 通知切片已从干净提交 `f8aba01793814b7119c4de7829bf747e42a94d53` 通过 `pnpm tauri:build -- --bundles app` 构建与本地 ad-hoc 签名；`tools/tauri/smoke-packaged-app.py` 在临时 HOME 分别验证默认和显式数据目录、私有凭据身份、真实 macOS 通知授权查询、实际 Global 工作区解析与私有目录权限、sidecar 就绪、未认证请求拒绝以及退出无残留。此 smoke 没有执行菜单/托盘等 UI 点击；两次桌面自动化分别超时和报 ScreenCaptureKit `SCStreamErrorDomain -3811`，所以真实 UI 验收保留待办。本地 ad-hoc 签名不是正式发布签名/公证。
 
 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
+
+#### D：默认档案链接拒绝与正常启动失败退出（2026-10-02）
+
+- 源码与私有真实安装包均确认：旧 `create_dir_all(reasonix-core)` 会跟随默认根的符号链接，链接到旧 `.reasonix` 后可修改其配置并生成 Preview 凭据身份。确定性回归旧逻辑失败，未操作用户旧档案。现改为私有叶目录创建及不跟随链接的普通目录检查，拒绝链接/悬空链接/普通文件；新根为 0700，已有正常档案内容保留，显式 `REASONIX_HOME` 语义未变。
+- 首个拒绝包保护了原件，但将 Err 返回给 Tauri setup 后仍 panic；仅改 build 错误处理的中间包门禁明确报 exit=-6、expectedMessage=true，未记为通过。已核对当前 Tauri 运行阶段的 setup Err panic 路径，最终在已知档案拒绝时、WebView/sidecar 创建前输出恢复说明并 exit=1。其他 setup 失败没有据此全部结案。
+- 档案 16 项专项、使用当前包真实 bridge 的完整 Rust 回归（218 通过、2 按原规则忽略）、严格 all-targets clippy 和完整 `.app`/DMG 构建均通过。最终 DMG 校验、只读挂载及临时安装后，三种非法根均正常拒绝，原件字节/mode/mtime/inode/链接目标保持，无 sidecar/readiness 残留；两档案正常包级启动/退出、3 阶段配置导入/恢复/显式拒绝以及 12 项启动中断清理/重启通过。签名为 ad-hoc，未公证。
+- 中间包另有完整窗口 46/46 和宿主异常退出 8/8 通过，其摘要与日志独立归属，不转记到最终包。本轮原生 UI 连接再次超时，实际交互未新增验收；默认叶目录检查不是任意外部目录替换的生命周期锁，也不能证明显式共享根、旧无锁宿主或全量数据回退安全。D 未结案，E、A/B/C 和正式发布门禁保持。
+- 源补丁、runner 快照、包摘要、失败过程和最终安装门禁见 [目录边界验证证据](evidence/2026-10-02-d-managed-root/README.md) 与 [机器可读结果](evidence/2026-10-02-d-managed-root/result.json)。未新增延期确认、发布或默认下载切换。
+
+#### D：宿主事件收敛、状态竞态修复与 DMG 安装复验（2026-10-02）
+
+- 对照 Wails 1.38.3 的共享关闭提示，确认较早 `GetDesktopShellStatus` 查询可覆盖更晚的托盘事件；专项在旧代码确定失败，现改为先订阅、事件到达后拒绝旧查询结果。设置菜单和关闭提示的组件 `window.runtime.EventsOn` 直连已移入 `bridge.ts` 两个固定宿主事件接口，解除订阅幂等且排队回调失效。Tauri 独立入口仍使用已有 `host:open-settings`；没有修改 Rust 最小化行为、注入 Wails shim 或扩大权限。
+- 源码专项、桌面 `test:app-lifecycle`、完整测试类型检查和生产前端门禁通过。测试类型检查发现既有原生快捷键 JSON 可选 modifier 的 unknown 类型，改为严格布尔比较后通过，未改变生产快捷键或门禁断言。使用项目要求的本地缓存 pnpm 10.34.5 构建完整 `.app` 与 DMG；签名为 ad-hoc，严格校验通过，未公证。源码尚未提交，源 HEAD 和补丁 SHA-256 已归档。
+- DMG 经校验、只读挂载、复制至私有临时安装目录和严格签名校验后卸载；安装后 host/sidecar SHA-256 与本轮构建一致。安装包七组门禁均 exit 0：两种档案的包级隔离/退出、完整窗口各 23/23（含原生编辑、剪贴板最小权限、取消面板、第二实例焦点及流式任务退出）、宿主 SIGTERM/SIGKILL 空闲/运行中共 8/8、两块 2× 屏幕的副屏/跨屏与重启 8/8、配置导入/恢复/显式拒绝 3 阶段、WKWebView 外链拒绝与浏览器回执、6 次系统通知送达及精确清理。通知两档案 initial active 均 false，不算前台或横幅/点击验收；未传旧 CLI，不算旧 GUI/全量数据回退。
+- 未改产品的上一候选在本轮亦完整通过 46 项窗口门禁及独立 8 项菜单/剪贴板/编辑/取消面板。更早同一候选曾托管 23/23 后显式首项最小化失败，日志已保留；本轮成功没有解释历史偶发失败，不认定 Preview 稳定性已结案。Wails 1.38.3 基线没有当前 `profilegate` 协议，不能将新宿主锁测试推广为任意旧版显式共享目录互斥。
+- 原生 UI 工具三次连接均 30 秒超时并重置。实际托盘/Dock、IME/自定义组合、通知拒绝/点击、钥匙串拒绝/设置迁移、不同缩放/实际拔插及其他物理门禁继续待验收；已请求用户决定是否延期，未收到确认前不扩大延期范围。D 未结案，E 继续等待 D 验收和 Preview 稳定；A/B/C、全量数据回退、Developer ID/公证与发布授权缺口保留。
+- 可审阅的基线说明、门禁范围、A/B/C/E 与其他发布阻塞、源补丁、原生/构建日志及包摘要已保存在 [本轮验证证据](evidence/2026-10-02-d-installed-host-events/README.md) 和 [机器可读结果](evidence/2026-10-02-d-installed-host-events/result.json)。本轮没有发布或切换默认下载项。
 
 #### D：当前候选完整源码回归汇总（2026-10-02）
 
@@ -938,10 +1360,13 @@ Phase 2 bridge 只承诺 `agent:event` 的语义等价版本。其余事件按�
 
 ## 尚存的直接 runtime 依赖
 
-除 `bridge.ts` 外，少数前端模块仍直接使用 `window.runtime`（clipboard、主题、
-文件拖拽、原生菜单、窗口状态、crash telemetry 和若干小型事件订阅）。这些应在
-Phase 1 逐项归并到 desktop API 的 platform/event 子接口。此处不做机械替换，
-以免在没有 Tauri host 实现时破坏 Wails 基线。
+当前源码中，文本剪贴板、外链、主题与窗口状态的 Wails 原生调用已集中到
+`wailsDesktopRuntime.ts`；共享调用方先选择 Tauri/Wails transport，Tauri 拒绝不回落
+Wails 或浏览器绕过权限。菜单设置事件也已通过宿主适配器；不能继续将这些列为散落直连。
+`bridge.ts` 仍集中消费 Wails 事件；`remoteTabEvents`、`runtimeStateSync`、history/config
+/catalog/inbox/project-tree 等订阅及 crash telemetry、若干宿主识别判断尚有 runtime 依赖。
+其中 E 的 remote/bot/updater 不在 D 验收前机械迁移，A/B/C 事件与真实进程覆盖仍待补齐。
+此源码收敛不代替原生调用方最小权限、物理剪贴板/菜单/拖放等完整验收。
 
 ## 迁移守卫
 

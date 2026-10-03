@@ -1,0 +1,8 @@
+{
+  "hostRunningAfterUiQuitAttempt": true,
+  "sidecarsBeforeCleanup": 1,
+  "cleanup": "SIGTERM to confirmed private host; does not pass UI Quit",
+  "hostsRemaining": 0,
+  "sidecarsRemaining": 0,
+  "readyDirectoriesRemaining": 0
+}

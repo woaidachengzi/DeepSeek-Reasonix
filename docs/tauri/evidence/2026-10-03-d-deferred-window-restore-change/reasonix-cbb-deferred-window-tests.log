@@ -1,0 +1,19 @@
+warning: `/Users/jerry/.cargo/config` is deprecated in favor of `config.toml`
+  |
+  = help: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+   Compiling reasonix-tauri v0.1.0 (/Users/jerry/temp/app/reasonix-tauri/desktop/tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.81s
+     Running unittests src/main.rs (target/debug/deps/reasonix_tauri-9916af7dc0d35f54)
+
+running 8 tests
+test window_state::tests::keeps_logical_size_when_restoring_on_a_different_display_scale ... ok
+test window_state::tests::accepts_only_sensible_window_sizes_and_scales ... ok
+test window_state::tests::restores_negative_coordinates_on_a_connected_secondary_monitor ... ok
+test window_state::tests::restores_straddling_window_to_display_with_most_visible_title_bar ... ok
+test window_state::tests::equal_title_bar_overlap_prefers_primary_display ... ok
+test window_state::tests::disconnected_monitor_and_extreme_coordinates_return_to_primary_work_area ... ok
+test window_state::tests::ignores_corrupt_or_unreasonable_state ... ok
+test window_state::tests::persists_and_reads_old_size_only_state ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 222 filtered out; finished in 0.01s
+

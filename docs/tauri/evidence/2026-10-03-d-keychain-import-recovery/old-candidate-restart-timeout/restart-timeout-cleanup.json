@@ -1,0 +1,11 @@
+{
+  "reason": "CUA getApp and inventory repeated timeouts; deliberately terminated exact private test host for cleanup, not UI acceptance",
+  "pid": 27634,
+  "rawKernelStatus": 15,
+  "exited": false,
+  "exitCode": null,
+  "signaled": true,
+  "signal": 15,
+  "sidecarsRemaining": [],
+  "readinessRemaining": 0
+}

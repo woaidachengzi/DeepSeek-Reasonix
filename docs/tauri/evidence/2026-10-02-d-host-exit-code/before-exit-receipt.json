@@ -1,0 +1,13 @@
+{
+  "app": "/private/tmp/reasonix-d-interactive-installed-tks3iqss/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-launch-services-m69wv60z",
+  "identifier": "io.reasonix.desktop.preview",
+  "pid": 81052,
+  "sidecarPid": 81060,
+  "openerPid": 81050,
+  "profile": "managed",
+  "interactive": false,
+  "exitCode": 0,
+  "expectedExitCode": 2,
+  "openExitCode": 0
+}

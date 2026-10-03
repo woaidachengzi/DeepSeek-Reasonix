@@ -1,0 +1,19 @@
+/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/Reasonix Window Baseline.app/Contents/MacOS/window-baseline: replacing existing signature
+/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/Reasonix Window Baseline.app: replacing existing signature
+{"app": "/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/Reasonix Window Baseline.app", "binarySha256": "ebcf416be73cb964ab6b513c4a8814b1a29a67a6f5a1812ec96763b1cada68e3", "base": "/private/tmp/reasonix-current-phase-pairs-m9v3qxm2"}
+{"delegate": "keep", "application": "tao", "kind": "cocoa", "action": "phase-timer", "root": "/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/0-cocoa", "style": "overlay", "hostPid": 30574, "kernelExitCode": 0, "openExitCode": 0, "expectedCode": 0}
+{"style": "overlay", "root": "/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/0-cocoa", "pid": 30574, "exitCode": 0, "precondition": true, "minimized": true, "restored": true}
+{"delegate": "keep", "application": "tao", "kind": "tauri", "action": "phase-timer", "root": "/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/1-tauri", "style": "overlay", "hostPid": 30591, "kernelExitCode": 2, "openExitCode": 0, "expectedCode": 2}
+{"style": "overlay", "root": "/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/1-tauri", "pid": 30591, "exitCode": 2, "precondition": true, "minimized": false, "restored": false}
+{"delegate": "keep", "application": "tao", "kind": "cocoa", "action": "phase-timer", "root": "/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/2-cocoa", "style": "overlay", "hostPid": 30604, "kernelExitCode": 0, "openExitCode": 0, "expectedCode": 0}
+{"style": "overlay", "root": "/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/2-cocoa", "pid": 30604, "exitCode": 0, "precondition": true, "minimized": true, "restored": true}
+{"delegate": "keep", "application": "tao", "kind": "tauri", "action": "phase-timer", "root": "/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/3-tauri", "style": "overlay", "hostPid": 30620, "kernelExitCode": 0, "openExitCode": 0, "expectedCode": 0}
+{"style": "overlay", "root": "/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/3-tauri", "pid": 30620, "exitCode": 0, "precondition": true, "minimized": true, "restored": true}
+{"delegate": "keep", "application": "tao", "kind": "cocoa", "action": "phase-timer", "root": "/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/4-cocoa", "style": "overlay", "hostPid": 30630, "kernelExitCode": 0, "openExitCode": 0, "expectedCode": 0}
+{"style": "overlay", "root": "/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/4-cocoa", "pid": 30630, "exitCode": 0, "precondition": true, "minimized": true, "restored": true}
+{"delegate": "keep", "application": "tao", "kind": "tauri", "action": "phase-timer", "root": "/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/5-tauri", "style": "overlay", "hostPid": 30646, "kernelExitCode": 0, "openExitCode": 0, "expectedCode": 0}
+{"style": "overlay", "root": "/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/5-tauri", "pid": 30646, "exitCode": 0, "precondition": true, "minimized": true, "restored": true}
+{"delegate": "keep", "application": "tao", "kind": "cocoa", "action": "phase-timer", "root": "/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/6-cocoa", "style": "overlay", "hostPid": 30664, "kernelExitCode": 0, "openExitCode": 0, "expectedCode": 0}
+{"style": "overlay", "root": "/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/6-cocoa", "pid": 30664, "exitCode": 0, "precondition": true, "minimized": true, "restored": true}
+{"delegate": "keep", "application": "tao", "kind": "tauri", "action": "phase-timer", "root": "/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/7-tauri", "style": "overlay", "hostPid": 30684, "kernelExitCode": 0, "openExitCode": 0, "expectedCode": 0}
+{"style": "overlay", "root": "/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/7-tauri", "pid": 30684, "exitCode": 0, "precondition": true, "minimized": true, "restored": true}

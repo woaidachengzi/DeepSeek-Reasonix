@@ -1,0 +1,13 @@
+{
+  "hostSha256": "e0fc4d124080bc9e337b009611d48240982e8ad14121ed24248bcf90ed868c76",
+  "failureExitProfiles": 2,
+  "failureExitCode": 2,
+  "normalPackageProfiles": 2,
+  "normalExitCode": 0,
+  "hostLifetimeCases": 8,
+  "actualCmdQExitCode": 0,
+  "actualQuitPid": 84743,
+  "actualQuitReadyRemaining": false,
+  "Daccepted": false,
+  "Estarted": false
+}

@@ -1,0 +1,314 @@
+
+theme pack contract
+  PASS  accepts #RRGGBB
+  PASS  accepts #RRGGBBAA
+  PASS  rejects url()
+  PASS  rejects gradient
+  PASS  token whitelist
+  PASS  code background is flattened to an opaque color
+  PASS  transparent bgSoft is composited over the theme background
+  PASS  every code and diff text role reaches WCAG AA on its rendered background
+  PASS  diff row backgrounds are pre-composited opaque colors
+  PASS  diff semantic text reaches WCAG AA on the final tinted row
+  PASS  midtone custom themes keep every syntax role readable on plain and tinted diff rows
+  PASS  generated custom palettes preserve WCAG AA across every rendered code surface
+  PASS  syntax direction follows final code luminance instead of global dark mode
+  PASS  graphite dark base code palette reaches WCAG AA
+  PASS  graphite dark preview uses the live code palette
+  PASS  graphite light base code palette reaches WCAG AA
+  PASS  graphite light preview uses the live code palette
+  PASS  aurora dark base code palette reaches WCAG AA
+  PASS  aurora dark preview uses the live code palette
+  PASS  aurora light base code palette reaches WCAG AA
+  PASS  aurora light preview uses the live code palette
+  PASS  slate dark base code palette reaches WCAG AA
+  PASS  slate dark preview uses the live code palette
+  PASS  slate light base code palette reaches WCAG AA
+  PASS  slate light preview uses the live code palette
+  PASS  carbon dark base code palette reaches WCAG AA
+  PASS  carbon dark preview uses the live code palette
+  PASS  carbon light base code palette reaches WCAG AA
+  PASS  carbon light preview uses the live code palette
+  PASS  nocturne dark base code palette reaches WCAG AA
+  PASS  nocturne dark preview uses the live code palette
+  PASS  nocturne light base code palette reaches WCAG AA
+  PASS  nocturne light preview uses the live code palette
+  PASS  amber dark base code palette reaches WCAG AA
+  PASS  amber dark preview uses the live code palette
+  PASS  amber light base code palette reaches WCAG AA
+  PASS  amber light preview uses the live code palette
+  PASS  Creation dark code palette reaches WCAG AA
+  PASS  Creation light code palette reaches WCAG AA
+  PASS  base stylesheet installs complete root and Creation code palettes
+  PASS  asset URL allowed
+  PASS  data URL allowed
+  PASS  remote URL rejected
+  PASS  registered same-origin official dev background allowed
+  PASS  registered Tauri app-data theme image allowed
+  PASS  registered Tauri asset-scheme theme image allowed
+  PASS  cross-origin bundled background rejected
+  PASS  unscoped Tauri asset path rejected
+  PASS  token-only preview keeps opaque panes
+  PASS  background preview applies configured pane opacity
+  PASS  sets data-theme-pack
+  PASS  marks background present
+  PASS  sets background image var
+  PASS  injects dark accent override
+  PASS  injects an opaque code readability island
+  PASS  injects contrast-checked syntax roles
+  PASS  applies round corners recipe
+  PASS  sets independent task image var
+  PASS  sets independent task opacity
+  PASS  computes home card pane opacity
+  PASS  computes task card pane opacity
+  PASS  computes home session-hover opacity tier
+  PASS  computes home child opacity tier
+  PASS  computes home interaction opacity tier
+  PASS  computes home operational overlay opacity tier
+  PASS  computes task session-hover opacity tier
+  PASS  computes task child opacity tier
+  PASS  caps task interaction opacity tier
+  PASS  caps task operational overlay opacity tier
+  PASS  task background controls safe area
+  PASS  home overlay follows pane opacity 0
+  PASS  task overlay follows pane opacity 0
+  PASS  home overlay follows pane opacity 0.5
+  PASS  task overlay follows pane opacity 0.5
+  PASS  home overlay follows pane opacity 1
+  PASS  task overlay follows pane opacity 1
+  PASS  legacy task scene inherits home pane opacity
+  PASS  scene task on root
+  PASS  scene home on root
+  PASS  clearing a pack removes every extended pane opacity tier
+  PASS  token-only themes keep operational overlays on the opaque base surface
+  PASS  token-only themes do not inject home overlay transparency
+  PASS  token-only themes do not inject task overlay transparency
+  PASS  applyTheme installs the base code readability stylesheet
+  PASS  preview applies pack
+  PASS  cancel restores cleared pack
+  PASS  activation failure surfaces to caller
+  PASS  activation failure keeps preview reversible
+  PASS  cancel restores appearance after activation failure
+  PASS  save-and-apply defers persistent activation to the experience controller
+  PASS  save-and-apply persists activation exactly once
+  PASS  save-and-apply activates before editor unmount
+  PASS  aurora pack active
+  PASS  pack switches live style to aurora
+  PASS  clear removes data-theme-pack
+  PASS  clear restores config graphite style
+  PASS  settings refresh preserves the active pack
+  PASS  settings refresh preserves the pack DOM marker
+  PASS  settings refresh preserves the pack effective style
+  PASS  settings refresh updates the configured restore appearance
+  PASS  clear restores the configured appearance after settings refresh
+  PASS  active pack effective style is not mirrored as configured base
+  PASS  direct reset still restores configured base after experience sync
+  PASS  inactive experience still synchronizes a newly selected base style
+  PASS  compact density vars defined in pack builder
+  PASS  compact density injected
+  PASS  compact row height injected
+  PASS  density pad consumed by cards
+  PASS  density gap consumed
+  PASS  density maps to list row height
+  PASS  layout background transparent when theme has background
+  PASS  token-only packs keep opaque layout surfaces
+  PASS  pane transparency keeps block code and diff opaque while preserving inline-code styling
+  PASS  home cards consume pane opacity tier
+  PASS  task cards consume pane opacity tier
+  PASS  preview cards consume the same pane opacity tier
+  PASS  background layer only displays for packs with backgrounds
+  PASS  ThemeLibrary cleanup cancels preview
+  PASS  import confirm reuses staged path without re-picking
+  PASS  import handles needsReplace result
+  PASS  ThemeGallery does not use native confirm dialogs
+  PASS  ThemeLibrary does not use native confirm dialogs
+  PASS  theme flows share the Reasonix confirm dialog
+  PASS  confirm dialog exposes accessible modal semantics
+  PASS  destructive confirmations use danger styling
+  PASS  confirm dialog supports Escape and focus restoration
+  PASS  gallery cancellation restores focus after closing its overflow menu
+  PASS  overlay style id stable
+  PASS  overlay style appended last for priority
+  PASS  tracks base appearance for restore
+  PASS  background layer CSS present
+  PASS  task scene CSS present
+  PASS  theme pack CSS does not apply backdrop-filter
+  PASS  overlay wash element styled
+  PASS  session export owner wires scene from session content
+  PASS  App mounts background layer
+  PASS  reset entry exists
+
+official themes (kind/grouping/i18n)
+  PASS  kind official passthrough
+  PASS  kind base passthrough
+  PASS  kind user passthrough
+  PASS  legacy builtin=true falls back to base
+  PASS  legacy builtin=false falls back to user
+  PASS  appearance overview present
+  PASS  overview has browse themes
+  PASS  overview can disable pack
+  PASS  settings pages retain accessible names without a duplicate visual header
+  PASS  base-style copy opens a prefilled theme editor
+  PASS  overview segmented controls expose selection semantics
+  PASS  overview choices use the shared field-width control
+  PASS  overview does not retain standalone segmented controls
+  PASS  overview choices share the bounded responsive field width
+  PASS  overview segmented controls expand on narrow screens
+  PASS  Creation compact swatches stay scoped to real theme cards
+  PASS  Creation appearance hero keeps readable swatch dimensions
+  PASS  Creation Graphite appearance hero keeps the gold accent palette
+  PASS  custom UI font selection exposes an editable font name
+  PASS  custom monospace font selection exposes an editable font name
+  PASS  font family selectors render localized names
+  PASS  active pack explains why base style is locked
+  PASS  gallery cards are listbox options
+  PASS  apply lives in gallery detail
+  PASS  card click selects without applying
+  PASS  changing gallery groups synchronizes the selected detail
+  PASS  apply path uses activate API
+  PASS  base style API wired
+  PASS  selection is frontend state
+  PASS  gallery thumbs lazy-load
+  PASS  isolated detail preview
+  PASS  theme preview includes real code and diff samples
+  PASS  base gallery cards render semantic UI thumbnails
+  PASS  immersive rail renders base-style thumbnails
+  PASS  graphite light uses its canonical preview palette
+  PASS  graphite dark uses its canonical preview palette
+  PASS  aurora light uses its canonical preview palette
+  PASS  aurora dark uses its canonical preview palette
+  PASS  slate light uses its canonical preview palette
+  PASS  slate dark uses its canonical preview palette
+  PASS  carbon light uses its canonical preview palette
+  PASS  carbon dark uses its canonical preview palette
+  PASS  nocturne light uses its canonical preview palette
+  PASS  nocturne dark uses its canonical preview palette
+  PASS  amber light uses its canonical preview palette
+  PASS  amber dark uses its canonical preview palette
+  PASS  six base previews have distinct dark accents
+  PASS  all gallery card clicks immediately start a global preview
+  PASS  gallery preview state is visible in theme details
+  PASS  leaving all themes restores the prior appearance
+  PASS  detail and immersive views share preview controls
+  PASS  appearance and scene previews are separate radio groups
+  PASS  preview controls expose selected values
+  PASS  preview radios support arrow keys and roving focus
+  PASS  immersive selection automatically starts a global preview
+  PASS  leaving immersive preview restores the prior appearance
+  PASS  redundant global-trial button is removed
+  PASS  immersive rail includes official, user, and base theme groups
+  PASS  immersive rail hides empty groups
+  PASS  immersive rail has no duplicate bottom tab navigation
+  PASS  active theme uses a status badge
+  PASS  active status is not rendered as a disabled primary action
+  PASS  user theme edit and export actions are visible outside the overflow menu
+  PASS  user theme overflow menu keeps only delete
+  PASS  editor supports an independent workspace image
+  PASS  editor exposes semantic theme colors
+  PASS  editor exposes scene opacity controls
+  PASS  content-area control exposes radio semantics and guidance
+  PASS  editor changes are previewed live
+  PASS  bridge exposes GetThemeExperience
+  PASS  bridge exposes ActivateBaseStyle
+  PASS  bridge exposes DisableThemePack
+  PASS  gallery combines official and base packs in all themes
+  PASS  all themes keeps flagship and base sections
+  PASS  catalog sections retain accessible grouping
+  PASS  base styles are no longer a separate top-level tab
+  PASS  empty user tab is not overwritten by selection seeding
+  PASS  overview no longer renders long style card grid
+  PASS  en has settings.themes.official.official-rose-dawn.name
+  PASS  zh has settings.themes.official.official-rose-dawn.name
+  PASS  zh-TW has settings.themes.official.official-rose-dawn.name
+  PASS  en has settings.themes.official.official-rose-dawn.description
+  PASS  zh has settings.themes.official.official-rose-dawn.description
+  PASS  zh-TW has settings.themes.official.official-rose-dawn.description
+  PASS  en has settings.themes.official.official-fortune-forge.name
+  PASS  zh has settings.themes.official.official-fortune-forge.name
+  PASS  zh-TW has settings.themes.official.official-fortune-forge.name
+  PASS  en has settings.themes.official.official-fortune-forge.description
+  PASS  zh has settings.themes.official.official-fortune-forge.description
+  PASS  zh-TW has settings.themes.official.official-fortune-forge.description
+  PASS  en has settings.themes.official.official-crimson-horizon.name
+  PASS  zh has settings.themes.official.official-crimson-horizon.name
+  PASS  zh-TW has settings.themes.official.official-crimson-horizon.name
+  PASS  en has settings.themes.official.official-crimson-horizon.description
+  PASS  zh has settings.themes.official.official-crimson-horizon.description
+  PASS  zh-TW has settings.themes.official.official-crimson-horizon.description
+  PASS  en has settings.themes.official.official-sage-breeze.name
+  PASS  zh has settings.themes.official.official-sage-breeze.name
+  PASS  zh-TW has settings.themes.official.official-sage-breeze.name
+  PASS  en has settings.themes.official.official-sage-breeze.description
+  PASS  zh has settings.themes.official.official-sage-breeze.description
+  PASS  zh-TW has settings.themes.official.official-sage-breeze.description
+  PASS  en has settings.themes.official.official-spark-notebook.name
+  PASS  zh has settings.themes.official.official-spark-notebook.name
+  PASS  zh-TW has settings.themes.official.official-spark-notebook.name
+  PASS  en has settings.themes.official.official-spark-notebook.description
+  PASS  zh has settings.themes.official.official-spark-notebook.description
+  PASS  zh-TW has settings.themes.official.official-spark-notebook.description
+  PASS  en has settings.themes.official.official-violet-starlight.name
+  PASS  zh has settings.themes.official.official-violet-starlight.name
+  PASS  zh-TW has settings.themes.official.official-violet-starlight.name
+  PASS  en has settings.themes.official.official-violet-starlight.description
+  PASS  zh has settings.themes.official.official-violet-starlight.description
+  PASS  zh-TW has settings.themes.official.official-violet-starlight.description
+  PASS  en has settings.themes.official.official-cyan-stage.name
+  PASS  zh has settings.themes.official.official-cyan-stage.name
+  PASS  zh-TW has settings.themes.official.official-cyan-stage.name
+  PASS  en has settings.themes.official.official-cyan-stage.description
+  PASS  zh has settings.themes.official.official-cyan-stage.description
+  PASS  zh-TW has settings.themes.official.official-cyan-stage.description
+  PASS  en has settings.themes.official.official-noir-gold.name
+  PASS  zh has settings.themes.official.official-noir-gold.name
+  PASS  zh-TW has settings.themes.official.official-noir-gold.name
+  PASS  en has settings.themes.official.official-noir-gold.description
+  PASS  zh has settings.themes.official.official-noir-gold.description
+  PASS  zh-TW has settings.themes.official.official-noir-gold.description
+  PASS  gallery key settings.themeGallery.title in all locales
+  PASS  gallery key settings.themeGallery.apply in all locales
+  PASS  gallery key settings.themeGallery.browse in all locales
+  PASS  gallery key settings.themeGallery.paletteLabel in all locales
+  PASS  gallery key settings.themeGallery.appearancePreview in all locales
+  PASS  gallery key settings.themeGallery.scenePreview in all locales
+  PASS  gallery key settings.themeGallery.scenePreviewHint in all locales
+  PASS  gallery key settings.themeGallery.tabAll in all locales
+  PASS  gallery key settings.themeGallery.sectionFlagship in all locales
+  PASS  gallery key settings.themeEditor.safeAreaHint in all locales
+  PASS  gallery key settings.themeLibrary.confirmDeleteTitle in all locales
+  PASS  gallery key settings.themeLibrary.confirmReplaceImportTitle in all locales
+  PASS  gallery key settings.themeLibrary.replaceConfirm in all locales
+  PASS  gallery key settings.themeLibrary.exportRightsTitle in all locales
+  PASS  gallery key settings.themeLibrary.exportConfirm in all locales
+  PASS  mock has 6 base packs
+  PASS  mock has 8 official packs
+  PASS  browser mock has 8 real official previews
+  PASS  browser mock has 8 real official backgrounds
+  PASS  browser mock gives every official theme the product pane opacity
+  PASS  Vite dev server permits only the official theme asset directory
+  PASS  gallery establishes its own responsive container
+  PASS  gallery collapses from its content width
+  PASS  theme editor escapes settings containing blocks through a body portal
+  PASS  theme editor portal retains accessible dialog semantics
+  PASS  theme editor establishes an independent responsive container
+  PASS  theme editor collapses from its own width
+  PASS  all editor segmented setting buttons share available width
+  PASS  base appearance options wrap at narrow editor widths
+  PASS  preview dimensions have labeled layout styling
+  PASS  scene preview explains home and workspace behavior
+  PASS  scene options use explicit Chinese labels
+  PASS  gallery explains click-to-preview and apply-to-save semantics
+  PASS  English restore copy names Graphite and preserves detailed typography
+  PASS  Chinese restore copy localizes Graphite as 石墨 and preserves detailed typography
+  PASS  user theme edit and export actions share a balanced row
+  PASS  immersive rail groups have lightweight headings and item stacks
+  PASS  active status has dedicated non-button styling
+  PASS  content-area guidance has dedicated responsive styling
+  PASS  code and diff surfaces consume the opaque code background
+  PASS  live and preview diff rows consume the same pre-composited safe backgrounds
+  PASS  Chinese content-area copy explains foreground placement
+  PASS  pack overlay never targets layout-scoped selectors
+  PASS  auto mode follows system light/dark
+  PASS  ThemeLibrary module retained for editor/helpers
+
+308 passed, 0 failed

@@ -617,6 +617,8 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("POST /v1/settings/desktop/language", b.authorized(b.idempotent(64<<10, b.setDesktopLanguage)))
 	mux.HandleFunc("POST /v1/settings/desktop/currency", b.authorized(b.idempotent(64<<10, b.setDesktopCurrency)))
 	mux.HandleFunc("POST /v1/settings/provider-key", b.authorized(b.idempotent(64<<10, b.setProviderKey)))
+	mux.HandleFunc("GET /v1/settings/provider-credential-account", b.authorized(b.providerCredentialAccount))
+	mux.HandleFunc("GET /v1/settings/wails-env-credential", b.authorized(b.wailsEnvCredential))
 	mux.HandleFunc("POST /v1/sessions:open", b.authorized(b.idempotent(64<<10, b.openSession)))
 	mux.HandleFunc("POST /v1/sessions:switch", b.authorized(b.idempotent(64<<10, b.switchSession)))
 	mux.HandleFunc("POST /v1/sessions:previews", b.authorized(b.sessionPreviews))
@@ -1349,6 +1351,35 @@ func (b *bridgeServer) setProviderKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, summary)
+}
+
+func (b *bridgeServer) providerCredentialAccount(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("provider")
+	if name == "" || len(name) > 256 || strings.TrimSpace(name) != name {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid provider identity")
+		return
+	}
+	cfg, err := appconfig.LoadUserConfigReadOnly()
+	if err != nil {
+		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read provider credential identity")
+		return
+	}
+	for _, provider := range cfg.Providers {
+		if provider.Name != name {
+			continue
+		}
+		if !provider.RequiresAPIKey() || !appconfig.IsValidCredentialKey(provider.APIKeyEnv) {
+			break
+		}
+		// Return the configured legacy keyring account, never its secret. The
+		// renderer cannot nominate an unrelated system-keychain account.
+		writeJSON(w, http.StatusOK, struct {
+			ProtocolVersion int    `json:"protocolVersion"`
+			Account         string `json:"account"`
+		}{desktopbridge.ProtocolVersion, provider.APIKeyEnv})
+		return
+	}
+	writeProtocolError(w, http.StatusBadRequest, "invalid_request", "provider has no legacy credential identity")
 }
 
 func (b *bridgeServer) shutdown(w http.ResponseWriter, _ *http.Request) {

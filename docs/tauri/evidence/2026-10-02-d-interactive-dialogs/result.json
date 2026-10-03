@@ -1,0 +1,24 @@
+{
+  "app": "/private/tmp/reasonix-d-runtime-installed-gm1mgpy_/Reasonix Tauri Preview.app",
+  "hostSha256": "b95b38c0e35d66c964bc370b621a46c9d69116b7408a7c7567f4c715abc17734",
+  "sidecarSha256": "29d985c7af09baefec4308339429eabfe921896c47db6f4c30584b742b7efd39",
+  "observation": "CUA native accessibility observations in task tool transcript; notes below are sanitized summaries, not raw AX dumps",
+  "checks": {
+    "settingsAccelerator": "passed: Cmd+, showed Settings",
+    "directorySelection": "passed: selected private workspace; workbench path/project updated",
+    "fileCancel": "passed: canceled native file panel; workspace and empty draft preserved",
+    "workspacePersistence": "passed: complete private host restart retained workspace path/project",
+    "fileConfirmation": "unverified: Open clicked after canary selected; ScreenCaptureKit -3811 before outcome observation",
+    "physicalMinimize": "unverified: Cmd+M/button attempted; AX/window-only screenshot cannot establish native minimized state",
+    "uiQuit": "unverified: observation/input error; host still running before scoped cleanup"
+  },
+  "cleanup": "Both exact private hosts cleaned by SIGTERM; no host/sidecar/ready-file remains. This is not user Quit acceptance.",
+  "scope": "One explicit private core profile on installed b95 candidate. No model request, credentials, notification or system preference changes. Does not close D or advance E.",
+  "artifactSha256": {
+    "fixture.json": "d5bed409e165dfbf0071fa7a064a35de238d901661ecc019633e40332de7c0f1",
+    "workbench-project-folders.json": "0f4b07f356f14cf02195ccc9d173946f79a38a7892dc76073696e5396c60410f",
+    "initial-cleanup.json": "653584be89d1eea8d1abb6232eede12bfddbe6f8da18643fa26a6a89827f3583",
+    "canary.txt": "0122f4513999112b90dab997e2f3fd05822d2404aa8e0dc3c92e189b26499a95",
+    "final-cleanup.json": "9cc6f50f677665429b7913f7cbccbcddba706e229879f0851378e556b1c3e2a0"
+  }
+}

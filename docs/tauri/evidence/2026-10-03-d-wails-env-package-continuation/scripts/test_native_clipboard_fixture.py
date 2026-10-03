@@ -1,0 +1,69 @@
+"""Recovery regressions using fake payloads; never accesses system clipboard."""
+import contextlib
+import importlib.util
+import io
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+import unittest
+from unittest.mock import patch
+
+source = Path(os.environ.get("REASONIX_CLIPBOARD_FIXTURE_SOURCE", Path(__file__).with_name("native-clipboard-fixture.py")))
+spec = importlib.util.spec_from_file_location("clipboard_fixture", source)
+fixture_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(fixture_module)
+
+
+class ClipboardRecoveryTests(unittest.TestCase):
+    def exercise(self, status, interrupted):
+        with tempfile.TemporaryDirectory(dir="/private/tmp") as temporary:
+            root = Path(temporary)
+            caller = root / "caller"
+            caller.mkdir(mode=0o700)
+            recovery = root / "recovery"
+            fixture = fixture_module.NativeClipboardFixture(caller)
+            payload = b"fake original multi-format clipboard bytes"
+            fixture.snapshot.write_bytes(payload)
+            fixture.snapshot.chmod(0o600)
+            fixture.marker.write_text('{"nonce":"fixture","count":7}')
+            fixture.marker.chmod(0o600)
+            fixture.command = lambda *_: subprocess.CompletedProcess([], status)
+
+            def retain(**_):
+                recovery.mkdir(mode=0o700)
+                return str(recovery)
+
+            with patch.object(fixture_module.tempfile, "mkdtemp", side_effect=retain), contextlib.redirect_stdout(io.StringIO()):
+                if (status == 2 and not interrupted) or status == 3:
+                    with self.assertRaisesRegex(RuntimeError, "recovery snapshot retained"):
+                        fixture.__exit__(None)
+                else:
+                    self.assertFalse(fixture.__exit__(RuntimeError if interrupted else None))
+            # Caller cleanup must not remove the only original backup when
+            # restoration declined due to a newer pasteboard generation.
+            shutil.rmtree(caller)
+            if status in (2, 3):
+                self.assertEqual((recovery / "original.plist").read_bytes(), payload)
+                self.assertEqual((recovery / "original.plist").stat().st_mode & 0o777, 0o600)
+                self.assertEqual(recovery.stat().st_mode & 0o777, 0o700)
+                self.assertTrue((recovery / "owned.json").is_file())
+            else:
+                self.assertFalse(recovery.exists())
+
+    def test_interrupted_changed_generation_keeps_recovery_after_caller_cleanup(self):
+        self.exercise(2, True)
+
+    def test_completed_changed_generation_reports_and_retains_recovery(self):
+        self.exercise(2, False)
+
+    def test_restored_generation_needs_no_recovery_copy(self):
+        self.exercise(0, False)
+
+    def test_unverified_restoration_retains_original_after_caller_cleanup(self):
+        self.exercise(3, False)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -76,6 +76,18 @@ func LoadUserConfigReadOnly() (*Config, error) {
 	return cfg, nil
 }
 
+// LoadUserConfigBytesReadOnly interprets an already bounded global snapshot
+// using the same provider isolation and normalization as the file loader. It
+// never reads another path, resolves credentials, or persists migrations.
+func LoadUserConfigBytesReadOnly(data []byte) (*Config, error) {
+	cfg := Default()
+	if _, err := decodeTOMLBytes(data, cfg); err != nil {
+		return nil, err
+	}
+	normalizeConfigForEdit(cfg)
+	return cfg, nil
+}
+
 type loadForRootOptions struct {
 	migrateOnDisk   bool
 	loadCredentials bool

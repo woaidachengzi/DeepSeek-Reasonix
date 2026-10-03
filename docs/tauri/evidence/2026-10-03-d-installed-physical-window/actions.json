@@ -1,0 +1,38 @@
+{
+  "tool": "cua_repl",
+  "app": "/private/tmp/reasonix-d-external-boundary-installed-_h6wuc93/Reasonix Tauri Preview.app",
+  "pid": 17006,
+  "actions": [
+    {
+      "action": "getApp",
+      "observation": "Reasonix window, native close/fullscreen/minimize buttons and menus"
+    },
+    {
+      "action": "Window menu → Minimize",
+      "menuItemID": "performMiniaturize:",
+      "result": "nativeMiniaturized=false; no will/did-mini notifications"
+    },
+    {
+      "action": "native minimize button click",
+      "result": "AX tree unchanged; no mini notifications"
+    },
+    {
+      "action": "Cmd+M",
+      "result": "AX tree unchanged; no mini notifications"
+    },
+    {
+      "action": "View → Toggle Full Screen",
+      "menuItemID": "toggleFullScreen:",
+      "result": "nativeStyleMask 49167; geometry 3840x2160 at (0,0); native traffic light AX controls absent"
+    },
+    {
+      "action": "View → Toggle Full Screen",
+      "result": "nativeStyleMask 32783; original geometry restored; traffic light AX controls restored"
+    },
+    {
+      "action": "Cmd+Q",
+      "result": "kernel exit0; sidecar/readiness cleaned"
+    }
+  ],
+  "guards": "CUA twice reported user changed app during window transitions; refreshed getAXState before continuing. Before rebinding after the first guard, verified exact host and sidecar PIDs remained live; no post-Quit UI read or reopen."
+}

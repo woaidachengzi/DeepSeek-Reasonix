@@ -1,0 +1,14 @@
+{
+  "privateRoot": "/private/tmp/reasonix-launch-services-vpvsvlno",
+  "applicationHideActualClose": true,
+  "showMenuActualRestore": true,
+  "restoreRequests": 1,
+  "restoreCompletions": 1,
+  "reopenEvents": 0,
+  "axReadOrRebindRestored": false,
+  "manualDockTrayAccepted": false,
+  "actualCmdQKernelExit": 0,
+  "sidecarReadyRemaining": false,
+  "productionHostSha256": "15fcd43baa4fc08225838a3b8bdd2441a10f823dacfd514375d081239347a370",
+  "DEComplete": false
+}

@@ -1,0 +1,21 @@
+warning: `/Users/jerry/.cargo/config` is deprecated in favor of `config.toml`
+  |
+  = help: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+   Compiling reasonix-tauri v0.1.0 (/Users/jerry/temp/app/reasonix-tauri/desktop/tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.21s
+     Running unittests src/main.rs (desktop/tauri/target/debug/deps/reasonix_tauri-9916af7dc0d35f54)
+
+running 10 tests
+test host_preferences::tests::invalid_zoom_does_not_change_the_saved_value ... ok
+test host_preferences::tests::custom_theme_rejects_paths_unknown_tokens_and_css_values ... ok
+test host_preferences::tests::legacy_close_only_preferences_keep_the_default_zoom ... ok
+test host_preferences::tests::failed_save_keeps_the_previous_runtime_choice ... ok
+test host_preferences::tests::active_official_theme_survives_restart_and_rejects_untrusted_ids ... ok
+test host_preferences::tests::imported_theme_assets_are_published_separately_from_preferences ... ok
+test host_preferences::tests::close_preference_survives_restart_and_ignores_corrupt_data ... ok
+test host_preferences::tests::imported_theme_gets_a_safe_unique_preview_id ... ok
+test host_preferences::tests::custom_theme_is_validated_persisted_activated_and_deleted ... ok
+test host_preferences::tests::saving_a_theme_replaces_and_clears_scene_assets_transactionally ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 210 filtered out; finished in 0.08s
+

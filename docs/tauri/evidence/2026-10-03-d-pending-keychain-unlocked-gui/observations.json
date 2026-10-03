@@ -1,0 +1,55 @@
+{
+  "source": "CUA actual installed app actions and returned AX/screenshot observations in this chat",
+  "profile": "explicit",
+  "fixtureDefaultKeychain": "owned private fixture unlocked before host launch",
+  "stages": [
+    {
+      "action": "save first fake value",
+      "observed": [
+        "已就绪",
+        "已保存到钥匙串",
+        "input empty with configured placeholder"
+      ]
+    },
+    {
+      "action": "save replacement fake value",
+      "observed": [
+        "已就绪",
+        "已保存到钥匙串",
+        "input empty with configured placeholder"
+      ]
+    },
+    {
+      "action": "CmdQ then same app/root normal restart",
+      "observed": [
+        "same credential identity",
+        "已就绪",
+        "input empty with configured placeholder; no saved value echoed"
+      ]
+    },
+    {
+      "action": "delete own fake value",
+      "observed": [
+        "未配置",
+        "钥匙串密钥已删除",
+        "input empty"
+      ]
+    },
+    {
+      "action": "CmdQ",
+      "observed": [
+        "kernel exit 0",
+        "open exit 0",
+        "sidecar absent",
+        "ready absent"
+      ]
+    }
+  ],
+  "limits": [
+    "Replacement success UI observed; no native readback of the replacement value performed.",
+    "No managed/cross-profile GUI acceptance.",
+    "No system authorization cancel UI acceptance or pending hint GUI acceptance.",
+    "Old Preview fixture is not Wails service compatibility proof.",
+    "No post-delete GUI restart this run."
+  ]
+}

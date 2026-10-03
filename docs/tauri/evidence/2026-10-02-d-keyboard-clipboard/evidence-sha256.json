@@ -1,0 +1,21 @@
+{
+  "README.md": "28df618c4dc9f37c90f3eb0c7cedbacdc2571f9ea1e9bf2ff0995d30af28aa53",
+  "after-controller.json": "69c2d03a253f9c34e5bea7bc40768a56f8d0fcac471710c6fff75fa2c9aecc54",
+  "after-copy-receipt.json": "20cf06c8ae8f702596fa4e8b31e6db3da1f0dc7617bb8c3f403e308692d6591e",
+  "after-cut-receipt.json": "41e8eb205cda2e7eef52e0d112309177627b9c25c1d797b0338d355b9da461f5",
+  "after-paste-receipt.json": "1cd6f99c0d4832ed3e882e8165d8aea3b4f1a6184094b4068d733144f05e163c",
+  "after-result.json": "c4a58dac2e8514a0c5b7481e510c4c0739e8d441f10be97c55c3950981137e09",
+  "after-ui-exit-receipt.json": "d507c54264b7ec7c72658d7a375a99a4c46290594f000e51c1554f9b7dec4eca",
+  "after-ui-launch.json": "5b9395d7d9548d9e80c65276b57bd97cda069fbec25da52d35af452b49491349",
+  "after-ui-result.json": "5974c16f43b46b8efd6df80b4774e2e6eff5f0a3e6026ab0429fa14b48507333",
+  "before-controller.json": "b750f5c866637a3ac66c68ca17d7a8d856fe5385a0fdcec20a193accb8b95f26",
+  "cleanup.json": "1d3fc8a9441e82171a03303650fb94179484ae0a24da2cd4f3869d1676ab2d61",
+  "native-clipboard-fixture.py": "acb52f27ed7b9dc6205f1424e6d0c4890c8695392a78674434de0928d87641cb",
+  "probe-interactive-clipboard.py": "7a2c22008fc9dc5c74728d9053698d84a520028d9abfc508cfb60b4f7ac64247",
+  "reasonix-clipboard-recovery-after.log": "edb4e2159c923ea45a32656078835cdf531c3d7b414c670dd786978875cb0678",
+  "reasonix-clipboard-recovery-before.log": "79f5ceca3fff627025b21d39f9f73e22801a2f44fe56a15696d6fa2a174da7d8",
+  "reasonix-keyboard-clipboard-ui-after.log": "786c9341be35089f8c1f173cd834343044ad36550614b3c8dadfa7fefc211065",
+  "reasonix-keyboard-clipboard-ui.log": "9ace945c2774b7561c4f555af8f525ab0a4a72a6c8455cbee059d1d3b26b5f9c",
+  "result.json": "cd15a3984cdb089fc3602a189b5c64e6bb86c47558349816493289bee371e1dc",
+  "test_native_clipboard_fixture.py": "1cf529659df5fa3a60904e2bb1b9a877f9419c51c7c0cb61af20784aec09c459"
+}

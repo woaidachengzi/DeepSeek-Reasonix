@@ -799,6 +799,27 @@ function getMock(): AppBindings {
   return mockSingleton;
 }
 
+// Fixed host events stay at the Wails adapter boundary. Tauri's separate
+// startup graph uses its native host listener; browser preview has no host.
+function onDesktopHostEvent(name: "app:open-settings" | "desktop:shell-status", cb: (...data: unknown[]) => void): () => void {
+  if (typeof window === "undefined" || !window.runtime?.EventsOn) return () => {};
+  let active = true;
+  const off = window.runtime.EventsOn(name, (...data) => { if (active) cb(...data); });
+  return () => {
+    if (!active) return;
+    active = false;
+    off();
+  };
+}
+
+export function onDesktopOpenSettings(cb: () => void): () => void {
+  return onDesktopHostEvent("app:open-settings", cb);
+}
+
+export function onDesktopShellStatus(cb: (payload: unknown) => void): () => void {
+  return onDesktopHostEvent("desktop:shell-status", cb);
+}
+
 // onEvent subscribes to the agent's typed event stream; returns an unsubscribe.
 export function onEvent(cb: (e: WireEvent) => void): () => void {
   if (realApp() && typeof window !== "undefined" && window.runtime) {

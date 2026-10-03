@@ -1,0 +1,21 @@
+warning: `/Users/jerry/.cargo/config` is deprecated in favor of `config.toml`
+  |
+  = help: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+   Compiling reasonix-tauri v0.1.0 (/Users/jerry/temp/app/reasonix-tauri/desktop/tauri)
+error: recursion limit reached while expanding `$crate::json_internal!`
+   --> examples/window-baseline.rs:343:39
+    |
+343 |                       let _ = send.send(serde_json::json!({"step": step, "overlay": overlay, "cocoa": cocoa, "mainQueue": main_queue,
+    |  _______________________________________^
+344 | |                         "runLoopTimer": run_loop_timer, "phaseTimer": phase_timer,
+345 | |                         "phaseState": phase_state[0].load(Ordering::SeqCst),
+346 | |                         "phasePrecondition": phase_state[1].load(Ordering::SeqCst) == 1,
+...   |
+371 | |                         "nativeVisible": native.isVisible(), "nativeStyleMask": native.styleMask().bits(),
+372 | |                         "pageFinished": app.state::<AtomicBool>().load(Ordering::SeqCst)}));
+    | |__________________________________________________________________________________________^
+    |
+    = help: consider increasing the recursion limit by adding a `#![recursion_limit = "256"]` attribute to your crate (`window_baseline`)
+    = note: this error originates in the macro `$crate::json_internal` which comes from the expansion of the macro `serde_json::json` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: could not compile `reasonix-tauri` (example "window-baseline") due to 1 previous error

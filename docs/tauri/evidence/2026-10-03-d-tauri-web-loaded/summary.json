@@ -1,0 +1,102 @@
+[
+  {
+    "variant": "none",
+    "binarySha256": "7bf660c4c8a642ad2ad84b7335b0fc78143ddead799a0fe575b69bed56a6d8dc",
+    "precondition": true,
+    "minimized": false,
+    "restored": false,
+    "exit": {
+      "delegate": "keep",
+      "application": "tao",
+      "kind": "cocoa",
+      "action": "direct",
+      "root": "/private/tmp/reasonix-tauri-window-baseline-kweay3q5/keep-tao-cocoa-standard-direct",
+      "style": "standard",
+      "hostPid": 16685,
+      "kernelExitCode": 2,
+      "openExitCode": 0,
+      "expectedCode": 2
+    },
+    "finalEvents": [
+      "resign-key",
+      "occlusion",
+      "key",
+      "occlusion"
+    ]
+  },
+  {
+    "variant": "loaded",
+    "binarySha256": "7bf660c4c8a642ad2ad84b7335b0fc78143ddead799a0fe575b69bed56a6d8dc",
+    "precondition": true,
+    "minimized": false,
+    "restored": false,
+    "exit": {
+      "delegate": "keep",
+      "application": "tao",
+      "kind": "cocoa",
+      "action": "direct",
+      "root": "/private/tmp/reasonix-tauri-window-baseline-xls01mq5/keep-tao-cocoa-standard-direct",
+      "style": "standard",
+      "hostPid": 16721,
+      "kernelExitCode": 2,
+      "openExitCode": 0,
+      "expectedCode": 2
+    },
+    "finalEvents": [
+      "resign-key",
+      "key",
+      "occlusion",
+      "resign-key",
+      "key",
+      "occlusion"
+    ]
+  },
+  {
+    "variant": "positive-size",
+    "binarySha256": "3e22038c24a6c6b8332c057878fb2cff4241f1e39e6a828ea2a309c6f1ca331a",
+    "passed": true,
+    "kernelExitCode": 0,
+    "openExitCode": 0,
+    "final": {
+      "active": true,
+      "elapsedMs": 1530,
+      "events": [
+        "key",
+        "occlusion",
+        "resign-key",
+        "key",
+        "occlusion",
+        "will-mini",
+        "resign-key",
+        "did-mini",
+        "occlusion",
+        "occlusion",
+        "key",
+        "did-demini",
+        "occlusion"
+      ],
+      "key": true,
+      "minimized": false,
+      "occlusionVisible": true,
+      "stage": "passed",
+      "visible": true
+    }
+  },
+  {
+    "variant": "positive-delay",
+    "binarySha256": "7e29b25c2b9862a5d6199caaebad46378fef3b52fd055380bbad19b4179798bb",
+    "passed": false,
+    "kernelExitCode": 1,
+    "openExitCode": 0,
+    "final": {
+      "active": false,
+      "elapsedMs": 5217,
+      "events": [],
+      "key": false,
+      "minimized": false,
+      "occlusionVisible": false,
+      "stage": "failed-key",
+      "visible": true
+    }
+  }
+]

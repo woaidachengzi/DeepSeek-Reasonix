@@ -1,0 +1,8 @@
+{"app": "/private/tmp/reasonix-d-interactive-installed-tks3iqss/Reasonix Tauri Preview.app", "root": "/private/tmp/reasonix-launch-services-m69wv60z", "identifier": "io.reasonix.desktop.preview", "pid": 81052, "sidecarPid": 81060, "openerPid": 81050, "profile": "managed", "interactive": false, "exitCode": 0, "expectedExitCode": 2, "openExitCode": 0}
+Traceback (most recent call last):
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/probe-launch-services-profile.py", line 180, in <module>
+    identities = [launch(app, identifier, managed, options.interactive, options.observe, options.failure_exit)
+                  ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/probe-launch-services-profile.py", line 124, in launch
+    raise RuntimeError("LaunchServices host exit code differed from expected status")
+RuntimeError: LaunchServices host exit code differed from expected status

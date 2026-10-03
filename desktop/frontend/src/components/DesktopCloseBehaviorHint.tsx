@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { app, type DesktopShellStatusView } from "../lib/bridge";
+import { app, onDesktopShellStatus, type DesktopShellStatusView } from "../lib/bridge";
 
 export function DesktopCloseBehaviorHint({
   backgroundSelected,
@@ -14,20 +14,27 @@ export function DesktopCloseBehaviorHint({
   useEffect(() => {
     let active = true;
     const update = (value: unknown) => {
-      if (!active || !value || typeof value !== "object") return;
+      if (!active || !value || typeof value !== "object") return false;
       const candidate = value as Partial<DesktopShellStatusView>;
       setStatus({
         trayState: candidate.trayState === "ready" || candidate.trayState === "unavailable" ? candidate.trayState : "probing",
         backgroundCloseAvailable: candidate.backgroundCloseAvailable === true,
         reason: typeof candidate.reason === "string" ? candidate.reason : undefined,
       });
+      return true;
     };
+    let eventRevision = 0;
+    const off = onDesktopShellStatus((value) => {
+      if (update(value)) eventRevision++;
+    });
+    const snapshotRevision = eventRevision;
     const getStatus = app.GetDesktopShellStatus;
-    if (typeof getStatus === "function") void getStatus.call(app).then(update).catch(() => undefined);
-    const off = window.runtime?.EventsOn("desktop:shell-status", update);
+    if (typeof getStatus === "function") void getStatus.call(app).then((value) => {
+      if (eventRevision === snapshotRevision) update(value);
+    }).catch(() => undefined);
     return () => {
       active = false;
-      off?.();
+      off();
     };
   }, []);
   if (!backgroundSelected || !status || status.backgroundCloseAvailable) return hint;

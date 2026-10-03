@@ -1,0 +1,6 @@
+warning: `/Users/jerry/.cargo/config` is deprecated in favor of `config.toml`
+  |
+  = help: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+   Compiling reasonix-tauri v0.1.0 (/Users/jerry/temp/app/reasonix-tauri/desktop/tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.69s
+  Executable unittests src/main.rs (desktop/tauri/target/debug/deps/reasonix_tauri-9916af7dc0d35f54)

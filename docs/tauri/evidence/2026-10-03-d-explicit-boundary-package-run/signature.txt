@@ -1,0 +1,26 @@
+Executable=/private/tmp/reasonix-d-explicit-boundary-installed-4ww0nly_/Reasonix Tauri Preview.app/Contents/MacOS/reasonix-tauri
+Identifier=io.reasonix.desktop.preview
+Format=app bundle with Mach-O thin (arm64)
+CodeDirectory v=20500 size=62940 flags=0x10002(adhoc,runtime) hashes=1956+7 location=embedded
+VersionPlatform=1
+VersionMin=720896
+VersionSDK=983552
+Hash type=sha256 size=32
+CandidateCDHash sha256=902e28ea536cd87a77b606f8ccfa4650f4099e39
+CandidateCDHashFull sha256=902e28ea536cd87a77b606f8ccfa4650f4099e39b093c3743a8f1a7372fb394b
+Hash choices=sha256
+CMSDigest=902e28ea536cd87a77b606f8ccfa4650f4099e39b093c3743a8f1a7372fb394b
+CMSDigestType=2
+Executable Segment base=0
+Executable Segment limit=26558464
+Executable Segment flags=0x1
+Page size=16384
+CDHash=902e28ea536cd87a77b606f8ccfa4650f4099e39
+Signature=adhoc
+Info.plist entries=14
+TeamIdentifier=not set
+Runtime Version=15.2.0
+Sealed Resources version=2 rules=13 files=2
+Internal requirements count=0 size=12
+Total signatures=1
+Chosen signature=1

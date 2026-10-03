@@ -1,0 +1,99 @@
+{
+  "startedAt": "2026-10-02T13:46:37.593119+00:00",
+  "app": "/private/tmp/reasonix-d-app-hide-installed-ipo2n156/Reasonix Tauri Preview.app",
+  "sourceHead": "64c745c1a4aa6bc1eccc45c70be9b1a54d7165c4",
+  "dirty": true,
+  "sourcePatchSha256": "a805d8d17e1d975f94e623c0121692e528c2e36553e5c2ec5ae58b3a1f92b10f",
+  "untrackedCodeSources": [
+    {
+      "path": "desktop/frontend/src/lib/wailsDesktopRuntime.ts",
+      "snapshot": "source-untracked/desktop/frontend/src/lib/wailsDesktopRuntime.ts",
+      "sha256": "4e5d176622bd6ced0484ba728066bc737cd170b8656134a4bac8a74f7d64e012"
+    },
+    {
+      "path": "desktop/tauri/examples/window-baseline.rs",
+      "snapshot": "source-untracked/desktop/tauri/examples/window-baseline.rs",
+      "sha256": "ecda289cf2e7fc3370413bb37ba483f8fa86eaf21513b4a82bc9df6b2399bed5"
+    }
+  ],
+  "artifactSha256": {
+    "Contents/MacOS/reasonix-tauri": "15fcd43baa4fc08225838a3b8bdd2441a10f823dacfd514375d081239347a370",
+    "Contents/MacOS/reasonix-desktop-bridge": "29d985c7af09baefec4308339429eabfe921896c47db6f4c30584b742b7efd39",
+    "Contents/Info.plist": "ce61cb6c5ba4a9f35217dc964292e23371d37a554354a5ecce233b09dc08904d"
+  },
+  "runnerSha256": "9848c273652cc56b2ce0ef8461a1ad25a0de0f0aa3d838188ec9d8256bd09bad",
+  "scriptSha256": {
+    "clipboard-snapshot.swift": "7c036498ff16ff0ad76c0f949324a9a6c97a6512ab604e15679144a676b24c3b",
+    "native-clipboard-fixture.py": "acb52f27ed7b9dc6205f1424e6d0c4890c8695392a78674434de0928d87641cb",
+    "native-document-provider.py": "f423d510eaed1230b8799fc119cd9e0e6b135bfc9f83f7ed183d82e17aeb22c1",
+    "native-task-provider.py": "ecb62568a2996040381b8275f655fffdece1880021ea5ee4f937861bc3ac70de",
+    "native-terminal-cwd.c": "0ea7099973981a5d69848bc1efe3f4e36d760e157facf569ef8b61d0f87843fd",
+    "probe-edit-launch-services.py": "d9da33630b3ade5ad5a80b8b1db5e3e2060df65a4e607b560bb92bef97917d80",
+    "probe-interactive-clipboard.py": "7a2c22008fc9dc5c74728d9053698d84a520028d9abfc508cfb60b4f7ac64247",
+    "probe-launch-services-profile.py": "7bb192a857bc7e144d2725b5216a30b4d5eb2e4391cfe1cc3661ff2d10ec5e7f",
+    "probe-legacy-profile-gate.py": "ed1272236b4e19d4d684a8833e5d5628be03088e472419754987965a6d35fe9f",
+    "smoke-document-scope.py": "653e9c8326481bdc0e08dd2fc22db207bc41413052effed15c14897d35f8fea7",
+    "smoke-host-lifetime.py": "16643899a33aa725635e694886a3ce21808243426b78f9c1428e13c4c4a404e5",
+    "smoke-legacy-rollback.py": "d0ffa28a08a7d7da0b7fb621e40f8fab1775c2149a200d9aaafbffe89dfc6cdd",
+    "smoke-managed-profile-boundary.py": "ac0c24fff73d7547bf04886e7b5b8011fd6469dc7528199af12b4df82a4db0e5",
+    "smoke-native-app-failure.py": "9c262988d16e7a5d642b649fe12148182b20635d8ae6e6884bdd3ba355d1b8e6",
+    "smoke-native-displays.py": "dfe5d1a0a835b2fe6e2864bbd014b98053341b4c79a36cf92de06c3fee50ca37",
+    "smoke-native-links.py": "9903b9757a04a61527ab5a422e5af29ac40e39472b10d8dc14814458e1101ef2",
+    "smoke-native-menu-window.py": "ce34aaa86c5c63e6b91b98738c67e3a8b2243349f3d600c667b97f70eb5ce9a7",
+    "smoke-native-notifications.py": "68f5d89465c93b72e17e5a0f8f86872096f9fbf919c5632413e54661f1da2506",
+    "smoke-native-startup.py": "3fa821bcc12dd7dea8d42edd7e1803f03265ecd42b559590cc510f83533441ba",
+    "smoke-native-terminal.py": "31bd59f4d5a46b6fe38b1a1cbd13404f357008c72b683b5fc145468e985d268c",
+    "smoke-native-ui-clipboard.py": "eec75e4c30dfa91205d5e80fdaa650b828b04d6aa64b92c62e676027b4cdfcd4",
+    "smoke-native-ui-export.py": "48fc3aacc666beaf4e6b183076246666af156f86243ed89abc58f2676af5b0ef",
+    "smoke-native-ui-legacy-read.py": "01d93b8829d38d0bb773d38d0471829abd1df0100e0589bc63a3f69226c3dbfa",
+    "smoke-native-ui-migration.py": "a5f808ae5ab96fb623bd0a31021c9297b9e90d832c4a7431e41f9ecac6a88901",
+    "smoke-native-ui-storage.py": "1187d7a4329b73c54385a1ce4eda51ef419a4df27653b7c23fc3fc121acc747e",
+    "smoke-native-ui-theme-import.py": "15715753d76b24b4c136623e187a64c92e9d2cf9b2b8b9fda751d98cf39e89ab",
+    "smoke-native-window.py": "2787f768370a75272fb508d28a33036950549e2dd445ad5924d2c728ea9d7ea3",
+    "smoke-packaged-app.py": "5d6d953d65b26c07b0821d298772012befd166fdb9aa14028dfaf9dab7ad9b23",
+    "smoke-profile-identity-refusal.py": "df8d2b4dc9c47f6b3b572cc05a2bb9d11e3a2198aeb015669d196fbd8cf9b9d1",
+    "smoke-profile-import.py": "a0c37744d19ec9599e5a2419df09e63ebd61fe66d47a59a415c9ecabd2c9e32e",
+    "test_native_clipboard_fixture.py": "1cf529659df5fa3a60904e2bb1b9a877f9419c51c7c0cb61af20784aec09c459",
+    "verify-installed-d.py": "9848c273652cc56b2ce0ef8461a1ad25a0de0f0aa3d838188ec9d8256bd09bad",
+    "verify-legacy-host.sh": "4eea87ea23635188249b05b17181f3a0ab89c06d9c818a6db41578f453780965"
+  },
+  "scope": "Selected programmatic D gates only; physical UI, historical stability and complete D/E acceptance remain separate.",
+  "gates": [
+    {
+      "name": "failure-exit",
+      "status": "passed",
+      "script": "probe-launch-services-profile.py",
+      "scriptSha256": "7bb192a857bc7e144d2725b5216a30b4d5eb2e4391cfe1cc3661ff2d10ec5e7f",
+      "args": [
+        "--failure-exit"
+      ],
+      "startedAt": "2026-10-02T13:46:37.677582+00:00",
+      "log": "failure-exit.log",
+      "exitCode": 0,
+      "finishedAt": "2026-10-02T13:46:45.113353+00:00"
+    },
+    {
+      "name": "package",
+      "status": "passed",
+      "script": "smoke-packaged-app.py",
+      "scriptSha256": "5d6d953d65b26c07b0821d298772012befd166fdb9aa14028dfaf9dab7ad9b23",
+      "args": [],
+      "startedAt": "2026-10-02T13:46:45.113889+00:00",
+      "log": "package.log",
+      "exitCode": 0,
+      "finishedAt": "2026-10-02T13:47:02.768907+00:00"
+    },
+    {
+      "name": "lifetime",
+      "status": "passed",
+      "script": "smoke-host-lifetime.py",
+      "scriptSha256": "16643899a33aa725635e694886a3ce21808243426b78f9c1428e13c4c4a404e5",
+      "args": [],
+      "startedAt": "2026-10-02T13:47:02.769292+00:00",
+      "log": "lifetime.log",
+      "exitCode": 0,
+      "finishedAt": "2026-10-02T13:47:37.650573+00:00"
+    }
+  ],
+  "finishedAt": "2026-10-02T13:47:37.651378+00:00"
+}

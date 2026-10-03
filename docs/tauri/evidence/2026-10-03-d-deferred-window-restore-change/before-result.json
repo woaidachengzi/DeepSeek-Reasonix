@@ -1,0 +1,24 @@
+{
+  "root": "/private/tmp/reasonix-cbb-empty-display-state-72go4_ya",
+  "seed": {
+    "width": 2000,
+    "height": 1400,
+    "maximized": false,
+    "x": -3400,
+    "y": 100,
+    "scale_factor": 2.0
+  },
+  "scope": "No-active-CG-display startup preservation diagnostic, not physical secondary display acceptance",
+  "nativeGate": "passed",
+  "saved": {
+    "width": 2000,
+    "height": 1400,
+    "maximized": false,
+    "x": 0,
+    "y": 100,
+    "scale_factor": 2.0
+  },
+  "preserved": false,
+  "remainingSidecars": [],
+  "remainingReadiness": 0
+}

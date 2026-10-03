@@ -1,0 +1,7 @@
+{
+  "pid": 64111,
+  "cleanup": "SIGTERM to exact private host after CUA observation failure; not UI Quit acceptance",
+  "hostsRemaining": 0,
+  "sidecarsRemaining": 0,
+  "readyDirectoriesRemaining": 0
+}

@@ -1,0 +1,6 @@
+{"app": "/private/tmp/reasonix-official-window-baseline/extracted/Reasonix.app", "binary": "/private/tmp/reasonix-official-window-baseline/extracted/Reasonix.app/Contents/MacOS/reasonix-desktop", "root": "/private/tmp/reasonix-official-physical-window-c39g48l1", "pid": 17777, "openerPid": 17774}
+Traceback (most recent call last):
+  File "/private/tmp/reasonix-official-window-baseline/launch.py", line 26, in <module>
+    exits=monitor.control([],1,180);assert len(exits)==1 and os.WIFEXITED(exits[0].data),'No normal kernel exit receipt'
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: No normal kernel exit receipt

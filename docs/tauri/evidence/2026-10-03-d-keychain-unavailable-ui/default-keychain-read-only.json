@@ -1,0 +1,14 @@
+[
+  {
+    "context": "private",
+    "exitCode": 1,
+    "defaultKeychainPathReported": "",
+    "stderr": "security: SecKeychainCopyDomainDefault user: A default keychain could not be found."
+  },
+  {
+    "context": "normal",
+    "exitCode": 0,
+    "defaultKeychainPathReported": "\"/Users/jerry/Library/Keychains/login.keychain-db\"",
+    "stderr": ""
+  }
+]

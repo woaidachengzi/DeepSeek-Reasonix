@@ -1,0 +1,39 @@
+FE.
+======================================================================
+ERROR: test_interrupted_changed_generation_keeps_recovery_after_caller_cleanup (__main__.ClipboardRecoveryTests.test_interrupted_changed_generation_keeps_recovery_after_caller_cleanup)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/test_native_clipboard_fixture.py", line 56, in test_interrupted_changed_generation_keeps_recovery_after_caller_cleanup
+    self.exercise(2, True)
+    ~~~~~~~~~~~~~^^^^^^^^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/test_native_clipboard_fixture.py", line 48, in exercise
+    self.assertEqual((recovery / "original.plist").read_bytes(), payload)
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.8/Frameworks/Python.framework/Versions/3.14/lib/python3.14/pathlib/__init__.py", line 777, in read_bytes
+    with self.open(mode='rb', buffering=0) as f:
+         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.8/Frameworks/Python.framework/Versions/3.14/lib/python3.14/pathlib/__init__.py", line 771, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/tmpvkmpgwhj/recovery/original.plist'
+
+======================================================================
+FAIL: test_completed_changed_generation_reports_and_retains_recovery (__main__.ClipboardRecoveryTests.test_completed_changed_generation_reports_and_retains_recovery)
+----------------------------------------------------------------------
+RuntimeError: clipboard changed during acceptance; current contents preserved
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/test_native_clipboard_fixture.py", line 59, in test_completed_changed_generation_reports_and_retains_recovery
+    self.exercise(2, False)
+    ~~~~~~~~~~~~~^^^^^^^^^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/test_native_clipboard_fixture.py", line 40, in exercise
+    with self.assertRaisesRegex(RuntimeError, "recovery snapshot retained"):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: "recovery snapshot retained" does not match "clipboard changed during acceptance; current contents preserved"
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.003s
+
+FAILED (failures=1, errors=1)

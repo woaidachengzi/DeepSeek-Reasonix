@@ -1,0 +1,12 @@
+{
+  "delegate": "keep",
+  "application": "tao",
+  "kind": "tauri",
+  "action": "phase-timer",
+  "root": "/private/tmp/reasonix-current-phase-pairs-m9v3qxm2/5-tauri",
+  "style": "overlay",
+  "hostPid": 30646,
+  "kernelExitCode": 0,
+  "openExitCode": 0,
+  "expectedCode": 0
+}

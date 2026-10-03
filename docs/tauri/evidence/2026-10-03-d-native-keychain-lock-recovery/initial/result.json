@@ -1,0 +1,18 @@
+{
+  "create": {
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "privateDefault": {
+    "exitCode": 0,
+    "stdout": "    \"/private/tmp/reasonix-locked-keychain-rxxpj_fu/home/Library/Keychains/fixture.keychain-db\"\n",
+    "stderr": ""
+  },
+  "privateSearch": {
+    "exitCode": 0,
+    "stdout": "    \"/private/tmp/reasonix-locked-keychain-rxxpj_fu/home/Library/Keychains/fixture.keychain-db\"\n",
+    "stderr": ""
+  },
+  "normalUnchanged": true
+}

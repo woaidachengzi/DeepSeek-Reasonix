@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "/private/tmp/reasonix-wails-env-post-run.py", line 9, in <module>
+    identifier=plistlib.loads((a/'Contents/Info.plist').read_bytes())['CFBundleIdentifier'];r['matchingInstances'][identifier]=m.matching_package_is_running(identifier)
+               ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.8/Frameworks/Python.framework/Versions/3.14/lib/python3.14/plistlib.py", line 933, in loads
+    return load(fp, fmt=fmt, dict_type=dict_type, aware_datetime=aware_datetime)
+  File "/opt/homebrew/Cellar/python@3.14/3.14.8/Frameworks/Python.framework/Versions/3.14/lib/python3.14/plistlib.py", line 914, in load
+    raise InvalidFileException()
+plistlib.InvalidFileException: Invalid file

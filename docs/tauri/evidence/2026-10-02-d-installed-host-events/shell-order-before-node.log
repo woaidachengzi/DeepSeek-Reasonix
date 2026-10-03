@@ -1,0 +1,20 @@
+node:internal/modules/run_main:111
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: a delayed snapshot must not overwrite the newer native tray event
++ actual - expected
+
++ 'Keep running after close.Closing this time will quit.'
+- 'Keep running after close.'
+
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/__tests__/desktop-close-behavior-hint.test.tsx:62:8) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 'Keep running after close.Closing this time will quit.',
+  expected: 'Keep running after close.',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v26.10.0

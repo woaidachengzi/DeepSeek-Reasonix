@@ -1,0 +1,77 @@
+{
+  "root": "/private/tmp/reasonix-cocoa-current-control-z2l_i42o",
+  "app": "/private/tmp/reasonix-cocoa-current-control-z2l_i42o/Private Identical Cocoa Control.app",
+  "pid": 31310,
+  "kernelExitCode": 1,
+  "openExitCode": 0,
+  "binarySha256": "2161541f86a4d9942f66ce16dc07aa396a1f2d33dae40967e4b2d85eb8f98a7f",
+  "passed": false,
+  "records": [
+    {
+      "active": true,
+      "elapsedMs": 115,
+      "events": [
+        "key"
+      ],
+      "key": true,
+      "minimized": false,
+      "occlusionVisible": false,
+      "stage": "ready",
+      "visible": true
+    },
+    {
+      "active": true,
+      "elapsedMs": 190,
+      "events": [
+        "key",
+        "occlusion"
+      ],
+      "key": true,
+      "minimized": false,
+      "occlusionVisible": true,
+      "stage": "loaded",
+      "visible": true
+    },
+    {
+      "active": true,
+      "elapsedMs": 216,
+      "events": [
+        "key",
+        "occlusion"
+      ],
+      "key": true,
+      "minimized": false,
+      "occlusionVisible": true,
+      "stage": "minimize-ready",
+      "visible": true
+    },
+    {
+      "active": true,
+      "elapsedMs": 216,
+      "events": [
+        "key",
+        "occlusion"
+      ],
+      "key": true,
+      "minimized": false,
+      "occlusionVisible": true,
+      "stage": "minimize-requested",
+      "visible": true
+    },
+    {
+      "active": true,
+      "elapsedMs": 5265,
+      "events": [
+        "key",
+        "occlusion",
+        "resign-key",
+        "occlusion"
+      ],
+      "key": false,
+      "minimized": false,
+      "occlusionVisible": false,
+      "stage": "failed-mini",
+      "visible": true
+    }
+  ]
+}

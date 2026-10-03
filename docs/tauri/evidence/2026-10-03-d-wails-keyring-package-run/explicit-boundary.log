@@ -1,0 +1,10 @@
+{"case": "home", "exitCode": 1, "expectedMessage": true, "originalsUnchanged": true, "sidecarRemaining": false, "readyRemaining": false}
+{"case": "alias", "exitCode": 1, "expectedMessage": true, "originalsUnchanged": true, "sidecarRemaining": false, "readyRemaining": false}
+{"case": "missing-descendant", "exitCode": 1, "expectedMessage": true, "originalsUnchanged": true, "sidecarRemaining": false, "readyRemaining": false}
+{"case": "ancestor", "exitCode": 1, "expectedMessage": true, "originalsUnchanged": true, "sidecarRemaining": false, "readyRemaining": false}
+{"case": "state", "exitCode": 1, "expectedMessage": true, "originalsUnchanged": true, "sidecarRemaining": false, "readyRemaining": false}
+{"case": "cache", "exitCode": 1, "expectedMessage": true, "originalsUnchanged": true, "sidecarRemaining": false, "readyRemaining": false}
+{"case": "legacy-support", "exitCode": 1, "expectedMessage": true, "originalsUnchanged": true, "sidecarRemaining": false, "readyRemaining": false}
+{"case": "legacy-cache", "exitCode": 1, "expectedMessage": true, "originalsUnchanged": true, "sidecarRemaining": false, "readyRemaining": false}
+{"case": "tilde", "exitCode": 1, "expectedMessage": true, "originalsUnchanged": true, "sidecarRemaining": false, "readyRemaining": false}
+{"case": "variable", "exitCode": 1, "expectedMessage": true, "originalsUnchanged": true, "sidecarRemaining": false, "readyRemaining": false}

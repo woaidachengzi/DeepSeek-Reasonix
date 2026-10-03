@@ -1,0 +1,46 @@
+warning: `/Users/jerry/.cargo/config` is deprecated in favor of `config.toml`
+  |
+  = help: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+   Compiling reasonix-tauri v0.1.0 (/Users/jerry/temp/app/reasonix-tauri/desktop/tauri)
+error[E0308]: mismatched types
+   --> examples/window-baseline.rs:219:63
+    |
+219 | ...                   if step == 4 { native.miniaturize(sender); }
+    |                                             ----------- ^^^^^^ expected `Option<&AnyObject>`, found `Option<&NSResponder>`
+    |                                             |
+    |                                             arguments to this method are incorrect
+    |
+    = note: expected enum `Option<&AnyObject>`
+               found enum `Option<&NSResponder>`
+note: method defined here
+   --> /Users/jerry/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/objc2-app-kit-0.3.2/src/generated/NSWindow.rs:978:16
+    |
+978 |         pub fn miniaturize(&self, sender: Option<&AnyObject>);
+    |                ^^^^^^^^^^^
+help: try using `.map(|v| &***v)` to convert `Option<&NSResponder>` to `Option<&AnyObject>`
+    |
+219 |                             if step == 4 { native.miniaturize(sender.map(|v| &***v)); }
+    |                                                                     +++++++++++++++
+
+error[E0308]: mismatched types
+   --> examples/window-baseline.rs:220:57
+    |
+220 | ...                   else { native.deminiaturize(sender); }
+    |                                     ------------- ^^^^^^ expected `Option<&AnyObject>`, found `Option<&NSResponder>`
+    |                                     |
+    |                                     arguments to this method are incorrect
+    |
+    = note: expected enum `Option<&AnyObject>`
+               found enum `Option<&NSResponder>`
+note: method defined here
+   --> /Users/jerry/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/objc2-app-kit-0.3.2/src/generated/NSWindow.rs:982:16
+    |
+982 |         pub fn deminiaturize(&self, sender: Option<&AnyObject>);
+    |                ^^^^^^^^^^^^^
+help: try using `.map(|v| &***v)` to convert `Option<&NSResponder>` to `Option<&AnyObject>`
+    |
+220 |                             else { native.deminiaturize(sender.map(|v| &***v)); }
+    |                                                               +++++++++++++++
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `reasonix-tauri` (example "window-baseline") due to 2 previous errors

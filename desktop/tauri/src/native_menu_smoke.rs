@@ -285,22 +285,39 @@ pub fn settings(app: &AppHandle, phase: &str) -> Result<(), String> {
                     .map_err(|_| "read visibility".into())
             })?;
         }
-        "menu-settings-minimized" | "menu-settings-native-minimized" => {
+        "menu-settings-minimized" | "menu-settings-native-minimized" | "menu-settings-presented-minimized" | "menu-settings-direct-minimized" => {
             // AppKit presentation is asynchronous: visibility alone can be
             // true before the restored window becomes key. Require the same
             // real active-window precondition as the installed Minimize role
             // before either API path requests its native transition.
+            let require_presentation = phase == "menu-settings-presented-minimized";
             wait_for(
                 app,
                 "active key settings window before minimizing",
-                |window| {
+                move |window| {
                     let state = crate::native_window_smoke::snapshot(window)?;
-                    Ok(state["applicationActive"] == true && state["nativeKeyWindow"] == true)
+                    let presented = !require_presentation
+                        || (state["nativeOcclusionVisible"] == true && state["applicationOcclusionVisible"] == true);
+                    Ok(state["applicationActive"] == true && state["nativeKeyWindow"] == true && presented)
                 },
             )?;
             crate::native_window_smoke::record(app, "settings-minimize-ready")?;
             if phase == "menu-settings-native-minimized" {
                 minimize_from_menu(app)?;
+            } else if phase == "menu-settings-direct-minimized" {
+                // Diagnostic control: use the same live NSWindow method as
+                // Tao, on the main thread, without its message dispatcher or
+                // the menu responder chain. Never used by the normal shell.
+                on_main(app, |_, window| {
+                    MainThreadMarker::new().ok_or("direct minimize requires main thread")?;
+                    let pointer = window.ns_window().map_err(|_| "direct window handle unavailable")?;
+                    if pointer.is_null() { return Err("direct window handle missing".into()); }
+                    // SAFETY: Live Tauri NSWindow borrowed on the AppKit main
+                    // thread; neither the pointer nor native object escapes.
+                    let native = unsafe { &*pointer.cast::<objc2_app_kit::NSWindow>() };
+                    native.miniaturize(Some(native));
+                    Ok(())
+                })?;
             } else {
                 on_main(app, |_, window| {
                     window
@@ -315,7 +332,7 @@ pub fn settings(app: &AppHandle, phase: &str) -> Result<(), String> {
                     .map_err(|_| "read minimized state".into())
             })?;
             crate::native_window_smoke::record(app, "settings-minimized")?;
-            if phase == "menu-settings-native-minimized" {
+            if matches!(phase, "menu-settings-native-minimized" | "menu-settings-direct-minimized") {
                 wait_for(app, "native menu minimization events", |window| {
                     let state = crate::native_window_smoke::snapshot(window)?;
                     Ok(state["willMiniaturize"]
@@ -353,7 +370,7 @@ pub fn settings(app: &AppHandle, phase: &str) -> Result<(), String> {
             && !NSApplication::sharedApplication(MainThreadMarker::new().ok_or("not main thread")?)
                 .isHidden())
     })?;
-    if phase == "menu-settings-native-minimized" {
+    if matches!(phase, "menu-settings-native-minimized" | "menu-settings-direct-minimized") {
         wait_for(app, "native menu deminiaturization event", |window| {
             Ok(
                 crate::native_window_smoke::snapshot(window)?["didDeminiaturize"]

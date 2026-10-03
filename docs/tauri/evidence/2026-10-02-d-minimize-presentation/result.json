@@ -1,0 +1,73 @@
+{
+  "app": "/private/tmp/reasonix-d-minimize-trace-installed-m0k8pkmw/Reasonix Tauri Preview.app",
+  "dmg": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri Preview_0.1.0_aarch64.dmg",
+  "sha256": {
+    "Reasonix Tauri Preview_0.1.0_aarch64.dmg": "23a6a4a8691b5c8c8ccb18155aeca6083daf35d646c260554183e1c1639b39fe",
+    "reasonix-tauri": "c29beab60b5b30e7634b2ff2114b4dfe189ec673e44324fb13ae487d8d8b5bbf",
+    "reasonix-desktop-bridge": "29d985c7af09baefec4308339429eabfe921896c47db6f4c30584b742b7efd39"
+  },
+  "sourceHead": "64c745c1a4aa6bc1eccc45c70be9b1a54d7165c4",
+  "dirty": true,
+  "gates": [
+    {
+      "name": "original-api",
+      "script": "smoke-native-menu-window.py",
+      "args": [
+        "--api-startups",
+        "1"
+      ],
+      "exitCode": 1,
+      "log": "original-api.log"
+    },
+    {
+      "name": "presented-comparison",
+      "script": "smoke-native-menu-window.py",
+      "args": [
+        "--presented"
+      ],
+      "exitCode": 1,
+      "log": "presented-comparison.log"
+    },
+    {
+      "name": "package",
+      "script": "smoke-packaged-app.py",
+      "args": [],
+      "exitCode": 0,
+      "log": "package.log"
+    }
+  ],
+  "sourcePatchSha256": "1c077024c1e86f46be8d79b870434611b2fb09ec4545ccdb29d6a7c0b31052f4",
+  "scope": "Diagnostic comparison; both window probes failed. Does not pass the complete window gate or D.",
+  "logSha256": {
+    "clippy.log": "c91c1cbdf2291f1c096f0b8ec4b770dc3cf8c9ccc054549a3f2828867fcc9edf",
+    "original-api.log": "7bbe27594ce6708537722188c61350dd82804b15a9bff7d2b0c7215151187cde",
+    "previous-native-role.log": "755598370738c7fc8bbe2a49eebc38340ac3a290c821d848dfd470d92a510dcf",
+    "presented-comparison.log": "506af10080a7f8926cdc20826da678fb08e219af0adc00dd80dfd775a5757c15",
+    "install.log": "3970f544baa120c145f3c101b4bbbd2825dd6d2d7a036b19ce9bb3ec9865247c",
+    "package.log": "4b85583120aec904ed26d39455e98df4ec9b16bcda4b8b4436a40a2f08ca5ccc",
+    "build.log": "e1c09a0efaf7f6a8304dbd6278aced91eff8b661a643336f8004fa47be46b66c"
+  },
+  "scriptSha256": {
+    "smoke-native-window.py": "5359eb633428dc2335fe6d9172f743a2fc315fffe8a41d3f4e2759acc8b64545",
+    "smoke-packaged-app.py": "5d6d953d65b26c07b0821d298772012befd166fdb9aa14028dfaf9dab7ad9b23",
+    "smoke-native-menu-window.py": "5caffcce0c753c7b6bd245f2f5f5ccb99849834cf6fdeaef3a60807da16b4753"
+  },
+  "checks": [
+    {
+      "name": "clippy",
+      "exitCode": 0,
+      "log": "clippy.log"
+    },
+    {
+      "name": "production-build",
+      "exitCode": 0,
+      "log": "build.log"
+    },
+    {
+      "name": "previous-installed-native-role",
+      "exitCode": 1,
+      "hostSha256": "49e8b9cda038bd5f002178079aa3895690dbff3ee1d8489334dd0c8b60fedd1a",
+      "log": "previous-native-role.log"
+    }
+  ]
+}

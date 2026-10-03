@@ -1,0 +1,69 @@
+{
+  "app": "/private/tmp/reasonix-d-direct-installed-f11sncvj/Reasonix Tauri Preview.app",
+  "dmg": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri Preview_0.1.0_aarch64.dmg",
+  "sha256": {
+    "Reasonix Tauri Preview_0.1.0_aarch64.dmg": "42a5e46eb82d874c98c8fffad9a56fe5766e29d9609f2591cc71f39bdca85047",
+    "reasonix-tauri": "de4f88c88dc80f3757b577315dbe9d42b8f75134e914851065a70bae34d814f5",
+    "reasonix-desktop-bridge": "29d985c7af09baefec4308339429eabfe921896c47db6f4c30584b742b7efd39"
+  },
+  "sourceHead": "64c745c1a4aa6bc1eccc45c70be9b1a54d7165c4",
+  "dirty": true,
+  "gates": [
+    {
+      "name": "direct-control",
+      "script": "smoke-native-menu-window.py",
+      "args": [
+        "--direct-only"
+      ],
+      "exitCode": 1,
+      "log": "direct-control.log"
+    },
+    {
+      "name": "package",
+      "script": "smoke-packaged-app.py",
+      "args": [],
+      "exitCode": 0,
+      "log": "package.log"
+    }
+  ],
+  "sourcePatchSha256": "48d9181959ee55b10203b6c993552a9ce19d9d7616f05b062982362b577f3db6",
+  "scope": "Diagnostic; direct NSWindow fails within Preview, independent minimal Cocoa control passes; does not accept D or resolve root cause.",
+  "checks": [
+    {
+      "name": "clippy",
+      "exitCode": 0,
+      "log": "clippy.log"
+    },
+    {
+      "name": "production-build",
+      "exitCode": 0,
+      "log": "build.log"
+    },
+    {
+      "name": "minimal-cocoa-wk-control",
+      "exitCode": 0,
+      "log": "cocoa-control.log",
+      "source": "cocoa-control.swift",
+      "manifest": "cocoa-control.json",
+      "scope": "private distinct bundle, fixed HTML; does not prove Preview or equal bundle preferences",
+      "sha256": {
+        "source": "baa51ab2a47383087d9617f04ef651730df615933ac684a9ecc70b229c6caffd",
+        "binary": "121191074aa3093d282e5e774c077cfae264b306b0248d8abf046caeade5e569",
+        "infoPlist": "06ff57f4960ddef7af73648e5bded27f75d26ea944127f559ad39b6758242f99"
+      }
+    }
+  ],
+  "logSha256": {
+    "clippy.log": "f7f1424744573a615c9e6bb6fa65f859de6e2af5121f278723854d21144a9273",
+    "cocoa-control.log": "38bb89a318f981945e1ebe4b3a41b825d5be966f426f674f1b9844e24e6ca786",
+    "direct-control.log": "7f15d434d3af056580ca968383af1ddf97b9fbeebf22482cb9b0e7b734226a6b",
+    "install.log": "2a58f6cfd4d60bd6d1377a166007d4f1b02afddef3f9592a518fc751545e74d7",
+    "package.log": "4b85583120aec904ed26d39455e98df4ec9b16bcda4b8b4436a40a2f08ca5ccc",
+    "build.log": "097e447f9e27083b46228bf25e2b7b88caa291918c0fa6e3959426ec7adf8d25"
+  },
+  "scriptSha256": {
+    "smoke-native-window.py": "5359eb633428dc2335fe6d9172f743a2fc315fffe8a41d3f4e2759acc8b64545",
+    "smoke-packaged-app.py": "5d6d953d65b26c07b0821d298772012befd166fdb9aa14028dfaf9dab7ad9b23",
+    "smoke-native-menu-window.py": "ce34aaa86c5c63e6b91b98738c67e3a8b2243349f3d600c667b97f70eb5ce9a7"
+  }
+}

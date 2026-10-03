@@ -1,0 +1,2272 @@
+
+> reasonix-desktop-frontend@0.0.0 test:tauri /Users/jerry/temp/app/reasonix-tauri/desktop/frontend
+> pnpm test:tauri-theme-catalog && node --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-ui-migration.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-code-rewind.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-chat-workspace-delete.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-chat-title-recovery.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-project-navigation.test.tsx && node --import tsx src/__tests__/tauri-workbench-sessions.test.ts && node --import tsx src/__tests__/tauri-drag-drop.test.ts && node --import tsx src/__tests__/tauri-bridge-contract.test.ts && node --import tsx src/__tests__/tauri-appearance.test.ts && node --import tsx src/__tests__/tauri-default-workspace.test.ts && node --import tsx src/__tests__/tauri-shortcuts.test.ts && node --import tsx src/__tests__/tauri-settings-api-key.test.tsx && node --import tsx src/__tests__/tauri-hooks-clipboard.test.tsx && node --import tsx src/__tests__/tauri-storage-clipboard.test.tsx && node --import tsx src/__tests__/diagnostics-native-clipboard.test.tsx && node --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-remote-settings.test.tsx && node --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-bot-settings.test.tsx && node --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-subagent-try.test.tsx && node --import ./scripts/css-stub-register.mjs --import ./scripts/svg-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-mcp-servers.test.tsx && node --import tsx src/__tests__/tauri-history-presentation.test.ts && node --import tsx src/__tests__/tauri-observed-usage.test.ts && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-progress-collapse.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-plugin-settings.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-plugin-themes.test.tsx && node --import tsx src/__tests__/tauri-skill-readiness.test.ts && node --import tsx src/__tests__/tauri-notification-preferences.test.ts && node --import tsx src/__tests__/tauri-notifications.test.ts && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-notification-workspace.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-global-opener.test.tsx && pnpm test:external-links
+
+
+> reasonix-desktop-frontend@0.0.0 test:tauri-theme-catalog /Users/jerry/temp/app/reasonix-tauri/desktop/frontend
+> node --experimental-vm-modules scripts/tauri-theme-catalog-build.test.mjs
+
+(node:70678) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+Vite client theme catalog: 8 official themes, exact asset bytes, selection and URL boundaries passed
+(node:70679) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+UI preference migration: explicit preview/confirmation, bounded scope, rollback, user edits and storage failures OK
+(node:70683) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+Failed to discover external openers TypeError: Cannot read properties of undefined (reading 'invoke')
+    at invoke (file:///Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/@tauri-apps+api@2.11.1/node_modules/@tauri-apps/api/core.js:202:39)
+    at Object.ExternalOpenersForTab (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/tauri/tauriExternalOpener.ts:7:39)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:133:50)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:152:10)
+    at Object.react_stack_bottom_frame (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:871:30)
+    at commitHookEffectListMount (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11)
+    at commitPassiveMountOnFiber (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15484:13)
+    at recursivelyTraversePassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+Failed to discover external openers TypeError: Cannot read properties of undefined (reading 'invoke')
+    at invoke (file:///Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/@tauri-apps+api@2.11.1/node_modules/@tauri-apps/api/core.js:202:39)
+    at Object.ExternalOpenersForTab (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/tauri/tauriExternalOpener.ts:7:39)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:133:50)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:152:10)
+    at Object.react_stack_bottom_frame (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:871:30)
+    at commitHookEffectListMount (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11)
+    at commitPassiveMountOnFiber (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15484:13)
+    at recursivelyTraversePassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+tauri code rewind UI: passed
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+(node:70892) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+tauri chat workspace — workspace, delete, and recovery flows
+  PASS  workbench is the initial desktop layout (expected "workbench", got "workbench")
+  PASS  desktop layout updates the workspace without a reload (expected "creation", got "creation")
+  PASS  the recent-session list renders the stored title
+  PASS  interrupted deletion is surfaced separately from ordinary sessions
+  PASS  each regular or recovery row has a delete control (expected 5, got 5)
+An update to SessionRow inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  the delete control is present and clickable
+  PASS  clicking delete asks for confirmation in place
+  PASS  the confirmation offers a confirm button (expected 1, got 1)
+An update to SessionRow inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  cancelling never reaches the bridge (expected 0, got 0)
+  PASS  cancelling restores the row
+An update to SessionRow inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  an interrupted identity can be armed for explicit cleanup
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  interrupted cleanup requires a distinct confirmation
+  PASS  explicit recovery targets the interrupted identity (expected "tauri-interrupted-delete", got "tauri-interrupted-delete")
+  PASS  recovery never opens or switches to the interrupted session (expected 0, got 0)
+  PASS  completed recovery removes the pending-deletion row
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  the other conversation can be opened first
+Failed to discover external openers TypeError: Cannot read properties of undefined (reading 'invoke')
+    at invoke (file:///Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/@tauri-apps+api@2.11.1/node_modules/@tauri-apps/api/core.js:202:39)
+    at Object.ExternalOpenersForTab (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/tauri/tauriExternalOpener.ts:7:39)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:133:50)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:152:10)
+    at Object.react_stack_bottom_frame (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:871:30)
+    at commitHookEffectListMount (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11)
+    at commitPassiveMountOnFiber (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15484:13)
+    at recursivelyTraversePassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+  PASS  opening a conversation starts the event subscription
+  PASS  the composer still accepts typing before the stream connects
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  subscription command completion alone does not enable sending
+  PASS  confirmed initial event connection enables sending
+  PASS  the Tauri entry renders historical Markdown without a localization crash
+  PASS  workspace drawer lists the current session's files
+  PASS  late preview of the first file cannot replace the latest file
+  PASS  late diff of the first file cannot replace the latest diff
+  PASS  file preview failure cannot leak into the changes view
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  a session switch can start while a workspace request is pending
+Failed to discover external openers TypeError: Cannot read properties of undefined (reading 'invoke')
+    at invoke (file:///Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/@tauri-apps+api@2.11.1/node_modules/@tauri-apps/api/core.js:202:39)
+    at Object.ExternalOpenersForTab (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/tauri/tauriExternalOpener.ts:7:39)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:133:50)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:152:10)
+    at Object.react_stack_bottom_frame (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:871:30)
+    at commitHookEffectListMount (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11)
+    at commitPassiveMountOnFiber (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15484:13)
+    at recursivelyTraversePassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+  PASS  new session workspace appears before the old request finishes
+  PASS  late listing from the previous session cannot replace the active workspace
+Failed to discover external openers TypeError: Cannot read properties of undefined (reading 'invoke')
+    at invoke (file:///Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/@tauri-apps+api@2.11.1/node_modules/@tauri-apps/api/core.js:202:39)
+    at Object.ExternalOpenersForTab (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/tauri/tauriExternalOpener.ts:7:39)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:133:50)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:152:10)
+    at Object.react_stack_bottom_frame (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:871:30)
+    at commitHookEffectListMount (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11)
+    at commitPassiveMountOnFiber (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15484:13)
+    at recursivelyTraversePassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+An update to SessionRow inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  the intended inactive row can be armed for deletion
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  deleting an inactive session switches to it first
+  PASS  confirming reaches the delete adapter
+  PASS  the delete targets the confirmed row (expected "tauri-doomed-row", got "tauri-doomed-row")
+  PASS  successful core deletion removes the persistent host catalog entry
+  PASS  the catalog cleanup targets the deleted row (expected "tauri-doomed-row", got "tauri-doomed-row")
+  PASS  deleting an inactive row restores the previously open conversation (expected "tauri-kept-row", got "tauri-kept-row")
+  PASS  the deleted row leaves the list
+  PASS  the other row survives
+  PASS  three recent conversations remain (expected 3, got 3)
+An update to SessionRow inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  a missing-file row can be armed for deletion
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  missing-row delete tries and recognizes the expected lifecycle conflict (expected "tauri-missing-row", got "tauri-missing-row")
+  PASS  missing-row delete reaches the recovery endpoint directly (expected "tauri-missing-row", got "tauri-missing-row")
+  PASS  missing identity is removed without disturbing the active conversation
+An update to SessionRow inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  a stale tombstone row can be armed for cleanup
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  deleted tombstone retries DELETE to clear the stale catalog row (expected "tauri-deleted-row", got "tauri-deleted-row")
+  PASS  stale tombstone cleanup preserves the active conversation
+An update to SessionRow inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  a rejected delete shows the bridge error
+  PASS  a rejected delete keeps the row
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  runtime panel can be opened
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  restart control is present
+  PASS  running turn cannot be interrupted by restart (expected 0, got 0)
+  PASS  running turn shows an actionable explanation
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriSessionPreview inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  idle session can restart to apply its key (expected 1, got 1)
+  PASS  event stream outage disables sending
+  PASS  reconnected event stream re-enables sending
+  PASS  expired replay window fetches a fresh snapshot (expected 7, got 7)
+  PASS  resync starts a new event subscription (expected 5, got 5)
+  PASS  outage during subscription setup cannot re-enable sending
+  PASS  recovery after setup outage re-enables sending
+  PASS  replayed event sequence is applied only once (expected 1, got 1)
+  PASS  a live text event sends one token beat and ignores replayed frames (expected 1, got 1)
+  PASS  turn_done does not invent idle state while snapshots remain running
+  PASS  unconfirmed turn completion asks for an authoritative refresh
+  PASS  manual refresh restores idle state from the bridge
+  PASS  finishing snapshot is retried until idle (expected 15, got 15)
+  PASS  confirmed idle state clears the stale completion warning
+  PASS  failed snapshots keep turn admission closed
+  PASS  snapshot failure remains visible instead of claiming completion
+  PASS  manual refresh recovers from snapshot failure
+  PASS  late snapshot from an older completed turn cannot mark a new turn idle
+  PASS  an enabled preset starts music for a running Preview turn
+  PASS  composer is available for submit guard test
+  PASS  two immediate sends start one bridge request (expected 1, got 1)
+  PASS  turn completion stops running-turn music
+  PASS  late history from an older turn cannot replace the new turn transcript
+  PASS  unsafe MCP link gives a visible configuration warning
+  PASS  unsafe MCP link is never rendered as a clickable anchor (expected 0, got 0)
+  PASS  safe MCP link keeps its authorization path (expected "https://docs.example.test/authorize", got "https://docs.example.test/authorize")
+  PASS  MCP link shows the actual destination host
+  PASS  MCP link does not navigate the WebView
+  PASS  MCP link opens once through the native host (expected 1, got 1)
+  PASS  native opener receives the validated authorization URL (expected "https://docs.example.test/authorize", got "https://docs.example.test/authorize")
+
+81 passed, 0 failed
+(node:70934) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:70934) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+Failed to discover external openers TypeError: Cannot read properties of undefined (reading 'invoke')
+    at invoke (file:///Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/@tauri-apps+api@2.11.1/node_modules/@tauri-apps/api/core.js:202:39)
+    at Object.ExternalOpenersForTab (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/tauri/tauriExternalOpener.ts:7:39)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:133:50)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:152:10)
+    at Object.react_stack_bottom_frame (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:871:30)
+    at commitHookEffectListMount (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11)
+    at commitPassiveMountOnFiber (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15484:13)
+    at recursivelyTraversePassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+pending title recovery outside the recent catalog passed
+(node:70936) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+Failed to discover external openers TypeError: Cannot read properties of undefined (reading 'invoke')
+    at invoke (file:///Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/@tauri-apps+api@2.11.1/node_modules/@tauri-apps/api/core.js:202:39)
+    at Object.ExternalOpenersForTab (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/tauri/tauriExternalOpener.ts:7:39)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:133:50)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:152:10)
+    at Object.react_stack_bottom_frame (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:871:30)
+    at commitHookEffectListMount (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11)
+    at commitPassiveMountOnFiber (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15484:13)
+    at recursivelyTraversePassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+Failed to discover external openers TypeError: Cannot read properties of undefined (reading 'invoke')
+    at invoke (file:///Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/@tauri-apps+api@2.11.1/node_modules/@tauri-apps/api/core.js:202:39)
+    at Object.ExternalOpenersForTab (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/tauri/tauriExternalOpener.ts:7:39)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:133:50)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:152:10)
+    at Object.react_stack_bottom_frame (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:871:30)
+    at commitHookEffectListMount (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11)
+    at commitPassiveMountOnFiber (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15484:13)
+    at recursivelyTraversePassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+Failed to discover external openers TypeError: Cannot read properties of undefined (reading 'invoke')
+    at invoke (file:///Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/@tauri-apps+api@2.11.1/node_modules/@tauri-apps/api/core.js:202:39)
+    at Object.ExternalOpenersForTab (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/tauri/tauriExternalOpener.ts:7:39)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:133:50)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:152:10)
+    at Object.react_stack_bottom_frame (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:871:30)
+    at commitHookEffectListMount (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11)
+    at commitPassiveMountOnFiber (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15484:13)
+    at recursivelyTraversePassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+Failed to discover external openers TypeError: Cannot read properties of undefined (reading 'invoke')
+    at invoke (file:///Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/@tauri-apps+api@2.11.1/node_modules/@tauri-apps/api/core.js:202:39)
+    at Object.ExternalOpenersForTab (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/tauri/tauriExternalOpener.ts:7:39)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:133:50)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:152:10)
+    at Object.react_stack_bottom_frame (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:871:30)
+    at commitHookEffectListMount (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11)
+    at commitPassiveMountOnFiber (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15484:13)
+    at recursivelyTraversePassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+tauri project navigation and legacy title backfill: OK
+tauri workbench project grouping and first-turn titles: OK
+  PASS  drag over enables visual feedback
+  PASS  drag leave clears visual feedback
+  PASS  drop clears visual feedback
+  PASS  drop attempts every selected path
+  PASS  one failed attachment does not discard successful files
+  PASS  unicode path reaches the real attachment callback
+  PASS  drop without an active session does not attach files
+  PASS  drag over an unavailable composer does not show attachment feedback
+  PASS  draft composer accepts file drops without opening a session
+  PASS  draft drop queues files until the first send
+  PASS  draft drop does not copy files into a session
+  PASS  attachment resolving after session change is not added to the new composer
+  PASS  session change prevents the rest of a multi-file drop from starting
+  PASS  retired native listener cannot update drag feedback
+  PASS  late native listener registration is not retained after cleanup
+  PASS  late native listener registration is immediately removed
+
+16 passed, 0 failed
+
+tauri bridge contract — command names
+  PASS  command name "legacy_ui_preferences" is a valid Rust identifier
+  PASS  command name "bridge_workspace_file_revert_preview" is a valid Rust identifier
+  PASS  command name "bridge_workspace_file_revert_commit" is a valid Rust identifier
+  PASS  command name "bridge_workspace_file_revert_undo" is a valid Rust identifier
+  PASS  command name "bridge_workspace_checkpoints" is a valid Rust identifier
+  PASS  command name "bridge_code_rewind_preview" is a valid Rust identifier
+  PASS  command name "bridge_code_rewind_commit" is a valid Rust identifier
+  PASS  command name "bridge_conversation_rewind_preview" is a valid Rust identifier
+  PASS  command name "bridge_conversation_rewind_commit" is a valid Rust identifier
+  PASS  command name "bridge_conversation_rewind_undo" is a valid Rust identifier
+  PASS  command name "bridge_legacy_fork_preview" is a valid Rust identifier
+  PASS  command name "bridge_legacy_fork_commit" is a valid Rust identifier
+  PASS  command name "bridge_session_heads" is a valid Rust identifier
+  PASS  command name "bridge_session_head_switch" is a valid Rust identifier
+  PASS  command name "bridge_combined_rewind_preview" is a valid Rust identifier
+  PASS  command name "bridge_combined_rewind_commit" is a valid Rust identifier
+  PASS  command name "bridge_pending_session_deletes_page" is a valid Rust identifier
+  PASS  command name "bridge_pending_session_title_recoveries" is a valid Rust identifier
+  PASS  command name "bridge_status" is a valid Rust identifier
+  PASS  command name "restart_bridge" is a valid Rust identifier
+  PASS  command name "bridge_open_session" is a valid Rust identifier
+  PASS  command name "bridge_switch_session" is a valid Rust identifier
+  PASS  command name "bridge_set_session_model" is a valid Rust identifier
+  PASS  command name "bridge_rename_session" is a valid Rust identifier
+  PASS  command name "bridge_delete_session" is a valid Rust identifier
+  PASS  command name "bridge_session_snapshot" is a valid Rust identifier
+  PASS  command name "bridge_session_balance" is a valid Rust identifier
+  PASS  command name "mcp_runtime_action" is a valid Rust identifier
+  PASS  command name "bridge_session_history" is a valid Rust identifier
+  PASS  command name "bridge_session_previews" is a valid Rust identifier
+  PASS  command name "bridge_submit" is a valid Rust identifier
+  PASS  command name "bridge_attach_file" is a valid Rust identifier
+  PASS  command name "bridge_workspace" is a valid Rust identifier
+  PASS  command name "bridge_workspace_file" is a valid Rust identifier
+  PASS  command name "bridge_workspace_changes" is a valid Rust identifier
+  PASS  command name "bridge_workspace_change_detail" is a valid Rust identifier
+  PASS  command name "workspace_roots_availability" is a valid Rust identifier
+  PASS  command name "bridge_cancel" is a valid Rust identifier
+  PASS  command name "bridge_approve" is a valid Rust identifier
+  PASS  command name "bridge_answer_question" is a valid Rust identifier
+  PASS  command name "bridge_answer_mcp_interaction" is a valid Rust identifier
+  PASS  command name "bridge_replay_pending_prompts" is a valid Rust identifier
+  PASS  command name "list_mcp_servers" is a valid Rust identifier
+  PASS  command name "save_mcp_server" is a valid Rust identifier
+  PASS  command name "delete_mcp_server" is a valid Rust identifier
+  PASS  command name "set_mcp_server_enabled" is a valid Rust identifier
+  PASS  command name "search_mcp_marketplace" is a valid Rust identifier
+  PASS  command name "resolve_mcp_marketplace" is a valid Rust identifier
+  PASS  command name "bridge_start_events" is a valid Rust identifier
+  PASS  command name "preview_profile_status" is a valid Rust identifier
+  PASS  command name "preview_runtime_info" is a valid Rust identifier
+  PASS  command name "import_stable_profile" is a valid Rust identifier
+  PASS  command name "workbench_sessions" is a valid Rust identifier
+  PASS  command name "workbench_session_page" is a valid Rust identifier
+  PASS  command name "bridge_session_catalog_shadow" is a valid Rust identifier
+  PASS  command name "bridge_import_legacy_session_catalog" is a valid Rust identifier
+  PASS  command name "backfill_workbench_titles" is a valid Rust identifier
+  PASS  command name "remember_workbench_session" is a valid Rust identifier
+  PASS  command name "forget_workbench_session" is a valid Rust identifier
+  PASS  command name "provider_summary" is a valid Rust identifier
+  PASS  command name "provider_configs" is a valid Rust identifier
+  PASS  command name "save_provider_config" is a valid Rust identifier
+  PASS  command name "delete_provider_config" is a valid Rust identifier
+  PASS  command name "discover_provider_models" is a valid Rust identifier
+  PASS  command name "usage_stats" is a valid Rust identifier
+  PASS  command name "permission_settings" is a valid Rust identifier
+  PASS  command name "change_permission_settings" is a valid Rust identifier
+  PASS  command name "secrets_settings" is a valid Rust identifier
+  PASS  command name "change_secrets_settings" is a valid Rust identifier
+  PASS  command name "sandbox_settings" is a valid Rust identifier
+  PASS  command name "change_sandbox_settings" is a valid Rust identifier
+  PASS  command name "network_settings" is a valid Rust identifier
+  PASS  command name "change_network_settings" is a valid Rust identifier
+  PASS  command name "skills_settings" is a valid Rust identifier
+  PASS  command name "change_skills_settings" is a valid Rust identifier
+  PASS  command name "subagent_settings" is a valid Rust identifier
+  PASS  command name "change_subagent_settings" is a valid Rust identifier
+  PASS  command name "hooks_settings" is a valid Rust identifier
+  PASS  command name "change_hooks_settings" is a valid Rust identifier
+  PASS  command name "memory_settings" is a valid Rust identifier
+  PASS  command name "change_memory_settings" is a valid Rust identifier
+  PASS  command name "memory_suggestions" is a valid Rust identifier
+  PASS  command name "accept_memory_suggestion" is a valid Rust identifier
+  PASS  command name "set_default_model" is a valid Rust identifier
+  PASS  command name "set_model_role" is a valid Rust identifier
+  PASS  command name "set_agent_preferences" is a valid Rust identifier
+  PASS  command name "test_provider_model" is a valid Rust identifier
+  PASS  command name "desktop_preferences" is a valid Rust identifier
+  PASS  command name "storage_settings" is a valid Rust identifier
+  PASS  command name "capability_diagnostics" is a valid Rust identifier
+  PASS  command name "runtime_doctor" is a valid Rust identifier
+  PASS  command name "export_frontend_diagnostics" is a valid Rust identifier
+  PASS  command name "set_desktop_approval" is a valid Rust identifier
+  PASS  command name "set_desktop_terminal_theme" is a valid Rust identifier
+  PASS  command name "set_desktop_appearance" is a valid Rust identifier
+  PASS  command name "set_desktop_language" is a valid Rust identifier
+  PASS  command name "set_desktop_currency" is a valid Rust identifier
+  PASS  command name "get_close_behavior" is a valid Rust identifier
+  PASS  command name "set_close_behavior" is a valid Rust identifier
+  PASS  command name "notification_permission" is a valid Rust identifier
+  PASS  command name "send_system_notification" is a valid Rust identifier
+  PASS  command name "pending_notification_clicks" is a valid Rust identifier
+  PASS  command name "resolve_notification_click" is a valid Rust identifier
+  PASS  command name "acknowledge_notification_click" is a valid Rust identifier
+  PASS  command name "keychain_save" is a valid Rust identifier
+  PASS  command name "keychain_import_legacy" is a valid Rust identifier
+  PASS  command name "keychain_delete" is a valid Rust identifier
+  PASS  command name "open_external_url" is a valid Rust identifier
+
+tauri bridge contract — no duplicates
+  PASS  all 108 command names are unique
+
+tauri bridge contract — argument shapes
+  PASS  bridge_open_session has request arg
+  PASS  bridge_switch_session has request arg
+  PASS  bridge_set_session_model has sessionId and request args
+  PASS  bridge_rename_session has request arg
+  PASS  rename_session PATCHes /v1/sessions/{sessionId}/title
+  PASS  bridge_delete_session has request arg
+  PASS  delete_session DELETEs /v1/sessions/{sessionId}
+  PASS  bridge_session_snapshot has request arg
+  PASS  bridge_session_balance exposes the session-scoped balance command
+  PASS  session balance stays scoped to the exact session path
+  PASS  MCP runtime actions are routed through the active session bridge path
+  PASS  bridge_session_history has request arg
+  PASS  bridge_submit has request arg
+  PASS  bridge_attach_file has request arg
+  PASS  bridge_workspace has request arg
+  PASS  bridge_workspace_file has request arg
+  PASS  bridge_workspace_changes has request arg
+  PASS  bridge_workspace_change_detail has request arg
+  PASS  bridge_cancel has request arg
+  PASS  bridge_start_events has afterSequence arg
+  PASS  bridge_status has no args
+  PASS  restart_bridge has no args
+  PASS  preview_profile_status has no args
+  PASS  preview_runtime_info has no args
+  PASS  runtime_doctor has no args
+  PASS  import_stable_profile requires explicit confirmation
+
+tauri bridge contract — event channels
+  PASS  event channel "bridge:event" follows naming convention
+  PASS  event channel "bridge:connection-error" follows naming convention
+  PASS  event channel "bridge:connection-restored" follows naming convention
+  PASS  event channel "bridge:resync-required" follows naming convention
+
+tauri bridge contract — response shapes
+  PASS  BridgeStatus.running is boolean
+  PASS  BridgeStatus.protocolVersion is optional
+  PASS  BridgeStatus.sidecarInstanceId is optional
+  PASS  PreviewRuntimeInfo.stableVersion contract
+  PASS  PreviewRuntimeInfo.stableCommit contract
+  PASS  PreviewRuntimeInfo.previewVersion contract
+  PASS  PreviewRuntimeInfo.previewCommit contract
+  PASS  PreviewRuntimeInfo.previewDirty contract
+  PASS  PreviewRuntimeInfo.tauriVersion contract
+  PASS  PreviewRuntimeInfo.previewBuild contract
+  PASS  PreviewRuntimeInfo.bridgeProtocolVersion contract
+  PASS  PreviewRuntimeInfo.sidecarInstanceId contract
+  PASS  BridgeSession.id is required
+  PASS  BridgeSession.path is required
+  PASS  BridgeSession.state is required
+  PASS  BridgeSession.workspaceRoot is optional
+  PASS  BridgeSession.modelRef is optional
+  PASS  BridgeSnapshot.sequence is required
+  PASS  BridgeSnapshot.session is required
+  PASS  BridgeHistory.sequence is required
+  PASS  BridgeHistory.session is required
+  PASS  BridgeHistory.messages is required
+  PASS  BridgeHistory.startIndex is required
+  PASS  BridgeHistory.totalMessages is required
+
+tauri bridge contract — session state enum
+  PASS  session state "idle" is a valid enum value
+  PASS  session state "running" is a valid enum value
+  PASS  session state "paused" is a valid enum value
+  PASS  there are exactly 3 session states
+
+tauri bridge contract — keychain commands
+  PASS  keychain_save has key arg
+  PASS  keychain_save has value arg
+  PASS  keychain_delete has key arg
+  PASS  window cannot invoke a credential read command
+  PASS  adapter cannot request credential values
+
+172 passed, 0 failed
+tauri appearance tests passed
+tauri default workspace: OK
+tauri shortcuts: OK
+tauri settings API key flow passed
+Hooks native JSON clipboard, denial/empty draft protection and stale clipboard/save/refresh ownership: OK
+Storage native clipboard refusal, duplicate click and source/refresh ownership: OK
+Diagnostic native copy, denial feedback, refreshed-report fencing and independent load error: OK
+(node:71043) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+  PASS  empty host list is visible
+  PASS  SSH alias scan returns importable aliases
+  PASS  importing an alias pre-fills its SSH name and address
+An update to TauriRemoteSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriRemoteSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  saving the imported alias persists the SSH-config flag
+  PASS  new SSH credentials are sent only in the save request
+  PASS  credential text is never rendered back into the settings page
+  PASS  saved host appears in the list
+  PASS  first connection requires explicit host-key confirmation
+  PASS  host key is trusted only after confirming the displayed fingerprint
+  PASS  verified connection status is shown on the host card
+  PASS  authentication failure offers an explicit temporary credential prompt
+An update to TauriRemoteSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriRemoteSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  temporary password and key passphrase are sent only with the retry request
+  PASS  temporary SSH credentials are not written to host settings
+  PASS  successful retry clears the temporary credential form
+  PASS  remote SFTP browser shows files and navigable folders
+  PASS  selecting a remote text file shows its bounded preview
+  PASS  remote preview reads only the selected file from the connected host
+An update to TauriRemoteSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  saving sends the original revision and edited text to the connected host
+  PASS  successful remote save is confirmed
+An update to TauriRemoteSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  a conflict keeps the user's unsaved draft and asks them to reload
+  PASS  declining a browser switch preserves the unsaved remote draft
+  PASS  remote browser navigates into a selected folder
+  PASS  choosing a remote folder fills the host workspace field
+  PASS  selected remote workspace is saved to the host settings
+  PASS  disconnect releases the live remote session and restores the connect action
+  PASS  removing a host requires confirmation
+  PASS  cancel leaves the host configured
+  PASS  confirmed removal deletes the saved host
+
+28 passed, 0 failed
+(node:71045) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+  PASS  a null legacy allowlist renders as an empty list instead of crashing settings
+  PASS  a null connection-specific allowlist renders as an empty list instead of crashing settings
+  PASS  runtime health is rendered from the bridge status
+  PASS  adapter identity and counters are visible
+  PASS  unsupported desktop command bridge is disclosed
+  PASS  gateway, global and connection access policies, self-message filtering, and channel preferences are shown separately
+  PASS  settings reads live status through the Tauri bridge
+  PASS  gateway toggle persists through the authenticated bridge action
+An update to TauriBotSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  gateway max steps saves through the authenticated Preview config bridge
+An update to TauriBotSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriBotSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  gateway queue mode saves to the live runtime configuration
+An update to TauriBotSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  platform self IDs are normalized and saved independently
+  PASS  chat route match and outputs save together through the authenticated bridge
+  PASS  pairing policy is saved through the authenticated bridge
+An update to TauriBotSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  allowlist editor saves normalized user IDs
+An update to TauriBotSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriBotSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  connection tool approval mode is persisted through the bridge
+An update to TauriBotSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  connection workspace root saves on blur
+  PASS  connection-specific pairing policy is saved
+An update to TauriBotSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  connection-specific access list is saved separately from the global list
+An update to TauriBotSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to TauriBotSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+  PASS  credential form sends the secret only with the save request
+  PASS  saved bot credential is cleared and never echoed into the page
+
+20 passed, 0 failed
+(node:71048) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+  PASS  discovered profiles are grouped and rendered even when optional tool metadata is missing
+  PASS  built-in model and effort selectors show inherited and overridden effective values
+  PASS  Use in chat returns the slash command with a trailing task space without submitting it
+  PASS  using a profile does not submit a chat turn
+  PASS  try request uses the active project and one-off task
+  PASS  try request uses the unsaved profile form values
+  PASS  trying the profile does not persist the draft
+  PASS  successful try output is shown in the editor
+  PASS  try output updates while the isolated subagent is still running
+  PASS  cancel button reaches the independent bridge cancellation request
+  PASS  live output polls the authenticated Preview bridge status
+  PASS  expected cancellation is not rendered as a run error
+
+12 passed, 0 failed
+  PASS  Registry package argument boundaries survive the reviewed form (expected "[\"--yes\",\"name with spaces\"]", got "[\"--yes\",\"name with spaces\"]")
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+(node:71050) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:71050) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+  PASS  the settings panel can be opened
+  PASS  the MCP tab can be opened
+
+tauri MCP servers — panel
+  PASS  the settings panel has an MCP servers tab
+  PASS  an empty profile says so
+  PASS  the add button is present
+  PASS  the form reached the save command
+  PASS  the save carries the server name (expected "time", got "time")
+  PASS  the credential the user typed is submitted once (expected "renderer-must-never-see-this", got "renderer-must-never-see-this")
+  PASS  the global MCP call timeout fallback is explicit (expected 0, got 0)
+  PASS  the global MCP startup timeout fallback is explicit (expected 0, got 0)
+  PASS  new servers start with no per-tool timeout overrides (expected "{}", got "{}")
+  PASS  the credential is never rendered back
+  PASS  the saved server appears in the list
+  PASS  the list names the credential key it expects
+  PASS  the activation switch is present
+  PASS  the switch sends disabled to the bridge (expected false, got false)
+  PASS  the effective disabled state is visible
+  PASS  activation does not expose the credential
+  PASS  the edit button is present
+  PASS  editing never prefills a credential (expected "", got "")
+  PASS  editing prefills the server name (expected "time", got "time")
+  PASS  the name is fixed while editing
+  PASS  editing shows the persisted server timeout (expected "0", got "0")
+  PASS  the edit reached the save command (expected 2, got 2)
+  PASS  an untouched credential field is omitted, so the stored value stays (expected undefined, got undefined)
+  PASS  the edited arguments are submitted
+  PASS  the per-server call timeout is saved through the Tauri bridge (expected 45, got 45)
+  PASS  the server startup timeout is saved through the Tauri bridge (expected 90, got 90)
+  PASS  the per-tool timeout override is saved through the Tauri bridge (expected 120, got 120)
+  PASS  editing keeps the activation state
+  PASS  the server list summarizes saved timeout policy
+  PASS  the delete button is present
+  PASS  the delete reached the delete command
+  PASS  the list is empty again
+  PASS  the official directory can be opened
+  PASS  a Registry result is shown before installation
+  PASS  an installable Registry entry can be selected
+  PASS  the entry is re-resolved before preparing a draft
+  PASS  the new draft uses the suggested local name (expected "remote", got "remote")
+  PASS  the new draft contains the resolved URL (expected "https://mcp.example.test/mcp", got "https://mcp.example.test/mcp")
+  PASS  the reviewed Registry draft can be saved
+  PASS  the Registry server appears in the installed list
+  PASS  the active session Host status is displayed
+  PASS  the Host tool details expand
+  PASS  the current Host tool description is available in details
+  PASS  the complete MCP settings page follows the selected English locale
+  PASS  eligible Streamable HTTP servers offer browser authorization
+  PASS  OAuth start is scoped to the displayed session ID (expected "active-session", got "active-session")
+  PASS  OAuth start identifies the selected server (expected "remote", got "remote")
+  PASS  completed browser authorization refreshes settings without auto-connecting
+  PASS  saved static or OAuth credentials can be cleared explicitly
+  PASS  credential clearing is scoped to the displayed session ID (expected "active-session", got "active-session")
+  PASS  credential clearing targets only the selected server (expected "remote", got "remote")
+  PASS  a failed enabled server can be connected to the active session
+  PASS  the runtime operation is scoped to the displayed session ID (expected "active-session", got "active-session")
+  PASS  connect is separate from the persisted activation toggle (expected "connect", got "connect")
+  PASS  connecting refreshes the active session status and tool count
+  PASS  a connected MCP can be disconnected from only this session
+  PASS  disconnect is an explicit runtime action (expected "disconnect", got "disconnect")
+  PASS  disconnect refreshes the current session status
+
+61 passed, 0 failed
+tauri progress grouping and duration: OK
+tauri observed usage: OK
+(node:71059) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+Failed to discover external openers TypeError: Cannot read properties of undefined (reading 'invoke')
+    at invoke (file:///Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/@tauri-apps+api@2.11.1/node_modules/@tauri-apps/api/core.js:202:39)
+    at Object.ExternalOpenersForTab (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/tauri/tauriExternalOpener.ts:7:39)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:133:50)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:152:10)
+    at Object.react_stack_bottom_frame (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:871:30)
+    at commitHookEffectListMount (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11)
+    at commitPassiveMountOnFiber (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15484:13)
+    at recursivelyTraversePassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+Failed to discover external openers TypeError: Cannot read properties of undefined (reading 'invoke')
+    at invoke (file:///Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/@tauri-apps+api@2.11.1/node_modules/@tauri-apps/api/core.js:202:39)
+    at Object.ExternalOpenersForTab (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/tauri/tauriExternalOpener.ts:7:39)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:133:50)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:152:10)
+    at Object.react_stack_bottom_frame (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:871:30)
+    at commitHookEffectListMount (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11)
+    at commitPassiveMountOnFiber (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15484:13)
+    at recursivelyTraversePassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+tauri progress disclosure: OK
+(node:71061) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+tauri plugin settings diagnostics: OK
+(node:71063) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+tauri plugin themes: OK
+tauri skill readiness tests passed
+  PASS  legacy installs keep the existing enabled-by-default notification switch
+  PASS  all three event types default on to match stable notification behavior
+  PASS  event preferences persist independently
+  PASS  event preference is saved to Preview local storage
+  PASS  the master switch suppresses every event type
+  PASS  reenabling the master switch restores the saved event choices
+
+6 passed, 0 failed
+Tauri notification click lifecycle passed
+(node:71071) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+Tauri notification workspace navigation passed
+(node:71080) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+Tauri Global workspace opener passed
+
+> reasonix-desktop-frontend@0.0.0 test:external-links /Users/jerry/temp/app/reasonix-tauri/desktop/frontend
+> node --import tsx src/__tests__/mermaid-native-links.test.tsx && node --import tsx src/__tests__/search-sources-native-actions.test.tsx && node --import tsx src/__tests__/rich-link-context-menu.test.tsx && node --import tsx src/__tests__/local-path-click-e2e.test.tsx && node --import tsx src/__tests__/native-local-path-actions.test.tsx && node --import tsx src/__tests__/external-opener.test.tsx && node --import tsx src/__tests__/external-opener-preference-sync.test.tsx
+
+Mermaid native links: mouse ownership, refusal/copy recovery and protocol boundary OK
+Search sources native opener/copy, modified activation and refusal recovery: OK
+
+rich link context menu
+  PASS  web link context menu opens on right click
+  PASS  pull request menu has three items (3)
+  PASS  pull request menu can open in the browser
+  PASS  pull request menu can copy the link
+  PASS  pull request menu can copy a reference
+  PASS  menu contains a "Copy reference" item
+  PASS  copy reference writes the owner/repo#number form (esengine/DeepSeek-Reasonix#6976)
+  PASS  a success toast confirms the copy
+  PASS  menu contains a "Copy reference" item
+  PASS  commit reference writes owner/repo@shortsha (esengine/DeepSeek-Reasonix@ca03d4c)
+  PASS  external menu has two items (2)
+  PASS  external menu has no reference action
+  PASS  menu contains a "Copy link" item
+  PASS  copy link writes the original URL (https://example.com/a/very/long/documentation/path)
+  PASS  menu contains a "Open in browser" item
+  PASS  open in browser sends the URL to the system browser
+  PASS  mailto menu offers compose email
+  PASS  mailto menu offers copy address
+  PASS  menu contains a "Copy email address" item
+  PASS  copy email address strips the mailto: scheme (support@example.com)
+  PASS  menu contains a "Compose email" item
+  PASS  compose email hands the mailto URL to the system handler
+  PASS  mail protocol classification is consistent
+  PASS  menu contains a "Copy email address" item
+  PASS  address copy for mailto:support@example.com?subject=Help&body=Hello
+  PASS  mail protocol classification is consistent
+  PASS  menu contains a "Copy email address" item
+  PASS  address copy for MAILTO:support@example.com
+  PASS  mail protocol classification is consistent
+  PASS  menu contains a "Copy email address" item
+  PASS  address copy for mailto:hello%2Btag@example.com
+  PASS  mail protocol classification is consistent
+  PASS  menu contains a "Copy email address" item
+  PASS  address copy for mailto:one@example.com,two@example.com?cc=other@example.com
+  PASS  mail protocol classification is consistent
+  PASS  menu contains a "Copy email address" item
+  PASS  address copy for mailto:bad%ZZ@example.com?subject=Help
+  PASS  mail protocol classification is consistent
+  PASS  menu contains a "Copy email address" item
+  PASS  address copy for mailto:?subject=Help
+  PASS  ContextMenu key opens the menu
+  PASS  keyboard menu focuses first action
+  PASS  Escape closes the menu
+  PASS  Escape returns focus to link
+  PASS  Shift+F10 opens the menu
+  PASS  menu contains a "Copy link" item
+  PASS  explicit label does not change what copy link writes
+  PASS  relative link right click is not intercepted
+  PASS  relative link opens no context menu
+  PASS  menu contains a "Copy link" item
+  PASS  a failed copy shows an error toast
+  PASS  Tauri Markdown click prevents WebView navigation
+  PASS  Tauri Markdown click sends the original URL to the validated Rust opener
+  PASS  middle click also uses the native opener
+  PASS  menu contains a "Compose email" item
+  PASS  email menu uses the same host entry
+  PASS  failed native opens offer a copy-link recovery
+  PASS  recovery copies the original link for opening in another app
+  PASS  opener failures do not expose internal error payloads
+  PASS  native refusal has no browser or Wails fallback
+  PASS  browser development keeps its external-tab path
+
+61 passed, 0 failed
+
+headless click-to-open e2e
+  PASS  exactly one anchor rendered
+  PASS  anchor href is the encoded file URL (file:///D:/Project/Jhtj/20250804_000000_001_%E4%B8%AD%E5%81%9C%E6%97%B6%E5%88%86%E6%9E%90/05-%E9%9D%99%E6%80%81%E9%AA%8C%E6%94%B6.md)
+  PASS  click invoked OpenLocalPath once
+  PASS  OpenLocalPath received the decoded CJK path (D:/Project/Jhtj/20250804_000000_001_中停时分析/05-静态验收.md)
+  PASS  system browser was not involved
+  PASS  UNC path forwarded as slash form (//nas/share/docs/report.md)
+  PASS  canonical UNC markdown link renders an anchor
+  PASS  canonical UNC path forwarded correctly (//nas/share/docs/report.md)
+  PASS  explicit file:/// markdown link opens locally
+  PASS  local path context menu opens on right click
+  PASS  file manager is not duplicated in the open-with list
+  PASS  context menu opens the path with the selected application
+  PASS  right-button auxclick does not open a local path
+  PASS  StrictMode opener discovery populates the local-path menu
+  PASS  latest opener discovery populates the local-path menu
+  PASS  stale opener discovery cannot replace the latest result
+  PASS  right-button auxclick does not open an http link
+  PASS  http link went to the system browser
+  PASS  OpenLocalPath was not called for the http link
+  PASS  no anchors for plain text
+
+20 passed, 0 failed
+native local document and workspace openers, icons and preference actions: OK
+
+external opener
+  PASS  uses the shared 28px / 7px topic-bar control geometry without an extra shadow
+  PASS  keeps both split-button segments within the shared control height
+  PASS  keeps Creation topic bars on the same 28px / 7px geometry
+  PASS  fits Workbench application artwork to the compact topic-bar control
+  PASS  preserves the slimmer Creation application artwork size
+  PASS  external opener has a distinct React key namespace
+  PASS  session actions have a distinct React key namespace
+  PASS  mounts for a Project tab
+  PASS  mounts for a Global tab without guessing from scope
+  PASS  stays hidden while an IM detail surface owns the header
+  PASS  renders a split-button menu trigger after discovery
+  PASS  renders the native application icon data URL
+  PASS  opens the installed-application menu
+  PASS  requests an installed-application refresh whenever the menu opens
+  PASS  renders applications discovered by the fresh scan
+  PASS  persists the selected application id
+  PASS  opens the exact Global workspace with the selection
+  PASS  primary action reuses the preference without another settings write
+  PASS  primary action uses the newly selected application
+  PASS  rapid primary clicks launch the workspace only once
+  PASS  opens immediately with the cached application list while refresh is still running
+  PASS  the latest overlapping discovery result wins
+  PASS  a stale discovery cannot replace the current menu
+  PASS  a newer tab selection persists even when it matches the discovered preference
+  PASS  an older tab completion cannot overwrite the latest opener preference
+  PASS  a newer failed launch does not cancel an older successful selection
+  PASS  an in-flight older preference write has the same result when a newer launch fails
+  PASS  a failed launch never persists the preference
+  PASS  a failed launch reports the launch error
+  PASS  the application launches before the preference write
+  PASS  a failed preference write reports the save error after opening
+  PASS  hides when the backend reports no local workspace capability
+
+32 passed, 0 failed, 32 total
+
+external opener preference synchronization
+  PASS  the visible tab initially discovers the old preference
+  PASS  an older tab completion synchronizes the visible control
+  PASS  the visible primary action uses the synchronized preference
+  PASS  a discovery started before the write cannot restore the stale preference
+
+4 passed, 0 failed, 4 total

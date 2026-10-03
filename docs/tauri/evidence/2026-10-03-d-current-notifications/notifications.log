@@ -1,0 +1,6 @@
+native macOS window managed notification-delivery: OK
+native macOS window managed menu-shortcuts: OK
+native notifications managed: three OS-delivered captions, two hidden sends, exact cleanup, originals and same-profile restart OK; initial application active=True
+native macOS window explicit notification-delivery: OK
+native macOS window explicit menu-shortcuts: OK
+native notifications explicit: three OS-delivered captions, two hidden sends, exact cleanup, originals and same-profile restart OK; initial application active=True

@@ -1,0 +1,80 @@
+{
+  "root": "/private/tmp/reasonix-cocoa-phase-control-n3jlhjt0",
+  "app": "/private/tmp/reasonix-cocoa-phase-control-n3jlhjt0/Private Phase Cocoa Control.app",
+  "pid": 16116,
+  "kernelExitCode": 1,
+  "openExitCode": 0,
+  "binarySha256": "5cba24e839f21084073aab3a55f5a3b8a06d03ab29a776c9b4dd829c2963aff1",
+  "passed": false,
+  "records": [
+    {
+      "active": true,
+      "elapsedMs": 114,
+      "events": [
+        "key"
+      ],
+      "key": true,
+      "minimized": false,
+      "occlusionVisible": false,
+      "stage": "ready",
+      "visible": true
+    },
+    {
+      "active": true,
+      "elapsedMs": 114,
+      "events": [
+        "key"
+      ],
+      "key": true,
+      "minimized": false,
+      "occlusionVisible": false,
+      "stage": "loaded",
+      "visible": true
+    },
+    {
+      "active": true,
+      "elapsedMs": 164,
+      "events": [
+        "key",
+        "resign-key",
+        "key"
+      ],
+      "key": true,
+      "minimized": false,
+      "occlusionVisible": false,
+      "stage": "minimize-ready",
+      "visible": true
+    },
+    {
+      "active": true,
+      "elapsedMs": 165,
+      "events": [
+        "key",
+        "resign-key",
+        "key"
+      ],
+      "key": true,
+      "minimized": false,
+      "occlusionVisible": false,
+      "stage": "minimize-requested",
+      "visible": true
+    },
+    {
+      "active": true,
+      "elapsedMs": 5215,
+      "events": [
+        "key",
+        "resign-key",
+        "key",
+        "resign-key",
+        "occlusion",
+        "occlusion"
+      ],
+      "key": false,
+      "minimized": false,
+      "occlusionVisible": false,
+      "stage": "failed-mini",
+      "visible": true
+    }
+  ]
+}

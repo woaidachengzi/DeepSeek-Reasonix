@@ -1,0 +1,25 @@
+warning: `/Users/jerry/.cargo/config` is deprecated in favor of `config.toml`
+  |
+  = help: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+   Compiling reasonix-tauri v0.1.0 (/Users/jerry/temp/app/reasonix-tauri/desktop/tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.70s
+     Running unittests src/main.rs (target/debug/deps/reasonix_tauri-9916af7dc0d35f54)
+
+running 1 test
+test data_profile::tests::linked_application_data_directory_cannot_create_preview_state_in_legacy_tree ... FAILED
+
+failures:
+
+---- data_profile::tests::linked_application_data_directory_cannot_create_preview_state_in_legacy_tree stdout ----
+
+thread 'data_profile::tests::linked_application_data_directory_cannot_create_preview_state_in_legacy_tree' (720089) panicked at src/data_profile.rs:765:9:
+assertion failed: prepare_managed_home(&app_data).is_err()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    data_profile::tests::linked_application_data_directory_cannot_create_preview_state_in_legacy_tree
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 225 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--bin reasonix-tauri`

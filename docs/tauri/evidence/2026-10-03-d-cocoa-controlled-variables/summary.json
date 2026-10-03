@@ -1,0 +1,169 @@
+[
+  {
+    "variant": "empty",
+    "binarySha256": "4ff4b2f4742c4bf9ac98be159c84917bfc93f45b2e239d12d35992763235f6a1",
+    "hostPid": 15446,
+    "kernelExitCode": 2,
+    "openExitCode": 0,
+    "passed": false,
+    "final": {
+      "events": [
+        "key",
+        "occlusion",
+        "resign-key",
+        "occlusion",
+        "key",
+        "occlusion"
+      ],
+      "minimized": false,
+      "precondition": true,
+      "restored": false,
+      "stage": "failed"
+    }
+  },
+  {
+    "variant": "web",
+    "binarySha256": "93e56f3dc68165406302e2dea49bf2877e213ea064aa4c865babaed62a832e09",
+    "hostPid": 15504,
+    "kernelExitCode": 2,
+    "openExitCode": 0,
+    "passed": false,
+    "final": {
+      "events": [
+        "key",
+        "occlusion",
+        "resign-key",
+        "occlusion",
+        "key",
+        "occlusion"
+      ],
+      "minimized": false,
+      "precondition": true,
+      "restored": false,
+      "stage": "failed"
+    }
+  },
+  {
+    "variant": "timer",
+    "binarySha256": "f03666ce553df7b07e64643984400af93589ddded9b9760ae0853e3beda8876e",
+    "hostPid": 15538,
+    "kernelExitCode": 2,
+    "openExitCode": 0,
+    "passed": false,
+    "final": {
+      "events": [
+        "key",
+        "occlusion",
+        "resign-key",
+        "occlusion",
+        "key",
+        "occlusion"
+      ],
+      "minimized": false,
+      "precondition": true,
+      "restored": false,
+      "stage": "failed"
+    }
+  },
+  {
+    "variant": "reorder",
+    "binarySha256": "0eeb030ebd882fa1bf61d449ea679552d512ee1a9ac8715ddac31adc940a6e6f",
+    "hostPid": 15613,
+    "kernelExitCode": 2,
+    "openExitCode": 0,
+    "passed": false,
+    "final": {
+      "events": [
+        "occlusion",
+        "occlusion",
+        "key",
+        "occlusion",
+        "resign-key"
+      ],
+      "minimized": false,
+      "precondition": false,
+      "restored": false,
+      "stage": "failed"
+    }
+  },
+  {
+    "variant": "size",
+    "binarySha256": "18e5333969a2254bc343040de884ec4d8028ebcee746d5ceae727691281ad0ad",
+    "hostPid": 15653,
+    "kernelExitCode": 2,
+    "openExitCode": 0,
+    "passed": false,
+    "final": {
+      "events": [
+        "key",
+        "occlusion",
+        "resign-key",
+        "occlusion",
+        "key",
+        "occlusion"
+      ],
+      "minimized": false,
+      "precondition": true,
+      "restored": false,
+      "stage": "failed"
+    }
+  },
+  {
+    "variant": "phase",
+    "binarySha256": "5cba24e839f21084073aab3a55f5a3b8a06d03ab29a776c9b4dd829c2963aff1",
+    "hostPid": 16116,
+    "kernelExitCode": 1,
+    "openExitCode": 0,
+    "passed": false,
+    "final": {
+      "active": true,
+      "elapsedMs": 5215,
+      "events": [
+        "key",
+        "resign-key",
+        "key",
+        "resign-key",
+        "occlusion",
+        "occlusion"
+      ],
+      "key": false,
+      "minimized": false,
+      "occlusionVisible": false,
+      "stage": "failed-mini",
+      "visible": true
+    }
+  },
+  {
+    "variant": "positive-repeat",
+    "binarySha256": "b88de85c4013c8612b8ca11094bbac6339a93e9e13febf629cd83e92f583f8cc",
+    "hostPid": 15577,
+    "kernelExitCode": 0,
+    "openExitCode": 0,
+    "passed": true,
+    "final": {
+      "active": true,
+      "elapsedMs": 1544,
+      "events": [
+        "key",
+        "occlusion",
+        "resign-key",
+        "key",
+        "occlusion",
+        "will-mini",
+        "resign-key",
+        "did-mini",
+        "occlusion",
+        "occlusion",
+        "key",
+        "did-demini",
+        "occlusion",
+        "occlusion"
+      ],
+      "key": true,
+      "minimized": false,
+      "occlusionVisible": false,
+      "stage": "passed",
+      "visible": true
+    }
+  }
+]

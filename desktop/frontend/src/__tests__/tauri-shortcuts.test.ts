@@ -52,8 +52,8 @@ for (const native of [...nativeShortcuts.required, ...nativeShortcuts.optional])
   assert.equal(nativeTauriShortcutConflict(native, "darwin"), true, `${native.title} stays native`);
   assert.equal(setTauriShortcut("settings", native, "darwin"), false, `${native.title} cannot be saved as a Preview shortcut`);
   const event = new dom.window.KeyboardEvent("keydown", {
-    key: native.key, metaKey: native.meta, ctrlKey: "ctrl" in native && native.ctrl,
-    altKey: "alt" in native && native.alt, shiftKey: "shift" in native && native.shift,
+    key: native.key, metaKey: native.meta, ctrlKey: "ctrl" in native && native.ctrl === true,
+    altKey: "alt" in native && native.alt === true, shiftKey: "shift" in native && native.shift === true,
   });
   for (const action of TAURI_SHORTCUT_ACTIONS) {
     assert.equal(matchesTauriShortcut(event, action, "darwin"), false, `${native.title} never dispatches ${action}`);

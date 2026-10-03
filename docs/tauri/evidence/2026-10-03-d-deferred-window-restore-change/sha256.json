@@ -1,0 +1,16 @@
+{
+  "README.md": "5cec3605aa18f18f49c64b4db1848f1148fbd0bdc54592aebbfb44b648deecf5",
+  "after-fixture-0.json": "a704a2e4ce8720a9e06de1c39ae6e6fbd9b52da8628db04b81fa805000dd42d1",
+  "after-fixture-3.json": "38a4178bcaefaf3cc124915dd4348c50945bd0f75ec106f2f4f422ae250916ba",
+  "before-probe.py.txt": "fb24b9a3147225fdd531f0636a9dfa5feb6579bcee5fba9fe2551829f82ddf42",
+  "before-result.json": "9d93fe42fa572547ee6c5984cb6ac27528e3272f47205ad0766af6b3cd9fe5a7",
+  "before.log": "7d1ce4c41536b094d996fc3991e700c577ecec7bc7642a105334aa7c60638749",
+  "installed.json": "a4ce5e9beb88573f3b8dbe5977aede367326c021d3f43048b36d96fccaa6f500",
+  "reasonix-cbb-deferred-window-clippy.log": "2fe3a9196e0302a222c77874611337949ef28f22ee337d9df26db76a8a559d1b",
+  "reasonix-cbb-deferred-window-tests.log": "82733e1c3f0d00875f604f8d14f4cdec82053e51b5f6bb5c7b6b6b078b58ec55",
+  "reasonix-deferred-window-build.log": "d7558e2047381b6aa08f0efd120ff05dc121c5c9d09dc4d5690ad86a812b8693",
+  "reasonix-deferred-window-install.log": "7be109e45861bca479cef4ce4550811e1199ca0afd2b05f5ecd233462aebc288",
+  "sources/desktop/tauri/src/main.rs": "aa855b6f9df7836a3ee5380ccf010102b631dfd57a0cb6291a82aca11738df54",
+  "sources/desktop/tauri/src/tray.rs": "ab102bb4a6a5bd8da15b2b46a70125a5f25e47041b5b004f21992554a0111be1",
+  "sources/desktop/tauri/src/window_state.rs": "28a64dbe992eb4da63694a2bed264c5762298c95032ed6ce2ba2b1ef3ee16a4d"
+}

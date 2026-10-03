@@ -1,0 +1,5 @@
+/private/tmp/reasonix-tauri-window-baseline-wh2kocn6/Reasonix Window Baseline.app/Contents/MacOS/window-baseline: replacing existing signature
+/private/tmp/reasonix-tauri-window-baseline-wh2kocn6/Reasonix Window Baseline.app: replacing existing signature
+{"app": "/private/tmp/reasonix-tauri-window-baseline-wh2kocn6/Reasonix Window Baseline.app", "binarySha256": "3a04b1f43b9143e2db4a0ee3c0f3fdfa5840161cdbde28eb58b56e7a7b8638b9", "base": "/private/tmp/reasonix-tauri-window-baseline-wh2kocn6"}
+{"delegate": "keep", "application": "tao", "kind": "cocoa", "action": "direct", "root": "/private/tmp/reasonix-tauri-window-baseline-wh2kocn6/keep-tao-cocoa-standard-direct", "style": "standard", "hostPid": 14664, "kernelExitCode": 2, "openExitCode": 0, "expectedCode": 2}
+{"style": "standard", "root": "/private/tmp/reasonix-tauri-window-baseline-wh2kocn6/keep-tao-cocoa-standard-direct", "pid": 14664, "exitCode": 2, "precondition": true, "minimized": false, "restored": false}

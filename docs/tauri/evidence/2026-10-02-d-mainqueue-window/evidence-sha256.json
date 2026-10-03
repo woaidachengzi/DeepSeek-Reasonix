@@ -1,0 +1,19 @@
+{
+  "README.md": "fbeeb14df98dc6358ab012ecf55cc0bfe0235d544cb537c701a0562ad1e34acb",
+  "cocoa-standard-direct-exit-receipt.json": "37ba02a87631f244dde8eccad14e9652bbc4f02ba938a4f517d1299d7b45916a",
+  "cocoa-standard-direct-host.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "cocoa-standard-direct-result.json": "e49e3d1fd2a502943876ecd7717f8083d35b2c37650194f7014cdc40534d9bee",
+  "cocoa-standard-main-queue-exit-receipt.json": "7015240540ab5c93be426fff34fec899ff04bb3f65fd3365ae925a3a809bd3b7",
+  "cocoa-standard-main-queue-host.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "cocoa-standard-main-queue-result.json": "992e59db327d23f520805536b7623859913aad2899d20b0865bdd7d206938f0d",
+  "effective-entitlements.json": "6a976e182dd0d3c526d4a95708a577d6e08898745588f5d16c7eb046efa200c7",
+  "reasonix-main-queue-baseline-build.log": "45e05672f1977326a22a9feed6ab3124ec477451f8131de188c4a8c67b283736",
+  "reasonix-main-queue-baseline-clippy.log": "e5037b6c3a5dccbfbbcaf6c798278ae945e4d117773fd5f2def868308bb1f0a2",
+  "reasonix-mainqueue-baseline-run.log": "397147a583fc037b5f3d06b214c4acf928df73fb257c5d5866ca67f5cc5f4b4d",
+  "reasonix-run-mainqueue-baseline.py": "f0f5ccad36abd72f11f837aa37937293d2f30e78ff054cf6ff116d0618c62196",
+  "result.json": "550f91c006a756932cb12719062a1f10039ed637b49157c5d649854f587e46bb",
+  "tauri-standard-main-queue-exit-receipt.json": "1a7f369c9d3458ec6ee989fd80565d53805f44fd1056f306fb13a08f413addc6",
+  "tauri-standard-main-queue-host.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "tauri-standard-main-queue-result.json": "be0a2d6f9e94d3b240a895fde9a92cbd3e1437bf321e101c9a7d1cbf1dbd9294",
+  "window-baseline.rs": "ecda289cf2e7fc3370413bb37ba483f8fa86eaf21513b4a82bc9df6b2399bed5"
+}

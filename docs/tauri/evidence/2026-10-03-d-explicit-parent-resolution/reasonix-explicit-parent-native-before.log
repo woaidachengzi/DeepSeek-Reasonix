@@ -1,0 +1,8 @@
+Private parent-resolution failure fixture retained: /private/tmp/reasonix-explicit-parent-jci0t7je
+Traceback (most recent call last):
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-explicit-parent-resolution.py", line 78, in <module>
+    smoke(sys.argv[1])
+    ~~~~~^^^^^^^^^^^^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-explicit-parent-resolution.py", line 48, in smoke
+    raise RuntimeError(f'parent-resolution host exit={process.returncode}, originalUnchanged={boundary.snapshot(stable) == before}')
+RuntimeError: parent-resolution host exit=2, originalUnchanged=False

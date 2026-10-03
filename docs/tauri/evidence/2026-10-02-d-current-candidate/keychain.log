@@ -1,0 +1,11 @@
+warning: `/Users/jerry/.cargo/config` is deprecated in favor of `config.toml`
+  |
+  = help: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.68s
+     Running unittests src/main.rs (desktop/tauri/target/debug/deps/reasonix_tauri-9916af7dc0d35f54)
+
+running 1 test
+test keychain::tests::native_keychain_profile_isolation_and_cleanup ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 219 filtered out; finished in 0.45s
+

@@ -1,0 +1,11 @@
+{
+  "binarySha256": "2bfd03e6aa094cbaa21b52243527eb3c7b464548ef89bb2adba9c71c29bd2847",
+  "base": "/private/tmp/reasonix-tauri-window-baseline-7iy3q1jq",
+  "samples": 2,
+  "preconditionsSatisfied": true,
+  "miniRestoreExecutedEach": true,
+  "minimizePassed": false,
+  "productionChanged": false,
+  "inference": "TaoApp subclass is not necessary to reproduce the Cocoa window failure in Tao context; delegate and event loop remain unseparated",
+  "DEComplete": false
+}

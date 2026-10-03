@@ -1,0 +1,26 @@
+{
+  "sourceRegressions": "passed",
+  "nativeKeychainTransactions": {
+    "passed": 25,
+    "ignored": 3,
+    "backend": "memory; real authenticated sidecar"
+  },
+  "actualOSWailsEnvImport": "pending",
+  "nativeUIAttempt": "CUA getState timed out after 30 seconds; kernel reset",
+  "build": "normalized production app and DMG passed",
+  "installedCandidate": "c71ab66c727b1dc71854a993ba232f6515975328f684e365d3fc9bef801f2707",
+  "failuresPreserved": [
+    "intermediate provider default-field pollution",
+    "sandbox loopback denial",
+    "sandbox Go cache denial"
+  ],
+  "scope": "macOS D incomplete; E not started; no publication",
+  "strictSignature": "passed",
+  "programmaticGatesPassed": 15,
+  "fullWindow": "LaunchServices installed app: managed24+explicit24 passed; direct-host managed8-stage focus failure retained",
+  "conditionalInactiveDisplays": "not applicable: actual active displays 2",
+  "actualLegacyRollback": "passed",
+  "actualBackupApply": "passed",
+  "postRun": "both strict signatures passed; no matching running apps",
+  "activationControl": "4 exact native Settings/API and Minimize-role receipts passed"
+}

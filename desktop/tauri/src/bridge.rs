@@ -2476,6 +2476,35 @@ impl BridgeSupervisor {
         Ok(configs)
     }
 
+    // Native-only secret transport; never returned by a renderer command.
+    pub fn wails_env_provider_key(&self, provider: &str) -> Result<Option<String>, String> {
+        let query = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("provider", provider).finish();
+        let response = self.request_json("GET", &format!("/v1/settings/wails-env-credential?{query}"), None, None)?;
+        if response.get("protocolVersion").and_then(serde_json::Value::as_u64) != Some(u64::from(PROTOCOL_VERSION)) {
+            return Err("desktop bridge protocol version is unsupported".into());
+        }
+        match response.get("value") {
+            Some(serde_json::Value::Null) => Ok(None),
+            Some(serde_json::Value::String(value)) if !value.trim().is_empty() && value.len() <= 32768 && !value.contains(['\0', '\r', '\n']) => Ok(Some(value.clone())),
+            _ => Err("Wails global credential response is unavailable".into()),
+        }
+    }
+
+    pub fn provider_credential_account(&self, provider: &str) -> Result<String, String> {
+        let query = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("provider", provider).finish();
+        let path = format!("/v1/settings/provider-credential-account?{query}");
+        let response = self.request_json("GET", &path, None, None)?;
+        if response.get("protocolVersion").and_then(serde_json::Value::as_u64) != Some(u64::from(PROTOCOL_VERSION)) {
+            return Err("desktop bridge protocol version is unsupported".into());
+        }
+        let account = response.get("account").and_then(serde_json::Value::as_str)
+            .filter(|account| valid_credential_account(account))
+            .ok_or("provider credential identity is unavailable")?;
+        Ok(account.to_owned())
+    }
+
     pub fn save_provider_config(
         &self,
         input: SaveProviderConfigRequest,
@@ -4946,6 +4975,13 @@ fn session_directory_path(
     Ok(path)
 }
 
+fn valid_credential_account(account: &str) -> bool {
+    let mut bytes = account.bytes();
+    account.len() <= 256
+        && bytes.next().is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
+        && bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
+}
+
 fn validate_session_directory_page(
     page: &SessionDirectoryPage,
     limit: u16,
@@ -5242,6 +5278,16 @@ fn display_error(error: impl std::fmt::Display) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn credential_accounts_follow_wails_environment_names() {
+        for value in ["DEEPSEEK_API_KEY", "SHARED_WAILS_KEY", "_KEY", "KEY_1"] {
+            assert!(super::valid_credential_account(value));
+        }
+        for value in ["", "0KEY", "a b", "../KEY", "中文", "KEY\n"] {
+            assert!(!super::valid_credential_account(value));
+        }
+        assert!(!super::valid_credential_account(&"A".repeat(257)));
+    }
     use super::{
         open_event_stream, parse_json_response, provider_summary_path, read_bounded_response,
         request_json, session_directory_path, session_path_component, validate_attachment,

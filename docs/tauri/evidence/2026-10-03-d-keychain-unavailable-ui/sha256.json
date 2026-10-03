@@ -1,0 +1,21 @@
+{
+  "README.md": "4b670df8c917e33dacfc22483a6b4d30fae2c41970d7dc49653d71af2e03ecf1",
+  "actions.json": "0d8a305d7f5816c9b84f5cc946d9dea360955d643a31dd9fae51bb62191efc45",
+  "credential_namespace.rs": "82f9d7b3ed37e930075b520f660dd27bf0d9c98dc3781cb152759ca4d74d0956",
+  "default-keychain-read-only.json": "b01270fff25358e307fb2c46d53dd572a81a3d72c050f6fbf5a17a8036abea58",
+  "exit-receipt.json": "53e008f8ddff3e4f0b4e6b47b75e1369e7ea2cafc1ddc90cefe035cdcb963b77",
+  "host.log": "d30183293c8d0e228a85fec23352ef22894962c3ff89d797cc6ecad5ca9f97f3",
+  "keychain.rs": "4d9231709ddbc9b0b97ea412273ff36bc972af7273d20745083629013b94fc71",
+  "launch-control.json": "3625e2cbec166a531c852bea0a7cf880c16473027cb11f1bce0e4a4d1a4207d8",
+  "launch.json": "cfd93b5fd9aad7e61e8f5926fb38999bcdbe95cdd695088448d37a0d46072b1a",
+  "legacy-after.json": "6ee79c74a65ed21e49d8709d16b1f60d3450510a4dcc23a9b3433fdb9ae366ad",
+  "legacy-before.json": "6ee79c74a65ed21e49d8709d16b1f60d3450510a4dcc23a9b3433fdb9ae366ad",
+  "legacy-initial-wrong-provider.json": "d93cb60e7b43960a4eee6687f37e4a2d6323d52178bac2f99793b449ab92ff58",
+  "main-window.json": "ca322f44ca65977eb15925270d716605762c1486745e695755f43b30ef6ceb8d",
+  "native-isolation-test.log": "569516198b79b32a88cc984c0f29ba882720d2349d8ce8fd46f9de767bbb9a75",
+  "result.json": "3be5f768622618841b84d5f6de421e41981307a101b347b7a03cf0037c8a0efc",
+  "run.log": "afbe7bdea204a93afd8a68884a766dcf80f0ac0702d6f730239fabc675d16e18",
+  "runner-initial.py": "3b9424f741505f573376d1a06ef0cb6984c03c5041c5d0474a1e9b8c5704ba54",
+  "wails-credentials-baseline.go": "3d821df68d1c709fcb9521874d68e63d90f3318bbe42fbd6c162ab15288d1c46",
+  "wails-notification-baseline.go": "775658a6fde235eefedc6582e25023d6c5629a25171f0eb199bcf45bfaabb60f"
+}

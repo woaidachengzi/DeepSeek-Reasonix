@@ -1,0 +1,1423 @@
+diff --git a/desktop/frontend/scripts/tauri-bridge-stub-loader.mjs b/desktop/frontend/scripts/tauri-bridge-stub-loader.mjs
+index 46fd231ea..6b3ee9cef 100644
+--- a/desktop/frontend/scripts/tauri-bridge-stub-loader.mjs
++++ b/desktop/frontend/scripts/tauri-bridge-stub-loader.mjs
+@@ -199,6 +199,7 @@ export function setTauriDesktopApproval(mode) { record("set_desktop_approval", {
+ export function setTauriDesktopTerminalTheme(theme) { record("set_desktop_terminal_theme", { theme }); return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: "auto", terminalTheme: theme }); }
+ export function setTauriDesktopAppearance(theme, style) { record("set_desktop_appearance", { theme, style }); return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: "auto", terminalTheme: "auto", theme, themeStyle: style, appearanceConfigured: true }); }
+ export function setTauriDesktopLanguage(language) { record("set_desktop_language", { language }); return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: "auto", language, terminalTheme: "auto", theme: "auto", themeStyle: "", appearanceConfigured: false }); }
++export function setTauriTrayLocale(locale) { record("set_tray_locale", { locale }); return globalThis.__trayLocaleFailure ? Promise.reject(new Error("private tray failure")) : Promise.resolve(); }
+ export function setTauriDesktopCurrency(currency) { record("set_desktop_currency", { currency }); return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: "auto", language: "", displayCurrency: currency, terminalTheme: "auto", theme: "auto", themeStyle: "", appearanceConfigured: false }); }
+ export function tauriZoomFactor() { record("get_zoom_factor"); return Promise.resolve(1); }
+ export function setTauriZoomFactor(factor) { record("set_zoom_factor", { factor }); return Promise.resolve(factor); }
+diff --git a/desktop/frontend/src/__tests__/desktop-close-behavior-hint.test.tsx b/desktop/frontend/src/__tests__/desktop-close-behavior-hint.test.tsx
+index 69d1c98e5..5fb8faa54 100644
+--- a/desktop/frontend/src/__tests__/desktop-close-behavior-hint.test.tsx
++++ b/desktop/frontend/src/__tests__/desktop-close-behavior-hint.test.tsx
+@@ -3,7 +3,8 @@ import React from "react";
+ import { act } from "react";
+ import { createRoot } from "react-dom/client";
+ import { DesktopCloseBehaviorHint } from "../components/DesktopCloseBehaviorHint";
+-import type { AppBindings } from "../lib/bridge";
++import { onDesktopOpenSettings, onDesktopShellStatus, type AppBindings } from "../lib/bridge";
++import assert from "node:assert/strict";
+ 
+ const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>", {
+   pretendToBeVisual: true,
+@@ -35,4 +36,51 @@ if (rootElement.textContent !== "Keep running after close.Closing this time will
+   throw new Error(`unexpected close fallback hint: ${JSON.stringify(rootElement.textContent)}`);
+ }
+ await act(async () => root.unmount());
++
++// A native tray transition is newer than the initial async status query.
++let resolveStatus!: (value: { trayState: "unavailable"; backgroundCloseAvailable: false }) => void;
++const pendingStatus = new Promise<{ trayState: "unavailable"; backgroundCloseAvailable: false }>((resolve) => { resolveStatus = resolve; });
++let statusEvent!: (...values: unknown[]) => void;
++let unsubscribed = 0;
++window.runtime = {
++  EventsOn(name: string, listener: (...values: unknown[]) => void) {
++    assert.equal(name, "desktop:shell-status");
++    statusEvent = listener;
++    return () => { unsubscribed++; };
++  },
++} as NonNullable<Window["runtime"]>;
++window.go.main.App.GetDesktopShellStatus = () => pendingStatus;
++const nextRoot = createRoot(rootElement);
++await act(async () => {
++  nextRoot.render(<DesktopCloseBehaviorHint backgroundSelected hint="Keep running after close." unavailableHint="Closing this time will quit." />);
++});
++await act(async () => {
++  statusEvent({ trayState: "ready", backgroundCloseAvailable: true });
++  resolveStatus({ trayState: "unavailable", backgroundCloseAvailable: false });
++  await pendingStatus;
++});
++assert.equal(rootElement.textContent, "Keep running after close.", "a delayed snapshot must not overwrite the newer native tray event");
++await act(async () => nextRoot.unmount());
++assert.equal(unsubscribed, 1, "the host subscription is removed on unmount");
++
++// Native queued delivery must be inert after the settings consumer leaves.
++let settingsEvent!: (...values: unknown[]) => void;
++let settingsOpened = 0;
++let settingsUnsubscribed = 0;
++window.runtime.EventsOn = (name, listener) => {
++  assert.equal(name, "app:open-settings");
++  settingsEvent = listener;
++  return () => { settingsUnsubscribed++; };
++};
++const stopSettings = onDesktopOpenSettings(() => { settingsOpened++; });
++settingsEvent();
++assert.equal(settingsOpened, 1);
++stopSettings();
++stopSettings();
++settingsEvent();
++assert.equal(settingsOpened, 1, "already queued host settings events cannot reopen settings after disposal");
++assert.equal(settingsUnsubscribed, 1, "host event disposal is idempotent");
++delete window.runtime;
++onDesktopOpenSettings(() => { throw new Error("browser preview must not fabricate a settings event"); })();
++onDesktopShellStatus(() => { throw new Error("browser preview must not fabricate tray status"); })();
+ console.log("desktop close behavior hint: ok");
+diff --git a/desktop/frontend/src/__tests__/tauri-project-navigation.test.tsx b/desktop/frontend/src/__tests__/tauri-project-navigation.test.tsx
+index 1cbeef1f5..d285ce00e 100644
+--- a/desktop/frontend/src/__tests__/tauri-project-navigation.test.tsx
++++ b/desktop/frontend/src/__tests__/tauri-project-navigation.test.tsx
+@@ -40,6 +40,10 @@ assert.ok((globalThis as unknown as { __tauriBridgeCalls: Array<{ name: string;
+   .some(call => call.name === "backfill_workbench_titles" && call.args.titles?.some(item => item.sessionId === "old-alpha" && item.title === "整理报告并加测试")), "default session title is replaced from the first user turn");
+ const calls = (globalThis as unknown as { __tauriBridgeCalls: Array<{ name: string; args: Record<string, string> }> }).__tauriBridgeCalls;
+ assert.ok(calls.some(call => call.name === "workbench_project_folders"));
++assert.ok(calls.some(call => call.name === "set_tray_locale" && call.args.locale === "en"),
++  "Auto language resolves navigator English and synchronizes the native tray on mount");
++assert.ok(!calls.some(call => call.name === "set_desktop_language"),
++  "runtime tray synchronization does not persist an explicit language over Auto");
+ assert.ok(calls.some(call => call.name === "bridge_session_previews"));
+ assert.ok(calls.some(call => call.name === "backfill_workbench_titles"));
+ const searchInput = document.querySelector<HTMLInputElement>('[aria-label="搜索会话和项目"]');
+@@ -339,4 +343,11 @@ assert.equal(localStorage.getItem("reasonix.tauri.default-workspace.v1"), null,
+ await act(async () => { [...document.querySelectorAll<HTMLButtonElement>(".tauri-storage-path__select")].find(button => ["选择", "Choose"].includes(button.textContent?.trim() ?? ""))?.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
+ assert.equal(localStorage.getItem("reasonix.tauri.default-workspace.v1"), "/work/restored", "Storage can select another default workspace");
+ await act(async () => { root.unmount(); });
+-console.log("tauri project navigation and legacy title backfill: OK");
++(globalThis as typeof globalThis & { __trayLocaleFailure?: boolean }).__trayLocaleFailure = true;
++root = createRoot(document.getElementById("root")!);
++await act(async () => { root.render(React.createElement(TauriSessionApp)); await new Promise(resolve => setTimeout(resolve, 0)); });
++assert.match(document.body.textContent ?? "", /Could not update the tray language|托盘语言未能更新/,
++  "native tray failure gives a retry instruction while the workbench stays usable");
++assert.doesNotMatch(document.body.textContent ?? "", /private tray failure/);
++await act(async () => { root.unmount(); });
++console.log("tauri project navigation, native tray locale and legacy title backfill: OK");
+diff --git a/desktop/frontend/src/__tests__/tauri-shortcuts.test.ts b/desktop/frontend/src/__tests__/tauri-shortcuts.test.ts
+index 74ba227c3..8ab7d426a 100644
+--- a/desktop/frontend/src/__tests__/tauri-shortcuts.test.ts
++++ b/desktop/frontend/src/__tests__/tauri-shortcuts.test.ts
+@@ -52,8 +52,8 @@ for (const native of [...nativeShortcuts.required, ...nativeShortcuts.optional])
+   assert.equal(nativeTauriShortcutConflict(native, "darwin"), true, `${native.title} stays native`);
+   assert.equal(setTauriShortcut("settings", native, "darwin"), false, `${native.title} cannot be saved as a Preview shortcut`);
+   const event = new dom.window.KeyboardEvent("keydown", {
+-    key: native.key, metaKey: native.meta, ctrlKey: "ctrl" in native && native.ctrl,
+-    altKey: "alt" in native && native.alt, shiftKey: "shift" in native && native.shift,
++    key: native.key, metaKey: native.meta, ctrlKey: "ctrl" in native && native.ctrl === true,
++    altKey: "alt" in native && native.alt === true, shiftKey: "shift" in native && native.shift === true,
+   });
+   for (const action of TAURI_SHORTCUT_ACTIONS) {
+     assert.equal(matchesTauriShortcut(event, action, "darwin"), false, `${native.title} never dispatches ${action}`);
+diff --git a/desktop/frontend/src/__tests__/window-state-ordering.test.ts b/desktop/frontend/src/__tests__/window-state-ordering.test.ts
+index 94b90976d..9f4fed6cd 100644
+--- a/desktop/frontend/src/__tests__/window-state-ordering.test.ts
++++ b/desktop/frontend/src/__tests__/window-state-ordering.test.ts
+@@ -1,6 +1,7 @@
+ // Run: pnpm test:window-state
+ 
+ import { createWindowStateSaver, type WindowStateSnapshot } from "../lib/windowState";
++import { getWailsWindowStateRuntime } from "../lib/wailsDesktopRuntime";
+ 
+ let failed = 0;
+ 
+@@ -55,4 +56,62 @@ ok(persisted[1].maximised, "the newest maximised state is preserved");
+ await save();
+ ok(persisted.length === 2, "an unchanged observation is deduplicated after persistence succeeds");
+ 
++// A disposed mount must not complete a delayed native read or drain queued
++// requests after a replacement mount has already saved newer geometry.
++const oldSize = deferred();
++const disposed = new AbortController();
++const lifecycleWrites: WindowStateSnapshot[] = [];
++let disposedReads = 0;
++let disposedPositionReads = 0;
++const disposedSave = createWindowStateSaver({
++  async WindowGetSize() {
++    disposedReads += 1;
++    await oldSize.promise;
++    return { w: 900, h: 600 };
++  },
++  async WindowGetPosition() { disposedPositionReads += 1; return { x: 10, y: 20 }; },
++  async WindowIsMaximised() { return false; },
++}, async state => { lifecycleWrites.push(state); }, disposed.signal);
++const delayedSave = disposedSave();
++await Promise.resolve();
++const queuedDisposedSave = disposedSave();
++disposed.abort();
++const mountedSave = createWindowStateSaver({
++  async WindowGetSize() { return { w: 1280, h: 800 }; },
++  async WindowGetPosition() { return { x: 40, y: 50 }; },
++  async WindowIsMaximised() { return true; },
++}, async state => { lifecycleWrites.push(state); });
++await mountedSave();
++oldSize.resolve();
++await Promise.all([delayedSave, queuedDisposedSave]);
++ok(lifecycleWrites.length === 1 && lifecycleWrites[0].width === 1280,
++  "a disposed capture cannot overwrite the replacement mount's geometry");
++ok(disposedReads === 1 && disposedPositionReads === 0,
++  "disposal stops the remaining native reads and queued captures");
++await disposedSave();
++ok(disposedReads === 1, "a disposed saver ignores subsequent requests");
++
++const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
++const lateWindow: { runtime?: object } = {};
++Object.defineProperty(globalThis, "window", { value: lateWindow, configurable: true });
++ok(getWailsWindowStateRuntime() === null, "browser without a host does not manufacture a geometry runtime");
++lateWindow.runtime = { WindowGetSize: async () => ({ w: 1, h: 1 }) };
++ok(getWailsWindowStateRuntime() === null, "incomplete geometry capability starts no capture");
++const injectedHost = {
++  geometry: { w: 1200, h: 700, x: 80, y: 90, maximised: true },
++  async WindowGetSize() { return { w: this.geometry.w, h: this.geometry.h }; },
++  async WindowGetPosition() { return { x: this.geometry.x, y: this.geometry.y }; },
++  async WindowIsMaximised() { return this.geometry.maximised; },
++};
++lateWindow.runtime = injectedHost;
++const injected = getWailsWindowStateRuntime();
++ok(injected !== null, "late Wails runtime injection is discovered at use time");
++if (injected) {
++  ok((await injected.WindowGetSize()).w === 1200
++    && (await injected.WindowGetPosition()).x === 80
++    && await injected.WindowIsMaximised(), "geometry adapter preserves the host method receiver");
++}
++if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
++else Reflect.deleteProperty(globalThis, "window");
++
+ if (failed > 0) process.exit(1);
+diff --git a/desktop/frontend/src/app-runtime/useNativeSettingsEvent.ts b/desktop/frontend/src/app-runtime/useNativeSettingsEvent.ts
+index 35acb78f4..6d1910112 100644
+--- a/desktop/frontend/src/app-runtime/useNativeSettingsEvent.ts
++++ b/desktop/frontend/src/app-runtime/useNativeSettingsEvent.ts
+@@ -1,5 +1,6 @@
+ import { useEffect } from "react";
+ import { useAppNavigationStore } from "../store/appNavigation";
++import { onDesktopOpenSettings } from "../lib/bridge";
+ 
+ export function useNativeSettingsEvent(input: {
+   closeTransientOverlays: () => void;
+@@ -7,8 +8,7 @@ export function useNativeSettingsEvent(input: {
+ }) {
+   const { closeTransientOverlays, setSettingsTarget } = input;
+   useEffect(() => {
+-    if (typeof window === "undefined" || !window.runtime) return;
+-    return window.runtime.EventsOn("app:open-settings", () => {
++    return onDesktopOpenSettings(() => {
+       closeTransientOverlays();
+       setSettingsTarget(useAppNavigationStore.getState().lastSettingsTarget);
+     });
+diff --git a/desktop/frontend/src/components/DesktopCloseBehaviorHint.tsx b/desktop/frontend/src/components/DesktopCloseBehaviorHint.tsx
+index c3480c491..f4fd9d2e3 100644
+--- a/desktop/frontend/src/components/DesktopCloseBehaviorHint.tsx
++++ b/desktop/frontend/src/components/DesktopCloseBehaviorHint.tsx
+@@ -1,5 +1,5 @@
+ import { useEffect, useState } from "react";
+-import { app, type DesktopShellStatusView } from "../lib/bridge";
++import { app, onDesktopShellStatus, type DesktopShellStatusView } from "../lib/bridge";
+ 
+ export function DesktopCloseBehaviorHint({
+   backgroundSelected,
+@@ -14,20 +14,27 @@ export function DesktopCloseBehaviorHint({
+   useEffect(() => {
+     let active = true;
+     const update = (value: unknown) => {
+-      if (!active || !value || typeof value !== "object") return;
++      if (!active || !value || typeof value !== "object") return false;
+       const candidate = value as Partial<DesktopShellStatusView>;
+       setStatus({
+         trayState: candidate.trayState === "ready" || candidate.trayState === "unavailable" ? candidate.trayState : "probing",
+         backgroundCloseAvailable: candidate.backgroundCloseAvailable === true,
+         reason: typeof candidate.reason === "string" ? candidate.reason : undefined,
+       });
++      return true;
+     };
++    let eventRevision = 0;
++    const off = onDesktopShellStatus((value) => {
++      if (update(value)) eventRevision++;
++    });
++    const snapshotRevision = eventRevision;
+     const getStatus = app.GetDesktopShellStatus;
+-    if (typeof getStatus === "function") void getStatus.call(app).then(update).catch(() => undefined);
+-    const off = window.runtime?.EventsOn("desktop:shell-status", update);
++    if (typeof getStatus === "function") void getStatus.call(app).then((value) => {
++      if (eventRevision === snapshotRevision) update(value);
++    }).catch(() => undefined);
+     return () => {
+       active = false;
+-      off?.();
++      off();
+     };
+   }, []);
+   if (!backgroundSelected || !status || status.backgroundCloseAvailable) return hint;
+diff --git a/desktop/frontend/src/lib/bridge.ts b/desktop/frontend/src/lib/bridge.ts
+index 6484bb88d..43efad9f6 100644
+--- a/desktop/frontend/src/lib/bridge.ts
++++ b/desktop/frontend/src/lib/bridge.ts
+@@ -799,6 +799,27 @@ function getMock(): AppBindings {
+   return mockSingleton;
+ }
+ 
++// Fixed host events stay at the Wails adapter boundary. Tauri's separate
++// startup graph uses its native host listener; browser preview has no host.
++function onDesktopHostEvent(name: "app:open-settings" | "desktop:shell-status", cb: (...data: unknown[]) => void): () => void {
++  if (typeof window === "undefined" || !window.runtime?.EventsOn) return () => {};
++  let active = true;
++  const off = window.runtime.EventsOn(name, (...data) => { if (active) cb(...data); });
++  return () => {
++    if (!active) return;
++    active = false;
++    off();
++  };
++}
++
++export function onDesktopOpenSettings(cb: () => void): () => void {
++  return onDesktopHostEvent("app:open-settings", cb);
++}
++
++export function onDesktopShellStatus(cb: (payload: unknown) => void): () => void {
++  return onDesktopHostEvent("desktop:shell-status", cb);
++}
++
+ // onEvent subscribes to the agent's typed event stream; returns an unsubscribe.
+ export function onEvent(cb: (e: WireEvent) => void): () => void {
+   if (realApp() && typeof window !== "undefined" && window.runtime) {
+diff --git a/desktop/frontend/src/lib/clipboard.ts b/desktop/frontend/src/lib/clipboard.ts
+index fae597ac5..b4d739a11 100644
+--- a/desktop/frontend/src/lib/clipboard.ts
++++ b/desktop/frontend/src/lib/clipboard.ts
+@@ -1,4 +1,5 @@
+ import { isTauri } from "@tauri-apps/api/core";
++import { readWailsClipboardText, writeWailsClipboardText } from "./wailsDesktopRuntime";
+ 
+ // Native Tauri clipboard access is limited to text in the main window. Browser
+ // and Wails keep their existing fallbacks; only explicit user actions read it.
+@@ -24,7 +25,7 @@ export async function writeClipboardText(value: string): Promise<boolean> {
+     // Permission denied or unavailable — try the Wails bridge.
+   }
+   try {
+-    if (typeof window !== "undefined" && (await window.runtime?.ClipboardSetText?.(value))) {
++    if (await writeWailsClipboardText(value)) {
+       return true;
+     }
+   } catch {
+@@ -56,9 +57,7 @@ export async function readClipboardTextOrThrow(): Promise<string> {
+     // Permission denied or unavailable.
+   }
+   try {
+-    if (typeof window !== "undefined" && window.runtime?.ClipboardGetText) {
+-      return await window.runtime.ClipboardGetText();
+-    }
++    return await readWailsClipboardText();
+   } catch {
+     // No readable clipboard source.
+   }
+diff --git a/desktop/frontend/src/lib/tauriBridge.ts b/desktop/frontend/src/lib/tauriBridge.ts
+index b33b02897..9c02cece5 100644
+--- a/desktop/frontend/src/lib/tauriBridge.ts
++++ b/desktop/frontend/src/lib/tauriBridge.ts
+@@ -1165,6 +1165,12 @@ export async function setTauriDesktopLanguage(language: LangPref): Promise<Tauri
+   return invoke<TauriDesktopPreferences>("set_desktop_language", { language });
+ }
+ 
++/** Resolved UI locale, including Auto; does not change the saved language. */
++export async function setTauriTrayLocale(locale: "en" | "zh" | "zh-TW"): Promise<void> {
++  requireTauri();
++  await invoke<void>("set_tray_locale", { locale });
++}
++
+ export async function setTauriDesktopCurrency(currency: "" | "CNY" | "USD"): Promise<TauriDesktopPreferences> {
+   requireTauri();
+   return invoke<TauriDesktopPreferences>("set_desktop_currency", { currency });
+diff --git a/desktop/frontend/src/lib/windowState.ts b/desktop/frontend/src/lib/windowState.ts
+index 6c5440a86..8759c51b1 100644
+--- a/desktop/frontend/src/lib/windowState.ts
++++ b/desktop/frontend/src/lib/windowState.ts
+@@ -9,6 +9,7 @@
+ 
+ import { useEffect } from "react";
+ import { app } from "./bridge";
++import { getWailsWindowStateRuntime, type WindowStateRuntime } from "./wailsDesktopRuntime";
+ 
+ export interface WindowStateSnapshot {
+   width: number;
+@@ -18,12 +19,6 @@ export interface WindowStateSnapshot {
+   maximised: boolean;
+ }
+ 
+-interface WindowStateRuntime {
+-  WindowGetSize(): Promise<{ w: number; h: number }>;
+-  WindowGetPosition(): Promise<{ x: number; y: number }>;
+-  WindowIsMaximised(): Promise<boolean>;
+-}
+-
+ // Serialize capture + persistence as one operation. Resize, polling, and
+ // beforeunload can all request a save while an earlier Wails call is still in
+ // flight; a queue prevents an older completion from overwriting a newer
+@@ -33,6 +28,7 @@ interface WindowStateRuntime {
+ export function createWindowStateSaver(
+   runtime: WindowStateRuntime,
+   persist: (state: WindowStateSnapshot) => Promise<void>,
++  signal?: AbortSignal,
+ ): () => Promise<void> {
+   let lastState = "";
+   let queue = Promise.resolve();
+@@ -40,9 +36,13 @@ export function createWindowStateSaver(
+   return () => {
+     queue = queue.then(async () => {
+       try {
++        if (signal?.aborted) return;
+         const size = await runtime.WindowGetSize();
++        if (signal?.aborted) return;
+         const pos = await runtime.WindowGetPosition();
++        if (signal?.aborted) return;
+         const maximised = await runtime.WindowIsMaximised();
++        if (signal?.aborted) return;
+         const state = { width: size.w, height: size.h, x: pos.x, y: pos.y, maximised };
+         const json = JSON.stringify(state);
+         if (json === lastState) return;
+@@ -58,14 +58,15 @@ export function createWindowStateSaver(
+ 
+ export function useWindowStatePersistence() {
+   useEffect(() => {
+-    const runtime = typeof window !== "undefined" ? window.runtime : undefined;
+-    if (!runtime?.WindowGetSize || !runtime.WindowGetPosition || !runtime.WindowIsMaximised) return;
+-    const { WindowGetSize, WindowGetPosition, WindowIsMaximised } = runtime;
++    const runtime = getWailsWindowStateRuntime();
++    if (!runtime) return;
++    const lifetime = new AbortController();
+ 
+     let timer: ReturnType<typeof setInterval>;
+     const save = createWindowStateSaver(
+-      { WindowGetSize, WindowGetPosition, WindowIsMaximised },
++      runtime,
+       (state) => app.SaveWindowState(state),
++      lifetime.signal,
+     );
+ 
+     // Debounced save on resize (500ms after the last resize event).
+@@ -85,6 +86,7 @@ export function useWindowStatePersistence() {
+     window.addEventListener("beforeunload", onBeforeUnload);
+ 
+     return () => {
++      lifetime.abort();
+       clearInterval(timer);
+       clearTimeout(debounce);
+       window.removeEventListener("resize", onResize);
+diff --git a/desktop/frontend/src/tauri/TauriChatWorkspace.tsx b/desktop/frontend/src/tauri/TauriChatWorkspace.tsx
+index 81965366f..39b9cfceb 100644
+--- a/desktop/frontend/src/tauri/TauriChatWorkspace.tsx
++++ b/desktop/frontend/src/tauri/TauriChatWorkspace.tsx
+@@ -104,6 +104,7 @@ import {
+   attachTauriFile,
+   chooseTauriAttachmentFiles,
+   chooseTauriWorkspaceRoot,
++  setTauriTrayLocale,
+   deleteTauriBridgeSession,
+   forgetTauriWorkbenchSession,
+   importTauriStableProjectFolders,
+@@ -408,6 +409,15 @@ export function TauriSessionPreview() {
+   const { locale, pref: languagePref, setPref: setLanguagePref } = useI18n();
+   const t = useT();
+   const { showToast } = useToast();
++  useEffect(() => {
++    let active = true;
++    void setTauriTrayLocale(locale).catch(() => {
++      if (active) showToast(locale === "en"
++        ? "Could not update the tray language. Restart Preview and retry."
++        : "托盘语言未能更新，请重启 Preview 后重试。", "warn");
++    });
++    return () => { active = false; };
++  }, [locale, showToast]);
+   const notificationFailureShown = useRef(false);
+   const notificationLocale = useRef(locale);
+   useLayoutEffect(() => { notificationLocale.current = locale; }, [locale]);
+diff --git a/desktop/tauri/README.md b/desktop/tauri/README.md
+index c9c77a8b4..a4db1302d 100644
+--- a/desktop/tauri/README.md
++++ b/desktop/tauri/README.md
+@@ -9,6 +9,25 @@ token 不放在 macOS 进程列表可见的启动环境或命令行中。
+ 
+ ## 当前平台范围
+ 
++安装包 D 门禁可用 `python3 -B tools/tauri/verify-installed-d.py '/path/to/Reasonix Tauri Preview.app' --output /private/tmp/new-evidence` 从仓库根串行复验。
++可用 `--gates dialog-cancel package` 独立复验原生面板取消与正常启动退出；该切片包含菜单/文本剪贴板前置检查，不绕过或替代完整窗口门禁。摘要计算兼容系统 Python 3.9。
++未跟踪的 desktop/internal/cmd 代码也会单独保存快照与摘要；只保存代码扩展名，不复制环境文件、私有档案或证据目录。
++输出目录必须全新；脚本记录候选摘要、签名、验收源码和逐项结果，遇到失败停止，后续项保持未运行。
++程序化验收不代表物理交互或 D/E 整组完成；当前同包复验与剩余范围见
++[2026-10-02 启动恢复证据](../../docs/tauri/evidence/2026-10-02-d-startup-refusal/README.md)。
++新增 `identity` 门禁覆盖托管/显式档案的身份元数据拒绝与备份恢复；本候选完整窗口
++仍在 Settings 最小化前提失败，不能宣称 D 已稳定或已验收。
++随后增加 opt-in 原生呈现诊断；最新诊断包的原 API 与独立 `--presented` 探针仍未通过，
++正常 package smoke 通过。具体时序和不同实验范围见
++[窗口诊断证据](../../docs/tauri/evidence/2026-10-02-d-minimize-presentation/README.md)，不代替原完整窗口门禁。
++独立 `--direct-only` 诊断随后确认实际主线程直接 NSWindow 调用仍失败，而最小 Cocoa
++程序通过；不能只归因于 Tauri 调度。当前包摘要和精确范围见
++[直接调用证据](../../docs/tauri/evidence/2026-10-02-d-direct-minimize/README.md)。
++本轮另收敛遗留 Wails 几何/剪贴板直连，并取消 hook 卸载后尚未提交的几何观察。
++最新包独立菜单/剪贴板 4/4 与正常双档案 smoke 通过；完整窗口失败仍保留。
++具体回归、未提交适配器快照和取消边界见
++[runtime 生命周期证据](../../docs/tauri/evidence/2026-10-02-d-runtime-lifecycle/README.md)。
++
+ 2026-09-30 用户确认本轮只推进 macOS 的改造、测试和发布候选验收。Windows/Linux
+ 因缺少实际测试环境延期；已有代码保留，但不承诺平台支持，也不要求其原生验收完成
+ 后才能推进 macOS。D→E 的顺序及 macOS 待验项以 [迁移清单](../../docs/tauri/API_SURFACE_AUDIT.md) 为准。
+@@ -19,6 +38,12 @@ Preview 使用 Tauri 应用数据目录下私有的 `REASONIX_HOME`。因此它
+ 写入稳定 Wails 客户端的配置、会话和缓存；稳定版可与它并存。导入稳定版数据会作为单独的
+ “先备份、再确认”的功能实现。开发者显式传入的 `REASONIX_HOME` 仍是有意识的覆盖选择。
+ 
++默认 `reasonix-core` 叶目录只接受普通目录；符号链接、悬空链接或同名文件会在创建
++WebView/sidecar 之前拒绝，输出恢复说明并以退出码 1 结束，避免链接到旧 Wails 档案后
++静默改写原件。新建目录为 0700。显式根仍遵循既有覆盖选择，不能据此宣称所有旧版
++共享目录已互斥。真实 DMG 安装拒绝、正常启动/导入与 12 项启动中断证据见
++[本轮目录边界验收](../../docs/tauri/evidence/2026-10-02-d-managed-root/README.md)。
++
+ Go core 解析状态根和缓存根时，`REASONIX_STATE_HOME`、`REASONIX_CACHE_HOME` 分别优先于 `REASONIX_HOME`。托管的
+ Preview 在启动时会清除继承来的这两个变量，否则它们会覆盖上面的私有
+ `REASONIX_HOME`，把 Preview 的状态或缓存写入外部目录——这个错误是静默的，
+diff --git a/desktop/tauri/src/data_profile.rs b/desktop/tauri/src/data_profile.rs
+index 9b5062a10..dafe83643 100644
+--- a/desktop/tauri/src/data_profile.rs
++++ b/desktop/tauri/src/data_profile.rs
+@@ -79,14 +79,7 @@ pub fn configure_preview_profile(app: &tauri::App) -> Result<PreviewProfile, Str
+         .path()
+         .app_data_dir()
+         .map_err(|error| format!("resolve Tauri preview data directory: {error}"))?;
+-    let home = preview_home(&app_data);
+-    fs::create_dir_all(&home).map_err(|error| {
+-        format!(
+-            "create Tauri preview data directory {}: {error}",
+-            home.display()
+-        )
+-    })?;
+-
++    let home = prepare_managed_home(&app_data)?;
+     // The Go core resolves state and cache overrides before REASONIX_HOME.
+     // Inherited values would route preview writes outside its private home.
+     enable_managed_profile(&home);
+@@ -97,6 +90,27 @@ pub fn configure_preview_profile(app: &tauri::App) -> Result<PreviewProfile, Str
+     })
+ }
+ 
++fn prepare_managed_home(app_data: &Path) -> Result<PathBuf, String> {
++    let home = preview_home(app_data);
++    fs::create_dir_all(app_data)
++        .map_err(|error| format!("create Tauri application data directory: {error}"))?;
++    // create_dir_all follows an existing link and would silently select the
++    // stable Wails profile as the managed Preview's writable storage root.
++    // Create only this leaf, then inspect without following it, including a
++    // dangling link or a non-directory left by an earlier failed setup.
++    match create_private_directory(&home) {
++        Ok(()) => {}
++        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
++        Err(error) => return Err(format!("create Tauri preview data directory: {error}")),
++    }
++    let metadata = fs::symlink_metadata(&home)
++        .map_err(|_| "Preview data directory is unavailable; check its permissions and restart")?;
++    if metadata.file_type().is_symlink() || !metadata.is_dir() {
++        return Err("managed Preview data directory must be an ordinary directory; move the link or conflicting file aside and restart with a separate Preview directory".into());
++    }
++    Ok(home)
++}
++
+ /// Points the Go core at one private state root and drops inherited overrides.
+ ///
+ /// Split out from `configure_preview_profile` so the isolation rule is directly
+@@ -536,6 +550,77 @@ mod tests {
+         );
+     }
+ 
++    #[cfg(unix)]
++    #[test]
++    fn managed_profile_rejects_linked_legacy_directory_without_touching_originals() {
++        use std::os::unix::fs::{symlink, PermissionsExt};
++        let root = tempfile::tempdir().unwrap();
++        let legacy = root.path().join(".reasonix");
++        fs::create_dir(&legacy).unwrap();
++        let config = legacy.join(CONFIG_FILE);
++        fs::write(&config, b"legacy config canary\n").unwrap();
++        fs::set_permissions(&config, fs::Permissions::from_mode(0o600)).unwrap();
++        let before = fs::metadata(&config).unwrap();
++        let app_data = root.path().join("app-data");
++        fs::create_dir(&app_data).unwrap();
++        let home = preview_home(&app_data);
++        symlink(&legacy, &home).unwrap();
++        assert!(
++            prepare_managed_home(&app_data).is_err(),
++            "managed Preview must not adopt a linked Wails directory"
++        );
++        assert_eq!(fs::read(&config).unwrap(), b"legacy config canary\n");
++        assert_eq!(
++            fs::metadata(&config).unwrap().permissions().mode(),
++            before.permissions().mode()
++        );
++        assert_eq!(
++            fs::metadata(&config).unwrap().modified().unwrap(),
++            before.modified().unwrap()
++        );
++        assert_eq!(fs::read_link(&home).unwrap(), legacy);
++    }
++
++    #[test]
++    fn managed_profile_creates_private_root_and_preserves_existing_profile() {
++        let root = tempfile::tempdir().unwrap();
++        let app_data = root.path().join("new/app-data");
++        let home = prepare_managed_home(&app_data).unwrap();
++        assert_eq!(home, preview_home(&app_data));
++        #[cfg(unix)]
++        {
++            use std::os::unix::fs::PermissionsExt;
++            assert_eq!(
++                fs::metadata(&home).unwrap().permissions().mode() & 0o777,
++                0o700
++            );
++        }
++        let canary = home.join(CONFIG_FILE);
++        fs::write(&canary, b"existing Preview\n").unwrap();
++        assert_eq!(prepare_managed_home(&app_data).unwrap(), home);
++        assert_eq!(fs::read(canary).unwrap(), b"existing Preview\n");
++    }
++
++    #[cfg(unix)]
++    #[test]
++    fn managed_profile_rejects_dangling_link_and_regular_file() {
++        use std::os::unix::fs::symlink;
++        let root = tempfile::tempdir().unwrap();
++        let home = preview_home(root.path());
++        let missing = root.path().join("missing-legacy");
++        symlink(&missing, &home).unwrap();
++        assert!(prepare_managed_home(root.path()).is_err());
++        assert!(
++            !missing.exists(),
++            "rejecting a dangling link must not create its target"
++        );
++        assert_eq!(fs::read_link(&home).unwrap(), missing);
++        fs::remove_file(&home).unwrap();
++        fs::write(&home, b"ordinary file canary\n").unwrap();
++        assert!(prepare_managed_home(root.path()).is_err());
++        assert_eq!(fs::read(&home).unwrap(), b"ordinary file canary\n");
++    }
++
+     #[test]
+     fn import_copies_config_after_creating_a_private_backup() {
+         let root = tempfile::tempdir().expect("temp root");
+diff --git a/desktop/tauri/src/main.rs b/desktop/tauri/src/main.rs
+index 58d7b3c11..2d05dd436 100644
+--- a/desktop/tauri/src/main.rs
++++ b/desktop/tauri/src/main.rs
+@@ -1488,6 +1488,11 @@ fn set_desktop_language(
+     supervisor.set_desktop_language(language)
+ }
+ 
++#[tauri::command]
++fn set_tray_locale(window: tauri::WebviewWindow, locale: String) -> Result<(), String> {
++    window.state::<tray::TrayMenuState>().set_locale(&locale)
++}
++
+ #[tauri::command]
+ fn set_desktop_currency(
+     supervisor: State<'_, BridgeSupervisor>,
+@@ -3599,6 +3604,95 @@ fn apply_menu_zoom(app: &tauri::AppHandle, factor: f64) {
+     }
+ }
+ 
++fn setup_preview(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
++    #[cfg(target_os = "macos")]
++    app.manage(native_window_smoke::WindowSmokeState::default());
++    #[cfg(target_os = "macos")]
++    app.manage(native_clipboard_smoke::ClipboardSmokeState::default());
++    #[cfg(target_os = "macos")]
++    app.manage(native_link_smoke::LinkSmokeState::default());
++    let profile = data_profile::configure_preview_profile(app)
++        .map_err(std::io::Error::other)?;
++    #[cfg(target_os = "macos")]
++    {
++        let origin = ui_origin::PreviewUiOrigin::for_profile(profile.home())
++            .map_err(std::io::Error::other)?;
++        app.manage(origin);
++    }
++    let mut main_config = app.config().app.windows.iter()
++        .find(|config| config.label == "main")
++        .ok_or_else(|| std::io::Error::other("main window configuration missing"))?
++        .clone();
++    #[cfg(all(target_os = "macos", not(debug_assertions)))]
++    { main_config.url = ui_origin::webview_url(app.handle()).map_err(std::io::Error::other)?; }
++    // Keep the established dev-server URL on development builds.
++    let _ = &mut main_config;
++    let main_builder = tauri::WebviewWindowBuilder::from_config(app, &main_config)?;
++    #[cfg(all(target_os = "macos", not(debug_assertions)))]
++    let main_builder = {
++        let origin = app.state::<ui_origin::PreviewUiOrigin>().inner().clone();
++        main_builder.on_navigation(move |url| origin.matches(url))
++    };
++    main_builder.build()?;
++    let window_state = PreviewWindowState::for_app(app)?;
++    let host_preferences = HostPreferences::for_app(app).map_err(std::io::Error::other)?;
++    let workbench_catalog =
++        WorkbenchCatalog::for_app(app).map_err(std::io::Error::other)?;
++    let project_catalog =
++        WorkbenchProjectCatalog::for_app(app).map_err(std::io::Error::other)?;
++    if let Some(window) = app.get_webview_window("main") {
++        window_state.restore(&window);
++        window_state.capture(&window);
++        window
++            .set_zoom(host_preferences.zoom_factor())
++            .map_err(std::io::Error::other)?;
++    }
++    let supervisor = BridgeSupervisor::from_environment(app.handle().clone());
++
++    #[cfg(target_os = "macos")]
++    {
++        let menu = menu::build_app_menu(app)
++            .map_err(|e| std::io::Error::other(e.to_string()))?;
++        app.set_menu(menu)?;
++    }
++
++    tray::create_tray(app)
++        .map_err(|e| std::io::Error::other(e.to_string()))?;
++
++    // Initialize keychain store
++    let keychain = keychain::KeychainStore::for_profile(&profile, app.handle());
++
++    supervisor.start().map_err(std::io::Error::other)?;
++    #[cfg(target_os = "macos")]
++    {
++        let appearance = native_appearance::NativeAppearance::default();
++        if appearance.sync(app.handle(), &supervisor).is_err() {
++            eprintln!("Reasonix could not restore the native appearance; retry appearance settings or restart Preview.");
++        }
++        app.manage(appearance);
++    }
++    if let Err(error) = keychain.restore_provider_api_keys(&supervisor) {
++        // A native credential service can be temporarily unavailable.
++        // Keep the app usable with its existing file-backed settings;
++        // affected credentials remain unavailable until the next
++        // startup or a user saves them again; other entries restore.
++        eprintln!("Reasonix could not restore system keychain credentials: {error}");
++    }
++    let notifications = notifications::NotificationState::for_profile(&profile, &app.config().identifier);
++    app.manage(std::sync::Arc::clone(&notifications));
++    notifications::NotificationState::install(app.handle(), &notifications);
++    app.manage(keychain);
++
++    app.manage(supervisor);
++    app.manage(profile);
++    app.manage(window_state);
++    app.manage(host_preferences);
++    app.manage(workbench_catalog);
++    app.manage(project_catalog);
++    app.manage(SessionShadowSnapshotCache::default());
++    Ok(())
++}
++
+ fn main() {
+     let app = tauri::Builder::default()
+         .register_uri_scheme_protocol("reasonix-preview", |context, request| {
+@@ -3632,91 +3726,13 @@ fn main() {
+         }))
+         .plugin(tauri_plugin_updater::Builder::new().build())
+         .setup(|app| {
+-            #[cfg(target_os = "macos")]
+-            app.manage(native_window_smoke::WindowSmokeState::default());
+-            #[cfg(target_os = "macos")]
+-            app.manage(native_clipboard_smoke::ClipboardSmokeState::default());
+-            #[cfg(target_os = "macos")]
+-            app.manage(native_link_smoke::LinkSmokeState::default());
+-            let profile =
+-                data_profile::configure_preview_profile(app).map_err(std::io::Error::other)?;
+-            #[cfg(target_os = "macos")]
+-            {
+-                let origin = ui_origin::PreviewUiOrigin::for_profile(profile.home())
+-                    .map_err(std::io::Error::other)?;
+-                app.manage(origin);
+-            }
+-            let mut main_config = app.config().app.windows.iter()
+-                .find(|config| config.label == "main")
+-                .ok_or_else(|| std::io::Error::other("main window configuration missing"))?
+-                .clone();
+-            #[cfg(all(target_os = "macos", not(debug_assertions)))]
+-            { main_config.url = ui_origin::webview_url(app.handle()).map_err(std::io::Error::other)?; }
+-            // Keep the established dev-server URL on development builds.
+-            let _ = &mut main_config;
+-            let main_builder = tauri::WebviewWindowBuilder::from_config(app, &main_config)?;
+-            #[cfg(all(target_os = "macos", not(debug_assertions)))]
+-            let main_builder = {
+-                let origin = app.state::<ui_origin::PreviewUiOrigin>().inner().clone();
+-                main_builder.on_navigation(move |url| origin.matches(url))
+-            };
+-            main_builder.build()?;
+-            let window_state = PreviewWindowState::for_app(app)?;
+-            let host_preferences = HostPreferences::for_app(app).map_err(std::io::Error::other)?;
+-            let workbench_catalog =
+-                WorkbenchCatalog::for_app(app).map_err(std::io::Error::other)?;
+-            let project_catalog =
+-                WorkbenchProjectCatalog::for_app(app).map_err(std::io::Error::other)?;
+-            if let Some(window) = app.get_webview_window("main") {
+-                window_state.restore(&window);
+-                window_state.capture(&window);
+-                window
+-                    .set_zoom(host_preferences.zoom_factor())
+-                    .map_err(std::io::Error::other)?;
+-            }
+-            let supervisor = BridgeSupervisor::from_environment(app.handle().clone());
+-
+-            #[cfg(target_os = "macos")]
+-            {
+-                let menu = menu::build_app_menu(app)
+-                    .map_err(|e| std::io::Error::other(e.to_string()))?;
+-                app.set_menu(menu)?;
+-            }
+-
+-            tray::create_tray(app)
+-                .map_err(|e| std::io::Error::other(e.to_string()))?;
+-
+-            // Initialize keychain store
+-            let keychain = keychain::KeychainStore::for_profile(&profile, app.handle());
+-
+-            supervisor.start().map_err(std::io::Error::other)?;
+-            #[cfg(target_os = "macos")]
+-            {
+-                let appearance = native_appearance::NativeAppearance::default();
+-                if appearance.sync(app.handle(), &supervisor).is_err() {
+-                    eprintln!("Reasonix could not restore the native appearance; retry appearance settings or restart Preview.");
+-                }
+-                app.manage(appearance);
+-            }
+-            if let Err(error) = keychain.restore_provider_api_keys(&supervisor) {
+-                // A native credential service can be temporarily unavailable.
+-                // Keep the app usable with its existing file-backed settings;
+-                // affected credentials remain unavailable until the next
+-                // startup or a user saves them again; other entries restore.
+-                eprintln!("Reasonix could not restore system keychain credentials: {error}");
+-            }
+-            let notifications = notifications::NotificationState::for_profile(&profile, &app.config().identifier);
+-            app.manage(std::sync::Arc::clone(&notifications));
+-            notifications::NotificationState::install(app.handle(), &notifications);
+-            app.manage(keychain);
+-
+-            app.manage(supervisor);
+-            app.manage(profile);
+-            app.manage(window_state);
+-            app.manage(host_preferences);
+-            app.manage(workbench_catalog);
+-            app.manage(project_catalog);
+-            app.manage(SessionShadowSnapshotCache::default());
++            // Tauri executes setup inside its event-loop callback and panics
++            // on a returned Err. Handle initialization refusals here, including
++            // damaged profile identity, rather than aborting the application.
++            setup_preview(app).unwrap_or_else(|error| {
++                eprintln!("Reasonix could not start: {error}");
++                std::process::exit(1);
++            });
+             Ok(())
+         })
+         .on_window_event(|window, event| {
+@@ -3934,6 +3950,7 @@ fn main() {
+             set_desktop_terminal_theme,
+             set_desktop_appearance,
+             set_desktop_language,
++            set_tray_locale,
+             set_desktop_currency,
+             set_default_model,
+             set_model_role,
+@@ -3995,7 +4012,11 @@ fn main() {
+             }
+         })
+         .build(tauri::generate_context!())
+-        .expect("failed to build Reasonix Tauri host");
++        .unwrap_or_else(|error| {
++            // App construction errors are ordinary startup failures.
++            eprintln!("Reasonix could not start: {error}");
++            std::process::exit(1);
++        });
+     app.run(|app, event| {
+         #[cfg(target_os = "macos")]
+         if matches!(event, tauri::RunEvent::Reopen { .. }) {
+diff --git a/desktop/tauri/src/native_menu_smoke.rs b/desktop/tauri/src/native_menu_smoke.rs
+index 4e0fa6cb0..22c2add6f 100644
+--- a/desktop/tauri/src/native_menu_smoke.rs
++++ b/desktop/tauri/src/native_menu_smoke.rs
+@@ -285,22 +285,39 @@ pub fn settings(app: &AppHandle, phase: &str) -> Result<(), String> {
+                     .map_err(|_| "read visibility".into())
+             })?;
+         }
+-        "menu-settings-minimized" | "menu-settings-native-minimized" => {
++        "menu-settings-minimized" | "menu-settings-native-minimized" | "menu-settings-presented-minimized" | "menu-settings-direct-minimized" => {
+             // AppKit presentation is asynchronous: visibility alone can be
+             // true before the restored window becomes key. Require the same
+             // real active-window precondition as the installed Minimize role
+             // before either API path requests its native transition.
++            let require_presentation = phase == "menu-settings-presented-minimized";
+             wait_for(
+                 app,
+                 "active key settings window before minimizing",
+-                |window| {
++                move |window| {
+                     let state = crate::native_window_smoke::snapshot(window)?;
+-                    Ok(state["applicationActive"] == true && state["nativeKeyWindow"] == true)
++                    let presented = !require_presentation
++                        || (state["nativeOcclusionVisible"] == true && state["applicationOcclusionVisible"] == true);
++                    Ok(state["applicationActive"] == true && state["nativeKeyWindow"] == true && presented)
+                 },
+             )?;
+             crate::native_window_smoke::record(app, "settings-minimize-ready")?;
+             if phase == "menu-settings-native-minimized" {
+                 minimize_from_menu(app)?;
++            } else if phase == "menu-settings-direct-minimized" {
++                // Diagnostic control: use the same live NSWindow method as
++                // Tao, on the main thread, without its message dispatcher or
++                // the menu responder chain. Never used by the normal shell.
++                on_main(app, |_, window| {
++                    MainThreadMarker::new().ok_or("direct minimize requires main thread")?;
++                    let pointer = window.ns_window().map_err(|_| "direct window handle unavailable")?;
++                    if pointer.is_null() { return Err("direct window handle missing".into()); }
++                    // SAFETY: Live Tauri NSWindow borrowed on the AppKit main
++                    // thread; neither the pointer nor native object escapes.
++                    let native = unsafe { &*pointer.cast::<objc2_app_kit::NSWindow>() };
++                    native.miniaturize(Some(native));
++                    Ok(())
++                })?;
+             } else {
+                 on_main(app, |_, window| {
+                     window
+@@ -315,7 +332,7 @@ pub fn settings(app: &AppHandle, phase: &str) -> Result<(), String> {
+                     .map_err(|_| "read minimized state".into())
+             })?;
+             crate::native_window_smoke::record(app, "settings-minimized")?;
+-            if phase == "menu-settings-native-minimized" {
++            if matches!(phase, "menu-settings-native-minimized" | "menu-settings-direct-minimized") {
+                 wait_for(app, "native menu minimization events", |window| {
+                     let state = crate::native_window_smoke::snapshot(window)?;
+                     Ok(state["willMiniaturize"]
+@@ -353,7 +370,7 @@ pub fn settings(app: &AppHandle, phase: &str) -> Result<(), String> {
+             && !NSApplication::sharedApplication(MainThreadMarker::new().ok_or("not main thread")?)
+                 .isHidden())
+     })?;
+-    if phase == "menu-settings-native-minimized" {
++    if matches!(phase, "menu-settings-native-minimized" | "menu-settings-direct-minimized") {
+         wait_for(app, "native menu deminiaturization event", |window| {
+             Ok(
+                 crate::native_window_smoke::snapshot(window)?["didDeminiaturize"]
+diff --git a/desktop/tauri/src/native_window_smoke.rs b/desktop/tauri/src/native_window_smoke.rs
+index 8b5496aac..da59e57dd 100644
+--- a/desktop/tauri/src/native_window_smoke.rs
++++ b/desktop/tauri/src/native_window_smoke.rs
+@@ -32,7 +32,7 @@ pub struct WindowSmokeState {
+     transitions: Arc<WindowTransitions>,
+ }
+ 
+-const TRANSITIONS: [&str; 7] = [
++const TRANSITIONS: [&str; 10] = [
+     "will-miniaturize",
+     "did-miniaturize",
+     "did-deminiaturize",
+@@ -40,17 +40,27 @@ const TRANSITIONS: [&str; 7] = [
+     "resigned-key",
+     "appearance-request",
+     "appearance-skipped",
++    "occlusion-changed",
++    "application-became-active",
++    "application-resigned-active",
+ ];
+ 
+-#[derive(Default)]
+ struct WindowTransitions {
+     record: Mutex<TransitionRecord>,
++    started: Instant,
++}
++
++impl Default for WindowTransitions {
++    fn default() -> Self {
++        Self { record: Mutex::default(), started: Instant::now() }
++    }
+ }
+ 
+ #[derive(Clone, Default)]
+ struct TransitionRecord {
+-    counts: [usize; 7],
++    counts: [usize; 10],
+     recent: Vec<&'static str>,
++    timed: Vec<serde_json::Value>,
+ }
+ 
+ impl WindowTransitions {
+@@ -59,8 +69,13 @@ impl WindowTransitions {
+             record.counts[index] += 1;
+             if record.recent.len() == 32 {
+                 record.recent.remove(0);
++                record.timed.remove(0);
+             }
+             record.recent.push(TRANSITIONS[index]);
++            record.timed.push(serde_json::json!({
++                "transition": TRANSITIONS[index],
++                "elapsedMs": self.started.elapsed().as_millis(),
++            }));
+         }
+     }
+ }
+@@ -77,6 +92,9 @@ fn install_window_observers(app: &AppHandle) -> Result<(), String> {
+         NSWindow, NSWindowDidBecomeKeyNotification, NSWindowDidDeminiaturizeNotification,
+         NSWindowDidMiniaturizeNotification, NSWindowDidResignKeyNotification,
+         NSWindowWillMiniaturizeNotification,
++        NSWindowDidChangeOcclusionStateNotification,
++        NSApplication, NSApplicationDidBecomeActiveNotification,
++        NSApplicationDidResignActiveNotification,
+     };
+     use objc2_foundation::{NSNotification, NSNotificationCenter};
+     objc2::MainThreadMarker::new().ok_or("window observers require the main thread")?;
+@@ -95,11 +113,12 @@ fn install_window_observers(app: &AppHandle) -> Result<(), String> {
+     let native = unsafe { &*pointer.cast::<NSWindow>() };
+     let names = unsafe {
+         [
+-            NSWindowWillMiniaturizeNotification,
+-            NSWindowDidMiniaturizeNotification,
+-            NSWindowDidDeminiaturizeNotification,
+-            NSWindowDidBecomeKeyNotification,
+-            NSWindowDidResignKeyNotification,
++            (0, NSWindowWillMiniaturizeNotification),
++            (1, NSWindowDidMiniaturizeNotification),
++            (2, NSWindowDidDeminiaturizeNotification),
++            (3, NSWindowDidBecomeKeyNotification),
++            (4, NSWindowDidResignKeyNotification),
++            (7, NSWindowDidChangeOcclusionStateNotification),
+         ]
+     };
+     WINDOW_OBSERVERS.with(|observers| {
+@@ -108,7 +127,7 @@ fn install_window_observers(app: &AppHandle) -> Result<(), String> {
+             return Err("window observers already registered".into());
+         }
+         let center = NSNotificationCenter::defaultCenter();
+-        for (index, name) in names.into_iter().enumerate() {
++        for (index, name) in names {
+             let counters = Arc::clone(&state.transitions);
+             let callback =
+                 RcBlock::new(move |_: std::ptr::NonNull<NSNotification>| counters.note(index));
+@@ -124,6 +143,22 @@ fn install_window_observers(app: &AppHandle) -> Result<(), String> {
+             };
+             observers.push(observer);
+         }
++        let application = NSApplication::sharedApplication(
++            objc2::MainThreadMarker::new().ok_or("application observer requires main thread")?,
++        );
++        let app_names = unsafe {
++            [(8, NSApplicationDidBecomeActiveNotification), (9, NSApplicationDidResignActiveNotification)]
++        };
++        for (index, name) in app_names {
++            let counters = Arc::clone(&state.transitions);
++            let callback = RcBlock::new(move |_: std::ptr::NonNull<NSNotification>| counters.note(index));
++            // SAFETY: Filter by this process's NSApplication on its main
++            // thread; callbacks retain only thread-safe counters.
++            let observer = unsafe {
++                center.addObserverForName_object_queue_usingBlock(Some(name), Some(&application), None, &callback)
++            };
++            observers.push(observer);
++        }
+         Ok(())
+     })
+ }
+@@ -256,7 +291,7 @@ pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, Stri
+         .lock()
+         .map_err(|_| "native transition record unavailable")?
+         .clone();
+-    Ok(serde_json::json!({
++    let mut snapshot = serde_json::json!({
+         "geometry": Geometry::read(window)?,
+         "monitors": monitors,
+         "visible": window.is_visible().map_err(|_| "read visibility")?,
+@@ -300,7 +335,18 @@ pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, Stri
+             .map(|state| state.reopened.load(Ordering::SeqCst)),
+         "mainPageFinished": window.app_handle().try_state::<WindowSmokeState>()
+             .is_some_and(|state| state.main_loaded.load(Ordering::SeqCst)),
+-    }))
++    });
++    let presentation = serde_json::json!({
++        "nativeWindowNumber": native.windowNumber(),
++        "nativeWindowLevel": native.level(),
++        "nativeTimedTransitions": transitions.timed,
++        "occlusionChanges": transitions.counts[7],
++        "applicationBecameActive": transitions.counts[8],
++        "applicationResignedActive": transitions.counts[9],
++    });
++    snapshot.as_object_mut().ok_or("invalid window snapshot")?
++        .extend(presentation.as_object().ok_or("invalid presentation snapshot")?.clone());
++    Ok(snapshot)
+ }
+ 
+ pub(crate) fn record(app: &AppHandle, stage: &'static str) -> Result<(), String> {
+@@ -677,6 +723,30 @@ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
+             record(app, "display-secondary-restored")?;
+         }
+         "menu-shortcuts" => crate::native_menu_smoke::shortcuts(app)?,
++        "tray-language" => {
++            let before = app.state::<crate::bridge::BridgeSupervisor>().desktop_preferences()?.language;
++            for (locale, expected) in [("en", ("Open", "Quit")), ("zh", ("打开", "退出")), ("zh-TW", ("打开", "退出"))] {
++                on_main(app, move |_, window| {
++                    crate::set_tray_locale(window.clone(), locale.into())?;
++                    let actual = window.state::<crate::tray::TrayMenuState>().labels()?;
++                    if actual != (expected.0.into(), expected.1.into()) {
++                        return Err("native tray titles did not match resolved language".into());
++                    }
++                    Ok(())
++                })?;
++            }
++            on_main(app, |_, window| {
++                let state = window.state::<crate::tray::TrayMenuState>();
++                let before = state.labels()?;
++                if crate::set_tray_locale(window.clone(), "invalid".into()).is_ok() || state.labels()? != before {
++                    return Err("invalid tray locale changed native labels".into());
++                }
++                Ok(())
++            })?;
++            if app.state::<crate::bridge::BridgeSupervisor>().desktop_preferences()?.language != before {
++                return Err("runtime tray locale modified the persisted language".into());
++            }
++        }
+         "notification-delivery" => crate::notifications::delivery_smoke(app)?,
+         "task-host-death" => crate::native_task_smoke::host_death(app, &directory)?,
+         "ui-legacy-read" => crate::native_ui_storage_smoke::legacy_read(app)?,
+@@ -698,6 +768,8 @@ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
+         "menu-settings-hidden"
+         | "menu-settings-minimized"
+         | "menu-settings-native-minimized"
++        | "menu-settings-presented-minimized"
++        | "menu-settings-direct-minimized"
+         | "menu-settings-app-hidden" => crate::native_menu_smoke::settings(app, phase)?,
+         "application-hide" => application_hide(app, &directory)?,
+         "background-close" => background_close(app, &directory, false)?,
+diff --git a/desktop/tauri/src/tray.rs b/desktop/tauri/src/tray.rs
+index c55e5a596..e6b11b1c3 100644
+--- a/desktop/tauri/src/tray.rs
++++ b/desktop/tauri/src/tray.rs
+@@ -1,9 +1,37 @@
+ use tauri::{
+-    menu::{MenuBuilder, MenuItemBuilder},
++    menu::{MenuBuilder, MenuItem, MenuItemBuilder},
+     tray::{TrayIconBuilder, TrayIconEvent},
+     Manager,
+ };
+ 
++pub struct TrayMenuState {
++    open: MenuItem<tauri::Wry>,
++    quit: MenuItem<tauri::Wry>,
++}
++
++impl TrayMenuState {
++    pub fn set_locale(&self, locale: &str) -> Result<(), String> {
++        let (open, quit) = match locale {
++            "zh" | "zh-TW" => ("打开", "退出"),
++            "en" => ("Open", "Quit"),
++            _ => return Err("unsupported tray language".into()),
++        };
++        let previous_open = self.open.text().map_err(|_| "read tray language")?;
++        self.open.set_text(open).map_err(|_| "update tray language")?;
++        if self.quit.set_text(quit).is_err() {
++            let _ = self.open.set_text(previous_open);
++            return Err("update tray language; restart Preview and retry".into());
++        }
++        Ok(())
++    }
++
++    #[cfg(target_os = "macos")]
++    pub(crate) fn labels(&self) -> Result<(String, String), String> {
++        Ok((self.open.text().map_err(|_| "read tray open title")?,
++            self.quit.text().map_err(|_| "read tray quit title")?))
++    }
++}
++
+ pub fn show_main_window(app: &tauri::AppHandle) {
+     #[cfg(target_os = "macos")]
+     crate::native_window_smoke::observe_restore(app, false);
+@@ -29,18 +57,12 @@ pub fn show_main_window(app: &tauri::AppHandle) {
+ }
+ 
+ pub fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
++    let open = MenuItemBuilder::new("Open").id("tray_show").build(app)?;
++    let quit = MenuItemBuilder::new("Quit").id("tray_quit").build(app)?;
+     let menu = MenuBuilder::new(app)
+-        .item(
+-            &MenuItemBuilder::new("Show Reasonix")
+-                .id("tray_show")
+-                .build(app)?,
+-        )
++        .item(&open)
+         .separator()
+-        .item(
+-            &MenuItemBuilder::new("Quit Reasonix")
+-                .id("tray_quit")
+-                .build(app)?,
+-        )
++        .item(&quit)
+         .build()?;
+     let _tray = TrayIconBuilder::new()
+         .icon(app.default_window_icon().expect("no default icon").clone())
+@@ -69,5 +91,7 @@ pub fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error + S
+         })
+         .build(app)?;
+ 
++    app.manage(TrayMenuState { open, quit });
++
+     Ok(())
+ }
+diff --git a/docs/tauri/API_SURFACE_AUDIT.md b/docs/tauri/API_SURFACE_AUDIT.md
+index 03a9a410e..73abde9f2 100644
+--- a/docs/tauri/API_SURFACE_AUDIT.md
++++ b/docs/tauri/API_SURFACE_AUDIT.md
+@@ -67,6 +67,68 @@ desktop API contract (保留 app/event helper 的调用形状)
+ 
+ 按 D→E 顺序推进。D 验收且 Preview 稳定后再推进 E；正式发布和默认下载项切换另行授权。
+ 
++**2026-10-02 当前候选独立异常退出：** 同一 `b95b38c0` 包的托管/显式 × 空闲/实际流式
++任务 × SIGTERM/SIGKILL 共 8/8 通过，sidecar kernel 正常退出、上游断开、原件及
++重启身份检查通过。独立运行不覆盖完整窗口批次中 lifetime 未执行的记录；runner
++另补齐未跟踪生产代码快照及摘要，详见 [同包退出证据](evidence/2026-10-02-d-current-lifetime/README.md)。
++
++**2026-10-02 当前候选完整窗口仍失败：** `b95b38c0` 托管档案 23/23 全通过，显式
++前 8 项通过后 Settings 最小化前提失败，合计 31/46；后续串行 lifetime 未执行。
++请求时真实 active/key/occlusion 可见且主页面完成，Will/Did 最小化仍为 0，随后失活；
++未确认根因，也不将成功档案推广为稳定。新 CUA 会话绑定仍报 -3811，文件确认未操作；
++失败现场、原始诊断、同包摘要及私有清理见 [完整窗口证据](evidence/2026-10-02-d-current-window/README.md)。D 仍未验收。
++
++**2026-10-02 当前包原生取消路径：** `b95b38c0` 同包托管/显式档案各三个独立阶段
++通过，共 6/6，包含菜单、文本剪贴板及文档保存/诊断导出/主题导入/目录选择四类
++实际面板取消；后续两档案 package smoke 也通过，摘要与严格签名复核一致。
++串行 runner 支持独立 `dialog-cancel`，且修复 Python 3.9 摘要兼容。范围和初次初始化
++失败见 [同包取消证据](evidence/2026-10-02-d-current-dialog-cancel-run/README.md)。不代替选中/保存成功或完整窗口门禁。
++
++**2026-10-02 最新候选物理交互补验：** 同一 `b95b38c0` 安装包的显式私有档案
++通过实际 Cmd+, Settings、目录选择、附件文件取消与完整 host 重启后的工作区恢复。
++文件确认后观察被 ScreenCaptureKit -3811 打断，重新绑定仍失败；实际最小化操作
++仅有 AX/单窗口截屏，不能据此确认状态，仍待核实。私有进程经精确路径核对后
++SIGTERM 清理无残留，不能代替 UI Quit。详见 [实际对话框证据](evidence/2026-10-02-d-interactive-dialogs/README.md)。
++原生窗口失败与其余物理待验仍阻塞 D，E 未推进。
++
++**2026-10-02 最新候选：遗留 runtime 收敛与窗口保存取消。** host `b95b38c0e35d66c964bc370b621a46c9d69116b7408a7c7567f4c715abc17734`
++将 Wails 窗口几何和文本剪贴板访问收敛到轻量适配器；hook 卸载取消尚未提交的旧
++观察/排队捕获，旧逻辑的三个确定性失败修复后通过，剪贴板及完整测试类型检查通过。
++生产 app/DMG 构建和真实只读安装、独立菜单/剪贴板 4/4、正常双档案 package smoke
++通过。本轮不撤回已发送的保存请求，也不改变 Tauri 窗口策略或解决最小化；完整窗口
++未复验，失败与物理待验项仍阻塞 D。源码补丁、新适配器快照和范围见
++[runtime 生命周期证据](evidence/2026-10-02-d-runtime-lifecycle/README.md)。E 未推进。
++
++**2026-10-02 前一直接调用诊断包：窗口仍失败。** host `de4f88c88dc80f3757b577315dbe9d42b8f75134e914851065a70bae34d814f5`
++在实际主线程绕过 Tauri 调度和菜单 responder 直接调用 NSWindow，托管首次最小化
++仍失败，显式未开始；正常两档案 package smoke、clippy 与生产 app/DMG 通过。
++独立最小 Cocoa/WKWebView 对照通过，不能将失败视为系统完全无法最小化；当前
++Stage Manager 只读状态为开启，未修改，也未确认其为原因。详情见
++[直接 NSWindow 对照](evidence/2026-10-02-d-direct-minimize/README.md)。D 仍未验收。
++
++**2026-10-02 前一呈现诊断包：窗口仍失败。** host `c29beab60b5b30e7634b2ff2114b4dfe189ec673e44324fb13ae487d8d8b5bbf`
++增加 opt-in 遮挡/应用激活事件及单调时间诊断，完整生产 app/DMG、clippy、正常两档案
++package smoke 通过；独立原 API 和可见呈现探针均未通过。原 API 请求时已有 key/激活/
++可见状态，仍没有最小化事件；可见呈现探针在前提阶段失败，未请求最小化。前一安装包
++的真实 Minimize responder 也失败。未修改生产恢复策略、未替换原门禁，也未解释根因；
++详见 [原生呈现证据](evidence/2026-10-02-d-minimize-presentation/README.md)。
++
++**2026-10-02 前一候选：启动身份拒绝修复，窗口门禁仍失败。** 已安装 host
++`49e8b9cda038bd5f002178079aa3895690dbff3ee1d8489334dd0c8b60fedd1a` 将返回的 setup
++错误集中处理为正常非零退出；身份损坏/冲突/链接的两档案拒绝与备份恢复 6/6、
++默认目录拒绝、配置导入、启动中断 12/12、独立异常退出 8/8 通过；完整 Rust
++218 通过、2 默认忽略，clippy 与生产 app/DMG 构建通过。完整窗口在托管 8 项后
++Settings 最小化前提失败，显式未开始；没有转记上一包成功或重跑覆盖失败。
++源码、当前包摘要及失败/成功证据见 [启动恢复证据](evidence/2026-10-02-d-startup-refusal/README.md)。
++物理交互及窗口稳定性仍未验收，D 未结案，E 未推进。
++
++**2026-10-02 前一候选同包复验（持续目标已建立）：** 已安装 host `9676735e7a5a046de9592d7d633fb9cf632280159b3a8d5081f6f430f23cf220`
++已通过完整窗口 46/46、就绪后异常退出 8/8、双屏 8/8、两档案外链与六条通知送达；
++官方 Wails 1.38.3 私有历史/附件/最新检查点回退通过，显式原生钥匙串测试 1/1 通过。
++这补齐最终包的证据归属，不解释历史偶发窗口失败，也不代替下方物理交互待验项；D 未结案，E 未推进。
++下表和后文保留历史包记录，该包摘要、精确范围及可复跑串行 runner 见
++[同包验收证据](evidence/2026-10-02-d-current-candidate/README.md)。A/B/C 与签名/公证及发布授权缺口保留。
++
+ **当前平台范围（2026-09-30 用户确认）：本轮只推进 macOS。** Windows 和 Linux 因缺少实际测试环境，改造及原生验收均延期，不作为本轮 D/E 完成或 macOS 发布候选的阻塞项。此前已提交的跨平台实现和验证记录保留，不能据此宣称 Windows/Linux 已受支持；本轮尚未提交的 Windows 通知改动已撤回。下方历史记录中的跨平台待办转入延期范围，后续有环境再恢复。
+ 
+ **外接屏范围调整（2026-10-02 用户确认已打开）：恢复连接显示器的原生定位与重启验收。** 当前应用识别到两块 2× 缩放屏幕；不同缩放、实际拔插与物理拖动仍未验收，需在相应条件可用时继续。2026-10-01 的延期及既有单屏证据保留为历史记录；Windows/Linux 继续延期，D→E 顺序和正式发布门禁保留。
+@@ -85,7 +147,7 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安
+ | D：菜单与快捷键 | macOS 编辑项改为 Tauri 原生 responder-chain 角色；设置菜单先恢复主窗口并发出设置事件。Reload 移除 Cmd+R，保留给可配置的会话刷新；设置和文字大小也不安装固定原生组合。原生编辑/退出/隐藏/最小化/全屏及系统 Emoji 组合禁止保存为 Preview 动作；旧冲突组合回落默认值，单项重置校验默认组合占用。真实 AppKit 菜单组合与共享保留表、设置菜单动作、组件与独立 Chrome 页面回归通过。新增独立 `--edit` 原生编辑门禁。私有真实包的产品输入框通过 CUA 原生按键验证输入、全选删除、撤销/重做；实际 Edit→Redo 点击与最小化后的 Settings 点击也通过。 | 干净包 `e3e030586` 两种档案的严格 `--edit` 已通过：真实 key window、WKWebView responder、选择及 Copy/Paste/Cut/Select All/Undo/Redo 和完整剪贴板恢复。托管私有普通档案的产品输入框 Cmd+C/X/V 已由 CUA 原生按键及独立系统代次核对通过；两种普通私有档案的配置目录实际按钮/成功反馈/输入框 Cmd+V 已通过；两种普通私有档案的实际输入框 Cmd+A/C/X/V 与 WebKit 右键 Copy/Cut/Paste 已通过精确文字、操作前后系统代次和原件恢复验收；消息菜单、实际失败反馈、IME/组合输入、隐藏其他应用、全屏与可配置快捷键路由仍待验收。程序化原生菜单动作和 Chrome 页面回归不代替用户原生交互。 |
+ | D：剪贴板 | 接入官方 clipboard-manager，主窗口仅允许读写文本；Tauri 原生拒绝后不再使用浏览器/Wails/execCommand 回退；Hooks JSON Copy/Paste 已从浏览器直连收敛到共享文本入口，拒绝/空值/旧 workspace 结果保护草稿，组件回归通过；共享写入/读取路径覆盖 Tauri、浏览器与 Wails。消息、存储路径、hooks 路径及输入框复用；复制成功反馈等待实际写入成功。原生调用模拟、拒绝/忙碌回退、失败剪切不删文本、空剪贴板不覆盖选择与成功反馈测试通过。实际 macOS WKWebView IPC 与系统文本读写通过；主窗口图片读取及无权限的同源隐藏窗口读写均拒绝，独立系统值/代次核对和完整原件恢复通过。 | 托管私有普通档案的输入框 Cmd+C/X/V 已通过实际 CUA 原生按键：剪切清空、粘贴精确文本恢复、系统值/代次及剪贴板原件恢复；`ada308408` 包两种普通私有档案的配置目录按钮、空工作区禁用状态、已复制反馈及输入框 Cmd+V 已通过实际 CUA 操作和系统值/代次核对，原剪贴板完整恢复；两种普通档案的输入框实际 Cmd+A/C/X/V 与 WebKit 右键 Copy/Cut/Paste 及空值禁用状态也已通过，Copy/Cut 要求严格新代次；其他存储/hooks 路径、消息复制/菜单、实际失败反馈和 IME/组合输入仍待验收。 |
+ | D：自定义命令权限 | 自定义 native/bridge 总入口按 Tauri 原生调用者限制为主窗口，插件保持独立 capability；真实包双 WKWebView 在两种档案通过主窗口 catalog/可执行目标拒绝、第二窗口 8 个文档和 2 个 bridge 查询拒绝、伪造 window 参数无效及原件/退出保护；剪贴板插件 ACL 和完整原件恢复也通过。 | 不能推广为全部会话/资源权限、MCP iframe、物理交互或其他平台已验收；`2cbed72bb` 的 42 阶段曾在最小化前提停止；后续诊断包 `e3e030586` 的完整 46 阶段已通过，仍不推断旧失败原因。 |
+-| D：窗口与多显示器 | 保存普通窗口位置和显示器缩放，最大化/最小化不覆盖普通尺寸；按当前工作区限制恢复位置，移除外接屏后回到主屏。状态文件原子替换，兼容旧尺寸文件。窗口几何回归通过；真实 macOS `.app` 原生 API 已验证窗口隐藏/最小化恢复、最大化退出后重启与取消最大化、普通尺寸/位置重启恢复。私有包已通过实际最小化按钮、Cmd+M 及原生 Settings 点击恢复窗口/渲染设置页。 | 2026-10-02 外接屏已恢复可用，原生 API 识别两块 2× 屏幕；当前 `37674eea7` 实际副屏定位/普通重启及跨屏恢复/再次重启两种档案 8/8 通过，不同缩放/拔插/物理拖动未标记通过；历史诊断包 `e3e030586` 的 46 阶段曾全过，`30a93592d` 为 31/46；`5f153aae7` 为 8/46、`67e7fcd8b` 为 31/46；新包 `6d405f8f8` 的完整 46 项及两种档案原生菜单曾通过，但追加原生菜单/原 API 首个托管启动均再次失败。两次外观请求都已跳过写入、恢复请求/完成各 1、Reopen=0，仍无 Will/Did Miniaturize 或 Did Deminiaturize。最新 `67c36323c` 的 4 个 API 启动样本及两种原生菜单曾通过，但完整门禁首项失败；追加只读模态/调整诊断的 `ada308408` 为 23/46，显式首项失败，实际启动已完成且无模态/sheet/实时调整。2026-10-02 `851111594`、`7a83505ce` 及 `1b6a7706d` 生产包的独立完整门禁各 46/46 曾通过；`c0e3871c5` 完整门禁曾为 19/46；`b96367355` 及最近完整门禁的 `f43825cc9` 在两块屏幕已连接后仍失败：托管前 8 项通过，随后设置最小化前提超时，显式档案未开始，见下方记录。历史及当前偶发失败根因仍未确定，窗口稳定性未验收，未放宽断言。 |
++| D：窗口与多显示器 | 保存普通窗口位置和显示器缩放，最大化/最小化不覆盖普通尺寸；按当前工作区限制恢复位置，移除外接屏后回到主屏。状态文件原子替换，兼容旧尺寸文件。窗口几何回归通过；真实 macOS `.app` 原生 API 已验证窗口隐藏/最小化恢复、最大化退出后重启与取消最大化、普通尺寸/位置重启恢复。私有包已通过实际最小化按钮、Cmd+M 及原生 Settings 点击恢复窗口/渲染设置页。 | 2026-10-02 外接屏已恢复可用，原生 API 识别两块 2× 屏幕；当前 `37674eea7` 实际副屏定位/普通重启及跨屏恢复/再次重启两种档案 8/8 通过，不同缩放/拔插/物理拖动未标记通过；历史诊断包 `e3e030586` 的 46 阶段曾全过，`30a93592d` 为 31/46；`5f153aae7` 为 8/46、`67e7fcd8b` 为 31/46；新包 `6d405f8f8` 的完整 46 项及两种档案原生菜单曾通过，但追加原生菜单/原 API 首个托管启动均再次失败。两次外观请求都已跳过写入、恢复请求/完成各 1、Reopen=0，仍无 Will/Did Miniaturize 或 Did Deminiaturize。最新 `67c36323c` 的 4 个 API 启动样本及两种原生菜单曾通过，但完整门禁首项失败；追加只读模态/调整诊断的 `ada308408` 为 23/46，显式首项失败，实际启动已完成且无模态/sheet/实时调整。2026-10-02 `851111594`、`7a83505ce` 及 `1b6a7706d` 生产包的独立完整门禁各 46/46 曾通过；`c0e3871c5` 完整门禁曾为 19/46；`b96367355` 及最近完整门禁的 `f43825cc9` 在两块屏幕已连接后仍失败：托管前 8 项通过，随后设置最小化前提超时，显式档案未开始，见下方记录。历史及当前偶发失败根因仍未确定，本轮上一候选和修复后 DMG 临时安装包的完整门禁分别 46/46 通过，新安装包双屏恢复 8/8 通过；历史偶发失败根因仍未解决，窗口稳定性未结案，未放宽断言。 |
+ | D：原生窗口外观 | macOS 保存/读取外观偏好及启动恢复同步到 Tauri 原生应用主题；串行处理避免旧读取覆盖新外观，保存拒绝时不修改原生主题。真实 AppKit dark/light/auto 与整包重启、非法主题/样式保持不变的验收通过。已修复首次 native 失败回滚将未配置外观变为显式 auto 的问题；鉴权 CAS 回滚保留未配置/旧样式并拒绝过期写入。真实 Go/AppKit 故障注入及不完整原生回滚后的整包启动恢复通过。设置页深色模式实际点击、选中状态及整窗深色渲染已通过。修复 Vite glob 编译条件后，真实 `de8afeeec` 包的两种档案均显示八套官方主题和图片，托管实际官方主题选择与背景预览已通过。`9972828f4` 托管普通档案的双图片主题导入、重复副本、无效包原件保护及两份主题重启预览通过；显式历史捕捉失败保留记录；当前 `5882a249d` 显式普通档案已补齐五阶段、双图片与两次正常退出，见下方记录。 | 原生标题栏细节、系统明暗切换、真实系统/磁盘错误导致的失败路径仍待执行；端口错误注入不等同于系统真实拒绝。 |
+ | D：托盘与退出 | 托盘有显示/退出菜单；主点击已对齐 Wails 始终打开/恢复窗口，移除可见时反向隐藏；托盘、Dock 重开及单实例唤起共用主线程恢复入口，补上 macOS 应用取消隐藏。退出沿用 supervisor 停止路径。真实包原生 CloseRequested 验证关闭后继续运行、关闭即退出、偏好重启恢复与 sidecar 清理；应用隐藏/取消隐藏也已验证。实际 Go 流式任务在关闭后继续产生事件并完成历史保存；原生 Show 菜单恢复几何，Quit 菜单在第二个任务运行中退出并清理上游及 sidecar。CUA 原生 Cmd+Q 和设置关闭即退出后实际窗口关闭按钮均已验证退出码 0、sidecar/readiness 清理。 | 真实托盘点击、人工物理按键/托盘退出及 Dock 重开仍待验收。程序化原生菜单动作不能代替按键/点击；新包两种档案的第二实例严格焦点门禁已通过；实际 Dock/托盘交互仍待验收。 |
+ | D：对话框与链接 | 现有 Tauri 选择器保留；共享外部链接及本地文档 adapter 已接入 Rust host。Markdown 默认打开、定位、另存为及指定已安装应用均走原生入口，错误不退回 browser mock。文档可执行目标拒绝、特殊路径、取消保存、源文件别名保护及权限拒绝已有回归。外部链接支持 HTTP(S)/受限 mailto，OAuth 入口仅接受 HTTP(S)。真实 macOS 包的主 WKWebView IPC 非法 URL 拒绝及两个原生入口打开默认浏览器、本机页面请求和退出清理已在默认/显式私有档案通过；Ghostty 专用入口已补上系统启动器退出码/超时反馈，实际不可启动私有应用的主 IPC 错误及原件保护门禁通过；系统 Terminal 的目录/文档入口已在真实包两种档案核对两个新会话的实际 kernel cwd 和清理。 | macOS 已增加系统应用注册查询、Spotlight 自定义安装位置和原生 64×64 图标；项目会话顶部选择器已接入配置偏好与卸载回退。Linux 已增加 XDG desktop entry 发现、GIO 原生启动、六类终端目录策略和有界 PNG 图标转换，共用逻辑回归通过；Linux 原生分支编译/图标/GUI 验收待执行。Windows 已增加 App Paths、安装目录/Toolbox 发现、终端目录策略和原生 PNG 图标代码；共用逻辑与 Win32 API 类型检查通过，Windows 原生 host 编译/注册表/图标/GUI 验收待执行；Global 会话已接入档案内稳定目录与会话身份查询。实际 AppKit 目录选择已验证中文/空格路径、默认工作区/项目显示及重启恢复，实际文件选择已验证文本附件显示为待发送。两种普通私有档案的诊断导出实际 Save/Cancel/Replace 面板已通过：中文/空格文件名、新保存、取消覆盖原件保护及确认覆盖；新包 `de8afeeec` 的两种普通档案已通过实际创建/编辑无图片主题、导出 Save/Cancel/Replace、旧包字节/权限/mtime/inode 保护及正常退出清理；`9972828f4` 托管普通档案的实际主题 Cancel/双图片导入/重复导入/无效包/重启及两次正常退出通过；显式历史捕捉失败保留记录，当前 `5882a249d` 已补齐五阶段、双图片重启及两次正常退出。当前 `851111594` 普通包两种私有档案的本地文档另存为实际 Cancel/Save/Cancel Replace/Replace 已完成，共两次正常生命周期/八项文件检查；原件和副本取消保护通过。当前 `5882a249d` 两种档案的同源/缺失源拒绝、mode-000 源实际读取拒绝及中文解决步骤已实际通过；0500 目的地真实写入拒绝与零输出/原件保护两档案通过，新简明提示原生复验待完成；实际应用主题、文档源目录拒绝及新写入拒绝提示原生复验、浏览器/邮件、指定应用的真实 UI 交互及 OAuth 仍需验收。 |
+@@ -99,6 +161,23 @@ macOS 继续按以下顺序收尾；每项分别记录源码回归和真实安
+ 
+ 剪贴板插件接入与文本权限参考 [Tauri 官方文档](https://v2.tauri.app/plugin/clipboard/)。
+ 
++#### D：默认档案链接拒绝与正常启动失败退出（2026-10-02）
++
++- 源码与私有真实安装包均确认：旧 `create_dir_all(reasonix-core)` 会跟随默认根的符号链接，链接到旧 `.reasonix` 后可修改其配置并生成 Preview 凭据身份。确定性回归旧逻辑失败，未操作用户旧档案。现改为私有叶目录创建及不跟随链接的普通目录检查，拒绝链接/悬空链接/普通文件；新根为 0700，已有正常档案内容保留，显式 `REASONIX_HOME` 语义未变。
++- 首个拒绝包保护了原件，但将 Err 返回给 Tauri setup 后仍 panic；仅改 build 错误处理的中间包门禁明确报 exit=-6、expectedMessage=true，未记为通过。已核对当前 Tauri 运行阶段的 setup Err panic 路径，最终在已知档案拒绝时、WebView/sidecar 创建前输出恢复说明并 exit=1。其他 setup 失败没有据此全部结案。
++- 档案 16 项专项、使用当前包真实 bridge 的完整 Rust 回归（218 通过、2 按原规则忽略）、严格 all-targets clippy 和完整 `.app`/DMG 构建均通过。最终 DMG 校验、只读挂载及临时安装后，三种非法根均正常拒绝，原件字节/mode/mtime/inode/链接目标保持，无 sidecar/readiness 残留；两档案正常包级启动/退出、3 阶段配置导入/恢复/显式拒绝以及 12 项启动中断清理/重启通过。签名为 ad-hoc，未公证。
++- 中间包另有完整窗口 46/46 和宿主异常退出 8/8 通过，其摘要与日志独立归属，不转记到最终包。本轮原生 UI 连接再次超时，实际交互未新增验收；默认叶目录检查不是任意外部目录替换的生命周期锁，也不能证明显式共享根、旧无锁宿主或全量数据回退安全。D 未结案，E、A/B/C 和正式发布门禁保持。
++- 源补丁、runner 快照、包摘要、失败过程和最终安装门禁见 [目录边界验证证据](evidence/2026-10-02-d-managed-root/README.md) 与 [机器可读结果](evidence/2026-10-02-d-managed-root/result.json)。未新增延期确认、发布或默认下载切换。
++
++#### D：宿主事件收敛、状态竞态修复与 DMG 安装复验（2026-10-02）
++
++- 对照 Wails 1.38.3 的共享关闭提示，确认较早 `GetDesktopShellStatus` 查询可覆盖更晚的托盘事件；专项在旧代码确定失败，现改为先订阅、事件到达后拒绝旧查询结果。设置菜单和关闭提示的组件 `window.runtime.EventsOn` 直连已移入 `bridge.ts` 两个固定宿主事件接口，解除订阅幂等且排队回调失效。Tauri 独立入口仍使用已有 `host:open-settings`；没有修改 Rust 最小化行为、注入 Wails shim 或扩大权限。
++- 源码专项、桌面 `test:app-lifecycle`、完整测试类型检查和生产前端门禁通过。测试类型检查发现既有原生快捷键 JSON 可选 modifier 的 unknown 类型，改为严格布尔比较后通过，未改变生产快捷键或门禁断言。使用项目要求的本地缓存 pnpm 10.34.5 构建完整 `.app` 与 DMG；签名为 ad-hoc，严格校验通过，未公证。源码尚未提交，源 HEAD 和补丁 SHA-256 已归档。
++- DMG 经校验、只读挂载、复制至私有临时安装目录和严格签名校验后卸载；安装后 host/sidecar SHA-256 与本轮构建一致。安装包七组门禁均 exit 0：两种档案的包级隔离/退出、完整窗口各 23/23（含原生编辑、剪贴板最小权限、取消面板、第二实例焦点及流式任务退出）、宿主 SIGTERM/SIGKILL 空闲/运行中共 8/8、两块 2× 屏幕的副屏/跨屏与重启 8/8、配置导入/恢复/显式拒绝 3 阶段、WKWebView 外链拒绝与浏览器回执、6 次系统通知送达及精确清理。通知两档案 initial active 均 false，不算前台或横幅/点击验收；未传旧 CLI，不算旧 GUI/全量数据回退。
++- 未改产品的上一候选在本轮亦完整通过 46 项窗口门禁及独立 8 项菜单/剪贴板/编辑/取消面板。更早同一候选曾托管 23/23 后显式首项最小化失败，日志已保留；本轮成功没有解释历史偶发失败，不认定 Preview 稳定性已结案。Wails 1.38.3 基线没有当前 `profilegate` 协议，不能将新宿主锁测试推广为任意旧版显式共享目录互斥。
++- 原生 UI 工具三次连接均 30 秒超时并重置。实际托盘/Dock、IME/自定义组合、通知拒绝/点击、钥匙串拒绝/设置迁移、不同缩放/实际拔插及其他物理门禁继续待验收；已请求用户决定是否延期，未收到确认前不扩大延期范围。D 未结案，E 继续等待 D 验收和 Preview 稳定；A/B/C、全量数据回退、Developer ID/公证与发布授权缺口保留。
++- 可审阅的基线说明、门禁范围、A/B/C/E 与其他发布阻塞、源补丁、原生/构建日志及包摘要已保存在 [本轮验证证据](evidence/2026-10-02-d-installed-host-events/README.md) 和 [机器可读结果](evidence/2026-10-02-d-installed-host-events/result.json)。本轮没有发布或切换默认下载项。
++
+ #### D：当前候选完整源码回归汇总（2026-10-02）
+ 
+ - 本轮开始 HEAD `5fe64f202` 为证据提交，实际候选生产提交 `ad3eb7070`；没有产品源码改动或重打包。使用该 `.app` 内的 `reasonix-desktop-bridge` 显式设置 `REASONIX_TAURI_BRIDGE_TEST_BIN`，运行完整 `cargo test --locked --manifest-path desktop/tauri/Cargo.toml -- --test-threads=1`，**215 通过、0 失败、2 默认忽略**，日志 `/private/tmp/reasonix-current-candidate-rust-full.log`。
+diff --git a/tools/tauri/smoke-native-menu-window.py b/tools/tauri/smoke-native-menu-window.py
+index 6bc9b3262..fbcc11c50 100644
+--- a/tools/tauri/smoke-native-menu-window.py
++++ b/tools/tauri/smoke-native-menu-window.py
+@@ -11,6 +11,7 @@ import importlib.util
+ import os
+ from pathlib import Path
+ import plistlib
++import shutil
+ import subprocess
+ import sys
+ import tempfile
+@@ -21,9 +22,11 @@ windows = importlib.util.module_from_spec(spec)
+ spec.loader.exec_module(windows)
+ 
+ 
+-def smoke(app_path, api_startups=0):
++def smoke(app_path, api_startups=0, presented=False, direct_only=False):
+     if not 0 <= api_startups <= 5:
+         raise ValueError("API startup sample count must be between zero and five")
++    if direct_only and (api_startups or presented):
++        raise ValueError("direct-only is a separate experiment; do not combine its inputs")
+     app = Path(app_path).resolve()
+     host, sidecar = (app / "Contents/MacOS" / name for name in ("reasonix-tauri", "reasonix-desktop-bridge"))
+     if not host.is_file() or not sidecar.is_file():
+@@ -38,15 +41,19 @@ def smoke(app_path, api_startups=0):
+     environment = {key: value for key, value in os.environ.items()
+                    if key in ("PATH", "USER", "LOGNAME", "LANG", "LC_ALL", "__CF_USER_TEXT_ENCODING")}
+     for managed in (True, False):
+-        with tempfile.TemporaryDirectory(prefix="reasonix-native-menu-window-", dir="/private/tmp") as directory:
+-            root = Path(directory)
+-            root.chmod(0o700)
++        root = Path(tempfile.mkdtemp(prefix="reasonix-native-menu-window-", dir="/private/tmp"))
++        root.chmod(0o700)
++        success = False
++        try:
+             for name in ("home", "tmp"):
+                 (root / name).mkdir(mode=0o700)
+             # Independent samples, not retries: any failed startup fails the
+             # gate immediately. Keep the original window API predicate intact.
+             phases = (["menu-settings-minimized"] * api_startups
++                      + (["menu-settings-presented-minimized"] if presented else [])
+                       + ["menu-settings-native-minimized", "menu-shortcuts"])
++            if direct_only:
++                phases = ["menu-settings-direct-minimized", "menu-shortcuts"]
+             identity = None
+             for phase in phases:
+                 current = windows.launch(host, sidecar, root, identifier, managed,
+@@ -59,7 +66,14 @@ def smoke(app_path, api_startups=0):
+                     windows.print_window_trace(root / "tmp")
+                 if list((root / "tmp").glob("reasonix-tauri-bridge-*")):
+                     raise RuntimeError("native menu/startup gate left readiness directories")
+-    print("Installed Minimize role, actual AppKit lifecycle events, Settings restoration and restart: OK")
++            success = True
++        finally:
++            if success:
++                shutil.rmtree(root)
++            else:
++                print(f"Private menu/window failure fixture retained: {root}", file=sys.stderr)
++    print(("Direct NSWindow diagnostic" if direct_only else "Installed Minimize role")
++          + ", actual AppKit lifecycle events, Settings restoration and restart: OK")
+     if api_startups:
+         print(f"Original Tauri API startup samples: {api_startups * 2} passed; no failed sample was retried")
+ 
+@@ -69,10 +83,14 @@ if __name__ == "__main__":
+     parser.add_argument("app")
+     parser.add_argument("--api-startups", type=int, choices=range(6), default=0,
+                         help="also run this many independent original-API startups per profile (no retries)")
++    parser.add_argument("--presented", action="store_true",
++                        help="diagnostic comparison: also require actual occlusion visibility before one API minimize; does not replace the original gate")
++    parser.add_argument("--direct-only", action="store_true",
++                        help="independent NSWindow.miniaturize control; bypasses Tauri dispatch/menu, never replaces normal window acceptance")
+     args = parser.parse_args()
+     if sys.platform != "darwin":
+         raise SystemExit("this gate requires macOS")
+     try:
+-        smoke(args.app, api_startups=args.api_startups)
++        smoke(args.app, api_startups=args.api_startups, presented=args.presented, direct_only=args.direct_only)
+     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+         raise SystemExit(f"native macOS menu window gate failed: {error}") from error
+diff --git a/tools/tauri/smoke-native-window.py b/tools/tauri/smoke-native-window.py
+index 316bf3f21..9b77e165d 100644
+--- a/tools/tauri/smoke-native-window.py
++++ b/tools/tauri/smoke-native-window.py
+@@ -94,7 +94,7 @@ def print_window_trace(temporary):
+             if not isinstance(state, dict):
+                 continue
+             status = {key: state[key] for key in fields if type(state.get(key)) is bool}
+-            status.update({key: state[key] for key in ("restoreRequests", "restoreCompletions", "reopenEvents", "willMiniaturize", "didMiniaturize", "didDeminiaturize", "becameKey", "resignedKey", "appearanceRequests", "appearanceSkipped")
++            status.update({key: state[key] for key in ("restoreRequests", "restoreCompletions", "reopenEvents", "willMiniaturize", "didMiniaturize", "didDeminiaturize", "becameKey", "resignedKey", "appearanceRequests", "appearanceSkipped", "occlusionChanges", "applicationBecameActive", "applicationResignedActive")
+                            if type(state.get(key)) is int and 0 <= state[key] <= 1000})
+             if type(state.get("nativeStyleMask")) is int and 0 <= state["nativeStyleMask"] < 2**32:
+                 status["nativeStyleMask"] = state["nativeStyleMask"]
+@@ -117,9 +117,19 @@ def print_window_trace(temporary):
+                     for monitor in monitors
+                 ]
+             transitions = state.get("nativeTransitions")
+-            known = {"will-miniaturize", "did-miniaturize", "did-deminiaturize", "became-key", "resigned-key", "appearance-request", "appearance-skipped"}
++            known = {"will-miniaturize", "did-miniaturize", "did-deminiaturize", "became-key", "resigned-key", "appearance-request", "appearance-skipped", "occlusion-changed", "application-became-active", "application-resigned-active"}
+             if type(transitions) is list and len(transitions) <= 32 and all(type(item) is str and item in known for item in transitions):
+                 status["nativeTransitions"] = transitions
++            timed = state.get("nativeTimedTransitions")
++            if type(timed) is list and len(timed) <= 32 and all(
++                type(item) is dict and item.get("transition") in known
++                and type(item.get("elapsedMs")) is int and 0 <= item["elapsedMs"] <= 300_000
++                for item in timed
++            ):
++                status["nativeTimedTransitions"] = timed
++            for key in ("nativeWindowNumber", "nativeWindowLevel"):
++                if type(state.get(key)) is int and abs(state[key]) < 2**32:
++                    status[key] = state[key]
+             print("native window trace: " + json.dumps({"stage": item["stage"], "state": status}), flush=True)
+     except (OSError, UnicodeError, ValueError, TypeError):
+         # A missing/malformed diagnostic must not replace the original failure.
+@@ -249,7 +259,7 @@ def launch(host_binary, sidecar_binary, root, identifier, managed, phase, provid
+ 
+ 
+ def smoke(app_path, include_focus=False, include_edit=False, include_dialogs=False,
+-          independent=False, profile="both"):
++          independent=False, profile="both", include_tray_language=False):
+     if profile not in ("both", "managed", "explicit"):
+         raise ValueError("profile must be both, managed or explicit")
+     if independent and include_focus:
+@@ -285,6 +295,8 @@ def smoke(app_path, include_focus=False, include_edit=False, include_dialogs=Fal
+                 phases.append("clipboard-native")
+             if include_dialogs:
+                 phases.append("dialog-cancel")
++            if include_tray_language or not independent:
++                phases.append("tray-language")
+             if include_edit:
+                 phases.append("menu-editing")
+             if include_focus:
+@@ -326,6 +338,7 @@ if __name__ == "__main__":
+     parser.add_argument("--focus", action="store_true")
+     parser.add_argument("--edit", action="store_true")
+     parser.add_argument("--dialogs", action="store_true")
++    parser.add_argument("--tray-language", action="store_true")
+     parser.add_argument("--independent", action="store_true",
+                         help="run menu/clipboard and requested edit/dialog gates without window transitions")
+     parser.add_argument("--profile", choices=("both", "managed", "explicit"), default="both",
+@@ -335,6 +348,7 @@ if __name__ == "__main__":
+         raise SystemExit("this acceptance requires macOS")
+     try:
+         smoke(args.app, include_focus=args.focus, include_edit=args.edit,
+-              include_dialogs=args.dialogs, independent=args.independent, profile=args.profile)
++              include_dialogs=args.dialogs, independent=args.independent, profile=args.profile,
++              include_tray_language=args.tray_language)
+     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+         raise SystemExit(f"native macOS window smoke failed: {error}") from error

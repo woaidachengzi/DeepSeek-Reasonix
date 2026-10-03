@@ -1,0 +1,25 @@
+
+> reasonix-desktop-frontend@0.0.0 test:tauri /Users/jerry/temp/app/reasonix-tauri/desktop/frontend
+> pnpm test:tauri-theme-catalog && node --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-ui-migration.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-code-rewind.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-chat-workspace-delete.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-chat-title-recovery.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-project-navigation.test.tsx && node --import tsx src/__tests__/tauri-workbench-sessions.test.ts && node --import tsx src/__tests__/tauri-drag-drop.test.ts && node --import tsx src/__tests__/tauri-bridge-contract.test.ts && node --import tsx src/__tests__/tauri-appearance.test.ts && node --import tsx src/__tests__/tauri-default-workspace.test.ts && node --import tsx src/__tests__/tauri-shortcuts.test.ts && node --import tsx src/__tests__/tauri-settings-api-key.test.tsx && node --import tsx src/__tests__/tauri-hooks-clipboard.test.tsx && node --import tsx src/__tests__/tauri-storage-clipboard.test.tsx && node --import tsx src/__tests__/diagnostics-native-clipboard.test.tsx && node --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-remote-settings.test.tsx && node --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-bot-settings.test.tsx && node --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-subagent-try.test.tsx && node --import ./scripts/css-stub-register.mjs --import ./scripts/svg-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-mcp-servers.test.tsx && node --import tsx src/__tests__/tauri-history-presentation.test.ts && node --import tsx src/__tests__/tauri-observed-usage.test.ts && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-progress-collapse.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-plugin-settings.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-plugin-themes.test.tsx && node --import tsx src/__tests__/tauri-skill-readiness.test.ts && node --import tsx src/__tests__/tauri-notification-preferences.test.ts && node --import tsx src/__tests__/tauri-notifications.test.ts && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-notification-workspace.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-global-opener.test.tsx && pnpm test:external-links
+
+
+> reasonix-desktop-frontend@0.0.0 test:tauri-theme-catalog /Users/jerry/temp/app/reasonix-tauri/desktop/frontend
+> node --experimental-vm-modules scripts/tauri-theme-catalog-build.test.mjs
+
+(node:70552) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+Vite client theme catalog: 8 official themes, exact asset bytes, selection and URL boundaries passed
+(node:70553) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+UI preference migration: explicit preview/confirmation, bounded scope, rollback, user edits and storage failures OK
+/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/tauri/TauriChatWorkspace.tsx:107
+  setTauriTrayLocale,
+  ^
+SyntaxError: The requested module '../lib/tauriBridge' does not provide an export named 'setTauriTrayLocale'
+    at #asyncInstantiate (node:internal/modules/esm/module_job:463:21)
+    at async ModuleJob.run (node:internal/modules/esm/module_job:561:5)
+    at async node:internal/modules/esm/loader:650:26
+    at async <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/__tests__/tauri-code-rewind.test.tsx:73:29)
+
+Node.js v26.10.0
+ ELIFECYCLE  Command failed with exit code 1.

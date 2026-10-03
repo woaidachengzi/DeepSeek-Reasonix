@@ -1,0 +1,11 @@
+{
+  "app": "/private/tmp/reasonix-cocoa-timer-control/Private Timer Cocoa Control.app",
+  "binarySha256": "f03666ce553df7b07e64643984400af93589ddded9b9760ae0853e3beda8876e",
+  "effectiveEntitlements": {
+    "com.apple.security.cs.allow-dyld-environment-variables": true,
+    "com.apple.security.cs.allow-jit": true,
+    "com.apple.security.cs.allow-unsigned-executable-memory": true,
+    "com.apple.security.files.user-selected.read-write": true,
+    "com.apple.security.network.client": true
+  }
+}

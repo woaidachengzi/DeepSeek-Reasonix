@@ -1,0 +1,20 @@
+{
+  "saved": {
+    "path": "/private/tmp/reasonix-launch-services-spr1741x/workspace/\u4fdd\u5b58 \u4e2d\u6587 & space/dialog-save.json",
+    "sha256": "e9019c8fa6eed5aef5b19f1cd97241b8a035b3e74d5c9a4ad36fb22172fe426e",
+    "size": 1475,
+    "mode": 384,
+    "mtimeNs": 1790992371524712166
+  },
+  "overwriteChanged": true,
+  "canaryUnchangedFromBeforeSave": true,
+  "canary": {
+    "sha256": "0122f4513999112b90dab997e2f3fd05822d2404aa8e0dc3c92e189b26499a95",
+    "size": 40,
+    "mode": 420,
+    "mtimeNs": 1790992037080807012
+  },
+  "savedDirectoryFiles": [
+    "dialog-save.json"
+  ]
+}

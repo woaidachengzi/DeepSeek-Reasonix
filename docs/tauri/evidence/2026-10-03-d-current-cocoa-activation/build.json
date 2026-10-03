@@ -1,0 +1,13 @@
+{
+  "root": "/private/tmp/reasonix-cocoa-activation-build-oqv41wc2",
+  "app": "/private/tmp/reasonix-cocoa-activation-build-oqv41wc2/Private Cocoa Control.app",
+  "binarySha256": "b88de85c4013c8612b8ca11094bbac6339a93e9e13febf629cd83e92f583f8cc",
+  "effectiveEntitlements": {
+    "com.apple.security.cs.allow-dyld-environment-variables": true,
+    "com.apple.security.cs.allow-jit": true,
+    "com.apple.security.cs.allow-unsigned-executable-memory": true,
+    "com.apple.security.files.user-selected.read-write": true,
+    "com.apple.security.network.client": true
+  },
+  "buildVersion": "/private/tmp/reasonix-cocoa-activation-build-oqv41wc2/Private Cocoa Control.app/Contents/MacOS/control:\nLoad command 10\n      cmd LC_BUILD_VERSION\n  cmdsize 32\n platform MACOS\n    minos 11.0\n      sdk 15.2\n   ntools 1\n     tool LD\n  version 1115.7.3\n"
+}

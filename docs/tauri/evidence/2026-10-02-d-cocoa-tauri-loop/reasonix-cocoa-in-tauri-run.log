@@ -1,0 +1,8 @@
+/private/tmp/reasonix-tauri-window-baseline-ahswjann/Reasonix Window Baseline.app/Contents/MacOS/window-baseline: replacing existing signature
+/private/tmp/reasonix-tauri-window-baseline-ahswjann/Reasonix Window Baseline.app: replacing existing signature
+{"app": "/private/tmp/reasonix-tauri-window-baseline-ahswjann/Reasonix Window Baseline.app", "binarySha256": "ec7218f660e0bbf823eaa89de178c053584331ac3c246a7ff695e32a56ac789d", "base": "/private/tmp/reasonix-tauri-window-baseline-ahswjann"}
+Traceback (most recent call last):
+  File "/private/tmp/reasonix-run-cocoa-in-tauri.py", line 37, in <module>
+    assert result['precondition'] is True,'baseline activation/page precondition failed'
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: baseline activation/page precondition failed

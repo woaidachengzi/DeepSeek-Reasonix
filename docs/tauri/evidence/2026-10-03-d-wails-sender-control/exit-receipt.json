@@ -1,0 +1,12 @@
+{
+  "delegate": "keep",
+  "application": "tao",
+  "kind": "cocoa",
+  "action": "direct",
+  "root": "/private/tmp/reasonix-tauri-window-baseline-73nw7292/keep-tao-cocoa-standard-direct",
+  "style": "standard",
+  "hostPid": 17729,
+  "kernelExitCode": 2,
+  "openExitCode": 0,
+  "expectedCode": 2
+}

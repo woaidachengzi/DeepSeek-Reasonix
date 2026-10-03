@@ -1,0 +1,18 @@
+{"root": "/private/tmp/reasonix-locked-keychain-rxxpj_fu", "passed": false, "normalUnchanged": true}
+Traceback (most recent call last):
+  File "/private/tmp/reasonix-locked-keychain-runner.py", line 30, in <module>
+    native=subprocess.run([str(binary),'keychain::tests::native_locked_keychain_preserves_secret_and_recovers','--exact','--ignored','--nocapture'],env=private_env,text=True,capture_output=True,timeout=45)
+  File "/opt/homebrew/Cellar/python@3.14/3.14.8/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 557, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.8/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 1221, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.8/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 2154, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.8/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 1268, in _check_timeout
+    raise TimeoutExpired(
+    ...<2 lines>...
+            stderr=b''.join(stderr_seq) if stderr_seq else None)
+subprocess.TimeoutExpired: Command '['/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/debug/deps/reasonix_tauri-9916af7dc0d35f54', 'keychain::tests::native_locked_keychain_preserves_secret_and_recovers', '--exact', '--ignored', '--nocapture']' timed out after 45 seconds

@@ -1,0 +1,12 @@
+{
+  "source": "same host context CGGetActiveDisplayList immediately before continuation",
+  "status": 0,
+  "activeDisplays": 2,
+  "displayIds": [
+    2,
+    1
+  ],
+  "conditionalGate": "inactive-display-state rejected before any fixture launch; actual zero-display precondition absent",
+  "nextAcceptance": "full native window gate scheduled after unaffected programmatic D gates",
+  "meaning": "new environment evidence; not proof of pending restoration or minimization root cause"
+}

@@ -1,0 +1,9 @@
+{
+  "README.md": "49a601478b7c7cca4e13990157a79cd469d96242a75fd07c470cf94f542b6c67",
+  "clippy-final.log": "0c6c93ab4a3fa0be46c7176b2948ada4936e760519e6a5a11ebd7c6a97add62b",
+  "installed.json": "509627a975497a5efe646759c46aa7094935bd091fc472f12257585d782bd2fa",
+  "native_clipboard_smoke.rs": "c7519953348bec3f2b0f42a7bee2e5b9780c0da816e408cd2de1c64bdecdb9c8",
+  "reasonix-native-permission-build.log": "6049a76dc44f84e24dfbb49dfe3ba488b0eb60a9264114eed4ac692ae03bd5eb",
+  "reasonix-native-permission-clippy.log": "f06004a9d89bab3595ab34ca8aac8c3ac196dbb313b2ca0fdde46cf430dac29b",
+  "reasonix-native-permission-install.log": "759af75ae756ad4599b9b68a971d7e28c8cc815e1522464013216dd52624fcda"
+}

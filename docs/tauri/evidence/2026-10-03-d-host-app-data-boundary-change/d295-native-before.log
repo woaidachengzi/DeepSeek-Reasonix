@@ -1,0 +1,8 @@
+Private application-data boundary failure fixture retained: /private/tmp/reasonix-app-data-boundary-612_3vtc
+Traceback (most recent call last):
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-application-data-boundary.py", line 126, in <module>
+    smoke(sys.argv[1])
+    ~~~~~^^^^^^^^^^^^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-application-data-boundary.py", line 92, in smoke
+    raise RuntimeError(f"host did not refuse the application data root with the expected recovery instruction: exit={process.returncode}, expectedMessage={expected_message}")
+RuntimeError: host did not refuse the application data root with the expected recovery instruction: exit=0, expectedMessage=False

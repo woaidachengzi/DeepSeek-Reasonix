@@ -1,0 +1,9 @@
+{
+  "cmd/reasonix-desktop-bridge/main.go": "c2218adb12f640cf4f5adea782b96f4a267326a6a077fc36bccc93975dd704e3",
+  "cmd/reasonix-desktop-bridge/provider_credential_account_test.go": "e307cc6d14d201c198bc697e0a956bc6ffdc556107cf4b4063e19b7ed1fc3e4a",
+  "desktop/tauri/src/bridge.rs": "0e253b13bc887f9d66e24dc6843787461ff03e59ad57a948f7905c84ca98188d",
+  "desktop/tauri/src/keychain.rs": "e1a492a6af2277b1e4382575e6f0ea96e7848bd3f70284d97e5c7407f8c7592d",
+  "desktop/frontend/src/lib/tauriBridge.ts": "b1c0f9da31b801de70bee1878e706730929cbb5e48d3a9a4f49c1f4af471d7c8",
+  "desktop/frontend/src/tauri/TauriSettings.tsx": "bc1bba2e3b7d6e56c8814b85ba2d02b7e2e39c375199bc936cff38d2cef41a0a",
+  "desktop/frontend/src/__tests__/tauri-settings-api-key.test.tsx": "ad4c4d9fa38c42b25256628adc13caf46e10373e07de6ff05991ebb46af193c4"
+}

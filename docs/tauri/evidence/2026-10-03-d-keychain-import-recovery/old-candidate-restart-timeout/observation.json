@@ -1,0 +1,15 @@
+{
+  "appHostSha256": "249dfd15d5b28a0dac67879143af181f494967f061d3e4f98b6731d54bade598",
+  "root": "/private/tmp/reasonix-launch-services-0_6b1i21",
+  "pid": 27634,
+  "sidecarPid": 27643,
+  "cua": [
+    "getApp timeoutReached -10005",
+    "getState tool 15000ms timeout and kernel reset",
+    "getApp timeoutReached -10005 again"
+  ],
+  "authoritative": "Exact host and sidecar live after observation timeouts; native page finished/key/visible/active. Deliberate SIGTERM cleanup recorded, not UI Quit or credential restoration acceptance.",
+  "launcherExitCode": 1,
+  "error": "LaunchServices host was terminated by a signal",
+  "stalePriorSuccessReceipts": "Archived then removed from current receipt filenames; tool now archives and clears before reused launch."
+}

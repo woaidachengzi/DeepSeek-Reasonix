@@ -1,0 +1,77 @@
+[
+  {
+    "variant": "identical",
+    "binarySha256": "62628630f5e8815c82505e06f764748a29a65d08f4f65c454b659a91a3b52655",
+    "hostPid": 16321,
+    "kernelExitCode": 1,
+    "openExitCode": 0,
+    "passed": false,
+    "final": {
+      "active": false,
+      "elapsedMs": 5322,
+      "events": [
+        "occlusion",
+        "occlusion"
+      ],
+      "key": false,
+      "minimized": false,
+      "occlusionVisible": false,
+      "stage": "failed-key",
+      "visible": true
+    }
+  },
+  {
+    "variant": "identity",
+    "binarySha256": "693a5730df8d3e4bd85dcd99cb326f494aa80ceffc1b14a958d85c218c272012",
+    "hostPid": 16382,
+    "kernelExitCode": 0,
+    "openExitCode": 0,
+    "passed": true,
+    "final": {
+      "active": true,
+      "elapsedMs": 1517,
+      "events": [
+        "key",
+        "occlusion",
+        "resign-key",
+        "key",
+        "occlusion",
+        "will-mini",
+        "resign-key",
+        "did-mini",
+        "occlusion",
+        "occlusion",
+        "key",
+        "did-demini",
+        "occlusion",
+        "occlusion"
+      ],
+      "key": true,
+      "minimized": false,
+      "occlusionVisible": false,
+      "stage": "passed",
+      "visible": true
+    }
+  },
+  {
+    "variant": "empty-identity",
+    "binarySha256": "bf0b7697384fa02ec526ba36410faf8bc5a5bf53e4071af1c9ff34e1300c21b5",
+    "hostPid": 16441,
+    "kernelExitCode": 2,
+    "openExitCode": 0,
+    "passed": false,
+    "final": {
+      "events": [
+        "occlusion",
+        "occlusion",
+        "key",
+        "occlusion",
+        "resign-key"
+      ],
+      "minimized": false,
+      "precondition": false,
+      "restored": false,
+      "stage": "failed"
+    }
+  }
+]

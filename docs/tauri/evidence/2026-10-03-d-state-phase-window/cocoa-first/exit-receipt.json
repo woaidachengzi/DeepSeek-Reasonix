@@ -1,0 +1,12 @@
+{
+  "delegate": "keep",
+  "application": "tao",
+  "kind": "cocoa",
+  "action": "phase-timer",
+  "root": "/private/tmp/reasonix-phase-cocoa-m75q05uh/keep-tao-cocoa-standard-phase-timer",
+  "style": "standard",
+  "hostPid": 22471,
+  "kernelExitCode": 0,
+  "openExitCode": 0,
+  "expectedCode": 0
+}

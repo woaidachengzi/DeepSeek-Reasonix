@@ -1,0 +1,2 @@
+[ERROR] Refusing to run pnpm@10.34.5: its npm registry signature could not be verified (@pnpm/exe@10.34.5: fetch failed; @pnpm/macos-arm64@10.34.5: fetch failed; pnpm@10.34.5: fetch failed). The bytes selected by this project's lockfile/registry do not match a published, signed pnpm release.
+This can indicate a tampered lockfile or a malicious/unreachable registry. Set `pmOnFail` to `ignore` to skip the version switch if this is unexpected.

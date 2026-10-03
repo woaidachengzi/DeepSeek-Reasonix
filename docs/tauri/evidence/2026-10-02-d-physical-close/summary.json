@@ -1,0 +1,26 @@
+{
+  "hostSha256": "e0fc4d124080bc9e337b009611d48240982e8ad14121ed24248bcf90ed868c76",
+  "sidecarSha256": "29d985c7af09baefec4308339429eabfe921896c47db6f4c30584b742b7efd39",
+  "uiOperations": {
+    "background": [
+      "native close button 49",
+      "telemetry read before AX observation: visible/nativeVisible false, restoreRequests 0, sidecar ready retained",
+      "AX observation caused Reopen, restoreRequests/completions/reopenEvents 1; not manual Dock/tray acceptance",
+      "settings confirmed default background selected",
+      "300 second launcher timeout; quit setting not operated in first round"
+    ],
+    "quit": [
+      "Cmd+, opened actual settings",
+      "radio 115 selected quit; background 0, quit 1",
+      "private host-preferences persisted closeBehavior quit",
+      "return workspace 58",
+      "native close button 49",
+      "no dead UI observation after close; authoritative kernel receipt 0 and cleanup"
+    ]
+  },
+  "manualDockTrayAccepted": false,
+  "physicalMinimizeFullscreenAccepted": false,
+  "DEComplete": false,
+  "productionBinaryChangedThisRound": false,
+  "scope": "macOS private explicit profiles, idle close; no active-turn close or same-profile installed restart acceptance"
+}

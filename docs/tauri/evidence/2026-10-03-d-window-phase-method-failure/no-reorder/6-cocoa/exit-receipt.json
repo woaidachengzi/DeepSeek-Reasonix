@@ -1,0 +1,12 @@
+{
+  "delegate": "keep",
+  "application": "tao",
+  "kind": "cocoa",
+  "action": "phase-timer",
+  "root": "/private/tmp/reasonix-current-phase-pairs-dk_34fff/6-cocoa",
+  "style": "overlay",
+  "hostPid": 30859,
+  "kernelExitCode": 2,
+  "openExitCode": 0,
+  "expectedCode": 2
+}

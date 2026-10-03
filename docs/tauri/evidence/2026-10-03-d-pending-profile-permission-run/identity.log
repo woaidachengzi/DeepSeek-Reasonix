@@ -1,0 +1,6 @@
+identity managed damaged: exit 1, originals, backup recovery and normal quit OK
+identity managed conflicting: exit 1, originals, backup recovery and normal quit OK
+identity managed linked: exit 1, originals, backup recovery and normal quit OK
+identity explicit damaged: exit 1, originals, backup recovery and normal quit OK
+identity explicit conflicting: exit 1, originals, backup recovery and normal quit OK
+identity explicit linked: exit 1, originals, backup recovery and normal quit OK

@@ -1,0 +1,9 @@
+{
+  "app": "/private/tmp/reasonix-d-explicit-boundary-installed-85vr2dm3/Reasonix Tauri Preview.app",
+  "dmg": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri Preview_0.1.0_aarch64.dmg",
+  "dmgSha256": "82e900855c73cfd3799cff5c82e9bc864ac3e10d45b20068dbaeb41d2e8a8276",
+  "artifactSha256": {
+    "reasonix-tauri": "cbb590ba4a2dd45afa322508387ddc07383993550bd9a48e17fedb4fc617a384",
+    "reasonix-desktop-bridge": "cd7262010182d96253c0aa6e6a8038b18ce9f194e35cbfac5cc75106a1ba46b3"
+  }
+}

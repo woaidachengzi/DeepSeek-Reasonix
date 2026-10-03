@@ -1,0 +1,62 @@
+lib/tauriBridge.ts:
+ * The native picker gives the bridge a path only after an explicit user
+ * selection. It does not expose filesystem APIs to the webview.
+ */
+export async function chooseTauriWorkspaceRoot(): Promise<string | null> {
+  requireTauri();
+  const selected = await openDialog({
+    directory: true,
+    multiple: false,
+    title: "Choose Reasonix workspace",
+  });
+  return typeof selected === "string" ? selected : null;
+}
+
+export async function chooseTauriSkillSourceDirectory(): Promise<string | null> {
+  requireTauri();
+  const selected = await openDialog({ directory: true, multiple: false, title: "选择技能来源目录" });
+  return typeof selected === "string" ? selected : null;
+}
+
+export async function chooseTauriAttachmentFiles(): Promise<string[]> {
+  requireTauri();
+  const selected = await openDialog({
+    directory: false,
+    multiple: true,
+    title: "Add files to this conversation",
+  });
+  if (typeof selected === "string") return [selected];
+  return Array.isArray(selected) ? selected : [];
+}
+
+export async function openTauriBridgeSession(sessionId: string, workspaceRoot?: string): Promise<TauriBridgeSession> {
+  requireTauri();
+
+main.rs export_frontend_diagnostics:
+#[tauri::command]
+async fn export_frontend_diagnostics(
+    app: tauri::AppHandle,
+    payload: serde_json::Value,
+) -> Result<bool, String> {
+    let filename = frontend_diagnostics_export_filename(&payload)?;
+    let (sender, receiver) = std::sync::mpsc::channel();
+    app.dialog()
+        .file()
+        .add_filter("JSON diagnostics", &["json"])
+        .set_file_name(filename)
+        .save_file(move |selection| {
+            let _ = sender.send(selection);
+        });
+    let selected =
+        tauri::async_runtime::spawn_blocking(move || receive_file_dialog_selection(receiver))
+            .await
+            .map_err(|_| "file dialog task failed; retry selecting a file")??;
+    let Some(path) = selected_theme_path(selected)? else {
+        return Ok(false);
+    };
+    write_frontend_diagnostics_export(&path, &payload)?;
+    Ok(true)
+}
+
+#[cfg(test)]
+mod frontend_diagnostics_export_tests {

@@ -1,0 +1,927 @@
+{
+  "cocoa-first": {
+    "diagnosticBinaryPrefix": "9365791b",
+    "precondition": true,
+    "minimized": true,
+    "restored": true,
+    "phaseState": 4,
+    "executions": [
+      1,
+      1
+    ],
+    "nativeEvents": [
+      "resign-key",
+      "key",
+      "occlusion",
+      "will-mini",
+      "resign-key",
+      "did-mini",
+      "occlusion",
+      "occlusion",
+      "key",
+      "did-demini",
+      "occlusion",
+      "occlusion",
+      "occlusion"
+    ],
+    "properties": null,
+    "phaseRecords": [
+      {
+        "active": true,
+        "cocoaPageComplete": true,
+        "elapsedMs": 51,
+        "events": [],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "loaded",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": true,
+        "elapsedMs": 100,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "minimize-ready",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": true,
+        "elapsedMs": 100,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "minimize-requested",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": true,
+        "elapsedMs": 626,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion",
+          "will-mini",
+          "resign-key",
+          "did-mini",
+          "occlusion",
+          "occlusion"
+        ],
+        "key": false,
+        "minimized": true,
+        "pageFinished": true,
+        "stage": "minimized",
+        "visible": false
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": true,
+        "elapsedMs": 1267,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion",
+          "will-mini",
+          "resign-key",
+          "did-mini",
+          "occlusion",
+          "occlusion",
+          "key",
+          "did-demini",
+          "occlusion",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "restored",
+        "visible": true
+      }
+    ],
+    "receipt": {
+      "delegate": "keep",
+      "application": "tao",
+      "kind": "cocoa",
+      "action": "phase-timer",
+      "root": "/private/tmp/reasonix-phase-cocoa-m75q05uh/keep-tao-cocoa-standard-phase-timer",
+      "style": "standard",
+      "hostPid": 22471,
+      "kernelExitCode": 0,
+      "openExitCode": 0,
+      "expectedCode": 0
+    }
+  },
+  "cocoa-repeat": {
+    "diagnosticBinaryPrefix": "9365791b",
+    "precondition": true,
+    "minimized": true,
+    "restored": true,
+    "phaseState": 4,
+    "executions": [
+      1,
+      1
+    ],
+    "nativeEvents": [
+      "resign-key",
+      "key",
+      "occlusion",
+      "will-mini",
+      "resign-key",
+      "did-mini",
+      "occlusion",
+      "occlusion",
+      "key",
+      "did-demini",
+      "occlusion",
+      "occlusion",
+      "occlusion"
+    ],
+    "properties": null,
+    "phaseRecords": [
+      {
+        "active": true,
+        "cocoaPageComplete": true,
+        "elapsedMs": 50,
+        "events": [],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "loaded",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": true,
+        "elapsedMs": 100,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "minimize-ready",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": true,
+        "elapsedMs": 100,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "minimize-requested",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": true,
+        "elapsedMs": 624,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion",
+          "will-mini",
+          "resign-key",
+          "did-mini",
+          "occlusion",
+          "occlusion"
+        ],
+        "key": false,
+        "minimized": true,
+        "pageFinished": true,
+        "stage": "minimized",
+        "visible": false
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": true,
+        "elapsedMs": 1271,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion",
+          "will-mini",
+          "resign-key",
+          "did-mini",
+          "occlusion",
+          "occlusion",
+          "key",
+          "did-demini",
+          "occlusion",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "restored",
+        "visible": true
+      }
+    ],
+    "receipt": {
+      "delegate": "keep",
+      "application": "tao",
+      "kind": "cocoa",
+      "action": "phase-timer",
+      "root": "/private/tmp/reasonix-phase-cocoa-scttmsjt/keep-tao-cocoa-standard-phase-timer",
+      "style": "standard",
+      "hostPid": 22614,
+      "kernelExitCode": 0,
+      "openExitCode": 0,
+      "expectedCode": 0
+    }
+  },
+  "tauri-no-reorder": {
+    "diagnosticBinaryPrefix": "9365791b",
+    "precondition": true,
+    "minimized": false,
+    "restored": false,
+    "phaseState": 2,
+    "executions": [
+      1,
+      0
+    ],
+    "nativeEvents": [
+      "resign-key",
+      "occlusion"
+    ],
+    "properties": null,
+    "phaseRecords": [
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 50,
+        "events": [],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "loaded",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 100,
+        "events": [],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "minimize-ready",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 100,
+        "events": [],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "minimize-requested",
+        "visible": true
+      }
+    ],
+    "receipt": {
+      "delegate": "keep",
+      "application": "tao",
+      "kind": "tauri",
+      "action": "phase-timer",
+      "root": "/private/tmp/reasonix-phase-tauri-j78oyihh/keep-tao-tauri-overlay-phase-timer",
+      "style": "overlay",
+      "hostPid": 22509,
+      "kernelExitCode": 2,
+      "openExitCode": 0,
+      "expectedCode": 2
+    }
+  },
+  "tauri-reorder-first": {
+    "diagnosticBinaryPrefix": "9365791b",
+    "precondition": true,
+    "minimized": false,
+    "restored": false,
+    "phaseState": 2,
+    "executions": [
+      1,
+      0
+    ],
+    "nativeEvents": [
+      "resign-key",
+      "key",
+      "occlusion",
+      "resign-key"
+    ],
+    "properties": null,
+    "phaseRecords": [
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 50,
+        "events": [],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "loaded",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 100,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "minimize-ready",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 100,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "minimize-requested",
+        "visible": true
+      }
+    ],
+    "receipt": {
+      "delegate": "keep",
+      "application": "tao",
+      "kind": "tauri",
+      "action": "phase-timer",
+      "root": "/private/tmp/reasonix-phase-tauri-reorder-b1qimbqy/keep-tao-tauri-overlay-phase-timer",
+      "style": "overlay",
+      "hostPid": 22555,
+      "kernelExitCode": 2,
+      "openExitCode": 0,
+      "expectedCode": 2
+    }
+  },
+  "window-delegate-none": {
+    "diagnosticBinaryPrefix": "520c853b",
+    "precondition": true,
+    "minimized": true,
+    "restored": true,
+    "phaseState": 4,
+    "executions": [
+      1,
+      1
+    ],
+    "nativeEvents": [
+      "resign-key",
+      "key",
+      "occlusion",
+      "will-mini",
+      "resign-key",
+      "did-mini",
+      "occlusion",
+      "occlusion",
+      "key",
+      "did-demini",
+      "occlusion",
+      "occlusion",
+      "occlusion"
+    ],
+    "properties": {
+      "nativeAnimationBehavior": 0,
+      "nativeCanBecomeKey": true,
+      "nativeCanBecomeMain": true,
+      "nativeClass": "NSKVONotifying_TaoWindow",
+      "nativeCollectionBehavior": 0,
+      "nativeExcludedFromWindowsMenu": false,
+      "nativeHidesOnDeactivate": false,
+      "nativeLevel": 0,
+      "windowDelegateDetached": true,
+      "windowDelegatePresent": false
+    },
+    "phaseRecords": [
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 51,
+        "events": [],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "loaded",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 101,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "minimize-ready",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 101,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "minimize-requested",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 622,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion",
+          "will-mini",
+          "resign-key",
+          "did-mini",
+          "occlusion",
+          "occlusion"
+        ],
+        "key": false,
+        "minimized": true,
+        "pageFinished": true,
+        "stage": "minimized",
+        "visible": false
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 1262,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion",
+          "will-mini",
+          "resign-key",
+          "did-mini",
+          "occlusion",
+          "occlusion",
+          "key",
+          "did-demini",
+          "occlusion",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "restored",
+        "visible": true
+      }
+    ],
+    "receipt": {
+      "delegate": "keep",
+      "application": "tao",
+      "kind": "tauri",
+      "action": "phase-timer",
+      "root": "/private/tmp/reasonix-phase-window-delegate-none-1w7b8wbp/keep-tao-tauri-overlay-phase-timer",
+      "style": "overlay",
+      "hostPid": 22713,
+      "kernelExitCode": 0,
+      "openExitCode": 0,
+      "expectedCode": 0
+    }
+  },
+  "window-delegate-keep": {
+    "diagnosticBinaryPrefix": "520c853b",
+    "precondition": true,
+    "minimized": true,
+    "restored": true,
+    "phaseState": 4,
+    "executions": [
+      1,
+      1
+    ],
+    "nativeEvents": [
+      "resign-key",
+      "key",
+      "occlusion",
+      "will-mini",
+      "resign-key",
+      "did-mini",
+      "occlusion",
+      "occlusion",
+      "key",
+      "did-demini",
+      "occlusion",
+      "occlusion",
+      "occlusion"
+    ],
+    "properties": {
+      "nativeAnimationBehavior": 0,
+      "nativeCanBecomeKey": true,
+      "nativeCanBecomeMain": true,
+      "nativeClass": "NSKVONotifying_TaoWindow",
+      "nativeCollectionBehavior": 0,
+      "nativeExcludedFromWindowsMenu": false,
+      "nativeHidesOnDeactivate": false,
+      "nativeLevel": 0,
+      "windowDelegateDetached": false,
+      "windowDelegatePresent": true
+    },
+    "phaseRecords": [
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 50,
+        "events": [],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "loaded",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 100,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "minimize-ready",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 100,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "minimize-requested",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 631,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion",
+          "will-mini",
+          "resign-key",
+          "did-mini",
+          "occlusion",
+          "occlusion"
+        ],
+        "key": false,
+        "minimized": true,
+        "pageFinished": true,
+        "stage": "minimized",
+        "visible": false
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 1275,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion",
+          "will-mini",
+          "resign-key",
+          "did-mini",
+          "occlusion",
+          "occlusion",
+          "key",
+          "did-demini",
+          "occlusion",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "restored",
+        "visible": true
+      }
+    ],
+    "receipt": {
+      "delegate": "keep",
+      "application": "tao",
+      "kind": "tauri",
+      "action": "phase-timer",
+      "root": "/private/tmp/reasonix-phase-tauri-reorder-03s48whx/keep-tao-tauri-overlay-phase-timer",
+      "style": "overlay",
+      "hostPid": 22757,
+      "kernelExitCode": 0,
+      "openExitCode": 0,
+      "expectedCode": 0
+    }
+  },
+  "window-delegate-keep-repeat": {
+    "diagnosticBinaryPrefix": "520c853b",
+    "precondition": true,
+    "minimized": true,
+    "restored": true,
+    "phaseState": 4,
+    "executions": [
+      1,
+      1
+    ],
+    "nativeEvents": [
+      "resign-key",
+      "key",
+      "occlusion",
+      "will-mini",
+      "resign-key",
+      "did-mini",
+      "occlusion",
+      "occlusion",
+      "key",
+      "did-demini",
+      "occlusion",
+      "occlusion",
+      "occlusion"
+    ],
+    "properties": {
+      "nativeAnimationBehavior": 0,
+      "nativeCanBecomeKey": true,
+      "nativeCanBecomeMain": true,
+      "nativeClass": "NSKVONotifying_TaoWindow",
+      "nativeCollectionBehavior": 0,
+      "nativeExcludedFromWindowsMenu": false,
+      "nativeHidesOnDeactivate": false,
+      "nativeLevel": 0,
+      "windowDelegateDetached": false,
+      "windowDelegatePresent": true
+    },
+    "phaseRecords": [
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 51,
+        "events": [],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "loaded",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 100,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "minimize-ready",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 101,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "minimize-requested",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 631,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion",
+          "will-mini",
+          "resign-key",
+          "did-mini",
+          "occlusion",
+          "occlusion"
+        ],
+        "key": false,
+        "minimized": true,
+        "pageFinished": true,
+        "stage": "minimized",
+        "visible": false
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 1275,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion",
+          "will-mini",
+          "resign-key",
+          "did-mini",
+          "occlusion",
+          "occlusion",
+          "key",
+          "did-demini",
+          "occlusion",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "restored",
+        "visible": true
+      }
+    ],
+    "receipt": {
+      "delegate": "keep",
+      "application": "tao",
+      "kind": "tauri",
+      "action": "phase-timer",
+      "root": "/private/tmp/reasonix-phase-tauri-reorder-wujcargj/keep-tao-tauri-overlay-phase-timer",
+      "style": "overlay",
+      "hostPid": 22849,
+      "kernelExitCode": 0,
+      "openExitCode": 0,
+      "expectedCode": 0
+    }
+  },
+  "old-binary-recheck": {
+    "diagnosticBinaryPrefix": "9365791b",
+    "precondition": true,
+    "minimized": true,
+    "restored": true,
+    "phaseState": 4,
+    "executions": [
+      1,
+      1
+    ],
+    "nativeEvents": [
+      "resign-key",
+      "key",
+      "occlusion",
+      "will-mini",
+      "resign-key",
+      "did-mini",
+      "occlusion",
+      "occlusion",
+      "key",
+      "did-demini",
+      "occlusion",
+      "occlusion",
+      "occlusion"
+    ],
+    "properties": null,
+    "phaseRecords": [
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 50,
+        "events": [],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "loaded",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 100,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "minimize-ready",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 101,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "minimize-requested",
+        "visible": true
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 625,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion",
+          "will-mini",
+          "resign-key",
+          "did-mini",
+          "occlusion",
+          "occlusion"
+        ],
+        "key": false,
+        "minimized": true,
+        "pageFinished": true,
+        "stage": "minimized",
+        "visible": false
+      },
+      {
+        "active": true,
+        "cocoaPageComplete": false,
+        "elapsedMs": 1275,
+        "events": [
+          "resign-key",
+          "key",
+          "occlusion",
+          "will-mini",
+          "resign-key",
+          "did-mini",
+          "occlusion",
+          "occlusion",
+          "key",
+          "did-demini",
+          "occlusion",
+          "occlusion"
+        ],
+        "key": true,
+        "minimized": false,
+        "pageFinished": true,
+        "stage": "restored",
+        "visible": true
+      }
+    ],
+    "receipt": {
+      "delegate": "keep",
+      "application": "tao",
+      "kind": "tauri",
+      "action": "phase-timer",
+      "root": "/private/tmp/reasonix-phase-old-binary-yqwbmuqu/keep-tao-tauri-overlay-phase-timer",
+      "style": "overlay",
+      "hostPid": 22819,
+      "kernelExitCode": 0,
+      "openExitCode": 0,
+      "expectedCode": 0
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "kind": "cocoa",
+  "action": "main-queue",
+  "root": "/private/tmp/reasonix-tauri-window-baseline-_g1ocvl1/cocoa-standard-main-queue",
+  "style": "standard",
+  "hostPid": 80932,
+  "kernelExitCode": 2,
+  "openExitCode": 0,
+  "expectedCode": 2
+}

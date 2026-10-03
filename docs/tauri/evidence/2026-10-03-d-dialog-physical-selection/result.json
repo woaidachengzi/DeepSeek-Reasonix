@@ -1,0 +1,15 @@
+{
+  "app": "/private/tmp/reasonix-d-theme-boundary-installed-b4f0dmtp/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-launch-services-spr1741x",
+  "identifier": "io.reasonix.desktop.preview",
+  "pid": 20690,
+  "sidecarPid": 20698,
+  "openerPid": 20688,
+  "profile": "explicit",
+  "interactive": true,
+  "exitCode": 0,
+  "expectedExitCode": 0,
+  "openExitCode": 0,
+  "sidecarRemaining": false,
+  "readyRemaining": false
+}

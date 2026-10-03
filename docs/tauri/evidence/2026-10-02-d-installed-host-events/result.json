@@ -1,0 +1,104 @@
+{
+  "sourceHead": "64c745c1a4aa6bc1eccc45c70be9b1a54d7165c4",
+  "dirty": true,
+  "app": "/private/tmp/reasonix-d-installed-a236fppg/Reasonix Tauri Preview.app",
+  "dmg": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri Preview_0.1.0_aarch64.dmg",
+  "sha256": {
+    "Reasonix Tauri Preview_0.1.0_aarch64.dmg": "4ad8da930149c77540a043967159469f975422de861bbe17e1e989c272917f53",
+    "reasonix-tauri": "8c93a9e0401d5c890079a44be57794b6332f69bb59f4676e9816fdd32ded8b84",
+    "reasonix-desktop-bridge": "29d985c7af09baefec4308339429eabfe921896c47db6f4c30584b742b7efd39"
+  },
+  "gates": [
+    {
+      "name": "package",
+      "exitCode": 0,
+      "log": "package.log"
+    },
+    {
+      "name": "window",
+      "exitCode": 0,
+      "log": "window.log"
+    },
+    {
+      "name": "lifetime",
+      "exitCode": 0,
+      "log": "lifetime.log"
+    },
+    {
+      "name": "displays",
+      "exitCode": 0,
+      "log": "displays.log"
+    },
+    {
+      "name": "profile",
+      "exitCode": 0,
+      "log": "profile.log"
+    },
+    {
+      "name": "links",
+      "exitCode": 0,
+      "log": "links.log"
+    },
+    {
+      "name": "notifications",
+      "exitCode": 0,
+      "log": "notifications.log"
+    }
+  ],
+  "sourcePatch": "source.patch",
+  "sourcePatchSha256": "129957e199a187fc963f2eecf2c24aeb0e5e2c9f6f7e3c1017bccf76375a5cb5",
+  "signature": "ad-hoc; codesign --verify --deep --strict passed; not notarized",
+  "installation": "hdiutil verify; readonly attach; ditto to private temporary install; detach; installed host/sidecar SHA-256 equals build",
+  "sourceChecks": [
+    {
+      "name": "shell-order-before-node",
+      "exitCode": 1,
+      "log": "shell-order-before-node.log",
+      "expectedExitCode": 1
+    },
+    {
+      "name": "shell-order-after",
+      "exitCode": 0,
+      "log": "shell-order-after.log",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "shortcuts",
+      "exitCode": 0,
+      "log": "shortcuts.log",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "test-typecheck",
+      "exitCode": 0,
+      "log": "test-typecheck.log",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "frontend-build",
+      "exitCode": 0,
+      "log": "frontend-build.log",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "lifecycle",
+      "exitCode": 0,
+      "log": "lifecycle.log",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "package-build",
+      "exitCode": 0,
+      "log": "package-build.log",
+      "expectedExitCode": 0
+    }
+  ],
+  "acceptance": {
+    "D": "incomplete",
+    "E": "not advanced; awaits D acceptance and Preview stability",
+    "physicalUi": "cua.getState timed out and reset kernel on all three attempts (30 seconds each)",
+    "explicitDeferralsThisTurn": [],
+    "windowStability": "latest two full gates passed; prior same-candidate intermittent minimization failures remain unexplained",
+    "legacyDirectories": "1.38.3 baseline lacks profilegate; current lock-aware host tests do not certify arbitrary old binaries"
+  }
+}

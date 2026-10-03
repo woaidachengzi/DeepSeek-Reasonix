@@ -1,0 +1,9 @@
+{
+  "sdkHeader": "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/ScreenCaptureKit.framework/Headers/SCError.h",
+  "sha256": "e6f51cbe0ca027a36fa4f8265262b27fb46e1bde2c821039f0f22349b27b8b11",
+  "code": -3811,
+  "symbol": "SCStreamErrorInternalError",
+  "userDeclinedCode": -3801,
+  "inference": "This does not identify permission denial, recording/sharing, input interference, or the native minimization root cause.",
+  "officialReference": "https://developer.apple.com/documentation/screencapturekit/scstreamerror/internalerror"
+}

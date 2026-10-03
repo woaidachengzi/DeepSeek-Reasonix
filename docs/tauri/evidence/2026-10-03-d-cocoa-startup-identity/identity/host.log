@@ -1,0 +1,6 @@
+{"active":true,"elapsedMs":135,"events":["key"],"key":true,"minimized":false,"occlusionVisible":false,"stage":"ready","visible":true}
+{"active":true,"elapsedMs":288,"events":["key","occlusion"],"key":true,"minimized":false,"occlusionVisible":true,"stage":"loaded","visible":true}
+{"active":true,"elapsedMs":336,"events":["key","occlusion","resign-key","key","occlusion"],"key":true,"minimized":false,"occlusionVisible":false,"stage":"minimize-ready","visible":true}
+{"active":true,"elapsedMs":336,"events":["key","occlusion","resign-key","key","occlusion"],"key":true,"minimized":false,"occlusionVisible":false,"stage":"minimize-requested","visible":true}
+{"active":true,"elapsedMs":862,"events":["key","occlusion","resign-key","key","occlusion","will-mini","resign-key","did-mini","occlusion","occlusion"],"key":false,"minimized":true,"occlusionVisible":false,"stage":"minimized","visible":false}
+{"active":true,"elapsedMs":1517,"events":["key","occlusion","resign-key","key","occlusion","will-mini","resign-key","did-mini","occlusion","occlusion","key","did-demini","occlusion","occlusion"],"key":true,"minimized":false,"occlusionVisible":false,"stage":"passed","visible":true}

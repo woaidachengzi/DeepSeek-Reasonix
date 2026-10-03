@@ -123,19 +123,46 @@ fn script(nonce: &str, denied: bool) -> String {
                 report(denied ? 'denied-failed' : 'main-failed'); return;
             }
             const invoke = (command, args = {}) => window.__TAURI_INTERNALS__.invoke(command, args);
-            const rejected = async (command, args) => {
+            const rejected = async (command, args, plugin = 'clipboard-manager') => {
                 try { await invoke(command, args); return false; }
                 catch (error) {
                     const message = String(error);
-                    return message.includes('clipboard-manager') && message.includes('not allowed');
+                    return message.includes(plugin) && message.includes('not allowed');
                 }
             };
             try {
                 if (denied) {
                     const read = await rejected('plugin:clipboard-manager|read_text');
                     const write = await rejected('plugin:clipboard-manager|write_text', { text: value + '-denied' });
-                    report(read && write ? 'denied-ok' : 'denied-failed');
+                    const dialog = await rejected('plugin:dialog|open', { options: { directory: true, multiple: false } }, 'dialog');
+                    const customRejected = async (command, args) => {
+                        try { await invoke(command, args); return false; }
+                        catch (error) { return String(error).includes('native application commands require the main window'); }
+                    };
+                    const commands = [
+                        ['set_tray_locale', { locale: 'zh' }],
+                        ['import_user_theme', {}],
+                        ['export_user_theme', { id: 'private-nonexistent-permission-probe' }],
+                        ['export_frontend_diagnostics', { payload: { schemaVersion: 2, manifest: { reportId: 'deniedqa' }, events: [] } }],
+                        ['notification_permission', {}],
+                        ['keychain_import_legacy', { provider: 'private-nonexistent-permission-probe', source: 'wails' }],
+                        ['keychain_import_legacy', { provider: 'private-nonexistent-permission-probe', source: 'wails-env' }],
+                    ];
+                    let custom = true;
+                    for (const [command, args] of commands) {
+                        // A forged renderer argument never changes the native
+                        // caller identity. No dialog/source read/credential
+                        // write is permitted before this common rejection.
+                        const ordinary = await customRejected(command, args);
+                        const forged = await customRejected(command, { ...args, window: 'main' });
+                        custom = custom && ordinary && forged;
+                    }
+                    report(read && write && dialog && custom ? 'denied-ok' : 'denied-failed');
                 } else {
+                    // Exercise the registered custom IPC handler, not only
+                    // a direct Rust call; hidden caller tests must then fail
+                    // at its real window-identity boundary.
+                    await invoke('set_tray_locale', { locale: 'en' });
                     await invoke('plugin:clipboard-manager|write_text', { text: value });
                     const text = await invoke('plugin:clipboard-manager|read_text');
                     const image = await rejected('plugin:clipboard-manager|read_image');

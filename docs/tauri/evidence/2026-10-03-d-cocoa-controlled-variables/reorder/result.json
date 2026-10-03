@@ -1,0 +1,303 @@
+{
+  "root": "/private/tmp/reasonix-cocoa-reorder-control-8olofftz",
+  "app": "/private/tmp/reasonix-cocoa-reorder-control-8olofftz/Private Reorder Cocoa Control.app",
+  "pid": 15613,
+  "kernelExitCode": 2,
+  "openExitCode": 0,
+  "binarySha256": "0eeb030ebd882fa1bf61d449ea679552d512ee1a9ac8715ddac31adc940a6e6f",
+  "passed": false,
+  "records": [
+    {
+      "applicationActive": false,
+      "nativeEvents": [
+        "occlusion"
+      ],
+      "nativeKey": false,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 0
+    },
+    {
+      "applicationActive": false,
+      "nativeEvents": [
+        "occlusion"
+      ],
+      "nativeKey": false,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 1
+    },
+    {
+      "applicationActive": false,
+      "nativeEvents": [
+        "occlusion"
+      ],
+      "nativeKey": false,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 2
+    },
+    {
+      "applicationActive": false,
+      "nativeEvents": [
+        "occlusion"
+      ],
+      "nativeKey": false,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 3
+    },
+    {
+      "applicationActive": false,
+      "nativeEvents": [
+        "occlusion"
+      ],
+      "nativeKey": false,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 4
+    },
+    {
+      "applicationActive": false,
+      "nativeEvents": [
+        "occlusion"
+      ],
+      "nativeKey": false,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 5
+    },
+    {
+      "applicationActive": false,
+      "nativeEvents": [
+        "occlusion"
+      ],
+      "nativeKey": false,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 6
+    },
+    {
+      "applicationActive": false,
+      "nativeEvents": [
+        "occlusion",
+        "occlusion"
+      ],
+      "nativeKey": false,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 7
+    },
+    {
+      "applicationActive": false,
+      "nativeEvents": [
+        "occlusion",
+        "occlusion"
+      ],
+      "nativeKey": false,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 8
+    },
+    {
+      "applicationActive": false,
+      "nativeEvents": [
+        "occlusion",
+        "occlusion"
+      ],
+      "nativeKey": false,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 9
+    },
+    {
+      "applicationActive": false,
+      "nativeEvents": [
+        "occlusion",
+        "occlusion"
+      ],
+      "nativeKey": false,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 10
+    },
+    {
+      "applicationActive": false,
+      "nativeEvents": [
+        "occlusion",
+        "occlusion"
+      ],
+      "nativeKey": false,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 11
+    },
+    {
+      "applicationActive": false,
+      "nativeEvents": [
+        "occlusion",
+        "occlusion"
+      ],
+      "nativeKey": false,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 12
+    },
+    {
+      "applicationActive": false,
+      "nativeEvents": [
+        "occlusion",
+        "occlusion"
+      ],
+      "nativeKey": false,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 13
+    },
+    {
+      "applicationActive": false,
+      "nativeEvents": [
+        "occlusion",
+        "occlusion"
+      ],
+      "nativeKey": false,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 14
+    },
+    {
+      "applicationActive": true,
+      "nativeEvents": [
+        "occlusion",
+        "occlusion",
+        "key",
+        "occlusion"
+      ],
+      "nativeKey": true,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 15
+    },
+    {
+      "applicationActive": true,
+      "nativeEvents": [
+        "occlusion",
+        "occlusion",
+        "key",
+        "occlusion"
+      ],
+      "nativeKey": true,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 16
+    },
+    {
+      "applicationActive": true,
+      "nativeEvents": [
+        "occlusion",
+        "occlusion",
+        "key",
+        "occlusion"
+      ],
+      "nativeKey": true,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 17
+    },
+    {
+      "applicationActive": true,
+      "nativeEvents": [
+        "occlusion",
+        "occlusion",
+        "key",
+        "occlusion"
+      ],
+      "nativeKey": true,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 18
+    },
+    {
+      "applicationActive": true,
+      "nativeEvents": [
+        "occlusion",
+        "occlusion",
+        "key",
+        "occlusion"
+      ],
+      "nativeKey": true,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 19
+    },
+    {
+      "applicationActive": false,
+      "nativeEvents": [
+        "occlusion",
+        "occlusion",
+        "key",
+        "occlusion",
+        "resign-key"
+      ],
+      "nativeKey": false,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 20
+    },
+    {
+      "applicationActive": false,
+      "nativeEvents": [
+        "occlusion",
+        "occlusion",
+        "key",
+        "occlusion",
+        "resign-key"
+      ],
+      "nativeKey": false,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 21
+    },
+    {
+      "applicationActive": false,
+      "nativeEvents": [
+        "occlusion",
+        "occlusion",
+        "key",
+        "occlusion",
+        "resign-key"
+      ],
+      "nativeKey": false,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 22
+    },
+    {
+      "applicationActive": false,
+      "nativeEvents": [
+        "occlusion",
+        "occlusion",
+        "key",
+        "occlusion",
+        "resign-key"
+      ],
+      "nativeKey": false,
+      "nativeMiniaturized": false,
+      "nativeVisible": true,
+      "step": 23
+    },
+    {
+      "events": [
+        "occlusion",
+        "occlusion",
+        "key",
+        "occlusion",
+        "resign-key"
+      ],
+      "minimized": false,
+      "precondition": false,
+      "restored": false,
+      "stage": "failed"
+    }
+  ]
+}

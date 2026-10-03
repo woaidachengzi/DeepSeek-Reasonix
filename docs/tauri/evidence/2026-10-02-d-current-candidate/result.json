@@ -1,0 +1,128 @@
+{
+  "startedAt": "2026-10-02T09:07:10.796774+00:00",
+  "app": "/private/tmp/reasonix-d-root-accepted-t4_lgkuh/Reasonix Tauri Preview.app",
+  "sourceHead": "64c745c1a4aa6bc1eccc45c70be9b1a54d7165c4",
+  "dirty": true,
+  "sourcePatchSha256": "86245969801f89e438ca808d136b55e4ec65c7c1ed1891f8349eefd24a1a9289",
+  "artifactSha256": {
+    "Contents/MacOS/reasonix-tauri": "9676735e7a5a046de9592d7d633fb9cf632280159b3a8d5081f6f430f23cf220",
+    "Contents/MacOS/reasonix-desktop-bridge": "29d985c7af09baefec4308339429eabfe921896c47db6f4c30584b742b7efd39",
+    "Contents/Info.plist": "ce61cb6c5ba4a9f35217dc964292e23371d37a554354a5ecce233b09dc08904d"
+  },
+  "runnerSha256": "842e7e23154c72c4ba0fb23c9a5477d38d6f5e365654f56db0cb7f0f3a853c11",
+  "scriptSha256": {
+    "clipboard-snapshot.swift": "7c036498ff16ff0ad76c0f949324a9a6c97a6512ab604e15679144a676b24c3b",
+    "native-clipboard-fixture.py": "11e40eabd287653290ddc5346886c789b6328094cae45c0163cadfb30ec2a91b",
+    "native-document-provider.py": "f423d510eaed1230b8799fc119cd9e0e6b135bfc9f83f7ed183d82e17aeb22c1",
+    "native-task-provider.py": "ecb62568a2996040381b8275f655fffdece1880021ea5ee4f937861bc3ac70de",
+    "native-terminal-cwd.c": "0ea7099973981a5d69848bc1efe3f4e36d760e157facf569ef8b61d0f87843fd",
+    "probe-edit-launch-services.py": "d9da33630b3ade5ad5a80b8b1db5e3e2060df65a4e607b560bb92bef97917d80",
+    "probe-legacy-profile-gate.py": "ed1272236b4e19d4d684a8833e5d5628be03088e472419754987965a6d35fe9f",
+    "smoke-document-scope.py": "653e9c8326481bdc0e08dd2fc22db207bc41413052effed15c14897d35f8fea7",
+    "smoke-host-lifetime.py": "16643899a33aa725635e694886a3ce21808243426b78f9c1428e13c4c4a404e5",
+    "smoke-legacy-rollback.py": "d0ffa28a08a7d7da0b7fb621e40f8fab1775c2149a200d9aaafbffe89dfc6cdd",
+    "smoke-managed-profile-boundary.py": "ac0c24fff73d7547bf04886e7b5b8011fd6469dc7528199af12b4df82a4db0e5",
+    "smoke-native-app-failure.py": "9c262988d16e7a5d642b649fe12148182b20635d8ae6e6884bdd3ba355d1b8e6",
+    "smoke-native-displays.py": "dfe5d1a0a835b2fe6e2864bbd014b98053341b4c79a36cf92de06c3fee50ca37",
+    "smoke-native-links.py": "9903b9757a04a61527ab5a422e5af29ac40e39472b10d8dc14814458e1101ef2",
+    "smoke-native-menu-window.py": "7c2870b722bd3d55a51f7187a26fd7dec659c6d29ad2412683ca94b4a88a2c24",
+    "smoke-native-notifications.py": "68f5d89465c93b72e17e5a0f8f86872096f9fbf919c5632413e54661f1da2506",
+    "smoke-native-startup.py": "3fa821bcc12dd7dea8d42edd7e1803f03265ecd42b559590cc510f83533441ba",
+    "smoke-native-terminal.py": "31bd59f4d5a46b6fe38b1a1cbd13404f357008c72b683b5fc145468e985d268c",
+    "smoke-native-ui-clipboard.py": "eec75e4c30dfa91205d5e80fdaa650b828b04d6aa64b92c62e676027b4cdfcd4",
+    "smoke-native-ui-export.py": "48fc3aacc666beaf4e6b183076246666af156f86243ed89abc58f2676af5b0ef",
+    "smoke-native-ui-legacy-read.py": "01d93b8829d38d0bb773d38d0471829abd1df0100e0589bc63a3f69226c3dbfa",
+    "smoke-native-ui-migration.py": "a5f808ae5ab96fb623bd0a31021c9297b9e90d832c4a7431e41f9ecac6a88901",
+    "smoke-native-ui-storage.py": "1187d7a4329b73c54385a1ce4eda51ef419a4df27653b7c23fc3fc121acc747e",
+    "smoke-native-ui-theme-import.py": "15715753d76b24b4c136623e187a64c92e9d2cf9b2b8b9fda751d98cf39e89ab",
+    "smoke-native-window.py": "c68219678eaee5904fedeaffd3ca65c5a2a7db779d3b9048bfc0f7c4b7713fa2",
+    "smoke-packaged-app.py": "5d6d953d65b26c07b0821d298772012befd166fdb9aa14028dfaf9dab7ad9b23",
+    "smoke-profile-import.py": "a0c37744d19ec9599e5a2419df09e63ebd61fe66d47a59a415c9ecabd2c9e32e",
+    "verify-installed-d.py": "842e7e23154c72c4ba0fb23c9a5477d38d6f5e365654f56db0cb7f0f3a853c11",
+    "verify-legacy-host.sh": "4eea87ea23635188249b05b17181f3a0ab89c06d9c818a6db41578f453780965"
+  },
+  "scope": "Selected programmatic D gates only; physical UI, historical stability and complete D/E acceptance remain separate.",
+  "gates": [
+    {
+      "name": "lifetime",
+      "status": "passed",
+      "script": "smoke-host-lifetime.py",
+      "scriptSha256": "16643899a33aa725635e694886a3ce21808243426b78f9c1428e13c4c4a404e5",
+      "args": [],
+      "startedAt": "2026-10-02T09:07:10.873848+00:00",
+      "log": "lifetime.log",
+      "exitCode": 0,
+      "finishedAt": "2026-10-02T09:07:45.408371+00:00"
+    },
+    {
+      "name": "displays",
+      "status": "passed",
+      "script": "smoke-native-displays.py",
+      "scriptSha256": "dfe5d1a0a835b2fe6e2864bbd014b98053341b4c79a36cf92de06c3fee50ca37",
+      "args": [
+        "--straddle"
+      ],
+      "startedAt": "2026-10-02T09:07:45.408862+00:00",
+      "log": "displays.log",
+      "exitCode": 0,
+      "finishedAt": "2026-10-02T09:08:13.637519+00:00"
+    },
+    {
+      "name": "links",
+      "status": "passed",
+      "script": "smoke-native-links.py",
+      "scriptSha256": "9903b9757a04a61527ab5a422e5af29ac40e39472b10d8dc14814458e1101ef2",
+      "args": [],
+      "startedAt": "2026-10-02T09:08:13.637964+00:00",
+      "log": "links.log",
+      "exitCode": 0,
+      "finishedAt": "2026-10-02T09:08:22.353605+00:00"
+    },
+    {
+      "name": "notifications",
+      "status": "passed",
+      "script": "smoke-native-notifications.py",
+      "scriptSha256": "68f5d89465c93b72e17e5a0f8f86872096f9fbf919c5632413e54661f1da2506",
+      "args": [],
+      "startedAt": "2026-10-02T09:08:22.354091+00:00",
+      "log": "notifications.log",
+      "exitCode": 0,
+      "finishedAt": "2026-10-02T09:08:36.866446+00:00"
+    }
+  ],
+  "finishedAt": "2026-10-02T09:08:36.866791+00:00",
+  "buildProvenance": "../2026-10-02-d-managed-root/result.json",
+  "additionalChecks": [
+    {
+      "name": "window",
+      "exitCode": 0,
+      "counts": "46/46",
+      "log": "window.log"
+    },
+    {
+      "name": "native-keychain",
+      "exitCode": 0,
+      "counts": "1/1",
+      "log": "keychain.log",
+      "scope": "unique dummy namespaces; test executable, not installed renderer interaction"
+    },
+    {
+      "name": "official-wails-rollback",
+      "exitCode": 0,
+      "log": "rollback.log",
+      "args": [
+        "--workspace-data"
+      ],
+      "scope": "official digest-verified 1.38.3 binaries; private Global history, attachments and latest checkpoint; earlier conflicting rewind refused"
+    }
+  ],
+  "logSha256": {
+    "links.log": "0198e72fe493ac007c294d2fc50d4d84f937cc29af67f4dcffbe6d275a802533",
+    "keychain.log": "18150afdd9f8be970e29914779690f90cded9f912aca15bff6a9f0172b01e496",
+    "lifetime.log": "09c60fd807314d9fc2f3e0a38d752874b8bd5ecb57eeb58b2926ec2ef6be9d05",
+    "window.log": "60fb56d3738f48abe19869252a6ac16eae8ed8c9712a87de8993f3cba0487bb1",
+    "notifications.log": "035c9008db48abcc7228b075f2c326a7c258a333d39b2988af659b992de3d3a4",
+    "displays.log": "78098ad0aebf71407ab26fcd2123e51630aa10861a859164b43ce119599d9881",
+    "rollback.log": "8aa34936d580f9714c2af1099a93b6e056c76b5ac089a87200dfbc329d3d9737"
+  }
+}

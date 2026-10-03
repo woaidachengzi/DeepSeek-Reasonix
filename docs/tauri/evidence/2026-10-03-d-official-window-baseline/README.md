@@ -1,0 +1,9 @@
+# 官方 Wails 1.38.3 窗口基线恢复
+
+此前官方临时副本未找到；重新读取官方 GitHub release API，arm64 zip大小88965850、SHA256532b84dfd7691fa5ec006f88cf6937614b84cdf553d5498a722134d3d4e3a241匹配已保存基线。下载完整后校验才解压，拒绝链接/重复/路径穿越/超限。host SHA256869b02d8f8a92f5847c1728923fde7153d931e105f26fd2926bfa8feeb863650、内嵌CLI5b1ab31424d45c8bf3cfe6a60b11da527df2252aee963d1c0c56352f57945962均匹配，strict签名通过。未重新签名或替换 /Applications。
+
+私有artifact位置见artifact.json，以后先核对其存在和固定摘要，不将历史记录当当前状态。独立HOME/core/state/cache与无用户凭据的固定配置，metrics/telemetry=false，HTTP(S)代理到本机拒绝端口，界面自动更新检查被代理拒绝；不使用真实模型。确切PID17777，CUA绑定该私有路径，Window菜单含performMiniaturize:。点击后CUA仍返回完整窗口树；官方二进制无 native state探针，因此仅此AX树不能证明最小化失败。向用户请求可见状态确认，结果待补。
+
+此记录尚不代表基线最小化或完整D验收通过。本次180秒有界观察超时，未执行正常Quit、未保存normal kernel回执，runner1；finally向确切host发送TERM并结束opener。退出不能计通过，确切PID清理验证单独记录。用户确认仍待补。
+
+后续清理复核：TERM后PID17777仍存活（opener已结束），不能把finally调用等同于清理完成。重新核对exact comm与自有路径，附着新的kernel退出监视器；CUA读取同一活绑定后Cmd+Q，取得normal kernel exit0。cleanup-exit.json记录这一独立后续退出，不覆盖原runner超时/exit1。之后未读取死亡UI绑定。未修改/重开本机安装版。

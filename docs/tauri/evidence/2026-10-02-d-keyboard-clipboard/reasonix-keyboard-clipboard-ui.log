@@ -1,0 +1,10 @@
+{"root": "/private/tmp/reasonix-interactive-clipboard-ysnc1ptw", "binary": "/private/tmp/reasonix-interactive-clipboard-ysnc1ptw/clipboard-snapshot", "snapshot": "/private/tmp/reasonix-interactive-clipboard-ysnc1ptw/clipboard-original.plist", "marker": "/private/tmp/reasonix-interactive-clipboard-ysnc1ptw/reasonix-native-clipboard-owned.json", "canary": "reasonix-native-clipboard-2d3fa37aa6b64b52859979def19cd74c"}
+{"app": "/private/tmp/reasonix-d-host-exit-installed-xg2eq0h_/Reasonix Tauri Preview.app", "root": "/private/tmp/reasonix-launch-services-yit94j4z", "identifier": "io.reasonix.desktop.preview", "pid": 87386, "sidecarPid": 87394, "openerPid": 87384, "profile": "explicit", "interactive": true}
+native clipboard preservation after failed phase: new contents preserved
+Traceback (most recent call last):
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/probe-interactive-clipboard.py", line 52, in <module>
+    launcher.launch(app, identifier, False, interactive=True, observe=True)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/probe-launch-services-profile.py", line 113, in launch
+    raise RuntimeError("LaunchServices host did not publish an exit receipt")
+RuntimeError: LaunchServices host did not publish an exit receipt

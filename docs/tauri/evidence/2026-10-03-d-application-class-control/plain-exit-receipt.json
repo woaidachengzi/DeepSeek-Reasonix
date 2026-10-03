@@ -1,0 +1,11 @@
+{
+  "application": "plain",
+  "kind": "cocoa",
+  "action": "direct",
+  "root": "/private/tmp/reasonix-tauri-window-baseline-7iy3q1jq/plain-cocoa-standard-direct",
+  "style": "standard",
+  "hostPid": 5307,
+  "kernelExitCode": 2,
+  "openExitCode": 0,
+  "expectedCode": 2
+}

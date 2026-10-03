@@ -1,0 +1,177 @@
+diff --git a/desktop/frontend/src/__tests__/desktop-close-behavior-hint.test.tsx b/desktop/frontend/src/__tests__/desktop-close-behavior-hint.test.tsx
+index 69d1c98e5..5fb8faa54 100644
+--- a/desktop/frontend/src/__tests__/desktop-close-behavior-hint.test.tsx
++++ b/desktop/frontend/src/__tests__/desktop-close-behavior-hint.test.tsx
+@@ -3,7 +3,8 @@ import React from "react";
+ import { act } from "react";
+ import { createRoot } from "react-dom/client";
+ import { DesktopCloseBehaviorHint } from "../components/DesktopCloseBehaviorHint";
+-import type { AppBindings } from "../lib/bridge";
++import { onDesktopOpenSettings, onDesktopShellStatus, type AppBindings } from "../lib/bridge";
++import assert from "node:assert/strict";
+ 
+ const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>", {
+   pretendToBeVisual: true,
+@@ -35,4 +36,51 @@ if (rootElement.textContent !== "Keep running after close.Closing this time will
+   throw new Error(`unexpected close fallback hint: ${JSON.stringify(rootElement.textContent)}`);
+ }
+ await act(async () => root.unmount());
++
++// A native tray transition is newer than the initial async status query.
++let resolveStatus!: (value: { trayState: "unavailable"; backgroundCloseAvailable: false }) => void;
++const pendingStatus = new Promise<{ trayState: "unavailable"; backgroundCloseAvailable: false }>((resolve) => { resolveStatus = resolve; });
++let statusEvent!: (...values: unknown[]) => void;
++let unsubscribed = 0;
++window.runtime = {
++  EventsOn(name: string, listener: (...values: unknown[]) => void) {
++    assert.equal(name, "desktop:shell-status");
++    statusEvent = listener;
++    return () => { unsubscribed++; };
++  },
++} as NonNullable<Window["runtime"]>;
++window.go.main.App.GetDesktopShellStatus = () => pendingStatus;
++const nextRoot = createRoot(rootElement);
++await act(async () => {
++  nextRoot.render(<DesktopCloseBehaviorHint backgroundSelected hint="Keep running after close." unavailableHint="Closing this time will quit." />);
++});
++await act(async () => {
++  statusEvent({ trayState: "ready", backgroundCloseAvailable: true });
++  resolveStatus({ trayState: "unavailable", backgroundCloseAvailable: false });
++  await pendingStatus;
++});
++assert.equal(rootElement.textContent, "Keep running after close.", "a delayed snapshot must not overwrite the newer native tray event");
++await act(async () => nextRoot.unmount());
++assert.equal(unsubscribed, 1, "the host subscription is removed on unmount");
++
++// Native queued delivery must be inert after the settings consumer leaves.
++let settingsEvent!: (...values: unknown[]) => void;
++let settingsOpened = 0;
++let settingsUnsubscribed = 0;
++window.runtime.EventsOn = (name, listener) => {
++  assert.equal(name, "app:open-settings");
++  settingsEvent = listener;
++  return () => { settingsUnsubscribed++; };
++};
++const stopSettings = onDesktopOpenSettings(() => { settingsOpened++; });
++settingsEvent();
++assert.equal(settingsOpened, 1);
++stopSettings();
++stopSettings();
++settingsEvent();
++assert.equal(settingsOpened, 1, "already queued host settings events cannot reopen settings after disposal");
++assert.equal(settingsUnsubscribed, 1, "host event disposal is idempotent");
++delete window.runtime;
++onDesktopOpenSettings(() => { throw new Error("browser preview must not fabricate a settings event"); })();
++onDesktopShellStatus(() => { throw new Error("browser preview must not fabricate tray status"); })();
+ console.log("desktop close behavior hint: ok");
+diff --git a/desktop/frontend/src/__tests__/tauri-shortcuts.test.ts b/desktop/frontend/src/__tests__/tauri-shortcuts.test.ts
+index 74ba227c3..8ab7d426a 100644
+--- a/desktop/frontend/src/__tests__/tauri-shortcuts.test.ts
++++ b/desktop/frontend/src/__tests__/tauri-shortcuts.test.ts
+@@ -52,8 +52,8 @@ for (const native of [...nativeShortcuts.required, ...nativeShortcuts.optional])
+   assert.equal(nativeTauriShortcutConflict(native, "darwin"), true, `${native.title} stays native`);
+   assert.equal(setTauriShortcut("settings", native, "darwin"), false, `${native.title} cannot be saved as a Preview shortcut`);
+   const event = new dom.window.KeyboardEvent("keydown", {
+-    key: native.key, metaKey: native.meta, ctrlKey: "ctrl" in native && native.ctrl,
+-    altKey: "alt" in native && native.alt, shiftKey: "shift" in native && native.shift,
++    key: native.key, metaKey: native.meta, ctrlKey: "ctrl" in native && native.ctrl === true,
++    altKey: "alt" in native && native.alt === true, shiftKey: "shift" in native && native.shift === true,
+   });
+   for (const action of TAURI_SHORTCUT_ACTIONS) {
+     assert.equal(matchesTauriShortcut(event, action, "darwin"), false, `${native.title} never dispatches ${action}`);
+diff --git a/desktop/frontend/src/app-runtime/useNativeSettingsEvent.ts b/desktop/frontend/src/app-runtime/useNativeSettingsEvent.ts
+index 35acb78f4..6d1910112 100644
+--- a/desktop/frontend/src/app-runtime/useNativeSettingsEvent.ts
++++ b/desktop/frontend/src/app-runtime/useNativeSettingsEvent.ts
+@@ -1,5 +1,6 @@
+ import { useEffect } from "react";
+ import { useAppNavigationStore } from "../store/appNavigation";
++import { onDesktopOpenSettings } from "../lib/bridge";
+ 
+ export function useNativeSettingsEvent(input: {
+   closeTransientOverlays: () => void;
+@@ -7,8 +8,7 @@ export function useNativeSettingsEvent(input: {
+ }) {
+   const { closeTransientOverlays, setSettingsTarget } = input;
+   useEffect(() => {
+-    if (typeof window === "undefined" || !window.runtime) return;
+-    return window.runtime.EventsOn("app:open-settings", () => {
++    return onDesktopOpenSettings(() => {
+       closeTransientOverlays();
+       setSettingsTarget(useAppNavigationStore.getState().lastSettingsTarget);
+     });
+diff --git a/desktop/frontend/src/components/DesktopCloseBehaviorHint.tsx b/desktop/frontend/src/components/DesktopCloseBehaviorHint.tsx
+index c3480c491..f4fd9d2e3 100644
+--- a/desktop/frontend/src/components/DesktopCloseBehaviorHint.tsx
++++ b/desktop/frontend/src/components/DesktopCloseBehaviorHint.tsx
+@@ -1,5 +1,5 @@
+ import { useEffect, useState } from "react";
+-import { app, type DesktopShellStatusView } from "../lib/bridge";
++import { app, onDesktopShellStatus, type DesktopShellStatusView } from "../lib/bridge";
+ 
+ export function DesktopCloseBehaviorHint({
+   backgroundSelected,
+@@ -14,20 +14,27 @@ export function DesktopCloseBehaviorHint({
+   useEffect(() => {
+     let active = true;
+     const update = (value: unknown) => {
+-      if (!active || !value || typeof value !== "object") return;
++      if (!active || !value || typeof value !== "object") return false;
+       const candidate = value as Partial<DesktopShellStatusView>;
+       setStatus({
+         trayState: candidate.trayState === "ready" || candidate.trayState === "unavailable" ? candidate.trayState : "probing",
+         backgroundCloseAvailable: candidate.backgroundCloseAvailable === true,
+         reason: typeof candidate.reason === "string" ? candidate.reason : undefined,
+       });
++      return true;
+     };
++    let eventRevision = 0;
++    const off = onDesktopShellStatus((value) => {
++      if (update(value)) eventRevision++;
++    });
++    const snapshotRevision = eventRevision;
+     const getStatus = app.GetDesktopShellStatus;
+-    if (typeof getStatus === "function") void getStatus.call(app).then(update).catch(() => undefined);
+-    const off = window.runtime?.EventsOn("desktop:shell-status", update);
++    if (typeof getStatus === "function") void getStatus.call(app).then((value) => {
++      if (eventRevision === snapshotRevision) update(value);
++    }).catch(() => undefined);
+     return () => {
+       active = false;
+-      off?.();
++      off();
+     };
+   }, []);
+   if (!backgroundSelected || !status || status.backgroundCloseAvailable) return hint;
+diff --git a/desktop/frontend/src/lib/bridge.ts b/desktop/frontend/src/lib/bridge.ts
+index 6484bb88d..43efad9f6 100644
+--- a/desktop/frontend/src/lib/bridge.ts
++++ b/desktop/frontend/src/lib/bridge.ts
+@@ -799,6 +799,27 @@ function getMock(): AppBindings {
+   return mockSingleton;
+ }
+ 
++// Fixed host events stay at the Wails adapter boundary. Tauri's separate
++// startup graph uses its native host listener; browser preview has no host.
++function onDesktopHostEvent(name: "app:open-settings" | "desktop:shell-status", cb: (...data: unknown[]) => void): () => void {
++  if (typeof window === "undefined" || !window.runtime?.EventsOn) return () => {};
++  let active = true;
++  const off = window.runtime.EventsOn(name, (...data) => { if (active) cb(...data); });
++  return () => {
++    if (!active) return;
++    active = false;
++    off();
++  };
++}
++
++export function onDesktopOpenSettings(cb: () => void): () => void {
++  return onDesktopHostEvent("app:open-settings", cb);
++}
++
++export function onDesktopShellStatus(cb: (payload: unknown) => void): () => void {
++  return onDesktopHostEvent("desktop:shell-status", cb);
++}
++
+ // onEvent subscribes to the agent's typed event stream; returns an unsubscribe.
+ export function onEvent(cb: (e: WireEvent) => void): () => void {
+   if (realApp() && typeof window !== "undefined" && window.runtime) {

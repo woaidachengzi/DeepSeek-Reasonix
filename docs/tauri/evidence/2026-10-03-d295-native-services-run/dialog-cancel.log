@@ -1,0 +1,4 @@
+native macOS window managed menu-shortcuts: OK
+native macOS window managed clipboard-native: OK
+Private window failure fixture retained: /private/tmp/reasonix-native-window-smoke-cc243m4e; completed stages: 2
+native macOS window smoke failed: clipboard restoration failed; private recovery snapshot retained at /var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/reasonix-clipboard-recovery-euf7n4kf

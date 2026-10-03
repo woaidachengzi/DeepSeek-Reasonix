@@ -9,6 +9,7 @@
 
 import { useEffect } from "react";
 import { app } from "./bridge";
+import { getWailsWindowStateRuntime, type WindowStateRuntime } from "./wailsDesktopRuntime";
 
 export interface WindowStateSnapshot {
   width: number;
@@ -16,12 +17,6 @@ export interface WindowStateSnapshot {
   x: number;
   y: number;
   maximised: boolean;
-}
-
-interface WindowStateRuntime {
-  WindowGetSize(): Promise<{ w: number; h: number }>;
-  WindowGetPosition(): Promise<{ x: number; y: number }>;
-  WindowIsMaximised(): Promise<boolean>;
 }
 
 // Serialize capture + persistence as one operation. Resize, polling, and
@@ -33,6 +28,7 @@ interface WindowStateRuntime {
 export function createWindowStateSaver(
   runtime: WindowStateRuntime,
   persist: (state: WindowStateSnapshot) => Promise<void>,
+  signal?: AbortSignal,
 ): () => Promise<void> {
   let lastState = "";
   let queue = Promise.resolve();
@@ -40,9 +36,13 @@ export function createWindowStateSaver(
   return () => {
     queue = queue.then(async () => {
       try {
+        if (signal?.aborted) return;
         const size = await runtime.WindowGetSize();
+        if (signal?.aborted) return;
         const pos = await runtime.WindowGetPosition();
+        if (signal?.aborted) return;
         const maximised = await runtime.WindowIsMaximised();
+        if (signal?.aborted) return;
         const state = { width: size.w, height: size.h, x: pos.x, y: pos.y, maximised };
         const json = JSON.stringify(state);
         if (json === lastState) return;
@@ -58,14 +58,15 @@ export function createWindowStateSaver(
 
 export function useWindowStatePersistence() {
   useEffect(() => {
-    const runtime = typeof window !== "undefined" ? window.runtime : undefined;
-    if (!runtime?.WindowGetSize || !runtime.WindowGetPosition || !runtime.WindowIsMaximised) return;
-    const { WindowGetSize, WindowGetPosition, WindowIsMaximised } = runtime;
+    const runtime = getWailsWindowStateRuntime();
+    if (!runtime) return;
+    const lifetime = new AbortController();
 
     let timer: ReturnType<typeof setInterval>;
     const save = createWindowStateSaver(
-      { WindowGetSize, WindowGetPosition, WindowIsMaximised },
+      runtime,
       (state) => app.SaveWindowState(state),
+      lifetime.signal,
     );
 
     // Debounced save on resize (500ms after the last resize event).
@@ -85,6 +86,7 @@ export function useWindowStatePersistence() {
     window.addEventListener("beforeunload", onBeforeUnload);
 
     return () => {
+      lifetime.abort();
       clearInterval(timer);
       clearTimeout(debounce);
       window.removeEventListener("resize", onResize);

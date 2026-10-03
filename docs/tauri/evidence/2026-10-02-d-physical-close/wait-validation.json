@@ -1,0 +1,37 @@
+{
+  "syntax": "passed",
+  "invalidArguments": [
+    {
+      "args": [
+        "--wait-seconds",
+        "0"
+      ],
+      "exitCode": 2,
+      "rejectedBeforeLaunch": true
+    },
+    {
+      "args": [
+        "--wait-seconds",
+        "901"
+      ],
+      "exitCode": 2,
+      "rejectedBeforeLaunch": true
+    },
+    {
+      "args": [
+        "--wait-seconds",
+        "900"
+      ],
+      "exitCode": 2,
+      "rejectedBeforeLaunch": true
+    },
+    {
+      "args": [
+        "--observe"
+      ],
+      "exitCode": 2,
+      "rejectedBeforeLaunch": true
+    }
+  ],
+  "valid900Interactive": "actual signed package run completed exit 0"
+}

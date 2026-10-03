@@ -1,0 +1,24 @@
+{
+  "candidateHostSha256": "60076bd5f9f8237330fb1b508b56241ff1c8f254b5d0e940b0e736c72f7039cf",
+  "hostPid": 32207,
+  "sidecarPid": 32214,
+  "privateRoot": "/private/tmp/reasonix-launch-services-_0une03g",
+  "privateOrigin": "reasonix-preview://6a7f46a93b549fb04cc9e33590739106.localhost/",
+  "actions": [
+    "CUA settings/models/scroll",
+    "typed fake non-provider-auth value into masked field",
+    "clicked Save to keychain",
+    "observed disabled controls with retained masked draft, no success/failure text",
+    "CUA inventory timeout reset; did not treat as process exit",
+    "exact PID live + sample + private keychain locked",
+    "explicitly unlocked owned fixture; save still pending",
+    "CUA SecurityAgent access rejected by tool safety policy",
+    "CUA CmdQ, kernel0/open0, sidecar/readiness absent"
+  ],
+  "limitations": [
+    "No observed system authorization dialog contents; SecurityAgent running alone does not identify its pending request",
+    "Save/replace/restart acceptance not passed",
+    "Screenshots returned in conversation, not separately archived",
+    "New pending guidance is source/test only until new package validation"
+  ]
+}

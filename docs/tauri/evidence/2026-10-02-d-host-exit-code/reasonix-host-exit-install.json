@@ -1,0 +1,9 @@
+{
+  "app": "/private/tmp/reasonix-d-host-exit-installed-xg2eq0h_/Reasonix Tauri Preview.app",
+  "dmg": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri Preview_0.1.0_aarch64.dmg",
+  "dmgSha256": "c24fe61e32b98399f723cf9bfc440d3897985bef45e365761f04f5c0117dd367",
+  "artifactSha256": {
+    "reasonix-tauri": "e0fc4d124080bc9e337b009611d48240982e8ad14121ed24248bcf90ed868c76",
+    "reasonix-desktop-bridge": "29d985c7af09baefec4308339429eabfe921896c47db6f4c30584b742b7efd39"
+  }
+}

@@ -12,6 +12,7 @@ use tauri::Manager;
 use crate::bridge::{BridgeStatus, BridgeSupervisor};
 
 const LEGACY_SERVICE_NAME: &str = "com.reasonix.desktop";
+const WAILS_SERVICE_NAME: &str = "reasonix";
 const STORAGE_ERROR: &str =
     "system credential storage is unavailable; unlock it or check application access permissions";
 const LEGACY_FILE_NAME: &str = "keychain.dat";
@@ -195,9 +196,28 @@ impl KeychainStore {
         Ok(entries)
     }
 
+    fn read_legacy_secret(&self, key: &str) -> Result<String, String> {
+        let entries = self.legacy_path.as_deref().map(Self::read_legacy_file)
+            .transpose()?.unwrap_or_default();
+        match entries.get(key) {
+            Some(value) => Ok(value.clone()),
+            None => self.legacy_backend.load(key)?
+                .ok_or_else(|| "no old Preview credential was found; re-enter the provider key".into()),
+        }
+    }
+
+    #[cfg(test)]
     fn import_legacy_with_sync<F>(&self, key: &str, sync: F) -> Result<(), String>
     where
         F: Fn(&str, Option<&str>) -> Result<(), String>,
+    {
+        self.import_source_with_sync(key, || self.read_legacy_secret(key), sync)
+    }
+
+    fn import_source_with_sync<F, L>(&self, key: &str, load_source: L, sync: F) -> Result<(), String>
+    where
+        F: Fn(&str, Option<&str>) -> Result<(), String>,
+        L: FnOnce() -> Result<String, String>,
     {
         let _guard = self
             .provider_sync
@@ -210,19 +230,7 @@ impl KeychainStore {
                 "the profile already has a credential; migration cannot overwrite it".into(),
             );
         }
-        let entries = self
-            .legacy_path
-            .as_deref()
-            .map(Self::read_legacy_file)
-            .transpose()?
-            .unwrap_or_default();
-        let value = match entries.get(key) {
-            Some(value) => value.clone(),
-            None => self
-                .legacy_backend
-                .load(key)?
-                .ok_or("no old Preview credential was found; re-enter the provider key")?,
-        };
+        let value = load_source()?;
         if value.trim().is_empty() || value.contains('\0') || value.len() > 32 << 10 {
             return Err("legacy provider credential is invalid; re-enter the provider key".into());
         }
@@ -239,11 +247,35 @@ impl KeychainStore {
         supervisor: &BridgeSupervisor,
         provider: &str,
     ) -> Result<(), String> {
+        self.import_provider_source(supervisor, provider, || self.read_legacy_secret(&format!("{PROVIDER_API_KEY_PREFIX}{provider}")))
+    }
+
+    pub fn import_wails_provider_key(&self, supervisor: &BridgeSupervisor, provider: &str) -> Result<(), String> {
+        self.import_provider_source(supervisor, provider, || {
+            let account = supervisor.provider_credential_account(provider)?;
+            PlatformCredentialBackend { service: WAILS_SERVICE_NAME.into() }.load(&account)?
+                .ok_or_else(|| "no Wails keyring credential was found; re-enter the provider key".into())
+        })
+    }
+
+    pub fn import_wails_env_provider_key(&self, supervisor: &BridgeSupervisor, provider: &str) -> Result<(), String> {
+        self.import_provider_source(supervisor, provider, || {
+            supervisor.wails_env_provider_key(provider)?
+                .ok_or_else(|| "no Wails global env credential was found; re-enter the provider key".into())
+        })
+    }
+
+    fn import_provider_source<L>(&self, supervisor: &BridgeSupervisor, provider: &str, load_source: L) -> Result<(), String>
+    where L: FnOnce() -> Result<String, String> {
         require_provider(supervisor, provider)?;
-        self.import_legacy_with_sync(
-            &format!("{PROVIDER_API_KEY_PREFIX}{provider}"),
-            |name, value| supervisor.set_provider_key(name, value).map(|_| ()),
-        )
+        self.import_source_with_sync(&format!("{PROVIDER_API_KEY_PREFIX}{provider}"), || {
+            // Protect effective file/runtime credentials under the same lock,
+            // before reading any original store, just like native entries.
+            if supervisor.provider_summary()?.providers.iter().any(|entry| entry.name == provider && entry.configured) {
+                return Err("the profile already has a credential; migration cannot overwrite it".into());
+            }
+            load_source()
+        }, |name, value| supervisor.set_provider_key(name, value).map(|_| ()))
     }
 
     pub fn save_secret(&self, key: &str, value: &str) -> Result<(), String> {
@@ -460,19 +492,53 @@ pub async fn keychain_delete(window: tauri::WebviewWindow, key: String) -> Resul
     .await
     .map_err(|_| "credential operation failed; retry deleting")?
 }
+// Public migration failures carry only fixed codes. Platform diagnostics and
+// credential attributes must never become UI text or serialized error fields.
+#[derive(Debug, serde::Serialize, PartialEq)]
+#[serde(tag = "code", rename_all = "snake_case")]
+pub enum CredentialImportError {
+    ExistingCredential,
+    MissingLegacyCredential,
+    MissingWailsCredential,
+    MissingWailsEnvCredential,
+    Unavailable,
+}
+
+impl From<String> for CredentialImportError {
+    fn from(error: String) -> Self {
+        match error.as_str() {
+            "the profile already has a credential; migration cannot overwrite it" => {
+                Self::ExistingCredential
+            }
+            "no old Preview credential was found; re-enter the provider key" => {
+                Self::MissingLegacyCredential
+            }
+            "no Wails keyring credential was found; re-enter the provider key" => Self::MissingWailsCredential,
+            "no Wails global env credential was found; re-enter the provider key" => Self::MissingWailsEnvCredential,
+            _ => Self::Unavailable,
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn keychain_import_legacy(
     window: tauri::WebviewWindow,
     provider: String,
-) -> Result<(), String> {
-    credential_window(window.label())?;
+    source: Option<String>,
+) -> Result<(), CredentialImportError> {
+    credential_window(window.label()).map_err(CredentialImportError::from)?;
     tauri::async_runtime::spawn_blocking(move || {
-        window
-            .state::<KeychainStore>()
-            .import_legacy_provider_key(&window.state::<BridgeSupervisor>(), &provider)
+        let store = window.state::<KeychainStore>();
+        let supervisor = window.state::<BridgeSupervisor>();
+        match source.as_deref() {
+            None | Some("preview") => store.import_legacy_provider_key(&supervisor, &provider),
+            Some("wails") => store.import_wails_provider_key(&supervisor, &provider),
+            Some("wails-env") => store.import_wails_env_provider_key(&supervisor, &provider),
+            _ => Err("unsupported credential import source".into()),
+        }.map_err(CredentialImportError::from)
     })
     .await
-    .map_err(|_| "credential operation failed; retry migration")?
+    .map_err(|_| CredentialImportError::Unavailable)?
 }
 fn credential_window(label: &str) -> Result<(), String> {
     if label != "main" {
@@ -583,6 +649,55 @@ mod tests {
 
     fn test_store() -> KeychainStore {
         KeychainStore::with_backend(Arc::new(MemoryCredentialBackend::default()))
+    }
+
+    #[test]
+    fn migration_failure_codes_are_precise_and_redacted() {
+        for (message, code) in [
+            (
+                "the profile already has a credential; migration cannot overwrite it",
+                "existing_credential",
+            ),
+            (
+                "no old Preview credential was found; re-enter the provider key",
+                "missing_legacy_credential",
+            ),
+            ("no Wails keyring credential was found; re-enter the provider key", "missing_wails_credential"),
+            ("platform diagnostic with private-token", "unavailable"),
+            (
+                "credential operations require the main window",
+                "unavailable",
+            ),
+            (
+                "the profile already has a credential; migration cannot overwrite it private-token",
+                "unavailable",
+            ),
+        ] {
+            assert_eq!(
+                serde_json::to_value(CredentialImportError::from(message.to_string())).unwrap(),
+                serde_json::json!({"code": code})
+            );
+        }
+    }
+
+    #[test]
+    fn explicit_source_import_refuses_existing_target_before_reading_source_and_preserves_source_on_rollback() {
+        let store = test_store();
+        let source = MemoryCredentialBackend::default();
+        source.save("SHARED_WAILS_KEY", "fake-wails-secret").unwrap();
+        store.save_secret("api_key_demo", "existing-preview").unwrap();
+        assert!(store.import_source_with_sync("api_key_demo", || panic!("existing target must not read Wails"), |_, _| Ok(())).is_err());
+        store.delete_secret("api_key_demo").unwrap();
+        assert!(store.import_source_with_sync("api_key_demo", || source.load("SHARED_WAILS_KEY").map(|v| v.unwrap()), |_, _| Err("offline".into())).is_err());
+        assert_eq!(store.load_secret("api_key_demo").unwrap(), None);
+        assert_eq!(source.load("SHARED_WAILS_KEY").unwrap().as_deref(), Some("fake-wails-secret"));
+        store.import_source_with_sync("api_key_demo", || source.load("SHARED_WAILS_KEY").map(|v| v.unwrap()), |name, value| {
+            assert_eq!(name, "demo");
+            assert_eq!(value, Some("fake-wails-secret"));
+            Ok(())
+        }).unwrap();
+        assert_eq!(store.load_secret("api_key_demo").unwrap().as_deref(), Some("fake-wails-secret"));
+        assert_eq!(source.load("SHARED_WAILS_KEY").unwrap().as_deref(), Some("fake-wails-secret"));
     }
 
     #[test]
@@ -1033,6 +1148,94 @@ mod tests {
         assert!(!second.delete("api_key_smoke").unwrap());
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "requires a fresh owned private HOME/keychain fixture; run alone in a subprocess"]
+    fn native_locked_keychain_preserves_secret_and_recovers() {
+        use std::os::unix::fs::MetadataExt;
+        use std::process::Command;
+        #[link(name = "Security", kind = "framework")]
+        unsafe extern "C" {
+            fn SecKeychainGetUserInteractionAllowed(state: *mut u8) -> i32;
+            fn SecKeychainSetUserInteractionAllowed(state: u8) -> i32;
+        }
+        let home = PathBuf::from(std::env::var_os("HOME").expect("private HOME required"));
+        let fixture = PathBuf::from(std::env::var_os("REASONIX_LOCKED_KEYCHAIN_FIXTURE").expect("owned fixture required"));
+        assert!(home.is_absolute());
+        assert_eq!(home.file_name().unwrap(), "home");
+        let root = home.parent().unwrap();
+        assert_eq!(root.parent().unwrap(), Path::new("/private/tmp"));
+        assert!(root.file_name().unwrap().to_str().unwrap().starts_with("reasonix-locked-keychain-"));
+        assert_eq!(fixture, home.join("Library/Keychains/fixture.keychain"));
+        assert_eq!(home.canonicalize().unwrap(), home);
+        assert_eq!(root.canonicalize().unwrap(), root);
+        assert_eq!(fixture.parent().unwrap().canonicalize().unwrap(), fixture.parent().unwrap());
+        let database = fixture.with_file_name("fixture.keychain-db");
+        let existing = if fixture.exists() { &fixture } else { &database };
+        assert!(fs::symlink_metadata(existing).unwrap().file_type().is_file());
+        let metadata = fs::metadata(root).unwrap();
+        assert_eq!(metadata.mode() & 0o777, 0o700);
+        assert_eq!(metadata.uid(), fs::metadata(&home).unwrap().uid());
+        let security = |args: &[&str]| Command::new("/usr/bin/security").args(args).output().unwrap();
+        let default = security(&["default-keychain", "-d", "user"]);
+        assert!(default.status.success());
+        let actual = String::from_utf8(default.stdout).unwrap();
+        let actual = actual.trim().trim_matches('"');
+        let path = fixture.to_str().unwrap();
+        assert!(actual == path || actual == format!("{path}-db"), "default must be the owned fixture");
+        let backend = PlatformCredentialBackend {
+            service: format!("com.reasonix.native-locked-test.{}", rand::random::<u128>()),
+        };
+        const KEY: &str = "api_key_smoke";
+        const PASSWORD: &str = "reasonix-owned-test-fixture-only";
+        struct Cleanup<'a> {
+            backend: &'a PlatformCredentialBackend,
+            path: &'a str,
+            interaction: u8,
+        }
+        impl Drop for Cleanup<'_> {
+            fn drop(&mut self) {
+                let _ = Command::new("/usr/bin/security").args(["unlock-keychain", "-p", PASSWORD, self.path]).output();
+                let _ = self.backend.delete(KEY);
+                // SAFETY: Restores the process-local setting read before this
+                // single-test subprocess; never changes another process.
+                unsafe { SecKeychainSetUserInteractionAllowed(self.interaction); }
+            }
+        }
+        let mut interaction = 0;
+        // SAFETY: Valid one-byte output storage for Security's Boolean.
+        assert_eq!(unsafe { SecKeychainGetUserInteractionAllowed(&mut interaction) }, 0);
+        let _cleanup = Cleanup { backend: &backend, path, interaction };
+        // Disable interaction before the first backend call as well: fixture
+        // setup must never depend on a user responding to an ACL prompt.
+        assert_eq!(unsafe { SecKeychainSetUserInteractionAllowed(0) }, 0);
+        assert!(security(&["unlock-keychain", "-p", PASSWORD, path]).status.success());
+        eprintln!("owned-keychain-stage: initial-read");
+        assert_eq!(backend.load(KEY).unwrap(), None);
+        eprintln!("owned-keychain-stage: seed");
+        backend.save(KEY, "owned-dummy-before-lock").unwrap();
+        eprintln!("owned-keychain-stage: seeded-read");
+        assert_eq!(backend.load(KEY).unwrap().as_deref(), Some("owned-dummy-before-lock"));
+        // SAFETY: Only this explicitly isolated test process loses optional
+        // authentication UI; production keeps its normal interaction policy.
+        assert_eq!(unsafe { SecKeychainSetUserInteractionAllowed(0) }, 0);
+        assert!(security(&["lock-keychain", path]).status.success());
+        eprintln!("owned-keychain-stage: locked-read");
+        assert_eq!(backend.load(KEY).unwrap_err(), STORAGE_ERROR);
+        eprintln!("owned-keychain-stage: locked-replace");
+        assert_eq!(backend.save(KEY, "owned-dummy-denied-replacement").unwrap_err(), STORAGE_ERROR);
+        eprintln!("owned-keychain-stage: locked-delete");
+        assert_eq!(backend.delete(KEY).unwrap_err(), STORAGE_ERROR);
+        eprintln!("owned-keychain-stage: unlock");
+        assert!(security(&["unlock-keychain", "-p", PASSWORD, path]).status.success());
+        assert_eq!(backend.load(KEY).unwrap().as_deref(), Some("owned-dummy-before-lock"));
+        backend.save(KEY, "owned-dummy-after-unlock").unwrap();
+        assert_eq!(backend.load(KEY).unwrap().as_deref(), Some("owned-dummy-after-unlock"));
+        assert!(backend.delete(KEY).unwrap());
+        assert_eq!(backend.load(KEY).unwrap(), None);
+        eprintln!("owned-keychain-stage: cleaned");
+    }
+
     #[test]
     fn unavailable_profile_preserves_recovery_instruction_without_bridge_access() {
         let recovery = "credential profile identity is unavailable; restore its metadata backup or check profile permissions";
@@ -1044,6 +1247,132 @@ mod tests {
             recovery
         );
         assert!(!supervisor.status().running);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "requires an owned isolated HOME/keychain and freshly built bridge; run alone"]
+    fn native_wails_keyring_import_uses_core_account_and_preserves_sources() {
+        use std::process::Command;
+        use std::os::unix::fs::MetadataExt;
+        #[link(name = "Security", kind = "framework")]
+        unsafe extern "C" {
+            fn SecKeychainGetUserInteractionAllowed(state: *mut u8) -> i32;
+            fn SecKeychainSetUserInteractionAllowed(state: u8) -> i32;
+            fn SecKeychainCopyDomainDefault(domain: u32, keychain: *mut *const std::ffi::c_void) -> i32;
+            fn SecKeychainGetPath(keychain: *const std::ffi::c_void, length: *mut u32, path: *mut u8) -> i32;
+            fn SecKeychainFindGenericPassword(keychain: *const std::ffi::c_void, service_len: u32, service: *const u8,
+                account_len: u32, account: *const u8, password_len: *mut u32, password: *mut *mut std::ffi::c_void,
+                item: *mut *const std::ffi::c_void) -> i32;
+            fn SecKeychainItemFreeContent(attributes: *const std::ffi::c_void, password: *mut std::ffi::c_void) -> i32;
+        }
+        #[link(name = "CoreFoundation", kind = "framework")]
+        unsafe extern "C" { fn CFRelease(value: *const std::ffi::c_void); }
+        let home = PathBuf::from(std::env::var_os("HOME").unwrap());
+        let root = home.parent().unwrap();
+        assert_eq!(root.parent().unwrap(), Path::new("/private/tmp"));
+        assert!(root.file_name().unwrap().to_str().unwrap().starts_with("reasonix-locked-keychain-"));
+        assert_eq!(home.canonicalize().unwrap(), home);
+        assert_eq!(fs::metadata(root).unwrap().mode() & 0o777, 0o700);
+        assert_eq!(fs::metadata(root).unwrap().uid(), fs::metadata(&home).unwrap().uid());
+        let fixture = home.join("Library/Keychains/fixture.keychain");
+        assert_eq!(fixture.parent().unwrap().canonicalize().unwrap(), fixture.parent().unwrap());
+        let database = fixture.with_file_name("fixture.keychain-db");
+        let existing = if fixture.exists() { &fixture } else { &database };
+        assert!(fs::symlink_metadata(existing).unwrap().file_type().is_file());
+        let output = Command::new("/usr/bin/security").args(["default-keychain", "-d", "user"]).output().unwrap();
+        assert!(output.status.success());
+        let selected = String::from_utf8(output.stdout).unwrap();
+        let selected = selected.trim().trim_matches('"');
+        assert!(selected == fixture.to_str().unwrap() || selected == format!("{}-db", fixture.display()));
+        let search = Command::new("/usr/bin/security").args(["list-keychains", "-d", "user"]).output().unwrap();
+        assert!(search.status.success());
+        let search = String::from_utf8(search.stdout).unwrap();
+        let entries: Vec<_> = search.lines().map(|line| line.trim().trim_matches('"')).filter(|line| !line.is_empty()).collect();
+        assert_eq!(entries, vec![selected], "only the owned private keychain may be searched");
+        // Independently check the API domain used by keyring, rather than
+        // assuming that the security CLI and native API choose the same root.
+        let mut native = std::ptr::null();
+        let status = unsafe { SecKeychainCopyDomainDefault(0, &mut native) };
+        eprintln!("owned-wails-keyring: native default status={status}");
+        assert_eq!(status, 0);
+        struct Release(*const std::ffi::c_void);
+        impl Drop for Release { fn drop(&mut self) { unsafe { CFRelease(self.0); } } }
+        let _release = Release(native);
+        let mut path = [0_u8; 4096];
+        let mut length = path.len() as u32;
+        assert_eq!(unsafe { SecKeychainGetPath(native, &mut length, path.as_mut_ptr()) }, 0);
+        let native_path = std::ffi::CStr::from_bytes_until_nul(&path).unwrap().to_str().unwrap();
+        assert!(native_path == fixture.to_str().unwrap() || native_path == format!("{}-db", fixture.display()), "native API must select the owned fixture");
+        let mut interaction = 0;
+        assert_eq!(unsafe { SecKeychainGetUserInteractionAllowed(&mut interaction) }, 0);
+        struct RestoreInteraction(u8);
+        impl Drop for RestoreInteraction {
+            fn drop(&mut self) { unsafe { SecKeychainSetUserInteractionAllowed(self.0); } }
+        }
+        let _interaction = RestoreInteraction(interaction);
+        // Only this native test subprocess disallows optional authorization UI.
+        assert_eq!(unsafe { SecKeychainSetUserInteractionAllowed(0) }, 0);
+        let source = PlatformCredentialBackend { service: WAILS_SERVICE_NAME.into() };
+        let account = format!("REASONIX_WAILS_FIXTURE_{:032X}", rand::random::<u128>());
+        let core = root.join("core");
+        fs::create_dir(&core).unwrap();
+        fs::write(core.join("config.toml"), format!("default_model = \"demo/chat\"\n[[providers]]\nname = \"demo\"\nkind = \"openai\"\nbase_url = \"https://provider.invalid/v1\"\napi_key_env = \"{account}\"\nmodels = [\"chat\"]\ndefault = \"chat\"\n")).unwrap();
+        for name in ["REASONIX_HOME", "REASONIX_STATE_HOME", "REASONIX_CACHE_HOME"] {
+            std::env::set_var(name, &core);
+        }
+        let target = Arc::new(PlatformCredentialBackend {
+            service: crate::credential_namespace::service_for_profile(&core).unwrap(),
+        });
+        let store = KeychainStore::with_backend(target.clone());
+        let supervisor = BridgeSupervisor::with_binary(PathBuf::from(std::env::var_os("REASONIX_TAURI_BRIDGE_TEST_BIN").unwrap()));
+        struct Cleanup<'a> {
+            source: &'a PlatformCredentialBackend, account: &'a str,
+            target: &'a PlatformCredentialBackend, supervisor: &'a BridgeSupervisor,
+        }
+        impl Drop for Cleanup<'_> {
+            fn drop(&mut self) {
+                let _ = self.supervisor.stop();
+                let _ = self.target.delete("api_key_demo");
+                let _ = self.source.delete(self.account);
+            }
+        }
+        let _cleanup = Cleanup { source: &source, account: &account, target: &target, supervisor: &supervisor };
+        // This fixed dummy record in the exclusive private keychain is
+        // pre-authorized for the compatibility test. It cannot prove normal
+        // Wails authorization/ACL prompts; production access stays unchanged.
+        let seeded = Command::new("/usr/bin/security").args(["add-generic-password", "-s", WAILS_SERVICE_NAME, "-a", &account,
+            "-w", "dummy-wails-source-only", "-A", fixture.to_str().unwrap()]).output().unwrap();
+        assert!(seeded.status.success());
+        let unlocked = Command::new("/usr/bin/security").args(["unlock-keychain", "-p", "reasonix-owned-test-fixture-only", fixture.to_str().unwrap()]).output().unwrap();
+        assert!(unlocked.status.success());
+        let mut password_len = 0;
+        let mut password = std::ptr::null_mut();
+        let read_status = unsafe { SecKeychainFindGenericPassword(native, WAILS_SERVICE_NAME.len() as u32, WAILS_SERVICE_NAME.as_ptr(),
+            account.len() as u32, account.as_ptr(), &mut password_len, &mut password, std::ptr::null_mut()) };
+        if !password.is_null() { unsafe { SecKeychainItemFreeContent(std::ptr::null(), password); } }
+        // Only an OS status is logged; never emit source bytes or attributes.
+        eprintln!("owned-wails-keyring: direct source read status={read_status}");
+        eprintln!("owned-wails-keyring: source-read after explicit fixture unlock");
+        assert_eq!(source.load(&account).unwrap().as_deref(), Some("dummy-wails-source-only"));
+        assert_eq!(source.load("api_key_demo").unwrap(), None);
+        supervisor.start().unwrap();
+        eprintln!("owned-wails-keyring: core-mapping and import");
+        assert_eq!(supervisor.provider_credential_account("demo").unwrap(), account);
+        store.import_wails_provider_key(&supervisor, "demo").unwrap();
+        assert_eq!(store.load_secret("api_key_demo").unwrap().as_deref(), Some("dummy-wails-source-only"));
+        assert_eq!(source.load(&account).unwrap().as_deref(), Some("dummy-wails-source-only"));
+        assert!(supervisor.provider_summary().unwrap().providers.iter().any(|p| p.name == "demo" && p.configured));
+        assert_eq!(store.import_wails_provider_key(&supervisor, "demo").unwrap_err(), "the profile already has a credential; migration cannot overwrite it");
+        supervisor.stop().unwrap();
+        supervisor.start().unwrap();
+        store.restore_provider_api_keys(&supervisor).unwrap();
+        assert!(supervisor.provider_summary().unwrap().providers.iter().any(|p| p.name == "demo" && p.configured));
+        store.delete_and_sync_provider_key(&supervisor, "api_key_demo").unwrap();
+        assert_eq!(store.load_secret("api_key_demo").unwrap(), None);
+        assert_eq!(source.load(&account).unwrap().as_deref(), Some("dummy-wails-source-only"));
+        supervisor.stop().unwrap();
+        eprintln!("owned-wails-keyring: mapped account, source preservation, refusal, restart and target deletion OK");
     }
 
     #[test]
@@ -1112,6 +1441,8 @@ default = "chat"
         let store = KeychainStore::with_backend(backend.clone());
         let supervisor = BridgeSupervisor::with_binary(PathBuf::from(binary));
         supervisor.start().unwrap();
+        assert_eq!(supervisor.provider_credential_account("first").unwrap(), "REASONIX_KEYCHAIN_PARTIAL_FIRST");
+        assert!(supervisor.provider_credential_account("unknown-account").is_err());
         let outcome = store.restore_provider_api_keys(&supervisor);
         let summary = supervisor.provider_summary().unwrap();
         supervisor.stop().unwrap();
@@ -1204,6 +1535,149 @@ default = "chat"
             }
         }
         check_files(home.path());
+    }
+
+    #[test]
+    fn real_bridge_wails_env_import_preserves_original_and_survives_restart() {
+        let Some(binary) = std::env::var_os("REASONIX_TAURI_BRIDGE_TEST_BIN") else {
+            assert!(std::env::var_os("CI").is_none(), "real bridge binary required in CI");
+            return;
+        };
+        let _env = crate::test_env::guard();
+        struct HomeGuard(Option<std::ffi::OsString>);
+        impl Drop for HomeGuard {
+            fn drop(&mut self) { match self.0.take() { Some(value) => std::env::set_var("HOME", value), None => std::env::remove_var("HOME") } }
+        }
+        let _home_env = HomeGuard(std::env::var_os("HOME"));
+        let root = tempdir().unwrap();
+        let home = root.path().join("home");
+        let source = home.join(".reasonix");
+        let core = root.path().join("core");
+        fs::create_dir_all(&source).unwrap(); fs::create_dir(&core).unwrap();
+        std::env::set_var("HOME", &home);
+        std::env::set_var("REASONIX_HOME", &core);
+        std::env::set_var("REASONIX_STATE_HOME", &core);
+        std::env::set_var("REASONIX_CACHE_HOME", &core);
+        let config = "[[providers]]\nname = \"demo\"\nkind = \"openai\"\nbase_url = \"https://example.invalid/v1\"\napi_key_env = \"REASONIX_CONNECTION_FAKE_KEY\"\nmodels = [\"chat\"]\ndefault = \"chat\"\n";
+        fs::write(source.join("config.toml"), config).unwrap(); fs::write(core.join("config.toml"), config).unwrap();
+        let original = b"REASONIX_CONNECTION_FAKE_KEY=owned-fake-wails-env-only\nUNRELATED_KEY=not-selected\n";
+        fs::write(source.join(".env"), original).unwrap();
+        let metadata = fs::metadata(source.join(".env")).unwrap();
+        let store = test_store();
+        let supervisor = BridgeSupervisor::with_binary(PathBuf::from(binary));
+        struct Stop<'a>(&'a BridgeSupervisor);
+        impl Drop for Stop<'_> { fn drop(&mut self) { let _ = self.0.stop(); } }
+        let _stop = Stop(&supervisor);
+        fs::write(core.join(".env"), b"REASONIX_CONNECTION_FAKE_KEY=existing-target-file-only\n").unwrap();
+        supervisor.start().unwrap();
+        for outcome in [store.import_legacy_provider_key(&supervisor, "demo"), store.import_wails_provider_key(&supervisor, "demo"), store.import_wails_env_provider_key(&supervisor, "demo")] {
+            assert!(outcome.unwrap_err().contains("cannot overwrite"));
+        }
+        assert_eq!(store.load_secret("api_key_demo").unwrap(), None);
+        assert_eq!(fs::read(core.join(".env")).unwrap(), b"REASONIX_CONNECTION_FAKE_KEY=existing-target-file-only\n");
+        supervisor.stop().unwrap(); fs::remove_file(core.join(".env")).unwrap(); supervisor.start().unwrap();
+        assert_eq!(supervisor.wails_env_provider_key("demo").unwrap().as_deref(), Some("owned-fake-wails-env-only"));
+        store.import_wails_env_provider_key(&supervisor, "demo").unwrap();
+        assert_eq!(store.load_secret("api_key_demo").unwrap().as_deref(), Some("owned-fake-wails-env-only"));
+        assert!(store.import_wails_env_provider_key(&supervisor, "demo").unwrap_err().contains("cannot overwrite"));
+        assert!(store.restart_bridge(&supervisor).unwrap().running);
+        assert!(supervisor.provider_summary().unwrap().providers.iter().find(|p| p.name == "demo").unwrap().configured);
+        assert!(store.delete_and_sync_provider_key(&supervisor, "api_key_demo").unwrap());
+        assert_eq!(fs::read(source.join(".env")).unwrap(), original);
+        assert_eq!(metadata.modified().unwrap(), fs::metadata(source.join(".env")).unwrap().modified().unwrap());
+        fs::remove_file(source.join(".env")).unwrap();
+        assert_eq!(store.import_wails_env_provider_key(&supervisor, "demo").unwrap_err(), "no Wails global env credential was found; re-enter the provider key");
+        fs::write(source.join(".env"), original).unwrap();
+        assert_eq!(fs::read(source.join("config.toml")).unwrap(), config.as_bytes());
+        assert_eq!(fs::read(source.join(".env")).unwrap(), original);
+        // The successful import/restart/deletion did not copy secrets to target files.
+        assert!(!core.join(".env").exists());
+        assert_eq!(metadata.permissions(), fs::metadata(source.join(".env")).unwrap().permissions());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "requires a fresh owned private HOME/keychain fixture and installed bridge; run alone"]
+    fn native_wails_env_import_restart_delete_preserves_original() {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        use std::process::Command;
+        #[link(name = "Security", kind = "framework")]
+        unsafe extern "C" {
+            fn SecKeychainCopyDomainDefault(domain: u32, keychain: *mut *const std::ffi::c_void) -> i32;
+            fn SecKeychainGetPath(keychain: *const std::ffi::c_void, length: *mut u32, path: *mut u8) -> i32;
+            fn SecKeychainGetUserInteractionAllowed(state: *mut u8) -> i32;
+            fn SecKeychainSetUserInteractionAllowed(state: u8) -> i32;
+        }
+        #[link(name = "CoreFoundation", kind = "framework")]
+        unsafe extern "C" { fn CFRelease(value: *const std::ffi::c_void); }
+        let home = PathBuf::from(std::env::var_os("HOME").unwrap());
+        let root = home.parent().unwrap();
+        assert_eq!(root.parent().unwrap(), Path::new("/private/tmp"));
+        assert!(root.file_name().unwrap().to_str().unwrap().starts_with("reasonix-locked-keychain-"));
+        assert_eq!(home.canonicalize().unwrap(), home);
+        assert_eq!(fs::metadata(root).unwrap().mode() & 0o777, 0o700);
+        assert_eq!(fs::metadata(root).unwrap().uid(), fs::metadata(&home).unwrap().uid());
+        let fixture = home.join("Library/Keychains/fixture.keychain");
+        assert_eq!(fixture.parent().unwrap().canonicalize().unwrap(), fixture.parent().unwrap());
+        let database = fixture.with_file_name("fixture.keychain-db");
+        assert!(fs::symlink_metadata(if fixture.exists() { &fixture } else { &database }).unwrap().is_file());
+        let mut native = std::ptr::null();
+        assert_eq!(unsafe { SecKeychainCopyDomainDefault(0, &mut native) }, 0);
+        struct Release(*const std::ffi::c_void);
+        impl Drop for Release { fn drop(&mut self) { unsafe { CFRelease(self.0); } } }
+        let _native = Release(native);
+        let mut path = [0_u8; 4096]; let mut length = path.len() as u32;
+        assert_eq!(unsafe { SecKeychainGetPath(native, &mut length, path.as_mut_ptr()) }, 0);
+        let selected = std::ffi::CStr::from_bytes_until_nul(&path).unwrap().to_str().unwrap();
+        assert!(selected == fixture.to_str().unwrap() || selected == database.to_str().unwrap());
+        let search = Command::new("/usr/bin/security").args(["list-keychains", "-d", "user"]).output().unwrap();
+        assert!(search.status.success());
+        let search = String::from_utf8(search.stdout).unwrap();
+        let entries: Vec<_> = search.lines().map(|line| line.trim().trim_matches('"')).filter(|line| !line.is_empty()).collect();
+        assert_eq!(entries.len(), 1);
+        assert!(entries[0] == fixture.to_str().unwrap() || entries[0] == database.to_str().unwrap());
+        let mut interaction = 0;
+        assert_eq!(unsafe { SecKeychainGetUserInteractionAllowed(&mut interaction) }, 0);
+        struct Interaction(u8);
+        impl Drop for Interaction { fn drop(&mut self) { unsafe { SecKeychainSetUserInteractionAllowed(self.0); } } }
+        let _interaction = Interaction(interaction);
+        assert_eq!(unsafe { SecKeychainSetUserInteractionAllowed(0) }, 0);
+        assert!(Command::new("/usr/bin/security").args(["unlock-keychain", "-p", "reasonix-owned-test-fixture-only", fixture.to_str().unwrap()]).output().unwrap().status.success());
+        let source = home.join(".reasonix"); let core = root.join("core");
+        fs::create_dir(&source).unwrap(); fs::create_dir(&core).unwrap();
+        let config = b"default_model = \"demo/chat\"\n[[providers]]\nname = \"demo\"\nkind = \"openai\"\nbase_url = \"https://provider.invalid/v1\"\napi_key_env = \"REASONIX_CONNECTION_NATIVE_ENV_KEY\"\nmodels = [\"chat\"]\ndefault = \"chat\"\n";
+        let original = b"REASONIX_CONNECTION_NATIVE_ENV_KEY=owned-native-env-only\n";
+        for (file, bytes) in [(source.join("config.toml"), config.as_slice()), (core.join("config.toml"), config.as_slice()), (source.join(".env"), original.as_slice())] {
+            fs::write(&file, bytes).unwrap(); fs::set_permissions(file, fs::Permissions::from_mode(0o600)).unwrap();
+        }
+        let metadata = fs::metadata(source.join(".env")).unwrap();
+        for name in ["REASONIX_HOME", "REASONIX_STATE_HOME", "REASONIX_CACHE_HOME"] { std::env::set_var(name, &core); }
+        let backend = Arc::new(PlatformCredentialBackend { service: crate::credential_namespace::service_for_profile(&core).unwrap() });
+        let store = KeychainStore::with_backend(backend.clone());
+        struct Cleanup(Arc<PlatformCredentialBackend>);
+        impl Drop for Cleanup { fn drop(&mut self) { let _ = self.0.delete("api_key_demo"); } }
+        let _cleanup = Cleanup(backend.clone());
+        let supervisor = BridgeSupervisor::with_binary(PathBuf::from(std::env::var_os("REASONIX_TAURI_BRIDGE_TEST_BIN").unwrap()));
+        struct Stop<'a>(&'a BridgeSupervisor);
+        impl Drop for Stop<'_> { fn drop(&mut self) { let _ = self.0.stop(); } }
+        let _stop = Stop(&supervisor);
+        supervisor.start().unwrap();
+        eprintln!("owned-native-env: authenticated source mapping verified");
+        assert!(supervisor.wails_env_provider_key("demo").unwrap().as_deref() == Some("owned-native-env-only"));
+        store.import_wails_env_provider_key(&supervisor, "demo").unwrap();
+        assert!(backend.load("api_key_demo").unwrap().as_deref() == Some("owned-native-env-only"));
+        assert!(store.import_wails_env_provider_key(&supervisor, "demo").unwrap_err().contains("cannot overwrite"));
+        assert!(store.restart_bridge(&supervisor).unwrap().running);
+        assert!(supervisor.provider_summary().unwrap().providers.iter().any(|p| p.name == "demo" && p.configured));
+        assert!(store.delete_and_sync_provider_key(&supervisor, "api_key_demo").unwrap());
+        assert!(backend.load("api_key_demo").unwrap().is_none());
+        assert!(fs::read(source.join(".env")).unwrap() == original);
+        assert!(fs::read(source.join("config.toml")).unwrap() == config);
+        let after = fs::metadata(source.join(".env")).unwrap();
+        assert_eq!(metadata.ino(), after.ino()); assert_eq!(metadata.mode(), after.mode()); assert_eq!(metadata.modified().unwrap(), after.modified().unwrap());
+        assert!(!core.join(".env").exists());
+        supervisor.stop().unwrap();
+        eprintln!("owned-native-env: OS import/refusal/restart/delete and originals preserved");
     }
 
     #[test]

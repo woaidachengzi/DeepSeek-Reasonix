@@ -1,0 +1,29 @@
+warning: `/Users/jerry/.cargo/config` is deprecated in favor of `config.toml`
+  |
+  = help: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+   Compiling reasonix-tauri v0.1.0 (/Users/jerry/temp/app/reasonix-tauri/desktop/tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.87s
+     Running unittests src/main.rs (target/debug/deps/reasonix_tauri-9916af7dc0d35f54)
+
+running 18 tests
+test data_profile::tests::bounded_project_folder_reader_rejects_growth_past_limit ... ok
+test data_profile::tests::explicit_boundary_refuses_stable_aliases_ancestors_and_missing_descendants ... ok
+test data_profile::tests::explicit_home_disables_automatic_import ... ok
+test data_profile::tests::explicit_profile_disables_managed_event_store_capability ... ok
+test data_profile::tests::explicit_state_and_cache_cannot_escape_into_stable_profile ... ok
+test data_profile::tests::import_copies_config_after_creating_a_private_backup ... ok
+test data_profile::tests::import_refuses_to_overwrite_a_preview_config ... ok
+test data_profile::tests::import_rejects_non_directory_backup_root_without_changing_files ... ok
+test data_profile::tests::import_rejects_oversized_config_before_creating_a_backup ... ok
+test data_profile::tests::import_rejects_redirected_backup_root_without_external_writes ... ok
+test data_profile::tests::import_rejects_symlinked_stable_config ... ok
+test data_profile::tests::managed_profile_creates_private_root_and_preserves_existing_profile ... ok
+test data_profile::tests::managed_profile_drops_inherited_state_and_cache_homes ... ok
+test data_profile::tests::managed_profile_rejects_dangling_link_and_regular_file ... ok
+test data_profile::tests::managed_profile_rejects_linked_legacy_directory_without_touching_originals ... ok
+test data_profile::tests::preview_profile_is_nested_under_tauri_app_data ... ok
+test data_profile::tests::project_folder_import_copies_only_roots_and_never_overwrites_preview ... ok
+test data_profile::tests::returning_to_stable_keeps_original_and_backup_after_preview_edits ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 206 filtered out; finished in 0.07s
+

@@ -1,0 +1,8 @@
+  PASS  a newer request waits for the in-flight capture and persistence
+  PASS  both distinct observations are persisted
+  PASS  the newest observation is written last
+  PASS  the newest maximised state is preserved
+  PASS  an unchanged observation is deduplicated after persistence succeeds
+  FAIL  a disposed capture cannot overwrite the replacement mount's geometry
+  FAIL  disposal stops the remaining native reads and queued captures
+  FAIL  a disposed saver ignores subsequent requests

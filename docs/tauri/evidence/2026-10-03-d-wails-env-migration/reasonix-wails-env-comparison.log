@@ -1,0 +1,6 @@
+destination comparison: kind=true base=true chat=true request=true models=true balance=false auth=true headers=true
+--- FAIL: TestProviderWailsEnvAuthenticatedBoundedReadOnly (0.00s)
+    wails_env_credential_test.go:46: unexpected status 400
+FAIL
+FAIL	reasonix/cmd/reasonix-desktop-bridge	0.669s
+FAIL

@@ -1,0 +1,52 @@
+desktop/app.go directory dialog reference:
+	}
+	cur, _ := os.Getwd()
+	a.mu.RLock()
+	if tab := a.activeTabLocked(); tab != nil && tab.WorkspaceRoot != "" {
+		cur = tab.WorkspaceRoot
+	}
+	a.mu.RUnlock()
+	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title:            "Choose working folder",
+		DefaultDirectory: dialogDefaultDirectory(cur),
+	})
+	if err != nil || dir == "" {
+		return "", err
+	}
+	return a.SwitchWorkspace(dir)
+}
+
+func dialogDefaultDirectory(preferred string) string {
+	if dir := nearestExistingDirectory(preferred); dir != "" {
+		return dir
+
+desktop/scroll_diagnostics_export.go save reference:
+
+// ExportScrollDiagnostics validates a local, content-free trace, asks the user
+// where to save it, and writes a ZIP. It performs no network requests.
+func (a *App) ExportScrollDiagnostics(payload string) (string, error) {
+	archive, reportID, err := buildScrollDiagnosticsArchive(payload)
+	if err != nil {
+		return "", err
+	}
+	if a.ctx == nil {
+		return "", nil
+	}
+	defaultFilename := fmt.Sprintf("reasonix-scroll-diagnostics-%s.zip", reportID[:8])
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:                "Export scroll diagnostics",
+		DefaultDirectory:     dialogDefaultDirectory(a.activeWorkspaceRoot()),
+		DefaultFilename:      safeExportFilename(defaultFilename),
+		CanCreateDirectories: true,
+		Filters:              exportFileFilters("application/zip", ".zip"),
+	})
+	if err != nil || path == "" {
+		return "", err
+	}
+	if filepath.Ext(path) == "" {
+		path += ".zip"
+	}
+	if err := a.SaveExportFile(path, string(archive), false); err != nil {
+		return "", err
+	}
+	return path, nil

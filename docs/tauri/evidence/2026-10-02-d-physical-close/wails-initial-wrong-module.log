@@ -1,0 +1,4 @@
+# ./desktop
+main module (reasonix) does not contain package reasonix/desktop
+FAIL	./desktop [setup failed]
+FAIL

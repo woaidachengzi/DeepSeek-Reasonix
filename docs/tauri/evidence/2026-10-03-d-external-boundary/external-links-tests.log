@@ -1,0 +1,140 @@
+
+> reasonix-desktop-frontend@0.0.0 test:external-links /Users/jerry/temp/app/reasonix-tauri/desktop/frontend
+> node --import tsx src/__tests__/mermaid-native-links.test.tsx && node --import tsx src/__tests__/search-sources-native-actions.test.tsx && node --import tsx src/__tests__/rich-link-context-menu.test.tsx && node --import tsx src/__tests__/local-path-click-e2e.test.tsx && node --import tsx src/__tests__/native-local-path-actions.test.tsx && node --import tsx src/__tests__/external-opener.test.tsx && node --import tsx src/__tests__/external-opener-preference-sync.test.tsx
+
+Mermaid native links: mouse ownership, refusal/copy recovery and protocol boundary OK
+Search sources native opener/copy, modified activation and refusal recovery: OK
+
+rich link context menu
+  PASS  web link context menu opens on right click
+  PASS  pull request menu has three items (3)
+  PASS  pull request menu can open in the browser
+  PASS  pull request menu can copy the link
+  PASS  pull request menu can copy a reference
+  PASS  menu contains a "Copy reference" item
+  PASS  copy reference writes the owner/repo#number form (esengine/DeepSeek-Reasonix#6976)
+  PASS  a success toast confirms the copy
+  PASS  menu contains a "Copy reference" item
+  PASS  commit reference writes owner/repo@shortsha (esengine/DeepSeek-Reasonix@ca03d4c)
+  PASS  external menu has two items (2)
+  PASS  external menu has no reference action
+  PASS  menu contains a "Copy link" item
+  PASS  copy link writes the original URL (https://example.com/a/very/long/documentation/path)
+  PASS  menu contains a "Open in browser" item
+  PASS  open in browser sends the URL to the system browser
+  PASS  mailto menu offers compose email
+  PASS  mailto menu offers copy address
+  PASS  menu contains a "Copy email address" item
+  PASS  copy email address strips the mailto: scheme (support@example.com)
+  PASS  menu contains a "Compose email" item
+  PASS  compose email hands the mailto URL to the system handler
+  PASS  mail protocol classification is consistent
+  PASS  menu contains a "Copy email address" item
+  PASS  address copy for mailto:support@example.com?subject=Help&body=Hello
+  PASS  mail protocol classification is consistent
+  PASS  menu contains a "Copy email address" item
+  PASS  address copy for MAILTO:support@example.com
+  PASS  mail protocol classification is consistent
+  PASS  menu contains a "Copy email address" item
+  PASS  address copy for mailto:hello%2Btag@example.com
+  PASS  mail protocol classification is consistent
+  PASS  menu contains a "Copy email address" item
+  PASS  address copy for mailto:one@example.com,two@example.com?cc=other@example.com
+  PASS  mail protocol classification is consistent
+  PASS  menu contains a "Copy email address" item
+  PASS  address copy for mailto:bad%ZZ@example.com?subject=Help
+  PASS  mail protocol classification is consistent
+  PASS  menu contains a "Copy email address" item
+  PASS  address copy for mailto:?subject=Help
+  PASS  ContextMenu key opens the menu
+  PASS  keyboard menu focuses first action
+  PASS  Escape closes the menu
+  PASS  Escape returns focus to link
+  PASS  Shift+F10 opens the menu
+  PASS  menu contains a "Copy link" item
+  PASS  explicit label does not change what copy link writes
+  PASS  relative link right click is not intercepted
+  PASS  relative link opens no context menu
+  PASS  menu contains a "Copy link" item
+  PASS  a failed copy shows an error toast
+  PASS  Tauri Markdown click prevents WebView navigation
+  PASS  Tauri Markdown click sends the original URL to the validated Rust opener
+  PASS  middle click also uses the native opener
+  PASS  menu contains a "Compose email" item
+  PASS  email menu uses the same host entry
+  PASS  failed native opens offer a copy-link recovery
+  PASS  recovery copies the original link for opening in another app
+  PASS  opener failures do not expose internal error payloads
+  PASS  native refusal has no browser or Wails fallback
+  PASS  browser development keeps its external-tab path
+
+61 passed, 0 failed
+
+headless click-to-open e2e
+  PASS  exactly one anchor rendered
+  PASS  anchor href is the encoded file URL (file:///D:/Project/Jhtj/20250804_000000_001_%E4%B8%AD%E5%81%9C%E6%97%B6%E5%88%86%E6%9E%90/05-%E9%9D%99%E6%80%81%E9%AA%8C%E6%94%B6.md)
+  PASS  click invoked OpenLocalPath once
+  PASS  OpenLocalPath received the decoded CJK path (D:/Project/Jhtj/20250804_000000_001_中停时分析/05-静态验收.md)
+  PASS  system browser was not involved
+  PASS  UNC path forwarded as slash form (//nas/share/docs/report.md)
+  PASS  canonical UNC markdown link renders an anchor
+  PASS  canonical UNC path forwarded correctly (//nas/share/docs/report.md)
+  PASS  explicit file:/// markdown link opens locally
+  PASS  local path context menu opens on right click
+  PASS  file manager is not duplicated in the open-with list
+  PASS  context menu opens the path with the selected application
+  PASS  right-button auxclick does not open a local path
+  PASS  StrictMode opener discovery populates the local-path menu
+  PASS  latest opener discovery populates the local-path menu
+  PASS  stale opener discovery cannot replace the latest result
+  PASS  right-button auxclick does not open an http link
+  PASS  http link went to the system browser
+  PASS  OpenLocalPath was not called for the http link
+  PASS  no anchors for plain text
+
+20 passed, 0 failed
+native local document and workspace openers, icons and preference actions: OK
+
+external opener
+  PASS  uses the shared 28px / 7px topic-bar control geometry without an extra shadow
+  PASS  keeps both split-button segments within the shared control height
+  PASS  keeps Creation topic bars on the same 28px / 7px geometry
+  PASS  fits Workbench application artwork to the compact topic-bar control
+  PASS  preserves the slimmer Creation application artwork size
+  PASS  external opener has a distinct React key namespace
+  PASS  session actions have a distinct React key namespace
+  PASS  mounts for a Project tab
+  PASS  mounts for a Global tab without guessing from scope
+  PASS  stays hidden while an IM detail surface owns the header
+  PASS  renders a split-button menu trigger after discovery
+  PASS  renders the native application icon data URL
+  PASS  opens the installed-application menu
+  PASS  requests an installed-application refresh whenever the menu opens
+  PASS  renders applications discovered by the fresh scan
+  PASS  persists the selected application id
+  PASS  opens the exact Global workspace with the selection
+  PASS  primary action reuses the preference without another settings write
+  PASS  primary action uses the newly selected application
+  PASS  rapid primary clicks launch the workspace only once
+  PASS  opens immediately with the cached application list while refresh is still running
+  PASS  the latest overlapping discovery result wins
+  PASS  a stale discovery cannot replace the current menu
+  PASS  a newer tab selection persists even when it matches the discovered preference
+  PASS  an older tab completion cannot overwrite the latest opener preference
+  PASS  a newer failed launch does not cancel an older successful selection
+  PASS  an in-flight older preference write has the same result when a newer launch fails
+  PASS  a failed launch never persists the preference
+  PASS  a failed launch reports the launch error
+  PASS  the application launches before the preference write
+  PASS  a failed preference write reports the save error after opening
+  PASS  hides when the backend reports no local workspace capability
+
+32 passed, 0 failed, 32 total
+
+external opener preference synchronization
+  PASS  the visible tab initially discovers the old preference
+  PASS  an older tab completion synchronizes the visible control
+  PASS  the visible primary action uses the synchronized preference
+  PASS  a discovery started before the write cannot restore the stale preference
+
+4 passed, 0 failed, 4 total

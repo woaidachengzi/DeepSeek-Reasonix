@@ -1,0 +1,11 @@
+native macOS window managed menu-shortcuts: OK
+native macOS window managed clipboard-native: OK
+native macOS window managed dialog-cancel: OK
+native macOS window managed menu-editing: OK
+native macOS window managed: 4/4 stages passed
+native macOS window explicit menu-shortcuts: OK
+native macOS window explicit clipboard-native: OK
+native macOS window explicit dialog-cancel: OK
+native macOS window explicit menu-editing: OK
+native macOS window explicit: 4/4 stages passed
+independent menu/clipboard slice passed; complete window acceptance remains separate

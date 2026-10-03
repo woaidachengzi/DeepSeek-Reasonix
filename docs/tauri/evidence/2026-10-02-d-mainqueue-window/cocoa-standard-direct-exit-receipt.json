@@ -1,0 +1,10 @@
+{
+  "kind": "cocoa",
+  "action": "direct",
+  "root": "/private/tmp/reasonix-tauri-window-baseline-_g1ocvl1/cocoa-standard-direct",
+  "style": "standard",
+  "hostPid": 80916,
+  "kernelExitCode": 2,
+  "openExitCode": 0,
+  "expectedCode": 2
+}

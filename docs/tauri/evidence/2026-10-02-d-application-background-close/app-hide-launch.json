@@ -1,0 +1,10 @@
+{
+  "app": "/private/tmp/reasonix-d-app-hide-installed-ipo2n156/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-launch-services-vpvsvlno",
+  "identifier": "io.reasonix.desktop.preview",
+  "pid": 93423,
+  "sidecarPid": 93441,
+  "openerPid": 93421,
+  "profile": "explicit",
+  "interactive": true
+}

@@ -1,0 +1,13 @@
+/private/tmp/reasonix-tauri-window-baseline-_g1ocvl1/Reasonix Window Baseline.app/Contents/MacOS/window-baseline: replacing existing signature
+/private/tmp/reasonix-tauri-window-baseline-_g1ocvl1/Reasonix Window Baseline.app: replacing existing signature
+{"app": "/private/tmp/reasonix-tauri-window-baseline-_g1ocvl1/Reasonix Window Baseline.app", "binarySha256": "27911b6e5078d5ec997cf1c2f76b399337288f66cf8943b4e283e0ddddd68a52", "base": "/private/tmp/reasonix-tauri-window-baseline-_g1ocvl1"}
+{"kind": "cocoa", "action": "direct", "root": "/private/tmp/reasonix-tauri-window-baseline-_g1ocvl1/cocoa-standard-direct", "style": "standard", "hostPid": 80916, "kernelExitCode": 2, "openExitCode": 0, "expectedCode": 2}
+{"style": "standard", "root": "/private/tmp/reasonix-tauri-window-baseline-_g1ocvl1/cocoa-standard-direct", "pid": 80916, "exitCode": 2, "precondition": true, "minimized": false, "restored": false}
+{"kind": "cocoa", "action": "main-queue", "root": "/private/tmp/reasonix-tauri-window-baseline-_g1ocvl1/cocoa-standard-main-queue", "style": "standard", "hostPid": 80932, "kernelExitCode": 2, "openExitCode": 0, "expectedCode": 2}
+{"style": "standard", "root": "/private/tmp/reasonix-tauri-window-baseline-_g1ocvl1/cocoa-standard-main-queue", "pid": 80932, "exitCode": 2, "precondition": true, "minimized": false, "restored": false}
+{"kind": "tauri", "action": "main-queue", "root": "/private/tmp/reasonix-tauri-window-baseline-_g1ocvl1/tauri-standard-main-queue", "style": "standard", "hostPid": 80946, "kernelExitCode": 2, "openExitCode": 0, "expectedCode": 2}
+Traceback (most recent call last):
+  File "/private/tmp/reasonix-run-mainqueue-baseline.py", line 44, in <module>
+    assert result['precondition'] is True,'baseline activation/page precondition failed'
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: baseline activation/page precondition failed

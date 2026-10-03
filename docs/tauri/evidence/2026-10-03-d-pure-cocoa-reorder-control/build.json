@@ -1,0 +1,11 @@
+{
+  "app": "/private/tmp/reasonix-pure-cocoa-phase-r47v83oh/Private Identical Cocoa Control.app",
+  "binarySha256": "2161541f86a4d9942f66ce16dc07aa396a1f2d33dae40967e4b2d85eb8f98a7f",
+  "effectiveEntitlements": {
+    "com.apple.security.cs.allow-dyld-environment-variables": true,
+    "com.apple.security.cs.allow-jit": true,
+    "com.apple.security.cs.allow-unsigned-executable-memory": true,
+    "com.apple.security.files.user-selected.read-write": true,
+    "com.apple.security.network.client": true
+  }
+}

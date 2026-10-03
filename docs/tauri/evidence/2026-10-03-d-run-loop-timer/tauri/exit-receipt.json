@@ -1,0 +1,12 @@
+{
+  "delegate": "keep",
+  "application": "tao",
+  "kind": "tauri",
+  "action": "run-loop-timer",
+  "root": "/private/tmp/reasonix-tauri-native-timer-dtd0j5vg/keep-tao-tauri-overlay-run-loop-timer",
+  "style": "overlay",
+  "hostPid": 22164,
+  "kernelExitCode": 2,
+  "openExitCode": 0,
+  "expectedCode": 2
+}

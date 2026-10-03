@@ -1,0 +1,17 @@
+native macOS window managed appearance-rollback-unconfigured: OK
+native macOS window managed appearance-dark: OK
+native macOS window managed restore-appearance-dark: OK
+native macOS window managed restore-appearance-light: OK
+native macOS window managed restore-appearance-auto: OK
+native macOS window managed appearance-rollback: OK
+native macOS window managed restore-appearance-rollback: OK
+native macOS window managed: 7/7 stages passed
+native macOS window explicit appearance-rollback-unconfigured: OK
+native macOS window explicit appearance-dark: OK
+native macOS window explicit restore-appearance-dark: OK
+native macOS window explicit restore-appearance-light: OK
+native macOS window explicit restore-appearance-auto: OK
+native macOS window explicit appearance-rollback: OK
+native macOS window explicit restore-appearance-rollback: OK
+native macOS window explicit: 7/7 stages passed
+native appearance/restart/rollback slice passed; complete window acceptance remains separate

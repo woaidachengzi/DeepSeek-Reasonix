@@ -1,0 +1,11 @@
+{
+  "cocoaIndependent": [
+    "11\n      cmd LC_BUILD_VERSION\n  cmdsize 32\n platform 1\n    minos 18.0\n      sdk 15.2\n   ntools 1\n     tool 3\n  version 1115.7.3"
+  ],
+  "cocoaTauriLoop": [
+    "10\n      cmd LC_BUILD_VERSION\n  cmdsize 32\n platform 1\n    minos 11.0\n      sdk 15.2\n   ntools 1\n     tool 3\n  version 1115.7.3"
+  ],
+  "production": [
+    "10\n      cmd LC_BUILD_VERSION\n  cmdsize 32\n platform 1\n    minos 11.0\n      sdk 15.2\n   ntools 1\n     tool 3\n  version 1115.7.3"
+  ]
+}

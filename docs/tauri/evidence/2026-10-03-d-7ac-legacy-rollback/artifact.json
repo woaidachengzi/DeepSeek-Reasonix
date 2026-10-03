@@ -1,0 +1,19 @@
+{
+  "preview": "/private/tmp/reasonix-d-explicit-boundary-installed-svdd0lq8/Reasonix Tauri Preview.app",
+  "legacy": "/private/tmp/reasonix-official-window-baseline/extracted/Reasonix.app",
+  "legacyCli": "/private/tmp/reasonix-official-window-baseline/extracted/Reasonix.app/Contents/MacOS/reasonix",
+  "workspaceData": true,
+  "exitCode": 0,
+  "artifactSha256": {
+    "/private/tmp/reasonix-d-explicit-boundary-installed-svdd0lq8/Reasonix Tauri Preview.app/Contents/MacOS/reasonix-tauri": "7ac271422cee864ac7a296a1b0e9504370148efc359c2904e857bd36b205acb5",
+    "/private/tmp/reasonix-d-explicit-boundary-installed-svdd0lq8/Reasonix Tauri Preview.app/Contents/MacOS/reasonix-desktop-bridge": "cd7262010182d96253c0aa6e6a8038b18ce9f194e35cbfac5cc75106a1ba46b3",
+    "/private/tmp/reasonix-official-window-baseline/extracted/Reasonix.app/Contents/MacOS/reasonix-desktop": "869b02d8f8a92f5847c1728923fde7153d931e105f26fd2926bfa8feeb863650",
+    "/private/tmp/reasonix-official-window-baseline/extracted/Reasonix.app/Contents/MacOS/reasonix": "5b1ab31424d45c8bf3cfe6a60b11da527df2252aee963d1c0c56352f57945962"
+  },
+  "scriptSha256": {
+    "smoke-profile-import.py": "a0c37744d19ec9599e5a2419df09e63ebd61fe66d47a59a415c9ecabd2c9e32e",
+    "smoke-legacy-rollback.py": "d0ffa28a08a7d7da0b7fb621e40f8fab1775c2149a200d9aaafbffe89dfc6cdd",
+    "smoke-packaged-app.py": "5d6d953d65b26c07b0821d298772012befd166fdb9aa14028dfaf9dab7ad9b23"
+  },
+  "privateFixtureRemovedOnSuccess": true
+}

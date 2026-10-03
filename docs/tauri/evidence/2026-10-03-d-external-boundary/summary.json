@@ -1,0 +1,8 @@
+{
+  "productionHostSha256": "bfb47fd84156acba8e9b530889d6a215145291d0a0722ab5f2f0518f2a17b4fa",
+  "failureExit": "passed",
+  "package": "passed",
+  "links": "failed: browser loopback receipt timed out, managed only; explicit not-run",
+  "lifetime": "independent 8/8 passed",
+  "DEComplete": false
+}

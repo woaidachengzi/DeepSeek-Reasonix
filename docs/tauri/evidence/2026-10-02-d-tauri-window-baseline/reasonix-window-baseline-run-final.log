@@ -1,0 +1,7 @@
+/private/tmp/reasonix-tauri-window-baseline-v84e53si/Reasonix Window Baseline.app/Contents/MacOS/window-baseline: replacing existing signature
+/private/tmp/reasonix-tauri-window-baseline-v84e53si/Reasonix Window Baseline.app: replacing existing signature
+{"app": "/private/tmp/reasonix-tauri-window-baseline-v84e53si/Reasonix Window Baseline.app", "binarySha256": "088a8e79fffdc8cd2ff0bafc308e263a1a2b36acf312dc5416397b3b64876f95", "base": "/private/tmp/reasonix-tauri-window-baseline-v84e53si"}
+{"style": "standard", "hostPid": 79676, "kernelExitCode": 2, "openExitCode": 0, "expectedCode": 2}
+{"style": "standard", "root": "/private/tmp/reasonix-tauri-window-baseline-v84e53si/standard", "pid": 79676, "exitCode": 2, "precondition": true, "minimized": false, "restored": false}
+{"style": "overlay", "hostPid": 79695, "kernelExitCode": 2, "openExitCode": 0, "expectedCode": 2}
+{"style": "overlay", "root": "/private/tmp/reasonix-tauri-window-baseline-v84e53si/overlay", "pid": 79695, "exitCode": 2, "precondition": true, "minimized": false, "restored": false}

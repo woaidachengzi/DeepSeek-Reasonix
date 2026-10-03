@@ -1,0 +1,13 @@
+{
+  "README.md": "dc0808378587399ce4c6c35f22a7749d7838067da616000f933afc84e8995a5e",
+  "build-first-failed.log": "196f9a7ce393e019fdd7d84e9ca6c9aa0b00acc8f13b094352bf95d47071d8af",
+  "build-passed.log": "dcaa29548bb05dc0ec2eb4346859e684a365b5da4315ad53efce222bd3264eb8",
+  "clippy.log": "ebc0b57ad7c6bb698e8e8d9d8b88cec036fd5aa6920cfe01df5bb36f6a042a3a",
+  "exit-receipt.json": "2f038e7d5f8f2a123e7676bea80a8677943d4a480b2d96d43bfc2a8d73894d7d",
+  "host.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "result.json": "c6f63adf980eb3d23bb6480f00daede5db50c02a84bcd976770764dfc04da8b6",
+  "run.log": "8e5e50a7f858be56c053717ed5585f5d4aa0fffb976e74fb3e6baa7f1c08d43e",
+  "runner.py": "0d56ab5f7895bedf96503fd6cc6fa5111efa15ab754f26c72b59ba90f31adf36",
+  "wails-runtime-excerpt.txt": "5e01a99c111adeb5948aa789c4f57ad36437db6ae1708c138b848de1ec2b6e9f",
+  "window-baseline.rs": "559012aa43e8cdb3c2c103fb3b9d14753cd09c9272332b5200d606f8a0647d39"
+}

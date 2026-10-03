@@ -1,0 +1,16 @@
+{
+  "hostPid": 6133,
+  "confirmedHostAbsent": true,
+  "binarySha256": "57955cbd13ed18d3c67b62f47f7a3cc594bad8d426431721c8f42029a83afb50",
+  "cuaGetAppError": "Computer Use server error -10005: timeoutReached",
+  "cuaReportedDurationSeconds": 7560.9098,
+  "actualClickCompleted": false,
+  "manualWaitSeconds": 60,
+  "manualWaitTimedOut": true,
+  "kernelReceiptSaved": false,
+  "runnerExitCode": 1,
+  "parserError": "KeyError restored for timeout-only result",
+  "sourceTimeoutSchemaRepaired": true,
+  "productionChanged": false,
+  "DEComplete": false
+}

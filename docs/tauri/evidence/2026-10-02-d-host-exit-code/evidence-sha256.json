@@ -1,0 +1,21 @@
+{
+  "README.md": "776426e7b861ca42ca864fd0252602e3b420acf0120184e31a195825a698a385",
+  "actual-quit-exit-receipt.json": "d07136acf176d3cd8e3b8399ba98d933a1bb94dc8bd7b67c96c8aad58ac05007",
+  "actual-quit-launch.json": "71ec5e533f17e70783eae26748e966b1497eeca87d0751a89c45b3331ba7e322",
+  "actual-quit-result.json": "98b677ed62120a6b41570d8f5bf78f9e3af5738b09452219ee2523d597b273e7",
+  "before-exit-receipt.json": "a4cea006d34bd1add54ff75162844477dee306fc6be899e5cfac104871df8473",
+  "before-failure-marker.json": "f741c302065e63ba7f292145754a58bc58f49dc7a577da8b90bfde7dc3438c78",
+  "cleanup.json": "1d3fc8a9441e82171a03303650fb94179484ae0a24da2cd4f3869d1676ab2d61",
+  "explicit-exit-receipt.json": "9332c7537ce38924e9e01c246c563358fb72d7ed2391f7a5b9c74071838a55c0",
+  "explicit-failure-marker.json": "f741c302065e63ba7f292145754a58bc58f49dc7a577da8b90bfde7dc3438c78",
+  "explicit-result.json": "c1a6908c98b56fb9d247a7fcd9da68b14c60bc692f7ee45bbedeb9534bc77bf5",
+  "managed-exit-receipt.json": "abc1333197e2f295d660b0dfd472d9f9d34695be0b4b53fdfa88427a111681dd",
+  "managed-failure-marker.json": "f741c302065e63ba7f292145754a58bc58f49dc7a577da8b90bfde7dc3438c78",
+  "managed-result.json": "ce0f64ff987f355b9e50c8f879b98bc139c15e0a2ae9f7c1b606a401095c3c98",
+  "reasonix-host-exit-before.log": "96a92ee2a066b4b24f69dbba21e20ef089ae64013a9caca473ba9cf72a86f3be",
+  "reasonix-host-exit-build.log": "1ecef188cd7d56ceefcff4d9de87e53ef4e03364f577dedd11a946791f52e464",
+  "reasonix-host-exit-clippy.log": "adc2e88b005e3a2a2de567e415bf536ec4fd0c6287751ca846a9911cc6dc5a91",
+  "reasonix-host-exit-install.json": "0e580c2af5d748239f15345247e0fb743a6419be459e0fc5ae609c23a83a8122",
+  "reasonix-host-exit-ui.log": "4f185f5f5cf0bdac8650e5f903284f176cd9f29634715cbac2d103800fd48c41",
+  "result.json": "5d6e5b52a17e1fc442d2cfcf64fee4cec9a3a2ee48e1d16e687b26dde3ffe163"
+}

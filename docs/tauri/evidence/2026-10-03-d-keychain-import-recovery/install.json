@@ -1,0 +1,9 @@
+{
+  "app": "/private/tmp/reasonix-d-keychain-copy-installed-4tiiqif5/Reasonix Tauri Preview.app",
+  "dmg": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri Preview_0.1.0_aarch64.dmg",
+  "dmgSha256": "48a3b26661d83d5ad8624d0bb814804a18502b7a0113ef185f2f0d2c24cf5591",
+  "artifactSha256": {
+    "reasonix-tauri": "60076bd5f9f8237330fb1b508b56241ff1c8f254b5d0e940b0e736c72f7039cf",
+    "reasonix-desktop-bridge": "29d985c7af09baefec4308339429eabfe921896c47db6f4c30584b742b7efd39"
+  }
+}

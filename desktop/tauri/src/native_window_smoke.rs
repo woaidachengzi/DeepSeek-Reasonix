@@ -32,7 +32,7 @@ pub struct WindowSmokeState {
     transitions: Arc<WindowTransitions>,
 }
 
-const TRANSITIONS: [&str; 7] = [
+const TRANSITIONS: [&str; 10] = [
     "will-miniaturize",
     "did-miniaturize",
     "did-deminiaturize",
@@ -40,17 +40,27 @@ const TRANSITIONS: [&str; 7] = [
     "resigned-key",
     "appearance-request",
     "appearance-skipped",
+    "occlusion-changed",
+    "application-became-active",
+    "application-resigned-active",
 ];
 
-#[derive(Default)]
 struct WindowTransitions {
     record: Mutex<TransitionRecord>,
+    started: Instant,
+}
+
+impl Default for WindowTransitions {
+    fn default() -> Self {
+        Self { record: Mutex::default(), started: Instant::now() }
+    }
 }
 
 #[derive(Clone, Default)]
 struct TransitionRecord {
-    counts: [usize; 7],
+    counts: [usize; 10],
     recent: Vec<&'static str>,
+    timed: Vec<serde_json::Value>,
 }
 
 impl WindowTransitions {
@@ -59,8 +69,13 @@ impl WindowTransitions {
             record.counts[index] += 1;
             if record.recent.len() == 32 {
                 record.recent.remove(0);
+                record.timed.remove(0);
             }
             record.recent.push(TRANSITIONS[index]);
+            record.timed.push(serde_json::json!({
+                "transition": TRANSITIONS[index],
+                "elapsedMs": self.started.elapsed().as_millis(),
+            }));
         }
     }
 }
@@ -77,6 +92,9 @@ fn install_window_observers(app: &AppHandle) -> Result<(), String> {
         NSWindow, NSWindowDidBecomeKeyNotification, NSWindowDidDeminiaturizeNotification,
         NSWindowDidMiniaturizeNotification, NSWindowDidResignKeyNotification,
         NSWindowWillMiniaturizeNotification,
+        NSWindowDidChangeOcclusionStateNotification,
+        NSApplication, NSApplicationDidBecomeActiveNotification,
+        NSApplicationDidResignActiveNotification,
     };
     use objc2_foundation::{NSNotification, NSNotificationCenter};
     objc2::MainThreadMarker::new().ok_or("window observers require the main thread")?;
@@ -95,11 +113,12 @@ fn install_window_observers(app: &AppHandle) -> Result<(), String> {
     let native = unsafe { &*pointer.cast::<NSWindow>() };
     let names = unsafe {
         [
-            NSWindowWillMiniaturizeNotification,
-            NSWindowDidMiniaturizeNotification,
-            NSWindowDidDeminiaturizeNotification,
-            NSWindowDidBecomeKeyNotification,
-            NSWindowDidResignKeyNotification,
+            (0, NSWindowWillMiniaturizeNotification),
+            (1, NSWindowDidMiniaturizeNotification),
+            (2, NSWindowDidDeminiaturizeNotification),
+            (3, NSWindowDidBecomeKeyNotification),
+            (4, NSWindowDidResignKeyNotification),
+            (7, NSWindowDidChangeOcclusionStateNotification),
         ]
     };
     WINDOW_OBSERVERS.with(|observers| {
@@ -108,7 +127,7 @@ fn install_window_observers(app: &AppHandle) -> Result<(), String> {
             return Err("window observers already registered".into());
         }
         let center = NSNotificationCenter::defaultCenter();
-        for (index, name) in names.into_iter().enumerate() {
+        for (index, name) in names {
             let counters = Arc::clone(&state.transitions);
             let callback =
                 RcBlock::new(move |_: std::ptr::NonNull<NSNotification>| counters.note(index));
@@ -121,6 +140,22 @@ fn install_window_observers(app: &AppHandle) -> Result<(), String> {
                     None,
                     &callback,
                 )
+            };
+            observers.push(observer);
+        }
+        let application = NSApplication::sharedApplication(
+            objc2::MainThreadMarker::new().ok_or("application observer requires main thread")?,
+        );
+        let app_names = unsafe {
+            [(8, NSApplicationDidBecomeActiveNotification), (9, NSApplicationDidResignActiveNotification)]
+        };
+        for (index, name) in app_names {
+            let counters = Arc::clone(&state.transitions);
+            let callback = RcBlock::new(move |_: std::ptr::NonNull<NSNotification>| counters.note(index));
+            // SAFETY: Filter by this process's NSApplication on its main
+            // thread; callbacks retain only thread-safe counters.
+            let observer = unsafe {
+                center.addObserverForName_object_queue_usingBlock(Some(name), Some(&application), None, &callback)
             };
             observers.push(observer);
         }
@@ -256,7 +291,7 @@ pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, Stri
         .lock()
         .map_err(|_| "native transition record unavailable")?
         .clone();
-    Ok(serde_json::json!({
+    let mut snapshot = serde_json::json!({
         "geometry": Geometry::read(window)?,
         "monitors": monitors,
         "visible": window.is_visible().map_err(|_| "read visibility")?,
@@ -300,7 +335,18 @@ pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, Stri
             .map(|state| state.reopened.load(Ordering::SeqCst)),
         "mainPageFinished": window.app_handle().try_state::<WindowSmokeState>()
             .is_some_and(|state| state.main_loaded.load(Ordering::SeqCst)),
-    }))
+    });
+    let presentation = serde_json::json!({
+        "nativeWindowNumber": native.windowNumber(),
+        "nativeWindowLevel": native.level(),
+        "nativeTimedTransitions": transitions.timed,
+        "occlusionChanges": transitions.counts[7],
+        "applicationBecameActive": transitions.counts[8],
+        "applicationResignedActive": transitions.counts[9],
+    });
+    snapshot.as_object_mut().ok_or("invalid window snapshot")?
+        .extend(presentation.as_object().ok_or("invalid presentation snapshot")?.clone());
+    Ok(snapshot)
 }
 
 pub(crate) fn record(app: &AppHandle, stage: &'static str) -> Result<(), String> {
@@ -582,11 +628,11 @@ fn background_close(
             .close()
             .map_err(|_| "request background close".into())
     })?;
-    wait_for(app, "background close", |window| {
-        window
-            .is_visible()
-            .map(|visible| !visible)
-            .map_err(|_| "read visibility".into())
+    wait_for(app, "background close hides macOS application", |_| {
+        Ok(objc2_app_kit::NSApplication::sharedApplication(
+            objc2::MainThreadMarker::new().ok_or("not main thread")?,
+        )
+        .isHidden())
     })?;
 
     if require_second {
@@ -608,6 +654,12 @@ fn background_close(
         })?;
         verify_geometry(app, "background close restore", normal)?;
     }
+    wait_for(app, "background restore unhides macOS application", |_| {
+        Ok(!objc2_app_kit::NSApplication::sharedApplication(
+            objc2::MainThreadMarker::new().ok_or("not main thread")?,
+        )
+        .isHidden())
+    })?;
     save(app)
 }
 
@@ -677,6 +729,30 @@ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
             record(app, "display-secondary-restored")?;
         }
         "menu-shortcuts" => crate::native_menu_smoke::shortcuts(app)?,
+        "tray-language" => {
+            let before = app.state::<crate::bridge::BridgeSupervisor>().desktop_preferences()?.language;
+            for (locale, expected) in [("en", ("Open", "Quit")), ("zh", ("打开", "退出")), ("zh-TW", ("打开", "退出"))] {
+                on_main(app, move |_, window| {
+                    crate::set_tray_locale(window.clone(), locale.into())?;
+                    let actual = window.state::<crate::tray::TrayMenuState>().labels()?;
+                    if actual != (expected.0.into(), expected.1.into()) {
+                        return Err("native tray titles did not match resolved language".into());
+                    }
+                    Ok(())
+                })?;
+            }
+            on_main(app, |_, window| {
+                let state = window.state::<crate::tray::TrayMenuState>();
+                let before = state.labels()?;
+                if crate::set_tray_locale(window.clone(), "invalid".into()).is_ok() || state.labels()? != before {
+                    return Err("invalid tray locale changed native labels".into());
+                }
+                Ok(())
+            })?;
+            if app.state::<crate::bridge::BridgeSupervisor>().desktop_preferences()?.language != before {
+                return Err("runtime tray locale modified the persisted language".into());
+            }
+        }
         "notification-delivery" => crate::notifications::delivery_smoke(app)?,
         "task-host-death" => crate::native_task_smoke::host_death(app, &directory)?,
         "ui-legacy-read" => crate::native_ui_storage_smoke::legacy_read(app)?,
@@ -698,6 +774,8 @@ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
         "menu-settings-hidden"
         | "menu-settings-minimized"
         | "menu-settings-native-minimized"
+        | "menu-settings-presented-minimized"
+        | "menu-settings-direct-minimized"
         | "menu-settings-app-hidden" => crate::native_menu_smoke::settings(app, phase)?,
         "application-hide" => application_hide(app, &directory)?,
         "background-close" => background_close(app, &directory, false)?,
@@ -764,6 +842,33 @@ pub fn start_if_requested(app: &AppHandle) {
         return;
     }
     let handle = app.clone();
+    if phase == "interactive-observe" {
+        // Observe actual user actions only. Never restore, focus, minimize or
+        // terminate the app on behalf of interactive acceptance.
+        std::thread::spawn(move || {
+            let result = marker_directory().and_then(|directory| {
+                let pending = directory.join("reasonix-native-window-observation.pending");
+                let published = directory.join("reasonix-native-window-observation.json");
+                for sequence in 0..1200 {
+                    let state = on_main(&handle, |_, window| snapshot(window))?;
+                    let receipt = serde_json::json!({
+                        "phase": "interactive-observe", "sequence": sequence,
+                        "state": state,
+                    });
+                    std::fs::write(&pending, receipt.to_string())
+                        .map_err(|_| "write interactive window observation")?;
+                    std::fs::rename(&pending, &published)
+                        .map_err(|_| "publish interactive window observation")?;
+                    std::thread::sleep(Duration::from_millis(250));
+                }
+                Ok::<(), String>(())
+            });
+            if result.is_err() {
+                eprintln!("Interactive window observation stopped before its time limit.");
+            }
+        });
+        return;
+    }
     std::thread::spawn(move || {
         let result = if phase == "task-background-menu-quit" {
             match marker_directory()

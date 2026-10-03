@@ -1,0 +1,8 @@
+native macOS window managed notification-delivery: OK
+native macOS window managed menu-shortcuts: OK
+{"originalPreserved": true, "permission": "granted", "profile": "managed", "readinessRemaining": false, "receipts": [{"applicationActive": false, "applicationHidden": false, "delivered": true, "kind": "turn_done", "removed": true}, {"applicationActive": false, "applicationHidden": true, "delivered": true, "kind": "approval_request", "removed": true}, {"applicationActive": false, "applicationHidden": true, "delivered": true, "kind": "ask_request", "removed": true}], "sameProfileIdentityAfterRestart": true}
+native notifications managed: three OS-delivered captions, two hidden sends, exact cleanup, originals and same-profile restart OK; initial application active=False
+native macOS window explicit notification-delivery: OK
+native macOS window explicit menu-shortcuts: OK
+{"originalPreserved": true, "permission": "granted", "profile": "explicit", "readinessRemaining": false, "receipts": [{"applicationActive": false, "applicationHidden": false, "delivered": true, "kind": "turn_done", "removed": true}, {"applicationActive": false, "applicationHidden": true, "delivered": true, "kind": "approval_request", "removed": true}, {"applicationActive": false, "applicationHidden": true, "delivered": true, "kind": "ask_request", "removed": true}], "sameProfileIdentityAfterRestart": true}
+native notifications explicit: three OS-delivered captions, two hidden sends, exact cleanup, originals and same-profile restart OK; initial application active=False

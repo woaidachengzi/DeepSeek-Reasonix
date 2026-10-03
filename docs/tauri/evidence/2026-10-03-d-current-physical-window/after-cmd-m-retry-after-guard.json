@@ -1,0 +1,234 @@
+{
+  "phase": "interactive-observe",
+  "sequence": 1064,
+  "state": {
+    "appearanceRequests": 2,
+    "appearanceSkipped": 2,
+    "applicationActivationPolicy": 0,
+    "applicationActive": true,
+    "applicationBecameActive": 9,
+    "applicationFinishedLaunching": true,
+    "applicationHidden": false,
+    "applicationModalWindowPresent": false,
+    "applicationOcclusionVisible": true,
+    "applicationResignedActive": 4,
+    "applicationRunning": true,
+    "becameKey": 6,
+    "didDeminiaturize": 0,
+    "didMiniaturize": 0,
+    "focused": false,
+    "geometry": {
+      "height": 1640,
+      "scale": 2.0,
+      "width": 2560,
+      "x": 816,
+      "y": 182
+    },
+    "mainPageFinished": true,
+    "maximized": false,
+    "minimized": false,
+    "monitors": [
+      {
+        "height": 1966,
+        "scale": 2.0,
+        "width": 3840,
+        "x": 0,
+        "y": 60
+      },
+      {
+        "height": 2100,
+        "scale": 2.0,
+        "width": 3840,
+        "x": -3840,
+        "y": 60
+      }
+    ],
+    "nativeAttachedSheet": false,
+    "nativeCanBecomeKey": true,
+    "nativeInLiveResize": false,
+    "nativeIsSheet": false,
+    "nativeKeyWindow": false,
+    "nativeMainWindow": false,
+    "nativeMiniaturizable": true,
+    "nativeMiniaturized": false,
+    "nativeOcclusionVisible": true,
+    "nativeOnActiveSpace": true,
+    "nativeStyleMask": 32783,
+    "nativeTimedTransitions": [
+      {
+        "elapsedMs": 4431,
+        "transition": "application-resigned-active"
+      },
+      {
+        "elapsedMs": 4448,
+        "transition": "occlusion-changed"
+      },
+      {
+        "elapsedMs": 39479,
+        "transition": "application-became-active"
+      },
+      {
+        "elapsedMs": 39481,
+        "transition": "became-key"
+      },
+      {
+        "elapsedMs": 40191,
+        "transition": "occlusion-changed"
+      },
+      {
+        "elapsedMs": 46808,
+        "transition": "resigned-key"
+      },
+      {
+        "elapsedMs": 47498,
+        "transition": "occlusion-changed"
+      },
+      {
+        "elapsedMs": 47529,
+        "transition": "occlusion-changed"
+      },
+      {
+        "elapsedMs": 76054,
+        "transition": "became-key"
+      },
+      {
+        "elapsedMs": 76070,
+        "transition": "application-became-active"
+      },
+      {
+        "elapsedMs": 76116,
+        "transition": "resigned-key"
+      },
+      {
+        "elapsedMs": 76117,
+        "transition": "application-resigned-active"
+      },
+      {
+        "elapsedMs": 98382,
+        "transition": "application-became-active"
+      },
+      {
+        "elapsedMs": 98383,
+        "transition": "became-key"
+      },
+      {
+        "elapsedMs": 98473,
+        "transition": "resigned-key"
+      },
+      {
+        "elapsedMs": 114949,
+        "transition": "became-key"
+      },
+      {
+        "elapsedMs": 114967,
+        "transition": "application-became-active"
+      },
+      {
+        "elapsedMs": 115016,
+        "transition": "resigned-key"
+      },
+      {
+        "elapsedMs": 115016,
+        "transition": "application-resigned-active"
+      },
+      {
+        "elapsedMs": 171267,
+        "transition": "application-became-active"
+      },
+      {
+        "elapsedMs": 171268,
+        "transition": "became-key"
+      },
+      {
+        "elapsedMs": 171332,
+        "transition": "occlusion-changed"
+      },
+      {
+        "elapsedMs": 171904,
+        "transition": "occlusion-changed"
+      },
+      {
+        "elapsedMs": 171905,
+        "transition": "application-became-active"
+      },
+      {
+        "elapsedMs": 178040,
+        "transition": "resigned-key"
+      },
+      {
+        "elapsedMs": 178041,
+        "transition": "application-resigned-active"
+      },
+      {
+        "elapsedMs": 196386,
+        "transition": "application-became-active"
+      },
+      {
+        "elapsedMs": 196389,
+        "transition": "became-key"
+      },
+      {
+        "elapsedMs": 197470,
+        "transition": "occlusion-changed"
+      },
+      {
+        "elapsedMs": 198050,
+        "transition": "occlusion-changed"
+      },
+      {
+        "elapsedMs": 216372,
+        "transition": "application-became-active"
+      },
+      {
+        "elapsedMs": 262385,
+        "transition": "resigned-key"
+      }
+    ],
+    "nativeTransitions": [
+      "application-resigned-active",
+      "occlusion-changed",
+      "application-became-active",
+      "became-key",
+      "occlusion-changed",
+      "resigned-key",
+      "occlusion-changed",
+      "occlusion-changed",
+      "became-key",
+      "application-became-active",
+      "resigned-key",
+      "application-resigned-active",
+      "application-became-active",
+      "became-key",
+      "resigned-key",
+      "became-key",
+      "application-became-active",
+      "resigned-key",
+      "application-resigned-active",
+      "application-became-active",
+      "became-key",
+      "occlusion-changed",
+      "occlusion-changed",
+      "application-became-active",
+      "resigned-key",
+      "application-resigned-active",
+      "application-became-active",
+      "became-key",
+      "occlusion-changed",
+      "occlusion-changed",
+      "application-became-active",
+      "resigned-key"
+    ],
+    "nativeVisible": true,
+    "nativeWindowLevel": 0,
+    "nativeWindowNumber": 1896,
+    "occlusionChanges": 9,
+    "reopenEvents": 0,
+    "resignedKey": 7,
+    "restoreCompletions": 0,
+    "restoreRequests": 0,
+    "runningActivationPolicy": 0,
+    "runningApplicationActive": true,
+    "visible": true,
+    "willMiniaturize": 0
+  }
+}

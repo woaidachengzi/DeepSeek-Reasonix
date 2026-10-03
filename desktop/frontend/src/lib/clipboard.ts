@@ -1,4 +1,5 @@
 import { isTauri } from "@tauri-apps/api/core";
+import { readWailsClipboardText, writeWailsClipboardText } from "./wailsDesktopRuntime";
 
 // Native Tauri clipboard access is limited to text in the main window. Browser
 // and Wails keep their existing fallbacks; only explicit user actions read it.
@@ -24,7 +25,7 @@ export async function writeClipboardText(value: string): Promise<boolean> {
     // Permission denied or unavailable — try the Wails bridge.
   }
   try {
-    if (typeof window !== "undefined" && (await window.runtime?.ClipboardSetText?.(value))) {
+    if (await writeWailsClipboardText(value)) {
       return true;
     }
   } catch {
@@ -56,9 +57,7 @@ export async function readClipboardTextOrThrow(): Promise<string> {
     // Permission denied or unavailable.
   }
   try {
-    if (typeof window !== "undefined" && window.runtime?.ClipboardGetText) {
-      return await window.runtime.ClipboardGetText();
-    }
+    return await readWailsClipboardText();
   } catch {
     // No readable clipboard source.
   }

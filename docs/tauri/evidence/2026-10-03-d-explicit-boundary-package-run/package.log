@@ -1,0 +1,2 @@
+packaged Preview managed profile, private credential identity, native notification authorization (granted), Global workspace, sidecar readiness, and shutdown: OK
+packaged Preview smoke failed: sidecar did not inherit the selected Preview home

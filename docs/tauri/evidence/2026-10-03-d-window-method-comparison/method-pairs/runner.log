@@ -1,0 +1,11 @@
+/private/tmp/reasonix-current-phase-pairs-j4sdqeg8/Reasonix Window Baseline.app/Contents/MacOS/window-baseline: replacing existing signature
+/private/tmp/reasonix-current-phase-pairs-j4sdqeg8/Reasonix Window Baseline.app: replacing existing signature
+{"app": "/private/tmp/reasonix-current-phase-pairs-j4sdqeg8/Reasonix Window Baseline.app", "binarySha256": "4f1a6ac3696ff6b525ddbca522461cbae5cfb1ee0be56cfc2be9dd87a9c7acfc", "base": "/private/tmp/reasonix-current-phase-pairs-j4sdqeg8"}
+{"delegate": "keep", "application": "tao", "kind": "cocoa", "action": "phase-timer", "root": "/private/tmp/reasonix-current-phase-pairs-j4sdqeg8/0-cocoa", "style": "overlay", "hostPid": 30254, "kernelExitCode": 0, "openExitCode": 0, "expectedCode": 0}
+{"style": "overlay", "root": "/private/tmp/reasonix-current-phase-pairs-j4sdqeg8/0-cocoa", "pid": 30254, "exitCode": 0, "precondition": true, "minimized": true, "restored": true}
+{"delegate": "keep", "application": "tao", "kind": "tauri", "action": "phase-timer", "root": "/private/tmp/reasonix-current-phase-pairs-j4sdqeg8/1-tauri", "style": "overlay", "hostPid": 30272, "kernelExitCode": 0, "openExitCode": 0, "expectedCode": 0}
+{"style": "overlay", "root": "/private/tmp/reasonix-current-phase-pairs-j4sdqeg8/1-tauri", "pid": 30272, "exitCode": 0, "precondition": true, "minimized": true, "restored": true}
+{"delegate": "keep", "application": "tao", "kind": "cocoa", "action": "phase-timer", "root": "/private/tmp/reasonix-current-phase-pairs-j4sdqeg8/2-cocoa", "style": "overlay", "hostPid": 30286, "kernelExitCode": 0, "openExitCode": 0, "expectedCode": 0}
+{"style": "overlay", "root": "/private/tmp/reasonix-current-phase-pairs-j4sdqeg8/2-cocoa", "pid": 30286, "exitCode": 0, "precondition": true, "minimized": true, "restored": true}
+{"delegate": "keep", "application": "tao", "kind": "tauri", "action": "phase-timer", "root": "/private/tmp/reasonix-current-phase-pairs-j4sdqeg8/3-tauri", "style": "overlay", "hostPid": 30299, "kernelExitCode": 0, "openExitCode": 0, "expectedCode": 0}
+{"style": "overlay", "root": "/private/tmp/reasonix-current-phase-pairs-j4sdqeg8/3-tauri", "pid": 30299, "exitCode": 0, "precondition": true, "minimized": true, "restored": true}

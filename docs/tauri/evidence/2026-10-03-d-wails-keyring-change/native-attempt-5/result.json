@@ -1,0 +1,25 @@
+{
+  "create": {
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "privateDefault": {
+    "exitCode": 0,
+    "stdout": "    \"/private/tmp/reasonix-locked-keychain-pikhkolf/home/Library/Keychains/fixture.keychain-db\"\n",
+    "stderr": ""
+  },
+  "privateSearch": {
+    "exitCode": 0,
+    "stdout": "    \"/private/tmp/reasonix-locked-keychain-pikhkolf/home/Library/Keychains/fixture.keychain-db\"\n",
+    "stderr": ""
+  },
+  "nativeTestExitCode": 101,
+  "testBinarySha256": "a2cc884c40cbc947892afe7c91f2b192b0397f786050e99790b458c304501e54",
+  "privateDefaultAfter": {
+    "exitCode": 0,
+    "stdout": "    \"/private/tmp/reasonix-locked-keychain-pikhkolf/home/Library/Keychains/fixture.keychain-db\"\n",
+    "stderr": ""
+  },
+  "normalUnchanged": true
+}

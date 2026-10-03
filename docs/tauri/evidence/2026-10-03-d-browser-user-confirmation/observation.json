@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-03",
+  "source": "User message and attached screenshot",
+  "userStatement": "浏览器打开了",
+  "attachment": {
+    "originalPath": "/var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/codex-clipboard-379c8f53-c0d4-4ebf-ad2a-ba719297e7cf.png",
+    "sha256": "fb7ebe0495d3d65fbec16d8778716b90c90dd50b7e0db214389899cfb2f58c44",
+    "copied": false
+  },
+  "observed": {
+    "browser": "Chrome",
+    "host": "127.0.0.1",
+    "port": 52041,
+    "commandPathSuffix": "open_external_url",
+    "title": "Reasonix 浏览器验收",
+    "heading": "Reasonix 浏览器打开链路已到达",
+    "body": "这是本机临时验收页，可以关闭此标签页。"
+  },
+  "acceptance": "User confirms browser opened; screenshot shows rendered local canary reached through open_external_url.",
+  "limitations": [
+    "Original successful fixtures were removed and port/nonce is absent from archived logs; cannot bind this screenshot to an exact profile, host binary hash or run.",
+    "Does not prove physical source click, mailto, OAuth, all external link entry points or complete D acceptance.",
+    "Browser may retain the rendered page after the temporary server exits; screenshot is not evidence of a currently live server."
+  ],
+  "relatedEvidence": [
+    "../2026-10-03-d-links-handler-run/result.json",
+    "../2026-10-03-d-theme-boundary-run/result.json"
+  ]
+}

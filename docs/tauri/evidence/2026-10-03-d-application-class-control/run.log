@@ -1,0 +1,7 @@
+/private/tmp/reasonix-tauri-window-baseline-7iy3q1jq/Reasonix Window Baseline.app/Contents/MacOS/window-baseline: replacing existing signature
+/private/tmp/reasonix-tauri-window-baseline-7iy3q1jq/Reasonix Window Baseline.app: replacing existing signature
+{"app": "/private/tmp/reasonix-tauri-window-baseline-7iy3q1jq/Reasonix Window Baseline.app", "binarySha256": "2bfd03e6aa094cbaa21b52243527eb3c7b464548ef89bb2adba9c71c29bd2847", "base": "/private/tmp/reasonix-tauri-window-baseline-7iy3q1jq"}
+{"application": "tao", "kind": "cocoa", "action": "direct", "root": "/private/tmp/reasonix-tauri-window-baseline-7iy3q1jq/tao-cocoa-standard-direct", "style": "standard", "hostPid": 5287, "kernelExitCode": 2, "openExitCode": 0, "expectedCode": 2}
+{"style": "standard", "root": "/private/tmp/reasonix-tauri-window-baseline-7iy3q1jq/tao-cocoa-standard-direct", "pid": 5287, "exitCode": 2, "precondition": true, "minimized": false, "restored": false}
+{"application": "plain", "kind": "cocoa", "action": "direct", "root": "/private/tmp/reasonix-tauri-window-baseline-7iy3q1jq/plain-cocoa-standard-direct", "style": "standard", "hostPid": 5307, "kernelExitCode": 2, "openExitCode": 0, "expectedCode": 2}
+{"style": "standard", "root": "/private/tmp/reasonix-tauri-window-baseline-7iy3q1jq/plain-cocoa-standard-direct", "pid": 5307, "exitCode": 2, "precondition": true, "minimized": false, "restored": false}

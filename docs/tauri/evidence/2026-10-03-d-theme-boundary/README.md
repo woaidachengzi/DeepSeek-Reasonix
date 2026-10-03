@@ -1,0 +1,11 @@
+# D 原生主题 Wails runtime 边界收敛
+
+对照冻结 Wails1.38.3 theme.ts，WindowSetSystemDefaultTheme/LightTheme/DarkTheme/BackgroundColour 四类调用移入窄 WailsAppearanceRuntime adapter；方法绑定保留runtime receiver，auto媒体监听、明暗背景常量、DOM主题行为保留。theme.ts不再直连window.runtime。Tauri仍使用已有Rust set_desktop_appearance及档案持久化，未增加renderer权限。
+
+首次编辑使用了错误工作目录，文件读取失败且未发生修改；修正路径后修改成功。普通tsx命令因sandbox IPC EPERM失败，完整日志保留；Node --import tsx运行相同theme-pack回归308通过/0失败；既有tauri-appearance回归通过。frontend生产构建含lint、类型与体积门禁通过。
+
+真实完整app/DMG构建、只读挂载复制弹出、strict ad-hoc签名验证通过。私有安装与host/sidecar/DMG摘要见install.json。当前host249dfd15d5b28a0dac67879143af181f494967f061d3e4f98b6731d54bade598，sidecar29d985c7af09baefec4308339429eabfe921896c47db6f4c30584b742b7efd39；DMG8edc4c6d7c26ed10f7f1c44a46e7c16389362ef8f189e18b79fcc44573766b8b。
+
+新appearance-only门禁顺序调用既有七个Rust原生外观阶段，不更改断言；拒绝与其他slice混用。跳过要求exercise预置几何的验证，仅因为此slice不执行几何exercise；主窗口门禁保留原阶段与验证。当前候选package通过；appearance托管/显式各7/7阶段通过，真实AppKit外观切换、跨重启恢复、无效值拒绝、配置保存失败回退/未配置回退和回退后重启均验证。每阶段保持同一档案credential identity并核对正常exit/sidecar与readiness清理。见[当前包结果](../2026-10-03-d-theme-boundary-run/result.json)及其源码/脚本快照。
+
+本轮覆盖源码主题边界和原生外观切片，不证明实际主题设置UI/系统主题切换、整个D或Preview稳定。此前bfb47fd8窗口菜单全屏/退出通过不直接沿用到本候选；最小化仍未解决，多显示器/托盘/通知/钥匙串等未完成矩阵保留。E未推进；正式签名/公证与正式发布另行授权。

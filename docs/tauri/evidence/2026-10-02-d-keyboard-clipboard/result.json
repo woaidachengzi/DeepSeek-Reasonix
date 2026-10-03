@@ -1,0 +1,29 @@
+{
+  "candidateHostSha256": "e0fc4d124080bc9e337b009611d48240982e8ad14121ed24248bcf90ed868c76",
+  "firstRun": {
+    "result": "failed",
+    "sourceCanaryCaseChanged": true,
+    "selectionToolError": -10005,
+    "timeout": true,
+    "originalClipboardRestored": false,
+    "originalBackupDeletedByOldFixture": true,
+    "recoverableFromOwnedFixture": false
+  },
+  "fixtureRecoveryRegression": {
+    "beforeFailingCases": 2,
+    "afterPassedCases": 3,
+    "usesSystemClipboard": false
+  },
+  "secondRun": {
+    "copy": true,
+    "cut": true,
+    "paste": true,
+    "draftCleared": true,
+    "modelRequestSent": false,
+    "actualCmdQExitCode": 0,
+    "originalFormatsRestoredAtSecondRunEntry": true,
+    "originalSnapshotRemovedAfterVerifiedRestore": true
+  },
+  "Daccepted": false,
+  "Estarted": false
+}

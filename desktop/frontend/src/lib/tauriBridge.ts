@@ -1165,6 +1165,12 @@ export async function setTauriDesktopLanguage(language: LangPref): Promise<Tauri
   return invoke<TauriDesktopPreferences>("set_desktop_language", { language });
 }
 
+/** Resolved UI locale, including Auto; does not change the saved language. */
+export async function setTauriTrayLocale(locale: "en" | "zh" | "zh-TW"): Promise<void> {
+  requireTauri();
+  await invoke<void>("set_tray_locale", { locale });
+}
+
 export async function setTauriDesktopCurrency(currency: "" | "CNY" | "USD"): Promise<TauriDesktopPreferences> {
   requireTauri();
   return invoke<TauriDesktopPreferences>("set_desktop_currency", { currency });
@@ -2039,10 +2045,23 @@ export async function keychainDelete(key: string): Promise<boolean> {
   return invoke<boolean>("keychain_delete", { key });
 }
 
+/** Only fixed host migration codes may select credential recovery copy. */
+export function keychainImportFailureCode(error: unknown): "existing_credential" | "missing_legacy_credential" | "missing_wails_credential" | "missing_wails_env_credential" | undefined {
+  if (typeof error !== "object" || error === null || !("code" in error)) return undefined;
+  const code = error.code;
+  return code === "existing_credential" || code === "missing_legacy_credential" || code === "missing_wails_credential" || code === "missing_wails_env_credential" ? code : undefined;
+}
+
 /** Copy this provider's old Preview credential without overwriting or deleting it. */
 export async function keychainImportLegacy(provider: string): Promise<void> {
   requireTauri();
   await invoke<void>("keychain_import_legacy", { provider });
+}
+
+/** Explicitly copy only the selected provider's Wails legacy keyring credential. */
+export async function keychainImportWails(provider: string): Promise<void> {
+  requireTauri();
+  await invoke<void>("keychain_import_legacy", { provider, source: "wails" });
 }
 
 
@@ -2073,4 +2092,10 @@ export async function acknowledgeTauriNotificationClick(token: string): Promise<
 export function onTauriNotificationClick(callback: () => void): Promise<UnlistenFn> {
   requireTauri();
   return listen("host:notification-clicked", callback);
+}
+
+/** Copy only this provider's original Wails global .env key into the native store. */
+export async function keychainImportWailsEnv(provider: string): Promise<void> {
+  requireTauri();
+  await invoke<void>("keychain_import_legacy", { provider, source: "wails-env" });
 }

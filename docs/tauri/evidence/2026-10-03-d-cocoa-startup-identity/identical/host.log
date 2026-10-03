@@ -1,0 +1,3 @@
+{"active":false,"elapsedMs":121,"events":[],"key":false,"minimized":false,"occlusionVisible":false,"stage":"ready","visible":true}
+{"active":false,"elapsedMs":273,"events":["occlusion"],"key":false,"minimized":false,"occlusionVisible":true,"stage":"loaded","visible":true}
+{"active":false,"elapsedMs":5322,"events":["occlusion","occlusion"],"key":false,"minimized":false,"occlusionVisible":false,"stage":"failed-key","visible":true}

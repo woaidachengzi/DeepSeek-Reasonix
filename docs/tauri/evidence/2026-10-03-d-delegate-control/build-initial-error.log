@@ -1,0 +1,12 @@
+warning: `/Users/jerry/.cargo/config` is deprecated in favor of `config.toml`
+  |
+  = help: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+   Compiling reasonix-tauri v0.1.0 (/Users/jerry/temp/app/reasonix-tauri/desktop/tauri)
+error[E0599]: no method named `class` found for struct `Retained<ProtocolObject<dyn NSApplicationDelegate>>` in the current scope
+   --> examples/window-baseline.rs:162:89
+    |
+162 | ...map(|delegate| delegate.class().name().to_string_lossy().into_owned()),
+    |                            ^^^^^ method not found in `Retained<ProtocolObject<dyn NSApplicationDelegate>>`
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `reasonix-tauri` (example "window-baseline") due to 1 previous error

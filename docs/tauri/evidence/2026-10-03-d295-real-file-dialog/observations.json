@@ -1,0 +1,12 @@
+{
+  "hostSha256": "d29503c849e5303eca92054bc8a6d4010e2bee1eaea90deb07d6ccc54a9c0822",
+  "profile": "explicit",
+  "pid": 50048,
+  "fileSelected": true,
+  "displayedAttachment": "附件 中文.txt 待发送",
+  "cancelPreservedAttachment": true,
+  "fileOriginalUnchanged": true,
+  "directoryConfirmation": "unverified: CUA reported Mac locked",
+  "restartPersistence": "not-run",
+  "normalQuit": "not-run: observer expired; fixture cleanup used exact private process"
+}

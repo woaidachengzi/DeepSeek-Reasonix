@@ -1,0 +1,18 @@
+warning: `/Users/jerry/.cargo/config` is deprecated in favor of `config.toml`
+  |
+  = help: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+   Compiling reasonix-tauri v0.1.0 (/Users/jerry/temp/app/reasonix-tauri/desktop/tauri)
+error[E0599]: no method named `isMiniaturizable` found for reference `&NSWindow` in the current scope
+  --> examples/window-baseline.rs:80:46
+   |
+80 |                     "miniaturizable": native.isMiniaturizable(),
+   |                                              ^^^^^^^^^^^^^^^^
+   |
+help: there is a method `isMiniaturized` with a similar name
+   |
+80 -                     "miniaturizable": native.isMiniaturizable(),
+80 +                     "miniaturizable": native.isMiniaturized(),
+   |
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `reasonix-tauri` (example "window-baseline") due to 1 previous error

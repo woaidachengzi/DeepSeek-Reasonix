@@ -1,0 +1,119 @@
+{
+  "phase": "interactive-observe",
+  "sequence": 433,
+  "state": {
+    "appearanceRequests": 2,
+    "appearanceSkipped": 2,
+    "applicationActivationPolicy": 0,
+    "applicationActive": false,
+    "applicationBecameActive": 1,
+    "applicationFinishedLaunching": true,
+    "applicationHidden": false,
+    "applicationModalWindowPresent": false,
+    "applicationOcclusionVisible": false,
+    "applicationResignedActive": 1,
+    "applicationRunning": true,
+    "becameKey": 0,
+    "didDeminiaturize": 0,
+    "didMiniaturize": 0,
+    "focused": false,
+    "geometry": {
+      "height": 1640,
+      "scale": 2.0,
+      "width": 2560,
+      "x": -3430,
+      "y": 228
+    },
+    "mainPageFinished": true,
+    "maximized": false,
+    "minimized": false,
+    "monitors": [
+      {
+        "height": 1966,
+        "scale": 2.0,
+        "width": 3840,
+        "x": 0,
+        "y": 60
+      },
+      {
+        "height": 2100,
+        "scale": 2.0,
+        "width": 3840,
+        "x": -3840,
+        "y": 60
+      }
+    ],
+    "nativeAttachedSheet": false,
+    "nativeCanBecomeKey": true,
+    "nativeInLiveResize": false,
+    "nativeIsSheet": false,
+    "nativeKeyWindow": false,
+    "nativeMainWindow": false,
+    "nativeMiniaturizable": true,
+    "nativeMiniaturized": false,
+    "nativeOcclusionVisible": false,
+    "nativeOnActiveSpace": true,
+    "nativeStyleMask": 32783,
+    "nativeTimedTransitions": [
+      {
+        "elapsedMs": 127,
+        "transition": "appearance-request"
+      },
+      {
+        "elapsedMs": 127,
+        "transition": "appearance-skipped"
+      },
+      {
+        "elapsedMs": 142,
+        "transition": "application-became-active"
+      },
+      {
+        "elapsedMs": 153,
+        "transition": "occlusion-changed"
+      },
+      {
+        "elapsedMs": 523,
+        "transition": "appearance-request"
+      },
+      {
+        "elapsedMs": 523,
+        "transition": "appearance-skipped"
+      },
+      {
+        "elapsedMs": 8940,
+        "transition": "resigned-key"
+      },
+      {
+        "elapsedMs": 8941,
+        "transition": "application-resigned-active"
+      },
+      {
+        "elapsedMs": 98676,
+        "transition": "occlusion-changed"
+      }
+    ],
+    "nativeTransitions": [
+      "appearance-request",
+      "appearance-skipped",
+      "application-became-active",
+      "occlusion-changed",
+      "appearance-request",
+      "appearance-skipped",
+      "resigned-key",
+      "application-resigned-active",
+      "occlusion-changed"
+    ],
+    "nativeVisible": false,
+    "nativeWindowLevel": 0,
+    "nativeWindowNumber": 22709,
+    "occlusionChanges": 2,
+    "reopenEvents": 0,
+    "resignedKey": 1,
+    "restoreCompletions": 0,
+    "restoreRequests": 0,
+    "runningActivationPolicy": 0,
+    "runningApplicationActive": false,
+    "visible": false,
+    "willMiniaturize": 0
+  }
+}

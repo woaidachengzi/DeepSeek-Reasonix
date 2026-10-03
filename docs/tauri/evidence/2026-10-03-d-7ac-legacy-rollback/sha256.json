@@ -1,0 +1,11 @@
+{
+  "README.md": "f6e8a27f422e2eccfaf374aae483585469b865fdf05e05499926c46c4ad6d580",
+  "artifact.json": "81d56b3ff9cbf57368ee5d48f65d8e3f0f4e055613a5f90a89f6ffa522feec5c",
+  "legacy-signature.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "post-run.json": "efaf1f08c1cdfeebebeca52c128a377988109407b8d1682f22bfb09ef2bbfae0",
+  "preview-signature.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "rollback.log": "c21e48fe33dc2736c93b5f8db3a032f5b178e14302ab990cba90fc91df085560",
+  "scripts/smoke-legacy-rollback.py": "d0ffa28a08a7d7da0b7fb621e40f8fab1775c2149a200d9aaafbffe89dfc6cdd",
+  "scripts/smoke-packaged-app.py": "5d6d953d65b26c07b0821d298772012befd166fdb9aa14028dfaf9dab7ad9b23",
+  "scripts/smoke-profile-import.py": "a0c37744d19ec9599e5a2419df09e63ebd61fe66d47a59a415c9ecabd2c9e32e"
+}

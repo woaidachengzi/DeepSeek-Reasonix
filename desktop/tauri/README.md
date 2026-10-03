@@ -1,5 +1,11 @@
 # Reasonix Tauri host
 
+2026-10-02 实际窗口验收可用 `python3 tools/tauri/probe-launch-services-profile.py <installed-app> --interactive --observe`。
+在全新私有档案启动并观察最多 300 秒；仅该显式模式启用只读原生窗口快照，
+不替用户操作窗口。真实 Quit 后用确切 PID 的 kernel 回执核对退出码与 sidecar/ready 清理，
+不要再读取失效 CUA binding。新包实际最小化与完整全屏往返仍未通过，
+详情见 [本批证据](../../docs/tauri/evidence/2026-10-02-d-interactive-window/README.md)。
+
 这是逐步替换 Wails shell 的 Tauri 2 host；它暂不替换稳定的 Go Agent、会话格式或
 现有前端 API。开发构建启动时 host 从 `REASONIX_DESKTOP_BRIDGE_BIN` 读取由构建流程提供的
 `reasonix-desktop-bridge` 可执行文件路径；release 打包启动时忽略该开发覆盖，由 Tauri 的 `externalBin` 从应用
@@ -8,6 +14,26 @@
 token 不放在 macOS 进程列表可见的启动环境或命令行中。
 
 ## 当前平台范围
+
+安装包 D 门禁可用 `python3 -B tools/tauri/verify-installed-d.py '/path/to/Reasonix Tauri Preview.app' --output /private/tmp/new-evidence` 从仓库根串行复验。
+可用 `--gates dialog-cancel package` 独立复验原生面板取消与正常启动退出；该切片包含菜单/文本剪贴板前置检查，不绕过或替代完整窗口门禁。摘要计算兼容系统 Python 3.9。
+未跟踪的 desktop/internal/cmd 代码也会单独保存快照与摘要；只保存代码扩展名，不复制环境文件、私有档案或证据目录。
+托盘语言可用 `--gates tray-language package` 独立复验；完整窗口门禁也包含菜单项语言与配置不变检查，不代替真实托盘弹出/点击。
+输出目录必须全新；脚本记录候选摘要、签名、验收源码和逐项结果，遇到失败停止，后续项保持未运行。
+程序化验收不代表物理交互或 D/E 整组完成；当前同包复验与剩余范围见
+[2026-10-02 启动恢复证据](../../docs/tauri/evidence/2026-10-02-d-startup-refusal/README.md)。
+新增 `identity` 门禁覆盖托管/显式档案的身份元数据拒绝与备份恢复；本候选完整窗口
+仍在 Settings 最小化前提失败，不能宣称 D 已稳定或已验收。
+随后增加 opt-in 原生呈现诊断；最新诊断包的原 API 与独立 `--presented` 探针仍未通过，
+正常 package smoke 通过。具体时序和不同实验范围见
+[窗口诊断证据](../../docs/tauri/evidence/2026-10-02-d-minimize-presentation/README.md)，不代替原完整窗口门禁。
+独立 `--direct-only` 诊断随后确认实际主线程直接 NSWindow 调用仍失败，而最小 Cocoa
+程序通过；不能只归因于 Tauri 调度。当前包摘要和精确范围见
+[直接调用证据](../../docs/tauri/evidence/2026-10-02-d-direct-minimize/README.md)。
+本轮另收敛遗留 Wails 几何/剪贴板直连，并取消 hook 卸载后尚未提交的几何观察。
+最新包独立菜单/剪贴板 4/4 与正常双档案 smoke 通过；完整窗口失败仍保留。
+具体回归、未提交适配器快照和取消边界见
+[runtime 生命周期证据](../../docs/tauri/evidence/2026-10-02-d-runtime-lifecycle/README.md)。
 
 2026-09-30 用户确认本轮只推进 macOS 的改造、测试和发布候选验收。Windows/Linux
 因缺少实际测试环境延期；已有代码保留，但不承诺平台支持，也不要求其原生验收完成
@@ -18,6 +44,12 @@ token 不放在 macOS 进程列表可见的启动环境或命令行中。
 Preview 使用 Tauri 应用数据目录下私有的 `REASONIX_HOME`。因此它不会静默读取、迁移或
 写入稳定 Wails 客户端的配置、会话和缓存；稳定版可与它并存。导入稳定版数据会作为单独的
 “先备份、再确认”的功能实现。开发者显式传入的 `REASONIX_HOME` 仍是有意识的覆盖选择。
+
+默认 `reasonix-core` 叶目录只接受普通目录；符号链接、悬空链接或同名文件会在创建
+WebView/sidecar 之前拒绝，输出恢复说明并以退出码 1 结束，避免链接到旧 Wails 档案后
+静默改写原件。新建目录为 0700。显式根仍遵循既有覆盖选择，不能据此宣称所有旧版
+共享目录已互斥。真实 DMG 安装拒绝、正常启动/导入与 12 项启动中断证据见
+[本轮目录边界验收](../../docs/tauri/evidence/2026-10-02-d-managed-root/README.md)。
 
 Go core 解析状态根和缓存根时，`REASONIX_STATE_HOME`、`REASONIX_CACHE_HOME` 分别优先于 `REASONIX_HOME`。托管的
 Preview 在启动时会清除继承来的这两个变量，否则它们会覆盖上面的私有

@@ -1,0 +1,11 @@
+{"app": "/private/tmp/reasonix-d-tray-caller-installed-9fwl55vz/Reasonix Tauri Preview.app", "root": "/private/tmp/reasonix-launch-services-x0xdto56", "identifier": "io.reasonix.desktop.preview", "pid": 75945, "sidecarPid": 75953, "openerPid": 75943, "profile": "managed", "interactive": false, "exitCode": 0, "sidecarRemaining": false, "readyRemaining": false}
+Traceback (most recent call last):
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/probe-launch-services-profile.py", line 151, in <module>
+    identities = [launch(app, identifier, managed, options.interactive)
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/probe-launch-services-profile.py", line 151, in <listcomp>
+    identities = [launch(app, identifier, managed, options.interactive)
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/probe-launch-services-profile.py", line 80, in launch
+    package.check_sidecar_profile(sidecar, core, managed, root / "cache")
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-packaged-app.py", line 113, in check_sidecar_profile
+    raise RuntimeError("sidecar retained an inherited state override")
+RuntimeError: sidecar retained an inherited state override

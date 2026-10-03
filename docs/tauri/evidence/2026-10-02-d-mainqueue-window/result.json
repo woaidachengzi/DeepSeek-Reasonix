@@ -1,0 +1,53 @@
+{
+  "binarySha256": "27911b6e5078d5ec997cf1c2f76b399337288f66cf8943b4e283e0ddddd68a52",
+  "samples": [
+    {
+      "kind": "cocoa",
+      "action": "direct",
+      "root": "/private/tmp/reasonix-tauri-window-baseline-_g1ocvl1/cocoa-standard-direct",
+      "style": "standard",
+      "hostPid": 80916,
+      "kernelExitCode": 2,
+      "openExitCode": 0,
+      "expectedCode": 2,
+      "precondition": true,
+      "minimized": false,
+      "restored": false,
+      "minimizeExecutions": 1,
+      "restoreExecutions": 1
+    },
+    {
+      "kind": "cocoa",
+      "action": "main-queue",
+      "root": "/private/tmp/reasonix-tauri-window-baseline-_g1ocvl1/cocoa-standard-main-queue",
+      "style": "standard",
+      "hostPid": 80932,
+      "kernelExitCode": 2,
+      "openExitCode": 0,
+      "expectedCode": 2,
+      "precondition": true,
+      "minimized": false,
+      "restored": false,
+      "minimizeExecutions": 1,
+      "restoreExecutions": 1
+    },
+    {
+      "kind": "tauri",
+      "action": "main-queue",
+      "root": "/private/tmp/reasonix-tauri-window-baseline-_g1ocvl1/tauri-standard-main-queue",
+      "style": "standard",
+      "hostPid": 80946,
+      "kernelExitCode": 2,
+      "openExitCode": 0,
+      "expectedCode": 2,
+      "precondition": false,
+      "minimized": false,
+      "restored": false,
+      "minimizeExecutions": 1,
+      "restoreExecutions": 1
+    }
+  ],
+  "tauriOverlay": "not-run after precondition failure",
+  "Daccepted": false,
+  "Estarted": false
+}

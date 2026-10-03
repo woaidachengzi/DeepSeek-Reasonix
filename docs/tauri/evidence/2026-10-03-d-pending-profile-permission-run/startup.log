@@ -1,0 +1,24 @@
+native macOS window managed menu-shortcuts: OK
+native macOS startup managed SIGTERM startup-before-parent-check: kernel exit 0, cleanup, originals and restart OK
+native macOS window managed menu-shortcuts: OK
+native macOS startup managed SIGTERM startup-before-token: kernel exit 0, cleanup, originals and restart OK
+native macOS window managed menu-shortcuts: OK
+native macOS startup managed SIGTERM startup-before-ready: kernel exit 0, cleanup, originals and restart OK
+native macOS window managed menu-shortcuts: OK
+native macOS startup managed SIGKILL startup-before-parent-check: kernel exit 0, cleanup, originals and restart OK
+native macOS window managed menu-shortcuts: OK
+native macOS startup managed SIGKILL startup-before-token: kernel exit 0, cleanup, originals and restart OK
+native macOS window managed menu-shortcuts: OK
+native macOS startup managed SIGKILL startup-before-ready: kernel exit 0, cleanup, originals and restart OK
+native macOS window explicit menu-shortcuts: OK
+native macOS startup explicit SIGTERM startup-before-parent-check: kernel exit 0, cleanup, originals and restart OK
+native macOS window explicit menu-shortcuts: OK
+native macOS startup explicit SIGTERM startup-before-token: kernel exit 0, cleanup, originals and restart OK
+native macOS window explicit menu-shortcuts: OK
+native macOS startup explicit SIGTERM startup-before-ready: kernel exit 0, cleanup, originals and restart OK
+native macOS window explicit menu-shortcuts: OK
+native macOS startup explicit SIGKILL startup-before-parent-check: kernel exit 0, cleanup, originals and restart OK
+native macOS window explicit menu-shortcuts: OK
+native macOS startup explicit SIGKILL startup-before-token: kernel exit 0, cleanup, originals and restart OK
+native macOS window explicit menu-shortcuts: OK
+native macOS startup explicit SIGKILL startup-before-ready: kernel exit 0, cleanup, originals and restart OK

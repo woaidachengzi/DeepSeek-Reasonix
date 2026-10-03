@@ -1,0 +1,18 @@
+{
+  "artifactSha256": {
+    "Contents/MacOS/reasonix-tauri": "bfb47fd84156acba8e9b530889d6a215145291d0a0722ab5f2f0518f2a17b4fa",
+    "Contents/MacOS/reasonix-desktop-bridge": "29d985c7af09baefec4308339429eabfe921896c47db6f4c30584b742b7efd39",
+    "Contents/Info.plist": "ce61cb6c5ba4a9f35217dc964292e23371d37a554354a5ecce233b09dc08904d"
+  },
+  "profile": "explicit",
+  "pid": 17006,
+  "sidecarPid": 17014,
+  "minimize": "failed UI attempts; no native mini transition",
+  "fullscreen": "menu enter/exit passed; exact geometry restored",
+  "quit": "passed kernel0 and cleanup",
+  "limitations": [
+    "No minimize selector invocation counter, so does not independently prove exact AppKit selector dispatch for each CUA action.",
+    "One explicit profile sample; does not certify repeated stability, fullscreen keyboard/button paths, mixed scale or screen unplug/drag.",
+    "Production source unchanged."
+  ]
+}

@@ -1,0 +1,35 @@
+warning: `/Users/jerry/.cargo/config` is deprecated in favor of `config.toml`
+  |
+  = help: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.29s
+     Running unittests src/main.rs (target/debug/deps/reasonix_tauri-9916af7dc0d35f54)
+
+running 25 tests
+test keychain::tests::load_nonexistent_returns_none ... ok
+test keychain::tests::delete_secret ... ok
+test keychain::tests::explicit_import_keeps_legacy_store_and_refuses_overwrite ... ok
+test keychain::tests::native_keychain_profile_isolation_and_cleanup ... ignored, explicit native Keychain smoke; unique temporary namespaces and dummy values only
+test keychain::tests::native_locked_keychain_preserves_secret_and_recovers ... ignored, requires a fresh owned private HOME/keychain fixture; run alone in a subprocess
+test keychain::tests::overwrite_secret ... ok
+test keychain::tests::real_bridge_import_save_restart_and_delete_keep_credentials_out_of_files ... ok
+test keychain::tests::import_bridge_failure_removes_target_and_preserves_source ... ok
+test keychain::tests::real_bridge_restore_continues_after_one_credential_read_failure ... ok
+test keychain::tests::error_categories_never_echo_platform_attributes_and_windows_are_scoped ... ok
+test keychain::tests::failed_bridge_response_reconciles_both_copies ... ok
+test keychain::tests::recognizes_only_named_provider_api_keys ... ok
+test keychain::tests::rejects_empty_keys ... ok
+test keychain::tests::migration_failure_codes_are_precise_and_redacted ... ok
+test keychain::tests::save_and_load_secret ... ok
+test keychain::tests::missing_legacy_file_does_not_block_first_launch ... ok
+test keychain::tests::uncertain_native_write_or_delete_rolls_back_before_bridge_sync ... ok
+test keychain::tests::unavailable_profile_preserves_recovery_instruction_without_bridge_access ... ok
+test keychain::tests::window_cannot_change_unrelated_keychain_entries ... ok
+test keychain::tests::import_and_manual_save_are_serialized_without_lost_user_write ... ok
+test keychain::tests::rejects_oversized_legacy_file_without_importing_any_keys ... ok
+test keychain::tests::migrates_legacy_json_entries ... ok
+test keychain::tests::rejects_symlinked_legacy_file_without_importing_target ... ok
+test keychain::tests::malformed_legacy_file_and_missing_or_denied_legacy_store_leave_target_empty ... ok
+test keychain::tests::validates_every_legacy_entry_before_writing_credentials ... ok
+
+test result: ok. 23 passed; 0 failed; 2 ignored; 0 measured; 197 filtered out; finished in 0.01s
+

@@ -1,0 +1,12 @@
+{
+  "delegate": "keep",
+  "application": "tao",
+  "kind": "tauri",
+  "action": "phase-timer",
+  "root": "/private/tmp/reasonix-phase-tauri-reorder-b1qimbqy/keep-tao-tauri-overlay-phase-timer",
+  "style": "overlay",
+  "hostPid": 22555,
+  "kernelExitCode": 2,
+  "openExitCode": 0,
+  "expectedCode": 2
+}

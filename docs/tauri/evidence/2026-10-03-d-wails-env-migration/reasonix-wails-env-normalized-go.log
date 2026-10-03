@@ -1,0 +1,7 @@
+--- FAIL: TestProviderProbeUsesEphemeralKeyAndOnlyProbesListedModel (0.00s)
+    provider_probe_test.go:18: listen on loopback: listen tcp4 127.0.0.1:0: bind: operation not permitted
+--- FAIL: TestProviderProbeFailureDoesNotEchoRemoteError (0.00s)
+    provider_probe_test.go:57: listen on loopback: listen tcp4 127.0.0.1:0: bind: operation not permitted
+FAIL
+FAIL	reasonix/cmd/reasonix-desktop-bridge	0.719s
+FAIL

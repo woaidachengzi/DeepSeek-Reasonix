@@ -1,0 +1,19 @@
+import importlib.util,os,plistlib,json,tempfile,hashlib
+from pathlib import Path
+repo=Path('/Users/jerry/temp/app/reasonix-tauri')
+spec=importlib.util.spec_from_file_location('windows',repo/'tools/tauri/smoke-native-window.py');w=importlib.util.module_from_spec(spec);spec.loader.exec_module(w)
+app=Path('/private/tmp/reasonix-d-explicit-boundary-installed-85vr2dm3/Reasonix Tauri Preview.app');host=app/'Contents/MacOS/reasonix-tauri';sidecar=app/'Contents/MacOS/reasonix-desktop-bridge'
+assert hashlib.sha256(host.read_bytes()).hexdigest()=='cbb590ba4a2dd45afa322508387ddc07383993550bd9a48e17fedb4fc617a384'
+identifier=plistlib.loads((app/'Contents/Info.plist').read_bytes())['CFBundleIdentifier'];assert not w.package.matching_package_is_running(identifier)
+root=Path(tempfile.mkdtemp(prefix='reasonix-cbb-empty-display-state-',dir='/private/tmp'));root.chmod(0o700);(root/'home').mkdir(mode=0o700);(root/'tmp').mkdir(mode=0o700)
+state=root/'home/Library/Application Support'/identifier/'window-state.json';state.parent.mkdir(parents=True,mode=0o700)
+seed={'width':2000,'height':1400,'maximized':False,'x':-3400,'y':100,'scale_factor':2.0};state.write_text(json.dumps(seed)+'\n')
+result={'root':str(root),'seed':seed,'scope':'No-active-CG-display startup preservation diagnostic, not physical secondary display acceptance'}
+env={k:os.environ[k] for k in ('PATH','LANG','LC_ALL','USER','LOGNAME','SHELL','__CF_USER_TEXT_ENCODING') if k in os.environ}
+try:
+ w.launch(host,sidecar,root,identifier,True,'menu-shortcuts',verify_window_state=False,environment=env)
+ result['nativeGate']='passed'
+except Exception as error:result['nativeGate']='failed';result['error']=str(error)
+finally:
+ result['saved']=json.loads(state.read_text());result['preserved']=result['saved']==seed;result['remainingSidecars']=w.package.own_sidecars(root/'tmp',sidecar);result['remainingReadiness']=len(list((root/'tmp').glob('reasonix-tauri-bridge-*/ready.json')))
+ (root/'result.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result),flush=True)

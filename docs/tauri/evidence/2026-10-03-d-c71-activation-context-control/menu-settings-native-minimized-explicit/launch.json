@@ -1,0 +1,11 @@
+{
+  "app": "/private/tmp/reasonix-d-explicit-boundary-installed-acm_slth/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-launch-services-bgpux2oq",
+  "identifier": "io.reasonix.desktop.preview",
+  "pid": 75840,
+  "sidecarPid": 75847,
+  "openerPid": 75838,
+  "profile": "explicit",
+  "interactive": false,
+  "nativePhase": "menu-settings-native-minimized"
+}

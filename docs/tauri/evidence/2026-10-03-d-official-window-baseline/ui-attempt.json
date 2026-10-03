@@ -1,0 +1,11 @@
+{
+  "tool": "cua_repl",
+  "app": "/private/tmp/reasonix-official-window-baseline/extracted/Reasonix.app",
+  "pid": 17777,
+  "menuItem": "Window > Minimize",
+  "selector": "performMiniaturize:",
+  "observation": "CUA returned full window/content/native buttons after menu click. No official-package native state probe exists; this does not independently prove minimized=false.",
+  "userConfirmation": "requested, not yet received",
+  "quit": "not performed; bounded 180s observation timed out and fixture cleanup sent TERM to exact owned host; no normal kernel exit receipt; runner exit1",
+  "followupCleanup": "After TERM host remained alive; exact PID/path revalidated, new kernel monitor attached; CUA Cmd+Q normal kernel exit0. Separate from initial timed-out runner."
+}

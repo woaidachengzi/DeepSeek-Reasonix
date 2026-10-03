@@ -1,0 +1,22 @@
+{
+  "source": "Actual CUA action/AX observation transcript summary",
+  "app": "/private/tmp/reasonix-d-keychain-pending-installed-_r6bt14n/Reasonix Tauri Preview.app",
+  "hostSha256": "d1c9fd5a0106019a8c20d1c93ccfca0ca5406c2d4a3e03cd594b8499e41e687c",
+  "profile": "managed",
+  "actions": [
+    "Settings > Storage and paths",
+    "default/current workspace unset and copy buttons disabled",
+    "click Copy Preview configuration directory: Help 已复制",
+    "read-only claim accepted exact text and generation",
+    "return workspace, Cmd+V: exact expectedPath from control.json in composer",
+    "Cmd+A/BackSpace: empty composer and Send disabled",
+    "Cmd+Q: runner exit0, exact path/generation/original/identity/cleanup passed, original clipboard full restoration verified"
+  ],
+  "notCovered": [
+    "explicit profile",
+    "message or Hooks copy buttons",
+    "OS actual refusal feedback",
+    "IME",
+    "complete D/E"
+  ]
+}

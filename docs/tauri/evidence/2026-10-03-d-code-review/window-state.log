@@ -1,0 +1,25 @@
+
+> reasonix-desktop-frontend@0.0.0 test:window-state /Users/jerry/temp/app/reasonix-tauri/desktop/frontend
+> tsx src/__tests__/window-state-ordering.test.ts
+
+node:net:2368
+      const error = new UVExceptionWithHostPort(rval, 'listen', address, port);
+                    ^
+
+Error: listen EPERM: operation not permitted /var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/tsx-501/83459.pipe
+    at Server.setupListenHandle [as _listen2] (node:net:2368:21)
+    at listenInCluster (node:net:2499:12)
+    at Server.listen (node:net:2641:5)
+    at file:///Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/tsx@4.23.11/node_modules/tsx/dist/cli.mjs:53:31472
+    at new Promise (<anonymous>)
+    at createIpcServer (file:///Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/tsx@4.23.11/node_modules/tsx/dist/cli.mjs:53:31450)
+    at async file:///Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/tsx@4.23.11/node_modules/tsx/dist/cli.mjs:55:542 {
+  code: 'EPERM',
+  errno: -1,
+  syscall: 'listen',
+  address: '/var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/tsx-501/83459.pipe',
+  port: -1
+}
+
+Node.js v26.10.0
+ ELIFECYCLE  Command failed with exit code 1.

@@ -1,0 +1,32 @@
+{
+  "baselineApp": "/private/tmp/reasonix-tauri-window-baseline-v84e53si/Reasonix Window Baseline.app",
+  "baselineBinarySha256": "088a8e79fffdc8cd2ff0bafc308e263a1a2b36acf312dc5416397b3b64876f95",
+  "tauri": "2.11.6",
+  "tao": "0.35.3",
+  "samples": [
+    {
+      "style": "standard",
+      "hostPid": 79676,
+      "kernelExitCode": 2,
+      "openExitCode": 0,
+      "expectedCode": 2,
+      "precondition": true,
+      "minimized": false,
+      "restored": false
+    },
+    {
+      "style": "overlay",
+      "hostPid": 79695,
+      "kernelExitCode": 2,
+      "openExitCode": 0,
+      "expectedCode": 2,
+      "precondition": true,
+      "minimized": false,
+      "restored": false
+    }
+  ],
+  "clippy": "passed",
+  "Daccepted": false,
+  "Estarted": false,
+  "productionHostUnchanged": true
+}

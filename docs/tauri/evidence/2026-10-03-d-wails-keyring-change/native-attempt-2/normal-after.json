@@ -1,0 +1,13 @@
+{
+  "default": {
+    "exitCode": 0,
+    "stdout": "    \"/Users/jerry/Library/Keychains/login.keychain-db\"\n",
+    "stderr": ""
+  },
+  "search": {
+    "exitCode": 0,
+    "stdout": "    \"/Users/jerry/Library/Keychains/login.keychain-db\"\n",
+    "stderr": ""
+  },
+  "preferencesSha256": null
+}

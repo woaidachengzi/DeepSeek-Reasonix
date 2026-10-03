@@ -1,0 +1,38 @@
+{
+  "tauriCocoaBinary": "6c967f456ad533186248d32641e44ececa3c12fbdbc9ac7d6ea4776edad1fc0c",
+  "tauriCocoa": {
+    "pid": 80139,
+    "precondition": true,
+    "minimized": false,
+    "restored": false,
+    "kernelExitCode": 2
+  },
+  "independentCocoaCurrent": {
+    "pid": 80246,
+    "passed": true,
+    "kernelExitCode": 0,
+    "binarySha256": "121191074aa3093d282e5e774c077cfae264b306b0248d8abf046caeade5e569"
+  },
+  "independentCocoaMin11": {
+    "pid": 80420,
+    "passed": true,
+    "kernelExitCode": 0,
+    "binarySha256": "fba4df08a5ba504d4504592c1238d34bcf8162c3e561c9132b367aeea010ed3f",
+    "minos": "11.0",
+    "sdk": "15.2",
+    "entitlements": "desktop/tauri/Entitlements.plist",
+    "effectiveEntitlements": "empty after outer app signing"
+  },
+  "productionHostUnchanged": true,
+  "Daccepted": false,
+  "Estarted": false,
+  "independentCocoaMin11FinalEntitlements": {
+    "pid": 80585,
+    "passed": true,
+    "kernelExitCode": 0,
+    "binarySha256": "9a4eb82f1bb645a2ee5ab951232df944a72be626be656ea393c0f3adb40a666e",
+    "minos": "11.0",
+    "sdk": "15.2",
+    "effectiveEntitlementsEqualProduction": true
+  }
+}

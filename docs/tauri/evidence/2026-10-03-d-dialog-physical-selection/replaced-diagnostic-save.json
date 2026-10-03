@@ -1,0 +1,70 @@
+{
+  "events": [
+    {
+      "source": "recorder",
+      "t": 0,
+      "type": "start"
+    },
+    {
+      "button": 0,
+      "isTrusted": true,
+      "modifiers": 0,
+      "pointerType": "mouse",
+      "t": 7626,
+      "target": "button",
+      "targetTag": "button",
+      "type": "pointerdown",
+      "x": 638.5,
+      "y": 431.5
+    },
+    {
+      "button": 0,
+      "isTrusted": true,
+      "modifiers": 0,
+      "pointerType": "mouse",
+      "t": 7679,
+      "target": "button",
+      "targetTag": "button",
+      "type": "pointerup",
+      "x": 638.5,
+      "y": 431.5
+    },
+    {
+      "button": 0,
+      "isTrusted": true,
+      "modifiers": 0,
+      "pointerType": "mouse",
+      "t": 7679,
+      "target": "button",
+      "targetTag": "button",
+      "type": "click",
+      "x": 638,
+      "y": 431
+    },
+    {
+      "t": 7679,
+      "type": "stop"
+    }
+  ],
+  "manifest": {
+    "buildChannel": "stable",
+    "buildCommit": "64c745c1a",
+    "createdAt": "2026-10-03T01:51:52.579Z",
+    "devicePixelRatio": 2,
+    "language": "zh-CN",
+    "platform": "macos",
+    "reducedMotion": false,
+    "reportId": "9fbb3c3018838e30e6b7ed96dda5a1c9",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+    "viewportHeight": 820,
+    "viewportWidth": 1280
+  },
+  "schemaVersion": 2,
+  "summary": {
+    "anomalies": [],
+    "droppedEventCount": 0,
+    "durationMs": 7679,
+    "eventCount": 5,
+    "markerCount": 0
+  }
+}

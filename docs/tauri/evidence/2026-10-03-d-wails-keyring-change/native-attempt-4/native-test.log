@@ -1,0 +1,17 @@
+
+running 1 test
+test keychain::tests::native_wails_keyring_import_uses_core_account_and_preserves_sources ... owned-wails-keyring: native default status=0
+owned-wails-keyring: source-read after explicit fixture unlock
+
+thread 'keychain::tests::native_wails_keyring_import_uses_core_account_and_preserves_sources' (784309) panicked at src/keychain.rs:1325:42:
+called `Result::unwrap()` on an `Err` value: "system credential storage is unavailable; unlock it or check application access permissions"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    keychain::tests::native_wails_keyring_import_uses_core_account_and_preserves_sources
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 229 filtered out; finished in 0.69s
+

@@ -1,0 +1,8 @@
+Private boundary failure fixture retained: /private/tmp/reasonix-managed-boundary-9our8619
+Traceback (most recent call last):
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-managed-profile-boundary.py", line 114, in <module>
+    smoke(sys.argv[1])
+    ~~~~~^^^^^^^^^^^^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-managed-profile-boundary.py", line 80, in smoke
+    raise RuntimeError(f"host did not refuse the managed profile with the expected recovery instruction: exit={process.returncode}, expectedMessage={expected_message}")
+RuntimeError: host did not refuse the managed profile with the expected recovery instruction: exit=-6, expectedMessage=True

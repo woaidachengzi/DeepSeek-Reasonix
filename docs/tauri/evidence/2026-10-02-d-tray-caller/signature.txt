@@ -1,0 +1,26 @@
+Executable=/private/tmp/reasonix-d-tray-caller-installed-9fwl55vz/Reasonix Tauri Preview.app/Contents/MacOS/reasonix-tauri
+Identifier=io.reasonix.desktop.preview
+Format=app bundle with Mach-O thin (arm64)
+CodeDirectory v=20500 size=62780 flags=0x10002(adhoc,runtime) hashes=1951+7 location=embedded
+VersionPlatform=1
+VersionMin=720896
+VersionSDK=983552
+Hash type=sha256 size=32
+CandidateCDHash sha256=717fdabffaf4d9893fb707e5f34096f5a0b8474a
+CandidateCDHashFull sha256=717fdabffaf4d9893fb707e5f34096f5a0b8474acc076a2e7775611826b9edcd
+Hash choices=sha256
+CMSDigest=717fdabffaf4d9893fb707e5f34096f5a0b8474acc076a2e7775611826b9edcd
+CMSDigestType=2
+Executable Segment base=0
+Executable Segment limit=26476544
+Executable Segment flags=0x1
+Page size=16384
+CDHash=717fdabffaf4d9893fb707e5f34096f5a0b8474a
+Signature=adhoc
+Info.plist entries=14
+TeamIdentifier=not set
+Runtime Version=15.2.0
+Sealed Resources version=2 rules=13 files=2
+Internal requirements count=0 size=12
+Total signatures=1
+Chosen signature=1

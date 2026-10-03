@@ -1,0 +1,26 @@
+Executable=/private/tmp/reasonix-d-identity-installed-t2jq7dom/Reasonix Tauri Preview.app/Contents/MacOS/reasonix-tauri
+Identifier=io.reasonix.desktop.preview
+Format=app bundle with Mach-O thin (arm64)
+CodeDirectory v=20500 size=62716 flags=0x10002(adhoc,runtime) hashes=1949+7 location=embedded
+VersionPlatform=1
+VersionMin=720896
+VersionSDK=983552
+Hash type=sha256 size=32
+CandidateCDHash sha256=225b1facc5f251e309e31adeab1e3043374436e5
+CandidateCDHashFull sha256=225b1facc5f251e309e31adeab1e3043374436e5b9c42f284aa305f8d66bbe66
+Hash choices=sha256
+CMSDigest=225b1facc5f251e309e31adeab1e3043374436e5b9c42f284aa305f8d66bbe66
+CMSDigestType=2
+Executable Segment base=0
+Executable Segment limit=26460160
+Executable Segment flags=0x1
+Page size=16384
+CDHash=225b1facc5f251e309e31adeab1e3043374436e5
+Signature=adhoc
+Info.plist entries=14
+TeamIdentifier=not set
+Runtime Version=15.2.0
+Sealed Resources version=2 rules=13 files=2
+Internal requirements count=0 size=12
+Total signatures=1
+Chosen signature=1

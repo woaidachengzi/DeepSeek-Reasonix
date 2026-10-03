@@ -1,0 +1,11 @@
+{
+  "app": "/private/tmp/reasonix-cocoa-empty-identity-control/Private Cocoa Control.app",
+  "binarySha256": "bf0b7697384fa02ec526ba36410faf8bc5a5bf53e4071af1c9ff34e1300c21b5",
+  "effectiveEntitlements": {
+    "com.apple.security.cs.allow-dyld-environment-variables": true,
+    "com.apple.security.cs.allow-jit": true,
+    "com.apple.security.cs.allow-unsigned-executable-memory": true,
+    "com.apple.security.files.user-selected.read-write": true,
+    "com.apple.security.network.client": true
+  }
+}

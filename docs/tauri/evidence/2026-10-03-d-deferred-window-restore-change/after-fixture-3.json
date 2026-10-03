@@ -1,0 +1,23 @@
+{
+  "profile": "explicit",
+  "root": "/private/tmp/reasonix-inactive-display-state-bf7y2_ze",
+  "seed": {
+    "width": 2000,
+    "height": 1400,
+    "maximized": false,
+    "x": -3400,
+    "y": 100,
+    "scale_factor": 2.0
+  },
+  "saved": {
+    "width": 2000,
+    "height": 1400,
+    "maximized": false,
+    "x": -3400,
+    "y": 100,
+    "scale_factor": 2.0
+  },
+  "remainingSidecars": [],
+  "remainingReadiness": 0,
+  "passed": true
+}

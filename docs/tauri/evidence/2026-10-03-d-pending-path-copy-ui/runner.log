@@ -1,0 +1,4 @@
+Ordinary managed clipboard UI ready
+Exact private path/generation, original, identity and normal quit cleanup OK
+Original clipboard item/type order and bytes restored and independently verified
+1 path UI lifecycle/system checks passed; actual interaction assertions require UI evidence.

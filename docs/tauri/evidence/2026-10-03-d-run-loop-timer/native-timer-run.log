@@ -1,0 +1,5 @@
+/private/tmp/reasonix-tauri-native-timer-dtd0j5vg/Reasonix Window Baseline.app/Contents/MacOS/window-baseline: replacing existing signature
+/private/tmp/reasonix-tauri-native-timer-dtd0j5vg/Reasonix Window Baseline.app: replacing existing signature
+{"app": "/private/tmp/reasonix-tauri-native-timer-dtd0j5vg/Reasonix Window Baseline.app", "binarySha256": "650f2b60da3a2cfb04f089a6b18ebccf13c008177d4be019ec2bc3fe248536af", "base": "/private/tmp/reasonix-tauri-native-timer-dtd0j5vg"}
+{"delegate": "keep", "application": "tao", "kind": "tauri", "action": "run-loop-timer", "root": "/private/tmp/reasonix-tauri-native-timer-dtd0j5vg/keep-tao-tauri-overlay-run-loop-timer", "style": "overlay", "hostPid": 22164, "kernelExitCode": 2, "openExitCode": 0, "expectedCode": 2}
+{"style": "overlay", "root": "/private/tmp/reasonix-tauri-native-timer-dtd0j5vg/keep-tao-tauri-overlay-run-loop-timer", "pid": 22164, "exitCode": 2, "precondition": true, "minimized": false, "restored": false}

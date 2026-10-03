@@ -1,0 +1,25 @@
+warning: `/Users/jerry/.cargo/config` is deprecated in favor of `config.toml`
+  |
+  = help: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+   Compiling reasonix-tauri v0.1.0 (/Users/jerry/temp/app/reasonix-tauri/desktop/tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.25s
+     Running unittests src/main.rs (desktop/tauri/target/debug/deps/reasonix_tauri-9916af7dc0d35f54)
+
+running 1 test
+test data_profile::tests::managed_profile_rejects_linked_legacy_directory_without_touching_originals ... FAILED
+
+failures:
+
+---- data_profile::tests::managed_profile_rejects_linked_legacy_directory_without_touching_originals stdout ----
+
+thread 'data_profile::tests::managed_profile_rejects_linked_legacy_directory_without_touching_originals' (4839200) panicked at src/data_profile.rs:559:9:
+managed Preview must not adopt a linked Wails directory
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    data_profile::tests::managed_profile_rejects_linked_legacy_directory_without_touching_originals
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 217 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--bin reasonix-tauri`

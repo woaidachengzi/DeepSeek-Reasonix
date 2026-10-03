@@ -40,6 +40,10 @@ assert.ok((globalThis as unknown as { __tauriBridgeCalls: Array<{ name: string; 
   .some(call => call.name === "backfill_workbench_titles" && call.args.titles?.some(item => item.sessionId === "old-alpha" && item.title === "整理报告并加测试")), "default session title is replaced from the first user turn");
 const calls = (globalThis as unknown as { __tauriBridgeCalls: Array<{ name: string; args: Record<string, string> }> }).__tauriBridgeCalls;
 assert.ok(calls.some(call => call.name === "workbench_project_folders"));
+assert.ok(calls.some(call => call.name === "set_tray_locale" && call.args.locale === "en"),
+  "Auto language resolves navigator English and synchronizes the native tray on mount");
+assert.ok(!calls.some(call => call.name === "set_desktop_language"),
+  "runtime tray synchronization does not persist an explicit language over Auto");
 assert.ok(calls.some(call => call.name === "bridge_session_previews"));
 assert.ok(calls.some(call => call.name === "backfill_workbench_titles"));
 const searchInput = document.querySelector<HTMLInputElement>('[aria-label="搜索会话和项目"]');
@@ -339,4 +343,11 @@ assert.equal(localStorage.getItem("reasonix.tauri.default-workspace.v1"), null, 
 await act(async () => { [...document.querySelectorAll<HTMLButtonElement>(".tauri-storage-path__select")].find(button => ["选择", "Choose"].includes(button.textContent?.trim() ?? ""))?.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
 assert.equal(localStorage.getItem("reasonix.tauri.default-workspace.v1"), "/work/restored", "Storage can select another default workspace");
 await act(async () => { root.unmount(); });
-console.log("tauri project navigation and legacy title backfill: OK");
+(globalThis as typeof globalThis & { __trayLocaleFailure?: boolean }).__trayLocaleFailure = true;
+root = createRoot(document.getElementById("root")!);
+await act(async () => { root.render(React.createElement(TauriSessionApp)); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.match(document.body.textContent ?? "", /Could not update the tray language|托盘语言未能更新/,
+  "native tray failure gives a retry instruction while the workbench stays usable");
+assert.doesNotMatch(document.body.textContent ?? "", /private tray failure/);
+await act(async () => { root.unmount(); });
+console.log("tauri project navigation, native tray locale and legacy title backfill: OK");

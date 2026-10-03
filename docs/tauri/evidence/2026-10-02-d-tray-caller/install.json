@@ -1,0 +1,9 @@
+{
+  "dmg": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri Preview_0.1.0_aarch64.dmg",
+  "dmgSha256": "538888bcfb595aaf99df316c1f3538fd077311b2ed93f350cf189d73e4151e58",
+  "app": "/private/tmp/reasonix-d-tray-caller-installed-9fwl55vz/Reasonix Tauri Preview.app",
+  "artifactSha256": {
+    "reasonix-tauri": "317d96bb0df1806bf23a09ac83439084a36604fd8fb35fa072e23c62ec5f39fb",
+    "reasonix-desktop-bridge": "29d985c7af09baefec4308339429eabfe921896c47db6f4c30584b742b7efd39"
+  }
+}

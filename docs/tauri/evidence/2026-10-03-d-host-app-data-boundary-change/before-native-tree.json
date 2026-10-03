@@ -1,0 +1,33 @@
+{
+  "path": "/private/tmp/reasonix-app-data-boundary-612_3vtc/home/.reasonix",
+  "entries": [
+    ".env",
+    "config.toml",
+    "reasonix-core",
+    "reasonix-core/.reasonix-session-profile.lock",
+    "reasonix-core/cache",
+    "reasonix-core/cache/environment",
+    "reasonix-core/cache/environment/probes-cd7fca5e2961e9e7.json",
+    "reasonix-core/cache/history-search",
+    "reasonix-core/cache/history-search/v1.sqlite",
+    "reasonix-core/cache/history-search/v1.sqlite-shm",
+    "reasonix-core/cache/history-search/v1.sqlite-wal",
+    "reasonix-core/cache/usage-catalog",
+    "reasonix-core/cache/usage-catalog/v1.sqlite",
+    "reasonix-core/cache/usage-catalog/v1.sqlite-shm",
+    "reasonix-core/cache/usage-catalog/v1.sqlite-wal",
+    "reasonix-core/desktop",
+    "reasonix-core/desktop/session-state-v1.sqlite",
+    "reasonix-core/desktop/session-state-v1.sqlite-shm",
+    "reasonix-core/desktop/session-state-v1.sqlite-wal",
+    "reasonix-core/global-workspace",
+    "reasonix-core/sessions",
+    "reasonix-core/sessions/tauri-tauri-package-workspace-smoke.inbox",
+    "reasonix-core/sessions/tauri-tauri-package-workspace-smoke.inbox/transaction.lock",
+    "reasonix-core/tauri-credential-profile.backup.json",
+    "reasonix-core/tauri-credential-profile.json",
+    "theme-assets",
+    "window-state.json"
+  ],
+  "scope": "private fixed dummy fixture only; file contents and credential values excluded"
+}

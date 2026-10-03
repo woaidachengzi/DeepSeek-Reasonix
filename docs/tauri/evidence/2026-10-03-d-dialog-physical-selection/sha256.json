@@ -1,0 +1,20 @@
+{
+  "README.md": "e343c3978eafb7b820b64dc3855c5eb89360aaa727f7a3b01ac1414b9e2f4ad0",
+  "actions.json": "2354cc5c54aa96d3334d68c85c9a51ef94a80541947b74549c8d8e6486856a87",
+  "canary-before-save.json": "f1032c3ae9c352c661ded8a5a768f67595267aecdf8f6c7a6345849fc16fe18d",
+  "capabilities.json": "ca322f44ca65977eb15925270d716605762c1486745e695755f43b30ef6ceb8d",
+  "exit-receipt.json": "058d45a246f442941331b9de10299d0ae0bbee1e1ae4fa2a5af788cc905dc51e",
+  "final-files.json": "408590cc6ae4db12ea5aba04743ecb006761007b9127622cb12747c1133ab580",
+  "first-diagnostic-save.json": "082b6b74a114f4cbb77c85d84f5272fefc58571f790347ebfa8560ece9fdac67",
+  "first-save-manifest.json": "1709ded87e8bc609e9b953ab45e9a51126c9768d842607952c43c8aa3d0cba2f",
+  "host.log": "d30183293c8d0e228a85fec23352ef22894962c3ff89d797cc6ecad5ca9f97f3",
+  "launch-control.json": "e90bfc8dcd2f826052047a4f0cf27b8efaa2f5bc7b1b7667b01746c90e14f396",
+  "launch.json": "896aa11138883a5228244ee613240a94ac963267b1b7a85ed8c7d4fd44ba78ff",
+  "overwrite-cancel-manifest.json": "686323239bfe1b0fda728e656d6ccb54ba6018c90652a0e7f07df3cb70f29c66",
+  "replaced-diagnostic-save.json": "e9019c8fa6eed5aef5b19f1cd97241b8a035b3e74d5c9a4ad36fb22172fe426e",
+  "result.json": "f155582afa52d1e2c7dddc614c19ed4832b29a0b0561a0ecaff908a3e5feed87",
+  "run.log": "f450d3bc949539192b16bc17a5929a49e9b920636ca2e85a81cda966405cc7b7",
+  "runner.py": "7bb192a857bc7e144d2725b5216a30b4d5eb2e4391cfe1cc3661ff2d10ec5e7f",
+  "tauri-dialog-reference.txt": "05a41bbdac68e439bfefd8dec2be03d4924f2572b379ee9da257c07d5c9dfa3e",
+  "wails-reference.txt": "ab69b5c2b587ea3fbf6dcf6aace7bcffdb92c600550001610a70f06b3583cdbe"
+}

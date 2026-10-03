@@ -1,0 +1,16 @@
+<unknown>:0: error: unable to open output file '/Users/jerry/.cache/clang/ModuleCache/1025DYQKWKBAF/SwiftShims-22LOMWGXQBUM1.pcm': 'Operation not permitted'
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib/swift/Swift.swiftmodule/arm64e-apple-macos.swiftinterface:5:8: error: could not build Objective-C module 'SwiftShims'
+    3 | // swift-module-flags: -disable-objc-attr-requires-foundation-module -target arm64e-apple-macosx15.2 -target-variant arm64e-apple-ios14.5-macabi -enable-objc-interop -enable-library-evolution -module-link-name swiftCore -parse-stdlib -swift-version 5 -O -library-level api -enforce-exclusivity=unchecked -enable-experimental-concise-pound-file -target-min-inlining-version min -enable-experimental-feature NoncopyableGenerics2 -enable-experimental-feature SuppressedAssociatedTypes -enable-experimental-feature ExtensionImportVisiblity -enable-experimental-feature Macros -enable-experimental-feature FreestandingMacros -enable-experimental-feature Extern -enable-experimental-feature BitwiseCopyable -user-module-version 6.0.3.1.5 -module-name Swift
+    4 | // swift-module-flags-ignorable: -enable-ossa-modules -enable-lexical-lifetimes=false
+    5 | import SwiftShims
+      |        `- error: could not build Objective-C module 'SwiftShims'
+    6 | @inlinable public func min<T>(_ x: T, _ y: T) -> T where T : Swift.Comparable {
+    7 |    
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib/swift/Swift.swiftmodule/arm64e-apple-macos.swiftinterface:5:1: error: failed to build module 'Swift'; this SDK is not supported by the compiler (the SDK is built with 'Apple Swift version 6.0.3 effective-5.10 (swiftlang-6.0.3.1.5 clang-1600.0.30.1)', while this compiler is 'Apple Swift version 6.0.3 effective-5.10 (swiftlang-6.0.3.1.10 clang-1600.0.30.1)'). Please select a toolchain which matches the SDK.
+    3 | // swift-module-flags: -disable-objc-attr-requires-foundation-module -target arm64e-apple-macosx15.2 -target-variant arm64e-apple-ios14.5-macabi -enable-objc-interop -enable-library-evolution -module-link-name swiftCore -parse-stdlib -swift-version 5 -O -library-level api -enforce-exclusivity=unchecked -enable-experimental-concise-pound-file -target-min-inlining-version min -enable-experimental-feature NoncopyableGenerics2 -enable-experimental-feature SuppressedAssociatedTypes -enable-experimental-feature ExtensionImportVisiblity -enable-experimental-feature Macros -enable-experimental-feature FreestandingMacros -enable-experimental-feature Extern -enable-experimental-feature BitwiseCopyable -user-module-version 6.0.3.1.5 -module-name Swift
+    4 | // swift-module-flags-ignorable: -enable-ossa-modules -enable-lexical-lifetimes=false
+    5 | import SwiftShims
+      | `- error: failed to build module 'Swift'; this SDK is not supported by the compiler (the SDK is built with 'Apple Swift version 6.0.3 effective-5.10 (swiftlang-6.0.3.1.5 clang-1600.0.30.1)', while this compiler is 'Apple Swift version 6.0.3 effective-5.10 (swiftlang-6.0.3.1.10 clang-1600.0.30.1)'). Please select a toolchain which matches the SDK.
+    6 | @inlinable public func min<T>(_ x: T, _ y: T) -> T where T : Swift.Comparable {
+    7 |    

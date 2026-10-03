@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useAppNavigationStore } from "../store/appNavigation";
+import { onDesktopOpenSettings } from "../lib/bridge";
 
 export function useNativeSettingsEvent(input: {
   closeTransientOverlays: () => void;
@@ -7,8 +8,7 @@ export function useNativeSettingsEvent(input: {
 }) {
   const { closeTransientOverlays, setSettingsTarget } = input;
   useEffect(() => {
-    if (typeof window === "undefined" || !window.runtime) return;
-    return window.runtime.EventsOn("app:open-settings", () => {
+    return onDesktopOpenSettings(() => {
       closeTransientOverlays();
       setSettingsTarget(useAppNavigationStore.getState().lastSettingsTarget);
     });

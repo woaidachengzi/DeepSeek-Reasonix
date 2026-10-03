@@ -1,0 +1,9 @@
+native macOS window managed menu-shortcuts: OK
+native macOS window managed clipboard-native: OK
+native macOS window managed tray-language: OK
+native macOS window managed: 3/3 stages passed
+native macOS window explicit menu-shortcuts: OK
+native macOS window explicit clipboard-native: OK
+native macOS window explicit tray-language: OK
+native macOS window explicit: 3/3 stages passed
+independent menu/clipboard slice passed; complete window acceptance remains separate

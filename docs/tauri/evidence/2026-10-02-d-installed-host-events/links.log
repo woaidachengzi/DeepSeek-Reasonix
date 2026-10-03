@@ -1,0 +1,3 @@
+native macOS window managed external-browser: OK
+native macOS window explicit external-browser: OK
+Main WKWebView link validation, default browser receipts and cleanup: OK

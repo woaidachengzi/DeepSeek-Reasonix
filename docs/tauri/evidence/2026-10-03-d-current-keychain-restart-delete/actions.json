@@ -1,0 +1,54 @@
+{
+  "fixtureRoot": "/private/tmp/reasonix-launch-services-_0une03g",
+  "app": "/private/tmp/reasonix-d-keychain-copy-installed-4tiiqif5/Reasonix Tauri Preview.app",
+  "profile": "explicit",
+  "dummyOnly": true,
+  "origin": "reasonix-preview://6a7f46a93b549fb04cc9e33590739106.localhost/",
+  "observationSource": "Actual CUA tree/screenshot returned in conversation, screenshots not separately archived; tree limited to first 189 elements",
+  "launches": [
+    {
+      "pid": 28531,
+      "sidecarPid": 28539,
+      "actions": [
+        "Settings -> Model services",
+        "first provider deepseek-flash initial 未配置",
+        "click migration: 已就绪 / 已保存到钥匙串, empty field with configured placeholder",
+        "second migration: 已有钥匙串凭据，迁移不会覆盖它。若要替换，请填写新密钥并保存到钥匙串。",
+        "deepseek-pro migration: 未找到旧 Preview 凭据，请填写密钥并保存到钥匙串。",
+        "CmdQ exit0, sidecar/readiness absent"
+      ]
+    },
+    {
+      "pid": 28639,
+      "sidecarPid": 28646,
+      "actions": [
+        "same app/root/identity restart",
+        "model picker enabled, deepseek-flash 已就绪, empty credential field",
+        "click delete: 未配置 / 钥匙串密钥已删除",
+        "click delete again: 钥匙串中没有密钥",
+        "CmdQ exit0, sidecar/readiness absent"
+      ]
+    },
+    {
+      "pid": 28729,
+      "sidecarPid": 28738,
+      "actions": [
+        "same app/root/identity restart after deletion",
+        "model picker disabled, deepseek-flash 未配置",
+        "no automatic reimport from preserved legacy file",
+        "CmdQ exit0, sidecar/readiness absent"
+      ]
+    }
+  ],
+  "legacyPreserved": true,
+  "normalPreferencesMatchEarlierRecordedBaseline": true,
+  "nativePostDeleteExactFixtureItemAbsent": true,
+  "scopeExcluded": [
+    "managed keychain UI matrix",
+    "save/replace UI",
+    "own keychain lock/denial",
+    "cross-profile actual UI isolation",
+    "Wails reasonix-service compatibility",
+    "full D/E acceptance"
+  ]
+}

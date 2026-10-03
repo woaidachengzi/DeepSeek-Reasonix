@@ -1,0 +1,18 @@
+{
+  "create": {
+    "exitCode": 206,
+    "stdout": "",
+    "stderr": "security: SecKeychainCreate /private/tmp/reasonix-private-keychain-iks3sui8/home/Library/Keychains/fixture.keychain: One or more parameters passed to a function were not valid.\n"
+  },
+  "privateDefault": {
+    "exitCode": 0,
+    "stdout": "    \"/private/tmp/reasonix-private-keychain-iks3sui8/home/Library/Keychains/fixture.keychain-db\"\n",
+    "stderr": ""
+  },
+  "privateSearch": {
+    "exitCode": 0,
+    "stdout": "    \"/private/tmp/reasonix-private-keychain-iks3sui8/home/Library/Keychains/fixture.keychain-db\"\n",
+    "stderr": ""
+  },
+  "normalUnchanged": true
+}

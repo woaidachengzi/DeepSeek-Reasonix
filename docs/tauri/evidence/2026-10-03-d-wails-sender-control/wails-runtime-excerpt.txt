@@ -1,0 +1,17 @@
+    if( [self IsFullScreen] ) {
+        [self.mainWindow applyWindowConstraints];
+        [self.mainWindow toggleFullScreen:nil];
+    }
+}
+
+- (void) Minimise {
+    [self.mainWindow miniaturize:nil];
+}
+
+- (void) UnMinimise {
+    [self.mainWindow deminiaturize:nil];
+}
+
+- (bool) IsMinimised {
+    return [self.mainWindow isMiniaturized];
+}

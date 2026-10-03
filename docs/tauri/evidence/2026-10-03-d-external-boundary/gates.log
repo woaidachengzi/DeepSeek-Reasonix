@@ -1,0 +1,3 @@
+failure-exit: passed (exit 0)
+package: passed (exit 0)
+links: failed (exit 1)

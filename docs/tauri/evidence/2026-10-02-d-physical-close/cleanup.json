@@ -1,0 +1,15 @@
+{
+  "confirmedAbsentPids": [
+    88516,
+    88525,
+    88514,
+    89154,
+    89161,
+    89152
+  ],
+  "readyFilesRemaining": {
+    "/private/tmp/reasonix-launch-services-ckjb8lp0": 0,
+    "/private/tmp/reasonix-launch-services-6i6k6g9y": 0
+  },
+  "systemClipboardTouched": false
+}

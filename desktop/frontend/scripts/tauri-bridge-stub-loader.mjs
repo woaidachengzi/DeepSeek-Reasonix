@@ -199,6 +199,7 @@ export function setTauriDesktopApproval(mode) { record("set_desktop_approval", {
 export function setTauriDesktopTerminalTheme(theme) { record("set_desktop_terminal_theme", { theme }); return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: "auto", terminalTheme: theme }); }
 export function setTauriDesktopAppearance(theme, style) { record("set_desktop_appearance", { theme, style }); return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: "auto", terminalTheme: "auto", theme, themeStyle: style, appearanceConfigured: true }); }
 export function setTauriDesktopLanguage(language) { record("set_desktop_language", { language }); return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: "auto", language, terminalTheme: "auto", theme: "auto", themeStyle: "", appearanceConfigured: false }); }
+export function setTauriTrayLocale(locale) { record("set_tray_locale", { locale }); return globalThis.__trayLocaleFailure ? Promise.reject(new Error("private tray failure")) : Promise.resolve(); }
 export function setTauriDesktopCurrency(currency) { record("set_desktop_currency", { currency }); return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: "auto", language: "", displayCurrency: currency, terminalTheme: "auto", theme: "auto", themeStyle: "", appearanceConfigured: false }); }
 export function tauriZoomFactor() { record("get_zoom_factor"); return Promise.resolve(1); }
 export function setTauriZoomFactor(factor) { record("set_zoom_factor", { factor }); return Promise.resolve(factor); }
@@ -206,6 +207,12 @@ export function getTauriCloseBehavior() { return Promise.resolve("keep_running")
 export function setTauriCloseBehavior(behavior) { record("set_close_behavior", { behavior }); return Promise.resolve(behavior); }
 export function keychainSave(key, value) { record("keychain_save", { key, value }); return Promise.resolve(); }
 export function keychainImportLegacy(provider) { record("keychain_import_legacy", { provider }); return Promise.resolve(); }
+export function keychainImportWailsEnv(provider) { record("keychain_import_legacy", { provider, source: "wails-env" }); return Promise.resolve(); }
+export function keychainImportWails(provider) { record("keychain_import_legacy", { provider, source: "wails" }); return Promise.resolve(); }
+export function keychainImportFailureCode(error) {
+  const code = error && typeof error === "object" ? error.code : undefined;
+  return ["existing_credential", "missing_legacy_credential", "missing_wails_credential"].includes(code) ? code : undefined;
+}
 export function keychainDelete(key) { record("keychain_delete", { key }); return Promise.resolve(true); }
 export function importTauriStableProfile() { return Promise.resolve({ importedConfig: "", backupConfig: "" }); }
 export function importTauriStableProjectFolders() {

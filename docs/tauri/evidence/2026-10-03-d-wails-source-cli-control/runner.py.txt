@@ -1,0 +1,21 @@
+import os,stat,subprocess,json,re,hashlib
+from pathlib import Path
+root=Path('/private/tmp/reasonix-locked-keychain-pikhkolf');home=root/'home';chain=home/'Library/Keychains/fixture.keychain-db'
+assert root.is_dir() and not root.is_symlink() and root.stat().st_uid==os.getuid() and stat.S_IMODE(root.stat().st_mode)==0o700
+assert home.resolve().is_relative_to(root) and chain.is_file() and not chain.is_symlink() and chain.stat().st_uid==os.getuid()
+normal={k:os.environ[k] for k in ('PATH','HOME','USER','LOGNAME','LANG') if k in os.environ};env=dict(normal,HOME=str(home),TMPDIR=str(root))
+def call(args,environment=env):return subprocess.run(['/usr/bin/security']+args,env=environment,text=True,capture_output=True,timeout=15)
+def snapshot():
+ pref=Path(normal['HOME'])/'Library/Preferences/com.apple.security.plist'
+ default=call(['default-keychain','-d','user'],normal);search=call(['list-keychains','-d','user'],normal)
+ assert default.returncode==0 and search.returncode==0
+ return {'default':default.stdout,'search':search.stdout,'preferencesSha256':hashlib.sha256(pref.read_bytes()).hexdigest() if pref.is_file() else None}
+before=snapshot();result={'fixture':str(root),'scope':'Owned fixed fake source only, never normal credentials'}
+try:
+ meta=call(['dump-keychain',str(chain)]);accounts=set(re.findall(r'REASONIX_WAILS_FIXTURE_[A-F0-9]{32}',meta.stdout));result['metadataExitCode']=meta.returncode;result['ownedSourceCount']=len(accounts)
+ if len(accounts)==1:
+  unlocked=call(['unlock-keychain','-p','reasonix-owned-test-fixture-only',str(chain)]);result['explicitUnlockExitCode']=unlocked.returncode
+  if unlocked.returncode==0:
+   read=call(['find-generic-password','-s','reasonix','-a',next(iter(accounts)),'-w',str(chain)]);result['sourceReadExitCode']=read.returncode;result['fixedDummyExact']=read.returncode==0 and read.stdout.strip()=='dummy-wails-source-only'
+finally:
+ result['normalUnchanged']=before==snapshot();assert result['normalUnchanged'];Path('/private/tmp/reasonix-wails-source-cli-control.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result))

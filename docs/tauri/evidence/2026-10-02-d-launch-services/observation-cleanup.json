@@ -1,0 +1,7 @@
+{
+  "pid": 76321,
+  "binary": "/private/tmp/reasonix-d-tray-caller-installed-9fwl55vz/Reasonix Tauri Preview.app/Contents/MacOS/reasonix-tauri",
+  "sidecarPid": 76326,
+  "remaining": 0,
+  "scope": "Same private copied test package newly observed with nonprivate UI origin after private Quit; no UI settings or session actions issued; SIGTERM cleanup is not private Cmd+Q acceptance."
+}

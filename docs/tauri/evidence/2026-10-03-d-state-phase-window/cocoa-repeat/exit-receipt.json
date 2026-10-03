@@ -1,0 +1,12 @@
+{
+  "delegate": "keep",
+  "application": "tao",
+  "kind": "cocoa",
+  "action": "phase-timer",
+  "root": "/private/tmp/reasonix-phase-cocoa-scttmsjt/keep-tao-cocoa-standard-phase-timer",
+  "style": "standard",
+  "hostPid": 22614,
+  "kernelExitCode": 0,
+  "openExitCode": 0,
+  "expectedCode": 0
+}

@@ -1,0 +1,5 @@
+/private/tmp/reasonix-phase-cocoa-scttmsjt/Reasonix Window Baseline.app/Contents/MacOS/window-baseline: replacing existing signature
+/private/tmp/reasonix-phase-cocoa-scttmsjt/Reasonix Window Baseline.app: replacing existing signature
+{"app": "/private/tmp/reasonix-phase-cocoa-scttmsjt/Reasonix Window Baseline.app", "binarySha256": "9365791ba119ca01132de2cc53d62b70e54954c7f2fb63781a9ab543eb9230d5", "base": "/private/tmp/reasonix-phase-cocoa-scttmsjt"}
+{"delegate": "keep", "application": "tao", "kind": "cocoa", "action": "phase-timer", "root": "/private/tmp/reasonix-phase-cocoa-scttmsjt/keep-tao-cocoa-standard-phase-timer", "style": "standard", "hostPid": 22614, "kernelExitCode": 0, "openExitCode": 0, "expectedCode": 0}
+{"style": "standard", "root": "/private/tmp/reasonix-phase-cocoa-scttmsjt/keep-tao-cocoa-standard-phase-timer", "pid": 22614, "exitCode": 0, "precondition": true, "minimized": true, "restored": true}

@@ -1,0 +1,20 @@
+{
+  "source": "Actual CUA observation, screenshots returned in conversation; pixels not separately archived",
+  "pid": 25636,
+  "origin": "reasonix-preview://847a44eafcbbeafa693d343be94b3b68.localhost/",
+  "provider": "deepseek-flash",
+  "initial": "未配置",
+  "migration": "已就绪; 已保存到钥匙串; field blank with configured placeholder",
+  "secondMigration": "Rejected with generic migration/system authorization failure; 已就绪 retained",
+  "normalPreferencesUnchanged": true,
+  "legacyUnchanged": true,
+  "quit": "CmdQ, kernel0/open0, no sidecar/readiness",
+  "remaining": [
+    "same-profile restart",
+    "actual GUI delete",
+    "own-keychain lock/refusal",
+    "managed profile",
+    "Wails reasonix service compatibility"
+  ],
+  "fixtureRoot": "/private/tmp/reasonix-launch-services-0_6b1i21"
+}
