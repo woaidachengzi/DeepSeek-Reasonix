@@ -756,6 +756,7 @@ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
         "notification-delivery" => crate::notifications::delivery_smoke(app)?,
         "task-host-death" => crate::native_task_smoke::host_death(app, &directory)?,
         "ui-legacy-read" => crate::native_ui_storage_smoke::legacy_read(app)?,
+        "ui-message-copy" => crate::native_ui_message_copy_smoke::run(app, &directory)?,
         "ui-store-empty" | "ui-store-seed" | "ui-store-restore" | "ui-store-clear" => {
             crate::native_ui_storage_smoke::run(app, &directory, phase)?
         }

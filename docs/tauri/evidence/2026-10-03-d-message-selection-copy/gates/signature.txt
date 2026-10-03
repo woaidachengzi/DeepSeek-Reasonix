@@ -1,0 +1,26 @@
+Executable=/private/tmp/reasonix-d-message-menu-installed-crpdlm9f/Reasonix Tauri Preview.app/Contents/MacOS/reasonix-tauri
+Identifier=io.reasonix.desktop.preview
+Format=app bundle with Mach-O thin (arm64)
+CodeDirectory v=20500 size=63068 flags=0x10002(adhoc,runtime) hashes=1960+7 location=embedded
+VersionPlatform=1
+VersionMin=720896
+VersionSDK=983552
+Hash type=sha256 size=32
+CandidateCDHash sha256=40d9851f0fe26538f03b2e0bc618e192d3f489f2
+CandidateCDHashFull sha256=40d9851f0fe26538f03b2e0bc618e192d3f489f282a6c5eeba383a5479982c50
+Hash choices=sha256
+CMSDigest=40d9851f0fe26538f03b2e0bc618e192d3f489f282a6c5eeba383a5479982c50
+CMSDigestType=2
+Executable Segment base=0
+Executable Segment limit=26591232
+Executable Segment flags=0x1
+Page size=16384
+CDHash=40d9851f0fe26538f03b2e0bc618e192d3f489f2
+Signature=adhoc
+Info.plist entries=14
+TeamIdentifier=not set
+Runtime Version=15.2.0
+Sealed Resources version=2 rules=13 files=2
+Internal requirements count=0 size=12
+Total signatures=1
+Chosen signature=1

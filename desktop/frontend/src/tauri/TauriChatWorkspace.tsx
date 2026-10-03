@@ -1,10 +1,11 @@
-import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Component, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Eye, FileText, FolderOpen, FolderTree, GitBranch, Keyboard, MessageSquare, Paperclip, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Settings, Sparkles, Square, Trash2, X } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { sendTauriSystemNotification } from "../lib/tauriBridge";
 import { useTauriNotificationClicks } from "./tauriNotifications";
 import { Markdown } from "../components/Markdown";
+const TranscriptSelectionMenu = lazy(() => import("../components/TranscriptSelectionMenu").then(module => ({ default: module.TranscriptSelectionMenu })));
 import { ExternalOpener } from "../components/ExternalOpener";
 import { tauriExternalOpenerBridge } from "./tauriExternalOpener";
 import { CopyButton } from "../components/CopyButton";
@@ -3431,6 +3432,10 @@ export function TauriSessionPreview() {
       </>}
 
       <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} items={commandPaletteItems} placeholder={t("palette.placeholder")} emptyText={t("palette.empty")} />
+      <Suspense fallback={null}><TranscriptSelectionMenu
+        enabled={Boolean(session && !settingsOpen && !diagnosticsOpen && !workspaceOpen && !commandPaletteOpen)}
+        resetKey={session?.id ?? "tauri-empty"}
+      /></Suspense>
       <ShortcutsCheatsheet open={shortcutsHelpOpen} platform={shortcutPlatform} onClose={() => setShortcutsHelpOpen(false)} t={t} items={shortcutHelpItems} />
       {settingsOpen && <TauriSettings key={settingsTab} initialTab={settingsTab} workspaceRoot={currentWorkspace || undefined} defaultWorkspace={defaultWorkspace} onChooseDefaultWorkspace={chooseDefaultWorkspace} onClearDefaultWorkspace={clearDefaultWorkspace} profile={profile} importBusy={busy} bridgeStatus={status} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={error} onRestartBridge={restartBridge} onRefreshCatalogAudit={() => refreshCatalogAudit()} onRefreshProfile={refreshProfile} onImportStableProfile={importStableProfile} onImportStableProjectFolders={importStableProjectFolders} onScanUnclaimedSessions={() => void openScanImportReview()} onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionId={session?.id} currentSessionState={session?.state} currentSessionModelRef={session?.modelRef} onCurrentSessionModelChange={changeCurrentSessionModel} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} onUseSubagentInChat={insertSubagentInvocation} />}
     </main>

@@ -1,7 +1,7 @@
 import { writeClipboardText } from "./clipboard";
 import { transcriptSelectionStore } from "./transcriptSelectionStore";
 
-const MESSAGE_SELECTION_SELECTOR = ".msg__body, .reasoning__body";
+const MESSAGE_SELECTION_SELECTOR = ".msg__body, .reasoning__body, .tauri-message .tauri-message__content > .md";
 export const TRANSCRIPT_COPY_FAILED_EVENT = "reasonix:transcript-copy-failed";
 
 export interface MessageSelectionCopyState {

@@ -1,0 +1,6 @@
+LaunchServices native kernel exit: {"phase": "ui-message-copy", "pid": 13390, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed ui-message-copy: OK
+Actual managed rendered message/menu/OS text, one provider call and clipboard restoration: OK
+LaunchServices native kernel exit: {"phase": "ui-message-copy", "pid": 13457, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit ui-message-copy: OK
+Actual explicit rendered message/menu/OS text, one provider call and clipboard restoration: OK

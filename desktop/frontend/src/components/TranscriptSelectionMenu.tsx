@@ -4,6 +4,8 @@ import { MessageSquare } from "lucide-react";
 import { ContextMenu, type ContextMenuPoint } from "./ContextMenu";
 import { messageSelectionContextText, TRANSCRIPT_COPY_FAILED_EVENT } from "../lib/messageSelectionCopy";
 import { writeClipboardText } from "../lib/clipboard";
+import { isTauri } from "@tauri-apps/api/core";
+import { hasWailsDesktopRuntime } from "../lib/wailsDesktopRuntime";
 import {
   detectShortcutPlatform,
   formatShortcutCombo,
@@ -253,7 +255,7 @@ export function TranscriptSelectionMenu({
 
   useEffect(() => {
     const onContextMenu = (event: MouseEvent) => {
-      if (!enabled || typeof window === "undefined" || !window.runtime) return;
+      if (!enabled || (!isTauri() && !hasWailsDesktopRuntime())) return;
       const snapshot = transcriptSelectionStore.getSnapshot();
       const rowKey = rowKeyForNode(event.target instanceof Node ? event.target : null);
       if (
@@ -326,7 +328,9 @@ export function TranscriptSelectionMenu({
     const onPointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return;
       const target = event.target instanceof Element ? event.target : null;
-      if (target?.closest(".transcript-selection-action")) return;
+      // Menu activation owns the captured selection until copy succeeds. A
+      // native denial must not lose it on the preceding physical pointerdown.
+      if (target?.closest(".transcript-selection-action, .context-menu")) return;
       const snapshot = transcriptSelectionStore.getSnapshot();
       if (snapshot.mode === "logical-dragging" || snapshot.mode === "logical-settled") {
         transcriptSelectionStore.clear("new-pointer");

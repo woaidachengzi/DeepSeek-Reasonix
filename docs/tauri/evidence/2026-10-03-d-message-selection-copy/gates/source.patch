@@ -1,0 +1,247 @@
+diff --git a/desktop/frontend/src/__tests__/transcript-selection-menu.test.tsx b/desktop/frontend/src/__tests__/transcript-selection-menu.test.tsx
+index a18ef3c41..530f40bf8 100644
+--- a/desktop/frontend/src/__tests__/transcript-selection-menu.test.tsx
++++ b/desktop/frontend/src/__tests__/transcript-selection-menu.test.tsx
+@@ -23,6 +23,7 @@ import { act } from "react";
+ import { createRoot } from "react-dom/client";
+ import { TranscriptSelectionMenu } from "../components/TranscriptSelectionMenu";
+ import { LocaleProvider } from "../lib/i18n";
++import { ToastProvider, useToast } from "../lib/toast";
+ import { resetCustomShortcuts, saveCustomShortcut } from "../lib/keyboardShortcuts";
+ import {
+   transcriptSelectionStore,
+@@ -554,5 +555,108 @@ console.log("\ntranscript selection menu");
+   dom.window.close();
+ }
+ 
++{
++  // Tauri has no Wails runtime: use native IPC and preserve selection on denial.
++  const dom = installDom();
++  const globals = globalThis as typeof globalThis & { isTauri?: boolean };
++  globals.isTauri = true;
++  let denied = false;
++  let browserWrites = 0;
++  let execWrites = 0;
++  const clipboard: string[] = [];
++  const commands: string[] = [];
++  Object.defineProperty(navigator, "clipboard", { configurable: true, value: {
++    writeText: async () => { browserWrites++; },
++  } });
++  Object.defineProperty(document, "execCommand", { configurable: true, value: () => { execWrites++; return true; } });
++  (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {
++    invoke: async (command: string, args?: { text?: string }) => {
++      commands.push(command);
++      if (command !== "plugin:clipboard-manager|write_text") throw new Error("unexpected IPC");
++      if (denied) throw new Error("native clipboard denied");
++      clipboard.push(args?.text ?? "");
++    },
++  };
++  document.body.insertAdjacentHTML("beforeend", '<article class="tauri-message"><div class="tauri-message__content"><div class="md">Tauri selected reply</div></div></article><textarea id="native-editor"></textarea>');
++  const message = document.querySelector(".tauri-message .md") as HTMLElement;
++  const editor = document.querySelector("#native-editor") as HTMLElement;
++  const root = createRoot(document.getElementById("root") as HTMLElement);
++  function CopyNotice() {
++    const { toasts } = useToast();
++    return <output id="copy-notice">{toasts.map((toast) => toast.level).join(",")}</output>;
++  }
++  await act(async () => {
++    root.render(<LocaleProvider><ToastProvider><TranscriptSelectionMenu /><CopyNotice /></ToastProvider></LocaleProvider>);
++    await flushTimers();
++  });
++  eq(window.runtime, undefined, "Tauri fixture has no legacy runtime");
++  selectNodeText(message.firstChild as Node);
++  eq((await dispatchContextMenu(message)).defaultPrevented, true, "Tauri selected message claims the app menu");
++  ok(document.querySelector(".context-menu") != null, "Tauri opens Copy without Wails");
++  await act(async () => {
++    document.querySelector<HTMLButtonElement>('.context-menu [role="menuitem"]')?.click();
++    await flushTimers();
++  });
++  eq(clipboard[0], "Tauri selected reply", "Tauri sends exact selected text to native IPC");
++  eq(document.getSelection()?.isCollapsed, true, "native success releases selection");
++  eq(browserWrites + execWrites, 0, "native success avoids browser fallback");
++  denied = true;
++  // Enable the shared pointer listener too: Copy-only Tauri mounts intentionally
++  // omit Add to Chat, so that mode alone would not exercise this regression.
++  await act(async () => {
++    root.render(<LocaleProvider><ToastProvider><TranscriptSelectionMenu onAddToChat={() => {}} /><CopyNotice /></ToastProvider></LocaleProvider>);
++    await flushTimers();
++  });
++  selectNodeText(message.firstChild as Node);
++  await dispatchContextMenu(message);
++  await act(async () => {
++    const copy = document.querySelector<HTMLButtonElement>('.context-menu [role="menuitem"]');
++    copy?.dispatchEvent(new window.MouseEvent("pointerdown", { bubbles: true, button: 0 }));
++    eq(document.getSelection()?.toString(), "Tauri selected reply", "pointerdown on Copy preserves selection before native result");
++    copy?.click();
++    await flushTimers();
++  });
++  eq(clipboard.length, 1, "native denial does not report another successful copy");
++  eq(document.getSelection()?.toString(), "Tauri selected reply", "native denial preserves selection for retry");
++  eq(document.querySelector("#copy-notice")?.textContent, "error", "native denial reports the existing error feedback");
++  eq(commands.length, 2, "each explicit Copy submits exactly one native operation");
++  eq(browserWrites + execWrites, 0, "native denial cannot bypass refusal with browser fallback");
++  eq((await dispatchContextMenu(editor)).defaultPrevented, false, "Tauri editable targets keep the native menu");
++  document.body.insertAdjacentHTML("beforeend", '<div class="transcript__row" data-row-key="tauri-logical"><div id="logical-body" class="msg__body">logical reply</div></div>');
++  await act(async () => {
++    root.render(<LocaleProvider><ToastProvider><TranscriptSelectionMenu resetKey="tauri-logical-tab" /><CopyNotice /></ToastProvider></LocaleProvider>);
++    await flushTimers();
++  });
++  await act(async () => {
++    transcriptSelectionStore.beginNative("tauri-logical-tab");
++    transcriptSelectionStore.promoteToLogical("tauri-logical-tab",
++      { rowKey: "tauri-logical", textOffset: 0, affinity: "forward" },
++      { rowKey: "tauri-logical", textOffset: 7, affinity: "forward" },
++      [{ rowKey: "tauri-logical", sourceText: "logical reply", contentRevision: 1, resolveText: async () => "logical reply" }]);
++    transcriptSelectionStore.settleLogical();
++    await flushTimers();
++  });
++  const logical = document.querySelector("#logical-body") as HTMLElement;
++  eq((await dispatchContextMenu(logical)).defaultPrevented, true, "Tauri logical selection opens Copy");
++  await act(async () => {
++    document.querySelector<HTMLButtonElement>('.context-menu [role="menuitem"]')?.click();
++    await flushTimers();
++  });
++  eq(transcriptSelectionStore.getSnapshot().mode, "logical-settled", "native denial retains the logical selection snapshot");
++  denied = false;
++  await dispatchContextMenu(logical);
++  await act(async () => {
++    document.querySelector<HTMLButtonElement>('.context-menu [role="menuitem"]')?.click();
++    await flushTimers();
++  });
++  eq(clipboard[1], "logical", "Tauri logical retry copies the exact frozen endpoint range");
++  eq(transcriptSelectionStore.getSnapshot().mode, "none", "native success clears the logical snapshot");
++  eq(commands.length, 4, "native and logical copies each invoke once per explicit action");
++  eq(browserWrites + execWrites, 0, "logical denial and retry keep the native permission boundary");
++  await act(async () => { root.unmount(); });
++  delete globals.isTauri;
++  dom.window.close();
++}
++
+ console.log(`\n${passed} passed, ${failed} failed, ${passed + failed} total`);
+ if (failed > 0) process.exit(1);
+diff --git a/desktop/frontend/src/components/TranscriptSelectionMenu.tsx b/desktop/frontend/src/components/TranscriptSelectionMenu.tsx
+index 88edcc690..b764646fa 100644
+--- a/desktop/frontend/src/components/TranscriptSelectionMenu.tsx
++++ b/desktop/frontend/src/components/TranscriptSelectionMenu.tsx
+@@ -4,6 +4,8 @@ import { MessageSquare } from "lucide-react";
+ import { ContextMenu, type ContextMenuPoint } from "./ContextMenu";
+ import { messageSelectionContextText, TRANSCRIPT_COPY_FAILED_EVENT } from "../lib/messageSelectionCopy";
+ import { writeClipboardText } from "../lib/clipboard";
++import { isTauri } from "@tauri-apps/api/core";
++import { hasWailsDesktopRuntime } from "../lib/wailsDesktopRuntime";
+ import {
+   detectShortcutPlatform,
+   formatShortcutCombo,
+@@ -253,7 +255,7 @@ export function TranscriptSelectionMenu({
+ 
+   useEffect(() => {
+     const onContextMenu = (event: MouseEvent) => {
+-      if (!enabled || typeof window === "undefined" || !window.runtime) return;
++      if (!enabled || (!isTauri() && !hasWailsDesktopRuntime())) return;
+       const snapshot = transcriptSelectionStore.getSnapshot();
+       const rowKey = rowKeyForNode(event.target instanceof Node ? event.target : null);
+       if (
+@@ -326,7 +328,9 @@ export function TranscriptSelectionMenu({
+     const onPointerDown = (event: PointerEvent) => {
+       if (event.button !== 0) return;
+       const target = event.target instanceof Element ? event.target : null;
+-      if (target?.closest(".transcript-selection-action")) return;
++      // Menu activation owns the captured selection until copy succeeds. A
++      // native denial must not lose it on the preceding physical pointerdown.
++      if (target?.closest(".transcript-selection-action, .context-menu")) return;
+       const snapshot = transcriptSelectionStore.getSnapshot();
+       if (snapshot.mode === "logical-dragging" || snapshot.mode === "logical-settled") {
+         transcriptSelectionStore.clear("new-pointer");
+diff --git a/desktop/frontend/src/lib/messageSelectionCopy.ts b/desktop/frontend/src/lib/messageSelectionCopy.ts
+index 9b4cbacda..70abcd041 100644
+--- a/desktop/frontend/src/lib/messageSelectionCopy.ts
++++ b/desktop/frontend/src/lib/messageSelectionCopy.ts
+@@ -1,7 +1,7 @@
+ import { writeClipboardText } from "./clipboard";
+ import { transcriptSelectionStore } from "./transcriptSelectionStore";
+ 
+-const MESSAGE_SELECTION_SELECTOR = ".msg__body, .reasoning__body";
++const MESSAGE_SELECTION_SELECTOR = ".msg__body, .reasoning__body, .tauri-message .tauri-message__content > .md";
+ export const TRANSCRIPT_COPY_FAILED_EVENT = "reasonix:transcript-copy-failed";
+ 
+ export interface MessageSelectionCopyState {
+diff --git a/desktop/frontend/src/lib/wailsDesktopRuntime.ts b/desktop/frontend/src/lib/wailsDesktopRuntime.ts
+index 1bcabc21d..b2ac5ba50 100644
+--- a/desktop/frontend/src/lib/wailsDesktopRuntime.ts
++++ b/desktop/frontend/src/lib/wailsDesktopRuntime.ts
+@@ -7,6 +7,10 @@ export interface WindowStateRuntime {
+   WindowIsMaximised(): Promise<boolean>;
+ }
+ 
++export function hasWailsDesktopRuntime(): boolean {
++  return typeof window !== "undefined" && Boolean(window.runtime);
++}
++
+ export function getWailsWindowStateRuntime(): WindowStateRuntime | null {
+   const runtime = typeof window === "undefined" ? undefined : window.runtime;
+   const size = runtime?.WindowGetSize;
+diff --git a/desktop/frontend/src/tauri/TauriChatWorkspace.tsx b/desktop/frontend/src/tauri/TauriChatWorkspace.tsx
+index 39b9cfceb..e22c68061 100644
+--- a/desktop/frontend/src/tauri/TauriChatWorkspace.tsx
++++ b/desktop/frontend/src/tauri/TauriChatWorkspace.tsx
+@@ -1,10 +1,11 @@
+-import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
++import { Component, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+ import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Eye, FileText, FolderOpen, FolderTree, GitBranch, Keyboard, MessageSquare, Paperclip, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Settings, Sparkles, Square, Trash2, X } from "lucide-react";
+ import type { UnlistenFn } from "@tauri-apps/api/event";
+ import { getCurrentWindow } from "@tauri-apps/api/window";
+ import { sendTauriSystemNotification } from "../lib/tauriBridge";
+ import { useTauriNotificationClicks } from "./tauriNotifications";
+ import { Markdown } from "../components/Markdown";
++const TranscriptSelectionMenu = lazy(() => import("../components/TranscriptSelectionMenu").then(module => ({ default: module.TranscriptSelectionMenu })));
+ import { ExternalOpener } from "../components/ExternalOpener";
+ import { tauriExternalOpenerBridge } from "./tauriExternalOpener";
+ import { CopyButton } from "../components/CopyButton";
+@@ -3431,6 +3432,10 @@ export function TauriSessionPreview() {
+       </>}
+ 
+       <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} items={commandPaletteItems} placeholder={t("palette.placeholder")} emptyText={t("palette.empty")} />
++      <Suspense fallback={null}><TranscriptSelectionMenu
++        enabled={Boolean(session && !settingsOpen && !diagnosticsOpen && !workspaceOpen && !commandPaletteOpen)}
++        resetKey={session?.id ?? "tauri-empty"}
++      /></Suspense>
+       <ShortcutsCheatsheet open={shortcutsHelpOpen} platform={shortcutPlatform} onClose={() => setShortcutsHelpOpen(false)} t={t} items={shortcutHelpItems} />
+       {settingsOpen && <TauriSettings key={settingsTab} initialTab={settingsTab} workspaceRoot={currentWorkspace || undefined} defaultWorkspace={defaultWorkspace} onChooseDefaultWorkspace={chooseDefaultWorkspace} onClearDefaultWorkspace={clearDefaultWorkspace} profile={profile} importBusy={busy} bridgeStatus={status} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={error} onRestartBridge={restartBridge} onRefreshCatalogAudit={() => refreshCatalogAudit()} onRefreshProfile={refreshProfile} onImportStableProfile={importStableProfile} onImportStableProjectFolders={importStableProjectFolders} onScanUnclaimedSessions={() => void openScanImportReview()} onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionId={session?.id} currentSessionState={session?.state} currentSessionModelRef={session?.modelRef} onCurrentSessionModelChange={changeCurrentSessionModel} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} onUseSubagentInChat={insertSubagentInvocation} />}
+     </main>
+diff --git a/desktop/tauri/src/main.rs b/desktop/tauri/src/main.rs
+index ee3b1b0f2..134eb6ccd 100644
+--- a/desktop/tauri/src/main.rs
++++ b/desktop/tauri/src/main.rs
+@@ -32,6 +32,8 @@ mod native_task_smoke;
+ #[cfg(target_os = "macos")]
+ mod native_ui_storage_smoke;
+ #[cfg(target_os = "macos")]
++mod native_ui_message_copy_smoke;
++#[cfg(target_os = "macos")]
+ mod native_window_smoke;
+ mod notifications;
+ mod opener_catalog;
+diff --git a/desktop/tauri/src/native_window_smoke.rs b/desktop/tauri/src/native_window_smoke.rs
+index 3b65d6d17..0767613a7 100644
+--- a/desktop/tauri/src/native_window_smoke.rs
++++ b/desktop/tauri/src/native_window_smoke.rs
+@@ -756,6 +756,7 @@ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
+         "notification-delivery" => crate::notifications::delivery_smoke(app)?,
+         "task-host-death" => crate::native_task_smoke::host_death(app, &directory)?,
+         "ui-legacy-read" => crate::native_ui_storage_smoke::legacy_read(app)?,
++        "ui-message-copy" => crate::native_ui_message_copy_smoke::run(app, &directory)?,
+         "ui-store-empty" | "ui-store-seed" | "ui-store-restore" | "ui-store-clear" => {
+             crate::native_ui_storage_smoke::run(app, &directory, phase)?
+         }
+diff --git a/tools/tauri/verify-installed-d.py b/tools/tauri/verify-installed-d.py
+index fe997cc0d..c1db04fb0 100644
+--- a/tools/tauri/verify-installed-d.py
++++ b/tools/tauri/verify-installed-d.py
+@@ -24,6 +24,7 @@ GATES = {
+     "parent-resolution": ("smoke-explicit-parent-resolution.py", []),
+     "identity": ("smoke-profile-identity-refusal.py", []),
+     "package": ("smoke-packaged-app.py", []),
++    "message-copy": ("smoke-native-message-copy.py", []),
+     "appearance": ("smoke-native-window.py", ["--appearance-only"]),
+     "profile": ("smoke-profile-import.py", []),
+     "startup": ("smoke-native-startup.py", []),

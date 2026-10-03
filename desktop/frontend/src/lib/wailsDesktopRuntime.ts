@@ -7,6 +7,10 @@ export interface WindowStateRuntime {
   WindowIsMaximised(): Promise<boolean>;
 }
 
+export function hasWailsDesktopRuntime(): boolean {
+  return typeof window !== "undefined" && Boolean(window.runtime);
+}
+
 export function getWailsWindowStateRuntime(): WindowStateRuntime | null {
   const runtime = typeof window === "undefined" ? undefined : window.runtime;
   const size = runtime?.WindowGetSize;

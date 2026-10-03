@@ -1,0 +1,17 @@
+LaunchServices native kernel exit: {"phase": "ui-message-copy", "pid": 11802, "rawKernelStatus": 512, "exitCode": 2, "signaled": false}
+Failed private message fixture retained: /private/tmp/reasonix-native-message-copy-kk_h7jd1
+native clipboard preservation after failed phase: original formats preserved
+Traceback (most recent call last):
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-native-message-copy.py", line 104, in <module>
+    smoke(args.app)
+    ~~~~~^^^^^^^^^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-native-message-copy.py", line 81, in smoke
+    windows.launch(app / "Contents/MacOS/reasonix-tauri", app / "Contents/MacOS/reasonix-desktop-bridge",
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                   root, identifier, managed, "ui-message-copy", fixture,
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                   verify_window_state=False, launch_services=True)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-native-window.py", line 242, in launch
+    raise RuntimeError(f"{phase}: {result.get('error', 'native acceptance failed')}")
+RuntimeError: ui-message-copy: read copied native text

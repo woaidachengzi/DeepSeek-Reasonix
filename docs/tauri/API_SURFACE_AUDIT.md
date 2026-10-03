@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-03）
 
+**最新 review/本地提交检查点：** [f259ddc9 实际消息选区复制](evidence/2026-10-03-d-message-selection-copy/README.md)已接入真实 Tauri 聊天入口的 lazy 共享菜单与正文选择边界；原生拒绝保留选区且无浏览器回退，Tauri Add to Chat 尚未接入。完整 transcript（菜单88项）、Tauri、Rust227项/5ignored与strict clippy、app/DMG构建安装签名通过。首包探针过早读取异步复制结果导致kernel2，原源码/失败/身份保留；修正等待后全新包双档案实际消息→菜单→OS剪贴板及原件恢复通过，当前包message-copy/package/startup/lifetime四组通过（启动12、生命周期8）。不继承e7的其余门禁/官方回退，完整窗口/其他服务/现场UI与授权仍待验；D未完成/E未开启，A/B/C和正式签名公证缺口保留。
+
 **当前候选补验：** [e7f5f9ae边界/原生fixture/官方回退](evidence/2026-10-03-d-restore-queue-continuation/README.md)新增8组程序门禁通过，同包共13组（前批窗口48/48）；双屏8项、通知OS六条送达与精确清理通过。原生全局.env迁移使用当前源码测试二进制+当前安装sidecar实际1/1通过；初次fixture前缀保护拒绝保留，修正前缀后全新fixture通过。当前包官方历史/附件/检查点/code rewind与实际配置备份应用回读通过，两app签名/无运行实例。权限/物理UI、钥匙串授权取消/旧服务、任意旧目录互斥及窗口历史失败仍未关闭，D未完成/E未开启，A/B/C及正式签名公证仍阻碍发布。
 
 **当前恢复修复候选：** [e7f5f9ae恢复队列边界](evidence/2026-10-03-d-restore-queue-boundary/README.md)保留pending至主队列setter后完成，阻止重入并提前注册状态；真实断言捕获过渡2560×1640/x640/y142后目标2000×1400/x920/y344，旧缓存保持。源码227项/clippy及app/DMG安装签名通过；定向8/8、当前包package/startup/failure-exit/window/lifetime五组通过，完整窗口48/48、生命周期8项。历史间歇失焦/2px未关闭，不继承74其他门禁和回退；新包其余D、备份回退/授权/物理UI待继续，D未完成/E未开启。

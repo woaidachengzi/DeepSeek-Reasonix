@@ -23,6 +23,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { TranscriptSelectionMenu } from "../components/TranscriptSelectionMenu";
 import { LocaleProvider } from "../lib/i18n";
+import { ToastProvider, useToast } from "../lib/toast";
 import { resetCustomShortcuts, saveCustomShortcut } from "../lib/keyboardShortcuts";
 import {
   transcriptSelectionStore,
@@ -551,6 +552,109 @@ console.log("\ntranscript selection menu");
     transcriptSelectionStore.clear("test-cleanup");
     root.unmount();
   });
+  dom.window.close();
+}
+
+{
+  // Tauri has no Wails runtime: use native IPC and preserve selection on denial.
+  const dom = installDom();
+  const globals = globalThis as typeof globalThis & { isTauri?: boolean };
+  globals.isTauri = true;
+  let denied = false;
+  let browserWrites = 0;
+  let execWrites = 0;
+  const clipboard: string[] = [];
+  const commands: string[] = [];
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: {
+    writeText: async () => { browserWrites++; },
+  } });
+  Object.defineProperty(document, "execCommand", { configurable: true, value: () => { execWrites++; return true; } });
+  (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {
+    invoke: async (command: string, args?: { text?: string }) => {
+      commands.push(command);
+      if (command !== "plugin:clipboard-manager|write_text") throw new Error("unexpected IPC");
+      if (denied) throw new Error("native clipboard denied");
+      clipboard.push(args?.text ?? "");
+    },
+  };
+  document.body.insertAdjacentHTML("beforeend", '<article class="tauri-message"><div class="tauri-message__content"><div class="md">Tauri selected reply</div></div></article><textarea id="native-editor"></textarea>');
+  const message = document.querySelector(".tauri-message .md") as HTMLElement;
+  const editor = document.querySelector("#native-editor") as HTMLElement;
+  const root = createRoot(document.getElementById("root") as HTMLElement);
+  function CopyNotice() {
+    const { toasts } = useToast();
+    return <output id="copy-notice">{toasts.map((toast) => toast.level).join(",")}</output>;
+  }
+  await act(async () => {
+    root.render(<LocaleProvider><ToastProvider><TranscriptSelectionMenu /><CopyNotice /></ToastProvider></LocaleProvider>);
+    await flushTimers();
+  });
+  eq(window.runtime, undefined, "Tauri fixture has no legacy runtime");
+  selectNodeText(message.firstChild as Node);
+  eq((await dispatchContextMenu(message)).defaultPrevented, true, "Tauri selected message claims the app menu");
+  ok(document.querySelector(".context-menu") != null, "Tauri opens Copy without Wails");
+  await act(async () => {
+    document.querySelector<HTMLButtonElement>('.context-menu [role="menuitem"]')?.click();
+    await flushTimers();
+  });
+  eq(clipboard[0], "Tauri selected reply", "Tauri sends exact selected text to native IPC");
+  eq(document.getSelection()?.isCollapsed, true, "native success releases selection");
+  eq(browserWrites + execWrites, 0, "native success avoids browser fallback");
+  denied = true;
+  // Enable the shared pointer listener too: Copy-only Tauri mounts intentionally
+  // omit Add to Chat, so that mode alone would not exercise this regression.
+  await act(async () => {
+    root.render(<LocaleProvider><ToastProvider><TranscriptSelectionMenu onAddToChat={() => {}} /><CopyNotice /></ToastProvider></LocaleProvider>);
+    await flushTimers();
+  });
+  selectNodeText(message.firstChild as Node);
+  await dispatchContextMenu(message);
+  await act(async () => {
+    const copy = document.querySelector<HTMLButtonElement>('.context-menu [role="menuitem"]');
+    copy?.dispatchEvent(new window.MouseEvent("pointerdown", { bubbles: true, button: 0 }));
+    eq(document.getSelection()?.toString(), "Tauri selected reply", "pointerdown on Copy preserves selection before native result");
+    copy?.click();
+    await flushTimers();
+  });
+  eq(clipboard.length, 1, "native denial does not report another successful copy");
+  eq(document.getSelection()?.toString(), "Tauri selected reply", "native denial preserves selection for retry");
+  eq(document.querySelector("#copy-notice")?.textContent, "error", "native denial reports the existing error feedback");
+  eq(commands.length, 2, "each explicit Copy submits exactly one native operation");
+  eq(browserWrites + execWrites, 0, "native denial cannot bypass refusal with browser fallback");
+  eq((await dispatchContextMenu(editor)).defaultPrevented, false, "Tauri editable targets keep the native menu");
+  document.body.insertAdjacentHTML("beforeend", '<div class="transcript__row" data-row-key="tauri-logical"><div id="logical-body" class="msg__body">logical reply</div></div>');
+  await act(async () => {
+    root.render(<LocaleProvider><ToastProvider><TranscriptSelectionMenu resetKey="tauri-logical-tab" /><CopyNotice /></ToastProvider></LocaleProvider>);
+    await flushTimers();
+  });
+  await act(async () => {
+    transcriptSelectionStore.beginNative("tauri-logical-tab");
+    transcriptSelectionStore.promoteToLogical("tauri-logical-tab",
+      { rowKey: "tauri-logical", textOffset: 0, affinity: "forward" },
+      { rowKey: "tauri-logical", textOffset: 7, affinity: "forward" },
+      [{ rowKey: "tauri-logical", sourceText: "logical reply", contentRevision: 1, resolveText: async () => "logical reply" }]);
+    transcriptSelectionStore.settleLogical();
+    await flushTimers();
+  });
+  const logical = document.querySelector("#logical-body") as HTMLElement;
+  eq((await dispatchContextMenu(logical)).defaultPrevented, true, "Tauri logical selection opens Copy");
+  await act(async () => {
+    document.querySelector<HTMLButtonElement>('.context-menu [role="menuitem"]')?.click();
+    await flushTimers();
+  });
+  eq(transcriptSelectionStore.getSnapshot().mode, "logical-settled", "native denial retains the logical selection snapshot");
+  denied = false;
+  await dispatchContextMenu(logical);
+  await act(async () => {
+    document.querySelector<HTMLButtonElement>('.context-menu [role="menuitem"]')?.click();
+    await flushTimers();
+  });
+  eq(clipboard[1], "logical", "Tauri logical retry copies the exact frozen endpoint range");
+  eq(transcriptSelectionStore.getSnapshot().mode, "none", "native success clears the logical snapshot");
+  eq(commands.length, 4, "native and logical copies each invoke once per explicit action");
+  eq(browserWrites + execWrites, 0, "logical denial and retry keep the native permission boundary");
+  await act(async () => { root.unmount(); });
+  delete globals.isTauri;
   dom.window.close();
 }
 
