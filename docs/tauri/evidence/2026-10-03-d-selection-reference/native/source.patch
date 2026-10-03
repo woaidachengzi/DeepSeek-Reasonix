@@ -1,0 +1,244 @@
+diff --git a/desktop/frontend/package.json b/desktop/frontend/package.json
+index 758f0416a..be119eb03 100644
+--- a/desktop/frontend/package.json
++++ b/desktop/frontend/package.json
+@@ -25,7 +25,7 @@
+     "test:task-monitor": "tsx src/components/TaskMonitorPanel.test.tsx && tsx src/__tests__/task-monitor-navigation.test.ts",
+     "test:mcp-app": "tsx src/__tests__/mcp-app-protocol.test.ts",
+     "test:workspace": "tsx src/__tests__/keyed-resource.test.ts && tsx src/__tests__/workspace-tree-memory.test.ts && tsx src/__tests__/workspace-refresh-store.test.ts && tsx src/__tests__/workspace-selection-isolation.test.tsx && tsx src/__tests__/workspace-changes-errors.test.tsx && tsx src/__tests__/workspace-turn-verification.test.tsx && tsx src/__tests__/workspace-preview-css.test.ts && tsx src/__tests__/workspace-context-menu.test.tsx && tsx src/__tests__/workspace-resize-interaction.test.tsx && tsx src/__tests__/workspace-panel-swr-contract.test.ts",
+-    "test:tauri": "pnpm test:tauri-theme-catalog && node --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-ui-migration.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-code-rewind.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-chat-workspace-delete.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-chat-title-recovery.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-project-navigation.test.tsx && node --import tsx src/__tests__/tauri-workbench-sessions.test.ts && node --import tsx src/__tests__/tauri-drag-drop.test.ts && node --import tsx src/__tests__/tauri-bridge-contract.test.ts && node --import tsx src/__tests__/tauri-appearance.test.ts && node --import tsx src/__tests__/tauri-default-workspace.test.ts && node --import tsx src/__tests__/tauri-shortcuts.test.ts && node --import tsx src/__tests__/tauri-settings-api-key.test.tsx && node --import tsx src/__tests__/tauri-hooks-clipboard.test.tsx && node --import tsx src/__tests__/tauri-storage-clipboard.test.tsx && node --import tsx src/__tests__/diagnostics-native-clipboard.test.tsx && node --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-remote-settings.test.tsx && node --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-bot-settings.test.tsx && node --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-subagent-try.test.tsx && node --import ./scripts/css-stub-register.mjs --import ./scripts/svg-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-mcp-servers.test.tsx && node --import tsx src/__tests__/tauri-history-presentation.test.ts && node --import tsx src/__tests__/tauri-observed-usage.test.ts && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-progress-collapse.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-plugin-settings.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-plugin-themes.test.tsx && node --import tsx src/__tests__/tauri-skill-readiness.test.ts && node --import tsx src/__tests__/tauri-notification-preferences.test.ts && node --import tsx src/__tests__/tauri-notifications.test.ts && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-notification-workspace.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-global-opener.test.tsx && pnpm test:external-links",
++    "test:tauri": "pnpm test:tauri-theme-catalog && node --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-ui-migration.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-code-rewind.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-chat-workspace-delete.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-chat-title-recovery.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-project-navigation.test.tsx && node --import tsx src/__tests__/tauri-workbench-sessions.test.ts && node --import tsx src/__tests__/tauri-drag-drop.test.ts && node --import tsx src/__tests__/tauri-bridge-contract.test.ts && node --import tsx src/__tests__/tauri-appearance.test.ts && node --import tsx src/__tests__/tauri-default-workspace.test.ts && node --import tsx src/__tests__/tauri-shortcuts.test.ts && node --import tsx src/__tests__/tauri-settings-api-key.test.tsx && node --import tsx src/__tests__/tauri-hooks-clipboard.test.tsx && node --import tsx src/__tests__/tauri-storage-clipboard.test.tsx && node --import tsx src/__tests__/diagnostics-native-clipboard.test.tsx && node --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-remote-settings.test.tsx && node --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-bot-settings.test.tsx && node --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-subagent-try.test.tsx && node --import ./scripts/css-stub-register.mjs --import ./scripts/svg-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-mcp-servers.test.tsx && node --import tsx src/__tests__/tauri-history-presentation.test.ts && node --import tsx src/__tests__/tauri-observed-usage.test.ts && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-progress-collapse.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-plugin-settings.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-plugin-themes.test.tsx && node --import tsx src/__tests__/tauri-skill-readiness.test.ts && node --import tsx src/__tests__/tauri-notification-preferences.test.ts && node --import tsx src/__tests__/tauri-notifications.test.ts && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-notification-workspace.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-global-opener.test.tsx && pnpm test:external-links && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-selection-add.test.tsx",
+     "test:settings-browser": "node bench/settings-layout.mjs",
+     "test:settings-responsive": "tsx src/__tests__/settings-responsive-layout.test.ts",
+     "test:stream": "tsx src/__tests__/raf-batch.test.ts && tsx src/__tests__/stream-delta-batch.test.ts && tsx src/__tests__/use-controller-stream-progress.test.ts",
+diff --git a/desktop/frontend/src/tauri/TauriChatWorkspace.tsx b/desktop/frontend/src/tauri/TauriChatWorkspace.tsx
+index e22c68061..9e16ded09 100644
+--- a/desktop/frontend/src/tauri/TauriChatWorkspace.tsx
++++ b/desktop/frontend/src/tauri/TauriChatWorkspace.tsx
+@@ -1,4 +1,4 @@
+-import { Component, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
++import { Component, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+ import { Activity, ArrowUp, Check, ChevronDown, ChevronRight, Eye, FileText, FolderOpen, FolderTree, GitBranch, Keyboard, MessageSquare, Paperclip, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Settings, Sparkles, Square, Trash2, X } from "lucide-react";
+ import type { UnlistenFn } from "@tauri-apps/api/event";
+ import { getCurrentWindow } from "@tauri-apps/api/window";
+@@ -9,6 +9,8 @@ const TranscriptSelectionMenu = lazy(() => import("../components/TranscriptSelec
+ import { ExternalOpener } from "../components/ExternalOpener";
+ import { tauriExternalOpenerBridge } from "./tauriExternalOpener";
+ import { CopyButton } from "../components/CopyButton";
++import { ComposerContextCard } from "../components/ComposerContextCard";
++import { formatSelectedTextContext, normalizeSelectedText, selectedTextSnippet, splitSelectedTextContext, type SelectedTextReference } from "../lib/selectedTextContext";
+ import { onTauriOpenSettings } from "../lib/tauriBridge";
+ import { CommandPalette, type PaletteItem } from "../components/CommandPalette";
+ import { ShortcutsCheatsheet, type ShortcutCheatsheetItem } from "../components/ShortcutsCheatsheet";
+@@ -52,13 +54,24 @@ class MessageErrorBoundary extends Component<{ children: ReactNode; index: numbe
+ }
+ 
+ 
++function UserMessageContent({ text }: { text: string }) {
++  const context = splitSelectedTextContext(text);
++  return <>
++    <Markdown text={parseAttachmentRefsForDisplay(context.submitText).text} />
++    {context.entries.map((entry, index) => <details key={index} className="tauri-message__selection">
++      <summary>{selectedTextSnippet(entry.text)}</summary>
++      <Markdown text={entry.text} />
++    </details>)}
++  </>;
++}
++
+ function HistoryMessageArticle({ entry, sessionId, questionId }: {
+   entry: IndexedHistoryMessage;
+   sessionId: string;
+   questionId?: string;
+ }) {
+   const { message, index } = entry;
+-  const display = message.role === "user" ? parseAttachmentRefsForDisplay(message.content) : null;
++  const display = message.role === "user" ? parseAttachmentRefsForDisplay(splitSelectedTextContext(message.content).submitText) : null;
+   const created = message.createdAtMs && Number.isSafeInteger(message.createdAtMs) ? new Date(message.createdAtMs) : null;
+   const createdAt = created && !Number.isNaN(created.getTime()) ? created : null;
+   return <MessageErrorBoundary index={index}>
+@@ -66,7 +79,7 @@ function HistoryMessageArticle({ entry, sessionId, questionId }: {
+       {message.role !== "user" && <div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div>}
+       <div className="tauri-message__content">
+         {message.role !== "user" && <div className="tauri-message__role">Reasonix</div>}
+-        <Markdown text={display?.text ?? message.content ?? ""} cacheKey={`${sessionId}:${index}`} />
++        {message.role === "user" ? <UserMessageContent text={message.content ?? ""} /> : <Markdown text={message.content ?? ""} cacheKey={`${sessionId}:${index}`} />}
+         {display && display.attachments.length > 0 && <div className="tauri-message__attachments">{display.attachments.map(attachment => <span key={attachment.path} title={attachment.path}><Paperclip size={13} />{attachment.name}</span>)}</div>}
+         {message.truncated && <small>为保护界面性能，这条历史内容已截断。</small>}
+       </div>
+@@ -460,6 +473,22 @@ export function TauriSessionPreview() {
+   const [editingProjectRoot, setEditingProjectRoot] = useState<string | null>(null);
+   const [projectTitleDraft, setProjectTitleDraft] = useState("");
+   const [prompt, setPrompt] = useState("");
++  const [selectedTextDrafts, setSelectedTextDrafts] = useState<Record<string, SelectedTextReference[]>>({});
++  const selectedTextSequence = useRef(0);
++  const selectedTexts = session ? selectedTextDrafts[session.id] ?? [] : [];
++  const addSelectedText = useCallback((text: string) => {
++    if (!session?.id) return;
++    const normalized = normalizeSelectedText(text);
++    if (!normalized.text) return;
++    if (normalized.truncated) showToast(t("composer.selectedTextTruncated"), "warn");
++    const reference = { id: `chat-selection-${++selectedTextSequence.current}`, text: normalized.text };
++    const sessionId = session.id;
++    setSelectedTextDrafts(previous => {
++      const current = previous[sessionId] ?? [];
++      return current.some(item => item.text === reference.text) ? previous : { ...previous, [sessionId]: [...current, reference] };
++    });
++    composerRef.current?.focus();
++  }, [session?.id, showToast, t]);
+   const [attachments, setAttachments] = useState<TauriBridgeAttachment[]>([]);
+   const [draftAttachmentPaths, setDraftAttachmentPaths] = useState<string[]>([]);
+   const [status, setStatus] = useState<TauriBridgeStatus | null>(null);
+@@ -2598,7 +2627,7 @@ export function TauriSessionPreview() {
+   }
+ 
+   async function submit() {
+-    const text = prompt.trim();
++    const text = [prompt.trim(), formatSelectedTextContext(selectedTexts)].filter(Boolean).join("\n\n");
+     if (busy || submitInFlightRef.current || isReadOnlyWorkbenchSource(sessionPageSource) ||
+         (!text && attachments.length === 0 && draftAttachmentPaths.length === 0)) return;
+     if (session && (!streamReady || session.state !== "idle")) return;
+@@ -2686,6 +2715,10 @@ export function TauriSessionPreview() {
+         }
+       }
+       setPrompt("");
++      setSelectedTextDrafts(previous => {
++        const remaining = (previous[sessionId] ?? []).filter(item => !selectedTexts.some(sent => sent.id === item.id));
++        return { ...previous, [sessionId]: remaining };
++      });
+       setAttachments([]);
+       setDraftAttachmentPaths([]);
+       if (attachmentError) setError(`部分文件未能添加：${attachmentError}`);
+@@ -3188,7 +3221,7 @@ export function TauriSessionPreview() {
+                 <div className="tauri-progress__messages">{item.entries.map(entry => <HistoryMessageArticle key={entry.index} entry={entry} sessionId={history!.session.id} />)}</div>
+               </details>)}
+             {/* Optimistic user message: shown immediately after submit, before history loads */}
+-            {pendingUserMessage && <article className="tauri-message is-user"><div className="tauri-message__content"><Markdown text={pendingUserMessage} /></div></article>}
++            {pendingUserMessage && <article className="tauri-message is-user"><div className="tauri-message__content"><UserMessageContent text={pendingUserMessage} /></div></article>}
+             {liveText && <details className="tauri-progress tauri-progress--live" key={`live-progress-${progressMode}`} open={progressMode === "deep"}><summary><ChevronRight size={14} aria-hidden="true" /><span>正在处理</span><small>展开查看当前输出</small></summary><div className="tauri-progress__messages"><article className="tauri-message is-assistant tauri-message--live"><div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div><div className="tauri-message__content"><div className="tauri-message__role">Reasonix</div><Markdown text={liveText} streaming cacheKey={`${session?.id ?? "live"}:stream`} /></div></article></div></details>}
+             {session?.state === "running" && !liveText && !pendingUserMessage && <div className="tauri-thinking" role="status"><span /><span /><span />Reasonix 正在思考…</div>}
+           </div> : <section className="tauri-welcome">
+@@ -3213,6 +3246,14 @@ export function TauriSessionPreview() {
+         <footer className="tauri-composer-area">
+           {error && <p className="tauri-error" role="alert">{error}</p>}
+           <div className={`tauri-composer${dragging ? " is-dragging" : ""}`}>
++            {selectedTexts.length > 0 && <div className="composer-context" aria-label={t("composer.selectedText")}>
++              {selectedTexts.map(reference => <ComposerContextCard key={reference.id} variant="selection"
++                name={selectedTextSnippet(reference.text)} meta={t("composer.selectedText")}
++                icon={<MessageSquare size={20} />} tooltipLabel={<Markdown text={reference.text} />}
++                removeLabel={t("composer.removeSelectedText")}
++                onRemove={() => { if (session) setSelectedTextDrafts(previous => ({ ...previous, [session.id]: (previous[session.id] ?? []).filter(item => item.id !== reference.id) })); composerRef.current?.focus(); }}
++              />)}
++            </div>}
+             {attachments.length > 0 && <div className="tauri-composer__attachments" aria-label="已添加文件">{attachments.map((attachment, index) => <div className="tauri-composer__attachment" key={`${attachment.path}-${index}`} title={attachment.path}>
+               <span className="tauri-composer__attachment-icon"><FileText size={15} /></span><span className="tauri-composer__attachment-name">{attachment.name}</span><small>{attachment.size < 1024 ? `${attachment.size} B` : `${(attachment.size / 1024).toFixed(1)} KB`}</small>
+               <button type="button" onClick={() => setAttachments(previous => previous.filter((_, itemIndex) => itemIndex !== index))} disabled={busy} aria-label={`移除文件 ${attachment.name}`}><X size={13} /></button>
+@@ -3241,7 +3282,7 @@ export function TauriSessionPreview() {
+             <div className="tauri-composer__bottom"><span>{session?.workspaceRoot ? `当前对话工作区 · ${session.workspaceRoot}` : session ? "当前对话使用默认工作区" : currentWorkspace ? `${currentWorkspace === defaultWorkspace ? "新对话默认工作区" : "新对话工作区"} · ${currentWorkspace}` : "Preview 配置与稳定版相互隔离"}</span>
+               <div className="tauri-composer__actions">
+                 <button className="tauri-attach-button" type="button" onClick={() => void addAttachments()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state !== "idle"))} aria-label="添加文件" title="从本机选择文件并附加到消息"><Paperclip size={16} /><span>添加文件</span></button>
+-                {session?.state === "running" ? <button className="tauri-send-button is-stop" type="button" onClick={() => void cancel()} disabled={busy} aria-label="停止生成"><Square size={15} fill="currentColor" /></button> : <button className="tauri-send-button" type="button" onClick={() => void submit()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state === "paused")) || (!prompt.trim() && attachments.length === 0 && draftAttachmentPaths.length === 0)} aria-label="发送消息"><ArrowUp size={18} /></button>}
++                {session?.state === "running" ? <button className="tauri-send-button is-stop" type="button" onClick={() => void cancel()} disabled={busy} aria-label="停止生成"><Square size={15} fill="currentColor" /></button> : <button className="tauri-send-button" type="button" onClick={() => void submit()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state === "paused")) || (!prompt.trim() && selectedTexts.length === 0 && attachments.length === 0 && draftAttachmentPaths.length === 0)} aria-label="发送消息"><ArrowUp size={18} /></button>}
+               </div>
+             </div>
+           </div>
+@@ -3435,6 +3476,7 @@ export function TauriSessionPreview() {
+       <Suspense fallback={null}><TranscriptSelectionMenu
+         enabled={Boolean(session && !settingsOpen && !diagnosticsOpen && !workspaceOpen && !commandPaletteOpen)}
+         resetKey={session?.id ?? "tauri-empty"}
++        onAddToChat={addSelectedText}
+       /></Suspense>
+       <ShortcutsCheatsheet open={shortcutsHelpOpen} platform={shortcutPlatform} onClose={() => setShortcutsHelpOpen(false)} t={t} items={shortcutHelpItems} />
+       {settingsOpen && <TauriSettings key={settingsTab} initialTab={settingsTab} workspaceRoot={currentWorkspace || undefined} defaultWorkspace={defaultWorkspace} onChooseDefaultWorkspace={chooseDefaultWorkspace} onClearDefaultWorkspace={clearDefaultWorkspace} profile={profile} importBusy={busy} bridgeStatus={status} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={error} onRestartBridge={restartBridge} onRefreshCatalogAudit={() => refreshCatalogAudit()} onRefreshProfile={refreshProfile} onImportStableProfile={importStableProfile} onImportStableProjectFolders={importStableProjectFolders} onScanUnclaimedSessions={() => void openScanImportReview()} onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionId={session?.id} currentSessionState={session?.state} currentSessionModelRef={session?.modelRef} onCurrentSessionModelChange={changeCurrentSessionModel} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} onUseSubagentInChat={insertSubagentInvocation} />}
+diff --git a/desktop/tauri/src/native_ui_message_copy_smoke.rs b/desktop/tauri/src/native_ui_message_copy_smoke.rs
+index e0741c769..fda7d12d0 100644
+--- a/desktop/tauri/src/native_ui_message_copy_smoke.rs
++++ b/desktop/tauri/src/native_ui_message_copy_smoke.rs
+@@ -112,5 +112,70 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
+     )
+     .map_err(|_| "record owned clipboard generation")?;
+     check(app, "document.getSelection()?.isCollapsed && !document.querySelector('.context-menu') ? 'edit-ok' : 'edit-pending'".into(), "successful copy release")?;
++    let select_for_chat = format!(
++        r#"(() => {{
++      const editor = document.querySelector('.tauri-composer textarea');
++      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(editor, 'draft-after-copy');
++      editor.dispatchEvent(new Event('input', {{bubbles:true}}));
++      const message = [...document.querySelectorAll('.tauri-message.is-assistant .md')].find(node => node.textContent.trim() === {literal});
++      if (!message) return 'edit-pending';
++      const range = document.createRange(); range.selectNodeContents(message);
++      const selection = document.getSelection(); selection.removeAllRanges(); selection.addRange(range);
++      message.dispatchEvent(new MouseEvent('pointerup', {{button:0,bubbles:true}}));
++      return 'edit-ok';
++    }})()"#
++    );
++    if !crate::native_edit_smoke::evaluate(app, select_for_chat)? {
++        return Err("select actual message for Add to Chat".into());
++    }
++    check(app, "document.querySelector('.transcript-selection-action[data-state=open] button:not(:disabled)') ? 'edit-ok' : 'edit-pending'".into(), "Add to Chat action")?;
++    if !crate::native_edit_smoke::evaluate(
++        app,
++        "document.querySelector('.transcript-selection-action button').click(); 'edit-ok'".into(),
++    )? {
++        return Err("activate rendered Add to Chat".into());
++    }
++    check(
++        app,
++        format!(
++            r#"(() => {{
++      const editor = document.querySelector('.tauri-composer textarea');
++      const cards = document.querySelectorAll('.tauri-composer .composer-context__name');
++      return cards.length === 1 && cards[0].textContent === {literal}
++        && editor.value === 'draft-after-copy' && document.activeElement === editor
++        && document.getSelection().isCollapsed ? 'edit-ok' : 'edit-pending';
++    }})()"#
++        ),
++        "quoted reference and unchanged draft",
++    )?;
++    let reselect = format!(
++        r#"(() => {{
++      const message = [...document.querySelectorAll('.tauri-message.is-assistant .md')].find(node => node.textContent.trim() === {literal});
++      const range = document.createRange(); range.selectNodeContents(message);
++      const selection = document.getSelection(); selection.removeAllRanges(); selection.addRange(range);
++      message.dispatchEvent(new MouseEvent('pointerup', {{button:0,bubbles:true}}));
++      return 'edit-ok';
++    }})()"#
++    );
++    if !crate::native_edit_smoke::evaluate(app, reselect)? {
++        return Err("reselect actual message for selection shortcut".into());
++    }
++    check(app, "document.querySelector('.transcript-selection-action[data-state=open] button:not(:disabled)') ? 'edit-ok' : 'edit-pending'".into(), "selection shortcut armed")?;
++    if !crate::native_edit_smoke::evaluate(app, "(() => { const event = new KeyboardEvent('keydown', {key:'l',metaKey:true,bubbles:true,cancelable:true}); document.dispatchEvent(event); return event.defaultPrevented ? 'edit-ok' : 'edit-pending'; })()".into())? {
++        return Err("rendered selection Cmd+L was not claimed".into());
++    }
++    check(app, "document.getSelection().isCollapsed && document.querySelectorAll('.tauri-composer .composer-context__name').length === 1 ? 'edit-ok' : 'edit-pending'".into(), "selection shortcut deduplicates")?;
++    if app.clipboard().read_text().ok().as_deref() != Some(text.as_str()) {
++        return Err("Add to Chat changed native clipboard".into());
++    }
++    let after_count = crate::native_window_smoke::on_main(app, |_, _| {
++        Ok(objc2_app_kit::NSPasteboard::generalPasteboard().changeCount())
++    })?;
++    if after_count != count {
++        return Err("Add to Chat changed clipboard generation".into());
++    }
++    std::fs::write(directory.join("reasonix-native-selection-add-result.json"),
++        serde_json::json!({"ok":true,"selectionReference":true,"draftPreserved":true,"composerFocused":true,"selectionShortcut":true,"deduplicated":true,"clipboardTextPreserved":true,"clipboardGenerationPreserved":true}).to_string())
++        .map_err(|_| "record Add to Chat result")?;
+     Ok(())
+ }
+diff --git a/tools/tauri/smoke-native-message-copy.py b/tools/tauri/smoke-native-message-copy.py
+index 4c1701d5e..9fb2bf30d 100644
+--- a/tools/tauri/smoke-native-message-copy.py
++++ b/tools/tauri/smoke-native-message-copy.py
+@@ -83,6 +83,13 @@ def smoke(app_path):
+                                verify_window_state=False, launch_services=True)
+                 if state != {"requests": 1, "error": False}:
+                     raise RuntimeError("owned provider request count or response failed")
++                selection = json.loads((root / "tmp/reasonix-native-selection-add-result.json").read_text())
++                if any(selection.get(name) is not True for name in (
++                    "ok", "selectionReference", "draftPreserved", "composerFocused", "selectionShortcut",
++                    "deduplicated", "clipboardTextPreserved", "clipboardGenerationPreserved",
++                )):
++                    raise RuntimeError("actual Add to Chat receipt is incomplete")
++                print(f"Native {'managed' if managed else 'explicit'} Add to Chat receipt: " + json.dumps(selection), flush=True)
+             success = True
+             print(f"Actual {'managed' if managed else 'explicit'} rendered message/menu/OS text, one provider call and clipboard restoration: OK", flush=True)
+         finally:

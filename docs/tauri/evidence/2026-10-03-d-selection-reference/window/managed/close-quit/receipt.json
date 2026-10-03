@@ -1,0 +1,8 @@
+{
+  "phase": "close-quit",
+  "root": "/private/tmp/reasonix-native-window-smoke-j9k33c7n",
+  "startedUnixMs": 1791033931815,
+  "passed": true,
+  "finishedUnixMs": 1791033935788,
+  "observerExit": -15
+}

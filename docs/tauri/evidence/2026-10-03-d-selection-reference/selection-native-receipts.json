@@ -1,0 +1,24 @@
+[
+  {
+    "profile": "managed",
+    "clipboardGenerationPreserved": true,
+    "clipboardTextPreserved": true,
+    "composerFocused": true,
+    "deduplicated": true,
+    "draftPreserved": true,
+    "ok": true,
+    "selectionReference": true,
+    "selectionShortcut": true
+  },
+  {
+    "profile": "explicit",
+    "clipboardGenerationPreserved": true,
+    "clipboardTextPreserved": true,
+    "composerFocused": true,
+    "deduplicated": true,
+    "draftPreserved": true,
+    "ok": true,
+    "selectionReference": true,
+    "selectionShortcut": true
+  }
+]

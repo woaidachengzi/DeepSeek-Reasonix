@@ -1,6 +1,6 @@
 # Reasonix Tauri host
 
-最新状态：[ecac5751 隐藏启动及48项窗口回归](../../docs/tauri/evidence/2026-10-03-d-initial-presentation/README.md)、[同包全屏与官方回退](../../docs/tauri/evidence/2026-10-03-d-initial-presentation-fullscreen-rollback/README.md)。可信主页面和宿主就绪后呈现，退出取消排队显示；同包窗口48/48、package/startup/failure-exit/lifetime四组、双档案全屏进入/退出/精确恢复，以及官方Wails历史/附件/检查点和实际配置备份回退通过。不继承旧包原生.env、通知或权限等结果。页面加载失败的可见恢复、真实权限/物理UI、多显示器拔插、旧钥匙串服务、任意旧目录互斥和历史窗口间歇问题仍待验，D未完成/E未开启，A/B/C及正式签名公证仍阻碍发布。下列带日期描述为历史现场，不直接代表当前候选。
+最新状态：[b4cbb6be 选区引用与当前包验收](../../docs/tauri/evidence/2026-10-03-d-selection-reference/README.md)。Tauri实际聊天入口接入引用卡片、草稿隔离、去重/移除和quoted-context格式；组件发送/失败保留通过，当前包实际按钮/synthetic Cmd+L与完整剪贴板恢复、五组程序门禁及原窗口48/48通过。真实第二轮引用provider请求、物理UI/配置快捷键和其他D仍待验，不继承此前ecac的官方回退或旧包权限/钥匙串/通知结果。D未完成/E未开启，A/B/C及正式签名公证仍阻碍发布。下列带日期描述为历史现场，不直接代表当前候选。
 
 2026-10-02 实际窗口验收可用 `python3 tools/tauri/probe-launch-services-profile.py <installed-app> --interactive --observe`。
 在全新私有档案启动并观察最多 300 秒；仅该显式模式启用只读原生窗口快照，

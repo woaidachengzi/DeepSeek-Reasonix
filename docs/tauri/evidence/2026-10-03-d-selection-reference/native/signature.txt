@@ -1,0 +1,26 @@
+Executable=/private/tmp/reasonix-d-selection-add-installed-kidmkv72/Reasonix Tauri Preview.app/Contents/MacOS/reasonix-tauri
+Identifier=io.reasonix.desktop.preview
+Format=app bundle with Mach-O thin (arm64)
+CodeDirectory v=20500 size=62748 flags=0x10002(adhoc,runtime) hashes=1950+7 location=embedded
+VersionPlatform=1
+VersionMin=720896
+VersionSDK=983552
+Hash type=sha256 size=32
+CandidateCDHash sha256=e431639b289f2b27d961c675c3df7a03bd69cd91
+CandidateCDHashFull sha256=e431639b289f2b27d961c675c3df7a03bd69cd916f1088d209d14823c6034e9b
+Hash choices=sha256
+CMSDigest=e431639b289f2b27d961c675c3df7a03bd69cd916f1088d209d14823c6034e9b
+CMSDigestType=2
+Executable Segment base=0
+Executable Segment limit=26443776
+Executable Segment flags=0x1
+Page size=16384
+CDHash=e431639b289f2b27d961c675c3df7a03bd69cd91
+Signature=adhoc
+Info.plist entries=14
+TeamIdentifier=not set
+Runtime Version=15.2.0
+Sealed Resources version=2 rules=13 files=2
+Internal requirements count=0 size=12
+Total signatures=1
+Chosen signature=1

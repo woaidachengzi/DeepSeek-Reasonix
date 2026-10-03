@@ -1,0 +1,25 @@
+
+> reasonix-desktop-frontend@0.0.0 test:transcript /Users/jerry/temp/app/reasonix-tauri/desktop/frontend
+> tsx src/__tests__/transcript-command.test.tsx && tsx src/__tests__/transcript-kernel.test.ts && tsx src/__tests__/transcript-geometry-commit.test.ts && tsx src/__tests__/transcript-kernel-races.test.ts && tsx src/__tests__/transcript-measurement-ledger.test.ts && tsx src/__tests__/transcript-materialization.test.tsx && tsx src/__tests__/transcript-timeline.test.ts && tsx src/__tests__/transcript-viewport.test.tsx && tsx src/__tests__/transcript-question-jump.test.ts && tsx src/__tests__/transcript-row-geometry.test.ts && tsx src/__tests__/transcript-geometry-environment.test.ts && tsx src/__tests__/transcript-scroll-diagnostics.test.ts && tsx src/__tests__/frontend-diagnostics.test.ts && tsx src/__tests__/project-tree-diagnostics.test.ts && tsx src/__tests__/nested-scroll-handoff.test.ts && tsx src/__tests__/reasoning-scroll-follow.test.tsx && tsx src/__tests__/creation-transcript-scrollbar.test.ts && tsx src/__tests__/question-jump-bar.test.tsx && tsx src/__tests__/transcript-question-nav.test.ts && tsx src/__tests__/transcript-question-nav-integration.test.ts && tsx src/__tests__/markdown-table-virtual.test.tsx && tsx src/__tests__/typography-overflow-contract.test.ts && tsx src/__tests__/transcript-selection-retention.test.tsx && tsx src/__tests__/transcript-logical-selection.test.ts && tsx src/__tests__/transcript-selection-overlay.test.tsx && tsx src/__tests__/markdown-pipeline.test.tsx && tsx src/__tests__/message-selection-copy.test.ts && tsx src/__tests__/transcript-selection-menu.test.tsx && tsx src/__tests__/transcript-selection-rendering.test.ts && tsx src/__tests__/transcript-store.test.ts
+
+node:net:2368
+      const error = new UVExceptionWithHostPort(rval, 'listen', address, port);
+                    ^
+
+Error: listen EPERM: operation not permitted /var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/tsx-501/30405.pipe
+    at Server.setupListenHandle [as _listen2] (node:net:2368:21)
+    at listenInCluster (node:net:2499:12)
+    at Server.listen (node:net:2641:5)
+    at file:///Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/tsx@4.23.11/node_modules/tsx/dist/cli.mjs:53:31472
+    at new Promise (<anonymous>)
+    at createIpcServer (file:///Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/tsx@4.23.11/node_modules/tsx/dist/cli.mjs:53:31450)
+    at async file:///Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/tsx@4.23.11/node_modules/tsx/dist/cli.mjs:55:542 {
+  code: 'EPERM',
+  errno: -1,
+  syscall: 'listen',
+  address: '/var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/tsx-501/30405.pipe',
+  port: -1
+}
+
+Node.js v26.10.0
+ ELIFECYCLE  Command failed with exit code 1.

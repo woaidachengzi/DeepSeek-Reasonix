@@ -1,0 +1,8 @@
+LaunchServices native kernel exit: {"phase": "ui-message-copy", "pid": 32296, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed ui-message-copy: OK
+Native managed Add to Chat receipt: {"clipboardGenerationPreserved": true, "clipboardTextPreserved": true, "composerFocused": true, "deduplicated": true, "draftPreserved": true, "ok": true, "selectionReference": true, "selectionShortcut": true}
+Actual managed rendered message/menu/OS text, one provider call and clipboard restoration: OK
+LaunchServices native kernel exit: {"phase": "ui-message-copy", "pid": 32377, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit ui-message-copy: OK
+Native explicit Add to Chat receipt: {"clipboardGenerationPreserved": true, "clipboardTextPreserved": true, "composerFocused": true, "deduplicated": true, "draftPreserved": true, "ok": true, "selectionReference": true, "selectionShortcut": true}
+Actual explicit rendered message/menu/OS text, one provider call and clipboard restoration: OK

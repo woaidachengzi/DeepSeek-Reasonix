@@ -1,0 +1,15 @@
+(node:30240) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+Failed to discover external openers TypeError: Cannot read properties of undefined (reading 'invoke')
+    at invoke (file:///Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/@tauri-apps+api@2.11.1/node_modules/@tauri-apps/api/core.js:202:39)
+    at Object.ExternalOpenersForTab (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/tauri/tauriExternalOpener.ts:7:39)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:133:50)
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/ExternalOpener.tsx:152:10)
+    at Object.react_stack_bottom_frame (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:871:30)
+    at commitHookEffectListMount (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11)
+    at commitPassiveMountOnFiber (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15484:13)
+    at recursivelyTraversePassiveMountEffects (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+Tauri actual selection reference, deduplication, removal and submit: OK

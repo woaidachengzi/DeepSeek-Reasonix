@@ -1,0 +1,4 @@
+
+> reasonix-desktop-frontend@0.0.0 typecheck /Users/jerry/temp/app/reasonix-tauri/desktop/frontend
+> tsc --noEmit
+

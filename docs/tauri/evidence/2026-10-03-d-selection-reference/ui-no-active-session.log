@@ -1,0 +1,11 @@
+(node:30115) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+An empty string ("") was passed to the src attribute. This may cause the browser to download the whole page again over the network. To fix this, either do not render the element at all or pass null to src instead of an empty string.
+/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/__tests__/tauri-selection-add.test.tsx:36
+const selected = document.querySelector(".tauri-message.is-assistant .md")!.textContent!.trim();
+                                                                         ^
+
+TypeError: Cannot read properties of null (reading 'textContent')
+    at <anonymous> (/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/__tests__/tauri-selection-add.test.tsx:36:74)
+
+Node.js v26.10.0
