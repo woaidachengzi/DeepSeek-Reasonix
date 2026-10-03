@@ -1,0 +1,9 @@
+{
+  "app": "/private/tmp/reasonix-d-minimize-factors-installed-a_1t60sl/Reasonix Tauri Preview.app",
+  "dmg": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri Preview_0.1.0_aarch64.dmg",
+  "dmgSha256": "c1a1058aea000c6305c9c13d05c4abf962581d0b974913771946065afeede966",
+  "artifactSha256": {
+    "reasonix-tauri": "f6bc6f89e6370e7deb3c041b70e39afcc3c76ae561a729b1470dbdd4e4c1e30f",
+    "reasonix-desktop-bridge": "cef6f224eea76402475d3af3c87b324c0c42248fe1ecd2b5f3848dcb7f759452"
+  }
+}

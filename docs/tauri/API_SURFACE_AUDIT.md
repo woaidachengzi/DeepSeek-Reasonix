@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-03）
 
+**原exercise两因素对照：** [f6bc6f89页面/Show组合](evidence/2026-10-03-d-minimize-exercise-factors/README.md)新增opt-in分支，原路径/断言不变；八例6过2失败，managed单Show未等页面与explicit原双Show路径均最小化失败/kernel2、Will/Did=0，原始回执完整保留。等页面四例通过，不等也两例通过；不能证明页面根因，重复Show不是必要失败条件。Wails隐藏启动/domReady呈现与当前页面未完成已可操作窗口的差异已核对，下一项收敛可信页面/初始化完成的一次性呈现和启动期请求归属，不仅改测试。当前包Rust227/5ignored、strict clippy、构建/安装签名和package/failure-exit/lifetime三组通过；历史最小化、物理UI/其他D及当前包官方回退仍未关闭，E未开启。
+
 **当前最小化路径对照：** [22ee同包8例](evidence/2026-10-03-d-minimize-path-control/README.md)两档案各一次API/直接AppKit/原生菜单/呈现前提，8/8、nativeMiniaturized=true、Will/Did=1、恢复和kernel0，原始时序/回执与固定包签名保持。成功前提均页面Finished与一次Show；原失败exercise页面未Finished且两次Show，仍混有初始化轨迹，不能归因或判修复；成功样本occlusion可为false。生产未改，新增可重跑路径工具仅help/语法验（真实执行固定控制脚本另存）。下一项按页面就绪与首次Show分别控制原exercise，不延时/重试/改断言；历史最小化、物理UI及其他D仍待验，E未开启。
 
 **当前全屏探针包：** [22ee53cb全屏完成与精确恢复](evidence/2026-10-03-d-fullscreen-completion/README.md)新增opt-in真实AppKit角色、FullScreen位/四通知/普通存档保护门禁，不改生产行为/权限。首轮托管五阶段通过，显式exercise最小化失败/kernel2、will/did=0，显式全屏当时未执行，整组保持failed；同包同保留档案的独立显式restore/fullscreen/restore三项通过，两档案进入3840×2160后精确回2000×1400/x920/y344、did-enter/exit各1、存档原字节/重启保持。同包package/failure-exit/lifetime另三组通过；Rust227/5ignored、strict clippy及app/DMG安装签名通过。首次宏递归编译失败保留；失败fixture复用前漏复制result/trace的证据限制明确记录，原日志/kernel保留，工具新增失败快照及回归。最小化/历史稳定性、物理UI、其他D及当前包回退仍未通过，不继承旧候选，E未开启。

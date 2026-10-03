@@ -1,0 +1,74 @@
+[
+  {
+    "name": "managed-exercise",
+    "status": "passed",
+    "pageFinishedAtRequest": false,
+    "restoreRequests": 2,
+    "willMiniaturize": 1,
+    "didMiniaturize": 1,
+    "kernelExit": 0
+  },
+  {
+    "name": "managed-exercise-loaded",
+    "status": "passed",
+    "pageFinishedAtRequest": true,
+    "restoreRequests": 2,
+    "willMiniaturize": 1,
+    "didMiniaturize": 1,
+    "kernelExit": 0
+  },
+  {
+    "name": "managed-exercise-single-show",
+    "status": "failed",
+    "pageFinishedAtRequest": false,
+    "restoreRequests": 1,
+    "willMiniaturize": null,
+    "didMiniaturize": null,
+    "kernelExit": 2
+  },
+  {
+    "name": "managed-exercise-loaded-single-show",
+    "status": "passed",
+    "pageFinishedAtRequest": true,
+    "restoreRequests": 1,
+    "willMiniaturize": 1,
+    "didMiniaturize": 1,
+    "kernelExit": 0
+  },
+  {
+    "name": "explicit-exercise",
+    "status": "failed",
+    "pageFinishedAtRequest": false,
+    "restoreRequests": 2,
+    "willMiniaturize": null,
+    "didMiniaturize": null,
+    "kernelExit": 2
+  },
+  {
+    "name": "explicit-exercise-loaded",
+    "status": "passed",
+    "pageFinishedAtRequest": true,
+    "restoreRequests": 2,
+    "willMiniaturize": 1,
+    "didMiniaturize": 1,
+    "kernelExit": 0
+  },
+  {
+    "name": "explicit-exercise-single-show",
+    "status": "passed",
+    "pageFinishedAtRequest": false,
+    "restoreRequests": 1,
+    "willMiniaturize": 1,
+    "didMiniaturize": 1,
+    "kernelExit": 0
+  },
+  {
+    "name": "explicit-exercise-loaded-single-show",
+    "status": "passed",
+    "pageFinishedAtRequest": true,
+    "restoreRequests": 1,
+    "willMiniaturize": 1,
+    "didMiniaturize": 1,
+    "kernelExit": 0
+  }
+]

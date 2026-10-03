@@ -1,0 +1,82 @@
+diff --git a/desktop/tauri/src/native_window_smoke.rs b/desktop/tauri/src/native_window_smoke.rs
+index 333e74594..2a24d08bf 100644
+--- a/desktop/tauri/src/native_window_smoke.rs
++++ b/desktop/tauri/src/native_window_smoke.rs
+@@ -495,11 +495,30 @@ pub(crate) fn verify_geometry(
+ }
+ 
+ fn exercise(app: &AppHandle, directory: &std::path::Path) -> Result<(), String> {
++    exercise_control(app, directory, false, false)
++}
++
++// Diagnostic factorization only. The original exercise keeps both flags false;
++// neither the product startup nor its acceptance prerequisites are changed.
++fn exercise_control(
++    app: &AppHandle,
++    directory: &std::path::Path,
++    loaded: bool,
++    single_show: bool,
++) -> Result<(), String> {
+     record(app, "exercise-ready")?;
+-    on_main(app, |handle, _| {
+-        tray::show_main_window(handle);
+-        Ok(())
+-    })?;
++    if loaded {
++        wait_for(app, "control trusted page finished", |window| {
++            Ok(page_finished(window.app_handle()))
++        })?;
++        record(app, "exercise-control-page-finished")?;
++    }
++    if !single_show {
++        on_main(app, |handle, _| {
++            tray::show_main_window(handle);
++            Ok(())
++        })?;
++    }
+     wait_for(app, "initial ordinary window", ordinary)?;
+     let (expected_x, expected_y, logical_width, logical_height) = on_main(app, |_, window| {
+         window
+@@ -572,6 +591,7 @@ fn exercise(app: &AppHandle, directory: &std::path::Path) -> Result<(), String>
+             .is_minimized()
+             .map_err(|_| "read minimized state".into())
+     })?;
++    record(app, "exercise-minimized")?;
+     save(app)?;
+     on_main(app, |handle, _| {
+         tray::show_main_window(handle);
+@@ -781,6 +801,9 @@ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
+     let directory = marker_directory()?;
+     match phase {
+         "exercise" => exercise(app, &directory)?,
++        "exercise-loaded" => exercise_control(app, &directory, true, false)?,
++        "exercise-single-show" => exercise_control(app, &directory, false, true)?,
++        "exercise-loaded-single-show" => exercise_control(app, &directory, true, true)?,
+         "display-secondary" => secondary_display(app, &directory)?,
+         "display-restore-secondary" => {
+             verify_geometry(
+diff --git a/tools/tauri/probe-minimize-paths.py b/tools/tauri/probe-minimize-paths.py
+index 8ce863c31..496f9a01e 100644
+--- a/tools/tauri/probe-minimize-paths.py
++++ b/tools/tauri/probe-minimize-paths.py
+@@ -8,7 +8,9 @@ w=importlib.util.module_from_spec(spec);spec.loader.exec_module(w)
+ parser=argparse.ArgumentParser(description='Once-per-path native minimize controls; not a complete window acceptance')
+ parser.add_argument('app',type=Path)
+ parser.add_argument('--output',required=True,type=Path)
++parser.add_argument('--exercise-factors',action='store_true',help='2x2 trusted-page/initial-Show controls; original exercise retained')
+ options=parser.parse_args()
++if sys.platform != 'darwin':parser.error('macOS required')
+ app=options.app.resolve()
+ host=app/'Contents/MacOS/reasonix-tauri';sidecar=app/'Contents/MacOS/reasonix-desktop-bridge'
+ identifier=plistlib.loads((app/'Contents/Info.plist').read_bytes())['CFBundleIdentifier']
+@@ -19,8 +21,8 @@ subprocess.run(['codesign','--verify','--deep','--strict',str(app)],check=True)
+ out=options.output.resolve();out.mkdir(mode=0o700,exist_ok=False)
+ observer=out/'activation-timeline'
+ subprocess.run(['swiftc',str(repo/'tools/tauri/activation-timeline.swift'),'-o',str(observer)],check=True)
+-summary={'artifactSha256':expected,'scope':'Independent once-per-path native controls, not a full window acceptance or retry of the failed exercise','cases':[]}
+-phases=('menu-settings-minimized','menu-settings-direct-minimized','menu-settings-native-minimized','menu-settings-presented-minimized')
++summary={'artifactSha256':expected,'scope':'Independent 2x2 exercise factors' if options.exercise_factors else 'Independent native path controls','completeWindowAcceptance':False,'cases':[]}
++phases=('exercise','exercise-loaded','exercise-single-show','exercise-loaded-single-show') if options.exercise_factors else ('menu-settings-minimized','menu-settings-direct-minimized','menu-settings-native-minimized','menu-settings-presented-minimized')
+ for managed in (True,False):
+  for phase in phases:
+   name=('managed' if managed else 'explicit')+'-'+phase
