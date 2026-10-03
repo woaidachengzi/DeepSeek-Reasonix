@@ -1,0 +1,15 @@
+{"elapsedMs":7,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[],"screenLocked":null,"unixMs":1791021828209}
+{"elapsedMs":63,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[{"active":false,"hidden":false,"pid":522,"terminated":false}],"screenLocked":null,"unixMs":1791021828265}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":109,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":522,"unixMs":1791021828312}
+{"bundle":"com.openai.codex","elapsedMs":109,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":96034,"unixMs":1791021828312}
+{"elapsedMs":121,"frontmostActive":true,"frontmostBundle":"io.reasonix.desktop.preview","frontmostPid":522,"loginDone":true,"onConsole":true,"previews":[{"active":true,"hidden":false,"pid":522,"terminated":false}],"screenLocked":null,"unixMs":1791021828324}
+{"bundle":"com.openai.codex","elapsedMs":390,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":96034,"unixMs":1791021828593}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":391,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":522,"unixMs":1791021828593}
+{"elapsedMs":422,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[{"active":false,"hidden":true,"pid":522,"terminated":false}],"screenLocked":null,"unixMs":1791021828624}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":464,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":522,"unixMs":1791021828666}
+{"bundle":"com.openai.codex","elapsedMs":467,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":96034,"unixMs":1791021828670}
+{"elapsedMs":484,"frontmostActive":true,"frontmostBundle":"io.reasonix.desktop.preview","frontmostPid":522,"loginDone":true,"onConsole":true,"previews":[{"active":true,"hidden":false,"pid":522,"terminated":false}],"screenLocked":null,"unixMs":1791021828686}
+{"bundle":"com.openai.codex","elapsedMs":3496,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":96034,"unixMs":1791021831699}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":3500,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":522,"unixMs":1791021831703}
+{"elapsedMs":3538,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[],"screenLocked":null,"unixMs":1791021831741}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":3539,"kind":"workspace-notification","name":"NSWorkspaceDidTerminateApplicationNotification","pid":522,"unixMs":1791021831741}

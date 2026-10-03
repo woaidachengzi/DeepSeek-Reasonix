@@ -1,0 +1,10 @@
+{"elapsedMs":7,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[],"screenLocked":null,"unixMs":1791021684024}
+{"elapsedMs":61,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[{"active":false,"hidden":false,"pid":99709,"terminated":false}],"screenLocked":null,"unixMs":1791021684078}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":110,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":99709,"unixMs":1791021684128}
+{"bundle":"com.openai.codex","elapsedMs":110,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":96034,"unixMs":1791021684128}
+{"elapsedMs":116,"frontmostActive":true,"frontmostBundle":"io.reasonix.desktop.preview","frontmostPid":99709,"loginDone":true,"onConsole":true,"previews":[{"active":true,"hidden":false,"pid":99709,"terminated":false}],"screenLocked":null,"unixMs":1791021684134}
+{"bundle":"com.openai.codex","elapsedMs":4200,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":96034,"unixMs":1791021688217}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":4202,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":99709,"unixMs":1791021688219}
+{"elapsedMs":4206,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[{"active":false,"hidden":false,"pid":99709,"terminated":false}],"screenLocked":null,"unixMs":1791021688224}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":4246,"kind":"workspace-notification","name":"NSWorkspaceDidTerminateApplicationNotification","pid":99709,"unixMs":1791021688264}
+{"elapsedMs":4263,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[],"screenLocked":null,"unixMs":1791021688280}

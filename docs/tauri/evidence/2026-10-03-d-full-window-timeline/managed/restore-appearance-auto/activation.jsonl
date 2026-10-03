@@ -1,0 +1,10 @@
+{"elapsedMs":5,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[],"screenLocked":null,"unixMs":1791021734619}
+{"elapsedMs":62,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[{"active":false,"hidden":false,"pid":99963,"terminated":false}],"screenLocked":null,"unixMs":1791021734676}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":99,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":99963,"unixMs":1791021734713}
+{"bundle":"com.openai.codex","elapsedMs":100,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":96034,"unixMs":1791021734713}
+{"elapsedMs":118,"frontmostActive":true,"frontmostBundle":"io.reasonix.desktop.preview","frontmostPid":99963,"loginDone":true,"onConsole":true,"previews":[{"active":true,"hidden":false,"pid":99963,"terminated":false}],"screenLocked":null,"unixMs":1791021734731}
+{"bundle":"com.openai.codex","elapsedMs":3461,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":96034,"unixMs":1791021738074}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":3462,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":99963,"unixMs":1791021738075}
+{"elapsedMs":3499,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[{"active":false,"hidden":false,"pid":99963,"terminated":false}],"screenLocked":null,"unixMs":1791021738112}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":3503,"kind":"workspace-notification","name":"NSWorkspaceDidTerminateApplicationNotification","pid":99963,"unixMs":1791021738116}
+{"elapsedMs":3555,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[],"screenLocked":null,"unixMs":1791021738168}

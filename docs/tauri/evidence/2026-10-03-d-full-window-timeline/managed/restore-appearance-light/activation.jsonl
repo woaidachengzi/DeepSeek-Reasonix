@@ -1,0 +1,10 @@
+{"elapsedMs":7,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[],"screenLocked":null,"unixMs":1791021731013}
+{"elapsedMs":63,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[{"active":false,"hidden":false,"pid":99944,"terminated":false}],"screenLocked":null,"unixMs":1791021731068}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":116,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":99944,"unixMs":1791021731122}
+{"elapsedMs":123,"frontmostActive":true,"frontmostBundle":"io.reasonix.desktop.preview","frontmostPid":99944,"loginDone":true,"onConsole":true,"previews":[{"active":true,"hidden":false,"pid":99944,"terminated":false}],"screenLocked":null,"unixMs":1791021731129}
+{"bundle":"com.openai.codex","elapsedMs":124,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":96034,"unixMs":1791021731129}
+{"bundle":"com.openai.codex","elapsedMs":3462,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":96034,"unixMs":1791021734468}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":3463,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":99944,"unixMs":1791021734468}
+{"elapsedMs":3487,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[{"active":false,"hidden":false,"pid":99944,"terminated":false}],"screenLocked":null,"unixMs":1791021734493}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":3502,"kind":"workspace-notification","name":"NSWorkspaceDidTerminateApplicationNotification","pid":99944,"unixMs":1791021734508}
+{"elapsedMs":3545,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[],"screenLocked":null,"unixMs":1791021734551}

@@ -1,0 +1,13 @@
+# 原候选完整窗口矩阵的逐阶段激活时序
+
+新增 tools/tauri/trace-native-window.py 只为现有 smoke-native-window.py 的 launch() 包裹只读观察器，不改变原矩阵、fixtures、焦点/几何/精确持久化断言、超时和清理。每阶段运行提交4ba805d8a中的 NSWorkspace 事件观察器；初始化状态写出后启动原验收，结束后仅终止所属观察器，保留该阶段原生JSON与精确内核回执。没有调用激活、隐藏、窗口控制或读取屏幕/剪贴板内容的API。观察器120秒有界运行，本轮48个阶段均仍活着直至所属调用终止（observerExit=-15）。
+
+实际测试是此前固定已安装候选74fefe10fb3b8a8be689f58c1eef6505a6252c47a0bd4a474f8a35c4328cbae8，sidecar16e3761d616c6bc751acd4a3250d4f7b2851ac985ecd2d3f5219e21d4423d093；完整准确摘要见 identity.json。不是被撤回的f120实验包，也不是本轮重建的生产包。该sidecar完整摘要以identity.json为准。
+
+完整矩阵 managed24/24、explicit24/24，共48/48通过；全部原宿主 kernel exit0且未被signal终止，身份跨重启保持，原精确持久化检查通过，成功临时档案按原runner规则清理。测试后严格codesign验证通过，无同Bundle ID Preview进程。timeline.log 是原矩阵输出；每阶段存receipt.json、观察时序、原生结果和该阶段内核退出回执；避免把前阶段的内核回执重复计数。观察器可执行文件、私有HOME/钥匙串及用户剪贴板快照不归档。
+
+managed单实例主PID243、第二PID256：第二退出1791021797396，主激活1791021797410，随后getter记录主frontmost/active。explicit主PID1346、第二PID1359：第二退出1791021925735，主激活1791021925742。getter曾短暂记录previews为空，与随后事件不同，因此仅当作采样快照，不能将空值理解为主进程已退出；真实kernel回执确认主正常退出。完整时序保留，未仅截取成功激活事件。
+
+本次没有修改生产窗口实现，因此不声称修复历史失焦，也不把观测器存在时的单次成功当作长期稳定。历史74完整explicit失败、独立2px漂移及f120实验失败仍保留；尚缺修正版观测器捕获到的失败时序。当前候选增加一次完整成功证据，不移除失败验收项，不晋升正式发布。D仍未完成、E未开启；physical UI/钥匙串授权、多显示器pending及A/B/C缺口仍按清单。未发布、推送或切换默认下载。
+
+review：工具只包装现有launch调用，后台任务/剪贴板fixture仍由原smoke管理；finally只终止自身Popen，不按名字杀进程；新输出目录必须不存在，证据不会覆盖；归档只选择窗口及内核JSON，没有复制HOME、token/ready.json或clipboard-original文件。新脚本Python语法与真实完整矩阵执行通过，证据manifest哈希复核通过。下一步保留同样观测入口诊断有实际失败的序列，同时定位精确2px持久化变化，不放宽断言。

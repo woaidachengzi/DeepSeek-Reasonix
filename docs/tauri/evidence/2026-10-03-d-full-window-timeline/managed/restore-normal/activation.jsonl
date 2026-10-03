@@ -1,0 +1,10 @@
+{"elapsedMs":7,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[],"screenLocked":null,"unixMs":1791021688378}
+{"elapsedMs":63,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[{"active":false,"hidden":false,"pid":99726,"terminated":false}],"screenLocked":null,"unixMs":1791021688434}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":114,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":99726,"unixMs":1791021688485}
+{"elapsedMs":122,"frontmostActive":true,"frontmostBundle":"io.reasonix.desktop.preview","frontmostPid":99726,"loginDone":true,"onConsole":true,"previews":[{"active":true,"hidden":false,"pid":99726,"terminated":false}],"screenLocked":null,"unixMs":1791021688493}
+{"bundle":"com.openai.codex","elapsedMs":123,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":96034,"unixMs":1791021688493}
+{"bundle":"com.openai.codex","elapsedMs":3462,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":96034,"unixMs":1791021691832}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":3462,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":99726,"unixMs":1791021691833}
+{"elapsedMs":3488,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[{"active":false,"hidden":false,"pid":99726,"terminated":false}],"screenLocked":null,"unixMs":1791021691859}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":3509,"kind":"workspace-notification","name":"NSWorkspaceDidTerminateApplicationNotification","pid":99726,"unixMs":1791021691880}
+{"elapsedMs":3547,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[],"screenLocked":null,"unixMs":1791021691918}

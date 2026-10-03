@@ -1,0 +1,10 @@
+{"elapsedMs":6,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[],"screenLocked":null,"unixMs":1791021703070}
+{"elapsedMs":59,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[{"active":false,"hidden":false,"pid":99799,"terminated":false}],"screenLocked":null,"unixMs":1791021703123}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":105,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":99799,"unixMs":1791021703169}
+{"bundle":"com.openai.codex","elapsedMs":105,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":96034,"unixMs":1791021703169}
+{"elapsedMs":114,"frontmostActive":true,"frontmostBundle":"io.reasonix.desktop.preview","frontmostPid":99799,"loginDone":true,"onConsole":true,"previews":[{"active":true,"hidden":false,"pid":99799,"terminated":false}],"screenLocked":null,"unixMs":1791021703178}
+{"bundle":"com.openai.codex","elapsedMs":3477,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":96034,"unixMs":1791021706541}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":3478,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":99799,"unixMs":1791021706542}
+{"elapsedMs":3511,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[{"active":false,"hidden":false,"pid":99799,"terminated":false}],"screenLocked":null,"unixMs":1791021706575}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":3521,"kind":"workspace-notification","name":"NSWorkspaceDidTerminateApplicationNotification","pid":99799,"unixMs":1791021706585}
+{"elapsedMs":3574,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[],"screenLocked":null,"unixMs":1791021706638}

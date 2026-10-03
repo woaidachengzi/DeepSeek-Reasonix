@@ -1,0 +1,10 @@
+{"elapsedMs":18,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[],"screenLocked":null,"unixMs":1791021678690}
+{"elapsedMs":129,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[{"active":false,"hidden":false,"pid":99657,"terminated":false}],"screenLocked":null,"unixMs":1791021678801}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":136,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":99657,"unixMs":1791021678808}
+{"bundle":"com.openai.codex","elapsedMs":137,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":96034,"unixMs":1791021678809}
+{"elapsedMs":190,"frontmostActive":true,"frontmostBundle":"io.reasonix.desktop.preview","frontmostPid":99657,"loginDone":true,"onConsole":true,"previews":[{"active":true,"hidden":false,"pid":99657,"terminated":false}],"screenLocked":null,"unixMs":1791021678862}
+{"bundle":"com.openai.codex","elapsedMs":5160,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":96034,"unixMs":1791021683832}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":5161,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":99657,"unixMs":1791021683833}
+{"elapsedMs":5175,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[{"active":false,"hidden":false,"pid":99657,"terminated":false}],"screenLocked":null,"unixMs":1791021683847}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":5179,"kind":"workspace-notification","name":"NSWorkspaceDidTerminateApplicationNotification","pid":99657,"unixMs":1791021683851}
+{"elapsedMs":5234,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[],"screenLocked":null,"unixMs":1791021683906}

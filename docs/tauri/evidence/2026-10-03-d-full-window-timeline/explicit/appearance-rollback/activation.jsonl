@@ -1,0 +1,10 @@
+{"elapsedMs":8,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[],"screenLocked":null,"unixMs":1791021866870}
+{"elapsedMs":63,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[{"active":false,"hidden":false,"pid":1086,"terminated":false}],"screenLocked":null,"unixMs":1791021866924}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":116,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":1086,"unixMs":1791021866977}
+{"elapsedMs":123,"frontmostActive":true,"frontmostBundle":"io.reasonix.desktop.preview","frontmostPid":1086,"loginDone":true,"onConsole":true,"previews":[{"active":true,"hidden":false,"pid":1086,"terminated":false}],"screenLocked":null,"unixMs":1791021866984}
+{"bundle":"com.openai.codex","elapsedMs":124,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":96034,"unixMs":1791021866985}
+{"elapsedMs":3704,"frontmostActive":false,"frontmostBundle":"io.reasonix.desktop.preview","frontmostPid":1086,"loginDone":true,"onConsole":true,"previews":[{"active":false,"hidden":false,"pid":1086,"terminated":false}],"screenLocked":null,"unixMs":1791021870565}
+{"bundle":"com.openai.codex","elapsedMs":3705,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":96034,"unixMs":1791021870566}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":3706,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":1086,"unixMs":1791021870568}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":3733,"kind":"workspace-notification","name":"NSWorkspaceDidTerminateApplicationNotification","pid":1086,"unixMs":1791021870595}
+{"elapsedMs":3764,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[],"screenLocked":null,"unixMs":1791021870625}

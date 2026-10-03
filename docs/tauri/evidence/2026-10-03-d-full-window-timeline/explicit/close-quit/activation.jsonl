@@ -1,0 +1,11 @@
+{"elapsedMs":6,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[],"screenLocked":null,"unixMs":1791021928997}
+{"elapsedMs":60,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[{"active":false,"hidden":false,"pid":1365,"terminated":false}],"screenLocked":null,"unixMs":1791021929052}
+{"elapsedMs":118,"frontmostActive":false,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[{"active":true,"hidden":false,"pid":1365,"terminated":false}],"screenLocked":null,"unixMs":1791021929109}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":118,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":1365,"unixMs":1791021929109}
+{"bundle":"com.openai.codex","elapsedMs":118,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":96034,"unixMs":1791021929109}
+{"elapsedMs":179,"frontmostActive":true,"frontmostBundle":"io.reasonix.desktop.preview","frontmostPid":1365,"loginDone":true,"onConsole":true,"previews":[{"active":true,"hidden":false,"pid":1365,"terminated":false}],"screenLocked":null,"unixMs":1791021929171}
+{"bundle":"com.openai.codex","elapsedMs":3463,"kind":"workspace-notification","name":"NSWorkspaceDidActivateApplicationNotification","pid":96034,"unixMs":1791021932455}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":3464,"kind":"workspace-notification","name":"NSWorkspaceDidDeactivateApplicationNotification","pid":1365,"unixMs":1791021932455}
+{"elapsedMs":3476,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[{"active":false,"hidden":false,"pid":1365,"terminated":false}],"screenLocked":null,"unixMs":1791021932467}
+{"bundle":"io.reasonix.desktop.preview","elapsedMs":3481,"kind":"workspace-notification","name":"NSWorkspaceDidTerminateApplicationNotification","pid":1365,"unixMs":1791021932473}
+{"elapsedMs":3532,"frontmostActive":true,"frontmostBundle":"com.openai.codex","frontmostPid":96034,"loginDone":true,"onConsole":true,"previews":[],"screenLocked":null,"unixMs":1791021932523}
