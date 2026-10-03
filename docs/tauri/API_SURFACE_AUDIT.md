@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-03）
 
+**隐藏启动生产改造 / review 检查点：** [ecac5751 首次呈现](evidence/2026-10-03-d-initial-presentation/README.md)按 Wails 基线初始隐藏，可信主页面 Finished 与宿主 Ready 联合呈现；早期 Show 合并、重复完成不重开，退出取消排队动作并在执行前再检查。四项状态回归加入，Rust231/5ignored、strict clippy、构建/DMG安装签名通过。同包 package/startup/failure-exit/lifetime 四组与原窗口矩阵 **48/48（两档案各24）** 一次通过，原断言/容差未变、kernel0，原始回执/时序完整归档。单次通过不关闭历史偶发窗口问题；页面未 Finished 的可见恢复、物理 UI/其他 D 与当前包实际官方回退仍待验，全屏不继承旧包。D 未完成/E 未开启，无发布或默认下载授权。
+
 **原exercise两因素对照：** [f6bc6f89页面/Show组合](evidence/2026-10-03-d-minimize-exercise-factors/README.md)新增opt-in分支，原路径/断言不变；八例6过2失败，managed单Show未等页面与explicit原双Show路径均最小化失败/kernel2、Will/Did=0，原始回执完整保留。等页面四例通过，不等也两例通过；不能证明页面根因，重复Show不是必要失败条件。Wails隐藏启动/domReady呈现与当前页面未完成已可操作窗口的差异已核对，下一项收敛可信页面/初始化完成的一次性呈现和启动期请求归属，不仅改测试。当前包Rust227/5ignored、strict clippy、构建/安装签名和package/failure-exit/lifetime三组通过；历史最小化、物理UI/其他D及当前包官方回退仍未关闭，E未开启。
 
 **当前最小化路径对照：** [22ee同包8例](evidence/2026-10-03-d-minimize-path-control/README.md)两档案各一次API/直接AppKit/原生菜单/呈现前提，8/8、nativeMiniaturized=true、Will/Did=1、恢复和kernel0，原始时序/回执与固定包签名保持。成功前提均页面Finished与一次Show；原失败exercise页面未Finished且两次Show，仍混有初始化轨迹，不能归因或判修复；成功样本occlusion可为false。生产未改，新增可重跑路径工具仅help/语法验（真实执行固定控制脚本另存）。下一项按页面就绪与首次Show分别控制原exercise，不延时/重试/改断言；历史最小化、物理UI及其他D仍待验，E未开启。

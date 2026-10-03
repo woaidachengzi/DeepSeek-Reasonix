@@ -1,0 +1,247 @@
+{
+  "completeOriginalMatrix": true,
+  "passed": 48,
+  "failed": 0,
+  "cases": [
+    {
+      "profile": "explicit",
+      "phase": "appearance-dark",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "appearance-rollback",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "appearance-rollback-unconfigured",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "application-hide",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "background-close",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "clipboard-native",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "close-quit",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "dialog-cancel",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "exercise",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "menu-editing",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "menu-settings-app-hidden",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "menu-settings-hidden",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "menu-settings-minimized",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "menu-shortcuts",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "restore-appearance-auto",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "restore-appearance-dark",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "restore-appearance-light",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "restore-appearance-rollback",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "restore-close-quit",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "restore-maximized",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "restore-normal",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "second-instance",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "task-background-menu-quit",
+      "passed": true
+    },
+    {
+      "profile": "explicit",
+      "phase": "tray-language",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "appearance-dark",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "appearance-rollback",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "appearance-rollback-unconfigured",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "application-hide",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "background-close",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "clipboard-native",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "close-quit",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "dialog-cancel",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "exercise",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "menu-editing",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "menu-settings-app-hidden",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "menu-settings-hidden",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "menu-settings-minimized",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "menu-shortcuts",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "restore-appearance-auto",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "restore-appearance-dark",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "restore-appearance-light",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "restore-appearance-rollback",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "restore-close-quit",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "restore-maximized",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "restore-normal",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "second-instance",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "task-background-menu-quit",
+      "passed": true
+    },
+    {
+      "profile": "managed",
+      "phase": "tray-language",
+      "passed": true
+    }
+  ]
+}

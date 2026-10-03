@@ -1,0 +1,105 @@
+diff --git a/desktop/tauri/src/main.rs b/desktop/tauri/src/main.rs
+index 134eb6ccd..cd4ad8965 100644
+--- a/desktop/tauri/src/main.rs
++++ b/desktop/tauri/src/main.rs
+@@ -35,6 +35,8 @@ mod native_ui_storage_smoke;
+ mod native_ui_message_copy_smoke;
+ #[cfg(target_os = "macos")]
+ mod native_window_smoke;
++#[cfg(target_os = "macos")]
++mod initial_presentation;
+ mod notifications;
+ mod opener_catalog;
+ mod protocol_generated;
+@@ -3621,6 +3623,8 @@ fn setup_preview(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
+             .map_err(std::io::Error::other)?;
+         app.manage(origin);
+     }
++    #[cfg(target_os = "macos")]
++    app.manage(initial_presentation::InitialPresentation::default());
+     let mut main_config = app.config().app.windows.iter()
+         .find(|config| config.label == "main")
+         .ok_or_else(|| std::io::Error::other("main window configuration missing"))?
+@@ -3635,6 +3639,8 @@ fn setup_preview(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
+         let origin = app.state::<ui_origin::PreviewUiOrigin>().inner().clone();
+         main_builder.on_navigation(move |url| origin.matches(url))
+     };
++    #[cfg(target_os = "macos")]
++    let main_builder = main_builder.visible(false).focused(false);
+     main_builder.build()?;
+     let window_state = PreviewWindowState::for_app(app)?;
+     // Register before a queued native restore can complete or reenter setup.
+@@ -3718,6 +3724,8 @@ fn main() {
+             #[cfg(target_os = "macos")]
+             native_window_smoke::observe(webview, payload);
+             #[cfg(target_os = "macos")]
++            initial_presentation::observe(webview, payload);
++            #[cfg(target_os = "macos")]
+             native_clipboard_smoke::observe(webview, payload);
+             #[cfg(target_os = "macos")]
+             native_link_smoke::observe(webview, payload);
+@@ -4050,6 +4058,10 @@ fn main() {
+     let requested_exit_code = std::sync::Arc::new(std::sync::OnceLock::<i32>::new());
+     let reported_exit_code = std::sync::Arc::clone(&requested_exit_code);
+     let runtime_exit_code = app.run_return(move |app, event| {
++        #[cfg(target_os = "macos")]
++        if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
++            initial_presentation::close(app);
++        }
+         if let tauri::RunEvent::ExitRequested {
+             code: Some(code), ..
+         } = &event
+@@ -4063,6 +4075,7 @@ fn main() {
+         }
+         #[cfg(target_os = "macos")]
+         if matches!(event, tauri::RunEvent::Ready) {
++            initial_presentation::runtime_ready(app);
+             native_window_smoke::start_if_requested(app);
+             native_profile_smoke::start_if_requested(app);
+         }
+@@ -4128,6 +4141,8 @@ fn main() {
+             });
+         }
+         if matches!(event, tauri::RunEvent::Exit) {
++            #[cfg(target_os = "macos")]
++            initial_presentation::close(app);
+             #[cfg(target_os = "macos")]
+             native_window_smoke::stop_window_observers();
+             if let Some(state) = app.try_state::<std::sync::Arc<notifications::NotificationState>>()
+diff --git a/desktop/tauri/src/tray.rs b/desktop/tauri/src/tray.rs
+index 69c37c433..20c66a84a 100644
+--- a/desktop/tauri/src/tray.rs
++++ b/desktop/tauri/src/tray.rs
+@@ -35,14 +35,32 @@ impl TrayMenuState {
+ pub fn show_main_window(app: &tauri::AppHandle) {
+     #[cfg(target_os = "macos")]
+     crate::native_window_smoke::observe_restore(app, false);
++    #[cfg(target_os = "macos")]
++    {
++        let handle = app.clone();
++        let _ = app.run_on_main_thread(move || crate::initial_presentation::request(&handle));
++    }
++    #[cfg(not(target_os = "macos"))]
++    present_main_window(app, true);
++}
++
++pub(crate) fn present_main_window(app: &tauri::AppHandle, unhide: bool) {
++    #[cfg(not(target_os = "macos"))]
++    let _ = unhide;
+     let handle = app.clone();
+     // Singleton callbacks arrive on a worker thread. Restore the application
+     // and its window together on the native UI thread; showing an NSWindow
+     // alone does not undo the macOS application's Hide action.
+     let _ = app.run_on_main_thread(move || {
++        #[cfg(target_os = "macos")]
++        if !crate::initial_presentation::can_present(&handle) {
++            return;
++        }
+         #[cfg(target_os = "macos")]
+         if let Some(main_thread) = objc2::MainThreadMarker::new() {
+             if objc2_app_kit::NSApplication::sharedApplication(main_thread).isHidden() {
++                // An automatic initial reveal must not undo a user Hide.
++                if !unhide { return; }
+                 let _ = handle.show();
+             }
+         }

@@ -1,0 +1,8 @@
+{
+  "phase": "restore-appearance-rollback",
+  "root": "/private/tmp/reasonix-native-window-smoke-a7xu0o_4",
+  "startedUnixMs": 1791031405242,
+  "passed": true,
+  "finishedUnixMs": 1791031408827,
+  "observerExit": -15
+}
