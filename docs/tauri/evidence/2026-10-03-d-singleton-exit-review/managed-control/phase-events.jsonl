@@ -1,0 +1,8 @@
+{"phase": "exercise", "kind": "begin", "unixMs": 1791021074331}
+{"phase": "exercise", "kind": "passed", "unixMs": 1791021080281}
+{"phase": "restore-maximized", "kind": "begin", "unixMs": 1791021080281}
+{"phase": "restore-maximized", "kind": "passed", "unixMs": 1791021084581}
+{"phase": "restore-normal", "kind": "begin", "unixMs": 1791021084581}
+{"phase": "restore-normal", "kind": "passed", "unixMs": 1791021088163}
+{"phase": "second-instance", "kind": "begin", "unixMs": 1791021088163}
+{"phase": "second-instance", "kind": "passed", "unixMs": 1791021092235}

@@ -1,0 +1,9 @@
+{
+  "app": "/private/tmp/reasonix-d-singleton-exit-installed-8l5iekjy/Reasonix Tauri Preview.app",
+  "dmg": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri Preview_0.1.0_aarch64.dmg",
+  "dmgSha256": "631c3c4ad5b0b4b21c3a5a3061e196a88c965b917ee344d97284f82154a2e97a",
+  "artifactSha256": {
+    "reasonix-tauri": "f120f29d7e2f55b891de69d9688ee04d4384842b9205779c16e11fef78e50f44",
+    "reasonix-desktop-bridge": "0a64f86b4fe8e235a224079c07a85ce14802cff5433f90d457b4f09488e54bb2"
+  }
+}

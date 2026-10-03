@@ -1,0 +1,4 @@
+package: passed (exit 0)
+startup: passed (exit 0)
+failure-exit: passed (exit 0)
+window: failed (exit 1)

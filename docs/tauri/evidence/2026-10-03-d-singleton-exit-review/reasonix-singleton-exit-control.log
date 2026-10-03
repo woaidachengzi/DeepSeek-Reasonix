@@ -1,0 +1,18 @@
+LaunchServices native kernel exit: {"phase": "exercise", "pid": 97619, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed exercise: OK
+LaunchServices native kernel exit: {"phase": "restore-maximized", "pid": 97681, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed restore-maximized: OK
+LaunchServices native kernel exit: {"phase": "restore-normal", "pid": 97696, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed restore-normal: OK
+LaunchServices native kernel exit: {"phase": "second-instance", "pid": 97711, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed second-instance: OK
+{"root": "/private/tmp/reasonix-singleton-exit-control-nd2qm7r1", "managed": true, "passed": true}
+LaunchServices native kernel exit: {"phase": "exercise", "pid": 97733, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit exercise: OK
+LaunchServices native kernel exit: {"phase": "restore-maximized", "pid": 97748, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit restore-maximized: OK
+LaunchServices native kernel exit: {"phase": "restore-normal", "pid": 97765, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit restore-normal: OK
+LaunchServices native kernel exit: {"phase": "second-instance", "pid": 97781, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit second-instance: OK
+{"root": "/private/tmp/reasonix-singleton-exit-control-z3ft4u74", "managed": false, "passed": true}
