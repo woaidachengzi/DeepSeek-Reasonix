@@ -1,0 +1,3 @@
+LaunchServices native kernel exit: {"phase": "exercise", "pid": 40031, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+Private window failure fixture retained: /private/tmp/reasonix-native-window-smoke-evu2ivte; completed stages: 0
+native macOS window smoke failed: [Errno 2] No such file or directory: '/private/tmp/reasonix-native-window-smoke-evu2ivte/home/Library/Application Support/io.reasonix.desktop.preview/window-state.json'

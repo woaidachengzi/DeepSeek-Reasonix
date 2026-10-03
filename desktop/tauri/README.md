@@ -2,6 +2,7 @@
 
 最新状态：[b6f7003f 实际引用发送/历史重开及 D 补验](../../docs/tauri/evidence/2026-10-03-d-selection-send-reopen/README.md)。两档案实际第二轮引用由本机 fake provider 验证共享 quoted-context，普通退出重开后历史保持、协议隐藏且草稿不重放。当前包14个程序门禁、实际备份应用及官方 Wails 历史/附件/检查点回退通过；Rust231/5ignored、strict clippy、构建/安装签名与清理通过。零显示器前置条件失败、物理输入未确认且 Mac 锁定；本包完整48阶段/权限钥匙串交互等仍待验。D未完成/E未开启，A/B/C及正式签名公证仍阻碍发布。下列带日期描述为历史现场，不直接代表当前候选。
 
+当前窗口补验：[完整矩阵失败与零显示器保护](../../docs/tauri/evidence/2026-10-03-d-zero-display-window/README.md)。b6首阶段原生最小化成功但零活跃显示器期间无新存档，整组保持失败；两档案实际零显示器旧状态保护、托盘语言6阶段及启动终止12项通过。同包累计17个程序门禁，恢复活跃显示器后完整矩阵及物理UI仍待验。
 2026-10-02 实际窗口验收可用 `python3 tools/tauri/probe-launch-services-profile.py <installed-app> --interactive --observe`。
 在全新私有档案启动并观察最多 300 秒；仅该显式模式启用只读原生窗口快照，
 不替用户操作窗口。真实 Quit 后用确切 PID 的 kernel 回执核对退出码与 sidecar/ready 清理，
