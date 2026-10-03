@@ -1,0 +1,17 @@
+LaunchServices native kernel exit: {"phase": "menu-settings-minimized", "pid": 20168, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed menu-settings-minimized: OK
+LaunchServices native kernel exit: {"phase": "menu-settings-direct-minimized", "pid": 20185, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed menu-settings-direct-minimized: OK
+LaunchServices native kernel exit: {"phase": "menu-settings-native-minimized", "pid": 20205, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed menu-settings-native-minimized: OK
+LaunchServices native kernel exit: {"phase": "menu-settings-presented-minimized", "pid": 20221, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed menu-settings-presented-minimized: OK
+LaunchServices native kernel exit: {"phase": "menu-settings-minimized", "pid": 20239, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit menu-settings-minimized: OK
+LaunchServices native kernel exit: {"phase": "menu-settings-direct-minimized", "pid": 20255, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit menu-settings-direct-minimized: OK
+LaunchServices native kernel exit: {"phase": "menu-settings-native-minimized", "pid": 20273, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit menu-settings-native-minimized: OK
+LaunchServices native kernel exit: {"phase": "menu-settings-presented-minimized", "pid": 20289, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit menu-settings-presented-minimized: OK
+{"managed-menu-settings-minimized": "passed", "managed-menu-settings-direct-minimized": "passed", "managed-menu-settings-native-minimized": "passed", "managed-menu-settings-presented-minimized": "passed", "explicit-menu-settings-minimized": "passed", "explicit-menu-settings-direct-minimized": "passed", "explicit-menu-settings-native-minimized": "passed", "explicit-menu-settings-presented-minimized": "passed"}

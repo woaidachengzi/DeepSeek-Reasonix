@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-03）
 
+**当前最小化路径对照：** [22ee同包8例](evidence/2026-10-03-d-minimize-path-control/README.md)两档案各一次API/直接AppKit/原生菜单/呈现前提，8/8、nativeMiniaturized=true、Will/Did=1、恢复和kernel0，原始时序/回执与固定包签名保持。成功前提均页面Finished与一次Show；原失败exercise页面未Finished且两次Show，仍混有初始化轨迹，不能归因或判修复；成功样本occlusion可为false。生产未改，新增可重跑路径工具仅help/语法验（真实执行固定控制脚本另存）。下一项按页面就绪与首次Show分别控制原exercise，不延时/重试/改断言；历史最小化、物理UI及其他D仍待验，E未开启。
+
 **当前全屏探针包：** [22ee53cb全屏完成与精确恢复](evidence/2026-10-03-d-fullscreen-completion/README.md)新增opt-in真实AppKit角色、FullScreen位/四通知/普通存档保护门禁，不改生产行为/权限。首轮托管五阶段通过，显式exercise最小化失败/kernel2、will/did=0，显式全屏当时未执行，整组保持failed；同包同保留档案的独立显式restore/fullscreen/restore三项通过，两档案进入3840×2160后精确回2000×1400/x920/y344、did-enter/exit各1、存档原字节/重启保持。同包package/failure-exit/lifetime另三组通过；Rust227/5ignored、strict clippy及app/DMG安装签名通过。首次宏递归编译失败保留；失败fixture复用前漏复制result/trace的证据限制明确记录，原日志/kernel保留，工具新增失败快照及回归。最小化/历史稳定性、物理UI、其他D及当前包回退仍未通过，不继承旧候选，E未开启。
 
 **当前候选窗口补验：** [f259ddc9完整矩阵与前置中断](evidence/2026-10-03-d-message-candidate-window/README.md)原矩阵托管24/24、显式前20项通过（44阶段kernel0），menu-editing前剪贴板完整保存保护拒绝；剩余4项当时未执行，不记完整48/48。当前只读capture确认不可读取格式，但原次具体helper状态未保存，不能事后归因。固定包/保留显式fixture的单实例与close/restore三项独立3/3通过，精确几何/身份和签名保持；menu-editing仍待安全前置。捕获错误新增固定分类及5项Python回归，不改保护或生产窗口代码。CUA再次30秒超时；现有矩阵不含全屏，下一步单独补完整fullscreen状态/结束通知/精确恢复，物理UI与历史稳定性、其他D及当前包回退仍未完成，E未开启。

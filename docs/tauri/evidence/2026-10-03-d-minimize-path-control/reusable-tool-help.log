@@ -1,0 +1,10 @@
+usage: probe-minimize-paths.py [-h] --output OUTPUT app
+
+Once-per-path native minimize controls; not a complete window acceptance
+
+positional arguments:
+  app
+
+options:
+  -h, --help       show this help message and exit
+  --output OUTPUT

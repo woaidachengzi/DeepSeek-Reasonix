@@ -1,0 +1,49 @@
+{
+  "artifactSha256": {
+    "reasonix-tauri": "22ee53cbfe6324f63a1f63d73d477cb3017be21cd5866ee4dfab1f50efc20e35",
+    "reasonix-desktop-bridge": "6f7f6352af9eed4043abe9600b6ad80712088d9363b4a94d69d824628035e447"
+  },
+  "scope": "Independent once-per-path native controls, not a full window acceptance or retry of the failed exercise",
+  "cases": [
+    {
+      "name": "managed-menu-settings-minimized",
+      "root": "/private/tmp/reasonix-minimize-path-glnjo7ah",
+      "status": "passed"
+    },
+    {
+      "name": "managed-menu-settings-direct-minimized",
+      "root": "/private/tmp/reasonix-minimize-path-hmkjjosn",
+      "status": "passed"
+    },
+    {
+      "name": "managed-menu-settings-native-minimized",
+      "root": "/private/tmp/reasonix-minimize-path-57w933ga",
+      "status": "passed"
+    },
+    {
+      "name": "managed-menu-settings-presented-minimized",
+      "root": "/private/tmp/reasonix-minimize-path-blmddsow",
+      "status": "passed"
+    },
+    {
+      "name": "explicit-menu-settings-minimized",
+      "root": "/private/tmp/reasonix-minimize-path-9v338sl9",
+      "status": "passed"
+    },
+    {
+      "name": "explicit-menu-settings-direct-minimized",
+      "root": "/private/tmp/reasonix-minimize-path-3sir4rvb",
+      "status": "passed"
+    },
+    {
+      "name": "explicit-menu-settings-native-minimized",
+      "root": "/private/tmp/reasonix-minimize-path-4du6iq43",
+      "status": "passed"
+    },
+    {
+      "name": "explicit-menu-settings-presented-minimized",
+      "root": "/private/tmp/reasonix-minimize-path-iq8sld6w",
+      "status": "passed"
+    }
+  ]
+}
