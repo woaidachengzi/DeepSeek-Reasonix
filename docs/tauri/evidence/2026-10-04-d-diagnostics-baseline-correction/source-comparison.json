@@ -1,0 +1,46 @@
+{
+  "sourceHead": "820938679",
+  "recorderBytesEqual": true,
+  "artifacts": [
+    {
+      "source": "/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/lib/frontendDiagnostics.ts",
+      "snapshot": "current/frontendDiagnostics.ts",
+      "sha256": "7db73f45b01ce045a5b51929420cf4917e92eba0abf65056b36b914770eb4fc8"
+    },
+    {
+      "source": "/Users/jerry/temp/app/reasonix-wails-1.38.3/desktop/frontend/src/lib/frontendDiagnostics.ts",
+      "snapshot": "wails/frontendDiagnostics.ts",
+      "sha256": "7db73f45b01ce045a5b51929420cf4917e92eba0abf65056b36b914770eb4fc8"
+    },
+    {
+      "source": "/Users/jerry/temp/app/reasonix-tauri/desktop/frontend/src/components/FrontendDiagnosticsControl.tsx",
+      "snapshot": "current/FrontendDiagnosticsControl.tsx",
+      "sha256": "6d8ae47fbc7ee969f9f5bc524ed436f982f367dbd6283633f5eba6e48fe1c196"
+    },
+    {
+      "source": "/Users/jerry/temp/app/reasonix-wails-1.38.3/desktop/frontend/src/components/FrontendDiagnosticsControl.tsx",
+      "snapshot": "wails/FrontendDiagnosticsControl.tsx",
+      "sha256": "9287f75f656856a5d001c01daae53755d472dca3072a40f89fbae79b97b55b40"
+    },
+    {
+      "source": "/Users/jerry/temp/app/reasonix-wails-1.38.3/desktop/frontend/src/components/ScrollDiagnosticPanel.tsx",
+      "snapshot": "wails/ScrollDiagnosticPanel.tsx",
+      "sha256": "337693686ec590edb0b35d3cef3fa171cc4cdf17db013dc3610e191f37133990"
+    },
+    {
+      "source": "/Users/jerry/temp/app/reasonix-wails-1.38.3/desktop/scroll_diagnostics_export.go",
+      "snapshot": "wails/scroll_diagnostics_export.go",
+      "sha256": "a5d931e0a4f0e586a55e8828864633aa9e386cb38a28cef8be97e0a8190f930c"
+    }
+  ],
+  "checks": [
+    {
+      "command": "node --import tsx src/__tests__/frontend-diagnostics.test.ts",
+      "exitCode": 0
+    },
+    {
+      "command": "node --import tsx src/__tests__/transcript-scroll-diagnostics.test.ts",
+      "exitCode": 0
+    }
+  ]
+}

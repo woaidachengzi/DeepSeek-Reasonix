@@ -1,5 +1,7 @@
 # D：当前包实际原生保存、覆盖取消及取消后重试
 
+**基线更正：** 本轮下文将前端交互记录JSON与独立滚动诊断ZIP入口直接比较，归属有误。[对应控件与记录器核对](../2026-10-04-d-diagnostics-baseline-correction/README.md)证明Wails对应前端交互入口也导出JSON，记录器字节一致。下文原对照判断保留供审计，不再作为该入口格式缺口；实际保存回执未改，其他入口与默认目录等仍待。
+
 源码/权限未改，基于 `17ee3b5a4`，仍为当前真实46包（完整host/sidecar SHA与strict签名后检在postcheck）。全新explicit root `/private/tmp/reasonix-launch-services-4fd_ipo5`，host93945/sidecar93952；启动器先确认x=-3200/y142/2560×1640/scale2，使用用户确认的左侧屏幕2。CUA绑定exact live app和本root独有origin，未发送模型请求。
 
 ## 基线与实现边界
