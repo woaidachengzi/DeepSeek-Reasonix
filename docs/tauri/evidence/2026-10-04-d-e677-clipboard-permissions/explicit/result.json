@@ -1,0 +1,7 @@
+{
+  "profile": "explicit",
+  "passed": true,
+  "clipboardOriginalFormatsRestored": true,
+  "nativeWindowPositionObserved": false,
+  "scope": "actual clipboard IPC and hidden caller denial, not physical Copy/Paste or selection editing"
+}

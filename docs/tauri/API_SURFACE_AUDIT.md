@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-04）
 
+**当前 e677 剪贴板/隐藏调用者：** [真实IPC双档案与原格式恢复](evidence/2026-10-04-d-e677-clipboard-permissions/README.md)。main文本写读/read_image拒绝、hidden text/dialog拒绝、6个原生命令7个来源case普通/伪造main共28次caller拒绝、原剪贴板全部格式恢复/退出0清理2/2通过；前端剪贴板回归通过，Tauri拒绝不fallback。窗口仅预置左屏未采样几何；物理编辑、系统通知/keychain授权等不算通过，D稳定/其他D/E/A/B/C仍待。
+
 **当前 e677 单实例左屏恢复：** [managed/explicit真实第二次LaunchServices启动](evidence/2026-10-04-d-e677-left-single-instance/README.md)。原后台关闭窗口由第二次同包启动恢复focused/unhide/精确左屏几何，第二次open0/原sidecar不替换、原host kernel0与清理2/2通过。受限模板参考不冒充exercise；开发例外/跨档案/remote child/Dock托盘/旧writer互斥等不继承通过，最小化与D稳定仍待。
 
 **当前 e677 宿主死亡生命周期：** [八例kernel退出/流断开/同档案重启](evidence/2026-10-04-d-e677-left-host-lifetime/README.md)。managed/explicit × idle/streaming × SIGTERM/SIGKILL共8/8通过，sidecar全正常退出0、4真实provider流、原件与durable身份保持/重启/清理通过。idle四例native位置确认在左屏；streaming预置左屏但未采样GUI位置，不扩大为视觉验收。不同于normal UI Quit、任意旧目录互斥和bot/remote生命周期；D稳定及其他D/E/A/B/C缺口仍待。

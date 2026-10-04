@@ -1,0 +1,4 @@
+LaunchServices native kernel exit: {"phase": "clipboard-native", "pid": 3023, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed clipboard-native: OK
+LaunchServices native kernel exit: {"phase": "clipboard-native", "pid": 3094, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit clipboard-native: OK

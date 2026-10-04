@@ -1,0 +1,21 @@
+# D：e677 当前候选剪贴板与隐藏调用者边界
+
+源HEAD f058d61d8，产品未改；新增独立工具运行既有clipboard-native原生探针。host e6778b8fc3a5bcd7095d75afccedae753a521559fb6dd4896ea72d4100ec0706、sidecar6189151139f5c820c15e4da18419f7ce4bc582d7b8885d3f7227fde8b828cb1b，exact路径在artifact.json。不是历史包继承。
+
+## 基线与收敛
+
+Wails1.38.3写剪贴板依次尝试navigator、window.runtime.ClipboardSetText、execCommand，fallback保存焦点和选择。当前公共clipboard.ts将Wails调用收敛到wailsDesktopRuntime，Tauri提前选择native文本插件，拒绝立即结束，严格读取向编辑器传播错误，防止把拒绝当空值擦除草稿。当前main capability只给main窗口clipboard text read/write及dialog open、event listen/unlisten、start-dragging；没有image读权限。冻结基线、当前适配层与capability。
+
+pnpm test:clipboard本轮exit0，覆盖Tauri成功/拒绝不切browser、Wails或execCommand，Wails原fallback，浏览器fallback与复制反馈等；属于JSDOM源码回归，不能替代物理Copy/Paste、IME或选区编辑。
+
+## 当前真实包
+
+managed/explicit两个私有档案串行2/2，session9657 terminal0。真实main可信页面完成后执行注册IPC：set_tray_locale、native text write/read canary成功，read_image因最小权限拒绝。新建同可信assets但非main label的隐藏WebView，实际text read/write及dialog open均拒绝。6个不同原生命令、7个command/source case分别普通/伪造window:'main'请求：set_tray_locale、import_user_theme、export_user_theme、export_frontend_diagnostics、notification_permission、keychain_import_legacy(wails/wails-env)，共7×2×2=28次特定native caller拒绝。两种keychain来源是同一命令的不同case，不误报7个不同命令。guard错误必须是native application commands require the main window，不能用其他验证错误冒充拒绝；没有访问真实旧钥匙串或弹出系统授权。隐藏调用者没有改变实际测试剪贴板。
+
+NativeClipboardFixture先在private named pasteboard自测恢复保护，再有界保存system clipboard全部格式；验证唯一canary及代际，结束时成功恢复原格式并删除私有snapshot。若代际变更则保留新内容与私有recovery，不强行覆盖；失败不计通过。本轮两次恢复成功，固定receipt记录clipboardOriginalFormatsRestored=true，未归档任何clipboard payload、原plist或owned nonce marker。两个原host kernel status0/正常exit0；sidecar/ready清理。postcheck无匹配Preview/此安装sidecar、strict/deep签名0、双SHA保持。
+
+## 窗口与限制
+
+每个新0700fixture exclusive seed0600左屏normal状态x=-3200/y142/2560×1640/scale2；此probe不采样实际native窗口几何，receipt明确nativeWindowPositionObserved=false，不把seed当成视觉验收。本轮仅IPC与隐藏caller边界，没有物理键/菜单动作、实际剪贴板图片读能力、通知banner或keychain grant/cancel验收。当前目录取消诊断probe自身未指定parent，这轮未运行，避免影响主屏；不将其当产品目录选择故障或批准延期。
+
+最小化/窗口间歇稳定、当前包其他D与官方GUI全资料回退、A/B/C和DeveloperID/公证缺口保持。D未完成，E完整验收仍待D稳定；仅Windows/Linux用户延期，不新增其他延期/push/正式发布/默认下载切换。

@@ -1,0 +1,5 @@
+
+> reasonix-desktop-frontend@0.0.0 test:clipboard /Users/jerry/temp/app/reasonix-tauri/desktop/frontend
+> node --import tsx src/__tests__/clipboard.test.tsx
+
+native/browser/Wails clipboard and copy feedback: OK

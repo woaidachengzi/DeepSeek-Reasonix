@@ -1,0 +1,15 @@
+{
+  "app": "/private/tmp/reasonix-d-parented-installed-psvk6loa/Reasonix Tauri Preview.app",
+  "sha256": {
+    "reasonix-tauri": "e6778b8fc3a5bcd7095d75afccedae753a521559fb6dd4896ea72d4100ec0706",
+    "reasonix-desktop-bridge": "6189151139f5c820c15e4da18419f7ce4bc582d7b8885d3f7227fde8b828cb1b"
+  },
+  "seededGeometry": {
+    "width": 2560,
+    "height": 1640,
+    "maximized": false,
+    "x": -3200,
+    "y": 142,
+    "scale_factor": 2.0
+  }
+}
