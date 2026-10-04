@@ -1,0 +1,15 @@
+{
+  "app": "/private/tmp/reasonix-d-native-reload-final-installed-6ade4s85/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-launch-services-dw7m1pez",
+  "identifier": "io.reasonix.desktop.preview",
+  "pid": 79726,
+  "sidecarPid": 79733,
+  "openerPid": 79724,
+  "profile": "explicit",
+  "interactive": true,
+  "exitCode": 0,
+  "expectedExitCode": 0,
+  "openExitCode": 0,
+  "sidecarRemaining": false,
+  "readyRemaining": false
+}

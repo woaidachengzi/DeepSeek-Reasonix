@@ -1,0 +1,22 @@
+{
+  "scope": "Faithful CUA action transcription; raw native observations prove only the listed completed transitions; no screenshot export",
+  "app": "/private/tmp/reasonix-d-native-reload-final-installed-6ade4s85/Reasonix Tauri Preview.app",
+  "pid": 79726,
+  "actions": [
+    "getApp bound exact installed f4 path; private main URL in AX",
+    "Window57 (initial56) -> Minimize3: no native Will/Did events",
+    "Window57 -> Show Reasonix5: native key/active true",
+    "yellow minimize52: no native Will/Did events",
+    "composer37 -> ctrl+super+f: no native fullscreen events",
+    "View56 -> Toggle Full Screen4: native Will/DidEnter exactly1, nativeFullscreen=true",
+    "ctrl+super+f: native Will/DidExit exactly1, fullscreen=false, exact original geometry",
+    "super+m after fullscreen exit: no native mini events",
+    "app menu51 -> Quit Reasonix9: monitor kernel exit0/open0, no sidecar/ready remaining"
+  ],
+  "minimizeAccepted": false,
+  "fullscreenShortcutEntryAccepted": false,
+  "fullscreenMenuEntryAccepted": true,
+  "fullscreenShortcutExitAccepted": true,
+  "quitAccepted": true,
+  "root": "/private/tmp/reasonix-launch-services-dw7m1pez"
+}
