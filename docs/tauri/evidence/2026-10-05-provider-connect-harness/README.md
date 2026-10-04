@@ -22,3 +22,9 @@ Node v24.21.0 下 provider-connect、原 settings-api-key 回归、目标组件 
 ## 构建预算复核
 
 首轮打包在前端语言包预算门禁失败，简中 79.1 KiB 超过 78.9 KiB。删除本次界面替换后全前端无引用的 10 个旧 Preview 标签（三种语言同步），再次构建后简中仍保持 78.9 KiB 原预算内；繁中有界增加 0.3 KiB 至 79.6 KiB，保留新增凭据恢复说明。首屏 JS、CSS 与 raw 预算不变，完整 pnpm build 退出 0，见 frontend-build.log。此次预算变化不是原生功能验收。
+
+## 提交后打包
+
+功能提交 a75461bde，语言包修正提交 d38abcd95；干净 d38abcd9599ac13d1a26393ff0115af4002bca46 构建退出 0。严格 deep 签名与 hdiutil verify 均通过（ad-hoc Preview，未公证）。新 host/sidecar/DMG SHA256 和源状态见 package-receipt.json。
+
+DMG 保留在 desktop/tauri/target/release/bundle/dmg/Reasonix Tauri Preview_0.1.0_aarch64.dmg。为遵守用户此前清理重复图标的要求，构建 app 注销并可逆移动到回执记录的隐藏临时目录，同时注销本次打包临时卷注册；LaunchServices 最终仅保留 Applications 中的两个已安装 Reasonix 应用。没有替换它们，也没有正式发布。本包尚未完成安装后功能 smoke，历史原生结果不能继承为通过。

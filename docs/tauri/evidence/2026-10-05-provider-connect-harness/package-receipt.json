@@ -1,0 +1,36 @@
+{
+  "sourceCommit": "d38abcd9599ac13d1a26393ff0115af4002bca46",
+  "sourceStatus": "",
+  "buildExit": 0,
+  "buildLog": "/private/tmp/reasonix-d38abcd95-build.log",
+  "createdAt": "2026-10-05T00:10:22.637986",
+  "functionalInstalledSmoke": "pending",
+  "signing": "ad-hoc; build script strict deep verification passed; not notarized",
+  "artifacts": {
+    "dmg": {
+      "path": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri Preview_0.1.0_aarch64.dmg",
+      "sha256": "3aa68b810438d2d60ab7d5fe88b92afabf4e41fbfc579251a20ef95ffffc2943",
+      "size": 40637213
+    },
+    "host": {
+      "path": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app/Contents/MacOS/reasonix-tauri",
+      "sha256": "63a7363bd1fb6322ca67c8d2ded1b7c39c48e4353fd3bcaf884e56072356de87",
+      "size": 32171552
+    },
+    "sidecar": {
+      "path": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app/Contents/MacOS/reasonix-desktop-bridge",
+      "sha256": "49f37f4d8d2c09ae7cc331cc870c6bceafc8f7a3c8cbf6018865943e1e546104",
+      "size": 51104560
+    }
+  },
+  "buildAppArchive": {
+    "original": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app",
+    "backup": "/private/tmp/.reasonix-app-cleanup-d38abcd95/Reasonix Tauri Preview.app.disabled",
+    "reversible": true
+  },
+  "dmgVerifyExit": 0,
+  "launchServicesReasonixPaths": [
+    "/Applications/Reasonix Tauri Preview.app",
+    "/Applications/Reasonix.app"
+  ]
+}
