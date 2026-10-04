@@ -1,5 +1,7 @@
 # Reasonix Tauri host
 
+新建交互档案可使用 `--interactive --observe --window-state-template /private/tmp/reasonix-screen2-window-state.json`；启动器先验证实际左屏bounds再开始验收。[当前46包全新左屏首次全屏键往返](../../docs/tauri/evidence/2026-10-04-d-screen2-template-fullscreen/README.md)已实际通过，最小化按钮/键仍未通过；不覆盖其他现场失败或稳定性缺口。
+
 交互验收位置：用户确认左侧屏幕为屏幕2；后续先将私有验收父窗口恢复到左屏并检查bounds，再打开弹窗，避免干扰屏幕1。[当前46包左屏恢复及目录sheet验证](../../docs/tauri/evidence/2026-10-04-d-screen2-placement/README.md)。不读AX的Cmd+M/Minimize菜单观察仍无原生最小化完成，缺口保留。
 
 当前46包补验：[真实目录、多文件与默认工作区重启](../../docs/tauri/evidence/2026-10-04-d-current-directory-multifile/README.md)。一份explicit私有档案真实Open/Cancel、两附件含中文空格路径、移除/重启持久化与两次正常Quit清理通过；其他档案/入口/保存错误场景仍待，D窗口稳定性仍未完成。

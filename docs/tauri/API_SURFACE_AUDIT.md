@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-04）
 
+**当前46包左屏首次全屏键往返：** [新建私有档案与真实原生完成证据](evidence/2026-10-04-d-screen2-template-fullscreen/README.md)。启动器新增受限geometry模板且先确认native恢复，边界回归2项通过；当前一份explicit左屏2档案Ctrl+Cmd+F首次进入/退出完成各1、精确恢复与正常Quit清理通过。最小化按钮/键仍失败；此前其他现场首次全屏失败保持，不称间歇根因或D稳定已解决。
+
 **当前46包目录、多文件与默认工作区重启：** [一份explicit私有档案的实际CUA验收](evidence/2026-10-04-d-current-directory-multifile/README.md)。真实目录Open/Cancel、两份附件同时返回（中文/空格路径）、附件Cancel保留/逐项移除、普通重启同工作区通过；两次正常Quit及自有sidecar/ready清理、安装SHA/strict signature保持。源码未改，不继承其他档案/入口/保存过滤错误场景；Escape/Cmd+A自动化未奏效记录保留。D稳定性缺口与E待验保持。
 
 **最新 46c2c9da 选区普通重开通过：** [失败stage、就绪前提修正与当前包七gate](evidence/2026-10-04-d-selection-reopen-ready/README.md)。首轮feb在首个storage配置检查code4/kernel2，检查前可信URL但mainFinished=false/hidden；保留失败。修正opt-in探针在可信Finished/渲染后读取storage，原配置/历史断言不变；当前两档案实际录键、旧键、引用二次发送/恰两provider/普通重开持久化/协议隐藏/无draft回放通过。Rust231/5ignored、strict clippy、真实app/DMG安装签名、七程序gate（含48/48、双档案fullscreen）和本包配置备份官方CLI回读通过。实际Cmd+M两个事件分发时key和查询target均main但无Mini完成，不证明role调用；物理全屏菜单进/键退/精确恢复和Quit通过，首次键进/物理最小化仍未通过。D未完成，E逐项验收仍待D稳定；其他D/官方GUI全资料回退不继承旧包，A/B/C与正式签名公证缺口保留。
