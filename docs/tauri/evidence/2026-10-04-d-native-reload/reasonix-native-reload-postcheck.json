@@ -1,0 +1,50 @@
+{
+  "apps": [
+    {
+      "app": "/private/tmp/reasonix-d-native-reload-installed-wlpysxiy/Reasonix Tauri Preview.app",
+      "signatureExit": 0,
+      "signature": "",
+      "sha256": {
+        "reasonix-tauri": "dda2b3c7fa2a016628df7fa0b0bf90f3f9050be4acf6f240574b568de13d0237",
+        "reasonix-desktop-bridge": "7352e79707cdcb83d7f55348afe251e5065c335c27a3b9c1e6506d6d3f403649"
+      }
+    },
+    {
+      "app": "/private/tmp/reasonix-d-native-reload-final-installed-6ade4s85/Reasonix Tauri Preview.app",
+      "signatureExit": 0,
+      "signature": "",
+      "sha256": {
+        "reasonix-tauri": "f4c2a60db15259131e2b7b4fd334d1a6746f443f6b21ae092707fa46adba1e98",
+        "reasonix-desktop-bridge": "7352e79707cdcb83d7f55348afe251e5065c335c27a3b9c1e6506d6d3f403649"
+      }
+    }
+  ],
+  "previewRunning": false,
+  "fixtures": [
+    {
+      "root": "/private/tmp/reasonix-native-window-smoke-cjldj2ze",
+      "sidecars": [],
+      "readyFiles": []
+    },
+    {
+      "root": "/private/tmp/reasonix-launch-services-mudn7eps",
+      "sidecars": [],
+      "readyFiles": []
+    },
+    {
+      "root": "/private/tmp/reasonix-launch-services-izu53r0s",
+      "sidecars": [],
+      "readyFiles": []
+    },
+    {
+      "root": "/private/tmp/reasonix-native-message-copy-7zizs3e0",
+      "sidecars": [],
+      "readyFiles": []
+    },
+    {
+      "root": "/private/tmp/reasonix-native-message-copy-jqnsltnj",
+      "sidecars": [],
+      "readyFiles": []
+    }
+  ]
+}

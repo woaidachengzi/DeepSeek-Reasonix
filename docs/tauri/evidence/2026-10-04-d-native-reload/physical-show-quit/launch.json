@@ -1,0 +1,10 @@
+{
+  "app": "/private/tmp/reasonix-d-native-reload-installed-wlpysxiy/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-launch-services-izu53r0s",
+  "identifier": "io.reasonix.desktop.preview",
+  "pid": 75059,
+  "sidecarPid": 75066,
+  "openerPid": 75057,
+  "profile": "explicit",
+  "interactive": true
+}

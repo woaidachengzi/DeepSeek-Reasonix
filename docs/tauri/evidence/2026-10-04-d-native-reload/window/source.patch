@@ -1,0 +1,57 @@
+diff --git a/desktop/tauri/src/main.rs b/desktop/tauri/src/main.rs
+index cd4ad8965..215d22e2d 100644
+--- a/desktop/tauri/src/main.rs
++++ b/desktop/tauri/src/main.rs
+@@ -34,6 +34,8 @@ mod native_ui_storage_smoke;
+ #[cfg(target_os = "macos")]
+ mod native_ui_message_copy_smoke;
+ #[cfg(target_os = "macos")]
++mod native_reload_smoke;
++#[cfg(target_os = "macos")]
+ mod native_window_smoke;
+ #[cfg(target_os = "macos")]
+ mod initial_presentation;
+@@ -3831,14 +3833,12 @@ fn main() {
+                         .kind(tauri_plugin_dialog::MessageDialogKind::Info)
+                         .blocking_show();
+                 }
+-                "reload" => {
+-                    if let Some(window) = app.get_webview_window("main") {
+-                        let _ = window.eval("location.reload()");
+-                    }
+-                }
+-                "force_reload" => {
++                "reload" | "force_reload" => {
+                     if let Some(window) = app.get_webview_window("main") {
+-                        let _ = window.eval("location.reload()");
++                        // Native reload remains available when page JavaScript cannot run.
++                        if window.reload().is_err() {
++                            eprintln!("Reasonix could not reload the main page; quit and reopen Preview.");
++                        }
+                     }
+                 }
+                 "toggle_fullscreen" => {
+diff --git a/desktop/tauri/src/native_window_smoke.rs b/desktop/tauri/src/native_window_smoke.rs
+index 2dc8f4985..7cf494dfa 100644
+--- a/desktop/tauri/src/native_window_smoke.rs
++++ b/desktop/tauri/src/native_window_smoke.rs
+@@ -800,6 +800,7 @@ fn fullscreen(app: &AppHandle, directory: &std::path::Path) -> Result<(), String
+ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
+     let directory = marker_directory()?;
+     match phase {
++        "ui-native-reload" => crate::native_reload_smoke::run(app, &directory)?,
+         "exercise" => exercise(app, &directory)?,
+         "exercise-loaded" => exercise_control(app, &directory, true, false)?,
+         "exercise-single-show" => exercise_control(app, &directory, false, true)?,
+diff --git a/tools/tauri/verify-installed-d.py b/tools/tauri/verify-installed-d.py
+index 84705d7e7..c692950c8 100644
+--- a/tools/tauri/verify-installed-d.py
++++ b/tools/tauri/verify-installed-d.py
+@@ -24,6 +24,7 @@ GATES = {
+     "parent-resolution": ("smoke-explicit-parent-resolution.py", []),
+     "identity": ("smoke-profile-identity-refusal.py", []),
+     "package": ("smoke-packaged-app.py", []),
++    "reload": ("smoke-native-reload.py", []),
+     "message-copy": ("smoke-native-message-copy.py", []),
+     "selection-send": ("smoke-native-message-copy.py", ["--selection-send"]),
+     "fullscreen": ("smoke-native-fullscreen.py", []),

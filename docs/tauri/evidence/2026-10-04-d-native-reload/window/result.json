@@ -1,0 +1,97 @@
+{
+  "startedAt": "2026-10-04T00:43:42.804239+00:00",
+  "app": "/private/tmp/reasonix-d-native-reload-installed-wlpysxiy/Reasonix Tauri Preview.app",
+  "sourceHead": "d0516cefdab3a754690df7cc61eac5c923f96022",
+  "dirty": true,
+  "sourcePatchSha256": "acdd7f218bd973fa5cfba081e899fe3fab64acebf0760dede09fad78a1091757",
+  "untrackedCodeSources": [
+    {
+      "path": "desktop/tauri/src/native_reload_smoke.rs",
+      "snapshot": "source-untracked/desktop/tauri/src/native_reload_smoke.rs",
+      "sha256": "95788abd1cad466edcba7bef4e767cb7ee168b4a0afe6143464625c2b0a6261e"
+    }
+  ],
+  "artifactSha256": {
+    "Contents/MacOS/reasonix-tauri": "dda2b3c7fa2a016628df7fa0b0bf90f3f9050be4acf6f240574b568de13d0237",
+    "Contents/MacOS/reasonix-desktop-bridge": "7352e79707cdcb83d7f55348afe251e5065c335c27a3b9c1e6506d6d3f403649",
+    "Contents/Info.plist": "ce61cb6c5ba4a9f35217dc964292e23371d37a554354a5ecce233b09dc08904d"
+  },
+  "runnerSha256": "32a10ff7631a1c2020aa099e6434504eb8428e5f45ad841880a65f8560a18dee",
+  "scriptSha256": {
+    "activation-timeline.swift": "45a2d0de41425971302d9f3f90f5aac10aa0244e82d19fa87b74d65822d167d3",
+    "clipboard-snapshot.swift": "cbcd5b9792b5101788f1e99201ae53a6e09150314097126568ca0f0f7fdc427c",
+    "launch-services-host.py": "46e08e417f6cda4dc96f557f0aa1e36ad005391c9e3669ea50f37d600925649d",
+    "native-clipboard-fixture.py": "95b75f8bf936e45923029e1b1ae8030d45b03b8b0c4e680891712c4bbccb289f",
+    "native-document-provider.py": "f423d510eaed1230b8799fc119cd9e0e6b135bfc9f83f7ed183d82e17aeb22c1",
+    "native-task-provider.py": "ecb62568a2996040381b8275f655fffdece1880021ea5ee4f937861bc3ac70de",
+    "native-terminal-cwd.c": "0ea7099973981a5d69848bc1efe3f4e36d760e157facf569ef8b61d0f87843fd",
+    "probe-edit-launch-services.py": "d9da33630b3ade5ad5a80b8b1db5e3e2060df65a4e607b560bb92bef97917d80",
+    "probe-interactive-clipboard.py": "7a2c22008fc9dc5c74728d9053698d84a520028d9abfc508cfb60b4f7ac64247",
+    "probe-launch-services-profile.py": "b3f246f858cea366e3b197bc3f92911e4771e61c8de908cfc86c4f5eaca56c3b",
+    "probe-legacy-profile-gate.py": "ed1272236b4e19d4d684a8833e5d5628be03088e472419754987965a6d35fe9f",
+    "probe-minimize-paths.py": "c799890b224e9699ed05f1dcf56cc7f4ef807ade5941735a4ebffea75d475ca0",
+    "smoke-application-data-boundary.py": "9666d1c2717b12a84a50818af111a8fa823dd683fb750e81df5039b724044a00",
+    "smoke-backup-rollback.py": "69d2f814e99119ad5b0333f1b211215ecfc2d5d3f2952d285fa457a4045eaaba",
+    "smoke-document-scope.py": "653e9c8326481bdc0e08dd2fc22db207bc41413052effed15c14897d35f8fea7",
+    "smoke-explicit-parent-resolution.py": "d792ef64a530198504d16bcdd86d7bd5e07a9cc9abf8d64e2410e250d8c0b42a",
+    "smoke-explicit-profile-boundary.py": "e5d7b2dd00d10a774764038216e5e8cf1139c4f812433c6309f8501f3e28bacf",
+    "smoke-host-lifetime.py": "16643899a33aa725635e694886a3ce21808243426b78f9c1428e13c4c4a404e5",
+    "smoke-inactive-display-window-state.py": "b221d37581eed84136f20bd23b3a88f63d8a78ac35f0df1e9dbce62930213bbb",
+    "smoke-legacy-rollback.py": "d0ffa28a08a7d7da0b7fb621e40f8fab1775c2149a200d9aaafbffe89dfc6cdd",
+    "smoke-managed-profile-boundary.py": "ac0c24fff73d7547bf04886e7b5b8011fd6469dc7528199af12b4df82a4db0e5",
+    "smoke-native-app-failure.py": "9c262988d16e7a5d642b649fe12148182b20635d8ae6e6884bdd3ba355d1b8e6",
+    "smoke-native-displays.py": "dfe5d1a0a835b2fe6e2864bbd014b98053341b4c79a36cf92de06c3fee50ca37",
+    "smoke-native-fullscreen.py": "268044bc29d7ee29a6c87dccaffe20ab06a26aff0822838af04975f644ea706c",
+    "smoke-native-links.py": "9903b9757a04a61527ab5a422e5af29ac40e39472b10d8dc14814458e1101ef2",
+    "smoke-native-menu-window.py": "ce34aaa86c5c63e6b91b98738c67e3a8b2243349f3d600c667b97f70eb5ce9a7",
+    "smoke-native-message-copy.py": "57e1bd3bd0b191852e2b77fdd25a8a25a2b812efbcdd69234acf54a94454a75a",
+    "smoke-native-notifications.py": "7a698adffacffcbd6126b96874c9f5254823be3fcfb98d13ddda22486eb0d2d7",
+    "smoke-native-reload.py": "73e10f227c148ed3ff40a823f6e994d94d5b67f641f2b06b96c298743098a54a",
+    "smoke-native-startup.py": "3fa821bcc12dd7dea8d42edd7e1803f03265ecd42b559590cc510f83533441ba",
+    "smoke-native-terminal.py": "31bd59f4d5a46b6fe38b1a1cbd13404f357008c72b683b5fc145468e985d268c",
+    "smoke-native-ui-clipboard.py": "eec75e4c30dfa91205d5e80fdaa650b828b04d6aa64b92c62e676027b4cdfcd4",
+    "smoke-native-ui-export.py": "48fc3aacc666beaf4e6b183076246666af156f86243ed89abc58f2676af5b0ef",
+    "smoke-native-ui-legacy-read.py": "01d93b8829d38d0bb773d38d0471829abd1df0100e0589bc63a3f69226c3dbfa",
+    "smoke-native-ui-migration.py": "a5f808ae5ab96fb623bd0a31021c9297b9e90d832c4a7431e41f9ecac6a88901",
+    "smoke-native-ui-storage.py": "1187d7a4329b73c54385a1ce4eda51ef419a4df27653b7c23fc3fc121acc747e",
+    "smoke-native-ui-theme-import.py": "15715753d76b24b4c136623e187a64c92e9d2cf9b2b8b9fda751d98cf39e89ab",
+    "smoke-native-window.py": "f2d72562285e9e2e124ec248c7392fc00952b284a7e25478c1cdd7474766f3bc",
+    "smoke-packaged-app.py": "5d6d953d65b26c07b0821d298772012befd166fdb9aa14028dfaf9dab7ad9b23",
+    "smoke-profile-identity-refusal.py": "df8d2b4dc9c47f6b3b572cc05a2bb9d11e3a2198aeb015669d196fbd8cf9b9d1",
+    "smoke-profile-import.py": "ec0aac4b1b4fe6d309f7b04bc51684db7ce4b7cadaf39744366e39712a6b781f",
+    "test_native_clipboard_fixture.py": "66f2eb70a23e6d0eaa2075658f7409a3e9b516c8ab3aa04e60f00afda6940666",
+    "test_native_fullscreen_receipts.py": "f528c0571d9925ac5e1f85dd18b5f232e5d769b176f7f65b31e14d864bd41933",
+    "test_profile_failure_preservation.py": "68daf59dc16e598833a270352562ac34eced9220326b73d85d1453599d9bf7f7",
+    "test_selection_provider_boundary.py": "7e4acce14f5e87aafa861bf3ba5252d7905431439861a3ff58071a3347a14e9a",
+    "trace-native-window.py": "8169b08cfa0ea5ce8559398de0c55134580c7d4cffde2c9b7dbe8d6be082d53a",
+    "verify-installed-d.py": "32a10ff7631a1c2020aa099e6434504eb8428e5f45ad841880a65f8560a18dee",
+    "verify-legacy-host.sh": "4eea87ea23635188249b05b17181f3a0ab89c06d9c818a6db41578f453780965"
+  },
+  "scope": "Selected programmatic D gates only; physical UI, historical stability and complete D/E acceptance remain separate.",
+  "gates": [
+    {
+      "name": "window",
+      "status": "failed",
+      "script": "smoke-native-window.py",
+      "scriptSha256": "f2d72562285e9e2e124ec248c7392fc00952b284a7e25478c1cdd7474766f3bc",
+      "args": [
+        "--focus",
+        "--edit",
+        "--dialogs",
+        "--launch-services"
+      ],
+      "startedAt": "2026-10-04T00:43:42.903422+00:00",
+      "log": "window.log",
+      "exitCode": 1,
+      "finishedAt": "2026-10-04T00:43:52.256736+00:00"
+    },
+    {
+      "name": "selection-send",
+      "status": "not-run"
+    },
+    {
+      "name": "fullscreen",
+      "status": "not-run"
+    }
+  ]
+}

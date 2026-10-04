@@ -1,0 +1,37 @@
+{
+  "scope": "faithful CUA action transcription, not a screenshot export or confirmed minimize completion",
+  "app": "/private/tmp/reasonix-d-native-reload-installed-wlpysxiy/Reasonix Tauri Preview.app",
+  "first": {
+    "root": "/private/tmp/reasonix-launch-services-mudn7eps",
+    "pid": 74742,
+    "actions": [
+      "getApp returned owned Reasonix AX",
+      "AX Raise and screenshot succeeded",
+      "click minimize 51: no AX change",
+      "click composer 36, press super+m: AX editor focus",
+      "View menu 55 -> Reload 3: menu dismissed and main AX returned",
+      "Window menu 57 -> Minimize 3: menu dismissed and main AX returned",
+      "open app menu after monitor expiry: CUA inactive binding"
+    ],
+    "nativeMiniaturized": false,
+    "willMiniaturize": 0,
+    "didMiniaturize": 0,
+    "terminal": "180-second monitor timeout, own cleanup; no physical Quit acceptance"
+  },
+  "second": {
+    "root": "/private/tmp/reasonix-launch-services-izu53r0s",
+    "pid": 75059,
+    "actions": [
+      "fresh getApp bound to new owned fixture",
+      "Window menu 56 -> Show Reasonix 5",
+      "native observation: active/key true, restoreRequests=2, restoreCompletions=2",
+      "click minimize 52: no AX change",
+      "native observation: mini=false, Will=0, Did=0, active=true, key=false",
+      "app menu 54 -> Quit Reasonix 9",
+      "post-Quit AX read returned connectionInvalid; independent monitor exited0"
+    ],
+    "showVerified": true,
+    "minimizeAccepted": false,
+    "quitVerifiedByKernelAndCleanup": true
+  }
+}
