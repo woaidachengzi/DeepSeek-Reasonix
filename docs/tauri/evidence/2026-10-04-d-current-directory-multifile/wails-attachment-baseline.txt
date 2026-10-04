@@ -1,0 +1,28 @@
+      className={[
+        "composer-wrap",
+        decisionPending ? "composer-wrap--decision-pending" : "",
+        heroMode ? "composer-wrap--hero" : "",
+      ].filter(Boolean).join(" ")}
+      style={attachmentInputEnabled ? { "--wails-drop-target": "drop" } as CSSProperties : undefined}
+      onDropCapture={onFileDropCapture}
+    >
+      <input
+        ref={fileInputRef}
+        className="composer-content-file-input"
+        type="file"
+        multiple
+        disabled={!attachmentInputEnabled}
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={(event) => {
+          const files = Array.from(event.currentTarget.files ?? []);
+          event.currentTarget.value = "";
+          if (files.length > 0) attachFiles(files);
+          requestActiveDraftFrame(() => taRef.current?.focus());
+        }}
+      />
+      {!heroMode && <AnchoredPopover
+        open={(contentMenuOpen || intentMenuOpen) && !disabled && !readOnly && !running}
+        anchorRef={contentMenuOpen ? contentMenuAnchorRef : intentMenuAnchorRef}
+        onClose={() => { setContentMenuOpen(false); closeIntentMenu(); }}
+        className="composer-access-menu composer-content-menu composer-intent-menu composer-menu-surface"

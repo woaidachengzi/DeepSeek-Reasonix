@@ -1,5 +1,7 @@
 # Reasonix Tauri host
 
+当前46包补验：[真实目录、多文件与默认工作区重启](../../docs/tauri/evidence/2026-10-04-d-current-directory-multifile/README.md)。一份explicit私有档案真实Open/Cancel、两附件含中文空格路径、移除/重启持久化与两次正常Quit清理通过；其他档案/入口/保存错误场景仍待，D窗口稳定性仍未完成。
+
 最新状态：[46c2c9da 选区普通重开与响应者诊断](../../docs/tauri/evidence/2026-10-04-d-selection-reopen-ready/README.md)。修正仅opt-in重开探针读取storage的就绪前提；当前包两档案实际配置录键、引用二次发送和普通重开/无draft回放通过。Rust231/5ignored、strict clippy、构建/DMG安装签名、七程序gate（含窗口48/48与全屏）及配置备份官方CLI回读通过。物理Cmd+M分发时key/查询target均main但无Mini完成；实际全屏菜单进/快捷键退/精确恢复与Quit通过，首次键进及最小化仍未通过。其他D/官方GUI全资料回退不继承旧包；D未完成，E逐项验收待D稳定，A/B/C及正式签名公证仍阻碍发布。历史现场不直接代表当前候选。
 
 当前窗口补验：[完整矩阵失败与零显示器保护](../../docs/tauri/evidence/2026-10-03-d-zero-display-window/README.md)。b6首阶段原生最小化成功但零活跃显示器期间无新存档，整组保持失败；两档案实际零显示器旧状态保护、托盘语言6阶段及启动终止12项通过。同包累计17个程序门禁，恢复活跃显示器后完整矩阵及物理UI仍待验。

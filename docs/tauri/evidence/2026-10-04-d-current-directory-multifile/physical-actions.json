@@ -1,0 +1,44 @@
+{
+  "kind": "CUA action and AX observation transcription, not an exported raw AX trace",
+  "sourceHead": "6faa225c1",
+  "root": "/private/tmp/reasonix-launch-services-kct2la97",
+  "workspace": "/private/tmp/reasonix-launch-services-kct2la97/workspace",
+  "privateOrigin": "reasonix-preview://ce218b093c51bac025b4f44cab613b11.localhost/",
+  "initialPid": 91661,
+  "reopenPid": 91918,
+  "directoryConfirm": {
+    "nativeTitle": "Choose Reasonix workspace",
+    "goToFolder": true,
+    "clickedOpen": true,
+    "projectAndDefaultWorkspaceExactPath": true
+  },
+  "directoryCancel": {
+    "clickedCancel": true,
+    "oldPathPreserved": true
+  },
+  "multiFile": {
+    "nativeTitle": "Add files to this conversation",
+    "selectedRows": 2,
+    "paths": [
+      "/private/tmp/reasonix-launch-services-kct2la97/workspace/附件 中文.txt",
+      "/private/tmp/reasonix-launch-services-kct2la97/workspace/canary.txt"
+    ],
+    "selectionGesture": "click first row then Shift+Down",
+    "returnedAttachments": 2,
+    "cancelPreservesBoth": true,
+    "removeEachThenSendDisabled": true,
+    "sentToProvider": false
+  },
+  "ordinaryRestart": {
+    "samePrivateRoot": true,
+    "sameOrigin": true,
+    "projectAndDefaultWorkspaceExactPath": true,
+    "attachmentsAbsentAfterExplicitRemoval": true
+  },
+  "automationFailures": [
+    "Escape immediately after opening directory panel did not dismiss it; explicit Cancel was used",
+    "Cmd+A did not expand selection; Shift+Down visibly selected both rows",
+    "getAXState(disableDiffing:true,emit:false) changed element indices; stale click 107 rejected before action, refreshed visible AX and used 50"
+  ],
+  "scope": "one explicit private profile; no managed, save, filters, missing-file or other picker entry acceptance"
+}

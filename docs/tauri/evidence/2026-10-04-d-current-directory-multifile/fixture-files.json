@@ -1,0 +1,12 @@
+[
+  {
+    "name": "canary.txt",
+    "bytes": 40,
+    "sha256": "0122f4513999112b90dab997e2f3fd05822d2404aa8e0dc3c92e189b26499a95"
+  },
+  {
+    "name": "附件 中文.txt",
+    "bytes": 26,
+    "sha256": "f20d48f9d5c94ef3e6c0bbb8f357fc86866d8fc6221150ee00b061e289cc8698"
+  }
+]

@@ -1,0 +1,28 @@
+	a.mu.RLock()
+	if tab := a.activeTabLocked(); tab != nil && tab.WorkspaceRoot != "" {
+		cur = tab.WorkspaceRoot
+	}
+	a.mu.RUnlock()
+	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title:            "Choose working folder",
+		DefaultDirectory: dialogDefaultDirectory(cur),
+	})
+	if err != nil || dir == "" {
+		return "", err
+	}
+	return a.SwitchWorkspace(dir)
+}
+
+func dialogDefaultDirectory(preferred string) string {
+	if dir := nearestExistingDirectory(preferred); dir != "" {
+		return dir
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		if dir := nearestExistingDirectory(cwd); dir != "" {
+			return dir
+		}
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		if dir := nearestExistingDirectory(home); dir != "" {
+			return dir
+		}
