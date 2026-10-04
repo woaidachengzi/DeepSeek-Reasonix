@@ -370,7 +370,11 @@ for (const path of localeChunks) {
   // with a bounded 0.1 KiB locale allowance. zh remains within its cap.
   // Hooks clipboard recovery steps add 44 gzip bytes (81084 -> 81128)
   // in the same Node level-9 compressor. Keep the next decimal TW ceiling.
-  const budget = (name.startsWith("zh-TW-") ? 79.3 : 78.9) * 1024;
+  // Harness-style provider setup replaces ten unused Preview captions. The
+  // remaining write-only credential/retry guidance needs a bounded 0.3 KiB
+  // TW allowance (81488 bytes before the final unused caption removal).
+  // Keep zh at its existing cap and retain all initial/CSS payload budgets.
+  const budget = (name.startsWith("zh-TW-") ? 79.6 : 78.9) * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 
