@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-04）
 
+**当前 e677 宿主死亡生命周期：** [八例kernel退出/流断开/同档案重启](evidence/2026-10-04-d-e677-left-host-lifetime/README.md)。managed/explicit × idle/streaming × SIGTERM/SIGKILL共8/8通过，sidecar全正常退出0、4真实provider流、原件与durable身份保持/重启/清理通过。idle四例native位置确认在左屏；streaming预置左屏但未采样GUI位置，不扩大为视觉验收。不同于normal UI Quit、任意旧目录互斥和bot/remote生命周期；D稳定及其他D/E/A/B/C缺口仍待。
+
 **当前 e677 配置备份回退：** [左屏三phase及官方CLI实际回读](evidence/2026-10-04-d-e677-left-backup-rollback/README.md)。受限模板与每次实际native位置确认先于导入，拒绝意外既有状态且不覆盖，2项guard回归通过；真实配置backup以0600恢复到私有Wails目录，官方CLI回读0、两SHA一致、恢复/Preview/backup/原Wails树保持及清理通过。仅配置回退，官方GUI全历史/附件/检查点仍待；最小化与D稳定未完成。
 
 **当前 e677 左屏窗口门禁：** [6项串行程序门禁与实际输入](evidence/2026-10-04-d-e677-left-settings-window/README.md)。受限模板扩展至三个不主动移屏的Settings phase，严格核对native轨迹位置，4项边界回归通过；managed/explicit各原生菜单/API最小化、hide恢复共6/6及kernel0清理通过。另一explicit真实全屏首次键入/退出完成各1、精确左屏恢复通过；实际CmdM与菜单Min仍无原生完成，不算最小化或D稳定通过。

@@ -1,0 +1,9 @@
+{
+  "runnerExitCode": 0,
+  "cases": 8,
+  "exactMatrix": true,
+  "sidecarNormalExits": 8,
+  "actualProviderStreams": 4,
+  "sameProfileRestarts": 8,
+  "installedExecutableHashesUnchanged": true
+}

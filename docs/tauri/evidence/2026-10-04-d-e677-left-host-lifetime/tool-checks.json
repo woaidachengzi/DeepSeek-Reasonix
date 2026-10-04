@@ -1,0 +1,6 @@
+{
+  "pythonSyntax": "ast.parse passed",
+  "sharedTemplateRegressionTests": 4,
+  "sharedTemplateRegressionFailed": 0,
+  "source": "tool results transcribed, not raw command log"
+}

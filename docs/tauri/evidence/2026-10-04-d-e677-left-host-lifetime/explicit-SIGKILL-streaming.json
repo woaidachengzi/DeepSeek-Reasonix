@@ -1,0 +1,25 @@
+{
+  "profile": "explicit",
+  "signal": "SIGKILL",
+  "activeStream": true,
+  "hostPid": 1564,
+  "sidecarPid": 1572,
+  "hostReturnCode": -9,
+  "sidecarRawWaitStatus": 0,
+  "sidecarExitCode": 0,
+  "originalsUnchanged": true,
+  "profileIdentityUnchanged": true,
+  "restartPhase": "menu-shortcuts",
+  "restartPassed": true,
+  "sidecarAndReadinessClean": true,
+  "nativeIdleGeometry": null,
+  "seededGeometry": {
+    "width": 2560,
+    "height": 1640,
+    "maximized": false,
+    "x": -3200,
+    "y": 142,
+    "scale_factor": 2.0
+  },
+  "providerRequests": 1
+}
