@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-04）
 
+**当前 e677 左屏窗口门禁：** [6项串行程序门禁与实际输入](evidence/2026-10-04-d-e677-left-settings-window/README.md)。受限模板扩展至三个不主动移屏的Settings phase，严格核对native轨迹位置，4项边界回归通过；managed/explicit各原生菜单/API最小化、hide恢复共6/6及kernel0清理通过。另一explicit真实全屏首次键入/退出完成各1、精确左屏恢复通过；实际CmdM与菜单Min仍无原生完成，不算最小化或D稳定通过。
+
 **新候选 e677：父窗口信息弹窗。** [修改与新DMG实际验收](evidence/2026-10-04-d-parented-menu-dialogs/README.md)。About/Updates改用main parent与非阻塞show；左屏实际sheet/OK关闭后设置响应、正常Quit清理通过；构建及严格clippy通过，新sidecar Rust231通过/0失败/5 ignored。Updates仍是信息入口。以下46包记录保留为历史证据，不能代替新候选其余验收；最小化/窗口稳定与其他D/E/A/B/C缺口仍待。
 
 **历史46包左屏关闭行为：** [实际关闭、Show 与普通重启证据](evidence/2026-10-04-d-screen2-close/README.md)。空闲explicit档案默认后台关闭保持host/sidecar并可菜单显示；另一档案关闭即退出与普通重启偏好持久化、两次退出0/清理通过。首档案末次Close被CUA拒绝后监控超时，不算退出通过。左侧位置保持；运行中会话/托盘/managed与D稳定缺口仍待。

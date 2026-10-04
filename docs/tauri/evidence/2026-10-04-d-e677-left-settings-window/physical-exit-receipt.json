@@ -1,0 +1,20 @@
+{
+  "app": "/private/tmp/reasonix-d-parented-installed-psvk6loa/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-launch-services-b7ezvv4z",
+  "identifier": "io.reasonix.desktop.preview",
+  "pid": 98483,
+  "sidecarPid": 98491,
+  "openerPid": 98481,
+  "profile": "explicit",
+  "interactive": true,
+  "initialWindowGeometry": {
+    "height": 1640,
+    "scale": 2.0,
+    "width": 2560,
+    "x": -3200,
+    "y": 142
+  },
+  "exitCode": 0,
+  "expectedExitCode": 0,
+  "openExitCode": 0
+}

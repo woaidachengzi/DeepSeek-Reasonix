@@ -1,0 +1,79 @@
+{
+  "programmatic": [
+    {
+      "phase": "menu-settings-native-minimized",
+      "profile": "managed",
+      "host": 98278,
+      "sidecar": 98286,
+      "minimized": [
+        {
+          "nativeMiniaturized": true,
+          "willMiniaturize": 1,
+          "didMiniaturize": 1
+        }
+      ]
+    },
+    {
+      "phase": "menu-settings-native-minimized",
+      "profile": "explicit",
+      "host": 98301,
+      "sidecar": 98308,
+      "minimized": [
+        {
+          "nativeMiniaturized": true,
+          "willMiniaturize": 1,
+          "didMiniaturize": 1
+        }
+      ]
+    },
+    {
+      "phase": "menu-settings-minimized",
+      "profile": "managed",
+      "host": 98331,
+      "sidecar": 98338,
+      "minimized": [
+        {
+          "nativeMiniaturized": true,
+          "willMiniaturize": 1,
+          "didMiniaturize": 1
+        }
+      ]
+    },
+    {
+      "phase": "menu-settings-minimized",
+      "profile": "explicit",
+      "host": 98360,
+      "sidecar": 98367,
+      "minimized": [
+        {
+          "nativeMiniaturized": true,
+          "willMiniaturize": 1,
+          "didMiniaturize": 1
+        }
+      ]
+    },
+    {
+      "phase": "menu-settings-hidden",
+      "profile": "managed",
+      "host": 98418,
+      "sidecar": 98425,
+      "minimized": []
+    },
+    {
+      "phase": "menu-settings-hidden",
+      "profile": "explicit",
+      "host": 98437,
+      "sidecar": 98444,
+      "minimized": []
+    }
+  ],
+  "physicalCUA": {
+    "host": 98483,
+    "sidecar": 98491,
+    "windowAXRaise": true,
+    "composerClickThenCmdM": "two local events target/main key true; no Will/DidMin before AX read",
+    "firstCtrlCmdFEnterExit": "completed native events 1/1; exact left normal restore",
+    "WindowMinimizeActualClick": "no Will/DidMin; restore1/1 unchanged before AX read",
+    "actualCmdQ": "kernel0/open0/cleanup"
+  }
+}

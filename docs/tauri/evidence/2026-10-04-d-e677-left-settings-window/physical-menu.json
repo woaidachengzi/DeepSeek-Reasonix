@@ -1,0 +1,264 @@
+{
+  "phase": "interactive-observe",
+  "sequence": 432,
+  "state": {
+    "appearanceRequests": 2,
+    "appearanceSkipped": 2,
+    "applicationActivationPolicy": 0,
+    "applicationActive": true,
+    "applicationBecameActive": 6,
+    "applicationFinishedLaunching": true,
+    "applicationHidden": false,
+    "applicationModalWindowPresent": false,
+    "applicationOcclusionVisible": true,
+    "applicationResignedActive": 3,
+    "applicationRunning": true,
+    "becameKey": 5,
+    "didDeminiaturize": 0,
+    "didEnterFullscreen": 1,
+    "didExitFullscreen": 1,
+    "didMiniaturize": 0,
+    "focused": false,
+    "fullscreen": false,
+    "geometry": {
+      "height": 1640,
+      "scale": 2.0,
+      "width": 2560,
+      "x": -3200,
+      "y": 142
+    },
+    "localMainCmdM": 2,
+    "localMainCtrlCmdF": 4,
+    "localMainLeftDown": 4,
+    "mainPageFinished": true,
+    "maximized": false,
+    "minimizeTargetIsMain": false,
+    "minimizeTargetPresent": false,
+    "minimized": false,
+    "monitors": [
+      {
+        "height": 1966,
+        "scale": 2.0,
+        "width": 3840,
+        "x": 0,
+        "y": 60
+      },
+      {
+        "height": 2100,
+        "scale": 2.0,
+        "width": 3840,
+        "x": -3840,
+        "y": 60
+      }
+    ],
+    "nativeAttachedSheet": false,
+    "nativeCanBecomeKey": true,
+    "nativeFullscreen": false,
+    "nativeInLiveResize": false,
+    "nativeIsSheet": false,
+    "nativeKeyWindow": false,
+    "nativeMainWindow": false,
+    "nativeMiniaturizable": true,
+    "nativeMiniaturized": false,
+    "nativeOcclusionVisible": true,
+    "nativeOnActiveSpace": true,
+    "nativeStyleMask": 32783,
+    "nativeTimedTransitions": [
+      {
+        "elapsedMs": 35067,
+        "transition": "local-main-left-down"
+      },
+      {
+        "elapsedMs": 35067,
+        "transition": "became-key"
+      },
+      {
+        "elapsedMs": 35071,
+        "transition": "local-main-left-down"
+      },
+      {
+        "actionTargetIsMain": true,
+        "actionTargetPresent": true,
+        "elapsedMs": 35133,
+        "inputMainWasKey": true,
+        "transition": "local-main-cmd-m"
+      },
+      {
+        "actionTargetIsMain": true,
+        "actionTargetPresent": true,
+        "elapsedMs": 35150,
+        "inputMainWasKey": true,
+        "transition": "local-main-cmd-m"
+      },
+      {
+        "elapsedMs": 35158,
+        "transition": "resigned-key"
+      },
+      {
+        "elapsedMs": 52169,
+        "transition": "became-key"
+      },
+      {
+        "elapsedMs": 52209,
+        "transition": "application-became-active"
+      },
+      {
+        "elapsedMs": 52254,
+        "transition": "resigned-key"
+      },
+      {
+        "elapsedMs": 52255,
+        "transition": "application-resigned-active"
+      },
+      {
+        "elapsedMs": 52403,
+        "transition": "application-became-active"
+      },
+      {
+        "elapsedMs": 52403,
+        "transition": "local-main-left-down"
+      },
+      {
+        "elapsedMs": 52403,
+        "transition": "became-key"
+      },
+      {
+        "actionTargetIsMain": true,
+        "actionTargetPresent": true,
+        "elapsedMs": 52420,
+        "inputMainWasKey": true,
+        "transition": "local-main-ctrl-cmd-f"
+      },
+      {
+        "actionTargetIsMain": true,
+        "actionTargetPresent": true,
+        "elapsedMs": 52421,
+        "inputMainWasKey": true,
+        "transition": "local-main-ctrl-cmd-f"
+      },
+      {
+        "elapsedMs": 52436,
+        "transition": "will-enter-fullscreen"
+      },
+      {
+        "elapsedMs": 52481,
+        "transition": "occlusion-changed"
+      },
+      {
+        "elapsedMs": 53018,
+        "transition": "application-became-active"
+      },
+      {
+        "elapsedMs": 53065,
+        "transition": "did-enter-fullscreen"
+      },
+      {
+        "elapsedMs": 53088,
+        "transition": "occlusion-changed"
+      },
+      {
+        "elapsedMs": 65186,
+        "transition": "resigned-key"
+      },
+      {
+        "elapsedMs": 65187,
+        "transition": "application-resigned-active"
+      },
+      {
+        "elapsedMs": 68364,
+        "transition": "application-became-active"
+      },
+      {
+        "elapsedMs": 68366,
+        "transition": "local-main-left-down"
+      },
+      {
+        "elapsedMs": 68366,
+        "transition": "became-key"
+      },
+      {
+        "actionTargetIsMain": true,
+        "actionTargetPresent": true,
+        "elapsedMs": 68672,
+        "inputMainWasKey": true,
+        "transition": "local-main-ctrl-cmd-f"
+      },
+      {
+        "actionTargetIsMain": true,
+        "actionTargetPresent": true,
+        "elapsedMs": 68681,
+        "inputMainWasKey": true,
+        "transition": "local-main-ctrl-cmd-f"
+      },
+      {
+        "elapsedMs": 68687,
+        "transition": "will-exit-fullscreen"
+      },
+      {
+        "elapsedMs": 68742,
+        "transition": "occlusion-changed"
+      },
+      {
+        "elapsedMs": 69262,
+        "transition": "did-exit-fullscreen"
+      },
+      {
+        "elapsedMs": 69291,
+        "transition": "occlusion-changed"
+      },
+      {
+        "elapsedMs": 100395,
+        "transition": "resigned-key"
+      }
+    ],
+    "nativeTransitions": [
+      "local-main-left-down",
+      "became-key",
+      "local-main-left-down",
+      "local-main-cmd-m",
+      "local-main-cmd-m",
+      "resigned-key",
+      "became-key",
+      "application-became-active",
+      "resigned-key",
+      "application-resigned-active",
+      "application-became-active",
+      "local-main-left-down",
+      "became-key",
+      "local-main-ctrl-cmd-f",
+      "local-main-ctrl-cmd-f",
+      "will-enter-fullscreen",
+      "occlusion-changed",
+      "application-became-active",
+      "did-enter-fullscreen",
+      "occlusion-changed",
+      "resigned-key",
+      "application-resigned-active",
+      "application-became-active",
+      "local-main-left-down",
+      "became-key",
+      "local-main-ctrl-cmd-f",
+      "local-main-ctrl-cmd-f",
+      "will-exit-fullscreen",
+      "occlusion-changed",
+      "did-exit-fullscreen",
+      "occlusion-changed",
+      "resigned-key"
+    ],
+    "nativeVisible": true,
+    "nativeWindowLevel": 0,
+    "nativeWindowNumber": 20942,
+    "occlusionChanges": 5,
+    "reopenEvents": 0,
+    "resignedKey": 5,
+    "restoreCompletions": 1,
+    "restoreRequests": 1,
+    "runningActivationPolicy": 0,
+    "runningApplicationActive": false,
+    "trustedMainUrl": true,
+    "visible": true,
+    "willEnterFullscreen": 1,
+    "willExitFullscreen": 1,
+    "willMiniaturize": 0
+  }
+}

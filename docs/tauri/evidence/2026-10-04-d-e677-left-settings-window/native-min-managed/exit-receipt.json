@@ -1,0 +1,14 @@
+{
+  "app": "/private/tmp/reasonix-d-parented-installed-psvk6loa/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-launch-services-yglb9qlz",
+  "identifier": "io.reasonix.desktop.preview",
+  "pid": 98278,
+  "sidecarPid": 98286,
+  "openerPid": 98276,
+  "profile": "managed",
+  "interactive": false,
+  "nativePhase": "menu-settings-native-minimized",
+  "exitCode": 0,
+  "expectedExitCode": 0,
+  "openExitCode": 0
+}

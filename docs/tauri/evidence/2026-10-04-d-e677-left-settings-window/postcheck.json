@@ -1,0 +1,21 @@
+{
+  "ownedHostAndSidecarPidsAbsent": [
+    98278,
+    98286,
+    98301,
+    98308,
+    98331,
+    98338,
+    98360,
+    98367,
+    98418,
+    98425,
+    98437,
+    98444,
+    98483,
+    98491
+  ],
+  "strictDeepSignatureExit": 0,
+  "installedHostAndSidecarHashesUnchanged": true,
+  "source": "post-run ps and codesign plus digest comparison"
+}
