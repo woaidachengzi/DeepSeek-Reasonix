@@ -1,0 +1,28 @@
+{
+  "source": "transcribed actual CUA actions and AX; not generated test assertions",
+  "about": {
+    "menuAction": "About Reasonix",
+    "role": "sheet",
+    "okDismissed": true
+  },
+  "updates": {
+    "menuAction": "Updates…",
+    "role": "sheet",
+    "okDismissed": true,
+    "content": "manual-download information, updater not available"
+  },
+  "afterDialogs": {
+    "settingsOpened": true,
+    "actualCmdQ": true
+  },
+  "strictClippy": {
+    "command": "cargo clippy --locked --manifest-path desktop/tauri/Cargo.toml --all-targets -- -D warnings",
+    "session": 54710,
+    "exitCode": 0
+  },
+  "previous46Minimize": {
+    "screenshot": "purple system sharing control covered traffic lights; no coordinate button click attempted",
+    "input": "composer focus then super+m; actual Window/Minimize menu click",
+    "outcome": "no Will/DidMiniaturize; no coordinate acceptance; preserves failure"
+  }
+}

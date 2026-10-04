@@ -69,15 +69,17 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-04）
 
-**当前46包左屏关闭行为：** [实际关闭、Show 与普通重启证据](evidence/2026-10-04-d-screen2-close/README.md)。空闲explicit档案默认后台关闭保持host/sidecar并可菜单显示；另一档案关闭即退出与普通重启偏好持久化、两次退出0/清理通过。首档案末次Close被CUA拒绝后监控超时，不算退出通过。左侧位置保持；运行中会话/托盘/managed与D稳定缺口仍待。
+**新候选 e677：父窗口信息弹窗。** [修改与新DMG实际验收](evidence/2026-10-04-d-parented-menu-dialogs/README.md)。About/Updates改用main parent与非阻塞show；左屏实际sheet/OK关闭后设置响应、正常Quit清理通过；构建及严格clippy通过，新sidecar Rust231通过/0失败/5 ignored。Updates仍是信息入口。以下46包记录保留为历史证据，不能代替新候选其余验收；最小化/窗口稳定与其他D/E/A/B/C缺口仍待。
 
-**当前46包实际保存与取消恢复：** [左屏诊断保存证据](evidence/2026-10-04-d-current-save-recovery/README.md)。一份explicit档案中文/空格命名保存、原生覆盖Cancel保持hash/mtime/mode、备份后Replace有效JSON0600、保存面板Cancel不写且保留5事件、重试导出和普通Quit清理通过。[基线归属更正](evidence/2026-10-04-d-diagnostics-baseline-correction/README.md)确认对应Wails前端交互控件也导出JSON，记录器字节一致/两记录器回归通过；ZIP是独立滚动诊断接口，不再列为该JSON入口格式缺口。默认目录、其他档案/过滤/写入故障/保存入口与独立旧API仍待。D稳定/E待验缺口保持。
+**历史46包左屏关闭行为：** [实际关闭、Show 与普通重启证据](evidence/2026-10-04-d-screen2-close/README.md)。空闲explicit档案默认后台关闭保持host/sidecar并可菜单显示；另一档案关闭即退出与普通重启偏好持久化、两次退出0/清理通过。首档案末次Close被CUA拒绝后监控超时，不算退出通过。左侧位置保持；运行中会话/托盘/managed与D稳定缺口仍待。
 
-**当前46包左屏首次全屏键往返：** [新建私有档案与真实原生完成证据](evidence/2026-10-04-d-screen2-template-fullscreen/README.md)。启动器新增受限geometry模板且先确认native恢复，边界回归2项通过；当前一份explicit左屏2档案Ctrl+Cmd+F首次进入/退出完成各1、精确恢复与正常Quit清理通过。最小化按钮/键仍失败；此前其他现场首次全屏失败保持，不称间歇根因或D稳定已解决。
+**历史46包实际保存与取消恢复：** [左屏诊断保存证据](evidence/2026-10-04-d-current-save-recovery/README.md)。一份explicit档案中文/空格命名保存、原生覆盖Cancel保持hash/mtime/mode、备份后Replace有效JSON0600、保存面板Cancel不写且保留5事件、重试导出和普通Quit清理通过。[基线归属更正](evidence/2026-10-04-d-diagnostics-baseline-correction/README.md)确认对应Wails前端交互控件也导出JSON，记录器字节一致/两记录器回归通过；ZIP是独立滚动诊断接口，不再列为该JSON入口格式缺口。默认目录、其他档案/过滤/写入故障/保存入口与独立旧API仍待。D稳定/E待验缺口保持。
 
-**当前46包目录、多文件与默认工作区重启：** [一份explicit私有档案的实际CUA验收](evidence/2026-10-04-d-current-directory-multifile/README.md)。真实目录Open/Cancel、两份附件同时返回（中文/空格路径）、附件Cancel保留/逐项移除、普通重启同工作区通过；两次正常Quit及自有sidecar/ready清理、安装SHA/strict signature保持。源码未改，不继承其他档案/入口/保存过滤错误场景；Escape/Cmd+A自动化未奏效记录保留。D稳定性缺口与E待验保持。
+**历史46包左屏首次全屏键往返：** [新建私有档案与真实原生完成证据](evidence/2026-10-04-d-screen2-template-fullscreen/README.md)。启动器新增受限geometry模板且先确认native恢复，边界回归2项通过；当前一份explicit左屏2档案Ctrl+Cmd+F首次进入/退出完成各1、精确恢复与正常Quit清理通过。最小化按钮/键仍失败；此前其他现场首次全屏失败保持，不称间歇根因或D稳定已解决。
 
-**最新 46c2c9da 选区普通重开通过：** [失败stage、就绪前提修正与当前包七gate](evidence/2026-10-04-d-selection-reopen-ready/README.md)。首轮feb在首个storage配置检查code4/kernel2，检查前可信URL但mainFinished=false/hidden；保留失败。修正opt-in探针在可信Finished/渲染后读取storage，原配置/历史断言不变；当前两档案实际录键、旧键、引用二次发送/恰两provider/普通重开持久化/协议隐藏/无draft回放通过。Rust231/5ignored、strict clippy、真实app/DMG安装签名、七程序gate（含48/48、双档案fullscreen）和本包配置备份官方CLI回读通过。实际Cmd+M两个事件分发时key和查询target均main但无Mini完成，不证明role调用；物理全屏菜单进/键退/精确恢复和Quit通过，首次键进/物理最小化仍未通过。D未完成，E逐项验收仍待D稳定；其他D/官方GUI全资料回退不继承旧包，A/B/C与正式签名公证缺口保留。
+**历史46包目录、多文件与默认工作区重启：** [一份explicit私有档案的实际CUA验收](evidence/2026-10-04-d-current-directory-multifile/README.md)。真实目录Open/Cancel、两份附件同时返回（中文/空格路径）、附件Cancel保留/逐项移除、普通重启同工作区通过；两次正常Quit及自有sidecar/ready清理、安装SHA/strict signature保持。源码未改，不继承其他档案/入口/保存过滤错误场景；Escape/Cmd+A自动化未奏效记录保留。D稳定性缺口与E待验保持。
+
+**历史 46c2c9da 选区普通重开通过：** [失败stage、就绪前提修正与当前包七gate](evidence/2026-10-04-d-selection-reopen-ready/README.md)。首轮feb在首个storage配置检查code4/kernel2，检查前可信URL但mainFinished=false/hidden；保留失败。修正opt-in探针在可信Finished/渲染后读取storage，原配置/历史断言不变；当前两档案实际录键、旧键、引用二次发送/恰两provider/普通重开持久化/协议隐藏/无draft回放通过。Rust231/5ignored、strict clippy、真实app/DMG安装签名、七程序gate（含48/48、双档案fullscreen）和本包配置备份官方CLI回读通过。实际Cmd+M两个事件分发时key和查询target均main但无Mini完成，不证明role调用；物理全屏菜单进/键退/精确恢复和Quit通过，首次键进/物理最小化仍未通过。D未完成，E逐项验收仍待D稳定；其他D/官方GUI全资料回退不继承旧包，A/B/C与正式签名公证缺口保留。
 
 **最新 041949c6 原生输入/选区原子观察：** [源码与真实当前包证据](evidence/2026-10-04-d-native-input-observation/README.md)。仅opt-in诊断改动：本主窗口固定M/F+modifier及点击计数、事件原样放行/退出移除；旧键同次dispatch的两个条件独立保存，原断言保持。当前真实包Rust231/5ignored、strict clippy、构建/DMG安装签名、六程序gate（含window48/48及双档案fullscreen）和配置备份官方CLI回读通过。实际Cmd+M有2条匹配local事件而Will/DidMin=0，不证明role调用或根因；实际全屏菜单进/键退/精确恢复与Quit通过，首次键进仍未通过。选区managed旧键两条件false、发送/provider通过，重开WKErrorDomain code4/kernel2，explicit未运行，整组failed。还需check stage/初始化前提定位；其他D/官方GUI全资料回退不继承旧包。D未完成/E未开启，A/B/C/正式签名公证缺口保持。
 

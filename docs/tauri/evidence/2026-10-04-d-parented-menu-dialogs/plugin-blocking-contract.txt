@@ -1,0 +1,19 @@
+    /// Returns `true` if the user pressed the OK/Yes button,
+    ///
+    /// This is a blocking operation,
+    /// and should *NOT* be used when running on the main thread context.
+    pub fn blocking_show(self) -> bool {
+        blocking_fn!(self, show)
+    }
+
+    /// Shows a message dialog and returns the button that was pressed.
+    ///
+    /// Returns a [`MessageDialogResult`] enum that indicates which button was pressed.
+    ///
+    /// This is a blocking operation,
+    /// and should *NOT* be used when running on the main thread context.
+    pub fn blocking_show_with_result(self) -> MessageDialogResult {
+        blocking_fn!(self, show_with_result)
+    }
+}
+#[derive(Debug, Serialize)]

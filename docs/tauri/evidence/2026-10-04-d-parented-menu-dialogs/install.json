@@ -1,0 +1,13 @@
+{
+  "app": "/private/tmp/reasonix-d-parented-installed-psvk6loa/Reasonix Tauri Preview.app",
+  "dmg": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri Preview_0.1.0_aarch64.dmg",
+  "sourceHead": "2d3744875",
+  "dirtyProductFiles": [
+    "desktop/tauri/src/main.rs"
+  ],
+  "sha256": {
+    "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri Preview_0.1.0_aarch64.dmg": "82d37d058284416c17c73469e034271126713cae65d7f93c280bc8bdcee45072",
+    "/private/tmp/reasonix-d-parented-installed-psvk6loa/Reasonix Tauri Preview.app/Contents/MacOS/reasonix-tauri": "e6778b8fc3a5bcd7095d75afccedae753a521559fb6dd4896ea72d4100ec0706",
+    "/private/tmp/reasonix-d-parented-installed-psvk6loa/Reasonix Tauri Preview.app/Contents/MacOS/reasonix-desktop-bridge": "6189151139f5c820c15e4da18419f7ce4bc582d7b8885d3f7227fde8b828cb1b"
+  }
+}

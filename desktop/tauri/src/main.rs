@@ -3815,11 +3815,16 @@ fn main() {
                         bridge::PROTOCOL_VERSION
                     );
                     let dialog = tauri_plugin_dialog::DialogExt::dialog(app);
-                    let _ = dialog
-                        .message(&msg)
-                        .title("About Reasonix")
-                        .kind(tauri_plugin_dialog::MessageDialogKind::Info)
-                        .blocking_show();
+                    if let Some(window) = app.get_webview_window("main") {
+                        // Bind the sheet to the user's display and keep the native
+                        // event loop responsive while the informational dialog is open.
+                        dialog
+                            .message(&msg)
+                            .parent(&window)
+                            .title("About Reasonix")
+                            .kind(tauri_plugin_dialog::MessageDialogKind::Info)
+                            .show(|_| {});
+                    }
                 }
                 "check_updates" => {
                     let version = env!("CARGO_PKG_VERSION");
@@ -3827,11 +3832,16 @@ fn main() {
                         "Current version: {version}\n\nUpdate checks are not available in Tauri Preview yet.\nFor released versions and manual downloads, visit:\nhttps://github.com/esengine/DeepSeek-Reasonix/releases"
                     );
                     let dialog = tauri_plugin_dialog::DialogExt::dialog(app);
-                    let _ = dialog
-                        .message(&msg)
-                        .title("Updates")
-                        .kind(tauri_plugin_dialog::MessageDialogKind::Info)
-                        .blocking_show();
+                    if let Some(window) = app.get_webview_window("main") {
+                        // Bind the sheet to the user's display and keep the native
+                        // event loop responsive while the informational dialog is open.
+                        dialog
+                            .message(&msg)
+                            .parent(&window)
+                            .title("Updates")
+                            .kind(tauri_plugin_dialog::MessageDialogKind::Info)
+                            .show(|_| {});
+                    }
                 }
                 "reload" | "force_reload" => {
                     if let Some(window) = app.get_webview_window("main") {
