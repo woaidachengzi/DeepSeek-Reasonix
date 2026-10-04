@@ -1,0 +1,22 @@
+{
+  "app": "/private/tmp/reasonix-minimize-sender-installed-bwlkpweb/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-launch-services-4yflitjm",
+  "identifier": "io.reasonix.desktop.preview",
+  "pid": 5551,
+  "sidecarPid": 5558,
+  "openerPid": 5549,
+  "profile": "explicit",
+  "interactive": true,
+  "initialWindowGeometry": {
+    "height": 1640,
+    "scale": 2.0,
+    "width": 2560,
+    "x": -3200,
+    "y": 142
+  },
+  "exitCode": 0,
+  "expectedExitCode": 0,
+  "openExitCode": 0,
+  "sidecarRemaining": false,
+  "readyRemaining": false
+}

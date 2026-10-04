@@ -1,0 +1,14 @@
+{
+  "app": "/private/tmp/reasonix-minimize-sender-installed-bwlkpweb/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-launch-services-d8knf2xj",
+  "identifier": "io.reasonix.desktop.preview",
+  "pid": 5483,
+  "sidecarPid": 5491,
+  "openerPid": 5481,
+  "profile": "managed",
+  "interactive": false,
+  "nativePhase": "menu-settings-native-minimized",
+  "exitCode": 0,
+  "expectedExitCode": 0,
+  "openExitCode": 0
+}

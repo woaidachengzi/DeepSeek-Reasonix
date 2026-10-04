@@ -1,0 +1,13 @@
+{
+  "app": "/private/tmp/reasonix-minimize-sender-installed-bwlkpweb/Reasonix Tauri Preview.app",
+  "sourceHead": "01822bac3",
+  "dirtyProductFiles": [
+    "desktop/tauri/src/native_menu_smoke.rs",
+    "desktop/tauri/src/native_window_smoke.rs"
+  ],
+  "sha256": {
+    "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri Preview_0.1.0_aarch64.dmg": "476ddf235cb52ff52d472409d74918161d89d5ce41358d7ef1e229cdd50e1961",
+    "/private/tmp/reasonix-minimize-sender-installed-bwlkpweb/Reasonix Tauri Preview.app/Contents/MacOS/reasonix-tauri": "1754bc34d6b89d263ac1173f613cf3fe92a00555dea231b4261b89ec3591ef7f",
+    "/private/tmp/reasonix-minimize-sender-installed-bwlkpweb/Reasonix Tauri Preview.app/Contents/MacOS/reasonix-desktop-bridge": "5c8dad34056254e6ff965d41fc1b3748bbf29aaf4c68321964baac1755c04a21"
+  }
+}

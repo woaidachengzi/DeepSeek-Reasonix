@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-04）
 
+**新诊断候选 1754：** [真实 Minimize sender 只读观测与失败记录](evidence/2026-10-04-d-minimize-menu-sender/README.md)。原生程序菜单最小化/Settings恢复双档案2/2通过；实际 Cmd+M/菜单仍无最小化事件，保留失败。菜单启用/快捷键正确；动作后失焦的 sender 查询不能证明输入时的根因。新包不继承下述 e677 各项验收，D稳定/E完整验收仍待。
+
 **当前 e677 剪贴板/隐藏调用者：** [真实IPC双档案与原格式恢复](evidence/2026-10-04-d-e677-clipboard-permissions/README.md)。main文本写读/read_image拒绝、hidden text/dialog拒绝、6个原生命令7个来源case普通/伪造main共28次caller拒绝、原剪贴板全部格式恢复/退出0清理2/2通过；前端剪贴板回归通过，Tauri拒绝不fallback。窗口仅预置左屏未采样几何；物理编辑、系统通知/keychain授权等不算通过，D稳定/其他D/E/A/B/C仍待。
 
 **当前 e677 单实例左屏恢复：** [managed/explicit真实第二次LaunchServices启动](evidence/2026-10-04-d-e677-left-single-instance/README.md)。原后台关闭窗口由第二次同包启动恢复focused/unhide/精确左屏几何，第二次open0/原sidecar不替换、原host kernel0与清理2/2通过。受限模板参考不冒充exercise；开发例外/跨档案/remote child/Dock托盘/旧writer互斥等不继承通过，最小化与D稳定仍待。
