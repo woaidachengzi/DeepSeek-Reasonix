@@ -1322,3 +1322,18 @@
 .tauri-theme-editor input[type=color]{width:34px;height:26px;padding:2px;border:1px solid var(--border);border-radius:6px;background:var(--bg)}
 .tauri-theme-editor__recipes{display:flex;gap:8px;flex-wrap:wrap}.tauri-theme-editor__recipes select{min-width:110px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)}
 .tauri-theme-editor>div{display:flex;gap:8px;flex-wrap:wrap}
+
+/* Model connection setup: one add card, with optional details folded away. */
+.tauri-provider-connect { padding: 16px; margin: 12px 0 20px; border: 1px solid var(--border-soft); border-radius: 12px; background: var(--bg); }
+.tauri-provider-connect-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 10px; background: var(--surface); }
+.tauri-provider-connect-tabs > button { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--fg-faint); font: inherit; cursor: pointer; }
+.tauri-provider-connect-tabs > button[aria-selected="true"] { border-color: var(--border-soft); background: var(--bg); color: var(--fg); }
+.tauri-provider-connect-tabs > button:disabled { cursor: default; opacity: .6; }
+.tauri-provider-connect .tauri-provider-editor-form { margin-bottom: 12px; }
+.tauri-provider-key-retry { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border-soft); border-radius: 8px; }
+.tauri-provider-key-retry > label { display: grid; gap: 5px; }
+.tauri-provider-connect .tauri-provider-preset-route { overflow-wrap: anywhere; }
+@media (max-width: 640px) { .tauri-provider-connect { padding: 12px; } .tauri-provider-connect-tabs { flex-direction: column; } }
+
+.tauri-provider-editor-form[hidden] { display: none; }
+.tauri-provider-connect-tabs > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
