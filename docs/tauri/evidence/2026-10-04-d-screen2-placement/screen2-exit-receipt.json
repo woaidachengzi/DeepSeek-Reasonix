@@ -1,0 +1,13 @@
+{
+  "app": "/private/tmp/reasonix-d-reopen-ready-installed-r4q66pgv/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-launch-services-jjma6bft",
+  "identifier": "io.reasonix.desktop.preview",
+  "pid": 92724,
+  "sidecarPid": 92731,
+  "openerPid": 92722,
+  "profile": "explicit",
+  "interactive": true,
+  "exitCode": 0,
+  "expectedExitCode": 0,
+  "openExitCode": 0
+}

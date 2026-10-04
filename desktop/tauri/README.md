@@ -1,5 +1,7 @@
 # Reasonix Tauri host
 
+交互验收位置：用户确认左侧屏幕为屏幕2；后续先将私有验收父窗口恢复到左屏并检查bounds，再打开弹窗，避免干扰屏幕1。[当前46包左屏恢复及目录sheet验证](../../docs/tauri/evidence/2026-10-04-d-screen2-placement/README.md)。不读AX的Cmd+M/Minimize菜单观察仍无原生最小化完成，缺口保留。
+
 当前46包补验：[真实目录、多文件与默认工作区重启](../../docs/tauri/evidence/2026-10-04-d-current-directory-multifile/README.md)。一份explicit私有档案真实Open/Cancel、两附件含中文空格路径、移除/重启持久化与两次正常Quit清理通过；其他档案/入口/保存错误场景仍待，D窗口稳定性仍未完成。
 
 最新状态：[46c2c9da 选区普通重开与响应者诊断](../../docs/tauri/evidence/2026-10-04-d-selection-reopen-ready/README.md)。修正仅opt-in重开探针读取storage的就绪前提；当前包两档案实际配置录键、引用二次发送和普通重开/无draft回放通过。Rust231/5ignored、strict clippy、构建/DMG安装签名、七程序gate（含窗口48/48与全屏）及配置备份官方CLI回读通过。物理Cmd+M分发时key/查询target均main但无Mini完成；实际全屏菜单进/快捷键退/精确恢复与Quit通过，首次键进及最小化仍未通过。其他D/官方GUI全资料回退不继承旧包；D未完成，E逐项验收待D稳定，A/B/C及正式签名公证仍阻碍发布。历史现场不直接代表当前候选。
