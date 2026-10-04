@@ -1,0 +1,21 @@
+{
+  "signatureExit": 0,
+  "sha256": {
+    "reasonix-tauri": "041949c6917d9b77d10fc1b837cc0f0ea4c0cc1dd66b44ccf63ffff6bde14d85",
+    "reasonix-desktop-bridge": "1adfc780af2305c149bc5795ee9f66809979642f1044a5e867448c50a48ea493"
+  },
+  "previewRunning": false,
+  "physicalHostAlive": false,
+  "fixtures": [
+    {
+      "root": "/private/tmp/reasonix-launch-services-z2o9gi6x",
+      "sidecars": [],
+      "readyFiles": []
+    },
+    {
+      "root": "/private/tmp/reasonix-native-message-copy-b9jvcii7",
+      "sidecars": [],
+      "readyFiles": []
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "app": "/private/tmp/reasonix-d-input-observation-installed-rh0um20b/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-launch-services-z2o9gi6x",
+  "pid": 82365,
+  "scope": "Faithful CUA action transcription; fixed native states copied after each action, no screenshot export",
+  "actions": [
+    "bind exact live private app and origin",
+    "composer36 click: key true/local-main-left-down1",
+    "super+m: localMainCmdM2, native mini false/Will0/Did0",
+    "composer36 click + ctrl+super+f: localMainCtrlCmdF0, no fullscreen events",
+    "View55 -> Toggle Full Screen4: DidEnter1/nativeFullscreen true",
+    "ctrl+super+f: localMainCtrlCmdF2, DidExit1/fullscreen false/exact original geometry",
+    "app menu51 -> Quit9: kernel/open exit0 and no sidecar/ready"
+  ],
+  "minimizeAccepted": false,
+  "shortcutEntryAccepted": false,
+  "menuFullscreenEntryAccepted": true,
+  "shortcutFullscreenExitAccepted": true,
+  "quitAccepted": true
+}

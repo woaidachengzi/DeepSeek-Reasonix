@@ -1,0 +1,13 @@
+{
+  "app": "/private/tmp/reasonix-d-input-observation-installed-rh0um20b/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-launch-services-z2o9gi6x",
+  "identifier": "io.reasonix.desktop.preview",
+  "pid": 82365,
+  "sidecarPid": 82372,
+  "openerPid": 82363,
+  "profile": "explicit",
+  "interactive": true,
+  "exitCode": 0,
+  "expectedExitCode": 0,
+  "openExitCode": 0
+}

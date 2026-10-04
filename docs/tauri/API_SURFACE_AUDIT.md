@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-04）
 
+**最新 041949c6 原生输入/选区原子观察：** [源码与真实当前包证据](evidence/2026-10-04-d-native-input-observation/README.md)。仅opt-in诊断改动：本主窗口固定M/F+modifier及点击计数、事件原样放行/退出移除；旧键同次dispatch的两个条件独立保存，原断言保持。当前真实包Rust231/5ignored、strict clippy、构建/DMG安装签名、六程序gate（含window48/48及双档案fullscreen）和配置备份官方CLI回读通过。实际Cmd+M有2条匹配local事件而Will/DidMin=0，不证明role调用或根因；实际全屏菜单进/键退/精确恢复与Quit通过，首次键进仍未通过。选区managed旧键两条件false、发送/provider通过，重开WKErrorDomain code4/kernel2，explicit未运行，整组failed。还需check stage/初始化前提定位；其他D/官方GUI全资料回退不继承旧包。D未完成/E未开启，A/B/C/正式签名公证缺口保持。
+
 **当前 f4c2a60d 窗口补验：** [原生路径/完整48阶段/全屏及物理差异](evidence/2026-10-04-d-f4-window-current/README.md)。生产和工具未改，当前包完整窗口managed24/explicit24共48/48通过、双档案原生全屏进入退出/精确存档/重启通过；API/AppKit/menu六例最小化恢复通过，两个occlusion前提失败且未请求最小化，保留exit1。实际CUA全屏菜单进入、Ctrl+Cmd+F退出/原几何与正常Quit清理通过，但快捷键首次进入、物理menu/button/Cmd+M最小化未通过；输入/窗口状态根因未证实，不称间歇问题已修复。前后strict签名/SHA/自有进程清理保持，当前配置回退沿用同一f4上一轮实测；选区失败、其他D与官方GUI全资料回退仍待。D未完成/E未开启，A/B/C/正式签名公证缺口保留。
 
 **最新 f4c2a60d 原生 Reload：** [实现、真实安装包及失败证据](evidence/2026-10-04-d-native-reload/README.md)。Reload 从页面 eval 改为原生 WK 加载；两档案正常/隐藏四轮及 package/failure-exit/lifetime、当前包配置备份应用/官方 CLI 回读通过。Rust231/5ignored、strict clippy、实际 app/DMG 构建安装签名及清理通过。首轮 dda 实际 Show/Quit 通过，但完整窗口最小化失败；最终 f4 选区门禁联合断言失败，不能据此认定旧键接管，重开空值保护未获安装包验证。健康页面 Reload 不证明 never-Finished/坏JS恢复；最终完整窗口和官方GUI全数据回退未运行，其他D不继承旧包。当前CUA可读UI；D未完成/E未开启，A/B/C及正式签名公证缺口保留。

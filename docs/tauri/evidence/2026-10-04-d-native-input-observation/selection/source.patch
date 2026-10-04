@@ -1,0 +1,186 @@
+diff --git a/desktop/tauri/src/native_ui_message_copy_smoke.rs b/desktop/tauri/src/native_ui_message_copy_smoke.rs
+index 33575676f..15143965b 100644
+--- a/desktop/tauri/src/native_ui_message_copy_smoke.rs
++++ b/desktop/tauri/src/native_ui_message_copy_smoke.rs
+@@ -22,7 +22,7 @@ fn check(app: &AppHandle, script: String, stage: &str) -> Result<(), String> {
+ }
+ 
+ // Opt-in fixed-schema observations only: no transcript/editor content is returned.
+-fn observe_selection(app: &AppHandle, directory: &Path) -> Result<(), String> {
++fn observe_selection(app: &AppHandle, directory: &Path, name: &str) -> Result<(), String> {
+     use block2::RcBlock;
+     use objc2::runtime::AnyObject;
+     use objc2_foundation::{NSError, NSString};
+@@ -48,7 +48,9 @@ fn observe_selection(app: &AppHandle, directory: &Path) -> Result<(), String> {
+               const selection = document.getSelection();
+               const transcript = document.querySelector('.tauri-transcript');
+               const action = document.querySelector('.transcript-selection-action');
+-              return {frameCallback: window.__reasonixSelectionFrame === true,
++              return {oldShortcutDefaultPrevented: window.__reasonixOldShortcutProbe?.defaultPrevented ?? null,
++                oldShortcutSelectionCollapsed: window.__reasonixOldShortcutProbe?.selectionCollapsed ?? null,
++                frameCallback: window.__reasonixSelectionFrame === true,
+                 documentVisible: document.visibilityState === 'visible',
+                 documentFocused: document.hasFocus(),
+                 selectionCollapsed: !selection || selection.isCollapsed,
+@@ -69,7 +71,7 @@ fn observe_selection(app: &AppHandle, directory: &Path) -> Result<(), String> {
+         .map_err(|_| "selection observation timed out")??;
+     let value: serde_json::Value = serde_json::from_str(&text)
+         .map_err(|_| "selection observation malformed")?;
+-    std::fs::write(directory.join("reasonix-native-selection-observation.json"), value.to_string())
++    std::fs::write(directory.join(name), value.to_string())
+         .map_err(|_| "record selection observation".into())
+ }
+ 
+@@ -210,7 +212,7 @@ pub fn run(app: &AppHandle, directory: &Path, send_selection: bool) -> Result<()
+     crate::native_window_smoke::record(app, "selection-requested")?;
+     let action_result = check(app, "document.querySelector('.transcript-selection-action[data-state=open] button:not(:disabled)') ? 'edit-ok' : 'edit-pending'".into(), "Add to Chat action");
+     // Capture the first terminal observation before the runner exits/cleans up.
+-    observe_selection(app, directory)?;
++    observe_selection(app, directory, "reasonix-native-selection-observation.json")?;
+     crate::native_window_smoke::record(app, if action_result.is_ok() { "selection-action-ready" } else { "selection-action-failed" })?;
+     action_result?;
+     if !crate::native_edit_smoke::evaluate(
+@@ -245,8 +247,14 @@ pub fn run(app: &AppHandle, directory: &Path, send_selection: bool) -> Result<()
+         return Err("reselect actual message for selection shortcut".into());
+     }
+     check(app, "document.querySelector('.transcript-selection-action[data-state=open] button:not(:disabled)') ? 'edit-ok' : 'edit-pending'".into(), "selection shortcut armed")?;
+-    if send_selection && !crate::native_edit_smoke::evaluate(app, "(() => { const event = new KeyboardEvent('keydown', {key:'l',metaKey:true,bubbles:true,cancelable:true}); document.dispatchEvent(event); return !event.defaultPrevented && !document.getSelection().isCollapsed ? 'edit-ok' : 'edit-pending'; })()".into())? {
+-        return Err("old selection shortcut still claimed after remap".into());
++    if send_selection {
++        let old_inactive = crate::native_edit_smoke::evaluate(app, "(() => { const event = new KeyboardEvent('keydown', {key:'l',metaKey:true,bubbles:true,cancelable:true}); document.dispatchEvent(event); const probe = {defaultPrevented:event.defaultPrevented, selectionCollapsed:!document.getSelection() || document.getSelection().isCollapsed}; window.__reasonixOldShortcutProbe = probe; return !probe.defaultPrevented && !probe.selectionCollapsed ? 'edit-ok' : 'edit-pending'; })()".into())?;
++        // Freeze both subconditions from the same dispatch, including failures;
++        // keep the first action observation in its distinct original file.
++        observe_selection(app, directory, "reasonix-native-old-shortcut-observation.json")?;
++        if !old_inactive {
++            return Err("old shortcut inactivity or retained selection assertion failed after remap".into());
++        }
+     }
+     let shortcut = format!("(() => {{ const event = new KeyboardEvent('keydown', {{key:'l',metaKey:true,shiftKey:{send_selection},bubbles:true,cancelable:true}}); document.dispatchEvent(event); return event.defaultPrevented ? 'edit-ok' : 'edit-pending'; }})()");
+     if !crate::native_edit_smoke::evaluate(app, shortcut)? {
+diff --git a/desktop/tauri/src/native_window_smoke.rs b/desktop/tauri/src/native_window_smoke.rs
+index 7cf494dfa..f6537e5c0 100644
+--- a/desktop/tauri/src/native_window_smoke.rs
++++ b/desktop/tauri/src/native_window_smoke.rs
+@@ -32,7 +32,7 @@ pub struct WindowSmokeState {
+     transitions: Arc<WindowTransitions>,
+ }
+ 
+-const TRANSITIONS: [&str; 14] = [
++const TRANSITIONS: [&str; 17] = [
+     "will-miniaturize",
+     "did-miniaturize",
+     "did-deminiaturize",
+@@ -47,6 +47,9 @@ const TRANSITIONS: [&str; 14] = [
+     "did-enter-fullscreen",
+     "will-exit-fullscreen",
+     "did-exit-fullscreen",
++    "local-main-cmd-m",
++    "local-main-ctrl-cmd-f",
++    "local-main-left-down",
+ ];
+ 
+ struct WindowTransitions {
+@@ -62,7 +65,7 @@ impl Default for WindowTransitions {
+ 
+ #[derive(Clone, Default)]
+ struct TransitionRecord {
+-    counts: [usize; 14],
++    counts: [usize; 17],
+     recent: Vec<&'static str>,
+     timed: Vec<serde_json::Value>,
+ }
+@@ -87,6 +90,7 @@ impl WindowTransitions {
+ thread_local! {
+     // Registration/removal and retained observer tokens stay on the AppKit
+     // main thread. The blocks capture only thread-safe diagnostic counters.
++    static INPUT_MONITOR: RefCell<Option<Retained<objc2::runtime::AnyObject>>> = const { RefCell::new(None) };
+     static WINDOW_OBSERVERS: RefCell<Vec<Retained<ProtocolObject<dyn NSObjectProtocol>>>> = const { RefCell::new(Vec::new()) };
+ }
+ 
+@@ -173,10 +177,63 @@ fn install_window_observers(app: &AppHandle) -> Result<(), String> {
+     })
+ }
+ 
++// Private interactive acceptance only. Observe fixed gesture classes without
++// characters, coordinates or content; pass each borrowed event through unchanged.
++// AppKit tracking loops may bypass this monitor, so absence is not non-delivery.
++fn install_input_monitor(app: &AppHandle) -> Result<(), String> {
++    use block2::RcBlock;
++    use objc2_app_kit::{NSEvent, NSEventMask, NSEventModifierFlags, NSEventType, NSWindow};
++    objc2::MainThreadMarker::new().ok_or("input monitor requires main thread")?;
++    let window = app.get_webview_window("main").ok_or("input monitor window missing")?;
++    let pointer = window.ns_window().map_err(|_| "input monitor handle missing")?;
++    if pointer.is_null() { return Err("input monitor handle null".into()); }
++    // SAFETY: Borrowed live main NSWindow, read on its owning thread; only its
++    // scalar number escapes, never the native pointer or event payload.
++    let number = unsafe { &*pointer.cast::<NSWindow>() }.windowNumber();
++    let counters = Arc::clone(&app.state::<WindowSmokeState>().transitions);
++    let callback = RcBlock::new(move |event: std::ptr::NonNull<NSEvent>| {
++        // SAFETY: AppKit supplies a live event for this callback. The original
++        // pointer is returned synchronously and is never stored or consumed.
++        let value = unsafe { event.as_ref() };
++        if value.windowNumber() == number {
++            if value.r#type() == NSEventType::LeftMouseDown {
++                counters.note(16);
++            } else if value.r#type() == NSEventType::KeyDown {
++                let modifiers = value.modifierFlags() & (NSEventModifierFlags::Command
++                    | NSEventModifierFlags::Control | NSEventModifierFlags::Shift | NSEventModifierFlags::Option);
++                // Fixed macOS virtual key positions; no arbitrary keystrokes
++                // are retained. These counts do not imply a menu action fired.
++                if value.keyCode() == 46 && modifiers == NSEventModifierFlags::Command {
++                    counters.note(14);
++                } else if value.keyCode() == 3 && modifiers == (NSEventModifierFlags::Control | NSEventModifierFlags::Command) {
++                    counters.note(15);
++                }
++            }
++        }
++        event.as_ptr()
++    });
++    INPUT_MONITOR.with(|slot| {
++        let mut slot = slot.borrow_mut();
++        if slot.is_some() { return Err("input monitor already registered".into()); }
++        // SAFETY: Callback returns its unchanged live argument, never null or
++        // a newly owned event; removal uses this exact retained token on main.
++        *slot = unsafe { NSEvent::addLocalMonitorForEventsMatchingMask_handler(
++            NSEventMask::KeyDown | NSEventMask::LeftMouseDown, &callback) };
++        if slot.is_none() { return Err("input monitor registration failed".into()); }
++        Ok(())
++    })
++}
++
+ pub(crate) fn stop_window_observers() {
+     if objc2::MainThreadMarker::new().is_none() {
+         return;
+     }
++    INPUT_MONITOR.with(|slot| {
++        if let Some(token) = slot.borrow_mut().take() {
++            // SAFETY: Exact local-monitor token, removed on its AppKit thread.
++            unsafe { objc2_app_kit::NSEvent::removeMonitor(&token); }
++        }
++    });
+     WINDOW_OBSERVERS.with(|observers| {
+         let mut observers = observers.borrow_mut();
+         if observers.is_empty() {
+@@ -356,6 +413,9 @@ pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, Stri
+         "nativeWindowNumber": native.windowNumber(),
+         "nativeWindowLevel": native.level(),
+         "nativeTimedTransitions": transitions.timed,
++        "localMainCmdM": transitions.counts[14],
++        "localMainCtrlCmdF": transitions.counts[15],
++        "localMainLeftDown": transitions.counts[16],
+         "occlusionChanges": transitions.counts[7],
+         "applicationBecameActive": transitions.counts[8],
+         "applicationResignedActive": transitions.counts[9],
+@@ -934,6 +994,12 @@ pub fn start_if_requested(app: &AppHandle) {
+     }
+     let handle = app.clone();
+     if phase == "interactive-observe" {
++        if install_input_monitor(app).is_err() {
++            stop_window_observers();
++            eprintln!("Private native input monitor registration failed.");
++            app.exit(2);
++            return;
++        }
+         // Observe actual user actions only. Never restore, focus, minimize or
+         // terminate the app on behalf of interactive acceptance.
+         std::thread::spawn(move || {
