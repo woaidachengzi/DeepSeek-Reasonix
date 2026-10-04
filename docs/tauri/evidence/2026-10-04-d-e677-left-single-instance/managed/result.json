@@ -1,0 +1,12 @@
+{
+  "profile": "managed",
+  "passed": true,
+  "expectedGeometry": {
+    "x": -3200,
+    "y": 142,
+    "width": 2560,
+    "height": 1640,
+    "scale": 2.0
+  },
+  "scope": "programmatic background close, real second LaunchServices start, native focus/geometry and cleanup"
+}

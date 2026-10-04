@@ -1,0 +1,49 @@
+    directory: &std::path::Path,
+    require_second: bool,
+) -> Result<(), String> {
+    let normal = expected_geometry(directory)?;
+    verify_geometry(app, "normal window before background close", normal.clone())?;
+    on_main(app, |handle, _| {
+        handle
+            .state::<HostPreferences>()
+            .set_close_behavior(CloseBehavior::KeepRunning)
+    })?;
+    on_main(app, |_, window| {
+        window
+            .close()
+            .map_err(|_| "request background close".into())
+    })?;
+    wait_for(app, "background close hides macOS application", |_| {
+        Ok(objc2_app_kit::NSApplication::sharedApplication(
+            objc2::MainThreadMarker::new().ok_or("not main thread")?,
+        )
+        .isHidden())
+    })?;
+
+    if require_second {
+        std::fs::write(
+            directory.join("reasonix-native-window-awaiting-instance.json"),
+            b"{}",
+        )
+        .map_err(|_| "write second instance marker")?;
+        let target = normal.clone();
+        wait_for(app, "second instance focus and geometry", move |window| {
+            Ok(ordinary(window)?
+                && window.is_focused().map_err(|_| "read focus")?
+                && target.matches(&Geometry::read(window)?))
+        })?;
+    } else {
+        on_main(app, |handle, _| {
+            tray::show_main_window(handle);
+            Ok(())
+        })?;
+        verify_geometry(app, "background close restore", normal)?;
+    }
+    wait_for(app, "background restore unhides macOS application", |_| {
+        Ok(!objc2_app_kit::NSApplication::sharedApplication(
+            objc2::MainThreadMarker::new().ok_or("not main thread")?,
+        )
+        .isHidden())
+    })?;
+    save(app)
+}

@@ -1,0 +1,4 @@
+LaunchServices native kernel exit: {"phase": "second-instance", "pid": 2186, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed second-instance: OK
+LaunchServices native kernel exit: {"phase": "second-instance", "pid": 2208, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit second-instance: OK
