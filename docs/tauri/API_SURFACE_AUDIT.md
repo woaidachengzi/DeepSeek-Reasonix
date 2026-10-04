@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-04）
 
+**当前46包左屏关闭行为：** [实际关闭、Show 与普通重启证据](evidence/2026-10-04-d-screen2-close/README.md)。空闲explicit档案默认后台关闭保持host/sidecar并可菜单显示；另一档案关闭即退出与普通重启偏好持久化、两次退出0/清理通过。首档案末次Close被CUA拒绝后监控超时，不算退出通过。左侧位置保持；运行中会话/托盘/managed与D稳定缺口仍待。
+
 **当前46包实际保存与取消恢复：** [左屏诊断保存证据](evidence/2026-10-04-d-current-save-recovery/README.md)。一份explicit档案中文/空格命名保存、原生覆盖Cancel保持hash/mtime/mode、备份后Replace有效JSON0600、保存面板Cancel不写且保留5事件、重试导出和普通Quit清理通过。[基线归属更正](evidence/2026-10-04-d-diagnostics-baseline-correction/README.md)确认对应Wails前端交互控件也导出JSON，记录器字节一致/两记录器回归通过；ZIP是独立滚动诊断接口，不再列为该JSON入口格式缺口。默认目录、其他档案/过滤/写入故障/保存入口与独立旧API仍待。D稳定/E待验缺口保持。
 
 **当前46包左屏首次全屏键往返：** [新建私有档案与真实原生完成证据](evidence/2026-10-04-d-screen2-template-fullscreen/README.md)。启动器新增受限geometry模板且先确认native恢复，边界回归2项通过；当前一份explicit左屏2档案Ctrl+Cmd+F首次进入/退出完成各1、精确恢复与正常Quit清理通过。最小化按钮/键仍失败；此前其他现场首次全屏失败保持，不称间歇根因或D稳定已解决。

@@ -1,0 +1,34 @@
+func (a *App) beforeClose(ctx context.Context) bool {
+	if a.remoteWindowTicket != "" {
+		// A remote web window closes immediately — nothing to snapshot, lease,
+		// or hide. Closing it must not stop the remote Serve or the main
+		// process's SSH connection.
+		return false
+	}
+	if a.forceQuit.Swap(false) || consumeSystemQuitRequested() {
+		return false
+	}
+	cfg, _, err := a.loadDesktopUserConfigForView()
+	if err != nil {
+		cfg = config.LoadForEdit(config.UserConfigPath())
+	}
+	if cfg.DesktopCloseBehavior() == "background" {
+		if !a.backgroundCloseHasRestorePath() {
+			return false
+		}
+		// Never query native maximise state here: during close the Win32 DPI
+		// path can report 0 and panic inside Wails ScaleToDefaultDPI. Use the
+		// last frontend-reported geometry instead.
+		a.backgroundMaximised.Store(a.lastKnownMaximised())
+		a.saveWindowStateSync()
+		a.snapshotAllTabs()
+		if a.desktopShell.coordinator != nil {
+			return a.desktopShell.coordinator.hideToBackground(ctx, func() bool {
+				return backgroundCloseUsesApplicationHide(goruntime.GOOS) || a.isTrayReady()
+			})
+		}
+		hideForBackground(ctx)
+		return true
+	}
+	return false
+}

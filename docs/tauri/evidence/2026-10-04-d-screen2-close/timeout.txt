@@ -1,0 +1,1 @@
+First fixture runner exit1: RuntimeError: LaunchServices host did not publish an exit receipt. Final close action rejected by CUA state protection; timeout cleanup is not user close acceptance.

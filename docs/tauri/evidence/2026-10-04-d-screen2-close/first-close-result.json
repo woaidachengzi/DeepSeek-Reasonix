@@ -1,0 +1,22 @@
+{
+  "app": "/private/tmp/reasonix-d-reopen-ready-installed-r4q66pgv/Reasonix Tauri Preview.app",
+  "root": "/private/tmp/reasonix-launch-services-h_lepfjw",
+  "identifier": "io.reasonix.desktop.preview",
+  "pid": 95557,
+  "sidecarPid": 95564,
+  "openerPid": 95555,
+  "profile": "explicit",
+  "interactive": true,
+  "initialWindowGeometry": {
+    "height": 1640,
+    "scale": 2.0,
+    "width": 2560,
+    "x": -3200,
+    "y": 142
+  },
+  "exitCode": 0,
+  "expectedExitCode": 0,
+  "openExitCode": 0,
+  "sidecarRemaining": false,
+  "readyRemaining": false
+}

@@ -1,0 +1,166 @@
+{
+  "phase": "interactive-observe",
+  "sequence": 1071,
+  "state": {
+    "appearanceRequests": 2,
+    "appearanceSkipped": 2,
+    "applicationActivationPolicy": 0,
+    "applicationActive": false,
+    "applicationBecameActive": 2,
+    "applicationFinishedLaunching": true,
+    "applicationHidden": false,
+    "applicationModalWindowPresent": false,
+    "applicationOcclusionVisible": true,
+    "applicationResignedActive": 2,
+    "applicationRunning": true,
+    "becameKey": 2,
+    "didDeminiaturize": 0,
+    "didEnterFullscreen": 0,
+    "didExitFullscreen": 0,
+    "didMiniaturize": 0,
+    "focused": false,
+    "fullscreen": false,
+    "geometry": {
+      "height": 1640,
+      "scale": 2.0,
+      "width": 2560,
+      "x": -3200,
+      "y": 142
+    },
+    "localMainCmdM": 0,
+    "localMainCtrlCmdF": 0,
+    "localMainLeftDown": 1,
+    "mainPageFinished": true,
+    "maximized": false,
+    "minimizeTargetIsMain": false,
+    "minimizeTargetPresent": false,
+    "minimized": false,
+    "monitors": [
+      {
+        "height": 1966,
+        "scale": 2.0,
+        "width": 3840,
+        "x": 0,
+        "y": 60
+      },
+      {
+        "height": 2100,
+        "scale": 2.0,
+        "width": 3840,
+        "x": -3840,
+        "y": 60
+      }
+    ],
+    "nativeAttachedSheet": false,
+    "nativeCanBecomeKey": true,
+    "nativeFullscreen": false,
+    "nativeInLiveResize": false,
+    "nativeIsSheet": false,
+    "nativeKeyWindow": false,
+    "nativeMainWindow": false,
+    "nativeMiniaturizable": true,
+    "nativeMiniaturized": false,
+    "nativeOcclusionVisible": true,
+    "nativeOnActiveSpace": true,
+    "nativeStyleMask": 32783,
+    "nativeTimedTransitions": [
+      {
+        "elapsedMs": 184,
+        "transition": "appearance-request"
+      },
+      {
+        "elapsedMs": 184,
+        "transition": "appearance-skipped"
+      },
+      {
+        "elapsedMs": 207,
+        "transition": "application-became-active"
+      },
+      {
+        "elapsedMs": 912,
+        "transition": "became-key"
+      },
+      {
+        "elapsedMs": 937,
+        "transition": "occlusion-changed"
+      },
+      {
+        "elapsedMs": 1068,
+        "transition": "appearance-request"
+      },
+      {
+        "elapsedMs": 1068,
+        "transition": "appearance-skipped"
+      },
+      {
+        "elapsedMs": 1781,
+        "transition": "resigned-key"
+      },
+      {
+        "elapsedMs": 1781,
+        "transition": "application-resigned-active"
+      },
+      {
+        "elapsedMs": 25256,
+        "transition": "occlusion-changed"
+      },
+      {
+        "elapsedMs": 70666,
+        "transition": "local-main-left-down"
+      },
+      {
+        "elapsedMs": 81553,
+        "transition": "became-key"
+      },
+      {
+        "elapsedMs": 81565,
+        "transition": "application-became-active"
+      },
+      {
+        "elapsedMs": 81598,
+        "transition": "occlusion-changed"
+      },
+      {
+        "elapsedMs": 90344,
+        "transition": "resigned-key"
+      },
+      {
+        "elapsedMs": 90344,
+        "transition": "application-resigned-active"
+      }
+    ],
+    "nativeTransitions": [
+      "appearance-request",
+      "appearance-skipped",
+      "application-became-active",
+      "became-key",
+      "occlusion-changed",
+      "appearance-request",
+      "appearance-skipped",
+      "resigned-key",
+      "application-resigned-active",
+      "occlusion-changed",
+      "local-main-left-down",
+      "became-key",
+      "application-became-active",
+      "occlusion-changed",
+      "resigned-key",
+      "application-resigned-active"
+    ],
+    "nativeVisible": true,
+    "nativeWindowLevel": 0,
+    "nativeWindowNumber": 20547,
+    "occlusionChanges": 3,
+    "reopenEvents": 0,
+    "resignedKey": 2,
+    "restoreCompletions": 2,
+    "restoreRequests": 2,
+    "runningActivationPolicy": 0,
+    "runningApplicationActive": false,
+    "trustedMainUrl": true,
+    "visible": true,
+    "willEnterFullscreen": 0,
+    "willExitFullscreen": 0,
+    "willMiniaturize": 0
+  }
+}

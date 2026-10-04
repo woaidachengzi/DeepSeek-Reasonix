@@ -1,0 +1,37 @@
+{
+  "source": "actual CUA observations transcribed; not an automated assertion",
+  "firstFixture": {
+    "pid": 95073,
+    "sidecarPid": 95080,
+    "closeKeepRunning": "hidden; both alive; no result receipt",
+    "menuShow": "visible; restoreRequests=restoreCompletions=2; unchanged left geometry",
+    "quitRadioSelected": true,
+    "closeAttempt": "CUA rejected; runner later timed out, exit1; not normal-exit acceptance"
+  },
+  "secondFixture": {
+    "pid": 95557,
+    "quitRadioSelected": true,
+    "actualCloseButton": 49
+  },
+  "ordinaryReopen": {
+    "pid": 95665,
+    "sameOrigin": true,
+    "quitRadioSelected": true,
+    "actualCloseButton": 49,
+    "geometry": {
+      "x": -3200,
+      "y": 142,
+      "width": 2560,
+      "height": 1640,
+      "scale": 2.0
+    }
+  },
+  "persistedPreference": {
+    "closeBehavior": "quit",
+    "mode": "0o644"
+  },
+  "postcheck": {
+    "sixOwnedPidsAbsent": true,
+    "strictDeepSignatureExit": 0
+  }
+}
