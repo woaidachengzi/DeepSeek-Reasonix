@@ -1,0 +1,11 @@
+{
+  "backupSha256": "30c2e6c6771f68e26613c91ca621e07471dc369998ec7419de1013ea0e61b36b",
+  "restoredSha256": "30c2e6c6771f68e26613c91ca621e07471dc369998ec7419de1013ea0e61b36b",
+  "restoredDefaultModel": "native-import/alpha",
+  "legacyExitCode": 0,
+  "legacyStdout": "currency = \"CNY\" (display: CNY)\n",
+  "legacyStderr": "",
+  "previewStoppedBeforeRestore": true,
+  "restoredTreeUnchanged": true,
+  "previewAndBackupTreeUnchanged": true
+}

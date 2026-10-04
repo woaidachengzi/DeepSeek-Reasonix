@@ -1,0 +1,9 @@
+{
+  "app": "/private/tmp/reasonix-d-parented-installed-psvk6loa/Reasonix Tauri Preview.app",
+  "artifactSha256": {
+    "reasonix-tauri": "e6778b8fc3a5bcd7095d75afccedae753a521559fb6dd4896ea72d4100ec0706",
+    "reasonix-desktop-bridge": "6189151139f5c820c15e4da18419f7ce4bc582d7b8885d3f7227fde8b828cb1b"
+  },
+  "legacyCliSha256": "5b1ab31424d45c8bf3cfe6a60b11da527df2252aee963d1c0c56352f57945962",
+  "scope": "Actual single config backup application and read-only official CLI recovery"
+}
