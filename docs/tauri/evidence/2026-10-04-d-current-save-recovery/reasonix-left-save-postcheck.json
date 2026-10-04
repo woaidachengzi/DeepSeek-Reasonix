@@ -1,0 +1,9 @@
+{
+  "signatureExitCode": 0,
+  "hostSha256": "46c2c9da5f1d10a0c92a5d319b465b381a36256e9e770870e6b6933ec13c5256",
+  "sidecarSha256": "31418d61fb58823fabe12e0b448f9d005eae4566381e0ff3ca868ef2c11d1fd4",
+  "hostAlive": false,
+  "previewRunning": false,
+  "sidecarsRemaining": [],
+  "readyRemaining": false
+}

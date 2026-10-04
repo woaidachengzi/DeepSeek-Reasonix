@@ -1,0 +1,32 @@
+	return archive.Bytes(), decoded.Manifest.ReportID, nil
+}
+
+// ExportScrollDiagnostics validates a local, content-free trace, asks the user
+// where to save it, and writes a ZIP. It performs no network requests.
+func (a *App) ExportScrollDiagnostics(payload string) (string, error) {
+	archive, reportID, err := buildScrollDiagnosticsArchive(payload)
+	if err != nil {
+		return "", err
+	}
+	if a.ctx == nil {
+		return "", nil
+	}
+	defaultFilename := fmt.Sprintf("reasonix-scroll-diagnostics-%s.zip", reportID[:8])
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:                "Export scroll diagnostics",
+		DefaultDirectory:     dialogDefaultDirectory(a.activeWorkspaceRoot()),
+		DefaultFilename:      safeExportFilename(defaultFilename),
+		CanCreateDirectories: true,
+		Filters:              exportFileFilters("application/zip", ".zip"),
+	})
+	if err != nil || path == "" {
+		return "", err
+	}
+	if filepath.Ext(path) == "" {
+		path += ".zip"
+	}
+	if err := a.SaveExportFile(path, string(archive), false); err != nil {
+		return "", err
+	}
+	return path, nil
+}

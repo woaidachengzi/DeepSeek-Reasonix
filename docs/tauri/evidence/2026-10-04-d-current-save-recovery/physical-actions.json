@@ -1,0 +1,22 @@
+{
+  "kind": "CUA action/AX observation transcription, not raw exported AX",
+  "sourceHead": "17ee3b5a4",
+  "privateOrigin": "reasonix-preview://6a82ff346317a0254f05da5e4739ff88.localhost/",
+  "root": "/private/tmp/reasonix-launch-services-4fd_ipo5",
+  "nativeSavePanel": true,
+  "filename": "诊断 保存.json",
+  "overwriteCancelPreserves": [
+    "sha256",
+    "mtimeNs",
+    "mode"
+  ],
+  "replaceConfirmed": true,
+  "originalBackupPreserved": true,
+  "savePanelCancelFileCreated": false,
+  "cancelRetainedEvents": 5,
+  "retryExportEventCount": 5,
+  "retryExportIdle": true,
+  "automationRejectedOnce": "stale application state before retry; refresh AX then new action",
+  "sentToProvider": false,
+  "scope": "one explicit profile; diagnostics entry only; no managed/filter enforcement/write failure/other entry acceptance"
+}

@@ -1,0 +1,14 @@
+{
+  "path": "/private/tmp/reasonix-launch-services-4fd_ipo5/workspace/诊断 保存.json",
+  "bytes": 1475,
+  "mode": "0o600",
+  "sha256": "f8e304f4e58a6e83c8f885e143515954836072f0e1c0743e7734dacd00b28ec5",
+  "mtimeNs": 1791082454095840437,
+  "schemaVersion": 2,
+  "keys": [
+    "events",
+    "manifest",
+    "schemaVersion",
+    "summary"
+  ]
+}

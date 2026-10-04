@@ -1,0 +1,52 @@
+fn write_frontend_diagnostics_export(
+    path: &Path,
+    payload: &serde_json::Value,
+) -> Result<(), String> {
+    frontend_diagnostics_export_filename(payload)?;
+    let encoded = serde_json::to_vec_pretty(payload).map_err(|error| error.to_string())?;
+    let parent = path
+        .parent()
+        .ok_or("invalid export destination; choose a file in a writable folder")?;
+    // Match the other native Save As paths: complete and sync a private sibling
+    // before replacing the chosen name. Never truncate an existing report or
+    // follow its symlink to modify another file.
+    let mut temporary = tempfile::NamedTempFile::new_in(parent)
+        .map_err(|_| "cannot prepare diagnostics export; choose a writable folder")?;
+    temporary
+        .write_all(&encoded)
+        .map_err(|_| "cannot write diagnostics export; check free space and retry")?;
+    temporary
+        .as_file()
+        .sync_all()
+        .map_err(|_| "cannot finish diagnostics export; check free space and retry")?;
+    temporary
+        .persist(path)
+        .map_err(|_| "cannot save diagnostics export; choose a writable file destination")?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn export_frontend_diagnostics(
+    app: tauri::AppHandle,
+    payload: serde_json::Value,
+) -> Result<bool, String> {
+    let filename = frontend_diagnostics_export_filename(&payload)?;
+    let (sender, receiver) = std::sync::mpsc::channel();
+    app.dialog()
+        .file()
+        .add_filter("JSON diagnostics", &["json"])
+        .set_file_name(filename)
+        .save_file(move |selection| {
+            let _ = sender.send(selection);
+        });
+    let selected =
+        tauri::async_runtime::spawn_blocking(move || receive_file_dialog_selection(receiver))
+            .await
+            .map_err(|_| "file dialog task failed; retry selecting a file")??;
+    let Some(path) = selected_theme_path(selected)? else {
+        return Ok(false);
+    };
+    write_frontend_diagnostics_export(&path, &payload)?;
+    Ok(true)
+}
+
