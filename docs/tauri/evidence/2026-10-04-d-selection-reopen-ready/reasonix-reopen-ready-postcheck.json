@@ -1,0 +1,34 @@
+{
+  "apps": [
+    {
+      "app": "/private/tmp/reasonix-d-reopen-stage-installed-1v55a5cm/Reasonix Tauri Preview.app",
+      "signatureExit": 0,
+      "sha256": {
+        "reasonix-tauri": "feb6b7e16e3277fb89c0e3edde18c75bf9ffc2bd7e3717daf42d7a05bf1ff343",
+        "reasonix-desktop-bridge": "31418d61fb58823fabe12e0b448f9d005eae4566381e0ff3ca868ef2c11d1fd4"
+      }
+    },
+    {
+      "app": "/private/tmp/reasonix-d-reopen-ready-installed-r4q66pgv/Reasonix Tauri Preview.app",
+      "signatureExit": 0,
+      "sha256": {
+        "reasonix-tauri": "46c2c9da5f1d10a0c92a5d319b465b381a36256e9e770870e6b6933ec13c5256",
+        "reasonix-desktop-bridge": "31418d61fb58823fabe12e0b448f9d005eae4566381e0ff3ca868ef2c11d1fd4"
+      }
+    }
+  ],
+  "previewRunning": false,
+  "physicalHostAlive": false,
+  "fixtures": [
+    {
+      "root": "/private/tmp/reasonix-native-message-copy-yhij90zd",
+      "sidecars": [],
+      "readyFiles": []
+    },
+    {
+      "root": "/private/tmp/reasonix-launch-services-6pwq3bv5",
+      "sidecars": [],
+      "readyFiles": []
+    }
+  ]
+}

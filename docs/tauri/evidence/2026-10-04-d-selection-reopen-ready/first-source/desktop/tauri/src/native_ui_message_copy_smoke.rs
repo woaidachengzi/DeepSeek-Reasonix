@@ -294,14 +294,6 @@ pub fn run(app: &AppHandle, directory: &Path, send_selection: bool) -> Result<()
 }
 
 pub fn reopen(app: &AppHandle, directory: &Path) -> Result<(), String> {
-    crate::native_window_smoke::record(app, "selection-reopen-before-ready")?;
-    // The host/sidecar can be ready while WKWebView is still navigating. Do
-    // not access origin storage until the trusted rendered page owns the probe.
-    crate::native_window_smoke::wait_for(app, "trusted finished selection reopen page", |window| {
-        Ok(crate::native_window_smoke::page_finished(window.app_handle())
-            && window.url().is_ok_and(|url| crate::ui_origin::matches(window.app_handle(), &url)))
-    })?;
-    check(app, "document.querySelector('.tauri-shell') && document.querySelector('.tauri-composer textarea') ? 'edit-ok' : 'edit-pending'".into(), "initialized reopened main page")?;
     crate::native_window_smoke::record(app, "selection-reopen-before-storage")?;
     check(app, "(() => { const saved = JSON.parse(localStorage.getItem('reasonix.tauri.shortcuts.v1') || '{}').add_selection; return saved?.key === 'l' && saved.meta === true && saved.shift === true ? 'edit-ok' : 'edit-pending'; })()".into(), "reopened configured selection shortcut")?;
     let nonce = fixture_nonce(directory)?;

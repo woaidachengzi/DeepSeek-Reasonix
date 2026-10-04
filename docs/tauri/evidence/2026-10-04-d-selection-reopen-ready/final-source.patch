@@ -1,0 +1,116 @@
+diff --git a/desktop/tauri/src/native_ui_message_copy_smoke.rs b/desktop/tauri/src/native_ui_message_copy_smoke.rs
+index 15143965b..aa6190143 100644
+--- a/desktop/tauri/src/native_ui_message_copy_smoke.rs
++++ b/desktop/tauri/src/native_ui_message_copy_smoke.rs
+@@ -11,7 +11,8 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
+ fn check(app: &AppHandle, script: String, stage: &str) -> Result<(), String> {
+     let deadline = Instant::now() + Duration::from_secs(15);
+     loop {
+-        if crate::native_edit_smoke::evaluate(app, script.clone())? {
++        if crate::native_edit_smoke::evaluate(app, script.clone())
++            .map_err(|error| format!("{stage}: {error}"))? {
+             return Ok(());
+         }
+         if Instant::now() >= deadline {
+@@ -293,6 +294,15 @@ pub fn run(app: &AppHandle, directory: &Path, send_selection: bool) -> Result<()
+ }
+ 
+ pub fn reopen(app: &AppHandle, directory: &Path) -> Result<(), String> {
++    crate::native_window_smoke::record(app, "selection-reopen-before-ready")?;
++    // The host/sidecar can be ready while WKWebView is still navigating. Do
++    // not access origin storage until the trusted rendered page owns the probe.
++    crate::native_window_smoke::wait_for(app, "trusted finished selection reopen page", |window| {
++        Ok(crate::native_window_smoke::page_finished(window.app_handle())
++            && window.url().is_ok_and(|url| crate::ui_origin::matches(window.app_handle(), &url)))
++    })?;
++    check(app, "document.querySelector('.tauri-shell') && document.querySelector('.tauri-composer textarea') ? 'edit-ok' : 'edit-pending'".into(), "initialized reopened main page")?;
++    crate::native_window_smoke::record(app, "selection-reopen-before-storage")?;
+     check(app, "(() => { const saved = JSON.parse(localStorage.getItem('reasonix.tauri.shortcuts.v1') || '{}').add_selection; return saved?.key === 'l' && saved.meta === true && saved.shift === true ? 'edit-ok' : 'edit-pending'; })()".into(), "reopened configured selection shortcut")?;
+     let nonce = fixture_nonce(directory)?;
+     let text = serde_json::to_string(&format!("reasonix-native-clipboard-{nonce}"))
+diff --git a/desktop/tauri/src/native_window_smoke.rs b/desktop/tauri/src/native_window_smoke.rs
+index f6537e5c0..809d42f5e 100644
+--- a/desktop/tauri/src/native_window_smoke.rs
++++ b/desktop/tauri/src/native_window_smoke.rs
+@@ -72,6 +72,10 @@ struct TransitionRecord {
+ 
+ impl WindowTransitions {
+     fn note(&self, index: usize) {
++        self.note_with_action(index, None);
++    }
++
++    fn note_with_action(&self, index: usize, action: Option<(bool, bool, bool)>) {
+         if let Ok(mut record) = self.record.lock() {
+             record.counts[index] += 1;
+             if record.recent.len() == 32 {
+@@ -79,10 +83,16 @@ impl WindowTransitions {
+                 record.timed.remove(0);
+             }
+             record.recent.push(TRANSITIONS[index]);
+-            record.timed.push(serde_json::json!({
++            let mut value = serde_json::json!({
+                 "transition": TRANSITIONS[index],
+                 "elapsedMs": self.started.elapsed().as_millis(),
+-            }));
++            });
++            if let Some((main_key, present, main_target)) = action {
++                value["inputMainWasKey"] = main_key.into();
++                value["actionTargetPresent"] = present.into();
++                value["actionTargetIsMain"] = main_target.into();
++            }
++            record.timed.push(value);
+         }
+     }
+ }
+@@ -177,6 +187,21 @@ fn install_window_observers(app: &AppHandle) -> Result<(), String> {
+     })
+ }
+ 
++// Query the responder chain only; never send an action or retain its target.
++// Present/identity booleans do not prove role invocation or transition success.
++fn action_context(number: isize, minimize: bool) -> Option<(bool, bool, bool)> {
++    use objc2_app_kit::{NSApplication, NSWindow};
++    let application = NSApplication::sharedApplication(objc2::MainThreadMarker::new()?);
++    let main_key = application.keyWindow().is_some_and(|window| window.windowNumber() == number);
++    let selector = if minimize { objc2::sel!(performMiniaturize:) } else { objc2::sel!(toggleFullScreen:) };
++    // SAFETY: Valid standard AppKit selectors; nil target/sender requests only
++    // responder resolution. This call does not invoke either window action.
++    let target = unsafe { application.targetForAction_to_from(selector, None, None) };
++    let main_target = target.as_ref().and_then(|target| target.downcast_ref::<NSWindow>())
++        .is_some_and(|window| window.windowNumber() == number);
++    Some((main_key, target.is_some(), main_target))
++}
++
+ // Private interactive acceptance only. Observe fixed gesture classes without
+ // characters, coordinates or content; pass each borrowed event through unchanged.
+ // AppKit tracking loops may bypass this monitor, so absence is not non-delivery.
+@@ -204,9 +229,9 @@ fn install_input_monitor(app: &AppHandle) -> Result<(), String> {
+                 // Fixed macOS virtual key positions; no arbitrary keystrokes
+                 // are retained. These counts do not imply a menu action fired.
+                 if value.keyCode() == 46 && modifiers == NSEventModifierFlags::Command {
+-                    counters.note(14);
++                    counters.note_with_action(14, action_context(number, true));
+                 } else if value.keyCode() == 3 && modifiers == (NSEventModifierFlags::Control | NSEventModifierFlags::Command) {
+-                    counters.note(15);
++                    counters.note_with_action(15, action_context(number, false));
+                 }
+             }
+         }
+@@ -351,6 +376,7 @@ pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, Stri
+             })
+         })
+         .collect();
++    let minimize_action = action_context(native.windowNumber(), true).ok_or("minimize target query unavailable")?;
+     let state = window.app_handle().state::<WindowSmokeState>();
+     let transitions = state
+         .transitions
+@@ -404,6 +430,9 @@ pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, Stri
+             .is_some_and(|state| state.main_loaded.load(Ordering::SeqCst)),
+     });
+     let presentation = serde_json::json!({
++        "minimizeTargetPresent": minimize_action.1,
++        "minimizeTargetIsMain": minimize_action.2,
++        "trustedMainUrl": window.url().is_ok_and(|url| crate::ui_origin::matches(window.app_handle(), &url)),
+         "nativeFullscreen": native.styleMask().contains(NSWindowStyleMask::FullScreen),
+         "fullscreen": window.is_fullscreen().map_err(|_| "read fullscreen state")?,
+         "willEnterFullscreen": transitions.counts[10],

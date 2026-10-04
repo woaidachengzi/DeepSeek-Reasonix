@@ -1,0 +1,7 @@
+selection-send: passed (exit 0)
+reload: passed (exit 0)
+package: passed (exit 0)
+failure-exit: passed (exit 0)
+lifetime: passed (exit 0)
+fullscreen: passed (exit 0)
+window: passed (exit 0)

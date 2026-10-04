@@ -1,0 +1,26 @@
+Executable=/private/tmp/reasonix-d-reopen-stage-installed-1v55a5cm/Reasonix Tauri Preview.app/Contents/MacOS/reasonix-tauri
+Identifier=io.reasonix.desktop.preview
+Format=app bundle with Mach-O thin (arm64)
+CodeDirectory v=20500 size=62876 flags=0x10002(adhoc,runtime) hashes=1954+7 location=embedded
+VersionPlatform=1
+VersionMin=720896
+VersionSDK=983552
+Hash type=sha256 size=32
+CandidateCDHash sha256=e3d0818d288d9d7da6e8e74d2d92fc128b605de0
+CandidateCDHashFull sha256=e3d0818d288d9d7da6e8e74d2d92fc128b605de0228ad2ac1582959ba8fad52a
+Hash choices=sha256
+CMSDigest=e3d0818d288d9d7da6e8e74d2d92fc128b605de0228ad2ac1582959ba8fad52a
+CMSDigestType=2
+Executable Segment base=0
+Executable Segment limit=26509312
+Executable Segment flags=0x1
+Page size=16384
+CDHash=e3d0818d288d9d7da6e8e74d2d92fc128b605de0
+Signature=adhoc
+Info.plist entries=14
+TeamIdentifier=not set
+Runtime Version=15.2.0
+Sealed Resources version=2 rules=13 files=2
+Internal requirements count=0 size=12
+Total signatures=1
+Chosen signature=1

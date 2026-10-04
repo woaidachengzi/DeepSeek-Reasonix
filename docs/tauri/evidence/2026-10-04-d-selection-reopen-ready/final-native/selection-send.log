@@ -1,0 +1,18 @@
+LaunchServices native kernel exit: {"phase": "ui-selection-send", "pid": 88017, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed ui-selection-send: OK
+Native managed Add to Chat receipt: {"clipboardGenerationPreserved": true, "clipboardTextPreserved": true, "composerFocused": true, "deduplicated": true, "draftPreserved": true, "ok": true, "selectionReference": true, "selectionShortcut": true}
+Native managed selection send receipt: {"configuredShortcut": true, "draftConsumed": true, "historyReference": true, "ok": true, "oldBindingInactive": true, "providerResponse": true}
+Native managed selection provider receipt: {"ok": true, "requests": 2, "quotedContextVerified": true, "inputSha256": "270fbaf16e342ecad232f3f4f92719934f1eeea51c7dca358f6a2699f4eb7f0b"}
+LaunchServices native kernel exit: {"phase": "ui-selection-reopen", "pid": 88049, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed ui-selection-reopen: OK
+Native managed selection reopen receipt: {"configuredShortcutPersisted": true, "historyReference": true, "noDraftReplay": true, "ok": true, "protocolTextHidden": true}
+Actual managed rendered message/menu/OS text, 2 provider calls and clipboard restoration: OK
+LaunchServices native kernel exit: {"phase": "ui-selection-send", "pid": 88084, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit ui-selection-send: OK
+Native explicit Add to Chat receipt: {"clipboardGenerationPreserved": true, "clipboardTextPreserved": true, "composerFocused": true, "deduplicated": true, "draftPreserved": true, "ok": true, "selectionReference": true, "selectionShortcut": true}
+Native explicit selection send receipt: {"configuredShortcut": true, "draftConsumed": true, "historyReference": true, "ok": true, "oldBindingInactive": true, "providerResponse": true}
+Native explicit selection provider receipt: {"ok": true, "requests": 2, "quotedContextVerified": true, "inputSha256": "9453c85e8a1c616aa0d5ab120f897581105b19a81fface4e148023c46dff7cbb"}
+LaunchServices native kernel exit: {"phase": "ui-selection-reopen", "pid": 88123, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window explicit ui-selection-reopen: OK
+Native explicit selection reopen receipt: {"configuredShortcutPersisted": true, "historyReference": true, "noDraftReplay": true, "ok": true, "protocolTextHidden": true}
+Actual explicit rendered message/menu/OS text, 2 provider calls and clipboard restoration: OK

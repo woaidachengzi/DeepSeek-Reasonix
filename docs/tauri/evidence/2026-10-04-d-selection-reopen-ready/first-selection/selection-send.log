@@ -1,0 +1,19 @@
+LaunchServices native kernel exit: {"phase": "ui-selection-send", "pid": 86553, "rawKernelStatus": 0, "exitCode": 0, "signaled": false}
+native macOS window managed ui-selection-send: OK
+Native managed Add to Chat receipt: {"clipboardGenerationPreserved": true, "clipboardTextPreserved": true, "composerFocused": true, "deduplicated": true, "draftPreserved": true, "ok": true, "selectionReference": true, "selectionShortcut": true}
+Native managed selection send receipt: {"configuredShortcut": true, "draftConsumed": true, "historyReference": true, "ok": true, "oldBindingInactive": true, "providerResponse": true}
+Native managed selection provider receipt: {"ok": true, "requests": 2, "quotedContextVerified": true, "inputSha256": "4d3d5e97892adb957f744c04914fde3eea1da9fb5ed21dd15f5199197973d148"}
+LaunchServices native kernel exit: {"phase": "ui-selection-reopen", "pid": 86592, "rawKernelStatus": 512, "exitCode": 2, "signaled": false}
+Failed private message fixture retained: /private/tmp/reasonix-native-message-copy-yhij90zd
+Traceback (most recent call last):
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-native-message-copy.py", line 157, in <module>
+    smoke(args.app, args.selection_send)
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-native-message-copy.py", line 132, in smoke
+    windows.launch(app / 'Contents/MacOS/reasonix-tauri', app / 'Contents/MacOS/reasonix-desktop-bridge',
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                   root, identifier, managed, 'ui-selection-reopen', verify_window_state=False, launch_services=True)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jerry/temp/app/reasonix-tauri/tools/tauri/smoke-native-window.py", line 242, in launch
+    raise RuntimeError(f"{phase}: {result.get('error', 'native acceptance failed')}")
+RuntimeError: ui-selection-reopen: reopened configured selection shortcut: WKWebView edit evaluation failed (WKErrorDomain, code 4)

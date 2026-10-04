@@ -1,6 +1,6 @@
 # Reasonix Tauri host
 
-最新状态：[041949c6 输入与选区原子诊断](../../docs/tauri/evidence/2026-10-04-d-native-input-observation/README.md)。新增仅私有交互模式的固定输入计数，原样放行/退出移除；选区旧键两个条件同次dispatch保存。新包Rust231/5ignored、strict clippy、构建/DMG安装签名、六程序gate（窗口48/48/全屏）及配置备份官方CLI回读通过。物理Cmd+M有匹配事件而无mini完成，首次全屏键仍未通过；菜单进/键退/精确恢复与Quit通过。选区managed发送通过但重开JavaScript异常code4，explicit未运行，整组未通过。其他D及官方GUI全资料回退不继承旧包；D未完成/E未开启，A/B/C与正式签名公证仍阻碍发布。历史现场不直接代表当前候选。
+最新状态：[46c2c9da 选区普通重开与响应者诊断](../../docs/tauri/evidence/2026-10-04-d-selection-reopen-ready/README.md)。修正仅opt-in重开探针读取storage的就绪前提；当前包两档案实际配置录键、引用二次发送和普通重开/无draft回放通过。Rust231/5ignored、strict clippy、构建/DMG安装签名、七程序gate（含窗口48/48与全屏）及配置备份官方CLI回读通过。物理Cmd+M分发时key/查询target均main但无Mini完成；实际全屏菜单进/快捷键退/精确恢复与Quit通过，首次键进及最小化仍未通过。其他D/官方GUI全资料回退不继承旧包；D未完成，E逐项验收待D稳定，A/B/C及正式签名公证仍阻碍发布。历史现场不直接代表当前候选。
 
 当前窗口补验：[完整矩阵失败与零显示器保护](../../docs/tauri/evidence/2026-10-03-d-zero-display-window/README.md)。b6首阶段原生最小化成功但零活跃显示器期间无新存档，整组保持失败；两档案实际零显示器旧状态保护、托盘语言6阶段及启动终止12项通过。同包累计17个程序门禁，恢复活跃显示器后完整矩阵及物理UI仍待验。
 2026-10-02 实际窗口验收可用 `python3 tools/tauri/probe-launch-services-profile.py <installed-app> --interactive --observe`。
