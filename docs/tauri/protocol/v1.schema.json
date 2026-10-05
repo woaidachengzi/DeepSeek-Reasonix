@@ -949,6 +949,62 @@
       },
       "additionalProperties": false
     },
+    "historyTurnUsage": {
+      "type": "object",
+      "required": [
+        "inputTokens",
+        "outputTokens",
+        "totalTokens",
+        "requestCount",
+        "reasoningTokens",
+        "estimated",
+        "complete"
+      ],
+      "properties": {
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "totalTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "requestCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "reasoningTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "cacheHitTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "cacheMissTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "estimated": {
+          "type": "boolean"
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
     "historyMessage": {
       "type": "object",
       "required": ["role", "content"],
@@ -957,7 +1013,8 @@
         "content": { "type": "string" },
         "truncated": { "type": "boolean" },
         "workDurationMs": { "type": "integer", "minimum": 0 },
-        "createdAtMs": { "type": "integer", "minimum": 0 }
+        "createdAtMs": { "type": "integer", "minimum": 0 },
+        "turnUsage": { "$ref": "#/$defs/historyTurnUsage" }
       },
       "additionalProperties": false
     },

@@ -1,0 +1,4 @@
+ok  	reasonix/internal/provider	8.299s
+ok  	reasonix/internal/desktopbridge	1.721s
+ok  	reasonix/internal/desktopbridge/protocolgen	1.767s
+ok  	reasonix/cmd/reasonix-desktop-bridge	29.757s

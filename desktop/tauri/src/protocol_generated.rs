@@ -177,6 +177,7 @@ pub struct BridgeHistoryMessage {
     pub created_at_ms: Option<u64>,
     pub role: String,
     pub truncated: Option<bool>,
+    pub turn_usage: Option<BridgeHistoryTurnUsage>,
     pub work_duration_ms: Option<u64>,
 }
 
@@ -189,6 +190,20 @@ pub struct BridgeHistoryResponse {
     pub session: BridgeSession,
     pub start_index: u64,
     pub total_messages: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeHistoryTurnUsage {
+    pub cache_hit_tokens: Option<u64>,
+    pub cache_miss_tokens: Option<u64>,
+    pub complete: bool,
+    pub estimated: bool,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub reasoning_tokens: u64,
+    pub request_count: u64,
+    pub total_tokens: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

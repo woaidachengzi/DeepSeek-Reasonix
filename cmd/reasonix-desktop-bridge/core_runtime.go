@@ -994,9 +994,19 @@ func bridgeHistoryMessageContent(message provider.Message) string {
 // tool requests/results, image references, and local execution metadata; none
 // of those are a safe or stable first bridge contract.
 func (r *controllerRuntime) History() []desktopbridge.HistoryMessage {
-	history := r.controller.History()
+	return projectBridgeHistory(r.controller.History())
+}
+
+func projectBridgeHistory(history []provider.Message) []desktopbridge.HistoryMessage {
 	messages := make([]desktopbridge.HistoryMessage, 0, len(history))
+	usage := newHistoryUsage()
 	for _, message := range history {
+		if message.Role == provider.RoleUser && bridgeHistoryMessageVisible(message) {
+			usage = newHistoryUsage()
+		}
+		if message.Role == provider.RoleAssistant {
+			usage.add(message.RequestUsage)
+		}
 		// Session-context is provider-facing runtime metadata, not a user
 		// question. It is persisted as a host-authored user-role message so the
 		// model can see it, but must never be projected into the chat transcript.
@@ -1023,6 +1033,7 @@ func (r *controllerRuntime) History() []desktopbridge.HistoryMessage {
 			Truncated:      truncated,
 			WorkDurationMs: message.WorkDurationMs,
 			CreatedAtMs:    message.CreatedAt,
+			TurnUsage:      usage.snapshot(role == "assistant"),
 		})
 	}
 	return messages

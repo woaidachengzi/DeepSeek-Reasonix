@@ -63,11 +63,26 @@ type RuntimeWorkspaceProvider interface {
 // reasoning, tool arguments/results, system prompts, image data, or other
 // persistence metadata.
 type HistoryMessage struct {
-	Role           string `json:"role"`
-	Content        string `json:"content"`
-	Truncated      bool   `json:"truncated,omitempty"`
-	WorkDurationMs int64  `json:"workDurationMs,omitempty"`
-	CreatedAtMs    int64  `json:"createdAtMs,omitempty"`
+	Role           string            `json:"role"`
+	Content        string            `json:"content"`
+	Truncated      bool              `json:"truncated,omitempty"`
+	WorkDurationMs int64             `json:"workDurationMs,omitempty"`
+	CreatedAtMs    int64             `json:"createdAtMs,omitempty"`
+	TurnUsage      *HistoryTurnUsage `json:"turnUsage,omitempty"`
+}
+
+// HistoryTurnUsage contains only local numeric accounting for one user turn.
+// Reasoning is a subset of output tokens, not an extra charge added to total.
+type HistoryTurnUsage struct {
+	InputTokens     int64  `json:"inputTokens"`
+	OutputTokens    int64  `json:"outputTokens"`
+	TotalTokens     int64  `json:"totalTokens"`
+	RequestCount    int64  `json:"requestCount"`
+	ReasoningTokens int64  `json:"reasoningTokens"`
+	CacheHitTokens  *int64 `json:"cacheHitTokens,omitempty"`
+	CacheMissTokens *int64 `json:"cacheMissTokens,omitempty"`
+	Estimated       bool   `json:"estimated"`
+	Complete        bool   `json:"complete"`
 }
 
 // AskAnswer is the transport-neutral projection of one structured question

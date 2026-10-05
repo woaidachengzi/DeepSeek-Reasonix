@@ -398,6 +398,22 @@
 .tauri-message .md > :first-child { margin-top: 0; }
 .tauri-message.is-final { grid-template-columns: minmax(0, 1fr); gap: 0; }
 .tauri-message.is-final > .tauri-message__avatar, .tauri-message.is-final .tauri-message__role { display: none; }
+.tauri-answer-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; margin-top: 12px; color: var(--fg-faint); font-size: calc(12px * var(--global-font-scale, 1)); }
+.tauri-answer-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 28px; padding: 4px 6px; border: 0; border-radius: 5px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.tauri-answer-actions .copybtn { width: 28px; }
+.tauri-answer-actions svg { flex-shrink: 0; }
+.tauri-answer-actions button:hover, .tauri-answer-actions button:focus-visible { background: var(--sidebar-hover); color: var(--fg); }
+.tauri-answer-actions time { font-variant-numeric: tabular-nums; }
+.tauri-answer-actions__missing { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px; }
+.tauri-turn-usage { position: fixed; z-index: var(--z-modal); width: min(360px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow: auto; padding: 16px; border: 1px solid var(--border-soft); border-radius: 14px; background: var(--surface); color: var(--fg); box-shadow: 0 12px 36px #0003; font-size: calc(12px * var(--global-font-scale, 1)); }
+.tauri-turn-usage header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tauri-turn-usage header button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--fg-dim); cursor: pointer; }
+.tauri-turn-usage header button:hover { background: var(--sidebar-hover); }
+.tauri-turn-usage dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin: 16px 0; }
+.tauri-turn-usage dt { color: var(--fg-dim); overflow-wrap: anywhere; }
+.tauri-turn-usage dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.tauri-turn-usage p { margin: 8px 0 0; color: var(--fg-faint); line-height: 1.6; }
+.tauri-turn-usage .tauri-turn-usage__note { color: var(--fg-dim); }
 .tauri-progress { margin: 16px 0 10px; border: 0; border-radius: 0; background: transparent; }
 .tauri-progress > summary, .tauri-progress__summary { display: flex; min-height: 33px; align-items: center; gap: 4px; padding: 0 0 8px; border-bottom: 1px solid var(--border-soft); color: var(--fg-dim); font-size: calc(13px * var(--global-font-scale, 1)); line-height: 24px; list-style: none; }
 .tauri-progress > summary { cursor: pointer; }

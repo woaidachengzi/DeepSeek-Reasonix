@@ -263,6 +263,8 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) (runErr err
 			ResponsesItems:     responsesItems,
 			ServerSearch:       serverSearch,
 			WorkDurationMs:     state.workDurationMs(),
+			CreatedAt:          time.Now().UnixMilli(),
+			RequestUsage:       persistedRequestUsage(usage),
 		})
 
 		if len(calls) == 0 {

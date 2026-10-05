@@ -75,6 +75,7 @@ func TestGoDTOsMatchTheWireSchema(t *testing.T) {
 		{Name: "answerQuestionRequest", Sample: answerQuestionRequest{}},
 		{Name: "mcpInteractionAnswerRequest", Sample: answerMCPInteractionRequest{}},
 		{Name: "deleteSessionResponse", Sample: deleteSessionResponse{}},
+		{Name: "historyTurnUsage", Sample: desktopbridge.HistoryTurnUsage{}},
 		{Name: "historyMessage", Sample: desktopbridge.HistoryMessage{}},
 		{Name: "historyResponse", Sample: historyResponse{}},
 	}

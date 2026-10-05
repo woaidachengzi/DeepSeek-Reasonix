@@ -79,7 +79,13 @@ func (c *checker) checkDTO(definition Definition, raw json.RawMessage) error {
 			return fmt.Errorf("%s: Go field %s is always serialized but $defs.%s marks %q optional",
 				definition.Name, field.Name, definition.Name, name)
 		}
-		if err := c.checkType(definition.Name, field.Name, field.Type, property, 0); err != nil {
+		wireType := field.Type
+		// A nil omitempty pointer is absent; a non-nil pointer serializes its
+		// element. Required pointers remain rejected because they can emit null.
+		if optional && wireType.Kind() == reflect.Pointer {
+			wireType = wireType.Elem()
+		}
+		if err := c.checkType(definition.Name, field.Name, wireType, property, 0); err != nil {
 			return err
 		}
 	}

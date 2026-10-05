@@ -20,6 +20,9 @@ func ProjectionMessages(msgs []Message) []Message { return projectMessages(msgs,
 
 func messagesNeedProjection(msgs []Message, keepExecution, keepOrigin bool) bool {
 	for _, m := range msgs {
+		if !keepExecution && m.RequestUsage != nil {
+			return true
+		}
 		if m.ReadPause != nil {
 			return true
 		}
@@ -49,6 +52,7 @@ func projectMessages(msgs []Message, keepExecution, keepOrigin bool) []Message {
 		// provider bytes.
 		candidate.ReadResult = nil
 		if !keepExecution {
+			candidate.RequestUsage = nil
 			candidate.ToolDiagnostic = nil
 		}
 		candidate.ReadPause = nil

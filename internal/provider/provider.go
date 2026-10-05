@@ -86,6 +86,7 @@ type Message struct {
 	MemoryCitations []MemoryCitation   `json:"memoryCitations,omitempty"` // local UI metadata; provider requests ignore it
 	WorkDurationMs  int64              `json:"workDurationMs,omitempty"`  // local UI metadata; provider requests ignore it
 	CreatedAt       int64              `json:"createdAt,omitempty"`       // local UI metadata; unix milliseconds; stripped before provider requests
+	RequestUsage    *Usage             `json:"requestUsage,omitempty"`    // local per-completion accounting; never sent to providers
 	Edited          bool               `json:"edited,omitempty"`          // local UI metadata; provider requests ignore it
 	Original        string             `json:"original,omitempty"`        // user prompt before inline edit
 	// LocalOnly marks durable transcript content that must never be sent to amodel provider.
@@ -695,7 +696,8 @@ const (
 // Estimated marks counts reconstructed locally because the provider's terminalusage record did not arrive;
 // exact provider usage leaves it false.
 type Usage struct {
-	Unknown                bool `json:"unknown,omitempty"` // at least one request had no provider usage
+	Unknown                bool `json:"unknown,omitempty"`                // at least one request had no provider usage
+	CacheAccountingUnknown bool `json:"cacheAccountingUnknown,omitempty"` // cache split was absent before billable-input normalization
 	PromptTokens           int
 	CompletionTokens       int
 	TotalTokens            int

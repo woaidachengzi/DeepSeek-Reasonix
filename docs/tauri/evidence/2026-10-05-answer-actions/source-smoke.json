@@ -1,0 +1,72 @@
+{
+  "profile": "isolated disposable fixture",
+  "actualProviderNetwork": "local SSE mock only",
+  "nativeGUI": "not exercised",
+  "cases": [
+    "previous package reads new local accounting metadata without migration",
+    "provider reported exact per-turn input/output/cache/reasoning",
+    "second turn does not accumulate session usage",
+    "assistant completion clock persists",
+    "restart preserves exact accounting and time",
+    "model request excludes local accounting/timestamps",
+    "missing terminal usage remains unknown"
+  ],
+  "first": {
+    "role": "assistant",
+    "content": "Usage fixture reply",
+    "workDurationMs": 1,
+    "createdAtMs": 1791208019784,
+    "turnUsage": {
+      "inputTokens": 200,
+      "outputTokens": 25,
+      "totalTokens": 225,
+      "requestCount": 1,
+      "reasoningTokens": 5,
+      "cacheHitTokens": 100,
+      "cacheMissTokens": 100,
+      "estimated": false,
+      "complete": true
+    }
+  },
+  "second": {
+    "role": "assistant",
+    "content": "Usage fixture reply",
+    "workDurationMs": 2,
+    "createdAtMs": 1791208019893,
+    "turnUsage": {
+      "inputTokens": 400,
+      "outputTokens": 50,
+      "totalTokens": 450,
+      "requestCount": 1,
+      "reasoningTokens": 10,
+      "cacheHitTokens": 200,
+      "cacheMissTokens": 200,
+      "estimated": false,
+      "complete": true
+    }
+  },
+  "unknown": {
+    "role": "assistant",
+    "content": "Usage fixture reply",
+    "workDurationMs": 1,
+    "createdAtMs": 1791208020594,
+    "turnUsage": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "totalTokens": 0,
+      "requestCount": 1,
+      "reasoningTokens": 0,
+      "estimated": false,
+      "complete": false
+    }
+  },
+  "processExits": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "readyRemoved": true,
+  "providerRequests": 3,
+  "binarySha256": "057da6bda0183b0439294f74e3b1c48d3dc7b7a387cbc48c7439deb3ced42e43"
+}

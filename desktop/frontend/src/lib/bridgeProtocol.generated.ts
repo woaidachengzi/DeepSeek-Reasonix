@@ -124,6 +124,7 @@ export interface BridgeHistoryMessage {
   createdAtMs?: number;
   role: "user" | "assistant";
   truncated?: boolean;
+  turnUsage?: BridgeHistoryTurnUsage;
   workDurationMs?: number;
 }
 
@@ -134,6 +135,18 @@ export interface BridgeHistoryResponse {
   session: BridgeSession;
   startIndex: number;
   totalMessages: number;
+}
+
+export interface BridgeHistoryTurnUsage {
+  cacheHitTokens?: number;
+  cacheMissTokens?: number;
+  complete: boolean;
+  estimated: boolean;
+  inputTokens: number;
+  outputTokens: number;
+  reasoningTokens: number;
+  requestCount: number;
+  totalTokens: number;
 }
 
 export interface BridgeLegacyConversationForkResult {

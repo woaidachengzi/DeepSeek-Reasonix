@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -70,6 +70,21 @@ const placeholderBytes = existsSync(frontendPlaceholder) ? readFileSync(frontend
 // Tauri must sign the app before bundling the DMG. Signing only the standalone
 // .app after `tauri build` leaves the copy already sealed in the DMG invalid.
 const adHocMacOSBuild = process.platform === "darwin" && !process.env.APPLE_SIGNING_IDENTITY;
+// Keep development bundles out of app search. The compatibility alias retains
+// Tauri's normal output path; the actual directory is excluded by Spotlight.
+if (process.platform === "darwin") {
+  const bundleDirectory = join(tauriDirectory, "target", "release", "bundle");
+  const macosDirectory = join(bundleDirectory, "macos");
+  const storageDirectory = join(bundleDirectory, "macos.noindex");
+  mkdirSync(bundleDirectory, { recursive: true });
+  if (existsSync(macosDirectory) && !lstatSync(macosDirectory).isSymbolicLink()) {
+    if (existsSync(storageDirectory)) throw new Error("both macOS bundle directories exist; preserve them and resolve the conflict before building");
+    renameSync(macosDirectory, storageDirectory);
+  }
+  mkdirSync(storageDirectory, { recursive: true });
+  if (!existsSync(macosDirectory)) symlinkSync("macos.noindex", macosDirectory, "dir");
+  if (realpathSync(macosDirectory) !== realpathSync(storageDirectory)) throw new Error("macOS bundle alias points outside its expected storage directory");
+}
 const tauri = spawnSync(tauriBinary, ["build", ...bundleArguments], {
   cwd: tauriDirectory,
   env: {

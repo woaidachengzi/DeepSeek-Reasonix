@@ -159,6 +159,7 @@ func mergeSamplingUsage(acc, attempt *provider.Usage) *provider.Usage {
 	}
 	if acc == nil {
 		merged := *attempt
+		merged.CacheAccountingUnknown = attempt.CacheAccountingUnknown || (attempt.PromptTokens > 0 && attempt.CacheHitTokens == 0 && attempt.CacheMissTokens == 0)
 		if merged.RequestCount <= 0 {
 			merged.RequestCount = 1
 		}
@@ -169,6 +170,7 @@ func mergeSamplingUsage(acc, attempt *provider.Usage) *provider.Usage {
 		return &merged
 	}
 	merged := *acc
+	merged.CacheAccountingUnknown = acc.CacheAccountingUnknown || attempt.CacheAccountingUnknown || (attempt.PromptTokens > 0 && attempt.CacheHitTokens == 0 && attempt.CacheMissTokens == 0)
 	merged.Unknown = merged.Unknown || attempt.Unknown
 	// Billable input for Cost: sum hit/miss (prompt when no cache split).
 	ah, am := billableHitMiss(acc)
@@ -267,6 +269,19 @@ func usageRequestCount(usage *provider.Usage) int {
 		return usage.RequestCount
 	}
 	return 1
+}
+
+// Copy immutable accounting into the assistant record before session save.
+// Missing terminal usage is unknown, never a fabricated zero-cost request.
+func persistedRequestUsage(usage *provider.Usage) *provider.Usage {
+	if usage == nil {
+		return &provider.Usage{Unknown: true, RequestCount: 1}
+	}
+	copy := *usage
+	if copy.RequestCount <= 0 {
+		copy.RequestCount = 1
+	}
+	return &copy
 }
 
 func (a *Agent) emitTurnUsage(usage *provider.Usage, cacheDiagnostics *CacheDiagnostics) *billing.CostQuote {

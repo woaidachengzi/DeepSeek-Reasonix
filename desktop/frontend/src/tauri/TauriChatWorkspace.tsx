@@ -9,6 +9,7 @@ const TranscriptSelectionMenu = lazy(() => import("../components/TranscriptSelec
 import { ExternalOpener } from "../components/ExternalOpener";
 import { tauriExternalOpenerBridge } from "./tauriExternalOpener";
 import { CopyButton } from "../components/CopyButton";
+import { TauriAnswerActions } from "./TauriAnswerActions";
 import { ComposerContextCard } from "../components/ComposerContextCard";
 import { formatSelectedTextContext, normalizeSelectedText, selectedTextSnippet, splitSelectedTextContext, type SelectedTextReference } from "../lib/selectedTextContext";
 import { onTauriOpenSettings } from "../lib/tauriBridge";
@@ -93,6 +94,7 @@ function HistoryMessageArticle({ entry, sessionId, questionId, finalAnswer = fal
         {message.truncated && <small>为保护界面性能，这条历史内容已截断。</small>}
       </div>
       {message.role === "user" && <UserMessageMeta text={message.content} createdAtMs={message.createdAtMs} />}
+      {finalAnswer && <TauriAnswerActions key={`${sessionId}:${index}`} text={message.content} createdAtMs={message.createdAtMs} usage={message.turnUsage} />}
     </article>
   </MessageErrorBoundary>;
 }

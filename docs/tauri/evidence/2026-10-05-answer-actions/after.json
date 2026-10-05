@@ -1,0 +1,226 @@
+{
+  "url": "http://127.0.0.1:5196/chat-qa",
+  "title": "Reasonix Harness 对话展示验收",
+  "mode": "after",
+  "browser": "Browser plugin not available; existing Playwright/headless installed Chrome",
+  "actualComponents": "TauriSessionApp + history renderer + shared CopyButton; simulated bridge, native clipboard write captured locally",
+  "checks": [
+    {
+      "theme": "dark",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "overflow": false,
+      "children": [
+        {
+          "text": "10月4日 22:21",
+          "inside": true
+        },
+        {
+          "text": "已完成，用时 47秒",
+          "inside": true
+        },
+        {
+          "text": "用量 1.9M tok10月4日 22:21",
+          "inside": true
+        },
+        {
+          "text": "2025年10月4日 22:21",
+          "inside": true
+        },
+        {
+          "text": "已完成，用时 47秒",
+          "inside": true
+        },
+        {
+          "text": "用量未记录",
+          "inside": true
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "viewport": {
+        "width": 768,
+        "height": 900
+      },
+      "overflow": false,
+      "children": [
+        {
+          "text": "10月4日 22:21",
+          "inside": true
+        },
+        {
+          "text": "已完成，用时 47秒",
+          "inside": true
+        },
+        {
+          "text": "用量 1.9M tok10月4日 22:21",
+          "inside": true
+        },
+        {
+          "text": "2025年10月4日 22:21",
+          "inside": true
+        },
+        {
+          "text": "已完成，用时 47秒",
+          "inside": true
+        },
+        {
+          "text": "用量未记录",
+          "inside": true
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 900
+      },
+      "overflow": false,
+      "children": [
+        {
+          "text": "10月4日 22:21",
+          "inside": true
+        },
+        {
+          "text": "已完成，用时 47秒",
+          "inside": true
+        },
+        {
+          "text": "用量 1.9M tok10月4日 22:21",
+          "inside": true
+        },
+        {
+          "text": "2025年10月4日 22:21",
+          "inside": true
+        },
+        {
+          "text": "已完成，用时 47秒",
+          "inside": true
+        },
+        {
+          "text": "用量未记录",
+          "inside": true
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "overflow": false,
+      "children": [
+        {
+          "text": "10月4日 22:21",
+          "inside": true
+        },
+        {
+          "text": "已完成，用时 47秒",
+          "inside": true
+        },
+        {
+          "text": "用量 1.9M tok10月4日 22:21",
+          "inside": true
+        },
+        {
+          "text": "2025年10月4日 22:21",
+          "inside": true
+        },
+        {
+          "text": "已完成，用时 47秒",
+          "inside": true
+        },
+        {
+          "text": "用量未记录",
+          "inside": true
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "viewport": {
+        "width": 768,
+        "height": 900
+      },
+      "overflow": false,
+      "children": [
+        {
+          "text": "10月4日 22:21",
+          "inside": true
+        },
+        {
+          "text": "已完成，用时 47秒",
+          "inside": true
+        },
+        {
+          "text": "用量 1.9M tok10月4日 22:21",
+          "inside": true
+        },
+        {
+          "text": "2025年10月4日 22:21",
+          "inside": true
+        },
+        {
+          "text": "已完成，用时 47秒",
+          "inside": true
+        },
+        {
+          "text": "用量未记录",
+          "inside": true
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 900
+      },
+      "overflow": false,
+      "children": [
+        {
+          "text": "10月4日 22:21",
+          "inside": true
+        },
+        {
+          "text": "已完成，用时 47秒",
+          "inside": true
+        },
+        {
+          "text": "用量 1.9M tok10月4日 22:21",
+          "inside": true
+        },
+        {
+          "text": "2025年10月4日 22:21",
+          "inside": true
+        },
+        {
+          "text": "已完成，用时 47秒",
+          "inside": true
+        },
+        {
+          "text": "用量未记录",
+          "inside": true
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "interaction": [
+    "expand/collapse process",
+    "final remains visible",
+    "single timed answer has non-interactive completion row",
+    "date-aware message time",
+    "copy original input + success icon",
+    "copy complete answer",
+    "answer time",
+    "usage detail exact counts + reasoning subset",
+    "dialog geometry desktop/narrow + Escape restores focus",
+    "reload preserves fixture usage; real persistence tested separately"
+  ]
+}

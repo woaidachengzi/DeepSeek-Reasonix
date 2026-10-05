@@ -177,8 +177,21 @@ func TestCheckGoDTOsBindsEveryFieldWithMatchingOptionality(t *testing.T) {
 	if err := CheckGoDTOs(root, []Definition{{Name: "thing", Sample: exact{}}}); err != nil {
 		t.Fatalf("exact DTO was rejected: %v", err)
 	}
+	type optionalPointer struct {
+		Name  string  `json:"name"`
+		Count int     `json:"count"`
+		Note  *string `json:"note,omitempty"`
+	}
+	if err := CheckGoDTOs(root, []Definition{{Name: "thing", Sample: optionalPointer{}}}); err != nil {
+		t.Fatalf("omitempty pointer was rejected: %v", err)
+	}
 
 	cases := map[string]any{
+		"nullable pointer on a non-null required field": struct {
+			Name  *string `json:"name"`
+			Count int     `json:"count"`
+			Note  string  `json:"note,omitempty"`
+		}{},
 		"schema field no Go field serializes": struct {
 			Name  string `json:"name"`
 			Count int    `json:"count"`
