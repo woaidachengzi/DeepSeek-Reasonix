@@ -1,0 +1,50 @@
+{
+  "phase": "before",
+  "browser": "Chromium / installed Google Chrome (headless)",
+  "browserPath": "Browser plugin not available; existing Playwright",
+  "url": "http://127.0.0.1:5198/approval-qa",
+  "component": "actual PromptCard; fixture exports via Vite transform only; host callbacks simulated",
+  "subject": "curl -s --max-time 15 \"https://search-api-web.eastmoney.com/search/jsonp?cb=cb&param=%7B%22uid%22%3A%22%22%2C%22keyword%22%3A%22%E7%BE%8E%E8%81%94%E5%82%A8%20COMEX%20%E9%BB%84%E9%87%91%22%2C%22type%22%3A%5B%22cmsArticleWebOld%22%5D%2C%22client%22%3A%22web%22%2C%22pageSize%22%3A20%2C%22pageIndex%22%3A1%7D\"\n-H \"Referer: https://so.eastmoney.com/\" | python3 /tmp/em_search.py",
+  "checks": [
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "cardWidth": 820,
+      "subjectWidth": 762,
+      "subjectScrollWidth": 1727,
+      "overflow": 963.515625,
+      "documentOverflow": false,
+      "buttonsInside": true,
+      "lineCount": 4
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 900
+      },
+      "cardWidth": 720,
+      "subjectWidth": 662,
+      "subjectScrollWidth": 1727,
+      "overflow": 1063.515625,
+      "documentOverflow": false,
+      "buttonsInside": true,
+      "lineCount": 4
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 900
+      },
+      "cardWidth": 366,
+      "subjectWidth": 308,
+      "subjectScrollWidth": 1727,
+      "overflow": 1417.515625,
+      "documentOverflow": false,
+      "buttonsInside": true,
+      "lineCount": 7
+    }
+  ],
+  "errors": []
+}
