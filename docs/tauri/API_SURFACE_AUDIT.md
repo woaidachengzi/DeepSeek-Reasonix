@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-05）
 
+**MiMo 对话模型可见性：** [展开刷新与未就绪提示](evidence/2026-10-05-mimo-picker/README.md)。已保存配置只读核对，菜单新增刷新、未就绪原因与失败保护；组件与隔离浏览器验证通过，真实钥匙串授权和 MiMo 网络请求未代操作。
+
 **模型服务删除入口：** [同卡片配置删除与密钥清除分离](evidence/2026-10-05-provider-delete/README.md)。原截图“删除”实际是钥匙串清除；新增明确服务删除与内联确认，保留 revision/默认模型保护，内置 DeepSeek 改为移除访问并提供重新添加；完整 Go 配置/桥接及前端回归、mock 浏览器通过。未操作真实用户配置，原生新包实测及 D/E/A/B/C 待验保持。
 
 **对话输入区与审批/模型：** [实现与回归证据](evidence/2026-10-05-composer-controls/README.md)。参考截图布局，当前会话工具审批读写/持久化与模型菜单接通；HTTP 门禁、Go/UI 回归、浏览器 mock 与构建通过。ask/auto/yolo 不冒充只读/工作区权限；新包端到端及 D/E/A/B/C 缺口保持。
