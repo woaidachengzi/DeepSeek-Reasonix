@@ -1,0 +1,35 @@
+{
+  "sourceCommit": "6e294180b8c1e4a7546ca41cf1f8d6e323b104f7",
+  "sourceDirty": false,
+  "buildCommand": "pnpm tauri:build --bundles app",
+  "artifact": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app",
+  "bundleIdentifier": "io.reasonix.desktop.preview",
+  "version": "0.1.0",
+  "architecture": "macOS arm64",
+  "signing": "ad-hoc; strict/deep verified; not notarized",
+  "sha256": {
+    "reasonix-tauri": "d1c7a52c820b40251c58c65f4a5cb90926ca2258ea05fc1b310baffb2ef59a51",
+    "reasonix-desktop-bridge": "7a65606af2e729b076902699b910b2ad17c30e3a862caef6e1863d070cc2b690"
+  },
+  "previousApp": "/var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/reasonix-session-archive-rollback-osfixsdi/Reasonix Tauri Preview.app.rollback",
+  "previousSha256": {
+    "reasonix-tauri": "01d0d97a9280c86776fe5f994ccea1dafcabecd1990bc423e1b9935554b27a9f",
+    "reasonix-desktop-bridge": "2341cc61ec26c445e5ad45e92b18be20691d3277c76687202d239d1446675acf"
+  },
+  "signatureChecks": [
+    {
+      "path": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app",
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "path": "/var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/reasonix-session-archive-rollback-osfixsdi/Reasonix Tauri Preview.app.rollback",
+      "exitCode": 0,
+      "output": ""
+    }
+  ],
+  "smoke": "package-smoke.json; real packaged bridge and previous bridge, isolated local provider",
+  "nativeGUI": "not exercised",
+  "packaging": "app only; no ZIP/DMG produced; Applications not replaced",
+  "rollback": "Close new app; rename backed-up .app.rollback to .app to run previous package. Original histories remain at same paths; old package does not hide new archives."
+}

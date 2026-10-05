@@ -69,7 +69,7 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-05）
 
-**对话归档：** [单条归档、恢复与进程证据](evidence/2026-10-05-session-archive/README.md)。对照 Wails 可恢复回收站，Tauri 新增独立归档可见性状态，保留原历史/工件/schema9；确认归档、已归档列表、恢复并打开原 ID 已接入。Go race、完整 Tauri 前端回归/生产门禁、Rust232/5ignored 与本机真实 sidecar 归档重启/继续发送通过；真实组件浏览器三档无溢出。Wails 回收站导入/批量归档/归档预览与清空未迁移，原生 WebKit和真实模型网络/D/E/A/B/C 缺口保持。
+**对话归档：** [单条归档、恢复与进程证据](evidence/2026-10-05-session-archive/README.md)。对照 Wails 可恢复回收站，Tauri 新增独立归档可见性状态，保留原历史/工件/schema9；确认归档、已归档列表、恢复并打开原 ID 已接入。Go race、完整 Tauri 前端回归/生产门禁、Rust232/5ignored 与 strict clippy 通过；真实组件浏览器三档无溢出。干净源码 `6e294180b` app-only 构建/严格签名、包内真实 sidecar 归档重启/继续发送与备份旧包回读原历史通过，三次退出0并清理。Wails 回收站导入/批量归档/归档预览与清空未迁移，原生 WebKit和真实模型网络/D/E/A/B/C 缺口保持。
 
 **审批命令长文本：** [折行与窗口宽度验证](evidence/2026-10-05-approval-command-wrap/README.md)。对照 Wails 补齐公共卡片长文本折行和标题收缩；真实组件浏览器在 1280/768/390px 下无溢出、复制原文一致、允许/拒绝回调通过，长名称/说明与暗色主题补验通过。原生 WebKit/真实工具执行及其他 D/E/A/B/C 缺口保持。
 

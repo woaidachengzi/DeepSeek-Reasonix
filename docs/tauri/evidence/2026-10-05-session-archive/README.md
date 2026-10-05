@@ -23,3 +23,11 @@ Browser plugin not available，使用项目已有 Playwright 与已安装的 hea
 `source-smoke.json` 使用新构建的真实 sidecar、临时 profile 与本机 SSE 模拟模型验证历史保留、运行中409、重试日期不变、工件路径/字节保留、归档直开409、0600/schema9、重启恢复、继续发送、inactive 归档保留当前 owner、空对话标题保留、损坏状态失败关闭且不覆盖、修复重试与配置原字节不变。两次退出0、ready文件移除，4次模型请求全部在本机。附件/检查点为隔离 marker，只证明归档不删除/搬动它们，不冒充图片加载或代码回滚验收。
 
 直接 `.app` 的构建、签名、包内同范围 smoke 和前一版回退回读证据追加在本目录回执；不生成 ZIP/DMG，不替换 Applications，不发布或切换默认下载项。原生 WebKit 鼠标/键盘交互和真实模型网络请求尚未执行，D 稳定验收/E 全面迁移、A/B/C 与正式签名/公证缺口不因本功能关闭。
+
+## 实际新包与回退
+
+干净源码 `6e294180b` 执行 `pnpm tauri:build --bundles app` 成功，包内 Go metadata 为同 revision / `vcs.modified=false`；前端生产门禁、Go sidecar 和 Rust release 构建通过。`cargo clippy --all-targets -- -D warnings` 通过。新包与备份前包均 `codesign --verify --deep --strict` 返回0，仍为本地 ad-hoc Preview，未公证。源 revision、host/sidecar SHA256、实际路径与回退位置见 `package-receipt.json`。
+
+`package-smoke.json` 用实际新包内 sidecar 重复 source smoke，全部通过；额外在同一隔离档案上启动备份旧包内 sidecar，能直接打开已归档 ID 并读到原用户历史，无须数据转换。回到新包后归档状态仍保留，可恢复并继续发送。三次进程退出0、ready文件均清理；本机模拟模型共4次请求。该证据属于包内真实 bridge 和旧包 bridge，不包括原生 GUI/宿主窗口完整生命周期验收。
+
+旧包备份后缀 `.app.rollback`，避免新增应用搜索项；需要回退时先关闭新包，将备份后缀改回 `.app` 再运行。原数据路径未移动，旧包会显示全部原对话；重新运行新包仍识别独立归档状态。此次没有修改用户现有 profile、API Key、密钥串、Applications 或默认下载项。
