@@ -58,6 +58,7 @@ type providerConfigView struct {
 	ResponsesMode string   `json:"responsesMode"`
 	BalanceURLSet bool     `json:"balanceUrlSet"`
 	Removable     bool     `json:"removable"`
+	Hidden        bool     `json:"hidden"`
 	Revision      string   `json:"revision"`
 }
 
@@ -135,6 +136,7 @@ type deleteProviderConfigRequest struct {
 	Models      []string `json:"models"`
 	Default     string   `json:"default"`
 	Revision    string   `json:"revision"`
+	Restore     bool     `json:"restore"`
 }
 
 type saveProviderConfigRequest struct {
@@ -191,7 +193,8 @@ func loadProviderConfigs(token string) (providerConfigList, error) {
 			ModelsURLSet: strings.TrimSpace(entry.ModelsURL) != "", NoProxy: entry.NoProxy,
 			ContextWindow: entry.ContextWindow, ResponsesMode: entry.ResponsesMode,
 			BalanceURLSet: strings.TrimSpace(entry.BalanceURL) != "",
-			Removable:     !configpkg.IsOfficialDeepSeekProvider(entry),
+			Removable:     providerAccessAllowed(cfg.Desktop.ProviderAccess, entry.Name),
+			Hidden:        !providerAccessAllowed(cfg.Desktop.ProviderAccess, entry.Name),
 			Revision:      revision,
 		})
 	}
@@ -361,10 +364,39 @@ func removeProviderConfig(input deleteProviderConfigRequest, token string) error
 	if entry.DisplayName != input.DisplayName || entry.Kind != input.Kind || entry.Default != input.Default || !slices.Equal(entry.ModelList(), input.Models) {
 		return errPreviewProviderChanged
 	}
-	if configpkg.IsOfficialDeepSeekProvider(entry) {
-		return fmt.Errorf("official provider access cannot be deleted here")
-	}
 	baseline := cfg.ModelSettingsBaseline()
+	if input.Restore {
+		if providerAccessAllowed(cfg.Desktop.ProviderAccess, input.Name) {
+			return errPreviewProviderChanged
+		}
+		cfg.Desktop.ProviderAccess = append(cfg.Desktop.ProviderAccess, input.Name)
+		return cfg.SaveUserSettingsDeltaTo(path, baseline)
+	}
+	if !providerAccessAllowed(cfg.Desktop.ProviderAccess, input.Name) {
+		return errPreviewProviderChanged
+	}
+	if configpkg.IsOfficialDeepSeekProvider(entry) {
+		// Canonical official entries may be recreated by config normalization.
+		// Remove access instead, retaining credentials and an explicit restore path.
+		if cfg.Desktop.ProviderAccess == nil {
+			cfg.Desktop.ProviderAccess = make([]string, 0, len(cfg.Providers))
+			for _, provider := range cfg.Providers {
+				cfg.Desktop.ProviderAccess = append(cfg.Desktop.ProviderAccess, provider.Name)
+			}
+		}
+		cfg.Desktop.ProviderAccess = slices.DeleteFunc(cfg.Desktop.ProviderAccess, func(name string) bool { return strings.TrimSpace(name) == input.Name })
+		fallback := ""
+		for i := range cfg.Providers {
+			candidate := &cfg.Providers[i]
+			candidate.ResolveAPIKeyForRoot(".")
+			if providerAccessAllowed(cfg.Desktop.ProviderAccess, candidate.Name) && candidate.Configured() && len(candidate.ModelList()) > 0 {
+				fallback = candidate.Name + "/" + candidate.DefaultModel()
+				break
+			}
+		}
+		retargetPreviewProviderReferences(cfg, input.Name, fallback)
+		return cfg.SaveUserSettingsDeltaTo(path, baseline)
+	}
 	if err := cfg.RemoveProvider(input.Name); err != nil {
 		return fmt.Errorf("another configured provider is required before deleting this service")
 	}
@@ -553,4 +585,52 @@ func persistProviderConfig(input saveProviderConfigRequest) error {
 		cfg.Desktop.ProviderAccess = append(cfg.Desktop.ProviderAccess, input.Name)
 	}
 	return cfg.SaveUserSettingsDeltaTo(path, baseline)
+}
+
+// Match qualified, bare-provider and unqualified model refs before mutating
+// defaults, using the same access-removal semantics as the Wails baseline.
+func retargetPreviewProviderReferences(cfg *configpkg.Config, name, fallback string) {
+	matches := func(ref string) bool {
+		if strings.TrimSpace(ref) == "" {
+			return false
+		}
+		if provider, _, qualified := strings.Cut(ref, "/"); qualified {
+			return provider == name
+		}
+		if ref == name {
+			return true
+		}
+		resolved, ok := cfg.ResolveModel(ref)
+		return ok && resolved.Name == name
+	}
+	refs := []*string{&cfg.DefaultModel, &cfg.Agent.PlannerModel, &cfg.Agent.GuardianModel, &cfg.Agent.RecoveryModel, &cfg.Agent.SubagentModel, &cfg.Bot.Model, &cfg.Bot.QQ.Model, &cfg.Bot.Dingtalk.Model}
+	for i := range cfg.Bot.Routes {
+		refs = append(refs, &cfg.Bot.Routes[i].Model)
+	}
+	for i := range cfg.Bot.Connections {
+		refs = append(refs, &cfg.Bot.Connections[i].Model)
+	}
+	// Resolve all references against the original default, then mutate them.
+	matched := make([]*string, 0, len(refs))
+	for _, ref := range refs {
+		if matches(*ref) {
+			matched = append(matched, ref)
+		}
+	}
+	visionMatches := matches(cfg.Agent.VisionModel)
+	for skill, ref := range cfg.Agent.SubagentModels {
+		if matches(ref) {
+			if fallback == "" {
+				delete(cfg.Agent.SubagentModels, skill)
+			} else {
+				cfg.Agent.SubagentModels[skill] = fallback
+			}
+		}
+	}
+	for _, ref := range matched {
+		*ref = fallback
+	}
+	if visionMatches {
+		cfg.Agent.VisionModel = ""
+	}
 }

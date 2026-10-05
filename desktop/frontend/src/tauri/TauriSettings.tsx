@@ -1619,7 +1619,7 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
               </div>
               {deleteReview?.name === provider.name && <div role="group" aria-label="确认删除模型服务" className="tauri-provider-delete-review">
                 <p>{t("settings.previewProvider.confirmDelete", { name: deleteReview.displayName || deleteReview.name })}</p>
-                <p className="tauri-settings-hint">删除服务配置，不删除对话记录或钥匙串凭据。已有会话需要另行切换模型。</p>
+                <p className="tauri-settings-hint">从可用服务中移除；内置服务可在“已移除的服务”中重新添加。保留对话记录和钥匙串凭据，已有会话需要另行切换模型。</p>
                 <button type="button" className="tauri-settings-button tauri-settings-button--danger" disabled={keyBusy} onClick={() => void deleteService()}>确认删除模型服务</button>
                 <button type="button" className="tauri-settings-button" disabled={keyBusy} onClick={() => setDeleteReview(null)}>{t("common.cancel")}</button>
               </div>}

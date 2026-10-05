@@ -608,12 +608,16 @@ pub struct ProviderConfigView {
     #[serde(default)]
     pub balance_url_set: bool,
     pub removable: bool,
+    #[serde(default)]
+    pub hidden: bool,
     pub revision: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteProviderConfigRequest {
+    #[serde(default)]
+    pub restore: bool,
     pub name: String,
     pub display_name: String,
     pub kind: String,

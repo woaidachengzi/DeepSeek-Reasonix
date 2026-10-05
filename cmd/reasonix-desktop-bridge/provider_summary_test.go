@@ -470,7 +470,7 @@ web_search = true
 	if err != nil {
 		t.Fatal(err)
 	}
-	if summary.PlannerModel != "local/text" || summary.VisionModel != "local/vision" || summary.WebSearchModel != "search/fast" || len(summary.Providers) != 3 || !strings.EqualFold(strings.Join(summary.Providers[0].VisionModels, ","), "vision") || summary.Providers[1].Configured || strings.Join(summary.Providers[2].SearchModels, ",") != "fast" {
+	if summary.PlannerModel != "local/text" || summary.VisionModel != "local/vision" || summary.WebSearchModel != "search/fast" || len(summary.Providers) != 2 || !strings.EqualFold(strings.Join(summary.Providers[0].VisionModels, ","), "vision") || strings.Join(summary.Providers[1].SearchModels, ",") != "fast" {
 		t.Fatalf("role summary: %#v", summary)
 	}
 	if response := request(`{"role":"vision","model":"auto"}`, true); response.Code != http.StatusOK {

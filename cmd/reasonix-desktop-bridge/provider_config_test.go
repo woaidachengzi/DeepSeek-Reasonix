@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -625,29 +626,13 @@ default = "chat"
 	}
 }
 
-func TestProviderConfigDeleteProtectsOfficialAndHiddenFallback(t *testing.T) {
+func TestProviderConfigDeleteProtectsHiddenFallback(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
 		config        string
 		provider      string
 		wantRemovable bool
 	}{
-		{"official", `default_model = "deepseek/chat"
-[desktop]
-provider_access = ["deepseek", "fallback"]
-[[providers]]
-name = "deepseek"
-kind = "openai"
-base_url = "https://api.deepseek.com"
-models = ["chat"]
-default = "chat"
-[[providers]]
-name = "fallback"
-kind = "openai"
-base_url = "https://fallback.example/v1"
-models = ["chat"]
-default = "chat"
-`, "deepseek", false},
 		{"hidden fallback", `default_model = "custom/chat"
 [desktop]
 provider_access = ["custom"]
@@ -695,6 +680,127 @@ default = "chat"
 			}
 			if string(raw) != tc.config {
 				t.Fatalf("failed deletion changed config: %s", raw)
+			}
+		})
+	}
+}
+
+func TestOfficialProviderAccessRemovalAndRestore(t *testing.T) {
+	for _, withFallback := range []bool{false, true} {
+		t.Run(fmt.Sprint(withFallback), func(t *testing.T) {
+			t.Setenv("REASONIX_HOME", t.TempDir())
+			t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+			if _, err := configpkg.StoreCredentialLines([]string{"FALLBACK_TEST_KEY=fixture-only"}); err != nil {
+				t.Fatal(err)
+			}
+			path := configpkg.UserConfigPath()
+			body := `default_model = "deepseek-pro/chat"
+future_field = "preserved"
+[[providers]]
+name = "deepseek-pro"
+kind = "openai"
+base_url = "https://api.deepseek.com"
+api_key_env = "OFFICIAL_TEST_KEY"
+models = ["chat"]
+default = "chat"
+[agent]
+planner_model = "deepseek-pro/chat"
+guardian_model = "deepseek-pro/chat"
+recovery_model = "deepseek-pro/chat"
+vision_model = "deepseek-pro/chat"
+[bot]
+model = "deepseek-pro/chat"
+`
+			if withFallback {
+				body += `
+[[providers]]
+name = "fallback"
+kind = "openai"
+base_url = "https://fallback.example/v1"
+api_key_env = "FALLBACK_TEST_KEY"
+models = ["chat"]
+default = "chat"
+`
+			}
+			if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			view, err := loadProviderConfigs(testToken)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var target providerConfigView
+			for _, p := range view.Providers {
+				if p.Name == "deepseek-pro" {
+					target = p
+				}
+			}
+			if !target.Removable || target.Hidden {
+				t.Fatalf("initial view: %+v", target)
+			}
+			input := deleteProviderConfigRequest{Name: target.Name, DisplayName: target.DisplayName, Kind: target.Kind, Models: target.Models, Default: target.Default, Revision: target.Revision}
+			if err := removeProviderConfig(input, testToken); err != nil {
+				t.Fatal(err)
+			}
+			if err := removeProviderConfig(input, testToken); err != errPreviewProviderChanged {
+				t.Fatalf("stale removal: %v", err)
+			}
+			cfg, err := configpkg.LoadUserConfigReadOnly()
+			if err != nil {
+				t.Fatal(err)
+			}
+			official, ok := cfg.Provider("deepseek-pro")
+			if !ok || official.APIKeyEnv != "OFFICIAL_TEST_KEY" {
+				t.Fatal("official entry or credential source lost")
+			}
+			if providerAccessAllowed(cfg.Desktop.ProviderAccess, "deepseek-pro") {
+				t.Fatal("removed official entry reappeared after reload")
+			}
+			if withFallback && (cfg.DefaultModel != "fallback/chat" || cfg.Agent.PlannerModel != "fallback/chat" || cfg.Agent.GuardianModel != "fallback/chat" || cfg.Agent.RecoveryModel != "fallback/chat" || cfg.Bot.Model != "fallback/chat") {
+				t.Fatalf("references not retargeted: default=%q planner=%q guardian=%q recovery=%q bot=%q", cfg.DefaultModel, cfg.Agent.PlannerModel, cfg.Agent.GuardianModel, cfg.Agent.RecoveryModel, cfg.Bot.Model)
+			}
+			if cfg.Agent.VisionModel != "" {
+				t.Fatal("vision reference retained")
+			}
+			summary, err := loadProviderSummary()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, p := range summary.Providers {
+				if p.Name == "deepseek-pro" {
+					t.Fatal("removed entry remains on service card")
+				}
+			}
+			view, err = loadProviderConfigs(testToken)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, p := range view.Providers {
+				if p.Name == "deepseek-pro" {
+					target = p
+				}
+			}
+			if !target.Hidden || target.Removable {
+				t.Fatal("restore view missing")
+			}
+			input.Revision = target.Revision
+			input.Restore = true
+			if err := removeProviderConfig(input, testToken); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err = configpkg.LoadUserConfigReadOnly()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !providerAccessAllowed(cfg.Desktop.ProviderAccess, "deepseek-pro") && !providerAccessAllowed(cfg.Desktop.ProviderAccess, "deepseek") {
+				t.Fatal("restore failed")
+			}
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(raw), "preserved") {
+				t.Fatal("unknown field lost")
 			}
 		})
 	}

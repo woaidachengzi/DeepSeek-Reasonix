@@ -30,6 +30,8 @@ Object.defineProperty(dom.window.navigator, "clipboard", { value: { writeText: a
 class TestResizeObserver { observe() {} unobserve() {} disconnect() {} }
 globalThis.ResizeObserver = TestResizeObserver as unknown as typeof ResizeObserver;
 
+let hiddenProvider = false;
+let restoredProvider = false;
 let keyPresent = false;
 const envCredentialPresent = true;
 let saveGate: Promise<void> | null = null;
@@ -142,13 +144,13 @@ const summary = (scope = "global") => ({
         if (failSummary) { failSummary = false; throw new Error("summary unavailable"); }
         return summary(args?.scope ?? "global");
       case "test_provider_model": lastProbeRequest = args?.request as { name: string; model: string; apiKey?: string }; return { protocolVersion: 1, latencyMillis: 123 };
-      case "provider_configs": return { protocolVersion: 1, providers: [{ name: "demo", displayName: "Demo", kind: "openai", models: ["m"], default: "m", modelsUrlSet: false, noProxy: false, contextWindow: 0, responsesMode: "", balanceUrlSet: false, removable: allowDeleteProvider, revision: "r1" }], presets: [providerPreset()] };
+      case "provider_configs": return { protocolVersion: 1, providers: [{ name: "demo", displayName: "Demo", kind: "openai", models: ["m"], default: "m", modelsUrlSet: false, noProxy: false, contextWindow: 0, responsesMode: "", balanceUrlSet: false, hidden: hiddenProvider, removable: allowDeleteProvider && !hiddenProvider, revision: "r1" }], presets: [providerPreset()] };
       case "save_provider_config": {
         if (args?.input?.presetId) { savedPresetId = args.input.presetId; savedPresetAction = args.input.presetAction ?? ""; presetInstalled = true; presetModified = savedPresetAction !== "reset"; return { protocolVersion: 1, providers: [{ name: "demo", displayName: "Demo", kind: "openai", models: ["m"], default: "m", removable: false, revision: "r1" }], presets: [providerPreset()] }; }
         savedProviderInput = args?.input;
         return { protocolVersion: 1, providers: [{ ...args?.input, removable: false }], presets: [providerPreset()] };
       }
-      case "delete_provider_config": deletedProviderName = args?.input?.name ?? ""; deletedProviderRevision = args?.input?.revision ?? ""; return { protocolVersion: 1, providers: [] };
+      case "delete_provider_config": if (args?.input?.restore) { restoredProvider = true; hiddenProvider = false; return { protocolVersion: 1, providers: [{ name: "demo", displayName: "Demo", kind: "openai", models: ["m"], default: "m", removable: true, hidden: false, revision: "r2" }] }; } deletedProviderName = args?.input?.name ?? ""; deletedProviderRevision = args?.input?.revision ?? ""; return { protocolVersion: 1, providers: [] };
       case "usage_stats": return { protocolVersion: 1, from: "2026-09-01", to: "2026-09-27", tokens: 42, requests: 1, turns: 1, cacheHit: 0, cacheMiss: 42, activeDays: 1, topModel: "demo/m", topProvider: "demo", daily: [], models: [], providers: [] };
       case "storage_settings":
         if (failStorage) { failStorage = false; throw new Error("storage unavailable"); }
@@ -1354,4 +1356,14 @@ assert.equal(deletedProviderName, "demo", "confirmed custom provider deletion re
 assert.equal(deletedProviderRevision, "r1", "deletion carries the configuration revision shown to the user");
 assert.match(visibleText(), /模型服务已删除|Model service deleted/, "provider deletion reports the new-session effect");
 await act(async () => { providerRoot.unmount(); });
+hiddenProvider = true;
+const restoreRoot = createRoot(document.getElementById("root")!);
+await act(async () => { restoreRoot.render(<LocaleProvider><TauriProviderEditor onSummaryChange={() => {}} /></LocaleProvider>); });
+assert.match(visibleText(), /已移除的服务/);
+const credentialCallsBeforeRestore = calls.filter(call => call.startsWith("keychain_")).length;
+await act(async () => { click("重新添加"); });
+assert.equal(restoredProvider, true, "restore carries explicit intent through the config command");
+assert.equal(calls.filter(call => call.startsWith("keychain_")).length, credentialCallsBeforeRestore, "restore does not read or rewrite credentials");
+assert.equal(document.querySelector("details"), null, "restored entry leaves the removed list");
+await act(async () => { restoreRoot.unmount(); });
 console.log("tauri settings API key flow passed");

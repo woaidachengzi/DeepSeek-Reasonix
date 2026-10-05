@@ -533,10 +533,11 @@ export interface TauriProviderConfig {
   responsesMode: string;
   balanceUrlSet: boolean;
   removable: boolean;
+  hidden?: boolean;
   revision: string;
 }
 
-export type TauriProviderConfigInput = Omit<TauriProviderConfig, "removable" | "revision"> & {
+export type TauriProviderConfigInput = Omit<TauriProviderConfig, "removable" | "revision" | "hidden"> & {
   baseUrl: string;
   modelsUrl: string;
   clearModelsUrl: boolean;
@@ -620,10 +621,10 @@ async function changeTauriProviderPreset(preset: TauriProviderPreset, presetActi
 export const installTauriProviderPreset = (preset: TauriProviderPreset) => changeTauriProviderPreset(preset, "add");
 export const resetTauriProviderPreset = (preset: TauriProviderPreset) => changeTauriProviderPreset(preset, "reset");
 
-export async function deleteTauriProviderConfig(provider: TauriProviderConfig): Promise<TauriProviderConfigList> {
+export async function deleteTauriProviderConfig(provider: TauriProviderConfig, restore = false): Promise<TauriProviderConfigList> {
   requireTauri();
   const { name, displayName, kind, models, default: defaultModel, revision } = provider;
-  return invoke<TauriProviderConfigList>("delete_provider_config", { input: { name, displayName, kind, models, default: defaultModel, revision } });
+  return invoke<TauriProviderConfigList>("delete_provider_config", { input: { name, displayName, kind, models, default: defaultModel, revision, ...(restore ? { restore: true } : {}) } });
 }
 
 export async function tauriUsageStats(request: UsageStatsRequest): Promise<UsageStatsRange> {

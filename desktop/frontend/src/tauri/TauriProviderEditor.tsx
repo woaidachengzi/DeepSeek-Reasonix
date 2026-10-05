@@ -156,6 +156,19 @@ export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyC
     }
   };
 
+  const restore = async (provider: TauriProviderConfig) => {
+    if (saving || discoveringModels || pendingKeys.length) return;
+    setSaving(true); setError(""); setMessage("");
+    try {
+      const view = await deleteTauriProviderConfig(provider, true);
+      setConfigs(view.providers); setPresets(view.presets || []);
+      setMessage("模型服务已重新添加。");
+      try { onSummaryChange(await tauriProviderSummary()); }
+      catch { setError(t("settings.previewProvider.message.refreshFailed")); }
+    } catch (err) { setError(tauriMessageFrom(err)); }
+    finally { setSaving(false); }
+  };
+
   const remove = async (provider: TauriProviderConfig) => {
     if (saving || !provider.removable || !window.confirm(t("settings.previewProvider.confirmDelete", { name: provider.displayName || provider.name }))) return;
     setSaving(true);
@@ -267,11 +280,17 @@ export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyC
       {!editingExisting && editorForm}
       {adding === "catalog" && <button type="button" className="tauri-settings-button" disabled={saving || discoveringModels || pendingKeys.length > 0} onClick={() => setAdding(null)}>{t("common.cancel")}</button>}
     </section>}
-    {loading ? <p className="tauri-settings-hint">{t("common.loading")}</p> : configs.map(provider => <div className="tauri-provider-editor-row" key={provider.name}>
+    {loading ? <p className="tauri-settings-hint">{t("common.loading")}</p> : configs.filter(provider => !provider.hidden).map(provider => <div className="tauri-provider-editor-row" key={provider.name}>
       <span><strong>{provider.displayName || provider.name}</strong><small>{provider.kind} · {t("settings.previewProvider.modelCount", { count: provider.models.length })}</small></span>
       <button type="button" className="tauri-settings-button" onClick={() => { setAdding(null); startEdit(provider); }} disabled={saving || discoveringModels || pendingKeys.length > 0 || !["openai", "anthropic", "responses"].includes(provider.kind)}>{t("common.edit")}</button>
       {provider.removable && <button type="button" className="tauri-settings-button" onClick={() => void remove(provider)} disabled={saving || discoveringModels || pendingKeys.length > 0}>{t("common.delete")}</button>}
     </div>)}
+    {configs.some(provider => provider.hidden) && <details><summary>已移除的服务</summary>
+      {configs.filter(provider => provider.hidden).map(provider => <div className="tauri-provider-editor-row" key={provider.name}>
+        <strong>{provider.displayName || provider.name}</strong>
+        <button type="button" className="tauri-settings-button" disabled={saving || discoveringModels || pendingKeys.length > 0} onClick={() => void restore(provider)}>重新添加</button>
+      </div>)}
+    </details>}
     {editingExisting && adding === null && editorForm}
     {pendingKeys.length > 0 && <div role="status" className="tauri-provider-key-retry"><p>{t("settings.previewProvider.connectionKeyRetry")}</p><label>API Key<input type="password" autoComplete="off" disabled={saving} value={adding === "catalog" ? presetKey : apiKey} onChange={event => adding === "catalog" ? setPresetKey(event.target.value) : setApiKey(event.target.value)} /></label><button type="button" className="tauri-settings-button" disabled={saving || !(adding === "catalog" ? presetKey : apiKey).trim()} onClick={() => void retryKeys()}>{t("settings.previewProvider.saveKey")}</button></div>}
     {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}

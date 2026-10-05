@@ -298,6 +298,9 @@ func loadProviderSummaryForScope(scope, workspaceRoot string) (providerSummaryRe
 	visionResolver := configpkg.NewModelCapabilityResolver()
 	for i := range cfg.Providers {
 		provider := &cfg.Providers[i]
+		if !providerAccessAllowed(cfg.Desktop.ProviderAccess, provider.Name) {
+			continue
+		}
 		requiresKey := provider.RequiresAPIKey()
 		provider.ResolveAPIKeyForRoot(root)
 		configured := (!requiresKey || provider.Configured()) && providerAccessAllowed(cfg.Desktop.ProviderAccess, provider.Name)

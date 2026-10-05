@@ -7,6 +7,9 @@ import (
 )
 
 func renderAgentModelAssignments(b *strings.Builder, c *Config) {
+	if c.Agent.GuardianModel != "" {
+		fmt.Fprintf(b, "guardian_model = %q\n", c.Agent.GuardianModel)
+	}
 	if c.Agent.PlannerModel != "" {
 		fmt.Fprintf(b, "planner_model = %q   # low-frequency planner (two-model collaboration)\n", c.Agent.PlannerModel)
 	} else {
@@ -33,6 +36,10 @@ func renderAgentModelAssignments(b *strings.Builder, c *Config) {
 }
 
 func renderAgentModelAssignmentDelta(b *strings.Builder, c, d *Config, anyAgent *bool) {
+	if c.Agent.GuardianModel != d.Agent.GuardianModel {
+		fmt.Fprintf(b, "guardian_model = %q\n", c.Agent.GuardianModel)
+		*anyAgent = true
+	}
 	if c.Agent.PlannerModel != "" && c.Agent.PlannerModel != d.Agent.PlannerModel {
 		fmt.Fprintf(b, "planner_model = %q\n", c.Agent.PlannerModel)
 		*anyAgent = true
