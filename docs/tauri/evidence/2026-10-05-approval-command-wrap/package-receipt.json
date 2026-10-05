@@ -1,0 +1,25 @@
+{
+  "sourceCommit": "fa0afbaf54d2bb4350cbc8db50b58d3d89024b71",
+  "builtFromCleanSource": true,
+  "app": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app",
+  "bundles": [
+    "app"
+  ],
+  "signature": "strict/deep ad-hoc verification passed",
+  "sha256": {
+    "reasonix-tauri": "01d0d97a9280c86776fe5f994ccea1dafcabecd1990bc423e1b9935554b27a9f",
+    "reasonix-desktop-bridge": "2341cc61ec26c445e5ad45e92b18be20691d3277c76687202d239d1446675acf"
+  },
+  "productionCSS": [
+    {
+      "asset": "TauriChatWorkspace-D-9ueOAN.css",
+      "rule": ".tauri-prompt-card{width:min(var(--tauri-conversation-max), calc(100% - 48px));overflow-wrap:anywhere;border:1px solid color-mix(in srgb, var(--accent) 32%, var(--border));background:color-mix(in srgb, var(--accent) 5%, var(--surface));min-width:0;max-width:100%;box-shadow:0 5px 18px color-mix(in srgb, var(--shadow-color) 7%, transparent);border-radius:14px;align-self:center;margin:8px auto 0;padding:13px 15px}",
+      "sha256": "2b974b24c0407a534b777aad36bd5d8889d2eff071efbcf96ddb6783cc7a2828"
+    }
+  ],
+  "rollback": {
+    "backup": "/var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/reasonix-approval-wrap-rollback-ovfwabbk/Reasonix Tauri Preview.app.rollback",
+    "sourceCommit": "ea2083349f6bb4bd6eae11a0925a5c41249d5ce8"
+  },
+  "nativeApprovalRendering": "not exercised; browser fixture host callbacks simulated"
+}

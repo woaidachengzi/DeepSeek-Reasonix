@@ -9,3 +9,5 @@
 基线溢出约 964/1064/1418px，修复后均为 0；详细测量见 `browser-before.json`、`browser-after.json`，截图 before-desktop/after-desktop/after-narrow。复现脚本 `browser-qa.mjs`，默认 frontend 路径为当前工作区；执行 `node browser-qa.mjs after`。测试页面、无界面浏览器与临时 server 均关闭。
 
 这些是实际 React/CSS 的浏览器显示验证，审批回调为模拟，不能替代原生 WebKit 或真实工具执行验收。D/E/A/B/C 缺口保持；本轮继续只构建直接运行的 `.app`，保留前一版回退，不生成 ZIP/DMG，不发布或切换默认下载。
+
+干净源码 `fa0afbaf5` 执行 `pnpm tauri:build --bundles app` 成功：前端契约/lint/类型/CSS/主题/bundle 门禁、Go sidecar 与 Rust release 构建通过。生产 CSS 含三个宽度/折行规则，包内 host/sidecar 的 SHA256 和回退路径见 `package-receipt.json`；`codesign --verify --deep --strict` 通过。旧包临时备份使用 `.app.rollback` 后缀以避免新增搜索图标，Applications 未替换。此次不重复后端/系统生命周期回归，不把前次 smoke 结果计作新包原生审批验收。
