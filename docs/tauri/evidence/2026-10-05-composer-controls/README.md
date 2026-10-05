@@ -16,3 +16,9 @@
 ## 待验边界
 
 mock 浏览器不是实际 Preview 安装包；真实服务模型切换、原生权限与审批交互端到端 smoke 仍待。新包需另行记录来源与哈希，不能继承旧包验收。D/E 和 A/B/C 发布缺口保持，未正式发布或切换默认下载项。
+
+## 提交后打包与实际 sidecar IPC
+
+干净源提交 1dda398633ad3a128446dc1c42603b7a97a7f5e5 打包退出 0，内置前端门禁通过；生成新免安装 ZIP（文件名带 1dda39863，旧 ZIP 保留可回退），解压后严格 deep 签名、两个可执行文件位及 host/sidecar 哈希一致，DMG hdiutil verify 通过。源状态、各 SHA256、产物与可逆隐藏 app 位置见 package-receipt.json。ad-hoc Preview，未公证，未替换 Applications 中已安装版本。
+
+包内 sidecar 在全新私有 HOME/Reasonix/XDG 档案、无真实密钥/模型请求/原生窗口下启动，实际令牌 IPC：未认证 GET 401、ask→auto→ask POST/GET、其他会话 404、错误模式 400、切换到另一会话再返回首条消息前模式仍 ask，全部通过；正常 shutdown 202、进程退出 0、readiness 删除通过，私有目录与子进程已清理。最初 smoke 脚本使用错误 shutdown 路径/200 预期，修正为 /v1:shutdown/202 后完整重跑，回执明确记录；不将脚本失败隐去。这里只验 sidecar 实际 IPC，native GUI/Rust invoke→Go 完整交互与真实模型服务仍未计为通过。

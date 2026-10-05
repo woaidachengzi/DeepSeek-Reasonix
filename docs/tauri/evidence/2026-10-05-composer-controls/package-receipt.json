@@ -1,0 +1,44 @@
+{
+  "sourceCommit": "1dda398633ad3a128446dc1c42603b7a97a7f5e5",
+  "sourceStatus": "",
+  "buildExit": 0,
+  "signing": "ad-hoc, not notarized",
+  "nativeGUISmoke": "pending",
+  "sidecarSmoke": {
+    "sourceCommit": "1dda398633ad3a128446dc1c42603b7a97a7f5e5",
+    "nativeGUI": "not exercised",
+    "harnessCorrections": [
+      "shutdown path /v1:shutdown",
+      "shutdown returns 202 Accepted; both earlier runs cleaned up"
+    ],
+    "cases": [
+      "unauthenticated GET refused",
+      "live POST/GET ask-auto-ask",
+      "other session and invalid mode refused",
+      "before-first-turn reopen retained ask"
+    ],
+    "processExit": 0,
+    "readyRemoved": true
+  },
+  "artifacts": {
+    "host": {
+      "sha256": "d33d44284510aed58db7af0bd299cb6f3d0c2d04bb3bafee4eedfdc4694e51a3"
+    },
+    "sidecar": {
+      "sha256": "39d279cea9e061476070a67bebbf7cbc2f968e9953f485759fe827b1b48c9325"
+    },
+    "zip": {
+      "path": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/portable/Reasonix Tauri Preview_0.1.0_arm64_1dda39863_portable.zip",
+      "sha256": "423b0a7a0a27bd5f3ff29d6233492274a64edc6f7b7586513462a74b503ea395",
+      "size": 40492632
+    },
+    "dmg": {
+      "path": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri Preview_0.1.0_aarch64.dmg",
+      "sha256": "92b550afad20779759378afd8b4ac382ef64f6fd4c8ed8a0773c3d907084df84",
+      "size": 40660278
+    }
+  },
+  "dmgVerifyExit": 0,
+  "extractedSignature": "strict deep passed",
+  "buildAppArchive": "/private/tmp/.reasonix-app-cleanup-1dda39863/Reasonix Tauri Preview.app.disabled"
+}
