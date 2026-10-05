@@ -22,6 +22,6 @@ Wails 基线 `SetEffortForTab` 使用 `config.NormalizeEffort`、同对话 runti
 
 ## 包与边界
 
-旧已验证应用已复制到 `rollback.json` 的 `.app.rollback` 路径，未改用户 profile。待本提交的 direct `.app` 构建与包内 sidecar smoke，随后补 package receipt。产物继续放在 `macos.noindex`，不制作 ZIP/DMG，不新增安装入口。
+旧已验证应用已复制到 `rollback.json` 的 `.app.rollback` 路径，未改用户 profile。源码提交 `8f2d92011` 的 direct `.app` 已成功构建，干净源码戳已嵌入 host；deep/strict ad-hoc 签名校验通过。包内真实 sidecar 跑完上述 5个本机 provider 请求，4次退出均0，并额外验证旧已验收包可以打开新 transcript，回到候选包历史仍完整。旧包不保证保留新思考偏好。详见 `package-receipt.json`、`package-build.log`、`package-smoke.json`。产物继续放在 `macos.noindex`，不制作 ZIP/DMG，不新增安装入口。Preview 注册已注销，Spotlight 仅返回 `/Applications/Reasonix.app`，正式 app 的 binary hash 保持不变；兼容路径注销的 -10814 表示 Spotlight 已无此入口。
 
 系统钥匙串/弹窗/通知及真实外部 provider 调用未触发。本次属于用户日常验收反馈修复，不新增 D/E 完成声明，不替代 A/B/C、签名/公证、跨平台与其他发布门禁。正式发布和默认下载切换仍未获授权。

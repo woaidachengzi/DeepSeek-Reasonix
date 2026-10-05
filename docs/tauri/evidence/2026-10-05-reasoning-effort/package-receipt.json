@@ -1,0 +1,67 @@
+{
+  "app": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos.noindex/Reasonix Tauri Preview.app",
+  "sourceCommit": "8f2d92011cde0ddea4aa80b68d17718069f00420",
+  "sourceDirtyAtBuild": false,
+  "sourceStampInBuildLog": true,
+  "sourceStampEmbeddedInHost": true,
+  "bundleIdentifier": "io.reasonix.desktop.preview",
+  "version": "0.1.0",
+  "hostSha256": "016553975807b74307d736310514d6e336af9723c01abadacbd04fad8dfc76d7",
+  "sidecarSha256": "a5f6c5da660f4663d6470bcb2760b45584c51c71b40b60ca51dbcbea158e542a",
+  "codesignDeepStrictExitCode": 0,
+  "signing": "ad-hoc local preview; not notarized",
+  "formats": [
+    "app"
+  ],
+  "installedCopyCreated": false,
+  "formalAppSha256": "31b9e70e8efabd314c4bc327c8c2c4e1644652beab3760a1092eb297b3a2d0a9",
+  "packageSmoke": {
+    "profile": "isolated disposable fixture",
+    "actualProviderNetwork": "local SSE mock only",
+    "nativeGUI": "not exercised",
+    "cases": [
+      "previous package can open new transcript; history survives return to candidate",
+      "capability summary redacted and authenticated",
+      "explicit first-turn max forwarded",
+      "current-session low forwarded",
+      "invalid effort keeps current model/effort/history",
+      "restart restores exact model/effort/history",
+      "model switch resets effort",
+      "MiMo Chat binary thinking type and no fictional depth"
+    ],
+    "processExits": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "readyRemoved": true,
+    "providerRequests": 5,
+    "binarySha256": "a5f6c5da660f4663d6470bcb2760b45584c51c71b40b60ca51dbcbea158e542a"
+  },
+  "rollback": {
+    "app": "/var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/reasonix-effort-rollback-rh0dlv2z/Reasonix Tauri Preview.app.rollback",
+    "source": "previous verified 3f4f0a7b0 app",
+    "dataDirectoriesTouched": false,
+    "hostSha256": "57d884cb04a68bfdbce2b2926fc210f379abbc8d11d6eec899a2f4c808013bc3"
+  },
+  "appEntries": [
+    {
+      "action": "unregister preview",
+      "path": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos.noindex/Reasonix Tauri Preview.app",
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "action": "unregister preview",
+      "path": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app",
+      "exitCode": 1,
+      "output": "failed to scan /Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app: -10814\n from spotlight"
+    },
+    {
+      "action": "Spotlight app entry inventory",
+      "exitCode": 0,
+      "output": "/Applications/Reasonix.app\n"
+    }
+  ]
+}

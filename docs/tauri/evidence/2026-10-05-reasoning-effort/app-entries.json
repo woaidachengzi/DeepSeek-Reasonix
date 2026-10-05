@@ -1,0 +1,19 @@
+[
+  {
+    "action": "unregister preview",
+    "path": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos.noindex/Reasonix Tauri Preview.app",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "action": "unregister preview",
+    "path": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app",
+    "exitCode": 1,
+    "output": "failed to scan /Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app: -10814\n from spotlight"
+  },
+  {
+    "action": "Spotlight app entry inventory",
+    "exitCode": 0,
+    "output": "/Applications/Reasonix.app\n"
+  }
+]
