@@ -199,7 +199,7 @@ func TestMimoEffortSupportsNone(t *testing.T) {
 	if !cap.Supported {
 		t.Fatal("MiMo effort must be supported")
 	}
-	for _, level := range []string{"auto", "none", "low", "medium", "high"} {
+	for _, level := range []string{"auto", "none", "enabled"} {
 		if !containsString(cap.Levels, level) {
 			t.Errorf("MiMo capability missing %q: %v", level, cap.Levels)
 		}
@@ -208,7 +208,7 @@ func TestMimoEffortSupportsNone(t *testing.T) {
 	if err != nil || got != "none" {
 		t.Fatalf("MiMo none = %q/%v, want none/nil", got, err)
 	}
-	for _, level := range []string{"low", "medium", "high"} {
+	for _, level := range []string{"enabled"} {
 		if got, err := NormalizeEffort(e, level); err != nil || got != level {
 			t.Fatalf("MiMo %s = %q/%v, want %s/nil", level, got, err, level)
 		}

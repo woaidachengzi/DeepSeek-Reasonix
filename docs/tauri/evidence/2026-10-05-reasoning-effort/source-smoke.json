@@ -1,0 +1,21 @@
+{
+  "profile": "isolated disposable fixture",
+  "actualProviderNetwork": "local SSE mock only",
+  "nativeGUI": "not exercised",
+  "cases": [
+    "capability summary redacted and authenticated",
+    "explicit first-turn max forwarded",
+    "current-session low forwarded",
+    "invalid effort keeps current model/effort/history",
+    "restart restores exact model/effort/history",
+    "model switch resets effort",
+    "MiMo Chat binary thinking type and no fictional depth"
+  ],
+  "processExits": [
+    0,
+    0
+  ],
+  "readyRemoved": true,
+  "providerRequests": 5,
+  "binarySha256": "635238fe552ec123cf95039f126b0af227647889d56280d72c62c79390316294"
+}

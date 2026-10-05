@@ -4,6 +4,8 @@ mod bridge;
 mod credential_namespace;
 mod data_profile;
 mod host_preferences;
+#[cfg(target_os = "macos")]
+mod initial_presentation;
 mod keychain;
 #[cfg(target_os = "macos")]
 mod legacy_ui_fixture;
@@ -28,17 +30,15 @@ mod native_menu_smoke;
 #[cfg(target_os = "macos")]
 mod native_profile_smoke;
 #[cfg(target_os = "macos")]
-mod native_task_smoke;
+mod native_reload_smoke;
 #[cfg(target_os = "macos")]
-mod native_ui_storage_smoke;
+mod native_task_smoke;
 #[cfg(target_os = "macos")]
 mod native_ui_message_copy_smoke;
 #[cfg(target_os = "macos")]
-mod native_reload_smoke;
+mod native_ui_storage_smoke;
 #[cfg(target_os = "macos")]
 mod native_window_smoke;
-#[cfg(target_os = "macos")]
-mod initial_presentation;
 mod notifications;
 mod opener_catalog;
 mod protocol_generated;
@@ -3676,8 +3676,7 @@ fn setup_preview(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     app.manage(native_clipboard_smoke::ClipboardSmokeState::default());
     #[cfg(target_os = "macos")]
     app.manage(native_link_smoke::LinkSmokeState::default());
-    let profile = data_profile::configure_preview_profile(app)
-        .map_err(std::io::Error::other)?;
+    let profile = data_profile::configure_preview_profile(app).map_err(std::io::Error::other)?;
     #[cfg(target_os = "macos")]
     {
         let origin = ui_origin::PreviewUiOrigin::for_profile(profile.home())
@@ -3686,12 +3685,18 @@ fn setup_preview(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     }
     #[cfg(target_os = "macos")]
     app.manage(initial_presentation::InitialPresentation::default());
-    let mut main_config = app.config().app.windows.iter()
+    let mut main_config = app
+        .config()
+        .app
+        .windows
+        .iter()
         .find(|config| config.label == "main")
         .ok_or_else(|| std::io::Error::other("main window configuration missing"))?
         .clone();
     #[cfg(all(target_os = "macos", not(debug_assertions)))]
-    { main_config.url = ui_origin::webview_url(app.handle()).map_err(std::io::Error::other)?; }
+    {
+        main_config.url = ui_origin::webview_url(app.handle()).map_err(std::io::Error::other)?;
+    }
     // Keep the established dev-server URL on development builds.
     let _ = &mut main_config;
     let main_builder = tauri::WebviewWindowBuilder::from_config(app, &main_config)?;
@@ -3707,17 +3712,17 @@ fn setup_preview(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     // Register before a queued native restore can complete or reenter setup.
     app.manage(window_state);
     let host_preferences = HostPreferences::for_app(app).map_err(std::io::Error::other)?;
-    let workbench_catalog =
-        WorkbenchCatalog::for_app(app).map_err(std::io::Error::other)?;
-    let project_catalog =
-        WorkbenchProjectCatalog::for_app(app).map_err(std::io::Error::other)?;
+    let workbench_catalog = WorkbenchCatalog::for_app(app).map_err(std::io::Error::other)?;
+    let project_catalog = WorkbenchProjectCatalog::for_app(app).map_err(std::io::Error::other)?;
     if let Some(window) = app.get_webview_window("main") {
         let window_state = app.state::<PreviewWindowState>();
         window_state.restore(&window);
         window_state.capture(&window);
         #[cfg(target_os = "macos")]
         if std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref() == Ok("restore-normal") {
-            window_state.verify_pending_capture().map_err(std::io::Error::other)?;
+            window_state
+                .verify_pending_capture()
+                .map_err(std::io::Error::other)?;
             native_window_smoke::record(app.handle(), "restore-capture-fenced")
                 .map_err(std::io::Error::other)?;
         }
@@ -3729,13 +3734,11 @@ fn setup_preview(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
 
     #[cfg(target_os = "macos")]
     {
-        let menu = menu::build_app_menu(app)
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        let menu = menu::build_app_menu(app).map_err(|e| std::io::Error::other(e.to_string()))?;
         app.set_menu(menu)?;
     }
 
-    tray::create_tray(app)
-        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    tray::create_tray(app).map_err(|e| std::io::Error::other(e.to_string()))?;
 
     // Initialize keychain store
     let keychain = keychain::KeychainStore::for_profile(&profile, app.handle());
@@ -3751,7 +3754,8 @@ fn setup_preview(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     }
     // Normal startup reads profile credentials through the core; never trigger
     // a system keychain authorization prompt merely by opening Preview.
-    let notifications = notifications::NotificationState::for_profile(&profile, &app.config().identifier);
+    let notifications =
+        notifications::NotificationState::for_profile(&profile, &app.config().identifier);
     app.manage(std::sync::Arc::clone(&notifications));
     notifications::NotificationState::install(app.handle(), &notifications);
     app.manage(keychain);
@@ -4174,6 +4178,8 @@ fn main() {
                     let path = marker.ok_or("notification smoke marker directory unavailable")?;
                     let supervisor = handle.state::<BridgeSupervisor>();
                     let session = supervisor.open_session(OpenSessionRequest {
+                        model_ref: None,
+                        effort: None,
                         session_id: "tauri-package-workspace-smoke".into(),
                         workspace_root: None,
                     })?;

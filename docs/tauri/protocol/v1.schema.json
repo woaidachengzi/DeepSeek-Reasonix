@@ -88,6 +88,7 @@
         "title": { "type": "string", "minLength": 1, "maxLength": 120 },
         "workspaceRoot": { "type": "string" },
         "modelRef": { "type": "string", "minLength": 1 },
+        "effort": { "type": "string" },
         "state": { "enum": ["idle", "running", "paused"] }
       },
       "additionalProperties": false
@@ -116,7 +117,8 @@
         "searchModels": { "type": "array", "items": { "type": "string" } },
         "modelCount": { "type": "integer", "minimum": 0 },
         "requiresKey": { "type": "boolean" },
-        "configured": { "type": "boolean" }
+        "configured": { "type": "boolean" },
+        "reasoning": { "type": "array", "items": { "$ref": "#/$defs/providerReasoningSummary" } }
       },
       "additionalProperties": false
     },
@@ -131,12 +133,22 @@
       },
       "additionalProperties": false
     },
+    "providerReasoningSummary": {
+      "title": "BridgeProviderReasoningSummary", "type": "object",
+      "required": ["model", "levels", "default", "selected"],
+      "properties": {
+        "model": { "type": "string" },
+        "levels": { "type": "array", "items": { "type": "string" } },
+        "default": { "type": "string" }, "selected": { "type": "string" }
+      }, "additionalProperties": false
+    },
     "setSessionModelRequest": {
       "title": "BridgeSetSessionModelRequest",
       "type": "object",
       "required": ["model"],
       "properties": {
-        "model": { "type": "string", "minLength": 1 }
+        "model": { "type": "string", "minLength": 1 },
+        "effort": { "type": "string", "minLength": 1, "maxLength": 64 }
       },
       "additionalProperties": false
     },
@@ -338,7 +350,9 @@
       "required": ["sessionId"],
       "properties": {
         "sessionId": { "$ref": "#/$defs/sessionId" },
-        "workspaceRoot": { "type": "string" }
+        "workspaceRoot": { "type": "string" },
+        "modelRef": { "type": "string", "minLength": 1 },
+        "effort": { "type": "string", "minLength": 1, "maxLength": 64 }
       },
       "additionalProperties": false
     },

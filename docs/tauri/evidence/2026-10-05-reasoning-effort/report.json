@@ -1,0 +1,75 @@
+{
+  "checks": [
+    {
+      "theme": "light",
+      "width": 1280,
+      "box": {
+        "x": 637,
+        "y": 424.5,
+        "width": 340,
+        "height": 346.5
+      }
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "box": {
+        "x": 331,
+        "y": 424.5,
+        "width": 340,
+        "height": 346.5
+      }
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "box": {
+        "x": 35,
+        "y": 381,
+        "width": 330,
+        "height": 346.5
+      }
+    },
+    {
+      "theme": "dark",
+      "width": 1280,
+      "box": {
+        "x": 637,
+        "y": 424.5,
+        "width": 340,
+        "height": 346.5
+      }
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "box": {
+        "x": 331,
+        "y": 424.5,
+        "width": 340,
+        "height": 346.5
+      }
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "box": {
+        "x": 35,
+        "y": 381,
+        "width": 330,
+        "height": 346.5
+      }
+    }
+  ],
+  "errors": [],
+  "title": "Reasonix 思考强度验收",
+  "actualComponents": "TauriSessionApp/ComposerControls/Send; simulated bridge only",
+  "browser": "Browser plugin not available; existing Playwright/headless installed Chrome",
+  "cases": [
+    "new draft exact effort passed through Send",
+    "MiMo binary selection resets after model change",
+    "no fictional tiers for unsupported model",
+    "light/dark wide/medium/narrow popup inside viewport",
+    "Escape focus restoration"
+  ]
+}

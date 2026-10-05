@@ -1422,8 +1422,10 @@ func (b *bridgeServer) shutdown(w http.ResponseWriter, _ *http.Request) {
 }
 
 type openSessionRequest struct {
-	SessionID     string `json:"sessionId"`
-	WorkspaceRoot string `json:"workspaceRoot,omitempty"`
+	SessionID     string  `json:"sessionId"`
+	WorkspaceRoot string  `json:"workspaceRoot,omitempty"`
+	ModelRef      string  `json:"modelRef,omitempty"`
+	Effort        *string `json:"effort,omitempty"`
 }
 
 type submitRequest struct {
@@ -1570,7 +1572,7 @@ func (b *bridgeServer) openSession(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid open_session request")
 		return
 	}
-	view, err := b.runtimes.Open(r.Context(), desktopbridge.OpenRequest{SessionID: request.SessionID, WorkspaceRoot: request.WorkspaceRoot})
+	view, err := b.runtimes.Open(r.Context(), desktopbridge.OpenRequest{SessionID: request.SessionID, WorkspaceRoot: request.WorkspaceRoot, ModelRef: request.ModelRef, Effort: request.Effort})
 	if err != nil {
 		b.writeRuntimeError(w, err, "unable to open desktop bridge session")
 		return
@@ -1584,7 +1586,7 @@ func (b *bridgeServer) switchSession(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid switch_session request")
 		return
 	}
-	view, err := b.runtimes.Switch(r.Context(), desktopbridge.OpenRequest{SessionID: request.SessionID, WorkspaceRoot: request.WorkspaceRoot})
+	view, err := b.runtimes.Switch(r.Context(), desktopbridge.OpenRequest{SessionID: request.SessionID, WorkspaceRoot: request.WorkspaceRoot, ModelRef: request.ModelRef, Effort: request.Effort})
 	if err != nil {
 		b.writeRuntimeError(w, err, "unable to switch desktop bridge session")
 		return
@@ -1733,7 +1735,16 @@ func (b *bridgeServer) setSessionModel(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, http.StatusBadRequest, "model_unavailable", "model is not configured for this workspace")
 		return
 	}
-	view, err := b.runtimes.SetSessionModel(r.Context(), active.ID, model)
+	var view desktopbridge.SessionView
+	if request.Effort != nil {
+		if model != active.ModelRef {
+			writeProtocolError(w, http.StatusBadRequest, "model_changed", "refresh the selected model before changing reasoning")
+			return
+		}
+		view, err = b.runtimes.SetSessionEffort(r.Context(), active.ID, model, *request.Effort)
+	} else {
+		view, err = b.runtimes.SetSessionModel(r.Context(), active.ID, model)
+	}
 	if err != nil {
 		if errors.Is(err, desktopbridge.ErrSessionModelSwitch) {
 			writeProtocolError(w, http.StatusBadGateway, "model_switch_failed", "model could not be started; the previous session model was restored")

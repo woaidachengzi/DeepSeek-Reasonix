@@ -167,6 +167,8 @@ export interface BridgeMCPInteractionAnswerRequest {
 }
 
 export interface BridgeOpenSessionRequest {
+  effort?: string;
+  modelRef?: string;
   sessionId: string;
   workspaceRoot?: string;
 }
@@ -192,6 +194,13 @@ export interface BridgeProviderModelProbeResponse {
   protocolVersion: number;
 }
 
+export interface BridgeProviderReasoningSummary {
+  default: string;
+  levels: string[];
+  model: string;
+  selected: string;
+}
+
 export interface BridgeProviderSummary {
   configured: boolean;
   displayName?: string;
@@ -199,6 +208,7 @@ export interface BridgeProviderSummary {
   modelCount: number;
   models: string[];
   name: string;
+  reasoning?: BridgeProviderReasoningSummary[];
   requiresKey: boolean;
   searchModels: string[];
   visionModels: string[];
@@ -297,6 +307,7 @@ export interface BridgeRenameSessionRequest {
 }
 
 export interface BridgeSession {
+  effort?: string;
   id: string;
   modelRef?: string;
   path: string;
@@ -365,6 +376,7 @@ export interface BridgeSetModelRoleRequest {
 }
 
 export interface BridgeSetSessionModelRequest {
+  effort?: string;
   model: string;
 }
 

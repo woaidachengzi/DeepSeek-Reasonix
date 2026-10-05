@@ -72,6 +72,50 @@ func (f *controllerFactory) options(request desktopbridge.OpenRequest) (boot.Opt
 		opts.WorkspaceRoot = root
 	}
 	opts.Model = strings.TrimSpace(request.ModelRef)
+	// Saved reasoning choices must never cross model boundaries. Explicit choices
+	// (including auto) take precedence; settings refresh/reopen inherit metadata.
+	sessionDir := opts.SessionDir
+	if sessionDir == "" {
+		sessionDir = appconfig.SessionDir()
+	}
+	if path, err := bridgeSessionPath(sessionDir, request.SessionID); err == nil {
+		meta, exists, loadErr := agent.LoadBranchMeta(path)
+		if loadErr != nil {
+			return boot.Options{}, nil, loadErr
+		}
+		if exists && meta.ReasoningModel != "" && meta.ReasoningEffort != nil && request.Effort == nil && (opts.Model == "" || opts.Model == meta.ReasoningModel) {
+			opts.Model = meta.ReasoningModel
+			opts.EffortOverride = meta.ReasoningEffort
+		}
+	}
+	if request.Effort != nil {
+		opts.EffortOverride = request.Effort
+	}
+	if opts.EffortOverride != nil || opts.Model != "" {
+		cfg, err := appconfig.LoadForRoot(opts.WorkspaceRoot)
+		if err != nil {
+			return boot.Options{}, nil, err
+		}
+		ref := opts.Model
+		if ref == "" {
+			ref = cfg.DefaultModel
+		}
+		entry, ok := cfg.ResolveModel(ref)
+		if !ok || !providerAccessAllowed(cfg.Desktop.ProviderAccess, entry.Name) {
+			return boot.Options{}, nil, fmt.Errorf("model unavailable")
+		}
+		if opts.EffortOverride != nil {
+			level := *opts.EffortOverride
+			if level == "" {
+				level = "auto"
+			}
+			normalized, err := appconfig.NormalizeEffort(entry, level)
+			if err != nil {
+				return boot.Options{}, nil, err
+			}
+			opts.EffortOverride = &normalized
+		}
+	}
 	if f.events != nil {
 		opts.Sink = f.events.Sink(request.SessionID)
 	} else if opts.Sink == nil {
@@ -121,7 +165,11 @@ func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.Open
 			}
 		}
 	}
-	runtime := &controllerRuntime{controller: controller, sessionID: request.SessionID, lifecycleSink: lifecycleSink}
+	runtime := &controllerRuntime{controller: controller, sessionID: request.SessionID, lifecycleSink: lifecycleSink, effort: selectedBridgeEffort(opts)}
+	if err := persistBridgeReasoning(controller, runtime.effort); err != nil {
+		controller.Close()
+		return nil, errors.Join(err, lifecycleSink.Close())
+	}
 	runtime.startTurnSnapshotMonitor()
 	return runtime, nil
 }
@@ -405,6 +453,7 @@ func bridgeSessionPath(sessionDir, sessionID string) (string, error) {
 // controllerRuntime adapts the established controller to the bridge's minimal
 // Runtime surface.
 type controllerRuntime struct {
+	effort           string
 	controller       *control.Controller
 	sessionID        string
 	lifecycleSink    *bridgeLifecycleSink

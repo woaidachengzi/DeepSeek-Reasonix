@@ -173,6 +173,8 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		default:
 			return nil, fmt.Errorf("openai: provider %q uses MiniMax thinking; effort must be adaptive or disabled", name)
 		}
+	case IsMiMo(cfg.BaseURL) && (protocol == "" || protocol == "openai"):
+		// configuredEffort already normalized legacy levels to enabled.
 	case zhipu:
 		// Zhipu GLM gates chain-of-thought through `thinking.type`
 		// (enabled|disabled) and silently ignores reasoning_effort, so /effort
@@ -235,7 +237,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 	}
 	return &client{
 		identityHeaders: provider.NewClientIdentityHeaders(),
-		reasoningState:  reasoningState{ollamaCloud: ollamaCloud, thinkingLocked: configuredThinkingType(cfg) == "disabled", reasoning: ReasoningForConfig(cfg)},
+		reasoningState:  reasoningState{mimo: IsMiMo(cfg.BaseURL) && (protocol == "" || protocol == "openai"), ollamaCloud: ollamaCloud, thinkingLocked: configuredThinkingType(cfg) == "disabled", reasoning: ReasoningForConfig(cfg)},
 		name:            name,
 		identity:        provider.RequestIdentity{Provider: name, DisplayName: cfg.DisplayName, Protocol: cfg.Protocol},
 		apiKey:          cfg.APIKey,

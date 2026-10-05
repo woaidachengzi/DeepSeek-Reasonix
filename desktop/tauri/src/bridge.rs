@@ -1983,10 +1983,7 @@ impl BridgeSupervisor {
         self.request_session(
             "POST",
             "/v1/sessions:open",
-            Some(json!({
-                "sessionId": session_id,
-                "workspaceRoot": request.workspace_root,
-            })),
+            Some(open_session_payload(&session_id, request)),
             Some(&request_id),
         )
         .map(|envelope| envelope.session)
@@ -1998,10 +1995,7 @@ impl BridgeSupervisor {
         self.request_session(
             "POST",
             "/v1/sessions:switch",
-            Some(json!({
-                "sessionId": session_id,
-                "workspaceRoot": request.workspace_root,
-            })),
+            Some(open_session_payload(&session_id, request)),
             Some(&request_id),
         )
         .map(|envelope| envelope.session)
@@ -2048,7 +2042,13 @@ impl BridgeSupervisor {
         self.request_session(
             "POST",
             &format!("/v1/sessions/{session_id}/model"),
-            Some(json!({ "model": request.model })),
+            Some({
+                let mut payload = json!({"model":request.model});
+                if let Some(effort) = request.effort {
+                    payload["effort"] = json!(effort);
+                }
+                payload
+            }),
             Some(&request_id),
         )
         .map(|envelope| envelope.session)
@@ -2433,8 +2433,10 @@ impl BridgeSupervisor {
         } else {
             ("GET", None, None)
         };
-        let response = self.request_json(method, "/v1/sessions/archives", body, request_id.as_deref())?;
-        let envelope: SessionArchiveResponse = serde_json::from_value(response).map_err(display_error)?;
+        let response =
+            self.request_json(method, "/v1/sessions/archives", body, request_id.as_deref())?;
+        let envelope: SessionArchiveResponse =
+            serde_json::from_value(response).map_err(display_error)?;
         if envelope.protocol_version != PROTOCOL_VERSION || envelope.sessions.len() > 10_000 {
             return Err("desktop bridge session archives are invalid".into());
         }
@@ -2444,7 +2446,10 @@ impl BridgeSupervisor {
             if !ids.insert(&item.session_id)
                 || item.archived_at_ms <= 0
                 || item.title.len() > 1024
-                || item.workspace_root.as_ref().is_some_and(|root| root.len() > 4096)
+                || item
+                    .workspace_root
+                    .as_ref()
+                    .is_some_and(|root| root.len() > 4096)
             {
                 return Err("desktop bridge archived conversation is invalid".into());
             }
@@ -2563,27 +2568,50 @@ impl BridgeSupervisor {
     // Native-only secret transport; never returned by a renderer command.
     pub fn wails_env_provider_key(&self, provider: &str) -> Result<Option<String>, String> {
         let query = url::form_urlencoded::Serializer::new(String::new())
-            .append_pair("provider", provider).finish();
-        let response = self.request_json("GET", &format!("/v1/settings/wails-env-credential?{query}"), None, None)?;
-        if response.get("protocolVersion").and_then(serde_json::Value::as_u64) != Some(u64::from(PROTOCOL_VERSION)) {
+            .append_pair("provider", provider)
+            .finish();
+        let response = self.request_json(
+            "GET",
+            &format!("/v1/settings/wails-env-credential?{query}"),
+            None,
+            None,
+        )?;
+        if response
+            .get("protocolVersion")
+            .and_then(serde_json::Value::as_u64)
+            != Some(u64::from(PROTOCOL_VERSION))
+        {
             return Err("desktop bridge protocol version is unsupported".into());
         }
         match response.get("value") {
             Some(serde_json::Value::Null) => Ok(None),
-            Some(serde_json::Value::String(value)) if !value.trim().is_empty() && value.len() <= 32768 && !value.contains(['\0', '\r', '\n']) => Ok(Some(value.clone())),
+            Some(serde_json::Value::String(value))
+                if !value.trim().is_empty()
+                    && value.len() <= 32768
+                    && !value.contains(['\0', '\r', '\n']) =>
+            {
+                Ok(Some(value.clone()))
+            }
             _ => Err("Wails global credential response is unavailable".into()),
         }
     }
 
     pub fn provider_credential_account(&self, provider: &str) -> Result<String, String> {
         let query = url::form_urlencoded::Serializer::new(String::new())
-            .append_pair("provider", provider).finish();
+            .append_pair("provider", provider)
+            .finish();
         let path = format!("/v1/settings/provider-credential-account?{query}");
         let response = self.request_json("GET", &path, None, None)?;
-        if response.get("protocolVersion").and_then(serde_json::Value::as_u64) != Some(u64::from(PROTOCOL_VERSION)) {
+        if response
+            .get("protocolVersion")
+            .and_then(serde_json::Value::as_u64)
+            != Some(u64::from(PROTOCOL_VERSION))
+        {
             return Err("desktop bridge protocol version is unsupported".into());
         }
-        let account = response.get("account").and_then(serde_json::Value::as_str)
+        let account = response
+            .get("account")
+            .and_then(serde_json::Value::as_str)
             .filter(|account| valid_credential_account(account))
             .ok_or("provider credential identity is unavailable")?;
         Ok(account.to_owned())
@@ -5081,7 +5109,9 @@ fn session_directory_path(
 fn valid_credential_account(account: &str) -> bool {
     let mut bytes = account.bytes();
     account.len() <= 256
-        && bytes.next().is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
+        && bytes
+            .next()
+            .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
         && bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
 }
 
@@ -5377,6 +5407,17 @@ fn opaque_secret() -> Result<String, String> {
 
 fn display_error(error: impl std::fmt::Display) -> String {
     error.to_string()
+}
+
+fn open_session_payload(session_id: &str, request: OpenSessionRequest) -> Value {
+    let mut payload = json!({"sessionId":session_id,"workspaceRoot":request.workspace_root});
+    if let Some(model) = request.model_ref {
+        payload["modelRef"] = json!(model);
+    }
+    if let Some(effort) = request.effort {
+        payload["effort"] = json!(effort);
+    }
+    payload
 }
 
 #[cfg(test)]
@@ -6531,6 +6572,8 @@ mod tests {
         let supervisor = BridgeSupervisor::with_binary(binary);
         supervisor.start().unwrap();
         let global = OpenSessionRequest {
+            model_ref: None,
+            effort: None,
             session_id: "global-opener-test".into(),
             workspace_root: None,
         };
@@ -6553,6 +6596,8 @@ mod tests {
         fs::create_dir(&project).unwrap();
         supervisor
             .switch_session(OpenSessionRequest {
+                model_ref: None,
+                effort: None,
                 session_id: "project-opener-test".into(),
                 workspace_root: Some(project.to_string_lossy().into()),
             })
@@ -6610,6 +6655,8 @@ mod tests {
         supervisor.start().expect("start bridge");
         supervisor
             .open_session(OpenSessionRequest {
+                model_ref: None,
+                effort: None,
                 session_id: "tauri-e2e-shadow".to_string(),
                 workspace_root: None,
             })
@@ -6654,6 +6701,8 @@ mod tests {
 
         supervisor
             .open_session(OpenSessionRequest {
+                model_ref: None,
+                effort: None,
                 session_id: "tauri-e2e-page-a".to_string(),
                 workspace_root: None,
             })
@@ -6666,6 +6715,8 @@ mod tests {
             .expect("title first session");
         supervisor
             .switch_session(OpenSessionRequest {
+                model_ref: None,
+                effort: None,
                 session_id: "tauri-e2e-page-b".to_string(),
                 workspace_root: None,
             })
@@ -6780,6 +6831,8 @@ mod tests {
             .expect("start bridge with capability handshake");
         supervisor
             .open_session(OpenSessionRequest {
+                model_ref: None,
+                effort: None,
                 session_id: "tauri-e2e-order".to_string(),
                 workspace_root: None,
             })
@@ -6848,6 +6901,8 @@ mod tests {
 
         let opened = supervisor
             .open_session(OpenSessionRequest {
+                model_ref: None,
+                effort: None,
                 session_id: "tauri-e2e-title".to_string(),
                 workspace_root: None,
             })
@@ -6878,6 +6933,8 @@ mod tests {
         supervisor.restart().expect("restart bridge");
         let reopened = supervisor
             .open_session(OpenSessionRequest {
+                model_ref: None,
+                effort: None,
                 session_id: "tauri-e2e-title".to_string(),
                 workspace_root: None,
             })
@@ -6888,6 +6945,68 @@ mod tests {
             "the title must be read back from core session metadata"
         );
         supervisor.stop().expect("stop bridge");
+    }
+
+    #[test]
+    fn real_sidecar_roundtrips_session_reasoning_selection() {
+        let Some(binary) = bridge_under_test() else {
+            return;
+        };
+        let _env = crate::test_env::guard();
+        let profile = tempfile::tempdir().unwrap();
+        env::set_var("REASONIX_HOME", profile.path());
+        env::set_var("REASONIX_STATE_HOME", profile.path());
+        fs::write(profile.path().join("config.toml"), "default_model = \"depth/deepseek-v4-flash\"\n[[providers]]\nname = \"depth\"\nkind = \"openai\"\nbase_url = \"http://127.0.0.1:9/v1\"\nmodels = [\"deepseek-v4-flash\"]\napi_key_env = \"REASONIX_EFFORT_FIXTURE_KEY\"\nno_proxy = true\n").unwrap();
+        fs::write(
+            profile.path().join(".env"),
+            "REASONIX_EFFORT_FIXTURE_KEY=fixture-only\n",
+        )
+        .unwrap();
+        let supervisor = BridgeSupervisor::with_binary(binary);
+        supervisor.start().unwrap();
+        let first = supervisor
+            .open_session(OpenSessionRequest {
+                session_id: "reasoning-host-test".into(),
+                workspace_root: None,
+                model_ref: Some("depth/deepseek-v4-flash".into()),
+                effort: Some("low".into()),
+            })
+            .unwrap();
+        assert_eq!(first.effort.as_deref(), Some("low"));
+        let selected = supervisor
+            .set_session_model(
+                "reasoning-host-test",
+                super::BridgeSetSessionModelRequest {
+                    model: "depth/deepseek-v4-flash".into(),
+                    effort: Some("max".into()),
+                },
+            )
+            .unwrap();
+        assert_eq!(selected.effort.as_deref(), Some("max"));
+        assert!(supervisor
+            .set_session_model(
+                "reasoning-host-test",
+                super::BridgeSetSessionModelRequest {
+                    model: "depth/deepseek-v4-flash".into(),
+                    effort: Some("turbo".into())
+                }
+            )
+            .is_err());
+        supervisor.restart().unwrap();
+        let restored = supervisor
+            .open_session(OpenSessionRequest {
+                session_id: "reasoning-host-test".into(),
+                workspace_root: None,
+                model_ref: None,
+                effort: None,
+            })
+            .unwrap();
+        assert_eq!(
+            restored.model_ref.as_deref(),
+            Some("depth/deepseek-v4-flash")
+        );
+        assert_eq!(restored.effort.as_deref(), Some("max"));
+        supervisor.stop().unwrap();
     }
 
     #[test]
@@ -6942,6 +7061,8 @@ mod tests {
         let session_id = "tauri-e2e-sqlite-events";
         let opened = supervisor
             .open_session(OpenSessionRequest {
+                model_ref: None,
+                effort: None,
                 session_id: session_id.to_string(),
                 workspace_root: None,
             })
@@ -6966,6 +7087,8 @@ mod tests {
         supervisor.restart().expect("restart before legacy import");
         supervisor
             .open_session(OpenSessionRequest {
+                model_ref: None,
+                effort: None,
                 session_id: session_id.to_string(),
                 workspace_root: None,
             })
@@ -6983,6 +7106,8 @@ mod tests {
             .expect("restart before imported projection recovery");
         supervisor
             .open_session(OpenSessionRequest {
+                model_ref: None,
+                effort: None,
                 session_id: session_id.to_string(),
                 workspace_root: None,
             })
@@ -6996,6 +7121,8 @@ mod tests {
         let write_session_id = "tauri-e2e-sqlite-write";
         let write_opened = supervisor
             .open_session(OpenSessionRequest {
+                model_ref: None,
+                effort: None,
                 session_id: write_session_id.to_string(),
                 workspace_root: None,
             })
@@ -7092,6 +7219,8 @@ mod tests {
             .expect("restart before projection recovery");
         supervisor
             .open_session(OpenSessionRequest {
+                model_ref: None,
+                effort: None,
                 session_id: write_session_id.to_string(),
                 workspace_root: None,
             })
@@ -7113,38 +7242,69 @@ mod tests {
 
     #[test]
     fn archive_preserves_artifacts_and_restores_after_bridge_restart() {
-        let Some(binary) = bridge_under_test() else { return; };
+        let Some(binary) = bridge_under_test() else {
+            return;
+        };
         let _env = crate::test_env::guard();
         let home = tempfile::tempdir().expect("isolated archive profile");
         std::env::set_var("REASONIX_HOME", home.path());
         std::env::set_var("REASONIX_STATE_HOME", home.path());
         let supervisor = BridgeSupervisor::with_binary(binary);
         supervisor.start().expect("start archive bridge");
-        let opened = supervisor.open_session(OpenSessionRequest {
-            session_id: "archive-first".into(), workspace_root: None,
-        }).expect("open archive target");
-        supervisor.rename_session(RenameSessionRequest {
-            session_id: opened.id.clone(), title: "Keep history".into(),
-        }).expect("name archive");
+        let opened = supervisor
+            .open_session(OpenSessionRequest {
+                model_ref: None,
+                effort: None,
+                session_id: "archive-first".into(),
+                workspace_root: None,
+            })
+            .expect("open archive target");
+        supervisor
+            .rename_session(RenameSessionRequest {
+                session_id: opened.id.clone(),
+                title: "Keep history".into(),
+            })
+            .expect("name archive");
         let metadata_path = format!("{}.meta", opened.path);
         let metadata = std::fs::read(&metadata_path).expect("empty conversation title metadata");
-        let archived = supervisor.session_archives(Some((opened.id.clone(), true)))
+        let archived = supervisor
+            .session_archives(Some((opened.id.clone(), true)))
             .expect("archive owned idle session");
         assert_eq!(archived.len(), 1);
         assert_eq!(archived[0].session_id, opened.id);
-        assert_eq!(std::fs::read(&metadata_path).expect("archived title metadata"), metadata);
+        assert_eq!(
+            std::fs::read(&metadata_path).expect("archived title metadata"),
+            metadata
+        );
         supervisor.stop().expect("exit archived bridge");
         supervisor.start().expect("restart archived bridge");
-        assert_eq!(supervisor.session_archives(None).expect("read archive after restart").len(), 1);
-        assert!(supervisor.open_session(OpenSessionRequest {
-            session_id: opened.id.clone(), workspace_root: None,
-        }).is_err());
-        let restored = supervisor.session_archives(Some((opened.id.clone(), false)))
+        assert_eq!(
+            supervisor
+                .session_archives(None)
+                .expect("read archive after restart")
+                .len(),
+            1
+        );
+        assert!(supervisor
+            .open_session(OpenSessionRequest {
+                model_ref: None,
+                effort: None,
+                session_id: opened.id.clone(),
+                workspace_root: None,
+            })
+            .is_err());
+        let restored = supervisor
+            .session_archives(Some((opened.id.clone(), false)))
             .expect("restore archive");
         assert!(restored.is_empty());
-        let reopened = supervisor.open_session(OpenSessionRequest {
-            session_id: opened.id, workspace_root: None,
-        }).expect("open restored original");
+        let reopened = supervisor
+            .open_session(OpenSessionRequest {
+                model_ref: None,
+                effort: None,
+                session_id: opened.id,
+                workspace_root: None,
+            })
+            .expect("open restored original");
         assert_eq!(reopened.path, opened.path);
         supervisor.stop().expect("exit restored bridge");
     }
@@ -7166,6 +7326,8 @@ mod tests {
         let doomed_id = "tauri-e2e-doomed";
         let opened = supervisor
             .open_session(OpenSessionRequest {
+                model_ref: None,
+                effort: None,
                 session_id: doomed_id.to_string(),
                 workspace_root: None,
             })
@@ -7193,6 +7355,8 @@ mod tests {
         let survivor_id = "tauri-e2e-keep";
         supervisor
             .switch_session(OpenSessionRequest {
+                model_ref: None,
+                effort: None,
                 session_id: survivor_id.to_string(),
                 workspace_root: None,
             })
@@ -7207,6 +7371,8 @@ mod tests {
         // Only the owned session can be deleted, so switch back before sweeping.
         supervisor
             .switch_session(OpenSessionRequest {
+                model_ref: None,
+                effort: None,
                 session_id: doomed_id.to_string(),
                 workspace_root: None,
             })
@@ -7228,6 +7394,8 @@ mod tests {
 
         let survivor = supervisor
             .switch_session(OpenSessionRequest {
+                model_ref: None,
+                effort: None,
                 session_id: survivor_id.to_string(),
                 workspace_root: None,
             })

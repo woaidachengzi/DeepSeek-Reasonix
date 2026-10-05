@@ -37,6 +37,9 @@ type BranchMeta struct {
 	TopicTitle       string    `json:"topic_title,omitempty"`
 	CustomTitle      string    `json:"custom_title,omitempty"`
 	Model            string    `json:"model,omitempty"`
+	// Reasoning selection is local metadata, scoped to this exact model.
+	ReasoningModel  string  `json:"reasoning_model,omitempty"`
+	ReasoningEffort *string `json:"reasoning_effort,omitempty"`
 	// TokenMode and AgentPreset are deprecated dual-write fields derived from
 	// QualityFloor; delivery writes "delivery", standard writes "full"/"".
 	TokenMode   string `json:"token_mode,omitempty"`
@@ -349,6 +352,10 @@ func saveBranchMetaContext(ctx context.Context, sessionPath string, m BranchMeta
 func preserveBranchMetaPersistence(next *BranchMeta, existing BranchMeta) {
 	if next == nil {
 		return
+	}
+	if next.ReasoningEffort == nil && existing.ReasoningEffort != nil {
+		effort := *existing.ReasoningEffort
+		next.ReasoningModel, next.ReasoningEffort = existing.ReasoningModel, &effort
 	}
 	next.DismissedTodoBatches = MergeDismissedTodoBatches(existing.DismissedTodoBatches, next.DismissedTodoBatches)
 	if existing.Revision > next.Revision {

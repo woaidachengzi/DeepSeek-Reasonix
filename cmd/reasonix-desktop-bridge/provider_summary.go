@@ -23,16 +23,24 @@ type providerSummaryResponse struct {
 	Providers           []providerSummaryEntry `json:"providers"`
 }
 
+type providerReasoningSummary struct {
+	Model    string   `json:"model"`
+	Levels   []string `json:"levels"`
+	Default  string   `json:"default"`
+	Selected string   `json:"selected"`
+}
+
 type providerSummaryEntry struct {
-	Name         string   `json:"name"`
-	DisplayName  string   `json:"displayName,omitempty"`
-	Kind         string   `json:"kind"`
-	Models       []string `json:"models"`
-	VisionModels []string `json:"visionModels"`
-	SearchModels []string `json:"searchModels"`
-	ModelCount   int      `json:"modelCount"`
-	RequiresKey  bool     `json:"requiresKey"`
-	Configured   bool     `json:"configured"`
+	Reasoning    []providerReasoningSummary `json:"reasoning,omitempty"`
+	Name         string                     `json:"name"`
+	DisplayName  string                     `json:"displayName,omitempty"`
+	Kind         string                     `json:"kind"`
+	Models       []string                   `json:"models"`
+	VisionModels []string                   `json:"visionModels"`
+	SearchModels []string                   `json:"searchModels"`
+	ModelCount   int                        `json:"modelCount"`
+	RequiresKey  bool                       `json:"requiresKey"`
+	Configured   bool                       `json:"configured"`
 }
 
 type setDefaultModelRequest struct {
@@ -42,7 +50,8 @@ type setDefaultModelRequest struct {
 }
 
 type setSessionModelRequest struct {
-	Model string `json:"model"`
+	Model  string  `json:"model"`
+	Effort *string `json:"effort,omitempty"`
 }
 
 type setModelRoleRequest struct {
@@ -321,7 +330,15 @@ func loadProviderSummaryForScope(scope, workspaceRoot string) (providerSummaryRe
 				}
 			}
 		}
+		reasoning := make([]providerReasoningSummary, 0)
+		for _, model := range models {
+			if resolved, ok := cfg.ResolveModel(provider.Name + "/" + model); ok {
+				cap := configpkg.EffortCapabilityForEntry(resolved)
+				reasoning = append(reasoning, providerReasoningSummary{Model: model, Levels: append([]string{}, cap.Levels...), Default: cap.Default, Selected: configpkg.EffortDisplay(resolved)})
+			}
+		}
 		entry := providerSummaryEntry{
+			Reasoning:    reasoning,
 			Name:         provider.Name,
 			DisplayName:  strings.TrimSpace(provider.DisplayName),
 			Kind:         provider.Kind,

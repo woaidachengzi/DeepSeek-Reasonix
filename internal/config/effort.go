@@ -92,6 +92,9 @@ func EffortDisplay(e *ProviderEntry) string {
 		return "auto"
 	}
 	effort := normalizeEffortLevel(e.Effort)
+	if isMimoEntry(e) {
+		effort = EffectiveEffort(e)
+	}
 
 	return effort
 }
@@ -105,6 +108,16 @@ func EffectiveEffort(e *ProviderEntry) string {
 		return ""
 	}
 	if effort := normalizeStoredEffort(e.Effort); effort != "" {
+		if isMimoEntry(e) && (explicitReasoningProtocol(e) == "" || explicitReasoningProtocol(e) == ReasoningProtocolOpenAI) {
+			switch effort {
+			case "low", "medium", "high":
+				return "enabled"
+			case "none":
+				if e.Kind == "openai" {
+					return "disabled"
+				}
+			}
+		}
 		return migrateStoredDeepSeekEffort(e, effort)
 	}
 	if explicitReasoningProtocol(e) == ReasoningProtocolKimiK3 {

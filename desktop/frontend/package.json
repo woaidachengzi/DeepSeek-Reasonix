@@ -57,7 +57,7 @@
     "test:app-memory": "PLAYWRIGHT_BROWSERS_PATH=.pw-browsers node bench/app-memory.mjs",
     "check:app-layers": "node scripts/check-app-entry-contract.mjs && node scripts/check-app-layers.test.mjs && node scripts/check-app-layers.mjs",
     "test:tauri-provider-connect": "node --import tsx src/__tests__/tauri-provider-connect.test.tsx",
-    "test:tauri-composer-controls": "node --import tsx src/__tests__/tauri-composer-controls.test.tsx"
+    "test:tauri-composer-controls": "node --import tsx src/__tests__/tauri-composer-controls.test.tsx && node --import tsx src/__tests__/tauri-composer-effort.test.tsx"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "1.7.5",

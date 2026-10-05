@@ -112,6 +112,13 @@ type client struct {
 // New creates a Responses API provider.
 func New(cfg Config) provider.Provider {
 	vendor := DetectVendor(cfg.BaseURL)
+	if vendor == "mimo" {
+		// Legacy saved depth values all enabled reasoning; do not advertise them as distinct strengths.
+		switch cfg.Effort {
+		case "low", "medium", "high":
+			cfg.Effort = "enabled"
+		}
+	}
 	cap := capabilitiesFor(vendor)
 	// Explicit replay contracts apply to compatible gateways as well as exact
 	// vendor hosts. Do not inherit endpoint defaults, headers, or output limits.

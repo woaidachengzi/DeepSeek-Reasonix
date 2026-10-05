@@ -34,6 +34,7 @@ type OpenRequest struct {
 	WorkspaceRoot string
 	// ModelRef is an optional per-session override. Empty follows effective config.
 	ModelRef string
+	Effort   *string
 }
 
 // SessionView is transport-safe runtime metadata. It intentionally excludes
@@ -44,6 +45,7 @@ type SessionView struct {
 	Title         string `json:"title,omitempty"`
 	WorkspaceRoot string `json:"workspaceRoot,omitempty"`
 	ModelRef      string `json:"modelRef,omitempty"`
+	Effort        string `json:"effort,omitempty"`
 	State         string `json:"state"`
 }
 
@@ -579,6 +581,10 @@ func (m *RuntimeManager) SetSessionModel(ctx context.Context, sessionID, modelRe
 	}
 	previous := m.runtime
 	previousRequest := OpenRequest{SessionID: m.view.ID, WorkspaceRoot: m.view.WorkspaceRoot, ModelRef: m.view.ModelRef}
+	if m.view.Effort != "" {
+		effort := m.view.Effort
+		previousRequest.Effort = &effort
+	}
 	if previousRequest.ModelRef == "" {
 		if provider, ok := previous.(RuntimeModelProvider); ok {
 			previousRequest.ModelRef = strings.TrimSpace(provider.ModelRef())
@@ -596,6 +602,7 @@ func (m *RuntimeManager) SetSessionModel(ctx context.Context, sessionID, modelRe
 	}
 	request := previousRequest
 	request.ModelRef = modelRef
+	request.Effort = nil // A model switch starts with that model's own default.
 	m.runtime = nil
 	m.view = SessionView{}
 	m.opening = true
@@ -1309,6 +1316,9 @@ func runtimeView(runtime Runtime, request OpenRequest) (SessionView, error) {
 		if modelRef := strings.TrimSpace(provider.ModelRef()); modelRef != "" {
 			view.ModelRef = modelRef
 		}
+	}
+	if provider, ok := runtime.(RuntimeEffortProvider); ok {
+		view.Effort = provider.Effort()
 	}
 	return view, nil
 }

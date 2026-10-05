@@ -1466,3 +1466,11 @@ Wails 或浏览器绕过权限。菜单设置事件也已通过宿主适配器�
 2. `app` 的调用点不直接感知 transport，不出现散落的 Tauri import。
 3. 前端 reducer 按 `(session/tab, sequence)` 去重；不能假定 WebView 事件绝不重复。
 4. 任何订阅断线都先获取权威 snapshot，不能凭内存事件重建会话。
+
+
+## 2026-10-05：对话思考强度反馈修复
+
+- [x] 对照 Wails SetEffortForTab 与 Harness ModelSelect 的 Host-owned capability，接入模型旁的思考选择。首次 Send 与当前对话请求均传真实 effort；保存/reopen、凭据刷新、模型切换重置、失败 metadata 回退已覆盖。
+- [x] 按 MiMo 官方当前契约修正 Chat thinking 开关和 Responses 可选项；不显示无效 low/high 深度。DeepSeek 等支持真实档位的模型仍使用其适配器声明。
+- [x] Go race、完整 Tauri 前端与 transcript 回归、build、真实 sidecar Rust 233/5 ignored、clippy、深浅主题多尺寸浏览器验证。证据：[reasoning-effort](evidence/2026-10-05-reasoning-effort/README.md)。实际包收据在该目录后续补充。
+- [ ] 外部真实 provider/native WebView 使用由用户继续体验验收。本项不替代既有 A/B/C、D/E 其他验收、正式签名/公证或发布授权；未把整项迁移标记完成。

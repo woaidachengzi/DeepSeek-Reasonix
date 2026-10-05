@@ -1122,8 +1122,8 @@ func TestFactoryPassesExtraThrough(t *testing.T) {
 	if !cl.vision {
 		t.Fatal("vision must survive factory (Extra passthrough)")
 	}
-	if cl.effort != "low" {
-		t.Fatalf("effort = %q, want low", cl.effort)
+	if cl.effort != "enabled" {
+		t.Fatalf("MiMo legacy low should keep thinking enabled, got %q", cl.effort)
 	}
 }
 

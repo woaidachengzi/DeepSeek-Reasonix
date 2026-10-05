@@ -12,7 +12,7 @@ func ReasoningForConfig(cfg provider.Config) provider.ReasoningCapability {
 	case "deepseek":
 		cap = provider.ReasoningOptions("high", "none", "low", "high", "max")
 	case "mimo":
-		cap = provider.ReasoningOptions("", "none", "low", "medium", "high")
+		return provider.ReasoningOptions("enabled", "none", "enabled")
 	default:
 		if protocol == "openai" {
 			cap = provider.ReasoningOptions("", "low", "medium", "high")

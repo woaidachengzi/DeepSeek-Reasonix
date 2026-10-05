@@ -1,0 +1,58 @@
+
+> reasonix-desktop-frontend@0.0.0 test:tauri-build-contract /Users/jerry/temp/app/reasonix-tauri/desktop/frontend
+> node scripts/tauri-build-contract.test.mjs
+
+
+tauri-build contract — Node version gate
+  PASS  checks process.versions.node
+  PASS  requires Node 24+
+
+tauri-build contract — Rust host triple
+  PASS  invokes rustc for host triple
+  PASS  uses rustc --print
+  PASS  requests host-tuple from rustc
+
+tauri-build contract — sidecar path naming
+  PASS  sidecar name starts with reasonix-desktop-bridge-
+  PASS  sidecar path includes target triple
+  PASS  sidecar is placed in binaries/ directory
+  PASS  go build targets the correct package
+
+tauri-build contract — cross-compilation guard
+  PASS  has cross-target error message
+  PASS  cross-target is explicitly rejected
+
+tauri-build contract — macOS signing
+  PASS  checks for signing identity
+  PASS  invokes codesign for ad-hoc signing
+  PASS  Tauri signs before bundling the DMG
+  PASS  checks the packaged app signature
+  PASS  checks nested binaries
+  PASS  uses strict signature verification
+  PASS  checks the .app bundle
+  PASS  ad-hoc signing only when no identity
+
+tauri-build contract — Tauri config
+  PASS  reads tauri.conf.json
+  PASS  uses productName for bundle path
+  PASS  uses local Tauri CLI from node_modules/.bin
+
+tauri-build contract — tauri.conf.json bundle config
+  PASS  bundle.active is true
+  PASS  bundle.targets is 'all'
+  PASS  externalBin includes reasonix-desktop-bridge
+  PASS  bundle has icon files
+  PASS  build.frontendDist is set
+  PASS  frontendDist points to ../frontend/dist
+  PASS  WebView has only event-listener, drag, file-picker, and text clipboard permissions
+
+tauri-build contract — launch icon format
+  PASS  bundle includes a PNG launch icon
+  PASS  launch icon is a PNG
+  PASS  launch icon has an IHDR header
+  PASS  launch icon width is 1024px
+  PASS  launch icon height is 1024px
+  PASS  launch icon uses 8-bit channels
+  PASS  launch icon uses RGBA color type
+
+36 passed, 0 failed

@@ -18,15 +18,24 @@ func (f *controllerFactory) Rebuild(ctx context.Context, previous desktopbridge.
 	if err != nil {
 		return nil, err
 	}
+	// Preflight/commit the narrow metadata delta before publishing a replacement
+	// generation. A write refusal must leave the old controller live.
+	undo := func() error { return nil }
+	if request.Effort != nil {
+		undo, err = prepareBridgeReasoning(old.controller.SessionPath(), opts.Model, selectedBridgeEffort(opts))
+		if err != nil {
+			return nil, errors.Join(err, sink.Close())
+		}
+	}
 	opts.ForceFullRebuild = true
 	result, err := boot.Rebuild(ctx, old.controller, opts)
 	if err != nil {
-		return nil, errors.Join(err, sink.Close())
+		return nil, errors.Join(err, undo(), sink.Close())
 	}
 	// The boot layer migrates posture and grants; host prompt wiring belongs
 	// to the replacement controller and must be reinstalled.
 	result.Controller.EnableInteractiveApproval()
-	next := &controllerRuntime{controller: result.Controller, sessionID: request.SessionID, lifecycleSink: sink}
+	next := &controllerRuntime{controller: result.Controller, sessionID: request.SessionID, lifecycleSink: sink, effort: selectedBridgeEffort(opts)}
 	next.startTurnSnapshotMonitor()
 	return next, nil
 }

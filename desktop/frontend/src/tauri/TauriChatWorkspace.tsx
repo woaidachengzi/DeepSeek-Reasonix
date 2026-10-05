@@ -2707,7 +2707,7 @@ export function TauriSessionPreview() {
       try {
         // The new session is opened only after the first Send. The event
         // listener must become ready before its turn is submitted.
-        const opened = await switchTauriBridgeSession(sessionId, root);
+        const opened = await switchTauriBridgeSession(sessionId, root, draftEffort && draftEffort.model === providerSummary?.defaultModel ? { modelRef:draftEffort.model, effort:draftEffort.level } : undefined);
         pendingDraftSubmissionRef.current = {
           sessionId, text, paths: [...draftAttachmentPaths], workspaceRoot: root,
         };
@@ -3073,6 +3073,19 @@ export function TauriSessionPreview() {
     }
   }
 
+  const [draftEffort, setDraftEffort] = useState<{ model: string; level: string } | null>(null);
+  async function changeEffort(level: string): Promise<boolean> {
+    if (busy || (session && session.state !== "idle")) return false;
+    const model = session?.modelRef || providerSummary?.defaultModel || "";
+    if (!session) { setDraftEffort({model, level}); return true; }
+    setBusy(true); setError("");
+    try {
+      const updated = await setTauriBridgeSessionModel(session.id, model, level);
+      setSession(updated); await rememberSession(updated); return true;
+    } catch (cause) { setError(tauriMessageFrom(cause)); return false; }
+    finally { setBusy(false); }
+  }
+
   async function changeDefaultModel(model: string) {
     if (!model || busy) return false;
     setBusy(true);
@@ -3344,7 +3357,7 @@ export function TauriSessionPreview() {
             }} placeholder={session?.state === "paused" ? "请先完成上方确认…" : session ? `继续聊聊你的问题…（${sendShortcutLabel} 发送）` : `输入问题，开始新对话…（${sendShortcutLabel} 发送）`} disabled={session?.state === "paused"} rows={3} />
             <div className="tauri-composer__bottom">
               <button className="tauri-attach-button" type="button" onClick={() => void addAttachments()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state !== "idle"))} aria-label="添加文件" title="从本机选择文件并附加到消息"><Plus size={23} /></button>
-              <TauriComposerControls key={session?.id ?? "new"} sessionId={session?.id} model={session?.modelRef || providerSummary?.defaultModel || ""} providers={providerSummary} onProvidersChange={setProviderSummary} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state !== "idle" || attachments.length > 0 || draftAttachmentPaths.length > 0))} refreshToken={settingsOpen} onModelChange={model => session ? changeCurrentSessionModel(model) : changeDefaultModel(model)} onBusyChange={setBusy} onError={setError} onOpenModels={() => { setSettingsTab("providers"); setSettingsOpen(true); }} />
+              <TauriComposerControls key={session?.id ?? "new"} sessionId={session?.id} workspaceRoot={currentWorkspace} effort={session ? session.effort || "auto" : draftEffort && draftEffort.model === providerSummary?.defaultModel ? draftEffort.level : "auto"} onEffortChange={changeEffort} model={session?.modelRef || providerSummary?.defaultModel || ""} providers={providerSummary} onProvidersChange={setProviderSummary} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state !== "idle" || attachments.length > 0 || draftAttachmentPaths.length > 0))} refreshToken={settingsOpen} onModelChange={model => session ? changeCurrentSessionModel(model) : changeDefaultModel(model)} onBusyChange={setBusy} onError={setError} onOpenModels={() => { setSettingsTab("providers"); setSettingsOpen(true); }} />
               <div className="tauri-composer__actions">
                 {session?.state === "running" ? <button className="tauri-send-button is-stop" type="button" onClick={() => void cancel()} disabled={busy} aria-label="停止生成"><Square size={15} fill="currentColor" /></button> : <button className="tauri-send-button" type="button" onClick={() => void submit()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state === "paused")) || (!prompt.trim() && selectedTexts.length === 0 && attachments.length === 0 && draftAttachmentPaths.length === 0)} aria-label="发送消息"><ArrowUp size={18} /></button>}
               </div>

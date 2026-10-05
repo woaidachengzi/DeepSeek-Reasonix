@@ -29,9 +29,9 @@ func TestEffortNormalization(t *testing.T) {
 		base, effort, want string
 	}{
 		{mimo, "max", "high"}, // DeepSeek-ism clamped to the OpenAI ceiling — MiMo 400s on "max"
-		{mimo, "high", "high"},
-		{mimo, "medium", "medium"},
-		{mimo, "low", "low"},
+		{mimo, "high", "enabled"},
+		{mimo, "medium", "enabled"},
+		{mimo, "low", "enabled"},
 		{mimo, "MAX", "high"}, // case-insensitive
 		{mimo, "auto", ""},    // UI/config auto means omit provider-specific effort
 		{mimo, "", ""},        // unset stays omitted

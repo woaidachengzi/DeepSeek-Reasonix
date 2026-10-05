@@ -27,12 +27,17 @@ func ReasoningForConfig(cfg provider.Config) provider.ReasoningCapability {
 		}
 	case protocol == "" && IsOllamaCloud(cfg.BaseURL):
 		cap = provider.ReasoningOptions("", "none", "low", "medium", "high", "max")
-	case protocol == "openai" || (protocol == "" && IsMiMo(cfg.BaseURL)):
+	case (protocol == "" || protocol == "openai") && IsMiMo(cfg.BaseURL):
+		cap = provider.ReasoningOptions("enabled", "enabled", "disabled")
+	case protocol == "openai":
 		cap = provider.ReasoningOptions("", "low", "medium", "high")
 	default:
 		cap = provider.ReasoningOptions("")
 	}
 	cap = provider.DeclaredReasoning(cfg, cap)
+	if (protocol == "" || protocol == "openai") && IsMiMo(cfg.BaseURL) {
+		cap = provider.ReasoningOptions("enabled", "enabled", "disabled")
+	}
 	if protocol == "glm" || (protocol == "" && (IsZhipu(cfg.BaseURL) || IsLongCat(cfg.BaseURL))) {
 		cap = provider.RestrictReasoning(cap, "enabled", "disabled")
 	}
@@ -49,6 +54,14 @@ func (c *client) ReasoningCapability() provider.ReasoningCapability { return c.r
 func configuredEffort(cfg provider.Config) (string, error) {
 	effort, _ := cfg.Extra["effort"].(string)
 	protocol, _ := cfg.Extra["reasoning_protocol"].(string)
+	if (protocol == "" || protocol == "openai") && IsMiMo(cfg.BaseURL) {
+		switch effort {
+		case "low", "medium", "high":
+			effort = "enabled"
+		case "none":
+			effort = "disabled"
+		}
+	}
 	cap := ReasoningForConfig(cfg)
 	if effort == "auto" || effort == "off" || protocol == "none" || configuredThinkingType(cfg) == "disabled" {
 		return effort, nil
@@ -58,6 +71,7 @@ func configuredEffort(cfg provider.Config) (string, error) {
 
 // reasoningState is the immutable reasoning contract resolved at construction.
 type reasoningState struct {
+	mimo           bool
 	ollamaCloud    bool
 	thinkingLocked bool
 	reasoning      provider.ReasoningCapability
@@ -87,6 +101,20 @@ func (c *client) applyReasoning(out *chatRequest, req provider.Request) {
 		out.Thinking = &thinkingMode{Type: c.deepSeekRequestThinking(req)}
 		if out.Thinking.Type == "disabled" {
 			out.ReasoningEffort = ""
+		}
+	case c.mimo:
+		// MiMo Chat documents thinking.type, with no independent depth control.
+		t := c.requestEffort(req)
+		if t == "" {
+			t = "enabled"
+		}
+		if c.thinkingType == "disabled" && req.EffortOverride == "" {
+			t = "disabled"
+		}
+		out.Thinking = &thinkingMode{Type: t}
+		out.ReasoningEffort = ""
+		if t != "disabled" {
+			out.Temperature = nil
 		}
 	case c.minimax:
 		// M3 uses a single `thinking.type` field with two valid values:

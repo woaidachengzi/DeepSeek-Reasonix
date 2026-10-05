@@ -232,6 +232,8 @@ pub struct BridgeMCPInteractionAnswerRequest {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeOpenSessionRequest {
+    pub effort: Option<String>,
+    pub model_ref: Option<String>,
     pub session_id: String,
     pub workspace_root: Option<String>,
 }
@@ -267,6 +269,15 @@ pub struct BridgeProviderModelProbeResponse {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeProviderReasoningSummary {
+    pub default: String,
+    pub levels: Vec<String>,
+    pub model: String,
+    pub selected: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeProviderSummary {
     pub configured: bool,
     pub display_name: Option<String>,
@@ -274,6 +285,7 @@ pub struct BridgeProviderSummary {
     pub model_count: u64,
     pub models: Vec<String>,
     pub name: String,
+    pub reasoning: Option<Vec<BridgeProviderReasoningSummary>>,
     pub requires_key: bool,
     pub search_models: Vec<String>,
     pub vision_models: Vec<String>,
@@ -400,6 +412,7 @@ pub struct BridgeRenameSessionRequest {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeSession {
+    pub effort: Option<String>,
     pub id: String,
     pub model_ref: Option<String>,
     pub path: String,
@@ -488,6 +501,7 @@ pub struct BridgeSetModelRoleRequest {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeSetSessionModelRequest {
+    pub effort: Option<String>,
     pub model: String,
 }
 

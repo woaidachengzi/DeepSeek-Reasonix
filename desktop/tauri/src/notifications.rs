@@ -533,6 +533,8 @@ pub(crate) fn delivery_smoke(app: &tauri::AppHandle) -> Result<(), String> {
     let session_id = format!("native-notification-{}", random_token()?);
     app.state::<BridgeSupervisor>()
         .open_session(crate::bridge::OpenSessionRequest {
+            model_ref: None,
+            effort: None,
             session_id: session_id.clone(),
             workspace_root: None,
         })
@@ -1081,6 +1083,8 @@ mod tests {
         fs::create_dir(&workspace).unwrap();
         supervisor
             .open_session(crate::bridge::OpenSessionRequest {
+                model_ref: None,
+                effort: None,
                 session_id: "tauri-notification-test".into(),
                 workspace_root: Some(workspace.to_string_lossy().into()),
             })

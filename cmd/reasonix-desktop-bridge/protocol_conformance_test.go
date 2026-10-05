@@ -17,6 +17,7 @@ func TestGoDTOsMatchTheWireSchema(t *testing.T) {
 		{Name: "event", Sample: desktopbridge.Event{}},
 		{Name: "health", Sample: healthResponse{}},
 		{Name: "providerSummary", Sample: providerSummaryEntry{}},
+		{Name: "providerReasoningSummary", Sample: providerReasoningSummary{}},
 		{Name: "providerSummaryResponse", Sample: providerSummaryResponse{ReasoningLanguage: "auto", CompactRatioPercent: 80}},
 		{Name: "setModelRoleRequest", Sample: setModelRoleRequest{}},
 		{Name: "setSessionModelRequest", Sample: setSessionModelRequest{}},

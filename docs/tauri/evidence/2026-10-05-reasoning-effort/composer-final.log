@@ -1,0 +1,6 @@
+
+> reasonix-desktop-frontend@0.0.0 test:tauri-composer-controls /Users/jerry/temp/app/reasonix-tauri/desktop/frontend
+> node --import tsx src/__tests__/tauri-composer-controls.test.tsx && node --import tsx src/__tests__/tauri-composer-effort.test.tsx
+
+PASS active session approval, refusal, default scope, model route, disabled state and Escape
+PASS model-owned effort levels, exact IDs, refusal, unsupported model, disabled state, error retry and Escape

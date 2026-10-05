@@ -1370,7 +1370,11 @@
 .tauri-composer__actions .tauri-send-button { width: 44px; height: 44px; border-radius: 50%; }
 .tauri-composer-controls { display: flex; flex: 1; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; }
 .tauri-composer-controls__permission, .tauri-composer-controls__model { position: relative; min-width: 0; }
-.tauri-composer-controls__model { margin-left: auto; max-width: 55%; }
+.tauri-composer-controls__selection { display:flex; align-items:center; justify-content:flex-end; gap:2px; min-width:0; max-width:65%; margin-left:auto; position:relative; }
+.tauri-composer-controls__model { flex:1; min-width:0; }
+.tauri-composer-controls__effort { flex:none; }
+.tauri-composer-picker.is-effort { color:var(--fg-faint); }
+.tauri-composer-popover.is-effort { right:0; max-height:min(420px, 60vh); overflow-y:auto; }
 .tauri-composer-picker { display: flex; align-items: center; gap: 7px; padding: 8px 10px; max-width: 100%; border: 0; border-radius: 10px; background: transparent; color: var(--fg-dim); font: inherit; font-size: 13px; cursor: pointer; }
 .tauri-composer-picker.is-permission { background: var(--surface-2); }
 .tauri-composer-picker > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1397,7 +1401,8 @@
  .tauri-composer { padding: 14px 12px 10px; border-radius: 22px; }
  .tauri-composer__bottom { flex-wrap: wrap; gap: 6px; }
  .tauri-composer-controls { flex-basis: calc(100% - 52px); gap: 4px; }
- .tauri-composer-controls__model { max-width: 48%; }
+ .tauri-composer-controls__selection { max-width:58%; flex-wrap:wrap; }
+ .tauri-composer-controls__effort .tauri-composer-picker { padding-block:3px; }
  .tauri-composer-picker { padding: 7px 6px; font-size: 12px; gap: 4px; }
  .tauri-composer__actions { margin-left: auto; }
  .tauri-composer-popover.is-permission { left: -42px; }

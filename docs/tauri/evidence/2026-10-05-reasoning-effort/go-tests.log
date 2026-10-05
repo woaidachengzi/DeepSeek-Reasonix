@@ -1,0 +1,7 @@
+ok  	reasonix/cmd/reasonix-desktop-bridge	27.554s
+ok  	reasonix/internal/desktopbridge	1.557s
+ok  	reasonix/internal/desktopbridge/protocolgen	(cached)
+ok  	reasonix/internal/desktopbridge/sessionpath	(cached)
+ok  	reasonix/internal/provider/openai	(cached)
+ok  	reasonix/internal/provider/responses	(cached)
+ok  	reasonix/internal/config	(cached)

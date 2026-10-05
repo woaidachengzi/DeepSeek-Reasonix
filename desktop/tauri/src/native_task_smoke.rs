@@ -66,6 +66,8 @@ fn submit(app: &AppHandle, supervisor: &BridgeSupervisor, id: &str) -> Result<()
     // rejects a different session even after its task has completed.
     supervisor
         .switch_session(OpenSessionRequest {
+            model_ref: None,
+            effort: None,
             session_id: id.into(),
             workspace_root: None,
         })

@@ -1617,14 +1617,14 @@ export async function openTauriBridgeSession(sessionId: string, workspaceRoot?: 
   return invoke<TauriBridgeSession>("bridge_open_session", { request: { sessionId, workspaceRoot } });
 }
 
-export async function switchTauriBridgeSession(sessionId: string, workspaceRoot?: string): Promise<TauriBridgeSession> {
+export async function switchTauriBridgeSession(sessionId: string, workspaceRoot?: string, selection?: { modelRef: string; effort: string }): Promise<TauriBridgeSession> {
   requireTauri();
-  return invoke<TauriBridgeSession>("bridge_switch_session", { request: { sessionId, workspaceRoot } });
+  return invoke<TauriBridgeSession>("bridge_switch_session", { request: { sessionId, workspaceRoot, ...selection } });
 }
 
-export async function setTauriBridgeSessionModel(sessionId: string, model: string): Promise<TauriBridgeSession> {
+export async function setTauriBridgeSessionModel(sessionId: string, model: string, effort?: string): Promise<TauriBridgeSession> {
   requireTauri();
-  return invoke<TauriBridgeSession>("bridge_set_session_model", { sessionId, request: { model } });
+  return invoke<TauriBridgeSession>("bridge_set_session_model", { sessionId, request: { model, ...(effort ? { effort } : {}) } });
 }
 
 export async function renameTauriBridgeSession(sessionId: string, title: string): Promise<TauriBridgeSession> {
