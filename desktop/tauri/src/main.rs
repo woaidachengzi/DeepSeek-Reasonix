@@ -585,6 +585,15 @@ fn bridge_switch_session(
 }
 
 #[tauri::command]
+fn bridge_session_approval_mode(
+    supervisor: State<'_, BridgeSupervisor>,
+    session_id: String,
+    mode: Option<String>,
+) -> Result<String, String> {
+    supervisor.session_approval_mode(&session_id, mode)
+}
+
+#[tauri::command]
 fn bridge_set_session_model(
     supervisor: State<'_, BridgeSupervisor>,
     session_id: String,
@@ -3885,6 +3894,7 @@ fn main() {
             bridge_open_session,
             bridge_switch_session,
             bridge_set_session_model,
+            bridge_session_approval_mode,
             bridge_rename_session,
             bridge_delete_session,
             bridge_pending_session_deletes_page,

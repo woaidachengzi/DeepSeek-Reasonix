@@ -1987,6 +1987,37 @@ impl BridgeSupervisor {
         .map(|envelope| envelope.session)
     }
 
+    pub fn session_approval_mode(
+        &self,
+        session_id: &str,
+        mode: Option<String>,
+    ) -> Result<String, String> {
+        let session_id = session_path_component(session_id)?;
+        if mode
+            .as_deref()
+            .is_some_and(|value| !matches!(value, "ask" | "auto" | "yolo"))
+        {
+            return Err("invalid approval mode".to_string());
+        }
+        let path = format!("/v1/sessions/{session_id}/approval-mode");
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            if mode.is_some() { "POST" } else { "GET" },
+            &path,
+            mode.map(|value| json!({"mode": value})),
+            Some(&request_id),
+        )?;
+        if response.get("protocolVersion").and_then(Value::as_u64)
+            != Some(u64::from(PROTOCOL_VERSION))
+        {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        match response.get("mode").and_then(Value::as_str) {
+            Some(value @ ("ask" | "auto" | "yolo")) => Ok(value.to_string()),
+            _ => Err("invalid session approval response".to_string()),
+        }
+    }
+
     pub fn set_session_model(
         &self,
         session_id: &str,

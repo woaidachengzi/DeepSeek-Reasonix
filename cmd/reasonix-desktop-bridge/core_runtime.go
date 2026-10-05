@@ -89,16 +89,14 @@ func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.Open
 		controller.Close()
 		return nil, errors.Join(err, lifecycleSink.Close())
 	}
-	// The desktop default belongs to new conversations only. A saved sidecar
-	// restores the posture of a conversation that already has a transcript.
+	// A composer choice can be durable before the first transcript turn.
+	// Prefer saved per-session metadata; desktop defaults only seed a new choice.
 	if path, pathErr := bridgeSessionPath(controller.SessionDir(), request.SessionID); pathErr == nil {
-		if _, statErr := os.Lstat(path); errors.Is(statErr, os.ErrNotExist) {
+		if meta, exists, loadErr := agent.LoadBranchMeta(path); loadErr == nil && exists && validBridgeApprovalMode(meta.ToolApprovalMode) {
+			controller.SetToolApprovalMode(meta.ToolApprovalMode)
+		} else if _, statErr := os.Lstat(path); errors.Is(statErr, os.ErrNotExist) {
 			if cfg, loadErr := appconfig.LoadUserConfigReadOnly(); loadErr == nil {
 				controller.SetToolApprovalMode(cfg.DesktopDefaultToolApprovalMode())
-			}
-		} else if statErr == nil {
-			if meta, exists, loadErr := agent.LoadBranchMeta(path); loadErr == nil && exists && validBridgeApprovalMode(meta.ToolApprovalMode) {
-				controller.SetToolApprovalMode(meta.ToolApprovalMode)
 			}
 		}
 	}
@@ -1346,4 +1344,25 @@ func (r *controllerRuntime) Shutdown() error {
 	err := r.controller.SnapshotForShutdown()
 	r.controller.Close()
 	return errors.Join(err, r.lifecycleSink.Close())
+}
+
+func (r *controllerRuntime) ApprovalMode() string { return r.controller.ToolApprovalMode() }
+
+func (r *controllerRuntime) SetApprovalMode(mode string) error {
+	if !validBridgeApprovalMode(mode) {
+		return fmt.Errorf("invalid approval mode")
+	}
+	if status := r.controller.RuntimeStatus(); status.Running || status.PendingPrompt {
+		return desktopbridge.ErrSessionConflict
+	}
+	// Commit metadata before changing the live gate. A disk refusal leaves the
+	// current posture intact; reopening uses the same durable branch preference.
+	if err := agent.UpdateBranchMeta(r.controller.SessionPath(), false, func(meta *agent.BranchMeta) error {
+		meta.ToolApprovalMode = mode
+		return nil
+	}); err != nil {
+		return err
+	}
+	r.controller.SetToolApprovalMode(mode)
+	return nil
 }

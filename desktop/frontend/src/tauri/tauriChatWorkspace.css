@@ -1337,3 +1337,45 @@
 
 .tauri-provider-editor-form[hidden] { display: none; }
 .tauri-provider-connect-tabs > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Reference composer: attachment and approval left, active model and send right. */
+.tauri-composer { border-radius: 26px; padding: 17px 16px 13px; }
+.tauri-composer textarea { min-height: 82px; font-size: calc(15px * var(--global-font-scale, 1)); }
+.tauri-composer__bottom { gap: 12px; min-height: 44px; }
+.tauri-composer__bottom > .tauri-attach-button { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: var(--surface-2); color: var(--fg); }
+.tauri-composer__actions { flex: 0 0 auto; }
+.tauri-composer__actions .tauri-send-button { width: 44px; height: 44px; border-radius: 50%; }
+.tauri-composer-controls { display: flex; flex: 1; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; }
+.tauri-composer-controls__permission, .tauri-composer-controls__model { position: relative; min-width: 0; }
+.tauri-composer-controls__model { margin-left: auto; max-width: 55%; }
+.tauri-composer-picker { display: flex; align-items: center; gap: 7px; padding: 8px 10px; max-width: 100%; border: 0; border-radius: 10px; background: transparent; color: var(--fg-dim); font: inherit; font-size: 13px; cursor: pointer; }
+.tauri-composer-picker.is-permission { background: var(--surface-2); }
+.tauri-composer-picker > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tauri-composer-picker svg { flex: 0 0 auto; }
+.tauri-composer-picker:disabled { opacity: .55; cursor: default; }
+.tauri-composer-picker:hover:not(:disabled) { background: var(--surface-2); color: var(--fg); }
+.tauri-composer-popover { position: absolute; bottom: calc(100% + 12px); width: min(340px, calc(100vw - 60px)); padding: 8px; border: 1px solid var(--border-soft); border-radius: 16px; background: var(--bg-elev); color: var(--fg); box-shadow: 0 12px 36px color-mix(in srgb, var(--shadow-color) 18%, transparent); z-index: 5; }
+.tauri-composer-popover.is-permission { left: 0; }
+.tauri-composer-popover.is-model { right: 0; }
+.tauri-composer-popover > small { display: block; padding: 6px 10px; color: var(--fg-faint); font-size: 11px; }
+.tauri-composer-popover button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px; border: 0; border-radius: 9px; background: transparent; color: var(--fg); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.tauri-composer-popover button:hover:not(:disabled), .tauri-composer-popover button[aria-pressed="true"] { background: var(--surface-2); }
+.tauri-composer-popover button:disabled { opacity: .5; cursor: default; }
+.tauri-composer-popover button > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tauri-composer-popover button small { display: block; margin-top: 4px; color: var(--fg-faint); font-size: 11px; line-height: 1.5; }
+.tauri-composer-popover p { padding: 8px; font-size: 12px; overflow-wrap: anywhere; }
+.tauri-composer-model-search { display: flex; align-items: center; gap: 7px; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: 9px; color: var(--fg-faint); }
+.tauri-composer-model-search input { width: 100%; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: var(--fg); font-size: 13px; }
+.tauri-composer-model-list { max-height: min(280px, 40vh); overflow-y: auto; overscroll-behavior: contain; }
+.tauri-composer-model-list h4 { margin: 10px 10px 2px; color: var(--fg-faint); font-size: 11px; font-weight: 500; }
+.tauri-composer-model-manage { margin-top: 5px; border-top: 1px solid var(--border-soft) !important; }
+.tauri-composer-picker:focus-visible, .tauri-composer-popover button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 640px) {
+ .tauri-composer { padding: 14px 12px 10px; border-radius: 22px; }
+ .tauri-composer__bottom { flex-wrap: wrap; gap: 6px; }
+ .tauri-composer-controls { flex-basis: calc(100% - 52px); gap: 4px; }
+ .tauri-composer-controls__model { max-width: 48%; }
+ .tauri-composer-picker { padding: 7px 6px; font-size: 12px; gap: 4px; }
+ .tauri-composer__actions { margin-left: auto; }
+ .tauri-composer-popover.is-permission { left: -42px; }
+}

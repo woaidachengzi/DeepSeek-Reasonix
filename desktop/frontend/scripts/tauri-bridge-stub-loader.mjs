@@ -195,6 +195,7 @@ export function saveTauriUserTheme(theme) { record("save_user_theme", { theme })
 export function deleteTauriUserTheme(id) { record("delete_user_theme", { id }); userThemes = userThemes.filter(theme => theme.id !== id); return Promise.resolve(); }
 export function importTauriUserTheme() { record("import_user_theme"); return Promise.resolve(globalThis.__importedTauriTheme ?? null); }
 export function exportTauriUserTheme(id) { record("export_user_theme", { id }); return Promise.resolve(true); }
+export function tauriSessionApprovalMode(sessionId, mode) { record("bridge_session_approval_mode", { sessionId, ...(mode ? { mode } : {}) }); return Promise.resolve(mode || "auto"); }
 export function setTauriDesktopApproval(mode) { record("set_desktop_approval", { mode }); return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: mode }); }
 export function setTauriDesktopTerminalTheme(theme) { record("set_desktop_terminal_theme", { theme }); return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: "auto", terminalTheme: theme }); }
 export function setTauriDesktopAppearance(theme, style) { record("set_desktop_appearance", { theme, style }); return Promise.resolve({ protocolVersion: 1, defaultToolApprovalMode: "auto", terminalTheme: "auto", theme, themeStyle: style, appearanceConfigured: true }); }

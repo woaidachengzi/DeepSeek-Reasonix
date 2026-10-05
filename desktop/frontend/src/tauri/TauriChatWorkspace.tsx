@@ -26,6 +26,7 @@ import logoWordmark from "../assets/logo-wordmark.svg";
 import { TAURI_SHORTCUT_LABELS, TauriSettings, type TauriSettingsTab } from "./TauriSettings";
 import { detectShortcutPlatform, formatShortcutCombo, type ShortcutSection } from "../lib/keyboardShortcuts";
 import { defaultTauriShortcut, getTauriShortcut, isTauriCompositionKey, matchesTauriShortcut, TAURI_SHORTCUT_ACTIONS, TAURI_SHORTCUT_TABS, useTauriShortcuts, type TauriShortcutAction } from "./tauriKeyboardShortcuts";
+import { TauriComposerControls } from "./TauriComposerControls";
 import { TauriStatusBar } from "./TauriStatusBar";
 import { useTauriDesktopLayout } from "./tauriDesktopLayout";
 import { getTauriDefaultWorkspace, setTauriDefaultWorkspace } from "./tauriDefaultWorkspace";
@@ -3007,13 +3008,15 @@ export function TauriSessionPreview() {
   }
 
   async function changeDefaultModel(model: string) {
-    if (!model || busy) return;
+    if (!model || busy) return false;
     setBusy(true);
     setError("");
     try {
       setProviderSummary(await setTauriDefaultModel(model));
+      return true;
     } catch (cause) {
       setError(tauriMessageFrom(cause));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -3197,18 +3200,6 @@ export function TauriSessionPreview() {
             <button type="button" className="tauri-icon-button tauri-workspace-tree-button" aria-label="浏览工作区文件" title="浏览工作区文件" onClick={toggleWorkspace} disabled={busy || !session}>
               <FolderTree size={17} />
             </button>
-            <label className="tauri-model-picker" title="此默认模型用于新对话；工作区配置可能覆盖它">
-              <span>模型</span>
-              <select value={providerSummary?.defaultModel ?? ""} onChange={event => void changeDefaultModel(event.target.value)} disabled={busy || !providerSummary?.providers.some(provider => provider.configured && provider.models.length > 0)}>
-                {!providerSummary?.defaultModel && <option value="" disabled>未选择</option>}
-                {providerSummary?.defaultModel && <option value={providerSummary.defaultModel}>{providerSummary.defaultModel} · 当前</option>}
-                {providerSummary?.providers.filter(provider => provider.configured).flatMap(provider => provider.models.map(model => {
-                  const ref = `${provider.name}/${model}`;
-                  return ref === providerSummary.defaultModel ? null : <option key={ref} value={ref}>{provider.displayName || provider.name} / {model}</option>;
-                }))}
-              </select>
-              <ChevronDown size={13} aria-hidden="true" />
-            </label>
             <button type="button" className="tauri-icon-button" aria-label="打开运行状态与设置" onClick={() => setDiagnosticsOpen(true)}><Activity size={17} /></button>
           </div>
         </header>
@@ -3281,16 +3272,17 @@ export function TauriSessionPreview() {
               }
               if (matchesTauriShortcut(native, "send_message", detectShortcutPlatform())) { event.preventDefault(); void submit(); }
             }} placeholder={session?.state === "paused" ? "请先完成上方确认…" : session ? `继续聊聊你的问题…（${sendShortcutLabel} 发送）` : `输入问题，开始新对话…（${sendShortcutLabel} 发送）`} disabled={session?.state === "paused"} rows={3} />
-            <div className="tauri-composer__bottom"><span>{session?.workspaceRoot ? `当前对话工作区 · ${session.workspaceRoot}` : session ? "当前对话使用默认工作区" : currentWorkspace ? `${currentWorkspace === defaultWorkspace ? "新对话默认工作区" : "新对话工作区"} · ${currentWorkspace}` : "Preview 配置与稳定版相互隔离"}</span>
+            <div className="tauri-composer__bottom">
+              <button className="tauri-attach-button" type="button" onClick={() => void addAttachments()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state !== "idle"))} aria-label="添加文件" title="从本机选择文件并附加到消息"><Plus size={23} /></button>
+              <TauriComposerControls key={session?.id ?? "new"} sessionId={session?.id} model={session?.modelRef || providerSummary?.defaultModel || ""} providers={providerSummary} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state !== "idle" || attachments.length > 0 || draftAttachmentPaths.length > 0))} refreshToken={settingsOpen} onModelChange={model => session ? changeCurrentSessionModel(model) : changeDefaultModel(model)} onBusyChange={setBusy} onError={setError} onOpenModels={() => { setSettingsTab("providers"); setSettingsOpen(true); }} />
               <div className="tauri-composer__actions">
-                <button className="tauri-attach-button" type="button" onClick={() => void addAttachments()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state !== "idle"))} aria-label="添加文件" title="从本机选择文件并附加到消息"><Paperclip size={16} /><span>添加文件</span></button>
                 {session?.state === "running" ? <button className="tauri-send-button is-stop" type="button" onClick={() => void cancel()} disabled={busy} aria-label="停止生成"><Square size={15} fill="currentColor" /></button> : <button className="tauri-send-button" type="button" onClick={() => void submit()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state === "paused")) || (!prompt.trim() && selectedTexts.length === 0 && attachments.length === 0 && draftAttachmentPaths.length === 0)} aria-label="发送消息"><ArrowUp size={18} /></button>}
               </div>
             </div>
           </div>
           <p className="tauri-composer-hint">Reasonix 可能会出错，请核对重要信息。<button type="button" onClick={() => setDiagnosticsOpen(true)}>预览版说明</button></p>
         </footer>
-        <TauriStatusBar workspace={currentWorkspace} sessionId={session?.id} model={providerSummary?.defaultModel} sessionState={session?.state} bridgeRunning={status?.running} observedUsage={observedUsage?.sessionId === session?.id ? observedUsage : null} sessionMetrics={sessionMetrics && sessionMetrics.sessionId === session?.id ? sessionMetrics.metrics : null} />
+        <TauriStatusBar workspace={currentWorkspace} sessionId={session?.id} model={session?.modelRef || providerSummary?.defaultModel} sessionState={session?.state} bridgeRunning={status?.running} observedUsage={observedUsage?.sessionId === session?.id ? observedUsage : null} sessionMetrics={sessionMetrics && sessionMetrics.sessionId === session?.id ? sessionMetrics.metrics : null} />
       </section>
 
       {scanImportOpen && <>

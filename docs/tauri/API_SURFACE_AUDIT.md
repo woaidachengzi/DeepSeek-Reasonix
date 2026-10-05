@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-05）
 
+**对话输入区与审批/模型：** [实现与回归证据](evidence/2026-10-05-composer-controls/README.md)。参考截图布局，当前会话工具审批读写/持久化与模型菜单接通；HTTP 门禁、Go/UI 回归、浏览器 mock 与构建通过。ask/auto/yolo 不冒充只读/工作区权限；新包端到端及 D/E/A/B/C 缺口保持。
+
 **添加模型体验调整：** [Harness 风格入口与回归证据](evidence/2026-10-05-provider-connect-harness/README.md)。按用户确认采用提供商/API Key 主流程及折叠自定义设置，保留自定义 API 与原配置管理；目标回归、类型检查和 mock 浏览器交互通过。真实钥匙串、服务连接和新包功能 smoke 尚未计为通过；D/E/A/B/C 缺口保持。
 
 **新诊断候选 1754：** [真实 Minimize sender 只读观测与失败记录](evidence/2026-10-04-d-minimize-menu-sender/README.md)。原生程序菜单最小化/Settings恢复双档案2/2通过；实际 Cmd+M/菜单仍无最小化事件，保留失败。菜单启用/快捷键正确；动作后失焦的 sender 查询不能证明输入时的根因。新包不继承下述 e677 各项验收，D稳定/E完整验收仍待。

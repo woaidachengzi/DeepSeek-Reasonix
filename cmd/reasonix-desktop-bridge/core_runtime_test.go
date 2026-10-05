@@ -1338,3 +1338,32 @@ func TestFreshBridgeSessionUsesDesktopApprovalDefault(t *testing.T) {
 		t.Fatalf("resumed session approval mode = %q, want saved yolo", got)
 	}
 }
+
+func TestComposerApprovalPersistsBeforeFirstTurnAndReopens(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REASONIX_HOME", root)
+	t.Setenv("REASONIX_STATE_HOME", root)
+	runtime, err := newControllerFactory(nil).Open(context.Background(), desktopbridge.OpenRequest{SessionID: "composer-approval", WorkspaceRoot: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := runtime.(*controllerRuntime)
+	if err := r.SetApprovalMode("ask"); err != nil {
+		t.Fatal(err)
+	}
+	if r.ApprovalMode() != "ask" {
+		t.Fatal(r.ApprovalMode())
+	}
+	if err := r.SetApprovalMode("invalid"); err == nil {
+		t.Fatal("invalid mode accepted")
+	}
+	r.controller.Close()
+	reopened, err := newControllerFactory(nil).Open(context.Background(), desktopbridge.OpenRequest{SessionID: "composer-approval", WorkspaceRoot: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.(*controllerRuntime).controller.Close()
+	if got := reopened.(*controllerRuntime).ApprovalMode(); got != "ask" {
+		t.Fatal(got)
+	}
+}

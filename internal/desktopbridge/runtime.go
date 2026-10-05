@@ -635,6 +635,42 @@ func (m *RuntimeManager) Snapshot() (SessionView, bool) {
 	return view, true
 }
 
+// RuntimeApprovalProvider exposes the active controller posture, separate from
+// desktop defaults and permission/sandbox policy.
+type RuntimeApprovalProvider interface {
+	ApprovalMode() string
+	SetApprovalMode(string) error
+}
+
+// SessionApproval serializes ownership, idle-state validation and persistence.
+// An empty mode is a read; a write never drains a pending approval prompt.
+func (m *RuntimeManager) SessionApproval(sessionID, mode string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return "", ErrClosed
+	}
+	if m.runtime == nil || m.view.ID != sessionID || sessionID == "" {
+		return "", ErrSessionNotFound
+	}
+	provider, ok := m.runtime.(RuntimeApprovalProvider)
+	if !ok {
+		return "", fmt.Errorf("approval mode is unavailable")
+	}
+	if mode != "" {
+		if mode != "ask" && mode != "auto" && mode != "yolo" {
+			return "", fmt.Errorf("invalid approval mode")
+		}
+		if m.opening || m.runtime.State() != "idle" {
+			return "", ErrSessionConflict
+		}
+		if err := provider.SetApprovalMode(mode); err != nil {
+			return "", err
+		}
+	}
+	return provider.ApprovalMode(), nil
+}
+
 // BoundShell reports the interpreter captured by the exact active session's
 // controller. It never falls back to another session or to current config.
 func (m *RuntimeManager) BoundShell(sessionID string) (string, bool) {

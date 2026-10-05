@@ -2099,3 +2099,8 @@ export async function keychainImportWailsEnv(provider: string): Promise<void> {
   requireTauri();
   await invoke<void>("keychain_import_legacy", { provider, source: "wails-env" });
 }
+
+export async function tauriSessionApprovalMode(sessionId: string, mode?: TauriToolApprovalMode): Promise<TauriToolApprovalMode> {
+  requireTauri();
+  return invoke<TauriToolApprovalMode>("bridge_session_approval_mode", { sessionId, ...(mode ? { mode } : {}) });
+}
