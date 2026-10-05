@@ -7,3 +7,5 @@
 组件回归覆盖审批流程、DeepSeek/MiMo 路由、重新打开刷新、未就绪模型可见但不可选、读取失败禁止旧模型选择、Escape 和 disabled。完整前端 build 通过。CUA 隔离浏览器 http://127.0.0.1:5197/mimo-picker-qa.html 实际 composer + mock host：旧父摘要 DeepSeek，打开读取 MiMo；可用 MiMo 点击后当前选择更新，不可用 MiMo 禁用并显示原因，console error/warn 空。截图为隔离数据，未调用实际付费模型或操作真实会话。临时页面、服务器与浏览器 tab 已清理。
 
 真实钥匙串授权需要用户完成；真实 MiMo 网络连接/余额/输出未验收。D/E/A/B/C 未据此标记完成，不发布或切换默认下载。
+
+干净源码 c19238d59 构建 app-only 通过，前端所有生产门禁、sidecar、Rust host 与 codesign --verify --deep --strict 通过，产出 1 个 arm64 app，无本次 ZIP/DMG，归属和 host SHA256 见 package-receipt.json。旧包留作回退，未替换 Applications。用户授权/真实 MiMo 请求仍需用户实测。

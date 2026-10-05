@@ -1,0 +1,12 @@
+{
+  "sourceCommit": "c19238d5966c2dee8677f6a9d4719a2bd19650fd",
+  "sourceDirty": false,
+  "artifact": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app",
+  "architecture": "macOS arm64",
+  "bundleCount": 1,
+  "zipGenerated": false,
+  "strictSignatureVerify": "passed, ad-hoc",
+  "nativeKeychainAuthorization": "user required, not bypassed",
+  "realMiMoRequest": "not exercised",
+  "hostSha256": "3e10a8378cea40662a1165bda5ec455966a5895c6ce016705e8c63784eef332b"
+}
