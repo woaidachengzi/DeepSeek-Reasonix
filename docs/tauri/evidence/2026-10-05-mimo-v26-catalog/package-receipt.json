@@ -1,0 +1,17 @@
+{
+  "sourceCommit": "ea2083349f6bb4bd6eae11a0925a5c41249d5ce8",
+  "app": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app",
+  "builtFromCleanSource": true,
+  "bundles": [
+    "app"
+  ],
+  "signature": "strict ad-hoc verification passed in build script",
+  "rollback": {
+    "backup": "/var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/reasonix-mimo-v26-rollback-z7mwtexv/Reasonix Tauri Preview.app.rollback",
+    "sourceCommit": "6fef0d95d7b2b2d2e6136d32f407f4f2508b564f"
+  },
+  "sha256": {
+    "reasonix-tauri": "e4f9727c44f7267834fc110a69f45b06ac556016792c2a0475da33a78b7c8cc5",
+    "reasonix-desktop-bridge": "98f46525eca1fb52f251f6838dcadfe9cdd5ce883f97b642d946918a6d391a18"
+  }
+}
