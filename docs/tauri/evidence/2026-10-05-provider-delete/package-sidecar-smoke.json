@@ -1,0 +1,13 @@
+{
+  "nativeGUI": "not exercised",
+  "profile": "isolated disposable fixture",
+  "cases": [
+    "unauthenticated config read refused",
+    "official removal hides service from summary",
+    "stale deletion refused",
+    "canonical config and credential source retained",
+    "explicit restore returns official service to summary"
+  ],
+  "processExit": 0,
+  "readyRemoved": true
+}

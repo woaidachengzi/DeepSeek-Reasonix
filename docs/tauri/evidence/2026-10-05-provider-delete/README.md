@@ -15,3 +15,9 @@
 摘要不再返回隐藏服务；配置列表保留 hidden 标记用于“已移除的服务 / 重新添加”，恢复调用同一受鉴权、身份、revision、配置锁保护的命令，明确 restore=true，无密钥读写。旧 deepseek-pro 官方别名的恢复沿用配置层规范化，可显示为 canonical deepseek 服务。修正模型设置渲染遗漏 guardian_model，使引用回退实际落盘。
 
 完整 Go bridge + internal/config 回归通过，覆盖有/无备用服务、移除重载不复现、revision 过期拒绝、配置/凭据来源/未来字段保留、恢复与引用回退。settings-api-key 回归新增隐藏服务重新添加、不触碰钥匙串。完整前端生产 build 通过。隔离 CUA 浏览器真实 TauriProviderEditor + mock host，5197/service-restore-qa.html，展开和恢复实际交互通过，错误/警告空；截图 browser-restored.png。fixture/server/tab 已清理。测试未读取或修改用户真实配置，也未进行真实付费模型请求。
+
+## 直接 app 交付
+
+干净源码提交 b68e46676 执行 pnpm tauri:build -- --bundles app，生产检查、sidecar、Rust host、签名严格校验全部通过；只产出一个 macOS arm64 app，不生成本次 ZIP/DMG。构建日志、源码归属和包内 host/sidecar SHA256 见本目录回执。包内实际 sidecar 在独立 HOME/REASONIX_HOME 下通过鉴权拒绝、内置服务移除/摘要隐藏、过期删除拒绝、配置/凭据来源保留、显式恢复、shutdown 202、exit0 和 readiness 文件清理；夹具已删除。未启动原生 GUI，不等同于用户实际安装数据的删除点击验收。使用时先退出旧 Preview，再双击交付 app，避免单实例转回旧进程。
+
+之前 ZIP/DMG 留作回退；未替换 Applications 中的 Wails/Preview，未正式签名、公证、发布或切换默认下载。D/E 和 A/B/C 缺口仍以迁移清单为准，本轮不标记完成。

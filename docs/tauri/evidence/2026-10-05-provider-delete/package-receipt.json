@@ -1,0 +1,16 @@
+{
+  "sourceCommit": "b68e4667663901d03281a3e33f0e058c4bab1d1a",
+  "sourceDirty": false,
+  "platform": "macOS arm64",
+  "artifact": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app",
+  "bundleCount": 1,
+  "zipGenerated": false,
+  "dmgGenerated": false,
+  "codesign": "ad-hoc, verify --deep --strict passed",
+  "nativeGUI": "not exercised",
+  "sha256": {
+    "reasonix-desktop-bridge": "551c5de91e0829ea59cf6a69273eec5938d5e5a7e480facbe69e1475b659fa0b",
+    "reasonix-tauri": "557a36bc374da57896d643f1439077e48ee528ab7279930f1a1cb29c0060c9bc"
+  },
+  "rollback": "prior ZIP/DMG retained; installed Wails and Preview untouched"
+}
