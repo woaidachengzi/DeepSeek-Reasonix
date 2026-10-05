@@ -1,0 +1,143 @@
+{
+  "url": "http://127.0.0.1:5197/chat-qa",
+  "title": "Reasonix Harness 对话展示验收",
+  "mode": "before",
+  "browser": "Browser plugin not available; existing Playwright/headless installed Chrome",
+  "actualComponents": "TauriSessionApp + history renderer + shared CopyButton; simulated bridge, native clipboard write captured locally",
+  "checks": [
+    {
+      "theme": "dark",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "overflow": false,
+      "children": [
+        {
+          "text": "22:21",
+          "inside": true
+        },
+        {
+          "text": "用时 47 秒1 条过程更新",
+          "inside": true
+        },
+        {
+          "text": "22:21",
+          "inside": true
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "viewport": {
+        "width": 768,
+        "height": 900
+      },
+      "overflow": false,
+      "children": [
+        {
+          "text": "22:21",
+          "inside": true
+        },
+        {
+          "text": "用时 47 秒1 条过程更新",
+          "inside": true
+        },
+        {
+          "text": "22:21",
+          "inside": true
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 900
+      },
+      "overflow": false,
+      "children": [
+        {
+          "text": "22:21",
+          "inside": true
+        },
+        {
+          "text": "用时 47 秒1 条过程更新",
+          "inside": true
+        },
+        {
+          "text": "22:21",
+          "inside": true
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "overflow": false,
+      "children": [
+        {
+          "text": "22:21",
+          "inside": true
+        },
+        {
+          "text": "用时 47 秒1 条过程更新",
+          "inside": true
+        },
+        {
+          "text": "22:21",
+          "inside": true
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "viewport": {
+        "width": 768,
+        "height": 900
+      },
+      "overflow": false,
+      "children": [
+        {
+          "text": "22:21",
+          "inside": true
+        },
+        {
+          "text": "用时 47 秒1 条过程更新",
+          "inside": true
+        },
+        {
+          "text": "22:21",
+          "inside": true
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 900
+      },
+      "overflow": false,
+      "children": [
+        {
+          "text": "22:21",
+          "inside": true
+        },
+        {
+          "text": "用时 47 秒1 条过程更新",
+          "inside": true
+        },
+        {
+          "text": "22:21",
+          "inside": true
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "interaction": []
+}

@@ -33,7 +33,7 @@ import { getTauriDefaultWorkspace, setTauriDefaultWorkspace } from "./tauriDefau
 import { observeTauriUsage, type TauriObservedUsage } from "./tauriObservedUsage";
 import { isTauriNotificationEnabled, getTauriProgressMode, getTauriSidebarVisible, setTauriSidebarVisible, TAURI_PROGRESS_MODE_CHANGED, type TauriNotificationKind } from "./tauriPreferences";
 import { handleTauriDragDropEvent, retainTauriDragDropListener } from "./dragDrop";
-import { formatTauriWorkDuration, groupTauriHistory, type IndexedHistoryMessage } from "./historyPresentation";
+import { formatTauriMessageClock, formatTauriWorkDuration, groupTauriHistory, type IndexedHistoryMessage } from "./historyPresentation";
 import { applyTerminalThemePreference, onTerminalThemePreferenceChange } from "../lib/terminalTheme";
 import { applyTauriAppearance, readTauriAppearance } from "./tauriAppearance";
 import { applyThemePack } from "../lib/themePack";
@@ -66,17 +66,25 @@ function UserMessageContent({ text }: { text: string }) {
   </>;
 }
 
-function HistoryMessageArticle({ entry, sessionId, questionId }: {
+function UserMessageMeta({ text, createdAtMs }: { text: string; createdAtMs?: number }) {
+  const { locale } = useI18n();
+  const clock = formatTauriMessageClock(createdAtMs, Date.now(), locale);
+  return <div className="tauri-message__meta">
+    {clock && <time dateTime={new Date(createdAtMs!).toISOString()} title={new Date(createdAtMs!).toLocaleString()}>{clock}</time>}
+    <CopyButton text={text} label="复制消息" showInlineLabel={false} />
+  </div>;
+}
+
+function HistoryMessageArticle({ entry, sessionId, questionId, finalAnswer = false }: {
   entry: IndexedHistoryMessage;
   sessionId: string;
   questionId?: string;
+  finalAnswer?: boolean;
 }) {
   const { message, index } = entry;
   const display = message.role === "user" ? parseAttachmentRefsForDisplay(splitSelectedTextContext(message.content).submitText) : null;
-  const created = message.createdAtMs && Number.isSafeInteger(message.createdAtMs) ? new Date(message.createdAtMs) : null;
-  const createdAt = created && !Number.isNaN(created.getTime()) ? created : null;
   return <MessageErrorBoundary index={index}>
-    <article id={questionId} data-tauri-question-anchor={questionId} className={`tauri-message is-${message.role}`}>
+    <article id={questionId} data-tauri-question-anchor={questionId} className={`tauri-message is-${message.role}${finalAnswer ? " is-final" : ""}`}>
       {message.role !== "user" && <div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div>}
       <div className="tauri-message__content">
         {message.role !== "user" && <div className="tauri-message__role">Reasonix</div>}
@@ -84,10 +92,7 @@ function HistoryMessageArticle({ entry, sessionId, questionId }: {
         {display && display.attachments.length > 0 && <div className="tauri-message__attachments">{display.attachments.map(attachment => <span key={attachment.path} title={attachment.path}><Paperclip size={13} />{attachment.name}</span>)}</div>}
         {message.truncated && <small>为保护界面性能，这条历史内容已截断。</small>}
       </div>
-      {message.role === "user" && <div className="tauri-message__meta">
-        {createdAt && <time dateTime={createdAt.toISOString()}>{createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>}
-        <CopyButton text={message.content} label="复制消息" showInlineLabel={false} />
-      </div>}
+      {message.role === "user" && <UserMessageMeta text={message.content} createdAtMs={message.createdAtMs} />}
     </article>
   </MessageErrorBoundary>;
 }
@@ -607,6 +612,7 @@ export function TauriSessionPreview() {
   const [platform, setPlatform] = useState<string>("");
   // Optimistic user message: displayed immediately after submit, cleared when history loads
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
+  const [pendingUserMessageTime, setPendingUserMessageTime] = useState<number>();
   // Drag-and-drop state
   const [dragging, setDragging] = useState(false);
   const pendingSessionDeleteIDs = useMemo(() => new Set(pendingSessionDeletes.map(item => item.id)), [pendingSessionDeletes]);
@@ -2726,6 +2732,7 @@ export function TauriSessionPreview() {
     const submitEpoch = ++turnEpochRef.current;
     setLiveText("");
     setPendingUserMessage(text || null);
+    setPendingUserMessageTime(Date.now());
     try {
       const prepared = [...readyAttachments];
       let attachmentError = "";
@@ -3268,14 +3275,15 @@ export function TauriSessionPreview() {
           {session && !history && historyLoading ? <div className="tauri-loading"><span /><p>正在载入对话…</p></div> : session && !history && historyError ? <div className="tauri-loading tauri-history-error"><p>无法载入对话记录</p><p>{historyError}</p><button type="button" className="tauri-diagnostic-action" onClick={() => void refreshHistory()} disabled={busy}>重新加载</button></div> : history?.messages.length || liveText || pendingUserMessage || session?.state === "running" ? <div className="tauri-transcript">
             {history && history.startIndex > 0 && <p className="tauri-history-note">当前显示最近 {history.messages.length} 条，共 {history.totalMessages} 条可见消息</p>}
             {historyPresentation.map(item => item.kind === "message"
-              ? <HistoryMessageArticle key={`message-${item.entry.index}`} entry={item.entry} sessionId={history!.session.id} questionId={item.entry.message.role === "user" ? `tauri-question-${item.entry.index}` : undefined} />
-              : <details className="tauri-progress" key={`progress-${item.entries[0].index}-${progressMode}`} open={progressMode === "deep"}>
-                <summary><ChevronRight size={14} aria-hidden="true" /><span>{item.active ? "正在处理" : formatTauriWorkDuration(item.durationMs) ?? "过程记录"}</span><small>{item.entries.length} 条过程更新</small></summary>
+              ? <HistoryMessageArticle key={`message-${item.entry.index}`} entry={item.entry} sessionId={history!.session.id} finalAnswer={item.entry.message.role === "assistant"} questionId={item.entry.message.role === "user" ? `tauri-question-${item.entry.index}` : undefined} />
+              : item.entries.length === 0 ? <div className="tauri-progress tauri-progress--summary" key={`progress-${item.anchorIndex}-${progressMode}`}><div className="tauri-progress__summary">已完成，{formatTauriWorkDuration(item.durationMs)}</div></div>
+              : <details className="tauri-progress" key={`progress-${item.anchorIndex}-${progressMode}`} open={progressMode === "deep"}>
+                <summary><span>{item.active ? "正在处理" : formatTauriWorkDuration(item.durationMs) ? `已完成，${formatTauriWorkDuration(item.durationMs)}` : "过程记录"}</span><ChevronDown size={14} aria-hidden="true" /></summary>
                 <div className="tauri-progress__messages">{item.entries.map(entry => <HistoryMessageArticle key={entry.index} entry={entry} sessionId={history!.session.id} />)}</div>
               </details>)}
             {/* Optimistic user message: shown immediately after submit, before history loads */}
-            {pendingUserMessage && <article className="tauri-message is-user"><div className="tauri-message__content"><UserMessageContent text={pendingUserMessage} /></div></article>}
-            {liveText && <details className="tauri-progress tauri-progress--live" key={`live-progress-${progressMode}`} open={progressMode === "deep"}><summary><ChevronRight size={14} aria-hidden="true" /><span>正在处理</span><small>展开查看当前输出</small></summary><div className="tauri-progress__messages"><article className="tauri-message is-assistant tauri-message--live"><div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div><div className="tauri-message__content"><div className="tauri-message__role">Reasonix</div><Markdown text={liveText} streaming cacheKey={`${session?.id ?? "live"}:stream`} /></div></article></div></details>}
+            {pendingUserMessage && <article className="tauri-message is-user"><div className="tauri-message__content"><UserMessageContent text={pendingUserMessage} /></div><UserMessageMeta text={pendingUserMessage} createdAtMs={pendingUserMessageTime} /></article>}
+            {liveText && <details className="tauri-progress tauri-progress--live" key={`live-progress-${progressMode}`} open={progressMode === "deep"}><summary><span>正在处理</span><ChevronDown size={14} aria-hidden="true" /></summary><div className="tauri-progress__messages"><article className="tauri-message is-assistant tauri-message--live"><div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div><div className="tauri-message__content"><div className="tauri-message__role">Reasonix</div><Markdown text={liveText} streaming cacheKey={`${session?.id ?? "live"}:stream`} /></div></article></div></details>}
             {session?.state === "running" && !liveText && !pendingUserMessage && <div className="tauri-thinking" role="status"><span /><span /><span />Reasonix 正在思考…</div>}
           </div> : <section className="tauri-welcome">
             <div className="tauri-welcome__mark"><Sparkles size={24} /></div>

@@ -78,7 +78,7 @@ assert.ok((globalThis as unknown as { __tauriBridgeCalls: Array<{ name: string; 
 const progress = document.querySelector<HTMLDetailsElement>(".tauri-progress");
 assert.ok(progress, "intermediate updates render inside a progress disclosure");
 assert.equal(progress.open, false, "progress is collapsed by default");
-assert.match(progress.querySelector("summary")?.textContent ?? "", /用时 16 分钟.*2 条过程更新/);
+assert.match(progress.querySelector("summary")?.textContent ?? "", /已完成，用时 16分0秒/);
 assert.match(progress.textContent ?? "", /先查看工作区.*发现两个提交/);
 assert.ok([...document.querySelectorAll(".tauri-message.is-assistant")].some(message =>
   !progress.contains(message) && message.textContent?.includes("结论：需要测试")), "the final answer stays outside the disclosure");

@@ -1,0 +1,919 @@
+
+> reasonix-desktop-frontend@0.0.0 test:transcript /Users/jerry/temp/app/reasonix-tauri/desktop/frontend
+> tsx src/__tests__/transcript-command.test.tsx && tsx src/__tests__/transcript-kernel.test.ts && tsx src/__tests__/transcript-geometry-commit.test.ts && tsx src/__tests__/transcript-kernel-races.test.ts && tsx src/__tests__/transcript-measurement-ledger.test.ts && tsx src/__tests__/transcript-materialization.test.tsx && tsx src/__tests__/transcript-timeline.test.ts && tsx src/__tests__/transcript-viewport.test.tsx && tsx src/__tests__/transcript-question-jump.test.ts && tsx src/__tests__/transcript-row-geometry.test.ts && tsx src/__tests__/transcript-geometry-environment.test.ts && tsx src/__tests__/transcript-scroll-diagnostics.test.ts && tsx src/__tests__/frontend-diagnostics.test.ts && tsx src/__tests__/project-tree-diagnostics.test.ts && tsx src/__tests__/nested-scroll-handoff.test.ts && tsx src/__tests__/reasoning-scroll-follow.test.tsx && tsx src/__tests__/creation-transcript-scrollbar.test.ts && tsx src/__tests__/question-jump-bar.test.tsx && tsx src/__tests__/transcript-question-nav.test.ts && tsx src/__tests__/transcript-question-nav-integration.test.ts && tsx src/__tests__/markdown-table-virtual.test.tsx && tsx src/__tests__/typography-overflow-contract.test.ts && tsx src/__tests__/transcript-selection-retention.test.tsx && tsx src/__tests__/transcript-logical-selection.test.ts && tsx src/__tests__/transcript-selection-overlay.test.tsx && tsx src/__tests__/markdown-pipeline.test.tsx && tsx src/__tests__/message-selection-copy.test.ts && tsx src/__tests__/transcript-selection-menu.test.tsx && tsx src/__tests__/transcript-selection-rendering.test.ts && tsx src/__tests__/transcript-store.test.ts
+
+PASS stable Transcript commands use committed state without cross-render callback chains
+  PASS  prepend batches share ownership and deduplicate each geometry revision
+  PASS  prepend remains active until the layout batch settles
+  PASS  prepend commits after its final layout batch
+  PASS  surface replacement cancels pending prepend settlement
+  PASS  user input cancels prepend settlement without another scroll write
+
+TranscriptKernel deterministic transactions
+  PASS  restore transaction begins in the current generation
+  PASS  logical block anchor commits one correction
+  PASS  block correction preserves its in-block offset
+  PASS  accepted correction reaches a terminal committed state
+  PASS  tail follow cannot supersede display change
+  PASS  question jump supersedes lower-priority display work
+  PASS  native user intent cancels an active jump and owns reader intent
+  PASS  reader gesture accepts zero tail writes
+  PASS  held growth remains staged with zero correction writes
+  PASS  release corrects only the changed prefix and retains the reader's 20px in-block offset
+  PASS  the following block advances past all expanded content
+  PASS  one geometry reconciliation cannot emit duplicate corrections
+  PASS  a queued callback from an expired generation performs zero writes
+  PASS  a queued callback from an unmounted surface performs zero writes
+  PASS  a transaction that cannot settle expires deterministically at 1000ms
+  PASS  expiry emits an explicit terminal outcome
+  PASS  one anomalous frame does not downgrade the session
+  PASS  a healthy frame resets the consecutive anomaly streak
+  PASS  two consecutive anomalies downgrade only the current generation
+  PASS  surface generation replacement clears safe mode
+  PASS  native input starts one kernel-owned gesture lease
+  PASS  the injected clock keeps native ownership until the lease expires
+  PASS  renewing native input replaces rather than stacks lease timers
+  PASS  the current generation ends the gesture exactly once
+  PASS  surface replacement cancels stale gesture callbacks
+  PASS  surface replacement cancels stale paint callbacks
+  PASS  the current generation accepts its paint callback
+  PASS  a delayed writer scroll keeps its provenance after user ownership begins
+  PASS  a physical offset that diverges from the writer target belongs to the user
+  PASS  a published future batch is painted without moving the kernel reader anchor
+  PASS  before-paint measurement acknowledgement neither releases native ownership nor writes scroll
+  PASS  batch completion cannot restore a replaced surface
+  PASS  a delayed layout scroll cannot revoke tail intent without an input owner
+  PASS  renewing input ownership does not invent a native scroll observation
+  PASS  the subsequent native event records actual user movement
+  PASS  no-op sync and lease renewal preserve the pending writer event provenance
+
+41 passed, 0 failed
+geometry commit: atomic paint, queued-work revocation, native takeover and disposal passed
+
+TranscriptKernel deterministic race matrix
+  PASS  detached observer and already queued frame cannot mutate replacement geometry
+  PASS  a cancelled surface-paint callback is inert even when delivered in the same generation
+  PASS  an old native timer cannot release the new generation's lease
+  PASS  stream growth × display change commits from the newest geometry
+  PASS  display change cancels its queued tail write and performs one correction
+  PASS  display change × wheel/touch/thumb gives ownership to the user
+  PASS  a held native gesture accepts zero programmatic writes
+  PASS  prepend × selection cancels the structural correction
+  PASS  selection keeps only its explicit edge-scroll write
+  PASS  selection reaches a terminal state when the gesture ends
+  PASS  prepend requested during a gesture captures intent without writing
+  PASS  gesture release resumes prepend from the pre-mutation logical anchor
+  PASS  prepend × display change deterministically selects the latest equal-priority transaction
+  PASS  the surviving transaction preserves the reader's in-block offset
+  PASS  Composer resize × tail follow submits one tail correction
+  PASS  question jump × session switch fences the old generation
+  PASS  a stale question jump performs zero writes
+  PASS  active completion × next-round start coalesces to one current-generation tail write
+  PASS  lazy Markdown/image/table measurement defers when the anchor is unmeasured
+  PASS  one geometry revision accepts at most one structural correction attempt
+  PASS  the latest measured geometry retries the logical reader anchor once
+  PASS  lazy content restores the exact block-local reader offset
+  PASS  writer scroll events cannot replace the structural logical anchor
+  PASS  the next native scroll records the user's actual reader anchor
+  PASS  measurement-only gesture completion preserves the pre-measurement logical anchor
+  PASS  a changed native position commits the gesture's final logical anchor
+  PASS  reduced-motion × surface replacement keeps the same generation fence and zero-write path
+  PASS  two consecutive geometry anomalies activate full-DOM safe mode
+  PASS  safe-mode anomalies remain numeric/enumerated diagnostics
+
+29 passed, 0 failed
+
+Transcript immutable measurement ledger
+  PASS  an empty measurement batch is a no-op
+  PASS  publication returns the exact immutable suffix snapshot for the range adapter
+  PASS  an already published snapshot is not replayed into TanStack
+  PASS  a valid measurement batch commits
+  PASS  all measurements become visible in the same snapshot
+  PASS  sub-pixel noise and invalid measurements do not publish a partial snapshot
+  PASS  ignored measurements leave the prior snapshot authoritative
+  PASS  a later atomic batch replaces every changed key together
+  PASS  the second batch publishes complete contents
+  PASS  retaining live block identities removes obsolete measurements
+  PASS  retention publishes one pruned snapshot
+  PASS  retaining an unchanged identity set is a no-op
+  PASS  DOM measurements can be staged before publication
+  PASS  an anchor-safe subset publishes atomically
+  PASS  a measurement before the reader anchor remains deferred
+  PASS  a measurement after the reader anchor becomes authoritative
+  PASS  an explicit safe boundary publishes the deferred prefix measurement
+  PASS  the deferred prefix survives window recycling until publication
+  PASS  expand then collapse before release discards the superseded staged size
+  PASS  collapsed content retains its original measured extent
+
+20 passed, 0 failed
+
+Materialization: 191px DOM / 171px estimate
+PASS cold jump exposes multiple real blocks
+PASS actual DOM height is fixed independently of parsing
+PASS first paint commits real sizes without overlaps or estimate gaps during native input
+PASS reverse materialization preserves every common visible position (0px)
+PASS reverse materialization has no inter-block gap or overlap (0px)
+PASS materialization does not write native scroll during input
+PASS origin release preserves an existing prepend owner
+PASS prepend settles after origin and materialization geometry commit
+PASS mid-history origin release preserves the previously painted prefix anchor
+PASS leading-edge origin is continuous, without a final reset jump (0px)
+PASS lease release cannot repay first-paint geometry debt inside the visible range
+PASS native top exposes the complete first block
+PASS offscreen growth fixture owns a visible anchor and predecessor
+PASS natural growth enters viewport before its measured prefix commits
+PASS offscreen growth preserves the committed reader anchor instead of selecting the newly visible predecessor
+
+Materialization: 151px DOM / 171px estimate
+PASS cold jump exposes multiple real blocks
+PASS actual DOM height is fixed independently of parsing
+PASS first paint commits real sizes without overlaps or estimate gaps during native input
+PASS reverse materialization preserves every common visible position (0px)
+PASS reverse materialization has no inter-block gap or overlap (0px)
+PASS materialization does not write native scroll during input
+PASS origin release preserves an existing prepend owner
+PASS prepend settles after origin and materialization geometry commit
+PASS mid-history origin release preserves the previously painted prefix anchor
+PASS leading-edge origin is continuous, without a final reset jump (0px)
+PASS lease release cannot repay first-paint geometry debt inside the visible range
+PASS native top exposes the complete first block
+PASS offscreen growth fixture owns a visible anchor and predecessor
+PASS natural growth enters viewport before its measured prefix commits
+PASS offscreen growth preserves the committed reader anchor instead of selecting the newly visible predecessor
+
+TimelineProjection block contract
+  PASS  prepend preserves every existing block identity
+  PASS  every block contains stable row identities
+  PASS  backend turn identities produce unique block keys
+  PASS  prompt patches and history renumbering do not change block identity
+  PASS  active turn is excluded from cold completed history
+  PASS  active turn remains one ordinary-DOM block
+  PASS  projection preserves paging state without adding a fake row
+  PASS  100 completed turns use full DOM
+  PASS  101 completed turns enter the window adapter
+  PASS  windowed history keeps the two most recent completed turns resident
+  PASS  10,000 turns project to 10,000 blocks
+  PASS  10,000-turn projection stays below 1s (48.8ms)
+
+12 passed, 0 failed
+
+Transcript viewport adapters
+  PASS  lazy TanStack prefix is concretely materialized before geometry ownership
+  PASS  third-party cache mutation cannot alter a committed prefix snapshot
+  PASS  invalid prefix enters covered full presentation using the immutable trusted geometry
+  PASS  resident growth prunes stale overscan before judging total mount budget
+  PASS  a stale late range cannot replace native viewport coverage
+  PASS  a measurement-only range commit stays frozen during native ownership
+  PASS  a retained range keeps its matching extent snapshot
+  PASS  gesture release commits the latest covering measurements
+  PASS  gesture release commits range and extent atomically
+  PASS  TanStack cannot publish ResizeObserver sizes outside the viewport commit protocol
+  PASS  DOM measurements enter the block-keyed staging ledger before publication
+  PASS  measurement admission re-reads actual geometry before publishing the complete size batch
+  PASS  the window adapter cannot create a competing input lease or accumulate input distance
+  PASS  a safe suffix publish cannot invalidate and rebuild the protected prefix
+  PASS  resident blocks publish exact sizes before leaving ordinary DOM
+  PASS  forward scrolling spends the bounded mount budget on compositor runway while retaining a reverse cushion
+  PASS  backward scrolling mirrors the bounded compositor runway
+  PASS  range commits use a tear-free native viewport snapshot instead of mutable render-time geometry
+  PASS  an uncovered native jump reconstructs from the prefix-size ledger
+  PASS  the reconstructed range covers the native viewport
+  PASS  reconstruction retains protected blocks
+  PASS  an unavailable ledger fails closed instead of painting an uncovered candidate
+  PASS  10,000-turn range reconstruction completes within 1s (0.2ms)
+  PASS  10,000-turn reconstruction keeps a bounded mounted range
+  PASS  10,000-turn reconstruction covers the authoritative viewport
+  PASS  10,000-turn reconstruction preserves protected block identity
+  PASS  writer commits an already-landed tail transaction without a redundant DOM assignment
+  PASS  100 completed turns render in full-DOM mode
+  PASS  full-DOM mode mounts every complete turn block
+  PASS  101 completed turns switch to the TanStack window adapter
+  PASS  800px viewport mounts at most 40 completed blocks (40)
+  PASS  mounted window blocks use native layout top rather than compositor transforms
+  PASS  the two latest completed turns remain resident ordinary DOM
+  PASS  normal growth must remain windowed within the total completed-block budget (windowed:40)
+  PASS  the jump-to-bottom action keeps a stable DOM host while hidden at the tail
+  PASS  reader takeover changes jump-to-bottom visibility without replacing its DOM identity
+  PASS  the identity-stable jump-to-bottom action restores native tail geometry through the kernel
+  PASS  the current streaming turn is projected as one active block
+  PASS  the active block stays outside the windowed history size ledger
+  PASS  an empty active process keeps its working status reachable
+  PASS  full safety presentation preserves the visible native block host
+  PASS  full presentation retains focus, native selection, and the existing action host
+  PASS  full presentation during native input preserves reader geometry without a program write
+  PASS  queued old observers cannot advance or write the replacement surface geometry
+  PASS  repeated invalid native geometry locks the shared full presentation
+  PASS  a healthy measurement cannot unlock generation-latched full mode
+  PASS  only a new surface generation restores the default window policy
+  PASS  1000 turns: completion and next-round start preserve the resident native identity
+  PASS  1000 turns: stream completion stays windowed within the completed mount budget
+  PASS  1000 turns: stream completion settles at the native tail within 4px
+  PASS  10000 turns: completion and next-round start preserve the resident native identity
+  PASS  10000 turns: stream completion stays windowed within the completed mount budget
+  PASS  10000 turns: stream completion settles at the native tail within 4px
+
+53 passed, 0 failed
+
+Transcript question jump transaction
+  PASS  an unmounted question starts a transaction while its block is pinned
+  PASS  window mounting does not perform an estimated physical write
+  PASS  painted target receives its single exact logical-anchor write
+  PASS  the question jump reaches a terminal state after paint
+  PASS  session switch cancels an old question jump
+  PASS  the old generation cannot write into the replacement surface
+  PASS  navigation remains pending while its target mounts
+  PASS  only the positioned transaction completes navigation
+  PASS  wheel: valid source data may finish loading
+  PASS  wheel: releasing the gesture cannot revive pending navigation
+  PASS  wheel: late failure cannot offer a cancelled retry
+  PASS  touch: valid source data may finish loading
+  PASS  touch: releasing the gesture cannot revive pending navigation
+  PASS  touch: late failure cannot offer a cancelled retry
+  PASS  thumb: valid source data may finish loading
+  PASS  thumb: releasing the gesture cannot revive pending navigation
+  PASS  thumb: late failure cannot offer a cancelled retry
+  PASS  selection: valid source data may finish loading
+  PASS  selection: releasing the gesture cannot revive pending navigation
+  PASS  selection: late failure cannot offer a cancelled retry
+  PASS  A failure does not alter B UI
+  PASS  A finally cannot release B's request
+  PASS  A→B→A rejects both old owners
+  PASS  new jump supersedes old failure even at the same turn
+  PASS  unmount revokes navigation ownership
+  PASS  B data completion cannot claim the detached surface
+
+26 passed, 0 failed
+transcript row geometry tests passed
+transcript geometry environment tests passed
+transcript scroll diagnostics tests passed
+frontend diagnostics tests passed
+project tree diagnostics tests passed
+
+nested scroll handoff
+  PASS  nested can scroll up from mid-body
+  PASS  nested can scroll down from mid-body
+  PASS  nested cannot scroll up at top
+  PASS  nested cannot scroll down at bottom
+  PASS  horizontal-only wrapper cannot scroll vertically
+  PASS  wheel-up at nested top should handoff to parent
+  PASS  wheel-up mid nested should not handoff
+  PASS  wheel over horizontal-only table wrapper handoffs vertical to parent
+  PASS  edge wheel is preventDefaulted
+  PASS  edge wheel promotes deltaY onto parent scrollTop
+  PASS  edge handoff notifies parent scroll intent
+  PASS  edge handoff reports normalized direction to the parent controller
+  PASS  latched gesture continues on parent
+  PASS  latched wheel keeps applying to parent
+  PASS  latched handoff keeps reporting normalized direction
+  PASS  mid nested wheel is left to the browser after latch expires
+  PASS  mid nested wheel does not move parent after latch expires
+  PASS  line-mode wheel deltas use a stable pixel fallback
+  PASS  page-mode wheel deltas use the transcript viewport height
+  PASS  line-mode handoff applies normalized pixels instead of raw lines
+  PASS  page-mode handoff applies one viewport page
+
+21 passed, 0 failed
+
+reasoning inner-scroll follow
+  PASS  expanded reasoning uses the responsive height cap
+  PASS  expanded reasoning keeps full content internally scrollable
+  PASS  lazy reasoning reserves collapsed history geometry
+  PASS  lazy expanded reasoning reserves bounded geometry
+  PASS  new reasoning tokens follow the inner tail while armed
+  PASS  reasoning pane participates in nested-scroll handoff
+  PASS  manual upward reading releases automatic inner follow
+  PASS  returning within eight pixels of the bottom rearms follow
+  PASS  a new assistant segment starts with inner follow armed
+  PASS  an active follow tolerates a reasoning body that is not mounted
+
+10 passed, 0 failed
+
+creation transcript scrollbar
+  PASS  geometry records the pointerdown overflow
+  PASS  geometry derives the thumb from the pointerdown layout
+  PASS  geometry records the pointerdown thumb track
+  PASS  drag follows pointer pixels on the frozen track
+  PASS  drag maps through the frozen pointerdown overflow
+  PASS  content growth would otherwise change the live mapping
+  PASS  geometry rebase pins the drag to the latest pointer sample
+  PASS  geometry rebase preserves the current physical scroll ratio
+  PASS  subsequent drag movement uses the current extent
+  PASS  drag clamps at the top
+  PASS  drag clamps at the bottom
+
+11 passed, 0 failed
+
+question jump bar
+  PASS  one physical rail click emits one question jump
+  PASS  the rail maps its top directly to the first question
+  PASS  one slider keypress emits one question jump
+  PASS  slider keyboard navigation advances by one exact question
+  PASS  the slider exposes its active absolute question
+  PASS  very long sessions keep a fixed marker count
+  PASS  aggregated markers retain the first question
+  PASS  aggregated markers retain the last question
+  PASS  aggregated markers retain the exact active question
+  PASS  rail geometry maps to an absolute turn without reading marker layout
+  PASS  10,000 questions render only the bounded marker set
+  PASS  a long aggregated rail still targets the exact unloaded question
+  PASS  an unloaded aggregate target keeps the lazy-load contract
+
+13 passed, 0 failed
+
+transcript question navigation
+  PASS  active question follows the last anchor above the viewport
+  PASS  active question falls back to the first mounted anchor at the top boundary
+  PASS  virtualized scrolling can update from the mounted question window
+  PASS  missing anchors leave the active question unchanged
+
+4 passed, 0 failed
+
+transcript question navigation integration
+  PASS  question navigator renders one marker per question
+  PASS  manual scroll moves the active marker to the visible question
+  PASS  the old tail marker is no longer active after manual scroll
+  PASS  scroll sync uses the absolute question index instead of the unrelated checkpoint turn
+  PASS  unloaded navigation requests its source session's target page
+  PASS  A failure cannot leave B's navigation pending
+  PASS  A completion neither requests its turn in B nor writes B's viewport
+  PASS  wheel during paging accepts zero program writes after loaded target arrives
+  PASS  touchstart during paging accepts zero program writes after loaded target arrives
+  PASS  mousedown during paging accepts zero program writes after loaded target arrives
+  PASS  queued A paint and disconnected observers cannot commit A's surface or write B
+  PASS  only the correctly painted current generation confirms its surface token
+
+12 passed, 0 failed
+
+markdown table virtualization
+  PASS  oversized table uses the fold wrapper
+  PASS  collapsed large tables do not mount a nested scroller
+  PASS  collapsed preview mounts only the first preview rows
+  PASS  expand control is present
+  PASS  expand control shows total row count
+  PASS  expanding mounts the virtual scroll container
+  PASS  table header stays intact after expand
+  PASS  header content is preserved
+  PASS  some body rows mount after expand
+  PASS  mounted rows are bounded (26 < 150)
+  PASS  mounted row count tracks the viewport, not the model
+  PASS  the first row renders its cells
+  PASS  collapse removes the nested scroller
+  PASS  collapse restores the preview row count
+  PASS  small tables render without virtualization
+  PASS  small tables do not show a fold control
+  PASS  small tables mount every row
+  PASS  large plain table uses the lightweight worker representation
+  PASS  lightweight table retains every source row
+  PASS  markdown source tables start collapsed
+  PASS  collapsed source tables avoid nested scroll
+  PASS  source table preview is bounded
+  PASS  expanding source tables mounts virtualization
+  PASS  markdown table body is virtualized (26 < 120)
+  PASS  markdown table header renders
+  PASS  complex large table stays on the semantic parser path
+  PASS  complex table preserves inline Markdown or fold wrapper
+  PASS  complex table preserves inline Markdown
+
+28 passed, 0 failed, 28 total
+
+typography overflow contract
+  PASS  text-size presets include the large accessibility step
+  PASS  legacy sans alias stays synced with UI font
+  PASS  xxlarge has a real scale bump
+  PASS  status bar dock height scales with interface text size
+  PASS  layout reserves scaled status bar height
+  PASS  app height follows the live viewport height variable
+  PASS  empty transcript can scroll instead of clipping
+  PASS  welcome empty state is not clipped by its own box
+  PASS  non-transcript markdown still culls offscreen blocks with a 72px placeholder
+  PASS  virtual transcript rows do not measure markdown through 72px placeholders
+  PASS  virtual transcript cards stay measurable after the markdown override
+  PASS  transcript scroller does not set padding-left
+  PASS  transcript scroller does not set padding-right
+  PASS  transcript scroller does not set padding-left
+  PASS  transcript scroller does not set padding-right
+  PASS  transcript scroller padding stays vertical-only (24px 0 32px)
+  PASS  transcript scroller does not set padding-left
+  PASS  transcript scroller does not set padding-right
+  PASS  transcript scroller padding stays vertical-only (18px 0 28px)
+  PASS  transcript scroller does not set padding-left
+  PASS  transcript scroller does not set padding-right
+  PASS  transcript scroller does not set padding-left
+  PASS  transcript scroller does not set padding-right
+  PASS  transcript scroller padding stays vertical-only (24px 0 28px)
+  PASS  transcript scroller does not set padding-left
+  PASS  transcript scroller does not set padding-right
+  PASS  default transcript inline inset is 32px
+  PASS  narrow viewports tighten the transcript inline inset
+  PASS  virtual rows own the left inset
+  PASS  virtual rows own the right inset
+  PASS  load-older header uses the same inline inset
+  PASS  empty transcript keeps its own horizontal inset
+Could not parse CSS @import URL "./components/ProviderConnections.css" relative to base URL "about:blank"
+Could not parse CSS @import URL "./components/ProviderCatalogPicker.css" relative to base URL "about:blank"
+  PASS  computed style keeps transcript markdown measurable
+  PASS  computed style still culls markdown outside the transcript
+  PASS  empty-state auto margins apply only to the welcome content
+  PASS  empty-state generic children do not receive auto margins
+  PASS  fixed status bar height follows the scaled dock token
+  PASS  status bar min-height follows the scaled dock token
+  PASS  brand list scrolls independently
+  PASS  provider detail can shrink within its column
+  PASS  long model IDs wrap within the detail
+  PASS  provider model rows grow with their content
+  PASS  provider model cards do not force undersized rows
+  PASS  provider model cards contain overflowing controls
+  PASS  compaction choices fit the settings control width
+  PASS  compaction rows align radio, label, percentage and explanation
+  PASS  compaction rows retain a stable click target
+  PASS  compaction explanations can shrink and wrap
+  PASS  percentage suffix remains visible beside the editable value
+  PASS  status bar keeps metrics on one row
+  PASS  status bar hides vertical overflow
+  PASS  .statusbar__model clips long text
+  PASS  .statusbar__model uses ellipsis
+  PASS  .statusbar__model stays on one line
+  PASS  .sidebar-im__summary-label clips long text
+  PASS  .sidebar-im__summary-label uses ellipsis
+  PASS  .sidebar-im__summary-label stays on one line
+  PASS  .sidebar-im__summary-status clips long text
+  PASS  .sidebar-im__summary-status uses ellipsis
+  PASS  .sidebar-im__summary-status stays on one line
+  PASS  .workbench-dock__tab-label clips long text
+  PASS  .workbench-dock__tab-label uses ellipsis
+  PASS  .workbench-dock__tab-label stays on one line
+  PASS  .workspace-files__scope-title clips long text
+  PASS  .workspace-files__scope-title uses ellipsis
+  PASS  .workspace-files__scope-title stays on one line
+  PASS  .workspace-files__scope-meta clips long text
+  PASS  .workspace-files__scope-meta uses ellipsis
+  PASS  .workspace-files__scope-meta stays on one line
+  PASS  .context-panel__section-head span clips long text
+  PASS  .context-panel__section-head span uses ellipsis
+  PASS  .context-panel__section-head span stays on one line
+  PASS  .context-panel__metric span clips long text
+  PASS  .context-panel__metric span uses ellipsis
+  PASS  .context-panel__metric span stays on one line
+  PASS  .context-panel__metric strong clips long text
+  PASS  .context-panel__metric strong uses ellipsis
+  PASS  .context-panel__metric strong stays on one line
+  PASS  .app--creation .context-panel__mini-stat-label clips long text
+  PASS  .app--creation .context-panel__mini-stat-label uses ellipsis
+  PASS  .app--creation .context-panel__mini-stat-label stays on one line
+  PASS  .app--creation .context-panel__mini-stat strong clips long text
+  PASS  .app--creation .context-panel__mini-stat strong uses ellipsis
+  PASS  .app--creation .context-panel__mini-stat strong stays on one line
+  PASS  .topbar__model clips long text
+  PASS  .topbar__model uses ellipsis
+  PASS  .topbar__model stays on one line
+  PASS  .composer-modebar__item span clips long text
+  PASS  .composer-modebar__item span uses ellipsis
+  PASS  .composer-modebar__item span stays on one line
+  PASS  .composer-more-menu__item span clips long text
+  PASS  .composer-more-menu__item span uses ellipsis
+  PASS  .composer-more-menu__item span stays on one line
+  PASS  creation dock skips zero-width grid interpolation on open
+  PASS  creation overview usage card disables inherited entrance animation
+  PASS  creation overview rows avoid edge-pinned value alignment
+  PASS  creation overview rows avoid the spacer grid that pushes values to the edge
+  PASS  creation overview values are not capped to a fixed 14ch width
+  PASS  session metric labels and rate badges share a compact header row
+  PASS  rate badges remain visible without truncating the amount row
+  PASS  rate badge labels stay intact
+  PASS  chat mode switcher contains enlarged labels
+  PASS  task method selector keeps its current state visible at narrow widths
+  PASS  task method selector truncates its value only when constrained
+  PASS  model selector uses the shared control weight
+  PASS  execution policy and model settings have a compact visual divider
+  PASS  composer enters icon-only mode before model and effort controls overlap
+  PASS  approval mode switcher shrinks with its compact composer container
+  PASS  ask approval restores the solid semantic fill
+  PASS  auto approval keeps high-contrast text on its solid fill
+  PASS  yolo approval restores the solid warning fill
+  PASS  task method menu uses the shared menu width
+  PASS  menu descriptions can wrap onto a second line
+  PASS  menu descriptions no longer use single-line ellipsis
+  PASS  task method selector uses the shared keyboard focus ring
+  PASS  model and effort selectors use the shared keyboard focus ring
+  PASS  active permission options retain keyboard focus feedback
+  PASS  creation assistant body text follows the conversation text size
+  PASS  themed assistant body text follows the conversation text size
+  PASS  creation assistant body follows the conversation font family
+  PASS  creation markdown follows the conversation font family
+  PASS  creation composer input follows the composer text size
+  PASS  interface text resolves its own exact regional size
+  PASS  conversation text resolves its own exact regional size
+  PASS  composer text resolves its own exact regional size
+  PASS  code text resolves its own exact regional size
+  PASS  code blocks keep the regional code font
+  PASS  inline code keeps the regional code font
+  PASS  nested code text inherits the regional code font
+  PASS  line-numbered code text inherits its viewer font
+  PASS  line-numbered code viewers use the regional code font
+  PASS  diff text follows the global scale until the code region is customized
+  PASS  message metadata keeps its regional size
+  PASS  composer metadata keeps the regional font
+  PASS  status bar keeps the regional font
+  PASS  conversation preview uses the exact conversation size
+  PASS  interface preview uses the exact interface size
+  PASS  composer preview uses the exact composer size
+  PASS  code preview uses the exact code size
+  PASS  metadata preview uses the exact supporting-text size
+  PASS  live preview renders the selected region's exact size
+  PASS  creation reasoning keeps the conversation font
+  PASS  creation tool names keep the code font
+  PASS  creation rules do not hardcode bare px font sizes (except font-size:0)
+  PASS  creation context-ring popover (portaled to body) follows interface text size
+  PASS  context-ring popover rules do not hardcode bare px font sizes (except font-size:0)
+  PASS  collapsed creation tool bodies keep mounted content clipped
+  PASS  collapsed creation tool bodies do not paint hidden tool text
+  PASS  composer compact controls activate at the capped theme width
+  PASS  markdown table wrapper scrolls horizontally
+  PASS  markdown table wrapper does not nest vertical scroll
+  PASS  markdown tables stay in document flow for trackpad Y
+  PASS  large tables use a fold stack for preview + expand
+  PASS  table expand control is clickable
+  PASS  code blocks scroll horizontally instead of widening the layout
+  PASS  code blocks do not nest vertical scroll by default
+  PASS  settings center stacks navigation before the modal is too narrow
+  PASS  settings fields collapse to one column at the mid-width breakpoint
+  PASS  settings modal only becomes fullscreen at the narrow breakpoint
+  PASS  narrow workbench layout hides side panels and keeps chat single-column
+  PASS  .reasoning__head font size follows the text-size scale
+  PASS  .turn-collapse__reasoning-head font size follows the text-size scale
+  PASS  .process-card__head font size follows the text-size scale
+  PASS  .tool__difflabel font size follows the text-size scale
+  PASS  .msg-memory-citations font size follows the text-size scale
+  PASS  .msg-memory-citations__source font size follows the text-size scale
+  PASS  .msg-memory-citations__note font size follows the text-size scale
+  PASS  .msg-attachment__name font size follows the text-size scale
+  PASS  .msg-attachment__meta font size follows the text-size scale
+  PASS  .msg-pasted-head font size follows the text-size scale
+  PASS  .msg-pasted-expanded font size follows the text-size scale
+  PASS  .msg-edit__input font size follows the text-size scale
+  PASS  .msg-edit__btn font size follows the text-size scale
+  PASS  .msg__send-failed font size follows the text-size scale
+  PASS  :root[data-theme-style] .process-card__kind font size follows the text-size scale
+  PASS  :root[data-theme-style] .msg--assistant > .process-card[data-tone="violet"] .process-card__name font size follows the text-size scale
+
+176 passed, 0 failed, 176 total
+
+transcript selection retention
+  PASS  plain click clears its provisional native selection
+  PASS  plain click never acquires or releases selection scroll ownership
+  PASS  plain click keeps the settled reader transaction intact
+  PASS  settled native selection releases scroll ownership without delayed anchor reconciliation
+  PASS  a real native selection acquires ownership before releasing it
+  PASS  a real native selection cancels streaming follow exactly once
+  PASS  plain click dismisses a previously settled native selection
+  PASS  plain click after a settled selection does not release reader ownership again
+  PASS  tab reset rejects delayed selection settle callbacks
+  PASS  settled native selection remains tracked until copy or dismissal
+  PASS  keyboard copy releases the native browser range after the copy event
+  PASS  keyboard copy releases transcript selection state
+  PASS  cross-row selection promotes before the pointer gesture settles
+  PASS  loaded-history boundary keeps edge observation and focus reconciliation alive
+  PASS  focus reconciliation waits while edge observation watches for an extent rebound
+  PASS  a false loaded-history boundary cannot strand the active drag
+  PASS  a coalesced virtual commit retains focus reconciliation beside edge observation
+  PASS  virtual range commit re-resolves the logical focus without relying on DOM mutation delivery
+  PASS  cross-row selection settles in logical mode when caret APIs are available
+  PASS  pointerup applies its exact final focus before settling
+  PASS  settled logical selection releases scroll ownership
+  PASS  clearing a settled logical selection does not release reader ownership again
+  PASS  pointercancel clears selection even when the event has no pressed button
+  PASS  pointercancel releases transcript selection state
+  PASS  pointercancel releases selection scroll ownership
+  PASS  pointer down begins a native drag with a frozen anchor
+  PASS  a dead native range still promotes from the frozen anchor during drag
+  PASS  dead-native promotion transfers scroll ownership to logical selection
+  PASS  a dead-native promoted gesture settles in logical mode
+  PASS  a migrated native anchor still promotes from the frozen anchor
+  PASS  promotion keeps the frozen pointer-down anchor row
+  PASS  a migrated-anchor promoted gesture settles in logical mode
+  PASS  plain Markdown fallback does not promote incompatible offsets
+
+33 passed, 0 failed
+
+logical transcript selection store
+  PASS  cross-row selection promotes in the source tab
+  PASS  unchanged caret reconciliation does not republish the selection snapshot
+  PASS  forward selection resolves partial endpoints and full middle rows
+  PASS  pointer release settles logical selection
+  PASS  expanded offscreen reasoning remains in logical selection even when its DOM is not mounted
+  PASS  reverse drag records direction
+  PASS  reverse drag still copies document order using UTF-16 offsets
+  PASS  promotion pins active cached projections
+  PASS  append-only live content keeps the frozen selected prefix
+  PASS  incremental live validation does not clear an append-only selection
+  PASS  non-append live replacement invalidates selected content
+  PASS  invalid content clears the logical selection
+  PASS  selection cleanup releases projection pins
+  PASS  dragging may temporarily pin every prospective selection row
+  PASS  settling releases unselected projections back to the cache budget
+  PASS  settled selection retains only its final row interval
+  PASS  settled snapshot drops revisions outside its final interval
+  PASS  late async projection cannot resolve a cleared snapshot
+  PASS  cleared snapshot id cannot be reused by async consumers
+
+logical transcript DOM adapter
+  PASS  rendered Markdown DOM is eligible for logical promotion
+  PASS  DOM projection filters controls and restores formula/table structure
+  PASS  DOM text boundary maps to a UTF-16 projection offset
+  PASS  logical offsets map back to a DOM highlight range
+  PASS  client caret rejects a stale virtual row outside the geometric hit target
+  PASS  plain Markdown source fallback stays in native selection mode
+
+user transcript selection projection
+  PASS  user projection keeps body and selected context while filtering attachment/card metadata
+
+streaming transcript selection projection
+  PASS  a streaming token projects only the active selectable row
+  PASS  successive stream updates reuse every historical projection object
+  PASS  the live override tracks the newest streamed answer text
+
+29 passed, 0 failed, 29 total
+
+transcript logical selection overlay
+  PASS  a pre-layout range does not draw zero-sized rectangles
+  PASS  a selected mounted range schedules a stabilization paint
+  PASS  the stabilization paint restores logical selection highlighting
+
+3 passed, 0 failed
+
+markdown pipeline parity
+  PASS  code-fence fixture exceeds 100KB
+  PASS  headingsAndProse: pipeline render matches react-markdown
+  PASS  headingsAndProse: sliced blocks render identically (3 blocks)
+  PASS  gfmTable: pipeline render matches react-markdown
+  PASS  gfmTable: sliced blocks render identically (1 blocks)
+  PASS  taskList: pipeline render matches react-markdown
+  PASS  taskList: sliced blocks render identically (1 blocks)
+  PASS  strikethroughAutolink: pipeline render matches react-markdown
+  PASS  strikethroughAutolink: sliced blocks render identically (1 blocks)
+  PASS  mathInline: pipeline render matches react-markdown
+  PASS  mathInline: sliced blocks render identically (1 blocks)
+  PASS  mathBlockRepair: pipeline render matches react-markdown
+  PASS  mathBlockRepair: sliced blocks render identically (4 blocks)
+  PASS  mathInlinePipe: pipeline render matches react-markdown
+  PASS  mathInlinePipe: sliced blocks render identically (1 blocks)
+  PASS  footnotes: pipeline render matches react-markdown
+  PASS  footnotes: sliced blocks render identically (2 blocks)
+  PASS  crossBlockRefs: pipeline render matches react-markdown
+  PASS  crossBlockRefs: sliced blocks render identically (5 blocks)
+  PASS  mermaidFence: pipeline render matches react-markdown
+  PASS  mermaidFence: sliced blocks render identically (1 blocks)
+  PASS  bigCodeFence: pipeline render matches react-markdown
+  PASS  bigCodeFence: sliced blocks render identically (1 blocks)
+  PASS  cjk: pipeline render matches react-markdown
+  PASS  cjk: sliced blocks render identically (2 blocks)
+  PASS  rawHtml: pipeline render matches react-markdown
+  PASS  rawHtml: sliced blocks render identically (1 blocks)
+  PASS  unsafeAndFileLinks: pipeline render matches react-markdown
+  PASS  unsafeAndFileLinks: sliced blocks render identically (1 blocks)
+  PASS  manyBlocks: pipeline render matches react-markdown
+  PASS  manyBlocks: sliced blocks render identically (80 blocks)
+  PASS  empty fenced blocks do not render phantom code cards
+  PASS  text around empty fenced blocks remains visible
+  PASS  non-empty comment code blocks remain visible
+  PASS  non-empty comment code keeps its code-block surface
+  PASS  block keys are stable indexes
+  PASS  footnote section is the trailing block
+  PASS  footnote reference links survive slicing
+  PASS  footnote definition anchors survive slicing
+  PASS  urlTransform parity for "https://example.com/a?b=c#d"
+  PASS  urlTransform parity for "http://example.com"
+  PASS  urlTransform parity for "mailto:user@example.com"
+  PASS  urlTransform parity for "javascript:alert(1)"
+  PASS  urlTransform parity for "vbscript:x"
+  PASS  urlTransform parity for "data:text/html,boom"
+  PASS  urlTransform parity for "./relative/path"
+  PASS  urlTransform parity for "../up"
+  PASS  urlTransform parity for "/absolute"
+  PASS  urlTransform parity for "#fragment"
+  PASS  urlTransform parity for "query?only"
+  PASS  urlTransform parity for "ftp://example.com/file"
+  PASS  urlTransform parity for "file:///etc/passwd"
+  PASS  urlTransform parity for "HTTPS://EXAMPLE.COM/upper"
+  PASS  urlTransform parity for "ircs://irc.example.com/chan"
+  PASS  urlTransform parity for "xmpp:user@example.com"
+  PASS  urlTransform parity for "a:b:c"
+  PASS  urlTransform parity for ""
+  PASS  urlTransform parity for "C:\\src\\app.ts"
+  PASS  authority-form UNC survives pipeline URL sanitization
+  PASS  authority-form UNC href survives HAST rendering
+  PASS  unsafe local URL is blanked: file://./PhysicalDrive0
+  PASS  unsafe local URL is blanked: file:////?/C:/Windows
+  PASS  unsafe local URL is blanked: file:///C:/safe.txt:payload
+  PASS  unsafe local URL is blanked: file:///tmp/report.md?download=1
+  PASS  unsafe local URL is blanked: file:///tmp/report.md#section
+  PASS  content revision is deterministic
+  PASS  content revision distinguishes texts
+  PASS  hast byte estimate is positive and bounded
+  PASS  hast byte estimate grows with content
+
+markdown selection projection
+  PASS  selection projection preserves readable structure, code, tables, CJK, emoji and LaTeX
+  PASS  selection projection uses the same UTF-16 text as the rendered DOM adapter
+  PASS  selection revision fingerprints projected UTF-16 text
+  PASS  large plain table uses the virtual table representation
+  PASS  virtual table projection includes rows that never mount in the DOM
+
+74 passed, 0 failed, 74 total
+
+message selection copy
+  PASS  copies selected message text through the fallback handler
+  PASS  does not override native copy inside editable fields
+  PASS  ignores whitespace-only selections
+  PASS  leaves non-message selections to the browser
+  PASS  ignores collapsed selections
+  PASS  does not claim copy events without writable clipboard data
+  PASS  restores one inline formula without dropping surrounding prose
+  PASS  selecting part of a formula copies the complete source
+  PASS  does not replace identical prose around a formula
+  PASS  restores display math delimiters
+  PASS  real Markdown rendering copies original TeX instead of normalized KaTeX input
+  PASS  preserves authored delimiter padding through real Markdown rendering
+  PASS  copies authored Young macros through nested pipe protection
+  PASS  logical copy claims the event before async projection resolves
+  PASS  late logical copy result cannot write after its snapshot is cleared
+  PASS  logical keyboard copy writes the frozen text projection
+  PASS  successful logical keyboard copy clears the snapshot
+
+17 passed, 0 failed
+
+transcript selection menu
+  PASS  transcript owns exactly one stable action host
+  PASS  the stable action host starts closed
+  PASS  the closed action host is hidden from assistive technology
+  PASS  the closed action button leaves the tab order
+  PASS  the closed action button cannot be activated
+  PASS  selection cycle 1 reuses the stable action host
+  PASS  selection cycle 1 opens the stable action host
+  PASS  selection cycle 1 closes without unmounting the host
+  PASS  selection cycle 2 reuses the stable action host
+  PASS  selection cycle 2 opens the stable action host
+  PASS  selection cycle 2 closes without unmounting the host
+  PASS  selection cycle 3 reuses the stable action host
+  PASS  selection cycle 3 opens the stable action host
+  PASS  selection cycle 3 closes without unmounting the host
+  PASS  selection cycle 4 reuses the stable action host
+  PASS  selection cycle 4 opens the stable action host
+  PASS  selection cycle 4 closes without unmounting the host
+  PASS  message selection right-click is claimed by the app menu
+  PASS  message selection right-click opens the transcript menu
+  PASS  transcript menu offers Copy
+  PASS  Copy writes the selection through the clipboard bridge
+  PASS  Copy releases the browser selection after the clipboard write succeeds
+  PASS  transcript menu closes after Copy
+  PASS  pointer selection exposes Add to Chat
+  PASS  clicking Add to Chat keeps the captured selection until activation
+  PASS  Add to Chat forwards the exact selected text
+  PASS  Add to Chat clears the browser selection
+  PASS  Add to Chat closes the floating action without unmounting it
+  PASS  Cmd/Ctrl+L adds the active transcript selection
+  PASS  pointer selection re-exposes the floating action
+  PASS  Escape dismisses the floating action without unmounting it
+  PASS  Escape keeps the browser selection
+  PASS  the Escape keyup does not re-open the dismissed action
+  PASS  a fresh pointer gesture re-opens the dismissed action
+  PASS  a new left-click clears the previous transcript selection
+  PASS  clearing the selection closes the floating action
+  PASS  the floating action hint tracks the rebound shortcut
+  PASS  the old combo no longer fires after a rebind
+  PASS  the rebound combo adds the selection
+  PASS  selection opens the floating action before a tab switch
+  PASS  a tab switch discards the captured selection action without unmounting the host
+  PASS  a tab switch clears the native transcript selection
+  PASS  keyup over a hydration placeholder cannot re-summon the action
+  PASS  disabled selection handling leaves the native context menu alone
+  PASS  disabled selection handling does not open a copy menu
+  PASS  the copy menu opens before a tab switch
+  PASS  disabling selection handling closes an already-open copy menu
+  PASS  a tab switch also discards the copy menu
+  PASS  collapsed selection leaves the event alone
+  PASS  collapsed selection does not open the menu
+  PASS  non-message selection does not open the menu
+  PASS  right-click on a message outside the selection leaves the event alone
+  PASS  selection in message A does not open the menu on message B
+  PASS  cross-message selection opens the menu on either message
+  PASS  right-click outside message bodies leaves the event alone
+  PASS  message selection does not open the menu over other surfaces
+  PASS  editable targets keep the native menu
+  PASS  editable targets do not open the transcript menu
+  PASS  keyboard-invoked menu opens without pointer coordinates
+  PASS  Escape closes the transcript menu
+  PASS  plain browser keeps the native selection menu
+  PASS  plain browser never sees the app menu
+  PASS  settled logical selection exposes Add to Chat by snapshot id
+  PASS  logical Add to Chat resolves partial endpoints in document order
+  PASS  logical Add to Chat clears the consumed snapshot
+  PASS  right-click inside a logical selection opens the app menu
+  PASS  logical right-click Copy resolves the frozen snapshot
+  PASS  successful logical Copy clears the snapshot
+  PASS  tab switch discards a late logical Add to Chat projection
+  PASS  Tauri fixture has no legacy runtime
+  PASS  Tauri selected message claims the app menu
+  PASS  Tauri opens Copy without Wails
+  PASS  Tauri sends exact selected text to native IPC
+  PASS  native success releases selection
+  PASS  native success avoids browser fallback
+  PASS  pointerdown on Copy preserves selection before native result
+  PASS  native denial does not report another successful copy
+  PASS  native denial preserves selection for retry
+  PASS  native denial reports the existing error feedback
+  PASS  each explicit Copy submits exactly one native operation
+  PASS  native denial cannot bypass refusal with browser fallback
+  PASS  Tauri editable targets keep the native menu
+  PASS  Tauri logical selection opens Copy
+  PASS  native denial retains the logical selection snapshot
+  PASS  Tauri logical retry copies the exact frozen endpoint range
+  PASS  native success clears the logical snapshot
+  PASS  native and logical copies each invoke once per explicit action
+  PASS  logical denial and retry keep the native permission boundary
+
+88 passed, 0 failed, 88 total
+
+transcript selection rendering
+  PASS  transcript selection action keeps one state-driven, accessibility-safe portal host
+  PASS  selection state changes neither remount the portal nor reinstall listeners through an action dependency
+  PASS  closed and positioning transcript actions stay mounted without painting or hit testing
+  PASS  non-Windows transcript actions retain the existing open animation
+  PASS  Windows transcript actions use an opaque non-transforming WebView2 paint path
+  PASS  the Windows transcript paint override does not affect terminal selection actions
+
+6 passed, 0 failed, 6 total
+
+transcript store
+  PASS  paged read pause equals live and legacy history presentation
+  PASS  reloading a pause does not duplicate its card
+  PASS  latest page projects items
+  PASS  latest page reports older history
+  PASS  history user items retain their absolute turn for complete-session navigation
+  PASS  every paged user item carries an absolute history turn
+  PASS  paged concatenation equals single-shot conversion (228 items from 286 messages)
+  PASS  newest page item ids are stable across prepends
+  PASS  item ids are unique across the full projection
+  PASS  10,000-turn target paging reaches the first page
+  PASS  10,000-turn target paging respects both turn and production entry bounds
+  PASS  10,000-turn target paging performs the expected bounded backend calls
+  PASS  targeted pages use the backend's bounded 1000-entry capacity
+  PASS  10,000-turn target paging preserves every question
+  PASS  10,000-turn target paging lands on absolute turn one
+  PASS  10,000-turn target paging keeps the tail coordinate
+  PASS  10,000-turn target paging keeps item ids unique
+  PASS  10,000-turn transcript stays within the production history body budget
+  PASS  10,000-turn targeted paging completes within 10s (1110.0ms)
+  PASS  result row converts standalone before its call pages in
+  PASS  standalone result keeps the toolCallId item id
+  PASS  older page prepends
+  PASS  the standalone result item is superseded by the merged call item
+  PASS  exactly one tool item after the merge (no duplicate)
+  PASS  merged tool item takes the call's args
+  PASS  merged tool item takes the result's output
+  PASS  merged tool item is done
+  PASS  merged projection equals single-shot conversion
+  PASS  append contributes the new rows' items
+  PASS  append keeps existing item ids
+  PASS  append grows the projection
+  PASS  three sessions resident at the cap
+  PASS  fourth session evicts the least-recently-used one
+  PASS  new session stays resident
+  PASS  pinned sessions do not count toward the resident cap
+  PASS  pinned live session survives eviction
+  PASS  oldest unpinned session evicts instead
+  PASS  evicted session re-opens via a fresh slice fetch
+  PASS  re-opened session restores its full projection
+  PASS  history body budget holds across sessions
+  PASS  byte budget evicts the oldest by weight
+  PASS  newest session survives byte-budget eviction
+  PASS  markdown cache returns stored value
+  PASS  markdown LRU evicts the least-recently-used entry
+  PASS  recently read markdown entry survives
+  PASS  markdown entries key on entryId + revision
+  PASS  active selection pins its markdown projection
+  PASS  refs in the newest page auto-fetch their chunks
+  PASS  fixture fits in one page
+  PASS  resolved full content replaces the inline preview
+  PASS  content resolution notifies subscribers with item patches
+  PASS  resolved content is served from the record
+  PASS  resolved content is not re-fetched
+  PASS  stale ref keeps the inline preview
+  PASS  latest page still projects
+  PASS  superseded load discards its late response
+  PASS  the latest load wins
+  PASS  evicted session discards its late response
+  PASS  evicted records never land
+  PASS  auto-fetch of the first load is in flight
+  PASS  late content chunk from a previous generation is discarded
+  PASS  stale cursor triggers a latest-page reload
+  PASS  reload replaces with the fresh newest page
+  PASS  paging resumes after the reload
+  PASS  older page prepends after reload
+  PASS  matching canonical fingerprint reuses the resident projection
+  PASS  resident projection retains its canonical revision
+  PASS  changed same-path fingerprint bypasses the resident projection
+  PASS  fresh projection adopts the advanced canonical digest
+  PASS  positive legacy slice revision implies a known canonical identity
+
+70 passed, 0 failed

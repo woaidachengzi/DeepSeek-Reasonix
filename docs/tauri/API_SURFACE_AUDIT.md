@@ -71,6 +71,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 **对话归档：** [单条归档、恢复与进程证据](evidence/2026-10-05-session-archive/README.md)。对照 Wails 可恢复回收站，Tauri 新增独立归档可见性状态，保留原历史/工件/schema9；确认归档、已归档列表、恢复并打开原 ID 已接入。Go race、完整 Tauri 前端回归/生产门禁、Rust232/5ignored 与 strict clippy 通过；真实组件浏览器三档无溢出。干净源码 `6e294180b` app-only 构建/严格签名、包内真实 sidecar 归档重启/继续发送与备份旧包回读原历史通过，三次退出0并清理。Wails 回收站导入/批量归档/归档预览与清空未迁移，原生 WebKit和真实模型网络/D/E/A/B/C 缺口保持。
 
+**Harness 对话显示：** [日期/复制与耗时折叠行](evidence/2026-10-05-harness-chat-chrome/README.md)。对照本地 Harness 最新源码，接入日期感知时间、中性用户气泡、独立最终回答及右侧展开箭头；单回答耗时行不提供空展开。前端全量 Tauri/Transcript 回归、生产构建和深浅色 1280/768/390px 真实组件浏览器通过，剪贴板在模拟宿主捕获。用户后续使用验收，原生 WebKit/真实模型及 D/E/A/B/C 缺口保持。
+
 **审批命令长文本：** [折行与窗口宽度验证](evidence/2026-10-05-approval-command-wrap/README.md)。对照 Wails 补齐公共卡片长文本折行和标题收缩；真实组件浏览器在 1280/768/390px 下无溢出、复制原文一致、允许/拒绝回调通过，长名称/说明与暗色主题补验通过。原生 WebKit/真实工具执行及其他 D/E/A/B/C 缺口保持。
 
 **MiMo v2.6 目录：** [官方来源与兼容升级](evidence/2026-10-05-mimo-v26-catalog/README.md)。补齐八个官方预设的 Flash/Pro；新建默认 Flash，旧预设视图追加新型号并保留默认和自定义项。配置/桥接回归、干净源码 app-only 构建和包内实际 sidecar 验证通过；旧服务设置/对话视图返回新型号，v2.6 Flash/Pro 请求均使用正确 ID。仅本机 mock，不包含真实 MiMo/原生 GUI 验收。
