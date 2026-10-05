@@ -1,0 +1,5 @@
+
+> reasonix-desktop-frontend@0.0.0 test:tauri-provider-connect /Users/jerry/temp/app/reasonix-tauri/desktop/frontend
+> node --import tsx src/__tests__/tauri-provider-connect.test.tsx
+
+PASS provider add modes, isolated drafts, folded details, credential refusal and refresh retry

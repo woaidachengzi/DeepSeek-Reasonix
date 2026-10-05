@@ -1,0 +1,35 @@
+warning: `/Users/jerry/.cargo/config` is deprecated in favor of `config.toml`
+  |
+  = help: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+   Compiling reasonix-tauri v0.1.0 (/Users/jerry/temp/app/reasonix-tauri/desktop/tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.90s
+     Running unittests src/main.rs (target/debug/deps/reasonix_tauri-4e84610828a36594)
+
+running 24 tests
+test keychain::tests::load_nonexistent_returns_none ... ok
+test keychain::tests::delete_secret ... ok
+test keychain::tests::explicit_import_keeps_legacy_store_and_refuses_overwrite ... ok
+test keychain::tests::explicit_source_import_refuses_existing_target_before_reading_source_and_preserves_source_on_rollback ... ok
+test keychain::tests::overwrite_secret ... ok
+test keychain::tests::real_bridge_import_save_restart_and_delete_keep_credentials_out_of_files ... ok
+test keychain::tests::real_bridge_restore_continues_after_one_credential_read_failure ... ok
+test keychain::tests::import_bridge_failure_removes_target_and_preserves_source ... ok
+test keychain::tests::rejects_empty_keys ... ok
+test keychain::tests::real_bridge_wails_env_import_preserves_original_and_survives_restart ... ok
+test keychain::tests::recognizes_only_named_provider_api_keys ... ok
+test keychain::tests::error_categories_never_echo_platform_attributes_and_windows_are_scoped ... ok
+test keychain::tests::failed_bridge_response_reconciles_both_copies ... ok
+test keychain::tests::missing_legacy_file_does_not_block_first_launch ... ok
+test keychain::tests::save_and_load_secret ... ok
+test keychain::tests::window_cannot_change_unrelated_keychain_entries ... ok
+test keychain::tests::import_and_manual_save_are_serialized_without_lost_user_write ... ok
+test keychain::tests::unavailable_profile_preserves_recovery_instruction_without_bridge_access ... ok
+test keychain::tests::rejects_oversized_legacy_file_without_importing_any_keys ... ok
+test keychain::tests::migration_failure_codes_are_precise_and_redacted ... ok
+test keychain::tests::rejects_symlinked_legacy_file_without_importing_target ... ok
+test keychain::tests::migrates_legacy_json_entries ... ok
+test keychain::tests::malformed_legacy_file_and_missing_or_denied_legacy_store_leave_target_empty ... ok
+test keychain::tests::validates_every_legacy_entry_before_writing_credentials ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 212 filtered out; finished in 0.00s
+

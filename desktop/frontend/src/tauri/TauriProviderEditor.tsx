@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { deleteTauriProviderConfig, discoverTauriProviderModels, installTauriProviderPreset, resetTauriProviderPreset, keychainSave, saveTauriProviderConfig, tauriMessageFrom, tauriProviderConfigs, tauriProviderSummary, type TauriProviderConfig, type TauriProviderConfigInput, type TauriProviderPreset, type TauriProviderSummary } from "../lib/tauriBridge";
+import { deleteTauriProviderConfig, discoverTauriProviderModels, installTauriProviderPreset, resetTauriProviderPreset, saveTauriProviderAPIKey, saveTauriProviderConfig, tauriMessageFrom, tauriProviderConfigs, tauriProviderSummary, type TauriProviderConfig, type TauriProviderConfigInput, type TauriProviderPreset, type TauriProviderSummary } from "../lib/tauriBridge";
 import { useT } from "../lib/i18n";
 
 const EMPTY: TauriProviderConfigInput = { name: "", displayName: "", kind: "openai", baseUrl: "", modelsUrl: "", clearModelsUrl: false, modelsUrlSet: false, noProxy: false, contextWindow: 0, responsesMode: "", balanceUrl: "", clearBalanceUrl: false, balanceUrlSet: false, models: [], default: "", useApiKey: true };
@@ -48,7 +48,7 @@ export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyC
     setPendingKeys(targets);
     try {
       for (const name of targets) {
-        await keychainSave(`api_key_${name}`, key);
+        await saveTauriProviderAPIKey(name, key);
         setPendingKeys(previous => previous.filter(target => target !== name));
       }
       onSummaryChange(await tauriProviderSummary());

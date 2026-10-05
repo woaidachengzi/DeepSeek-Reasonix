@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -696,5 +697,95 @@ func TestAgentPreferencesEndpointPersistsAndValidatesPreviewValues(t *testing.T)
 		if !strings.Contains(string(afterInvalid), preserved) {
 			t.Fatalf("saved agent config lost %q: %s", preserved, afterInvalid)
 		}
+	}
+}
+
+func TestDirectProviderAPIKeySaveClearAndReload(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	path := filepath.Join(home, "config.toml")
+	original := `default_model = "mimo/chat"
+[[providers]]
+name = "mimo"
+kind = "openai"
+base_url = "https://mimo.example/v1"
+api_key_env = "DIRECT_MIMO_TEST_KEY"
+models = ["chat", "flash"]
+default = "chat"
+[desktop]
+provider_access = ["mimo"]
+`
+	if err := os.WriteFile(path, []byte(original), 0600); err != nil {
+		t.Fatal(err)
+	}
+	bridge := newBridgeServer(testToken, "direct-key-fixture")
+	post := func(body, id string, auth bool) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/v1/settings/provider-api-key", strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set(requestIDHeader, id)
+		if auth {
+			r.Header.Set("Authorization", "Bearer "+testToken)
+		}
+		w := httptest.NewRecorder()
+		bridge.handler().ServeHTTP(w, r)
+		return w
+	}
+	body := `{"providerName":"mimo","apiKey":"fixture-direct-api-key"}`
+	if w := post(body, "no-auth", false); w.Code != http.StatusUnauthorized {
+		t.Fatal("unauthenticated credential write allowed")
+	}
+	configpkg.SetDesktopKeychainCredential("mimo", "fixture-old-keychain-key")
+	defer configpkg.ClearDesktopKeychainCredential("mimo")
+	w := post(body, "save-direct", true)
+	if w.Code != http.StatusOK || strings.Contains(w.Body.String(), "fixture-direct-api-key") || strings.Contains(w.Body.String(), "DIRECT_MIMO_TEST_KEY") {
+		t.Fatalf("save response not redacted: %d", w.Code)
+	}
+	if w := post(body, "save-direct", true); w.Code != http.StatusOK {
+		t.Fatal("idempotent save failed")
+	}
+	info, err := os.Stat(configpkg.UserCredentialsPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0600 {
+		t.Fatalf("credential permissions = %o", info.Mode().Perm())
+	}
+	// Simulate a new sidecar without the process environment or keychain overlay.
+	if err := os.Unsetenv("DIRECT_MIMO_TEST_KEY"); err != nil {
+		t.Fatal(err)
+	}
+	summary, err := loadProviderSummary()
+	if err != nil || len(summary.Providers) != 1 || !summary.Providers[0].Configured {
+		t.Fatalf("key did not survive reload: %v", err)
+	}
+	if err := persistDefaultModel("mimo/flash"); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{`{"providerName":"other","apiKey":"fixture"}`, `{"providerName":"mimo","apiKey":""}`, `{"providerName":"mimo","apiKey":"line1\nINJECTED_KEY=line2"}`} {
+		if w := post(bad, "bad-"+fmt.Sprint(len(bad)), true); w.Code != http.StatusBadRequest {
+			t.Fatal("invalid credential accepted")
+		}
+	}
+	if w := post(`{"providerName":"mimo","delete":true}`, "clear-direct", true); w.Code != http.StatusOK {
+		t.Fatalf("clear status = %d", w.Code)
+	}
+	summary, err = loadProviderSummary()
+	if err != nil || summary.Providers[0].Configured {
+		t.Fatal("cleared key remains ready")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "fixture-direct-api-key") {
+		t.Fatal("secret copied into config")
+	}
+	raw, err = os.ReadFile(configpkg.UserCredentialsPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "fixture-direct-api-key") {
+		t.Fatal("cleared secret remains in file")
 	}
 }

@@ -9,7 +9,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
-use crate::bridge::{BridgeStatus, BridgeSupervisor};
+use crate::bridge::BridgeSupervisor;
+#[cfg(test)]
+use crate::bridge::BridgeStatus;
 
 const LEGACY_SERVICE_NAME: &str = "com.reasonix.desktop";
 const WAILS_SERVICE_NAME: &str = "reasonix";
@@ -283,6 +285,9 @@ impl KeychainStore {
     }
 
     pub fn load_secret(&self, key: &str) -> Result<Option<String>, String> {
+        if let Some(error) = self.backend.availability_error() {
+            return Err(error.into());
+        }
         self.backend.load(key)
     }
 
@@ -293,6 +298,7 @@ impl KeychainStore {
     /// Restore provider keys after the bridge starts. The native credential
     /// store remains the source of truth; the bridge retains values only for
     /// its current lifetime so core sessions can resolve them without .env.
+    #[cfg(test)]
     pub fn restore_provider_api_keys(&self, supervisor: &BridgeSupervisor) -> Result<(), String> {
         let _guard = self
             .provider_sync
@@ -301,6 +307,7 @@ impl KeychainStore {
         self.restore_provider_api_keys_unlocked(supervisor)
     }
 
+    #[cfg(test)]
     pub fn restart_bridge(&self, supervisor: &BridgeSupervisor) -> Result<BridgeStatus, String> {
         let _guard = self
             .provider_sync
@@ -311,6 +318,7 @@ impl KeychainStore {
         Ok(status)
     }
 
+    #[cfg(test)]
     fn restore_provider_api_keys_unlocked(
         &self,
         supervisor: &BridgeSupervisor,
@@ -535,7 +543,12 @@ pub async fn keychain_import_legacy(
             Some("wails") => store.import_wails_provider_key(&supervisor, &provider),
             Some("wails-env") => store.import_wails_env_provider_key(&supervisor, &provider),
             _ => Err("unsupported credential import source".into()),
-        }.map_err(CredentialImportError::from)
+        }.map_err(CredentialImportError::from)?;
+        let value = store.load_secret(&format!("{PROVIDER_API_KEY_PREFIX}{provider}"))
+            .map_err(CredentialImportError::from)?
+            .ok_or(CredentialImportError::Unavailable)?;
+        supervisor.persist_provider_api_key(&provider, Some(&value))
+            .map(|_| ()).map_err(CredentialImportError::from)
     })
     .await
     .map_err(|_| CredentialImportError::Unavailable)?

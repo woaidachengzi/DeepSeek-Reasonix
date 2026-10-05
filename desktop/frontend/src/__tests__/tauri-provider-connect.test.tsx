@@ -14,15 +14,15 @@ const writes: string[] = [];
 const config = (name: string) => ({ name, displayName: name, kind: "openai", models: ["chat"], default: "chat", noProxy: false, contextWindow: 0, modelsUrlSet: false, balanceUrlSet: false, responsesMode: "", removable: true, revision: "r1" });
 const presets = () => [{ id: "two-routes", label: "Two routes", description: "API defaults", group: "API", recommended: true, status: installed ? "installed" : "available", revision: "r1", routes: ["alpha", "beta"].map(name => ({ name, kind: "openai", baseUrl: "https://example.com/v1", models: ["chat"], default: "chat" })) }, { id: "other", label: "Other", status: "available", revision: "r1", routes: [], description: "", group: "API", recommended: false }];
 const view = () => ({ protocolVersion: 1, providers: installed ? [config("alpha"), config("beta")] : [], presets: presets() });
-Object.assign(dom.window, { __TAURI_INTERNALS__: { async invoke(command: string, args?: { input?: { presetId?: string }; key?: string; value?: string }) {
+Object.assign(dom.window, { __TAURI_INTERNALS__: { async invoke(command: string, args?: { input?: { presetId?: string }; providerName?: string; apiKey?: string }) {
   if (command === "provider_configs") return view();
   if (command === "save_provider_config") { installs++; installed = true; return view(); }
   if (command === "provider_summary") {
     if (failRefresh || (failRefreshAfterKeys && written.size === 2)) { failRefresh = false; failRefreshAfterKeys = false; throw new Error("private refresh failure"); }
     return { protocolVersion: 1, providers: ["alpha", "beta"].map(name => ({ name, requiresKey: true, configured: written.has(name) })) };
   }
-  if (command === "keychain_save") {
-    const name = args!.key!.replace("api_key_", "");
+  if (command === "save_provider_api_key") {
+    const name = args!.providerName!;
     writes.push(name);
     if (name === "beta" && failKey) throw new Error("private credential failure");
     written.add(name); return;
@@ -69,7 +69,7 @@ assert.match(document.body.textContent!, /Connection saved; credentials could no
 assert.doesNotMatch(document.body.textContent!, /private credential failure/);
 assert.equal(document.querySelector<HTMLButtonElement>('[role="tab"]')!.disabled, true, "cannot orphan a partial credential retry by switching mode");
 failKey = false;
-await click("Save to Keychain");
+await click("Save API Key");
 assert.equal(installs, 1, "retry never reinstalls the committed config");
 assert.deepEqual(writes, ["alpha", "beta", "beta"], "retry preserves the key already committed for alpha");
 assert.equal(document.querySelector(".tauri-provider-key-retry"), null);
@@ -86,7 +86,7 @@ await change(key, "refresh-canary");
 await click("Save");
 assert.ok(document.querySelector(".tauri-provider-key-retry"), "failed state query retains the retry and secret draft");
 const beforeRefreshRetryWrites = writes.length;
-await click("Save to Keychain");
+await click("Save API Key");
 assert.equal(writes.length, beforeRefreshRetryWrites, "summary-only retry does not rewrite keys already stored");
 assert.equal(installs, 2, "refresh retry does not duplicate a committed connection");
 await act(async () => root.unmount());

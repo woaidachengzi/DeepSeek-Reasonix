@@ -544,6 +544,36 @@ func validateModelRole(cfg *configpkg.Config, role, ref, root string) error {
 	return nil
 }
 
+func persistProviderAPIKey(request setProviderKeyRequest) error {
+	name := strings.TrimSpace(request.ProviderName)
+	value := strings.TrimSpace(request.APIKey)
+	if name == "" || len(name) > 256 || (!request.Delete && value == "") || len(value) > 16384 || strings.ContainsAny(value, "\r\n\x00") {
+		return errors.New("invalid provider credential")
+	}
+	unlock := configpkg.LockUserConfigEdits()
+	defer unlock()
+	cfg, err := configpkg.LoadUserConfigReadOnly()
+	if err != nil {
+		return err
+	}
+	provider, ok := cfg.Provider(name)
+	if !ok || !providerAccessAllowed(cfg.Desktop.ProviderAccess, name) || !provider.RequiresAPIKey() || !configpkg.IsValidCredentialKey(provider.APIKeyEnv) {
+		return errors.New("provider credential source is unavailable")
+	}
+	if request.Delete {
+		if err := configpkg.RemoveCredential(provider.APIKeyEnv); err != nil {
+			return err
+		}
+	} else {
+		if _, err := configpkg.StoreCredentialLines([]string{provider.APIKeyEnv + "=" + value}); err != nil {
+			return err
+		}
+	}
+	// A previous explicit keychain import must not override the newly saved key.
+	configpkg.ClearDesktopKeychainCredential(name)
+	return nil
+}
+
 func updateProviderKey(request setProviderKeyRequest) error {
 	name := strings.TrimSpace(request.ProviderName)
 	if name == "" {

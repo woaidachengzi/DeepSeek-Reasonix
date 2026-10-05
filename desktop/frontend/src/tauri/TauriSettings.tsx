@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { Check, ArrowLeft, Search, X, Keyboard, Globe, Languages, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles, Users, Webhook, Package, Bot } from "lucide-react";
-import { tauriProviderConfigs, deleteTauriProviderConfig, type TauriProviderConfig, tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, setTauriAgentPreference, testTauriProviderModel, tauriDesktopPreferences, tauriActiveThemeId, setTauriActiveThemeId, tauriUserThemes, tauriPluginThemes, saveTauriUserTheme, deleteTauriUserTheme, importTauriUserTheme, exportTauriUserTheme, setTauriDesktopApproval, setTauriDesktopTerminalTheme, setTauriDesktopAppearance, setTauriDesktopLanguage, setTauriDesktopCurrency, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, tauriZoomFactor, setTauriZoomFactor, keychainSave, keychainDelete, keychainImportLegacy, keychainImportWails, keychainImportWailsEnv, keychainImportFailureCode, tauriNotificationPermission, type TauriNotificationPermission, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, tauriCapabilityDiagnostics, tauriRuntimeDoctor, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
+import { tauriProviderConfigs, deleteTauriProviderConfig, type TauriProviderConfig, tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, setTauriAgentPreference, testTauriProviderModel, tauriDesktopPreferences, tauriActiveThemeId, setTauriActiveThemeId, tauriUserThemes, tauriPluginThemes, saveTauriUserTheme, deleteTauriUserTheme, importTauriUserTheme, exportTauriUserTheme, setTauriDesktopApproval, setTauriDesktopTerminalTheme, setTauriDesktopAppearance, setTauriDesktopLanguage, setTauriDesktopCurrency, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, tauriZoomFactor, setTauriZoomFactor, saveTauriProviderAPIKey, clearTauriProviderAPIKey, keychainImportLegacy, keychainImportWails, keychainImportWailsEnv, keychainImportFailureCode, tauriNotificationPermission, type TauriNotificationPermission, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, tauriCapabilityDiagnostics, tauriRuntimeDoctor, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
 import { applyTerminalThemePreference, normalizeTerminalThemePreference, getCustomTerminalPalette, setCustomTerminalPalette, DEFAULT_TERMINAL_PALETTE, type TerminalPalette, type TerminalPaletteKey, type TerminalThemePreference } from "../lib/terminalTheme";
 import { THEME_STYLES, type Theme, type ThemeStyle } from "../lib/theme";
 import { useI18n, useT, type DictKey, type LangPref, type Translator } from "../lib/i18n";
@@ -1506,11 +1506,11 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
     setKeyStatus(prev => ({ ...prev, [providerName]: { message: t("settings.previewProvider.keyPending"), error: false } }));
     try {
       let deleted = false;
-      if (action === "save") await keychainSave(`api_key_${providerName}`, key);
+      if (action === "save") await saveTauriProviderAPIKey(providerName, key);
       else if (action === "import") await keychainImportLegacy(providerName);
       else if (action === "import-wails") await keychainImportWails(providerName);
       else if (action === "import-wails-env") await keychainImportWailsEnv(providerName);
-      else deleted = await keychainDelete(`api_key_${providerName}`);
+      else deleted = await clearTauriProviderAPIKey(providerName);
       if (action === "save" && mounted.current) {
         setApiKeyInputs(prev => ({ ...prev, [providerName]: prev[providerName] === key ? "" : prev[providerName] }));
       }
@@ -1653,6 +1653,7 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
                     <button type="button" className="tauri-settings-button" onClick={() => void handleApiKeyAction(provider.name, "save")} disabled={keyBusy || configBusy || Boolean(deleteReview) || !apiKeyInputs[provider.name]}>
                       {t("settings.previewProvider.saveKey")}
                     </button>
+                    <details><summary>导入旧版凭据（可选）</summary>
                     <button type="button" className="tauri-settings-button" onClick={() => void handleApiKeyAction(provider.name, "import")} disabled={keyBusy || configBusy || Boolean(deleteReview)}>
                       {t("settings.previewProvider.importLegacyKey")}
                     </button>
@@ -1662,8 +1663,9 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
                     <button type="button" className="tauri-settings-button" onClick={() => void handleApiKeyAction(provider.name, "import-wails")} disabled={keyBusy || configBusy || Boolean(deleteReview)}>
                       {t("settings.previewProvider.importWailsKey")}
                     </button>
+                    </details>
                     <button type="button" className="tauri-settings-button tauri-settings-button--danger" onClick={() => void handleApiKeyAction(provider.name, "delete")} disabled={keyBusy || configBusy || Boolean(deleteReview)}>
-                      清除钥匙串密钥
+                      清除 API Key
                     </button>
                     {pendingApply[provider.name] && currentSessionState && onApplyToCurrentSession && (
                       <button type="button" className="tauri-settings-button" onClick={() => void handleApplyToCurrentSession(provider.name)} disabled={keyBusy || configBusy || Boolean(deleteReview) || currentSessionState !== "idle" || currentSessionHasAttachments} title={currentSessionState !== "idle" ? t("common.busyHint") : currentSessionHasAttachments ? t("settings.previewProvider.resolveAttachments") : undefined}>

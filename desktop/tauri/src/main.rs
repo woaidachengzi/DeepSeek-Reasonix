@@ -561,11 +561,45 @@ fn bridge_status(supervisor: State<'_, BridgeSupervisor>) -> BridgeStatus {
 }
 
 #[tauri::command]
-fn restart_bridge(
-    supervisor: State<'_, BridgeSupervisor>,
-    keychain: State<'_, keychain::KeychainStore>,
-) -> Result<BridgeStatus, String> {
-    keychain.restart_bridge(&supervisor)
+async fn save_provider_api_key(
+    window: tauri::WebviewWindow,
+    provider_name: String,
+    api_key: String,
+) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("credential operations require the main window".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        window
+            .state::<BridgeSupervisor>()
+            .persist_provider_api_key(&provider_name, Some(&api_key))
+            .map(|_| ())
+    })
+    .await
+    .map_err(|_| "credential operation failed; retry saving")?
+}
+
+#[tauri::command]
+async fn clear_provider_api_key(
+    window: tauri::WebviewWindow,
+    provider_name: String,
+) -> Result<bool, String> {
+    if window.label() != "main" {
+        return Err("credential operations require the main window".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        window
+            .state::<BridgeSupervisor>()
+            .persist_provider_api_key(&provider_name, None)
+            .map(|_| true)
+    })
+    .await
+    .map_err(|_| "credential operation failed; retry clearing")?
+}
+
+#[tauri::command]
+fn restart_bridge(supervisor: State<'_, BridgeSupervisor>) -> Result<BridgeStatus, String> {
+    supervisor.restart()
 }
 
 #[tauri::command]
@@ -3699,13 +3733,8 @@ fn setup_preview(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
         }
         app.manage(appearance);
     }
-    if let Err(error) = keychain.restore_provider_api_keys(&supervisor) {
-        // A native credential service can be temporarily unavailable.
-        // Keep the app usable with its existing file-backed settings;
-        // affected credentials remain unavailable until the next
-        // startup or a user saves them again; other entries restore.
-        eprintln!("Reasonix could not restore system keychain credentials: {error}");
-    }
+    // Normal startup reads profile credentials through the core; never trigger
+    // a system keychain authorization prompt merely by opening Preview.
     let notifications = notifications::NotificationState::for_profile(&profile, &app.config().identifier);
     app.manage(std::sync::Arc::clone(&notifications));
     notifications::NotificationState::install(app.handle(), &notifications);
@@ -3950,6 +3979,8 @@ fn main() {
             legacy_ui_preferences,
             preview_runtime_info,
             provider_summary,
+            save_provider_api_key,
+            clear_provider_api_key,
             provider_configs,
             save_provider_config,
             delete_provider_config,

@@ -2032,6 +2032,17 @@ export function tauriTurnFailure(event: Pick<TauriBridgeEvent, "eventKind" | "pa
   return reason || "本轮未完成：Agent 没有返回结果";
 }
 
+/** Save a model API key in the Preview profile's local credential store. */
+export async function saveTauriProviderAPIKey(providerName: string, apiKey: string): Promise<void> {
+  requireTauri();
+  await invoke<void>("save_provider_api_key", { providerName, apiKey });
+}
+
+export async function clearTauriProviderAPIKey(providerName: string): Promise<boolean> {
+  requireTauri();
+  return invoke<boolean>("clear_provider_api_key", { providerName });
+}
+
 // ── Keychain API ──────────────────────────────────────────────────────
 
 /** Save a secret to the system keychain. */
