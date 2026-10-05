@@ -13,10 +13,18 @@
 
 `pnpm test:tauri` 全套通过；`pnpm test:transcript` 通过（含 single-writer 静态门禁、kernel/视口/分页竞态与70项 projection 断言）；`pnpm build` 生产契约/hooks/类型/CSS/主题/bundle 门禁通过。原始日志在本目录。Transcript 首次在沙箱内遇到 tsx IPC `listen EPERM`，在获准的沙箱外运行通过；Tauri 测试末尾已有 SVG 空资源夹具警告不是本次浏览器结果，未隐藏。
 
-Browser plugin not available，使用已有 Playwright 和已安装的 headless Google Chrome。实际 `TauriSessionApp`、history renderer、共享 CopyButton 和生产 CSS；仅 bridge/history/native invoke-event 响应模拟，剪贴板 write 捕获在页面内，不操作系统剪贴板、用户账号或真实模型。临时页面 `http://127.0.0.1:5197/chat-qa`，before 为修改前 HEAD 文件，after 为本次工作区源文件。
+Browser plugin not available，使用已有 Playwright 和已安装的 headless Google Chrome。实际 `TauriSessionApp`、history renderer、共享 CopyButton 和生产 CSS；仅 bridge/history/native invoke-event 响应模拟，剪贴板 write 捕获在页面内，不操作系统剪贴板、用户账号或真实模型。临时页面 `http://127.0.0.1:5197/chat-qa`，before 为修改前固定 revision `57a1b88b3` 文件，after 为本次工作区源文件。
 
 深色/浅色 × 1280/768/390px 六组检查均通过：页面 title/非空实际内容、无框架 overlay、console error/warning 为空、元信息/状态行在 transcript 内且没有横向溢出。额外验证展开/收起中间输出、最终回答始终可见、单回答完成行无空箭头、往日/跨年时间、复制原文与成功图标。宽屏/窄屏截图已人工查看，原始几何和交互结果在 before.json/after.json，脚本为 browser-qa.mjs。
 
 ## 包与范围
 
 按已有用户授权 review/提交后构建直接 `.app`，不生成 ZIP/DMG、不替换 Applications。保存前一包为 `.app.rollback`，避免新增应用搜索图标；包的 source/hash/signature/回退位置另见 package-receipt.json（构建后追加）。当前证据不包含原生 WebKit GUI 和真实模型网络验收。用户接受后续通过日常使用反馈；原 D/E/A/B/C 及正式签名/公证缺口保持，未正式发布或切换默认下载项。
+
+## 已构建直接运行包
+
+干净源码 `f2770c124` 的 `pnpm tauri:build --bundles app` 成功，包含完整生产前端门禁和原生 release 构建；app-build.log 记录真实命令输出。包内 host 含相同源 revision；Go sidecar metadata 为相同 revision / vcs.modified=false。新包和备份旧包的 `codesign --verify --deep --strict` 均通过。
+
+package-receipt.json 记录准确程序位置、SHA256 和旧包临时备份；package-check.py 在一次性 REASONIX_HOME/STATE_HOME 档案中执行新包实际 sidecar：未授权 health 401、授权 health 200/ok、shutdown 202、退出0、ready文件移除。没有启动原生 GUI、调用外部模型或修改用户配置。这一最小包检查不替代前述真实组件浏览器 QA，也不升级为 D/E 整体原生验收。
+
+打包最初两次没有执行，因为自动审批服务返回 `Selected model is at capacity`，并明确不是 unsafe 判定；通过相同审批流程等待后重试成功，没有绕过审查。程序仍为 ad-hoc 本地 Preview，没有公证、正式发布、Applications 覆盖或默认下载切换。
