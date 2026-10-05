@@ -69,6 +69,8 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 #### 当前候选验收索引（2026-10-05）
 
+**MiMo v2.6 目录：** [官方来源与兼容升级](evidence/2026-10-05-mimo-v26-catalog/README.md)。补齐八个官方预设的 Flash/Pro；新建默认 Flash，旧预设视图追加新型号并保留默认和自定义项。配置/桥接回归通过；包内验收待补。
+
 **保存 API Key 后应用到当前会话：** [失败保护与状态迁移](evidence/2026-10-05-settings-apply/README.md)。Review 的三处问题已修复：使用已有 boot.Rebuild，保留历史/本会话授权/审批模式；读取或构建失败拒绝新消息并保留旧会话，相关 race 回归通过。干净源码 app-only 构建与包内真实 sidecar/本机模拟服务对话通过：保存轮换 Key 后同会话发送、历史/审批模式保留、错误恢复、模型切换、重启和退出。原生 GUI/真实 MiMo 与其他迁移缺口保持。
 
 **API Key 简化（用户要求）：** [本地凭据直接保存与使用](evidence/2026-10-05-direct-api-key/README.md)。模型添加和普通保存不再依赖系统钥匙串，启动/重启不自动读钥匙串；原生鉴权/权限、0600 持久化/重载、组件、生产构建及 Rust 回归通过。旧凭据仅保留显式可选迁移，真实 MiMo 请求及其他 D/E/A/B/C 缺口保持。

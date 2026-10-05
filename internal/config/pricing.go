@@ -218,9 +218,9 @@ func mimoDomesticPrices(models []string) map[string]*provider.Pricing {
 	prices := map[string]*provider.Pricing{}
 	for _, model := range models {
 		switch strings.TrimSpace(model) {
-		case "mimo-v2.5-pro", "mimo-v2-pro":
+		case "mimo-v2.6-pro", "mimo-v2.5-pro", "mimo-v2-pro":
 			prices[model] = mimoV25ProPrice()
-		case "mimo-v2.5", "mimo-v2-omni":
+		case "mimo-v2.6-flash", "mimo-v2.5", "mimo-v2-omni":
 			prices[model] = mimoV25Price()
 		case "mimo-v2-flash":
 			prices[model] = mimoV2FlashPrice()

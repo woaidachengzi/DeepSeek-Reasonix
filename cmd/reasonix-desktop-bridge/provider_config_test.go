@@ -270,7 +270,7 @@ func TestPreviewPresetResetRestoresCuratedRouteAndPreservesCredentialSource(t *t
 		t.Fatal(err)
 	}
 	entry, ok := cfg.Provider("mimo-api")
-	if !ok || entry.BaseURL != "https://api.xiaomimimo.com/v1" || entry.DefaultModel() != "mimo-v2.5-pro" || entry.APIKeyEnv != "MIMO_API_KEY" || entry.DisplayName != "My MiMo" || cfg.DefaultModel != "mimo-api/mimo-v2.5-pro" {
+	if !ok || entry.BaseURL != "https://api.xiaomimimo.com/v1" || entry.DefaultModel() != "mimo-v2.6-flash" || entry.APIKeyEnv != "MIMO_API_KEY" || entry.DisplayName != "My MiMo" || cfg.DefaultModel != "mimo-api/mimo-v2.6-flash" {
 		t.Fatalf("reset provider = %+v", entry)
 	}
 	if err := persistProviderPreset(input, testToken); err == nil {

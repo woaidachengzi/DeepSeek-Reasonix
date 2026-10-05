@@ -824,6 +824,7 @@ func normalizeConfigForEdit(cfg *Config) bool {
 	normalizeLegacyProviderModels(cfg)
 	normalizeDesktopOfficialProviderAccess(cfg)
 	normalizeOfficialDeepSeekModels(cfg)
+	changed = normalizeLegacyMimoV26Catalog(cfg) || changed
 	migrateBillingDisplayCurrency(cfg)
 	freezeProviderBillingCurrencies(cfg)
 	applyDeepSeekOfficialDefaultPricing(cfg)
