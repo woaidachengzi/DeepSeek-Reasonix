@@ -557,7 +557,7 @@ func persistProviderAPIKey(request setProviderKeyRequest) error {
 		return err
 	}
 	provider, ok := cfg.Provider(name)
-	if !ok || !providerAccessAllowed(cfg.Desktop.ProviderAccess, name) || !provider.RequiresAPIKey() || !configpkg.IsValidCredentialKey(provider.APIKeyEnv) {
+	if !ok || !providerAccessAllowed(cfg.Desktop.ProviderAccess, name) || !configpkg.IsValidCredentialKey(provider.APIKeyEnv) {
 		return errors.New("provider credential source is unavailable")
 	}
 	if request.Delete {

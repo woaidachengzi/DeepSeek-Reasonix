@@ -42,9 +42,9 @@ export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyC
     setModelText(provider?.models.join("\n") ?? "");
   };
 
-  const finishCredentials = async (names: string[], key: string) => {
+  const finishCredentials = async (names: string[], key: string, force = false) => {
     const summary = await tauriProviderSummary();
-    const targets = summary.providers.filter(provider => names.includes(provider.name) && provider.requiresKey && !provider.configured).map(provider => provider.name);
+    const targets = summary.providers.filter(provider => names.includes(provider.name) && (force || (provider.requiresKey && !provider.configured))).map(provider => provider.name);
     setPendingKeys(targets);
     try {
       for (const name of targets) {
@@ -64,7 +64,7 @@ export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyC
     if (saving || !pendingKeys.length) return;
     setSaving(true); setError("");
     try {
-      await finishCredentials(pendingKeys, adding === "catalog" ? presetKey.trim() : apiKey.trim());
+      await finishCredentials(pendingKeys, adding === "catalog" ? presetKey.trim() : apiKey.trim(), adding !== "catalog");
       setPresetKey(""); setApiKey(""); setAdding(null); setEditing(null);
       setMessage(t("settings.previewProvider.message.saved"));
     } catch { setError(t("settings.previewProvider.connectionKeyRetry")); }
@@ -117,7 +117,7 @@ export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyC
       setEditingExisting(true);
       if (editing.useApiKey && apiKey.trim()) {
         setPendingKeys([editing.name]);
-        try { await finishCredentials([editing.name], apiKey.trim()); }
+        try { await finishCredentials([editing.name], apiKey.trim(), true); }
         catch { setError(t("settings.previewProvider.connectionKeyRetry")); return; }
       } else {
         try { onSummaryChange(await tauriProviderSummary()); }

@@ -789,3 +789,30 @@ provider_access = ["mimo"]
 		t.Fatal("cleared secret remains in file")
 	}
 }
+
+func TestDirectLocalProviderAcceptsExplicitAPIKey(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	config := `[[providers]]
+name = "local-auth"
+kind = "openai"
+base_url = "http://127.0.0.1:9999/v1"
+api_key_env = "LOCAL_EXPLICIT_KEY"
+models = ["chat"]
+`
+	if err := os.WriteFile(configpkg.UserConfigPath(), []byte(config), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := persistProviderAPIKey(setProviderKeyRequest{ProviderName: "local-auth", APIKey: "fixture-local-auth"}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := configpkg.LoadUserConfigReadOnly()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, _ := cfg.Provider("local-auth")
+	p.ResolveAPIKeyForRoot(".")
+	if p.APIKey() != "fixture-local-auth" {
+		t.Fatal("local explicit API key was dropped")
+	}
+}

@@ -7,3 +7,5 @@
 Go bridge/internal/config 回归通过：无授权写入拒绝、idempotency、0600、本地保存后清空进程环境再读仍就绪、选择另一模型、旧内存覆盖移除、无效来源/空值/换行注入拒绝、清除后的未就绪与密钥不回传。组件测试覆盖正常添加、已有卡片保存、重试和模型选择器；完整前端生产 build、Rust keychain 24 个隔离单测和 clippy --all-targets -D warnings 通过。CUA 隔离真实组件 + mock host，5197/direct-key-qa.html：选择 MiMo、填写模拟 API Key、保存、模型就绪、选择 mimo-v2.6-flash 成功，console error/warn 空；截图 browser-direct-key.png。页面、server、tab 已清理。真实 MiMo 付费连接未调用。
 
 本轮按用户要求调整 D 凭据默认方案；钥匙串保留显式迁移路径，其他 D/E/A/B/C 验收缺口保持，不能据此宣布迁移完成或正式发布。原候选包可回退；本轮继续 app-only，不生成 ZIP/DMG。
+
+包内 smoke 夹具校正：local BaseURL 核心默认允许无密钥，不能用 configured=false 作为其断言；改用 MiMo 官方 BaseURL + 明确的本机 mock request_url，且 mock 按实际 MiMo api-key 请求头校验。初次夹具不匹配已清理，未调用真实 MiMo。另补显式 local APIKeyEnv 可保存边界，不以 RequiresAPIKey() 阻止用户提供本地代理密钥；新自定义连接的用户输入密钥不再因 local configured=true 被跳过，重试保持该行为。新增 Go 回归及连接组件回归通过。
