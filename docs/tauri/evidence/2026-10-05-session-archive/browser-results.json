@@ -1,0 +1,44 @@
+{
+  "url": "http://127.0.0.1:5199/archive-qa",
+  "title": "Reasonix 对话归档验收",
+  "browser": "Browser plugin not available; existing Playwright / headless installed Chrome",
+  "actualComponents": "TauriSessionApp / SessionRow; bridge responses and history simulated",
+  "checks": [
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "width": 620,
+      "inside": true,
+      "overflow": false
+    },
+    {
+      "viewport": {
+        "width": 900,
+        "height": 760
+      },
+      "width": 620,
+      "inside": true,
+      "overflow": false
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 900
+      },
+      "width": 358,
+      "inside": true,
+      "overflow": false
+    }
+  ],
+  "errors": [],
+  "cases": [
+    "archive current idle conversation",
+    "ordinary list hides committed archive",
+    "no permanent delete invoked",
+    "reload retains archive fixture state",
+    "responsive archived dialog",
+    "restore reopens original ID with history"
+  ]
+}

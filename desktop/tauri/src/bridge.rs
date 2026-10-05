@@ -191,6 +191,22 @@ pub struct SessionDirectoryPage {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ArchivedSession {
+    pub session_id: String,
+    pub title: String,
+    pub workspace_root: Option<String>,
+    pub archived_at_ms: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionArchiveResponse {
+    protocol_version: u8,
+    sessions: Vec<ArchivedSession>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PendingSessionDelete {
     pub id: String,
     pub title: String,
@@ -2401,6 +2417,39 @@ impl BridgeSupervisor {
             return Err("desktop bridge scan import response is invalid".to_string());
         }
         Ok(envelope.session_ids)
+    }
+
+    pub fn session_archives(
+        &self,
+        change: Option<(String, bool)>,
+    ) -> Result<Vec<ArchivedSession>, String> {
+        let (method, body, request_id) = if let Some((id, archived)) = change {
+            let id = session_path_component(&id)?;
+            (
+                "POST",
+                Some(json!({"sessionId": id, "archived": archived})),
+                Some(opaque_secret()?),
+            )
+        } else {
+            ("GET", None, None)
+        };
+        let response = self.request_json(method, "/v1/sessions/archives", body, request_id.as_deref())?;
+        let envelope: SessionArchiveResponse = serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != PROTOCOL_VERSION || envelope.sessions.len() > 10_000 {
+            return Err("desktop bridge session archives are invalid".into());
+        }
+        let mut ids = std::collections::HashSet::new();
+        for item in &envelope.sessions {
+            session_path_component(&item.session_id)?;
+            if !ids.insert(&item.session_id)
+                || item.archived_at_ms <= 0
+                || item.title.len() > 1024
+                || item.workspace_root.as_ref().is_some_and(|root| root.len() > 4096)
+            {
+                return Err("desktop bridge archived conversation is invalid".into());
+            }
+        }
+        Ok(envelope.sessions)
     }
 
     pub fn delete_session(
@@ -7060,6 +7109,44 @@ mod tests {
             .iter()
             .any(|message| message.content == "preview SQLite answer"));
         supervisor.stop().expect("stop managed Preview sidecar");
+    }
+
+    #[test]
+    fn archive_preserves_artifacts_and_restores_after_bridge_restart() {
+        let Some(binary) = bridge_under_test() else { return; };
+        let _env = crate::test_env::guard();
+        let home = tempfile::tempdir().expect("isolated archive profile");
+        std::env::set_var("REASONIX_HOME", home.path());
+        std::env::set_var("REASONIX_STATE_HOME", home.path());
+        let supervisor = BridgeSupervisor::with_binary(binary);
+        supervisor.start().expect("start archive bridge");
+        let opened = supervisor.open_session(OpenSessionRequest {
+            session_id: "archive-first".into(), workspace_root: None,
+        }).expect("open archive target");
+        supervisor.rename_session(RenameSessionRequest {
+            session_id: opened.id.clone(), title: "Keep history".into(),
+        }).expect("name archive");
+        let metadata_path = format!("{}.meta", opened.path);
+        let metadata = std::fs::read(&metadata_path).expect("empty conversation title metadata");
+        let archived = supervisor.session_archives(Some((opened.id.clone(), true)))
+            .expect("archive owned idle session");
+        assert_eq!(archived.len(), 1);
+        assert_eq!(archived[0].session_id, opened.id);
+        assert_eq!(std::fs::read(&metadata_path).expect("archived title metadata"), metadata);
+        supervisor.stop().expect("exit archived bridge");
+        supervisor.start().expect("restart archived bridge");
+        assert_eq!(supervisor.session_archives(None).expect("read archive after restart").len(), 1);
+        assert!(supervisor.open_session(OpenSessionRequest {
+            session_id: opened.id.clone(), workspace_root: None,
+        }).is_err());
+        let restored = supervisor.session_archives(Some((opened.id.clone(), false)))
+            .expect("restore archive");
+        assert!(restored.is_empty());
+        let reopened = supervisor.open_session(OpenSessionRequest {
+            session_id: opened.id, workspace_root: None,
+        }).expect("open restored original");
+        assert_eq!(reopened.path, opened.path);
+        supervisor.stop().expect("exit restored bridge");
     }
 
     // Deleting is the only bridge operation that destroys user data, so the

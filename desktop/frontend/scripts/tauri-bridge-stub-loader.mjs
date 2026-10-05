@@ -59,6 +59,20 @@ export function onTauriOpenSettings(callback) { globalThis.__openNativeSettings 
 
 export function newTauriSessionId() { return "tauri-stub-session"; }
 
+export function tauriSessionArchives() {
+  record("bridge_session_archives");
+  if (globalThis.__archiveReadError) return Promise.reject(new Error(globalThis.__archiveReadError));
+  return Promise.resolve((globalThis.__archivedSessions ?? []).slice());
+}
+export function changeTauriSessionArchive(sessionId, archived) {
+  record("bridge_change_session_archive", { sessionId, archived });
+  if (globalThis.__archiveChangeError) return Promise.reject(new Error(globalThis.__archiveChangeError));
+  const items = (globalThis.__archivedSessions ?? []).filter(item => item.sessionId !== sessionId);
+  if (archived) { const tab=(globalThis.__workbenchSessions ?? []).find(item => item.sessionId === sessionId); items.push({sessionId, title:tab?.title ?? "新对话", workspaceRoot:tab?.workspaceRoot, archivedAtMs:Date.now()}); }
+  globalThis.__archivedSessions=items;
+  return Promise.resolve(items.slice());
+}
+
 export function tauriBridgeStatus() { record("bridge_status"); return Promise.resolve({ running: true, protocolVersion: 1 }); }
 export function restartTauriBridge() { record("restart_bridge"); return Promise.resolve({ running: true, protocolVersion: 1 }); }
 export function previewProfileStatus() { return Promise.resolve({ previewHome: "/tmp", previewConfigExists: true, stableConfigExists: false, importAvailable: false, managedProfile: true }); }
@@ -206,6 +220,8 @@ export function tauriZoomFactor() { record("get_zoom_factor"); return Promise.re
 export function setTauriZoomFactor(factor) { record("set_zoom_factor", { factor }); return Promise.resolve(factor); }
 export function getTauriCloseBehavior() { return Promise.resolve("keep_running"); }
 export function setTauriCloseBehavior(behavior) { record("set_close_behavior", { behavior }); return Promise.resolve(behavior); }
+export function saveTauriProviderAPIKey(providerName, apiKey) { record("save_provider_api_key", { providerName, apiKey }); return Promise.resolve(); }
+export function clearTauriProviderAPIKey(providerName) { record("clear_provider_api_key", { providerName }); return Promise.resolve(true); }
 export function keychainSave(key, value) { record("keychain_save", { key, value }); return Promise.resolve(); }
 export function keychainImportLegacy(provider) { record("keychain_import_legacy", { provider }); return Promise.resolve(); }
 export function keychainImportWailsEnv(provider) { record("keychain_import_legacy", { provider, source: "wails-env" }); return Promise.resolve(); }

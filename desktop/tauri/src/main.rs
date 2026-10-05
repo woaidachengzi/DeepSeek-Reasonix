@@ -645,6 +645,22 @@ fn bridge_rename_session(
 }
 
 #[tauri::command]
+fn bridge_session_archives(
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<Vec<bridge::ArchivedSession>, String> {
+    supervisor.session_archives(None)
+}
+
+#[tauri::command]
+fn bridge_change_session_archive(
+    supervisor: State<'_, BridgeSupervisor>,
+    session_id: String,
+    archived: bool,
+) -> Result<Vec<bridge::ArchivedSession>, String> {
+    supervisor.session_archives(Some((session_id, archived)))
+}
+
+#[tauri::command]
 fn bridge_delete_session(
     supervisor: State<'_, BridgeSupervisor>,
     request: SessionRequest,
@@ -3926,6 +3942,8 @@ fn main() {
             bridge_session_approval_mode,
             bridge_rename_session,
             bridge_delete_session,
+            bridge_session_archives,
+            bridge_change_session_archive,
             bridge_pending_session_deletes_page,
             bridge_pending_session_title_recoveries,
             list_mcp_servers,

@@ -1632,6 +1632,23 @@ export async function renameTauriBridgeSession(sessionId: string, title: string)
   return invoke<TauriBridgeSession>("bridge_rename_session", { request: { sessionId, title } });
 }
 
+export interface TauriArchivedSession {
+  sessionId: string;
+  title: string;
+  workspaceRoot?: string;
+  archivedAtMs: number;
+}
+
+export async function tauriSessionArchives(): Promise<TauriArchivedSession[]> {
+  requireTauri();
+  return invoke<TauriArchivedSession[]>("bridge_session_archives");
+}
+
+export async function changeTauriSessionArchive(sessionId: string, archived: boolean): Promise<TauriArchivedSession[]> {
+  requireTauri();
+  return invoke<TauriArchivedSession[]>("bridge_change_session_archive", { sessionId, archived });
+}
+
 export interface TauriBridgeDeletedSession {
   protocolVersion: number;
   deleted: boolean;

@@ -34,6 +34,7 @@ import (
 	"reasonix/internal/pathidentity"
 	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
+	"reasonix/internal/sessionarchive"
 	"reasonix/internal/sessioncontext"
 	"reasonix/internal/sessionidentity"
 	sessionstore "reasonix/internal/store"
@@ -84,7 +85,19 @@ func (f *controllerFactory) options(request desktopbridge.OpenRequest) (boot.Opt
 	return opts, lifecycleSink, nil
 }
 
+func (f *controllerFactory) ValidateOpen(request desktopbridge.OpenRequest) error {
+	if archived, err := sessionarchive.Contains(sessionArchivePath(), request.SessionID); err != nil {
+		return err
+	} else if archived {
+		return fmt.Errorf("%w: conversation is archived; restore it first", desktopbridge.ErrSessionConflict)
+	}
+	return nil
+}
+
 func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+	if err := f.ValidateOpen(request); err != nil {
+		return nil, err
+	}
 	opts, lifecycleSink, err := f.options(request)
 	if err != nil {
 		return nil, err

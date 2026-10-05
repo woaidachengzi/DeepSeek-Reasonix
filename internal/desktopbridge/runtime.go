@@ -389,6 +389,10 @@ func NewRuntimeManager(factory RuntimeFactory) *RuntimeManager {
 	return &RuntimeManager{factory: factory}
 }
 
+// RuntimeOpenAdmission performs read-only policy validation before Switch
+// releases the current controller. Archive errors must preserve that owner.
+type RuntimeOpenAdmission interface{ ValidateOpen(OpenRequest) error }
+
 func (m *RuntimeManager) Open(ctx context.Context, request OpenRequest) (SessionView, error) {
 	request.SessionID = strings.TrimSpace(request.SessionID)
 	request.WorkspaceRoot = strings.TrimSpace(request.WorkspaceRoot)
@@ -400,6 +404,12 @@ func (m *RuntimeManager) Open(ctx context.Context, request OpenRequest) (Session
 	if m.closed {
 		m.mu.Unlock()
 		return SessionView{}, ErrClosed
+	}
+	if admission, ok := m.factory.(RuntimeOpenAdmission); ok {
+		if err := admission.ValidateOpen(request); err != nil {
+			m.mu.Unlock()
+			return SessionView{}, err
+		}
 	}
 	if m.runtime != nil {
 		view := m.view
@@ -444,6 +454,12 @@ func (m *RuntimeManager) Switch(ctx context.Context, request OpenRequest) (Sessi
 	if m.closed {
 		m.mu.Unlock()
 		return SessionView{}, ErrClosed
+	}
+	if admission, ok := m.factory.(RuntimeOpenAdmission); ok {
+		if err := admission.ValidateOpen(request); err != nil {
+			m.mu.Unlock()
+			return SessionView{}, err
+		}
 	}
 	if m.runtime == nil {
 		m.mu.Unlock()

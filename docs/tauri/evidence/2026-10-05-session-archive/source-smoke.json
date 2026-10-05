@@ -1,0 +1,27 @@
+{
+  "nativeGUI": "not exercised; packaged sidecar real process",
+  "profile": "isolated disposable fixture",
+  "actualProviderNetwork": "not exercised; local mock only",
+  "cases": [
+    "unauthorized and traversal requests rejected",
+    "running archive refused without state change",
+    "archive retry retains original date",
+    "history checkpoint and attachment paths/bytes retained",
+    "direct open of archived ID refused",
+    "owner-only overlay; identity schema 9 unchanged",
+    "archive survives sidecar restart",
+    "restore opens original ID/path/history and continues with same provider",
+    "inactive archive retains current owner",
+    "fresh empty conversation title survives archive",
+    "refused switch preserves current owner",
+    "corrupt overlay fails closed without overwrite",
+    "repair permits retry; config bytes unchanged"
+  ],
+  "processExits": [
+    0,
+    0
+  ],
+  "readyRemoved": true,
+  "providerRequests": 4,
+  "binarySha256": "e1f8e4e653b30782cd0aa8e137932050af651ace019edbd168eedbebd805838a"
+}
