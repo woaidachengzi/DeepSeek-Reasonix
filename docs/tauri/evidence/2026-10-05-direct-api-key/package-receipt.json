@@ -1,0 +1,15 @@
+{
+  "sourceCommit": "016f1fb1dcb4c5c0ccc5de9640d04f738c3f474f",
+  "sourceDirty": false,
+  "artifact": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app",
+  "architecture": "macOS arm64",
+  "zipGenerated": false,
+  "dmgGenerated": false,
+  "strictSignatureVerify": "passed, ad-hoc",
+  "nativeGUI": "not exercised",
+  "APIKeyFlow": "profile .env; no automatic model keychain access",
+  "sha256": {
+    "reasonix-desktop-bridge": "ecd0ad7ed9aea51ed22700c56b4d14a7a0faa720c1bd6af6947f307bb179a2de",
+    "reasonix-tauri": "3dabe886e06adacead18bf5db6554fe91a348bca6dc7559b65531cac13f32191"
+  }
+}

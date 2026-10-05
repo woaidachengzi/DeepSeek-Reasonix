@@ -9,3 +9,5 @@ Go bridge/internal/config 回归通过：无授权写入拒绝、idempotency、0
 本轮按用户要求调整 D 凭据默认方案；钥匙串保留显式迁移路径，其他 D/E/A/B/C 验收缺口保持，不能据此宣布迁移完成或正式发布。原候选包可回退；本轮继续 app-only，不生成 ZIP/DMG。
 
 包内 smoke 夹具校正：local BaseURL 核心默认允许无密钥，不能用 configured=false 作为其断言；改用 MiMo 官方 BaseURL + 明确的本机 mock request_url，且 mock 按实际 MiMo api-key 请求头校验。初次夹具不匹配已清理，未调用真实 MiMo。另补显式 local APIKeyEnv 可保存边界，不以 RequiresAPIKey() 阻止用户提供本地代理密钥；新自定义连接的用户输入密钥不再因 local configured=true 被跳过，重试保持该行为。新增 Go 回归及连接组件回归通过。
+
+最终干净源码 016f1fb1d 执行 app-only 构建，所有生产前端门禁/sidecar/Rust/signature strict 核验通过，只生成 arm64 app。本包实际 sidecar smoke 使用独立 HOME/REASONIX_HOME 和本机 mock：未授权 POST 拒绝、保存就绪、仅 .env 保存且 0600、MiMo api-key 认证头实际请求、退出重启后第二模型请求成功、清除后未就绪，两次 shutdown 202/exit0/readiness 删除，夹具清理。未启动用户原生 GUI 或请求真实 MiMo，未访问系统钥匙串。老包保留作回退，Applications 未替换，不正式发布。

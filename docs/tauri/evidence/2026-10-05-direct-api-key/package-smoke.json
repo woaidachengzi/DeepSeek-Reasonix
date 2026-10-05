@@ -1,0 +1,18 @@
+{
+  "nativeGUI": "not exercised",
+  "profile": "isolated disposable fixture",
+  "actualMiMoNetwork": "not exercised; local mock provider only",
+  "cases": [
+    "unauthorized write refused",
+    "saved API key immediately ready",
+    "local provider probe uses saved API key",
+    "secret stored only in owner-only profile .env",
+    "new sidecar restores local API key and probes second model"
+  ],
+  "processExits": [
+    0,
+    0
+  ],
+  "readyRemoved": true,
+  "localProviderRequests": 2
+}
