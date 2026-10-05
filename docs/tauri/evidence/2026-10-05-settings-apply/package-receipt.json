@@ -1,0 +1,18 @@
+{
+  "sourceCommit": "6fef0d95d7b2b2d2e6136d32f407f4f2508b564f",
+  "app": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app",
+  "builtFromCleanSource": true,
+  "bundles": [
+    "app"
+  ],
+  "signature": "ad-hoc; codesign --verify --deep --strict passed in build script",
+  "smoke": "package-smoke.json",
+  "rollback": {
+    "backup": "/var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/reasonix-settings-rollback-r29bevib/Reasonix Tauri Preview.app.rollback",
+    "restoreTo": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app"
+  },
+  "sha256": {
+    "reasonix-tauri": "2b802e658affffc8ff626e682b352438a26cdd6de6e1f604ca70b65c967b73ac",
+    "reasonix-desktop-bridge": "b32c7a94fd319fe1d85f80ea0b00c1768529f15dacb74868af0f67b199e93db5"
+  }
+}

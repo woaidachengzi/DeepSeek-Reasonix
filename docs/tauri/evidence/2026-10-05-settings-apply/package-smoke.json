@@ -1,0 +1,30 @@
+{
+  "nativeGUI": "not exercised",
+  "profile": "isolated disposable fixture",
+  "actualMiMoNetwork": "not exercised; local mock provider only",
+  "cases": [
+    "active conversation uses rotated key without restarting",
+    "history and approval mode retained",
+    "settings read failure rejects request and retains history",
+    "retry after restoring settings succeeds",
+    "explicit model switch uses saved key",
+    "unauthorized write refused",
+    "saved API key immediately ready",
+    "actual conversation uses saved API key",
+    "secret stored only in owner-only profile .env",
+    "new sidecar restores local API key and probes second model"
+  ],
+  "processExits": [
+    0,
+    0
+  ],
+  "readyRemoved": true,
+  "localProviderRequests": 5,
+  "upstreamModels": [
+    "chat",
+    "chat",
+    "chat",
+    "flash",
+    "flash"
+  ]
+}
