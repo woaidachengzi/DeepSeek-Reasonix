@@ -274,7 +274,7 @@ func TestRuntimeManagerSubmitsAndCancelsOwnedSession(t *testing.T) {
 	if _, err := manager.Open(context.Background(), OpenRequest{SessionID: "a"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := manager.Submit("a", "hello"); err != nil {
+	if _, err := manager.Submit(context.Background(), "a", "hello"); err != nil {
 		t.Fatalf("submit: %v", err)
 	}
 	if len(runtime.submits) != 1 || runtime.submits[0] != "hello" {
@@ -286,10 +286,10 @@ func TestRuntimeManagerSubmitsAndCancelsOwnedSession(t *testing.T) {
 	if runtime.cancelCalls.Load() != 1 {
 		t.Fatalf("cancel calls = %d", runtime.cancelCalls.Load())
 	}
-	if _, err := manager.Submit("missing", "hello"); !errors.Is(err, ErrSessionNotFound) {
+	if _, err := manager.Submit(context.Background(), "missing", "hello"); !errors.Is(err, ErrSessionNotFound) {
 		t.Fatalf("missing session error = %v", err)
 	}
-	if _, err := manager.Submit("a", "   "); !errors.Is(err, ErrInvalidInput) {
+	if _, err := manager.Submit(context.Background(), "a", "   "); !errors.Is(err, ErrInvalidInput) {
 		t.Fatalf("blank input error = %v", err)
 	}
 }

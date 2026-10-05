@@ -901,14 +901,22 @@ func (m *RuntimeManager) History(sessionID string) (HistoryView, error) {
 
 // Submit starts a turn on the bridge-owned runtime. It intentionally returns
 // after admission rather than waiting for Agent work; progress is delivered by
-// the event transport added on top of this lifecycle layer.
-func (m *RuntimeManager) Submit(sessionID, input string) (SessionView, error) {
+// the event transport added on top of this lifecycle layer. Saved settings are
+// applied first, so a key written after the controller froze it still reaches
+// the provider.
+func (m *RuntimeManager) Submit(ctx context.Context, sessionID, input string) (SessionView, error) {
 	if strings.TrimSpace(input) == "" {
 		return SessionView{}, ErrInvalidInput
 	}
-	return m.withRuntime(sessionID, func(runtime Runtime) {
-		runtime.Submit(input)
-	})
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err := m.rebuildSettingsLocked(ctx, strings.TrimSpace(sessionID)); err != nil {
+		return SessionView{}, err
+	}
+	m.runtime.Submit(input)
+	view := m.view
+	view.State = m.runtime.State()
+	return view, nil
 }
 
 // AttachFile copies a user-selected file into the owned session's workspace.
@@ -1247,28 +1255,31 @@ func buildRuntime(ctx context.Context, factory RuntimeFactory, request OpenReque
 	if err != nil {
 		return nil, SessionView{}, err
 	}
+	view, err := runtimeView(runtime, request)
+	if err != nil && runtime != nil {
+		_ = runtime.Shutdown()
+	}
+	return runtime, view, err
+}
+
+func runtimeView(runtime Runtime, request OpenRequest) (SessionView, error) {
 	if runtime == nil {
-		return nil, SessionView{}, errors.New("desktop bridge runtime factory returned nil runtime")
+		return SessionView{}, errors.New("desktop bridge runtime factory returned nil runtime")
 	}
 	path := strings.TrimSpace(runtime.SessionPath())
 	if path == "" {
-		_ = runtime.Shutdown()
-		return nil, SessionView{}, errors.New("desktop bridge runtime has no session path")
+		return SessionView{}, errors.New("desktop bridge runtime has no session path")
 	}
 	view := SessionView{
-		ID:            request.SessionID,
-		Path:          path,
-		Title:         runtime.Title(),
-		WorkspaceRoot: request.WorkspaceRoot,
-		ModelRef:      request.ModelRef,
-		State:         runtime.State(),
+		ID: request.SessionID, Path: path, Title: runtime.Title(),
+		WorkspaceRoot: request.WorkspaceRoot, ModelRef: request.ModelRef, State: runtime.State(),
 	}
 	if provider, ok := runtime.(RuntimeModelProvider); ok {
 		if modelRef := strings.TrimSpace(provider.ModelRef()); modelRef != "" {
 			view.ModelRef = modelRef
 		}
 	}
-	return runtime, view, nil
+	return view, nil
 }
 
 func (m *RuntimeManager) withRuntime(sessionID string, action func(Runtime)) (SessionView, error) {

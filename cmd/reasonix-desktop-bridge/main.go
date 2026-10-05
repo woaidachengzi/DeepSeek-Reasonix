@@ -1799,8 +1799,12 @@ func (b *bridgeServer) submit(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid submit request")
 		return
 	}
-	view, err := b.runtimes.Submit(r.PathValue("id"), request.Input)
+	view, err := b.runtimes.Submit(r.Context(), r.PathValue("id"), request.Input)
 	if err != nil {
+		if errors.Is(err, desktopbridge.ErrSessionSettingsApply) {
+			writeProtocolError(w, http.StatusConflict, "settings_apply_failed", "saved provider settings could not be applied; retry, or restart the bridge service")
+			return
+		}
 		b.writeRuntimeError(w, err, "unable to submit desktop bridge input")
 		return
 	}
@@ -2074,6 +2078,8 @@ func (b *bridgeServer) writeRuntimeError(w http.ResponseWriter, err error, messa
 		status, code = http.StatusInternalServerError, "session_model_recovery_failed"
 	case errors.Is(err, desktopbridge.ErrSessionModelSwitch):
 		status, code = http.StatusBadGateway, "model_switch_failed"
+	case errors.Is(err, desktopbridge.ErrSessionSettingsApply):
+		status, code = http.StatusConflict, "settings_apply_failed"
 	}
 	writeProtocolError(w, status, code, message)
 }

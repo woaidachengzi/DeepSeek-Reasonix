@@ -1081,7 +1081,7 @@ func TestBridgeDeletionFenceRejectsWritesAndRetriesCleanup(t *testing.T) {
 	if err != nil || !exists || record.State != sessionidentity.StateDeleting {
 		t.Fatalf("failed deletion state = %#v, %v, %v", record, exists, err)
 	}
-	if _, err := manager.Submit("delete-retry", "must not be sent"); !errors.Is(err, desktopbridge.ErrSessionConflict) {
+	if _, err := manager.Submit(ctx, "delete-retry", "must not be sent"); !errors.Is(err, desktopbridge.ErrSessionConflict) {
 		t.Fatalf("submit during deletion = %v", err)
 	}
 	if _, err := manager.Open(ctx, desktopbridge.OpenRequest{SessionID: "delete-retry", WorkspaceRoot: view.WorkspaceRoot}); !errors.Is(err, desktopbridge.ErrSessionConflict) {

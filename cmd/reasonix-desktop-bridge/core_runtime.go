@@ -58,7 +58,7 @@ func newControllerFactory(events *desktopbridge.EventStream) *controllerFactory 
 	return &controllerFactory{events: events}
 }
 
-func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+func (f *controllerFactory) options(request desktopbridge.OpenRequest) (boot.Options, *bridgeLifecycleSink, error) {
 	opts := f.base
 	opts.WorkspaceRoot = request.WorkspaceRoot
 	if strings.TrimSpace(opts.WorkspaceRoot) == "" {
@@ -66,7 +66,7 @@ func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.Open
 		// Never expose the sidecar's incidental launch directory as a project.
 		root, err := previewGlobalWorkspace()
 		if err != nil {
-			return nil, err
+			return boot.Options{}, nil, err
 		}
 		opts.WorkspaceRoot = root
 	}
@@ -80,6 +80,14 @@ func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.Open
 	opts.Sink = lifecycleSink
 	if strings.TrimSpace(opts.StatsSource) == "" {
 		opts.StatsSource = "desktop-tauri"
+	}
+	return opts, lifecycleSink, nil
+}
+
+func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.OpenRequest) (desktopbridge.Runtime, error) {
+	opts, lifecycleSink, err := f.options(request)
+	if err != nil {
+		return nil, err
 	}
 	controller, err := boot.Build(ctx, opts)
 	if err != nil {
@@ -448,6 +456,13 @@ func (r *controllerRuntime) LocalWorkspace() (string, error) {
 func (r *controllerRuntime) SessionPath() string { return r.controller.SessionPath() }
 func (r *controllerRuntime) ModelRef() string    { return r.controller.ModelRef() }
 func (r *controllerRuntime) BoundShell() string  { return r.controller.BoundShell().Kind.String() }
+
+// ModelSettingsState reports the fingerprint this controller was built with
+// against the one saved on disk, which is how Submit learns a provider's API
+// key changed after the controller froze its credentials.
+func (r *controllerRuntime) ModelSettingsState() (string, string, error) {
+	return r.controller.ModelSettingsState()
+}
 
 func (r *controllerRuntime) SessionMetrics() desktopbridge.SessionMetrics {
 	used, window := r.controller.ContextSnapshot()
