@@ -1075,7 +1075,7 @@ saveGate = new Promise(resolve => { releaseSave = resolve; });
 await act(async () => {
   click("保存到钥匙串");
   click("保存到钥匙串");
-  click("删除");
+  click("清除钥匙串密钥");
 });
 assert.equal(calls.filter(call => call === "keychain_save").length, 1, "repeated save starts one operation");
 assert.equal(calls.filter(call => call === "keychain_delete").length, 0, "delete cannot race with save");
@@ -1100,13 +1100,13 @@ await act(async () => { click("应用到当前会话"); });
 assert.equal(applyCalls, 1, "active-session update is user initiated");
 assert.doesNotMatch(visibleText(), /应用到当前会话/, "successful update clears the pending action");
 
-await act(async () => { click(["删除", "Delete"]); });
+await act(async () => { click("清除钥匙串密钥"); });
 assert.match(visibleText(), /钥匙串密钥已删除；其他凭据仍可用/, "delete reports the keychain scope when .env remains");
 assert.match(visibleText(), /已就绪/, "refreshed provider remains configured by .env");
 assert.equal(calls.filter(call => call === "provider_summary").length, 7, "delete refreshes the provider summary");
 assert.equal(parentConfigured, true, "the model picker outside settings keeps the .env readiness");
 
-await act(async () => { click("删除"); });
+await act(async () => { click("清除钥匙串密钥"); });
 assert.match(visibleText(), /钥匙串中没有密钥/, "repeated delete does not claim a key was removed");
 
 await act(async () => { enterKey("secret-input-value"); });
@@ -1143,7 +1143,7 @@ assert.doesNotMatch(visibleText(), /密钥保存失败/, "the next explicit acti
 assert.equal(calls.filter(call => call === "provider_summary").length, summaryCountBeforeImport, "failed migration does not report a saved key");
 assert.doesNotMatch(visibleText(), /secret-in-migration-error/, "migration errors hide sensitive host diagnostics");
 assert.equal(document.querySelector<HTMLInputElement>(".tauri-settings-apikey input")?.value, "secret-input-value", "failed migration preserves the entered value");
-await act(async () => { click("删除"); });
+await act(async () => { click("清除钥匙串密钥"); });
 await act(async () => { click("应用到当前会话"); });
 const saveCountBeforeImport = calls.filter(call => call === "keychain_save").length;
 const deleteCountBeforeImport = calls.filter(call => call === "keychain_delete").length;
@@ -1153,7 +1153,7 @@ await act(async () => {
   click("迁移旧 Preview 凭据");
   click("迁移旧 Preview 凭据");
   click("保存到钥匙串");
-  click("删除");
+  click("清除钥匙串密钥");
 });
 assert.equal(importRequests.length, importCountBeforeGate + 1, "repeated migration starts one operation");
 assert.equal(calls.filter(call => call === "keychain_save").length, saveCountBeforeImport, "save cannot race with migration");
@@ -1165,7 +1165,7 @@ assert.equal(keyPresent, true, "migration updates native credential readiness");
 assert.equal(document.querySelector<HTMLInputElement>(".tauri-settings-apikey input")?.value, "secret-input-value", "migration never discards an unsaved input");
 assert.match(visibleText(), /已保存到钥匙串/);
 assert.match(visibleText(), /应用到当前会话/, "migrated credential offers the active-session update");
-await act(async () => { click("删除"); });
+await act(async () => { click("清除钥匙串密钥"); });
 failImport = true;
 await act(async () => { click("迁移旧 Preview 凭据"); });
 assert.equal(keyPresent, false, "failed import leaves the destination empty");
@@ -1192,7 +1192,7 @@ await act(async () => {
   click("迁移 Wails 旧钥匙串");
   click("迁移 Wails 旧钥匙串");
   click("迁移旧 Preview 凭据");
-  click("删除");
+  click("清除钥匙串密钥");
 });
 assert.equal(importRequests.length, beforeWails + 1, "Wails import shares the single credential operation guard");
 assert.deepEqual(importRequests.at(-1), { provider: "demo", source: "wails" }, "renderer supplies neither a system account nor a secret");
@@ -1201,7 +1201,7 @@ saveGate = null;
 assert.equal(keyPresent, true);
 assert.equal(document.querySelector<HTMLInputElement>(".tauri-settings-apikey input")?.value, "secret-input-value", "Wails import preserves unsaved draft");
 assert.match(visibleText(), /已保存到钥匙串/);
-await act(async () => { click("删除"); });
+await act(async () => { click("清除钥匙串密钥"); });
 
 missingLegacy = true;
 await act(async () => { click("迁移 Wails 全局凭据"); });
@@ -1213,7 +1213,7 @@ const beforeWailsEnv = importRequests.length;
 saveGate = new Promise(resolve => { releaseSave = resolve; });
 await act(async () => {
   click("迁移 Wails 全局凭据"); click("迁移 Wails 全局凭据");
-  click("迁移 Wails 旧钥匙串"); click("删除");
+  click("迁移 Wails 旧钥匙串"); click("清除钥匙串密钥");
 });
 assert.equal(importRequests.length, beforeWailsEnv + 1);
 assert.deepEqual(importRequests.at(-1), { provider: "demo", source: "wails-env" }, "renderer cannot choose a source path/account or receive a secret");
@@ -1221,7 +1221,21 @@ await act(async () => { releaseSave?.(); });
 saveGate = null;
 assert.equal(keyPresent, true);
 assert.equal(document.querySelector<HTMLInputElement>(".tauri-settings-apikey input")?.value, "secret-input-value");
-await act(async () => { click("删除"); });
+await act(async () => { click("清除钥匙串密钥"); });
+
+allowDeleteProvider = true;
+const credentialDeletesBeforeService = calls.filter(call => call === "keychain_delete").length;
+await act(async () => { click("删除模型服务"); });
+assert.ok(document.querySelector('[aria-label="确认删除模型服务"]'));
+assert.equal(deletedProviderName, "", "review must not remove config before confirmation");
+await act(async () => { document.querySelector('[aria-label="确认删除模型服务"]')?.querySelectorAll<HTMLButtonElement>("button")[1]?.click(); });
+assert.equal(deletedProviderName, "", "cancel preserves config");
+await act(async () => { click("删除模型服务"); });
+await act(async () => { click("确认删除模型服务"); });
+assert.equal(deletedProviderName, "demo");
+assert.equal(deletedProviderRevision, "r1");
+assert.equal(calls.filter(call => call === "keychain_delete").length, credentialDeletesBeforeService, "service delete preserves credential scope");
+allowDeleteProvider = false;
 
 await act(async () => { click(["运行诊断", "诊断", "Diagnostics"]); });
 assert.match(visibleText(), /持久身份目录/, "diagnostics show the actual sidebar data source");

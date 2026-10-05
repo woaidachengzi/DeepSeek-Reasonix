@@ -4,7 +4,7 @@ import { useT } from "../lib/i18n";
 
 const EMPTY: TauriProviderConfigInput = { name: "", displayName: "", kind: "openai", baseUrl: "", modelsUrl: "", clearModelsUrl: false, modelsUrlSet: false, noProxy: false, contextWindow: 0, responsesMode: "", balanceUrl: "", clearBalanceUrl: false, balanceUrlSet: false, models: [], default: "", useApiKey: true };
 
-export function TauriProviderEditor({ onSummaryChange }: { onSummaryChange: (summary: TauriProviderSummary) => void }) {
+export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyChange }: { onSummaryChange: (summary: TauriProviderSummary) => void; disabled?: boolean; onBusyChange?: (busy: boolean) => void }) {
   const t = useT();
   const [configs, setConfigs] = useState<TauriProviderConfig[]>([]);
   const [presets, setPresets] = useState<TauriProviderPreset[]>([]);
@@ -24,6 +24,8 @@ export function TauriProviderEditor({ onSummaryChange }: { onSummaryChange: (sum
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  useEffect(() => { onBusyChange?.(saving || discoveringModels || pendingKeys.length > 0); }, [saving, discoveringModels, pendingKeys.length, onBusyChange]);
 
   useEffect(() => {
     let active = true;
@@ -234,7 +236,7 @@ export function TauriProviderEditor({ onSummaryChange }: { onSummaryChange: (sum
       <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" onClick={() => void save()} disabled={saving || discoveringModels || pendingKeys.length > 0}>{saving ? t("settings.previewProvider.saving") : t("settings.previewProvider.saveService")}</button><button type="button" className="tauri-settings-button" onClick={() => { setEditing(null); setAdding(null); setApiKey(""); }} disabled={saving || discoveringModels || pendingKeys.length > 0}>{t("common.cancel")}</button></div>
     </div> : null;
 
-  return <div className="tauri-provider-editor">
+  return <fieldset disabled={disabled} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><div className="tauri-provider-editor">
     <div className="tauri-settings-model-header"><strong>{t("settings.previewProvider.serviceConfig")}</strong><button type="button" className="tauri-settings-button" onClick={() => setAdding("catalog")} disabled={saving || discoveringModels || pendingKeys.length > 0}>{t("settings.addProvider")}</button></div>
     {adding && <section className="tauri-provider-connect" aria-label={t("settings.addProvider")}>
       <div className="tauri-provider-connect-tabs" role="tablist" aria-label={t("settings.addProvider.chooseTitle")}>
@@ -274,5 +276,5 @@ export function TauriProviderEditor({ onSummaryChange }: { onSummaryChange: (sum
     {pendingKeys.length > 0 && <div role="status" className="tauri-provider-key-retry"><p>{t("settings.previewProvider.connectionKeyRetry")}</p><label>API Key<input type="password" autoComplete="off" disabled={saving} value={adding === "catalog" ? presetKey : apiKey} onChange={event => adding === "catalog" ? setPresetKey(event.target.value) : setApiKey(event.target.value)} /></label><button type="button" className="tauri-settings-button" disabled={saving || !(adding === "catalog" ? presetKey : apiKey).trim()} onClick={() => void retryKeys()}>{t("settings.previewProvider.saveKey")}</button></div>}
     {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}
     {message && <p className="tauri-settings-hint" role="status">{message}</p>}
-  </div>;
+  </div></fieldset>;
 }

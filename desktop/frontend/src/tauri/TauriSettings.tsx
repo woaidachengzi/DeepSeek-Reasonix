@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { Check, ArrowLeft, Search, X, Keyboard, Globe, Languages, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles, Users, Webhook, Package, Bot } from "lucide-react";
-import { tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, setTauriAgentPreference, testTauriProviderModel, tauriDesktopPreferences, tauriActiveThemeId, setTauriActiveThemeId, tauriUserThemes, tauriPluginThemes, saveTauriUserTheme, deleteTauriUserTheme, importTauriUserTheme, exportTauriUserTheme, setTauriDesktopApproval, setTauriDesktopTerminalTheme, setTauriDesktopAppearance, setTauriDesktopLanguage, setTauriDesktopCurrency, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, tauriZoomFactor, setTauriZoomFactor, keychainSave, keychainDelete, keychainImportLegacy, keychainImportWails, keychainImportWailsEnv, keychainImportFailureCode, tauriNotificationPermission, type TauriNotificationPermission, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, tauriCapabilityDiagnostics, tauriRuntimeDoctor, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
+import { tauriProviderConfigs, deleteTauriProviderConfig, type TauriProviderConfig, tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, setTauriAgentPreference, testTauriProviderModel, tauriDesktopPreferences, tauriActiveThemeId, setTauriActiveThemeId, tauriUserThemes, tauriPluginThemes, saveTauriUserTheme, deleteTauriUserTheme, importTauriUserTheme, exportTauriUserTheme, setTauriDesktopApproval, setTauriDesktopTerminalTheme, setTauriDesktopAppearance, setTauriDesktopLanguage, setTauriDesktopCurrency, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, tauriZoomFactor, setTauriZoomFactor, keychainSave, keychainDelete, keychainImportLegacy, keychainImportWails, keychainImportWailsEnv, keychainImportFailureCode, tauriNotificationPermission, type TauriNotificationPermission, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, tauriCapabilityDiagnostics, tauriRuntimeDoctor, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
 import { applyTerminalThemePreference, normalizeTerminalThemePreference, getCustomTerminalPalette, setCustomTerminalPalette, DEFAULT_TERMINAL_PALETTE, type TerminalPalette, type TerminalPaletteKey, type TerminalThemePreference } from "../lib/terminalTheme";
 import { THEME_STYLES, type Theme, type ThemeStyle } from "../lib/theme";
 import { useI18n, useT, type DictKey, type LangPref, type Translator } from "../lib/i18n";
@@ -1459,6 +1459,10 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
   const [showApiKey, setShowApiKey] = useState<Record<string, boolean>>({});
   const [keyStatus, setKeyStatus] = useState<Record<string, { message: string; error: boolean } | null>>({});
   const [keyBusy, setKeyBusy] = useState(false);
+  const [configBusy, setConfigBusy] = useState(false);
+  const [configVersion, setConfigVersion] = useState(0);
+  const [deleteReview, setDeleteReview] = useState<TauriProviderConfig | null>(null);
+  const [serviceDeleteError, setServiceDeleteError] = useState("");
   const [pendingApply, setPendingApply] = useState<Record<string, boolean>>({});
   const [probeModels, setProbeModels] = useState<Record<string, string>>({});
   const [probeBusy, setProbeBusy] = useState<Record<string, boolean>>({});
@@ -1493,7 +1497,7 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
 
   const handleApiKeyAction = async (providerName: string, action: "save" | "delete" | "import" | "import-wails" | "import-wails-env") => {
     const key = apiKeyInputs[providerName];
-    if (keyBusyRef.current || (action === "save" && !key)) return;
+    if (keyBusyRef.current || configBusy || deleteReview || (action === "save" && !key)) return;
     keyBusyRef.current = true;
     setKeyBusy(true);
     const previousTimer = statusTimers.current.get(providerName);
@@ -1555,6 +1559,32 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
     }
   };
 
+  const reviewServiceDelete = async (name: string) => {
+    if (keyBusyRef.current || configBusy || Object.values(probeBusy).some(Boolean)) return;
+    keyBusyRef.current = true; setKeyBusy(true); setServiceDeleteError("");
+    try {
+      const view = await tauriProviderConfigs();
+      const target = view.providers.find(provider => provider.name === name);
+      if (!target?.removable) { setServiceDeleteError("此服务不能在这里删除，请检查服务配置。"); return; }
+      setDeleteReview(target);
+    } catch (error) { setServiceDeleteError(tauriMessageFrom(error)); }
+    finally { keyBusyRef.current = false; if (mounted.current) setKeyBusy(false); }
+  };
+
+  const deleteService = async () => {
+    if (!deleteReview || keyBusyRef.current || configBusy) return;
+    const target = deleteReview;
+    keyBusyRef.current = true; setKeyBusy(true); setServiceDeleteError("");
+    try {
+      await deleteTauriProviderConfig(target);
+      setDeleteReview(null); setConfigVersion(version => version + 1);
+      setApiKeyInputs(previous => { const next = { ...previous }; delete next[target.name]; return next; });
+      try { onProviderSummaryChange(await tauriProviderSummary()); }
+      catch { setServiceDeleteError(t("settings.previewProvider.message.deleteRefreshFailed")); }
+    } catch (error) { setServiceDeleteError(tauriMessageFrom(error)); }
+    finally { keyBusyRef.current = false; if (mounted.current) setKeyBusy(false); }
+  };
+
   const handleProviderProbe = async (provider: TauriProviderSummary["providers"][number]) => {
     const model = probeModels[provider.name] || provider.models[0] || "";
     if (!model || probeBusy[provider.name]) return;
@@ -1574,7 +1604,8 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
     <div className="tauri-settings-section">
       <h3>{t("settings.models.services")}</h3>
       <p className="tauri-settings-hint">{t("settings.previewProvider.pageHint")}</p>
-      <TauriProviderEditor onSummaryChange={onProviderSummaryChange} />
+      {serviceDeleteError && <p className="tauri-diagnostic-error" role="alert">{serviceDeleteError}</p>}
+      <TauriProviderEditor key={configVersion} onSummaryChange={onProviderSummaryChange} disabled={keyBusy || Boolean(deleteReview) || Object.values(probeBusy).some(Boolean)} onBusyChange={setConfigBusy} />
       {providerSummary.providers.length === 0 ? (
         <div className="tauri-settings-empty">{t("settings.previewProvider.noServices")}</div>
       ) : (
@@ -1584,16 +1615,23 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
               <div className="tauri-settings-model-header">
                 <strong>{provider.displayName || provider.name}</strong>
                 <span className={`tauri-settings-badge${provider.configured ? " is-ready" : ""}`}>{provider.configured ? t("settings.previewProvider.ready") : t("settings.previewProvider.notConfigured")}</span>
+                <button type="button" className="tauri-settings-button tauri-settings-button--danger" disabled={keyBusy || configBusy || Boolean(deleteReview) || Object.values(probeBusy).some(Boolean)} onClick={() => void reviewServiceDelete(provider.name)}>删除模型服务</button>
               </div>
+              {deleteReview?.name === provider.name && <div role="group" aria-label="确认删除模型服务" className="tauri-provider-delete-review">
+                <p>{t("settings.previewProvider.confirmDelete", { name: deleteReview.displayName || deleteReview.name })}</p>
+                <p className="tauri-settings-hint">删除服务配置，不删除对话记录或钥匙串凭据。已有会话需要另行切换模型。</p>
+                <button type="button" className="tauri-settings-button tauri-settings-button--danger" disabled={keyBusy} onClick={() => void deleteService()}>确认删除模型服务</button>
+                <button type="button" className="tauri-settings-button" disabled={keyBusy} onClick={() => setDeleteReview(null)}>{t("common.cancel")}</button>
+              </div>}
               <p className="tauri-settings-model-meta">{provider.kind} · {t("settings.previewProvider.modelCount", { count: provider.modelCount })}</p>
               <div className="tauri-settings-provider-probe">
                 <label>{t("settings.previewProvider.probeModel")}
-                  <select className="tauri-settings-input" aria-label={t("settings.previewProvider.probeModelFor", { name: provider.displayName || provider.name })} value={probeModels[provider.name] || provider.models[0] || ""} disabled={probeBusy[provider.name] || provider.models.length === 0} onChange={event => setProbeModels(prev => ({ ...prev, [provider.name]: event.target.value }))}>
+                  <select className="tauri-settings-input" aria-label={t("settings.previewProvider.probeModelFor", { name: provider.displayName || provider.name })} value={probeModels[provider.name] || provider.models[0] || ""} disabled={keyBusy || configBusy || Boolean(deleteReview) || probeBusy[provider.name] || provider.models.length === 0} onChange={event => setProbeModels(prev => ({ ...prev, [provider.name]: event.target.value }))}>
                     {provider.models.length === 0 && <option value="">{t("settings.modelPrefs.choose")}</option>}
                     {provider.models.map(model => <option key={model} value={model}>{model}</option>)}
                   </select>
                 </label>
-                <button type="button" className="tauri-settings-button" disabled={probeBusy[provider.name] || provider.models.length === 0} onClick={() => void handleProviderProbe(provider)}>{probeBusy[provider.name] ? t("settings.previewProvider.probeRunning") : t("settings.previewProvider.probe")}</button>
+                <button type="button" className="tauri-settings-button" disabled={keyBusy || configBusy || Boolean(deleteReview) || probeBusy[provider.name] || provider.models.length === 0} onClick={() => void handleProviderProbe(provider)}>{probeBusy[provider.name] ? t("settings.previewProvider.probeRunning") : t("settings.previewProvider.probe")}</button>
                 {probeStatus[provider.name] && <span role={probeStatus[provider.name]?.error ? "alert" : "status"} className={`tauri-settings-provider-probe-status${probeStatus[provider.name]?.error ? " is-error" : ""}`}>{probeStatus[provider.name]?.message}</span>}
               </div>
               {provider.requiresKey && (
@@ -1612,23 +1650,23 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
                     </button>
                   </div>
                   <div className="tauri-settings-apikey-actions">
-                    <button type="button" className="tauri-settings-button" onClick={() => void handleApiKeyAction(provider.name, "save")} disabled={keyBusy || !apiKeyInputs[provider.name]}>
+                    <button type="button" className="tauri-settings-button" onClick={() => void handleApiKeyAction(provider.name, "save")} disabled={keyBusy || configBusy || Boolean(deleteReview) || !apiKeyInputs[provider.name]}>
                       {t("settings.previewProvider.saveKey")}
                     </button>
-                    <button type="button" className="tauri-settings-button" onClick={() => void handleApiKeyAction(provider.name, "import")} disabled={keyBusy}>
+                    <button type="button" className="tauri-settings-button" onClick={() => void handleApiKeyAction(provider.name, "import")} disabled={keyBusy || configBusy || Boolean(deleteReview)}>
                       {t("settings.previewProvider.importLegacyKey")}
                     </button>
-                    <button type="button" className="tauri-settings-button" onClick={() => void handleApiKeyAction(provider.name, "import-wails-env")} disabled={keyBusy}>
+                    <button type="button" className="tauri-settings-button" onClick={() => void handleApiKeyAction(provider.name, "import-wails-env")} disabled={keyBusy || configBusy || Boolean(deleteReview)}>
                       {t("settings.previewProvider.importWailsEnvKey")}
                     </button>
-                    <button type="button" className="tauri-settings-button" onClick={() => void handleApiKeyAction(provider.name, "import-wails")} disabled={keyBusy}>
+                    <button type="button" className="tauri-settings-button" onClick={() => void handleApiKeyAction(provider.name, "import-wails")} disabled={keyBusy || configBusy || Boolean(deleteReview)}>
                       {t("settings.previewProvider.importWailsKey")}
                     </button>
-                    <button type="button" className="tauri-settings-button tauri-settings-button--danger" onClick={() => void handleApiKeyAction(provider.name, "delete")} disabled={keyBusy}>
-                      {t("common.delete")}
+                    <button type="button" className="tauri-settings-button tauri-settings-button--danger" onClick={() => void handleApiKeyAction(provider.name, "delete")} disabled={keyBusy || configBusy || Boolean(deleteReview)}>
+                      清除钥匙串密钥
                     </button>
                     {pendingApply[provider.name] && currentSessionState && onApplyToCurrentSession && (
-                      <button type="button" className="tauri-settings-button" onClick={() => void handleApplyToCurrentSession(provider.name)} disabled={keyBusy || currentSessionState !== "idle" || currentSessionHasAttachments} title={currentSessionState !== "idle" ? t("common.busyHint") : currentSessionHasAttachments ? t("settings.previewProvider.resolveAttachments") : undefined}>
+                      <button type="button" className="tauri-settings-button" onClick={() => void handleApplyToCurrentSession(provider.name)} disabled={keyBusy || configBusy || Boolean(deleteReview) || currentSessionState !== "idle" || currentSessionHasAttachments} title={currentSessionState !== "idle" ? t("common.busyHint") : currentSessionHasAttachments ? t("settings.previewProvider.resolveAttachments") : undefined}>
                         {t("settings.permission.applyCurrent")}
                       </button>
                     )}
