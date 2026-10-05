@@ -71,7 +71,7 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 **对话归档：** [单条归档、恢复与进程证据](evidence/2026-10-05-session-archive/README.md)。对照 Wails 可恢复回收站，Tauri 新增独立归档可见性状态，保留原历史/工件/schema9；确认归档、已归档列表、恢复并打开原 ID 已接入。Go race、完整 Tauri 前端回归/生产门禁、Rust232/5ignored 与 strict clippy 通过；真实组件浏览器三档无溢出。干净源码 `6e294180b` app-only 构建/严格签名、包内真实 sidecar 归档重启/继续发送与备份旧包回读原历史通过，三次退出0并清理。Wails 回收站导入/批量归档/归档预览与清空未迁移，原生 WebKit和真实模型网络/D/E/A/B/C 缺口保持。
 
-**回答操作行与逐轮用量：** [复制、日期及持久化明细](evidence/2026-10-05-answer-actions/README.md)。接入回答复制/时间及本轮输入、输出、缓存、思考、请求次数明细；缺失/部分/估算明确提示，思考不重复计费。Go race/agent 专项、完整 Tauri/Transcript/生产门禁及 Rust232/5ignored 通过；宽窄真实组件浏览器和新 sidecar 重启/旧包回读通过。用户要求后续清理重复入口，正式版保留；真实模型/原生 GUI 与 D/E/A/B/C 缺口保持。
+**回答操作行与逐轮用量：** [复制、日期及持久化明细](evidence/2026-10-05-answer-actions/README.md)。接入回答复制/时间及本轮输入、输出、缓存、思考、请求次数明细；缺失/部分/估算明确提示，思考不重复计费。Go race/agent 专项、完整 Tauri/Transcript/生产门禁及 Rust232/5ignored 通过；宽窄真实组件浏览器和新 sidecar 重启/旧包回读通过。干净源码 `3f4f0a7b0` 直接 app/noindex 构建、签名/版本核对、包内真实 sidecar 逐轮用量重启和旧包回读通过。三份 Preview 重复入口已清理、旧程序移入 noindex 回退目录；Spotlight 精确查询只剩 /Applications/Reasonix.app，正式版摘要不变。真实模型/原生 GUI 与 D/E/A/B/C 缺口保持。
 
 **Harness 对话显示：** [日期/复制与耗时折叠行](evidence/2026-10-05-harness-chat-chrome/README.md)。对照本地 Harness 最新源码，接入日期感知时间、中性用户气泡、独立最终回答及右侧展开箭头；单回答耗时行不提供空展开。前端全量 Tauri/Transcript 回归、生产构建和深浅色 1280/768/390px 真实组件浏览器通过，剪贴板在模拟宿主捕获。干净源码 `f2770c124` app-only 构建、严格签名/版本核对及包内 sidecar 启动/鉴权/退出通过，旧包已备份。用户后续使用验收，原生 WebKit/真实模型及 D/E/A/B/C 缺口保持。
 

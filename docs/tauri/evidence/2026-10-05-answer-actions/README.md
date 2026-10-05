@@ -29,3 +29,17 @@ Browser plugin not available，使用已有 Playwright + 安装的 headless Chro
 按用户已有 review/提交/打包授权，干净源码构建直接 macOS arm64 .app，不生成 ZIP/DMG。用户新增要求清理搜索入口并仅保留现有正式版：只读 Spotlight 确认 /Applications/Reasonix.app 与三份 Preview（Applications、macos、portable）。正式版保留不替换；旧 Preview 程序移动到不索引的回退位置，保留用户数据；本轮新包仍为 Preview，不冒充正式发布。
 
 构建脚本将实际 macOS 包放入 macos.noindex，保留 macos 相对链接供现有 Tauri/验收路径使用；冲突目录/错误链接失败关闭，不覆盖未知目录。实际 app 构建将验证此路径、签名与嵌入源码。包回执、包内 smoke和精确清理路径在本目录构建后追加。当前数据字段为 additive，旧包能读原历史；正式发布/默认下载项未切换。
+
+## 实际新包完成
+
+干净源码 `3f4f0a7b0` app-only 构建成功，macos 相对链接确实指向 macos.noindex；严格 deep codesign、host 嵌入源 revision、包内 Go vcs.revision 与 vcs.modified=false 核对通过。package-receipt.json 记录实际路径、摘要及前包备份。strict clippy 通过。包内实际 sidecar 的 health/401/shutdown/exit0/readiness清理通过。
+
+package-smoke.json 在新包实际进程中重复本轮用量/时间、两个独立回合、重启、缺失 terminal usage、provider本地字段隔离和前包回读全部通过；4次正常退出、3次本机 SSE 请求，未调用真实模型或打开原生窗口。程序仍为 ad-hoc Preview/未公证，本轮未正式发布或替换正式版。
+
+final-ui-tests.log 的旧 SVG/原生 opener 缺失警告来自原 JSDOM 夹具；真实浏览器 console 检查为空，未把这些测试夹具当作原生 UI 验收。
+
+## 重复入口已清理
+
+Spotlight 初始发现正式版和三份 Preview，清理后精确查询仅返回 `/Applications/Reasonix.app`。Applications 的旧 Preview 和 portable 旧包已注销并移到 `desktop/tauri/target/preview-backups.noindex` 下的 `.app.rollback`，逐份主程序摘要核对不变；本次新包保存在 macos.noindex，并注销兼容路径/新路径注册。正式版1.38.3原主程序 SHA256 前后相同，未替换/发布任何正式版，未操作用户 profiles。详细原路径、备份路径和搜索结果见 app-entry-cleanup.json。没有重置整个 Spotlight/LaunchServices、删除其他应用或重启 Dock。
+
+首次注销新包 canonical noindex 路径返回 -10814（没有注册/Spotlight找不到该包）而中断了后续核对；旧包已经安全移动。第二次核对记录这些已存在备份，仅将该未找到状态视为已无入口，其他错误仍拒绝；最终搜索只有正式版。公开清理脚本的 beforeSpotlight 是第二次运行时的即时状态，initialDiscovery 是首次只读核对的四条真实路径，保留这一区别。原生 Apps/Launchpad 搜索面板没有主动操作，旧面板需要重新搜索才能显示更新。
