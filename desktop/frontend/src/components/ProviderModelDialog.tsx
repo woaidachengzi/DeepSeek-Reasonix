@@ -5,10 +5,12 @@ import { useProviderT as useT } from "../lib/providerSettingsLocale";
 import { imageInputHardBlocked, imageInputState } from "../lib/providerImageInput";
 import { ModalCloseButton } from "./ModalCloseButton";
 import type { ProviderModelCapabilityView } from "../lib/types";
+import { ModelReasoningControl } from "./ModelReasoningControl";
 import { modelDraftError } from "../lib/providerModelDraft";
 
-export interface ModelDetailsDraft { model: string; contextWindow: string; maxOutputTokens: number; vision: boolean | null; }
-export default function ProviderModelDialog({ initial, candidates, contextDefault, capability, baseURL, busy, onClose, onApply, onDelete }: {
+export interface ModelDetailsDraft { model: string; contextWindow: string; maxOutputTokens: number; vision: boolean | null; supportedEfforts?: string[]; defaultEffort?: string; }
+export default function ProviderModelDialog({ initial, candidates, contextDefault, capability, baseURL, busy, effortOptions = [], modelCapabilities = [], onClose, onApply, onDelete }: {
+  effortOptions?: string[]; modelCapabilities?: ProviderModelCapabilityView[];
   initial?: ModelDetailsDraft; candidates: string[]; contextDefault?: number;
   capability?: ProviderModelCapabilityView; baseURL?: string; busy: boolean; onClose: () => void; onApply: (draft: ModelDetailsDraft) => void;
   onDelete?: () => void;
@@ -19,6 +21,10 @@ export default function ProviderModelDialog({ initial, candidates, contextDefaul
   const [context, setContext] = useState(initial?.contextWindow ?? "");
   const [output, setOutput] = useState(initial?.maxOutputTokens ? String(Math.max(-1, initial.maxOutputTokens)) : "");
   const [vision, setVision] = useState(initial?.vision == null ? "auto" : String(initial.vision));
+  const [supportedEfforts, setSupportedEfforts] = useState(initial?.supportedEfforts ?? []);
+  const [defaultEffort, setDefaultEffort] = useState(initial?.defaultEffort ?? "");
+  const activeCapability = modelCapabilities.find(item => item.model === model.trim()) ?? capability;
+  const levels = [...new Set([...(activeCapability?.reasoning?.options ?? []).map(option => option.id), ...effortOptions])];
   const [error, setError] = useState(false);
   useLayoutEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
@@ -31,10 +37,10 @@ export default function ProviderModelDialog({ initial, candidates, contextDefaul
   const imageState = imageBlocked ? "unsupported" : imageInputState(vision === "auto" ? "auto" : vision === "true" ? "on" : "off", capability);
   return createPortal(<dialog ref={dialog} className="provider-model-dialog" aria-labelledby={titleId}
     onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}>
-    <form onSubmit={event => { event.preventDefault(); if (validation) { setError(true); return; } onApply({ model:model.trim(), contextWindow:context.trim(), maxOutputTokens:Number(output) || 0, vision:vision === "auto" ? null : !imageBlocked && vision === "true" }); }}>
+    <form onSubmit={event => { event.preventDefault(); if (validation) { setError(true); return; } onApply({ model:model.trim(), contextWindow:context.trim(), maxOutputTokens:Number(output) || 0, supportedEfforts, defaultEffort, vision:vision === "auto" ? null : !imageBlocked && vision === "true" }); }}>
       <header><h2 id={titleId}>{t(initial ? "settings.modelDialog.edit" : "settings.models.add")}</h2><ModalCloseButton label={t("common.close")} disabled={busy} onClick={onClose}/></header>
       <label className="provider-model-dialog__id">{t("settings.modelDialog.id")}
-        {initial ? <span><LockKeyhole size={16}/>{model}</span> : <input autoFocus className="mem-input" value={model} disabled={busy} onChange={e=>setModel(e.target.value)} placeholder="deepseek-v4-flash"/>}
+        {initial ? <span><LockKeyhole size={16}/>{model}</span> : <input autoFocus className="mem-input" value={model} disabled={busy} onChange={e=>{setModel(e.target.value);setSupportedEfforts([]);setDefaultEffort("");}} placeholder="deepseek-v4-flash"/>}
       </label>
       <div className="provider-model-dialog__columns">
         <section><h3>{t("settings.modelDialog.parameters")}</h3>
@@ -46,6 +52,8 @@ export default function ProviderModelDialog({ initial, candidates, contextDefaul
             <input id={`${titleId}-output`} className="mem-input" type="number" min={-1} value={output} disabled={busy} placeholder={t("settings.models.inherit")} onChange={e=>setOutput(e.target.value)}/>
           </label>
           <p>{t("settings.modelDialog.outputHint")}</p>
+          <ModelReasoningControl key={model} options={levels} supportedEfforts={supportedEfforts} defaultEffort={defaultEffort} disabled={busy} onChange={(levels, defaultLevel) => { setSupportedEfforts(levels); setDefaultEffort(defaultLevel); }}/>
+          {activeCapability?.reasoning?.error && <p role="alert">{activeCapability.reasoning.error}</p>}
         </section>
         <aside><h3>{t("settings.modelDialog.capabilities")}</h3>
           <div className="provider-model-dialog__capability-title">{t("settings.modelDialog.input")}</div>

@@ -1108,6 +1108,14 @@ fn delete_provider_config(
 }
 
 #[tauri::command]
+fn preview_provider_reasoning(
+    supervisor: State<'_, BridgeSupervisor>,
+    input: SaveProviderConfigRequest,
+) -> Result<Vec<bridge::ProviderModelReasoning>, String> {
+    supervisor.preview_provider_reasoning(input)
+}
+
+#[tauri::command]
 fn discover_provider_models(
     supervisor: State<'_, BridgeSupervisor>,
     input: DiscoverProviderModelsRequest,
@@ -4007,6 +4015,7 @@ fn main() {
             save_provider_config,
             delete_provider_config,
             discover_provider_models,
+            preview_provider_reasoning,
             usage_stats,
             storage_settings,
             capability_diagnostics,

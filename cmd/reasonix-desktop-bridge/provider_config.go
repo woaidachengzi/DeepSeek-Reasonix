@@ -17,6 +17,7 @@ import (
 
 	configpkg "reasonix/internal/config"
 	"reasonix/internal/desktopbridge"
+	"reasonix/internal/provider"
 )
 
 // Provider configuration is deliberately separate from the redacted summary.
@@ -46,20 +47,29 @@ type providerPresetView struct {
 	Revision    string                    `json:"revision"`
 }
 
+type providerModelReasoning struct {
+	Model             string                     `json:"model"`
+	ReasoningProtocol string                     `json:"reasoningProtocol"`
+	SupportedEfforts  []string                   `json:"supportedEfforts"`
+	DefaultEffort     string                     `json:"defaultEffort"`
+	Options           []provider.ReasoningOption `json:"options,omitempty"`
+}
+
 type providerConfigView struct {
-	Name          string   `json:"name"`
-	DisplayName   string   `json:"displayName"`
-	Kind          string   `json:"kind"`
-	Models        []string `json:"models"`
-	Default       string   `json:"default"`
-	ModelsURLSet  bool     `json:"modelsUrlSet"`
-	NoProxy       bool     `json:"noProxy"`
-	ContextWindow int      `json:"contextWindow"`
-	ResponsesMode string   `json:"responsesMode"`
-	BalanceURLSet bool     `json:"balanceUrlSet"`
-	Removable     bool     `json:"removable"`
-	Hidden        bool     `json:"hidden"`
-	Revision      string   `json:"revision"`
+	ModelReasoning []providerModelReasoning `json:"modelReasoning"`
+	Name           string                   `json:"name"`
+	DisplayName    string                   `json:"displayName"`
+	Kind           string                   `json:"kind"`
+	Models         []string                 `json:"models"`
+	Default        string                   `json:"default"`
+	ModelsURLSet   bool                     `json:"modelsUrlSet"`
+	NoProxy        bool                     `json:"noProxy"`
+	ContextWindow  int                      `json:"contextWindow"`
+	ResponsesMode  string                   `json:"responsesMode"`
+	BalanceURLSet  bool                     `json:"balanceUrlSet"`
+	Removable      bool                     `json:"removable"`
+	Hidden         bool                     `json:"hidden"`
+	Revision       string                   `json:"revision"`
 }
 
 var errPreviewProviderChanged = errors.New("provider settings changed; reload before deleting")
@@ -140,23 +150,24 @@ type deleteProviderConfigRequest struct {
 }
 
 type saveProviderConfigRequest struct {
-	PresetID        string   `json:"presetId"`
-	PresetAction    string   `json:"presetAction"`
-	Revision        string   `json:"revision"`
-	Name            string   `json:"name"`
-	DisplayName     string   `json:"displayName"`
-	Kind            string   `json:"kind"`
-	BaseURL         string   `json:"baseUrl"`
-	ModelsURL       string   `json:"modelsUrl"`
-	ClearModelsURL  bool     `json:"clearModelsUrl"`
-	NoProxy         *bool    `json:"noProxy"`
-	ContextWindow   *int     `json:"contextWindow"`
-	ResponsesMode   *string  `json:"responsesMode"`
-	BalanceURL      string   `json:"balanceUrl"`
-	ClearBalanceURL bool     `json:"clearBalanceUrl"`
-	Models          []string `json:"models"`
-	Default         string   `json:"default"`
-	UseAPIKey       bool     `json:"useApiKey"`
+	ModelReasoning  *[]providerModelReasoning `json:"modelReasoning,omitempty"`
+	PresetID        string                    `json:"presetId"`
+	PresetAction    string                    `json:"presetAction"`
+	Revision        string                    `json:"revision"`
+	Name            string                    `json:"name"`
+	DisplayName     string                    `json:"displayName"`
+	Kind            string                    `json:"kind"`
+	BaseURL         string                    `json:"baseUrl"`
+	ModelsURL       string                    `json:"modelsUrl"`
+	ClearModelsURL  bool                      `json:"clearModelsUrl"`
+	NoProxy         *bool                     `json:"noProxy"`
+	ContextWindow   *int                      `json:"contextWindow"`
+	ResponsesMode   *string                   `json:"responsesMode"`
+	BalanceURL      string                    `json:"balanceUrl"`
+	ClearBalanceURL bool                      `json:"clearBalanceUrl"`
+	Models          []string                  `json:"models"`
+	Default         string                    `json:"default"`
+	UseAPIKey       bool                      `json:"useApiKey"`
 }
 
 var previewProviderName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$`)
@@ -188,7 +199,8 @@ func loadProviderConfigs(token string) (providerConfigList, error) {
 	for i := range cfg.Providers {
 		entry := &cfg.Providers[i]
 		view.Providers = append(view.Providers, providerConfigView{
-			Name: entry.Name, DisplayName: entry.DisplayName, Kind: entry.Kind,
+			ModelReasoning: providerReasoningForConfig(*entry),
+			Name:           entry.Name, DisplayName: entry.DisplayName, Kind: entry.Kind,
 			Models: append([]string(nil), entry.ModelList()...), Default: entry.Default,
 			ModelsURLSet: strings.TrimSpace(entry.ModelsURL) != "", NoProxy: entry.NoProxy,
 			ContextWindow: entry.ContextWindow, ResponsesMode: entry.ResponsesMode,
@@ -199,6 +211,22 @@ func loadProviderConfigs(token string) (providerConfigList, error) {
 		})
 	}
 	return view, nil
+}
+
+// Expose adapter-owned levels without endpoints or credential identifiers.
+func providerReasoningForConfig(entry configpkg.ProviderEntry) []providerModelReasoning {
+	cfg := configpkg.Config{Providers: []configpkg.ProviderEntry{entry}}
+	out := make([]providerModelReasoning, 0, len(entry.ModelList()))
+	for _, model := range entry.ModelList() {
+		resolved, ok := cfg.ResolveModel(entry.Name + "/" + model)
+		if !ok {
+			continue
+		}
+		ov := entry.ModelOverrides[model]
+		cap := configpkg.ReasoningCapabilityForEntry(resolved)
+		out = append(out, providerModelReasoning{Model: model, ReasoningProtocol: ov.ReasoningProtocol, SupportedEfforts: ov.SupportedEfforts, DefaultEffort: ov.DefaultEffort, Options: cap.Options})
+	}
+	return out
 }
 
 func previewProviderPresets(cfg *configpkg.Config, revision string) []providerPresetView {
@@ -466,6 +494,33 @@ func validateProviderConfigInput(input *saveProviderConfigRequest) error {
 	if !seen[input.Default] {
 		return fmt.Errorf("default model must appear in the model list")
 	}
+	if input.ModelReasoning != nil {
+		seenReasoning := map[string]bool{}
+		for _, item := range *input.ModelReasoning {
+			if !seen[item.Model] || seenReasoning[item.Model] {
+				return fmt.Errorf("reasoning settings must reference distinct configured models")
+			}
+			seenReasoning[item.Model] = true
+			switch item.ReasoningProtocol {
+			case "", "auto", "openai", "deepseek", "glm", "kimi-k3", "none":
+			default:
+				return fmt.Errorf("invalid reasoning protocol")
+			}
+			if len(item.SupportedEfforts) > 32 {
+				return fmt.Errorf("too many reasoning levels")
+			}
+			levels := map[string]bool{}
+			for _, level := range item.SupportedEfforts {
+				if level == "auto" || len(level) > 64 || !previewProviderName.MatchString(level) || strings.ToLower(level) != level || levels[level] {
+					return fmt.Errorf("reasoning levels must be distinct lowercase identifiers; use automatic for inheritance")
+				}
+				levels[level] = true
+			}
+			if item.DefaultEffort != "" && len(item.SupportedEfforts) > 0 && !levels[item.DefaultEffort] {
+				return fmt.Errorf("default reasoning level must be selected in available levels")
+			}
+		}
+	}
 	if input.BaseURL != "" {
 		if err := validateProviderURL(input.BaseURL); err != nil {
 			return fmt.Errorf("endpoint %w", err)
@@ -569,6 +624,31 @@ func persistProviderConfig(input saveProviderConfigRequest) error {
 	entry.Model = input.Models[0]
 	entry.Models = append([]string(nil), input.Models...)
 	entry.Default = input.Default
+	if input.ModelReasoning != nil {
+		if entry.ModelOverrides == nil {
+			entry.ModelOverrides = map[string]configpkg.ProviderModelOverride{}
+		}
+		for _, item := range *input.ModelReasoning {
+			ov := entry.ModelOverrides[item.Model]
+			ov.ReasoningProtocol = item.ReasoningProtocol
+			ov.SupportedEfforts = append([]string(nil), item.SupportedEfforts...)
+			ov.DefaultEffort = item.DefaultEffort
+			entry.ModelOverrides[item.Model] = ov
+		}
+		candidate := configpkg.Config{Providers: []configpkg.ProviderEntry{entry}}
+		for _, item := range *input.ModelReasoning {
+			resolved, _ := candidate.ResolveModel(entry.Name + "/" + item.Model)
+			cap := configpkg.ReasoningCapabilityForEntry(resolved)
+			if err := cap.Validate(item.Model, configpkg.EffectiveEffort(resolved)); err != nil {
+				return err
+			}
+			for _, level := range item.SupportedEfforts {
+				if !slices.Contains(cap.IDs(), level) {
+					return fmt.Errorf("model %q does not support reasoning level %q", item.Model, level)
+				}
+			}
+		}
+	}
 	if !exists && input.UseAPIKey {
 		entry.APIKeyEnv = "REASONIX_" + strings.ToUpper(strings.ReplaceAll(input.Name, "-", "_")) + "_API_KEY"
 	}

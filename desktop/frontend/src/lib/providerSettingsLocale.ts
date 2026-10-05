@@ -3,6 +3,16 @@ import { useI18n, type DictKey } from "./i18n";
 
 // Loaded with model settings, keeping setup-only copy out of the chat startup bundle.
 const en = {
+  "providerUI.reasoningReadFailed": "Unable to read reasoning levels. Check the model and protocol, then retry.",
+  "settings.modelDialog.reasoningEffort": "Reasoning effort",
+  "settings.modelDialog.reasoningEffortOptions": "Available reasoning levels",
+  "settings.modelDialog.reasoningEffortDefault": "Default reasoning level",
+  "settings.modelDialog.resetReasoningEffort": "Reset reasoning effort",
+  "settings.modelDialog.automatic": "Automatic",
+  "settings.modelDialog.reasoningEffortHint": "Automatic inherits the provider default. Higher levels may use more time and tokens.",
+  "settings.modelDialog.customEfforts": "Custom reasoning levels",
+  "settings.modelDialog.customEffortsHint": "Only add levels documented by this endpoint. Automatic inherits provider defaults.",
+  "settings.modelDialog.invalidEfforts": "Invalid level. Use lowercase letters, digits, hyphens or underscores; choose Automatic separately.",
   "providerUI.modelHelpLabel": "About {name}",
   "providerUI.defaultModelHelp": "Used for new conversations. Existing conversations keep their saved model; change it in the conversation when needed.",
   "providerUI.plannerModelHelp": "Follow conversation model: use the same model for planning and execution.\n\nChoose another model to handle planning separately; execution continues with the conversation model.",
@@ -56,6 +66,16 @@ const en = {
   "providerUI.draftHint": "Changes stay in this form until you save.",
 };
 const zh: Record<keyof typeof en, string> = {
+  "providerUI.reasoningReadFailed": "无法读取推理档位，请检查模型和推理协议后重试。",
+  "settings.modelDialog.reasoningEffort": "思考强度",
+  "settings.modelDialog.reasoningEffortOptions": "可用思考档位",
+  "settings.modelDialog.reasoningEffortDefault": "默认思考档位",
+  "settings.modelDialog.resetReasoningEffort": "恢复自动思考强度",
+  "settings.modelDialog.automatic": "自动",
+  "settings.modelDialog.reasoningEffortHint": "自动继承服务商默认值。更高档位可能消耗更多时间和 token。",
+  "settings.modelDialog.customEfforts": "手动添加推理档位",
+  "settings.modelDialog.customEffortsHint": "仅添加此服务端文档明确支持的档位；自动表示继承服务商默认值。",
+  "settings.modelDialog.invalidEfforts": "档位格式有误，请使用小写字母、数字、连字符或下划线；自动请单独选择。",
   "providerUI.modelHelpLabel": "{name}说明",
   "providerUI.defaultModelHelp": "用于新建会话。已有会话继续使用各自保存的模型，需要时可在会话中切换。",
   "providerUI.plannerModelHelp": "跟随会话模型：使用同一个模型进行规划与执行。\n\n指定其它模型后，由它独立负责规划，执行仍使用会话模型。",
@@ -109,6 +129,16 @@ const zh: Record<keyof typeof en, string> = {
   "providerUI.draftHint": "更改暂存于表单，点击保存后生效。",
 };
 const zhTW: Record<keyof typeof en, string> = {
+  "providerUI.reasoningReadFailed": "無法讀取推理檔位，請檢查模型和推理協定後重試。",
+  "settings.modelDialog.reasoningEffort": "思考強度",
+  "settings.modelDialog.reasoningEffortOptions": "可用思考檔位",
+  "settings.modelDialog.reasoningEffortDefault": "預設思考檔位",
+  "settings.modelDialog.resetReasoningEffort": "恢復自動思考強度",
+  "settings.modelDialog.automatic": "自動",
+  "settings.modelDialog.reasoningEffortHint": "自動繼承服務商預設值。更高檔位可能消耗更多時間和 token。",
+  "settings.modelDialog.customEfforts": "手動添加推理檔位",
+  "settings.modelDialog.customEffortsHint": "僅添加此服務端文件明確支援的檔位；自動表示繼承服務商預設值。",
+  "settings.modelDialog.invalidEfforts": "檔位格式有誤，請使用小寫字母、數字、連字號或底線；自動請單獨選擇。",
   "providerUI.modelHelpLabel": "{name}說明",
   "providerUI.defaultModelHelp": "用於新建對話。已有對話繼續使用各自儲存的模型，需要時可在對話中切換。",
   "providerUI.plannerModelHelp": "跟隨對話模型：使用同一個模型進行規劃與執行。\n\n指定其他模型後，由它獨立負責規劃，執行仍使用對話模型。",

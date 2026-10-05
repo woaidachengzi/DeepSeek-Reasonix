@@ -615,7 +615,30 @@ pub struct BridgeHistory {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ProviderReasoningOption {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderModelReasoning {
+    pub model: String,
+    #[serde(default)]
+    pub reasoning_protocol: String,
+    #[serde(default)]
+    pub supported_efforts: Option<Vec<String>>,
+    #[serde(default)]
+    pub default_effort: String,
+    #[serde(default)]
+    pub options: Vec<ProviderReasoningOption>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProviderConfigView {
+    #[serde(default)]
+    pub model_reasoning: Vec<ProviderModelReasoning>,
     pub name: String,
     pub display_name: String,
     pub kind: String,
@@ -690,6 +713,8 @@ pub struct ProviderPresetView {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveProviderConfigRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_reasoning: Option<Vec<ProviderModelReasoning>>,
     #[serde(default)]
     pub preset_id: String,
     #[serde(default)]
@@ -2653,6 +2678,24 @@ impl BridgeSupervisor {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
         Ok(configs)
+    }
+
+    pub fn preview_provider_reasoning(
+        &self,
+        input: SaveProviderConfigRequest,
+    ) -> Result<Vec<ProviderModelReasoning>, String> {
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/provider-configs/reasoning",
+            Some(json!(input)),
+            None,
+        )?;
+        if response.get("protocolVersion").and_then(Value::as_u64)
+            != Some(u64::from(PROTOCOL_VERSION))
+        {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        serde_json::from_value(response["modelReasoning"].clone()).map_err(display_error)
     }
 
     pub fn discover_provider_models(
@@ -5572,6 +5615,28 @@ mod tests {
 
     #[test]
     fn settings_wire_views_preserve_model_efforts_and_hooks() {
+        let reasoning = json!([{"model":"chat", "reasoningProtocol":"openai",
+            "supportedEfforts":["low","high","ultra"], "defaultEffort":"ultra",
+            "options":[{"id":"ultra","name":"ultra"}]}]);
+        let request: SaveProviderConfigRequest = serde_json::from_value(json!({
+            "name":"custom", "displayName":"", "kind":"openai", "baseUrl":"",
+            "models":["chat"], "default":"chat", "useApiKey":false,
+            "modelReasoning":reasoning
+        }))
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(request).unwrap()["modelReasoning"],
+            reasoning
+        );
+        let view: super::ProviderConfigView = serde_json::from_value(json!({
+            "name":"custom", "displayName":"", "kind":"openai", "models":["chat"],
+            "default":"chat", "removable":true, "revision":"abc", "modelReasoning":reasoning
+        }))
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(view).unwrap()["modelReasoning"],
+            reasoning
+        );
         let providers: ProviderConfigList = serde_json::from_value(json!({
             "protocolVersion": 1, "providers": [],
             "presets": [{"id":"mimo-api", "label":"MiMo API", "description":"Direct API",

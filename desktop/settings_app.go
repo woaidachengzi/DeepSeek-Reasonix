@@ -86,14 +86,15 @@ type ProviderView struct {
 }
 
 type ProviderModelCapabilityView struct {
-	Model                   string   `json:"model"`
-	InputModalities         []string `json:"inputModalities"`
-	State                   string   `json:"state"`
-	Source                  string   `json:"source"`
-	AutomaticState          string   `json:"automaticState"`
-	AutomaticSource         string   `json:"automaticSource"`
-	ImageInputEnableAllowed bool     `json:"imageInputEnableAllowed"`
-	ImageInputBlockReason   string   `json:"imageInputBlockReason,omitempty"`
+	Reasoning               *provider.ReasoningCapability `json:"reasoning,omitempty"`
+	Model                   string                        `json:"model"`
+	InputModalities         []string                      `json:"inputModalities"`
+	State                   string                        `json:"state"`
+	Source                  string                        `json:"source"`
+	AutomaticState          string                        `json:"automaticState"`
+	AutomaticSource         string                        `json:"automaticSource"`
+	ImageInputEnableAllowed bool                          `json:"imageInputEnableAllowed"`
+	ImageInputBlockReason   string                        `json:"imageInputBlockReason,omitempty"`
 }
 
 type ProviderModelCatalogUpdate struct {
@@ -735,9 +736,21 @@ func providerModelCapabilitiesForView(p config.ProviderEntry, models []string) [
 		entry := p
 		entry.Model = model
 		capability := resolver.Resolve(&entry)
-		out = append(out, modelCapabilityView(capability))
+		view := modelCapabilityView(capability)
+		view.Reasoning = providerModelReasoningForView(p, model)
+		out = append(out, view)
 	}
 	return out
+}
+
+func providerModelReasoningForView(p config.ProviderEntry, model string) *provider.ReasoningCapability {
+	cfg := config.Config{Providers: []config.ProviderEntry{p}}
+	cfg.Providers[0].Models = append(append([]string(nil), p.ModelList()...), model)
+	if resolved, ok := cfg.ResolveModel(p.Name + "/" + model); ok {
+		reasoning := config.ReasoningCapabilityForEntry(resolved)
+		return &reasoning
+	}
+	return nil
 }
 
 func modelCapabilityView(capability config.ResolvedModelCapability) ProviderModelCapabilityView {

@@ -521,7 +521,16 @@ export async function tauriProviderSummary(workspaceRoot?: string, scope: "globa
   return invoke<TauriProviderSummary>("provider_summary", { scope, ...(workspaceRoot ? { workspaceRoot } : {}) });
 }
 
+export interface TauriModelReasoning {
+  model: string;
+  reasoningProtocol: string;
+  supportedEfforts: string[] | null;
+  defaultEffort: string;
+  options?: { id: string; name: string }[];
+}
+
 export interface TauriProviderConfig {
+  modelReasoning?: TauriModelReasoning[];
   name: string;
   displayName: string;
   kind: string;
@@ -594,6 +603,11 @@ export interface TauriProviderPreset {
 export async function tauriProviderConfigs(): Promise<TauriProviderConfigList> {
   requireTauri();
   return invoke<TauriProviderConfigList>("provider_configs");
+}
+
+export async function previewTauriProviderReasoning(input: TauriProviderConfigInput): Promise<TauriModelReasoning[]> {
+  requireTauri();
+  return invoke<TauriModelReasoning[]>("preview_provider_reasoning", { input });
 }
 
 export async function discoverTauriProviderModels(provider: Pick<TauriProviderConfig, "name" | "revision">): Promise<TauriDiscoveredProviderModels> {

@@ -82,16 +82,20 @@ func (a *App) FetchProviderModelCatalogDraft(p ProviderView, key string) ([]Prov
 	}
 	before := savedIdentity()
 	e := config.ProviderEntry{
-		Name:       p.Name,
-		Kind:       p.Kind,
-		BaseURL:    p.BaseURL,
-		ModelsURL:  strings.TrimSpace(p.ModelsURL),
-		APIKeyEnv:  p.APIKeyEnv,
-		Headers:    p.Headers,
-		AuthHeader: p.AuthHeader,
-		NoProxy:    p.NoProxy,
-		ChatURL:    p.ChatURL,
-		RequestURL: p.RequestURL,
+		Name:              p.Name,
+		Kind:              p.Kind,
+		BaseURL:           p.BaseURL,
+		ModelsURL:         strings.TrimSpace(p.ModelsURL),
+		APIKeyEnv:         p.APIKeyEnv,
+		Headers:           p.Headers,
+		AuthHeader:        p.AuthHeader,
+		NoProxy:           p.NoProxy,
+		ChatURL:           p.ChatURL,
+		RequestURL:        p.RequestURL,
+		ReasoningProtocol: p.ReasoningProtocol,
+		SupportedEfforts:  p.SupportedEfforts,
+		DefaultEffort:     p.DefaultEffort,
+		Thinking:          p.Thinking,
 	}
 	started := time.Now()
 	credentialsRevision := config.CredentialStoreRevision()
@@ -137,7 +141,9 @@ func (a *App) FetchProviderModelCatalogDraft(p ProviderView, key string) ([]Prov
 		entry := e
 		entry.Model = model.ID
 		resolved := capabilities.Resolve(&entry)
-		result = append(result, modelCapabilityView(resolved))
+		view := modelCapabilityView(resolved)
+		view.Reasoning = providerModelReasoningForView(e, model.ID)
+		result = append(result, view)
 	}
 	return result, nil
 }

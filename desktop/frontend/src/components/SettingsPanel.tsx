@@ -1370,6 +1370,7 @@ export function normalizeProviderView(p: ProviderView): ProviderView {
     const model = String(raw.model ?? "").trim();
     if (!model) return [];
     return [{
+      reasoning: raw.reasoning,
       automaticState: raw.automaticState,
       automaticSource: raw.automaticSource,
       imageInputEnableAllowed: raw.imageInputEnableAllowed,
@@ -6317,7 +6318,7 @@ export function ProviderEditor({
     setModelContextWindows(current => ({...current, [draft.model]:draft.contextWindow}));
     setModelOverrides(current => {
       const previous = current.find(item => item.model === draft.model);
-      return [...current.filter(item => item.model !== draft.model), {...previous, model:draft.model, reasoningProtocol:previous?.reasoningProtocol ?? "", supportedEfforts:previous?.supportedEfforts ?? [], defaultEffort:previous?.defaultEffort ?? "", vision:draft.vision, maxOutputTokens:draft.maxOutputTokens}];
+      return [...current.filter(item => item.model !== draft.model), {...previous, model:draft.model, reasoningProtocol:previous?.reasoningProtocol ?? "", supportedEfforts:draft.supportedEfforts ?? previous?.supportedEfforts ?? [], defaultEffort:draft.defaultEffort ?? previous?.defaultEffort ?? "", vision:draft.vision, maxOutputTokens:draft.maxOutputTokens}];
     });
     setModelDialog(null);
   };
@@ -6506,8 +6507,9 @@ export function ProviderEditor({
       {fetchStatus && <div role="status" className="provider-fetch-status provider-fetch-status--ok">{fetchStatus}</div>}
       {fetchFallback && <div role="alert" className="provider-fetch-status provider-fetch-status--warn">{fetchFallback}</div>}
       {modelDialog !== null && <Suspense fallback={null}><ProviderModelDialog
+        effortOptions={supportedEfforts} modelCapabilities={modelCapabilities}
         baseURL={effectiveRequestUrl} candidates={modelCandidateNames} contextDefault={Number(ctx) || undefined}
-        initial={modelDialog ? {model:modelDialog, contextWindow:modelContextWindows[modelDialog] ?? "", maxOutputTokens:modelOverrides.find(item=>item.model === modelDialog)?.maxOutputTokens ?? 0, vision:modelOverrides.find(item=>item.model === modelDialog)?.vision ?? null} : undefined}
+        initial={modelDialog ? {model:modelDialog, contextWindow:modelContextWindows[modelDialog] ?? "", supportedEfforts:modelOverrides.find(item=>item.model === modelDialog)?.supportedEfforts ?? [], defaultEffort:modelOverrides.find(item=>item.model === modelDialog)?.defaultEffort ?? "", maxOutputTokens:modelOverrides.find(item=>item.model === modelDialog)?.maxOutputTokens ?? 0, vision:modelOverrides.find(item=>item.model === modelDialog)?.vision ?? null} : undefined}
         capability={modelCapabilities.find(item=>item.model === modelDialog)} busy={busy || fetchingModels}
         onClose={()=>setModelDialog(null)} onApply={applyModelDetails} onDelete={deleteModel}/></Suspense>}
       <ProviderEditorModelPicker

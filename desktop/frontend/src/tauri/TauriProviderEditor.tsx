@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { deleteTauriProviderConfig, discoverTauriProviderModels, installTauriProviderPreset, resetTauriProviderPreset, saveTauriProviderAPIKey, saveTauriProviderConfig, tauriMessageFrom, tauriProviderConfigs, tauriProviderSummary, type TauriProviderConfig, type TauriProviderConfigInput, type TauriProviderPreset, type TauriProviderSummary } from "../lib/tauriBridge";
-import { useT } from "../lib/i18n";
+import { deleteTauriProviderConfig, previewTauriProviderReasoning, discoverTauriProviderModels, installTauriProviderPreset, resetTauriProviderPreset, saveTauriProviderAPIKey, saveTauriProviderConfig, tauriMessageFrom, tauriProviderConfigs, tauriProviderSummary, type TauriModelReasoning, type TauriProviderConfig, type TauriProviderConfigInput, type TauriProviderPreset, type TauriProviderSummary } from "../lib/tauriBridge";
+import { ModelReasoningControl } from "../components/ModelReasoningControl";
+import { useProviderT as useT } from "../lib/providerSettingsLocale";
 
 const EMPTY: TauriProviderConfigInput = { name: "", displayName: "", kind: "openai", baseUrl: "", modelsUrl: "", clearModelsUrl: false, modelsUrlSet: false, noProxy: false, contextWindow: 0, responsesMode: "", balanceUrl: "", clearBalanceUrl: false, balanceUrlSet: false, models: [], default: "", useApiKey: true };
 
@@ -24,6 +25,29 @@ export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyC
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [reasoningPreview, setReasoningPreview] = useState<{ signature: string; models: TauriModelReasoning[]; error?: string } | null>(null);
+  const [reasoningRetry, setReasoningRetry] = useState(0);
+  const previewModels = [...new Set(modelText.split(/\r?\n|,/).map(value => value.trim()).filter(Boolean))];
+  const reasoningSignature = editing && previewModels.length ? JSON.stringify({
+    name: editing.name, kind: editing.kind, baseUrl: editing.baseUrl, models: previewModels,
+    modelReasoning: editing.modelReasoning?.filter(item => previewModels.includes(item.model)).map(({ model, reasoningProtocol, supportedEfforts, defaultEffort }) => ({ model, reasoningProtocol, supportedEfforts, defaultEffort })),
+  }) : "";
+  const reasoningReady = reasoningPreview?.signature === reasoningSignature;
+
+  useEffect(() => {
+    if (!reasoningSignature) return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      const draft = JSON.parse(reasoningSignature);
+      void previewTauriProviderReasoning({ ...EMPTY, ...draft, default: draft.models[0] }).then(models => {
+        if (active) setReasoningPreview({signature:reasoningSignature, models});
+      }).catch(error => {
+        if (active) setReasoningPreview({signature:reasoningSignature, models:[], error:tauriMessageFrom(error)});
+      });
+    }, 150);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [reasoningSignature, reasoningRetry]);
+
 
   useEffect(() => { onBusyChange?.(saving || discoveringModels || pendingKeys.length > 0); }, [saving, discoveringModels, pendingKeys.length, onBusyChange]);
 
@@ -105,7 +129,7 @@ export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyC
         }
       } catch { setError(t("settings.previewProvider.error.invalidEndpoint")); return; }
     }
-    const input: TauriProviderConfigInput = { name: editing.name, displayName: editing.displayName, kind: editing.kind, baseUrl: editing.baseUrl, modelsUrl: editing.modelsUrl, clearModelsUrl: editing.clearModelsUrl, modelsUrlSet: editing.modelsUrlSet, noProxy: editing.noProxy, contextWindow: editing.contextWindow, responsesMode: editing.responsesMode, balanceUrl: editing.balanceUrl, clearBalanceUrl: editing.clearBalanceUrl, balanceUrlSet: editing.balanceUrlSet, models, default: models.includes(editing.default) ? editing.default : models[0], useApiKey: editing.useApiKey };
+    const input: TauriProviderConfigInput = { modelReasoning: editing.modelReasoning?.filter(item => models.includes(item.model)).map(({model, reasoningProtocol, supportedEfforts, defaultEffort}) => ({model, reasoningProtocol, supportedEfforts, defaultEffort})), name: editing.name, displayName: editing.displayName, kind: editing.kind, baseUrl: editing.baseUrl, modelsUrl: editing.modelsUrl, clearModelsUrl: editing.clearModelsUrl, modelsUrlSet: editing.modelsUrlSet, noProxy: editing.noProxy, contextWindow: editing.contextWindow, responsesMode: editing.responsesMode, balanceUrl: editing.balanceUrl, clearBalanceUrl: editing.clearBalanceUrl, balanceUrlSet: editing.balanceUrlSet, models, default: models.includes(editing.default) ? editing.default : models[0], useApiKey: editing.useApiKey };
     setSaving(true);
     setError("");
     try {
@@ -225,6 +249,15 @@ export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyC
       {editingExisting && <button type="button" className="tauri-settings-button" onClick={() => void discoverModels()} disabled={saving || discoveringModels}>{discoveringModels ? t("settings.previewProvider.discoveringModels") : t("settings.previewProvider.discoverModels")}</button>}
       {modelText.trim() && <label>{t("settings.previewProvider.defaultModel")}<select value={editing.default && modelText.split(/\r?\n|,/).map(value => value.trim()).includes(editing.default) ? editing.default : modelText.split(/\r?\n|,/).map(value => value.trim()).filter(Boolean)[0] ?? ""} disabled={saving} onChange={event => setEditing({ ...editing, default: event.target.value })}>{modelText.split(/\r?\n|,/).map(value => value.trim()).filter(Boolean).map(model => <option key={model} value={model}>{model}</option>)}</select></label>}
 
+      {reasoningReady && reasoningPreview?.error && <p role="alert">{t("providerUI.reasoningReadFailed")} <button type="button" className="tauri-settings-button" disabled={saving} onClick={() => setReasoningRetry(value => value + 1)}>{t("common.retry")}</button></p>}
+      {previewModels.map(model => {
+        const reasoning = editing.modelReasoning?.find(item => item.model === model);
+        const update = (changes: Partial<NonNullable<TauriProviderConfigInput["modelReasoning"]>[number]>) => setEditing({ ...editing, modelReasoning: [...(editing.modelReasoning ?? []).filter(item => item.model !== model), { model, reasoningProtocol: "", supportedEfforts: [], defaultEffort: "", ...reasoning, ...changes }] });
+        return <details key={model} className="tauri-provider-advanced"><summary>{model} · {t("settings.modelDialog.reasoningEffort")}</summary>
+          <label>{t("settings.reasoningProtocol")}<select value={reasoning?.reasoningProtocol ?? ""} disabled={saving} onChange={event => update({reasoningProtocol:event.target.value, supportedEfforts:[], defaultEffort:""})}><option value="">{t("common.auto")}</option>{["openai", "deepseek", "glm", "kimi-k3", "none"].map(protocol => <option key={protocol} value={protocol}>{protocol}</option>)}</select></label>
+          <ModelReasoningControl options={(reasoningReady ? reasoningPreview?.models.find(item => item.model === model)?.options ?? [] : []).map(option => option.id)} supportedEfforts={reasoning?.supportedEfforts ?? []} defaultEffort={reasoning?.defaultEffort ?? ""} disabled={saving || !reasoningReady || Boolean(reasoningPreview?.error) || reasoning?.reasoningProtocol === "none"} onChange={(levels, defaultLevel) => update({supportedEfforts:levels, defaultEffort:defaultLevel})}/>
+        </details>;
+      })}
     </> : null;
 
   const editorForm = editing ? <div hidden={adding === "catalog" || (!editingExisting && adding !== "custom")} className="tauri-provider-editor-form">

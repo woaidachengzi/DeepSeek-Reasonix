@@ -257,3 +257,14 @@
 .settings-page-content:has(.model-access-page:not([hidden]) .provider-connections:not([hidden])) > .banner {
   flex-shrink: 0;
 }
+
+.provider-model-dialog__effort-card { margin-top: 18px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: color-mix(in srgb, var(--bg) 48%, transparent); }
+.provider-model-dialog__effort-card > label { margin-bottom: 9px; }
+.provider-model-dialog__effort-card .provider-model-dialog__chips { margin-bottom: 14px; }
+.provider-model-dialog__effort-card .provider-model-dialog__chips label { padding: 7px 9px; background: var(--bg-elev); }
+.provider-model-dialog__effort-card > p { margin-bottom: 0; }
+
+.provider-model-dialog__effort-card > label { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; }
+.provider-model-dialog__effort-card > label > input,
+.provider-model-dialog__effort-card > label > select { grid-column: 1 / -1; width: 100%; }
+.provider-model-dialog__effort-card .provider-model-dialog__chips label { display: inline-flex; }

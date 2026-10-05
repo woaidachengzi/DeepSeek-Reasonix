@@ -1820,6 +1820,7 @@ export interface ProviderModelCatalogUpdate {
 }
 
 export interface ProviderModelCapabilityView {
+  reasoning?: { options: { id: string; name: string }[]; default?: string; error?: string };
 	automaticState?: string;
 	automaticSource?: string;
 	imageInputEnableAllowed?: boolean;
