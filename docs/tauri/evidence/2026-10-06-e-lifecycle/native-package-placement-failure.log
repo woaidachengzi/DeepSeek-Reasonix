@@ -1,0 +1,3 @@
+packaged window geometry after native capture: {"width": 2560, "height": 1640, "maximized": false, "x": -3600, "y": 200, "scale_factor": 2.0}
+packaged Preview managed profile, private credential identity, native notification authorization (granted), Global workspace, sidecar readiness, and shutdown: OK
+packaged Preview smoke failed: packaged window did not retain the requested normal geometry: {"width": 2560, "height": 1640, "maximized": false, "x": -3372, "y": 200, "scale_factor": 2.0}

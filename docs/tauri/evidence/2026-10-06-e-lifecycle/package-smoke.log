@@ -1,0 +1,5 @@
+=== RUN   TestEActualPackageLifecycleSmoke
+    e_package_smoke_test.go:252: actual packaged sidecar sha256=3fb687e990314c1d25246c3e503588979080f3d3a42506b7d90be65939bbb3f0; restart/SSH trust/SFTP revision/loopback tunnel/pairing scope/auth/0600/exit passed; rollback=true
+--- PASS: TestEActualPackageLifecycleSmoke (1.66s)
+PASS
+ok  	reasonix/cmd/reasonix-desktop-bridge	2.332s

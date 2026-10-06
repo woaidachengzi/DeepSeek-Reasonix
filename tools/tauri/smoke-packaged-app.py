@@ -225,7 +225,7 @@ def smoke_once(host_binary, sidecar_binary, identifier, managed, window_state=No
             if window_state is not None:
                 saved = placement_helper().read_window_state_template(app_data / "window-state.json")
                 if saved != window_state:
-                    raise RuntimeError("packaged window did not retain the requested normal geometry")
+                    raise RuntimeError("packaged window did not retain the requested normal geometry: " + json.dumps(saved))
                 print("packaged window geometry after native capture: " + json.dumps(saved))
             notification_status = json.loads((temp / "reasonix-native-notification-smoke.json").read_text())
             if notification_status.get("permission") not in {"not_determined", "denied", "granted", "provisional"} or notification_status.get("clickSupported") is not True:

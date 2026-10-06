@@ -1,0 +1,4 @@
+packaged window geometry after native capture: {"width": 2560, "height": 1640, "maximized": false, "x": -3000, "y": 200, "scale_factor": 2.0}
+packaged Preview managed profile, private credential identity, native notification authorization (granted), Global workspace, sidecar readiness, and shutdown: OK
+packaged window geometry after native capture: {"width": 2560, "height": 1640, "maximized": false, "x": -3000, "y": 200, "scale_factor": 2.0}
+packaged Preview explicit profile, private credential identity, native notification authorization (granted), Global workspace, sidecar readiness, and shutdown: OK

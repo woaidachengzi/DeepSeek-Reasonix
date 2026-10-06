@@ -1,0 +1,94 @@
+{
+  "recordedAt": "2026-10-06T13:17:33.613286+00:00",
+  "scope": "E first batches; updater excluded; no formal release",
+  "sourceCommit": "7e6645bdc8f9011a4cf289d6885e998503e65651",
+  "sourceCleanAtBuild": true,
+  "artifact": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos.noindex/Reasonix Tauri Preview.app",
+  "artifactFormat": "direct .app (no ZIP/DMG)",
+  "hashes": {
+    "reasonix-tauri": "790315fa4c84697122f6646c3104cfa129ad6cc29f5047f4e31977441980b726",
+    "reasonix-desktop-bridge": "3fb687e990314c1d25246c3e503588979080f3d3a42506b7d90be65939bbb3f0"
+  },
+  "signature": {
+    "deepStrictVerification": "passed",
+    "type": "ad-hoc",
+    "notarized": false
+  },
+  "rollback": {
+    "artifact": "/var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/reasonix-e-rollback-g1fy6b6e/Reasonix Tauri Preview.app.rollback",
+    "sourceCommit": "46981f4a06da15465fb31e22a4c845b8b611df95",
+    "newConfigReadByPreviousBinary": true,
+    "currentBinaryReopenedAndRemovedAccount": true,
+    "testProfile": "disposable; no production data"
+  },
+  "packageLifecycle": {
+    "result": "passed",
+    "log": "package-smoke.log",
+    "test": "TestEActualPackageLifecycleSmoke",
+    "cases": [
+      "unauthenticated request rejected",
+      "explicit SSH fingerprint trust and persistence",
+      "real SFTP browse/read/revision write and stale conflict",
+      "real loopback forward transport",
+      "forward port released on shutdown",
+      "bot created disabled with private credential",
+      "pairing approval stays connection scoped",
+      "config/credential/pairing private file permissions",
+      "restart preserved bot config/credential",
+      "old binary read current config and current binary resumed",
+      "sidecar clean exit/readiness removed"
+    ]
+  },
+  "nativeHost": {
+    "result": "passed",
+    "log": "native-package-smoke.log",
+    "profiles": [
+      "managed",
+      "explicit"
+    ],
+    "geometry": {
+      "width": 2560,
+      "height": 1640,
+      "x": -3000,
+      "y": 200,
+      "scale_factor": 2.0,
+      "maximized": false
+    },
+    "display": "left screen 2, HiDPI scale 2",
+    "checks": [
+      "actual window capture matches template on exit",
+      "isolated profile identity/private metadata",
+      "release ignores dev sidecar override",
+      "unauthenticated sidecar health rejected",
+      "Global workspace inside profile",
+      "notification permission read-only query",
+      "normal host exit cleans sidecar/readiness"
+    ],
+    "limits": [
+      "not the entire D monitor/window matrix",
+      "notification permission query only, no delivery/click acceptance",
+      "normal exit through package smoke flag, no manual tray/menu interactions"
+    ],
+    "residualOwnedProcesses": []
+  },
+  "remaining": [
+    "remote Serve/controller and remote conversations/workspaces",
+    "remote mkdir/rename/delete and configured forwards automatic apply",
+    "bot Desktop commands/watch/approval/takeover",
+    "QR install/full diagnostics and real IM platform tests",
+    "complex management pages actual process/permission/recovery matrix",
+    "unclosed A/B/C/D release gates",
+    "official signing/notarization"
+  ],
+  "formalApplication": "untouched /Applications/Reasonix.app",
+  "defaultDownload": "unchanged",
+  "searchCleanup": {
+    "unregisteredActualPreviewPath": true,
+    "aliasUnregisterExit": 1,
+    "aliasUnregisterMeaning": "not registered after actual path was removed",
+    "indexedApplications": [
+      "/Applications/Reasonix.app"
+    ],
+    "formalBinarySha256": "31b9e70e8efabd314c4bc327c8c2c4e1644652beab3760a1092eb297b3a2d0a9"
+  }
+}
