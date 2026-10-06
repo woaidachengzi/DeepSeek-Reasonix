@@ -97,14 +97,16 @@ type remoteSaveResponse struct {
 }
 
 type previewRemoteSessions struct {
-	mu      sync.Mutex
-	saveMu  sync.Mutex
-	clients map[string]*remote.Client
-	peers   map[string]remote.HostKeyQuestion
+	mu       sync.Mutex
+	saveMu   sync.Mutex
+	clients  map[string]*remote.Client
+	peers    map[string]remote.HostKeyQuestion
+	attempts map[string]*remoteConnectAttempt
+	closed   bool
 }
 
 func newPreviewRemoteSessions() *previewRemoteSessions {
-	return &previewRemoteSessions{clients: map[string]*remote.Client{}, peers: map[string]remote.HostKeyQuestion{}}
+	return &previewRemoteSessions{clients: map[string]*remote.Client{}, peers: map[string]remote.HostKeyQuestion{}, attempts: map[string]*remoteConnectAttempt{}}
 }
 
 func (m *previewRemoteSessions) get(name string) (*remote.Client, remote.HostKeyQuestion) {
@@ -116,15 +118,48 @@ func (m *previewRemoteSessions) get(name string) (*remote.Client, remote.HostKey
 	return m.clients[name], m.peers[name]
 }
 
-func (m *previewRemoteSessions) put(name string, client *remote.Client, peer remote.HostKeyQuestion) {
+// An attempt owns publication until disconnect, configuration change, shutdown
+// or a newer request cancels it. A late dial must never resurrect that host.
+type remoteConnectAttempt struct{ cancel context.CancelFunc }
+
+func (m *previewRemoteSessions) begin(name string, parent context.Context) (context.Context, *remoteConnectAttempt, error) {
 	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return nil, nil, desktopbridge.ErrClosed
+	}
+	if old := m.attempts[name]; old != nil {
+		old.cancel()
+	}
+	ctx, cancel := context.WithCancel(parent)
+	ticket := &remoteConnectAttempt{cancel: cancel}
+	m.attempts[name] = ticket
+	return ctx, ticket, nil
+}
+
+func (m *previewRemoteSessions) finish(name string, ticket *remoteConnectAttempt) {
+	m.mu.Lock()
+	if m.attempts[name] == ticket {
+		delete(m.attempts, name)
+	}
+	m.mu.Unlock()
+	ticket.cancel()
+}
+
+func (m *previewRemoteSessions) putCurrent(name string, ticket *remoteConnectAttempt, client *remote.Client, peer remote.HostKeyQuestion) bool {
+	m.mu.Lock()
+	if m.closed || m.attempts[name] != ticket {
+		m.mu.Unlock()
+		_ = client.Close()
+		return false
+	}
 	previous := m.clients[name]
-	m.clients[name] = client
-	m.peers[name] = peer
+	m.clients[name], m.peers[name] = client, peer
 	m.mu.Unlock()
 	if previous != nil && previous != client {
 		_ = previous.Close()
 	}
+	return true
 }
 
 func (m *previewRemoteSessions) disconnect(name string) {
@@ -133,6 +168,10 @@ func (m *previewRemoteSessions) disconnect(name string) {
 	}
 	m.mu.Lock()
 	client := m.clients[name]
+	if pending := m.attempts[name]; pending != nil {
+		pending.cancel()
+		delete(m.attempts, name)
+	}
 	delete(m.clients, name)
 	delete(m.peers, name)
 	m.mu.Unlock()
@@ -146,6 +185,11 @@ func (m *previewRemoteSessions) closeAll() {
 		return
 	}
 	m.mu.Lock()
+	m.closed = true
+	for _, pending := range m.attempts {
+		pending.cancel()
+	}
+	m.attempts = map[string]*remoteConnectAttempt{}
 	clients := m.clients
 	m.clients = map[string]*remote.Client{}
 	m.peers = map[string]remote.HostKeyQuestion{}
@@ -154,6 +198,24 @@ func (m *previewRemoteSessions) closeAll() {
 		if client != nil {
 			_ = client.Close()
 		}
+	}
+}
+
+func (m *previewRemoteSessions) annotate(view *remoteSettingsView) {
+	for i := range view.Hosts {
+		host := &view.Hosts[i]
+		client, peer := m.get(host.Name)
+		state := "disconnected"
+		if client != nil {
+			state = client.Status().Status.String()
+		}
+		m.mu.Lock()
+		pending := m.attempts[host.Name] != nil
+		m.mu.Unlock()
+		if pending {
+			state = "connecting"
+		}
+		host.Connection = &remoteConnectResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Status: state, Host: peer.Host, Address: peer.Address, KeyType: peer.KeyType, Fingerprint: peer.Fingerprint}
 	}
 }
 
@@ -177,6 +239,12 @@ func (b *bridgeServer) connectRemoteHost(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	b.remoteSessions.disconnect(input.Name)
+	attemptCtx, ticket, err := b.remoteSessions.begin(input.Name, r.Context())
+	if err != nil {
+		writeProtocolError(w, http.StatusConflict, "conflict", "remote manager is shutting down")
+		return
+	}
+	defer b.remoteSessions.finish(input.Name, ticket)
 
 	cfg, err := configpkg.LoadUserConfigReadOnly()
 	if err != nil {
@@ -232,7 +300,7 @@ func (b *bridgeServer) connectRemoteHost(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusOK, remoteConnectResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Status: "failed", Message: "ssh_client_unavailable"})
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(attemptCtx, 15*time.Second)
 	defer cancel()
 	if err := client.Start(ctx); err != nil {
 		_ = client.Close()
@@ -260,7 +328,15 @@ func (b *bridgeServer) connectRemoteHost(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusOK, remoteConnectResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Status: "failed", Message: "host_key_not_verified"})
 		return
 	}
-	b.remoteSessions.put(input.Name, client, verified)
+	if ctx.Err() != nil {
+		_ = client.Close()
+		writeProtocolError(w, http.StatusConflict, "conflict", "SSH connection attempt cancelled")
+		return
+	}
+	if !b.remoteSessions.putCurrent(input.Name, ticket, client, verified) {
+		writeProtocolError(w, http.StatusConflict, "conflict", "SSH connection attempt superseded")
+		return
+	}
 	writeJSON(w, http.StatusOK, remoteConnectResponse{
 		ProtocolVersion: desktopbridge.ProtocolVersion, Status: "connected", Host: host.Label(),
 		Address: verified.Address, KeyType: verified.KeyType, Fingerprint: verified.Fingerprint,

@@ -131,6 +131,7 @@ export interface TauriRemoteHost {
   useSSHConfig: boolean;
   passwordSet: boolean;
   passphraseSet: boolean;
+  connection?: TauriRemoteConnectResponse;
 }
 
 export interface TauriRemoteSettings {
@@ -146,7 +147,7 @@ export interface TauriRemoteSSHConfigScan {
   aliases: { alias: string }[];
 }
 
-export interface TauriRemoteHostInput extends Omit<TauriRemoteHost, "passwordSet" | "passphraseSet"> {
+export interface TauriRemoteHostInput extends Omit<TauriRemoteHost, "passwordSet" | "passphraseSet" | "connection"> {
   passwordAction?: "keep" | "replace" | "clear";
   password?: string;
   passphraseAction?: "keep" | "replace" | "clear";
@@ -168,7 +169,7 @@ export interface TauriRemoteConnectRequest {
 
 export interface TauriRemoteConnectResponse {
   protocolVersion: number;
-  status: "connected" | "host_key_confirmation" | "failed";
+  status: "connected" | "host_key_confirmation" | "failed" | "disconnected" | "idle" | "connecting" | "reconnecting" | "degraded" | "stopped";
   host?: string;
   address?: string;
   keyType?: string;
@@ -376,6 +377,7 @@ export interface TauriBotRuntimeStatus {
   startedAt?: string;
   adapterHealth?: TauriBotAdapterHealth[];
   desktopBridgeAvailable: boolean;
+  refreshing?: boolean;
 }
 
 export interface TauriBotChannelSettings {
@@ -444,7 +446,11 @@ export interface TauriBotSettings {
   routes: TauriBotRoute[];
 }
 
+export interface TauriBotConnectionInput { id: string; platform: "qq" | "feishu" | "weixin"; domain: string; label: string; identity: string; secret: string; }
+
 export type TauriBotSettingsChange =
+  | { action: "create_connection"; connection: TauriBotConnectionInput }
+  | { action: "remove_connection"; channelId: string }
   | { action: "set_enabled"; enabled: boolean }
   | { action: "set_gateway_runtime"; maxSteps?: number; debounceMs?: number; queueMode?: TauriBotSettings["queueMode"]; queueCap?: number; queueDrop?: TauriBotSettings["queueDrop"]; ignoreSelfMessages?: boolean; pairingRequestTtlMinutes?: number; pairingMaxPendingPerPlatform?: number }
   | { action: "set_self_user_ids"; platform: "qq" | "feishu" | "weixin" | "dingtalk"; values: string[] }
@@ -472,6 +478,16 @@ export async function changeTauriBotSettings(change: TauriBotSettingsChange): Pr
 export async function tauriBotRuntimeStatus(): Promise<TauriBotRuntimeStatus> {
   requireTauri();
   return invoke<TauriBotRuntimeStatus>("bot_runtime_status");
+}
+
+export interface TauriBotPairingRequest { code: string; platform: string; connection_id?: string; domain?: string; chat_type: string; chat_id: string; user_id: string; user_name?: string; created_at: string; expires_at: string; }
+export interface TauriBotPairingView { protocolVersion: number; requests: TauriBotPairingRequest[]; }
+export async function tauriBotPairing(): Promise<TauriBotPairingView> {requireTauri();return invoke<TauriBotPairingView>("bot_pairing");}
+export async function changeTauriBotPairing(action: "approve" | "reject", code: string): Promise<TauriBotPairingView> {requireTauri();return invoke<TauriBotPairingView>("change_bot_pairing", {action,code});}
+
+export async function restartTauriBotRuntime(): Promise<TauriBotRuntimeStatus> {
+  requireTauri();
+  return invoke<TauriBotRuntimeStatus>("restart_bot_runtime");
 }
 
 export async function scanTauriRemoteSSHConfig(): Promise<TauriRemoteSSHConfigScan> {
@@ -2146,4 +2162,10 @@ export async function keychainImportWailsEnv(provider: string): Promise<void> {
 export async function tauriSessionApprovalMode(sessionId: string, mode?: TauriToolApprovalMode): Promise<TauriToolApprovalMode> {
   requireTauri();
   return invoke<TauriToolApprovalMode>("bridge_session_approval_mode", { sessionId, ...(mode ? { mode } : {}) });
+}
+
+export interface TauriRemoteForwards { protocolVersion: number; forwards: { id: string; localAddress: string; remoteAddress: string; active: boolean; failed: boolean }[] }
+export async function tauriRemoteForwards(input: { name: string; action: "list" | "add" | "remove"; id?: string; localPort?: number; remoteHost?: string; remotePort?: number }): Promise<TauriRemoteForwards> {
+  requireTauri();
+  return invoke<TauriRemoteForwards>("remote_forwards", { input });
 }

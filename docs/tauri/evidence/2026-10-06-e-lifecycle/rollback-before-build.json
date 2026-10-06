@@ -1,0 +1,12 @@
+{
+  "path": "/var/folders/j8/bqc5mc190_q6f4ytd9d32hlm0000gn/T/reasonix-e-rollback-g1fy6b6e/Reasonix Tauri Preview.app.rollback",
+  "hostSha256": "542f8c3193bd75f47e6ab83fd44a6a031370d5843ef26c946e13e896b32910ea",
+  "sidecarSha256": "5a8f61a3dec402f2c8f72ced30d615bd396d0631295b17568e143d85e146b6c4",
+  "plist": {},
+  "buildMetadata": [
+    "build\tvcs=git",
+    "build\tvcs.revision=46981f4a06da15465fb31e22a4c845b8b611df95",
+    "build\tvcs.time=2026-10-05T23:49:46Z",
+    "build\tvcs.modified=false"
+  ]
+}

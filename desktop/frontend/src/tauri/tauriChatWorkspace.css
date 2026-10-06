@@ -1173,6 +1173,21 @@
 .tauri-updates-settings-notice { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--surface); color: var(--fg-faint); font-size: 12px; line-height: 1.6; }
 .tauri-remote-host-list { display: grid; gap: 8px; margin-top: 14px; }
 .tauri-remote-host-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 14px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--surface); }
+.tauri-remote-host-card:has(> .tauri-remote-forwards) { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+.tauri-remote-host-card:has(> .tauri-remote-forwards) > .tauri-settings-actions { grid-column: 2; grid-row: 1; margin: 0; }
+.tauri-remote-forwards { grid-column: 1 / -1; grid-row: 2; margin: 0; min-width: 0; }
+.tauri-remote-forwards .tauri-settings-actions { margin-top: 0; }
+.tauri-remote-forwards .tauri-settings-actions code { min-width: 0; overflow-wrap: anywhere; }
+.tauri-remote-forwards form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.tauri-remote-forwards form label { display: grid; gap: 6px; min-width: 0; }
+.tauri-remote-forwards form .tauri-settings-input { width: 100%; min-width: 0; }
+.tauri-remote-forwards form > button { grid-column: 1 / -1; justify-self: start; }
+@media (max-width: 570px) {
+  .tauri-remote-host-card:has(> .tauri-remote-forwards) { grid-template-columns: minmax(0, 1fr); }
+  .tauri-remote-host-card:has(> .tauri-remote-forwards) > .tauri-settings-actions { grid-column: 1; grid-row: 2; }
+  .tauri-remote-forwards { grid-row: 3; }
+  .tauri-remote-forwards form { grid-template-columns: minmax(0, 1fr); }
+}
 .tauri-remote-host-card > div:first-child { display: grid; min-width: 0; gap: 4px; }
 .tauri-remote-host-card strong { color: var(--fg); font-size: 12px; }
 .tauri-remote-host-card small { overflow: hidden; color: var(--fg-faint); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }

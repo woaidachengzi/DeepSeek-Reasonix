@@ -1,0 +1,8 @@
+ok  	reasonix/cmd/reasonix-desktop-bridge	31.258s
+ok  	reasonix/internal/bot	(cached)
+ok  	reasonix/internal/botruntime	(cached)
+ok  	reasonix/internal/remote	(cached)
+ok  	reasonix/internal/remote/bootstrap	2.448s
+ok  	reasonix/internal/remote/forward	1.537s
+ok  	reasonix/internal/remote/sftpfs	1.597s
+?   	reasonix/internal/remote/sshtest	[no test files]

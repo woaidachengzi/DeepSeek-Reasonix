@@ -2,7 +2,7 @@
 
 > 状态：原始分阶段设计计划。Tauri Preview、受管 Go bridge 和隔离的会话存储切片已实现；以下 Phase 0–3 与 §8 保留当时的实施顺序，不代表当前待办。当前能力见 [`desktop/tauri/README.md`](../../desktop/tauri/README.md)，存储与发布门禁见 [`SESSION_STORAGE_IMPLEMENTATION_V3.md`](./SESSION_STORAGE_IMPLEMENTATION_V3.md)。
 >
-> 当前平台范围（2026-09-30 用户确认）：本轮仅推进 macOS；Windows/Linux 改造与原生验收因缺少环境延期。当前 D→E 顺序和验收范围见 [`API_SURFACE_AUDIT.md`](./API_SURFACE_AUDIT.md)，历史跨平台待办不作为本轮 macOS 的阻塞项。
+> 当前平台范围（2026-09-30 用户确认）：本轮仅推进 macOS；Windows/Linux 改造与原生验收因缺少环境延期。当前 D→E 顺序和验收范围见 [`API_SURFACE_AUDIT.md`](./API_SURFACE_AUDIT.md)，历史跨平台待办不作为本轮 macOS 的阻塞项。2026-10-06 用户授权直接推进 E、排除 updater，当前范围以 [E 清单](E_MIGRATION_CHECKLIST.md) 为准；D 未关闭项继续保留。
 >
 > 基线：`desktop-v1.38.3` / `v1.38.3`，提交
 > `fa018e4109268c912063c8cc619302fccdb57d74`。

@@ -1,12 +1,13 @@
 package main
 
 import (
-	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"reasonix/internal/botruntime"
 	appconfig "reasonix/internal/config"
@@ -81,28 +82,38 @@ type botChannelSettings struct {
 	Access             *botConnectionAccessView `json:"access,omitempty"`
 }
 
+type botConnectionInput struct {
+	ID       string `json:"id"`
+	Platform string `json:"platform"`
+	Domain   string `json:"domain"`
+	Label    string `json:"label"`
+	Identity string `json:"identity"`
+	Secret   string `json:"secret"`
+}
+
 type botSettingsChange struct {
-	Action                   string             `json:"action"`
-	Enabled                  bool               `json:"enabled"`
-	ChannelID                string             `json:"channelId,omitempty"`
-	Platform                 string             `json:"platform,omitempty"`
-	List                     string             `json:"list,omitempty"`
-	Mode                     string             `json:"mode,omitempty"`
-	Values                   []string           `json:"values,omitempty"`
-	Identity                 string             `json:"identity,omitempty"`
-	Secret                   string             `json:"secret,omitempty"`
-	Model                    *string            `json:"model,omitempty"`
-	ToolApprovalMode         *string            `json:"toolApprovalMode,omitempty"`
-	WorkspaceRoot            *string            `json:"workspaceRoot,omitempty"`
-	MaxSteps                 *int               `json:"maxSteps,omitempty"`
-	DebounceMs               *int               `json:"debounceMs,omitempty"`
-	QueueMode                *string            `json:"queueMode,omitempty"`
-	QueueCap                 *int               `json:"queueCap,omitempty"`
-	QueueDrop                *string            `json:"queueDrop,omitempty"`
-	IgnoreSelfMessages       *bool              `json:"ignoreSelfMessages,omitempty"`
-	PairingRequestTTLMinutes *int               `json:"pairingRequestTtlMinutes,omitempty"`
-	PairingMaxPending        *int               `json:"pairingMaxPendingPerPlatform,omitempty"`
-	Routes                   []botRouteSettings `json:"routes,omitempty"`
+	Connection               *botConnectionInput `json:"connection,omitempty"`
+	Action                   string              `json:"action"`
+	Enabled                  bool                `json:"enabled"`
+	ChannelID                string              `json:"channelId,omitempty"`
+	Platform                 string              `json:"platform,omitempty"`
+	List                     string              `json:"list,omitempty"`
+	Mode                     string              `json:"mode,omitempty"`
+	Values                   []string            `json:"values,omitempty"`
+	Identity                 string              `json:"identity,omitempty"`
+	Secret                   string              `json:"secret,omitempty"`
+	Model                    *string             `json:"model,omitempty"`
+	ToolApprovalMode         *string             `json:"toolApprovalMode,omitempty"`
+	WorkspaceRoot            *string             `json:"workspaceRoot,omitempty"`
+	MaxSteps                 *int                `json:"maxSteps,omitempty"`
+	DebounceMs               *int                `json:"debounceMs,omitempty"`
+	QueueMode                *string             `json:"queueMode,omitempty"`
+	QueueCap                 *int                `json:"queueCap,omitempty"`
+	QueueDrop                *string             `json:"queueDrop,omitempty"`
+	IgnoreSelfMessages       *bool               `json:"ignoreSelfMessages,omitempty"`
+	PairingRequestTTLMinutes *int                `json:"pairingRequestTtlMinutes,omitempty"`
+	PairingMaxPending        *int                `json:"pairingMaxPendingPerPlatform,omitempty"`
+	Routes                   []botRouteSettings  `json:"routes,omitempty"`
 }
 
 func readBotSettings() (botSettingsView, error) {
@@ -205,8 +216,39 @@ func firstNonEmpty(values ...string) string {
 func changeBotSettings(change botSettingsChange) (botSettingsView, error) {
 	change.Action = strings.TrimSpace(change.Action)
 	change.ChannelID = strings.TrimSpace(change.ChannelID)
-	if change.Action != "set_enabled" && change.Action != "set_channel_enabled" && change.Action != "set_credentials" && change.Action != "set_pairing" && change.Action != "set_allowlist" && change.Action != "set_allow_all" && change.Action != "set_channel_access_mode" && change.Action != "set_channel_pairing" && change.Action != "set_channel_allowlist" && change.Action != "set_channel_runtime" && change.Action != "set_gateway_runtime" && change.Action != "set_self_user_ids" && change.Action != "set_routes" {
+	if change.Action != "create_connection" && change.Action != "remove_connection" && change.Action != "set_enabled" && change.Action != "set_channel_enabled" && change.Action != "set_credentials" && change.Action != "set_pairing" && change.Action != "set_allowlist" && change.Action != "set_allow_all" && change.Action != "set_channel_access_mode" && change.Action != "set_channel_pairing" && change.Action != "set_channel_allowlist" && change.Action != "set_channel_runtime" && change.Action != "set_gateway_runtime" && change.Action != "set_self_user_ids" && change.Action != "set_routes" {
 		return botSettingsView{}, fmt.Errorf("invalid bot settings action")
+	}
+	if change.Action == "create_connection" {
+		if change.Connection == nil {
+			return botSettingsView{}, fmt.Errorf("missing bot connection")
+		}
+		input := change.Connection
+		input.ID, input.Platform, input.Domain, input.Label, input.Identity = strings.TrimSpace(input.ID), strings.TrimSpace(input.Platform), strings.TrimSpace(input.Domain), strings.TrimSpace(input.Label), strings.TrimSpace(input.Identity)
+		if input.ID == "qq" || input.ID == "feishu" || input.ID == "weixin" || input.ID == "dingtalk" || !previewProviderName.MatchString(input.ID) || len(input.ID) > 64 || len(input.Label) > 128 || len(input.Identity) > 512 || input.Identity == "" || len(input.Secret) > 8192 || strings.TrimSpace(input.Secret) == "" || strings.ContainsAny(input.Secret, "\r\n") {
+			return botSettingsView{}, fmt.Errorf("invalid bot connection")
+		}
+		switch input.Platform {
+		case "feishu":
+			if input.Domain == "" {
+				input.Domain = "feishu"
+			}
+			if input.Domain != "feishu" && input.Domain != "lark" {
+				return botSettingsView{}, fmt.Errorf("invalid bot domain")
+			}
+		case "qq", "weixin":
+			if input.Domain == "" {
+				input.Domain = input.Platform
+			}
+			if input.Domain != input.Platform {
+				return botSettingsView{}, fmt.Errorf("invalid bot domain")
+			}
+		default:
+			return botSettingsView{}, fmt.Errorf("unsupported bot connection platform")
+		}
+	}
+	if change.Action == "remove_connection" && (!previewProviderName.MatchString(change.ChannelID) || len(change.ChannelID) > 64) {
+		return botSettingsView{}, fmt.Errorf("invalid bot connection ID")
 	}
 	if change.Action == "set_routes" {
 		if len(change.Routes) > 200 {
@@ -292,6 +334,66 @@ func changeBotSettings(change botSettingsChange) (botSettingsView, error) {
 		return botSettingsView{}, fmt.Errorf("bot identity and credential are required")
 	}
 	err := appconfig.EditUserConfigWithCredentialsStrict(func(cfg *appconfig.Config) ([]appconfig.CredentialChange, error) {
+		if change.Action == "create_connection" {
+			input := change.Connection
+			if len(cfg.Bot.Connections) >= 100 {
+				return nil, fmt.Errorf("too many bot connections")
+			}
+			for _, entry := range cfg.Bot.Connections {
+				if botruntime.ConnectionRuntimeID(entry) == input.ID || strings.TrimSpace(entry.ID) == input.ID {
+					return nil, fmt.Errorf("bot connection already exists")
+				}
+			}
+			// A fresh account is disabled until its owner explicitly enables it. Trust
+			// starts with pairing, never an implicit allow-all grant.
+			now := time.Now().UTC().Format(time.RFC3339)
+			entry := appconfig.BotConnectionConfig{ID: input.ID, Provider: input.Platform, Domain: input.Domain, Label: firstNonEmpty(input.Label, input.ID), Status: "connected", CreatedAt: now, UpdatedAt: now, Access: appconfig.BotAccessConfig{Enabled: true, PairingEnabled: true}}
+			key := botCredentialKey(input.ID)
+			if input.Platform == "weixin" {
+				entry.Credential.AccountID = input.Identity
+				entry.Credential.TokenEnv = key
+			} else {
+				entry.Credential.AppID = input.Identity
+				entry.Credential.AppSecretEnv = key
+			}
+			cfg.Bot.Connections = append(cfg.Bot.Connections, entry)
+			return []appconfig.CredentialChange{{Key: key, Value: input.Secret}}, nil
+		}
+		if change.Action == "remove_connection" {
+			index := -1
+			for i, entry := range cfg.Bot.Connections {
+				if botruntime.ConnectionRuntimeID(entry) == change.ChannelID || strings.TrimSpace(entry.ID) == change.ChannelID {
+					index = i
+					break
+				}
+			}
+			if index < 0 {
+				return nil, fmt.Errorf("bot connection not found")
+			}
+			cfg.Bot.Connections = append(cfg.Bot.Connections[:index], cfg.Bot.Connections[index+1:]...)
+			routes := cfg.Bot.Routes[:0]
+			for _, route := range cfg.Bot.Routes {
+				if strings.TrimSpace(route.ConnectionID) != change.ChannelID {
+					routes = append(routes, route)
+				}
+			}
+			cfg.Bot.Routes = routes
+			watchers := cfg.Bot.DesktopWatchers[:0]
+			for _, watcher := range cfg.Bot.DesktopWatchers {
+				if strings.TrimSpace(watcher.ConnectionID) != change.ChannelID {
+					watchers = append(watchers, watcher)
+				}
+			}
+			cfg.Bot.DesktopWatchers = watchers
+			key := botCredentialKey(change.ChannelID)
+			data, _ := json.Marshal(cfg)
+			quoted, _ := json.Marshal(key)
+			if !strings.Contains(string(data), string(quoted)) {
+				return []appconfig.CredentialChange{{Key: key, Remove: true}}, nil
+			}
+			return nil, nil
+		}
+
 		if change.Action == "set_routes" {
 			routes := make([]appconfig.BotRouteConfig, 0, len(change.Routes))
 			for _, route := range change.Routes {
@@ -692,7 +794,7 @@ func setBotChannelCredential(cfg *appconfig.Config, channelID, identity string) 
 func (b *bridgeServer) botSettings(w http.ResponseWriter, _ *http.Request) {
 	view, err := readBotSettings()
 	if err != nil {
-		writeProtocolError(w, http.StatusInternalServerError, "internal", err.Error())
+		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read bot settings")
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
@@ -701,16 +803,16 @@ func (b *bridgeServer) botSettings(w http.ResponseWriter, _ *http.Request) {
 func (b *bridgeServer) changeBotSettings(w http.ResponseWriter, r *http.Request) {
 	var change botSettingsChange
 	if err := decodeJSONBody(w, r, 64<<10, &change); err != nil {
-		writeProtocolError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "bot settings could not be saved; check the input and retry")
 		return
 	}
 	view, err := changeBotSettings(change)
 	if err != nil {
-		writeProtocolError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "bot settings could not be saved; check the input and retry")
 		return
 	}
 	if b.botRuntime != nil {
-		b.botRuntime.refreshAsync(context.Background())
+		b.botRuntime.refreshAsync(nil)
 	}
 	writeJSON(w, http.StatusOK, view)
 }

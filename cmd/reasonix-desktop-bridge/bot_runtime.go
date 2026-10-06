@@ -20,12 +20,15 @@ import (
 // commands to all Preview sessions; /desktop commands must not target a
 // different (stable/Wails) profile.
 type previewBotRuntime struct {
-	lifecycleMu sync.Mutex
-	mu          sync.Mutex
-	cancel      context.CancelFunc
-	gateway     *bot.BotGateway
-	status      botRuntimeStatusView
-	closed      bool
+	bindingFactory func(*appconfig.Config, map[bot.Platform]bool, *slog.Logger) []bot.AdapterBinding
+	lifecycleMu    sync.Mutex
+	mu             sync.Mutex
+	cancel         context.CancelFunc
+	gateway        *bot.BotGateway
+	status         botRuntimeStatusView
+	closed         bool
+	parent         context.Context
+	pending        int
 }
 
 type botRuntimeStatusView struct {
@@ -38,6 +41,7 @@ type botRuntimeStatusView struct {
 	Platforms              map[string]string           `json:"platforms,omitempty"`
 	AdapterHealth          []bot.AdapterHealthSnapshot `json:"adapterHealth,omitempty"`
 	DesktopBridgeAvailable bool                        `json:"desktopBridgeAvailable"`
+	Refreshing             bool                        `json:"refreshing"`
 }
 
 func newPreviewBotRuntime() *previewBotRuntime {
@@ -50,9 +54,20 @@ func newPreviewBotRuntime() *previewBotRuntime {
 }
 
 func (r *previewBotRuntime) refreshAsync(parent context.Context) {
+	r.mu.Lock()
+	if parent != nil {
+		r.parent = parent
+	}
+	if r.parent == nil {
+		r.parent = context.Background()
+	}
+	parent = r.parent
+	r.pending++
+	r.mu.Unlock()
 	go func() {
+		defer func() { r.mu.Lock(); r.pending--; r.mu.Unlock() }()
 		if err := r.refresh(parent); err != nil {
-			slog.Warn("Preview bot runtime refresh failed", "err", err)
+			slog.Warn("Preview bot runtime refresh failed")
 		}
 	}()
 }
@@ -110,7 +125,7 @@ func (r *previewBotRuntime) refresh(parent context.Context) error {
 		},
 		ControlEnabled:     cfg.Bot.Control.Enabled,
 		ControlAddr:        cfg.Bot.Control.Addr,
-		ControlToken:       os.Getenv(strings.TrimSpace(cfg.Bot.Control.TokenEnv)),
+		ControlToken:       appconfig.ResolveCredentialForRootGlobalFirst(".", strings.TrimSpace(cfg.Bot.Control.TokenEnv)).Value,
 		Channels:           channels,
 		ConnectionChannels: connectionChannels,
 		Routes:             botruntime.RouteConfigs(cfg.Bot.Routes, true, true),
@@ -142,7 +157,12 @@ func (r *previewBotRuntime) refresh(parent context.Context) error {
 		// Desktop remains nil: this Preview sidecar cannot safely expose Wails
 		// sessions or their approval/watch state.
 	}
-	bindings := botruntime.AdapterBindings(cfg, plan.enabled, nil, logger)
+	bindings := []bot.AdapterBinding(nil)
+	if r.bindingFactory != nil {
+		bindings = r.bindingFactory(cfg, plan.enabled, logger)
+	} else {
+		bindings = botruntime.AdapterBindings(cfg, plan.enabled, nil, logger)
+	}
 	if len(bindings) == 0 {
 		cancel()
 		r.setStatus(botRuntimeStatusView{ProtocolVersion: 1, Status: "stopped", Message: "No bot adapters are configured", DesktopBridgeAvailable: false})
@@ -263,6 +283,13 @@ func (r *previewBotRuntime) snapshot() botRuntimeStatusView {
 		status.AdapterHealth = r.gateway.AdapterHealth()
 		status.Connections = r.gateway.AdapterCount()
 	}
+	status.Refreshing = r.pending > 0
+	status.AdapterHealth = append([]bot.AdapterHealthSnapshot(nil), status.AdapterHealth...)
+	for i := range status.AdapterHealth {
+		if status.AdapterHealth[i].LastError != "" {
+			status.AdapterHealth[i].LastError = "Connection failed; check credentials and retry."
+		}
+	}
 	return status
 }
 
@@ -272,4 +299,18 @@ func (b *bridgeServer) botRuntimeStatus(w http.ResponseWriter, _ *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, b.botRuntime.snapshot())
+}
+
+type botRuntimeActionRequest struct {
+	Action string `json:"action"`
+}
+
+func (b *bridgeServer) changeBotRuntime(w http.ResponseWriter, r *http.Request) {
+	var input botRuntimeActionRequest
+	if err := decodeJSONBody(w, r, 1024, &input); err != nil || input.Action != "restart" {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid bot runtime action")
+		return
+	}
+	b.botRuntime.refreshAsync(nil)
+	writeJSON(w, http.StatusAccepted, b.botRuntime.snapshot())
 }

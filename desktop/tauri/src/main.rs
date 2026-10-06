@@ -1171,43 +1171,96 @@ fn change_remote_settings(
 }
 
 #[tauri::command]
-fn connect_remote_host(
+async fn connect_remote_host(
     supervisor: State<'_, BridgeSupervisor>,
     request: RemoteConnectRequest,
 ) -> Result<RemoteConnectResponse, String> {
-    supervisor.connect_remote_host(request)
+    let client = supervisor.management_client()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        client.remote_request::<RemoteConnectResponse>(
+            "/v1/settings/remote/connect",
+            serde_json::json!(request),
+        )
+    })
+    .await
+    .map_err(|_| "remote operation worker failed".to_string())?
 }
 
 #[tauri::command]
-fn disconnect_remote_host(
+async fn disconnect_remote_host(
     supervisor: State<'_, BridgeSupervisor>,
     request: BridgeRemoteDisconnectRequest,
 ) -> Result<BridgeRemoteDisconnectResponse, String> {
-    supervisor.disconnect_remote_host(request)
+    let client = supervisor.management_client()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        client.remote_request::<BridgeRemoteDisconnectResponse>(
+            "/v1/settings/remote/disconnect",
+            serde_json::json!(request),
+        )
+    })
+    .await
+    .map_err(|_| "remote operation worker failed".to_string())?
 }
 
 #[tauri::command]
-fn browse_remote_host(
+async fn remote_forwards(
+    supervisor: State<'_, BridgeSupervisor>,
+    input: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let client = supervisor.management_client()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        client.remote_request("/v1/settings/remote/forwards", input)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn browse_remote_host(
     supervisor: State<'_, BridgeSupervisor>,
     request: BridgeRemoteBrowseRequest,
 ) -> Result<BridgeRemoteBrowseResponse, String> {
-    supervisor.browse_remote_host(request)
+    let client = supervisor.management_client()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        client.remote_request::<BridgeRemoteBrowseResponse>(
+            "/v1/settings/remote/browse",
+            serde_json::json!(request),
+        )
+    })
+    .await
+    .map_err(|_| "remote operation worker failed".to_string())?
 }
 
 #[tauri::command]
-fn preview_remote_file(
+async fn preview_remote_file(
     supervisor: State<'_, BridgeSupervisor>,
     request: BridgeRemoteFilePreviewRequest,
 ) -> Result<BridgeRemoteFilePreviewResponse, String> {
-    supervisor.preview_remote_file(request)
+    let client = supervisor.management_client()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        client.remote_request::<BridgeRemoteFilePreviewResponse>(
+            "/v1/settings/remote/preview",
+            serde_json::json!(request),
+        )
+    })
+    .await
+    .map_err(|_| "remote operation worker failed".to_string())?
 }
 
 #[tauri::command]
-fn save_remote_file(
+async fn save_remote_file(
     supervisor: State<'_, BridgeSupervisor>,
     request: BridgeRemoteFileSaveRequest,
 ) -> Result<BridgeRemoteFileSaveResponse, String> {
-    supervisor.save_remote_file(request)
+    let client = supervisor.management_client()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        client.remote_request::<BridgeRemoteFileSaveResponse>(
+            "/v1/settings/remote/save",
+            serde_json::json!(request),
+        )
+    })
+    .await
+    .map_err(|_| "remote operation worker failed".to_string())?
 }
 
 #[tauri::command]
@@ -1270,6 +1323,26 @@ fn bot_runtime_status(
     supervisor: State<'_, BridgeSupervisor>,
 ) -> Result<serde_json::Value, String> {
     supervisor.bot_runtime_status()
+}
+
+#[tauri::command]
+fn bot_pairing(supervisor: State<'_, BridgeSupervisor>) -> Result<serde_json::Value, String> {
+    supervisor.bot_pairing()
+}
+#[tauri::command]
+fn change_bot_pairing(
+    supervisor: State<'_, BridgeSupervisor>,
+    action: String,
+    code: String,
+) -> Result<serde_json::Value, String> {
+    supervisor.change_bot_pairing(action, code)
+}
+
+#[tauri::command]
+fn restart_bot_runtime(
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<serde_json::Value, String> {
+    supervisor.restart_bot_runtime()
 }
 
 #[tauri::command]
@@ -4026,6 +4099,7 @@ fn main() {
             connect_remote_host,
             disconnect_remote_host,
             browse_remote_host,
+            remote_forwards,
             preview_remote_file,
             save_remote_file,
             permission_settings,
@@ -4036,6 +4110,9 @@ fn main() {
             change_sandbox_settings,
             network_settings,
             bot_runtime_status,
+            restart_bot_runtime,
+            bot_pairing,
+            change_bot_pairing,
             bot_settings,
             change_bot_settings,
             change_network_settings,

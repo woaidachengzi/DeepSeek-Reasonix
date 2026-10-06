@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	configpkg "reasonix/internal/config"
 	"reasonix/internal/remote"
@@ -227,6 +230,83 @@ func TestPreviewRemoteConnectRequiresAndPersistsExplicitHostKeyTrust(t *testing.
 		t.Fatalf("directory preview status = %d, want 400: %s", previewResponse.Code, previewResponse.Body.String())
 	}
 
+	// Real TCP round trip through SSH; only this machine may bind the forward.
+	target, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer target.Close()
+	go func() {
+		for {
+			conn, err := target.Accept()
+			if err != nil {
+				return
+			}
+			go func() { defer conn.Close(); _, _ = io.Copy(conn, conn) }()
+		}
+	}()
+	portProbe, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	localPort := portProbe.Addr().(*net.TCPAddr).Port
+	_ = portProbe.Close()
+	forwardInput := remoteForwardRequest{Name: "loopback", Action: "add", ID: "test", LocalPort: localPort, RemoteHost: "127.0.0.1", RemotePort: target.Addr().(*net.TCPAddr).Port}
+	forwardCall := func(input remoteForwardRequest, id string) *httptest.ResponseRecorder {
+		t.Helper()
+		body, _ := json.Marshal(input)
+		req := httptest.NewRequest("POST", "/v1/settings/remote/forwards", strings.NewReader(string(body)))
+		req.Header.Set("Authorization", "Bearer "+testToken)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(requestIDHeader, id)
+		response := httptest.NewRecorder()
+		bridge.handler().ServeHTTP(response, req)
+		return response
+	}
+	forwarded := forwardCall(forwardInput, "forward-add")
+	if forwarded.Code != 200 {
+		t.Fatalf("add forward: %d %s", forwarded.Code, forwarded.Body.String())
+	}
+	var forwardView remoteForwardsView
+	if err := json.Unmarshal(forwarded.Body.Bytes(), &forwardView); err != nil || len(forwardView.Forwards) != 1 || !forwardView.Forwards[0].Active || !strings.HasPrefix(forwardView.Forwards[0].LocalAddress, "127.0.0.1:") {
+		t.Fatalf("forward view: %#v %v", forwardView, err)
+	}
+	replay := forwardCall(forwardInput, "forward-add")
+	if replay.Code != 200 || replay.Body.String() != forwarded.Body.String() {
+		t.Fatal("forward idempotency replay changed")
+	}
+	if duplicate := forwardCall(forwardInput, "forward-duplicate"); duplicate.Code != 409 {
+		t.Fatal("duplicate forward accepted")
+	}
+	invalid := forwardInput
+	invalid.ID = "other"
+	invalid.LocalPort = 0
+	if rejected := forwardCall(invalid, "invalid-forward"); rejected.Code != 400 {
+		t.Fatal("invalid local port accepted")
+	}
+	tunnel, err := net.DialTimeout("tcp", forwardView.Forwards[0].LocalAddress, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = tunnel.SetDeadline(time.Now().Add(3 * time.Second))
+	_, _ = tunnel.Write([]byte("ping"))
+	reply := make([]byte, 4)
+	_, err = io.ReadFull(tunnel, reply)
+	_ = tunnel.Close()
+	if err != nil || string(reply) != "ping" {
+		t.Fatalf("forward round trip: %q %v", reply, err)
+	}
+	// Configuration reads carry the real connection state after reopening UI.
+	settingsReq := httptest.NewRequest("GET", "/v1/settings/remote", nil)
+	settingsReq.Header.Set("Authorization", "Bearer "+testToken)
+	settingsResp := httptest.NewRecorder()
+	bridge.handler().ServeHTTP(settingsResp, settingsReq)
+	var liveSettings remoteSettingsView
+	_ = json.Unmarshal(settingsResp.Body.Bytes(), &liveSettings)
+	if len(liveSettings.Hosts) != 1 || liveSettings.Hosts[0].Connection == nil || liveSettings.Hosts[0].Connection.Status != "connected" {
+		t.Fatal("live state missing on settings reopen")
+	}
+
 	disconnectBody, _ := json.Marshal(remoteDisconnectRequest{Name: "loopback"})
 	disconnectReq := httptest.NewRequest(http.MethodPost, "/v1/settings/remote/disconnect", strings.NewReader(string(disconnectBody)))
 	disconnectReq.Header.Set("Content-Type", "application/json")
@@ -238,6 +318,12 @@ func TestPreviewRemoteConnectRequiresAndPersistsExplicitHostKeyTrust(t *testing.
 	}
 	if client, _ := bridge.remoteSessions.get("loopback"); client != nil {
 		t.Fatal("disconnect left an SSH client in the Preview session manager")
+	}
+
+	if listener, err := net.Listen("tcp", forwardView.Forwards[0].LocalAddress); err != nil {
+		t.Fatal("disconnect leaked forwarded port")
+	} else {
+		_ = listener.Close()
 	}
 
 	again := request("")

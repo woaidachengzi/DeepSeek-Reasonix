@@ -49,7 +49,7 @@ desktop API contract (保留 app/event helper 的调用形状)
 | B：核心稳定性 | PoC 通过后 | settings/provider、会话历史、workspace、文件与 diff。当前 Tauri 已有 provider/历史/附件、逐层 workspace 文件引用、受限文件预览，以及 Git 与本轮 session checkpoint 变更/diff；已接入单文件恢复、撤销、检查点多文件代码回滚、同日志会话头的对话回滚与版本导航、文件和对话组合回滚，以及旧格式独立会话分叉。 |
 | C：进程与工具 | 需单独生命周期测试 | shell/terminal、MCP、Browser、plugins、worktree。 |
 | D：host 平台能力 | 由 Rust 实现，不进 Go core | 窗口、文件对话框、外部链接、菜单、托盘、通知、钥匙串。 |
-| E：后置 | Preview 稳定后 | remote host、bot、updater、复杂管理页。 |
+| E：进行中 | 2026-10-06 用户授权直接推进 | remote host、bot、复杂管理页；updater 明确排除。 |
 
 ### A→B→C 当前执行状态（2026-09-30）
 
@@ -65,7 +65,11 @@ desktop API contract (保留 app/event helper 的调用形状)
 
 ### D→E 改造与验收目标（2026-09-30，进行中）
 
-按 D→E 顺序推进。D 验收且 Preview 稳定后再推进 E；正式发布和默认下载项切换另行授权。
+原计划按 D→E 顺序推进。2026-10-06 用户明确要求直接推进 E，并排除 updater；按此新范围执行，D 未关闭项仍保留为发布门禁。当前 E 分项见 [E_MIGRATION_CHECKLIST.md](E_MIGRATION_CHECKLIST.md)。正式发布和默认下载项切换另行授权。
+
+#### E 首批（2026-10-06，进行中）
+
+直接推进 E 的新授权优先于历史 D→E 顺序，updater 不迁移。分项见 [E 清单](E_MIGRATION_CHECKLIST.md)，本批验收见 [连接生命周期与管理页证据](evidence/2026-10-06-e-lifecycle/README.md)。历史索引中的“E 未开启”仅描述当时状态；D、A/B/C 与正式发布门禁仍未全部关闭。
 
 #### 当前候选验收索引（2026-10-05）
 
@@ -196,7 +200,7 @@ desktop API contract (保留 app/event helper 的调用形状)
 | 文件/目录对话框与外部链接 | 现有入口/边界实现与组件回归保留；Chrome 用户截图只证明本机 canary 显示 | 上一d1候选对应原生包/GUI选取取消与真实来源点击、邮件/OAuth未全验 |
 | 通知 | 原生权限/送达与点击路由已实现；旧包实际送达记录保留 | 上一d1候选六次实际送达、横幅/点击、授权拒绝/恢复、冷启动完整链路待验 |
 | 钥匙串 | 上一d1候选源代码原生私有锁定/拒绝/解锁恢复通过；600 explicit迁移/重启/删除通过；上一d1候选等待提示组件回归通过；上一d1候选 d1 [预先解锁 explicit GUI 保存/替换成功反馈、重启就绪且不回显、删除与退出](evidence/2026-10-03-d-pending-keychain-unlocked-gui/README.md)通过 | 替换值未原生读回；上一d1候选 GUI 等待提示、managed跨档案GUI、系统授权取消待验；CUA禁止SecurityAgent，需人工完成该取消切片；旧Preview迁移不等于Wails服务迁移 |
-| E 全部能力 | remote host/bot部分接口和页面已在，但未按E逐项验收；updater目前为说明/手动下载入口 | D验收且Preview稳定后再推进remote host、bot、updater与复杂管理页；插件注册不能算更新流程完成 |
+| E 全部能力 | 2026-10-06 已开始连接生命周期、bot CRUD/配对、loopback 转发及管理页作用域修复，见 E 清单 | 按用户新授权直接推进；remote Serve/远端对话、bot Desktop/扫码及完整管理页包级矩阵仍未完成；updater 排除 |
 | A/B/C 与发布 | 本文前部已列明发布缺口；本轮D切片未关闭A/B/C | A合同/事件错误覆盖，B历史/Markdown图片与检查点等完整兼容，C终端/Browser/worktree/MCP插件真实生命周期；正式发布/默认下载切换须新授权 |
 
 以下日期条目保留历史实施和失败现场。当前索引与逐包回执优先用于评估本候选，不能把累计局部通过计为D/E完成。

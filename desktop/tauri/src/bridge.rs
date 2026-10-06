@@ -887,6 +887,8 @@ pub struct RemoteSettingsHost {
     pub use_ssh_config: bool,
     pub password_set: bool,
     pub passphrase_set: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connection: Option<RemoteConnectResponse>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1670,6 +1672,37 @@ pub struct BridgeSupervisor {
     launcher: BridgeLauncher,
     process: Mutex<Option<BridgeProcess>>,
     events: Mutex<Option<EventForwarder>>,
+}
+
+#[derive(Clone)]
+pub struct BridgeManagementClient {
+    address: SocketAddr,
+    token: String,
+}
+
+impl BridgeManagementClient {
+    pub fn remote_request<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &'static str,
+        payload: Value,
+    ) -> Result<T, String> {
+        let request_id = opaque_secret()?;
+        let response = request_json_with_timeout(
+            self.address,
+            &self.token,
+            "POST",
+            path,
+            Some(payload),
+            Some(&request_id),
+            Duration::from_secs(30),
+        )?;
+        if response.get("protocolVersion").and_then(Value::as_u64)
+            != Some(u64::from(PROTOCOL_VERSION))
+        {
+            return Err("desktop bridge protocol version is unsupported".into());
+        }
+        serde_json::from_value(response).map_err(display_error)
+    }
 }
 
 #[derive(Clone)]
@@ -2784,6 +2817,47 @@ impl BridgeSupervisor {
         Ok(response)
     }
 
+    pub fn bot_pairing(&self) -> Result<Value, String> {
+        let response = self.request_json("GET", "/v1/settings/bots/pairing", None, None)?;
+        if response.get("protocolVersion").and_then(Value::as_u64)
+            != Some(u64::from(PROTOCOL_VERSION))
+        {
+            return Err("desktop bridge protocol version is unsupported".into());
+        }
+        Ok(response)
+    }
+    pub fn change_bot_pairing(&self, action: String, code: String) -> Result<Value, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/bots/pairing",
+            Some(json!({"action":action,"code":code})),
+            Some(&request_id),
+        )?;
+        if response.get("protocolVersion").and_then(Value::as_u64)
+            != Some(u64::from(PROTOCOL_VERSION))
+        {
+            return Err("desktop bridge protocol version is unsupported".into());
+        }
+        Ok(response)
+    }
+
+    pub fn restart_bot_runtime(&self) -> Result<Value, String> {
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            "/v1/settings/bots/runtime",
+            Some(json!({"action":"restart"})),
+            Some(&request_id),
+        )?;
+        if response.get("protocolVersion").and_then(Value::as_u64)
+            != Some(u64::from(PROTOCOL_VERSION))
+        {
+            return Err("desktop bridge protocol version is unsupported".into());
+        }
+        Ok(response)
+    }
+
     pub fn bot_settings(&self) -> Result<Value, String> {
         let response = self.request_json("GET", "/v1/settings/bots", None, None)?;
         if response.get("protocolVersion").and_then(Value::as_u64)
@@ -2833,96 +2907,6 @@ impl BridgeSupervisor {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
         Ok(view)
-    }
-
-    pub fn connect_remote_host(
-        &self,
-        request: RemoteConnectRequest,
-    ) -> Result<RemoteConnectResponse, String> {
-        let response = self.request_json(
-            "POST",
-            "/v1/settings/remote/connect",
-            Some(json!(request)),
-            None,
-        )?;
-        let result: RemoteConnectResponse =
-            serde_json::from_value(response).map_err(display_error)?;
-        if result.protocol_version != u64::from(PROTOCOL_VERSION) {
-            return Err("desktop bridge protocol version is unsupported".to_string());
-        }
-        Ok(result)
-    }
-
-    pub fn disconnect_remote_host(
-        &self,
-        request: BridgeRemoteDisconnectRequest,
-    ) -> Result<BridgeRemoteDisconnectResponse, String> {
-        let response = self.request_json(
-            "POST",
-            "/v1/settings/remote/disconnect",
-            Some(json!(request)),
-            None,
-        )?;
-        let result: BridgeRemoteDisconnectResponse =
-            serde_json::from_value(response).map_err(display_error)?;
-        if result.protocol_version != u64::from(PROTOCOL_VERSION) {
-            return Err("desktop bridge protocol version is unsupported".to_string());
-        }
-        Ok(result)
-    }
-
-    pub fn browse_remote_host(
-        &self,
-        request: BridgeRemoteBrowseRequest,
-    ) -> Result<BridgeRemoteBrowseResponse, String> {
-        let response = self.request_json(
-            "POST",
-            "/v1/settings/remote/browse",
-            Some(json!(request)),
-            None,
-        )?;
-        let result: BridgeRemoteBrowseResponse =
-            serde_json::from_value(response).map_err(display_error)?;
-        if result.protocol_version != u64::from(PROTOCOL_VERSION) {
-            return Err("desktop bridge protocol version is unsupported".to_string());
-        }
-        Ok(result)
-    }
-
-    pub fn preview_remote_file(
-        &self,
-        request: BridgeRemoteFilePreviewRequest,
-    ) -> Result<BridgeRemoteFilePreviewResponse, String> {
-        let response = self.request_json(
-            "POST",
-            "/v1/settings/remote/preview",
-            Some(json!(request)),
-            None,
-        )?;
-        let result: BridgeRemoteFilePreviewResponse =
-            serde_json::from_value(response).map_err(display_error)?;
-        if result.protocol_version != u64::from(PROTOCOL_VERSION) {
-            return Err("desktop bridge protocol version is unsupported".to_string());
-        }
-        Ok(result)
-    }
-
-    pub fn save_remote_file(
-        &self,
-        request: BridgeRemoteFileSaveRequest,
-    ) -> Result<BridgeRemoteFileSaveResponse, String> {
-        let response = self.request_json(
-            "POST",
-            "/v1/settings/remote/save",
-            Some(json!(request)),
-            None,
-        )?;
-        let result: BridgeRemoteFileSaveResponse =
-            serde_json::from_value(response).map_err(display_error)?;
-        if result.protocol_version != u64::from(PROTOCOL_VERSION) {
-            return Err("desktop bridge protocol version is unsupported".to_string());
-        }
-        Ok(result)
     }
 
     pub fn permission_settings(
@@ -3299,6 +3283,11 @@ impl BridgeSupervisor {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
         Ok(view)
+    }
+
+    pub fn management_client(&self) -> Result<BridgeManagementClient, String> {
+        let (address, token) = self.event_connection()?;
+        Ok(BridgeManagementClient { address, token })
     }
 
     pub fn subagent_try_client(&self) -> Result<BridgeSubagentTryClient, String> {
@@ -6259,6 +6248,53 @@ mod tests {
         assert!(physical.states.is_empty());
         assert_eq!(physical.unclaimed_count, 0);
         assert_eq!(physical.error_count, 0);
+    }
+
+    #[test]
+    fn management_worker_checks_protocol_auth_and_request_identity() {
+        for version in [1, 2] {
+            let listener = TcpListener::bind("127.0.0.1:0").expect("test listener");
+            let address = listener.local_addr().unwrap();
+            let (tx, rx) = mpsc::channel();
+            let server = thread::spawn(move || {
+                let (stream, _) = listener.accept().unwrap();
+                let mut reader = BufReader::new(stream);
+                let mut headers = String::new();
+                loop {
+                    let mut line = String::new();
+                    reader.read_line(&mut line).unwrap();
+                    if line == "\r\n" {
+                        break;
+                    }
+                    headers.push_str(&line);
+                }
+                let length = headers
+                    .lines()
+                    .find_map(|line| line.strip_prefix("Content-Length: "))
+                    .unwrap()
+                    .parse::<usize>()
+                    .unwrap();
+                let mut body = vec![0; length];
+                reader.read_exact(&mut body).unwrap();
+                tx.send(headers).unwrap();
+                let response = json!({"protocolVersion": version, "forwards": []}).to_string();
+                write!(reader.into_inner(), "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", response.len(), response).unwrap();
+            });
+            let client = super::BridgeManagementClient {
+                address,
+                token: "worker-fixture-token".into(),
+            };
+            let response = client.remote_request::<serde_json::Value>(
+                "/v1/settings/remote/forwards",
+                json!({"name":"fixture","action":"list"}),
+            );
+            assert_eq!(response.is_ok(), version == 1);
+            let headers = rx.recv_timeout(Duration::from_secs(1)).unwrap();
+            assert!(headers.starts_with("POST /v1/settings/remote/forwards HTTP/1.1"));
+            assert!(headers.contains("Authorization: Bearer worker-fixture-token\r\n"));
+            assert!(headers.contains("X-Reasonix-Request-ID: "));
+            server.join().unwrap();
+        }
     }
 
     #[test]

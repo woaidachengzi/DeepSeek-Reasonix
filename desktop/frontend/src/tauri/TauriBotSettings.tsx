@@ -1,16 +1,21 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Activity, Bot, RefreshCw, ShieldAlert } from "lucide-react";
-import { changeTauriBotSettings, tauriBotRuntimeStatus, tauriBotSettings, tauriMessageFrom, tauriProviderSummary, type TauriBotRoute, type TauriBotRuntimeStatus, type TauriBotSettings, type TauriBotSettingsChange, type TauriProviderSummary } from "../lib/tauriBridge";
-import { useT } from "../lib/i18n";
+import { changeTauriBotSettings, restartTauriBotRuntime, tauriBotRuntimeStatus, tauriBotSettings, tauriMessageFrom, tauriProviderSummary, type TauriBotRoute, type TauriBotRuntimeStatus, type TauriBotSettings, type TauriBotSettingsChange, type TauriProviderSummary } from "../lib/tauriBridge";
+import { TauriBotPairingManager } from "./TauriBotPairingManager";
+import { TauriBotConnectionManager } from "./TauriBotConnectionManager";
+import { useManagementT } from "./tauriManagementI18n";
 
 export function TauriBotSettings() {
-  const t = useT();
+  const t = useManagementT();
   const [status, setStatus] = useState<TauriBotRuntimeStatus | null>(null);
   const [settings, setSettings] = useState<TauriBotSettings | null>(null);
   const [providerSummary, setProviderSummary] = useState<TauriProviderSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSavingState] = useState(false);
+  const savingRef = useRef(false);
+  const setSaving = (value: boolean) => { if (value) ++refreshEpoch.current; savingRef.current = value; setSavingState(value); };
   const [error, setError] = useState("");
+  const [statusError, setStatusError] = useState("");
   const [credentialDrafts, setCredentialDrafts] = useState<Record<string, { identity: string; secret: string }>>({});
   const [accessDrafts, setAccessDrafts] = useState<Record<string, string>>({});
   const [workspaceDrafts, setWorkspaceDrafts] = useState<Record<string, string>>({});
@@ -18,22 +23,30 @@ export function TauriBotSettings() {
   const [selfUserDrafts, setSelfUserDrafts] = useState<Record<string, string>>({});
   const [routeDrafts, setRouteDrafts] = useState<TauriBotRoute[]>([]);
 
+  const mounted = useRef(true);
+  const refreshEpoch = useRef(0);
+  const savedRoutes = useRef<TauriBotRoute[]>([]);
+  const statusPollBusy = useRef(false);
   const refresh = useCallback(async () => {
+    const epoch = ++refreshEpoch.current;
+    const priorRoutes = savedRoutes.current;
     setLoading(true);
     setError("");
     try {
       const [nextSettings, nextStatus, nextProviders] = await Promise.all([tauriBotSettings(), tauriBotRuntimeStatus(), tauriProviderSummary()]);
+      if (!mounted.current || epoch !== refreshEpoch.current) return;
       setSettings(nextSettings);
-      setRouteDrafts(nextSettings.routes ?? []);
+      setRouteDrafts(current => JSON.stringify(current) === JSON.stringify(priorRoutes) ? (nextSettings.routes ?? []) : current);
+      savedRoutes.current = nextSettings.routes ?? [];
       setStatus(nextStatus);
       setProviderSummary(nextProviders);
     }
-    catch (err) { setError(tauriMessageFrom(err)); }
-    finally { setLoading(false); }
+    catch (err) { if (mounted.current && epoch === refreshEpoch.current) setError(tauriMessageFrom(err)); }
+    finally { if (mounted.current && epoch === refreshEpoch.current) setLoading(false); }
   }, []);
 
   const change = async (action: "set_enabled" | "set_channel_enabled", enabled: boolean, channelId?: string) => {
-    if (saving) return;
+    if (savingRef.current) return;
     setSaving(true); setError("");
     try {
       const next = await changeTauriBotSettings(action === "set_enabled"
@@ -46,7 +59,7 @@ export function TauriBotSettings() {
   };
 
   const saveAccessPolicy = async (change: Extract<TauriBotSettingsChange, { action: "set_pairing" }>) => {
-    if (saving) return;
+    if (savingRef.current) return;
     setSaving(true); setError("");
     try {
       const next = await changeTauriBotSettings(change);
@@ -57,7 +70,7 @@ export function TauriBotSettings() {
   };
 
   const saveGatewayRuntime = async (change: Extract<TauriBotSettingsChange, { action: "set_gateway_runtime" }>) => {
-    if (saving) return;
+    if (savingRef.current) return;
     setSaving(true); setError("");
     try {
       setSettings(await changeTauriBotSettings(change));
@@ -76,7 +89,7 @@ export function TauriBotSettings() {
 
   const saveSelfUserIDs = async (platform: "qq" | "feishu" | "weixin" | "dingtalk") => {
     const values = [...new Set((selfUserDrafts[platform] ?? joinBotAllowlist(settings?.selfUserIds?.[platform])).split(/[\n,，]/).map(value => value.trim()).filter(Boolean))];
-    if (values.some(value => value.length > 512) || values.length > 100 || saving) {
+    if (values.some(value => value.length > 512) || values.length > 100 || savingRef.current) {
       setError(t("settings.bots.allowlistInvalid"));
       return;
     }
@@ -90,12 +103,12 @@ export function TauriBotSettings() {
   };
 
   const saveRoutes = async () => {
-    if (saving || routeDrafts.length > 200) return;
+    if (savingRef.current || routeDrafts.length > 200) return;
     setSaving(true); setError("");
     try {
       const next = await changeTauriBotSettings({ action: "set_routes", routes: routeDrafts });
       setSettings(next);
-      setRouteDrafts(next.routes ?? []);
+      setRouteDrafts(next.routes ?? []); savedRoutes.current = next.routes ?? [];
       setStatus(await tauriBotRuntimeStatus());
     } catch (err) { setError(tauriMessageFrom(err)); }
     finally { setSaving(false); }
@@ -106,7 +119,7 @@ export function TauriBotSettings() {
   const routesDirty = JSON.stringify(routeDrafts) !== JSON.stringify(settings?.routes ?? []);
 
   const saveAllowAll = async (enabled: boolean) => {
-    if (saving || (enabled && !window.confirm(t("settings.bots.allowAllConfirm")))) return;
+    if (savingRef.current || (enabled && !window.confirm(t("settings.bots.allowAllConfirm")))) return;
     setSaving(true); setError("");
     try {
       setSettings(await changeTauriBotSettings({ action: "set_allow_all", enabled }));
@@ -116,7 +129,7 @@ export function TauriBotSettings() {
   };
 
   const saveChannelAccess = async (change: Extract<TauriBotSettingsChange, { action: "set_channel_access_mode" | "set_channel_pairing" }>) => {
-    if (saving || (change.action === "set_channel_access_mode" && change.mode === "everyone" && !window.confirm(t("settings.bots.allowAllConfirm")))) return;
+    if (savingRef.current || (change.action === "set_channel_access_mode" && change.mode === "everyone" && !window.confirm(t("settings.bots.allowAllConfirm")))) return;
     setSaving(true); setError("");
     try {
       setSettings(await changeTauriBotSettings(change));
@@ -130,7 +143,7 @@ export function TauriBotSettings() {
     const access = settings?.channels.find(channel => channel.id === channelId)?.access;
     const raw = accessDrafts[key] ?? joinBotAllowlist(access?.[list]);
     const values = [...new Set(raw.split(/[\n,，]/).map(value => value.trim()).filter(Boolean))];
-    if (values.some(value => value.length > 512) || values.length > 100 || saving) {
+    if (values.some(value => value.length > 512) || values.length > 100 || savingRef.current) {
       setError(t("settings.bots.allowlistInvalid"));
       return;
     }
@@ -144,7 +157,7 @@ export function TauriBotSettings() {
   };
 
   const saveChannelRuntime = async (change: Extract<TauriBotSettingsChange, { action: "set_channel_runtime" }>) => {
-    if (saving) return;
+    if (savingRef.current) return;
     setSaving(true); setError("");
     try {
       setSettings(await changeTauriBotSettings(change));
@@ -157,7 +170,7 @@ export function TauriBotSettings() {
     const key = `${platform}.${list}`;
     const raw = accessDrafts[key] ?? joinBotAllowlist(settings?.allowlist?.[platform]?.[list]);
     const values = [...new Set(raw.split(/[\n,，]/).map(value => value.trim()).filter(Boolean))];
-    if (values.some(value => value.length > 512) || values.length > 100 || saving) {
+    if (values.some(value => value.length > 512) || values.length > 100 || savingRef.current) {
       setError(t("settings.bots.allowlistInvalid"));
       return;
     }
@@ -173,7 +186,7 @@ export function TauriBotSettings() {
 
   const saveCredentials = async (channelId: string) => {
     const draft = credentialDrafts[channelId];
-    if (saving || !draft?.identity.trim() || !draft.secret) return;
+    if (savingRef.current || !draft?.identity.trim() || !draft.secret) return;
     setSaving(true); setError("");
     try {
       const next = await changeTauriBotSettings({ action: "set_credentials", channelId, identity: draft.identity, secret: draft.secret });
@@ -184,11 +197,29 @@ export function TauriBotSettings() {
     finally { setSaving(false); }
   };
 
+  // Poll runtime only: configuration refresh must never erase unsaved route,
+  // access or credential drafts. Ignore responses from a closed settings page.
   useEffect(() => {
+    mounted.current = true;
     void refresh();
-    const timer = window.setInterval(() => { void refresh(); }, 15_000);
-    return () => window.clearInterval(timer);
+    const poll = async () => {
+      if (statusPollBusy.current) return;
+      statusPollBusy.current = true;
+      try { const next = await tauriBotRuntimeStatus(); if (mounted.current) {setStatus(next);setStatusError("");} }
+      catch (error) { if (mounted.current) setStatusError(tauriMessageFrom(error)); }
+      finally { statusPollBusy.current = false; }
+    };
+    const timer = window.setInterval(() => { void poll(); }, 3_000);
+    return () => { mounted.current = false; ++refreshEpoch.current; window.clearInterval(timer); };
   }, [refresh]);
+
+  const restartRuntime = async () => {
+    if (savingRef.current || status?.refreshing) return;
+    setSaving(true); setError("");
+    try { setStatus(await restartTauriBotRuntime()); }
+    catch (error) { setError(tauriMessageFrom(error)); }
+    finally { setSaving(false); }
+  };
 
   const statusLabel = (value: string) => {
     const keys: Record<string, "settings.bots.stateRunning" | "settings.bots.stateStopped" | "settings.bots.stateBlocked" | "settings.bots.stateDegraded" | "settings.bots.stateError" | "settings.bots.stateUnknown"> = {
@@ -200,9 +231,13 @@ export function TauriBotSettings() {
   return <div className="tauri-settings-section tauri-bot-settings">
     <div className="tauri-settings-actions">
       <span className={`tauri-bot-status tauri-bot-status--${status?.status ?? "unknown"}`}><i aria-hidden="true" />{loading && !status ? t("common.loading") : status ? statusLabel(status.status) : t("settings.bots.stateUnknown")}</span>
-      <button type="button" className="tauri-settings-button" disabled={loading} onClick={() => void refresh()}><RefreshCw size={14} />{t("settings.bots.refresh")}</button>
+      <button type="button" className="tauri-settings-button" disabled={loading || saving || routesDirty} onClick={() => void refresh()}><RefreshCw size={14} />{t("settings.bots.refresh")}</button>
     </div>
+    <div className="tauri-settings-actions"><button className="tauri-settings-button" type="button" disabled={saving || loading || Boolean(status?.refreshing)} onClick={() => void restartRuntime()}><RefreshCw size={14}/>{t("settings.bots.restartRuntime")}</button>{status?.refreshing && <span role="status">{t("settings.bots.refreshingRuntime")}</span>}</div>
+    {settings && <TauriBotConnectionManager settings={settings} disabled={saving} onBusyChange={setSaving} onError={setError} onSaved={next => {++refreshEpoch.current;setSettings(next);setRouteDrafts(current => routesDirty ? current : (next.routes ?? []));savedRoutes.current=next.routes??[];void tauriBotRuntimeStatus().then(nextStatus => {if(mounted.current) setStatus(nextStatus);}).catch(error => {if(mounted.current) setError(tauriMessageFrom(error));});}}/>}
+    <TauriBotPairingManager disabled={saving} onBusyChange={setSaving} onApproved={() => {const epoch=++refreshEpoch.current;void Promise.all([tauriBotSettings(),tauriBotRuntimeStatus()]).then(([next,nextStatus]) => {if(mounted.current && epoch===refreshEpoch.current){setSettings(next);setStatus(nextStatus);}}).catch(error=>{if(mounted.current) setError(tauriMessageFrom(error));});}}/>
     {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}
+    {statusError && <p className="tauri-diagnostic-error" role="alert">{statusError}</p>}
     {settings && <>
       <h3>{t("settings.bots.runtimeTitle")}</h3>
       <label className="tauri-settings-toggle"><Bot className="tauri-settings-field-icon" size={18} /><span><strong>{t("settings.bots.enabled")}</strong><small>{t("settings.bots.enabledHint")}</small></span><input type="checkbox" checked={settings.enabled} disabled={saving || (!settings.enabled && !settings.accessControlConfigured)} onChange={event => void change("set_enabled", event.target.checked)} /></label>

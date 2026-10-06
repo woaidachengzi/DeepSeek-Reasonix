@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { changeTauriPermissionSettings, changeTauriSecretsSettings, tauriMessageFrom, tauriPermissionSettings, tauriSecretsSettings, type TauriPermissionList, type TauriPermissionMode, type TauriPermissionScope, type TauriPermissionSettings, type TauriSecretsSettings } from "../lib/tauriBridge";
 import { useT } from "../lib/i18n";
 
@@ -22,17 +22,37 @@ export function TauriPermissionsSettings({ workspaceRoot, currentSessionState, c
   const [drafts, setDrafts] = useState<Record<TauriPermissionList, string>>({ allow: "", ask: "", deny: "" });
   const busyRef = useRef(false);
 
+  const mounted = useRef(false);
+  const loadRequest = useRef(0);
+  const operationRequest = useRef(0);
+  useLayoutEffect(() => {
+    mounted.current = true;
+    ++loadRequest.current;
+    ++operationRequest.current;
+    busyRef.current = false;
+    setBusy(false); setView(null); setLoading(true); setPendingApply(false);
+    setDrafts({ allow: "", ask: "", deny: "" });
+    return () => { mounted.current = false; ++loadRequest.current; ++operationRequest.current; };
+  }, [scope, workspaceRoot]);
   const reload = (nextScope = scope) => {
-    setLoading(true);
-    setError("");
-    void Promise.all([tauriPermissionSettings(nextScope === "project" ? workspaceRoot : undefined), tauriSecretsSettings()]).then(([permissions, secrets]) => { setView(permissions); setSecretsView(secrets); }).catch(err => setError(tauriMessageFrom(err))).finally(() => setLoading(false));
+    const request = ++loadRequest.current;
+    setLoading(true); setError("");
+    void Promise.all([tauriPermissionSettings(nextScope === "project" ? workspaceRoot : undefined), tauriSecretsSettings()])
+      .then(([permissions, secrets]) => { if (mounted.current && request === loadRequest.current) { setView(permissions); setSecretsView(secrets); } })
+      .catch(err => { if (mounted.current && request === loadRequest.current) setError(tauriMessageFrom(err)); })
+      .finally(() => { if (mounted.current && request === loadRequest.current) setLoading(false); });
   };
-  useEffect(() => { if (!workspaceRoot && scope === "project") setScope("global"); reload(!workspaceRoot ? "global" : scope); }, [workspaceRoot]);
+  useEffect(() => {
+    if (!workspaceRoot && scope === "project") { setScope("global"); return; }
+    reload(scope);
+  }, [scope, workspaceRoot]);
 
   const change = async (action: "mode" | "add" | "remove", list?: TauriPermissionList, rule?: string, mode?: TauriPermissionMode) => {
-    if (busyRef.current) return;
+    if (loading || busyRef.current) return;
     const normalizedRule = rule?.trim() ?? "";
     if (action !== "mode" && !normalizedRule) return;
+    const operation = ++operationRequest.current;
+    ++loadRequest.current;
     busyRef.current = true;
     setBusy(true);
     setError("");
@@ -41,15 +61,15 @@ export function TauriPermissionsSettings({ workspaceRoot, currentSessionState, c
       const next = action === "mode"
         ? await changeTauriPermissionSettings({ action, mode: mode!, scope, workspaceRoot })
         : await changeTauriPermissionSettings({ action, list: list!, rule: normalizedRule, scope, workspaceRoot });
+      if (!mounted.current || operation !== operationRequest.current) return;
       setView(next);
       setPendingApply(true);
       setNotice(t("settings.permission.saved"));
       if (action === "add" && list) setDrafts(previous => ({ ...previous, [list]: "" }));
     } catch (err) {
-      setError(tauriMessageFrom(err));
+      if (mounted.current && operation === operationRequest.current) setError(tauriMessageFrom(err));
     } finally {
-      busyRef.current = false;
-      setBusy(false);
+      if (mounted.current && operation === operationRequest.current) { busyRef.current = false; setBusy(false); }
     }
   };
 
@@ -59,40 +79,46 @@ export function TauriPermissionsSettings({ workspaceRoot, currentSessionState, c
   };
 
   const changeSecrets = async (change: { filterSubprocessEnv?: boolean; protectSensitiveFiles?: boolean }) => {
-    if (busyRef.current) return;
+    if (loading || busyRef.current) return;
+    const operation = ++operationRequest.current;
+    ++loadRequest.current;
     busyRef.current = true;
     setBusy(true);
     setError("");
     setNotice("");
     try {
-      setSecretsView(await changeTauriSecretsSettings(change));
+      const next = await changeTauriSecretsSettings(change);
+      if (!mounted.current || operation !== operationRequest.current) return;
+      setSecretsView(next);
       setNotice(t("settings.secrets.saved"));
     } catch (err) {
-      setError(tauriMessageFrom(err));
+      if (mounted.current && operation === operationRequest.current) setError(tauriMessageFrom(err));
     } finally {
-      busyRef.current = false;
-      setBusy(false);
+      if (mounted.current && operation === operationRequest.current) { busyRef.current = false; setBusy(false); }
     }
   };
 
   const applyCurrent = async () => {
     if (!onApplyToCurrentSession || busyRef.current || currentSessionState !== "idle" || currentSessionHasAttachments) return;
+    const operation = ++operationRequest.current;
+    ++loadRequest.current;
     busyRef.current = true;
     setBusy(true);
     setError("");
     try {
       const applied = await onApplyToCurrentSession();
+      if (!mounted.current || operation !== operationRequest.current) return;
       if (applied) {
         setPendingApply(false);
         setNotice(t("settings.permission.applied"));
       } else setError(t("settings.permission.applyFailed"));
-    } catch { setError(t("settings.permission.applyFailed")); }
-    finally { busyRef.current = false; setBusy(false); }
+    } catch { if (mounted.current && operation === operationRequest.current) setError(t("settings.permission.applyFailed")); }
+    finally { if (mounted.current && operation === operationRequest.current) { busyRef.current = false; setBusy(false); } }
   };
 
   return <div className="tauri-settings-section tauri-permissions-settings">
     <div className="tauri-settings-field"><span className="tauri-settings-field-label">{t("settings.permission.scope")}<small>{t("settings.permission.scopeHint")}</small></span><div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.permission.scope")}>
-      {(["global", "project"] as const).map(value => <button key={value} type="button" role="radio" aria-checked={scope === value} className={`tauri-settings-radio${scope === value ? " is-active" : ""}`} disabled={busy || (value === "project" && !workspaceRoot)} onClick={() => { setScope(value); reload(value); }}>{t(value === "global" ? "settings.permission.scopeGlobal" : "settings.permission.scopeProject")}</button>)}
+      {(["global", "project"] as const).map(value => <button key={value} type="button" role="radio" aria-checked={scope === value} className={`tauri-settings-radio${scope === value ? " is-active" : ""}`} disabled={busy || (value === "project" && !workspaceRoot)} onClick={() => { setScope(value); }}>{t(value === "global" ? "settings.permission.scopeGlobal" : "settings.permission.scopeProject")}</button>)}
     </div></div>
     <h3>{t("settings.permission.defaultDecision")}</h3>
     <p>{t("settings.permission.defaultDecisionHint")}</p>
@@ -113,8 +139,8 @@ export function TauriPermissionsSettings({ workspaceRoot, currentSessionState, c
       <h3>{t("settings.secrets.title")}</h3>
       <p>{t("settings.secrets.description")}</p>
       {secretsView && <>
-        <label className="tauri-settings-field tauri-settings-checkbox-field"><span className="tauri-settings-field-label">{t("settings.secrets.filterEnv")}<small>{t("settings.secrets.filterEnvHint")}</small></span><input type="checkbox" checked={secretsView.filterSubprocessEnv} disabled={busy} onChange={event => void changeSecrets({ filterSubprocessEnv: event.target.checked })} /></label>
-        <label className="tauri-settings-field tauri-settings-checkbox-field"><span className="tauri-settings-field-label">{t("settings.secrets.protectFiles")}<small>{t("settings.secrets.protectFilesHint")}</small></span><input type="checkbox" checked={secretsView.protectSensitiveFiles} disabled={busy} onChange={event => void changeSecrets({ protectSensitiveFiles: event.target.checked })} /></label>
+        <label className="tauri-settings-field tauri-settings-checkbox-field"><span className="tauri-settings-field-label">{t("settings.secrets.filterEnv")}<small>{t("settings.secrets.filterEnvHint")}</small></span><input type="checkbox" checked={secretsView.filterSubprocessEnv} disabled={busy || loading} onChange={event => void changeSecrets({ filterSubprocessEnv: event.target.checked })} /></label>
+        <label className="tauri-settings-field tauri-settings-checkbox-field"><span className="tauri-settings-field-label">{t("settings.secrets.protectFiles")}<small>{t("settings.secrets.protectFilesHint")}</small></span><input type="checkbox" checked={secretsView.protectSensitiveFiles} disabled={busy || loading} onChange={event => void changeSecrets({ protectSensitiveFiles: event.target.checked })} /></label>
       </>}
     </> : <button type="button" className="tauri-settings-button" onClick={() => reload()}>{t("common.retry")}</button>}
     {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}

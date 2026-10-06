@@ -154,45 +154,92 @@ func ApprovePairingCode(code string) (PairingRequest, error) {
 	if err != nil {
 		return PairingRequest{}, err
 	}
-	userPath := config.UserConfigPath()
-	if userPath == "" {
-		return PairingRequest{}, errors.New("reasonix user config path is unavailable")
-	}
-	unlock := config.LockUserConfigEdits()
-	defer unlock()
-	cfg := config.LoadForEdit(userPath)
-	if approvePairingForConnectionAccess(&cfg.Bot, req) {
-		if err := cfg.SaveTo(userPath); err != nil {
-			return PairingRequest{}, err
+	err = func() error {
+		unlock := config.LockUserConfigEdits()
+		defer unlock()
+		path := config.UserConfigPath()
+		if path == "" {
+			return errors.New("reasonix user config path is unavailable")
 		}
-		return req, nil
-	}
-	cfg.Bot.Allowlist.Enabled = true
-	switch req.Platform {
-	case PlatformQQ:
-		cfg.Bot.Allowlist.QQUsers, _ = appendUnique(cfg.Bot.Allowlist.QQUsers, req.UserID)
-	case PlatformFeishu:
-		cfg.Bot.Allowlist.FeishuUsers, _ = appendUnique(cfg.Bot.Allowlist.FeishuUsers, req.UserID)
-	case PlatformWeixin:
-		cfg.Bot.Allowlist.WeixinUsers, _ = appendUnique(cfg.Bot.Allowlist.WeixinUsers, req.UserID)
-	}
-	if allowlistAdminCount(cfg.Bot.Allowlist) == 0 {
+		cfg, err := config.LoadForEditReadOnlyStrict(path)
+		if err != nil {
+			return err
+		}
+		userPath := path
+		if req.ConnectionID != "" && req.ConnectionID != string(req.Platform) {
+			found := false
+			for _, conn := range cfg.Bot.Connections {
+				domain := strings.TrimSpace(conn.Domain)
+				if domain == "" {
+					domain = conn.Provider
+				}
+				if pairingConnectionMatches(conn, req.ConnectionID) && conn.Provider == string(req.Platform) && (req.Domain == "" || domain == req.Domain) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return errors.New("pairing connection no longer exists")
+			}
+		}
+		if approvePairingForConnectionAccess(&cfg.Bot, req) {
+			if err := cfg.SaveTo(userPath); err != nil {
+				return err
+			}
+			return nil
+		}
+		cfg.Bot.Allowlist.Enabled = true
 		switch req.Platform {
 		case PlatformQQ:
-			cfg.Bot.Allowlist.QQAdmins, _ = appendUnique(cfg.Bot.Allowlist.QQAdmins, req.UserID)
-			cfg.Bot.Allowlist.QQApprovers, _ = appendUnique(cfg.Bot.Allowlist.QQApprovers, req.UserID)
+			cfg.Bot.Allowlist.QQUsers, _ = appendUnique(cfg.Bot.Allowlist.QQUsers, req.UserID)
 		case PlatformFeishu:
-			cfg.Bot.Allowlist.FeishuAdmins, _ = appendUnique(cfg.Bot.Allowlist.FeishuAdmins, req.UserID)
-			cfg.Bot.Allowlist.FeishuApprovers, _ = appendUnique(cfg.Bot.Allowlist.FeishuApprovers, req.UserID)
+			cfg.Bot.Allowlist.FeishuUsers, _ = appendUnique(cfg.Bot.Allowlist.FeishuUsers, req.UserID)
 		case PlatformWeixin:
-			cfg.Bot.Allowlist.WeixinAdmins, _ = appendUnique(cfg.Bot.Allowlist.WeixinAdmins, req.UserID)
-			cfg.Bot.Allowlist.WeixinApprovers, _ = appendUnique(cfg.Bot.Allowlist.WeixinApprovers, req.UserID)
+			cfg.Bot.Allowlist.WeixinUsers, _ = appendUnique(cfg.Bot.Allowlist.WeixinUsers, req.UserID)
 		}
-	}
-	if err := cfg.SaveTo(userPath); err != nil {
-		return PairingRequest{}, err
+		if allowlistAdminCount(cfg.Bot.Allowlist) == 0 {
+			switch req.Platform {
+			case PlatformQQ:
+				cfg.Bot.Allowlist.QQAdmins, _ = appendUnique(cfg.Bot.Allowlist.QQAdmins, req.UserID)
+				cfg.Bot.Allowlist.QQApprovers, _ = appendUnique(cfg.Bot.Allowlist.QQApprovers, req.UserID)
+			case PlatformFeishu:
+				cfg.Bot.Allowlist.FeishuAdmins, _ = appendUnique(cfg.Bot.Allowlist.FeishuAdmins, req.UserID)
+				cfg.Bot.Allowlist.FeishuApprovers, _ = appendUnique(cfg.Bot.Allowlist.FeishuApprovers, req.UserID)
+			case PlatformWeixin:
+				cfg.Bot.Allowlist.WeixinAdmins, _ = appendUnique(cfg.Bot.Allowlist.WeixinAdmins, req.UserID)
+				cfg.Bot.Allowlist.WeixinApprovers, _ = appendUnique(cfg.Bot.Allowlist.WeixinApprovers, req.UserID)
+			}
+		}
+		if err := cfg.SaveTo(userPath); err != nil {
+			return err
+		}
+		return nil
+	}()
+	if err != nil {
+		return PairingRequest{}, errors.Join(err, restorePairingRequest(req))
 	}
 	return req, nil
+}
+
+// A failed configuration commit must not silently consume an approval request.
+func restorePairingRequest(req PairingRequest) error {
+	if req.Code == "" {
+		return nil
+	}
+	pairingMu.Lock()
+	defer pairingMu.Unlock()
+	path := PairingStorePath()
+	store, err := loadPairingFile(path)
+	if err != nil {
+		return err
+	}
+	for _, current := range store.Requests {
+		if strings.EqualFold(current.Code, req.Code) {
+			return nil
+		}
+	}
+	store.Requests = append(store.Requests, req)
+	return savePairingFile(path, store)
 }
 
 func approvePairingForConnectionAccess(botCfg *config.BotConfig, req PairingRequest) bool {

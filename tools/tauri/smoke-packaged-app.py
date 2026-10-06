@@ -5,7 +5,9 @@ Usage: python3 tools/tauri/smoke-packaged-app.py PATH_TO_APP
 The host's package-smoke flag exits through Tauri's normal RunEvent::Exit path.
 """
 
+import argparse
 import http.client
+import importlib.util
 import ipaddress
 import json
 import os
@@ -143,7 +145,7 @@ def check_credential_profile(home):
     return identities[0]
 
 
-def smoke_once(host_binary, sidecar_binary, identifier, managed):
+def smoke_once(host_binary, sidecar_binary, identifier, managed, window_state=None):
     with tempfile.TemporaryDirectory(prefix="reasonix-tauri-package-smoke-") as root_string:
         root = Path(root_string)
         home = root / "home"
@@ -151,6 +153,9 @@ def smoke_once(host_binary, sidecar_binary, identifier, managed):
         home.mkdir()
         temp.mkdir()
         app_data = home / "Library/Application Support" / identifier
+        if window_state is not None:
+            # Geometry only, in this newly owned fixture; never copy user data.
+            placement_helper().seed_window_state(app_data, window_state)
         expected_home = app_data / "reasonix-core" if managed else root / "reasonix-home"
         cache_home = root / "reasonix-cache"
         env = os.environ.copy()
@@ -217,6 +222,11 @@ def smoke_once(host_binary, sidecar_binary, identifier, managed):
                 raise RuntimeError("packaged sidecar survived host exit")
             if list(temp.glob("reasonix-tauri-bridge-*/ready.json")):
                 raise RuntimeError("sidecar readiness directory survived host exit")
+            if window_state is not None:
+                saved = placement_helper().read_window_state_template(app_data / "window-state.json")
+                if saved != window_state:
+                    raise RuntimeError("packaged window did not retain the requested normal geometry")
+                print("packaged window geometry after native capture: " + json.dumps(saved))
             notification_status = json.loads((temp / "reasonix-native-notification-smoke.json").read_text())
             if notification_status.get("permission") not in {"not_determined", "denied", "granted", "provisional"} or notification_status.get("clickSupported") is not True:
                 raise RuntimeError("packaged native notification permission query failed")
@@ -246,7 +256,16 @@ def smoke_once(host_binary, sidecar_binary, identifier, managed):
                     pass
 
 
-def smoke(app_path):
+def placement_helper():
+    spec = importlib.util.spec_from_file_location(
+        "package_smoke_placement", Path(__file__).with_name("probe-launch-services-profile.py")
+    )
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    return helper
+
+
+def smoke(app_path, window_state=None):
     app = Path(app_path).resolve()
     host_binary = app / "Contents/MacOS/reasonix-tauri"
     sidecar_binary = app / "Contents/MacOS/reasonix-desktop-bridge"
@@ -258,15 +277,21 @@ def smoke(app_path):
         raise RuntimeError("package has no bundle identifier")
     if matching_package_is_running(identifier):
         raise RuntimeError("a Preview with this bundle identifier is already running; close it before the smoke")
-    identities = [smoke_once(host_binary, sidecar_binary, identifier, managed) for managed in (True, False)]
+    identities = [smoke_once(host_binary, sidecar_binary, identifier, managed, window_state) for managed in (True, False)]
     if identities[0] == identities[1]:
         raise RuntimeError("independently created profiles share a credential identity")
 
 
 if __name__ == "__main__":
-    if sys.platform != "darwin" or len(sys.argv) != 2:
+    if sys.platform != "darwin":
         raise SystemExit("usage on macOS: smoke-packaged-app.py PATH_TO_APP")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("app")
+    parser.add_argument("--window-state-template", type=Path,
+                        help="seed only validated normal window geometry in fresh private profiles")
+    args = parser.parse_args()
     try:
-        smoke(sys.argv[1])
+        state = placement_helper().read_window_state_template(args.window_state_template) if args.window_state_template else None
+        smoke(args.app, state)
     except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
         raise SystemExit(f"packaged Preview smoke failed: {error}") from error

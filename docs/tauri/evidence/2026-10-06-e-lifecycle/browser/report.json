@@ -1,0 +1,29 @@
+{
+  "checks": [
+    "failed save preserves editable draft and offers retry",
+    "pairing requires explicit confirmation, then pending request disappears",
+    "three-second health poll preserves unsaved route draft",
+    "runtime restart displays configuration application status",
+    "reopened remote settings show actual connection; disconnect retires port manager",
+    "management Chinese vocabulary loads on demand with no fallback labels"
+  ],
+  "errors": [],
+  "shots": [
+    "bot-light-1280.png",
+    "bot-light-390.png",
+    "bot-dark-1280.png",
+    "bot-dark-390.png",
+    "remote-1280.png",
+    "remote-390.png",
+    "bot-chinese-390.png"
+  ],
+  "browser": "Browser plugin not available; existing Playwright and headless Chrome",
+  "actualComponents": [
+    "TauriBotSettings",
+    "TauriBotConnectionManager",
+    "TauriBotPairingManager",
+    "TauriRemoteSettings",
+    "TauriRemoteForwards"
+  ],
+  "nativeBridge": "isolated simulation; no IM/network credentials"
+}

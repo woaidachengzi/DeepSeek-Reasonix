@@ -18,18 +18,19 @@ type remoteSettingsView struct {
 }
 
 type remoteSettingsHost struct {
-	Name           string `json:"name"`
-	Host           string `json:"host"`
-	Port           int    `json:"port"`
-	User           string `json:"user"`
-	IdentityFile   string `json:"identityFile"`
-	ProxyJump      string `json:"proxyJump"`
-	Workspace      string `json:"workspace"`
-	ServeInstall   string `json:"serveInstall"`
-	CredentialMode string `json:"credentialMode"`
-	UseSSHConfig   bool   `json:"useSSHConfig"`
-	PasswordSet    bool   `json:"passwordSet"`
-	PassphraseSet  bool   `json:"passphraseSet"`
+	Name           string                 `json:"name"`
+	Host           string                 `json:"host"`
+	Port           int                    `json:"port"`
+	User           string                 `json:"user"`
+	IdentityFile   string                 `json:"identityFile"`
+	ProxyJump      string                 `json:"proxyJump"`
+	Workspace      string                 `json:"workspace"`
+	ServeInstall   string                 `json:"serveInstall"`
+	CredentialMode string                 `json:"credentialMode"`
+	UseSSHConfig   bool                   `json:"useSSHConfig"`
+	PasswordSet    bool                   `json:"passwordSet"`
+	PassphraseSet  bool                   `json:"passphraseSet"`
+	Connection     *remoteConnectResponse `json:"connection,omitempty"`
 }
 
 type remoteSettingsHostInput struct {
@@ -207,6 +208,7 @@ func (b *bridgeServer) remoteSettings(w http.ResponseWriter, _ *http.Request) {
 		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read Preview remote host settings")
 		return
 	}
+	b.remoteSessions.annotate(&view)
 	writeJSON(w, http.StatusOK, view)
 }
 
@@ -244,6 +246,7 @@ func (b *bridgeServer) changeRemoteSettings(w http.ResponseWriter, r *http.Reque
 			b.remoteSessions.disconnect(strings.TrimSpace(change.Host.Name))
 		}
 	}
+	b.remoteSessions.annotate(&view)
 	writeJSON(w, http.StatusOK, view)
 }
 
