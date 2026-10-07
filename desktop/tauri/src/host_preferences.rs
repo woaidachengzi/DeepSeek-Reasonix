@@ -164,12 +164,29 @@ fn default_corners() -> String {
     "soft".into()
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CloseBehavior {
-    #[default]
     KeepRunning,
     Quit,
+}
+
+impl CloseBehavior {
+    pub(crate) fn effective_for_tray(self, platform: &str, available: bool) -> Self {
+        if platform == "linux" && !available { Self::Quit } else { self }
+    }
+
+    fn platform_default(platform: &str) -> Self {
+        // Linux desktops do not consistently expose an AppIndicator tray.
+        // Preserve explicit saved choices; only a new/missing setting uses this.
+        if platform == "linux" { Self::Quit } else { Self::KeepRunning }
+    }
+}
+
+impl Default for CloseBehavior {
+    fn default() -> Self {
+        Self::platform_default(std::env::consts::OS)
+    }
 }
 
 pub struct HostPreferences {
@@ -820,13 +837,37 @@ mod tests {
     use super::*;
 
     #[test]
+    fn close_default_is_safe_without_a_linux_tray_and_preserves_saved_choices() {
+        assert_eq!(CloseBehavior::platform_default("linux"), CloseBehavior::Quit);
+        for platform in ["macos", "windows"] {
+            assert_eq!(CloseBehavior::platform_default(platform), CloseBehavior::KeepRunning);
+        }
+        let saved: SavedPreferences = serde_json::from_str(r#"{"closeBehavior":"keep_running"}"#).unwrap();
+        assert_eq!(saved.close_behavior, CloseBehavior::KeepRunning);
+        let missing: SavedPreferences = serde_json::from_str("{}").unwrap();
+        assert_eq!(missing.close_behavior, CloseBehavior::default());
+    }
+
+    #[test]
+    fn absent_tray_only_changes_linux_background_close() {
+        assert_eq!(CloseBehavior::KeepRunning.effective_for_tray("linux", false), CloseBehavior::Quit);
+        assert_eq!(CloseBehavior::KeepRunning.effective_for_tray("linux", true), CloseBehavior::KeepRunning);
+        for platform in ["linux", "macos", "windows"] {
+            assert_eq!(CloseBehavior::Quit.effective_for_tray(platform, false), CloseBehavior::Quit);
+        }
+        for platform in ["macos", "windows"] {
+            assert_eq!(CloseBehavior::KeepRunning.effective_for_tray(platform, false), CloseBehavior::KeepRunning);
+        }
+    }
+
+    #[test]
     fn close_preference_survives_restart_and_ignores_corrupt_data() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let path = directory.path().join(FILE_NAME);
         let store = HostPreferences {
             path: path.clone(),
             asset_root: directory.path().join("theme-assets"),
-            preferences: Mutex::new(SavedPreferences::default()),
+            preferences: Mutex::new(SavedPreferences { close_behavior: CloseBehavior::KeepRunning, ..SavedPreferences::default() }),
         };
         store
             .set_close_behavior(CloseBehavior::Quit)
@@ -860,7 +901,7 @@ mod tests {
         let store = HostPreferences {
             path: directory.path().join("missing").join(FILE_NAME),
             asset_root: directory.path().join("theme-assets"),
-            preferences: Mutex::new(SavedPreferences::default()),
+            preferences: Mutex::new(SavedPreferences { close_behavior: CloseBehavior::KeepRunning, ..SavedPreferences::default() }),
         };
         assert!(store.set_close_behavior(CloseBehavior::Quit).is_err());
         assert_eq!(store.close_behavior(), CloseBehavior::KeepRunning);

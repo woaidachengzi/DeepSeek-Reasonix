@@ -90,10 +90,23 @@ eq(resolveBuildTarget([], "aarch64-apple-darwin").extension, "", "native macOS b
 eq(resolveBuildRunner(windowsTarget, "aarch64-apple-darwin", "darwin"), "cargo-xwin", "Windows cross-build on macOS uses cargo-xwin");
 eq(resolveBuildRunner(resolveBuildTarget(["--target=aarch64-pc-windows-msvc"], "x86_64-pc-windows-msvc"), "x86_64-pc-windows-msvc", "win32"), null, "Windows architecture switch retains the native MSVC toolchain");
 eq(resolveBuildRunner(windowsTarget, windowsTarget.target, "win32"), null, "native Windows does not require cargo-xwin");
+for (const [target, arch] of [["x86_64-unknown-linux-gnu", "amd64"], ["aarch64-unknown-linux-gnu", "arm64"]]) {
+  const nativeLinux = resolveBuildTarget([], target);
+  eq(nativeLinux.extension, "", "native Linux sidecar has no Windows extension");
+  eq(nativeLinux.goEnv.GOOS, "linux", "native Linux ignores an inherited Go target OS");
+  eq(nativeLinux.goEnv.GOARCH, arch, "native Linux Go architecture matches Rust");
+  eq(nativeLinux.goEnv.CGO_ENABLED, "0", "Linux sidecar does not add a libc dependency");
+  eq(resolveBuildRunner(nativeLinux, target, "linux"), null, "native Linux retains cargo");
+}
 for (const args of [["--target"], ["--target", "--debug"], ["--target=x86_64-unknown-linux-gnu"]]) {
   let rejected = false;
   try { resolveBuildTarget(args, "aarch64-apple-darwin"); } catch { rejected = true; }
   ok(rejected, `rejects invalid or unsupported target ${args.join(" ")}`);
+}
+for (const target of ["x86_64-unknown-linux-musl", "armv7-unknown-linux-gnu"]) {
+  let rejected = false;
+  try { resolveBuildTarget([], target); } catch { rejected = true; }
+  ok(rejected, `rejects unsupported native Linux host ${target}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +155,15 @@ const windowsConf = JSON.parse(readFileSync(resolve(__dirname, "../../tauri/taur
 eq(windowsConf.bundle.windows.nsis.installMode, "currentUser", "Preview installs without replacing a machine-wide stable installation");
 eq(windowsConf.bundle.targets[0], "nsis", "Windows defaults to the cross-buildable NSIS installer");
 ok(windowsConf.bundle.icon.some(path => path.endsWith(".ico")), "Windows has an ICO resource");
+const linuxConf = JSON.parse(readFileSync(resolve(__dirname, "../../tauri/tauri.linux.conf.json"), "utf8"));
+eq(JSON.stringify(linuxConf.bundle.targets), JSON.stringify(["deb", "appimage"]), "Linux produces Debian and AppImage packages");
+ok(linuxConf.bundle.icon.every(path => path.endsWith(".png")), "Linux packaging uses a PNG icon, not macOS ICNS");
+ok(linuxConf.bundle.linux.deb.depends.includes("libayatana-appindicator3-1"), "Debian package declares its tray runtime dependency");
+const linuxBuildSource = readFileSync(resolve(__dirname, "../../tauri/scripts/build-linux.sh"), "utf8");
+contains(linuxBuildSource, 'uname -s', "Linux script rejects non-Linux hosts before building");
+contains(linuxBuildSource, 'rustc --print host-tuple', "Linux script builds the native Rust target");
+contains(linuxBuildSource, 'pkg-config --exists', "Linux script checks GTK/WebKit and D-Bus prerequisites");
+contains(linuxBuildSource, 'sha256sum', "Linux script prints package verification hashes");
 const tauriConfigDirectory = resolve(__dirname, "../../tauri");
 const mainWindowCapability = JSON.parse(
   readFileSync(resolve(tauriConfigDirectory, "capabilities/main-window.json"), "utf8"),

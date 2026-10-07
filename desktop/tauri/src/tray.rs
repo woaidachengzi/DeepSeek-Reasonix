@@ -86,10 +86,11 @@ pub fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error + S
         .item(&quit)
         .build()?;
     let _tray = TrayIconBuilder::new()
-        .icon(app.default_window_icon().expect("no default icon").clone())
+        .icon(app.default_window_icon().ok_or_else(|| std::io::Error::other("Preview tray icon is unavailable"))?.clone())
         .tooltip("Reasonix")
         .menu(&menu)
-        .show_menu_on_left_click(false)
+        // Linux has no TrayIconEvent::Click; restoration uses the menu instead.
+        .show_menu_on_left_click(tray_menu_on_left_click(std::env::consts::OS))
         .on_menu_event(|app, event| match event.id().as_ref() {
             "tray_show" => show_main_window(app),
             "tray_quit" => app.exit(0),
@@ -115,4 +116,18 @@ pub fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error + S
     app.manage(TrayMenuState { open, quit });
 
     Ok(())
+}
+
+fn tray_menu_on_left_click(platform: &str) -> bool {
+    platform == "linux"
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn linux_tray_uses_the_menu_instead_of_unsupported_click_events() {
+        assert!(super::tray_menu_on_left_click("linux"));
+        assert!(!super::tray_menu_on_left_click("macos"));
+        assert!(!super::tray_menu_on_left_click("windows"));
+    }
 }

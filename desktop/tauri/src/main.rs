@@ -1704,7 +1704,9 @@ fn set_desktop_language(
 
 #[tauri::command]
 fn set_tray_locale(window: tauri::WebviewWindow, locale: String) -> Result<(), String> {
-    window.state::<tray::TrayMenuState>().set_locale(&locale)
+    window.try_state::<tray::TrayMenuState>()
+        .ok_or("system tray is unavailable; use the main window")?
+        .set_locale(&locale)
 }
 
 #[tauri::command]
@@ -2544,15 +2546,22 @@ fn open_external_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn get_close_behavior(preferences: State<'_, HostPreferences>) -> CloseBehavior {
+fn get_close_behavior(app: tauri::AppHandle, preferences: State<'_, HostPreferences>) -> CloseBehavior {
+    // Report the behavior that CloseRequested actually uses, without rewriting
+    // an explicit saved preference when a Linux tray is temporarily unavailable.
     preferences.close_behavior()
+        .effective_for_tray(std::env::consts::OS, app.try_state::<tray::TrayMenuState>().is_some())
 }
 
 #[tauri::command]
 fn set_close_behavior(
+    app: tauri::AppHandle,
     preferences: State<'_, HostPreferences>,
     behavior: CloseBehavior,
 ) -> Result<CloseBehavior, String> {
+    if behavior.effective_for_tray(std::env::consts::OS, app.try_state::<tray::TrayMenuState>().is_some()) != behavior {
+        return Err("system tray is unavailable; choose quit when closing".into());
+    }
     preferences.set_close_behavior(behavior)?;
     Ok(behavior)
 }
@@ -3924,7 +3933,12 @@ fn setup_preview(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
         app.set_menu(menu)?;
     }
 
-    tray::create_tray(app).map_err(|e| std::io::Error::other(e.to_string()))?;
+    if let Err(error) = tray::create_tray(app) {
+        #[cfg(target_os = "linux")]
+        eprintln!("Reasonix tray is unavailable; window close will quit: {error}");
+        #[cfg(not(target_os = "linux"))]
+        return Err(std::io::Error::other(error.to_string()).into());
+    }
 
     // Initialize keychain store
     let keychain = keychain::KeychainStore::for_profile(&profile, app.handle());
@@ -4020,7 +4034,9 @@ fn main() {
             }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
-                match window.app_handle().state::<HostPreferences>().close_behavior() {
+                let behavior = window.app_handle().state::<HostPreferences>().close_behavior()
+                    .effective_for_tray(std::env::consts::OS, window.app_handle().try_state::<tray::TrayMenuState>().is_some());
+                match behavior {
                     CloseBehavior::KeepRunning => {
                         // Match Wails' macOS background close: hide the
                         // application so the shell's Dock/tray restore path

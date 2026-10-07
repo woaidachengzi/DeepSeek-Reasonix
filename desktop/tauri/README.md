@@ -50,7 +50,8 @@ token 不放在 macOS 进程列表可见的启动环境或命令行中。
 
 2026-10-07 用户授权 Windows 适配及 x64 Preview 包构建，Windows 原生手动验收由用户执行。
 构建方法与待验矩阵见 [Windows Preview 验收](../../docs/tauri/WINDOWS_PREVIEW_ACCEPTANCE.md)。
-交叉编译通过不等于 Windows 原生验收通过；Linux 仍延期。
+交叉编译通过不等于 Windows 原生验收通过。Linux 原生 GNU x64/ARM64 构建适配已开始，
+构建环境、安装包与桌面环境待验项见 [Linux Preview 验收](../../docs/tauri/LINUX_PREVIEW_ACCEPTANCE.md)。
 D→E 的顺序及 macOS 待验项以 [迁移清单](../../docs/tauri/API_SURFACE_AUDIT.md) 为准。
 
 ## 数据隔离
@@ -153,6 +154,21 @@ pnpm tauri:build
 嵌入应用包。macOS 包仍只支持本机 target；Windows x64/ARM64 MSVC 目标可在本机
 构建，非 Windows 主机的 Windows 交叉构建使用 cargo-xwin。后者仍需 Windows 原生验收，
 不能把交叉编译通过当作平台支持已验证。
+
+## 构建 Linux 测试包
+
+在配置好 WebKitGTK 4.1、GTK3、AppIndicator、D-Bus 开发库的同架构 GNU Linux 上执行：
+
+```bash
+pnpm --dir desktop/frontend install --frozen-lockfile
+bash desktop/tauri/scripts/build-linux.sh
+```
+
+默认生成 `.deb` 和 AppImage；只需 Debian 包时在脚本末尾传 `deb`。
+Linux 新档案默认关闭即退出；显式保存的关闭偏好继续有效。托盘通过菜单恢复窗口，
+不依赖 Linux 不支持的鼠标点击事件。若托盘初始化失败，应用仍能启动，但关闭窗口会退出。
+手动工作流 `Tauri Linux Preview` 可在 Ubuntu 22.04 上构建并上传预览附件，不发布 release，
+不读取模型 API key；本轮没有推送或触发该工作流。
 
 本机构建没有 `APPLE_SIGNING_IDENTITY` 时会使用 ad-hoc 签名，适合本机测试但未公证；不要
 将此类包作为正式下载发布。配置 Developer ID 与公证凭据后，正式发布流程必须保留 Tauri

@@ -1,0 +1,11 @@
+{
+  "bundle": {
+    "targets": ["deb", "appimage"],
+    "icon": ["../build/appicon.png"],
+    "linux": {
+      "deb": {
+        "depends": ["libayatana-appindicator3-1"]
+      }
+    }
+  }
+}

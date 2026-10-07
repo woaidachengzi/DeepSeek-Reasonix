@@ -1,0 +1,58 @@
+name: Tauri Linux Preview
+
+# Build only on explicit dispatch; do not publish releases or use app credentials.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tauri-linux-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-x64:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      # AppImage tooling can extract itself on runners without FUSE mounts.
+      APPIMAGE_EXTRACT_AND_RUN: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: pnpm/action-setup@v6.0.9
+        with:
+          version: 10.34.5
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: desktop/frontend/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux build libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config curl wget file libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev patchelf xvfb dbus-x11
+      - name: Install frontend dependencies
+        run: pnpm --dir desktop/frontend install --frozen-lockfile
+      - name: Check build contracts
+        run: pnpm --dir desktop/frontend test:tauri-build-contract
+      - name: Build Debian and AppImage previews
+        run: bash desktop/tauri/scripts/build-linux.sh
+      - name: Run native Linux Rust regression tests
+        run: xvfb-run -a dbus-run-session -- cargo test --manifest-path desktop/tauri/Cargo.toml --bin reasonix-tauri
+      - name: Upload preview packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: reasonix-tauri-linux-x64-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            desktop/tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+            desktop/tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+            docs/tauri/LINUX_PREVIEW_ACCEPTANCE.md
