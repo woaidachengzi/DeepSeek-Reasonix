@@ -26,6 +26,7 @@ keyring = { version = "3.6.3", features = ["apple-native", "windows-native", "sy
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-opener = "2"
 percent-encoding = "2"
+png = "0.18.1"
 tauri-plugin-shell = "2.3.6"
 
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -51,7 +52,6 @@ futures-lite = "2.6.1"
 zbus = "5.19.0"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-png = "0.18.1"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Storage_FileSystem", "Win32_Security", "Win32_System_Com", "Win32_System_Environment", "Win32_System_Registry", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [dev-dependencies]

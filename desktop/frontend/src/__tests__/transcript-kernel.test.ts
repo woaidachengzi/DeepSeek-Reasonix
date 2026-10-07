@@ -245,5 +245,35 @@ ok(!kernel.observeNativeScroll({ ...snapshot, scrollTop: 900 }),
   "no-op sync and lease renewal preserve the pending writer event provenance");
 kernel.endUserGesture();
 
+{
+  const clock = new FakeClock();
+  const kernel = new TranscriptKernel({ clock });
+  const writes: number[] = [];
+  kernel.connectWriter(request => { writes.push(request.generation); return { accepted: true, offset: 1400, changed: true }; });
+  kernel.replaceSurface("tauri-first");
+  kernel.beginUserGesture(snapshot);
+  kernel.observeNativeScroll({ ...snapshot, scrollTop: 150 });
+  kernel.endUserGesture();
+  kernel.replaceSurface("tauri-second");
+  const reopened = kernel.replaceSurface("tauri-first");
+  ok(reopened.anchor.kind === "block", "kernel retains reader memory independently of the Tauri opening policy");
+  const openLatest = kernel.begin("restore", { kind: "tail" })!;
+  kernel.advanceGeometry();
+  kernel.correctAnchor(openLatest, () => undefined);
+  ok(kernel.intent === "tail" && openLatest.status === "committed", "opening a Tauri conversation can explicitly select its latest turn");
+  kernel.scheduleTailSync();
+  const beforeSwitch = writes.length;
+  kernel.replaceSurface("tauri-second");
+  clock.flushFrames();
+  ok(writes.length === beforeSwitch, "a queued streaming follow cannot scroll the newly opened conversation");
+  kernel.beginUserGesture(snapshot);
+  kernel.observeNativeScroll({ ...snapshot, scrollTop: 100 });
+  kernel.endUserGesture();
+  kernel.scheduleTailSync();
+  clock.flushFrames();
+  ok(writes.length === beforeSwitch, "streaming updates make zero writes while the reader browses older questions");
+  kernel.scrollToTail();
+  ok(writes.length === beforeSwitch + 1 && kernel.intent === "tail", "an explicit new submission resumes following the answer");
+}
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

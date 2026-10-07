@@ -451,6 +451,7 @@ export function tauriSessionBalance(sessionId) {
 }
 
 export function tauriBridgeHistory(sessionId) {
+  if (globalThis.__historyError) return Promise.reject(new Error(globalThis.__historyError));
   const messages = globalThis.__tauriHistoryMessages ?? [];
   const result = { sequence: 0, session: { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle" }, messages, startIndex: 0, totalMessages: messages.length };
   return globalThis.__historyGate ? globalThis.__historyGate.then(() => result) : Promise.resolve(result);
@@ -464,8 +465,16 @@ export function submitTauriBridge(sessionId, input) {
 
 export function attachTauriFile(sessionId, path) {
   record("bridge_attach_file", { sessionId, path });
+  if (path.includes("pasted-image")) return Promise.resolve({ path: ".reasonix/attachments/image.png", name: "粘贴图片.png", size: 70, isImage: true });
   return Promise.resolve({ path: ".reasonix/attachments/a.txt", name: "a.txt", size: 1, isImage: false });
 }
+
+export function stageTauriPastedImage(dataUrl) {
+  record("stage_pasted_image", { hasData: Boolean(dataUrl) });
+  const result = globalThis.__stagedImage === undefined ? { token: "paste-test", path: "/tmp/pasted-image-test.png", size: 70 } : globalThis.__stagedImage;
+  return globalThis.__pasteGate ? globalThis.__pasteGate.then(() => result) : Promise.resolve(result);
+}
+export function discardTauriPastedImage(token) { record("discard_pasted_image", { token }); return Promise.resolve(); }
 
 export function cancelTauriBridge(sessionId) {
   record("bridge_cancel", { sessionId });
@@ -678,8 +687,8 @@ export function resolveTauriMCPMarketplace(name) {
   return Promise.resolve({ name, suggestedName: "remote", title: "Remote", installable: true, transport: "http", url: "https://mcp.example.test/mcp" });
 }
 
-export function tauriAssistantTextDelta() { return ""; }
-export function tauriComposerInput(prompt, attachments) { return prompt.trim(); }
+export function tauriAssistantTextDelta(event) { return event.eventKind === "text" && event.payload.kind === "text" && typeof event.payload.text === "string" ? event.payload.text : ""; }
+export function tauriComposerInput(prompt, attachments) { return [prompt.trim(), ...attachments.map(item => "@" + item.path)].filter(Boolean).join("\\n\\n"); }
 export function tauriEventSummary(event) { return JSON.stringify(event.payload); }
 
 export function tauriNotificationPermission(request = false) { record("notification_permission", { request }); return Promise.resolve({ permission: "granted", clickSupported: true }); }

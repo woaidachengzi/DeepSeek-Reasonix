@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 
 const dom = new JSDOM("<!doctype html><html><body><div id='root'></div></body></html>", { url: "http://localhost/", pretendToBeVisual: true });
-Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, Event: dom.window.Event, MouseEvent: dom.window.MouseEvent, requestAnimationFrame: dom.window.requestAnimationFrame.bind(dom.window), cancelAnimationFrame: dom.window.cancelAnimationFrame.bind(dom.window), localStorage: dom.window.localStorage, IS_REACT_ACT_ENVIRONMENT: true });
+Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, Event: dom.window.Event, MouseEvent: dom.window.MouseEvent, FileReader: dom.window.FileReader, requestAnimationFrame: dom.window.requestAnimationFrame.bind(dom.window), cancelAnimationFrame: dom.window.cancelAnimationFrame.bind(dom.window), localStorage: dom.window.localStorage, IS_REACT_ACT_ENVIRONMENT: true });
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
 (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri = true;
 (dom.window as unknown as { __TAURI__?: unknown }).__TAURI__ = { core: { invoke: () => Promise.resolve(null) } };
@@ -165,5 +165,72 @@ const newlineEvent = new dom.window.KeyboardEvent("keydown", { key: "Enter", shi
 await act(async () => { composer.dispatchEvent(newlineEvent); });
 assert.equal(composer.value, "before\nafter", "the configurable newline shortcut inserts a line break at the current selection");
 assert.equal(newlineEvent.defaultPrevented, true, "the newline shortcut prevents the browser from inserting a second line break");
+await act(async () => { document.querySelector<HTMLButtonElement>(".tauri-settings-back")?.click(); });
+const pasteBridge = globalThis as unknown as { __tauriBridgeCalls: Array<{ name: string; args?: { hasData?: boolean; path?: string } }>; __stagedImage?: unknown };
+function paste(text: string, files: File[] = []) {
+  const event = new dom.window.Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "clipboardData", { value: { files, items: [], getData: () => text } });
+  composer.dispatchEvent(event);
+  return event;
+}
+const stageCount = () => pasteBridge.__tauriBridgeCalls.filter(call => call.name === "stage_pasted_image").length;
+const beforeTextPaste = stageCount();
+await act(async () => { assert.equal(paste("normal text").defaultPrevented, false); });
+assert.equal(stageCount(), beforeTextPaste, "ordinary text paste does not read the native image clipboard");
+const screenshot = new dom.window.File([new Uint8Array([137, 80, 78, 71])], "screen.png", { type: "image/png" });
+const imageReadCompleted = new Promise<void>(resolve => {
+  // Follow the real reader instead of assuming a fixed wall-clock delay is
+  // sufficient under CI load. act then drains the bridge promise/state work.
+  class PasteFileReader extends dom.window.FileReader {
+    constructor() { super(); this.addEventListener("loadend", () => resolve(), { once: true }); }
+  }
+  Object.assign(globalThis, { FileReader: PasteFileReader });
+});
+try {
+  await act(async () => {
+    assert.equal(paste("", [screenshot as unknown as File]).defaultPrevented, true);
+    await imageReadCompleted;
+  });
+} finally {
+  Object.assign(globalThis, { FileReader: dom.window.FileReader });
+}
+assert.match(document.querySelector(".tauri-composer__attachments")?.textContent ?? "", /粘贴图片\.png/);
+assert.ok(pasteBridge.__tauriBridgeCalls.some(call => call.name === "stage_pasted_image" && call.args?.hasData));
+assert.ok(pasteBridge.__tauriBridgeCalls.some(call => call.name === "bridge_attach_file" && call.args?.path?.includes("pasted-image")));
+assert.ok(pasteBridge.__tauriBridgeCalls.some(call => call.name === "discard_pasted_image"), "copied image releases host temporary file");
+await act(async () => { document.querySelector<HTMLButtonElement>('.tauri-composer__attachment button')?.click(); });
+assert.equal(document.querySelector(".tauri-composer__attachment"), null, "image attachment can be removed");
+pasteBridge.__stagedImage = null;
+await act(async () => { paste(""); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.equal(document.querySelector(".tauri-composer__attachment"), null, "empty native clipboard does not create an attachment");
+pasteBridge.__stagedImage = undefined;
+const stream = globalThis as unknown as { __emitBridgeEvent?: (event: unknown) => void; __historyError?: string };
+let sequence = 0;
+const emit = (kind: string, payload: object = {}) => stream.__emitBridgeEvent?.({
+  sessionId: "second-session", sequence: ++sequence, eventKind: kind, payload: { kind, ...payload },
+});
+await act(async () => { emit("turn_started"); emit("reasoning", { text: "PRIVATE_REASONING" }); });
+assert.match(document.querySelector('.tauri-live-activity [role="status"]')?.textContent ?? "", /正在思考/);
+assert.doesNotMatch(document.querySelector(".tauri-transcript")?.textContent ?? "", /PRIVATE_REASONING/);
+await act(async () => { emit("text", { text: "实时回答可见" }); });
+const liveAnswer = document.querySelector(".tauri-message--live");
+assert.match(liveAnswer?.textContent ?? "", /实时回答可见/);
+assert.equal(liveAnswer?.closest("details"), null, "streamed answer is visible without expanding process details");
+await act(async () => {
+  emit("tool_dispatch", { tool: { id: "read-1", name: "read_file", partial: true } });
+  emit("tool_dispatch", { tool: { id: "read-1", name: "read_file", args: "PRIVATE_ARGS" } });
+});
+assert.equal(document.querySelectorAll(".tauri-live-activity li").length, 1);
+assert.equal(document.querySelector<HTMLDetailsElement>(".tauri-live-activity details")?.open, true);
+await act(async () => { emit("tool_result", { tool: { id: "read-1", output: "PRIVATE_OUTPUT" } }); });
+assert.equal(document.querySelector(".tauri-live-activity li")?.getAttribute("data-tool-state"), "done");
+assert.doesNotMatch(document.querySelector(".tauri-transcript")?.textContent ?? "", /PRIVATE_ARGS|PRIVATE_OUTPUT/);
+stream.__historyError = "对话记录刷新失败";
+await act(async () => { emit("turn_done"); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.match(document.querySelector(".tauri-message--live")?.textContent ?? "", /实时回答可见/, "a failed history refresh must not erase the visible answer");
+stream.__historyError = undefined;
+await act(async () => { emit("turn_started"); });
+assert.equal(document.querySelector(".tauri-message--live"), null);
+assert.equal(document.querySelectorAll(".tauri-live-activity li").length, 0, "a new turn clears prior execution progress");
 await act(async () => { root.unmount(); });
 console.log("tauri progress disclosure: OK");

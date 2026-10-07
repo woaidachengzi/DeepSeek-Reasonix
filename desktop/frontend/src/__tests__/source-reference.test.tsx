@@ -46,6 +46,10 @@ const { createRoot } = await import("react-dom/client");
 const root = createRoot(document.getElementById("root")!);
 const received: unknown[] = [];
 const nativeCalls: unknown[] = [];
+await React.act(async () => root.render(<RichMarkdownLink href="./docs/GUIDE.md">Guide</RichMarkdownLink>));
+assert.equal(document.querySelector("a")?.getAttribute("href"), "./docs/GUIDE.md", "ordinary relative documents retain links without a workspace source handler");
+await React.act(async () => root.render(<RichMarkdownLink href="src/main.ts#L188">main.ts (line 188)</RichMarkdownLink>));
+assert.ok(document.querySelector("code"), "explicit code-line citations remain non-navigating without a source handler");
 Object.assign(globalThis, { isTauri: true });
 Object.assign(window, { __TAURI_INTERNALS__: { invoke: async (command: string, args: unknown) => {
   nativeCalls.push({ command, args });

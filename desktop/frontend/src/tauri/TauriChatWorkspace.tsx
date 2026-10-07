@@ -19,6 +19,10 @@ import { onTauriOpenSettings } from "../lib/tauriBridge";
 import { CommandPalette, type PaletteItem } from "../components/CommandPalette";
 import { ShortcutsCheatsheet, type ShortcutCheatsheetItem } from "../components/ShortcutsCheatsheet";
 import { QuestionJumpBar } from "../components/QuestionJumpBar";
+import { useTranscriptKernel } from "../lib/useTranscriptKernel";
+import { TauriLiveProgress } from "./TauriLiveProgress";
+import { advanceLiveProgress, EMPTY_LIVE_PROGRESS } from "./liveProgress";
+import { attachPastedImages, pastedImageFiles } from "./pastedImages";
 import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
 import { compactQuestionText, type QuestionAnchor } from "../lib/transcriptGrouping";
 import { LocaleProvider, useI18n, useT, type DictKey } from "../lib/i18n";
@@ -88,7 +92,7 @@ function HistoryMessageArticle({ entry, sessionId, questionId, finalAnswer = fal
   const { message, index } = entry;
   const display = message.role === "user" ? parseAttachmentRefsForDisplay(splitSelectedTextContext(message.content).submitText) : null;
   return <MessageErrorBoundary index={index}>
-    <article id={questionId} data-tauri-question-anchor={questionId} className={`tauri-message is-${message.role}${finalAnswer ? " is-final" : ""}`}>
+    <article id={questionId} data-tauri-question-anchor={questionId} data-transcript-block-key={questionId ?? `message-${index}`} className={`tauri-message is-${message.role}${finalAnswer ? " is-final" : ""}`}>
       {message.role !== "user" && <div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div>}
       <div className="tauri-message__content">
         {message.role !== "user" && <div className="tauri-message__role">Reasonix</div>}
@@ -127,6 +131,8 @@ import {
   approveTauriBridge,
   cancelTauriBridge,
   attachTauriFile,
+  stageTauriPastedImage,
+  discardTauriPastedImage,
   chooseTauriAttachmentFiles,
   chooseTauriWorkspaceRoot,
   setTauriTrayLocale,
@@ -513,6 +519,14 @@ export function TauriSessionPreview() {
   }, [session?.id, showToast, t]);
   const [attachments, setAttachments] = useState<TauriBridgeAttachment[]>([]);
   const [draftAttachmentPaths, setDraftAttachmentPaths] = useState<string[]>([]);
+  const stagedImagesRef = useRef(new Map<string, string>());
+  const pasteInFlightRef = useRef(false);
+  const pasteOwnerRef = useRef(0);
+  const discardDraftImages = useCallback(() => {
+    for (const token of stagedImagesRef.current.values()) void discardTauriPastedImage(token).catch(() => {});
+    stagedImagesRef.current.clear();
+  }, []);
+  useEffect(() => () => { pasteOwnerRef.current += 1; discardDraftImages(); }, [discardDraftImages]);
   const [status, setStatus] = useState<TauriBridgeStatus | null>(null);
   const [profile, setProfile] = useState<TauriPreviewProfileStatus | null>(null);
   const [scanImportOpen, setScanImportOpen] = useState(false);
@@ -530,6 +544,11 @@ export function TauriSessionPreview() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
   const [liveText, setLiveText] = useState("");
+  const [liveProgress, setLiveProgress] = useState(EMPTY_LIVE_PROGRESS);
+  const clearLiveResponse = useCallback(() => {
+    setLiveText("");
+    setLiveProgress(EMPTY_LIVE_PROGRESS);
+  }, []);
   const [sequence, setSequence] = useState(0);
   const [streamRevision, setStreamRevision] = useState(0);
   const [streamReady, setStreamReady] = useState(false);
@@ -584,7 +603,6 @@ export function TauriSessionPreview() {
   const archiveRequestRef = useRef(0);
   const [pendingPrompt, setPendingPrompt] = useState<TauriPendingPrompt | null>(null);
   const [promptSelections, setPromptSelections] = useState<Record<string, string[]>>({});
-  const conversationRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const turnEpochRef = useRef(0);
   const attentionChimeSeenRef = useRef(new Set<string>());
@@ -619,6 +637,25 @@ export function TauriSessionPreview() {
   // Optimistic user message: displayed immediately after submit, cleared when history loads
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const [pendingUserMessageTime, setPendingUserMessageTime] = useState<number>();
+  const [transcriptElement, setTranscriptElement] = useState<HTMLDivElement | null>(null);
+  const viewport = useTranscriptKernel({
+    sessionKey: session?.id ?? "new-conversation",
+    initialPosition: "tail",
+    geometryRevision: `${session?.id}:${history?.sequence}:${history?.startIndex}:${history?.messages.length}:${liveText.length}:${pendingUserMessageTime}:${session?.state}:${progressMode}`,
+  });
+  const { scrollRef: conversationRef, scrollElement, kernel: transcriptKernel, commitViewportGeometry } = viewport;
+  useLayoutEffect(() => { commitViewportGeometry(); }, [history, liveProgress, pendingUserMessage, commitViewportGeometry]);
+  useLayoutEffect(() => {
+    if (!scrollElement || typeof ResizeObserver === "undefined") return;
+    const generation = transcriptKernel.generation;
+    let active = true;
+    const observer = new ResizeObserver(() => {
+      if (active && generation === transcriptKernel.generation) commitViewportGeometry();
+    });
+    observer.observe(scrollElement);
+    if (transcriptElement) observer.observe(transcriptElement);
+    return () => { active = false; observer.disconnect(); };
+  }, [scrollElement, transcriptElement, session?.id, transcriptKernel, commitViewportGeometry]);
   // Drag-and-drop state
   const [dragging, setDragging] = useState(false);
   const pendingSessionDeleteIDs = useMemo(() => new Set(pendingSessionDeletes.map(item => item.id)), [pendingSessionDeletes]);
@@ -808,12 +845,7 @@ export function TauriSessionPreview() {
   }, [questions]);
 
   function jumpToQuestion(question: QuestionAnchor) {
-    const conversation = conversationRef.current;
-    const anchor = document.getElementById(question.id);
-    if (!conversation || !anchor) return;
-    const top = anchor.getBoundingClientRect().top - conversation.getBoundingClientRect().top + conversation.scrollTop - 20;
-    conversation.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
-    setActiveQuestion(question.turn);
+    if (viewport.jumpToBlock(question.id)) setActiveQuestion(question.turn);
   }
 
   useEffect(() => {
@@ -1196,7 +1228,7 @@ export function TauriSessionPreview() {
             attentionChimeSeenRef.current.clear();
             notificationPromptSeenRef.current.clear();
             setSession(previous => previous ? { ...previous, state: "running" } : previous);
-            setLiveText("");
+            clearLiveResponse();
           }
           const incomingPrompt = tauriPromptFromEvent(event);
           if (incomingPrompt) {
@@ -1224,6 +1256,7 @@ export function TauriSessionPreview() {
           }
           const textDelta = tauriAssistantTextDelta(event);
           if (textDelta) setLiveText(previous => previous + textDelta);
+          setLiveProgress(previous => advanceLiveProgress(previous, event));
           if (event.eventKind === "text" || event.eventKind === "reasoning" || event.eventKind === "tool_dispatch") generativeMusic.playTokenNote();
           if (event.eventKind === "turn_done") {
             generativeMusic.stop();
@@ -1271,6 +1304,7 @@ export function TauriSessionPreview() {
                 setHistory(latestHistory);
                 setPendingUserMessage(null); // Clear optimistic message
                 setHistoryError("");
+                clearLiveResponse();
               } catch (historyError) {
                 if (!completionIsCurrent()) return;
                 const message = tauriMessageFrom(historyError);
@@ -1279,7 +1313,6 @@ export function TauriSessionPreview() {
               } finally {
                 if (!completionIsCurrent()) return;
                 setHistoryLoading(false);
-                setLiveText("");
                 // A failed turn must keep its reason on screen; only a
                 // completed turn clears a previous message. Do not erase a
                 // newer event-stream outage while transcript refresh finishes.
@@ -1310,7 +1343,7 @@ export function TauriSessionPreview() {
           resyncRequested = true;
           active = false;
           setStreamReady(false);
-          setLiveText("");
+          clearLiveResponse();
           setStreamRevision(previous => previous + 1);
         });
         if (!active) { offResync(); return; }
@@ -1705,13 +1738,14 @@ export function TauriSessionPreview() {
       setHistory(null);
       setAttachments([]);
       setDraftAttachmentPaths([]);
+      discardDraftImages();
       if (!session) setPrompt("");
       setDragging(false);
       setPendingPrompt(null);
       setPromptSelections({});
       setHistoryLoading(true);
       setHistoryError("");
-      setLiveText("");
+      clearLiveResponse();
       setPendingUserMessage(null);
       setSequence(0);
       setStreamReady(false);
@@ -1810,7 +1844,7 @@ export function TauriSessionPreview() {
         turnEpochRef.current += 1;
         invalidateWorkspaceRequests(); setWorkspaceOpen(false);
         setSession(null); setHistory(null); setEvents([]); setPendingPrompt(null);
-        setPromptSelections({}); setLiveText(""); setPendingUserMessage(null); setTitleEditing(false);
+        setPromptSelections({}); clearLiveResponse(); setPendingUserMessage(null); setTitleEditing(false);
       }
       restored = !archived;
       await refreshCatalogAudit(() => true, true);
@@ -1922,12 +1956,13 @@ export function TauriSessionPreview() {
     setHistoryLoading(false);
     setStreamReady(false);
     setEvents([]);
-    setLiveText("");
+    clearLiveResponse();
     setPendingUserMessage(null);
     setPendingPrompt(null);
     setPromptSelections({});
     setAttachments([]);
     setDraftAttachmentPaths([]);
+    discardDraftImages();
     setPrompt("");
     setError("");
     setTitleEditing(false);
@@ -2175,7 +2210,7 @@ export function TauriSessionPreview() {
       setHistory(latestHistory);
       setHistoryError("");
       setPendingUserMessage(null);
-      setLiveText("");
+      clearLiveResponse();
     } finally {
       if (turnEpochRef.current === epoch) setHistoryLoading(false);
     }
@@ -2699,6 +2734,45 @@ export function TauriSessionPreview() {
     }
   }
 
+  async function pasteImages(files: File[]) {
+    if (busy || pasteInFlightRef.current || isReadOnlyWorkbenchSource(sessionPageSource) || (session && (!streamReady || session.state !== "idle"))) return;
+    pasteInFlightRef.current = true;
+    const epoch = workspaceEpochRef.current;
+    const owner = pasteOwnerRef.current;
+    const isCurrent = () => epoch === workspaceEpochRef.current && owner === pasteOwnerRef.current;
+    setBusy(true);
+    setError("");
+    try {
+      await attachPastedImages(files, {
+        sessionId: session?.id,
+        isCurrent,
+        stage: stageTauriPastedImage,
+        discard: discardTauriPastedImage,
+        attach: attachTauriFile,
+        add: attachment => setAttachments(previous => [...previous, attachment]),
+        queue: image => {
+          stagedImagesRef.current.set(image.path, image.token);
+          setDraftAttachmentPaths(previous => [...previous, image.path]);
+        },
+      });
+    } catch (cause) {
+      if (isCurrent()) setError(`图片未能添加：${tauriMessageFrom(cause)}；请重新复制图片，或使用“添加文件”。`);
+    } finally {
+      pasteInFlightRef.current = false;
+      if (owner === pasteOwnerRef.current) setBusy(false);
+    }
+  }
+
+  function removeDraftAttachment(index: number) {
+    const path = draftAttachmentPaths[index];
+    const token = stagedImagesRef.current.get(path);
+    if (token) {
+      stagedImagesRef.current.delete(path);
+      void discardTauriPastedImage(token).catch(() => {});
+    }
+    setDraftAttachmentPaths(previous => previous.filter((_, itemIndex) => itemIndex !== index));
+  }
+
   async function submit() {
     const text = [prompt.trim(), formatSelectedTextContext(selectedTexts)].filter(Boolean).join("\n\n");
     if (busy || submitInFlightRef.current || isReadOnlyWorkbenchSource(sessionPageSource) ||
@@ -2726,7 +2800,9 @@ export function TauriSessionPreview() {
       }
       return;
     }
-    await submitPreparedInput(session.id, text, attachments, [], false, session.workspaceRoot);
+    // A failed first send may leave the new session open with staged draft files.
+    // Keep those files retryable instead of silently dropping image-only input.
+    await submitPreparedInput(session.id, text, attachments, draftAttachmentPaths, false, session.workspaceRoot);
   }
 
   async function submitPreparedInput(
@@ -2738,7 +2814,8 @@ export function TauriSessionPreview() {
     root?: string,
   ) {
     const submitEpoch = ++turnEpochRef.current;
-    setLiveText("");
+    clearLiveResponse();
+    viewport.scrollToBottom();
     setPendingUserMessage(text || null);
     setPendingUserMessageTime(Date.now());
     try {
@@ -2795,6 +2872,7 @@ export function TauriSessionPreview() {
       });
       setAttachments([]);
       setDraftAttachmentPaths([]);
+      discardDraftImages();
       if (attachmentError) setError(`部分文件未能添加：${attachmentError}`);
       // Fetch history after a short delay to let the backend settle
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -2878,7 +2956,7 @@ export function TauriSessionPreview() {
     try {
       const cancelled = await cancelTauriBridge(sessionId);
       setSession(cancelled);
-      setLiveText("");
+      clearLiveResponse();
       setPendingPrompt(null);
       setPromptSelections({});
       // Refresh history after cancel
@@ -2927,7 +3005,7 @@ export function TauriSessionPreview() {
         setAttachments([]);
         setPendingPrompt(null);
         setPromptSelections({});
-        setLiveText("");
+        clearLiveResponse();
         setSequence(0);
         setStreamRevision(previous => previous + 1);
       }
@@ -3306,20 +3384,23 @@ export function TauriSessionPreview() {
           </div>
         </header>
 
-        <div className="tauri-conversation" ref={conversationRef}>
-          {session && !history && historyLoading ? <div className="tauri-loading"><span /><p>正在载入对话…</p></div> : session && !history && historyError ? <div className="tauri-loading tauri-history-error"><p>无法载入对话记录</p><p>{historyError}</p><button type="button" className="tauri-diagnostic-action" onClick={() => void refreshHistory()} disabled={busy}>重新加载</button></div> : history?.messages.length || liveText || pendingUserMessage || session?.state === "running" ? <div className="tauri-transcript">
+        <div className="tauri-conversation" ref={viewport.setScroller} onScroll={viewport.onScroll}
+          onWheelCapture={viewport.onWheelCapture} onPointerDownCapture={viewport.onPointerDownCapture}
+          onTouchStartCapture={() => viewport.onTouchStartCapture()} onTouchEndCapture={viewport.onTouchEndCapture}
+          onKeyDownCapture={viewport.onKeyDownCapture}>
+          {session && !history && historyLoading ? <div className="tauri-loading"><span /><p>正在载入对话…</p></div> : session && !history && historyError ? <div className="tauri-loading tauri-history-error"><p>无法载入对话记录</p><p>{historyError}</p><button type="button" className="tauri-diagnostic-action" onClick={() => void refreshHistory()} disabled={busy}>重新加载</button></div> : history?.messages.length || liveText || pendingUserMessage || session?.state === "running" || session?.state === "paused" ? <div className="tauri-transcript" ref={setTranscriptElement}>
             {history && history.startIndex > 0 && <p className="tauri-history-note">当前显示最近 {history.messages.length} 条，共 {history.totalMessages} 条可见消息</p>}
             {historyPresentation.map(item => item.kind === "message"
               ? <HistoryMessageArticle key={`message-${item.entry.index}`} entry={item.entry} sessionId={history!.session.id} finalAnswer={item.entry.message.role === "assistant"} questionId={item.entry.message.role === "user" ? `tauri-question-${item.entry.index}` : undefined} />
               : item.entries.length === 0 ? <div className="tauri-progress tauri-progress--summary" key={`progress-${item.anchorIndex}-${progressMode}`}><div className="tauri-progress__summary">已完成，{formatTauriWorkDuration(item.durationMs)}</div></div>
-              : <details className="tauri-progress" key={`progress-${item.anchorIndex}-${progressMode}`} open={progressMode === "deep"}>
+              : <details className="tauri-progress" data-transcript-block-key={`progress-${item.anchorIndex}`} key={`progress-${item.anchorIndex}-${progressMode}-${item.active}`} open={item.active || progressMode === "deep"}>
                 <summary><span>{item.active ? "正在处理" : formatTauriWorkDuration(item.durationMs) ? `已完成，${formatTauriWorkDuration(item.durationMs)}` : "过程记录"}</span><ChevronDown size={14} aria-hidden="true" /></summary>
                 <div className="tauri-progress__messages">{item.entries.map(entry => <HistoryMessageArticle key={entry.index} entry={entry} sessionId={history!.session.id} />)}</div>
               </details>)}
             {/* Optimistic user message: shown immediately after submit, before history loads */}
-            {pendingUserMessage && <article className="tauri-message is-user"><div className="tauri-message__content"><UserMessageContent text={pendingUserMessage} /></div><UserMessageMeta text={pendingUserMessage} createdAtMs={pendingUserMessageTime} /></article>}
-            {liveText && <details className="tauri-progress tauri-progress--live" key={`live-progress-${progressMode}`} open={progressMode === "deep"}><summary><span>正在处理</span><ChevronDown size={14} aria-hidden="true" /></summary><div className="tauri-progress__messages"><article className="tauri-message is-assistant tauri-message--live"><div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div><div className="tauri-message__content"><div className="tauri-message__role">Reasonix</div><Markdown text={liveText} streaming cacheKey={`${session?.id ?? "live"}:stream`} /></div></article></div></details>}
-            {session?.state === "running" && !liveText && !pendingUserMessage && <div className="tauri-thinking" role="status"><span /><span /><span />Reasonix 正在思考…</div>}
+            {pendingUserMessage && <article className="tauri-message is-user" data-transcript-block-key="pending-question"><div className="tauri-message__content"><UserMessageContent text={pendingUserMessage} /></div><UserMessageMeta text={pendingUserMessage} createdAtMs={pendingUserMessageTime} /></article>}
+            {liveText && <article className="tauri-message is-assistant tauri-message--live" data-transcript-block-key="live-answer"><div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div><div className="tauri-message__content"><div className="tauri-message__role">Reasonix</div><Markdown text={liveText} streaming cacheKey={`${session?.id ?? "live"}:stream`} /></div></article>}
+            {(session?.state === "running" || session?.state === "paused") && <TauriLiveProgress progress={liveProgress} paused={session.state === "paused"} />}
           </div> : <section className="tauri-welcome">
             <div className="tauri-welcome__mark"><Sparkles size={24} /></div>
             <p className="tauri-welcome__eyebrow">REASONIX · TAURI PREVIEW</p>
@@ -3356,9 +3437,14 @@ export function TauriSessionPreview() {
             </div>)}</div>}
             {draftAttachmentPaths.length > 0 && <div className="tauri-composer__attachments" aria-label="待发送文件">{draftAttachmentPaths.map((path, index) => <div className="tauri-composer__attachment" key={`${path}-${index}`} title={path}>
               <span className="tauri-composer__attachment-icon"><FileText size={15} /></span><span className="tauri-composer__attachment-name">{path.split(/[\\/]/).pop() || path}</span><small>待发送</small>
-              <button type="button" onClick={() => setDraftAttachmentPaths(previous => previous.filter((_, itemIndex) => itemIndex !== index))} disabled={busy} aria-label={`移除待发送文件 ${path.split(/[\\/]/).pop() || path}`}><X size={13} /></button>
+              <button type="button" onClick={() => removeDraftAttachment(index)} disabled={busy} aria-label={`移除待发送文件 ${path.split(/[\\/]/).pop() || path}`}><X size={13} /></button>
             </div>)}</div>}
-            <textarea ref={composerRef} value={prompt} onChange={event => setPrompt(event.target.value)} onKeyDown={event => {
+            <textarea ref={composerRef} value={prompt} onChange={event => setPrompt(event.target.value)} onPaste={event => {
+              const files = pastedImageFiles(event.clipboardData);
+              if (files === null) return;
+              if (files.length) event.preventDefault();
+              void pasteImages(files);
+            }} onKeyDown={event => {
               const native = event.nativeEvent;
               if (isTauriCompositionKey(native)) return;
               if (matchesTauriShortcut(native, "composer_newline", detectShortcutPlatform())) {

@@ -46,9 +46,11 @@ function readSnapshot(element: HTMLElement): TranscriptViewportSnapshot {
 export function useTranscriptKernel({
   sessionKey,
   geometryRevision,
+  initialPosition = "restore",
 }: {
   sessionKey: string;
   geometryRevision: string | number;
+  initialPosition?: "restore" | "tail";
 }) {
   const clock = useContext(TranscriptKernelClockContext);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -99,9 +101,10 @@ export function useTranscriptKernel({
     writer.freeze(false);
     const restored = kernel.replaceSurface(sessionKey);
     writer.attach(scrollRef.current, restored.generation);
-    if (restored.anchor.kind === "block") kernel.begin("restore", restored.anchor);
+    if (initialPosition === "tail") kernel.begin("restore", { kind: "tail" });
+    else if (restored.anchor.kind === "block") kernel.begin("restore", restored.anchor);
     refresh();
-  }, [kernel, refresh, sessionKey, writer]);
+  }, [initialPosition, kernel, refresh, sessionKey, writer]);
 
   const setScroller = useCallback((element: HTMLDivElement | null) => {
     scrollRef.current = element;
@@ -184,7 +187,10 @@ export function useTranscriptKernel({
     inputRevisionRef.current += 1;
     writer.freeze(false);
     pointerGestureRef.current = 0;
-    if (resumed) kernel.afterCurrentGenerationPaint(settleGeometry);
+    // Growth admitted while native input owns the viewport cannot write yet.
+    // Once the reader actually reaches the bottom, reconcile that held tail
+    // growth after release even when there is no deferred structural request.
+    if (resumed || kernel.intent === "tail") kernel.afterCurrentGenerationPaint(settleGeometry);
     refresh();
   }, [kernel, refresh, settleGeometry, writer]);
 

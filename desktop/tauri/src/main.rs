@@ -41,6 +41,7 @@ mod native_ui_storage_smoke;
 mod native_window_smoke;
 mod notifications;
 mod opener_catalog;
+mod pasted_images;
 mod protocol_generated;
 mod runtime_info;
 mod session_shadow;
@@ -812,6 +813,63 @@ fn bridge_attach_file(
     request: AttachFileRequest,
 ) -> Result<BridgeAttachment, String> {
     supervisor.attach_file(request)
+}
+
+#[tauri::command]
+async fn stage_pasted_image(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    data_url: Option<String>,
+) -> Result<Option<pasted_images::StagedImage>, String> {
+    if window.label() != "main" {
+        return Err("image paste is only available in the main window".into());
+    }
+    // Clipboard reads can deadlock Linux on the UI thread. Both decoding and
+    // file IO are confined to a worker and only invoked by an explicit Paste.
+    tauri::async_runtime::spawn_blocking(move || {
+        let (extension, bytes) = if let Some(value) = data_url {
+            pasted_images::decode_data_url(&value)?
+        } else {
+            use tauri_plugin_clipboard_manager::ClipboardExt;
+            let image = match app.clipboard().read_image() {
+                Ok(image) => image,
+                Err(error)
+                    if error
+                        .to_string()
+                        .contains("not available in the requested format") =>
+                {
+                    return Ok(None)
+                }
+                Err(_) => {
+                    return Err(
+                        "unable to read clipboard image; copy the image again or use Add file"
+                            .into(),
+                    )
+                }
+            };
+            (
+                "png".into(),
+                pasted_images::encode_rgba(image.width(), image.height(), image.rgba())?,
+            )
+        };
+        app.state::<pasted_images::PastedImages>()
+            .stage(&extension, &bytes)
+            .map(Some)
+    })
+    .await
+    .map_err(|_| "image paste worker stopped")?
+}
+
+#[tauri::command]
+fn discard_pasted_image(
+    window: tauri::WebviewWindow,
+    images: State<'_, pasted_images::PastedImages>,
+    token: String,
+) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("image paste is only available in the main window".into());
+    }
+    images.discard(&token)
 }
 
 #[tauri::command]
@@ -3966,6 +4024,7 @@ fn setup_preview(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     app.manage(workbench_catalog);
     app.manage(project_catalog);
     app.manage(SessionShadowSnapshotCache::default());
+    app.manage(pasted_images::PastedImages::default());
     Ok(())
 }
 
@@ -4178,6 +4237,8 @@ fn main() {
             import_unclaimed_workbench_sessions,
             bridge_submit,
             bridge_attach_file,
+            stage_pasted_image,
+            discard_pasted_image,
             bridge_workspace,
             bridge_workspace_file,
             bridge_workspace_changes,

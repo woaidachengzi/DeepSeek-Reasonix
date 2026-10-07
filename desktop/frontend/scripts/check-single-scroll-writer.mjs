@@ -47,7 +47,7 @@ const ALLOWED_RAW_SCROLLTOP = new Set([
 ]);
 const IMPERATIVE_SCROLL_RE = /\.scroll(?:To|By)\s*\(|\.scrollTo(?:Offset|Index)\s*\(/;
 const RAW_SCROLLTOP_WRITE_RE = /\.scrollTop\s*=(?!=)/;
-const TRANSCRIPT_SURFACE_RE = /(?:^|\/)(?:transcript[^/]*|useTranscript[^/]*|Transcript[^/]*|MarkdownHistory)\.(?:ts|tsx)$/;
+const TRANSCRIPT_SURFACE_RE = /(?:^|\/)(?:transcript[^/]*|useTranscript[^/]*|Transcript[^/]*|MarkdownHistory|TauriChatWorkspace)\.(?:ts|tsx)$/;
 
 function sourceFiles(root) {
   const files = [];

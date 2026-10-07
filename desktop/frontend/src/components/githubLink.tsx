@@ -392,7 +392,7 @@ export function RichMarkdownLink({
   if (local !== null) {
     return <LocalPathMarkdownLink href={href ?? ""} path={local} children={children} />;
   }
-  if (source && !openSource) return <code className="md-code">{children}</code>;
+  if (source?.line !== undefined && !openSource) return <code className="md-code">{children}</code>;
 
   const iconKind = classifyLinkIcon(href);
   const compactLabel = github && linkText(children) === href ? github.compactLabel : undefined;

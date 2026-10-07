@@ -1,0 +1,41 @@
+import assert from "node:assert/strict";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { TauriLiveProgress } from "../tauri/TauriLiveProgress";
+import { advanceLiveProgress, EMPTY_LIVE_PROGRESS, liveProgressLabel } from "../tauri/liveProgress";
+import type { TauriBridgeEvent } from "../lib/tauriBridge";
+
+const event = (kind: string, payload: Record<string, unknown> = {}): TauriBridgeEvent => ({
+  eventKind: kind, payload: { kind, ...payload }, protocolVersion: 1, sessionId: "test", sequence: 1,
+});
+(globalThis as typeof globalThis & { React: typeof React }).React = React;
+let progress = advanceLiveProgress(EMPTY_LIVE_PROGRESS, event("reasoning", { text: "PRIVATE_REASONING" }));
+assert.equal(liveProgressLabel(progress, false), "正在思考…");
+assert.equal(JSON.stringify(progress).includes("PRIVATE_REASONING"), false);
+progress = advanceLiveProgress(progress, event("tool_dispatch", { tool: { id: "read-1", name: "read_file", partial: true, args: "API_KEY" } }));
+progress = advanceLiveProgress(progress, event("tool_dispatch", { tool: { id: "read-1", name: "read_file", args: "API_KEY" } }));
+assert.equal(progress.tools.length, 1, "partial and complete dispatch update one stable tool row");
+assert.equal(progress.tools[0].state, "running");
+progress = advanceLiveProgress(progress, event("tool_result", { tool: { id: "read-1", output: "PRIVATE_OUTPUT" } }));
+assert.equal(progress.tools[0].name, "read_file", "result may omit a dispatch name");
+assert.equal(progress.tools[0].state, "done");
+progress = advanceLiveProgress(progress, event("tool_dispatch", { tool: { id: "read-1", name: "read_file" } }));
+assert.equal(progress.tools[0].state, "done", "a late dispatch cannot re-open a completed tool");
+progress = advanceLiveProgress(progress, event("tool_result", { tool: { id: "bash-2", name: "bash", err: "PRIVATE_ERROR" } }));
+assert.equal(progress.tools[1].state, "failed");
+progress = advanceLiveProgress(progress, event("text", { text: "PUBLIC_ANSWER" }));
+assert.equal(liveProgressLabel(progress, false), "正在回答…");
+assert.equal(liveProgressLabel(progress, true), "等待你的确认…");
+const html = renderToStaticMarkup(<TauriLiveProgress progress={progress} paused={false} />);
+assert.match(html, /<details[^>]*open=""/);
+assert.match(html, /read_file/);
+assert.match(html, /已完成/);
+assert.match(html, /失败/);
+assert.doesNotMatch(html, /PRIVATE_|API_KEY|PUBLIC_ANSWER/);
+assert.equal(advanceLiveProgress(progress, event("usage")), progress);
+assert.equal(advanceLiveProgress(progress, event("tool_dispatch", { tool: null })), progress);
+assert.equal(advanceLiveProgress(progress, event("text", { kind: "reasoning" })), progress);
+for (let index = 0; index < 50; index++) progress = advanceLiveProgress(progress, event("tool_dispatch", { tool: { id: `tool-${index}`, name: "test" } }));
+assert.equal(progress.tools.length, 30, "live execution metadata is bounded");
+assert.equal(advanceLiveProgress(progress, event("turn_started")), EMPTY_LIVE_PROGRESS, "next turn cannot inherit prior tools");
+console.log("Tauri public live progress: OK");

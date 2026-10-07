@@ -1759,6 +1759,18 @@ export async function attachTauriFile(sessionId: string, path: string): Promise<
   return invoke<TauriBridgeAttachment>("bridge_attach_file", { request });
 }
 
+export type TauriStagedImage = { token: string; path: string; size: number };
+
+export async function stageTauriPastedImage(dataUrl?: string): Promise<TauriStagedImage | null> {
+  requireTauri();
+  return invoke<TauriStagedImage | null>("stage_pasted_image", { dataUrl: dataUrl ?? null });
+}
+
+export async function discardTauriPastedImage(token: string): Promise<void> {
+  requireTauri();
+  await invoke("discard_pasted_image", { token });
+}
+
 export async function tauriWorkspace(sessionId: string, path = ""): Promise<TauriWorkspaceList> {
   requireTauri();
   return invoke<TauriWorkspaceList>("bridge_workspace", { request: { sessionId, path } });
