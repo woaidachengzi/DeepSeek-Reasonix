@@ -6,6 +6,7 @@
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveBuildRunner, resolveBuildTarget } from "./tauri-build-target.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const scriptSource = readFileSync(resolve(__dirname, "tauri-build.mjs"), "utf8");
@@ -79,8 +80,21 @@ contains(scriptSource, './cmd/reasonix-desktop-bridge', "go build targets the co
 // ---------------------------------------------------------------------------
 
 console.log("\ntauri-build contract — cross-compilation guard");
-contains(scriptSource, 'cross-target', "has cross-target error message");
-contains(scriptSource, 'not supported yet', "cross-target is explicitly rejected");
+const windowsTarget = resolveBuildTarget(["--target", "x86_64-pc-windows-msvc"], "aarch64-apple-darwin");
+eq(windowsTarget.extension, ".exe", "Windows sidecar extension follows target, not host");
+eq(windowsTarget.goEnv.GOOS, "windows", "Windows sidecar is cross-compiled for Windows");
+eq(windowsTarget.goEnv.GOARCH, "amd64", "Rust x64 maps to Go amd64");
+eq(windowsTarget.goEnv.CGO_ENABLED, "0", "Windows sidecar does not require a host C toolchain");
+eq(resolveBuildTarget(["--target=aarch64-pc-windows-msvc"], "aarch64-apple-darwin").goEnv.GOARCH, "arm64", "inline ARM64 target maps to Go arm64");
+eq(resolveBuildTarget([], "aarch64-apple-darwin").extension, "", "native macOS build remains unchanged");
+eq(resolveBuildRunner(windowsTarget, "aarch64-apple-darwin", "darwin"), "cargo-xwin", "Windows cross-build on macOS uses cargo-xwin");
+eq(resolveBuildRunner(resolveBuildTarget(["--target=aarch64-pc-windows-msvc"], "x86_64-pc-windows-msvc"), "x86_64-pc-windows-msvc", "win32"), null, "Windows architecture switch retains the native MSVC toolchain");
+eq(resolveBuildRunner(windowsTarget, windowsTarget.target, "win32"), null, "native Windows does not require cargo-xwin");
+for (const args of [["--target"], ["--target", "--debug"], ["--target=x86_64-unknown-linux-gnu"]]) {
+  let rejected = false;
+  try { resolveBuildTarget(args, "aarch64-apple-darwin"); } catch { rejected = true; }
+  ok(rejected, `rejects invalid or unsupported target ${args.join(" ")}`);
+}
 
 // ---------------------------------------------------------------------------
 // Contract 5: macOS ad-hoc signing
@@ -112,7 +126,8 @@ contains(scriptSource, 'tauri.conf.json', "reads tauri.conf.json");
 contains(scriptSource, 'productName', "uses productName for bundle path");
 
 // The build uses the local Tauri CLI from node_modules.
-contains(scriptSource, '.bin', "uses local Tauri CLI from node_modules/.bin");
+contains(scriptSource, '"@tauri-apps", "cli", "tauri.js"', "uses the local Tauri JS entrypoint on all platforms");
+contains(scriptSource, 'spawnSync(process.execPath', "runs the CLI with Node instead of executing a Windows cmd shim");
 
 // ---------------------------------------------------------------------------
 // Contract 7: tauri.conf.json bundle config
@@ -123,6 +138,10 @@ console.log("\ntauri-build contract — tauri.conf.json bundle config");
 const tauriConf = JSON.parse(
   readFileSync(resolve(__dirname, "../../tauri/tauri.conf.json"), "utf8"),
 );
+const windowsConf = JSON.parse(readFileSync(resolve(__dirname, "../../tauri/tauri.windows.conf.json"), "utf8"));
+eq(windowsConf.bundle.windows.nsis.installMode, "currentUser", "Preview installs without replacing a machine-wide stable installation");
+eq(windowsConf.bundle.targets[0], "nsis", "Windows defaults to the cross-buildable NSIS installer");
+ok(windowsConf.bundle.icon.some(path => path.endsWith(".ico")), "Windows has an ICO resource");
 const tauriConfigDirectory = resolve(__dirname, "../../tauri");
 const mainWindowCapability = JSON.parse(
   readFileSync(resolve(tauriConfigDirectory, "capabilities/main-window.json"), "utf8"),

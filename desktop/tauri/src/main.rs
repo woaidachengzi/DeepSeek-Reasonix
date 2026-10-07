@@ -4117,7 +4117,12 @@ fn main() {
                     }
                 }
                 "hide" => {
+                    #[cfg(target_os = "macos")]
                     let _ = app.hide();
+                    #[cfg(not(target_os = "macos"))]
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.hide();
+                    }
                 }
                 _ => {}
             }

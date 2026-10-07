@@ -373,8 +373,12 @@ for (const path of localeChunks) {
   // Harness-style provider setup replaces ten unused Preview captions. The
   // remaining write-only credential/retry guidance needs a bounded 0.3 KiB
   // TW allowance (81488 bytes before the final unused caption removal).
-  // Keep zh at its existing cap and retain all initial/CSS payload budgets.
-  const budget = (name.startsWith("zh-TW-") ? 79.6 : 78.9) * 1024;
+  // Retain all initial/CSS payload budgets.
+  // E path mutation and Serve/controller controls add 32 localized captions.
+  // Removing only those keys from the emitted chunks measures 80744 -> 81325 B
+  // (zh, +581 B) and 81445 -> 81967 B (zh-TW, +522 B). Keep the next decimal
+  // ceilings for that measured growth; initial JS and CSS limits stay fixed.
+  const budget = (name.startsWith("zh-TW-") ? 80.1 : 79.5) * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 

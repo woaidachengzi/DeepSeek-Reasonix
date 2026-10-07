@@ -670,8 +670,9 @@
 .tauri-settings-status-items .status-bar-items-editor { width: min(100%, 515px); max-width: none; flex: 0 1 515px; }
 .tauri-settings-status-items .status-bar-item-row label { font-size: var(--font-control-small); }
 .tauri-model-settings { container: tauri-model-settings / inline-size; }
-.tauri-model-settings__section { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
-.tauri-model-settings__section + .tauri-model-settings__section { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--border-soft); }
+/* Own the shared SettingsSection surface across theme and layout overrides. */
+:root .tauri-settings-content .tauri-model-settings > .settings-section.tauri-model-settings__section { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+:root .tauri-settings-content .tauri-model-settings > .settings-section.tauri-model-settings__section + .settings-section.tauri-model-settings__section { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--border-soft); }
 .tauri-model-settings__section > .settings-section__head { display: block; margin: 0; padding: 0 0 13px; border-bottom: 1px solid var(--border-soft); }
 .tauri-model-settings__section .settings-section__title { color: var(--fg); font-size: 15px; font-weight: 650; line-height: 1.5; }
 .tauri-model-settings__section .settings-section__desc { margin-top: 3px; color: var(--fg-faint); font-size: 11px; line-height: 1.5; }
@@ -929,8 +930,8 @@
 @media (max-width: 760px) { .tauri-bot-channel-access__lists { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .tauri-bot-channel-runtime__body { grid-template-columns: 1fr; } .tauri-bot-runtime-field:last-child { grid-column: auto; } .tauri-bot-route__grid { grid-template-columns: 1fr; } }
 .tauri-settings-model-list { display: grid; gap: 8px; }
-.tauri-settings-model-card { padding: 12px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface); }
-.tauri-provider-editor { margin: 18px 0 24px; padding: 18px; border: 1px solid var(--border-soft); border-radius: 12px; background: var(--surface); }
+.tauri-settings-model-card { padding: 12px; border: 1px solid var(--border-soft); border-radius: 10px; background: transparent; }
+.tauri-provider-editor { margin: 18px 0 24px; padding: 18px; border: 1px solid var(--border-soft); border-radius: 12px; background: transparent; }
 .tauri-provider-preset-search { width: 100%; margin: 10px 0; }
 .tauri-provider-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(205px, 1fr)); gap: 8px; max-height: 250px; overflow-y: auto; margin-bottom: 18px; }
 .tauri-provider-preset { display: grid; gap: 5px; min-width: 0; padding: 11px 12px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--bg); color: var(--fg); text-align: left; }
@@ -949,7 +950,7 @@
 .tauri-provider-editor-form h4 { margin: 0; }
 .tauri-provider-editor-form label { display: grid; gap: 7px; font-size: 12px; color: var(--fg-dim); }
 .tauri-provider-editor-form input:not([type="checkbox"]), .tauri-provider-editor-form select, .tauri-provider-editor-form textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface); color: var(--fg); font: inherit; }
-.tauri-provider-advanced { margin: 12px 0; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg); }
+.tauri-provider-advanced { margin: 12px 0; border: 1px solid var(--border-soft); border-radius: 8px; background: transparent; }
 .tauri-provider-advanced > summary { padding: 10px 12px; color: var(--fg-faint); cursor: pointer; font-size: 12px; }
 .tauri-provider-advanced__body { display: grid; gap: 10px; padding: 0 12px 12px; }
 .tauri-provider-advanced__body > label:not(.tauri-provider-editor-checkbox) { display: grid; gap: 5px; }
@@ -1366,7 +1367,7 @@
 .tauri-theme-editor>div{display:flex;gap:8px;flex-wrap:wrap}
 
 /* Model connection setup: one add card, with optional details folded away. */
-.tauri-provider-connect { padding: 16px; margin: 12px 0 20px; border: 1px solid var(--border-soft); border-radius: 12px; background: var(--bg); }
+.tauri-provider-connect { padding: 16px; margin: 12px 0 20px; border: 1px solid var(--border-soft); border-radius: 12px; background: transparent; }
 .tauri-provider-connect-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 10px; background: var(--surface); }
 .tauri-provider-connect-tabs > button { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--fg-faint); font: inherit; cursor: pointer; }
 .tauri-provider-connect-tabs > button[aria-selected="true"] { border-color: var(--border-soft); background: var(--bg); color: var(--fg); }

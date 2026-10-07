@@ -48,9 +48,10 @@ token 不放在 macOS 进程列表可见的启动环境或命令行中。
 具体回归、未提交适配器快照和取消边界见
 [runtime 生命周期证据](../../docs/tauri/evidence/2026-10-02-d-runtime-lifecycle/README.md)。
 
-2026-09-30 用户确认本轮只推进 macOS 的改造、测试和发布候选验收。Windows/Linux
-因缺少实际测试环境延期；已有代码保留，但不承诺平台支持，也不要求其原生验收完成
-后才能推进 macOS。D→E 的顺序及 macOS 待验项以 [迁移清单](../../docs/tauri/API_SURFACE_AUDIT.md) 为准。
+2026-10-07 用户授权 Windows 适配及 x64 Preview 包构建，Windows 原生手动验收由用户执行。
+构建方法与待验矩阵见 [Windows Preview 验收](../../docs/tauri/WINDOWS_PREVIEW_ACCEPTANCE.md)。
+交叉编译通过不等于 Windows 原生验收通过；Linux 仍延期。
+D→E 的顺序及 macOS 待验项以 [迁移清单](../../docs/tauri/API_SURFACE_AUDIT.md) 为准。
 
 ## 数据隔离
 
@@ -149,8 +150,9 @@ pnpm tauri:build
 ```
 
 该命令先使用当前 Rust host target triple 构建 Go bridge，再由 Tauri 将它作为受管 sidecar
-嵌入应用包。当前仅支持与构建机器相同的 target，不接受跨 target 打包；这是为了避免在
-尚未建立 macOS 双架构签名与回归流程前制造未经验证的安装包。
+嵌入应用包。macOS 包仍只支持本机 target；Windows x64/ARM64 MSVC 目标可在本机
+构建，非 Windows 主机的 Windows 交叉构建使用 cargo-xwin。后者仍需 Windows 原生验收，
+不能把交叉编译通过当作平台支持已验证。
 
 本机构建没有 `APPLE_SIGNING_IDENTITY` 时会使用 ad-hoc 签名，适合本机测试但未公证；不要
 将此类包作为正式下载发布。配置 Developer ID 与公证凭据后，正式发布流程必须保留 Tauri

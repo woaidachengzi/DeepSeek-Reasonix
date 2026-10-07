@@ -13,8 +13,7 @@ const tauriBinary = join(
   "desktop",
   "frontend",
   "node_modules",
-  ".bin",
-  process.platform === "win32" ? "tauri.cmd" : "tauri",
+  "@tauri-apps", "cli", "tauri.js",
 );
 
 if (Number(process.versions.node.split(".")[0]) < 24) {
@@ -32,7 +31,7 @@ if (build.status !== 0) process.exit(build.status ?? 1);
 // The bridge executable is generated under Tauri's ignored target directory,
 // then passed only to the host process. The WebView never receives this path,
 // its token, or the bridge's loopback address.
-const tauri = spawn(tauriBinary, ["dev", ...process.argv.slice(2)], {
+const tauri = spawn(process.execPath, [tauriBinary, "dev", ...process.argv.slice(2)], {
   cwd: tauriDirectory,
   env: { ...process.env, REASONIX_DESKTOP_BRIDGE_BIN: bridgeBinary },
   stdio: "inherit",

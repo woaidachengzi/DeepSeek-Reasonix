@@ -2,6 +2,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSyn
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveBuildRunner, resolveBuildTarget } from "./tauri-build-target.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, "../../..");
@@ -12,8 +13,7 @@ const tauriBinary = join(
   "desktop",
   "frontend",
   "node_modules",
-  ".bin",
-  process.platform === "win32" ? "tauri.cmd" : "tauri",
+  "@tauri-apps", "cli", "tauri.js",
 );
 
 if (Number(process.versions.node.split(".")[0]) < 24) {
@@ -28,16 +28,7 @@ if (hostTriple.status !== 0 || !hostTriple.stdout.trim()) {
 
 const bundleArguments = process.argv.slice(2);
 if (bundleArguments[0] === "--") bundleArguments.shift();
-const targetIndex = bundleArguments.findIndex(argument => argument === "--target");
-const requestedTarget = targetIndex === -1 ? hostTriple.stdout.trim() : bundleArguments[targetIndex + 1];
-if (!requestedTarget) throw new Error("--target requires a target triple");
-if (requestedTarget !== hostTriple.stdout.trim()) {
-  throw new Error(
-    `cross-target Tauri bundling is not supported yet: requested ${requestedTarget}, host is ${hostTriple.stdout.trim()}`,
-  );
-}
-
-const extension = process.platform === "win32" ? ".exe" : "";
+const { target: requestedTarget, windows: windowsBuild, extension, goEnv } = resolveBuildTarget(bundleArguments, hostTriple.stdout.trim());
 const bridgeBinary = join(
   sidecarDirectory,
   `reasonix-desktop-bridge-${requestedTarget}${extension}`,
@@ -45,6 +36,7 @@ const bridgeBinary = join(
 mkdirSync(sidecarDirectory, { recursive: true });
 const bridgeBuild = spawnSync("go", ["build", "-trimpath", "-o", bridgeBinary, "./cmd/reasonix-desktop-bridge"], {
   cwd: repositoryRoot,
+  env: { ...process.env, ...goEnv },
   stdio: "inherit",
 });
 if (bridgeBuild.error) throw bridgeBuild.error;
@@ -69,11 +61,13 @@ const frontendPlaceholder = join(repositoryRoot, "desktop", "frontend", "dist", 
 const placeholderBytes = existsSync(frontendPlaceholder) ? readFileSync(frontendPlaceholder) : null;
 // Tauri must sign the app before bundling the DMG. Signing only the standalone
 // .app after `tauri build` leaves the copy already sealed in the DMG invalid.
-const adHocMacOSBuild = process.platform === "darwin" && !process.env.APPLE_SIGNING_IDENTITY;
+const macOSBuild = requestedTarget.endsWith("-apple-darwin");
+const adHocMacOSBuild = macOSBuild && !process.env.APPLE_SIGNING_IDENTITY;
+const targetArgumentPresent = bundleArguments.some(arg => arg === "--target" || arg === "-t" || arg.startsWith("--target="));
+const bundleDirectory = join(tauriDirectory, "target", ...(targetArgumentPresent ? [requestedTarget] : []), bundleArguments.includes("--debug") ? "debug" : "release", "bundle");
 // Keep development bundles out of app search. The compatibility alias retains
 // Tauri's normal output path; the actual directory is excluded by Spotlight.
-if (process.platform === "darwin") {
-  const bundleDirectory = join(tauriDirectory, "target", "release", "bundle");
+if (macOSBuild) {
   const macosDirectory = join(bundleDirectory, "macos");
   const storageDirectory = join(bundleDirectory, "macos.noindex");
   mkdirSync(bundleDirectory, { recursive: true });
@@ -85,7 +79,11 @@ if (process.platform === "darwin") {
   if (!existsSync(macosDirectory)) symlinkSync("macos.noindex", macosDirectory, "dir");
   if (realpathSync(macosDirectory) !== realpathSync(storageDirectory)) throw new Error("macOS bundle alias points outside its expected storage directory");
 }
-const tauri = spawnSync(tauriBinary, ["build", ...bundleArguments], {
+const defaultRunner = resolveBuildRunner({ target: requestedTarget, windows: windowsBuild }, hostTriple.stdout.trim(), process.platform);
+if (defaultRunner && !bundleArguments.some(arg => arg === "--runner" || arg.startsWith("--runner="))) {
+  bundleArguments.push("--runner", defaultRunner);
+}
+const tauri = spawnSync(process.execPath, [tauriBinary, "build", ...bundleArguments], {
   cwd: tauriDirectory,
   env: {
     ...process.env,
@@ -104,12 +102,12 @@ if (tauri.status !== 0) process.exit(tauri.status ?? 1);
 
 // Verify the exact .app Tauri placed into the bundle. A local preview uses
 // ad-hoc signing; official builds keep their Developer ID signature.
-if (process.platform === "darwin") {
+if (macOSBuild) {
   const { productName } = JSON.parse(readFileSync(join(tauriDirectory, "tauri.conf.json"), "utf8"));
   if (typeof productName !== "string" || !productName.trim()) {
     throw new Error("tauri.conf.json must define a productName before macOS signature verification");
   }
-  const appBundle = join(tauriDirectory, "target", "release", "bundle", "macos", `${productName}.app`);
+  const appBundle = join(bundleDirectory, "macos", `${productName}.app`);
   const signing = spawnSync("codesign", ["--verify", "--deep", "--strict", appBundle], {
     stdio: "inherit",
   });

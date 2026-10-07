@@ -1,0 +1,15 @@
+{
+  "bundle": {
+    "targets": ["nsis"],
+    "icon": ["../build/appicon.png", "icons/icon.ico"],
+    "windows": {
+      "webviewInstallMode": { "type": "embedBootstrapper" },
+      "nsis": {
+        "installMode": "currentUser",
+        "startMenuFolder": "Reasonix Tauri Preview",
+        "languages": ["English", "SimpChinese", "TradChinese"],
+        "displayLanguageSelector": true
+      }
+    }
+  }
+}
