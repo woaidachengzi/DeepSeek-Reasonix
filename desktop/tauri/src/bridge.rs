@@ -1694,7 +1694,7 @@ impl BridgeManagementClient {
             path,
             Some(payload),
             Some(&request_id),
-            Duration::from_secs(30),
+            Duration::from_secs(60),
         )?;
         if response.get("protocolVersion").and_then(Value::as_u64)
             != Some(u64::from(PROTOCOL_VERSION))

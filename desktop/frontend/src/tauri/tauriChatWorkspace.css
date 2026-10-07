@@ -1207,6 +1207,10 @@
 .tauri-remote-browser-toolbar > code { overflow: hidden; color: var(--fg-dim); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .tauri-remote-browser-toolbar .tauri-settings-actions { margin-top: 0; }
 .tauri-remote-browser-list { min-height: 120px; max-height: min(420px, 50vh); overflow: auto; padding: 6px 0; }
+.tauri-remote-browser-row { display: flex; align-items: center; gap: 6px; }
+.tauri-remote-browser-row > .tauri-remote-browser-entry { flex: 1; min-width: 0; }
+.tauri-remote-browser-row > .tauri-settings-actions { flex: 0 0 auto; margin: 0; gap: 4px; }
+.tauri-remote-serve-logs { max-height: 220px; overflow: auto; margin: 0; padding: 8px; border: 1px solid var(--border-soft); border-radius: 6px; background: var(--surface-2); color: var(--fg-dim); font-size: 11px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
 .tauri-remote-browser-entry { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--fg); text-align: left; }
 .tauri-remote-browser-entry:not(:disabled):hover { background: var(--surface-2); }
 .tauri-remote-browser-entry span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

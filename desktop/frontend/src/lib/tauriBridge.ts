@@ -527,6 +527,52 @@ export async function saveTauriRemoteFile(request: BridgeRemoteFileSaveRequest):
   return invoke<BridgeRemoteFileSaveResponse>("save_remote_file", { request });
 }
 
+export interface TauriRemotePathChangeRequest {
+  name: string;
+  action: "mkdir" | "rename" | "delete";
+  path: string;
+  newPath?: string;
+  recursive?: boolean;
+}
+
+export interface TauriRemotePathChangeResponse {
+  protocolVersion: number;
+  path: string;
+}
+
+export async function changeTauriRemotePath(request: TauriRemotePathChangeRequest): Promise<TauriRemotePathChangeResponse> {
+  requireTauri();
+  return invoke<TauriRemotePathChangeResponse>("change_remote_path", { request });
+}
+
+export interface TauriRemoteServeRequest {
+  name: string;
+  workspace: string;
+  action: "status" | "start" | "stop" | "logs";
+  tailLines?: number;
+}
+
+export interface TauriRemoteServeView {
+  protocolVersion: number;
+  name: string;
+  workspace: string;
+  state: "stopped" | "running" | "ready" | "logs";
+  localUrl?: string;
+  message?: string;
+  logs?: string;
+}
+
+export async function tauriRemoteServe(request: TauriRemoteServeRequest): Promise<TauriRemoteServeView> {
+  requireTauri();
+  return invoke<TauriRemoteServeView>("remote_serve", { input: request });
+}
+
+/** Opens the authenticated remote controller without disclosing its bootstrap URL to the renderer. */
+export async function openTauriRemoteController(name: string, workspace: string): Promise<void> {
+  requireTauri();
+  await invoke<void>("open_remote_controller", { input: { name, workspace } });
+}
+
 export async function tauriPreviewRuntimeInfo(): Promise<TauriPreviewRuntimeInfo> {
   requireTauri();
   return invoke<TauriPreviewRuntimeInfo>("preview_runtime_info");

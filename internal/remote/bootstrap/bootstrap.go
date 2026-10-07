@@ -299,6 +299,12 @@ func Stop(ctx context.Context, conn Conn, workspace string) error {
 
 // Logs writes up to n tail lines of the serve log to w.
 func Logs(ctx context.Context, conn Conn, workspace string, n int, w io.Writer) error {
+	return LogsBounded(ctx, conn, workspace, n, 0, w)
+}
+
+// LogsBounded also caps output bytes on the remote before Exec collects it.
+// A line cap alone cannot bound a log containing very long lines.
+func LogsBounded(ctx context.Context, conn Conn, workspace string, n, maxBytes int, w io.Writer) error {
 	fs, err := conn.SFTP()
 	if err != nil {
 		return err
@@ -312,7 +318,11 @@ func Logs(ctx context.Context, conn Conn, workspace string, n int, w io.Writer) 
 		return err
 	}
 	paths := pathsFor(home, ws)
-	res, err := conn.Exec(ctx, LogsCommand(paths.LogFile, n))
+	command := LogsCommand(paths.LogFile, n)
+	if maxBytes > 0 {
+		command = fmt.Sprintf("(%s) | tail -c %d", command, maxBytes)
+	}
+	res, err := conn.Exec(ctx, command)
 	if err != nil {
 		return err
 	}

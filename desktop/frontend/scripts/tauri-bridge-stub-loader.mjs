@@ -166,6 +166,21 @@ export function saveTauriRemoteFile(request) {
   if (error) return Promise.reject(error);
   return Promise.resolve({ protocolVersion: 1, path: request.path, revision: "saved-revision" });
 }
+export function changeTauriRemotePath(request) {
+  record("change_remote_path", { request });
+  if (globalThis.__remotePathChangePending) return globalThis.__remotePathChangePending(request);
+  if (globalThis.__remotePathChangeError) return Promise.reject(globalThis.__remotePathChangeError);
+  return Promise.resolve({ protocolVersion: 1, path: request.newPath ?? request.path });
+}
+export function tauriRemoteServe(request) {
+  record("remote_serve", { input: request });
+  const results = globalThis.__remoteServeResults ?? [];
+  if (results.length) return Promise.resolve(results.shift());
+  if (request.action === "start") return Promise.resolve({ protocolVersion: 1, name: request.name, workspace: request.workspace, state: "ready", localUrl: "http://127.0.0.1:41234/" });
+  if (request.action === "logs") return Promise.resolve({ protocolVersion: 1, name: request.name, workspace: request.workspace, state: "logs", logs: "serve log" });
+  return Promise.resolve({ protocolVersion: 1, name: request.name, workspace: request.workspace, state: "stopped" });
+}
+export function openTauriRemoteController(name, workspace) { record("open_remote_controller", { input: { name, workspace } }); return Promise.resolve(); }
 export function tauriPermissionSettings(workspaceRoot) { record("permission_settings",{workspaceRoot}); if(globalThis.__permissionReadHandler) return globalThis.__permissionReadHandler(workspaceRoot); return Promise.resolve({ protocolVersion: 1, mode: "ask", allow: [], ask: [], deny: [], scope:workspaceRoot?"project":"global", projectOverrides:{mode:false,allow:false,ask:false,deny:false} }); }
 export function changeTauriPermissionSettings(change) { record("change_permission_settings", { change }); return Promise.resolve({ protocolVersion: 1, mode: change.mode ?? "ask", allow: [], ask: [], deny: [] }); }
 export function tauriSecretsSettings() { record("secrets_settings"); return Promise.resolve({ protocolVersion: 1, filterSubprocessEnv: false, protectSensitiveFiles: false }); }

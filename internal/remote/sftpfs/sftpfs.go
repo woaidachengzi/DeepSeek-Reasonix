@@ -300,10 +300,19 @@ func (f *FS) Rename(ctx context.Context, oldPath, newPath string) error {
 	return err
 }
 
+// RenameExclusive uses standard SFTP rename, which refuses an existing
+// destination. Unlike atomic file replacement, a user rename must not overwrite.
+func (f *FS) RenameExclusive(ctx context.Context, oldPath, newPath string) error {
+	_, err := run(ctx, func() (struct{}, error) {
+		return struct{}{}, f.client.Rename(oldPath, newPath)
+	})
+	return err
+}
+
 // Remove deletes a file or (recursively) a directory.
 func (f *FS) Remove(ctx context.Context, p string, recursive bool) error {
 	_, err := run(ctx, func() (struct{}, error) {
-		fi, serr := f.client.Stat(p)
+		fi, serr := f.client.Lstat(p)
 		if serr != nil {
 			return struct{}{}, serr
 		}

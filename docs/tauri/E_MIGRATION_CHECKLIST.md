@@ -5,9 +5,9 @@
 | 功能面 | Wails 基线 | Tauri 起点 | 当前工作及验收 |
 | --- | --- | --- | --- |
 | remote 配置与认证 | desktop/remote_hosts.go、remote_prefs.go；SSH config、显式主机指纹、临时/持久凭据 | 读取/修改/删除、SSH alias 扫描、指纹确认和密码恢复已有 | 本批补连接请求归属、断开/改配置/退出取消、重开设置时的权威连接状态；源码 Go race / UI 回归、新包本机 SSH 信任/持久化/退出验收已通过 |
-| remote 文件 | remote_listing.go；浏览、读取/写入及路径操作 | SFTP 浏览、文本预览、revision 保存已有 | 本批补目录/文件异步请求归属、取消/切换后旧结果丢弃；新包真实 SFTP 浏览/预览/revision 保存及旧版本冲突通过；mkdir/rename/delete 尚未接入 |
-| remote tunnel / Serve | remote_serve.go、remote_server_stop.go；forward、bootstrap、状态/日志 | 本批新增会话内 local forward；Serve 入口未接 | 本地转发默认且只允许 loopback；源码真实 SSH 传输、重复请求拒绝、断开释放端口及新包转发/退出释放通过；配置转发自动应用、Serve 后续批次，不把 SSH/SFTP 验证算作 Serve 验收 |
-| remote 对话与工作区 | remote_tab*.go、remote_projects.go；恢复、事件/审批、模型归属、断线重连 | 本地单会话 bridge，尚未完整对接远端 controller | 后续批次；不能借用正式版档案或放宽模型/写入权限代替 |
+| remote 文件 | remote_listing.go；浏览、读取/写入及路径操作 | SFTP 浏览、文本预览、revision 保存已有 | 本批补目录/文件异步请求归属、取消/切换后旧结果丢弃；新包真实 SFTP 浏览/预览/revision 保存及旧版本冲突通过。本轮接入 mkdir、同目录 rename、删除（目录需显式递归确认），侧车拒绝根目录/登录主目录删除；Go race、Tauri 组件回归通过。此轮未重建 `.app`，不能把源码回归视为包内证据。 |
+| remote tunnel / Serve | remote_serve.go、remote_server_stop.go；forward、bootstrap、状态/日志 | Serve 生命周期与 controller 浏览器入口已接；Tauri 内嵌 remote tab 未接 | 设置页可按已认证 SSH 会话读取状态、启动/复用、停止及读取最多 500 行、256 KiB 日志；可由原生宿主将fragment 登录 controller URL 直接交给系统浏览器，renderer 不接收 token/URL。tunnel 固定 `127.0.0.1:0`，断开 SSH 会随 client forward 一并关闭。源码 Go/UI/Rust 回归通过，但未用真实远端 Serve 或重建 `.app` 验收。自动启动可复用现有兼容 CLI，或按策略在远端 npm 安装；Preview 未携带可上传 CLI/发布下载回退，`local-proxy` 凭据显式拒绝。配置转发自动应用与 Tauri 原生 remote tab 后续批次，不把 SSH/SFTP 验证算作 Serve/controller 验收。 |
+| remote 对话与工作区 | remote_tab*.go、remote_projects.go；恢复、事件/审批、模型归属、断线重连 | 可启动 remote controller 浏览器页；本地单会话 bridge 尚未完整对接远端 controller | 系统浏览器 controller 使用 Serve 的现有页面/会话能力；Tauri 内的会话恢复、事件/审批、模型归属与断线重连仍未迁移，不能借用本地会话或放宽模型/写入权限代替。 |
 | bot 配置和账号 | bot_connection_app.go、bot_runtime_app.go；多账号、凭据、启停、状态、诊断 | 旧渠道配置/凭据、路由/队列/权限、适配器运行已有 | 本批补手动多账号创建/删除、受保护凭据、路由/订阅清理、运行时重启和配置应用状态；源码 Go race / UI、新包默认关闭/私有凭据/重启持久化/旧包读取回退通过；未连接真实 IM |
 | bot 配对和管理 | internal/bot/pairing.go、desktop/bot_bridge*.go | 可开启配对，但没有待申请审批入口；Desktop=nil | 本批补本档案申请列表/批准/拒绝、失效连接拒绝、配置写失败保护；源码失败恢复及新包鉴权/连接内授权通过；桌面对话订阅/远程审批/接管仍待迁移 |
 | bot 扫码安装与诊断 | Start/PollBotConnectionInstall、Diagnose/TestBotConnection | 尚无完整 Preview 安装/诊断流程 | 后续批次；真实 IM 平台连接须在可用账号环境验收 |
@@ -31,4 +31,4 @@
 
 本批源码提交 `7e6645bdc8f9011a4cf289d6885e998503e65651` 已构建直接可运行 `.app`，包内 sidecar 在临时档案与本机 SSH/SFTP 服务通过集成验收，旧包读取新配置并回到新包通过。原生宿主在屏幕 2 内侧通过两种档案的退出清理和只读通知权限查询；这不替代 D 的完整原生窗口矩阵。证据见 [本批验收记录](evidence/2026-10-06-e-lifecycle/README.md) 和 [包收据](evidence/2026-10-06-e-lifecycle/package-receipt.json)。
 
-不将表中“已有”能力计作整个 E 已完成。下一批优先 remote Serve/controller 与 bot Desktop 桥接；文件路径操作、扫码安装、完整管理页实际包矩阵仍保持未完成。仅 updater 属于用户明确排除。
+不将表中“已有”能力计作整个 E 已完成。下一批优先 Tauri 原生 remote tab/controller 与 bot Desktop 桥接；配置转发自动应用、扫码安装、完整管理页实际包矩阵仍保持未完成。仅 updater 属于用户明确排除。

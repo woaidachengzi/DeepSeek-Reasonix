@@ -96,6 +96,23 @@ type remoteSaveResponse struct {
 	Revision        string `json:"revision"`
 }
 
+// remotePathChangeRequest intentionally models just the three filesystem
+// mutations exposed by the Preview UI.  These operations are scoped to the
+// live, authenticated SSH connection; they never persist an arbitrary path or
+// expose a shell command surface to the renderer.
+type remotePathChangeRequest struct {
+	Name      string `json:"name"`
+	Action    string `json:"action"`
+	Path      string `json:"path"`
+	NewPath   string `json:"newPath,omitempty"`
+	Recursive bool   `json:"recursive,omitempty"`
+}
+
+type remotePathChangeResponse struct {
+	ProtocolVersion int    `json:"protocolVersion"`
+	Path            string `json:"path"`
+}
+
 type previewRemoteSessions struct {
 	mu       sync.Mutex
 	saveMu   sync.Mutex
@@ -454,7 +471,10 @@ func (b *bridgeServer) previewRemoteFile(w http.ResponseWriter, r *http.Request)
 		writeProtocolError(w, http.StatusBadGateway, "remote_preview_failed", "could not open remote file service")
 		return
 	}
-	resolved, err := fsys.RealPath(ctx, input.Path)
+	// Resolve the parent only: selecting a symlink must mutate that entry,
+	// never the directory or file it points to.
+	parent, err := fsys.RealPath(ctx, path.Dir(input.Path))
+	resolved := path.Join(parent, path.Base(input.Path))
 	if err != nil {
 		writeProtocolError(w, http.StatusBadGateway, "remote_preview_failed", "could not resolve remote file")
 		return
@@ -561,6 +581,89 @@ func (b *bridgeServer) saveRemoteFile(w http.ResponseWriter, r *http.Request) {
 		Path:            resolved,
 		Revision:        remoteContentRevision([]byte(input.Content)),
 	})
+}
+
+func (b *bridgeServer) changeRemotePath(w http.ResponseWriter, r *http.Request) {
+	var input remotePathChangeRequest
+	if err := decodeJSONBody(w, r, 12<<10, &input); err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid remote path request")
+		return
+	}
+	input.Name = strings.TrimSpace(input.Name)
+	input.Path = strings.TrimSpace(input.Path)
+	input.NewPath = strings.TrimSpace(input.NewPath)
+	if !previewProviderName.MatchString(input.Name) || input.Path == "" || len(input.Path) > 4096 || len(input.NewPath) > 4096 ||
+		strings.ContainsRune(input.Path, '\x00') || strings.ContainsRune(input.NewPath, '\x00') ||
+		(input.Action != "mkdir" && input.Action != "rename" && input.Action != "delete") ||
+		(input.Action == "rename" && input.NewPath == "") || (input.Action != "rename" && input.NewPath != "") {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid remote path request")
+		return
+	}
+	client, _ := b.remoteSessions.get(input.Name)
+	if client == nil || client.Status().Status != remote.StatusConnected {
+		writeProtocolError(w, http.StatusConflict, "conflict", "remote host is not connected")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	fsys, err := client.SFTP()
+	if err != nil {
+		writeProtocolError(w, http.StatusBadGateway, "remote_path_failed", "could not open remote file service")
+		return
+	}
+	resolved, err := fsys.RealPath(ctx, input.Path)
+	if input.Action == "mkdir" {
+		// A new directory does not exist yet, so resolve and validate its parent
+		// instead. This keeps relative and tilde paths canonical without allowing
+		// a trailing dot segment to escape the selected directory.
+		parent, parentErr := fsys.RealPath(ctx, path.Dir(input.Path))
+		name := path.Base(input.Path)
+		if parentErr != nil || name == "." || name == "/" || name == ".." {
+			writeProtocolError(w, http.StatusBadRequest, "remote_path_failed", "remote directory parent does not exist")
+			return
+		}
+		resolved = path.Join(parent, name)
+		if err := fsys.MkdirExclusive(ctx, resolved); err != nil {
+			writeProtocolError(w, http.StatusConflict, "remote_path_failed", "could not create remote directory; it may already exist")
+			return
+		}
+		writeJSON(w, http.StatusOK, remotePathChangeResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Path: resolved})
+		return
+	}
+	if err != nil {
+		writeProtocolError(w, http.StatusBadRequest, "remote_path_failed", "remote path no longer exists")
+		return
+	}
+	home, homeErr := fsys.ResolvePath(ctx, "~")
+	if homeErr != nil || resolved == "/" || resolved == home || path.Base(input.Path) == "." || path.Base(input.Path) == ".." || input.Path == "~" {
+		writeProtocolError(w, http.StatusBadRequest, "remote_path_failed", "refusing to mutate the remote root or home directory")
+		return
+	}
+	if input.Action == "delete" {
+		if err := fsys.Remove(ctx, resolved, input.Recursive); err != nil {
+			writeProtocolError(w, http.StatusConflict, "remote_path_failed", "could not delete remote path; a non-empty folder requires recursive deletion")
+			return
+		}
+		writeJSON(w, http.StatusOK, remotePathChangeResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Path: resolved})
+		return
+	}
+
+	parent, parentErr := fsys.RealPath(ctx, path.Dir(input.NewPath))
+	newName := path.Base(input.NewPath)
+	if parentErr != nil || newName == "." || newName == "/" || newName == ".." {
+		writeProtocolError(w, http.StatusBadRequest, "remote_path_failed", "remote rename destination parent does not exist")
+		return
+	}
+	destination := path.Join(parent, newName)
+	if _, statErr := fsys.Stat(ctx, destination); statErr == nil {
+		writeProtocolError(w, http.StatusConflict, "remote_path_failed", "remote rename destination already exists")
+		return
+	}
+	if err := fsys.RenameExclusive(ctx, resolved, destination); err != nil {
+		writeProtocolError(w, http.StatusConflict, "remote_path_failed", "could not rename remote path")
+		return
+	}
+	writeJSON(w, http.StatusOK, remotePathChangeResponse{ProtocolVersion: desktopbridge.ProtocolVersion, Path: destination})
 }
 
 func remoteContentRevision(data []byte) string {

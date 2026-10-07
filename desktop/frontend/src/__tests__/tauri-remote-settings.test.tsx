@@ -53,11 +53,13 @@ async function main() {
   ok(name?.value === "gpu" && address?.value === "gpu", "importing an alias pre-fills its SSH name and address");
   const password = document.querySelector<HTMLInputElement>('[aria-label="SSH password"]');
   const passphrase = document.querySelector<HTMLInputElement>('[aria-label="Private-key passphrase"]');
+  const workspace = document.querySelector<HTMLInputElement>("#remote-host-workspace");
   if (password) typeInto(password, "private-password");
   if (passphrase) typeInto(passphrase, "private-passphrase");
+  if (workspace) typeInto(workspace, "/srv/workspace");
   await act(async () => { click("Save"); await settle(); await settle(); });
   const calls = (globalThis as typeof globalThis & {
-    __tauriBridgeCalls: { name: string; args: { change?: { host?: { name?: string; host?: string; workspace?: string; useSSHConfig?: boolean } }; request?: { trustFingerprint?: string; password?: string; passphrase?: string } } }[];
+    __tauriBridgeCalls: { name: string; args: { change?: { host?: { name?: string; host?: string; workspace?: string; useSSHConfig?: boolean } }; request?: { trustFingerprint?: string; password?: string; passphrase?: string }; input?: { action?: string; name?: string; workspace?: string } } }[];
   }).__tauriBridgeCalls;
   const save = calls.find(call => call.name === "change_remote_settings")?.args.change?.host;
   ok(save?.name === "gpu" && save.host === "gpu" && save.useSSHConfig === true, "saving the imported alias persists the SSH-config flag");
@@ -74,6 +76,14 @@ async function main() {
   const connectCalls = calls.filter(call => call.name === "connect_remote_host");
   ok(connectCalls.length === 2 && connectCalls[1]?.args.request?.trustFingerprint === "SHA256:trusted-test", "host key is trusted only after confirming the displayed fingerprint");
   ok(document.body.textContent?.includes("Connection verified"), "verified connection status is shown on the host card");
+  ok(document.body.textContent?.includes("Reasonix Serve"), "a connected host exposes the Reasonix Serve lifecycle entry");
+  await act(async () => { click("Start Serve"); await settle(); await settle(); });
+  const serveStart = calls.find(call => call.name === "remote_serve" && call.args.input?.action === "start");
+  ok(serveStart?.args.input?.name === "gpu" && serveStart.args.input.workspace === "/srv/workspace", "starting Serve scopes the request to the connected host and its saved workspace");
+  ok(document.body.textContent?.includes("http://127.0.0.1:41234/"), "a ready Serve reports its loopback tunnel without exposing an auth token");
+  await act(async () => { click("Open controller"); await settle(); });
+  const controllerOpen = calls.find(call => call.name === "open_remote_controller");
+  ok(controllerOpen?.args.input?.name === "gpu" && controllerOpen.args.input.workspace === "/srv/workspace", "opening the controller is scoped to the connected host and workspace without passing a URL to the renderer");
   await act(async () => { click("Disconnect"); await settle(); });
   (globalThis as typeof globalThis & { __remoteConnectResults?: unknown[] }).__remoteConnectResults = [
     { protocolVersion: 1, status: "failed", message: "authentication_failed" },
@@ -93,6 +103,7 @@ async function main() {
   ok(!document.querySelector("#remote-password-gpu") && document.body.textContent?.includes("Connection verified"), "successful retry clears the temporary credential form");
   (globalThis as typeof globalThis & { __remoteBrowseResults?: unknown[] }).__remoteBrowseResults = [
     { protocolVersion: 1, path: "/srv/workspace", parentPath: "/srv", entries: [{ name: "project", path: "/srv/workspace/project", isDir: true, symlink: false, size: 0, modTime: 0 }, { name: "README.md", path: "/srv/workspace/README.md", isDir: false, symlink: false, size: 12, modTime: 0 }], truncated: false },
+    { protocolVersion: 1, path: "/srv/workspace", parentPath: "/srv", entries: [{ name: "project", path: "/srv/workspace/project", isDir: true, symlink: false, size: 0, modTime: 0 }, { name: "README.md", path: "/srv/workspace/README.md", isDir: false, symlink: false, size: 12, modTime: 0 }], truncated: false },
     { protocolVersion: 1, path: "/srv/workspace/project", parentPath: "/srv/workspace", entries: [], truncated: false },
   ];
   (globalThis as typeof globalThis & { __remotePreviewResults?: unknown[] }).__remotePreviewResults = [
@@ -101,6 +112,27 @@ async function main() {
   await act(async () => { click("Edit"); await settle(); });
   await act(async () => { click("Browse folders"); await settle(); await settle(); });
   ok(document.body.textContent?.includes("README.md") && document.body.textContent?.includes("project"), "remote SFTP browser shows files and navigable folders");
+  await act(async () => { click("New folder"); await settle(); });
+  const pathName = document.querySelector<HTMLInputElement>(".reasonix-confirm-dialog input");
+  if (pathName) typeInto(pathName, "notes");
+  await act(async () => { click("Create folder"); await settle(); await settle(); });
+  const pathChange = (globalThis as typeof globalThis & { __tauriBridgeCalls: { name: string; args: { request?: { action?: string; path?: string } } }[] }).__tauriBridgeCalls.find(call => call.name === "change_remote_path");
+  ok(pathChange?.args.request?.action === "mkdir" && pathChange.args.request.path === "/srv/workspace/notes", "creating a folder uses the connected host and current remote directory");
+  let finishPathChange!: (value: unknown) => void;
+  const pathGlobals = globalThis as typeof globalThis & { __remotePathChangePending?: () => Promise<unknown> };
+  pathGlobals.__remotePathChangePending = () => new Promise(resolve => { finishPathChange = resolve; });
+  await act(async () => { click("New folder"); await settle(); });
+  const delayedName = document.querySelector<HTMLInputElement>(".reasonix-confirm-dialog input");
+  if (delayedName) typeInto(delayedName, "late-folder");
+  await act(async () => { click("Create folder"); await settle(); });
+  const browserCancel = [...document.querySelector("#remote-browser-title")!.closest("section")!.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Cancel");
+  await act(async () => { browserCancel?.click(); await settle(); });
+  const browseCountBeforeCompletion = calls.filter(call => call.name === "browse_remote_host").length;
+  await act(async () => { finishPathChange({ protocolVersion: 1, path: "/srv/workspace/late-folder" }); await settle(); });
+  ok(calls.filter(call => call.name === "browse_remote_host").length === browseCountBeforeCompletion && !document.querySelector("#remote-browser-title") && !document.querySelector("#remote-path-change-title"), "a path mutation completing after browser cancellation cannot refresh or reopen the old directory");
+  delete pathGlobals.__remotePathChangePending;
+  (globalThis as typeof globalThis & { __remoteBrowseResults?: unknown[] }).__remoteBrowseResults?.unshift({ protocolVersion: 1, path: "/srv/workspace", parentPath: "/srv", entries: [{ name: "project", path: "/srv/workspace/project", isDir: true, symlink: false, size: 0, modTime: 0 }, { name: "README.md", path: "/srv/workspace/README.md", isDir: false, symlink: false, size: 12, modTime: 0 }], truncated: false });
+  await act(async () => { click("Browse folders"); await settle(); await settle(); });
   const remoteFile = document.querySelector<HTMLButtonElement>(".tauri-remote-browser-entry--file");
   await act(async () => { remoteFile?.click(); await settle(); });
   ok(document.body.textContent?.includes("# Remote project") && document.body.textContent?.includes("Text file"), "selecting a remote text file shows its bounded preview");

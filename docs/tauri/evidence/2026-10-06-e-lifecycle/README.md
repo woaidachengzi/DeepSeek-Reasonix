@@ -35,4 +35,12 @@
 
 第一次位置验收在屏幕 2 边缘得到 x 从 -3600 移到 -3372，失败证据保留于 native-package-placement-failure.log。改用屏幕内侧 x=-3000，两个档案均严格保持相同几何；未放宽断言，也未修改产品窗口代码。这只证明本机指定位置的 package-smoke 正常退出，不代表完整 D 多显示器/焦点/托盘矩阵。通知只查询权限，未验证发送/点击；bot 没有向真实 IM 联系人发送任何消息。smoke 工具的错误诊断增强发生在构建之后，不影响已记录的产品二进制源码身份。
 
-剩余发布阻碍：E 的 remote Serve/远端对话与工作区、远端路径操作、配置转发自动应用、bot Desktop 控制/订阅/审批接管、扫码安装/完整连接诊断与管理页实际运行矩阵尚未完成。A 的剩余 Wails runtime 入口收敛与当前包完整回归；B 的工作区/diff、大目录/异常/跨会话原生矩阵与历史资源引用完整兼容；C 的 shell/terminal、Browser、worktree Preview 入口及 MCP/插件真实进程完整矩阵，均未在此批关闭。D 当前包原生显示器/窗口焦点、通知交互及官方 Wails 完整档案互斥/回退等剩余门禁不继承旧包通过；正式 Developer ID 签名、公证和正式发布未执行。Windows/Linux 按之前用户确认延期；updater 按本次用户要求排除。
+后续源码改造（2026-10-07）：远程文件浏览器接入 mkdir、同目录 rename 和删除；目录删除须在 UI 显式勾选递归，侧车拒绝远端根目录和登录主目录，且所有操作仍绑定已认证的当前 SSH 会话。`go test -race ./cmd/reasonix-desktop-bridge`、Tauri 组件回归和 TypeScript 检查通过；尚未重建 `.app`，因此这不是包内验收证据。
+
+后续源码改造（2026-10-07）：设置页新增远端 Serve 的状态、启动/复用、停止和最多 500 行日志入口。侧车只允许通过已认证 SSH 会话、固定 `127.0.0.1:0` 建立 Serve tunnel，并在启动竞争时复查当前 client；会话切换不会让旧连接发布新 tunnel。它可复用远端既有的兼容 CLI，或按 `serve_install` 使用远端 npm；Tauri Preview 不携带用于上传的主 CLI、没有 release 下载回退，也不支持 `local-proxy` 凭据模式，均在界面/协议中明确限制。`go test ./cmd/reasonix-desktop-bridge`、Tauri 设置页回归（32 passed）、TypeScript 与 `cargo check` 通过；未连接真实远端 Serve、未重建 `.app`，因此 controller 和包内证据仍未完成。
+
+后续源码改造（2026-10-07）：controller 的关键入口已接到 Tauri。侧车只把带 fragment token 的 loopback URL 返回给 Rust 宿主；Rust 再校验 HTTP、数值 loopback、端口、根路径和 64 位十六进制 token 后才交给系统浏览器。renderer 不会获得该 URL 或 token，Serve 页面通过 `/auth/token` 换取 HttpOnly cookie 并清除 fragment；token 是 Serve 的共享凭据，并非一次性凭据。这是复用远端 Serve 现有 controller 页面，不等于 Tauri 内的 remote tab、SSE、审批或会话恢复已完成；真实远端和打包 `.app` 验收仍缺失。
+
+提交前 review（2026-10-07）：修复 Rust 直接转发 `action` 导致 Go 严格解码拒绝 Serve 请求、路径操作异步完成刷新已关闭浏览器、重复 controller 打开更换 tunnel 端口、符号链接删除误操作目标以及 rename 覆盖目标的风险。原生 controller 使用 fragment token，引导 cookie 登录并清除 fragment；浏览器打开失败只返回固定错误，避免错误文本携带 URL。Serve 日志在远端同时限制 500 行和 256 KiB；Rust 请求超时 60 秒覆盖 Go 45 秒生命周期期限。验证：`go test -race ./cmd/reasonix-desktop-bridge ./internal/remote/sftpfs ./internal/remote/bootstrap` 通过；TypeScript 通过；远端设置组件 34 passed；Rust `external_url_tests` 4 passed。组件测试仍有既有 act 提示。这些仍是源码证据，真实远端 Serve 与安装包运行待验收。
+
+剩余发布阻碍：E 的 Tauri 原生 remote tab/远端对话与工作区、Serve 实际包与真实远端验收、配置转发自动应用、bot Desktop 控制/订阅/审批接管、扫码安装/完整连接诊断与管理页实际运行矩阵尚未完成。A 的剩余 Wails runtime 入口收敛与当前包完整回归；B 的工作区/diff、大目录/异常/跨会话原生矩阵与历史资源引用完整兼容；C 的 shell/terminal、Browser、worktree Preview 入口及 MCP/插件真实进程完整矩阵，均未在此批关闭。D 当前包原生显示器/窗口焦点、通知交互及官方 Wails 完整档案互斥/回退等剩余门禁不继承旧包通过；正式 Developer ID 签名、公证和正式发布未执行。Windows 根据用户最新要求在本批提交后推进，Linux 延期；updater 按用户要求排除。

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -228,6 +229,66 @@ func TestPreviewRemoteConnectRequiresAndPersistsExplicitHostKeyTrust(t *testing.
 	bridge.handler().ServeHTTP(previewResponse, previewReq)
 	if previewResponse.Code != http.StatusBadRequest {
 		t.Fatalf("directory preview status = %d, want 400: %s", previewResponse.Code, previewResponse.Body.String())
+	}
+
+	pathCall := func(input remotePathChangeRequest, id string) *httptest.ResponseRecorder {
+		t.Helper()
+		body, err := json.Marshal(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/v1/settings/remote/paths", strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+testToken)
+		req.Header.Set(requestIDHeader, id)
+		response := httptest.NewRecorder()
+		bridge.handler().ServeHTTP(response, req)
+		return response
+	}
+	created := path.Join(listing.Path, "created")
+	if response := pathCall(remotePathChangeRequest{Name: "loopback", Action: "mkdir", Path: created}, "mkdir-created"); response.Code != http.StatusOK {
+		t.Fatalf("create remote directory: %d %s", response.Code, response.Body.String())
+	}
+	if info, err := os.Stat(filepath.Join(remoteRoot, "created")); err != nil || !info.IsDir() {
+		t.Fatalf("created directory missing: %v, %v", info, err)
+	}
+	renamed := path.Join(listing.Path, "renamed")
+	if response := pathCall(remotePathChangeRequest{Name: "loopback", Action: "rename", Path: created, NewPath: renamed}, "rename-created"); response.Code != http.StatusOK {
+		t.Fatalf("rename remote directory: %d %s", response.Code, response.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(remoteRoot, "renamed")); err != nil {
+		t.Fatalf("renamed directory missing: %v", err)
+	}
+	if response := pathCall(remotePathChangeRequest{Name: "loopback", Action: "rename", Path: renamed, NewPath: preview.Path}, "rename-conflict"); response.Code != http.StatusConflict {
+		t.Fatalf("rename over an existing remote path = %d, want 409: %s", response.Code, response.Body.String())
+	}
+	if err := os.WriteFile(filepath.Join(remoteRoot, "renamed", "child.txt"), []byte("remove me"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if response := pathCall(remotePathChangeRequest{Name: "loopback", Action: "delete", Path: renamed}, "delete-nonempty"); response.Code != http.StatusConflict {
+		t.Fatalf("nonrecursive remote directory delete = %d, want 409: %s", response.Code, response.Body.String())
+	}
+	if response := pathCall(remotePathChangeRequest{Name: "loopback", Action: "delete", Path: renamed, Recursive: true}, "delete-recursive"); response.Code != http.StatusOK {
+		t.Fatalf("recursive remote directory delete: %d %s", response.Code, response.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(remoteRoot, "renamed")); !os.IsNotExist(err) {
+		t.Fatalf("recursive remote delete left directory: %v", err)
+	}
+	if response := pathCall(remotePathChangeRequest{Name: "loopback", Action: "delete", Path: listing.Path, Recursive: true}, "delete-home"); response.Code != http.StatusBadRequest {
+		t.Fatalf("remote home delete = %d, want 400: %s", response.Code, response.Body.String())
+	}
+	link := filepath.Join(remoteRoot, "project-link")
+	if err := os.Symlink(filepath.Join(remoteRoot, "project"), link); err != nil {
+		t.Fatal(err)
+	}
+	if response := pathCall(remotePathChangeRequest{Name: "loopback", Action: "delete", Path: path.Join(listing.Path, "project-link"), Recursive: true}, "delete-symlink"); response.Code != http.StatusOK {
+		t.Fatalf("delete symlink: %d %s", response.Code, response.Body.String())
+	}
+	if _, err := os.Lstat(link); !os.IsNotExist(err) {
+		t.Fatalf("symlink was not removed: %v", err)
+	}
+	if info, err := os.Stat(filepath.Join(remoteRoot, "project")); err != nil || !info.IsDir() {
+		t.Fatalf("symlink target was deleted: %v", err)
 	}
 
 	// Real TCP round trip through SSH; only this machine may bind the forward.

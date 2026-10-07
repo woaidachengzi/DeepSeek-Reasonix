@@ -1,6 +1,7 @@
 import { TauriRemoteForwards } from "./TauriRemoteForwards";
+import { TauriRemoteServe } from "./TauriRemoteServe";
 import { useEffect, useRef, useState } from "react";
-import { browseTauriRemoteHost, changeTauriRemoteSettings, connectTauriRemoteHost, disconnectTauriRemoteHost, previewTauriRemoteFile, saveTauriRemoteFile, scanTauriRemoteSSHConfig, tauriMessageFrom, tauriRemoteSettings, type TauriRemoteHostInput, type TauriRemoteSettings, type TauriRemoteConnectResponse } from "../lib/tauriBridge";
+import { browseTauriRemoteHost, changeTauriRemotePath, changeTauriRemoteSettings, connectTauriRemoteHost, disconnectTauriRemoteHost, previewTauriRemoteFile, saveTauriRemoteFile, scanTauriRemoteSSHConfig, tauriMessageFrom, tauriRemoteSettings, type TauriRemoteHostInput, type TauriRemoteSettings, type TauriRemoteConnectResponse } from "../lib/tauriBridge";
 import type { BridgeRemoteBrowseResponse, BridgeRemoteFilePreviewResponse, BridgeRemoteFileSaveRequest } from "../lib/bridgeProtocol.generated";
 import { useT } from "../lib/i18n";
 
@@ -15,6 +16,13 @@ const REMOTE_ERROR_KEYS = {
   authentication_failed: "settings.remote.error.authentication_failed",
   host_key_mismatch: "settings.remote.error.host_key_mismatch",
 } as const;
+
+type RemotePathDialog = {
+  action: "mkdir" | "rename" | "delete";
+  path: string;
+  isDir: boolean;
+  name: string;
+};
 
 function editableHost(host: TauriRemoteSettings["hosts"][number]): TauriRemoteHostInput {
   const { passwordSet: _passwordSet, passphraseSet: _passphraseSet, connection: _connection, ...editable } = host;
@@ -46,6 +54,10 @@ export function TauriRemoteSettings() {
   const [remotePreviewError, setRemotePreviewError] = useState(false);
   const [remoteSaveBusy, setRemoteSaveBusy] = useState(false);
   const [remoteSaveError, setRemoteSaveError] = useState(false);
+  const [pathDialog, setPathDialog] = useState<RemotePathDialog | null>(null);
+  const [recursiveDelete, setRecursiveDelete] = useState(false);
+  const [pathChangeBusy, setPathChangeBusy] = useState(false);
+  const [pathChangeError, setPathChangeError] = useState(false);
   const hasUnsavedRemoteDraft = Boolean(remotePreview && remoteDraft !== remotePreview.content);
   const confirmDiscardRemoteDraft = () => !hasUnsavedRemoteDraft || window.confirm(t("settings.remote.discardEditsConfirm"));
 
@@ -54,6 +66,13 @@ export function TauriRemoteSettings() {
   const connectEpoch = useRef(0);
   const browseEpoch = useRef(0);
   const previewEpoch = useRef(0);
+  const pathEpoch = useRef(0);
+  const clearPathDialog = () => {
+    ++pathEpoch.current;
+    setPathDialog(null);
+    setPathChangeBusy(false);
+    setPathChangeError(false);
+  };
   const reload = () => {
     const epoch = ++viewEpoch.current;
     setLoading(true); setError("");
@@ -63,7 +82,7 @@ export function TauriRemoteSettings() {
   };
   useEffect(() => {
     mounted.current = true; reload();
-    return () => { mounted.current = false; ++viewEpoch.current; ++connectEpoch.current; ++browseEpoch.current; ++previewEpoch.current; };
+    return () => { mounted.current = false; ++viewEpoch.current; ++connectEpoch.current; ++browseEpoch.current; ++previewEpoch.current; ++pathEpoch.current; };
   }, []);
   const connectionFor = (name: string) => connectionStates[name] ?? view?.hosts.find(host => host.name === name)?.connection;
 
@@ -116,6 +135,7 @@ export function TauriRemoteSettings() {
   const disconnect = async (name: string) => {
     if (busy || !confirmDiscardRemoteDraft()) return;
     const epoch = ++connectEpoch.current;
+    clearPathDialog();
     ++browseEpoch.current; ++previewEpoch.current; setBrowsingHost(""); setBrowseListing(null); setRemotePreview(null);
     setConnecting(name); setError(""); setNotice("");
     try {
@@ -130,6 +150,7 @@ export function TauriRemoteSettings() {
 
   const loadRemoteDirectory = async (name: string, path?: string, discardConfirmed = false) => {
     if (!discardConfirmed && !confirmDiscardRemoteDraft()) return;
+    clearPathDialog();
     const epoch = ++browseEpoch.current; ++previewEpoch.current; setRemotePreviewBusy(false);
     setBrowseBusy(true); setBrowseError(false); setRemotePreview(null); setRemotePreviewError(false);
     try { const next = await browseTauriRemoteHost(name,path); if (mounted.current && epoch === browseEpoch.current) setBrowseListing(next); }
@@ -166,6 +187,49 @@ export function TauriRemoteSettings() {
     finally { if (mounted.current) setRemoteSaveBusy(false); }
   };
 
+  const openPathDialog = (dialog: RemotePathDialog) => {
+    if (!confirmDiscardRemoteDraft()) return;
+    ++pathEpoch.current;
+    ++previewEpoch.current;
+    setRemotePreviewBusy(false);
+    setRemotePreview(null);
+    setRemotePreviewError(false);
+    setPathChangeError(false);
+    setRecursiveDelete(false);
+    setPathDialog(dialog);
+  };
+
+  const changeRemotePath = async () => {
+    if (!pathDialog || !browseListing || pathChangeBusy) return;
+    const name = pathDialog.name.trim();
+    if ((pathDialog.action === "mkdir" || pathDialog.action === "rename") && (!name || name === "." || name === ".." || name.includes("/"))) return;
+    const base = browseListing.path.replace(/\/$/, "");
+    const epoch = ++pathEpoch.current;
+    const directoryEpoch = browseEpoch.current;
+    const host = browsingHost;
+    const directory = browseListing.path;
+    const current = () => mounted.current && epoch === pathEpoch.current && directoryEpoch === browseEpoch.current;
+    setPathChangeBusy(true);
+    setPathChangeError(false);
+    try {
+      await changeTauriRemotePath({
+        name: host,
+        action: pathDialog.action,
+        path: pathDialog.action === "mkdir" ? `${base}/${name}` : pathDialog.path,
+        ...(pathDialog.action === "rename" ? { newPath: `${base}/${name}` } : {}),
+        ...(pathDialog.action === "delete" ? { recursive: recursiveDelete } : {}),
+      });
+      if (!current()) return;
+      setPathDialog(null);
+      setNotice(t("settings.remote.pathChanged"));
+      await loadRemoteDirectory(host, directory, true);
+    } catch {
+      if (current()) setPathChangeError(true);
+    } finally {
+      if (current()) setPathChangeBusy(false);
+    }
+  };
+
   const beginBrowse = async (name: string, path?: string) => {
     if (!confirmDiscardRemoteDraft()) return;
     setBrowsingHost(name); setBrowseListing(null); setBrowseError(false); setRemotePreview(null); setRemotePreviewError(false);
@@ -174,6 +238,8 @@ export function TauriRemoteSettings() {
 
   const chooseRemoteDirectory = () => {
     if (!browseListing || !confirmDiscardRemoteDraft()) return;
+    clearPathDialog();
+    ++browseEpoch.current; ++previewEpoch.current;
     setDraft(current => ({ ...current, workspace: browseListing.path }));
     setBrowsingHost(""); setBrowseListing(null);
   };
@@ -216,6 +282,7 @@ export function TauriRemoteSettings() {
             </div>}
           </div>
           {connection?.status === "connected" && <TauriRemoteForwards key={host.name} name={host.name}/>}
+          {connection?.status === "connected" && <TauriRemoteServe key={`${host.name}:${host.workspace}`} name={host.name} workspace={host.workspace} credentialMode={host.credentialMode}/>}
           <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" disabled={Boolean(connecting) || busy} onClick={() => void connect(host.name)}>{connecting === host.name ? t("settings.remote.connecting") : t(connection?.status === "connected" ? "settings.remote.connectedAction" : "settings.remote.connect")}</button>{(connection?.status === "connected" || connecting === host.name || connection?.status === "reconnecting") && <button type="button" className="tauri-settings-button" disabled={busy} onClick={() => void disconnect(host.name)}>{connecting === host.name ? t("common.cancel") : t("settings.remote.disconnect")}</button>}<button type="button" className="tauri-settings-button" disabled={busy || Boolean(connecting)} onClick={() => beginEdit(editableHost(host), true)}>{t("common.edit")}</button><button type="button" className="tauri-settings-button tauri-settings-button--danger" disabled={busy || Boolean(connecting)} onClick={() => setPendingRemove(host)}>{t("common.delete")}</button></div>
           </section>;
         })}</div>}
@@ -245,14 +312,20 @@ export function TauriRemoteSettings() {
         <h3 id="remote-browser-title">{t("settings.remote.browserTitle", { host: browsingHost })}</h3>
         {browseListing && <><div className="tauri-remote-browser-toolbar"><code title={browseListing.path}>{browseListing.path}</code><div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" disabled={browseBusy || browseListing.parentPath === browseListing.path} onClick={() => void loadRemoteDirectory(browsingHost, browseListing.parentPath)}>{t("settings.remote.parentDirectory")}</button><button type="button" className="tauri-settings-button" disabled={browseBusy} onClick={chooseRemoteDirectory}>{t("settings.remote.selectDirectory")}</button></div></div>
           {browseListing.truncated && <p className="tauri-settings-muted">{t("settings.remote.listTruncated")}</p>}
-          <div className="tauri-remote-browser-list" aria-busy={browseBusy}>{browseListing.entries.map(entry => entry.isDir ? <button key={entry.path} type="button" className="tauri-remote-browser-entry" disabled={browseBusy} onClick={() => void loadRemoteDirectory(browsingHost, entry.path)}><span>▸ {entry.name}</span><small>{entry.symlink ? t("settings.remote.symlink") : t("settings.remote.directory")}</small></button> : <button key={entry.path} type="button" className="tauri-remote-browser-entry tauri-remote-browser-entry--file" disabled={browseBusy || remotePreviewBusy} onClick={() => void loadRemotePreview(browsingHost, entry.path)}><span>{entry.name}</span><small>{t("settings.remote.fileSize", { size: entry.size })}</small></button>)}</div>
+          <div className="tauri-remote-browser-list" aria-busy={browseBusy}>{browseListing.entries.map(entry => <div className="tauri-remote-browser-row" key={entry.path}><button type="button" className={`tauri-remote-browser-entry${entry.isDir ? "" : " tauri-remote-browser-entry--file"}`} disabled={browseBusy || (!entry.isDir && remotePreviewBusy)} onClick={() => entry.isDir ? void loadRemoteDirectory(browsingHost, entry.path) : void loadRemotePreview(browsingHost, entry.path)}><span>{entry.isDir ? "▸ " : ""}{entry.name}</span><small>{entry.isDir ? (entry.symlink ? t("settings.remote.symlink") : t("settings.remote.directory")) : t("settings.remote.fileSize", { size: entry.size })}</small></button><div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" disabled={browseBusy} onClick={() => openPathDialog({ action: "rename", path: entry.path, isDir: entry.isDir, name: entry.name })}>{t("settings.remote.renamePath")}</button><button type="button" className="tauri-settings-button tauri-settings-button--danger" disabled={browseBusy} onClick={() => openPathDialog({ action: "delete", path: entry.path, isDir: entry.isDir, name: entry.name })}>{t("settings.remote.deletePath")}</button></div></div>)}</div>
           {remotePreviewBusy && <p role="status">{t("settings.remote.previewLoading")}</p>}
           {remotePreviewError && <p className="tauri-diagnostic-error" role="alert">{t("settings.remote.previewFailed")}</p>}
           {remotePreview && <section className="tauri-remote-file-preview" aria-label={t("settings.remote.previewTitle")}><header><code title={remotePreview.path}>{remotePreview.path}</code><span>{remotePreview.kind === "binary" ? t("settings.remote.binaryFile") : t("settings.remote.textFile")}</span></header>{remotePreview.kind === "binary" ? <p>{t("settings.remote.binaryPreviewUnsupported")}</p> : <textarea aria-label={t("settings.remote.previewTitle")} value={remoteDraft} readOnly={remotePreview.truncated} onChange={event => setRemoteDraft(event.currentTarget.value)} />}{remotePreview.truncated && <p>{t("settings.remote.previewTruncated")}</p>}{remoteSaveError && <p className="tauri-diagnostic-error" role="alert">{t("settings.remote.saveFailed")}</p>}{remotePreview.kind === "text" && !remotePreview.truncated && <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" disabled={remoteSaveBusy || remoteDraft === remotePreview.content} onClick={() => void saveRemoteDraft()}>{remoteSaveBusy ? t("settings.remote.savingFile") : t("settings.remote.saveFile")}</button></div>}</section>}
           {browseListing.entries.length === 0 && <p className="tauri-settings-muted">{t("settings.remote.emptyDirectory")}</p>}</>}
         {browseBusy && <p role="status">{t("settings.remote.browsing")}</p>}
         {browseError && <p className="tauri-diagnostic-error" role="alert">{t("settings.remote.browseFailed")}</p>}
-        <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" onClick={() => { if (!confirmDiscardRemoteDraft()) return; ++browseEpoch.current; ++previewEpoch.current; setBrowsingHost(""); setBrowseListing(null); setRemotePreview(null); }}>{t("common.cancel")}</button></div>
+        <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" disabled={browseBusy} onClick={() => openPathDialog({ action: "mkdir", path: browseListing?.path ?? "", isDir: true, name: "" })}>{t("settings.remote.newFolder")}</button><button type="button" className="tauri-settings-button" onClick={() => { if (!confirmDiscardRemoteDraft()) return; clearPathDialog(); ++browseEpoch.current; ++previewEpoch.current; setBrowsingHost(""); setBrowseListing(null); setRemotePreview(null); }}>{t("common.cancel")}</button></div>
+      </section></div>}
+      {pathDialog && <div className="reasonix-confirm-backdrop" role="presentation"><section className="reasonix-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="remote-path-change-title">
+        <h3 id="remote-path-change-title">{t(pathDialog.action === "mkdir" ? "settings.remote.createFolderTitle" : pathDialog.action === "rename" ? "settings.remote.renamePathTitle" : "settings.remote.deletePathTitle")}</h3>
+        {pathDialog.action === "delete" ? <><p>{t("settings.remote.deletePathMessage", { name: pathDialog.name })}</p>{pathDialog.isDir && <label className="tauri-settings-checkbox"><input type="checkbox" checked={recursiveDelete} disabled={pathChangeBusy} onChange={event => setRecursiveDelete(event.currentTarget.checked)} />{t("settings.remote.recursiveDelete")}</label>}</> : <label className="tauri-settings-field"><span className="tauri-settings-field-label">{t("settings.remote.pathName")}</span><input className="tauri-settings-input" autoFocus maxLength={255} value={pathDialog.name} disabled={pathChangeBusy} onChange={event => { const name = event.currentTarget.value; setPathDialog(current => current ? { ...current, name } : current); }} /></label>}
+        {pathChangeError && <p className="tauri-diagnostic-error" role="alert">{t("settings.remote.pathChangeFailed")}</p>}
+        <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" disabled={pathChangeBusy} onClick={() => setPathDialog(null)}>{t("common.cancel")}</button><button type="button" className={pathDialog.action === "delete" ? "tauri-settings-button tauri-settings-button--danger" : "tauri-settings-button"} disabled={pathChangeBusy || ((pathDialog.action === "mkdir" || pathDialog.action === "rename") && (!pathDialog.name.trim() || pathDialog.name.includes("/")))} onClick={() => void changeRemotePath()}>{t(pathDialog.action === "mkdir" ? "settings.remote.confirmCreateFolder" : pathDialog.action === "rename" ? "settings.remote.confirmRenamePath" : "settings.remote.confirmDeletePath")}</button></div>
       </section></div>}
     </>}
     {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}

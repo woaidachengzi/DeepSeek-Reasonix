@@ -1216,6 +1216,61 @@ async fn remote_forwards(
 }
 
 #[tauri::command]
+async fn remote_serve(
+    supervisor: State<'_, BridgeSupervisor>,
+    input: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let (path, input) = remote_serve_request(input)?;
+    let client = supervisor.management_client()?;
+    tauri::async_runtime::spawn_blocking(move || client.remote_request(path, input))
+        .await
+        .map_err(|_| "remote operation worker failed".to_string())?
+}
+
+fn remote_serve_request(mut input: serde_json::Value) -> Result<(&'static str, serde_json::Value), String> {
+    let action = input
+        .get("action")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| "remote Serve action is required".to_string())?;
+    let path = match action {
+        "status" => "/v1/settings/remote/serve/status",
+        "start" => "/v1/settings/remote/serve/start",
+        "stop" => "/v1/settings/remote/serve/stop",
+        "logs" => "/v1/settings/remote/serve/logs",
+        _ => return Err("remote Serve action is invalid".to_string()),
+    };
+    input.as_object_mut().unwrap().remove("action");
+    Ok((path, input))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoteControllerLaunch {
+    protocol_version: u64,
+    url: String,
+}
+
+#[tauri::command]
+async fn open_remote_controller(
+    app: tauri::AppHandle,
+    supervisor: State<'_, BridgeSupervisor>,
+    input: serde_json::Value,
+) -> Result<(), String> {
+    let client = supervisor.management_client()?;
+    let launch = tauri::async_runtime::spawn_blocking(move || {
+        client.remote_request::<RemoteControllerLaunch>("/v1/settings/remote/controller/open", input)
+    })
+    .await
+    .map_err(|_| "remote operation worker failed".to_string())??;
+    if launch.protocol_version != 1 {
+        return Err("desktop bridge protocol version is unsupported".to_string());
+    }
+    app.opener()
+        .open_url(validated_remote_controller_url(&launch.url)?, None::<&str>)
+        .map_err(|_| "could not open remote controller in the system browser".to_string())
+}
+
+#[tauri::command]
 async fn browse_remote_host(
     supervisor: State<'_, BridgeSupervisor>,
     request: BridgeRemoteBrowseRequest,
@@ -1258,6 +1313,19 @@ async fn save_remote_file(
             "/v1/settings/remote/save",
             serde_json::json!(request),
         )
+    })
+    .await
+    .map_err(|_| "remote operation worker failed".to_string())?
+}
+
+#[tauri::command]
+async fn change_remote_path(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let client = supervisor.management_client()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        client.remote_request("/v1/settings/remote/paths", request)
     })
     .await
     .map_err(|_| "remote operation worker failed".to_string())?
@@ -2391,6 +2459,43 @@ fn validated_external_url(value: &str) -> Result<String, String> {
         || url.password().is_some()
     {
         return Err("external link must be an HTTP(S) URL without userinfo".into());
+    }
+    Ok(url.into())
+}
+
+// A controller launch URL carries the Serve token in a fragment. It comes
+// only from the authenticated sidecar, never from renderer input, and must be
+// the exact loopback bootstrap shape emitted by that sidecar before the
+// host hands it to the system browser.
+fn validated_remote_controller_url(value: &str) -> Result<String, String> {
+    if value.len() > 1024 || value.chars().any(char::is_control) {
+        return Err("remote controller URL is invalid".into());
+    }
+    let url = url::Url::parse(value).map_err(|_| "remote controller URL is invalid")?;
+    let loopback = url
+        .host_str()
+        .and_then(|host| host.parse::<std::net::IpAddr>().ok())
+        .is_some_and(|ip| ip.is_loopback());
+    if url.scheme() != "http"
+        || !loopback
+        || url.port().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.path() != "/"
+        || url.query().is_some()
+    {
+        return Err("remote controller must use a loopback HTTP URL".into());
+    }
+    let mut pairs = url::form_urlencoded::parse(url.fragment().unwrap_or_default().as_bytes());
+    let Some((key, token)) = pairs.next() else {
+        return Err("remote controller token is missing".into());
+    };
+    if key != "token"
+        || pairs.next().is_some()
+        || token.len() != 64
+        || !token.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
+        return Err("remote controller token is invalid".into());
     }
     Ok(url.into())
 }
@@ -4100,8 +4205,11 @@ fn main() {
             disconnect_remote_host,
             browse_remote_host,
             remote_forwards,
+            remote_serve,
+            open_remote_controller,
             preview_remote_file,
             save_remote_file,
+            change_remote_path,
             permission_settings,
             change_permission_settings,
             secrets_settings,
@@ -4326,7 +4434,22 @@ fn main() {
 
 #[cfg(test)]
 mod external_url_tests {
-    use super::{validated_external_link, validated_external_url};
+    use super::{
+        remote_serve_request, validated_external_link, validated_external_url, validated_remote_controller_url,
+    };
+
+    #[test]
+    fn serve_route_consumes_renderer_action_before_strict_bridge_decode() {
+        for action in ["status", "start", "stop", "logs"] {
+            let (path, body) = remote_serve_request(serde_json::json!({
+                "action": action, "name": "gpu", "workspace": "/srv/work"
+            })).unwrap();
+            assert_eq!(path, format!("/v1/settings/remote/serve/{action}"));
+            assert_eq!(body, serde_json::json!({"name": "gpu", "workspace": "/srv/work"}));
+        }
+        assert!(remote_serve_request(serde_json::json!({"action": "exec"})).is_err());
+        assert!(remote_serve_request(serde_json::Value::Null).is_err());
+    }
 
     #[test]
     fn accepts_web_links_and_rejects_credentials_and_local_files() {
@@ -4379,6 +4502,28 @@ mod external_url_tests {
             validated_external_link(&format!("https://example.test/{}", "x".repeat(16 << 10)))
                 .is_err()
         );
+    }
+
+    #[test]
+    fn remote_controller_requires_exact_loopback_fragment_url() {
+        let token = "a".repeat(64);
+        assert_eq!(
+            validated_remote_controller_url(&format!("http://127.0.0.1:40123/#token={token}"))
+                .unwrap(),
+            format!("http://127.0.0.1:40123/#token={token}")
+        );
+        for value in [
+            "https://127.0.0.1:40123/?token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "http://localhost:40123/?token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "http://127.0.0.1:40123/other?token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "http://127.0.0.1:40123/?token=short",
+            "http://127.0.0.1:40123/?token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&next=x",
+            "http://127.0.0.1:40123/?key=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "http://127.0.0.1:40123/#token=short",
+            "http://127.0.0.1:40123/#token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&next=x",
+        ] {
+            assert!(validated_remote_controller_url(value).is_err(), "accepted {value}");
+        }
     }
 }
 
