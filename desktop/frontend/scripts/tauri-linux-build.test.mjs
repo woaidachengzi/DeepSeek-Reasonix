@@ -81,7 +81,34 @@ try {
     const result = run(["deb"], { QA_BUILD_SUCCESS: "1", ...env });
     assert.equal(result.status, Number(Object.values(env)[0]), "artifact verification failure cannot report a successful build");
   }
+  // CI requires a real sidecar instead of silently skipping lifecycle tests.
+  const workflow = readFileSync(resolve(dirname(sourceScript), "../../../.github/workflows/tauri-linux-preview.yml"), "utf8");
+  const nativeStep = workflow.match(/      - name: Run native Linux Rust regression tests\n([\s\S]*?)(?=      - name:|$)/)?.[1];
+  assert.ok(nativeStep, "Linux preview workflow has a native regression step");
+  const bridgePath = nativeStep.match(/REASONIX_TAURI_BRIDGE_TEST_BIN: (.+)/)?.[1];
+  assert.equal(bridgePath, "${{ github.workspace }}/desktop/tauri/binaries/reasonix-desktop-bridge-x86_64-unknown-linux-gnu", "CI tests use the x64 sidecar produced by packaging");
+  const nativeRun = nativeStep.match(/        run: \|\n([\s\S]*)/)?.[1].replace(/^          /gm, "");
+  assert.ok(nativeRun, "native test step includes an executable-sidecar preflight");
+  assert.match(nativeRun, /^test -x "\$REASONIX_TAURI_BRIDGE_TEST_BIN"$/m, "CI rejects a missing or non-executable sidecar before Cargo runs");
+  for (const [tool, body] of [
+    ["xvfb-run", '[[ "$1" == -a ]] || exit 21\nshift\nexec "$@"'],
+    ["dbus-run-session", '[[ "$1" == -- ]] || exit 22\nshift\nexec "$@"'],
+    ["cargo", '[[ "$CI" == true && -x "$REASONIX_TAURI_BRIDGE_TEST_BIN" ]] || exit 23\nprintf "%s\\n" "$@" > "$QA_BUILD_LOG"'],
+  ]) {
+    writeFileSync(join(fixture, tool), `#!/bin/bash\n${body}\n`);
+    chmodSync(join(fixture, tool), 0o755);
+  }
+  const fixtureBridge = bridgePath.replace("${{ github.workspace }}", fixture);
+  mkdirSync(dirname(fixtureBridge), { recursive: true });
+  const runNative = () => spawnSync("bash", ["-e", "-c", nativeRun], {
+    env: { ...process.env, PATH: `${fixture}:${process.env.PATH}`, CI: "true", REASONIX_TAURI_BRIDGE_TEST_BIN: fixtureBridge, QA_BUILD_LOG: log }, encoding: "utf8",
+  });
+  assert.notEqual(runNative().status, 0, "missing built sidecar cannot pass the native CI step");
+  writeFileSync(fixtureBridge, "#!/bin/bash\nexit 0\n"); chmodSync(fixtureBridge, 0o755);
+  assert.equal(runNative().status, 0, "native CI step forwards the real sidecar through Xvfb and D-Bus");
+  assert.deepEqual(readFileSync(log, "utf8").trim().split("\n"), ["test", "--locked", "--manifest-path", "desktop/tauri/Cargo.toml", "--bin", "reasonix-tauri"]);
   console.log("PASS Linux native build preflight, package selection, target arguments, artifact discovery and failure propagation");
+  console.log("PASS Linux preview CI sidecar selection, missing-binary preflight and native test arguments");
 } finally {
   rmSync(fixture, { recursive: true, force: true });
 }

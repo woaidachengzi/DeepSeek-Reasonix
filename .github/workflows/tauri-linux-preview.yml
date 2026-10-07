@@ -45,7 +45,11 @@ jobs:
       - name: Build Debian and AppImage previews
         run: bash desktop/tauri/scripts/build-linux.sh
       - name: Run native Linux Rust regression tests
-        run: xvfb-run -a dbus-run-session -- cargo test --manifest-path desktop/tauri/Cargo.toml --bin reasonix-tauri
+        env:
+          REASONIX_TAURI_BRIDGE_TEST_BIN: ${{ github.workspace }}/desktop/tauri/binaries/reasonix-desktop-bridge-x86_64-unknown-linux-gnu
+        run: |
+          test -x "$REASONIX_TAURI_BRIDGE_TEST_BIN"
+          xvfb-run -a dbus-run-session -- cargo test --locked --manifest-path desktop/tauri/Cargo.toml --bin reasonix-tauri
       - name: Upload preview packages
         uses: actions/upload-artifact@v7
         with:

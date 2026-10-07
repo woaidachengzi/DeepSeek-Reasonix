@@ -50,8 +50,10 @@ token 不放在 macOS 进程列表可见的启动环境或命令行中。
 
 2026-10-07 用户授权 Windows 适配及 x64 Preview 包构建，Windows 原生手动验收由用户执行。
 构建方法与待验矩阵见 [Windows Preview 验收](../../docs/tauri/WINDOWS_PREVIEW_ACCEPTANCE.md)。
-交叉编译通过不等于 Windows 原生验收通过。Linux 原生 GNU x64/ARM64 构建适配已开始，
-构建环境、安装包与桌面环境待验项见 [Linux Preview 验收](../../docs/tauri/LINUX_PREVIEW_ACCEPTANCE.md)。
+交叉编译通过不等于 Windows 原生验收通过。Linux 原生 GNU x64/ARM64 构建适配已实现；
+Ubuntu 26.04 ARM64 的 deb/AppImage 已交付，原生 Rust 224 项通过，用户确认手动整体验收通过。
+该结论不扩展到 x64、其他发行版或未逐项记录的故障场景，详见
+[Linux Preview 验收](../../docs/tauri/LINUX_PREVIEW_ACCEPTANCE.md)。
 D→E 的顺序及 macOS 待验项以 [迁移清单](../../docs/tauri/API_SURFACE_AUDIT.md) 为准。
 
 ## 数据隔离
