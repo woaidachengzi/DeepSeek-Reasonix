@@ -12,6 +12,8 @@ export interface EditorProps {
   sourceSize?: number;
   /** Opt in to the workspace-oriented viewer with line numbers and search. */
   showLineNumbers?: boolean;
+  /** One-based source citation line; only the numbered viewer consumes it. */
+  focusLine?: number;
   /** Request that the workspace-oriented viewer opens search after mounting. */
   searchRequestPending?: boolean;
   /** Called once the viewer has consumed a pending search request. */

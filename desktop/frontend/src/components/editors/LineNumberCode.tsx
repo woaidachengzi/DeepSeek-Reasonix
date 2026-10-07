@@ -161,6 +161,7 @@ export default function LineNumberCode({
   sourceSize,
   searchRequestPending,
   onSearchRequestConsumed,
+  focusLine,
 }: EditorProps) {
   const t = useT();
   const lines = useMemo(() => value.split("\n"), [value]);
@@ -391,6 +392,18 @@ export default function LineNumberCode({
   scrollToLineRef.current = scrollToLine;
 
   useEffect(() => {
+    if (focusLine !== undefined && Number.isInteger(focusLine) && focusLine > 0 && focusLine <= lines.length) {
+      const container = scrollRef.current;
+      if (isVirtual) {
+        scrollToLineRef.current(focusLine - 1);
+      } else if (container) {
+        const row = container.querySelector<HTMLElement>(`[data-line-index="${focusLine - 1}"]`);
+        if (row) container.scrollTo({ top: container.scrollTop + row.getBoundingClientRect().top - container.getBoundingClientRect().top - container.clientHeight / 2 + row.clientHeight / 2 });
+      }
+    }
+  }, [focusLine, value, lines.length, isVirtual]);
+
+  useEffect(() => {
     setCurrentMatchIdx(0);
     if (!searchQuery || !matches[0]) return;
     const timer = window.setTimeout(() => scrollToLineRef.current(matches[0].lineIndex), 0);
@@ -428,7 +441,7 @@ export default function LineNumberCode({
       <div
         key={index}
         data-line-index={index}
-        className={`code-line-row${isCurrent ? " code-line-row--current" : ""}${isDimmed ? " code-line-row--dim" : ""}`}
+        className={`code-line-row${isCurrent || lineNo === focusLine ? " code-line-row--current" : ""}${isDimmed ? " code-line-row--dim" : ""}`}
         style={{ transform: "none" }}
       >
         {showLineNumbers !== false && (

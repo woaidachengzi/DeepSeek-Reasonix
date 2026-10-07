@@ -479,6 +479,22 @@ ok(firstViewer.querySelector(".code-block__copy") != null, "restores the floatin
 
 await act(async () => root.unmount());
 
+const citationContainer = document.createElement("div");
+document.body.appendChild(citationContainer);
+const citationRoot = createRoot(citationContainer);
+const ancestorScrollCount = scrolledLines.length;
+const renderCitation = async (line: number) => {
+  await act(async () => citationRoot.render(<LocaleProvider><LineNumberCode value={"first\nsecond\nthird"} showLineNumbers focusLine={line} scrollMode="bounded" maxHeight={320} /></LocaleProvider>));
+};
+await renderCitation(2);
+ok(citationContainer.querySelector('[data-line-index="1"]')?.classList.contains("code-line-row--current"), "source citation uses one-based line numbers");
+ok(scrolledLines.length === ancestorScrollCount, "source focus scrolls only the code viewer, not its ancestors");
+await renderCitation(3);
+ok(citationContainer.querySelectorAll(".code-line-row--current").length === 1 && citationContainer.querySelector('[data-line-index="2"]')?.classList.contains("code-line-row--current"), "a changed citation replaces the previous line highlight");
+await renderCitation(999);
+ok(citationContainer.querySelector(".code-line-row--current") == null, "out-of-range citations never highlight an unrelated line");
+await act(async () => citationRoot.unmount());
+
 const largeContainer = document.createElement("div");
 document.body.appendChild(largeContainer);
 const largeRoot = createRoot(largeContainer);

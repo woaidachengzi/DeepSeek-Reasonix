@@ -34,6 +34,7 @@ import {
   type VirtualMarkdownTableData,
 } from "./largeMarkdownTable";
 import { isLocalFileHref } from "./localFileUrl";
+import { parseSourceReference } from "./sourceReference";
 import { contentRevision } from "./contentRevision";
 import { markdownSelectionTextFromBlocks } from "./markdownSelectionProjection";
 export { estimateHastBytes } from "./markdownByteEstimate";
@@ -86,7 +87,7 @@ export function defaultMarkdownUrlTransform(value: string): string {
 // or explicit Markdown links and must survive URL sanitisation, which would
 // otherwise blank them along with javascript: and friends.
 export function markdownUrlTransform(value: string): string {
-  return isLocalFileHref(value) ? value : defaultMarkdownUrlTransform(value);
+  return isLocalFileHref(value) || parseSourceReference(value) !== null ? value : defaultMarkdownUrlTransform(value);
 }
 
 // Images use a separate protocol policy because their bytes are resolved and

@@ -5,6 +5,9 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { sendTauriSystemNotification } from "../lib/tauriBridge";
 import { useTauriNotificationClicks } from "./tauriNotifications";
 import { Markdown } from "../components/Markdown";
+import { CodeViewer } from "../components/CodeViewer";
+import { SourceReferenceContext } from "../components/SourceReferenceContext";
+import { workspaceSourcePath, type SourceReference } from "../lib/sourceReference";
 const TranscriptSelectionMenu = lazy(() => import("../components/TranscriptSelectionMenu").then(module => ({ default: module.TranscriptSelectionMenu })));
 import { ExternalOpener } from "../components/ExternalOpener";
 import { tauriExternalOpenerBridge } from "./tauriExternalOpener";
@@ -550,6 +553,7 @@ export function TauriSessionPreview() {
   const [workspaceTruncated, setWorkspaceTruncated] = useState(false);
   const [workspacePreview, setWorkspacePreview] = useState<TauriWorkspaceFilePreview | null>(null);
   const [workspacePreviewLoading, setWorkspacePreviewLoading] = useState(false);
+  const [workspacePreviewLine, setWorkspacePreviewLine] = useState<number | undefined>();
   const [workspaceView, setWorkspaceView] = useState<"files" | "changes" | "checkpoints">("files");
   const [workspaceChanges, setWorkspaceChanges] = useState<TauriWorkspaceChanges | null>(null);
   const [workspaceChangesLoading, setWorkspaceChangesLoading] = useState(false);
@@ -2645,14 +2649,16 @@ export function TauriSessionPreview() {
     insertWorkspacePath(entry.path);
   }
 
-  async function previewWorkspaceFile(entry: TauriWorkspaceEntry) {
-    if (entry.isDir || !session || busy) return;
-    const sessionID = session.id;
+  const workspaceSessionId = session?.id;
+  const previewWorkspaceFile = useCallback(async (entry: TauriWorkspaceEntry, line?: number) => {
+    if (entry.isDir || !workspaceSessionId) return;
+    const sessionID = workspaceSessionId;
     const epoch = workspaceEpochRef.current;
     const request = ++workspacePreviewRequestRef.current;
     const isCurrent = () => workspaceEpochRef.current === epoch && workspacePreviewRequestRef.current === request;
     setWorkspacePreviewLoading(true);
     setWorkspacePreview(null);
+    setWorkspacePreviewLine(line);
     setWorkspaceError("");
     try {
       const preview = await tauriWorkspaceFile(sessionID, entry.path);
@@ -2662,7 +2668,7 @@ export function TauriSessionPreview() {
     } finally {
       if (isCurrent()) setWorkspacePreviewLoading(false);
     }
-  }
+  }, [workspaceSessionId]);
 
   async function addAttachments() {
     if (busy || isReadOnlyWorkbenchSource(sessionPageSource) || (session && (!streamReady || session.state !== "idle"))) return;
@@ -3131,8 +3137,22 @@ export function TauriSessionPreview() {
 
   const currentWorkspace = workspaceRoot || session?.workspaceRoot || "";
   const activeProjectKey = workbenchProjectKey(currentWorkspace, platform);
+  const openSourceReference = useCallback((reference: SourceReference) => {
+    setWorkspaceOpen(true);
+    setWorkspaceView("files");
+    const path = workspaceSourcePath(reference, currentWorkspace, platform);
+    if (!workspaceSessionId || path === null) {
+      ++workspacePreviewRequestRef.current;
+      setWorkspacePreview(null);
+      setWorkspacePreviewLoading(false);
+      setWorkspaceError(locale === "en" ? "This code reference is outside the current workspace. Switch to the matching project and retry." : "代码引用不属于当前工作区；请切换到对应项目后重试。");
+      return;
+    }
+    void previewWorkspaceFile({ path, name: path.split("/").pop() ?? path, isDir: false }, reference.line);
+  }, [currentWorkspace, platform, previewWorkspaceFile, workspaceSessionId, locale]);
 
   return (
+    <SourceReferenceContext.Provider value={openSourceReference}>
     <main className="tauri-shell" data-platform={platform} data-desktop-layout={desktopLayout} data-sidebar-hidden={sidebarVisible ? undefined : "true"}>
       <aside className="tauri-sidebar" aria-label="会话导航">
         <div className="tauri-sidebar__drag" data-tauri-drag-region aria-hidden="true" />
@@ -3461,7 +3481,8 @@ export function TauriSessionPreview() {
               {workspacePreviewLoading && <div className="tauri-workspace-preview__loading">正在读取预览…</div>}
               {workspacePreview && <section className="tauri-workspace-preview" aria-label="文件预览">
                 <header><div><strong>{workspacePreview.path}</strong><span>{workspacePreview.size} bytes{workspacePreview.truncated ? " · 已截断" : ""}</span></div><button type="button" className="tauri-diagnostic-action" onClick={() => insertWorkspacePath(workspacePreview.path)}><Eye size={13} /> 插入引用</button></header>
-                {workspacePreview.binary ? <p className="tauri-workspace-preview__binary">这是二进制文件，已隐藏内容；仍可插入它的 @路径。</p> : <pre>{workspacePreview.body || "（空文件）"}</pre>}
+                {workspacePreviewLine && <p className="tauri-workspace-preview__binary" role="status">{workspacePreview.body && workspacePreviewLine <= workspacePreview.body.split("\n").length && !workspacePreview.binary ? (locale === "en" ? `Line ${workspacePreviewLine} highlighted` : `已定位到第 ${workspacePreviewLine} 行`) : (locale === "en" ? `Line ${workspacePreviewLine} is outside the readable preview. The file may have changed or been truncated; check the original file.` : `第 ${workspacePreviewLine} 行不在可读预览范围内；文件可能已修改或截断，请检查原文件。`)}</p>}
+                {workspacePreview.binary ? <p className="tauri-workspace-preview__binary">这是二进制文件，已隐藏内容；仍可插入它的 @路径。</p> : workspacePreview.body ? <CodeViewer key={workspacePreview.path} value={workspacePreview.body} showLineNumbers focusLine={workspacePreviewLine} scrollMode="bounded" maxHeight={320} /> : <pre>（空文件）</pre>}
               </section>}
               {workspaceTruncated && <p className="tauri-workspace-drawer__note">目录较大，仅显示前 200 项。</p>}
               <p className="tauri-workspace-drawer__hint">单击文件把 <code>@路径</code> 插入输入框，双击文件查看安全预览。</p>
@@ -3574,6 +3595,7 @@ export function TauriSessionPreview() {
       </div>}
       {settingsOpen && <TauriSettings key={settingsTab} initialTab={settingsTab} workspaceRoot={currentWorkspace || undefined} defaultWorkspace={defaultWorkspace} onChooseDefaultWorkspace={chooseDefaultWorkspace} onClearDefaultWorkspace={clearDefaultWorkspace} profile={profile} importBusy={busy} bridgeStatus={status} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={error} onRestartBridge={restartBridge} onRefreshCatalogAudit={() => refreshCatalogAudit()} onRefreshProfile={refreshProfile} onImportStableProfile={importStableProfile} onImportStableProjectFolders={importStableProjectFolders} onScanUnclaimedSessions={() => void openScanImportReview()} onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionId={session?.id} currentSessionState={session?.state} currentSessionModelRef={session?.modelRef} onCurrentSessionModelChange={changeCurrentSessionModel} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} onUseSubagentInChat={insertSubagentInvocation} />}
     </main>
+    </SourceReferenceContext.Provider>
   );
 }
 

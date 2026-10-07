@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode } from "react";
-import { Copy, ExternalLink, FolderOpen, Hash, Mail, Save } from "lucide-react";
+import { Copy, ExternalLink, FileCode, FolderOpen, Hash, Mail, Save } from "lucide-react";
 import { app, openExternal } from "../lib/bridge";
 import { writeClipboardText } from "../lib/clipboard";
 import { t } from "../lib/i18n";
 import { localPathFromHref } from "../lib/localFileUrl";
 import type { ExternalOpenerView, ExternalOpenersView } from "../lib/types";
 import { useToast } from "../lib/toast";
+import { SourceReferenceContext } from "./SourceReferenceContext";
+import { parseSourceReference } from "../lib/sourceReference";
 import { ContextMenu, contextMenuPointFromEvent, type ContextMenuItem, type ContextMenuPoint } from "./ContextMenu";
 
 export { localPathFromHref } from "../lib/localFileUrl";
@@ -341,6 +343,8 @@ export function RichMarkdownLink({
   // links keep their own richer menu inside LocalPathMarkdownLink below.
   const { showToast } = useToast();
   const github = parseGitHubLink(href);
+  const openSource = useContext(SourceReferenceContext);
+  const source = parseSourceReference(href);
   const [menuPoint, setMenuPoint] = useState<ContextMenuPoint | null>(null);
   const closeMenu = useCallback(() => setMenuPoint(null), []);
   const copyText = useCallback((text: string) => {
@@ -368,10 +372,27 @@ export function RichMarkdownLink({
     setMenuPoint(contextMenuPointFromEvent(event));
   };
 
-  const local = localPathFromHref(href);
+  const nativeLocal = localPathFromHref(href);
+  // Existing file:// links retain their native opener and rich context menu.
+  // A line suffix is an explicit request for the workspace source preview.
+  if (openSource && source && (source.line !== undefined || nativeLocal === null)) {
+    const activate = (event: ReactMouseEvent<HTMLAnchorElement>) => {
+      event.preventDefault();
+      openSource(source);
+    };
+    return <a className="md-rich-link md-rich-link--source" href={href}
+      title={`${source.path}${source.line ? ` (line ${source.line})` : ""}`}
+      onClick={activate} onAuxClick={event => { if (event.button === 1) activate(event); }}
+      onMouseDown={event => { if (event.button === 1) event.preventDefault(); }}>
+      <FileCode aria-hidden="true" size={13} strokeWidth={2} />
+      <span className="md-rich-link__label">{children}</span>
+    </a>;
+  }
+  const local = nativeLocal ?? (source && /^(?:\/|[A-Za-z]:[\\/])/.test(source.path) ? source.path : null);
   if (local !== null) {
     return <LocalPathMarkdownLink href={href ?? ""} path={local} children={children} />;
   }
+  if (source && !openSource) return <code className="md-code">{children}</code>;
 
   const iconKind = classifyLinkIcon(href);
   const compactLabel = github && linkText(children) === href ? github.compactLabel : undefined;
