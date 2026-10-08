@@ -25,6 +25,17 @@ fn request() -> SessionImageRequest {
     }
 }
 #[test]
+fn remote_image_ipc_omits_absent_optional_fields_for_renderer() {
+    for image in [
+        json!({"url":pixels(1),"mime":"image/png","size":100}),
+        json!({"url":"","errorCode":"forbidden"}),
+    ] {
+        let native: BridgeRemoteControllerImage = serde_json::from_value(image.clone()).unwrap();
+        assert!(valid_image(&native));
+        assert_eq!(serde_json::to_value(native).unwrap(), image);
+    }
+}
+#[test]
 fn remote_image_ipc_fixed_route_private_fields_and_narrow_request() {
     for extra in ["workspace", "url", "token", "localSessionId", "action"] {
         let mut value =

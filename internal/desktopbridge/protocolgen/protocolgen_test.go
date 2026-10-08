@@ -10,6 +10,24 @@ import (
 // repoRoot is the schema's own tree: tests run from the package directory.
 const repoRoot = "../../.."
 
+func TestGenerateOmitsAbsentOptionalRustFields(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, SchemaPath, `{"$defs":{"image":{"type":"object","required":["url"],"properties":{"url":{"type":"string"},"errorCode":{"type":"string"}}}}}`)
+	artifacts, err := Generate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, artifact := range artifacts {
+		if artifact.Path != RustArtifactPath {
+			continue
+		}
+		wire := string(artifact.Data)
+		if !strings.Contains(wire, "#[serde(skip_serializing_if = \"Option::is_none\")]\n    pub error_code: Option<String>,") || strings.Contains(wire, "#[serde(skip_serializing_if = \"Option::is_none\")]\n    pub url:") {
+			t.Fatal("optional Rust fields must serialize absent without changing required fields")
+		}
+	}
+}
+
 func TestGeneratePreservesSnakeCaseWireKeys(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, SchemaPath, `{"$defs":{"search":{"type":"object","properties":{"sources_status":{"type":"string"},"toolCallId":{"type":"string"}}}}}`)

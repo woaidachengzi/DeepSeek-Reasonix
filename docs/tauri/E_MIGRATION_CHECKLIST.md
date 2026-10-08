@@ -1,5 +1,19 @@
 # E 迁移清单
 
+## 2026-10-08 超过 30 文件的 review 提交
+
+本批 review 提交共享原生历史图片验收修复、指定会话 SSE bridge/native transport 与 pending-open 取消、订阅 registry 核心。registry 防止旧 generation/worker 清理新订阅，限制 current/live/tombstone 数量；review 补 main Destroyed 之后的 admission 撤销、Supervisor stop 与 start 的 owner 锁归属、tombstone 上限准确恢复提示。四项 registry 回归、Go 五包 race/vet、完整前端 Tauri/测试类型、Python receipt 与协议镜像通过，详细范围见 [API audit](API_SURFACE_AUDIT.md#2026-10-08-订阅注册表与超过-30-文件-review-提交)。订阅 IPC/载荷检查/实际 WebView 实时面仍未接入，本批源码提交不代表新 App 打包或整个 E 完成；已交付 App 不覆盖、不推送。下方未提交记录是各增量阶段当时状态。
+
+## 2026-10-08 共享原生历史图片与会话事件传输（后续未提交源码）
+
+- 实际 release App 的 managed/explicit 两种隔离档案已通过共享历史图片、可见 ImageViewer、Escape 保留底层历史、关闭清理和无未捕获异常门禁。修复 SSH acronym wire、Serve 首帧 admission、Rust 缺省字段省略、预览 Escape 冒泡。图片阶段证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-08-共享历史的真实原生图片验收0ebda4fd9-后续未提交源码)；已交付 `0ebda4fd9` App 未覆盖。
+- 新增 shared controller `SessionEvents`，按明确 catalogue member 路径接收后台/前台会话事件，使用原 SSH owner/operation 的取消与 cookie transport；不把未标记或其他会话帧归给当前 surface。帧/行/UTF-8/序号/关联 ID 有界，未知字段通过 typed event 投影剔除；取消和关闭拒绝已缓冲结果，EOF 要求显式重开并补快照，不自动重试、接管或授予写入。
+- shared client 五项顶层回归及生产 Serve token gate/真实 Controller/会话文件/broadcaster 路由用例通过；完整 controller/Serve race 和 vet 通过，日志 `/private/tmp/reasonix-native-history-ui.POmxwA/events-complete-race.log` / `events-vet.log`。生产 broadcaster 事件为自有 fixture，不声称已执行真实模型 turn、SSH/SSE 原生界面或审批恢复。
+- 后续增加受监督 handle 的窄 `session-events` bridge route，实际自有 SSH tunnel + cookie HTTP + bridge HTTP 回归通过；验证路径过滤/typed projection、撤销清理、字段/鉴权/重放拒绝、每 handle 两订阅和取消释放，另用故障 writer 验证 request 尚未取消时的首写/事件输出失败清理。完整 bridge/controller/protocolgen race、vet、DTO/schema、镜像、前端类型和 Rust 编译检查通过。输出有写入预算，不进入本地 EventLedger；schema event 仍是 opaque，原生 payload 检查和 subscription generation fence 尚待接入，不能算实际包实时对话验收。证据 `events-bridge-final-race.log` / `events-bridge-complete-race.log`，详见 [API audit](API_SURFACE_AUDIT.md#2026-10-08-远程会话-sse-bridge-路由未提交增量)。
+- 原生内部 transport 核心已接固定 HTTP/1.0 SSE、catalogue membership、controller/path fence、有界 header/frame、socket shutdown 取消和 Drop 清理，五项 transport/完整 remote-controller 15 项通过；实际 bridge HTTP/1.0 framing + socket 关闭清理 race 通过。尚未注册 command 或向 renderer emit opaque event；pending-open 取消、subscription registry、payload/capability 检查、generation/window/sidecar fence 仍待实现。不能把 TCP fixture 当作 WKWebView/App 联调。证据 `events-native-controller-final.log` / `events-native-http10.log`，详见 [API audit](API_SURFACE_AUDIT.md#2026-10-08-原生指定会话事件传输核心未提交增量)。
+- 后续补 pending-open cancellation：同一 operation 的 socket lease 覆盖 catalogue 响应头/JSON body 和 SSE 响应头，取消主动 shutdown 而非等 I/O timeout；预先取消零 TCP dispatch，失败打开释放 lease，迟到打开不返回。两项顶层回归与完整 Rust 266 passed / 0 failed / 6 ignored 通过，详见 [API audit](API_SURFACE_AUDIT.md#2026-10-08-原生会话事件-pending-open-取消未提交增量)。TCP connect 仍有 1 秒预算；subscription registry、载荷检查和窗口/sidecar/generation fence 尚待接入，不算 actual App 订阅验收。
+- 下一步接原生订阅与 generation/surface fence，再接快照/实时事件统一归约、显式恢复/发送/审批/模型归属和重连。现有只读历史 handle 不能隐式升级为可写会话。系统剪贴板、bot Desktop、三平台专项、复杂管理页与 SQLite 等其余目标保持未完成；本批没有新的 App 重建或提交/推送。
+
 ## 2026-10-08 远程图片正向原生验收与 review 提交
 
 真实 release App 的 managed/explicit 两种私有档案均通过 WKWebView → 注册 IPC → 包内 bridge → 临时密钥认证 SSH/SFTP → 生产 shell bootstrap → 实际 CLI Serve → saved workspace PNG 解码。验收没有 mock 图片响应或 controller factory，没有真实账号、模型请求、系统剪贴板操作、下载或远端安装；会话及 workspace 元数据保持逐字节不变。review 补正向收据严格布尔校验、fixture 输入/XOR 回归和 Serve 进程身份/清理确认；只有清理成功才生成最终收据。证据 `/private/tmp/reasonix-remote-image-positive.78LOTy/`、`/private/tmp/reasonix-native-ssh-2976458357/integration-receipt.json`。本批 review 后提交，再从干净 HEAD 重建 arm64 ad-hoc `.app`，以最终包复验记录为准。共享 Transcript 的原生完整界面、剪贴板粘贴发送、真实远端平台/代理/安装及完整 controller/bot 等门禁仍保留；原生 standalone 图片节点验收不能代替共享对话界面验收。下方“未提交/未执行”是各阶段当时状态。

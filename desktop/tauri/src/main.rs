@@ -4338,6 +4338,11 @@ fn main() {
                     CloseBehavior::Quit => window.app_handle().exit(0),
                 }
             }
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                if let Some(supervisor) = window.app_handle().try_state::<BridgeSupervisor>() {
+                    supervisor.clear_remote_subscriptions();
+                }
+            }
         })
         .on_menu_event(|app, event| {
             match event.id().as_ref() {

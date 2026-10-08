@@ -1,5 +1,59 @@
 # Wails API 与事件面盘点
 
+## 2026-10-08 订阅注册表与超过 30 文件 review 提交
+
+- 新增 native subscription registry 核心：主窗口窄 request、受 Supervisor 提供的 sidecar instance owner、随机 128-bit subscription ID、surface 单调 generation。替换先从 current map 撤销旧身份再取消旧 operation；旧 worker Drop 只删除同一 entry，不能清理新订阅。发布 admission 与撤销在同一锁内串行；callback 只允许非阻塞 native enqueue，renderer 仍须拒绝已经入队的旧 subscription ID。
+- admission 限制 16 current / 32 live（包含取消后仍持有 ticket 的 worker）/ 64 surface generation tombstones；旧/相同 generation 拒绝，不因关闭/失败释放历史 fence。review 将 surface tombstone 超限错误与 current/live 超限区分，前者提示复用 surface 或重启 Preview，不能用“关闭未用会话”假称可释放 tombstone。
+- Supervisor start 绑定 backend-owned instance，stop/status 检测已退出及替换 owner 均撤销。review 将 stop 的 owner 撤销放到同一 process-slot 锁内，防止与并发 start 错位；main Destroyed 通过 try_state 清理并撤销 owner admission，隐藏 KeepRunning 主窗口不当作销毁。清理后更高 generation 也不能直接重开，须由 host 重新绑定 owner；不是只取消已经打开的 sockets。
+- 四项 registry 回归检查替换/旧 finally、取消/clear/drop/owner 变化、current/live/tombstone 上限、scope/窄字段/secondary-window/旧 generation 拒绝。编译初稿使用错误 Rand trait，修复为 TryRngCore；失败日志保留，不计作通过。最终 registry 回归 `review-registry-final.log`；完整本批 Go 五包 race/vet、协议镜像 check、完整 test:tauri、前端测试类型、Python receipt 5 项均通过，证据 `/private/tmp/reasonix-native-history-ui.POmxwA/review-*`。
+- 用户新增“超过 30 个变更文件先 review 再提交”要求，本批按该门禁提交。React review 确认 Serve 父级按 host/workspace key 重挂载，首帧 busy 不借旧 scope；ImageViewer Escape listener 有卸载清理且阻止底层设置页事件。镜像统一省略 None，与 Go/schema 缺省字段保持一致；不放宽 PNG/scope 验证。
+- Review 修复后的完整 Rust 270 passed / 0 failed / 6 ignored、clippy all-targets `-D warnings` 与 `git diff --check` 通过，日志 `review-rust-final.log` / `review-clippy-final.log`；ignored 手工原生环境测试未执行。四项 registry 最终回归已明确检查 clear 后更高 generation 也拒绝。
+- 此注册表还没有注册订阅 IPC、接 native event payload/capability projection 或实际 WebView 事件投递；unexpected child exit 的即时 observer、主窗口重建身份及 live UI 尚须后续联调，不能把 source hook/registry unit test 视为实际 App 生命周期验收。已交付 App 未重建/覆盖，真实账号/剪贴板、完整 controller/bot、跨平台和 SQLite 等门禁保持未完成；不推送或正式发布。下方“未提交”保留各增量阶段当时状态。
+
+## 2026-10-08 原生会话事件 pending-open 取消（未提交增量）
+
+- 原生 `EventCancellation` 现在可在打开前创建；同一单次 operation 顺序持有 catalogue HTTP 与 SSE socket lease。注册 socket 前在锁内检查已取消状态，取消 shutdown 当前 socket；lease Drop 只卸载自己持有的 socket 并关闭它，失败/解析错误也释放。清单解析完成、SSE 打开完成和事件返回前再次检查取消，不发布迟到结果。
+- 共用 host HTTP 增加内部 connected-socket callback，lease 保持到完整响应解析结束；既有调用默认 no-op，不改变 route、auth、响应预算或错误语义。native catalogue 沿用完整字段/计数/身份验证，不为取消另写一套宽松清单解析。TCP connect 仍为既有 1 秒预算，尚未建立的 socket 不能 shutdown；connect 结束后若已取消，不发送请求。
+- 新增两项顶层回归：故意不返回 catalogue 响应头、JSON body 半途停住、SSE 响应头停住时，取消均在 2 秒观测预算内结束并释放 socket；预先取消为零 TCP dispatch，失败打开也清理 socket。此前七项 event 回归通过，完整 Rust 266 passed / 0 failed / 6 ignored。最终 JSON body 扩展单独复验通过，证据 `/private/tmp/reasonix-native-history-ui.POmxwA/events-native-open-tests.log`、`events-native-open-final.log`、`events-native-open-rust-complete.log`；这些自有 TCP fixture 不是真实 WebView 或外部 SSH/模型验收。
+- 尚未接 subscription registry、native kind/payload/capability projection、generation/window/sidecar owner 或注册命令/emit 到 renderer。后续 registry 必须为每次打开创建独立 cancellation，并先撤销旧 operation 再接新 surface。本批未重建 App、提交/推送或操作真实账号/系统剪贴板；完整目标保持未完成。
+- 最终源码的完整 Rust 复验仍为 266 passed / 0 failed / 6 ignored：`events-native-open-rust-final.log`；最终 clippy all-targets `-D warnings` 通过：`events-native-open-clippy-final.log`，`git diff --check` 通过。
+
+## 2026-10-08 原生指定会话事件传输核心（未提交增量）
+
+- 新增 `remote_controller_events.rs`，仅内部 host transport，尚未注册 command 或 emit renderer 事件。原生先读取受监督 handle 的 catalogue，未列出的 path 不打开事件流；固定 `POST session-events` JSON 不带 URL/token/workspace/replay 参数，bridge bearer 仅在 host HTTP header。
+- 使用 HTTP/1.0 close-delimited SSE，不把 HTTP chunk-size 行误当 metadata；header 单行 8 KiB/累计 64 KiB、frame 含 comments/metadata 累计 9 MiB，有界读取避免 `read_line` 无界分配。拒绝错误状态/MIME、重复 Content-Type、Transfer-Encoding 和 Content-Length；支持 comments、CRLF、多行 data，EOF/半帧/非法 UTF-8/超预算均结束，不自动重连或重放。响应头阶段 socket read timeout 35 秒，流阶段空闲 read timeout 25 秒，写入 5 秒；这些是 socket I/O 超时，不声称总时长 deadline。
+- 每帧核对 version、canonical 只读 controller、host/resolved workspace、envelope path 与 event path。自有 socket clone 的 shutdown 可立即取消阻塞读，取消后已有 buffered frame 不能返回；错误与 Drop 同样清理。event 仍是 internal opaque object，不能绕过 native kind/payload/capability 检查直接 emit。尚待 pending-open 取消、主窗口 subscription registry、generation token 和窗口/sidecar 退出归属，不能声称这些生命周期已完成。
+- 五项原生 transport 回归包括固定 POST/多行/EOF、HTTP/范围拒绝、行/累计 comments 预算、半帧/UTF-8、真正阻塞 socket 取消及 buffered fence、native catalogue 未列出拒绝；完整 remote-controller 15 passed / 0 failed。自有 TCP response 是 fixture，不是原生 WebView 或模型联调。初次沙箱禁止 listener 失败保留，允许自有 loopback 后回归通过；初次 clippy 发现 fixture 未处理短读，改为完整 header/body 读取后复验。证据目录 `/private/tmp/reasonix-native-history-ui.POmxwA/`，`events-native-controller-final.log`、`events-native-transport-tests-allowed.log`、`events-native-clippy-final.log`。
+- 另用实际 bridge HTTP server → cookie HTTP → SSH direct-tcpip 验证 HTTP/1.0 响应确实无 chunk/Content-Length、selected data 可读且 socket 关闭取消 upstream，race 通过：`events-native-http10.log`。这不是 actual native IPC/App 集成；没有新增 capability、App 构建、提交/推送、真实账号或系统剪贴板操作。
+- fixture 短读修复后的完整 Rust 回归为 264 passed / 0 failed / 6 ignored，日志 `events-native-rust-complete.log`；clippy all-targets `-D warnings` 通过。ignored 原生/人工环境测试未执行，不把单元测试汇总视为实际 App 窗口或剪贴板验收。
+
+## 2026-10-08 远程会话 SSE bridge 路由（未提交增量）
+
+- 新增认证后的 `POST /v1/remote/controllers/{controllerID}/session-events`，仅接受 catalogue 中的 `sessionPath`，拒绝 URL/token/workspace、query 和 Last-Event-ID。原 SSH 连接 owner 不变，事件包保留只读 controller 与双层 session path，不进入本地 EventLedger、不授予写入或重放。
+- 每个 handle 两个 admission slots、输出 envelope 9 MiB、写入/flush 5 秒和 comment heartbeat 10 秒；专属 operation context 保证输出失败也取消 upstream reader。断开/关闭和每次输出前再次核对原连接，已写到 TCP 的字节仍须未来 native generation fence 拒绝。
+- 四项 bridge 回归使用实际自有 SSH direct-tcpip + cookie HTTP，前三项同时通过 bridge HTTP server 检查 selected/foreign/private projection、owner 撤销后 body 清理、窄字段/鉴权/重放拒绝、两个订阅上限与取消释放；第四项故障 writer 验证首写/事件写失败在 request 仍有效时主动结束 upstream body、保留共享 controller 并释放槽位。证据 `/private/tmp/reasonix-native-history-ui.POmxwA/events-bridge-final-race.log`。远端 catalogue/events 是 fixture，故障 writer 不是实际慢读 App，不把这些结果视为 production Serve bootstrap、实际模型或原生实时界面验收。
+- 完整 bridge/controller/protocolgen race、Go vet、真实 Go DTO/schema、生成镜像 check、前端测试类型与 Rust `cargo check --locked` 通过。对应 `events-bridge-complete-race.log`、`events-bridge-vet.log`、`events-bridge-final-race.log`、`events-bridge-mirrors.log`、`events-bridge-types.log`、`events-bridge-rust-check.log`；静态检查首次自动权限审核超时，没有执行，随后仅重试一次并成功，不将超时列为检查通过。
+- schema 新增 event envelope 并生成 TS/Rust 镜像；event object 在镜像中保持 opaque，Go shared eventwire 投影不替代 native payload/capability 检查。尚未注册原生订阅 command、增加 health capability 或实现 live UI/恢复/发送/审批，本批未重建、提交或推送 App。
+
+## 2026-10-08 远程会话 SSE 共用客户端（未提交增量）
+
+- `internal/remote/controller/session_events.go` 提供显式 catalogue member 的 `SessionEvents/Next/Close`。原 tunnel origin、HttpOnly cookie、operation 和 SSH/controller owner 保留；`all=1` 只在 backend 接收，发布前只保留精确 session path，未标记/其他会话事件不会被当作前台。未知顶层/嵌套字段通过 shared typed event 解码剔除，bridge/native 尚须验证各 payload/capability。
+- 与 Wails 现有 frame gate 保持 8 MiB；单行、累计多行（含 comments/metadata）、UTF-8、known kind、JS-safe seq 和关联 ID 检查有界。多行 data 使用 builder，避免大量小行的 string-slice 放大。comments/keepalive/CRLF/multiline 支持；SSE id/retry 不转换成重放或重连授权。完整帧 EOF 要求重开/快照 reconcile，半帧/损坏/超预算拒绝；失败仅返回固定错误，不回显私有 body。
+- 关闭仅该 stream 不影响共享 controller；关闭 controller/operation 取消正在读取的实际 HTTP body，拒绝已有但未消费的缓冲事件。401/403 撤销旧认证连接，不能继续复用过期 cookie。
+- 五项顶层 shared client 回归通过：selected/foreign/untagged 路由、typed projection、multiline/CRLF、EOF 不重试、损坏/累计预算、nil/未列出/认证拒绝、三类取消与真正 HTTP body 退出、缓冲发布 fence、非 SSE 响应。生产 Serve route/token gate + 真实 Controller/保存会话/broadcaster 用例验证后台 reasoning/text/turn_done correlation，订阅不 resume、不回写。
+- 完整 `go test -race ./internal/remote/controller ./internal/serve` 与 `go vet` 通过。证据 `/private/tmp/reasonix-native-history-ui.POmxwA/events-complete-race.log`、`events-serve-race.log`、`events-vet.log`。这里只发布自有事件 fixture，不把它说成实际模型 turn、SSH/Serve 安装、原生实时 UI 或审批恢复验收。
+- 此 shared-client 阶段当时尚未增加 bridge/native command、live surface、恢复/发送/审批/模型写入或自动重连；后续 bridge route 见上节，native/UI 仍未接入。本批未重建 App、提交/推送，未操作真实 profile/账号/系统剪贴板。下一步按 controller + session + generation 所有权接入订阅，保留原只读权限，不以这一传输阶段替代完整 remote controller/bot Desktop 等目标。
+
+## 2026-10-08 共享历史的真实原生图片验收（`0ebda4fd9` 后续未提交源码）
+
+- 新增 opt-in `ui-remote-image-history`：从生产设置页进入远程 SSH、会话列表和共享 Transcript，读取真实保存的自有会话。不是独立 `<img>` 或模拟 native adapter。只激活自有临时 App；截图仅取该 WKWebView，不读取其他窗口或系统剪贴板。
+- 原生复验发现并修复四个问题：SSH settings 输入/输出的 `useSSHConfig` 被 Rust 默认改成 `useSshConfig`；Serve 状态 effect 前短暂启用操作；Rust 生成镜像把缺省字段输出为 `null` 而不是 schema/Go 的字段省略，导致图片被 renderer 拒绝；图片预览 Escape 同时关闭底层设置页。分别增加 wire、首帧、成功/失败图片序列化、Escape 冒泡回归。生成器统一省略 `None`，不放宽前端 PNG/scope 验证、不修改 shared Transcript 滚动实现。
+- 独立 release 候选的 managed/explicit 两种档案已通过真实 WKWebView → 包内 bridge → private-key loopback SSH → production ShellBootstrap/CLI Serve → 保存历史 → Markdown PNG。实际历史和可见 ImageViewer 均解码 16×10；预览不重读路径，Escape 保留底层历史，关闭历史清除预览和 body scroll lock，退出设置卸载 lease。截图已检查，未用仅存在的弹层 DOM 冒充可见预览。
+- 外部 fixture 确认真实 SSH exec、Serve workspace/PID/loopback identity、保存 transcript/meta 字节不变、零模型请求；仅在生产 fenced StopCommand 确认自有 Serve 停止后发布集成收据。已通过证据：`/private/tmp/reasonix-native-history-ui.POmxwA/integration-escape.log`、`/private/tmp/reasonix-native-ssh-413136075/integration-receipt.json`；两种档案截图位于 `/private/tmp/reasonix-native-remote-image-positive-cs5g53p6/`。
+- 失败证据保留：非空 host wire/首帧门禁、图片 `null` 拒绝、Escape 导致设置页卸载和随后探针异常，均不能计作成功。失败诊断只保存固定 DOM/可见性/错误布尔值，不记录模型响应或用户配置。最终候选另加 uncaught-error gate，两种档案复验通过：`integration-final.log`、`/private/tmp/reasonix-native-ssh-3428695826/integration-receipt.json`，截图位于 `/private/tmp/reasonix-native-remote-image-positive-uqy1fvkh/`，不覆盖失败日志。
+- 完整 Rust 259 passed / 0 failed / 6 ignored、clippy、Go protocolgen/sshtest race、协议镜像 check、remote-controller、完整 `test:tauri` 和测试类型通过；生产构建包含 type/hooks/static/budget。最终 direct IPC 模式 managed/explicit 回归也通过（`integration-ipc-final.log`，仍明确 `sharedTranscriptUI:false`）。证据目录 `/private/tmp/reasonix-native-history-ui.POmxwA/`；完整前端以 `tauri-final-current.log` 和 `types-final-escape.log` 为准，初稿误用不存在的 `test:types` 后保留失败日志并单独复跑正确命令。候选为 `0ebda4fd9` 上的 dirty build，不能冒充干净提交。
+- 独立最终 App 位于 `/private/tmp/reasonix-native-image-release.eUtbs7/target/aarch64-apple-darwin/release/bundle/macos.noindex/Reasonix Tauri Preview.app`，主程序 SHA-256 `e84df83fea9fb1f883811b10a096c7d792742b15c72077c58a66bf8ccb749f70`，deep/strict ad-hoc 签名校验通过。已交付 `0ebda4fd9` App 未覆盖，主程序仍为 `f8d35efdcfa3fe618e94c9f71cac77a7b826e2056fb838af1c059f36fb226bc6`。本批未提交/推送。该结果不证明物理 Escape/Cmd+V、真实外部 SSH/模型/IM、跨平台、完整 controller/bot Desktop、复杂管理页或 SQLite 恢复验收；系统剪贴板操作仍需用户授权。
+
 ## 2026-10-08 原生远程图片边界探针与独立 release 候选（后续源码）
 
 - 新增 opt-in `ui-remote-image-boundary` 和 `ui-remote-image-ipc` native phases；只调用真实主 WKWebView 注册的 `bridge_remote_controller_session_image`。前者严格检查 unknown-field/空 source/未知 handle 拒绝，后者必须由外部自有 fixture 提供真实 handle/session/source 并实际解码 PNG。控制文件窄字段、有界、拒绝 token/url/workspace/localSessionId，收据只记录固定布尔/范围，不记录请求、像素或 credentials。收据不自动证明 SSH/Serve provenance 或共享 Transcript UI。

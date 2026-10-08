@@ -78,8 +78,15 @@ assert.equal(gates.length, 4, "replaced lease obtains a fresh image scope even f
 await act(async () => { gates[3].resolve({ url: pixels, mime: "image/png" }); await tick(); });
 await act(async () => { image()!.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true })); await tick(); });
 assert.ok(dialog(), "keyboard opens preview");
-await act(async () => document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+let parentEscapes = 0;
+const parentEscape = (event: KeyboardEvent) => { if (event.key === "Escape") ++parentEscapes; };
+window.addEventListener("keydown", parentEscape);
+const escape = new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+await act(async () => document.dispatchEvent(escape));
 assert.equal(dialog(), null);
+assert.equal(escape.defaultPrevented, true);
+assert.equal(parentEscapes, 0, "preview Escape must not also close its underlying settings/workspace");
+window.removeEventListener("keydown", parentEscape);
 await act(async () => { image()!.click(); await tick(); });
 const lastResolver = resolver!;
 await act(async () => root.unmount());

@@ -1,6 +1,5 @@
 //! Host-only typed remote catalogue IPC. No arbitrary URL/token/session path,
 //! no local RuntimeManager operation, and no supervisor lock during HTTP I/O.
-use crate::bridge::request_json_with_timeout;
 use crate::protocol_generated::*;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde::{de::DeserializeOwned, Deserialize};
@@ -15,6 +14,13 @@ const MAX_JS: u64 = 9_007_199_254_740_991;
 #[path = "remote_controller_image.rs"]
 mod image;
 pub use image::SessionImageRequest;
+
+#[path = "remote_controller_events.rs"]
+mod events;
+
+#[path = "remote_controller_subscriptions.rs"]
+mod subscriptions;
+pub(crate) use subscriptions::RemoteSubscriptions;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -89,9 +95,19 @@ impl RemoteControllerClient {
         body: Option<Value>,
         timeout: u64,
     ) -> Result<T, String> {
+        self.request_connected(method, path, body, timeout, |_| Ok(()))
+    }
+    fn request_connected<T: DeserializeOwned, G>(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<Value>,
+        timeout: u64,
+        connected: impl FnOnce(&std::net::TcpStream) -> Result<G, String>,
+    ) -> Result<T, String> {
         // Never pass a decoder or network/free-text error across the renderer
         // boundary: future Serve fields may contain credentials or paths.
-        let response = request_json_with_timeout(
+        let response = crate::bridge::request_json_with_connected_socket(
             self.address,
             &self.token,
             method,
@@ -99,6 +115,7 @@ impl RemoteControllerClient {
             body,
             None,
             Duration::from_secs(timeout),
+            connected,
         )
         .map_err(|_| FAILED.to_string())?;
         if response.get("protocolVersion").and_then(Value::as_u64) != Some(1) {
@@ -132,11 +149,19 @@ impl RemoteControllerClient {
         &self,
         request: HandleRequest,
     ) -> Result<BridgeRemoteControllerSessionsResponse, String> {
-        let response: BridgeRemoteControllerSessionsResponse = self.request(
+        self.sessions_connected(request, |_| Ok(()))
+    }
+    fn sessions_connected<G>(
+        &self,
+        request: HandleRequest,
+        connected: impl FnOnce(&std::net::TcpStream) -> Result<G, String>,
+    ) -> Result<BridgeRemoteControllerSessionsResponse, String> {
+        let response: BridgeRemoteControllerSessionsResponse = self.request_connected(
             "GET",
             &format!("{}/sessions", path(&request.controller_id)?),
             None,
             20,
+            connected,
         )?;
         if !view(&response.controller)
             || response.controller.id != request.controller_id

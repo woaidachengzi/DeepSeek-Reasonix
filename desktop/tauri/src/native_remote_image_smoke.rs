@@ -185,6 +185,259 @@ pub fn run(app: &AppHandle, directory: &Path, positive: bool) -> Result<(), Stri
     work.and(cleanup)
 }
 
+// Snapshot only the owned main WKWebView, never the user's screen/other apps.
+fn screenshot(app: &AppHandle, path: std::path::PathBuf) -> Result<(), String> {
+    use block2::RcBlock;
+    use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
+    use objc2_foundation::{NSDictionary, NSError};
+    use objc2_web_kit::WKWebView;
+    let (send, receive) = std::sync::mpsc::sync_channel(1);
+    crate::native_window_smoke::on_main(app, move |_, window| {
+        window
+            .with_webview(move |platform| {
+                // SAFETY: Tauri schedules this live owned WKWebView on main; the
+                // completion converts AppKit pixels on main, sending only bytes.
+                let webview = unsafe { &*platform.inner().cast::<WKWebView>() };
+                let completed = RcBlock::new(move |image: *mut NSImage, error: *mut NSError| {
+                    let bytes = (|| {
+                        if !error.is_null() {
+                            return None;
+                        }
+                        let image = unsafe { image.as_ref() }?;
+                        let tiff = image.TIFFRepresentation()?;
+                        let bitmap = NSBitmapImageRep::imageRepWithData(&tiff)?;
+                        // SAFETY: PNG uses an empty, correctly typed dictionary.
+                        let png = unsafe {
+                            bitmap.representationUsingType_properties(
+                                NSBitmapImageFileType::PNG,
+                                &NSDictionary::new(),
+                            )
+                        }?;
+                        let bytes = png.to_vec();
+                        (bytes.len() <= 16 << 20 && bytes.starts_with(b"\x89PNG\r\n\x1a\n"))
+                            .then_some(bytes)
+                    })();
+                    let _ = send.try_send(bytes);
+                });
+                unsafe {
+                    webview.takeSnapshotWithConfiguration_completionHandler(None, &completed);
+                }
+            })
+            .map_err(|_| "schedule owned WebView snapshot".to_string())
+    })?;
+    let bytes = receive
+        .recv_timeout(Duration::from_secs(10))
+        .map_err(|_| "owned WebView snapshot timed out")?
+        .ok_or("owned WebView snapshot unavailable")?;
+    std::fs::write(path, bytes).map_err(|_| "save owned WebView snapshot".to_string())
+}
+
+// Exercise mounted production settings/lease/Transcript/Markdown/ImageViewer,
+// not a standalone image node or a renderer import mocked by a test harness.
+pub fn history(app: &AppHandle, directory: &Path) -> Result<(), String> {
+    run(app, directory, false)?;
+    // A failed later UI stage must not leave the earlier boundary receipt.
+    std::fs::remove_file(directory.join("reasonix-native-remote-image-result.json"))
+        .map_err(|_| "retire boundary receipt")?;
+    let input = fixture(directory)?;
+    let attach = input
+        .attach
+        .ok_or("shared history requires owned SSH fixture")?;
+    // Rendered QA needs an actual active/key WKWebView. Background/off-display
+    // package startup checks are not sufficient for observer/paint behavior.
+    // This helper only activates this owned window; it never uses clipboard.
+    crate::native_edit_smoke::focus(app)?;
+    let attach_json = serde_json::to_string(&attach).map_err(|_| "encode owned UI fixture")?;
+    let path = serde_json::to_string(&input.session_path).map_err(|_| "encode owned UI path")?;
+    let work = (|| {
+        act(app, "window.__reasonixRemoteRenderErrorCount=0; window.__reasonixRemoteRenderError=()=>{window.__reasonixRemoteRenderErrorCount++}; window.addEventListener('error',window.__reasonixRemoteRenderError); window.addEventListener('unhandledrejection',window.__reasonixRemoteRenderError)")?;
+        act(
+            app,
+            &format!(
+                r#"window.__reasonixRemoteImageProbe={{done:false,connectOK:false,settingsOK:false,rowFound:false,statusOK:false,workspaceOK:false}};
+          (async()=>{{const result=await window.__TAURI_INTERNALS__.invoke('connect_remote_host',{{request:{{name:'owned-image',trustFingerprint:{attach_json}.fingerprint}}}});
+          window.__reasonixRemoteImageProbe.connectOK=result.status==='connected';
+          const settings=await window.__TAURI_INTERNALS__.invoke('remote_settings');
+          window.__reasonixRemoteImageProbe.settingsOK=true;
+          const host=settings.hosts.find(host=>host.name==='owned-image');
+          window.__reasonixRemoteImageProbe.rowFound=!!host;
+          window.__reasonixRemoteImageProbe.statusOK=host?.connection?.status==='connected';
+          window.__reasonixRemoteImageProbe.workspaceOK=host?.workspace==={attach_json}.workspace;
+          }})().catch(()=>{{}}).finally(()=>{{window.__reasonixRemoteImageProbe.done=true;}})"#
+            ),
+        )?;
+        check(
+            app,
+            "window.__reasonixRemoteImageProbe?.done",
+            "owned UI settings response",
+            20,
+        )?;
+        for (field, stage) in [
+            ("connectOK", "owned SSH connect receipt"),
+            ("settingsOK", "native remote settings IPC"),
+            ("rowFound", "native owned host row"),
+            ("statusOK", "native settings connection state"),
+            ("workspaceOK", "native settings workspace"),
+        ] {
+            check(
+                app,
+                &format!("window.__reasonixRemoteImageProbe?.{field} === true"),
+                stage,
+                1,
+            )?;
+        }
+        act(
+            app,
+            "document.querySelector('.tauri-sidebar__footer .tauri-sidebar__diagnostics').click()",
+        )?;
+        check(
+            app,
+            "document.querySelector('.tauri-settings-nav')",
+            "settings mount",
+            10,
+        )?;
+        act(app, "Array.from(document.querySelectorAll('.tauri-settings-nav-item')).find(node=>['远程 SSH','Remote SSH'].includes(node.textContent.trim())).click()")?;
+        check(
+            app,
+            "document.querySelector('.tauri-settings-content[data-tab=remote]')",
+            "remote settings navigation",
+            10,
+        )?;
+        check(app, "Array.from(document.querySelectorAll('.tauri-remote-host-card strong')).some(node=>node.textContent === 'owned-image')", "owned host settings row", 15)?;
+        check(
+            app,
+            "document.querySelector('.tauri-remote-serve')",
+            "connected owned host UI",
+            15,
+        )?;
+        act(
+            app,
+            "document.querySelector('.tauri-remote-serve summary').click()",
+        )?;
+        check(app, "document.querySelector('.tauri-remote-serve button[aria-expanded]')?.disabled === false", "Serve UI ready", 15)?;
+        act(
+            app,
+            "document.querySelector('.tauri-remote-serve button[aria-expanded]').click()",
+        )?;
+        screenshot(app, directory.join("reasonix-native-remote-catalogue.png"))?;
+        check(
+            app,
+            "document.querySelector('.tauri-remote-serve button[aria-expanded=true]')",
+            "shared sessions toggle",
+            5,
+        )?;
+        check(
+            app,
+            "document.querySelector('.tauri-remote-sessions')",
+            "shared sessions mount",
+            10,
+        )?;
+        check(
+            app,
+            "document.querySelector('.tauri-remote-sessions[aria-busy=false]')",
+            "shared sessions request completion",
+            30,
+        )?;
+        screenshot(app, directory.join("reasonix-native-remote-catalogue.png"))?;
+        check(
+            app,
+            "!document.querySelector('.tauri-remote-sessions [role=alert]')",
+            "shared sessions request success",
+            1,
+        )?;
+        let row = format!("Array.from(document.querySelectorAll('.tauri-remote-sessions-list li')).find(row=>row.querySelector('code')?.title==={path})");
+        check(
+            app,
+            &format!("({row})?.querySelector('button')?.disabled === false"),
+            "owned saved session catalogue",
+            30,
+        )?;
+        act(app, &format!("({row}).querySelector('button').click()"))?;
+        check(app, "document.querySelector('.tauri-remote-history[aria-busy=false] .tauri-remote-history-viewport')", "shared history mount", 15)?;
+        // Reveal the settings section; this does not write the nested Transcript
+        // scroller or bypass its generation-aware viewport writer.
+        act(
+            app,
+            "document.querySelector('.tauri-remote-history').scrollIntoView({block:'start'})",
+        )?;
+        let pixels = format!("(() => {{const image=document.querySelector('.tauri-remote-history-viewport img');return image?.src.startsWith('data:image/png;base64,')&&image.naturalWidth==={}&&image.naturalHeight==={}&&image.getBoundingClientRect().width>0;}})()", input.width, input.height);
+        check(app, &pixels, "shared Markdown PNG pixels", 20)?;
+        screenshot(app, directory.join("reasonix-native-remote-history.png"))?;
+        act(app, "window.__reasonixRemoteImageURL=document.querySelector('.tauri-remote-history-viewport img').src; window.__reasonixRemoteImageOverflow=document.body.style.overflow; document.querySelector('.tauri-remote-history-viewport img').click()")?;
+        check(app, "document.querySelector('.image-viewer-backdrop[role=dialog] img')?.src === window.__reasonixRemoteImageURL", "shared ImageViewer preview", 10)?;
+        let preview_pixels = format!("(()=>{{const node=document.querySelector('.image-viewer-backdrop[role=dialog]');const image=node?.querySelector('img');return node&&getComputedStyle(node).opacity==='1'&&image?.naturalWidth==={}&&image.naturalHeight==={};}})()", input.width, input.height);
+        check(app, &preview_pixels, "visible shared preview pixels", 10)?;
+        screenshot(app, directory.join("reasonix-native-remote-preview.png"))?;
+        act(
+            app,
+            "document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}))",
+        )?;
+        check(app, "!document.querySelector('.image-viewer-backdrop') && document.body.style.overflow === window.__reasonixRemoteImageOverflow", "preview Escape and scroll lock cleanup", 5)?;
+        check(
+            app,
+            "!!document.querySelector('.tauri-remote-history-viewport img')",
+            "Escape preserves underlying history",
+            1,
+        )?;
+        act(
+            app,
+            "document.querySelector('.tauri-remote-history-viewport img').click()",
+        )?;
+        check(app, "document.querySelector('.image-viewer-backdrop[role=dialog] img')?.src === window.__reasonixRemoteImageURL", "reopened shared preview", 5)?;
+        act(
+            app,
+            "document.querySelector('.tauri-remote-history-header button').click()",
+        )?;
+        check(app, "!document.querySelector('.tauri-remote-history') && !document.querySelector('.image-viewer-backdrop') && document.body.style.overflow === window.__reasonixRemoteImageOverflow", "history closes owned preview", 5)?;
+        act(app, "document.querySelector('.tauri-remote-serve button[aria-expanded]').click(); document.querySelector('.tauri-settings-back').click()")?;
+        check(app, "!document.querySelector('.tauri-settings-overlay') && !document.querySelector('.tauri-remote-sessions')", "settings lease unmount", 5)?;
+        check(app, "window.__reasonixRemoteRenderErrorCount === 0", "no uncaught shared UI errors", 1)?;
+        Ok(())
+    })();
+    if work.is_err() {
+        let _ = screenshot(app, directory.join("reasonix-native-remote-failure.png"));
+        let mut states = serde_json::Map::new();
+        for (name, expression) in [
+            ("documentVisible", "document.visibilityState==='visible'"),
+            ("documentFocused", "document.hasFocus()"),
+            ("questionInDOM", "document.querySelector('.tauri-remote-history-viewport')?.textContent.includes('owned screenshot')"),
+            ("answerInDOM", "document.querySelector('.tauri-remote-history-viewport')?.textContent.includes('Owned image response')"),
+            ("hasMarkdown", "!!document.querySelector('.tauri-remote-history-viewport .md')"),
+            ("hasMarkdownFallback", "!!document.querySelector('.tauri-remote-history-viewport [data-transcript-selection-source-fallback]')"),
+            ("hasImage", "!!document.querySelector('.tauri-remote-history-viewport img')"),
+            ("hasImagePlaceholder", "!!document.querySelector('.tauri-remote-history-viewport .md-image-placeholder')"),
+            ("hasImageRefusal", "!!document.querySelector('.tauri-remote-history-viewport .md-image-fallback')"),
+            ("messageVisible", "(()=>{const node=document.querySelector('.tauri-remote-history-viewport .msg');if(!node)return false;const css=getComputedStyle(node);return css.opacity==='1'&&css.visibility==='visible'&&node.getBoundingClientRect().height>0})()"),
+            ("bodyVisible", "(()=>{const node=document.querySelector('.tauri-remote-history-viewport .msg__body');if(!node)return false;const css=getComputedStyle(node);return css.opacity==='1'&&css.visibility==='visible'&&node.getBoundingClientRect().height>0})()"),
+            ("uncaughtError", "window.__reasonixRemoteRenderErrorCount>0"),
+        ] {
+            let state = crate::native_edit_smoke::evaluate(app, format!("({expression}) ? 'edit-ok' : 'edit-pending'"));
+            states.insert(name.into(), state.map(serde_json::Value::Bool).unwrap_or(serde_json::Value::Null));
+        }
+        let _ = std::fs::write(
+            directory.join("reasonix-native-remote-render-states.json"),
+            serde_json::Value::Object(states).to_string(),
+        );
+    }
+    let cleanup = (|| {
+        act(app, "window.__reasonixRemoteImageCleanup=false; (async()=>{await window.__TAURI_INTERNALS__.invoke('disconnect_remote_host',{request:{name:'owned-image'}});window.__reasonixRemoteImageCleanup=true;})().catch(()=>{})")?;
+        check(
+            app,
+            "window.__reasonixRemoteImageCleanup === true",
+            "owned UI SSH disconnect",
+            10,
+        )?;
+        act(app, "window.removeEventListener('error',window.__reasonixRemoteRenderError); window.removeEventListener('unhandledrejection',window.__reasonixRemoteRenderError); delete window.__reasonixRemoteRenderError; delete window.__reasonixRemoteRenderErrorCount; delete window.__reasonixRemoteImageProbe; delete window.__reasonixRemoteImageURL; delete window.__reasonixRemoteImageOverflow; delete window.__reasonixRemoteImageCleanup")
+    })();
+    work.and(cleanup)?;
+    std::fs::write(directory.join("reasonix-native-remote-image-result.json"), serde_json::json!({
+        "ok":true,"registeredWebViewIPC":true,"unknownFieldRejected":true,"invalidSourceRejected":true,
+        "unknownHandleRejected":true,"positivePixels":true,"clipboardTouched":false,"sharedTranscriptUI":true,
+        "previewOpened":true,"escapeClosed":true,"historyClosedPreview":true,"settingsLeaseUnmounted":true,
+        "sshServeProvenance":"external fixture must verify separately"
+    }).to_string()).map_err(|_| "write shared history receipt".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

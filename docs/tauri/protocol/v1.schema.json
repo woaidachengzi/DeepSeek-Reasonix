@@ -18,6 +18,7 @@
     { "$ref": "#/$defs/remoteControllerResponse" },
     { "$ref": "#/$defs/remoteControllerSessionsResponse" },
     { "$ref": "#/$defs/remoteControllerCloseResponse" },
+    { "$ref": "#/$defs/remoteControllerSessionEvent" },
     { "$ref": "#/$defs/remoteBrowseRequest" },
     { "$ref": "#/$defs/remoteBrowseResponse" },
     { "$ref": "#/$defs/setAgentPreferenceRequest" },
@@ -417,6 +418,17 @@
       "properties": {
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" }, "controller": { "$ref": "#/$defs/remoteControllerView" },
         "view": { "$ref": "#/$defs/remoteControllerSessionView" }
+      }, "additionalProperties": false
+    },
+    "remoteControllerSessionEvent": {
+      "title": "BridgeRemoteControllerSessionEvent", "type": "object",
+      "description": "Non-replayable session event envelope. The event object is projected through Go eventwire.Event; native consumers must validate payloads and fence delivery by subscription generation.",
+      "required": ["protocolVersion", "controller", "sessionPath", "event"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "controller": { "$ref": "#/$defs/remoteControllerView" },
+        "sessionPath": { "type": "string", "minLength": 1, "maxLength": 32768 },
+        "event": { "type": "object" }
       }, "additionalProperties": false
     },
     "remoteControllerSessionImageRequest": {

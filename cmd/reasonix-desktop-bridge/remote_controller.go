@@ -58,8 +58,9 @@ type remoteControllerAttempt struct {
 }
 type remoteControllerConnection struct {
 	*remoteControllerAttempt
-	view   remoteControllerView
-	client *controller.Client
+	view       remoteControllerView
+	client     *controller.Client
+	eventSlots chan struct{}
 }
 
 // The factory seam is Go-only for owned SSH fixtures. No renderer-supplied
@@ -162,7 +163,7 @@ func (m *previewRemoteSessions) publishController(ticket *remoteControllerAttemp
 	if err != nil {
 		return nil, false
 	}
-	connection := &remoteControllerConnection{remoteControllerAttempt: ticket, client: candidate, view: remoteControllerView{ID: id, Name: ticket.scope.name, Workspace: workspace, ReadOnly: true}}
+	connection := &remoteControllerConnection{remoteControllerAttempt: ticket, client: candidate, eventSlots: make(chan struct{}, 2), view: remoteControllerView{ID: id, Name: ticket.scope.name, Workspace: workspace, ReadOnly: true}}
 	m.controllers[connection.view.ID] = connection
 	delete(m.controllerAttempts, ticket.scope)
 	return connection, true

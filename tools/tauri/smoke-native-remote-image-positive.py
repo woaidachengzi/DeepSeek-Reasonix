@@ -46,15 +46,17 @@ def manifest(path):
     return value
 
 
-def validate_receipt(receipt):
+def validate_receipt(receipt, shared_history=False):
     fields = ("ok", "registeredWebViewIPC", "unknownFieldRejected", "invalidSourceRejected", "unknownHandleRejected", "positivePixels")
     if not isinstance(receipt, dict) or any(receipt.get(key) is not True for key in fields):
         raise RuntimeError("native positive image receipt incomplete")
-    if receipt.get("clipboardTouched") is not False or receipt.get("sharedTranscriptUI") is not False:
+    if receipt.get("clipboardTouched") is not False or receipt.get("sharedTranscriptUI") is not shared_history:
         raise RuntimeError("native positive image receipt overclaims scope")
+    if shared_history and any(receipt.get(key) is not True for key in ("previewOpened", "escapeClosed", "historyClosedPreview", "settingsLeaseUnmounted")):
+        raise RuntimeError("shared history receipt incomplete")
 
 
-def smoke(app_path, template_path, manifest_path, profile):
+def smoke(app_path, template_path, manifest_path, profile, surface="ipc"):
     value = manifest(manifest_path)
     app = Path(app_path).resolve()
     identifier = plistlib.loads((app / "Contents/Info.plist").read_bytes())["CFBundleIdentifier"]
@@ -84,7 +86,7 @@ def smoke(app_path, template_path, manifest_path, profile):
         config.write_text('default_model="local/alpha"\n[desktop]\nprovider_access=["local"]\n'
                           '[[providers]]\nname="local"\nkind="openai"\nbase_url="http://127.0.0.1:1/v1"\nmodels=["alpha"]\ndefault="alpha"\n'
                           f'[[remote.hosts]]\nname="owned-image"\nhost="127.0.0.1"\nport={value["port"]}\nuser="owned-fixture"\n'
-                          f'identity_file={q(value["identityFile"])}\nserve_install="never"\nuse_ssh_config=false\n')
+                          f'identity_file={q(value["identityFile"])}\nworkspace={q(value["workspace"])}\nserve_install="never"\nuse_ssh_config=false\n')
         control = root / "tmp/reasonix-native-remote-image-control.json"
         control.touch(mode=0o600)
         control.write_text(json.dumps({"attach": {"name": "owned-image", "workspace": value["workspace"], "fingerprint": value["fingerprint"]},
@@ -93,13 +95,18 @@ def smoke(app_path, template_path, manifest_path, profile):
             raise RuntimeError("Preview started before launch; user app untouched")
         try:
             windows.launch(app / "Contents/MacOS/reasonix-tauri", app / "Contents/MacOS/reasonix-desktop-bridge", root,
-                           identifier, managed, "ui-remote-image-ipc", verify_window_state=False, environment=environment,
+                           identifier, managed, "ui-remote-image-history" if surface == "history" else "ui-remote-image-ipc", verify_window_state=False, environment=environment,
                            launch_services=True, acceptance_timeout=90)
             receipt = json.loads((root / "tmp/reasonix-native-remote-image-result.json").read_text())
-            validate_receipt(receipt)
+            validate_receipt(receipt, surface == "history")
+            if surface == "history":
+                for name in ("history", "preview"):
+                    snapshot = root / f"tmp/reasonix-native-remote-{name}.png"
+                    if snapshot.is_symlink() or not snapshot.is_file() or snapshot.stat().st_size > 16 << 20 or snapshot.read_bytes()[:8] != b"\x89PNG\r\n\x1a\n":
+                        raise RuntimeError("owned WebView screenshot missing")
             if json.loads((app_data / "window-state.json").read_text()) != geometry:
                 raise RuntimeError("owned image probe moved outside fixture geometry")
-            print(f"native positive remote image {mode}: real IPC/SSH attach/PNG decode/close/disconnect/shutdown OK", flush=True)
+            print(f"native positive remote image {mode}/{surface}: real IPC/SSH/PNG/owned cleanup OK", flush=True)
         finally:
             print(f"Private positive image evidence: {root}", flush=True)
 
@@ -110,8 +117,9 @@ if __name__ == "__main__":
     parser.add_argument("--window-state-template", required=True)
     parser.add_argument("--fixture-manifest", required=True)
     parser.add_argument("--profile", choices=("managed", "explicit", "both"), default="both")
+    parser.add_argument("--surface", choices=("ipc", "history"), default="ipc")
     args = parser.parse_args()
     try:
-        smoke(args.app, args.window_state_template, args.fixture_manifest, args.profile)
+        smoke(args.app, args.window_state_template, args.fixture_manifest, args.profile, args.surface)
     except (OSError, ValueError, TypeError, RuntimeError, subprocess.SubprocessError) as error:
         raise SystemExit(f"positive remote image probe failed: {error}") from error

@@ -158,6 +158,7 @@ pub struct BridgeEvent {
     pub protocol_version: u64,
     pub sequence: u64,
     pub session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tab_id: Option<String>,
 }
 
@@ -174,10 +175,14 @@ pub struct BridgeHealth {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeHistoryMessage {
     pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub created_at_ms: Option<u64>,
     pub role: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub truncated: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub turn_usage: Option<BridgeHistoryTurnUsage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub work_duration_ms: Option<u64>,
 }
 
@@ -195,7 +200,9 @@ pub struct BridgeHistoryResponse {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeHistoryTurnUsage {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_hit_tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_miss_tokens: Option<u64>,
     pub complete: bool,
     pub estimated: bool,
@@ -209,8 +216,10 @@ pub struct BridgeHistoryTurnUsage {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeLegacyConversationForkResult {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     pub ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
 }
 
@@ -225,6 +234,7 @@ pub struct BridgeLegacyConversationForkResultResponse {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeMCPInteractionAnswerRequest {
     pub action: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<Value>,
     pub id: String,
 }
@@ -232,9 +242,12 @@ pub struct BridgeMCPInteractionAnswerRequest {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeOpenSessionRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub effort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub model_ref: Option<String>,
     pub session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_root: Option<String>,
 }
 
@@ -242,6 +255,7 @@ pub struct BridgeOpenSessionRequest {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeProjectFolder {
     pub root: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
 }
 
@@ -255,6 +269,7 @@ pub struct BridgeProjectFoldersResponse {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeProviderModelProbeRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
     pub model: String,
     pub name: String,
@@ -280,11 +295,13 @@ pub struct BridgeProviderReasoningSummary {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeProviderSummary {
     pub configured: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
     pub kind: String,
     pub model_count: u64,
     pub models: Vec<String>,
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<Vec<BridgeProviderReasoningSummary>>,
     pub requires_key: bool,
     pub search_models: Vec<String>,
@@ -320,6 +337,7 @@ pub struct BridgeRemoteBrowseEntry {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeRemoteBrowseRequest {
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
 }
 
@@ -337,18 +355,26 @@ pub struct BridgeRemoteBrowseResponse {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeRemoteConnectRequest {
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub passphrase: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub trust_fingerprint: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeRemoteConnectResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub fingerprint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub host: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub key_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
     pub protocol_version: u64,
     pub status: String,
@@ -366,13 +392,20 @@ pub struct BridgeRemoteControllerCloseResponse {
 pub struct BridgeRemoteControllerHistoryMessage {
     pub content: String,
     pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub missing: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol_recovery: Option<BridgeRemoteControllerProtocolRecovery>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<String>,
     pub role: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub server_search: Option<Vec<BridgeRemoteControllerHistorySearch>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<BridgeRemoteControllerHistoryToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_name: Option<String>,
 }
 
@@ -380,8 +413,11 @@ pub struct BridgeRemoteControllerHistoryMessage {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeRemoteControllerHistorySearch {
     pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub query: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub results: Option<Vec<BridgeRemoteControllerHistorySearchHit>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "sources_status")]
     pub sources_status: Option<String>,
 }
@@ -389,7 +425,9 @@ pub struct BridgeRemoteControllerHistorySearch {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeRemoteControllerHistorySearchHit {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
 }
 
@@ -404,9 +442,13 @@ pub struct BridgeRemoteControllerHistoryToolCall {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeRemoteControllerImage {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error_code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub filename: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mime: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub size: Option<u64>,
     pub url: String,
 }
@@ -464,6 +506,15 @@ pub struct BridgeRemoteControllerSession {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerSessionEvent {
+    pub controller: BridgeRemoteControllerView,
+    pub event: Value,
+    pub protocol_version: u64,
+    pub session_path: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeRemoteControllerSessionImageRequest {
     pub session_path: String,
     pub source: String,
@@ -496,6 +547,7 @@ pub struct BridgeRemoteControllerSessionView {
     pub ownership: String,
     pub protocol_version: u64,
     pub read_only: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub runtime_state: Option<BridgeRemoteControllerRuntimeState>,
     pub session_path: String,
 }
@@ -589,12 +641,16 @@ pub struct BridgeRenameSessionRequest {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeSession {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub effort: Option<String>,
     pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub model_ref: Option<String>,
     pub path: String,
     pub state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_root: Option<String>,
 }
 
@@ -617,8 +673,11 @@ pub struct BridgeSessionHeadView {
     pub id: String,
     pub kind: String,
     pub message_count: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub preview: Option<String>,
     pub selected: bool,
 }
@@ -643,8 +702,10 @@ pub struct BridgeSessionMetrics {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeSessionResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub metrics: Option<BridgeSessionMetrics>,
     pub protocol_version: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sequence: Option<u64>,
     pub session: BridgeSession,
 }
@@ -652,9 +713,13 @@ pub struct BridgeSessionResponse {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeSetAgentPreferenceRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub compact_ratio_percent: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_language: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_root: Option<String>,
 }
 
@@ -662,7 +727,9 @@ pub struct BridgeSetAgentPreferenceRequest {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeSetDefaultModelRequest {
     pub model: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_root: Option<String>,
 }
 
@@ -671,13 +738,16 @@ pub struct BridgeSetDefaultModelRequest {
 pub struct BridgeSetModelRoleRequest {
     pub model: String,
     pub role: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_root: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeSetSessionModelRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub effort: Option<String>,
     pub model: String,
 }
@@ -699,7 +769,9 @@ pub struct BridgeTerminalActionResponse {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeTerminalCreateRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub shell_id: Option<String>,
 }
 
@@ -758,6 +830,7 @@ pub struct BridgeTerminalSessionResponse {
 pub struct BridgeTerminalSessionView {
     pub created_at: u64,
     pub cwd: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i64>,
     pub id: String,
     pub running: bool,
@@ -784,6 +857,7 @@ pub struct BridgeTerminalWorkspaceResponse {
 pub struct BridgeTerminalWorkspaceView {
     pub available: bool,
     pub read_only: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
     pub sessions: Vec<BridgeTerminalSessionView>,
     pub shells: Vec<BridgeTerminalShellView>,
@@ -792,11 +866,17 @@ pub struct BridgeTerminalWorkspaceView {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeWorkspaceChangeDetail {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub added: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub binary: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub diff: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub removed: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub truncated: Option<bool>,
 }
 
@@ -816,13 +896,19 @@ pub struct BridgeWorkspaceChangeDetailResponse {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeWorkspaceChangeView {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub can_session_revert: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub git_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub latest_prompt: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub latest_time: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub old_path: Option<String>,
     pub path: String,
     pub sources: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub turns: Option<Vec<u64>>,
 }
 
@@ -831,7 +917,9 @@ pub struct BridgeWorkspaceChangeView {
 pub struct BridgeWorkspaceChanges {
     pub files: Vec<BridgeWorkspaceChangeView>,
     pub git_available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub git_branch: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub git_err: Option<String>,
 }
 
@@ -865,10 +953,12 @@ pub struct BridgeWorkspaceCodeRewindPlan {
     pub conflicts: Vec<String>,
     pub coverage: String,
     pub coverage_gaps: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub disabled_reason: Option<String>,
     pub file_count: u64,
     pub files: Vec<String>,
     pub files_truncated: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub plan_id: Option<String>,
     pub requires_coverage_confirmation: bool,
     pub turn: u64,
@@ -881,10 +971,12 @@ pub struct BridgeWorkspaceCombinedRewindPlan {
     pub can_files: bool,
     pub conflicts: Vec<String>,
     pub coverage_gaps: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub disabled_reason: Option<String>,
     pub file_count: u64,
     pub files: Vec<String>,
     pub files_truncated: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub plan_id: Option<String>,
     pub requires_coverage_confirmation: bool,
     pub turn: u64,
@@ -896,11 +988,14 @@ pub struct BridgeWorkspaceCombinedRewindResult {
     pub conflicts: Vec<String>,
     pub conversation_forked: bool,
     pub deleted_count: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     pub files_restored: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub head_id: Option<String>,
     pub ok: bool,
     pub partial: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_id: Option<String>,
     pub undo_available: bool,
     pub written_count: u64,
@@ -910,7 +1005,9 @@ pub struct BridgeWorkspaceCombinedRewindResult {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeWorkspaceConversationRewindPlan {
     pub can_conversation: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub disabled_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub plan_id: Option<String>,
     pub turn: u64,
 }
@@ -919,7 +1016,9 @@ pub struct BridgeWorkspaceConversationRewindPlan {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeWorkspaceConversationRewindResult {
     pub conversation_forked: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub head_id: Option<String>,
     pub ok: bool,
 }
@@ -935,11 +1034,15 @@ pub struct BridgeWorkspaceEntry {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeWorkspaceFilePreview {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub binary: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub body: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     pub path: String,
     pub size: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub truncated: Option<bool>,
 }
 
@@ -967,10 +1070,14 @@ pub struct BridgeWorkspaceFileRevertCommitRequest {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeWorkspaceFileRevertPlan {
     pub can_files: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub conflicts: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub disabled_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub legacy: Option<bool>,
     pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub plan_id: Option<String>,
 }
 
@@ -984,10 +1091,13 @@ pub struct BridgeWorkspaceFileRevertPlanResponse {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeWorkspaceFileRevertResult {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub conflicts: Option<Vec<String>>,
     pub deleted_count: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     pub ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_id: Option<String>,
     pub undo_available: bool,
     pub written_count: u64,
@@ -1022,10 +1132,15 @@ pub struct BridgeWorkspaceImageResponse {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeWorkspaceImageView {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error_code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub filename: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mime: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub open_href: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub size: Option<u64>,
     pub url: String,
 }

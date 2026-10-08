@@ -8,7 +8,9 @@ const RemoteSessions = lazy(() => import("./TauriRemoteSessions").then(module =>
 export function TauriRemoteServe({ name, workspace, credentialMode }: { name: string; workspace: string; credentialMode: string }) {
   const t = useT();
   const [view, setView] = useState<TauriRemoteServeView | null>(null);
-  const [busy, setBusy] = useState<ServeAction | "">("");
+  // The first paint precedes the status effect; don't expose briefly enabled
+  // controls which can lose a click when that effect initializes the view.
+  const [busy, setBusy] = useState<ServeAction | "">(workspace ? "status" : "");
   const [error, setError] = useState("");
   const [sessionsOpen,setSessionsOpen] = useState(false);
   const mounted = useRef(true);

@@ -350,6 +350,13 @@ export interface BridgeRemoteControllerSession {
   turns: number;
 }
 
+export interface BridgeRemoteControllerSessionEvent {
+  controller: BridgeRemoteControllerView;
+  event: Record<string, unknown>;
+  protocolVersion: number;
+  sessionPath: string;
+}
+
 export interface BridgeRemoteControllerSessionImageRequest {
   sessionPath: string;
   source: string;

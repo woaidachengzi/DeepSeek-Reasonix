@@ -108,6 +108,7 @@ func TestNativePackageRemoteImageActualSSHServe(t *testing.T) {
 	sessionPath := filepath.Join(sessions, "owned-image.jsonl")
 	session := agent.NewSession("owned fixture")
 	session.Add(provider.Message{Role: provider.RoleUser, Content: "owned screenshot"})
+	session.Add(provider.Message{Role: provider.RoleAssistant, Content: "Owned image response\n\n![owned screenshot](owned.png)"})
 	if err := session.Save(sessionPath); err != nil {
 		t.Fatal(err)
 	}
@@ -174,6 +175,7 @@ func TestNativePackageRemoteImageActualSSHServe(t *testing.T) {
 		return stdout.String(), stderr.String(), code
 	}
 	var execs atomic.Int32
+	defer func() { t.Logf("Owned SSH exec count: %d", execs.Load()) }()
 	server := sshtest.Start(t, sshtest.Options{AuthorizedKey: signer.PublicKey(), SFTPRoot: home, Exec: func(command string) (string, string, int) {
 		execs.Add(1)
 		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
@@ -242,6 +244,13 @@ func TestNativePackageRemoteImageActualSSHServe(t *testing.T) {
 		t.Fatal("owned geometry template required")
 	}
 	cmd := exec.CommandContext(ctx, python, filepath.Join(repo, "tools/tauri/smoke-native-remote-image-positive.py"), app, "--fixture-manifest", manifest, "--window-state-template", template, "--profile", "both")
+	surface := os.Getenv("REASONIX_NATIVE_REMOTE_IMAGE_SURFACE")
+	if surface != "" {
+		if surface != "history" && surface != "ipc" {
+			t.Fatal("invalid owned native surface")
+		}
+		cmd.Args = append(cmd.Args, "--surface", surface)
+	}
 	cmd.Env = []string{"PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin", "LANG=en_US.UTF-8"}
 	cmd.Dir = repo
 	output, runErr := cmd.CombinedOutput()
@@ -277,5 +286,5 @@ func TestNativePackageRemoteImageActualSSHServe(t *testing.T) {
 	if modelRequests.Load() != 0 {
 		t.Fatal("readonly image flow invoked model")
 	}
-	receipt = map[string]any{"ok": true, "realSSH": true, "privateKeyAuth": true, "actualShellBootstrap": true, "productionServe": true, "realPackagedBridge": true, "realWKWebViewPixels": true, "managedAndExplicit": true, "savedSessionUnchanged": true, "zeroModelRequests": true, "clipboardTouched": false, "sharedTranscriptUI": false}
+	receipt = map[string]any{"ok": true, "realSSH": true, "privateKeyAuth": true, "actualShellBootstrap": true, "productionServe": true, "realPackagedBridge": true, "realWKWebViewPixels": true, "managedAndExplicit": true, "savedSessionUnchanged": true, "zeroModelRequests": true, "clipboardTouched": false, "sharedTranscriptUI": surface == "history"}
 }

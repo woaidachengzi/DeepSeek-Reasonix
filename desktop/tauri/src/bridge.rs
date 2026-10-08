@@ -892,6 +892,7 @@ pub struct RemoteSettingsHost {
     pub workspace: String,
     pub serve_install: String,
     pub credential_mode: String,
+    #[serde(rename = "useSSHConfig")]
     pub use_ssh_config: bool,
     pub password_set: bool,
     pub passphrase_set: bool,
@@ -934,6 +935,7 @@ pub struct RemoteSettingsHostInput {
     pub workspace: String,
     pub serve_install: String,
     pub credential_mode: String,
+    #[serde(rename = "useSSHConfig")]
     pub use_ssh_config: bool,
     #[serde(default)]
     pub password_action: String,
@@ -1680,6 +1682,7 @@ pub struct BridgeSupervisor {
     launcher: BridgeLauncher,
     process: Mutex<Option<BridgeProcess>>,
     events: Mutex<Option<EventForwarder>>,
+    remote_subscriptions: crate::remote_controller::RemoteSubscriptions,
 }
 
 #[derive(Clone)]
@@ -1980,6 +1983,7 @@ impl BridgeSupervisor {
             launcher,
             process: Mutex::new(None),
             events: Mutex::new(None),
+            remote_subscriptions: crate::remote_controller::RemoteSubscriptions::default(),
         }
     }
 
@@ -1990,15 +1994,18 @@ impl BridgeSupervisor {
             .map_err(|_| "bridge state lock is unavailable")?;
         if let Some(existing) = process.as_mut() {
             if existing.child.is_running()? {
+                self.remote_subscriptions.set_owner(Some(&existing.sidecar_instance_id));
                 return Ok(BridgeStatus {
                     running: true,
                     protocol_version: Some(PROTOCOL_VERSION),
                     sidecar_instance_id: Some(existing.sidecar_instance_id.clone()),
                 });
             }
+            self.remote_subscriptions.set_owner(None);
             *process = None;
         }
         let started = self.spawn_bridge()?;
+        self.remote_subscriptions.set_owner(Some(&started.sidecar_instance_id));
         let status = BridgeStatus {
             running: true,
             protocol_version: Some(PROTOCOL_VERSION),
@@ -2017,6 +2024,7 @@ impl BridgeSupervisor {
             };
         };
         let Some(existing) = process.as_mut() else {
+            self.remote_subscriptions.set_owner(None);
             return BridgeStatus {
                 running: false,
                 protocol_version: None,
@@ -2024,6 +2032,7 @@ impl BridgeSupervisor {
             };
         };
         if !existing.child.is_running().unwrap_or(false) {
+            self.remote_subscriptions.set_owner(None);
             *process = None;
             return BridgeStatus {
                 running: false,
@@ -4524,11 +4533,13 @@ impl BridgeSupervisor {
 
     pub fn stop(&self) -> Result<(), String> {
         self.stop_events();
-        let process = self
+        let mut slot = self
             .process
             .lock()
-            .map_err(|_| "bridge state lock is unavailable")?
-            .take();
+            .map_err(|_| "bridge state lock is unavailable")?;
+        self.remote_subscriptions.set_owner(None);
+        let process = slot.take();
+        drop(slot);
         let Some(mut process) = process else {
             return Ok(());
         };
@@ -4707,6 +4718,10 @@ impl BridgeSupervisor {
         Ok(crate::remote_controller::RemoteControllerClient::new(
             address, token,
         ))
+    }
+
+    pub(crate) fn clear_remote_subscriptions(&self) {
+        self.remote_subscriptions.clear();
     }
 
     fn stop_events(&self) {
@@ -4891,6 +4906,24 @@ pub(crate) fn request_json_with_timeout(
     request_id: Option<&str>,
     read_timeout: Duration,
 ) -> Result<Value, String> {
+    request_json_with_connected_socket(
+        address, token, method, path, body, request_id, read_timeout, |_| Ok(()),
+    )
+}
+
+// Keep a caller-owned cancellation lease alive throughout request and response
+// I/O. The callback receives only the already connected host-owned socket.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn request_json_with_connected_socket<G>(
+    address: SocketAddr,
+    token: &str,
+    method: &str,
+    path: &str,
+    body: Option<Value>,
+    request_id: Option<&str>,
+    read_timeout: Duration,
+    connected: impl FnOnce(&TcpStream) -> Result<G, String>,
+) -> Result<Value, String> {
     let bytes = body
         .map(|value| serde_json::to_vec(&value))
         .transpose()
@@ -4898,6 +4931,7 @@ pub(crate) fn request_json_with_timeout(
     let body = bytes.as_deref().unwrap_or_default();
     let mut stream =
         TcpStream::connect_timeout(&address, Duration::from_secs(1)).map_err(display_error)?;
+    let _lease = connected(&stream)?;
     stream
         .set_read_timeout(Some(read_timeout))
         .map_err(display_error)?;
@@ -5543,6 +5577,38 @@ fn open_session_payload(session_id: &str, request: OpenSessionRequest) -> Value 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn remote_host_ssh_config_wire_key_matches_go_and_renderer() {
+        for enabled in [false, true] {
+            let input = serde_json::json!({
+                "name":"owned-image", "host":"127.0.0.1", "port":22,
+                "user":"owned", "identityFile":"/owned/key", "proxyJump":"",
+                "workspace":"/owned/workspace", "serveInstall":"never",
+                "credentialMode":"remote", "useSSHConfig":enabled
+            });
+            let host: super::RemoteSettingsHostInput =
+                serde_json::from_value(input.clone()).expect("renderer useSSHConfig input");
+            assert_eq!(host.use_ssh_config, enabled);
+            let output = serde_json::to_value(host).unwrap();
+            assert_eq!(output["useSSHConfig"], enabled);
+            assert!(output.get("useSshConfig").is_none());
+            let mut wire = input;
+            wire["passwordSet"] = serde_json::json!(false);
+            wire["passphraseSet"] = serde_json::json!(false);
+            wire["connection"] =
+                serde_json::json!({"protocolVersion":1,"status":"connected"});
+            let view: super::RemoteSettingsView = serde_json::from_value(serde_json::json!({
+                "protocolVersion":1, "configPath":"/owned/config.toml",
+                "sshConfigPath":"/owned/ssh-config", "hosts":[wire]
+            }))
+            .expect("Go host settings response");
+            assert_eq!(view.hosts[0].use_ssh_config, enabled);
+            let wire = serde_json::to_value(view).unwrap();
+            assert_eq!(wire["hosts"][0]["useSSHConfig"], enabled);
+            assert!(wire["hosts"][0].get("useSshConfig").is_none());
+            assert_eq!(wire["hosts"][0]["connection"]["status"], "connected");
+        }
+    }
     #[test]
     fn credential_accounts_follow_wails_environment_names() {
         for value in ["DEEPSEEK_API_KEY", "SHARED_WAILS_KEY", "_KEY", "KEY_1"] {

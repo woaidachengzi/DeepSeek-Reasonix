@@ -22,6 +22,7 @@ func TestGoDTOsMatchTheWireSchema(t *testing.T) {
 		{Name: "remoteControllerSessionImageView", Sample: controller.SessionImageView{}},
 		{Name: "remoteControllerImage", Sample: controller.SessionImage{}},
 		{Name: "remoteControllerSessionViewResponse", Sample: remoteControllerSessionViewResponse{}},
+		{Name: "remoteControllerSessionEvent", Sample: remoteControllerSessionEvent{}},
 		{Name: "remoteControllerSessionView", Sample: controller.SessionView{}},
 		{Name: "remoteControllerHistoryMessage", Sample: controller.HistoryMessage{}},
 		{Name: "remoteControllerHistoryToolCall", Sample: controller.HistoryToolCall{}},

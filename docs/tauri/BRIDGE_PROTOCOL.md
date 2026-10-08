@@ -34,6 +34,7 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | Remote controller 只读连接 | `POST /v1/remote/controllers` | 同一已认证 SSH 底层连接与 host/workspace 复用健康 handle；新附着可取消旧的未完成附着；只接受 `name/workspace`，不接受 URL/token |
 | Remote controller 会话清单 | `GET /v1/remote/controllers/{controllerID}/sessions` | 只读；远程路径不转换为本地会话/文件权限；断线/重连/关闭后旧 handle 拒绝读取 |
 | Remote controller 指定会话视图 | `POST /v1/remote/controllers/{controllerID}/session-view` | 只读；body 只有 `sessionPath`，必须匹配远程清单；不恢复/接管/切换会话，不调用本地 RuntimeManager |
+| Remote controller 指定会话事件 | `POST /v1/remote/controllers/{controllerID}/session-events` | 只读、非重放 SSE；body 只有 `sessionPath`，必须匹配清单；独立于本地 EventLedger，不授予发送/恢复权限 |
 | 关闭 Remote controller | `DELETE /v1/remote/controllers/{controllerID}` | 合法 handle 可重复关闭；只清理自有 HTTP owner，不停止远程 Serve、SSH 或其他工作区 |
 | Preview 远程工作区浏览 | `POST /v1/settings/remote/browse` | 只通过已验证连接执行 SFTP 目录读取；每页最多返回 500 项，不执行远程 shell 命令 |
 | Preview 权限规则 | `GET/POST /v1/settings/permissions` | GET 可用 `workspaceRoot` 读取项目有效值；POST 的 `scope=global|project` 选择用户配置或当前项目 `reasonix.toml`，项目首改按字段继承对应全局值；保存使用 request ID 去重 |
@@ -123,6 +124,35 @@ saved/external 从指定文件加载，不借用前台模型，runtime 缺省且
 外部 writer 的最新磁盘历史可读取，但不会自动接管；retiring 的后台 owner 返回冲突。
 bindMu 防止 controller 替换时串会话；history 与随后采样的 runtime 是观察值，不是原子
 事件事务或未来发送授权。事件恢复仍须单独接入。
+
+后续源码增加指定会话 `session-events`，认证仍由 bridge bearer 与 backend cookie
+完成；禁止 query、`Last-Event-ID`、URL/token/workspace/afterSequence 等入站字段。
+每个受监督 controller 最多两个订阅，关闭订阅不关闭共享 controller。后端读取
+`/events?all=1`，但只发布精确匹配指定路径的 typed event，未标记和其他会话帧丢弃。
+输出 `data: {protocolVersion, controller, sessionPath, event}`；controller 保持只读。
+schema 中 event 是 opaque object，Go 用共享 eventwire 类型剔除未知字段，但不表示
+各 native payload 已验证或 UI 可直接消费。native 接入还须验证 payload/capability，
+并用 controller + session + subscription generation 拒绝迟到帧；已写入 TCP 的字节
+不能由后来的 SSH 撤销收回。本流不进入本地 session EventLedger，也不分配重放 ID。
+输入帧（含 metadata/comments）最多 8 MiB，输出 envelope 最多 9 MiB；原 transport
+限制响应头等待 15 秒，输出写入/flush 等待最多 5 秒，空闲每 10 秒发送 comment。
+操作取消、断线/重连/关闭 controller 均关闭 upstream body 并释放槽位；EOF/损坏
+结束连接，必须显式重开并 reconcile 快照/待处理提示，不自动重试、切前台或接管。
+后续已增加内部 Rust host transport：读取 catalogue 后固定 HTTP/1.0 POST，要求
+close-delimited SSE（拒绝 chunked/Content-Length），有界 header/frame 与 socket
+shutdown 取消已打开的 reader。typed envelope 对 controller/host/workspace/path 再次
+核对；event 仍 opaque，不能直接 emit 到 renderer。订阅 registry、
+native payload 检查、generation/window/sidecar fence 尚待接入。后续 pending-open 已
+补 operation socket lease，覆盖 catalogue HTTP 响应头/body 和 SSE 响应头，取消主动
+shutdown 已建立 socket；连接阶段仍有 1 秒预算，完成后已取消则不派发请求。
+registry 须在打开前分配独立 operation，在关闭/替换时取消，不复用旧取消句柄。
+后续内部 registry 核心为每次 reserve 分配 native 随机 subscription ID，按 surface
+单调 generation 拒绝旧请求；sidecar identity 只由 Supervisor 绑定。16 current /
+32 live / 64 generation tombstones 有界，旧 worker Drop 不能删除替换 entry，
+main Destroyed/stop 撤销 owner admission。尚无注册 IPC 或未经校验的 payload emit，
+queued event 仍须 renderer 用完整 identity fence 拒绝，不能以 native gate 代替。
+当前没有注册原生命令、
+live UI 或恢复/发送/审批链路，transport fixture 不是实际 App 命令验收。
 
 历史保留 reasoning、工具参数/结果、搜索结果和恢复提示；DTO 不含 provider replay/raw
 或额外配置/凭据字段。响应最多 30 MiB（为宿主 32 MiB body gate 留 envelope 空间）、

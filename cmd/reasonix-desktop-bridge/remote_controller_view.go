@@ -20,10 +20,14 @@ type remoteControllerSessionViewResponse struct {
 	View            controller.SessionView `json:"view"`
 }
 
+func controllerSessionPath(path string) bool {
+	return path != "" && len(path) <= 32768 && utf8.ValidString(path) && strings.IndexFunc(path, unicode.IsControl) < 0
+}
+
 func (b *bridgeServer) remoteControllerSessionView(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("controllerID")
 	var input remoteControllerSessionViewRequest
-	if !controllerHandle(id) || decodeJSONBody(w, r, 200<<10, &input) != nil || input.SessionPath == "" || len(input.SessionPath) > 32768 || !utf8.ValidString(input.SessionPath) || strings.IndexFunc(input.SessionPath, unicode.IsControl) >= 0 {
+	if !controllerHandle(id) || decodeJSONBody(w, r, 200<<10, &input) != nil || !controllerSessionPath(input.SessionPath) {
 		writeProtocolError(w, 400, "invalid_request", "select one listed remote session")
 		return
 	}

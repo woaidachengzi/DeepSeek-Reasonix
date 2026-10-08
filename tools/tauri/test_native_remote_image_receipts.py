@@ -53,6 +53,19 @@ class ReceiptTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 positive.validate_receipt(value)
 
+    def test_shared_history_requires_all_interactions_and_rejects_ipc_receipt(self):
+        receipt = {**self.receipt(), "positivePixels": True, "sharedTranscriptUI": True,
+                   "previewOpened": True, "escapeClosed": True,
+                   "historyClosedPreview": True, "settingsLeaseUnmounted": True}
+        positive.validate_receipt(receipt, True)
+        with self.assertRaises(RuntimeError):
+            positive.validate_receipt(receipt)
+        for key in ("sharedTranscriptUI", "previewOpened", "escapeClosed", "historyClosedPreview", "settingsLeaseUnmounted"):
+            for value in (None, False, 0, 1, "true"):
+                with self.subTest(key=key, value=value):
+                    with self.assertRaises(RuntimeError):
+                        positive.validate_receipt({**receipt, key: value}, True)
+
 
 if __name__ == "__main__":
     unittest.main()

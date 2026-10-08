@@ -283,6 +283,11 @@ func renderRust(types []*named) []byte {
 		b.WriteString("#[serde(rename_all = \"camelCase\")]\n")
 		fmt.Fprintf(&b, "pub struct %s {\n", t.name)
 		for _, f := range t.fields {
+			// Optional schema fields are absent, not null. Preserve Go's
+			// omitempty contract when the typed native mirror returns to JS.
+			if f.optional {
+				b.WriteString("    #[serde(skip_serializing_if = \"Option::is_none\")]\n")
+			}
 			// Preserve intentional snake_case wire keys rather than letting
 			// the struct's camelCase default silently rename or drop them.
 			if strings.Contains(f.jsonName, "_") {
