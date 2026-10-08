@@ -19,7 +19,7 @@ func TestRemoteControllerSessionViewBridgeScopeAndPrivacy(t *testing.T) {
 		if r.URL.Query().Get("session") != "/remote/session.jsonl" {
 			t.Error("wrong selected session")
 		}
-		_, _ = io.WriteString(w, `{"protocolVersion":1,"sessionPath":"/remote/session.jsonl","readOnly":true,"ownership":"saved","current":false,"modelRef":"","label":"","history":[{"role":"user","content":"remote question"},{"role":"assistant","content":"remote answer","reasoning":"remote thought","config":{"apiKey":"private-extra"}}],"token":"private-extra"}`)
+		_, _ = io.WriteString(w, `{"protocolVersion":1,"sessionPath":"/remote/session.jsonl","readOnly":true,"ownership":"saved","current":false,"modelRef":"","label":"","history":[{"id":"owned-user","role":"user","content":"remote question"},{"id":"owned-answer","role":"assistant","content":"remote answer","reasoning":"remote thought","config":{"apiKey":"private-extra"}}],"token":"private-extra"}`)
 	})
 	view := attachController(t, b, "/project")
 	target := "/v1/remote/controllers/" + view.ID + "/session-view"
@@ -41,6 +41,9 @@ func TestRemoteControllerSessionViewBridgeScopeAndPrivacy(t *testing.T) {
 	}
 	if strings.Contains(got.Body.String(), "private-extra") {
 		t.Fatal("unknown remote field forwarded")
+	}
+	if response.View.History[0].ID != "owned-user" || response.View.History[1].ID != "owned-answer" {
+		t.Fatal("bridge replaced backend display identity")
 	}
 	if _, present := b.runtimes.Snapshot(); present {
 		t.Fatal("remote history created local runtime")
@@ -65,7 +68,7 @@ func TestRemoteControllerSessionViewBridgeRevokesPendingRead(t *testing.T) {
 		case <-r.Context().Done():
 		case <-abort:
 		}
-		_ = json.NewEncoder(w).Encode(controller.SessionView{ProtocolVersion: 1, SessionPath: "/remote/session.jsonl", ReadOnly: true, Ownership: "saved", History: []controller.HistoryMessage{{Role: "assistant", Content: "late-old-generation"}}})
+		_ = json.NewEncoder(w).Encode(controller.SessionView{ProtocolVersion: 1, SessionPath: "/remote/session.jsonl", ReadOnly: true, Ownership: "saved", History: []controller.HistoryMessage{{ID: "owned-late", Role: "assistant", Content: "late-old-generation"}}})
 	})
 	defer close(abort)
 	view := attachController(t, b, "/project")

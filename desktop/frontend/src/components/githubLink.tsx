@@ -7,7 +7,7 @@ import { t } from "../lib/i18n";
 import { localPathFromHref } from "../lib/localFileUrl";
 import type { ExternalOpenerView, ExternalOpenersView } from "../lib/types";
 import { useToast } from "../lib/toast";
-import { SourceReferenceContext } from "./SourceReferenceContext";
+import { LocalPathActionContext, SourceReferenceContext } from "./SourceReferenceContext";
 import { parseSourceReference } from "../lib/sourceReference";
 import { ContextMenu, contextMenuPointFromEvent, type ContextMenuItem, type ContextMenuPoint } from "./ContextMenu";
 
@@ -344,6 +344,7 @@ export function RichMarkdownLink({
   const { showToast } = useToast();
   const github = parseGitHubLink(href);
   const openSource = useContext(SourceReferenceContext);
+  const scopedPathAction = useContext(LocalPathActionContext);
   const source = parseSourceReference(href);
   const [menuPoint, setMenuPoint] = useState<ContextMenuPoint | null>(null);
   const closeMenu = useCallback(() => setMenuPoint(null), []);
@@ -373,6 +374,16 @@ export function RichMarkdownLink({
   };
 
   const nativeLocal = localPathFromHref(href);
+  if (scopedPathAction && (source || nativeLocal !== null)) {
+    const path = source?.path ?? nativeLocal!;
+    const activate = (event: ReactMouseEvent<HTMLAnchorElement>) => { event.preventDefault(); scopedPathAction(path); };
+    return <a className="md-rich-link md-rich-link--source" href={href} title={path}
+      onClick={activate} onAuxClick={event => { if (event.button === 1) activate(event); }}
+      onMouseDown={event => { if (event.button === 1) event.preventDefault(); }}
+      onContextMenu={event => { event.preventDefault(); event.stopPropagation(); }}>
+      <FileCode aria-hidden="true" size={13} strokeWidth={2} /><span className="md-rich-link__label">{children}</span>
+    </a>;
+  }
   // Existing file:// links retain their native opener and rich context menu.
   // A line suffix is an explicit request for the workspace source preview.
   if (openSource && source && (source.line !== undefined || nativeLocal === null)) {

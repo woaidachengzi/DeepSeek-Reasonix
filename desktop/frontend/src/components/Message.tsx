@@ -6,7 +6,6 @@ import { CopyButton } from "./CopyButton";
 import { ComposerContextCard } from "./ComposerContextCard";
 import { formatAttachmentRefForDisplay, formatAttachmentRefForSubmit, parseAttachmentRefsForDisplay, sortDisplayAttachments } from "../lib/attachmentDisplay";
 import type { DisplayAttachment } from "../lib/attachmentDisplay";
-import { app } from "../lib/bridge";
 import { replaySubmitTextPreservingSelectedContext } from "../lib/editReplay";
 import { useT } from "../lib/i18n";
 import { ImageViewer } from "./ImageViewer";
@@ -20,6 +19,8 @@ import type { CheckpointMeta } from "../lib/types";
 import { InvocationBadge } from "./InvocationBadge";
 import { CodeViewer } from "./CodeViewer";
 import { formatSelectionLabels, languageFor, parseSelectedTextContext, stripSelectionLabels } from "../lib/selectedTextContext";
+import { MarkdownImageResolverContext } from "./MarkdownImageContext";
+import { useAttachmentImageScope } from "../lib/useAttachmentImageScope";
 
 const AssistantReasoningPanel = lazy(() => import("./AssistantReasoningPanel").then((module) => ({ default: module.AssistantReasoningPanel })));
 const MemoryCitations = lazy(() => import("./MemoryCitations").then((module) => ({ default: module.MemoryCitations })));
@@ -179,6 +180,7 @@ export function UserMessage({
 }) {
   const t = useT();
   const invocationMetadata = useContext(InvocationMetadataContext);
+  const imageResolver = useContext(MarkdownImageResolverContext);
   const imSource = parseImSourceMessage(text);
   const actionText = stripMemoryCompilerExecution(imSource?.text ?? text);
   const hasMemoryCompiler = Boolean(submitText?.includes("<memory-compiler-execution>"));
@@ -198,20 +200,14 @@ export function UserMessage({
   const [draftAttachments, setDraftAttachments] = useState<DisplayAttachment[]>(attachments);
   const [editSubmitting, setEditSubmitting] = useState(false);
   const editRef = useRef<HTMLTextAreaElement>(null);
-  const [imagePreviews, setImagePreviews] = useState<Record<string, string>>({});
-  const [imageViewer, setImageViewer] = useState<{ open: boolean; url: string; name: string }>({ open: false, url: "", name: "" });
+  const previewPaths = orderedAttachments.concat(sortDisplayAttachments(draftAttachments)).filter(attachment => attachment.kind === "image" && attachment.source === "attachment").map(attachment => attachment.path).join("\n");
+  const {owner:imageOwner,load:loadImage,urls:imagePreviews} = useAttachmentImageScope(imageResolver,id ?? text,previewPaths);
+  const [imageViewerState, setImageViewer] = useState<{ owner?: typeof imageOwner; open: boolean; url: string; name: string }>({ open: false, url: "", name: "" });
+  const imageViewer = imageViewerState.owner === imageOwner ? imageViewerState : {open:false,url:"",name:""};
   const openImageViewer = useCallback(async (path: string, name: string) => {
-    let url = imagePreviews[path];
-    if (!url) {
-      try {
-        url = await app.AttachmentDataURL(path);
-        setImagePreviews((prev) => (prev[path] ? prev : { ...prev, [path]: url }));
-      } catch {
-        return;
-      }
-    }
-    setImageViewer({ open: true, url, name });
-  }, [imagePreviews]);
+    const url = await loadImage(path);
+    if (url) setImageViewer({ owner:imageOwner,open: true, url, name });
+  }, [imageOwner,loadImage]);
 
   const closeImageViewer = useCallback(() => {
     setImageViewer((prev) => (prev.open ? { ...prev, open: false } : prev));
@@ -270,11 +266,6 @@ export function UserMessage({
     }));
   };
   const orderedDraftAttachments = sortDisplayAttachments(draftAttachments);
-  const imagePreviewKey = orderedAttachments
-    .concat(orderedDraftAttachments)
-    .filter((attachment) => attachment.kind === "image" && attachment.source === "attachment")
-    .map((attachment) => attachment.path)
-    .join("\n");
 
   useEffect(() => {
     if (editing) return;
@@ -355,23 +346,6 @@ export function UserMessage({
     }
   };
 
-  useEffect(() => {
-    const paths = imagePreviewKey ? imagePreviewKey.split("\n") : [];
-    if (paths.length === 0) return;
-    let cancelled = false;
-    for (const path of paths) {
-      if (imagePreviews[path]) continue;
-      app.AttachmentDataURL(path)
-        .then((url) => {
-          if (cancelled) return;
-          setImagePreviews((prev) => (prev[path] ? prev : { ...prev, [path]: url }));
-        })
-        .catch(() => {});
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [imagePreviewKey]);
   return (
     <div
       className={`msg msg--user${imSource ? " msg--im-source" : ""}${failed ? " msg--user-failed" : ""}`}

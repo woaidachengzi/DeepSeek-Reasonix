@@ -48,7 +48,7 @@ import { useCreationTranscriptScrollbar } from "../lib/useCreationTranscriptScro
 import { hasTranscriptScrollableRange } from "../lib/transcriptScrollGeometry";
 import { attachNestedScrollHandoff } from "../lib/nestedScrollHandoff";
 import { useTranscriptEntranceAnimation } from "../lib/useEntranceAnimation";
-import type { QuestionAnchor } from "../lib/transcriptGrouping";
+import { canFollowQuestionAppend, type QuestionAnchor } from "../lib/transcriptGrouping";
 import { transcriptSelectionStore } from "../lib/transcriptSelectionStore";
 import { recordFrontendDiagnostic } from "../lib/frontendDiagnosticBridge";
 import { InvocationMetadataContext } from "./Message";
@@ -151,10 +151,15 @@ export function Transcript(props: TranscriptProps) {
     sessionKey: surfaceKey,
     geometryRevision: `${contentRevision}:${footerHeight}:${experience}:${historyMutation?.seq ?? 0}`,
   });
+  const followQuestionAppend = useTranscriptCommand((explicitSubmission: boolean) => {
+    // Passive snapshot growth may continue existing tail ownership, but cannot
+    // grant it or end a native lease. Only this surface's submission may do so.
+    if (canFollowQuestionAppend(explicitSubmission,transcriptKernel.intent,transcriptKernel.userGestureActive)) scrollToBottom();
+  });
   const [
     questions, loadedByTurn, totalQuestions, activeQuestion, setActiveQuestion,
     scheduleActiveQuestionSync, turnForUser, lastTurn,
-  ] = useTranscriptQuestions(items, historyStartTurn, historyTotalTurns, scrollElement, scrollToBottom);
+  ] = useTranscriptQuestions(items, historyStartTurn, historyTotalTurns, scrollElement, followQuestionAppend);
 
   const segmentStates = useMemo(() => foldSegmentStates(turnModels, experience === "deep"), [experience, turnModels]);
   const [folds, setFolds] = useState<FoldMap>(EMPTY_FOLDS);

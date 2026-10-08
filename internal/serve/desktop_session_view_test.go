@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -59,6 +60,15 @@ func TestDesktopSessionViewActualServeSavedAndOwnedHistory(t *testing.T) {
 	if err != nil || !active.Current || active.Ownership != "serve" || active.RuntimeState == nil || active.RuntimeState.RuntimeEpoch == "" {
 		t.Fatalf("foreground view %+v %v", active, err)
 	}
+	ownedMessages := f.server.ctl().History()
+	if len(ownedMessages) != len(active.History) {
+		t.Fatal("owned history fixture unexpectedly contains filtered entries")
+	}
+	for i, row := range active.History {
+		if row.ID != ownedMessages[i].ID {
+			t.Fatal("owned snapshot replaced Controller identity")
+		}
+	}
 	other := filepath.Join(f.dir, "中文 +&.jsonl")
 	session := agent.NewSession("sys")
 	session.Add(provider.Message{Role: provider.RoleUser, Content: "saved question\nline2"})
@@ -85,6 +95,23 @@ func TestDesktopSessionViewActualServeSavedAndOwnedHistory(t *testing.T) {
 	if f.server.ctl().SessionPath() != f.active || f.server.sessionMirrored(other) {
 		t.Fatal("read switched or adopted remote session")
 	}
+	again, err := c.SessionView(context.Background(), agent.CanonicalSessionPath(other))
+	if err != nil || !reflect.DeepEqual(again.History, view.History) {
+		t.Fatal("repeat snapshot changed backend entry identities")
+	}
+	for i, row := range view.History {
+		if row.ID != session.Messages[i].ID {
+			t.Fatal("display identity was not the persisted backend message ID")
+		}
+	}
+	session.Add(provider.Message{Role: provider.RoleUser, Content: "new tail"})
+	if err := session.Save(other); err != nil {
+		t.Fatal(err)
+	}
+	appended, err := c.SessionView(context.Background(), agent.CanonicalSessionPath(other))
+	if err != nil || len(appended.History) != len(view.History)+1 || !reflect.DeepEqual(appended.History[:len(view.History)], view.History) {
+		t.Fatal("append renamed or changed existing display entries")
+	}
 	for _, raw := range []string{"", "/no-such-session.jsonl", filepath.Join(f.dir, "x.events"), agent.CanonicalSessionPath(other) + "&other=private"} {
 		status, _ := f.get(t, "/desktop/session-view?session="+url.QueryEscape(raw))
 		if status == 200 {
@@ -104,6 +131,71 @@ func TestDesktopSessionViewActualServeSavedAndOwnedHistory(t *testing.T) {
 	}
 	if _, err := c.SessionView(context.Background(), outside); !errors.Is(err, controller.ErrSessionNotListed) {
 		t.Fatal("unlisted path reached remote read")
+	}
+}
+
+func TestDesktopSessionViewLegacyIDsAreReadOnlyAndDeterministic(t *testing.T) {
+	f, c := desktopViewFixture(t)
+	path := filepath.Join(f.dir, "legacy-ids.jsonl")
+	contents := []byte("{\"role\":\"user\",\"content\":\"old question\"}\n{\"role\":\"assistant\",\"content\":\"old answer\"}\n")
+	if err := os.WriteFile(path, contents, 0600); err != nil {
+		t.Fatal(err)
+	}
+	canonical := agent.CanonicalSessionPath(path)
+	first, err := c.SessionView(context.Background(), canonical)
+	if err != nil || len(first.History) != 2 || first.History[0].ID == "" || first.History[0].ID == first.History[1].ID {
+		t.Fatalf("legacy projection %+v %v", first, err)
+	}
+	second, err := c.SessionView(context.Background(), canonical)
+	if err != nil || !reflect.DeepEqual(first.History, second.History) {
+		t.Fatal("legacy identities changed between reads")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != string(contents) {
+		t.Fatal("spectator read rewrote legacy file")
+	}
+}
+
+func TestDesktopSessionViewRejectsDuplicateStoredIdentity(t *testing.T) {
+	f, _ := desktopViewFixture(t)
+	path := filepath.Join(f.dir, "duplicate-ids.jsonl")
+	// Use a legacy transcript, not Session.Save: the DAG loader correctly
+	// deduplicates duplicate event records before this display projection.
+	contents := []byte("{\"id\":\"duplicate-entry\",\"role\":\"user\",\"content\":\"question\"}\n{\"id\":\"duplicate-entry\",\"role\":\"assistant\",\"content\":\"answer\"}\n")
+	if err := os.WriteFile(path, contents, 0600); err != nil {
+		t.Fatal(err)
+	}
+	status, body := f.get(t, "/desktop/session-view?session="+url.QueryEscape(agent.CanonicalSessionPath(path)))
+	if status != 422 || strings.Contains(body, "duplicate-entry") || strings.Contains(body, "question") {
+		t.Fatalf("invalid identities published or diagnostic leaked: %d %s", status, body)
+	}
+}
+
+func TestDesktopHistoryProjectionKeepsBackendIdentityThroughFiltering(t *testing.T) {
+	marker := provider.Message{ID: "recovery-entry", Role: provider.RoleTool, LocalOnly: true, FinalReadinessRecovery: &provider.FinalReadinessRecovery{Pending: true, Missing: []string{"verification"}}}
+	user := provider.Message{ID: "user-entry", Role: provider.RoleUser, Content: "question"}
+	answer := provider.Message{ID: "answer-entry", Role: provider.RoleAssistant, Content: "answer"}
+	rows, err := desktopHistoryMessages([]provider.Message{user, marker, answer})
+	if err != nil || len(rows) != 3 || rows[1].ID != marker.ID || rows[1].Role != "final_readiness" {
+		t.Fatalf("transformed identity %+v %v", rows, err)
+	}
+	marker.FinalReadinessRecovery.Pending = false
+	filtered, err := desktopHistoryMessages([]provider.Message{user, marker, answer})
+	if err != nil || len(filtered) != 2 || filtered[0].ID != rows[0].ID || filtered[1].ID != rows[2].ID {
+		t.Fatal("filtering consumed recovery renamed visible entries")
+	}
+	reordered, err := desktopHistoryMessages([]provider.Message{answer, user})
+	if err != nil || reordered[0].ID != answer.ID || reordered[1].ID != user.ID {
+		t.Fatal("projection used positions instead of backend identities")
+	}
+	for _, invalid := range []provider.Message{{Role: provider.RoleUser}, {ID: "bad\nidentity", Role: provider.RoleUser}, {ID: strings.Repeat("x", 4097), Role: provider.RoleUser}, user} {
+		if _, err := desktopHistoryMessages([]provider.Message{user, invalid}); err == nil {
+			t.Fatal("invalid/duplicate display identity accepted")
+		}
+	}
+	legacy, _ := json.Marshal(historyMessages([]provider.Message{user}))
+	if strings.Contains(string(legacy), `"id"`) {
+		t.Fatal("legacy Serve history wire changed")
 	}
 }
 

@@ -6,6 +6,8 @@ const previousWindow = globalThis.window;
 globalThis.window = dom.window as unknown as Window & typeof globalThis;
 const id = "AAAAAAAAAAAAAAAAAAAAAA";
 const view = { id, name: "owned", workspace: "/resolved-owned", readOnly: true };
+const sessionPath = "/remote/中文 &+?#.jsonl";
+const snapshot = {protocolVersion:1,sessionPath,readOnly:true,ownership:"saved",current:false,modelRef:"",label:"",history:[{id:"backend-user",role:"user",content:"question"}]};
 const calls: { command: string; args: Record<string, unknown> }[] = [];
 let fallback = 0;
 let refuse = false;
@@ -17,6 +19,7 @@ Object.assign(window, {
       if (refuse) throw new Error("native refusal");
       if (command === "bridge_remote_controller_attach") return { protocolVersion: 1, controller: view };
       if (command === "bridge_remote_controller_sessions") return { protocolVersion: 1, controller: view, sessions: [] };
+      if (command === "bridge_remote_controller_session_view") return {protocolVersion:1,controller:view,view:snapshot};
       if (command === "bridge_remote_controller_close") return { protocolVersion: 1, closed: true };
       throw new Error("unexpected native command");
     },
@@ -28,11 +31,13 @@ try {
   const lease = nativeRemoteControllers.acquire("owned", "requested-alias");
   assert.deepEqual(await lease.ready, view);
   assert.deepEqual(await lease.sessions(), []);
+  assert.deepEqual(await lease.sessionView(sessionPath),snapshot);
   lease.release();
   await tick();
   assert.deepEqual(calls, [
     { command: "bridge_remote_controller_attach", args: { request: { name: "owned", workspace: "requested-alias" } } },
     { command: "bridge_remote_controller_sessions", args: { request: { controllerId: id } } },
+    { command: "bridge_remote_controller_session_view", args: {request:{controllerId:id,sessionPath}} },
     { command: "bridge_remote_controller_close", args: { request: { controllerId: id } } },
   ], "renderer sends only narrow typed requests, not a URL, token or local session identity");
   refuse = true;

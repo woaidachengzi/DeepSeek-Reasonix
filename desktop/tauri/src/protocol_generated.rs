@@ -365,6 +365,7 @@ pub struct BridgeRemoteControllerCloseResponse {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeRemoteControllerHistoryMessage {
     pub content: String,
+    pub id: String,
     pub missing: Option<Vec<String>>,
     pub protocol_recovery: Option<BridgeRemoteControllerProtocolRecovery>,
     pub reasoning: Option<String>,

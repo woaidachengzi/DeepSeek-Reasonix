@@ -372,8 +372,9 @@
       "properties": { "id": { "type": "string", "minLength": 1, "maxLength": 4096 } }, "additionalProperties": false
     },
     "remoteControllerHistoryMessage": {
-      "title": "BridgeRemoteControllerHistoryMessage", "type": "object", "required": ["role", "content"],
+      "title": "BridgeRemoteControllerHistoryMessage", "type": "object", "required": ["id", "role", "content"],
       "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 4096 },
         "role": { "type": "string", "enum": ["system", "user", "assistant", "tool", "notice", "protocol_recovery", "final_readiness"] },
         "content": { "type": "string" }, "reasoning": { "type": "string" },
         "missing": { "type": "array", "maxItems": 10000, "items": { "type": "string" } },

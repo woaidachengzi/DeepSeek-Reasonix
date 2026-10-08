@@ -272,6 +272,7 @@ export interface BridgeRemoteControllerCloseResponse {
 
 export interface BridgeRemoteControllerHistoryMessage {
   content: string;
+  id: string;
   missing?: string[];
   protocolRecovery?: BridgeRemoteControllerProtocolRecovery;
   reasoning?: string;

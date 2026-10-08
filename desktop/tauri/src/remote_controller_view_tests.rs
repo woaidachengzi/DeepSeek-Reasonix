@@ -1,7 +1,7 @@
 use super::*;
 
 fn snapshot() -> Value {
-    json!({"protocolVersion":1,"sessionPath":"/remote/中文 &+.jsonl","readOnly":true,"ownership":"saved","current":false,"modelRef":"","label":"","history":[{"role":"user","content":"你好"},{"role":"assistant","content":"answer","reasoning":"thought","toolCalls":[{"id":"t","name":"read","arguments":"{}"}],"serverSearch":[{"id":"s","results":[{"title":"title","url":"https://example.invalid"}],"raw":{"secret":"private-replay"}}],"credentials":{"token":"private-config"}}],"token":"private-extra"})
+    json!({"protocolVersion":1,"sessionPath":"/remote/中文 &+.jsonl","readOnly":true,"ownership":"saved","current":false,"modelRef":"","label":"","history":[{"id":"owned-user","role":"user","content":"你好"},{"id":"owned-answer","role":"assistant","content":"answer","reasoning":"thought","toolCalls":[{"id":"t","name":"read","arguments":"{}"}],"serverSearch":[{"id":"s","results":[{"title":"title","url":"https://example.invalid"}],"raw":{"secret":"private-replay"}}],"credentials":{"token":"private-config"}}],"token":"private-extra"})
 }
 fn response() -> Value {
     let mut value = json!({"protocolVersion":1,"controller":tests::controller(),"view":snapshot()});
@@ -40,6 +40,8 @@ fn remote_session_view_ipc_fixed_route_typed_privacy_and_unknown_request_rejecti
     assert_eq!(client.session_view(req).unwrap_err(), INVALID);
     let (client, task) = tests::fixture(response());
     let view = client.session_view(request()).unwrap();
+    assert_eq!(view.view.history[0].id, "owned-user");
+    assert_eq!(view.view.history[1].id, "owned-answer");
     assert_eq!(view.view.history[1].reasoning.as_deref(), Some("thought"));
     assert_eq!(
         view.view.history[1].server_search.as_ref().unwrap()[0]
@@ -69,6 +71,25 @@ fn remote_session_view_ipc_fixed_route_typed_privacy_and_unknown_request_rejecti
 #[test]
 fn remote_session_view_ipc_rejects_wrong_session_runtime_and_budget() {
     let mut candidates = Vec::new();
+    for value in [
+        json!(""),
+        json!("bad\nidentity"),
+        json!("x".repeat(4097)),
+        Value::Null,
+    ] {
+        let mut candidate = response();
+        candidate["view"]["history"][0]["id"] = value;
+        candidates.push(candidate);
+    }
+    let mut candidate = response();
+    candidate["view"]["history"][1]["id"] = json!("owned-user");
+    candidates.push(candidate);
+    let mut candidate = response();
+    candidate["view"]["history"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("id");
+    candidates.push(candidate);
     for (field, value) in [
         ("sessionPath", json!("/other")),
         ("protocolVersion", json!(2)),

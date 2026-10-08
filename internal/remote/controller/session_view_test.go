@@ -14,7 +14,7 @@ import (
 )
 
 const ownedViewPath = "/remote/中文 &+?#.jsonl"
-const validSavedView = `{"protocolVersion":1,"sessionPath":"/remote/中文 &+?#.jsonl","readOnly":true,"ownership":"saved","current":false,"modelRef":"","label":"","history":[{"role":"user","content":"你好"},{"role":"assistant","content":"answer","reasoning":"thought","toolCalls":[{"id":"t","name":"read","arguments":"{}"}],"serverSearch":[{"id":"s","query":"q","results":[{"title":"title","url":"https://example.invalid"}],"raw":{"secret":"private-replay"}}],"apiKey":"private-config"},{"role":"tool","content":"ok","toolCallId":"t","toolName":"read"}]}`
+const validSavedView = `{"protocolVersion":1,"sessionPath":"/remote/中文 &+?#.jsonl","readOnly":true,"ownership":"saved","current":false,"modelRef":"","label":"","history":[{"id":"user-entry","role":"user","content":"你好"},{"id":"answer-entry","role":"assistant","content":"answer","reasoning":"thought","toolCalls":[{"id":"t","name":"read","arguments":"{}"}],"serverSearch":[{"id":"s","query":"q","results":[{"title":"title","url":"https://example.invalid"}],"raw":{"secret":"private-replay"}}],"apiKey":"private-config"},{"id":"result-entry","role":"tool","content":"ok","toolCallId":"t","toolName":"read"}]}`
 
 func sessionViewFixture(t *testing.T, listed bool, handler http.HandlerFunc) (*Client, *atomic.Int32) {
 	t.Helper()
@@ -80,6 +80,11 @@ func TestClientSessionViewScopedTypedHistory(t *testing.T) {
 }
 func TestClientSessionViewRejectsWrongScopeAndBudgets(t *testing.T) {
 	for _, body := range []string{
+		strings.Replace(validSavedView, `"id":"user-entry",`, "", 1),
+		strings.Replace(validSavedView, `"user-entry"`, `""`, 1),
+		strings.Replace(validSavedView, `"answer-entry"`, `"user-entry"`, 1),
+		strings.Replace(validSavedView, `"user-entry"`, `"bad\nidentity"`, 1),
+		strings.Replace(validSavedView, `"user-entry"`, `"`+strings.Repeat("x", 4097)+`"`, 1),
 		strings.Replace(validSavedView, ownedViewPath, "/other", 1),
 		strings.Replace(validSavedView, `"readOnly":true`, `"readOnly":false`, 1),
 		strings.Replace(validSavedView, `"protocolVersion":1`, `"protocolVersion":2`, 1),

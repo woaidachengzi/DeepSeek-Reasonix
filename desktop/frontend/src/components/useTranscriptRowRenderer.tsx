@@ -119,7 +119,7 @@ export function useTranscriptRowRenderer({
           checkpoint={checkpointsByTurn.get(row.turn)} actionPending={actionPending}
           rewindDisabled={rewindDisabled} hoverMenus={actionHoverMenus}
           isLastTurn={row.turn === lastTurn}
-          onRewind={(turn, scope) => { onRewind?.(turn, scope); setOpenAction(null); }}
+          onRewind={onRewind ? (turn, scope) => { onRewind(turn, scope); setOpenAction(null); } : undefined}
         />;
       }
     }

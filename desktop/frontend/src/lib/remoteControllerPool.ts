@@ -1,8 +1,9 @@
-import type { BridgeRemoteControllerRequest, BridgeRemoteControllerView, BridgeRemoteControllerSession, BridgeRemoteControllerResponse, BridgeRemoteControllerSessionsResponse, BridgeRemoteControllerCloseResponse } from "./bridgeProtocol.generated";
+import type { BridgeRemoteControllerRequest, BridgeRemoteControllerView, BridgeRemoteControllerSession, BridgeRemoteControllerResponse, BridgeRemoteControllerSessionsResponse, BridgeRemoteControllerCloseResponse, BridgeRemoteControllerSessionView, BridgeRemoteControllerSessionViewResponse } from "./bridgeProtocol.generated";
 
 export interface RemoteControllerAPI {
   attach(request: BridgeRemoteControllerRequest): Promise<BridgeRemoteControllerResponse>;
   sessions(id: string): Promise<BridgeRemoteControllerSessionsResponse>;
+  sessionView(id: string, sessionPath: string): Promise<BridgeRemoteControllerSessionViewResponse>;
   close(id: string): Promise<BridgeRemoteControllerCloseResponse>;
 }
 interface Entry {
@@ -15,9 +16,14 @@ interface Entry {
 export interface RemoteControllerLease {
   ready: Promise<BridgeRemoteControllerView>;
   sessions(): Promise<BridgeRemoteControllerSession[]>;
+  sessionView(sessionPath: string): Promise<BridgeRemoteControllerSessionView>;
   release(): void;
 }
 const FAILED = "remote controller connection changed; reconnect the host and reopen the workspace";
+const encoder = new TextEncoder();
+function identifier(value: string, limit: number): boolean {
+  return typeof value === "string" && value.length > 0 && encoder.encode(value).length <= limit && !/\p{Cc}/u.test(value);
+}
 
 // One owner pool for all React mounts. A late attach must close before the next
 // same-scope attach can reuse its backend handle; an old finally cannot delete
@@ -45,6 +51,11 @@ export class RemoteControllerPool {
     ++owner.refs;
     let released = false;
     const ready = owner.ready.then(view => { if (released || owner.retired) throw new Error(FAILED); return view; });
+    const assertLive = () => { if (released || owner.retired) throw new Error(FAILED); };
+    const assertController = (actual: BridgeRemoteControllerView, expected: BridgeRemoteControllerView) => {
+      assertLive();
+      if (actual.id !== expected.id || actual.name !== expected.name || actual.workspace !== expected.workspace || actual.readOnly !== true) throw new Error(FAILED);
+    };
     // A mount can unmount before consuming ready. Rejections still propagate
     // to its consumer but must not become detached/unhandled promise errors.
     void ready.catch(() => {});
@@ -52,9 +63,26 @@ export class RemoteControllerPool {
       ready,
       sessions:async () => {
         const view = await ready;
+        assertLive();
         const response = await this.api.sessions(view.id);
-        if (released || owner.retired || response.protocolVersion !== 1 || response.controller.id !== view.id || response.controller.name !== view.name || response.controller.workspace !== view.workspace || response.controller.readOnly !== true) throw new Error(FAILED);
+        assertController(response.controller,view);
+        if (response.protocolVersion !== 1) throw new Error(FAILED);
         return response.sessions;
+      },
+      sessionView:async sessionPath => {
+        if (!identifier(sessionPath,32768)) throw new Error(FAILED);
+        const view = await ready;
+        assertLive();
+        const response = await this.api.sessionView(view.id,sessionPath);
+        assertController(response.controller,view);
+        const snapshot = response.view;
+        if (response.protocolVersion !== 1 || snapshot.protocolVersion !== 1 || snapshot.sessionPath !== sessionPath || snapshot.readOnly !== true || !Array.isArray(snapshot.history) || snapshot.history.length > 100000) throw new Error(FAILED);
+        const identities = new Set<string>();
+        for (const message of snapshot.history) {
+          if (!identifier(message.id,4096) || identities.has(message.id)) throw new Error(FAILED);
+          identities.add(message.id);
+        }
+        return snapshot;
       },
       release:() => {
         if (released) return;

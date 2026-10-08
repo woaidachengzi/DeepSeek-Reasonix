@@ -255,7 +255,11 @@ fn valid_session_view(v: &BridgeRemoteControllerSessionView, expected: &str) -> 
             return false;
         }
     }
+    let mut seen = HashSet::new();
     for m in &v.history {
+        if m.id.is_empty() || !clean(&m.id, 4096) || !seen.insert(&m.id) {
+            return false;
+        }
         if !matches!(
             m.role.as_str(),
             "system"

@@ -1,6 +1,7 @@
 import { commitTranscriptWindowGeometry } from "../lib/transcriptWindowGeometry";
 import { TranscriptMeasurementLedger } from "../lib/transcriptMeasurementLedger";
 import { TranscriptKernel, type TranscriptKernelClock, type TranscriptKernelEvent } from "../lib/transcriptKernel";
+import { canFollowQuestionAppend, shouldFollowSubmittedQuestion } from "../lib/transcriptGrouping";
 
 let passed = 0;
 let failed = 0;
@@ -274,6 +275,33 @@ kernel.endUserGesture();
   ok(writes.length === beforeSwitch, "streaming updates make zero writes while the reader browses older questions");
   kernel.scrollToTail();
   ok(writes.length === beforeSwitch + 1 && kernel.intent === "tail", "an explicit new submission resumes following the answer");
+}
+{
+  const clock = new FakeClock();
+  const kernel = new TranscriptKernel({clock});
+  const writes:number[] = [];
+  kernel.connectWriter(request => { writes.push(request.offset); return {accepted:true,offset:request.offset,changed:true}; });
+  kernel.replaceSurface("snapshot-reader");
+  kernel.beginUserGesture(snapshot);
+  kernel.observeNativeScroll(snapshot);
+  kernel.renewNativeGesture(snapshot,320,()=>{});
+  const previous = {total:2,lastId:"entry-2"};
+  const refreshed = {total:3,lastId:"entry-3",requestedId:""};
+  if (canFollowQuestionAppend(shouldFollowSubmittedQuestion(previous,refreshed),kernel.intent,kernel.userGestureActive)) kernel.scrollToTail();
+  kernel.advanceGeometry(); kernel.scheduleTailSync(); clock.flushFrames();
+  ok(writes.length === 0 && kernel.intent === "reader", "snapshot question append performs zero writes during native reader ownership");
+  clock.advance(320); kernel.scheduleTailSync(); clock.flushFrames();
+  ok(writes.length === 0 && kernel.anchor.kind === "block", "snapshot question append preserves the reading anchor after lease release");
+  ok(!canFollowQuestionAppend(false,kernel.intent,kernel.userGestureActive), "passive growth cannot grant tail ownership to a settled reader");
+  const submitted = {total:4,lastId:"submitted-4",requestedId:"submitted-4"};
+  if (shouldFollowSubmittedQuestion(refreshed,submitted)) kernel.scrollToTail();
+  ok(writes.length === 1 && kernel.intent === "tail", "only an explicit client submission requests tail follow");
+  ok(!shouldFollowSubmittedQuestion(submitted,submitted), "receipt/content updates cannot repeat the same submission tail request");
+  kernel.beginUserGesture({...snapshot,scrollTop:1500});
+  kernel.observeNativeScroll({...snapshot,scrollTop:1500});
+  ok(!canFollowQuestionAppend(false,kernel.intent,kernel.userGestureActive), "passive growth cannot end native ownership even at the tail");
+  kernel.endUserGesture();
+  ok(canFollowQuestionAppend(false,kernel.intent,kernel.userGestureActive), "passive growth may continue an existing settled tail owner");
 }
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

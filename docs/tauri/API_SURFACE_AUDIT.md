@@ -1,5 +1,31 @@
 # Wails API 与事件面盘点
 
+## 2026-10-08 远程历史增量 review 与 macOS 可运行候选
+
+本轮收敛 `d0106adb8` 之后的 42 项源码/测试/文档增量，未新增远程图片接口：该入口尚未接通完整链路，已撤下本轮新写的未完成代码。按 React 按需加载和 effect/异步归属规则 review；只读历史保留共享 Transcript 与单写入者，没有获得本地文件、发送、恢复或审批能力。
+
+- 重新运行四包完整 Go race、vet、Rust 全量测试（253 passed、0 failed、6 ignored）、clippy、完整 `test:transcript`、完整 `test:tauri`、测试 typecheck、协议镜像检查，全部 exit 0。构建同时通过生产 typecheck/hooks/static/budget，未放宽原门限。
+- `--target aarch64-apple-darwin --bundles app` 的实际 App 已构建并通过 deep/strict ad-hoc 签名校验。实际运行默认 managed 与显式 temporary 两种档案，验证私有 credential identity、Global workspace、sidecar readiness/未鉴权 401、只读通知状态查询和正常退出清理，全部通过。没有访问真实档案、SSH/模型/IM 或系统剪贴板。
+- 本轮证据目录 `/private/tmp/reasonix-history-review.Ubhzkf/`：`build-candidate.log`、`package-smoke-candidate.log`、`go-race.log`、`go-vet.log`、`rust.log`、`clippy.log`、`transcript.log`、`tauri.log`、`test-types.log`、`protocol.log`。旧 `d0106adb8` App 在 `previous-d0106adb8.app` 保留可恢复副本。
+- 交付门禁：review 后提交一次，再从干净 HEAD 重建并重新运行包 smoke；最终以同目录 `build-final.log` / `package-smoke-final.log` 为准，不交付携带 uncommitted provenance 的候选。当前包不包含 Developer ID/公证、正式安装替换或发布授权。
+- 下文“未提交/未重建”和 `d0106adb8` 交付状态是各阶段历史快照。只读 UI 的既有浏览器证据与本轮实际包启动证据分别保留，二者都不能冒充远程历史新命令的 WKWebView/真实 Serve 完整联调。远程媒体、controller 事件/写入/审批/模型、bot Desktop 与跨平台/管理页/SQLite 门禁仍未关闭。
+
+## 2026-10-08 只读远程历史 UI 与共享权限/阅读意图修复
+
+当前增量未提交、未打包，已交付 App 仍是 `d0106adb8`。设置页显式选择历史后复用共享 Transcript；controller/workspace/path 和 backend entry ID 共同命名展示身份，工具结果匹配限制在当前 assistant 工具组，reasoning/search 保留。只读快照没有发送、编辑、恢复、审批或模型变更入口。
+
+- 共享 UserMessage 附件改为遵从 scoped image resolver；拒绝/异常/旧 owner 不能调用本地 AttachmentDataURL。共享 RichMarkdownLink 增加 scoped path action，对远程 file URL、普通路径和行号引用统一拦截点击、中键和路径菜单；默认本地/Wails 行为保留。远程媒体尚未连接，界面明确提示在远端查看，不用直接 URL 或本地文件权限补洞。
+- 浏览器实测发现共享问题导航将新增历史问题误判为主动发送并抢回 tail。修复为客户端明确提交的临时显示意图；保持收据确认后的意图，不从 snapshot/hydration 赋予。确定性 Kernel 和 hook 回归覆盖 native lease 中/释放后的零写入、稳定锚点、明确发送恢复、内容补丁/前插不重放。
+- 隔离浏览器最终证据 `/private/tmp/reasonix-remote-history.Aw6GtM/browser-complete.log`：自有 `http://127.0.0.1:62224/remote-qa`（验收后已关闭），1440×1100 / 390×844，现有 Playwright 1.62.1 + headless Chrome（Browser plugin not available）。页面身份、非空、无 overlay、console、截图、交互六项通过；250 轮打开物理末尾、过程/工具展开、无本地媒体/路径调用或直接图片网络请求、刷新 reader offset/可见锚点均保持、旧结果切换拒绝、固定错误/空态、卸载关闭 owner 通过。`desktop.png`、`process.png`、`refresh.png`、`narrow.png` 已视觉检查。
+- 早期虚拟入口 HMR/CJS 预优化失败、刷新回归失败和修复初稿导致的正常 tail 批量增长预算回归分别保留日志；修复区分 reader/native lease/已有 tail/主动提交后重跑原断言，不放宽 4px、completed block mount cap、single writer 或构建体积预算。最终 `transcript-complete.log` 完整共享回归、`tauri-complete.log` 完整 Tauri 回归、`test-types-complete.log` 与 `build-complete.log`（生产 typecheck/hooks/static/budget）全部 exit 0。普通 tail 批量增长仍 windowed ≤40 completed blocks，10,000 轮完成/下一轮身份与物理尾部通过。源码与完整门禁见 [E 清单](E_MIGRATION_CHECKLIST.md#2026-10-08-只读远程历史界面与共享渲染安全后续源码增量)。
+- 模拟 native invoke 只证明共享界面和权限分流，不等于真实 Serve / SSH、`.app` IPC / WKWebView 或原生系统剪贴板验收。完整 controller 的事件/重连/发送/审批/模型归属、远程媒体、bot Desktop、异平台/复杂管理页/SQLite 门禁继续保留；未使用真实档案、凭据、模型或 IM。
+
+## 2026-10-08 远程历史稳定身份与 lease 读取增量
+
+`d0106adb8` 已 review/提交并重建为 macOS App；以下为其后未提交源码，不自动替换用户验收的 App。指定会话 DTO 保留 backend entry ID，旧日志确定性兼容且不回写；缺失/重复身份拒绝而不按位置编号。native binding/共享 lease 已接指定 path 读取，释放与 SSH 重置前后均有派发/发布归属检查。旧 `/history` 不变。
+
+证据 `/private/tmp/reasonix-remote-identity.8uASVb/`：`go-race.log` 四包定向 race、`serve-fixed.log` 实际 Serve 再验、`rust-test.log` 6 passed/253 filtered、`pool-test.log` 3 套连接/绑定/列表回归、`tauri-tests.log` 完整 Tauri 前端、生产/测试 typecheck、vet、clippy、protocol check 通过。`serve-final.log` 的补充 fixture 首次失败保留：Save 后 DAG 合法去重使损坏 fixture 不成立；改用原始损坏旧 transcript 后原拒绝断言通过。尚未新增历史界面、滚动行为或 App/WKWebView 调用证据。下一步与其余完整目标见 [E 清单](E_MIGRATION_CHECKLIST.md#2026-10-08-远程历史稳定身份与共享读取后续源码增量)。
+
 ## 2026-10-08 指定远程会话视图 review 与 macOS 交付
 
 本批覆盖 `a9a9728fa` 后的指定会话只读快照、协议与 native command；没有接入前端远程历史面板。下文“未提交/未重建”保留各阶段当时的状态，不代表本轮交付状态。

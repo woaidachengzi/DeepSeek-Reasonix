@@ -2,9 +2,12 @@ package serve
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"reasonix/internal/agent"
 	"reasonix/internal/control"
@@ -21,7 +24,35 @@ type desktopSessionView struct {
 	ModelRef        string                      `json:"modelRef"`
 	Label           string                      `json:"label"`
 	RuntimeState    *event.RuntimeStateSnapshot `json:"runtimeState,omitempty"`
-	History         []historyMessage            `json:"history"`
+	History         []desktopHistoryMessage     `json:"history"`
+}
+
+// Identity belongs to the stored/Controller message, not its position in a
+// filtered display projection. Legacy files receive deterministic IDs from
+// agent.LoadSession; a snapshot must never mint IDs or rewrite those files.
+type desktopHistoryMessage struct {
+	ID string `json:"id"`
+	historyMessage
+}
+
+func desktopHistoryMessages(messages []provider.Message) ([]desktopHistoryMessage, error) {
+	out := make([]desktopHistoryMessage, 0, len(messages))
+	seen := make(map[string]bool, len(messages))
+	for _, message := range historyWithoutPinnedContextRevisions(messages) {
+		rows := historyMessages([]provider.Message{message})
+		if len(rows) == 0 {
+			continue
+		}
+		// All supported projections produce at most one display row per
+		// backend entry, including steer/recovery sentinels. Fail explicitly
+		// if that contract changes rather than inventing positional suffixes.
+		if len(rows) != 1 || message.ID == "" || len(message.ID) > 4096 || !utf8.ValidString(message.ID) || strings.IndexFunc(message.ID, unicode.IsControl) >= 0 || seen[message.ID] {
+			return nil, errors.New("remote history identity is invalid")
+		}
+		seen[message.ID] = true
+		out = append(out, desktopHistoryMessage{ID: message.ID, historyMessage: rows[0]})
+	}
+	return out, nil
 }
 
 // Explicit spectator snapshot: no foreground fallback, balance/provider I/O,
@@ -96,7 +127,11 @@ func (s *Server) desktopSessionView(w http.ResponseWriter, r *http.Request) {
 		}
 		messages = loaded.Messages
 	}
-	v.History = historyMessages(messages)
+	v.History, err = desktopHistoryMessages(messages)
+	if err != nil {
+		http.Error(w, "remote history identity is unavailable", 422)
+		return
+	}
 	if detached != nil {
 		s.detachedMu.Lock()
 		valid := s.detached[canonical] == detached && !detached.retiring && detached.ctrl == ctrl

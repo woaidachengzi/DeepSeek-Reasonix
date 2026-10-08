@@ -133,8 +133,23 @@ bridge 输入按最多 200 KiB JSON 与解码后的 32768 字节 path 双重限�
 固定 POST 路由、25 秒 worker 等待，响应再次校验归属、只读、字段预算和版本并脱敏错误。
 搜索来源状态保留原 wire key `sources_status`；Rust 生成镜像显式 serde rename，不能由
 camelCase 默认规则改变该字段。native HTTP fixture 同时检查读取与再次输出的字段名。
-本阶段尚未连接前端历史面板；macOS 构建/启动证据见 API audit 的交付记录，
-native client fixture 和普通包启动仍不是新增命令的 WKWebView 联调证明。
+指定会话的每条 history 现在必须带唯一非空 `id`（最多 4096 UTF-8 字节，无控制字符）。
+该 ID 直接来自 Controller/存储 entry；过滤消耗后的 recovery、追加及重排不按位置重新编号。
+旧格式日志由现有 agent loader 确定性赋予兼容 ID，spectator 不修改文件；已有重复或非法
+显示身份明确失败。旧 `/history` wire 保持不变。尚不含 entry IDs 的早期 session-view
+原型不按数组下标兜底，需要升级远端 Serve；不把该失败转成本地恢复或发送授权。
+前端 native binding 与共享 lease 已可读取该 DTO，读取前后均核对 consumer/SSH owner、
+controller、resolved workspace、指定 path 和只读标志，并拒绝重复 ID 与迟到结果。
+后续源码已连接设置页的显式只读历史面板，复用共享 Transcript/TimelineProjection/Kernel。
+消息/工具/搜索身份由 controller、resolved workspace、session path 与 backend entry ID
+共同命名；刷新不重建同一 surface，旧请求完成不发布到替换后的会话。
+快照新增问题不是用户发送：共享 reducer 只在客户端明确提交时标记临时
+`tailFollowRequested`，不从 history DTO 或 provider 事件赋予，收据确认不撤销该显示意图。
+共享问题导航仅以新的明确提交意图恢复 tail follow，普通历史刷新保持 reader 锚点。
+此面板没有发送/编辑/恢复/审批/模型变更能力；远程图片 resolver 显式拒绝，
+附件与 file/source 链接不得回落到本地 AttachmentDataURL、文件打开器或路径菜单。
+这不是完整 remote tab 或远程文件预览；本批已进入 macOS 候选构建，review/交付门禁见 API audit，
+native client fixture、模拟宿主浏览器和普通包启动均不等于新增命令的 WKWebView 联调。
 
 当前 bridge 已实现 health、脱敏 Provider 摘要、建/开会话、空闲会话的显式切换、重命名与删除、快照、可见历史、工作区附件、逐层工作区目录、受限工作区文件预览、Git 变更列表与受限 diff、submit、cancel、审批/ask/MCP 提示回答、断线后的待处理提示重放、SSE 事件与正常关闭。工作区目录只返回当前会话工作区下的一层，隐藏常见构建产物、依赖目录和 `.git`，每层最多 200 项；返回值只有相对路径，`..` 越界会被拒绝。文件预览只读取有限大小的常规文件；二进制或非法 UTF-8 文件仅返回 `binary: true`，不会把原始字节交给 renderer。Git 变更查询只执行固定的只读 Git 子命令，diff 输出限制为 2 MiB；非 Git 工作区会返回 `gitAvailable: false`，不会伪造“干净”。会话自定义标题写入 core 的 `.jsonl.meta`，不改动 transcript；标题为空、含控制字符或超过 120 个 Unicode 字符时会被拒绝。删除走 core 自身的产物清理（transcript、事件日志与 sidecar、guardian、inbox、checkpoint、子 agent 记录、cleanup 标记），只允许删除当前持有且空闲的会话，避免 host 误删另一个 host 正在使用的会话；删除成功后 bridge 释放该控制器且不再写回快照，否则会把刚删掉的文件重新创建出来。对已不存在的会话重复执行删除返回 `not_found`，而带同一 `X-Reasonix-Request-ID` 的传输重试重放首次响应。
 

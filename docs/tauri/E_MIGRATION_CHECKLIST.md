@@ -2,6 +2,8 @@
 
 2026-10-06 用户要求直接推进 E，明确不需要 updater。本轮不再以 D 全部验收为 E 的启动条件；D、A/B/C 未关闭项仍保留为正式发布门禁。正式发布、替换正式应用、切换默认下载均未授权。updater 从本轮范围排除。
 
+2026-10-08 最新可运行候选与 review 记录见本文末尾及 [API audit](API_SURFACE_AUDIT.md#2026-10-08-远程历史增量-review-与-macos-可运行候选)。下列“未提交/未打包”保留各阶段当时状态，不覆盖后续交付记录。
+
 | 功能面 | Wails 基线 | Tauri 起点 | 当前工作及验收 |
 | --- | --- | --- | --- |
 | remote 配置与认证 | desktop/remote_hosts.go、remote_prefs.go；SSH config、显式主机指纹、临时/持久凭据 | 读取/修改/删除、SSH alias 扫描、指纹确认和密码恢复已有 | 本批补连接请求归属、断开/改配置/退出取消、重开设置时的权威连接状态；源码 Go race / UI 回归、新包本机 SSH 信任/持久化/退出验收已通过 |
@@ -75,3 +77,27 @@
 - 用户要求先生成可运行 App，再 review 并提交；此前大批图片/终端/只读列表已在 `a9a9728fa`，本轮审阅剩余 20 项增量并加入生成器修复与回归。发现并修复 Rust 将 `sources_status` 误作驼峰字段而丢失搜索来源状态的问题，复现与修复后验证分开记录。
 - 完整四包 Go race、Rust 253 passed/6 ignored、完整前端 Tauri 回归、typecheck、vet、clippy、协议镜像门禁通过。首次构建的 arm64 `.app` 与两种临时档案启动/退出 smoke 通过，交付包从本次干净提交重建，最终日志位于 `/private/tmp/reasonix-macos-review.J5DA05/`。
 - 新增远程历史 UI、稳定消息身份、事件/发送/审批/模型改动仍未实现；完整 E 目标继续。未连接真实外部账号、改动正式数据或触碰系统剪贴板，本地 ad-hoc 签名不是正式发布签名/公证。
+
+## 2026-10-08 远程历史稳定身份与共享读取（后续源码增量）
+
+- 当前已提交/交付的 macOS App 基线是 `d0106adb8`；本段为其后的未提交源码，未覆盖该 App，也未升级旧包级证据。
+- 指定会话 DTO 增加必需的 backend entry `id`。普通、steer/recovery 显示投影保留各自源身份；可见条目缺失/重复/越界 ID 时失败，不由数组位置生成。旧 `/history` 不变，旧格式存储通过现有 loader 确定性兼容且不回写；早期缺少 entry IDs 的远端快照明确要求升级 Serve。
+- native binding 和 RemoteControllerPool lease 接入 `sessionView(path)`：派发前检查未释放/退役，完成后核对 controller、host、resolved workspace、path、只读标志和 ID 唯一性。共享消费者、release 到派发间隙、迟到读取、SSH 重置/新 owner、不同身份/路径、拒绝无本地/Wails fallback 均有回归。
+- 源码验证：4 包定向 Go race、生产 Serve 的重复读取/追加/legacy 不回写/损坏身份/后台隔离回归、Rust 6 项筛选回归、完整 `test:tauri`、生产/测试 typecheck、vet、clippy、协议生成检查通过。证据 `/private/tmp/reasonix-remote-identity.8uASVb/`；补充 fixture 首次误用 Save 被 DAG 合法去重，修正为损坏旧格式后同一拒绝断言通过，失败日志保留。
+- 尚未把远程历史接到共享 Transcript；下一步是独立 remote surface、远程文件/图片解析权限和 generation 归属，不复制位置键或另建滚动写入者。之后继续完整 controller 事件/恢复/发送/审批/模型与 bot Desktop、异平台/复杂管理页/SQLite 门禁；本次不是总体完成，也不是新增 native command 的 App/WKWebView 验收。
+
+## 2026-10-08 只读远程历史界面与共享渲染安全（后续源码增量）
+
+- 继上一阶段，远程列表现可显式打开独立只读历史 surface，懒加载并复用共享 Transcript/TimelineProjection/Kernel。所有展示键按 controller/workspace/path/backend entry 命名；刷新保留同一 surface，选中替换、读取失败和卸载拒绝旧结果。没有 composer、编辑/恢复、审批或模型修改入口，不将 runtime 快照冒充实时进展。
+- 修补共享入口：UserMessage 附件遵从 scoped resolver，拒绝/异常不回落本地；远程 file URL/路径/代码行引用统一拦截点击、中键与本地路径菜单。远程文件/图片尚未接入，界面明确提示；现阶段不是媒体或完整 controller 完成。
+- 浏览器复现了共享问题导航把“快照新增问题”误当“用户发送”抢回底部的真实问题。仅客户端明确提交才产生临时 `tailFollowRequested`，不会由历史读取赋予；共享 hook 与确定性 Kernel 回归覆盖普通刷新 reader 零写入、稳定锚点、主动提交恢复和补丁/前插不重放，未新增滚动写入者或重试时钟。
+- 隔离浏览器最终验收通过：250 轮打开末尾、思考/工具展开、远程媒体/文件零本地调用与零直接图片请求、刷新可见锚点和 scrollTop 不变、旧请求切换拒绝、390px 无横溢出、错误隐私/空态/卸载释放。原生 invoke 为 mock，不替代 App/SSH/Serve 包级联调。证据 `/private/tmp/reasonix-remote-history.Aw6GtM/`，详细场景、失败日志和截图见 [API audit](API_SURFACE_AUDIT.md#2026-10-08-只读远程历史-ui-与共享权限阅读意图修复)。
+- 完整 `test:transcript`、完整 `test:tauri`、生产/测试 typecheck、hooks lint、single-writer 与 build 体积门禁最终通过；新投影/媒体/异步归属/提交意图回归均纳入测试脚本。初稿撤掉所有被动跟随导致普通 tail 批量增长的挂载预算回归，修正为仅保留已有、非 native lease 的 tail 归属后原 53 项 viewport 断言通过，不调整 ≤40 或 4px 门限。失败与最终通过日志分开保留。
+- 已交付 App 仍是 `d0106adb8`，本批未提交/推送、未重建 App。下一步继续远程媒体授权与实际 IPC 只读链路，再接 controller 事件/恢复/发送/审批/模型与 bot Desktop；原生图片粘贴、Windows/Linux、复杂管理页和 SQLite 门禁未关闭。
+
+## 2026-10-08 远程历史批次 review 与可运行 App
+
+- 已收敛上一阶段 42 项源码/测试/文档；尚未接通的远程图片读取入口不进入此次提交/包。共享阅读位置、稳定 ID 和本地/远程权限分流的回归保留，未新增滚动写入者、降低预算或开放远程写入。
+- 当前 arm64 App 候选构建及 deep/strict ad-hoc 签名通过；实际 App 用独立临时 HOME 分别验证 managed/explicit 档案、私有身份、Global workspace、认证与 sidecar readiness、正常退出无残留通过。旧 App 可恢复副本与全部日志位于 `/private/tmp/reasonix-history-review.Ubhzkf/`。
+- 本轮完整 Go 四包 race/vet、Rust 253 passed/6 ignored 与 clippy、完整前端 Transcript/Tauri、测试类型、协议生成与生产构建门禁通过。交付要求 review 提交后从干净 HEAD 重建，再运行相同包 smoke，最终收据是 `build-final.log` 与 `package-smoke-final.log`；不把 dirty 候选当作已提交版本。
+- 未推送/正式安装或发布，不使用真实账号、用户数据/剪贴板。包启动不替代新增远程命令实际 WKWebView/SSH/Serve 联调，原生图片粘贴及跨平台等其余目标保持未完成。

@@ -122,3 +122,7 @@ assert.equal(
 );
 
 console.log("turn event projection reset tests passed");
+
+const submitted = reducer(initialState,{type:"user",text:"explicit",seq:0,submissionId:"owned-submission"});
+const confirmed = reducer(submitted,{type:"send_confirmed",submissionId:"owned-submission"});
+assert.equal(confirmed.items[0].kind === "user" && confirmed.items[0].tailFollowRequested,true,"explicit submission tail intent survives receipt confirmation");

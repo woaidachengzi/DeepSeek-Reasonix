@@ -28,6 +28,7 @@ type HistorySearch struct {
 	Results       []provider.ServerSearchHit `json:"results,omitempty"`
 }
 type HistoryMessage struct {
+	ID               string                           `json:"id"`
 	Role             string                           `json:"role"`
 	Content          string                           `json:"content"`
 	Reasoning        string                           `json:"reasoning,omitempty"`
@@ -154,7 +155,12 @@ func validSessionView(v SessionView, path string) bool {
 			return false
 		}
 	}
+	seen := make(map[string]bool, len(v.History))
 	for _, m := range v.History {
+		if m.ID == "" || !cleanField(m.ID, 4096) || seen[m.ID] {
+			return false
+		}
+		seen[m.ID] = true
 		switch m.Role {
 		case "system", "user", "assistant", "tool", "notice", "protocol_recovery", "final_readiness":
 		default:

@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useT } from "../lib/i18n";
 import { nativeRemoteControllers } from "../lib/nativeRemoteControllers";
 import type { RemoteControllerLease, RemoteControllerPool } from "../lib/remoteControllerPool";
 import type { BridgeRemoteControllerView, BridgeRemoteControllerSession } from "../lib/bridgeProtocol.generated";
 
 const PAGE_SIZE = 50;
+const RemoteHistory = lazy(() => import("./TauriRemoteHistory").then(module => ({default:module.TauriRemoteHistory})));
 
 export function TauriRemoteSessions({ name,workspace,pool = nativeRemoteControllers }: { name:string;workspace:string;pool?:RemoteControllerPool }) {
   const t = useT();
@@ -13,6 +14,8 @@ export function TauriRemoteSessions({ name,workspace,pool = nativeRemoteControll
   const [busy,setBusy] = useState(true);
   const [failed,setFailed] = useState(false);
   const [page,setPage] = useState(0);
+  const [connection,setConnection] = useState<RemoteControllerLease | null>(null);
+  const [selected,setSelected] = useState<{scope:string;path:string;title:string} | null>(null);
   const scope = JSON.stringify([name,workspace]);
   const [dataScope,setDataScope] = useState(scope);
   const belongs = dataScope === scope;
@@ -24,6 +27,7 @@ export function TauriRemoteSessions({ name,workspace,pool = nativeRemoteControll
     const current = pool.acquire(name,workspace);
     const token = {};
     lease.current = current; request.current = token;
+    setConnection(current); setSelected(null);
     setDataScope(JSON.stringify([name,workspace]));
     setView(null); setRows([]); setPage(0); setBusy(true); setFailed(false);
     void current.ready.then(async view => {
@@ -47,7 +51,8 @@ export function TauriRemoteSessions({ name,workspace,pool = nativeRemoteControll
       const entries = await current.sessions();
       if (request.current !== token || lease.current !== current) return;
       setRows(entries); setPage(0);
-    } catch { if (request.current === token) { setRows([]); setFailed(true); } }
+      setSelected(previous => previous && entries.some(row => row.path === previous.path) ? previous : null);
+    } catch { if (request.current === token) { setRows([]); setFailed(true); setSelected(null); } }
     finally { if (request.current === token) { request.current = null; setBusy(false); } }
   };
 
@@ -63,10 +68,14 @@ export function TauriRemoteSessions({ name,workspace,pool = nativeRemoteControll
     {belongs && !failed ? <ul className="tauri-remote-sessions-list">{visible.map(row => <li key={row.path}>
       <strong>{row.title || row.name}</strong><code title={row.path}>{row.path}</code>
       <small>{t("settings.remote.sessionsTurns",{count:row.turns})}{row.current ? ` · ${t("settings.remote.sessionsCurrent")}` : ""}{row.running ? ` · ${t("settings.remote.sessionsRunning")}` : ""}{row.takenOver ? ` · ${t("settings.remote.sessionsTakenOver")}` : ""}</small>
+      <button type="button" className="tauri-settings-button" disabled={loading} onClick={() => setSelected({scope,path:row.path,title:row.title || row.name})}>{t("settings.remote.historyOpen")}</button>
     </li>)}</ul> : null}
     <div className="tauri-settings-actions">
       <button type="button" className="tauri-settings-button" disabled={loading} onClick={() => void refresh()}>{t("settings.remote.sessionsRefresh")}</button>
       {belongs && !failed && count > 1 ? <><button type="button" className="tauri-settings-button" disabled={loading || page === 0} onClick={() => setPage(current => current-1)}>{t("settings.remote.sessionsPrevious")}</button><span>{t("settings.remote.sessionsPage",{page:page+1,count})}</span><button type="button" className="tauri-settings-button" disabled={loading || page+1 >= count} onClick={() => setPage(current => current+1)}>{t("settings.remote.sessionsNext")}</button></> : null}
     </div>
+    {belongs && !failed && view && connection && selected?.scope === scope ? <Suspense fallback={<p role="status">{t("common.loading")}</p>}>
+      <RemoteHistory key={JSON.stringify([scope,selected.path,view.id])} lease={connection} controller={view} sessionPath={selected.path} title={selected.title} onClose={() => setSelected(null)} />
+    </Suspense> : null}
   </section>;
 }

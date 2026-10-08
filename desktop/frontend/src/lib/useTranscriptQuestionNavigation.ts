@@ -6,6 +6,7 @@ import {
   lastQuestionTurn,
   questionAnchorId,
   questionTurnsById,
+  shouldFollowSubmittedQuestion,
   type QuestionAnchor,
   type QuestionAnchorPosition,
 } from "./transcriptGrouping";
@@ -15,18 +16,20 @@ export function useTranscriptQuestions(
   historyStartTurn: number,
   historyTotalTurns: number,
   scrollElement: HTMLElement | null,
-  scrollToBottom: () => void,
+  onQuestionAppend: (explicitSubmission:boolean) => void,
 ) {
-  const [questions, loadedByTurn, totalQuestions] = useMemo(() => {
+  const [questions, loadedByTurn, totalQuestions, requestedId] = useMemo(() => {
     const loaded = new Map<number, QuestionAnchor>();
     let nextTurn = historyStartTurn > 0 ? historyStartTurn - 1 : 0;
+    let requestedId = "";
     for (const item of items) {
       if (item.kind !== "user") continue;
+      requestedId = item.tailFollowRequested ? item.id : "";
       const turn = item.historyTurn != null && item.historyTurn > 0 ? item.historyTurn - 1 : nextTurn;
       loaded.set(turn, { id: item.id, text: compactQuestionText(item.text), turn, checkpointTurn: item.checkpointTurn });
       nextTurn = Math.max(nextTurn, turn + 1);
     }
-    return [Array.from(loaded.values()).sort((a, b) => a.turn - b.turn), loaded, Math.max(historyTotalTurns, nextTurn)] as const;
+    return [Array.from(loaded.values()).sort((a, b) => a.turn - b.turn), loaded, Math.max(historyTotalTurns, nextTurn), requestedId] as const;
   }, [historyStartTurn, historyTotalTurns, items]);
   const [activeQuestion, setActiveQuestion] = useState<number | null>(null);
   const frameRef = useRef<number | null>(null);
@@ -58,8 +61,10 @@ export function useTranscriptQuestions(
     const lastId = questions[questions.length - 1]?.id ?? "";
     const previous = tailRef.current;
     tailRef.current = { total: totalQuestions, lastId };
-    if (previous.total > 0 && totalQuestions > previous.total && lastId !== previous.lastId) scrollToBottom();
-  }, [questions, scrollToBottom, totalQuestions]);
+    if (previous.total > 0 && totalQuestions > previous.total && lastId !== previous.lastId) {
+      onQuestionAppend(shouldFollowSubmittedQuestion(previous,{total:totalQuestions,lastId,requestedId}));
+    }
+  }, [questions, requestedId, onQuestionAppend, totalQuestions]);
 
   const userTurns = useMemo(() => questionTurnsById(questions), [questions]);
   const turnForUser = useCallback((item: Extract<Item, { kind: "user" }>) => userTurns.get(item.id), [userTurns]);

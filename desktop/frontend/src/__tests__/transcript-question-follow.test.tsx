@@ -1,0 +1,30 @@
+import assert from "node:assert/strict";
+import {JSDOM} from "jsdom";
+import type {Item} from "../lib/useController";
+import {TranscriptTestClock} from "./transcript-test-clock";
+
+const dom=new JSDOM("<div id='root'></div>",{url:"http://localhost/"});
+const clock=new TranscriptTestClock();
+Object.assign(globalThis,{window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,requestAnimationFrame:clock.requestAnimationFrame,cancelAnimationFrame:clock.cancelAnimationFrame,IS_REACT_ACT_ENVIRONMENT:true});
+const React=await import("react");const {act}=React;const {createRoot}=await import("react-dom/client");
+const {useTranscriptQuestions}=await import("../lib/useTranscriptQuestionNavigation");
+const root=createRoot(document.getElementById("root")!);
+let follows=0;const requests:boolean[]=[];const follow=(explicit:boolean)=>{requests.push(explicit);if(explicit) follows++;};
+function Probe({items}:{items:Item[]}) {useTranscriptQuestions(items,0,0,null,follow);return null;}
+const render=async(items:Item[])=>act(async()=>{root.render(<Probe items={items}/>);clock.flushFrames();});
+const user=(id:string,requested=false):Item=>({kind:"user",id,text:id,tailFollowRequested:requested});
+await render([user("one")]);
+await render([user("one"),user("snapshot-two")]);
+assert.equal(follows,0,"snapshot refresh with a new question is not a submission intent");
+assert.deepEqual(requests,[false],"snapshot growth only asks to continue existing tail ownership");
+await render([user("one"),user("snapshot-two"),user("submitted-three",true)]);
+assert.equal(follows,1,"explicit submission follows even if its receipt already cleared submissionId");
+await render([user("one"),user("snapshot-two"),user("submitted-three",true),{kind:"assistant",id:"answer",text:"content patch"}]);
+assert.equal(follows,1,"content patch does not replay submission intent");
+await render([user("prepended"),user("one"),user("snapshot-two"),user("submitted-three",true)]);
+assert.equal(follows,1,"prepend preserves the last submitted identity without another follow");
+await render([user("prepended"),user("one"),user("snapshot-two"),user("submitted-three",true),user("external-four")]);
+assert.equal(follows,1,"externally appended user question does not inherit an earlier submission grant");
+assert.deepEqual(requests,[false,true,false],"only the client submission can grant tail ownership");
+await act(async()=>root.unmount());assert.equal(clock.frames.size,0);dom.window.close();
+console.log("Transcript question follow: explicit client intent only; snapshot, patch and prepend preserve reader ownership");

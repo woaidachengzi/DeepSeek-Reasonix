@@ -1242,6 +1242,12 @@
 .tauri-remote-sessions-list strong { white-space: pre-wrap; overflow-wrap: anywhere; }
 .tauri-remote-sessions-list code { color: var(--fg-dim); font-size: 11px; overflow-wrap: anywhere; }
 .tauri-remote-host-card .tauri-remote-sessions-list small { white-space: normal; overflow-wrap: anywhere; }
+.tauri-remote-sessions-list .tauri-settings-button { justify-self: start; }
+.tauri-remote-history { margin-block: 16px; min-width: 0; border-top: 1px solid var(--border-soft); padding-block: 12px; }
+.tauri-remote-history-header { display: flex; gap: 12px; align-items: start; justify-content: space-between; }
+.tauri-remote-history-header h4 { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tauri-remote-history-path { display: block; overflow-wrap: anywhere; color: var(--fg-dim); font-size: 11px; }
+.tauri-remote-history-viewport { height: min(70vh, 720px); min-height: 320px; margin-block: 12px; border: 1px solid var(--border-soft); background: var(--surface); }
 .tauri-remote-host-card strong { color: var(--fg); font-size: 12px; }
 .tauri-remote-host-card small { overflow: hidden; color: var(--fg-faint); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .tauri-remote-credential-prompt { display: grid; max-width: 360px; gap: 8px; margin-top: 8px; padding: 10px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface-2); }

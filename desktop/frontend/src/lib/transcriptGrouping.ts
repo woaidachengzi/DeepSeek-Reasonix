@@ -4,6 +4,14 @@ import type { Item } from "./useController";
 export type QuestionAnchor = { id: string; text: string; turn: number; checkpointTurn?: number; loaded?: boolean };
 export type QuestionAnchorPosition = { turn: number; top: number };
 
+export function shouldFollowSubmittedQuestion(previous: {total:number;lastId:string}, current: {total:number;lastId:string;requestedId:string}): boolean {
+  return previous.total > 0 && current.total > previous.total && current.lastId !== previous.lastId && Boolean(current.requestedId) && current.requestedId === current.lastId;
+}
+
+export function canFollowQuestionAppend(explicitSubmission:boolean, intent:"reader" | "tail", gestureActive:boolean): boolean {
+  return explicitSubmission || (intent === "tail" && !gestureActive);
+}
+
 export function activeQuestionTurn(
   positions: readonly QuestionAnchorPosition[],
   viewportTop = 0,

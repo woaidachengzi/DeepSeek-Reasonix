@@ -42,7 +42,7 @@ func (b *bridgeServer) remoteControllerSessionView(w http.ResponseWriter, r *htt
 		return
 	}
 	if err != nil {
-		writeProtocolError(w, 502, "remote_controller_failed", "could not read remote session; verify remote Serve supports session-view v1 and reopen the workspace")
+		writeProtocolError(w, 502, "remote_controller_failed", "could not read remote session; upgrade remote Serve for session-view v1 with entry IDs and reopen the workspace")
 		return
 	}
 	writeJSON(w, 200, remoteControllerSessionViewResponse{desktopbridge.ProtocolVersion, connection.view, view})
