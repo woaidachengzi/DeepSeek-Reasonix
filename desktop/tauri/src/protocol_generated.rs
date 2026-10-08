@@ -356,6 +356,57 @@ pub struct BridgeRemoteConnectResponse {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerCloseResponse {
+    pub closed: bool,
+    pub protocol_version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerRequest {
+    pub name: String,
+    pub workspace: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerResponse {
+    pub controller: BridgeRemoteControllerView,
+    pub protocol_version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerSession {
+    pub current: bool,
+    pub mtime_milli: u64,
+    pub name: String,
+    pub path: String,
+    pub running: bool,
+    pub taken_over: bool,
+    pub title: String,
+    pub turns: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerSessionsResponse {
+    pub controller: BridgeRemoteControllerView,
+    pub protocol_version: u64,
+    pub sessions: Vec<BridgeRemoteControllerSession>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerView {
+    pub id: String,
+    pub name: String,
+    pub read_only: bool,
+    pub workspace: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeRemoteDisconnectRequest {
     pub name: String,
 }
@@ -509,6 +560,107 @@ pub struct BridgeSetSessionModelRequest {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeSubmitRequest {
     pub input: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeTerminalActionResponse {
+    pub accepted: bool,
+    pub protocol_version: u64,
+    pub terminal_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeTerminalCreateRequest {
+    pub path: Option<String>,
+    pub shell_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeTerminalExitView {
+    pub exit_code: i64,
+    pub id: String,
+    pub removed: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeTerminalInputRequest {
+    pub data: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeTerminalOutputResponse {
+    pub output: BridgeTerminalOutputView,
+    pub protocol_version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeTerminalOutputView {
+    pub data: String,
+    pub end: u64,
+    pub id: String,
+    pub start: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeTerminalRenameRequest {
+    pub title: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeTerminalResizeRequest {
+    pub cols: u64,
+    pub rows: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeTerminalSessionResponse {
+    pub protocol_version: u64,
+    pub terminal: BridgeTerminalSessionView,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeTerminalSessionView {
+    pub created_at: u64,
+    pub cwd: String,
+    pub exit_code: Option<i64>,
+    pub id: String,
+    pub running: bool,
+    pub shell: String,
+    pub title: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeTerminalShellView {
+    pub id: String,
+    pub label: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeTerminalWorkspaceResponse {
+    pub protocol_version: u64,
+    pub workspace: BridgeTerminalWorkspaceView,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeTerminalWorkspaceView {
+    pub available: bool,
+    pub read_only: bool,
+    pub reason: Option<String>,
+    pub sessions: Vec<BridgeTerminalSessionView>,
+    pub shells: Vec<BridgeTerminalShellView>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -747,6 +899,7 @@ pub struct BridgeWorkspaceImageView {
     pub error_code: Option<String>,
     pub filename: Option<String>,
     pub mime: Option<String>,
+    pub open_href: Option<String>,
     pub size: Option<u64>,
     pub url: String,
 }

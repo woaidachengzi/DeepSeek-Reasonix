@@ -8,7 +8,13 @@ const MAX_BYTES: usize = 16 << 20;
 const MAX_PENDING: usize = 20;
 
 #[derive(Default)]
-pub struct PastedImages(Mutex<HashMap<String, NamedTempFile>>);
+struct ImageStaging {
+    closed: bool,
+    files: HashMap<String, NamedTempFile>,
+}
+
+#[derive(Default)]
+pub struct PastedImages(Mutex<ImageStaging>);
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -22,8 +28,11 @@ pub struct StagedImage {
 impl PastedImages {
     pub fn stage(&self, extension: &str, bytes: &[u8]) -> Result<StagedImage, String> {
         validate_image(extension, bytes)?;
-        let mut files = self.0.lock().map_err(|_| "image staging is unavailable")?;
-        if files.len() >= MAX_PENDING {
+        let mut state = self.0.lock().map_err(|_| "image staging is unavailable")?;
+        if state.closed {
+            return Err("image staging has shut down".into());
+        }
+        if state.files.len() >= MAX_PENDING {
             return Err(
                 "at most 20 pasted images can be pending; remove an image and retry".into(),
             );
@@ -43,7 +52,7 @@ impl PastedImages {
             .unwrap()
             .to_string_lossy()
             .into_owned();
-        files.insert(token.clone(), file);
+        state.files.insert(token.clone(), file);
         Ok(StagedImage {
             token,
             path,
@@ -63,8 +72,19 @@ impl PastedImages {
         self.0
             .lock()
             .map_err(|_| "image staging is unavailable")?
+            .files
             .remove(token);
         Ok(())
+    }
+
+    pub fn shutdown(&self) {
+        // AppHandle clones/worker threads can retain managed state, and the
+        // host reports its exit with process::exit. Do not depend on Drop.
+        // The same lock fences in-flight stage operations before deleting only
+        // files this host owns. Late workers are denied even after cleanup.
+        let mut state = self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        state.closed = true;
+        state.files.clear();
     }
 }
 
@@ -187,5 +207,20 @@ mod tests {
             !std::path::Path::new(&staged.path).exists(),
             "host exit drops its temporary images"
         );
+    }
+
+    #[test]
+    fn explicit_shutdown_cleans_retained_state_and_rejects_late_workers() {
+        let images = std::sync::Arc::new(PastedImages::default());
+        let worker = std::sync::Arc::clone(&images);
+        let bytes = encode_rgba(1, 1, &[0, 0, 0, 255]).unwrap();
+        let staged = images.stage("png", &bytes).unwrap();
+        assert!(std::path::Path::new(&staged.path).exists());
+        images.shutdown();
+        assert!(!std::path::Path::new(&staged.path).exists());
+        assert!(worker.stage("png", &bytes).is_err());
+        images.discard(&staged.token).unwrap();
+        images.shutdown();
+        assert!(images.stage("png", &bytes).is_err());
     }
 }

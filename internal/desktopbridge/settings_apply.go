@@ -22,6 +22,17 @@ type SettingsRuntime interface {
 	ReleaseForReplacement() error
 }
 
+// Candidates may tentatively write narrowly scoped metadata while building.
+// Publication commits that delta; releasing an uncommitted candidate must undo
+// it, including a rejected terminal handoff after a successful build.
+type RuntimeReplacementCommitter interface{ CommitReplacement() }
+
+func commitReplacement(runtime Runtime) {
+	if candidate, ok := runtime.(RuntimeReplacementCommitter); ok {
+		candidate.CommitReplacement()
+	}
+}
+
 // RuntimeSettingsFactory migrates same-session state while keeping previous
 // alive on failure. It must not close previous; the manager owns publication.
 type RuntimeSettingsFactory interface {
@@ -89,6 +100,9 @@ func (m *RuntimeManager) rebuildSettingsLocked(ctx context.Context, sessionID st
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("%w: %v", ErrSessionSettingsApply, err)
 	}
+	if m.terminalCreates != 0 {
+		return ErrTerminalBusy
+	}
 	next, err := factory.Rebuild(ctx, previous, request)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrSessionSettingsApply, err)
@@ -100,6 +114,11 @@ func (m *RuntimeManager) rebuildSettingsLocked(ctx context.Context, sessionID st
 		}
 		return fmt.Errorf("%w: %v", ErrSessionSettingsApply, err)
 	}
+	if err := m.transferTerminalsLocked(previous, next); err != nil {
+		return errors.Join(err, next.ReleaseForReplacement())
+	}
+	m.ownerEpoch++
+	commitReplacement(next)
 	m.runtime, m.view = next, view
 	// The replacement now owns the live history. Never snapshot the outgoing
 	// controller over it or fire SessionEnd for a credentials update.

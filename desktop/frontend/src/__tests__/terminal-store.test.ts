@@ -261,5 +261,59 @@ if (useTerminalStore.getState().error !== "terminal input failed") {
 writeError = null;
 process.stdout.write("PASS terminal write failures remain visible to the user\n");
 
+resetTerminalStoreForTests();
+const initialChoice = useTerminalStore.getState().syncWorkspace("selected");
+pending.get("selected")?.({ available: true, readOnly: false, sessions: [firstSession, { ...firstSession, id: "manually-selected" }], shells: [] });
+await initialChoice;
+useTerminalStore.getState().setActiveSession("manually-selected");
+const backgroundChoice = useTerminalStore.getState().syncWorkspace("selected");
+pending.get("selected")?.({ available: true, readOnly: false, sessions: [firstSession, { ...firstSession, id: "manually-selected" }], shells: [] });
+await backgroundChoice;
+if (useTerminalStore.getState().activeSessionId !== "manually-selected") throw new Error("background metadata refresh replaced the user's active terminal");
+process.stdout.write("PASS background refresh preserves manually selected terminal\n");
+
+resetTerminalStoreForTests();
+createPending.length = 0;
+const abaReady = useTerminalStore.getState().syncWorkspace("aba");
+pending.get("aba")?.({ available: true, readOnly: false, sessions: [], shells: [] });
+await abaReady;
+const oldCreate = useTerminalStore.getState().createSession("aba");
+await Promise.resolve(); await Promise.resolve();
+await useTerminalStore.getState().syncWorkspace("");
+const newAba = useTerminalStore.getState().syncWorkspace("aba");
+pending.get("aba")?.({ available: true, readOnly: false, sessions: [], shells: [] });
+await newAba;
+createPending[0]?.(firstSession);
+await oldCreate;
+if (useTerminalStore.getState().workspace?.sessions.length !== 0) throw new Error("late terminal create crossed an away-and-back owner generation");
+process.stdout.write("PASS blank-session reset and same-ID return reject a late create\n");
+
+resetTerminalStoreForTests();
+calls = 0;
+const pendingBeforeReset = useTerminalStore.getState().syncWorkspace("reset-pending");
+const resolveBeforeReset = pending.get("reset-pending");
+await useTerminalStore.getState().syncWorkspace("");
+const reloadAfterReset = useTerminalStore.getState().syncWorkspace("reset-pending");
+if (calls !== 2) throw new Error("returning after a blank reset reused a revoked workspace request");
+pending.get("reset-pending")?.(readyWorkspace);
+await reloadAfterReset;
+resolveBeforeReset?.({ ...readyWorkspace, readOnly: true });
+await pendingBeforeReset;
+if (useTerminalStore.getState().tabId !== "reset-pending" || useTerminalStore.getState().workspace?.readOnly) throw new Error("revoked workspace response replaced the reopened panel");
+process.stdout.write("PASS blank reset revokes pending workspace deduplication\n");
+
+resetTerminalStoreForTests();
+createPending.length = 0;
+useTerminalStore.setState({ tabId: "ready-aba", workspace: readyWorkspace, loading: false });
+const staleReadyCreate = useTerminalStore.getState().createSession("ready-aba");
+// Switch before the already-resolved readiness promise resumes its caller.
+await useTerminalStore.getState().syncWorkspace("");
+const readyAgain = useTerminalStore.getState().syncWorkspace("ready-aba");
+pending.get("ready-aba")?.(readyWorkspace);
+await readyAgain;
+if (createPending.length !== 0) throw new Error("old readiness continuation started a terminal after ownership changed");
+if (await staleReadyCreate !== null) throw new Error("revoked readiness returned a created terminal");
+process.stdout.write("PASS readiness continuation cannot start a terminal for a new owner\n");
+
 if (previousWindow) globalThis.window = previousWindow;
 else delete (globalThis as { window?: unknown }).window;

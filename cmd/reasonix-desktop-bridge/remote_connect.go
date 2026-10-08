@@ -114,16 +114,18 @@ type remotePathChangeResponse struct {
 }
 
 type previewRemoteSessions struct {
-	mu       sync.Mutex
-	saveMu   sync.Mutex
-	clients  map[string]*remote.Client
-	peers    map[string]remote.HostKeyQuestion
-	attempts map[string]*remoteConnectAttempt
-	closed   bool
+	mu                 sync.Mutex
+	saveMu             sync.Mutex
+	clients            map[string]*remote.Client
+	peers              map[string]remote.HostKeyQuestion
+	attempts           map[string]*remoteConnectAttempt
+	controllers        map[string]*remoteControllerConnection
+	controllerAttempts map[remoteControllerScope]*remoteControllerAttempt
+	closed             bool
 }
 
 func newPreviewRemoteSessions() *previewRemoteSessions {
-	return &previewRemoteSessions{clients: map[string]*remote.Client{}, peers: map[string]remote.HostKeyQuestion{}, attempts: map[string]*remoteConnectAttempt{}}
+	return &previewRemoteSessions{clients: map[string]*remote.Client{}, peers: map[string]remote.HostKeyQuestion{}, attempts: map[string]*remoteConnectAttempt{}, controllers: map[string]*remoteControllerConnection{}, controllerAttempts: map[remoteControllerScope]*remoteControllerAttempt{}}
 }
 
 func (m *previewRemoteSessions) get(name string) (*remote.Client, remote.HostKeyQuestion) {
@@ -171,6 +173,9 @@ func (m *previewRemoteSessions) putCurrent(name string, ticket *remoteConnectAtt
 		return false
 	}
 	previous := m.clients[name]
+	if previous != client {
+		m.revokeControllersLocked(name, "")
+	}
 	m.clients[name], m.peers[name] = client, peer
 	m.mu.Unlock()
 	if previous != nil && previous != client {
@@ -185,6 +190,7 @@ func (m *previewRemoteSessions) disconnect(name string) {
 	}
 	m.mu.Lock()
 	client := m.clients[name]
+	m.revokeControllersLocked(name, "")
 	if pending := m.attempts[name]; pending != nil {
 		pending.cancel()
 		delete(m.attempts, name)
@@ -203,6 +209,7 @@ func (m *previewRemoteSessions) closeAll() {
 	}
 	m.mu.Lock()
 	m.closed = true
+	m.revokeControllersLocked("", "")
 	for _, pending := range m.attempts {
 		pending.cancel()
 	}

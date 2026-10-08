@@ -165,7 +165,9 @@ export const TerminalView = forwardRef<TerminalViewHandle, {
       terminal.options.theme = terminalThemeForElement(host);
     };
     const stopObservingTheme = observeTerminalTheme(host, updateTheme);
-    const terminalSink = registerTerminalSink(session.id, (bytes) => terminal.write(bytes), openRef.current);
+    // Queue RIS alongside output: a synchronous reset could race xterm's
+    // buffered writes and repaint pre-recovery bytes after the snapshot.
+    const terminalSink = registerTerminalSink(session.id, (bytes) => terminal.write(bytes), openRef.current, () => terminal.write("\x1bc"));
     terminalSinkRef.current = terminalSink;
     const input = terminal.onData((data) => { void write(tabId, session.id, data).catch(() => {}); });
     const outputResize = terminal.onResize(({ cols, rows }) => { void resize(tabId, session.id, cols, rows).catch(() => {}); });

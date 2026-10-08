@@ -9,13 +9,15 @@ export function registerTerminalSink(
   id: string,
   sink: (data: Uint8Array) => void,
   initiallyActive = true,
+  reset: () => void = () => {},
 ): TerminalSinkSubscription {
   let active = initiallyActive;
   let disposed = false;
   let cursor = 0;
-  const [unregister, history] = registerTerminalOutputSink(id, (bytes, sequence) => {
+  let revision = 0;
+  const [unregister, history] = registerTerminalOutputSink(id, (bytes, sequence, nextRevision) => {
     if (!active || disposed) return;
-    if (cursor === sequence) {
+    if (revision === nextRevision && cursor === sequence) {
       sink(bytes);
       cursor = sequence + 1;
       return;
@@ -26,8 +28,13 @@ export function registerTerminalSink(
   cursor = initialHistory[1] - initialHistory[0].length;
   const flush = () => {
     if (!active || disposed) return;
-    const [chunks, nextSequence] = history();
+    const [chunks, nextSequence, nextRevision] = history();
     const firstSequence = nextSequence - chunks.length;
+    if (revision !== nextRevision) {
+      reset();
+      revision = nextRevision;
+      cursor = firstSequence;
+    }
     const first = Math.max(cursor, firstSequence);
     for (let sequence = first; sequence < nextSequence; sequence += 1) {
       const bytes = chunks[sequence - firstSequence];

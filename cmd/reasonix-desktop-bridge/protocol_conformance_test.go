@@ -6,6 +6,7 @@ import (
 
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/desktopbridge/protocolgen"
+	"reasonix/internal/remote/controller"
 )
 
 // The bridge server owns the wire format, so its hand-written DTOs are the Go
@@ -13,6 +14,25 @@ import (
 func TestGoDTOsMatchTheWireSchema(t *testing.T) {
 	root := filepath.Join("..", "..")
 	definitions := []protocolgen.Definition{
+		{Name: "remoteControllerRequest", Sample: remoteControllerRequest{}},
+		{Name: "remoteControllerView", Sample: remoteControllerView{}},
+		{Name: "remoteControllerSession", Sample: controller.Session{}},
+		{Name: "remoteControllerResponse", Sample: remoteControllerResponse{}},
+		{Name: "remoteControllerSessionsResponse", Sample: remoteControllerSessionsResponse{}},
+		{Name: "remoteControllerCloseResponse", Sample: remoteControllerCloseResponse{}},
+		{Name: "terminalCreateRequest", Sample: terminalCreateRequest{}},
+		{Name: "terminalInputRequest", Sample: terminalInputRequest{}},
+		{Name: "terminalResizeRequest", Sample: terminalResizeRequest{}},
+		{Name: "terminalRenameRequest", Sample: terminalRenameRequest{}},
+		{Name: "terminalShellView", Sample: desktopbridge.TerminalShellView{}},
+		{Name: "terminalSessionView", Sample: desktopbridge.TerminalSessionView{}},
+		{Name: "terminalWorkspaceView", Sample: desktopbridge.TerminalWorkspaceView{}},
+		{Name: "terminalOutputView", Sample: desktopbridge.TerminalOutputView{}},
+		{Name: "terminalExitView", Sample: desktopbridge.TerminalExitView{}},
+		{Name: "terminalWorkspaceResponse", Sample: terminalWorkspaceResponse{}},
+		{Name: "terminalSessionResponse", Sample: terminalSessionResponse{}},
+		{Name: "terminalOutputResponse", Sample: terminalOutputResponse{}},
+		{Name: "terminalActionResponse", Sample: terminalActionResponse{}},
 		{Name: "session", Sample: desktopbridge.SessionView{}},
 		{Name: "event", Sample: desktopbridge.Event{}},
 		{Name: "health", Sample: healthResponse{}},

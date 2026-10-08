@@ -83,7 +83,13 @@ func (c *Controller) visionLocalImageValue(pathName, baseDir string) (string, er
 		err     error
 	)
 	if isAttachmentRef(filepath.ToSlash(pathName)) {
-		dataURL, err = visionImageDataURL(pathName)
+		if strings.TrimSpace(baseDir) == "" {
+			// Legacy CLI callers own cwd. Desktop/Global controllers instead
+			// carry an explicit root; never read their attachments from cwd.
+			dataURL, err = visionImageDataURL(pathName)
+		} else {
+			dataURL, err = visionImageDataURLInRoot(baseDir, pathName)
+		}
 	} else {
 		dataURL, err = visionFileImageDataURL(pathName, baseDir)
 	}

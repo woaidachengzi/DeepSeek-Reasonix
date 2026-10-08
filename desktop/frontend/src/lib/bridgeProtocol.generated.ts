@@ -265,6 +265,45 @@ export interface BridgeRemoteConnectResponse {
   status: "connected" | "host_key_confirmation" | "failed";
 }
 
+export interface BridgeRemoteControllerCloseResponse {
+  closed: boolean;
+  protocolVersion: number;
+}
+
+export interface BridgeRemoteControllerRequest {
+  name: string;
+  workspace: string;
+}
+
+export interface BridgeRemoteControllerResponse {
+  controller: BridgeRemoteControllerView;
+  protocolVersion: number;
+}
+
+export interface BridgeRemoteControllerSession {
+  current: boolean;
+  mtimeMilli: number;
+  name: string;
+  path: string;
+  running: boolean;
+  takenOver: boolean;
+  title: string;
+  turns: number;
+}
+
+export interface BridgeRemoteControllerSessionsResponse {
+  controller: BridgeRemoteControllerView;
+  protocolVersion: number;
+  sessions: BridgeRemoteControllerSession[];
+}
+
+export interface BridgeRemoteControllerView {
+  id: string;
+  name: string;
+  readOnly: boolean;
+  workspace: string;
+}
+
 export interface BridgeRemoteDisconnectRequest {
   name: string;
 }
@@ -382,6 +421,81 @@ export interface BridgeSetSessionModelRequest {
 
 export interface BridgeSubmitRequest {
   input: string;
+}
+
+export interface BridgeTerminalActionResponse {
+  accepted: boolean;
+  protocolVersion: number;
+  terminalId: string;
+}
+
+export interface BridgeTerminalCreateRequest {
+  path?: string;
+  shellId?: string;
+}
+
+export interface BridgeTerminalExitView {
+  exitCode: number;
+  id: string;
+  removed: boolean;
+}
+
+export interface BridgeTerminalInputRequest {
+  data: string;
+}
+
+export interface BridgeTerminalOutputResponse {
+  output: BridgeTerminalOutputView;
+  protocolVersion: number;
+}
+
+export interface BridgeTerminalOutputView {
+  data: string;
+  end: number;
+  id: string;
+  start: number;
+}
+
+export interface BridgeTerminalRenameRequest {
+  title: string;
+}
+
+export interface BridgeTerminalResizeRequest {
+  cols: number;
+  rows: number;
+}
+
+export interface BridgeTerminalSessionResponse {
+  protocolVersion: number;
+  terminal: BridgeTerminalSessionView;
+}
+
+export interface BridgeTerminalSessionView {
+  createdAt: number;
+  cwd: string;
+  exitCode?: number;
+  id: string;
+  running: boolean;
+  shell: string;
+  title: string;
+}
+
+export interface BridgeTerminalShellView {
+  id: string;
+  label: string;
+}
+
+export interface BridgeTerminalWorkspaceResponse {
+  protocolVersion: number;
+  workspace: BridgeTerminalWorkspaceView;
+}
+
+export interface BridgeTerminalWorkspaceView {
+  available: boolean;
+  readOnly: boolean;
+  reason?: string;
+  sessions: BridgeTerminalSessionView[];
+  shells: BridgeTerminalShellView[];
 }
 
 export interface BridgeWorkspaceChangeDetail {
@@ -568,6 +682,7 @@ export interface BridgeWorkspaceImageView {
   errorCode?: string;
   filename?: string;
   mime?: "image/png";
+  openHref?: string;
   size?: number;
   url: string;
 }

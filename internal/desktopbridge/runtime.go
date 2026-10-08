@@ -398,11 +398,14 @@ func (f RuntimeFactoryFunc) Open(ctx context.Context, request OpenRequest) (Runt
 type RuntimeManager struct {
 	factory RuntimeFactory
 
-	mu      sync.Mutex
-	runtime Runtime
-	view    SessionView
-	opening bool
-	closed  bool
+	mu               sync.Mutex
+	runtime          Runtime
+	view             SessionView
+	opening          bool
+	closed           bool
+	ownerEpoch       uint64
+	terminalCreates  int
+	pendingTerminals *retainedRuntimeTerminals
 }
 
 func NewRuntimeManager(factory RuntimeFactory) *RuntimeManager {
@@ -558,7 +561,7 @@ func (m *RuntimeManager) Switch(ctx context.Context, request OpenRequest) (Sessi
 // SetSessionModel rebuilds the active controller for the same transcript with
 // an explicit model override. The old controller is durably shut down first;
 // if constructing the replacement fails, the previous model is reopened.
-func (m *RuntimeManager) SetSessionModel(ctx context.Context, sessionID, modelRef string) (SessionView, error) {
+func (m *RuntimeManager) SetSessionModel(ctx context.Context, sessionID, modelRef string) (result SessionView, resultErr error) {
 	sessionID = strings.TrimSpace(sessionID)
 	modelRef = strings.TrimSpace(modelRef)
 	if sessionID == "" || modelRef == "" {
@@ -606,10 +609,30 @@ func (m *RuntimeManager) SetSessionModel(ctx context.Context, sessionID, modelRe
 	request := previousRequest
 	request.ModelRef = modelRef
 	request.Effort = nil // A model switch starts with that model's own default.
+	retained, err := m.retainTerminalsLocked(previous)
+	if err != nil {
+		m.mu.Unlock()
+		return SessionView{}, err
+	}
+	var pending *retainedRuntimeTerminals
+	if retained != nil {
+		pending = &retainedRuntimeTerminals{retained}
+		m.pendingTerminals = pending
+	}
 	m.runtime = nil
 	m.view = SessionView{}
 	m.opening = true
 	m.mu.Unlock()
+	if pending != nil {
+		defer func() {
+			resultErr = errors.Join(resultErr, pending.Close())
+			m.mu.Lock()
+			if m.pendingTerminals == pending {
+				m.pendingTerminals = nil
+			}
+			m.mu.Unlock()
+		}()
+	}
 
 	if err := previous.Shutdown(); err != nil {
 		m.finishOpen(nil, SessionView{})
@@ -617,11 +640,14 @@ func (m *RuntimeManager) SetSessionModel(ctx context.Context, sessionID, modelRe
 	}
 	runtime, view, err := buildRuntime(ctx, factory, request)
 	if err == nil {
-		if m.finishOpen(runtime, view) {
+		err = m.finishRetainedOpen(runtime, view, pending)
+		if err == nil {
 			return view, nil
 		}
 		_ = runtime.Shutdown()
-		return SessionView{}, ErrClosed
+		if errors.Is(err, ErrClosed) {
+			return SessionView{}, ErrClosed
+		}
 	}
 
 	m.mu.Lock()
@@ -634,6 +660,15 @@ func (m *RuntimeManager) SetSessionModel(ctx context.Context, sessionID, modelRe
 	recoveryCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer cancel()
 	recovered, recoveredView, recoveryErr := buildRuntime(recoveryCtx, factory, previousRequest)
+	if recoveryErr == nil {
+		recoveryErr = m.finishRetainedOpen(recovered, recoveredView, pending)
+		if recoveryErr != nil {
+			_ = recovered.Shutdown()
+		}
+	}
+	if errors.Is(recoveryErr, ErrClosed) {
+		return SessionView{}, ErrClosed
+	}
 	if recoveryErr != nil {
 		m.finishOpen(nil, SessionView{})
 		return SessionView{}, errors.Join(
@@ -641,10 +676,6 @@ func (m *RuntimeManager) SetSessionModel(ctx context.Context, sessionID, modelRe
 			fmt.Errorf("switch active session model: %w", err),
 			fmt.Errorf("restore previous session model: %w", recoveryErr),
 		)
-	}
-	if !m.finishOpen(recovered, recoveredView) {
-		_ = recovered.Shutdown()
-		return SessionView{}, ErrClosed
 	}
 	return SessionView{}, errors.Join(ErrSessionModelSwitch, fmt.Errorf("switch active session model: %w; previous model restored", err))
 }
@@ -1255,13 +1286,19 @@ func (m *RuntimeManager) Shutdown() error {
 	}
 	m.closed = true
 	runtime := m.runtime
+	pending := m.pendingTerminals
+	m.pendingTerminals = nil
 	m.runtime = nil
 	m.view = SessionView{}
 	m.mu.Unlock()
-	if runtime == nil {
-		return nil
+	var terminalErr error
+	if pending != nil {
+		terminalErr = pending.Close()
 	}
-	return runtime.Shutdown()
+	if runtime == nil {
+		return terminalErr
+	}
+	return errors.Join(terminalErr, runtime.Shutdown())
 }
 
 func (m *RuntimeManager) finishOpen(runtime Runtime, view SessionView) bool {
@@ -1272,6 +1309,7 @@ func (m *RuntimeManager) finishOpen(runtime Runtime, view SessionView) bool {
 		return false
 	}
 	if runtime != nil {
+		m.ownerEpoch++
 		m.runtime = runtime
 		m.view = view
 	}

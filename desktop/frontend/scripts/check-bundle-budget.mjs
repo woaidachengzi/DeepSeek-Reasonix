@@ -382,7 +382,11 @@ for (const path of localeChunks) {
   // Removing only those keys from the emitted chunks measures 81325 -> 81426 B
   // (zh, +101 B) and 81967 -> 82071 B (zh-TW, +104 B). Keep the next decimal
   // ceilings for this measured copy growth; initial JS and CSS limits stay fixed.
-  const budget = (name.startsWith("zh-TW-") ? 80.2 : 79.6) * 1024;
+  // Read-only remote session lists add fourteen localized captions. Removing
+  // only those keys measures 81426 -> 81689 B (zh, +263 B) and
+  // 82071 -> 82339 B (zh-TW, +268 B). Keep the next decimal ceilings for
+  // that measured copy; initial JS and CSS budgets remain unchanged.
+  const budget = (name.startsWith("zh-TW-") ? 80.5 : 79.8) * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 

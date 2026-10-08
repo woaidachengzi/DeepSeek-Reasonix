@@ -28,6 +28,20 @@ globalThis.btoa = (value: string) => Buffer.from(value, "binary").toString("base
 
 try {
   __resetTerminalEventBus();
+  const releaseResetBridge = startTerminalEventBridge();
+  let resetCount = 0;
+  const resetOutput: number[] = [];
+  const resetSink = registerTerminalSink("reset", bytes => resetOutput.push(...bytes), true, () => { resetCount++; resetOutput.length = 0; });
+  __emitMockTerminalOutput({ id: "reset", data: base64(new Uint8Array([1, 2])) });
+  resetSink.setActive(false);
+  __emitMockTerminalOutput({ id: "reset", data: base64(new Uint8Array([8])), reset: true });
+  __emitMockTerminalOutput({ id: "reset", data: base64(new Uint8Array([9])) });
+  resetSink.setActive(true);
+  check(resetCount === 1 && JSON.stringify(resetOutput) === "[8,9]", "paused xterm replaces stale history exactly once on snapshot recovery");
+  __emitMockTerminalOutput({ id: "reset", data: "", reset: true });
+  check(resetCount === 2 && resetOutput.length === 0, "empty snapshot resets an already painted xterm");
+  resetSink.dispose(); releaseResetBridge();
+  __resetTerminalEventBus();
   startTerminalEventBridge();
   const first: number[] = [];
   __emitMockTerminalOutput({ id: "utf8", data: base64(new Uint8Array([0xe4, 0xbd])) });

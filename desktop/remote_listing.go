@@ -7,14 +7,12 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"net"
 	"net/http"
-	"net/http/cookiejar"
-	"net/url"
 	"strings"
 	"time"
 
 	"reasonix/internal/agent"
+	"reasonix/internal/remote/controller"
 )
 
 const (
@@ -69,27 +67,7 @@ func serveURL(base, path string) string {
 }
 
 func newServeHTTPClient(base string) (*http.Client, error) {
-	parsed, err := url.Parse(strings.TrimSpace(base))
-	if err != nil {
-		return nil, fmt.Errorf("invalid remote serve URL: %w", err)
-	}
-	ip := net.ParseIP(parsed.Hostname())
-	if parsed.Scheme != "http" || ip == nil || !ip.IsLoopback() || parsed.User != nil {
-		return nil, fmt.Errorf("remote serve URL must use loopback HTTP")
-	}
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return nil, err
-	}
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.Proxy = nil
-	return &http.Client{
-		Jar:       jar,
-		Transport: transport,
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}, nil
+	return controller.NewHTTPClient(base)
 }
 
 // servePost keeps the bounded response text in failures so remote lease and
@@ -171,20 +149,7 @@ func serveDoForSession(ctx context.Context, client *http.Client, method, url str
 // serveHandshake exchanges the pre-shared token for the session cookie.
 // Serve replies 204 on success; the cookie lands in client's jar.
 func serveHandshake(ctx context.Context, client *http.Client, base, token string) error {
-	body, err := json.Marshal(map[string]string{"token": token})
-	if err != nil {
-		return err
-	}
-	resp, err := serveDo(ctx, client, http.MethodPost, serveURL(base, "/auth/token"), body)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
-	if resp.StatusCode == http.StatusNoContent {
-		return nil
-	}
-	return fmt.Errorf("serve auth handshake: status %d", resp.StatusCode)
+	return controller.Handshake(ctx, client, base, token)
 }
 
 // serveSessions lists the serve's sessions.

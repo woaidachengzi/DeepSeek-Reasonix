@@ -467,6 +467,65 @@ func visionImageDataURL(path string) (string, error) {
 	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(raw), nil
 }
 
+// visionImageDataURLInRoot reads a controller-owned attachment without using or
+// changing process cwd. All components retain the attachment no-symlink rule;
+// os.Root additionally confines the actual open against directory-swap races.
+// Unlike the legacy cwd helper, a missing directory is not created on reads.
+func visionImageDataURLInRoot(base, path string) (string, error) {
+	if strings.TrimSpace(base) == "" || filepath.IsAbs(path) {
+		return "", fmt.Errorf("attachment requires an explicit root and relative path")
+	}
+	clean := filepath.Clean(filepath.FromSlash(path))
+	prefix := filepath.Join(".reasonix", "attachments") + string(filepath.Separator)
+	if !strings.HasPrefix(clean, prefix) {
+		return "", fmt.Errorf("attachment path is outside .reasonix/attachments")
+	}
+	root, err := os.OpenRoot(base)
+	if err != nil {
+		return "", err
+	}
+	defer root.Close()
+	var info os.FileInfo
+	var current string
+	for part := range strings.SplitSeq(clean, string(filepath.Separator)) {
+		current = filepath.Join(current, part)
+		info, err = root.Lstat(current)
+		if err != nil {
+			return "", err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return "", fmt.Errorf("attachment path must not contain symlinks")
+		}
+	}
+	if !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > maxImageAttachmentBytes {
+		return "", fmt.Errorf("attachment image must be a regular file between 1 byte and 64 MB")
+	}
+	file, err := root.Open(clean)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	opened, err := file.Stat()
+	if err != nil {
+		return "", err
+	}
+	if !os.SameFile(info, opened) {
+		return "", fmt.Errorf("attachment changed while opening")
+	}
+	value, err := dataURLFromImageReader(file, path)
+	if err != nil {
+		return "", err
+	}
+	after, err := file.Stat()
+	if err != nil {
+		return "", err
+	}
+	if !os.SameFile(opened, after) || after.Size() != opened.Size() {
+		return "", fmt.Errorf("attachment changed while reading")
+	}
+	return value, nil
+}
+
 func readAttachmentImage(path string) (raw []byte, mime string, err error) {
 	clean, err := cleanAttachmentPath(path)
 	if err != nil {

@@ -257,7 +257,7 @@ eq(
   "pointer and keyboard intent prefetch the terminal chunk before opening from the topic bar",
 );
 eq(
-  /registerTerminalSink\(session\.id, \(bytes\) => terminal\.write\(bytes\), openRef\.current\)/.test(terminalViewSource)
+  /registerTerminalSink\(session\.id, \(bytes\) => terminal\.write\(bytes\), openRef\.current(?:,|\))/.test(terminalViewSource)
     && /terminalSinkRef\.current\?\.setActive\(open\)/.test(terminalViewSource),
   true,
   "the warm terminal pauses PTY output while collapsed and resumes from its output cursor",

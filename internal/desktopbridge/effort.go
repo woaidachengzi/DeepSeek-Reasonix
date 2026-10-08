@@ -33,6 +33,9 @@ func (m *RuntimeManager) SetSessionEffort(ctx context.Context, sessionID, model,
 	if err := ctx.Err(); err != nil {
 		return SessionView{}, err
 	}
+	if m.terminalCreates != 0 {
+		return SessionView{}, ErrTerminalBusy
+	}
 	request := OpenRequest{SessionID: sessionID, WorkspaceRoot: m.view.WorkspaceRoot, ModelRef: model, Effort: &effort}
 	next, err := factory.Rebuild(ctx, previous, request)
 	if err != nil {
@@ -45,6 +48,12 @@ func (m *RuntimeManager) SetSessionEffort(ctx context.Context, sessionID, model,
 		}
 		return SessionView{}, err
 	}
+	if err := m.transferTerminalsLocked(previous, next); err != nil {
+		_ = next.ReleaseForReplacement()
+		return SessionView{}, err
+	}
+	m.ownerEpoch++
+	commitReplacement(next)
 	m.runtime, m.view = next, view
 	_ = previous.ReleaseForReplacement()
 	return view, nil

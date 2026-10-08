@@ -25,6 +25,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/desktopbridge/sessionpath"
+	"reasonix/internal/desktopterminal"
 	"reasonix/internal/event"
 	"reasonix/internal/fileref"
 	"reasonix/internal/guardian"
@@ -165,7 +166,7 @@ func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.Open
 			}
 		}
 	}
-	runtime := &controllerRuntime{controller: controller, sessionID: request.SessionID, lifecycleSink: lifecycleSink, effort: selectedBridgeEffort(opts)}
+	runtime := &controllerRuntime{controller: controller, sessionID: request.SessionID, lifecycleSink: lifecycleSink, effort: selectedBridgeEffort(opts), terminalEvents: f.events}
 	if err := persistBridgeReasoning(controller, runtime.effort); err != nil {
 		controller.Close()
 		return nil, errors.Join(err, lifecycleSink.Close())
@@ -453,21 +454,28 @@ func bridgeSessionPath(sessionDir, sessionID string) (string, error) {
 // controllerRuntime adapts the established controller to the bridge's minimal
 // Runtime surface.
 type controllerRuntime struct {
-	effort           string
-	controller       *control.Controller
-	sessionID        string
-	lifecycleSink    *bridgeLifecycleSink
-	snapshotStop     chan struct{}
-	snapshotStopped  chan struct{}
-	snapshotStopOne  sync.Once
-	snapshotPending  atomic.Bool
-	snapshotRetryAt  atomic.Int64
-	snapshotActivity func() error
-	deleting         atomic.Bool
-	deleted          atomic.Bool
-	removeArtifacts  func(string) error
-	oauthMu          sync.Mutex
-	oauthFlows       map[string]*mcpOAuthFlow
+	effort              string
+	controller          *control.Controller
+	sessionID           string
+	lifecycleSink       *bridgeLifecycleSink
+	snapshotStop        chan struct{}
+	snapshotStopped     chan struct{}
+	snapshotStopOne     sync.Once
+	snapshotPending     atomic.Bool
+	snapshotRetryAt     atomic.Int64
+	snapshotActivity    func() error
+	deleting            atomic.Bool
+	deleted             atomic.Bool
+	removeArtifacts     func(string) error
+	oauthMu             sync.Mutex
+	oauthFlows          map[string]*mcpOAuthFlow
+	terminalMu          sync.Mutex
+	terminals           *desktopterminal.Manager
+	terminalsClosed     bool
+	terminalCreating    int
+	terminalEvents      *desktopbridge.EventStream
+	replacementMu       sync.Mutex
+	replacementRollback func() error
 }
 
 type mcpOAuthFlow struct {
@@ -981,9 +989,10 @@ func (r *controllerRuntime) Delete() error {
 		if err := remove(path); err != nil {
 			return err
 		}
+		terminalErr := r.closeTerminals()
 		r.controller.Close()
 		r.deleted.Store(true)
-		return nil
+		return terminalErr
 	}
 	identities, err := sessionidentity.Open(context.Background(), identityPath, filepath.Dir(r.controller.SessionDir()))
 	if err != nil {
@@ -994,6 +1003,9 @@ func (r *controllerRuntime) Delete() error {
 		return fmt.Errorf("fence desktop bridge session deletion: %w", bridgeIdentityConflict(err))
 	}
 	r.deleting.Store(true)
+	if err := r.closeTerminals(); err != nil {
+		return err
+	}
 	if err := remove(path); err != nil {
 		return err
 	}
@@ -1430,17 +1442,18 @@ func (r *controllerRuntime) ReplayPendingPrompts() {
 }
 
 func (r *controllerRuntime) Shutdown() error {
+	terminalErr := r.closeTerminals()
 	r.cancelMCPOAuthFlows()
 	r.stopTurnSnapshotMonitor()
 	if r.deleting.Load() {
 		// A failed or interrupted sweep has already fenced this identity.
 		// Snapshotting here would recreate a transcript during deletion.
 		r.controller.Close()
-		return r.lifecycleSink.Close()
+		return errors.Join(terminalErr, r.lifecycleSink.Close())
 	}
 	err := r.controller.SnapshotForShutdown()
 	r.controller.Close()
-	return errors.Join(err, r.lifecycleSink.Close())
+	return errors.Join(terminalErr, err, r.lifecycleSink.Close())
 }
 
 func (r *controllerRuntime) ApprovalMode() string { return r.controller.ToolApprovalMode() }

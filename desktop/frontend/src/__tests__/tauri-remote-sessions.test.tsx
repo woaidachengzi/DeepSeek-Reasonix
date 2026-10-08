@@ -1,0 +1,31 @@
+import assert from "node:assert/strict";
+import { JSDOM } from "jsdom";
+import { RemoteControllerPool, type RemoteControllerAPI } from "../lib/remoteControllerPool";
+import type { BridgeRemoteControllerSessionsResponse } from "../lib/bridgeProtocol.generated";
+const dom=new JSDOM("<html><body><div id='root'></div></body></html>",{url:"http://localhost/",pretendToBeVisual:true});
+Object.assign(globalThis,{window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,Event:dom.window.Event,IS_REACT_ACT_ENVIRONMENT:true});
+Object.defineProperty(globalThis,"navigator",{value:dom.window.navigator,configurable:true});
+const React=await import("react");const {act}=React;const {createRoot}=await import("react-dom/client");
+const {LocaleProvider}=await import("../lib/i18n");const {TauriRemoteSessions}=await import("../tauri/TauriRemoteSessions");
+const tick=()=>new Promise<void>(resolve=>setTimeout(resolve,0));
+const root=createRoot(document.getElementById("root")!);
+let counter=0;const views=new Map();const calls:string[]=[];
+let read:(id:string)=>Promise<BridgeRemoteControllerSessionsResponse>=async id=>({protocolVersion:1,controller:views.get(id),sessions:Array.from({length:51},(_,index)=>({name:`row-${index}`,title:index===0?"First question\nsecond line":`Question ${index}`,path:`/remote/session-${index}.jsonl`,turns:2,current:index===0,running:index===1,takenOver:index===2,mtimeMilli:1}))});
+const api:RemoteControllerAPI={attach:async req=>{calls.push(`attach:${req.workspace}`);const controller={id:`owned-${++counter}`,name:req.name,workspace:req.workspace,readOnly:true};views.set(controller.id,controller);return {protocolVersion:1,controller};},sessions:async id=>{calls.push(`read:${id}`);return read(id);},close:async id=>{calls.push(`close:${id}`);return {protocolVersion:1,closed:true};}};
+const pool=new RemoteControllerPool(api);
+async function render(workspace:string){await act(async()=>{root.render(<LocaleProvider><TauriRemoteSessions name="gpu" workspace={workspace} pool={pool}/></LocaleProvider>);await tick();});}
+async function click(label:string){await act(async()=>{const button=[...document.querySelectorAll<HTMLButtonElement>("button")].find(v=>v.textContent===label);assert.ok(button);button.click();await tick();});}
+await render("/p");assert.equal(document.querySelectorAll("li").length,50);assert.ok(document.body.textContent?.includes("Read-only list"));assert.ok(document.body.textContent?.includes("Current on server"));assert.equal(document.querySelectorAll("textarea,a").length,0,"no composer or local file links");
+await click("Next page");assert.equal(document.querySelectorAll("li").length,1);assert.ok(document.body.textContent?.includes("Question 50"));
+await click("Previous page");assert.equal(document.querySelectorAll("li").length,50);
+let finish!:(value:BridgeRemoteControllerSessionsResponse)=>void;
+read=id=>new Promise(resolve=>{finish=resolve;});
+await click("Refresh sessions");const old=views.get("owned-1");
+read=async id=>({protocolVersion:1,controller:views.get(id),sessions:[]});await render("/q");
+assert.ok(document.body.textContent?.includes("No saved remote sessions"));
+await act(async()=>{finish({protocolVersion:1,controller:old,sessions:[{name:"old",title:"STALE PRIVATE TITLE",path:"/old.jsonl",turns:1,current:false,running:false,takenOver:false,mtimeMilli:1}]});await tick();});
+assert.ok(!document.body.textContent?.includes("STALE PRIVATE TITLE"));assert.ok(!document.querySelector('[aria-busy="true"]'));
+read=async()=>{throw new Error("private-backend-secret");};await click("Refresh sessions");
+assert.ok(document.querySelector('[role="alert"]')?.textContent?.includes("close and reopen"));assert.ok(!document.body.textContent?.includes("private-backend-secret"));
+await act(async()=>{root.unmount();await tick();});assert.deepEqual(calls.filter(c=>c.startsWith("close:")),["close:owned-1","close:owned-2"]);
+console.log("PASS Tauri remote sessions UI: paging, read-only boundary, stale response and cleanup");

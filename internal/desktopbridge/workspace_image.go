@@ -2,6 +2,7 @@ package desktopbridge
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"errors"
 	"image"
@@ -32,18 +33,48 @@ type WorkspaceImageView struct {
 	Mime      string `json:"mime,omitempty"`
 	Size      int64  `json:"size,omitempty"`
 	ErrorCode string `json:"errorCode,omitempty"`
+	OpenHref  string `json:"openHref,omitempty"`
 }
 
 // WorkspaceImage holds the ownership lock through resolution and decoding, so
 // a concurrent session switch cannot substitute another session's workspace.
 func (m *RuntimeManager) WorkspaceImage(sessionID, source string) (WorkspaceImageView, error) {
+	return m.WorkspaceImageWithRemote(context.Background(), sessionID, source, nil)
+}
+
+// Remote work releases the controller lock and fences its result against the
+// owner's epoch, including switch-away-and-back and same-session model rebuild.
+func (m *RuntimeManager) WorkspaceImageWithRemote(ctx context.Context, sessionID, source string, remote func(context.Context, string) WorkspaceImageView) (WorkspaceImageView, error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	locked := true
+	defer func() {
+		if locked {
+			m.mu.Unlock()
+		}
+	}()
 	if m.closed {
 		return WorkspaceImageView{}, ErrClosed
 	}
 	if m.runtime == nil || strings.TrimSpace(sessionID) == "" || m.view.ID != strings.TrimSpace(sessionID) {
 		return WorkspaceImageView{}, ErrSessionNotFound
+	}
+	if IsRemoteWorkspaceImage(source) {
+		if remote == nil {
+			return WorkspaceImageView{ErrorCode: "blocked-remote"}, nil
+		}
+		epoch := m.ownerEpoch
+		m.mu.Unlock()
+		locked = false
+		view := remote(ctx, source)
+		m.mu.Lock()
+		locked = true
+		if m.closed {
+			return WorkspaceImageView{}, ErrClosed
+		}
+		if m.runtime == nil || m.view.ID != strings.TrimSpace(sessionID) || m.ownerEpoch != epoch {
+			return WorkspaceImageView{}, ErrSessionNotFound
+		}
+		return view, nil
 	}
 	provider, ok := m.runtime.(RuntimeWorkspaceProvider)
 	if !ok {
@@ -54,6 +85,12 @@ func (m *RuntimeManager) WorkspaceImage(sessionID, source string) (WorkspaceImag
 		return WorkspaceImageView{}, ErrInvalidWorkspacePath
 	}
 	return readWorkspaceImage(root, source), nil
+}
+
+func IsRemoteWorkspaceImage(source string) bool {
+	source = strings.TrimSpace(source)
+	return strings.HasPrefix(source, "//") || (len(source) >= 7 && strings.EqualFold(source[:7], "http://")) ||
+		(len(source) >= 8 && strings.EqualFold(source[:8], "https://"))
 }
 
 func readWorkspaceImage(base, source string) WorkspaceImageView {

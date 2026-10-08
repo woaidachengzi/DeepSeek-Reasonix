@@ -9,7 +9,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/http/cookiejar"
 	"runtime"
 	"sort"
 	"strconv"
@@ -618,12 +617,11 @@ func (m *desktopRemoteManager) reloadServeProviders(ctx context.Context, generat
 	}
 	allOK := true
 	for ws, t := range targets {
-		jar, err := cookiejar.New(nil)
+		client, err := newServeHTTPClient(t.base)
 		if err != nil {
 			allOK = false
 			continue
 		}
-		client := &http.Client{Jar: jar}
 		callCtx, cancel := context.WithTimeout(ctx, remoteProviderReloadTimeout)
 		err = serveHandshake(callCtx, client, t.base, t.token)
 		if err == nil {
@@ -633,6 +631,7 @@ func (m *desktopRemoteManager) reloadServeProviders(ctx context.Context, generat
 		if err != nil && strings.Contains(err.Error(), "status 409") {
 			err = m.cancelThenReload(ctx, client, t.base, t.token)
 		}
+		client.CloseIdleConnections()
 		if err != nil {
 			log.Printf("[remote] reloadServeProviders: FAILED host=%s ws=%s err=%v", hostID, ws, err)
 			allOK = false

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/cookiejar"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -78,8 +77,11 @@ func TestCredentialProxyRealHostSmoke(t *testing.T) {
 	}
 
 	// One real model turn through the desktop-held key.
-	jar, _ := cookiejar.New(nil)
-	client := &http.Client{Jar: jar, Timeout: 120 * time.Second}
+	client, err := newServeHTTPClient(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.Timeout = 120 * time.Second
 	if err := serveHandshake(ctx, client, base, token); err != nil {
 		t.Fatalf("handshake: %v", err)
 	}

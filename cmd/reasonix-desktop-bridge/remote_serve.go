@@ -58,27 +58,45 @@ func serveForwardName(workspace string) string {
 }
 
 func newRemoteServeMutexes() *remoteServeMutexes {
-	return &remoteServeMutexes{hosts: map[string]*sync.Mutex{}}
+	return &remoteServeMutexes{hosts: map[string]chan struct{}{}}
 }
 
 type remoteServeMutexes struct {
 	mu    sync.Mutex
-	hosts map[string]*sync.Mutex
+	hosts map[string]chan struct{}
 }
 
 func (m *remoteServeMutexes) lock(name string) func() {
+	unlock, _ := m.lockContext(context.Background(), name)
+	return unlock
+}
+
+// A canceled controller attach must not wait behind another Serve operation.
+// The older browser/Serve handlers retain the same per-host mutual exclusion.
+func (m *remoteServeMutexes) lockContext(ctx context.Context, name string) (func(), error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	m.mu.Lock()
 	if m.hosts == nil {
-		m.hosts = map[string]*sync.Mutex{}
+		m.hosts = map[string]chan struct{}{}
 	}
 	lock := m.hosts[name]
 	if lock == nil {
-		lock = &sync.Mutex{}
+		lock = make(chan struct{}, 1)
 		m.hosts[name] = lock
 	}
 	m.mu.Unlock()
-	lock.Lock()
-	return lock.Unlock
+	select {
+	case lock <- struct{}{}:
+		if err := ctx.Err(); err != nil {
+			<-lock
+			return nil, err
+		}
+		return func() { <-lock }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 func (b *bridgeServer) remoteServeStatus(w http.ResponseWriter, r *http.Request) {
@@ -177,10 +195,28 @@ func (b *bridgeServer) stopRemoteServe(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), remoteServeTimeout)
 	defer cancel()
+	transport, transportErr := client.SSH()
+	if transportErr != nil {
+		writeProtocolError(w, http.StatusConflict, "conflict", "remote connection changed while stopping Serve")
+		return
+	}
 	if err := bootstrap.Stop(ctx, client, input.Workspace); err != nil {
 		writeProtocolError(w, http.StatusBadGateway, "remote_serve_failed", "could not stop remote Serve")
 		return
 	}
+	b.remoteSessions.mu.Lock()
+	currentTransport, currentErr := client.SSH()
+	if b.remoteSessions.clients[input.Name] != client || ctx.Err() != nil || currentErr != nil || currentTransport != transport {
+		b.remoteSessions.mu.Unlock()
+		writeProtocolError(w, http.StatusConflict, "conflict", "remote connection changed while stopping Serve")
+		return
+	}
+	// Pending attaches have not yet published their resolved workspace. Cancel
+	// all of this host's pending attaches so a path alias cannot resurrect a
+	// just-stopped Serve; other published workspaces remain usable.
+	b.remoteSessions.revokePendingControllersLocked(input.Name)
+	b.remoteSessions.revokeControllersLocked(input.Name, input.Workspace)
+	b.remoteSessions.mu.Unlock()
 	_ = client.Forwards().Remove(serveForwardName(input.Workspace))
 	writeJSON(w, http.StatusOK, remoteServeView{ProtocolVersion: desktopbridge.ProtocolVersion, Name: input.Name, Workspace: input.Workspace, State: "stopped"})
 }

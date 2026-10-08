@@ -158,13 +158,23 @@ pub fn paste(app: &AppHandle, directory: &Path) -> Result<(), String> {
     if pending_files(directory)? != 0 {
         return Err("existing session copy left staging files".into());
     }
-    // Leave this copied-but-unsent image in the composer. Reopen must not replay it.
+    // A copied existing-session attachment must not leak into a fresh draft.
+    act(app, "document.querySelector('.tauri-sidebar__new').click()")?;
+    check(app, "!document.querySelector('.tauri-composer__attachment') && document.querySelector('.tauri-composer textarea').value === ''", "new draft clears copied unsent attachment")?;
+    act(app, "document.querySelector('.tauri-composer textarea').focus()")?;
+    crate::native_menu_smoke::edit(app, "Paste")?;
+    check(app, &image_loaded_expression(".tauri-composer__attachment-icon img"), "unsent image before quit")?;
+    if pending_files(directory)? != 1 {
+        return Err("exit fixture did not retain exactly one staged image".into());
+    }
+    // Leave an actual staged file alive: the external runner must prove normal
+    // host Exit deletes it, and reopening must not replay the unsent draft.
     std::fs::write(
         directory.join("reasonix-native-image-paste-result.json"),
         serde_json::json!({
             "ok":true,"nativeMenuPaste":true,"draftPreview":true,"draftRemovalCleanup":true,
             "imageSend":true,"historyImage":true,"markdownImage":true,"existingSessionPreview":true,
-            "stagingCleanup":true,"noEarlySession":true
+            "stagingCleanup":true,"noEarlySession":true,"pendingImageBeforeExit":true
         })
         .to_string(),
     )

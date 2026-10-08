@@ -66,23 +66,24 @@ type shutdownResponse struct {
 }
 
 type bridgeServer struct {
-	token              string
-	instanceID         string
-	shutdownRequested  chan struct{}
-	shutdownOnce       sync.Once
-	runtimes           *desktopbridge.RuntimeManager
-	events             *desktopbridge.EventStream
-	requestIDs         *idempotencyLedger
-	remoteSessions     *previewRemoteSessions
-	remoteServeMu      *remoteServeMutexes
-	packageOpsMu       sync.Mutex
-	subagentTryMu      sync.Mutex
-	subagentTryRun     *subagentTryRun
-	cacheIdentityReads bool
-	identityReadMu     sync.Mutex
-	identityReadStore  *sessionidentity.Store
-	mcpRegistry        *mcpregistry.Client
-	botRuntime         *previewBotRuntime
+	token                   string
+	instanceID              string
+	shutdownRequested       chan struct{}
+	shutdownOnce            sync.Once
+	runtimes                *desktopbridge.RuntimeManager
+	events                  *desktopbridge.EventStream
+	requestIDs              *idempotencyLedger
+	remoteSessions          *previewRemoteSessions
+	remoteServeMu           *remoteServeMutexes
+	remoteControllerFactory remoteControllerFactory
+	packageOpsMu            sync.Mutex
+	subagentTryMu           sync.Mutex
+	subagentTryRun          *subagentTryRun
+	cacheIdentityReads      bool
+	identityReadMu          sync.Mutex
+	identityReadStore       *sessionidentity.Store
+	mcpRegistry             *mcpregistry.Client
+	botRuntime              *previewBotRuntime
 }
 
 func main() {
@@ -618,6 +619,9 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("POST /v1/settings/remote/serve/stop", b.authorized(b.idempotent(12<<10, b.stopRemoteServe)))
 	mux.HandleFunc("POST /v1/settings/remote/serve/logs", b.authorized(b.remoteServeLogs))
 	mux.HandleFunc("POST /v1/settings/remote/controller/open", b.authorized(b.openRemoteController))
+	mux.HandleFunc("POST /v1/remote/controllers", b.authorized(b.attachRemoteController))
+	mux.HandleFunc("GET /v1/remote/controllers/{controllerID}/sessions", b.authorized(b.remoteControllerSessions))
+	mux.HandleFunc("DELETE /v1/remote/controllers/{controllerID}", b.authorized(b.closeRemoteController))
 	mux.HandleFunc("POST /v1/settings/remote/hosts", b.authorized(b.idempotent(64<<10, b.changeRemoteSettings)))
 	mux.HandleFunc("GET /v1/settings/bots", b.authorized(b.botSettings))
 	mux.HandleFunc("POST /v1/settings/bots", b.authorized(b.idempotent(64<<10, b.changeBotSettings)))
@@ -647,6 +651,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("GET /v1/sessions/title-recovery", b.authorized(b.pendingSessionTitleRecoveries))
 	mux.HandleFunc("GET /v1/sessions/{id}/snapshot", b.authorized(b.sessionSnapshot))
 	mux.HandleFunc("GET /v1/sessions/{id}/workspace-target", b.authorized(b.sessionWorkspaceTarget))
+	b.terminalRoutes(mux)
 	mux.HandleFunc("GET /v1/sessions/{id}/balance", b.authorized(b.sessionBalance))
 	mux.HandleFunc("POST /v1/sessions/{id}/mcp/runtime", b.authorized(b.idempotent(64<<10, b.sessionMCPRuntimeAction)))
 	mux.HandleFunc("POST /v1/sessions/{id}/mcp/auth/clear", b.authorized(b.idempotent(64<<10, b.sessionMCPClearAuthentication)))
@@ -850,12 +855,14 @@ func (b *bridgeServer) authorized(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, healthResponse{
+	view := healthResponse{
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
 		Capabilities:      []string{"health", "provider_summary", "provider_configs", "save_provider_config", "delete_provider_config", "discover_provider_models", "preview_provider_reasoning", "provider_model_probe", "usage_stats", "storage_settings", "permission_settings", "set_permission_settings", "secrets_settings", "set_secrets_settings", "sandbox_settings", "set_sandbox_settings", "network_settings", "set_network_settings", "skills_settings", "set_skills_settings", "plan_skill_install", "install_skill", "archive_skill", "restore_skill", "plugin_settings", "set_plugin_settings", "plugin_doctor", "plan_plugin_install", "install_plugin", "remove_plugin", "subagent_settings", "set_subagent_settings", "try_subagent", "subagent_try_status", "cancel_subagent_try", "hooks_settings", "set_hooks_settings", "memory_settings", "set_memory_settings", "memory_suggestions", "accept_memory_suggestion", "set_default_model", "set_session_model", "session_approval_mode", "set_session_approval_mode", "set_model_role", "set_agent_preferences", "desktop_preferences", "set_desktop_external_opener", "set_desktop_approval", "set_provider_key", "save_provider_api_key", "bot_settings", "set_bot_settings", "bot_runtime_status", "restart_bot_runtime", "bot_connection_crud", "bot_pairing", "change_bot_pairing", "remote_ssh_probe", "remote_ssh_connect", "remote_ssh_disconnect", "remote_workspace_browse", "remote_file_preview", "remote_file_save", "remote_path_mutation", "remote_forwards", "remote_serve", "remote_controller", "open_session", "switch_session", "session_snapshot", "session_balance", "session_history", "rename_session", "delete_session", "session_archives", "change_session_archive", "attach_file", "workspace_target", "workspace_list", "workspace_file_preview", "workspace_image", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "mcp_server_activation", "mcp_runtime_action", "mcp_marketplace", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "session_scan_import_review_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
-	})
+	}
+	view.Capabilities = append(view.Capabilities, "remote_controller_sessions_v1")
+	writeJSON(w, http.StatusOK, view)
 }
 
 func (b *bridgeServer) providerSummary(w http.ResponseWriter, r *http.Request) {
@@ -1905,7 +1912,7 @@ func (b *bridgeServer) workspaceImage(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid workspace image request")
 		return
 	}
-	image, err := b.runtimes.WorkspaceImage(r.PathValue("id"), request.Source)
+	image, err := b.runtimes.WorkspaceImageWithRemote(r.Context(), r.PathValue("id"), request.Source, loadPreviewRemoteImage)
 	if err != nil {
 		b.writeRuntimeError(w, err, "unable to resolve desktop bridge workspace image")
 		return
@@ -2128,6 +2135,12 @@ func (b *bridgeServer) writeRuntimeError(w http.ResponseWriter, err error, messa
 		status, code = http.StatusNotFound, "not_found"
 	case errors.Is(err, desktopbridge.ErrClosed):
 		status, code = http.StatusServiceUnavailable, "shutting_down"
+	case errors.Is(err, desktopbridge.ErrTerminalBusy):
+		status, code = http.StatusConflict, "terminal_busy"
+		message = "terminal creation is still pending; wait for it to finish before replacing the session controller"
+	case errors.Is(err, desktopbridge.ErrTerminalUnavailable):
+		status, code = http.StatusServiceUnavailable, "terminal_unavailable"
+		message = "terminal ownership could not be transferred; reopen the active session and check workspace access"
 	case errors.Is(err, desktopbridge.ErrSessionModelRecover):
 		status, code = http.StatusInternalServerError, "session_model_recovery_failed"
 	case errors.Is(err, desktopbridge.ErrSessionModelSwitch):

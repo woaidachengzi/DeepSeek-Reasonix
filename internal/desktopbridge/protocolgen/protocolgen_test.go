@@ -10,6 +10,20 @@ import (
 // repoRoot is the schema's own tree: tests run from the package directory.
 const repoRoot = "../../.."
 
+func TestGenerateSignedIntegerForNegativeExitCodes(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, SchemaPath, `{"$defs":{"exit":{"type":"object","required":["code","offset"],"properties":{"code":{"type":"integer","minimum":-2147483648},"offset":{"type":"integer","minimum":0}}}}}`)
+	artifacts, err := Generate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, artifact := range artifacts {
+		if artifact.Path == RustArtifactPath && (!strings.Contains(string(artifact.Data), "pub code: i64,") || !strings.Contains(string(artifact.Data), "pub offset: u64,")) {
+			t.Fatal("signed terminal exit code or unsigned byte offset generated incorrectly")
+		}
+	}
+}
+
 // TestGenerateMatchesCommittedArtifacts makes the drift gate part of go test,
 // not only of the explicit -check command CI runs.
 func TestGenerateMatchesCommittedArtifacts(t *testing.T) {

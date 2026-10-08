@@ -5,8 +5,80 @@
 `d564c5c3e` 后的图片阶段增量已接入 Tauri 主窗口、会话归属的本地图片解析、
 输入框/历史附件预览与共享 Markdown 图片适配，并以隔离数据验证源码和 macOS 包启动。
 后文 2026-10-06/07 “仅识别 Wails 图片 resolver”是历史快照，不再代表本地图片的当前源码状态。
-真实原生图片粘贴、旧 Global 附件包级兼容和受限远程图片代理仍未放行；详细边界见
+后续未提交增量已接入共享受限远程图片代理并通过隔离 Go/浏览器链路与 App 构建；
+不再使用 WebView 直连图片。真实原生图片粘贴、旧 Global 附件包级兼容和远程代理包级使用仍未放行；详细边界见
 [图片阶段验收](IMAGE_PREVIEW_ACCEPTANCE.md)。A/B/C 与正式发布门禁仍保留。
+
+## 2026-10-08 当前源码 review 与提交验证
+
+本次合并下述终端、受限图片加载、远程只读列表及差异返回位置增量。下文“未提交”描述各阶段当时的状态；当前验证以暂存区导出的固定源码快照为准，不将旧 App 的验收升级为新源码包级通过。
+
+- Review 修复终端清空后同 ID 重开复用过期列表请求，以及 readiness 返回后继续创建旧 owner 终端；新增确定性回归。修复 Wails 凭据重载遗漏共用 HTTP client 导致握手被拒绝；现有取消忙碌 turn 与重载回归真实复现并验证修复。
+- 修复远程列表引用退役颜色变量、终端测试的 request ID/ES2021 类型错误。14 条新增远程列表文案在 level-9 gzip 实测 zh 为 81426→81689 B、zh-TW 为 82071→82339 B，locale 门限调整到相邻小数上限；首屏 JS、CSS 和其他预算保持原值。
+- 固定快照的完整 `test:terminal`、`test:tauri`、`test:remote-controller`、`test:typecheck` 与 `build` 通过。Go bridge / desktopbridge / desktopterminal / terminalprocess / netclient / control / remote/controller / serve 的全量 race 通过；Wails `Serve|Remote|Terminal` race 通过。协议生成器一致性和 Go vet 通过；Rust 全量 251 passed、0 failed、6 ignored；Python 原生验收工具 16 项回归通过。
+- Windows/Linux amd64、CGO_ENABLED=0 的完整 bridge 交叉构建通过，仅编译未运行。差异长列表返回的位置、焦点、加载/失败返回、刷新、窗口缩小与会话切换已由浏览器验证；Browser plugin 不可用，使用已有 Playwright 和 Chrome。
+- 最终日志保存在 `/private/tmp/reasonix-final-{go,wails,terminal,tauri,remote-ui,test-types,build}.log`，Rust/Python/vet 日志在 `/private/tmp/reasonix-all-review-{rust,python,vet}.log`。本次 review 未重新打包 App，不放行尚未完成的原生剪贴板、远程完整读写/审批及异平台实际运行门禁。
+
+## 2026-10-08 远程 controller 只读后端（未提交）
+
+新增仅含 `name/workspace` 的 attach、opaque handle 清单读取与关闭接口，后端自持 SSH tunnel、token/cookie；会话 DTO 不传递未知配置字段。连接绑定底层 SSH 身份，断开/自动重连/替换/停服/退出取消旧 owner；目录路径不成为本地会话或文件授权。
+自有真实 SSH direct-tcpip + HTTP cookie 生命周期，以及生产 Serve controller 的临时 transcript 清单兼容回归通过；Go race/vet、协议镜像/DTO、TypeScript 与 Rust 编译检查通过。
+未重建 App，尚无 native IPC/remote tab 或远程发送/审批/模型归属。详情及日志见 [E 清单](E_MIGRATION_CHECKLIST.md#2026-10-08-远程-controller-连接归属与只读清单后续未提交增量)。图片剪贴板与整体 E 门禁不变。
+
+### 后续源码：窄原生 IPC 与只读列表
+
+上述后端快照之后，已增加主窗口 attach/sessions/close 三个 typed IPC，固定路由、worker 执行、未知字段拒绝和响应归属/预算校验；设置页显式打开只读清单，按 50 条分页，关闭不影响本地 RuntimeManager。共享前端 lease 覆盖迟到 attach/close、scope 切换和 uncertain-close barrier，不把多次 React 挂载变成不受控连接。
+
+- Rust 新增 3 项 HTTP fixture 单测通过（其余 254 项 filtered，不冒充 Rust 全量），`cargo clippy --locked --all-targets -- -D warnings` 通过。
+- `test:remote-controller` 的 pool、真实 invoke 绑定模拟与组件测试通过；`test:tauri`、`typecheck`、`test:typecheck`、`build`（含 hooks/层级/单滚动写入者/体积门限）通过。终端测试以相同 8 个文件的 `node --import tsx` 入口通过；默认 tsx CLI 的 IPC pipe 受 sandbox EPERM 限制，没有改测试内容绕过断言。
+- Browser plugin not available；既有 Playwright 1.62.1 + 自有 headless Chrome 在临时 `http://127.0.0.1:57069/remote-qa` fixture（现已关闭）、1440×1000 与 390×844 检查通过：页面身份、非空、无框架 overlay、console error/warn 为零、分页/关闭重开/错误隐私、长路径无横向溢出。浏览器调用的是模拟 IPC，不连接用户 SSH/模型，不冒充 WKWebView 包内验收。
+- 证据 `/private/tmp/reasonix-remote-catalogue-ui.a45Q7Q/`：`native-ipc-tests.log`、`clippy.log`、`remote-bindings-final.log`、`tauri-regression-final.log`、`build-final.log`、`test-typecheck-bindings-final.log`、`terminal-direct-final.log`、`browser-qa.log`、`desktop.png`、`narrow.png`。早期 pnpm 错误启动器、权限审核超时及测试类型失败保留，只有修正后最终日志列作通过；本轮未修改签名校验或体积预算。之后并发任务暂存大量改动并调整中文 locale 预算；该调整不属于本轮验证结论，提交前须基于最终快照复核，不能把这里的通过升级为后续全部改动通过。
+- 此阶段未重建/启动新 App，尚无远程历史/发送/事件/审批/模型归属、bot Desktop 或真实 Serve 外部账号联调；未提交/推送，不关闭图片剪贴板与整个 E 门禁。
+
+## 2026-10-08 内置终端共用进程层（未提交）
+
+在原生图片验收因已有 Preview 进程而安全拒绝期间，先准备终端共用底层，不关闭图片门禁。
+现有 Wails 的真实 PTY/ConPTY 实现迁入 `internal/terminalprocess`，Wails 通过薄 adapter 调用；
+固定使用原锁定版本 `creack/pty v1.1.24`、`UserExistsError/conpty v0.1.4`，不引入 WebKit/CGO。
+这不是外部 Terminal 启动器或普通 stdin/stdout 管道替代。
+
+- Backend-only Spec 需要绝对 shell/cwd、有效字符和 1..1000 × 1..500 的尺寸；不接收 renderer 的程序路径、参数或环境。复制参数/环境快照，空环境不默默继承宿主变量，保留 Windows 隐藏环境键兼容。
+- Unix PTY 从启动起负责一次进程回收，防止取消创建、尚未注册 Wait 的子进程成为 zombie；Wait 结果可重复读取，Close 幂等并清理自有进程组。Windows 保留 ConPTY、独立 argv 引用和 pseudo-console 关闭实现。
+- macOS 真实无登录 shell PTY 验证通过：stdin/stdout 都是 TTY、输入实际执行而非 echo 假阳性、100×30 尺寸、中文/空格 cwd、自有环境不继承测试 sentinel、非零退出码、重复 Wait/Close、取消创建的进程回收及其自有子进程清理。没有打开用户终端或读取登录 profile。
+- `go test -race ./internal/terminalprocess -count=1` 和 `go vet ./internal/terminalprocess` 通过；Wails nested module 的 `go test . -run 'Terminal' -count=1` 通过，包含既有生命周期/归属与真实 PTY smoke。链接器已有 duplicate `-lobjc` warning，不是测试失败。
+- `GOOS=windows/linux GOARCH=amd64 CGO_ENABLED=0 go test -c ./internal/terminalprocess` 通过；仅编译，不证明 Windows ConPTY/Linux PTY 的实际运行。新的 Windows 真实 ConPTY 测试已随源码加入，需 Windows runner 执行。
+- 接入后的完整 `cmd/reasonix-desktop-bridge` 也在 Windows/Linux amd64、`CGO_ENABLED=0` 下构建通过，产物只保存在 `/private/tmp/reasonix-terminal-backend-compile.xHVGqm/`；未执行这些异平台二进制，不覆盖已交付 App 或 CI 状态。
+- 后续 Go 后端已增加 `internal/desktopterminal` 的本地会话工作区管理器及 controller-generation 的 `RuntimeTerminalProvider`：实际工作区解析、已安装 shell ID/用户偏好、最多 10 个会话（含创建/关闭中的 reservation）、每次 64 KiB 输入与四个队列槽、每个终端 128 KiB 输出快照。输出保持原始字节的 base64 与累计 byte offset；单个 live frame 最多 8 KiB，断线缺口必须重新取快照。终端数据直接进入有界 bridge ledger，不进入 Agent sink、History 或模型上下文。
+- 会话切换和删除/退出关闭创建与输入 gate；慢创建返回后若已失去归属必须关闭自有 PTY，不登记、不发事件。输入串行且不持有 controller ownership lock 等待 OS write；关闭会丢弃尚未执行的排队输入。读取中断也关闭自己的终端，不能留下不可见 shell；关闭超时/仍有启动中的资源返回失败，不能记为清理成功。
+- 认证 HTTP 创建/输入/resize/rename/close/output 已接入，创建和输入必须提供 request ID，同 ID 重试只重放响应，不重复命令；renderer 不能传程序、参数或环境。JSON schema、Go DTO 和生成的 Rust/TypeScript 类型一致，固定错误包含恢复步骤且不回显输入、路径、系统错误或凭据。端点契约见 [BRIDGE_PROTOCOL.md](BRIDGE_PROTOCOL.md)。
+- 最终 `go test -race ./internal/desktopterminal ./internal/desktopbridge ./internal/terminalprocess ./cmd/reasonix-desktop-bridge -count=1` 与 `go vet ./internal/desktopterminal ./internal/desktopbridge ./cmd/reasonix-desktop-bridge` 通过；Go bridge/protocolgen 全量及生成器 `--check` 通过。覆盖越界/外部链接、字节/队列/会话预算、broken reader、堵塞输入关闭、取消/慢创建、switch-away-and-back 的迟到回包、replay gap、认证/未知字段/重复输入与 schema。
+- 实际 controller → 认证 HTTP → 真实 macOS PTY 回归通过：Global cwd、执行 marker、100×30、请求重放不重复执行、输出不进入模型历史，以及切换/退出后的 **自有 shell PID 已消失**（只读 signal 0，不按名称/未知 PID 杀进程）。测试使用新 HOME/配置且关闭用户 shell rc，没有打开 GUI 或访问模型/真实账号。Rust 默认环境全量为 243 passed / 0 failed / 5 ignored；需额外提供真实 bridge 的条件测试不能据此声称包级通过。
+- 同会话模型切换、设置刷新、推理强度替换现已保留实际 PTY 和输出缓存：独占 backend retention lease 校验实际 workspace、session ID、transcript path 和 EventStream 身份，旧 provider 的输入/创建 gate 撤销；模型目标失败后 lease 交接给恢复的旧模型。创建 reservation 持续到桥接最终回包校验，尚未确认的创建会使替换返回 `terminal_busy`，不留下未确认进程或重试重复创建。设置/推理替换也递增 owner epoch，迟到的旧输出回包不能进入新 generation。
+- 重建期间 RuntimeManager 持有未附着 lease；Shutdown 立即关闭它，不等待 factory 返回，附着/发布也与退出互斥。交接失败会恢复原 terminal gate；推理元数据仅在发布时提交，拒绝已构建候选也回滚暂存选择。真实 controller/PTY 回归验证五个阶段均为 **同一个自有 shell PID**：初始、推理切换、模型切换、设置刷新、失败恢复；还验证 factory 阻塞时 Shutdown 返回后 PID 已消失，随后候选不得发布。没有访问真实账号或用户终端。
+- 此保活最终源码的全量 `go test -race ./internal/desktopterminal ./internal/desktopbridge ./internal/terminalprocess ./cmd/reasonix-desktop-bridge -count=1`、`go vet` 与协议生成器 `--check` 通过；Windows/Linux amd64 完整 bridge 再次 `CGO_ENABLED=0` 交叉构建通过，产物 `/private/tmp/reasonix-terminal-retention-compile.Rri927/`，仍未异平台运行。覆盖成功/恢复/双重失败、交接身份拒绝、退出竞态、pending create、settings/effort 迟到回包与配置回滚。
+- Rust 已接入 7 个 main-window-only typed command（workspace/create/output/input/resize/rename/close）与 `terminal.rs` client；HTTP 在 `spawn_blocking` worker 执行，获取 connection 后不持有 supervisor process lock 等待 PTY/HTTP。禁止未知字段、任意程序/参数/环境；输入为不超过 64 KiB 的严格 base64。mutation 重试必须复用同一 request ID 与相同 body，不发送重复命令；响应校验版本、终端归属、字节 offset、预算和 JS 安全整数范围。只有有限错误恢复 code 能过 Rust 字符串边界，绝不透传 bridge 的自由文本错误。
+- SSE host 将 `terminal_output` / `terminal_exit` 校验并规范化后仅对 `main` label 发 `bridge:terminal-event`，不向其他窗口广播，不会进入 `bridge:event` 的 Agent consumers；无效 terminal frame 被丢弃，不降级成 AI text。Unix signal 退出码允许 `-1`，Windows DWORD 允许到 `4294967295`，生成器按显式负 minimum 生成 `i64`，保留 byte offset 的 `u64`。
+- Rust 默认全量 `cargo test --locked --manifest-path desktop/tauri/Cargo.toml` 为 248 passed / 0 failed / 6 ignored；条件型旧真实 bridge 测试不能据此记为真实运行。新增终端的 5 个源码回归验证 header injection/unknown fields/main label、二进制/base64、预算/错归属/错协议、同 ID/同 body HTTP 丢响应重试、错误隐私与事件分流。显式提供 `/private/tmp/reasonix-terminal-ipc.0ihf5N/reasonix-desktop-bridge` 并执行 `terminal::tests::actual_bridge_pty_end_to_end -- --ignored --nocapture` 已真实通过：Rust client → 新隔离 Go sidecar → 实际 PTY，创建与输入重试不重复、100×30、重命名、更换模型后同 shell PID、输出不进入 History、Close 后自有 PID 消失；第二个测试 shell 只终止自身，实际 wire 返回 `-1` 并正确解码。没有启动用户 GUI、读取真实配置/rc 或访问真实账号。
+- 更新退出码后的 Go bridge/desktopbridge/desktopterminal/protocolgen 全量 race 与生成器 `--check` 通过。这组源码验证本身不证明已交付 App 包含终端入口；下述独立候选的原生证据单独记录，不能把 Go/Rust 或浏览器通过记为 C 已完成。图片原生及 Windows/Linux 实际运行门禁继续保留。
+
+## 2026-10-08 内置终端前端增量（未提交，独立 macOS 候选已构建）
+
+- Preview 聊天顶栏新增终端开关，首次打开才加载共用 `TerminalPanel` / xterm；仅允许当前可写会话，打开面板不启动 shell，用户点击“新建终端会话”才创建。收起只暂停 xterm 绘制、不停止 PTY；重新展开按输出游标恢复，不重复创建。切换会话撤销 renderer owner、输入队列和订阅，后端负责实际进程清理。
+- 原生 `AppBindings` 在 Wails/browser mock 之前解析，原生失败绝不落到 mock。只走已登记的 typed command，程序、参数、环境仍由 backend 决定；终端输出单独订阅 `bridge:terminal-event`，不会进入 AI 文本或 History。复制沿用现有实现；“将终端输出加入聊天”显式获取受限快照、去掉控制序列、暂存为选中文本上下文，不自动发送。
+- 每个终端 FIFO 串行提交 input/resize/rename/close；单次输入最大 64 KiB，renderer 在途与待发送输入合计最多 256 KiB / 1024 个待执行操作。未知交付结果、退出、断线、owner 撤销均丢弃未执行的排队输入，绝不换新 request ID 自动重发。关闭后不能继续输入；原生拒绝错误由终端面板显示并提供重新加载入口。
+- 原始字节/base64 + byte offset 去重和 overlap 裁剪，缺口取最多 128 KiB 的授权快照；恢复中的 live frame 最多暂存 16 帧 × 8 KiB。至多一次附加快照重试，失败显示恢复提示、不无限轮询。被截断的缺口替换共享 history，xterm 队列内 RIS 保证旧异步写入不会覆盖恢复数据；暂停期间也记住 snapshot revision，重新展开只重放替换后的数据。重连取快照并刷新 metadata，保留用户手动选择的终端；新建回包之前发生的退出不会发布成“仍运行”。
+- 新增 transport/native binding 回归覆盖 UTF-8、FIFO、字节预算、输入取消、重复/重叠输出、快照恢复、旧 owner 迟到快照、异步 listener 释放、错长度/错终端快照拒绝、提前退出，以及原生优先且无 mock fallback。既有终端回归通过（workspace-layout 39/0）；store 额外覆盖刷新保留选择与同 ID 切回时拒绝旧 create，终端 commands 生命周期回归通过。
+- 隔离 Playwright 浏览器宿主模拟验证通过：页面身份、非空页面、无 overlay/console error，键盘走 typed IPC、ANSI/中文显示、显式上下文暂存、收起/重开只创建一次、单一 terminal listener、会话切换不显示旧终端；1440×1000 与 390×844 截图已检查。窄窗口终端/输入区收紧并保留至少 100px 对话区，没有增加 transcript scroll writer。临时证据在 `/private/tmp/reasonix-terminal-ui.BBjAO7/`；模拟宿主 **没有实际执行 shell**，不替代之前的真实 Rust → Go → PTY 测试，也不覆盖 Tauri WebView 的真实 IPC、复制/粘贴或原生窗口验收。
+- 完整前端 build（hooks/WAAPI/single-scroll-writer/app-layer/Wails binding/CSS/theme token/typecheck/production bundle budget）、`test:terminal`、`test:transcript` 与 `test:tauri` 全量回归通过；仍有既有 jsdom mock/React act/deprecation warning，浏览器 fixture 无 warning/error。最终终端测试/构建日志在临时证据目录。未新增提交或 push，未覆盖旧已交付 App、正式发布或 Developer ID 签名。下述独立候选包不改变图片及跨平台剩余门禁。
+
+### 独立 ARM64 App 与真实 WKWebView 终端验收
+
+- 使用显式 `--target aarch64-apple-darwin --bundles app` 构建候选：`desktop/tauri/target/aarch64-apple-darwin/release/bundle/macos.noindex/Reasonix Tauri Preview.app`。本地 ad-hoc 签名与 `codesign --verify --deep --strict` 通过；没有公证、DMG 更新、正式发布或默认下载切换。源码基于 `a2e3c851ad0d80790bedb5c0dc0be46bbb5056f0` 加未提交增量，不等同该提交的干净构建。
+- `tools/tauri/smoke-native-integrated-terminal.py` 的 managed / explicit 两个全新私有 profile 均通过。实际生产 WKWebView / xterm textarea 的 DOM InputEvent 经已注册 IPC、打包 Go bridge 到真实 PTY；确认 stdin/stdout 是 TTY，中文/ANSI 实际绘制、中文/空格 cwd 正确。此证据不是物理键盘、原生输入法或系统 clipboard 验收。
+- 面板打开不执行 shell，点击新建才创建；收起/展开保留同一个 PTY。显式“加入聊天”生成一个上下文卡片，完整 tooltip 保留执行 marker/中文并去掉实际 ANSI 控制字符；History 仍为空、没有模型请求或自动发送。关闭及会话切换后各自 shell PID 消失，正常 App 退出后第三个 shell PID 消失；两个 host 均有 kernel exitCode 0 证据，打包 sidecar 也已退出。
+- runner 拒绝任何同 bundle ID 的已有 Preview，不关闭或激活用户 App，不读写系统 clipboard；新建临时 HOME/工作区、固定 `/bin/sh` 和私有启动环境，窗口一直位于给定左侧显示器几何。失败的两次尝试保留：第一次 seed 第二会话误用 open 而被正确返回 409，第二次误把完整输出断言施加在 72 字符摘要上；均修正验收驱动，未放宽生产保护或改变摘要设计。
+- 最终两种 profile 的固定布尔/PID receipt 与正常退出证据保留在 `/private/tmp/reasonix-native-terminal-ui-oqb90yzi/`；构建与完整日志位于 `/private/tmp/reasonix-terminal-ui.BBjAO7/`。host SHA-256 为 `86e730d846ce2652a4a49e64cebda380141dc52e2700e81cec2e4ba84632f82b`，sidecar 为 `cacd9145e87f66a4d6957a07d55e1251ed5773193bcdd873a4580b58db7c1909`。随后 Rust 全量 248 passed / 0 failed / 6 ignored、clippy `--all-targets -- -D warnings` 及新增 runner 3 项纯单元测试通过；ignored 条件测试不计作成功。
+- 这只放行上述 macOS 内置终端链路，不代表 C 全部完成。原生终端复制/粘贴、物理键盘/输入法、Windows ConPTY 与 Linux PTY 实际包级运行、远程 controller/bot 联动、图片完整原生粘贴以及正式签名/发布门禁仍待验证。
 
 ## 结论
 

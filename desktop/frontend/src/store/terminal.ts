@@ -46,7 +46,8 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
   async syncWorkspace(tabId, force = false) {
     const normalizedTabId = tabId.trim();
     if (!normalizedTabId) {
-      set({ tabId: "", workspace: null, activeSessionId: null, loading: false, error: null });
+      inFlight = null;
+      set({ tabId: "", generation: get().generation + 1, workspace: null, activeSessionId: null, loading: false, error: null });
       return null;
     }
     if (!force && inFlight?.tabId === normalizedTabId) return inFlight.promise;
@@ -68,7 +69,8 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
         const workspace = normalizedWorkspace(value);
         const current = get();
         if (current.tabId !== normalizedTabId || current.generation !== generation) return null;
-        const active = workspace.sessions.find((session) => session.running)?.id ?? workspace.sessions[0]?.id ?? null;
+        const active = workspace.sessions.some(item => item.id === current.activeSessionId) ? current.activeSessionId
+          : workspace.sessions.find((session) => session.running)?.id ?? workspace.sessions[0]?.id ?? null;
         set({ workspace, loading: false, error: null, activeSessionId: active });
         return workspace;
       })
@@ -95,13 +97,16 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
   },
   async createSession(tabId, relativePath = ".", shellId = "default") {
     const normalizedTabId = tabId.trim();
+    let generation = get().generation;
     set({ error: null });
     try {
-      const workspace = await get().ensureReady(normalizedTabId);
-      if (!workspace?.available || workspace.readOnly) return null;
+      const readiness = get().ensureReady(normalizedTabId);
+      generation = get().generation;
+      const workspace = await readiness;
+      if (get().tabId !== normalizedTabId || get().generation !== generation || !workspace?.available || workspace.readOnly) return null;
       const session = await app.CreateTerminalForTab(normalizedTabId, relativePath, shellId);
       set((state) => {
-        if (state.tabId !== normalizedTabId || !state.workspace) return {};
+        if (state.tabId !== normalizedTabId || state.generation !== generation || !state.workspace) return {};
         const sessions = state.workspace.sessions.some((item) => item.id === session.id)
           ? state.workspace.sessions.map((item) => item.id === session.id ? session : item)
           : [...state.workspace.sessions, session];
@@ -109,7 +114,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
       });
       return session;
     } catch (error) {
-      if (get().tabId === normalizedTabId) set({ error: errorMessage(error) });
+      if (get().tabId === normalizedTabId && get().generation === generation) set({ error: errorMessage(error) });
       throw error;
     }
   },

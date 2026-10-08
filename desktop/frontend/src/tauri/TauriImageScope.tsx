@@ -15,12 +15,8 @@ export function TauriImageScope({ sessionId, children }: { sessionId?: string; c
   // Hide the previous session's image in the same render as the session switch.
   const activePreview = preview?.sessionId === sessionId ? preview : null;
   const resolve = useCallback(async (source: string): Promise<MarkdownImageView> => {
-    // Preserve external raster URLs; local paths are never assigned to img.src.
-    // Remote image proxying is a separate gate, not a filesystem capability.
-    if (/^(https?:\/\/|\/\/)/i.test(source)) {
-      const url = source.startsWith("//") ? `https:${source}` : source;
-      return { url, openHref: url };
-    }
+    // All images use the owned bridge; no direct WebView network fallback can
+    // bypass the application's proxy or public-address/decode budgets.
     if (!sessionId) return { url: "", errorCode: "no-session" };
     return tauriWorkspaceImage(sessionId, source);
   }, [sessionId]);

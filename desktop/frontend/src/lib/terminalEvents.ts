@@ -3,13 +3,14 @@ import { createSubscriptionScope } from "./subscriptionScope";
 
 const MAX_HISTORY_BYTES = 1024 * 1024;
 
-type SequencedTerminalSink = (data: Uint8Array, sequence: number) => void;
+type SequencedTerminalSink = (data: Uint8Array, sequence: number, revision: number) => void;
 
 const sinks = new Map<string, SequencedTerminalSink>();
 const exitListeners = new Set<(event: TerminalExitEvent) => void>();
 const history = new Map<string, Uint8Array[]>();
 const historyBytes = new Map<string, number>();
 const nextSequence = new Map<string, number>();
+const revisions = new Map<string, number>();
 let bridge: { users: number; scope: ReturnType<typeof createSubscriptionScope> } | null = null;
 
 function decodeBase64(value: string): Uint8Array {
@@ -22,7 +23,13 @@ function decodeBase64(value: string): Uint8Array {
 
 function deliverOutput(event: TerminalOutputEvent): void {
   const bytes = decodeBase64(event.data);
-  if (bytes.byteLength === 0) return;
+  if (event.reset) {
+    history.delete(event.id);
+    historyBytes.delete(event.id);
+    nextSequence.set(event.id, 0);
+    revisions.set(event.id, (revisions.get(event.id) ?? 0) + 1);
+  }
+  if (bytes.byteLength === 0 && !event.reset) return;
   const sequence = nextSequence.get(event.id) ?? 0;
   nextSequence.set(event.id, sequence + 1);
   const queue = history.get(event.id) ?? [];
@@ -33,7 +40,7 @@ function deliverOutput(event: TerminalOutputEvent): void {
   }
   history.set(event.id, queue);
   historyBytes.set(event.id, total);
-  sinks.get(event.id)?.(bytes, sequence);
+  sinks.get(event.id)?.(bytes, sequence, revisions.get(event.id) ?? 0);
 }
 
 function deliverExit(event: TerminalExitEvent): void {
@@ -63,14 +70,14 @@ export function startTerminalEventBridge(): () => void {
 
 export function registerTerminalOutputSink(id: string, sink: SequencedTerminalSink): readonly [
   unregister: () => void,
-  history: () => readonly [chunks: readonly Uint8Array[], nextSequence: number],
+  history: () => readonly [chunks: readonly Uint8Array[], nextSequence: number, revision: number],
 ] {
   sinks.set(id, sink);
   return [
     () => {
       if (sinks.get(id) === sink) sinks.delete(id);
     },
-    () => [history.get(id) ?? [], nextSequence.get(id) ?? 0],
+    () => [history.get(id) ?? [], nextSequence.get(id) ?? 0, revisions.get(id) ?? 0],
   ];
 }
 
@@ -78,6 +85,7 @@ export function forgetTerminalSession(id: string): void {
   history.delete(id);
   historyBytes.delete(id);
   nextSequence.delete(id);
+  revisions.delete(id);
 }
 
 export function registerTerminalExitListener(listener: (event: TerminalExitEvent) => void): () => void {
@@ -90,6 +98,7 @@ export function __resetTerminalEventBus(): void {
   history.clear();
   historyBytes.clear();
   nextSequence.clear();
+  revisions.clear();
   bridge?.scope.dispose();
   bridge = null;
 }

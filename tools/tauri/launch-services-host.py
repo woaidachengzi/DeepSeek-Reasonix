@@ -12,6 +12,16 @@ import subprocess
 import time
 
 
+def owned_terminal_shell_environment(phase, root, env):
+    if phase != "ui-integrated-terminal":
+        return {}
+    expected = {"SHELL": "/bin/sh", "ENV": "/dev/null", "BASH_ENV": "/dev/null",
+                "ZDOTDIR": str(root / "home")}
+    if any(env.get(name) != value for name, value in expected.items()):
+        raise ValueError("integrated terminal startup environment is not runner-owned")
+    return expected
+
+
 class LaunchServicesHost:
     def __init__(self, binary, sidecar, root, env, package):
         self.binary, self.root, self.package = binary, root, package
@@ -37,6 +47,8 @@ class LaunchServicesHost:
                 continue
             command.extend(["--env", name + "=" + env.get(name, "")])
         command.extend(["--env", "REASONIX_DESKTOP_BRIDGE_TOKEN=must-be-cleared"])
+        for name, value in owned_terminal_shell_environment(self.phase, root, env).items():
+            command.extend(["--env", name + "=" + value])
         self.opener = subprocess.Popen(command, stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             start_new_session=True, env={key: env[key] for key in

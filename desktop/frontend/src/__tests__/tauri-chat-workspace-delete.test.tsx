@@ -254,11 +254,20 @@ async function main() {
   await act(async () => { clickButton("返回文件列表"); await settle(); clickButton("变更"); await settle(); });
   const clickChange = (path: string) => document.querySelector<HTMLElement>(`.tauri-workspace-change-entry[title*="${path}"]`)
     ?.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  const drawerBody = () => document.querySelector<HTMLDivElement>(".tauri-workspace-drawer__body")!;
+  drawerBody().scrollTop = 580;
+  const changesReads = bridgeCalls().filter(call => call.name === "bridge_workspace_changes").length;
   await act(async () => { clickChange("a.txt"); await settle(); });
   eq(document.querySelectorAll(".tauri-workspace-change-entry").length, 0, "loading a diff immediately hides the changes list");
   ok(document.querySelector(".tauri-workspace-drawer--diff"), "changes open the dedicated wider diff view");
+  drawerBody().scrollTop = 0;
   await act(async () => { clickButton("返回变更列表"); await settle(); });
+  eq(drawerBody().scrollTop, 580, "returning from a pending diff restores the list position before paint");
+  eq(bridgeCalls().filter(call => call.name === "bridge_workspace_changes").length, changesReads, "Back reuses the list snapshot without a request or loading reset");
+  ok(document.activeElement?.getAttribute("title")?.includes("a.txt"), "Back restores focus to the selected file without scrolling");
+  drawerBody().scrollTop = 320;
   await act(async () => { clickChange("b.txt"); await settle(); });
+  drawerBody().scrollTop = 0;
   await act(async () => {
     releaseOldDetail?.({ source: "git", diff: "stale diff", binary: false, added: 1, removed: 0, truncated: false });
     await settle();
@@ -269,6 +278,8 @@ async function main() {
   await act(async () => { clickButton("返回变更列表"); await settle(); });
   eq(document.querySelectorAll('[aria-label="文件差异"]').length, 0, "returning to changes closes the diff");
   eq(document.querySelectorAll(".tauri-workspace-change-entry").length, 2, "returning to changes restores the list");
+  eq(drawerBody().scrollTop, 320, "refreshing the diff retains the original list position");
+  ok(document.querySelector('.tauri-workspace-change-entry[aria-current="true"]')?.getAttribute("title")?.includes("b.txt"), "the last opened change remains selected on return");
 
   let rejectInactiveDiff: ((error: Error) => void) | undefined;
   workspaceStub.__workspaceDetailHandler = () => new Promise((_resolve, reject) => { rejectInactiveDiff = reject; });

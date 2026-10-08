@@ -34,19 +34,23 @@ mod native_reload_smoke;
 #[cfg(target_os = "macos")]
 mod native_task_smoke;
 #[cfg(target_os = "macos")]
-mod native_ui_message_copy_smoke;
-#[cfg(target_os = "macos")]
 mod native_ui_image_smoke;
 #[cfg(target_os = "macos")]
+mod native_ui_message_copy_smoke;
+#[cfg(target_os = "macos")]
 mod native_ui_storage_smoke;
+#[cfg(target_os = "macos")]
+mod native_ui_terminal_smoke;
 #[cfg(target_os = "macos")]
 mod native_window_smoke;
 mod notifications;
 mod opener_catalog;
 mod pasted_images;
 mod protocol_generated;
+mod remote_controller;
 mod runtime_info;
 mod session_shadow;
+mod terminal;
 #[cfg(test)]
 mod theme_asset_scope_tests;
 mod tray;
@@ -136,17 +140,17 @@ use bridge::{
     BridgeSetModelRoleRequest, BridgeSetSessionModelRequest, BridgeSnapshot, BridgeStatus,
     BridgeSupervisor, BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
     BridgeWorkspaceCheckpointsResponse, BridgeWorkspaceFileResponse,
-    BridgeWorkspaceImageResponse, WorkspaceImageRequest,
     BridgeWorkspaceFileRevertPlanResponse, BridgeWorkspaceFileRevertResultResponse,
-    BridgeWorkspaceListResponse, CodeRewindCommitRequest, CodeRewindPreviewRequest,
-    CombinedRewindCommitRequest, CombinedRewindPreviewRequest, ConversationRewindCommitRequest,
-    ConversationRewindPreviewRequest, ConversationRewindUndoRequest, DeleteProviderConfigRequest,
-    DesktopPreferences, DiscoverProviderModelsRequest, DiscoveredProviderModels,
-    HooksSettingsChange, HooksSettingsView, LegacySessionCatalogEntry, MCPClearAuthRequest,
-    MCPClearAuthResponse, MCPMarketplaceEntry, MCPMarketplaceResponse, MCPOAuthRequest,
-    MCPOAuthResponse, MCPRuntimeActionRequest, MCPRuntimeActionResponse,
-    MCPServerActivationRequest, MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse,
-    MCPServerView, MemorySettingsChange, MemorySettingsView, MemorySuggestionAcceptance,
+    BridgeWorkspaceImageResponse, BridgeWorkspaceListResponse, CodeRewindCommitRequest,
+    CodeRewindPreviewRequest, CombinedRewindCommitRequest, CombinedRewindPreviewRequest,
+    ConversationRewindCommitRequest, ConversationRewindPreviewRequest,
+    ConversationRewindUndoRequest, DeleteProviderConfigRequest, DesktopPreferences,
+    DiscoverProviderModelsRequest, DiscoveredProviderModels, HooksSettingsChange,
+    HooksSettingsView, LegacySessionCatalogEntry, MCPClearAuthRequest, MCPClearAuthResponse,
+    MCPMarketplaceEntry, MCPMarketplaceResponse, MCPOAuthRequest, MCPOAuthResponse,
+    MCPRuntimeActionRequest, MCPRuntimeActionResponse, MCPServerActivationRequest,
+    MCPServerDeleteRequest, MCPServerInput, MCPServerMutationResponse, MCPServerView,
+    MemorySettingsChange, MemorySettingsView, MemorySuggestionAcceptance,
     MemorySuggestionAcceptanceRequest, MemorySuggestionsView, NetworkSettingsChange,
     NetworkSettingsView, OpenSessionRequest, PendingSessionDeleteCursor, PendingSessionDeletePage,
     PendingSessionTitleRecovery, PermissionSettingsChange, PermissionSettingsView,
@@ -161,7 +165,7 @@ use bridge::{
     SkillInstallResult, SkillsSettingsChange, SkillsSettingsView, SubagentProfileInput,
     SubagentSettingsChange, SubagentSettingsView, SubagentTryStatusView, SubmitRequest,
     WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceFileRevertCommitRequest,
-    WorkspaceFileRevertUndoRequest, WorkspaceRequest,
+    WorkspaceFileRevertUndoRequest, WorkspaceImageRequest, WorkspaceRequest,
 };
 use data_profile::{
     PreviewProfile, PreviewProfileStatus, ProfileImportResult, ProjectFoldersImportResult,
@@ -876,6 +880,166 @@ fn discard_pasted_image(
 }
 
 #[tauri::command]
+async fn bridge_remote_controller_attach(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    request: remote_controller::AttachRequest,
+) -> Result<protocol_generated::BridgeRemoteControllerResponse, String> {
+    remote_controller::ensure_main_window(window.label())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<BridgeSupervisor>()
+            .remote_controller_client()?
+            .attach(request)
+    })
+    .await
+    .map_err(|_| "remote controller worker stopped; reopen the remote workspace".to_string())?
+}
+
+#[tauri::command]
+async fn bridge_remote_controller_sessions(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    request: remote_controller::HandleRequest,
+) -> Result<protocol_generated::BridgeRemoteControllerSessionsResponse, String> {
+    remote_controller::ensure_main_window(window.label())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<BridgeSupervisor>()
+            .remote_controller_client()?
+            .sessions(request)
+    })
+    .await
+    .map_err(|_| "remote controller worker stopped; reopen the remote workspace".to_string())?
+}
+
+#[tauri::command]
+async fn bridge_remote_controller_close(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    request: remote_controller::HandleRequest,
+) -> Result<protocol_generated::BridgeRemoteControllerCloseResponse, String> {
+    remote_controller::ensure_main_window(window.label())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<BridgeSupervisor>()
+            .remote_controller_client()?
+            .close(request)
+    })
+    .await
+    .map_err(|_| "remote controller worker stopped; reopen the remote workspace".to_string())?
+}
+
+#[tauri::command]
+async fn bridge_terminal_workspace(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    request: terminal::WorkspaceRequest,
+) -> Result<protocol_generated::BridgeTerminalWorkspaceResponse, String> {
+    terminal::ensure_main_window(window.label())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<BridgeSupervisor>()
+            .terminal_client()?
+            .workspace(request)
+    })
+    .await
+    .map_err(|_| "terminal worker stopped; refresh the active session".to_string())?
+}
+
+#[tauri::command]
+async fn bridge_terminal_create(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    request: terminal::CreateRequest,
+) -> Result<protocol_generated::BridgeTerminalSessionResponse, String> {
+    terminal::ensure_main_window(window.label())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<BridgeSupervisor>()
+            .terminal_client()?
+            .create(request)
+    })
+    .await
+    .map_err(|_| "terminal worker stopped; refresh the active session".to_string())?
+}
+
+#[tauri::command]
+async fn bridge_terminal_output(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    request: terminal::TargetRequest,
+) -> Result<protocol_generated::BridgeTerminalOutputResponse, String> {
+    terminal::ensure_main_window(window.label())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<BridgeSupervisor>()
+            .terminal_client()?
+            .output(request)
+    })
+    .await
+    .map_err(|_| "terminal worker stopped; refresh the active session".to_string())?
+}
+
+#[tauri::command]
+async fn bridge_terminal_input(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    request: terminal::InputRequest,
+) -> Result<protocol_generated::BridgeTerminalActionResponse, String> {
+    terminal::ensure_main_window(window.label())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<BridgeSupervisor>()
+            .terminal_client()?
+            .input(request)
+    })
+    .await
+    .map_err(|_| "terminal worker stopped; refresh the active session".to_string())?
+}
+
+#[tauri::command]
+async fn bridge_terminal_resize(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    request: terminal::ResizeRequest,
+) -> Result<protocol_generated::BridgeTerminalActionResponse, String> {
+    terminal::ensure_main_window(window.label())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<BridgeSupervisor>()
+            .terminal_client()?
+            .resize(request)
+    })
+    .await
+    .map_err(|_| "terminal worker stopped; refresh the active session".to_string())?
+}
+
+#[tauri::command]
+async fn bridge_terminal_rename(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    request: terminal::RenameRequest,
+) -> Result<protocol_generated::BridgeTerminalActionResponse, String> {
+    terminal::ensure_main_window(window.label())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<BridgeSupervisor>()
+            .terminal_client()?
+            .rename(request)
+    })
+    .await
+    .map_err(|_| "terminal worker stopped; refresh the active session".to_string())?
+}
+
+#[tauri::command]
+async fn bridge_terminal_close(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    request: terminal::CloseRequest,
+) -> Result<protocol_generated::BridgeTerminalActionResponse, String> {
+    terminal::ensure_main_window(window.label())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<BridgeSupervisor>()
+            .terminal_client()?
+            .close(request)
+    })
+    .await
+    .map_err(|_| "terminal worker stopped; refresh the active session".to_string())?
+}
+
+#[tauri::command]
 fn bridge_workspace(
     supervisor: State<'_, BridgeSupervisor>,
     request: WorkspaceRequest,
@@ -902,7 +1066,9 @@ async fn bridge_workspace_image(
     }
     tauri::async_runtime::spawn_blocking(move || {
         app.state::<BridgeSupervisor>().workspace_image(request)
-    }).await.map_err(|_| "workspace image worker failed".to_string())?
+    })
+    .await
+    .map_err(|_| "workspace image worker failed".to_string())?
 }
 
 #[tauri::command]
@@ -1302,7 +1468,9 @@ async fn remote_serve(
         .map_err(|_| "remote operation worker failed".to_string())?
 }
 
-fn remote_serve_request(mut input: serde_json::Value) -> Result<(&'static str, serde_json::Value), String> {
+fn remote_serve_request(
+    mut input: serde_json::Value,
+) -> Result<(&'static str, serde_json::Value), String> {
     let action = input
         .get("action")
         .and_then(serde_json::Value::as_str)
@@ -1333,7 +1501,8 @@ async fn open_remote_controller(
 ) -> Result<(), String> {
     let client = supervisor.management_client()?;
     let launch = tauri::async_runtime::spawn_blocking(move || {
-        client.remote_request::<RemoteControllerLaunch>("/v1/settings/remote/controller/open", input)
+        client
+            .remote_request::<RemoteControllerLaunch>("/v1/settings/remote/controller/open", input)
     })
     .await
     .map_err(|_| "remote operation worker failed".to_string())??;
@@ -1779,7 +1948,8 @@ fn set_desktop_language(
 
 #[tauri::command]
 fn set_tray_locale(window: tauri::WebviewWindow, locale: String) -> Result<(), String> {
-    window.try_state::<tray::TrayMenuState>()
+    window
+        .try_state::<tray::TrayMenuState>()
         .ok_or("system tray is unavailable; use the main window")?
         .set_locale(&locale)
 }
@@ -2621,11 +2791,16 @@ fn open_external_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn get_close_behavior(app: tauri::AppHandle, preferences: State<'_, HostPreferences>) -> CloseBehavior {
+fn get_close_behavior(
+    app: tauri::AppHandle,
+    preferences: State<'_, HostPreferences>,
+) -> CloseBehavior {
     // Report the behavior that CloseRequested actually uses, without rewriting
     // an explicit saved preference when a Linux tray is temporarily unavailable.
-    preferences.close_behavior()
-        .effective_for_tray(std::env::consts::OS, app.try_state::<tray::TrayMenuState>().is_some())
+    preferences.close_behavior().effective_for_tray(
+        std::env::consts::OS,
+        app.try_state::<tray::TrayMenuState>().is_some(),
+    )
 }
 
 #[tauri::command]
@@ -2634,7 +2809,11 @@ fn set_close_behavior(
     preferences: State<'_, HostPreferences>,
     behavior: CloseBehavior,
 ) -> Result<CloseBehavior, String> {
-    if behavior.effective_for_tray(std::env::consts::OS, app.try_state::<tray::TrayMenuState>().is_some()) != behavior {
+    if behavior.effective_for_tray(
+        std::env::consts::OS,
+        app.try_state::<tray::TrayMenuState>().is_some(),
+    ) != behavior
+    {
         return Err("system tray is unavailable; choose quit when closing".into());
     }
     preferences.set_close_behavior(behavior)?;
@@ -4226,6 +4405,13 @@ fn main() {
             bridge_open_session,
             bridge_switch_session,
             bridge_set_session_model,
+            bridge_terminal_workspace,
+            bridge_terminal_create,
+            bridge_terminal_output,
+            bridge_terminal_input,
+            bridge_terminal_resize,
+            bridge_terminal_rename,
+            bridge_terminal_close,
             bridge_session_approval_mode,
             bridge_rename_session,
             bridge_delete_session,
@@ -4306,6 +4492,9 @@ fn main() {
             browse_remote_host,
             remote_forwards,
             remote_serve,
+            bridge_remote_controller_attach,
+            bridge_remote_controller_sessions,
+            bridge_remote_controller_close,
             open_remote_controller,
             preview_remote_file,
             save_remote_file,
@@ -4510,6 +4699,7 @@ fn main() {
             });
         }
         if matches!(event, tauri::RunEvent::Exit) {
+            app.state::<pasted_images::PastedImages>().shutdown();
             #[cfg(target_os = "macos")]
             initial_presentation::close(app);
             #[cfg(target_os = "macos")]
@@ -4535,7 +4725,8 @@ fn main() {
 #[cfg(test)]
 mod external_url_tests {
     use super::{
-        remote_serve_request, validated_external_link, validated_external_url, validated_remote_controller_url,
+        remote_serve_request, validated_external_link, validated_external_url,
+        validated_remote_controller_url,
     };
 
     #[test]
@@ -4543,9 +4734,13 @@ mod external_url_tests {
         for action in ["status", "start", "stop", "logs"] {
             let (path, body) = remote_serve_request(serde_json::json!({
                 "action": action, "name": "gpu", "workspace": "/srv/work"
-            })).unwrap();
+            }))
+            .unwrap();
             assert_eq!(path, format!("/v1/settings/remote/serve/{action}"));
-            assert_eq!(body, serde_json::json!({"name": "gpu", "workspace": "/srv/work"}));
+            assert_eq!(
+                body,
+                serde_json::json!({"name": "gpu", "workspace": "/srv/work"})
+            );
         }
         assert!(remote_serve_request(serde_json::json!({"action": "exec"})).is_err());
         assert!(remote_serve_request(serde_json::Value::Null).is_err());

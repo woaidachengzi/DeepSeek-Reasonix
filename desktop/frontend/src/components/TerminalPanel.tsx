@@ -203,6 +203,7 @@ export function TerminalPanel({
             <div className="terminal-error" role="alert">
               <AlertTriangle size={14} />
               <span>{error}</span>
+              <button type="button" className="terminal-icon-button" onClick={() => { void syncWorkspace(tabId).catch(() => {}); }} aria-label={t("terminal.retry")} title={t("terminal.retry")}><RefreshCw size={13} /></button>
               <button type="button" className="terminal-icon-button" onClick={clearError} aria-label={t("terminal.dismissError")} title={t("terminal.dismissError")}><X size={13} /></button>
             </div>
           )}

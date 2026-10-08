@@ -8,6 +8,8 @@ import type { InvocationRequest } from "./invocationDisplay";
 import type { FollowupBindings } from "./pendingFollowup";
 import { addBreadcrumb } from "./breadcrumbs";
 import { nativeLocalPathBinding } from "./nativeLocalPaths";
+import { nativeTerminalBinding, nativeTerminals } from "./nativeTerminals";
+import { isTauri } from "@tauri-apps/api/core";
 import { maybeShare } from "./queryCoalesce";
 import { makeMockSessionCatalogBindings } from "./sessionCatalogBridge";
 import { makeMockHistoryCatalogBindings, type HistoryCatalogBindings } from "./historyCatalogBridge";
@@ -831,6 +833,7 @@ export function onEvent(cb: (e: WireEvent) => void): () => void {
 export interface TerminalOutputEvent {
   id: string;
   data: string;
+  reset?: boolean;
 }
 
 export interface TerminalExitEvent {
@@ -845,6 +848,7 @@ function terminalEventPayload<T>(payload: unknown): T | null {
 }
 
 export function onTerminalOutput(cb: (event: TerminalOutputEvent) => void): () => void {
+  if (isTauri()) return nativeTerminals.onOutput(cb);
   if (realApp() && typeof window !== "undefined" && window.runtime) {
     return window.runtime.EventsOn("terminal:output", (payload) => {
       const event = terminalEventPayload<TerminalOutputEvent>(payload);
@@ -856,6 +860,7 @@ export function onTerminalOutput(cb: (event: TerminalOutputEvent) => void): () =
 }
 
 export function onTerminalExit(cb: (event: TerminalExitEvent) => void): () => void {
+  if (isTauri()) return nativeTerminals.onExit(cb);
   if (realApp() && typeof window !== "undefined" && window.runtime) {
     return window.runtime.EventsOn("terminal:exit", (payload) => {
       const event = terminalEventPayload<TerminalExitEvent>(payload);
@@ -1151,7 +1156,7 @@ function elapsedMs(startedAt: number): number {
 
 export const app: AppBindings = new Proxy({} as AppBindings, {
   get(_t, prop) {
-    const native = nativeLocalPathBinding(String(prop));
+    const native = nativeTerminalBinding(String(prop)) ?? nativeLocalPathBinding(String(prop));
     if (native) return native;
     const target = realApp() ?? getMock();
     const v = (target as unknown as Record<string, unknown>)[String(prop)];

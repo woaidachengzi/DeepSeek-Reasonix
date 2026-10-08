@@ -584,9 +584,9 @@ pub use crate::protocol_generated::{
     BridgeWorkspaceChangesResponse, BridgeWorkspaceCheckpointsResponse, BridgeWorkspaceFileRequest,
     BridgeWorkspaceFileResponse, BridgeWorkspaceFileRevertCommitRequest,
     BridgeWorkspaceFileRevertPlanResponse, BridgeWorkspaceFileRevertResultResponse,
-    BridgeWorkspaceFileRevertUndoRequest, BridgeWorkspaceListResponse, BridgeWorkspaceRequest,
+    BridgeWorkspaceFileRevertUndoRequest, BridgeWorkspaceImageRequest,
+    BridgeWorkspaceImageResponse, BridgeWorkspaceListResponse, BridgeWorkspaceRequest,
     BridgeWorkspaceTargetResponse,
-    BridgeWorkspaceImageRequest, BridgeWorkspaceImageResponse,
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -4013,8 +4013,26 @@ impl BridgeSupervisor {
         request: WorkspaceImageRequest,
     ) -> Result<BridgeWorkspaceImageResponse, String> {
         let session_id = session_path_component(&request.session_id)?;
-        let inline = request.source.get(..5).is_some_and(|prefix| prefix.eq_ignore_ascii_case("data:"));
-        let max_source = if inline { (16 << 20) * 4 / 3 + 1024 } else { 4096 };
+        let inline = request
+            .source
+            .get(..5)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("data:"));
+        let remote = request
+            .source
+            .get(..7)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("http://"))
+            || request
+                .source
+                .get(..8)
+                .is_some_and(|prefix| prefix.eq_ignore_ascii_case("https://"))
+            || request.source.starts_with("//");
+        let max_source = if inline {
+            (16 << 20) * 4 / 3 + 1024
+        } else if remote {
+            16 << 10
+        } else {
+            4096
+        };
         if request.source.trim().is_empty()
             || request.source.len() > max_source
             || request.source.contains('\0')
@@ -4024,7 +4042,9 @@ impl BridgeSupervisor {
         let response = self.request_json(
             "POST",
             &format!("/v1/sessions/{session_id}:workspace-image"),
-            Some(json!(BridgeWorkspaceImageRequest { source: request.source })),
+            Some(json!(BridgeWorkspaceImageRequest {
+                source: request.source
+            })),
             None,
         )?;
         let envelope: BridgeWorkspaceImageResponse =
@@ -4675,6 +4695,20 @@ impl BridgeSupervisor {
         Ok((running.address, running.token.clone()))
     }
 
+    pub fn terminal_client(&self) -> Result<crate::terminal::TerminalClient, String> {
+        let (address, token) = self.event_connection()?;
+        Ok(crate::terminal::TerminalClient::new(address, token))
+    }
+
+    pub fn remote_controller_client(
+        &self,
+    ) -> Result<crate::remote_controller::RemoteControllerClient, String> {
+        let (address, token) = self.event_connection()?;
+        Ok(crate::remote_controller::RemoteControllerClient::new(
+            address, token,
+        ))
+    }
+
     fn stop_events(&self) {
         let forwarder = self.events.lock().ok().and_then(|mut events| events.take());
         if let Some(forwarder) = forwarder {
@@ -4848,7 +4882,7 @@ fn request_json(
     )
 }
 
-fn request_json_with_timeout(
+pub(crate) fn request_json_with_timeout(
     address: SocketAddr,
     token: &str,
     method: &str,
@@ -4936,25 +4970,28 @@ fn parse_json_response(response: &[u8]) -> Result<Value, String> {
         // Carry only a small allowlist of recovery codes across the Tauri
         // String error boundary. Never forward the bridge's free-text message:
         // it may contain a private transcript or workspace path.
-        if matches!(status, 404 | 409 | 422) {
+        if matches!(status, 400 | 404 | 409 | 422 | 503) {
             let parsed = serde_json::from_slice::<Value>(first_json_value(raw)).ok();
             let code = parsed
                 .as_ref()
                 .and_then(|value| value.pointer("/error/code"))
                 .and_then(Value::as_str);
-            let allowed = matches!((status, code),
+            let allowed = matches!(
+                (status, code),
                 (
                     409,
                     Some(
                         "session_missing"
-                        | "session_deleting"
-                        | "session_deleted"
-                        | "resync_required"
-                        | "workspace_file_ambiguous",
+                            | "session_deleting"
+                            | "session_deleted"
+                            | "resync_required"
+                            | "workspace_file_ambiguous"
+                            | "terminal_busy",
                     ),
-                )
-                | (404, Some("workspace_file_not_found"))
-                | (422, Some("workspace_file_unavailable"))
+                ) | (400, Some("terminal_invalid_request"))
+                    | (404, Some("workspace_file_not_found" | "terminal_not_found"))
+                    | (422, Some("workspace_file_unavailable"))
+                    | (503, Some("terminal_unavailable"))
             );
             if allowed {
                 let code = code.unwrap();
@@ -5074,7 +5111,7 @@ fn validate_workspace_target(
     Ok(())
 }
 
-fn session_path_component(session_id: &str) -> Result<String, String> {
+pub(crate) fn session_path_component(session_id: &str) -> Result<String, String> {
     let session_id = session_id.trim();
     if session_id.is_empty()
         || session_id.len() > 128
@@ -5390,6 +5427,12 @@ fn forward_events(
                                 continue;
                             }
                             after_sequence = after_sequence.max(event.sequence);
+                            if let Some(terminal) = crate::terminal::terminal_event(&event) {
+                                if let Ok(terminal) = terminal {
+                                    let _ = app.emit_to("main", "bridge:terminal-event", terminal);
+                                }
+                                continue;
+                            }
                             let _ = app.emit("bridge:event", event);
                         }
                     }

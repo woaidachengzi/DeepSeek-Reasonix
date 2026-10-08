@@ -302,6 +302,15 @@
 .tauri-sidebar__diagnostics:hover, .tauri-archives-toggle:hover { color: var(--fg) !important; }
 
 .tauri-main { position: relative; display: flex; min-width: 0; min-height: 0; flex-direction: column; }
+.tauri-terminal-drawer { flex: 0 0 min(280px, 40vh); min-height: 0; overflow: hidden; border-top: 1px solid var(--border); }
+.tauri-terminal-drawer[hidden] { display: none; }
+.tauri-terminal-drawer .terminal-panel { min-height: 0; }
+@media (max-width: 680px) {
+  .tauri-terminal-drawer { flex-basis: min(200px, 28vh); }
+  .tauri-terminal-drawer .terminal-panel__identity span { display: none; }
+  .tauri-terminal-drawer .terminal-panel__actions { gap: 2px; }
+  .tauri-main:has(> .tauri-terminal-drawer:not([hidden])) .tauri-composer textarea { max-height: 96px; }
+}
 .tauri-topbar { position: relative; display: flex; height: 64px; min-height: 64px; align-items: center; justify-content: space-between; gap: 18px; padding: 0 24px; border-bottom: 1px solid var(--border-soft); }
 .tauri-topbar [data-tauri-drag-region] { cursor: default; }
 .tauri-topbar button, .tauri-topbar select, .tauri-topbar input, .tauri-topbar label { -webkit-app-region: no-drag; app-region: no-drag; }
@@ -517,6 +526,7 @@
 .tauri-workspace-drawer__toolbar .tauri-diagnostic-action { display: inline-flex; align-items: center; gap: 4px; }
 .tauri-workspace-drawer__toolbar .tauri-diagnostic-action.is-active { border-color: color-mix(in srgb, var(--accent) 48%, var(--border)); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); color: var(--fg); }
 .tauri-workspace-drawer__entries { display: grid; gap: 2px; padding: 0; margin: 0; list-style: none; }
+.tauri-workspace-change-entry[aria-current="true"] { border-color: var(--border-soft); background: var(--surface); }
 .tauri-workspace-entry { display: flex; width: 100%; min-height: 34px; align-items: center; gap: 8px; padding: 0 9px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--fg-dim); text-align: left; }
 .tauri-workspace-entry:hover { border-color: var(--border-soft); background: var(--surface); color: var(--fg); }
 .tauri-workspace-entry__icon { display: grid; flex: 0 0 auto; place-items: center; color: var(--accent); }
@@ -1223,6 +1233,15 @@
   .tauri-remote-forwards form { grid-template-columns: minmax(0, 1fr); }
 }
 .tauri-remote-host-card > div:first-child { display: grid; min-width: 0; gap: 4px; }
+.tauri-remote-serve { grid-column: 1 / -1; min-width: 0; }
+.tauri-remote-sessions { min-width: 0; margin-block: 12px; border-top: 1px solid var(--border-soft); padding-top: 12px; }
+.tauri-remote-sessions h4 { margin: 0 0 8px; color: var(--fg); }
+.tauri-remote-sessions > p { overflow-wrap: anywhere; }
+.tauri-remote-sessions-list { display: grid; gap: 8px; max-height: min(45vh, 340px); overflow: auto; margin: 12px 0; padding: 0; list-style: none; }
+.tauri-remote-sessions-list li { display: grid; gap: 4px; min-width: 0; border: 1px solid var(--border-soft); border-radius: 6px; padding: 8px; background: var(--surface); }
+.tauri-remote-sessions-list strong { white-space: pre-wrap; overflow-wrap: anywhere; }
+.tauri-remote-sessions-list code { color: var(--fg-dim); font-size: 11px; overflow-wrap: anywhere; }
+.tauri-remote-host-card .tauri-remote-sessions-list small { white-space: normal; overflow-wrap: anywhere; }
 .tauri-remote-host-card strong { color: var(--fg); font-size: 12px; }
 .tauri-remote-host-card small { overflow: hidden; color: var(--fg-faint); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .tauri-remote-credential-prompt { display: grid; max-width: 360px; gap: 8px; margin-top: 8px; padding: 10px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface-2); }

@@ -1,14 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { openTauriRemoteController, tauriMessageFrom, tauriRemoteServe, type TauriRemoteServeView } from "../lib/tauriBridge";
 import { useT } from "../lib/i18n";
 
 type ServeAction = "status" | "start" | "stop" | "logs" | "controller";
+const RemoteSessions = lazy(() => import("./TauriRemoteSessions").then(module => ({default:module.TauriRemoteSessions})));
 
 export function TauriRemoteServe({ name, workspace, credentialMode }: { name: string; workspace: string; credentialMode: string }) {
   const t = useT();
   const [view, setView] = useState<TauriRemoteServeView | null>(null);
   const [busy, setBusy] = useState<ServeAction | "">("");
   const [error, setError] = useState("");
+  const [sessionsOpen,setSessionsOpen] = useState(false);
   const mounted = useRef(true);
   const epoch = useRef(0);
 
@@ -21,6 +23,7 @@ export function TauriRemoteServe({ name, workspace, credentialMode }: { name: st
       const next = await tauriRemoteServe({ name, workspace, action, ...(action === "logs" ? { tailLines: 100 } : {}) });
       if (!mounted.current || requestEpoch !== epoch.current) return;
       setView(current => action === "logs" ? { ...(current ?? next), state: current?.state ?? "stopped", logs: next.logs ?? "" } : next);
+      if (action === "stop") setSessionsOpen(false);
     } catch (cause) {
       if (mounted.current && requestEpoch === epoch.current) setError(tauriMessageFrom(cause));
     } finally {
@@ -49,6 +52,7 @@ export function TauriRemoteServe({ name, workspace, credentialMode }: { name: st
     mounted.current = true;
     const requestEpoch = ++epoch.current;
     setView(null);
+    setSessionsOpen(false);
     setError("");
     if (!workspace) {
       setBusy("");
@@ -87,9 +91,11 @@ export function TauriRemoteServe({ name, workspace, credentialMode }: { name: st
         <button type="button" className="tauri-settings-button" disabled={Boolean(busy)} onClick={() => void run("status")}>{busy === "status" ? t("common.loading") : t("settings.bots.refresh")}</button>
         <button type="button" className="tauri-settings-button" disabled={Boolean(busy) || localProxyUnavailable} onClick={() => void run("start")}>{busy === "start" ? t("settings.remote.serveStarting") : t("settings.remote.serveStart")}</button>
         <button type="button" className="tauri-settings-button" disabled={Boolean(busy) || localProxyUnavailable} onClick={() => void openController()}>{busy === "controller" ? t("settings.remote.controllerOpening") : t("settings.remote.controllerOpen")}</button>
+        <button type="button" className="tauri-settings-button" aria-expanded={sessionsOpen} disabled={Boolean(busy) || localProxyUnavailable} onClick={() => setSessionsOpen(current => !current)}>{t(sessionsOpen ? "settings.remote.sessionsClose" : "settings.remote.sessionsOpen")}</button>
         <button type="button" className="tauri-settings-button" disabled={Boolean(busy) || state === "stopped"} onClick={() => void run("stop")}>{busy === "stop" ? t("settings.remote.serveStopping") : t("settings.remote.serveStop")}</button>
         <button type="button" className="tauri-settings-button" disabled={Boolean(busy)} onClick={() => void run("logs")}>{busy === "logs" ? t("common.loading") : t("settings.remote.serveLogs")}</button>
       </div>
+      {sessionsOpen ? <Suspense fallback={<p role="status">{t("common.loading")}</p>}><RemoteSessions key={JSON.stringify([name,workspace])} name={name} workspace={workspace}/></Suspense> : null}
       {view?.logs !== undefined && <pre className="tauri-remote-serve-logs">{view.logs || t("settings.remote.serveLogsEmpty")}</pre>}
     </div>
   </details>;

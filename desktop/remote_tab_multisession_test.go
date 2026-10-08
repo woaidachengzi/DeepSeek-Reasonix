@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/cookiejar"
 	"net/http/httptest"
 	"slices"
 	"strings"
@@ -618,11 +617,10 @@ func TestExternalSessionResetPreservesBlankIdentity(t *testing.T) {
 
 func remoteSessionTestClient(t *testing.T, fs *fakeServe) (*http.Client, context.Context) {
 	t.Helper()
-	jar, err := cookiejar.New(nil)
+	client, err := newServeHTTPClient(fs.server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	client := &http.Client{Jar: jar}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	t.Cleanup(cancel)
 	if err := serveHandshake(ctx, client, fs.server.URL, "s3cret"); err != nil {

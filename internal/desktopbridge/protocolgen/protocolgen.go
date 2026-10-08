@@ -40,6 +40,7 @@ type node struct {
 	Type       string                     `json:"type"`
 	Enum       []string                   `json:"enum"`
 	Const      json.RawMessage            `json:"const"`
+	Minimum    *float64                   `json:"minimum"`
 	Required   []string                   `json:"required"`
 	Properties map[string]json.RawMessage `json:"properties"`
 	Items      json.RawMessage            `json:"items"`
@@ -177,6 +178,9 @@ func (g *generator) typeOf(raw json.RawMessage, hint string) (string, string, er
 	case "boolean":
 		return "boolean", "bool", nil
 	case "integer":
+		if n.Minimum != nil && *n.Minimum < 0 {
+			return "number", "i64", nil
+		}
 		return "number", "u64", nil
 	case "number":
 		return "number", "f64", nil

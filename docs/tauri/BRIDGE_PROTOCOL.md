@@ -31,6 +31,9 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | Preview 桌面费用展示币种 | `GET /v1/settings/desktop`、`POST /v1/settings/desktop/currency` | 保存使用 request ID 去重；仅改变新费用报价的展示币种，不改供应商价表 |
 | Preview 远程 SSH 主机与别名 | `GET /v1/settings/remote`、`POST /v1/settings/remote/scan`、`POST /v1/settings/remote/hosts` | 读取与别名扫描只读；主机变更使用 request ID 去重 |
 | Preview 远程 SSH 连接与断开 | `POST /v1/settings/remote/connect`、`POST /v1/settings/remote/disconnect` | sidecar 生命周期内保留受监督 SSH 连接；未知主机密钥只有在调用方提交与当前握手一致的指纹后才会写入 Reasonix 管理的 `known_hosts`；sidecar 关闭时断开 |
+| Remote controller 只读连接 | `POST /v1/remote/controllers` | 同一已认证 SSH 底层连接与 host/workspace 复用健康 handle；新附着可取消旧的未完成附着；只接受 `name/workspace`，不接受 URL/token |
+| Remote controller 会话清单 | `GET /v1/remote/controllers/{controllerID}/sessions` | 只读；远程路径不转换为本地会话/文件权限；断线/重连/关闭后旧 handle 拒绝读取 |
+| 关闭 Remote controller | `DELETE /v1/remote/controllers/{controllerID}` | 合法 handle 可重复关闭；只清理自有 HTTP owner，不停止远程 Serve、SSH 或其他工作区 |
 | Preview 远程工作区浏览 | `POST /v1/settings/remote/browse` | 只通过已验证连接执行 SFTP 目录读取；每页最多返回 500 项，不执行远程 shell 命令 |
 | Preview 权限规则 | `GET/POST /v1/settings/permissions` | GET 可用 `workspaceRoot` 读取项目有效值；POST 的 `scope=global|project` 选择用户配置或当前项目 `reasonix.toml`，项目首改按字段继承对应全局值；保存使用 request ID 去重 |
 | 设置新会话默认模型 | `POST /v1/settings/default-model` | `X-Reasonix-Request-ID` 去重 |
@@ -55,6 +58,11 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 可见历史 | `GET /v1/sessions/{sessionId}/history` | 是 |
 | 附加文件 | `POST /v1/sessions/{sessionId}:attach` | `X-Reasonix-Request-ID` 去重 |
 | 当前会话本地工作区 | `GET /v1/sessions/{sessionId}/workspace-target` | 只读且仅允许当前会话；返回 runtime 实际目录供 Rust 原生打开，Global 项目归属仍为空 |
+| 内置终端清单 | `GET /v1/sessions/{sessionId}/terminal` | 只读；仅当前 session workspace，同会话 controller 重建保留终端，返回终端/shell ID，不返回执行参数或环境 |
+| 创建内置终端 | `POST /v1/sessions/{sessionId}/terminal` | 必须带 `X-Reasonix-Request-ID`；相同请求重试不创建第二个 PTY |
+| 内置终端输入 | `POST /v1/sessions/{sessionId}/terminal/{terminalId}/input` | 必须带 `X-Reasonix-Request-ID`；base64 原始字节，有界串行队列；重试不重复执行 |
+| 内置终端输出快照 | `GET /v1/sessions/{sessionId}/terminal/{terminalId}/output` | 只读；至多 128 KiB 原始字节，base64 与 byte offset |
+| 终端尺寸/名称/关闭 | `POST .../terminal/{terminalId}/resize`、`PATCH .../terminal/{terminalId}/title`、`DELETE .../terminal/{terminalId}` | 支持请求 ID 去重；仅归属当前会话的终端，不能操作外部 Terminal |
 | 工作区目录（逐层） | `POST /v1/sessions/{sessionId}:workspace` | 是 |
 | 工作区文件预览 | `POST /v1/sessions/{sessionId}:workspace-file` | 是；仅返回受限文本或二进制标记 |
 | 工作区变更（Git + 本轮会话检查点） | `POST /v1/sessions/{sessionId}:workspace-changes` | 是；来源显式标记 |
@@ -84,6 +92,21 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 正常关闭 | `POST /v1:shutdown` | 是 |
 
 桌面偏好读取 `GET /v1/settings/desktop` 现在包含 `externalOpener` 稳定应用 ID；`POST /v1/settings/desktop/external-opener` 接收 `{ "id": "vscode" }`，复用鉴权、请求 ID 去重和窄用户配置写入。该接口只保存 UI 偏好，不执行应用程序。Rust 原生宿主校验本机安装目录后才调用写入，工作区打开使用会话 ID 读取权威 snapshot；应用卸载后的选择回退不会改写保存的 ID。此字段可被旧客户端忽略，旧配置没有该字段时默认为空。
+
+`remote_controller_sessions_v1` 目前只标识只读 catalogue 阶段；Tauri 主窗口源码已接窄 IPC 和设置页列表，不表示完整 remote tab 可用。附着返回 `{protocolVersion, controller: {id, name, workspace, readOnly: true}}`；ID 是随机 16 bytes 的规范无 padding base64url（22 字符）。清单追加 `sessions`，每项固定 `name/path/title/turns/current/running/takenOver/mtimeMilli`，不返回 Serve 的额外 URL、token 或配置。认证 cookie 仅在 Go 持有。每个 handle 同时绑定当前受监督 client 与底层 SSH 连接；连接替换、断线、停服、退出均有撤销边界。列表操作不恢复/切换远程当前会话，也不访问本地 RuntimeManager。读写/流事件/审批/模型归属须另行接入，不因 catalogue 返回而开放权限。此源码增量未重建 App。
+
+主窗口命令 `bridge_remote_controller_attach/sessions/close` 仅接受 `{request}`；
+attach 的 request 只有 `name/workspace`，另两项只有 `controllerId`，拒绝未知字段。
+宿主固定 HTTP method/path，先检查 main label，再在 blocking worker 执行；
+网络等待不占 supervisor lock，错误不透传网络/解码器自由文本。响应再次检查版本、
+canonical handle、只读标志、目录字段/计数预算及重复路径。renderer 不能指定 URL/token。
+
+前端共享 lease 按 host/workspace 去重；最后一个消费者卸载才关闭。迟到 attach 与 close
+完成之前，同 scope 的新 attach 等待 predecessor，防止旧关闭清理新 UI 的复用 handle。
+关闭投递不确定时保留拒绝 barrier，直到成功的显式 SSH 重连/断开或真实配置撤销；
+保存仍为 connected 的未改变配置不清空池。旧清单和 finally 不可写入新 scope。
+列表由用户显式打开才懒加载，每页最多挂载 50 条，路径仅展示；关闭/停服收起列表。
+Rust HTTP fixture、绑定与组件回归、浏览器模拟原生调用的验证不等于 App 原生调用验收。
 
 当前 bridge 已实现 health、脱敏 Provider 摘要、建/开会话、空闲会话的显式切换、重命名与删除、快照、可见历史、工作区附件、逐层工作区目录、受限工作区文件预览、Git 变更列表与受限 diff、submit、cancel、审批/ask/MCP 提示回答、断线后的待处理提示重放、SSE 事件与正常关闭。工作区目录只返回当前会话工作区下的一层，隐藏常见构建产物、依赖目录和 `.git`，每层最多 200 项；返回值只有相对路径，`..` 越界会被拒绝。文件预览只读取有限大小的常规文件；二进制或非法 UTF-8 文件仅返回 `binary: true`，不会把原始字节交给 renderer。Git 变更查询只执行固定的只读 Git 子命令，diff 输出限制为 2 MiB；非 Git 工作区会返回 `gitAvailable: false`，不会伪造“干净”。会话自定义标题写入 core 的 `.jsonl.meta`，不改动 transcript；标题为空、含控制字符或超过 120 个 Unicode 字符时会被拒绝。删除走 core 自身的产物清理（transcript、事件日志与 sidecar、guardian、inbox、checkpoint、子 agent 记录、cleanup 标记），只允许删除当前持有且空闲的会话，避免 host 误删另一个 host 正在使用的会话；删除成功后 bridge 释放该控制器且不再写回快照，否则会把刚删掉的文件重新创建出来。对已不存在的会话重复执行删除返回 `not_found`，而带同一 `X-Reasonix-Request-ID` 的传输重试重放首次响应。
 
@@ -124,6 +147,53 @@ Controller 的 durable shutdown，再创建/恢复目标 Controller；`running` 
 及表单内容。所有三类回答都先由 Controller 持久化 `prompt_answered` 再释放阻塞的 Agent
 回合。重新打开处于 `paused` 的会话后，host 在建立 SSE 监听后调用
 `replay-prompts`，因此审批卡片不会因窗口重启而丢失。
+
+## 内置终端增量（2026-10-08，未提交）
+
+创建体为 `{ "path": ".", "shellId": "default" }`，两个字段都可省略。
+`path` 必须是实际 controller 工作区内的相对目录/文件，文件使用父目录；绝对路径、
+越界和外部链接拒绝，不接受 renderer 的 executable/args/env。
+shell ID 只选择后端批准且已安装的解释器，默认遵循用户设置/现有 Wails 发现规则。
+同一 session workspace 最多 10 个终端，创建中与关闭中也占 reservation。
+
+输入体只有 `{ "data": "<base64>" }`，解码后 1..65536 字节，不能换用 URL 或命令字段。
+HTTP 202 表示输入已复制进入最多四项的串行队列，不表示命令完成；队列满返回
+`terminal_busy`，客户端不得自动更换 request ID 重发已被确认的输入。
+尺寸体为 `{ "cols": 80, "rows": 24 }`，分别限制 1..1000 / 1..500；
+名称体只有 `title`，最多 80 个 Unicode 字符，拒绝控制字符。
+
+输出快照包含 `id / data / start / end`。`data` 是 base64 原始终端字节，最多 128 KiB；
+`start/end` 是累计 raw byte offset，不是 Unicode 字符数。`terminal_output` SSE payload
+使用同一结构，每帧最多 8 KiB，`terminal_exit` 为 `id / exitCode / removed`。
+客户端必须将它们与 Agent 事件分流，不能作为 assistant text；replay 缺口需要用终端快照
+替换旧缓存。输出不持久化到 core History，也不自动进入模型上下文。
+
+所有入口复用 bridge 认证和当前 session 归属；切换、删除和退出关闭旧 generation 的
+输入/创建 gate，迟到回包不能暴露到新会话（包括同 ID 的新 generation）。关闭中仍有进程
+或创建未完成返回失败，不伪造清理成功。同一会话的 model/settings/effort rebuild 使用
+独占 backend retention lease 保留原 PTY、名称、尺寸和输出缓存；校验实际工作区、会话、
+transcript path 与事件流身份，不接收 renderer 的归属重绑定。模型失败恢复仍交接同一 PTY；
+无法恢复则关闭 lease。创建尚未完成最终归属确认时替换返回 `terminal_busy`，需等待创建完成。
+所有替换递增 owner epoch，迟到回包不得越过 generation；旧 provider 不能再写已交接终端。
+RuntimeManager 在 factory 重建期间持有 lease，退出立即清理，不依赖候选构建返回。
+设置/推理候选只有发布后才提交暂存配置，交接失败恢复旧 gate 并回滚选择。
+Rust 主窗口已提供 `bridge_terminal_workspace/create/output/input/resize/rename/close`，严格
+typed request 的 mutation 都需 `requestId`，只允许 `main` window；请求由后台 worker 执行。
+输入是严格 base64 原始字节；host 检查响应归属/offset/预算/版本，同 ID 丢响应重试不会换
+body。退出码有符号，允许 Unix `-1` 与 Windows DWORD，生成镜像为 `i64`。
+`terminal_output` / `terminal_exit` 经 host 校验后仅对 `main` label 发 `bridge:terminal-event`，不混入
+`bridge:event` 的 Agent stream；无效 terminal frame 丢弃。前端源码已接共用 TerminalPanel/xterm
+懒加载入口、单一订阅、同终端串行输入和 byte offset 去重/缺口快照替换，不按消息次数猜测。
+renderer 输入待发送和在途合计最多 256 KiB（单次 64 KiB），最多 1024 个待执行操作；
+断线/失去 owner/失败时取消尚未提交的输入，不换 request ID 自动重发。恢复期间暂存最多
+16 × 8 KiB live frame，快照最多一次附加重试，快照缺口用 revision + queued RIS 替换旧显示。
+主动“添加输出到聊天”才转为去除 ANSI/控制序列的文本上下文，仍不自动提交或写入 History。
+浏览器宿主模拟与真实 Rust client → Go → PTY 的验证是分别执行的。独立 ARM64 候选 App
+现已构建，并通过 managed/explicit 私有 profile 的真实 WKWebView/xterm InputEvent → 已登记
+IPC → 打包 Go → PTY 验收，包含中文/ANSI、显式上下文暂存但不发送、收起不重建与关闭/
+切换/正常退出后的自有 PID 清理。证据与候选 hash 见 [API_SURFACE_AUDIT.md](API_SURFACE_AUDIT.md)。
+它不覆盖物理键盘/输入法或系统剪贴板，也不表示旧已交付 Preview 已更新或 C 全部完成；
+Windows/Linux 实际运行、远程 controller/bot、图片原生粘贴与正式发布门禁继续保留。
 
 ## Envelope
 

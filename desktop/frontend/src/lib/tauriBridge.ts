@@ -496,19 +496,31 @@ export async function scanTauriRemoteSSHConfig(): Promise<TauriRemoteSSHConfigSc
   return invoke<TauriRemoteSSHConfigScan>("scan_remote_ssh_config");
 }
 
+async function invalidateRemoteControllerHost(name: string): Promise<void> {
+  try { (await import("./nativeRemoteControllers")).nativeRemoteControllers.invalidateHost(name); }
+  catch { /* A not-yet-loaded feature chunk cannot turn successful SSH/config I/O into a failed operation. */ }
+}
+
 export async function changeTauriRemoteSettings(change: TauriRemoteSettingsChange): Promise<TauriRemoteSettings> {
   requireTauri();
-  return invoke<TauriRemoteSettings>("change_remote_settings", { change });
+  const result = await invoke<TauriRemoteSettings>("change_remote_settings", { change });
+  const name = change.host?.name ?? change.name ?? "";
+  if (result.hosts.find(host => host.name === name)?.connection?.status !== "connected") await invalidateRemoteControllerHost(name);
+  return result;
 }
 
 export async function connectTauriRemoteHost(request: TauriRemoteConnectRequest): Promise<TauriRemoteConnectResponse> {
   requireTauri();
-  return invoke<TauriRemoteConnectResponse>("connect_remote_host", { request });
+  const result = await invoke<TauriRemoteConnectResponse>("connect_remote_host", { request });
+  await invalidateRemoteControllerHost(request.name);
+  return result;
 }
 
 export async function disconnectTauriRemoteHost(name: string): Promise<BridgeRemoteDisconnectResponse> {
   requireTauri();
-  return invoke<BridgeRemoteDisconnectResponse>("disconnect_remote_host", { request: { name } });
+  const result = await invoke<BridgeRemoteDisconnectResponse>("disconnect_remote_host", { request: { name } });
+  await invalidateRemoteControllerHost(name);
+  return result;
 }
 
 export async function browseTauriRemoteHost(name: string, path?: string): Promise<BridgeRemoteBrowseResponse> {

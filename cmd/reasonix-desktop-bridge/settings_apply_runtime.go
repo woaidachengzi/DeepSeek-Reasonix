@@ -35,14 +35,29 @@ func (f *controllerFactory) Rebuild(ctx context.Context, previous desktopbridge.
 	// The boot layer migrates posture and grants; host prompt wiring belongs
 	// to the replacement controller and must be reinstalled.
 	result.Controller.EnableInteractiveApproval()
-	next := &controllerRuntime{controller: result.Controller, sessionID: request.SessionID, lifecycleSink: sink, effort: selectedBridgeEffort(opts)}
+	next := &controllerRuntime{controller: result.Controller, sessionID: request.SessionID, lifecycleSink: sink, effort: selectedBridgeEffort(opts), terminalEvents: f.events, replacementRollback: undo}
 	next.startTurnSnapshotMonitor()
 	return next, nil
 }
 
 func (r *controllerRuntime) ReleaseForReplacement() error {
+	terminalErr := r.closeTerminals()
 	r.cancelMCPOAuthFlows()
 	r.stopTurnSnapshotMonitor()
 	r.controller.ReleaseResources()
-	return r.lifecycleSink.Close()
+	r.replacementMu.Lock()
+	undo := r.replacementRollback
+	r.replacementRollback = nil
+	r.replacementMu.Unlock()
+	var rollbackErr error
+	if undo != nil {
+		rollbackErr = undo()
+	}
+	return errors.Join(terminalErr, rollbackErr, r.lifecycleSink.Close())
+}
+
+func (r *controllerRuntime) CommitReplacement() {
+	r.replacementMu.Lock()
+	r.replacementRollback = nil
+	r.replacementMu.Unlock()
 }
