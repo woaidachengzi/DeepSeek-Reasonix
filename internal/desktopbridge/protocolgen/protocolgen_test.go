@@ -63,8 +63,8 @@ func TestGenerateMatchesCommittedArtifacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
-	if len(artifacts) != 2 {
-		t.Fatalf("got %d artifacts, want 2", len(artifacts))
+	if len(artifacts) != 3 {
+		t.Fatalf("got %d artifacts, want 3", len(artifacts))
 	}
 	if err := Check(repoRoot, artifacts); err != nil {
 		t.Fatalf("committed mirrors drifted from the wire schema: %v", err)

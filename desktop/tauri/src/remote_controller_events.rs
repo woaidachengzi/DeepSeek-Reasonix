@@ -1,5 +1,5 @@
-//! Selected-session host transport. Not exposed to the renderer until the
-//! subscription registry and capability-specific event projection are wired.
+//! Selected-session host transport with cancellation and native payload
+//! projection. The subscription worker owns admission to the renderer queue.
 use super::*;
 use std::{
     io::{BufRead, BufReader, Write},
@@ -294,7 +294,7 @@ impl SessionEvents {
                 if !has_data {
                     continue;
                 }
-                let frame: BridgeRemoteControllerSessionEvent =
+                let mut frame: BridgeRemoteControllerSessionEvent =
                     serde_json::from_slice(&data).map_err(|_| FAILED.to_string())?;
                 if frame.protocol_version != 1
                     || !view(&frame.controller)
@@ -309,8 +309,9 @@ impl SessionEvents {
                 {
                     return Err(FAILED.into());
                 }
-                // Internal envelope only. Do not emit this opaque event directly
-                // to a WebView: native kind/payload validation remains required.
+                frame.event = super::event_payload::project(&frame.event)?;
+                // The worker still checks registry ownership before enqueue;
+                // the renderer fences events already queued for an old owner.
                 return Ok(frame);
             }
             let (field, value) = text.split_once(':').unwrap_or((text, ""));

@@ -1800,6 +1800,7 @@ enum BridgeChild {
     Bundled {
         child: Option<ShellCommandChild>,
         running: Arc<AtomicBool>,
+        remote_exit: Arc<Mutex<Option<crate::remote_controller::OwnerRevocation>>>,
     },
 }
 
@@ -1896,10 +1897,12 @@ impl BridgeLauncher {
                     return Err(display_error(error));
                 }
                 let running = Arc::new(AtomicBool::new(true));
-                watch_bundled_child(events, Arc::clone(&running));
+                let remote_exit = Arc::new(Mutex::new(None));
+                watch_bundled_child(events, Arc::clone(&running), Arc::clone(&remote_exit));
                 Ok(BridgeChild::Bundled {
                     child: Some(child),
                     running,
+                    remote_exit,
                 })
             }
         }
@@ -1907,6 +1910,29 @@ impl BridgeLauncher {
 }
 
 impl BridgeChild {
+    fn bind_remote_exit(&mut self, revocation: crate::remote_controller::OwnerRevocation) {
+        match self {
+            Self::Bundled {
+                running,
+                remote_exit,
+                ..
+            } => {
+                let mut hook = remote_exit
+                    .lock()
+                    .unwrap_or_else(|error| error.into_inner());
+                if running.load(Ordering::Acquire) {
+                    *hook = Some(revocation);
+                } else {
+                    drop(hook);
+                    revocation.revoke();
+                }
+            }
+            // Explicit developer children are still checked by Supervisor
+            // status/reserve; no terminal observer is claimed for this path.
+            #[cfg(any(debug_assertions, test))]
+            Self::Explicit(_) => {}
+        }
+    }
     fn is_running(&mut self) -> Result<bool, String> {
         match self {
             #[cfg(any(debug_assertions, test))]
@@ -1934,17 +1960,26 @@ impl BridgeChild {
 fn watch_bundled_child(
     events: tauri::async_runtime::Receiver<CommandEvent>,
     running: Arc<AtomicBool>,
+    remote_exit: Arc<Mutex<Option<crate::remote_controller::OwnerRevocation>>>,
 ) {
-    tauri::async_runtime::spawn(monitor_bundled_child(events, running));
+    tauri::async_runtime::spawn(monitor_bundled_child(events, running, remote_exit));
 }
 
 async fn monitor_bundled_child(
     mut events: tauri::async_runtime::Receiver<CommandEvent>,
     running: Arc<AtomicBool>,
+    remote_exit: Arc<Mutex<Option<crate::remote_controller::OwnerRevocation>>>,
 ) {
     while let Some(event) = events.recv().await {
         if matches!(event, CommandEvent::Terminated(_)) {
             running.store(false, Ordering::Release);
+            let revocation = remote_exit
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .take();
+            if let Some(revocation) = revocation {
+                revocation.revoke();
+            }
             return;
         }
     }
@@ -1994,7 +2029,12 @@ impl BridgeSupervisor {
             .map_err(|_| "bridge state lock is unavailable")?;
         if let Some(existing) = process.as_mut() {
             if existing.child.is_running()? {
-                self.remote_subscriptions.set_owner(Some(&existing.sidecar_instance_id));
+                self.remote_subscriptions
+                    .set_owner(Some(&existing.sidecar_instance_id));
+                existing.child.bind_remote_exit(
+                    self.remote_subscriptions
+                        .owner_revocation(&existing.sidecar_instance_id),
+                );
                 return Ok(BridgeStatus {
                     running: true,
                     protocol_version: Some(PROTOCOL_VERSION),
@@ -2004,8 +2044,13 @@ impl BridgeSupervisor {
             self.remote_subscriptions.set_owner(None);
             *process = None;
         }
-        let started = self.spawn_bridge()?;
-        self.remote_subscriptions.set_owner(Some(&started.sidecar_instance_id));
+        let mut started = self.spawn_bridge()?;
+        self.remote_subscriptions
+            .set_owner(Some(&started.sidecar_instance_id));
+        started.child.bind_remote_exit(
+            self.remote_subscriptions
+                .owner_revocation(&started.sidecar_instance_id),
+        );
         let status = BridgeStatus {
             running: true,
             protocol_version: Some(PROTOCOL_VERSION),
@@ -4724,6 +4769,44 @@ impl BridgeSupervisor {
         self.remote_subscriptions.clear();
     }
 
+    pub(crate) fn reserve_remote_subscription(
+        &self,
+        label: &str,
+        request: crate::remote_controller::SubscribeRequest,
+    ) -> Result<
+        (
+            crate::remote_controller::RemoteControllerClient,
+            crate::remote_controller::SubscriptionOperation,
+        ),
+        String,
+    > {
+        let mut slot = self
+            .process
+            .lock()
+            .map_err(|_| "bridge state lock is unavailable")?;
+        let process = slot.as_mut().ok_or("desktop bridge is not running")?;
+        if !process
+            .child
+            .is_running()
+            .map_err(|_| "desktop bridge is unavailable; reopen the remote workspace")?
+        {
+            self.remote_subscriptions.set_owner(None);
+            return Err("desktop bridge is not running".into());
+        }
+        let operation =
+            self.remote_subscriptions
+                .reserve(label, &process.sidecar_instance_id, request)?;
+        let client = crate::remote_controller::RemoteControllerClient::new(
+            process.address,
+            process.token.clone(),
+        );
+        Ok((client, operation)) // No HTTP/SSH I/O while the process slot is held.
+    }
+
+    pub(crate) fn close_remote_subscription(&self, label: &str, id: &str) -> Result<(), String> {
+        self.remote_subscriptions.close(label, id)
+    }
+
     fn stop_events(&self) {
         let forwarder = self.events.lock().ok().and_then(|mut events| events.take());
         if let Some(forwarder) = forwarder {
@@ -4907,7 +4990,14 @@ pub(crate) fn request_json_with_timeout(
     read_timeout: Duration,
 ) -> Result<Value, String> {
     request_json_with_connected_socket(
-        address, token, method, path, body, request_id, read_timeout, |_| Ok(()),
+        address,
+        token,
+        method,
+        path,
+        body,
+        request_id,
+        read_timeout,
+        |_| Ok(()),
     )
 }
 
@@ -5595,8 +5685,7 @@ mod tests {
             let mut wire = input;
             wire["passwordSet"] = serde_json::json!(false);
             wire["passphraseSet"] = serde_json::json!(false);
-            wire["connection"] =
-                serde_json::json!({"protocolVersion":1,"status":"connected"});
+            wire["connection"] = serde_json::json!({"protocolVersion":1,"status":"connected"});
             let view: super::RemoteSettingsView = serde_json::from_value(serde_json::json!({
                 "protocolVersion":1, "configPath":"/owned/config.toml",
                 "sshConfigPath":"/owned/ssh-config", "hosts":[wire]
@@ -5670,7 +5759,12 @@ mod tests {
                 .unwrap();
             drop(sender);
             let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
-            super::monitor_bundled_child(receiver, running.clone()).await;
+            super::monitor_bundled_child(
+                receiver,
+                running.clone(),
+                std::sync::Arc::new(std::sync::Mutex::new(None)),
+            )
+            .await;
             assert!(
                 running.load(std::sync::atomic::Ordering::Acquire),
                 "pipe error or lost event channel cannot confirm child exit"
@@ -5699,7 +5793,12 @@ mod tests {
                 .unwrap();
             drop(sender);
             let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
-            super::monitor_bundled_child(receiver, running.clone()).await;
+            super::monitor_bundled_child(
+                receiver,
+                running.clone(),
+                std::sync::Arc::new(std::sync::Mutex::new(None)),
+            )
+            .await;
             assert!(!running.load(std::sync::atomic::Ordering::Acquire));
         });
     }
@@ -5710,8 +5809,57 @@ mod tests {
             let (sender, receiver) = tauri::async_runtime::channel(1);
             drop(sender);
             let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
-            super::monitor_bundled_child(receiver, running.clone()).await;
+            super::monitor_bundled_child(
+                receiver,
+                running.clone(),
+                std::sync::Arc::new(std::sync::Mutex::new(None)),
+            )
+            .await;
             assert!(running.load(std::sync::atomic::Ordering::Acquire));
+        });
+    }
+
+    #[test]
+    fn bundled_terminal_observer_revokes_and_late_binding_is_closed() {
+        tauri::async_runtime::block_on(async {
+            use std::sync::{
+                atomic::{AtomicBool, Ordering},
+                Arc, Mutex,
+            };
+            let registry = crate::remote_controller::RemoteSubscriptions::default();
+            registry.set_owner(Some("owned"));
+            let request = || crate::remote_controller::SubscribeRequest {
+                controller_id: "AAAAAAAAAAAAAAAAAAAAAA".into(),
+                session_path: "/owned/session.jsonl".into(),
+                surface_id: "surface".into(),
+                generation: 1,
+            };
+            let operation = registry.reserve("main", "owned", request()).unwrap();
+            let (sender, receiver) = tauri::async_runtime::channel(1);
+            sender
+                .send(tauri_plugin_shell::process::CommandEvent::Terminated(
+                    tauri_plugin_shell::process::TerminatedPayload {
+                        code: Some(0),
+                        signal: None,
+                    },
+                ))
+                .await
+                .unwrap();
+            let running = Arc::new(AtomicBool::new(true));
+            let remote_exit = Arc::new(Mutex::new(Some(registry.owner_revocation("owned"))));
+            super::monitor_bundled_child(receiver, running.clone(), remote_exit.clone()).await;
+            assert!(!running.load(Ordering::Acquire));
+            assert!(operation.cancellation().is_closed());
+            assert!(remote_exit.lock().unwrap().is_none());
+
+            registry.set_owner(Some("late"));
+            let mut child = super::BridgeChild::Bundled {
+                child: None,
+                running,
+                remote_exit,
+            };
+            child.bind_remote_exit(registry.owner_revocation("late"));
+            assert!(registry.reserve("main", "late", request()).is_err());
         });
     }
 

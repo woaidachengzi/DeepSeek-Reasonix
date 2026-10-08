@@ -1,0 +1,3217 @@
+{
+  "version": 1,
+  "kinds": [
+    "turn_started",
+    "reasoning",
+    "text",
+    "message",
+    "tool_dispatch",
+    "tool_result",
+    "usage",
+    "notice",
+    "phase",
+    "approval_request",
+    "ask_request",
+    "turn_done",
+    "compaction_started",
+    "compaction_done",
+    "tool_progress",
+    "mcp_surface_ready",
+    "retrying",
+    "steer",
+    "guardian_assessment",
+    "extension_surface",
+    "extension_status",
+    "stream_attempt",
+    "context_maintenance",
+    "workspace_changed",
+    "turn_phase",
+    "completion_summary",
+    "tool_result_preview",
+    "turn_status",
+    "prompt_answered",
+    "mcp_interaction",
+    "session_changed",
+    "read_status"
+  ],
+  "event": {
+    "kind": "object",
+    "fields": {
+      "approval": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "fresh": {
+              "optional": true,
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "id": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "kind": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "reason": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "recovery": {
+              "optional": true,
+              "shape": {
+                "kind": "object",
+                "nullable": true,
+                "fields": {
+                  "can_grant_task": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "boolean"
+                    }
+                  },
+                  "change_kind": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "change_rationale": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "diagnosis": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "failed_summary": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "failed_tool": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "next_action": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "next_tool": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "plan_after": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "plan_before": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "review_rationale": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "source_agent": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "task_grant_scope": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "subject": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "tool": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "turnId": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "write_access": {
+              "optional": true,
+              "shape": {
+                "kind": "object",
+                "nullable": true,
+                "fields": {
+                  "broad_home_access": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "boolean"
+                    }
+                  },
+                  "directories": {
+                    "shape": {
+                      "kind": "array",
+                      "nullable": true,
+                      "items": {
+                        "kind": "string"
+                      }
+                    }
+                  },
+                  "display_directories": {
+                    "shape": {
+                      "kind": "array",
+                      "nullable": true,
+                      "items": {
+                        "kind": "string"
+                      }
+                    }
+                  },
+                  "justification": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "ordinary_permission_needed": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "boolean"
+                    }
+                  },
+                  "persist_allowed": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "ask": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "id": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "questions": {
+              "shape": {
+                "kind": "array",
+                "nullable": true,
+                "items": {
+                  "kind": "object",
+                  "fields": {
+                    "header": {
+                      "optional": true,
+                      "shape": {
+                        "kind": "string"
+                      }
+                    },
+                    "id": {
+                      "shape": {
+                        "kind": "string"
+                      }
+                    },
+                    "multi": {
+                      "optional": true,
+                      "shape": {
+                        "kind": "boolean"
+                      }
+                    },
+                    "options": {
+                      "shape": {
+                        "kind": "array",
+                        "nullable": true,
+                        "items": {
+                          "kind": "object",
+                          "fields": {
+                            "description": {
+                              "optional": true,
+                              "shape": {
+                                "kind": "string"
+                              }
+                            },
+                            "label": {
+                              "shape": {
+                                "kind": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "prompt": {
+                      "shape": {
+                        "kind": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "turnId": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            }
+          }
+        }
+      },
+      "checkpointTurn": {
+        "optional": true,
+        "shape": {
+          "kind": "integer",
+          "nullable": true
+        }
+      },
+      "code": {
+        "optional": true,
+        "shape": {
+          "kind": "string"
+        }
+      },
+      "compaction": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "archive": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "messages": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "summary": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "trigger": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            }
+          }
+        }
+      },
+      "completion": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "attention": {
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "changed_files": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "checks_failed": {
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "checks_passed": {
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "checks_suppressed": {
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "constraint_degraded": {
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "floor": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "gap_kinds": {
+              "optional": true,
+              "shape": {
+                "kind": "array",
+                "nullable": true,
+                "items": {
+                  "kind": "string"
+                }
+              }
+            },
+            "mutations": {
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "preset": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "review": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "verdict": {
+              "shape": {
+                "kind": "string"
+              }
+            }
+          }
+        }
+      },
+      "decisionReceipt": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "id": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "kind": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "outcome": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "subject": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "tool": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            }
+          }
+        }
+      },
+      "detail": {
+        "optional": true,
+        "shape": {
+          "kind": "string"
+        }
+      },
+      "diagnostic": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "kind": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "protocol": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "providerDisplayName": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "providerId": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "requestPath": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "status": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "traceId": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            }
+          }
+        }
+      },
+      "err": {
+        "optional": true,
+        "shape": {
+          "kind": "string"
+        }
+      },
+      "extension": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "card": {
+              "optional": true,
+              "shape": {
+                "kind": "object",
+                "nullable": true,
+                "fields": {
+                  "actions": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "array",
+                      "nullable": true,
+                      "items": {
+                        "kind": "object",
+                        "fields": {
+                          "actionId": {
+                            "shape": {
+                              "kind": "string"
+                            }
+                          },
+                          "label": {
+                            "shape": {
+                              "kind": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "fields": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "array",
+                      "nullable": true,
+                      "items": {
+                        "kind": "object",
+                        "fields": {
+                          "key": {
+                            "shape": {
+                              "kind": "string"
+                            }
+                          },
+                          "value": {
+                            "shape": {
+                              "kind": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "markdown": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "progress": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "number",
+                      "nullable": true
+                    }
+                  },
+                  "text": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "title": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "form": {
+              "optional": true,
+              "shape": {
+                "kind": "object",
+                "nullable": true,
+                "fields": {
+                  "fields": {
+                    "shape": {
+                      "kind": "array",
+                      "nullable": true,
+                      "items": {
+                        "kind": "object",
+                        "fields": {
+                          "default": {
+                            "optional": true,
+                            "shape": {
+                              "kind": "json",
+                              "nullable": true
+                            }
+                          },
+                          "key": {
+                            "shape": {
+                              "kind": "string"
+                            }
+                          },
+                          "kind": {
+                            "optional": true,
+                            "shape": {
+                              "kind": "string"
+                            }
+                          },
+                          "label": {
+                            "optional": true,
+                            "shape": {
+                              "kind": "string"
+                            }
+                          },
+                          "options": {
+                            "optional": true,
+                            "shape": {
+                              "kind": "array",
+                              "nullable": true,
+                              "items": {
+                                "kind": "string"
+                              }
+                            }
+                          },
+                          "required": {
+                            "optional": true,
+                            "shape": {
+                              "kind": "boolean"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "message": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "title": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "generation": {
+              "optional": true,
+              "shape": {
+                "kind": "unsigned"
+              }
+            },
+            "kind": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "notification": {
+              "optional": true,
+              "shape": {
+                "kind": "object",
+                "nullable": true,
+                "fields": {
+                  "body": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "severity": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "title": {
+                    "shape": {
+                      "kind": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "pluginId": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "sessionId": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "status": {
+              "optional": true,
+              "shape": {
+                "kind": "object",
+                "nullable": true,
+                "fields": {
+                  "detail": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "label": {
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "progress": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "number",
+                      "nullable": true
+                    }
+                  },
+                  "severity": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "surfaceId": {
+              "shape": {
+                "kind": "string"
+              }
+            }
+          }
+        }
+      },
+      "guardian": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "duration_ms": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "id": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "outcome": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "rationale": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "risk_level": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "subject": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "tool": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "usage": {
+              "optional": true,
+              "shape": {
+                "kind": "object",
+                "nullable": true,
+                "fields": {
+                  "aggregateMode": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "cacheDiagnostics": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "object",
+                      "nullable": true,
+                      "fields": {
+                        "cacheHitTokens": {
+                          "shape": {
+                            "kind": "integer"
+                          }
+                        },
+                        "cacheMissTokens": {
+                          "shape": {
+                            "kind": "integer"
+                          }
+                        },
+                        "logRewriteVersion": {
+                          "shape": {
+                            "kind": "integer"
+                          }
+                        },
+                        "prefixChangeReasons": {
+                          "optional": true,
+                          "shape": {
+                            "kind": "array",
+                            "nullable": true,
+                            "items": {
+                              "kind": "string"
+                            }
+                          }
+                        },
+                        "prefixChanged": {
+                          "shape": {
+                            "kind": "boolean"
+                          }
+                        },
+                        "prefixHash": {
+                          "shape": {
+                            "kind": "string"
+                          }
+                        },
+                        "sessionContext": {
+                          "optional": true,
+                          "shape": {
+                            "kind": "object",
+                            "nullable": true,
+                            "fields": {
+                              "backgroundMemory": {
+                                "shape": {
+                                  "kind": "object",
+                                  "fields": {
+                                    "chars": {
+                                      "optional": true,
+                                      "shape": {
+                                        "kind": "integer"
+                                      }
+                                    },
+                                    "digest": {
+                                      "optional": true,
+                                      "shape": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "digest": {
+                                "shape": {
+                                  "kind": "string"
+                                }
+                              },
+                              "environment": {
+                                "shape": {
+                                  "kind": "object",
+                                  "fields": {
+                                    "chars": {
+                                      "optional": true,
+                                      "shape": {
+                                        "kind": "integer"
+                                      }
+                                    },
+                                    "digest": {
+                                      "optional": true,
+                                      "shape": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "reasons": {
+                                "optional": true,
+                                "shape": {
+                                  "kind": "array",
+                                  "nullable": true,
+                                  "items": {
+                                    "kind": "string"
+                                  }
+                                }
+                              },
+                              "skillsCatalog": {
+                                "shape": {
+                                  "kind": "object",
+                                  "fields": {
+                                    "chars": {
+                                      "optional": true,
+                                      "shape": {
+                                        "kind": "integer"
+                                      }
+                                    },
+                                    "digest": {
+                                      "optional": true,
+                                      "shape": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "targetRole": {
+                                "shape": {
+                                  "kind": "string"
+                                }
+                              },
+                              "version": {
+                                "shape": {
+                                  "kind": "integer"
+                                }
+                              },
+                              "workspace": {
+                                "shape": {
+                                  "kind": "object",
+                                  "fields": {
+                                    "chars": {
+                                      "optional": true,
+                                      "shape": {
+                                        "kind": "integer"
+                                      }
+                                    },
+                                    "digest": {
+                                      "optional": true,
+                                      "shape": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "systemHash": {
+                          "shape": {
+                            "kind": "string"
+                          }
+                        },
+                        "toolSchemaTokens": {
+                          "shape": {
+                            "kind": "integer"
+                          }
+                        },
+                        "toolsHash": {
+                          "shape": {
+                            "kind": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "cacheHitTokens": {
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "cacheMissTokens": {
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "completionTokens": {
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "contextCacheHitTokens": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "contextCacheMissTokens": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "contextCompletionTokens": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "contextPromptTokens": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "contextReasoningTokens": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "cost": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "number"
+                    }
+                  },
+                  "costComplete": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "boolean"
+                    }
+                  },
+                  "costQuote": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "object",
+                      "nullable": true,
+                      "fields": {
+                        "aggregateMode": {
+                          "optional": true,
+                          "shape": {
+                            "kind": "string"
+                          }
+                        },
+                        "billingMode": {
+                          "optional": true,
+                          "shape": {
+                            "kind": "string"
+                          }
+                        },
+                        "catalogSource": {
+                          "optional": true,
+                          "shape": {
+                            "kind": "string"
+                          }
+                        },
+                        "complete": {
+                          "shape": {
+                            "kind": "boolean"
+                          }
+                        },
+                        "costComplete": {
+                          "shape": {
+                            "kind": "boolean"
+                          }
+                        },
+                        "displayComplete": {
+                          "shape": {
+                            "kind": "boolean"
+                          }
+                        },
+                        "displayStatus": {
+                          "optional": true,
+                          "shape": {
+                            "kind": "string"
+                          }
+                        },
+                        "estimated": {
+                          "shape": {
+                            "kind": "boolean"
+                          }
+                        },
+                        "incompleteReason": {
+                          "optional": true,
+                          "shape": {
+                            "kind": "string"
+                          }
+                        },
+                        "legacyEstimate": {
+                          "optional": true,
+                          "shape": {
+                            "kind": "boolean"
+                          }
+                        },
+                        "modelRef": {
+                          "optional": true,
+                          "shape": {
+                            "kind": "string"
+                          }
+                        },
+                        "original": {
+                          "shape": {
+                            "kind": "object",
+                            "fields": {
+                              "amount": {
+                                "shape": {
+                                  "kind": "string"
+                                }
+                              },
+                              "currency": {
+                                "shape": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "originalTotals": {
+                          "optional": true,
+                          "shape": {
+                            "kind": "array",
+                            "nullable": true,
+                            "items": {
+                              "kind": "object",
+                              "fields": {
+                                "amount": {
+                                  "shape": {
+                                    "kind": "string"
+                                  }
+                                },
+                                "currency": {
+                                  "shape": {
+                                    "kind": "string"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "pricingFingerprint": {
+                          "optional": true,
+                          "shape": {
+                            "kind": "string"
+                          }
+                        },
+                        "rateBand": {
+                          "optional": true,
+                          "shape": {
+                            "kind": "string"
+                          }
+                        },
+                        "rateDate": {
+                          "optional": true,
+                          "shape": {
+                            "kind": "string"
+                          }
+                        },
+                        "ratedAt": {
+                          "optional": true,
+                          "shape": {
+                            "kind": "string"
+                          }
+                        },
+                        "selected": {
+                          "optional": true,
+                          "shape": {
+                            "kind": "object",
+                            "nullable": true,
+                            "fields": {
+                              "amount": {
+                                "shape": {
+                                  "kind": "string"
+                                }
+                              },
+                              "currency": {
+                                "shape": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "usageSource": {
+                          "optional": true,
+                          "shape": {
+                            "kind": "string"
+                          }
+                        },
+                        "valuations": {
+                          "optional": true,
+                          "shape": {
+                            "kind": "map",
+                            "nullable": true,
+                            "items": {
+                              "kind": "object",
+                              "fields": {
+                                "asOf": {
+                                  "shape": {
+                                    "kind": "string"
+                                  }
+                                },
+                                "basis": {
+                                  "shape": {
+                                    "kind": "string"
+                                  }
+                                },
+                                "money": {
+                                  "shape": {
+                                    "kind": "object",
+                                    "fields": {
+                                      "amount": {
+                                        "shape": {
+                                          "kind": "string"
+                                        }
+                                      },
+                                      "currency": {
+                                        "shape": {
+                                          "kind": "string"
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                "rateSnapshot": {
+                                  "optional": true,
+                                  "shape": {
+                                    "kind": "object",
+                                    "nullable": true,
+                                    "fields": {
+                                      "asOf": {
+                                        "shape": {
+                                          "kind": "string"
+                                        }
+                                      },
+                                      "base": {
+                                        "shape": {
+                                          "kind": "string"
+                                        }
+                                      },
+                                      "quote": {
+                                        "shape": {
+                                          "kind": "string"
+                                        }
+                                      },
+                                      "rate": {
+                                        "shape": {
+                                          "kind": "number"
+                                        }
+                                      },
+                                      "source": {
+                                        "shape": {
+                                          "kind": "string"
+                                        }
+                                      },
+                                      "stale": {
+                                        "optional": true,
+                                        "shape": {
+                                          "kind": "boolean"
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                "source": {
+                                  "shape": {
+                                    "kind": "string"
+                                  }
+                                },
+                                "stale": {
+                                  "optional": true,
+                                  "shape": {
+                                    "kind": "boolean"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "costUsd": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "number"
+                    }
+                  },
+                  "currency": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "currencyCode": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "displayComplete": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "boolean"
+                    }
+                  },
+                  "displayStatus": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "estimated": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "boolean"
+                    }
+                  },
+                  "originalTotals": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "array",
+                      "nullable": true,
+                      "items": {
+                        "kind": "object",
+                        "fields": {
+                          "amount": {
+                            "shape": {
+                              "kind": "string"
+                            }
+                          },
+                          "currency": {
+                            "shape": {
+                              "kind": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "promptTokens": {
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "reasoningTokens": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "sessionCacheHitTokens": {
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "sessionCacheMissTokens": {
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "source": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "totalTokens": {
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  }
+                }
+              }
+            },
+            "user_authorization": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            }
+          }
+        }
+      },
+      "itemId": {
+        "optional": true,
+        "shape": {
+          "kind": "string"
+        }
+      },
+      "kind": {
+        "shape": {
+          "kind": "string"
+        }
+      },
+      "level": {
+        "optional": true,
+        "shape": {
+          "kind": "string"
+        }
+      },
+      "maintenance": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "action": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "affectedToolResults": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "cacheBreak": {
+              "optional": true,
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "inputTokens": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "operationId": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "projectionVersion": {
+              "optional": true,
+              "shape": {
+                "kind": "unsigned"
+              }
+            },
+            "reason": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "resultTokens": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "savedTokens": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "status": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "trigger": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            }
+          }
+        }
+      },
+      "mcpInteraction": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "elicitationId": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "id": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "message": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "mode": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "requestedSchema": {
+              "optional": true,
+              "shape": {
+                "kind": "json",
+                "nullable": true
+              }
+            },
+            "server": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "turnId": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "url": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            }
+          }
+        }
+      },
+      "memoryCitations": {
+        "optional": true,
+        "shape": {
+          "kind": "array",
+          "nullable": true,
+          "items": {
+            "kind": "object",
+            "fields": {
+              "id": {
+                "optional": true,
+                "shape": {
+                  "kind": "string"
+                }
+              },
+              "kind": {
+                "optional": true,
+                "shape": {
+                  "kind": "string"
+                }
+              },
+              "lineEnd": {
+                "optional": true,
+                "shape": {
+                  "kind": "integer"
+                }
+              },
+              "lineStart": {
+                "optional": true,
+                "shape": {
+                  "kind": "integer"
+                }
+              },
+              "note": {
+                "optional": true,
+                "shape": {
+                  "kind": "string"
+                }
+              },
+              "source": {
+                "shape": {
+                  "kind": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "outcome": {
+        "optional": true,
+        "shape": {
+          "kind": "string"
+        }
+      },
+      "phase": {
+        "optional": true,
+        "shape": {
+          "kind": "string"
+        }
+      },
+      "promptId": {
+        "optional": true,
+        "shape": {
+          "kind": "string"
+        }
+      },
+      "promptKind": {
+        "optional": true,
+        "shape": {
+          "kind": "string"
+        }
+      },
+      "promptLegacy": {
+        "optional": true,
+        "shape": {
+          "kind": "boolean"
+        }
+      },
+      "protocolRecovery": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "id": {
+              "shape": {
+                "kind": "string"
+              }
+            }
+          }
+        }
+      },
+      "readPause": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "id": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "omitted": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "reads": {
+              "shape": {
+                "kind": "array",
+                "nullable": true,
+                "items": {
+                  "kind": "object",
+                  "fields": {
+                    "covered": {
+                      "optional": true,
+                      "shape": {
+                        "kind": "array",
+                        "nullable": true,
+                        "items": {
+                          "kind": "array",
+                          "items": {
+                            "kind": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "intent": {
+                      "optional": true,
+                      "shape": {
+                        "kind": "string"
+                      }
+                    },
+                    "missing": {
+                      "optional": true,
+                      "shape": {
+                        "kind": "array",
+                        "nullable": true,
+                        "items": {
+                          "kind": "array",
+                          "items": {
+                            "kind": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "path": {
+                      "shape": {
+                        "kind": "string"
+                      }
+                    },
+                    "readId": {
+                      "shape": {
+                        "kind": "string"
+                      }
+                    },
+                    "reason": {
+                      "shape": {
+                        "kind": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "readStatus": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "active": {
+              "optional": true,
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "covered": {
+              "optional": true,
+              "shape": {
+                "kind": "array",
+                "nullable": true,
+                "items": {
+                  "kind": "array",
+                  "items": {
+                    "kind": "integer"
+                  }
+                }
+              }
+            },
+            "generation": {
+              "optional": true,
+              "shape": {
+                "kind": "unsigned"
+              }
+            },
+            "hasMore": {
+              "optional": true,
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "intent": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "missing": {
+              "optional": true,
+              "shape": {
+                "kind": "array",
+                "nullable": true,
+                "items": {
+                  "kind": "array",
+                  "items": {
+                    "kind": "integer"
+                  }
+                }
+              }
+            },
+            "path": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "readId": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "reason": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "recovery": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "seq": {
+              "optional": true,
+              "shape": {
+                "kind": "unsigned"
+              }
+            },
+            "sourceEnd": {
+              "optional": true,
+              "shape": {
+                "kind": "integer",
+                "nullable": true
+              }
+            },
+            "state": {
+              "shape": {
+                "kind": "string"
+              }
+            }
+          }
+        }
+      },
+      "readiness": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "attempts": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "missing": {
+              "optional": true,
+              "shape": {
+                "kind": "array",
+                "nullable": true,
+                "items": {
+                  "kind": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "reasoning": {
+        "optional": true,
+        "shape": {
+          "kind": "string"
+        }
+      },
+      "receipt": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "changes": {
+              "optional": true,
+              "shape": {
+                "kind": "array",
+                "nullable": true,
+                "items": {
+                  "kind": "object",
+                  "fields": {
+                    "path": {
+                      "shape": {
+                        "kind": "string"
+                      }
+                    },
+                    "reviewed": {
+                      "shape": {
+                        "kind": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "diff": {
+              "optional": true,
+              "shape": {
+                "kind": "object",
+                "nullable": true,
+                "fields": {
+                  "added": {
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "coverage": {
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "files": {
+                    "shape": {
+                      "kind": "array",
+                      "nullable": true,
+                      "items": {
+                        "kind": "object",
+                        "fields": {
+                          "added": {
+                            "shape": {
+                              "kind": "integer"
+                            }
+                          },
+                          "binary": {
+                            "optional": true,
+                            "shape": {
+                              "kind": "boolean"
+                            }
+                          },
+                          "kind": {
+                            "shape": {
+                              "kind": "string"
+                            }
+                          },
+                          "modeOnly": {
+                            "optional": true,
+                            "shape": {
+                              "kind": "boolean"
+                            }
+                          },
+                          "patch": {
+                            "optional": true,
+                            "shape": {
+                              "kind": "string"
+                            }
+                          },
+                          "path": {
+                            "shape": {
+                              "kind": "string"
+                            }
+                          },
+                          "removed": {
+                            "shape": {
+                              "kind": "integer"
+                            }
+                          },
+                          "unavailable": {
+                            "optional": true,
+                            "shape": {
+                              "kind": "string"
+                            }
+                          },
+                          "uncounted": {
+                            "optional": true,
+                            "shape": {
+                              "kind": "boolean"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "id": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "reasons": {
+                    "shape": {
+                      "kind": "array",
+                      "nullable": true,
+                      "items": {
+                        "kind": "string"
+                      }
+                    }
+                  },
+                  "removed": {
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "turn": {
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  }
+                }
+              }
+            },
+            "gaps": {
+              "optional": true,
+              "shape": {
+                "kind": "array",
+                "nullable": true,
+                "items": {
+                  "kind": "object",
+                  "fields": {
+                    "detail": {
+                      "optional": true,
+                      "shape": {
+                        "kind": "string"
+                      }
+                    },
+                    "kind": {
+                      "shape": {
+                        "kind": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "interrupted": {
+              "optional": true,
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "risks": {
+              "optional": true,
+              "shape": {
+                "kind": "array",
+                "nullable": true,
+                "items": {
+                  "kind": "string"
+                }
+              }
+            },
+            "verdict": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "verifications": {
+              "optional": true,
+              "shape": {
+                "kind": "array",
+                "nullable": true,
+                "items": {
+                  "kind": "object",
+                  "fields": {
+                    "command": {
+                      "shape": {
+                        "kind": "string"
+                      }
+                    },
+                    "exitCode": {
+                      "optional": true,
+                      "shape": {
+                        "kind": "integer",
+                        "nullable": true
+                      }
+                    },
+                    "interrupted": {
+                      "optional": true,
+                      "shape": {
+                        "kind": "boolean"
+                      }
+                    },
+                    "passed": {
+                      "shape": {
+                        "kind": "boolean"
+                      }
+                    },
+                    "stale": {
+                      "optional": true,
+                      "shape": {
+                        "kind": "boolean"
+                      }
+                    },
+                    "toolCallId": {
+                      "optional": true,
+                      "shape": {
+                        "kind": "string"
+                      }
+                    },
+                    "toolResultId": {
+                      "optional": true,
+                      "shape": {
+                        "kind": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "recovery": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "next_attempt_at": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "phase": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "reason": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "wait_budget_ms": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "waited_ms": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "waiting": {
+              "optional": true,
+              "shape": {
+                "kind": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "retryAttempt": {
+        "optional": true,
+        "shape": {
+          "kind": "integer"
+        }
+      },
+      "retryMax": {
+        "optional": true,
+        "shape": {
+          "kind": "integer"
+        }
+      },
+      "retryScope": {
+        "optional": true,
+        "shape": {
+          "kind": "string"
+        }
+      },
+      "runtimeState": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "activity": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "backgroundJobs": {
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "cancelRequested": {
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "cancellable": {
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "pendingPrompt": {
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "phase": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "revision": {
+              "shape": {
+                "kind": "unsigned"
+              }
+            },
+            "running": {
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "runtimeEpoch": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "schemaVersion": {
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "turnEventSeq": {
+              "shape": {
+                "kind": "unsigned"
+              }
+            },
+            "turnId": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "turnStatus": {
+              "shape": {
+                "kind": "string"
+              }
+            }
+          }
+        }
+      },
+      "seq": {
+        "optional": true,
+        "shape": {
+          "kind": "unsigned"
+        }
+      },
+      "sessionCurrent": {
+        "optional": true,
+        "shape": {
+          "kind": "boolean"
+        }
+      },
+      "sessionPath": {
+        "optional": true,
+        "shape": {
+          "kind": "string"
+        }
+      },
+      "sessionReset": {
+        "optional": true,
+        "shape": {
+          "kind": "boolean"
+        }
+      },
+      "status": {
+        "optional": true,
+        "shape": {
+          "kind": "string"
+        }
+      },
+      "streamAttempt": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "action": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "attempt": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "id": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "max": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "reason": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            }
+          }
+        }
+      },
+      "text": {
+        "optional": true,
+        "shape": {
+          "kind": "string"
+        }
+      },
+      "tool": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "added": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "argChars": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "args": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "attemptId": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "capabilityId": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "diff": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "durationMs": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "endedAt": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "err": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "execution": {
+              "optional": true,
+              "shape": {
+                "kind": "object",
+                "nullable": true,
+                "fields": {
+                  "durationMs": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "exitCode": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "integer",
+                      "nullable": true
+                    }
+                  },
+                  "failurePhase": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "kind": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "mutationRisk": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "outputTail": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "platform": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "shell": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "shellVersion": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "state": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "supportsAndAnd": {
+                    "shape": {
+                      "kind": "boolean"
+                    }
+                  },
+                  "verification": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "id": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "name": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "output": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "parentId": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "partial": {
+              "optional": true,
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "profile": {
+              "optional": true,
+              "shape": {
+                "kind": "object",
+                "nullable": true,
+                "fields": {
+                  "effort": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "model": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "readOnly": {
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "refreshed": {
+              "optional": true,
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "removed": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "resolvedName": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "startedAt": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "subagentErrorCode": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "subagentRef": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "subagentRetryable": {
+              "optional": true,
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "subagentStatus": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "truncated": {
+              "optional": true,
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "verifying": {
+              "optional": true,
+              "shape": {
+                "kind": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "turnId": {
+        "optional": true,
+        "shape": {
+          "kind": "string"
+        }
+      },
+      "usage": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "aggregateMode": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "cacheDiagnostics": {
+              "optional": true,
+              "shape": {
+                "kind": "object",
+                "nullable": true,
+                "fields": {
+                  "cacheHitTokens": {
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "cacheMissTokens": {
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "logRewriteVersion": {
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "prefixChangeReasons": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "array",
+                      "nullable": true,
+                      "items": {
+                        "kind": "string"
+                      }
+                    }
+                  },
+                  "prefixChanged": {
+                    "shape": {
+                      "kind": "boolean"
+                    }
+                  },
+                  "prefixHash": {
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "sessionContext": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "object",
+                      "nullable": true,
+                      "fields": {
+                        "backgroundMemory": {
+                          "shape": {
+                            "kind": "object",
+                            "fields": {
+                              "chars": {
+                                "optional": true,
+                                "shape": {
+                                  "kind": "integer"
+                                }
+                              },
+                              "digest": {
+                                "optional": true,
+                                "shape": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "digest": {
+                          "shape": {
+                            "kind": "string"
+                          }
+                        },
+                        "environment": {
+                          "shape": {
+                            "kind": "object",
+                            "fields": {
+                              "chars": {
+                                "optional": true,
+                                "shape": {
+                                  "kind": "integer"
+                                }
+                              },
+                              "digest": {
+                                "optional": true,
+                                "shape": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "reasons": {
+                          "optional": true,
+                          "shape": {
+                            "kind": "array",
+                            "nullable": true,
+                            "items": {
+                              "kind": "string"
+                            }
+                          }
+                        },
+                        "skillsCatalog": {
+                          "shape": {
+                            "kind": "object",
+                            "fields": {
+                              "chars": {
+                                "optional": true,
+                                "shape": {
+                                  "kind": "integer"
+                                }
+                              },
+                              "digest": {
+                                "optional": true,
+                                "shape": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "targetRole": {
+                          "shape": {
+                            "kind": "string"
+                          }
+                        },
+                        "version": {
+                          "shape": {
+                            "kind": "integer"
+                          }
+                        },
+                        "workspace": {
+                          "shape": {
+                            "kind": "object",
+                            "fields": {
+                              "chars": {
+                                "optional": true,
+                                "shape": {
+                                  "kind": "integer"
+                                }
+                              },
+                              "digest": {
+                                "optional": true,
+                                "shape": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "systemHash": {
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "toolSchemaTokens": {
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "toolsHash": {
+                    "shape": {
+                      "kind": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "cacheHitTokens": {
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "cacheMissTokens": {
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "completionTokens": {
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "contextCacheHitTokens": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "contextCacheMissTokens": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "contextCompletionTokens": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "contextPromptTokens": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "contextReasoningTokens": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "cost": {
+              "optional": true,
+              "shape": {
+                "kind": "number"
+              }
+            },
+            "costComplete": {
+              "optional": true,
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "costQuote": {
+              "optional": true,
+              "shape": {
+                "kind": "object",
+                "nullable": true,
+                "fields": {
+                  "aggregateMode": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "billingMode": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "catalogSource": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "complete": {
+                    "shape": {
+                      "kind": "boolean"
+                    }
+                  },
+                  "costComplete": {
+                    "shape": {
+                      "kind": "boolean"
+                    }
+                  },
+                  "displayComplete": {
+                    "shape": {
+                      "kind": "boolean"
+                    }
+                  },
+                  "displayStatus": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "estimated": {
+                    "shape": {
+                      "kind": "boolean"
+                    }
+                  },
+                  "incompleteReason": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "legacyEstimate": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "boolean"
+                    }
+                  },
+                  "modelRef": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "original": {
+                    "shape": {
+                      "kind": "object",
+                      "fields": {
+                        "amount": {
+                          "shape": {
+                            "kind": "string"
+                          }
+                        },
+                        "currency": {
+                          "shape": {
+                            "kind": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "originalTotals": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "array",
+                      "nullable": true,
+                      "items": {
+                        "kind": "object",
+                        "fields": {
+                          "amount": {
+                            "shape": {
+                              "kind": "string"
+                            }
+                          },
+                          "currency": {
+                            "shape": {
+                              "kind": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "pricingFingerprint": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "rateBand": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "rateDate": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "ratedAt": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "selected": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "object",
+                      "nullable": true,
+                      "fields": {
+                        "amount": {
+                          "shape": {
+                            "kind": "string"
+                          }
+                        },
+                        "currency": {
+                          "shape": {
+                            "kind": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "usageSource": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "valuations": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "map",
+                      "nullable": true,
+                      "items": {
+                        "kind": "object",
+                        "fields": {
+                          "asOf": {
+                            "shape": {
+                              "kind": "string"
+                            }
+                          },
+                          "basis": {
+                            "shape": {
+                              "kind": "string"
+                            }
+                          },
+                          "money": {
+                            "shape": {
+                              "kind": "object",
+                              "fields": {
+                                "amount": {
+                                  "shape": {
+                                    "kind": "string"
+                                  }
+                                },
+                                "currency": {
+                                  "shape": {
+                                    "kind": "string"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "rateSnapshot": {
+                            "optional": true,
+                            "shape": {
+                              "kind": "object",
+                              "nullable": true,
+                              "fields": {
+                                "asOf": {
+                                  "shape": {
+                                    "kind": "string"
+                                  }
+                                },
+                                "base": {
+                                  "shape": {
+                                    "kind": "string"
+                                  }
+                                },
+                                "quote": {
+                                  "shape": {
+                                    "kind": "string"
+                                  }
+                                },
+                                "rate": {
+                                  "shape": {
+                                    "kind": "number"
+                                  }
+                                },
+                                "source": {
+                                  "shape": {
+                                    "kind": "string"
+                                  }
+                                },
+                                "stale": {
+                                  "optional": true,
+                                  "shape": {
+                                    "kind": "boolean"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "source": {
+                            "shape": {
+                              "kind": "string"
+                            }
+                          },
+                          "stale": {
+                            "optional": true,
+                            "shape": {
+                              "kind": "boolean"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "costUsd": {
+              "optional": true,
+              "shape": {
+                "kind": "number"
+              }
+            },
+            "currency": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "currencyCode": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "displayComplete": {
+              "optional": true,
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "displayStatus": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "estimated": {
+              "optional": true,
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "originalTotals": {
+              "optional": true,
+              "shape": {
+                "kind": "array",
+                "nullable": true,
+                "items": {
+                  "kind": "object",
+                  "fields": {
+                    "amount": {
+                      "shape": {
+                        "kind": "string"
+                      }
+                    },
+                    "currency": {
+                      "shape": {
+                        "kind": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "promptTokens": {
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "reasoningTokens": {
+              "optional": true,
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "sessionCacheHitTokens": {
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "sessionCacheMissTokens": {
+              "shape": {
+                "kind": "integer"
+              }
+            },
+            "source": {
+              "optional": true,
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "totalTokens": {
+              "shape": {
+                "kind": "integer"
+              }
+            }
+          }
+        }
+      },
+      "workspace": {
+        "optional": true,
+        "shape": {
+          "kind": "object",
+          "nullable": true,
+          "fields": {
+            "allPaths": {
+              "shape": {
+                "kind": "boolean"
+              }
+            },
+            "changes": {
+              "shape": {
+                "kind": "array",
+                "nullable": true,
+                "items": {
+                  "kind": "object",
+                  "fields": {
+                    "oldPath": {
+                      "optional": true,
+                      "shape": {
+                        "kind": "string"
+                      }
+                    },
+                    "op": {
+                      "shape": {
+                        "kind": "string"
+                      }
+                    },
+                    "path": {
+                      "shape": {
+                        "kind": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "revisions": {
+              "shape": {
+                "kind": "object",
+                "fields": {
+                  "content": {
+                    "shape": {
+                      "kind": "unsigned"
+                    }
+                  },
+                  "gitMeta": {
+                    "shape": {
+                      "kind": "unsigned"
+                    }
+                  },
+                  "session": {
+                    "shape": {
+                      "kind": "unsigned"
+                    }
+                  },
+                  "tree": {
+                    "shape": {
+                      "kind": "unsigned"
+                    }
+                  },
+                  "workingTree": {
+                    "shape": {
+                      "kind": "unsigned"
+                    }
+                  }
+                }
+              }
+            },
+            "source": {
+              "shape": {
+                "kind": "string"
+              }
+            },
+            "watchState": {
+              "shape": {
+                "kind": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

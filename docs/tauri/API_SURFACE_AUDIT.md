@@ -1,5 +1,29 @@
 # Wails API 与事件面盘点
 
+## 2026-10-08 原生远程订阅 review 提交
+
+- Review 范围包括订阅/取消 IPC、Go-derived 事件载荷 contract、native worker、包内 sidecar 终止撤销，以及 renderer 的先监听后收据与 owner/generation 校验。新增 renderer helper 尚未挂接实时历史 UI，不以基础入口提交代表实时面完成。
+- 修复 renderer 取消监听的异步错误遗漏：Tauri SDK 的 unlisten 类型声明为 void，但实现返回 Promise；窗口关闭时的拒绝现在被统一清理入口捕获。回归覆盖正常释放和监听注册完成前卸载，两者都不出现未处理拒绝或迟到 subscribe。补 native SDK mock 的窄 invoke、载荷转发、释放与拒绝不回退验证，并将两项订阅 suite 接入 `test:remote-controller`。
+- 修复新增测试的 `Array.at()` 与现有测试类型库不兼容。构建预算按已提交的七条远程历史文案补计：只移除这些 emitted keys 测得 zh 81677 → 81845 B、zh-TW 82321 → 82465 B；门限分别为 80.0/80.6 KiB，初始 JS 与 CSS 预算未调整。
+- 本轮完整 Rust 280 passed / 0 failed / 6 ignored、clippy all-targets `-D warnings`，Go eventwire/desktopbridge/protocolgen/sessionpath race、协议 artifact drift check、前端 remote-controller（含 history/subscription）、测试类型检查及生产构建均通过。证据 `/private/tmp/reasonix-subscription-review-*.log`。全仓 cargo fmt check 仍有既存文件格式差异，本批 Rust 文件已独立格式化；未扩大到无关文件。6 个需原生手工环境的 ignored 测试未运行。
+- 此轮没有构建/覆盖新 App，也没有执行真实 WebView 订阅 IPC；窗口重建身份、原生队列和实时 UI、统一快照/事件归约与可写会话入口仍须单独验收。
+
+## 2026-10-08 bundled sidecar 终止订阅撤销（未提交增量）
+
+- 包内 child monitor 的明确 Terminated receipt 现在撤销该 sidecar 的 remote subscription owner，主动 shutdown 当前 socket；不是等下一次 status 查询。revoker 使用弱 registry 引用与确切 owner 比对，旧 child 的迟到通知不能撤销替换 owner，也不延长 Supervisor 生命周期。
+- readiness 之后绑定 observer；若终止先于绑定，running flag 与 hook 锁配合使迟到绑定立即撤销。保留原进程纪律：输出管道 Error/无终止 receipt 的 channel EOF 不证明进程已退出，不能因此启动第二个 child。显式 developer binary 仍靠 Supervisor status/reserve 检查，不声称已拥有同等终止 observer。
+- 回归检查真实 monitor receipt、晚绑定、旧 owner fence、弱引用，以及自有 TCP worker 被 owner 撤销后释放阻塞读取且不发布迟到 ended。普通 sandbox 下 loopback bind 受限的失败日志单独保留；允许自有测试 socket 后的完整回归以 `events-native-owner-rust-final.log` 和 `events-native-owner-clippy-final.log` 为准，证据目录 `/private/tmp/reasonix-native-history-ui.POmxwA/`。
+- 最终完整 Rust 280 passed / 0 failed / 6 ignored，clippy all-targets `-D warnings` 与 `git diff --check` 通过；ignored 原生手工环境测试没有执行，不以测试数量代替实际 App 验收。
+- 此增量仍未构建新 App 或调用实际 WKWebView 订阅 IPC；窗口重建身份、原生队列里的旧事件消费 fence 和 live UI 验收未关闭。下方前一阶段的“意外退出即时撤销待补”仅对包内明确终止 receipt 由本节更新，其他失联/外部服务门禁保持未完成。
+
+## 2026-10-08 原生事件载荷投影与订阅命令（未提交增量）
+
+- 从 Go eventwire 类型及 32 种事件 registry 生成第三份 host-only JSON contract；现有 v1 TS/Rust envelope 镜像保持不变。native 按 contract 校验类型、必填/可空字段、JS 安全整数和事件关联字段，剔除未知 typed 字段；MCP 等明确用途的 JSON 保留为数据，不授予执行/审批权限。工具 ID 遵从 Go 的 optional 定义，不新增不兼容必填项。
+- 输入结构遍历限制深度 64、节点 200000、数组 100000 和对象字段 10000；这些是在已有 frame 预算和 JSON 解析后的校验，不声称峰值堆内存认证。生成器区分 byte slice 的 base64 与 byte array 的数字数组，重复 JSON 名称拒绝自动推断。
+- 已注册 main-only `bridge_remote_controller_subscribe` / `bridge_remote_controller_unsubscribe`。窄 request 绑定 Supervisor-owned instance、controller/session/surface/generation 和随机 subscription ID；worker 发布 `bridge:remote-session-state` 的 opening/ready/ended 与 `bridge:remote-session-event` 的投影结果。返回身份仅为收据，不是 ready 或可写权限；消费端须先监听、再 invoke，并拒绝已入队的旧身份。取消/替换移除 current 后不能发布迟到 ended，EOF 不自动重连。
+- 四项载荷和三项 worker 顶层回归覆盖全部已知 kind、隐私字段剔除、错误类型/预算、真实自有 TCP 的状态顺序及取消。最终完整 Rust 277 passed / 0 failed / 6 ignored、clippy all-targets `-D warnings`、73 项构建契约及 Linux 脚本契约通过，证据 `/private/tmp/reasonix-native-history-ui.POmxwA/events-native-command-*.log`；fixture 修复前失败日志保留，不计为通过。
+- 以上是源码/自有 TCP 验证，不是实际 Wry 队列、WKWebView IPC 或新 App 验收。live UI、sidecar 意外退出即时撤销、窗口重建身份、快照归约及显式恢复/发送/审批仍待补齐。当前未重建/覆盖交付 App，未操作真实账号/剪贴板、推送或发布。下方历史阶段的“尚未注册命令”由本节更新，不代表所有生命周期门禁完成。
+
 ## 2026-10-08 订阅注册表与超过 30 文件 review 提交
 
 - 新增 native subscription registry 核心：主窗口窄 request、受 Supervisor 提供的 sidecar instance owner、随机 128-bit subscription ID、surface 单调 generation。替换先从 current map 撤销旧身份再取消旧 operation；旧 worker Drop 只删除同一 entry，不能清理新订阅。发布 admission 与撤销在同一锁内串行；callback 只允许非阻塞 native enqueue，renderer 仍须拒绝已经入队的旧 subscription ID。

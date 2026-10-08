@@ -18,9 +18,19 @@ pub use image::SessionImageRequest;
 #[path = "remote_controller_events.rs"]
 mod events;
 
+#[path = "remote_controller_event_payload.rs"]
+mod event_payload;
+
 #[path = "remote_controller_subscriptions.rs"]
 mod subscriptions;
-pub(crate) use subscriptions::RemoteSubscriptions;
+pub(crate) use subscriptions::{
+    OwnerRevocation, RemoteSubscriptions, SubscribeRequest, SubscriptionIdentity,
+    SubscriptionOperation,
+};
+
+#[path = "remote_controller_subscription_worker.rs"]
+mod subscription_worker;
+pub(crate) use subscription_worker::{run_subscription, UnsubscribeRequest};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -257,30 +267,7 @@ fn valid_session_view(v: &BridgeRemoteControllerSessionView, expected: &str) -> 
         _ => return false,
     }
     if let Some(s) = &v.runtime_state {
-        if s.schema_version > 1
-            || s.revision > MAX_JS
-            || s.turn_event_seq > MAX_JS
-            || s.background_jobs > MAX_JS
-            || !clean(&s.runtime_epoch, 4096)
-            || !clean(&s.turn_id, 4096)
-            || !clean(&s.activity, 8192)
-        {
-            return false;
-        }
-        if !matches!(
-            s.phase.as_str(),
-            "idle" | "executing" | "finishing" | "closed"
-        ) || !matches!(
-            s.turn_status.as_str(),
-            "" | "queued"
-                | "in_progress"
-                | "waiting_user"
-                | "cancelling"
-                | "completed"
-                | "interrupted"
-                | "failed"
-                | "protocol_failed"
-        ) {
+        if !valid_runtime_state(s) {
             return false;
         }
     }
@@ -348,6 +335,35 @@ fn valid_session_view(v: &BridgeRemoteControllerSessionView, expected: &str) -> 
         }
     }
     true
+}
+
+fn valid_turn_status(status: &str) -> bool {
+    matches!(
+        status,
+        "" | "queued"
+            | "in_progress"
+            | "waiting_user"
+            | "cancelling"
+            | "completed"
+            | "interrupted"
+            | "failed"
+            | "protocol_failed"
+    )
+}
+
+fn valid_runtime_state(s: &BridgeRemoteControllerRuntimeState) -> bool {
+    s.schema_version <= 1
+        && s.revision <= MAX_JS
+        && s.turn_event_seq <= MAX_JS
+        && s.background_jobs <= MAX_JS
+        && clean(&s.runtime_epoch, 4096)
+        && clean(&s.turn_id, 4096)
+        && clean(&s.activity, 8192)
+        && matches!(
+            s.phase.as_str(),
+            "idle" | "executing" | "finishing" | "closed"
+        )
+        && valid_turn_status(&s.turn_status)
 }
 
 #[cfg(test)]

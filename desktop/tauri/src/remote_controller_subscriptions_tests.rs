@@ -16,6 +16,38 @@ fn registry() -> RemoteSubscriptions {
 }
 
 #[test]
+fn terminal_owner_revocation_cancels_only_its_current_owner() {
+    let registry = registry();
+    let operation = registry
+        .reserve("main", "owned-sidecar", request("surface", 1))
+        .unwrap();
+    let cancel = operation.cancellation();
+    registry.owner_revocation("owned-sidecar").revoke();
+    assert!(cancel.is_closed());
+    assert_eq!(
+        operation
+            .with_terminal(|_| panic!("dead owner publication"))
+            .unwrap(),
+        None::<()>
+    );
+    assert!(registry
+        .reserve("main", "owned-sidecar", request("surface", 2))
+        .is_err());
+
+    registry.set_owner(Some("replacement"));
+    let replacement = registry
+        .reserve("main", "replacement", request("surface", 1))
+        .unwrap();
+    registry.owner_revocation("owned-sidecar").revoke();
+    assert!(!replacement.cancellation().is_closed());
+    assert_eq!(replacement.with_current(|_| 1).unwrap(), Some(1));
+    let weak = registry.owner_revocation("replacement");
+    drop(registry);
+    weak.revoke(); // No registry is retained by a terminal observer.
+    assert!(replacement.cancellation().is_closed());
+}
+
+#[test]
 fn subscriptions_replace_before_publication_and_old_finish_cannot_remove_new() {
     let registry = registry();
     let old = registry

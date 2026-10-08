@@ -1,5 +1,17 @@
 # E 迁移清单
 
+## 2026-10-08 原生远程订阅 review 提交
+
+本批 review 提交原生事件投影、订阅/取消 IPC、包内 sidecar 退出撤销及 renderer 消费 helper。Review 修复异步 unlisten 的未处理拒绝、测试类型兼容及既存历史文案的构建预算漏计，并将 renderer/native adapter 回归接入远程检查。Rust 280 项、clippy、Go race、协议生成检查、前端远程回归/测试类型/生产构建通过，详情见 [API audit](API_SURFACE_AUDIT.md#2026-10-08-原生远程订阅-review-提交)。尚未挂接实时 UI，也未重建 App；实际 WebView、窗口重建、统一归约和可写入口的门禁保持未完成。
+
+## 2026-10-08 包内 sidecar 终止 observer（未提交增量）
+
+明确 child 终止 receipt 已主动撤销对应 remote subscription owner；晚绑定立即撤销、旧 owner 通知不影响新 owner，取消关闭实际 TCP 读取。管道故障不作为进程退出证据；显式 developer binary 仍未接同等 observer。源码回归与限制见 [API audit](API_SURFACE_AUDIT.md#2026-10-08-bundled-sidecar-终止订阅撤销未提交增量)，尚未重建 App 或关闭窗口重建/live UI 门禁。
+
+## 2026-10-08 原生事件载荷与订阅 IPC（未提交增量）
+
+已接入 Go-derived 32-kind 载荷 contract、native typed projection 和主窗口订阅/取消命令；返回身份与 opening/ready/ended 分开，替换/取消后的旧 worker 不发布迟到结果。完整 Rust 277 passed / 0 failed / 6 ignored、clippy 与构建契约通过，范围与限制见 [API audit](API_SURFACE_AUDIT.md#2026-10-08-原生事件载荷投影与订阅命令未提交增量)。尚无此次实际 WebView IPC、新 App 或 live UI 验收；sidecar 意外退出即时撤销、窗口重建、快照/事件统一归约、恢复/发送/审批/模型归属和 bot 等门禁保持未完成。变更超过 30 个文件时先 review、验证，再提交；当前阶段不提前宣称完成或覆盖旧包。
+
 ## 2026-10-08 超过 30 文件的 review 提交
 
 本批 review 提交共享原生历史图片验收修复、指定会话 SSE bridge/native transport 与 pending-open 取消、订阅 registry 核心。registry 防止旧 generation/worker 清理新订阅，限制 current/live/tombstone 数量；review 补 main Destroyed 之后的 admission 撤销、Supervisor stop 与 start 的 owner 锁归属、tombstone 上限准确恢复提示。四项 registry 回归、Go 五包 race/vet、完整前端 Tauri/测试类型、Python receipt 与协议镜像通过，详细范围见 [API audit](API_SURFACE_AUDIT.md#2026-10-08-订阅注册表与超过-30-文件-review-提交)。订阅 IPC/载荷检查/实际 WebView 实时面仍未接入，本批源码提交不代表新 App 打包或整个 E 完成；已交付 App 不覆盖、不推送。下方未提交记录是各增量阶段当时状态。

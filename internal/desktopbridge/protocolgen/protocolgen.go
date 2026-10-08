@@ -90,9 +90,14 @@ func Generate(root string) ([]Artifact, error) {
 	for _, name := range g.order {
 		ordered = append(ordered, g.types[name])
 	}
+	events, err := remoteEventArtifact()
+	if err != nil {
+		return nil, err
+	}
 	return []Artifact{
 		{Path: TypeScriptArtifactPath, Data: renderTypeScript(ordered)},
 		{Path: RustArtifactPath, Data: renderRust(ordered)},
+		events,
 	}, nil
 }
 

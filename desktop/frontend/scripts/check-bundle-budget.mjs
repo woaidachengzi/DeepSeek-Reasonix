@@ -386,7 +386,12 @@ for (const path of localeChunks) {
   // only those keys measures 81426 -> 81689 B (zh, +263 B) and
   // 82071 -> 82339 B (zh-TW, +268 B). Keep the next decimal ceilings for
   // that measured copy; initial JS and CSS budgets remain unchanged.
-  const budget = (name.startsWith("zh-TW-") ? 80.5 : 79.8) * 1024;
+  // The seven already-shipped read-only history captions (including scoped
+  // image guidance) add 168 B to zh (81677 -> 81845 B) and 144 B to zh-TW
+  // (82321 -> 82465 B), measured by removing only those keys from the emitted
+  // chunks. Account for that copy with the next decimal ceilings; keep all
+  // initial JavaScript and CSS limits unchanged.
+  const budget = (name.startsWith("zh-TW-") ? 80.6 : 80.0) * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 

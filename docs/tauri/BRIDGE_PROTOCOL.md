@@ -1,5 +1,11 @@
 # Reasonix Desktop Bridge Protocol v1（草案）
 
+## 原生只读远程订阅增量（2026-10-08）
+
+主窗口可调用 `bridge_remote_controller_subscribe`，request 仅含 controllerId、sessionPath、surfaceId、generation；host 返回 protocolVersion 与受监督 owner 绑定的随机 subscription 身份。`bridge_remote_controller_unsubscribe` 只接受 subscriptionId。收据不等于流已就绪；native 分别发送 `bridge:remote-session-state`（opening/ready/ended）和 `bridge:remote-session-event`（身份与投影 frame）。renderer 必须先监听再调用，逐帧检查当前身份/generation，结束后显式补快照，不自动重放或获得写入权限。
+
+v1 envelope 的 event 仍为 opaque object；进入 renderer 前 native 依据从权威 Go eventwire 生成的 `remote_event_contract.generated.json` 校验/投影。协议生成检查同时覆盖该第三份 host-only artifact 与现有 TS/Rust 镜像。此源码入口尚不代表实际 App/live UI 或完整窗口/sidecar 生命周期验收。
+
 ## 范围
 
 本协议连接 Tauri host 与本地 Go sidecar。它不是公网 API，sidecar 只允许本机

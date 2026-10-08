@@ -962,6 +962,37 @@ async fn bridge_remote_controller_session_image(
 }
 
 #[tauri::command]
+fn bridge_remote_controller_subscribe(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    request: remote_controller::SubscribeRequest,
+) -> Result<remote_controller::SubscriptionIdentity, String> {
+    remote_controller::ensure_main_window(window.label())?;
+    let (client, operation) = app
+        .state::<BridgeSupervisor>()
+        .reserve_remote_subscription(window.label(), request)?;
+    let identity = operation.identity();
+    std::thread::Builder::new()
+        .name("remote-session-events".into())
+        .spawn(move || remote_controller::run_subscription(app, client, operation))
+        .map_err(|_| {
+            "remote subscription worker could not start; reopen the session".to_string()
+        })?;
+    // Receipt is not stream readiness or send/resume authority. The listener
+    // must bind surface+generation before invoke; wait for the ready notice.
+    Ok(identity)
+}
+
+#[tauri::command]
+fn bridge_remote_controller_unsubscribe(
+    window: tauri::WebviewWindow,
+    supervisor: State<'_, BridgeSupervisor>,
+    request: remote_controller::UnsubscribeRequest,
+) -> Result<(), String> {
+    supervisor.close_remote_subscription(window.label(), &request.subscription_id)
+}
+
+#[tauri::command]
 async fn bridge_terminal_workspace(
     window: tauri::WebviewWindow,
     app: tauri::AppHandle,
@@ -4536,6 +4567,8 @@ fn main() {
             bridge_remote_controller_close,
             bridge_remote_controller_session_view,
             bridge_remote_controller_session_image,
+            bridge_remote_controller_subscribe,
+            bridge_remote_controller_unsubscribe,
             open_remote_controller,
             preview_remote_file,
             save_remote_file,

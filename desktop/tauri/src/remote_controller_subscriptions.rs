@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Arc, Mutex,
+        Arc, Mutex, Weak,
     },
 };
 
@@ -26,6 +26,7 @@ pub(crate) struct SubscribeRequest {
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SubscriptionIdentity {
+    pub protocol_version: u64,
     pub subscription_id: String,
     pub surface_id: String,
     pub generation: u64,
@@ -56,7 +57,43 @@ pub(crate) struct RemoteSubscriptions {
     state: Arc<Mutex<State>>,
     live: Arc<AtomicUsize>,
 }
+// A process observer must never revoke a later sidecar owner. Weak ownership
+// also prevents a child monitor from keeping the Supervisor registry alive.
+pub(crate) struct OwnerRevocation {
+    state: Weak<Mutex<State>>,
+    owner: String,
+}
+impl std::fmt::Debug for OwnerRevocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("OwnerRevocation")
+    }
+}
+impl OwnerRevocation {
+    pub(crate) fn revoke(self) {
+        let Some(state) = self.state.upgrade() else {
+            return;
+        };
+        let retired = if let Ok(mut state) = state.lock() {
+            if state.owner.as_deref() != Some(&self.owner) {
+                return;
+            }
+            state.owner = None;
+            std::mem::take(&mut state.current)
+        } else {
+            return;
+        };
+        for entry in retired.values() {
+            entry.cancellation.close();
+        }
+    }
+}
 impl RemoteSubscriptions {
+    pub(crate) fn owner_revocation(&self, owner: &str) -> OwnerRevocation {
+        OwnerRevocation {
+            state: Arc::downgrade(&self.state),
+            owner: owner.to_owned(),
+        }
+    }
     // Only BridgeSupervisor supplies this identity, never a renderer argument.
     pub(crate) fn set_owner(&self, owner: Option<&str>) {
         let retired = if let Ok(mut state) = self.state.lock() {
@@ -86,7 +123,6 @@ impl RemoteSubscriptions {
             entry.cancellation.close();
         }
     }
-    #[allow(dead_code)] // Command registration follows payload projection.
     pub(crate) fn reserve(
         &self,
         label: &str,
@@ -135,6 +171,7 @@ impl RemoteSubscriptions {
         self.live.fetch_add(1, Ordering::AcqRel);
         let entry = Arc::new(Entry {
             identity: SubscriptionIdentity {
+                protocol_version: 1,
                 subscription_id: URL_SAFE_NO_PAD.encode(random),
                 surface_id: request.surface_id.clone(),
                 generation: request.generation,
@@ -158,6 +195,25 @@ impl RemoteSubscriptions {
             entry,
         })
     }
+    pub(crate) fn close(&self, label: &str, id: &str) -> Result<(), String> {
+        ensure_main_window(label)?;
+        if !handle(id) {
+            return Err(INVALID.into());
+        }
+        let retired = {
+            let mut state = self.state.lock().map_err(|_| FAILED.to_string())?;
+            let surface = state
+                .current
+                .iter()
+                .find(|(_, entry)| entry.identity.subscription_id == id)
+                .map(|(surface, _)| surface.clone());
+            surface.and_then(|surface| state.current.remove(&surface))
+        };
+        if let Some(entry) = retired {
+            entry.cancellation.close();
+        }
+        Ok(())
+    }
 }
 impl Drop for RemoteSubscriptions {
     fn drop(&mut self) {
@@ -170,20 +226,32 @@ pub(crate) struct SubscriptionOperation {
     entry: Arc<Entry>,
 }
 impl SubscriptionOperation {
-    #[allow(dead_code)]
     pub(crate) fn identity(&self) -> SubscriptionIdentity {
         self.entry.identity.clone()
     }
-    #[allow(dead_code)]
     pub(crate) fn cancellation(&self) -> EventCancellation {
         self.entry.cancellation.clone()
     }
     // Callback must be a nonblocking native enqueue, never network I/O. Its
     // admission is serialized with revoke/replacement. Renderer must still
     // reject already queued events carrying an obsolete subscription ID.
-    #[allow(dead_code)]
     pub(crate) fn with_current<T>(
         &self,
+        publish: impl FnOnce(&SubscriptionIdentity) -> T,
+    ) -> Result<Option<T>, String> {
+        self.publish(false, publish)
+    }
+    // Transport failure closes its socket before the fixed terminal notice.
+    // User/owner revoke removed the entry, so cannot publish even this notice.
+    pub(crate) fn with_terminal<T>(
+        &self,
+        publish: impl FnOnce(&SubscriptionIdentity) -> T,
+    ) -> Result<Option<T>, String> {
+        self.publish(true, publish)
+    }
+    fn publish<T>(
+        &self,
+        terminal: bool,
         publish: impl FnOnce(&SubscriptionIdentity) -> T,
     ) -> Result<Option<T>, String> {
         let state = self.state.lock().map_err(|_| FAILED.to_string())?;
@@ -193,7 +261,7 @@ impl SubscriptionOperation {
             .is_some_and(|current| Arc::ptr_eq(current, &self.entry));
         if current
             && state.owner.as_deref() == Some(&self.entry.identity.sidecar_instance_id)
-            && !self.entry.cancellation.is_closed()
+            && (terminal || !self.entry.cancellation.is_closed())
         {
             Ok(Some(publish(&self.entry.identity)))
         } else {
