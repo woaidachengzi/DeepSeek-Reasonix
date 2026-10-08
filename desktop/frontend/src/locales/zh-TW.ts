@@ -1557,7 +1557,7 @@ export const zhTW: Record<DictKey, string> = {
   "settings.remote.historyFailed": "無法讀取此會話，請升級遠端 Serve 後關閉並重新開啟清單。",
   "settings.remote.historyEmpty": "此會話沒有可顯示的訊息。",
   "settings.remote.historyRefresh": "重新整理歷史",
-  "settings.remote.historyMediaUnavailable": "遠端檔案和圖片預覽尚未接入，請在遠端電腦檢視。",
+  "settings.remote.historyMediaUnavailable": "圖片按所選遠端會話的工作區預覽。遠端檔案和程式碼跳轉尚未接入，請在遠端電腦檢視。",
   "settings.remote.sessionsFailed": "遠端會話清單不可用。請檢查 Serve，然後關閉並重開此清單，或重新連線已儲存的 SSH 主機。",
   "settings.remote.sessionsEmpty": "尚無已儲存的遠端會話。",
   "settings.remote.sessionsTurns": "{count} 輪對話",

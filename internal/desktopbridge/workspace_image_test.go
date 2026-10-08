@@ -129,3 +129,59 @@ func TestWorkspaceImageRejectsOtherSessionAndClosedRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestWorkspaceImageHeldRootAliasesAndNilRoot(t *testing.T) {
+	base := t.TempDir()
+	data := imageFixture(t, 1, 1)
+	if err := os.WriteFile(filepath.Join(base, "owned.png"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	alias := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(base, alias); err != nil {
+		t.Fatal(err)
+	}
+	if v := ReadWorkspaceImageFromRoot(root, filepath.Join(alias, "owned.png"), alias); v.ErrorCode != "" {
+		t.Fatal("same inode alias rejected", v.ErrorCode)
+	}
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "owned.png"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if v := ReadWorkspaceImageFromRoot(root, filepath.Join(outside, "owned.png"), outside); v.URL != "" || v.ErrorCode != "forbidden" {
+		t.Fatal("alternate prefix became a filesystem grant")
+	}
+	if v := ReadWorkspaceImageFromRoot(nil, "owned.png", base); v.URL != "" || v.ErrorCode != "forbidden" {
+		t.Fatal("nil root read a file")
+	}
+	if v := ReadWorkspaceImageFromRoot(nil, "data:image/png;base64,"+base64.StdEncoding.EncodeToString(data)); v.ErrorCode != "" {
+		t.Fatal("inline raster needs filesystem authority")
+	}
+	if err := os.Rename(base, base+"-held"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Remove(filepath.Join(base, "owned.png"))
+		_ = os.Remove(base)
+		_ = os.Rename(base+"-held", base)
+	})
+	if err := os.Mkdir(base, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "owned.png"), imageFixture(t, 2, 1), 0600); err != nil {
+		t.Fatal(err)
+	}
+	v := ReadWorkspaceImageFromRoot(root, "owned.png")
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(v.URL, "data:image/png;base64,"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(raw))
+	if err != nil || cfg.Width != 1 {
+		t.Fatal("held root followed a replacement pathname")
+	}
+}

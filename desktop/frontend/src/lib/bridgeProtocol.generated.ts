@@ -301,6 +301,14 @@ export interface BridgeRemoteControllerHistoryToolCall {
   name: string;
 }
 
+export interface BridgeRemoteControllerImage {
+  errorCode?: "blocked-remote" | "proxy-config" | "fetch-failed" | "not-found" | "forbidden" | "not-a-file" | "too-large" | "changed-file" | "invalid-image" | "unsupported-type";
+  filename?: string;
+  mime?: "image/png";
+  size?: number;
+  url: string;
+}
+
 export interface BridgeRemoteControllerProtocolRecovery {
   id: string;
 }
@@ -340,6 +348,24 @@ export interface BridgeRemoteControllerSession {
   takenOver: boolean;
   title: string;
   turns: number;
+}
+
+export interface BridgeRemoteControllerSessionImageRequest {
+  sessionPath: string;
+  source: string;
+}
+
+export interface BridgeRemoteControllerSessionImageResponse {
+  controller: BridgeRemoteControllerView;
+  protocolVersion: number;
+  view: BridgeRemoteControllerSessionImageView;
+}
+
+export interface BridgeRemoteControllerSessionImageView {
+  image: BridgeRemoteControllerImage;
+  protocolVersion: number;
+  sessionPath: string;
+  workspace: string;
 }
 
 export interface BridgeRemoteControllerSessionView {

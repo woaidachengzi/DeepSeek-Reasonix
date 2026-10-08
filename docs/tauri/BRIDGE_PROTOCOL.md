@@ -153,6 +153,26 @@ native client fixture、模拟宿主浏览器和普通包启动均不等于新�
 
 当前 bridge 已实现 health、脱敏 Provider 摘要、建/开会话、空闲会话的显式切换、重命名与删除、快照、可见历史、工作区附件、逐层工作区目录、受限工作区文件预览、Git 变更列表与受限 diff、submit、cancel、审批/ask/MCP 提示回答、断线后的待处理提示重放、SSE 事件与正常关闭。工作区目录只返回当前会话工作区下的一层，隐藏常见构建产物、依赖目录和 `.git`，每层最多 200 项；返回值只有相对路径，`..` 越界会被拒绝。文件预览只读取有限大小的常规文件；二进制或非法 UTF-8 文件仅返回 `binary: true`，不会把原始字节交给 renderer。Git 变更查询只执行固定的只读 Git 子命令，diff 输出限制为 2 MiB；非 Git 工作区会返回 `gitAvailable: false`，不会伪造“干净”。会话自定义标题写入 core 的 `.jsonl.meta`，不改动 transcript；标题为空、含控制字符或超过 120 个 Unicode 字符时会被拒绝。删除走 core 自身的产物清理（transcript、事件日志与 sidecar、guardian、inbox、checkpoint、子 agent 记录、cleanup 标记），只允许删除当前持有且空闲的会话，避免 host 误删另一个 host 正在使用的会话；删除成功后 bridge 释放该控制器且不再写回快照，否则会把刚删掉的文件重新创建出来。对已不存在的会话重复执行删除返回 `not_found`，而带同一 `X-Reasonix-Request-ID` 的传输重试重放首次响应。
 
+后续源码增加 `POST /v1/remote/controllers/{controllerID}/session-image`，只接受
+`{sessionPath, source}`（24 MiB body，source 至多 22370645 UTF-8 bytes）。workspace
+由 backend-owned handle 注入 Serve `POST /desktop/session-image`，renderer 不提供
+workspace、URL、token 或本地会话 ID。返回 `{protocolVersion, controller, view}`，
+view 固定 `protocolVersion/sessionPath/workspace/image`；image 仅含重新编码的 PNG
+data URI、filename、mime、size 或白名单 errorCode，不含 openHref。client 严格检查
+版本/路径/workspace、12 MiB response、8 MiB PNG、1200px 与完整可解码 raster。
+saved/external 必须有归属当前 Serve workspace 的持久化元数据，缺失不回写/迁移。
+活跃/后台使用各自 runtime root；读取前后均检查 owner、目录/会话文件 inode、alias
+及取消。锁忙、owner 改变为固定错误，不 fallback 本地。两端最多两项 admission，
+Serve/bridge 分别有 25/32 秒预算，client 整个 catalogue+读取为 30 秒。
+后续 review 已接 main-only `bridge_remote_controller_session_image`；入站窄 DTO
+只有 `controllerId/sessionPath/source`，拒绝其他字段。Rust 在 typed 输出前再次完整
+解码有界 PNG；remote lease 核对 handle/path/workspace 并剔除 opener/private 字段，
+共享历史 resolver 在派发/返回时检查同一布局提交 scope。实际包启动 smoke 已通过，
+但不等于图片命令 WKWebView/SSH/Serve 联调通过，feature capability 未新增。
+
+此后端阶段尚未新增原生 command、前端 resolver 或 feature capability，当时已交付 App 仍是
+`de2c6050c`；typed 后端/SSH fixture 不等于包内远程媒体 UI 验收。
+
 单文件恢复沿用 core 的两阶段检查点事务。预览不会写入文件；提交会重新校验方案与文件指纹，旧方案和会话运行中的提交会失败。会话首次修改后文件再次变化时，界面须显示覆盖风险，并让用户在最终操作中显式选择 `overwrite_checkpoint`。`keep_current` 由界面取消表示。恢复成功后若 core 返回可撤销事务 ID，界面提供一次撤销入口；撤销前重新核对文件指纹，后续手工修改会使撤销失败。bridge 只回传相对路径、冲突原因和恢复数量，不回传原始文件内容或绝对路径。此功能只恢复一个由当前会话检查点持有的文件，不回退对话历史。
 
 检查点页接入 core 的 `RewindCode` 事务。预览列出该轮及以后被捕获的文件，最多展示 60 条路径，同时返回完整计数；发现文件冲突时禁用提交，不提供多文件强制覆盖。项目覆盖缺口允许提交前必须勾选风险确认，bridge 再次检查该标志；没有确认时即使绕开前端也不能提交。成功的代码回滚可经前述撤销事务入口恢复操作前文件，且不改变对话历史。对话回滚、组合回滚和旧格式独立会话分叉均已接入 Preview。

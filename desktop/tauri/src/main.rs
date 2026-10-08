@@ -944,6 +944,22 @@ async fn bridge_remote_controller_session_view(
 }
 
 #[tauri::command]
+async fn bridge_remote_controller_session_image(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    request: remote_controller::SessionImageRequest,
+) -> Result<protocol_generated::BridgeRemoteControllerSessionImageResponse, String> {
+    remote_controller::ensure_main_window(window.label())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<BridgeSupervisor>()
+            .remote_controller_client()?
+            .session_image(request)
+    })
+    .await
+    .map_err(|_| "remote image worker stopped; reopen the remote workspace".to_string())?
+}
+
+#[tauri::command]
 async fn bridge_terminal_workspace(
     window: tauri::WebviewWindow,
     app: tauri::AppHandle,
@@ -4512,6 +4528,7 @@ fn main() {
             bridge_remote_controller_sessions,
             bridge_remote_controller_close,
             bridge_remote_controller_session_view,
+            bridge_remote_controller_session_image,
             open_remote_controller,
             preview_remote_file,
             save_remote_file,

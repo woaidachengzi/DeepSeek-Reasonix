@@ -1,5 +1,24 @@
 # Wails API 与事件面盘点
 
+## 2026-10-08 远程图片 native/UI review 与可运行 App
+
+- 在下述后端增量之上接入 main-window-only `bridge_remote_controller_session_image`、remote lease 与共享 Transcript 图片 resolver。renderer 仅提交 controller/session/source；native 再验 PNG 完整像素、尺寸、base64 与 owner，lease 显式剔除 opener/私有字段。
+- resolver 在布局提交时持有会话 scope，派发与返回均核对同一 scope；刷新历史不重建图片权限，切换/卸载后的结果不发布。不开放远程文件跳转、发送或审批权限。
+- 本轮 review 补充图片跨 scope、释放后的派发/迟到结果、URI/预算和私有字段回归。证据目录 `/private/tmp/reasonix-package-review.QZYtvf/` 保存构建、源码测试和实际包 smoke；旧 `de2c6050c` App 备份为 `previous-de2c6050c.app`。
+- macOS arm64 ad-hoc App 已实际构建，deep/strict 签名及 managed/explicit 临时档案的启动、readiness/未鉴权拒绝、退出清理通过。包启动不等于新增命令的 WKWebView/SSH/Serve 图片联调；真实账号、剪贴板、正式签名/公证/发布和其余迁移门禁未关闭。下文记录为各阶段当时状态。
+- 完整四包 Go race/vet、Rust 256 passed/0 failed/6 ignored 与 clippy、完整前端 Tauri/Transcript、remote controller 回归、测试类型及协议镜像检查通过；构建包含生产类型/hooks/static/budget 门禁。新增测试故意构造非法 enum 的 TypeScript 初稿失败已修正，最终日志为 `remote-final.log`、`types-final.log`。提交后按同参数从干净 HEAD 重建，再运行 `package-smoke-final.log`，不将 dirty 构建冒充提交后的包。
+
+## 2026-10-08 远程图片读取链路（后续源码增量）
+
+已交付 App/干净提交仍为 `de2c6050c`。本批新增 Serve → 共用 controller client → authenticated bridge 的 scoped 图片读取；尚未接原生 command 或前端 resolver，未覆盖已交付 App，不声明远程媒体 UI 已完成。
+
+- Serve 新增 `POST /desktop/session-image`，输入 explicit canonical session、backend workspace alias、source。会话目录可能是全局目录：活跃/后台 owner 使用自身 workspace，saved/external 必须有有界、只读、root-confined 的持久化 `workspace_root`，并与当前 Serve 工作区一致。缺失旧元数据、其他工作区、退休 controller、越界路径失败，不借当前 cwd/本地 RuntimeManager 或自动 heal/reclaim。
+- 用 held `os.Root` 读取原有受限 raster decoder，16 MiB/40MP 入站、1200px/8 MiB PNG 出站；兼容同 inode 的逻辑 workspace alias（包含绝对/file URL 来源），不按路径前缀盲信 alias。公共 HTTP 图片复用专用 SSRF/proxy transport，不把 controller Cookie/Authorization 转发到图片站点。远端路径/public URL 的 `openHref` 不出站。
+- 解码/网络期间释放 bind lock，发布前重查 foreground/controller/selected path、detached map/退休/替换、saved workspace metadata、transcript inode、workspace inode/alias 和请求取消。bind lock 忙时明确返回 409，不阻塞等待长时间模型构建。Serve 和 bridge 分别以两个 admission slots 限制大请求/解码内存；超时与取消关闭入站 body。未把只读接口变为发送/审批权限。
+- 共用 client 的图片结果只有 typed PNG URI/filename/mime/size/fixed errorCode，完整 PNG 解码、尺寸/base64/body 预算与 protocol/path/workspace 校验；任意 remote file/HTTP URL、SVG、private diagnostic/config/opener 字段均不能透传。bridge 工作区只能来自 backend SSH bootstrap handle，不接受 renderer 的 workspace/url/token 字段；释放 handle/SSH owner 会取消旧读取。
+- 证据 `/private/tmp/reasonix-remote-image.rKqpbO/`：生产 Serve + token middleware +真实 Controller/磁盘图片的鉴权、saved/detached/external 隔离与无回写；确定性后端读取 seam 的替换/取消发布零结果；真实 loopback SSH direct-tcpip + cookie HTTP fixture 的 bridge 白名单/隐私/取消。四包完整 `four-packages-race.log` 与最后新增 alias/metadata/admission 后的两次 `image-final-race.log`、vet、DTO/schema/生成镜像检查、Rust check/clippy、生产/测试 typecheck 均通过。最终同版本完整 race 以 `four-packages-final-race.log` 为准。
+- 此阶段没有实际 App/WKWebView 的新命令调用、前端图片显示或真实远端安装/代理联调证据。下一步接 main-only 窄 IPC 和 scoped resolver，并验实际隔离包；缺失历史 workspace 元数据的兼容恢复门禁仍保留。原生粘贴、controller 事件/发送/审批/模型归属、bot Desktop、异平台/管理页/SQLite 不因本批通过关闭。
+
 ## 2026-10-08 远程历史增量 review 与 macOS 可运行候选
 
 本轮收敛 `d0106adb8` 之后的 42 项源码/测试/文档增量，未新增远程图片接口：该入口尚未接通完整链路，已撤下本轮新写的未完成代码。按 React 按需加载和 effect/异步归属规则 review；只读历史保留共享 Transcript 与单写入者，没有获得本地文件、发送、恢复或审批能力。

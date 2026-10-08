@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { RemoteControllerPool, type RemoteControllerAPI } from "../lib/remoteControllerPool";
-import type { BridgeRemoteControllerResponse, BridgeRemoteControllerCloseResponse, BridgeRemoteControllerSessionsResponse, BridgeRemoteControllerSessionViewResponse } from "../lib/bridgeProtocol.generated";
+import type { BridgeRemoteControllerResponse, BridgeRemoteControllerCloseResponse, BridgeRemoteControllerSessionsResponse, BridgeRemoteControllerSessionViewResponse, BridgeRemoteControllerSessionImageResponse } from "../lib/bridgeProtocol.generated";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -21,12 +21,14 @@ function fixture() {
   const reads: { id: string; gate: ReturnType<typeof deferred<BridgeRemoteControllerSessionsResponse>> }[] = [];
   const snapshots: { id: string; sessionPath: string; gate: ReturnType<typeof deferred<BridgeRemoteControllerSessionViewResponse>> }[] = [];
   const api: RemoteControllerAPI = {
+    sessionImage: (id,sessionPath,source) => { const gate = deferred<BridgeRemoteControllerSessionImageResponse>(); images.push({id,sessionPath,source,gate}); return gate.promise; },
     attach: request => { const gate = deferred<BridgeRemoteControllerResponse>(); attaches.push({ ...request, gate }); return gate.promise; },
     close: id => { const gate = deferred<BridgeRemoteControllerCloseResponse>(); closes.push({ id, gate }); return gate.promise; },
     sessions: id => { const gate = deferred<BridgeRemoteControllerSessionsResponse>(); reads.push({ id, gate }); return gate.promise; },
     sessionView: (id,sessionPath) => { const gate = deferred<BridgeRemoteControllerSessionViewResponse>(); snapshots.push({ id,sessionPath,gate }); return gate.promise; },
   };
-  return { pool: new RemoteControllerPool(api), attaches, closes, reads, snapshots };
+  const images: {id:string;sessionPath:string;source:string;gate:ReturnType<typeof deferred<BridgeRemoteControllerSessionImageResponse>>}[] = [];
+  return { pool: new RemoteControllerPool(api), attaches, closes, reads, snapshots, images };
 }
 {
   const f = fixture();
@@ -143,4 +145,28 @@ for (const tamper of [
   assert.equal(f.snapshots.length,0,"invalid path never reaches IPC");
   lease.release(); await tick(); f.closes[0].gate.resolve({protocolVersion:1,closed:true}); await tick();
 }
-console.log("Remote controller pool: shared ownership, delayed attach/close, session-view scope/IDs, stale snapshots, uncertain delivery and SSH reset passed");
+const imageResponse = ():BridgeRemoteControllerSessionImageResponse => ({...response("image"),view:{protocolVersion:1,sessionPath:selected,workspace:"/owned",image:{url:"data:image/png;base64,aQ==",mime:"image/png",size:1}}});
+{
+  const f=fixture(); const lease=f.pool.acquire("owned","/owned"); await tick(); f.attaches[0].gate.resolve(response("image")); await lease.ready;
+  const read=lease.sessionImage(selected,"photo.png"); await tick();
+  assert.deepEqual({id:f.images[0].id,path:f.images[0].sessionPath,source:f.images[0].source},{id:"image",path:selected,source:"photo.png"});
+  const valid=imageResponse(); Object.assign(valid.view.image,{openHref:"file:///private/secret",token:"PRIVATE"}); f.images[0].gate.resolve(valid);
+  assert.deepEqual(await read,{url:valid.view.image.url,mime:"image/png",size:1,filename:undefined},"pixels never grant a remote opener or expose extra fields");
+  const late=lease.sessionImage(selected,"late.png"); await tick(); lease.release(); f.images[1].gate.resolve(imageResponse());
+  await assert.rejects(late,/connection changed/);
+  await assert.rejects(lease.sessionImage(selected,"new.png"),/connection changed/); assert.equal(f.images.length,2,"released lease dispatches no image request");
+  await tick(); f.closes[0].gate.resolve({protocolVersion:1,closed:true}); await tick();
+}
+for(const tamper of [
+  (r:BridgeRemoteControllerSessionImageResponse)=>{r.view.sessionPath="/other";},
+  (r:BridgeRemoteControllerSessionImageResponse)=>{r.view.workspace="/other";},
+  (r:BridgeRemoteControllerSessionImageResponse)=>{r.controller.id="other";},
+  (r:BridgeRemoteControllerSessionImageResponse)=>{r.view.image.url="https://private.invalid/image.png";},
+  (r:BridgeRemoteControllerSessionImageResponse)=>{r.view.image.size=16777217;},
+  (r:BridgeRemoteControllerSessionImageResponse)=>{Object.assign(r.view.image,{errorCode:"PRIVATE ERROR"});},
+]) {
+  const f=fixture(); const lease=f.pool.acquire("owned","/owned"); await tick(); f.attaches[0].gate.resolve(response("image")); await lease.ready;
+  const read=lease.sessionImage(selected,"photo.png"); await tick(); const invalid=imageResponse(); tamper(invalid); f.images[0].gate.resolve(invalid); await assert.rejects(read,/connection changed/);
+  lease.release(); await tick(); f.closes[0].gate.resolve({protocolVersion:1,closed:true}); await tick();
+}
+console.log("Remote controller pool: shared ownership, scoped images, private-field projection, stale responses, history IDs and SSH reset passed");

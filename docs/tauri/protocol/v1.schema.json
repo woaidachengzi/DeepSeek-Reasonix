@@ -419,6 +419,40 @@
         "view": { "$ref": "#/$defs/remoteControllerSessionView" }
       }, "additionalProperties": false
     },
+    "remoteControllerSessionImageRequest": {
+      "title": "BridgeRemoteControllerSessionImageRequest", "type": "object", "required": ["sessionPath", "source"],
+      "properties": {
+        "sessionPath": { "type": "string", "minLength": 1, "maxLength": 32768 },
+        "source": { "type": "string", "minLength": 1, "maxLength": 22370645 }
+      }, "additionalProperties": false
+    },
+    "remoteControllerImage": {
+      "title": "BridgeRemoteControllerImage", "type": "object", "required": ["url"],
+      "properties": {
+        "url": { "type": "string", "maxLength": 11184900 },
+        "filename": { "type": "string", "maxLength": 4096 },
+        "mime": { "type": "string", "enum": ["image/png"] },
+        "size": { "type": "integer", "minimum": 0, "maximum": 16777216 },
+        "errorCode": { "type": "string", "enum": ["blocked-remote", "proxy-config", "fetch-failed", "not-found", "forbidden", "not-a-file", "too-large", "changed-file", "invalid-image", "unsupported-type"] }
+      }, "additionalProperties": false
+    },
+    "remoteControllerSessionImageView": {
+      "title": "BridgeRemoteControllerSessionImageView", "type": "object", "required": ["protocolVersion", "sessionPath", "workspace", "image"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "sessionPath": { "type": "string", "minLength": 1, "maxLength": 32768 },
+        "workspace": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "image": { "$ref": "#/$defs/remoteControllerImage" }
+      }, "additionalProperties": false
+    },
+    "remoteControllerSessionImageResponse": {
+      "title": "BridgeRemoteControllerSessionImageResponse", "type": "object", "required": ["protocolVersion", "controller", "view"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "controller": { "$ref": "#/$defs/remoteControllerView" },
+        "view": { "$ref": "#/$defs/remoteControllerSessionImageView" }
+      }, "additionalProperties": false
+    },
     "remoteBrowseRequest": {
       "title": "BridgeRemoteBrowseRequest",
       "type": "object",

@@ -12,7 +12,7 @@ const root=createRoot(document.getElementById("root")!);
 const tick=async()=>{for(let i=0;i<12;i++)await Promise.resolve();};
 const controller={id:"owned-controller",name:"owned",workspace:"/resolved",readOnly:true};
 const gates:{path:string;resolve:(view:BridgeRemoteControllerSessionView)=>void;reject:(error:unknown)=>void}[]=[];
-const lease:RemoteControllerLease={ready:Promise.resolve(controller),sessions:async()=>[],release:()=>{},sessionView:path=>new Promise((resolve,reject)=>gates.push({path,resolve,reject}))};
+const lease:RemoteControllerLease={sessionImage:async()=>({url:"",errorCode:"not-found"}),ready:Promise.resolve(controller),sessions:async()=>[],release:()=>{},sessionView:path=>new Promise((resolve,reject)=>gates.push({path,resolve,reject}))};
 const snapshot=(path:string):BridgeRemoteControllerSessionView=>({protocolVersion:1,sessionPath:path,readOnly:true,ownership:"saved",current:false,modelRef:"",label:"",history:[]});
 const close=()=>{};
 const render=async(path:string)=>act(async()=>{root.render(<LocaleProvider><TauriRemoteHistory lease={lease} controller={controller} sessionPath={path} title={path} onClose={close}/></LocaleProvider>);await tick();});

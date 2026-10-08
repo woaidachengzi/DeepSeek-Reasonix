@@ -403,6 +403,16 @@ pub struct BridgeRemoteControllerHistoryToolCall {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerImage {
+    pub error_code: Option<String>,
+    pub filename: Option<String>,
+    pub mime: Option<String>,
+    pub size: Option<u64>,
+    pub url: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeRemoteControllerProtocolRecovery {
     pub id: String,
 }
@@ -450,6 +460,30 @@ pub struct BridgeRemoteControllerSession {
     pub taken_over: bool,
     pub title: String,
     pub turns: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerSessionImageRequest {
+    pub session_path: String,
+    pub source: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerSessionImageResponse {
+    pub controller: BridgeRemoteControllerView,
+    pub protocol_version: u64,
+    pub view: BridgeRemoteControllerSessionImageView,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerSessionImageView {
+    pub image: BridgeRemoteControllerImage,
+    pub protocol_version: u64,
+    pub session_path: String,
+    pub workspace: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

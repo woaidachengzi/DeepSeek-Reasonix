@@ -12,6 +12,10 @@ const FAILED: &str =
     "remote controller is unavailable; reconnect the saved SSH host and reopen the workspace";
 const MAX_JS: u64 = 9_007_199_254_740_991;
 
+#[path = "remote_controller_image.rs"]
+mod image;
+pub use image::SessionImageRequest;
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AttachRequest {

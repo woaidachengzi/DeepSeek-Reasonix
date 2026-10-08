@@ -1,5 +1,9 @@
 # E 迁移清单
 
+## 2026-10-08 远程图片 IPC/UI review 与 macOS App
+
+本轮接入 main-only 图片 IPC、remote lease 与共享历史图片 resolver，保持 backend workspace、只读会话归属和迟到结果 fence，不提供本机 opener/文件回退。已构建 arm64 ad-hoc 可运行 App，签名及实际 managed/explicit 临时档案启动和退出通过；review 补图片 scope、释放/迟到结果及私有字段回归。日志与上版 App 备份在 `/private/tmp/reasonix-package-review.QZYtvf/`，详见 [API audit](API_SURFACE_AUDIT.md#2026-10-08-远程图片-nativeui-review-与可运行-app)。尚无新增图片 command 的实际 WKWebView/SSH/Serve 联调，不能把启动 smoke 当作该功能验收。真实剪贴板、完整 controller/bot Desktop、跨平台、管理页和 SQLite 门禁保持未完成；不发布、不替换正式应用。
+
 2026-10-06 用户要求直接推进 E，明确不需要 updater。本轮不再以 D 全部验收为 E 的启动条件；D、A/B/C 未关闭项仍保留为正式发布门禁。正式发布、替换正式应用、切换默认下载均未授权。updater 从本轮范围排除。
 
 2026-10-08 最新可运行候选与 review 记录见本文末尾及 [API audit](API_SURFACE_AUDIT.md#2026-10-08-远程历史增量-review-与-macos-可运行候选)。下列“未提交/未打包”保留各阶段当时状态，不覆盖后续交付记录。
@@ -101,3 +105,11 @@
 - 当前 arm64 App 候选构建及 deep/strict ad-hoc 签名通过；实际 App 用独立临时 HOME 分别验证 managed/explicit 档案、私有身份、Global workspace、认证与 sidecar readiness、正常退出无残留通过。旧 App 可恢复副本与全部日志位于 `/private/tmp/reasonix-history-review.Ubhzkf/`。
 - 本轮完整 Go 四包 race/vet、Rust 253 passed/6 ignored 与 clippy、完整前端 Transcript/Tauri、测试类型、协议生成与生产构建门禁通过。交付要求 review 提交后从干净 HEAD 重建，再运行相同包 smoke，最终收据是 `build-final.log` 与 `package-smoke-final.log`；不把 dirty 候选当作已提交版本。
 - 未推送/正式安装或发布，不使用真实账号、用户数据/剪贴板。包启动不替代新增远程命令实际 WKWebView/SSH/Serve 联调，原生图片粘贴及跨平台等其余目标保持未完成。
+
+## 2026-10-08 远程图片 Serve/client/bridge（后续源码增量）
+
+- 上批已提交/交付基线 `de2c6050c` 保持不变；本批未提交/未重建 App。新增 scoped PNG 读取接口、共用 client、authenticated bridge、Go DTO/schema 与生成镜像；尚无原生 command 或 UI resolver，不将其记为完整远程图片功能。
+- 全局 session catalogue 不等于 workspace grant。saved/external 按持久化 workspace（有界、无回写、root confinement）校验，owned runtime 按自身 workspace 校验；只允许同 Serve/SSH workspace，逻辑 alias 必须同 inode。旧元数据缺失、其他工作区、退休/替换、路径/文件 inode 改变、取消明确失败；不借本地工作区/cwd/原 opener，不自动恢复/接管历史。
+- 入站 body/source、图片 bytes/pixels、输出 PNG/尺寸和两层 admission slots 有界；解码不持有 bind lock，发布再校验全部归属。公共图片复用现有专用 SSRF/proxy transport；controller Cookie、remote path/openHref、私有配置/诊断不交给 renderer。
+- 当前回归：生产 Serve 实际 token/Controller/磁盘附件、客户端 PNG/字段/预算/错误/privacy、真实 loopback SSH bridge handle 生命周期与取消、held root/alias 替换及 metadata/admission 门禁通过。完整四包 race、最终新增用例两次 race、vet、协议 DTO/schema/镜像、Rust check/clippy、生产/测试 typecheck 通过；证据 `/private/tmp/reasonix-remote-image.rKqpbO/`，最终完整 race 为 `four-packages-final-race.log`。仅后端 seam 测试归属 race，不冒充真实网络图片或 native UI。
+- 下一步：main-window-only IPC → remote lease scoped image resolver → 图片界面/滚动与隔离实际 App 验收；同时保留没有历史 workspace 元数据的兼容恢复检查。不关闭真实外部服务、原生剪贴板、完整 controller/bot Desktop、Windows/Linux/复杂管理页/SQLite 门禁。

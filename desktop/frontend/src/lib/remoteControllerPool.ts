@@ -1,9 +1,11 @@
 import type { BridgeRemoteControllerRequest, BridgeRemoteControllerView, BridgeRemoteControllerSession, BridgeRemoteControllerResponse, BridgeRemoteControllerSessionsResponse, BridgeRemoteControllerCloseResponse, BridgeRemoteControllerSessionView, BridgeRemoteControllerSessionViewResponse } from "./bridgeProtocol.generated";
+import type { BridgeRemoteControllerImage, BridgeRemoteControllerSessionImageResponse } from "./bridgeProtocol.generated";
 
 export interface RemoteControllerAPI {
   attach(request: BridgeRemoteControllerRequest): Promise<BridgeRemoteControllerResponse>;
   sessions(id: string): Promise<BridgeRemoteControllerSessionsResponse>;
   sessionView(id: string, sessionPath: string): Promise<BridgeRemoteControllerSessionViewResponse>;
+  sessionImage(id: string, sessionPath: string, source: string): Promise<BridgeRemoteControllerSessionImageResponse>;
   close(id: string): Promise<BridgeRemoteControllerCloseResponse>;
 }
 interface Entry {
@@ -17,6 +19,7 @@ export interface RemoteControllerLease {
   ready: Promise<BridgeRemoteControllerView>;
   sessions(): Promise<BridgeRemoteControllerSession[]>;
   sessionView(sessionPath: string): Promise<BridgeRemoteControllerSessionView>;
+  sessionImage(sessionPath: string, source: string): Promise<BridgeRemoteControllerImage>;
   release(): void;
 }
 const FAILED = "remote controller connection changed; reconnect the host and reopen the workspace";
@@ -83,6 +86,25 @@ export class RemoteControllerPool {
           identities.add(message.id);
         }
         return snapshot;
+      },
+      sessionImage:async (sessionPath,source) => {
+        if (!identifier(sessionPath,32768) || typeof source !== "string" || !source.trim() || encoder.encode(source).length > 22370645 || source.includes("\0")) throw new Error(FAILED);
+        const view = await ready;
+        assertLive();
+        const response = await this.api.sessionImage(view.id,sessionPath,source);
+        assertController(response.controller,view);
+        const image = response.view.image;
+        if (response.protocolVersion !== 1 || response.view.protocolVersion !== 1 || response.view.sessionPath !== sessionPath || response.view.workspace !== view.workspace
+          || typeof image.url !== "string" || image.url.length > 11184900 || image.filename !== undefined && (typeof image.filename !== "string" || encoder.encode(image.filename).length > 4096 || /\p{Cc}/u.test(image.filename))
+          || image.size !== undefined && (!Number.isSafeInteger(image.size) || image.size < 0 || image.size > 16777216)) throw new Error(FAILED);
+        if (image.errorCode !== undefined) {
+          if (image.url || image.mime !== undefined || image.filename !== undefined || image.size !== undefined || !["blocked-remote","proxy-config","fetch-failed","not-found","forbidden","not-a-file","too-large","changed-file","invalid-image","unsupported-type"].includes(image.errorCode)) throw new Error(FAILED);
+          return {url:"",errorCode:image.errorCode};
+        }
+        if (image.mime !== "image/png" || !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(image.url)) throw new Error(FAILED);
+        // Explicit projection, even for test/alternate native adapters: an
+        // unexpected remote opener or private field cannot become a UI grant.
+        return {url:image.url,filename:image.filename,mime:image.mime,size:image.size};
       },
       release:() => {
         if (released) return;

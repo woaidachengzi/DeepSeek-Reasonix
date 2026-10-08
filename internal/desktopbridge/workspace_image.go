@@ -94,6 +94,25 @@ func IsRemoteWorkspaceImage(source string) bool {
 }
 
 func readWorkspaceImage(base, source string) WorkspaceImageView {
+	if len(source) >= 5 && strings.EqualFold(source[:5], "data:") {
+		return ReadWorkspaceImageFromRoot(nil, source)
+	}
+	// Retain validation order for the existing local API.
+	if _, err := workspaceImagePath(base, source); err != nil {
+		return WorkspaceImageView{ErrorCode: "forbidden"}
+	}
+	root, err := os.OpenRoot(base)
+	if err != nil {
+		return WorkspaceImageView{ErrorCode: "not-found"}
+	}
+	defer root.Close()
+	return ReadWorkspaceImageFromRoot(root, source)
+}
+
+// ReadWorkspaceImageFromRoot uses a directory handle whose session ownership
+// the caller established. The caller retains the handle and fences publication.
+// A nil handle permits inline raster data only, never filesystem access.
+func ReadWorkspaceImageFromRoot(root *os.Root, source string, aliases ...string) WorkspaceImageView {
 	fail := func(code string) WorkspaceImageView { return WorkspaceImageView{ErrorCode: code} }
 	if len(source) >= 5 && strings.EqualFold(source[:5], "data:") {
 		if len(source) > WorkspaceImageSourceLimit {
@@ -111,17 +130,34 @@ func readWorkspaceImage(base, source string) WorkspaceImageView {
 		}
 		return workspaceImagePixels(data, "image", int64(len(data)), format)
 	}
-	path, err := workspaceImagePath(base, source)
+	if root == nil {
+		return fail("forbidden")
+	}
+	path, err := workspaceImagePath(root.Name(), source)
+	// A backend workspace alias may spell an absolute attachment differently
+	// from the canonical root name. Accept it only if it still names this held
+	// directory inode, never by simply trusting an alternate path prefix.
+	if err != nil && len(aliases) > 0 {
+		owned, ownedErr := root.Stat(".")
+		for _, alias := range aliases {
+			if ownedErr != nil || !filepath.IsAbs(alias) {
+				continue
+			}
+			candidate, aliasErr := os.Stat(alias)
+			if aliasErr != nil || !os.SameFile(owned, candidate) {
+				continue
+			}
+			if relative, pathErr := workspaceImagePath(alias, source); pathErr == nil {
+				path, err = relative, nil
+				break
+			}
+		}
+	}
 	if err != nil {
 		return fail("forbidden")
 	}
 	// os.Root confines both path traversal and symlink resolution during open,
 	// including filesystem races. EvalSymlinks followed by os.Open is not enough.
-	root, err := os.OpenRoot(base)
-	if err != nil {
-		return fail("not-found")
-	}
-	defer root.Close()
 	info, err := root.Stat(path)
 	if err != nil {
 		return fail("not-found")

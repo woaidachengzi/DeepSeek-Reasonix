@@ -1975,7 +1975,7 @@ export const en = {
   "settings.remote.historyFailed": "Unable to read this session. Upgrade remote Serve, then close and reopen the list.",
   "settings.remote.historyEmpty": "This session has no displayable messages.",
   "settings.remote.historyRefresh": "Refresh history",
-  "settings.remote.historyMediaUnavailable": "Remote file and image previews are not connected yet. View them on the remote computer.",
+  "settings.remote.historyMediaUnavailable": "Images use the selected remote session workspace. Remote file and code navigation are not connected yet; view them on the remote computer.",
   "settings.remote.sessionsFailed": "The remote session list is unavailable. Check Serve, then close and reopen this list or reconnect the saved SSH host.",
   "settings.remote.sessionsEmpty": "No saved remote sessions.",
   "settings.remote.sessionsTurns": "{count} turns",

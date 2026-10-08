@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Transcript } from "../components/Transcript";
 import { MarkdownImageResolverContext } from "../components/MarkdownImageContext";
 import { LocalPathActionContext, SourceReferenceContext } from "../components/SourceReferenceContext";
@@ -9,7 +9,6 @@ import type { BridgeRemoteControllerView, BridgeRemoteControllerSessionView } fr
 import type { Item } from "../lib/useController";
 
 const noPrompt = () => {};
-const unavailableImage = async () => ({url:"",errorCode:"remote-preview-not-connected"});
 
 export function TauriRemoteHistory({lease,controller,sessionPath,title,onClose}: {lease:RemoteControllerLease;controller:BridgeRemoteControllerView;sessionPath:string;title:string;onClose:()=>void}) {
   const t = useT();
@@ -40,6 +39,20 @@ export function TauriRemoteHistory({lease,controller,sessionPath,title,onClose}:
     return () => { mounted.current = false; request.current = null; };
   },[load]);
   const blockedFile = useCallback(() => setFileNotice(true),[]);
+  const imageOwner = useRef<object | null>(null);
+  const imageScope = useMemo(() => ({}),[lease,sessionPath,surface]);
+  useLayoutEffect(() => {
+    imageOwner.current = imageScope;
+    return () => { if (imageOwner.current === imageScope) imageOwner.current = null; };
+  },[imageScope]);
+  const resolveImage = useCallback(async (source:string) => {
+    if (imageOwner.current !== imageScope) return {url:"",errorCode:"remote-preview-unavailable"};
+    try {
+      const image = await lease.sessionImage(sessionPath,source);
+      if (imageOwner.current !== imageScope) return {url:"",errorCode:"remote-preview-unavailable"};
+      return image;
+    } catch { return {url:"",errorCode:"remote-preview-unavailable"}; }
+  },[imageScope,lease,sessionPath]);
   const current = snapshot?.surface === surface ? snapshot : null;
   return <section className="tauri-remote-history" aria-label={t("settings.remote.historyTitle")} aria-busy={busy}>
     <div className="tauri-remote-history-header"><h4>{title || t("settings.remote.historyTitle")}</h4>
@@ -52,7 +65,7 @@ export function TauriRemoteHistory({lease,controller,sessionPath,title,onClose}:
     {failed ? <p role="alert" className="tauri-diagnostic-error">{t("settings.remote.historyFailed")}</p> : null}
     {current && current.items.length === 0 ? <p>{t("settings.remote.historyEmpty")}</p> : null}
     {current && current.items.length > 0 ? <div className="tauri-remote-history-viewport">
-      <MarkdownImageResolverContext.Provider value={unavailableImage}>
+      <MarkdownImageResolverContext.Provider value={resolveImage}>
         <LocalPathActionContext.Provider value={blockedFile}><SourceReferenceContext.Provider value={blockedFile}>
           <Transcript key={surface} items={current.items} tabId={`remote:${surface}`} geometrySessionKey={`remote:${surface}`}
             contentRevision={current.revision} onPrompt={noPrompt} actionPending rewindDisabled />
