@@ -2,7 +2,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSyn
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveBuildRunner, resolveBuildTarget } from "./tauri-build-target.mjs";
+import { resolveBuildRunner, resolveBuildTarget, resolveBundleDirectory } from "./tauri-build-target.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, "../../..");
@@ -63,8 +63,7 @@ const placeholderBytes = existsSync(frontendPlaceholder) ? readFileSync(frontend
 // .app after `tauri build` leaves the copy already sealed in the DMG invalid.
 const macOSBuild = requestedTarget.endsWith("-apple-darwin");
 const adHocMacOSBuild = macOSBuild && !process.env.APPLE_SIGNING_IDENTITY;
-const targetArgumentPresent = bundleArguments.some(arg => arg === "--target" || arg === "-t" || arg.startsWith("--target="));
-const bundleDirectory = join(tauriDirectory, "target", ...(targetArgumentPresent ? [requestedTarget] : []), bundleArguments.includes("--debug") ? "debug" : "release", "bundle");
+const bundleDirectory = resolveBundleDirectory(tauriDirectory, bundleArguments, requestedTarget, process.env.CARGO_TARGET_DIR);
 // Keep development bundles out of app search. The compatibility alias retains
 // Tauri's normal output path; the actual directory is excluded by Spotlight.
 if (macOSBuild) {

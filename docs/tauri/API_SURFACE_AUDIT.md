@@ -1,5 +1,22 @@
 # Wails API 与事件面盘点
 
+## 2026-10-08 原生远程图片边界探针与独立 release 候选（后续源码）
+
+- 新增 opt-in `ui-remote-image-boundary` 和 `ui-remote-image-ipc` native phases；只调用真实主 WKWebView 注册的 `bridge_remote_controller_session_image`。前者严格检查 unknown-field/空 source/未知 handle 拒绝，后者必须由外部自有 fixture 提供真实 handle/session/source 并实际解码 PNG。控制文件窄字段、有界、拒绝 token/url/workspace/localSessionId，收据只记录固定布尔/范围，不记录请求、像素或 credentials。收据不自动证明 SSH/Serve provenance 或共享 Transcript UI。
+- 首次独立 debug App 探针失败：debug 使用开发 origin，不满足 profile-bound `reasonix-preview` 门禁。没有放宽检查或启动 dev server；失败证据 `/private/tmp/reasonix-remote-image-ui.TknC1t/native-boundary.log` 及 `/private/tmp/reasonix-native-remote-image-boundary-haa2yppy/` 保留。改用独立 release 候选进行实际检查。
+- 修正构建脚本的 bundle path，遵循 `CARGO_TARGET_DIR`（相对路径按 Tauri cwd 解析）；bundle.noindex 与签名校验均指向实际候选，不能验证默认目录的旧 App。默认/显式 target、绝对/相对 Cargo output 与 debug 的新增契约通过，共 73 项及 Linux 构建契约通过。独立输出 `/private/tmp/reasonix-native-image-release.eUtbs7/target/.../release/bundle/macos.noindex/Reasonix Tauri Preview.app` 的实际构建、生产 type/hooks/static/budget 和 deep/strict ad-hoc 校验通过。
+- `smoke-native-remote-image-boundary.py` 经 LaunchServices 实际启动该 release App；managed/explicit 临时档案的 trusted WKWebView、真实 IPC 注册/三种拒绝、私有身份/readiness/未鉴权 401、原几何保持、退出和 sidecar/readiness 清理全部通过。证据 `/private/tmp/reasonix-native-image-release.eUtbs7/boundary.log` 与 `/private/tmp/reasonix-native-remote-image-boundary-bkdb2gjw/` 两种档案 receipts；没有操作剪贴板、真实账号/远端或用户档案。Python receipt verifier 3 tests、Rust 窄 fixture 回归、完整 Rust 257 passed/0 failed/6 ignored、clippy 通过。
+- 本批 native positive PNG 分支尚未运行，不证明成功远程图片或 shared Transcript 的 App UI 验收。下一步建立真实自有 SSH + Serve/磁盘附件 fixture，验证 handle 的 backend ownership、真实正向 PNG 和迟到/撤销；不以模拟 HTTP body/桥接 factory 冒充完整链路。其余粘贴/发送、controller/bot Desktop、跨平台/管理页/SQLite 仍未关闭。
+- 本批源码未提交/推送，独立候选是 dirty evidence，不冒充已提交交付包。已交付 `eefdb4e55` release App 未覆盖，host/bridge SHA256 分别仍为 `91f11f8faa2e16561625a5fe5ec4dd71ba324c1585175bb736dac0b500481766` / `886819e5d8433e35f2e30783420d992b8408f9831160cb5daaaa6706ae196e64`。
+
+## 2026-10-08 远程图片共享预览与浏览器验收（后续源码）
+
+- Review 后发现 remote Markdown image 未接入大图查看器。提取 `TauriRemoteImageScope`：继续使用同一 remote lease/scope 的图片 resolver，并按需复用现有 ImageViewer；预览只接受解析后的有界 PNG URI，不读取原路径、不授予 opener。布局提交绑定 owner，派发/返回/预览点击都检查同一 scope；切换释放旧像素，A→B→A 不复活旧预览，普通历史刷新保持 resolver 与图片缓存。
+- `tauri-remote-images.test.tsx` 纳入 `test:remote-history`，覆盖子组件 effect 前的 owner、旧 resolver 零派发、迟到结果、同 scope 刷新、lease 替换、ABA、私有失败、拒绝 URL、键盘预览与卸载清理。最终 remote-controller、测试类型、完整 Tauri/Transcript 及生产 type/hooks/static/budget 通过。
+- Browser plugin 不可用，使用已安装 Playwright + 自有无头 Chrome/loopback Vite fixture（native invoke 是模拟 adapter，不连接真实 SSH）。桌面 1440×1100、窄屏 390×844：250 轮共享历史打开尾部；用户附件/回答 PNG 实际解码 160×100；预览/Escape 不重读；reader refresh 前后同锚点 500.515625px、scrollTop 50010px；旧会话图片返回 1px fixture 不能覆盖新会话 160px 图片；文件/图片零本地权限调用、零直接远程图片 HTTP；固定失败/空态/卸载关闭 owner。页面身份、非空、无框架 overlay、零相关 console warning/error、截图与交互均通过。
+- 证据 `/private/tmp/reasonix-remote-image-ui.TknC1t/`：`browser-complete.log`、`remote-complete.log`、`types-complete.log`、`build-complete.log`、`tauri.log`、`transcript.log`；截图 `desktop.png/preview.png/narrow.png` 已查看。此增量未提交/未重建 App，已交付包仍对应干净提交 `eefdb4e55`。下一步为实际 packaged WKWebView → native IPC → SSH/Serve 的隔离图片验证，不以浏览器或包启动 smoke 代替。
+- 现有 native image paste runner 操作系统剪贴板；用户尚未授予本轮剪贴板测试权限，未运行。该项不阻塞可独立推进的只读原生远程图片验收；不因本批通过关闭粘贴/发送、完整 controller/bot Desktop、跨平台、管理页、SQLite 等剩余目标。
+
 ## 2026-10-08 远程图片 native/UI review 与可运行 App
 
 - 在下述后端增量之上接入 main-window-only `bridge_remote_controller_session_image`、remote lease 与共享 Transcript 图片 resolver。renderer 仅提交 controller/session/source；native 再验 PNG 完整像素、尺寸、base64 与 owner，lease 显式剔除 opener/私有字段。
@@ -1618,3 +1635,10 @@ Wails 或浏览器绕过权限。菜单设置事件也已通过宿主适配器�
 - [x] 按 MiMo 官方当前契约修正 Chat thinking 开关和 Responses 可选项；不显示无效 low/high 深度。DeepSeek 等支持真实档位的模型仍使用其适配器声明。
 - [x] Go race、完整 Tauri 前端与 transcript 回归、build、真实 sidecar Rust 233/5 ignored、clippy、深浅主题多尺寸浏览器验证；direct `.app` 已构建并通过包内 smoke、旧包历史回退和签名校验。证据及实际包收据：[reasoning-effort](evidence/2026-10-05-reasoning-effort/README.md)。
 - [ ] 外部真实 provider/native WebView 使用由用户继续体验验收。本项不替代既有 A/B/C、D/E 其他验收、正式签名/公证或发布授权；未把整项迁移标记完成。
+## 2026-10-08 正向原生远程图片与 review 交付
+
+- opt-in `TestNativePackageRemoteImageActualSSHServe` 仅在显式指定 macOS App/CLI 和 owned geometry 时运行。自有 loopback SSH 接受临时生成的 ed25519 公钥；SFTP、direct-tcpip 与实际 `/bin/sh` 执行生产 bootstrap，PATH 中的 CLI 是实际 `cmd/reasonix` 构建，不模拟 Serve/图片响应。所有 HOME/state/workspace/key 留在私有临时目录，模型服务计数必须为零，安装策略固定 `never`。
+- 两种包内档案通过 actual main WKWebView `connect_remote_host`、controller attach、session image、close、disconnect；actual PNG natural size 16×10 及可见像素解码确认。registered image IPC 同时拒绝 unknown fields、空 source、未知 handle。收据严格区分成功像素与共享 Transcript UI，明确没有操作系统剪贴板验收。
+- 外部 fixture 另外核对生产 Serve workspace/loopback/PID identity、SSH exec、saved transcript/meta 字节不变和零模型调用，并用 production fenced StopCommand 清理仅该 fixture Serve；确认已停止之后才发布集成收据。证据 `/private/tmp/reasonix-remote-image-positive.78LOTy/integration.log`、`/private/tmp/reasonix-native-ssh-2976458357/integration-receipt.json`；review 门禁日志同目录 `review-*`。测试路径初稿和沙箱 socket 拒绝日志保留，成功记录使用 `review-go-complete.log` / `review-transcript-final.log`。
+- 本批按需 lazy ImageViewer、stable scope、派发/发布 fence 与旧点击/ABA 回归保持；没有更改 Transcript 单写入者或 reader intent，没有开放本机路径/发送/审批能力。用户要求 review/提交及可运行 App，本批在 review 后提交再按 clean source 构建并复验，不发布/推送/正式安装。最终 App 位于 `desktop/tauri/target/aarch64-apple-darwin/release/bundle/macos.noindex/Reasonix Tauri Preview.app`；实际签名和包复验以同证据目录 `build-final.log` / `integration-final.log` 为准。
+- 自有 macOS loopback SSH/Serve 不代表异平台真实远端、代理/安装/外部账号或 shared Transcript 原生完整交互已验收；原生粘贴发送、完整 controller/bot Desktop、Windows/Linux、复杂管理页、SQLite 与 legacy workspace 恢复继续保持门禁。updater 排除。

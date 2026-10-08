@@ -32,6 +32,8 @@ mod native_profile_smoke;
 #[cfg(target_os = "macos")]
 mod native_reload_smoke;
 #[cfg(target_os = "macos")]
+mod native_remote_image_smoke;
+#[cfg(target_os = "macos")]
 mod native_task_smoke;
 #[cfg(target_os = "macos")]
 mod native_ui_image_smoke;

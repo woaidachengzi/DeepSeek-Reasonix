@@ -1,4 +1,14 @@
 // Resolve both the Rust host and Go sidecar from the requested bundle target.
+import { join, resolve } from "node:path";
+
+// Cargo resolves a relative CARGO_TARGET_DIR from the invocation directory.
+// Bundle relocation and signature checks must address that same candidate.
+export function resolveBundleDirectory(tauriDirectory, args, target, cargoTargetDirectory) {
+  const directory = resolve(tauriDirectory, cargoTargetDirectory || "target");
+  const explicitTarget = args.some(arg => arg === "--target" || arg === "-t" || arg.startsWith("--target="));
+  return join(directory, ...(explicitTarget ? [target] : []), args.includes("--debug") ? "debug" : "release", "bundle");
+}
+
 export function resolveBuildTarget(args, hostTriple) {
   const index = args.findIndex(arg => arg === "--target" || arg === "-t");
   const inline = args.find(arg => arg.startsWith("--target="));

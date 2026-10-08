@@ -142,7 +142,9 @@ def print_window_trace(temporary):
 
 
 def launch(host_binary, sidecar_binary, root, identifier, managed, phase, provider=None,
-           verify_window_state=True, environment=None, launch_services=False):
+           verify_window_state=True, environment=None, launch_services=False, acceptance_timeout=45):
+    if type(acceptance_timeout) is not int or not 1 <= acceptance_timeout <= 120:
+        raise ValueError("native acceptance timeout outside bounded range")
     home, temporary = root / "home", root / "tmp"
     app_data = home / "Library/Application Support" / identifier
     core_home = app_data / "reasonix-core" if managed else root / "core"
@@ -228,7 +230,7 @@ def launch(host_binary, sidecar_binary, root, identifier, managed, phase, provid
                 raise RuntimeError("background native task replaced its sidecar instance")
             package.check_unauthenticated_health(address)
 
-        deadline = time.monotonic() + 45
+        deadline = time.monotonic() + acceptance_timeout
         while host.poll() is None and time.monotonic() < deadline:
             if provider:
                 provider.pump(inspect_live_task)

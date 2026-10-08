@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveBuildRunner, resolveBuildTarget } from "./tauri-build-target.mjs";
+import { resolveBuildRunner, resolveBuildTarget, resolveBundleDirectory } from "./tauri-build-target.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const scriptSource = readFileSync(resolve(__dirname, "tauri-build.mjs"), "utf8");
@@ -41,6 +41,13 @@ function contains(haystack, needle, label) {
 function notContains(haystack, needle, label) {
   ok(!haystack.includes(needle), label);
 }
+
+console.log("\ntauri-build contract — exact Cargo bundle output");
+const fixtureDirectory = resolve("owned-fixture", "tauri");
+eq(resolveBundleDirectory(fixtureDirectory, [], "owned-target"), resolve(fixtureDirectory, "target/release/bundle"), "default host output");
+eq(resolveBundleDirectory(fixtureDirectory, ["--target", "owned-target"], "owned-target", "../isolated-target"), resolve(fixtureDirectory, "../isolated-target/owned-target/release/bundle"), "relative Cargo output preserves explicit target");
+eq(resolveBundleDirectory(fixtureDirectory, ["--debug", "--target=owned-target"], "owned-target", resolve("private-target")), resolve("private-target/owned-target/debug/bundle"), "absolute Cargo debug output");
+contains(scriptSource, "process.env.CARGO_TARGET_DIR", "signature verification uses actual Cargo output override");
 
 // ---------------------------------------------------------------------------
 // Contract 1: Node version gate

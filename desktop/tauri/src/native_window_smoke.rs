@@ -939,6 +939,8 @@ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
         "ui-selection-reopen" => crate::native_ui_message_copy_smoke::reopen(app, &directory)?,
         "ui-image-paste" => crate::native_ui_image_smoke::paste(app, &directory)?,
         "ui-image-reopen" => crate::native_ui_image_smoke::reopen(app, &directory)?,
+        "ui-remote-image-boundary" => crate::native_remote_image_smoke::run(app, &directory, false)?,
+        "ui-remote-image-ipc" => crate::native_remote_image_smoke::run(app, &directory, true)?,
         "ui-integrated-terminal" => crate::native_ui_terminal_smoke::run(app, &directory)?,
         "ui-store-empty" | "ui-store-seed" | "ui-store-restore" | "ui-store-clear" => {
             crate::native_ui_storage_smoke::run(app, &directory, phase)?

@@ -1,5 +1,17 @@
 # E 迁移清单
 
+## 2026-10-08 远程图片正向原生验收与 review 提交
+
+真实 release App 的 managed/explicit 两种私有档案均通过 WKWebView → 注册 IPC → 包内 bridge → 临时密钥认证 SSH/SFTP → 生产 shell bootstrap → 实际 CLI Serve → saved workspace PNG 解码。验收没有 mock 图片响应或 controller factory，没有真实账号、模型请求、系统剪贴板操作、下载或远端安装；会话及 workspace 元数据保持逐字节不变。review 补正向收据严格布尔校验、fixture 输入/XOR 回归和 Serve 进程身份/清理确认；只有清理成功才生成最终收据。证据 `/private/tmp/reasonix-remote-image-positive.78LOTy/`、`/private/tmp/reasonix-native-ssh-2976458357/integration-receipt.json`。本批 review 后提交，再从干净 HEAD 重建 arm64 ad-hoc `.app`，以最终包复验记录为准。共享 Transcript 的原生完整界面、剪贴板粘贴发送、真实远端平台/代理/安装及完整 controller/bot 等门禁仍保留；原生 standalone 图片节点验收不能代替共享对话界面验收。下方“未提交/未执行”是各阶段当时状态。
+
+## 2026-10-08 原生远程图片边界实际 App 验收（后续源码）
+
+独立 release App 在 managed/explicit 两种临时档案中通过真实 WKWebView 图片 IPC 注册与 unknown field/空 source/未知 handle 拒绝、正常退出及无 sidecar/readiness 残留；没有操作系统剪贴板或真实账号。新增正向 PNG 探针仍需真实自有 SSH/Serve fixture，尚未执行，不把拒绝检查算作远程图片成功验收。首次 debug origin 拒绝保留失败证据；构建脚本已遵循 Cargo 独立 target 输出并验证实际候选签名，73 项构建契约及 Rust 257 passed/6 ignored、clippy、receipt verifier 通过。证据 `/private/tmp/reasonix-native-image-release.eUtbs7/`、`/private/tmp/reasonix-native-remote-image-boundary-bkdb2gjw/`，详见 [API audit](API_SURFACE_AUDIT.md#2026-10-08-原生远程图片边界探针与独立-release-候选后续源码)。本增量未提交，候选在独立临时目录；已交付 `eefdb4e55` App 未覆盖。完整目标继续保持未完成。
+
+## 2026-10-08 远程图片预览与渲染证据（后续源码）
+
+补远程历史图片的 shared ImageViewer 与 scoped resolver 生命周期，保持只读权限、不打开本机文件。新增 effect/旧请求/ABA/预览/清理回归，以及真实共享 Transcript 浏览器 desktop/narrow 图片解码、预览、reader refresh 与迟到图片验证，完整 Tauri/Transcript、类型及构建门禁通过。日志和截图在 `/private/tmp/reasonix-remote-image-ui.TknC1t/`，详见 [API audit](API_SURFACE_AUDIT.md#2026-10-08-远程图片共享预览与浏览器验收后续源码)。native invoke 使用模拟 adapter，不能当成原生 App/SSH/Serve 联调。当前交付 App 仍为 `eefdb4e55`；本增量未提交/未打包。下一步继续实际隔离原生链路，系统剪贴板 runner 未获授权，未执行；其余完整目标保持未完成。
+
 ## 2026-10-08 远程图片 IPC/UI review 与 macOS App
 
 本轮接入 main-only 图片 IPC、remote lease 与共享历史图片 resolver，保持 backend workspace、只读会话归属和迟到结果 fence，不提供本机 opener/文件回退。已构建 arm64 ad-hoc 可运行 App，签名及实际 managed/explicit 临时档案启动和退出通过；review 补图片 scope、释放/迟到结果及私有字段回归。日志与上版 App 备份在 `/private/tmp/reasonix-package-review.QZYtvf/`，详见 [API audit](API_SURFACE_AUDIT.md#2026-10-08-远程图片-nativeui-review-与可运行-app)。尚无新增图片 command 的实际 WKWebView/SSH/Serve 联调，不能把启动 smoke 当作该功能验收。真实剪贴板、完整 controller/bot Desktop、跨平台、管理页和 SQLite 门禁保持未完成；不发布、不替换正式应用。
