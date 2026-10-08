@@ -21,7 +21,7 @@ import (
 
 // Real SSH + direct-tcpip + real HTTP cookie exchange. Serve catalogue bodies
 // are fixtures; this does not validate EnsureServe installation or real models.
-func controllerFixture(t *testing.T, sessions http.HandlerFunc) (*bridgeServer, *sshtest.Server, *remote.Client, *atomic.Int32) {
+func controllerFixture(t *testing.T, sessions http.HandlerFunc, views ...http.HandlerFunc) (*bridgeServer, *sshtest.Server, *remote.Client, *atomic.Int32) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -73,6 +73,13 @@ func controllerFixture(t *testing.T, sessions http.HandlerFunc) (*bridgeServer, 
 			return
 		}
 		cookie, err := r.Cookie("reasonix_token")
+		if err == nil && cookie.Value == "owned-controller-secret" && len(views) == 1 && r.URL.Path == "/desktop/session-view" {
+			if r.Method != http.MethodGet || len(r.URL.Query()) != 1 {
+				t.Error("bad session view channel")
+			}
+			views[0](w, r)
+			return
+		}
 		if err != nil || cookie.Value != "owned-controller-secret" || r.URL.Path != "/sessions" || r.URL.RawQuery != "" {
 			t.Error("bad catalogue channel")
 			w.WriteHeader(401)

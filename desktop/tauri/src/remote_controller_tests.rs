@@ -5,14 +5,16 @@ use std::{
     thread,
 };
 
-const ID: &str = "AAAAAAAAAAAAAAAAAAAAAA";
-fn controller() -> Value {
+pub(super) const ID: &str = "AAAAAAAAAAAAAAAAAAAAAA";
+pub(super) fn controller() -> Value {
     json!({"id":ID,"name":"owned","workspace":"/remote/actual","readOnly":true})
 }
 fn row() -> Value {
     json!({"name":"a","path":"/remote/a.jsonl","title":"中文\n第二行","turns":2,"current":true,"running":false,"takenOver":false,"mtimeMilli":1})
 }
-fn fixture(response: Value) -> (RemoteControllerClient, thread::JoinHandle<(String, Value)>) {
+pub(super) fn fixture(
+    response: Value,
+) -> (RemoteControllerClient, thread::JoinHandle<(String, Value)>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     let task = thread::spawn(move || {
@@ -38,7 +40,7 @@ fn fixture(response: Value) -> (RemoteControllerClient, thread::JoinHandle<(Stri
             .unwrap()
             .parse()
             .unwrap();
-        assert!(size <= 12288);
+        assert!(size <= 200 * 1024);
         let mut body = vec![0; size];
         reader.read_exact(&mut body).unwrap();
         let value = if body.is_empty() {

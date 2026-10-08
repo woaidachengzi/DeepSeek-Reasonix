@@ -283,6 +283,11 @@ func renderRust(types []*named) []byte {
 		b.WriteString("#[serde(rename_all = \"camelCase\")]\n")
 		fmt.Fprintf(&b, "pub struct %s {\n", t.name)
 		for _, f := range t.fields {
+			// Preserve intentional snake_case wire keys rather than letting
+			// the struct's camelCase default silently rename or drop them.
+			if strings.Contains(f.jsonName, "_") {
+				fmt.Fprintf(&b, "    #[serde(rename = %q)]\n", f.jsonName)
+			}
 			fmt.Fprintf(&b, "    pub %s: %s,\n", f.rustName, f.rustType)
 		}
 		b.WriteString("}")

@@ -270,6 +270,40 @@ export interface BridgeRemoteControllerCloseResponse {
   protocolVersion: number;
 }
 
+export interface BridgeRemoteControllerHistoryMessage {
+  content: string;
+  missing?: string[];
+  protocolRecovery?: BridgeRemoteControllerProtocolRecovery;
+  reasoning?: string;
+  role: "system" | "user" | "assistant" | "tool" | "notice" | "protocol_recovery" | "final_readiness";
+  serverSearch?: BridgeRemoteControllerHistorySearch[];
+  toolCallId?: string;
+  toolCalls?: BridgeRemoteControllerHistoryToolCall[];
+  toolName?: string;
+}
+
+export interface BridgeRemoteControllerHistorySearch {
+  id: string;
+  query?: string;
+  results?: BridgeRemoteControllerHistorySearchHit[];
+  sources_status?: string;
+}
+
+export interface BridgeRemoteControllerHistorySearchHit {
+  title?: string;
+  url?: string;
+}
+
+export interface BridgeRemoteControllerHistoryToolCall {
+  arguments: string;
+  id: string;
+  name: string;
+}
+
+export interface BridgeRemoteControllerProtocolRecovery {
+  id: string;
+}
+
 export interface BridgeRemoteControllerRequest {
   name: string;
   workspace: string;
@@ -278,6 +312,22 @@ export interface BridgeRemoteControllerRequest {
 export interface BridgeRemoteControllerResponse {
   controller: BridgeRemoteControllerView;
   protocolVersion: number;
+}
+
+export interface BridgeRemoteControllerRuntimeState {
+  activity: string;
+  backgroundJobs: number;
+  cancelRequested: boolean;
+  cancellable: boolean;
+  pendingPrompt: boolean;
+  phase: "idle" | "executing" | "finishing" | "closed";
+  revision: number;
+  running: boolean;
+  runtimeEpoch: string;
+  schemaVersion: number;
+  turnEventSeq: number;
+  turnId: string;
+  turnStatus: "" | "queued" | "in_progress" | "waiting_user" | "cancelling" | "completed" | "interrupted" | "failed" | "protocol_failed";
 }
 
 export interface BridgeRemoteControllerSession {
@@ -289,6 +339,28 @@ export interface BridgeRemoteControllerSession {
   takenOver: boolean;
   title: string;
   turns: number;
+}
+
+export interface BridgeRemoteControllerSessionView {
+  current: boolean;
+  history: BridgeRemoteControllerHistoryMessage[];
+  label: string;
+  modelRef: string;
+  ownership: "serve" | "saved" | "external";
+  protocolVersion: number;
+  readOnly: boolean;
+  runtimeState?: BridgeRemoteControllerRuntimeState;
+  sessionPath: string;
+}
+
+export interface BridgeRemoteControllerSessionViewRequest {
+  sessionPath: string;
+}
+
+export interface BridgeRemoteControllerSessionViewResponse {
+  controller: BridgeRemoteControllerView;
+  protocolVersion: number;
+  view: BridgeRemoteControllerSessionView;
 }
 
 export interface BridgeRemoteControllerSessionsResponse {

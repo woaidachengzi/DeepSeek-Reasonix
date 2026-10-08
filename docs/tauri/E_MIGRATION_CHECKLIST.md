@@ -59,3 +59,19 @@
 - 共享 lease 处理多个挂载与 StrictMode：最后消费者释放才关闭，同 scope 新附着等待旧附着与关闭完成；旧 finally 不删除新 owner。关闭投递不确定时保留 barrier，直到显式 SSH 操作已撤销后端 owner；未改变、仍保持 connected 的配置保存不清空池。
 - Rust 新增 3 项 typed HTTP fixture 单测和 clippy 通过；pool/绑定/组件、完整 Tauri 前端回归、生产/测试类型检查、build 的现有门限通过。Browser plugin 不可用，使用已有 Playwright + 自有 headless Chrome，桌面/390px 窄屏的非空/overlay/console/分页/关闭重开/错误隐私/长路径布局通过；原生调用是 mock，不能算 `.app` 或真实远端验收。详细日志与截图见 [API audit](API_SURFACE_AUDIT.md#后续源码窄原生-ipc-与只读列表)。
 - 未重建当前阶段的 App，未提交或推送，未操作真实 profile/SSH/模型/IM/系统剪贴板。下一步继续 controller 读写/事件与审批/模型归属及隔离包内验证；只读列表不关闭 remote tab、bot Desktop、图片原生粘贴或整个 E 的门禁。
+
+## 2026-10-08 指定远程会话历史与 runtime 读取（后续未提交增量）
+
+此前图片/终端/只读列表改造现已进入当前提交 `a9a9728fa`；本段是该提交后的独立源码增量，不把旧 App 或旧快照测试升级为新代码的包级通过。
+
+- 新增 Serve 的显式 `desktop/session-view`，修正新远程读取链路会误用旧 status 自动 reclaim、旧 history 默认前台回退的问题；旧 API 保持原行为不变。新路由只读取选中的 canonical 会话：foreground/detached 使用各自 runtime/model，saved/external 使用各自文件，缺失/越界/退休不回退。
+- shared client、认证 bridge 的 `session-view` 和 main-only native typed command 已接；远程清单是输入白名单，URL/token 不入站，30 MiB/100,000 条预算，未知配置及 replay 字段不出站，owner 关闭取消在途读取并拒绝迟到发布。只读视图不开放本地 RuntimeManager 或远程发送权限。
+- 新增 Go client 3 项、生产 Serve 3 项、bridge 2 项顶层回归，以及 Rust 2 项 native client fixture；包含自有真实 SSH direct-tcpip/cookie、生产 Controller/磁盘历史兼容、工具/reasoning/search、后台模型隔离、不自动接管、缺失/symlink/未知字段拒绝、取消/脱敏/版本/预算。未调用真实模型或外部账号。
+- 最终定向 4 包 Go race、shared client 全量 race、Go vet、DTO/schema 与生成镜像检查、前端 typecheck、原生 remote client 的 5 项 Rust 测试（其余 254 filtered）及 clippy 通过，证据 `/private/tmp/reasonix-remote-view.v5p1wr/`。最初 compile 因 sandbox 禁止写 Go cache 失败，获审核后最终编译/回归通过；不将最初失败记为成功。
+- 未接前端远程历史面板，未增加稳定消息/turn 展示身份、发送、SSE/重连/审批或远程模型修改；未重建或启动 App，未提交/推送本批。接下来把视图接入独立 remote surface，保留生成代次与 transcript 单写入者，再补完整 controller 的事件和写入权限。bot Desktop、原生图片粘贴、Windows/Linux 和其余包级门禁保持未关闭。
+
+## 2026-10-08 本批 review 与 macOS App 交付
+
+- 用户要求先生成可运行 App，再 review 并提交；此前大批图片/终端/只读列表已在 `a9a9728fa`，本轮审阅剩余 20 项增量并加入生成器修复与回归。发现并修复 Rust 将 `sources_status` 误作驼峰字段而丢失搜索来源状态的问题，复现与修复后验证分开记录。
+- 完整四包 Go race、Rust 253 passed/6 ignored、完整前端 Tauri 回归、typecheck、vet、clippy、协议镜像门禁通过。首次构建的 arm64 `.app` 与两种临时档案启动/退出 smoke 通过，交付包从本次干净提交重建，最终日志位于 `/private/tmp/reasonix-macos-review.J5DA05/`。
+- 新增远程历史 UI、稳定消息身份、事件/发送/审批/模型改动仍未实现；完整 E 目标继续。未连接真实外部账号、改动正式数据或触碰系统剪贴板，本地 ad-hoc 签名不是正式发布签名/公证。

@@ -1,5 +1,14 @@
 # Wails API 与事件面盘点
 
+## 2026-10-08 指定远程会话视图 review 与 macOS 交付
+
+本批覆盖 `a9a9728fa` 后的指定会话只读快照、协议与 native command；没有接入前端远程历史面板。下文“未提交/未重建”保留各阶段当时的状态，不代表本轮交付状态。
+
+- Review 发现 `sources_status` 被 Rust struct 的 camelCase 默认命名静默丢弃。先以 Go 生成器测试及 Rust 真实 HTTP fixture 的反序列化/再序列化断言复现，再让生成器为含下划线的 schema wire key 输出显式 serde rename。搜索来源状态按原字段名保留，未知 replay/凭据字段仍被丢弃；其他既有 camelCase 字段不变。
+- 修复后的四包完整 Go race（controller/serve/bridge/protocolgen）、Go vet、协议生成一致性、Rust 全量 253 passed/0 failed/6 ignored、clippy all-targets、前端 typecheck 通过；完整 `test:tauri` 也通过。日志在 `/private/tmp/reasonix-macos-review.J5DA05/`，复现失败日志与最终通过日志分开保留。
+- 首次 macOS arm64 App 生产构建、严格本地 ad-hoc 签名，以及默认托管/显式临时 profile 的包级启动/退出 smoke 通过：私有凭据身份、原生通知权限只读查询、Global 工作区、sidecar readiness、401 拒绝与退出清理。该首次包尚未包含 review 修复，最终交付以提交后 `build-final.log`、`package-smoke-final.log` 和包内 provenance 为准。
+- 未推送、未安装或替换正式应用；未读取用户日常 profile、使用真实 SSH/模型/IM 或操作系统剪贴板。包启动不等于新增远程命令的 WKWebView 联调，更不关闭完整 remote tab、bot Desktop、原生图片粘贴、异平台或正式签名/公证门禁。
+
 ## 2026-10-08 当前图片阶段增量
 
 `d564c5c3e` 后的图片阶段增量已接入 Tauri 主窗口、会话归属的本地图片解析、
@@ -20,6 +29,12 @@
 - 最终日志保存在 `/private/tmp/reasonix-final-{go,wails,terminal,tauri,remote-ui,test-types,build}.log`，Rust/Python/vet 日志在 `/private/tmp/reasonix-all-review-{rust,python,vet}.log`。本次 review 未重新打包 App，不放行尚未完成的原生剪贴板、远程完整读写/审批及异平台实际运行门禁。
 
 ## 2026-10-08 远程 controller 只读后端（未提交）
+
+### 当前后续增量：显式远程会话视图
+
+当前 HEAD `a9a9728fa` 后新增 Serve → common client → bridge → main-only native command 的指定会话读取源码；尚未接前端历史面板或重建 App。新路径不调用旧 status 自动 reclaim/history 前台 fallback，不借用前台模型/runtime，也不成为任何 local RuntimeManager 权限。
+
+`/private/tmp/reasonix-remote-view.v5p1wr/`：`view-final-race.log` 为 bridge/serve/remote-client/protocolgen 定向 race，`shared-client-full-race.log` 为 shared client 全量 race，`vet-final.log`、`protocol-check.log`、`types.log`、`native-view-tests.log`（5 passed，254 filtered）、`clippy-final.log` 通过。生产 Serve Controller 的 saved/owned/detached/external 测试和 bridge 自有 SSH/HTTP fixture 分别执行；原生 client HTTP fixture 不等于 App 内命令调用。详细端点、预算和剩余范围见 [协议](BRIDGE_PROTOCOL.md) 与 [E 清单](E_MIGRATION_CHECKLIST.md#2026-10-08-指定远程会话历史与-runtime-读取后续未提交增量)。本批未提交/推送或连接外部账号，原生图片粘贴与整个 E 门禁不变。
 
 新增仅含 `name/workspace` 的 attach、opaque handle 清单读取与关闭接口，后端自持 SSH tunnel、token/cookie；会话 DTO 不传递未知配置字段。连接绑定底层 SSH 身份，断开/自动重连/替换/停服/退出取消旧 owner；目录路径不成为本地会话或文件授权。
 自有真实 SSH direct-tcpip + HTTP cookie 生命周期，以及生产 Serve controller 的临时 transcript 清单兼容回归通过；Go race/vet、协议镜像/DTO、TypeScript 与 Rust 编译检查通过。

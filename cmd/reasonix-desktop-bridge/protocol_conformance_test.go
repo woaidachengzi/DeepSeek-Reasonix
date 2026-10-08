@@ -6,6 +6,8 @@ import (
 
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/desktopbridge/protocolgen"
+	"reasonix/internal/event"
+	"reasonix/internal/provider"
 	"reasonix/internal/remote/controller"
 )
 
@@ -14,6 +16,15 @@ import (
 func TestGoDTOsMatchTheWireSchema(t *testing.T) {
 	root := filepath.Join("..", "..")
 	definitions := []protocolgen.Definition{
+		{Name: "remoteControllerSessionViewRequest", Sample: remoteControllerSessionViewRequest{}},
+		{Name: "remoteControllerSessionViewResponse", Sample: remoteControllerSessionViewResponse{}},
+		{Name: "remoteControllerSessionView", Sample: controller.SessionView{}},
+		{Name: "remoteControllerHistoryMessage", Sample: controller.HistoryMessage{}},
+		{Name: "remoteControllerHistoryToolCall", Sample: controller.HistoryToolCall{}},
+		{Name: "remoteControllerHistorySearch", Sample: controller.HistorySearch{}},
+		{Name: "remoteControllerHistorySearchHit", Sample: provider.ServerSearchHit{}},
+		{Name: "remoteControllerProtocolRecovery", Sample: provider.ProtocolRecoveryAction{}},
+		{Name: "remoteControllerRuntimeState", Sample: event.RuntimeStateSnapshot{}},
 		{Name: "remoteControllerRequest", Sample: remoteControllerRequest{}},
 		{Name: "remoteControllerView", Sample: remoteControllerView{}},
 		{Name: "remoteControllerSession", Sample: controller.Session{}},

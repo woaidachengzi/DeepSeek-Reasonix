@@ -565,6 +565,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("GET /events", s.events)
 	mux.HandleFunc("GET /runtime-states", s.runtimeStates)
 	mux.HandleFunc("GET /history", s.history)
+	mux.HandleFunc("GET /desktop/session-view", s.desktopSessionView)
 	mux.HandleFunc("GET /context", s.context)
 	mux.HandleFunc("POST /submit", s.submit)
 	s.registerInboxRoutes(mux)

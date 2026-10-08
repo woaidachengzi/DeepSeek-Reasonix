@@ -10,6 +10,20 @@ import (
 // repoRoot is the schema's own tree: tests run from the package directory.
 const repoRoot = "../../.."
 
+func TestGeneratePreservesSnakeCaseWireKeys(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, SchemaPath, `{"$defs":{"search":{"type":"object","properties":{"sources_status":{"type":"string"},"toolCallId":{"type":"string"}}}}}`)
+	artifacts, err := Generate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, artifact := range artifacts {
+		if artifact.Path == RustArtifactPath && !strings.Contains(string(artifact.Data), "#[serde(rename = \"sources_status\")]\n    pub sources_status: Option<String>,") {
+			t.Fatal("Rust camelCase default would silently drop a snake_case wire key")
+		}
+	}
+}
+
 func TestGenerateSignedIntegerForNegativeExitCodes(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, SchemaPath, `{"$defs":{"exit":{"type":"object","required":["code","offset"],"properties":{"code":{"type":"integer","minimum":-2147483648},"offset":{"type":"integer","minimum":0}}}}}`)

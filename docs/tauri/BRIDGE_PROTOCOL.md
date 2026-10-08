@@ -33,6 +33,7 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | Preview 远程 SSH 连接与断开 | `POST /v1/settings/remote/connect`、`POST /v1/settings/remote/disconnect` | sidecar 生命周期内保留受监督 SSH 连接；未知主机密钥只有在调用方提交与当前握手一致的指纹后才会写入 Reasonix 管理的 `known_hosts`；sidecar 关闭时断开 |
 | Remote controller 只读连接 | `POST /v1/remote/controllers` | 同一已认证 SSH 底层连接与 host/workspace 复用健康 handle；新附着可取消旧的未完成附着；只接受 `name/workspace`，不接受 URL/token |
 | Remote controller 会话清单 | `GET /v1/remote/controllers/{controllerID}/sessions` | 只读；远程路径不转换为本地会话/文件权限；断线/重连/关闭后旧 handle 拒绝读取 |
+| Remote controller 指定会话视图 | `POST /v1/remote/controllers/{controllerID}/session-view` | 只读；body 只有 `sessionPath`，必须匹配远程清单；不恢复/接管/切换会话，不调用本地 RuntimeManager |
 | 关闭 Remote controller | `DELETE /v1/remote/controllers/{controllerID}` | 合法 handle 可重复关闭；只清理自有 HTTP owner，不停止远程 Serve、SSH 或其他工作区 |
 | Preview 远程工作区浏览 | `POST /v1/settings/remote/browse` | 只通过已验证连接执行 SFTP 目录读取；每页最多返回 500 项，不执行远程 shell 命令 |
 | Preview 权限规则 | `GET/POST /v1/settings/permissions` | GET 可用 `workspaceRoot` 读取项目有效值；POST 的 `scope=global|project` 选择用户配置或当前项目 `reasonix.toml`，项目首改按字段继承对应全局值；保存使用 request ID 去重 |
@@ -107,6 +108,33 @@ canonical handle、只读标志、目录字段/计数预算及重复路径。ren
 保存仍为 connected 的未改变配置不清空池。旧清单和 finally 不可写入新 scope。
 列表由用户显式打开才懒加载，每页最多挂载 50 条，路径仅展示；关闭/停服收起列表。
 Rust HTTP fixture、绑定与组件回归、浏览器模拟原生调用的验证不等于 App 原生调用验收。
+
+`remote_controller_view_v1` 为后续指定会话读取能力，不声明远程发送或审批权限。
+Go 先在当前 owner 的 catalogue 中验证 path，再访问 Serve 新增的
+`GET /desktop/session-view?session=<encoded-path>`，整个操作最多 20 秒。
+新 Serve 路由要求一个显式 canonical path，非法/不存在/越界/已删路径失败，不回退前台。
+它不使用旧 `/status` 的自动 reclaim 或 `/history` 的默认会话回退；旧 Serve 缺少路由时
+返回可操作错误，不用旧路由猜测兼容。
+
+结果是 `{protocolVersion, controller, view}`，view 含版本、sessionPath、readOnly=true、
+ownership=serve/saved/external、current、modelRef、label、可选 runtimeState 和 typed history。
+只有实际 Serve-owned foreground/detached controller 提供自己的 modelRef/label/runtime；
+saved/external 从指定文件加载，不借用前台模型，runtime 缺省且模型字段为空。
+外部 writer 的最新磁盘历史可读取，但不会自动接管；retiring 的后台 owner 返回冲突。
+bindMu 防止 controller 替换时串会话；history 与随后采样的 runtime 是观察值，不是原子
+事件事务或未来发送授权。事件恢复仍须单独接入。
+
+历史保留 reasoning、工具参数/结果、搜索结果和恢复提示；DTO 不含 provider replay/raw
+或额外配置/凭据字段。响应最多 30 MiB（为宿主 32 MiB body gate 留 envelope 空间）、
+最多 100,000 条；saved/external 源文件先检查普通文件和 64 MiB 上限，超限失败而不截断。
+bridge 输入按最多 200 KiB JSON 与解码后的 32768 字节 path 双重限制；不接受 URL/token。
+读取结束再次检查 SSH owner，关闭/断线迟到结果不发布。原生
+`bridge_remote_controller_session_view` 仅 main label，typed request 为 controllerId/sessionPath，
+固定 POST 路由、25 秒 worker 等待，响应再次校验归属、只读、字段预算和版本并脱敏错误。
+搜索来源状态保留原 wire key `sources_status`；Rust 生成镜像显式 serde rename，不能由
+camelCase 默认规则改变该字段。native HTTP fixture 同时检查读取与再次输出的字段名。
+本阶段尚未连接前端历史面板；macOS 构建/启动证据见 API audit 的交付记录，
+native client fixture 和普通包启动仍不是新增命令的 WKWebView 联调证明。
 
 当前 bridge 已实现 health、脱敏 Provider 摘要、建/开会话、空闲会话的显式切换、重命名与删除、快照、可见历史、工作区附件、逐层工作区目录、受限工作区文件预览、Git 变更列表与受限 diff、submit、cancel、审批/ask/MCP 提示回答、断线后的待处理提示重放、SSE 事件与正常关闭。工作区目录只返回当前会话工作区下的一层，隐藏常见构建产物、依赖目录和 `.git`，每层最多 200 项；返回值只有相对路径，`..` 越界会被拒绝。文件预览只读取有限大小的常规文件；二进制或非法 UTF-8 文件仅返回 `binary: true`，不会把原始字节交给 renderer。Git 变更查询只执行固定的只读 Git 子命令，diff 输出限制为 2 MiB；非 Git 工作区会返回 `gitAvailable: false`，不会伪造“干净”。会话自定义标题写入 core 的 `.jsonl.meta`，不改动 transcript；标题为空、含控制字符或超过 120 个 Unicode 字符时会被拒绝。删除走 core 自身的产物清理（transcript、事件日志与 sidecar、guardian、inbox、checkpoint、子 agent 记录、cleanup 标记），只允许删除当前持有且空闲的会话，避免 host 误删另一个 host 正在使用的会话；删除成功后 bridge 释放该控制器且不再写回快照，否则会把刚删掉的文件重新创建出来。对已不存在的会话重复执行删除返回 `not_found`，而带同一 `X-Reasonix-Request-ID` 的传输重试重放首次响应。
 

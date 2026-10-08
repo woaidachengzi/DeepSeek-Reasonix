@@ -24,6 +24,13 @@ pub struct HandleRequest {
     pub controller_id: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SessionViewRequest {
+    pub controller_id: String,
+    pub session_path: String,
+}
+
 pub fn ensure_main_window(label: &str) -> Result<(), String> {
     if label == "main" {
         Ok(())
@@ -170,8 +177,150 @@ impl RemoteControllerClient {
         }
         Ok(response)
     }
+
+    pub fn session_view(
+        &self,
+        request: SessionViewRequest,
+    ) -> Result<BridgeRemoteControllerSessionViewResponse, String> {
+        if request.session_path.is_empty() || !clean(&request.session_path, 32768) {
+            return Err(INVALID.into());
+        }
+        let route = format!("{}/session-view", path(&request.controller_id)?);
+        let response: BridgeRemoteControllerSessionViewResponse = self.request(
+            "POST",
+            &route,
+            Some(json!(BridgeRemoteControllerSessionViewRequest {
+                session_path: request.session_path.clone()
+            })),
+            25,
+        )?;
+        if !view(&response.controller)
+            || response.controller.id != request.controller_id
+            || !valid_session_view(&response.view, &request.session_path)
+        {
+            return Err(FAILED.into());
+        }
+        Ok(response)
+    }
+}
+
+fn valid_session_view(v: &BridgeRemoteControllerSessionView, expected: &str) -> bool {
+    if v.protocol_version != 1
+        || v.session_path != expected
+        || !v.read_only
+        || v.history.len() > 100000
+        || !clean(&v.model_ref, 4096)
+        || !clean(&v.label, 4096)
+    {
+        return false;
+    }
+    match v.ownership.as_str() {
+        "serve" => {
+            if v.runtime_state.is_none() {
+                return false;
+            }
+        }
+        "saved" | "external" => {
+            if v.runtime_state.is_some() || !v.model_ref.is_empty() || !v.label.is_empty() {
+                return false;
+            }
+        }
+        _ => return false,
+    }
+    if let Some(s) = &v.runtime_state {
+        if s.schema_version > 1
+            || s.revision > MAX_JS
+            || s.turn_event_seq > MAX_JS
+            || s.background_jobs > MAX_JS
+            || !clean(&s.runtime_epoch, 4096)
+            || !clean(&s.turn_id, 4096)
+            || !clean(&s.activity, 8192)
+        {
+            return false;
+        }
+        if !matches!(
+            s.phase.as_str(),
+            "idle" | "executing" | "finishing" | "closed"
+        ) || !matches!(
+            s.turn_status.as_str(),
+            "" | "queued"
+                | "in_progress"
+                | "waiting_user"
+                | "cancelling"
+                | "completed"
+                | "interrupted"
+                | "failed"
+                | "protocol_failed"
+        ) {
+            return false;
+        }
+    }
+    for m in &v.history {
+        if !matches!(
+            m.role.as_str(),
+            "system"
+                | "user"
+                | "assistant"
+                | "tool"
+                | "notice"
+                | "protocol_recovery"
+                | "final_readiness"
+        ) || m.missing.as_ref().is_some_and(|v| v.len() > 10000)
+            || m.tool_call_id.as_ref().is_some_and(|v| !clean(v, 4096))
+            || m.tool_name.as_ref().is_some_and(|v| !clean(v, 4096))
+        {
+            return false;
+        }
+        if let Some(calls) = &m.tool_calls {
+            if calls.len() > 10000
+                || calls.iter().any(|c| {
+                    c.id.is_empty()
+                        || c.name.is_empty()
+                        || !clean(&c.id, 4096)
+                        || !clean(&c.name, 4096)
+                })
+            {
+                return false;
+            }
+        }
+        if m.protocol_recovery
+            .as_ref()
+            .is_some_and(|v| v.id.is_empty() || !clean(&v.id, 4096))
+        {
+            return false;
+        }
+        if let Some(searches) = &m.server_search {
+            if searches.len() > 10000 {
+                return false;
+            }
+            for search in searches {
+                if !clean(&search.id, 4096)
+                    || search
+                        .sources_status
+                        .as_ref()
+                        .is_some_and(|s| !clean(s, 4096))
+                {
+                    return false;
+                }
+                if let Some(hits) = &search.results {
+                    if hits.len() > 10000
+                        || hits
+                            .iter()
+                            .any(|h| h.url.as_ref().is_some_and(|s| !clean(s, 32768)))
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+    true
 }
 
 #[cfg(test)]
 #[path = "remote_controller_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "remote_controller_view_tests.rs"]
+mod view_tests;

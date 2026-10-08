@@ -341,6 +341,83 @@
         "closed": { "type": "boolean", "const": true }
       }, "additionalProperties": false
     },
+    "remoteControllerSessionViewRequest": {
+      "title": "BridgeRemoteControllerSessionViewRequest", "type": "object",
+      "required": ["sessionPath"],
+      "properties": { "sessionPath": { "type": "string", "minLength": 1, "maxLength": 32768 } }, "additionalProperties": false
+    },
+    "remoteControllerHistoryToolCall": {
+      "title": "BridgeRemoteControllerHistoryToolCall", "type": "object",
+      "required": ["id", "name", "arguments"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "arguments": { "type": "string" }
+      }, "additionalProperties": false
+    },
+    "remoteControllerHistorySearchHit": {
+      "title": "BridgeRemoteControllerHistorySearchHit", "type": "object", "required": [],
+      "properties": { "title": { "type": "string" }, "url": { "type": "string", "maxLength": 32768 } }, "additionalProperties": false
+    },
+    "remoteControllerHistorySearch": {
+      "title": "BridgeRemoteControllerHistorySearch", "type": "object", "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "maxLength": 4096 }, "query": { "type": "string" },
+        "sources_status": { "type": "string", "maxLength": 4096 },
+        "results": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/$defs/remoteControllerHistorySearchHit" } }
+      }, "additionalProperties": false
+    },
+    "remoteControllerProtocolRecovery": {
+      "title": "BridgeRemoteControllerProtocolRecovery", "type": "object", "required": ["id"],
+      "properties": { "id": { "type": "string", "minLength": 1, "maxLength": 4096 } }, "additionalProperties": false
+    },
+    "remoteControllerHistoryMessage": {
+      "title": "BridgeRemoteControllerHistoryMessage", "type": "object", "required": ["role", "content"],
+      "properties": {
+        "role": { "type": "string", "enum": ["system", "user", "assistant", "tool", "notice", "protocol_recovery", "final_readiness"] },
+        "content": { "type": "string" }, "reasoning": { "type": "string" },
+        "missing": { "type": "array", "maxItems": 10000, "items": { "type": "string" } },
+        "toolCalls": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/$defs/remoteControllerHistoryToolCall" } },
+        "toolCallId": { "type": "string", "maxLength": 4096 }, "toolName": { "type": "string", "maxLength": 4096 },
+        "serverSearch": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/$defs/remoteControllerHistorySearch" } },
+        "protocolRecovery": { "$ref": "#/$defs/remoteControllerProtocolRecovery" }
+      }, "additionalProperties": false
+    },
+    "remoteControllerRuntimeState": {
+      "title": "BridgeRemoteControllerRuntimeState", "type": "object",
+      "required": ["schemaVersion", "runtimeEpoch", "revision", "phase", "running", "turnId", "turnStatus", "turnEventSeq", "pendingPrompt", "cancelRequested", "cancellable", "backgroundJobs", "activity"],
+      "properties": {
+        "schemaVersion": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "runtimeEpoch": { "type": "string", "maxLength": 4096 },
+        "revision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "phase": { "type": "string", "enum": ["idle", "executing", "finishing", "closed"] },
+        "running": { "type": "boolean" }, "turnId": { "type": "string", "maxLength": 4096 },
+        "turnStatus": { "type": "string", "enum": ["", "queued", "in_progress", "waiting_user", "cancelling", "completed", "interrupted", "failed", "protocol_failed"] },
+        "turnEventSeq": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "pendingPrompt": { "type": "boolean" }, "cancelRequested": { "type": "boolean" }, "cancellable": { "type": "boolean" },
+        "backgroundJobs": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "activity": { "type": "string", "maxLength": 8192 }
+      }, "additionalProperties": false
+    },
+    "remoteControllerSessionView": {
+      "title": "BridgeRemoteControllerSessionView", "type": "object",
+      "required": ["protocolVersion", "sessionPath", "readOnly", "ownership", "current", "modelRef", "label", "history"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "sessionPath": { "type": "string", "minLength": 1, "maxLength": 32768 }, "readOnly": { "type": "boolean", "const": true },
+        "ownership": { "type": "string", "enum": ["serve", "saved", "external"] }, "current": { "type": "boolean" },
+        "modelRef": { "type": "string", "maxLength": 4096 }, "label": { "type": "string", "maxLength": 4096 },
+        "runtimeState": { "$ref": "#/$defs/remoteControllerRuntimeState" },
+        "history": { "type": "array", "maxItems": 100000, "items": { "$ref": "#/$defs/remoteControllerHistoryMessage" } }
+      }, "additionalProperties": false
+    },
+    "remoteControllerSessionViewResponse": {
+      "title": "BridgeRemoteControllerSessionViewResponse", "type": "object", "required": ["protocolVersion", "controller", "view"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" }, "controller": { "$ref": "#/$defs/remoteControllerView" },
+        "view": { "$ref": "#/$defs/remoteControllerSessionView" }
+      }, "additionalProperties": false
+    },
     "remoteBrowseRequest": {
       "title": "BridgeRemoteBrowseRequest",
       "type": "object",
