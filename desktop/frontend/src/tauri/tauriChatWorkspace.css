@@ -532,12 +532,30 @@
 .tauri-workspace-preview { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--surface); }
 .tauri-workspace-preview > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tauri-workspace-preview > header > div { min-width: 0; }
-.tauri-workspace-preview strong, .tauri-workspace-preview span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tauri-workspace-preview strong { color: var(--fg); font: 10px var(--font-mono); }
-.tauri-workspace-preview span { margin-top: 2px; color: var(--fg-faint); font-size: 9px; }
+.tauri-workspace-preview > header strong, .tauri-workspace-preview > header span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tauri-workspace-preview > header strong { color: var(--fg); font: 10px var(--font-mono); }
+.tauri-workspace-preview > header span { margin-top: 2px; color: var(--fg-faint); font-size: 9px; }
 .tauri-workspace-preview > header button { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; }
 .tauri-workspace-preview pre { max-height: 280px; overflow: auto; margin: 0; padding: 8px; border-radius: 6px; background: color-mix(in srgb, var(--bg) 75%, #000); color: var(--fg-dim); font: 10px/1.5 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .tauri-workspace-preview__binary { margin: 0; color: var(--fg-faint); font-size: 10px; line-height: 1.5; }
+.tauri-workspace-drawer--preview .tauri-workspace-drawer__header { flex-shrink: 0; }
+.tauri-workspace-drawer--preview .tauri-workspace-drawer__body { display: flex; flex: 1; flex-direction: column; overflow: hidden; }
+.tauri-workspace-drawer--preview .tauri-workspace-drawer__toolbar { flex-shrink: 0; }
+.tauri-workspace-drawer--preview .tauri-workspace-preview { display: flex; flex: 1; min-height: 0; flex-direction: column; }
+.tauri-workspace-drawer--preview .tauri-workspace-preview > header,
+.tauri-workspace-drawer--preview .tauri-workspace-preview__binary { flex-shrink: 0; }
+.tauri-workspace-drawer--preview .tauri-workspace-preview > .code-block,
+.tauri-workspace-drawer--preview .code-block__wrap { display: flex; flex: 1; min-height: 0; flex-direction: column; overflow: hidden; }
+.tauri-workspace-drawer--preview .code--scroll-y { flex: 1; min-height: 0; max-height: 100%; }
+.tauri-workspace-drawer--diff { width: min(640px, 92vw); }
+.tauri-workspace-drawer--diff .tauri-workspace-drawer__header > div { min-width: 0; }
+.tauri-workspace-drawer--diff .tauri-workspace-drawer__header span { max-width: none; }
+.tauri-workspace-diff .diff { flex: 1; min-height: 0; margin: 0; overscroll-behavior: contain; }
+.tauri-workspace-diff__stats { display: flex; align-items: center; gap: 10px; }
+.tauri-workspace-diff .tauri-workspace-diff__added { color: var(--add-fg); }
+.tauri-workspace-diff .tauri-workspace-diff__removed { color: var(--del-fg); }
+.tauri-workspace-diff .diff__row--add { --diff-row-bg: color-mix(in srgb, var(--add-fg) 10%, var(--code-bg, var(--bg-soft))); }
+.tauri-workspace-diff .diff__row--del { --diff-row-bg: color-mix(in srgb, var(--del-fg) 10%, var(--code-bg, var(--bg-soft))); }
 .tauri-workspace-revert { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--fg-dim); font-size: 10px; line-height: 1.5; }
 .tauri-workspace-revert strong { color: var(--fg); font-size: 11px; }
 .tauri-workspace-revert code { overflow-wrap: anywhere; color: var(--fg); }

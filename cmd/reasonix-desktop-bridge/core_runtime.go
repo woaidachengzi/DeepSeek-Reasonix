@@ -1218,22 +1218,31 @@ func (r *controllerRuntime) ListWorkspace(rel string) (desktopbridge.WorkspaceLi
 // returning their contents to the renderer.
 func (r *controllerRuntime) ReadWorkspaceFile(rel string) (desktopbridge.WorkspaceFilePreview, error) {
 	_, resolvedPath, cleanRel, err := r.resolveWorkspacePath(rel)
+	// Chat replies sometimes cite only a filename. Prefer the exact root path;
+	// search only a missing bare name, never repair an explicit directory path.
+	if errors.Is(err, os.ErrNotExist) && isBareWorkspaceFilename(rel) {
+		var matched string
+		matched, err = findWorkspaceFilename(r.controller.WorkspaceRoot(), strings.TrimSpace(rel))
+		if err == nil {
+			_, resolvedPath, cleanRel, err = r.resolveWorkspacePath(matched)
+		}
+	}
 	if err != nil {
-		return desktopbridge.WorkspaceFilePreview{}, err
+		return desktopbridge.WorkspaceFilePreview{}, workspaceFileAccessError(err)
 	}
 	if cleanRel == "" {
 		return desktopbridge.WorkspaceFilePreview{}, fmt.Errorf("%w: a file path is required", desktopbridge.ErrInvalidWorkspacePath)
 	}
 	info, err := os.Stat(resolvedPath)
 	if err != nil {
-		return desktopbridge.WorkspaceFilePreview{}, fmt.Errorf("%w: file is unavailable", desktopbridge.ErrInvalidWorkspacePath)
+		return desktopbridge.WorkspaceFilePreview{}, workspaceFileAccessError(err)
 	}
 	if info.IsDir() || !info.Mode().IsRegular() {
 		return desktopbridge.WorkspaceFilePreview{}, fmt.Errorf("%w: path is not a regular file", desktopbridge.ErrInvalidWorkspacePath)
 	}
 	file, err := os.Open(resolvedPath)
 	if err != nil {
-		return desktopbridge.WorkspaceFilePreview{}, fmt.Errorf("%w: file cannot be opened", desktopbridge.ErrInvalidWorkspacePath)
+		return desktopbridge.WorkspaceFilePreview{}, workspaceFileAccessError(err)
 	}
 	defer file.Close()
 	buffer := make([]byte, bridgeWorkspacePreviewLimit+1)

@@ -22,6 +22,9 @@ Object.assign(globalThis, {
 // Node 22 exposes `navigator` as a getter-only global, so it needs a definition
 // rather than an assignment.
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
+dom.window.HTMLElement.prototype.scrollTo = function (options: ScrollToOptions | number, y?: number) {
+  this.scrollTop = typeof options === "number" ? y ?? 0 : options.top ?? this.scrollTop;
+};
 // The adapter stub answers every Tauri call; these markers keep any host check
 // inside the component on the Tauri path.
   (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri = true;
@@ -56,8 +59,9 @@ function clickByClass(className: string): boolean {
 }
 
 function clickButton(label: string): boolean {
+  const aliases: Record<string, string> = { "返回文件列表": "Back to files", "返回变更列表": "Back to changes", "刷新": "Refresh" };
   const button = [...document.querySelectorAll<HTMLButtonElement>("button")]
-    .find(candidate => candidate.textContent?.trim() === label);
+    .find(candidate => candidate.textContent?.trim() === label || candidate.textContent?.trim() === aliases[label]);
   if (!button) return false;
   button.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
   return true;
@@ -99,7 +103,7 @@ async function main() {
     { id: "tauri-interrupted-delete", title: "删除中断会话" },
   ];
   (globalThis as unknown as { __tauriHistoryMessages: unknown[] }).__tauriHistoryMessages = [
-    { role: "assistant", content: "```js\nconst answer = 42;\n```" },
+    { role: "assistant", content: "```js\nconst answer = 42;\n```\n\n`daily_select.py:14`" },
   ];
 
   const React = await import("react");
@@ -197,6 +201,30 @@ async function main() {
   await act(async () => { clickByClass("tauri-workspace-tree-button"); await settle(); });
   ok(text().includes("a.txt") && text().includes("b.txt"), "workspace drawer lists the current session's files");
 
+  let rejectPendingListing: ((reason: Error) => void) | undefined;
+  workspaceStub.__workspaceHandler = () => new Promise((_resolve, reject) => { rejectPendingListing = reject; });
+  workspaceStub.__workspaceFileHandler = async () => ({ path: "strategies/daily_select.py", body: Array.from({ length: 80 }, (_, i) => `# line ${i + 1}`).join("\n"), size: 800 });
+  await act(async () => { clickButton("刷新"); await settle(); });
+  await act(async () => {
+    document.querySelector<HTMLElement>("a.md-rich-link--source")?.click();
+    await settle();
+  });
+  ok(document.querySelector(".tauri-workspace-drawer--preview"), "source citations open the dedicated file preview");
+  eq(document.querySelectorAll(".tauri-workspace-drawer__entries").length, 0, "source preview hides the file tree");
+  ok(text().includes("Line 14 highlighted"), "source preview retains the requested line");
+  ok(document.querySelector(".tauri-workspace-preview strong")?.textContent === "strategies/daily_select.py", "preview displays the resolved file path");
+  await act(async () => { rejectPendingListing?.(new Error("stale directory error")); await settle(); });
+  ok(!text().includes("stale directory error"), "a pending directory failure cannot overwrite the file preview");
+  await act(async () => { clickButton("刷新"); await settle(); });
+  ok(text().includes("Line 14 highlighted"), "refresh preserves the target line and preview view");
+  workspaceStub.__workspaceHandler = async (_sessionId, path) => ({ ...keptFiles, path });
+  await act(async () => { clickButton("返回文件列表"); await settle(); });
+  eq(document.querySelectorAll(".tauri-workspace-preview").length, 0, "returning to files closes the preview");
+  eq(document.querySelectorAll(".tauri-workspace-entry").length, 2, "returning to files restores directory browsing");
+  const returnListing = bridgeCalls().filter(call => call.name === "bridge_workspace").at(-1);
+  eq((returnListing?.args as { path: string })?.path, "strategies", "return opens the resolved file's parent directory");
+  workspaceStub.__workspaceHandler = async sessionId => sessionId === "tauri-kept-row" ? keptFiles : otherFiles;
+
   let releaseOldPreview: ((value: object) => void) | undefined;
   const oldPreview = new Promise<object>(resolve => { releaseOldPreview = resolve; });
   workspaceStub.__workspaceFileHandler = async (_sessionId, path) => path === "a.txt"
@@ -205,6 +233,8 @@ async function main() {
   const doubleClickFile = (path: string) => document.querySelector<HTMLElement>(`.tauri-workspace-entry[title*="${path}"]`)
     ?.dispatchEvent(new dom.window.MouseEvent("dblclick", { bubbles: true, cancelable: true }));
   await act(async () => { doubleClickFile("a.txt"); await settle(); });
+  eq(document.querySelectorAll(".tauri-workspace-entry").length, 0, "pending file preview already hides the directory list");
+  await act(async () => { clickButton("返回文件列表"); await settle(); });
   await act(async () => { doubleClickFile("b.txt"); await settle(); });
   await act(async () => {
     releaseOldPreview?.({ path: "a.txt", body: "stale preview", size: 13, binary: false, truncated: false });
@@ -221,22 +251,41 @@ async function main() {
   workspaceStub.__workspaceDetailHandler = async (_sessionId, path) => path === "a.txt"
     ? oldDetail
     : { source: "git", diff: "new diff", binary: false, added: 1, removed: 0, truncated: false };
-  await act(async () => { clickButton("变更"); await settle(); });
+  await act(async () => { clickButton("返回文件列表"); await settle(); clickButton("变更"); await settle(); });
   const clickChange = (path: string) => document.querySelector<HTMLElement>(`.tauri-workspace-change-entry[title*="${path}"]`)
     ?.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
   await act(async () => { clickChange("a.txt"); await settle(); });
+  eq(document.querySelectorAll(".tauri-workspace-change-entry").length, 0, "loading a diff immediately hides the changes list");
+  ok(document.querySelector(".tauri-workspace-drawer--diff"), "changes open the dedicated wider diff view");
+  await act(async () => { clickButton("返回变更列表"); await settle(); });
   await act(async () => { clickChange("b.txt"); await settle(); });
   await act(async () => {
     releaseOldDetail?.({ source: "git", diff: "stale diff", binary: false, added: 1, removed: 0, truncated: false });
     await settle();
   });
   ok(text().includes("new diff") && !text().includes("stale diff"), "late diff of the first file cannot replace the latest diff");
+  await act(async () => { clickButton("刷新"); await settle(); });
+  ok(text().includes("new diff") && document.querySelector(".tauri-workspace-drawer--diff"), "refresh reloads the selected diff without reopening the changes list");
+  await act(async () => { clickButton("返回变更列表"); await settle(); });
+  eq(document.querySelectorAll('[aria-label="文件差异"]').length, 0, "returning to changes closes the diff");
+  eq(document.querySelectorAll(".tauri-workspace-change-entry").length, 2, "returning to changes restores the list");
+
+  let rejectInactiveDiff: ((error: Error) => void) | undefined;
+  workspaceStub.__workspaceDetailHandler = () => new Promise((_resolve, reject) => { rejectInactiveDiff = reject; });
+  workspaceStub.__workspaceFileHandler = async () => ({ path: "strategies/daily_select.py", body: Array.from({ length: 80 }, (_, i) => `# line ${i + 1}`).join("\n"), size: 800 });
+  await act(async () => { clickChange("a.txt"); await settle(); });
+  await act(async () => { clickByClass("tauri-workspace-drawer__scrim"); await settle(); });
+  await act(async () => { document.querySelector<HTMLElement>("a.md-rich-link--source")?.click(); await settle(); });
+  await act(async () => { rejectInactiveDiff?.(new Error("inactive diff failure")); await settle(); });
+  ok(!text().includes("inactive diff failure"), "a late diff failure cannot overwrite a newly opened source preview");
+  ok(text().includes("Line 14 highlighted"), "switching from a pending diff to a source citation keeps the target file");
+  await act(async () => { clickButton("返回文件列表"); await settle(); });
   await act(async () => { clickButton("文件"); await settle(); });
   let rejectOldPreview: ((reason: Error) => void) | undefined;
   const failingPreview = new Promise<object>((_resolve, reject) => { rejectOldPreview = reject; });
   workspaceStub.__workspaceFileHandler = async () => failingPreview;
   await act(async () => { doubleClickFile("a.txt"); await settle(); });
-  await act(async () => { clickButton("变更"); await settle(); });
+  await act(async () => { clickButton("返回文件列表"); await settle(); clickButton("变更"); await settle(); });
   await act(async () => { rejectOldPreview?.(new Error("stale preview failure")); await settle(); });
   ok(!text().includes("stale preview failure"), "file preview failure cannot leak into the changes view");
   await act(async () => { clickButton("文件"); await settle(); });

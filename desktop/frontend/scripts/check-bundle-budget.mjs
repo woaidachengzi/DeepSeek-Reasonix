@@ -378,7 +378,11 @@ for (const path of localeChunks) {
   // Removing only those keys from the emitted chunks measures 80744 -> 81325 B
   // (zh, +581 B) and 81445 -> 81967 B (zh-TW, +522 B). Keep the next decimal
   // ceilings for that measured growth; initial JS and CSS limits stay fixed.
-  const budget = (name.startsWith("zh-TW-") ? 80.1 : 79.5) * 1024;
+  // Workspace document-reference recovery adds three localized messages.
+  // Removing only those keys from the emitted chunks measures 81325 -> 81426 B
+  // (zh, +101 B) and 81967 -> 82071 B (zh-TW, +104 B). Keep the next decimal
+  // ceilings for this measured copy growth; initial JS and CSS limits stay fixed.
+  const budget = (name.startsWith("zh-TW-") ? 80.2 : 79.6) * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 

@@ -2087,6 +2087,13 @@ export function newTauriSessionId(): string {
 
 export function tauriMessageFrom(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
+  const workspaceErrors: Record<string, Parameters<typeof t>[0]> = {
+    "desktop bridge request failed with status 404 (workspace_file_not_found)": "workspace.referenceNotFound",
+    "desktop bridge request failed with status 409 (workspace_file_ambiguous)": "workspace.referenceAmbiguous",
+    "desktop bridge request failed with status 422 (workspace_file_unavailable)": "workspace.referenceUnavailable",
+  };
+  const workspaceKey = workspaceErrors[message];
+  if (workspaceKey) return t(workspaceKey);
   const localizedErrors: Record<string, Parameters<typeof t>[0]> = {
     "旧版项目文件夹清单暂不可用；当前仅显示 Tauri 本地保存的文件夹。": "settings.data.legacyProjectFoldersUnavailable",
     "Tauri 本地项目文件夹清单暂不可用；当前仅显示旧版项目来源。": "settings.data.tauriProjectFoldersUnavailable",

@@ -8,6 +8,8 @@ import { Markdown } from "../components/Markdown";
 import { MarkdownImage } from "../components/MarkdownImage";
 import { TauriImageScope } from "./TauriImageScope";
 import { CodeViewer } from "../components/CodeViewer";
+import { DiffView } from "../components/DiffView";
+import { pathToLang } from "../lib/lang";
 import { SourceReferenceContext } from "../components/SourceReferenceContext";
 import { workspaceSourcePath, type SourceReference } from "../lib/sourceReference";
 const TranscriptSelectionMenu = lazy(() => import("../components/TranscriptSelectionMenu").then(module => ({ default: module.TranscriptSelectionMenu })));
@@ -575,12 +577,15 @@ export function TauriSessionPreview() {
   const [workspacePreview, setWorkspacePreview] = useState<TauriWorkspaceFilePreview | null>(null);
   const [workspacePreviewLoading, setWorkspacePreviewLoading] = useState(false);
   const [workspacePreviewLine, setWorkspacePreviewLine] = useState<number | undefined>();
+  const [workspaceFileView, setWorkspaceFileView] = useState<"list" | "preview">("list");
+  const [workspacePreviewPath, setWorkspacePreviewPath] = useState("");
   const [workspaceView, setWorkspaceView] = useState<"files" | "changes" | "checkpoints">("files");
   const [workspaceChanges, setWorkspaceChanges] = useState<TauriWorkspaceChanges | null>(null);
   const [workspaceChangesLoading, setWorkspaceChangesLoading] = useState(false);
   const [workspaceChangeDetail, setWorkspaceChangeDetail] = useState<TauriWorkspaceChangeDetail | null>(null);
   const [workspaceChangeDetailPath, setWorkspaceChangeDetailPath] = useState("");
   const [workspaceChangeDetailLoading, setWorkspaceChangeDetailLoading] = useState(false);
+  const [workspaceChangesView, setWorkspaceChangesView] = useState<"list" | "diff">("list");
   const [workspaceFileRevertPlan, setWorkspaceFileRevertPlan] = useState<TauriWorkspaceFileRevertPlan | null>(null);
   const [workspaceFileRevertBusy, setWorkspaceFileRevertBusy] = useState(false);
   const [workspaceFileRevertMessage, setWorkspaceFileRevertMessage] = useState("");
@@ -1757,10 +1762,13 @@ export function TauriSessionPreview() {
       setWorkspaceEntries([]);
       setWorkspacePreview(null);
       setWorkspacePreviewLoading(false);
+      setWorkspaceFileView("list");
+      setWorkspacePreviewPath("");
       setWorkspaceView("files");
       setWorkspaceChanges(null);
       setWorkspaceChangeDetail(null);
       setWorkspaceChangeDetailPath("");
+      setWorkspaceChangesView("list");
       setWorkspaceChangesLoading(false);
       setWorkspaceChangeDetailLoading(false);
       turnEpochRef.current += 1;
@@ -2030,6 +2038,7 @@ export function TauriSessionPreview() {
     const request = ++workspaceListRequestRef.current;
     const isCurrent = () => workspaceEpochRef.current === epoch && workspaceListRequestRef.current === request;
     workspacePreviewRequestRef.current += 1;
+    setWorkspaceFileView("list");
     setWorkspaceLoading(true);
     setWorkspacePreviewLoading(false);
     setWorkspacePreview(null);
@@ -2054,6 +2063,7 @@ export function TauriSessionPreview() {
     const request = ++workspaceChangesRequestRef.current;
     const isCurrent = () => workspaceEpochRef.current === epoch && workspaceChangesRequestRef.current === request;
     workspaceDetailRequestRef.current += 1;
+    setWorkspaceChangesView("list");
     workspaceFileRevertRequestRef.current += 1;
     setWorkspaceFileRevertPlan(null);
     setWorkspaceFileRevertMessage("");
@@ -2519,6 +2529,10 @@ export function TauriSessionPreview() {
     const request = ++workspaceDetailRequestRef.current;
     const isCurrent = () => workspaceEpochRef.current === epoch && workspaceDetailRequestRef.current === request;
     workspaceFileRevertRequestRef.current += 1;
+    workspaceChangesRequestRef.current += 1;
+    setWorkspaceChangesLoading(false);
+    setWorkspaceChangesView("diff");
+    setWorkspaceChangeDetailPath(path);
     setWorkspaceFileRevertPlan(null);
     setWorkspaceFileRevertMessage("");
     setWorkspaceChangeDetailLoading(true);
@@ -2624,6 +2638,9 @@ export function TauriSessionPreview() {
   }
 
   function showWorkspaceView(view: "files" | "changes" | "checkpoints") {
+    workspaceDetailRequestRef.current += 1;
+    setWorkspaceChangeDetailLoading(false);
+    setWorkspaceChangesView("list");
     workspaceFileRevertRequestRef.current += 1;
     setWorkspaceFileRevertPlan(null);
     setCodeRewindPlan(null);
@@ -2693,6 +2710,10 @@ export function TauriSessionPreview() {
     const epoch = workspaceEpochRef.current;
     const request = ++workspacePreviewRequestRef.current;
     const isCurrent = () => workspaceEpochRef.current === epoch && workspacePreviewRequestRef.current === request;
+    workspaceListRequestRef.current += 1;
+    setWorkspaceLoading(false);
+    setWorkspaceFileView("preview");
+    setWorkspacePreviewPath(entry.path);
     setWorkspacePreviewLoading(true);
     setWorkspacePreview(null);
     setWorkspacePreviewLine(line);
@@ -3218,10 +3239,18 @@ export function TauriSessionPreview() {
   const currentWorkspace = workspaceRoot || session?.workspaceRoot || "";
   const activeProjectKey = workbenchProjectKey(currentWorkspace, platform);
   const openSourceReference = useCallback((reference: SourceReference) => {
+    workspaceDetailRequestRef.current += 1;
+    setWorkspaceChangeDetailLoading(false);
+    setWorkspaceChangeDetail(null);
+    setWorkspaceChangesView("list");
     setWorkspaceOpen(true);
     setWorkspaceView("files");
+    setWorkspaceFileView("preview");
+    setWorkspacePreviewPath(reference.path);
     const path = workspaceSourcePath(reference, currentWorkspace, platform);
     if (!workspaceSessionId || path === null) {
+      ++workspaceListRequestRef.current;
+      setWorkspaceLoading(false);
       ++workspacePreviewRequestRef.current;
       setWorkspacePreview(null);
       setWorkspacePreviewLoading(false);
@@ -3230,6 +3259,9 @@ export function TauriSessionPreview() {
     }
     void previewWorkspaceFile({ path, name: path.split("/").pop() ?? path, isDir: false }, reference.line);
   }, [currentWorkspace, platform, previewWorkspaceFile, workspaceSessionId, locale]);
+
+  const workspaceFilePreviewActive = workspaceView === "files" && workspaceFileView === "preview";
+  const workspaceDiffActive = workspaceView === "changes" && workspaceChangesView === "diff";
 
   return (
     <SourceReferenceContext.Provider value={openSourceReference}>
@@ -3547,47 +3579,58 @@ export function TauriSessionPreview() {
 
       {workspaceOpen && <>
         <button className="tauri-workspace-drawer__scrim" aria-label="关闭工作区文件" type="button" onClick={() => setWorkspaceOpen(false)} />
-        <aside className="tauri-workspace-drawer" aria-label="工作区文件">
+        <aside className={`tauri-workspace-drawer${workspaceFilePreviewActive || workspaceDiffActive ? " tauri-workspace-drawer--preview" : ""}${workspaceDiffActive ? " tauri-workspace-drawer--diff" : ""}`} aria-label="工作区文件">
           <header className="tauri-workspace-drawer__header">
-            <div><p>WORKSPACE</p><h2>{workspaceView === "files" ? "文件" : workspaceView === "changes" ? "变更" : recoveryCopy.tab}</h2><span title={currentWorkspace}>{workspaceView === "files" ? (workspacePath ? `/${workspacePath}` : "工作区根目录") : workspaceView === "changes" ? (workspaceChanges?.gitBranch ? `Git · ${workspaceChanges.gitBranch}` : "Git 工作区") : currentWorkspace}</span></div>
+            <div><p>WORKSPACE</p><h2>{workspaceDiffActive ? (locale === "en" ? "File changes" : "文件差异") : workspaceFilePreviewActive ? (locale === "en" ? "File preview" : "文件预览") : workspaceView === "files" ? "文件" : workspaceView === "changes" ? "变更" : recoveryCopy.tab}</h2><span title={workspaceDiffActive ? workspaceChangeDetailPath : workspaceFilePreviewActive ? (workspacePreview?.path || workspacePreviewPath) : currentWorkspace}>{workspaceDiffActive ? workspaceChangeDetailPath : workspaceFilePreviewActive ? (workspacePreview?.path || workspacePreviewPath) : workspaceView === "files" ? (workspacePath ? `/${workspacePath}` : "工作区根目录") : workspaceView === "changes" ? (workspaceChanges?.gitBranch ? `Git · ${workspaceChanges.gitBranch}` : "Git 工作区") : currentWorkspace}</span></div>
             <button type="button" className="tauri-icon-button" onClick={() => setWorkspaceOpen(false)} aria-label="关闭"><X size={17} /></button>
           </header>
           <div className="tauri-workspace-drawer__body">
             <div className="tauri-workspace-drawer__toolbar">
+              {workspaceFilePreviewActive ? <>
+                <button type="button" className="tauri-diagnostic-action" onClick={() => void loadWorkspace(workspacePreview ? workspaceParent(workspacePreview.path) : workspacePath)}><FolderOpen size={13} /> {locale === "en" ? "Back to files" : "返回文件列表"}</button>
+                <button type="button" className="tauri-diagnostic-action" onClick={() => void previewWorkspaceFile({ path: workspacePreview?.path || workspacePreviewPath, name: "", isDir: false }, workspacePreviewLine)} disabled={workspacePreviewLoading || !workspacePreviewPath || workspaceSourcePath({ path: workspacePreview?.path || workspacePreviewPath }, currentWorkspace, platform) === null}>{locale === "en" ? "Refresh" : "刷新"}</button>
+              </> : workspaceDiffActive ? <>
+                <button type="button" className="tauri-diagnostic-action" onClick={() => void loadWorkspaceChanges()}><GitBranch size={13} /> {locale === "en" ? "Back to changes" : "返回变更列表"}</button>
+                <button type="button" className="tauri-diagnostic-action" onClick={() => void loadWorkspaceChangeDetail(workspaceChangeDetailPath)} disabled={workspaceChangeDetailLoading}>{locale === "en" ? "Refresh" : "刷新"}</button>
+              </> : <>
               <button type="button" className={`tauri-diagnostic-action${workspaceView === "files" ? " is-active" : ""}`} onClick={() => showWorkspaceView("files")} disabled={workspaceView === "files" && workspaceLoading}><FolderOpen size={13} /> 文件</button>
               <button type="button" className={`tauri-diagnostic-action${workspaceView === "changes" ? " is-active" : ""}`} onClick={() => showWorkspaceView("changes")} disabled={workspaceView === "changes" && workspaceChangesLoading}><GitBranch size={13} /> 变更</button>
               <button type="button" className={`tauri-diagnostic-action${workspaceView === "checkpoints" ? " is-active" : ""}`} onClick={() => showWorkspaceView("checkpoints")} disabled={workspaceView === "checkpoints" && workspaceCheckpointsLoading}><FileText size={13} /> {recoveryCopy.tab}</button>
               {workspaceView === "files" ? <><button type="button" className="tauri-diagnostic-action" onClick={() => void loadWorkspace(workspacePath)} disabled={workspaceLoading}>刷新</button><button type="button" className="tauri-diagnostic-action" onClick={() => void loadWorkspace(workspaceParent(workspacePath))} disabled={workspaceLoading || !workspacePath}>返回上级</button></> : <button type="button" className="tauri-diagnostic-action" onClick={() => void (workspaceView === "changes" ? loadWorkspaceChanges() : loadWorkspaceCheckpoints())} disabled={workspaceView === "changes" ? workspaceChangesLoading : workspaceCheckpointsLoading}>刷新</button>}
+              </>}
             </div>
             {workspaceError && <p className="tauri-workspace-drawer__error">{workspaceError}</p>}
             {workspaceView === "files" ? <>
-              {workspaceLoading ? <div className="tauri-workspace-drawer__loading">正在读取文件…</div> : workspaceEntries.length === 0 ? <div className="tauri-workspace-drawer__empty">此目录没有可展示的文件。</div> : <ul className="tauri-workspace-drawer__entries">
+              {!workspaceFilePreviewActive && (workspaceLoading ? <div className="tauri-workspace-drawer__loading">正在读取文件…</div> : workspaceEntries.length === 0 ? <div className="tauri-workspace-drawer__empty">此目录没有可展示的文件。</div> : <ul className="tauri-workspace-drawer__entries">
                 {workspaceEntries.map(entry => <li key={entry.path}><button type="button" className="tauri-workspace-entry" onClick={() => insertWorkspaceReference(entry)} onDoubleClick={() => void previewWorkspaceFile(entry)} title={entry.isDir ? `打开 ${entry.name}` : `单击插入 @${entry.path}，双击预览`}>
                   <span className="tauri-workspace-entry__icon">{entry.isDir ? <FolderOpen size={15} /> : <FileText size={15} />}</span><span className="tauri-workspace-entry__name">{entry.name}</span>{entry.isDir && <ChevronRight size={14} />}
                 </button></li>)}
-              </ul>}
+              </ul>)}
               {workspacePreviewLoading && <div className="tauri-workspace-preview__loading">正在读取预览…</div>}
               {workspacePreview && <section className="tauri-workspace-preview" aria-label="文件预览">
                 <header><div><strong>{workspacePreview.path}</strong><span>{workspacePreview.size} bytes{workspacePreview.truncated ? " · 已截断" : ""}</span></div><button type="button" className="tauri-diagnostic-action" onClick={() => insertWorkspacePath(workspacePreview.path)}><Eye size={13} /> 插入引用</button></header>
                 {workspacePreviewLine && <p className="tauri-workspace-preview__binary" role="status">{workspacePreview.body && workspacePreviewLine <= workspacePreview.body.split("\n").length && !workspacePreview.binary ? (locale === "en" ? `Line ${workspacePreviewLine} highlighted` : `已定位到第 ${workspacePreviewLine} 行`) : (locale === "en" ? `Line ${workspacePreviewLine} is outside the readable preview. The file may have changed or been truncated; check the original file.` : `第 ${workspacePreviewLine} 行不在可读预览范围内；文件可能已修改或截断，请检查原文件。`)}</p>}
-                {workspacePreview.binary ? <p className="tauri-workspace-preview__binary">这是二进制文件，已隐藏内容；仍可插入它的 @路径。</p> : workspacePreview.body ? <CodeViewer key={workspacePreview.path} value={workspacePreview.body} showLineNumbers focusLine={workspacePreviewLine} scrollMode="bounded" maxHeight={320} /> : <pre>（空文件）</pre>}
+                {workspacePreview.binary ? <p className="tauri-workspace-preview__binary">这是二进制文件，已隐藏内容；仍可插入它的 @路径。</p> : workspacePreview.body ? <CodeViewer key={workspacePreview.path} value={workspacePreview.body} showLineNumbers focusLine={workspacePreviewLine} scrollMode="bounded" maxHeight="100%" /> : <pre>（空文件）</pre>}
               </section>}
-              {workspaceTruncated && <p className="tauri-workspace-drawer__note">目录较大，仅显示前 200 项。</p>}
-              <p className="tauri-workspace-drawer__hint">单击文件把 <code>@路径</code> 插入输入框，双击文件查看安全预览。</p>
+              {!workspaceFilePreviewActive && <>
+                {workspaceTruncated && <p className="tauri-workspace-drawer__note">目录较大，仅显示前 200 项。</p>}
+                <p className="tauri-workspace-drawer__hint">单击文件把 <code>@路径</code> 插入输入框，双击文件查看安全预览。</p>
+              </>}
             </> : workspaceView === "changes" ? <>
-              {workspaceChangesLoading ? <div className="tauri-workspace-drawer__loading">正在读取变更…</div> : workspaceChanges?.files.length ? <>
+              {!workspaceDiffActive && (workspaceChangesLoading ? <div className="tauri-workspace-drawer__loading">正在读取变更…</div> : workspaceChanges?.files.length ? <>
                 {workspaceChanges && !workspaceChanges.gitAvailable && <p className="tauri-workspace-drawer__note">Git 不可用，仅显示 Reasonix 本轮会话检查点：{workspaceChanges.gitErr || "未检测到仓库"}</p>}
                 <ul className="tauri-workspace-drawer__entries">
                 {workspaceChanges.files.map(change => <li key={change.path}><button type="button" className="tauri-workspace-entry tauri-workspace-change-entry" onClick={() => void loadWorkspaceChangeDetail(change.path)} title={`查看 ${change.path} 的差异`}>
                   <span className="tauri-workspace-entry__icon"><GitBranch size={15} /></span><span className="tauri-workspace-entry__name">{change.path}</span><small>{workspaceChangeLabel(change.gitStatus, change.sources)}{change.sources?.length > 1 ? " · Git+本轮" : change.sources?.includes("session") ? ` · 第${change.turns && change.turns.length > 0 ? change.turns[change.turns.length - 1] : "?"}轮` : ""}</small>
                 </button></li>)}
                 </ul>
-              </> : <div className="tauri-workspace-drawer__empty">当前没有工作区变更。</div>}
+              </> : <div className="tauri-workspace-drawer__empty">当前没有工作区变更。</div>)}
               {workspaceChangeDetailLoading && <div className="tauri-workspace-preview__loading">正在读取差异…</div>}
-              {workspaceChangeDetail && <section className="tauri-workspace-preview" aria-label="文件差异">
-                <header><div><strong>{workspaceChangeDetailPath}</strong><span>{workspaceChangeDetail.source === "session" ? "本轮会话" : "Git"} · {workspaceChangeDetail.added ?? 0} 新增 · {workspaceChangeDetail.removed ?? 0} 删除{workspaceChangeDetail.truncated ? " · 已截断" : ""}</span></div><button type="button" className="tauri-diagnostic-action" onClick={() => insertWorkspacePath(workspaceChangeDetailPath)}><Eye size={13} /> 引用文件</button></header>
+              {workspaceDiffActive && workspaceChangeDetail && <section className="tauri-workspace-preview tauri-workspace-diff" aria-label="文件差异">
+                <header><div><strong title={workspaceChangeDetailPath}>{workspaceChangeDetailPath.split("/").pop()}</strong><div className="tauri-workspace-diff__stats"><span>{workspaceChangeDetail.source === "session" ? "本轮会话" : "Git"}</span><span className="tauri-workspace-diff__added">+{workspaceChangeDetail.added ?? 0}</span><span className="tauri-workspace-diff__removed">−{workspaceChangeDetail.removed ?? 0}</span></div></div><button type="button" className="tauri-diagnostic-action" onClick={() => insertWorkspacePath(workspaceChangeDetailPath)}><Eye size={13} /> 引用文件</button></header>
                 {workspaceChanges?.files.find(change => change.path === workspaceChangeDetailPath)?.canSessionRevert && <button type="button" className="tauri-diagnostic-action" onClick={() => void previewWorkspaceFileRevert(workspaceChangeDetailPath)} disabled={workspaceFileRevertBusy || busy || session?.state !== "idle"}>{t("workspace.revertSessionFileShort")}</button>}
-                {workspaceChangeDetail.binary ? <p className="tauri-workspace-preview__binary">这是二进制变更，无法显示文本差异。</p> : <pre>{workspaceChangeDetail.diff || "（没有可显示的文本差异）"}</pre>}
+                {workspaceChangeDetail.truncated && <p className="tauri-workspace-preview__binary" role="status">{locale === "en" ? "This preview is truncated. Check the original file for the full change." : "差异预览已截断，请查看原文件获取完整变更。"}</p>}
+                {workspaceChangeDetail.binary ? <p className="tauri-workspace-preview__binary">这是二进制变更，无法显示文本差异。</p> : workspaceChangeDetail.diff ? /^@@\s/m.test(workspaceChangeDetail.diff) ? <DiffView key={workspaceChangeDetailPath} diff={workspaceChangeDetail.diff} language={pathToLang(workspaceChangeDetailPath)} maxHeight="100%" /> : <CodeViewer key={workspaceChangeDetailPath} value={workspaceChangeDetail.diff} language="plaintext" scrollMode="bounded" maxHeight="100%" /> : <p className="tauri-workspace-preview__binary">（没有可显示的文本差异）</p>}
               </section>}
               {workspaceFileRevertBusy && <p className="tauri-workspace-drawer__note">{recoveryCopy.fileRevert.working}</p>}
               {workspaceFileRevertMessage && <p role="status" className="tauri-workspace-drawer__note">{workspaceFileRevertMessage}</p>}
@@ -3604,7 +3647,7 @@ export function TauriSessionPreview() {
                 {workspaceFileRevertPlan.conflicts && workspaceFileRevertPlan.conflicts.length > 0 && <p role="alert">{recoveryCopy.fileRevert.conflictNotice} {workspaceFileRevertPlan.conflicts.join(", ")}</p>}
                 <div><button type="button" className="tauri-diagnostic-action" onClick={() => setWorkspaceFileRevertPlan(null)} disabled={workspaceFileRevertBusy}>{recoveryCopy.fileRevert.cancel}</button>{workspaceFileRevertPlan.canFiles && <button type="button" className="tauri-diagnostic-action" onClick={() => void commitWorkspaceFileRevert()} disabled={workspaceFileRevertBusy || busy || session?.state !== "idle"}>{workspaceFileRevertPlan.conflicts?.length ? recoveryCopy.fileRevert.overwrite : recoveryCopy.fileRevert.confirm}</button>}</div>
               </section>}
-              <p className="tauri-workspace-drawer__hint">变更来自 Git 或本轮会话检查点；点击文件查看受限差异。</p>
+              {!workspaceDiffActive && <p className="tauri-workspace-drawer__hint">变更来自 Git 或本轮会话检查点；点击文件查看受限差异。</p>}
             </> : <>
               {sessionHeads.length > 0 && <section className="tauri-workspace-revert" aria-label={recoveryCopy.heads.title}>
                 <strong>{recoveryCopy.heads.title}</strong>

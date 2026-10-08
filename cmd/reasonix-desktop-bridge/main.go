@@ -2108,6 +2108,12 @@ func (b *bridgeServer) replayPendingPrompts(w http.ResponseWriter, r *http.Reque
 func (b *bridgeServer) writeRuntimeError(w http.ResponseWriter, err error, message string) {
 	status, code := http.StatusInternalServerError, "internal"
 	switch {
+	case errors.Is(err, desktopbridge.ErrWorkspaceFileNotFound):
+		status, code = http.StatusNotFound, "workspace_file_not_found"
+	case errors.Is(err, desktopbridge.ErrWorkspaceFileAmbiguous):
+		status, code = http.StatusConflict, "workspace_file_ambiguous"
+	case errors.Is(err, desktopbridge.ErrWorkspaceFileUnavailable):
+		status, code = http.StatusUnprocessableEntity, "workspace_file_unavailable"
 	case errors.Is(err, ErrKnownSessionMissing):
 		status, code = http.StatusConflict, "session_missing"
 	case errors.Is(err, ErrKnownSessionDeleting):

@@ -2,11 +2,13 @@ import { useContext, useEffect, useMemo, useState } from "react";
 import { app } from "../lib/bridge";
 import { hasMarkdownImageResolver, markdownImageSource, type MarkdownImageView } from "../lib/markdownImage";
 import { RichMarkdownLink } from "./githubLink";
-import { MarkdownImageResolverContext, MarkdownImageTabContext } from "./MarkdownImageContext";
+import { MarkdownImagePreviewContext, MarkdownImageResolverContext, MarkdownImageTabContext } from "./MarkdownImageContext";
+import { t } from "../lib/i18n";
 
 export function MarkdownImage({ src, alt, title }: { src?: string; alt?: string; title?: string }) {
   const tabId = useContext(MarkdownImageTabContext);
   const resolver = useContext(MarkdownImageResolverContext);
+  const preview = useContext(MarkdownImagePreviewContext);
   const source = src?.trim() ?? "";
   const resolverAvailable = Boolean(resolver) || hasMarkdownImageResolver();
   const [element, setElement] = useState<HTMLElement | null>(null);
@@ -65,12 +67,29 @@ export function MarkdownImage({ src, alt, title }: { src?: string; alt?: string;
   if (!resolved) {
     return <span ref={setElement} className="md-image-placeholder" role="status" aria-label={alt?.trim() || "Loading image"} />;
   }
+  const openPreview = () => preview?.({ url: resolved.url, name: alt?.trim() || resolved.filename });
   return (
     <img
       ref={setElement}
       src={resolved.url}
       alt={alt ?? ""}
-      title={title}
+      title={title ?? (preview ? t("imageViewer.clickToPreview") : undefined)}
+      role={preview ? "button" : undefined}
+      tabIndex={preview ? 0 : undefined}
+      aria-label={preview ? `${t("imageViewer.clickToPreview")}${alt ? `: ${alt}` : ""}` : undefined}
+      style={preview ? { cursor: "zoom-in" } : undefined}
+      onClick={preview ? event => {
+        event.preventDefault();
+        event.stopPropagation();
+        openPreview();
+      } : undefined}
+      onKeyDown={preview ? event => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          event.stopPropagation();
+          openPreview();
+        }
+      } : undefined}
       loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"

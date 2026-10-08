@@ -1,11 +1,11 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type CSSProperties } from "react";
 
 export interface DiffProps {
   original?: string;
   modified?: string;
   diff?: string;
   language?: string;
-  maxHeight?: number;
+  maxHeight?: CSSProperties["maxHeight"];
 }
 
 // ── EDITOR SEAM (diff) ───────────────────────────────────────────────────────

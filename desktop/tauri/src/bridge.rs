@@ -4933,22 +4933,33 @@ fn parse_json_response(response: &[u8]) -> Result<Value, String> {
     }
     let raw = decoded_body.as_deref().unwrap_or(body);
     if !(200..300).contains(&status) {
-        // Carry only a small allowlist of session recovery codes across the Tauri
+        // Carry only a small allowlist of recovery codes across the Tauri
         // String error boundary. Never forward the bridge's free-text message:
         // it may contain a private transcript or workspace path.
-        if status == 409 {
+        if matches!(status, 404 | 409 | 422) {
             let parsed = serde_json::from_slice::<Value>(first_json_value(raw)).ok();
             let code = parsed
                 .as_ref()
                 .and_then(|value| value.pointer("/error/code"))
                 .and_then(Value::as_str);
-            if let Some(
-                code @ ("session_missing" | "session_deleting" | "session_deleted"
-                | "resync_required"),
-            ) = code
-            {
+            let allowed = matches!((status, code),
+                (
+                    409,
+                    Some(
+                        "session_missing"
+                        | "session_deleting"
+                        | "session_deleted"
+                        | "resync_required"
+                        | "workspace_file_ambiguous",
+                    ),
+                )
+                | (404, Some("workspace_file_not_found"))
+                | (422, Some("workspace_file_unavailable"))
+            );
+            if allowed {
+                let code = code.unwrap();
                 return Err(format!(
-                    "desktop bridge request failed with status 409 ({code})"
+                    "desktop bridge request failed with status {status} ({code})"
                 ));
             }
         }
@@ -6448,6 +6459,26 @@ mod tests {
         let parsed = parse_json_response(response).expect("JSON surrounded by diagnostics");
         assert_eq!(parsed["protocolVersion"], 1);
         assert_eq!(parsed["message"], "brace } in string");
+    }
+
+    #[test]
+    fn response_parser_preserves_safe_workspace_file_codes() {
+        for (status, code) in [
+            (404, "workspace_file_not_found"),
+            (409, "workspace_file_ambiguous"),
+            (422, "workspace_file_unavailable"),
+        ] {
+            let response = format!("HTTP/1.1 {status} Error\r\n\r\n{{\"error\":{{\"code\":\"{code}\",\"message\":\"/private/workspace/report.md\"}}}}");
+            assert_eq!(
+                parse_json_response(response.as_bytes()).unwrap_err(),
+                format!("desktop bridge request failed with status {status} ({code})")
+            );
+        }
+        let response = b"HTTP/1.1 500 Error\r\n\r\n{\"error\":{\"code\":\"workspace_file_not_found\",\"message\":\"private\"}}";
+        assert_eq!(
+            parse_json_response(response).unwrap_err(),
+            "desktop bridge request failed with status 500"
+        );
     }
 
     #[test]
