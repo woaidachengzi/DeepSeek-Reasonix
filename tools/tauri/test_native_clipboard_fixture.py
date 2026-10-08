@@ -17,6 +17,50 @@ spec.loader.exec_module(fixture_module)
 
 
 class ClipboardRecoveryTests(unittest.TestCase):
+    def test_invalid_image_modes_are_rejected_before_access(self):
+        with tempfile.TemporaryDirectory(dir="/private/tmp") as temporary:
+            for options in ({"image_format": "svg"}, {"image_format": "png", "expected_path": "/fixture"}):
+                with self.assertRaises(ValueError):
+                    fixture_module.NativeClipboardFixture(temporary, **options)
+
+    def test_image_seed_failure_restores_even_when_command_raises(self):
+        for failure in (1, subprocess.TimeoutExpired("helper", 15), OSError("private failure")):
+            with self.subTest(failure=type(failure).__name__), tempfile.TemporaryDirectory(dir="/private/tmp") as temporary:
+                fixture = fixture_module.NativeClipboardFixture(temporary, image_format="png")
+                fixture.binary.touch()
+                calls = []
+
+                def command(action, argument):
+                    calls.append(action)
+                    if action == "capture-image":
+                        fixture.snapshot.write_bytes(b"fake original clipboard")
+                    if action == "seed-image":
+                        if isinstance(failure, Exception):
+                            raise failure
+                        return subprocess.CompletedProcess([], failure)
+                    return subprocess.CompletedProcess([], 0)
+
+                fixture.command = command
+                with contextlib.redirect_stdout(io.StringIO()), self.assertRaisesRegex(RuntimeError, "restoration attempted"):
+                    fixture.__enter__()
+                self.assertEqual(calls, ["selftest", "capture-image", "seed-image", "restore"])
+                self.assertFalse(fixture.snapshot.exists())
+
+    def test_image_capture_refusal_never_seeds(self):
+        with tempfile.TemporaryDirectory(dir="/private/tmp") as temporary:
+            fixture = fixture_module.NativeClipboardFixture(temporary, image_format="tiff")
+            fixture.binary.touch()
+            calls = []
+
+            def command(action, argument):
+                calls.append(action)
+                return subprocess.CompletedProcess([], 0 if action == "selftest" else 2)
+
+            fixture.command = command
+            with self.assertRaisesRegex(RuntimeError, "no clipboard write was performed"):
+                fixture.__enter__()
+            self.assertEqual(calls, ["selftest", "capture-image"])
+
     def test_snapshot_refusal_reports_fixed_category_without_content_or_write(self):
         for status, reason in ((1, "snapshot unavailable"), (2, "clipboard changed"),
                                (3, "cannot round-trip"), (9, "snapshot helper failed")):

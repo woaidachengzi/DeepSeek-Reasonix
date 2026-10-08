@@ -5,6 +5,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { sendTauriSystemNotification } from "../lib/tauriBridge";
 import { useTauriNotificationClicks } from "./tauriNotifications";
 import { Markdown } from "../components/Markdown";
+import { MarkdownImage } from "../components/MarkdownImage";
+import { TauriImageScope } from "./TauriImageScope";
 import { CodeViewer } from "../components/CodeViewer";
 import { SourceReferenceContext } from "../components/SourceReferenceContext";
 import { workspaceSourcePath, type SourceReference } from "../lib/sourceReference";
@@ -65,8 +67,10 @@ class MessageErrorBoundary extends Component<{ children: ReactNode; index: numbe
 
 function UserMessageContent({ text }: { text: string }) {
   const context = splitSelectedTextContext(text);
+  const display = parseAttachmentRefsForDisplay(context.submitText);
   return <>
-    <Markdown text={parseAttachmentRefsForDisplay(context.submitText).text} />
+    <Markdown text={display.text} />
+    {display.attachments.length > 0 && <div className="tauri-message__attachments">{display.attachments.map(attachment => <span key={attachment.path} title={attachment.path} className={attachment.kind === "image" ? "is-image" : undefined}>{attachment.kind === "image" ? <MarkdownImage src={attachment.path} alt={attachment.name} /> : <Paperclip size={13} />}{attachment.name}</span>)}</div>}
     {context.entries.map((entry, index) => <details key={index} className="tauri-message__selection">
       <summary>{selectedTextSnippet(entry.text)}</summary>
       <Markdown text={entry.text} />
@@ -90,14 +94,12 @@ function HistoryMessageArticle({ entry, sessionId, questionId, finalAnswer = fal
   finalAnswer?: boolean;
 }) {
   const { message, index } = entry;
-  const display = message.role === "user" ? parseAttachmentRefsForDisplay(splitSelectedTextContext(message.content).submitText) : null;
   return <MessageErrorBoundary index={index}>
     <article id={questionId} data-tauri-question-anchor={questionId} data-transcript-block-key={questionId ?? `message-${index}`} className={`tauri-message is-${message.role}${finalAnswer ? " is-final" : ""}`}>
       {message.role !== "user" && <div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div>}
       <div className="tauri-message__content">
         {message.role !== "user" && <div className="tauri-message__role">Reasonix</div>}
         {message.role === "user" ? <UserMessageContent text={message.content ?? ""} /> : <Markdown text={message.content ?? ""} cacheKey={`${sessionId}:${index}`} />}
-        {display && display.attachments.length > 0 && <div className="tauri-message__attachments">{display.attachments.map(attachment => <span key={attachment.path} title={attachment.path}><Paperclip size={13} />{attachment.name}</span>)}</div>}
         {message.truncated && <small>为保护界面性能，这条历史内容已截断。</small>}
       </div>
       {message.role === "user" && <UserMessageMeta text={message.content} createdAtMs={message.createdAtMs} />}
@@ -519,11 +521,11 @@ export function TauriSessionPreview() {
   }, [session?.id, showToast, t]);
   const [attachments, setAttachments] = useState<TauriBridgeAttachment[]>([]);
   const [draftAttachmentPaths, setDraftAttachmentPaths] = useState<string[]>([]);
-  const stagedImagesRef = useRef(new Map<string, string>());
+  const stagedImagesRef = useRef(new Map<string, { token: string; previewUrl?: string }>());
   const pasteInFlightRef = useRef(false);
   const pasteOwnerRef = useRef(0);
   const discardDraftImages = useCallback(() => {
-    for (const token of stagedImagesRef.current.values()) void discardTauriPastedImage(token).catch(() => {});
+    for (const image of stagedImagesRef.current.values()) void discardTauriPastedImage(image.token).catch(() => {});
     stagedImagesRef.current.clear();
   }, []);
   useEffect(() => () => { pasteOwnerRef.current += 1; discardDraftImages(); }, [discardDraftImages]);
@@ -2751,7 +2753,7 @@ export function TauriSessionPreview() {
         attach: attachTauriFile,
         add: attachment => setAttachments(previous => [...previous, attachment]),
         queue: image => {
-          stagedImagesRef.current.set(image.path, image.token);
+          stagedImagesRef.current.set(image.path, { token: image.token, previewUrl: image.previewUrl });
           setDraftAttachmentPaths(previous => [...previous, image.path]);
         },
       });
@@ -2765,10 +2767,10 @@ export function TauriSessionPreview() {
 
   function removeDraftAttachment(index: number) {
     const path = draftAttachmentPaths[index];
-    const token = stagedImagesRef.current.get(path);
-    if (token) {
+    const image = stagedImagesRef.current.get(path);
+    if (image) {
       stagedImagesRef.current.delete(path);
-      void discardTauriPastedImage(token).catch(() => {});
+      void discardTauriPastedImage(image.token).catch(() => {});
     }
     setDraftAttachmentPaths(previous => previous.filter((_, itemIndex) => itemIndex !== index));
   }
@@ -3384,7 +3386,7 @@ export function TauriSessionPreview() {
           </div>
         </header>
 
-        <div className="tauri-conversation" ref={viewport.setScroller} onScroll={viewport.onScroll}
+        <TauriImageScope sessionId={session?.id}><div className="tauri-conversation" ref={viewport.setScroller} onScroll={viewport.onScroll}
           onWheelCapture={viewport.onWheelCapture} onPointerDownCapture={viewport.onPointerDownCapture}
           onTouchStartCapture={() => viewport.onTouchStartCapture()} onTouchEndCapture={viewport.onTouchEndCapture}
           onKeyDownCapture={viewport.onKeyDownCapture}>
@@ -3413,7 +3415,7 @@ export function TauriSessionPreview() {
             </div>
             {!session && <button className="tauri-welcome__start" type="button" onClick={() => composerRef.current?.focus()} disabled={busy}><Plus size={16} />开始新对话</button>}
           </section>}
-        </div>
+        </div></TauriImageScope>
 
         {questions.length >= 2 && <QuestionJumpBar loadedQuestions={questions} totalQuestions={questions.length} activeTurn={activeQuestion} onJump={jumpToQuestion}
           height={Math.min(240, Math.max(48, questions.length * 18 + 12))} />}
@@ -3432,11 +3434,11 @@ export function TauriSessionPreview() {
               />)}
             </div>}
             {attachments.length > 0 && <div className="tauri-composer__attachments" aria-label="已添加文件">{attachments.map((attachment, index) => <div className="tauri-composer__attachment" key={`${attachment.path}-${index}`} title={attachment.path}>
-              <span className="tauri-composer__attachment-icon"><FileText size={15} /></span><span className="tauri-composer__attachment-name">{attachment.name}</span><small>{attachment.size < 1024 ? `${attachment.size} B` : `${(attachment.size / 1024).toFixed(1)} KB`}</small>
+              <span className="tauri-composer__attachment-icon">{attachment.isImage ? <TauriImageScope sessionId={session?.id}><MarkdownImage src={attachment.path} alt={attachment.name} /></TauriImageScope> : <FileText size={15} />}</span><span className="tauri-composer__attachment-name">{attachment.name}</span><small>{attachment.size < 1024 ? `${attachment.size} B` : `${(attachment.size / 1024).toFixed(1)} KB`}</small>
               <button type="button" onClick={() => setAttachments(previous => previous.filter((_, itemIndex) => itemIndex !== index))} disabled={busy} aria-label={`移除文件 ${attachment.name}`}><X size={13} /></button>
             </div>)}</div>}
             {draftAttachmentPaths.length > 0 && <div className="tauri-composer__attachments" aria-label="待发送文件">{draftAttachmentPaths.map((path, index) => <div className="tauri-composer__attachment" key={`${path}-${index}`} title={path}>
-              <span className="tauri-composer__attachment-icon"><FileText size={15} /></span><span className="tauri-composer__attachment-name">{path.split(/[\\/]/).pop() || path}</span><small>待发送</small>
+              <span className="tauri-composer__attachment-icon">{stagedImagesRef.current.get(path)?.previewUrl ? <img src={stagedImagesRef.current.get(path)!.previewUrl} alt="待发送图片" /> : <FileText size={15} />}</span><span className="tauri-composer__attachment-name">{path.split(/[\\/]/).pop() || path}</span><small>待发送</small>
               <button type="button" onClick={() => removeDraftAttachment(index)} disabled={busy} aria-label={`移除待发送文件 ${path.split(/[\\/]/).pop() || path}`}><X size={13} /></button>
             </div>)}</div>}
             <textarea ref={composerRef} value={prompt} onChange={event => setPrompt(event.target.value)} onPaste={event => {

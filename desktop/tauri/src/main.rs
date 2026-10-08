@@ -36,6 +36,8 @@ mod native_task_smoke;
 #[cfg(target_os = "macos")]
 mod native_ui_message_copy_smoke;
 #[cfg(target_os = "macos")]
+mod native_ui_image_smoke;
+#[cfg(target_os = "macos")]
 mod native_ui_storage_smoke;
 #[cfg(target_os = "macos")]
 mod native_window_smoke;
@@ -134,6 +136,7 @@ use bridge::{
     BridgeSetModelRoleRequest, BridgeSetSessionModelRequest, BridgeSnapshot, BridgeStatus,
     BridgeSupervisor, BridgeWorkspaceChangeDetailResponse, BridgeWorkspaceChangesResponse,
     BridgeWorkspaceCheckpointsResponse, BridgeWorkspaceFileResponse,
+    BridgeWorkspaceImageResponse, WorkspaceImageRequest,
     BridgeWorkspaceFileRevertPlanResponse, BridgeWorkspaceFileRevertResultResponse,
     BridgeWorkspaceListResponse, CodeRewindCommitRequest, CodeRewindPreviewRequest,
     CombinedRewindCommitRequest, CombinedRewindPreviewRequest, ConversationRewindCommitRequest,
@@ -886,6 +889,20 @@ fn bridge_workspace_file(
     request: WorkspaceFileRequest,
 ) -> Result<BridgeWorkspaceFileResponse, String> {
     supervisor.workspace_file(request)
+}
+
+#[tauri::command]
+async fn bridge_workspace_image(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    request: WorkspaceImageRequest,
+) -> Result<BridgeWorkspaceImageResponse, String> {
+    if window.label() != "main" {
+        return Err("workspace images are only available in the main window".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<BridgeSupervisor>().workspace_image(request)
+    }).await.map_err(|_| "workspace image worker failed".to_string())?
 }
 
 #[tauri::command]
@@ -4241,6 +4258,7 @@ fn main() {
             discard_pasted_image,
             bridge_workspace,
             bridge_workspace_file,
+            bridge_workspace_image,
             bridge_workspace_changes,
             bridge_workspace_change_detail,
             bridge_workspace_file_revert_preview,

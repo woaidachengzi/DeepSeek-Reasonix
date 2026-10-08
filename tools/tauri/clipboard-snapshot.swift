@@ -4,8 +4,50 @@ import Foundation
 import Darwin
 
 struct Entry: Codable, Equatable { let type: String; let data: Data }
-struct Snapshot: Codable { let count: Int; let nonce: String; let items: [[Entry]]; let ownedPath: String? }
+struct Snapshot: Codable { let count: Int; let nonce: String; let items: [[Entry]]; let ownedPath: String?; let ownedImage: [[Entry]]? }
 enum Failure: Error { case bounds, unavailable, changed, invalid, restore }
+
+func privateImageSource(_ snapshotURL: URL, _ sourceURL: URL) throws -> (String, [[Entry]]) {
+    let temporary = snapshotURL.deletingLastPathComponent()
+    let mode = temporary.deletingLastPathComponent(), root = mode.deletingLastPathComponent()
+    guard temporary.lastPathComponent == "tmp", ["managed", "explicit"].contains(mode.lastPathComponent),
+          root.deletingLastPathComponent().standardizedFileURL == URL(fileURLWithPath: "/private/tmp").standardizedFileURL,
+          sourceURL == temporary.appendingPathComponent("reasonix-native-ui-clipboard-image.json") else { throw Failure.invalid }
+    for directory in [root, mode, temporary] {
+        let attributes = try FileManager.default.attributesOfItem(atPath: directory.path)
+        guard directory.resolvingSymlinksInPath().standardizedFileURL == directory.standardizedFileURL,
+              attributes[.type] as? FileAttributeType == .typeDirectory,
+              (attributes[.ownerAccountID] as? NSNumber)?.uint32Value == geteuid(),
+              (attributes[.posixPermissions] as? NSNumber)?.intValue == 0o700 else { throw Failure.invalid }
+    }
+    let attributes = try FileManager.default.attributesOfItem(atPath: sourceURL.path)
+    guard attributes[.type] as? FileAttributeType == .typeRegular,
+          sourceURL.resolvingSymlinksInPath().standardizedFileURL == sourceURL.standardizedFileURL,
+          (attributes[.ownerAccountID] as? NSNumber)?.uint32Value == geteuid(),
+          (attributes[.posixPermissions] as? NSNumber)?.intValue == 0o600,
+          ((attributes[.size] as? NSNumber)?.intValue ?? Int.max) <= 8192 else { throw Failure.invalid }
+    let bytes = try Data(contentsOf: sourceURL)
+    guard bytes.count <= 8192, let control = try JSONSerialization.jsonObject(with: bytes) as? [String: String],
+          Set(control.keys) == Set(["nonce", "format"]), let nonce = control["nonce"],
+          nonce.count == 32, nonce.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }),
+          root.lastPathComponent == "reasonix-native-image-clipboard-" + nonce,
+          let format = control["format"], ["png", "tiff"].contains(format),
+          let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 64, pixelsHigh: 40,
+              bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+              colorSpaceName: .deviceRGB, bytesPerRow: 256, bitsPerPixel: 32),
+          let pixels = bitmap.bitmapData else { throw Failure.invalid }
+    for y in 0..<40 { for x in 0..<64 {
+        let offset = y * bitmap.bytesPerRow + x * 4
+        pixels[offset] = UInt8(x * 4); pixels[offset + 1] = UInt8(y * 6)
+        pixels[offset + 2] = 120; pixels[offset + 3] = 255
+    } }
+    guard let image = bitmap.representation(using: format == "png" ? .png : .tiff, properties: [:]),
+          image.count <= 65536 else { throw Failure.bounds }
+    let content = [[Entry(type: format == "png" ? NSPasteboard.PasteboardType.png.rawValue : NSPasteboard.PasteboardType.tiff.rawValue, data: image),
+                    Entry(type: "io.reasonix.native-image-fixture", data: Data(nonce.utf8))]]
+    try validateRestoration(content)
+    return (nonce, content)
+}
 
 func privatePathSource(_ snapshotURL: URL, _ sourceURL: URL) throws -> (String, String) {
     let temporary = snapshotURL.deletingLastPathComponent()
@@ -99,13 +141,14 @@ func validateRestoration(_ content: [[Entry]]) throws {
 func perform(_ args: [String], _ board: NSPasteboard) throws {
     guard args.count == 4 else { throw Failure.invalid }
     let path = URL(fileURLWithPath: args[2])
-    if args[1] == "capture" || args[1] == "capture-path" {
+    if args[1] == "capture" || args[1] == "capture-path" || args[1] == "capture-image" {
         let pathSource = args[1] == "capture-path" ? try privatePathSource(path, URL(fileURLWithPath: args[3])) : nil
+        let imageSource = args[1] == "capture-image" ? try privateImageSource(path, URL(fileURLWithPath: args[3])) : nil
         let count = board.changeCount
         let content = try items(board)
         try validateRestoration(content)
         guard board.changeCount == count else { throw Failure.changed }
-        let snapshot = Snapshot(count: count, nonce: pathSource?.0 ?? args[3], items: content, ownedPath: pathSource?.1)
+        let snapshot = Snapshot(count: count, nonce: pathSource?.0 ?? imageSource?.0 ?? args[3], items: content, ownedPath: pathSource?.1, ownedImage: imageSource?.1)
         let encoder = PropertyListEncoder(); encoder.outputFormat = .binary
         try encoder.encode(snapshot).write(to: path, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
@@ -119,6 +162,25 @@ func perform(_ args: [String], _ board: NSPasteboard) throws {
     let ownValues = snapshot.ownedPath == nil ? [expected, expected + "-denied"] : [expected]
     let marker = URL(fileURLWithPath: args[3])
     let owned = try? JSONSerialization.jsonObject(with: Data(contentsOf: marker)) as? [String: Any]
+    if let expectedImage = snapshot.ownedImage {
+        if args[1] == "seed-image" {
+            guard board.changeCount == snapshot.count else { throw Failure.changed }
+            try writeItems(expectedImage, board)
+            let count = board.changeCount
+            try JSONSerialization.data(withJSONObject: ["nonce": snapshot.nonce, "count": count])
+                .write(to: marker, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: marker.path)
+            guard board.changeCount == count, try items(board) == expectedImage else { throw Failure.changed }
+            return
+        }
+        guard args[1] == "verify" || args[1] == "restore" else { throw Failure.invalid }
+        if args[1] == "restore" && board.changeCount == snapshot.count { return }
+        let count = board.changeCount
+        guard owned?["nonce"] as? String == snapshot.nonce, owned?["count"] as? Int == count,
+              try items(board) == expectedImage, board.changeCount == count else { throw Failure.changed }
+        if args[1] == "restore" { try writeItems(snapshot.items, board) }
+        return
+    }
     let checkpoint = marker.appendingPathExtension("before.json")
     if args[1] == "checkpoint" {
         // Record only the system generation immediately before a real UI
@@ -301,6 +363,37 @@ func selftest(_ path: String) throws {
     do { try perform(["helper", "capture-path", backup, source.path], board); throw Failure.changed }
     catch Failure.invalid {}
     guard board.changeCount == invalidCount, board.string(forType: .string) == expected.path else { throw Failure.restore }
+
+    let imageNonce = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+    let imageRoot = URL(fileURLWithPath: "/private/tmp/reasonix-native-image-clipboard-" + imageNonce)
+    let imageMode = imageRoot.appendingPathComponent("managed"), imageTmp = imageMode.appendingPathComponent("tmp")
+    for directory in [imageRoot, imageMode, imageTmp] {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+    }
+    defer { try? FileManager.default.removeItem(at: imageRoot) }
+    let imageControl = imageTmp.appendingPathComponent("reasonix-native-ui-clipboard-image.json")
+    let imageBackup = imageTmp.appendingPathComponent("clipboard-original.plist").path
+    let imageMarker = imageTmp.appendingPathComponent("image-owned.json").path
+    for format in ["png", "tiff"] {
+        try JSONSerialization.data(withJSONObject: ["nonce": imageNonce, "format": format]).write(to: imageControl, options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: imageControl.path)
+        try writeItems(original, board)
+        try perform(["helper", "capture-image", imageBackup, imageControl.path], board)
+        try perform(["helper", "seed-image", imageBackup, imageMarker], board)
+        try perform(["helper", "verify", imageBackup, imageMarker], board)
+        guard board.string(forType: .string) == nil,
+              board.data(forType: format == "png" ? .png : .tiff) != nil else { throw Failure.invalid }
+        try perform(["helper", "restore", imageBackup, imageMarker], board)
+        guard try items(board) == original else { throw Failure.restore }
+        try perform(["helper", "capture-image", imageBackup, imageControl.path], board)
+        try perform(["helper", "seed-image", imageBackup, imageMarker], board)
+        let sameImage = try items(board)
+        try writeItems(sameImage, board)
+        let externalCount = board.changeCount
+        do { try perform(["helper", "restore", imageBackup, imageMarker], board); throw Failure.invalid }
+        catch Failure.changed {}
+        guard board.changeCount == externalCount, try items(board) == sameImage else { throw Failure.restore }
+    }
 }
 
 func execute() throws {

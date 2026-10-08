@@ -9,13 +9,16 @@ import uuid
 
 
 class NativeClipboardFixture(AbstractContextManager):
-    def __init__(self, temporary, expected_path=None, nonce=None):
+    def __init__(self, temporary, expected_path=None, nonce=None, image_format=None):
         self.temporary = Path(temporary)
         self.snapshot = self.temporary / "clipboard-original.plist"
         self.marker = self.temporary / "reasonix-native-clipboard-owned.json"
         self.binary = self.temporary / "clipboard-snapshot"
         self.nonce = nonce or uuid.uuid4().hex
         self.expected_path = expected_path
+        if image_format not in (None, 'png', 'tiff') or (image_format and expected_path is not None):
+            raise ValueError('Invalid private clipboard image mode')
+        self.image_format = image_format
 
     def command(self, action, argument):
         return subprocess.run([str(self.binary), action, str(self.snapshot), str(argument)],
@@ -32,6 +35,11 @@ class NativeClipboardFixture(AbstractContextManager):
             raise RuntimeError("clipboard restoration safeguards failed in a private named pasteboard; no system clipboard write performed")
         self.marker.unlink(missing_ok=True)
         action, argument = 'capture', self.nonce
+        if self.image_format:
+            control = self.temporary / 'reasonix-native-ui-clipboard-image.json'
+            control.touch(mode=0o600, exist_ok=False)
+            control.write_text(json.dumps({'nonce': self.nonce, 'format': self.image_format}))
+            action, argument = 'capture-image', control
         if self.expected_path is not None:
             control = self.temporary / 'reasonix-native-ui-clipboard-path.json'
             control.touch(mode=0o600)
@@ -49,6 +57,15 @@ class NativeClipboardFixture(AbstractContextManager):
             }.get(capture.returncode, "snapshot helper failed")
             raise RuntimeError(f"current clipboard preflight refused: {reason} (exit {capture.returncode}); no clipboard write was performed")
         (self.temporary / "reasonix-native-clipboard-control.json").write_text(json.dumps({"nonce": self.nonce}))
+        if self.image_format:
+            try:
+                if self.command('seed-image', self.marker).returncode:
+                    raise RuntimeError('private image clipboard seed failed')
+            except (OSError, subprocess.SubprocessError, RuntimeError):
+                # __enter__ failures do not invoke the context manager's exit.
+                # Seeding can have written the clipboard before timing out.
+                self.__exit__(RuntimeError)
+                raise RuntimeError('private image clipboard seed failed; restoration attempted') from None
         return self
 
     def pump(self, inspect_live):

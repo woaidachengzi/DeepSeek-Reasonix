@@ -75,7 +75,7 @@ fn check(app: &AppHandle, stage: &str, expression: &str) -> Result<(), String> {
     }
 }
 
-fn focus(app: &AppHandle) -> Result<(), String> {
+pub(crate) fn focus(app: &AppHandle) -> Result<(), String> {
     let _ = crate::native_window_smoke::record(app, "edit-focus-ready");
     // Use the same asynchronous restoration path as tray/Dock/second instance.
     // AppKit activation is not established merely by ordering a window front.

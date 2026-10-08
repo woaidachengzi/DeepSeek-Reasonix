@@ -489,6 +489,9 @@
 .tauri-attach-button:disabled { opacity: .45; }
 .tauri-message__attachments { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
 .tauri-message__attachments > span { display: inline-flex; max-width: min(300px, 100%); align-items: center; gap: 6px; overflow: hidden; padding: 5px 8px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface-2); color: var(--fg-dim); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.tauri-message__attachments > .is-image { flex-direction: column; align-items: flex-start; }
+.tauri-message__attachments img { width: auto; max-width: 240px; max-height: 160px; object-fit: contain; border-radius: 4px; }
+.tauri-composer__attachment-icon img { width: 38px; height: 38px; object-fit: contain; border-radius: 4px; }
 .tauri-send-button { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border: 0; border-radius: 9px; background: var(--accent); color: var(--accent-fg) !important; }
 .tauri-send-button:hover:not(:disabled) { filter: brightness(1.08); }
 .tauri-send-button:disabled { background: var(--surface-2); color: var(--fg-faint) !important; opacity: 1 !important; }

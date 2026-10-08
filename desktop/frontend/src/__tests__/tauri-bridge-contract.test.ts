@@ -200,6 +200,11 @@ const commands: CommandContract[] = [
     description: "tauriWorkspaceFile() invokes bridge_workspace_file with { request }",
   },
   {
+    command: "bridge_workspace_image",
+    argKeys: ["request"],
+    description: "tauriWorkspaceImage() invokes a typed session-scoped image resolver",
+  },
+  {
     command: "bridge_workspace_changes",
     argKeys: ["request"],
     description: "tauriWorkspaceChanges() invokes bridge_workspace_changes with { request }",

@@ -1,0 +1,38 @@
+import assert from "node:assert/strict";
+import { JSDOM } from "jsdom";
+
+const dom = new JSDOM("<div id='root'></div>", { url: "http://localhost/", pretendToBeVisual: true });
+Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, localStorage: dom.window.localStorage, IS_REACT_ACT_ENVIRONMENT: true });
+Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
+const { createElement, act } = await import("react");
+const { createRoot } = await import("react-dom/client");
+const { MarkdownImage } = await import("../components/MarkdownImage");
+const { TauriImageScope } = await import("../tauri/TauriImageScope");
+const state = globalThis as typeof globalThis & {
+  __imageGate?: (session: string, source: string) => Promise<{ url: string; errorCode?: string }>;
+  __tauriBridgeCalls: { name: string; args: { sessionId: string; source: string } }[];
+};
+const pending = new Map<string, (result: { url: string; errorCode?: string }) => void>();
+state.__imageGate = (session, source) => new Promise(resolve => pending.set(`${session}:${source}`, resolve));
+const root = createRoot(document.getElementById("root")!);
+const render = (session: string, source = ".reasonix/attachments/image.png") =>
+  root.render(createElement(TauriImageScope, { sessionId: session, children: createElement(MarkdownImage, { src: source, alt: "截图" }) }));
+await act(async () => render("first"));
+assert.equal(document.querySelector("img"), null, "raw local paths are never rendered");
+await act(async () => render("second"));
+await act(async () => pending.get("first:.reasonix/attachments/image.png")!({ url: "data:image/png;base64,STALE" }));
+assert.equal(document.querySelector("img"), null, "a stale session result cannot show another session's image");
+await act(async () => pending.get("second:.reasonix/attachments/image.png")!({ url: "data:image/png;base64,CURRENT" }));
+assert.equal(document.querySelector("img")?.getAttribute("src"), "data:image/png;base64,CURRENT");
+await act(async () => render("second", "../../outside.png"));
+assert.equal(document.querySelector("img"), null, "source change hides old pixels before new resolution");
+await act(async () => pending.get("second:../../outside.png")!({ url: "", errorCode: "forbidden" }));
+assert.equal(document.querySelector("img"), null);
+assert.equal(document.querySelector(".md-image-fallback")?.getAttribute("title"), "forbidden");
+const before = state.__tauriBridgeCalls.length;
+await act(async () => render("second", "https://example.org/image.png"));
+assert.equal(document.querySelector("img")?.getAttribute("src"), "https://example.org/image.png");
+assert.equal(state.__tauriBridgeCalls.length, before, "external URLs do not gain native filesystem access");
+await act(async () => root.unmount());
+dom.window.close();
+console.log("Tauri workspace image ownership, stale source, fallback and external URL tests passed");

@@ -474,6 +474,13 @@ pub struct WorkspaceFileRequest {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct WorkspaceImageRequest {
+    pub session_id: String,
+    pub source: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceChangeDetailRequest {
     pub session_id: String,
     pub path: String,
@@ -579,6 +586,7 @@ pub use crate::protocol_generated::{
     BridgeWorkspaceFileRevertPlanResponse, BridgeWorkspaceFileRevertResultResponse,
     BridgeWorkspaceFileRevertUndoRequest, BridgeWorkspaceListResponse, BridgeWorkspaceRequest,
     BridgeWorkspaceTargetResponse,
+    BridgeWorkspaceImageRequest, BridgeWorkspaceImageResponse,
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -3996,6 +4004,33 @@ impl BridgeSupervisor {
             serde_json::from_value(response).map_err(display_error)?;
         if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        Ok(envelope)
+    }
+
+    pub fn workspace_image(
+        &self,
+        request: WorkspaceImageRequest,
+    ) -> Result<BridgeWorkspaceImageResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let inline = request.source.get(..5).is_some_and(|prefix| prefix.eq_ignore_ascii_case("data:"));
+        let max_source = if inline { (16 << 20) * 4 / 3 + 1024 } else { 4096 };
+        if request.source.trim().is_empty()
+            || request.source.len() > max_source
+            || request.source.contains('\0')
+        {
+            return Err("workspace image source is invalid".into());
+        }
+        let response = self.request_json(
+            "POST",
+            &format!("/v1/sessions/{session_id}:workspace-image"),
+            Some(json!(BridgeWorkspaceImageRequest { source: request.source })),
+            None,
+        )?;
+        let envelope: BridgeWorkspaceImageResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".into());
         }
         Ok(envelope)
     }

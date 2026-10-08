@@ -55,6 +55,11 @@ export function tauriMessageFrom(error) {
 }
 
 export function isTauriDesktop() { return true; }
+export function tauriWorkspaceImage(sessionId, source) {
+  record("bridge_workspace_image", { sessionId, source });
+  if (globalThis.__imageGate) return globalThis.__imageGate(sessionId, source);
+  return Promise.resolve(globalThis.__workspaceImage ?? { url: "", errorCode: "not-found" });
+}
 export function onTauriOpenSettings(callback) { globalThis.__openNativeSettings = callback; return Promise.resolve(() => { if (globalThis.__openNativeSettings === callback) globalThis.__openNativeSettings = undefined; }); }
 
 export function newTauriSessionId() { return "tauri-stub-session"; }

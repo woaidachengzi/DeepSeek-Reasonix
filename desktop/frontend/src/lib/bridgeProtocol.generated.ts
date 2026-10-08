@@ -555,6 +555,23 @@ export interface BridgeWorkspaceFileRevertUndoRequest {
   transactionId: string;
 }
 
+export interface BridgeWorkspaceImageRequest {
+  source: string;
+}
+
+export interface BridgeWorkspaceImageResponse {
+  image: BridgeWorkspaceImageView;
+  protocolVersion: number;
+}
+
+export interface BridgeWorkspaceImageView {
+  errorCode?: string;
+  filename?: string;
+  mime?: "image/png";
+  size?: number;
+  url: string;
+}
+
 export interface BridgeWorkspaceListResponse {
   entries: BridgeWorkspaceEntry[];
   path: string;

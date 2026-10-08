@@ -16,6 +16,7 @@ pub struct StagedImage {
     pub token: String,
     pub path: String,
     pub size: usize,
+    pub preview_url: String,
 }
 
 impl PastedImages {
@@ -47,6 +48,12 @@ impl PastedImages {
             token,
             path,
             size: bytes.len(),
+            preview_url: format!("data:{};base64,{}", match extension {
+                "jpg" | "jpeg" => "image/jpeg",
+                "gif" => "image/gif",
+                "webp" => "image/webp",
+                _ => "image/png",
+            }, STANDARD.encode(bytes)),
         })
     }
 
@@ -138,6 +145,7 @@ mod tests {
         let bytes = encode_rgba(1, 1, &[255, 0, 0, 255]).unwrap();
         let staged = images.stage("png", &bytes).unwrap();
         assert_eq!(std::fs::read(&staged.path).unwrap(), bytes);
+        assert_eq!(staged.preview_url, format!("data:image/png;base64,{}", STANDARD.encode(&bytes)));
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

@@ -2,57 +2,79 @@ import { useContext, useEffect, useMemo, useState } from "react";
 import { app } from "../lib/bridge";
 import { hasMarkdownImageResolver, markdownImageSource, type MarkdownImageView } from "../lib/markdownImage";
 import { RichMarkdownLink } from "./githubLink";
-import { MarkdownImageTabContext } from "./MarkdownImageContext";
+import { MarkdownImageResolverContext, MarkdownImageTabContext } from "./MarkdownImageContext";
 
 export function MarkdownImage({ src, alt, title }: { src?: string; alt?: string; title?: string }) {
   const tabId = useContext(MarkdownImageTabContext);
+  const resolver = useContext(MarkdownImageResolverContext);
   const source = src?.trim() ?? "";
-  const resolverAvailable = hasMarkdownImageResolver();
+  const resolverAvailable = Boolean(resolver) || hasMarkdownImageResolver();
+  const [element, setElement] = useState<HTMLElement | null>(null);
+  const [nearViewport, setNearViewport] = useState(() => !resolver || typeof IntersectionObserver === "undefined");
   const legacyView = useMemo<MarkdownImageView>(
     () => ({ url: markdownImageSource(source), openHref: /^https?:\/\//i.test(source) ? source : undefined }),
     [source],
   );
-  const [resolved, setResolved] = useState<MarkdownImageView | null>(() => resolverAvailable ? null : legacyView);
-  const [loadFailed, setLoadFailed] = useState(false);
+  const [result, setResult] = useState<{ source: string; resolver: typeof resolver; tabId: string; view: MarkdownImageView } | null>(null);
+  const [failedURL, setFailedURL] = useState<string | null>(null);
+  // Never paint a previous session's pixels while the new effect is pending.
+  const resolved = result?.source === source && result.resolver === resolver && result.tabId === tabId
+    ? result.view : resolverAvailable ? null : legacyView;
+
+  useEffect(() => {
+    if (!resolver || typeof IntersectionObserver === "undefined") {
+      setNearViewport(true);
+      return;
+    }
+    if (!element || nearViewport) return;
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        setNearViewport(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: "400px" });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [element, nearViewport, resolver]);
 
   useEffect(() => {
     let live = true;
-    setLoadFailed(false);
-    if (!hasMarkdownImageResolver()) {
-      setResolved(legacyView);
+    if (!nearViewport) return () => { live = false; };
+    setFailedURL(null);
+    if (!resolver && !hasMarkdownImageResolver()) {
       return () => { live = false; };
     }
-    setResolved(null);
-    void app.ResolveMarkdownImageForTab(tabId, source).then((view) => {
-      if (live) setResolved(view);
+    void (resolver ? resolver(source) : app.ResolveMarkdownImageForTab(tabId, source)).then((view) => {
+      if (live) setResult({ source, resolver, tabId, view });
     }).catch(() => {
-      if (live) setResolved({ url: "", errorCode: "resolve-failed" });
+      if (live) setResult({ source, resolver, tabId, view: { url: "", errorCode: "resolve-failed" } });
     });
     return () => { live = false; };
-  }, [legacyView, source, tabId]);
+  }, [nearViewport, resolver, source, tabId]);
 
-  const unavailable = loadFailed || Boolean(resolved?.errorCode) || (resolved !== null && !resolved.url);
+  const unavailable = Boolean(resolved?.url && failedURL === resolved.url) || Boolean(resolved?.errorCode) || (resolved !== null && !resolved.url);
   if (unavailable) {
     const label = alt?.trim() || resolved?.filename || "Image unavailable";
     return (
-      <span className="md-image-fallback" role="img" aria-label={label} title={resolved?.errorCode || title}>
+      <span ref={setElement} className="md-image-fallback" role="img" aria-label={label} title={resolved?.errorCode || title}>
         <span>{label}</span>
         {resolved?.openHref && <RichMarkdownLink href={resolved.openHref}>Open image</RichMarkdownLink>}
       </span>
     );
   }
   if (!resolved) {
-    return <span className="md-image-placeholder" role="status" aria-label={alt?.trim() || "Loading image"} />;
+    return <span ref={setElement} className="md-image-placeholder" role="status" aria-label={alt?.trim() || "Loading image"} />;
   }
   return (
     <img
+      ref={setElement}
       src={resolved.url}
       alt={alt ?? ""}
       title={title}
       loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"
-      onError={() => setLoadFailed(true)}
+      onError={() => setFailedURL(resolved.url)}
     />
   );
 }

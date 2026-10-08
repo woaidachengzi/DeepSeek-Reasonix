@@ -1,0 +1,189 @@
+package desktopbridge
+
+import (
+	"bytes"
+	"encoding/base64"
+	"errors"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	"image/png"
+	"io"
+	"net/url"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+
+	"golang.org/x/image/draw"
+	_ "golang.org/x/image/webp"
+)
+
+const workspaceImageMaxBytes = 16 << 20
+const WorkspaceImageSourceLimit = workspaceImageMaxBytes*4/3 + 1024
+const workspaceImageMaxPixels = 40_000_000
+const workspaceImagePreviewSide = 1200
+
+// WorkspaceImageView contains only bounded, re-encoded raster pixels, never a
+// filesystem URL or SVG. Size describes the original file, not the preview.
+type WorkspaceImageView struct {
+	URL       string `json:"url"`
+	Filename  string `json:"filename,omitempty"`
+	Mime      string `json:"mime,omitempty"`
+	Size      int64  `json:"size,omitempty"`
+	ErrorCode string `json:"errorCode,omitempty"`
+}
+
+// WorkspaceImage holds the ownership lock through resolution and decoding, so
+// a concurrent session switch cannot substitute another session's workspace.
+func (m *RuntimeManager) WorkspaceImage(sessionID, source string) (WorkspaceImageView, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return WorkspaceImageView{}, ErrClosed
+	}
+	if m.runtime == nil || strings.TrimSpace(sessionID) == "" || m.view.ID != strings.TrimSpace(sessionID) {
+		return WorkspaceImageView{}, ErrSessionNotFound
+	}
+	provider, ok := m.runtime.(RuntimeWorkspaceProvider)
+	if !ok {
+		return WorkspaceImageView{}, ErrInvalidWorkspacePath
+	}
+	root, err := provider.LocalWorkspace()
+	if err != nil || strings.TrimSpace(root) == "" {
+		return WorkspaceImageView{}, ErrInvalidWorkspacePath
+	}
+	return readWorkspaceImage(root, source), nil
+}
+
+func readWorkspaceImage(base, source string) WorkspaceImageView {
+	fail := func(code string) WorkspaceImageView { return WorkspaceImageView{ErrorCode: code} }
+	if len(source) >= 5 && strings.EqualFold(source[:5], "data:") {
+		if len(source) > WorkspaceImageSourceLimit {
+			return fail("too-large")
+		}
+		header, payload, ok := strings.Cut(source, ",")
+		formats := map[string]string{"data:image/png;base64": "png", "data:image/jpeg;base64": "jpeg", "data:image/gif;base64": "gif", "data:image/webp;base64": "webp"}
+		format := formats[strings.ToLower(header)]
+		if !ok || format == "" {
+			return fail("unsupported-type")
+		}
+		data, err := base64.StdEncoding.DecodeString(payload)
+		if err != nil {
+			return fail("invalid-image")
+		}
+		return workspaceImagePixels(data, "image", int64(len(data)), format)
+	}
+	path, err := workspaceImagePath(base, source)
+	if err != nil {
+		return fail("forbidden")
+	}
+	// os.Root confines both path traversal and symlink resolution during open,
+	// including filesystem races. EvalSymlinks followed by os.Open is not enough.
+	root, err := os.OpenRoot(base)
+	if err != nil {
+		return fail("not-found")
+	}
+	defer root.Close()
+	info, err := root.Stat(path)
+	if err != nil {
+		return fail("not-found")
+	}
+	if !info.Mode().IsRegular() {
+		return fail("not-a-file")
+	}
+	if info.Size() <= 0 || info.Size() > workspaceImageMaxBytes {
+		return fail("too-large")
+	}
+	f, err := root.Open(path)
+	if err != nil {
+		return fail("not-found")
+	}
+	defer f.Close()
+	opened, err := f.Stat()
+	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(info, opened) || opened.Size() != info.Size() {
+		return fail("changed-file")
+	}
+	data, err := io.ReadAll(io.LimitReader(f, workspaceImageMaxBytes+1))
+	if err != nil || len(data) == 0 || len(data) > workspaceImageMaxBytes {
+		return fail("too-large")
+	}
+	return workspaceImagePixels(data, filepath.Base(path), opened.Size(), "")
+}
+
+func workspaceImagePixels(data []byte, filename string, size int64, declaredFormat string) WorkspaceImageView {
+	fail := func(code string) WorkspaceImageView { return WorkspaceImageView{ErrorCode: code} }
+	if len(data) == 0 || len(data) > workspaceImageMaxBytes {
+		return fail("too-large")
+	}
+	config, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || (format != "png" && format != "jpeg" && format != "gif" && format != "webp") {
+		return fail("unsupported-type")
+	}
+	if declaredFormat != "" && format != declaredFormat {
+		return fail("invalid-image")
+	}
+	if config.Width <= 0 || config.Height <= 0 || int64(config.Width) > workspaceImageMaxPixels/int64(config.Height) {
+		return fail("too-large")
+	}
+	pixels, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil || pixels.Bounds().Dx() != config.Width || pixels.Bounds().Dy() != config.Height {
+		return fail("invalid-image")
+	}
+	w, h := config.Width, config.Height
+	if w > workspaceImagePreviewSide || h > workspaceImagePreviewSide {
+		if w >= h {
+			h = max(1, h*workspaceImagePreviewSide/w)
+			w = workspaceImagePreviewSide
+		} else {
+			w = max(1, w*workspaceImagePreviewSide/h)
+			h = workspaceImagePreviewSide
+		}
+	}
+	preview := image.NewNRGBA(image.Rect(0, 0, w, h))
+	draw.ApproxBiLinear.Scale(preview, preview.Bounds(), pixels, pixels.Bounds(), draw.Src, nil)
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, preview); err != nil || encoded.Len() > 8<<20 {
+		return fail("invalid-image")
+	}
+	return WorkspaceImageView{
+		URL:      "data:image/png;base64," + base64.StdEncoding.EncodeToString(encoded.Bytes()),
+		Filename: filename, Mime: "image/png", Size: size,
+	}
+}
+
+func workspaceImagePath(base, source string) (string, error) {
+	source = strings.TrimSpace(source)
+	if source == "" || len(source) > 4096 || strings.ContainsRune(source, 0) {
+		return "", os.ErrInvalid
+	}
+	if !filepath.IsAbs(source) {
+		u, err := url.Parse(source)
+		if err != nil || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "" && !strings.EqualFold(u.Scheme, "file")) {
+			return "", os.ErrInvalid
+		}
+		if u.Host != "" && !strings.EqualFold(u.Host, "localhost") {
+			return "", os.ErrPermission
+		}
+		source = filepath.FromSlash(u.Path)
+		if strings.EqualFold(u.Scheme, "file") && runtime.GOOS == "windows" && len(source) >= 3 && source[0] == '\\' && source[2] == ':' {
+			source = source[1:]
+		}
+	}
+	if filepath.IsAbs(source) {
+		absolute, err := filepath.Abs(base)
+		if err != nil {
+			return "", err
+		}
+		var relErr error
+		source, relErr = filepath.Rel(absolute, source)
+		if relErr != nil {
+			return "", relErr
+		}
+	}
+	path := filepath.Clean(source)
+	if !filepath.IsLocal(path) || path == "." || strings.ContainsRune(path, 0) || strings.HasPrefix(path, "\\\\") {
+		return "", errors.New("image path escapes owned workspace")
+	}
+	return path, nil
+}

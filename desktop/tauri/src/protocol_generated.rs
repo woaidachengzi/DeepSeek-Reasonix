@@ -730,6 +730,29 @@ pub struct BridgeWorkspaceFileRevertUndoRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceImageRequest {
+    pub source: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceImageResponse {
+    pub image: BridgeWorkspaceImageView,
+    pub protocol_version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWorkspaceImageView {
+    pub error_code: Option<String>,
+    pub filename: Option<String>,
+    pub mime: Option<String>,
+    pub size: Option<u64>,
+    pub url: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeWorkspaceListResponse {
     pub entries: Vec<BridgeWorkspaceEntry>,
     pub path: String,

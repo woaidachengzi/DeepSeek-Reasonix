@@ -30,6 +30,7 @@ import type {
   BridgeSessionMetrics,
   BridgeWorkspaceListResponse,
   BridgeWorkspaceFileResponse,
+  BridgeWorkspaceImageResponse,
   BridgeWorkspaceChangesResponse,
   BridgeWorkspaceChangeDetailResponse,
   BridgeWorkspaceFileRevertPlanResponse,
@@ -1759,7 +1760,7 @@ export async function attachTauriFile(sessionId: string, path: string): Promise<
   return invoke<TauriBridgeAttachment>("bridge_attach_file", { request });
 }
 
-export type TauriStagedImage = { token: string; path: string; size: number };
+export type TauriStagedImage = { token: string; path: string; size: number; previewUrl?: string };
 
 export async function stageTauriPastedImage(dataUrl?: string): Promise<TauriStagedImage | null> {
   requireTauri();
@@ -1780,6 +1781,12 @@ export async function tauriWorkspaceFile(sessionId: string, path: string): Promi
   requireTauri();
   const response = await invoke<BridgeWorkspaceFileResponse>("bridge_workspace_file", { request: { sessionId, path } });
   return response.preview;
+}
+
+export async function tauriWorkspaceImage(sessionId: string, source: string): Promise<BridgeWorkspaceImageResponse["image"]> {
+  requireTauri();
+  const response = await invoke<BridgeWorkspaceImageResponse>("bridge_workspace_image", { request: { sessionId, source } });
+  return response.image;
 }
 
 export async function tauriWorkspaceChanges(sessionId: string): Promise<TauriWorkspaceChanges> {
