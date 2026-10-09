@@ -32,7 +32,8 @@
     "prompt_answered",
     "mcp_interaction",
     "session_changed",
-    "read_status"
+    "read_status",
+    "user_message_admitted"
   ],
   "event": {
     "kind": "object",

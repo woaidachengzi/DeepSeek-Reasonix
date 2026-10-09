@@ -25,6 +25,16 @@ def receipt():
 
 
 class NativeTerminalGates(unittest.TestCase):
+    def test_primary_display_requires_explicit_opt_in(self):
+        terminal.require_placement({"x": -1200}, False)
+        terminal.require_placement({"x": 100}, True)
+        for x in (0, 100):
+            with self.subTest(x=x), self.assertRaisesRegex(ValueError, "left-display"):
+                terminal.require_placement({"x": x}, False)
+        for value in (None, 1, "true"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                terminal.require_placement({"x": 100}, value)
+
     def test_fixed_boolean_receipt_and_pid_bounds(self):
         self.assertEqual(terminal.validate_receipt(receipt()), 12345)
         for key in receipt():
@@ -45,8 +55,9 @@ class NativeTerminalGates(unittest.TestCase):
             with patch.object(terminal.windows.package, "matching_package_is_running", return_value=True), \
                     patch.object(terminal.windows.package, "placement_helper") as placement, \
                     patch.object(terminal.windows, "launch") as launch:
-                with self.assertRaisesRegex(RuntimeError, "already running"):
-                    terminal.smoke(app, "not-read.json", "managed")
+                for primary in (False, True):
+                    with self.subTest(primary=primary), self.assertRaisesRegex(RuntimeError, "already running"):
+                        terminal.smoke(app, "not-read.json", "managed", primary)
                 placement.assert_not_called()
                 launch.assert_not_called()
 

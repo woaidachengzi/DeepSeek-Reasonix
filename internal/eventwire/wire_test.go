@@ -551,6 +551,28 @@ func TestMessageIdentityOnlyProjectsAppliedSteer(t *testing.T) {
 	}
 }
 
+func TestUserAdmissionWireIsContentFreeCanonicalIdentity(t *testing.T) {
+	got := ToWire(event.Event{Kind: event.UserMessageAdmitted, MessageID: "canonical-user"})
+	if got.Kind != "user_message_admitted" || got.MessageID != "canonical-user" || got.Text != "" || got.ItemID != "" {
+		t.Fatalf("admission wire: %+v", got)
+	}
+}
+
+func TestUserAdmissionWireCannotCarryUnrelatedPayloadOrActionIdentity(t *testing.T) {
+	got := ToWire(event.Event{Kind: event.UserMessageAdmitted, MessageID: "canonical-user", TurnID: "owned-turn", Sequence: 7, Status: event.TurnStatus("in_progress"), SessionPath: "/owned.jsonl", Text: "private-input", Detail: "private-detail", Reasoning: "private-reasoning", ItemID: "action-identity", PromptKind: "approval", SessionReset: true})
+	encoded, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(encoded, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if len(fields) != 6 || fields["kind"] != "user_message_admitted" || fields["messageId"] != "canonical-user" || fields["turnId"] != "owned-turn" || fields["seq"] != float64(7) || fields["status"] != "in_progress" || fields["sessionPath"] != "/owned.jsonl" {
+		t.Fatal("content-free admission forwarded unrelated payload or lost its envelope")
+	}
+}
+
 func TestPromptWireMarksLegacyIdentity(t *testing.T) {
 	w := ToWire(event.Event{Kind: event.AskRequest, ItemID: "legacy-ask", Ask: event.Ask{ID: "legacy-ask"}})
 	if !w.PromptLegacy || w.PromptID != "legacy-ask" || w.PromptKind != "ask" {

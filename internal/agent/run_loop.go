@@ -150,10 +150,14 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string, pinned pinnedRev
 		rawContent = a.turn.turnInput
 	}
 	userMessage := provider.Message{
+		ID:   NewMessageID(),
 		Role: provider.RoleUser, Origin: inputMessageOrigin(ctx), Content: input, RawContent: rawContent,
 		Images: userImages(ctx), VisionSummary: VisionSummaryFromContext(ctx), CreatedAt: userCreatedAt,
 	}
 	a.appendPinnedRevisionAndUser(ctx, pinned, userMessage)
+	if IsUserAuthoredTurnMessage(userMessage) {
+		a.svc.sink.Emit(event.Event{Kind: event.UserMessageAdmitted, MessageID: userMessage.ID})
+	}
 
 	// The loop fields join the classification computed above rather than
 	// opening a second object: one turn, one turnRuntime. The zero values the

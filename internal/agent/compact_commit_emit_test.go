@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -48,12 +49,21 @@ func TestCommitSummaryEmitsOutsideCompactionLock(t *testing.T) {
 		{Role: provider.RoleAssistant, Content: "ok"},
 	}}
 	path := filepath.Join(t.TempDir(), "session.jsonl")
+	// This fixture exercises a canonical display fence; legacy anonymous
+	// message literals deliberately fail that fence until the owner gives IDs.
+	for i := range sess.Messages {
+		sess.Messages[i].ID = NewMessageID()
+	}
 	sink := &reentrantSnapshotSink{}
 	a := New(prov, tool.NewRegistry(), sess, Options{
 		ContextWindow: 20_000, CompactRatio: 0.5, RecentKeep: 2,
 		SessionPath: path, WorkspaceID: "ws", ModelRef: "p/m",
 	}, sink)
 	sink.agent = a
+	beforeIDs, beforeDigest, ok := sess.MessageProjectionBaseSnapshot(100000)
+	if !ok {
+		t.Fatal("canonical base unavailable before projection compaction")
+	}
 	if err := a.CompactNow(context.Background(), ""); err != nil {
 		t.Fatalf("CompactNow: %v", err)
 	}
@@ -65,6 +75,10 @@ func TestCommitSummaryEmitsOutsideCompactionLock(t *testing.T) {
 	}
 	if got := a.currentProjectionVersion(); got != 1 {
 		t.Fatalf("projection version = %d, want 1", got)
+	}
+	afterIDs, afterDigest, ok := sess.MessageProjectionBaseSnapshot(100000)
+	if !ok || !slices.Equal(beforeIDs, afterIDs) || beforeDigest != afterDigest {
+		t.Fatal("provider projection compaction changed canonical history")
 	}
 }
 

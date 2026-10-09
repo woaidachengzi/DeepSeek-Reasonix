@@ -1974,6 +1974,7 @@ export const zh: Record<DictKey, string> = {
   "settings.remote.historyOpen": "查看历史",
   "settings.remote.historyTitle": "远程会话历史",
   "settings.remote.historyReadOnly": "只读快照，不是实时进度。发送、审批和模型切换尚未接入。",
+  "settings.remote.historyLiveReadOnly": "只读实时进度。发送、审批和模型切换尚未接入；同步停止时请刷新历史。",
   "settings.remote.historyFailed": "无法读取此会话，请升级远端 Serve 后关闭并重新打开列表。",
   "settings.remote.historyEmpty": "此会话没有可显示的消息。",
   "settings.remote.historyRefresh": "刷新历史",

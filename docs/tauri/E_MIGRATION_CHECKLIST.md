@@ -1,5 +1,53 @@
 # E 迁移清单
 
+## 2026-10-10 超过 30 文件的 review 收敛
+
+本批 32 个文件，停止功能扩展并按先 review 后提交规则收敛。Review 修复 bot 路由遗漏聊天类型/字段边界的身份碰撞；真实 hub 回归确认同 ID 群聊不能继承或解除私聊订阅/接管。远程投影与同步、admission wire 白名单、canonical content fence、React 生命周期及终端 opt-in 探针一起复核，Go/Rust/完整 transcript/类型/lint 等验证见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-超过-30-文件的-review-收敛)。独立 Wails desktop 全量有五项失败，全部在本批之前的 HEAD 临时快照复现（两项 checkpoint、三项旧 MiMo 断言），保留待独立处理，不宣称全量通过。最新 App 未重建，不含最后的 wire/bot 修复；原生可见性、完整 bot Desktop 接入及目标其它门禁仍未完成，不以本批源码回归替代。未推送/发布，以下阶段记录保留当时状态。
+
+## 2026-10-10 增量 review 与 admission wire 收敛
+
+只读检查确认当前桌面锁屏，与上轮 key window/可见性失败一致；原生绘制仍待解锁后的独立验收，未据此认定全部历史根因。Review 修复 admission wire 可能携带误附正文/审批身份的契约缺口，新增回归先复现再按六字段白名单收敛。关联七包完整 race、修复后三包 race、vet/生成器、Rust 289 项/clippy 和前端专项/生命周期通过，见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-增量-review-与-admission-wire-白名单)。bot Desktop 仍需完整会话/watch/审批/显式接管链路，未用只读列表替代。最新 App 尚未含这一 wire 修复；29 个文件未达超过 30 文件先 review 后提交阈值，未提交/推送，完整目标继续保留。
+
+## 2026-10-10 当前包原生终端复验
+
+新增显式主屏测试选项（默认左屏约束不变）、固定布尔绘制诊断及原生激活/可见性前提；runner 4 项、格式和全量 build gates/签名通过。最新 arm64 App 已含 early admission 修复；旧包和中间诊断包完整备份。实际 managed/explicit 原生终端复验未通过可见文本，后续诊断证明页面当时不可见/不聚焦，最终候选在更早 native 激活前提失败，不能据此宣称 terminal transport 故障或成功，见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-当前包原生终端复验与可见性前提)。未使用真实账号/数据/剪贴板，未公证/发布/提交/推送；29 个文件未达超过 30 文件先 review 后提交阈值。原生可见性、完整终端/图片/live 与完整目标剩余门禁继续保留。
+
+## 2026-10-10 早期快照 buffered admission 修复（App 后续源码）
+
+新增回归先复现 append 前空问题快照丢失已缓冲 canonical admission 的同步竞态，再修复为沿原身份 gate 消费缓冲并同订阅重取可信完整 cut；不发布空问题或轮询。专项/类型/lint/scroll writer 和隔离浏览器的实际竞态恢复、跨轮/压缩展示与 cleanup 通过，见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-早期快照与已缓冲-admission-竞态app-后续源码)。最新 App 不含这一后续修复，仍须后续打包；legacy/synthetic 关联边界、原生和真实服务及完整目标剩余门禁保留。26 个变更文件，未达超过 30 文件先 review 后提交阈值，未提交/推送。
+
+## 2026-10-10 当前远程 admission / 跨轮 / 压缩增量 App
+
+已将当前 26 个 dirty 文件重建为 macOS arm64 ad-hoc 可运行 App，包含下述 admission、跨轮、内容 fence 与压缩后实时展示。全部现有 build gates、Go/Rust release、bundle budgets、包内 deep/strict 签名与完整 transcript 等价回归通过；实际包在两个全新临时档案的启动、Global workspace 隔离、普通退出和 sidecar 清理通过，见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-admission--跨轮--压缩增量-macos-app)。旧 App 保留临时备份。未公证/发布/提交/推送；26 文件未达超过 30 文件先 review 后提交阈值。不能替代 WKWebView live/reader/窗口重建或真实服务验收，完整目标继续保留。
+
+## 2026-10-10 压缩后的可信快照与实时展示（App 后续源码）
+
+正常 provider projection 压缩完成后，同订阅重取可信完整 cut，校验通过才恢复共享卡片与回答流；直接和缓冲完成事件同路处理，真实 canonical rewrite 仍严格拒绝。专项/类型/lint/scroll writer/Kernel 53 项及桌面/窄屏隔离 Playwright 的卡片展开、后续回答和清理通过，见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-压缩完成后的可信-cut-与实时展示app-后续源码)。不是 WKWebView 或真实服务验收，当前 App 未重建；真实 rewrite、legacy/synthetic continuation 与完整目标剩余门禁继续保留。26 个变更文件，未达超过 30 个文件先 review 后提交阈值，未提交/推送。
+
+## 2026-10-10 prefix 内容 fence 与压缩语义（App 后续源码）
+
+修复 canonical prefix 只核对 ID 的缺口：admission 原子保存身份及 canonical digest，投影拒绝 same-ID 内容改写，恢复原内容后可读，不干预引擎。完整 controller race、Agent 专项/vet/格式门禁通过；实际 CompactNow + 假 summarizer 证明 provider context projection 压缩保持 canonical IDs/digest，见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-canonical-prefix-内容-fence-与压缩语义app-后续源码)。renderer 尚未接压缩后的可信新 cut，真正 base rewrite 与其它完整目标门禁仍未完成。26 个变更文件，未提交/推送/重打 App。
+
+## 2026-10-10 同订阅跨轮 resnapshot（App 后续源码）
+
+coordinator 等 canonical admission 再串行取得新完整 cut，同订阅/owner 不变，旧成功/失败/continuation 零发布；早期 active 空 suffix 等事件而非轮询。核对问题 ID、seq 与 runtime epoch，快速 terminal overlap 不误作新 turn，React 同步忙状态沿用 owner fence。专项/类型/lint/scroll writer/Kernel 53 项及桌面/窄屏隔离 Playwright 跨轮渲染通过，见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-同订阅-canonical-admission-跨轮-resnapshotapp-后续源码)。compaction/base/legacy/合成 continuation 恢复和实际 App 的跨轮/reader 验收仍待完成，当前 App 不含本阶段源码。23 个变更文件，未达提交阈值；完整目标继续保留。
+
+## 2026-10-10 canonical 用户 admission 边界（App 后续源码）
+
+新增只含规范 messageId 的 `user_message_admitted`，在真实用户消息原子 append 后发布，Controller durable ledger 先于回调；合成 continuation 不发用户 admission，投影确认 suffix identity、不重复问题。Go race/vet、Agent/Controller 时序、native projector 4 项、契约与前端专项/类型/lint 通过，见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-canonical-用户-admission-事件app-后续源码)。还需 coordinator 新轮 resnapshot 与 compaction/base 恢复；已交付 App 不含本阶段源码。累计 21 个变更文件，未达提交阈值，不关闭完整目标。
+
+## 2026-10-10 当前增量 macOS 可运行 App
+
+已将 `23a57a58b` 加 12 个未提交文件重建为 arm64 ad-hoc App；全部现有前端 build 等价门禁、Go/Rust release、包内 deep/strict 签名验证通过。实际 App 的 managed/explicit 临时档案启动、Global workspace 隔离、普通退出与 packaged sidecar 清理通过，见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-当前远程-snapshotlive-增量-macos-app)。旧 App 已备份，没有公证/发布/推送或提交。不能把 package smoke 当作 WKWebView live UI 或真实远程服务验收；完整目标与恢复/跨平台/管理页/SQLite 门禁继续保留。
+
+## 2026-10-10 远程 live history React 接入（未提交增量）
+
+Serve-owned 历史页已接 ready-bound 快照、共享投影和实时事件；保存历史仍是静态只读。刷新/卸载退休旧订阅，reconcile 不被迟到 body 锁住，相同 controller 值不重订阅；三语文案更新。JSDOM 生命周期、投影/snapshot、类型/lint/scroll writer 与完整 transcript 等价回归通过，Playwright 自有夹具的桌面/窄屏快照/live/刷新/迟到回调/关闭和控制台检查通过，见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-远程-live-history-react-接入未提交增量)。尚非原生或真实服务验收，跨轮/admission/compaction/legacy 恢复、App 打包与完整目标剩余门禁仍待完成；未推送。当前 12 个文件，未达提交阈值。
+
+## 2026-10-10 shared reducer 远程 conversation 投影（未提交增量）
+
+远程 fixed cut 已接纯 conversation 投影：复用共享 event reducer 与 history 展示，保留 backend/surface 身份、stream rollback 与 tool 结果；steer messageId 对应 saved notice，旧 local fallback 不变，输出不授予 local actions/commands。专项、shared stream 128 项、类型/lint 门禁通过，详见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-shared-reducer-远程-conversation-投影未提交增量)。尚未接实际 React 渲染或原生验收；admission、compaction、legacy steer 与跨轮仍须恢复设计，没有新 App 或推送。当前 7 个文件未达 review 后提交阈值。
+
 ## 2026-10-10 remote snapshot 同步层 review 提交
 
 本批超过 30 个变更文件，已停止扩展并 review，按门禁收敛提交。新增前端 snapshot 窄 binding 与 ready 后读取/固定 cut 分页/live 缓冲协调层，贯通已完成的 shared client、bridge 与 native IPC；相关完整 Go race/vet、Rust 289 passed/6 ignored/clippy、前端专项/类型/lint 及契约门禁通过，详见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-remote-snapshot-同步层-review-提交)。仍未接实际渲染/统一 Item reducer，也未完成跨轮、admission/compaction/legacy steer 或原生滚动/窗口重建验收；没有新 App 或推送。完整目标继续推进，不能以这些源码/夹具回归替代原生或真实服务验收。

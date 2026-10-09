@@ -9,6 +9,31 @@ import (
 	"reasonix/internal/event"
 )
 
+func TestDesktopWatchRouteKeyPreservesIdentity(t *testing.T) {
+	base := DesktopWatchRoute{Platform: PlatformFeishu, ConnectionID: "first|second", Domain: "third", ChatType: ChatDM, ChatID: "chat"}
+	cases := map[string]DesktopWatchRoute{}
+	group := base
+	group.ChatType = ChatGroup
+	cases["chat type"] = group
+	unknown := base
+	unknown.ChatType = ""
+	cases["unknown chat type"] = unknown
+	split := base
+	split.ConnectionID, split.Domain = "first", "second|third"
+	cases["field boundaries"] = split
+	for name, other := range cases {
+		t.Run(name, func(t *testing.T) {
+			if base.Key() == other.Key() {
+				t.Fatalf("distinct routes share key: %#v / %#v", base, other)
+			}
+		})
+	}
+	copy := base
+	if base.Key() != copy.Key() {
+		t.Fatal("equivalent route keys must be stable")
+	}
+}
+
 type fakeDesktopBridge struct {
 	sessions  []DesktopSessionInfo
 	watching  map[string]bool

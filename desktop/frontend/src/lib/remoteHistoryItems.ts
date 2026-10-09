@@ -4,11 +4,15 @@ import { historySearchAndAnswer } from "./searchTranscript";
 
 // Shared Transcript presentation, but never its local hydration/actions. Every
 // item key is namespaced backend identity; tool-result matching is turn-local.
-export function remoteHistoryItems(view: BridgeRemoteControllerSessionView, surface: string, labels: {protocol:string;readiness:string}): Item[] {
+export function remoteHistoryKey(surface:string,entry:string,part="entry",child="") {
+  return `remote:${JSON.stringify([surface,entry,part,child])}`;
+}
+
+export function remoteHistoryItems(view: Pick<BridgeRemoteControllerSessionView,"history">, surface: string, labels: {protocol:string;readiness:string}): Item[] {
   const items: Item[] = [];
   const calls = new Map<string,number>();
   const identities = new Set<string>();
-  const key = (entry:string,part="entry",child="") => `remote:${JSON.stringify([surface,entry,part,child])}`;
+  const key = (entry:string,part="entry",child="") => remoteHistoryKey(surface,entry,part,child);
   const append = (item:Item) => {
     if (identities.has(item.id)) throw new Error("invalid remote display identity");
     identities.add(item.id); items.push(item);

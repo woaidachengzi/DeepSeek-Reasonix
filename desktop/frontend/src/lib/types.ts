@@ -18,6 +18,7 @@ export type { ContextBudgetInfo, ContextMaintenanceInfo, ContextMaintenanceRecei
 export type { ProjectGroupsSnapshot, ProjectRuntimeTopic, ProjectTopicKey, ProjectTopicPage, ProjectTopicPageRequest, ProjectTreeChangedV2, ProjectTreeOrganizationBindings, ProjectTreeRuntimeSnapshot, ProjectTreeSnapshot, SessionCatalogBindings, SessionCatalogStatus, SessionGroup, SessionReference } from "./sessionCatalogTypes";
 export type EventKind =
   | "turn_started"
+  | "user_message_admitted"
   | "reasoning"
   | "text"
   | "message"
@@ -395,6 +396,8 @@ export interface WireEvent extends RecoveryEventFields {
   /** session_changed: the transcript was replaced under the same path (head switch, clear). */
   sessionReset?: boolean;
   promptId?: string;
+  /** Canonical identity for applied guidance or user admission, separate from inbox itemId. */
+  messageId?: string;
   promptKind?: "ask" | "approval" | "plan" | "recovery" | "mcp" | string;
   promptLegacy?: boolean;
   turnId?: string;

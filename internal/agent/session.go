@@ -400,6 +400,34 @@ func (s *Session) MessageIdentitySnapshot(limit int) ([]string, bool) {
 	return ids, true
 }
 
+// MessageProjectionBaseSnapshot captures identities and canonical content
+// under one lock. A display fence must detect same-ID edits as well as removal;
+// the digest is process-local metadata, never a second conversation copy.
+func (s *Session) MessageProjectionBaseSnapshot(limit int) ([]string, string, bool) {
+	if s == nil || limit < 0 {
+		return nil, "", false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if len(s.Messages) > limit {
+		return nil, "", false
+	}
+	ids := make([]string, len(s.Messages))
+	seen := make(map[string]bool, len(ids))
+	for i, message := range s.Messages {
+		if message.ID == "" || seen[message.ID] {
+			return nil, "", false
+		}
+		seen[message.ID] = true
+		ids[i] = message.ID
+	}
+	digest, err := ContentDigestForMessages(s.Messages)
+	if err != nil {
+		return nil, "", false
+	}
+	return ids, digest, true
+}
+
 // Len returns the number of messages, safe to call from any goroutine.
 func (s *Session) Len() int {
 	s.mu.RLock()

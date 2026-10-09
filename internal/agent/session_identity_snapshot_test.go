@@ -70,3 +70,32 @@ func TestMessageIdentitySnapshotConcurrentAppendHasOnePrefix(t *testing.T) {
 		}
 	}
 }
+
+func TestProjectionBaseSnapshotFencesContentWithStableIdentity(t *testing.T) {
+	s := &Session{}
+	s.Add(provider.Message{ID: "owned", Role: provider.RoleUser, Content: "old"})
+	ids, before, ok := s.MessageProjectionBaseSnapshot(1)
+	if !ok || before == "" || len(ids) != 1 || ids[0] != "owned" {
+		t.Fatal("missing atomic base")
+	}
+	s.Replace([]provider.Message{{ID: "owned", Role: provider.RoleUser, Content: "edited"}})
+	_, after, ok := s.MessageProjectionBaseSnapshot(1)
+	if !ok || after == before {
+		t.Fatal("same-ID content edit escaped fence")
+	}
+	if ids, digest, ok := s.MessageProjectionBaseSnapshot(0); ok || ids != nil || digest != "" {
+		t.Fatal("display count budget was bypassed")
+	}
+	var absent *Session
+	if _, _, ok := absent.MessageProjectionBaseSnapshot(1); ok {
+		t.Fatal("nil base accepted")
+	}
+	s.Replace([]provider.Message{{ID: "duplicate"}, {ID: "duplicate"}})
+	if _, _, ok := s.MessageProjectionBaseSnapshot(2); ok {
+		t.Fatal("duplicate base accepted")
+	}
+	invalid := &Session{Messages: []provider.Message{{ID: ""}}}
+	if _, _, ok := invalid.MessageProjectionBaseSnapshot(1); ok {
+		t.Fatal("missing identity repaired by base read")
+	}
+}

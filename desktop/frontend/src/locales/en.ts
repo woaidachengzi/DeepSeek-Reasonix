@@ -1972,6 +1972,7 @@ export const en = {
   "settings.remote.historyOpen": "View history",
   "settings.remote.historyTitle": "Remote session history",
   "settings.remote.historyReadOnly": "Read-only snapshot, not live progress. Sending, approvals and model switching are not connected.",
+  "settings.remote.historyLiveReadOnly": "Read-only live progress. Sending, approvals and model switching are not connected. Refresh history if synchronization stops.",
   "settings.remote.historyFailed": "Unable to read this session. Upgrade remote Serve, then close and reopen the list.",
   "settings.remote.historyEmpty": "This session has no displayable messages.",
   "settings.remote.historyRefresh": "Refresh history",

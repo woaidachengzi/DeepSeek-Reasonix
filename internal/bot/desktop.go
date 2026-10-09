@@ -40,9 +40,12 @@ type DesktopWatchRoute struct {
 	ChatID       string
 }
 
-// Key 返回订阅表的稳定键。
+// Key 返回完整聊天归属的稳定键。字节长度前缀保留字段边界，避免分隔符碰撞；
+// 未知聊天类型不继承私聊的订阅或接管权限。配置持久化的是路由字段而非此键。
 func (r DesktopWatchRoute) Key() string {
-	return fmt.Sprintf("%s|%s|%s|%s", r.Platform, r.ConnectionID, r.Domain, r.ChatID)
+	return fmt.Sprintf("%d:%s|%d:%s|%d:%s|%d:%s|%d:%s",
+		len(r.Platform), r.Platform, len(r.ConnectionID), r.ConnectionID,
+		len(r.Domain), r.Domain, len(r.ChatType), r.ChatType, len(r.ChatID), r.ChatID)
 }
 
 // DesktopBridge 由桌面端进程实现，让 bot 聊天获得对整个桌面端的上帝视角：

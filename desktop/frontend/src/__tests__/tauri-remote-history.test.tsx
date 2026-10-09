@@ -31,5 +31,40 @@ assert.ok(!document.body.textContent?.includes("PRIVATE"));
 await act(async()=>{refresh().click();await tick();});assert.equal(gates.length,4);
 await act(async()=>root.unmount());
 await act(async()=>{gates[3].resolve(snapshot("/new.jsonl"));await tick();});
+assert.equal(document.getElementById("root")?.children.length,0);
+
+// Reconcile releases the UI lock even when native cancellation is still
+// settling. Equal controller props do not retire the current subscription.
+const liveRoot=createRoot(document.getElementById("root")!);
+const ownedController={...controller,id:"AAAAAAAAAAAAAAAAAAAAAQ"};
+const listeners=new Map<string,(payload:unknown)=>void>();
+const subscriptions:Record<string,unknown>[]=[];const closed:string[]=[];
+const reads:{resolve:(value:unknown)=>void}[]=[];
+const transport={
+  listen:async(name:string,callback:(payload:unknown)=>void)=>{listeners.set(name,callback);return()=>{if(listeners.get(name)===callback)listeners.delete(name);};},
+  subscribe:async(input:Record<string,unknown>)=>{
+    const identity={...input,protocolVersion:1,subscriptionId:subscriptions.length?"BBBBBBBBBBBBBBBBBBBBBQ":"CCCCCCCCCCCCCCCCCCCCCA",sidecarInstanceId:"fixture"};
+    subscriptions.push(identity);
+    listeners.get("bridge:remote-session-state")?.({protocolVersion:1,subscription:identity,state:"ready"});return identity;
+  },
+  unsubscribe:async(id:string)=>{closed.push(id);},
+  snapshot:async()=>new Promise<unknown>(resolve=>reads.push({resolve})),
+};
+const ownedLease:RemoteControllerLease={...lease,sessionView:async path=>({...snapshot(path),ownership:"serve"})};
+const renderOwned=async()=>act(async()=>{liveRoot.render(<LocaleProvider><TauriRemoteHistory lease={ownedLease} controller={{...ownedController}} transport={transport} sessionPath="/owned.jsonl" title="Owned" onClose={close}/></LocaleProvider>);await tick();});
+await renderOwned();assert.equal(reads.length,1);
+await renderOwned();assert.equal(subscriptions.length,1,"equal controller clone must not replace subscription");
+await act(async()=>{listeners.get("bridge:remote-session-state")?.({protocolVersion:1,subscription:subscriptions[0],state:"ended"});await tick();});
+assert.ok(document.querySelector('[role="alert"]'));assert.equal(refresh().disabled,false);
+await act(async()=>{refresh().click();await tick();});
+assert.equal(reads.length,2,"retry starts while cancelled old read is unresolved");
+assert.ok(refresh().disabled);
+await act(async()=>{reads[0].resolve({private:"late invalid old cut"});await tick();});
+assert.ok(refresh().disabled,"old finally cannot unlock newer pending read");
+assert.equal(document.querySelector('[role="alert"]'),null);
+await act(async()=>liveRoot.unmount());
+assert.equal(listeners.size,0);assert.equal(closed.length,2);
+await act(async()=>{reads[1].resolve({});await tick();});
 assert.equal(document.getElementById("root")?.children.length,0);dom.window.close();
 console.log("Remote history UI ownership: old failure/finally, refresh guard, fixed errors, empty state and unmount passed");
+console.log("Remote live UI ownership: equal controller identity, reconcile unlock, retry before old read settlement, stale finally and subscription cleanup passed");

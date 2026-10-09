@@ -1,5 +1,107 @@
 # Wails API 与事件面盘点
 
+## 2026-10-10 超过 30 文件的 review 收敛
+
+- 本批累计 32 个文件，按用户规则停止功能扩展并 review 后提交。范围为 shared remote conversation 展示、canonical admission/content fence、同订阅跨轮/压缩/early-body 同步，以及原生终端 opt-in 验收探针；以下历史阶段标题保留当时状态，不代表最新提交或包状态。
+- Review 确认共享 bot Desktop 路由键漏掉 ChatType 且拼接分隔符不保留字段边界。新增测试先复现私聊/群聊/未知类型与分隔符碰撞；修复为包含全部五字段的字节长度前缀键。真实 desktop hub 回归证明同 ChatID 的群聊不能继承私聊 watch、drive/takeover lookup，也不能退订或 release 私聊绑定。现有配置保存完整路由字段，键仅在运行时重建，不改变持久化格式，不把未知类型升级为私聊，不宣称新增 thread 级隔离。
+- 重新检查 admission 六字段 wire 白名单、canonical prefix ID/digest、串行 capture/旧结果 fence、共享 reducer 的只读操作剥离与 React 订阅生命周期；React best-practices 技能用于 primitive dependencies 与监听清理检查，未新增滚动 writer、同步库或执行权限。未发现其它需阻止本批提交的问题；注释同步为 ID 加 digest。
+- 本轮完整 bot/botruntime/eventwire/control/desktop-bridge race 通过（bridge 38.014s）；Agent admission/合成 continuation/base digest/真实 CompactNow 专项 race 通过。完整 transcript、remote-history、snapshot/projection 专项、生产与测试 TypeScript、全量 hooks lint、single scroll writer 通过；协议生成器 check、相关 Go vet、终端 runner 4 项通过。Rust 完整 289 passed/0 failed/6 ignored，clippy all-targets -D warnings 通过；ignored 不计成功。独立 desktop hub 新专项 race 通过。
+- 独立 Wails desktop 模块全量 race 未通过，不能列为全绿。完整 JSON 日志 `/private/tmp/reasonix-desktop-review-tests.jsonl`；在临时目录解压未改动 HEAD `23a57a58b…` 后，五项逐一复现（`desktop-baseline-failures.jsonl` 位于 `/private/tmp/reasonix-review-baseline.dTHFVj/`）：`TestEnsureBlankTabStartsProjectRuntimeWithCurrentWorkspaceContext` / `TestRewindReinjectsProjectWorkspaceContext` 没有 checkpoint；`TestAddProviderPresetAccessSavesEditableProviderAndKey` / `TestResetProviderPresetAccessOverwritesSameNameProvider` / `TestModelsForTabListsMimoAPIPaidAccess` 仍断言旧 MiMo 默认或两模型列表，实际预设已为四模型。它们在本批之前已失败，不混入新的 bot 隔离修复，也不为提交放宽测试；后续须独立处理。desktop vet 通过，链接器 duplicate `-lobjc` 仅为警告。
+- 本轮没有新浏览器或原生 UI 成功证据，也没有重建 App；最新 `e9fd74b2…` App 不含 wire 白名单和 bot 路由键后续修复。锁屏下的 native 可见性验收继续保留未通过，不能以源码测试代替原生/真实服务。Preview gateway Desktop 仍为 nil，完整 bot Desktop 接入、legacy/synthetic/base-rewrite 恢复与完整目标其它门禁继续保留；没有推送、公证、正式发布或默认下载切换。
+
+## 2026-10-10 增量 review 与 admission wire 白名单
+
+- 只读 CGSession 固定布尔查询确认当前桌面 `CGSSessionScreenIsLocked=true`、loginDone=true；不输出用户身份，不读取屏幕。与上轮实际 native keyWindow/applicationActive/occlusion=false 一致，是当前绘制验收未满足的环境前提证据；不能推导它是所有历史窗口问题的唯一根因。未解锁/操控系统，原生 terminal/live/图片门禁仍须在可见会话中实测。
+- 检查 bot Desktop 现状：Preview gateway Desktop 仍为 nil；完整 contract 包含所有 live 会话、watch、审批/问答、显式 takeover/release/drive，并不是只读 catalogue。RuntimeManager 仍为显式单会话 owner。没有把部分列表或当前控制器隐式接上当作完整 bot Desktop，没有配置/连接真实 IM；后续仍须实现整条归属及生命周期链路。
+- Review 覆盖 canonical admission emitter/barrier、prefix identity/content fence、同订阅序列化跨轮/compaction/early-body 同步、共享 reducer 身份和只读操作剥离、React primitive dependencies/owner 清理、三语及 native opt-in 探针/runner。React 技能用于稳定依赖/订阅归属检查，未添加新订阅库、滚动写入者或执行权限。
+- 发现 UserMessageAdmitted 内容无关语义仅由生产 emitter 保证，通用 ToWire 仍会转发误附带的 Text/Detail/Reasoning/ItemID/PromptKind/SessionReset。新增六字段精确白名单回归先失败；现在 ToWire 对该 kind 只保留 kind/messageId/turnId/seq/status/sessionPath，不传问题正文或 prompt/action 身份；Steer 与其它 kind 不变，Serve 的外围 route stamping 仍独立保留。wire/控制器真实 admission 时序及契约回归通过，不更改 provider input 或持久化结构。
+- 全量关联七包 race 最终 exit 0，Agent 249.380s、desktopbridge 4.444s、bridge 38.488s，其它 cached；日志 `/private/tmp/reasonix-increment-review.cu7AnP/go-race.log`。这轮 broad run 在 wire 修复前已启动，对修复后的 eventwire/protocolgen/control 再跑完整 race，以 `admission-wire-final-race.log` 为准（control 43.926s）；相关 vet exit 0，真实 `cmd/desktop-bridge-protocol-gen -check` 通过。首次生成器调用误用不存在命令，未计作验证。
+- native 完整测试 289 passed/0 failed/6 ignored、clippy all-targets -D warnings exit 0，日志同目录 `rust-test.log` / `clippy.log`；条件 ignored 不计成功。前端 snapshot/projection 专项和历史 UI 生命周期通过；首次 UI 直接 Node 运行缺 SVG loader，使用 package 规定的 svg/css stub imports 重跑通过，只有 Node module.register 弃用提示，未修改门禁。没有本轮新 browser 或原生成功证据，不继承之前 mock/native 启动结果为完整功能验收。
+- 最新 `e9fd74b2…` App 不含此 wire 后续修复，尚未重打。diff check 通过；29 个 dirty 文件，未达超过 30 文件先 review 后提交阈值，没有提交/推送/发布，完整目标及剩余门禁继续保留。
+
+## 2026-10-10 当前包原生终端复验与可见性前提
+
+- 当前显示器只读查询为一块 1920×1080 / scale 2 主屏，没有原 runner 要求的左侧副屏。终端 runner 新增显式 `--allow-primary-display`，默认左屏约束不变；仍先拒绝已运行 Preview、读取有界严格 geometry template、启动全新 owned profile，最终必须核对完全相同的持久化几何与原全部 PTY/清理收据。新增单元门禁覆盖显式布尔 opt-in、默认拒绝和两种 placement 下 busy Preview 拒绝；全部 4 项通过。
+- 用 `a17c1a98…` 实际 App 在 managed/explicit 两个全新档案复验，两者均 native exit 2：实际 InputEvent 经 WKWebView/注册 IPC/包内 Go 到真实 PTY，后端读取已确认自有 shell PID、TTY、中文/ANSI 与 cwd，但可见 xterm marker/中文断言超时；没有通过后续折叠、上下文、关闭、切换和 shutdown PID 全部门禁。日志 `/private/tmp/reasonix-terminal-current.nENfx9/native.log`、`explicit.log`；现场分别 `/private/tmp/reasonix-native-terminal-ui-_uky8810/managed`、`/private/tmp/reasonix-native-terminal-ui-0jhrghw_/explicit`。这不是成功验收，也不能证明输出 transport 故障。
+- 新增 opt-in 失败诊断只记录 9 个固定 bool/null，不写终端正文、DOM dump、配置、环境或模型响应。诊断候选 `1e54b1d4…` 的实际结果显示 rows 存在/有文本、面板打开/有尺寸、无 terminal error，但 `documentVisible=false`、`documentFocused=false`、marker/中文未画；对应 `/private/tmp/reasonix-native-terminal-ui-33_iiw0b/managed/tmp/reasonix-native-terminal-paint-diagnostic.json`。保存几何确为请求的 2400×1600 / x200 y120 / scale2，未绕过 geometry 检查。
+- 终端 opt-in 探针现复用已有 native_edit_smoke::focus（与 remote image history 同路）并要求 `document.visibilityState=visible` 后才断言渲染；不操作系统剪贴板/物理键盘、不改变正常产品启动/渲染策略。最终候选 actual managed 复验仍 native exit 2，在更早的严格 native 激活前提失败：first responder accepted=true，keyWindow/applicationActive=false；page Finished、visible/not-hidden、on-active-space/can-become-key，无 modal/sheet/live resize，restore 2/2，但 becameKey=0、occlusion=false。证据 `/private/tmp/reasonix-terminal-current.nENfx9/focus-native.log` 和 `/private/tmp/reasonix-native-terminal-ui-ek6h4cr8/managed`。不能据此确定系统/产品根因，不能把之前的绘制失败计作 terminal 已坏或已好。
+- 两次候选 build 都执行现有全部前端 gates/budgets、Go/Rust release、Tauri bundle 与 deep/strict 签名验证，exit 0；日志 `build.log` / `focus-build.log` 位于 `/private/tmp/reasonix-terminal-current.nENfx9/`。最新普通输出 App 已包含上一阶段 early buffered admission 修复与本次 opt-in 诊断/可见性前提，宿主 SHA-256 `e9fd74b247d071178e347b28271fd8b335726c7d0d04276f2aa82a5bdb60bd10`，包内已签名 sidecar `215cbdcfda91e808ca615d2dc275c3a8809f747513b8fcf04ba055633cdf84fe`；arm64 ad-hoc，未公证/发布。原 `a17c1a98…` App 与中间诊断包分别保存在该目录 `Previous Reasonix Tauri Preview.app` / `Diagnostic Reasonix Tauri Preview.app`，没有删除旧证据。
+- Rust touched-file fmt、Python runner 4 项、diff check 通过；未重跑完整 Rust/clippy/Go/Transcript，不继承其它包的原生验收。没有使用真实用户档案/外部账号/模型/剪贴板。原生可见性前提、终端完整门禁、原生 live/reader/图片粘贴、legacy/synthetic 恢复和其它完整目标继续保留。29 个 dirty 文件未达超过 30 文件先 review 后提交阈值，未提交/推送。
+
+## 2026-10-10 早期快照与已缓冲 admission 竞态（App 后续源码）
+
+- 检查发现订阅可能始于 turn_started 之后：canonical admission 在初始快照读取期间缓冲，而快照是 append 前采样的 active/空 suffix。之前空 suffix 分支仅切到等待，没有处理已缓冲 admission，后续无第二个身份事件可唤醒；追加文本会要求 reconcile。新增确定性回归先观察到读取次数 1 而非 2 的断言失败，确认不是推测。
+- 空 suffix 仍不发布、不轮询；分类 candidate 后取出当前缓冲，清空原队列及预算计数，再通过同一 receive / scoped admission gate 处理。已缓冲 canonical identity 可让现有串行读取循环取可信完整 cut，成功后才显示问题/答案与后到文本；没有新增同步器、重订阅、定时器、scroll writer 或用户权限。没有 admission 的文本、错误 canonical question 与卸载仍零发布/清理。
+- snapshot 专项（含直接/缓冲 compaction、跨轮、所有原有预算/owner 用例）、conversation projection、生产/测试 TypeScript、局部 lint、single scroll writer 通过。没有本轮新 Go/Rust 修改或全套回归；上一阶段完整 transcript 仍是独立证据。
+- Browser plugin not available，既有 Playwright/Chrome 自有 transport 夹具实际验证“admission 先缓冲 → 空问题旧 body 返回 → 同订阅读取第二 cut（无需额外事件）→ 问题/回答/live → 关闭”；随后重新加载回归跨轮、刷新迟到 fence、压缩卡片和清理。`http://127.0.0.1:5198/remote-live-qa` 页面身份/非空/无 overlay、零控制台 warning/error、1280×900 与 390×900 无横溢出通过。最终跨轮/压缩展示截图 `/private/tmp/reasonix-remote-live-qa.ztYeMi/preappend-{1280,390}.png` 已检查；竞态恢复有独立 DOM/读取次数断言，截图不是它的时间序列记录。临时脚本首轮输出仍列旧截图名，改正输出后同脚本再次通过，未替换实际截图或断言。
+- 最新 `a17c1a98…` App 在本修复前构建，不含本阶段改动，未再重打/提交/推送。旧格式 steer 与 synthetic continuation 不因这个修复取得猜测身份，仍需明确后端关联边界；完整目标及原生/真实服务验收保留。仍为 26 个 dirty 文件，未达超过 30 文件先 review 后提交阈值。
+
+## 2026-10-10 admission / 跨轮 / 压缩增量 macOS App
+
+- 当前 26 个 dirty 文件基于 `23a57a58b55fd053c06629d083cf3148194d3a0c` 重建 arm64 App，包含 canonical 用户 admission、同订阅跨轮 resnapshot、prefix identity/content fence、压缩完成后的可信 cut 及共享实时展示。路径 `desktop/tauri/target/aarch64-apple-darwin/release/bundle/macos.noindex/Reasonix Tauri Preview.app`；不是干净提交 release。之前可运行 App 已完整备份到 `/private/tmp/reasonix-compaction-package.r9oKuf/Previous Reasonix Tauri Preview.app`。
+- 现有 tauri-build 与已安装工具等价执行全部 package build gates：全量 frontend lint、WAAPI、scroll writer、AST layers、自检/Wails binding、CSS/z-index/theme、TypeScript、Vite 和全部 bundle budget 通过；Go sidecar / Rust release / Tauri app bundle 成功，包内 deep/strict codesign 验证通过。arm64、ad-hoc hardened runtime、无 Team ID、未公证。构建日志 `/private/tmp/reasonix-compaction-package.r9oKuf/build.log`。
+- 对实际已签名 App 内文件计算宿主 SHA-256 `a17c1a98848accfaabef157b26656a5d8284bc67d7b96bb60623504f6c0a9589`，sidecar `215cbdcfda91e808ca615d2dc275c3a8809f747513b8fcf04ba055633cdf84fe`。
+- 实际 App 的 managed/explicit 两个全新临时档案均 exit 0；private child environment 不继承 provider credentials、不改父 shell/profile。native notification permission 仅查询，不请求/发送；已鉴权 packaged sidecar 建立 Global session，工作区落在各自临时档案；普通退出后无对应 sidecar 残留。证据 `/private/tmp/reasonix-compaction-package.r9oKuf/package-smoke-result.json`、两种档案的 smoke.log 和 package-smoke.mjs。启动前只读确认没有已运行 Preview/sidecar，没有使用真实模型/SSH/IM/用户数据或剪贴板。
+- 完整 package.json `test:transcript` 以已安装 Node/tsx 等价执行，最终 exit 0，日志 `/private/tmp/reasonix-compaction-package.r9oKuf/transcript-authorized.log`；首次沙箱运行在 tsx 本地 IPC 上 EPERM，授权相同脚本重跑，未跳过测试或修改门禁。
+- package smoke 只证明签名包能启动、隔离和退出，不证明 WKWebView 会话 live/reader/窗口重建、图片粘贴或真实远程服务验收。那些验收、真实 canonical rewrite/legacy/synthetic 恢复及完整目标剩余门禁仍保留。没有正式签名、发布、公证、默认下载切换、提交或推送；26 个 dirty 文件未达超过 30 文件先 review 后提交阈值。
+
+## 2026-10-10 压缩完成后的可信 cut 与实时展示（App 后续源码）
+
+- 同轮 `compaction_done` 不直接交给旧投影；coordinator 以当前 canonical question ID 和完成序号为边界，在同 ready subscription 上串行重取完整 cut。沿用 Serve prefix identity/content fence、固定分页与既有预算；新 cut 校验成功后原子替换投影，再处理后到事件。缓冲中的完成事件也走相同路径，未添加轮询、重订阅、viewport writer 或操作权限。
+- 共享 conversation 投影只允许已验证完整 cut 的 replay 应用 compaction_done，普通 live 调用仍拒绝这个基线边界；共享 reducer 展示完成卡片，剥离 archive 操作。真正 canonical rewrite、错 scope、失败或不可验证的新 cut 仍 reconcile，保留旧展示，不声称已经恢复真实 base rewrite。
+- snapshot/projection 专项覆盖直接及缓冲完成事件、校验失败不发布、稳定 active IDs、卡片摘要与继续回答；生产/测试 TypeScript、局部 lint、single scroll writer、TranscriptKernel 53 项通过。没有重新执行完整 transcript 或 Go/Rust 全套，也未重打 App；前述 Go 内容 fence 证据仍是独立阶段。
+- Browser plugin not available，使用已安装 Playwright/Chrome，在 `http://127.0.0.1:5198/remote-live-qa` 运行自有 transport 夹具。实际 React 完成跨轮、压缩后同订阅重取、展开过程及压缩卡片、摘要/后续回答、无 archive action、关闭清理；页面身份/非空/无 overlay、零控制台 warning/error、1280×900 与 390×900 无横溢出通过。截图 `/private/tmp/reasonix-remote-live-qa.ztYeMi/compaction-{1280,390}.png` 已检查。最初夹具未展开过程 fold，等待未挂载卡片而超时；改为真实点击过程 header 后通过，未修改生产默认折叠行为。
+- 这是 mocked native transport 的浏览器证据，不是 WKWebView/真实远程服务验收。已交付 App 不含本阶段代码；真实 rewrite、legacy/synthetic continuation 和完整目标剩余门禁继续保留。仍为 26 个 dirty 文件，未达超过 30 文件先 review 后提交阈值，没有提交或推送。
+
+## 2026-10-10 canonical prefix 内容 fence 与压缩语义（App 后续源码）
+
+- 检查当前 `commitSummaryProjection`：CAS 验证 canonical transcript/version 后只安装 provider context projection 与维护 receipt，并不删改 canonical 历史。`compaction_done` 不能一概等同 canonical rewrite；不过远程 live 仍需从可信新 cut 证明基线，再恢复投影，不能直接忽略所有压缩事件。
+- 先修复现有 prefix fence 只比较 ID 的缺口。Session 新增 `MessageProjectionBaseSnapshot`，同一锁内采样有界 identity 列表和既有 WAL canonical digest（不复制第二份会话正文）；Controller admission 保存两者，投影读取对同一次 history snapshot 的 prefix 再核对 canonical digest。同 ID 的正文改写也返回既有 ErrTurnProjectionChanged，不取消引擎、不修复消息 ID，不因显示预算失败拒绝 admission；ledger replacement 清除旧 digest。
+- 摘要采用既有 transcript 内容语义（排除 ID/CreatedAt 兼容元数据），ID 另行逐项核对；只限制消息数量 100000，不宣称编码峰值内存或计算成本有新字节预算。摘要编码失败只使显示 base 不可用，未改变 provider input/持久化格式。
+- Agent race 专项覆盖同 ID 内容修改、预算/duplicate/missing/nil 及并发 append；Controller 回归覆盖 same-ID rewrite 拒绝、恢复原内容重新可读、引擎保持运行以及既有 admission。完整 controller race 通过（日志 `/private/tmp/reasonix-current-package.VAtdWg/prefix-digest-control-race.log`），相关 vet/gofmt/diff check 通过。现有实际 `CompactNow` + fake summarizer 回归新增压缩前后 canonical IDs/digest 不变，projection version 从 0 到 1 且维护事件可重入，通过。首次压缩夹具使用匿名 message literals，被 fence 正确拒绝；仅给自有夹具分配 owner message ID 后复测通过，未让生产只读接口修复 legacy 身份。
+- 尚未修改 renderer/coordinator 对 compaction_done 的处理，也没有新 UI/原生证据。下一步在此内容 fence 上接同轮可信 cut 重取与共享 compaction card，真正 canonical base rewrite 继续严格拒绝，不能以正常 provider projection 的证明代替 rewrite 恢复。当前 App 不含本阶段源码，未重打/推送/提交；26 个 dirty 文件未达超过 30 文件先 review 后提交阈值，完整目标保持未完成。
+
+## 2026-10-10 同订阅 canonical admission 跨轮 resnapshot（App 后续源码）
+
+- coordinator 在不同 turn 的 queued/start 执行边界暂停旧投影并 fence 在途 cut，不据它读取问题。只在同 candidate 的 `user_message_admitted` 到达后，使用原 ready subscription/owner/generation 串行取得新完整 cut；没有轮询、定时重试、重建 controller/subscription、发送或执行权限。初始 active 快照还没有 canonical suffix 时也等待这个事件，不能发布空问题或循环读取。
+- 每个 cut 的分页 cursor/seq/turn 局部保管，仅完整且未 supersede 的结果可替换当前投影；旧页成功/失败均不能发布、关闭新 turn 或派发旧 continuation。native snapshot 槽最多一项，旧 read 实际结束后才派发新 cut。保留原 page/frame/queue budgets；同 scoped admission 的 canonical user ID 必须在 active suffix（快速已终止时在 history），seq 覆盖 admission，runtime epoch 不得跨已发布 cut 改变；错身份、旧 lifecycle seq、gap、超预算或 owner/reconcile 仍 fail closed。fast-terminal overlap 保留已确认 turn identity，避免把晚到重复 terminal 当作新 turn。
+- `TauriRemoteHistory` 复用现有 owner fence 与 Transcript；syncing/live 更新 busy，reconcile 可手动刷新，卸载仍关闭唯一订阅。React 技能用于同步/读取状态的单一生命周期，没有添加 viewport writer 或滚动补偿。
+- Node 专项验证 execution boundary 不读、canonical barrier 后同订阅读、串行 supersession、旧失败/continuation/dispose 零发布、快结束 overlap、空 canonical suffix 不轮询、错问题/旧 turn seq/runtime epoch 拒绝；既有 snapshot budgets/ready/privacy 和历史 UI 生命周期、投影回归通过。生产/测试 TypeScript、局部 lint、single scroll writer、TranscriptKernel 53 项通过。测试第一次类型检查指出 fixture event shape 与 ES target 不支持 `.at`，已修正测试，不放宽生产契约。
+- Browser plugin not available，既有 Playwright/Chrome 在 `http://127.0.0.1:5198/remote-live-qa` 的自有 transport 夹具，实际 React/Transcript 完成“首轮快照/live → refresh/迟到旧结果 → 第二轮 start（不读） → admission → 第二问题/答案/live → 关闭”。页面身份/非空/无 overlay、零控制台 error/warning、同订阅（未新增 identity）、busy 状态及 cleanup 通过；1280×900 与 390×900 无横溢出，截图 `/private/tmp/reasonix-remote-live-qa.ztYeMi/cross-turn-{1280,390}.png`。这是 mocked native transport，不是 WKWebView/真实 SSH/模型验收。
+- 尚无 compaction 改写 base/legacy steer/合成 continuation 的同步恢复，或实际包的跨轮原生 UI/reader/窗口重建验收。已交付 `c64f825e…` App 不含 admission/cross-turn 源码，未重打/提交/推送。当前 23 个 dirty 文件，未达超过 30 文件先 review 后提交阈值；完整目标保持未完成。
+
+## 2026-10-10 canonical 用户 admission 事件（App 后续源码）
+
+- 确认 `turn_started` 是 Controller/provider 的执行边界，早于 Agent 的真实用户消息 canonical append，不能据它宣称快照已包含新问题。新增 append-only event kind `user_message_admitted`（旧 kind 数值不变），Agent 为用户消息预先分配规范 MessageID，在原有 pinned-context/user 原子 AddBatch 后发布仅带 identity 的事件；不传问题正文、不添加 inbox/action authority。host-origin synthetic continuation 不发用户 admission。
+- admission 进入 Controller synchronous barrier，先 durable ledger append，再 frontend publication。eventwire 仅在 steer/admission 投影 MessageID；生成 native event contract 和 desktop EventKind 已同步。纯远程投影校验 admission ID 必须等于 snapshot question suffix ID，不新增/重复问题、也不按文本猜身份。
+- Agent emitter/host continuation race 专项通过；实际 Agent + Controller 的 Submit 集成回调证明 canonical suffix 与 stamped admission/ledger ID 一致，重复 3 次通过。完整 event/eventwire/turnevent/protocolgen/control race 最终通过，日志 `/private/tmp/reasonix-current-package.VAtdWg/admission-race-final.log`；相关 Go vet、native event projector 4 项、生成器 check、前端投影/snapshot、生产/测试 TypeScript、局部 lint 与 diff check 通过。
+- 首次回归暴露遗漏 desktop EventKind，已修复；新集成夹具最初未设置 Runner，随后误用不创建 admission ledger 的同步 Run，另在 Submit 回调后过早清理异步保存，均已改为真实 Runner/Submit + 现有 waitIdle cleanup，未放宽 canonical/stamped/ledger 断言。第一次 Rust filter 命中 0 项，只作为编译检查，后来用 `native_event_projection` 实际运行 4 项。
+- 这是跨轮恢复所需的可信 admission 边界，尚未接 coordinator 的新轮重取快照或 compaction/base 恢复。当前 `c64f825e…` App 不含这一后续源码，未再次打包、未推送/提交。累计 21 个 dirty 文件，未达超过 30 文件先 review 后提交阈值；完整目标继续保持未完成。
+
+## 2026-10-10 当前远程 snapshot/live 增量 macOS App
+
+- 已重建 Apple Silicon release App，路径 `desktop/tauri/target/aarch64-apple-darwin/release/bundle/macos.noindex/Reasonix Tauri Preview.app`。源码基线 `23a57a58b55fd053c06629d083cf3148194d3a0c` 加本轮 12 个 dirty 文件；含 shared projection 与 React live history，不能描述成干净提交的可重现 release。此前 App 完整备份于 `/private/tmp/reasonix-current-package.VAtdWg/Previous Reasonix Tauri Preview.app`，没有推送/公证/默认下载切换。
+- 以现有 `tauri-build.mjs` 打包，临时 runner 递归执行 package.json 的全部 build gates，使用已安装 Node/工具等价执行 pnpm 子脚本，不安装依赖、不跳过门禁：全量 hooks lint、WAAPI、single scroll writer、app layers/self-test、Wails bindings/self-test、CSS syntax、z-index/theme tokens、TypeScript、Vite 与 bundle budget 通过；Go sidecar build、Rust release、Tauri app bundle、codesign deep/strict 验证通过。签名为 ad-hoc，arm64，未公证。构建日志 `/private/tmp/reasonix-current-package.VAtdWg/build.log`。
+- 包内宿主 SHA-256 `c64f825eba7a49745b4a40f4ef52380772ed06ccefc6f5dd3f1df9af092ebe59`；已签名 Go sidecar `782ee3d70f50068b381115e5f7082253dadb2c5eca847b99688b1417445b607c`。校验针对实际 App 内文件而不是 target 中未签名二进制。
+- 实际启动同一个签名 App，子进程仅使用 private user environment，父进程环境不变、无继承凭据/provider env；managed 与 explicit 新建档案均 exit 0。package smoke 经真正 native setup 查询通知权限（不请求授权或发送），通过已鉴权 packaged sidecar 创建 Global session，结果工作区严格在对应临时档案内，普通 Exit 后 sidecar 无残留。证据 `/private/tmp/reasonix-current-package.VAtdWg/package-smoke-result.json` 及两种档案的 smoke.log。启动前只读检查无已运行 Preview，未打开真实 profile、模型/SSH/IM 或系统剪贴板。
+- 只证明当前 App 可启动与包级隔离/退出，不证明 WKWebView 的 snapshot/live UI、跨轮/admission/compaction/legacy 恢复、原生图片粘贴、Windows/Linux 或整个目标通过。源码仍 12 项，未达超过 30 文件先 review 后提交阈值。
+
+## 2026-10-10 远程 live history React 接入（未提交增量）
+
+- `TauriRemoteHistory` 对 Serve-owned 会话先分类，再打开 ready-bound snapshot/live coordinator，完整 cut 交给共享 conversation 投影，一次发布 history/items/live；保存会话仍使用静态历史，不订阅。沿用 Transcript 与唯一 viewport writer，没有新增滚动补偿、发送、审批或模型切换能力。三种语言区分静态快照与只读实时进度。
+- 每次读取有独立 owner，刷新递增订阅 generation 并退休旧 stream，卸载解除监听/订阅。reconcile 立即释放自己的 UI refresh 锁，不等待已经取消的 native body 返回；迟到的 snapshot/event/finally 不能更新新 owner 或解除新请求。controller 使用原始字段依赖，相同内容的新对象不重订阅。React 技能用于这些稳定依赖与清理边界。
+- 已添加 JSDOM 回归：equal controller、旧读取 pending 时 reconcile/retry、旧 finally 无权解锁新读取、unmount listeners/subscription cleanup；既有静态历史回归和纯投影/snapshot 专项通过。生产/测试 TypeScript、局部 ESLint、唯一 scroll writer gate、完整 `test:transcript` 已安装 Node 等价命令、diff whitespace check 通过；没有宣称 pnpm launcher 成功。
+- Browser plugin not available，使用已安装 Playwright/Chrome、本机 `http://127.0.0.1:5198/remote-live-qa` 自有 transport 夹具，实际渲染 React/Transcript。验证页面 URL/title、非空问题/答案、快照后 live 更新、controller clone、刷新 generation、pending body 结束后可立即再刷新、迟到旧 body/event 零交付、关闭清理、无框架 overlay/控制台 warning/error；1280×900 与 390×900 无横向溢出。截图位于临时目录 `/private/tmp/reasonix-remote-live-qa.ztYeMi/remote-{1280,390}.png`，不是仓库产物或原生证据。首次夹具默认语言导致额外重订阅，已固定 locale；另将 snapshot 尚未完成时的错误 gap 期待改为真实 ended 事件，没有放宽生产协议。
+- 尚未完成跨轮、admission 无 canonical question、compaction 改写 base、legacy steer 的恢复，以及 WKWebView 原生滚动/窗口重建和实际 App 验收。没有重打 App、真实账号/数据访问或推送/发布。累计 12 个变更文件，未达超过 30 个文件先 review 后提交阈值。
+
+## 2026-10-10 shared reducer 远程 conversation 投影（未提交增量）
+
+- 新增 `remoteConversationProjection.ts`，将完整 fixed cut 的 prefix/真实问题 suffix 交给现有 remote history 展示，active replay/live 交给共享 `useController.reducer`（remote payload 保留模式），复用 assistant sampling、tool/search、stream-attempt rollback、prompt/terminal 等语义，不实现第二个聊天 reducer。投影只返回 items/live/running/pendingPrompt，没有 State、发送、审批、resume 或 local runtime ports。
+- prefix 使用保存 entry ID；active assistant/tool 使用 surface+backend turn+共享 segment/tool ID；其它 event 卡片关联 backend seq，旧 prefix 增长不重命名 active 卡片。共享 WireEvent 新增可选 messageId，steer notice 在提供 ID 时使用保存消息身份，与 inbox itemId 分离，旧 local legacy fallback 保持不变；remote 缺失 guidance ID 明确 reconcile，不按文本猜问题。live 与 saved steer notice 在同一 surface 使用一致 display key。
+- spectator 输出移除 local action/recovery/inbox/archive/tool capability/execution 与 extension card actions；不改变 tool 的读写分类文字。active admission 尚无 canonical question、改写 base 的 compaction/session/workspace 事件、旧 steer 或 turn/seq scope 异常明确 reconcile，未宣称这些跨边界恢复已实现。新事件 key 暂存后与 shared state 一起提交，拒绝事件不消费 cursor。
+- Node 专项验证 prefix/suffix/steer 相同文本不误归类、相同保存 ID、scope 隔离、prepend/后续 sampling 稳定 key、完整 remote tool result、stream rollback、terminal 无本地恢复 action、缺失问题/legacy steer/compaction/foreign turn/gap 拒绝；shared stream regression 128 passed/0 failed，既有 turn lifecycle、remote history、snapshot 同步专项通过。生产/测试 TypeScript、局部 lint、diff whitespace check 通过。初始测试错把 tool 后已结算的 assistant 当作 live bubble，已对齐现有共享 sampling contract，没有修改 reducer 来满足错误期待。
+- 这是纯投影增量，尚未接 TauriRemoteHistory 的实际渲染 lifecycle；未改 viewport writer/滚动逻辑，没有 Browser/Playwright 或 WKWebView 通过声明，也没有新 App。React 技能指导复用共享 reducer、稳定身份和生命周期边界；没有真实账号/数据、模型请求或发布推送。累计 7 个变更文件，未达超过 30 个文件先 review 再提交阈值。
+
 ## 2026-10-10 remote snapshot 同步层 review 提交
 
 - 本批变更超过 30 个文件，按用户门禁停止扩展并 review。覆盖 shared client、bridge 初始/host-owned 续页、native 契约/ready-bound snapshot IPC，以及新增 renderer snapshot binding/同步协调层；下方未提交标题保留各阶段历史范围。

@@ -99,7 +99,27 @@ fn owned_pid(
             if text.contains(&format!("{}\r\n", cwd.display()))
                 && text.contains("\x1b[32m中文-output\x1b[0m")
             {
-                check(app, &format!("document.querySelector('.xterm-rows')?.textContent.includes('owned-terminal:{pid}') && document.querySelector('.xterm-rows')?.textContent.includes('中文-output')"), "real PTY bytes painted in xterm")?;
+                if let Err(error) = check(app, &format!("document.querySelector('.xterm-rows')?.textContent.includes('owned-terminal:{pid}') && document.querySelector('.xterm-rows')?.textContent.includes('中文-output')"), "real PTY bytes painted in xterm") {
+                    // Fixed booleans only: no terminal text, DOM dump, profile
+                    // data, environment or model response enters diagnostics.
+                    let mut diagnostics = serde_json::Map::new();
+                    for (name, expression) in [
+                        ("rowsPresent", "!!document.querySelector('.xterm-rows')"),
+                        ("rowsHaveText", "!!document.querySelector('.xterm-rows')?.textContent.trim()"),
+                        ("screenVisible", "document.querySelector('.xterm-screen')?.getBoundingClientRect().height > 0"),
+                        ("terminalMarkerPainted", "!!document.querySelector('.xterm-rows')?.textContent.includes('owned-terminal:')"),
+                        ("utf8Painted", "!!document.querySelector('.xterm-rows')?.textContent.includes('中文-output')"),
+                        ("panelOpen", "document.querySelector('.tauri-terminal-drawer')?.hidden === false"),
+                        ("documentVisible", "document.visibilityState === 'visible'"),
+                        ("documentFocused", "document.hasFocus()"),
+                        ("terminalErrorVisible", "!!document.querySelector('.terminal-panel [role=alert]')"),
+                    ] {
+                        let value = crate::native_edit_smoke::evaluate(app, format!("(() => (({expression}) ? 'edit-ok' : 'edit-pending'))()"));
+                        diagnostics.insert(name.into(), value.map(serde_json::Value::Bool).unwrap_or(serde_json::Value::Null));
+                    }
+                    std::fs::write(cwd.parent().ok_or("terminal diagnostic directory missing")?.join("reasonix-native-terminal-paint-diagnostic.json"), serde_json::Value::Object(diagnostics).to_string()).map_err(|_| "write fixed terminal paint diagnostic")?;
+                    return Err(error);
+                }
                 return Ok(pid);
             }
         }
@@ -128,6 +148,15 @@ fn gone(pid: u32) -> Result<(), String> {
 }
 pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
     check(app, "location.protocol === 'reasonix-preview:' && document.querySelector('.tauri-shell') && document.querySelector('.tauri-sidebar__new')?.disabled === false", "trusted initialized app")?;
+    // WKWebView may suspend xterm animation-frame paints while fully occluded.
+    // Require the owned native window to be active before asserting rendering,
+    // exactly as the existing image-history acceptance does; no clipboard.
+    crate::native_edit_smoke::focus(app)?;
+    check(
+        app,
+        "document.visibilityState === 'visible'",
+        "visible owned terminal page",
+    )?;
     let workspace = directory.join("terminal-workspace 中文");
     std::fs::create_dir(&workspace).map_err(|_| "create private terminal workspace")?;
     let supervisor = app.state::<BridgeSupervisor>();

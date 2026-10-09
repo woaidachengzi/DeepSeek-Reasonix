@@ -50,7 +50,7 @@ type Event struct {
 	// ItemID correlates Steer / TurnDone / unapplied-steer with a durable
 	// session-inbox entry. Empty for legacy text-only guidance.
 	ItemID string `json:"itemId,omitempty"`
-	// MessageID connects an applied steer to its saved transcript row. It is
+	// MessageID connects applied steer or user admission to its transcript row. It is
 	// display-only, distinct from inbox ItemID, and omitted by legacy emitters.
 	MessageID string `json:"messageId,omitempty"`
 	// SessionPath routes frames emitted by detached Serve controllers. Older

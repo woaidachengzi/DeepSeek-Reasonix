@@ -129,6 +129,48 @@ func testGroupRoute() bot.DesktopWatchRoute {
 	return r
 }
 
+func TestBridgeSameChatIDDoesNotSharePrivateOwnership(t *testing.T) {
+	env := newBridgeTestEnvSessions([]bot.DesktopSessionInfo{{TabID: "tab-1", Ready: true}})
+	private := testWatchRoute()
+	group := private
+	group.ChatType = bot.ChatGroup
+	if err := env.hub.SetWatch(private, true); err != nil {
+		t.Fatal(err)
+	}
+	if env.hub.Watching(group) {
+		t.Fatal("group inherited private subscription")
+	}
+	if err := env.hub.SetWatch(group, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.hub.SetWatch(group, false); err != nil {
+		t.Fatal(err)
+	}
+	if !env.hub.Watching(private) {
+		t.Fatal("group unsubscribe removed private subscription")
+	}
+	if _, err := env.hub.Takeover(private, "tab-1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := env.hub.TakeoverTab(group); got != "" {
+		t.Fatalf("group inherited private takeover: %s", got)
+	}
+	if _, err := env.hub.DriveInput(group, "must not submit"); err == nil {
+		t.Fatal("group drove private takeover")
+	}
+	select {
+	case got := <-env.driven:
+		t.Fatalf("unauthorized submission: %v", got)
+	default:
+	}
+	if _, err := env.hub.Release(group); err == nil {
+		t.Fatal("group released private takeover")
+	}
+	if got := env.hub.TakeoverTab(private); got != "tab-1" {
+		t.Fatalf("group release changed private takeover: %s", got)
+	}
+}
+
 func TestBridgeTakeoverRejectsGroupChat(t *testing.T) {
 	env := newBridgeTestEnvSessions([]bot.DesktopSessionInfo{{TabID: "tab-1", Label: "会话一", Ready: true}})
 	if _, err := env.hub.Takeover(testGroupRoute(), "tab-1"); err == nil {

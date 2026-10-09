@@ -110,6 +110,17 @@ func TestTurnProjectionViewSeparatesPrefixAndUserSuffix(t *testing.T) {
 	if !c.Running() {
 		t.Fatal("spectator read changed engine admission")
 	}
+	unchanged := session.Snapshot()
+	edited := session.Snapshot()
+	edited[2].Content = "same ID, different canonical answer"
+	session.Replace(edited)
+	if _, err := c.TurnProjectionView(); !errors.Is(err, ErrTurnProjectionChanged) {
+		t.Fatalf("same-ID rewrite: %v", err)
+	}
+	session.Replace(unchanged)
+	if _, err := c.TurnProjectionView(); err != nil {
+		t.Fatalf("restored canonical prefix: %v", err)
+	}
 	// A rewrite/compaction that removes the base is an explicit reconcile, not
 	// a positional cut of unrelated history with the old cursor.
 	session.Replace([]provider.Message{{ID: "rewritten", Role: provider.RoleUser, Content: "new base"}})
@@ -138,5 +149,45 @@ func TestTurnProjectionViewRejectsMissingAdmissionBase(t *testing.T) {
 	}
 	if _, err := c.TurnProjectionView(); !errors.Is(err, ErrTurnProjectionChanged) {
 		t.Fatalf("missing base: %v", err)
+	}
+}
+
+func TestUserAdmissionPublicationHasCanonicalProjectionAndDurableEvent(t *testing.T) {
+	isolateControlConfigHome(t)
+	session := agent.NewSession("system")
+	prov := &recordingProvider{streams: [][]provider.Chunk{textTurn("fixture answer")}}
+	executor := agent.New(prov, tool.NewRegistry(), session, agent.Options{}, event.Discard)
+	type observed struct {
+		event event.Event
+		view  TurnProjectionView
+		err   error
+	}
+	seen := make(chan observed, 1)
+	var c *Controller
+	c = New(Options{Runner: executor, Executor: executor, SessionDir: t.TempDir(), SessionPath: filepath.Join(t.TempDir(), "owned.jsonl"), Sink: event.FuncSink(func(e event.Event) {
+		if e.Kind != event.UserMessageAdmitted {
+			return
+		}
+		view, err := c.TurnProjectionView()
+		seen <- observed{e, view, err}
+	})})
+	t.Cleanup(func() { c.Cancel(); waitIdle(t, c); c.Close() })
+	c.Submit("fixture user question")
+	select {
+	case got := <-seen:
+		if got.err != nil || got.event.TurnID == "" || got.event.Sequence == 0 || len(got.view.UserSuffix) != 1 || got.view.UserSuffix[0].ID != got.event.MessageID {
+			t.Fatalf("canonical admission projection: %+v", got)
+		}
+		found := false
+		for _, envelope := range got.view.Projection.Events {
+			if envelope.Sequence == got.event.Sequence && envelope.Event.Kind == "user_message_admitted" && envelope.Event.MessageID == got.event.MessageID {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatal("admission callback ran before ledger publication")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("missing user admission publication")
 	}
 }

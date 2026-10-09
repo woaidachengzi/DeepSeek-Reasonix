@@ -31,15 +31,21 @@ def validate_receipt(receipt):
     return pid
 
 
-def smoke(app_path, template_path, profile):
+def require_placement(geometry, allow_primary_display):
+    if type(allow_primary_display) is not bool:
+        raise ValueError("primary display permission must be explicit boolean")
+    if geometry["x"] >= 0 and not allow_primary_display:
+        raise ValueError("terminal smoke requires a left-display window template; use --allow-primary-display for an owned primary-screen run")
+
+
+def smoke(app_path, template_path, profile, allow_primary_display=False):
     app = Path(app_path).resolve()
     identifier = plistlib.loads((app / "Contents/Info.plist").read_bytes())["CFBundleIdentifier"]
     if windows.package.matching_package_is_running(identifier):
         raise RuntimeError("Preview already running; isolated terminal acceptance refused")
     placement = windows.package.placement_helper()
     geometry = placement.read_window_state_template(Path(template_path))
-    if geometry["x"] >= 0:
-        raise ValueError("terminal smoke requires a left-display window template")
+    require_placement(geometry, allow_primary_display)
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(app)], check=True, timeout=20)
     evidence = Path(tempfile.mkdtemp(prefix="reasonix-native-terminal-ui-", dir="/private/tmp"))
     evidence.chmod(0o700)
@@ -73,7 +79,7 @@ def smoke(app_path, template_path, profile):
             if windows.package.is_alive(pid):
                 raise RuntimeError("owned terminal PID survived normal application shutdown")
             if json.loads((app_data / "window-state.json").read_text()) != geometry:
-                raise RuntimeError("terminal acceptance escaped left-display geometry")
+                raise RuntimeError("terminal acceptance escaped requested display geometry")
             print(f"native integrated terminal {mode}: IPC/input/TTY/UTF8/explicit context/close/switch/shutdown OK", flush=True)
         finally:
             # Preserve these owned profiles and fixed receipts for independent
@@ -86,10 +92,11 @@ if __name__ == "__main__":
     parser.add_argument("app")
     parser.add_argument("--window-state-template", required=True)
     parser.add_argument("--profile", choices=("managed", "explicit", "both"), default="both")
+    parser.add_argument("--allow-primary-display", action="store_true", help="explicitly allow the fresh owned test window on the primary display; exact geometry checks remain required")
     args = parser.parse_args()
     if sys.platform != "darwin":
         raise SystemExit("native integrated terminal acceptance requires macOS")
     try:
-        smoke(args.app, args.window_state_template, args.profile)
+        smoke(args.app, args.window_state_template, args.profile, args.allow_primary_display)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         raise SystemExit(f"native integrated terminal smoke failed: {error}") from error

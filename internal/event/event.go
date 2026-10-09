@@ -138,6 +138,10 @@ const (
 	SessionChanged
 	// ReadStatus upserts one logical read's delivery state instead of per page.
 	ReadStatus
+	// UserMessageAdmitted follows the canonical append of a genuine user's
+	// message. MessageID is display identity only, not body or action authority.
+	// TurnStarted precedes this boundary.
+	UserMessageAdmitted
 	// KindCount is a sentinel one past the last real Kind. New event kinds must
 	// be inserted above it so completeness tests cover them automatically.
 	KindCount
@@ -557,7 +561,7 @@ type Event struct {
 	ReadStatus         *ReadStatusPayload        // ReadStatus: one logical read's delivery state
 	ReadPause          *provider.ReadPause       // TurnDone: durable display-only pause receipt
 	ItemID             string                    // correlates durable inbox events
-	MessageID          string                    // Steer: canonical saved message identity, not inbox authority
+	MessageID          string                    // Steer/UserMessageAdmitted: canonical message identity, not inbox authority
 	SessionPath        string                    // routes Serve frames
 	SessionReset       bool                      // SessionChanged came from /new or /clear, not resume/recovery
 	Workspace          *WorkspaceChangedPayload  // WorkspaceChanged (host-local)

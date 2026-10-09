@@ -1554,6 +1554,7 @@ export const zhTW: Record<DictKey, string> = {
   "settings.remote.historyOpen": "檢視歷史",
   "settings.remote.historyTitle": "遠端會話歷史",
   "settings.remote.historyReadOnly": "唯讀快照，不是即時進度。傳送、審批與模型切換尚未接入。",
+  "settings.remote.historyLiveReadOnly": "唯讀即時進度。傳送、審批與模型切換尚未接入；同步停止時請重新整理歷史。",
   "settings.remote.historyFailed": "無法讀取此會話，請升級遠端 Serve 後關閉並重新開啟清單。",
   "settings.remote.historyEmpty": "此會話沒有可顯示的訊息。",
   "settings.remote.historyRefresh": "重新整理歷史",

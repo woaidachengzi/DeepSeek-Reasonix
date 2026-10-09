@@ -32,11 +32,12 @@ type turnEventDurableSink struct{ owner *turnEventSink }
 
 // turnEventState has an independent lock so ledger I/O never holds c.mu.
 type turnEventState struct {
-	mu               sync.RWMutex
-	ledger           *turnevent.Ledger
-	err              error
-	projectionTurnID string
-	projectionPrefix []string // Message identities only, not a second conversation copy.
+	mu                     sync.RWMutex
+	ledger                 *turnevent.Ledger
+	err                    error
+	projectionTurnID       string
+	projectionPrefix       []string // Message identities only, not a second conversation copy.
+	projectionPrefixDigest string   // Canonical content fence; same-ID edits also invalidate it.
 }
 
 func newTurnEventSink(inner event.Sink, c *Controller) *turnEventSink {
@@ -87,7 +88,7 @@ func turnEventSynchronousBarrier(kind event.Kind) bool {
 	switch kind {
 	case event.ToolDispatch, event.ToolResult, event.AskRequest, event.ApprovalRequest,
 		event.MCPInteractionRequest, event.PromptAnswered, event.TurnStatusChanged,
-		event.TurnStarted, event.TurnDone:
+		event.TurnStarted, event.UserMessageAdmitted, event.TurnDone:
 		return true
 	default:
 		return false
@@ -348,8 +349,8 @@ func (c *Controller) prepareTurnAdmission(body func(context.Context) error) func
 	return func(context.Context) error { return fmt.Errorf("persist turn admission: %w", admissionErr) }
 }
 
-// Admission precedes the provider goroutine. Retain only stable prefix IDs;
-// the reader checks them against the canonical transcript rather than copying
+// Admission precedes the provider goroutine. Retain stable prefix IDs and its
+// content digest; the reader checks them against the canonical transcript rather than copying
 // provider prompts/attachments into a second mutable conversation artifact.
 func (c *Controller) beginProjectionTurn() error {
 	c.turnEvents.mu.Lock()
@@ -366,13 +367,16 @@ func (c *Controller) beginProjectionTurn() error {
 	}
 	c.turnEvents.projectionTurnID = id
 	c.turnEvents.projectionPrefix = nil
+	c.turnEvents.projectionPrefixDigest = ""
 	if c.executor == nil {
 		c.turnEvents.projectionPrefix = []string{}
+		c.turnEvents.projectionPrefixDigest, _ = agent.ContentDigestForMessages(nil)
 		return nil
 	}
 	// Display budget must not reject engine admission or copy huge histories.
-	if prefix, ok := c.executor.Session().MessageIdentitySnapshot(100000); ok {
+	if prefix, digest, ok := c.executor.Session().MessageProjectionBaseSnapshot(100000); ok {
 		c.turnEvents.projectionPrefix = prefix
+		c.turnEvents.projectionPrefixDigest = digest
 	}
 	return nil
 }
@@ -422,6 +426,10 @@ func (c *Controller) TurnProjectionView() (TurnProjectionView, error) {
 		if history[i].ID != id {
 			return TurnProjectionView{}, ErrTurnProjectionChanged
 		}
+	}
+	digest, err := agent.ContentDigestForMessages(history[:len(prefix)])
+	if err != nil || digest != c.turnEvents.projectionPrefixDigest {
+		return TurnProjectionView{}, ErrTurnProjectionChanged
 	}
 	view.Prefix = history[:len(prefix)]
 	for _, message := range history[len(prefix):] {
@@ -474,6 +482,7 @@ func (c *Controller) rebindTurnEvents(sessionPath string) {
 	c.turnEvents.err = nil
 	c.turnEvents.projectionTurnID = ""
 	c.turnEvents.projectionPrefix = nil
+	c.turnEvents.projectionPrefixDigest = ""
 	c.turnEvents.mu.Unlock()
 	if previous != nil && previous != ledger {
 		if closeErr := previous.Close(); closeErr != nil {
