@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import "./remote-prompt-decision.test";
 import { RemoteControllerPool, type RemoteControllerAPI } from "../lib/remoteControllerPool";
 import type { BridgeRemoteControllerResponse, BridgeRemoteControllerCloseResponse, BridgeRemoteControllerSessionsResponse, BridgeRemoteControllerSessionViewResponse, BridgeRemoteControllerSessionImageResponse } from "../lib/bridgeProtocol.generated";
 import type { BridgeRemoteControllerSessionCancelRequest,BridgeRemoteControllerSessionCancelResponse } from "../lib/bridgeProtocol.generated";
 import type { BridgeRemoteControllerSessionSubmitRequest,BridgeRemoteControllerSessionSubmitResponse } from "../lib/bridgeProtocol.generated";
+import type { BridgeRemoteControllerSessionPromptRequest,BridgeRemoteControllerSessionPromptResponse } from "../lib/bridgeProtocol.generated";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -23,6 +25,7 @@ function fixture() {
   const reads: { id: string; gate: ReturnType<typeof deferred<BridgeRemoteControllerSessionsResponse>> }[] = [];
   const snapshots: { id: string; sessionPath: string; gate: ReturnType<typeof deferred<BridgeRemoteControllerSessionViewResponse>> }[] = [];
   const api: RemoteControllerAPI = {
+    sessionPrompt:(id,input)=>{const gate=deferred<BridgeRemoteControllerSessionPromptResponse>();prompts.push({id,input,gate});return gate.promise;},
     sessionSubmit:(id,input)=>{const gate=deferred<BridgeRemoteControllerSessionSubmitResponse>();sends.push({id,input,gate});return gate.promise;},
     sessionCancel:(id,scope)=>{const gate=deferred<BridgeRemoteControllerSessionCancelResponse>();stops.push({id,scope,gate});return gate.promise;},
     sessionImage: (id,sessionPath,source) => { const gate = deferred<BridgeRemoteControllerSessionImageResponse>(); images.push({id,sessionPath,source,gate}); return gate.promise; },
@@ -34,7 +37,25 @@ function fixture() {
   const images: {id:string;sessionPath:string;source:string;gate:ReturnType<typeof deferred<BridgeRemoteControllerSessionImageResponse>>}[] = [];
   const stops:{id:string;scope:BridgeRemoteControllerSessionCancelRequest;gate:ReturnType<typeof deferred<BridgeRemoteControllerSessionCancelResponse>>}[]=[];
   const sends:{id:string;input:BridgeRemoteControllerSessionSubmitRequest;gate:ReturnType<typeof deferred<BridgeRemoteControllerSessionSubmitResponse>>}[]=[];
-  return { pool: new RemoteControllerPool(api), attaches, closes, reads, snapshots, images,stops,sends };
+  const prompts:{id:string;input:BridgeRemoteControllerSessionPromptRequest;gate:ReturnType<typeof deferred<BridgeRemoteControllerSessionPromptResponse>>}[]=[];
+  return { pool: new RemoteControllerPool(api), attaches, closes, reads, snapshots, images,stops,sends,prompts };
+}
+
+{
+  const f=fixture(),lease=f.pool.acquire("owned","/owned");await tick();f.attaches[0].gate.resolve(response("prompt-owner"));await lease.ready;
+  const input:BridgeRemoteControllerSessionPromptRequest={sessionPath:selected,runtimeEpoch:"instance",turnId:"turn",promptId:"prompt",promptRuntimeEpoch:"",kind:"mcp",answer:{action:"accept",content:{answer:["original"]}}};
+  const pending=lease.sessionPrompt!(input);input.promptId="caller-mutated";(input.answer.content as {answer:string[]}).answer[0]="caller-mutated";await tick();
+  assert.equal(f.prompts[0].input.promptId,"prompt");assert.deepEqual(f.prompts[0].input.answer,{action:"accept",content:{answer:["original"]}},"answer copied before await");
+  const scope={sessionPath:selected,runtimeEpoch:"instance",turnId:"turn",promptId:"prompt",promptRuntimeEpoch:"",kind:"mcp" as const};
+  const receipt={protocolVersion:1,...scope,resolved:true};
+  f.prompts[0].gate.resolve({...response("prompt-owner"),receipt:{...receipt,private:"PRIVATE"} as typeof receipt});
+  assert.deepEqual(await pending,receipt,"private decision fields stripped");
+  for(const bad of [{...input,promptId:""},{...input,promptRuntimeEpoch:"bad\nidentity"},{...input,answer:{value:"x".repeat(131073)}}])await assert.rejects(lease.sessionPrompt!(bad),/connection changed/);
+  assert.equal(f.prompts.length,1,"invalid scope/budget never dispatches");
+  const wrong=lease.sessionPrompt!({...input,...scope});await tick();f.prompts[1].gate.resolve({...response("prompt-owner"),receipt:{...receipt,turnId:"other"}});await assert.rejects(wrong,/outcome is unknown/);
+  const late=lease.sessionPrompt!({...input,...scope});await tick();lease.release();await tick();f.prompts[2].gate.resolve({...response("prompt-owner"),receipt});await assert.rejects(late,/outcome is unknown/);
+  await assert.rejects(lease.sessionPrompt!({...input,...scope}),/connection changed/);assert.equal(f.prompts.length,3,"released decision cannot dispatch or retry");
+  f.closes[0].gate.resolve({protocolVersion:1,closed:true});await tick();
 }
 
 {

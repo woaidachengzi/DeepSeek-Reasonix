@@ -323,15 +323,22 @@ type PromptAnswer struct {
 // specialized resolvers retain their validation and durable receipts; this
 // mutex makes their check-and-wake path single-writer for one controller.
 func (c *Controller) ResolvePromptExact(identity PromptIdentity, answer PromptAnswer) error {
-	defer c.refreshRuntimeState(event.Event{})
 	if c == nil {
 		return ErrPromptNotPending
 	}
+	defer c.refreshRuntimeState(event.Event{})
 	if identity.PromptID == "" || identity.TurnID == "" {
 		return ErrPromptNotPending
 	}
 	c.promptResolveMu.Lock()
 	defer c.promptResolveMu.Unlock()
+	return c.resolvePromptExactLocked(identity, answer)
+}
+
+// Caller owns promptResolveMu; scoped remote decisions reuse the same durable
+// specialized resolvers instead of checking an identity then calling an
+// independently locked compatibility resolver.
+func (c *Controller) resolvePromptExactLocked(identity PromptIdentity, answer PromptAnswer) error {
 	c.mu.Lock()
 	closed := c.closed
 	c.mu.Unlock()

@@ -94,3 +94,81 @@ for(const bad of [
   {...hostCut,events:[...hostCut.events,{...hostCut.events[0],seq:2}],capturedThrough:2,projection:{...hostCut.projection,replay:{...hostCut.projection.replay,latestSeq:2}}},
 ])assert.throws(()=>createRemoteConversationProjection(bad,surface,labels),/readiness|question/);
 console.log("Remote host display: no fabricated user, private input/actions absent, canonical identity/origin refusal and shared live output passed");
+
+// A verified waiting cut must recover the same card as the live event stream.
+// These are display snapshots, never a controller lease or an executable grant.
+const promptFixtures=[
+  {kind:"ask",event:"ask_request",field:"ask",request:{id:"ask-id",questions:[{id:"question",prompt:"Choose",options:[{label:"One",value:"one"}]}]}},
+  {kind:"approval",event:"approval_request",field:"approval",request:{id:"approval-id",tool:"write_file",subject:"remote file"}},
+  {kind:"plan",event:"approval_request",field:"approval",request:{id:"plan-id",tool:"exit_plan_mode",subject:"plan",kind:"plan"}},
+  {kind:"recovery",event:"approval_request",field:"approval",request:{id:"recovery-id",tool:"read_file",subject:"retry",kind:"recovery"}},
+  {kind:"mcp",event:"mcp_interaction",field:"mcpInteraction",request:{id:"mcp-id",server:"fixture",mode:"form",message:"Details",requestedSchema:{type:"object",properties:{name:{type:"string"}}}}},
+] as const;
+for(const fixture of promptFixtures){
+  const frame={kind:fixture.event,seq:10,sessionPath:path,turnId:turn,runtimeEpoch:"prompt-routing",[fixture.field]:fixture.request};
+  const waitingCut:RemoteDisplayCut={...cut,events:[...events,frame],capturedThrough:10,
+    projection:{...cut.projection,turnStatus:"waiting_user",replay:{...cut.projection.replay,latestSeq:10,nextAfterSeq:10}}};
+  const recovered=createRemoteConversationProjection(waitingCut,surface,labels);
+  const live=createRemoteConversationProjection(cut,surface,labels);
+  live.event(frame);
+  assert.deepEqual(recovered.view().prompt,live.view().prompt);
+  const pending=recovered.view().prompt!;
+  assert.equal(pending.kind,fixture.kind);
+  assert.equal(pending.request.id,fixture.request.id);
+  assert.equal(pending.request.turnId,turn);
+  assert.equal(pending.request.runtimeEpoch,"prompt-routing","routing stamp is not the replay/controller epoch");
+  assert.equal("commands" in recovered.view(),false);
+  assert.equal("approval" in recovered.view(),false);
+  pending.request.id="consumer-mutated";
+  assert.equal(recovered.view().prompt?.request.id,fixture.request.id);
+  if(pending.kind==="ask"){
+    pending.request.questions[0].prompt="consumer-mutated";
+    const again=recovered.view().prompt!;
+    assert.ok(again.kind==="ask"&&again.request.questions[0].prompt==="Choose");
+  }
+  live.event({kind:"prompt_answered",seq:11,sessionPath:path,turnId:turn,itemId:"another-prompt"});
+  assert.equal(live.view().prompt?.request.id,fixture.request.id,"unrelated receipt cannot dismiss this card");
+  live.event({kind:"prompt_answered",seq:12,sessionPath:path,turnId:turn});
+  assert.equal(live.view().prompt?.request.id,fixture.request.id,"identity-free receipts cannot dismiss remote cards");
+  live.event({kind:"prompt_answered",seq:13,sessionPath:path,turnId:turn,itemId:fixture.request.id});
+  assert.equal(live.view().prompt,undefined);
+  assert.equal(live.view().pendingPrompt,false);
+  live.event({...frame,seq:14});
+  assert.equal(live.view().prompt,undefined,"late re-delivery cannot resurrect an answered prompt");
+  recovered.event({kind:"turn_done",seq:11,sessionPath:path,turnId:turn,status:"completed"});
+  assert.equal(recovered.view().prompt,undefined,"completed turns expose no pending decision");
+}
+const isolated=createRemoteConversationProjection(cut,surface,labels);
+const mutableAsk={id:"immutable-id",questions:[{id:"q",prompt:"original",options:[]}]};
+isolated.event({kind:"ask_request",seq:10,sessionPath:path,turnId:turn,ask:mutableAsk});
+mutableAsk.id="transport-mutated";mutableAsk.questions[0].prompt="transport-mutated";
+assert.equal(isolated.view().prompt?.request.id,"immutable-id");
+const isolatedPrompt=isolated.view().prompt!;
+assert.ok(isolatedPrompt.kind==="ask"&&isolatedPrompt.request.questions[0].prompt==="original");
+assert.equal(isolatedPrompt.request.runtimeEpoch,undefined,"legacy empty routing stamps must not acquire an instance epoch");
+for(const request of [
+  {id:"foreign",questions:[],turnId:"foreign-turn"},
+  {id:"foreign",questions:[],runtimeEpoch:"other-routing"},
+])assert.throws(()=>isolated.event({kind:"ask_request",seq:11,sessionPath:path,turnId:turn,runtimeEpoch:"routing",ask:request}),/prompt identity/);
+isolated.event({kind:"text",seq:11,sessionPath:path,turnId:turn,text:"accepted cursor"});
+assert.equal(isolated.view().prompt?.request.id,"immutable-id","rejected prompt identities do not consume the cursor");
+for(const id of ["","bad\nidentity","x".repeat(4097)]){
+  const invalid=createRemoteConversationProjection(cut,surface,labels);
+  invalid.event({kind:"ask_request",seq:10,sessionPath:path,turnId:turn,ask:{id,questions:[]}});
+  assert.equal(invalid.view().pendingPrompt,true);
+  assert.equal(invalid.view().prompt,undefined,"unusable identity retains waiting state but exposes no actionable card");
+}
+isolated.event({kind:"approval_request",seq:12,sessionPath:path,turnId:turn,approval:{id:"new-approval",tool:"write_file",subject:"remote"}});
+assert.equal(isolated.view().prompt?.kind,"approval","the latest arrival selects the current slot, not an older Ask");
+isolated.event({kind:"prompt_answered",seq:13,sessionPath:path,turnId:turn,itemId:"immutable-id"});
+assert.equal(isolated.view().prompt?.request.id,"new-approval","a delayed receipt for a retained older slot cannot dismiss the current card");
+isolated.event({kind:"prompt_answered",seq:14,sessionPath:path,turnId:turn,itemId:"new-approval"});
+assert.equal(isolated.view().prompt,undefined);
+const ambiguous=createRemoteConversationProjection(cut,surface,labels);
+ambiguous.event({kind:"ask_request",seq:10,sessionPath:path,turnId:turn,ask:{id:"same-id",questions:[]}});
+ambiguous.event({kind:"approval_request",seq:11,sessionPath:path,turnId:turn,approval:{id:"same-id",tool:"write_file",subject:"remote"}});
+assert.equal(ambiguous.view().prompt,undefined,"ambiguous prompt ownership exposes no actionable card");
+const badRouting=createRemoteConversationProjection(cut,surface,labels);
+badRouting.event({kind:"ask_request",seq:10,sessionPath:path,turnId:turn,runtimeEpoch:"bad\nrouting",ask:{id:"valid-id",questions:[]}});
+assert.equal(badRouting.view().prompt,undefined);
+console.log("Remote prompt display: five recovered kinds, routing/turn identity, isolated snapshots, answered dismissal and fail-closed cards passed");

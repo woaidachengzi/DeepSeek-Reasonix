@@ -323,6 +323,36 @@ export interface BridgeRemoteControllerProjectionRequest {
   sessionPath: string;
 }
 
+export interface BridgeRemoteControllerPromptApprovalAnswer {
+  allow: boolean;
+  persist?: boolean;
+  session?: boolean;
+}
+
+export interface BridgeRemoteControllerPromptAskAnswer {
+  questions: BridgeRemoteControllerPromptQuestionAnswer[];
+}
+
+export interface BridgeRemoteControllerPromptMcpAnswer {
+  action: "accept" | "decline" | "cancel";
+  content?: Record<string, unknown>;
+}
+
+export interface BridgeRemoteControllerPromptPlanAnswer {
+  action: "start_execution" | "revise_plan" | "exit_plan";
+  feedback?: string;
+}
+
+export interface BridgeRemoteControllerPromptQuestionAnswer {
+  questionId: string;
+  selected: string[];
+}
+
+export interface BridgeRemoteControllerPromptRecoveryAnswer {
+  action: "continue" | "continue_task" | "revise";
+  feedback?: string;
+}
+
 export interface BridgeRemoteControllerProtocolRecovery {
   id: string;
 }
@@ -428,6 +458,33 @@ export interface BridgeRemoteControllerSessionProjectionResponse {
   nextPage?: string;
   projection: BridgeRemoteControllerSessionProjection;
   protocolVersion: number;
+}
+
+export interface BridgeRemoteControllerSessionPromptReceipt {
+  kind: "ask" | "approval" | "plan" | "recovery" | "mcp";
+  promptId: string;
+  promptRuntimeEpoch: string;
+  protocolVersion: number;
+  resolved: boolean;
+  runtimeEpoch: string;
+  sessionPath: string;
+  turnId: string;
+}
+
+export interface BridgeRemoteControllerSessionPromptRequest {
+  answer: Record<string, unknown>;
+  kind: "ask" | "approval" | "plan" | "recovery" | "mcp";
+  promptId: string;
+  promptRuntimeEpoch: string;
+  runtimeEpoch: string;
+  sessionPath: string;
+  turnId: string;
+}
+
+export interface BridgeRemoteControllerSessionPromptResponse {
+  controller: BridgeRemoteControllerView;
+  protocolVersion: number;
+  receipt: BridgeRemoteControllerSessionPromptReceipt;
 }
 
 export interface BridgeRemoteControllerSessionSubmitReceipt {

@@ -475,6 +475,53 @@ pub struct BridgeRemoteControllerProjectionRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerPromptApprovalAnswer {
+    pub allow: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub persist: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerPromptAskAnswer {
+    pub questions: Vec<BridgeRemoteControllerPromptQuestionAnswer>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerPromptMcpAnswer {
+    pub action: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerPromptPlanAnswer {
+    pub action: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub feedback: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerPromptQuestionAnswer {
+    pub question_id: String,
+    pub selected: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerPromptRecoveryAnswer {
+    pub action: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub feedback: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeRemoteControllerProtocolRecovery {
     pub id: String,
 }
@@ -610,6 +657,39 @@ pub struct BridgeRemoteControllerSessionProjectionResponse {
     pub next_page: Option<String>,
     pub projection: BridgeRemoteControllerSessionProjection,
     pub protocol_version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerSessionPromptReceipt {
+    pub kind: String,
+    pub prompt_id: String,
+    pub prompt_runtime_epoch: String,
+    pub protocol_version: u64,
+    pub resolved: bool,
+    pub runtime_epoch: String,
+    pub session_path: String,
+    pub turn_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerSessionPromptRequest {
+    pub answer: Value,
+    pub kind: String,
+    pub prompt_id: String,
+    pub prompt_runtime_epoch: String,
+    pub runtime_epoch: String,
+    pub session_path: String,
+    pub turn_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerSessionPromptResponse {
+    pub controller: BridgeRemoteControllerView,
+    pub protocol_version: u64,
+    pub receipt: BridgeRemoteControllerSessionPromptReceipt,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

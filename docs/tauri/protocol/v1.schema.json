@@ -19,6 +19,8 @@
     { "$ref": "#/$defs/remoteControllerSessionsResponse" },
     { "$ref": "#/$defs/remoteControllerCloseResponse" },
     { "$ref": "#/$defs/remoteControllerSessionEvent" },
+    { "$ref": "#/$defs/remoteControllerSessionPromptRequest" },
+    { "$ref": "#/$defs/remoteControllerSessionPromptResponse" },
     { "$ref": "#/$defs/remoteBrowseRequest" },
     { "$ref": "#/$defs/remoteBrowseResponse" },
     { "$ref": "#/$defs/setAgentPreferenceRequest" },
@@ -473,6 +475,59 @@
         "sessionPath": { "type": "string", "minLength": 1, "maxLength": 32768 },
         "event": { "type": "object" }
       }, "additionalProperties": false
+    },
+    "remoteControllerPromptQuestionAnswer": {
+      "title": "BridgeRemoteControllerPromptQuestionAnswer", "type": "object", "required": ["questionId", "selected"],
+      "properties": { "questionId": { "type": "string", "minLength": 1, "maxLength": 4096 }, "selected": { "type": "array", "maxItems": 64, "items": { "type": "string", "maxLength": 8192 } } }, "additionalProperties": false
+    },
+    "remoteControllerPromptAskAnswer": {
+      "title": "BridgeRemoteControllerPromptAskAnswer", "type": "object", "required": ["questions"],
+      "properties": { "questions": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/remoteControllerPromptQuestionAnswer" } } }, "additionalProperties": false
+    },
+    "remoteControllerPromptApprovalAnswer": {
+      "title": "BridgeRemoteControllerPromptApprovalAnswer", "type": "object", "required": ["allow"],
+      "properties": { "allow": { "type": "boolean" }, "session": { "type": "boolean" }, "persist": { "type": "boolean" } }, "additionalProperties": false,
+      "not": { "anyOf": [ { "required": ["session", "persist"], "properties": { "session": { "const": true }, "persist": { "const": true } } }, { "properties": { "allow": { "const": false } }, "anyOf": [ { "required": ["session"], "properties": { "session": { "const": true } } }, { "required": ["persist"], "properties": { "persist": { "const": true } } } ] } ] }
+    },
+    "remoteControllerPromptPlanAnswer": {
+      "title": "BridgeRemoteControllerPromptPlanAnswer", "type": "object", "required": ["action"],
+      "properties": { "action": { "type": "string", "enum": ["start_execution", "revise_plan", "exit_plan"] }, "feedback": { "type": "string", "maxLength": 4096 } }, "additionalProperties": false
+    },
+    "remoteControllerPromptRecoveryAnswer": {
+      "title": "BridgeRemoteControllerPromptRecoveryAnswer", "type": "object", "required": ["action"],
+      "properties": { "action": { "type": "string", "enum": ["continue", "continue_task", "revise"] }, "feedback": { "type": "string", "maxLength": 4096 } }, "additionalProperties": false
+    },
+    "remoteControllerPromptMcpAnswer": {
+      "title": "BridgeRemoteControllerPromptMcpAnswer", "type": "object", "required": ["action"],
+      "properties": { "action": { "type": "string", "enum": ["accept", "decline", "cancel"] }, "content": { "type": "object" } }, "additionalProperties": false,
+      "if": { "required": ["content"] }, "then": { "properties": { "action": { "const": "accept" } } }
+    },
+    "remoteControllerSessionPromptRequest": {
+      "title": "BridgeRemoteControllerSessionPromptRequest", "type": "object", "required": ["sessionPath", "runtimeEpoch", "turnId", "promptId", "promptRuntimeEpoch", "kind", "answer"],
+      "properties": {
+        "sessionPath": { "type": "string", "minLength": 1, "maxLength": 32768 }, "runtimeEpoch": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "turnId": { "type": "string", "minLength": 1, "maxLength": 4096 }, "promptId": { "type": "string", "minLength": 1, "maxLength": 4096 }, "promptRuntimeEpoch": { "type": "string", "maxLength": 4096 },
+        "kind": { "type": "string", "enum": ["ask", "approval", "plan", "recovery", "mcp"] }, "answer": { "type": "object" }
+      }, "additionalProperties": false,
+      "oneOf": [
+        { "properties": { "kind": { "const": "ask" }, "answer": { "$ref": "#/$defs/remoteControllerPromptAskAnswer" } } },
+        { "properties": { "kind": { "const": "approval" }, "answer": { "$ref": "#/$defs/remoteControllerPromptApprovalAnswer" } } },
+        { "properties": { "kind": { "const": "plan" }, "answer": { "$ref": "#/$defs/remoteControllerPromptPlanAnswer" } } },
+        { "properties": { "kind": { "const": "recovery" }, "answer": { "$ref": "#/$defs/remoteControllerPromptRecoveryAnswer" } } },
+        { "properties": { "kind": { "const": "mcp" }, "answer": { "$ref": "#/$defs/remoteControllerPromptMcpAnswer" } } }
+      ]
+    },
+    "remoteControllerSessionPromptReceipt": {
+      "title": "BridgeRemoteControllerSessionPromptReceipt", "type": "object", "required": ["protocolVersion", "sessionPath", "runtimeEpoch", "turnId", "promptId", "promptRuntimeEpoch", "kind", "resolved"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" }, "sessionPath": { "type": "string", "minLength": 1, "maxLength": 32768 }, "runtimeEpoch": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "turnId": { "type": "string", "minLength": 1, "maxLength": 4096 }, "promptId": { "type": "string", "minLength": 1, "maxLength": 4096 }, "promptRuntimeEpoch": { "type": "string", "maxLength": 4096 },
+        "kind": { "type": "string", "enum": ["ask", "approval", "plan", "recovery", "mcp"] }, "resolved": { "type": "boolean" }
+      }, "additionalProperties": false
+    },
+    "remoteControllerSessionPromptResponse": {
+      "title": "BridgeRemoteControllerSessionPromptResponse", "type": "object", "required": ["protocolVersion", "controller", "receipt"],
+      "properties": { "protocolVersion": { "$ref": "#/$defs/protocolVersion" }, "controller": { "$ref": "#/$defs/remoteControllerView" }, "receipt": { "$ref": "#/$defs/remoteControllerSessionPromptReceipt" } }, "additionalProperties": false
     },
     "remoteControllerSessionSubmitRequest": {
       "title": "BridgeRemoteControllerSessionSubmitRequest", "type": "object", "required": ["sessionPath", "runtimeEpoch", "revision", "text"],

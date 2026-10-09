@@ -1,8 +1,12 @@
 package main
 
 import (
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
 
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/desktopbridge/protocolgen"
@@ -11,11 +15,73 @@ import (
 	"reasonix/internal/remote/controller"
 )
 
+func TestRemotePromptSchemaDiscriminatesDecisionKinds(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", protocolgen.SchemaPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document any
+	if err := json.Unmarshal(raw, &document); err != nil {
+		t.Fatal(err)
+	}
+	compiler := jsonschema.NewCompiler()
+	compiler.UseLoader(nil)
+	const resource = "https://reasonix.local/schemas/desktop-bridge/v1.json"
+	if err := compiler.AddResource(resource, document); err != nil {
+		t.Fatal(err)
+	}
+	schema, err := compiler.Compile(resource + "#/$defs/remoteControllerSessionPromptRequest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := compiler.Compile(resource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		kind, answer string
+		valid        bool
+	}{
+		{"ask", `{"questions":[]}`, true},
+		{"approval", `{"allow":false}`, true},
+		{"approval", `{"allow":true,"session":true}`, true},
+		{"plan", `{"action":"exit_plan"}`, true},
+		{"recovery", `{"action":"revise","feedback":"adjust"}`, true},
+		{"mcp", `{"action":"accept","content":{"answer":true}}`, true},
+		{"mcp", `{"action":"cancel"}`, true},
+		{"ask", `{"allow":true}`, false},
+		{"approval", `{"allow":true,"action":"accept"}`, false},
+		{"approval", `{"allow":false,"persist":true}`, false},
+		{"approval", `{"allow":true,"session":true,"persist":true}`, false},
+		{"plan", `{"action":"continue"}`, false},
+		{"recovery", `{"action":"exit_plan"}`, false},
+		{"mcp", `{"action":"decline","content":{}}`, false},
+	} {
+		var answer any
+		if json.Unmarshal([]byte(test.answer), &answer) != nil {
+			t.Fatal("bad fixture")
+		}
+		value := map[string]any{"sessionPath": "/remote/session.jsonl", "runtimeEpoch": "instance", "turnId": "turn", "promptId": "prompt", "promptRuntimeEpoch": "", "kind": test.kind, "answer": answer}
+		if err := schema.Validate(value); (err == nil) != test.valid {
+			t.Fatalf("schema kind %s answer %s valid=%v: %v", test.kind, test.answer, test.valid, err)
+		}
+		if test.valid {
+			if err := root.Validate(value); err != nil {
+				t.Fatalf("root schema omitted prompt request: %v", err)
+			}
+		}
+	}
+}
+
 // The bridge server owns the wire format, so its hand-written DTOs are the Go
 // half of the contract that the generated TypeScript and Rust mirrors follow.
 func TestGoDTOsMatchTheWireSchema(t *testing.T) {
 	root := filepath.Join("..", "..")
 	definitions := []protocolgen.Definition{
+		{Name: "remoteControllerSessionPromptRequest", Sample: remoteControllerSessionPromptRequest{}},
+		{Name: "remoteControllerSessionPromptReceipt", Sample: remoteControllerSessionPromptReceipt{}},
+		{Name: "remoteControllerSessionPromptResponse", Sample: remoteControllerSessionPromptResponse{}},
+		{Name: "remoteControllerPromptQuestionAnswer", Sample: controller.SessionPromptQuestionAnswer{}},
 		{Name: "remoteControllerSessionSubmitRequest", Sample: controller.SessionSubmitRequest{}},
 		{Name: "remoteControllerSessionSubmitReceipt", Sample: controller.SessionSubmitReceipt{}},
 		{Name: "remoteControllerSessionSubmitResponse", Sample: remoteControllerSessionSubmitResponse{}},

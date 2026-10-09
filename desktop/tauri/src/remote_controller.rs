@@ -23,6 +23,10 @@ pub use cancel::SessionCancelRequest;
 mod submit;
 pub use submit::SessionSubmitRequest;
 
+#[path = "remote_controller_prompt.rs"]
+mod prompt;
+pub use prompt::SessionPromptRequest;
+
 #[path = "remote_controller_events.rs"]
 mod events;
 

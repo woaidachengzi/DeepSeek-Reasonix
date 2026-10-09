@@ -2,6 +2,7 @@ import type { BridgeRemoteControllerRequest, BridgeRemoteControllerView, BridgeR
 import type { BridgeRemoteControllerImage, BridgeRemoteControllerSessionImageResponse } from "./bridgeProtocol.generated";
 import type { BridgeRemoteControllerSessionCancelRequest, BridgeRemoteControllerSessionCancelReceipt, BridgeRemoteControllerSessionCancelResponse } from "./bridgeProtocol.generated";
 import type { BridgeRemoteControllerSessionSubmitRequest, BridgeRemoteControllerSessionSubmitReceipt, BridgeRemoteControllerSessionSubmitResponse } from "./bridgeProtocol.generated";
+import type { BridgeRemoteControllerSessionPromptRequest, BridgeRemoteControllerSessionPromptReceipt, BridgeRemoteControllerSessionPromptResponse } from "./bridgeProtocol.generated";
 
 export interface RemoteControllerAPI {
   attach(request: BridgeRemoteControllerRequest): Promise<BridgeRemoteControllerResponse>;
@@ -10,6 +11,7 @@ export interface RemoteControllerAPI {
   sessionImage(id: string, sessionPath: string, source: string): Promise<BridgeRemoteControllerSessionImageResponse>;
   sessionCancel?(id:string, scope:BridgeRemoteControllerSessionCancelRequest):Promise<BridgeRemoteControllerSessionCancelResponse>;
   sessionSubmit?(id:string, input:BridgeRemoteControllerSessionSubmitRequest):Promise<BridgeRemoteControllerSessionSubmitResponse>;
+  sessionPrompt?(id:string, input:BridgeRemoteControllerSessionPromptRequest):Promise<BridgeRemoteControllerSessionPromptResponse>;
   close(id: string): Promise<BridgeRemoteControllerCloseResponse>;
 }
 interface Entry {
@@ -26,11 +28,13 @@ export interface RemoteControllerLease {
   sessionImage(sessionPath: string, source: string): Promise<BridgeRemoteControllerImage>;
   sessionCancel?(scope:BridgeRemoteControllerSessionCancelRequest):Promise<BridgeRemoteControllerSessionCancelReceipt>;
   sessionSubmit?(input:BridgeRemoteControllerSessionSubmitRequest):Promise<BridgeRemoteControllerSessionSubmitReceipt>;
+  sessionPrompt?(input:BridgeRemoteControllerSessionPromptRequest):Promise<BridgeRemoteControllerSessionPromptReceipt>;
   release(): void;
 }
 const FAILED = "remote controller connection changed; reconnect the host and reopen the workspace";
 export const REMOTE_STOP_UNKNOWN = "remote stop outcome is unknown; refresh the selected session and do not automatically retry";
 export const REMOTE_SEND_UNKNOWN = "remote send outcome is unknown; refresh the selected session and do not automatically retry";
+export const REMOTE_PROMPT_UNKNOWN = "remote decision outcome is unknown; refresh the selected session and do not automatically retry";
 const encoder = new TextEncoder();
 function identifier(value: string, limit: number): boolean {
   return typeof value === "string" && value.length > 0 && encoder.encode(value).length <= limit && !/\p{Cc}/u.test(value);
@@ -137,6 +141,21 @@ export class RemoteControllerPool {
           if(response.protocolVersion!==1||receipt.protocolVersion!==1||receipt.sessionPath!==message.sessionPath||receipt.runtimeEpoch!==message.runtimeEpoch||receipt.revision!==message.revision||receipt.accepted!==true)throw new Error(REMOTE_SEND_UNKNOWN);
           return {protocolVersion:1,sessionPath:message.sessionPath,runtimeEpoch:message.runtimeEpoch,revision:message.revision,accepted:true};
         } catch {throw new Error(REMOTE_SEND_UNKNOWN);}
+      }} : {}),
+      ...(this.api.sessionPrompt ? {sessionPrompt:async (input:BridgeRemoteControllerSessionPromptRequest) => {
+        let message:BridgeRemoteControllerSessionPromptRequest;
+        try {
+          message={sessionPath:input.sessionPath,runtimeEpoch:input.runtimeEpoch,turnId:input.turnId,promptId:input.promptId,promptRuntimeEpoch:input.promptRuntimeEpoch,kind:input.kind,answer:structuredClone(input.answer)};
+          if(!identifier(message.sessionPath,32768)||!identifier(message.runtimeEpoch,4096)||!identifier(message.turnId,4096)||!identifier(message.promptId,4096)||(message.promptRuntimeEpoch!==""&&!identifier(message.promptRuntimeEpoch,4096))||!["ask","approval","plan","recovery","mcp"].includes(message.kind)||!message.answer||typeof message.answer!=="object"||Array.isArray(message.answer)||encoder.encode(JSON.stringify(message.answer)).length>131072)throw new Error(FAILED);
+        } catch {throw new Error(FAILED);}
+        const view=await ready;assertLive();
+        try {
+          const response=await this.api.sessionPrompt!(view.id,message);
+          assertController(response.controller,view);
+          const receipt=response.receipt;
+          if(response.protocolVersion!==1||receipt.protocolVersion!==1||receipt.sessionPath!==message.sessionPath||receipt.runtimeEpoch!==message.runtimeEpoch||receipt.turnId!==message.turnId||receipt.promptId!==message.promptId||receipt.promptRuntimeEpoch!==message.promptRuntimeEpoch||receipt.kind!==message.kind||receipt.resolved!==true)throw new Error(REMOTE_PROMPT_UNKNOWN);
+          return {protocolVersion:1,sessionPath:message.sessionPath,runtimeEpoch:message.runtimeEpoch,turnId:message.turnId,promptId:message.promptId,promptRuntimeEpoch:message.promptRuntimeEpoch,kind:message.kind,resolved:true};
+        } catch {throw new Error(REMOTE_PROMPT_UNKNOWN);}
       }} : {}),
       release:() => {
         if (released) return;

@@ -1,5 +1,33 @@
 # E 迁移清单
 
+## 2026-10-10 远程 prompt 决策归属与超过 30 文件 review 收敛
+
+累计达到 31 文件后暂停扩展，完成本批 scoped Controller/Serve/shared client/SSH bridge/schema/native/展示投影与单次前端决策执行层 review。修复 Go Ask 对 null 选项及嵌套重复决策键的错误接纳；最终 Go 四包 race/vet/生成、Rust 299 项/clippy、完整原 Transcript/Tauri/类型/build 预算通过，证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-远程-prompt-决策归属与超过-30-文件-review-收敛)。按先 review 后提交规则收敛，不 push。执行层尚未挂到实际卡片，App `49f7a76bd` 不含本批；原生可见交互、真实 SSH/bot 和完整目标其余门禁未完成，不以本批源码回归替代。下一步复用卡片时须保留草稿/挂载身份、等待事件确认清除，禁用本地文件引用入口，避免现有审批点击退场掩盖 unknown。
+
+## 2026-10-10 远程 pending prompt 的展示恢复（App 后续源码）
+
+验证后的 replay cut 和 live 事件现可从共享 reducer 导出五类 display-only 提示快照；保留精确 turn/id/独立 routing stamp，深复制隔离 transport/consumer，旧回执或无身份回执不能清掉当前提示，身份异常/歧义不暴露可操作卡片。完整原 remote-controller 回归和两份 TS 类型检查通过，证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-远程-pending-prompt-的展示恢复app-后续源码)。这里只完成展示投影，实际卡片与用户决策入口、原生可见交互尚待接验，App `49f7a76bd` 不含本批。累计 29 文件，未达超过 30 文件先 review 后提交阈值；无提交/push/新包/真实账号或发布，完整目标继续。
+
+## 2026-10-10 精确远程 prompt 的原生 IPC 与连接层（App 后续源码）
+
+主窗口限定 typed native session-prompt、严格五类输入/收据以及可选前端 adapter/pool/lease 已接，保留实例与 prompt routing 双身份、单次 dispatch/unknown/no retry，await 前复制嵌套 answer，释放后的旧收据不影响新 owner。Rust 299 项/clippy、实际 loopback/前端 binding/pool 回归、原完整 remote-controller/类型和 Go 四包 race/vet/生成证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-精确远程-prompt-的原生-ipc-与连接层app-后续源码)。实际 prompt 恢复/卡片和原生交互尚未接验，App `49f7a76bd` 不含本批，完整目标继续。累计 27 文件未达超过 30 文件先 review 后提交阈值，无提交/push/重打包或真实账号发布。
+
+## 2026-10-10 精确远程 prompt 的 Go bridge 与协议镜像（App 后续源码）
+
+接入 bridge token/已保存 SSH owner 下的固定 session-prompt/capability，补 schema 五类 answer 与 kind 关联、实际 TS/Rust 生成和 Go DTO conformance；严格单次 scoped decision、私密收据剥离、unknown/no retry，不借本地 RuntimeManager。自有 SSH 转发专项、实际 schema 正反例、最终 Go 四包 race/vet/生成 check、Rust 296 项/clippy 与类型证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-精确远程-prompt-的-go-bridge-与协议镜像app-后续源码)。Rust native 命令/前端恢复决策尚未接，App `49f7a76bd` 不含本批，不能当作原生或实际 SSH/bot 完成验收。累计 19 文件未达超过 30 文件先 review 后提交阈值，无提交/push/新包，完整目标继续。
+
+## 2026-10-10 精确远程 prompt 的 Serve/shared client 链路（App 后续源码）
+
+接入认证固定 session-prompt 与 typed shared Client：既有 owner/精确双 epoch/turn/prompt、后台退役 gate、严格五类 answer union、单次发送/未知不重试，不 resume/切前台/扩大执行权限。实际 Agent/Serve 前后台 Ask、身份/认证/foreign writer/退役/重复/owner 撤销及最终三包专项和完整 race/vet 证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-精确远程-prompt-的-serveshared-client-链路app-后续源码)。其它类型未获远程端到端验收，bridge/schema/native/UI 尚未接，不能算远程审批完成；App `49f7a76bd` 不含本轮源码，完整目标继续。累计 11 文件未达超过 30 文件先 review 后提交阈值，无提交/push/重打包/真实账号或发布。
+
+## 2026-10-10 精确远程 prompt 接纳基础（App 后续源码）
+
+新增 path/Controller 实例/活动轮次与独立 prompt routing identity 的精确接纳入口，锁等待后检查撤销，复用现有五类专用 resolver/durable transition，不 resume/切前台/扩大权限。实际 Ask/Approval/MCP 专项十次 race、完整 Controller race/vet 与限制见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-精确远程-prompt-接纳基础app-后续源码)。尚未接认证 Serve/shared client/bridge/native/UI，不能算远程审批完成或原生验收；当前 App 来自 `49f7a76bd`、不含本轮源码，完整目标继续。累计 5 文件未达超过 30 文件 review 后提交阈值，无提交/push/新打包/真实账号。
+
+## 2026-10-10 已提交远程发送 macOS App 与包级 smoke
+
+已从干净提交 `49f7a76bd` 重建 arm64 ad-hoc 可运行 App，包含 scoped Send 后端/native/UI，原完整 build gates/预算及实际严格签名通过；managed/explicit 两个独立临时档案的启动、私有身份、401 鉴权、Global workspace、只读通知查询、普通退出和 sidecar 清理通过。旧包完整备份、新包 SHA 和日志见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-已提交远程发送-macos-app-与包级-smoke)。未以包级 smoke 替代 WKWebView 可见交互或真实 SSH/bot，完整目标其余门禁继续；没有正式签名/公证/发布、默认下载切换或真实账号/数据迁移。本轮仅两文档追加收据，未提交/push，以下保留历史阶段状态。
+
 ## 2026-10-10 远程发送界面与超过 30 文件 review 收敛
 
 达到 32 文件后暂停扩展，先 review 再提交，不 push。补齐 typed native adapter/pool 与 owner-fenced 发送框；修复 settled cut 不含活动 ID 的边界，精确事件序列/idle scope 校验、防重复、未知保留草稿/刷新、旧响应隔离以及同订阅问题/回答展示通过。最终 Go race/vet/生成、Rust 296 项/clippy、完整 Transcript/Tauri/类型/原 build 预算与实际 Chrome 桌面/窄屏交互截图证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-远程发送界面与超过-30-文件-review-收敛)。accepted 不是回答/保存完成；当前 App a678bf4f7 尚未包含本批源码，提交后需重建及隔离 smoke。浏览器 fixture 不替代 WKWebView/真实 SSH/bot，完整目标与其它未完成门禁保留，不发布/默认下载切换或使用真实账号。以下保留历史阶段状态。

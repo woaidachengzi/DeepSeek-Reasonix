@@ -4,6 +4,7 @@ import type { BridgeRemoteControllerResponse, BridgeRemoteControllerSessionsResp
 import type { BridgeRemoteControllerSessionImageResponse } from "./bridgeProtocol.generated";
 import type { BridgeRemoteControllerSessionCancelResponse } from "./bridgeProtocol.generated";
 import type { BridgeRemoteControllerSessionSubmitResponse } from "./bridgeProtocol.generated";
+import type { BridgeRemoteControllerSessionPromptResponse } from "./bridgeProtocol.generated";
 
 export const nativeRemoteControllers = new RemoteControllerPool({
   attach:request => invoke<BridgeRemoteControllerResponse>("bridge_remote_controller_attach",{request}),
@@ -12,5 +13,6 @@ export const nativeRemoteControllers = new RemoteControllerPool({
   sessionImage:(controllerId,sessionPath,source) => invoke<BridgeRemoteControllerSessionImageResponse>("bridge_remote_controller_session_image",{request:{controllerId,sessionPath,source}}),
   sessionCancel:(controllerId,scope) => invoke<BridgeRemoteControllerSessionCancelResponse>("bridge_remote_controller_session_cancel",{request:{controllerId,...scope}}),
   sessionSubmit:(controllerId,input) => invoke<BridgeRemoteControllerSessionSubmitResponse>("bridge_remote_controller_session_submit",{request:{controllerId,...input}}),
+  sessionPrompt:(controllerId,input) => invoke<BridgeRemoteControllerSessionPromptResponse>("bridge_remote_controller_session_prompt",{request:{controllerId,...input}}),
   close:controllerId => invoke<BridgeRemoteControllerCloseResponse>("bridge_remote_controller_close",{request:{controllerId}}),
 });
