@@ -978,6 +978,22 @@ async fn bridge_remote_controller_session_cancel(
 }
 
 #[tauri::command]
+async fn bridge_remote_controller_session_submit(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    request: remote_controller::SessionSubmitRequest,
+) -> Result<protocol_generated::BridgeRemoteControllerSessionSubmitResponse, String> {
+    remote_controller::ensure_main_window(window.label())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<BridgeSupervisor>()
+            .remote_controller_client()?
+            .session_submit(request)
+    })
+    .await
+    .map_err(|_| "remote send outcome is unknown; refresh the selected session and do not automatically retry".to_string())?
+}
+
+#[tauri::command]
 async fn bridge_remote_controller_snapshot(
     window: tauri::WebviewWindow,
     app: tauri::AppHandle,
@@ -4599,6 +4615,7 @@ fn main() {
             bridge_remote_controller_session_view,
             bridge_remote_controller_session_image,
             bridge_remote_controller_session_cancel,
+            bridge_remote_controller_session_submit,
             bridge_remote_controller_subscribe,
             bridge_remote_controller_snapshot,
             bridge_remote_controller_unsubscribe,

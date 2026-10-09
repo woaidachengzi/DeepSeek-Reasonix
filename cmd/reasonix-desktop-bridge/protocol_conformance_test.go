@@ -16,6 +16,9 @@ import (
 func TestGoDTOsMatchTheWireSchema(t *testing.T) {
 	root := filepath.Join("..", "..")
 	definitions := []protocolgen.Definition{
+		{Name: "remoteControllerSessionSubmitRequest", Sample: controller.SessionSubmitRequest{}},
+		{Name: "remoteControllerSessionSubmitReceipt", Sample: controller.SessionSubmitReceipt{}},
+		{Name: "remoteControllerSessionSubmitResponse", Sample: remoteControllerSessionSubmitResponse{}},
 		{Name: "remoteControllerSessionCancelRequest", Sample: controller.SessionCancelScope{}},
 		{Name: "remoteControllerSessionCancelReceipt", Sample: controller.SessionCancelReceipt{}},
 		{Name: "remoteControllerSessionCancelResponse", Sample: remoteControllerSessionCancelResponse{}},

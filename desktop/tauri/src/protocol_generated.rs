@@ -614,6 +614,33 @@ pub struct BridgeRemoteControllerSessionProjectionResponse {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerSessionSubmitReceipt {
+    pub accepted: bool,
+    pub protocol_version: u64,
+    pub revision: u64,
+    pub runtime_epoch: String,
+    pub session_path: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerSessionSubmitRequest {
+    pub revision: u64,
+    pub runtime_epoch: String,
+    pub session_path: String,
+    pub text: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerSessionSubmitResponse {
+    pub controller: BridgeRemoteControllerView,
+    pub protocol_version: u64,
+    pub receipt: BridgeRemoteControllerSessionSubmitReceipt,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeRemoteControllerSessionView {
     pub current: bool,
     pub history: Vec<BridgeRemoteControllerHistoryMessage>,

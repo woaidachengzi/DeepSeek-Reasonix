@@ -474,6 +474,33 @@
         "event": { "type": "object" }
       }, "additionalProperties": false
     },
+    "remoteControllerSessionSubmitRequest": {
+      "title": "BridgeRemoteControllerSessionSubmitRequest", "type": "object", "required": ["sessionPath", "runtimeEpoch", "revision", "text"],
+      "properties": {
+        "sessionPath": { "type": "string", "minLength": 1, "maxLength": 32768 },
+        "runtimeEpoch": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 524288 }
+      }, "additionalProperties": false
+    },
+    "remoteControllerSessionSubmitReceipt": {
+      "title": "BridgeRemoteControllerSessionSubmitReceipt", "type": "object", "required": ["protocolVersion", "sessionPath", "runtimeEpoch", "revision", "accepted"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "sessionPath": { "type": "string", "minLength": 1, "maxLength": 32768 },
+        "runtimeEpoch": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "accepted": { "type": "boolean" }
+      }, "additionalProperties": false
+    },
+    "remoteControllerSessionSubmitResponse": {
+      "title": "BridgeRemoteControllerSessionSubmitResponse", "type": "object", "required": ["protocolVersion", "controller", "receipt"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "controller": { "$ref": "#/$defs/remoteControllerView" },
+        "receipt": { "$ref": "#/$defs/remoteControllerSessionSubmitReceipt" }
+      }, "additionalProperties": false
+    },
     "remoteControllerSessionCancelRequest": {
       "title": "BridgeRemoteControllerSessionCancelRequest", "type": "object", "required": ["sessionPath", "runtimeEpoch", "turnId"],
       "properties": {

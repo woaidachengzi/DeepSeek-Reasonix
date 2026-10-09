@@ -1,5 +1,45 @@
 # Wails API 与事件面盘点
 
+## 2026-10-10 远程发送界面与超过 30 文件 review 收敛
+
+- 累计达到 32 个文件后暂停功能扩展，复核 scoped Controller 的原子接纳/锁序、Serve 前后台 owner、SSH/client 生命周期、单次 dispatch、typed bridge/schema/native 收据与前端 consumer/request 归属。本批按先 review 后提交规则收敛，不 push；以下保留各阶段当时状态。
+- native adapter/pool 接入可选 sessionSubmit：await 前复制精确 path/Controller epoch/revision/text，owner 或收据不一致只报告安全未知结果，无 fallback/自动重试。界面通过显式用户事件发送，先重新读取同会话 idle RuntimeState；同 scope、已验证事件序列和当前展示身份全部一致后才提交。pending 防重复，未知结果保留草稿并要求手动刷新，换会话后的迟到成功/失败无权影响新草稿；accepted 只表示接纳，问题与回答由同一既有订阅展示，不伪造完成。
+- Review 发现 settled cut 有意不含 activeTurnId，而 idle RuntimeState 仍保留上一轮 ID；修复初稿的过严比较，改为已验证事件序列加条件活动 ID fence。测试 fixture 同时改为实际合法 settled cut，没有放宽 parser。JSDOM 使用既有 TranscriptTestClock 推进 mounted geometry，再保留 unmount 后零待执行 frame 断言。React best-practices 用于事件触发和稳定 effect 依赖，没有新增订阅/轮询/scroll writer 或修改共享 Transcript/kernel。
+- 最终 Go 四包 race exit 0（本次 cached，前一轮实际执行证据见下方），vet 和协议生成器 -check exit 0；Rust 296 passed/0 failed/6 ignored、clippy all-targets -D warnings exit 0。完整原 test:transcript/test:tauri/test:typecheck 与原 build 全部门禁 exit 0，包含 hooks/WAAPI/single-writer/layers/bindings/CSS/theme/类型/Vite/预算；未删门禁或放宽预算。初次前端执行因沙箱 tsx 临时 IPC listen EPERM 中断，保留失败日志并在批准权限下重跑原脚本。证据 `/private/tmp/reasonix-send-ui-qa.48z9jv/{go-race,rust,clippy,frontend-gates,frontend-gates-sandbox-failed,build}.log`。CSS 120.4/120.9 KiB，zh 79.4/80.0、zh-TW 80.1/80.6 KiB；现有 module.register/fixture empty img src/Cargo/chunk 提示保留，不宣称全部日志零警告。
+- Browser plugin not available，按 frontend-testing-debugging 技能使用已安装 Playwright/Chrome、临时 Vite fixture 和实际 TauriRemoteHistory/shared Transcript。`http://127.0.0.1:5198/remote-send-qa` 在 1280×900、390×900 的 identity/nonblank/no framework overlay、零 console error-warning/pageerror、无横向溢出与实际交互通过：重复提交只 dispatch 一次、未知结果保留草稿且禁重发、刷新后重新发送、同订阅展示实际新问题/回答、切换会话丢弃旧失败、关闭解除监听。截图 `sent-1280.png`/`unknown-390.png` 与 `check.mjs`/`browser.log` 在上述临时目录，主 agent 已查看，两张截图不入库。
+- 当前 macOS App 仍来自 a678bf4f7，不包含本批发送源码；Chrome fixture 不替代 WKWebView/native IPC/真实外部 SSH 或 bot 验收。提交后需重新打包并做隔离包级 smoke。恢复/审批/模型归属/接管/bot、跨平台、管理页、SQLite 与已知旧 Wails 五项失败仍待收敛，完整目标不关闭。本批不使用真实 profile/key/模型/IM/用户迁移，不正式签名/公证/发布或切换默认下载。
+
+## 2026-10-10 远程发送的 Go bridge 与原生 IPC（App 后续源码）
+
+- sidecar 增加 bridge-token 保护的固定 `POST /v1/remote/controllers/{controllerID}/session-submit` 与 `remote_controller_submit_v1` capability。flat DTO 仅 path/Controller epoch/revision/text，1 MiB JSON/512 KiB text/JS-safe revision/23s 门禁，拒绝 query/unknown 字段及坏 scope；只取已保存 SSH/forward 的 shared Client，不接 URL/token/local runtime/action/model。不完整收据、owner/连接更换或请求撤销保守返回 `remote_submit_unknown`，固定错误、无重试/本地 fallback。readOnly 仍是 catalogue/projection 属性，不授予审批或接管。
+- 原 schema/generator 新增三种 request/receipt/response TS/Rust 镜像，实际 Go DTO conformance 登记并通过，不手改生成文件或放宽 checker。Rust main-only `bridge_remote_controller_session_submit` 注册 invoke handler，blocking worker 取 clone client，无 supervisor 锁内网络 I/O；deny_unknown_fields/字节和 JS 整数预算、固定路由、exact controller/path/epoch/revision/version/accepted 与 48 KiB 收据校验。dispatch 后通用 HTTP 错误全部保守提示未知、不发布成功、不自动重试；accepted 仅为接纳，实际 turn/save 由事件确认。
+- 自有真实 SSH/direct-tcpip/cookie fixture 的 bridge 认证、严格字段/无 query、单次 exact text/scope、private 剥离、unlisted/closed 零 dispatch、无 local runtime、409/错误及坏 200 收据/dispatch 后 close Unknown 专项三次 race 通过（2.106s）；不是实际外部 SSH 部署。Rust 三组实际 loopback IPC 测试覆盖固定 typed payload、私密剥离、错收据未知、额外字段/空/控制/NUL/字节和编码预算拒绝，无网络 fallback。
+- 最终完整 Go 四包 race exit 0（bridge 36.982s，client 3.523s，Serve 104.944s，Controller cached），四包 vet 与原生成器 -check exit 0；日志 `/private/tmp/reasonix-submit-native-go-race.log`。Rust 完整 296 passed/0 failed/6 ignored、clippy all-targets -D warnings exit 0，`/private/tmp/reasonix-submit-native-{rust,clippy}.log`；ignored 不算实测，Cargo config deprecation 提示保留。生产/测试 TypeScript、既有 native-remote-controller bindings 和 diff --check 通过，没有 React/viewport 改动。
+- 前端 adapter/pool/发送框、同订阅提交展示及旧 consumer 迟到结果隔离仍待接；当前 App 仍是 a678bf4f7、不含这批后续源码，尚无新 WKWebView/包级发送或实际账号验收。恢复/审批/模型归属/接管/bot、跨平台、管理页与 SQLite 等完整目标继续未完成。累计 22 个未提交文件，未触发超过 30 文件先 review 后提交阈值，无提交/push/重打包/正式签名发布或真实用户迁移。
+
+## 2026-10-10 远程发送的 Serve/shared client 链路（App 后续源码）
+
+- 认证 Handler 新增固定 `POST /desktop/session-submit`：protocol 1、路径/Controller epoch/已提交 revision/用户 text，拒绝额外 query/未知字段/尾随 JSON/空消息/NUL/超预算/非 JS 安全 revision；body 1 MiB、消息 512 KiB、读取/操作 15s。读取完整 body 后才 TryLock binding gate，固定 catalogue/canonical 路径，拒绝 mirrored/外部 writer/saved，不 resume/接管/切前台。只选已经拥有的具体 Controller，通过上方 scoped 原语原子保留接纳，不使用 legacy /submit 或解释命令。
+- 后台 owner 必须再 TryLock 现有 admissionMu，在该 gate 内重新校验 registry 指针、retiring 和 ctrl，并持有到接纳返回；与实际 idle-close/model rebuild 共用 gate。初稿只 lookup retiring 有关闭间隙，复核已修复并补持有 gate 时直接拒绝的实际 HTTP 回归。没有在 detachedMu 内调用模型/发布，也不排队等待 idle owner 退役。
+- shared Client `SubmitSessionTurn` 仅发送固定 POST/cookie 和 typed scope/text，catalogue 是输入白名单而非写授权；20s operation 绑定 SSH/client owner，receipt 固定五字段与 exact scope/version/accepted 校验，私密未知字段丢弃。401/403 撤销 owner，404/409 提醒刷新；dispatch 后错误/坏/超预算收据或 owner 撤销为结果未知，固定安全提示、无 fallback/idempotency header/自动重试。accepted 只表示接纳已保留，不虚构 provider/保存/回答完成。
+- 隔离 HOME/profile、实际 Agent/local gated provider、真实 Serve/token/cookie/shared Client 覆盖 foreground/detached 的用户 `/new` 原文、私有鉴权拒绝、旧实例/旧完成后 revision/重复、saved/retiring/foreign writer、admission gate 与不切前台/不采用历史；用户问题只增加一次，精确 Stop 产生同轮 interrupted。另有 HTTP 严格 body/bind gate/mirrored 不恢复，client typed receipt/隐私/单次 dispatch、坏收据/未知、owner 关闭和零 unlisted dispatch 回归。没有外部 SSH、真实模型或用户数据。
+- gate 修复后的最终三包专项三次 race 全部 exit 0（Serve 4.931s/client 1.359s/Controller 1.881s），完整三包 race exit 0（Serve 100.743s，client/Controller cached），三包 vet exit 0；`/private/tmp/reasonix-remote-submit-{focused,full}-final.log`。修改前完整结果另保留，不当作修复后证据；diff --check 通过。
+- 尚未接 bridge capability/schema、Rust IPC、前端发送、恢复/审批/模型归属/接管或 bot 的完整工作流，当前 App 为 a678bf4f7 且不包含本批源码；上述测试不能代替 native/WKWebView/真实 SSH 或其它完整目标门禁。当前累计 9 个未提交文件，未达超过 30 文件先 review 后提交阈值，无提交/push/新 App/正式发布。
+
+## 2026-10-10 远程发送的原子 Controller 接纳基础（App 后续源码）
+
+- 新增 `SubmitScopedContext` 与路径/Controller epoch/已提交 RuntimeState revision scope，只接纳已经拥有、已发布 idle 状态的 Controller；runtimeState→admission→ledger 锁序下同时比较身份并保留 running，不先检查再调用普通 Submit。拒绝旧 idle revision、缺失/失败 ledger、运行/finishing/rotation/closed/draining 和锁等待期间撤销；不 parking、resume、切前台、获取 lease 或扩大管理命令权限。现有普通提交入口不变，实际执行继续使用既有 guarded turn/持久化/完成流程。
+- 用户文本经既有 workspace-scoped reference resolver，不解释 shell/slash 管理命令。传输 context 只控制接纳前撤销，已接纳后断开不取消用户轮次；nil 仅意味着接纳已保留，不证明 provider/持久化成功，后续 HTTP 收据仍须区分这些状态且禁止自动重试。这不是已完成的远程发送功能。
+- 最终专项 20 次 race（2.785s）、完整 Controller race（40.629s）和 vet 全部 exit 0；日志 `/private/tmp/reasonix-scoped-submit-{race,full}.log`。实际公开入口验证 `/new`、`/clear`、`!…` 到达测试 runner 为普通文本且路径不变；覆盖重复/旧 revision/错误 owner、接纳后断线、锁等待撤销、finishing 不排队、失败 ledger/rotation/忙碌观察拒绝。收紧已发布 idle 后，测试原来的 waitIdleAdmission 不等待 runtime 发布，曾正确拒绝“新”提交；改为等待实际 RuntimeStateSink idle 通知，不放宽源码，失败日志保留为 `/private/tmp/reasonix-scoped-submit-busy-publication-failed.log`。
+- 尚未接 authenticated Serve/shared client、bridge/native/UI 发送/收据与实际 Agent 远程链路；当前 App 仍为干净 a678bf4f7，不包含此后续源码。没有真实模型/SSH/账号/用户迁移或原生可见验收，完整目标继续。本轮共 4 个未提交文件，未达超过 30 文件阈值，无提交/push。
+
+## 2026-10-10 已提交远程 Stop macOS App 与包级 smoke
+
+- 从干净提交 `a678bf4f7d3ae6da44c6a5ef1b3314eeb640e65d` 重建 Apple Silicon App，包含前述远程 Stop 全链路；原始完整 build gates 与 Rust release/bundle exit 0，未放宽预算。App 位于 `desktop/tauri/target/aarch64-apple-darwin/release/bundle/macos.noindex/Reasonix Tauri Preview.app`，标准 macos 路径保留别名。build runner 恢复 dist/.gitkeep，构建后工作区干净。
+- 实际 App 的 deep/strict 签名验证 exit 0，Mach-O arm64、ad-hoc hardened runtime、无 TeamIdentifier；host SHA-256 `91312174198c62fde9a2e22530695c5277fe6ad8178606356753585f00e384ae`，已签 Go sidecar SHA-256 `4a5f859c61abd2f92c496e8486f0877ab6104ce045d3f9bcc7c130ec899ee830`。没有正式签名、公证、DMG、发布或默认下载切换。
+- 这个实际新包的既有 packaged smoke exit 0：managed/explicit 全新临时档案、私有身份/凭据权限、未认证请求拒绝、Global workspace、sidecar readiness、普通退出与自身进程清理均通过；通知授权仅只读查询，未申请新权限。没有读取真实 profile/key、使用模型或外部 SSH。日志 `/private/tmp/reasonix-stop-package.CE93uH/{build,package-smoke}.log`；旧包完整保存在同目录 `Previous Reasonix Tauri Preview.app`，备份严格签名亦通过。
+- 只读检测桌面仍锁屏；这不是 WKWebView 远程 Stop 可见交互、终端/图片粘贴、真实 SSH/bot 或跨平台验收。完整目标继续未完成，以下保留各阶段当时状态。本轮仅两份文档新增包收据，未达超过 30 文件 review 后提交阈值，未提交/push。
+
 ## 2026-10-10 远程 Stop 界面与超过 30 文件 review 收敛
 
 - 达到 31 文件时暂停扩展，随后仅增加 review 回归和修复公共按钮 hidden 样式，最终 33 文件。完整复核 Controller 锁序/实例与活动轮次、请求撤销、Serve 已持有 owner/外部写入拒绝、shared client 单次请求/结果未知、bridge SSH 句柄与 Rust typed 收据，以及 React consumer/surface/request 的异步归属；没有放宽只读 projection、执行权限、fallback 或恢复历史。按先 review 后提交规则收敛，未 push。

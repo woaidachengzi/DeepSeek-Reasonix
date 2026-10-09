@@ -19,8 +19,8 @@ import (
 	"reasonix/internal/remote/controller"
 )
 
-// The catalogue/projection stays read-only. A separate scoped Stop route does
-// not grant submit/approval/takeover authority or a local RuntimeManager.
+// The catalogue/projection stays read-only. Separate scoped Stop/user-message
+// routes do not grant approval/takeover authority or a local RuntimeManager.
 // All endpoints/tokens stay behind the bridge.
 type remoteControllerRequest struct {
 	Name      string `json:"name"`

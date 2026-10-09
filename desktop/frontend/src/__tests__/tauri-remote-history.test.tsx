@@ -102,7 +102,60 @@ assert.ok(document.body.textContent?.includes("Waiting for the remote turn to fi
 await act(async()=>{listeners.get("bridge:remote-session-state")?.({protocolVersion:1,subscription:subscriptions.at(-1),state:"ended"});await tick();});
 assert.ok(stopButton().hidden,"reconcile cannot leave a stale Stop action enabled");
 await act(async()=>stopRoot.unmount());
-assert.equal(listeners.size,0);dom.window.close();
+assert.equal(listeners.size,0);
+
+// Sending is an explicit event, not an effect or a local optimistic transcript.
+const sendRoot=createRoot(document.getElementById("root")!);
+const sends:{input:{sessionPath:string;runtimeEpoch:string;revision:number;text:string};resolve:(value:unknown)=>void;reject:(error:unknown)=>void}[]=[];
+let preflightGate:Promise<BridgeRemoteControllerSessionView>|undefined;
+const idleView=(path:string):BridgeRemoteControllerSessionView=>({...snapshot(path),ownership:"serve",runtimeState:{schemaVersion:1,runtimeEpoch:"controller-instance",revision:9,phase:"idle",running:false,cancelRequested:false,cancellable:false,pendingPrompt:false,backgroundJobs:0,activity:"",turnId:"prior-turn",turnStatus:"completed",turnEventSeq:4}});
+const sendLease:RemoteControllerLease={...ownedLease,sessionView:path=>{const gate=preflightGate;preflightGate=undefined;return gate??Promise.resolve(idleView(path));},sessionSubmit:input=>new Promise((resolve,reject)=>sends.push({input,resolve,reject}))};
+const renderSend=async(path:string)=>act(async()=>{sendRoot.render(<LocaleProvider><TauriRemoteHistory lease={sendLease} controller={ownedController} transport={transport} sessionPath={path} title={path} onClose={close}/></LocaleProvider>);await tick();});
+const answerSendCut=async(path:string,next=false)=>act(async()=>{
+  const identity=subscriptions.at(-1)!,turnId=next?"next-turn":"prior-turn",messageId=next?"next-user":"prior-user",base=next?4:0;
+  const events=[{kind:"turn_started",seq:base+1,turnId,sessionPath:path,status:"in_progress"},{kind:"user_message_admitted",seq:base+2,turnId,sessionPath:path,messageId,status:"in_progress"},{kind:"text",seq:base+3,turnId,sessionPath:path,text:next?"Real streamed answer":"Prior answer",status:"in_progress"},...next?[]:[{kind:"turn_done",seq:4,turnId,sessionPath:path,status:"completed"}]];
+  reads.at(-1)!.resolve({protocolVersion:1,subscription:identity,snapshot:{protocolVersion:1,controller:ownedController,projection:{protocolVersion:1,sessionPath:path,readOnly:true,initial:true,history:[{id:"prior-user",role:"user",content:"Prior question"},{id:"prior-answer",role:"assistant",content:"Prior answer"}],userSuffix:next?[{id:messageId,role:"user",content:"New question"}]:[],...next?{activeTurnId:turnId}:{},turnStatus:next?"in_progress":"completed",replayAfterSeq:4,replay:{events:next?events:[],floorSeq:1,latestSeq:next?7:4,nextAfterSeq:next?7:4,hasMore:false,runtimeEpoch:"routing-epoch"}}}});await tick();
+});
+const sendButton=()=>[...document.querySelectorAll<HTMLButtonElement>("button")].find(button=>button.textContent==="Send message")!;
+const enterDraft=async(text:string)=>act(async()=>{const textarea=document.querySelector<HTMLTextAreaElement>("textarea")!;Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype,"value")!.set!.call(textarea,text);textarea.dispatchEvent(new dom.window.Event("input",{bubbles:true}));await tick();});
+await renderSend("/send.jsonl");await answerSendCut("/send.jsonl");await enterDraft("New question");
+assert.ok(!sendButton().disabled,`draft=${document.querySelector<HTMLTextAreaElement>("textarea")!.value}; busy=${document.querySelector("section")?.getAttribute("aria-busy")}; text=${document.body.textContent}`);
+await act(async()=>{sendButton().click();sendButton().click();await tick();});
+assert.equal(sends.length,1);assert.ok(sendButton().disabled&&refresh().disabled);
+assert.deepEqual(sends[0].input,{sessionPath:"/send.jsonl",runtimeEpoch:"controller-instance",revision:9,text:"New question"});
+await act(async()=>{sends[0].reject(new Error("PRIVATE unknown send"));await tick();});
+assert.match(document.querySelector('[role="alert"]')?.textContent??"",/Send outcome is unknown/);
+assert.equal(document.querySelector<HTMLTextAreaElement>("textarea")!.value,"New question");assert.ok(sendButton().disabled&&!refresh().disabled);
+await act(async()=>{refresh().click();await tick();});await answerSendCut("/send.jsonl");
+await act(async()=>{sendButton().click();await tick();});assert.equal(sends.length,2);
+const beforeSubscription=subscriptions.length;
+await act(async()=>{
+  const identity=subscriptions.at(-1)!;
+  for(const event of [{kind:"turn_started",seq:5,turnId:"next-turn",sessionPath:"/send.jsonl",status:"in_progress"},{kind:"user_message_admitted",seq:6,turnId:"next-turn",sessionPath:"/send.jsonl",messageId:"next-user",status:"in_progress"}])listeners.get("bridge:remote-session-event")?.({protocolVersion:1,subscription:identity,frame:{protocolVersion:1,controller:ownedController,sessionPath:"/send.jsonl",event}});
+  await tick();
+});
+await answerSendCut("/send.jsonl",true);
+await act(async()=>{sends[1].resolve({protocolVersion:1,sessionPath:"/send.jsonl",runtimeEpoch:"controller-instance",revision:9,accepted:true});await tick();});
+assert.equal(subscriptions.length,beforeSubscription,"accepted turn stays on same subscription");
+assert.equal(document.querySelector<HTMLTextAreaElement>("textarea")!.value,"");
+assert.match(document.body.textContent??"",/Real streamed answer/);assert.match(document.body.textContent??"",/Message admitted/);
+assert.ok(sendButton().disabled,"accepted receipt cannot fabricate a completed turn");
+await renderSend("/old-send.jsonl");await answerSendCut("/old-send.jsonl");await enterDraft("Old draft");
+await act(async()=>{sendButton().click();await tick();});assert.equal(sends.length,3);
+await renderSend("/new-send.jsonl");await answerSendCut("/new-send.jsonl");await enterDraft("New draft");
+await act(async()=>{sends[2].reject(new Error("PRIVATE old send"));await tick();});
+assert.equal(document.querySelector('[role="alert"]'),null);assert.equal(document.querySelector<HTMLTextAreaElement>("textarea")!.value,"New draft");assert.ok(!sendButton().disabled);
+let rejectPreflight!:(error:unknown)=>void;preflightGate=new Promise((_,reject)=>{rejectPreflight=reject;});
+await act(async()=>{sendButton().click();await tick();});assert.equal(sends.length,3);
+await renderSend("/last-send.jsonl");await answerSendCut("/last-send.jsonl");await enterDraft("Latest draft");
+await act(async()=>{rejectPreflight(new Error("PRIVATE stale read"));await tick();});
+assert.equal(sends.length,3);assert.equal(document.querySelector('[role="alert"]'),null);assert.equal(document.querySelector<HTMLTextAreaElement>("textarea")!.value,"Latest draft");assert.ok(!sendButton().disabled);
+assert.ok(!document.body.textContent?.includes("PRIVATE"));
+// Advance actual geometry paints for the new-cut/surface replacements, rather
+// than leaving all browser frames suspended for the entire interaction flow.
+await act(async()=>{clock.flushFrames();await tick();clock.flushFrames();await tick();});
+assert.equal(document.querySelector<HTMLTextAreaElement>("textarea")!.value,"Latest draft");
+await act(async()=>sendRoot.unmount());assert.equal(listeners.size,0);dom.window.close();
 assert.equal(clock.frames.size,0);
 console.log("Remote Stop UI: exact displayed turn/controller epoch, duplicate guard, fixed unknown state, manual refresh, stale failure and waiting for terminal passed");
 console.log("Remote history UI ownership: old failure/finally, refresh guard, fixed errors, empty state and unmount passed");

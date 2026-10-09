@@ -1,6 +1,7 @@
 import type { BridgeRemoteControllerRequest, BridgeRemoteControllerView, BridgeRemoteControllerSession, BridgeRemoteControllerResponse, BridgeRemoteControllerSessionsResponse, BridgeRemoteControllerCloseResponse, BridgeRemoteControllerSessionView, BridgeRemoteControllerSessionViewResponse } from "./bridgeProtocol.generated";
 import type { BridgeRemoteControllerImage, BridgeRemoteControllerSessionImageResponse } from "./bridgeProtocol.generated";
 import type { BridgeRemoteControllerSessionCancelRequest, BridgeRemoteControllerSessionCancelReceipt, BridgeRemoteControllerSessionCancelResponse } from "./bridgeProtocol.generated";
+import type { BridgeRemoteControllerSessionSubmitRequest, BridgeRemoteControllerSessionSubmitReceipt, BridgeRemoteControllerSessionSubmitResponse } from "./bridgeProtocol.generated";
 
 export interface RemoteControllerAPI {
   attach(request: BridgeRemoteControllerRequest): Promise<BridgeRemoteControllerResponse>;
@@ -8,6 +9,7 @@ export interface RemoteControllerAPI {
   sessionView(id: string, sessionPath: string): Promise<BridgeRemoteControllerSessionViewResponse>;
   sessionImage(id: string, sessionPath: string, source: string): Promise<BridgeRemoteControllerSessionImageResponse>;
   sessionCancel?(id:string, scope:BridgeRemoteControllerSessionCancelRequest):Promise<BridgeRemoteControllerSessionCancelResponse>;
+  sessionSubmit?(id:string, input:BridgeRemoteControllerSessionSubmitRequest):Promise<BridgeRemoteControllerSessionSubmitResponse>;
   close(id: string): Promise<BridgeRemoteControllerCloseResponse>;
 }
 interface Entry {
@@ -23,10 +25,12 @@ export interface RemoteControllerLease {
   sessionView(sessionPath: string): Promise<BridgeRemoteControllerSessionView>;
   sessionImage(sessionPath: string, source: string): Promise<BridgeRemoteControllerImage>;
   sessionCancel?(scope:BridgeRemoteControllerSessionCancelRequest):Promise<BridgeRemoteControllerSessionCancelReceipt>;
+  sessionSubmit?(input:BridgeRemoteControllerSessionSubmitRequest):Promise<BridgeRemoteControllerSessionSubmitReceipt>;
   release(): void;
 }
 const FAILED = "remote controller connection changed; reconnect the host and reopen the workspace";
 export const REMOTE_STOP_UNKNOWN = "remote stop outcome is unknown; refresh the selected session and do not automatically retry";
+export const REMOTE_SEND_UNKNOWN = "remote send outcome is unknown; refresh the selected session and do not automatically retry";
 const encoder = new TextEncoder();
 function identifier(value: string, limit: number): boolean {
   return typeof value === "string" && value.length > 0 && encoder.encode(value).length <= limit && !/\p{Cc}/u.test(value);
@@ -121,6 +125,18 @@ export class RemoteControllerPool {
           if(response.protocolVersion!==1||receipt.protocolVersion!==1||receipt.sessionPath!==scope.sessionPath||receipt.runtimeEpoch!==scope.runtimeEpoch||receipt.turnId!==scope.turnId||receipt.cancelled!==true)throw new Error(REMOTE_STOP_UNKNOWN);
           return {protocolVersion:1,sessionPath:scope.sessionPath,runtimeEpoch:scope.runtimeEpoch,turnId:scope.turnId,cancelled:true};
         } catch {throw new Error(REMOTE_STOP_UNKNOWN);}
+      }} : {}),
+      ...(this.api.sessionSubmit ? {sessionSubmit:async (input:BridgeRemoteControllerSessionSubmitRequest) => {
+        const message={sessionPath:input.sessionPath,runtimeEpoch:input.runtimeEpoch,revision:input.revision,text:input.text};
+        if(!identifier(message.sessionPath,32768)||!identifier(message.runtimeEpoch,4096)||!Number.isSafeInteger(message.revision)||message.revision<1||typeof message.text!=="string"||!message.text.trim()||encoder.encode(message.text).length>524288||message.text.includes("\0"))throw new Error(FAILED);
+        const view=await ready;assertLive();
+        try {
+          const response=await this.api.sessionSubmit!(view.id,message);
+          assertController(response.controller,view);
+          const receipt=response.receipt;
+          if(response.protocolVersion!==1||receipt.protocolVersion!==1||receipt.sessionPath!==message.sessionPath||receipt.runtimeEpoch!==message.runtimeEpoch||receipt.revision!==message.revision||receipt.accepted!==true)throw new Error(REMOTE_SEND_UNKNOWN);
+          return {protocolVersion:1,sessionPath:message.sessionPath,runtimeEpoch:message.runtimeEpoch,revision:message.revision,accepted:true};
+        } catch {throw new Error(REMOTE_SEND_UNKNOWN);}
       }} : {}),
       release:() => {
         if (released) return;

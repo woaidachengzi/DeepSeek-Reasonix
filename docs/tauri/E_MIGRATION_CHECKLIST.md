@@ -1,5 +1,25 @@
 # E 迁移清单
 
+## 2026-10-10 远程发送界面与超过 30 文件 review 收敛
+
+达到 32 文件后暂停扩展，先 review 再提交，不 push。补齐 typed native adapter/pool 与 owner-fenced 发送框；修复 settled cut 不含活动 ID 的边界，精确事件序列/idle scope 校验、防重复、未知保留草稿/刷新、旧响应隔离以及同订阅问题/回答展示通过。最终 Go race/vet/生成、Rust 296 项/clippy、完整 Transcript/Tauri/类型/原 build 预算与实际 Chrome 桌面/窄屏交互截图证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-远程发送界面与超过-30-文件-review-收敛)。accepted 不是回答/保存完成；当前 App a678bf4f7 尚未包含本批源码，提交后需重建及隔离 smoke。浏览器 fixture 不替代 WKWebView/真实 SSH/bot，完整目标与其它未完成门禁保留，不发布/默认下载切换或使用真实账号。以下保留历史阶段状态。
+
+## 2026-10-10 远程发送的 Go bridge 与原生 IPC（App 后续源码）
+
+固定认证 bridge session-submit/capability、schema 与真正 TS/Rust 生成/Go conformance、main-only typed native 命令已接，保持 SSH owner/精确 scope、单次发送与 Unknown/no retry，不借本地 RuntimeManager。自有 SSH 转发和 Rust loopback 专项、最终 Go 四包完整 race/vet/生成检查、Rust 296 项/clippy 及类型/既有 bindings 证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-远程发送的-go-bridge-与原生-ipcapp-后续源码)。accepted 不是回答/保存完成。未接前端发送与同订阅/迟到响应回归，App a678bf4f7 不含本批源码，不能替代 WKWebView/实际 SSH 或完整目标验收。累计 22 个文件未达超过 30 文件先 review 后提交阈值，无提交/push/新包/正式发布或真实账号。
+
+## 2026-10-10 远程发送的 Serve/shared client 链路（App 后续源码）
+
+独立认证 POST/session-submit 接入精确 path/Controller epoch/revision 的原子用户消息接纳，并以现有后台 admission gate 防止 idle owner 关闭竞态；不 resume/切前台/解释管理命令或借用本地提交。typed shared Client 单次请求、exact 收据与未知结果/no retry，以及隔离真实 Agent/Serve 的前台/后台、旧版本/重复/认证/saved/retiring/外部 writer/不切前台回归和最终三包完整 race/vet 证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-远程发送的-serveshared-client-链路app-后续源码)。accepted 仅为接纳，不是回答/保存成功。未接 bridge/native/UI 与完整恢复/审批/接管/bot，现有 App a678bf4f7 不含本批源码，不替代原生或真实 SSH 验收；完整目标继续。累计 9 个未提交文件，未达超过 30 文件 review 后提交阈值，无提交/push/新打包。
+
+## 2026-10-10 远程发送的原子 Controller 接纳基础（App 后续源码）
+
+新增精确 path/Controller epoch/RuntimeState revision 下的 idle 原子接纳入口，拒绝旧页面、重复、撤销和 finishing 排队，不解释管理/shell 命令，也不 resume/切前台/获取写租约。最终专项 20 次 race、完整 Controller race/vet 与状态发布竞态证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-远程发送的原子-controller-接纳基础app-后续源码)。nil 仅表示接纳，不代表 provider/保存成功；尚未接远程 HTTP/shared client/native/UI，不能算完整发送功能或原生/真实服务验收。当前 App 为 a678bf4f7、不含本轮源码，完整目标保留；累计 4 个未提交文件，未达超过 30 文件 review 后提交阈值，无提交/push。
+
+## 2026-10-10 已提交远程 Stop macOS App 与包级 smoke
+
+已从干净提交 `a678bf4f7` 重建 arm64 ad-hoc 可运行 App，包含远程 Stop 后端、native IPC 和前端按钮；原完整 build gates、实际严格签名及 managed/explicit 临时档案包级启动、认证隔离、Global workspace、普通退出与 sidecar 清理通过。旧包完整保留，新包 SHA 和日志见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-已提交远程-stop-macos-app-与包级-smoke)。桌面仍锁屏，未宣称 WKWebView 远程 Stop/终端/图片或真实 SSH/bot 验收；跨平台、管理页、SQLite 和已知旧失败仍待收敛，完整目标不关闭。没有正式签名/公证/发布或默认下载切换。本轮仅两份文档追加包收据，未提交/push，以下保留历史阶段状态。
+
 ## 2026-10-10 远程 Stop 界面与超过 30 文件 review 收敛
 
 达到 31 文件后暂停扩展，review 修复公共按钮 hidden 样式并补回归，最终 33 文件先 review 后提交，未 push。接入前端 owner-fenced Stop，不采样新轮次、不伪造终态，unknown 需手动刷新，旧结果不能影响新 surface；React/测试技能及 Go/Rust/完整 Transcript/Tauri/类型/构建预算、实际 Chrome 的桌面/窄屏交互与截图证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-远程-stop-界面与超过-30-文件-review-收敛)。当前 App 仍为 6a026104b，尚未重建；浏览器 fixture 不替代 WKWebView/实际 SSH 远程 Stop 验收，发送/审批/接管/bot 与完整目标其它门禁继续未完成，未发布或切换默认下载。

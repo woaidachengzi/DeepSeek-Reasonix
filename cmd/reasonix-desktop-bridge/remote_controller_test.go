@@ -88,7 +88,7 @@ func controllerFixture(t *testing.T, sessions http.HandlerFunc, views ...http.Ha
 			views[0](w, r)
 			return
 		}
-		if err == nil && cookie.Value == "owned-controller-secret" && len(views) == 1 && (r.URL.Path == "/desktop/session-image" || r.URL.Path == "/desktop/session-cancel") {
+		if err == nil && cookie.Value == "owned-controller-secret" && len(views) == 1 && (r.URL.Path == "/desktop/session-image" || r.URL.Path == "/desktop/session-cancel" || r.URL.Path == "/desktop/session-submit") {
 			if r.Method != http.MethodPost || r.URL.RawQuery != "" {
 				t.Error("bad scoped session command channel")
 			}

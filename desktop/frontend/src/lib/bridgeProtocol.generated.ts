@@ -430,6 +430,27 @@ export interface BridgeRemoteControllerSessionProjectionResponse {
   protocolVersion: number;
 }
 
+export interface BridgeRemoteControllerSessionSubmitReceipt {
+  accepted: boolean;
+  protocolVersion: number;
+  revision: number;
+  runtimeEpoch: string;
+  sessionPath: string;
+}
+
+export interface BridgeRemoteControllerSessionSubmitRequest {
+  revision: number;
+  runtimeEpoch: string;
+  sessionPath: string;
+  text: string;
+}
+
+export interface BridgeRemoteControllerSessionSubmitResponse {
+  controller: BridgeRemoteControllerView;
+  protocolVersion: number;
+  receipt: BridgeRemoteControllerSessionSubmitReceipt;
+}
+
 export interface BridgeRemoteControllerSessionView {
   current: boolean;
   history: BridgeRemoteControllerHistoryMessage[];

@@ -570,6 +570,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("GET /desktop/session-projection", s.desktopSessionProjection)
 	mux.HandleFunc("POST /desktop/session-image", s.desktopSessionImage)
 	mux.HandleFunc("POST /desktop/session-cancel", s.desktopSessionCancel)
+	mux.HandleFunc("POST /desktop/session-submit", s.desktopSessionSubmit)
 	mux.HandleFunc("GET /context", s.context)
 	mux.HandleFunc("POST /submit", s.submit)
 	s.registerInboxRoutes(mux)

@@ -19,6 +19,10 @@ pub use image::SessionImageRequest;
 mod cancel;
 pub use cancel::SessionCancelRequest;
 
+#[path = "remote_controller_submit.rs"]
+mod submit;
+pub use submit::SessionSubmitRequest;
+
 #[path = "remote_controller_events.rs"]
 mod events;
 
