@@ -68,8 +68,8 @@ export function insertTextAtSelection(
   return { value: next, caret: before.length + text.length };
 }
 
-export function useFileReferenceMenu(text: string, cwd?: string, tabId?: string, workspaceScopeKey?: string) {
-  const token = useMemo(() => activeFileReferenceToken(text), [text]);
+export function useFileReferenceMenu(text: string, cwd?: string, tabId?: string, workspaceScopeKey?: string, enabled = true) {
+  const token = useMemo(() => enabled ? activeFileReferenceToken(text) : null, [text, enabled]);
   const atRaw = token?.raw ?? null;
   const atDir = token?.dir ?? "";
   const atFrag = token?.frag ?? "";

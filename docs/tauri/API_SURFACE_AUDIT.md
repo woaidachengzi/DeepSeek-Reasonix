@@ -1,5 +1,19 @@
 # Wails API 与事件面盘点
 
+## 2026-10-10 提示卡片提交前复核
+
+复核本批 12 文件的事件触发、稳定提示身份、刷新代际退役、旧异步回执隔离、草稿保留、共享卡片默认行为和远程文件查询禁用，未发现阻塞提交的问题；`git diff --check` 通过。完整原前端门禁及最终专项/浏览器证据沿用下节记录。本批虽未超过 30 文件，但功能已完整，为让新 App 对应明确源码版本，先提交再构建；不 push，包级结果须等实际构建和隔离 smoke 完成再记录。
+
+## 2026-10-10 远程五类提示卡片与刷新草稿归属（App 后续源码）
+
+- 当前 HEAD `18d8654ba` 已提交上批 31 文件的 scoped prompt/native/决策归属基础。本批接入实际 TauriRemoteHistory：五类已验证 pending prompt 复用既有 AskCard/ApprovalModal/MCPInteractionCard，显式用户操作才 dispatch；精确实例/turn/prompt/routing 身份与 load owner/stream admission 双 fence，无本地 runtime、自动审批或额外订阅/scroll writer。Plan start/revise/exit 与 Recovery continue/task/revise 保留专用语义；持久规则选项规范为 persist 单一 grant，不能把 session/persist 两项同时发送。
+- 共享卡片保持默认本地行为；远程 Approval 受控 busy 且不点击退场，Ask 受控提交且不因 Stop 清草稿，MCP URL 按 opener 成功才显示已打开，缺安全 URL/opener 则不能打开。远程计划修订明确禁 FileReferenceMenu 的 token/query 入口；在实际 UI 测试注入本地 ListDir/Search spy，输入 @local 证实零本地查询。URL 仍需显式点击，经 tauriSafeMCPURL 的 web/无凭据校验与既有 host-side open_external_url；本批没有实际 native opener/外部认证服务联调证明。
+- React 最佳实践用于事件触发与稳定卡片身份：展示层 deep copy 不能让同身份 MCP schema 每次采样重置，故提示 request/schema 在同身份 host 保持稳定。Review 修复把 generation 当卡片 key 导致刷新丢草稿的初稿；现在同 surface/Controller 实例/完整 prompt 身份保持卡片和草稿，generation 只退役命令。每个 attempt 捕获旧 generation/predicate，StrictMode/刷新 cleanup 丢弃旧回执；reconcile 立即解除旧 prompt 的刷新锁，不能等旧调用结束才能重新同步。
+- 实际 TauriRemoteHistory/JSDOM 回归涵盖五类回答、精确两种 epoch、unknown 保留 shelf/输入且禁止重发、receipt 不能清卡片、对应事件才移除、换会话旧失败、同身份 MCP/Plan 刷新保留 DOM 与草稿、sampling 表单不重置、pending/reconcile/刷新后旧 generation failure 不影响新决策、unmount 零监听/剩余 frame。最终专项 exit 0，`/private/tmp/reasonix-prompt-cards-focused-final.log`；既有 Approval 动画 9 passed/0 failed，`/private/tmp/reasonix-prompt-cards-approval-regression-final.log`。生产/测试类型检查 exit 0，diff --check 通过。
+- 完整原 test:transcript/test:tauri/test:typecheck/build 最终 exit 0，`/private/tmp/reasonix-prompt-cards-full-frontend-final.log`；保留 hooks/WAAPI/single-writer/layers/bindings/CSS/theme/类型/Vite/预算，没有删除门禁或放宽预算。最终产物含新 historyDecisionHint 的 renderer 分支及各语言字典；CSS 120.4/120.9 KiB、zh 79.5/80.0、zh-TW 80.2/80.6。原 module.register/fixture empty img src/chunk 提示保留，未宣称所有日志无警告；Go/Rust 本批未修改，相关最终证据保留上批记录，不把旧 Go 结果当新原生 UI 验收。
+- Browser plugin not available，依 frontend-testing-debugging 技能使用已安装 Playwright/Chrome、自有临时 Vite fixture、实际 renderer/shared Transcript，不用真实 profile/key/模型/SSH/IM。flow：`http://127.0.0.1:5199/remote-prompt-qa` → 五类用户决策/unknown/刷新/事件 → 保留或清除真实卡片；1280×1000、390×1000 的 page identity/nonblank/no overlay、零 console error-warning/pageerror、无横向溢出、五类实际交互、旧结果隔离、MCP sampling/同身份刷新保持草稿、Plan @local 不出菜单、Close 清监听通过。首轮 fixture 把隐藏但仍 mounted 的发送按钮当不存在而等待超时，记录 browser.log，不计通过；修正 fixture 等待条件，没有放宽产品 gate。最终 `check.mjs`/`browser-evidence-final.log` 和完整截图 `approval-unknown-1280.png`/`mcp-draft-390.png` 在 `/private/tmp/reasonix-prompt-cards-qa.wTN35g`，主 agent 已查看；截图不入库，fixture server 已正常关闭。
+- 最终 12 文件，尚未触发超过 30 文件先 review 后提交阈值，未提交/push/新打包。实际 arm64 App 仍来自 `49f7a76bd`，尚不含 `18d8654ba` 或本批 renderer；接下来需源码收敛、重建 App/隔离包级 smoke 和可安全执行的 WKWebView/native 链路验证。上述 Chrome fixture 不替代真实 SSH/bot/外部 MCP、Windows/Linux、复杂管理页或 SQLite 恢复门禁，完整目标继续，不正式签名/公证/发布或切换默认下载/迁移数据。
+
 ## 2026-10-10 远程 prompt 决策归属与超过 30 文件 review 收敛
 
 - 达到 31 文件即暂停扩展，review 本批 Controller 锁序/精确提示接纳、Serve 已持有前后台 owner/退役 gate、认证 SSH/client 归属、协议五类 union/生成镜像、main-only native IPC、展示恢复和前端单次决策执行层；按先 review 后提交规则收敛，不 push。以下保留各阶段当时状态。

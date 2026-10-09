@@ -222,6 +222,9 @@ export function ApprovalModal({
   insertRequest,
   onRevisionActiveChange,
   toolApprovalMode,
+  decisionPending = false,
+  waitForConfirmation = false,
+  fileReferencesEnabled = true,
 }: {
   approval: WireApproval;
   onAnswer: (allow: boolean, session: boolean, persist: boolean) => void;
@@ -235,6 +238,9 @@ export function ApprovalModal({
   insertRequest?: ComposerInsertRequest | null;
   onRevisionActiveChange?: (active: boolean) => void;
   toolApprovalMode?: ToolApprovalMode;
+  decisionPending?: boolean;
+  waitForConfirmation?: boolean;
+  fileReferencesEnabled?: boolean;
 }) {
   const t = useT();
   const isPlanApproval = approval.tool === "exit_plan_mode";
@@ -280,7 +286,8 @@ export function ApprovalModal({
   const [recoveryGuidanceOpen, setRecoveryGuidanceOpen] = useState(false);
   const [recoveryGuidanceText, setRecoveryGuidanceText] = useState("");
   const [grantSimilarForTask, setGrantSimilarForTask] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [localSubmitting, setSubmitting] = useState(false);
+  const submitting = localSubmitting || decisionPending;
   const instanceId = useId();
   const cardRef = useRef<HTMLDivElement | null>(null);
   const shelfRef = useRef<HTMLDivElement | null>(null);
@@ -294,10 +301,13 @@ export function ApprovalModal({
   // When consecutive approvals arrive, animate the old card out before the
   // new one slides in so a queue of pending approvals does not visibly pop.
   const closingRef = useRef(false);
-  const fileMenu = useFileReferenceMenu(revisionText, cwd, tabId, workspaceScopeKey);
+  const fileMenu = useFileReferenceMenu(revisionText, cwd, tabId, workspaceScopeKey, fileReferencesEnabled);
 
   const answerWithExit = (fn: () => void) => {
     if (closingRef.current || submitting) return;
+    // Remote receipts can be unknown. Keep the shelf and its draft mounted;
+    // its owner supplies busy state and the authoritative stream removes it.
+    if (waitForConfirmation) { fn(); return; }
     closingRef.current = true;
     setSubmitting(true);
     const el = shelfRef.current;

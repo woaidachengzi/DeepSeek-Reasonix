@@ -41,6 +41,9 @@ type AskCardProps = {
   onDismiss?: () => void | Promise<void>;
   draftScope?: string;
   onStop: () => void;
+  busy?: boolean;
+  preserveDraftOnStop?: boolean;
+  controlledSubmission?: boolean;
 };
 
 export function AskCard(props: AskCardProps) {
@@ -50,7 +53,7 @@ export function AskCard(props: AskCardProps) {
   return <AskCardBody key={draftKey} {...props} draftKey={draftKey} />;
 }
 
-function AskCardBody({ ask, onAnswer, onStop, draftKey }: AskCardProps & { draftKey: string }) {
+function AskCardBody({ ask, onAnswer, onStop, draftKey, busy = false, preserveDraftOnStop = false, controlledSubmission = false }: AskCardProps & { draftKey: string }) {
   const t = useT();
   // Per-question state: selected option labels, and an optional typed answer.
   const [sel, setSel] = useState<Record<string, string[]>>(() => readAskDraft(draftKey)?.sel ?? {});
@@ -63,7 +66,8 @@ function AskCardBody({ ask, onAnswer, onStop, draftKey }: AskCardProps & { draft
   const [selectedIndex, setSelectedIndex] = useState(() => readAskDraft(draftKey)?.selectedIndex ?? 0);
   const [expandedDescriptionId, setExpandedDescriptionId] = useState<string | null>(null);
   const [descriptionTruncated, setDescriptionTruncated] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [localSubmitting, setSubmitting] = useState(false);
+  const submitting = localSubmitting || busy;
   // A newly delivered Ask always starts expanded, matching harness. Collapse
   // is presentation state and must not leak from an earlier request.
   const [collapsed, setCollapsed] = useState(false);
@@ -140,10 +144,10 @@ function AskCardBody({ ask, onAnswer, onStop, draftKey }: AskCardProps & { draft
 
   const submitAction = (action: () => void | Promise<void>) => {
     if (submitting) return;
-    setSubmitting(true);
+    if (!controlledSubmission) setSubmitting(true);
     void Promise.resolve()
       .then(action)
-      .catch(() => setSubmitting(false));
+      .catch(() => { if (!controlledSubmission) setSubmitting(false); });
   };
 
   const finishOrAdvance = (nextSel = sel, nextCustom = custom) => {
@@ -182,7 +186,8 @@ function AskCardBody({ ask, onAnswer, onStop, draftKey }: AskCardProps & { draft
   };
 
   const stopAsk = () => {
-    clearAskDraft(draftKey);
+    if (submitting) return;
+    if (!preserveDraftOnStop) clearAskDraft(draftKey);
     onStop();
   };
 

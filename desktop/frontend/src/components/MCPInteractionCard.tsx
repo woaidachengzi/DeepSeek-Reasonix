@@ -31,7 +31,7 @@ export function MCPInteractionCard({
   interaction: WireMCPInteraction;
   busy: boolean;
   onAnswer: (id: string, action: "accept" | "decline" | "cancel", content?: Record<string, unknown>) => void;
-  onOpenLink?: (url: string) => void;
+  onOpenLink?: (url: string) => void | Promise<void>;
 }) {
   const { t } = useI18n();
   const mode = interaction.mode === "url" ? "url" : "form";
@@ -61,10 +61,12 @@ export function MCPInteractionCard({
     onAnswer(interaction.id, "accept", coerceStructuredValues(schema.fields, values).content);
   };
 
-  const openLink = () => {
-    if (!interaction.url) return;
-    setOpenedLink(true);
-    onOpenLink?.(interaction.url);
+  const openLink = async () => {
+    if (!interaction.url || !onOpenLink || busy) return;
+    try {
+      await onOpenLink(interaction.url);
+      setOpenedLink(true);
+    } catch { setOpenedLink(false); }
   };
 
   const validationHint = schema.unsupported
@@ -106,7 +108,7 @@ export function MCPInteractionCard({
               <button type="button" className="btn btn--small" onClick={() => onAnswer(interaction.id, "cancel")} disabled={busy}>
                 {t("mcp.interaction.cancel")}
               </button>
-              <button type="button" className="btn btn--small" onClick={openLink} disabled={busy || !interaction.url}>
+              <button type="button" className="btn btn--small" onClick={() => void openLink()} disabled={busy || !interaction.url || !onOpenLink}>
                 {t("mcp.interaction.openUrl", { host: targetHost || t("mcp.interaction.link") })}
               </button>
               <button type="button" className="btn btn--small btn--primary" onClick={() => onAnswer(interaction.id, "accept")} disabled={busy}>

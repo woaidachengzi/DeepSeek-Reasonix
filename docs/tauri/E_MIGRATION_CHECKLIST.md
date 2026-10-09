@@ -1,5 +1,13 @@
 # E 迁移清单
 
+## 2026-10-10 提示卡片提交前复核
+
+本批 12 文件 review 完成，未发现阻塞提交的问题，diff 检查通过；为形成可复现 App 版本先提交再打包，不 push。遵循后续超过 30 文件先 review 后提交规则。构建及原生隔离 smoke 尚待执行，不能提前标为包级通过。
+
+## 2026-10-10 远程五类提示卡片与刷新草稿归属（App 后续源码）
+
+实际远程历史页已复用 Ask/Approval/Plan/Recovery/MCP 卡片，显式事件接单次精确执行层；unknown 不退场、不自动重试，receipt 不清卡片，同身份刷新保留草稿、换 generation 只退役请求，reconcile 释放旧刷新锁。禁用本地文件引用，URL 只经显式点击与现有 native URL 校验。完整原 Transcript/Tauri/类型/build、既有审批动画和实际 Chrome 桌面/窄屏五类交互与截图证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-远程五类提示卡片与刷新草稿归属app-后续源码)。当前 12 个变更文件，未触发超过 30 文件先 review 后提交阈值，未提交/push/重打包。现有 App `49f7a76bd` 不含本批及已提交 `18d8654ba` 基础，原生包/实际 SSH/bot 和完整目标其余门禁仍待验证，不能以 Chrome fixture 代替。
+
 ## 2026-10-10 远程 prompt 决策归属与超过 30 文件 review 收敛
 
 累计达到 31 文件后暂停扩展，完成本批 scoped Controller/Serve/shared client/SSH bridge/schema/native/展示投影与单次前端决策执行层 review。修复 Go Ask 对 null 选项及嵌套重复决策键的错误接纳；最终 Go 四包 race/vet/生成、Rust 299 项/clippy、完整原 Transcript/Tauri/类型/build 预算通过，证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-远程-prompt-决策归属与超过-30-文件-review-收敛)。按先 review 后提交规则收敛，不 push。执行层尚未挂到实际卡片，App `49f7a76bd` 不含本批；原生可见交互、真实 SSH/bot 和完整目标其余门禁未完成，不以本批源码回归替代。下一步复用卡片时须保留草稿/挂载身份、等待事件确认清除，禁用本地文件引用入口，避免现有审批点击退场掩盖 unknown。
