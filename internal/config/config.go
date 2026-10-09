@@ -796,6 +796,9 @@ type BotDesktopWatcherConfig struct {
 	Domain       string `toml:"domain"`
 	ChatType     string `toml:"chat_type"`
 	ChatID       string `toml:"chat_id"`
+	// ActorID identifies the authenticated subscriber for Preview's continuing
+	// permission checks. Legacy records without it convey no Preview authority.
+	ActorID string `toml:"actor_id"`
 }
 
 type BotSelfUserIDs struct {

@@ -52,8 +52,9 @@ var ErrKnownSessionDeleted = fmt.Errorf("%w: session was deleted", desktopbridge
 // opens a session. It lives with the host because the layering rule keeps
 // internal/desktopbridge free of boot and control imports.
 type controllerFactory struct {
-	base   boot.Options
-	events *desktopbridge.EventStream
+	base        boot.Options
+	events      *desktopbridge.EventStream
+	ownedEvents *desktopbridge.OwnedEventStream
 }
 
 func newControllerFactory(events *desktopbridge.EventStream) *controllerFactory {
@@ -123,6 +124,9 @@ func (f *controllerFactory) options(request desktopbridge.OpenRequest) (boot.Opt
 		opts.Sink = event.Discard
 	}
 	lifecycleSink := newBridgeLifecycleSink(opts.Sink, request.SessionID)
+	if f.ownedEvents != nil {
+		lifecycleSink.ownedSource = f.ownedEvents.NewSource()
+	}
 	opts.Sink = lifecycleSink
 	if strings.TrimSpace(opts.StatsSource) == "" {
 		opts.StatsSource = "desktop-tauri"
@@ -183,6 +187,7 @@ type bridgeLifecycleSink struct {
 	mu           sync.Mutex
 	identities   *sessionidentity.Store
 	markedReady  bool
+	ownedSource  *desktopbridge.OwnedEventSource
 }
 
 func newBridgeLifecycleSink(inner event.Sink, sessionID string) *bridgeLifecycleSink {
@@ -197,6 +202,9 @@ func newBridgeLifecycleSink(inner event.Sink, sessionID string) *bridgeLifecycle
 }
 
 func (s *bridgeLifecycleSink) Emit(input event.Event) {
+	if s.ownedSource != nil {
+		s.ownedSource.Emit(input)
+	}
 	if s.inner != nil {
 		s.inner.Emit(input)
 	}
@@ -225,6 +233,9 @@ func (s *bridgeLifecycleSink) Emit(input event.Event) {
 func (s *bridgeLifecycleSink) Close() error {
 	if s == nil {
 		return nil
+	}
+	if s.ownedSource != nil {
+		s.ownedSource.Close()
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

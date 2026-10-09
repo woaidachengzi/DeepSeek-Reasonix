@@ -37,6 +37,7 @@ func (m *RuntimeManager) finishRetainedOpen(runtime Runtime, view SessionView, p
 	m.opening = false
 	m.ownerEpoch++
 	m.runtime, m.view = runtime, view
+	m.activateOwnedEventsLocked()
 	return nil
 }
 

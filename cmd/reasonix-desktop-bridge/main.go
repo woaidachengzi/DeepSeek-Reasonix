@@ -84,6 +84,7 @@ type bridgeServer struct {
 	identityReadStore       *sessionidentity.Store
 	mcpRegistry             *mcpregistry.Client
 	botRuntime              *previewBotRuntime
+	ownedEvents             *desktopbridge.OwnedEventStream
 }
 
 func main() {
@@ -257,13 +258,18 @@ func runWithContext(ctx context.Context, cfg config, token string) (runErr error
 		return err
 	}
 	events := desktopbridge.NewEventStream(1024)
-	manager := desktopbridge.NewRuntimeManager(newControllerFactory(events))
+	ownedEvents := desktopbridge.NewOwnedEventStream()
+	defer ownedEvents.Close()
+	factory := newControllerFactory(events)
+	factory.ownedEvents = ownedEvents
+	manager := desktopbridge.NewRuntimeManager(factory)
 	defer func() {
 		if err := manager.Shutdown(); err != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("close session runtime: %w", err))
 		}
 	}()
 	bridge := newBridgeServerWithEvents(token, instanceID, manager, events)
+	bridge.ownedEvents = ownedEvents
 	bridge.botRuntime.refreshAsync(ctx)
 	defer bridge.botRuntime.stop()
 	defer bridge.remoteSessions.closeAll()

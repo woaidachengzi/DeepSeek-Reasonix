@@ -588,7 +588,10 @@ func TestBridgeHistoryProjectionHidesHostSessionContext(t *testing.T) {
 
 func TestControllerRuntimeRenamesSessionMetadataWithoutTouchingTranscript(t *testing.T) {
 	workspace := t.TempDir()
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	profile := t.TempDir()
+	t.Setenv("REASONIX_HOME", profile)
+	t.Setenv("REASONIX_STATE_HOME", profile)
+	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
 	open := func() desktopbridge.Runtime {
 		factory := newControllerFactory(nil)
 		factory.base.WorkspaceRoot = workspace
@@ -992,7 +995,10 @@ func TestBridgeRecoversManualTitleIntentAfterAbruptWriterExit(t *testing.T) {
 
 func TestControllerRuntimeDeleteRemovesSessionArtifacts(t *testing.T) {
 	workspace := t.TempDir()
-	t.Setenv("REASONIX_HOME", t.TempDir())
+	profile := t.TempDir()
+	t.Setenv("REASONIX_HOME", profile)
+	t.Setenv("REASONIX_STATE_HOME", profile)
+	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
 	open := func(sessionID string) desktopbridge.Runtime {
 		factory := newControllerFactory(nil)
 		factory.base.WorkspaceRoot = workspace
@@ -1144,6 +1150,10 @@ func TestBridgeShutdownDoesNotSnapshotDeletingSession(t *testing.T) {
 }
 
 func TestControllerRuntimeAttachFileCopiesIntoSessionWorkspace(t *testing.T) {
+	profile := t.TempDir()
+	t.Setenv("REASONIX_HOME", profile)
+	t.Setenv("REASONIX_STATE_HOME", profile)
+	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
 	workspace := t.TempDir()
 	source := filepath.Join(t.TempDir(), "research notes.txt")
 	if err := os.WriteFile(source, []byte("selected context"), 0o600); err != nil {
@@ -1169,6 +1179,17 @@ func TestControllerRuntimeAttachFileCopiesIntoSessionWorkspace(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(workspace, ".reasonix", "attachments")); err != nil {
 		t.Fatalf("workspace attachment directory: %v", err)
+	}
+	if data, err := os.ReadFile(source); err != nil || string(data) != "selected context" {
+		t.Fatalf("attachment changed source content = %q, %v", data, err)
+	}
+	sourceInfo, err := os.Stat(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	copyInfo, err := os.Stat(filepath.Join(workspace, filepath.FromSlash(attachment.Path)))
+	if err != nil || os.SameFile(sourceInfo, copyInfo) {
+		t.Fatalf("attachment must own a distinct copied file: %v", err)
 	}
 }
 
@@ -1214,6 +1235,10 @@ func TestControllerRuntimeListsBoundedWorkspaceEntries(t *testing.T) {
 }
 
 func TestControllerRuntimePreviewsSafeWorkspaceFiles(t *testing.T) {
+	profile := t.TempDir()
+	t.Setenv("REASONIX_HOME", profile)
+	t.Setenv("REASONIX_STATE_HOME", profile)
+	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
 	workspace := t.TempDir()
 	textPath := filepath.Join(workspace, "notes.txt")
 	if err := os.WriteFile(textPath, []byte("hello\nworld"), 0o600); err != nil {
@@ -1242,6 +1267,10 @@ func TestControllerRuntimePreviewsSafeWorkspaceFiles(t *testing.T) {
 }
 
 func TestControllerRuntimeListsAndPreviewsGitChanges(t *testing.T) {
+	profile := t.TempDir()
+	t.Setenv("REASONIX_HOME", profile)
+	t.Setenv("REASONIX_STATE_HOME", profile)
+	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
 	repo := t.TempDir()
 	runGitTest := func(args ...string) {
 		t.Helper()

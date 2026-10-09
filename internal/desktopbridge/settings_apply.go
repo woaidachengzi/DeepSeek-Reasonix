@@ -120,6 +120,7 @@ func (m *RuntimeManager) rebuildSettingsLocked(ctx context.Context, sessionID st
 	m.ownerEpoch++
 	commitReplacement(next)
 	m.runtime, m.view = next, view
+	m.activateOwnedEventsLocked()
 	// The replacement now owns the live history. Never snapshot the outgoing
 	// controller over it or fire SessionEnd for a credentials update.
 	_ = previous.ReleaseForReplacement()

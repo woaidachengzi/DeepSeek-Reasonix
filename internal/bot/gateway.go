@@ -721,6 +721,15 @@ func (gw *BotGateway) dispatchLoop(ctx context.Context, binding AdapterBinding) 
 }
 
 func (gw *BotGateway) handleMessage(ctx context.Context, binding AdapterBinding, msg InboundMessage) {
+	if _, scoped := gw.cfg.Desktop.(DesktopScopedBridge); scoped {
+		// Authenticated transport binding, not message-supplied routing, owns
+		// scoped Desktop authority. Reject mismatches before access/callbacks.
+		if binding.ID == "" || msg.ConnectionID != "" && msg.ConnectionID != binding.ID || msg.Domain != "" && msg.Domain != binding.Domain {
+			gw.logger.Warn("bot rejected inconsistent Desktop transport identity")
+			return
+		}
+		msg.ConnectionID, msg.Domain = binding.ID, binding.Domain
+	}
 	msg.Platform = binding.Platform
 	if msg.ConnectionID == "" {
 		msg.ConnectionID = binding.ID
@@ -1688,7 +1697,7 @@ func (gw *BotGateway) handleSlashCommandCore(ctx context.Context, adapter Adapte
 		if !gw.requireCommandRole(ctx, adapter, msg, "admin") {
 			return
 		}
-		_ = gw.sendText(ctx, adapter, msg, gw.handleDesktopCommand(msg))
+		_ = gw.sendText(ctx, adapter, msg, gw.handleDesktopCommandContext(ctx, msg))
 
 	case strings.HasPrefix(msg.Text, "/status"):
 		active := gw.sessions.ActiveCount()

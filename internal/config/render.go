@@ -1730,6 +1730,9 @@ func renderBotDesktopWatcher(b *strings.Builder, watcher BotDesktopWatcherConfig
 	if strings.TrimSpace(watcher.ChatID) != "" {
 		fmt.Fprintf(b, "chat_id = %q\n", strings.TrimSpace(watcher.ChatID))
 	}
+	if strings.TrimSpace(watcher.ActorID) != "" {
+		fmt.Fprintf(b, "actor_id = %q\n", strings.TrimSpace(watcher.ActorID))
+	}
 }
 
 // renderRuleList emits a permission rule list. A populated list renders as an

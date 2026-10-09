@@ -23,6 +23,7 @@ func TestControllerRuntimeFreezesExplicitVisionCapabilityForGlobalImages(t *test
 	profile := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("REASONIX_HOME", profile)
+	t.Setenv("REASONIX_STATE_HOME", profile)
 	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
 	var pixels bytes.Buffer

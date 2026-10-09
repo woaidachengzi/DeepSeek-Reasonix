@@ -55,6 +55,7 @@ func (m *RuntimeManager) SetSessionEffort(ctx context.Context, sessionID, model,
 	m.ownerEpoch++
 	commitReplacement(next)
 	m.runtime, m.view = next, view
+	m.activateOwnedEventsLocked()
 	_ = previous.ReleaseForReplacement()
 	return view, nil
 }

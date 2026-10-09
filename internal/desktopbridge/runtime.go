@@ -398,14 +398,15 @@ func (f RuntimeFactoryFunc) Open(ctx context.Context, request OpenRequest) (Runt
 type RuntimeManager struct {
 	factory RuntimeFactory
 
-	mu               sync.Mutex
-	runtime          Runtime
-	view             SessionView
-	opening          bool
-	closed           bool
-	ownerEpoch       uint64
-	terminalCreates  int
-	pendingTerminals *retainedRuntimeTerminals
+	mu                sync.Mutex
+	runtime           Runtime
+	view              SessionView
+	opening           bool
+	closed            bool
+	ownerEpoch        uint64
+	localInputVersion uint64
+	terminalCreates   int
+	pendingTerminals  *retainedRuntimeTerminals
 }
 
 func NewRuntimeManager(factory RuntimeFactory) *RuntimeManager {
@@ -985,6 +986,9 @@ func (m *RuntimeManager) Submit(ctx context.Context, sessionID, input string) (S
 	if err := m.rebuildSettingsLocked(ctx, strings.TrimSpace(sessionID)); err != nil {
 		return SessionView{}, err
 	}
+	// A valid local send reclaims remote driving, including queued local input.
+	// This fence is updated under the same lock as exact remote admission.
+	m.localInputVersion++
 	m.runtime.Submit(input)
 	view := m.view
 	view.State = m.runtime.State()
@@ -1312,6 +1316,7 @@ func (m *RuntimeManager) finishOpen(runtime Runtime, view SessionView) bool {
 		m.ownerEpoch++
 		m.runtime = runtime
 		m.view = view
+		m.activateOwnedEventsLocked()
 	}
 	return true
 }

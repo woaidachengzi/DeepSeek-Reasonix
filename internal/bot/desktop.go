@@ -132,7 +132,7 @@ func (gw *BotGateway) handleDesktopCommand(msg InboundMessage) string {
 				return "已在本次运行中退订桌面事件，但保存失败；桌面端重启后订阅可能恢复。"
 			}
 			return "已退订桌面事件推送，持久化订阅也已移除。"
-		case "", "state":
+		case "", "state", "status":
 			if bridge.Watching(route) {
 				return "本聊天正在订阅桌面事件推送。用 /desktop watch off 退订。"
 			}
@@ -197,19 +197,50 @@ func (gw *BotGateway) divertToDesktopTakeover(ctx context.Context, adapter Adapt
 		return false
 	}
 	route := desktopRouteFromMessage(msg)
-	if bridge.TakeoverTab(route) == "" {
-		return false
+	scoped, scopedHost := bridge.(DesktopScopedBridge)
+	if scopedHost {
+		if !desktopScopedIdentity(msg) || !scoped.DesktopTakeoverActive(route, desktopActor(msg)) {
+			return false
+		}
+	} else {
+		if bridge.TakeoverTab(route) == "" {
+			return false
+		}
 	}
 	// Re-check the continuing capability, not only the command that created it.
 	// A runtime refresh can revoke admin while leaving this process-local binding
 	// alive; base allowlist admission alone must not preserve takeover power.
 	if !gw.checkCommandRole(msg.Platform, msg, "admin") {
-		_, _ = bridge.Release(route)
-		_ = gw.sendText(ctx, adapter, msg, "桌面接管已解除：当前账号不再具有 bot 管理员权限。")
+		feedback := "桌面接管已解除：当前账号不再具有 bot 管理员权限。"
+		if scopedHost {
+			feedback = "当前账号不再具有 bot 管理员权限，本条输入未转发；解除接管未确认，请在桌面端检查并收回控制。"
+			if ctx != nil && ctx.Err() == nil {
+				if _, err := scoped.ExecuteDesktopCommand(ctx, DesktopCommand{Route: route, ActorID: desktopActor(msg), Action: "release"}); err == nil && ctx.Err() == nil {
+					feedback = "桌面接管已解除：当前账号不再具有 bot 管理员权限。"
+				}
+			}
+		} else {
+			_, _ = bridge.Release(route)
+		}
+		_ = gw.sendText(ctx, adapter, msg, feedback)
 		return true
 	}
 	if strings.TrimSpace(msg.Text) == "" {
 		_ = gw.sendText(ctx, adapter, msg, "接管模式暂不支持转发附件，请发送文本。")
+		return true
+	}
+	if scopedHost {
+		if ctx == nil || ctx.Err() != nil || len(msg.Text) > desktopCommandBytes {
+			_ = gw.sendText(ctx, adapter, msg, desktopOperationUnknown)
+			return true
+		}
+		feedback, err := scoped.ExecuteDesktopCommand(ctx, DesktopCommand{Route: route, ActorID: desktopActor(msg), Action: "drive", AnswerText: msg.Text})
+		if err != nil || ctx.Err() != nil {
+			feedback = desktopOperationUnknown
+		}
+		if strings.TrimSpace(feedback) != "" {
+			_ = gw.sendText(ctx, adapter, msg, feedback)
+		}
 		return true
 	}
 	feedback, err := bridge.DriveInput(route, msg.Text)

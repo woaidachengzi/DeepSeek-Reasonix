@@ -1,5 +1,37 @@
 # E 迁移清单
 
+## 2026-10-10 bot 基础批次超过 30 文件 review 收敛
+
+达到 31 文件后暂停扩展并整批 review，修复 scoped 入站消息可指定其它 connection/domain 权限的问题，补真实绑定校验与零回调拒绝回归；最终十次专项、五包完整 race/vet/生成/格式门禁通过，缓存范围与证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-bot-基础批次超过-30-文件-review-收敛)。按规则 review 后提交，不 push；完整 host/watch 消费/过滤/通知、全 local/remote 目录与真实 IM/Plan/Recovery E2E 仍未完成，Desktop 继续未启用。App 仍为 `0366aa636`，无新包或真实账号/迁移/发布，完整目标继续。
+
+## 2026-10-10 精确私有提示快照与 bot 决策 ticket（后续源码）
+
+新增 core/manager 精确归属下的私有提示读取，不回放/补路由/修改提示；bot 随机 ticket 绑定聊天、actor 与完整 prompt/owner 身份，显示刷新不重置单次决策，严格 Ask 解析与 Plan/Recovery/MCP 专用 grammar/codec 已接。实际核心 Ask/Approval/MCP 读取及 Preview Ask→MCP 决策、票据隔离、最终十次专项与五包完整 race/vet/生成/格式证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-精确私有提示快照与-bot-决策-ticket后续源码)。Plan/Recovery 实际 bot E2E、完整 host 注册、watch 消费/过滤/收回通知、全 local/remote 目录和 IM 回流未完成，不能替代原生或真实服务验收。App 仍为 `0366aa636`；累计 30 文件尚未超过提交门槛，无提交/push/新包，下一批继续前准备整批 review 收敛，完整目标继续。
+
+## 2026-10-10 Preview 本地驾驶、收回标记与 watch 存储（后续源码）
+
+补齐绑定实际本地 Controller/聊天/actor 的驾驶组件及 manager 原子 LocalInputVersion 收回 fence，同 ID 模型替换和本地发送后旧绑定不可复用。watch 保存 actor 并以现有 strict 无凭据事务逐路由落盘，保留其它配置、失败后的本进程状态和并发顺序，旧无 actor/重复归属不启用。实际 Controller 与临时配置专项十次 race、四包完整 race/vet/生成/格式检查通过，范围及证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-preview-本地驾驶收回标记与-watch-存储后续源码)。完整 Preview DesktopBridge 尚未注册：事件消费/过滤/通知、五类提示、完整 local/remote 目录与实际 IM 联动未完成，不能替代原生验收。App 仍为 `0366aa636`，累计 26 文件未达超过 30 文件先 review 后提交门槛，无提交/push/新包，完整目标继续。
+
+## 2026-10-10 bot 入站精确 Desktop 命令入口（后续源码）
+
+实际 gateway 入站命令和继续接管可选择精确宿主入口，保留聊天/连接/认证 actor 与 context，回答不分离查找/提交，失败不退回 ID-only 接口或自动重试；修复 watch status 别名及解除未确认时的错误成功文案。实际入站权限/跨连接隔离等专项十次 race、三包完整 race/vet/生成/格式检查通过，缓存范围和证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-bot-入站精确-desktop-命令入口后续源码)。Preview scoped host 尚未注册，Desktop 仍未启用，watch 消费/持久化/过滤、实际接管收回和 IM 回流未完成；App `0366aa636` 不含本批。累计 20 文件未达超过 30 文件先 review 后提交门槛，无提交/push/新包，完整目标继续。
+
+## 2026-10-10 bot Desktop 私有事件来源与发布生命周期（后续源码）
+
+补齐绑定实际 manager/Controller 双代际的私有事件来源，以及打开、模型、effort、配置重建四条发布路径；旧来源关闭退役旧观察者，队列异常明确要求新快照。实际 Controller 的 Ask/decision、模型替换及配置候选失败保留/成功退役回归，最终专项十次 race、两包完整 race、vet/生成/格式检查通过，初稿失败与修复证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-bot-desktop-私有事件来源与发布生命周期后续源码)。尚未启用 bot Desktop 或接入 IM/watch/权限过滤/接管回流，不能标记完整 bot 或原生验收完成；App 仍为 `0366aa636`、不含本批源码。累计 16 文件未达超过 30 文件先 review 后提交门槛，无提交/push/新包，完整目标继续。
+
+## 2026-10-10 bot Desktop 的本地精确命令归属基础（后续源码）
+
+新增当前 Preview 本地 runtime 的精确观察/提交/决策基础：manager 与 Controller 双代际、路径/轮次/idle revision/prompt routing fence，复用原子提交和严格五类 resolver；不按旧 ID fallback，不恢复/切换或自动重建模型。实际 Controller 的文本、真实 Ask/durable decision、重复/撤销/同会话模型重建隔离，以及十次专项和两包完整 race/vet/生成器通过；回归另修复三个旧测试继承状态目录造成标题/删除/图片历史污染，失败记录和复验证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-bot-desktop-的本地精确命令归属基础后续源码)。这不是完整 bot 会话/watch/审批/接管/回流/本地收回或 native/外部账号验收，Desktop Bridge 仍未启用。累计 8 文件未达超过 30 文件提交门槛，未提交/push/重建 App，完整目标继续。
+
+## 2026-10-10 历史文件失败复验与配置隔离
+
+截图中的两个历史文件测试在当前 bridge 包复验通过；补齐它们及相邻 Git preview 测试的独立配置/状态/缓存档案，并增加附件原件不变、副本非同一文件断言。三个专项十次 race、完整 bridge race、vet 和格式/diff 检查通过，范围及原始误筛选记录见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-历史文件失败复验与配置隔离)。当前桌面接口超时，CGSession 返回 unavailable，不能沿用旧锁屏结论或标记原生可见 UI 通过。bot Desktop 仍未接入；当前 3 个文件未达超过 30 文件提交门槛，无提交/push/产品包变化，完整目标继续。
+
+## 2026-10-10 提示卡片 macOS App 重建与隔离启动
+
+12 文件完成 review 并提交 `0366aa636`，无 push；从干净提交构建 arm64 可运行 App，含提示协议/native 基础及五类实际卡片。原完整 frontend build、Rust release、本地 ad-hoc 严格签名和实际 App managed/explicit 独立临时档案 smoke 均 exit 0；旧 App 已备份。包路径、哈希与实际证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-提示卡片-macos-app-重建与隔离启动)。没有正式签名/公证/发布，也未使用真实配置/API key。隔离 smoke 仅验证原生启动/档案/sidecar/鉴权/退出链路，不替代可见窗口交互、真实 SSH/bot/外部 MCP 或其他完整目标门禁。
+
 ## 2026-10-10 提示卡片提交前复核
 
 本批 12 文件 review 完成，未发现阻塞提交的问题，diff 检查通过；为形成可复现 App 版本先提交再打包，不 push。遵循后续超过 30 文件先 review 后提交规则。构建及原生隔离 smoke 尚待执行，不能提前标为包级通过。

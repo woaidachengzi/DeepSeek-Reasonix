@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -58,12 +59,27 @@ func TestResolvePromptScopedUsesExistingDecisionAndDurableTransition(t *testing.
 			}
 			identity := identities[0]
 			scope := scopedPromptIdentity(c, identity)
+			payload, err := c.ReadPromptScopedContext(context.Background(), scope, identity)
+			if err != nil || !json.Valid(payload) {
+				t.Fatal("private scoped prompt snapshot unavailable", err)
+			}
+			payload[0] = '!'
+			second, err := c.ReadPromptScopedContext(context.Background(), scope, identity)
+			if err != nil || !json.Valid(second) {
+				t.Fatal("snapshot aliases consumer", err)
+			}
+			if len(requests) != 0 || len(answered) != 0 || len(c.PendingPromptIdentities()) != 1 || c.PendingPromptIdentities()[0] != identity {
+				t.Fatal("snapshot emitted or rebound prompt ownership")
+			}
 			answer := PromptAnswer{Allow: true, Questions: []event.AskAnswer{{QuestionID: "q1", Selected: []string{"A"}}}, Action: mcpinteraction.ActionAccept}
 			wrongPath, wrongEpoch, wrongTurn := scope, scope, scope
 			wrongPath.SessionPath += ".other"
 			wrongEpoch.RuntimeEpoch += "-other"
 			wrongTurn.TurnID += "-other"
 			for _, wrong := range []PromptResolveScope{{}, wrongPath, wrongEpoch, wrongTurn} {
+				if _, err := c.ReadPromptScopedContext(context.Background(), wrong, identity); !errors.Is(err, ErrPromptResolveScope) {
+					t.Fatal("wrong snapshot scope accepted", err)
+				}
 				if err := c.ResolvePromptScopedContext(context.Background(), wrong, identity, answer); !errors.Is(err, ErrPromptResolveScope) {
 					t.Fatalf("wrong scope: %v", err)
 				}

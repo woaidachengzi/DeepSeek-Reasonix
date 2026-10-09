@@ -1,5 +1,66 @@
 # Wails API 与事件面盘点
 
+## 2026-10-10 bot 基础批次超过 30 文件 review 收敛
+
+- 本批达到 31 文件后停止功能扩展，复核 scoped command/read、发布/关闭四路径、观察队列归属、提示票据与单次决策、watch 事务、local reclaim、入站权限及测试档案隔离。发现 scoped gateway 原入站逻辑允许消息指定 connection/domain，从而可能选择其它连接权限；修复为在白名单、角色和 OnInbound 前按实际 AdapterBinding 校验，不一致直接拒绝，空身份由真实绑定填充。保留非 scoped 旧接口行为；新增伪造连接/domain 的命令与持续驾驶拒绝、零 callback/零回执及正常绑定回归。另补 ticket 显示复用分支的撤销检查。
+- 修复后最终四包专项十次 race exit 0（control 2.768s、desktopbridge 1.331s、bot 1.770s、bridge 31.491s）；五包完整 race exit 0（control 44.351s、desktopbridge cached，前节有实际执行证据、bot 3.408s、config 14.075s、bridge 45.254s）。日志 `/private/tmp/reasonix-bot-review.t33MPa/{focused-final,full-race}.log`；五包 vet、原生成器 -check、触及 Go 文件格式和 diff 检查通过。没有以其它未执行包或测试夹具替代真实服务/原生验收。
+- 本批 scoped host 私有组件、测试隔离修复与证据按规则 review 后提交，不 push。完整 Preview DesktopBridge 仍未注册、Desktop nil/capability false；实际 watch 事件消费/权限过滤/实时收回通知、完整 local/remote 目录、真实 IM 和 Plan/Recovery E2E 继续待接验。现有 macOS App 仍为 `0366aa636`，不含本批，无新包/真实账号/迁移/正式发布，完整目标继续。
+
+## 2026-10-10 精确私有提示快照与 bot 决策 ticket（后续源码）
+
+- Controller 新增 ReadPromptScopedContext，共享原 scoped resolver 的实际路径/Controller epoch/活动轮次校验，并在 prompt resolve 与 leaf approval 锁下验证完整 prompt identity/state、序列化独立私有 wire 数据。读取不 replay、不发事件、不补 routing、不做 durable transition/resolver callback；manager 在双代际 owner 锁下保留原捕获 scope 直达 core，不重采样新 epoch 或退回兼容读接口。Review 发现原 replay helper 的 approval 分支会补绑定 routing，已替换初稿 collector 方案，最终门禁基于新独立读取入口。
+- 私有 ticket 以随机 opaque ID 绑定完整聊天路由、actor、Controller/manager 双代际和 prompt turn/kind/routing identity，最多 128 条、15 分钟，失效/关闭清理私密快照。原始 core prompt ID 不是可操作凭据，显示刷新复用同一 ticket、不会重置 attempted；未知/失败 dispatch 不自动重试。Ask 根据捕获问题严格解析未知/重复/遗漏赋值和编号歧义；Plan/Recovery/MCP 保留专用 action/feedback/content，不能用 generic allow。gateway scoped grammar 保留 MCP JSON 字符串中的空格，使用既有严格五类 codec 在单次接纳前验证大小/字段。
+- 实际核心 Ask/Approval/MCP 回归新增 scope 拒绝、独立 JSON、不重发/不改 routing identity 检查；实际 Preview Controller 的 Ask→MCP 同活动轮次验证真实问题/选项读取、chat/actor/core-ID 拒绝、坏输入零 wake、Ask 选择及 MCP form content/durable decision、旧 ticket 不漂移到新提示或同 ID 模型替换。其它五类 grammar 在实际 gateway 假宿主路径验证；Plan/Recovery 尚未获得实际 bot 端到端决策证明，不能将现有 codec/core 证明当作已完成。
+- 最终四包专项十次 race exit 0（control 2.468s、desktopbridge 1.459s、bot 1.794s、bridge 19.352s）；五包完整 race exit 0（control 43.561s、desktopbridge 4.284s、bot 3.454s、config 14.658s、bridge 43.402s）。日志 `/private/tmp/reasonix-bot-prompts.UU9t0M/{focused-final,full-race}.log`；五包 vet、原生成器 -check、gofmt/diff 检查通过。所有实际 Controller 使用临时独立配置/状态/缓存及私有 fake provider；MCP 由 Controller Interact fixture 驱动，不连接真实 MCP/IM 或开启外部 URL。
+- 私有组件仍未组成/注册完整 Preview DesktopBridge，watch 消费/发送权限与群聊过滤、实时收回通知、完整 local/remote 目录和真实 IM 回流继续待接验；Desktop nil/capability false 保持不变。没有新 App/原生可见 UI/真实账号验收或发布；现有 App 来自 `0366aa636`。累计 30 个变更文件，尚未超过 30 文件提交门槛，无提交/push，下一批新增文件前需准备整批 review 收敛，完整目标继续。
+
+## 2026-10-10 Preview 本地驾驶、收回标记与 watch 存储（后续源码）
+
+- 新增当前本地 Controller 的私有驾驶组件：显式 takeover 捕获 manager/Controller 双代际、路径和独立 LocalInputVersion，驾驶同时绑定完整聊天路由及认证 actor。其它聊天/连接/domain/群成员不能继承或抢占；release 只撤销本路由。每次 drive 捕获当前 idle revision 并交给原子 SubmitOwned，不解释命令、排队 busy 输入、自动重新接管或借 remote/Wails owner。
+- RuntimeManager 的有效本地 Submit（包括引用图片的文本输入）在原 manager 锁下推进私有 LocalInputVersion；SubmitOwned 在同一锁下复核。旧绑定不能仅刷新 idle revision 绕过本地收回，同 ID 模型替换也退役绑定。收回标记不进入公共协议、不是 prompt routing epoch；组件关闭不关闭本地 Controller。继续接管 probe 同时匹配 route 与 actor，避免别的群成员因权限不足自动解除原操作者绑定。
+- watch 存储经现有无凭据 strict 配置事务按单路由更新，保存 actor_id 供后续逐次权限复核；保存失败时本进程的 on/off 仍保持权威，不从旧磁盘快照恢复。变更与落盘串行，最多 128 条；保留旧 actor-less 记录但不在 Preview 启用，重复归属 fail closed。它保留其它进程变更的配置/路由；非规范身份拒绝，避免 renderer trim 在重启后变成不同归属。持久记录本身不授予发送权限，未来消费者须复核 adapter/allowlist/admin 并过滤群聊内容。
+- 实际 Controller + 私有假 provider 覆盖普通文本 `/clear`、busy 不排队、有效本地发送收回、旧 local version 即使刷新 revision 仍拒绝、同 ID 模型替换隔离、route/actor 冲突、release 与关闭不杀本地。真实临时 TOML 覆盖 actor roundtrip、旧/重复记录、逐路由保留、失败/撤销后状态、并发 on/off 与容量边界。最终三包专项十次 race exit 0（bot 1.913s、desktopbridge 1.310s、bridge 23.935s），四包完整 race exit 0（bot 5.446s、config 13.582s、desktopbridge 4.944s、bridge 37.082s）；日志 `/private/tmp/reasonix-bot-host.U7L9wF/{focused-final,full-race}.log`。四包 vet、原生成器 -check、gofmt/diff 检查通过。
+- 这两个组件尚未组成/注册完整 Preview DesktopBridge：watch 事件消费、实时收回通知、精确五类提示与完整本地/remote 会话目录仍待接入，`previewBotRuntime` Desktop 仍 nil/capability false，不能把本地当前 Controller 组件当作所有会话或实际 IM 回流完成。没有原生可见 UI/真实 IM 验收、新 App 或发布；已交付 App 仍为 `0366aa636`。累计 26 个变更文件，未达超过 30 文件先 review 后提交门槛，无提交/push，完整目标继续。
+
+## 2026-10-10 bot 入站精确 Desktop 命令入口（后续源码）
+
+- 实际 BotGateway 入站/slash 路径新增可选 DesktopScopedBridge：传入既有完整 DesktopWatchRoute、认证 actor（OperatorID 优先）、明确 action/target 与原始待解析回答、入站 context。宿主须先捕获精确 owner/prompt 再解析并接纳同一份回答，不再由 gateway 分开执行 AskQuestions/Answer 或只按 ID 审批。接管普通输入和权限撤销后的 release 也走同一入口；选择 scoped host 后，任何失败/撤销都不 fallback 到 legacy 方法，不自动重试。
+- scoped 入口拒绝未知平台/聊天类型、缺少聊天/连接身份、错误命令前缀/参数和超过 64 KiB 输入；独立复核 admin。错误或 dispatch 后 context 撤销只返回固定未确认文案，不泄露原始 provider/workspace 错误或假报接纳；解除接管失败不能宣称已解除。旧 Wails 接口保留，同时修复既有 `/desktop watch status` 与帮助不一致（保留 state 别名）。
+- 假宿主所有 legacy 方法设为 panic，实际 `handleMessage` 路径覆盖所有命令、OperatorID、连接白名单、approver 无 admin、跨连接管理员隔离、context 透传与撤销、错误私密剥离/no retry，另覆盖继续接管的准确聊天类型/原样输入、撤销 release、失败解除和超限拒绝。最终专项十次 race exit 0（1.874s）；三个相关包完整 race exit 0（bot 3.049s、desktopbridge cached，上一节有实际执行证据、bridge 33.759s）。日志 `/private/tmp/reasonix-bot-scoped-dispatch.oigu4o/{focused-final,full-race}.log`；三包 vet、原生成器 -check、gofmt/diff 检查通过。
+- 此批完成 gateway 入口，尚未注册 Preview scoped host，`previewBotRuntime` Desktop 仍 nil/capability false；实际 watch 持久化、观察者消费/聊天权限过滤、接管与本地收回、IM 回流仍须继续实现验收。不得把假宿主证明当作实际 Controller/IM 联动通过。App 仍来自 `0366aa636`、不含本批；累计 20 文件未达超过 30 文件先 review 后提交门槛，无提交/push/新包/真实账号或发布，完整目标继续。
+
+## 2026-10-10 bot Desktop 私有事件来源与发布生命周期（后续源码）
+
+- 新增 host-private OwnedEventStream；来源在 manager 实际发布之后绑定会话/路径、manager 与 Controller 双代际，不接纳候选构建事件，不凭旧会话 ID 订阅新实例。生产 lifecycle sink 负责事件投递及关闭；普通打开、保留终端的模型替换、effort 和配置重建四条发布路径均激活来源。失败候选不替换旧来源，关闭旧来源会退役其观察者且不影响新来源。
+- 每个观察者独立复制 payload，最多 8 个观察者、每队列 32 帧、每帧 64 KiB；溢出或编码/大小异常明确返回需要新快照，退役/关闭/撤销清空旧队列，不静默丢帧、自动重订阅或重试命令。事件 wire 的 turn/prompt ID 保持原样，私有 scope 单独携带 Controller 实例身份，未伪造 wire runtimeEpoch 或 prompt routing 身份。
+- 实际 Controller 集成验证 Ask 与 durable decision、同 ID 模型替换后的旧来源隔离、实际配置重建失败保留旧观察者，以及成功重建退役旧来源；均使用独立临时配置/状态/缓存与私有 fake provider，无真实 IM/模型账号。最终专项 `go test -race -count=10 -run 'TestOwned(Events|Commands)' ./internal/desktopbridge ./cmd/reasonix-desktop-bridge` exit 0（1.282s/10.512s），两包完整 race exit 0（4.033s/33.699s），日志 `/private/tmp/reasonix-bot-owned-events.xAvcVP/{focused-final,full-race}.log`。两包 vet、原协议生成器 `-check`、触及文件 gofmt 和 diff 检查通过。
+- 初稿使用不存在的 event RuntimeEpoch 字段且遗漏模型替换的保留终端发布路径，初次/随后同版专项失败保留于 focused.log/focused-repeat.log；修复字段与全部发布路径后十次专项通过，再增加实际配置失败/成功证明并重新执行上述最终门禁。不将早期失败或前版成功算作最终证明。
+- 这是观察生产者基础，不是完整 bot 会话/watch/审批/接管/回流：Desktop Bridge 仍未启用，尚无实际 IM 消费者、持久 watch、聊天角色/私密内容过滤或本地收回验证；事件 payload 不可直接转发到 IM。未改公共协议/native/UI，未重建 App；已交付 App 仍为 `0366aa636`，不含这些后续源码。累计 16 文件未达超过 30 文件先 review 后提交门槛，无提交/push，完整目标继续。
+
+## 2026-10-10 bot Desktop 的本地精确命令归属基础（后续源码）
+
+- Preview bot 仍未接 Desktop Bridge，不能直接复用只按 session ID 寻址的兼容 Submit/Approve。新增 host-neutral RuntimeOwnedCommands/CommandSnapshot/SubmitOwned/ResolveOwnedPrompt：捕获实际本地会话 ID/路径、manager ownerEpoch 与独立 Controller runtimeEpoch，保留原 idle revision、活动 turn、精确 prompt kind/id/routing stamp。manager 在同一 owner 锁下拒绝关闭/替换/撤销；core 复用既有原子 scoped submit 与五类 specialized scoped resolver，不暴露或保留原始 Controller 指针、不调用 Wails、本地/远程不会相互 fallback。
+- pending identity 列表只是观察，不能替代核心决策检查；返回列表及原始 answer bytes 独立复制。五类 answer union 使用已有严格 shared decoder，不重复发明布尔审批路径；manager 没有新增公开 HTTP/IPC 或猜测未知会话。Submit 不解释管理命令、不重采样 revision、不自动重试，配置已变化则拒绝，必须由明确桌面刷新/重建后重新绑定，不能让旧接管隐式获得新 Controller。此基础尚不包含 watch 通知、Ask 问题正文、聊天权限/持久订阅、显式接管、驱动回流或本地收回链路，Desktop=nil/capability=false 保持真实，完整 bot 联动未完成。
+- 实际 Go Controller + 独立假 provider 验证文本 `/clear` 走普通用户消息、旧 idle revision/重复/撤销拒绝、真实 Ask 的错误路由和 null 选项不能唤醒、正确回答与对应 durable PromptAnswered、重复回答拒绝，以及 same-session 模型重建后的路径不变而 manager/Controller 双代际更新、旧命令零 provider dispatch。通用 manager 单测覆盖四项身份拒绝、等待 owner 锁后撤销、关闭、pending/answer consumer 隔离及不向旧兼容 Runtime fallback。这里只做本地 Go 集成，五类 native/IM 端到端、实际模型/外部账号、远程所有者并未通过验收。
+- 首次专项与两包完整 race 通过；十次专项首次暴露测试 provider 重复注册 panic，保留 focused-repeat.log，不计通过。改为 sync.Once 注册及按唯一私有 endpoint 索引每轮实例（不发网络），并使测试记录入队遵循取消后，原十次专项最终 exit 0：desktopbridge 1.259s、bridge 8.479s，focused-repeat-final.log。
+- 同一外层临时 STATE_HOME 的第二次完整运行还暴露三个旧测试污染：Rename 读到 Release notes、Delete 读到已删除标记、Global image provider 收到两张历史图片。它们仅设置配置 HOME，没有设置状态 HOME；补齐 Rename/Delete 的私有配置/状态/缓存及图片测试状态目录，不删除外层旧记录、不改产品行为、不放宽原断言。三个污染专项在同一外层档案 `-race -count=10` exit 0（9.459s），profile-isolation-repeat.log。最终同档案两包完整 `-race -count=1` exit 0：desktopbridge 4.120s、bridge 35.271s，full-race-isolated-final.log；失败 full-race-final.log 保留。vet-isolated-final.log、实际协议生成器 generated-check-final.log、gofmt/diff 检查均 exit 0。日志目录 `/private/tmp/reasonix-bot-owned-commands.TCSRNe/`。
+- 当前累计 8 个文件，未达超过 30 文件先 review 后提交阈值，未提交/push/重打包；现有 App `0366aa636` 不含本批。下一步必须接实例归属的事件观察和完整 bot Desktop 生命周期，不能把此命令基础或只读清单标成 bot 联动。完整迁移目标及原生/跨平台/管理页/SQLite 门禁继续保留。
+
+## 2026-10-10 历史文件失败复验与配置隔离
+
+- 当前 `0366aa636` 的两个历史测试 `TestControllerRuntimeAttachFileCopiesIntoSessionWorkspace` / `TestControllerRuntimePreviewsSafeWorkspaceFiles` 在正确 bridge 包复验通过（`/private/tmp/reasonix-runtime-file-current.log`）。首次误对 internal/remote 运行同名筛选只有 no tests to run，不计通过；首次正确包运行继承环境，也不计独立档案验收，更不能据此推断历史失败的唯一根因。
+- Review 发现这两个测试及相邻 Git preview 测试调用 boot.Build 前没有明确设置配置/状态/缓存档案；补为每个测试独立临时 REASONIX_HOME/STATE_HOME/CACHE_HOME。附件断言另验证原件字节不变及副本不是同一文件，保留既有工作区落点、大小、文本/二进制及越界拒绝断言，不修改产品逻辑或放宽门禁。
+- 补强后三个专项 `-race -count=10` exit 0（6.311s），完整 bridge `go test -race ./cmd/reasonix-desktop-bridge` exit 0（33.560s），vet exit 0、gofmt/diff 检查通过。完整/专项运行的外层档案也分别限定在测试临时目录；日志 `/private/tmp/reasonix-runtime-file-review.JdiWji/{focused-race,bridge-race,vet}.log`。这只证明该包的当前回归，不代表全部 Go 包或原生窗口已验收。
+- 当前 CUA inventory 调用超时并重置 kernel；只读 CGSession 查询在隔离编译缓存下返回 unavailable，不能沿用旧记录宣称当前仍锁屏，亦不能据此声称窗口可交互。未进行解锁、系统剪贴板或真实账号操作。Preview bot_runtime.go 仍明确 Desktop=nil / desktopBridgeAvailable=false，完整会话/watch/审批/显式接管联动仍待实施，不能用已有 bot 接入或会话列表代替。
+- 当前共 3 个变更文件（测试及两份既有包/本次证据文档），未达超过 30 文件先 review 后提交门槛，尚未提交/push。产品代码和已交付 App 没有变化，无须为测试文档修改重打包；完整目标继续。
+
+## 2026-10-10 提示卡片 macOS App 重建与隔离启动
+
+- 上节 12 文件已 review 并提交 `0366aa6361200e6afff1a5bbff68dc3ad368677c`，无 push。实际 builder 记录该干净提交后构建 Go sidecar、执行原完整 frontend build 门禁（未跳过或放宽预算）、编译 Rust release 并生成 arm64 App；build exit 0，日志 `/private/tmp/reasonix-prompt-package.dLVpvZ/build.log`。本批 App 已包含 `18d8654ba` 提示协议/native 基础和五类实际提示卡片，不再是旧 `49f7a76bd` 包。
+- 可运行包：`desktop/tauri/target/aarch64-apple-darwin/release/bundle/macos.noindex/Reasonix Tauri Preview.app`，兼容 `macos` 路径指向该目录。主程序及 sidecar 均为 arm64；ad-hoc hardened runtime、无 TeamIdentifier，`codesign --verify --deep --strict` exit 0。没有正式签名/公证/发布或切换默认下载。替换前旧包已用 ditto 保留在 `/private/tmp/reasonix-prompt-package.dLVpvZ/Previous Reasonix Tauri Preview.app`，备份严格签名检查通过，可恢复。
+- 现有 packaged smoke 对实际新 App 执行两次，外层最小环境、内部独立临时 HOME/managed 与 explicit profile；exit 0，日志 `/private/tmp/reasonix-prompt-package.dLVpvZ/package-smoke.log`。两个档案均验证私有且不同的凭据身份、真实 sidecar/loopback readiness、未认证 health 401、子环境隔离、Global workspace 0700、只读 native notification 权限查询（granted）及正常 host exit/sidecar/readiness 清理。未使用真实配置/API key/模型/SSH/IM，也未发送系统通知。此 smoke 不证明可见 WKWebView 提示交互、真实 SSH/bot 或外部 MCP 登录。
+- App 主程序 SHA-256 `b538863beb82714476a878674a8a36337a4c8716848260a5f614c7a6604ddb22`；sidecar SHA-256 `9bf9f100b020a0ad1d0d94cc51b62727152348206f48d7565955f1cdf71b2847`。构建与 smoke 完成时源码树仍干净；随后仅追加本节及清单包级证据，尚未再次提交。完整迁移目标仍继续，其他原生交互、真实服务、跨平台/复杂管理页/SQLite 门禁不能据此标为完成。
+
 ## 2026-10-10 提示卡片提交前复核
 
 复核本批 12 文件的事件触发、稳定提示身份、刷新代际退役、旧异步回执隔离、草稿保留、共享卡片默认行为和远程文件查询禁用，未发现阻塞提交的问题；`git diff --check` 通过。完整原前端门禁及最终专项/浏览器证据沿用下节记录。本批虽未超过 30 文件，但功能已完整，为让新 App 对应明确源码版本，先提交再构建；不 push，包级结果须等实际构建和隔离 smoke 完成再记录。
