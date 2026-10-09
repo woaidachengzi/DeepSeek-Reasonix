@@ -27,6 +27,23 @@ var sessionEventKinds = func() map[string]bool {
 	return kinds
 }()
 
+func validSessionMessageIdentity(frame eventwire.Event) bool {
+	if !cleanField(frame.MessageID, 4096) {
+		return false
+	}
+	if frame.Kind == "user_message_admitted" || frame.Kind == "host_input_admitted" {
+		return frame.MessageID != ""
+	}
+	return frame.Kind == "steer" || frame.MessageID == ""
+}
+
+func projectSessionAdmission(frame eventwire.Event) eventwire.Event {
+	if frame.Kind != "user_message_admitted" && frame.Kind != "host_input_admitted" {
+		return frame
+	}
+	return eventwire.Event{Kind: frame.Kind, MessageID: frame.MessageID, TurnID: frame.TurnID, Sequence: frame.Sequence, Status: frame.Status, SessionPath: frame.SessionPath, SessionCurrent: frame.SessionCurrent}
+}
+
 // SessionEventStream has one Next consumer. Its lifetime belongs to both the
 // selected operation and the authenticated SSH/controller owner. It never
 // retries, adopts another foreground, or turns an SSE id into a replay grant.
@@ -163,12 +180,12 @@ func (s *SessionEventStream) Next() (frame eventwire.Event, err error) {
 			frame = eventwire.Event{}
 			continue
 		}
-		if !sessionEventKinds[frame.Kind] || frame.Sequence > 9_007_199_254_740_991 || !cleanField(frame.TurnID, 4096) || !cleanField(frame.ItemID, 4096) || !cleanField(frame.PromptID, 4096) || !cleanField(frame.MessageID, 4096) || (frame.MessageID != "" && frame.Kind != "steer") {
+		if !sessionEventKinds[frame.Kind] || frame.Sequence > 9_007_199_254_740_991 || !cleanField(frame.TurnID, 4096) || !cleanField(frame.ItemID, 4096) || !cleanField(frame.PromptID, 4096) || !validSessionMessageIdentity(frame) {
 			return eventwire.Event{}, ErrResponse
 		}
 		if s.ctx.Err() != nil || s.client.Closed() {
 			return eventwire.Event{}, s.client.viewReadError(s.ctx)
 		}
-		return frame, nil
+		return projectSessionAdmission(frame), nil
 	}
 }

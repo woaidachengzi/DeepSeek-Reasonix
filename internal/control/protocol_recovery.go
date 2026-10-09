@@ -46,7 +46,8 @@ func (c *Controller) RunProtocolRecoveryWithAdmission(ctx context.Context, id, g
 		if admitted != nil {
 			admitted()
 		}
-		return c.runTurn(recoveryCtx, protocolRecoveryPrompt+recoveryGuidance(guidance))
+		input := protocolRecoveryPrompt + recoveryGuidance(guidance)
+		return newTurnOrchestrator(c).runSyntheticTurnWithRawDisplay(recoveryCtx, input, input, "")
 	})
 }
 
@@ -73,7 +74,8 @@ func (c *Controller) SubmitProtocolRecovery(id, guidance string) {
 		if err != nil {
 			return err
 		}
-		return c.runTurn(recoveryCtx, protocolRecoveryPrompt+recoveryGuidance(guidance))
+		input := protocolRecoveryPrompt + recoveryGuidance(guidance)
+		return newTurnOrchestrator(c).runSyntheticTurnWithRawDisplay(recoveryCtx, input, input, "")
 	})
 }
 

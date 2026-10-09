@@ -19,6 +19,7 @@ export type { ProjectGroupsSnapshot, ProjectRuntimeTopic, ProjectTopicKey, Proje
 export type EventKind =
   | "turn_started"
   | "user_message_admitted"
+  | "host_input_admitted"
   | "reasoning"
   | "text"
   | "message"

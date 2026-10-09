@@ -35,7 +35,15 @@ func TestProtocolRecoveryControllerDurabilityAndConcurrentAdmission(t *testing.T
 	a := agent.New(p, tool.NewRegistry(), session, agent.Options{}, event.Discard)
 	dir := t.TempDir()
 	path := filepath.Join(dir, "session.jsonl")
-	c := New(Options{Runner: a, Executor: a, SessionDir: dir, SessionPath: path, Sink: event.Discard})
+	var userAdmissions, hostAdmissions atomic.Int32
+	c := New(Options{Runner: a, Executor: a, SessionDir: dir, SessionPath: path, Sink: event.FuncSink(func(e event.Event) {
+		if e.Kind == event.UserMessageAdmitted {
+			userAdmissions.Add(1)
+		}
+		if e.Kind == event.HostInputAdmitted && e.MessageID != "" {
+			hostAdmissions.Add(1)
+		}
+	})})
 	defer c.Close()
 	if err := c.RunTurn(context.Background(), "next"); err == nil {
 		t.Fatal("expected opaque failure")
@@ -83,6 +91,20 @@ func TestProtocolRecoveryControllerDurabilityAndConcurrentAdmission(t *testing.T
 	}
 	if p.calls.Load() != 2 {
 		t.Fatal("duplicate provider invocation")
+	}
+	users, hosts := 0, 0
+	for _, message := range session.Snapshot() {
+		if message.Role != provider.RoleUser {
+			continue
+		}
+		if message.Origin == provider.MessageOriginHost {
+			hosts++
+		} else if message.Origin == provider.MessageOriginUser {
+			users++
+		}
+	}
+	if users != 1 || hosts != 1 || userAdmissions.Load() != 1 || hostAdmissions.Load() != 1 || len(c.Checkpoints()) != 1 {
+		t.Fatalf("recovery became a user question/checkpoint: users=%d hosts=%d userEvents=%d hostEvents=%d checkpoints=%d", users, hosts, userAdmissions.Load(), hostAdmissions.Load(), len(c.Checkpoints()))
 	}
 }
 func TestParseProtocolRecoveryCommand(t *testing.T) {

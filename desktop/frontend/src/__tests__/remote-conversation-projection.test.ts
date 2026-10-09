@@ -74,3 +74,23 @@ assert.ok(compacted.view().items.some(item=>item.kind==="compaction"&&!item.pend
 compacted.event({kind:"text",seq:12,turnId:turn,sessionPath:path,text:"continued after compaction"});
 assert.equal(compacted.view().live?.text,"continued after compaction");
 console.log("Remote conversation projection: shared reducer, stable prefix/turn/tool/guidance identity, stream rollback and spectator-only output passed");
+
+const hostCut:RemoteDisplayCut={...admittedCut,events:[{kind:"host_input_admitted",seq:1,turnId:turn,sessionPath:path,messageId:"host-input",text:"PRIVATE host instructions",itemId:"not-an-authority"}],projection:{...admittedCut.projection,userSuffix:[]}};
+const host=createRemoteConversationProjection(hostCut,surface,labels);
+assert.deepEqual(host.view().items,remoteHistoryItems({history:hostCut.projection.history},surface,labels),"host readiness invents no question or notice");
+assert.equal(host.view().running,true);
+host.event({kind:"text",seq:2,turnId:turn,sessionPath:path,text:"continued answer"});
+assert.equal(host.view().live?.text,"continued answer");
+assert.equal(host.view().items.filter(item=>item.kind==="user").length,1);
+assert.ok(!JSON.stringify(host.view()).includes("PRIVATE"));
+assert.throws(()=>host.event({kind:"host_input_admitted",seq:3,turnId:turn,sessionPath:path,messageId:"host-input"}),/readiness/);
+host.event({kind:"text",seq:3,turnId:turn,sessionPath:path,text:" more"});
+assert.equal(host.view().live?.text,"continued answer more","rejected live readiness cannot consume the cursor");
+for(const bad of [
+  {...hostCut,events:[{...hostCut.events[0],messageId:""}]},
+  {...hostCut,events:[{...hostCut.events[0],messageId:"old-user"}]},
+  {...hostCut,events:[{...hostCut.events[0],turnId:"foreign"}]},
+  {...hostCut,projection:{...hostCut.projection,userSuffix:cut.projection.userSuffix}},
+  {...hostCut,events:[...hostCut.events,{...hostCut.events[0],seq:2}],capturedThrough:2,projection:{...hostCut.projection,replay:{...hostCut.projection.replay,latestSeq:2}}},
+])assert.throws(()=>createRemoteConversationProjection(bad,surface,labels),/readiness|question/);
+console.log("Remote host display: no fabricated user, private input/actions absent, canonical identity/origin refusal and shared live output passed");

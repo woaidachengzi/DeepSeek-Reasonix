@@ -39,18 +39,57 @@ fn native_event_projection_preserves_all_go_kinds_and_known_nested_fields() {
     full["runtimeState"]["turnStatus"] = json!("in_progress");
     for kind in &contract.kinds {
         full["kind"] = json!(kind);
-        if kind == "steer" {
+        if ["steer", "user_message_admitted", "host_input_admitted"].contains(&kind.as_str()) {
             full["messageId"] = json!("owned-message");
         } else {
             full.as_object_mut().unwrap().remove("messageId");
         }
+        let expected = if ["user_message_admitted", "host_input_admitted"].contains(&kind.as_str())
+        {
+            let mut expected = full.clone();
+            expected.as_object_mut().unwrap().retain(|key, _| {
+                [
+                    "kind",
+                    "messageId",
+                    "turnId",
+                    "seq",
+                    "status",
+                    "sessionPath",
+                    "sessionCurrent",
+                ]
+                .contains(&key.as_str())
+            });
+            expected
+        } else {
+            full.clone()
+        };
         assert_eq!(
             project(&full).unwrap_or_else(|_| panic!("generated fixture rejected for {kind}")),
-            full,
+            expected,
             "{kind}"
         );
     }
     assert!(contract.kinds.len() >= 32);
+}
+
+#[test]
+fn native_admission_identity_preserves_both_origins_without_body_or_authority() {
+    for kind in ["user_message_admitted", "host_input_admitted"] {
+        let mut frame = base(kind);
+        frame["messageId"] = json!("canonical-input");
+        frame["sessionCurrent"] = json!(true);
+        let expected = frame.clone();
+        frame["text"] = json!("private instructions");
+        frame["detail"] = json!("private detail");
+        frame["itemId"] = json!("approval-identity");
+        assert_eq!(project(&frame).unwrap(), expected);
+        frame.as_object_mut().unwrap().remove("messageId");
+        assert_eq!(project(&frame).err().as_deref(), Some(FAILED));
+        for bad in [json!(""), json!("bad\n"), json!(12), Value::Null] {
+            frame["messageId"] = bad;
+            assert_eq!(project(&frame).err().as_deref(), Some(FAILED));
+        }
+    }
 }
 
 #[test]

@@ -47,7 +47,7 @@
     "test:bench": "PLAYWRIGHT_BROWSERS_PATH=.pw-browsers node bench/run.mjs",
     "test:remote-history": "node --import tsx src/__tests__/remote-history-items.test.ts && node --import tsx src/__tests__/remote-media-scope.test.tsx && node --import tsx src/__tests__/transcript-question-follow.test.tsx && node --import tsx src/__tests__/tauri-remote-images.test.tsx && node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import tsx src/__tests__/tauri-remote-history.test.tsx",
     "test:remote-controller": "node --import tsx src/__tests__/remote-controller-pool.test.ts && node --import tsx src/__tests__/native-remote-controller-bindings.test.ts && node --import tsx src/__tests__/tauri-remote-sessions.test.tsx && node --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-remote-serve-readiness.test.tsx && pnpm test:remote-history && pnpm test:remote-subscription",
-    "test:remote-subscription": "node --import tsx src/__tests__/remote-session-subscription.test.ts && node --import tsx src/__tests__/native-remote-session-subscription-bindings.test.ts",
+    "test:remote-subscription": "node --import tsx src/__tests__/remote-session-subscription.test.ts && node --import tsx src/__tests__/native-remote-session-subscription-bindings.test.ts && node --import tsx src/__tests__/remote-session-snapshot.test.ts && node --import tsx src/__tests__/remote-conversation-projection.test.ts",
     "test:typecheck": "tsc --noEmit -p tsconfig.test.json",
     "test:isolated-worktree": "tsx src/__tests__/isolated-worktree.test.ts",
     "test:tauri-build-contract": "node scripts/tauri-build-contract.test.mjs && node scripts/tauri-linux-build.test.mjs",

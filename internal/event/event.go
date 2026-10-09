@@ -142,6 +142,9 @@ const (
 	// message. MessageID is display identity only, not body or action authority.
 	// TurnStarted precedes this boundary.
 	UserMessageAdmitted
+	// HostInputAdmitted follows the canonical append of explicit host-origin
+	// turn input. It is readiness metadata, never a visible user question.
+	HostInputAdmitted
 	// KindCount is a sentinel one past the last real Kind. New event kinds must
 	// be inserted above it so completeness tests cover them automatically.
 	KindCount
@@ -506,6 +509,14 @@ const (
 	UsageSourceGoalEvaluator    = "goal-evaluator"
 )
 
+// ProtocolRecoveryRewrite is a local-only attestation from the atomic metadata
+// writer. It is never a renderer event or an authorization from remote input.
+type ProtocolRecoveryRewrite struct {
+	MessageID string
+	Previous  json.RawMessage
+	Current   json.RawMessage
+}
+
 // Event is one increment in a turn's event stream. Read the field(s) documented
 // for Kind; the others are zero.
 type Event struct {
@@ -561,7 +572,7 @@ type Event struct {
 	ReadStatus         *ReadStatusPayload        // ReadStatus: one logical read's delivery state
 	ReadPause          *provider.ReadPause       // TurnDone: durable display-only pause receipt
 	ItemID             string                    // correlates durable inbox events
-	MessageID          string                    // Steer/UserMessageAdmitted: canonical message identity, not inbox authority
+	MessageID          string                    // Steer/UserMessageAdmitted/HostInputAdmitted: canonical identity, not inbox authority
 	SessionPath        string                    // routes Serve frames
 	SessionReset       bool                      // SessionChanged came from /new or /clear, not resume/recovery
 	Workspace          *WorkspaceChangedPayload  // WorkspaceChanged (host-local)
@@ -569,6 +580,8 @@ type Event struct {
 	PhaseName TurnPhaseName
 	// Completion is set on CompletionSummary events.
 	Completion *CompletionSummaryInfo
+
+	ProtocolRecoveryRewrite *ProtocolRecoveryRewrite `json:"-"` // checked local metadata transition only
 }
 
 type WorkspaceWatchState string

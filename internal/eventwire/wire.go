@@ -78,7 +78,7 @@ type StreamAttempt struct {
 
 // ToWire converts a typed runtime event into the shared frontend JSON contract.
 func ToWire(e event.Event) Event {
-	if e.Kind == event.UserMessageAdmitted {
+	if e.Kind == event.UserMessageAdmitted || e.Kind == event.HostInputAdmitted {
 		// This canonical append barrier is identity-only even if a producer
 		// accidentally reuses an event carrying text or prompt/action fields.
 		return Event{Kind: kindNames[e.Kind], MessageID: e.MessageID, TurnID: e.TurnID, Sequence: e.Sequence, Status: string(e.Status), SessionPath: e.SessionPath}
@@ -576,6 +576,7 @@ var kindNames = map[event.Kind]string{
 	event.Retrying:                "retrying",
 	event.Steer:                   "steer",
 	event.UserMessageAdmitted:     "user_message_admitted",
+	event.HostInputAdmitted:       "host_input_admitted",
 	event.GuardianAssessment:      "guardian_assessment",
 	event.ExtensionSurface:        "extension_surface",
 	event.ExtensionStatus:         "extension_status",

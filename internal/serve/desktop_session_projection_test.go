@@ -3,6 +3,7 @@ package serve
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -10,11 +11,13 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"weak"
 
 	"reasonix/internal/agent"
+	"reasonix/internal/agent/testutil"
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/event"
@@ -25,6 +28,208 @@ import (
 
 type projectionGateProvider struct {
 	ready, later, laterReady, release chan struct{}
+}
+
+// The first real engine turn creates a protocol-recovery checkpoint. The
+// second uses the public Controller recovery API, not a relabelled user input
+// or a fabricated admission event.
+type admissionRecoveryProvider struct {
+	first *testutil.MockProvider
+	gate  *projectionGateProvider
+	calls atomic.Int32
+}
+
+func (p *admissionRecoveryProvider) Name() string                     { return "owned-admission-recovery" }
+func (p *admissionRecoveryProvider) RequiresAssistantReasoning() bool { return true }
+func (p *admissionRecoveryProvider) Stream(ctx context.Context, req provider.Request) (<-chan provider.Chunk, error) {
+	if p.calls.Add(1) == 1 {
+		return p.first.Stream(ctx, req)
+	}
+	return p.gate.Stream(ctx, req)
+}
+
+func TestDesktopSessionAdmissionActualEngineServeRecovery(t *testing.T) {
+	f, client := desktopViewFixture(t)
+	f.server.ctl().Close()
+	session := agent.NewSession("PRIVATE system")
+	session.Add(provider.Message{ID: "prior-answer", Role: provider.RoleAssistant, Content: "earlier", ReasoningContent: "earlier reasoning"})
+	f.active = filepath.Join(f.dir, "admission-recovery.jsonl")
+	if err := session.Save(f.active); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.leases.Rebind(f.active); err != nil {
+		t.Fatal(err)
+	}
+	f.server.bc.SetCurrentSession(f.active)
+	gate := &projectionGateProvider{ready: make(chan struct{}), later: make(chan struct{}), laterReady: make(chan struct{}), release: make(chan struct{})}
+	p := &admissionRecoveryProvider{first: testutil.NewMock("strict", testutil.ErrorTurn(&provider.APIError{Status: 400, Body: `{"model":"deepseek"}`})), gate: gate}
+	executor := agent.New(p, tool.NewRegistry(), session, agent.Options{}, event.Discard)
+	tag := newSessionTagSink(f.server.bc)
+	tag.SetPath(f.active)
+	done := make(chan event.Event, 2)
+	ctrl := control.New(control.Options{Runner: executor, Executor: executor, Sink: event.FuncSink(func(e event.Event) {
+		tag.Emit(e)
+		if e.Kind == event.TurnDone {
+			done <- e
+		}
+	}), SessionDir: f.dir, SessionPath: f.active})
+	f.server.mu.Lock()
+	f.server.ctrl = ctrl
+	f.server.mu.Unlock()
+	f.server.RegisterSessionTag(ctrl, tag)
+	t.Cleanup(ctrl.Close)
+	path := agent.CanonicalSessionPath(f.active)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	stream, err := client.SessionEvents(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	ctrl.Submit("actual user question")
+	select {
+	case finished := <-done:
+		if finished.Err == nil {
+			t.Fatal("fixture must create a real protocol-recovery checkpoint")
+		}
+	case <-ctx.Done():
+		t.Fatal("owned user turn never settled")
+	}
+	var userID string
+	for userID == "" {
+		frame, err := stream.Next()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if frame.Kind == "user_message_admitted" {
+			if frame.MessageID == "" || frame.TurnID == "" || frame.Sequence == 0 || frame.SessionPath != path || !frame.SessionCurrent || frame.Text != "" || frame.ItemID != "" {
+				t.Fatalf("actual user SSE identity/privacy: %+v", frame)
+			}
+			userID = frame.MessageID
+		}
+	}
+	action := ctrl.PendingProtocolRecovery()
+	if action == nil || userID == "" {
+		t.Fatal("missing canonical user identity or recovery token")
+	}
+	beforeRecovery := session.Snapshot()
+	ctrl.SubmitProtocolRecovery(action.ID, "PRIVATE host guidance")
+	settled := false
+	t.Cleanup(func() {
+		cancel()
+		ctrl.Cancel()
+		if settled {
+			return
+		}
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("owned recovery did not terminate")
+		}
+	})
+	var hostID, hostTurn string
+	var hostSequence uint64
+	for hostID == "" {
+		frame, err := stream.Next()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if frame.Kind != "host_input_admitted" {
+			continue
+		}
+		if frame.MessageID == "" || frame.MessageID == userID || frame.TurnID == "" || frame.Sequence == 0 || frame.SessionPath != path || !frame.SessionCurrent || frame.Text != "" || frame.ItemID != "" {
+			t.Fatalf("actual host SSE identity/privacy: %+v", frame)
+		}
+		hostID, hostTurn, hostSequence = frame.MessageID, frame.TurnID, frame.Sequence
+	}
+	select {
+	case <-gate.ready:
+	case <-ctx.Done():
+		t.Fatal("recovery never reached its active capture")
+	}
+	// The exact engine-authored hidden metadata consumption can now advance
+	// the fence without blessing unrelated edits or exposing a new question.
+	cut, err := client.SessionProjection(ctx, path)
+	if err != nil || cut.ActiveTurnID != hostTurn || len(cut.UserSuffix) != 0 || !cut.Replay.HasMore {
+		t.Fatalf("actual active recovery cut did not reconcile: %v", err)
+	}
+	encoded, err := json.Marshal(cut)
+	if err != nil || strings.Contains(string(encoded), "PRIVATE") {
+		t.Fatal("private host/system input escaped active display cut")
+	}
+	page, err := client.SessionProjectionPage(ctx, path, cut)
+	if err != nil || page.Replay.HasMore || page.Replay.NextAfterSequence != cut.Replay.LatestSequence {
+		t.Fatalf("actual recovery pagination: %v", err)
+	}
+	original := session.Snapshot()
+	edited := session.Snapshot()
+	for i := range edited {
+		if edited[i].ID == userID {
+			edited[i].Content = "unattested same-ID rewrite"
+		}
+	}
+	session.Replace(edited)
+	_, rewriteErr := client.SessionProjection(ctx, path)
+	session.Replace(original)
+	if !errors.Is(rewriteErr, remotecontroller.ErrProjectionReconcile) {
+		t.Fatalf("unattested history edit bypassed reconciliation: %v", rewriteErr)
+	}
+	replay, err := ctrl.TurnProjectionReplay()
+	if err != nil || replay.ActiveTurnID != hostTurn {
+		t.Fatalf("durable recovery replay: %v", err)
+	}
+	foundHost := false
+	for _, envelope := range replay.Events {
+		frame := envelope.Event
+		if frame.Kind == "host_input_admitted" {
+			foundHost = frame.MessageID == hostID && envelope.Sequence == hostSequence && envelope.TurnID == hostTurn && frame.Text == ""
+		}
+	}
+	userCount, hostCount := 0, 0
+	recordConsumed := false
+	for _, message := range session.Snapshot() {
+		if message.ID == userID && message.Origin == provider.MessageOriginUser {
+			userCount++
+		}
+		if message.ID == hostID && message.Origin == provider.MessageOriginHost {
+			hostCount++
+		}
+		if record, ok := provider.DecodeProtocolRecovery(message.ProtocolRecovery); ok && record.ID == action.ID && record.State == "consumed" {
+			for _, prior := range beforeRecovery {
+				if previous, ok := provider.DecodeProtocolRecovery(prior.ProtocolRecovery); ok && prior.ID == message.ID && previous.ID == action.ID && previous.State == "pending" {
+					recordConsumed = true
+				}
+			}
+		}
+	}
+	if !foundHost || !recordConsumed || userCount != 1 || hostCount != 1 || p.calls.Load() != 2 {
+		t.Fatalf("canonical provenance was lost: users=%d host=%v/%d consumed=%v calls=%d", userCount, foundHost, hostCount, recordConsumed, p.calls.Load())
+	}
+	ctrl.Cancel()
+	select {
+	case <-done:
+		settled = true
+	case <-ctx.Done():
+		t.Fatal("owned recovery cancellation never settled")
+	}
+	cut, err = client.SessionProjection(ctx, path)
+	if err != nil || cut.ActiveTurnID != "" || len(cut.UserSuffix) != 0 {
+		t.Fatalf("settled recovery cut did not reconcile: %v", err)
+	}
+	encoded, err = json.Marshal(cut)
+	if err != nil || strings.Contains(string(encoded), "PRIVATE") {
+		t.Fatal("private host/system input escaped terminal display cut")
+	}
+	foundUser := false
+	for _, row := range cut.History {
+		foundUser = foundUser || row.ID == userID && row.Content == "actual user question"
+		if row.ID == hostID {
+			t.Fatal("synthetic continuation became a visible question")
+		}
+	}
+	if !foundUser {
+		t.Fatal("settled recovery lost the original canonical question")
+	}
 }
 
 func (p *projectionGateProvider) Name() string { return "owned-projection-fixture" }

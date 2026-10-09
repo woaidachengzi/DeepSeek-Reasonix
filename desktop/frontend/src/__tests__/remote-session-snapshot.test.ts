@@ -49,6 +49,71 @@ function preAppendResponse(){
   p.userSuffix=[];p.replay={...p.replay,events:[],latestSeq:3,nextAfterSeq:3};p.replayAfterSeq=3;
   return early;
 }
+function hostResponse(){
+  const result=admittedResponse("host-turn","host-input");const p=result.snapshot.projection;
+  p.userSuffix=[];
+  p.replay.events[1]={...p.replay.events[1],kind:"host_input_admitted",messageId:"host-input",text:"private host instructions"};
+  return result;
+}
+{
+  const f=await readyFixture();const first=hostResponse(),second=hostResponse();
+  first.snapshot.projection.replay.events=first.snapshot.projection.replay.events.slice(0,1);
+  first.snapshot.projection.replay.hasMore=true;first.snapshot.projection.replay.nextAfterSeq=3;
+  (first.snapshot as {nextPage?:string}).nextPage=id;
+  second.snapshot.projection.initial=false;second.snapshot.projection.history=[];
+  second.snapshot.projection.replay.events=second.snapshot.projection.replay.events.slice(1);
+  f.reads[0].resolve(first);await tick();assert.equal(f.cuts.length,0,"host readiness may be on a later fixed-cut page");
+  f.reads[1].resolve(second);await f.stream.settled;
+  assert.equal(f.cuts.length,1);assert.equal(f.cuts[0].projection.userSuffix.length,0);
+  f.frame({kind:"text",seq:6,turnId:"host-turn"});assert.deepEqual(f.live,[6]);f.stream.dispose();
+}
+{
+  const f=await liveFixture();f.frame({kind:"turn_started",seq:3,turnId:"host-turn"});
+  f.frame({kind:"host_input_admitted",seq:4,turnId:"host-turn",messageId:"host-input"});await tick();
+  assert.deepEqual(f.calls[2],{id:next,next:undefined},"host readiness reuses the same subscription");
+  f.reads[2].resolve(hostResponse());await tick();assert.equal(f.cuts.length,2);
+  f.frame({kind:"compaction_done",seq:6,turnId:"host-turn"});await tick();
+  const compacted=hostResponse(),p=compacted.snapshot.projection;
+  p.replay.events.push({...event(6),kind:"compaction_done",turnId:"host-turn",compaction:{summary:"host verified digest"}});
+  p.replay.latestSeq=6;p.replay.nextAfterSeq=6;
+  f.reads[3].resolve(compacted);await tick();assert.equal(f.cuts.length,3,"host compaction recaptures without inventing a question ID");
+  f.frame({kind:"text",seq:7,turnId:"host-turn"});assert.deepEqual(f.live,[7]);f.stream.dispose();
+}
+{
+  const f=await readyFixture();f.frame({kind:"host_input_admitted",seq:4,turnId:"host-turn",messageId:"host-input"});
+  const early=preAppendResponse();early.snapshot.projection.activeTurnId="host-turn";
+  f.reads[0].resolve(early);await tick();assert.equal(f.calls.length,2,"buffered host admission also wakes a pre-append body");
+  f.reads[1].resolve(hostResponse());await f.stream.settled;assert.equal(f.cuts.length,1);f.stream.dispose();
+}
+for(const scenario of ["wrong host ID","mixed origin","missing barrier","conflicting origins","runtime changed","dispose","fast terminal","terminal before admission"]){
+  const f=await liveFixture();f.frame({kind:"turn_started",seq:3,turnId:"host-turn"});
+  f.frame({kind:"host_input_admitted",seq:4,turnId:"host-turn",messageId:scenario==="wrong host ID"?"foreign-input":"host-input"});await tick();
+  const result=hostResponse(),p=result.snapshot.projection;
+  if(scenario==="conflicting origins")f.frame({kind:"user_message_admitted",seq:5,turnId:"host-turn",messageId:"host-input"});
+  if(scenario==="runtime changed")p.replay.runtimeEpoch="replacement-runtime";
+  if(scenario==="mixed origin")p.userSuffix=[{id:"unexpected-question",role:"user",content:"must not guess origin"}];
+  if(scenario==="missing barrier")p.replay.events[1]={...p.replay.events[1],kind:"turn_phase"};
+  if(scenario==="fast terminal"||scenario==="terminal before admission"){
+    p.history.push({id:"host-answer",role:"assistant",content:"continued final answer"});p.activeTurnId="";p.turnStatus="completed";p.replayAfterSeq=6;
+    p.replay={...p.replay,events:[],latestSeq:6,nextAfterSeq:6};
+    if(scenario==="terminal before admission"){p.replayAfterSeq=3;p.replay.latestSeq=3;p.replay.nextAfterSeq=3;}
+  }
+  if(scenario==="dispose")f.stream.dispose();
+  f.reads[2].resolve(result);await tick();
+  assert.equal(f.cuts.length,scenario==="fast terminal"?2:1,scenario);
+  if(scenario==="fast terminal"){
+    assert.equal(f.cuts[1].projection.userSuffix.length,0);f.frame({kind:"turn_done",seq:6,turnId:"host-turn",status:"completed"});
+    assert.equal(f.states[f.states.length-1],"live");f.stream.dispose();
+  }else if(scenario!=="dispose")assert.equal(f.states[f.states.length-1],"reconcile",scenario);
+  assert.equal(f.callbacks.size,0);
+}
+console.log("Remote host continuation: canonical readiness, paged cut, cross-turn/compaction/early-body/fast-terminal, mixed/wrong identity and disposal passed");
+{
+  const f=await readyFixture(),legacy=hostResponse();legacy.snapshot.projection.replay.events[1].kind="turn_phase";
+  f.reads[0].resolve(legacy);await f.stream.settled;
+  assert.equal(f.cuts.length,0);assert.equal(f.calls.length,1);
+  assert.equal(f.states[f.states.length-1],"reconcile","output without canonical input readiness cannot wait or guess forever");
+}
 {
   const f=await liveFixture();f.frame({kind:"compaction_started",seq:3});f.frame({kind:"compaction_done",seq:4});await tick();
   assert.equal(f.calls.length,3);assert.deepEqual(f.live,[3],"unverified completion is not applied to old view");

@@ -1,5 +1,29 @@
 # E 迁移清单
 
+## 2026-10-10 admission 与协议恢复批次 review 收敛
+
+本批在 29 文件阶段先主动 review，发现并补齐 snapshot/projection 回归的专用 remote 脚本登记，最终 30 文件随本记录提交，未推送。当前完整 Go 八包 race/vet、Rust 290 项/clippy、完整 Transcript/Tauri/remote-controller/类型/lint/single writer 和实际新登记脚本通过，见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-admission-与协议恢复批次-review-收敛)。已知 Wails 五项旧失败仍复现，未宣称其全量通过；当前 App 尚未重建、不含这批修复。接下来从已提交源码构建安全包，再继续远程控制及完整目标其余未完成门禁；以下保留各阶段当时状态。
+
+## 2026-10-10 协议恢复 canonical 元数据可信边界（App 后续源码）
+
+为实际 pending→consumed protocol metadata 改写增加原子 local-only 证明，在 durable checkpoint 后严格复原旧 prefix digest、校验身份/来源/其余 incident 字段，再推进新 digest；不忽略 metadata、不放行一般历史改写、不传证明到前端。真实 Agent/Serve/token SSE/shared client 的活动续接与固定分页已可读，同 ID 用户正文改写仍 409；三次真实回归、最终完整 Controller/wire race、相关 vet/生成检查见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-协议恢复-canonical-元数据可信边界app-后续源码)。当前 29 文件未超过提交阈值，未提交/推送/重打 App，不能据此宣称 native/SSH/bot/跨平台/管理页/SQLite 或全部目标验收通过；以下记录保留各阶段当时状态。
+
+## 2026-10-10 真实协议恢复来源与 Serve 链路（App 后续源码）
+
+修复协议恢复 context 的 host 来源被普通用户编排覆盖：同步/异步入口改用既有 synthetic 编排，真实 Agent/Controller/Serve/token SSE/shared client 验证 canonical 身份、无新增用户问题/checkpoint、私密续接不展示。最终真实链路三次 race 与相关 vet 通过，见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-真实协议恢复来源与-serve-链路app-后续源码)。同时确认活动协议恢复的 pending→consumed 元数据改写触发严格 prefix fence/409：可信 canonical rewrite 恢复边界仍待实现，仅取消后的终态重新同步通过，不能算实时展示已完成。当前 25 文件未达超过 30 文件提交阈值，未提交/推送/重打 App；原生/真实账号及其它完整目标门禁仍未关闭。
+
+## 2026-10-10 同订阅 host 续接展示与恢复（App 后续源码）
+
+Renderer 已接 host readiness：完整 cut 分页后确认 canonical origin/ID，无新增用户问题或虚构 parent，同订阅恢复跨轮/早期 body、压缩及快速终态；错身份、混合来源、epoch 变化、legacy 无边界输出和 dispose 仍拒绝。专项、类型/lint、完整 transcript 与 remote-history/scroll writer 门禁、实际 React 的桌面/窄屏 fixture 交互与截图检查通过，见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-同订阅-host-续接展示与恢复app-后续源码)。不是 WKWebView/真实远程服务或完整目标验收，当前 App 未包含上轮传输和本轮恢复修复。累计 22 文件，未达超过 30 文件提交阈值，未提交/推送；其它原生/控制/bot/跨平台/管理页/SQLite 门禁保持未完成。
+
+## 2026-10-10 host 入库边界与 admission 真实载荷（App 后续源码）
+
+新增独立、无正文的 host-input canonical 入库事件及同步 durable barrier，不将合成 continuation 当新用户问题；投影拒绝来源改写/重复身份。追查并修复 native 与 shared remote SSE/cut 原来仅允许 steer 携带 messageId、误拒绝真实用户 admission 的缺口，正向真实载荷、隐私剥离和缺失/非法 ID 负向回归通过。Go 完整相关 race/vet、Rust 290 项/clippy、类型及既有 renderer 回归见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-host-入库边界及-canonical-admission-传输收敛app-后续源码)。尚未接 renderer 的系统续接恢复，没有新原生/真实服务验收；最新 App 未含这些后续修复，完整目标不关闭。累计 18 文件，未达超过 30 文件提交阈值，未提交/推送。
+
+## 2026-10-10 已提交源码 macOS App 与实际包 smoke
+
+已从干净提交 `ebd1bcc50…` 重建当前 arm64 ad-hoc App，含最后的 admission wire/bot 路由修复；完整构建门禁、严格签名复核与这个实际包的 managed/explicit 临时档案启动、Global workspace/凭据身份隔离、普通退出与 sidecar 清理通过，旧 App 完整保留。证据与 SHA 见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-已提交源码-macos-app-与实际包-smoke)。桌面仍锁屏，没有重跑或宣称可见 UI 验收；这不是终端/live/图片/真实远程服务验证。完整目标及其它门禁继续保留，未推送/公证/发布。本轮仅新增两份文档的验收记录，未达超过 30 文件提交阈值；以下记录保持各阶段当时状态。
+
 ## 2026-10-10 超过 30 文件的 review 收敛
 
 本批 32 个文件，停止功能扩展并按先 review 后提交规则收敛。Review 修复 bot 路由遗漏聊天类型/字段边界的身份碰撞；真实 hub 回归确认同 ID 群聊不能继承或解除私聊订阅/接管。远程投影与同步、admission wire 白名单、canonical content fence、React 生命周期及终端 opt-in 探针一起复核，Go/Rust/完整 transcript/类型/lint 等验证见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-超过-30-文件的-review-收敛)。独立 Wails desktop 全量有五项失败，全部在本批之前的 HEAD 临时快照复现（两项 checkpoint、三项旧 MiMo 断言），保留待独立处理，不宣称全量通过。最新 App 未重建，不含最后的 wire/bot 修复；原生可见性、完整 bot Desktop 接入及目标其它门禁仍未完成，不以本批源码回归替代。未推送/发布，以下阶段记录保留当时状态。

@@ -573,6 +573,37 @@ func TestUserAdmissionWireCannotCarryUnrelatedPayloadOrActionIdentity(t *testing
 	}
 }
 
+func TestHostInputAdmissionWireIsIdentityOnly(t *testing.T) {
+	got := ToWire(event.Event{Kind: event.HostInputAdmitted, MessageID: "host-input", TurnID: "owned", Sequence: 7, Status: event.TurnInProgress, SessionPath: "/owned.jsonl", Text: "private host instructions", Detail: "private", Reasoning: "private", ItemID: "action", PromptKind: "approval", SessionReset: true})
+	encoded, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(encoded, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if len(fields) != 6 || fields["kind"] != "host_input_admitted" || fields["messageId"] != "host-input" || fields["turnId"] != "owned" || fields["seq"] != float64(7) || fields["status"] != "in_progress" || fields["sessionPath"] != "/owned.jsonl" {
+		t.Fatal("host readiness lost its identity or exposed unrelated fields")
+	}
+}
+
+func TestProtocolRecoveryRewriteAttestationNeverExternalizes(t *testing.T) {
+	e := event.Event{Kind: event.Notice, RecoveryCheckpoint: true, ProtocolRecoveryRewrite: &event.ProtocolRecoveryRewrite{MessageID: "private-record", Previous: json.RawMessage(`{"private":"before-secret"}`), Current: json.RawMessage(`{"private":"after-secret"}`)}}
+	encoded, err := json.Marshal(ToWire(e))
+	if err != nil || string(encoded) != `{"kind":"notice","level":"info"}` {
+		t.Fatalf("local attestation leaked into wire event: %s %v", encoded, err)
+	}
+	encoded, err = json.Marshal(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &fields); err != nil || fields["ProtocolRecoveryRewrite"] != nil {
+		t.Fatal("direct event JSON externalized a local attestation")
+	}
+}
+
 func TestPromptWireMarksLegacyIdentity(t *testing.T) {
 	w := ToWire(event.Event{Kind: event.AskRequest, ItemID: "legacy-ask", Ask: event.Ask{ID: "legacy-ask"}})
 	if !w.PromptLegacy || w.PromptID != "legacy-ask" || w.PromptKind != "ask" {

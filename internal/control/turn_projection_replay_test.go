@@ -1,6 +1,7 @@
 package control
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -12,6 +13,67 @@ import (
 	"reasonix/internal/tool"
 	"reasonix/internal/turnevent"
 )
+
+func TestHostAdmissionHasDurableReadinessButNoUserQuestion(t *testing.T) {
+	isolateControlConfigHome(t)
+	session := agent.NewSession("system")
+	session.Add(provider.Message{ID: "real-question", Role: provider.RoleUser, Origin: provider.MessageOriginUser, Content: "actual question"})
+	session.Add(provider.Message{ID: "old-answer", Role: provider.RoleAssistant, Content: "old answer"})
+	executor := agent.New(&recordingProvider{streams: [][]provider.Chunk{textTurn("continued answer")}}, tool.NewRegistry(), session, agent.Options{}, event.Discard)
+	type observation struct {
+		event           event.Event
+		view            TurnProjectionView
+		err             error
+		rewriteRejected bool
+	}
+	seen := make(chan observation, 1)
+	var c *Controller
+	c = New(Options{Runner: executor, Executor: executor, SessionDir: t.TempDir(), SessionPath: filepath.Join(t.TempDir(), "owned.jsonl"), Sink: event.FuncSink(func(e event.Event) {
+		if e.Kind != event.HostInputAdmitted {
+			return
+		}
+		view, err := c.TurnProjectionView()
+		original := session.Snapshot()
+		edited := session.Snapshot()
+		for i := range edited {
+			if edited[i].ID == e.MessageID {
+				edited[i].Origin = provider.MessageOriginUser
+			}
+		}
+		session.Replace(edited)
+		_, rewriteErr := c.TurnProjectionView()
+		session.Replace(append(original, provider.Message{ID: e.MessageID, Role: provider.RoleUser, Origin: provider.MessageOriginHost}))
+		_, duplicateErr := c.TurnProjectionView()
+		session.Replace(original)
+		seen <- observation{e, view, err, errors.Is(rewriteErr, ErrTurnProjectionChanged) && errors.Is(duplicateErr, ErrTurnProjectionChanged)}
+	})})
+	t.Cleanup(func() { c.Cancel(); waitIdle(t, c); c.Close() })
+	c.runGuarded(func(ctx context.Context) error {
+		return newTurnOrchestrator(c).runComposedSyntheticTurn(ctx, "private host continuation")
+	})
+	select {
+	case got := <-seen:
+		if got.err != nil || got.event.MessageID == "" || got.event.TurnID == "" || got.event.Sequence == 0 || len(got.view.UserSuffix) != 0 || !got.rewriteRejected {
+			t.Fatalf("host readiness: %+v", got)
+		}
+		found := false
+		for _, envelope := range got.view.Projection.Events {
+			if envelope.Sequence == got.event.Sequence && envelope.Event.Kind == "host_input_admitted" && envelope.Event.MessageID == got.event.MessageID {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatal("host callback ran before durable readiness publication")
+		}
+		for _, message := range got.view.Prefix {
+			if message.ID == got.event.MessageID {
+				t.Fatal("private host input leaked into canonical display prefix")
+			}
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("missing host readiness")
+	}
+}
 
 func TestTurnProjectionReplayPreservesLedgerOwnershipAndFailure(t *testing.T) {
 	var absent *Controller

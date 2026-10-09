@@ -159,8 +159,8 @@ func (a *Agent) saveProtocolRecord(r provider.ProtocolRecoveryRecord) error {
 	if err != nil {
 		return err
 	}
-	a.Session().storeProtocolRecord(r.ID, raw)
-	return event.EmitChecked(a.svc.sink, event.Event{Kind: event.Notice, RecoveryCheckpoint: true})
+	rewrite := a.Session().storeProtocolRecord(r.ID, raw)
+	return event.EmitChecked(a.svc.sink, event.Event{Kind: event.Notice, RecoveryCheckpoint: true, ProtocolRecoveryRewrite: rewrite})
 }
 
 func (a *Agent) protocolRecord(frozen samplingRequest, state string) provider.ProtocolRecoveryRecord {
@@ -223,7 +223,7 @@ func (a *Agent) consumeManualProtocolRecovery(ctx context.Context, s *samplingRe
 	return nil
 }
 
-func (s *Session) storeProtocolRecord(id string, raw json.RawMessage) {
+func (s *Session) storeProtocolRecord(id string, raw json.RawMessage) *event.ProtocolRecoveryRewrite {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range slices.Backward(s.Messages) {
@@ -234,14 +234,19 @@ func (s *Session) storeProtocolRecord(id string, raw json.RawMessage) {
 			_ = json.Unmarshal(raw, &changes)
 			maps.Copy(fields, changes)
 			merged, _ := json.Marshal(fields)
+			previous := append(json.RawMessage(nil), s.Messages[i].ProtocolRecovery...)
 			s.Messages[i].ProtocolRecovery = merged
 			s.version++
 			s.rewriteVersion++
-			return
+			if next, ok := provider.DecodeProtocolRecovery(merged); ok && record.State == "pending" && next.State == "consumed" {
+				return &event.ProtocolRecoveryRewrite{MessageID: s.Messages[i].ID, Previous: previous, Current: append(json.RawMessage(nil), merged...)}
+			}
+			return nil
 		}
 	}
 	s.Messages = append(s.Messages, provider.Message{Role: provider.RoleTool, Name: provider.LocalOnlyToolName, ToolCallID: provider.LocalOnlyToolID, LocalOnly: true, ProtocolRecovery: append(json.RawMessage(nil), raw...)})
 	s.version++
+	return nil
 }
 
 // New authored input invalidates a pending button. Consumed repair accounting

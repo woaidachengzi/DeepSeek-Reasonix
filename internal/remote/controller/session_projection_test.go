@@ -181,6 +181,8 @@ func TestSessionProjectionClientRejectsMalformedCutsAndPrivateRows(t *testing.T)
 		{"foreign frame", func(v *SessionProjection) { v.Replay.Events[0].SessionPath = "/foreign" }},
 		{"terminal status", func(v *SessionProjection) { v.TurnStatus = "completed" }},
 		{"unknown frame status", func(v *SessionProjection) { v.Replay.Events[0].Status = "unknown" }},
+		{"missing user admission identity", func(v *SessionProjection) { v.Replay.Events[0].Kind = "user_message_admitted" }},
+		{"missing host admission identity", func(v *SessionProjection) { v.Replay.Events[0].Kind = "host_input_admitted" }},
 		{"no progress", func(v *SessionProjection) { v.Replay.Events = []eventwire.Event{}; v.Replay.NextAfterSequence = 0 }},
 		{"invalid token", func(v *SessionProjection) { v.PageToken = "url-or-secret" }},
 	}
@@ -212,6 +214,23 @@ func TestSessionProjectionClientRejectsMalformedCutsAndPrivateRows(t *testing.T)
 			c, _ := projectionFixture(t, true, func(w http.ResponseWriter, r *http.Request) { json.NewEncoder(w).Encode(page) })
 			if _, err := c.SessionProjectionPage(context.Background(), ownedViewPath, ownedProjection()); !errors.Is(err, ErrProjectionReconcile) {
 				t.Fatalf("mixed cut accepted: %v", err)
+			}
+		})
+	}
+}
+
+func TestSessionProjectionPreservesCanonicalAdmissionsWithoutBody(t *testing.T) {
+	for _, kind := range []string{"user_message_admitted", "host_input_admitted"} {
+		t.Run(kind, func(t *testing.T) {
+			v := ownedProjection()
+			v.Replay.Events[0].Kind = kind
+			v.Replay.Events[0].MessageID = "canonical-input"
+			v.Replay.Events[0].Text = "PRIVATE"
+			v.Replay.Events[0].ItemID = "action"
+			c, _ := projectionFixture(t, true, func(w http.ResponseWriter, r *http.Request) { json.NewEncoder(w).Encode(v) })
+			got, err := c.SessionProjection(context.Background(), ownedViewPath)
+			if err != nil || got.Replay.Events[0].MessageID != "canonical-input" || got.Replay.Events[0].Text != "" || got.Replay.Events[0].ItemID != "" {
+				t.Fatalf("canonical cut admission: %+v %v", got, err)
 			}
 		})
 	}

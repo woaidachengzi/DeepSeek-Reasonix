@@ -138,7 +138,7 @@ pub(super) fn project(value: &Value) -> Result<Value, String> {
     if contract.version != 1 || count(value, 0, &mut remaining).is_err() {
         return Err(FAILED.into());
     }
-    let result = contract
+    let mut result = contract
         .event
         .project(value)
         .map_err(|_| FAILED.to_string())?;
@@ -153,7 +153,11 @@ pub(super) fn project(value: &Value) -> Result<Value, String> {
     {
         return Err(FAILED.into());
     }
-    if kind != "steer" && result.get("messageId").is_some() {
+    let admission = matches!(kind, "user_message_admitted" | "host_input_admitted");
+    if kind != "steer" && !admission && result.get("messageId").is_some() {
+        return Err(FAILED.into());
+    }
+    if admission && !identifier(&result, "messageId", true) {
         return Err(FAILED.into());
     }
     if result
@@ -198,6 +202,22 @@ pub(super) fn project(value: &Value) -> Result<Value, String> {
         }) {
             return Err(FAILED.into());
         }
+    }
+    if admission {
+        // Canonical append readiness carries no conversation body or prompt
+        // authority. Preserve Serve's independent route stamp only.
+        result.as_object_mut().ok_or(FAILED)?.retain(|key, _| {
+            [
+                "kind",
+                "messageId",
+                "turnId",
+                "seq",
+                "status",
+                "sessionPath",
+                "sessionCurrent",
+            ]
+            .contains(&key.as_str())
+        });
     }
     Ok(result)
 }

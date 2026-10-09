@@ -1,6 +1,6 @@
 import { initialState, reducer, type Item, type LiveStream, type State } from "./useController";
 import { remoteHistoryItems, remoteHistoryKey } from "./remoteHistoryItems";
-import type { RemoteDisplayCut } from "./remoteSessionSnapshot";
+import { remoteCutInput, type RemoteDisplayCut } from "./remoteSessionSnapshot";
 import type { WireEvent } from "./types";
 
 export interface RemoteConversationView {
@@ -15,7 +15,7 @@ export interface RemoteConversationView {
 export function createRemoteConversationProjection(cut:RemoteDisplayCut, surface:string, labels:{protocol:string;readiness:string}) {
   const p=cut.projection,turn=p.activeTurnId??"";
   if(!p.initial||!p.readOnly||cut.capturedThrough!==p.replay.latestSeq)throw new Error("remote cut incomplete");
-  if(turn&&p.userSuffix.length!==1)throw new Error("remote question requires reconciliation");
+  const input=remoteCutInput(cut);
   const prefix=remoteHistoryItems({history:[...p.history,...p.userSuffix]},surface,labels);
   const messages=new Set([...p.history,...p.userSuffix].map(row=>row.id));
   if(messages.size!==p.history.length+p.userSuffix.length)throw new Error("duplicate remote message identity");
@@ -26,9 +26,10 @@ export function createRemoteConversationProjection(cut:RemoteDisplayCut, surface
     if(!Number.isSafeInteger(raw.seq)||raw.seq!==after+1||raw.turnId!==turn||raw.sessionPath!==p.sessionPath)throw new Error("remote event scope changed");
     const e=raw as unknown as WireEvent;
     if(e.kind==="user_message_admitted"&&e.messageId!==p.userSuffix[0]?.id)throw new Error("remote question identity requires reconciliation");
+    if(e.kind==="host_input_admitted"&&(!verifiedCut||input?.kind!=="host"||e.messageId!==input.messageId))throw new Error("remote host readiness identity requires reconciliation");
     if(e.kind==="steer"&&(typeof e.messageId!=="string"||!e.messageId||new TextEncoder().encode(e.messageId).length>4096||/\p{Cc}/u.test(e.messageId)||messages.has(e.messageId)))throw new Error("remote guidance identity requires reconciliation");
     if(e.kind==="session_changed"||e.kind==="workspace_changed"||e.kind==="compaction_done"&&!verifiedCut)throw new Error("remote base requires reconciliation");
-    const next=reducer(state,{type:"event",e,remote:true});
+    const next=e.kind==="user_message_admitted"||e.kind==="host_input_admitted"?state:reducer(state,{type:"event",e,remote:true});
     const staged:[string,string][]=[];
     let guidance:string|undefined;
     for(const item of next.items){

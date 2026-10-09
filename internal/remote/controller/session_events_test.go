@@ -87,6 +87,8 @@ func TestSessionEventsRejectsMalformedBoundedFrames(t *testing.T) {
 		fmt.Sprintf("data: {\"kind\":\"text\",\"turnId\":\"bad\\u0000\",\"sessionPath\":%q}\n\n", eventSession),
 		fmt.Sprintf("data: {\"kind\":\"steer\",\"messageId\":\"bad\\u0000\",\"sessionPath\":%q}\n\n", eventSession),
 		fmt.Sprintf("data: {\"kind\":\"text\",\"messageId\":\"owned-message\",\"sessionPath\":%q}\n\n", eventSession),
+		fmt.Sprintf("data: {\"kind\":\"user_message_admitted\",\"sessionPath\":%q}\n\n", eventSession),
+		fmt.Sprintf("data: {\"kind\":\"host_input_admitted\",\"messageId\":\"bad\\u0000\",\"sessionPath\":%q}\n\n", eventSession),
 		"data: {\"kind\":\"text\"}\n", ":" + strings.Repeat("x", sessionEventFrameMax) + "\n\n",
 		strings.Repeat(":"+strings.Repeat("x", 1024)+"\n", 8192) + "\n",
 	} {
@@ -121,6 +123,25 @@ func TestSessionEventsPreservesSteerMessageAndInboxIdentities(t *testing.T) {
 	legacy, err := stream.Next()
 	if err != nil || legacy.MessageID != "" || legacy.ItemID != "" || legacy.Text != "legacy" {
 		t.Fatalf("legacy: %+v %v", legacy, err)
+	}
+}
+
+func TestSessionEventsCanonicalAdmissionsAreIdentityOnly(t *testing.T) {
+	for _, kind := range []string{"user_message_admitted", "host_input_admitted"} {
+		t.Run(kind, func(t *testing.T) {
+			c, _ := eventStreamFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprintf(w, "data: {\"kind\":%q,\"messageId\":\"canonical-input\",\"turnId\":\"owned\",\"seq\":7,\"sessionPath\":%q,\"sessionCurrent\":true,\"text\":\"PRIVATE\",\"itemId\":\"action\"}\n\n", kind, eventSession)
+			})
+			stream, err := c.SessionEvents(context.Background(), eventSession)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer stream.Close()
+			frame, err := stream.Next()
+			if err != nil || frame.Kind != kind || frame.MessageID != "canonical-input" || frame.TurnID != "owned" || frame.Sequence != 7 || !frame.SessionCurrent || frame.Text != "" || frame.ItemID != "" {
+				t.Fatalf("canonical readiness rejected or exposed body/authority: %+v %v", frame, err)
+			}
+		})
 	}
 }
 

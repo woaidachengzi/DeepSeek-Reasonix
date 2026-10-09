@@ -33,7 +33,8 @@
     "mcp_interaction",
     "session_changed",
     "read_status",
-    "user_message_admitted"
+    "user_message_admitted",
+    "host_input_admitted"
   ],
   "event": {
     "kind": "object",

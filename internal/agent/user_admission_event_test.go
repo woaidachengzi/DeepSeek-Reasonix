@@ -46,13 +46,26 @@ func TestUserAdmissionEventFollowsCanonicalAppend(t *testing.T) {
 
 func TestSyntheticContinuationDoesNotAdmitUserQuestion(t *testing.T) {
 	count := 0
-	a := New(&fakeProvider{}, tool.NewRegistry(), NewSession("system"), Options{}, event.FuncSink(func(e event.Event) {
+	hostCount := 0
+	session := NewSession("system")
+	a := New(&fakeProvider{}, tool.NewRegistry(), session, Options{}, event.FuncSink(func(e event.Event) {
 		if e.Kind == event.UserMessageAdmitted {
 			count++
+		}
+		if e.Kind == event.HostInputAdmitted {
+			hostCount++
+			messages := session.Snapshot()
+			last := messages[len(messages)-1]
+			if e.MessageID == "" || last.ID != e.MessageID || last.Origin != provider.MessageOriginHost || e.Text != "" || e.ItemID != "" {
+				t.Fatal("host admission preceded canonical append or carried content/authority")
+			}
 		}
 	}))
 	a.beginRunTurn(WithInputMessageOrigin(context.Background(), provider.MessageOriginHost), "synthetic continuation", pinnedRevisionPlan{})
 	if count != 0 {
 		t.Fatal("host continuation must not become a user question")
+	}
+	if hostCount != 1 {
+		t.Fatal("explicit host input must publish exactly one independent readiness boundary")
 	}
 }

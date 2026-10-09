@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,36 @@ import (
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
 )
+
+func TestProtocolRecoveryConsumptionAttestationOwnsExactAtomicPayload(t *testing.T) {
+	session := NewSession("system")
+	previous := json.RawMessage(`{"version":1,"id":"incident","state":"pending","scope":"owned","fingerprint":"owned","prefix":1,"count":2,"anchor":"owned","run":1,"future":{"keep":true}}`)
+	session.Add(provider.Message{ID: "record", Role: provider.RoleTool, Name: provider.LocalOnlyToolName, ToolCallID: provider.LocalOnlyToolID, LocalOnly: true, ProtocolRecovery: previous})
+	current := json.RawMessage(`{"version":1,"id":"incident","state":"consumed","projected":true,"scope":"owned","fingerprint":"owned","prefix":1,"count":2,"anchor":"owned","run":1}`)
+	change := session.storeProtocolRecord("incident", current)
+	if change == nil || change.MessageID != "record" || !bytes.Equal(change.Previous, previous) || !strings.Contains(string(change.Current), `"future":{"keep":true}`) {
+		t.Fatal("atomic recovery rewrite lost its old identity or unknown metadata")
+	}
+	var stored json.RawMessage
+	for _, message := range session.Snapshot() {
+		if message.ID == "record" {
+			stored = message.ProtocolRecovery
+		}
+	}
+	if !bytes.Equal(stored, change.Current) {
+		t.Fatal("attestation does not describe the exact canonical write")
+	}
+	change.Previous[0] = '['
+	change.Current[0] = '['
+	for _, message := range session.Snapshot() {
+		if message.ID == "record" && !bytes.Equal(message.ProtocolRecovery, stored) {
+			t.Fatal("attestation aliases canonical metadata")
+		}
+	}
+	if change := session.storeProtocolRecord("incident", current); change != nil {
+		t.Fatal("already consumed metadata minted another admission attestation")
+	}
+}
 
 func opaqueRecoveryError() error {
 	return &provider.APIError{Provider: "strict-replay", Status: 400, Body: `{"model":"deepseek-v4-pro"}`}

@@ -203,6 +203,9 @@ func (c *Client) readSessionProjection(operation context.Context, path string, p
 	if !validSessionProjection(view, path, after, previous == nil) {
 		return SessionProjection{}, ErrResponse
 	}
+	for i, frame := range view.Replay.Events {
+		view.Replay.Events[i] = projectSessionAdmission(frame)
+	}
 	if previous != nil && (view.ActiveTurnID != previous.ActiveTurnID || view.TurnStatus != previous.TurnStatus || view.ReplayAfterSequence != previous.ReplayAfterSequence || view.Replay.LatestSequence != previous.Replay.LatestSequence || view.Replay.RuntimeEpoch != previous.Replay.RuntimeEpoch || (view.PageToken != "" && view.PageToken != previous.PageToken)) {
 		return SessionProjection{}, ErrProjectionReconcile
 	}
@@ -263,7 +266,7 @@ func validSessionProjection(v SessionProjection, path string, after uint64, init
 	}
 	expected := after
 	for _, frame := range r.Events {
-		if frame.Sequence != expected+1 || frame.SessionPath != path || frame.TurnID != v.ActiveTurnID || !sessionEventKinds[frame.Kind] || !cleanField(frame.ItemID, 4096) || !cleanField(frame.PromptID, 4096) || !cleanField(frame.MessageID, 4096) || (frame.MessageID != "" && frame.Kind != "steer") {
+		if frame.Sequence != expected+1 || frame.SessionPath != path || frame.TurnID != v.ActiveTurnID || !sessionEventKinds[frame.Kind] || !cleanField(frame.ItemID, 4096) || !cleanField(frame.PromptID, 4096) || !validSessionMessageIdentity(frame) {
 			return false
 		}
 		switch event.TurnStatus(frame.Status) {

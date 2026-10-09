@@ -88,7 +88,7 @@ func turnEventSynchronousBarrier(kind event.Kind) bool {
 	switch kind {
 	case event.ToolDispatch, event.ToolResult, event.AskRequest, event.ApprovalRequest,
 		event.MCPInteractionRequest, event.PromptAnswered, event.TurnStatusChanged,
-		event.TurnStarted, event.UserMessageAdmitted, event.TurnDone:
+		event.TurnStarted, event.UserMessageAdmitted, event.HostInputAdmitted, event.TurnDone:
 		return true
 	default:
 		return false
@@ -158,7 +158,10 @@ func (s *turnEventSink) persistAndPublish(e event.Event) error {
 		return nil
 	}
 	if e.RecoveryCheckpoint {
-		return s.c.checkpointToolTranscript()
+		if err := s.c.checkpointToolTranscript(); err != nil {
+			return err
+		}
+		return s.c.acceptProtocolRecoveryRewrite(e.ProtocolRecoveryRewrite)
 	}
 	ledger := s.c.turnEventLedger()
 	if ledger == nil {
@@ -432,6 +435,24 @@ func (c *Controller) TurnProjectionView() (TurnProjectionView, error) {
 		return TurnProjectionView{}, ErrTurnProjectionChanged
 	}
 	view.Prefix = history[:len(prefix)]
+	for _, envelope := range projection.Events {
+		if envelope.Event.Kind != "host_input_admitted" {
+			continue
+		}
+		if envelope.Event.MessageID == "" {
+			return TurnProjectionView{}, ErrTurnProjectionChanged
+		}
+		matches, valid := 0, false
+		for i, message := range history {
+			if message.ID == envelope.Event.MessageID {
+				matches++
+				valid = i >= len(prefix) && message.Role == provider.RoleUser && message.Origin == provider.MessageOriginHost
+			}
+		}
+		if matches != 1 || !valid {
+			return TurnProjectionView{}, ErrTurnProjectionChanged
+		}
+	}
 	for _, message := range history[len(prefix):] {
 		if agent.IsUserAuthoredTurnMessage(message) {
 			view.UserSuffix = append(view.UserSuffix, message)

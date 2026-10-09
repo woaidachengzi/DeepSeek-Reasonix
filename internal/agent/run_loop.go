@@ -157,6 +157,8 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string, pinned pinnedRev
 	a.appendPinnedRevisionAndUser(ctx, pinned, userMessage)
 	if IsUserAuthoredTurnMessage(userMessage) {
 		a.svc.sink.Emit(event.Event{Kind: event.UserMessageAdmitted, MessageID: userMessage.ID})
+	} else if userMessage.Origin == provider.MessageOriginHost {
+		a.svc.sink.Emit(event.Event{Kind: event.HostInputAdmitted, MessageID: userMessage.ID})
 	}
 
 	// The loop fields join the classification computed above rather than

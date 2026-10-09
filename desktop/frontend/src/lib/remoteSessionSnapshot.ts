@@ -11,6 +11,7 @@ export interface RemoteDisplayCut {
   events:Record<string,unknown>[];
   capturedThrough:number;
 }
+export interface RemoteCutInput {kind:"user"|"host";turn:string;messageId:string}
 export interface RemoteSnapshotSink {
   state(state:"opening"|"syncing"|"live"|"reconcile"):void;
   snapshot(cut:RemoteDisplayCut):void;
@@ -23,6 +24,19 @@ const clean=(value:unknown,limit:number):value is string => typeof value==="stri
 const sequence=(value:unknown):value is number => Number.isSafeInteger(value) && (value as number)>=0;
 const sameIdentity=(a:unknown,b:RemoteSubscriptionIdentity):boolean => record(a) && ["protocolVersion","subscriptionId","controllerId","sessionPath","surfaceId","generation","sidecarInstanceId"].every(key=>a[key]===b[key as keyof RemoteSubscriptionIdentity]);
 
+// Readiness is canonical backend metadata, not a synthetic question or a
+// guessed parent turn. A host input never enters the visible history rows.
+export function remoteCutInput(cut:RemoteDisplayCut):RemoteCutInput|undefined {
+  const p=cut.projection,turn=p.activeTurnId??"";
+  if(!turn)return undefined;
+  const hosts=cut.events.filter(event=>event.kind==="host_input_admitted");
+  if(p.userSuffix.length===1 && hosts.length===0)return {kind:"user",turn,messageId:p.userSuffix[0].id};
+  if(p.userSuffix.length!==0 || hosts.length!==1)throw new Error("remote question/readiness requires reconciliation");
+  const host=hosts[0];
+  if(host.turnId!==turn||host.sessionPath!==p.sessionPath||!sequence(host.seq)||host.seq<=p.replayAfterSeq||host.seq>cut.capturedThrough||!clean(host.messageId,4096)||!host.messageId||p.history.some(row=>row.id===host.messageId))throw new Error("remote host readiness identity changed");
+  return {kind:"host",turn,messageId:host.messageId};
+}
+
 // One listener/ready lifecycle owns both snapshot and live delivery. No timers,
 // retry, resume, provider reconstruction or positional display identity guesses.
 export function openRemoteSessionSnapshot(transport:RemoteSnapshotTransport, selected:BridgeRemoteControllerView, input:RemoteSubscriptionRequest, sink:RemoteSnapshotSink) {
@@ -31,9 +45,9 @@ export function openRemoteSessionSnapshot(transport:RemoteSnapshotTransport, sel
   let stopped=false, initialized=false, last=0, turn="", pendingBytes=0;
   let pending:Record<string,unknown>[]=[];
   let identity:RemoteSubscriptionIdentity|null=null, revision=0, candidate="", observed=0;
-  let admission:{turn:string;messageId:string;seq:number}|undefined;
+  let admission:(RemoteCutInput & {seq:number})|undefined;
   let needsCapture=true, reading:Promise<void>|undefined;
-  let epoch:string|undefined, questionId="";
+  let epoch:string|undefined, readyInput:RemoteCutInput|undefined;
   let subscription:ReturnType<typeof openRemoteSessionSubscription> | undefined;
   const dispose=()=>{if(stopped)return;stopped=true;pending=[];pendingBytes=0;subscription?.dispose();};
   const fail=()=>{if(stopped)return;dispose();sink.state("reconcile");};
@@ -67,10 +81,10 @@ export function openRemoteSessionSnapshot(transport:RemoteSnapshotTransport, sel
       if(initialized && event.turnId===turn){
         if((event.seq as number)<=last)return;
         if(event.kind!=="compaction_done"){deliver(event);return;}
-        if(event.seq!==last+1||!questionId)throw new Error("remote compaction scope changed");
+        if(event.seq!==last+1||!readyInput)throw new Error("remote compaction scope changed");
         // Re-read the complete cut through the backend's identity/content
         // fence. Never apply an unverified base barrier to the current view.
-        candidate=turn;admission={turn,messageId:questionId,seq:event.seq as number};revision++;initialized=false;
+        candidate=turn;admission={...readyInput,seq:event.seq as number};revision++;initialized=false;
         pending=[];pendingBytes=0;needsCapture=true;enqueue(event);sink.state("syncing");void requestCapture();return;
       }
       if(event.turnId!==turn && (event.kind==="turn_started" || event.kind==="turn_status"&&event.status==="queued")){
@@ -82,10 +96,11 @@ export function openRemoteSessionSnapshot(transport:RemoteSnapshotTransport, sel
       observed=Math.max(observed,event.seq as number);
       if(candidate){
         if(event.turnId!==candidate)throw new Error("remote admission scope changed");
-        if(event.kind==="user_message_admitted"){
+        if(event.kind==="user_message_admitted"||event.kind==="host_input_admitted"){
+          const kind=event.kind==="user_message_admitted"?"user":"host";
           if(!clean(event.messageId,4096)||!event.messageId)throw new Error("missing remote question identity");
-          if(admission){if(admission.messageId!==event.messageId||admission.seq!==event.seq)throw new Error("conflicting remote admission");return;}
-          admission={turn:candidate,messageId:event.messageId as string,seq:event.seq as number};needsCapture=true;
+          if(admission){if(admission.kind!==kind||admission.messageId!==event.messageId||admission.seq!==event.seq)throw new Error("conflicting remote admission");return;}
+          admission={kind,turn:candidate,messageId:event.messageId as string,seq:event.seq as number};needsCapture=true;
         }else if(!admission && !["turn_started","turn_status","turn_phase"].includes(event.kind as string))throw new Error("remote question not admitted");
         enqueue(event);
         if(admission)void requestCapture();
@@ -122,20 +137,7 @@ export function openRemoteSessionSnapshot(transport:RemoteSnapshotTransport, sel
         const ids=new Set<string>();
         for(const row of [...p.history,...p.userSuffix]){if(!row.id||!clean(row.id,4096)||ids.has(row.id)||!["user","assistant","tool","notice","protocol_recovery","final_readiness"].includes(row.role))throw new Error("invalid remote history");ids.add(row.id);}
         if(p.userSuffix.some(row=>row.role!=="user"))throw new Error("invalid remote question");
-        if(!expected && active && p.userSuffix.length===0){
-          // Admission can precede canonical append. Wait on the existing
-          // subscription for its identity barrier, never poll an empty cut.
-          candidate=active;revision++;initialized=false;needsCapture=false;observed=Math.max(observed,r.latestSeq);
-          sink.state("syncing");
-          // The SSE subscription can start after turn_started and buffer its
-          // canonical admission while this pre-append body is in flight. Feed
-          // those frames through the same scoped admission gate before waiting
-          // for new events; otherwise its one identity barrier is lost.
-          const waiting=pending;pending=[];pendingBytes=0;
-          for(const event of waiting){if(stopped)return;receive(event);}
-          return;
-        }
-        if(expected && (r.latestSeq<expected.seq || active&&active!==expected.turn || !(active?p.userSuffix:p.history).some(row=>row.id===expected.messageId&&row.role==="user")))throw new Error("remote admission cut changed");
+        if(expected && (r.latestSeq<expected.seq || active&&active!==expected.turn || expected.kind==="user"&&!(active?p.userSuffix:p.history).some(row=>row.id===expected.messageId&&row.role==="user")))throw new Error("remote admission cut changed");
         first=p;cutLast=p.replayAfterSeq;cutTurn=p.activeTurnId??"";
       }else if(!first||p.history.length||p.userSuffix.length||p.activeTurnId!==first.activeTurnId||p.turnStatus!==first.turnStatus||p.replayAfterSeq!==first.replayAfterSeq||r.latestSeq!==first.replay.latestSeq||r.runtimeEpoch!==first.replay.runtimeEpoch)throw new Error("remote cut changed");
       for(const value of r.events){const event=checkedEvent(value);if(event.turnId!==cutTurn||event.seq!==cutLast+1)throw new Error("remote replay gap");cutLast=event.seq as number;events.push(event);}
@@ -145,14 +147,35 @@ export function openRemoteSessionSnapshot(transport:RemoteSnapshotTransport, sel
       if(page===63)throw new Error("remote page budget");
     }
     if(stopped||capturedRevision!==revision||!first)return;
+    const cut:RemoteDisplayCut={projection:first,events,capturedThrough:cutLast};
+    if(!expected && cutTurn && first.userSuffix.length===0 && !events.some(event=>event.kind==="host_input_admitted")){
+      if(events.some(event=>!["turn_started","turn_status","turn_phase"].includes(event.kind as string)))throw new Error("remote input readiness missing");
+      // Admission can precede canonical append. Wait on the existing
+      // subscription for its identity barrier, never poll an empty cut.
+      candidate=cutTurn;revision++;initialized=false;needsCapture=false;observed=Math.max(observed,first.replay.latestSeq);
+      sink.state("syncing");
+      // The SSE subscription can start after turn_started and buffer its
+      // canonical admission while this pre-append body is in flight. Feed
+      // those frames through the same scoped admission gate before waiting
+      // for new events; otherwise its one identity barrier is lost.
+      const waiting=pending;pending=[];pendingBytes=0;
+      for(const event of waiting){if(stopped)return;receive(event);}
+      return;
+    }
+    const inputReady=remoteCutInput(cut);
+    // A fast-settled host input is intentionally absent from visible history.
+    // Its scoped SSE admission was already confirmed; the same-owner/epoch
+    // terminal cut must cover its sequence. Never synthesize a user row to
+    // match that hidden ID. Active cuts still require exact replay identity.
+    if(expected && cutTurn && (inputReady?.kind!==expected.kind||inputReady.messageId!==expected.messageId))throw new Error("remote input readiness changed");
     // Publish one complete bounded cut. A superseding admission fences the
     // previous read; overlap is not applied twice. No partial cut is painted.
     const live=pending.filter(event=>(event.seq as number)>cutLast);
     let cursor=cutLast;
     for(const event of live){if(event.turnId!==cutTurn||event.seq!==cursor+1)throw new Error("remote live gap");cursor=event.seq as number;}
-    sink.snapshot({projection:first,events,capturedThrough:cutLast});
+    sink.snapshot(cut);
     if(stopped||capturedRevision!==revision)return;
-    last=cutLast;turn=cutTurn||expected?.turn||"";epoch=first.replay.runtimeEpoch??"";questionId=first.userSuffix[0]?.id??"";candidate="";admission=undefined;pending=[];pendingBytes=0;initialized=true;
+    last=cutLast;turn=cutTurn||expected?.turn||"";epoch=first.replay.runtimeEpoch??"";readyInput=inputReady;candidate="";admission=undefined;pending=[];pendingBytes=0;initialized=true;
     for(const event of live){if(stopped)return;receive(event);}
     if(!stopped&&capturedRevision===revision)sink.state("live");
   }
