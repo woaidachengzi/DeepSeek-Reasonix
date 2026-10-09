@@ -30,6 +30,13 @@ type previewDesktopWatchStore struct {
 	watchers map[string]previewDesktopWatcher
 	persist  func(previewDesktopWatcher, bool) error
 	closed   bool
+	leases   map[string]previewDesktopWatchLease
+}
+
+type previewDesktopWatchLease struct {
+	watcher previewDesktopWatcher
+	ctx     context.Context
+	cancel  context.CancelFunc
 }
 
 func newPreviewDesktopWatchStore(path string) (*previewDesktopWatchStore, error) {
@@ -113,6 +120,10 @@ func (s *previewDesktopWatchStore) SetWatch(ctx context.Context, route bot.Deskt
 		return errPreviewDesktopWatch
 	}
 	key := route.Key()
+	if lease, ok := s.leases[key]; ok {
+		lease.cancel()
+		delete(s.leases, key)
+	}
 	if enabled {
 		if _, existing := s.watchers[key]; !existing && len(s.watchers) >= previewDesktopWatchLimit {
 			return errPreviewDesktopWatch
@@ -154,5 +165,35 @@ func (s *previewDesktopWatchStore) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.closed = true
+	for _, lease := range s.leases {
+		lease.cancel()
+	}
+	clear(s.leases)
 	clear(s.watchers)
+}
+
+// deliveryLeases capture the current in-memory subscription generation. Off,
+// actor replacement and Close revoke it even if persistence fails. Network IO
+// never holds the store lock; cancellation cannot retract an admitted packet.
+func (s *previewDesktopWatchStore) deliveryLeases() []previewDesktopWatchLease {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil
+	}
+	if s.leases == nil {
+		s.leases = make(map[string]previewDesktopWatchLease)
+	}
+	result := make([]previewDesktopWatchLease, 0, len(s.watchers))
+	for key, watcher := range s.watchers {
+		lease, ok := s.leases[key]
+		if !ok {
+			ctx, cancel := context.WithCancel(context.Background())
+			lease = previewDesktopWatchLease{watcher, ctx, cancel}
+			s.leases[key] = lease
+		}
+		result = append(result, lease)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].watcher.route.Key() < result[j].watcher.route.Key() })
+	return result
 }

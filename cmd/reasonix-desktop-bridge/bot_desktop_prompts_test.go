@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"reasonix/internal/bot"
 	"reasonix/internal/desktopbridge"
@@ -55,6 +56,13 @@ default="alpha"
 	if !ok {
 		t.Fatal("missing actual controller")
 	}
+	catalogue := newPreviewDesktopCatalogue(manager, nil)
+	defer catalogue.Close()
+	entries, err := catalogue.Refresh(context.Background())
+	if err != nil || len(entries) != 1 {
+		t.Fatal("actual directory missing", err)
+	}
+	entry := entries[0]
 	if err := manager.SubmitOwned(context.Background(), initial, "private gated ask"); err != nil {
 		t.Fatal(err)
 	}
@@ -70,6 +78,10 @@ default="alpha"
 		t.Fatal("missing actual pending prompt")
 	}
 	prompt := view.State.Pending[0]
+	pendingRead, err := catalogue.ReadPending(context.Background(), entry)
+	if err != nil || len(pendingRead.Prompts) != 1 || pendingRead.Prompts[0].Ask == nil || pendingRead.Prompts[0].Scope.PromptID != prompt.ID {
+		t.Fatal("unified reader lost actual Ask", err)
+	}
 	for _, mutate := range []func(*desktopbridge.OwnedPrompt){
 		func(p *desktopbridge.OwnedPrompt) { p.ID += "-wrong" }, func(p *desktopbridge.OwnedPrompt) { p.TurnID += "-wrong" },
 		func(p *desktopbridge.OwnedPrompt) { p.RuntimeEpoch += "-wrong" }, func(p *desktopbridge.OwnedPrompt) { p.Kind = "approval" },
@@ -100,6 +112,24 @@ default="alpha"
 		t.Fatal("private snapshot replayed into ordinary sink")
 	}
 	command := bot.DesktopCommand{Route: route, ActorID: "operator", Action: "answer", TargetID: id, AnswerText: "2"}
+	// Simulate an old unknown attempt while the actual prompt remains pending.
+	tickets.mu.Lock()
+	original := tickets.tickets[id]
+	spent := original
+	spent.attempted = true
+	spent.issued = time.Now().Add(-2 * previewDesktopPromptLifetime)
+	tickets.tickets[id] = spent
+	tickets.mu.Unlock()
+	if refreshed, _, err := tickets.Issue(context.Background(), route, "operator", view.Scope, prompt); err != nil || refreshed != id {
+		t.Fatal("expiry rearmed unknown local decision", err)
+	}
+	if _, err := tickets.ExecuteDesktopCommand(context.Background(), command); err == nil || len(answers) != 0 {
+		t.Fatal("expired spent ticket dispatched")
+	}
+	// Restore the unattempted fixture for the real Controller decision below.
+	tickets.mu.Lock()
+	tickets.tickets[id] = original
+	tickets.mu.Unlock()
 	wrong := command
 	wrong.TargetID = prompt.ID
 	if _, err := tickets.ExecuteDesktopCommand(context.Background(), wrong); err == nil {
@@ -148,6 +178,10 @@ default="alpha"
 	mcpView, ok := manager.CommandSnapshot()
 	if !ok || len(mcpView.State.Pending) != 1 || mcpView.State.Pending[0].Kind != "mcp" {
 		t.Fatal("actual MCP identity missing")
+	}
+	pendingRead, err = catalogue.ReadPending(context.Background(), entry)
+	if err != nil || len(pendingRead.Prompts) != 1 || pendingRead.Prompts[0].MCPInteraction == nil || pendingRead.Prompts[0].Ask != nil || pendingRead.Prompts[0].Scope.PromptID != mcpView.State.Pending[0].ID || len(requests) != 0 || len(decisions) != 0 {
+		t.Fatal("unified reader replayed or adopted previous Ask", err)
 	}
 	mcpID, _, err := tickets.Issue(context.Background(), route, "operator", mcpView.Scope, mcpView.State.Pending[0])
 	if err != nil || mcpID == id {

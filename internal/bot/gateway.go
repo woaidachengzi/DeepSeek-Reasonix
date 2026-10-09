@@ -175,14 +175,16 @@ type BotGateway struct {
 	sessions *SessionManager
 	startErr []error
 
-	lifecycleMu sync.Mutex
-	started     bool
-	stopped     bool
-	runCancel   context.CancelFunc
-	startDone   chan struct{}
-	stopDone    chan struct{}
-	gatewayWG   sync.WaitGroup
-	turnWG      sync.WaitGroup
+	lifecycleMu   sync.Mutex
+	started       bool
+	stopped       bool
+	runCancel     context.CancelFunc
+	runContext    context.Context
+	desktopSendWG sync.WaitGroup
+	startDone     chan struct{}
+	stopDone      chan struct{}
+	gatewayWG     sync.WaitGroup
+	turnWG        sync.WaitGroup
 
 	mu                      sync.Mutex
 	controllers             map[string]*sessionState // session key -> active state
@@ -399,6 +401,7 @@ func (gw *BotGateway) Start(ctx context.Context) (err error) {
 	gw.started = true
 	runCtx, cancel := context.WithCancel(ctx)
 	gw.runCancel = cancel
+	gw.runContext = runCtx
 	startDone := make(chan struct{})
 	gw.startDone = startDone
 	gw.lifecycleMu.Unlock()
@@ -409,6 +412,7 @@ func (gw *BotGateway) Start(ctx context.Context) (err error) {
 		gw.lifecycleMu.Lock()
 		if err != nil {
 			gw.runCancel = nil
+			gw.runContext = nil
 		}
 		close(startDone)
 		gw.lifecycleMu.Unlock()
@@ -609,6 +613,7 @@ func (gw *BotGateway) Stop() {
 	gw.stopDone = stopDone
 	cancel := gw.runCancel
 	gw.runCancel = nil
+	gw.runContext = nil
 	startDone := gw.startDone
 	gw.lifecycleMu.Unlock()
 	defer close(stopDone)
@@ -634,6 +639,7 @@ func (gw *BotGateway) Stop() {
 	gw.gatewayWG.Wait()
 	gw.closeSessions()
 	gw.turnWG.Wait()
+	gw.desktopSendWG.Wait()
 	gw.closeSessions()
 }
 

@@ -55,6 +55,7 @@ type Server struct {
 	// exists to prevent). It also keeps switchModel's Snapshot/Build/Close
 	// off s.mu, as the narrower switchMu did before it was widened.
 	bindMu                 sync.Mutex
+	runtimeLeaseProbe      func(string) bool                // bindMu; per-server read-only test seam
 	desktopProjectionPages map[string]desktopProjectionPage // bindMu; bounded, short-lived read-only continuations
 	ctrl                   control.SessionAPI
 	bc                     *Broadcaster
@@ -572,6 +573,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("POST /desktop/session-cancel", s.desktopSessionCancel)
 	mux.HandleFunc("POST /desktop/session-submit", s.desktopSessionSubmit)
 	mux.HandleFunc("POST /desktop/session-prompt", s.desktopSessionPrompt)
+	mux.HandleFunc("POST /desktop/session-pending", s.desktopSessionPending)
 	mux.HandleFunc("GET /context", s.context)
 	mux.HandleFunc("POST /submit", s.submit)
 	s.registerInboxRoutes(mux)

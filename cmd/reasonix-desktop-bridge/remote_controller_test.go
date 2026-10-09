@@ -72,6 +72,13 @@ func controllerFixture(t *testing.T, sessions http.HandlerFunc, views ...http.Ha
 			w.WriteHeader(204)
 			return
 		}
+		if cookie, err := r.Cookie("reasonix_token"); err == nil && cookie.Value == "owned-controller-secret" && len(views) == 1 && r.URL.Path == "/runtime-states" {
+			if r.Method != http.MethodGet || r.URL.RawQuery != "" || r.Header.Get("Authorization") != "" {
+				t.Error("bad runtime state channel")
+			}
+			views[0](w, r)
+			return
+		}
 		cookie, err := r.Cookie("reasonix_token")
 		if err == nil && cookie.Value == "owned-controller-secret" && len(views) == 1 && r.URL.Path == "/desktop/session-projection" {
 			if r.Method != http.MethodGet || (len(r.URL.Query()) != 1 && len(r.URL.Query()) != 3) || r.Header.Get("Authorization") != "" {
@@ -88,7 +95,7 @@ func controllerFixture(t *testing.T, sessions http.HandlerFunc, views ...http.Ha
 			views[0](w, r)
 			return
 		}
-		if err == nil && cookie.Value == "owned-controller-secret" && len(views) == 1 && (r.URL.Path == "/desktop/session-image" || r.URL.Path == "/desktop/session-cancel" || r.URL.Path == "/desktop/session-submit" || r.URL.Path == "/desktop/session-prompt") {
+		if err == nil && cookie.Value == "owned-controller-secret" && len(views) == 1 && (r.URL.Path == "/desktop/session-image" || r.URL.Path == "/desktop/session-cancel" || r.URL.Path == "/desktop/session-submit" || r.URL.Path == "/desktop/session-prompt" || r.URL.Path == "/desktop/session-pending") {
 			if r.Method != http.MethodPost || r.URL.RawQuery != "" {
 				t.Error("bad scoped session command channel")
 			}

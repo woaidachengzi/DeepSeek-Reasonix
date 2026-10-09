@@ -1,5 +1,46 @@
 # Wails API 与事件面盘点
 
+## 2026-10-10 bot 远程票据与 31 文件 review 收敛
+
+- 达到 31 个变更文件后停止功能扩展，整批 review，按用户规则先验证再提交，不 push。本批包括受权限约束的 gateway 通知、owner/watch 退役取消、全已发布本地/remote live 目录、只读租约检查、精确 pending snapshot 与远程单次提示票据；不是完整 Preview host 已启用。
+- 远程票据捕获原连接对象、目录实例、Controller 与独立 prompt routing epoch、turn/kind/ID，以及聊天/actor。复用本地五类严格答案解析，不接受原始 prompt ID、跨聊天/操作者、通用 approve 替代专用决策或同 path 换代。读取和发送不持有票据 mutex，Close 取消在途请求；单次预留后未知结果不重试，不重采样另一个 SSH/local owner。隔离真实 SSH/cookie 转发配合 HTTP body fixture 证明五类输入与完整 scope、并发重复拒绝和关闭取消，不替代实际远程五类 resolver/真实 IM 端到端验收。
+- Review 修复：已使用票据不因 15 分钟过期重新发放；remote 目录句柄退役后恢复也不重置同一未知决策，保留最多 128 条 spent tombstone 至原连接/service 退役，容量耗尽明确拒绝，不驱逐后重试。本地保留至对应提示离开 pending。补过期、目录恢复、并发与取消回归。通知文案移除尚未注册的 /desktop pending，改为回桌面处理；失败 pending 读取不返回半批元数据。Serve 测试探针改为 bindMu 保护的实例级 seam，避免进程全局函数替换。
+- 补跑曾因新增测试漏 time 导入失败，已修复。Serve 十次专项实际失败为 TempDir 清理时 usage-catalog 后台写缓存（focused-corrected.log），不是 race detector 数据竞争；新增读测试复用 stats.CloseUsageCatalogs 等待后台关闭，不删除真实数据、不放宽断言。最终结果以下述 review 日志为准，早期失败日志保留。
+- 验证证据目录：/private/tmp/reasonix-bot-batch-review.0KVyeZ/。最终五包相关专项十次 race exit 0（bridge 34.663s、bot 2.201s、agent 5.633s、remote/controller 2.204s、serve 5.512s），focused-reviewed-final.log。最终七包非缓存完整 race exit 0（bot 4.468s、control 44.052s、config 14.841s、desktopbridge 5.659s、remote/controller 3.842s、serve 106.644s、bridge 45.891s），full-reviewed-final.log。八包 vet exit 0，vet-reviewed-final.log；原协议生成器 -check exit 0，generated-reviewed-final.log；gofmt/diff 检查通过。Agent 仅只读租约专项与 vet，不声称全 Agent/全仓库回归或原生验收。
+- 完整 host 的 status/pending 输出、远程驾驶/接管、本地收回通知、全 owner watch 与 gateway 换代整合仍待接入；生产 Desktop nil/capability false 保持。真实 IM、远程 Plan/Recovery/MCP、可见 WKWebView、跨 OS 专项和 SQLite 恢复完整门禁仍未完成。本轮未更新 App，不使用真实账号/迁移数据、不正式签名/发布或切换下载；完整目标继续。以下各节保留当时的阶段状态。
+
+## 2026-10-10 精确远程提示快照与统一本地/remote 读取（后续源码）
+
+- 新增认证固定 POST /desktop/session-pending 与 typed ReadSessionPending。输入捕获实际 sessionPath/Controller runtimeEpoch；Serve 直接匹配已发布前台/非退役 detached owner，不扫描文件、resume/切前台、获取租约或重放提示。bind/admission gate、只读 foreign/mirror 检查、状态/活动 turn 与原 core ReadPromptScopedContext 同时约束读取；读取后复核 revision/状态，变化即拒绝，不把半批提示假报为空。独立 prompt routing epoch 与 Controller epoch 保持分离，不在读路径补 stamp 或 durable transition。
+- 五类 typed 提示只保留 Ask/Approval/Plan/Recovery/MCP 显示字段与明确完整 scope，不回传其它事件正文/reasoning/config。客户端使用固定已认证 owner/取消链路，401/403 退役；错误/旧端点不回退 legacy。限制响应 2 MiB、32 提示、每条 64 KiB，并在分配嵌套记录前解析数量/单条预算；scope/turn/kind/payload identity 交叉校验。读取是观察，不是操作 ticket 或 resolver 授权。
+- 私有目录新增 ReadPending：本地经当前同 owner 的 manager 精确读，remote 经原捕获连接/path/epoch 请求并复核连接与目录句柄。目录关闭/退役或同 path/ID 替换不能重采样新实例；保持本地/远程隔离与独立数据。实际 Serve 前台/后台 Ask 验证重复读取不发请求/receipt、不改 state/routing、认证与错误 epoch；实际 Preview Controller Ask→MCP 验证统一本地读取不重放、不采用前一提示；隔离 SSH/HTTP body fixture 验证统一 remote scope、换代拒绝、关闭连接零请求。五类 codec/body 校验不替代实际远程 Plan/Recovery/MCP 或真实 IM E2E。
+- 最终三包专项十次 race exit 0（remote/controller 1.634s、serve 7.223s、bridge 13.709s）；最终七包完整 race exit 0（bot/control/config/desktopbridge cached，前节有实际执行证据、remote/controller 2.928s、serve 104.805s、bridge 40.373s）。证据 /private/tmp/reasonix-bot-pending.vcqtLH/{focused-final,full-race-final}.log；八包 vet、原桌面生成器 -check、格式/diff 检查通过。这是 Go 私有 Serve/client 与宿主读取，未新增公共 native/renderer API；测试使用临时独立档案、私有 fake provider/SDK 或隔离 SSH fixture，不连接真实账号。
+- 统一本地/remote 精确提示读已接，但完整 host 的 status/pending 输出、remote 操作 ticket/专用五类决策、全会话接管/watch/local reclaim 尚未组成生产链路；Desktop nil/capability false 不变。现有 App 仍为 0366aa636，不含本轮，无新包/真实账号/迁移/发布。累计 28 个未提交文件，尚未超过 30 文件门槛，无提交/push；后续新增第三个文件即须暂停扩展、整批 review 后提交，完整目标继续。
+
+## 2026-10-10 bot 本地与 remote live 目录、只读租约归属（后续源码）
+
+- 新增私有目录，枚举当前 RuntimeManager 的实际本地 owner（目前同时只持有一个）及所有已发布 remote controller/SSH 连接中的前台与 detached 实例。最初逐个扫描保存列表/历史页的实现已替换为现有 Serve /runtime-states 的 typed client，目录不请求 /sessions/历史/状态兼容 fallback，不 attach/resume/切前台/启动 Serve 或打开本地模型。最多 128 个 runtime 记录、总调用 20 秒；容量/不完整/连接集变更/读取失败明确拒绝并退役该批句柄，不将部分目录假报为全部。快照仍是分时观察，不是跨多个 Serve 的原子状态或执行授权。
+- Serve runtime 快照新增 additive ownership 标记 serve/external/retiring；保留既有状态展示，但私有 bot 目录排除外部/退役/closed，不能把已交接的镜像 Controller 当作可操作实例。Review 发现既有 foreign lease probe 会清理坏/过期元数据，不适合状态读；新增保守只读 probe，不获取锁、创建锁文件或移除/修复元数据，未知/残留 foreign 保持不可用，恢复仍须显式 ownership/recovery 路径。原有执行/恢复 probe 行为未改。
+- Go client 使用固定认证 GET、2 MiB/128 记录、严格 schema/revision/唯一 path/epoch/单一 foreground/归属/状态字段校验；401/403 退役连接，旧 Serve 缺少归属字段或端点不支持即失败，不 fallback。目录返回独立副本与随机 opaque handle：同 owner 刷新稳定，同 path/ID 替换或失败后的旧 handle 不跟随新实例。原始 path/标题/history/错误不被格式化到 IM，后续动作须重新校验相同 capture 并执行 scoped admission。
+- 隔离真实 SSH/cookie/HTTP + Serve-body fixture 验证两个连接的前台/后台与真实本地 Controller 同时列出、256 个保存记录不扫描/不占活跃容量、external/closed 排除、同 path remote epoch 与同 ID 本地模型替换、连接关闭、在途目录撤销/失败退役、容量/非法句柄/返回副本。另用实际 Serve + typed client 验证前台/后台，256 个无效保存文件不读取、后台 transcript 删除仍观察到实例、foreign 和 retiring 正确标记；Agent 专项证明只读 probe 不修复 metadata/创建锁。实际 Serve、SSH-body fixture 与目录组合测试是分别的隔离证明，不冒充一个真实外部 SSH Serve/IM 端到端验收。
+- 最终四包相关专项十次 race exit 0（agent 4.477s、remote/controller 1.626s、serve 3.700s、bridge 25.237s）；最终七包完整 race exit 0（bot 4.695s、control 44.932s、config/desktopbridge cached，前节有实际执行证据、remote/controller 3.572s、serve 106.437s、bridge 48.120s）。证据 /private/tmp/reasonix-bot-catalogue.eYvYQn/{focused-final,full-race-final}.log；八包 vet exit 0，原生成器 -check 和格式/diff 检查通过。Agent 本轮仅执行只读 probe 专项与 vet，不冒充全 Agent 或全仓库回归通过。
+- 本批仍为宿主私有目录，尚未连接 /desktop status/pending 输出与提示 ticket/五类决策、全 local/remote 接管/watch/local reclaim 或注册完整 Preview host；Desktop nil/capability false 继续保持，真实 IM 与 Plan/Recovery E2E 未验收。App 仍来自 0366aa636，未更新；无真实账号/迁移/正式发布。累计 19 个未提交文件，未超过 30 文件先 review 后提交门槛，无提交/push，完整目标继续。
+
+## 2026-10-10 bot watch 事件消费者与撤销中的发送（后续源码）
+
+- 将精确已发布 owner 的 OwnedEventStream、watch 存储与 SendDesktopNotification 连为私有消费者；每个消费者只运行一次，捕获同一 owner/gateway，不自动重放、重新绑定或重试未知发送。仅白名单事件种类生成固定开始/结束/待提示摘要；所有聊天均不转发原始事件正文、reasoning、工具输出、错误、路径或 prompt ID，结束摘要不假报任务成功。下一步完整 host 仍须接目录、提示 ticket 与会话身份展示，不能把当前摘要消费者当作完整 IM 回流完成。
+- 观察者新增 Done 退役信号：source/stream/consumer 关闭、队列溢出会取消正在 SDK IO 中的发送，而不只停止下一次 Read。watch 内存代际租约在 off、actor 替换或 store 关闭时取消，落盘失败也不恢复旧授权；同 actor off/on 创建新代际，旧请求不能复活。网络 IO 不持有 watch/stream 锁；取消不能撤回已发送消息，SDK 仍须遵守 context。最终 transport/access/admin 检查复用 gateway，持久订阅不授予 admin。
+- 隔离链路使用真实 gateway 与假 SDK，验证群聊固定摘要/非白名单零转发、保存 member 拒绝、失败 off 取消在途且不复活、actor 替换、source/stream/consumer/gateway 停止与溢出取消、未知不重试和重复 Run 拒绝。另由实际 Preview Controller + 私有 fake provider 产生真实开始/结束事件，通过 production lifecycle source→消费者→真实 gateway→假 SDK，证明请求确实到 provider、回答正文不转发、同 ID 模型替换退役旧观察者；不是手工 Emit 替代这一项，也不是实际外部 IM/模型服务验收。
+- 最终专项十次 race 通过（bridge 16.957s、desktopbridge 1.350s、bot 1.767s）；最终五包完整 race exit 0（bridge 38.129s，bot/control/config/desktopbridge cached），证据 `/private/tmp/reasonix-watch-consumer.2lIFJH/{focused-final,full-race-final}.log`；五包 vet、原生成器 -check、gofmt/diff 检查通过。缓存来源本轮前版实际执行五包通过（bot 3.147s、control 42.327s、config 13.114s、desktopbridge 4.128s、bridge 44.439s），随后仅在 bridge 包补单次 Run 接纳及其测试，最终 bridge 已重新实际执行，不以旧版 bridge 证明替代。
+- 完整 Preview host 仍未注册，Desktop nil/capability false 不变；全 local/remote 目录、实时本地收回通知、真实 IM/Plan/Recovery E2E 与完整目标其它包级门禁仍待接验。当前 App 仍来自 `0366aa636`，不含本批或 `b847c54e0` bot 基础；无新包/真实账号/迁移/发布。累计 10 个未提交文件，未超过 30 文件门槛，无提交/push，完整目标继续。
+
+## 2026-10-10 bot watch 单次发送权限与隐私边界（后续源码）
+
+- 新增 SendDesktopNotification 私有发送入口：逐次检查当前已启动 gateway 的精确平台/连接/domain、保存 actor 的白名单与 admin 权限；持久订阅不自动获得发送权限。summary 与 private detail 分离，群聊/guild/thread 仅 summary，DM/direct 可包含 detail；summary 必须由未来消费者从批准的事件类型构造，不可直接转发原始事件。限制身份/文本大小及编码，不接受任意附件、卡片、webhook 或回复目标。
+- 发送仅执行一次，失败/撤销返回固定未确认结果；公开 AdapterHealth 同样不保存原始 SDK 错误，部分送达 ID 仍用于自消息抑制、不冒充成功回执。Stop 撤销并等待已接纳发送，WaitGroup 接纳与停止由同一生命周期锁隔离；适配器须遵守 context，不能在 Send 内同步回调 Stop。取消不能撤回已发送消息；当前 gateway 配置是权限权威，生产配置刷新须停止并替换 gateway，不宣称实时读取磁盘或验证群成员身份。
+- 真实 gateway 生命周期配合假 SDK 覆盖启动前/停止后、路由不匹配、权限撤销、群聊隐私、非法载荷、取消、不重试、Stop 等待、健康错误脱敏与部分发送 echo 抑制。最终专项十次 race 通过（bot 1.905s）；五包完整 race 通过（bot 3.056s、control 41.609s、config 12.313s、desktopbridge cached，前节有实际执行证据、bridge 41.302s）。日志 `/private/tmp/reasonix-bot-notifications.DJP3Wa/{focused-echo-final,full-race-final}.log`；五包 vet（最终生产实现，随后仅增 echo 测试）、原生成器 -check、gofmt/diff 检查通过。
+- 尚未把 OwnedEventStream 消费者与该入口连接、注册完整 Preview host 或启用实际 IM。实时收回通知、完整 local/remote 目录及真实 IM/Plan/Recovery E2E 仍待接验；Desktop nil/capability false 不变。App 仍为 `0366aa636`，不含本轮及 `b847c54e0` 基础源码，无新包/真实账号/迁移/发布。本轮累计 5 文件，未超过 30 文件 review 后提交门槛，无提交/push，完整目标继续。
+
 ## 2026-10-10 bot 基础批次超过 30 文件 review 收敛
 
 - 本批达到 31 文件后停止功能扩展，复核 scoped command/read、发布/关闭四路径、观察队列归属、提示票据与单次决策、watch 事务、local reclaim、入站权限及测试档案隔离。发现 scoped gateway 原入站逻辑允许消息指定 connection/domain，从而可能选择其它连接权限；修复为在白名单、角色和 OnInbound 前按实际 AdapterBinding 校验，不一致直接拒绝，空身份由真实绑定填充。保留非 scoped 旧接口行为；新增伪造连接/domain 的命令与持续驾驶拒绝、零 callback/零回执及正常绑定回归。另补 ticket 显示复用分支的撤销检查。

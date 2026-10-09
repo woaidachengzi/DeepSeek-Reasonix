@@ -59,7 +59,9 @@ func (p *previewDesktopPrompts) pruneLocked() {
 				}
 			}
 		}
-		if !present || time.Since(ticket.issued) > previewDesktopPromptLifetime {
+		// Keep a spent ticket while this prompt remains pending: expiry must
+		// not turn an unknown decision into a fresh retry capability.
+		if !present || !ticket.attempted && time.Since(ticket.issued) > previewDesktopPromptLifetime {
 			delete(p.tickets, id)
 		}
 	}
@@ -114,23 +116,39 @@ func (p *previewDesktopPrompts) ExecuteDesktopCommand(ctx context.Context, comma
 	if !ok || ticket.attempted || ticket.route != command.Route || ticket.actor != command.ActorID || ctx.Err() != nil {
 		return "", errPreviewDesktopBinding
 	}
+	scope := remotecontroller.SessionPromptScope{SessionPath: ticket.scope.SessionPath, RuntimeEpoch: ticket.scope.RuntimeEpoch, TurnID: ticket.prompt.TurnID, PromptID: ticket.prompt.ID, PromptRuntimeEpoch: ticket.prompt.RuntimeEpoch, Kind: ticket.prompt.Kind}
+	encoded, err := previewDesktopPromptAnswer(command, scope, ticket.payload)
+	if err != nil {
+		return "", err
+	}
+	ticket.attempted = true
+	p.tickets[command.TargetID] = ticket
+	if err := p.manager.ResolveOwnedPrompt(ctx, ticket.scope, ticket.prompt, json.RawMessage(encoded)); err != nil {
+		return "", err
+	}
+	return "已提交该提示的决定；这不表示任务或保存已完成。", nil
+}
+
+// Parse the same strict five-kind union against a previously captured display,
+// without looking up another owner or performing any operation.
+func previewDesktopPromptAnswer(command bot.DesktopCommand, scope remotecontroller.SessionPromptScope, payload json.RawMessage) (string, error) {
 	var answer json.RawMessage
 	switch command.Action {
 	case "approve", "deny":
 		// Plan/Recovery/MCP must use their specialized decisions, never a generic
 		// allow bit. Full host registration is still to be connected.
-		if ticket.prompt.Kind != "approval" {
+		if scope.Kind != "approval" {
 			return "", errPreviewDesktopBinding
 		}
 		answer, _ = json.Marshal(struct {
 			Allow bool `json:"allow"`
 		}{command.Action == "approve"})
 	case "answer":
-		if ticket.prompt.Kind != "ask" {
+		if scope.Kind != "ask" {
 			return "", errPreviewDesktopBinding
 		}
 		var wire eventwire.Event
-		if err := json.Unmarshal(ticket.payload, &wire); err != nil || wire.Ask == nil {
+		if err := json.Unmarshal(payload, &wire); err != nil || wire.Ask == nil {
 			return "", errPreviewDesktopBinding
 		}
 		questions := make([]event.AskQuestion, len(wire.Ask.Questions))
@@ -152,7 +170,7 @@ func (p *previewDesktopPrompts) ExecuteDesktopCommand(ctx context.Context, comma
 			Questions []remotecontroller.SessionPromptQuestionAnswer `json:"questions"`
 		}{encoded})
 	case "plan", "recovery", "mcp":
-		if ticket.prompt.Kind != command.Action {
+		if scope.Kind != command.Action {
 			return "", errPreviewDesktopBinding
 		}
 		text := strings.TrimSpace(command.AnswerText)
@@ -188,17 +206,10 @@ func (p *previewDesktopPrompts) ExecuteDesktopCommand(ctx context.Context, comma
 	if len(answer) == 0 || len(answer) > 64<<10 {
 		return "", errPreviewDesktopBinding
 	}
-	if _, err := remotecontroller.DecodeSessionPromptAnswer(remotecontroller.SessionPromptRequest{SessionPromptScope: remotecontroller.SessionPromptScope{SessionPath: ticket.scope.SessionPath, RuntimeEpoch: ticket.scope.RuntimeEpoch, TurnID: ticket.prompt.TurnID, PromptID: ticket.prompt.ID, PromptRuntimeEpoch: ticket.prompt.RuntimeEpoch, Kind: ticket.prompt.Kind}, Answer: answer}); err != nil {
+	if _, err := remotecontroller.DecodeSessionPromptAnswer(remotecontroller.SessionPromptRequest{SessionPromptScope: scope, Answer: answer}); err != nil {
 		return "", errPreviewDesktopBinding
 	}
-	// Once dispatch is attempted, even an error/unknown result cannot retry this
-	// capability. Invalid local parsing above leaves the draft ticket available.
-	ticket.attempted = true
-	p.tickets[command.TargetID] = ticket
-	if err := p.manager.ResolveOwnedPrompt(ctx, ticket.scope, ticket.prompt, answer); err != nil {
-		return "", err
-	}
-	return "已提交该提示的决定；这不表示任务或保存已完成。", nil
+	return string(answer), nil
 }
 
 func (p *previewDesktopPrompts) Close() {

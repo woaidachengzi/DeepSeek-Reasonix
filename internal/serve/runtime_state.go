@@ -18,6 +18,7 @@ import (
 type runtimeSessionView struct {
 	SessionPath string                     `json:"sessionPath"`
 	Current     bool                       `json:"current"`
+	Ownership   string                     `json:"ownership"`
 	State       event.RuntimeStateSnapshot `json:"state"`
 }
 
@@ -53,10 +54,20 @@ func runtimeStateOf(ctrl control.SessionAPI) event.RuntimeStateSnapshot {
 		BackgroundJobs: status.BackgroundJobs, CancelRequested: status.CancelRequested, Cancellable: status.Cancellable}
 }
 
-// runtimeStates is a memory-only reconciliation surface, including detached
-// controllers. It does not list transcripts, generate titles, or fetch balance.
+// runtimeStates reconciles published Controllers and read-only lease metadata,
+// including detached instances. It does not scan/load transcripts, repair stale
+// leases, generate titles, or fetch balance.
 func (s *Server) runtimeStates(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, s.runtimeStatesSnapshot())
+}
+
+// Called with bindMu held; the optional probe is private to this server, not
+// a mutable process-global callback shared by asynchronous HTTP handlers.
+func (s *Server) runtimeForeignLeaseReadOnly(path string) bool {
+	if s.runtimeLeaseProbe != nil {
+		return s.runtimeLeaseProbe(path)
+	}
+	return agent.SessionLeaseHeldByOtherRuntimeReadOnly(path)
 }
 
 func (s *Server) runtimeStatesSnapshot() runtimeStatesView {
@@ -66,10 +77,12 @@ func (s *Server) runtimeStatesSnapshot() runtimeStatesView {
 	s.bindMu.Lock()
 	current := s.ctl()
 	controllers := []control.SessionAPI{current}
+	retiring := make(map[control.SessionAPI]bool)
 	s.detachedMu.Lock()
 	for _, detached := range s.detached {
 		if detached.ctrl != current {
 			controllers = append(controllers, detached.ctrl)
+			retiring[detached.ctrl] = detached.retiring
 		}
 	}
 	s.detachedMu.Unlock()
@@ -78,7 +91,14 @@ func (s *Server) runtimeStatesSnapshot() runtimeStatesView {
 		if ctrl == nil {
 			continue
 		}
-		result.Sessions = append(result.Sessions, runtimeSessionView{SessionPath: agent.CanonicalSessionPath(ctrl.SessionPath()), Current: ctrl == current, State: runtimeStateOf(ctrl)})
+		path := agent.CanonicalSessionPath(ctrl.SessionPath())
+		ownership := "serve"
+		if retiring[ctrl] {
+			ownership = "retiring"
+		} else if s.sessionMirrored(path) || s.runtimeForeignLeaseReadOnly(path) {
+			ownership = "external"
+		}
+		result.Sessions = append(result.Sessions, runtimeSessionView{SessionPath: path, Current: ctrl == current, Ownership: ownership, State: runtimeStateOf(ctrl)})
 	}
 	s.bindMu.Unlock()
 	sort.Slice(result.Sessions, func(i, j int) bool {

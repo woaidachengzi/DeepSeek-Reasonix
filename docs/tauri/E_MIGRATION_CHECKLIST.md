@@ -1,5 +1,25 @@
 # E 迁移清单
 
+## 2026-10-10 bot 远程票据与 31 文件 review 收敛
+
+达到 31 文件后停止扩展、整批 review 再提交，不 push。远程单次票据已复用本地五类解析，绑定原 SSH/Controller/prompt/聊天/actor，关闭取消在途；修复过期或目录恢复重新发放未知决策票据的问题，并补并发、过期与取消回归。移除通知里未实现的命令；补读测试 usage catalog 的关闭门禁，防止临时目录清理与后台写入竞争。最终源码回归范围、早期失败与日志见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-bot-远程票据与-31-文件-review-收敛)。生产 Desktop 仍未启用，完整 host、远程接管/驾驶、全 owner watch、本地收回及真实服务/原生/跨 OS/SQLite 恢复验收继续待完成；本轮未更新 App，无真实账号/迁移/正式发布，完整目标继续。以下保留历史阶段状态。
+
+## 2026-10-10 精确远程提示快照与统一本地/remote 读取（后续源码）
+
+认证、精确实例下的私有 pending snapshot 已经 Serve/client 接入目录 ReadPending；不重放/补路由/修改提示或恢复历史，换代/取消/退役拒绝，保持 Controller 与 prompt routing 双身份和 32 条/单条 64 KiB 分配前预算。真实 Serve 前后台 Ask、实际本地 Ask→MCP、隔离 SSH remote body fixture 与最终专项/相关包门禁见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-精确远程提示快照与统一本地remote-读取后续源码)。实际远程 Plan/Recovery/MCP、完整 host/票据/五类操作及真实 IM/原生验收仍待继续，不以 typed fixture 代替。App 仍为 0366aa636，Desktop 尚未启用；累计 28 文件未超过 30 文件门槛，无提交/push/新包/真实账号/迁移或发布，完整目标继续。
+
+## 2026-10-10 bot 本地与 remote live 目录、只读租约归属（后续源码）
+
+私有目录已覆盖实际本地 owner 与全部已发布 remote 连接的前台/后台实例，使用 typed /runtime-states 而非历史扫描。新增 serve/external/retiring 标记与不会修复元数据的只读租约探测；随机句柄绑定实例、换代不漂移，超限/失败不冒充完整目录。真实本地 Controller、隔离 SSH/body fixture、实际 Serve/client、256 保存记录及退役/镜像/只读探测证据与边界见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-bot-本地与-remote-live-目录只读租约归属后续源码)。目录观察尚未组成 status/pending/五类决策与全会话接管/watch host；Desktop 仍未启用，真实服务/原生与完整目标其它门禁继续待验。App 仍为 0366aa636，累计 19 个未提交文件未超过 30 文件门槛，无提交/push/新包/真实账号/迁移或发布。
+
+## 2026-10-10 bot watch 事件消费者与撤销中的发送（后续源码）
+
+精确已发布 owner 的事件流、watch 存储与实际 gateway 发送入口已连接为私有消费者，只转发批准种类的固定摘要，不泄露事件正文/路径/错误。source 退役/队列溢出以及 watch off/actor 替换/关闭会取消在途发送，同 actor 重订阅不能复活旧请求，单消费者不重复 Run/重试/自动漂移。真实 gateway + 假 SDK 与实际 Controller + fake provider 的贯通证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-bot-watch-事件消费者与撤销中的发送后续源码)；这不是实际 IM 验收。完整 host、全 local/remote 目录、提示 ticket 展示/决策整合、本地收回通知及真实服务门禁仍待接验，Desktop 尚未启用。App 仍为 `0366aa636`，累计 10 个未提交文件未超过 30 文件门槛，无提交/push/新包/真实账号/迁移或发布，完整目标继续。
+
+## 2026-10-10 bot watch 单次发送权限与隐私边界（后续源码）
+
+新增精确已启动 gateway/连接/actor 的逐次权限复核发送入口，群聊仅安全摘要，私聊可带独立 detail；单次发送不重试、原始 SDK 错误不进入回执或公开健康状态，Stop 取消并等待，部分送达保留 echo 抑制。真实 gateway + 假 SDK 的十次专项与五包 race/vet/生成/格式证据和限制见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-bot-watch-单次发送权限与隐私边界后续源码)。事件消费者尚未接入，完整 host/全 local 与 remote 目录/收回通知/真实 IM 与 Plan/Recovery E2E 未完成，Desktop 仍未启用。App 仍为 `0366aa636`，无新包或真实账号/迁移/发布；本轮累计 5 文件未超过 30 文件门槛，无提交/push，完整目标继续。
+
 ## 2026-10-10 bot 基础批次超过 30 文件 review 收敛
 
 达到 31 文件后暂停扩展并整批 review，修复 scoped 入站消息可指定其它 connection/domain 权限的问题，补真实绑定校验与零回调拒绝回归；最终十次专项、五包完整 race/vet/生成/格式门禁通过，缓存范围与证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-bot-基础批次超过-30-文件-review-收敛)。按规则 review 后提交，不 push；完整 host/watch 消费/过滤/通知、全 local/remote 目录与真实 IM/Plan/Recovery E2E 仍未完成，Desktop 继续未启用。App 仍为 `0366aa636`，无新包或真实账号/迁移/发布，完整目标继续。

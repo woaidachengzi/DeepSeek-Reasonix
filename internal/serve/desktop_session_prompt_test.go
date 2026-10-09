@@ -102,6 +102,22 @@ func TestDesktopSessionPromptActualControllerServeClient(t *testing.T) {
 				t.Fatal(identities)
 			}
 			id := identities[0]
+			readScope := controller.SessionPendingScope{SessionPath: canonical, RuntimeEpoch: ctrl.RuntimeStateSnapshot().RuntimeEpoch}
+			beforeRead := ctrl.RuntimeStateSnapshot()
+			pending, err := client.ReadSessionPending(context.Background(), readScope)
+			if err != nil || len(pending.Prompts) != 1 || pending.Prompts[0].Scope.PromptID != id.PromptID || pending.Prompts[0].Scope.PromptRuntimeEpoch != id.RuntimeEpoch || pending.Prompts[0].Ask == nil {
+				t.Fatal("exact pending read", pending, err)
+			}
+			pending.Prompts[0].Ask.Questions[0].Prompt = "consumer mutation"
+			again, err := client.ReadSessionPending(context.Background(), readScope)
+			if err != nil || again.Prompts[0].Ask.Questions[0].Prompt == "consumer mutation" || ctrl.RuntimeStateSnapshot() != beforeRead || len(prompts) != 0 || len(decisions) != 0 || ctrl.PendingPromptIdentities()[0] != id {
+				t.Fatal("read replayed, mutated routing/state or retained caller data", err)
+			}
+			wrongRead := readScope
+			wrongRead.RuntimeEpoch += "-replacement"
+			if _, err := client.ReadSessionPending(context.Background(), wrongRead); !errors.Is(err, controller.ErrPromptChanged) {
+				t.Fatal("wrong instance read prompt", err)
+			}
 			input := controller.SessionPromptRequest{SessionPromptScope: controller.SessionPromptScope{SessionPath: canonical, RuntimeEpoch: ctrl.RuntimeStateSnapshot().RuntimeEpoch, TurnID: id.TurnID, PromptID: id.PromptID, PromptRuntimeEpoch: id.RuntimeEpoch, Kind: string(id.Kind)}, Answer: json.RawMessage(`{"questions":[{"questionId":"q1","selected":["A"]}]}`)}
 			wire, _ := json.Marshal(desktopSessionPromptRequest{1, input})
 			authenticated := httptest.NewServer(f.server.Handler())
@@ -113,6 +129,18 @@ func TestDesktopSessionPromptActualControllerServeClient(t *testing.T) {
 			response.Body.Close()
 			if response.StatusCode != 401 {
 				t.Fatal("decision bypassed authentication")
+			}
+			readBody, _ := json.Marshal(struct {
+				ProtocolVersion int `json:"protocolVersion"`
+				controller.SessionPendingScope
+			}{1, readScope})
+			response, err = http.Post(authenticated.URL+"/desktop/session-pending", "application/json", strings.NewReader(string(readBody)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			response.Body.Close()
+			if response.StatusCode != 401 {
+				t.Fatal("private snapshot bypassed authentication")
 			}
 			wrong := input
 			wrong.RuntimeEpoch += "-other"

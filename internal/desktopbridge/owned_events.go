@@ -46,6 +46,7 @@ type OwnedEventSubscription struct {
 	stream *OwnedEventStream
 	scope  OwnedCommandScope
 	frames chan OwnedObservedEvent
+	done   chan struct{}
 	ended  error // protected by stream.mu
 }
 
@@ -84,7 +85,7 @@ func (s *OwnedEventStream) Subscribe(scope OwnedCommandScope) (*OwnedEventSubscr
 	if len(s.subscribers) >= ownedObserverLimit {
 		return nil, ErrOwnedObservationGap
 	}
-	sub := &OwnedEventSubscription{stream: s, scope: scope, frames: make(chan OwnedObservedEvent, ownedObserverBuffer)}
+	sub := &OwnedEventSubscription{stream: s, scope: scope, frames: make(chan OwnedObservedEvent, ownedObserverBuffer), done: make(chan struct{})}
 	s.subscribers[sub] = struct{}{}
 	return sub, nil
 }
@@ -125,6 +126,7 @@ func (s *OwnedEventStream) endLocked(sub *OwnedEventSubscription, reason error) 
 		return
 	}
 	sub.ended = reason
+	close(sub.done)
 	delete(s.subscribers, sub)
 	close(sub.frames)
 	// Retire buffered private payloads too; a retained closed subscription must
@@ -138,6 +140,10 @@ func (s *OwnedEventSubscription) Close() {
 	defer s.stream.mu.Unlock()
 	s.stream.endLocked(s, ErrOwnedObservationClosed)
 }
+
+// Done closes on source retirement, overflow or subscription/stream closure.
+// Outbound consumers must also cancel in-flight delivery, not just their next Read.
+func (s *OwnedEventSubscription) Done() <-chan struct{} { return s.done }
 
 func (s *OwnedEventSource) Emit(input event.Event) {
 	s.emitMu.Lock()

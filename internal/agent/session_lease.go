@@ -248,14 +248,34 @@ func TryReclaimCurrentProcessSessionLease(path string) (*SessionLease, error) {
 	return lease, nil
 }
 
+// SessionLeaseHeldByOtherRuntimeReadOnly is a conservative observation probe.
+// It never acquires a lock or repairs/removes stale metadata. Foreign or unreadable
+// metadata remains unavailable until an explicit ownership/recovery path resolves
+// it; an active lease held by this process is authoritative.
+func SessionLeaseHeldByOtherRuntimeReadOnly(path string) bool {
+	if strings.TrimSpace(path) == "" {
+		return false
+	}
+	path = canonicalSessionSavePath(path)
+	if _, own := sessionLeaseActiveOwners.Load(path); own {
+		return false
+	}
+	info, err := LoadSessionLeaseInfo(path)
+	if err != nil {
+		return !os.IsNotExist(err)
+	}
+	if info == nil {
+		return false
+	}
+	return info.PID != os.Getpid() || info.WriterID != SessionWriterID()
+}
+
 // SessionLeaseHeldByOtherRuntime reports whether path's session lease is held
 // by a live runtime other than the calling process. Callers use it to keep
 // destructive operations away from sessions another process may be writing;
 // leases held by this process report false because callers tear their own
-// runtimes down before acting. The lock file is only probed when a foreign
-// lease info file exists, so the common uncontended case never touches the
-// lock; a probe cannot steal a live lease because holders keep the lock held
-// for their whole lifetime.
+// runtimes down before acting. Unlike the read-only observation helper it can
+// probe locks and clean stale metadata as part of an ownership operation.
 func SessionLeaseHeldByOtherRuntime(path string) bool {
 	if strings.TrimSpace(path) == "" {
 		return false

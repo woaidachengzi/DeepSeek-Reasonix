@@ -32,6 +32,36 @@ func desktopWatchTestConfig(t *testing.T, records ...appconfig.BotDesktopWatcher
 	return path
 }
 
+func TestPreviewDesktopWatchDeliveryLeaseCannotAdoptReenabledActor(t *testing.T) {
+	store, err := newPreviewDesktopWatchStore(desktopWatchTestConfig(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	route := desktopWatchTestRoute()
+	if err := store.SetWatch(context.Background(), route, "owner", true); err != nil {
+		t.Fatal(err)
+	}
+	old := store.deliveryLeases()[0]
+	if same := store.deliveryLeases()[0]; same.ctx != old.ctx {
+		t.Fatal("snapshot silently replaced generation")
+	}
+	if err := store.SetWatch(context.Background(), route, "owner", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetWatch(context.Background(), route, "owner", true); err != nil {
+		t.Fatal(err)
+	}
+	fresh := store.deliveryLeases()[0]
+	if old.ctx.Err() == nil || fresh.ctx.Err() != nil || old.ctx == fresh.ctx {
+		t.Fatal("same actor off/on revived stale lease")
+	}
+	store.Close()
+	if fresh.ctx.Err() == nil || len(store.deliveryLeases()) != 0 {
+		t.Fatal("close retained active delivery")
+	}
+}
+
 func TestPreviewDesktopWatchActualConfigActorRoundTripAndPerRouteEdit(t *testing.T) {
 	ctx := context.Background()
 	route := desktopWatchTestRoute()
