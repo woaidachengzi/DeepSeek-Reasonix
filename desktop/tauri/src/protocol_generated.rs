@@ -455,6 +455,26 @@ pub struct BridgeRemoteControllerImage {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerProjectionReplay {
+    pub events: Vec<Value>,
+    pub floor_seq: u64,
+    pub has_more: bool,
+    pub latest_seq: u64,
+    pub next_after_seq: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_epoch: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerProjectionRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub continuation: Option<String>,
+    pub session_path: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeRemoteControllerProtocolRecovery {
     pub id: String,
 }
@@ -535,6 +555,35 @@ pub struct BridgeRemoteControllerSessionImageView {
     pub protocol_version: u64,
     pub session_path: String,
     pub workspace: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerSessionProjection {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_turn_id: Option<String>,
+    pub history: Vec<BridgeRemoteControllerHistoryMessage>,
+    pub initial: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page_token: Option<String>,
+    pub protocol_version: u64,
+    pub read_only: bool,
+    pub replay: BridgeRemoteControllerProjectionReplay,
+    pub replay_after_seq: u64,
+    pub session_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub turn_status: Option<String>,
+    pub user_suffix: Vec<BridgeRemoteControllerHistoryMessage>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerSessionProjectionResponse {
+    pub controller: BridgeRemoteControllerView,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_page: Option<String>,
+    pub projection: BridgeRemoteControllerSessionProjection,
+    pub protocol_version: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

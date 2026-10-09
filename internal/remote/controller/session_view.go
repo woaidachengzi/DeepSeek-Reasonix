@@ -155,14 +155,21 @@ func validSessionView(v SessionView, path string) bool {
 			return false
 		}
 	}
-	seen := make(map[string]bool, len(v.History))
-	for _, m := range v.History {
+	return validHistoryMessages(v.History)
+}
+
+func validHistoryMessages(history []HistoryMessage) bool {
+	if history == nil || len(history) > 100000 {
+		return false
+	}
+	seen := make(map[string]bool, len(history))
+	for _, m := range history {
 		if m.ID == "" || !cleanField(m.ID, 4096) || seen[m.ID] {
 			return false
 		}
 		seen[m.ID] = true
 		switch m.Role {
-		case "system", "user", "assistant", "tool", "notice", "protocol_recovery", "final_readiness":
+		case "user", "assistant", "tool", "notice", "protocol_recovery", "final_readiness":
 		default:
 			return false
 		}

@@ -962,6 +962,21 @@ async fn bridge_remote_controller_session_image(
 }
 
 #[tauri::command]
+async fn bridge_remote_controller_snapshot(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    request: remote_controller::SnapshotRequest,
+) -> Result<remote_controller::SnapshotResponse, String> {
+    remote_controller::ensure_main_window(window.label())?;
+    let (client, operation) = app
+        .state::<BridgeSupervisor>()
+        .reserve_remote_snapshot(window.label(), request)?;
+    tauri::async_runtime::spawn_blocking(move || operation.read(client))
+        .await
+        .map_err(|_| "remote snapshot worker stopped; reopen the session".to_string())?
+}
+
+#[tauri::command]
 fn bridge_remote_controller_subscribe(
     window: tauri::WebviewWindow,
     app: tauri::AppHandle,
@@ -4568,6 +4583,7 @@ fn main() {
             bridge_remote_controller_session_view,
             bridge_remote_controller_session_image,
             bridge_remote_controller_subscribe,
+            bridge_remote_controller_snapshot,
             bridge_remote_controller_unsubscribe,
             open_remote_controller,
             preview_remote_file,

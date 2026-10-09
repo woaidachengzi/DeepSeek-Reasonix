@@ -82,7 +82,7 @@ fn run_with(
         return;
     };
     if !matches!(
-        operation.with_current(|identity| state(identity, "ready")),
+        operation.with_ready(|identity| state(identity, "ready")),
         Ok(Some(Ok(())))
     ) {
         return;

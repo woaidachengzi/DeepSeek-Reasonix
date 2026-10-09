@@ -4807,6 +4807,42 @@ impl BridgeSupervisor {
         self.remote_subscriptions.close(label, id)
     }
 
+    pub(crate) fn reserve_remote_snapshot(
+        &self,
+        label: &str,
+        request: crate::remote_controller::SnapshotRequest,
+    ) -> Result<
+        (
+            crate::remote_controller::RemoteControllerClient,
+            crate::remote_controller::SnapshotOperation,
+        ),
+        String,
+    > {
+        let mut slot = self
+            .process
+            .lock()
+            .map_err(|_| "bridge state lock is unavailable")?;
+        let process = slot.as_mut().ok_or("desktop bridge is not running")?;
+        if !process
+            .child
+            .is_running()
+            .map_err(|_| "desktop bridge is unavailable; reopen the remote workspace")?
+        {
+            self.remote_subscriptions.set_owner(None);
+            return Err("desktop bridge is not running".into());
+        }
+        let operation = self.remote_subscriptions.reserve_snapshot(
+            label,
+            &process.sidecar_instance_id,
+            request,
+        )?;
+        let client = crate::remote_controller::RemoteControllerClient::new(
+            process.address,
+            process.token.clone(),
+        );
+        Ok((client, operation)) // No network I/O under supervisor/registry locks.
+    }
+
     fn stop_events(&self) {
         let forwarder = self.events.lock().ok().and_then(|mut events| events.take());
         if let Some(forwarder) = forwarder {

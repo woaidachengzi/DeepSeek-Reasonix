@@ -21,11 +21,14 @@ mod events;
 #[path = "remote_controller_event_payload.rs"]
 mod event_payload;
 
+#[path = "remote_controller_projection.rs"]
+mod projection;
+
 #[path = "remote_controller_subscriptions.rs"]
 mod subscriptions;
 pub(crate) use subscriptions::{
-    OwnerRevocation, RemoteSubscriptions, SubscribeRequest, SubscriptionIdentity,
-    SubscriptionOperation,
+    OwnerRevocation, RemoteSubscriptions, SnapshotOperation, SnapshotRequest, SnapshotResponse,
+    SubscribeRequest, SubscriptionIdentity, SubscriptionOperation,
 };
 
 #[path = "remote_controller_subscription_worker.rs"]
@@ -271,20 +274,21 @@ fn valid_session_view(v: &BridgeRemoteControllerSessionView, expected: &str) -> 
             return false;
         }
     }
+    valid_history(&v.history)
+}
+
+fn valid_history(history: &[BridgeRemoteControllerHistoryMessage]) -> bool {
+    if history.len() > 100000 {
+        return false;
+    }
     let mut seen = HashSet::new();
-    for m in &v.history {
+    for m in history {
         if m.id.is_empty() || !clean(&m.id, 4096) || !seen.insert(&m.id) {
             return false;
         }
         if !matches!(
             m.role.as_str(),
-            "system"
-                | "user"
-                | "assistant"
-                | "tool"
-                | "notice"
-                | "protocol_recovery"
-                | "final_readiness"
+            "user" | "assistant" | "tool" | "notice" | "protocol_recovery" | "final_readiness"
         ) || m.missing.as_ref().is_some_and(|v| v.len() > 10000)
             || m.tool_call_id.as_ref().is_some_and(|v| !clean(v, 4096))
             || m.tool_name.as_ref().is_some_and(|v| !clean(v, 4096))

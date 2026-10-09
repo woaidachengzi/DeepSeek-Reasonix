@@ -73,6 +73,14 @@ func controllerFixture(t *testing.T, sessions http.HandlerFunc, views ...http.Ha
 			return
 		}
 		cookie, err := r.Cookie("reasonix_token")
+		if err == nil && cookie.Value == "owned-controller-secret" && len(views) == 1 && r.URL.Path == "/desktop/session-projection" {
+			if r.Method != http.MethodGet || (len(r.URL.Query()) != 1 && len(r.URL.Query()) != 3) || r.Header.Get("Authorization") != "" {
+				t.Error("bad session projection channel")
+			}
+			w.Header().Set("Content-Type", "application/json")
+			views[0](w, r)
+			return
+		}
 		if err == nil && cookie.Value == "owned-controller-secret" && len(views) == 1 && r.URL.Path == "/events" {
 			if r.Method != http.MethodGet || r.URL.RawQuery != "all=1" {
 				t.Error("bad session event channel")

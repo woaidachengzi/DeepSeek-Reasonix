@@ -276,7 +276,7 @@ export interface BridgeRemoteControllerHistoryMessage {
   missing?: string[];
   protocolRecovery?: BridgeRemoteControllerProtocolRecovery;
   reasoning?: string;
-  role: "system" | "user" | "assistant" | "tool" | "notice" | "protocol_recovery" | "final_readiness";
+  role: "user" | "assistant" | "tool" | "notice" | "protocol_recovery" | "final_readiness";
   serverSearch?: BridgeRemoteControllerHistorySearch[];
   toolCallId?: string;
   toolCalls?: BridgeRemoteControllerHistoryToolCall[];
@@ -307,6 +307,20 @@ export interface BridgeRemoteControllerImage {
   mime?: "image/png";
   size?: number;
   url: string;
+}
+
+export interface BridgeRemoteControllerProjectionReplay {
+  events: Record<string, unknown>[];
+  floorSeq: number;
+  hasMore: boolean;
+  latestSeq: number;
+  nextAfterSeq: number;
+  runtimeEpoch?: string;
+}
+
+export interface BridgeRemoteControllerProjectionRequest {
+  continuation?: string;
+  sessionPath: string;
 }
 
 export interface BridgeRemoteControllerProtocolRecovery {
@@ -373,6 +387,27 @@ export interface BridgeRemoteControllerSessionImageView {
   protocolVersion: number;
   sessionPath: string;
   workspace: string;
+}
+
+export interface BridgeRemoteControllerSessionProjection {
+  activeTurnId?: string;
+  history: BridgeRemoteControllerHistoryMessage[];
+  initial: boolean;
+  pageToken?: string;
+  protocolVersion: number;
+  readOnly: boolean;
+  replay: BridgeRemoteControllerProjectionReplay;
+  replayAfterSeq: number;
+  sessionPath: string;
+  turnStatus?: string;
+  userSuffix: BridgeRemoteControllerHistoryMessage[];
+}
+
+export interface BridgeRemoteControllerSessionProjectionResponse {
+  controller: BridgeRemoteControllerView;
+  nextPage?: string;
+  projection: BridgeRemoteControllerSessionProjection;
+  protocolVersion: number;
 }
 
 export interface BridgeRemoteControllerSessionView {

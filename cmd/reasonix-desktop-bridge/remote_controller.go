@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -58,9 +59,11 @@ type remoteControllerAttempt struct {
 }
 type remoteControllerConnection struct {
 	*remoteControllerAttempt
-	view       remoteControllerView
-	client     *controller.Client
-	eventSlots chan struct{}
+	view            remoteControllerView
+	client          *controller.Client
+	eventSlots      chan struct{}
+	projectionMu    sync.Mutex
+	projectionPages map[string]remoteProjectionPage
 }
 
 // The factory seam is Go-only for owned SSH fixtures. No renderer-supplied

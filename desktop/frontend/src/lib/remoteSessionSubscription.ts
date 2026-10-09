@@ -32,6 +32,8 @@ const handle = (value: unknown): value is string => typeof value === "string" &&
 export function openRemoteSessionSubscription(transport: RemoteSubscriptionTransport, selectedController: BridgeRemoteControllerView, input: RemoteSubscriptionRequest, sink: RemoteSubscriptionSink) {
   const request = {controllerId:input.controllerId,sessionPath:input.sessionPath,surfaceId:input.surfaceId,generation:input.generation};
   const controller = {...selectedController};
+  let resolveReady!: (identity:RemoteSubscriptionIdentity | null) => void;
+  const ready = new Promise<RemoteSubscriptionIdentity | null>(resolve => { resolveReady = resolve; });
   let disposed = false;
   let identity: RemoteSubscriptionIdentity | null = null;
   let phase: "opening" | "ready" | "ended" = "opening";
@@ -56,6 +58,7 @@ export function openRemoteSessionSubscription(transport: RemoteSubscriptionTrans
   const dispose = () => {
     if (disposed) return;
     disposed = true; pending = []; bytes = 0;
+    resolveReady(null);
     for (const unlisten of listeners.splice(0)) releaseListener(unlisten);
     if (identity) close(identity.subscriptionId);
   };
@@ -74,7 +77,7 @@ export function openRemoteSessionSubscription(transport: RemoteSubscriptionTrans
     if (name === "bridge:remote-session-state") {
       const state = payload.state;
       if (state === "opening" && phase === "opening") sink.state("opening");
-      else if (state === "ready" && phase === "opening") { phase = "ready"; sink.state("ready"); }
+      else if (state === "ready" && phase === "opening") { phase = "ready"; resolveReady({...identity}); sink.state("ready"); }
       else if (state === "ended") { phase = "ended"; dispose(); sink.state("ended"); }
       else fail();
       return;
@@ -115,5 +118,5 @@ export function openRemoteSessionSubscription(transport: RemoteSubscriptionTrans
       return disposed ? null : {...identity};
     } catch { fail(); return null; }
   })();
-  return {receipt,dispose};
+  return {receipt,ready,dispose};
 }

@@ -1,5 +1,50 @@
 # Wails API 与事件面盘点
 
+## 2026-10-10 remote snapshot 同步层 review 提交
+
+- 本批变更超过 30 个文件，按用户门禁停止扩展并 review。覆盖 shared client、bridge 初始/host-owned 续页、native 契约/ready-bound snapshot IPC，以及新增 renderer snapshot binding/同步协调层；下方未提交标题保留各阶段历史范围。
+- 前端先监听并取得 exact receipt + ready，再读取快照，分页保持同一 turn/status/epoch/baseline/latest cut。首屏 prefix/suffix 与全部有界 replay 完成后一次交付，live 队列最多 256 项/9 MiB，capture 最多 64 页/30 MiB；重叠事件不重复应用。停用后不交付迟到页、不发下一页，owner/generation/scope 变化、缺页或预算耗尽要求显式 reconcile，不自动 resume、重试或回退。订阅新增 ready promise，关闭时解除尚未完成的 ready 等待。
+- Review 收紧 native replay 的缺失/空 status 拒绝，补 renderer active/settled cut 检查、live 单帧 8 MiB 门禁及 turn 变化检查；测试 `.at()` 改用项目现有 TS lib 兼容写法，没有放宽配置。SDK 夹具验证 snapshot invoke 只发送 subscriptionId/continuation，没有 Wails/browser fallback；同步测试覆盖 receipt/ready 顺序、两页 atomic cut、缓冲重叠、关闭/迟到响应、scope/cut/epoch/身份/状态/停滞/队列预算拒绝。
+- 相关四包完整 Go race 通过：desktop-bridge 33.999s、remote-controller 2.898s、Serve 93.602s、protocolgen 1.798s；四包 vet 通过。Review 修正后完整 Rust 289 passed/6 ignored、clippy all-targets -D warnings 通过；前端同步/订阅/两项 SDK binding、测试 TypeScript、局部 lint 与生成器 check 通过。直接使用已安装 Node/tsx/tsc，不绕过 pnpm 启动器签名门禁。
+- 尚未把协调层接入渲染界面或统一 Item reducer：真正用户问题与 applied steer 保存身份、admission/compaction/legacy steer、后续 turn/无序号事件、窗口重建及滚动仍需继续实现/验收。当前代码遇到不同 turn/gap 明确 reconcile，不能把这视作完整跨轮实时体验。没有新 App、WKWebView/真实 SSH/模型验收、真实账号/数据操作、签名发布或推送。前端技能用于异步生命周期 review；未改渲染组件/viewport，没有浏览器截图或 UI 通过声明。
+
+## 2026-10-09 ready 订阅绑定的 native snapshot IPC（未提交增量）
+
+- 注册 main-only `bridge_remote_controller_snapshot`，请求只含 subscriptionId 与可选 bridge continuation；拒绝 caller-supplied controller/session/owner/surface/generation/URL/token。Supervisor 短锁确认当前侧车存活、实例 owner 和同一订阅后取得 client/ticket，网络读取在 blocking worker 中执行，不持 process/registry 锁。
+- native registry 只在 ready notice 成功入队后标记 ready；invoke receipt 或失败的 ready emit 不能读取快照。每个 ready entry 最多一项 snapshot，使用独立 cancellable socket，不占用 SSE socket；ticket 释放只清除自己的槽，不关闭 live stream。owner 撤销、observer、close/clear、surface generation replacement 和 worker 退休同时关闭在途 snapshot。读取前/后再次 fence 当前 entry/owner/ready；结果包含原 subscription 完整身份，renderer 仍须拒绝已入队的旧 generation。
+- 自有实际 TCP 夹具阻塞响应 body，再替换 generation，证明 socket 中断与旧结果零交付，新订阅不被旧 ticket 清理；其它专项覆盖 ready 前/失败 emit/secondary window/owner/busy 拒绝、scope identity、窄 HTTP body、各退休路径零旧 dispatch/publication。snapshot 专项 14 通过；完整 Rust 289 passed/6 ignored、clippy all-targets -D warnings、局部 rustfmt、生成器 check 与 diff whitespace check 通过。
+- 原生命令已接，但没有 renderer snapshot binding/reducer 或实际 UI 调用验收。跨页 cut 对比由既有 bridge/shared client 执行；renderer 还需建立初始 cut、缓冲 live 事件、保持同一 cut 并合并 stable prefix/user suffix/steer，处理 admission/compaction/legacy steer 与原生滚动/窗口重建。不把 TCP 或 Rust 测试当成 WKWebView/App/真实 SSH/模型验收。没有新 App、真实数据操作、推送或发布；累计 26 个变更文件，未到超过 30 个文件先 review 后提交阈值。
+
+## 2026-10-09 native projection transport 与类型契约（未提交增量）
+
+- 为 bridge projection request/replay/session/response 补齐 schema、Go DTO conformance 与生成的 Rust/TypeScript mirrors。native 请求只接受 controllerId/sessionPath/continuation，未知字段拒绝；固定 host POST 不带 renderer URL/token/provider/history 参数。
+- 新增 native `remote_controller_projection.rs`，校验 controller/path、initial 模式、只读标志、稳定历史/suffix 身份、跨数组重复 ID、状态/turn/epoch、JS-safe cut/连续序号/nextPage 与每页 512 项/单帧 8 MiB 验证预算。replay event 再通过既有 Go eventwire-derived payload projector，剔除未知字段、保持 messageId 与 inbox itemId 独立。Serve pageToken 一旦到达 native 立即拒绝；只接受 bridge-owned nextPage。HTTP body 沿用 32 MiB 传输上限，Value 解码后的结构校验不宣称完整峰值分配门禁。
+- 共享 native history validator 与 schema 一并拒绝 system/developer 角色；本地 provider/history 表示不变。专项自有 TCP fixture 验证初始/续页窄 body、固定路由/auth、身份/隐私、非法请求零 dispatch、异常 cut/turn/status/角色/seq/nextPage/Serve token 拒绝。完整 Rust `cargo test --locked` 285 passed/6 ignored、clippy all-targets -D warnings、局部 rustfmt check、Go DTO conformance、生成器 check 与直接 Node TypeScript noEmit 通过。
+- 此处仍是 host transport，暂未注册 Tauri snapshot command。先需要补 live subscription ready + owner/surface generation 的 snapshot delivery/cancellation fence 与跨页 cut 保持，再接 renderer reducer；没有把裸 HTTP 读取作为已接通的界面功能。未重建 App，也没有实际 WKWebView/SSH/模型验收、真实账号或数据操作、签名发布和推送。累计 19 个变更文件，未达到超过 30 个文件先 review 再提交阈值。
+
+## 2026-10-09 bridge host-owned projection 续页（未提交增量）
+
+- 首屏入口扩展为 initial/continuation 读取，只接受 `sessionPath` 与可选 `continuation`；Serve 的 page token 在响应前清除，renderer 不提供 server cursor、历史、URL 或 token。返回 `nextPage` 是 bridge 自己随机生成的只读句柄，必须匹配同一 controller/session；未知、其它 owner/path、已过期句柄零远程 dispatch。
+- shared client 新增 opaque `ProjectionCursor` 与 `SessionProjectionNext`，私有字段只持 cut/序号/token 元数据和 weak client owner，没有历史或事件数组，JSON 不能重建；读取时继续验证 catalogue、operation/owner、scope 与固定上界。不改变旧 Go `SessionProjectionPage` 的校验合同。
+- 每个 controller 最多 64 个缓存项，链路原始期限两分钟，续页不延期，过期项释放；中间页重复读取返回同一后继句柄，不为重试累积新槽。最终页请求的原句柄保留到期限，可重读丢失的最终响应。缓存只持紧凑字段，不强引用已退休 client。
+- 专项 race 通过，覆盖 cursor 不可序列化/无正文持有、owner/path/零值拒绝、初始 token 不泄露、实际 HTTP 最终页重读、过期回收、64 槽门禁和中间页重复读取不延期/不增槽；完整 bridge race（34.074s）、remote-controller race（3.015s）、两包 vet 与 diff whitespace check 通过。自建 fixture 的 client 不代表真实 SSH、模型或原生 App。
+- 下一步仍是 native snapshot IPC/契约与 renderer snapshot-live 合并，并处理 admission/compaction/legacy steer 边界。未接 UI、未重建 App、未操作真实账号/数据或发布推送；累计 12 个文件，未达超过 30 个文件先 review 再提交阈值。上一段首屏-only 限制记录阶段当时状态，以本段最新范围为准。
+
+## 2026-10-09 bridge 初始远程 projection（未提交增量）
+
+- 新增认证 `POST /v1/remote/controllers/{controllerID}/session-projection`，只接受一个 `sessionPath`；未知 body 字段、额外 JSON、query 与 Last-Event-ID 均拒绝。读取前后核对同一 controller owner，沿用 shared client 的 catalogue、scope、固定 cut、字节与事件预算，不创建本地 runtime 或发起模型请求。
+- 返回 typed display projection，保留历史/问题 suffix/指导消息的稳定身份，丢弃未知配置和秘密字段。401/403 撤销 owner，失效 owner 与 Serve 要求 reconcile 返回安全 409；其它读取失败返回固定 502，不转发远端错误正文、不回退旧路由。controller 关闭取消在途 body，不发布旧 owner 的迟到快照。
+- bridge 完整 race（33.501s）、remote-controller 完整 race（3.357s）及两包 vet 通过；专项覆盖鉴权、非法输入零 dispatch、未列出目标、异常事件/序号/终止状态/system 行、秘密剔除、身份保留、安全错误与在途关闭。首次沙箱专项因回环监听权限失败，经批准运行自建回环服务后通过；不是实际 SSH、原生 App 或真实服务验收。
+- 这次仅接首屏，不接受 caller-supplied previous projection。bridge host-owned 续页能力、native IPC 与 renderer snapshot/live reducer 仍待实现；调用方必须先建立 ready live subscription 再获取 cut，当前没有 UI 调用，未宣称该顺序已在原生链路验收。admission/compaction/legacy steer 等同步边界保持未完成。没有新 App、真实账号/数据操作或推送；累计 11 个变更文件，未到超过 30 个文件先 review 后提交阈值。
+
+## 2026-10-09 shared remote projection client（未提交增量）
+
+- 在 `cf7fd0246` 的 Serve 首屏/续页路由上接入 shared remote Client.SessionProjection/SessionProjectionPage。每次读取重新验证 selected catalogue member，使用固定 cookie-authenticated GET 路由与二十秒 operation/owner 共同取消边界；只发送 session 和服务器给出的 page/next-after，不发送历史、URL、配置或模型 token。不自动重试、拼接无限页、resume 或回退到旧 session-view/status。409 和固定 cut 变化明确要求重新同步，401/403 撤销客户端。
+- typed DTO 验证首屏/续页模式、同一 session/turn/status/epoch/baseline/latest cut、连续 JS-safe sequence、非空可推进分页、精确 continuation、history/suffix 跨数组身份与可见角色。抽取共享历史 validator，旧 session-view 客户端也拒绝 system/developer 行，防止连接尚未修复的 Serve 时转发 provider 提示词。整体 30 MiB byte gate、100000 history rows；replay 在物化事件 structs 前限制 512 项及每个原始事件 8 MiB，不把事后数组长度检查宣称为预分配门禁。其他嵌套/历史检查仍是 typed decode 后验证，不宣称完整峰值堆内存认证。
+- HTTP 夹具覆盖固定 query、未知字段剔除、scope/身份/状态/序号/预算拒绝、变更 cut、无 fallback、错误隐私、失效鉴权、预取消零 projection dispatch及 owner/operation 取消释放实际 body。新增预解码回归验证失败不发布部分 page；实际本地 Serve token gate + real Controller/Agent + 530 个 fake provider 有序搜索结果验证 shared client 两页固定 cut，后到内容不混入，读取不接管运行。
+- 完整 remote-controller/Serve/desktop-bridge race 通过（2.483s / 94.812s / 33.885s），预解码门禁追加后完整 remote-controller race（3.108s）、实际 Serve/client 专项 race（8.529s）及三包 vet 通过。证据 `/private/tmp/reasonix-projection-client.deZVCf/` 的 `client-full-race.log`、`client-decoder-final.log`、`actual-serve-decoder-final.log`、`client-decoder-vet.log`。自有 fixture 搜索结果和 fake provider 不代表真实模型、SSH tunnel 或原生 App 验收。
+- 尚未接 bridge projection route、native snapshot IPC 或 renderer 的 snapshot/live reducer。admission 尚无 canonical question、compaction prefix rewrite、legacy steer、窗口重建与原生队列/滚动仍需继续收敛；没有重建 App、提交/推送或操作真实外部账号/数据。当前 7 个变更文件，未达到超过 30 个文件先 review 后提交的阈值。
+
 ## 2026-10-09 只读远程 projection 快照 review 提交
 
 - 本批超过 30 个变更文件，按用户要求停止扩展模块、review 后提交。涵盖窄 renderer 订阅、统一 Preview runner、稳定 prefix/首屏 replay/固定分页、steer 消息关联，以及新的 `GET /desktop/session-projection`。下方“未提交增量”保留各阶段当时状态，本段更新本批交付范围。

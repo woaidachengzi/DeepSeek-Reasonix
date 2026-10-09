@@ -1,5 +1,29 @@
 # E 迁移清单
 
+## 2026-10-10 remote snapshot 同步层 review 提交
+
+本批超过 30 个变更文件，已停止扩展并 review，按门禁收敛提交。新增前端 snapshot 窄 binding 与 ready 后读取/固定 cut 分页/live 缓冲协调层，贯通已完成的 shared client、bridge 与 native IPC；相关完整 Go race/vet、Rust 289 passed/6 ignored/clippy、前端专项/类型/lint 及契约门禁通过，详见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-remote-snapshot-同步层-review-提交)。仍未接实际渲染/统一 Item reducer，也未完成跨轮、admission/compaction/legacy steer 或原生滚动/窗口重建验收；没有新 App 或推送。完整目标继续推进，不能以这些源码/夹具回归替代原生或真实服务验收。
+
+## 2026-10-09 ready 订阅绑定的 native snapshot IPC（未提交增量）
+
+已注册 main-only snapshot command，只接受 ready 订阅身份及 bridge continuation；读前后核对 owner/surface generation，独立 socket 随订阅退休取消，每项订阅最多一个在途读取，结果携带完整 identity。专项 TCP 取消/ready/scope 门禁、完整 Rust 289 passed/6 ignored、clippy 与格式/生成器门禁通过，见 [API audit](API_SURFACE_AUDIT.md#2026-10-09-ready-订阅绑定的-native-snapshot-ipc未提交增量)。还需 renderer binding、快照/live reducer、同步边界和实际 App 验收；没有新 App、提交或推送。累计 26 个文件，未达超过 30 个文件先 review 再提交阈值。
+
+## 2026-10-09 native projection transport 与类型契约（未提交增量）
+
+补齐生成的快照契约与 native 初始/续页读取、历史身份及事件投影校验；同步拒绝远程 system/developer 提示词角色。完整 Rust 285 passed/6 ignored、clippy、生成器/Go DTO、类型与局部格式门禁通过，详见 [API audit](API_SURFACE_AUDIT.md#2026-10-09-native-projection-transport-与类型契约未提交增量)。尚未注册 snapshot command；继续绑定 live ready/owner/surface generation、跨页固定 cut 及 renderer reducer，再做 App 原生验收。没有新 App、提交或推送；累计 19 个文件未达 review 后提交阈值。
+
+## 2026-10-09 bridge host-owned projection 续页（未提交增量）
+
+已补 bridge 首屏/续页：Serve token 留在 host，界面仅取绑定 controller/session 的临时句柄；缓存最多 64 项、不持历史正文/事件数组，两分钟原期限不延期，中间/最终页可显式重读。专项/完整两包 race 与 vet 通过，见 [API audit](API_SURFACE_AUDIT.md#2026-10-09-bridge-host-owned-projection-续页未提交增量)。native IPC、快照/实时 UI 合并及实际 App 验收仍待继续，没有新 App、提交或推送。当前 12 个变更文件未达 review 后提交阈值。
+
+## 2026-10-09 bridge 初始远程 projection（未提交增量）
+
+已接入认证 bridge 首屏只读快照入口，保留稳定身份、过滤未知私密字段并在 owner 关闭后取消/拒绝迟到读取。bridge 与 shared remote client 完整 race、vet 通过，范围与限制见 [API audit](API_SURFACE_AUDIT.md#2026-10-09-bridge-初始远程-projection未提交增量)。尚未完成 bridge 续页、native IPC、snapshot/live UI 合并或重建 App；实际原生与真实服务验收不以源码测试替代。当前累计 11 个文件，按超过 30 个文件先 review 再提交规则继续推进。
+
+## 2026-10-09 shared remote projection client（未提交增量）
+
+共享远程客户端已能读取 Serve 的初始 projection 与固定上界续页，校验 catalogue/scope/身份/序号/状态及字节/页数预算；过期或变化明确要求同步，不自动回退或接管。旧历史客户端也拒绝 system/developer 提示词行。完整相关三包 race、追加的有界解码/实际 Serve-client 专项及 vet 通过，详见 [API audit](API_SURFACE_AUDIT.md#2026-10-09-shared-remote-projection-client未提交增量)。还需接 bridge/native snapshot IPC 与 renderer 统一归约，当前没有新 App 或实际原生验收；7 个变更文件未达到 review 后提交阈值。
+
 ## 2026-10-09 只读远程 projection 快照 review 提交
 
 本批超过 30 个变更文件，已 review 并按提交门禁收敛。新增 Serve 只读 projection 首屏/续页接口，接入稳定 prefix、问题 suffix、固定事件 cut 和 steer 身份；句柄绑定原 controller/session，限制 64 槽与两分钟期限，不授予接管/确认/发送权限。Review 修复共用远程历史投影的 system/developer 提示词行泄露、重复身份和缓存强引用保留风险。完整相关 Go race、专项 HTTP/分页/隐私、vet、renderer 回归和类型/lint 检查通过，详见 [API audit](API_SURFACE_AUDIT.md#2026-10-09-只读远程-projection-快照-review-提交)。以下增量标题保留当时状态；本批没有新 App、bridge/native snapshot IPC 或实时 UI 验收，仍须继续接入与处理 admission/compaction/legacy steer 同步边界。

@@ -19,6 +19,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	remotecontroller "reasonix/internal/remote/controller"
 	"reasonix/internal/tool"
 )
 
@@ -133,6 +134,20 @@ func TestDesktopSessionProjectionOwnedHTTPFixedPagesAndPrivacy(t *testing.T) {
 	if len(first.Replay.Events) == 0 || first.Replay.Events[0].Sequence != first.ReplayAfterSequence+1 {
 		t.Fatal("initial replay baseline is missing or mixed")
 	}
+	// Exercise the shared client against the actual Serve token gate and
+	// controller, not just a compatible JSON fixture.
+	f.server.auth = newAuthGate(config.ServeConfig{AuthMode: "token", Token: "owned-projection-client"})
+	authenticated := httptest.NewServer(f.server.Handler())
+	t.Cleanup(authenticated.Close)
+	client, err := remotecontroller.Connect(context.Background(), context.Background(), authenticated.URL, "owned-projection-client")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(client.Close)
+	clientFirst, err := client.SessionProjection(context.Background(), path)
+	if err != nil || !clientFirst.Initial || !clientFirst.Replay.HasMore || len(clientFirst.History) != 2 || clientFirst.History[1].ID != "old-answer" {
+		t.Fatalf("actual shared client capture: %v", err)
+	}
 	laterOnce.Do(func() { close(p.later) })
 	select {
 	case <-p.laterReady:
@@ -161,6 +176,15 @@ func TestDesktopSessionProjectionOwnedHTTPFixedPagesAndPrivacy(t *testing.T) {
 	}
 	if repeatedStatus, repeated := f.get(t, pageRoute); repeatedStatus != 200 || repeated != body {
 		t.Fatal("lost final response cannot be retried at the same cut")
+	}
+	clientPage, err := client.SessionProjectionPage(context.Background(), path, clientFirst)
+	if err != nil || clientPage.Replay.HasMore || clientPage.Replay.LatestSequence != clientFirst.Replay.LatestSequence || clientPage.Replay.NextAfterSequence != clientFirst.Replay.LatestSequence {
+		t.Fatalf("actual shared client page: %v", err)
+	}
+	for _, frame := range clientPage.Replay.Events {
+		if frame.Sequence > clientFirst.Replay.LatestSequence || strings.Contains(frame.Text, "LATER") || (frame.Tool != nil && frame.Tool.ID == "later-search") {
+			t.Fatal("actual shared client crossed initial cut")
+		}
 	}
 	if !ctrl.Running() || ctrl.SessionPath() != f.active {
 		t.Fatal("snapshot took ownership or stopped turn")

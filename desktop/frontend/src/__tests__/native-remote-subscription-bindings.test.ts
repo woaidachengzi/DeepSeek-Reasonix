@@ -18,6 +18,7 @@ Object.assign(window,{
       if(name === "plugin:event|unlisten") return;
       if(name === "bridge_remote_controller_subscribe") return {subscriptionId:"owned"};
       if(name === "bridge_remote_controller_unsubscribe") return;
+      if(name === "bridge_remote_controller_snapshot") return {protocolVersion:1};
       throw new Error("unexpected invoke");
     },
   },
@@ -39,6 +40,12 @@ try {
   const before = calls.length;
   await assert.rejects(transport.listen("bridge:global-event",()=>{}),/invalid remote subscription event/);
   assert.equal(calls.length,before);
+  assert.equal(fallback,0);
+  const {nativeRemoteSnapshotTransport:snapshot} = await import("../lib/nativeRemoteSessionSnapshot");
+  await snapshot.snapshot("owned-subscription");
+  assert.deepEqual(calls[calls.length-1],{name:"bridge_remote_controller_snapshot",args:{request:{subscriptionId:"owned-subscription"}}});
+  await snapshot.snapshot("owned-subscription","owned-continuation");
+  assert.deepEqual(calls[calls.length-1],{name:"bridge_remote_controller_snapshot",args:{request:{subscriptionId:"owned-subscription",continuation:"owned-continuation"}}});
   assert.equal(fallback,0);
   console.log("Native remote subscription bindings: main-target listeners, narrow commands and no fallback passed");
 } finally {

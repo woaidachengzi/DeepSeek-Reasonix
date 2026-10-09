@@ -29,6 +29,7 @@ function fixture() {
   assert.deepEqual(f.output,[],"native enqueue cannot beat exact invoke receipt");
   f.resolve({...identity,token:"PRIVATE"});
   assert.deepEqual(await f.subscription.receipt,identity,"receipt explicitly drops unknown fields");
+  assert.deepEqual(await f.subscription.ready,identity,"ready resolves only after scoped receipt and native ready");
   assert.deepEqual(f.output,["opening","ready","answer"]);
   const late = f.callbacks.get("bridge:remote-session-event")!;
   f.event(frame,{...identity,generation:0});
@@ -42,6 +43,7 @@ function fixture() {
 }
 {
   const f = fixture(); await tick(); f.subscription.dispose(); f.resolve(identity);
+  assert.equal(await f.subscription.ready,null,"dispose settles a still-pending ready read");
   assert.equal(await f.subscription.receipt,null);
   assert.deepEqual(f.output,[]);
   assert.equal(f.callbacks.size,0);

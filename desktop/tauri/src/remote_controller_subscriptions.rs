@@ -4,7 +4,7 @@ use rand::TryRngCore;
 use std::{
     collections::HashMap,
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc, Mutex, Weak,
     },
 };
@@ -13,6 +13,10 @@ const CURRENT_MAX: usize = 16;
 const LIVE_MAX: usize = 32; // Includes cancelled workers still holding a ticket.
 const SURFACE_MAX: usize = 64; // Generation tombstones survive close until owner changes.
 const BUSY: &str = "remote subscriptions are busy; close an unused session and retry";
+
+#[path = "remote_controller_snapshot.rs"]
+mod snapshot;
+pub(crate) use snapshot::{SnapshotOperation, SnapshotRequest, SnapshotResponse};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -39,10 +43,22 @@ struct Entry {
     identity: SubscriptionIdentity,
     cancellation: EventCancellation,
     live: Arc<AtomicUsize>,
+    ready: AtomicBool,
+    snapshot: Mutex<Option<Arc<EventCancellation>>>,
+}
+impl Entry {
+    fn retire(&self) {
+        self.cancellation.close();
+        if let Ok(snapshot) = self.snapshot.lock() {
+            if let Some(snapshot) = snapshot.as_ref() {
+                snapshot.close();
+            }
+        }
+    }
 }
 impl Drop for Entry {
     fn drop(&mut self) {
-        self.cancellation.close();
+        self.retire();
         self.live.fetch_sub(1, Ordering::AcqRel);
     }
 }
@@ -83,7 +99,7 @@ impl OwnerRevocation {
             return;
         };
         for entry in retired.values() {
-            entry.cancellation.close();
+            entry.retire();
         }
     }
 }
@@ -107,7 +123,7 @@ impl RemoteSubscriptions {
             return;
         };
         for entry in retired.values() {
-            entry.cancellation.close();
+            entry.retire();
         }
     }
     pub(crate) fn clear(&self) {
@@ -120,7 +136,7 @@ impl RemoteSubscriptions {
             return;
         };
         for entry in retired.values() {
-            entry.cancellation.close();
+            entry.retire();
         }
     }
     pub(crate) fn reserve(
@@ -181,6 +197,8 @@ impl RemoteSubscriptions {
             },
             cancellation: EventCancellation::default(),
             live: Arc::clone(&self.live),
+            ready: AtomicBool::new(false),
+            snapshot: Mutex::new(None),
         });
         state
             .generations
@@ -188,7 +206,7 @@ impl RemoteSubscriptions {
         let old = state.current.insert(request.surface_id, Arc::clone(&entry));
         drop(state);
         if let Some(old) = old {
-            old.cancellation.close();
+            old.retire();
         }
         Ok(SubscriptionOperation {
             state: Arc::clone(&self.state),
@@ -210,7 +228,7 @@ impl RemoteSubscriptions {
             surface.and_then(|surface| state.current.remove(&surface))
         };
         if let Some(entry) = retired {
-            entry.cancellation.close();
+            entry.retire();
         }
         Ok(())
     }
@@ -231,6 +249,18 @@ impl SubscriptionOperation {
     }
     pub(crate) fn cancellation(&self) -> EventCancellation {
         self.entry.cancellation.clone()
+    }
+    pub(crate) fn with_ready(
+        &self,
+        enqueue: impl FnOnce(&SubscriptionIdentity) -> Result<(), ()>,
+    ) -> Result<Option<Result<(), ()>>, String> {
+        self.with_current(|identity| {
+            let result = enqueue(identity);
+            if result.is_ok() {
+                self.entry.ready.store(true, Ordering::Release);
+            }
+            result
+        })
     }
     // Callback must be a nonblocking native enqueue, never network I/O. Its
     // admission is serialized with revoke/replacement. Renderer must still
@@ -271,7 +301,7 @@ impl SubscriptionOperation {
 }
 impl Drop for SubscriptionOperation {
     fn drop(&mut self) {
-        self.entry.cancellation.close();
+        self.entry.retire();
         if let Ok(mut state) = self.state.lock() {
             if state
                 .current

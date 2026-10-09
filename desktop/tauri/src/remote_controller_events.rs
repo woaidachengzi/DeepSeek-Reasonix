@@ -29,7 +29,7 @@ impl EventCancellation {
             }
         }
     }
-    fn attach(&self, socket: &TcpStream) -> Result<EventSocketLease, String> {
+    pub(super) fn attach(&self, socket: &TcpStream) -> Result<EventSocketLease, String> {
         let mut current = self.socket.lock().map_err(|_| FAILED.to_string())?;
         if self.stopped.load(Ordering::Acquire) || current.is_some() {
             return Err(FAILED.into());
@@ -43,7 +43,7 @@ impl EventCancellation {
     }
 }
 
-struct EventSocketLease {
+pub(super) struct EventSocketLease {
     cancellation: EventCancellation,
     socket: Arc<TcpStream>,
 }

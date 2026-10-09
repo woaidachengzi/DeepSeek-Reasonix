@@ -622,6 +622,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("POST /v1/remote/controllers", b.authorized(b.attachRemoteController))
 	mux.HandleFunc("GET /v1/remote/controllers/{controllerID}/sessions", b.authorized(b.remoteControllerSessions))
 	mux.HandleFunc("POST /v1/remote/controllers/{controllerID}/session-view", b.authorized(b.remoteControllerSessionView))
+	mux.HandleFunc("POST /v1/remote/controllers/{controllerID}/session-projection", b.authorized(b.remoteControllerSessionProjection))
 	mux.HandleFunc("POST /v1/remote/controllers/{controllerID}/session-image", b.authorized(b.remoteControllerSessionImage))
 	mux.HandleFunc("POST /v1/remote/controllers/{controllerID}/session-events", b.authorized(b.remoteControllerSessionEvents))
 	mux.HandleFunc("DELETE /v1/remote/controllers/{controllerID}", b.authorized(b.closeRemoteController))

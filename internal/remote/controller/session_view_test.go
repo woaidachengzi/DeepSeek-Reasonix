@@ -91,6 +91,8 @@ func TestClientSessionViewRejectsWrongScopeAndBudgets(t *testing.T) {
 		strings.Replace(validSavedView, `"saved"`, `"unknown"`, 1),
 		strings.Replace(validSavedView, `"modelRef":""`, `"modelRef":"foreground/model"`, 1),
 		strings.Replace(validSavedView, `"role":"user"`, `"role":"unknown"`, 1),
+		strings.Replace(validSavedView, `"role":"user"`, `"role":"system"`, 1),
+		strings.Replace(validSavedView, `"role":"user"`, `"role":"developer"`, 1),
 		strings.Replace(validSavedView, `"history":[`, `"history":null,"ignored":[`, 1),
 		strings.Replace(validSavedView, `"modelRef":""`, `"runtimeState":{"schemaVersion":1,"phase":"idle"},"modelRef":""`, 1),
 		strings.Repeat(" ", (32<<20)+1),
