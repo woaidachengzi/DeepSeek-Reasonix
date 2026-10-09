@@ -474,6 +474,32 @@
         "event": { "type": "object" }
       }, "additionalProperties": false
     },
+    "remoteControllerSessionCancelRequest": {
+      "title": "BridgeRemoteControllerSessionCancelRequest", "type": "object", "required": ["sessionPath", "runtimeEpoch", "turnId"],
+      "properties": {
+        "sessionPath": { "type": "string", "minLength": 1, "maxLength": 32768 },
+        "runtimeEpoch": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "turnId": { "type": "string", "minLength": 1, "maxLength": 4096 }
+      }, "additionalProperties": false
+    },
+    "remoteControllerSessionCancelReceipt": {
+      "title": "BridgeRemoteControllerSessionCancelReceipt", "type": "object", "required": ["protocolVersion", "sessionPath", "runtimeEpoch", "turnId", "cancelled"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "sessionPath": { "type": "string", "minLength": 1, "maxLength": 32768 },
+        "runtimeEpoch": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "turnId": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "cancelled": { "type": "boolean" }
+      }, "additionalProperties": false
+    },
+    "remoteControllerSessionCancelResponse": {
+      "title": "BridgeRemoteControllerSessionCancelResponse", "type": "object", "required": ["protocolVersion", "controller", "receipt"],
+      "properties": {
+        "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
+        "controller": { "$ref": "#/$defs/remoteControllerView" },
+        "receipt": { "$ref": "#/$defs/remoteControllerSessionCancelReceipt" }
+      }, "additionalProperties": false
+    },
     "remoteControllerSessionImageRequest": {
       "title": "BridgeRemoteControllerSessionImageRequest", "type": "object", "required": ["sessionPath", "source"],
       "properties": {

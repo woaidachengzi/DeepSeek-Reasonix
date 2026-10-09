@@ -21,6 +21,7 @@ Object.assign(window, {
       if (command === "bridge_remote_controller_sessions") return { protocolVersion: 1, controller: view, sessions: [] };
       if (command === "bridge_remote_controller_session_view") return {protocolVersion:1,controller:view,view:snapshot};
       if (command === "bridge_remote_controller_session_image") return {protocolVersion:1,controller:view,view:{protocolVersion:1,sessionPath,workspace:view.workspace,image:{url:"",errorCode:"not-found"}}};
+      if(command === "bridge_remote_controller_session_cancel")return {protocolVersion:1,controller:view,receipt:{protocolVersion:1,sessionPath,runtimeEpoch:"instance",turnId:"turn",cancelled:true}};
       if (command === "bridge_remote_controller_close") return { protocolVersion: 1, closed: true };
       throw new Error("unexpected native command");
     },
@@ -34,6 +35,7 @@ try {
   assert.deepEqual(await lease.sessions(), []);
   assert.deepEqual(await lease.sessionView(sessionPath),snapshot);
   assert.deepEqual(await lease.sessionImage(sessionPath,"image.png"),{url:"",errorCode:"not-found"});
+  assert.deepEqual(await lease.sessionCancel!({sessionPath,runtimeEpoch:"instance",turnId:"turn"}),{protocolVersion:1,sessionPath,runtimeEpoch:"instance",turnId:"turn",cancelled:true});
   lease.release();
   await tick();
   assert.deepEqual(calls, [
@@ -41,6 +43,7 @@ try {
     { command: "bridge_remote_controller_sessions", args: { request: { controllerId: id } } },
     { command: "bridge_remote_controller_session_view", args: {request:{controllerId:id,sessionPath}} },
     { command: "bridge_remote_controller_session_image", args: {request:{controllerId:id,sessionPath,source:"image.png"}} },
+    {command:"bridge_remote_controller_session_cancel",args:{request:{controllerId:id,sessionPath,runtimeEpoch:"instance",turnId:"turn"}}},
     { command: "bridge_remote_controller_close", args: { request: { controllerId: id } } },
   ], "renderer sends only narrow typed requests, not a URL, token or local session identity");
   refuse = true;

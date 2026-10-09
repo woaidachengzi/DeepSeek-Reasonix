@@ -1,11 +1,13 @@
 import type { BridgeRemoteControllerRequest, BridgeRemoteControllerView, BridgeRemoteControllerSession, BridgeRemoteControllerResponse, BridgeRemoteControllerSessionsResponse, BridgeRemoteControllerCloseResponse, BridgeRemoteControllerSessionView, BridgeRemoteControllerSessionViewResponse } from "./bridgeProtocol.generated";
 import type { BridgeRemoteControllerImage, BridgeRemoteControllerSessionImageResponse } from "./bridgeProtocol.generated";
+import type { BridgeRemoteControllerSessionCancelRequest, BridgeRemoteControllerSessionCancelReceipt, BridgeRemoteControllerSessionCancelResponse } from "./bridgeProtocol.generated";
 
 export interface RemoteControllerAPI {
   attach(request: BridgeRemoteControllerRequest): Promise<BridgeRemoteControllerResponse>;
   sessions(id: string): Promise<BridgeRemoteControllerSessionsResponse>;
   sessionView(id: string, sessionPath: string): Promise<BridgeRemoteControllerSessionViewResponse>;
   sessionImage(id: string, sessionPath: string, source: string): Promise<BridgeRemoteControllerSessionImageResponse>;
+  sessionCancel?(id:string, scope:BridgeRemoteControllerSessionCancelRequest):Promise<BridgeRemoteControllerSessionCancelResponse>;
   close(id: string): Promise<BridgeRemoteControllerCloseResponse>;
 }
 interface Entry {
@@ -20,9 +22,11 @@ export interface RemoteControllerLease {
   sessions(): Promise<BridgeRemoteControllerSession[]>;
   sessionView(sessionPath: string): Promise<BridgeRemoteControllerSessionView>;
   sessionImage(sessionPath: string, source: string): Promise<BridgeRemoteControllerImage>;
+  sessionCancel?(scope:BridgeRemoteControllerSessionCancelRequest):Promise<BridgeRemoteControllerSessionCancelReceipt>;
   release(): void;
 }
 const FAILED = "remote controller connection changed; reconnect the host and reopen the workspace";
+export const REMOTE_STOP_UNKNOWN = "remote stop outcome is unknown; refresh the selected session and do not automatically retry";
 const encoder = new TextEncoder();
 function identifier(value: string, limit: number): boolean {
   return typeof value === "string" && value.length > 0 && encoder.encode(value).length <= limit && !/\p{Cc}/u.test(value);
@@ -106,6 +110,18 @@ export class RemoteControllerPool {
         // unexpected remote opener or private field cannot become a UI grant.
         return {url:image.url,filename:image.filename,mime:image.mime,size:image.size};
       },
+      ...(this.api.sessionCancel ? {sessionCancel:async (input:BridgeRemoteControllerSessionCancelRequest) => {
+        const scope={sessionPath:input.sessionPath,runtimeEpoch:input.runtimeEpoch,turnId:input.turnId};
+        if(!identifier(scope.sessionPath,32768)||!identifier(scope.runtimeEpoch,4096)||!identifier(scope.turnId,4096))throw new Error(FAILED);
+        const view=await ready;assertLive();
+        try {
+          const response=await this.api.sessionCancel!(view.id,scope);
+          assertController(response.controller,view);
+          const receipt=response.receipt;
+          if(response.protocolVersion!==1||receipt.protocolVersion!==1||receipt.sessionPath!==scope.sessionPath||receipt.runtimeEpoch!==scope.runtimeEpoch||receipt.turnId!==scope.turnId||receipt.cancelled!==true)throw new Error(REMOTE_STOP_UNKNOWN);
+          return {protocolVersion:1,sessionPath:scope.sessionPath,runtimeEpoch:scope.runtimeEpoch,turnId:scope.turnId,cancelled:true};
+        } catch {throw new Error(REMOTE_STOP_UNKNOWN);}
+      }} : {}),
       release:() => {
         if (released) return;
         released = true;

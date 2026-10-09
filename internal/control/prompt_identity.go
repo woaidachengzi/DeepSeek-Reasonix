@@ -181,6 +181,24 @@ func (o *PendingPromptOwner) CancelAll() {
 		_ = cancel()
 	}
 }
+
+// takeTurnCancels detaches only this turn's callbacks before cancellation can
+// let a replacement turn start. Callers execute them outside the owner lock.
+func (o *PendingPromptOwner) takeTurnCancels(turnID string) []func() error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	var cancels []func() error
+	for id, prompt := range o.pending {
+		if turnID == "" || prompt.Identity.TurnID != turnID {
+			continue
+		}
+		delete(o.pending, id)
+		if prompt.Cancel != nil {
+			cancels = append(cancels, prompt.Cancel)
+		}
+	}
+	return cancels
+}
 func (o *PendingPromptOwner) Identities() []PromptIdentity {
 	o.mu.Lock()
 	defer o.mu.Unlock()

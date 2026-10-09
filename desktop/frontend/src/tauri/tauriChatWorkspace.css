@@ -1287,6 +1287,7 @@
 .tauri-permissions-settings .tauri-settings-checkbox-field input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); }
 .tauri-settings-button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--surface); color: var(--fg-dim); font-size: 11px; text-decoration: none; cursor: pointer; transition: border-color .12s, background .12s; }
 .tauri-settings-button:hover { border-color: var(--border); background: var(--surface-2); color: var(--fg); }
+.tauri-settings-button[hidden] { display: none; }
 .tauri-settings-button--danger { border-color: color-mix(in srgb, var(--err) 32%, var(--border-soft)); color: var(--err); }
 .tauri-settings-button--danger:hover { background: color-mix(in srgb, var(--err) 8%, var(--surface)); border-color: color-mix(in srgb, var(--err) 48%, var(--border)); }
 .tauri-settings-apikey { margin-top: 10px; }

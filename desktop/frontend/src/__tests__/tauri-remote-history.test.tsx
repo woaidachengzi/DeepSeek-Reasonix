@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 import type { RemoteControllerLease } from "../lib/remoteControllerPool";
 import type { BridgeRemoteControllerSessionView } from "../lib/bridgeProtocol.generated";
+import {TranscriptTestClock} from "./transcript-test-clock";
 
-const dom=new JSDOM("<body><div id='root'></div></body>",{url:"http://localhost/",pretendToBeVisual:true});
-Object.assign(globalThis,{window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,Event:dom.window.Event,localStorage:dom.window.localStorage,IS_REACT_ACT_ENVIRONMENT:true});
+const dom=new JSDOM("<!doctype html><body><div id='root'></div></body>",{url:"http://localhost/",pretendToBeVisual:true});
+const clock=new TranscriptTestClock();
+Object.assign(globalThis,{window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,Event:dom.window.Event,localStorage:dom.window.localStorage,requestAnimationFrame:clock.requestAnimationFrame,cancelAnimationFrame:clock.cancelAnimationFrame,IS_REACT_ACT_ENVIRONMENT:true});
 Object.defineProperty(globalThis,"navigator",{value:dom.window.navigator,configurable:true});
 const React=await import("react");const {act}=React;const {createRoot}=await import("react-dom/client");
 const {LocaleProvider}=await import("../lib/i18n");const {TauriRemoteHistory}=await import("../tauri/TauriRemoteHistory");
@@ -65,6 +67,43 @@ assert.equal(document.querySelector('[role="alert"]'),null);
 await act(async()=>liveRoot.unmount());
 assert.equal(listeners.size,0);assert.equal(closed.length,2);
 await act(async()=>{reads[1].resolve({});await tick();});
-assert.equal(document.getElementById("root")?.children.length,0);dom.window.close();
+assert.equal(document.getElementById("root")?.children.length,0);
+
+// Stop captures the displayed cut's turn, never a later sampled foreground.
+const stopRoot=createRoot(document.getElementById("root")!);
+const stops:{scope:{sessionPath:string;runtimeEpoch:string;turnId:string};resolve:(value:{protocolVersion:number;sessionPath:string;runtimeEpoch:string;turnId:string;cancelled:boolean})=>void;reject:(error:unknown)=>void}[]=[];
+const stopLease:RemoteControllerLease={...ownedLease,
+  sessionView:async path=>({...snapshot(path),ownership:"serve",runtimeState:{schemaVersion:1,runtimeEpoch:"controller-instance",revision:1,phase:"executing",running:true,cancelRequested:false,cancellable:true,pendingPrompt:false,backgroundJobs:0,activity:"streaming",turnId:"owned-turn",turnStatus:"in_progress",turnEventSeq:3}}),
+  sessionCancel:scope=>new Promise((resolve,reject)=>stops.push({scope,resolve,reject})),
+};
+const renderStop=async(path:string)=>act(async()=>{stopRoot.render(<LocaleProvider><TauriRemoteHistory lease={stopLease} controller={ownedController} transport={transport} sessionPath={path} title={path} onClose={close}/></LocaleProvider>);await tick();});
+const answerStopCut=async(path:string)=>act(async()=>{
+  const identity=subscriptions.at(-1)!;
+  reads.at(-1)!.resolve({protocolVersion:1,subscription:identity,snapshot:{protocolVersion:1,controller:ownedController,projection:{protocolVersion:1,sessionPath:path,readOnly:true,initial:true,history:[],userSuffix:[{id:"question",role:"user",content:"Active question"}],activeTurnId:"owned-turn",turnStatus:"in_progress",replayAfterSeq:0,replay:{events:[{kind:"turn_started",seq:1,turnId:"owned-turn",sessionPath:path,status:"in_progress"},{kind:"user_message_admitted",seq:2,turnId:"owned-turn",sessionPath:path,messageId:"question",status:"in_progress"},{kind:"text",seq:3,turnId:"owned-turn",sessionPath:path,text:"Partial answer",status:"in_progress"}],floorSeq:1,latestSeq:3,nextAfterSeq:3,hasMore:false,runtimeEpoch:"routing-epoch"}}}});
+  await tick();
+});
+const stopButton=()=>[...document.querySelectorAll<HTMLButtonElement>("button")].find(button=>button.textContent==="Stop")!;
+await renderStop("/stop-old.jsonl");await answerStopCut("/stop-old.jsonl");
+assert.ok(!stopButton().hidden&&!stopButton().disabled);
+await act(async()=>{stopButton().click();stopButton().click();await tick();});
+assert.equal(stops.length,1,"double click dispatches one Stop");assert.ok(stopButton().disabled&&refresh().disabled);
+assert.deepEqual(stops[0].scope,{sessionPath:"/stop-old.jsonl",runtimeEpoch:"controller-instance",turnId:"owned-turn"},"Controller epoch is not event routing epoch");
+await act(async()=>{stops[0].reject(new Error("PRIVATE endpoint/key"));await tick();});
+assert.match(document.querySelector('[role="alert"]')?.textContent??"",/outcome is unknown/);
+assert.ok(stopButton().disabled&&!refresh().disabled);assert.ok(!document.body.textContent?.includes("PRIVATE"));
+await act(async()=>{refresh().click();await tick();});await answerStopCut("/stop-old.jsonl");
+await act(async()=>{stopButton().click();await tick();});assert.equal(stops.length,2);
+await renderStop("/stop-new.jsonl");await answerStopCut("/stop-new.jsonl");
+await act(async()=>{stops[1].reject(new Error("PRIVATE stale stop"));await tick();});
+assert.equal(document.querySelector('[role="alert"]'),null);assert.ok(!stopButton().disabled,"old finally does not disable or unlock new operation");
+await act(async()=>{stopButton().click();await tick();});assert.equal(stops.length,3);
+await act(async()=>{stops[2].resolve({protocolVersion:1,...stops[2].scope,cancelled:true});await tick();});
+assert.ok(document.body.textContent?.includes("Waiting for the remote turn to finish"));assert.ok(stopButton().disabled);
+await act(async()=>{listeners.get("bridge:remote-session-state")?.({protocolVersion:1,subscription:subscriptions.at(-1),state:"ended"});await tick();});
+assert.ok(stopButton().hidden,"reconcile cannot leave a stale Stop action enabled");
+await act(async()=>stopRoot.unmount());
+assert.equal(listeners.size,0);dom.window.close();
+assert.equal(clock.frames.size,0);
+console.log("Remote Stop UI: exact displayed turn/controller epoch, duplicate guard, fixed unknown state, manual refresh, stale failure and waiting for terminal passed");
 console.log("Remote history UI ownership: old failure/finally, refresh guard, fixed errors, empty state and unmount passed");
 console.log("Remote live UI ownership: equal controller identity, reconcile unlock, retry before old read settlement, stale finally and subscription cleanup passed");

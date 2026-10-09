@@ -1978,6 +1978,8 @@ export const zh: Record<DictKey, string> = {
   "settings.remote.historyFailed": "无法读取此会话，请升级远端 Serve 后关闭并重新打开列表。",
   "settings.remote.historyEmpty": "此会话没有可显示的消息。",
   "settings.remote.historyRefresh": "刷新历史",
+  "settings.remote.stopSent": "停止请求已发送，等待远程轮次结束。",
+  "settings.remote.stopUnknown": "停止结果未知。请刷新历史确认，不要自动重试。",
   "settings.remote.historyMediaUnavailable": "图片按所选远程会话的工作区预览。远程文件和代码跳转尚未接入，请在远端电脑查看。",
   "settings.remote.sessionsFailed": "远程会话列表不可用。请检查 Serve，然后关闭并重开此列表，或重新连接已保存的 SSH 主机。",
   "settings.remote.sessionsEmpty": "暂无已保存的远程会话。",

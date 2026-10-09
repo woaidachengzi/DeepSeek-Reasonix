@@ -15,6 +15,10 @@ const MAX_JS: u64 = 9_007_199_254_740_991;
 mod image;
 pub use image::SessionImageRequest;
 
+#[path = "remote_controller_cancel.rs"]
+mod cancel;
+pub use cancel::SessionCancelRequest;
+
 #[path = "remote_controller_events.rs"]
 mod events;
 

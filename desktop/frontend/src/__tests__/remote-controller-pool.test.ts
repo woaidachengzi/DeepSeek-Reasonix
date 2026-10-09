@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { RemoteControllerPool, type RemoteControllerAPI } from "../lib/remoteControllerPool";
 import type { BridgeRemoteControllerResponse, BridgeRemoteControllerCloseResponse, BridgeRemoteControllerSessionsResponse, BridgeRemoteControllerSessionViewResponse, BridgeRemoteControllerSessionImageResponse } from "../lib/bridgeProtocol.generated";
+import type { BridgeRemoteControllerSessionCancelRequest,BridgeRemoteControllerSessionCancelResponse } from "../lib/bridgeProtocol.generated";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -21,6 +22,7 @@ function fixture() {
   const reads: { id: string; gate: ReturnType<typeof deferred<BridgeRemoteControllerSessionsResponse>> }[] = [];
   const snapshots: { id: string; sessionPath: string; gate: ReturnType<typeof deferred<BridgeRemoteControllerSessionViewResponse>> }[] = [];
   const api: RemoteControllerAPI = {
+    sessionCancel:(id,scope)=>{const gate=deferred<BridgeRemoteControllerSessionCancelResponse>();stops.push({id,scope,gate});return gate.promise;},
     sessionImage: (id,sessionPath,source) => { const gate = deferred<BridgeRemoteControllerSessionImageResponse>(); images.push({id,sessionPath,source,gate}); return gate.promise; },
     attach: request => { const gate = deferred<BridgeRemoteControllerResponse>(); attaches.push({ ...request, gate }); return gate.promise; },
     close: id => { const gate = deferred<BridgeRemoteControllerCloseResponse>(); closes.push({ id, gate }); return gate.promise; },
@@ -28,7 +30,24 @@ function fixture() {
     sessionView: (id,sessionPath) => { const gate = deferred<BridgeRemoteControllerSessionViewResponse>(); snapshots.push({ id,sessionPath,gate }); return gate.promise; },
   };
   const images: {id:string;sessionPath:string;source:string;gate:ReturnType<typeof deferred<BridgeRemoteControllerSessionImageResponse>>}[] = [];
-  return { pool: new RemoteControllerPool(api), attaches, closes, reads, snapshots, images };
+  const stops:{id:string;scope:BridgeRemoteControllerSessionCancelRequest;gate:ReturnType<typeof deferred<BridgeRemoteControllerSessionCancelResponse>>}[]=[];
+  return { pool: new RemoteControllerPool(api), attaches, closes, reads, snapshots, images,stops };
+}
+
+{
+  const f=fixture(),lease=f.pool.acquire("owned","/owned");await tick();f.attaches[0].gate.resolve(response("cancel-owner"));await lease.ready;
+  const scope={sessionPath:selected,runtimeEpoch:"instance",turnId:"turn"};
+  const pending=lease.sessionCancel!(scope);scope.turnId="caller-mutated";await tick();
+  assert.equal(f.stops[0].scope.turnId,"turn","scope is immutable across ready/dispatch");
+  const receipt={protocolVersion:1,sessionPath:selected,runtimeEpoch:"instance",turnId:"turn",cancelled:true};
+  f.stops[0].gate.resolve({...response("cancel-owner"),receipt:{...receipt,private:"PRIVATE"} as typeof receipt});
+  assert.deepEqual(await pending,receipt,"receipt strips private extras");
+  const late=lease.sessionCancel!({...scope,turnId:"turn"});await tick();lease.release();await tick();
+  f.stops[1].gate.resolve({...response("cancel-owner"),receipt});
+  await assert.rejects(late,/outcome is unknown/,"release after dispatch cannot publish success");
+  await assert.rejects(lease.sessionCancel!({...scope,turnId:"turn"}),/connection changed/);
+  assert.equal(f.stops.length,2,"released operation does not dispatch or retry");
+  f.closes[0].gate.resolve({protocolVersion:1,closed:true});await tick();
 }
 {
   const f = fixture();

@@ -1,5 +1,46 @@
 # Wails API 与事件面盘点
 
+## 2026-10-10 远程 Stop 界面与超过 30 文件 review 收敛
+
+- 达到 31 文件时暂停扩展，随后仅增加 review 回归和修复公共按钮 hidden 样式，最终 33 文件。完整复核 Controller 锁序/实例与活动轮次、请求撤销、Serve 已持有 owner/外部写入拒绝、shared client 单次请求/结果未知、bridge SSH 句柄与 Rust typed 收据，以及 React consumer/surface/request 的异步归属；没有放宽只读 projection、执行权限、fallback 或恢复历史。按先 review 后提交规则收敛，未 push。
+- 前端 native adapter/pool 接入可选窄 Stop：scope 在 await 前复制，lease/SSH 失效或收据异身份不发布成功、固定未知错误且不重试。按钮只在 Serve 活动 cut、Controller epoch 和可用 adapter 下展示；点击捕获已经展示的 cut turn ID，不再采样新的前台轮次，pending 防重复，sent 仅等待终态 SSE，不伪造 completed；unknown 禁止重发直到手动刷新，换 surface/cut 的旧 response/finally 无权更新新操作。发送/审批/接管和文件跳转仍未接通。
+- React best-practices 用于明确事件触发、稳定 effect 依赖和 request 归属，不新增 SWR/订阅/轮询/scroll writer。frontend-testing-debugging 实际 Chrome 回归发现既有 inline-flex 会覆盖 HTML hidden；修复公共 `.tauri-settings-button[hidden]` 后同一流程完整重跑通过。JSDOM 使用既有 TranscriptTestClock，补 exact scope/Controller-vs-routing epoch、重复点击、unknown/private/error、手动刷新、stale failure/finally、等待终态与 reconcile 隐藏回归；该测试原 remote-history/Tauri pipeline 已登记，不新增漏登记的脚本。
+- 最终完整 Go 四包 race 全部 exit 0（本次 cached；上轮实际执行耗时见下方），相关 vet/generator-check 通过；Rust 完整 293 passed/0 failed/6 ignored、clippy all-targets -D warnings 通过。完整原脚本 test:transcript/test:tauri（含 remote pool/native/history/subscription）/test:typecheck exit 0，最后新增 reconcile 断言另做实际专项和类型复测；hooks/single-writer/WAAPI/layers/bindings/CSS/theme/生产类型/Vite/预算所有原 build gates 再运行 exit 0。证据 `/private/tmp/reasonix-stop-ui-qa.RuraoJ/{go-race,rust,clippy,frontend-gates,build-final}.log`；现有 module.register/empty fixture img src/Cargo/chunk 提示保留，未宣称所有日志零警告。CSS 120.4/120.9 KiB，zh 79.3/80.0、zh-TW 79.9/80.6 KiB，未放宽预算；dist/.gitkeep 已恢复。
+- Browser plugin not available，依技能使用已安装 Playwright/Chrome 与临时 Vite 注入的实际 React TauriRemoteHistory/shared Transcript，所有接口只用 owned fixture，无系统剪贴板/真实 profile/key/SSH/模型。`http://127.0.0.1:5198/remote-live-qa` 的 page identity/nonblank/no framework overlay/无相关 console error-warning、重复点击、unknown/刷新、sent→终态隐藏、换 session 后旧 failure 丢弃、关闭解绑与 1280/390 无横向溢出均通过；实际截图 `sent-1280.png`/`unknown-390.png` 同目录，主 agent 已查看。check.mjs 与截图均不入库。
+- 这是 browser fixture 与源码门禁，不是 WKWebView/native 远程 Stop 交互或实际 SSH 部署验收。现有 App 仍是 6a026104b，尚未从新提交重建；原生可见、发送/审批/接管、bot、Windows/Linux、管理页、SQLite 及已知 Wails 五项旧失败继续未完成，目标不关闭，没有真实账号/用户迁移/正式签名/发布或默认下载切换。
+
+## 2026-10-10 远程 Stop 的 Go bridge 与原生 IPC（App 后续源码）
+
+- Go sidecar 增加 bridge token 保护的固定 `POST /v1/remote/controllers/{controllerID}/session-cancel` 与 `remote_controller_cancel_v1` capability；body 仅 path/Controller epoch/turn ID，不接收 URL/token/workspace/local runtime/action，严格 DTO/40 KiB/18s 门禁。连接只取已保存 SSH/forward 的 backend owner，shared client 单次执行；操作前拒绝失效句柄，操作后句柄/owner 变化或不完整收据返回 `remote_cancel_unknown`，不发表旧成功、不自动重试或调用本地 RuntimeManager。Controller view/projection 保持 readOnly=true，不因此授予发送/审批/接管。
+- 真正复用项目 schema/generator 增加三种 request/receipt/response 的 TS/Rust 镜像和 Go DTO conformance 注册。初稿匿名嵌入收据不能被当前 reflection gate 精确检查，改为显式平铺的 wire DTO 与 Scope() 比较；JSON 载荷未改变、checker 未放宽，最终实际 conformance/载荷回归通过。
+- Rust 主窗口限定的 `bridge_remote_controller_session_cancel` 已注册 invoke handler，clone host-only client 后在 blocking worker 执行，无 supervisor 锁内网络 IO；输入字段/句柄/预算严格校验，固定路由/收据 path/epoch/turn/controller/version/cancelled 匹配，未知字段不穿过 renderer。通用 native HTTP 层不公开远端诊断，因此发出请求后的所有不确认/拒绝/错误都保守提示“结果未知，刷新且不自动重试”，不是从未知结果推断成功或扩大权限。
+- 自有临时 SSH/forward/cookie fixture 的 bridge 认证、坏字段/unlisted/closed/无本地 runtime、typed receipt/隐私、409 与错误/失配收据、dispatch 后 close 的 uncertain/no retry 三次 race 通过；后续扁平 wire 修正后的 bridge/shared/真实 Agent Serve 联合专项三次 race 亦通过（2.160s/1.540s/3.562s）。这不是外部 SSH 账号或真实远程部署验收。
+- 最终完整 Go 四包 race exit 0（bridge 38.376s，remote/controller 2.551s，Serve 103.347s，Controller cached），`/private/tmp/reasonix-native-stop-go-race.log`。Rust 专项三组与完整 293 passed/0 failed/6 ignored、clippy all-targets -D warnings 通过，日志 `/private/tmp/reasonix-native-stop-{rust,clippy}.log`；ignored 不算已验证，现有 Cargo config 提示保留。Go vet、原生成器 -check/touched Rust fmt、生产/测试 TypeScript 和既有 native controller bindings 通过。未修改 React/scroll/renderer 状态，没有以这些源码/fixture 代替 WKWebView 或包级可见验收。
+- 尚未接前端 lease/pool/按钮、native owner/surface 的交互回归或重打 App；发送/审批/接管/bot 及完整目标其它门禁继续未完成。当前 App 仍为 6a026104b，累计 23 个未提交文件，未触发超过 30 文件先 review 后提交阈值，无提交/push/签名发布/外部账号或新原生可见验收。
+
+## 2026-10-10 远程指定轮次 Stop 的 Serve/shared client 链路（App 后续源码）
+
+- 注册 token/auth Handler 下独立 `POST /desktop/session-cancel`，固定协议 1、40 KiB 有界 body/10s 读取期限、拒绝额外 query/未知字段/尾随 JSON；先读 body 再 TryLock 发布边界。只选择 Serve 当前已持有的 foreground/detached Controller，拒绝 saved、retiring、mirrored/foreign writer，不 resume/reclaim/adopt/切换会话，不把只读 projection 改成写权限。最终使用已发布 Controller 实例 epoch 与活动 turn ID 的 CancelScopedContext，在等待锁后再校验 operation context，已撤销请求不产生迟到取消。
+- shared Client 新增 typed SessionCancelScope/Receipt 与一次性 CancelSessionTurn，先限定 catalogue path 再向固定 route 发 POST；无 idempotency 标记、自动重试、legacy `/cancel` fallback、任意 URL/token 参数或配置/历史回显。401/403 关闭连接，409/404 要求刷新；发送后 transport、截断/错误/异身份 receipt 或 owner 撤销均区分“结果未知”，不能据此重复 Stop 或宣布成功。
+- 临时 profile/token/loopback 上使用真实 Agent/Controller 与 gated fixture provider 验证前台、detached 实际 context 被取消并生成同 turn interrupted terminal；错误实例/旧轮次/retiring/外部 writer/未认证和 saved catalogue 成员均拒绝，后续实际轮次仍活跃，foreground 与所有权未变。客户端正向 exact receipt/未知字段剥离、错误/超预算 receipt、服务端错误、认证丢失、不列出的路径以及 dispatch 后 Close/no retry 回归通过。此处 provider 无外部模型调用，foreign writer 使用既有测试探针，不是实际 SSH/外部账号联调。
+- 最终专项三包 race 连续三次 exit 0（Serve 3.647s，remote/controller 1.327s，Controller 1.828s），`/private/tmp/reasonix-remote-stop-focused-race.log`；最终源码与 fixture 的完整三包 race exit 0（Serve 101.756s，remote/controller 2.702s，Controller 38.102s），`/private/tmp/reasonix-remote-stop-full-race.log`，包括新增锁等待期间 context 撤销回归，相关 vet/diff --check 通过。认证测试初稿误用了 fixture 创建 token gate 前的旧 Handler，已改为实际 token Handler 的无 cookie 请求；没有把未认证 200 当作通过，也没有放松认证断言。
+- 当前仅完成后端 HTTP/shared client；native bridge/renderer Stop、发送/审批/接管及 bot 联动仍待实现，未宣称 remote controller 可完整控制。累计 10 个未提交文件，未达超过 30 文件先 review 后提交阈值；当前 App 仍是 6a026104b，没有重打包/提交/push/真实账号或新原生验收，完整目标其余门禁继续保持未完成。
+
+## 2026-10-10 指定远程轮次停止的 Controller 基础（App 后续源码）
+
+- 新增 CancelScoped/TurnCancelScope：会话路径、已发布 Controller RuntimeState 实例 epoch、当前活动 turn ID 一起校验；校验及 context 取消共用 admission 锁，不调用无范围的 Cancel，也不停止 idle goal、恢复历史或授予写权限。按 runtimeState sampler 的锁序取得运行实例，并核对当前 path/ledger，故障或换绑时拒绝；普通 Serve 没有 Desktop 事件 routing epoch 也可校验，不混用两类 epoch。
+- 只摘取该轮次的 prompt cancel callbacks，在 owner/admission/runtime 锁外执行；不调用全局 approval.clearAll，避免旧清理误移除后续交互。真实 Controller 回归覆盖错误路径/实例/旧轮次/空范围/终态/ledger 故障、先取消 context 再过同步状态 barrier、旧轮次 cleanup 被阻塞时新轮次实际启动且 context/prompt/status 保留。现有普通 Cancel 行为未改。
+- 最终专项四组 race 连续 20 次 exit 0（Controller 2.729s），最终源码/fixture 的完整 Controller 与 turnevent race exit 0（Controller 41.261s，turnevent cached），日志 `/private/tmp/reasonix-scoped-cancel-final-joined-race.log`；相关 vet 与 diff --check 通过。初稿的测试 channel 重绑竞态及临时档案清理先于 foreground 结束的问题已修复，fixture 在 Close/TempDir 回收前等待自有轮次 idle；不通过忽略错误或延时删除放行。
+- 本阶段仅完成 backend 控制原语，尚未注册远程 HTTP endpoint/shared client/native bridge 或界面 Stop 权限；现有 remote projection 仍只读，不能算远程控制已接通。现有 macOS App 仍是已提交 6a026104b，不含本轮源码；没有原生/真实账号验收、重打包、提交或 push。累计 5 个未提交文件，未触发超过 30 文件先 review 后提交规则；目标其余门禁继续保持未完成。
+
+## 2026-10-10 已提交 admission/recovery macOS App 与包级 smoke
+
+- 从干净 `6a026104bb95f8ff42b1f37fcb2f11b62b5da623` 重建实际 arm64 App，build log 的 Preview source 无 dirty 标记，打包后 dist/.gitkeep 已恢复且 git status 为空；包含本批 canonical user/host admission、native/shared transport 白名单、renderer host readiness 和 protocol recovery 来源/精确 metadata 边界修复。路径 `desktop/tauri/target/aarch64-apple-darwin/release/bundle/macos.noindex/Reasonix Tauri Preview.app`，常规 macos alias 指向相同 storage。
+- 宿主 SHA-256 `eb48c6ef36cef8887f96f7e030bf81ab1a3dfff3e4d3700cab571734c91e873c`，包内已签名 Go sidecar `cbaa577448e851598ae745df8202717b1a4b884720ce4cebe4ed312658ddadd0`。两者 Mach-O arm64；deep/strict codesign 验证通过，adhoc/runtime、TeamIdentifier 未设置，不是 Developer ID/公证/正式发布包。使用既有 tauri-build 和已核对的本地 Node runner，动态执行原 package.json 所有 build gates，没有安装依赖或绕过预算；hooks/WAAPI/writer/layers/bindings/CSS/theme/z-index/TypeScript/Vite/bundle预算及 Go/Rust release、bundle/signature 完整 exit 0，`/private/tmp/reasonix-admission-package.JBnCIl/build.log`。现有 chunk/Cargo 提示保留。
+- 原 `1d925389…` App 完整备份至同目录 `Previous Reasonix Tauri Preview.app`，宿主摘要与原包相同、strict/deep 签名仍通过，没有覆盖旧证据或删除用户文件。仅构建 app，本轮没有新 DMG、push、正式签名、公证、发布或默认下载切换。
+- 现有 smoke-packaged-app.py 对这个新实际包的 managed/explicit 两个全新临时档案完成 host/Go startup、独立私有 credential profile identity、清理继承的 profile/token override、loopback ready/未认证 health 401、Global workspace 私有目录、native notification 权限只读查询、普通 Exit 与 owned sidecar/readiness 清理；exit 0，`package-smoke.log` 同目录，临时档案已正常回收。未读写真实 Reasonix profile/API key/外部模型/SSH/IM 或系统剪贴板，未请求 notification 权限。
+- 当前桌面只读 CGSession 查询 screenLocked=true/loginDone=true，本轮没有尝试解锁或执行可见 UI 验收。上述真实包 smoke 不是 host continuation 的 WKWebView 展示、native terminal/image paste/live、真实远程账号/bot 或一般 canonical rewrite/legacy steer 的验收；Windows/Linux、管理页、SQLite 和已知 Wails 五项失败仍保持未完成，完整目标不关闭。本轮仅两份文档追加收据，未达超过 30 文件 review/提交阈值。
+
 ## 2026-10-10 admission 与协议恢复批次 review 收敛
 
 - 在 29 文件的完整批次完成后主动收敛 review，先于下一阶段远程控制扩展。复核 canonical user/host 原子入库、Controller durable barrier/content fence、精确 local-only recovery attestation、Go/native 两侧 admission 白名单、renderer 同订阅/分页/异步 supersession 与只读共享 projection，没有新增执行权限、重订阅层、轮询器或 scroll writer。React best-practices 技能用于稳定依赖、单一订阅与共享状态归属复核，没有加入 SWR 或新依赖。

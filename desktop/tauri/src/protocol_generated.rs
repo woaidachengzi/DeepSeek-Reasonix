@@ -526,6 +526,32 @@ pub struct BridgeRemoteControllerSession {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerSessionCancelReceipt {
+    pub cancelled: bool,
+    pub protocol_version: u64,
+    pub runtime_epoch: String,
+    pub session_path: String,
+    pub turn_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerSessionCancelRequest {
+    pub runtime_epoch: String,
+    pub session_path: String,
+    pub turn_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeRemoteControllerSessionCancelResponse {
+    pub controller: BridgeRemoteControllerView,
+    pub protocol_version: u64,
+    pub receipt: BridgeRemoteControllerSessionCancelReceipt,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeRemoteControllerSessionEvent {
     pub controller: BridgeRemoteControllerView,
     pub event: Value,

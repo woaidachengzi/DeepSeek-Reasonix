@@ -1,5 +1,25 @@
 # E 迁移清单
 
+## 2026-10-10 远程 Stop 界面与超过 30 文件 review 收敛
+
+达到 31 文件后暂停扩展，review 修复公共按钮 hidden 样式并补回归，最终 33 文件先 review 后提交，未 push。接入前端 owner-fenced Stop，不采样新轮次、不伪造终态，unknown 需手动刷新，旧结果不能影响新 surface；React/测试技能及 Go/Rust/完整 Transcript/Tauri/类型/构建预算、实际 Chrome 的桌面/窄屏交互与截图证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-远程-stop-界面与超过-30-文件-review-收敛)。当前 App 仍为 6a026104b，尚未重建；浏览器 fixture 不替代 WKWebView/实际 SSH 远程 Stop 验收，发送/审批/接管/bot 与完整目标其它门禁继续未完成，未发布或切换默认下载。
+
+## 2026-10-10 远程 Stop 的 Go bridge 与原生 IPC（App 后续源码）
+
+补齐 bridge token/已保存 SSH owner 下的固定 Stop route、typed schema 与生成/Go conformance、主窗口限定 Rust IPC；保持只读 projection，无本地 RuntimeManager/fallback/重试，句柄撤销或收据不确认不发表成功。Go bridge/shared/真实 Agent Serve 专项、Rust 293 项/clippy、协议生成/类型/绑定门禁见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-远程-stop-的-go-bridge-与原生-ipcapp-后续源码)。未接前端 lease/pool/按钮或验证原生交互，没有新 App/外部账号验收；发送/审批/接管/bot 与完整目标其它门禁仍未完成。当前 App 为 6a026104b，23 个文件未达超过 30 文件 review 后提交阈值，无提交/push/发布。
+
+## 2026-10-10 远程指定轮次 Stop 的 Serve/shared client 链路（App 后续源码）
+
+接入独立认证 HTTP endpoint 与一次性 typed shared Client Stop，不使用 legacy Cancel/resume/接管/重试；校验当前已持有 Controller 的 path/实例/轮次并在锁等待后检查请求撤销。隔离真实 Agent/Serve 的 foreground/detached context 与 interrupted terminal、旧轮/错误实例/saved/retiring/外部 writer/认证拒绝、客户端不确定结果和 no retry 三次 race/vet 见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-远程指定轮次-stop-的-serveshared-client-链路app-后续源码)。尚未接 native/UI，不将现有只读 projection 升为写权限；发送/审批/接管/bot/原生与其它完整目标门禁继续未完成。累计 10 个文件未达超过 30 文件 review 后提交阈值；当前 App 仍是 6a026104b，没有提交/push/重打包/真实账号或新的原生验收。
+
+## 2026-10-10 指定远程轮次停止的 Controller 基础（App 后续源码）
+
+补充精确 CancelScoped 原语，使用实际 Controller 实例 epoch/会话路径/活动轮次，原子校验并取消该 context、只清理该轮次交互；旧请求与旧 cleanup 不影响后续对话。普通 Serve 的实例 ID 与可为空的 Desktop 事件路由 ID 已区分，专项 20 次 race/vet 证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-指定远程轮次停止的-controller-基础app-后续源码)。尚未接远程 HTTP/shared client/native/UI，remote projection 不因此变成可写；当前 App 仍为 6a026104b，完整目标未完成。累计 5 文件，未触发超过 30 文件先 review 后提交阈值，无提交/push/重打包/真实账号或新的原生验收。
+
+## 2026-10-10 已提交 admission/recovery macOS App 与包级 smoke
+
+已从干净提交 `6a026104b` 重建 arm64 ad-hoc 可运行 App，包含上一批入库/host 续接及协议恢复修复；完整 build gates、严格签名和新实际包的 managed/explicit 临时档案启动、私有身份/认证边界/Global workspace/普通退出及 sidecar 清理均通过，旧包完整保留。新包 SHA 与日志见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-已提交-admissionrecovery-macos-app-与包级-smoke)。桌面仍锁屏，没有新的可见 UI/原生图片粘贴/终端/live 或真实远程账号/bot 验收，不能替代其它完整目标门禁；没有 DMG、正式签名/公证/发布或默认下载切换。本轮仅两文档追加收据，未提交/推送，以下保留各阶段状态。
+
 ## 2026-10-10 admission 与协议恢复批次 review 收敛
 
 本批在 29 文件阶段先主动 review，发现并补齐 snapshot/projection 回归的专用 remote 脚本登记，最终 30 文件随本记录提交，未推送。当前完整 Go 八包 race/vet、Rust 290 项/clippy、完整 Transcript/Tauri/remote-controller/类型/lint/single writer 和实际新登记脚本通过，见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-admission-与协议恢复批次-review-收敛)。已知 Wails 五项旧失败仍复现，未宣称其全量通过；当前 App 尚未重建、不含这批修复。接下来从已提交源码构建安全包，再继续远程控制及完整目标其余未完成门禁；以下保留各阶段当时状态。

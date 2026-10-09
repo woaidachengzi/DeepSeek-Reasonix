@@ -17,7 +17,7 @@ export function TauriRemoteHistory({lease,controller,sessionPath,title,onClose,t
   const t = useT();
   const {id:controllerId,name:controllerName,workspace:controllerWorkspace,readOnly:controllerReadOnly}=controller;
   const surface = JSON.stringify([controllerId,controllerName,controllerWorkspace,sessionPath]);
-  const [snapshot,setSnapshot] = useState<{surface:string;view:BridgeRemoteControllerSessionView;items:Item[];live?:LiveStream;running:boolean;revision:number} | null>(null);
+  const [snapshot,setSnapshot] = useState<{surface:string;view:BridgeRemoteControllerSessionView;items:Item[];live?:LiveStream;running:boolean;turnId?:string;revision:number} | null>(null);
   const [surfaceId] = useState(() => `remote:${crypto.randomUUID()}`);
   const generation = useRef(0);
   const owner = useRef<object | null>(null);
@@ -27,9 +27,12 @@ export function TauriRemoteHistory({lease,controller,sessionPath,title,onClose,t
   const [fileNotice,setFileNotice] = useState(false);
   const request = useRef<object | null>(null);
   const mounted = useRef(false);
+  const stopRequest=useRef<object|null>(null);
+  const [stopState,setStopState]=useState<{surface:string;turnId:string;outcome:"pending"|"sent"|"unknown"}|null>(null);
   const load = useCallback(async () => {
     if (!mounted.current || request.current) return;
     const token = {}; request.current = token; owner.current = token;
+    stopRequest.current=null;setStopState(null);
     stream.current?.dispose();stream.current = null;
     const currentGeneration = ++generation.current;
     const alive = () => mounted.current && owner.current === token;
@@ -39,10 +42,11 @@ export function TauriRemoteHistory({lease,controller,sessionPath,title,onClose,t
       if(!alive())return;
       if(view.ownership === "serve") {
         let projection:ReturnType<typeof createRemoteConversationProjection> | undefined;
+        let turnId:string|undefined;
         const publish = () => {
           if(!alive() || !projection)return;
           const display=projection.view();
-          setSnapshot(previous => alive() ? {surface,view,...display,revision:(previous?.revision??0)+1} : previous);
+          setSnapshot(previous => alive() ? {surface,view,...display,turnId,revision:(previous?.revision??0)+1} : previous);
         };
         const current = openRemoteSessionSnapshot(transport,{id:controllerId,name:controllerName,workspace:controllerWorkspace,readOnly:controllerReadOnly},{controllerId,sessionPath,surfaceId,generation:currentGeneration},{
           state:state => {if(!alive())return;
@@ -54,7 +58,7 @@ export function TauriRemoteHistory({lease,controller,sessionPath,title,onClose,t
             if(request.current === token)request.current=null;
             setFailed(true);setBusy(false);
           }},
-          snapshot:cut => {if(!alive())return;projection=createRemoteConversationProjection(cut,surface,{protocol:t("notice.protocolRecoveryBody"),readiness:t("notice.finalReadiness")});publish();},
+          snapshot:cut => {if(!alive())return;if(turnId!==cut.projection.activeTurnId){stopRequest.current=null;setStopState(null);}turnId=cut.projection.activeTurnId;projection=createRemoteConversationProjection(cut,surface,{protocol:t("notice.protocolRecoveryBody"),readiness:t("notice.finalReadiness")});publish();},
           event:frame => {if(!alive() || !projection)return;projection.event(frame);publish();},
         });
         stream.current = current;
@@ -73,10 +77,23 @@ export function TauriRemoteHistory({lease,controller,sessionPath,title,onClose,t
   useEffect(() => {
     mounted.current = true; request.current = null; setSnapshot(null); setFileNotice(false);
     void load();
-    return () => { mounted.current = false; request.current = null;owner.current=null;stream.current?.dispose();stream.current=null; };
+    return () => { mounted.current = false; request.current = null;owner.current=null;stopRequest.current=null;stream.current?.dispose();stream.current=null; };
   },[load]);
   const blockedFile = useCallback(() => setFileNotice(true),[]);
   const current = snapshot?.surface === surface ? snapshot : null;
+  const stopped=stopState?.surface===surface&&stopState.turnId===current?.turnId?stopState:null;
+  const canStop=!failed&&!!lease.sessionCancel&&current?.view.ownership==="serve"&&current.running&&!!current.turnId&&!!current.view.runtimeState?.runtimeEpoch;
+  const stop=async()=>{
+    if(!canStop||busy||stopRequest.current||stopped||!current?.turnId||!lease.sessionCancel)return;
+    const token={},sourceOwner=owner.current,turnId=current.turnId;
+    stopRequest.current=token;setStopState({surface,turnId,outcome:"pending"});
+    const alive=()=>mounted.current&&owner.current===sourceOwner&&stopRequest.current===token;
+    try {
+      await lease.sessionCancel({sessionPath,runtimeEpoch:current.view.runtimeState!.runtimeEpoch,turnId});
+      if(alive())setStopState({surface,turnId,outcome:"sent"});
+    } catch {if(alive())setStopState({surface,turnId,outcome:"unknown"});}
+    finally {if(alive())stopRequest.current=null;}
+  };
   return <section className="tauri-remote-history" aria-label={t("settings.remote.historyTitle")} aria-busy={busy}>
     <div className="tauri-remote-history-header"><h4>{title || t("settings.remote.historyTitle")}</h4>
       <button type="button" className="tauri-settings-button" onClick={onClose}>{t("common.close")}</button></div>
@@ -95,6 +112,9 @@ export function TauriRemoteHistory({lease,controller,sessionPath,title,onClose,t
         </SourceReferenceContext.Provider></LocalPathActionContext.Provider>
       </TauriRemoteImageScope>
     </div> : null}
-    <button type="button" className="tauri-settings-button" disabled={busy} onClick={() => void load()}>{t("settings.remote.historyRefresh")}</button>
+    {stopped?.outcome==="sent"&&current?.running?<p role="status">{t("settings.remote.stopSent")}</p>:null}
+    {stopped?.outcome==="unknown"?<p role="alert" className="tauri-diagnostic-error">{t("settings.remote.stopUnknown")}</p>:null}
+    <button type="button" className="tauri-settings-button" hidden={!canStop} disabled={busy||!!stopped} onClick={()=>void stop()}>{t("composer.stopShort")}</button>
+    <button type="button" className="tauri-settings-button" disabled={busy||stopped?.outcome==="pending"} onClick={() => void load()}>{t("settings.remote.historyRefresh")}</button>
   </section>;
 }

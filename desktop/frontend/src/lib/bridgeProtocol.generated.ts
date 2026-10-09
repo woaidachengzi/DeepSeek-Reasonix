@@ -364,6 +364,26 @@ export interface BridgeRemoteControllerSession {
   turns: number;
 }
 
+export interface BridgeRemoteControllerSessionCancelReceipt {
+  cancelled: boolean;
+  protocolVersion: number;
+  runtimeEpoch: string;
+  sessionPath: string;
+  turnId: string;
+}
+
+export interface BridgeRemoteControllerSessionCancelRequest {
+  runtimeEpoch: string;
+  sessionPath: string;
+  turnId: string;
+}
+
+export interface BridgeRemoteControllerSessionCancelResponse {
+  controller: BridgeRemoteControllerView;
+  protocolVersion: number;
+  receipt: BridgeRemoteControllerSessionCancelReceipt;
+}
+
 export interface BridgeRemoteControllerSessionEvent {
   controller: BridgeRemoteControllerView;
   event: Record<string, unknown>;

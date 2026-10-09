@@ -19,8 +19,9 @@ import (
 	"reasonix/internal/remote/controller"
 )
 
-// These routes expose a read-only catalogue, not a local RuntimeManager or a
-// remote turn/approval capability. All endpoints/tokens stay behind the bridge.
+// The catalogue/projection stays read-only. A separate scoped Stop route does
+// not grant submit/approval/takeover authority or a local RuntimeManager.
+// All endpoints/tokens stay behind the bridge.
 type remoteControllerRequest struct {
 	Name      string `json:"name"`
 	Workspace string `json:"workspace"`
