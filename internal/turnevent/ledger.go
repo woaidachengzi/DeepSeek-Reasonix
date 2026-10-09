@@ -14,6 +14,7 @@ import (
 	"slices"
 	"sync"
 	"time"
+	"weak"
 
 	"reasonix/internal/event"
 	"reasonix/internal/eventwire"
@@ -99,6 +100,34 @@ type ReplayView struct {
 	LeafMessageID      string     `json:"leafMessageId,omitempty"`
 	RuntimeEpoch       string     `json:"runtimeEpoch,omitempty"`
 }
+
+// ProjectionReplayView samples the active-turn boundary and its first bounded
+// replay page under one ledger lock. It does not claim an atomic provider
+// transcript snapshot: that artifact has a separate mutation lifecycle.
+type ProjectionReplayView struct {
+	ReplayView
+	Boundary            ProjectionReplayBoundary `json:"-"`
+	ActiveTurnID        string                   `json:"activeTurnId,omitempty"`
+	TurnStatus          event.TurnStatus         `json:"turnStatus,omitempty"`
+	ReplayAfterSequence uint64                   `json:"replayAfterSeq"`
+}
+
+// ProjectionReplayBoundary is an opaque, process-local continuation fence, not
+// an authority token. Remote adapters must still validate session and owner.
+type ProjectionReplayBoundary struct {
+	owner               weak.Pointer[Ledger]
+	sessionID           string
+	turnID              string
+	runtimeEpoch        string
+	replayAfterSequence uint64
+	throughSequence     uint64
+	transcriptRevision  int64
+	transcriptDigest    string
+	headID              string
+	leafMessageID       string
+}
+
+var ErrProjectionReplayChanged = errors.New("turn projection replay boundary changed")
 
 // PendingProjection is an unacknowledged terminal Turn whose full events must
 // remain available until the Desktop display-only sidecar is rebuilt.
@@ -439,6 +468,10 @@ func (l *Ledger) ProjectionCursor() (latest, replayAfter uint64) {
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	return l.projectionCursorLocked()
+}
+
+func (l *Ledger) projectionCursorLocked() (latest, replayAfter uint64) {
 	latest = l.latestLocked()
 	replayAfter = latest
 	if l.active != "" && !l.terminal && l.turnStartSeq > 0 {
@@ -672,10 +705,87 @@ func (l *Ledger) Replay(after uint64) (ReplayView, error) {
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	return l.replayLocked(after, started)
+}
+
+// ProjectionReplay is the initial spectator projection read. Independent
+// ActiveTurnID/ProjectionCursor/Replay calls can straddle terminal + Begin and
+// attach a different turn's events to a sampled cursor. This read cannot.
+// Consumers must still fence later pages and live events by the returned turn,
+// epoch and sequence, and reconcile the separately sampled transcript.
+func (l *Ledger) ProjectionReplay() (ProjectionReplayView, error) {
+	started := time.Now()
+	if l == nil {
+		return ProjectionReplayView{ReplayView: ReplayView{Events: []Envelope{}}}, nil
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	_, after := l.projectionCursorLocked()
+	view := ProjectionReplayView{TurnStatus: l.status, ReplayAfterSequence: after}
+	if !l.terminal {
+		view.ActiveTurnID = l.active
+	}
+	var err error
+	view.ReplayView, err = l.replayLocked(after, started)
+	if err == nil {
+		view.Boundary = ProjectionReplayBoundary{
+			owner: weak.Make(l), sessionID: l.sessionID, turnID: view.ActiveTurnID,
+			runtimeEpoch: view.RuntimeEpoch, replayAfterSequence: after,
+			throughSequence:    view.LatestSequence,
+			transcriptRevision: view.TranscriptRevision, transcriptDigest: view.TranscriptDigest,
+			headID: view.HeadID, leafMessageID: view.LeafMessageID,
+		}
+	}
+	return view, err
+}
+
+// ProjectionReplayPage reads only the suffix captured by the initial read.
+// New events do not move its upper bound. A changed turn/epoch or checkpoint
+// requires a new projection rather than mixing pages from different histories.
+func (l *Ledger) ProjectionReplayPage(boundary ProjectionReplayBoundary, after uint64) (ReplayView, error) {
+	if l == nil {
+		return ReplayView{}, ErrProjectionReplayChanged
+	}
+	started := time.Now()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.poisoned != nil {
+		return ReplayView{}, l.unavailableLocked()
+	}
+	if boundary.owner.Value() != l || boundary.sessionID != l.sessionID || boundary.turnID == "" || boundary.turnID != l.active || boundary.runtimeEpoch != l.routing.runtimeEpoch || l.turnStartSeq == 0 || boundary.replayAfterSequence != l.turnStartSeq-1 || boundary.replayAfterSequence < l.compactedThrough || after < boundary.replayAfterSequence || after > boundary.throughSequence || boundary.throughSequence > l.latestLocked() {
+		return ReplayView{}, ErrProjectionReplayChanged
+	}
+	view, err := l.replayThroughLocked(after, boundary.throughSequence, started)
+	if err != nil {
+		return view, err
+	}
+	expected := after
+	for _, entry := range view.Events {
+		if entry.Sequence != expected+1 || entry.TurnID != boundary.turnID || entry.RuntimeEpoch != boundary.runtimeEpoch {
+			return ReplayView{}, ErrProjectionReplayChanged
+		}
+		expected = entry.Sequence
+	}
+	if view.HasMore && len(view.Events) == 0 {
+		return ReplayView{}, ErrProjectionReplayChanged
+	}
+	// These metadata describe the initial cut, not a later terminal commit.
+	view.TranscriptRevision, view.TranscriptDigest = boundary.transcriptRevision, boundary.transcriptDigest
+	view.HeadID, view.LeafMessageID = boundary.headID, boundary.leafMessageID
+	return view, err
+}
+
+// Caller holds l.mu. Both readers retain the existing reset, page-budget and
+// poison semantics rather than creating a second permissive replay decoder.
+func (l *Ledger) replayLocked(after uint64, started time.Time) (ReplayView, error) {
+	return l.replayThroughLocked(after, l.latestLocked(), started)
+}
+
+func (l *Ledger) replayThroughLocked(after, latest uint64, started time.Time) (ReplayView, error) {
+	view := ReplayView{Events: []Envelope{}}
 	if l.poisoned != nil {
 		return view, l.unavailableLocked()
 	}
-	latest := l.latestLocked()
 	floor := l.compactedThrough + 1
 	if len(l.records) > 0 {
 		floor = l.records[0].Sequence
@@ -697,6 +807,9 @@ func (l *Ledger) Replay(after uint64) (ReplayView, error) {
 	view.NextAfterSequence = effective
 	var pageBytes int64
 	for _, rec := range l.records {
+		if rec.Sequence > latest {
+			break
+		}
 		if rec.Sequence <= effective {
 			continue
 		}

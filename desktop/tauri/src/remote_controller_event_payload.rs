@@ -147,10 +147,13 @@ pub(super) fn project(value: &Value) -> Result<Value, String> {
         .and_then(Value::as_str)
         .ok_or_else(|| FAILED.to_string())?;
     if !contract.kinds.iter().any(|known| known == kind)
-        || !["turnId", "itemId", "promptId"]
+        || !["turnId", "itemId", "promptId", "messageId"]
             .iter()
             .all(|key| identifier(&result, key, false))
     {
+        return Err(FAILED.into());
+    }
+    if kind != "steer" && result.get("messageId").is_some() {
         return Err(FAILED.into());
     }
     if result

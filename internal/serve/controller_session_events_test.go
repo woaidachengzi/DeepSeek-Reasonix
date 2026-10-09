@@ -39,11 +39,15 @@ func TestSharedControllerSessionEventsActualServeBackgroundIsolation(t *testing.
 	f.server.bc.Emit(event.Event{Kind: event.Text, Text: "untagged foreground"})
 	f.server.bc.Emit(event.Event{Kind: event.Reasoning, SessionPath: path, TurnID: "owned-turn", Sequence: 1, Text: "owned reasoning"})
 	f.server.bc.Emit(event.Event{Kind: event.Text, SessionPath: path, TurnID: "owned-turn", Sequence: 2, Text: "owned answer"})
-	f.server.bc.Emit(event.Event{Kind: event.TurnDone, SessionPath: path, TurnID: "owned-turn", Sequence: 3})
-	for i, kind := range []string{"reasoning", "text", "turn_done"} {
+	f.server.bc.Emit(event.Event{Kind: event.Steer, SessionPath: path, TurnID: "owned-turn", Sequence: 3, Text: "owned guidance", ItemID: "owned-inbox", MessageID: "owned-message"})
+	f.server.bc.Emit(event.Event{Kind: event.TurnDone, SessionPath: path, TurnID: "owned-turn", Sequence: 4})
+	for i, kind := range []string{"reasoning", "text", "steer", "turn_done"} {
 		frame, err := stream.Next()
 		if err != nil || frame.Kind != kind || frame.SessionPath != path || frame.SessionCurrent || frame.TurnID != "owned-turn" || frame.Sequence != uint64(i+1) {
 			t.Fatalf("background correlation failed: %+v %v", frame, err)
+		}
+		if kind == "steer" && (frame.MessageID != "owned-message" || frame.ItemID != "owned-inbox" || frame.Text != "owned guidance") {
+			t.Fatalf("Serve dropped steer correlation: %+v", frame)
 		}
 	}
 	if f.server.ctl().SessionPath() != f.active {

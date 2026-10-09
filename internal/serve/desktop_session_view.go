@@ -39,6 +39,14 @@ func desktopHistoryMessages(messages []provider.Message) ([]desktopHistoryMessag
 	out := make([]desktopHistoryMessage, 0, len(messages))
 	seen := make(map[string]bool, len(messages))
 	for _, message := range historyWithoutPinnedContextRevisions(messages) {
+		// Provider/system/developer prompts are not remote conversation rows.
+		// Keep the shared local history representation unchanged; restrict only
+		// the explicit desktop spectator projection used by both endpoints.
+		switch message.Role {
+		case provider.RoleUser, provider.RoleAssistant, provider.RoleTool:
+		default:
+			continue
+		}
 		rows := historyMessages([]provider.Message{message})
 		if len(rows) == 0 {
 			continue

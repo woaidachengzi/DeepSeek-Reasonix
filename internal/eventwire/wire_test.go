@@ -517,6 +517,11 @@ func TestToWireInteractionAndLifecyclePayloads(t *testing.T) {
 			in:   event.Event{Kind: event.Steer, Text: "mid-turn guidance"},
 			want: []string{`"kind":"steer"`, `"text":"mid-turn guidance"`},
 		},
+		{
+			name: "steer message identity",
+			in:   event.Event{Kind: event.Steer, Text: "same guidance", ItemID: "owned-inbox", MessageID: "owned-message"},
+			want: []string{`"kind":"steer"`, `"itemId":"owned-inbox"`, `"messageId":"owned-message"`},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -531,6 +536,18 @@ func TestToWireInteractionAndLifecyclePayloads(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestMessageIdentityOnlyProjectsAppliedSteer(t *testing.T) {
+	for _, kind := range []event.Kind{event.Text, event.Notice, event.TurnDone} {
+		if got := ToWire(event.Event{Kind: kind, MessageID: "unrelated"}); got.MessageID != "" {
+			t.Fatal("non-steer leaked message association")
+		}
+	}
+	data, err := json.Marshal(ToWire(event.Event{Kind: event.Steer, Text: "legacy"}))
+	if err != nil || strings.Contains(string(data), "messageId") {
+		t.Fatalf("legacy: %s %v", data, err)
 	}
 }
 

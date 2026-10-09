@@ -107,4 +107,32 @@ for (const bad of [{...frame,sessionPath:"/foreign"},{...frame,controller:{...co
     process.off("unhandledRejection", onUnhandled);
   }
 }
-console.log("Remote subscription ownership: listener admission, receipt queue, generation/owner fences, async teardown, cancellation, bounds and fixed failures passed");
+{
+  const emitted: string[] = [];
+  let calls = 0;
+  const transport:RemoteSubscriptionTransport = {
+    listen:async () => { calls++; return ()=>{}; },
+    subscribe:async () => { calls++; return identity; },
+    unsubscribe:async () => { calls++; },
+  };
+  for (const generation of [0,-1,1.5,Number.MAX_SAFE_INTEGER+1]) {
+    const subscription = openRemoteSessionSubscription(transport,controller,{...request,generation},{state:state=>emitted.push(state),event:()=>assert.fail("invalid admission")});
+    assert.equal(await subscription.receipt,null);
+  }
+  assert.equal(calls,0,"invalid generation cannot install listeners or dispatch native commands");
+  assert.deepEqual(emitted,["failed","failed","failed","failed"]);
+}
+{
+  let closes = 0;
+  const input = {...request,token:"PRIVATE"};
+  const subscription = openRemoteSessionSubscription({
+    listen:async () => ()=>{},
+    subscribe:async actual => { assert.deepEqual(actual,request); return identity; },
+    unsubscribe:() => { closes++; throw new Error("closed native owner"); },
+  },controller,input,{state:()=>{},event:()=>{}});
+  input.generation = 99; // Capture scope before asynchronous listener admission.
+  await subscription.receipt;
+  assert.doesNotThrow(()=>subscription.dispose());
+  assert.equal(closes,1);
+}
+console.log("Remote subscription ownership: listener admission, narrow captured scope, receipt queue, generation/owner fences, async teardown, cancellation, bounds and fixed failures passed");

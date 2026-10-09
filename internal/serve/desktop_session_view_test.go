@@ -60,7 +60,12 @@ func TestDesktopSessionViewActualServeSavedAndOwnedHistory(t *testing.T) {
 	if err != nil || !active.Current || active.Ownership != "serve" || active.RuntimeState == nil || active.RuntimeState.RuntimeEpoch == "" {
 		t.Fatalf("foreground view %+v %v", active, err)
 	}
-	ownedMessages := f.server.ctl().History()
+	var ownedMessages []provider.Message
+	for _, message := range f.server.ctl().History() {
+		if message.Role != provider.RoleSystem {
+			ownedMessages = append(ownedMessages, message)
+		}
+	}
 	if len(ownedMessages) != len(active.History) {
 		t.Fatal("owned history fixture unexpectedly contains filtered entries")
 	}
@@ -100,7 +105,7 @@ func TestDesktopSessionViewActualServeSavedAndOwnedHistory(t *testing.T) {
 		t.Fatal("repeat snapshot changed backend entry identities")
 	}
 	for i, row := range view.History {
-		if row.ID != session.Messages[i].ID {
+		if row.ID != session.Messages[i+1].ID {
 			t.Fatal("display identity was not the persisted backend message ID")
 		}
 	}
@@ -175,6 +180,10 @@ func TestDesktopHistoryProjectionKeepsBackendIdentityThroughFiltering(t *testing
 	marker := provider.Message{ID: "recovery-entry", Role: provider.RoleTool, LocalOnly: true, FinalReadinessRecovery: &provider.FinalReadinessRecovery{Pending: true, Missing: []string{"verification"}}}
 	user := provider.Message{ID: "user-entry", Role: provider.RoleUser, Content: "question"}
 	answer := provider.Message{ID: "answer-entry", Role: provider.RoleAssistant, Content: "answer"}
+	private, err := desktopHistoryMessages([]provider.Message{{ID: "system-entry", Role: provider.RoleSystem, Content: "PRIVATE system prompt"}, {ID: "developer-entry", Role: provider.Role("developer"), Content: "PRIVATE developer prompt"}, user, answer})
+	if err != nil || len(private) != 2 || private[0].ID != user.ID || private[1].ID != answer.ID {
+		t.Fatal("private prompt became a remote conversation row")
+	}
 	rows, err := desktopHistoryMessages([]provider.Message{user, marker, answer})
 	if err != nil || len(rows) != 3 || rows[1].ID != marker.ID || rows[1].Role != "final_readiness" {
 		t.Fatalf("transformed identity %+v %v", rows, err)

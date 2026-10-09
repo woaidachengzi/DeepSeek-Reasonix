@@ -79,6 +79,9 @@ type StreamAttempt struct {
 // ToWire converts a typed runtime event into the shared frontend JSON contract.
 func ToWire(e event.Event) Event {
 	w := Event{Kind: kindNames[e.Kind], PromptKind: e.PromptKind, TurnID: e.TurnID, Sequence: e.Sequence, Status: string(e.Status), Text: e.Text, Detail: e.Detail, Reasoning: e.Reasoning, ItemID: e.ItemID, SessionPath: e.SessionPath, SessionReset: e.SessionReset}
+	if e.Kind == event.Steer {
+		w.MessageID = e.MessageID
+	}
 	if e.ItemID != "" {
 		promptEvent := false
 		switch e.Kind {

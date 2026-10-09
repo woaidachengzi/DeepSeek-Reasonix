@@ -30,7 +30,7 @@ const handle = (value: unknown): value is string => typeof value === "string" &&
 // bounded queue; no callback receives an event before its exact receipt and
 // ready notice. This is not a snapshot/replay projector or a write grant.
 export function openRemoteSessionSubscription(transport: RemoteSubscriptionTransport, selectedController: BridgeRemoteControllerView, input: RemoteSubscriptionRequest, sink: RemoteSubscriptionSink) {
-  const request = {...input};
+  const request = {controllerId:input.controllerId,sessionPath:input.sessionPath,surfaceId:input.surfaceId,generation:input.generation};
   const controller = {...selectedController};
   let disposed = false;
   let identity: RemoteSubscriptionIdentity | null = null;
@@ -49,7 +49,9 @@ export function openRemoteSessionSubscription(transport: RemoteSubscriptionTrans
   const close = (id: string) => {
     if (closed.has(id)) return;
     closed.add(id);
-    void transport.unsubscribe(id).catch(() => {}); // Never retry/reopen an uncertain close.
+    try {
+      void Promise.resolve(transport.unsubscribe(id)).catch(() => {});
+    } catch { /* Never retry/reopen an uncertain close. */ }
   };
   const dispose = () => {
     if (disposed) return;

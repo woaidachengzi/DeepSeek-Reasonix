@@ -49,10 +49,13 @@ func TestRemoteEventContractByteEncodingAndDuplicateFields(t *testing.T) {
 	if err != nil || array.Kind != "array" || array.Nullable || array.Items.Kind != "unsigned" {
 		t.Fatal("byte arrays must retain JSON numeric array encoding")
 	}
-	_, err = eventTypeShape(reflect.TypeOf(struct {
-		First  string `json:"same"`
-		Second string `json:"same"`
-	}{}), map[reflect.Type]bool{})
+	// Deliberately malformed input is built at runtime so go vet can still
+	// validate the production types without rejecting this negative fixture.
+	duplicate := reflect.StructOf([]reflect.StructField{
+		{Name: "First", Type: reflect.TypeOf(""), Tag: `json:"same"`},
+		{Name: "Second", Type: reflect.TypeOf(""), Tag: `json:"same"`},
+	})
+	_, err = eventTypeShape(duplicate, map[reflect.Type]bool{})
 	if err == nil {
 		t.Fatal("ambiguous JSON names must require an explicit contract")
 	}

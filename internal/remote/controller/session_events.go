@@ -163,7 +163,7 @@ func (s *SessionEventStream) Next() (frame eventwire.Event, err error) {
 			frame = eventwire.Event{}
 			continue
 		}
-		if !sessionEventKinds[frame.Kind] || frame.Sequence > 9_007_199_254_740_991 || !cleanField(frame.TurnID, 4096) || !cleanField(frame.ItemID, 4096) || !cleanField(frame.PromptID, 4096) {
+		if !sessionEventKinds[frame.Kind] || frame.Sequence > 9_007_199_254_740_991 || !cleanField(frame.TurnID, 4096) || !cleanField(frame.ItemID, 4096) || !cleanField(frame.PromptID, 4096) || !cleanField(frame.MessageID, 4096) || (frame.MessageID != "" && frame.Kind != "steer") {
 			return eventwire.Event{}, ErrResponse
 		}
 		if s.ctx.Err() != nil || s.client.Closed() {

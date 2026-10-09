@@ -12,6 +12,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
+	"reasonix/internal/provider"
 	"reasonix/internal/sessioninbox"
 	"reasonix/internal/turnevent"
 )
@@ -31,9 +32,11 @@ type turnEventDurableSink struct{ owner *turnEventSink }
 
 // turnEventState has an independent lock so ledger I/O never holds c.mu.
 type turnEventState struct {
-	mu     sync.RWMutex
-	ledger *turnevent.Ledger
-	err    error
+	mu               sync.RWMutex
+	ledger           *turnevent.Ledger
+	err              error
+	projectionTurnID string
+	projectionPrefix []string // Message identities only, not a second conversation copy.
 }
 
 func newTurnEventSink(inner event.Sink, c *Controller) *turnEventSink {
@@ -330,11 +333,9 @@ func (c *Controller) turnEventLedgerError() error {
 }
 
 func (c *Controller) prepareTurnAdmission(body func(context.Context) error) func(context.Context) error {
-	admissionErr := c.turnEventLedgerError()
+	admissionErr := c.beginProjectionTurn()
 	if ledger := c.turnEventLedger(); admissionErr == nil && ledger != nil {
-		if _, err := ledger.Begin(); err != nil {
-			admissionErr = err
-		} else if err := c.emitTurnEventChecked(event.Event{Kind: event.TurnStatusChanged, Status: event.TurnQueued}); err != nil {
+		if err := c.emitTurnEventChecked(event.Event{Kind: event.TurnStatusChanged, Status: event.TurnQueued}); err != nil {
 			admissionErr = err
 		} else if err := c.emitTurnEventChecked(event.Event{Kind: event.TurnStarted, Status: event.TurnInProgress}); err != nil {
 			admissionErr = err
@@ -345,6 +346,90 @@ func (c *Controller) prepareTurnAdmission(body func(context.Context) error) func
 	}
 	slog.Error("controller: persist turn admission", "err", admissionErr)
 	return func(context.Context) error { return fmt.Errorf("persist turn admission: %w", admissionErr) }
+}
+
+// Admission precedes the provider goroutine. Retain only stable prefix IDs;
+// the reader checks them against the canonical transcript rather than copying
+// provider prompts/attachments into a second mutable conversation artifact.
+func (c *Controller) beginProjectionTurn() error {
+	c.turnEvents.mu.Lock()
+	defer c.turnEvents.mu.Unlock()
+	if c.turnEvents.err != nil {
+		return c.turnEvents.err
+	}
+	if c.turnEvents.ledger == nil {
+		return nil
+	}
+	id, err := c.turnEvents.ledger.Begin()
+	if err != nil {
+		return err
+	}
+	c.turnEvents.projectionTurnID = id
+	c.turnEvents.projectionPrefix = nil
+	if c.executor == nil {
+		c.turnEvents.projectionPrefix = []string{}
+		return nil
+	}
+	// Display budget must not reject engine admission or copy huge histories.
+	if prefix, ok := c.executor.Session().MessageIdentitySnapshot(100000); ok {
+		c.turnEvents.projectionPrefix = prefix
+	}
+	return nil
+}
+
+var ErrTurnProjectionChanged = errors.New("turn display projection changed")
+
+// TurnProjectionView separates a stable pre-turn prefix from the live suffix.
+// It is an internal read-only artifact, not a renderer DTO or provider input.
+type TurnProjectionView struct {
+	Prefix     []provider.Message
+	UserSuffix []provider.Message
+	Projection turnevent.ProjectionReplayView
+}
+
+func (c *Controller) TurnProjectionView() (TurnProjectionView, error) {
+	if c == nil {
+		return TurnProjectionView{}, ErrTurnProjectionChanged
+	}
+	c.turnEvents.mu.RLock()
+	defer c.turnEvents.mu.RUnlock()
+	if c.turnEvents.err != nil {
+		return TurnProjectionView{}, c.turnEvents.err
+	}
+	if c.turnEvents.ledger == nil {
+		return TurnProjectionView{}, ErrTurnProjectionChanged
+	}
+	projection, err := c.turnEvents.ledger.ProjectionReplay()
+	if err != nil {
+		return TurnProjectionView{}, err
+	}
+	history := c.History()
+	if len(history) > 100000 {
+		return TurnProjectionView{}, ErrTurnProjectionChanged
+	}
+	view := TurnProjectionView{Projection: projection, UserSuffix: []provider.Message{}}
+	if projection.ActiveTurnID == "" {
+		// A new Begin cannot cross this read lock. The terminal event is emitted
+		// after the canonical transcript settles, so this is a complete prefix.
+		view.Prefix = history
+		return view, nil
+	}
+	prefix := c.turnEvents.projectionPrefix
+	if projection.ActiveTurnID != c.turnEvents.projectionTurnID || prefix == nil || len(history) < len(prefix) {
+		return TurnProjectionView{}, ErrTurnProjectionChanged
+	}
+	for i, id := range prefix {
+		if history[i].ID != id {
+			return TurnProjectionView{}, ErrTurnProjectionChanged
+		}
+	}
+	view.Prefix = history[:len(prefix)]
+	for _, message := range history[len(prefix):] {
+		if agent.IsUserAuthoredTurnMessage(message) {
+			view.UserSuffix = append(view.UserSuffix, message)
+		}
+	}
+	return view, nil
 }
 
 func (c *Controller) applyTurnDoneProtocol(done event.Event, cancelRequested bool) event.Event {
@@ -387,6 +472,8 @@ func (c *Controller) rebindTurnEvents(sessionPath string) {
 	previous := c.turnEvents.ledger
 	c.turnEvents.ledger = ledger
 	c.turnEvents.err = nil
+	c.turnEvents.projectionTurnID = ""
+	c.turnEvents.projectionPrefix = nil
 	c.turnEvents.mu.Unlock()
 	if previous != nil && previous != ledger {
 		if closeErr := previous.Close(); closeErr != nil {
@@ -484,6 +571,31 @@ func (c *Controller) TurnEventReplay(after uint64) (turnevent.ReplayView, error)
 		return turnevent.ReplayView{Events: []turnevent.Envelope{}}, nil
 	}
 	return ledger.Replay(after)
+}
+
+// TurnProjectionReplay samples the active lifecycle boundary and first replay
+// page together. It grants no projection acknowledgement or turn ownership.
+// History remains a separate artifact and must not be treated as atomic with
+// this read merely because both were fetched by the same HTTP request.
+func (c *Controller) TurnProjectionReplay() (turnevent.ProjectionReplayView, error) {
+	if err := c.turnEventLedgerError(); err != nil {
+		return turnevent.ProjectionReplayView{}, err
+	}
+	return c.turnEventLedger().ProjectionReplay()
+}
+
+// TurnProjectionReplayPage keeps the selected ledger bound for this read. It
+// neither resumes a turn nor acknowledges a terminal display projection.
+func (c *Controller) TurnProjectionReplayPage(boundary turnevent.ProjectionReplayBoundary, after uint64) (turnevent.ReplayView, error) {
+	if c == nil {
+		return turnevent.ReplayView{}, turnevent.ErrProjectionReplayChanged
+	}
+	c.turnEvents.mu.RLock()
+	defer c.turnEvents.mu.RUnlock()
+	if c.turnEvents.err != nil {
+		return turnevent.ReplayView{}, c.turnEvents.err
+	}
+	return c.turnEvents.ledger.ProjectionReplayPage(boundary, after)
 }
 
 func (c *Controller) AcknowledgeTurnProjection(turnID string) error {

@@ -39,6 +39,11 @@ fn native_event_projection_preserves_all_go_kinds_and_known_nested_fields() {
     full["runtimeState"]["turnStatus"] = json!("in_progress");
     for kind in &contract.kinds {
         full["kind"] = json!(kind);
+        if kind == "steer" {
+            full["messageId"] = json!("owned-message");
+        } else {
+            full.as_object_mut().unwrap().remove("messageId");
+        }
         assert_eq!(
             project(&full).unwrap_or_else(|_| panic!("generated fixture rejected for {kind}")),
             full,
@@ -46,6 +51,29 @@ fn native_event_projection_preserves_all_go_kinds_and_known_nested_fields() {
         );
     }
     assert!(contract.kinds.len() >= 32);
+}
+
+#[test]
+fn native_steer_message_identity_is_narrow_and_legacy_optional() {
+    let mut steer = base("steer");
+    assert!(project(&steer).unwrap().get("messageId").is_none());
+    steer["itemId"] = json!("owned-inbox");
+    steer["messageId"] = json!("owned-message");
+    let projected = project(&steer).unwrap();
+    assert_eq!(projected["messageId"], "owned-message");
+    assert_eq!(projected["itemId"], "owned-inbox");
+    for bad in [
+        json!("bad\n"),
+        json!("x".repeat(4097)),
+        json!(12),
+        Value::Null,
+    ] {
+        steer["messageId"] = bad;
+        assert_eq!(project(&steer).err().as_deref(), Some(FAILED));
+    }
+    steer["messageId"] = json!("owned-message");
+    steer["kind"] = json!("text");
+    assert_eq!(project(&steer).err().as_deref(), Some(FAILED));
 }
 
 #[test]

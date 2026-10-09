@@ -757,7 +757,7 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (re
 	modelRef, effortRef := spec.Worker.Model, spec.Worker.Effort
 	usageModelRef := t.usageModelRef(modelRef, effortRef)
 	parentID, parentSink, _, _ := CallContext(ctx)
-	run, err := t.prepareTranscriptRunWithPrompt(ctx, subReg, modelRef, effortRef, spec.Context.parentSession(ctx), parentID, spec.Context.ContinueFrom, spec.Context.ForkFrom, spec.Worker.SystemPrompt, spec.Worker.Kind, spec.Worker.Name)
+	run, err := t.prepareTranscriptRunWithPrompt(ctx, subReg, modelRef, effortRef, spec.Context.parentSession(ctx), parentID, spec.Context.ContinueFrom, spec.Context.ForkFrom, spec.Worker.SystemPrompt, spec.Worker.Kind, spec.Worker.Name, spec.Context.Ephemeral)
 	if err != nil {
 		return "", err
 	}
@@ -949,12 +949,18 @@ func (t *TaskTool) bashCanEnforceWriteRoots() bool {
 	return false
 }
 
-func (t *TaskTool) prepareTranscriptRunWithPrompt(ctx context.Context, subReg *tool.Registry, modelRef, effortRef, parentSession, parentID, continueFrom, legacyForkFrom, systemPrompt, kind, name string) (*SubagentRun, error) {
+func (t *TaskTool) prepareTranscriptRunWithPrompt(ctx context.Context, subReg *tool.Registry, modelRef, effortRef, parentSession, parentID, continueFrom, legacyForkFrom, systemPrompt, kind, name string, ephemeral bool) (*SubagentRun, error) {
 	continueFrom = strings.TrimSpace(continueFrom)
 	legacyForkFrom = strings.TrimSpace(legacyForkFrom)
 	parentSession = strings.TrimSpace(parentSession)
 	if continueFrom != "" && legacyForkFrom != "" {
 		return nil, fmt.Errorf("continue_from and fork_from are mutually exclusive; pass only continue_from")
+	}
+	if ephemeral {
+		if continueFrom != "" || legacyForkFrom != "" {
+			return nil, fmt.Errorf("ephemeral subagent cannot continue a persisted transcript")
+		}
+		return EphemeralSubagentRun(systemPrompt), nil
 	}
 	if t.transcripts == nil {
 		return nil, fmt.Errorf("subagent transcript store is required")

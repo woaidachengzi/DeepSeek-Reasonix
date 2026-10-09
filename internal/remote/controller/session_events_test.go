@@ -85,6 +85,8 @@ func TestSessionEventsRejectsMalformedBoundedFrames(t *testing.T) {
 		fmt.Sprintf("data: {\"kind\":\"new-unknown\",\"sessionPath\":%q}\n\n", eventSession),
 		fmt.Sprintf("data: {\"kind\":\"text\",\"seq\":9007199254740992,\"sessionPath\":%q}\n\n", eventSession),
 		fmt.Sprintf("data: {\"kind\":\"text\",\"turnId\":\"bad\\u0000\",\"sessionPath\":%q}\n\n", eventSession),
+		fmt.Sprintf("data: {\"kind\":\"steer\",\"messageId\":\"bad\\u0000\",\"sessionPath\":%q}\n\n", eventSession),
+		fmt.Sprintf("data: {\"kind\":\"text\",\"messageId\":\"owned-message\",\"sessionPath\":%q}\n\n", eventSession),
 		"data: {\"kind\":\"text\"}\n", ":" + strings.Repeat("x", sessionEventFrameMax) + "\n\n",
 		strings.Repeat(":"+strings.Repeat("x", 1024)+"\n", 8192) + "\n",
 	} {
@@ -99,6 +101,26 @@ func TestSessionEventsRejectsMalformedBoundedFrames(t *testing.T) {
 				t.Fatalf("bad frame accepted: %v", err)
 			}
 		})
+	}
+}
+
+func TestSessionEventsPreservesSteerMessageAndInboxIdentities(t *testing.T) {
+	c, _ := eventStreamFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "data: {\"kind\":\"steer\",\"text\":\"owned guidance\",\"messageId\":\"owned-message\",\"itemId\":\"owned-inbox\",\"sessionPath\":%q}\n\n", eventSession)
+		fmt.Fprintf(w, "data: {\"kind\":\"steer\",\"text\":\"legacy\",\"sessionPath\":%q}\n\n", eventSession)
+	})
+	stream, err := c.SessionEvents(context.Background(), eventSession)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	frame, err := stream.Next()
+	if err != nil || frame.MessageID != "owned-message" || frame.ItemID != "owned-inbox" {
+		t.Fatalf("associated: %+v %v", frame, err)
+	}
+	legacy, err := stream.Next()
+	if err != nil || legacy.MessageID != "" || legacy.ItemID != "" || legacy.Text != "legacy" {
+		t.Fatalf("legacy: %+v %v", legacy, err)
 	}
 }
 

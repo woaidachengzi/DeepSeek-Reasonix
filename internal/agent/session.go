@@ -376,6 +376,30 @@ func (s *Session) Snapshot() []provider.Message {
 	return msgs
 }
 
+// MessageIdentitySnapshot captures a bounded append-prefix fence without
+// copying large tool results, images or provider-visible transcript payloads.
+// An unavailable/invalid display fence never mutates the conversation.
+func (s *Session) MessageIdentitySnapshot(limit int) ([]string, bool) {
+	if s == nil || limit < 0 {
+		return nil, false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if len(s.Messages) > limit {
+		return nil, false
+	}
+	ids := make([]string, len(s.Messages))
+	seen := make(map[string]bool, len(s.Messages))
+	for i, message := range s.Messages {
+		if message.ID == "" || seen[message.ID] {
+			return nil, false
+		}
+		seen[message.ID] = true
+		ids[i] = message.ID
+	}
+	return ids, true
+}
+
 // Len returns the number of messages, safe to call from any goroutine.
 func (s *Session) Len() int {
 	s.mu.RLock()

@@ -1,5 +1,57 @@
 # Wails API 与事件面盘点
 
+## 2026-10-09 只读远程 projection 快照 review 提交
+
+- 本批超过 30 个变更文件，按用户要求停止扩展模块、review 后提交。涵盖窄 renderer 订阅、统一 Preview runner、稳定 prefix/首屏 replay/固定分页、steer 消息关联，以及新的 `GET /desktop/session-projection`。下方“未提交增量”保留各阶段当时状态，本段更新本批交付范围。
+- 新接口仅读取已由 Serve 持有的 foreground/detached controller；saved/external/mirrored/retiring 目标拒绝，不 resume、rebind、ack 或隐式升级写权限。初始响应分离已过滤的历史 prefix、真实问题 suffix 和 typed eventwire 重放，显式给出 replayAfterSeq 与固定 latestSeq。续页只接受一个 canonical session、32 位小写 hex page token 和 JS-safe canonical after；没有 renderer URL/token、自动重试或前台回退。
+- 分页句柄最多 64 个、原始期限两分钟，不延期；校验 exact controller/path 及 ledger/turn/epoch/baseline，完成页可在原期限内幂等重读。Review 将 controller 与 ledger continuation owner 改为弱引用，缓存只保存边界元数据，不延长已退休历史对象的内存寿命；添加跨 prefix/suffix 重复 ID 拒绝和随机 token 碰撞拒绝。响应沿用 512 events/soft event byte budget，整体 30 MiB/100000 history rows 门禁。
+- 实际自有 HTTP + real Controller/Agent + gate fake provider 回归生成 530 个有序 fixture 搜索结果，验证两页稳定 cut、后到文本/工具不混入、首屏 baseline、最终页重试、期限/未知句柄/path/controller 拒绝、64 槽上限与 token gate，且读取不停止或接管运行。生产远程历史 helper 的 system/developer 行泄露由回归暴露并修复，共用旧 session-view 与新 projection route 都过滤 provider prompt 角色；本地共享 history 表示不变，用户/助手/tool/recovery 的保存身份保留。
+- 最终相关六包完整 race 通过：Serve 95.723s、controller 41.791s、ledger 1.990s，protocolgen/remote-controller/desktop-bridge 通过；补 replayAfterSeq 后接口专项 race 通过（8.680s）。八包 vet、renderer 三项订阅回归、生产/测试 TypeScript 与局部 lint 通过。证据 `/private/tmp/reasonix-projection-route.fFGAC4/` 的 `review-race-final.log`、`route-baseline-final.log`、`review-vet.log`、`renderer-subscription-final.log`、`renderer-custom-sdk-final.log`、`renderer-sdk-final.log`、`renderer-types-final.log`、`renderer-test-types.log`、`renderer-lint.log`；前阶段完整 agent 252.709s、Rust 281 项和 clippy 的证据见下一段目录。初始夹具身份/认证包装/短观察时间及 system 泄露失败日志保留，不计为通过；使用明确安装的 Node 运行测试，不绕过 pnpm 启动器的签名门禁。
+- 这是 Serve 端快照入口，不是 bridge/native snapshot IPC 或 live UI 统一归约完成。下一步仍须接 shared remote client/bridge/native/renderer，处理 admission 尚未出现 canonical user 行、compaction 改写 prefix、旧无 messageId steer 的显式同步，以及实际窗口重建/队列/滚动验收。没有重建或覆盖 App，没有真实外部账号/数据迁移、签名发布、推送或默认下载切换；其他完整目标门禁保持未完成。
+
+## 2026-10-09 applied steer 保存消息关联（未提交增量）
+
+- Agent 在消费 steer 时显式生成保存消息 ID，先写入 canonical session，再发布相同 MessageID；保留 durable inbox ItemID 的独立语义。新增可选 wire `messageId`，仅投影 applied steer，不修改指导文本、provider wrapper、提示词或模型输入权限。旧事件省略字段仍可读；未应用指导和其他事件不能冒充 applied steer 的消息关联。
+- Go 远程 SSE 校验该 ID 的字符/长度和事件种类，Go-derived contract 同步生成，native typed projection 同样校验并保留关联。假模型专项验证普通/持久指导的保存先于事件、两种身份分离及相同文本不复用 ID；账本验证续页、重开后的身份保持和旧实例 boundary 拒绝；实际自有 Serve HTTP/token/broadcaster 回归验证字段出站且不 resume/改写选中档案。这些不是实际模型、SSH 或 WebView 联调验收。
+- 完整 `go test -race` 的 agent/control/turnevent/eventwire/remote-controller/protocolgen/desktop-bridge 七包通过（agent 252.709s），新增账本和 Serve 回归及修正后的 contract 回归单独 race 通过；相关包 vet、生成器 check 通过。Rust 完整 281 passed / 0 failed / 6 ignored、clippy all-targets -D warnings、两项所改 Rust 文件格式检查通过。证据 `/private/tmp/reasonix-steer-identity.MQhN2r/` 的 `go-race-final.log`、`ledger-race-final.log`、`serve-steer-final.log`、`contract-race-final.log`、`go-vet-repaired.log`、`generated-check.log`、`native-tests-permitted.log`、`native-clippy.log`、`native-format-final.log`。
+- 初始 sandbox Rust 25 项失败均是自有端口监听权限拒绝，获准复跑通过，失败记录保留。既有静态重复 JSON tag 的负面夹具会使 vet 拒绝，改为 reflect.StructOf 构造同样的非法输入并保留拒绝断言，未放宽生成器。仓库整体 cargo fmt 检查还有既存其他文件格式差异，没有借此批量格式化无关文件，不声称全仓格式通过。
+- 补充上阶段定位：`IsUserAuthoredTurnMessage` 本身排除 applied steer，UserSuffix 只包含真实问题；不能把它当作 steer 行来源。后续应通过重放/实时事件的 messageId 按 seq 插入对应行，不用文本相等或 inbox ID 猜测 canonical 身份。历史前缀改写/compaction 的恢复及 Serve/bridge/native/UI 接入仍未完成，没有新 App 验收。当前 29 个变更文件，尚未达到超过 30 个文件先 review 后提交的阈值。
+
+## 2026-10-09 固定上界的 projection 重放分页（未提交增量）
+
+- 首次 ProjectionReplay 捕获 process-local 不透明 boundary：ledger 实例、会话、轮次、runtime epoch、起始序号及固定上界。Controller 提供只读续页入口并持有 ledger binding 读锁；不能把后到文本或终止事件混入初始分页，也不能用新的 ledger 接续旧 boundary。boundary 不出站 JSON，不是授权凭证；后续远程路由仍须独立校验 selected session/owner。
+- 续页沿用 512 events/soft byte budget 的共同读取逻辑，保留首屏 transcript revision/digest/head/leaf 元数据。新轮次、checkpoint 越过初始 baseline、越界 cursor、丢帧/空页无法推进或存储失败均明确要求重新同步，不伪装为 ready；无 projection acknowledgement、resume 或模型请求。
+- 回归覆盖分页期间新增文本与终止、固定序号/元数据、结束空页、轮次/会话/epoch/owner 拒绝、真实已确认终止的 checkpoint 和 poison/nil；controller 验证只读读取及存储失败。专项 race 与 vet 已通过，证据 `/private/tmp/reasonix-projection-pages.YkjyHP/pages-focused-final.log`、`pages-vet-opaque.log`。初次完整 controller 回归被沙箱本地监听权限拒绝；获准复跑的初次压缩夹具缺少 projection ack，失败保留在 `pages-race-final.log`，已修正夹具而非放宽压缩门禁。修正后的完整两包 race 通过（`pages-race-repaired.log`），不透明字段收敛后再执行完整两包复验，最终结果见 `pages-race-opaque-final.log`。
+- 仍未接 Serve/bridge/native snapshot 路由或 renderer 统一归约。已定位 steer 消费事件的 ItemID 是 inbox 身份，而保存消息 ID 另行生成，后续需显式关联及排序，不能直接把全部 UserSuffix 前置。未重建 App、操作真实服务/数据或宣称原生验收；当前 16 个变更文件，未达到超过 30 个文件先 review 再提交的阈值。
+
+## 2026-10-09 Preview 试运行统一 runner（未提交增量）
+
+- 修复上阶段 child 构造枚举门禁：Preview subagent 试运行改走 TaskTool 的 RunProfileSpec，不增加白名单。显式 Ephemeral context 允许临时运行不创建 transcript，但拒绝 ContinueFrom/ForkFrom；普通持久运行仍要求 transcript store。保留 profile 原始提示词、只读工具、深度与 scheduler 限额及取消边界。
+- 预览接收统一 runner 的回答文本进度，忽略 reasoning；retrying 状态清理旧预览，完成结果替换流式预览。自有 fake provider 回归验证只读工具范围、提示词、不写父子 transcript、预取消零模型调用；不代表真实模型流式或原生 App 验收。
+- 完整 `go test -race ./internal/agent ./internal/control ./internal/turnevent` 通过（agent 250.425s、controller 44.259s），完整 bridge race 通过（46.058s）。后追加的 ephemeral 回归单独 race 通过，runner 专项和 agent/bridge vet 通过。证据 `/private/tmp/reasonix-unified-preview.RF5gyy/` 的 `engine-race-final.log`、`bridge-race-final.log`、`ephemeral-final.log`、`runner-focused.log`、`runner-vet.log`。此前失败记录保留，本段更新其当前状态。
+- 当前 16 个变更文件，未达到超过 30 个文件的 review 后提交阈值，未提交/推送或重建 App。下一步仍是显示字段投影、稳定分页及 compaction/steer 映射后接 Serve/bridge/native；完整目标和原生验收保持未完成。
+
+## 2026-10-09 admission 前缀身份与只读 projection view（未提交增量）
+
+- Controller 在 Begin 与 provider goroutine 启动之间记录历史 prefix 的稳定消息 ID；不保存第二份 conversation、工具输出、图片或配置。Agent 的 `MessageIdentitySnapshot` 在消息锁内先检查 100000 项预算，再有界复制 ID，空/重复身份拒绝显示 fence；显示预算或 fence 无效不拒绝引擎 admission。
+- 新增内部 `TurnProjectionView`，阻止新 Begin/rebind 横跨读取；将校验过身份的旧 prefix、后续真实用户消息与原子 active replay 分开。当前轮次的 canonical partial assistant/tool rows 不再同时纳入旧 prefix。前缀被 rewrite/compaction 移除、没有 admission base、存储失败等明确要求 reconcile，不按旧位置静默切割；此处仍需后续 compaction 恢复、steer 时序映射与分页处理。
+- Controller 针对性 race 回归通过（`prefix-focused-final.log`），身份快照专项回归通过（`identity-focused-final.log`），三包 vet 通过（`prefix-vet.log`），证据 `/private/tmp/reasonix-projection-prefix.gMJxi5/`。初始夹具未等待 owned TurnDone 导致临时档案清理失败，已改为先等终止回执；非法 ID 夹具改为直接构造 malformed Session，避免 Replace 自动 mint ID 与断言相冲突。失败日志保留，不计为通过。
+- 完整 race 已终态：controller 通过（44.942s）、ledger 通过；agent 失败（252.619s），包括初始非法 ID 夹具及已有 `TestChildConstructionForksStayEnumerated` 门禁。修正后的身份专项已通过；二项失败复验仍指出 `cmd/reasonix-desktop-bridge/subagent_try.go` 直接构造 child、绕过统一 TaskTool runner。未加白名单或删断言，完整 agent 门禁保持未通过。失败/复验见 `prefix-race-final.log` / `agent-failures-recheck.log`。
+- 内部 provider.Message artifact 尚未作为 Serve/bridge/native DTO 出站，仍须通过现有显示字段投影，不能把 provider/system 元数据送到 renderer。未修改 rendered UI、重建 App 或操作真实用户数据/服务，实际实时链路与其他目标保持未完成；后续需收敛 Preview 试运行 runner 门禁及上述 prefix/suffix 路由。
+
+## 2026-10-09 原子 active-turn 重放边界（未提交增量）
+
+- 共用 Go Ledger 新增 `ProjectionReplay`，在同一锁内采样 active turn/status、replayAfter 与首个有界 replay page。避免独立调用 ActiveTurnID/ProjectionCursor/Replay 横跨 terminal + Begin 时拼接不同轮次。旧 Replay 和 ProjectionCursor 复用相同内部逻辑，保留 reset/poison、512 events/soft byte budget 与计量语义；没有另建宽松 decoder。
+- Controller 提供只读 `TurnProjectionReplay`，存储初始化/账本失败明确返回错误，不能伪装成空的已就绪 projection；读取不接管会话、确认 projection、删除 retained event 或触发模型。三项 ledger 顶层回归覆盖多轮/终止、分页/poison/nil、并发 terminal + admission；controller 回归覆盖身份、保留事件和失败拒绝。
+- 完整 `go test -race ./internal/turnevent ./internal/control` 与两包 vet 通过，日志 `/private/tmp/reasonix-projection-boundary.773wrn/boundary-race-final.log` / `boundary-vet.log`；初次 sandbox Go cache 拒绝日志保留。并发夹具不是模型服务或 native App 验收。
+- 这只使 lifecycle 元数据与首个事件分页原子一致，provider history 仍独立变化；尚未将本入口接到 Serve/bridge/native，后续分页、历史 prefix 与 active suffix 的一致性及 reader viewport 保留仍需接入，不能直接把旧 snapshot 赋予此 cursor。未改 UI、重建 App 或操作真实账号/剪贴板，其他 E 门禁不关闭。
+
+## 2026-10-09 renderer 订阅目标与窄请求（未提交增量）
+
+- 在 `3c897f5da` 基础上将 native event listener target 固定为主窗口，仅允许两个远程订阅频道。订阅 request 显式投影四个允许字段；客户端在异步监听注册前捕获相同窄 scope，额外 URL/token 或后续调用方对象变更不进入 native 请求。
+- 回归补 main-target SDK invoke、字段剔除、无回退、非法 generation 零 dispatch、捕获 scope 与同步/异步取消异常；保留先监听、精确收据、ready 顺序与旧 owner/generation 拒绝。测试与类型/局部 lint 的本轮证据目录 `/private/tmp/reasonix-renderer-subscription.Cxm3uE/`。pnpm 启动器因 registry 获取失败无法验证签名而拒绝运行，未跳过校验；改用已安装 Node/tsx/TypeScript/ESLint 直接执行本轮相关检查，不能声称 pnpm 完整流水线通过。
+- 本轮没有修改 rendered UI 或重建 App，SDK mock 不是实际 WebView 验收。既有远程 snapshot 的 history/runtime 分别采样，不能直接赋予原子 event cursor；后续统一归约必须解决历史与流式后缀的重复/漏帧边界，不接本地 RuntimeManager/EventLedger 作为替代。live UI、原生生命周期和其他 E 门禁保持未完成。
+
 ## 2026-10-08 原生远程订阅 review 提交
 
 - Review 范围包括订阅/取消 IPC、Go-derived 事件载荷 contract、native worker、包内 sidecar 终止撤销，以及 renderer 的先监听后收据与 owner/generation 校验。新增 renderer helper 尚未挂接实时历史 UI，不以基础入口提交代表实时面完成。

@@ -557,6 +557,7 @@ type Event struct {
 	ReadStatus         *ReadStatusPayload        // ReadStatus: one logical read's delivery state
 	ReadPause          *provider.ReadPause       // TurnDone: durable display-only pause receipt
 	ItemID             string                    // correlates durable inbox events
+	MessageID          string                    // Steer: canonical saved message identity, not inbox authority
 	SessionPath        string                    // routes Serve frames
 	SessionReset       bool                      // SessionChanged came from /new or /clear, not resume/recovery
 	Workspace          *WorkspaceChangedPayload  // WorkspaceChanged (host-local)

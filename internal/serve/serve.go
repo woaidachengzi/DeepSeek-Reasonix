@@ -54,9 +54,10 @@ type Server struct {
 	// while the lease keeper guards another (the exact split this feature
 	// exists to prevent). It also keeps switchModel's Snapshot/Build/Close
 	// off s.mu, as the narrower switchMu did before it was widened.
-	bindMu sync.Mutex
-	ctrl   control.SessionAPI
-	bc     *Broadcaster
+	bindMu                 sync.Mutex
+	desktopProjectionPages map[string]desktopProjectionPage // bindMu; bounded, short-lived read-only continuations
+	ctrl                   control.SessionAPI
+	bc                     *Broadcaster
 	// buildController builds the replacement controller during a model switch.
 	// Nil in production (switchModel falls back to boot.Build); tests inject a
 	// fake so switchModel can be exercised without real provider IO.
@@ -566,6 +567,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("GET /runtime-states", s.runtimeStates)
 	mux.HandleFunc("GET /history", s.history)
 	mux.HandleFunc("GET /desktop/session-view", s.desktopSessionView)
+	mux.HandleFunc("GET /desktop/session-projection", s.desktopSessionProjection)
 	mux.HandleFunc("POST /desktop/session-image", s.desktopSessionImage)
 	mux.HandleFunc("GET /context", s.context)
 	mux.HandleFunc("POST /submit", s.submit)

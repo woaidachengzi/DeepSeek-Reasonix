@@ -1,5 +1,33 @@
 # E 迁移清单
 
+## 2026-10-09 只读远程 projection 快照 review 提交
+
+本批超过 30 个变更文件，已 review 并按提交门禁收敛。新增 Serve 只读 projection 首屏/续页接口，接入稳定 prefix、问题 suffix、固定事件 cut 和 steer 身份；句柄绑定原 controller/session，限制 64 槽与两分钟期限，不授予接管/确认/发送权限。Review 修复共用远程历史投影的 system/developer 提示词行泄露、重复身份和缓存强引用保留风险。完整相关 Go race、专项 HTTP/分页/隐私、vet、renderer 回归和类型/lint 检查通过，详见 [API audit](API_SURFACE_AUDIT.md#2026-10-09-只读远程-projection-快照-review-提交)。以下增量标题保留当时状态；本批没有新 App、bridge/native snapshot IPC 或实时 UI 验收，仍须继续接入与处理 admission/compaction/legacy steer 同步边界。
+
+## 2026-10-09 applied steer 保存消息关联（未提交增量）
+
+运行中指导事件增加 display-only `messageId`，对应已保存的同一条消息；收件箱 `itemId` 保持独立，旧事件省略关联仍兼容。关联贯通 Agent、账本、wire、Go SSE 和 native typed projection。七包完整 Go race、专项 Serve/账本回归、vet/生成器 check、Rust 281 项与 clippy 通过，详见 [API audit](API_SURFACE_AUDIT.md#2026-10-09-applied-steer-保存消息关联未提交增量)。尚未接到实际实时界面或重建 App，继续接历史前缀/分页/指导事件的远程快照与统一归约。当前 29 个变更文件，未达到超过 30 个文件的 review 后提交阈值。
+
+## 2026-10-09 固定上界的 projection 重放分页（未提交增量）
+
+补齐初始快照续页边界：固定首屏序号上界，校验 ledger/session/turn/epoch，不混入后到事件，并保留首屏 transcript 元数据。分页专项 race、vet 及最终完整 controller/ledger race 通过，证据与限制见 [API audit](API_SURFACE_AUDIT.md#2026-10-09-固定上界的-projection-重放分页未提交增量)。Serve/bridge/native 和 UI 尚未接入；下一步补 steer 保存消息身份与事件排序，compaction 恢复仍未完成。没有新 App 或实际原生验收，当前 16 个变更文件未达到提交阈值。
+
+## 2026-10-09 Preview 试运行统一 runner（未提交增量）
+
+Preview 试运行已改走统一 TaskTool runner，保持只读、临时不落盘、profile 提示词和取消边界，未放宽 child 构造白名单。完整 agent/controller/ledger 及 bridge race、ephemeral 专项与 vet 通过，解决下阶段记录的 agent 门禁失败；详见 [API audit](API_SURFACE_AUDIT.md#2026-10-09-preview-试运行统一-runner未提交增量)。没有真实模型或新 App 验收；projection 路由与其他目标继续推进。变更超过 30 个文件先 review、验证再提交，当前 16 个文件未达到阈值。
+
+## 2026-10-09 稳定历史 prefix 与 active suffix（未提交增量）
+
+已补 admission 前的有界消息身份 fence 与内部只读 projection view，区分旧 prefix、后续用户消息与当前事件重放；不复制第二份 conversation，显示失败不影响引擎接收问题。专项、controller/ledger 完整 race 与三包 vet 通过；agent 完整回归仍被 Preview subagent 试运行绕过统一 runner 的既有枚举门禁拒绝，未加白名单绕过。详见 [API audit](API_SURFACE_AUDIT.md#2026-10-09-admission-前缀身份与只读-projection-view未提交增量)。这是内部读取基础，尚未接 Serve/bridge/native DTO 或 UI；分页、compaction/steer 映射及原生验收仍未完成。
+
+## 2026-10-09 active-turn 初始重放原子读取（未提交增量）
+
+Go ledger/controller 已补同锁的 active-turn/status/replayAfter/首个有界事件分页读取，消除终止与新轮 admission 之间的混合 cursor；失败不变成空的 ready projection。完整 ledger/controller race 与 vet 通过，见 [API audit](API_SURFACE_AUDIT.md#2026-10-09-原子-active-turn-重放边界未提交增量)。这不是 provider history 的原子快照；Serve/bridge/native 路由、后续分页、历史 prefix 与实时 suffix 合并及实际 UI/App 验收保持未完成。
+
+## 2026-10-09 订阅客户端窄 scope（未提交增量）
+
+在 `3c897f5da` 基础上补主窗口目标监听、频道白名单、显式请求字段与异步前 scope 捕获，并回归非法 generation 零 dispatch 和取消异常。未修改实际 UI 或重建 App；快照与事件的原子同步边界仍需实现，不能把 SDK mock 当作实时历史验收。范围与直接 Node 检查限制见 [API audit](API_SURFACE_AUDIT.md#2026-10-09-renderer-订阅目标与窄请求未提交增量)。
+
 ## 2026-10-08 原生远程订阅 review 提交
 
 本批 review 提交原生事件投影、订阅/取消 IPC、包内 sidecar 退出撤销及 renderer 消费 helper。Review 修复异步 unlisten 的未处理拒绝、测试类型兼容及既存历史文案的构建预算漏计，并将 renderer/native adapter 回归接入远程检查。Rust 280 项、clippy、Go race、协议生成检查、前端远程回归/测试类型/生产构建通过，详情见 [API audit](API_SURFACE_AUDIT.md#2026-10-08-原生远程订阅-review-提交)。尚未挂接实时 UI，也未重建 App；实际 WebView、窗口重建、统一归约和可写入口的门禁保持未完成。

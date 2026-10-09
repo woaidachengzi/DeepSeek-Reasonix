@@ -151,6 +151,16 @@ func (s subagentTryTextSink) Emit(e event.Event) {
 		if e.Text != "" {
 			s.run.append(e.Text)
 		}
+	case event.ToolProgress:
+		// Unified runner previews distinguish response text from reasoning,
+		// diagnostics and tool output. Only the visible answer channel belongs
+		// in this settings page's answer preview.
+		if e.Tool.Name == event.SubagentProgressTextName {
+			s.run.append(e.Tool.Output)
+		}
+		if e.Tool.Name == event.SubagentProgressStatusName && e.Tool.Output == "retrying" {
+			s.run.reset()
+		}
 	case event.Message:
 		s.run.replace(e.Text)
 	}
@@ -248,13 +258,35 @@ func runReadOnlySubagentTry(ctx context.Context, root string, input previewSubag
 	registry := readOnlySubagentTryToolRegistry(cfg, root, input.AllowedTools)
 	policy := permission.New(cfg.Permissions.Mode, cfg.Permissions.Allow, cfg.Permissions.Ask, cfg.Permissions.Deny).
 		WithAllowDynamicBashFallback(cfg.Permissions.AllowDynamicBash)
-	return agent.RunReadOnlySubAgentWithSession(ctx, provider, registry, agent.NewSession(prompt), task, agent.Options{
-		MaxSteps:      12,
-		Temperature:   cfg.Agent.Temperature,
-		Pricing:       model.Price,
-		ContextWindow: model.ContextWindow,
-		Gate:          control.BuildHeadlessApprovalGate(policy, control.ToolApprovalAsk),
+	return runReadOnlySubagentTryWithOptions(ctx, root, task, agent.TaskToolOptions{
+		Provider:       provider,
+		ParentRegistry: registry,
+		SysPrompt:      prompt,
+		MaxSteps:       12,
+		Temperature:    cfg.Agent.Temperature,
+		Pricing:        model.Price,
+		ContextWindow:  model.ContextWindow,
+		Gate:           control.BuildHeadlessApprovalGate(policy, control.ToolApprovalAsk),
 	}, sink)
+}
+
+func runReadOnlySubagentTryWithOptions(ctx context.Context, root, task string, options agent.TaskToolOptions, sink event.Sink) (string, error) {
+	runner := agent.NewTaskToolWithOptions(options).
+		WithTranscripts(nil, root, "", "").
+		WithMaxSubagentDepth(1).
+		WithScheduler(agent.NewSubagentScheduler(1, 1))
+	ctx = agent.WithToolCallContext(ctx, "preview-profile", sink, nil, false)
+	result, err := runner.RunProfileSpec(ctx, agent.ProfileExecSpec{
+		Task:    agent.TaskSpec{Objective: task},
+		Worker:  agent.WorkerSpec{Kind: "task", Name: "preview-profile", SystemPrompt: options.SysPrompt, UseProfilePrompt: true},
+		Grant:   agent.CapabilityGrant{ReadOnly: true, AllowNoTools: true},
+		Context: agent.ContextRequest{Ephemeral: true},
+		Sched:   agent.SchedulerPolicy{MaxSteps: 12},
+	})
+	if err == nil && sink != nil {
+		sink.Emit(event.Event{Kind: event.Message, Text: result})
+	}
+	return result, err
 }
 
 func readOnlySubagentTryToolRegistry(cfg *configpkg.Config, root string, allowedTools []string) *tool.Registry {

@@ -1589,6 +1589,12 @@
           }
         }
       },
+      "messageId": {
+        "optional": true,
+        "shape": {
+          "kind": "string"
+        }
+      },
       "outcome": {
         "optional": true,
         "shape": {
