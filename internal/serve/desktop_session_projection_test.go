@@ -92,8 +92,22 @@ func TestDesktopSessionAdmissionActualEngineServeRecovery(t *testing.T) {
 		if finished.Err == nil {
 			t.Fatal("fixture must create a real protocol-recovery checkpoint")
 		}
+		if finished.ProtocolRecovery == nil {
+			t.Fatal("completed engine turn did not publish its recovery checkpoint", finished.Err)
+		}
 	case <-ctx.Done():
 		t.Fatal("owned user turn never settled")
+	}
+	// TurnDone reaches this sink while fan-out is still finishing. Running()
+	// deliberately includes that boundary, so PendingProtocolRecovery must not
+	// yet expose an executable token. Wait the actual Controller boundary rather
+	// than racing it or retrying a recovery submission.
+	if boundary, finishing := ctrl.TurnFinishingDone(); finishing {
+		select {
+		case <-boundary:
+		case <-ctx.Done():
+			t.Fatal("owned turn completion boundary did not settle")
+		}
 	}
 	var userID string
 	for userID == "" {

@@ -61,6 +61,9 @@ func (c *Controller) admitGuardedTurn(body func(ctx context.Context) error, park
 		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "input was not accepted: the session is being switched — please resend"})
 		return turnDroppedRotating
 	}
+	// Every non-driving turn/input reservation reclaims control, including
+	// an attempted local send while busy and parked/inbox compatibility turns.
+	c.revokeDesktopDrivingLocked()
 	if c.running {
 		if parkWhileRunning {
 			c.parkedTurns = append(c.parkedTurns, body)

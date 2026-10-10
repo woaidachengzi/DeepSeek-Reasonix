@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -95,6 +96,12 @@ default="alpha"
 	tickets := newPreviewDesktopPrompts(manager)
 	defer tickets.Close()
 	route := desktopWatchTestRoute()
+	commands := newPreviewDesktopCommands(catalogue)
+	defer commands.Close()
+	display, err := commands.ExecuteDesktopCommand(context.Background(), bot.DesktopCommand{Route: route, ActorID: "operator", Action: "pending", TargetID: entry.handle})
+	if err != nil || !strings.Contains(display, "ask") || !strings.HasPrefix(commandsPromptTicket(t, display), "p-") {
+		t.Fatal("composed local pending display did not issue local ticket", err)
+	}
 	id, payload, err := tickets.Issue(context.Background(), route, "operator", view.Scope, prompt)
 	if err != nil || id == prompt.ID {
 		t.Fatal("ticket not independent of core ID", err)
@@ -202,7 +209,12 @@ default="alpha"
 		t.Fatal("invalid MCP decision woke waiter")
 	}
 	mcpCommand.AnswerText = `accept {"approved":true,"label":"two  spaces"}`
-	if _, err := tickets.ExecuteDesktopCommand(context.Background(), mcpCommand); err != nil {
+	display, err = commands.ExecuteDesktopCommand(context.Background(), bot.DesktopCommand{Route: route, ActorID: "operator", Action: "pending", TargetID: entry.handle})
+	if err != nil || !strings.Contains(display, "mcp") {
+		t.Fatal("composed local MCP display failed", err)
+	}
+	mcpCommand.TargetID = commandsPromptTicket(t, display)
+	if _, err := commands.ExecuteDesktopCommand(context.Background(), mcpCommand); err != nil {
 		t.Fatal(err)
 	}
 	actualMCP := awaitOwnedCommand(t, mcpResult)

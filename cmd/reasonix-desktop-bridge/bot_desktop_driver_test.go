@@ -117,6 +117,10 @@ default="alpha"
 	if _, err := driver.ExecuteDesktopCommand(ctx, wrong); !errors.Is(err, errPreviewDesktopBinding) {
 		t.Fatal(err)
 	}
+	wrong.Action, wrong.AnswerText = "release", ""
+	if _, err := driver.ExecuteDesktopCommand(ctx, wrong); !errors.Is(err, errPreviewDesktopBinding) || !driver.DesktopTakeoverActive(route, "owner") {
+		t.Fatal("another actor released local holder", err)
+	}
 	command.Action, command.AnswerText = "drive", "/clear"
 	if _, err := driver.ExecuteDesktopCommand(ctx, command); err != nil {
 		t.Fatal(err)
@@ -143,6 +147,10 @@ default="alpha"
 	current := awaitDesktopDriverIdle(t, manager)
 	if current.LocalInputVersion <= old.LocalInputVersion {
 		t.Fatal("local reclaim fence did not advance")
+	}
+	staleTakeover := bot.DesktopCommand{Route: route, ActorID: "owner", Action: "takeover", TargetID: "driver-owned"}
+	if _, err := driver.executeCaptured(ctx, staleTakeover, &old); !errors.Is(err, errPreviewDesktopBinding) {
+		t.Fatal("stale directory capture adopted new local control version", err)
 	}
 	// Even if an old remote caller refreshes only the idle revision, the local
 	// reclaim version still blocks it under manager's atomic admission lock.
@@ -176,7 +184,9 @@ default="alpha"
 	if _, err := driver.ExecuteDesktopCommand(ctx, command); err != nil {
 		t.Fatal(err)
 	}
-	command.Action, command.ActorID = "release", "revoked-admin"
+	// Losing admin does not change the authenticated actor's identity. The
+	// driver's release requires that original actor, not a different account.
+	command.Action, command.ActorID = "release", "owner"
 	if _, err := driver.ExecuteDesktopCommand(ctx, command); err != nil {
 		t.Fatal("relinquish must work after admin loss", err)
 	}

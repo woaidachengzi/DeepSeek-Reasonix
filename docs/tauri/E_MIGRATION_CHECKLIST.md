@@ -1,5 +1,33 @@
 # E 迁移清单
 
+## 2026-10-10 32 文件驾驶与命令组合批次 review 收敛
+
+watch on/off/status 已适配共享订阅 store，关闭命令不删除订阅、保存未知不伪报成功。达到 31 文件后停止功能扩展，review 整批核心授权/Serve/shared Client/local+remote 绑定/命令组合/有序关闭；修复回归发现的 recovery 测试 finishing 边界窗口后增为 32 文件。按用户规则验证并提交，不 push；最终证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-32-文件驾驶与命令组合批次-review-收敛)。生产 Desktop 未启用，App 未更新，完整 host/全 owner watch/即时收回与真实服务/原生/跨 OS/SQLite 门禁继续待完成，完整目标保持；不使用真实账号、迁移数据或正式发布。以下保留历史阶段状态。
+
+## 2026-10-10 驾驶授权的有序关闭与未知解除门禁（后续源码）
+
+command composition 已增加停入口/取消票据与 driving 有序 Shutdown：固定原绑定解除，取消/await 在途 reservation，不重试未知结果，重复关闭共享首次结果；紧急 Close/父退役不冒充远端已确认解除。本地实际 accepted Agent turn 不被解绑取消，测试结束后等待写盘 commit。最终回归与清理失败修复证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-驾驶授权的有序关闭与未知解除门禁后续源码)。完整宿主 gateway/watch/prompt worker 生命周期与实时收回仍待接，Desktop 未启用，App 未更新，真实服务/原生/跨 OS/SQLite 与完整目标继续。累计恰 30 文件，尚未超过提交阈值，无提交/push/真实账号/迁移/正式发布。
+
+## 2026-10-10 统一本地与远程驾驶的 opaque 命令入口（后续源码）
+
+takeover/drive/release 已接统一 command composition，固定原 handle/backend/chat/actor，同 route 不并占两类通道，未知 remote 不改投 local；解除取消并等待原 reservation 后再发原 backend 请求。本地 capture 增加独立输入代际比较，另一 actor 不能解除。实际本地 Go Agent、隔离 SSH fixture、实际 gateway 和并发/未知/收回组合回归证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-统一本地与远程驾驶的-opaque-命令入口后续源码)。完整 host/watch/即时收回通知/网关换代主动释放与 await 尚待接，Desktop 未启用，App 未更新，真实服务/原生/跨 OS/SQLite 与完整目标继续。累计 28 文件未超过提交阈值，无提交/push/真实账号/迁移/正式发布。
+
+## 2026-10-10 bot 远程驾驶的原连接与聊天操作者绑定（后续源码）
+
+私有 remote driver 已固定 opaque handle/原 tunnel/Controller scope/key/route/actor，持续输入使用原 grant 加当前 idle revision；未知结果不重发、不 fallback，本地期限保留原解除 key，取消/Close 不伪报远端解除成功。实际 gateway 权限/持续消息/管理员失效解除与隔离真实 SSH body fixture、十次专项和最终完整回归记录见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-bot-远程驾驶的原连接与聊天操作者绑定后续源码)。local+remote 完整 host、网关换代主动释放/await 和实时 watch/收回仍待接；Desktop 未启用，App 未更新，真实服务/原生/跨 OS/SQLite 和完整目标继续。累计 24 文件未超过提交阈值，无提交/push/真实账号/迁移/发布。
+
+## 2026-10-10 远程驾驶授权的 Serve/shared client 链路（后续源码）
+
+认证固定 capture/acquire/state/release/input 与 typed Client 已接实际核心 grant，原始 capture/ControlVersion 与每轮 inputRevision 分离，既有前台/后台实例 gate 和只读租约检查保留。实际 Agent/fake provider 经 Serve/client 验证字面输入、单 holder、重复拒绝、本地收回、同路径替换、释放/断开不取消已接纳任务；十次专项及完整七包 race、vet/生成检查证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-远程驾驶授权的-serveshared-client-链路后续源码)。opaque remote driver、聊天/actor 绑定与实时 watch/收回尚待宿主整合，Desktop 未启用，App 未更新；真实服务/原生/跨 OS/SQLite 仍未完成。累计 21 文件未超过提交阈值，无提交/push/真实账号/迁移/正式发布，完整目标继续。
+
+## 2026-10-10 核心驾驶授权与独立本地收回代际（后续源码）
+
+补充持续远程驾驶的 Controller 权威基础：捕获独立 ControlVersion，与 path/epoch/idle revision 同时校验；普通输入及暂停队列收回，source 标签不授予豁免。接管不启动任务，不续期/抢占/复活旧 key；驾驶在原子 admission 下检查同 holder，释放/请求断开不取消已接纳 turn。实际 Controller/runner、并发/等待撤销/过期/容量/同路径重绑及最终专项、完整包证据与 finishing→idle 测试窗口说明见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-核心驾驶授权与独立本地收回代际后续源码)。尚未接固定 Serve/client/remote host 驾驶链路和实时收回/watch，不算远程接管完成；Desktop 未启用，App 未更新，真实服务/原生/跨 OS/SQLite 门禁继续待完成。累计 16 文件未超过提交阈值，无提交/push/真实账号/迁移/正式发布，完整目标继续。
+
+## 2026-10-10 bot status/pending 与五类票据组合入口（后续源码）
+
+新增严格 scoped pending 命令与私有 command composition，将所有已发布本地/remote live 目录、按实例读取提示、聊天/actor 单次票据和五类专用决策串联。群聊仅类型/票据，私聊显示 consent 内容；超长不截断、独立 routing 身份不泄露、外部 MCP URL 不转发，输出前复核整个提示 cut。真实 gateway→隔离 SSH/body fixture、实际本地 Ask→MCP 组合，以及权限/换代/取消/格式与完整相关包证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-bot-statuspending-与五类票据组合入口后续源码)。完整 host 仍未注册，Desktop 未启用；远程驾驶/接管、全 owner watch/本地收回及真实 IM/原生/跨 OS/SQLite 门禁继续待接验。本轮未更新 App；累计 7 文件未超过 30 文件提交阈值，无提交/push/真实账号/迁移/发布，完整目标继续。
+
 ## 2026-10-10 bot 远程票据与 31 文件 review 收敛
 
 达到 31 文件后停止扩展、整批 review 再提交，不 push。远程单次票据已复用本地五类解析，绑定原 SSH/Controller/prompt/聊天/actor，关闭取消在途；修复过期或目录恢复重新发放未知决策票据的问题，并补并发、过期与取消回归。移除通知里未实现的命令；补读测试 usage catalog 的关闭门禁，防止临时目录清理与后台写入竞争。最终源码回归范围、早期失败与日志见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-bot-远程票据与-31-文件-review-收敛)。生产 Desktop 仍未启用，完整 host、远程接管/驾驶、全 owner watch、本地收回及真实服务/原生/跨 OS/SQLite 恢复验收继续待完成；本轮未更新 App，无真实账号/迁移/正式发布，完整目标继续。以下保留历史阶段状态。

@@ -95,7 +95,8 @@ var errNoSessionPath = errors.New("session has content but no session path; conv
 // Controller drives one chat session. Construct with New; drive with the command
 // methods; observe through the Sink passed in Options.
 type Controller struct {
-	runtimeState controllerRuntimeState
+	runtimeState   controllerRuntimeState
+	desktopDriving controllerDesktopDriving // mu; never exposed in event/replay snapshots
 	// promptResolveMu serializes exact prompt decisions on one controller. It
 	// prevents two UI submissions from racing through separate prompt managers.
 	promptResolveMu    sync.Mutex
@@ -1370,6 +1371,7 @@ func (c *Controller) SubmitInvocationDisplay(display, input string, invocations 
 }
 
 func (c *Controller) submitInvocations(input, display string, requests []InvocationRequest) {
+	c.revokeDesktopDriving()
 	if len(requests) == 0 {
 		c.SubmitDisplay(display, input)
 		return
@@ -1464,10 +1466,12 @@ func (c *Controller) SubmitEditedDisplay(display, input, original string) {
 // commands. It still resolves references, so callers can submit trusted
 // user-authored prompt text without expanding the command surface.
 func (c *Controller) SubmitUserTurn(input, display string) {
+	c.revokeDesktopDriving()
 	c.runRefTurn(input, display)
 }
 
 func (c *Controller) submit(input, display, editedOriginal string) {
+	c.revokeDesktopDriving()
 	trimmed := strings.TrimSpace(input)
 	if note, ok := MemoryQuickAddNote(trimmed); ok {
 		c.rememberProjectNote(note)
@@ -1492,6 +1496,7 @@ func (c *Controller) submitHTTP(input, display string) {
 }
 
 func (c *Controller) submitHTTPWithFormat(input, display, format string) {
+	c.revokeDesktopDriving()
 	trimmed := strings.TrimSpace(input)
 	if note, ok := MemoryQuickAddNote(trimmed); ok {
 		c.rememberProjectNote(note)
@@ -2188,6 +2193,7 @@ func (c *Controller) beginRotation() error {
 		return errRotationInProgress
 	}
 	c.rotating = true
+	c.revokeDesktopDrivingLocked()
 	return nil
 }
 
@@ -2471,6 +2477,9 @@ func (c *Controller) refreshInteractiveGate() {
 // TrySteer queues mid-turn guidance only when the active agent turn accepts it.
 func (c *Controller) TrySteer(text string) bool {
 	c.mu.Lock()
+	if strings.TrimSpace(text) != "" {
+		c.revokeDesktopDrivingLocked()
+	}
 	exec := c.executor
 	running := c.running
 	c.mu.Unlock()
@@ -3405,6 +3414,7 @@ func (c *Controller) Resume(s *agent.Session, path string) {
 	}
 	c.mu.Lock()
 	c.sessionPath = path
+	c.revokeDesktopDrivingLocked()
 	c.guardianPath = guardian.PathFor(path)
 	c.mu.Unlock()
 	c.bindExecutorProjection(path, true)
@@ -3875,6 +3885,7 @@ func (c *Controller) commitRecoveredSession(originalPath, reason string, info ag
 	}
 	c.mu.Lock()
 	c.sessionPath = info.Path
+	c.revokeDesktopDrivingLocked()
 	c.guardianPath = guardian.PathFor(info.Path)
 	c.mu.Unlock()
 	// Recovery branch is a new lineage path. Load an inherited projection
@@ -4274,6 +4285,7 @@ func (c *Controller) setSessionPath(p string, fresh bool) {
 	c.snapshotMu.Lock()
 	c.mu.Lock()
 	c.sessionPath = p
+	c.revokeDesktopDrivingLocked()
 	c.guardianPath = guardian.PathFor(p)
 	c.mu.Unlock()
 	// Fresh paths clear projection; rebinds keep/load the target sidecar.
@@ -5078,6 +5090,8 @@ func (c *Controller) close(fireSessionEnd bool, jobsMode closeJobsMode) {
 		// section (while a running turn's TurnDone delivery is still in
 		// flight) would park again and start after teardown.
 		c.closed = true
+		c.revokeDesktopDrivingLocked()
+		clear(c.desktopDriving.used)
 		c.parkedTurns = nil
 		// A finishing-only controller no longer needs the delivery gate because
 		// closed seals every admission path. Keep running truthful until the

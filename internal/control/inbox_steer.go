@@ -167,6 +167,7 @@ func (c *Controller) trySteerInboxItem(id, expectedTurnID string) (sessioninbox.
 	}
 	accepted := turnMatches && !c.closed && !c.rotating && c.running && c.executor != nil && len(env.FrozenImages) == 0 && c.executor.SteerItem(id, loader)
 	if accepted {
+		c.revokeDesktopDrivingLocked()
 		c.inbox.mu.Lock()
 		c.inbox.trackActive(id)
 		c.inbox.mu.Unlock()

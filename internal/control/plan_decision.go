@@ -45,7 +45,7 @@ func (c *Controller) resolvePlanDecisionWithFeedbackLocked(id string, action Pla
 	pending, ok, err := c.approval.resolveToolAfter(id, planApprovalTool, func(p pendingApproval) error {
 		if action == PlanDecisionRevisePlan && feedback != "" {
 			var enqueueErr error
-			staged, enqueueErr = c.EnqueueInbox(InboxRequest{Intent: sessioninbox.IntentFollowup, Display: feedback, Raw: feedback, Submit: feedback, Source: "plan_revision", Idempotency: "plan-revision:" + id})
+			staged, enqueueErr = c.enqueueInbox(InboxRequest{Intent: sessioninbox.IntentFollowup, Display: feedback, Raw: feedback, Submit: feedback, Source: "plan_revision", Idempotency: "plan-revision:" + id}, true)
 			if enqueueErr != nil {
 				return fmt.Errorf("queue plan revision: %w", enqueueErr)
 			}

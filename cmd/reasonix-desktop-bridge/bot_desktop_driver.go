@@ -59,6 +59,10 @@ func (d *previewDesktopDriver) DesktopTakeoverActive(route bot.DesktopWatchRoute
 }
 
 func (d *previewDesktopDriver) ExecuteDesktopCommand(ctx context.Context, command bot.DesktopCommand) (string, error) {
+	return d.executeCaptured(ctx, command, nil)
+}
+
+func (d *previewDesktopDriver) executeCaptured(ctx context.Context, command bot.DesktopCommand, expected *desktopbridge.OwnedCommandView) (string, error) {
 	if ctx == nil || ctx.Err() != nil || strings.TrimSpace(command.ActorID) == "" || !validPreviewDesktopRoute(command.Route) {
 		return "", errPreviewDesktopBinding
 	}
@@ -71,7 +75,7 @@ func (d *previewDesktopDriver) ExecuteDesktopCommand(ctx context.Context, comman
 	key := command.Route.Key()
 	switch command.Action {
 	case "takeover":
-		if !current || view.Scope.SessionID != command.TargetID {
+		if !current || view.Scope.SessionID != command.TargetID || expected != nil && (expected.Scope != view.Scope || expected.LocalInputVersion != view.LocalInputVersion) {
 			return "", errPreviewDesktopBinding
 		}
 		if previous, exists := d.bindings[key]; exists {
@@ -90,6 +94,9 @@ func (d *previewDesktopDriver) ExecuteDesktopCommand(ctx context.Context, comman
 	case "release":
 		// Release is route-scoped revocation, including after actor admin loss.
 		// It cannot dispatch a turn or alter any other route's binding.
+		if binding, exists := d.bindings[key]; exists && binding.actor != command.ActorID {
+			return "", errPreviewDesktopBinding
+		}
 		delete(d.bindings, key)
 		return "本聊天的 Preview 本地接管已解除。", nil
 	case "drive":

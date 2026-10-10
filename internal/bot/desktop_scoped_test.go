@@ -64,6 +64,7 @@ func TestDesktopScopedCommandActualSlashDispatch(t *testing.T) {
 	cases := []struct{ text, action, target, answer string }{
 		{"/desktop", "status", "", ""},
 		{"/desktop sessions", "status", "", ""},
+		{"/desktop pending s-handle", "pending", "s-handle", ""},
 		{"/desktop watch on", "watch", "on", ""},
 		{"/desktop watch off", "watch", "off", ""},
 		{"/desktop watch status", "watch", "status", ""},
@@ -113,6 +114,7 @@ func TestDesktopScopedRejectsMalformedRevokedAndCanceled(t *testing.T) {
 		"/desktop-other approve prompt", "/desktop approve", "/desktop approve prompt extra",
 		"/desktop watch maybe", "/desktop watch on extra", "/desktop status extra",
 		"/desktop release extra", "/desktop answer prompt", "/desktop takeover tab extra",
+		"/desktop pending", "/desktop pending one extra",
 		"/desktop " + strings.Repeat("x", desktopCommandBytes),
 	} {
 		if got := gw.handleDesktopCommandContext(context.Background(), desktopTestMessage(text)); got != desktopScopedCommandUsage {

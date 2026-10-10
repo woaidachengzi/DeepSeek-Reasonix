@@ -37,10 +37,18 @@ type DesktopScopedBridge interface {
 
 const desktopOperationUnknown = "桌面操作未确认；请刷新桌面会话状态后检查结果，不要自动重试。"
 const desktopCommandBytes = 64 << 10
-const desktopScopedCommandUsage = desktopCommandUsage + "\n" +
+const desktopScopedCommandUsage = "用法:\n" +
+	"/desktop status - 查看已发布的 live 会话句柄\n" +
+	"/desktop watch on|off|status - 订阅/退订桌面事件推送\n" +
+	"/desktop pending <会话句柄> - 查看当前提示与单次操作票据\n" +
+	"/desktop approve <ticket> - 批准该票据对应的操作\n" +
+	"/desktop deny <ticket> - 拒绝该票据对应的操作\n" +
+	"/desktop answer <ticket> <选项编号或文本> - 回答该票据对应的问题\n" +
 	"/desktop plan <ticket> start_execution|revise_plan|exit_plan [说明]\n" +
 	"/desktop recovery <ticket> continue|continue_task|revise [说明]\n" +
-	"/desktop mcp <ticket> accept|decline|cancel [JSON 对象]"
+	"/desktop mcp <ticket> accept|decline|cancel [JSON 对象]\n" +
+	"/desktop takeover <会话句柄> - 接管该 live 会话，后续文本直接驱动它\n" +
+	"/desktop release - 解除本聊天操作者的接管"
 
 var ErrDesktopAskAnswer = errors.New("desktop question answer is invalid")
 
@@ -159,6 +167,12 @@ func parseDesktopCommand(msg InboundMessage) (DesktopCommand, bool) {
 		return command, len(fields) == 2
 	case "release":
 		return command, len(fields) == 2
+	case "pending":
+		if len(fields) != 3 {
+			return command, false
+		}
+		command.TargetID = fields[2]
+		return command, true
 	case "watch":
 		command.TargetID = "status"
 		if len(fields) == 3 {

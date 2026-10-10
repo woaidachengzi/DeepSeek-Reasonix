@@ -290,6 +290,12 @@ func (c *Controller) pauseInboxOnRotate() {
 // EnqueueInbox durably queues an instruction. Only returns a receipt after
 // blob+manifest commit. Does not auto-start a turn (call TrySubmit / dispatcher).
 func (c *Controller) EnqueueInbox(req InboxRequest) (sessioninbox.InboxReceipt, error) {
+	return c.enqueueInbox(req, false)
+}
+
+// Only the core's prompt-decision staging path may preserve driving here.
+// Source is persisted display metadata and must never convey this authority.
+func (c *Controller) enqueueInbox(req InboxRequest, preserveDriving bool) (sessioninbox.InboxReceipt, error) {
 	st, err := c.ensureInbox()
 	if err != nil {
 		return sessioninbox.InboxReceipt{}, err
@@ -303,6 +309,12 @@ func (c *Controller) EnqueueInbox(req InboxRequest) (sessioninbox.InboxReceipt, 
 	}
 	if submit == "" && len(req.Invocations) == 0 {
 		return sessioninbox.InboxReceipt{}, sessioninbox.ErrEmpty
+	}
+	// Composer/HTTP/ACP/bot queue input is user intent even when paused and
+	// not yet admitted as a turn. Internal plan feedback staging is a prompt
+	// decision, not a composer send; its later non-driving admission is fenced.
+	if !preserveDriving {
+		c.revokeDesktopDriving()
 	}
 	display := firstNonEmptyStr(req.Display, submit)
 	raw := firstNonEmptyStr(req.Raw, submit)

@@ -21,6 +21,7 @@ func (c *Controller) runSynchronousTurn(
 	}
 	ctx, cancel := context.WithCancel(extension.ContextWithRuntimeOwner(ctx, c.RuntimeOwner()))
 	c.mu.Lock()
+	c.revokeDesktopDrivingLocked()
 	// Finishing is part of the gate: TurnDone is still fanning out. Closed
 	// seals a torn-down controller. Blocking callers get an error rather than
 	// parking because they already own and enforce the request boundary.

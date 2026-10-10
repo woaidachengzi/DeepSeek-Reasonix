@@ -35,6 +35,12 @@ func (c *Controller) SubmitScopedContext(ctx context.Context, scope TurnSubmitSc
 }
 
 func (c *Controller) admitScopedTurn(requestCtx context.Context, scope TurnSubmitScope, body func(context.Context) error) error {
+	return c.admitScopedTurnGuarded(requestCtx, scope, body, nil)
+}
+
+// guard runs only under the exact same runtime/admission locks as reservation.
+// A non-nil guard is private to the driving API, never a caller-provided hook.
+func (c *Controller) admitScopedTurnGuarded(requestCtx context.Context, scope TurnSubmitScope, body func(context.Context) error, guard func() bool) error {
 	if c == nil || requestCtx == nil || requestCtx.Err() != nil || scope.SessionPath == "" || scope.RuntimeEpoch == "" || scope.Revision == 0 || body == nil {
 		return ErrTurnSubmitScope
 	}
@@ -45,14 +51,16 @@ func (c *Controller) admitScopedTurn(requestCtx context.Context, scope TurnSubmi
 	// lock as the identity comparison; never validate then call Submit separately.
 	c.runtimeState.mu.Lock()
 	c.mu.Lock()
-	c.turnEvents.mu.RLock()
-	ledger := c.turnEvents.ledger
-	matches := c.turnEvents.err == nil && ledger != nil &&
-		c.runtimeState.path == c.sessionPath && c.runtimeState.ledger == ledger &&
-		c.runtimeState.snapshot.RuntimeEpoch == scope.RuntimeEpoch && c.runtimeState.snapshot.Revision == scope.Revision &&
-		c.runtimeState.snapshot.Phase == "idle" && !c.runtimeState.snapshot.Running && !c.runtimeState.snapshot.PendingPrompt
-	c.turnEvents.mu.RUnlock()
+	if guard == nil && requestCtx.Err() == nil && c.matchesDrivingOwnerLocked(scope) {
+		c.revokeDesktopDrivingLocked()
+	}
+	matches := c.matchesScopedIdleLocked(scope)
 	if requestCtx.Err() != nil || !matches || c.sessionPath != scope.SessionPath || c.closed || c.rotating || c.running || c.finishing || c.rejectDrainingGenerationLocked() {
+		c.mu.Unlock()
+		c.runtimeState.mu.Unlock()
+		return ErrTurnSubmitScope
+	}
+	if guard != nil && !guard() {
 		c.mu.Unlock()
 		c.runtimeState.mu.Unlock()
 		return ErrTurnSubmitScope
