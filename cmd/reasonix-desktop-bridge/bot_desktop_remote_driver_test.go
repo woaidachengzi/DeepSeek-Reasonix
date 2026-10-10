@@ -32,6 +32,26 @@ func remoteDrivingTestFixture(t *testing.T) *remoteDrivingFixture {
 	t.Helper()
 	f := &remoteDrivingFixture{route: desktopWatchTestRoute(), revision: 1, epoch: "captured-/remote/live.jsonl", requests: make(chan controller.SessionDrivingRequest, 128)}
 	b, _, _, _ := controllerFixture(t, func(w http.ResponseWriter, r *http.Request) { t.Error("driving scanned history"); w.WriteHeader(400) }, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/desktop/session-observation" {
+			var input controller.SessionObservationRequest
+			if json.NewDecoder(r.Body).Decode(&input) != nil || !controller.ValidSessionObservationRequest(input) || input.Scope.SessionPath != "/remote/live.jsonl" {
+				t.Error("invalid fixture observation scope")
+				w.WriteHeader(400)
+				return
+			}
+			f.mu.Lock()
+			valid := input.Scope.RuntimeEpoch == f.epoch
+			f.mu.Unlock()
+			if !valid {
+				w.WriteHeader(409)
+				return
+			}
+			w.Header().Set("Content-Type", "application/x-ndjson")
+			_ = json.NewEncoder(w).Encode(controller.SessionObservationFrame{ProtocolVersion: 1, Kind: "ready"})
+			w.(http.Flusher).Flush()
+			<-r.Context().Done()
+			return
+		}
 		if r.URL.Path == "/runtime-states" {
 			f.mu.Lock()
 			states := catalogueFixtureStates([]controller.Session{{Path: "/remote/live.jsonl"}}, strings.TrimSuffix(f.epoch, "-/remote/live.jsonl"))

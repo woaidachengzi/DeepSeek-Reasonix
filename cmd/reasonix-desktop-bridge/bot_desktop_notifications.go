@@ -76,20 +76,24 @@ func (n *previewDesktopNotifications) Run(ctx context.Context) error {
 			if runCtx.Err() != nil {
 				return runCtx.Err()
 			}
-			if lease.ctx.Err() != nil {
-				continue
-			}
-			sendCtx, stop := context.WithCancel(runCtx)
-			stopLease := context.AfterFunc(lease.ctx, stop)
-			if lease.ctx.Err() == nil && sendCtx.Err() == nil {
-				// Gateway owns the final current transport/access/admin check.
-				// No raw event bytes, owner path/name/ID or prompt ID reach IM.
-				_, _ = n.sender.SendDesktopNotification(sendCtx, lease.watcher.route, lease.watcher.actor, bot.DesktopNotification{Summary: summary})
-			}
-			stopLease()
-			stop()
+			previewDesktopDeliverNotification(runCtx, lease, n.sender, summary)
 			// Unknown delivery is never retried or redirected to another actor.
 		}
+	}
+}
+
+func previewDesktopDeliverNotification(ctx context.Context, lease previewDesktopWatchLease, sender previewDesktopNotificationSender, summary string) {
+	if ctx.Err() != nil || lease.ctx.Err() != nil {
+		return
+	}
+	sendCtx, stop := context.WithCancel(ctx)
+	stopLease := context.AfterFunc(lease.ctx, stop)
+	defer stopLease()
+	defer stop()
+	if lease.ctx.Err() == nil && sendCtx.Err() == nil {
+		// Gateway owns the final transport/access/admin check. Only a fixed
+		// summary reaches IM, with no retry after an unknown delivery.
+		_, _ = sender.SendDesktopNotification(sendCtx, lease.watcher.route, lease.watcher.actor, bot.DesktopNotification{Summary: summary})
 	}
 }
 

@@ -405,6 +405,7 @@ type RuntimeManager struct {
 	closed            bool
 	ownerEpoch        uint64
 	localInputVersion uint64
+	localReclaims     map[*OwnedLocalReclaimObservation]struct{}
 	terminalCreates   int
 	pendingTerminals  *retainedRuntimeTerminals
 }
@@ -514,6 +515,7 @@ func (m *RuntimeManager) Switch(ctx context.Context, request OpenRequest) (Sessi
 		m.mu.Unlock()
 		return SessionView{}, errors.New("desktop bridge runtime factory is not configured")
 	}
+	m.retireLocalReclaimLocked()
 	m.runtime = nil
 	m.view = SessionView{}
 	m.opening = true
@@ -620,6 +622,7 @@ func (m *RuntimeManager) SetSessionModel(ctx context.Context, sessionID, modelRe
 		pending = &retainedRuntimeTerminals{retained}
 		m.pendingTerminals = pending
 	}
+	m.retireLocalReclaimLocked()
 	m.runtime = nil
 	m.view = SessionView{}
 	m.opening = true
@@ -989,6 +992,7 @@ func (m *RuntimeManager) Submit(ctx context.Context, sessionID, input string) (S
 	// A valid local send reclaims remote driving, including queued local input.
 	// This fence is updated under the same lock as exact remote admission.
 	m.localInputVersion++
+	m.signalLocalReclaimLocked()
 	m.runtime.Submit(input)
 	view := m.view
 	view.State = m.runtime.State()
@@ -1276,6 +1280,7 @@ func (m *RuntimeManager) DeleteSession(sessionID string) error {
 	if err := m.runtime.Delete(); err != nil {
 		return err
 	}
+	m.retireLocalReclaimLocked()
 	m.runtime = nil
 	m.view = SessionView{}
 	return nil
@@ -1289,6 +1294,7 @@ func (m *RuntimeManager) Shutdown() error {
 		return nil
 	}
 	m.closed = true
+	m.retireLocalReclaimLocked()
 	runtime := m.runtime
 	pending := m.pendingTerminals
 	m.pendingTerminals = nil

@@ -226,6 +226,7 @@ func (s *turnEventSink) persistAndPublish(e event.Event) error {
 		return nil
 	}
 	s.c.refreshRuntimeState(stamped)
+	s.c.desktopEvents.publish(ledger, stamped.Kind)
 	s.publishInner(stamped)
 	if e.Kind == event.TurnDone && !ledger.ProjectionAckRequired() {
 		if err := ledger.AcknowledgeProjection(stamped.TurnID); err != nil {
@@ -522,7 +523,9 @@ func (c *Controller) failTurnEventLedger(err error) {
 		c.turnEvents.err = err
 	}
 	c.turnEvents.mu.Unlock()
+	c.desktopEvents.retire()
 	c.mu.Lock()
+	c.retireDesktopDrivingLocked()
 	cancel := c.cancel
 	if cancel != nil {
 		c.canceling = true

@@ -97,6 +97,7 @@ var errNoSessionPath = errors.New("session has content but no session path; conv
 type Controller struct {
 	runtimeState   controllerRuntimeState
 	desktopDriving controllerDesktopDriving // mu; never exposed in event/replay snapshots
+	desktopEvents  controllerDesktopEvents
 	// promptResolveMu serializes exact prompt decisions on one controller. It
 	// prevents two UI submissions from racing through separate prompt managers.
 	promptResolveMu    sync.Mutex
@@ -2193,7 +2194,8 @@ func (c *Controller) beginRotation() error {
 		return errRotationInProgress
 	}
 	c.rotating = true
-	c.revokeDesktopDrivingLocked()
+	c.desktopEvents.retire()
+	c.retireDesktopDrivingLocked()
 	return nil
 }
 
@@ -3414,7 +3416,8 @@ func (c *Controller) Resume(s *agent.Session, path string) {
 	}
 	c.mu.Lock()
 	c.sessionPath = path
-	c.revokeDesktopDrivingLocked()
+	c.retireDesktopDrivingLocked()
+	c.desktopEvents.retire()
 	c.guardianPath = guardian.PathFor(path)
 	c.mu.Unlock()
 	c.bindExecutorProjection(path, true)
@@ -3885,7 +3888,8 @@ func (c *Controller) commitRecoveredSession(originalPath, reason string, info ag
 	}
 	c.mu.Lock()
 	c.sessionPath = info.Path
-	c.revokeDesktopDrivingLocked()
+	c.retireDesktopDrivingLocked()
+	c.desktopEvents.retire()
 	c.guardianPath = guardian.PathFor(info.Path)
 	c.mu.Unlock()
 	// Recovery branch is a new lineage path. Load an inherited projection
@@ -4285,7 +4289,8 @@ func (c *Controller) setSessionPath(p string, fresh bool) {
 	c.snapshotMu.Lock()
 	c.mu.Lock()
 	c.sessionPath = p
-	c.revokeDesktopDrivingLocked()
+	c.retireDesktopDrivingLocked()
+	c.desktopEvents.retire()
 	c.guardianPath = guardian.PathFor(p)
 	c.mu.Unlock()
 	// Fresh paths clear projection; rebinds keep/load the target sidecar.
@@ -5090,7 +5095,8 @@ func (c *Controller) close(fireSessionEnd bool, jobsMode closeJobsMode) {
 		// section (while a running turn's TurnDone delivery is still in
 		// flight) would park again and start after teardown.
 		c.closed = true
-		c.revokeDesktopDrivingLocked()
+		c.desktopEvents.retire()
+		c.retireDesktopDrivingLocked()
 		clear(c.desktopDriving.used)
 		c.parkedTurns = nil
 		// A finishing-only controller no longer needs the delivery gate because

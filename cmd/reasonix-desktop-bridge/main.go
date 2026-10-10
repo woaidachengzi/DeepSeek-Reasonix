@@ -270,9 +270,11 @@ func runWithContext(ctx context.Context, cfg config, token string) (runErr error
 	}()
 	bridge := newBridgeServerWithEvents(token, instanceID, manager, events)
 	bridge.ownedEvents = ownedEvents
+	bridge.botRuntime.configureDesktop(manager, bridge.remoteSessions, ownedEvents)
 	bridge.botRuntime.refreshAsync(ctx)
-	defer bridge.botRuntime.stop()
 	defer bridge.remoteSessions.closeAll()
+	// Preserve original tunnels until bot ingress/notifications/grants retire.
+	defer bridge.botRuntime.stop()
 	bridge.cacheIdentityReads = true
 	defer bridge.closeIdentityReadStore()
 	ready := readyFile{

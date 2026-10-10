@@ -1,5 +1,65 @@
 # E 迁移清单
 
+## 2026-10-10 32 文件 review 与原 grant 收回观察基础
+
+超过 30 文件后停止扩展，对整批 scoped bot 宿主/代际启停、全已发布 owner 的只读观察/固定摘要通知、本地 manager 收回及 Controller driving 观察基础完成 review。核对精确原 owner/epoch/key/聊天 actor、取消与 await、权限复核、无输入/凭据正文、无历史恢复/自动重连/未知重试，以及 main 在关闭 SSH 前清理 bot 的次序。未发现阻塞本批提交的问题；本地提交后不 push。
+
+Controller 新增原已接管 grant 的单次收回观察，最多 8 个，要求原 capture/control version/key 严格一致；不创建或续期 grant、不读历史。真正非 driving 输入才发收回信号；release/expiry/rotation/rebind/Close/ledger failure 只退役。原 expiry timer 使无后续查询的观察也能结束；已发信号后仍保留退役 fence。停止观察不解除驾驶，原已用 key 的 release 仅关闭该 key 的观察，不能影响新 holder。真实 Controller runner 证明字面远程 driving 不收回、自有 HTTP 输入收回、原 key 释放不影响新 holder，以及取消/容量/旧 capture 拒绝。首次夹具在 HTTP 输入回合完成前捕获新 idle scope 而失败，改为等待实际 idle commit 后重测，未放宽生产门禁。
+
+最终 driving/event 专项 race 十次通过（6.885s）；六包完整 race 通过：bridge 59.638s、bot 3.651s、control 43.560s、Serve 107.083s，desktopbridge/remote-controller cached。六包 vet、实际协议 generator -check（首次审批超时未运行，一次重试成功）、gofmt/diff 检查通过；日志 `/private/tmp/reasonix-preview-refresh.xiLkyz/{driving-review-race,batch-review-race}.log`。没有新 TS/Rust/native 协议变更。
+
+Controller 观察基础尚未接到远程 Serve/client/bot 的原 grant 通知；完整远程即时收回仍未完成。上一节 App 仍是 `037a9d895…` 加当时 29 文件的 dirty 候选，未包含本节新增 Controller 观察基础，不能当作本批干净提交或功能包级验收。真实 IM/Plan/Recovery、原生交互、Windows/Linux/复杂管理页与 SQLite 门禁继续保留；完整目标不关闭，不使用真实账号/迁移/正式发布。
+
+## 2026-10-10 本地接管收回的即时通知与在途取消（后续源码）
+
+实际 RuntimeManager 本地输入版本变更已接单次观察器：接管注册时核对原 manager/owner/session/path 与输入版本，最多 8 个观察器；远程 scoped 输入不触发，模型替换/切换/删除/关闭只退役而不误报本地输入。信号与退役分开保留，已开始的 SDK 发送仍受原 owner 生命周期取消。通知只向原聊天/actor 发送固定摘要，不依赖可选 watch，不含输入正文，不重试未知发送，也不取消已接纳的 Agent 任务。gateway generation 关闭取消并 await 通知 worker。
+
+新增真实 Agent + 真实 gateway/假 SDK 的隔离回归：运行中本地 steering 收回、不取消原任务、无 watch 仍通知、原 actor release/关闭及模型替换中断在途 SDK。测试等待实际 idle commit，不再错误地要求 steering 必然产生第二次 provider 请求；fixture cleanup 先等待 Agent 完成落盘再删除私有目录。预算测试释放全部观察器后独立验证 stale input fence，防止容量拒绝掩盖版本校验。最终专项 race 十次通过：bridge 39.735s、desktopbridge 1.525s；六包完整 race 通过：bridge 49.486s、desktopbridge 4.323s，其余 bot/control/remote-controller/Serve cached。六包 vet 和 diff 检查通过；此前失败不计通过。
+
+累计 29 文件，未超过 30 文件 review 后提交门槛，无提交/push。本节只覆盖实际本地 manager；远程 Serve 原 grant 的即时本地收回通知仍待接验，真实 IM/Plan/Recovery、原生界面、跨 OS 和 SQLite 门禁未完成。默认 Node 16 不满足打包版本要求；Node 24 的 zlib 对同一语言包测得 zh 80.3 KiB 超过原 80.0 KiB 门禁，Homebrew Node 26 对同一产物测得 79.5 KiB 且原预算全部通过，未更改源码/文案/预算。完整目标保持，不使用真实账号/迁移/正式发布。
+
+已用 Homebrew Node 26 从 `037a9d8954cddd95092dc03af7b0c10a39ed5401` 加当前 29 个未提交文件重建 arm64 ad-hoc App（dirty 候选，不是干净提交 release）。原完整 frontend build gates/预算、Go sidecar、Rust release、Tauri app bundle 与 deep/strict codesign 验证通过。实际新包 managed/explicit 两个独立临时档案的私有凭据身份、401 鉴权、Global workspace、sidecar readiness、普通退出与 sidecar 清理均通过。App 在 `desktop/tauri/target/aarch64-apple-darwin/release/bundle/macos.noindex/Reasonix Tauri Preview.app`；host SHA256 `72085840a0c7a233b53dbf78847c4bfb337181d44e18efa3022285d7bbc68e22`，bridge SHA256 `221b709735b3d3c817b9b2a3bbe7da83808fa7ef852108addab9f446f0274e5d`。构建及实际包日志在 `/private/tmp/reasonix-preview-refresh.xiLkyz/{build-homebrew-node,package-smoke}.log`，旧 App 完整保留为同目录 `Reasonix Tauri Preview.previous.app`。未启动真实 IM，也未验证该 App 内可见 bot/远程/提示操作；不以隔离启动替代这些门禁，没有 DMG/公证/发布或默认下载切换。
+
+## 2026-10-10 实际 Preview bot runtime 注册与配置换代（后续源码）
+
+main 已给 previewBotRuntime 注入实际 sidecar manager/remoteSessions/ownedEvents；仅在现有 bot 显式启用/访问控制门禁与有效适配器存在时构造 scoped 宿主，gateway 启动且全 owner 观察 ready 后才报告 DesktopBridgeAvailable。watch store 跨网关代际共享，读取配置不启动历史/Wails 会话。refresh/stop 先停宿主入口与通知、取消并等待 gateway，再在独立 cleanup context 下解除原 key；main 的 defer 次序已保证 bot 清理先于 SSH closeAll。原宿主通知退役会关闭同代 gateway，旧退役 callback 不能关闭新 gateway；解除未知 latch 阻止本进程自动构造下一代 SDK，停止状态保留“解除未确认，检查原 owner”警告，不伪报远端解除。
+
+新增实际 runtime refresh 测试（私有 profile/state/cache、file credential store、隔离真实 SSH/auth HTTP、真实 gateway 与假 SDK）：实际注册/opaque status/watch/takeover、成功刷新只解除原 key 并换 SDK/host、保留 watch、旧 callback 不停止新代际；未知解除只尝试一次，重复 refresh 不建新 SDK；父进程 context 取消后仍用原连接/key 完成解除，且不重启。首次父取消分支误用子测试回调的 continue 产生编译失败，改为 return 后重测，不计失败为通过。实际 runtime 专项十次 race 通过（7.226s），补停止警告断言后十次通过（10.604s）。最终六包完整 race 通过：bridge 53.860s、bot 5.874s、control 43.593s，desktopbridge/remote-controller/Serve cached；含最终警告断言的完整 bridge 再测通过（45.708s）。六包 vet（前次审批超时未运行，允许的一次重试成功）、gofmt/diff 检查通过；无生成协议变更。
+
+累计 22 文件，未超过 30 文件 review 后提交门槛，无提交/push。源码已注册生产 scoped Desktop，但没有启动真实 IM 账号，旧 App 仍未更新；即时本地收回通知、实际 IM/Plan/Recovery E2E、原生及 Windows/Linux/SQLite 门禁仍待验，不能以这组隔离源码回归替代包级/真实服务验收。完整目标保持，无真实数据迁移、正式签名/发布或默认下载切换。
+
+## 2026-10-10 Scoped 宿主与同代网关的有序生命周期（后续源码）
+
+新增同一 gateway generation 的 scoped DesktopBridge 组合：首次 Start 只绑定原 sender 与全 owner 监督器，ready 后才开放命令；旧 ID-only/无 actor 接口明确拒绝，无兼容 fallback。监督器结束会停入口并启动独立有界 cleanup；取消 ingress 不取消原 catalogue 的解除权威，Shutdown 先取消/await 通知，再关闭 prompt/commands 并解除原 driving key，最后关闭 catalogue。生命周期闸门等待遵守调用 context；并发/重复关闭共享首次解除结果，未知结果不重试。watch store、实际本地/SSH runtime 仍由 sidecar 所有，gateway 换代保留 watch。关闭代际保留原 route/actor 的纯拒绝 fence：后续普通文本由旧 gateway 拒绝，不能自动转入普通 bot task；该标记不是驾驶 grant，也不供其它 actor 继承。
+
+真实 gateway 入口/权限/回复与隔离真实 SSH + scoped HTTP fixture 验证启动前拒绝、opaque status、非 admin 拒绝、watch/takeover、旧接口拒绝、原 key/scope 一次解除、并发成功/未知结果一致、共享 watch 保留，以及停止后真实普通文本仍返回未确认；新代际使用新建且已启动 gateway（不复用已停止对象）。最终宿主专项十次 race 通过（2.226s）；宿主+通知监督+远程通知十次 race 通过（15.759s）。六包完整 race 通过（bridge 43.836s，其余五包 cached，非缓存证据保留前阶段）；追加真实继续文本断言后的完整 bridge race 通过（43.666s）。最终六包 vet（审批超时后的允许一次重试成功）、gofmt/diff 检查通过。本阶段无协议生成物更改。
+
+累计 19 文件，未超过 30 文件 review 后提交门槛，无提交/push。宿主组合尚未接入生产 previewBotRuntime/main 注册与停止顺序，生产 Desktop 仍未启用，App 未更新；即时本地收回通知、实际 IM/Plan/Recovery E2E、原生/跨 OS/SQLite 门禁继续待接验，完整目标保持，不使用真实账号/迁移/正式发布。
+
+## 2026-10-10 全已发布 owner 通知监督与关闭等待（后续源码）
+
+新增单 gateway generation 的通知监督器：刷新只读 live catalogue，覆盖当前本地与全部已连接远程 Serve 的前台/后台；移除旧 owner 时先取消全部被移除消费者，再 await 后开新实例。同一 owner 监听失败/消失后重现不自动重连，保留最多 1024 个代际 tombstone，超限或目录/开流失败停止整组并取消/await，不伪报部分覆盖。新消费者在完整本次 cut 均开流成功后才放行发送，启动第二个 owner 失败时已排队首个 kind 也不发送；Run 单次，Close 取消，Shutdown/Done 等待全部消费者，显式 Refresh 由 Run 串行确认。共享 catalogue/manager/watch store 不被监督器关闭，后续宿主仍负责命令与驾驶解除顺序。
+
+实际本地 Agent + 隔离真实 SSH/authenticated HTTP 的远程前台/后台 + 真实 gateway/假 SDK 组合证明三类 owner 都收到固定摘要，saved/external 不订阅；实际模型替换后显式新 cut 和新 Controller turn 继续通知，未变远程不重复开流。失败 generation 无自动重连、启动部分失败零发送且 HTTP 被取消、Shutdown 取消/await 正在 SDK 的发送均通过。fixture 初次先建本地再由 SSH fixture 切换私有 profile，触发真实 settings-stale 拒绝；改为先固定私有 profile 并建目录再开本地，未放宽产品门禁。最终监督器/本地/远程通知专项十次 race 通过（25.521s）；补测试失败路径 cleanup await 后监督器十次 race 通过（11.486s）。六包完整 race 通过（bridge 44.149s，其余五包 cached，前阶段非缓存证据保留）；最后完整 bridge 含 cleanup 修正通过（43.967s）。六包 vet、gofmt/diff 检查通过；本轮无生成协议变更，上一阶段实际 generator -check 证据保留。
+
+累计 16 文件，未超过 30 文件 review 后提交门槛，无提交/push。通知监督器仍未注册到生产 bot runtime：完整 scoped DesktopBridge、gateway 换代 stop/驾驶解除/prompt 与 watch worker await、即时本地收回通知及真实 IM/Plan/Recovery E2E 继续待接验。生产 Desktop 仍未启用，App 未更新；原生、Windows/Linux 与 SQLite 门禁、完整目标保持，未使用真实账号/迁移/正式发布。
+
+## 2026-10-10 远程观察到 bot 通知消费者（后续源码）
+
+新增绑定原 SSH/controller connection、Controller epoch 与 gateway generation 的私有远程通知消费者，接上一阶段认证 observation 接口、共享 watch store 与逐次 gateway 权限发送入口。单 reader 持续读取并限制 32 个排队 kind，源 EOF/非法帧/溢出、原连接或 catalogue 取消、消费者关闭会取消在途 SDK；watch off/actor 替换取消旧 lease。Run 单次、Close 幂等，宿主须 Close/await；无自动重连、改投、回放或未知送达重试。复用本地/远程安全摘要发送边界，发现 MCP kind 与共享 wire 不一致后统一为 `mcp_interaction`，新增五类映射一致性回归。
+
+隔离真实 loopback SSH 隧道 + 认证 HTTP + 真实 gateway/假 SDK 贯通测试证明五类固定摘要、源 EOF、退订、actor 换代、溢出、连接/catalogue/显式 Close 均取消旧发送且不重试；`go test -race ./cmd/reasonix-desktop-bridge -run 'TestRemoteDesktopNotifications|TestPreviewDesktopNotifications' -count=10` 最终通过（17.754s）。初次 fixture 未允许新固定 endpoint，产生 `bad catalogue channel` 失败；补入明确 POST 观察路由且保留 cookie/方法/无 query 校验后重测通过，未放宽认证。核心/typed Client 观察专项十次通过（2.253s/1.598s）。最终六包完整 race 通过：bridge 50.652s、bot 5.852s、control 43.661s、desktopbridge cached、remote/controller 2.899s、Serve 108.467s；六包 vet、生成器 `go run ./cmd/desktop-bridge-protocol-gen -check`（审批超时后允许的一次重试成功）、diff 格式检查通过。
+
+累计 14 文件，尚未超过 30 文件 review 后提交门槛，无提交/push。消费者仍未组成自动覆盖全已发布 local/remote owner 的宿主监督器，gateway 替换/停止的完整注册、驾驶解除与 prompt/watch worker await、即时本地收回通知、实际 IM/Plan/Recovery E2E 继续待接验；生产 Desktop 未启用，App 未更新，原生/跨 OS/SQLite 门禁与完整目标保持。未使用真实账号、迁移或正式发布。
+
+## 2026-10-10 精确实例的核心与认证远程事件观察（后续源码）
+
+新增 Controller/实际 ledger 绑定的只读事件订阅，以及固定认证 `POST /desktop/session-observation` 和 typed shared Client。仅输出五类批准生命周期 kind，不输出正文、提示、路径、凭据或 grant；无历史恢复、回放、自动重连或前台切换。核心限 8 个订阅、每个 32 帧，溢出/取消/重绑/关闭/ledger 失败均关闭旧观察者并拒绝排队前缀。Serve 仅绑定已发布前台或非 retiring 后台 owner，保留后台 admission/镜像/外部只读租约门禁，写入限时；客户端 ready 建连限时、单帧 1 KiB 严格字段，原连接取消终止实际 HTTP。
+
+验证：实际 Controller 专项 `go test -race ./internal/control -run 'TestDesktopEvents' -count=10` 通过；实际 Agent（隔离 provider，取消后完成）、认证 HTTP、前台/后台、错 epoch、历史拒绝、外部写入与后台 retirement gate，以及正文/未知 kind/超限帧拒绝和真实 HTTP 原连接取消，`go test -race ./internal/serve ./internal/remote/controller -run 'TestDesktopObservation|TestSessionObservation' -count=10` 通过。完整 `go test -race ./internal/control ./internal/remote/controller ./internal/serve` 通过（40.188s/2.858s/105.206s）；三个包 vet 与 diff 格式检查通过。初次检查发现 Kind 是整数枚举而非字符串、测试复用 provider 没有 release 字段，均已修正后重测，不将失败算成功。
+
+本批目前 10 文件，未超过 30 文件 review 后提交门槛，无提交/push。尚未组成全 local/remote 目录通知消费者和 gateway/watch/prompt 的完整宿主生命周期，生产 Desktop 未启用，App 未更新；不代表实际 IM、原生 UI、跨 OS 或 SQLite 门禁完成。完整目标保持，不使用真实账号或迁移/正式发布。
+
 ## 2026-10-10 32 文件驾驶与命令组合批次 review 收敛
 
 watch on/off/status 已适配共享订阅 store，关闭命令不删除订阅、保存未知不伪报成功。达到 31 文件后停止功能扩展，review 整批核心授权/Serve/shared Client/local+remote 绑定/命令组合/有序关闭；修复回归发现的 recovery 测试 finishing 边界窗口后增为 32 文件。按用户规则验证并提交，不 push；最终证据见 [API audit](API_SURFACE_AUDIT.md#2026-10-10-32-文件驾驶与命令组合批次-review-收敛)。生产 Desktop 未启用，App 未更新，完整 host/全 owner watch/即时收回与真实服务/原生/跨 OS/SQLite 门禁继续待完成，完整目标保持；不使用真实账号、迁移数据或正式发布。以下保留历史阶段状态。

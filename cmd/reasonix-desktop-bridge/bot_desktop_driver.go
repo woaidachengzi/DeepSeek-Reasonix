@@ -26,10 +26,13 @@ type previewDesktopBinding struct {
 // across bounded manager admission serializes release/rebind with dispatch;
 // no external network send or manager callback is permitted inside this lock.
 type previewDesktopDriver struct {
-	manager  *desktopbridge.RuntimeManager
-	mu       sync.Mutex
-	bindings map[string]previewDesktopBinding
-	closed   bool
+	manager        *desktopbridge.RuntimeManager
+	mu             sync.Mutex
+	bindings       map[string]previewDesktopBinding
+	closed         bool
+	reclaimCtx     context.Context
+	reclaimSender  previewDesktopNotificationSender
+	reclaimWorkers map[*previewLocalReclaimWorker]struct{}
 }
 
 func newPreviewDesktopDriver(manager *desktopbridge.RuntimeManager) *previewDesktopDriver {
@@ -89,6 +92,10 @@ func (d *previewDesktopDriver) executeCaptured(ctx context.Context, command bot.
 		if len(d.bindings) != 0 {
 			return "", errPreviewDesktopBinding
 		}
+		d.cancelReclaimWorkersLocked(command.Route, "")
+		if err := d.observeReclaimLocked(view, command.Route, command.ActorID); err != nil {
+			return "", err
+		}
 		d.bindings[key] = previewDesktopBinding{command.Route, command.ActorID, view.Scope, view.LocalInputVersion}
 		return "已接管当前 Preview 本地会话；桌面本地发送会收回控制。", nil
 	case "release":
@@ -98,6 +105,7 @@ func (d *previewDesktopDriver) executeCaptured(ctx context.Context, command bot.
 			return "", errPreviewDesktopBinding
 		}
 		delete(d.bindings, key)
+		d.cancelReclaimWorkersLocked(command.Route, command.ActorID)
 		return "本聊天的 Preview 本地接管已解除。", nil
 	case "drive":
 		binding, exists := d.bindings[key]
@@ -142,5 +150,8 @@ func (d *previewDesktopDriver) Close() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.closed = true
+	for worker := range d.reclaimWorkers {
+		worker.cancel()
+	}
 	clear(d.bindings)
 }

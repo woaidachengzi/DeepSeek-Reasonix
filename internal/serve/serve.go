@@ -575,6 +575,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("POST /desktop/session-prompt", s.desktopSessionPrompt)
 	mux.HandleFunc("POST /desktop/session-pending", s.desktopSessionPending)
 	mux.HandleFunc("POST /desktop/session-driving", s.desktopSessionDriving)
+	mux.HandleFunc("POST /desktop/session-observation", s.desktopSessionObservation)
 	mux.HandleFunc("GET /context", s.context)
 	mux.HandleFunc("POST /submit", s.submit)
 	s.registerInboxRoutes(mux)

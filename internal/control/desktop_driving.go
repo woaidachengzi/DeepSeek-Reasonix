@@ -28,9 +28,10 @@ type desktopDrivingGrant struct {
 	expires time.Time
 }
 type controllerDesktopDriving struct {
-	active  *desktopDrivingGrant
-	used    map[string]struct{}
-	version uint64
+	active   *desktopDrivingGrant
+	used     map[string]struct{}
+	version  uint64
+	reclaims map[*DesktopDrivingReclaimObservation]struct{} // Controller.mu
 }
 
 func validDesktopDrivingKey(key string) bool {
@@ -58,10 +59,28 @@ func (c *Controller) matchesScopedIdleLocked(scope TurnSubmitScope) bool {
 }
 
 func (c *Controller) revokeDesktopDrivingLocked() {
+	if grant := c.desktopDriving.active; grant != nil {
+		if time.Now().Before(grant.expires) {
+			c.signalDesktopDrivingReclaimLocked(grant)
+		} else {
+			c.retireDesktopDrivingReclaimsLocked(grant.key)
+		}
+	}
+	c.clearDesktopDrivingLocked()
+}
+
+func (c *Controller) clearDesktopDrivingLocked() {
 	c.desktopDriving.active = nil
 	if c.desktopDriving.version < desktopDrivingVersionLimit {
 		c.desktopDriving.version++
 	}
+}
+
+// Lifecycle replacement is not local input. Retire even observations whose
+// one-shot signal was already consumed and whose SDK send may still be live.
+func (c *Controller) retireDesktopDrivingLocked() {
+	c.retireDesktopDrivingReclaimsLocked("")
+	c.clearDesktopDrivingLocked()
 }
 
 func (c *Controller) revokeDesktopDriving() {
@@ -72,7 +91,8 @@ func (c *Controller) revokeDesktopDriving() {
 
 func (c *Controller) expireDesktopDrivingLocked() {
 	if grant := c.desktopDriving.active; grant != nil && !time.Now().Before(grant.expires) {
-		c.revokeDesktopDrivingLocked()
+		c.retireDesktopDrivingReclaimsLocked(grant.key)
+		c.clearDesktopDrivingLocked()
 	}
 }
 
@@ -172,10 +192,12 @@ func (c *Controller) ReleaseDesktopDriving(ctx context.Context, scope DesktopDri
 		if grant.capture != scope {
 			return ErrDesktopDrivingScope
 		}
-		c.revokeDesktopDrivingLocked()
+		c.retireDesktopDrivingReclaimsLocked(key)
+		c.clearDesktopDrivingLocked()
 		return nil
 	}
 	if _, spent := c.desktopDriving.used[key]; spent {
+		c.retireDesktopDrivingReclaimsLocked(key)
 		return nil
 	}
 	return ErrDesktopDrivingScope
