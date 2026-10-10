@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	appconfig "reasonix/internal/config"
 	"reasonix/internal/desktopbridge/sessionpath"
@@ -23,7 +24,7 @@ func TestSQLiteActualPackageLegacyHistory(t *testing.T) {
 	if binary == "" {
 		t.Skip("requires explicitly selected packaged sidecar")
 	}
-	for _, mode := range []string{"legacy_unicode", "hidden_protocol", "newest_page", "malformed"} {
+	for _, mode := range []string{"legacy_unicode", "hidden_protocol", "newest_page", "malformed", "unsupported_event_schema", "unknown_dag_entry", "selected_dag"} {
 		t.Run(mode, func(t *testing.T) {
 			profile := t.TempDir()
 			t.Setenv("REASONIX_HOME", profile)
@@ -83,6 +84,61 @@ func TestSQLiteActualPackageLegacyHistory(t *testing.T) {
 			if err := os.WriteFile(path, original, 0600); err != nil {
 				t.Fatal(err)
 			}
+			// A compatibility checkpoint must not conceal an authoritative event
+			// log, either a selected branch or an unsupported/newer format. Construct
+			// wire bytes independently of current Session.Save or DAG writers.
+			var originalEvents []byte
+			var wantCreatedAt []int64
+			switch mode {
+			case "unsupported_event_schema":
+				originalEvents = []byte("{\"schema_version\":999,\"type\":\"log\",\"generation\":1,\"at\":\"2026-01-08T10:00:00Z\"}\n")
+			case "unknown_dag_entry":
+				originalEvents = []byte("{\"schema_version\":2,\"type\":\"log\",\"generation\":1,\"at\":\"2026-01-08T10:00:00Z\"}\n{\"schema_version\":2,\"type\":\"PRIVATE_UNSUPPORTED_ENTRY\",\"at\":\"2026-01-08T10:00:01Z\"}\n")
+			case "selected_dag":
+				// Independent schema-2 wire fixture, not a current writer round trip.
+				// The checkpoint and the unselected main branch intentionally disagree.
+				want = []string{"DAG 分支问题 🌏", "已选择分支的回答\n第二行"}
+				base := time.Date(2026, 1, 8, 10, 0, 0, 0, time.UTC)
+				wantCreatedAt = []int64{base.Add(time.Second).UnixMilli(), base.Add(4 * time.Second).UnixMilli()}
+				var events bytes.Buffer
+				appendEvent := func(kind string, offset int, fields map[string]any) {
+					t.Helper()
+					fields["schema_version"], fields["type"], fields["at"] = 2, kind, base.Add(time.Duration(offset)*time.Second)
+					if err := json.NewEncoder(&events).Encode(fields); err != nil {
+						t.Fatal(err)
+					}
+				}
+				appendMessage := func(head, entry, parent, parentDigest, role, content string, offset int) string {
+					t.Helper()
+					// Historical hash identity omits local ID and timestamp. Field
+					// order matches the published message wire shape, independent of
+					// today's agent package encoder/identity helpers.
+					identity, err := json.Marshal(struct {
+						Role    string `json:"role"`
+						Content string `json:"content,omitempty"`
+					}{role, content})
+					if err != nil {
+						t.Fatal(err)
+					}
+					digest := fmt.Sprintf("%x", sha256.Sum256(append(append([]byte(parentDigest), 0), identity...)))
+					appendEvent("message", offset, map[string]any{"head": head, "id": entry, "parent": parent,
+						"digest": digest, "msgs": []map[string]any{{"id": entry, "role": role, "content": content,
+							"createdAt": base.Add(time.Duration(offset) * time.Second).UnixMilli()}}})
+					return digest
+				}
+				appendEvent("log", 0, map[string]any{"generation": 1})
+				userDigest := appendMessage("main", "U", "", "", "user", want[0], 1)
+				appendMessage("main", "M", "U", userDigest, "assistant", "PRIVATE_UNSELECTED_BRANCH", 2)
+				appendEvent("fork", 3, map[string]any{"head": "main", "new_head": "F", "from": "U", "kind": "fork"})
+				appendMessage("F", "A", "U", userDigest, "assistant", want[1], 4)
+				appendEvent("select", 5, map[string]any{"head": "F"})
+				originalEvents = append([]byte(nil), events.Bytes()...)
+			}
+			if originalEvents != nil {
+				if err := os.WriteFile(store.SessionEventLog(path), originalEvents, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
 			identityStore, err := sessionidentity.Open(context.Background(), appconfig.DesktopSessionIdentityPath(), profile)
 			if err != nil {
 				t.Fatal(err)
@@ -97,10 +153,13 @@ func TestSQLiteActualPackageLegacyHistory(t *testing.T) {
 				if status, _ := p.call(t, "GET", "/v1/sessions/"+id+"/history", nil, false); status != 401 {
 					t.Fatal("history bypassed authentication", status)
 				}
-				status, _ := p.call(t, "POST", "/v1/sessions:open", map[string]string{"sessionId": id}, true)
-				if mode == "malformed" {
+				status, openReply := p.call(t, "POST", "/v1/sessions:open", map[string]string{"sessionId": id}, true)
+				if mode == "malformed" || mode == "unsupported_event_schema" || mode == "unknown_dag_entry" {
 					if status != 500 {
-						t.Fatal("malformed legacy history was not rejected", status)
+						t.Fatal("malformed/unsupported authoritative history was not rejected", status)
+					}
+					if bytes.Contains(openReply, []byte(profile)) || bytes.Contains(openReply, []byte("PRIVATE_")) {
+						t.Fatal("history rejection leaked private path or unsupported entry details")
 					}
 				} else {
 					if status != 200 {
@@ -116,7 +175,11 @@ func TestSQLiteActualPackageLegacyHistory(t *testing.T) {
 						if i%2 != 0 {
 							role = "assistant"
 						}
-						if message.Content != want[i] || message.Role != role || message.TurnUsage != nil || message.CreatedAtMs != 0 || message.WorkDurationMs != 0 {
+						createdAt := int64(0)
+						if wantCreatedAt != nil {
+							createdAt = wantCreatedAt[i]
+						}
+						if message.Content != want[i] || message.Role != role || message.TurnUsage != nil || message.CreatedAtMs != createdAt || message.WorkDurationMs != 0 {
 							t.Fatal("legacy content/order or unknown accounting was fabricated", i)
 						}
 					}
@@ -128,6 +191,15 @@ func TestSQLiteActualPackageLegacyHistory(t *testing.T) {
 				got, err := os.ReadFile(path)
 				if err != nil || !bytes.Equal(got, original) {
 					t.Fatal("opening or shutdown rewrote historical JSONL", err)
+				}
+				if originalEvents != nil {
+					gotEvents, err := os.ReadFile(store.SessionEventLog(path))
+					if err != nil || !bytes.Equal(gotEvents, originalEvents) {
+						t.Fatal("authoritative event log was downgraded, repaired or rewritten", err)
+					}
+					if _, err := os.Stat(store.SessionEventLogDamaged(path)); !os.IsNotExist(err) {
+						t.Fatal("hard format rejection salvaged or truncated an authoritative log", err)
+					}
 				}
 				entries, err := os.ReadDir(appconfig.SessionDir())
 				if err != nil {

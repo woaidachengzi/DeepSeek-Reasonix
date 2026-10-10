@@ -16,7 +16,8 @@ class ControlReceiptTests(unittest.TestCase):
     def test_lifecycle_replaces_stale_running_receipt_privately(self):
         with tempfile.TemporaryDirectory() as directory:
             control = Path(directory) / 'control.json'
-            payload = {'hostPid': 123, 'phase': 'before-import', 'state': 'running'}
+            payload = {'hostPid': 123, 'phase': 'before-import', 'state': 'running',
+                       'webviewOrigin': 'reasonix-preview://0123456789abcdef0123456789abcdef.localhost/'}
             migration.publish_control(control, payload)
             self.assertEqual(json.loads(control.read_text()), payload)
             for state in ('ending', 'ended'):

@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod bot_diagnostics;
 mod bridge;
 mod credential_namespace;
 mod data_profile;
@@ -1756,6 +1757,15 @@ fn network_settings(
     supervisor: State<'_, BridgeSupervisor>,
 ) -> Result<NetworkSettingsView, String> {
     supervisor.network_settings()
+}
+
+#[tauri::command]
+fn bot_connection_diagnostics(
+    window: tauri::WebviewWindow,
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<bot_diagnostics::DiagnosticsView, String> {
+    bot_diagnostics::ensure_main_window(window.label())?;
+    supervisor.bot_connection_diagnostics()
 }
 
 #[tauri::command]
@@ -4298,7 +4308,7 @@ fn setup_preview(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
         #[cfg(target_os = "macos")]
         if std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref() == Ok("restore-normal") {
             window_state
-                .verify_pending_capture()
+                .verify_pending_capture(false)
                 .map_err(std::io::Error::other)?;
             native_window_smoke::record(app.handle(), "restore-capture-fenced")
                 .map_err(std::io::Error::other)?;
@@ -4648,6 +4658,7 @@ fn main() {
             change_sandbox_settings,
             network_settings,
             bot_runtime_status,
+            bot_connection_diagnostics,
             restart_bot_runtime,
             bot_pairing,
             change_bot_pairing,

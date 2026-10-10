@@ -2,6 +2,7 @@ import { convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { formatAttachmentRefForSubmit } from "./attachmentDisplay";
+import { parseBotDiagnostics, type BotDiagnostics } from "./botDiagnostics";
 import { t } from "./i18n";
 import type { CapabilityDiagnosticsReport, RuntimeDoctorReport, UsageStatsRange, UsageStatsRequest } from "./types";
 import type { FrontendDiagnosticPayload } from "./frontendDiagnostics";
@@ -479,6 +480,11 @@ export async function changeTauriBotSettings(change: TauriBotSettingsChange): Pr
 export async function tauriBotRuntimeStatus(): Promise<TauriBotRuntimeStatus> {
   requireTauri();
   return invoke<TauriBotRuntimeStatus>("bot_runtime_status");
+}
+
+export async function tauriBotConnectionDiagnostics(): Promise<BotDiagnostics> {
+  requireTauri();
+  return parseBotDiagnostics(await invoke<unknown>("bot_connection_diagnostics"));
 }
 
 export interface TauriBotPairingRequest { code: string; platform: string; connection_id?: string; domain?: string; chat_type: string; chat_id: string; user_id: string; user_name?: string; created_at: string; expires_at: string; }

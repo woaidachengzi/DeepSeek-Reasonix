@@ -11,6 +11,20 @@ import signal
 import subprocess
 import time
 
+UI_MIGRATION_PHASES = ("before-import", "after-import", "after-undo")
+
+
+def private_legacy_ui_environment(ordinary_ui_phase, env):
+    """Only the fixed private-source fixture may enter an ordinary UI launch."""
+    name = "REASONIX_TAURI_LEGACY_UI_SMOKE"
+    if ordinary_ui_phase is None:
+        if name in env:
+            raise ValueError("legacy UI fixture requires an explicit ordinary migration phase")
+        return {}
+    if ordinary_ui_phase not in UI_MIGRATION_PHASES or env.get(name) != "private-source":
+        raise ValueError("ordinary migration requires a fixed phase and private legacy source")
+    return {name: "private-source"}
+
 
 def owned_terminal_shell_environment(phase, root, env):
     if phase != "ui-integrated-terminal":
@@ -22,14 +36,30 @@ def owned_terminal_shell_environment(phase, root, env):
     return expected
 
 
+def launch_phase(env, ordinary_ui_phase=None, ordinary_bot_diagnostics=False):
+    if type(ordinary_bot_diagnostics) is not bool:
+        raise ValueError("ordinary bot diagnostics selector must be boolean")
+    if ordinary_bot_diagnostics:
+        if ordinary_ui_phase is not None or any(name in env for name in (
+                "REASONIX_TAURI_NATIVE_WINDOW_SMOKE", "REASONIX_TAURI_PACKAGE_SMOKE",
+                "REASONIX_TAURI_PROFILE_SMOKE", "REASONIX_TAURI_LEGACY_UI_SMOKE")):
+            raise ValueError("ordinary bot diagnostics cannot mix automated smoke phases")
+        return "ui-bot-diagnostics"
+    return ("ui-migration-" + ordinary_ui_phase if ordinary_ui_phase is not None
+            else env["REASONIX_TAURI_NATIVE_WINDOW_SMOKE"])
+
+
 class LaunchServicesHost:
-    def __init__(self, binary, sidecar, root, env, package):
+    def __init__(self, binary, sidecar, root, env, package, ordinary_ui_phase=None,
+                 ordinary_bot_diagnostics=False):
+        legacy_environment = private_legacy_ui_environment(ordinary_ui_phase, env)
+        phase = launch_phase(env, ordinary_ui_phase, ordinary_bot_diagnostics)
         self.binary, self.root, self.package = binary, root, package
         self.pid = None
         self.returncode = None
         self.monitor = None
         self.temporary = root / "tmp"
-        self.phase = env["REASONIX_TAURI_NATIVE_WINDOW_SMOKE"]
+        self.phase = phase
         # Never forward ambient provider credentials, proxies or caller secrets
         # into LaunchServices. These values are owned acceptance inputs only.
         names = ("HOME", "TMPDIR", "REASONIX_HOME", "REASONIX_STATE_HOME",
@@ -47,6 +77,8 @@ class LaunchServicesHost:
                 continue
             command.extend(["--env", name + "=" + env.get(name, "")])
         command.extend(["--env", "REASONIX_DESKTOP_BRIDGE_TOKEN=must-be-cleared"])
+        for name, value in legacy_environment.items():
+            command.extend(["--env", name + "=" + value])
         for name, value in owned_terminal_shell_environment(self.phase, root, env).items():
             command.extend(["--env", name + "=" + value])
         self.opener = subprocess.Popen(command, stdin=subprocess.DEVNULL,

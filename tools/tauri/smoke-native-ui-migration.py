@@ -2,9 +2,12 @@
 """Own three ordinary Preview launches for real UI import/restart/undo testing.
 
 Use Settings > Storage and paths > Old Preview UI preferences. In the first
-launch preview/confirm/import, then Cmd+Q. In the second verify imported values
-and the rollback button, undo, then Cmd+Q. In the third verify restored defaults
-and absent rollback record, then Cmd+Q. Repeat for managed and explicit profiles.
+launch preview/confirm/import, then Cmd+Q. In the second verify imported values,
+preview the private old preferences again, and use the rollback button before
+Cmd+Q. In the third verify restored defaults and absent rollback record, preview
+the private old preferences again WITHOUT importing, then Cmd+Q. Every launch
+must exercise the ordinary preview read so its fresh source receipt is checked.
+Repeat for managed and explicit profiles.
 The runner verifies native source isolation, identity, originals and lifecycle;
 actual UI assertions must also be recorded via the native UI or by the operator.
 No shared legacy store is seeded, cleared or imported.
@@ -31,6 +34,9 @@ sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location('package', Path(__file__).with_name('smoke-packaged-app.py'))
 package = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(package)
+launch_spec = importlib.util.spec_from_file_location('launch_services', Path(__file__).with_name('launch-services-host.py'))
+launch_services = importlib.util.module_from_spec(launch_spec)
+launch_spec.loader.exec_module(launch_services)
 
 
 def original(path):
@@ -73,7 +79,7 @@ def check_source_receipt(receipt, expected_reads=None):
         raise RuntimeError('Private nonpersistent legacy source receipt missing/invalid')
 
 
-def smoke(app_path, control_path, seconds, profile='both'):
+def smoke(app_path, control_path, seconds, profile='both', use_launch_services=False):
     if profile not in ('both', 'managed', 'explicit'):
         raise ValueError('Unknown UI migration profile mode')
     app = Path(app_path).resolve()
@@ -116,8 +122,12 @@ def smoke(app_path, control_path, seconds, profile='both'):
                     # Match the explicit-profile contract: REASONIX_HOME
                     # selects its state; do not add a separate state override.
                     env |= {'REASONIX_HOME': str(core), 'REASONIX_CACHE_HOME': str(root / 'cache')}
-                host = subprocess.Popen([str(host_binary)], env=env, stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.DEVNULL, start_new_session=True)
+                if use_launch_services:
+                    host = launch_services.LaunchServicesHost(
+                        host_binary, sidecar_binary, root, env, package, ordinary_ui_phase=phase)
+                else:
+                    host = subprocess.Popen([str(host_binary)], env=env, stdout=subprocess.DEVNULL,
+                                            stderr=subprocess.DEVNULL, start_new_session=True)
                 sidecar = None
                 control_payload = None
                 try:
@@ -139,9 +149,13 @@ def smoke(app_path, control_path, seconds, profile='both'):
                         raise RuntimeError('Ordinary private Preview did not start')
                     control_payload = {'root': str(root), 'hostPid': host.pid,
                                        'sidecarPid': sidecar, 'phase': phase, 'managed': managed,
-                                       'workspace': str(root / '旧界面 工作区'), 'state': 'running'}
+                                       'workspace': str(root / '旧界面 工作区'),
+                                       'webviewOrigin': f'reasonix-preview://{identity}.localhost/',
+                                       'launchMethod': 'launch-services' if use_launch_services else 'direct',
+                                       'state': 'running'}
                     publish_control(control, control_payload)
                     print(f"Ordinary {'managed' if managed else 'explicit'} UI phase {phase} ready", flush=True)
+                    print('Required each launch: use Preview old UI preferences to read the private source before Quit. After undo, do not import again.', flush=True)
                     if host.wait(timeout=seconds) != 0:
                         raise RuntimeError('UI migration did not quit normally')
                     deadline = time.monotonic() + 5
@@ -158,7 +172,10 @@ def smoke(app_path, control_path, seconds, profile='both'):
                     if control_payload is not None:
                         publish_control(control, control_payload | {'state': 'ending'})
                     if host.poll() is None:
-                        os.killpg(host.pid, signal.SIGKILL)
+                        if use_launch_services:
+                            host.kill()
+                        else:
+                            os.killpg(host.pid, signal.SIGKILL)
                         host.wait(timeout=5)
                     for pid in package.own_sidecars(root / 'tmp', sidecar_binary):
                         try:
@@ -169,6 +186,8 @@ def smoke(app_path, control_path, seconds, profile='both'):
                         publish_control(control, control_payload | {
                             'state': 'ended', 'exitCode': host.returncode,
                         })
+                    if use_launch_services:
+                        host.close()
         success = True
         print(f'{passed} ordinary UI lifecycles and source-isolation checks passed; native UI evidence must confirm import/restore behavior.', flush=True)
     finally:
@@ -187,7 +206,9 @@ if __name__ == '__main__':
     parser.add_argument('--seconds', type=int, default=300, choices=range(60, 901))
     parser.add_argument('--profile', choices=('both', 'managed', 'explicit'), default='both',
                         help='run both profile modes, or only an independently unfinished mode')
+    parser.add_argument('--launch-services', action='store_true',
+                        help='register the private host with LaunchServices and retain an exact-PID kernel exit receipt')
     args = parser.parse_args()
     if sys.platform != 'darwin':
         raise SystemExit('This acceptance requires macOS')
-    smoke(args.app, args.control, args.seconds, profile=args.profile)
+    smoke(args.app, args.control, args.seconds, profile=args.profile, use_launch_services=args.launch_services)

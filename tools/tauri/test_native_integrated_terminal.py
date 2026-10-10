@@ -25,6 +25,39 @@ def receipt():
 
 
 class NativeTerminalGates(unittest.TestCase):
+    def test_launch_discards_prior_capture_receipt_before_starting_owned_host(self):
+        with tempfile.TemporaryDirectory(prefix="reasonix-capture-receipt-unit-", dir="/private/tmp") as directory:
+            root = Path(directory)
+            (root / "home").mkdir()
+            temporary = root / "tmp"
+            temporary.mkdir()
+            stale = temporary / "reasonix-native-window-queued-capture.json"
+            stale.write_text('{"preserved":true}')
+            normal = temporary / "reasonix-native-window-normal.json"
+            normal.write_text("owned normal geometry")
+            with patch.object(terminal.windows.launch_services_host, "LaunchServicesHost",
+                              side_effect=RuntimeError("owned launch intercepted")):
+                with self.assertRaisesRegex(RuntimeError, "owned launch intercepted"):
+                    terminal.windows.launch(root / "host", root / "sidecar", root,
+                                            "io.reasonix.desktop.preview", True, "restore-normal",
+                                            environment={}, launch_services=True)
+            self.assertFalse(stale.exists())
+            self.assertEqual(normal.read_text(), "owned normal geometry")
+
+    def test_saved_geometry_rejects_observed_primary_and_secondary_drift(self):
+        requested = {"width": 2400, "height": 1600, "x": 200, "y": 120,
+                     "scale_factor": 2, "maximized": False}
+        terminal.require_saved_geometry(dict(requested), requested)
+        terminal.require_saved_geometry({**requested, "scale_factor": 2.0}, requested)
+        with self.assertRaisesRegex(RuntimeError, "escaped requested"):
+            terminal.require_saved_geometry({**requested, "x": 468}, requested)
+        secondary = {**requested, "x": -3400}
+        with self.assertRaisesRegex(RuntimeError, "escaped requested"):
+            terminal.require_saved_geometry({**secondary, "x": -3372}, secondary)
+        for actual in [None, {}, {**requested, "unexpected": True}]:
+            with self.subTest(actual=actual), self.assertRaises(RuntimeError):
+                terminal.require_saved_geometry(actual, requested)
+
     def test_primary_display_requires_explicit_opt_in(self):
         terminal.require_placement({"x": -1200}, False)
         terminal.require_placement({"x": 100}, True)

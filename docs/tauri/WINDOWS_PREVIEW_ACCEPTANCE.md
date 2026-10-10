@@ -1,5 +1,17 @@
 # Windows Preview 手动验收
 
+## 2026-10-10 当前诊断增量的新候选
+
+基于 `7e11d70051715f0258e176a98171435fd50036dd` 加构建时 26 个未提交文件，包含只读 bot diagnostics native IPC/面板和窗口恢复共同路径改动。独立输出目录保留旧安装包，不是干净提交发布；没有签名、安装或 Windows 原生运行证明。
+
+当前安装包：`desktop/tauri/target/windows-current-20261010/x86_64-pc-windows-msvc/release/bundle/nsis/Reasonix Tauri Preview_0.1.0_x64-setup.exe`，38,240,608 字节，SHA256 `6978cae495cc8e2b212d5d70ed0a8f8cbea0d2377ee49043a97f17d6654e59ba`。
+
+原完整前端 lint/契约/TypeScript/Vite/资源预算通过，未放宽预算；Windows MSVC release 编译 1m55s、NSIS 封装正常 exit0。73 构建契约及 Linux preflight/CI sidecar 模拟检查通过。临时 runner 首次工作目录错误和第二次缺少本地工具路径分别 exit1，原失败日志保留；修正后第三次完成，不计失败尝试为通过。日志与构建时源码摘要：`desktop/tauri/target/windows-current-20261010/{build.log,build-corrected.log,build-toolpath.log,SOURCE_IDENTITY.json}`。
+
+7-Zip 列表和解包成功；主程序为 x64 GUI PE、Go sidecar 为 x64 PE，仅 NSIS 组件、WebView2 bootstrapper 和程序文件，无用户档案、模型配置、凭据 JSON 或 SQLite 文件。解包 sidecar SHA256 `0e8bec4484f20e117a983ce5270c8cd710c7b2a6f2bfe8dcac877a1140a5398f` 与构建产物字节完全一致；解包主程序 SHA256 `c062fe4816fb3c14faaf02cdc86cf1025cfe1c23ec934d42e515c00e0d024c1a`，与原 host 唯一差异为正常 `__TAURI_BUNDLE_TYPE_VAR_UNK` → `__TAURI_BUNDLE_TYPE_VAR_NSS`。审计夹具保留 `/private/tmp/reasonix-windows-current-audit.3Jkjn8`。
+
+保留两项源码警告（Windows 分支 DirBuilder unused_mut、未使用 restore_desktop_appearance）及旧 cargo config/交叉构建/未签名/NSIS 输出字符集提示。下方手动矩阵仍待 Windows 电脑；尤其 bot 页配置/运行观察分离、刷新、图片粘贴、终端、窗口/托盘、多屏 DPI、安装与退出不能由交叉编译或解包代替。真实远程/IM SDK、模型调用与用户数据导入没有执行。
+
 ## 2026-10-10 新候选（未做 Windows 原生验收）
 
 从 `17ffeff7af01cfbc73fff3ddf7bd74ef21bffebf` 加当时 18 个未提交文件构建，包含远程 driving 收回观察与 Serve 观察锁竞争修正。完整前端门禁、Windows MSVC release 与 NSIS 构建通过；macOS 交叉构建不是 Windows 运行证明，也未正式签名或发布。

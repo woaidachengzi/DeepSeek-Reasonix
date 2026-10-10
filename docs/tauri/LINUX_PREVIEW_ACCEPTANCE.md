@@ -1,5 +1,52 @@
 # Linux Preview 构建与验收
 
+## 2026-10-10 当前包合法 DAG 分支的正向读取
+
+当前 deb 精确 sidecar `b155dd0a…` 追加独立 schema-2 DAG wire fixture：checkpoint/main/fork 回答故意不同，显式选中fork。实际open/history只返回所选两条消息及准确角色/顺序/原时间戳，无未选分支混入或checkpoint回退；缺失usage/duration不虚构。完整七类旧历史矩阵（旧Unicode、隐藏协议、最新分页、损坏JSONL、未知schema、未知DAGentry、selected DAG）各十次race12.069s正常exit0，每类两次启动/退出，原件不改写、401和无phantom等门禁保留。宿主race/release子进程非race，没有模型调用/真实数据/GUI。
+
+仅同步测试文件到私有guest源码，原件备份 `/home/parallels/reasonix-builds/linux-current-20261010.OYyUda/selected-dag-regression.1Sy2Nt/original-test.go`；未重建或安装包，私有快照已有测试增量。日志与runner为 `desktop/tauri/target/linux-current-20261010/selected-dag-regression.{log,sh}`。不证明全部DAG/压缩损坏恢复或普通恢复界面。
+
+## 2026-10-10 当前包不支持事件格式的拒绝边界
+
+当前 deb 准确 sidecar SHA256 `b155dd0a6a7cb48b7db04908fc71e69667cc3b0ca3c7cb290e0f5af55df97a92` 追加 schema_version=999、schema 2 未知 DAG entry 两类实际包测试。合法主 JSONL不能遮盖不支持的权威事件日志；authenticated open500、401、错误脱敏、两次启动/退出、原件字节保留、无 `.damaged` salvage 或 phantom transcript，各10次race通过，3.785s、正常exit0。宿主race/release子进程非race，不调用模型、真实账号或用户数据。
+
+只同步测试文件至原私有guest源码，原件保留 `/home/parallels/reasonix-builds/linux-current-20261010.OYyUda/event-format-regression.xI0kFr/original-test.go`；快照此后含测试增量，不重建/安装已交付包。日志和固定runner在 `desktop/tauri/target/linux-current-20261010/event-format-regression.{log,sh}`。不是合法 DAG、全部压缩/损坏恢复、可见界面或完整 SQLite gate 证明。
+
+## 2026-10-10 当前 Linux Rust 原生回归完成
+
+继续观察原 session11073，而非重启测试；以 0 结束。使用当前 deb 包内 sidecar SHA256 `b155dd0a6a7cb48b7db04908fc71e69667cc3b0ca3c7cb290e0f5af55df97a92`，准确 frozen source `8525393798…`、标准 `cargo test --locked --manifest-path desktop/tauri/Cargo.toml --bin reasonix-tauri`、独立 Xvfb/D-Bus/CARGO_BUILD_JOBS=2：debug test 编译 2m42s，291 passed/0 failed/2 ignored（2.43s）。保留 unused appearance 方法警告和末尾 D-Bus 提示；默认忽略项不算通过。
+
+因此同一当前源码/包已有原完整前端门禁与预算、实际 deb/AppImage 审计和四次普通 Exit、真实 release sidecar 诊断及 SQLite 十轮 race、Linux Rust 回归证据；仍不等同于可见 UI/IME/Wayland/媒体/通知或真实 SSH/IM 服务验收。日志 `desktop/tauri/target/linux-current-20261010/native-rust.log`；交付包与下节摘要未变，未安装或发布。26 个变更文件，无提交/push，完整目标 active。
+
+## 2026-10-10 当前 deb/AppImage 已交付，实际包门禁通过
+
+上一节的同一构建 session51437 以 0 结束，未因封装静默重启；只读核对准确私有目录时 linuxdeploy/appimagetool 确实在运行，随后原任务完成。Rust release 4m50s，保留 Linux-only unused appearance 方法警告。源码仍为档案 `7fa70880…` 与 guest 私有快照 `8525393798…`，不混用旧候选、不声称原 GitHub 基线的干净 release。
+
+实际包复制在独立 `desktop/tauri/target/linux-current-20261010/packages/`，宿主副本摘要与 guest 原包逐字节一致，旧包保留：
+
+| 包 | SHA256 |
+| --- | --- |
+| `Reasonix Tauri Preview_0.1.0_arm64.deb` | `b40ee1393a83561bacdfc58eb35e66d80725ba9cda8ae925120b8a4ede52938d` |
+| `Reasonix Tauri Preview_0.1.0_aarch64.AppImage` | `78cd4f2836de0eb97991e89789b45d54d30f3405ca219b3600b39b3f972779a8` |
+
+新私有 audit `/home/parallels/reasonix-builds/linux-current-20261010.OYyUda/package-audit.G8ehIS`：deb 架构 arm64、主程序/静态 Go sidecar 均实际 ELF ARM64，host `cad7a2c4dd18047d9c10e4df2d2272bf78e494a71d36134db9397b9664b4ed79`、sidecar `b155dd0a6a7cb48b7db04908fc71e69667cc3b0ca3c7cb290e0f5af55df97a92`；host ldd 无 missing，apt-get --simulate install 成功（未安装）。AppImage 正常提取、AppRun 可执行，两包 sidecar 与本次构建 binary 精确一致；文件清单未包含 .env/config.toml/credentials JSON/SQLite/DB，未打入真实账号或数据。
+
+独立 Xvfb/D-Bus、最小环境/private HOME/XDG/file credential store 中，deb 入口与 AppRun 各 managed/explicit 共四次真实普通 RunEvent::Exit 通过：host0、同一 sidecar pidfd 已退出、readiness 删除，401、准确 core/cache/credential identity、继承 token 清空及忽略无效开发 binary override 门禁均通过。私有 fixture `/tmp/reasonix-linux-package-{o7cikmsm,vvzhuh0f,s8przdfq,p5odf31b}` 保留；不是可见 GUI、窗口关闭/托盘动作或物理剪贴板证明。D-Bus/portal/PipeWire 提示原样保留，runner 与整组审计均 exit0。
+
+最终 deb 内实际 sidecar 的 bot diagnostics（渠道关闭/网关关闭，两次正常启动）、所有五个 TestSQLiteActualPackage 系列（原子导入/WAL突退/兼容及离线恢复/审阅扫描/旧历史）与三平台参数门禁十次 race 通过（29.495s）。宿主测试带 race，实际 release 子进程不带 race；无模型 submit/IM adapter 启动或真实账号联调。审计 session64909 exit0，完整脚本与日志 `desktop/tauri/target/linux-current-20261010/{audit.sh,package-audit.log}`。
+
+当前源码 Linux Rust 标准回归随后以包内实际 sidecar、独立 Xvfb/D-Bus、CARGO_BUILD_JOBS=2 启动，session11073 真实编译中，尚无全量通过结论；原进程须继续观察，不能重启替代。日志 `native-rust.log`，来源/包摘要与当前状态见同目录 SOURCE_IDENTITY.json。当前26变更文件，未提交/推送/安装/正式发布；可见 UI/IME/Wayland/媒体/通知及真实服务等完整专项仍未完成。
+
+## 2026-10-10 当前诊断增量的 Ubuntu 新私有构建（进行中）
+
+重新只读确认授权的 Ubuntu UUID `{12152c42-4575-4de9-8a87-d116cb8a48b5}` running。Parallels 嵌套 shell 参数首次解析不符合预期，改为固定脚本入口并用 `id` 明确验证 parallels uid1000；没有以 root 构建或操作用户应用。源码档案只从 git tracked/非忽略 untracked 导出，无 `.git`、真实 `.env`、node_modules、构建缓存、绝对或上行路径、tracked symlink；原有 `.env.example` 与 credential 源代码保留。档案 SHA256 `7fa70880c14baad736a04dead9c087f3971640c8e3af206bccebeb2383b6dc92`，对应 host `7e11d7005` 加当时 25 个未提交文件，含新 bot diagnostics 与 macOS 时序修复源码。
+
+新目录 `/home/parallels/reasonix-builds/linux-current-20261010.OYyUda` 私有 0700，旧 `linux-20261010-isolated.ikxqey` 源码/产物不覆盖。先逐字节核对 package.json/pnpm-lock.yaml 与旧依赖缓存一致，再复制 node_modules，不安装或更新依赖；使用已有 Node24.21.0/pnpm10.34.5/Go1.26.6/Rust1.93.1，GOENV=off/GOPROXY=off，无真实服务请求。guest 私有快照提交 `8525393798316517bb8f17151eb2974b3cf16745` 不是 GitHub 提交或原基线的干净 release。
+
+第一次构建调用 Parallels 返回 Invalid argument（255）；宿主开始标记/日志均不存在，guest 准确目录前缀也没有匹配，确认未开始后仅重试一次。原构建现在真实运行，宿主 exec session51437；没有观察超时重启。73 项构建契约/Linux 脚本模拟、原完整前端类型/样式/边界等门禁与预算已通过：CSS120.5/120.9KiB、zh79.8/80.0、TW80.4/80.6，未改预算。已进入 native Rust release 编译，当前尚无新版 deb/AppImage 或包级通过结果。
+
+脚本、完整原构建日志与源码档案保留在 `desktop/tauri/target/linux-current-20261010/{build.sh,probe.sh,native-build.log,source.tar.gz,guest-root.txt}`，独立目录不含用户配置/凭据。后续继续观察同一进程，再审计实际 deb/AppImage/sidecar 摘要、依赖与普通 Exit；不能以源码契约或原旧包成功代替本候选包验收。新增本文件记录后当前 26 个变更文件，未提交/推送/安装/发布，完整目标 active。
+
 ## 2026-10-10 旧格式历史实际包读取
 
 以本节下方SHA固定的lifecycle deb sidecar执行新增opt-in `TestSQLiteActualPackageLegacyHistory`，四类合成旧JSONL各十次通过（8.819s）：无ID中文/emoji/多行内容；legacy v1无manifest的host session-context和system/tool/reasoning不泄漏；240条精确最新200/start40/total240；损坏JSONL拒绝open500。无旧usage/时间/时长不虚构；401、准确身份/角色/顺序、两次启动及普通退出/readiness清理、JSONL字节不改、无phantom会话通过。不可达合成provider只用于open，不submit、不使用账号或真实历史。

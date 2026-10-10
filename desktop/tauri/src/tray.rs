@@ -65,12 +65,25 @@ pub(crate) fn present_main_window(app: &tauri::AppHandle, unhide: bool) {
             }
         }
         if let Some(window) = handle.get_webview_window("main") {
+            #[cfg(not(target_os = "macos"))]
             if let Some(state) = handle.try_state::<crate::window_state::PreviewWindowState>() {
                 state.restore(&window);
             }
+            #[cfg(target_os = "macos")]
+            let _ = crate::native_window_smoke::record_presentation(&window, "presentation-before-unminimize");
             let _ = window.unminimize();
+            #[cfg(target_os = "macos")]
+            let _ = crate::native_window_smoke::record_presentation(&window, "presentation-before-show");
             let _ = window.show();
+            #[cfg(target_os = "macos")]
+            let _ = crate::native_window_smoke::record_presentation(&window, "presentation-after-show");
             let _ = window.set_focus();
+            #[cfg(target_os = "macos")]
+            let _ = crate::native_window_smoke::record_presentation(&window, "presentation-after-focus");
+            #[cfg(target_os = "macos")]
+            if let Some(state) = handle.try_state::<crate::window_state::PreviewWindowState>() {
+                state.restore(&window);
+            }
         }
         #[cfg(target_os = "macos")]
         crate::native_window_smoke::observe_restore(&handle, true);

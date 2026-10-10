@@ -1,5 +1,135 @@
 # E 迁移清单
 
+## 2026-10-10 30文件批次 review 与本地提交门禁
+
+在继续扩展前 review 当前30文件：只读诊断固定无参数/main-only IPC、短锁后网络读取、Rust/frontend严格投影与固定错误、React请求epoch/卸载/旧finally隔离、按需三语管理词典；共同窗口present/restore的macOS guard、单次排队和原保存几何capture fence；LaunchServices固定私有phase/最小环境、精确PID/kernel exit和每次新收据；实际包bot/旧JSONL/未知事件格式/所选DAG分支测试及三平台候选来源和限制。未发现本批新增阻塞性代码问题，无扩大权限、补偿坐标、重试掩盖或放宽原生门禁。
+
+提交前标准Rust308 passed/0 failed/6 ignored（6.68s，使用当前准确包内sidecar）；六包Go race和vet通过（bridge50.845s、remote14.677s、bot3.827s，修正后control42.275s，其余缓存）；两项诊断专项、bot设置20项通过，既有act警告/Node register弃用提示保留。应用/测试两份TypeScript检查、相关lint、Python12项、73构建契约与Linux脚本/CI模拟、gofmt/diff通过。首次Go命令误加不存在包路径、测试TypeScript命令误写复数配置名分别失败，修正准确路径后再验，失败不计通过。日志 `/private/tmp/reasonix-batch30-{rust,go-race,go-race-corrected,build-contract}.log`。
+
+前述新Windows/Linux包和macOS原生几何/终端、导入撤销及实际sidecar历史门禁证据保持各自准确摘要；本次源码review不代替包级或原生证明。此前一次Rust全量37个HTTP类失败根因仍未确认，本轮全量通过不等于波动已消除。bot非默认状态的原生UI待解锁，图片系统剪贴板待授权，真实SSH/IM/模型服务、完整压缩恢复/复杂管理页/Windows实机专项等仍未关闭。仅准备本地提交这30个明确源文件/测试/文档，不提交忽略的包/临时夹具、不push、不安装/发布，完整目标active。
+
+## 2026-10-10 合法 DAG 选中分支的实际包历史读取
+
+旧历史实际包矩阵新增独立 schema-2 wire fixture：合法 JSONL checkpoint 与事件日志故意不同；main 与 fork 共用用户消息但回答不同，显式 select fork。独立构造消息链 digest、ID、原始时间戳，不经当前 Session.Save/DAG writer。实际 authenticated open/history 准确返回所选分支的两条中文/emoji/多行消息、角色/顺序和原时间戳，既不混入未选 main，也不回退 checkpoint，缺失 usage/duration 不虚构。
+
+当前 macOS App 精确 sidecar `7d452d7e…` 首次正向2.359s通过，完整七类旧历史矩阵各十次race24.611s exit0；当前 Linux deb准确sidecar `b155dd0a…` 同七类十次race12.069s exit0。均每类两次启动/正常退出，401、profile/session/paging与JSONL/事件原件不改写、无salvage/phantom检查保留；release子进程非race，测试宿主race。Linux仅更新测试，原测试备份 `selected-dag-regression.1Sy2Nt/original-test.go`，不重建/安装包。
+
+日志 `/private/tmp/reasonix-current-selected-dag-{initial,full}.log`、`desktop/tauri/target/linux-current-20261010/selected-dag-regression.log`；Go vet、gofmt/diff通过。不是全部 DAG/压缩投影/损坏恢复、交互式恢复 UI 或真实数据迁移证明。bot原生界面仍待解锁后执行，剪贴板/真实服务门禁不变；30变更文件，无提交/推送，完整目标active。
+
+## 2026-10-10 实际包拒绝不支持的事件日志格式
+
+旧历史包级矩阵追加 schema_version=999、schema 2 未知 DAG entry 两类独立 wire fixture。即使存在合法主 JSONL，authenticated open仍返回500，不能隐式回退、升级或修补权威事件日志。每类两次启动/退出，验证401、错误不泄露私有路径/条目、主 JSONL/事件原件字节保留、无 `.damaged` salvage 或 phantom transcript。
+
+当前 macOS App 精确 sidecar `7d452d7e…` 十次race 7.816s exit0；当前 Linux deb精确sidecar `b155dd0a…` 十次race 3.785s exit0。宿主测试race/release子进程非race，无模型submit/真实用户数据/GUI。Linux仅同步测试文件，原件备份于私有guest目录 `event-format-regression.xI0kFr/original-test.go`，原快照此后有测试增量，不重建或安装包。日志 `/private/tmp/reasonix-current-event-format-package.log` 和 `desktop/tauri/target/linux-current-20261010/event-format-regression.log`。Go vet、gofmt/diff通过。
+
+只补齐未知格式拒绝，不证明合法 DAG/压缩投影、所有损坏恢复或恢复 UI。Mac 本轮仍锁屏，未启动或绑定 GUI；其余原生/剪贴板/真实服务门禁不变。当前30变更文件，未达到“超过30”review后提交条件，无提交/推送，完整目标active。
+
+## 2026-10-10 bot 原生诊断私有夹具已准备，锁屏待解锁
+
+新增 `tools/tauri/smoke-native-bot-diagnostics.py`，只准备合成飞书渠道开启/总网关关闭的普通 UI 档案；managed/explicit 私有 HOME、cache、core 与 file credentials，未写入真实密钥。共同 LaunchServices 适配器增加明确 ordinary bot phase，只用于内核退出收据，不传应用 native smoke flag、不注入验收 JavaScript，拒绝混用 migration/native/profile/package smoke。开始前已有 Preview 运行则拒绝，不关闭用户应用。控制收据带精确 host/sidecar PID、私有 origin 和 running/ending/ended，正常退出后逐项检查配置 bytes/mode/mtime、profile identity、sidecar/readiness 清理；保留合成夹具，`lifecyclePassed` 与 host exitCode 分开，不能把进程退出当完整 UI 通过。
+
+夹具与隔离环境 admission 等辅助 unit 共 12 项通过；不启动 GUI、不证明 bot 页实际显示。原生工具报告 Mac 锁屏且无法自动解锁，已请求用户手动解锁，当前未启动或绑定任何实例。下一步必须核对 live PID 与 private origin 后在真实 WKWebView 读取配置/运行观察，手动刷新并 Cmd+Q，保存独立界面证据；不保存设置、重启网关、使用系统剪贴板、调用模型或真实 IM。当前 29 个变更文件，未超过 30，无提交/推送，完整目标 active。
+
+## 2026-10-10 当前 Windows 安装包已交付
+
+独立 `windows-current-20261010` 输出当前 7e11d7005 加构建时 26 文件增量的 Windows x64 NSIS 包（38,240,608 字节，SHA256 `6978cae4…`），原完整前端门禁/预算、MSVC release 1m55s 和 NSIS 正常 exit0。7-Zip 解包/x64 PE 检查、sidecar 字节一致与唯一 host bundle marker 补丁检查通过；没有用户档案、模型配置或凭据文件。两次临时脚本准备失败及工具链警告保留，不算通过；旧包不覆盖。详见 [当前 Windows 候选](WINDOWS_PREVIEW_ACCEPTANCE.md#2026-10-10-当前诊断增量的新候选)。
+
+本轮重新跑 73 构建契约/Linux 脚本与 CI 模拟、9 项 Python 原生验收辅助 unit 通过；只读 review 确认窗口恢复的 macOS 新顺序仍在平台 guard 内，不改变 Windows/Linux 顺序。未执行 Windows 原生安装/界面、真实 IM/远程/模型服务、真实数据迁移或正式签名/发布。当前 27 变更文件，未达超过 30 文件先 review 后提交阈值，无提交/推送，完整目标 active。
+
+## 2026-10-10 当前 Linux 原生 Rust 回归通过
+
+原 session11073 正常 exit0：当前 private snapshot `8525393798…`、实际 deb sidecar `b155dd0a…`、独立 Xvfb/D-Bus 的标准 Rust 回归 291 passed/0 failed/2 ignored，2m42s 编译/2.43s 测试，警告和忽略项如实保留。当前两包及普通 Exit/真实 sidecar SQLite、诊断门禁仍对应原新包摘要；不把 headless/源码测试升级为可见 GUI、IME/Wayland、物理剪贴板或真实服务验收。详见 [Linux 当前原生回归](LINUX_PREVIEW_ACCEPTANCE.md#2026-10-10-当前-linux-rust-原生回归完成)。26 个变更文件，无提交/推送，完整目标 active。
+
+## 2026-10-10 当前 Linux 两包与实际 sidecar 验收通过
+
+原 Ubuntu 私有构建 session51437 正常完成，没有重启封装；当前 deb/AppImage 已交付独立 `desktop/tauri/target/linux-current-20261010/packages/`，SHA 分别 `b40ee139…` / `78cd4f28…`，旧包保留。实际 ARM64/ldd/模拟依赖与文件清单、两包 sidecar 精确一致检查通过；两包 managed/explicit 四次私有 Xvfb/D-Bus 普通 Exit0/sidecar/readiness/身份/401/覆盖值边界通过。真实包内 bot diagnostics 与全部 SQLite 实际包测试、三平台参数十次 race 29.495s 通过，整组审计 session64909 exit0，详见 [Linux 当前包证据](LINUX_PREVIEW_ACCEPTANCE.md#2026-10-10-当前-debappimage-已交付实际包门禁通过)。不是普通可见 UI/IME/Wayland/剪贴板或真实服务证明。
+
+当前 Linux Rust 标准回归使用本包 sidecar 已在独立环境启动，session11073 仍活，尚无全量结果。原建包阶段和失败调用证据保留，不把旧结果挪给新包。26 个变更文件，未提交/推送/安装/发布，完整目标 active。
+
+## 2026-10-10 当前 Linux 原生构建已启动
+
+在已授权 Ubuntu 的新私有目录冻结当前 `7e11d7005` 加 25 文件增量的源码档案，SHA256 `7fa70880c14baad736a04dead9c087f3971640c8e3af206bccebeb2383b6dc92`。原旧目录/包保留，只复用锁文件和 package.json 完全一致的既有依赖副本，无安装/真实账号/数据迁移。parallels uid1000 的私有 guest 快照 `8525393798316517bb8f17151eb2974b3cf16745` 不等于 GitHub 干净 release。73 构建契约、Linux 模拟和原完整 frontend gates/预算通过，正在同一 native Rust 构建；session51437 仍活，不能重启或宣称已出新包。目录、失败调用核验与证据详见 [Linux 当前私有构建](LINUX_PREVIEW_ACCEPTANCE.md#2026-10-10-当前诊断增量的-ubuntu-新私有构建进行中)。当前 26 变更文件，未达超过 30 文件先 review 后提交阈值，完整目标 active。
+
+## 2026-10-10 首次显示后单次恢复修复与完整终端几何通过
+
+macOS 的共同 restore 路径拒绝隐藏窗口提前应用几何；共同 presentation 在 show/focus 之后才调用 restore，仍由 restore_pending/restore_queued 保留原保存状态并防止重入重复排队。保存坐标直接应用一次，无偏移补偿、定时校正或情景重试；Windows/Linux 的既有恢复顺序不变。新增原保存状态在显示前/排队中/完成后的保护回归，窗口状态专项 10 项通过。
+
+最终 App 在 `desktop/tauri/target/macos-presentrestore-20261010/aarch64-apple-darwin/release/bundle/macos.noindex/Reasonix Tauri Preview.app`；host SHA256 `ebc05b56a9f73cd189f31bb0a07a39e548af5d9fb2439973e1d71cf5c123efe4`，sidecar `7d452d7e459a1c21ed5ce9c2f3689695a013f46eced5854fb249d7f31f20cdec`。原完整前端门禁/资源预算与 deep/strict ad-hoc 签名验证通过，最终增量 release 41.12s。首次修复候选（host b2141148…）完整备份在 `/private/tmp/reasonix-presentrestore-before-gate.eFRMQd/Reasonix Tauri Preview.before-gate.app`，旧诊断包不覆盖；所有包基于 7e11d7005 加未提交增量，不是干净提交发布，无安装/公证/真实账号或真实数据操作。
+
+最终 App 四次完整 `smoke-native-integrated-terminal.py` 均 exit 0：副屏 managed/explicit `/private/tmp/reasonix-native-terminal-ui-13jq9rms/{managed,explicit}`，主屏 managed/explicit `/private/tmp/reasonix-native-terminal-ui-_pzvw837/{managed,explicit}`。原精确模板比较未放宽，分别保留 x=-3400 与 x=200，width2400/height1600/y120/scale2/maximized=false 全部一致。实际 WKWebView xterm InputEvent → native IPC → 包内 Go → PTY、真实 TTY、UTF8/ANSI 绘制、显式创建/context、折叠不重建、关闭/切换/退出 PID 清理及无模型历史门禁均通过。不是物理键盘/剪贴板证明。
+
+同一最终 App 普通窗口 geometry-only 六阶段真实启动 exit 0：managed `/private/tmp/reasonix-native-restore-gate-sxiltfzp`、explicit `/private/tmp/reasonix-native-restore-gate-vc4q8muz` 各 exercise/restore-maximized/restore-normal 三次，原 normal geometry、身份稳定、正常 host/sidecar/readiness 清理检查全部通过；两档案正常重启均有新 `preserved=true` 排队捕获收据。临时 runner `/private/tmp/reasonix-native-restore-gate-20261010.py` 仅调用既有严格 launch，不操作剪贴板/外部服务。此切片不是完整原生窗口/菜单/剪贴板验收。
+
+第一候选的 managed restore-normal 曾因验收线程在 presentation 前读收据而失败，保留 `/private/tmp/reasonix-native-restore-gate-jy8aak4g`，不重标通过。修正验收等待 actual restore_pending 完成边界，并在每次启动清除旧 queued-capture 收据；新增无 GUI 的旧收据清理回归，Python 终端 6 项、控制与私有环境 3 项通过。Rust 最终全量 308 passed/0 failed/6 ignored；其中一次并行原生验收期间全量有 37 项失败（多个 HTTP 类测试），单项和原生结束后的全量再验通过，根因尚未确认，不能据此声称消除了测试波动。后续 review 需保留这一风险记录。
+
+当前 25 个变更文件，未提交/推送。图片系统剪贴板验收仍待授权，真实远程/IM SDK、当前 Windows/Linux 包专项、复杂管理页及其它完整目标仍未完成；目标 active。
+
+## 2026-10-10 同步 window.show 边界确认位置变化
+
+在共同 presentation 路径追加取消最小化前、show 前、show 后、focus 后四个只读 opt-in 快照；普通档案不开启，调用顺序与窗口行为未改。独立 `macos-showtrace-20261010` 诊断 App 完成原全部前端门禁/预算、Rust release 1m43s、deep/strict ad-hoc 签名验证。host SHA256 `084f3c2ce745987d06e7428e2a10a4a7d86b3e1bff438da7a143735e8e1f06cf`，sidecar 仍 `7d452d7e459a1c21ed5ce9c2f3689695a013f46eced5854fb249d7f31f20cdec`；旧包未覆盖，dirty 身份如实保留，无安装/公证/发布。
+
+副屏 managed 私有档案 `/private/tmp/reasonix-native-terminal-ui-sxw94m8g/managed` 的 requested/drained/before-unminimize/before-show 均 x=-3400，after-show 已为 -3372，after-focus 不再变化；第二次显式 show 保持 -3372。因此偏移在首次同步 window.show 返回前已经发生，不是后续 focus、终端输入或应用 restored_bounds 钳制。Tao 源码的 show 直接调用 AppKit makeKeyAndOrderFront，而 focus 再调用该方法与激活；这不能进一步证明具体系统布局机制。主屏 managed 证据 `/private/tmp/reasonix-native-terminal-ui-b8hxl9qo/managed` 保留同样边界。两次完整终端 gate 仍因精确模板几何失败；核心收据、native host kernel exit 0 和 shutdown PTY PID 清理通过，不以这些部分成功替代完整验收。
+
+Rust 全量 307 passed / 0 failed / 6 ignored，初始呈现 4 项与 Python 终端 5 项通过；未放宽门禁或加入补偿/特殊重试。下一步检查首次显示与保存几何恢复的共同事务边界，在保存状态仍受保护时完成最终恢复，再验证原生普通窗口、终端与重启；尚无生产修复通过证据。当前 24 个变更文件，未提交/推送，完整目标继续 active。
+
+## 2026-10-10 窗口偏移已缩小到首次显示阶段
+
+新增只读 opt-in 坐标追踪：记录实际恢复请求和 Tao/AppKit setter 队列完成后的窗口快照，普通档案不开启、不改变位置、焦点、恢复顺序或验收标准。新增双屏模板计算回归，证明 x=200/-3400 在当前 work area 下均不会被应用的 restored_bounds 钳制。Rust 全量 307 passed / 0 failed / 6 ignored，窗口状态专项 9 passed；忽略项不能视为原生通过。
+
+独立诊断包 `desktop/tauri/target/macos-windowtrace-20261010/aarch64-apple-darwin/release/bundle/macos.noindex/Reasonix Tauri Preview.app` 已完成原完整前端门禁、资源预算、Rust release（1m40s）和 deep/strict ad-hoc 签名验证。host SHA256 `aee7c4d28e947f25fbb4efcc54e99b788b79c3bcc66dc18b66d04eeb5c9578dd`，sidecar 仍为 `7d452d7e459a1c21ed5ce9c2f3689695a013f46eced5854fb249d7f31f20cdec`。基于 7e11d7005 加未提交增量，不是干净提交发布；旧包未覆盖，无安装、公证、真实服务或用户数据操作。
+
+同一诊断包的副屏 managed 与主屏 managed 私有启动均复现严格几何失败，终端核心固定收据全部 true、正常 host 内核退出 0、shutdown PTY PID 消失。副屏 trace 请求 -3400，隐藏窗口的 restore-geometry-drained 仍为 -3400，到首次显示后的 edit-focus-ready 才变为 -3372；主屏请求 200，队列完成后仍为 200，首次显示后变为 468。证据保留 `/private/tmp/reasonix-native-terminal-ui-frfn_7f5/managed` 与 `/private/tmp/reasonix-native-terminal-ui-l9mj53wa/managed`。这排除了恢复计算/已排空 setter 队列和后续终端输入作为偏移起点，尚不能区分首次 show/focus 或系统窗口布局行为；不能宣称产品修复或整个终端验收通过。下一步追踪共同 presentation 路径的 show/focus 边界，而非补偿坐标或重试相同条件。23 个变更文件，未提交/推送；完整目标 active。
+
+## 2026-10-10 当前包原生终端核心通过、窗口几何门禁仍失败
+
+在同一新版 App 上执行既有 `smoke-native-integrated-terminal.py`，不使用剪贴板/物理键盘/系统 Terminal/真实模型。LaunchServices 启动全新 private HOME/state/cache，固定 `/bin/sh` 与空启动文件，实际 WKWebView xterm InputEvent → 注册 IPC → 包内 Go → PTY。主屏 managed、原默认左屏 managed、独立补执行尚未启动的左屏 explicit 三个样本均得到全部 true 固定收据：realWebViewIPC/xtermInputEvent/realTTY/utf8AnsiPainted/explicitCreateOnly/collapseSamePTY/explicitContextOnly/closePIDGone/switchPIDGone/noModelHistory；native host kernel exit=0，正常窗口 runner 与 shutdownPID 消失检查通过。不是物理按键验收，也不证明整个终端门禁通过。
+
+三组最终均 exit 1，原因是未改变的严格窗口模板比较：主屏请求 x=200，实际保存 x=468；副屏请求 x=-3400，managed/explicit 均保存 x=-3372，其余 width2400/height1600/y120/scale2/maximized=false 不变。实际 trace 报告两块 3840 像素宽、scale2 显示器，左屏 x=-3840；不同于此前只有主屏的历史环境。`edit-focus-ready`（终端动作之前）已记录偏移后的几何，native 激活/聚焦/可见/可信 origin 均 true。共同窗口恢复/激活位置差异已复现，根因未确认，不能归因为终端渲染、操作系统策略或用户移动，未添加坐标补偿或特殊重试。
+
+失败证据分别保留 `/private/tmp/reasonix-native-terminal-ui-2hoas21i/managed`、`/private/tmp/reasonix-native-terminal-ui-z1nv357e/managed`、`/private/tmp/reasonix-native-terminal-ui-igjouccv/explicit`。原主屏失败未被副屏或 explicit 的核心成功覆盖；最后 Preview inventory 空。抽取相同严格 comparator 并新增两种已观测 x 漂移的拒绝回归，终端 Python 单元共 5 项通过，原几何断言及全部功能字段门禁未放宽。当前共 21 个变更文件，未提交/推送。下一步定位共同位置恢复/激活问题；完整图片/剪贴板、远程/真实服务、平台专项等目标仍未完成。
+
+## 2026-10-10 原生偏好迁移六阶段完整复验通过
+
+对相同新版 App（host `810d606a…` / sidecar `7d452d7e…`）完成真实 CUA/WKWebView 操作，不使用 DOM 模拟替代：managed 与 explicit 私有档案各 before-import / after-import / after-undo 三次 LaunchServices 启动。每次先核对精确 host/sidecar PID 与控制收据的私有 origin，之后每次输入都依据新鲜 AX 树并检查当前 origin。managed 为 `e58267d3b1beb17c57d3a4c0abc9cf70`，explicit 为 `f7b7c0066cb0cfda649d92963fdefa91`，两者不同且各自重启稳定；界面显示配置目录分别为私有 AppData/core 与显式 `/core`。
+
+两档案均实际预览私有 large / workspace / deep 三项，勾选确认、导入显示 3 项成功和回退按钮；重启后工作区指向对应私有目录、深入 radio=1、大字号 radio=1、回退记录保留；本次重新预览来源再撤回显示恢复 3 项。再次重启后工作区未设置、标准 radio=1、默认字号 radio=1、回退按钮消失；仅预览仍存在的来源，不重新导入。六次退出前都有新 `nonPersistent=true/readCount=1/valueCount=3` 收据。
+
+runner `77037` 最终 exit 0，六次精确 host 内核退出码均 0（managed 39122/39422/40208，explicit 40729/41038/41491），每次 sidecar/readiness 清理、原件字节/权限/mtime 与档案 identity 检查通过。成功合成夹具与控制收据按 runner 自动清理，最终应用 inventory 空；此前失败夹具未覆盖/删除。切换档案时临时操作 helper 的旧 origin 期望曾导致输入前拒绝，重新只读核对当前 AX 地址后建立该档案守卫继续，未移除 origin 校验，未点击普通用户配置。
+
+两种档案 after-undo 阶段还实际进入 bot 页并刷新新诊断：native IPC 成功返回四个 legacy 渠道，均显示“配置检查：已关闭 / 运行观察：尚未观察到”，未出现读取失败，不启动或连接真实 IM。这仅证明默认关闭档案的原生读取/刷新链路，不证明 SDK 登录、投递或全部故障/启用状态。图片粘贴、终端、远程/真实服务及 Windows/Linux 当前包专项等完整目标仍未完成，目标保持 active。当前变更仍 19 文件，未提交/推送。
+
+## 2026-10-10 原生私有界面绑定与迁移部分实测
+
+新增迁移 runner 可选 `--launch-services`，复用现有精确 PID/kqueue kernel-exit 工具，不把 open 进程当作 host。仅固定 before-import/after-import/after-undo 阶段可传 `private-source`，不转发任意来源或环境凭据；2 项环境 admission unit、1 项控制收据 unit 与 diff 检查通过。新增接线未改变生产 App。仍要求每次活 PID、私有 origin、来源/原件保留及正常退出，不放宽缺失收据或签名门禁。
+
+本轮新版 App 私有 managed 档案 `/private/tmp/reasonix-ui-migration-managed-yhb3zyak` 通过 LaunchServices 启动后，实际 CUA 地址与收据 `reasonix-preview://a433d9b33f2721e04907f4ecb3237541.localhost/` 匹配，空会话与 storage/core 路径也匹配。普通界面完成预览 3 项合成偏好（large/private workspace/deep）、勾选确认、导入成功/撤回按钮；Cmd+Q 后内核退出 0、sidecar/readiness 清理、原件和 identity 不变。第二次真实启动核对私有 workspace、深入 radio=1 与大字号 radio=1，存储页回退记录仍在；实际撤回显示恢复 3 项，再 Cmd+Q 内核退出 0，sidecar/readiness 清理及原件不变。
+
+第二次未点击预览来源，严格 `check_source_receipt` 因缺少本次 read receipt 判失败并保留夹具；整个三阶段矩阵未通过，撤销后重启结果和 explicit 档案尚未实测。已把每个阶段必须预览私有来源（after-undo 只预览、不得重新导入）的步骤写入 runner 文档及就绪提示，未取消断言。退出后应用 inventory 空，未使用失效 binding 再打开应用。当前共 19 个变更文件，未提交/推送；这一证据不证明终端/图片/剪贴板或真实服务门禁完成。
+
+## 2026-10-10 含只读诊断面板的新 macOS App
+
+独立目录 `desktop/tauri/target/macos-botdiag-20261010/aarch64-apple-darwin/release/bundle/macos.noindex/Reasonix Tauri Preview.app` 构建成功，未覆盖旧包。基于 `7e11d7005` 加未提交诊断增量，native build identity 如实 dirty；Go sidecar、Rust release（2m04s）、原全部 frontend gates/资源预算、ad-hoc 签名及 codesign deep/strict 验证通过，未公证/安装/发布。pnpm 在线签名校验此前 fetch 失败，未关闭验证；原 build scripts 展开后调用已安装本地工具，所有原门禁保留。App 仅原有 5 个封装文件，无用户配置或凭据文件。
+
+新包 host SHA256 `810d606a40205d35c8f44e3757192895c51bafae4f1cdd4849a1c9d1fdec7b39`，sidecar SHA256 `7d452d7e459a1c21ed5ce9c2f3689695a013f46eced5854fb249d7f31f20cdec`。新增 opt-in `TestBotDiagnosticsActualPackageReadOnly` 指向这个确切包内 sidecar：渠道关闭/网关关闭两类各两次启动，十轮 race 通过（4.219s），验证 401/400/200、固定观察协议、私密身份/凭据名称不返回、runtime 未运行/刷新、配置字节/权限/mtime 不变、正常 shutdown/readiness 清理；全程独立 HOME/state/cache/file credentials，无真实 IM。未指定 binary 的默认源码测试只 skip，不计包级通过。
+
+同一个新包内 sidecar 的 SQLite/审阅扫描/原始旧 JSONL 历史 23 类实际可执行文件场景，加平台启动参数门禁，各十轮 race 通过（38.758s）。不继承旧包摘要；未迁移真实数据。忽略目录 `SOURCE_IDENTITY.json` 保存本候选边界与二进制摘要。WKWebView 诊断界面、原生导入/撤销和终端/图片/剪贴板及真实服务仍待完成；未再启动或操作普通用户配置。当前 17 个变更文件，未达到超过 30 文件先 review 后提交阈值，未提交/推送，完整目标继续 active。
+
+## 2026-10-10 bot 只读诊断原生接线与界面隔离拒绝
+
+新增 `TauriBotDiagnostics` 并接入 bot 设置页，独立展示配置检查/运行观察、非认证或投递证明的提示、显式刷新、加载/空/固定失败恢复。保存或重新加载设置时清除旧观察并退休旧请求；同一请求身份才可提交结果或结束 loading，卸载后不写状态。独立组件生命周期回归覆盖旧请求/旧 finally、保存后重载、刷新清旧、错误脱敏、空列表和卸载；原 bot 设置 20 项通过，既有 act 警告如实保留。新增三语文案留在按需 management 词典，不扩大通用语言 chunk。
+
+Browser plugin not available，使用既有 Playwright/Chrome 在独立 `http://127.0.0.1:5198/e-qa` 验收实际 React 设置组件，native bridge 为合成夹具。页面身份/有内容/无 Vite overlay、控制台 errors 空、1280×900 与 390×900 无页面溢出、配置/观察分离、刷新失败不泄露 canary、重试空列表通过；既有添加/配对/保存失败保稿/轮询保稿/重启与转发界面回归通过。报告和截图保留 `/private/tmp/reasonix-botdiag-qa.pxZkr4/`；不是 WKWebView/native IPC 或真实服务验收。TypeScript 测试配置、新组件 lint 与 diff 检查通过。当前 16 个变更文件，未提交/推送；原生导入/撤销、剪贴板授权和真实 IM 等完整门禁不变。
+
+后续接入前端 `tauriBotConnectionDiagnostics` 固定无参数调用与 `parseBotDiagnostics`：只接受固定字段、协议/观察标记、config/runtime 状态枚举、UTF-8 字节有界且唯一的连接 ID；返回独立投影，不渲染原始 SDK 诊断。源码回归验证全部 45 个状态组合、空列表、私密字段/异常状态/重复 ID/控制字符/超长及过大列表拒绝；实际前端函数通过模拟 Tauri core 验证仅调用对应命令、无外部 URL/token/激活参数、非 Tauri 拒绝且无回退。未连接真实 native IPC/IM，不冒充配置页或原生包级验收。新 test 被 discovery runner 自动发现，无需改 package.json。
+
+Node 26 下诊断专项通过，应用及测试两份 TypeScript 配置检查 exit 0。系统 Node 16 的启动失败、pnpm 在线版本签名验证因 fetch 失败而拒绝，以及首次类型检查发现 Object.hasOwn 不在现有 lib 的失败均未算通过；未降低签名验证，直接运行本地已安装 TypeScript，改为兼容的 hasOwnProperty.call 后重验。当前共 9 个变更文件，未提交/推送。
+
+在 `7e11d7005` 后新增主窗口专用 `bot_connection_diagnostics` typed IPC。使用短锁获取 bridge 地址与 token，再在锁外执行固定认证 GET；不带写请求 ID，不重试写操作，不启动或刷新 bot。Rust 严格检查 protocol、`runtimeObservationOnly=true`、固定状态枚举、未知字段及有界唯一连接 ID；解析失败不回显 SDK/私密字段。7 项 Rust 专项（含真实 loopback HTTP 路由/认证）和 Go 诊断专项通过。尚未接入配置页、重建安装包或验收真实 IM，不以此声明完整诊断完成。
+
+本轮 Rust 全量源码回归结果为 306 passed、6 ignored；环境门控的原生/真实 sidecar 用例未提供专用环境时不能算包级运行证据。Python 收据 unit 与 diff 检查通过。仅 6 个文件变更，未达到超过 30 文件先 review 后提交的阈值，未提交或推送。
+
+用户退出普通 Preview 后启动私有 managed UI 夹具，确认自有 host/sidecar 存活；随后界面工具绑定显示普通配置的 origin 和真实会话，立即停止，未点击、导入或撤销。私有 runner 结束并保留 `/private/tmp/reasonix-ui-migration-managed-p8xwktj4`，因缺少本次 legacy-source read receipt 判失败。不能把正常进程退出当作 UI 导入验收通过，也尚不能证明界面绑定失配的根因。控制收据新增预期 `webviewOrigin`，receipt unit 通过；等待普通实例再次退出并修正启动/绑定方式后复验。
+
 ## 2026-10-10 超过30文件的review收敛批次
 
 新增bot只读诊断的Go路由`GET /v1/settings/bots/diagnostics`（原bridge鉴权）。只返回ID及固定config/runtime状态码；配置与运行观察独立、`runtimeObservationOnly=true`，不证明认证/投递或新配置已生效，不refresh、不启停、不发送。拒绝query，配置读取失败只给通用问题/恢复建议；不返回label/SDK错误/凭据值或名称/身份/路径。先补Go后端，尚无typed native IPC/前端入口，未宣称完整诊断、扫码安装或真实IM完成。

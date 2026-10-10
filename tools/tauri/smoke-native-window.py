@@ -151,6 +151,7 @@ def launch(host_binary, sidecar_binary, root, identifier, managed, phase, provid
     result_path = temporary / "reasonix-native-window-result.json"
     result_path.unlink(missing_ok=True)
     (temporary / "reasonix-native-window-trace.jsonl").unlink(missing_ok=True)
+    (temporary / "reasonix-native-window-queued-capture.json").unlink(missing_ok=True)
     instance_marker = temporary / "reasonix-native-window-awaiting-instance.json"
     instance_marker.unlink(missing_ok=True)
     env = dict(os.environ if environment is None else environment)

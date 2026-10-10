@@ -38,6 +38,11 @@ def require_placement(geometry, allow_primary_display):
         raise ValueError("terminal smoke requires a left-display window template; use --allow-primary-display for an owned primary-screen run")
 
 
+def require_saved_geometry(actual, requested):
+    if actual != requested:
+        raise RuntimeError("terminal acceptance escaped requested display geometry")
+
+
 def smoke(app_path, template_path, profile, allow_primary_display=False):
     app = Path(app_path).resolve()
     identifier = plistlib.loads((app / "Contents/Info.plist").read_bytes())["CFBundleIdentifier"]
@@ -78,8 +83,7 @@ def smoke(app_path, template_path, profile, allow_primary_display=False):
             pid = validate_receipt(receipt)
             if windows.package.is_alive(pid):
                 raise RuntimeError("owned terminal PID survived normal application shutdown")
-            if json.loads((app_data / "window-state.json").read_text()) != geometry:
-                raise RuntimeError("terminal acceptance escaped requested display geometry")
+            require_saved_geometry(json.loads((app_data / "window-state.json").read_text()), geometry)
             print(f"native integrated terminal {mode}: IPC/input/TTY/UTF8/explicit context/close/switch/shutdown OK", flush=True)
         finally:
             # Preserve these owned profiles and fixed receipts for independent

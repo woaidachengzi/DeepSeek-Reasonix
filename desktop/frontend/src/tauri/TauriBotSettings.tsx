@@ -3,6 +3,7 @@ import { Activity, Bot, RefreshCw, ShieldAlert } from "lucide-react";
 import { changeTauriBotSettings, restartTauriBotRuntime, tauriBotRuntimeStatus, tauriBotSettings, tauriMessageFrom, tauriProviderSummary, type TauriBotRoute, type TauriBotRuntimeStatus, type TauriBotSettings, type TauriBotSettingsChange, type TauriProviderSummary } from "../lib/tauriBridge";
 import { TauriBotPairingManager } from "./TauriBotPairingManager";
 import { TauriBotConnectionManager } from "./TauriBotConnectionManager";
+import { TauriBotDiagnostics } from "./TauriBotDiagnostics";
 import { useManagementT } from "./tauriManagementI18n";
 
 export function TauriBotSettings() {
@@ -236,6 +237,7 @@ export function TauriBotSettings() {
     <div className="tauri-settings-actions"><button className="tauri-settings-button" type="button" disabled={saving || loading || Boolean(status?.refreshing)} onClick={() => void restartRuntime()}><RefreshCw size={14}/>{t("settings.bots.restartRuntime")}</button>{status?.refreshing && <span role="status">{t("settings.bots.refreshingRuntime")}</span>}</div>
     {settings && <TauriBotConnectionManager settings={settings} disabled={saving} onBusyChange={setSaving} onError={setError} onSaved={next => {++refreshEpoch.current;setSettings(next);setRouteDrafts(current => routesDirty ? current : (next.routes ?? []));savedRoutes.current=next.routes??[];void tauriBotRuntimeStatus().then(nextStatus => {if(mounted.current) setStatus(nextStatus);}).catch(error => {if(mounted.current) setError(tauriMessageFrom(error));});}}/>}
     <TauriBotPairingManager disabled={saving} onBusyChange={setSaving} onApproved={() => {const epoch=++refreshEpoch.current;void Promise.all([tauriBotSettings(),tauriBotRuntimeStatus()]).then(([next,nextStatus]) => {if(mounted.current && epoch===refreshEpoch.current){setSettings(next);setStatus(nextStatus);}}).catch(error=>{if(mounted.current) setError(tauriMessageFrom(error));});}}/>
+    <TauriBotDiagnostics settings={settings} disabled={saving || loading} />
     {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}
     {statusError && <p className="tauri-diagnostic-error" role="alert">{statusError}</p>}
     {settings && <>

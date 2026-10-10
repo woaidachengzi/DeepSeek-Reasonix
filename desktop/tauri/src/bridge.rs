@@ -1692,6 +1692,20 @@ pub struct BridgeManagementClient {
 }
 
 impl BridgeManagementClient {
+    fn bot_connection_diagnostics(
+        &self,
+    ) -> Result<crate::bot_diagnostics::DiagnosticsView, String> {
+        let response = request_json(
+            self.address,
+            &self.token,
+            "GET",
+            "/v1/settings/bots/diagnostics",
+            None,
+            None,
+        )?;
+        crate::bot_diagnostics::parse(response)
+    }
+
     pub fn remote_request<T: serde::de::DeserializeOwned>(
         &self,
         path: &'static str,
@@ -2877,6 +2891,12 @@ impl BridgeSupervisor {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
         Ok(response)
+    }
+
+    pub fn bot_connection_diagnostics(
+        &self,
+    ) -> Result<crate::bot_diagnostics::DiagnosticsView, String> {
+        self.management_client()?.bot_connection_diagnostics()
     }
 
     pub fn bot_pairing(&self) -> Result<Value, String> {
@@ -6634,6 +6654,42 @@ mod tests {
             assert!(headers.contains("X-Reasonix-Request-ID: "));
             server.join().unwrap();
         }
+    }
+
+    #[test]
+    fn bot_diagnostics_client_uses_authenticated_read_only_fixed_route() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream);
+            let mut headers = String::new();
+            loop {
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                if line == "\r\n" {
+                    break;
+                }
+                headers.push_str(&line);
+            }
+            assert!(headers.starts_with("GET /v1/settings/bots/diagnostics HTTP/1.1\r\n"));
+            assert!(headers.contains("Authorization: Bearer owned-bot-diagnostic-token\r\n"));
+            assert!(!headers.contains("X-Reasonix-Request-ID:"));
+            let response =
+                json!({"protocolVersion":1,"runtimeObservationOnly":true,"connections":[]})
+                    .to_string();
+            write!(reader.into_inner(), "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", response.len(), response).unwrap();
+        });
+        let client = super::BridgeManagementClient {
+            address,
+            token: "owned-bot-diagnostic-token".into(),
+        };
+        assert!(client
+            .bot_connection_diagnostics()
+            .unwrap()
+            .connections
+            .is_empty());
+        server.join().unwrap();
     }
 
     #[test]

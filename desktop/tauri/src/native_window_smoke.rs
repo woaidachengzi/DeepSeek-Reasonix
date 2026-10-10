@@ -456,8 +456,37 @@ pub(crate) fn snapshot(window: &WebviewWindow) -> Result<serde_json::Value, Stri
 }
 
 pub(crate) fn record(app: &AppHandle, stage: &'static str) -> Result<(), String> {
-    use std::io::Write;
     let value = on_main(app, |_, window| snapshot(window))?;
+    write_trace(serde_json::json!({"stage": stage, "state": value}))
+}
+
+/// Read-only evidence at the actual restoration boundaries. Never enabled for
+/// an ordinary profile and never changes the requested window placement.
+pub(crate) fn record_presentation(window: &WebviewWindow, stage: &'static str) -> Result<(), String> {
+    if !window.app_handle().try_state::<WindowSmokeState>().is_some_and(|state| state.enabled) {
+        return Ok(());
+    }
+    write_trace(serde_json::json!({"stage": stage, "state": snapshot(window)?}))
+}
+
+pub(crate) fn record_geometry_restore(
+    window: &WebviewWindow,
+    stage: &'static str,
+    requested: (i32, i32, u32, u32),
+) -> Result<(), String> {
+    if !window.app_handle().try_state::<WindowSmokeState>().is_some_and(|state| state.enabled) {
+        return Ok(());
+    }
+    let (x, y, width, height) = requested;
+    write_trace(serde_json::json!({
+        "stage": stage,
+        "requestedGeometry": {"x": x, "y": y, "width": width, "height": height},
+        "state": snapshot(window)?,
+    }))
+}
+
+fn write_trace(value: serde_json::Value) -> Result<(), String> {
+    use std::io::Write;
     let mut file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -466,9 +495,16 @@ pub(crate) fn record(app: &AppHandle, stage: &'static str) -> Result<(), String>
     writeln!(
         file,
         "{}",
-        serde_json::json!({"stage": stage, "state": value})
+        value
     )
     .map_err(|_| "write private window trace".into())
+}
+
+pub(crate) fn record_queued_capture(preserved: bool) -> Result<(), String> {
+    std::fs::write(
+        marker_directory()?.join("reasonix-native-window-queued-capture.json"),
+        serde_json::json!({"preserved": preserved}).to_string(),
+    ).map_err(|_| "write queued capture fence receipt".into())
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -969,6 +1005,18 @@ fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
         "second-instance" => background_close(app, &directory, true)?,
         "restore-maximized" | "restore-normal" => {
             let expected = expected_geometry(&directory)?;
+            if phase == "restore-normal" {
+                wait_for(app, "saved geometry restoration completed", |window| {
+                    Ok(window.app_handle().state::<PreviewWindowState>().restoration_completed())
+                })?;
+                let receipt: serde_json::Value = serde_json::from_slice(
+                    &std::fs::read(directory.join("reasonix-native-window-queued-capture.json"))
+                        .map_err(|_| "queued capture fence receipt missing")?,
+                ).map_err(|_| "queued capture fence receipt invalid")?;
+                if receipt.get("preserved") != Some(&serde_json::Value::Bool(true)) {
+                    return Err("queued capture replaced saved normal geometry".into());
+                }
+            }
             if phase == "restore-maximized" {
                 wait_for(app, "restored maximized window", |window| {
                     window

@@ -132,7 +132,10 @@ impl PreviewWindowState {
         // The runtime handles setters inline only on its UI thread. On macOS
         // Tao then submits the actual AppKit mutations to the main queue.
         #[cfg(target_os = "macos")]
-        if objc2::MainThreadMarker::new().is_none() {
+        if objc2::MainThreadMarker::new().is_none() || !window.is_visible().unwrap_or(false) {
+            // The first AppKit order-front can constrain a hidden window's
+            // frame. Apply saved geometry only after presentation, once, while
+            // capture still retains the original request. No corrective retry.
             return;
         }
         if !self.restore_pending.load(Ordering::SeqCst) {
@@ -176,7 +179,12 @@ impl PreviewWindowState {
         if self.restore_queued.swap(true, Ordering::SeqCst) {
             return;
         }
-        if let Some((x, y, width, height)) = restored_bounds(&state, &areas) {
+        let requested_bounds = restored_bounds(&state, &areas);
+        if let Some((x, y, width, height)) = requested_bounds {
+            #[cfg(target_os = "macos")]
+            let _ = crate::native_window_smoke::record_geometry_restore(
+                window, "restore-geometry-requested", (x, y, width, height),
+            );
             if window
                 .set_size(tauri::PhysicalSize::new(width, height))
                 .is_err()
@@ -196,12 +204,27 @@ impl PreviewWindowState {
         }
         #[cfg(target_os = "macos")]
         {
+            if std::env::var("REASONIX_TAURI_NATIVE_WINDOW_SMOKE").as_deref() == Ok("restore-normal") {
+                // Exercise the capture fence after the visible restore has
+                // queued its mutations, not merely during hidden setup.
+                self.capture(window);
+                let _ = crate::native_window_smoke::record_queued_capture(
+                    self.verify_pending_capture(true).is_ok(),
+                );
+            }
             let window = window.clone();
             // Queue behind Tao's size, position and maximization mutations.
             // Until this boundary, capture/save must retain the original normal
             // geometry. Reentrant focus/resize events must not enqueue it twice.
             dispatch2::DispatchQueue::main().exec_async(move || {
                 if let Some(state) = window.app_handle().try_state::<PreviewWindowState>() {
+                    // The setters have now drained, before capture replaces the
+                    // saved request. Preserve both sides for opt-in diagnosis.
+                    if let Some(bounds) = requested_bounds {
+                        let _ = crate::native_window_smoke::record_geometry_restore(
+                            &window, "restore-geometry-drained", bounds,
+                        );
+                    }
                     state.restore_pending.store(false, Ordering::SeqCst);
                     state.restore_queued.store(false, Ordering::SeqCst);
                     state.capture(&window);
@@ -272,12 +295,18 @@ impl PreviewWindowState {
             .map_err(|error| format!("write main window state {}: {error}", self.path.display()))
     }
 
-    /// Opt-in native regression: setup captured while Tao's mutations are queued.
+    /// Opt-in native regression: capture must retain the original saved frame
+    /// both before first presentation and while Tao's mutations are queued.
     #[cfg(target_os = "macos")]
-    pub(crate) fn verify_pending_capture(&self) -> Result<(), String> {
+    pub(crate) fn restoration_completed(&self) -> bool {
+        !self.restore_pending.load(Ordering::SeqCst)
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn verify_pending_capture(&self, queued: bool) -> Result<(), String> {
         let cached = self.normal.lock().unwrap_or_else(|e| e.into_inner()).clone();
         if !self.restore_pending.load(Ordering::SeqCst)
-            || !self.restore_queued.load(Ordering::SeqCst)
+            || self.restore_queued.load(Ordering::SeqCst) != queued
             || cached.is_none()
             || cached != read_state(&self.path)
         {
@@ -325,6 +354,31 @@ mod tests {
             height,
             scale,
         }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn capture_fence_requires_original_state_before_and_during_presentation() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(STATE_FILE);
+        let original = state();
+        write_state(&path, &serde_json::to_vec(&original).unwrap()).unwrap();
+        let host = PreviewWindowState {
+            path, normal: Mutex::new(Some(original)),
+            restore_pending: AtomicBool::new(true), restore_queued: AtomicBool::new(false),
+        };
+        assert!(host.verify_pending_capture(false).is_ok());
+        assert!(!host.restoration_completed());
+        assert!(host.verify_pending_capture(true).is_err());
+        host.restore_queued.store(true, Ordering::SeqCst);
+        assert!(host.verify_pending_capture(true).is_ok());
+        assert!(host.verify_pending_capture(false).is_err());
+        host.normal.lock().unwrap().as_mut().unwrap().x = Some(468);
+        assert!(host.verify_pending_capture(true).is_err());
+        *host.normal.lock().unwrap() = read_state(&host.path);
+        host.restore_pending.store(false, Ordering::SeqCst);
+        assert!(host.restoration_completed());
+        assert!(host.verify_pending_capture(true).is_err());
     }
 
     #[test]
@@ -379,6 +433,18 @@ mod tests {
         assert_eq!(read_state(&path), None);
         fs::write(&path, r#"{"width":1,"height":1,"maximized":false}"#).unwrap();
         assert_eq!(read_state(&path), None);
+    }
+
+    #[test]
+    fn observed_two_display_templates_do_not_require_position_clamping() {
+        let areas = [area(0, 60, 3840, 1966, 2.0), area(-3840, 60, 3840, 2100, 2.0)];
+        for x in [200, -3400] {
+            let saved = SavedWindowState {
+                width: 2400, height: 1600, maximized: false,
+                x: Some(x), y: Some(120), scale_factor: Some(2.0),
+            };
+            assert_eq!(restored_bounds(&saved, &areas), Some((x, 120, 2400, 1600)));
+        }
     }
 
     #[test]
