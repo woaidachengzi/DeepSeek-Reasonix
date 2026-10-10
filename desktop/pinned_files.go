@@ -1,20 +1,15 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync/atomic"
-	"unicode/utf8"
 
 	"reasonix/internal/agent"
 	"reasonix/internal/control"
-	"reasonix/internal/fileutil"
+	"reasonix/internal/pinnedcontext"
 )
 
 const (
@@ -24,164 +19,45 @@ const (
 )
 
 var (
-	errPinnedNotRegular   = errors.New("only regular files can be pinned")
-	errPinnedFileTooLarge = errors.New("pinned file exceeds the size limit")
+	errPinnedNotRegular       = pinnedcontext.ErrNotRegular
+	errPinnedFileTooLarge     = pinnedcontext.ErrFileTooLarge
+	pinnedFileReadHookForTest atomic.Pointer[func()]
 )
 
-// PinnedFileInfo holds metadata about one pinned context file.
+// Keep the Wails binding's public Go type identity unchanged.
 type PinnedFileInfo struct {
 	Path          string `json:"path"`
 	SizeBytes     int64  `json:"sizeBytes"`
 	TokenEstimate int    `json:"tokenEstimate"`
 	Error         string `json:"error,omitempty"`
 }
-
 type pinnedContextBuild struct {
 	Snapshot agent.PinnedContextSnapshot
 	Infos    []PinnedFileInfo
 }
 
-// pinnedFileReadHookForTest coordinates deterministic Pin/New/turn races.
-// Production leaves it nil.
-var pinnedFileReadHookForTest atomic.Pointer[func()]
-
-func normalizePinnedRelPath(relPath string) (string, error) {
-	clean := filepath.ToSlash(filepath.Clean(strings.TrimSpace(relPath)))
-	clean = strings.TrimPrefix(clean, "./")
-	if clean == "" || clean == "." || filepath.IsAbs(relPath) || strings.HasPrefix(clean, "/") {
-		return "", errors.New("invalid empty or absolute path")
-	}
-	if clean == ".." || strings.HasPrefix(clean, "../") {
-		return "", errors.New("path traversal outside workspace is forbidden")
-	}
-	if !utf8.ValidString(clean) {
-		return "", errors.New("pinned path is not valid UTF-8")
-	}
-	return clean, nil
-}
-
-func readPinnedWorkspaceFile(root, relPath string) (string, []byte, int64, error) {
-	clean, err := normalizePinnedRelPath(relPath)
-	if err != nil {
-		return "", nil, 0, err
-	}
-	if strings.TrimSpace(root) == "" {
-		return clean, nil, 0, errors.New("tab has no workspace root")
-	}
-	file, err := fileutil.OpenFileBeneath(root, filepath.FromSlash(clean))
-	if err != nil {
-		return clean, nil, 0, err
-	}
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil {
-		return clean, nil, 0, err
-	}
-	if !info.Mode().IsRegular() {
-		return clean, nil, info.Size(), errPinnedNotRegular
-	}
+func pinnedReadHook() {
 	if hook := pinnedFileReadHookForTest.Load(); hook != nil {
 		(*hook)()
 	}
-	if info.Size() > maxPinnedFileSize {
-		return clean, nil, info.Size(), fmt.Errorf("%w: file size (%d bytes) exceeds the %d-byte limit", errPinnedFileTooLarge, info.Size(), maxPinnedFileSize)
-	}
-	data, err := io.ReadAll(io.LimitReader(file, maxPinnedFileSize+1))
-	if err != nil {
-		return clean, nil, info.Size(), err
-	}
-	if len(data) > maxPinnedFileSize {
-		return clean, nil, int64(len(data)), fmt.Errorf("%w: file grew beyond the %d-byte limit while reading", errPinnedFileTooLarge, maxPinnedFileSize)
-	}
-	return clean, data, int64(len(data)), nil
 }
-
+func normalizePinnedRelPath(path string) (string, error) { return pinnedcontext.NormalizePath(path) }
+func readPinnedWorkspaceFile(root, path string) (string, []byte, int64, error) {
+	return pinnedcontext.ReadFile(root, path, pinnedReadHook)
+}
 func buildPinnedContext(root string, files []string) pinnedContextBuild {
-	result := pinnedContextBuild{
-		Snapshot: agent.PinnedContextSnapshot{
-			Files:  make([]agent.PinnedContextFile, 0, len(files)),
-			Issues: make([]agent.PinnedContextIssue, 0, len(files)),
-		},
-		Infos: make([]PinnedFileInfo, 0, len(files)),
+	build := pinnedcontext.Build(root, files, pinnedReadHook)
+	infos := make([]PinnedFileInfo, len(build.Infos))
+	for i, info := range build.Infos {
+		infos[i] = PinnedFileInfo(info)
 	}
-	if len(files) == 0 || strings.TrimSpace(root) == "" {
-		return result
-	}
-	for _, rel := range files {
-		clean, data, size, err := readPinnedWorkspaceFile(root, rel)
-		info := PinnedFileInfo{Path: rel, SizeBytes: size, TokenEstimate: estimateTokensFromBytes(size)}
-		if clean != "" {
-			info.Path = clean
-		}
-		if err != nil {
-			info.Error = err.Error()
-			result.Snapshot.Issues = append(result.Snapshot.Issues, agent.PinnedContextIssue{
-				Path: info.Path, Reason: pinnedContextIssueReason(err),
-			})
-			result.Infos = append(result.Infos, info)
-			continue
-		}
-		content := agent.SanitizePinnedContextContent(string(data))
-		if len(content) > maxPinnedFileSize {
-			info.Error = fmt.Sprintf("pinned file exceeds the %d-byte limit after XML normalization", maxPinnedFileSize)
-			result.Snapshot.Issues = append(result.Snapshot.Issues, agent.PinnedContextIssue{
-				Path: clean, Reason: agent.PinnedContextIssueFileTooLarge,
-			})
-			result.Infos = append(result.Infos, info)
-			continue
-		}
-		candidate, err := agent.NormalizePinnedContextFile(agent.PinnedContextFile{Path: clean, Content: content})
-		if err != nil {
-			info.Error = err.Error()
-			result.Snapshot.Issues = append(result.Snapshot.Issues, agent.PinnedContextIssue{
-				Path: clean, Reason: agent.PinnedContextIssueReadFailed,
-			})
-			result.Infos = append(result.Infos, info)
-			continue
-		}
-		result.Snapshot.Files = append(result.Snapshot.Files, candidate)
-		if err := agent.ValidatePinnedContextSnapshot(result.Snapshot); err != nil {
-			result.Snapshot.Files = result.Snapshot.Files[:len(result.Snapshot.Files)-1]
-			result.Snapshot.Issues = append(result.Snapshot.Issues, agent.PinnedContextIssue{
-				Path: clean, Reason: agent.PinnedContextIssueTotalLimit,
-			})
-			info.Error = fmt.Sprintf("pinned context would exceed the %d-byte total limit", maxPinnedContextSize)
-			result.Infos = append(result.Infos, info)
-			continue
-		}
-		result.Infos = append(result.Infos, info)
-	}
-	return result
+	return pinnedContextBuild{Snapshot: build.Snapshot, Infos: infos}
 }
-
 func pinnedContextIssueReason(err error) agent.PinnedContextIssueReason {
-	switch {
-	case errors.Is(err, os.ErrNotExist):
-		return agent.PinnedContextIssueNotFound
-	case errors.Is(err, errPinnedNotRegular):
-		return agent.PinnedContextIssueNotRegular
-	case errors.Is(err, errPinnedFileTooLarge):
-		return agent.PinnedContextIssueFileTooLarge
-	default:
-		return agent.PinnedContextIssueReadFailed
-	}
+	return pinnedcontext.IssueReason(err)
 }
-
 func pinnedContextLoader(root string) control.PinnedContextLoader {
-	return func(ctx context.Context, sessionPath string) (agent.PinnedContextSnapshot, error) {
-		if err := ctx.Err(); err != nil {
-			return agent.PinnedContextSnapshot{}, err
-		}
-		state, err := loadPinnedContextState(sessionPath)
-		if err != nil {
-			return agent.PinnedContextSnapshot{}, err
-		}
-		build := buildPinnedContext(root, state.Files)
-		if err := ctx.Err(); err != nil {
-			return agent.PinnedContextSnapshot{}, err
-		}
-		return build.Snapshot, nil
-	}
+	return pinnedcontext.Loader(root, pinnedReadHook)
 }
 
 func pinnedInfoForPath(infos []PinnedFileInfo, path string) (PinnedFileInfo, bool) {

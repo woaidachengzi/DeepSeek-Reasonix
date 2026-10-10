@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -133,6 +134,91 @@ func TestFinishedTurnClosesLogMarkerInOneBatch(t *testing.T) {
 	}
 	if _, ok := reloaded.OpenTurn(); ok {
 		t.Fatal("finished turn must not stay open")
+	}
+}
+
+func TestFinishedLegacyTurnUpgradeClosesMigratedMarker(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "legacy.jsonl")
+	if err := os.WriteFile(path, []byte("{\"role\":\"system\",\"content\":\"sys\"}\n{\"role\":\"user\",\"content\":\"old\"}\n{\"role\":\"assistant\",\"content\":\"old answer\"}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := agent.LoadSession(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
+	c := New(Options{Executor: exec, SessionDir: dir, SessionPath: path, Label: "legacy", Sink: event.Discard})
+	start := sess.Len()
+	marker := c.markInFlightTurn(start, true)
+	if marker.ID == "" || marker.HeadID != "" {
+		t.Fatal("fixture must begin with a legacy sidecar marker")
+	}
+	sess.Add(provider.Message{Role: provider.RoleUser, Content: "new question"})
+	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "completed answer"})
+	c.finishInFlightTurn(start, marker)
+	reloaded, err := agent.LoadSession(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := reloaded.Head(); !ok {
+		t.Fatal("completed save must upgrade to DAG")
+	}
+	if turn, ok := reloaded.OpenTurn(); ok {
+		t.Fatalf("completed legacy turn remained open after upgrade: %s", turn.TurnID)
+	}
+	types := dagLogEntryTypes(t, path)
+	if types[len(types)-1] != "turn_end" {
+		t.Fatalf("completed upgrade tail = %v", types)
+	}
+	before, err := os.ReadFile(store.SessionEventLog(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	restart := New(Options{Executor: agent.New(nil, nil, reloaded, agent.Options{}, event.Discard), SessionDir: dir, SessionPath: path, Sink: event.Discard})
+	restart.recoverInterruptedTurn(path)
+	after, err := os.ReadFile(store.SessionEventLog(path))
+	if err != nil || string(before) != string(after) {
+		t.Fatal("completed legacy turn was recovered as interrupted", err)
+	}
+	if last := reloaded.Snapshot()[reloaded.Len()-1]; last.Role != provider.RoleAssistant || last.Content != "completed answer" || last.LocalOnly {
+		t.Fatal("completed answer no longer provider-visible")
+	}
+}
+
+func TestLegacyTurnUpgradeDoesNotInferCompletionFromAnswer(t *testing.T) {
+	for _, prepared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("wrong_commit_%v", prepared), func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "legacy.jsonl")
+			if err := os.WriteFile(path, []byte("{\"role\":\"system\",\"content\":\"sys\"}\n{\"role\":\"user\",\"content\":\"old\"}\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			sess, err := agent.LoadSession(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
+			c := New(Options{Executor: exec, SessionDir: dir, SessionPath: path, Sink: event.Discard})
+			marker := c.markInFlightTurn(sess.Len(), true)
+			sess.Add(provider.Message{Role: provider.RoleUser, Content: "unfinished question"})
+			sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "partial answer"})
+			if prepared {
+				if _, matched, err := agent.PrepareSessionInFlightTurnCommit(path, marker, "wrong-canonical-digest"); err != nil || !matched {
+					t.Fatal("prepare fixture", err)
+				}
+			}
+			if err := c.Snapshot(); err != nil {
+				t.Fatal(err)
+			}
+			reloaded, err := agent.LoadSession(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if turn, ok := reloaded.OpenTurn(); !ok || turn.TurnID != marker.ID {
+				t.Fatal("uncommitted legacy turn was closed based on assistant text")
+			}
+		})
 	}
 }
 

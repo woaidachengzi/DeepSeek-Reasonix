@@ -24,7 +24,7 @@ func TestSQLiteActualPackageLegacyHistory(t *testing.T) {
 	if binary == "" {
 		t.Skip("requires explicitly selected packaged sidecar")
 	}
-	for _, mode := range []string{"legacy_unicode", "hidden_protocol", "newest_page", "malformed", "unsupported_event_schema", "unknown_dag_entry", "selected_dag"} {
+	for _, mode := range []string{"legacy_unicode", "hidden_protocol", "newest_page", "malformed", "unsupported_event_schema", "unknown_dag_entry", "selected_dag", "corrupt_projection", "unsupported_projection_schema"} {
 		t.Run(mode, func(t *testing.T) {
 			profile := t.TempDir()
 			t.Setenv("REASONIX_HOME", profile)
@@ -149,6 +149,21 @@ func TestSQLiteActualPackageLegacyHistory(t *testing.T) {
 				t.Fatal(importErr, closeErr)
 			}
 			for launch := 0; launch < 2; launch++ {
+				// Unlike the authoritative event log, a projection is disposable.
+				// Reinstall independent bad wire bytes before each cold start so
+				// both launches exercise rejection, not merely a missing cache.
+				var invalidProjection []byte
+				switch mode {
+				case "corrupt_projection":
+					invalidProjection = []byte("{broken PRIVATE_PROJECTION_SENTINEL}\n")
+				case "unsupported_projection_schema":
+					invalidProjection = []byte(`{"schema_version":999,"projection":{"messages":[{"role":"assistant","content":"PRIVATE_PROJECTION_SENTINEL"}]}}`)
+				}
+				if invalidProjection != nil {
+					if err := os.WriteFile(store.SessionContext(path), invalidProjection, 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
 				p := startSQLitePackagedSidecar(t, binary, profile, "")
 				if status, _ := p.call(t, "GET", "/v1/sessions/"+id+"/history", nil, false); status != 401 {
 					t.Fatal("history bypassed authentication", status)
@@ -188,6 +203,11 @@ func TestSQLiteActualPackageLegacyHistory(t *testing.T) {
 					}
 				}
 				p.stop(t)
+				if invalidProjection != nil {
+					if _, err := os.Stat(store.SessionContext(path)); !os.IsNotExist(err) {
+						t.Fatal("invalid disposable projection was retained or silently rewritten", err)
+					}
+				}
 				got, err := os.ReadFile(path)
 				if err != nil || !bytes.Equal(got, original) {
 					t.Fatal("opening or shutdown rewrote historical JSONL", err)

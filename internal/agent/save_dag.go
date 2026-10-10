@@ -112,6 +112,31 @@ func (s *Session) saveDAGLocked(path string, mode sessionSaveMode, route dagRout
 		pending[i].Head = plan.head
 	}
 	plan.entries = append(plan.entries, pending...)
+	// A turn may start with a legacy sidecar marker and upgrade while saving
+	// its completed tail. The upgrade copies turn_begin into the DAG, so the
+	// prepared commit must also close that exact turn in this same append.
+	// Never infer completion from assistant text or close an unrelated marker.
+	if head := st.heads[plan.head]; head != nil && head.openTurn != nil {
+		meta, ok, metaErr := LoadBranchMeta(path)
+		if metaErr != nil {
+			s.requeuePendingMarkers(pending)
+			return metaErr
+		}
+		if ok && meta.InFlightTurn != nil {
+			marker := meta.InFlightTurn
+			if marker.HeadID == "" && marker.ID == head.openTurn.turn && marker.CommitDigest != "" && marker.CommitDigest == digestString(digest) {
+				alreadyClosed := false
+				for _, entry := range plan.entries {
+					if entry.Type == sessionDAGTypeTurnEnd && entry.Turn == marker.ID {
+						alreadyClosed = true
+					}
+				}
+				if !alreadyClosed {
+					plan.entries = append(plan.entries, sessionDAGEntry{Type: sessionDAGTypeTurnEnd, Head: plan.head, Turn: marker.ID, At: now})
+				}
+			}
+		}
+	}
 	if len(plan.entries) == 0 {
 		s.adoptDAGPosition(st, plan)
 		s.republishDAGDerivedIfPending(ctx, path, st, plan, msgs, digest, baseRevision)

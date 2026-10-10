@@ -1,5 +1,145 @@
 # E 迁移清单
 
+## 2026-10-10 用户要求本轮收尾 review / 本地提交 / 暂停
+
+Linux共享loader候选完成构建及隔离包验收，准确来源/摘要/四次正常退出与各十次门禁见Linux文档；不安装、不发布、不推送。审查范围包含旧完成回合升级的身份/digest fence、canonical与host历史投影边界、Wails/Tauri共同loader及公开DTO兼容、独立actual-package夹具、只读原生终端诊断与三平台证据。发现继承的清单读取使用普通os.Open，异常FIFO可阻塞、外部symlink未限制；修复为绝对路径后的同描述符OpenFileBeneath及regular文件校验，增加FIFO有界返回、外部symlink拒绝及相对session路径兼容回归，不改清单schema/大小门槛或引擎修订协议。
+
+**本轮macOS/Windows/Linux pinnedloader候选均早于最后review修复，不包含此清单防护，不等同最终提交源码。** 现有候选证据只证明各自冻结来源；之后继续须重建，不覆盖或混算来源。完整目标尚未完成：固定/取消固定管理UI、剪贴板授权/原生验收、终端物理输入/截图及旧窗口失败根因、Windows实机、可见Linux GUI和真实服务/账号门禁仍保留。按用户最新要求，review/回归/本地提交完成后暂停目标，不继续扩展或推送。
+
+最终review修复回归：共享pinnedcontext十次race1.607s、完整bridge race54.086s（session5199 exit0）、Wails固定文件兼容十次race52.030s（session46176 exit0），root相关包及desktop Go vet、所有变更Go文件gofmt和git diff检查通过。无新的阻塞性审查问题；打包后的清单安全修复只有源码回归证据，三平台包需下轮同步，不混算为本候选包证据。
+
+## 2026-10-10 共享固定文件 loader 同步 Windows 新安装包
+
+新独立 `windows-pinnedloader-20261010` x64 NSIS，38,247,762字节，SHA256 `b328df7304775dc191ba82c9e69667d8c3a242dbea102591bad89a1cce25154f`；base `de8bd83a…` + 十五文件dirty。原完整frontend门禁和预算保持并通过，MSVC release47.81s、NSIS构建session15375 exit0。解包session90345 exit0，准确sidecar `a94671b9…` 与本次构建字节一致、x64 GUI host/sidecar、唯一预期host UNK→NSS补丁及配置/凭据JSON/DB文件名清单通过，旧包保留；来源和日志在新target，详见Windows验收文档。
+
+没有Windows实机，不证明安装/WebView2/固定文件修改撤销及恢复/UI/终端/bot/剪贴板/多屏DPI通过，也未正式签名/安装/发布/推送或连接真实服务。Mac新loader包已准确复验，Linux仍旧候选，下一步同步；普通固定管理页及其它完整目标剩余门禁继续保留。十五文件变更未达超过30文件先review后提交阈值，目标active。
+
+## 2026-10-10 固定上下文 loader 修复进入新 Mac App，准确包十次门禁通过
+
+新独立 `desktop/tauri/target/macos-pinnedloader-20261010/` 候选，base `de8bd83a…` + 十五文件dirty增量；只克隆旧target缓存依赖目录，不复制旧App，原候选保留。完整原frontend检查/资源预算通过，Rust release45.65s，session47856 exit0；build script及独立deep/strict ad-hoc签名验证通过，无正式签名/公证/安装/发布。App位于 `aarch64-apple-darwin/release/bundle/macos.noindex/Reasonix Tauri Preview.app`。host SHA256 `795acaeb2d727a16e3bf69b26f32139cce0cc29604635bdd329a167573efd3c3`，准确包内sidecar `6e5bcd1ea943bf9ea91fce1c2d1276c81ed0be808b334821e4dca4c0a7c771e2`，不是上一轮独立测试引擎。
+
+准确新包sidecar的三正向投影恢复、三坏pinned缓存拒绝、两真实私有固定文件编辑/撤销及九类旧历史模式各十次race harness74.457s通过，session34512 exit0；最终harness SHA256 `aafe6149…`。真实compress后退出，修改实际私有文件或desired清单，再冷启动submit，要求新manifest/正文hash/size/revision wire独立校验正确、修订仍为user角色、摘要/上次问答保留且可见canonical历史不泄漏host修订；沿用原checkpoint/较短delta协议，不强制delta。release child本身非race。此前最终合法夹具在旧准确包两项失败仍保留，不能将错误清单/强制delta旧诊断算作基线证明。
+
+新App managed/explicit两个独立私有配置，credential identity隔离、继承token/state/bin override处理、401、原生通知权限只读查询、Global workspace、ready及正常RunEvent::Exit/child清理通过，session6252 exit0；不是物理输入或通知banner/完整UI验收。完整日志 `build.log`、`package-recovery-gates.log`、`private-app-lifecycle.log` 及 `SOURCE_IDENTITY.json` 在新target。gofmt/diff通过；没有真实模型/账号/系统剪贴板或用户数据操作。
+
+Windows/Linux现有候选尚未含loader修复，下一步同步重建并验证；新Mac候选也未新增原生固定/取消固定管理页、压缩卡片/滚动、终端物理输入/截图/console/overlay或系统剪贴板证据。六次终端原生通过属于旧terminaltrace候选，窗口偏移旧失败根因仍未确定。十五文件变更未达超过30文件先review后提交阈值，未提交/推送；全目标active。
+
+## 2026-10-10 固定上下文共同读取层及 Tauri turn loader 源码修复
+
+将Wails既有路径规范化、OpenFileBeneath安全读取、增长/UTF8 XML归一化/单文件与总预算、issue分类、会话固定清单schema/ID/大小校验及turn loader抽取到 `internal/pinnedcontext`；Wails调用共享实现，保留公开PinnedFileInfo的Go类型身份、原hook/绑定wire和会话清单写入生命周期。Tauri `controllerFactory.options` 在确定实际workspace后设置同一Loader，由既有Controller admission调用；不在renderer/恢复投影增加补偿或更改引擎修订协议。当前共同runtime SHA256 `3e8d0fcc…`、共享读取源 `9af1d45a…`。
+
+新共享测试覆盖当前正文变更/清单撤销、取消、错误session/schema/JSON/越界/超大清单、工作区外symlink与读取后文件增长，各十次race1.730s通过。Wails既有固定/取消固定/安全读取/并发专项首次编译因抽取遗漏fmt失败，修正后8.111s通过，保留公开DTO类型身份后再跑6.516s通过（原session54597 exit0）；nested module必须在desktop目录运行，最初从root传 ./desktop不计通过。完整bridge race51.390s（session85446 exit0），相关root及desktop Go vet/gofmt/diff通过。
+
+独立新引擎 `/private/tmp/reasonix-pinnedloader.TnRj3n/reasonix-desktop-bridge` SHA256 `f44cb25b…`，不是App/安装包：八类恢复/坏缓存/真实文件修改撤销各十次46.144s通过，session81715 exit0，日志 `source-engine-final-gates.log`。测试修正两个独立夹具错误并保留原失败：固定清单sessionId必须是规范文件stem `tauri-projection-restart-owned`；共同引擎会选择更短的完整checkpoint而非一律delta。最终按实际协议独立解码manifest/changes、正文SHA/size及完整revision wire/hash验证新编辑或空清单撤销，delta若使用仍要求base/removal，未改生产协议。所有含pinned的正向fixture补齐真实私有文件及合法desired清单，不再把缺失desired清单误作保留固定状态。首次错误ID新引擎109.081s失败、第二次强制delta5.812s失败，均保留。
+
+最终harness SHA256 `aafe6149…`；同一合法fixture在准确旧Mac App sidecar `310534fe…` 仍两项失败，session95905 exit1、2.069s，日志 `old-package-final-baseline.log`，确认真实旧包缺口而非错误夹具。**现有Mac/Windows/Linux包均未含此loader接线修复**；下节旧baseline的错误ID/强制delta断言只能作为历史诊断，最终旧包红色及新引擎绿色以本节为准。下一步构建新候选并复验准确包，固定/取消固定原生管理入口、真实服务/系统剪贴板和全目标剩余门禁仍保留。当前十五变更文件，未提交/推送/安装/发布，目标active。
+
+## 2026-10-10 固定文件编辑/撤销准确包复现失败：Tauri 缺少 turn loader 接线
+
+新增opt-in `TestProjectionActualPackagePinnedFileLifecycle`：独立合法旧host checkpoint、私有global-workspace/owned.txt及schema1会话固定清单；首轮准确包实际compress生成covered pinned缓存并正常退出，随后修改私有文件正文或把私有清单置空，再冷启动submit。现有共同引擎协议保留append-only历史，用user-role host delta/base_revision替换正文或remove撤销；门禁要求对应新delta，而非要求抹掉旧历史正文。两项当前准确Mac sidecar `310534fe…` 均失败，原session79048 exit1，2.332s，日志 `desktop/tauri/target/macos-terminaltrace-20261010/package-pinned-file-baseline.log`。失败发生在第二次provider请求缺少新修订，不是首轮compress、缓存认证或问答保存失败；不放宽断言，也不改写为pass。
+
+源码接线证据：Wails `desktop/settings_app.go` 的boot.Options设置 `PinnedContextLoader: pinnedContextLoader(snap.workspaceRoot)`；Tauri `controllerFactory.options` 未设置，boot只转发已有值，故默认factory没有每轮加载器。后续应抽取并复用Wails的安全工作区读取/固定清单校验，再接入Tauri admission，不在renderer或projection增加补偿；固定/取消固定管理入口也仍需完整契约与原生验收。测试harness SHA256 `3992403b2543e5d5b188db3e68b3ef7fbb6b7a6477ab99540720225fcf0b09b2`，Go vet/gofmt/diff通过；无选定包时这些opt-in测试skip，不是验收通过。上一节六类绿门禁属于修改前harness的准确范围，不能覆盖本节失败。
+
+本轮仅独立夹具和诊断证据，没有修复生产接线、重建/安装、普通配置/真实账号/系统剪贴板或用户数据操作。十一文件变更，未提交/推送；全目标仍active。
+
+## 2026-10-10 真实压缩后 pinned 派生缓存拒绝门禁（Mac / Ubuntu 准确包）
+
+新增 `TestProjectionActualPackageRejectsPinnedCache` 三类负向：先让准确包实际执行compress并生成covered pinned检查点，正常退出后只修改私有 `.context.json` 的pinned_context_hash为错误值、删除该hash或将schema_version退为3；不改canonical JSONL/DAG或host provenance。第二次冷启动真实submit要求provider请求不再含旧摘要、完整原问答回退、固定正文恰一次且为user角色，并保留上一轮问答；history仍为完整canonical且不显示host修订，正常退出磁盘正文不重复、无额外模型/summary请求。不是只检查缓存文件被删除。
+
+Mac新诊断App准确sidecar `310534fe…` 三正向+三负向各十次race harness38.231s，原session84708 exit0；首次三负向3.571s通过，最初sandbox回环监听被拒未执行，不计为通过。Ubuntu确认running后，准确deb sidecar `c57eaa1e…` 同六类各十次15.019s，原session37786 exit0；只读overlay、测试摘要前后校验、冻结guest Git前后clean，不覆盖源码或重建/安装包。最终harness SHA256 `4f7530db03ca3d84b32deaeb69ffb83e4450c60138d67a7cfe3aaa841b3840ff`。两平台日志在各 `target/*-20261010/package-pinned-cache-gates.log`；Go vet/gofmt/diff通过，release child本身非race，来源记录已追加。
+
+这证明covered pinned缓存认证缺失/不匹配及旧schema能安全回退，不证明canonical provenance篡改、固定文件实际编辑/撤销、自动压力压缩、WebView压缩卡片/滚动或真实模型。没有普通配置/系统剪贴板/真实账号/用户数据操作；十一文件变更，未提交/推送，完整目标仍active。
+
+## 2026-10-10 Mac 终端阶段诊断包：固定六次原生门禁通过，旧位置失败仍未定位
+
+七个只读阶段快照已进入新独立 `macos-terminaltrace-20261010` App；旧候选与失败夹具保留，不修改普通窗口恢复/保存逻辑、不增加重试或放宽断言。base `de8bd83a…` + 十一文件dirty增量，原frontend门禁/资源预算通过，Rust release53.28s，session52976 exit0，deep/strict ad-hoc验证两次通过。host SHA256 `d3a5944130de912d4d8219906c0a84578defc914f6c2aa1fa1d9e8b2438cec78`，sidecar `310534fe322b265648f12d1c90daf900c3ecdff843853b7cd0b47e061ff712b7` 与上一候选字节一致；不是clean release、正式签名或公证。
+
+固定三轮managed/explicit共六次私有LaunchServices启动，原session81134及61038均exit0；真实WKWebView/xterm InputEvent→注册IPC→Go PTY、UTF8/ANSI绘制、显式create/output-to-chat不自动submit、折叠同PTY、close/switch PIDgone、不写model history以及正常kernel exit0/child/readiness清理均通过。每次七条terminal-stage trace与严格退出保存门禁均保持2400×1600、x=-3400/y=120/scale2/maxfalse，共42条阶段记录已独立核对。夹具 `/private/tmp/reasonix-native-terminal-ui-u5m4mgi8`、`-iwnrfy5i`、`-280qqdx3`；日志 `/private/tmp/reasonix-terminaltrace-native-20261010.log`、`/private/tmp/reasonix-terminaltrace-native-repeat-1-20261010.log`、`/private/tmp/reasonix-terminaltrace-native-repeat-2-20261010.log`。新来源记录在独立target的 `SOURCE_IDENTITY.json`。
+
+这六次仅证明新诊断候选在同一左侧屏幕条件下未复现，不能解释或修复下节旧候选的位置偏移；只读记录也可能改变时序，旧红色门禁仍保留。当前CUA inventory再次30s超时/kernel reset，没有截图、console、framework overlay或物理键盘证明；未以HTTP浏览器页替代native验收，也未访问系统剪贴板/真实账号/普通配置。十一变更文件未达超过30文件先review后提交阈值，无提交/推送/安装/发布，完整目标active。
+
+## 2026-10-10 最新 Mac App 终端原生切片通过但完整位置门禁失败
+
+使用前端测试技能核对实际native flow；Browser插件不在当前技能/工具列表，目标是实际WKWebView App而非HTTP页，没有用Playwright浏览器代理替代native证明。CUA `getState` 两次各30s超时/kernel reset，不能据此判断锁屏或App故障，也没有截图、console、framework overlay或物理键盘证明。随后检查已有隔离runner与其真实WKWebView/xterm InputEvent→注册IPC→包内Go PTY实现，并运行准确最新 `macos-pinnedhistory-20261010` App，保留严格窗口位置断言，不使用剪贴板/真实账号/普通配置。
+
+原session84212终态exit1：managed私有host PID6091 LaunchServices kernel status0/exit0，runner先确认sidecar/readiness清理及shutdown PTY PID6148 gone；真实terminal receipt的IPC/TTY/UTF8 ANSI绘制、仅显式create、折叠同PTY、显式output-to-chat不自动submit、close/switch PIDgone、noModelHistory均true。随后保存geometry不等于原请求，完整gate失败且explicit未启动。请求/恢复focus末尾2400×1600、x=-3400/y=120/scale2/maxfalse，但退出保存x=-3158/y=116，size/scale/max保持；现有trace的`restore-geometry-drained`及`edit-focus-restored`仍是原请求，说明变化发生在最后已记录恢复边界之后，具体原因未确定，不能归因macOS/用户拖动或宣称此前修复已回归。
+
+保留 `/private/tmp/reasonix-native-terminal-ui-diqotjv4/managed` 和 `/private/tmp/reasonix-latest-native-terminal-20261010.log`，未将局部收据当作完整pass；host/sidecar SHA256仍 `aed032e2…`/`310534fe…`。源代码 `native_ui_terminal_smoke.rs` 只新增七个read-only阶段snapshot（visible ready/first PTY paint/collapse-reopen/context preview closed/first PTY closed/conversation switched/before normal shutdown），供下一次准确包定位；不改普通restore/capture、不增加补偿、重试或放宽断言。rustfmt check、Python隔离runner六项unit、cargo check --locked均通过，编译日志 `/private/tmp/reasonix-terminal-native-stage-check-20261010.log`。此诊断尚未进入App，不能用未执行计划替代定位；来源记录已标FAIL/partial，当前十一文件变更，未提交/推送或重打包，完整目标active。
+
+## 2026-10-10 Linux 两项显式 PTY / 私有 D-Bus 原生依赖门禁
+
+标准Rust回归中的两条ignored测试已经分别按精确名称显式执行，原session14525 exit0，冻结guest源码及现有包未改，git status clean。真实PTY使用准确新deb sidecar `c57eaa1e…`，1 passed/0 failed/0 ignored/292 filtered，0.20s：Rust client→bridge HTTP→Go PTY，create/input去重、resize/stty、同shell PID、中文rename、模型切换保持shell、不写模型history、close后夹具PIDgone及self-SIGKILL signed exit -1通过。通知单独私有real broker/mock service，1 passed/0 failed/0 ignored/292 filtered，2.12s，验证投递/回调/伪造拒绝/owner重启/失败超时/关闭释放，不连接用户session bus或显示桌面banner。测试内容与隔离范围完整检查后执行，日志及来源记录在 `desktop/tauri/target/linux-pinnedhistory-20261010/`，详见Linux验收文档。
+
+不将标准291 passed/2 ignored改成293项普通通过，不将debug测试宿主/私有broker当作release App的WebView输入或真实桌面通知；PTY Drop有own-child兜底且未断言未使用兜底，正常package Exit证据仍是此前四次门禁。没有新构建、安装、真实模型/账号/clipboard/用户数据操作或提交/推送；十个变更文件未达超过30文件先review后提交阈值，完整目标仍active。
+
+## 2026-10-10 实际 compress 与 covered pinned 检查点的双冷启动包门禁
+
+扩展独立wire包级fixture，新增 `actual_compress_pinned_prefix`：不预写 `.context.json`，以完整旧问答、约8KiB旧回答及独立合法host pinned XML启动；loopback假模型实际发出 `compress` 工具调用（before当前真实用户输入），当前包内共同引擎调用自己的summarizer并生成新的投影。只按最终user摘要指令分发假模型响应，不以全request子串冒充summary调用。断言summary确实含被折叠旧回答而不包含固定正文；后续provider请求只含摘要、固定正文恰一次且为user角色、当前输入，第二次冷启动保留上次问答。canonical历史完整、不混入摘要或host固定修订，正常退出磁盘修订恰一次；新 `.context.json` covered_count至少4（包含原第4条host修订）、pinned_context_hash非空、投影正文含固定内容恰一次。此门禁首次证明实际压缩路径及被覆盖固定内容重建，不只是预写投影尾部兼容。
+
+Mac同一准确包sidecar `310534fe…` 三类双冷启动各十次race harness初次18.775s、最终说明修订后19.349s通过，原final session96583 exit0，日志 `desktop/tauri/target/macos-pinnedhistory-20261010/package-actual-compress-final.log`。Ubuntu同一准确deb sidecar `c57eaa1e…` 使用只读Go overlay映射新测试，冻结源码不覆盖且结束git status clean，测试SHA256 `87748481f4aa6fad68534a8eec00cae0c24865d7b41516e3433669005d401308` 前后验证，初次7.132s、最终7.946s通过，原final session83054 exit0，日志 `desktop/tauri/target/linux-pinnedhistory-20261010/package-actual-compress.log`。最终fixture的Go vet/gofmt/diff门禁通过（最后仅说明注释变化）；release child本身非race。来源记录追加准确proof；只增加测试，无runtime修改或重新打包，前述最新三平台候选不变。
+
+仍不是普通WebView压缩过程/卡片/滚动验收、自动压力压缩、固定文件编辑/撤销、坏pinned hash/provenance拒绝、真实模型服务或Windows实机证明。系统图片剪贴板、复杂管理/远程/终端/bot及其它完整目标未关闭；无真实用户操作、安装/正式签名/发布/推送。当前十个变更文件，未达超过30文件先review后提交阈值，目标active。
+
+## 2026-10-10 固定上下文过滤修复同步 Windows/Linux 候选并复验
+
+新Windows包在 `desktop/tauri/target/windows-pinnedhistory-20261010/x86_64-pc-windows-msvc/release/bundle/nsis/`，SHA256 `353cfe6babea559c4edc9255fa0c625c41b2b9e65c02c98f4c36875a1172429d`，38,242,763字节。完整原frontend门禁/预算、MSVC release1m04s、NSIS及原session24688 exit0；解包十文件、PE x64 host/sidecar、准确sidecar字节一致和唯一预期UNK→NSS host bundle marker通过，audit session57130 exit0。无Windows环境，固定上下文历史/重启及既有UI/终端/bot/剪贴板等手动验收未完成；Windows验收文档补齐新候选与追加矩阵。
+
+Ubuntu确认running后从十文件dirty归档 `c03048197…` 在新私有root `linux-pinnedhistory-20261010.dGHbp9` 构建，snapshot `2ed49000…`不是GitHub release。完整原frontend门禁/预算、73contracts、Linux preflight/CI模拟、release1m33s和原session69914 exit0。新deb/AppImage已复制回 `desktop/tauri/target/linux-pinnedhistory-20261010/packages/`，摘要分别 `e6ae4462…`/`c0852c8e…`与guest原件一致，准确sidecar `c57eaa1e…`。两包实际入口各managed/explicit共四次Xvfb/D-Bus正常Exit、身份/401/子进程与readiness清理及包结构/依赖simulate通过；所有包内SQLite/bot/平台参数与两类正向摘要/pinned尾部双冷启动各十次58.263s、历史/预览/usage十次1.357s、controller四类turn/digest边界十次2.500s通过，audit session58117 exit0。准确deb sidecar的标准Rust291 passed/0 failed/2 ignored，debug compile46.91s、测试2.72s，原session25224 exit0；警告及ignored保留。详见Linux验收文档。
+
+此前两个平台候选及私有源码完整保留，三平台当前最新候选均含本轮共同历史可见性修复，但没有以其它平台/源码测试替代Windows实机、Linux可见UI/IME/Wayland、系统剪贴板或真实外部服务。实际compactor/covered pinned重建/固定文件编辑撤销等完整目标继续待推进；没有安装/正式签名/公证/发布/推送或真实数据迁移。当前十个变更文件，尚未达超过30文件review后提交阈值，目标active。
+
+## 2026-10-10 固定上下文修复进入新 macOS App 并完成准确包复验
+
+在新独立target `desktop/tauri/target/macos-pinnedhistory-20261010/` 构建，旧 `macos-presentrestore-20261010` App未替换。base `de8bd83acbc4fd6fab6334dfcc5dac9ce4694979` + 十文件dirty增量，不是clean release。新App在 `aarch64-apple-darwin/release/bundle/macos.noindex/Reasonix Tauri Preview.app`，host SHA256 `aed032e2f497553fdb6b62e7e39a264e04df4f2c6ae2b45fd79d0a291c015bd6`，包内sidecar `310534fe322b265648f12d1c90daf900c3ecdff843853b7cd0b47e061ff712b7`。完整原frontend检查与资源预算通过，native release56.39s，原session4622 exit0；deep/strict ad-hoc签名两次验证通过，无公证、正式签名或安装/发布。Vite/cargo deprecated config/跳过公证警告保留。
+
+新准确包sidecar的 `TestProjectionActualPackageRestart`（无pinned及独立host pinned尾部，两次冷启动submit）与 `TestSQLiteActualPackageLegacyHistory` 九类，各十次race harness46.514s通过，原session16100 exit0。上一节旧包的pinned历史5条红色失败仍保留；本次新包证明固定正文在真实loopback请求中恰一次、保持user角色、第二次重启仍保留上次问答，而可见canonical历史不泄漏host修订或摘要。release child本身非race，不是实际压缩器生成/covered pinned重建/固定文件编辑撤销或真实模型证明。
+
+managed/explicit两个新私有档案由 `smoke-packaged-app.py` 正常启动与退出，profile/credential identity、Global workspace、readiness和精确sidecar清理通过，原session84480 exit0。不是普通交互界面、物理键盘/剪贴板、bot/终端/窗口专项的本候选复验；此前证据仍归属此前候选。新来源记录、build/package-history/private-lifecycle日志在独立target。Windows/Linux上一轮候选仍缺本轮host pinned过滤修复，需后续同步重建；完整目标保持active。当前十个变更文件，未达超过30文件review后提交阈值，未提交/推送或操作真实数据。
+
+## 2026-10-10 固定上下文尾部恢复门禁与 bridge 历史过滤修复（源码增量，包待重建）
+
+扩展 `TestProjectionActualPackageRestart` 为无 pinned / 摘要 covered prefix 之后带独立合法 host pinned checkpoint 两类；独立编码文件摘要、revision 身份和 XML，不使用 Agent writer 生成 fixture。各两次冷启动检查真实 loopback provider 请求中的摘要、新输入、上次问答、固定文件正文恰一次且保持 user role；canonical 历史不含摘要或 host pinned 修订，正常退出磁盘固定修订不重复。不是实际压缩器生成 checkpoint、covered pinned 重建、固定文件编辑/撤销或真实模型服务证明。
+
+当前 macOS 准确包 sidecar `d40a9e5c…` 的新增 pinned 门禁先失败，第二次诊断确认 `count=5 state=idle`（应为4）：模型已正确使用固定正文，但 `bridgeHistoryMessageVisible` 漏掉 host pinned revision，投影出多余“用户问题”。确定性历史过滤回归同样基线失败。修复共用可见性规则，使用 `agent.IsPinnedContextRevision` 的 role/origin/envelope 身份，不按文本一概隐藏；真正 user-origin 引用相同标签仍显示。历史与 uncached 旧历史预览共用规则，cached listing 也由回归确认保持可见问题。
+
+历史/预览/usage 专项十次 race 2.333s 通过；临时修复引擎 `/private/tmp/reasonix-pinned-history-fix-sidecar-20261010` SHA256 `6e5796bff07e16f576d5314cc10574e30c6bc48e5e66285230defb387b5fbbe1` 的两类双冷启动各十次 race 14.168s 通过，日志 `/private/tmp/reasonix-pinned-history-restart.log`。完整 bridge race 53.117s、Go vet、gofmt/diff 门禁通过，完整日志 `/private/tmp/reasonix-pinned-history-bridge-full.log`。临时引擎不是 bundle；上一节三平台候选均尚不含本轮过滤修复，必须重建后以准确包复验，不能将旧包 pinned 失败改写为通过。当前十个变更文件，未提交/推送、安装或真实配置操作；完整目标仍 active。
+
+## 2026-10-10 完成升级修复同步 Windows/Linux 新候选
+
+将上轮共同引擎精确commit-digest/回合身份 fence 修复同步两平台，旧候选与源码保留。Ubuntu运行状态先确认，host `de8bd83ac…` + 五文件dirty源码冻结归档 `e98640f7…` 校验成功，新私有root `linux-projectionfix-20261010.YX7XXe` 与snapshot `075459eadd…`，不是GitHub clean release。原全部frontend门禁/预算、73构建契约和Linux preflight/CI模拟通过，release1m39s，原构建session64936正常exit0；macOS provenance扩展属性警告及平台unused appearance警告保留。
+
+新Linux包在 `desktop/tauri/target/linux-projectionfix-20261010/packages/`，deb SHA256 `63b1e1c6934ded3d2c31c2f0e713b3d09b05ff1dc858f6a1acea16cb195e8545`，AppImage `eef7ec0e909716fc42a061fdd2cbe56e4c68ed22eab6e026253e27ebdcb5f03f`，host副本与guest原件一致。两包及构建准确Go sidecar `15cfed15…` 字节相同，ELF ARM64/ldd/依赖simulate/配置凭据DB文件清单审计通过；deb入口和真实AppRun各managed/explicit共四次独立Xvfb/D-Bus正常Exit与精确child/readiness清理、401/profile/identity等通过。所有SQLite actual-package系列含九类旧历史与合法摘要两次冷启动submit、只读bot/平台参数十次race46.821s通过；四类完成/中断/digest fence专项十次2.501s通过。审计session79852 exit0；随后标准Linux Rust原session74141以准确包内sidecar正常exit0，291 passed/0 failed/2 ignored（编译31.68s，测试2.39s）。详见Linux验收文档，不冒作可见UI/IME/Wayland/真实模型或IM/SSH证明。
+
+新Windows NSIS在 `desktop/tauri/target/windows-projectionfix-20261010/x86_64-pc-windows-msvc/release/bundle/nsis/`，38,243,179字节，SHA256 `5833d7d3873f9bb56cbc57c6dc9cb2af597a954e62d2e4baed23b956d10f54d3`。原完整frontend门禁/预算、MSVC release56.37s及原构建session6594 exit0；7zz提取、x64 GUI/sidecar、准确sidecar `3e92b52a…` 与构建字节一致、host唯一期望UNK→NSS bundle marker patch及十文件清单审计通过。既有Windows/cargo/交叉构建/未签名警告保留。无Windows运行环境，安装/后续问答重启恢复、剪贴板/窗口/终端/bot等手动矩阵仍待实机，不能由其它平台通过代替。
+
+新source identity和完整日志在各独立target，未安装、公证/正式签名、发布/推送或真实用户迁移。当前七个变更文件，未达超过30文件先review后提交阈值。完成升级缺陷已有macOS/Linux准确包复验与Windows新构建候选，但整个压缩/pinned/损坏恢复、真实服务、系统图片剪贴板和其它完整目标仍未关闭；目标active。
+
+## 2026-10-10 旧回合完成时升级 DAG 的原子终态修复与新 macOS App
+
+上轮红色实际包门禁的根因已由独立确定性回归复现：旧 JSONL 回合从 sidecar in-flight marker 开始，完成保存升级为schema2时复制 `turn_begin`，旧完成流程随后只清理sidecar，留下DAG open turn；下一次Resume因此把真实完成回答当成中断输出。修复在共同 `saveDAGLocked`：只有当前head open turn ID与legacy marker ID一致、marker没有native HeadID、预先写入的非空CommitDigest与待保存canonical digest完全一致时，将 `turn_end`与完成回答放入同一append batch；已有end不重复。元数据读取失败保留待写markers并返回错误，不推断、重试掩盖或放宽真正中断的恢复规则。没有/错误commit digest的assistant尾部仍保持open。
+
+新增确定性完成升级/负向digest fence，已完成DAG/真正中断既有专项各十次5.267s通过（先验证完成升级基线红色）。Agent全量race285.774s通过；Controller首次全量51.617s失败，定位本轮负向fixture缺少保存层必需system message，补齐合法旧wire而不改变生产规则或断言后全量44.466s通过，完整日志 `/private/tmp/reasonix-projection-controller-full.log`。bridge全量race51.679s通过，日志 `/private/tmp/reasonix-projection-bridge-full.log`；三包Go vet和gofmt/diff通过。独立临时新sidecar的合法投影/两次冷启动submit十次11.469s通过，但没有用它替代包证明。
+
+当前同路径macOS App已重建：base `de8bd83acbc4fd6fab6334dfcc5dac9ce4694979` + dirty五文件增量，不是clean release；host SHA256 `7538d3240111335959234784bc74f8c1e9eda3fda941e3216dc1e30ae38254e3`，包内sidecar `d40a9e5c665171f37d3a9ada0a005e84a6515e513fdc555b743d36104083be46`。原全部frontend门禁及资源预算通过，Rust release54.08s，deep/strict ad-hoc签名验证通过；首次命令因pnpm PATH缺失exit127未打包，补现有pnpm路径后重跑成功，失败不计通过。新准确包sidecar的合法投影恢复与完整九类历史矩阵各十次race44.201s exit0：模型使用摘要而不重放被覆盖原文，第二次冷启动保留上次问答及新输入，history仍为完整canonical而非摘要；release child本身非race。managed/explicit私有App启动、profile identity、Global workspace、readiness与正常退出清理通过，不是交互式恢复/真实模型服务验收。
+
+覆盖前的旧App及来源记录完整备份 `/private/tmp/reasonix-projection-before-fix.lQ1e2J/`，旧host `ebc05b56…`/sidecar `7d452d7e…` 的原生终端、窗口和bot诊断证据仍归属这个旧候选，不能冒作新包已复验。新来源记录在原target目录；Windows/Linux旧候选尚不含此共同引擎修复。保留真实服务/系统图片剪贴板授权、复杂管理页及其它SQLite/压缩/pinned上下文恢复门禁，不关闭完整目标；没有安装/公证/发布/推送或真实用户数据操作，当前五个变更文件，未达超过30文件先review后提交阈值。
+
+## 2026-10-10 非默认 bot 诊断的普通原生 UI 与压缩恢复失败
+
+用户解锁后，CUA inventory 确认没有普通 Preview；运行 `smoke-native-bot-diagnostics.py` 的 managed/explicit 两个合成档案。输入前分别核对 live host PID 81412/81609、准确当前 App 路径，以及 AX 中与 control.json 完全匹配的私有 WebView origin。真实 WKWebView 设置→机器人显示 `legacy:feishu` 配置检查“Bot 网关已关闭”、运行观察“尚未观察到”，其它三个 legacy 渠道“已关闭/尚未观察到”；点击“刷新诊断”后仍准确区分两类结果。managed 首屏/刷新截图未见空白或框架错误层、诊断文本无裁切；explicit AX证明相同结果，其首次截图恰处于系统窗口动画，不能据此宣称完整视觉QA。未读取浏览器console，不能宣称console门禁通过，也未测试窄屏/真实SDK。
+
+两次 Cmd+Q 均有准确 PID 的 native kernel status0/exit0 收据，runner确认配置字节/权限/mtime及profile identity不变、sidecar/readiness清理，session87695终态exit0。保留私有夹具 `/private/tmp/reasonix-native-bot-diagnostics-2_je47np` 和 `/private/tmp/reasonix-native-bot-diagnostics-rekr58_4`。使用现有App host `ebc05b56…`/sidecar `7d452d7e…`，没有重建、启用网关、保存凭据、模型submit、剪贴板或真实数据操作；这不是完整bot Desktop/真实IM验收。
+
+另新增 opt-in `TestProjectionActualPackageRestart`：独立schema4摘要wire/hash、loopback合成OpenAI SSE、当前准确包两次冷启动/submit，要求模型上下文使用摘要与后续尾部，history仍为canonical。首次摘要使用和持久化问答通过，但第二次冷启动请求缺少上一轮回答（问题仍在）；原JSONL和权威事件日志都有assistant回答，checkpoint覆盖数3/两条摘要未吞掉尾部。重复定位均失败，不改为通过、不放宽断言；待检查turn终态持久化与interrupted-turn恢复边界，尚不能定为摘要本身的bug。日志仅合成标记布尔值/角色/长度，不输出系统提示或私有路径。保留红色包级门禁继续修复，完整压缩恢复不能关闭。目前3个源文件/文档变更，未提交/推送，完整目标active。
+
+## 2026-10-10 损坏摘要缓存的实际包 canonical 历史回退
+
+在实际包旧历史矩阵追加独立坏 JSON 与 schema_version=999 的 `.context.json`：每次冷启动前重新放入带私有 sentinel 的无效投影，两次启动都真实经过拒绝，不把第一次删除后第二次缺失当作重复验证。authenticated open/history 正常返回原始中文/emoji/多行问答、角色和顺序，隐藏 sentinel 不进入历史，未知 usage/duration 不虚构；401、正常退出、主 JSONL 字节不改写和无 phantom transcript 门禁保留。仅丢弃私有夹具中的无效摘要缓存，确认其未被静默改写成合法缓存；不操作真实数据。
+
+当前 macOS App 精确 sidecar `7d452d7e459a1c21ed5ce9c2f3689695a013f46eced5854fb249d7f31f20cdec` 两项各十次 race 8.419s exit0，扩展后完整九类各十次 29.453s exit0；当前 Ubuntu deb 精确 sidecar `b155dd0a6a7cb48b7db04908fc71e69667cc3b0ca3c7cb290e0f5af55df97a92` 两项各十次 4.098s exit0。测试宿主 race、release 子进程非 race。首次 macOS 命令因 sandbox 编译缓存访问被拒未运行，获准访问已有缓存后运行成功，不把被拒命令算通过。Go vet、gofmt/diff检查通过。
+
+Linux只更新私有快照测试文件，原件备份 `projection-rejection-regression.6wl42W/original-test.go`，runner 在忽略目录 `desktop/tauri/target/linux-current-20261010/projection-rejection-regression.sh`；没有重建、安装、推送或发布。这证明无效派生缓存不会替代或损坏权威历史，不证明合法压缩投影在重启后进入实际模型请求、完整压缩恢复、交互式恢复 UI 或真实数据迁移。Mac 原生工具仍报告锁屏，导入/撤销与非默认 bot 界面待解锁；系统图片剪贴板及真实服务门禁保留。当前2个变更源文件/文档，未达超过30文件 review 后提交阈值，完整目标active。
+
 ## 2026-10-10 30文件批次 review 与本地提交门禁
 
 在继续扩展前 review 当前30文件：只读诊断固定无参数/main-only IPC、短锁后网络读取、Rust/frontend严格投影与固定错误、React请求epoch/卸载/旧finally隔离、按需三语管理词典；共同窗口present/restore的macOS guard、单次排队和原保存几何capture fence；LaunchServices固定私有phase/最小环境、精确PID/kernel exit和每次新收据；实际包bot/旧JSONL/未知事件格式/所选DAG分支测试及三平台候选来源和限制。未发现本批新增阻塞性代码问题，无扩大权限、补偿坐标、重试掩盖或放宽原生门禁。

@@ -63,6 +63,28 @@ func TestSessionPreviewUsesFreshListingProjection(t *testing.T) {
 	}
 }
 
+func TestSessionPreviewSkipsHostPinnedRevision(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tauri-pinned.jsonl")
+	session := agent.NewSession("system")
+	session.Add(provider.Message{Role: provider.RoleUser, Origin: provider.MessageOriginHost, Content: "<pinned_context_revision>private standing context</pinned_context_revision>"})
+	session.Add(provider.Message{Role: provider.RoleUser, Origin: provider.MessageOriginUser, Content: "visible question"})
+	if err := session.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	if got := readSessionPreview(path, "pinned"); got.FirstUser != "visible question" {
+		t.Fatalf("pinned revision became preview: %+v", got)
+	}
+	// Independent legacy wire has no listing cache; exercise full replay too.
+	legacyPath := filepath.Join(t.TempDir(), "tauri-legacy-pinned.jsonl")
+	legacy := "{\"role\":\"system\",\"content\":\"system\"}\n{\"role\":\"user\",\"origin\":\"host\",\"content\":\"<pinned_context_revision>private standing context</pinned_context_revision>\"}\n{\"role\":\"user\",\"origin\":\"user\",\"content\":\"visible question\"}\n"
+	if err := os.WriteFile(legacyPath, []byte(legacy), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if got := readSessionPreview(legacyPath, "legacy-pinned"); got.FirstUser != "visible question" {
+		t.Fatalf("uncached pinned revision became preview: %+v", got)
+	}
+}
+
 func TestSessionPreviewDoesNotFollowTranscriptMetadataOrEventLogSymlinks(t *testing.T) {
 	root := t.TempDir()
 	profileSessions := filepath.Join(root, "profile", "sessions")

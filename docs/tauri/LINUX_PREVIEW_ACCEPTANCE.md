@@ -1,5 +1,61 @@
 # Linux Preview 构建与验收
 
+## 2026-10-10 共享固定文件 loader 新包验收及 review 边界
+
+新 ARM64 deb/AppImage 位于 `desktop/tauri/target/linux-pinnedloader-20261010/packages/`，SHA256 分别为 `a886a8da0806c292b9b665592248b8f9d1576411bb237017d6d38a0ede49ed06`、`24805d9d88057249612a7787383759975ca39c1f3e102107c72ecb9660a972a9`；Mac副本核对一致。来源为 base `de8bd83a…` + 打包时十五文件dirty，源码归档 `b94feac8…`、guest冻结快照 `73702d76…`，私有root `linux-pinnedloader-20261010.UeDzHX`。原前端门禁/预算及73契约通过，Rust release1m28s，build session73203最终exit0。首次完整缓存复制被空间门禁拒绝（session33685 exit1），未删除旧目录或放宽空间门槛；后续只复制release依赖缓存，不复制debug/旧bundle。
+
+audit session42699 exit0：准确host `6a9bd63c…`、sidecar `02c459af…`；ARM64、两包和构建sidecar字节一致、ldd无missing、apt仅simulate、配置/凭据JSON/DB文件名清单通过。deb入口及实际AppRun各managed/explicit，四次私有Xvfb/D-Bus启动正常RunEvent::Exit，401/profile及sidecar/readiness清理通过。全部bot/SQLite/platformargs及八类摘要恢复、坏pinned缓存、真实私有文件编辑撤销各十次race harness66.395s；历史/预览/usage十次1.346s、完成升级四类十次2.565s、共享loader十次1.106s；冻结Git结束clean。portal/PipeWire/D-Bus警告保留，未当作GUI或媒体证明。
+
+`SOURCE_IDENTITY.json`及构建/审计日志在新target。没有新增标准Rust debug回归，旧包291 passed/2 ignored不得移算新包。用户随后要求review并提交、暂停目标；review追加清单FIFO非阻塞/外部symlink拒绝修复，**本候选不包含该打包后修复，不等同最终提交源码**。下一轮需重建三平台包；可见GUI/IME/Wayland/物理剪贴板、Windows实机及真实服务门禁继续保留。未安装/发布/推送或操作真实数据。
+
+## 2026-10-10 covered pinned 缓存认证拒绝的双冷启动包门禁
+
+准确现有deb sidecar `c57eaa1e…` 三正向恢复+三负向缓存各十次，15.019s，原session37786 exit0。负向先实际compress生成covered pinned检查点，退出后仅将派生缓存hash改错/删除或schema退为3；再次冷启动submit必须拒绝旧摘要、恢复完整原问答，同时固定正文仅一次且为user角色、上轮问答不丢、history不显示host修订、磁盘正文不重复、无额外模型请求。不是只验证缓存删除。使用只读overlay，harness SHA256 `4f7530db03ca3d84b32deaeb69ffb83e4450c60138d67a7cfe3aaa841b3840ff` 前后校验，guest冻结Git前后clean；未改源码、重建或安装。日志 `desktop/tauri/target/linux-pinnedhistory-20261010/package-pinned-cache-gates.log`，脚本 `pinned-cache-gates.sh`，来源记录追加准确范围。
+
+race只覆盖测试宿主而非release child；仍不是canonical provenance篡改、文件实际编辑/撤销、压力自动压缩、原生WebView卡片/滚动或真实服务/桌面GUI证明。
+
+## 2026-10-10 显式补跑标准回归的 PTY / 私有 D-Bus 两项 ignored 门禁
+
+逐项读取隔离测试后，用准确新deb sidecar SHA256 `c57eaa1ed86eb97b4b66296c012ce92c8af69d2b30e91dbdb2664ba9341ff857`，在原冻结private snapshot执行两条精确名称 `cargo test --locked --manifest-path desktop/tauri/Cargo.toml --bin reasonix-tauri <test-name> -- --ignored --exact`。脚本显式清理继承profile及DBUS_SESSION_BUS_ADDRESS，私有PTY子进程env_clear/file credential/新HOME/project，模型URL仅不可用loopback，不做模型请求；D-Bus测试自建独立 `/tmp/reasonix-dbus-*` broker与受控假通知服务，不连接用户session bus或显示桌面通知。原session14525正常exit0，结束guest git status clean，完整日志 `desktop/tauri/target/linux-pinnedhistory-20261010/explicit-native-gates.log`，包与源码均未修改。
+
+- `terminal::tests::actual_bridge_pty_end_to_end`：1 passed/0 failed/0 ignored/292 filtered，0.20s。Rust TerminalClient经真实bridge HTTP到实际Go PTY，验证create/input同request身份去重、100×30 resize/stty、输出与同一shell PID、中文rename、模型切换保持原shell、终端输出不进入history；close后仅探测夹具自己的PID确已退出。第二个夹具shell自行SIGKILL后正确传递signed exit_code=-1。OwnedBridge Drop尝试正常shutdown并有精确child兜底；该测试没有单独断言是否使用了兜底，不能据此新增“正常host Exit”证明，正常包Exit仍依据此前四次startup门禁。
+- `notifications::xdg::dbus_tests::real_broker_covers_delivery_actions_owner_restart_failure_and_shutdown`：1 passed/0 failed/0 ignored/292 filtered，2.12s。真实broker验证能力/投递wire、早到回调、重复/伪造/非默认/关闭后信号拒绝、服务owner重启及ID复用、失败/超时不破坏旧绑定、shutdown释放worker/callback；服务是受控mock，不证明普通桌面banner/portal或Wayland通知行为。
+
+原标准回归仍记291 passed/2 ignored，以上是两条单独显式结果，不改写成标准套件293 passed。保留unused appearance警告，来源记录追加精确范围。本次不是release Rust测试宿主、WebView/xterm、物理键盘或剪贴板，Windows运行及其余完整目标仍未完成。
+
+## 2026-10-10 同一新包的实际 compress / covered pinned 追加门禁
+
+不重建包、不改冻结guest源码：只读Go overlay将最终SHA256 `87748481f4aa6fad68534a8eec00cae0c24865d7b41516e3433669005d401308` 包测试映射到private snapshot，前后校验摘要及准确deb sidecar `c57eaa1e…`，结束git status clean。三类 `TestProjectionActualPackageRestart` 各十次，含实际 `compress` 工具→loopback summarizer→生成认证covered-prefix pinned checkpoint→两次冷启动submit，最终7.946s、原session83054 exit0（初次7.132s通过）；release child非race。模型请求保留摘要/固定正文/上次问答，可见历史不泄漏固定修订，磁盘不重复；详细断言、Mac对应结果和仍未覆盖项见E清单本日“实际 compress 与 covered pinned 检查点”记录。日志 `desktop/tauri/target/linux-pinnedhistory-20261010/package-actual-compress.log`，来源记录已追加；不是可见WebView/压力自动压缩、固定文件编辑撤销、坏pinned hash拒绝、真实服务或Windows运行证明。
+
+## 2026-10-10 固定上下文过滤修复的新 deb/AppImage（隔离包级验收）
+
+新包在 `desktop/tauri/target/linux-pinnedhistory-20261010/packages/`：ARM64 deb 42,926,958字节、SHA256 `e6ae4462c1d609bb429e526cd0365d4d7613c082ec571036b61530d1bf191ab1`；ARM64 AppImage 118,966,792字节、SHA256 `c0852c8e1304328a4d5b27c1becbcc008be98e8473def47053e2d3dc92ab9183`。Mac副本与guest原件摘要一致；旧projectionfix及更早候选保留，没有安装或替换用户应用。
+
+Ubuntu运行状态先确认，host `de8bd83ac…` + 十文件dirty源码归档SHA256 `c03048197b7f903df9865bab51923dfe6cd309efdd2eb7a64594e7a03a5894ce` 校验通过；新私有root `/home/parallels/reasonix-builds/linux-pinnedhistory-20261010.dGHbp9`，private snapshot `2ed49000aa529fb5d2380a33dc711df46f97e5bd`，不是GitHub clean release。完整原frontend门禁/预算、73构建契约及Linux preflight/CI模拟通过，release1m33s，原build session69914 exit0。macOS archive provenance、Vite及unused appearance警告留在日志，没有改门禁掩盖。
+
+审计夹具 `package-audit.LmKVwf`：准确deb host SHA256 `28090bd7d3b0f2033bda93778ffff55602ecb65da1019cab47272c5feb241fab`，Go sidecar `c57eaa1ed86eb97b4b66296c012ce92c8af69d2b30e91dbdb2664ba9341ff857`；两包及构建sidecar字节一致、ARM64 ELF、ldd无缺失、apt仅simulate、配置/凭据/DB文件清单审计通过。deb入口与真实AppRun各managed/explicit四次独立Xvfb/D-Bus正常RunEvent::Exit通过，sidecar/readiness清理、401、profile/identity等边界通过。四个私有档案 `/tmp/reasonix-linux-package-ljjjw3u6`、`-9mqulm6n`、`-kkxbimam`、`-zxyvkiof` 保留。
+
+准确包sidecar的全部SQLite actual-package系列、只读bot、平台参数及两类正向摘要恢复（无pinned/host pinned尾部，两次冷启动submit）各十次race harness58.263s通过；历史/预览/usage专项十次1.357s、完成/中断/digest fence四类十次2.500s通过，原audit session58117 exit0。release child本身非race。随后标准 `cargo test --locked --manifest-path desktop/tauri/Cargo.toml --bin reasonix-tauri` 使用准确deb sidecar，own Xvfb/D-Bus，debug compile46.91s，291 passed/0 failed/2 ignored，测试2.72s，原session25224 exit0。忽略项不计通过；portal fallback/PipeWire及D-Bus结束警告保留。
+
+新来源记录和native-build/package-audit/native-rust日志在target。没有可见普通GUI/IME/Wayland/媒体/通知/系统图片剪贴板或真实模型、IM、SSH证明；pinned covered-prefix重建、固定文件编辑撤销、实际compactor及其它完整门禁继续待验收，不能因当前合成包级通过而关闭完整目标。未安装、正式签名/发布、推送或操作真实用户数据。
+
+## 2026-10-10 旧会话完成升级修复的新 deb/AppImage
+
+冻结本地 `de8bd83acbc4fd6fab6334dfcc5dac9ce4694979` + 五文件dirty增量，归档SHA256 `e98640f7da413c3ee4c07906784c13c335951870b6215412e13a6386361dc188`；新私有Ubuntu root `/home/parallels/reasonix-builds/linux-projectionfix-20261010.YX7XXe`、快照commit `075459eaddffd57d221959cfafd0ab07dfc50b84`。快照不是GitHub clean release。旧guest源码和旧包保留，仅复制旧私有编译缓存与经package.json/lock逐字节核对的既有依赖。macOS provenance扩展属性解压警告保留，源码归档校验通过，不更改源码内容或屏蔽构建门禁。
+
+原完整前端门禁及资源预算、73构建契约、Linux preflight/CI模拟通过；Rust release1m39s，deb/AppImage构建原session64936终态exit0。主机副本在 `desktop/tauri/target/linux-projectionfix-20261010/packages/`，分别与guest原包摘要相同：
+
+| 包 | SHA256 |
+| --- | --- |
+| `Reasonix Tauri Preview_0.1.0_arm64.deb` | `63b1e1c6934ded3d2c31c2f0e713b3d09b05ff1dc858f6a1acea16cb195e8545` |
+| `Reasonix Tauri Preview_0.1.0_aarch64.AppImage` | `eef7ec0e909716fc42a061fdd2cbe56e4c68ed22eab6e026253e27ebdcb5f03f` |
+
+审计root `package-audit.2iPL5W`：deb host ELF ARM64摘要 `94c0b8472efa555a7f435a2b6585f5d8c6c9aa409abdc449fc0131a2d898a325`，静态Go sidecar `15cfed15cedc2483b553b34f84969f0c799425bfb113616d2c476b933500ee7f`；两包及本次构建sidecar字节相同。ldd无missing、apt仅simulate成功，完整文件清单不含.env/config.toml/凭据JSON/SQLite/DB。deb入口和真实AppRun分别managed/explicit共四次独立Xvfb/D-Bus正常RunEvent::Exit通过，准确子进程pidfd退出、readiness清理、401及私有身份/profile/清空继承token与忽略开发binary override门禁保留。portal/PipeWire/D-Bus与unused appearance警告保留，不当作可见UI/声音验收。
+
+准确deb内sidecar的合法摘要恢复（两次冷启动submit，模型摘要与canonical历史分离）、九类旧历史、其它全部SQLite actual-package系列、只读bot与平台参数，各十次race46.821s通过；Controller完成升级/负向digest fence/已完成DAG/真正中断专项各十次2.501s通过。宿主race，release子进程非race；loopback模型夹具无真实凭据，不接真实模型服务。审计session79852终态exit0，日志和固定runner在新target目录。随后标准Linux Rust回归使用这个准确包内sidecar、独立Xvfb/D-Bus/CARGO_BUILD_JOBS=2，原session74141终态exit0：debug编译31.68s、291 passed/0 failed/2 ignored（2.39s），警告与末尾D-Bus提示保留。
+
+这关闭本次共同引擎完成升级缺陷的Linux包验证切片，不代表全部压缩/pinned上下文/损坏恢复或可见UI/IME/Wayland/物理剪贴板、真实SSH/IM等完整目标。未安装、签名/发布、推送或操作真实用户数据。
+
 ## 2026-10-10 当前包合法 DAG 分支的正向读取
 
 当前 deb 精确 sidecar `b155dd0a…` 追加独立 schema-2 DAG wire fixture：checkpoint/main/fork 回答故意不同，显式选中fork。实际open/history只返回所选两条消息及准确角色/顺序/原时间戳，无未选分支混入或checkpoint回退；缺失usage/duration不虚构。完整七类旧历史矩阵（旧Unicode、隐藏协议、最新分页、损坏JSONL、未知schema、未知DAGentry、selected DAG）各十次race12.069s正常exit0，每类两次启动/退出，原件不改写、401和无phantom等门禁保留。宿主race/release子进程非race，没有模型调用/真实数据/GUI。

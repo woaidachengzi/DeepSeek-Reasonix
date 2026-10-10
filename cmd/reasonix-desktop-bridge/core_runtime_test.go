@@ -586,6 +586,18 @@ func TestBridgeHistoryProjectionHidesHostSessionContext(t *testing.T) {
 	}
 }
 
+func TestBridgeHistoryProjectionHidesOnlyHostPinnedRevisions(t *testing.T) {
+	const revision = "<pinned_context_revision>private standing context</pinned_context_revision>"
+	history := projectBridgeHistory([]provider.Message{
+		{Role: provider.RoleUser, Origin: provider.MessageOriginHost, Content: revision},
+		{Role: provider.RoleUser, Origin: provider.MessageOriginUser, Content: revision},
+		{Role: provider.RoleAssistant, Content: "answer"},
+	})
+	if len(history) != 2 || history[0].Content != revision || history[1].Content != "answer" {
+		t.Fatalf("host revision leaked or user quotation hidden: %#v", history)
+	}
+}
+
 func TestControllerRuntimeRenamesSessionMetadataWithoutTouchingTranscript(t *testing.T) {
 	workspace := t.TempDir()
 	profile := t.TempDir()

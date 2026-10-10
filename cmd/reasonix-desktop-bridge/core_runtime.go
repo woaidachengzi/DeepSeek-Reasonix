@@ -33,6 +33,7 @@ import (
 	"reasonix/internal/mcplaunch"
 	"reasonix/internal/netclient"
 	"reasonix/internal/pathidentity"
+	"reasonix/internal/pinnedcontext"
 	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
 	"reasonix/internal/sessionarchive"
@@ -73,6 +74,7 @@ func (f *controllerFactory) options(request desktopbridge.OpenRequest) (boot.Opt
 		}
 		opts.WorkspaceRoot = root
 	}
+	opts.PinnedContextLoader = pinnedcontext.Loader(opts.WorkspaceRoot, nil)
 	opts.Model = strings.TrimSpace(request.ModelRef)
 	// Saved reasoning choices must never cross model boundaries. Explicit choices
 	// (including auto) take precedence; settings refresh/reopen inherit metadata.
@@ -1050,7 +1052,7 @@ func (r *controllerRuntime) State() string {
 const bridgeHistoryMaxContentRunes = 16_000
 
 func bridgeHistoryMessageVisible(message provider.Message) bool {
-	return message.Role == provider.RoleUser && !sessioncontext.IsContent(message.Content) ||
+	return message.Role == provider.RoleUser && !sessioncontext.IsContent(message.Content) && !agent.IsPinnedContextRevision(message) ||
 		message.Role == provider.RoleAssistant
 }
 

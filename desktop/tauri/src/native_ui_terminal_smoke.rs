@@ -157,6 +157,7 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
         "document.visibilityState === 'visible'",
         "visible owned terminal page",
     )?;
+    crate::native_window_smoke::record(app, "terminal-visible-ready")?;
     let workspace = directory.join("terminal-workspace 中文");
     std::fs::create_dir(&workspace).map_err(|_| "create private terminal workspace")?;
     let supervisor = app.state::<BridgeSupervisor>();
@@ -199,6 +200,7 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
     act(app, "const select=document.querySelector('.terminal-shell-select'); const setter=Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set; setter.call(select,'sh'); select.dispatchEvent(new Event('change',{bubbles:true}))")?;
     let terminal = new_terminal(app, FIRST)?;
     let first_pid = owned_pid(app, FIRST, &terminal, &workspace)?;
+    crate::native_window_smoke::record(app, "terminal-first-pty-painted")?;
     if !supervisor
         .history(SessionRequest {
             session_id: FIRST.into(),
@@ -222,6 +224,7 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
     if after.workspace.sessions.len() != 1 || after.workspace.sessions[0].id != terminal {
         return Err("reopen replaced the owned PTY".into());
     }
+    crate::native_window_smoke::record(app, "terminal-collapsed-reopened")?;
     click(
         app,
         ".terminal-panel__actions .terminal-icon-button:nth-of-type(2)",
@@ -236,6 +239,7 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
     act(app, "document.querySelector('.composer-context__label').closest('.tooltip-trigger').dispatchEvent(new MouseEvent('mouseover',{bubbles:true,relatedTarget:null}))")?;
     check(app, &format!("[...document.querySelectorAll('[role=tooltip]')].some(node => node.textContent.includes('owned-terminal:{first_pid}') && node.textContent.includes('中文-output') && !node.textContent.includes('\\u001b'))"), "complete sanitized output-to-chat preview")?;
     act(app, "document.querySelector('.composer-context__label').closest('.tooltip-trigger').dispatchEvent(new MouseEvent('mouseout',{bubbles:true,relatedTarget:document.body}))")?;
+    crate::native_window_smoke::record(app, "terminal-context-preview-closed")?;
     if !supervisor
         .history(SessionRequest {
             session_id: FIRST.into(),
@@ -252,16 +256,19 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
         "close visible terminal",
     )?;
     gone(first_pid)?;
+    crate::native_window_smoke::record(app, "terminal-first-pty-closed")?;
     let switch_terminal = new_terminal(app, FIRST)?;
     let switch_pid = owned_pid(app, FIRST, &switch_terminal, &workspace)?;
     select(app, "Terminal acceptance B")?;
     check(app, "!document.querySelector('.tauri-terminal-drawer') && !document.querySelector('.xterm-helper-textarea')", "conversation switch revokes old UI")?;
     gone(switch_pid)?;
+    crate::native_window_smoke::record(app, "terminal-conversation-switched")?;
     click(app, "[aria-label='切换终端面板']")?;
     check(app, "document.querySelector('.terminal-panel__actions .terminal-icon-button')?.disabled === false", "second conversation terminal capability")?;
     act(app, "const select=document.querySelector('.terminal-shell-select'); select.value='sh'; select.dispatchEvent(new Event('change',{bubbles:true}))")?;
     let shutdown_terminal = new_terminal(app, SECOND)?;
     let shutdown_pid = owned_pid(app, SECOND, &shutdown_terminal, &workspace)?;
+    crate::native_window_smoke::record(app, "terminal-before-normal-shutdown")?;
     // Normal app shutdown, executed by native_window_smoke after this returns,
     // must clean this third shell. The Python runner verifies its disappearance.
     std::fs::write(
