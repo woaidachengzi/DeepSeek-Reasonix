@@ -67,6 +67,9 @@ func (d *previewDesktopDriving) Shutdown(ctx context.Context) error {
 	if err := d.local.AwaitReclaimNotifications(bounded); err != nil {
 		result = errPreviewDesktopBinding
 	}
+	if err := d.remote.AwaitReclaimNotifications(bounded); err != nil {
+		result = errPreviewDesktopBinding
+	}
 	d.mu.Lock()
 	d.shutdownErr = result
 	close(d.shutdownDone)

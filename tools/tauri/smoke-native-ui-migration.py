@@ -8,6 +8,9 @@ and absent rollback record, then Cmd+Q. Repeat for managed and explicit profiles
 The runner verifies native source isolation, identity, originals and lifecycle;
 actual UI assertions must also be recorded via the native UI or by the operator.
 No shared legacy store is seeded, cleared or imported.
+Control receipts are running/ending/ended; require a live matching PID AND
+the private WebView origin before UI actions. Never rebind a dead fixture by
+bundle/path: a computer-use binding may launch a default-profile instance.
 """
 import argparse
 import importlib.util
@@ -33,6 +36,19 @@ spec.loader.exec_module(package)
 def original(path):
     info = path.stat()
     return path.read_bytes(), info.st_mode, info.st_mtime_ns
+
+
+def publish_control(control, payload):
+    """Publish a complete private lifecycle receipt, never a partial JSON file."""
+    with tempfile.NamedTemporaryFile(mode='w', prefix='.ui-migration-control-',
+                                     dir=control.parent, delete=False) as output:
+        temporary = Path(output.name)
+        os.fchmod(output.fileno(), 0o600)
+        output.write(json.dumps(payload) + '\n')
+    try:
+        os.replace(temporary, control)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def prepare_source(root):
@@ -103,6 +119,7 @@ def smoke(app_path, control_path, seconds, profile='both'):
                 host = subprocess.Popen([str(host_binary)], env=env, stdout=subprocess.DEVNULL,
                                         stderr=subprocess.DEVNULL, start_new_session=True)
                 sidecar = None
+                control_payload = None
                 try:
                     deadline = time.monotonic() + 25
                     while host.poll() is None and time.monotonic() < deadline:
@@ -120,11 +137,10 @@ def smoke(app_path, control_path, seconds, profile='both'):
                         time.sleep(0.05)
                     else:
                         raise RuntimeError('Ordinary private Preview did not start')
-                    control.touch(mode=0o600)
-                    control.write_text(json.dumps({'root': str(root), 'hostPid': host.pid,
-                                                  'sidecarPid': sidecar, 'phase': phase, 'managed': managed,
-                                                  'workspace': str(root / '旧界面 工作区')}))
-                    control.chmod(0o600)
+                    control_payload = {'root': str(root), 'hostPid': host.pid,
+                                       'sidecarPid': sidecar, 'phase': phase, 'managed': managed,
+                                       'workspace': str(root / '旧界面 工作区'), 'state': 'running'}
+                    publish_control(control, control_payload)
                     print(f"Ordinary {'managed' if managed else 'explicit'} UI phase {phase} ready", flush=True)
                     if host.wait(timeout=seconds) != 0:
                         raise RuntimeError('UI migration did not quit normally')
@@ -139,6 +155,8 @@ def smoke(app_path, control_path, seconds, profile='both'):
                     passed += 1
                     print(f"UI phase {phase}: private source, identity, originals and normal quit cleanup OK", flush=True)
                 finally:
+                    if control_payload is not None:
+                        publish_control(control, control_payload | {'state': 'ending'})
                     if host.poll() is None:
                         os.killpg(host.pid, signal.SIGKILL)
                         host.wait(timeout=5)
@@ -147,6 +165,10 @@ def smoke(app_path, control_path, seconds, profile='both'):
                             os.kill(pid, signal.SIGKILL)
                         except ProcessLookupError:
                             pass
+                    if control_payload is not None:
+                        publish_control(control, control_payload | {
+                            'state': 'ended', 'exitCode': host.returncode,
+                        })
         success = True
         print(f'{passed} ordinary UI lifecycles and source-isolation checks passed; native UI evidence must confirm import/restore behavior.', flush=True)
     finally:

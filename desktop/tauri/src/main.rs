@@ -4776,7 +4776,7 @@ fn main() {
             native_window_smoke::start_if_requested(app);
             native_profile_smoke::start_if_requested(app);
         }
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         if matches!(event, tauri::RunEvent::Ready)
             && std::env::var("REASONIX_TAURI_PACKAGE_SMOKE").as_deref() == Ok("1")
         {
@@ -4791,6 +4791,10 @@ fn main() {
                     .map(std::path::PathBuf::from)
                     .map(|dir| dir.join("reasonix-native-notification-smoke.json"));
                 let verified = native_status.and_then(|status| {
+                    // XDG has no macOS-style authorization state. Preserve its
+                    // truthful Unknown/Unavailable report; the Linux lifecycle
+                    // probe does not claim notification delivery coverage.
+                    #[cfg(target_os = "macos")]
                     if matches!(
                         status.permission,
                         notifications::Permission::Unavailable | notifications::Permission::Unknown

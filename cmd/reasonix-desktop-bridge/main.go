@@ -643,6 +643,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("GET /v1/settings/bots/pairing", b.authorized(b.botPairing))
 	mux.HandleFunc("POST /v1/settings/bots/pairing", b.authorized(b.idempotent(1024, b.changeBotPairing)))
 	mux.HandleFunc("GET /v1/settings/bots/runtime", b.authorized(b.botRuntimeStatus))
+	mux.HandleFunc("GET /v1/settings/bots/diagnostics", b.authorized(b.botConnectionDiagnostics))
 	mux.HandleFunc("POST /v1/settings/bots/runtime", b.authorized(b.idempotent(1024, b.changeBotRuntime)))
 	mux.HandleFunc("POST /v1/settings/desktop/approval", b.authorized(b.idempotent(64<<10, b.setDesktopApproval)))
 	mux.HandleFunc("POST /v1/settings/desktop/terminal-theme", b.authorized(b.idempotent(64<<10, b.setDesktopTerminalTheme)))

@@ -1,5 +1,129 @@
 # E 迁移清单
 
+## 2026-10-10 超过30文件的review收敛批次
+
+新增bot只读诊断的Go路由`GET /v1/settings/bots/diagnostics`（原bridge鉴权）。只返回ID及固定config/runtime状态码；配置与运行观察独立、`runtimeObservationOnly=true`，不证明认证/投递或新配置已生效，不refresh、不启停、不发送。拒绝query，配置读取失败只给通用问题/恢复建议；不返回label/SDK错误/凭据值或名称/身份/路径。先补Go后端，尚无typed native IPC/前端入口，未宣称完整诊断、扫码安装或真实IM完成。
+
+达到31文件后停止功能扩展并review整批：remote worker原grant/key/audience与取消await、严格单帧client、Serve原owner/锁等待与无锁网络IO、host停止顺序、Linux hook与自有进程probe、macOS控制收据、SQLite/旧JSONL夹具与dirty候选摘要、三语言精简。修正新诊断的legacy映射：仅四个固定槽位可映射，微信/钉钉实际domain匹配；legacy/custom账户ID碰撞以失败回归复现后改为歧义行unknown，不能把别的账户运行状态关联过来。凭据不存在时同时检查CredentialsSet，不能仅因存了环境变量名就认为可用。所有修正只用于只读诊断，不改引擎/适配器权限或真实配置。
+
+最终六包race通过（bridge52.550s、Serve/controller/desktopbridge/sessionidentity/control cached），六包vet通过；15类诊断投影、legacy/custom碰撞和认证只读HTTP十次2.047s；73项构建契约/Linux模拟、三语言退役文案无调用方/键集/占位符、测试类型、Python控制收据unit/语法、gofmt/diff通过。前端完整build、原资源预算和macOS/Linux原生build及实际包内23类故障/历史场景的既有本批证据保留，未以源码回归代替原生验收。日志`/private/tmp/reasonix-remote-reclaim-package.ZLtaVX/{bot-diagnostics-source,bot-diagnostics-alias-before,bot-diagnostics-alias-after,bot-diagnostics-commit,batch31-go-race-commit,batch31-go-vet-reviewed,batch31-build-contract,batch31-locales}.log`；审核超时未执行的一次诊断命令已允许一次重试，旧失败/修正前日志均保留。
+
+最后冻结版本vet日志为`batch31-go-vet-commit.log`；首次审核超时未执行，允许一次重试后exit0，不把超时算静态通过。暂存仅明确31源文件/测试/文档，排除忽略的包与私有夹具，cached diff检查通过。
+
+当前31文件满足用户review后本地提交规则，不push。现有独立macOS App早于新增诊断，仅其包内23类后端/签名证据有效，未重打包包含新路由；Linux/Windows候选也不冒充新路由包。普通Preview仍未退出、图片剪贴板授权未收到，相关原生验收等待；配置自动转发（含反向转发）行为已询问，未回复前不改变监听策略。真实外部账号/迁移/正式签名发布/updater不操作，完整目标保持active。
+
+## 2026-10-10 远程回收通知 review 的 SDK 取消边界
+
+review当前remote driver/reclaim worker、Serve observation锁、client严格单帧和host shutdown接线，未在本轮发现新增生产修复。补既有自有SSH/HTTP+假SDK回归三项：SDK发送阻塞时收到重复reclaimed、含私有text的异常帧均取消并await、不追加或重试通知；人工推进测试绑定started至TTL外触发真实prune，取消并await，原key/scope仍保留、不隐式重新接管，显式release准确原grant。原EOF/release/错误actor/catalogue/connection/Close场景保留，十项组合各十次race通过（5.216s），日志`/private/tmp/reasonix-remote-reclaim-package.ZLtaVX/reclaim-review-sdk.log`。
+
+完整bridge/controller race通过（52.077s/cached），两包vet、gofmt/diff通过，日志`reclaim-review-regression.log`。只扩展已有两份测试，当前仍28变更文件，不代表实际IM SDK/服务或完整批次review提交；新macOS App产品源码/二进制未改变。普通Preview未退出、剪贴板授权未回复前相应原生验收仍暂停，完整目标active，无真实账号/迁移/发布/提交/push。
+
+## 2026-10-10 当前 macOS 源码独立 App 已构建
+
+CUA只读inventory确认普通`io.reasonix.desktop.preview`仍运行，未绑定/点击/退出它；已请用户保存并退出后再启动私有普通UI导入/撤销验收。没有把现有正常实例当测试档案，也未操作剪贴板。等待期间，从`17ffeff7a`加当前28文件启动独立`CARGO_TARGET_DIR=desktop/tauri/target/macos-current-20261010`的arm64 app-only重建，旧App/运行应用不覆盖，清除正式签名/公证相关构建变量，仅ad-hoc。
+
+原完整前端门禁通过，Node26.10.0/zlib1.2.12测得zh79.0/80.0、TW79.6/80.6KiB，原预算未改。独立目录首次Rust release编译2m29s，原session53238以0结束；未重启构建。新App在`desktop/tauri/target/macos-current-20261010/aarch64-apple-darwin/release/bundle/macos.noindex/Reasonix Tauri Preview.app`，deep/strict签名验证通过，adhoc/runtime、TeamIdentifier未设，无公证/发布。host SHA256 `723dceed9d3f99c4559e737d361b9c73b4a44653df695ff02dde1d28e22b9307`，sidecar仍`ad6c56ef15da7be720cd5917eb1b6f649d113add9e18b5a6931bf6890bc76c4d`；包资源枚举仅plist/icon/两个binary/签名清单，没有用户配置或凭据文件。日志`/private/tmp/reasonix-remote-reclaim-package.ZLtaVX/macos-current-build.log`，忽略输出目录`SOURCE_IDENTITY.json`保存构建中捕获的源码摘要/工具链/dirty身份及产物摘要。普通Preview经CUA只读inventory仍存活，未关闭/绑定/操作；新App私有host启动及普通UI证据尚待用户退出后验收。累计仍28文件，无提交/push/安装/正式发布，完整目标active。
+
+新App准确包内sidecar的全部23类SQLite/旧历史/审阅扫描场景及三平台参数十次复验通过（39.131s），日志`macos-current-sqlite.log`；测试宿主race、实际release子进程非race。签名/摘要复验通过，不能将该后端证据替代仍待验的新host私有启动、WKWebView/普通UI/剪贴板或完整目标。旧App与Linux/Windows候选均未覆盖，下一步待用户退出普通Preview后对新App做私有启动及导入/撤销界面验收。
+
+## 2026-10-10 实际包的旧格式历史读取矩阵
+
+新增 opt-in `TestSQLiteActualPackageLegacyHistory`，不经当前Session.Save生成样本，独立构造旧JSONL、显式合成身份和不可达回环provider，只open/history、不submit。四类各十次实际包验收：无消息ID的中文/emoji/多行内容保持；legacy v1 session-context（无新版section manifest）、system/tool/reasoning不进入用户可见历史；240条会话精确返回最新200条/start40/total240；合法前缀后损坏JSONL在open返回500拒绝。无旧usage/时间/时长时不虚构，401、准确身份/角色/顺序、两次启动/正常退出/readiness清理、原JSONL字节不变和无phantom会话均通过。
+
+使用前节摘要固定的实际macOS App/Linux lifecycle deb sidecar，十次分别17.349s/8.819s，测试宿主race、release子进程非race。初次夹具用*.jsonl把生命周期sidecar误判为phantom，改用store.IsSessionTranscriptName；随后局部变量store遮蔽import导致编译失败，改名后通过，未改生产。日志`/private/tmp/reasonix-remote-reclaim-package.ZLtaVX/sqlite-history-{macos-initial,macos-final,linux-final,macos-corrected,linux-corrected}.log`保留。Linux仅新增测试文件偏离私有快照9daba875，无重打包/安装。
+
+完整bridge/sessionidentity race、两包vet、gofmt/diff检查通过，回归日志`sqlite-history-regression.log`。默认回归的opt-in测试skip不算实际包证据。上述四类旧格式后端证据不替代真实历史迁移、全部事件日志/DAG/压缩损坏矩阵或普通导入/恢复UI。当前28文件，未超过30文件review后提交门槛，无提交/push；完整目标active，剪贴板/真实账号/正式发布未操作。
+
+## 2026-10-10 实际包的扫描审阅导入后端门禁
+
+新增显式 opt-in `TestSQLiteActualPackageReviewedScan`，使用同一已交付 macOS App/Linux lifecycle deb 的真实 release sidecar。七类场景各十次通过：只导入所选文件；扫描后文件变化、确认信息缺失、重复选择、catalog 接管或文件删除时整批409；第二条 INSERT 条件故障仅在第一条已插入时触发，500后整批回滚，重启无身份残留。401、扫描不自动登记/不暴露绝对路径、目录 revision、未选文件保留、源 JSONL/catalog 不改写、正常退出/readiness 清理也验证。详见 [Linux 记录](LINUX_PREVIEW_ACCEPTANCE.md#2026-10-10-实际-sidecar-扫描审阅导入)。
+
+首轮事务夹具错误地要求HTTP返回底层SQLite错误，两个包均按既有规则隐藏而测试失败；只修正测试为通用错误及不泄漏断言，不改生产规则。最终 macOS/Linux 分别9.597s/8.159s，release子进程非race、测试宿主带race；完整 bridge/sessionidentity race 与 vet通过。新增仅测试，产品包未改。累计27文件，未超过30文件先review再提交门槛，无提交/push。普通导入/恢复界面、旧历史样本完整矩阵及其它原生专项仍待验，不关闭完整SQLite或完整目标；无真实账号/迁移/剪贴板/安装/发布。
+
+## 2026-10-10 Linux 普通 Exit 与新 deb 内清理
+
+既有包级 smoke 入口扩展至 Linux，实际 release host 通过普通 RunEvent::Exit 清理，而非依赖探针 SIGTERM；macOS 原授权门禁保留，Linux readonly XDG 状态不冒充通知投递。新 deb 的 managed/explicit 私有档案两次验证 normal host0/sidecar退出/readiness删除、Global准确 protocol/session/路径及0700目录、401/凭据身份和release忽略继承token/开发binary覆盖值。前轮不支持该Exit入口的包作负对照，20秒timeout失败且清理不误报通过。新deb精确sidecar十二类SQLite与三平台参数十次race、原生Rust283/2ignored、macOS cargo check通过，详细摘要及边界见[Linux记录](LINUX_PREVIEW_ACCEPTANCE.md)。
+
+原AppImage封装后来正常完成，两包managed/explicit普通Exit均取得实际通过证据。整组最后一项中断，guest所有相关进程消失/readiness残留而宿主prlctl等待；权威核对后仅关闭本任务准确客户端（143），原中断不算通过。随后新的私有档案单项重验同一AppImage explicit，Exit0/sidecar/readiness/Global/401/身份均通过，无重打包或用户操作。新两包交付在`desktop/tauri/target/Reasonix-Tauri-Preview-0.1.0-arm64-20261010-lifecycle/`，旧包保留，详细源码/包摘要与失败证据见Linux记录。
+
+普通Exit不是可见窗口/托盘/键盘退出验证，通知投递、Wayland/IME/媒体/GStreamer/复杂UI、macOS普通导入/恢复界面和图片系统剪贴板等保留。剪贴板专项及Ubuntu中断时人工操作已询问，未收到允许前不操作剪贴板，不猜测中断原因。累计26文件，无本分支提交/push/安装/发布，完整目标active。以下保留历史阶段记录。
+
+## 2026-10-10 Windows 候选和 Ubuntu ARM64 新包隔离验收
+
+Windows x64 NSIS 已从 `17ffeff7a` 加当时 18 文件构建并解包审计，但没有 Windows 原生运行；详见 [Windows 记录](WINDOWS_PREVIEW_ACCEPTANCE.md)。用户授权恢复 Ubuntu 并隔离验收后，已在新目录完成 73 项构建契约、原生 Rust 283 passed/2 ignored、真实 sidecar SQLite 故障与恢复。Linux 初次 Node24 zh 80.3/80.0 KiB 失败；按 React bundle 优化规范核查并仅删除 23 条无源码/测试调用方的旧 provider 文案，三语言一致及相关 23 suite/类型回归通过，原 Node24 完整门禁转为 zh79.8/80.0、TW80.4/80.6，不改预算或 locale 行为。
+
+新版 deb/AppImage 已原生构建、解包/依赖/配置凭据审计、复制校验并在私有 Xvfb/D-Bus 用实际正常入口完成 managed/explicit 四次启动。AppImage 首次误用 usr/bin 入口导致 WebKit 路径失败，改探针入口为 AppRun 后同一包通过，不把失败算通过。最终 deb 内真实 sidecar 的十二类 SQLite 场景与三平台参数十次 race 通过（12.138s）。详细源码/包摘要、所有失败与成功日志、原包路径及验收边界见 [Linux 记录](LINUX_PREVIEW_ACCEPTANCE.md)；交付在 `desktop/tauri/target/Reasonix-Tauri-Preview-0.1.0-arm64-20261010/`，未安装或触及真实数据。
+
+这是原生 startup/401/profile 与包内后端证据，探针终止自有进程不代表 normal UI quit，仍未覆盖真实服务、可见 UI/管理页、Wayland/IME、x64/旧发行版和完整恢复界面。macOS 私有普通导入/撤销、图片原生粘贴、IM/Plan/Recovery 等原门禁保留。累计 25 文件，未超过 30 文件，无本分支提交/push/正式发布，目标 active。以下历史记录保留。
+
+## 2026-10-10 当前 App 的实际 WKWebView 存储隔离与受控旧偏好读取
+
+对上一节 SHA256 未变的 App 完成实际原生验收：`smoke-native-ui-storage.py` 的 managed/explicit 各两个私有档案共 18 次原生启动，验证初始无 canary、种下受控值、重启恢复工作区按钮显示、跨档案隔离与清理；`smoke-native-ui-legacy-read.py --private-source` 四次启动、八次精确三项非持久化来源读取，reader 销毁、稳定凭据身份、原始 canary/来源及正常退出清理通过。不读取真实旧偏好或系统剪贴板。这是实际 WKWebView/main IPC 与原界面工作区显示证据，不是所有存储管理页/SQLite GUI 或导入撤销完成。
+
+普通 managed 导入/撤销界面尝试未通过：已创建私有 fixture `/private/tmp/reasonix-ui-migration-managed-yphikj_v`，首阶段等待 180 秒后失败；按完整 App 路径的 CUA 观察耗时约 591 秒，返回时私有 host 已结束，界面属于常规档案而非 fixture。没有在该返回界面点击、输入、导入或撤销，也未关闭常规实例；不能以这次观察作私有验收。精确 PID 74940/74947 的只读 ps 确认均不存活。CUA 按名称/路径绑定可能在过期后解析/启动常规实例，后续不得重绑已死的私有 fixture。失败资料保留，不算通过。
+
+修正验收 runner 控制收据：原子发布 0600 JSON，阶段开始 running、清理前 ending、清理后 ended，避免超时后仍留下貌似 live 的控制信息；文档明确 UI 动作前必须同时核对 live PID 与 private origin。`test_ui_migration_control.py` 一项私有原子替换/状态/权限/临时文件清理测试通过；这只证明收据 helper，不冒充整个普通 UI 流程成功。现有 App deep/strict 签名、二进制 SHA 和 diff 检查通过。仅新增工具回归与清单，累计 18 文件，无提交/push，没有新 App 二进制变更。
+
+日志 `/private/tmp/reasonix-remote-reclaim-package.ZLtaVX/{native-ui-storage,native-private-legacy-read,native-ui-migration-managed}.log`。真实导入/撤销界面继续待验，不能为了避开观察延迟或错误档案而放宽归属门禁；其余历史样本、reviewed-scan、Windows/Linux/复杂管理页及完整目标保持 active，不使用真实账号/迁移/正式发布。以下保留历史阶段记录。
+
+## 2026-10-10 实际包的合法头/损坏数据页 quick_check 门禁
+
+在 opt-in compatibility 用例增加 `corrupt_page`：先取得真实 sessions btree rootpage，正常关闭 fixture writer 后，仅破坏该数据页类型字节，保留 SQLite magic/header、schema/version 及其余字节；边界检查保证修改仅落在合成私有库。实际 release sidecar 启动由 `session identity quick check` 明确拒绝，不发布 readiness、不改库或 JSONL，区别于前阶段非法文件头拒绝。最初 encoding/binary 被同名 binary 变量遮蔽导致编译失败，给 import 明确别名后通过；未改生产完整性判断。
+
+新用例首轮通过（1.991s）。最终全部十二类 opt-in 包级场景十次通过（17.700s），证据 `/private/tmp/reasonix-remote-reclaim-package.ZLtaVX/sqlite-package-integrity.log`；完整 bridge/sessionidentity race 通过（52.652s/cached），两包 vet、gofmt/diff 通过。实际 package release 子进程不带 race；测试宿主带 race。仅扩展验收文件与清单，App 二进制不变，累计仍 16 文件，无提交/push，未触及真实数据或正式发布。
+
+当前已有 SQLite schema/主库内部损坏/WAL/事务错误/alias/重复导入/offline restore 的实际包内后端证据，不将它等同于完整 SQLite 或完整目标完成：reviewed-scan、旧历史样本矩阵、native 恢复界面仍需继续；Windows/Linux、复杂管理页以及真实 IM/Plan/Recovery/图片原生粘贴等门禁保持 active。以下保留历史阶段记录。
+
+## 2026-10-10 实际包内导入事务回滚、物理别名与重复导入
+
+新增 opt-in `TestSQLiteActualPackageImportAtomicity`：同一实际 release sidecar、合成私有 JSONL/SQLite。只在测试库创建故障 trigger，第二条 INSERT 时先证明第一条已在同一事务中插入，再 RAISE(ABORT)；实际 import-catalog 返回 409，list 的身份数和目录 snapshot revision 回到批次前，正常停机并用原包重启后仍为零，证明 durable rollback 而非仅缓存隐藏。硬链接与符号链接别名也整批拒绝、没有半批登记或 JSONL 改写。两个不同 ID 的独立同内容文件正常导入，重发带 stale 标题的原批次不修改已有身份、标题、时间/目录 revision，重启保留两条记录。所有进口均通过实际认证 HTTP；401 拒绝、两轮正常退出/readiness 清理验证。
+
+四类新增场景首轮通过（2.249s）；连同前阶段七类场景，全部十一类 opt-in 十次通过（17.275s），证据 `/private/tmp/reasonix-remote-reclaim-package.ZLtaVX/sqlite-package-atomic.log`。最终完整 bridge/sessionidentity race 通过（52.636s/cached），两包 vet、gofmt/diff 通过。测试宿主带 race，实际包内 release 子进程不带 race。新增仅验收代码；包二进制未改，累计 16 文件，无提交/push，未达超过 30 文件的 review 后提交门槛。
+
+这补齐了当前 catalog 导入批次的失败原子性、physical alias 冲突与重复导入后端证据，不替代 reviewed-scan UI、完整旧历史样本、quick_check 页损坏和 native 恢复界面矩阵。没有真实账号/迁移/正式发布，Windows/Linux 专项、复杂管理页包矩阵、图片原生粘贴与真实 IM/Plan/Recovery 等完整目标继续 active。以下保留历史阶段记录。
+
+## 2026-10-10 实际包内 WAL 崩溃提交恢复与损坏保护
+
+新增 opt-in `TestSQLiteActualPackageAbruptExitWAL`，实际使用上一节 SHA256 固定的 release sidecar。合成非空 JSONL/身份库，只配置不可达回环 provider，不发送模型请求；通过包内 authenticated open 与既有 PATCH title 路由完成真实重命名提交，仅 SIGKILL 本测试创建并持有的子进程并 await，确认留下非空 WAL。单独主库副本仍为旧标题，证明新提交只在 WAL 而非已 checkpoint 的主库；原包重启后实际 list 恢复新标题，正常退出/readiness 清理，JSONL 保持原样。另破坏 owned WAL 最后帧校验，实际包启动前明确拒绝、不发布 readiness，主库、损坏 WAL 与 JSONL 全部未变，不让 SQLite 静默回落到旧标题。
+
+初次测试误写不存在的 POST rename 路由返回 404，核对现有 PATCH `/v1/sessions/{id}/title` 后修正夹具并重测，没有增加兼容路由或放宽生产门禁。加非空历史与 main-only WAL 对照后三次通过（3.416s）；最终两条 WAL 加前阶段五类场景合计七类 opt-in 十次通过（13.320s），证据 `/private/tmp/reasonix-remote-reclaim-package.ZLtaVX/sqlite-package-wal.log`。完整 bridge/sessionidentity race 通过（52.683s/cached），两包 vet、gofmt/diff 通过。race 插桩为测试宿主，包内 release 子进程不是 race 产物。
+
+本轮只扩展原验收文件与清单，累计仍 16 文件，无提交/push，App 二进制未变。不触及真实档案或账号，不执行正式签名/发布。已补实际包的 committed WAL 崩溃及损坏拒绝门禁，但事务中途失败、重复导入/路径与 alias 冲突、历史样本矩阵和 native 恢复 UI 仍需验证；不能将两条崩溃用例当作整个 SQLite/完整目标完成。Windows/Linux、复杂管理页与真实 IM/原生粘贴等门禁继续 active。以下保留历史阶段记录。
+
+## 2026-10-10 SQLite 身份库的实际包内兼容与停机恢复验收
+
+新增 opt-in `TestSQLiteActualPackageCompatibilityAndOfflineRestore`，要求显式提供 `REASONIX_SQLITE_PACKAGE_BIN`，实际启动上一节 App 内 sidecar（二进制 SHA256 `ad6c56ef15da7be720cd5917eb1b6f649d113add9e18b5a6931bf6890bc76c4d`，验收前后校验未变），不以进程内 handler 替代。所有 HOME/profile/cache/tmp 及 JSONL/SQLite 均为合成私有档案；子进程仅继承最小环境，不使用模型、真实凭据、IM、GUI、剪贴板或用户迁移。
+
+五类场景十次通过：真实 v8（移除 v9 的 import_verified 列）启动升级到 v9，401 拒绝及 authenticated sync/list 的 ID/标题/存在性一致；future schema、损坏 SQLite header、主库缺失但孤立 WAL 分别在启动前明确拒绝、不发布 readiness、不改原数据库/孤立证据或 JSONL；正常停机后创建完整 offline snapshot，stage 到新档案，用相同包内 sidecar 启动读取身份/标题，正常退出、readiness 清理，源库与两份 JSONL 不变。初次夹具误用 WorkbenchOrderEntry.Title 导致编译失败，核对 schema 后修正；早期测试错误地要求坏库仍启动 HTTP，改为验证产品既有启动拒绝，未放宽生产门禁。
+
+最终 opt-in 十次通过（6.718s），收据 `/private/tmp/reasonix-remote-reclaim-package.ZLtaVX/sqlite-package.log`。完整 bridge/sessionidentity race 通过（52.843s/11.644s；完整默认运行中 opt-in 用例按设计 skip，实际包证据来自前述显式运行），两包 vet、gofmt/diff 通过。race 插桩覆盖测试宿主；运行的 packaged release sidecar 并非 race 产物。新增仅验收代码，App 二进制无变化；累计 16 文件，未超过 30 文件 review 后提交门槛，无提交/push。
+
+这不是整个 SQLite 恢复矩阵完成：实际包的 WAL 崩溃/损坏 WAL、事务中断、重复导入/路径或 alias 冲突、旧历史样本矩阵和 native 恢复 UI 仍需继续；既有源码 WAL/事务回归不能替代对应包级证据。Windows/Linux 专项、复杂管理页、图片原生粘贴及真实 IM/Plan/Recovery 等完整目标继续 active。以下保留历史阶段记录。
+
+## 2026-10-10 原 grant 远程收回增量 macOS 可运行包
+
+已将 `17ffeff7af01cfbc73fff3ddf7bd74ef21bffebf` 加当前 15 文件未提交增量重建为 arm64 ad-hoc App，包含远程原 grant 收回 Serve/client/driver、宿主取消等待与观察锁竞争修复。现有完整前端构建门禁、Go/Rust release、原资源预算以及 exact bundle deep/strict 签名验证通过；实际包的 managed/explicit 两类临时档案、独立凭据身份、401 鉴权、Global workspace、原生通知权限只读查询、正常退出和 sidecar/readiness 无残留均通过。使用 Homebrew Node 26.10.0；未修改资源预算。
+
+App 位于 `desktop/tauri/target/aarch64-apple-darwin/release/bundle/macos.noindex/Reasonix Tauri Preview.app`。host SHA256 `5fa6f63798de73810ef48809d135d4dd776e62d1e44a5988f12eca07ba1edb2f`，bridge SHA256 `ad6c56ef15da7be720cd5917eb1b6f649d113add9e18b5a6931bf6890bc76c4d`。日志 `/private/tmp/reasonix-remote-reclaim-package.ZLtaVX/{build,package-smoke}.log`，上一 App 完整保留为同目录 `Reasonix Tauri Preview.previous.app`。本包标记 dirty 候选，不冒充干净提交；构建后仅本清单新增收据，不改变二进制功能。
+
+未提交/push、公证/发布、正式安装或切换默认下载；没有真实账号、剪贴板或用户数据迁移。此启动/退出验收不替代新增 remote/bot 的实际可见界面和真实 IM/Plan/Recovery E2E，Windows/Linux 专项、复杂管理页包矩阵及 SQLite 兼容恢复门禁仍需继续。完整目标保持 active，超过 30 个文件时仍先 review/修复/验证再本地提交。以下保留历史阶段记录。
+
+## 2026-10-10 远程原 grant 收回通知贯通与观察锁竞争修复（后续源码）
+
+bot remote driver 已连接原 grant 的认证观察握手：观察 ready 才确认接管，失败保留原 key 供显式解除、不重取。收回或 EOF 将原绑定变为继续输入拒绝 fence；state 回复先于信号也保留原 audience/key，不能转入普通 bot。固定摘要只发原聊天/actor，不依赖 watch；release/连接或 catalogue 退役/host 关闭取消并 await 在途 SDK，不重试未知发送、不取消已接纳 Agent 任务。宿主配置原 sender，driving Shutdown 等待本地与远程两类 worker。
+
+完整隔离 SSH → 实际认证 Serve/Agent → scoped host → 真实 gateway/假 SDK 测试发现产品锁竞争：HTTP 输入持 bindMu 发布 turn_started，既有观察用 TryLock 失败误报退役并停止整代宿主。修复建立后观察的复核为可取消等待，随后仍核对精确原 owner、mirror/只读租约；初始 admission 仍忙即拒绝，网络写不持锁。事件与收回两种流均增加前台/后台确定性锁占用测试，以及占锁时请求取消/source 退役无等待泄漏测试。贯通测试随后暴露夹具错误地禁止本地 steering 后续 provider 请求，改为检查被拒远程文本不进入 provider，并核对原 owner；未放宽生产门禁。
+
+贯通/宿主/runtime 与观察专项十次 race 通过：bridge 14.839s、Serve 12.858s、remote-controller 1.744s；追加确定性收回与取消断言后的 Serve 专项十次通过（14.449s）。最终六包完整 race 通过：bridge 55.836s、Serve 107.958s，其余 desktopbridge/bot/control/remote-controller cached；六包 vet、gofmt/diff 检查通过。累计 15 文件，未超过 30 文件门槛，无提交/push，基于 `17ffeff7a`。没有 desktop IPC/schema/TS/Rust 变更，App 未更新；本节隔离源码证明不替代真实 IM/Plan/Recovery、原生 UI、Windows/Linux/复杂管理页/SQLite 包级门禁。完整目标保持，不使用真实账号、迁移或正式发布。以下保留阶段历史记录。
+
+## 2026-10-10 原 grant 收回观察的认证 Serve/client 链路（后续源码）
+
+已将上一批 Controller 单次原 grant 观察接到固定认证 `POST /desktop/driving-reclaim-observation` 与共享 Client：严格 protocol/scope/original key、64 KiB 请求与 1 KiB 帧，禁止查询/replay/Last-Event-ID/额外字段。只绑定已发布前台或非退役后台的实际 Controller，复核 bind/admission gate、只读租约及 mirror，不恢复历史。响应只含 `ready` 与一次 `reclaimed`，不回传 key/路径/正文；本地信号之后持续保留 source，直到原 grant/owner 退役或客户端取消，供后续 SDK 在途发送取消使用。关闭观察不解除/续期驾驶；20 秒仅界定握手，既定长连接归原 Client/operation 所有，无 fallback、自动重连或重试，401/403 退役连接。网络写有界且不持 owner 锁。
+
+真实认证 Serve/client + 前台/后台实际 Agent/fake provider 验证：错误 key/epoch、历史路径/外部写租约、退役 admission、畸形请求及 replay 拒绝；关闭读流不释放 holder，原 capture 在自己运行中仍能观察，实际 TrySteer 收回输出固定一帧，原 spent key release 结束 source 且不取消已接纳任务，同路径 rebind 仅 EOF、不误报输入。客户端固定 cookie/路由、严格字段/预算/种类/重复帧、失败不泄露正文或重试、收回后原 owner 取消打断实际 HTTP 均验证。初次畸形 recorder 测试因默认 example.com Host 被现有安全门禁拒为 421，修正夹具回环 Host 与 JSON header 后重测，未改生产门禁；审批超时未运行的一次请求按提示重试。
+
+最终专项 race 十次通过：remote-controller 1.422s、Serve 6.030s。六包完整 race 通过：bridge 53.019s、remote-controller 3.181s、Serve 107.755s，其余 desktopbridge/bot/control cached；六包 vet、gofmt/diff 检查通过。本阶段未改 desktop IPC/schema/TS/Rust。当前累计 6 文件，未超过 30 文件门槛，无提交/push；基于已提交 `17ffeff7a`。bot 原 remote driver 的接管握手、取消/await 与通知消费者尚待连接，不算完整远程即时收回完成，App 未更新。真实 IM/Plan/Recovery、原生交互、跨 OS/复杂管理页/SQLite 及完整目标仍未完成，不使用真实账号/迁移/正式发布。
+
 ## 2026-10-10 32 文件 review 与原 grant 收回观察基础
 
 超过 30 文件后停止扩展，对整批 scoped bot 宿主/代际启停、全已发布 owner 的只读观察/固定摘要通知、本地 manager 收回及 Controller driving 观察基础完成 review。核对精确原 owner/epoch/key/聊天 actor、取消与 await、权限复核、无输入/凭据正文、无历史恢复/自动重连/未知重试，以及 main 在关闭 SSH 前清理 bot 的次序。未发现阻塞本批提交的问题；本地提交后不 push。

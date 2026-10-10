@@ -66,6 +66,10 @@ func (h *previewDesktopHost) Start(ctx context.Context, sender previewDesktopNot
 		h.StopIngress()
 		return errPreviewDesktopBinding
 	}
+	if err := h.commands.driving.remote.ConfigureReclaimNotifications(h.ctx, sender); err != nil {
+		h.StopIngress()
+		return errPreviewDesktopBinding
+	}
 	n, err := newPreviewDesktopNotificationHost(h.ctx, h.catalogue, h.stream, h.store, sender)
 	if err != nil {
 		h.StopIngress()

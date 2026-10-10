@@ -1,5 +1,11 @@
 # Windows Preview 手动验收
 
+## 2026-10-10 新候选（未做 Windows 原生验收）
+
+从 `17ffeff7af01cfbc73fff3ddf7bd74ef21bffebf` 加当时 18 个未提交文件构建，包含远程 driving 收回观察与 Serve 观察锁竞争修正。完整前端门禁、Windows MSVC release 与 NSIS 构建通过；macOS 交叉构建不是 Windows 运行证明，也未正式签名或发布。
+
+安装包：`desktop/tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/Reasonix Tauri Preview_0.1.0_x64-setup.exe`，38,206,373 字节，SHA256 `4d18669cf427f686392980c67e27a3304ac166274d536db55d5daa7bb4b6d4c1`。7-Zip 列表和解包通过，只有 NSIS 组件、WebView2 bootstrapper、x64 GUI 主程序及 x64 Go sidecar，没有用户档案、模型配置或 API key 文件。旧 NSIS 目录完整保留于 `/private/tmp/reasonix-remote-reclaim-package.ZLtaVX/windows-previous-nsis`；构建日志同目录 `windows-build.log`。以下是旧候选的历史记录，不能混用摘要或验收结论。
+
 2026-10-07 用户授权 Windows 适配与安装包构建，原生运行由用户在 Windows 电脑验收。
 E 提交基线：`d040be2b7917c2abe728166848a21241ecf86abe`。本批 Windows 构建适配在此基线上继续。
 

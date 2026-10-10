@@ -28,6 +28,44 @@ func (s *Server) desktopObservationOwner(path string) *control.Controller {
 	return nil
 }
 
+// Established observers must distinguish ordinary binding-lock contention
+// from retirement. Input admission also holds bindMu while publishing events.
+// Wait cancellably, then recheck the exact published owner; never hold a gate
+// across network IO or treat a busy gate as permission to publish.
+func (s *Server) desktopObservationCurrent(ctx context.Context, retired <-chan struct{}, path string, owner *control.Controller) bool {
+	for {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-retired:
+			return false
+		default:
+		}
+		if s.bindMu.TryLock() {
+			current := s.desktopObservationOwner(path) == owner && !s.sessionMirrored(path) && !s.runtimeForeignLeaseReadOnly(path)
+			s.bindMu.Unlock()
+			select {
+			case <-ctx.Done():
+				return false
+			case <-retired:
+				return false
+			default:
+				return current
+			}
+		}
+		timer := time.NewTimer(5 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return false
+		case <-retired:
+			timer.Stop()
+			return false
+		case <-timer.C:
+		}
+	}
+}
+
 func (s *Server) desktopSessionObservation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	admission, cancel := context.WithTimeout(r.Context(), 15*time.Second)
@@ -109,11 +147,10 @@ func (s *Server) desktopSessionObservation(w http.ResponseWriter, r *http.Reques
 	}
 	for {
 		frame, err := sub.Read(r.Context())
-		if err != nil || !s.bindMu.TryLock() {
+		if err != nil {
 			return
 		}
-		current := s.desktopObservationOwner(path) == owner && !s.sessionMirrored(path) && !s.runtimeForeignLeaseReadOnly(path)
-		s.bindMu.Unlock()
+		current := s.desktopObservationCurrent(r.Context(), sub.Done(), path, owner)
 		if !current || !write(controller.SessionObservationFrame{ProtocolVersion: 1, Kind: frame.Kind}) {
 			return
 		}

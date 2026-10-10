@@ -16,6 +16,34 @@ import (
 	"reasonix/internal/tool"
 )
 
+func TestDesktopObservationBusyGateCancellation(t *testing.T) {
+	for _, retirement := range []bool{false, true} {
+		t.Run(map[bool]string{false: "request_cancel", true: "source_retire"}[retirement], func(t *testing.T) {
+			s := &Server{}
+			s.bindMu.Lock()
+			defer s.bindMu.Unlock()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			retired := make(chan struct{})
+			result := make(chan bool, 1)
+			go func() { result <- s.desktopObservationCurrent(ctx, retired, "unused", nil) }()
+			if retirement {
+				close(retired)
+			} else {
+				cancel()
+			}
+			select {
+			case current := <-result:
+				if current {
+					t.Fatal("cancelled observer remained current")
+				}
+			case <-time.After(time.Second):
+				t.Fatal("observer cancellation waited for binding lock")
+			}
+		})
+	}
+}
+
 func TestDesktopObservationActualAuthenticatedForegroundAndDetached(t *testing.T) {
 	for _, detached := range []bool{false, true} {
 		name := "foreground"
@@ -100,8 +128,31 @@ func TestDesktopObservationActualAuthenticatedForegroundAndDetached(t *testing.T
 				t.Fatal(err)
 			}
 			defer stream.Close()
+			// Actual HTTP driving admission publishes turn_started while holding
+			// bindMu. A busy same-owner gate must not terminate this stream.
+			f.server.bindMu.Lock()
+			unlock := f.server.bindMu.Unlock
+			defer func() {
+				if unlock != nil {
+					unlock()
+				}
+			}()
 			ctrl.SubmitUserTurn("private observed body", "private display")
-			frame, err := stream.Next()
+			type readResult struct {
+				frame controller.SessionObservationFrame
+				err   error
+			}
+			read := make(chan readResult, 1)
+			go func() { frame, err := stream.Next(); read <- readResult{frame, err} }()
+			select {
+			case <-read:
+				t.Fatal("busy same-owner gate prematurely ended or published observation")
+			case <-time.After(100 * time.Millisecond):
+			}
+			unlock()
+			unlock = nil
+			result := <-read
+			frame, err := result.frame, result.err
 			if err != nil || frame.Kind != "turn_started" {
 				t.Fatal(frame, err)
 			}

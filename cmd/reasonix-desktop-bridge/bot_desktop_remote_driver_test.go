@@ -16,22 +16,63 @@ import (
 )
 
 type remoteDrivingFixture struct {
-	mu                         sync.Mutex
-	catalogue                  *previewDesktopCatalogue
-	bridge                     *bridgeServer
-	driver                     *previewDesktopRemoteDriver
-	entry                      previewDesktopCatalogueEntry
-	route                      bot.DesktopWatchRoute
-	revision, version          uint64
-	epoch, holder, fail, block string
-	grant                      controller.SessionDrivingScope
-	requests                   chan controller.SessionDrivingRequest
+	mu                           sync.Mutex
+	catalogue                    *previewDesktopCatalogue
+	bridge                       *bridgeServer
+	driver                       *previewDesktopRemoteDriver
+	entry                        previewDesktopCatalogueEntry
+	route                        bot.DesktopWatchRoute
+	revision, version            uint64
+	epoch, holder, fail, block   string
+	grant                        controller.SessionDrivingScope
+	requests                     chan controller.SessionDrivingRequest
+	reclaimSignal, reclaimRetire chan struct{}
+	reclaimExtra                 chan string
 }
 
 func remoteDrivingTestFixture(t *testing.T) *remoteDrivingFixture {
 	t.Helper()
 	f := &remoteDrivingFixture{route: desktopWatchTestRoute(), revision: 1, epoch: "captured-/remote/live.jsonl", requests: make(chan controller.SessionDrivingRequest, 128)}
+	f.reclaimSignal, f.reclaimRetire = make(chan struct{}), make(chan struct{})
+	f.reclaimExtra = make(chan string, 1)
 	b, _, _, _ := controllerFixture(t, func(w http.ResponseWriter, r *http.Request) { t.Error("driving scanned history"); w.WriteHeader(400) }, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/desktop/driving-reclaim-observation" {
+			var input controller.DrivingReclaimObservationRequest
+			if json.NewDecoder(r.Body).Decode(&input) != nil || !controller.ValidDrivingReclaimObservationRequest(input) {
+				t.Error("invalid original grant observation")
+				w.WriteHeader(400)
+				return
+			}
+			f.mu.Lock()
+			valid := input.Scope == f.grant && input.Key == f.holder && f.fail != "observe"
+			signal, retire := f.reclaimSignal, f.reclaimRetire
+			f.mu.Unlock()
+			if !valid {
+				w.WriteHeader(409)
+				return
+			}
+			w.Header().Set("Content-Type", "application/x-ndjson")
+			_ = json.NewEncoder(w).Encode(controller.SessionObservationFrame{ProtocolVersion: 1, Kind: "ready"})
+			w.(http.Flusher).Flush()
+			select {
+			case <-r.Context().Done():
+				return
+			case <-retire:
+				return
+			case <-signal:
+			}
+			_ = json.NewEncoder(w).Encode(controller.SessionObservationFrame{ProtocolVersion: 1, Kind: "reclaimed"})
+			w.(http.Flusher).Flush()
+			select {
+			case <-r.Context().Done():
+			case <-retire:
+			case extra := <-f.reclaimExtra:
+				_, _ = io.WriteString(w, extra+"\n")
+				w.(http.Flusher).Flush()
+				<-r.Context().Done()
+			}
+			return
+		}
 		if r.URL.Path == "/desktop/session-observation" {
 			var input controller.SessionObservationRequest
 			if json.NewDecoder(r.Body).Decode(&input) != nil || !controller.ValidSessionObservationRequest(input) || input.Scope.SessionPath != "/remote/live.jsonl" {

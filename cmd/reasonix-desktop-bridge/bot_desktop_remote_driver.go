@@ -23,6 +23,7 @@ type previewRemoteDrivingBinding struct {
 	ready, uncertain, busy, released, expired bool
 	cancel                                    context.CancelFunc
 	done                                      chan struct{}
+	reclaimEnded                              bool
 }
 
 // A private remote driving component, not a complete DesktopBridge. Gateway
@@ -30,12 +31,15 @@ type previewRemoteDrivingBinding struct {
 // Each reservation binds the original tunnel/epoch, route and actor. Unknown
 // mutations fence continuing input; no implicit reacquire or local fallback.
 type previewDesktopRemoteDriver struct {
-	catalogue *previewDesktopCatalogue
-	ctx       context.Context
-	cancel    context.CancelFunc
-	mu        sync.Mutex
-	closed    bool
-	bindings  map[bot.DesktopWatchRoute]*previewRemoteDrivingBinding
+	catalogue      *previewDesktopCatalogue
+	ctx            context.Context
+	cancel         context.CancelFunc
+	mu             sync.Mutex
+	closed         bool
+	bindings       map[bot.DesktopWatchRoute]*previewRemoteDrivingBinding
+	reclaimCtx     context.Context
+	reclaimSender  previewDesktopNotificationSender
+	reclaimWorkers map[*previewRemoteReclaimWorker]struct{}
 }
 
 func newPreviewDesktopRemoteDriver(catalogue *previewDesktopCatalogue) *previewDesktopRemoteDriver {
@@ -51,6 +55,7 @@ func (d *previewDesktopRemoteDriver) current(b *previewRemoteDrivingBinding) boo
 func (d *previewDesktopRemoteDriver) pruneLocked() {
 	for route, binding := range d.bindings {
 		if !d.current(binding) {
+			d.cancelReclaimWorkersLocked(binding)
 			if binding.cancel != nil {
 				binding.cancel()
 			}
@@ -59,6 +64,7 @@ func (d *previewDesktopRemoteDriver) pruneLocked() {
 			// Keep the original key for explicit release: the host's earlier
 			// deadline is not evidence that a late remote acquire has expired.
 			binding.expired = true
+			d.cancelReclaimWorkersLocked(binding)
 			if binding.cancel != nil {
 				binding.cancel()
 			}
@@ -175,11 +181,22 @@ func (d *previewDesktopRemoteDriver) takeover(ctx context.Context, command bot.D
 	request.Key = b.key
 	_, err = entry.remote.client.SessionDriving(operation, request)
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	if err != nil || operation.Err() != nil || d.bindings[command.Route] != b || !d.current(b) {
 		if errors.Is(err, controller.ErrDrivingChanged) && d.bindings[command.Route] == b {
 			delete(d.bindings, command.Route)
 		}
+		d.mu.Unlock()
+		return "", errPreviewDesktopBinding
+	}
+	d.mu.Unlock()
+	// Acknowledge only after the original grant observer is ready. Retain the
+	// key after observation failure for explicit cleanup, never reacquire it.
+	if err := d.startReclaimObservation(operation, b); err != nil {
+		return "", errPreviewDesktopBinding
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if operation.Err() != nil || d.bindings[command.Route] != b || !d.current(b) || b.reclaimEnded {
 		return "", errPreviewDesktopBinding
 	}
 	b.ready = true
@@ -208,7 +225,15 @@ func (d *previewDesktopRemoteDriver) drive(ctx context.Context, command bot.Desk
 		d.mu.Lock()
 		if err == nil || errors.Is(err, controller.ErrDrivingChanged) {
 			if d.bindings[command.Route] == b {
-				delete(d.bindings, command.Route)
+				if d.reclaimSender != nil {
+					// The state reply can beat the original reclaim frame. Keep
+					// its audience/key and worker until explicit release; neither
+					// discard the notice nor reroute subsequent ordinary input.
+					b.reclaimEnded, b.ready, b.uncertain = true, false, true
+				} else {
+					d.cancelReclaimWorkersLocked(b)
+					delete(d.bindings, command.Route)
+				}
 			}
 		}
 		d.mu.Unlock()
@@ -224,7 +249,7 @@ func (d *previewDesktopRemoteDriver) drive(ctx context.Context, command bot.Desk
 		return "", errPreviewDesktopBinding
 	}
 	d.mu.Lock()
-	if operation.Err() != nil || d.bindings[command.Route] != b || !d.current(b) {
+	if operation.Err() != nil || d.bindings[command.Route] != b || !d.current(b) || b.reclaimEnded {
 		d.mu.Unlock()
 		return "", errPreviewDesktopBinding
 	}
@@ -238,7 +263,7 @@ func (d *previewDesktopRemoteDriver) drive(ctx context.Context, command bot.Desk
 	_, err = b.entry.remote.client.SessionDriving(operation, request)
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if err != nil || operation.Err() != nil || d.bindings[command.Route] != b || !d.current(b) {
+	if err != nil || operation.Err() != nil || d.bindings[command.Route] != b || !d.current(b) || b.reclaimEnded {
 		return "", errPreviewDesktopBinding
 	}
 	b.uncertain = false
@@ -261,6 +286,7 @@ func (d *previewDesktopRemoteDriver) release(ctx context.Context, command bot.De
 		d.mu.Unlock()
 		return "", errPreviewDesktopBinding
 	}
+	d.cancelReclaimWorkersLocked(b)
 	if b.cancel != nil {
 		b.cancel()
 	}
@@ -321,6 +347,9 @@ func (d *previewDesktopRemoteDriver) Close() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.closed = true
+	for worker := range d.reclaimWorkers {
+		worker.cancel()
+	}
 	for _, b := range d.bindings {
 		if b.cancel != nil {
 			b.cancel()
