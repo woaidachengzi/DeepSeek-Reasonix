@@ -1600,6 +1600,11 @@ export async function rememberTauriWorkbenchProjectFolder(root: string): Promise
   return invoke<TauriWorkbenchProjectFolders>("remember_workbench_project_folder", { root });
 }
 
+export async function removeTauriWorkbenchProjectFolder(root: string): Promise<TauriWorkbenchProjectFolders> {
+  requireTauri();
+  return invoke<TauriWorkbenchProjectFolders>("remove_workbench_project_folder", { root });
+}
+
 export async function renameTauriWorkbenchProjectFolder(root: string, title: string): Promise<TauriWorkbenchProjectFolders> {
   requireTauri();
   return invoke<TauriWorkbenchProjectFolders>("rename_workbench_project_folder", { root, title });
@@ -1906,6 +1911,12 @@ export async function tauriLegacyForkPreview(sessionId: string, turn: number): P
 export async function tauriLegacyForkCommit(sessionId: string, planId: string): Promise<TauriLegacyConversationForkResult> {
   requireTauri();
   const response = await invoke<BridgeLegacyConversationForkResultResponse>("bridge_legacy_fork_commit", { request: { sessionId, planId } });
+  return response.result;
+}
+
+export async function forkTauriBridgeSession(sessionId: string, forkToken: string): Promise<TauriLegacyConversationForkResult> {
+  requireTauri();
+  const response = await invoke<BridgeLegacyConversationForkResultResponse>("bridge_fork_session", { request: { sessionId, forkToken } });
   return response.result;
 }
 

@@ -1073,8 +1073,9 @@ func (r *controllerRuntime) History() []desktopbridge.HistoryMessage {
 
 func projectBridgeHistory(history []provider.Message) []desktopbridge.HistoryMessage {
 	messages := make([]desktopbridge.HistoryMessage, 0, len(history))
+	tokens, _ := agent.ConversationPrefixTokens(history)
 	usage := newHistoryUsage()
-	for _, message := range history {
+	for index, message := range history {
 		if message.Role == provider.RoleUser && bridgeHistoryMessageVisible(message) {
 			usage = newHistoryUsage()
 		}
@@ -1101,6 +1102,10 @@ func projectBridgeHistory(history []provider.Message) []desktopbridge.HistoryMes
 			continue
 		}
 		content, truncated := truncateBridgeHistoryContent(content)
+		forkToken := ""
+		if role == "assistant" && len(message.ToolCalls) == 0 && len(tokens) == len(history) {
+			forkToken = tokens[index]
+		}
 		messages = append(messages, desktopbridge.HistoryMessage{
 			Role:           role,
 			Content:        content,
@@ -1108,6 +1113,7 @@ func projectBridgeHistory(history []provider.Message) []desktopbridge.HistoryMes
 			WorkDurationMs: message.WorkDurationMs,
 			CreatedAtMs:    message.CreatedAt,
 			TurnUsage:      usage.snapshot(role == "assistant"),
+			ForkToken:      forkToken,
 		})
 	}
 	return messages

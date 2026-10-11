@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"strings"
 
 	"reasonix/internal/agent"
@@ -157,6 +158,75 @@ func (c *Controller) CheckpointHasBoundary(turn int) bool {
 		id = messages[boundary].ID
 	}
 	return id != "" && messages[boundary].ID == id
+}
+
+// ForkCurrentSessionToPath creates an independent transcript at the current tip.
+// Unlike Branch, it leaves this controller and the selected source head intact.
+// It also works after resume, without requiring a live checkpoint boundary.
+func (c *Controller) ForkCurrentSessionToPath(targetPath, name string) error {
+	return c.ForkSessionToPath(targetPath, name, "")
+}
+
+// ForkSessionToPath copies through the exact completed answer identified by
+// forkToken. An empty token retains the full-tip behavior for internal callers.
+func (c *Controller) ForkSessionToPath(targetPath, name, forkToken string) error {
+	if targetPath == "" || filepath.Clean(targetPath) != targetPath ||
+		filepath.Dir(targetPath) != filepath.Clean(c.SessionDir()) || filepath.Ext(targetPath) != ".jsonl" || targetPath == c.SessionPath() {
+		return fmt.Errorf("conversation fork target is invalid")
+	}
+	if err := c.beginRotation(); err != nil {
+		return err
+	}
+	defer c.endRotation()
+	if c.executor == nil || !c.executor.Session().HasContent() {
+		return fmt.Errorf("nothing to fork yet")
+	}
+	parentPath := c.SessionPath()
+	messages := c.executor.Session().Snapshot()
+	if forkToken != "" {
+		tokens, err := agent.ConversationPrefixTokens(messages)
+		if err != nil {
+			return err
+		}
+		boundary := -1
+		for index, token := range tokens {
+			if token == forkToken && messages[index].Role == provider.RoleAssistant &&
+				strings.TrimSpace(messages[index].Content) != "" && len(messages[index].ToolCalls) == 0 {
+				boundary = index
+				break
+			}
+		}
+		if boundary < 0 {
+			return fmt.Errorf("分叉位置已失效，请重新打开对话后重试")
+		}
+		messages = messages[:boundary+1]
+	}
+	child := agent.NewSession("")
+	child.Messages = messages
+	if err := child.SaveIfAbsent(targetPath); err != nil {
+		return err
+	}
+	// Persist the visible chain only, with a new log/head identity. Copy runtime
+	// preferences without inheriting the parent's recovery or in-flight markers.
+	preview, turns := agent.SessionPreviewFromMessages(messages)
+	meta := agent.BranchMeta{Name: strings.TrimSpace(name), CustomTitle: strings.TrimSpace(name),
+		ParentID: agent.BranchID(parentPath), ForkTurn: -1, ForkMessageIndex: len(messages),
+		Preview: preview, Turns: turns, SchemaVersion: agent.BranchMetaCountsVersion,
+		WorkspaceRoot: c.WorkspaceRoot(), Scope: "global"}
+	if meta.WorkspaceRoot != "" {
+		meta.Scope = "project"
+	}
+	if parent, ok, err := agent.LoadBranchMeta(parentPath); err == nil && ok {
+		meta.Model, meta.ReasoningModel, meta.ReasoningEffort = parent.Model, parent.ReasoningModel, parent.ReasoningEffort
+		meta.Mode, meta.ToolApprovalMode, meta.QualityFloor = parent.Mode, parent.ToolApprovalMode, parent.QualityFloor
+	}
+	if err := agent.SaveBranchMeta(targetPath, meta); err != nil {
+		return err
+	}
+	if _, err := child.CopyValidContextProjection(parentPath, targetPath); err != nil {
+		slog.Warn("controller: conversation fork did not inherit context projection", "err", err)
+	}
+	return nil
 }
 
 // Branch copies the current conversation into a child branch and switches to it.

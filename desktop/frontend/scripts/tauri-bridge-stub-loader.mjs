@@ -287,6 +287,13 @@ export function rememberTauriWorkbenchProjectFolder(root) {
   return Promise.resolve({ folders: folders.slice() });
 }
 
+export function removeTauriWorkbenchProjectFolder(root) {
+  record("remove_workbench_project_folder", { root });
+  if (globalThis.__removeProjectFolderFailure) return Promise.reject(new Error("test catalog write failed"));
+  globalThis.__savedProjectFolders = (globalThis.__savedProjectFolders ?? []).filter(folder => folder.root !== root);
+  return Promise.resolve({ folders: globalThis.__savedProjectFolders.slice() });
+}
+
 export function renameTauriWorkbenchProjectFolder(root, title) {
   record("rename_workbench_project_folder", { root, title });
   const folders = globalThis.__savedProjectFolders ?? [];
@@ -399,10 +406,12 @@ export function rememberTauriWorkbenchSession(sessionId, workspaceRoot, title) {
         ? { ...entry, workspaceRoot, title: title ?? entry.title }
         : entry
     );
-    return Promise.resolve(globalThis.__workbenchSessions.slice());
+    const result = globalThis.__workbenchSessions.slice();
+    return globalThis.__rememberSessionGate ? globalThis.__rememberSessionGate.then(() => result) : Promise.resolve(result);
   }
   globalThis.__workbenchSessions = [{ sessionId, workspaceRoot, title }, ...list];
-  return Promise.resolve(globalThis.__workbenchSessions.slice());
+  const result = globalThis.__workbenchSessions.slice();
+    return globalThis.__rememberSessionGate ? globalThis.__rememberSessionGate.then(() => result) : Promise.resolve(result);
 }
 
 export function forgetTauriWorkbenchSession(sessionId) {
@@ -429,6 +438,19 @@ export function switchTauriBridgeSession(sessionId, workspaceRoot) {
   return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle", title: globalThis.__recoveredTitles?.[sessionId] ?? storedTitle(sessionId), workspaceRoot });
 }
 
+export async function forkTauriBridgeSession(sessionId, forkToken) {
+  record("bridge_fork_session", { sessionId, forkToken });
+  if (globalThis.__forkSessionHandler) return globalThis.__forkSessionHandler(sessionId, forkToken);
+  const source = (globalThis.__workbenchSessions ?? []).find(item => item.sessionId === sessionId);
+  const child = { sessionId: "tauri-fork-child", title: (source?.title ?? "对话") + "（分叉）", workspaceRoot: source?.workspaceRoot };
+  const messages = globalThis.__historyBySession?.[sessionId] ?? globalThis.__tauriHistoryMessages ?? [];
+  const boundary = messages.findIndex(message => message.forkToken === forkToken);
+  if (boundary < 0) throw new Error("分叉位置已失效");
+  globalThis.__historyBySession = { ...(globalThis.__historyBySession ?? {}), [child.sessionId]: messages.slice(0, boundary + 1) };
+  globalThis.__workbenchSessions = [child, ...(globalThis.__workbenchSessions ?? [])];
+  return { ok: true, sessionId: child.sessionId };
+}
+
 export function renameTauriBridgeSession(sessionId, title) {
   record("bridge_rename_session", { sessionId, title });
   return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle", title });
@@ -447,7 +469,8 @@ export function tauriBridgeSnapshot(sessionId) {
   record("bridge_session_snapshot", { sessionId });
   if (globalThis.__snapshotError) return Promise.reject(new Error("snapshot unavailable"));
   const state = globalThis.__snapshotStates?.shift() ?? globalThis.__snapshotState ?? "idle";
-  const result = { sequence: globalThis.__snapshotSequence ?? 0, session: { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state } };
+  const workspaceRoot = (globalThis.__workbenchSessions ?? []).find(item => item.sessionId === sessionId)?.workspaceRoot;
+  const result = { sequence: globalThis.__snapshotSequence ?? 0, session: { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state, workspaceRoot } };
   return globalThis.__snapshotGate ? globalThis.__snapshotGate.then(() => result) : Promise.resolve(result);
 }
 
@@ -457,9 +480,11 @@ export function tauriSessionBalance(sessionId) {
 }
 
 export function tauriBridgeHistory(sessionId) {
+  record("bridge_session_history", { sessionId });
   if (globalThis.__historyError) return Promise.reject(new Error(globalThis.__historyError));
-  const messages = globalThis.__tauriHistoryMessages ?? [];
-  const result = { sequence: 0, session: { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle" }, messages, startIndex: 0, totalMessages: messages.length };
+  const messages = globalThis.__historyBySession?.[sessionId] ?? globalThis.__tauriHistoryMessages ?? [];
+  const workspaceRoot = (globalThis.__workbenchSessions ?? []).find(item => item.sessionId === sessionId)?.workspaceRoot;
+  const result = { sequence: 0, session: { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle", workspaceRoot }, messages, startIndex: 0, totalMessages: messages.length };
   return globalThis.__historyGate ? globalThis.__historyGate.then(() => result) : Promise.resolve(result);
 }
 
@@ -504,7 +529,9 @@ export function answerTauriMCPInteraction(sessionId, id, action, content) {
 
 export function replayTauriPendingPrompts(sessionId) {
   record("bridge_replay_pending_prompts", { sessionId });
-  return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle" });
+  const workspaceRoot = (globalThis.__workbenchSessions ?? []).find(item => item.sessionId === sessionId)?.workspaceRoot;
+  const result = { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle", workspaceRoot };
+  return globalThis.__replayGate ? globalThis.__replayGate.then(() => result) : Promise.resolve(result);
 }
 
 export function tauriPromptFromEvent(event) {

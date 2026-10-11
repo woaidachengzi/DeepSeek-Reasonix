@@ -99,6 +99,8 @@ type bridgeTestRuntime struct {
 	codeRewindConfirmed       bool
 	conversationRewindCommits int
 	legacyForkCommits         int
+	conversationForkCalls     int
+	conversationForkToken     string
 	conversationRewindUndos   int
 	sessionHeadSwitches       int
 	combinedRewindCommits     int
@@ -212,6 +214,11 @@ func (r *bridgeTestRuntime) PrepareLegacyConversationFork(turn int) (desktopbrid
 }
 func (r *bridgeTestRuntime) CommitLegacyConversationFork(string) (desktopbridge.LegacyConversationForkResult, error) {
 	r.legacyForkCommits++
+	return desktopbridge.LegacyConversationForkResult{OK: true, SessionID: "tauri-child"}, nil
+}
+func (r *bridgeTestRuntime) ForkConversation(forkToken string) (desktopbridge.LegacyConversationForkResult, error) {
+	r.conversationForkCalls++
+	r.conversationForkToken = forkToken
 	return desktopbridge.LegacyConversationForkResult{OK: true, SessionID: "tauri-child"}, nil
 }
 func (r *bridgeTestRuntime) UndoConversationRewind(string) (desktopbridge.WorkspaceConversationRewindResult, error) {

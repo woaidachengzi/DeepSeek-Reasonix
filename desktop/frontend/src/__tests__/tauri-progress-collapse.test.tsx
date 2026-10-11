@@ -221,8 +221,11 @@ await act(async () => {
   emit("tool_dispatch", { tool: { id: "read-1", name: "read_file", args: "PRIVATE_ARGS" } });
 });
 assert.equal(document.querySelectorAll(".tauri-live-activity li").length, 1);
-assert.equal(document.querySelector<HTMLDetailsElement>(".tauri-live-activity details")?.open, true);
+assert.equal(document.querySelector<HTMLDetailsElement>(".tauri-live-activity details")?.open, false, "tool execution starts collapsed");
+await act(async () => { document.querySelector<HTMLElement>(".tauri-live-activity details summary")?.click(); });
+assert.equal(document.querySelector<HTMLDetailsElement>(".tauri-live-activity details")?.open, true, "the reader can expand tool execution");
 await act(async () => { emit("tool_result", { tool: { id: "read-1", output: "PRIVATE_OUTPUT" } }); });
+assert.equal(document.querySelector<HTMLDetailsElement>(".tauri-live-activity details")?.open, true, "tool updates preserve the reader's disclosure choice");
 assert.equal(document.querySelector(".tauri-live-activity li")?.getAttribute("data-tool-state"), "done");
 assert.doesNotMatch(document.querySelector(".tauri-transcript")?.textContent ?? "", /PRIVATE_ARGS|PRIVATE_OUTPUT/);
 stream.__historyError = "对话记录刷新失败";

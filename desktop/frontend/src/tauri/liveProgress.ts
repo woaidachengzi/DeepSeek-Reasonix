@@ -1,4 +1,4 @@
-import type { TauriBridgeEvent } from "../lib/tauriBridge";
+import { tauriAssistantTextDelta, type TauriBridgeEvent } from "../lib/tauriBridge";
 
 export type LiveTool = { id: string; name: string; state: "running" | "done" | "failed" };
 export type LiveProgress = { phase: "thinking" | "answering" | "tool" | "finishing"; tools: LiveTool[] };
@@ -34,4 +34,22 @@ export function liveProgressLabel(progress: LiveProgress, paused: boolean): stri
   if (progress.phase === "finishing") return "正在整理回答…";
   if (progress.phase === "tool") return "正在执行工具…";
   return "正在思考…";
+}
+
+export type LiveAnswer = { segments: string[]; streaming: boolean };
+export const EMPTY_LIVE_ANSWER: LiveAnswer = { segments: [], streaming: false };
+
+/** Token deltas join within a model response; tool boundaries finish that response. */
+export function advanceLiveAnswer(previous: LiveAnswer, event: TauriBridgeEvent): LiveAnswer {
+  if (event.payload.kind !== event.eventKind) return previous;
+  if (event.eventKind === "turn_started") return EMPTY_LIVE_ANSWER;
+  if (event.eventKind === "tool_dispatch" || event.eventKind === "turn_done") {
+    return previous.streaming ? { ...previous, streaming: false } : previous;
+  }
+  const delta = tauriAssistantTextDelta(event);
+  if (!delta) return previous;
+  const segments = previous.streaming
+    ? [...previous.segments.slice(0, -1), previous.segments[previous.segments.length - 1] + delta]
+    : [...previous.segments, delta];
+  return { segments, streaming: true };
 }

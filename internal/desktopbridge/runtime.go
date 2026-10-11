@@ -74,6 +74,7 @@ type HistoryMessage struct {
 	WorkDurationMs int64             `json:"workDurationMs,omitempty"`
 	CreatedAtMs    int64             `json:"createdAtMs,omitempty"`
 	TurnUsage      *HistoryTurnUsage `json:"turnUsage,omitempty"`
+	ForkToken      string            `json:"forkToken,omitempty"` // Opaque action token; no raw transcript metadata.
 }
 
 // HistoryTurnUsage contains only local numeric accounting for one user turn.

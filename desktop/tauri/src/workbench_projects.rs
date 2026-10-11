@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -21,9 +21,23 @@ pub struct WorkbenchProjectCatalog {
     folders: Mutex<ProjectFolderState>,
 }
 
-struct ProjectFolderState {
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+struct ProjectFolderDocument {
     folders: Vec<BridgeProjectFolder>,
+    #[serde(default)]
+    removed_roots: Vec<String>,
+}
+
+struct ProjectFolderState {
+    document: ProjectFolderDocument,
     load_error: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum StoredProjectFolders {
+    Legacy(Vec<BridgeProjectFolder>),
+    Current(ProjectFolderDocument),
 }
 
 impl WorkbenchProjectCatalog {
@@ -42,14 +56,14 @@ impl WorkbenchProjectCatalog {
     }
 
     fn at(path: PathBuf) -> Self {
-        let (folders, load_error) = match read_folders(&path) {
-            Ok(folders) => (folders, None),
-            Err(error) => (Vec::new(), Some(error)),
+        let (document, load_error) = match read_folders(&path) {
+            Ok(document) => (document, None),
+            Err(error) => (ProjectFolderDocument::default(), Some(error)),
         };
         Self {
             path,
             folders: Mutex::new(ProjectFolderState {
-                folders,
+                document,
                 load_error,
             }),
         }
@@ -67,8 +81,8 @@ impl WorkbenchProjectCatalog {
         // app restart before project folders can be used again.
         if state.load_error.is_some() {
             match read_folders(&self.path) {
-                Ok(folders) => {
-                    state.folders = folders;
+                Ok(document) => {
+                    state.document = document;
                     state.load_error = None;
                 }
                 Err(error) => {
@@ -80,12 +94,13 @@ impl WorkbenchProjectCatalog {
         state
             .load_error
             .clone()
-            .map_or_else(|| Ok(state.folders.clone()), Err)
+            .map_or_else(|| Ok(state.document.folders.clone()), Err)
     }
 
     pub fn remember(&self, root: &str) -> Result<Vec<BridgeProjectFolder>, String> {
+        let root = normalize_root(root)?;
         let folder = BridgeProjectFolder {
-            root: normalize_root(root)?,
+            root: root.clone(),
             title: None,
         };
         let mut state = self
@@ -95,19 +110,22 @@ impl WorkbenchProjectCatalog {
         if let Some(error) = &state.load_error {
             return Err(error.clone());
         }
-        if state.folders.iter().any(|existing| {
+        if state.document.folders.iter().any(|existing| {
             normalized_project_key(&existing.root) == normalized_project_key(&folder.root)
         }) {
-            return Ok(state.folders.clone());
+            return Ok(state.document.folders.clone());
         }
-        if state.folders.len() >= MAX_PROJECTS {
+        if state.document.folders.len() >= MAX_PROJECTS {
             return Err("project folder catalog is full".to_string());
         }
-        let mut updated = state.folders.clone();
-        updated.push(folder);
-        write_folders(&self.path, &updated)?;
-        state.folders = updated.clone();
-        Ok(updated)
+        let mut updated = state.document.clone();
+        updated
+            .removed_roots
+            .retain(|removed| normalized_project_key(removed) != normalized_project_key(&root));
+        updated.folders.push(folder);
+        write_document(&self.path, &updated)?;
+        state.document = updated.clone();
+        Ok(updated.folders)
     }
 
     pub fn set_title(&self, root: &str, title: &str) -> Result<Vec<BridgeProjectFolder>, String> {
@@ -126,24 +144,93 @@ impl WorkbenchProjectCatalog {
         if let Some(error) = &state.load_error {
             return Err(error.clone());
         }
-        let mut updated = state.folders.clone();
+        let mut updated = state.document.clone();
+        updated
+            .removed_roots
+            .retain(|removed| normalized_project_key(removed) != normalized_project_key(&root));
         if let Some(folder) = updated
+            .folders
             .iter_mut()
             .find(|folder| normalized_project_key(&folder.root) == normalized_project_key(&root))
         {
             folder.title = Some(title.to_string());
         } else {
-            if updated.len() >= MAX_PROJECTS {
+            if updated.folders.len() >= MAX_PROJECTS {
                 return Err("project folder catalog is full".to_string());
             }
-            updated.push(BridgeProjectFolder {
+            updated.folders.push(BridgeProjectFolder {
                 root,
                 title: Some(title.to_string()),
             });
         }
-        write_folders(&self.path, &updated)?;
-        state.folders = updated.clone();
-        Ok(updated)
+        write_document(&self.path, &updated)?;
+        state.document = updated.clone();
+        Ok(updated.folders)
+    }
+    pub fn remove(&self, root: &str) -> Result<(), String> {
+        let root = normalize_root(root)?;
+        let key = normalized_project_key(&root);
+        let mut state = self
+            .folders
+            .lock()
+            .map_err(|_| "project folder catalog lock is unavailable".to_string())?;
+        if let Some(error) = &state.load_error {
+            return Err(error.clone());
+        }
+        let mut updated = state.document.clone();
+        updated
+            .folders
+            .retain(|folder| normalized_project_key(&folder.root) != key);
+        if !updated
+            .removed_roots
+            .iter()
+            .any(|removed| normalized_project_key(removed) == key)
+        {
+            if updated.removed_roots.len() >= MAX_PROJECTS {
+                return Err("removed project folder catalog is full".to_string());
+            }
+            updated.removed_roots.push(root);
+        }
+        write_document(&self.path, &updated)?;
+        state.document = updated;
+        Ok(())
+    }
+
+    pub fn merge_legacy(
+        &self,
+        mut legacy: Vec<BridgeProjectFolder>,
+    ) -> Result<Vec<BridgeProjectFolder>, String> {
+        // Retry a failed startup read before using exclusions. Both local folders
+        // and exclusions must come from the same locked snapshot.
+        self.list()?;
+        let state = self
+            .folders
+            .lock()
+            .map_err(|_| "project folder catalog lock is unavailable".to_string())?;
+        let removed: HashSet<_> = state
+            .document
+            .removed_roots
+            .iter()
+            .map(|root| normalized_project_key(root))
+            .collect();
+        legacy.retain(|folder| !removed.contains(&normalized_project_key(&folder.root)));
+        let mut indexes: HashMap<_, _> = legacy
+            .iter()
+            .enumerate()
+            .map(|(index, folder)| (normalized_project_key(&folder.root), index))
+            .collect();
+        for folder in &state.document.folders {
+            let key = normalized_project_key(&folder.root);
+            if let Some(&index) = indexes.get(&key) {
+                if folder.title.is_some() {
+                    legacy[index].title = folder.title.clone();
+                }
+            } else {
+                indexes.insert(key, legacy.len());
+                legacy.push(folder.clone());
+            }
+        }
+        Ok(legacy)
     }
 }
 
@@ -202,10 +289,12 @@ pub(crate) fn normalized_project_key(root: &str) -> String {
     }
 }
 
-fn read_folders(path: &Path) -> Result<Vec<BridgeProjectFolder>, String> {
+fn read_folders(path: &Path) -> Result<ProjectFolderDocument, String> {
     let metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(ProjectFolderDocument::default())
+        }
         Err(error) => return Err(format!("inspect project folder catalog failed: {error}")),
     };
     if metadata.file_type().is_symlink()
@@ -236,8 +325,27 @@ fn read_folders(path: &Path) -> Result<Vec<BridgeProjectFolder>, String> {
     }
     let bytes = read_bounded_catalog(file, MAX_CATALOG_BYTES)
         .map_err(|error| format!("read project folder catalog failed: {error}"))?;
-    let decoded = serde_json::from_slice::<Vec<BridgeProjectFolder>>(&bytes)
-        .map_err(|_| "project folder catalog is not valid JSON".to_string())?;
+    let document = match serde_json::from_slice::<StoredProjectFolders>(&bytes)
+        .map_err(|_| "project folder catalog is not valid JSON".to_string())?
+    {
+        StoredProjectFolders::Legacy(folders) => ProjectFolderDocument {
+            folders,
+            removed_roots: Vec::new(),
+        },
+        StoredProjectFolders::Current(document) => document,
+    };
+    if document.removed_roots.len() > MAX_PROJECTS {
+        return Err("removed project folder catalog contains too many entries".to_string());
+    }
+    let mut removed_roots = Vec::new();
+    let mut removed_keys = HashSet::new();
+    for root in document.removed_roots {
+        let root = normalize_root(&root)?;
+        if removed_keys.insert(normalized_project_key(&root)) {
+            removed_roots.push(root);
+        }
+    }
+    let decoded = document.folders;
     if decoded.len() > MAX_PROJECTS {
         return Err("project folder catalog contains too many entries".to_string());
     }
@@ -261,7 +369,10 @@ fn read_folders(path: &Path) -> Result<Vec<BridgeProjectFolder>, String> {
             return Err("project folder catalog contains too many entries".to_string());
         }
     }
-    Ok(folders)
+    Ok(ProjectFolderDocument {
+        folders,
+        removed_roots,
+    })
 }
 
 pub(crate) fn same_file_as_path(path: &Path, file: &fs::File) -> std::io::Result<bool> {
@@ -285,9 +396,13 @@ fn read_bounded_catalog(mut reader: impl Read, max_bytes: u64) -> std::io::Resul
     Ok(bytes)
 }
 
-fn write_folders(path: &Path, folders: &[BridgeProjectFolder]) -> Result<(), String> {
-    let encoded = serde_json::to_vec(folders)
-        .map_err(|error| format!("encode project folder catalog: {error}"))?;
+fn write_document(path: &Path, document: &ProjectFolderDocument) -> Result<(), String> {
+    let encoded = if document.removed_roots.is_empty() {
+        serde_json::to_vec(&document.folders)
+    } else {
+        serde_json::to_vec(document)
+    }
+    .map_err(|error| format!("encode project folder catalog: {error}"))?;
     if encoded.len() as u64 > MAX_CATALOG_BYTES {
         return Err("project folder catalog exceeds the size limit".to_string());
     }
@@ -341,6 +456,80 @@ mod tests {
     }
 
     #[test]
+    fn removal_persists_excludes_legacy_and_preserves_workspace_files() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let workspace = directory.path().join("workspace");
+        fs::create_dir(&workspace).unwrap();
+        fs::write(workspace.join("keep.txt"), "keep").unwrap();
+        let root = workspace.to_str().unwrap();
+        let path = directory.path().join(CATALOG_FILE);
+        // Existing array catalogs still load, including customized names.
+        let legacy = vec![BridgeProjectFolder {
+            root: root.into(),
+            title: Some("old".into()),
+        }];
+        fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+        let catalog = WorkbenchProjectCatalog::at(path.clone());
+        assert_eq!(catalog.list().unwrap().len(), 1);
+        catalog.remove(&format!("{root}/")).unwrap();
+        catalog.remove(root).unwrap();
+        let reloaded = WorkbenchProjectCatalog::at(path.clone());
+        assert!(reloaded.list().unwrap().is_empty());
+        assert!(reloaded.merge_legacy(legacy.clone()).unwrap().is_empty());
+        assert_eq!(
+            fs::read_to_string(workspace.join("keep.txt")).unwrap(),
+            "keep"
+        );
+        // Explicitly choosing the folder again restores it, also after restart.
+        reloaded.remember(root).unwrap();
+        assert_eq!(
+            WorkbenchProjectCatalog::at(path)
+                .merge_legacy(legacy)
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn legacy_only_removal_and_local_title_override_survive_reload() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let path = directory.path().join(CATALOG_FILE);
+        let catalog = WorkbenchProjectCatalog::at(path.clone());
+        let legacy = vec![
+            BridgeProjectFolder {
+                root: "/work/empty/".into(),
+                title: None,
+            },
+            BridgeProjectFolder {
+                root: "/work/kept".into(),
+                title: Some("legacy".into()),
+            },
+        ];
+        catalog.remove("/work/empty").unwrap();
+        catalog.set_title("/work/kept/", "custom").unwrap();
+        let merged = WorkbenchProjectCatalog::at(path)
+            .merge_legacy(legacy)
+            .unwrap();
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].title.as_deref(), Some("custom"));
+    }
+
+    #[test]
+    fn failed_removal_keeps_catalog_and_invalid_roots_do_not_write() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let path = directory.path().join(CATALOG_FILE);
+        let catalog = WorkbenchProjectCatalog::at(path.clone());
+        assert!(catalog.remove("relative").is_err());
+        assert!(!path.exists());
+        catalog.remember("/work/empty").unwrap();
+        fs::remove_file(&path).unwrap();
+        fs::create_dir(&path).unwrap();
+        assert!(catalog.remove("/work/empty").is_err());
+        assert_eq!(catalog.list().unwrap().len(), 1);
+    }
+
+    #[test]
     fn malformed_catalog_fails_closed_without_overwriting_source() {
         let directory = tempfile::tempdir().expect("temp directory");
         let path = directory.path().join(CATALOG_FILE);
@@ -350,6 +539,7 @@ mod tests {
 
         assert!(catalog.list().is_err());
         assert!(catalog.remember("/work/new").is_err());
+        assert!(catalog.remove("/work/new").is_err());
         assert_eq!(fs::read(path).expect("read preserved catalog"), malformed);
     }
 
@@ -401,7 +591,14 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        assert!(write_folders(&path, &folders).is_err());
+        assert!(write_document(
+            &path,
+            &ProjectFolderDocument {
+                folders,
+                removed_roots: Vec::new()
+            }
+        )
+        .is_err());
         assert!(!path.exists());
     }
 

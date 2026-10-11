@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Database, X } from "lucide-react";
+import { Database, GitBranch, X } from "lucide-react";
 import { CopyButton } from "../components/CopyButton";
 import type { BridgeHistoryTurnUsage } from "../lib/bridgeProtocol.generated";
 import { formatTokens } from "../lib/format";
@@ -65,7 +65,7 @@ function UsageDetails({ id, usage, trigger, onClose }: {
   </div>, document.body);
 }
 
-export function TauriAnswerActions({ text, createdAtMs, usage }: { text: string; createdAtMs?: number; usage?: BridgeHistoryTurnUsage }) {
+export function TauriAnswerActions({ text, createdAtMs, usage, onFork, forkDisabledReason }: { text: string; createdAtMs?: number; usage?: BridgeHistoryTurnUsage; onFork?: () => void; forkDisabledReason?: string }) {
   const { locale } = useI18n();
   const en = locale === "en";
   const clock = formatTauriMessageClock(createdAtMs, Date.now(), locale);
@@ -79,6 +79,7 @@ export function TauriAnswerActions({ text, createdAtMs, usage }: { text: string;
     <CopyButton text={text} label={en ? "Copy answer" : "复制回答"} showInlineLabel={false} />
     {usage ? <button ref={trigger} type="button" className="tauri-answer-actions__usage" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(value => !value)}><Database size={16} aria-hidden="true" />{label}</button>
       : <span className="tauri-answer-actions__missing" title={en ? "This older answer has no saved token accounting." : "这条回答没有已保存的用量数据。"}><Database size={16} aria-hidden="true" />{label}</span>}
+    {onFork && <button type="button" className="tauri-answer-actions__fork" aria-label={en ? "Branch in new chat" : "分叉对话"} title={forkDisabledReason || (en ? "Start a new chat through this answer" : "从这条回复分叉，继承截至这里的对话")} disabled={Boolean(forkDisabledReason)} onClick={onFork}><GitBranch size={16} aria-hidden="true" /><span>{en ? "Branch" : "分叉对话"}</span></button>}
     {clock && <time dateTime={new Date(createdAtMs!).toISOString()} title={new Date(createdAtMs!).toLocaleString()}>{clock}</time>}
     {open && usage && trigger.current && <UsageDetails id={id} usage={usage} trigger={trigger.current} onClose={restore => { setOpen(false); if (restore) trigger.current?.focus(); }} />}
   </div>;

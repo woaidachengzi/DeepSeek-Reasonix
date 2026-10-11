@@ -26,8 +26,9 @@ import { CommandPalette, type PaletteItem } from "../components/CommandPalette";
 import { ShortcutsCheatsheet, type ShortcutCheatsheetItem } from "../components/ShortcutsCheatsheet";
 import { QuestionJumpBar } from "../components/QuestionJumpBar";
 import { useTranscriptKernel } from "../lib/useTranscriptKernel";
+import { TauriLiveAnswer } from "./TauriLiveAnswer";
 import { TauriLiveProgress } from "./TauriLiveProgress";
-import { advanceLiveProgress, EMPTY_LIVE_PROGRESS } from "./liveProgress";
+import { advanceLiveAnswer, advanceLiveProgress, EMPTY_LIVE_ANSWER, EMPTY_LIVE_PROGRESS } from "./liveProgress";
 import { attachPastedImages, pastedImageFiles } from "./pastedImages";
 import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
 import { compactQuestionText, type QuestionAnchor } from "../lib/transcriptGrouping";
@@ -91,11 +92,13 @@ function UserMessageMeta({ text, createdAtMs }: { text: string; createdAtMs?: nu
   </div>;
 }
 
-function HistoryMessageArticle({ entry, sessionId, questionId, finalAnswer = false }: {
+function HistoryMessageArticle({ entry, sessionId, questionId, finalAnswer = false, onFork, forkDisabledReason }: {
   entry: IndexedHistoryMessage;
   sessionId: string;
   questionId?: string;
   finalAnswer?: boolean;
+  onFork?: (token: string) => void;
+  forkDisabledReason?: string;
 }) {
   const { message, index } = entry;
   return <MessageErrorBoundary index={index}>
@@ -107,7 +110,7 @@ function HistoryMessageArticle({ entry, sessionId, questionId, finalAnswer = fal
         {message.truncated && <small>为保护界面性能，这条历史内容已截断。</small>}
       </div>
       {message.role === "user" && <UserMessageMeta text={message.content} createdAtMs={message.createdAtMs} />}
-      {finalAnswer && <TauriAnswerActions key={`${sessionId}:${index}`} text={message.content} createdAtMs={message.createdAtMs} usage={message.turnUsage} />}
+      {finalAnswer && <TauriAnswerActions key={`${sessionId}:${index}`} text={message.content} createdAtMs={message.createdAtMs} usage={message.turnUsage} onFork={onFork ? () => onFork(message.forkToken ?? "") : undefined} forkDisabledReason={forkDisabledReason || (!message.forkToken ? "请重新打开对话，读取分叉位置后再重试" : "")} />}
     </article>
   </MessageErrorBoundary>;
 }
@@ -158,7 +161,9 @@ import {
   rememberTauriWorkbenchSession,
   rememberTauriWorkbenchProjectFolder,
   renameTauriWorkbenchProjectFolder,
+  removeTauriWorkbenchProjectFolder,
   renameTauriBridgeSession,
+  forkTauriBridgeSession,
   restartTauriBridge,
   replayTauriPendingPrompts,
   setTauriDefaultModel,
@@ -188,7 +193,6 @@ import {
   tauriBridgeHistory,
   tauriBridgeSnapshot,
   tauriBridgeStatus,
-  tauriAssistantTextDelta,
   tauriComposerInput,
   tauriEventSummary,
   tauriMessageFrom,
@@ -354,6 +358,7 @@ interface SessionRowProps {
   active: boolean;
   busy: boolean;
   switchingBlocked: boolean;
+  retryActive?: boolean;
   onActivate: () => void;
   onDelete: () => void;
   onArchive?: () => void;
@@ -361,7 +366,7 @@ interface SessionRowProps {
 
 /** One recent conversation. The confirm step lives in the row so only the row
  *  the user armed changes shape, and leaving the row disarms it. */
-function SessionRow({ tab, active, busy, switchingBlocked, onActivate, onDelete, onArchive }: SessionRowProps) {
+function SessionRow({ tab, active, busy, switchingBlocked, retryActive = false, onActivate, onDelete, onArchive }: SessionRowProps) {
   const [confirming, setConfirming] = useState<"delete" | "archive" | null>(null);
   const missing = isMissingWorkbenchSession(tab);
   const deletionInterrupted = tab.deletionInterrupted === true;
@@ -382,7 +387,7 @@ function SessionRow({ tab, active, busy, switchingBlocked, onActivate, onDelete,
       <button
         type="button"
         className={`tauri-sidebar__session${missing ? " is-missing" : ""}`}
-        disabled={busy || active || switchingBlocked || missing || deletionInterrupted}
+        disabled={busy || (active && !retryActive) || switchingBlocked || missing || deletionInterrupted}
         onClick={onActivate}
         aria-label={deletionInterrupted ? `${displayTitle(tab.title)}（删除未完成）` : missing ? `${displayTitle(tab.title)}（文件缺失）` : titleRecoveryPending ? `${displayTitle(tab.title)}（标题恢复待完成）` : undefined}
         title={deletionInterrupted ? "上次删除被中断；点击右侧按钮并确认后继续删除。" : missing ? "会话文件缺失，无法打开。可删除这条失效记录。" : titleRecoveryPending ? "上次改名被中断；打开此会话会核对侧车并尝试完成或撤销改名。" : tab.workspaceRoot ? `${tab.sessionId}\n${tab.workspaceRoot}` : tab.sessionId}
@@ -491,6 +496,8 @@ export function TauriSessionPreview() {
   const [pendingSessionTitleRecoveryError, setPendingSessionTitleRecoveryError] = useState("");
   const [projectFolders, setProjectFolders] = useState<WorkbenchProjectFolder[]>([]);
   const [projectFoldersWarning, setProjectFoldersWarning] = useState("");
+  const projectFoldersRevisionRef = useRef(0);
+  const forkInFlightRef = useRef(false);
   const [sessionPageCursor, setSessionPageCursor] = useState<{ position: number; id: string; snapshotId: string; total: number } | null>(null);
   const [sessionPageSource, setSessionPageSource] = useState<TauriWorkbenchSessionPage["source"] | "unavailable">("unavailable");
   const [sessionPageDirectoryCount, setSessionPageDirectoryCount] = useState<number | null>(null);
@@ -551,10 +558,11 @@ export function TauriSessionPreview() {
   const [history, setHistory] = useState<TauriBridgeHistory | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
-  const [liveText, setLiveText] = useState("");
+  const [liveAnswer, setLiveAnswer] = useState(EMPTY_LIVE_ANSWER);
+  const liveText = liveAnswer.segments.join("\n\n");
   const [liveProgress, setLiveProgress] = useState(EMPTY_LIVE_PROGRESS);
   const clearLiveResponse = useCallback(() => {
-    setLiveText("");
+    setLiveAnswer(EMPTY_LIVE_ANSWER);
     setLiveProgress(EMPTY_LIVE_PROGRESS);
   }, []);
   const [sequence, setSequence] = useState(0);
@@ -744,12 +752,21 @@ export function TauriSessionPreview() {
     return [...commands, ...sessions];
   }, [t, busy, switchingBlocked, visibleTabs, session, sessionPageSource, defaultWorkspace, workspacePath]);
   const projectGroups = useMemo(() => groupWorkbenchSessions(visibleTabs, projectFolders, platform), [visibleTabs, projectFolders, platform]);
+  const occupiedProjectKeys = useMemo(() => new Set(groupWorkbenchSessions(tabs, [], platform).map(group => group.key)), [tabs, platform]);
   const searchedProjectGroups = useMemo(() => filterWorkbenchProjectGroups(projectGroups, sessionSearch), [projectGroups, sessionSearch]);
   const searchingSessions = sessionSearch.trim().length > 0;
   const projectHistoryMayBeIncomplete = sessionPageCursor !== null || sessionPageSource === "legacy";
   const projectHistoryUnavailableHint = sessionPageSource === "legacy"
     ? "持久会话目录未核验，无法确认此项目是否还有历史会话；重新检查目录后再选择"
     : "还有未加载的会话页；加载更多以确认此项目是否为空";
+  const forkUnavailableReason = !session ? "先打开左侧历史对话，再分叉对话"
+    : busy ? "正在处理，请稍候再分叉"
+    : switchingBlocked ? "请等待当前生成或待确认操作完成，再分叉对话"
+    : isReadOnlyWorkbenchSource(sessionPageSource) ? "请先重新检查会话目录，通过核验后再分叉对话"
+    : !streamReady || historyLoading || history?.session.id !== session.id ? "正在读取对话，完成后可分叉"
+    : !history.totalMessages ? "当前对话还没有历史消息，发送消息后可分叉"
+    : prompt.trim() || attachments.length || draftAttachmentPaths.length || selectedTexts.length ? "请先发送或清空未发送内容，再分叉对话"
+    : "";
   const projectRootsKey = projectGroups.flatMap(group => group.root ? [group.root] : []).join("\u0000");
   const activeCatalogTitle = tabs.find(tab => tab.sessionId === session?.id)?.title;
 
@@ -1215,6 +1232,24 @@ export function TauriSessionPreview() {
         setSessionMetrics(snapshot.metrics ? { sessionId: session.id, metrics: snapshot.metrics } : null);
         setSequence(snapshot.sequence);
         let lastSequence = snapshot.sequence;
+        const historyEpoch = turnEpochRef.current;
+        // Display history independently of event setup and prompt replay.
+        // The source generation and turn epoch fence every completion.
+        const initialHistory = (async () => {
+          try {
+            const latestHistory = await tauriBridgeHistory(session.id);
+            if (!active || turnEpochRef.current !== historyEpoch) return;
+            setHistory(latestHistory);
+            setHistoryError("");
+          } catch (historyCause) {
+            if (!active || turnEpochRef.current !== historyEpoch) return;
+            const message = tauriMessageFrom(historyCause);
+            setHistoryError(message);
+            setError(message);
+          } finally {
+            if (active && turnEpochRef.current === historyEpoch) setHistoryLoading(false);
+          }
+        })();
         offEvent = await onTauriBridgeEvent(event => {
           if (!active || resyncRequested || event.sessionId !== session.id || event.sequence <= lastSequence) return;
           const notify = (kind: TauriNotificationKind, failed = false) => {
@@ -1267,8 +1302,7 @@ export function TauriSessionPreview() {
             setPromptSelections({});
             setSession(previous => previous ? { ...previous, state: "running" } : previous);
           }
-          const textDelta = tauriAssistantTextDelta(event);
-          if (textDelta) setLiveText(previous => previous + textDelta);
+          setLiveAnswer(previous => advanceLiveAnswer(previous, event));
           setLiveProgress(previous => advanceLiveProgress(previous, event));
           if (event.eventKind === "text" || event.eventKind === "reasoning" || event.eventKind === "tool_dispatch") generativeMusic.playTokenNote();
           if (event.eventKind === "turn_done") {
@@ -1373,25 +1407,7 @@ export function TauriSessionPreview() {
           if (active && turnEpochRef.current === replayEpoch) setError(tauriMessageFrom(replayError));
         }
         if (!active) return;
-        if (!streamDisconnected && turnEpochRef.current === replayEpoch) setError("");
-        const historyEpoch = turnEpochRef.current;
-        try {
-          const latestHistory = await tauriBridgeHistory(session.id);
-          if (!active) return;
-          if (turnEpochRef.current === historyEpoch) {
-            setHistory(latestHistory);
-            setHistoryError("");
-          }
-        } catch (historyCause) {
-          if (!active) return;
-          if (turnEpochRef.current === historyEpoch) {
-            const message = tauriMessageFrom(historyCause);
-            setHistoryError(message);
-            setError(message);
-          }
-        } finally {
-          if (active) setHistoryLoading(false);
-        }
+        await initialHistory;
       } catch (error) {
         if (!active) return;
         offEvent?.();
@@ -1444,9 +1460,12 @@ export function TauriSessionPreview() {
   async function rememberSession(
     next: TauriBridgeSession,
     failureMessage = "对话已打开，但无法保存到最近对话",
+    audit = true,
+    isActive: () => boolean = () => true,
   ) {
     try {
       const updated = await rememberTauriWorkbenchSession(next.id, next.workspaceRoot ?? undefined, tauriSessionTitle(next.title, "") || undefined);
+      if (!isActive()) return;
       sessionPageRevisionRef.current += 1;
       if (!isIdentityPageSource(sessionPageSource)) {
         setTabs(previous => preserveWorkbenchLifecycle(updated, previous));
@@ -1457,9 +1476,18 @@ export function TauriSessionPreview() {
         setSessionPageTitleMismatchCount(null);
         setSessionPageMissingTranscriptCount(null);
       }
-      await refreshCatalogAudit(() => true, true);
+      if (!audit && isIdentityPageSource(sessionPageSource)) {
+        // A verified existing row keeps its lifecycle and sidebar position;
+        // metadata confirmed by the selected runtime can update in place.
+        setTabs(previous => previous.map(tab => tab.sessionId === next.id ? {
+          ...tab,
+          title: next.title || tab.title,
+          workspaceRoot: next.workspaceRoot ?? tab.workspaceRoot,
+        } : tab));
+      }
+      if (audit) await refreshCatalogAudit(isActive, true);
     } catch (cause) {
-      setError(`${failureMessage}：${tauriMessageFrom(cause)}`);
+      if (isActive()) setError(`${failureMessage}：${tauriMessageFrom(cause)}`);
     }
   }
 
@@ -1566,13 +1594,15 @@ export function TauriSessionPreview() {
   }
 
   async function reloadWorkbenchProjectFolders(isActive: () => boolean = () => true) {
+    const revision = projectFoldersRevisionRef.current;
+    const isCurrent = () => isActive() && revision === projectFoldersRevisionRef.current;
     try {
       const result = await tauriWorkbenchProjectFolders();
-      if (!isActive()) return;
+      if (!isCurrent()) return;
       setProjectFolders(result.folders.map(folder => ({ root: folder.root, title: folder.title })));
       setProjectFoldersWarning(result.warning ? tauriMessageFrom(result.warning) : "");
     } catch (cause) {
-      if (!isActive()) return;
+      if (!isCurrent()) return;
       setProjectFoldersWarning(`读取项目文件夹失败：${tauriMessageFrom(cause)}`);
     }
   }
@@ -1743,6 +1773,7 @@ export function TauriSessionPreview() {
     }
     if (archivedSessions === null || archiveError || (archivedSessionIDs.has(id) && !restoredFromArchive)) { setError("对话归档状态尚未就绪，或该对话已归档；请检查归档状态后恢复对话。"); return false; }
     if (!id) { setError("缺少会话 ID"); return false; }
+    if (session?.id === id && streamReady && !historyLoading && !historyError && history?.session.id === id) return true;
     setBusy(true);
     setError("");
     try {
@@ -1778,23 +1809,34 @@ export function TauriSessionPreview() {
       setWorkspaceChangesView("list");
       setWorkspaceChangesLoading(false);
       setWorkspaceChangeDetailLoading(false);
-      turnEpochRef.current += 1;
+      const activationEpoch = ++turnEpochRef.current;
+      const isCurrent = () => turnEpochRef.current === activationEpoch;
+      // Publish the surface and its stream generation in one render. Restarting
+      // again after catalog maintenance would discard and reload this history.
+      setStreamRevision(previous => previous + 1);
       setSession(next);
       setWorkspaceRoot(next.workspaceRoot ?? root ?? "");
+      // The backend has validated this exact transcript. A plain reopen does
+      // not require another whole-profile inventory scan. Keep catalog writes
+      // and recovery UI maintenance outside the navigation wait, with a fence
+      // against late results changing a newer surface.
+      const existingRow = tabs.some(tab => tab.sessionId === next.id);
+      void rememberSession(next, "对话已打开，但无法保存到最近对话", !existingRow, isCurrent);
+      void reloadPendingSessionTitleRecoveries(isCurrent);
+      void tauriBridgeStatus().then(nextStatus => {
+        if (isCurrent()) setStatus(nextStatus);
+      }).catch(() => {});
       const openedRoot = next.workspaceRoot ?? root;
       if (openedRoot?.trim()) {
-        try {
-          const result = await rememberTauriWorkbenchProjectFolder(openedRoot);
+        const projectRevision = projectFoldersRevisionRef.current;
+        void rememberTauriWorkbenchProjectFolder(openedRoot).then(result => {
+          if (!isCurrent() || projectRevision !== projectFoldersRevisionRef.current) return;
           setProjectFolders(result.folders.map(folder => ({ root: folder.root, title: folder.title })));
           setProjectFoldersWarning(result.warning ? tauriMessageFrom(result.warning) : "");
-        } catch (cause) {
-          setError(`对话已打开，但无法保存项目文件夹：${tauriMessageFrom(cause)}`);
-        }
+        }).catch(cause => {
+          if (isCurrent()) setError(`对话已打开，但无法保存项目文件夹：${tauriMessageFrom(cause)}`);
+        });
       }
-      await rememberSession(next);
-      await reloadPendingSessionTitleRecoveries();
-      setStreamRevision(previous => previous + 1);
-      setStatus(await tauriBridgeStatus());
       return true;
     } catch (cause) {
       setError(sessionLifecycleNotice(cause) ?? tauriMessageFrom(cause));
@@ -1808,6 +1850,46 @@ export function TauriSessionPreview() {
     if (!session || busy || switchingBlocked || isReadOnlyWorkbenchSource(sessionPageSource)) return;
     setTitleDraft(displayTitle(session.title, activeCatalogTitle));
     setTitleEditing(true);
+  }
+
+  async function forkCurrentSession(forkToken: string) {
+    if (!forkToken || !session || session.state !== "idle" || busy || forkInFlightRef.current || !streamReady || historyLoading ||
+        isReadOnlyWorkbenchSource(sessionPageSource) || history?.session.id !== session.id || !history.totalMessages ||
+        prompt.trim() || attachments.length || draftAttachmentPaths.length || selectedTexts.length) return;
+    const sourceID = session.id;
+    const root = session.workspaceRoot;
+    const epoch = workspaceEpochRef.current;
+    const isCurrent = () => workspaceEpochRef.current === epoch;
+    let createdID: string | undefined;
+    forkInFlightRef.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await forkTauriBridgeSession(sourceID, forkToken);
+      if (!isCurrent()) return;
+      if (result.sessionId && result.sessionId !== sourceID) createdID = result.sessionId;
+      if (!result.ok || !result.sessionId || result.sessionId === sourceID) {
+        setError(createdID ? `${result.error || "分叉已保存，部分信息未保存完成"}（${createdID}）；请重新检查会话目录后打开该对话。` : result.error || "无法分叉对话，请重试。");
+        return;
+      }
+      // The backend has registered an independent transcript. Load the new
+      // directory identity before activating it through the normal restore path.
+      const refreshedSource = await reloadFirstWorkbenchSessionPage(++catalogAuditRequestRef.current, isCurrent);
+      if (!isCurrent()) return;
+      if (!refreshedSource || isReadOnlyWorkbenchSource(refreshedSource)) {
+        setError(`分叉已创建（${createdID}），但会话目录未通过检查；请重新检查会话目录，再从左侧打开该对话。`);
+        return;
+      }
+      const opened = await activateSession(result.sessionId, root);
+      if (!opened && isCurrent()) setError(`分叉已创建（${result.sessionId}），但未能打开；请从左侧历史对话重试。`);
+    } catch (cause) {
+      if (isCurrent()) setError(createdID
+        ? `分叉已创建（${createdID}），但后续加载失败：${tauriMessageFrom(cause)}。请重新检查会话目录，再从左侧打开该对话。`
+        : `无法分叉对话：${tauriMessageFrom(cause)}。请重试。`);
+    } finally {
+      forkInFlightRef.current = false;
+      if (isCurrent()) setBusy(false);
+    }
   }
 
   async function saveTitle() {
@@ -2020,6 +2102,23 @@ export function TauriSessionPreview() {
     setTauriDefaultWorkspace("");
     setDefaultWorkspace("");
     if (!session) setWorkspaceRoot("");
+  }
+
+  async function removeProject(root: string) {
+    if (!root || busy || switchingBlocked) return;
+    projectFoldersRevisionRef.current += 1;
+    setBusy(true);
+    setProjectFoldersWarning("");
+    try {
+      const result = await removeTauriWorkbenchProjectFolder(root);
+      setProjectFolders(result.folders.map(folder => ({ root: folder.root, title: folder.title })));
+      setProjectFoldersWarning(result.warning ? tauriMessageFrom(result.warning) : "");
+      setEditingProjectRoot(null);
+    } catch (cause) {
+      setProjectFoldersWarning(`无法移除项目：${tauriMessageFrom(cause)}。请重试移除。`);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function saveProjectTitle(root: string) {
@@ -3388,11 +3487,12 @@ export function TauriSessionPreview() {
                   <button type="button" aria-label="取消重命名项目" disabled={busy} onClick={() => setEditingProjectRoot(null)}><X size={13} /></button>
                 </form> : <button type="button" className={`tauri-project-group__select${activeProjectKey === group.key ? " is-active" : ""}`} aria-current={activeProjectKey === group.key ? "location" : undefined} title={projectGroupHasUnloadedSessions(group, projectHistoryMayBeIncomplete) ? projectHistoryUnavailableHint : workspaceAvailability[group.root] === false ? `${group.root}\n工作区不可用；已有会话仍可打开` : group.root} aria-label={`切换到项目 ${group.label}${projectGroupHasUnloadedSessions(group, projectHistoryMayBeIncomplete) ? sessionPageSource === "legacy" ? "（持久目录未核验，先重新检查）" : "（历史会话尚未加载，先加载更多）" : workspaceAvailability[group.root] === false ? "（工作区不可用）" : ""}`} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || switchingBlocked || projectGroupHasUnloadedSessions(group, projectHistoryMayBeIncomplete) || (group.sessions.length > 0 && !group.sessions.some(tab => !isMissingWorkbenchSession(tab)))} onClick={() => { const latest = group.sessions.find(tab => !isMissingWorkbenchSession(tab)); if (latest) { if (latest.sessionId !== session?.id) void activateSession(latest.sessionId, latest.workspaceRoot); } else setWorkspaceRoot(group.root || ""); }}><FolderOpen size={14} /><span>{group.label}</span>{projectGroupHasUnloadedSessions(group, projectHistoryMayBeIncomplete) && <small className="tauri-project-group__unloaded">{sessionPageSource === "legacy" ? "目录未核验" : "历史未加载"}</small>}{workspaceAvailability[group.root] === false && <small className="tauri-project-group__unavailable">工作区不可用</small>}<small>{group.sessions.length}</small></button>}
                 <button type="button" className="tauri-project-group__rename" aria-label={`重命名项目 ${group.label}`} title="重命名项目" disabled={busy || switchingBlocked || editingProjectRoot !== null} onClick={() => { setEditingProjectRoot(group.root || null); setProjectTitleDraft(group.title ?? ""); }}><Pencil size={12} /></button>
+                {!occupiedProjectKeys.has(group.key) && <button type="button" className="tauri-project-group__remove" aria-label={`移除空项目 ${group.label}`} title="从侧栏移除项目，保留磁盘文件和历史对话" disabled={busy || switchingBlocked || editingProjectRoot !== null} onClick={() => void removeProject(group.root!)}><Trash2 size={12} /></button>}
                 <button type="button" className="tauri-project-group__new" aria-label={`在 ${group.label} 中新建对话`} title={workspaceAvailability[group.root] === false ? "工作区不可用，无法在此处新建对话" : "在此项目新建对话"} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || switchingBlocked || workspaceAvailability[group.root] === false} onClick={() => void createSession(group.root || "")}><Plus size={14} /></button>
               </div>
-              {(searchingSessions || !collapsedProjects[group.key]) && group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} busy={busy || isReadOnlyWorkbenchSource(sessionPageSource)} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} onArchive={canArchiveWorkbenchSession(tab) ? () => void changeSessionArchive(tab, true) : undefined} />)}
+              {(searchingSessions || !collapsedProjects[group.key]) && group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} retryActive={Boolean(historyError) && !historyLoading} busy={busy || isReadOnlyWorkbenchSource(sessionPageSource)} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} onArchive={canArchiveWorkbenchSession(tab) ? () => void changeSessionArchive(tab, true) : undefined} />)}
             </section>
-          ) : group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} busy={busy || isReadOnlyWorkbenchSource(sessionPageSource)} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} onArchive={canArchiveWorkbenchSession(tab) ? () => void changeSessionArchive(tab, true) : undefined} />))}
+          ) : group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} retryActive={Boolean(historyError) && !historyLoading} busy={busy || isReadOnlyWorkbenchSource(sessionPageSource)} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} onArchive={canArchiveWorkbenchSession(tab) ? () => void changeSessionArchive(tab, true) : undefined} />))}
           {sessionPageSource === "identity_unverified" && <p className="tauri-sidebar__page-note" role="status">
             正在只读显示未完成 shadow 核验的持久身份目录（{sessionPageDirectoryCount ?? tabs.length} 条）；不能据此打开、重命名、删除或新建会话。原因：{sessionPageCatalogWarning ? "旧会话兼容目录不可读" : catalogAudit ? sessionShadowDifferenceSummary(catalogAudit) : "shadow 报告不可用"}。请先重新检查并处理差异。
           </p>}
@@ -3474,7 +3574,7 @@ export function TauriSessionPreview() {
           {session && !history && historyLoading ? <div className="tauri-loading"><span /><p>正在载入对话…</p></div> : session && !history && historyError ? <div className="tauri-loading tauri-history-error"><p>无法载入对话记录</p><p>{historyError}</p><button type="button" className="tauri-diagnostic-action" onClick={() => void refreshHistory()} disabled={busy}>重新加载</button></div> : history?.messages.length || liveText || pendingUserMessage || session?.state === "running" || session?.state === "paused" ? <div className="tauri-transcript" ref={setTranscriptElement}>
             {history && history.startIndex > 0 && <p className="tauri-history-note">当前显示最近 {history.messages.length} 条，共 {history.totalMessages} 条可见消息</p>}
             {historyPresentation.map(item => item.kind === "message"
-              ? <HistoryMessageArticle key={`message-${item.entry.index}`} entry={item.entry} sessionId={history!.session.id} finalAnswer={item.entry.message.role === "assistant"} questionId={item.entry.message.role === "user" ? `tauri-question-${item.entry.index}` : undefined} />
+              ? <HistoryMessageArticle key={`message-${item.entry.index}`} entry={item.entry} sessionId={history!.session.id} finalAnswer={item.entry.message.role === "assistant"} onFork={token => void forkCurrentSession(token)} forkDisabledReason={forkUnavailableReason} questionId={item.entry.message.role === "user" ? `tauri-question-${item.entry.index}` : undefined} />
               : item.entries.length === 0 ? <div className="tauri-progress tauri-progress--summary" key={`progress-${item.anchorIndex}-${progressMode}`}><div className="tauri-progress__summary">已完成，{formatTauriWorkDuration(item.durationMs)}</div></div>
               : <details className="tauri-progress" data-transcript-block-key={`progress-${item.anchorIndex}`} key={`progress-${item.anchorIndex}-${progressMode}-${item.active}`} open={item.active || progressMode === "deep"}>
                 <summary><span>{item.active ? "正在处理" : formatTauriWorkDuration(item.durationMs) ? `已完成，${formatTauriWorkDuration(item.durationMs)}` : "过程记录"}</span><ChevronDown size={14} aria-hidden="true" /></summary>
@@ -3482,7 +3582,7 @@ export function TauriSessionPreview() {
               </details>)}
             {/* Optimistic user message: shown immediately after submit, before history loads */}
             {pendingUserMessage && <article className="tauri-message is-user" data-transcript-block-key="pending-question"><div className="tauri-message__content"><UserMessageContent text={pendingUserMessage} /></div><UserMessageMeta text={pendingUserMessage} createdAtMs={pendingUserMessageTime} /></article>}
-            {liveText && <article className="tauri-message is-assistant tauri-message--live" data-transcript-block-key="live-answer"><div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div><div className="tauri-message__content"><div className="tauri-message__role">Reasonix</div><Markdown text={liveText} streaming cacheKey={`${session?.id ?? "live"}:stream`} /></div></article>}
+            {liveText && <article className="tauri-message is-assistant tauri-message--live" data-transcript-block-key="live-answer"><div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div><div className="tauri-message__content"><div className="tauri-message__role">Reasonix</div><TauriLiveAnswer answer={liveAnswer} sessionId={session?.id ?? "live"} /></div></article>}
             {(session?.state === "running" || session?.state === "paused") && <TauriLiveProgress progress={liveProgress} paused={session.state === "paused"} />}
           </div> : <section className="tauri-welcome">
             <div className="tauri-welcome__mark"><Sparkles size={24} /></div>

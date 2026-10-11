@@ -115,7 +115,7 @@ pub(crate) mod test_env {
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     fs,
     fs::File,
     io::{Read, Write},
@@ -164,7 +164,7 @@ use bridge::{
     SaveProviderConfigRequest, ScanImportCandidate, ScanImportSelection, SecretsSettingsChange,
     SecretsSettingsView, SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
     SessionDirectoryPage, SessionFirstMessageTitle, SessionHeadSwitchRequest, SessionPreview,
-    SessionRequest, SkillArchiveRequest, SkillArchiveResult, SkillInstallPlan, SkillInstallRequest,
+    ForkSessionRequest, SessionRequest, SkillArchiveRequest, SkillArchiveResult, SkillInstallPlan, SkillInstallRequest,
     SkillInstallResult, SkillsSettingsChange, SkillsSettingsView, SubagentProfileInput,
     SubagentSettingsChange, SubagentSettingsView, SubagentTryStatusView, SubmitRequest,
     WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceFileRevertCommitRequest,
@@ -179,7 +179,7 @@ use session_shadow::SessionShadowReport;
 use tauri::{Manager, State};
 use window_state::PreviewWindowState;
 use workbench_catalog::{WorkbenchCatalog, WorkbenchSession, WorkbenchTitle};
-use workbench_projects::{normalized_project_key, WorkbenchProjectCatalog};
+use workbench_projects::WorkbenchProjectCatalog;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1336,6 +1336,12 @@ fn bridge_legacy_fork_commit(
     supervisor.legacy_fork_commit(request)
 }
 
+#[tauri::command]
+async fn bridge_fork_session(app: tauri::AppHandle, request: ForkSessionRequest) -> Result<BridgeLegacyConversationForkResultResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || app.state::<BridgeSupervisor>().fork_session(request))
+        .await.map_err(|error| format!("fork session task failed: {error}"))?
+}
+
 fn workspace_root_is_available(root: &str) -> Option<bool> {
     if root.trim().is_empty() || root.len() > 4096 || !Path::new(root).is_absolute() {
         return Some(false);
@@ -2190,6 +2196,20 @@ fn rename_workbench_project_folder(
     Ok(merged_workbench_project_folders(&supervisor, &catalog))
 }
 
+#[tauri::command]
+async fn remove_workbench_project_folder(
+    app: tauri::AppHandle,
+    root: String,
+) -> Result<WorkbenchProjectFoldersResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let catalog = app.state::<WorkbenchProjectCatalog>();
+        catalog.remove(&root)?;
+        Ok(merged_workbench_project_folders(&app.state::<BridgeSupervisor>(), &catalog))
+    })
+    .await
+    .map_err(|error| format!("remove project folder task failed: {error}"))?
+}
+
 fn merged_workbench_project_folders(
     supervisor: &BridgeSupervisor,
     catalog: &WorkbenchProjectCatalog,
@@ -2198,27 +2218,13 @@ fn merged_workbench_project_folders(
         Ok(folders) => (folders, true),
         Err(_) => (Vec::new(), false),
     };
-    let (local, local_available) = match catalog.list() {
-        Ok(local) => (local, true),
-        Err(_) => (Vec::new(), false),
-    };
-    let mut folder_indexes = HashMap::with_capacity(folders.len() + local.len());
-    for (index, folder) in folders.iter().enumerate() {
-        folder_indexes
-            .entry(normalized_project_key(&folder.root))
-            .or_insert(index);
-    }
-    for folder in local {
-        let key = normalized_project_key(&folder.root);
-        if let Some(&index) = folder_indexes.get(&key) {
-            if folder.title.is_some() {
-                folders[index].title = folder.title;
-            }
-        } else {
-            folder_indexes.insert(key, folders.len());
-            folders.push(folder);
+    let local_available = match catalog.merge_legacy(folders.clone()) {
+        Ok(merged) => {
+            folders = merged;
+            true
         }
-    }
+        Err(_) => false,
+    };
     WorkbenchProjectFoldersResponse {
         folders,
         warning: match (legacy_available, local_available) {
@@ -2238,10 +2244,30 @@ fn merged_workbench_project_folders(
 }
 
 #[tauri::command]
-fn workbench_session_page(
-    supervisor: State<'_, BridgeSupervisor>,
-    catalog: State<'_, WorkbenchCatalog>,
-    shadow_cache: State<'_, SessionShadowSnapshotCache>,
+async fn workbench_session_page(
+    app: tauri::AppHandle,
+    limit: Option<u16>,
+    cursor: Option<SessionDirectoryCursor>,
+) -> Result<WorkbenchSessionPage, String> {
+    // Inventory checks read transcripts and call the sidecar. Keep them off
+    // the native event loop so navigation and window input remain responsive.
+    tauri::async_runtime::spawn_blocking(move || {
+        read_workbench_session_page(
+            &app.state::<BridgeSupervisor>(),
+            &app.state::<WorkbenchCatalog>(),
+            &app.state::<SessionShadowSnapshotCache>(),
+            limit,
+            cursor,
+        )
+    })
+    .await
+    .map_err(|_| "session directory worker stopped; retry the directory check".to_string())?
+}
+
+fn read_workbench_session_page(
+    supervisor: &BridgeSupervisor,
+    catalog: &WorkbenchCatalog,
+    shadow_cache: &SessionShadowSnapshotCache,
     limit: Option<u16>,
     cursor: Option<SessionDirectoryCursor>,
 ) -> Result<WorkbenchSessionPage, String> {
@@ -2332,7 +2358,7 @@ fn workbench_session_page(
             Ok(_) => shadow_cache.clear(),
         }
     }
-    let shadow = compare_session_catalog_with_directory(&supervisor, &legacy_sessions);
+    let shadow = compare_session_catalog_with_directory(supervisor, &legacy_sessions);
     if shadow.is_err() {
         if let Some(page) = shadow_cache.page(&legacy_sessions, cursor.as_ref(), limit) {
             return Ok(page);
@@ -2737,14 +2763,18 @@ fn identity_directory_is_safe_to_page(report: &SessionShadowReport) -> bool {
 }
 
 #[tauri::command]
-fn bridge_session_catalog_shadow(
-    supervisor: State<'_, BridgeSupervisor>,
-    catalog: State<'_, WorkbenchCatalog>,
-) -> Result<SessionShadowReport, String> {
-    // Bridge inventory errors can contain private filesystem paths. Keep the
-    // UI-facing diagnostic count-only even when the shadow scan fails.
-    compare_session_catalog(&supervisor, &catalog)
+async fn bridge_session_catalog_shadow(app: tauri::AppHandle) -> Result<SessionShadowReport, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        // Bridge inventory errors can contain private filesystem paths. Keep
+        // UI-facing diagnostics count-only even when the shadow scan fails.
+        compare_session_catalog(
+            &app.state::<BridgeSupervisor>(),
+            &app.state::<WorkbenchCatalog>(),
+        )
         .map_err(|_| "session catalog shadow is unavailable; retry later".to_string())
+    })
+    .await
+    .map_err(|_| "session catalog worker stopped; retry the directory check".to_string())?
 }
 
 #[tauri::command]
@@ -2801,14 +2831,17 @@ mod identity_title_backfill_tests {
 }
 
 #[tauri::command]
-fn remember_workbench_session(
-    supervisor: State<'_, BridgeSupervisor>,
-    catalog: State<'_, WorkbenchCatalog>,
+async fn remember_workbench_session(
+    app: tauri::AppHandle,
     request: WorkbenchSession,
 ) -> Result<Vec<WorkbenchSession>, String> {
-    let sessions = catalog.remember(request)?;
-    sync_workbench_order(&supervisor, &sessions)?;
-    Ok(sessions)
+    tauri::async_runtime::spawn_blocking(move || {
+        let sessions = app.state::<WorkbenchCatalog>().remember(request)?;
+        sync_workbench_order(&app.state::<BridgeSupervisor>(), &sessions)?;
+        Ok(sessions)
+    })
+    .await
+    .map_err(|_| "session catalog worker stopped; retry saving the session".to_string())?
 }
 
 #[tauri::command]
@@ -4605,6 +4638,7 @@ fn main() {
             bridge_combined_rewind_commit,
             bridge_legacy_fork_preview,
             bridge_legacy_fork_commit,
+            bridge_fork_session,
             workspace_roots_availability,
             bridge_cancel,
             bridge_approve,
@@ -4705,6 +4739,7 @@ fn main() {
             workbench_project_folders,
             remember_workbench_project_folder,
             rename_workbench_project_folder,
+            remove_workbench_project_folder,
             workbench_session_page,
             backfill_workbench_titles,
             remember_workbench_session,

@@ -1476,7 +1476,8 @@
         "truncated": { "type": "boolean" },
         "workDurationMs": { "type": "integer", "minimum": 0 },
         "createdAtMs": { "type": "integer", "minimum": 0 },
-        "turnUsage": { "$ref": "#/$defs/historyTurnUsage" }
+        "turnUsage": { "$ref": "#/$defs/historyTurnUsage" },
+        "forkToken": { "type": "string" }
       },
       "additionalProperties": false
     },

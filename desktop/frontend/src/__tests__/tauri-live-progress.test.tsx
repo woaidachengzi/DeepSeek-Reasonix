@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { TauriLiveProgress } from "../tauri/TauriLiveProgress";
-import { advanceLiveProgress, EMPTY_LIVE_PROGRESS, liveProgressLabel } from "../tauri/liveProgress";
+import { advanceLiveAnswer, advanceLiveProgress, EMPTY_LIVE_ANSWER, EMPTY_LIVE_PROGRESS, liveProgressLabel } from "../tauri/liveProgress";
 import type { TauriBridgeEvent } from "../lib/tauriBridge";
 
 const event = (kind: string, payload: Record<string, unknown> = {}): TauriBridgeEvent => ({
@@ -27,7 +27,7 @@ progress = advanceLiveProgress(progress, event("text", { text: "PUBLIC_ANSWER" }
 assert.equal(liveProgressLabel(progress, false), "正在回答…");
 assert.equal(liveProgressLabel(progress, true), "等待你的确认…");
 const html = renderToStaticMarkup(<TauriLiveProgress progress={progress} paused={false} />);
-assert.match(html, /<details[^>]*open=""/);
+assert.doesNotMatch(html, /<details[^>]*open=/, "tool details start collapsed");
 assert.match(html, /read_file/);
 assert.match(html, /已完成/);
 assert.match(html, /失败/);
@@ -39,3 +39,22 @@ for (let index = 0; index < 50; index++) progress = advanceLiveProgress(progress
 assert.equal(progress.tools.length, 30, "live execution metadata is bounded");
 assert.equal(advanceLiveProgress(progress, event("turn_started")), EMPTY_LIVE_PROGRESS, "next turn cannot inherit prior tools");
 console.log("Tauri public live progress: OK");
+
+let answer = advanceLiveAnswer(EMPTY_LIVE_ANSWER, event("text", { text: "我先查 **最新" }));
+answer = advanceLiveAnswer(answer, event("text", { text: "价格**。" }));
+assert.deepEqual(answer.segments, ["我先查 **最新价格**。"], "token chunks must preserve inline Markdown");
+answer = advanceLiveAnswer(answer, event("tool_dispatch", { tool: { id: "tool-1", name: "web_fetch" } }));
+assert.equal(answer.streaming, false, "a tool boundary completes Markdown even while the turn is running");
+const completedSegments = answer.segments;
+answer = advanceLiveAnswer(answer, event("tool_result", { tool: { id: "tool-1", output: "PRIVATE_OUTPUT" } }));
+answer = advanceLiveAnswer(answer, event("reasoning", { text: "PRIVATE_REASONING" }));
+assert.equal(answer.segments, completedSegments, "execution metadata does not rewrite completed text");
+answer = advanceLiveAnswer(answer, event("text", { text: "拿到结果了。" }));
+assert.deepEqual(answer.segments, ["我先查 **最新价格**。", "拿到结果了。"], "model responses remain separate paragraphs");
+assert.equal(answer.streaming, true);
+answer = advanceLiveAnswer(answer, event("turn_done"));
+assert.equal(answer.streaming, false);
+assert.equal(advanceLiveAnswer(answer, event("text", { kind: "reasoning", text: "PRIVATE_REASONING" })), answer);
+assert.equal(JSON.stringify(answer).includes("PRIVATE_"), false);
+assert.equal(advanceLiveAnswer(answer, event("turn_started")), EMPTY_LIVE_ANSWER, "a new turn clears previous segments");
+console.log("Tauri live answer boundaries: OK");

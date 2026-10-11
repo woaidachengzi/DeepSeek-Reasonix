@@ -122,6 +122,7 @@ export interface BridgeHealth {
 export interface BridgeHistoryMessage {
   content: string;
   createdAtMs?: number;
+  forkToken?: string;
   role: "user" | "assistant";
   truncated?: boolean;
   turnUsage?: BridgeHistoryTurnUsage;

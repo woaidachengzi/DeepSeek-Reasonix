@@ -118,6 +118,7 @@ await act(async () => {
   Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, "value")!.set!.call(textarea, "修复侧栏显示问题");
   textarea.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
 });
+const pageReadsBeforeFirstSend = calls.filter(call => call.name === "workbench_session_page").length;
 await act(async () => {
   document.querySelector<HTMLButtonElement>('[aria-label="发送消息"]')?.click();
   await new Promise(resolve => setTimeout(resolve, 130));
@@ -125,7 +126,7 @@ await act(async () => {
 assert.ok(calls.some(call => call.name === "bridge_switch_session" && call.args.sessionId === "tauri-stub-session" && call.args.workspaceRoot === "/work/beta"));
 assert.ok(calls.some(call => call.name === "bridge_submit" && call.args.sessionId === "tauri-stub-session"));
 assert.ok(calls.some(call => call.name === "remember_workbench_session" && call.args.sessionId === "tauri-stub-session"), "first accepted send stores the session");
-assert.ok(calls.filter(call => call.name === "workbench_session_page").length >= 4, "first send refreshes the identity-backed sidebar");
+assert.ok(calls.filter(call => call.name === "workbench_session_page").length > pageReadsBeforeFirstSend, "first send refreshes the identity-backed sidebar");
 assert.ok(calls.some(call => call.name === "backfill_workbench_titles" && JSON.stringify(call.args).includes("修复侧栏显示问题")));
 assert.match(document.body.textContent ?? "", /修复侧栏显示问题/);
 await act(async () => { root.unmount(); });
@@ -319,6 +320,31 @@ await act(async () => {
 });
 assert.match(document.body.textContent ?? "", /加载完成的会话/);
 assert.doesNotMatch(document.body.textContent ?? "", /正在加载对话/);
+await act(async () => { root.unmount(); });
+
+// Empty project removal persists on remount; populated (including archived)
+// roots stay protected even when a search hides their rows.
+(globalThis as typeof globalThis & { __savedProjectFolders: unknown[] }).__savedProjectFolders = [{ root: "/work/removable", title: "可移除空项目" }];
+(globalThis as unknown as { __workbenchPages: unknown[] }).__workbenchPages = [];
+(globalThis as unknown as { __workbenchSessions: unknown[] }).__workbenchSessions = [{ sessionId: "kept-chat", workspaceRoot: "/work/kept", title: "保留对话" }];
+root = createRoot(document.getElementById("root")!);
+await act(async () => { root.render(React.createElement(TauriSessionApp)); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.equal(document.querySelector('[aria-label="移除空项目 kept"]'), null);
+const removeEmptyProject = () => document.querySelector<HTMLButtonElement>('[aria-label="移除空项目 可移除空项目"]');
+assert.ok(removeEmptyProject());
+(globalThis as typeof globalThis & { __removeProjectFolderFailure: boolean }).__removeProjectFolderFailure = true;
+await act(async () => { removeEmptyProject()!.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.ok(removeEmptyProject(), "failed persistence leaves the project available for retry");
+assert.match(document.body.textContent ?? "", /无法移除项目.*请重试移除/);
+(globalThis as typeof globalThis & { __removeProjectFolderFailure: boolean }).__removeProjectFolderFailure = false;
+await act(async () => { removeEmptyProject()!.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.equal(removeEmptyProject(), null);
+assert.ok(document.querySelector('.tauri-project-group[aria-label="kept"]'), "removing a saved root preserves other conversations");
+assert.ok(calls.some(call => call.name === "remove_workbench_project_folder" && call.args.root === "/work/removable"));
+await act(async () => { root.unmount(); });
+root = createRoot(document.getElementById("root")!);
+await act(async () => { root.render(React.createElement(TauriSessionApp)); await new Promise(resolve => setTimeout(resolve, 0)); });
+assert.equal(removeEmptyProject(), null, "removed empty projects do not return after reload");
 await act(async () => { root.unmount(); });
 
 // The native picker and Storage page edit a Preview-only default used by New.

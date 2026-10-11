@@ -177,6 +177,8 @@ pub struct BridgeHistoryMessage {
     pub content: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created_at_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fork_token: Option<String>,
     pub role: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub truncated: Option<bool>,

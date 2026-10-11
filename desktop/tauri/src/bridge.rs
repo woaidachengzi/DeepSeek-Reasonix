@@ -82,6 +82,13 @@ pub struct SessionRequest {
     pub session_id: String,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForkSessionRequest {
+    pub session_id: String,
+    pub fork_token: String,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MCPRuntimeActionRequest {
@@ -4514,6 +4521,24 @@ impl BridgeSupervisor {
         Ok(envelope)
     }
 
+    pub fn fork_session(&self, request: ForkSessionRequest) -> Result<BridgeLegacyConversationForkResultResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let request_id = opaque_secret()?;
+        let path = format!("/v1/sessions/{session_id}:fork");
+        if request.fork_token.len() != 64 || !request.fork_token.bytes().all(|value| value.is_ascii_hexdigit()) {
+            return Err("分叉位置无效，请重新打开对话后重试".to_string());
+        }
+        let response = self.request_json("POST", &path, Some(json!({"forkToken": request.fork_token})), Some(&request_id))?;
+        let envelope: BridgeLegacyConversationForkResultResponse = serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
+            return Err("desktop bridge protocol version is unsupported".to_string());
+        }
+        if envelope.result.ok && (envelope.result.session_id.as_ref().is_none_or(|id| id == &request.session_id || session_path_component(id).is_err())) {
+            return Err("desktop bridge returned an invalid fork session identity".to_string());
+        }
+        Ok(envelope)
+    }
+
     pub fn cancel(&self, request: SessionRequest) -> Result<BridgeSession, String> {
         let session_id = session_path_component(&request.session_id)?;
         let path = format!("/v1/sessions/{session_id}:cancel");
@@ -4682,40 +4707,21 @@ impl BridgeSupervisor {
         body: Option<Value>,
         request_id: Option<&str>,
     ) -> Result<Value, String> {
-        let mut process = self
-            .process
-            .lock()
-            .map_err(|_| "bridge state lock is unavailable")?;
-        let Some(running) = process.as_mut() else {
-            return Err("desktop bridge is not running".to_string());
-        };
-        if !running.child.is_running()? {
-            *process = None;
-            return Err("desktop bridge is not running".to_string());
-        }
-        request_json(
-            running.address,
-            &running.token,
-            method,
-            path,
-            body.clone(),
-            request_id,
-        )
-        // The Go bridge caches this request ID before a turn is admitted. If
-        // the host lost the first response after sending it, one same-ID retry
-        // is safe; it replays the response instead of submitting twice.
-        .or_else(|first_error| match request_id {
-            Some(request_id) => request_json(
-                running.address,
-                &running.token,
-                method,
-                path,
-                body,
-                Some(request_id),
-            )
-            .map_err(|_| first_error),
-            None => Err(first_error),
-        })
+        // Snapshot the owned connection under the process lock, then release it
+        // before blocking I/O. Session restoration must not block status/event
+        // connections or shutdown for the duration of core initialization.
+        let (address, token) = self.event_connection()?;
+        request_json(address, &token, method, path, body.clone(), request_id)
+            // The Go bridge caches this request ID before a turn is admitted. If
+            // the host lost the first response after sending it, one same-ID retry
+            // is safe; it replays the response instead of submitting twice.
+            .or_else(|first_error| match request_id {
+                Some(request_id) => {
+                    request_json(address, &token, method, path, body, Some(request_id))
+                        .map_err(|_| first_error)
+                }
+                None => Err(first_error),
+            })
     }
 
     fn request_json_with_timeout(
@@ -5032,8 +5038,28 @@ fn request_json(
         path,
         body,
         request_id,
-        Duration::from_secs(2),
+        bridge_request_timeout(path),
     )
+}
+
+fn bridge_request_timeout(path: &str) -> Duration {
+    match path {
+        path if path.ends_with(":fork") => Duration::from_secs(120),
+        // Both operations build the core, initialize tools, and restore saved
+        // transcripts. Match the existing slow-operation budget rather than
+        // cancelling a valid restore after the ordinary two-second RPC budget.
+        "/v1/sessions:open" | "/v1/sessions:switch" => Duration::from_secs(120),
+        _ => Duration::from_secs(2),
+    }
+}
+
+fn bridge_io_error(error: std::io::Error) -> String {
+    match error.kind() {
+        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut => {
+            "desktop bridge request timed out; check the session status and retry".to_string()
+        }
+        _ => display_error(error),
+    }
 }
 
 pub(crate) fn request_json_with_timeout(
@@ -5076,11 +5102,11 @@ pub(crate) fn request_json_with_connected_socket<G>(
         .map_err(display_error)?;
     let body = bytes.as_deref().unwrap_or_default();
     let mut stream =
-        TcpStream::connect_timeout(&address, Duration::from_secs(1)).map_err(display_error)?;
+        TcpStream::connect_timeout(&address, Duration::from_secs(1)).map_err(bridge_io_error)?;
     let _lease = connected(&stream)?;
     stream
         .set_read_timeout(Some(read_timeout))
-        .map_err(display_error)?;
+        .map_err(bridge_io_error)?;
     let request_id_header = request_id
         .map(|request_id| format!("X-Reasonix-Request-ID: {request_id}\r\n"))
         .unwrap_or_default();
@@ -5090,8 +5116,8 @@ pub(crate) fn request_json_with_connected_socket<G>(
     );
     stream
         .write_all(headers.as_bytes())
-        .map_err(display_error)?;
-    stream.write_all(body).map_err(display_error)?;
+        .map_err(bridge_io_error)?;
+    stream.write_all(body).map_err(bridge_io_error)?;
     let response = read_bounded_response(stream, MAX_BRIDGE_HTTP_RESPONSE_BYTES)?;
     parse_json_response(&response)
 }
@@ -5101,7 +5127,7 @@ fn read_bounded_response(reader: impl Read, max_bytes: usize) -> Result<Vec<u8>,
     reader
         .take(max_bytes.saturating_add(1) as u64)
         .read_to_end(&mut response)
-        .map_err(display_error)?;
+        .map_err(bridge_io_error)?;
     if response.len() > max_bytes {
         return Err("desktop bridge response exceeds the size limit".to_string());
     }
@@ -6737,6 +6763,51 @@ mod tests {
             .recv_timeout(Duration::from_secs(1))
             .expect("headers");
         assert!(headers.contains("X-Reasonix-Request-ID: request-123\r\n"));
+    }
+
+    #[test]
+    fn session_restore_waits_beyond_the_ordinary_rpc_budget() {
+        for path in ["/v1/sessions:open", "/v1/sessions:switch"] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let address = listener.local_addr().unwrap();
+            let server = thread::spawn(move || {
+                let (stream, _) = listener.accept().unwrap();
+                let mut reader = BufReader::new(stream);
+                loop {
+                    let mut line = String::new();
+                    reader.read_line(&mut line).unwrap();
+                    if line == "\r\n" {
+                        break;
+                    }
+                }
+                thread::sleep(Duration::from_millis(2200));
+                reader
+                    .into_inner()
+                    .write_all(
+                        b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+                    )
+                    .unwrap();
+            });
+            assert_eq!(
+                request_json(address, "test-token", "POST", path, None, None).unwrap(),
+                json!({})
+            );
+            server.join().unwrap();
+        }
+        assert_eq!(
+            super::bridge_request_timeout("/v1/health"),
+            Duration::from_secs(2)
+        );
+    }
+
+    #[test]
+    fn socket_timeouts_have_actionable_portable_errors() {
+        for kind in [std::io::ErrorKind::WouldBlock, std::io::ErrorKind::TimedOut] {
+            assert_eq!(
+                super::bridge_io_error(std::io::Error::from(kind)),
+                "desktop bridge request timed out; check the session status and retry"
+            );
+        }
     }
 
     #[test]
