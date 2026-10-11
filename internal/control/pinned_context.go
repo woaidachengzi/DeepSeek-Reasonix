@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"fmt"
 
 	"reasonix/internal/agent"
 	"reasonix/internal/provider"
@@ -15,6 +16,39 @@ type controllerPromptState struct {
 // controller's current session immediately before an admitted model turn.
 // Implementations perform I/O without holding Controller or Session locks.
 type PinnedContextLoader func(context.Context, string) (agent.PinnedContextSnapshot, error)
+
+// MutatePinnedContext excludes new turns and session rotation while the host
+// updates desired context. Unlike rotation, it preserves transcript events and
+// driving identity. The callback must not call controller mutation methods.
+func (c *Controller) MutatePinnedContext(update func(sessionPath string) error) error {
+	if c == nil || update == nil {
+		return fmt.Errorf("pinned context mutation is unavailable")
+	}
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return fmt.Errorf("controller is closed")
+	}
+	if c.running || c.finishing {
+		c.mu.Unlock()
+		return errTurnRunningRotation
+	}
+	if c.rotating {
+		c.mu.Unlock()
+		return errRotationInProgress
+	}
+	c.rotating = true
+	c.mu.Unlock()
+	defer c.endRotation()
+	if c.PendingPrompt() {
+		return errTurnRunningRotation
+	}
+	path := c.SessionPath()
+	if path == "" {
+		return fmt.Errorf("session is not ready")
+	}
+	return update(path)
+}
 
 func newControllerPromptState(base string, executor *agent.Agent) controllerPromptState {
 	current := ""

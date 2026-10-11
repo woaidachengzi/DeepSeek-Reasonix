@@ -1,15 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"os"
 	"strings"
 
 	"reasonix/internal/agent"
-	"reasonix/internal/fileutil"
 	"reasonix/internal/pinnedcontext"
 	"reasonix/internal/store"
 )
@@ -30,25 +27,7 @@ func loadPinnedContextState(path string) (pinnedContextState, error) {
 }
 
 func savePinnedContextState(sessionPath string, files []string) error {
-	sessionPath = strings.TrimSpace(sessionPath)
-	if sessionPath == "" {
-		return fmt.Errorf("session is not ready")
-	}
-	normalized, err := normalizePinnedContextFiles(files)
-	if err != nil {
-		return err
-	}
-	state := emptyPinnedContextState(sessionPath)
-	state.Files = normalized
-	raw, err := json.Marshal(state)
-	if err != nil {
-		return err
-	}
-	raw = append(raw, '\n')
-	if len(raw) > maxPinnedContextStateBytes {
-		return fmt.Errorf("pinned context state exceeds %d bytes", maxPinnedContextStateBytes)
-	}
-	return fileutil.AtomicWriteFileStrict(store.SessionPinnedContext(sessionPath), raw, 0o600)
+	return pinnedcontext.SaveState(sessionPath, files)
 }
 
 func loadOrMigratePinnedContextState(sessionPath string, legacy []string) (pinnedContextState, error) {
