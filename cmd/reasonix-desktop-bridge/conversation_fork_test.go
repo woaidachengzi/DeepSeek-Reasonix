@@ -15,9 +15,54 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/event"
+	"reasonix/internal/pinnedcontext"
 	"reasonix/internal/provider"
 	"reasonix/internal/sessionidentity"
+	"reasonix/internal/store"
 )
+
+func TestConversationForkRejectsCorruptPinnedManifestBeforeCreatingChild(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("REASONIX_HOME", state)
+	t.Setenv("REASONIX_STATE_HOME", state)
+	dir := appconfig.SessionDir()
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path, err := bridgeSessionPath(dir, "tauri-parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{\"role\":\"assistant\",\"content\":\"answer\"}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	manifest := store.SessionPinnedContext(path)
+	if err := os.WriteFile(manifest, []byte("broken manifest"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ag := agent.New(nil, nil, agent.NewSession("base"), agent.Options{}, event.Discard)
+	ctrl := control.New(control.Options{Executor: ag, Runner: ag, Sink: event.Discard, SessionDir: dir, SessionPath: path})
+	defer ctrl.Close()
+	result, err := (&controllerRuntime{controller: ctrl}).ForkConversation("")
+	if err == nil || result.SessionID != "" || !strings.Contains(err.Error(), "load source pinned files") {
+		t.Fatalf("fork did not reject corrupt context: %+v %v", result, err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("failed preflight created child files: %+v %v", entries, err)
+	}
+	// Controller initialization creates parent-owned inbox/event sidecars.
+	// A rejected fork must create no files under a new session identity.
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.Name(), strings.TrimSuffix(filepath.Base(path), ".jsonl")+".") {
+			t.Fatalf("failed preflight created child artifact: %s", entry.Name())
+		}
+	}
+	raw, err := os.ReadFile(manifest)
+	if err != nil || string(raw) != "broken manifest" {
+		t.Fatalf("failed preflight changed source: %q %v", raw, err)
+	}
+}
 
 func TestConversationForkCopiesVisibleHistoryAndRegistersIndependentChild(t *testing.T) {
 	for _, format := range []string{"legacy", "schema2-selected-head", "legacy-early", "schema2-selected-head-early"} {
@@ -73,6 +118,12 @@ func TestConversationForkCopiesVisibleHistoryAndRegistersIndependentChild(t *tes
 			if err != nil {
 				t.Fatal(err)
 			}
+			if err := os.WriteFile(filepath.Join(workspace, "notes.txt"), []byte("pinned context"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := pinnedcontext.SaveState(parentPath, []string{"notes.txt"}); err != nil {
+				t.Fatal(err)
+			}
 			sourceHead, hasHead := ctrl.SessionHead()
 			if (strings.HasPrefix(format, "schema2")) != hasHead {
 				t.Fatalf("unexpected fixture format: %s head=%v", format, hasHead)
@@ -108,6 +159,17 @@ func TestConversationForkCopiesVisibleHistoryAndRegistersIndependentChild(t *tes
 			child, err := agent.LoadSession(childPath)
 			if err != nil {
 				t.Fatal(err)
+			}
+			pins, err := pinnedcontext.LoadState(childPath)
+			if err != nil || pins.SessionID != agent.BranchID(childPath) || !reflect.DeepEqual(pins.Files, []string{"notes.txt"}) {
+				t.Fatalf("child pins=%+v err=%v", pins, err)
+			}
+			if _, err := pinnedcontext.Change(workspace, childPath, "notes.txt", false); err != nil {
+				t.Fatal(err)
+			}
+			pins, err = pinnedcontext.LoadState(parentPath)
+			if err != nil || !reflect.DeepEqual(pins.Files, []string{"notes.txt"}) {
+				t.Fatalf("child unpin changed source pins=%+v err=%v", pins, err)
 			}
 			if !reflect.DeepEqual(child.Snapshot(), expected) {
 				t.Fatalf("forked visible chain differs: %v vs %v", child.Snapshot(), expected)

@@ -1,5 +1,19 @@
 # E 迁移清单
 
+## 2026-10-11 短期目标：固定文件管理与分叉恢复
+
+用户恢复改造并要求每批最多 15 个文件，review 和测试通过后提交。已分批提交共同保存／修改层（9 文件，`64cf24b03`）、带会话身份校验及请求去重的 HTTP／Rust／TypeScript 接口（11 文件，`71433c4aa`）、文件预览固定按钮及 composer 固定清单（7 文件，`127dfe63f`）；收尾批 4 文件补分叉继承及打包恢复验证。本短期目标不等同完整跨平台迁移完成。
+
+固定清单沿用 schema 1 与原文件布局，Wails 改为调用共同原子保存实现，公开绑定保持兼容。修改与 controller turn admission／rotation 互斥，不退休消息流或 driving 身份。仅允许当前且空闲的会话；失效记录仍可取消固定，新失效文件不能加入，损坏清单不会被修改覆盖。renderer 只接收路径／大小／估算／失效原因，模型每轮仍使用共同 loader 读取最新正文。新分叉复制 desired 清单并绑定新 branch ID，父子后续修改独立；失败后保留已创建子对话 ID，不引导重复创建。
+
+相关 Go 全量回归、固定文件专项 race、Wails 兼容回归、协议生成 check、TypeScript 含测试类型检查、hooks lint、完整 Tauri／Transcript 回归、Rust check／clippy 与响应校验测试通过。Go 首次完整回归有一次既有 Ask ticket 时序失败，随后完整重跑通过，未据此调整 ticket 逻辑。新增组件测试覆盖延迟读取、旧 mutation 晚到、双击、运行／只读／初始化禁用、错误重试和失效文件移除。
+
+Browser plugin 不可用，使用 Chrome／Playwright 隔离夹具挂载真实组件（native adapter 模拟），1440×900 与 900×620 都通过预览固定、会话独立恢复、失败重试和失效移除；页面身份、非空、无 overlay、无相关 console／page errors 与控件范围检查通过。截图位于 `/private/tmp/reasonix-pinned-ui/pinned-1440.png` 和 `pinned-900.png`。这属于浏览器界面证据，不冒充 WKWebView 中逐个点击控件的验收。
+
+新 macOS App 构建与 `codesign --verify --deep --strict` 通过。准确包内 sidecar 的 `TestPinnedForkActualPackageRestore` 私有 profile 验证通过：从第一条回复截断／排除后续内容、同请求 ID 重放同一 child、原 transcript 不变、固定清单继承与独立取消、进程正常退出后重启恢复父子历史及清单、文件删除后的失效与取消固定。`smoke-packaged-app.py` 的 managed／explicit 私有 profile 原生宿主启动、凭据身份、Global workspace、ready 和正常退出均通过；测试不用真实账号／服务或用户历史。
+
+产物为 `desktop/tauri/target/release/bundle/macos/Reasonix Tauri Preview.app`。sidecar SHA256 `020b6cd4cecaccd8594b50267d83ce6a723104a40a31372079b51517b2530419`；host SHA256 `cb9b213204629c05c13fa40b44d988018dcadd78ad949740b50e4c5f609e9e58`。本包包含 10-10 清单安全修复和 10-11 改造；旧 Windows／Linux 候选不混算此证据，尚需同步与实机验收。原清单里的物理终端／窗口问题、剪贴板及真实服务验收继续保留。
+
 ## 2026-10-10 用户要求本轮收尾 review / 本地提交 / 暂停
 
 Linux共享loader候选完成构建及隔离包验收，准确来源/摘要/四次正常退出与各十次门禁见Linux文档；不安装、不发布、不推送。审查范围包含旧完成回合升级的身份/digest fence、canonical与host历史投影边界、Wails/Tauri共同loader及公开DTO兼容、独立actual-package夹具、只读原生终端诊断与三平台证据。发现继承的清单读取使用普通os.Open，异常FIFO可阻塞、外部symlink未限制；修复为绝对路径后的同描述符OpenFileBeneath及regular文件校验，增加FIFO有界返回、外部symlink拒绝及相对session路径兼容回归，不改清单schema/大小门槛或引擎修订协议。

@@ -12,12 +12,19 @@ import (
 
 	appconfig "reasonix/internal/config"
 	"reasonix/internal/desktopbridge"
+	"reasonix/internal/pinnedcontext"
 	"reasonix/internal/sessionidentity"
 )
 
 func (r *controllerRuntime) ForkConversation(forkToken string) (desktopbridge.LegacyConversationForkResult, error) {
 	if appconfig.DesktopSessionIdentityPath() == "" {
 		return desktopbridge.LegacyConversationForkResult{}, fmt.Errorf("conversation identity store is unavailable")
+	}
+	// Capture desired context before creating the child. A malformed source
+	// manifest must not silently become an empty context in the new conversation.
+	pinned, err := pinnedcontext.LoadState(r.controller.SessionPath())
+	if err != nil {
+		return desktopbridge.LegacyConversationForkResult{}, fmt.Errorf("load source pinned files before forking: %w", err)
 	}
 	var random [16]byte
 	if _, err := rand.Read(random[:]); err != nil {
@@ -60,6 +67,10 @@ func (r *controllerRuntime) ForkConversation(forkToken string) (desktopbridge.Le
 	}
 	// A created transcript remains discoverable even if a later metadata write
 	// fails. Return its ID so the UI can direct the user to session history.
+	pinnedErr := pinnedcontext.SaveState(path, pinned.Files)
+	if pinnedErr != nil {
+		slog.Warn("conversation fork pinned context incomplete", "session_id", childID, "err", pinnedErr)
+	}
 	if err := identities.MarkReady(ctx, childID, path); err != nil {
 		// Keep the durable child identity in the normal result envelope. Returning
 		// an RPC error here would discard it and invite another creation attempt.
@@ -68,6 +79,9 @@ func (r *controllerRuntime) ForkConversation(forkToken string) (desktopbridge.Le
 	}
 	if forkErr != nil {
 		return desktopbridge.LegacyConversationForkResult{SessionID: childID, Error: "分叉已保存，部分信息未保存完成；请从历史对话打开。"}, nil
+	}
+	if pinnedErr != nil {
+		return desktopbridge.LegacyConversationForkResult{SessionID: childID, Error: "分叉已保存，但固定文件清单保存失败；请从历史对话打开，并重新固定所需文件。"}, nil
 	}
 	return desktopbridge.LegacyConversationForkResult{OK: true, SessionID: childID}, nil
 }
