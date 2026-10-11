@@ -1,5 +1,5 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Activity, Archive, ArrowUp, Check, ChevronDown, ChevronRight, Eye, FileText, FolderOpen, FolderTree, GitBranch, Keyboard, MessageSquare, Paperclip, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Settings, Sparkles, Square, TerminalSquare, Trash2, X } from "lucide-react";
+import { Activity, Archive, ArrowUp, Check, ChevronDown, ChevronRight, Eye, FileText, FolderOpen, FolderTree, GitBranch, Keyboard, MessageSquare, Paperclip, Pin, PinOff, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Settings, Sparkles, Square, TerminalSquare, Trash2, X } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { sendTauriSystemNotification } from "../lib/tauriBridge";
@@ -18,6 +18,8 @@ const TauriTerminalDock = lazy(() => import("./TauriTerminalDock").then(module =
 import { ExternalOpener } from "../components/ExternalOpener";
 import { tauriExternalOpenerBridge } from "./tauriExternalOpener";
 import { CopyButton } from "../components/CopyButton";
+import { useTauriPinnedFiles } from "./useTauriPinnedFiles";
+import { TauriPinnedFilesShelf } from "./TauriPinnedFilesShelf";
 import { TauriAnswerActions } from "./TauriAnswerActions";
 import { ComposerContextCard } from "../components/ComposerContextCard";
 import { formatSelectedTextContext, normalizeSelectedText, selectedTextSnippet, splitSelectedTextContext, type SelectedTextReference } from "../lib/selectedTextContext";
@@ -568,7 +570,9 @@ export function TauriSessionPreview() {
   const [sequence, setSequence] = useState(0);
   const [streamRevision, setStreamRevision] = useState(0);
   const [streamReady, setStreamReady] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [operationBusy, setBusy] = useState(false);
+  const pinnedFiles = useTauriPinnedFiles({ sessionId: session?.id, ready: streamReady, idle: session?.state === "idle", readOnly: isReadOnlyWorkbenchSource(sessionPageSource), busy: operationBusy });
+  const busy = operationBusy || pinnedFiles.busy;
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [catalogAudit, setCatalogAudit] = useState<TauriSessionShadowReport | null>(null);
   const [catalogAuditError, setCatalogAuditError] = useState("");
@@ -3605,6 +3609,9 @@ export function TauriSessionPreview() {
 
         <footer className="tauri-composer-area">
           {error && <p className="tauri-error" role="alert">{error}</p>}
+          <TauriPinnedFilesShelf files={pinnedFiles.files} error={pinnedFiles.error} disabled={pinnedFiles.disabled} english={locale === "en"}
+            onRemove={path => void pinnedFiles.change(path, false)} onRetry={pinnedFiles.retry}
+            onPreview={path => { setWorkspaceOpen(true); setWorkspaceView("files"); void previewWorkspaceFile({ path, name: path, isDir: false }); }} />
           <div className={`tauri-composer${dragging ? " is-dragging" : ""}`}>
             {selectedTexts.length > 0 && <div className="composer-context" aria-label={t("composer.selectedText")}>
               {selectedTexts.map(reference => <ComposerContextCard key={reference.id} variant="selection"
@@ -3760,7 +3767,12 @@ export function TauriSessionPreview() {
               </ul>)}
               {workspacePreviewLoading && <div className="tauri-workspace-preview__loading">正在读取预览…</div>}
               {workspacePreview && <section className="tauri-workspace-preview" aria-label="文件预览">
-                <header><div><strong>{workspacePreview.path}</strong><span>{workspacePreview.size} bytes{workspacePreview.truncated ? " · 已截断" : ""}</span></div><button type="button" className="tauri-diagnostic-action" onClick={() => insertWorkspacePath(workspacePreview.path)}><Eye size={13} /> 插入引用</button></header>
+                <header><div><strong>{workspacePreview.path}</strong><span>{workspacePreview.size} bytes{workspacePreview.truncated ? " · 已截断" : ""}</span></div><div className="tauri-workspace-preview__actions">
+                  <button type="button" className="tauri-diagnostic-action" disabled={pinnedFiles.disabled || Boolean(workspacePreview.binary && !pinnedFiles.files.some(file => file.path === workspacePreview.path))} onClick={() => void pinnedFiles.change(workspacePreview.path, !pinnedFiles.files.some(file => file.path === workspacePreview.path))}>
+                    {pinnedFiles.files.some(file => file.path === workspacePreview.path) ? <PinOff size={13} /> : <Pin size={13} />}{pinnedFiles.files.some(file => file.path === workspacePreview.path) ? (locale === "en" ? "Unpin" : "取消固定") : (locale === "en" ? "Pin to context" : "固定到上下文")}
+                  </button>
+                  <button type="button" className="tauri-diagnostic-action" onClick={() => insertWorkspacePath(workspacePreview.path)}><Eye size={13} /> 插入引用</button>
+                </div></header>
                 {workspacePreviewLine && <p className="tauri-workspace-preview__binary" role="status">{workspacePreview.body && workspacePreviewLine <= workspacePreview.body.split("\n").length && !workspacePreview.binary ? (locale === "en" ? `Line ${workspacePreviewLine} highlighted` : `已定位到第 ${workspacePreviewLine} 行`) : (locale === "en" ? `Line ${workspacePreviewLine} is outside the readable preview. The file may have changed or been truncated; check the original file.` : `第 ${workspacePreviewLine} 行不在可读预览范围内；文件可能已修改或截断，请检查原文件。`)}</p>}
                 {workspacePreview.binary ? <p className="tauri-workspace-preview__binary">这是二进制文件，已隐藏内容；仍可插入它的 @路径。</p> : workspacePreview.body ? <CodeViewer key={workspacePreview.path} value={workspacePreview.body} showLineNumbers focusLine={workspacePreviewLine} scrollMode="bounded" maxHeight="100%" /> : <pre>（空文件）</pre>}
               </section>}

@@ -55,6 +55,19 @@ export function tauriMessageFrom(error) {
 }
 
 export function isTauriDesktop() { return true; }
+export function tauriPinnedFiles(sessionId) {
+  record("bridge_pinned_files", { sessionId });
+  return globalThis.__pinnedFilesHandler?.(sessionId) ?? Promise.resolve(globalThis.__pinnedFiles?.[sessionId] ?? []);
+}
+export function tauriChangePinnedFile(sessionId, path, pin) {
+  record("bridge_change_pinned_file", { sessionId, path, pin });
+  if (globalThis.__changePinnedFileHandler) return globalThis.__changePinnedFileHandler(sessionId, path, pin);
+  globalThis.__pinnedFiles ??= {};
+  let files = (globalThis.__pinnedFiles[sessionId] ?? []).filter(file => file.path !== path);
+  if (pin) files = [...files, { path, sizeBytes: 12, tokenEstimate: 3 }];
+  globalThis.__pinnedFiles[sessionId] = files;
+  return Promise.resolve(files);
+}
 export function tauriWorkspaceImage(sessionId, source) {
   record("bridge_workspace_image", { sessionId, source });
   if (globalThis.__imageGate) return globalThis.__imageGate(sessionId, source);
