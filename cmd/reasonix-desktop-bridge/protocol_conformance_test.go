@@ -145,6 +145,8 @@ func TestGoDTOsMatchTheWireSchema(t *testing.T) {
 		{Name: "workspaceFileRequest", Sample: workspaceFileRequest{}},
 		{Name: "workspaceFilePreview", Sample: desktopbridge.WorkspaceFilePreview{}},
 		{Name: "workspaceFileResponse", Sample: workspaceFileResponse{}},
+		{Name: "pinnedFile", Sample: desktopbridge.PinnedFile{}},
+		{Name: "pinnedFilesResponse", Sample: pinnedFilesResponse{}},
 		{Name: "workspaceChangeView", Sample: desktopbridge.WorkspaceChangeView{}},
 		{Name: "workspaceChanges", Sample: desktopbridge.WorkspaceChanges{}},
 		{Name: "workspaceChangesResponse", Sample: workspaceChangesResponse{}},

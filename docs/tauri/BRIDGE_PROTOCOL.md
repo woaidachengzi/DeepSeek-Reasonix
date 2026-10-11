@@ -73,6 +73,8 @@ named pipe，但必须保留相同 JSON envelope、认证、sequence 与重连�
 | 终端尺寸/名称/关闭 | `POST .../terminal/{terminalId}/resize`、`PATCH .../terminal/{terminalId}/title`、`DELETE .../terminal/{terminalId}` | 支持请求 ID 去重；仅归属当前会话的终端，不能操作外部 Terminal |
 | 工作区目录（逐层） | `POST /v1/sessions/{sessionId}:workspace` | 是 |
 | 工作区文件预览 | `POST /v1/sessions/{sessionId}:workspace-file` | 是；仅返回受限文本或二进制标记 |
+| 固定上下文文件清单 | `GET /v1/sessions/{sessionId}/pinned-files` | 只允许当前会话；返回相对路径、字节数、token 估算及失效原因，不返回文件内容 |
+| 固定／取消固定文件 | `POST /v1/sessions/{sessionId}:pin-file` / `:unpin-file` | body `{path}`；必须带 `X-Reasonix-Request-ID`；仅允许空闲的当前会话；与 turn admission 和 session rotation 互斥。修改持久化到原有 `.pinned-context.json`，下一次模型 turn 读取最新文件内容 |
 | 工作区变更（Git + 本轮会话检查点） | `POST /v1/sessions/{sessionId}:workspace-changes` | 是；来源显式标记 |
 | 工作区变更详情 | `POST /v1/sessions/{sessionId}:workspace-change-detail` | 是；仅返回受限 diff，支持 Git 或会话检查点 |
 | 单文件恢复预览 | `POST /v1/sessions/{sessionId}:workspace-file-revert-preview` | 只读；返回会话首次修改前的恢复方案、可用性及冲突原因 |

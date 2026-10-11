@@ -2019,6 +2019,39 @@ struct ReadyFile {
 }
 
 impl BridgeSupervisor {
+    pub fn pinned_files(
+        &self,
+        request: SessionRequest,
+    ) -> Result<crate::protocol_generated::BridgePinnedFilesResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let response = self.request_json(
+            "GET",
+            &format!("/v1/sessions/{session_id}/pinned-files"),
+            None,
+            None,
+        )?;
+        validate_pinned_files(response, &session_id)
+    }
+
+    pub fn change_pinned_file(
+        &self,
+        request: WorkspaceFileRequest,
+        pin: bool,
+    ) -> Result<crate::protocol_generated::BridgePinnedFilesResponse, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        if request.path.trim().is_empty() || request.path.len() > 4096 || request.path.contains('\0') {
+            return Err("pinned file path is invalid".to_string());
+        }
+        let action = if pin { "pin-file" } else { "unpin-file" };
+        let request_id = opaque_secret()?;
+        let response = self.request_json(
+            "POST",
+            &format!("/v1/sessions/{session_id}:{action}"),
+            Some(json!(BridgeWorkspaceFileRequest { path: request.path })),
+            Some(&request_id),
+        )?;
+        validate_pinned_files(response, &session_id)
+    }
     pub fn from_environment(app: tauri::AppHandle) -> Self {
         #[cfg(debug_assertions)]
         if let Some(binary) = env::var_os(BRIDGE_BINARY_ENV) {
@@ -5023,6 +5056,18 @@ fn request_shutdown(address: SocketAddr, token: &str) -> Result<(), String> {
     request_json(address, token, "POST", "/v1:shutdown", None, None).map(|_| ())
 }
 
+fn validate_pinned_files(
+    response: Value,
+    session_id: &str,
+) -> Result<crate::protocol_generated::BridgePinnedFilesResponse, String> {
+    let envelope: crate::protocol_generated::BridgePinnedFilesResponse =
+        serde_json::from_value(response).map_err(display_error)?;
+    if envelope.protocol_version != u64::from(PROTOCOL_VERSION) || envelope.session_id != session_id {
+        return Err("pinned files response does not match the active session".to_string());
+    }
+    Ok(envelope)
+}
+
 fn request_json(
     address: SocketAddr,
     token: &str,
@@ -5749,6 +5794,21 @@ fn open_session_payload(session_id: &str, request: OpenSessionRequest) -> Value 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn pinned_files_response_rejects_cross_session_and_wrong_protocol() {
+        let valid = serde_json::json!({
+            "protocolVersion":1, "sessionId":"owned",
+            "files":[{"path":"notes.txt","sizeBytes":12,"tokenEstimate":3}]
+        });
+        assert_eq!(super::validate_pinned_files(valid.clone(), "owned").unwrap().files.len(), 1);
+        assert!(super::validate_pinned_files(valid.clone(), "other").is_err());
+        let mut wrong_version = valid.clone();
+        wrong_version["protocolVersion"] = serde_json::json!(99);
+        assert!(super::validate_pinned_files(wrong_version, "owned").is_err());
+        let mut invalid_files = valid;
+        invalid_files["files"] = serde_json::Value::Null;
+        assert!(super::validate_pinned_files(invalid_files, "owned").is_err());
+    }
     #[test]
     fn remote_host_ssh_config_wire_key_matches_go_and_renderer() {
         for enabled in [false, true] {

@@ -255,6 +255,24 @@ pub struct BridgeOpenSessionRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BridgePinnedFile {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    pub path: String,
+    pub size_bytes: u64,
+    pub token_estimate: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgePinnedFilesResponse {
+    pub files: Vec<BridgePinnedFile>,
+    pub protocol_version: u64,
+    pub session_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeProjectFolder {
     pub root: String,
     #[serde(skip_serializing_if = "Option::is_none")]

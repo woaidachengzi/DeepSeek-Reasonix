@@ -7,6 +7,8 @@ import { t } from "./i18n";
 import type { CapabilityDiagnosticsReport, RuntimeDoctorReport, UsageStatsRange, UsageStatsRequest } from "./types";
 import type { FrontendDiagnosticPayload } from "./frontendDiagnostics";
 import type {
+  BridgePinnedFile,
+  BridgePinnedFilesResponse,
   BridgeAnswerQuestionRequest,
   BridgeApprovalRequest,
   BridgeAskAnswer,
@@ -1804,6 +1806,20 @@ export async function tauriWorkspaceFile(sessionId: string, path: string): Promi
   requireTauri();
   const response = await invoke<BridgeWorkspaceFileResponse>("bridge_workspace_file", { request: { sessionId, path } });
   return response.preview;
+}
+
+export type TauriPinnedFile = BridgePinnedFile;
+
+export async function tauriPinnedFiles(sessionId: string): Promise<TauriPinnedFile[]> {
+  requireTauri();
+  const response = await invoke<BridgePinnedFilesResponse>("bridge_pinned_files", { request: { sessionId } });
+  return response.files;
+}
+
+export async function tauriChangePinnedFile(sessionId: string, path: string, pin: boolean): Promise<TauriPinnedFile[]> {
+  requireTauri();
+  const response = await invoke<BridgePinnedFilesResponse>("bridge_change_pinned_file", { request: { sessionId, path }, pin });
+  return response.files;
 }
 
 export async function tauriWorkspaceImage(sessionId: string, source: string): Promise<BridgeWorkspaceImageResponse["image"]> {

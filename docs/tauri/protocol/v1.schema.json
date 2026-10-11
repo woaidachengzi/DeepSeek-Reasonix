@@ -35,6 +35,7 @@
     { "$ref": "#/$defs/workspaceFileRequest" },
     { "$ref": "#/$defs/workspaceFilePreview" },
     { "$ref": "#/$defs/workspaceFileResponse" },
+    { "$ref": "#/$defs/pinnedFilesResponse" },
     { "$ref": "#/$defs/workspaceImageRequest" },
     { "$ref": "#/$defs/workspaceImageResponse" },
     { "$ref": "#/$defs/terminalCreateRequest" },
@@ -944,6 +945,58 @@
       "properties": {
         "protocolVersion": { "$ref": "#/$defs/protocolVersion" },
         "preview": { "$ref": "#/$defs/workspaceFilePreview" }
+      },
+      "additionalProperties": false
+    },
+    "pinnedFile": {
+      "title": "BridgePinnedFile",
+      "type": "object",
+      "required": [
+        "path",
+        "sizeBytes",
+        "tokenEstimate"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tokenEstimate": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "pinnedFilesResponse": {
+      "title": "BridgePinnedFilesResponse",
+      "type": "object",
+      "required": [
+        "protocolVersion",
+        "sessionId",
+        "files"
+      ],
+      "properties": {
+        "protocolVersion": {
+          "$ref": "#/$defs/protocolVersion"
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pinnedFile"
+          }
+        }
       },
       "additionalProperties": false
     },

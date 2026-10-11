@@ -1185,6 +1185,35 @@ fn bridge_workspace_file(
 }
 
 #[tauri::command]
+async fn bridge_pinned_files(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    request: SessionRequest,
+) -> Result<protocol_generated::BridgePinnedFilesResponse, String> {
+    if window.label() != "main" {
+        return Err("pinned files require the main window".to_string());
+    }
+    tauri::async_runtime::spawn_blocking(move || app.state::<BridgeSupervisor>().pinned_files(request))
+        .await
+        .map_err(|_| "pinned file worker stopped; reopen the conversation".to_string())?
+}
+
+#[tauri::command]
+async fn bridge_change_pinned_file(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    request: WorkspaceFileRequest,
+    pin: bool,
+) -> Result<protocol_generated::BridgePinnedFilesResponse, String> {
+    if window.label() != "main" {
+        return Err("pinned files require the main window".to_string());
+    }
+    tauri::async_runtime::spawn_blocking(move || app.state::<BridgeSupervisor>().change_pinned_file(request, pin))
+        .await
+        .map_err(|_| "pinned file worker stopped; reopen the conversation".to_string())?
+}
+
+#[tauri::command]
 async fn bridge_workspace_image(
     window: tauri::WebviewWindow,
     app: tauri::AppHandle,
@@ -4620,6 +4649,8 @@ fn main() {
             discard_pasted_image,
             bridge_workspace,
             bridge_workspace_file,
+            bridge_pinned_files,
+            bridge_change_pinned_file,
             bridge_workspace_image,
             bridge_workspace_changes,
             bridge_workspace_change_detail,

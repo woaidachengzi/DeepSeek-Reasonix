@@ -174,6 +174,19 @@ export interface BridgeOpenSessionRequest {
   workspaceRoot?: string;
 }
 
+export interface BridgePinnedFile {
+  error?: string;
+  path: string;
+  sizeBytes: number;
+  tokenEstimate: number;
+}
+
+export interface BridgePinnedFilesResponse {
+  files: BridgePinnedFile[];
+  protocolVersion: number;
+  sessionId: string;
+}
+
 export interface BridgeProjectFolder {
   root: string;
   title?: string;
