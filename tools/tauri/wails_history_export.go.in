@@ -1,0 +1,78 @@
+// Built against the Wails source's own session package so its versioned codec,
+// commit validation, content references and projection rules are authoritative.
+// This helper never opens a writer or reads account credentials.
+package main
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"reasonix/internal/session"
+)
+
+type export struct {
+	Version int `json:"version"`
+	SessionID string `json:"sessionId"`
+	Header json.RawMessage `json:"header"`
+	Manifest json.RawMessage `json:"manifest"`
+	SourceSHA256 string `json:"sourceSha256"`
+	Title string `json:"title"`
+	ModelRef string `json:"modelRef"`
+	Messages json.RawMessage `json:"messages"`
+	ModelMessages json.RawMessage `json:"modelMessages"`
+	Commits int `json:"commits"`
+}
+
+func main() {
+	if err := run(); err != nil { fmt.Fprintln(os.Stderr,err); os.Exit(1) }
+}
+
+func run() error {
+	input := flag.String("input", "", "canonical v5 by-id directory from a verified offline snapshot")
+	output := flag.String("output", "", "new private export directory")
+	flag.Parse()
+	if !filepath.IsAbs(*input) || !filepath.IsAbs(*output) { return fmt.Errorf("input and output must be absolute directories") }
+	info,err := os.Lstat(*input)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 { return fmt.Errorf("input must be a plain directory") }
+	inputRoot,err := filepath.EvalSymlinks(*input); if err != nil { return err }
+	outputParent,err := filepath.EvalSymlinks(filepath.Dir(*output)); if err != nil { return err }
+	rel,err := filepath.Rel(inputRoot,filepath.Join(outputParent,filepath.Base(*output)))
+	if err != nil || rel=="." || (!filepath.IsAbs(rel) && rel!=".." && !strings.HasPrefix(rel,".."+string(filepath.Separator))) { return fmt.Errorf("output must be outside input") }
+	entries,err := os.ReadDir(*input)
+	if err != nil { return err }
+	if err := os.Mkdir(*output,0700); err != nil { return err }
+	count := 0
+	for _,entry := range entries {
+		if !entry.IsDir() || entry.Name()[0]=='.' { continue }
+		if err := session.ValidateSessionID(entry.Name()); err != nil { return fmt.Errorf("invalid source session directory %q",entry.Name()) }
+		dir := filepath.Join(*input,entry.Name())
+		header,err := os.ReadFile(filepath.Join(dir,"header.json")); if err != nil { return err }
+		manifest,err := os.ReadFile(filepath.Join(dir,"manifest.json")); if err != nil { return err }
+		var identity struct { SessionID string `json:"sessionId"` }
+		if err := json.Unmarshal(header,&identity); err != nil || identity.SessionID!=entry.Name() { return fmt.Errorf("header identity mismatch for %s",entry.Name()) }
+		commits,err := session.Replay(dir,nil)
+		if err != nil { return fmt.Errorf("validate source %s: %w",entry.Name(),err) }
+		projection,err := session.Project(commits)
+		if err != nil { return fmt.Errorf("project source %s: %w",entry.Name(),err) }
+		messages,err := json.Marshal(projection.Messages); if err != nil { return err }
+		model,err := json.Marshal(projection.ModelMessages); if err != nil { return err }
+		log,err := os.ReadFile(filepath.Join(dir,"events.frames")); if err != nil { return err }
+		digest := sha256.Sum256(log)
+		data,err := json.Marshal(export{Version:1,SessionID:entry.Name(),Header:header,Manifest:manifest,SourceSHA256:hex.EncodeToString(digest[:]),Title:projection.Title,ModelRef:projection.ModelRef,Messages:messages,ModelMessages:model,Commits:len(commits)})
+		if err != nil { return err }
+		file,err := os.OpenFile(filepath.Join(*output,entry.Name()+".json"),os.O_CREATE|os.O_EXCL|os.O_WRONLY,0600)
+		if err != nil { return err }
+		_,writeErr := file.Write(append(data,'\n'))
+		if writeErr==nil { writeErr=file.Sync() }
+		closeErr := file.Close()
+		if writeErr!=nil { return writeErr }; if closeErr!=nil { return closeErr }
+		count++
+	}
+	return json.NewEncoder(os.Stdout).Encode(map[string]any{"exported":count,"output":*output})
+}
