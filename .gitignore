@@ -87,3 +87,6 @@ site/.generated/
 
 # Native acceptance Python bytecode cache
 /tools/tauri/__pycache__/
+
+# Private pre-takeover snapshots contain local configuration and credentials.
+/desktop/takeover-backups.noindex/

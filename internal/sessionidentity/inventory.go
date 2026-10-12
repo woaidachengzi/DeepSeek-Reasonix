@@ -191,6 +191,15 @@ func Inventory(ctx context.Context, identities *Store, sessionDir, catalogPath s
 	}
 	for position, entry := range catalogEntries {
 		path, err := sessionpath.TranscriptPath(dir, entry.SessionID)
+		if identities != nil {
+			if record, exists := byID[entry.SessionID]; exists {
+				// An explicitly imported Wails identity proves its original path
+				// through a profile-relative hash; ordinary Preview IDs remain flat.
+				if bound, bindErr := sessionpath.LegacyID(identities.profileRoot, record.Path); bindErr == nil && bound == record.ID {
+					path = record.Path
+				}
+			}
+		}
 		if err != nil {
 			report.Errors = append(report.Errors, fmt.Sprintf("workbench entry %d: %v", position, err))
 			continue

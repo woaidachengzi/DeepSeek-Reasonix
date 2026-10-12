@@ -461,6 +461,9 @@ func hasBridgeSessionResidue(transcriptPath string) (bool, error) {
 // workspace is deliberately absent: it is UI metadata and never selects the
 // transcript directory.
 func bridgeSessionPath(sessionDir, sessionID string) (string, error) {
+	if sessionpath.IsLegacyID(sessionID) {
+		return registeredLegacySessionPath(sessionID)
+	}
 	return sessionpath.TranscriptPath(sessionDir, sessionID)
 }
 

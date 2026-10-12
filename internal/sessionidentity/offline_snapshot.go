@@ -38,7 +38,7 @@ type SnapshotManifest struct {
 }
 
 // CreateOfflineSnapshot copies the Preview profile, except its regenerable
-// top-level cache directory, plus its separate host-owned workbench catalog
+// top-level cache and MCP stdio runtime caches, plus its separate host catalog
 // into a new private directory outside the profile. The caller must first stop
 // all profile writers: existing binaries do not honor a common profile lock,
 // so this function intentionally does not claim that a lock taken here would
@@ -100,7 +100,7 @@ func CreateOfflineSnapshot(ctx context.Context, profileRoot, catalogPath, destin
 		if entry.Type()&os.ModeSymlink != 0 {
 			return fmt.Errorf("snapshot refuses symlink: %s", path)
 		}
-		if entry.IsDir() && filepath.Clean(rel) == regenerableProfileCacheDirectory {
+		if entry.IsDir() && regenerableSnapshotCache(rel) {
 			return filepath.SkipDir
 		}
 		dest := filepath.Join(profileCopy, rel)
@@ -161,6 +161,18 @@ func CreateOfflineSnapshot(ctx context.Context, profileRoot, catalogPath, destin
 		return snapshotDir, fmt.Errorf("verify incomplete snapshot %s: %w", snapshotDir, err)
 	}
 	return snapshotDir, nil
+}
+
+// MCP subprocesses own cache directories below mcp-state/<workspace>/<server>
+// (and the older mcp-state/<server> layout). npm installs contain symlinks and
+// are reproducible; server data/config outside these exact caches stay backed up.
+func regenerableSnapshotCache(relative string) bool {
+	clean := filepath.ToSlash(filepath.Clean(relative))
+	if clean == regenerableProfileCacheDirectory {
+		return true
+	}
+	parts := strings.Split(clean, "/")
+	return (len(parts) == 3 || len(parts) == 4) && parts[0] == "mcp-state" && parts[len(parts)-1] == "cache"
 }
 
 // VerifyOfflineSnapshot checks the manifest and every member before a recovery
