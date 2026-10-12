@@ -30,6 +30,7 @@ pub struct PreviewProfile {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviewProfileStatus {
+    pub takeover_profile: bool,
     pub preview_home: String,
     pub preview_config_exists: bool,
     pub stable_config: Option<String>,
@@ -65,6 +66,10 @@ pub struct ProjectFoldersImportResult {
 /// They cannot select the stable default tree, including through an alias.
 /// Automatic importing is unavailable for an externally selected profile.
 pub fn configure_preview_profile(app: &tauri::App) -> Result<PreviewProfile, String> {
+    if app.config().identifier == "io.reasonix.desktop.takeover" {
+        return configure_takeover_profile(app);
+    }
+    env::remove_var("REASONIX_TAURI_PROFILE_MODE");
     let stable_config = default_stable_config_path();
     let explicit_home = explicit_reasonix_home()
         .map(|home| protect_explicit_profile(&home, stable_config.as_deref()))
@@ -95,6 +100,49 @@ pub fn configure_preview_profile(app: &tauri::App) -> Result<PreviewProfile, Str
         stable_config,
         managed_profile: true,
     })
+}
+
+fn configure_takeover_profile(app: &tauri::App) -> Result<PreviewProfile, String> {
+    let stable_config = default_stable_config_path().ok_or("原配置目录无法定位；请检查用户主目录后重启。")?;
+    let home = stable_config.parent().ok_or("原配置目录无效；请检查用户主目录。")?.to_path_buf();
+    validate_takeover_receipt(&home)?;
+    let app_data = app.path().app_data_dir().map_err(|_| "安装版界面目录不可用；请检查目录权限。")?;
+    reject_known_stable_overlap(&app_data, Some(&stable_config))?;
+    prepare_application_data_directory(&app_data)?;
+    // The installation selects the original default profile explicitly. An
+    // inherited state/home override cannot substitute a different data tree.
+    env::remove_var("REASONIX_STATE_HOME");
+    env::remove_var("REASONIX_CACHE_HOME");
+    env::set_var("REASONIX_HOME", &home);
+    env::set_var("REASONIX_TAURI_PROFILE_MODE", "takeover");
+    disable_managed_event_store();
+    Ok(PreviewProfile { home, stable_config: Some(stable_config), managed_profile: false })
+}
+
+fn validate_takeover_receipt(home: &Path) -> Result<(), String> {
+    let info = fs::symlink_metadata(home).map_err(|_| "原资料目录不存在；请先运行接管准备工具。")?;
+    if !info.is_dir() || info.file_type().is_symlink() {
+        return Err("原资料目录不是普通目录；请检查目录，保留原数据后重试。".into());
+    }
+    let path = home.join("tauri-takeover-v1.json");
+    let info = fs::symlink_metadata(&path).map_err(|_| "原资料尚未完成备份和接管准备；请先运行接管准备工具。")?;
+    if !info.is_file() || info.file_type().is_symlink() || info.len() > 8 * 1024 * 1024 {
+        return Err("接管凭据无效；请从已验证备份重新检查准备结果。".into());
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Receipt { version: u64, profile_root: PathBuf, backup_snapshot: PathBuf, rows: Vec<serde_json::Value> }
+    let data = fs::read(&path).map_err(|_| "接管凭据读取失败；请检查文件权限。")?;
+    let receipt: Receipt = serde_json::from_slice(&data).map_err(|_| "接管凭据损坏；请从已验证备份恢复准备结果。")?;
+    let canonical_home = fs::canonicalize(home).map_err(|_| "原资料目录无法规范化；请检查目录权限。")?;
+    if receipt.version != 1 || receipt.rows.is_empty() || receipt.rows.len() > 10_000 ||
+        fs::canonicalize(&receipt.profile_root).ok().as_ref() != Some(&canonical_home) {
+        return Err("接管凭据与原目录不一致；请重新运行接管准备工具。".into());
+    }
+    if !receipt.backup_snapshot.join("manifest.json").is_file() {
+        return Err("接管备份不可用；请恢复备份目录后重启。".into());
+    }
+    Ok(())
 }
 
 fn prepare_managed_home(app_data: &Path) -> Result<PathBuf, String> {
@@ -166,6 +214,7 @@ impl PreviewProfile {
             .is_some_and(|path| path.is_file());
         let preview_config_exists = self.config_path().is_file();
         PreviewProfileStatus {
+            takeover_profile: !self.managed_profile && env::var("REASONIX_TAURI_PROFILE_MODE").as_deref() == Ok("takeover"),
             preview_home: self.home.display().to_string(),
             preview_config_exists,
             stable_config: self
@@ -628,6 +677,27 @@ fn restrict_config_permissions(_path: &Path) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn takeover_requires_completed_receipt_matching_original_root_and_backup() {
+        let temp = tempfile::tempdir().unwrap();
+        let home = temp.path().join("original");
+        fs::create_dir(&home).unwrap();
+        assert!(super::validate_takeover_receipt(&home).is_err());
+        let backup = temp.path().join("backup");
+        fs::create_dir(&backup).unwrap();
+        fs::write(backup.join("manifest.json"), b"{}").unwrap();
+        let receipt = home.join("tauri-takeover-v1.json");
+        let valid = serde_json::json!({"version":1,"profileRoot":home,"backupSnapshot":backup,"rows":[{"sessionId":"old"}]});
+        fs::write(&receipt, serde_json::to_vec(&valid).unwrap()).unwrap();
+        assert!(super::validate_takeover_receipt(&home).is_ok());
+        let mut wrong = valid.clone();
+        wrong["profileRoot"] = serde_json::json!(temp.path());
+        fs::write(&receipt, serde_json::to_vec(&wrong).unwrap()).unwrap();
+        assert!(super::validate_takeover_receipt(&home).is_err());
+        fs::write(&receipt, serde_json::to_vec(&valid).unwrap()).unwrap();
+        fs::remove_file(backup.join("manifest.json")).unwrap();
+        assert!(super::validate_takeover_receipt(&home).is_err());
+    }
     use super::*;
 
     #[cfg(unix)]

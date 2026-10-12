@@ -129,7 +129,15 @@ func (s *Store) SyncWorkbenchOrder(ctx context.Context, sessionDir string, entri
 		if !exists {
 			continue
 		}
-		if filepath.Clean(record.Path) != filepath.Clean(paths[entry.ID]) {
+		expectedPath := paths[entry.ID]
+		if sessionpath.IsLegacyID(record.ID) {
+			bound, bindErr := sessionpath.LegacyID(s.profileRoot, record.Path)
+			if bindErr != nil || bound != record.ID {
+				return 0, fmt.Errorf("%w: %s", ErrPathChanged, entry.ID)
+			}
+			expectedPath = record.Path
+		}
+		if filepath.Clean(record.Path) != filepath.Clean(expectedPath) {
 			return 0, fmt.Errorf("%w: %s", ErrPathChanged, entry.ID)
 		}
 		// A stale host row can outlive a deletion that was fenced or already

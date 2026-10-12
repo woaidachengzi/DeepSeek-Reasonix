@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reasonix/internal/desktopbridge/sessionpath"
 	"reflect"
 	"strings"
 	"testing"
@@ -166,5 +167,46 @@ func TestSyncWorkbenchOrderRejectsDuplicateBeforeMutation(t *testing.T) {
 	record, exists, err := store.Get(ctx, "one")
 	if err != nil || !exists || record.WorkspaceRoot != "/before" || record.Position != 0 {
 		t.Fatalf("invalid sync mutated identity: %#v exists=%v err=%v", record, exists, err)
+	}
+}
+
+func TestSyncWorkbenchOrderPreservesBoundLegacyPath(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	dir := filepath.Join(root, "sessions")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "projects", "original", "sessions", "old.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	id, err := sessionpath.LegacyID(root, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, filepath.Join(root, "desktop", "identity.sqlite"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if err := store.Import(ctx, root, []Candidate{{ID: id, Path: path}}); err != nil {
+		t.Fatal(err)
+	}
+	if count, err := store.SyncWorkbenchOrder(ctx, dir, []WorkbenchOrderEntry{{ID: id}}); err != nil || count != 1 {
+		t.Fatalf("sync %d: %v", count, err)
+	}
+	record, _, err := store.Get(ctx, id)
+	if err != nil || record.Path != path {
+		t.Fatalf("original path changed: %v", err)
+	}
+	if _, err := store.db.ExecContext(ctx, "UPDATE sessions SET relative_path=? WHERE id=?", "projects/original/sessions/other.jsonl", id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SyncWorkbenchOrder(ctx, dir, []WorkbenchOrderEntry{{ID: id}}); err == nil {
+		t.Fatal("altered legacy path was accepted")
 	}
 }

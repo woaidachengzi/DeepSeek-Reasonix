@@ -104,6 +104,7 @@ export interface TauriBridgeHistory {
 }
 
 export interface TauriPreviewProfileStatus {
+  takeoverProfile?: boolean;
   previewHome: string;
   previewConfigExists: boolean;
   stableConfig?: string;

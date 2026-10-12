@@ -49,6 +49,58 @@ fn run(app: &AppHandle, directory: &Path, phase: &str) -> Result<serde_json::Val
     if !before.running {
         return Err("profile acceptance sidecar not running".into());
     }
+    if phase == "takeover" {
+        if !profile.status().takeover_profile || profile.status().managed_profile {
+            return Err("takeover installation did not select the original profile".into());
+        }
+        let receipt: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(profile.home().join("tauri-takeover-v1.json"))
+                .map_err(|_| "read takeover acceptance receipt")?,
+        ).map_err(|_| "decode takeover acceptance receipt")?;
+        let rows = receipt["rows"].as_array().ok_or("takeover rows unavailable")?;
+        let page = crate::read_workbench_session_page(
+            &supervisor, &app.state::<crate::WorkbenchCatalog>(),
+            &app.state::<crate::SessionShadowSnapshotCache>(), Some(200), None,
+        )?;
+        if page.source == "identity_unverified" || page.total != rows.len() as u64 {
+            return Err(format!("takeover navigation source {} count {}", page.source, page.total));
+        }
+        let entries = rows.iter().map(|row| Ok(crate::bridge::SessionCatalogMetadata {
+            session_id: row["sessionId"].as_str().ok_or("takeover identity unavailable")?.into(),
+            workspace_root: row["workspaceRoot"].as_str().filter(|value| !value.is_empty()).map(str::to_owned),
+        })).collect::<Result<Vec<_>, String>>()?;
+        if supervisor.sync_session_catalog(entries)? != rows.len() {
+            return Err("takeover recent catalog did not preserve every identity".into());
+        }
+        let mut counts = Vec::new();
+        for row in rows {
+            let id = row["sessionId"].as_str().ok_or("takeover identity unavailable")?;
+            let workspace = row["workspaceRoot"].as_str().filter(|value| !value.is_empty()).map(str::to_owned);
+            let opened = supervisor.switch_session(crate::bridge::OpenSessionRequest {
+                session_id: id.into(), workspace_root: workspace,
+                model_ref: None, effort: None,
+            })?;
+            if opened.id != id { return Err("takeover opened a different identity".into()); }
+            let history = supervisor.history(crate::bridge::SessionRequest { session_id: id.into() })?;
+            counts.push(history.total_messages);
+        }
+        let initial = supervisor.status().sidecar_instance_id;
+        let restarted = supervisor.restart()?;
+        if !restarted.running || restarted.sidecar_instance_id == initial {
+            return Err("takeover restart did not replace the sidecar".into());
+        }
+        for (row, expected) in rows.iter().zip(&counts) {
+            let id = row["sessionId"].as_str().ok_or("takeover identity unavailable")?;
+            supervisor.switch_session(crate::bridge::OpenSessionRequest {
+                session_id: id.into(),
+                workspace_root: row["workspaceRoot"].as_str().filter(|value| !value.is_empty()).map(str::to_owned),
+                model_ref: None, effort: None,
+            })?;
+            let history = supervisor.history(crate::bridge::SessionRequest { session_id: id.into() })?;
+            if history.total_messages != *expected { return Err("takeover history changed after restart".into()); }
+        }
+        return Ok(serde_json::json!({"phase":phase,"ok":true,"opened":rows.len(),"historyCounts":counts,"restart":true,"navigationSource":page.source}));
+    }
     if crate::import_stable_profile(app.state(), false).is_ok()
         || crate::import_stable_project_folders(app.state(), false).is_ok()
     {

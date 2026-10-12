@@ -62,6 +62,15 @@ func (b *bridgeServer) importLegacyCatalog(w http.ResponseWriter, r *http.Reques
 			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "legacy catalog contains an invalid workspace path")
 			return
 		}
+		// Takeover identities were prepared offline against the original file.
+		// Replaying the host's recent list must not import a flat duplicate.
+		if sessionpath.IsLegacyID(entry.SessionID) {
+			if _, err := registeredLegacySessionPath(entry.SessionID); err != nil {
+				b.writeRuntimeError(w, err, "legacy identity is unavailable")
+				return
+			}
+			continue
+		}
 		path, err := sessionpath.TranscriptPath(sessionDir, entry.SessionID)
 		if err != nil {
 			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "legacy catalog contains an invalid session identifier")

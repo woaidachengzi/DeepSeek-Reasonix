@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,6 +38,12 @@ func TestTakeoverOpensOriginalProjectTranscriptWithoutRelocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	identities.Close()
+	request := httptest.NewRequest("POST", "/v1/sessions/import-catalog", strings.NewReader(`{"sessions":[{"sessionId":"`+id+`"}]}`))
+	response := httptest.NewRecorder()
+	(&bridgeServer{}).importLegacyCatalog(response, request)
+	if response.Code != 200 {
+		t.Fatalf("takeover recent import status %d", response.Code)
+	}
 	resolved, err := bridgeSessionPath(appconfig.SessionDir(), id)
 	if err != nil || resolved != path {
 		t.Fatalf("path: %s %v", resolved, err)

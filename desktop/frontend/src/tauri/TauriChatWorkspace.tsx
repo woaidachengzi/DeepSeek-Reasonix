@@ -3415,7 +3415,7 @@ export function TauriSessionPreview() {
     <main className="tauri-shell" data-platform={platform} data-desktop-layout={desktopLayout} data-sidebar-hidden={sidebarVisible ? undefined : "true"}>
       <aside className="tauri-sidebar" aria-label="会话导航">
         <div className="tauri-sidebar__drag" data-tauri-drag-region aria-hidden="true" />
-        <div className="tauri-sidebar__brand"><img src={logoWordmark} alt="Reasonix" draggable={false} /><span>PREVIEW</span></div>
+        <div className="tauri-sidebar__brand"><img src={logoWordmark} alt="Reasonix" draggable={false} /><span>{profile?.takeoverProfile ? "本地版" : "PREVIEW"}</span></div>
         <button className="tauri-sidebar__new" type="button" onClick={() => void createSession()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || switchingBlocked}>
           <Plus size={17} aria-hidden="true" /><span>新建对话</span><kbd>{newSessionShortcutLabel}</kbd>
         </button>
@@ -3590,7 +3590,7 @@ export function TauriSessionPreview() {
             {(session?.state === "running" || session?.state === "paused") && <TauriLiveProgress progress={liveProgress} paused={session.state === "paused"} />}
           </div> : <section className="tauri-welcome">
             <div className="tauri-welcome__mark"><Sparkles size={24} /></div>
-            <p className="tauri-welcome__eyebrow">REASONIX · TAURI PREVIEW</p>
+            <p className="tauri-welcome__eyebrow">{profile?.takeoverProfile ? "REASONIX · 原配置与记录" : "REASONIX · TAURI PREVIEW"}</p>
             <h1>把复杂的事，<br /><span>一步步想清楚。</span></h1>
             <p className="tauri-welcome__copy">代码、想法或待办——从一个问题开始，Reasonix 会陪你一起拆解。</p>
             <div className="tauri-starters" aria-label="开始方式">
