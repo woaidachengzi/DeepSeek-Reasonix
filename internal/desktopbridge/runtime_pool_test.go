@@ -270,3 +270,84 @@ func TestRuntimePoolShutdownClosesOtherSlotsAfterFailure(t *testing.T) {
 		t.Fatal("one failure skipped another owner's shutdown")
 	}
 }
+
+type retainedParallelRuntime struct {
+	*parallelRuntime
+	retained bool
+}
+
+func (r *retainedParallelRuntime) KeepRuntimeResident() bool { return r.retained }
+
+func TestRuntimePoolEvictsOnlyUnselectedIdleOwners(t *testing.T) {
+	runtimes := make(map[string]*parallelRuntime)
+	pool := NewRuntimePool(RuntimeFactoryFunc(func(_ context.Context, req OpenRequest) (Runtime, error) {
+		runtime := &parallelRuntime{fakeRuntime: &fakeRuntime{path: "/sessions/" + req.SessionID + ".jsonl"}}
+		runtimes[req.SessionID] = runtime
+		return runtime, nil
+	}))
+	pool.capacity = 3
+	defer pool.Shutdown()
+	for _, id := range []string{"a", "b", "c"} {
+		if _, err := pool.Open(context.Background(), OpenRequest{SessionID: id}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, _ = pool.Submit(context.Background(), "a", "run")
+	if _, err := pool.Open(context.Background(), OpenRequest{SessionID: "d"}); err != nil {
+		t.Fatal(err)
+	}
+	if runtimes["b"].shutdownCalls.Load() != 1 || runtimes["a"].shutdownCalls.Load() != 0 || runtimes["c"].shutdownCalls.Load() != 0 {
+		t.Fatal("eviction reached live or selected owner")
+	}
+	if len(pool.Snapshots()) != 3 {
+		t.Fatal("resident bound was exceeded")
+	}
+	if _, ok := pool.SessionSnapshot("b"); ok {
+		t.Fatal("retired owner is still published")
+	}
+	if _, err := pool.Switch(context.Background(), OpenRequest{SessionID: "b"}); err != nil {
+		t.Fatal("evicted history cannot reopen", err)
+	}
+	if runtimes["a"].State() != "running" {
+		t.Fatal("history reopening interrupted background turn")
+	}
+}
+
+func TestRuntimePoolCapacityPreservesActiveAndRetainedResources(t *testing.T) {
+	for _, state := range []string{"running", "paused", "retained"} {
+		t.Run(state, func(t *testing.T) {
+			a := &retainedParallelRuntime{parallelRuntime: &parallelRuntime{fakeRuntime: &fakeRuntime{path: "/sessions/a.jsonl"}}, retained: state == "retained"}
+			if state == "running" {
+				a.phase.Store(1)
+			}
+			if state == "paused" {
+				a.phase.Store(2)
+			}
+			b := &parallelRuntime{fakeRuntime: &fakeRuntime{path: "/sessions/b.jsonl"}}
+			var builds atomic.Int32
+			pool := NewRuntimePool(RuntimeFactoryFunc(func(_ context.Context, req OpenRequest) (Runtime, error) {
+				builds.Add(1)
+				if req.SessionID == "a" {
+					return a, nil
+				}
+				return b, nil
+			}))
+			pool.capacity = 2
+			defer pool.Shutdown()
+			for _, id := range []string{"a", "b"} {
+				if _, err := pool.Open(context.Background(), OpenRequest{SessionID: id}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := pool.Switch(context.Background(), OpenRequest{SessionID: "c"}); !errors.Is(err, ErrRuntimeCapacity) {
+				t.Fatal(err)
+			}
+			if builds.Load() != 2 || a.shutdownCalls.Load() != 0 {
+				t.Fatal("capacity cancelled a protected runtime")
+			}
+			if view, ok := pool.Snapshot(); !ok || view.ID != "b" {
+				t.Fatal("capacity failure changed selection")
+			}
+		})
+	}
+}

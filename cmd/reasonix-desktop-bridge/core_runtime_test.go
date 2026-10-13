@@ -56,6 +56,32 @@ func TestShouldSnapshotSubmissionFollowsControllerRouteClassification(t *testing
 	}
 }
 
+func TestControllerRuntimeResidencyProtectsNonTurnResources(t *testing.T) {
+	terminalLeaseTestProfile(t)
+	raw, err := newControllerFactory(nil).Open(context.Background(), desktopbridge.OpenRequest{SessionID: "residency", WorkspaceRoot: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := raw.(*controllerRuntime)
+	defer runtime.Shutdown()
+	if runtime.KeepRuntimeResident() {
+		t.Fatal("empty idle runtime should be evictable")
+	}
+	runtime.terminalCreating = 1
+	if !runtime.KeepRuntimeResident() {
+		t.Fatal("in-flight terminal creation was evictable")
+	}
+	runtime.terminalCreating = 0
+	runtime.oauthFlows = map[string]*mcpOAuthFlow{"pending": {view: desktopbridge.MCPAuthFlow{Status: "pending"}, cancel: func() {}}}
+	if !runtime.KeepRuntimeResident() {
+		t.Fatal("pending OAuth flow was evictable")
+	}
+	runtime.oauthFlows["pending"].view.Status = "completed"
+	if runtime.KeepRuntimeResident() {
+		t.Fatal("completed OAuth flow retained idle runtime")
+	}
+}
+
 func TestSnapshotActivityFailureKeepsPendingForThrottledRetry(t *testing.T) {
 	t.Setenv("REASONIX_HOME", t.TempDir())
 	controller, err := boot.Build(context.Background(), boot.Options{WorkspaceRoot: t.TempDir(), Sink: event.Discard})

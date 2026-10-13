@@ -1071,6 +1071,32 @@ func (r *controllerRuntime) State() string {
 	}
 }
 
+// Idle display state does not imply that the runtime's background resources
+// can be closed. Navigation eviction must retain jobs, PTYs and OAuth flows.
+func (r *controllerRuntime) KeepRuntimeResident() bool {
+	if r.controller.RuntimeStatus().BackgroundJobs != 0 {
+		return true
+	}
+	r.terminalMu.Lock()
+	retained := r.terminalCreating != 0
+	if r.terminals != nil {
+		view, err := r.terminals.Workspace()
+		retained = retained || err != nil || len(view.Sessions) != 0
+	}
+	r.terminalMu.Unlock()
+	if retained {
+		return true
+	}
+	r.oauthMu.Lock()
+	defer r.oauthMu.Unlock()
+	for _, flow := range r.oauthFlows {
+		if flow.view.Status == "pending" {
+			return true
+		}
+	}
+	return false
+}
+
 const bridgeHistoryMaxContentRunes = 16_000
 
 func bridgeHistoryMessageVisible(message provider.Message) bool {

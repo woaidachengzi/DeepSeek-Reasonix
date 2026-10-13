@@ -16,6 +16,9 @@ type RuntimePool struct {
 	navigation sync.Mutex
 	mu         sync.RWMutex
 	slots      map[string]*RuntimeManager
+	lastUsed   map[string]uint64
+	useClock   uint64
+	capacity   int
 	selected   string
 	closed     bool
 	ctx        context.Context
@@ -24,7 +27,7 @@ type RuntimePool struct {
 
 func NewRuntimePool(factory RuntimeFactory) *RuntimePool {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &RuntimePool{factory: factory, slots: make(map[string]*RuntimeManager), ctx: ctx, cancel: cancel}
+	return &RuntimePool{factory: factory, slots: make(map[string]*RuntimeManager), lastUsed: make(map[string]uint64), capacity: DefaultResidentSessions, ctx: ctx, cancel: cancel}
 }
 
 func (p *RuntimePool) slot(id string) (*RuntimeManager, error) {
@@ -51,6 +54,14 @@ func (p *RuntimePool) Open(ctx context.Context, request OpenRequest) (SessionVie
 	p.navigation.Lock()
 	defer p.navigation.Unlock()
 	if err := ctx.Err(); err != nil {
+		return SessionView{}, err
+	}
+	if admission, ok := p.factory.(RuntimeOpenAdmission); ok {
+		if err := admission.ValidateOpen(request); err != nil {
+			return SessionView{}, err
+		}
+	}
+	if err := p.makeRoom(request.SessionID); err != nil {
 		return SessionView{}, err
 	}
 	p.mu.Lock()
@@ -94,7 +105,53 @@ func (p *RuntimePool) Open(ctx context.Context, request OpenRequest) (SessionVie
 		return SessionView{}, ErrClosed
 	}
 	p.selected = request.SessionID
+	p.useClock++
+	p.lastUsed[request.SessionID] = p.useClock
 	return view, nil
+}
+
+// Called under navigation. Only unselected, atomically idle owners may retire.
+// All live owners count toward the bound; active work is never force-cancelled.
+func (p *RuntimePool) makeRoom(id string) error {
+	p.mu.RLock()
+	if p.closed {
+		p.mu.RUnlock()
+		return ErrClosed
+	}
+	if p.slots[id] != nil || len(p.slots) < p.capacity {
+		p.mu.RUnlock()
+		return nil
+	}
+	type candidate struct {
+		id   string
+		used uint64
+		slot *RuntimeManager
+	}
+	var candidates []candidate
+	for key, slot := range p.slots {
+		if key != p.selected {
+			candidates = append(candidates, candidate{key, p.lastUsed[key], slot})
+		}
+	}
+	p.mu.RUnlock()
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].used == candidates[j].used {
+			return candidates[i].id < candidates[j].id
+		}
+		return candidates[i].used < candidates[j].used
+	})
+	for _, item := range candidates {
+		retired, err := item.slot.tryRetireIdle()
+		if !retired {
+			continue
+		}
+		p.mu.Lock()
+		delete(p.slots, item.id)
+		delete(p.lastUsed, item.id)
+		p.mu.Unlock()
+		return err
+	}
+	return ErrRuntimeCapacity
 }
 
 func (p *RuntimePool) Switch(ctx context.Context, request OpenRequest) (SessionView, error) {
@@ -192,6 +249,7 @@ func (p *RuntimePool) DeleteSession(id string) error {
 	}
 	p.mu.Lock()
 	delete(p.slots, id)
+	delete(p.lastUsed, id)
 	if p.selected == id {
 		p.selected = ""
 	}
@@ -221,6 +279,7 @@ func (p *RuntimePool) ChangeArchive(id string, archived bool, commit func(bool) 
 	if archived {
 		p.mu.Lock()
 		delete(p.slots, id)
+		delete(p.lastUsed, id)
 		if p.selected == id {
 			p.selected = ""
 		}
@@ -242,6 +301,7 @@ func (p *RuntimePool) Shutdown() error {
 	p.cancel()
 	slots := p.slots
 	p.slots = nil
+	p.lastUsed = nil
 	p.selected = ""
 	p.mu.Unlock()
 	var result error
