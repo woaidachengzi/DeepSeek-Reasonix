@@ -96,6 +96,28 @@ provider_access = ["mimo-token-plan-cn"]
 	if !ok || !p.HasModel("mimo-v2.6-flash") || p.DefaultModel() != "mimo-v2.5-pro" {
 		t.Fatal("old saved preset did not expose new models")
 	}
+	workspace := t.TempDir()
+	for _, load := range []struct {
+		name string
+		run  func() (*Config, error)
+	}{
+		{"project", func() (*Config, error) { return LoadForRootReadOnly(workspace) }},
+		{"runtime", func() (*Config, error) {
+			return LoadModelRuntimeSnapshot(workspace, "mimo-token-plan-cn/mimo-v2.6-flash")
+		}},
+	} {
+		view, err := load.run()
+		if err != nil {
+			t.Fatalf("%s load: %v", load.name, err)
+		}
+		provider, ok := view.Provider("mimo-token-plan-cn")
+		if !ok || !reflect.DeepEqual(provider.ModelList(), p.ModelList()) || provider.APIKeyEnv != p.APIKeyEnv {
+			t.Fatalf("%s diverged from settings catalog", load.name)
+		}
+		if _, ok := view.ResolveModel("mimo-token-plan-cn/mimo-v2.6-flash"); !ok {
+			t.Fatalf("%s rejects a settings-listed model", load.name)
+		}
+	}
 	after, err := os.ReadFile(path)
 	if err != nil || string(after) != string(raw) {
 		t.Fatal("read-only load wrote user configuration")

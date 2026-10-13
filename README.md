@@ -19,7 +19,7 @@ There are two explicit desktop modes:
 | Mode | Version / application identity | Data behavior |
 | --- | --- | --- |
 | **Reasonix Tauri Preview** | `0.1.0` / `io.reasonix.desktop.preview` | Uses a separate managed profile for development and isolated evaluation |
-| **Reasonix Tauri** (original-profile takeover) | `0.1.2` / `io.reasonix.desktop.takeover` | Uses the original `~/.reasonix` after verified backup and offline preparation |
+| **Reasonix Tauri** (original-profile takeover) | `0.1.3` / `io.reasonix.desktop.takeover` | Uses the original `~/.reasonix` after verified backup and offline preparation |
 
 The macOS Apple Silicon takeover candidate has passed current-history and restart acceptance, and the maintainer has confirmed practical use. This is a verified migration path for the tested profile, not a claim that all historical formats, platforms, or release gates are complete.
 
@@ -81,20 +81,20 @@ Status as of 2026-10-13; Windows/Linux rows retain their 2026-10-07 evidence:
 
 | Platform | Package | Current evidence |
 | --- | --- | --- |
-| macOS Apple Silicon | `0.1.2` takeover app / DMG; isolated Preview also available | Original-history/restart and native UI acceptance passed for the tested profile; ad hoc signed, not Apple notarized; broader release gates remain open |
+| macOS Apple Silicon | `0.1.3` takeover app / DMG; isolated Preview also available | Original-history/restart and native UI acceptance passed for the tested profile; ad hoc signed, not Apple notarized; broader release gates remain open |
 | Windows x64 | NSIS installer `.exe` | Built and package contents checked; the full native manual matrix remains unrecorded |
 | Ubuntu 26.04 ARM64 | `.deb` / `.AppImage` | Native build, 224 Rust tests passed / 1 ignored, package audit completed; maintainer confirmed manual acceptance |
 | Linux x64 / other distributions | Native build support and manual x64 packaging workflow | Not validated by the Ubuntu ARM64 result |
 
 See [Windows acceptance](./docs/tauri/WINDOWS_PREVIEW_ACCEPTANCE.md), [Linux acceptance](./docs/tauri/LINUX_PREVIEW_ACCEPTANCE.md), and [Ubuntu package hashes](./docs/tauri/evidence/2026-10-07-linux-arm64/README.md).
 
-The `0.1.2` takeover candidate is a local macOS handoff; it does not establish a notarized, automatically updated stable release channel. Upstream npm packages, websites, downloads, and signing statements do not describe this fork's Tauri packages.
+The `0.1.3` takeover candidate is a local macOS handoff; it does not establish a notarized, automatically updated stable release channel. Upstream npm packages, websites, downloads, and signing statements do not describe this fork's Tauri packages.
 
 ## Install and choose a data mode
 
 Use the package handed off for your exact OS and architecture, and verify its supplied SHA256 before running it. Install/launch **Reasonix Tauri Preview**, then configure a provider and model in the application.
 
-For the macOS Apple Silicon takeover package, open `Reasonix Tauri_0.1.2_aarch64.dmg` and drag **Reasonix Tauri** into Applications. The original profile must already have a verified backup and a matching `tauri-takeover-v1.json` completion receipt; building/installing the app does not perform this preparation. Keep the referenced backup available and fully quit Wails before starting the takeover app. Preparation and rollback are described in the [takeover record](./docs/tauri/STABLE_TAKEOVER.md). The local candidate uses ad hoc signing and is not Apple notarized.
+For the macOS Apple Silicon takeover package, open `Reasonix Tauri_0.1.3_aarch64.dmg` and drag **Reasonix Tauri** into Applications. The original profile must already have a verified backup and a matching `tauri-takeover-v1.json` completion receipt; building/installing the app does not perform this preparation. Keep the referenced backup available and fully quit Wails before starting the takeover app. Preparation and rollback are described in the [takeover record](./docs/tauri/STABLE_TAKEOVER.md). The local candidate uses ad hoc signing and is not Apple notarized.
 
 For the Ubuntu ARM64 handoff, open a terminal in the package directory:
 
@@ -162,6 +162,7 @@ The inherited CLI can still be built with `make build`; legacy Wails instruction
 ## Documentation
 
 - [Tauri host, development, and profile boundaries](./desktop/tauri/README.md)
+- [MiMo model switching fix in 0.1.3](./docs/tauri/MIMO_MODEL_SWITCH_RECOVERY.md)
 - [History model recovery in 0.1.2](./docs/tauri/HISTORY_MODEL_RECOVERY.md)
 - [Original-profile takeover, acceptance, and rollback](./docs/tauri/STABLE_TAKEOVER.md)
 - [E migration scope and remaining work](./docs/tauri/E_MIGRATION_CHECKLIST.md)

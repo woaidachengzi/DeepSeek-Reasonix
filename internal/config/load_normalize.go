@@ -20,6 +20,9 @@ func normalizeLoadedConfig(cfg *Config) error {
 	normalizeLegacyProviderModels(cfg)
 	normalizeDesktopOfficialProviderAccess(cfg)
 	normalizeOfficialDeepSeekModels(cfg)
+	// Provider merging rereads raw TOML; repeat catalog repair afterwards so
+	// runtime/project views agree with the settings and probe views.
+	normalizeLegacyMimoV26Catalog(cfg)
 	migrateBillingDisplayCurrency(cfg)
 	freezeProviderBillingCurrencies(cfg)
 	applyDeepSeekOfficialDefaultPricing(cfg)

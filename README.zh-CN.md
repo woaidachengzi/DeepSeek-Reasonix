@@ -19,7 +19,7 @@
 | 方式 | 版本 / 应用标识 | 资料使用方式 |
 | --- | --- | --- |
 | **Reasonix Tauri Preview** | `0.1.0` / `io.reasonix.desktop.preview` | 使用独立托管资料目录，适合开发和隔离试用 |
-| **Reasonix Tauri 原资料接管版** | `0.1.2` / `io.reasonix.desktop.takeover` | 完成备份核验与离线准备后，直接使用原 `~/.reasonix` |
+| **Reasonix Tauri 原资料接管版** | `0.1.3` / `io.reasonix.desktop.takeover` | 完成备份核验与离线准备后，直接使用原 `~/.reasonix` |
 
 macOS Apple Silicon 接管候选包已通过当前历史及重启恢复验收，维护者已确认实际使用体验。这表示已验证的资料接管路径可用，不代表所有历史格式、平台和正式发布门禁均已完成。
 
@@ -81,20 +81,20 @@ flowchart LR
 
 | 平台 | 安装包 | 当前验证情况 |
 | --- | --- | --- |
-| macOS Apple Silicon | `0.1.2` 接管 app / DMG，另保留隔离 Preview | 当前资料的原历史／重启及原生界面验收通过；ad hoc 签名，未 Apple 公证；更广的发布门禁仍有待验项 |
+| macOS Apple Silicon | `0.1.3` 接管 app / DMG，另保留隔离 Preview | 当前资料的原历史／重启及原生界面验收通过；ad hoc 签名，未 Apple 公证；更广的发布门禁仍有待验项 |
 | Windows x64 | NSIS 安装器 `.exe` | 已完成构建和包结构检查；完整原生手动矩阵尚未逐项记录 |
 | Ubuntu 26.04 ARM64 | `.deb` / `.AppImage` | 原生构建、包审计完成，Rust 224 项通过 / 1 项忽略；维护者已确认手动验收通过 |
 | Linux x64 / 其他发行版 | 同架构构建适配及手动 x64 打包工作流 | 不能继承 Ubuntu ARM64 的通过结论 |
 
 详见 [Windows 验收](./docs/tauri/WINDOWS_PREVIEW_ACCEPTANCE.md)、[Linux 验收](./docs/tauri/LINUX_PREVIEW_ACCEPTANCE.md) 和 [Ubuntu 包摘要](./docs/tauri/evidence/2026-10-07-linux-arm64/README.md)。
 
-`0.1.2` 接管候选包为本地 macOS 交付，不代表已建立 Apple 公证或自动更新的稳定发布渠道。上游 npm 包、官网、下载页及签名声明不代表本分支的 Tauri 安装包。
+`0.1.3` 接管候选包为本地 macOS 交付，不代表已建立 Apple 公证或自动更新的稳定发布渠道。上游 npm 包、官网、下载页及签名声明不代表本分支的 Tauri 安装包。
 
 ## 安装与选择资料模式
 
 使用与你的系统、架构对应的交付包，运行前核对随包 SHA256。安装并启动 **Reasonix Tauri Preview** 后，在应用内配置模型服务即可。
 
-macOS Apple Silicon 接管包：打开 `Reasonix Tauri_0.1.2_aarch64.dmg`，将 **Reasonix Tauri** 拖入 Applications。原资料目录须事先完成完整备份核验，并具有匹配的 `tauri-takeover-v1.json` 完成凭据；单纯构建或安装不会代办接管准备。保留凭据引用的备份，使用接管版前完全退出 Wails。准备与回退见[接管记录](./docs/tauri/STABLE_TAKEOVER.md)。该本地候选包为 ad hoc 签名，尚未 Apple 公证。
+macOS Apple Silicon 接管包：打开 `Reasonix Tauri_0.1.3_aarch64.dmg`，将 **Reasonix Tauri** 拖入 Applications。原资料目录须事先完成完整备份核验，并具有匹配的 `tauri-takeover-v1.json` 完成凭据；单纯构建或安装不会代办接管准备。保留凭据引用的备份，使用接管版前完全退出 Wails。准备与回退见[接管记录](./docs/tauri/STABLE_TAKEOVER.md)。该本地候选包为 ad hoc 签名，尚未 Apple 公证。
 
 Ubuntu ARM64 交付包可在安装包目录打开终端执行：
 
@@ -162,6 +162,7 @@ Linux 产物位于 `desktop/tauri/target/<本机 Rust triple>/release/bundle/`�
 ## 文档入口
 
 - [Tauri 宿主、开发和档案边界](./desktop/tauri/README.md)
+- [0.1.3 MiMo 模型切换修复](./docs/tauri/MIMO_MODEL_SWITCH_RECOVERY.md)
 - [0.1.2 历史模型恢复修复](./docs/tauri/HISTORY_MODEL_RECOVERY.md)
 - [原资料接管、验收与回退](./docs/tauri/STABLE_TAKEOVER.md)
 - [E 迁移范围与未完成项](./docs/tauri/E_MIGRATION_CHECKLIST.md)
