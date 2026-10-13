@@ -14,6 +14,7 @@ import {
   tauriSafeMCPURL,
 } from "../lib/tauriBridge";
 
+// Unavailable models expose only a status-bound public marker, never provider details.
 let passed = 0;
 let failed = 0;
 
@@ -26,6 +27,9 @@ function eq(a: unknown, b: unknown, label: string) {
     failed += 1;
   }
 }
+
+eq(tauriMessageFrom(new Error("desktop bridge request failed with status 400 (model_unavailable)")),
+  "该会话的模型已不可用；请在模型设置中选择可用的默认模型后重试。", "unavailable history model gives recovery instructions");
 
 function ok(condition: unknown, label: string) {
   if (condition) {

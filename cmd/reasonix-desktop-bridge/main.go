@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"reasonix/internal/boot"
 	appconfig "reasonix/internal/config"
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/mcpregistry"
@@ -2173,6 +2174,9 @@ func (b *bridgeServer) writeRuntimeError(w http.ResponseWriter, err error, messa
 	case errors.Is(err, desktopbridge.ErrTerminalUnavailable):
 		status, code = http.StatusServiceUnavailable, "terminal_unavailable"
 		message = "terminal ownership could not be transferred; reopen the active session and check workspace access"
+	case errors.Is(err, boot.ErrUnknownModel):
+		status, code = http.StatusBadRequest, "model_unavailable"
+		message = "session model is unavailable; select an available model in settings and retry"
 	case errors.Is(err, desktopbridge.ErrSessionModelRecover):
 		status, code = http.StatusInternalServerError, "session_model_recovery_failed"
 	case errors.Is(err, desktopbridge.ErrSessionModelSwitch):

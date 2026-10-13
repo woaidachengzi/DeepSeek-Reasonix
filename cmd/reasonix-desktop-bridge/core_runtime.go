@@ -95,18 +95,37 @@ func (f *controllerFactory) options(request desktopbridge.OpenRequest) (boot.Opt
 	if request.Effort != nil {
 		opts.EffortOverride = request.Effort
 	}
-	if opts.EffortOverride != nil || opts.Model != "" {
-		cfg, err := appconfig.LoadForRoot(opts.WorkspaceRoot)
+	{
+		cfg, err := appconfig.LoadModelRuntimeSnapshot(opts.WorkspaceRoot, opts.Model)
 		if err != nil {
 			return boot.Options{}, nil, err
 		}
-		ref := opts.Model
-		if ref == "" {
-			ref = cfg.DefaultModel
+		// Desktop startup uses the same access-aware fallback as Wails. The
+		// CLI intentionally preserves an unknown default for its setup error;
+		// that policy must not prevent opening saved desktop conversations.
+		appconfig.NormalizeLegacyMimoCustomProvidersForRefs(cfg, cfg.DefaultModel, opts.Model)
+		// A removed saved reasoning model is also an implicit restore, not
+		// a new user selection. Do not carry its effort into the replacement.
+		if opts.Model != "" && strings.TrimSpace(request.ModelRef) == "" {
+			entry, available := cfg.ResolveModel(opts.Model)
+			if !available || !providerAccessAllowed(cfg.Desktop.ProviderAccess, entry.Name) {
+				opts.Model = ""
+				if request.Effort == nil {
+					opts.EffortOverride = nil
+				}
+			}
 		}
+		if opts.Model == "" {
+			ref, _, available := cfg.ResolveDesktopNewSessionModel()
+			if !available {
+				return boot.Options{}, nil, boot.ErrUnknownModel
+			}
+			opts.Model = ref
+		}
+		ref := opts.Model
 		entry, ok := cfg.ResolveModel(ref)
 		if !ok || !providerAccessAllowed(cfg.Desktop.ProviderAccess, entry.Name) {
-			return boot.Options{}, nil, fmt.Errorf("model unavailable")
+			return boot.Options{}, nil, boot.ErrUnknownModel
 		}
 		if opts.EffortOverride != nil {
 			level := *opts.EffortOverride

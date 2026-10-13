@@ -2,9 +2,11 @@
 
 ## 当前状态（2026-10-13）
 
-macOS Apple Silicon `Reasonix Tauri` 0.1.1 接管候选包已完成当前资料的原历史、最近目录、重启恢复及原生界面验收；维护者确认实际使用可用。默认构建仍为隔离 Preview 0.1.0，接管版使用独立配置 `tauri.takeover.conf.json`，须先核验备份并完成原目录准备，不能仅将 `REASONIX_HOME` 指向旧资料代替接管。
+0.1.2 接入桌面默认模型恢复，避免失效默认／保存模型阻止历史打开；明确指定模型保持严格校验。修复边界及实际验收见[历史模型恢复](../../docs/tauri/HISTORY_MODEL_RECOVERY.md)。
 
-当前概览、Tauri 选型理由、会话身份／历史／模型上下文架构见[主 README](../../README.zh-CN.md)；准备、验收范围与回退见[原资料接管记录](../../docs/tauri/STABLE_TAKEOVER.md)。下方各阶段证据保留其原日期、候选与范围，不能将早期失败或单项成功直接当作当前安装包的整体结论。0.1.1 本地包为 ad hoc 签名，未 Apple 公证；Windows／Linux 的接管路径尚未按此包验收。
+macOS Apple Silicon `Reasonix Tauri` 0.1.2 接管候选包已完成当前资料的原历史、最近目录、重启恢复及原生界面验收；维护者确认实际使用可用。默认构建仍为隔离 Preview 0.1.0，接管版使用独立配置 `tauri.takeover.conf.json`，须先核验备份并完成原目录准备，不能仅将 `REASONIX_HOME` 指向旧资料代替接管。
+
+当前概览、Tauri 选型理由、会话身份／历史／模型上下文架构见[主 README](../../README.zh-CN.md)；准备、验收范围与回退见[原资料接管记录](../../docs/tauri/STABLE_TAKEOVER.md)。下方各阶段证据保留其原日期、候选与范围，不能将早期失败或单项成功直接当作当前安装包的整体结论。0.1.2 本地包为 ad hoc 签名，未 Apple 公证；Windows／Linux 的接管路径尚未按此包验收。
 
 当前46包补验：[实际诊断保存/覆盖取消/取消后重试](../../docs/tauri/evidence/2026-10-04-d-current-save-recovery/README.md)。一份explicit左屏档案保存JSON0600、原文件保护、5事件重试与普通Quit清理通过；[正确基线对应](../../docs/tauri/evidence/2026-10-04-d-diagnostics-baseline-correction/README.md)确认Wails同入口也是JSON、记录器字节一致。独立滚动ZIP接口、默认目录及其他保存入口/错误场景仍待核对。
 

@@ -5239,7 +5239,7 @@ fn parse_json_response(response: &[u8]) -> Result<Value, String> {
                             | "workspace_file_ambiguous"
                             | "terminal_busy",
                     ),
-                ) | (400, Some("terminal_invalid_request"))
+                ) | (400, Some("terminal_invalid_request" | "model_unavailable"))
                     | (404, Some("workspace_file_not_found" | "terminal_not_found"))
                     | (422, Some("workspace_file_unavailable"))
                     | (503, Some("terminal_unavailable"))
@@ -6939,6 +6939,13 @@ mod tests {
         let parsed = parse_json_response(response).expect("JSON surrounded by diagnostics");
         assert_eq!(parsed["protocolVersion"], 1);
         assert_eq!(parsed["message"], "brace } in string");
+    }
+
+    #[test]
+    fn response_parser_preserves_model_unavailable_without_private_details() {
+        let response = b"HTTP/1.1 400 Error\r\n\r\n{\"error\":{\"code\":\"model_unavailable\",\"message\":\"private-provider-and-key\"}}";
+        assert_eq!(parse_json_response(response).unwrap_err(),
+            "desktop bridge request failed with status 400 (model_unavailable)");
     }
 
     #[test]
