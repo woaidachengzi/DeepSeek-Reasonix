@@ -273,7 +273,11 @@
 .tauri-session-row:hover .tauri-sidebar__session, .tauri-session-row:focus-within .tauri-sidebar__session { padding-right: 34px; }
 .tauri-session-row:focus-within .tauri-session-row__delete, .tauri-session-row:focus-within .tauri-session-row__archive { opacity: 1; }
 .tauri-session-row:hover .tauri-session-row__delete, .tauri-session-row__delete:focus-visible, .tauri-session-row:hover .tauri-session-row__archive, .tauri-session-row__archive:focus-visible { border-color: var(--border-soft); background: var(--surface); color: var(--fg) !important; opacity: 1; }
-.tauri-session-row__delete:disabled, .tauri-session-row__archive:disabled { opacity: .25; }
+.tauri-session-row .tauri-session-row__delete:disabled, .tauri-session-row .tauri-session-row__archive:disabled { opacity: 0; }
+.tauri-session-row:hover .tauri-session-row__delete:disabled,
+.tauri-session-row:hover .tauri-session-row__archive:disabled,
+.tauri-session-row:focus-within .tauri-session-row__delete:disabled,
+.tauri-session-row:focus-within .tauri-session-row__archive:disabled { opacity: .25; }
 
 .tauri-session-delete {
   display: grid;

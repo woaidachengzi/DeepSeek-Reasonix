@@ -16,6 +16,7 @@ class NativeTaskProvider(AbstractContextManager):
         self.closed = threading.Event()
         self.completed = threading.Event()
         self.requests = 0
+        self.closed_requests = set()
         self.error = None
         self.lock = threading.Lock()
         self.host_death = host_death
@@ -68,6 +69,8 @@ class NativeTaskProvider(AbstractContextManager):
                         while not fixture.stop.is_set() and time.monotonic() < deadline:
                             readable, _, _ = select.select([self.connection], [], [], 0.1)
                             if readable and self.connection.recv(1) == b"":
+                                with fixture.lock:
+                                    fixture.closed_requests.add(number)
                                 fixture.closed.set()
                                 return
                         if not fixture.stop.is_set():
@@ -123,6 +126,17 @@ class NativeTaskProvider(AbstractContextManager):
     def verify_host_death(self):
         if self.error or self.requests != 1 or self.completed.is_set() or not self.closed.wait(timeout=3):
             raise RuntimeError("host death did not disconnect the actual active provider stream")
+
+    def verify_parallel_quit(self):
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            with self.lock:
+                if self.error:
+                    raise RuntimeError("parallel native fixture failed")
+                if self.requests == 2 and self.closed_requests == {1, 2}:
+                    return
+            time.sleep(0.05)
+        raise RuntimeError("parallel native quit did not disconnect both provider requests")
 
     def __exit__(self, *_):
         self.stop.set()

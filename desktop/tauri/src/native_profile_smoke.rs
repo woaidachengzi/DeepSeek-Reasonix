@@ -49,6 +49,9 @@ fn run(app: &AppHandle, directory: &Path, phase: &str) -> Result<serde_json::Val
     if !before.running {
         return Err("profile acceptance sidecar not running".into());
     }
+    if phase == "parallel" {
+        return run_parallel(&supervisor, &profile, directory);
+    }
     if phase == "takeover" {
         if !profile.status().takeover_profile || profile.status().managed_profile {
             return Err("takeover installation did not select the original profile".into());
@@ -173,6 +176,142 @@ fn run(app: &AppHandle, directory: &Path, phase: &str) -> Result<serde_json::Val
         serde_json::json!({"phase": phase, "ok": true, "backup": backup,
         "initialInstance": before.sidecar_instance_id, "finalInstance": supervisor.status().sidecar_instance_id}),
     )
+}
+
+// Uses the production supervisor and core; no UI scripting or real model API.
+// The runner owns an explicit private profile and a bounded loopback fixture.
+fn run_parallel(
+    supervisor: &BridgeSupervisor,
+    profile: &PreviewProfile,
+    directory: &Path,
+) -> Result<serde_json::Value, String> {
+    let home = profile
+        .home()
+        .canonicalize()
+        .map_err(|_| "parallel fixture profile unavailable")?;
+    let control = directory
+        .canonicalize()
+        .map_err(|_| "parallel fixture controls unavailable")?;
+    if profile.status().takeover_profile
+        || !home.starts_with("/private/tmp")
+        || !control.starts_with("/private/tmp")
+    {
+        return Err("parallel acceptance requires a private Preview fixture".into());
+    }
+    let config = std::fs::read_to_string(home.join("config.toml"))
+        .map_err(|_| "parallel fixture config unavailable")?;
+    let fixture: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(home.join("parallel-fixture.json"))
+            .map_err(|_| "parallel fixture declaration unavailable")?,
+    )
+    .map_err(|_| "invalid parallel fixture declaration")?;
+    let port = fixture["port"]
+        .as_u64()
+        .filter(|port| *port > 0 && *port <= 65535)
+        .ok_or("invalid parallel fixture port")?;
+    if !parallel_fixture_config(&config, port) {
+        return Err("parallel acceptance requires the local fixture provider".into());
+    }
+    let workspace = home.join("parallel-workspace");
+    std::fs::create_dir_all(&workspace).map_err(|_| "prepare parallel workspace")?;
+    let open = |id: &str| {
+        supervisor.switch_session(crate::bridge::OpenSessionRequest {
+            session_id: id.into(),
+            workspace_root: Some(workspace.to_string_lossy().into_owned()),
+            model_ref: None,
+            effort: None,
+        })
+    };
+    let wait = |id: &str, streaming: bool| -> Result<crate::bridge::BridgeSnapshot, String> {
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while Instant::now() < deadline {
+            let snapshot = supervisor.snapshot(crate::bridge::SessionRequest {
+                session_id: id.into(),
+            })?;
+            let ready = if streaming {
+                snapshot.session.state == "running"
+                    && snapshot.live_state.as_ref().is_some_and(|live| {
+                        live.active
+                            && live
+                                .answer
+                                .segments
+                                .iter()
+                                .any(|text| text.contains("native-before-close"))
+                    })
+            } else {
+                snapshot.session.state == "idle"
+            };
+            if ready {
+                return Ok(snapshot);
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        Err("parallel fixture state timed out".into())
+    };
+    open("native-parallel-a")?;
+    supervisor.submit(crate::bridge::SubmitRequest {
+        session_id: "native-parallel-a".into(),
+        input: "private fixture task A".into(),
+    })?;
+    wait("native-parallel-a", true)?;
+    open("native-parallel-b")?;
+    supervisor.submit(crate::bridge::SubmitRequest {
+        session_id: "native-parallel-b".into(),
+        input: "private fixture task B".into(),
+    })?;
+    wait("native-parallel-b", true)?;
+    let inventory = supervisor.live_sessions()?;
+    if inventory.sessions.len() != 2
+        || inventory
+            .sessions
+            .iter()
+            .any(|session| session.state != "running")
+    {
+        return Err("packaged supervisor did not preserve two running sessions".into());
+    }
+    // A's snapshot remains readable while the selected owner is B.
+    wait("native-parallel-a", true)?;
+    supervisor.cancel(crate::bridge::SessionRequest {
+        session_id: "native-parallel-a".into(),
+    })?;
+    wait("native-parallel-a", false)?;
+    wait("native-parallel-b", true)?;
+    let inventory = supervisor.live_sessions()?;
+    if inventory.selected_session_id != "native-parallel-b" {
+        return Err("background cancellation changed selection".into());
+    }
+    std::fs::write(
+        directory.join("reasonix-native-parallel-cancelled-a.json"),
+        b"{}",
+    )
+    .map_err(|_| "publish parallel cancel marker")?;
+    Ok(
+        serde_json::json!({"phase":"parallel","ok":true,"runningOwners":2,"backgroundSnapshot":true,"independentCancel":true,"quitWithBackgroundTask":true}),
+    )
+}
+
+fn parallel_fixture_config(config: &str, port: u64) -> bool {
+    let expected = format!("default_model = \"local/alpha\"\n\n[desktop]\nprovider_access = [\"local\"]\n\n[[providers]]\nname = \"local\"\nkind = \"openai\"\nbase_url = \"http://127.0.0.1:{port}/v1\"\nmodels = [\"alpha\"]\ndefault = \"alpha\"\n");
+    config.trim() == expected.trim()
+}
+
+#[cfg(test)]
+mod parallel_tests {
+    use super::parallel_fixture_config;
+    #[test]
+    fn parallel_fixture_refuses_remote_provider_and_credentials() {
+        let config = "default_model = \"local/alpha\"\n\n[desktop]\nprovider_access = [\"local\"]\n\n[[providers]]\nname = \"local\"\nkind = \"openai\"\nbase_url = \"http://127.0.0.1:1234/v1\"\nmodels = [\"alpha\"]\ndefault = \"alpha\"\n";
+        assert!(parallel_fixture_config(config, 1234));
+        assert!(!parallel_fixture_config(
+            &config.replace("127.0.0.1", "remote.example"),
+            1234
+        ));
+        assert!(!parallel_fixture_config(
+            &format!("{config}api_key_env = \"REAL_KEY\"\n"),
+            1234
+        ));
+        assert!(!parallel_fixture_config(config, 4321));
+    }
 }
 
 pub fn start_if_requested(app: &AppHandle) {

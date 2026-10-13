@@ -61,7 +61,8 @@
     "check:app-layers": "node scripts/check-app-entry-contract.mjs && node scripts/check-app-layers.test.mjs && node scripts/check-app-layers.mjs",
     "test:tauri-provider-connect": "node --import tsx src/__tests__/tauri-provider-connect.test.tsx",
     "test:tauri-composer-controls": "node --import tsx src/__tests__/tauri-composer-controls.test.tsx && node --import tsx src/__tests__/tauri-composer-effort.test.tsx",
-    "test:tauri-parallel-sessions": "node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-parallel-sessions.test.tsx"
+    "test:tauri-parallel-sessions": "node --import ./scripts/svg-stub-register.mjs --import ./scripts/css-stub-register.mjs --import ./scripts/tauri-bridge-stub-register.mjs --import tsx src/__tests__/tauri-parallel-sessions.test.tsx",
+    "test:tauri-parallel-browser": "node bench/tauri-parallel-sessions.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "1.7.5",

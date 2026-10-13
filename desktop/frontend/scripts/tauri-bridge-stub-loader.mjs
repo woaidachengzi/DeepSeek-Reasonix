@@ -511,6 +511,7 @@ export function tauriBridgeHistory(sessionId) {
 
 export function submitTauriBridge(sessionId, input) {
   record("bridge_submit", { sessionId, input });
+  if (globalThis.__parallelSessionStates) globalThis.__parallelSessionStates[sessionId] = "running";
   const result = { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "running" };
   return globalThis.__submitGate ? globalThis.__submitGate.then(() => result) : Promise.resolve(result);
 }
