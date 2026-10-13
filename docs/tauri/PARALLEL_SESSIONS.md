@@ -76,4 +76,4 @@
 
 实际 Go 控制器覆盖交错回答及持久历史；完整 Go race、Rust 320 项（6 项原有忽略）、Tauri 前端回归和 transcript 回归通过。真实 Chrome 渲染检查深浅主题及侧栏操作，无 overflow／console／框架错误。原生验收仅使用隔离的 Preview 和私有 loopback 假服务；未操作真实 API Key 或原资料。
 
-准备交付 macOS ARM64 原资料接管候选 App／DMG 0.1.4。已安装版本仍是 0.1.3，原资料及备份保留。锁屏期间无法人工点击新版接管 App；原资料的新版原生 UI 验收未完成，不能沿用旧版结果宣称通过。
+已生成 macOS ARM64 原资料接管候选 App／DMG 0.1.4，源码提交 `b07d8fe7f`。App 及只读挂载 DMG 内签名验证通过，host／sidecar 二进制一致，SHA256 已生成；[验收摘要](./evidence/2026-10-14-parallel-macos/README.md)随源码保存。已安装版本仍是 0.1.3，原资料及备份保留。锁屏期间无法人工点击新版接管 App；原资料的新版原生 UI 验收未完成，不能沿用旧版结果宣称通过。

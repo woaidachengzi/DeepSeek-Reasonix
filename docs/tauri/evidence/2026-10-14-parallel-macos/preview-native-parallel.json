@@ -1,0 +1,12 @@
+{
+  "backgroundSnapshot": true,
+  "independentCancel": true,
+  "ok": true,
+  "phase": "parallel",
+  "quitWithBackgroundTask": true,
+  "runningOwners": 2,
+  "scopedSettingsApply": true,
+  "providerRequests": 2,
+  "bothProvidersDisconnectedOnExit": true,
+  "sidecarCleanedOnExit": true
+}
