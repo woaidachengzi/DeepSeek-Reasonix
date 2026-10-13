@@ -76,4 +76,4 @@
 
 实际 Go 控制器覆盖交错回答及持久历史；完整 Go race、Rust 320 项（6 项原有忽略）、Tauri 前端回归和 transcript 回归通过。真实 Chrome 渲染检查深浅主题及侧栏操作，无 overflow／console／框架错误。原生验收仅使用隔离的 Preview 和私有 loopback 假服务；未操作真实 API Key 或原资料。
 
-已生成 macOS ARM64 原资料接管候选 App／DMG 0.1.4，源码提交 `b07d8fe7f`。App 及只读挂载 DMG 内签名验证通过，host／sidecar 二进制一致，SHA256 已生成；[验收摘要](./evidence/2026-10-14-parallel-macos/README.md)随源码保存。已安装版本仍是 0.1.3，原资料及备份保留。锁屏期间无法人工点击新版接管 App；原资料的新版原生 UI 验收未完成，不能沿用旧版结果宣称通过。
+已生成 macOS ARM64 原资料接管候选 App／DMG 0.1.4，源码提交 `b07d8fe7f`。App 及只读挂载 DMG 内签名验证通过，host／sidecar 二进制一致，SHA256 已生成；[验收摘要](./evidence/2026-10-14-parallel-macos/README.md)随源码保存。已安装版本仍是 0.1.3，原资料及备份保留。解锁后补充原生点击验收：0.1.4 接管候选包打开此前报错的原历史及另一历史，草稿隔离与恢复通过，测试草稿已清除；没有向模型发送原历史。私有 Preview 中通过原生 UI 创建 A／B、同时执行、来回切换、停止 A，以及在 B 继续运行时应用 A 的 Hooks 设置；正常退出后两个请求断开。验收细节见 `native-ui-acceptance.json`。

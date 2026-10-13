@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-14",
+  "takeoverVersion": "0.1.4",
+  "takeoverBuildCommit": "b07d8fe7f",
+  "originalHistoryOpen": true,
+  "originalHistoryNavigation": true,
+  "originalDraftIsolatedAndRestored": true,
+  "testDraftRemoved": true,
+  "privatePreviewNativeClicks": {
+    "twoSimultaneousRunningBadges": true,
+    "newSessionWhileRunning": true,
+    "navigateWhileBothRunning": true,
+    "liveAnswerRestored": true,
+    "stopOnlyA": true,
+    "applyHooksToIdleAWhileBRunning": true,
+    "bRequestStayedConnected": true,
+    "providerRequests": 2,
+    "bothRequestsDisconnectedOnNormalQuit": true
+  },
+  "limitations": [
+    "Original-profile tests read histories and exercised local drafts; they did not send original history to a model provider.",
+    "Parallel provider requests used a new private loopback fixture.",
+    "Installed Applications copy remains 0.1.3; the tested takeover candidate was launched directly from the build bundle."
+  ]
+}

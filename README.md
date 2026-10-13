@@ -82,7 +82,7 @@ Status as of 2026-10-14; Windows/Linux rows retain their 2026-10-07 evidence:
 
 | Platform | Package | Current evidence |
 | --- | --- | --- |
-| macOS Apple Silicon | `0.1.4` takeover app / DMG; isolated Preview also available | Parallel execution verified with actual Go controllers, headless React UI and a packaged Preview supervisor using private fixtures; takeover UI acceptance with original data remains pending; ad hoc signed, not Apple notarized |
+| macOS Apple Silicon | `0.1.4` takeover app / DMG; isolated Preview also available | Parallel execution verified with actual Go controllers, headless React UI and a packaged Preview supervisor using private fixtures; original-history navigation and draft isolation passed in the takeover native UI; parallel clicks passed with private Preview fixtures; ad hoc signed, not Apple notarized |
 | Windows x64 | NSIS installer `.exe` | Built and package contents checked; the full native manual matrix remains unrecorded |
 | Ubuntu 26.04 ARM64 | `.deb` / `.AppImage` | Native build, 224 Rust tests passed / 1 ignored, package audit completed; maintainer confirmed manual acceptance |
 | Linux x64 / other distributions | Native build support and manual x64 packaging workflow | Not validated by the Ubuntu ARM64 result |

@@ -82,7 +82,7 @@ flowchart LR
 
 | 平台 | 安装包 | 当前验证情况 |
 | --- | --- | --- |
-| macOS Apple Silicon | `0.1.4` 接管 app / DMG，另保留隔离 Preview | 实际 Go 控制器、headless React 界面与私有夹具 Preview 原生宿主通过并行验收；新版接管包使用原数据的人工界面验收待完成；ad hoc 签名，未 Apple 公证 |
+| macOS Apple Silicon | `0.1.4` 接管 app / DMG，另保留隔离 Preview | 实际 Go 控制器、headless React 界面与私有夹具 Preview 原生宿主通过并行验收；新版接管包原历史导航／草稿隔离，以及私有 Preview 原生并行点击验收通过；ad hoc 签名，未 Apple 公证 |
 | Windows x64 | NSIS 安装器 `.exe` | 已完成构建和包结构检查；完整原生手动矩阵尚未逐项记录 |
 | Ubuntu 26.04 ARM64 | `.deb` / `.AppImage` | 原生构建、包审计完成，Rust 224 项通过 / 1 项忽略；维护者已确认手动验收通过 |
 | Linux x64 / 其他发行版 | 同架构构建适配及手动 x64 打包工作流 | 不能继承 Ubuntu ARM64 的通过结论 |
