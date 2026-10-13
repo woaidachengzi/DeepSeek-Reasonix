@@ -2683,6 +2683,17 @@ impl BridgeSupervisor {
         )?)
     }
 
+    pub fn apply_session_settings(&self, request: SessionRequest) -> Result<BridgeSession, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let request_id = opaque_secret()?;
+        let path = format!("/v1/sessions/{session_id}:apply-settings");
+        let response = self.request_session("POST", &path, Some(json!({})), Some(&request_id))?;
+        if response.session.id != session_id {
+            return Err("invalid session settings owner".into());
+        }
+        Ok(response.session)
+    }
+
     pub fn session_balance(
         &self,
         request: SessionRequest,
@@ -5256,7 +5267,8 @@ fn parse_json_response(response: &[u8]) -> Result<Value, String> {
                             | "session_deleted"
                             | "resync_required"
                             | "workspace_file_ambiguous"
-                            | "terminal_busy",
+                            | "terminal_busy"
+                            | "settings_apply_failed",
                     ),
                 ) | (400, Some("terminal_invalid_request" | "model_unavailable"))
                     | (404, Some("workspace_file_not_found" | "terminal_not_found"))

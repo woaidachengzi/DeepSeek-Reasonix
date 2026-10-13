@@ -1062,10 +1062,10 @@ func (r *controllerRuntime) State() string {
 	status := r.controller.RuntimeStatus()
 	status = r.snapshotIfSettled(status)
 	switch {
-	case status.Running:
-		return "running"
 	case status.PendingPrompt:
 		return "paused"
+	case status.Running:
+		return "running"
 	default:
 		return "idle"
 	}

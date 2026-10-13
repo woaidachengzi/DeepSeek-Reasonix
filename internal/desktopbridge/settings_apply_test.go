@@ -151,3 +151,18 @@ func TestSettingsSubmitSerializesConcurrentShutdown(t *testing.T) {
 		t.Fatal("runtime remained after shutdown")
 	}
 }
+
+func TestExplicitSettingsApplyReloadsUnchangedFingerprint(t *testing.T) {
+	next := &settingsTestRuntime{fakeRuntime: &fakeRuntime{path: "/sessions/a.jsonl", state: "idle"}, applied: "same", desired: "same"}
+	manager, factory := settingsManager(t, func(context.Context, Runtime, OpenRequest) (SettingsRuntime, error) { return next, nil })
+	factory.initial.applied, factory.initial.desired = "same", "same"
+	factory.initial.state = "running"
+	if _, err := manager.ApplySettings(context.Background(), "a"); !errors.Is(err, ErrSessionConflict) || factory.calls != 0 {
+		t.Fatal("busy owner admitted settings reload", err)
+	}
+	factory.initial.state = "idle"
+	view, err := manager.ApplySettings(context.Background(), "a")
+	if err != nil || view.ID != "a" || factory.calls != 1 || factory.initial.releases != 1 {
+		t.Fatal("explicit reload was skipped", view, err)
+	}
+}

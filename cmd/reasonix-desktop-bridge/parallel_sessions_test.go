@@ -165,6 +165,9 @@ func TestParallelActualControllersPromptsBindingsAndPersistence(t *testing.T) {
 	go ask("a", callA, answersA)
 	go ask("b", callB, answersB)
 	pendingA, pendingB := awaitParallelState(t, pool, "a", true), awaitParallelState(t, pool, "b", true)
+	if pendingA.Session.State != "paused" || pendingB.Session.State != "paused" {
+		t.Fatal("pending questions must expose paused owners")
+	}
 	prompts := newPreviewDesktopPrompts(pool)
 	defer prompts.Close()
 	ticketB, _, err := prompts.Issue(ctx, route, "owner", pendingB.Scope, pendingB.State.Pending[0])
@@ -199,6 +202,13 @@ func TestParallelActualControllersPromptsBindingsAndPersistence(t *testing.T) {
 	}
 	if callB.ctx.Err() != nil {
 		t.Fatal("A cancel reached B provider")
+	}
+	awaitParallelState(t, pool, "a", false)
+	if _, err := pool.ApplySettings(ctx, "a"); err != nil {
+		t.Fatal(err)
+	}
+	if current, ok := pool.CommandSessionSnapshot("b"); !ok || current.Scope != pendingB.Scope || callB.ctx.Err() != nil {
+		t.Fatal("settings apply changed background owner")
 	}
 	if _, err := pool.AnswerQuestion("b", pendingB.State.Pending[0].ID, []desktopbridge.AskAnswer{{QuestionID: "q", Selected: []string{"B"}}}); err != nil {
 		t.Fatal(err)

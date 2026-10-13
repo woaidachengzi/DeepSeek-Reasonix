@@ -640,6 +640,14 @@ fn bridge_session_approval_mode(
 }
 
 #[tauri::command]
+fn bridge_apply_session_settings(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: SessionRequest,
+) -> Result<BridgeSession, String> {
+    supervisor.apply_session_settings(request)
+}
+
+#[tauri::command]
 fn bridge_set_session_model(
     supervisor: State<'_, BridgeSupervisor>,
     session_id: String,
@@ -4618,6 +4626,7 @@ fn main() {
             bridge_open_session,
             bridge_switch_session,
             bridge_set_session_model,
+            bridge_apply_session_settings,
             bridge_terminal_workspace,
             bridge_terminal_create,
             bridge_terminal_output,

@@ -63,6 +63,24 @@ func (m *RuntimeManager) RebuildSettings(ctx context.Context, sessionID string) 
 }
 
 func (m *RuntimeManager) rebuildSettingsLocked(ctx context.Context, sessionID string) error {
+	return m.applySettingsLocked(ctx, sessionID, false)
+}
+
+// ApplySettings explicitly reloads all runtime configuration for this idle
+// owner, including settings outside the model fingerprint. Other slots keep
+// their current controllers, tasks and captured prompt epochs.
+func (m *RuntimeManager) ApplySettings(ctx context.Context, sessionID string) (SessionView, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err := m.applySettingsLocked(ctx, strings.TrimSpace(sessionID), true); err != nil {
+		return SessionView{}, err
+	}
+	view := m.view
+	view.State = m.runtime.State()
+	return view, nil
+}
+
+func (m *RuntimeManager) applySettingsLocked(ctx context.Context, sessionID string, force bool) error {
 	if m.closed {
 		return ErrClosed
 	}
@@ -80,11 +98,18 @@ func (m *RuntimeManager) rebuildSettingsLocked(ctx context.Context, sessionID st
 	if err != nil {
 		return fmt.Errorf("%w: read saved settings: %v", ErrSessionSettingsApply, err)
 	}
-	if !stale {
+	if !stale && !force {
 		return nil
 	}
 	if state != "idle" {
 		return fmt.Errorf("%w: active session %q is %s", ErrSessionConflict, sessionID, state)
+	}
+	if force {
+		if readiness, ok := m.runtime.(RuntimeArchiveReadiness); ok {
+			if err := readiness.CheckArchiveIdle(); err != nil {
+				return err
+			}
+		}
 	}
 	previous, ok := m.runtime.(SettingsRuntime)
 	factory, supported := m.factory.(RuntimeSettingsFactory)
@@ -117,6 +142,7 @@ func (m *RuntimeManager) rebuildSettingsLocked(ctx context.Context, sessionID st
 	if err := m.transferTerminalsLocked(previous, next); err != nil {
 		return errors.Join(err, next.ReleaseForReplacement())
 	}
+	m.retireLocalReclaimLocked()
 	m.ownerEpoch++
 	commitReplacement(next)
 	m.runtime, m.view = next, view

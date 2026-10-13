@@ -171,6 +171,7 @@ import {
   replayTauriPendingPrompts,
   setTauriDefaultModel,
   setTauriBridgeSessionModel,
+  applyTauriSessionSettings,
   startTauriBridgeEvents,
   submitTauriBridge,
   switchTauriBridgeSession,
@@ -3184,6 +3185,31 @@ export function TauriSessionPreview() {
     }
   }
 
+  async function applyCurrentSessionSettings(): Promise<boolean> {
+    if (busy || !session || session.state !== "idle" || attachments.length > 0) return false;
+    setBusy(true);
+    setError("");
+    try {
+      const updated = await applyTauriSessionSettings(session.id);
+      turnEpochRef.current += 1;
+      setSession(updated);
+      setSessionMetrics(null);
+      setEvents([]);
+      setHistory(null);
+      setPendingPrompt(null);
+      setPromptSelections({});
+      clearLiveResponse();
+      setSequence(0);
+      setStreamRevision(previous => previous + 1);
+      return true;
+    } catch (cause) {
+      setError(tauriMessageFrom(cause));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function restartBridge(): Promise<boolean> {
     if (busy) return false;
     setBusy(true);
@@ -3931,7 +3957,7 @@ export function TauriSessionPreview() {
           {switchingBlocked && <p role="status">恢复对话不会中断后台任务。</p>}
         </section>
       </div>}
-      {settingsOpen && <TauriSettings key={settingsTab} initialTab={settingsTab} workspaceRoot={currentWorkspace || undefined} defaultWorkspace={defaultWorkspace} onChooseDefaultWorkspace={chooseDefaultWorkspace} onClearDefaultWorkspace={clearDefaultWorkspace} profile={profile} importBusy={busy} bridgeStatus={status} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={error} onRestartBridge={restartBridge} onRefreshCatalogAudit={() => refreshCatalogAudit()} onRefreshProfile={refreshProfile} onImportStableProfile={importStableProfile} onImportStableProjectFolders={importStableProjectFolders} onScanUnclaimedSessions={() => void openScanImportReview()} onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionId={session?.id} currentSessionState={session?.state} currentSessionModelRef={session?.modelRef} onCurrentSessionModelChange={changeCurrentSessionModel} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} onUseSubagentInChat={insertSubagentInvocation} />}
+      {settingsOpen && <TauriSettings key={settingsTab} initialTab={settingsTab} workspaceRoot={currentWorkspace || undefined} defaultWorkspace={defaultWorkspace} onChooseDefaultWorkspace={chooseDefaultWorkspace} onClearDefaultWorkspace={clearDefaultWorkspace} profile={profile} importBusy={busy} bridgeStatus={status} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={error} onRestartBridge={restartBridge} onRefreshCatalogAudit={() => refreshCatalogAudit()} onRefreshProfile={refreshProfile} onImportStableProfile={importStableProfile} onImportStableProjectFolders={importStableProjectFolders} onScanUnclaimedSessions={() => void openScanImportReview()} onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionId={session?.id} currentSessionState={session?.state} currentSessionModelRef={session?.modelRef} onCurrentSessionModelChange={changeCurrentSessionModel} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={applyCurrentSessionSettings} onUseSubagentInChat={insertSubagentInvocation} />}
     </main>
     </SourceReferenceContext.Provider>
   );

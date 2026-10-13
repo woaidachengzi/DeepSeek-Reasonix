@@ -414,6 +414,14 @@ func (p *RuntimePool) RebuildSettings(ctx context.Context, sessionID string) (Se
 	return slot.RebuildSettings(ctx, sessionID)
 }
 
+func (p *RuntimePool) ApplySettings(ctx context.Context, sessionID string) (SessionView, error) {
+	slot, err := p.slot(sessionID)
+	if err != nil {
+		return SessionView{}, err
+	}
+	return slot.ApplySettings(ctx, sessionID)
+}
+
 func (p *RuntimePool) TerminalWorkspace(sessionID string) (TerminalWorkspaceView, error) {
 	slot, err := p.slot(sessionID)
 	if err != nil {

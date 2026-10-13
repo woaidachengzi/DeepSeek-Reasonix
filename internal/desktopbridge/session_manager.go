@@ -67,6 +67,7 @@ type SessionManager interface {
 	SessionHeads(sessionID string) ([]SessionHeadView, error)
 	SwitchSessionHead(sessionID, headID string) error
 	RebuildSettings(ctx context.Context, sessionID string) (SessionView, error)
+	ApplySettings(ctx context.Context, sessionID string) (SessionView, error)
 	TerminalWorkspace(sessionID string) (TerminalWorkspaceView, error)
 	CreateTerminal(ctx context.Context, sessionID, path, shellID string) (TerminalSessionView, error)
 	TerminalOutput(sessionID, terminalID string) (TerminalOutputView, error)

@@ -259,6 +259,9 @@ fn run_parallel(
         session_id: "native-parallel-b".into(),
         input: "private fixture task B".into(),
     })?;
+    supervisor.apply_session_settings(crate::bridge::SessionRequest {
+        session_id: "native-parallel-a".into(),
+    })?;
     wait("native-parallel-b", true)?;
     let inventory = supervisor.live_sessions()?;
     if inventory.sessions.len() != 2
@@ -275,6 +278,9 @@ fn run_parallel(
         session_id: "native-parallel-a".into(),
     })?;
     wait("native-parallel-a", false)?;
+    supervisor.apply_session_settings(crate::bridge::SessionRequest {
+        session_id: "native-parallel-a".into(),
+    })?;
     wait("native-parallel-b", true)?;
     let inventory = supervisor.live_sessions()?;
     if inventory.selected_session_id != "native-parallel-b" {
@@ -286,7 +292,7 @@ fn run_parallel(
     )
     .map_err(|_| "publish parallel cancel marker")?;
     Ok(
-        serde_json::json!({"phase":"parallel","ok":true,"runningOwners":2,"backgroundSnapshot":true,"independentCancel":true,"quitWithBackgroundTask":true}),
+        serde_json::json!({"phase":"parallel","ok":true,"runningOwners":2,"backgroundSnapshot":true,"independentCancel":true,"scopedSettingsApply":true,"quitWithBackgroundTask":true}),
     )
 }
 

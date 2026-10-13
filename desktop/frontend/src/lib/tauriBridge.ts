@@ -1745,6 +1745,11 @@ export async function switchTauriBridgeSession(sessionId: string, workspaceRoot?
   return invoke<TauriBridgeSession>("bridge_switch_session", { request: { sessionId, workspaceRoot, ...selection } });
 }
 
+export async function applyTauriSessionSettings(sessionId: string): Promise<TauriBridgeSession> {
+  requireTauri();
+  return invoke<TauriBridgeSession>("bridge_apply_session_settings", { request: { sessionId } });
+}
+
 export async function setTauriBridgeSessionModel(sessionId: string, model: string, effort?: string): Promise<TauriBridgeSession> {
   requireTauri();
   return invoke<TauriBridgeSession>("bridge_set_session_model", { sessionId, request: { model, ...(effort ? { effort } : {}) } });
@@ -2156,6 +2161,7 @@ export function tauriMessageFrom(error: unknown): string {
   if (message === "desktop bridge request failed with status 400 (model_unavailable)") {
     return "该会话的模型已不可用；请在模型设置中选择可用的默认模型后重试。";
   }
+  if (message === "desktop bridge request failed with status 409 (settings_apply_failed)") return "当前会话设置应用失败；请检查配置后重试。";
   if (message === "desktop bridge request failed with status 429 (runtime_capacity)") return "同时驻留的会话已达上限；请等待任务完成或关闭后台终端后重试。";
   const workspaceErrors: Record<string, Parameters<typeof t>[0]> = {
     "desktop bridge request failed with status 404 (workspace_file_not_found)": "workspace.referenceNotFound",

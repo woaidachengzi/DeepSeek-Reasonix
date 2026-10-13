@@ -235,6 +235,10 @@ export function changeTauriMemorySettings(change) { record("change_memory_settin
 export function tauriMemorySuggestions(workspaceRoot) { record("memory_suggestions", { workspaceRoot }); return Promise.resolve({ memories: [], skills: [], generatedAt: "2026-09-28T00:00:00Z", available: true, source: "local-history" }); }
 export function acceptTauriMemorySuggestion(workspaceRoot, kind, id) { record("accept_memory_suggestion", { request: { workspaceRoot, kind, id } }); return Promise.resolve({ path: "/preview/memory/suggestion.md", suggestions: { memories: [], skills: [], generatedAt: "2026-09-28T00:00:00Z", available: true, source: "local-history" } }); }
 export function setTauriDefaultModel() { return Promise.resolve({ protocolVersion: 1, providers: [] }); }
+export function applyTauriSessionSettings(sessionId) {
+  record("bridge_apply_session_settings", { sessionId });
+  return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle" });
+}
 export function setTauriBridgeSessionModel(sessionId, model) {
   record("bridge_set_session_model", { sessionId, model });
   return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", modelRef: model, state: "idle" });

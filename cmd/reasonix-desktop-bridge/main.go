@@ -767,6 +767,9 @@ func (b *bridgeServer) sessionCommand(w http.ResponseWriter, r *http.Request) {
 	const prefix = "/v1/sessions/"
 	path := strings.TrimPrefix(r.URL.Path, prefix)
 	switch {
+	case strings.HasSuffix(path, ":apply-settings"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":apply-settings"))
+		b.idempotent(1024, b.applySessionSettings)(w, r)
 	case strings.HasSuffix(path, ":pin-file"), strings.HasSuffix(path, ":unpin-file"):
 		suffix := ":unpin-file"
 		if strings.HasSuffix(path, ":pin-file") {
@@ -1823,6 +1826,19 @@ func (b *bridgeServer) setSessionModel(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		b.writeRuntimeError(w, err, "unable to change the active session model")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})
+}
+
+func (b *bridgeServer) applySessionSettings(w http.ResponseWriter, r *http.Request) {
+	view, err := b.runtimes.ApplySettings(r.Context(), r.PathValue("id"))
+	if err != nil {
+		if errors.Is(err, desktopbridge.ErrSessionSettingsApply) {
+			writeProtocolError(w, http.StatusConflict, "settings_apply_failed", "saved session settings could not be applied; check configuration and retry")
+			return
+		}
+		b.writeRuntimeError(w, err, "unable to apply settings to this session")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})
