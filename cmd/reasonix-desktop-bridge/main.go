@@ -71,7 +71,7 @@ type bridgeServer struct {
 	instanceID              string
 	shutdownRequested       chan struct{}
 	shutdownOnce            sync.Once
-	runtimes                *desktopbridge.RuntimeManager
+	runtimes                desktopbridge.SessionManager
 	events                  *desktopbridge.EventStream
 	requestIDs              *idempotencyLedger
 	remoteSessions          *previewRemoteSessions
@@ -263,7 +263,7 @@ func runWithContext(ctx context.Context, cfg config, token string) (runErr error
 	defer ownedEvents.Close()
 	factory := newControllerFactory(events)
 	factory.ownedEvents = ownedEvents
-	manager := desktopbridge.NewRuntimeManager(factory)
+	manager := desktopbridge.NewRuntimePool(factory)
 	defer func() {
 		if err := manager.Shutdown(); err != nil {
 			runErr = errors.Join(runErr, fmt.Errorf("close session runtime: %w", err))
@@ -344,15 +344,15 @@ func requireLoopbackAddress(address string) error {
 	return nil
 }
 
-func newBridgeServer(token, instanceID string, managers ...*desktopbridge.RuntimeManager) *bridgeServer {
-	manager := desktopbridge.NewRuntimeManager(nil)
+func newBridgeServer(token, instanceID string, managers ...desktopbridge.SessionManager) *bridgeServer {
+	var manager desktopbridge.SessionManager = desktopbridge.NewRuntimePool(nil)
 	if len(managers) > 0 && managers[0] != nil {
 		manager = managers[0]
 	}
 	return newBridgeServerWithEvents(token, instanceID, manager, desktopbridge.NewEventStream(1024))
 }
 
-func newBridgeServerWithEvents(token, instanceID string, manager *desktopbridge.RuntimeManager, events *desktopbridge.EventStream) *bridgeServer {
+func newBridgeServerWithEvents(token, instanceID string, manager desktopbridge.SessionManager, events *desktopbridge.EventStream) *bridgeServer {
 	return &bridgeServer{
 		token:             token,
 		instanceID:        instanceID,
@@ -658,6 +658,7 @@ func (b *bridgeServer) handler() http.Handler {
 	mux.HandleFunc("GET /v1/settings/wails-env-credential", b.authorized(b.wailsEnvCredential))
 	mux.HandleFunc("POST /v1/sessions:open", b.authorized(b.idempotent(64<<10, b.openSession)))
 	mux.HandleFunc("POST /v1/sessions:switch", b.authorized(b.idempotent(64<<10, b.switchSession)))
+	mux.HandleFunc("GET /v1/sessions:live", b.authorized(b.liveSessions))
 	mux.HandleFunc("POST /v1/sessions:previews", b.authorized(b.sessionPreviews))
 	mux.HandleFunc("POST /v1/sessions/sync-catalog", b.authorized(b.syncSessionCatalog))
 	mux.HandleFunc("POST /v1/sessions/titles/first-message", b.authorized(b.backfillSessionTitles))
@@ -888,7 +889,7 @@ func (b *bridgeServer) health(w http.ResponseWriter, _ *http.Request) {
 		ProtocolVersion:   desktopbridge.ProtocolVersion,
 		Status:            "ok",
 		SidecarInstanceID: b.instanceID,
-		Capabilities:      []string{"health", "provider_summary", "provider_configs", "save_provider_config", "delete_provider_config", "discover_provider_models", "preview_provider_reasoning", "provider_model_probe", "usage_stats", "storage_settings", "permission_settings", "set_permission_settings", "secrets_settings", "set_secrets_settings", "sandbox_settings", "set_sandbox_settings", "network_settings", "set_network_settings", "skills_settings", "set_skills_settings", "plan_skill_install", "install_skill", "archive_skill", "restore_skill", "plugin_settings", "set_plugin_settings", "plugin_doctor", "plan_plugin_install", "install_plugin", "remove_plugin", "subagent_settings", "set_subagent_settings", "try_subagent", "subagent_try_status", "cancel_subagent_try", "hooks_settings", "set_hooks_settings", "memory_settings", "set_memory_settings", "memory_suggestions", "accept_memory_suggestion", "set_default_model", "set_session_model", "session_approval_mode", "set_session_approval_mode", "set_model_role", "set_agent_preferences", "desktop_preferences", "set_desktop_external_opener", "set_desktop_approval", "set_provider_key", "save_provider_api_key", "bot_settings", "set_bot_settings", "bot_runtime_status", "restart_bot_runtime", "bot_connection_crud", "bot_pairing", "change_bot_pairing", "remote_ssh_probe", "remote_ssh_connect", "remote_ssh_disconnect", "remote_workspace_browse", "remote_file_preview", "remote_file_save", "remote_path_mutation", "remote_forwards", "remote_serve", "remote_controller", "open_session", "switch_session", "session_snapshot", "session_balance", "session_history", "rename_session", "fork_session", "delete_session", "session_archives", "change_session_archive", "attach_file", "workspace_target", "pinned_files", "change_pinned_file", "workspace_list", "workspace_file_preview", "workspace_image", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "mcp_server_activation", "mcp_runtime_action", "mcp_marketplace", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "session_scan_import_review_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
+		Capabilities:      []string{"health", "provider_summary", "provider_configs", "save_provider_config", "delete_provider_config", "discover_provider_models", "preview_provider_reasoning", "provider_model_probe", "usage_stats", "storage_settings", "permission_settings", "set_permission_settings", "secrets_settings", "set_secrets_settings", "sandbox_settings", "set_sandbox_settings", "network_settings", "set_network_settings", "skills_settings", "set_skills_settings", "plan_skill_install", "install_skill", "archive_skill", "restore_skill", "plugin_settings", "set_plugin_settings", "plugin_doctor", "plan_plugin_install", "install_plugin", "remove_plugin", "subagent_settings", "set_subagent_settings", "try_subagent", "subagent_try_status", "cancel_subagent_try", "hooks_settings", "set_hooks_settings", "memory_settings", "set_memory_settings", "memory_suggestions", "accept_memory_suggestion", "set_default_model", "set_session_model", "session_approval_mode", "set_session_approval_mode", "set_model_role", "set_agent_preferences", "desktop_preferences", "set_desktop_external_opener", "set_desktop_approval", "set_provider_key", "save_provider_api_key", "bot_settings", "set_bot_settings", "bot_runtime_status", "restart_bot_runtime", "bot_connection_crud", "bot_pairing", "change_bot_pairing", "remote_ssh_probe", "remote_ssh_connect", "remote_ssh_disconnect", "remote_workspace_browse", "remote_file_preview", "remote_file_save", "remote_path_mutation", "remote_forwards", "remote_serve", "remote_controller", "open_session", "switch_session", "parallel_sessions", "session_snapshot", "session_balance", "session_history", "rename_session", "fork_session", "delete_session", "session_archives", "change_session_archive", "attach_file", "workspace_target", "pinned_files", "change_pinned_file", "workspace_list", "workspace_file_preview", "workspace_image", "workspace_changes", "workspace_change_detail", "submit", "cancel", "approve", "answer_question", "answer_mcp_interaction", "mcp_servers", "mcp_server_activation", "mcp_runtime_action", "mcp_marketplace", "session_catalog_sync", "session_directory_snapshot_v1", "session_directory_snapshot_full_v1", "session_shadow_snapshot_v1", "session_shadow_audit_snapshot_v1", "session_delete_recovery_list_v1", "session_title_intent_v1", "session_title_recovery_list_v1", "session_scan_import_review_v1", "project_folders_read", "replay_pending_prompts", "idempotency", "shutdown"},
 	}
 	view.Capabilities = append(view.Capabilities, "remote_controller_sessions_v1")
 	view.Capabilities = append(view.Capabilities, "remote_controller_view_v1")
@@ -1651,8 +1652,8 @@ func (b *bridgeServer) switchSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (b *bridgeServer) sessionSnapshot(w http.ResponseWriter, r *http.Request) {
-	view, ok := b.runtimes.Snapshot()
-	if !ok || view.ID != r.PathValue("id") {
+	view, ok := b.runtimes.SessionSnapshot(r.PathValue("id"))
+	if !ok {
 		writeProtocolError(w, http.StatusNotFound, "not_found", "desktop bridge session not found")
 		return
 	}
@@ -1664,6 +1665,17 @@ func (b *bridgeServer) sessionSnapshot(w http.ResponseWriter, r *http.Request) {
 		response["metrics"] = metrics
 	}
 	writeJSON(w, http.StatusOK, response)
+}
+
+// Lists only published live owners, never restores saved history or switches
+// selection. This snapshot is the authority for background activity badges.
+func (b *bridgeServer) liveSessions(w http.ResponseWriter, r *http.Request) {
+	views := b.runtimes.Snapshots()
+	if views == nil {
+		views = []desktopbridge.SessionView{}
+	}
+	selected, _ := b.runtimes.Snapshot()
+	writeJSON(w, http.StatusOK, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "sessions": views, "selectedSessionId": selected.ID})
 }
 
 func (b *bridgeServer) sessionBalance(w http.ResponseWriter, r *http.Request) {
@@ -1781,8 +1793,8 @@ func (b *bridgeServer) setSessionModel(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid session model request")
 		return
 	}
-	active, ok := b.runtimes.Snapshot()
-	if !ok || active.ID != r.PathValue("id") {
+	active, ok := b.runtimes.SessionSnapshot(r.PathValue("id"))
+	if !ok {
 		writeProtocolError(w, http.StatusNotFound, "not_found", "desktop bridge session not found")
 		return
 	}
@@ -2148,6 +2160,9 @@ func (b *bridgeServer) replayPendingPrompts(w http.ResponseWriter, r *http.Reque
 func (b *bridgeServer) writeRuntimeError(w http.ResponseWriter, err error, message string) {
 	status, code := http.StatusInternalServerError, "internal"
 	switch {
+	case errors.Is(err, desktopbridge.ErrRuntimeCapacity):
+		status, code = http.StatusTooManyRequests, "runtime_capacity"
+		message = "live session capacity reached; finish a task or close its background resources before opening another session"
 	case errors.Is(err, desktopbridge.ErrWorkspaceFileNotFound):
 		status, code = http.StatusNotFound, "workspace_file_not_found"
 	case errors.Is(err, desktopbridge.ErrWorkspaceFileAmbiguous):

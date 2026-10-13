@@ -39,7 +39,7 @@ func (e previewDesktopCatalogueEntry) key() previewDesktopCatalogueKey {
 }
 
 type previewDesktopCatalogue struct {
-	manager *desktopbridge.RuntimeManager
+	manager desktopbridge.SessionManager
 	remotes *previewRemoteSessions
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -49,7 +49,7 @@ type previewDesktopCatalogue struct {
 	entries map[string]previewDesktopCatalogueEntry
 }
 
-func newPreviewDesktopCatalogue(manager *desktopbridge.RuntimeManager, remotes *previewRemoteSessions) *previewDesktopCatalogue {
+func newPreviewDesktopCatalogue(manager desktopbridge.SessionManager, remotes *previewRemoteSessions) *previewDesktopCatalogue {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &previewDesktopCatalogue{manager: manager, remotes: remotes, ctx: ctx, cancel: cancel, refresh: make(chan struct{}, 1), entries: make(map[string]previewDesktopCatalogueEntry)}
 }
@@ -62,8 +62,8 @@ func (c *previewDesktopCatalogue) Close() {
 	clear(c.entries)
 }
 
-// Refresh includes every presently published local owner (the current manager
-// has one) and every attached remote Serve, including its detached controllers.
+// Refresh includes every presently published local owner and every attached
+// remote Serve, including its detached controllers.
 // Saved/external history is never a live owner. Reads never attach/resume/open,
 // start Serve, resolve prompts, switch foreground or touch a local model.
 // Any incomplete/failed read retires the whole catalogue; no silent partial list.
@@ -90,12 +90,16 @@ func (c *previewDesktopCatalogue) Refresh(ctx context.Context) (result []preview
 	if bounded.Err() != nil || c.ctx.Err() != nil {
 		return nil, errPreviewDesktopBinding
 	}
-	var localScope desktopbridge.OwnedCommandScope
+	var localScopes []desktopbridge.OwnedCommandScope
 	if c.manager != nil {
-		if view, ok := c.manager.CommandSnapshot(); ok {
-			localScope = view.Scope
-			result = append(result, previewDesktopCatalogueEntry{local: &view, running: view.State.Running, pending: view.State.PendingPrompt})
+		selected, _ := c.manager.Snapshot()
+		for _, view := range c.manager.CommandSnapshots() {
+			localScopes = append(localScopes, view.Scope)
+			result = append(result, previewDesktopCatalogueEntry{local: &view, running: view.State.Running, pending: view.State.PendingPrompt, detached: view.Session.ID != selected.ID})
 		}
+	}
+	if len(result) > previewDesktopCatalogueLimit {
+		return nil, errPreviewDesktopBinding
 	}
 	connections := c.remoteConnections()
 	inspected := len(result)
@@ -128,14 +132,17 @@ func (c *previewDesktopCatalogue) Refresh(ctx context.Context) (result []preview
 		}
 	}
 	if c.manager != nil {
-		view, ok := c.manager.CommandSnapshot()
-		if ok != (localScope.SessionID != "") || ok && view.Scope != localScope {
+		views := c.manager.CommandSnapshots()
+		if len(views) != len(localScopes) {
 			return nil, errPreviewDesktopBinding
 		}
-		if ok {
-			result[0].local = &view
-			result[0].running = view.State.Running
-			result[0].pending = view.State.PendingPrompt
+		for i, view := range views {
+			if view.Scope != localScopes[i] {
+				return nil, errPreviewDesktopBinding
+			}
+			result[i].local = &view
+			result[i].running = view.State.Running
+			result[i].pending = view.State.PendingPrompt
 		}
 	}
 	c.mu.Lock()

@@ -79,6 +79,7 @@ type SessionManager interface {
 	SessionSnapshot(sessionID string) (SessionView, bool)
 	Snapshots() []SessionView
 	CommandSnapshots() []OwnedCommandView
+	CommandSessionSnapshot(sessionID string) (OwnedCommandView, bool)
 }
 
 var _ SessionManager = (*RuntimeManager)(nil)

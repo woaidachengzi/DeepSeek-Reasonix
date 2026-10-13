@@ -27,7 +27,7 @@ func (c *previewDesktopCatalogue) ReadPending(ctx context.Context, entry preview
 		if c.manager == nil {
 			return result, errPreviewDesktopBinding
 		}
-		view, ok := c.manager.CommandSnapshot()
+		view, ok := c.manager.CommandSessionSnapshot(entry.local.Scope.SessionID)
 		if !ok || view.Scope != entry.local.Scope {
 			return result, errPreviewDesktopBinding
 		}
@@ -44,7 +44,7 @@ func (c *previewDesktopCatalogue) ReadPending(ctx context.Context, entry preview
 			}
 			result.Prompts = append(result.Prompts, remotecontroller.SessionPendingPrompt{Scope: remotecontroller.SessionPromptScope{SessionPath: scope.SessionPath, RuntimeEpoch: scope.RuntimeEpoch, TurnID: prompt.TurnID, PromptID: prompt.ID, PromptRuntimeEpoch: prompt.RuntimeEpoch, Kind: prompt.Kind}, Ask: wire.Ask, Approval: wire.Approval, MCPInteraction: wire.MCPInteraction})
 		}
-		after, ok := c.manager.CommandSnapshot()
+		after, ok := c.manager.CommandSessionSnapshot(view.Scope.SessionID)
 		if !ok || after.Scope != view.Scope || after.State.Revision != view.State.Revision || view.State.PendingPrompt != (len(result.Prompts) != 0) || !remotecontroller.ValidSessionPendingView(result, scope) {
 			return remotecontroller.SessionPendingView{}, errPreviewDesktopBinding
 		}

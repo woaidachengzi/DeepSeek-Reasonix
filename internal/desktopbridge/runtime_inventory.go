@@ -19,3 +19,8 @@ func (m *RuntimeManager) CommandSnapshots() []OwnedCommandView {
 	}
 	return nil
 }
+
+func (m *RuntimeManager) CommandSessionSnapshot(sessionID string) (OwnedCommandView, bool) {
+	view, ok := m.CommandSnapshot()
+	return view, ok && view.Scope.SessionID == sessionID
+}

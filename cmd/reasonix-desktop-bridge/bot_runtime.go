@@ -29,7 +29,7 @@ type previewBotRuntime struct {
 	closed         bool
 	parent         context.Context
 	pending        int
-	desktopManager *desktopbridge.RuntimeManager
+	desktopManager desktopbridge.SessionManager
 	desktopRemotes *previewRemoteSessions
 	desktopStream  *desktopbridge.OwnedEventStream
 	watch          *previewDesktopWatchStore
@@ -38,7 +38,7 @@ type previewBotRuntime struct {
 }
 
 // Configure once before refresh; callers supply actual sidecar-owned resources.
-func (r *previewBotRuntime) configureDesktop(manager *desktopbridge.RuntimeManager, remotes *previewRemoteSessions, stream *desktopbridge.OwnedEventStream) {
+func (r *previewBotRuntime) configureDesktop(manager desktopbridge.SessionManager, remotes *previewRemoteSessions, stream *desktopbridge.OwnedEventStream) {
 	r.lifecycleMu.Lock()
 	defer r.lifecycleMu.Unlock()
 	if r.closed || r.desktopStream != nil {

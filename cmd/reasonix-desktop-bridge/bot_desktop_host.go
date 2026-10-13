@@ -32,7 +32,7 @@ type previewDesktopHost struct {
 var _ bot.DesktopBridge = (*previewDesktopHost)(nil)
 var _ bot.DesktopScopedBridge = (*previewDesktopHost)(nil)
 
-func newPreviewDesktopHost(ctx context.Context, manager *desktopbridge.RuntimeManager, remotes *previewRemoteSessions, stream *desktopbridge.OwnedEventStream, store *previewDesktopWatchStore) (*previewDesktopHost, error) {
+func newPreviewDesktopHost(ctx context.Context, manager desktopbridge.SessionManager, remotes *previewRemoteSessions, stream *desktopbridge.OwnedEventStream, store *previewDesktopWatchStore) (*previewDesktopHost, error) {
 	if ctx == nil || ctx.Err() != nil || stream == nil || store == nil || manager == nil && remotes == nil {
 		return nil, errPreviewDesktopBinding
 	}

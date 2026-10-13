@@ -33,13 +33,13 @@ type previewDesktopPromptTicket struct {
 // core IDs. A delayed IM reply never re-finds a new prompt by the old ID.
 // They remain private until the full host performs audience/permission checks.
 type previewDesktopPrompts struct {
-	manager *desktopbridge.RuntimeManager
+	manager desktopbridge.SessionManager
 	mu      sync.Mutex
 	tickets map[string]previewDesktopPromptTicket
 	closed  bool
 }
 
-func newPreviewDesktopPrompts(manager *desktopbridge.RuntimeManager) *previewDesktopPrompts {
+func newPreviewDesktopPrompts(manager desktopbridge.SessionManager) *previewDesktopPrompts {
 	return &previewDesktopPrompts{manager: manager, tickets: make(map[string]previewDesktopPromptTicket)}
 }
 
@@ -48,8 +48,8 @@ func (p *previewDesktopPrompts) pruneLocked() {
 		clear(p.tickets)
 		return
 	}
-	view, ok := p.manager.CommandSnapshot()
 	for id, ticket := range p.tickets {
+		view, ok := p.manager.CommandSessionSnapshot(ticket.scope.SessionID)
 		present := false
 		if ok && ticket.scope == view.Scope {
 			for _, prompt := range view.State.Pending {

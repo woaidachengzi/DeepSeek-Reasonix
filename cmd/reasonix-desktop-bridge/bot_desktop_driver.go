@@ -20,13 +20,13 @@ type previewDesktopBinding struct {
 	localVersion uint64
 }
 
-// previewDesktopDriver owns only the manager's current local Controller.
-// It is a component of the future full host, not an all-session DesktopBridge.
+// previewDesktopDriver binds exact local controllers. Navigation does not
+// revoke an otherwise valid captured owner.
 // It never opens/restores sessions or adopts remote/Wails owners. Holding mu
 // across bounded manager admission serializes release/rebind with dispatch;
 // no external network send or manager callback is permitted inside this lock.
 type previewDesktopDriver struct {
-	manager        *desktopbridge.RuntimeManager
+	manager        desktopbridge.SessionManager
 	mu             sync.Mutex
 	bindings       map[string]previewDesktopBinding
 	closed         bool
@@ -35,7 +35,7 @@ type previewDesktopDriver struct {
 	reclaimWorkers map[*previewLocalReclaimWorker]struct{}
 }
 
-func newPreviewDesktopDriver(manager *desktopbridge.RuntimeManager) *previewDesktopDriver {
+func newPreviewDesktopDriver(manager desktopbridge.SessionManager) *previewDesktopDriver {
 	return &previewDesktopDriver{manager: manager, bindings: make(map[string]previewDesktopBinding)}
 }
 
@@ -46,7 +46,8 @@ func (d *previewDesktopDriver) pruneLocked() (desktopbridge.OwnedCommandView, bo
 	}
 	view, ok := d.manager.CommandSnapshot()
 	for key, binding := range d.bindings {
-		if !ok || binding.scope != view.Scope || binding.localVersion != view.LocalInputVersion {
+		owner, present := d.manager.CommandSessionSnapshot(binding.scope.SessionID)
+		if !present || binding.scope != owner.Scope || binding.localVersion != owner.LocalInputVersion {
 			delete(d.bindings, key)
 		}
 	}
@@ -76,6 +77,11 @@ func (d *previewDesktopDriver) executeCaptured(ctx context.Context, command bot.
 		return "", errPreviewDesktopBinding
 	}
 	key := command.Route.Key()
+	if command.Action == "takeover" && d.manager != nil {
+		view, current = d.manager.CommandSessionSnapshot(command.TargetID)
+	} else if binding, exists := d.bindings[key]; exists {
+		view, current = d.manager.CommandSessionSnapshot(binding.scope.SessionID)
+	}
 	switch command.Action {
 	case "takeover":
 		if !current || view.Scope.SessionID != command.TargetID || expected != nil && (expected.Scope != view.Scope || expected.LocalInputVersion != view.LocalInputVersion) {

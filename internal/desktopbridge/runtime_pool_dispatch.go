@@ -5,6 +5,13 @@ import (
 	"encoding/json"
 )
 
+func (p *RuntimePool) CommandSessionSnapshot(sessionID string) (OwnedCommandView, bool) {
+	if slot, err := p.slot(sessionID); err == nil {
+		return slot.CommandSessionSnapshot(sessionID)
+	}
+	return OwnedCommandView{}, false
+}
+
 // Each dispatch captures a slot, then uses its existing ownership lock and
 // epoch checks. Navigation never lends one session another session's runtime.
 func (p *RuntimePool) PrepareCombinedRewind(sessionID string, turn int) (WorkspaceCombinedRewindPlan, error) {

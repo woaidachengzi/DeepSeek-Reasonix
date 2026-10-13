@@ -16,7 +16,7 @@ import (
 	"reasonix/internal/provider"
 )
 
-func awaitDesktopDriverIdle(t *testing.T, manager *desktopbridge.RuntimeManager) desktopbridge.OwnedCommandView {
+func awaitDesktopDriverIdle(t *testing.T, manager desktopbridge.SessionManager) desktopbridge.OwnedCommandView {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
