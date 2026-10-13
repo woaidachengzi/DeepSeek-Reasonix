@@ -259,9 +259,6 @@ fn run_parallel(
         session_id: "native-parallel-b".into(),
         input: "private fixture task B".into(),
     })?;
-    supervisor.apply_session_settings(crate::bridge::SessionRequest {
-        session_id: "native-parallel-a".into(),
-    })?;
     wait("native-parallel-b", true)?;
     let inventory = supervisor.live_sessions()?;
     if inventory.sessions.len() != 2
