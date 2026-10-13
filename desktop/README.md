@@ -1,4 +1,6 @@
-# Reasonix Desktop (Wails shell)
+# Reasonix Desktop
+
+This directory contains the original Wails shell and the migrated Tauri host. The current Tauri takeover candidate is 0.1.4 and supports independently owned parallel conversations. See the [Tauri overview](../README.md) and [parallel-session architecture and acceptance](../docs/tauri/PARALLEL_SESSIONS.md). The Wails development instructions below remain applicable to the original shell.
 
 Model/provider setup: [English guide](../docs/MODEL_SETTINGS.md) · [中文指南](../docs/MODEL_SETTINGS.zh-CN.md).
 
