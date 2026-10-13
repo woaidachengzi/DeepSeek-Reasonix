@@ -2156,6 +2156,7 @@ export function tauriMessageFrom(error: unknown): string {
   if (message === "desktop bridge request failed with status 400 (model_unavailable)") {
     return "该会话的模型已不可用；请在模型设置中选择可用的默认模型后重试。";
   }
+  if (message === "desktop bridge request failed with status 429 (runtime_capacity)") return "同时驻留的会话已达上限；请等待任务完成或关闭后台终端后重试。";
   const workspaceErrors: Record<string, Parameters<typeof t>[0]> = {
     "desktop bridge request failed with status 404 (workspace_file_not_found)": "workspace.referenceNotFound",
     "desktop bridge request failed with status 409 (workspace_file_ambiguous)": "workspace.referenceAmbiguous",

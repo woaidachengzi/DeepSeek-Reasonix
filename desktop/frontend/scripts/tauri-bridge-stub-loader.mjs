@@ -16,6 +16,8 @@ export async function load(url, context, nextLoad) {
 
 const STUB_SOURCE = `
 const calls = [];
+const bridgeListeners = new Set();
+const restoredListeners = new Set();
 globalThis.__tauriBridgeCalls = calls;
 
 function record(name, args) {
@@ -280,7 +282,7 @@ export function importTauriStableProjectFolders() {
 }
 export function chooseTauriWorkspaceRoot() { record("choose_workspace_root"); return Promise.resolve(globalThis.__chosenWorkspaceRoot ?? null); }
 export function chooseTauriSkillSourceDirectory() { return Promise.resolve(null); }
-export function chooseTauriAttachmentFiles() { return Promise.resolve([]); }
+export function chooseTauriAttachmentFiles() { return Promise.resolve(globalThis.__chosenAttachmentPaths ?? []); }
 
 export function tauriWorkbenchSessions() {
   record("workbench_sessions");
@@ -440,7 +442,7 @@ function storedTitle(sessionId) {
 export function openTauriBridgeSession(sessionId, workspaceRoot) {
   record("bridge_open_session", { sessionId, workspaceRoot });
   globalThis.__pendingSessionTitleRecoveries = (globalThis.__pendingSessionTitleRecoveries ?? []).filter(entry => entry.id !== sessionId);
-  return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle", title: globalThis.__recoveredTitles?.[sessionId] ?? storedTitle(sessionId), workspaceRoot });
+  return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: globalThis.__parallelSessionStates?.[sessionId] ?? "idle", title: globalThis.__recoveredTitles?.[sessionId] ?? storedTitle(sessionId), workspaceRoot });
 }
 
 export function switchTauriBridgeSession(sessionId, workspaceRoot) {
@@ -448,7 +450,7 @@ export function switchTauriBridgeSession(sessionId, workspaceRoot) {
   const failure = globalThis.__switchFailure;
   if (failure) return Promise.reject(new Error(failure));
   globalThis.__pendingSessionTitleRecoveries = (globalThis.__pendingSessionTitleRecoveries ?? []).filter(entry => entry.id !== sessionId);
-  return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle", title: globalThis.__recoveredTitles?.[sessionId] ?? storedTitle(sessionId), workspaceRoot });
+  return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: globalThis.__parallelSessionStates?.[sessionId] ?? "idle", title: globalThis.__recoveredTitles?.[sessionId] ?? storedTitle(sessionId), workspaceRoot });
 }
 
 export async function forkTauriBridgeSession(sessionId, forkToken) {
@@ -481,10 +483,16 @@ export function deleteTauriBridgeSession(sessionId) {
 export function tauriBridgeSnapshot(sessionId) {
   record("bridge_session_snapshot", { sessionId });
   if (globalThis.__snapshotError) return Promise.reject(new Error("snapshot unavailable"));
-  const state = globalThis.__snapshotStates?.shift() ?? globalThis.__snapshotState ?? "idle";
+  const state = globalThis.__parallelSessionStates?.[sessionId] ?? globalThis.__snapshotStates?.shift() ?? globalThis.__snapshotState ?? "idle";
   const workspaceRoot = (globalThis.__workbenchSessions ?? []).find(item => item.sessionId === sessionId)?.workspaceRoot;
-  const result = { sequence: globalThis.__snapshotSequence ?? 0, session: { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state, workspaceRoot } };
+  const result = { liveState: globalThis.__parallelLiveStates?.[sessionId], sequence: globalThis.__snapshotSequence ?? 0, session: { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state, workspaceRoot } };
   return globalThis.__snapshotGate ? globalThis.__snapshotGate.then(() => result) : Promise.resolve(result);
+}
+
+export function tauriLiveSessions() {
+  record("bridge_live_sessions");
+  const sessions = Object.entries(globalThis.__parallelSessionStates ?? {}).map(([id,state]) => ({ id, state, path: "/tmp/" + id + ".jsonl" }));
+  return globalThis.__liveInventoryGate ? globalThis.__liveInventoryGate.then(() => ({ protocolVersion:1,selectedSessionId:"",sessions })) : Promise.resolve({ protocolVersion:1,selectedSessionId:"",sessions });
 }
 
 export function tauriSessionBalance(sessionId) {
@@ -522,6 +530,7 @@ export function discardTauriPastedImage(token) { record("discard_pasted_image", 
 
 export function cancelTauriBridge(sessionId) {
   record("bridge_cancel", { sessionId });
+  if (globalThis.__parallelSessionStates) globalThis.__parallelSessionStates[sessionId] = "idle";
   return Promise.resolve({ id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle" });
 }
 
@@ -542,12 +551,15 @@ export function answerTauriMCPInteraction(sessionId, id, action, content) {
 
 export function replayTauriPendingPrompts(sessionId) {
   record("bridge_replay_pending_prompts", { sessionId });
+  const approval = globalThis.__parallelApprovals?.[sessionId];
+  if (approval) queueMicrotask(() => globalThis.__emitBridgeEvent?.({ protocolVersion:1, sessionId, sequence: ++globalThis.__snapshotSequence, eventKind:"approval_request", payload:{kind:"approval_request",approval} }));
   const workspaceRoot = (globalThis.__workbenchSessions ?? []).find(item => item.sessionId === sessionId)?.workspaceRoot;
-  const result = { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle", workspaceRoot };
+  const result = { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: globalThis.__parallelSessionStates?.[sessionId] ?? "idle", workspaceRoot };
   return globalThis.__replayGate ? globalThis.__replayGate.then(() => result) : Promise.resolve(result);
 }
 
 export function tauriPromptFromEvent(event) {
+  if (event.eventKind === "approval_request" && event.payload.approval) return { ...event.payload.approval, kind:"approval" };
   if (event.eventKind !== "mcp_interaction" || !event.payload.mcpInteraction) return null;
   return { ...event.payload.mcpInteraction, kind: "mcp" };
 }
@@ -644,9 +656,9 @@ export function startTauriBridgeEvents() {
   else if (!globalThis.__holdStreamReady) queueMicrotask(() => globalThis.__emitBridgeRestored?.());
   return Promise.resolve();
 }
-export function onTauriBridgeEvent(callback) { globalThis.__emitBridgeEvent = callback; return Promise.resolve(() => { if (globalThis.__emitBridgeEvent === callback) globalThis.__emitBridgeEvent = undefined; }); }
+export function onTauriBridgeEvent(callback) { bridgeListeners.add(callback); globalThis.__emitBridgeEvent = event => { for (const listener of bridgeListeners) listener(event); }; return Promise.resolve(() => { bridgeListeners.delete(callback); if (!bridgeListeners.size) globalThis.__emitBridgeEvent = undefined; }); }
 export function onTauriBridgeConnectionError(callback) { globalThis.__emitBridgeError = callback; return Promise.resolve(() => { if (globalThis.__emitBridgeError === callback) globalThis.__emitBridgeError = undefined; }); }
-export function onTauriBridgeConnectionRestored(callback) { globalThis.__emitBridgeRestored = callback; return Promise.resolve(() => { if (globalThis.__emitBridgeRestored === callback) globalThis.__emitBridgeRestored = undefined; }); }
+export function onTauriBridgeConnectionRestored(callback) { restoredListeners.add(callback); globalThis.__emitBridgeRestored = () => { for (const listener of restoredListeners) listener(); }; return Promise.resolve(() => { restoredListeners.delete(callback); if (!restoredListeners.size) globalThis.__emitBridgeRestored = undefined; }); }
 export function onTauriBridgeResyncRequired(callback) { globalThis.__emitBridgeResync = callback; return Promise.resolve(() => { if (globalThis.__emitBridgeResync === callback) globalThis.__emitBridgeResync = undefined; }); }
 
 export function tauriMCPServers(workspaceRoot) {

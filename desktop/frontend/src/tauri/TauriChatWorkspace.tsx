@@ -18,6 +18,7 @@ const TauriTerminalDock = lazy(() => import("./TauriTerminalDock").then(module =
 import { ExternalOpener } from "../components/ExternalOpener";
 import { tauriExternalOpenerBridge } from "./tauriExternalOpener";
 import { CopyButton } from "../components/CopyButton";
+import { useTauriLiveSessions } from "./useTauriLiveSessions";
 import { useTauriPinnedFiles } from "./useTauriPinnedFiles";
 import { TauriPinnedFilesShelf } from "./TauriPinnedFilesShelf";
 import { TauriAnswerActions } from "./TauriAnswerActions";
@@ -194,6 +195,7 @@ import {
   tauriCombinedRewindCommit,
   tauriBridgeHistory,
   tauriBridgeSnapshot,
+  tauriLiveSessions,
   tauriBridgeStatus,
   tauriComposerInput,
   tauriEventSummary,
@@ -360,6 +362,7 @@ interface SessionRowProps {
   active: boolean;
   busy: boolean;
   switchingBlocked: boolean;
+  runtimeState?: TauriBridgeSession["state"];
   retryActive?: boolean;
   onActivate: () => void;
   onDelete: () => void;
@@ -368,7 +371,7 @@ interface SessionRowProps {
 
 /** One recent conversation. The confirm step lives in the row so only the row
  *  the user armed changes shape, and leaving the row disarms it. */
-function SessionRow({ tab, active, busy, switchingBlocked, retryActive = false, onActivate, onDelete, onArchive }: SessionRowProps) {
+function SessionRow({ tab, active, busy, switchingBlocked, runtimeState, retryActive = false, onActivate, onDelete, onArchive }: SessionRowProps) {
   const [confirming, setConfirming] = useState<"delete" | "archive" | null>(null);
   const missing = isMissingWorkbenchSession(tab);
   const deletionInterrupted = tab.deletionInterrupted === true;
@@ -378,7 +381,7 @@ function SessionRow({ tab, active, busy, switchingBlocked, retryActive = false, 
       <div className="tauri-session-delete" role="group" aria-label={confirming === "archive" ? "确认归档对话" : "确认删除对话"}>
         <span className="tauri-session-delete__question">{confirming === "archive" ? `归档“${displayTitle(tab.title)}”？可在已归档对话中恢复。` : deletionInterrupted ? `继续删除“${displayTitle(tab.title)}”？` : titleRecoveryPending ? `删除“${displayTitle(tab.title)}”并放弃未完成的改名？` : `删除“${displayTitle(tab.title)}”？`}</span>
         <span className="tauri-session-delete__actions">
-          <button type="button" className="tauri-session-delete__confirm" disabled={busy} onClick={confirming === "archive" ? onArchive : onDelete}>{confirming === "archive" ? "归档" : deletionInterrupted ? "继续删除" : "删除"}</button>
+          <button type="button" className="tauri-session-delete__confirm" disabled={busy || switchingBlocked} onClick={confirming === "archive" ? onArchive : onDelete}>{confirming === "archive" ? "归档" : deletionInterrupted ? "继续删除" : "删除"}</button>
           <button type="button" className="tauri-session-delete__cancel" disabled={busy} onClick={() => setConfirming(null)}>取消</button>
         </span>
       </div>
@@ -389,13 +392,14 @@ function SessionRow({ tab, active, busy, switchingBlocked, retryActive = false, 
       <button
         type="button"
         className={`tauri-sidebar__session${missing ? " is-missing" : ""}`}
-        disabled={busy || (active && !retryActive) || switchingBlocked || missing || deletionInterrupted}
+        disabled={busy || (active && !retryActive) || missing || deletionInterrupted}
         onClick={onActivate}
         aria-label={deletionInterrupted ? `${displayTitle(tab.title)}（删除未完成）` : missing ? `${displayTitle(tab.title)}（文件缺失）` : titleRecoveryPending ? `${displayTitle(tab.title)}（标题恢复待完成）` : undefined}
         title={deletionInterrupted ? "上次删除被中断；点击右侧按钮并确认后继续删除。" : missing ? "会话文件缺失，无法打开。可删除这条失效记录。" : titleRecoveryPending ? "上次改名被中断；打开此会话会核对侧车并尝试完成或撤销改名。" : tab.workspaceRoot ? `${tab.sessionId}\n${tab.workspaceRoot}` : tab.sessionId}
       >
         <MessageSquare size={15} aria-hidden="true" />
         <span>{displayTitle(tab.title)}</span>
+        {runtimeState && runtimeState !== "idle" && <small className={`tauri-session-activity is-${runtimeState}`} role="status">{runtimeState === "paused" ? "待确认" : "运行中"}</small>}
         {deletionInterrupted && <small className="tauri-session-recovery">删除未完成</small>}
         {titleRecoveryPending && <small className="tauri-session-recovery">标题待恢复</small>}
         {missing && <small className="tauri-session-missing">文件缺失</small>}
@@ -537,14 +541,21 @@ export function TauriSessionPreview() {
   const [attachments, setAttachments] = useState<TauriBridgeAttachment[]>([]);
   const [draftAttachmentPaths, setDraftAttachmentPaths] = useState<string[]>([]);
   const stagedImagesRef = useRef(new Map<string, { token: string; previewUrl?: string }>());
+  const conversationDraftsRef = useRef(new Map<string, { prompt: string; attachments: TauriBridgeAttachment[]; paths: string[]; images: Map<string, { token: string; previewUrl?: string }> }>());
   const pasteInFlightRef = useRef(false);
   const pasteOwnerRef = useRef(0);
   const discardDraftImages = useCallback(() => {
     for (const image of stagedImagesRef.current.values()) void discardTauriPastedImage(image.token).catch(() => {});
     stagedImagesRef.current.clear();
   }, []);
-  useEffect(() => () => { pasteOwnerRef.current += 1; discardDraftImages(); }, [discardDraftImages]);
+  useEffect(() => () => {
+    pasteOwnerRef.current += 1;
+    const tokens = new Set([...stagedImagesRef.current.values()].map(image => image.token));
+    for (const draft of conversationDraftsRef.current.values()) for (const image of draft.images.values()) tokens.add(image.token);
+    for (const token of tokens) void discardTauriPastedImage(token).catch(() => {});
+  }, []);
   const [status, setStatus] = useState<TauriBridgeStatus | null>(null);
+  const liveSessions = useTauriLiveSessions(status?.running === true, status?.sidecarInstanceId);
   const [profile, setProfile] = useState<TauriPreviewProfileStatus | null>(null);
   const [scanImportOpen, setScanImportOpen] = useState(false);
   const [scanImportCandidates, setScanImportCandidates] = useState<TauriScanImportCandidate[]>([]);
@@ -631,6 +642,7 @@ export function TauriSessionPreview() {
   const attentionChimeSeenRef = useRef(new Set<string>());
   const notificationPromptSeenRef = useRef(new Set<string>());
   const submitInFlightRef = useRef(false);
+  const navigationInFlightRef = useRef(false);
   const pendingDraftSubmissionRef = useRef<{ sessionId: string; text: string; paths: string[]; workspaceRoot?: string } | null>(null);
   const sessionPageRequestRef = useRef(false);
   const sessionPageRevisionRef = useRef(0);
@@ -648,8 +660,25 @@ export function TauriSessionPreview() {
   const workspaceChangesReturnRef = useRef<{ sessionId: string; epoch: number; top: number; pending: boolean } | null>(null);
   const [activeQuestion, setActiveQuestion] = useState<number | null>(null);
   const switchingBlocked = Boolean(session && session.state !== "idle");
+  const runtimeState = (id: string) => id === session?.id ? session.state : liveSessions.sessions[id]?.state;
+  const targetIsBusy = (id: string) => { const state = runtimeState(id); return state !== undefined && state !== "idle"; };
+  const draftKey = (id?: string, root = workspaceRoot) => id ?? `new:${root}`;
+  function saveConversationDraft() {
+    const key = draftKey(session?.id);
+    if (!prompt && !attachments.length && !draftAttachmentPaths.length) { conversationDraftsRef.current.delete(key); return; }
+    conversationDraftsRef.current.set(key, { prompt, attachments: [...attachments], paths: [...draftAttachmentPaths], images: new Map(stagedImagesRef.current) });
+  }
+  function restoreConversationDraft(id?: string, root = workspaceRoot) {
+    const saved = conversationDraftsRef.current.get(draftKey(id, root));
+    setPrompt(saved?.prompt ?? "");
+    setAttachments(saved?.attachments ?? []);
+    setDraftAttachmentPaths(saved?.paths ?? []);
+    stagedImagesRef.current = new Map(saved?.images);
+    pasteOwnerRef.current += 1;
+  }
+
   useTauriNotificationClicks({
-    canOpen: click => click.sessionId === session?.id || (!busy && !switchingBlocked && !isReadOnlyWorkbenchSource(sessionPageSource)),
+    canOpen: click => click.sessionId === session?.id || (!busy && !isReadOnlyWorkbenchSource(sessionPageSource)),
     open: async target => {
       setSettingsOpen(false); setDiagnosticsOpen(false); setWorkspaceOpen(false);
       if (target.sessionId === session?.id) return true;
@@ -657,7 +686,7 @@ export function TauriSessionPreview() {
     },
     unavailable: () => showToast(t("composer.sessionContextReadFailed"), "warn"),
     failed: () => showToast(t("notifications.openFailed"), "warn"),
-  }, { busy, blocked: switchingBlocked, source: sessionPageSource, sessionId: session?.id });
+  }, { busy, blocked: busy, source: sessionPageSource, sessionId: session?.id });
   const [platform, setPlatform] = useState<string>("");
   // Optimistic user message: displayed immediately after submit, cleared when history loads
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
@@ -725,7 +754,7 @@ export function TauriSessionPreview() {
       { tab: "about", label: "settings.about.navLabel", keywords: ["about", "版本"] },
     ];
     const commands: PaletteItem[] = [
-      { id: "tauri-command-new-session", group: commandGroup, title: t("palette.cmd.newSession"), icon: <Plus size={15} />, compact: true, keywords: ["new", "新建"], run: () => { setSettingsOpen(false); setDiagnosticsOpen(false); if (!busy && !switchingBlocked) void createSession(); } },
+      { id: "tauri-command-new-session", group: commandGroup, title: t("palette.cmd.newSession"), icon: <Plus size={15} />, compact: true, keywords: ["new", "新建"], run: () => { setSettingsOpen(false); setDiagnosticsOpen(false); if (!busy) void createSession(); } },
       { id: "tauri-command-settings", group: commandGroup, title: t("palette.cmd.settings"), icon: <Settings size={15} />, compact: true, keywords: ["settings", "设置"], run: () => openSettingsTab("general") },
       { id: "tauri-command-shortcuts", group: commandGroup, title: t("shortcuts.action.showShortcuts"), icon: <Keyboard size={15} />, compact: true, keywords: ["shortcuts", "keyboard", "快捷键"], run: () => setShortcutsHelpOpen(true) },
       { id: "tauri-command-files", group: commandGroup, title: t("workspace.filesTab"), icon: <FolderTree size={15} />, compact: true, keywords: ["files", "workspace", "文件", "工作区"], run: () => { if (!session || busy) return; setSettingsOpen(false); setDiagnosticsOpen(false); setWorkspaceView("files"); setWorkspaceOpen(true); void loadWorkspace(workspacePath); } },
@@ -740,7 +769,7 @@ export function TauriSessionPreview() {
         run: () => openSettingsTab(tab),
       })),
     ];
-    const sessions: PaletteItem[] = (busy || switchingBlocked || isReadOnlyWorkbenchSource(sessionPageSource) ? [] : visibleTabs.filter(tab => !isMissingWorkbenchSession(tab) && !tab.deletionInterrupted)).map(tab => ({
+    const sessions: PaletteItem[] = (busy || isReadOnlyWorkbenchSource(sessionPageSource) ? [] : visibleTabs.filter(tab => !isMissingWorkbenchSession(tab) && !tab.deletionInterrupted)).map(tab => ({
       id: `tauri-session-${tab.sessionId}`,
       group: sessionGroup,
       title: displayTitle(tab.title),
@@ -922,7 +951,7 @@ export function TauriSessionPreview() {
         else if (diagnosticsOpen) setDiagnosticsOpen(false);
         else setWorkspaceOpen(false);
       }
-      else if (matchesTauriShortcut(event, "new_session", shortcutPlatform) && !busy && !switchingBlocked) {
+      else if (matchesTauriShortcut(event, "new_session", shortcutPlatform) && !busy) {
         event.preventDefault();
         void createSession();
       }
@@ -987,7 +1016,7 @@ export function TauriSessionPreview() {
           && matchesTauriShortcut(event, action, shortcutPlatform));
         if (sessionShortcut) {
           event.preventDefault();
-          if (!settingsOpen && !diagnosticsOpen && !workspaceOpen && !busy && !switchingBlocked) {
+          if (!settingsOpen && !diagnosticsOpen && !workspaceOpen && !busy) {
             const position = Number(sessionShortcut.slice("goto_session_".length)) - 1;
             const target = visibleTabs.filter(tab => !isMissingWorkbenchSession(tab))[position];
             if (target && target.sessionId !== session?.id) void activateSession(target.sessionId, target.workspaceRoot);
@@ -1235,6 +1264,11 @@ export function TauriSessionPreview() {
         setSession(snapshot.session);
         setSessionMetrics(snapshot.metrics ? { sessionId: session.id, metrics: snapshot.metrics } : null);
         setSequence(snapshot.sequence);
+        if (snapshot.liveState?.active && snapshot.session.state !== "idle") {
+          setLiveAnswer(snapshot.liveState.answer);
+          setLiveProgress(snapshot.liveState.progress);
+          if (snapshot.liveState.truncated) setError("实时回答超出显示上限；回合结束后可查看保存的回答。");
+        }
         let lastSequence = snapshot.sequence;
         const historyEpoch = turnEpochRef.current;
         // Display history independently of event setup and prompt replay.
@@ -1769,6 +1803,7 @@ export function TauriSessionPreview() {
   }
 
   async function activateSession(id: string, root?: string, restoredFromArchive = false) {
+    if (busy || submitInFlightRef.current || navigationInFlightRef.current) return false;
     if (isReadOnlyWorkbenchSource(sessionPageSource)) {
       setError(sessionPageSource === "unavailable"
         ? "会话目录尚未通过检查；读取成功后才能打开会话。"
@@ -1778,17 +1813,17 @@ export function TauriSessionPreview() {
     if (archivedSessions === null || archiveError || (archivedSessionIDs.has(id) && !restoredFromArchive)) { setError("对话归档状态尚未就绪，或该对话已归档；请检查归档状态后恢复对话。"); return false; }
     if (!id) { setError("缺少会话 ID"); return false; }
     if (session?.id === id && streamReady && !historyLoading && !historyError && history?.session.id === id) return true;
+    navigationInFlightRef.current = true;
     setBusy(true);
     setError("");
     try {
       const next = await switchTauriBridgeSession(id, root);
+      saveConversationDraft();
+      restoreConversationDraft(next.id, next.workspaceRoot ?? root ?? "");
+      void liveSessions.refresh();
       invalidateWorkspaceRequests();
       setEvents([]);
       setHistory(null);
-      setAttachments([]);
-      setDraftAttachmentPaths([]);
-      discardDraftImages();
-      if (!session) setPrompt("");
       setDragging(false);
       setPendingPrompt(null);
       setPromptSelections({});
@@ -1846,6 +1881,7 @@ export function TauriSessionPreview() {
       setError(sessionLifecycleNotice(cause) ?? tauriMessageFrom(cause));
       return false;
     } finally {
+      navigationInFlightRef.current = false;
       setBusy(false);
     }
   }
@@ -1933,7 +1969,7 @@ export function TauriSessionPreview() {
   }
 
   async function changeSessionArchive(target: Pick<WorkbenchSessionTab, "sessionId" | "workspaceRoot">, archived: boolean) {
-    if (busy || switchingBlocked || archivedSessions === null || archiveError || isReadOnlyWorkbenchSource(sessionPageSource)) return;
+    if (busy || targetIsBusy(target.sessionId) || archivedSessions === null || archiveError || isReadOnlyWorkbenchSource(sessionPageSource)) return;
     if (archived && session?.id === target.sessionId && (prompt.trim() || attachments.length || selectedTexts.length)) {
       setError("当前对话有未发送内容；请先发送或清空草稿，再归档对话。"); return;
     }
@@ -1969,12 +2005,8 @@ export function TauriSessionPreview() {
       setError("当前会话目录为只读来源；重新检查并核验通过后才能删除会话。");
       return;
     }
-    if (busy || (switchingBlocked && !retryingInterruptedDelete)) return;
+    if (busy || (targetIsBusy(target.sessionId) && !retryingInterruptedDelete)) return;
     const sessionToRestore = session;
-    if (!retryingInterruptedDelete && !isOpen && (session?.state === "running" || session?.state === "paused")) {
-      setError("请先停止正在生成的对话，再删除其他会话。");
-      return;
-    }
     setBusy(true);
     setError("");
     invalidateWorkspaceRequests();
@@ -2000,6 +2032,11 @@ export function TauriSessionPreview() {
       // controller. DELETE resumes cleanup without recreating the transcript.
       await deleteTauriBridgeSession(target.sessionId);
       deleted = true;
+      const cachedDraft = conversationDraftsRef.current.get(draftKey(target.sessionId));
+      for (const image of cachedDraft?.images.values() ?? []) void discardTauriPastedImage(image.token).catch(() => {});
+      conversationDraftsRef.current.delete(draftKey(target.sessionId));
+      if (isOpen) { discardDraftImages(); setPrompt(""); setAttachments([]); setDraftAttachmentPaths([]); }
+      void liveSessions.refresh();
       if (target.deletionInterrupted) {
         setPendingSessionDeletes(previous => previous.filter(item => item.id !== target.sessionId));
       }
@@ -2050,7 +2087,13 @@ export function TauriSessionPreview() {
       setError("当前会话目录为只读来源；重新检查并核验通过后才能新建会话。");
       return;
     }
-    if (busy || switchingBlocked) return;
+    if (busy || navigationInFlightRef.current) return;
+    if (session) saveConversationDraft();
+    else {
+      discardDraftImages();
+      conversationDraftsRef.current.delete(draftKey(undefined));
+    }
+    restoreConversationDraft(undefined, root.trim());
     invalidateWorkspaceRequests();
     turnEpochRef.current += 1;
     setSession(null);
@@ -2063,10 +2106,6 @@ export function TauriSessionPreview() {
     setPendingUserMessage(null);
     setPendingPrompt(null);
     setPromptSelections({});
-    setAttachments([]);
-    setDraftAttachmentPaths([]);
-    discardDraftImages();
-    setPrompt("");
     setError("");
     setTitleEditing(false);
     setWorkspaceOpen(false);
@@ -2109,7 +2148,7 @@ export function TauriSessionPreview() {
   }
 
   async function removeProject(root: string) {
-    if (!root || busy || switchingBlocked) return;
+    if (!root || busy) return;
     projectFoldersRevisionRef.current += 1;
     setBusy(true);
     setProjectFoldersWarning("");
@@ -3043,6 +3082,8 @@ export function TauriSessionPreview() {
       setAttachments([]);
       setDraftAttachmentPaths([]);
       discardDraftImages();
+      conversationDraftsRef.current.delete(draftKey(sessionId));
+      if (firstTurn) conversationDraftsRef.current.delete(draftKey(undefined, root ?? ""));
       if (attachmentError) setError(`部分文件未能添加：${attachmentError}`);
       // Fetch history after a short delay to let the backend settle
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -3148,6 +3189,8 @@ export function TauriSessionPreview() {
     setBusy(true);
     setError("");
     try {
+      const running = await tauriLiveSessions();
+      if (running.sessions.some(owner => owner.state !== "idle")) { setError("请等待当前回合及后台任务结束，再重启桥接服务。"); return false; }
       if (session) {
         const current = await tauriBridgeSnapshot(session.id);
         setSessionMetrics(current.metrics ? { sessionId: session.id, metrics: current.metrics } : null);
@@ -3416,7 +3459,7 @@ export function TauriSessionPreview() {
       <aside className="tauri-sidebar" aria-label="会话导航">
         <div className="tauri-sidebar__drag" data-tauri-drag-region aria-hidden="true" />
         <div className="tauri-sidebar__brand"><img src={logoWordmark} alt="Reasonix" draggable={false} /><span>{profile?.takeoverProfile ? "本地版" : "PREVIEW"}</span></div>
-        <button className="tauri-sidebar__new" type="button" onClick={() => void createSession()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || switchingBlocked}>
+        <button className="tauri-sidebar__new" type="button" onClick={() => void createSession()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource)}>
           <Plus size={17} aria-hidden="true" /><span>新建对话</span><kbd>{newSessionShortcutLabel}</kbd>
         </button>
         <div className="tauri-sidebar__search">
@@ -3453,7 +3496,7 @@ export function TauriSessionPreview() {
                 sessionId: item.id, title: item.title, workspaceRoot: item.workspaceRoot,
                 state: item.state, missing: item.state === "missing", titleRecoveryPending: true,
               };
-              return <SessionRow key={item.id} tab={tab} active={session?.id === item.id} busy={busy || sessionPageSource === "cached"} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(item.id, item.workspaceRoot)} onDelete={() => void deleteSession(tab)} onArchive={canArchiveWorkbenchSession(tab) ? () => void changeSessionArchive(tab, true) : undefined} />;
+              return <SessionRow key={item.id} tab={tab} active={session?.id === item.id} busy={busy || sessionPageSource === "cached"} runtimeState={runtimeState(tab.sessionId)} switchingBlocked={targetIsBusy(tab.sessionId)} onActivate={() => void activateSession(item.id, item.workspaceRoot)} onDelete={() => void deleteSession(tab)} onArchive={canArchiveWorkbenchSession(tab) ? () => void changeSessionArchive(tab, true) : undefined} />;
             })}
           </section>
         </>}
@@ -3489,20 +3532,20 @@ export function TauriSessionPreview() {
                   <input autoFocus maxLength={1024} value={projectTitleDraft} aria-label={`重命名项目 ${group.label}`} onChange={event => setProjectTitleDraft(event.target.value)} onKeyDown={event => { if (event.key === "Escape") setEditingProjectRoot(null); }} />
                   <button type="submit" aria-label="保存项目名称" disabled={busy}><Check size={13} /></button>
                   <button type="button" aria-label="取消重命名项目" disabled={busy} onClick={() => setEditingProjectRoot(null)}><X size={13} /></button>
-                </form> : <button type="button" className={`tauri-project-group__select${activeProjectKey === group.key ? " is-active" : ""}`} aria-current={activeProjectKey === group.key ? "location" : undefined} title={projectGroupHasUnloadedSessions(group, projectHistoryMayBeIncomplete) ? projectHistoryUnavailableHint : workspaceAvailability[group.root] === false ? `${group.root}\n工作区不可用；已有会话仍可打开` : group.root} aria-label={`切换到项目 ${group.label}${projectGroupHasUnloadedSessions(group, projectHistoryMayBeIncomplete) ? sessionPageSource === "legacy" ? "（持久目录未核验，先重新检查）" : "（历史会话尚未加载，先加载更多）" : workspaceAvailability[group.root] === false ? "（工作区不可用）" : ""}`} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || switchingBlocked || projectGroupHasUnloadedSessions(group, projectHistoryMayBeIncomplete) || (group.sessions.length > 0 && !group.sessions.some(tab => !isMissingWorkbenchSession(tab)))} onClick={() => { const latest = group.sessions.find(tab => !isMissingWorkbenchSession(tab)); if (latest) { if (latest.sessionId !== session?.id) void activateSession(latest.sessionId, latest.workspaceRoot); } else setWorkspaceRoot(group.root || ""); }}><FolderOpen size={14} /><span>{group.label}</span>{projectGroupHasUnloadedSessions(group, projectHistoryMayBeIncomplete) && <small className="tauri-project-group__unloaded">{sessionPageSource === "legacy" ? "目录未核验" : "历史未加载"}</small>}{workspaceAvailability[group.root] === false && <small className="tauri-project-group__unavailable">工作区不可用</small>}<small>{group.sessions.length}</small></button>}
-                <button type="button" className="tauri-project-group__rename" aria-label={`重命名项目 ${group.label}`} title="重命名项目" disabled={busy || switchingBlocked || editingProjectRoot !== null} onClick={() => { setEditingProjectRoot(group.root || null); setProjectTitleDraft(group.title ?? ""); }}><Pencil size={12} /></button>
-                {!occupiedProjectKeys.has(group.key) && <button type="button" className="tauri-project-group__remove" aria-label={`移除空项目 ${group.label}`} title="从侧栏移除项目，保留磁盘文件和历史对话" disabled={busy || switchingBlocked || editingProjectRoot !== null} onClick={() => void removeProject(group.root!)}><Trash2 size={12} /></button>}
-                <button type="button" className="tauri-project-group__new" aria-label={`在 ${group.label} 中新建对话`} title={workspaceAvailability[group.root] === false ? "工作区不可用，无法在此处新建对话" : "在此项目新建对话"} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || switchingBlocked || workspaceAvailability[group.root] === false} onClick={() => void createSession(group.root || "")}><Plus size={14} /></button>
+                </form> : <button type="button" className={`tauri-project-group__select${activeProjectKey === group.key ? " is-active" : ""}`} aria-current={activeProjectKey === group.key ? "location" : undefined} title={projectGroupHasUnloadedSessions(group, projectHistoryMayBeIncomplete) ? projectHistoryUnavailableHint : workspaceAvailability[group.root] === false ? `${group.root}\n工作区不可用；已有会话仍可打开` : group.root} aria-label={`切换到项目 ${group.label}${projectGroupHasUnloadedSessions(group, projectHistoryMayBeIncomplete) ? sessionPageSource === "legacy" ? "（持久目录未核验，先重新检查）" : "（历史会话尚未加载，先加载更多）" : workspaceAvailability[group.root] === false ? "（工作区不可用）" : ""}`} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || projectGroupHasUnloadedSessions(group, projectHistoryMayBeIncomplete) || (group.sessions.length > 0 && !group.sessions.some(tab => !isMissingWorkbenchSession(tab)))} onClick={() => { const latest = group.sessions.find(tab => !isMissingWorkbenchSession(tab)); if (latest) { if (latest.sessionId !== session?.id) void activateSession(latest.sessionId, latest.workspaceRoot); } else setWorkspaceRoot(group.root || ""); }}><FolderOpen size={14} /><span>{group.label}</span>{projectGroupHasUnloadedSessions(group, projectHistoryMayBeIncomplete) && <small className="tauri-project-group__unloaded">{sessionPageSource === "legacy" ? "目录未核验" : "历史未加载"}</small>}{workspaceAvailability[group.root] === false && <small className="tauri-project-group__unavailable">工作区不可用</small>}<small>{group.sessions.length}</small></button>}
+                <button type="button" className="tauri-project-group__rename" aria-label={`重命名项目 ${group.label}`} title="重命名项目" disabled={busy || editingProjectRoot !== null} onClick={() => { setEditingProjectRoot(group.root || null); setProjectTitleDraft(group.title ?? ""); }}><Pencil size={12} /></button>
+                {!occupiedProjectKeys.has(group.key) && <button type="button" className="tauri-project-group__remove" aria-label={`移除空项目 ${group.label}`} title="从侧栏移除项目，保留磁盘文件和历史对话" disabled={busy || editingProjectRoot !== null} onClick={() => void removeProject(group.root!)}><Trash2 size={12} /></button>}
+                <button type="button" className="tauri-project-group__new" aria-label={`在 ${group.label} 中新建对话`} title={workspaceAvailability[group.root] === false ? "工作区不可用，无法在此处新建对话" : "在此项目新建对话"} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || workspaceAvailability[group.root] === false} onClick={() => void createSession(group.root || "")}><Plus size={14} /></button>
               </div>
-              {(searchingSessions || !collapsedProjects[group.key]) && group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} retryActive={Boolean(historyError) && !historyLoading} busy={busy || isReadOnlyWorkbenchSource(sessionPageSource)} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} onArchive={canArchiveWorkbenchSession(tab) ? () => void changeSessionArchive(tab, true) : undefined} />)}
+              {(searchingSessions || !collapsedProjects[group.key]) && group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} retryActive={Boolean(historyError) && !historyLoading} busy={busy || isReadOnlyWorkbenchSource(sessionPageSource)} runtimeState={runtimeState(tab.sessionId)} switchingBlocked={targetIsBusy(tab.sessionId)} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} onArchive={canArchiveWorkbenchSession(tab) ? () => void changeSessionArchive(tab, true) : undefined} />)}
             </section>
-          ) : group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} retryActive={Boolean(historyError) && !historyLoading} busy={busy || isReadOnlyWorkbenchSource(sessionPageSource)} switchingBlocked={switchingBlocked} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} onArchive={canArchiveWorkbenchSession(tab) ? () => void changeSessionArchive(tab, true) : undefined} />))}
+          ) : group.sessions.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={session?.id === tab.sessionId} retryActive={Boolean(historyError) && !historyLoading} busy={busy || isReadOnlyWorkbenchSource(sessionPageSource)} runtimeState={runtimeState(tab.sessionId)} switchingBlocked={targetIsBusy(tab.sessionId)} onActivate={() => void activateSession(tab.sessionId, tab.workspaceRoot)} onDelete={() => void deleteSession(tab)} onArchive={canArchiveWorkbenchSession(tab) ? () => void changeSessionArchive(tab, true) : undefined} />))}
           {sessionPageSource === "identity_unverified" && <p className="tauri-sidebar__page-note" role="status">
             正在只读显示未完成 shadow 核验的持久身份目录（{sessionPageDirectoryCount ?? tabs.length} 条）；不能据此打开、重命名、删除或新建会话。原因：{sessionPageCatalogWarning ? "旧会话兼容目录不可读" : catalogAudit ? sessionShadowDifferenceSummary(catalogAudit) : "shadow 报告不可用"}。请先重新检查并处理差异。
           </p>}
           {unverifiedLegacyTabs.length > 0 && <section className="tauri-pending-deletes" aria-label="仅在旧兼容目录中的未核验会话">
             <div className="tauri-sidebar__section-title">仅在旧目录中（只读）</div>
-            {unverifiedLegacyTabs.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={false} busy switchingBlocked={switchingBlocked} onActivate={() => {}} onDelete={() => {}} />)}
+            {unverifiedLegacyTabs.map(tab => <SessionRow key={tab.sessionId} tab={tab} active={false} busy runtimeState={runtimeState(tab.sessionId)} switchingBlocked={targetIsBusy(tab.sessionId)} onActivate={() => {}} onDelete={() => {}} />)}
           </section>}
           {sessionPageCursor && <button type="button" className="tauri-sidebar__load-more" onClick={() => void loadMoreWorkbenchSessions()} disabled={sessionPageLoading} aria-label="加载更多会话">
             {sessionPageLoading ? "正在加载…" : "加载更多会话"}
@@ -3650,7 +3693,7 @@ export function TauriSessionPreview() {
                 return;
               }
               if (matchesTauriShortcut(native, "send_message", detectShortcutPlatform())) { event.preventDefault(); void submit(); }
-            }} placeholder={session?.state === "paused" ? "请先完成上方确认…" : session ? `继续聊聊你的问题…（${sendShortcutLabel} 发送）` : `输入问题，开始新对话…（${sendShortcutLabel} 发送）`} disabled={session?.state === "paused"} rows={3} />
+            }} placeholder={session?.state === "paused" ? "请先完成上方确认…" : session ? `继续聊聊你的问题…（${sendShortcutLabel} 发送）` : `输入问题，开始新对话…（${sendShortcutLabel} 发送）`} disabled={busy || session?.state === "paused"} rows={3} />
             <div className="tauri-composer__bottom">
               <button className="tauri-attach-button" type="button" onClick={() => void addAttachments()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state !== "idle"))} aria-label="添加文件" title="从本机选择文件并附加到消息"><Plus size={23} /></button>
               <TauriComposerControls key={session?.id ?? "new"} sessionId={session?.id} workspaceRoot={currentWorkspace} effort={session ? session.effort || "auto" : draftEffort && draftEffort.model === providerSummary?.defaultModel ? draftEffort.level : "auto"} onEffortChange={changeEffort} model={session?.modelRef || providerSummary?.defaultModel || ""} providers={providerSummary} onProvidersChange={setProviderSummary} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state !== "idle" || attachments.length > 0 || draftAttachmentPaths.length > 0))} refreshToken={settingsOpen} onModelChange={model => session ? changeCurrentSessionModel(model) : changeDefaultModel(model)} onBusyChange={setBusy} onError={setError} onOpenModels={() => { setSettingsTab("providers"); setSettingsOpen(true); }} />
@@ -3731,7 +3774,7 @@ export function TauriSessionPreview() {
             <details className="tauri-diagnostic-card tauri-runtime-details"><summary>构建与版本详情</summary>{!runtimeInfo ? <p>正在读取构建信息…</p> : <dl><div><dt>稳定版基线</dt><dd>v{runtimeInfo.stableVersion} · {runtimeInfo.stableCommit.slice(0, 12)}</dd></div><div><dt>Preview / Tauri</dt><dd>v{runtimeInfo.previewVersion} · v{runtimeInfo.tauriVersion}</dd></div><div><dt>Preview 源码</dt><dd>{runtimeInfo.previewCommit === "unknown" ? "未知" : runtimeInfo.previewCommit.slice(0, 12)}{runtimeInfo.previewDirty && "（含未提交改动）"}</dd></div><div><dt>宿主构建时间</dt><dd>{runtimeInfo.previewBuild}</dd></div><div><dt>桥接协议</dt><dd>v{runtimeInfo.bridgeProtocolVersion}</dd></div><div><dt>Sidecar</dt><dd>{runtimeInfo.sidecarInstanceId ?? "未运行"}</dd></div>{session && <div><dt>会话 ID</dt><dd>{session.id}</dd></div>}{session && <div><dt>会话路径</dt><dd>{session.path}</dd></div>}{history && <div><dt>历史记录</dt><dd>{history.totalMessages} 条</dd></div>}<div><dt>事件游标</dt><dd>{sequence} · 最近 {events.length} 个事件</dd></div></dl>}</details>
             <details className="tauri-diagnostic-card tauri-event-details"><summary>桥接事件日志</summary>{events.length === 0 ? <p>开始一个对话后，这里会显示桥接事件。</p> : <ol>{events.map(event => <li key={event.sequence}><b>#{event.sequence} · {event.eventKind}</b><pre>{tauriEventSummary(event)}</pre></li>)}</ol>}</details>
             {session && <button type="button" className="tauri-diagnostic-action" onClick={() => void refreshHistory()} disabled={busy}>刷新当前对话状态与记录</button>}
-            <p className="tauri-diagnostics__note">会话切换仅在当前回复结束后启用，避免中断正在进行的请求。</p>
+            <p className="tauri-diagnostics__note">切换对话不会中断后台任务；停止和审批只作用于对应对话。</p>
           </div>
         </aside>
       </>}
@@ -3882,10 +3925,10 @@ export function TauriSessionPreview() {
         <section className="tauri-archives-panel" role="dialog" aria-modal="true" aria-label="已归档对话">
           <header><div><h2>已归档对话</h2><p>历史与附件均保留。恢复后可继续对话。</p></div><button autoFocus type="button" aria-label="关闭已归档对话" disabled={busy} onClick={() => setArchivesOpen(false)}><X size={18} /></button></header>
           <div className="tauri-archives-panel__list">
-            {archiveError ? <p role="alert">读取归档状态失败：{archiveError}；请关闭后重试。</p> : archivedSessions === null ? <p role="status">正在读取…</p> : archivedSessions.length === 0 ? <p>还没有已归档对话。</p> : archivedSessions.map(item => <article key={item.sessionId}><div><strong>{displayTitle(item.title)}</strong><small>{item.workspaceRoot || "全局对话"} · {new Date(item.archivedAtMs).toLocaleDateString()}</small></div><button type="button" disabled={busy || switchingBlocked || isReadOnlyWorkbenchSource(sessionPageSource)} onClick={() => void changeSessionArchive(item, false)}>恢复并打开</button></article>)}
+            {archiveError ? <p role="alert">读取归档状态失败：{archiveError}；请关闭后重试。</p> : archivedSessions === null ? <p role="status">正在读取…</p> : archivedSessions.length === 0 ? <p>还没有已归档对话。</p> : archivedSessions.map(item => <article key={item.sessionId}><div><strong>{displayTitle(item.title)}</strong><small>{item.workspaceRoot || "全局对话"} · {new Date(item.archivedAtMs).toLocaleDateString()}</small></div><button type="button" disabled={busy || targetIsBusy(item.sessionId) || isReadOnlyWorkbenchSource(sessionPageSource)} onClick={() => void changeSessionArchive(item, false)}>恢复并打开</button></article>)}
           </div>
           {error && <p className="tauri-error" role="alert">{error}</p>}
-          {switchingBlocked && <p role="status">请先完成当前对话或处理审批，再恢复对话。</p>}
+          {switchingBlocked && <p role="status">恢复对话不会中断后台任务。</p>}
         </section>
       </div>}
       {settingsOpen && <TauriSettings key={settingsTab} initialTab={settingsTab} workspaceRoot={currentWorkspace || undefined} defaultWorkspace={defaultWorkspace} onChooseDefaultWorkspace={chooseDefaultWorkspace} onClearDefaultWorkspace={clearDefaultWorkspace} profile={profile} importBusy={busy} bridgeStatus={status} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={error} onRestartBridge={restartBridge} onRefreshCatalogAudit={() => refreshCatalogAudit()} onRefreshProfile={refreshProfile} onImportStableProfile={importStableProfile} onImportStableProjectFolders={importStableProjectFolders} onScanUnclaimedSessions={() => void openScanImportReview()} onClose={() => setSettingsOpen(false)} onProviderSummaryChange={setProviderSummary} currentSessionId={session?.id} currentSessionState={session?.state} currentSessionModelRef={session?.modelRef} onCurrentSessionModelChange={changeCurrentSessionModel} currentSessionHasAttachments={attachments.length > 0} onApplyToCurrentSession={restartBridge} onUseSubagentInChat={insertSubagentInvocation} />}

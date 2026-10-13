@@ -1533,3 +1533,6 @@
 .tauri-pinned-files__error { display: flex; gap: 8px; align-items: start; font-size: 11px; overflow-wrap: anywhere; }
 .tauri-pinned-files__error button { flex: 0 0 auto; text-decoration: underline; }
 .tauri-workspace-preview__actions { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
+
+.tauri-sidebar__session .tauri-session-activity { flex: 0 0 auto; color: var(--accent); font-size: 10px; white-space: nowrap; }
+.tauri-sidebar__session .tauri-session-activity.is-paused { color: var(--fg-dim); }
