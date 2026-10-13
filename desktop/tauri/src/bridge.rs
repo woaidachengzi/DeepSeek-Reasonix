@@ -602,6 +602,7 @@ pub struct BridgeSnapshot {
     pub sequence: u64,
     pub session: BridgeSession,
     pub metrics: Option<BridgeSessionMetrics>,
+    pub live_state: Option<crate::live_sessions::BridgeLiveState>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -2653,7 +2654,15 @@ impl BridgeSupervisor {
     pub fn snapshot(&self, request: SessionRequest) -> Result<BridgeSnapshot, String> {
         let session_id = session_path_component(&request.session_id)?;
         let path = format!("/v1/sessions/{session_id}/snapshot");
-        let envelope = self.request_session("GET", &path, None, None)?;
+        let response = self.request_json("GET", &path, None, None)?;
+        let live_state = crate::live_sessions::parse_live_state(response.get("liveState"))?;
+        let envelope: BridgeSessionResponse =
+            serde_json::from_value(response).map_err(display_error)?;
+        if envelope.protocol_version != u64::from(PROTOCOL_VERSION)
+            || envelope.session.id != session_id
+        {
+            return Err("invalid session snapshot owner".into());
+        }
         let sequence = envelope.sequence.ok_or_else(|| {
             "desktop bridge snapshot did not contain an event sequence".to_string()
         })?;
@@ -2661,7 +2670,17 @@ impl BridgeSupervisor {
             sequence,
             session: envelope.session,
             metrics: envelope.metrics,
+            live_state,
         })
+    }
+
+    pub fn live_sessions(&self) -> Result<crate::live_sessions::BridgeLiveSessions, String> {
+        crate::live_sessions::parse_live_sessions(self.request_json(
+            "GET",
+            "/v1/sessions:live",
+            None,
+            None,
+        )?)
     }
 
     pub fn session_balance(
@@ -5221,7 +5240,7 @@ fn parse_json_response(response: &[u8]) -> Result<Value, String> {
         // Carry only a small allowlist of recovery codes across the Tauri
         // String error boundary. Never forward the bridge's free-text message:
         // it may contain a private transcript or workspace path.
-        if matches!(status, 400 | 404 | 409 | 422 | 503) {
+        if matches!(status, 400 | 404 | 409 | 422 | 429 | 503) {
             let parsed = serde_json::from_slice::<Value>(first_json_value(raw)).ok();
             let code = parsed
                 .as_ref()
@@ -5243,6 +5262,7 @@ fn parse_json_response(response: &[u8]) -> Result<Value, String> {
                     | (404, Some("workspace_file_not_found" | "terminal_not_found"))
                     | (422, Some("workspace_file_unavailable"))
                     | (503, Some("terminal_unavailable"))
+                    | (429, Some("runtime_capacity"))
             );
             if allowed {
                 let code = code.unwrap();
@@ -6946,6 +6966,14 @@ mod tests {
         let response = b"HTTP/1.1 400 Error\r\n\r\n{\"error\":{\"code\":\"model_unavailable\",\"message\":\"private-provider-and-key\"}}";
         assert_eq!(parse_json_response(response).unwrap_err(),
             "desktop bridge request failed with status 400 (model_unavailable)");
+    }
+
+    #[test]
+    fn response_parser_preserves_runtime_capacity_without_private_details() {
+        let response = b"HTTP/1.1 429 Error\r\n\r\n{\"error\":{\"code\":\"runtime_capacity\",\"message\":\"private-session-and-path\"}}";
+        assert_eq!(parse_json_response(response).unwrap_err(), "desktop bridge request failed with status 429 (runtime_capacity)");
+        let unknown = b"HTTP/1.1 429 Error\r\n\r\n{\"error\":{\"code\":\"other\",\"message\":\"private-session-and-path\"}}";
+        assert_eq!(parse_json_response(unknown).unwrap_err(), "desktop bridge request failed with status 429");
     }
 
     #[test]

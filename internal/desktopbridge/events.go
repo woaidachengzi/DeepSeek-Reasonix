@@ -17,12 +17,14 @@ type EventStream struct {
 	mu          sync.Mutex
 	ledger      *EventLedger
 	subscribers map[chan Event]struct{}
+	live        map[string]*liveCheckpoint
 }
 
 func NewEventStream(capacity int) *EventStream {
 	return &EventStream{
 		ledger:      NewEventLedger(capacity),
 		subscribers: make(map[chan Event]struct{}),
+		live:        make(map[string]*liveCheckpoint),
 	}
 }
 
@@ -69,6 +71,7 @@ func (s *EventStream) publish(input Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	published := s.ledger.Append(input)
+	s.advanceLive(published)
 	for subscriber := range s.subscribers {
 		select {
 		case subscriber <- published:

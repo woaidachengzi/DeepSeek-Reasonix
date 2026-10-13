@@ -93,6 +93,26 @@ export interface TauriBridgeSnapshot {
   sequence: number;
   session: TauriBridgeSession;
   metrics?: BridgeSessionMetrics;
+  liveState?: TauriLiveState | null;
+}
+
+/** Bounded public checkpoint; completed tool responses already belong to history. */
+export interface TauriLiveState {
+  active: boolean;
+  answer: { segments: string[]; streaming: boolean };
+  progress: { phase: "thinking" | "answering" | "tool" | "finishing"; tools: { id: string; name: string; state: "running" | "done" | "failed" }[] };
+  truncated: boolean;
+}
+
+export interface TauriLiveSessions {
+  protocolVersion: number;
+  selectedSessionId: string;
+  sessions: TauriBridgeSession[];
+}
+
+export async function tauriLiveSessions(): Promise<TauriLiveSessions> {
+  requireTauri();
+  return invoke<TauriLiveSessions>("bridge_live_sessions");
 }
 
 export interface TauriBridgeHistory {

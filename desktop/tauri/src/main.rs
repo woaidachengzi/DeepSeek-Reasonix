@@ -2,6 +2,7 @@
 
 mod bot_diagnostics;
 mod bridge;
+mod live_sessions;
 mod credential_namespace;
 mod data_profile;
 mod host_preferences;
@@ -791,6 +792,13 @@ fn bridge_session_snapshot(
     request: SessionRequest,
 ) -> Result<BridgeSnapshot, String> {
     supervisor.snapshot(request)
+}
+
+#[tauri::command]
+fn bridge_live_sessions(
+    supervisor: State<'_, BridgeSupervisor>,
+) -> Result<live_sessions::BridgeLiveSessions, String> {
+    supervisor.live_sessions()
 }
 
 #[tauri::command]
@@ -4636,6 +4644,7 @@ fn main() {
             search_mcp_marketplace,
             resolve_mcp_marketplace,
             bridge_session_snapshot,
+            bridge_live_sessions,
             bridge_session_balance,
             bridge_session_history,
             bridge_session_previews,

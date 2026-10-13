@@ -1659,8 +1659,8 @@ func (b *bridgeServer) sessionSnapshot(w http.ResponseWriter, r *http.Request) {
 	}
 	// Capture the event boundary before reading metrics. Later events must stay
 	// replayable instead of being skipped by a newer cursor with older values.
-	sequence := b.events.LatestSequence()
-	response := map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "sequence": sequence, "session": view}
+	live, sequence := b.events.LiveSnapshot(view.ID)
+	response := map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "sequence": sequence, "session": view, "liveState": live}
 	if metrics, ok := b.runtimes.SessionMetrics(view.ID); ok {
 		response["metrics"] = metrics
 	}
