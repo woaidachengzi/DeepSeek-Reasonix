@@ -14,12 +14,23 @@
 
 本改造分支由 [woaidachengzi](https://github.com/woaidachengzi) 独立开发维护。Tauri 迁移和下述改进属于当前分支的工作；原有 Go 引擎及继承功能来自上游 Reasonix。
 
-桌面应用名为 **Reasonix Tauri Preview**，当前版本 `0.1.0`，使用独立应用标识 `io.reasonix.desktop.preview`。它不替换稳定版 Wails 应用；提供 Preview 安装包，不代表全部迁移功能或正式发布门禁已完成。
+目前有两种明确区分的桌面运行方式：
+
+| 方式 | 版本 / 应用标识 | 资料使用方式 |
+| --- | --- | --- |
+| **Reasonix Tauri Preview** | `0.1.0` / `io.reasonix.desktop.preview` | 使用独立托管资料目录，适合开发和隔离试用 |
+| **Reasonix Tauri 原资料接管版** | `0.1.1` / `io.reasonix.desktop.takeover` | 完成备份核验与离线准备后，直接使用原 `~/.reasonix` |
+
+macOS Apple Silicon 接管候选包已通过当前历史及重启恢复验收，维护者已确认实际使用体验。这表示已验证的资料接管路径可用，不代表所有历史格式、平台和正式发布门禁均已完成。
 
 ## 当前分支的改造内容
 
 - **Tauri 桌面宿主**：Rust 外壳管理 Go sidecar、原生窗口、菜单与系统能力，前端通过类型化 bridge 通信。
 - **桌面工作台**：项目与会话管理、模型选择、流式对话、Markdown、附件及会话生命周期管理。
+- **历史与导航**：持久会话身份、目录分页与快照缓存、限制历史响应大小、空闲会话显式切换。项目可改名，空项目可从侧栏移除，保留磁盘文件。
+- **消息级分叉对话**：从已完成的助手回答处分叉，在独立对话中继续，保留原对话。
+- **固定上下文文件**：将工作区文件固定为持久对话上下文，分叉继承固定文件选择。
+- **原资料接管**：完整备份核验、当前 Wails JSONL 原路径登记，以及选定旧 v5 记录的兼容投影；准备过程中保留原配置和源记录。
 - **模型与配置页面**：服务商和模型设置、凭据保存/删除；模型偏好与模型服务页面在不同主题、布局下统一整体底色。
 - **远程管理**：SSH 认证和主机指纹确认、SFTP 浏览/编辑/路径操作，以及 Serve 状态、日志、启停和系统浏览器 controller 入口。
 - **机器人与管理页迁移**：账号管理、配对审批，以及权限、插件、MCP、hooks、memory、subagents、数据和诊断等配置面；迁移和真实服务验收仍逐项推进。
@@ -28,24 +39,62 @@
 
 上述是已接入的功能面，不代表与 Wails 完全对齐。Tauri 原生远程 tab、剩余机器人流程、管理页实际包验收等见 [E 迁移清单](./docs/tauri/E_MIGRATION_CHECKLIST.md)。自动更新不在本轮迁移范围内。
 
+## Tauri 在这个项目中的好处
+
+- **原生桌面宿主，沿用现有网页界面。** Tauri 使用系统 WebView：macOS 为 WKWebView，Windows 为 WebView2，Linux 为 WebKitGTK，无需随应用分发独立浏览器运行时。参见官方[进程模型](https://v2.tauri.app/concept/process-model/)。
+- **桌面能力的职责更清楚。** Rust 负责窗口、菜单、原生弹窗、凭据存储和 sidecar 生命周期；React 界面通过类型化命令与事件调用这些能力。Tauri 的 [IPC 模型](https://v2.tauri.app/concept/inter-process-communication/)提供通信边界，本项目的 bridge 另行执行协议和输入校验。
+- **复用 Go Agent 引擎。** 模型调用、工具、配置和会话恢复继续留在 Go 中；桌面宿主可独立改进，Rust 负责 sidecar 的启动、重启和退出清理，避免重写已有 Agent 行为。
+- **打包与资料模式可分别验证。** 各平台的原生打包配置，以及独立的 Preview／接管应用身份，便于先用私有夹具验证桌面改动，再使用已有资料。
+
+实际使用中的改善来自宿主、历史读取、渲染和生命周期等多方面修复。目前未发布同条件下 Wails 与 Tauri 的内存或延迟对比基准。
+
+## 历史会话的架构改造
+
+```mermaid
+flowchart LR
+    UI[React 对话界面] -->|类型化命令| Host[Rust Tauri 宿主]
+    Host -->|带认证的本地 bridge| Engine[Go Agent 引擎]
+    Engine --> Directory[SQLite 会话身份目录]
+    Engine --> History[历史与模型上下文存储]
+    Engine -->|事件| Host
+    Host -->|界面更新| UI
+```
+
+“最近对话列表”现在主要承担导航元数据职责，不再作为会话是否存在的唯一依据。打开、分页、改名和删除建立在持久身份目录及已核验的历史文件归属之上。
+
+| 层次 | 改造内容 | 使用上的收益 |
+| --- | --- | --- |
+| 身份目录 | SQLite 保存会话 ID、资料目录内相对路径、工作区、标题及修订、顺序和生命周期状态 | 重启后身份可恢复；已删除、缺失或路径变化的会话不会被静默创建为空对话 |
+| 原路径兼容 | 导入的 Wails 身份绑定原 JSONL 相对路径的哈希 | 当前项目历史沿用原位置，拒绝未知或路径不匹配的旧身份 |
+| 目录与历史读取 | 目录游标带快照身份并缓存已审计快照；目录检查离开原生事件循环执行，历史响应最多包含最近 200 条可见消息 | 减少重复目录审计及传入、渲染到界面的内容，避免混用过期目录分页 |
+| 显示历史与模型上下文 | 完整显示历史与已压缩的模型工作集分别保留，并检查覆盖范围和来源 | 接管后可读原历史，也保留原模型上下文，不从界面文字重新拼装上下文 |
+| 分叉与固定文件 | 用已完成回答的前缀 token 确定分叉位置；子会话使用独立身份并继承固定文件选择 | 从指定回答继续探索，保留原对话 |
+| 接管准备 | 停止写入、核验完整备份，在 profile gate 内准备身份与兼容投影，最后发布完成凭据 | 接管宿主拒绝未准备的资料；不支持同一 gate 的旧二进制仍须避免同时运行 |
+
+最近 200 条是当前历史接口的显示上限，尚非完整的向前翻页浏览。引擎恢复时仍可能读取完整历史；端到端性能和更早消息浏览还需继续改进。
+
+本次接管验收覆盖 **25 个当前对话**：**21 个**沿用原 JSONL 路径，**4 个**使用匹配的旧 v5 投影补齐。安装包内的真实宿主逐条打开并验证重启前后历史消息数一致；原生界面还验证了原历史重开、最近目录登记、启动重放和分叉入口。这是本次资料的验证范围，不代表所有用户的历史格式都已覆盖。详见[接管实现与验收记录](./docs/tauri/STABLE_TAKEOVER.md)。
+
 ## 平台状态
 
-截至 2026-10-07：
+截至 2026-10-13；Windows／Linux 行保留 2026-10-07 的验收范围：
 
-| 平台 | Preview 安装包 | 当前验证情况 |
+| 平台 | 安装包 | 当前验证情况 |
 | --- | --- | --- |
-| macOS Apple Silicon | 开发签名 app / DMG | 已构建 Preview 并完成部分包级验证；原生窗口与正式发布门禁仍有未完成项 |
+| macOS Apple Silicon | `0.1.1` 接管 app / DMG，另保留隔离 Preview | 当前资料的原历史／重启及原生界面验收通过；ad hoc 签名，未 Apple 公证；更广的发布门禁仍有待验项 |
 | Windows x64 | NSIS 安装器 `.exe` | 已完成构建和包结构检查；完整原生手动矩阵尚未逐项记录 |
 | Ubuntu 26.04 ARM64 | `.deb` / `.AppImage` | 原生构建、包审计完成，Rust 224 项通过 / 1 项忽略；维护者已确认手动验收通过 |
 | Linux x64 / 其他发行版 | 同架构构建适配及手动 x64 打包工作流 | 不能继承 Ubuntu ARM64 的通过结论 |
 
 详见 [Windows 验收](./docs/tauri/WINDOWS_PREVIEW_ACCEPTANCE.md)、[Linux 验收](./docs/tauri/LINUX_PREVIEW_ACCEPTANCE.md) 和 [Ubuntu 包摘要](./docs/tauri/evidence/2026-10-07-linux-arm64/README.md)。
 
-目前是本地交付的 Preview 包，不是已发布、已签名的稳定下载渠道。上游 npm 包、官网、下载页及签名声明不代表本分支的 Tauri 安装包。
+`0.1.1` 接管候选包为本地 macOS 交付，不代表已建立 Apple 公证或自动更新的稳定发布渠道。上游 npm 包、官网、下载页及签名声明不代表本分支的 Tauri 安装包。
 
-## 使用 Preview
+## 安装与选择资料模式
 
 使用与你的系统、架构对应的交付包，运行前核对随包 SHA256。安装并启动 **Reasonix Tauri Preview** 后，在应用内配置模型服务即可。
+
+macOS Apple Silicon 接管包：打开 `Reasonix Tauri_0.1.1_aarch64.dmg`，将 **Reasonix Tauri** 拖入 Applications。原资料目录须事先完成完整备份核验，并具有匹配的 `tauri-takeover-v1.json` 完成凭据；单纯构建或安装不会代办接管准备。保留凭据引用的备份，使用接管版前完全退出 Wails。准备与回退见[接管记录](./docs/tauri/STABLE_TAKEOVER.md)。该本地候选包为 ad hoc 签名，尚未 Apple 公证。
 
 Ubuntu ARM64 交付包可在安装包目录打开终端执行：
 
@@ -65,7 +114,7 @@ APPIMAGE_EXTRACT_AND_RUN=1 "./Reasonix Tauri Preview_0.1.0_aarch64.AppImage"
 
 安装包不携带维护者的个人 API key 或配置。默认模型条目不等于已保存凭据，请配置自己的服务凭据。Linux 系统凭据保存需要可用的会话 D-Bus 和 Secret Service。
 
-默认托管 Preview 档案与稳定版 `~/.reasonix` 分离，旧资料仅在明确操作后导入。显式设置 `REASONIX_HOME` 会覆盖默认目录；没有备份时，不要让测试包直接使用稳定版资料。
+默认托管 Preview 档案与稳定版 `~/.reasonix` 分离，旧资料仅在明确操作后导入。Preview 中显式设置 `REASONIX_HOME` 可选择符合宿主保护规则的资料目录；接管安装版则选择原默认目录并检查完成凭据，不能用环境变量覆盖来代替已核验的接管准备。
 
 ## 从当前分支构建
 
@@ -78,11 +127,19 @@ pnpm --dir desktop/frontend install --frozen-lockfile
 pnpm --dir desktop/frontend tauri:dev
 ```
 
-macOS 打包：
+macOS 隔离 Preview 打包：
 
 ```bash
 pnpm --dir desktop/frontend tauri:build
 ```
+
+macOS 原资料接管版打包（启动前另行完成资料准备）：
+
+```bash
+pnpm --dir desktop/frontend tauri:build -- --config tauri.takeover.conf.json --bundles app,dmg
+```
+
+接管 App 和 DMG 产物位于 `desktop/tauri/target/release/bundle/`。本次接管验收仅覆盖 macOS Apple Silicon。
 
 Windows 原生构建，准备 Visual Studio C++ Build Tools 后，在仓库根目录执行：
 
@@ -105,6 +162,7 @@ Linux 产物位于 `desktop/tauri/target/<本机 Rust triple>/release/bundle/`�
 ## 文档入口
 
 - [Tauri 宿主、开发和档案边界](./desktop/tauri/README.md)
+- [原资料接管、验收与回退](./docs/tauri/STABLE_TAKEOVER.md)
 - [E 迁移范围与未完成项](./docs/tauri/E_MIGRATION_CHECKLIST.md)
 - [API 功能审计与发布门禁](./docs/tauri/API_SURFACE_AUDIT.md)
 - [Windows Preview 验收](./docs/tauri/WINDOWS_PREVIEW_ACCEPTANCE.md)
