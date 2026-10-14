@@ -193,7 +193,10 @@ export const MarkdownHistory = memo(function MarkdownHistory({
     // The Window measures the new DOM in this same prepaint React commit,
     // rather than exposing a changed body above an old prefix for one frame.
     presentation.geometryChanged();
-  }, [blocks, presentation.geometryChanged]);
+    // Parsing is not presentation: setParsed may be queued while a cold
+    // renderer still suspends. Notify only after formatted blocks commit.
+    if (blocks) onParsed?.();
+  }, [blocks, presentation.geometryChanged, onParsed]);
 
   useEffect(() => {
     if (initial) {
@@ -205,7 +208,6 @@ export const MarkdownHistory = memo(function MarkdownHistory({
           bytes: text.length * 2 + result.selectionText.length * 2 + estimateHastBytes(result.blocks),
         });
       }
-      onParsed?.();
       return;
     }
     const handle = getMarkdownWorkerClient().parse(text);
@@ -230,7 +232,6 @@ export const MarkdownHistory = memo(function MarkdownHistory({
           releaseDeferredCommit = undefined;
           if (pendingPresentation.current === commit) pendingPresentation.current = null;
           setParsed(next);
-          onParsed?.();
         };
         const scroller = fallbackMarkerRef.current?.closest<HTMLElement>(".transcript") ?? null;
         const isAtBottom = () => !scroller

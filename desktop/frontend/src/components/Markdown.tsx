@@ -388,6 +388,13 @@ const StreamingMarkdownTail = memo(function StreamingMarkdownTail({ text }: { te
   return <div ref={elementRef} className="md md--stream-tail" data-transcript-selection-source-fallback />;
 });
 
+function HistoryMarkdownCommit({ text, onReady }: { text: string; onReady?: () => void }) {
+  // This marker is inside the renderer's Suspense content, so its layout
+  // effect cannot run while a cold renderer is still showing its fallback.
+  useLayoutEffect(() => { onReady?.(); }, [text, onReady]);
+  return null;
+}
+
 export const Markdown = memo(function Markdown({
   text,
   plainStatusBlocks = false,
@@ -412,10 +419,7 @@ export const Markdown = memo(function Markdown({
   const [legacyMode, setLegacyMode] = useState(false);
   const handleWorkerError = useCallback(() => {
     setLegacyMode(true);
-    // Keep the existing readable fallback on parser failure rather than
-    // trapping a history surface behind a permanent loading indicator.
-    onHistoryReady?.();
-  }, [onHistoryReady]);
+  }, []);
   // While the worker owns the final parse of a completed stream, hold the
   // idle finalization so the full document is not ALSO parsed main-thread.
   const holdIdleFinalization = !streaming && !legacyMode;
@@ -463,6 +467,7 @@ export const Markdown = memo(function Markdown({
             ))}
           </div>
         )}
+        {legacyMode && renderedText === text && onHistoryReady && <HistoryMarkdownCommit text={renderedText} onReady={onHistoryReady} />}
       </Suspense>
       {pendingText && <StreamingMarkdownTail text={pendingText} />}
     </>

@@ -82,6 +82,12 @@ console.log("\nTranscriptKernel deterministic transactions");
   revealKernel.correctAnchor(bRestore, () => undefined);
   revealClock.flushFrames();
   ok(revealWrites.length === 1 && revealWrites[0] === b.generation, "formatted history reveals after one current-generation tail restore");
+  const lateRestore = revealKernel.begin("restore", { kind: "tail" })!;
+  revealKernel.afterCurrentGenerationPaint(() => revealKernel.correctAnchor(lateRestore, () => undefined));
+  revealKernel.beginUserGesture({ scrollTop: 200, scrollHeight: 2000, clientHeight: 600,
+    visibleBlocks: [{ key: "history-reader", top: 180, bottom: 400 }] });
+  revealClock.flushFrames();
+  ok(revealWrites.length === 1 && lateRestore.status === "cancelled", "a delayed cold renderer reveal respects reader ownership with zero extra writes");
 }
 const clock = new FakeClock();
 const events: TranscriptKernelEvent[] = [];
