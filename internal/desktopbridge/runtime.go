@@ -981,6 +981,29 @@ func (m *RuntimeManager) History(sessionID string) (HistoryView, error) {
 // the event transport added on top of this lifecycle layer. Saved settings are
 // applied first, so a key written after the controller froze it still reaches
 // the provider.
+// RuntimeContinuation admits an explicit host continuation without user prose.
+type RuntimeContinuation interface{ ContinueTurn() bool }
+
+func (m *RuntimeManager) Continue(ctx context.Context, sessionID string) (SessionView, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err := m.rebuildSettingsLocked(ctx, strings.TrimSpace(sessionID)); err != nil {
+		return SessionView{}, err
+	}
+	if m.runtime.State() != "idle" {
+		return SessionView{}, ErrSessionConflict
+	}
+	runtime, ok := m.runtime.(RuntimeContinuation)
+	if !ok || !runtime.ContinueTurn() {
+		return SessionView{}, ErrInvalidInput
+	}
+	m.localInputVersion++
+	m.signalLocalReclaimLocked()
+	view := m.view
+	view.State = m.runtime.State()
+	return view, nil
+}
+
 func (m *RuntimeManager) Submit(ctx context.Context, sessionID, input string) (SessionView, error) {
 	if strings.TrimSpace(input) == "" {
 		return SessionView{}, ErrInvalidInput

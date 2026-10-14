@@ -767,6 +767,9 @@ func (b *bridgeServer) sessionCommand(w http.ResponseWriter, r *http.Request) {
 	const prefix = "/v1/sessions/"
 	path := strings.TrimPrefix(r.URL.Path, prefix)
 	switch {
+	case strings.HasSuffix(path, ":continue"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":continue"))
+		b.idempotent(1024, b.continueSession)(w, r)
 	case strings.HasSuffix(path, ":apply-settings"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":apply-settings"))
 		b.idempotent(1024, b.applySessionSettings)(w, r)
@@ -1829,6 +1832,15 @@ func (b *bridgeServer) setSessionModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})
+}
+
+func (b *bridgeServer) continueSession(w http.ResponseWriter, r *http.Request) {
+	view, err := b.runtimes.Continue(r.Context(), r.PathValue("id"))
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to continue this session")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})
 }
 
 func (b *bridgeServer) applySessionSettings(w http.ResponseWriter, r *http.Request) {

@@ -116,6 +116,15 @@ try {
   await act(async () => { document.querySelector<HTMLButtonElement>('button[aria-label="停止生成"]')!.click(); await settle(); });
   assert.equal(fixture.__tauriBridgeCalls.filter(call => call.name === "bridge_cancel").at(-1)?.args.sessionId, "b", "stop routes only to selected B");
   assert.equal(fixture.__parallelSessionStates.a, "paused", "stopping B preserves A waiting state");
+  // Empty composer continues only an existing, loaded and idle conversation.
+  await typeDraft("");
+  await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label^="移除文件"]')!.click(); await settle(); });
+  await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="继续运行"]')!.click(); await settle(); });
+  assert.equal(fixture.__tauriBridgeCalls.filter(call => call.name === "bridge_continue").at(-1)?.args.sessionId, "b");
+  assert.equal(fixture.__parallelSessionStates.a, "paused", "empty continuation preserves the other owner");
+  assert(!body().includes("使用当前模型继续，不追加消息"), "continuation instructions do not enter the transcript");
+  await act(async () => { [...document.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.includes("新建对话"))!.click(); await settle(); });
+  assert.equal(document.querySelector<HTMLButtonElement>('[aria-label="发送消息"]')!.disabled, true, "blank new conversations cannot continue");
   console.log("PASS parallel workspace: switching, checkpoints, drafts, attachments, late history, prompts and independent stop");
 } finally {
   await act(async () => { root.unmount(); });

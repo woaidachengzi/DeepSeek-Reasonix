@@ -174,6 +174,7 @@ import {
   applyTauriSessionSettings,
   startTauriBridgeEvents,
   submitTauriBridge,
+  continueTauriBridge,
   switchTauriBridgeSession,
   tauriWorkspace,
   tauriWorkspaceFile,
@@ -2983,7 +2984,29 @@ export function TauriSessionPreview() {
     setDraftAttachmentPaths(previous => previous.filter((_, itemIndex) => itemIndex !== index));
   }
 
+  const canContinue = Boolean(session && history?.session.id === session.id && history.totalMessages > 0 && !historyLoading && !historyError);
+  const emptyComposer = !prompt.trim() && selectedTexts.length === 0 && attachments.length === 0 && draftAttachmentPaths.length === 0;
+
+  async function continueCurrentTurn() {
+    if (!session || busy || submitInFlightRef.current || !streamReady || session.state !== "idle" || !canContinue || isReadOnlyWorkbenchSource(sessionPageSource)) return;
+    submitInFlightRef.current = true;
+    setBusy(true);
+    setError("");
+    const epoch = ++turnEpochRef.current;
+    clearLiveResponse();
+    try {
+      const updated = await continueTauriBridge(session.id);
+      if (turnEpochRef.current === epoch) setSession(updated);
+    } catch (cause) {
+      if (turnEpochRef.current === epoch) setError(tauriMessageFrom(cause));
+    } finally {
+      submitInFlightRef.current = false;
+      setBusy(false);
+    }
+  }
+
   async function submit() {
+    if (emptyComposer && canContinue) { await continueCurrentTurn(); return; }
     const text = [prompt.trim(), formatSelectedTextContext(selectedTexts)].filter(Boolean).join("\n\n");
     if (busy || submitInFlightRef.current || isReadOnlyWorkbenchSource(sessionPageSource) ||
         (!text && attachments.length === 0 && draftAttachmentPaths.length === 0)) return;
@@ -3724,7 +3747,7 @@ export function TauriSessionPreview() {
               <button className="tauri-attach-button" type="button" onClick={() => void addAttachments()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state !== "idle"))} aria-label="添加文件" title="从本机选择文件并附加到消息"><Plus size={23} /></button>
               <TauriComposerControls key={session?.id ?? "new"} sessionId={session?.id} workspaceRoot={currentWorkspace} effort={session ? session.effort || "auto" : draftEffort && draftEffort.model === providerSummary?.defaultModel ? draftEffort.level : "auto"} onEffortChange={changeEffort} model={session?.modelRef || providerSummary?.defaultModel || ""} providers={providerSummary} onProvidersChange={setProviderSummary} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state !== "idle" || attachments.length > 0 || draftAttachmentPaths.length > 0))} refreshToken={settingsOpen} onModelChange={model => session ? changeCurrentSessionModel(model) : changeDefaultModel(model)} onBusyChange={setBusy} onError={setError} onOpenModels={() => { setSettingsTab("providers"); setSettingsOpen(true); }} />
               <div className="tauri-composer__actions">
-                {session?.state === "running" ? <button className="tauri-send-button is-stop" type="button" onClick={() => void cancel()} disabled={busy} aria-label="停止生成"><Square size={15} fill="currentColor" /></button> : <button className="tauri-send-button" type="button" onClick={() => void submit()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state === "paused")) || (!prompt.trim() && selectedTexts.length === 0 && attachments.length === 0 && draftAttachmentPaths.length === 0)} aria-label="发送消息"><ArrowUp size={18} /></button>}
+                {session?.state === "running" ? <button className="tauri-send-button is-stop" type="button" onClick={() => void cancel()} disabled={busy} aria-label="停止生成"><Square size={15} fill="currentColor" /></button> : <button className="tauri-send-button" type="button" onClick={() => void submit()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state === "paused")) || (emptyComposer && !canContinue)} aria-label={emptyComposer && canContinue ? "继续运行" : "发送消息"} title={emptyComposer && canContinue ? "使用当前模型继续，不追加消息" : "发送消息"}><ArrowUp size={18} /></button>}
               </div>
             </div>
           </div>

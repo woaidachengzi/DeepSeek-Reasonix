@@ -1800,6 +1800,11 @@ export async function tauriBridgeHistory(sessionId: string): Promise<TauriBridge
   return invoke<TauriBridgeHistory>("bridge_session_history", { request: { sessionId } });
 }
 
+export async function continueTauriBridge(sessionId: string): Promise<TauriBridgeSession> {
+  requireTauri();
+  return invoke<TauriBridgeSession>("bridge_continue", { request: { sessionId } });
+}
+
 export async function submitTauriBridge(sessionId: string, input: string): Promise<TauriBridgeSession> {
   requireTauri();
   return invoke<TauriBridgeSession>("bridge_submit", { request: { sessionId, input } });

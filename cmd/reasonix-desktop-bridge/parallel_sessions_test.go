@@ -222,6 +222,36 @@ func TestParallelActualControllersPromptsBindingsAndPersistence(t *testing.T) {
 	if err != nil || len(history.Messages) < 2 || !strings.Contains(history.Messages[len(history.Messages)-1].Content, "owned result") {
 		t.Fatal("B completion was not durable", err)
 	}
+	bridge := newBridgeServerWithEvents(testToken, "continue-fixture", pool, events)
+	request := func() *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "/v1/sessions/b:continue", strings.NewReader("{}"))
+		r.Header.Set("Authorization", "Bearer "+testToken)
+		r.Header.Set(requestIDHeader, "continue-fixture-id-1234567890123456")
+		response := httptest.NewRecorder()
+		bridge.handler().ServeHTTP(response, r)
+		return response
+	}
+	if response := request(); response.Code != 202 {
+		t.Fatal("continuation rejected", response.Code, response.Body.String())
+	}
+	awaitOwnedCommand(t, fixture.calls)
+	if response := request(); response.Code != 202 {
+		t.Fatal("idempotent retry rejected")
+	}
+	awaitParallelState(t, pool, "b", false)
+	history, err = pool.History("b")
+	users := 0
+	for _, message := range history.Messages {
+		if message.Role == "user" {
+			users++
+		}
+	}
+	if err != nil || users != 1 {
+		t.Fatal("continuation added a visible user message", users, err)
+	}
+	if view, ok := pool.SessionSnapshot("a"); !ok || view.State != "idle" {
+		t.Fatal("continuation changed another owner")
+	}
 	frames, resync, _, off := events.Subscribe(0)
 	defer off()
 	asks := map[string]bool{}

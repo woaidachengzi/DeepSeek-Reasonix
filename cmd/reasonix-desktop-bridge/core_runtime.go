@@ -1100,7 +1100,7 @@ func (r *controllerRuntime) KeepRuntimeResident() bool {
 const bridgeHistoryMaxContentRunes = 16_000
 
 func bridgeHistoryMessageVisible(message provider.Message) bool {
-	return message.Role == provider.RoleUser && !sessioncontext.IsContent(message.Content) && !agent.IsPinnedContextRevision(message) ||
+	return message.Role == provider.RoleUser && message.Origin != provider.MessageOriginHost && !sessioncontext.IsContent(message.Content) && !agent.IsPinnedContextRevision(message) ||
 		message.Role == provider.RoleAssistant
 }
 
@@ -1357,6 +1357,14 @@ func truncateBridgeHistoryContent(content string) (string, bool) {
 		return content, false
 	}
 	return string(runes[:bridgeHistoryMaxContentRunes]) + "\n\n[Preview truncated this message]", true
+}
+
+func (r *controllerRuntime) ContinueTurn() bool {
+	accepted := r.controller.ContinueTurn()
+	if accepted {
+		r.markSnapshotPending()
+	}
+	return accepted
 }
 
 func (r *controllerRuntime) Submit(input string) {

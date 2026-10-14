@@ -4052,6 +4052,17 @@ impl BridgeSupervisor {
         Ok(result)
     }
 
+    pub fn continue_session(&self, request: SessionRequest) -> Result<BridgeSession, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let request_id = opaque_secret()?;
+        let path = format!("/v1/sessions/{session_id}:continue");
+        let response = self.request_session("POST", &path, Some(json!({})), Some(&request_id))?;
+        if response.session.id != session_id {
+            return Err("invalid continuation owner".into());
+        }
+        Ok(response.session)
+    }
+
     pub fn submit(&self, request: SubmitRequest) -> Result<BridgeSession, String> {
         let session_id = session_path_component(&request.session_id)?;
         let request_id = opaque_secret()?;

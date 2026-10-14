@@ -493,3 +493,11 @@ func (p *RuntimePool) WorkspaceImageWithRemote(ctx context.Context, sessionID, s
 	}
 	return slot.WorkspaceImageWithRemote(ctx, sessionID, source, remote)
 }
+
+func (p *RuntimePool) Continue(ctx context.Context, sessionID string) (SessionView, error) {
+	slot, err := p.slot(sessionID)
+	if err != nil {
+		return SessionView{}, err
+	}
+	return slot.Continue(ctx, sessionID)
+}

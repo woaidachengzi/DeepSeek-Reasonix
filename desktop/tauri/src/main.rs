@@ -826,6 +826,14 @@ fn bridge_session_history(
 }
 
 #[tauri::command]
+fn bridge_continue(
+    supervisor: State<'_, BridgeSupervisor>,
+    request: SessionRequest,
+) -> Result<BridgeSession, String> {
+    supervisor.continue_session(request)
+}
+
+#[tauri::command]
 fn bridge_submit(
     supervisor: State<'_, BridgeSupervisor>,
     request: SubmitRequest,
@@ -4662,6 +4670,7 @@ fn main() {
             scan_unclaimed_workbench_sessions,
             import_unclaimed_workbench_sessions,
             bridge_submit,
+            bridge_continue,
             bridge_attach_file,
             stage_pasted_image,
             discard_pasted_image,
