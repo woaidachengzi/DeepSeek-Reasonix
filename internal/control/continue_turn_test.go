@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"errors"
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
@@ -52,5 +53,38 @@ func TestContinueTurnUsesHostOriginAndOriginalPolicySource(t *testing.T) {
 	}
 	if len(c.Checkpoints()) != 1 {
 		t.Fatal("continuation created a visible rewind checkpoint")
+	}
+}
+
+func TestContinueTurnAfterProviderFailure(t *testing.T) {
+	sess := agent.NewSession("sys")
+	prov := &scriptedTurns{turns: [][]provider.Chunk{{{Type: provider.ChunkError, Err: errors.New("fixture model unavailable")}}, textTurn("recovered answer")}}
+	exec := agent.New(prov, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
+	c := New(Options{Runner: exec, Executor: exec, Label: "retry-test"})
+	defer c.Close()
+	if err := newTurnOrchestrator(c).runTurnWithRawDisplay(context.Background(), "original question", "original question", ""); err == nil {
+		t.Fatal("fixture did not fail")
+	}
+	if !c.ContinueTurn() {
+		t.Fatal("failed turn cannot continue")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for c.Running() && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if c.Running() {
+		t.Fatal("retry did not finish")
+	}
+	users, answered := 0, false
+	for _, message := range sess.Snapshot() {
+		if agent.IsUserAuthoredTurnMessage(message) {
+			users++
+		}
+		if message.Role == provider.RoleAssistant && message.Content == "recovered answer" {
+			answered = true
+		}
+	}
+	if users != 1 || !answered {
+		t.Fatal("retry did not recover without a duplicate question", users, answered)
 	}
 }
