@@ -59,9 +59,10 @@ import { tauriThemePackById } from "./tauriThemeCatalog";
 import { tauriWorkspaceRecoveryCopy } from "./tauriWorkspaceRecoveryCopy";
 
 /** Per-message error boundary to prevent one bad message from crashing the entire transcript. */
-class MessageErrorBoundary extends Component<{ children: ReactNode; index: number }, { hasError: boolean }> {
+class MessageErrorBoundary extends Component<{ children: ReactNode; index: number; onError?: () => void }, { hasError: boolean }> {
   state = { hasError: false };
   static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch() { this.props.onError?.(); }
   render() {
     if (this.state.hasError) {
       return <div style={{ padding: "8px 12px", color: "#e0696a", fontSize: "11px", border: "1px solid #343945", borderRadius: "8px", margin: "8px 0" }}>
@@ -73,11 +74,11 @@ class MessageErrorBoundary extends Component<{ children: ReactNode; index: numbe
 }
 
 
-function UserMessageContent({ text }: { text: string }) {
+function UserMessageContent({ text, onReady }: { text: string; onReady?: () => void }) {
   const context = splitSelectedTextContext(text);
   const display = parseAttachmentRefsForDisplay(context.submitText);
   return <>
-    <Markdown text={display.text} />
+    <Markdown text={display.text} onHistoryReady={onReady} />
     {display.attachments.length > 0 && <div className="tauri-message__attachments">{display.attachments.map(attachment => <span key={attachment.path} title={attachment.path} className={attachment.kind === "image" ? "is-image" : undefined}>{attachment.kind === "image" ? <MarkdownImage src={attachment.path} alt={attachment.name} /> : <Paperclip size={13} />}{attachment.name}</span>)}</div>}
     {context.entries.map((entry, index) => <details key={index} className="tauri-message__selection">
       <summary>{selectedTextSnippet(entry.text)}</summary>
@@ -104,12 +105,14 @@ function HistoryMessageArticle({ entry, sessionId, questionId, finalAnswer = fal
   forkDisabledReason?: string;
 }) {
   const { message, index } = entry;
-  return <MessageErrorBoundary index={index}>
+  const historyParsed = useTauriHistoryParsed();
+  const markHistoryReady = useCallback(() => historyParsed(index, message.content ?? ""), [historyParsed, index, message.content]);
+  return <MessageErrorBoundary index={index} onError={markHistoryReady}>
     <article id={questionId} data-tauri-question-anchor={questionId} data-transcript-block-key={questionId ?? `message-${index}`} className={`tauri-message is-${message.role}${finalAnswer ? " is-final" : ""}`}>
       {message.role !== "user" && <div className="tauri-message__avatar" aria-hidden="true"><Sparkles size={16} /></div>}
       <div className="tauri-message__content">
         {message.role !== "user" && <div className="tauri-message__role">Reasonix</div>}
-        {message.role === "user" ? <UserMessageContent text={message.content ?? ""} /> : <Markdown text={message.content ?? ""} cacheKey={`${sessionId}:${index}`} />}
+        {message.role === "user" ? <UserMessageContent text={message.content ?? ""} onReady={markHistoryReady} /> : <Markdown text={message.content ?? ""} cacheKey={`${sessionId}:${index}`} onHistoryReady={markHistoryReady} />}
         {message.truncated && <small>为保护界面性能，这条历史内容已截断。</small>}
       </div>
       {message.role === "user" && <UserMessageMeta text={message.content} createdAtMs={message.createdAtMs} />}
@@ -258,6 +261,7 @@ import {
 import { filterWorkbenchProjectGroups, groupWorkbenchSessions, needsFirstMessageTitle, titleFromFirstUser, workbenchProjectKey, type WorkbenchProjectFolder } from "./workbenchSessions";
 import { sessionLifecycleFailure, sessionLifecycleNotice } from "./sessionLifecycleError";
 import "./tauriChatWorkspace.css";
+import { TauriHistorySurface, useTauriHistoryParsed } from "./TauriHistorySurface";
 
 interface WorkbenchSessionTab {
   sessionId: string;
@@ -701,6 +705,7 @@ export function TauriSessionPreview() {
     geometryRevision: `${session?.id}:${history?.sequence}:${history?.startIndex}:${history?.messages.length}:${liveText.length}:${pendingUserMessageTime}:${session?.state}:${progressMode}`,
   });
   const { scrollRef: conversationRef, scrollElement, kernel: transcriptKernel, commitViewportGeometry } = viewport;
+  const prepareHistoryViewport = useCallback(() => commitViewportGeometry(undefined, true), [commitViewportGeometry]);
   useLayoutEffect(() => { commitViewportGeometry(); }, [history, liveProgress, pendingUserMessage, commitViewportGeometry]);
   useLayoutEffect(() => {
     if (!scrollElement || typeof ResizeObserver === "undefined") return;
@@ -891,6 +896,9 @@ export function TauriSessionPreview() {
       Boolean(session && session.state !== "idle" && history.session.state !== "idle" && !pendingUserMessage),
     )
     : [], [history, session?.state, pendingUserMessage]);
+  const historyMarkdownEntries = useMemo(() => historyPresentation.flatMap(item =>
+    item.kind === "message" ? [item.entry] : item.active || progressMode === "deep" ? item.entries : []
+  ).map(entry => ({ index: entry.index, text: entry.message.content ?? "" })), [historyPresentation, progressMode]);
 
   useEffect(() => {
     const conversation = conversationRef.current;
@@ -3724,7 +3732,7 @@ export function TauriSessionPreview() {
           </div>
         </header>
 
-        <TauriImageScope sessionId={session?.id}><div className="tauri-conversation" ref={viewport.setScroller} onScroll={viewport.onScroll}
+        <TauriImageScope sessionId={session?.id}><TauriHistorySurface key={session?.id ?? "new"} entries={historyMarkdownEntries} loaded={Boolean(history && history.session.id === session?.id)} onPrepared={prepareHistoryViewport}><div className="tauri-conversation" ref={viewport.setScroller} onScroll={viewport.onScroll}
           onWheelCapture={viewport.onWheelCapture} onPointerDownCapture={viewport.onPointerDownCapture}
           onTouchStartCapture={() => viewport.onTouchStartCapture()} onTouchEndCapture={viewport.onTouchEndCapture}
           onKeyDownCapture={viewport.onKeyDownCapture}>
@@ -3753,7 +3761,7 @@ export function TauriSessionPreview() {
             </div>
             {!session && <button className="tauri-welcome__start" type="button" onClick={() => composerRef.current?.focus()} disabled={busy}><Plus size={16} />开始新对话</button>}
           </section>}
-        </div></TauriImageScope>
+        </div></TauriHistorySurface></TauriImageScope>
 
         {questions.length >= 2 && <QuestionJumpBar loadedQuestions={questions} totalQuestions={questions.length} activeTurn={activeQuestion} onJump={jumpToQuestion}
           height={Math.min(240, Math.max(48, questions.length * 18 + 12))} />}

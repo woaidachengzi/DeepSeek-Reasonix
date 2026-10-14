@@ -65,6 +65,24 @@ class FakeClock implements TranscriptKernelClock {
 }
 
 console.log("\nTranscriptKernel deterministic transactions");
+{
+  const revealClock = new FakeClock();
+  const revealKernel = new TranscriptKernel({ clock: revealClock });
+  const revealWrites: number[] = [];
+  revealKernel.connectWriter(request => { revealWrites.push(request.generation); return { accepted: true, offset: 900, changed: true }; });
+  revealKernel.replaceSurface("history-format-a");
+  const aRestore = revealKernel.begin("restore", { kind: "tail" })!;
+  revealKernel.afterCurrentGenerationPaint(() => revealKernel.correctAnchor(aRestore, () => undefined));
+  const staleParsers = [...revealClock.frames.values()];
+  const b = revealKernel.replaceSurface("history-format-b");
+  staleParsers.forEach(callback => callback(revealClock.time));
+  ok(revealWrites.length === 0, "a late Markdown geometry commit cannot move a newer history surface");
+  const bRestore = revealKernel.begin("restore", { kind: "tail" })!;
+  revealKernel.advanceGeometry();
+  revealKernel.correctAnchor(bRestore, () => undefined);
+  revealClock.flushFrames();
+  ok(revealWrites.length === 1 && revealWrites[0] === b.generation, "formatted history reveals after one current-generation tail restore");
+}
 const clock = new FakeClock();
 const events: TranscriptKernelEvent[] = [];
 const writes: Array<{ generation: number; transactionId: number; offset: number; owner: string }> = [];

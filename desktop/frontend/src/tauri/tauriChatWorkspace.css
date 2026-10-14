@@ -392,6 +392,10 @@
 .tauri-welcome__start { display: inline-flex; height: 36px; align-items: center; gap: 8px; padding: 0 14px; margin-top: 19px; border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent); border-radius: 10px; background: var(--accent); color: var(--accent-fg) !important; font-size: 12px !important; font-weight: 620 !important; }
 .tauri-welcome__start:hover:not(:disabled) { filter: brightness(1.06); }
 .tauri-loading { display: grid; flex: 1; align-content: center; justify-items: center; gap: 11px; color: var(--fg-faint); font-size: 12px; }
+.tauri-conversation-frame { display: flex; position: relative; min-height: 0; flex: 1 1 auto; }
+.tauri-history-surface { display: flex; min-width: 0; min-height: 0; flex: 1 1 auto; }
+.tauri-history-surface.is-preparing { visibility: hidden; pointer-events: none; }
+.tauri-history-preparing { position: absolute; inset: 0; background: var(--bg); pointer-events: none; }
 .tauri-loading > span { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: tauri-spin .8s linear infinite; }
 
 .tauri-transcript { width: min(var(--tauri-conversation-max), calc(100% - 56px)); margin: 0 auto; padding: 34px 0 46px; }

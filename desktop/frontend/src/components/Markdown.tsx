@@ -394,6 +394,7 @@ export const Markdown = memo(function Markdown({
   streaming = false,
   cacheKey,
   wasStreamed,
+  onHistoryReady,
 }: {
   text: string;
   plainStatusBlocks?: boolean;
@@ -402,12 +403,19 @@ export const Markdown = memo(function Markdown({
   cacheKey?: string;
   /** The item originated in the live renderer, even if this is a remount. */
   wasStreamed?: boolean;
+  /** Signals that a history host can reveal its first formatted presentation. */
+  onHistoryReady?: () => void;
 }) {
   // legacyMode: the worker/inline pipeline failed (Worker unavailable AND the
   // in-process parse threw) — fall back to the pre-Phase-E behavior:
   // the idle-time main-thread finalization below parses the full document.
   const [legacyMode, setLegacyMode] = useState(false);
-  const handleWorkerError = useCallback(() => setLegacyMode(true), []);
+  const handleWorkerError = useCallback(() => {
+    setLegacyMode(true);
+    // Keep the existing readable fallback on parser failure rather than
+    // trapping a history surface behind a permanent loading indicator.
+    onHistoryReady?.();
+  }, [onHistoryReady]);
   // While the worker owns the final parse of a completed stream, hold the
   // idle finalization so the full document is not ALSO parsed main-thread.
   const holdIdleFinalization = !streaming && !legacyMode;
@@ -432,6 +440,7 @@ export const Markdown = memo(function Markdown({
     finalizeLengthRef.current = text.length;
   }, [streaming, legacyMode, text]);
   const handleWorkerParsed = useCallback(() => {
+    onHistoryReady?.();
     if (finalizeStartRef.current === 0) return;
     performance.measure("reasonix:markdown-finalize", {
       start: finalizeStartRef.current,
@@ -440,7 +449,7 @@ export const Markdown = memo(function Markdown({
     });
     finalizeStartRef.current = 0;
     finalizeLengthRef.current = 0;
-  }, []);
+  }, [onHistoryReady]);
 
   const committedView = (
     <>
