@@ -3026,7 +3026,7 @@ export function TauriSessionPreview() {
     setBusy(true);
     setError("");
     const cardId = crypto.randomUUID();
-    setSteeringCards(previous => [...previous, {id:cardId,sessionId:targetId,text,state:"sending"}].slice(-100));
+    setSteeringCards(previous => [...previous, {id:cardId,sessionId:targetId,text,state:"sending" as const}].slice(-100));
     try {
       await steerTauriBridge(targetId, text);
       setSteeringCards(previous => previous.map(card => card.id === cardId && card.state === "sending" ? {...card,state:"submitted"} : card));
