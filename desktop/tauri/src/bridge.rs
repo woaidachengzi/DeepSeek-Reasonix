@@ -5149,6 +5149,11 @@ fn bridge_request_timeout(path: &str) -> Duration {
         // transcripts. Match the existing slow-operation budget rather than
         // cancelling a valid restore after the ordinary two-second RPC budget.
         "/v1/sessions:open" | "/v1/sessions:switch" => Duration::from_secs(120),
+        // These Go handlers allow twenty seconds for an upstream provider.
+        // Leave time for the handler to return its result instead of timing
+        // out a healthy model at the ordinary local-RPC budget.
+        "/v1/settings/provider-model-probe"
+        | "/v1/settings/provider-configs/discover-models" => Duration::from_secs(25),
         _ => Duration::from_secs(2),
     }
 }
@@ -6884,8 +6889,13 @@ mod tests {
     }
 
     #[test]
-    fn session_restore_waits_beyond_the_ordinary_rpc_budget() {
-        for path in ["/v1/sessions:open", "/v1/sessions:switch"] {
+    fn slow_operations_wait_beyond_the_ordinary_rpc_budget() {
+        for path in [
+            "/v1/sessions:open",
+            "/v1/sessions:switch",
+            "/v1/settings/provider-model-probe",
+            "/v1/settings/provider-configs/discover-models",
+        ] {
             let listener = TcpListener::bind("127.0.0.1:0").unwrap();
             let address = listener.local_addr().unwrap();
             let server = thread::spawn(move || {
@@ -6916,6 +6926,12 @@ mod tests {
             super::bridge_request_timeout("/v1/health"),
             Duration::from_secs(2)
         );
+        for path in [
+            "/v1/settings/provider-model-probe",
+            "/v1/settings/provider-configs/discover-models",
+        ] {
+            assert_eq!(super::bridge_request_timeout(path), Duration::from_secs(25));
+        }
     }
 
     #[test]
