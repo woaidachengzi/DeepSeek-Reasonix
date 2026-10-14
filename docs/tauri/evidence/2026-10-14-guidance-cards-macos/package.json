@@ -1,0 +1,11 @@
+{
+  "version": "0.1.7",
+  "buildCommit": "20d06bb13",
+  "signaturesVerified": true,
+  "dmgBinariesMatch": true,
+  "sha256": "59206f97fc28edb538d9f1f8ffd11fafe556d5957d29ad55f93decc500bfb89d",
+  "binaries": {
+    "reasonix-tauri": "8e8f3c9f6c90fdcc3881be8449f0a7e24be8410fbf2a87259db8dbedc9e52266",
+    "reasonix-desktop-bridge": "fa8d0759795c850679e4b05f921d5b6fe77dfc25890defeaf29a8529edfa5be4"
+  }
+}

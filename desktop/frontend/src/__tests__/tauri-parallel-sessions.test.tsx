@@ -123,6 +123,8 @@ try {
   await typeDraft("先检查再继续");
   await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="提交引导"]')!.click(); await settle(); });
   assert(body().includes("Approval B"), "steering does not bypass pending approval");
+  await act(async () => { fixture.__emitBridgeEvent?.({protocolVersion:1,sessionId:"b",sequence:++fixture.__snapshotSequence,eventKind:"notice",payload:{code:"unapplied_steer",text:"Guide not applied\n先检查再继续"}}); await settle(); });
+  assert(document.querySelector(".tauri-steering-card")?.textContent?.includes("引导未应用"), "unapplied guidance retains its content with an honest status");
   assert(document.querySelector(".tauri-composer__attachments"), "text steering retains staged attachments");
   await typeDraft("unsent B");
   await act(async () => { document.querySelector<HTMLButtonElement>(".tauri-prompt-card__allow")!.click(); await settle(); });
