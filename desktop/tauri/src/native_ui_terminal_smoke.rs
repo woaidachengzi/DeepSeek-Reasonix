@@ -185,7 +185,7 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
     check(app, "location.protocol === 'reasonix-preview:' && document.querySelector('.tauri-shell') && document.querySelector('.tauri-sidebar__new')?.disabled === false", "trusted initialized app")?;
     click(
         app,
-        ".tauri-sidebar__load-more[aria-label='重新检查会话目录']",
+        ".tauri-sidebar__refresh[aria-label='刷新会话']",
     )?;
     check(app, "[...document.querySelectorAll('.tauri-sidebar__session')].some(node => node.textContent.trim() === 'Terminal acceptance A')", "registered session list")?;
     select(app, "Terminal acceptance A")?;

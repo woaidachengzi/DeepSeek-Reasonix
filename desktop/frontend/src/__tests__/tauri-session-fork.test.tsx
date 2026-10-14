@@ -94,7 +94,7 @@ try {
  assert.match(document.body.textContent??"",/重新检查会话目录/);
  assert.ok(!document.body.textContent?.includes("无法分叉对话"),"saved forks must not be reported as failed creation");
  delete state.__forkSessionHandler;
- await act(async()=>[...document.querySelectorAll<HTMLButtonElement>("button")].find(item=>item.textContent==="重新检查会话目录")!.click());
+ await act(async()=>[...document.querySelectorAll<HTMLButtonElement>("button")].find(item=>item.textContent==="刷新会话")!.click());
  await until(()=>document.querySelectorAll(".tauri-session-row").length===4 && !forkButton().disabled);
  assert.equal(button("Saved fork").disabled,false,"the durable child is recoverable after directory recheck");
  await draft("开始生成");

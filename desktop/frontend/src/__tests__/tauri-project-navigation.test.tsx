@@ -162,7 +162,7 @@ await act(async () => {
 assert.match(document.body.textContent ?? "", /审计失败后的 JSON 回退/);
 assert.doesNotMatch(document.body.textContent ?? "", /审计前身份页/);
 assert.match(document.body.textContent ?? "", /最多 50 条/);
-const retryDirectory = document.querySelector<HTMLButtonElement>('[aria-label="重新检查会话目录"]');
+const retryDirectory = document.querySelector<HTMLButtonElement>('[aria-label="刷新会话"]');
 assert.ok(retryDirectory, "legacy fallback offers an explicit recheck");
 await act(async () => { retryDirectory.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
 assert.match(document.body.textContent ?? "", /重查后身份目录/);
@@ -249,7 +249,7 @@ assert.match(document.body.textContent ?? "", /漂移后的兼容页/);
 assert.ok(calls.some(call => call.name === "bridge_switch_session" && call.args.workspaceRoot === "/work/persisted"), "sidebar New uses the saved default workspace on first Send");
 assert.doesNotMatch(document.body.textContent ?? "", /审计时的身份页/);
 assert.match(document.body.textContent ?? "", /最多 50 条/);
-assert.ok(document.querySelector<HTMLButtonElement>('[aria-label="重新检查会话目录"]'));
+assert.ok(document.querySelector<HTMLButtonElement>('[aria-label="刷新会话"]'));
 await act(async () => { root.unmount(); });
 
 let rejectAudit!: (reason: Error) => void;

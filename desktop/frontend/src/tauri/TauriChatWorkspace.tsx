@@ -1,5 +1,5 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Activity, Archive, ArrowUp, Check, ChevronDown, ChevronRight, Eye, FileText, FolderOpen, FolderTree, GitBranch, Keyboard, MessageSquare, Paperclip, Pin, PinOff, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Settings, Sparkles, Square, TerminalSquare, Trash2, X } from "lucide-react";
+import { Activity, Archive, ArrowUp, Check, ChevronDown, ChevronRight, Eye, FileText, FolderOpen, FolderTree, GitBranch, Keyboard, MessageSquare, Paperclip, Pin, PinOff, PanelLeftClose, PanelLeftOpen, Pencil, Plus, RefreshCw, Search, Settings, Sparkles, Square, TerminalSquare, Trash2, X } from "lucide-react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { sendTauriSystemNotification } from "../lib/tauriBridge";
@@ -3625,7 +3625,12 @@ export function TauriSessionPreview() {
         <button type="button" className="tauri-archives-toggle" onClick={() => setArchivesOpen(true)}><Archive size={15} aria-hidden="true" />已归档对话{archivedSessions ? ` (${archivedSessions.length})` : ""}</button>
         {archivedSessions === null && !archiveError && <p className="tauri-sidebar__page-note" role="status">正在读取归档状态…</p>}
         {archiveError && <div className="tauri-pending-deletes__error" role="alert"><span>读取归档状态失败：{archiveError}；请重试。</span><button type="button" disabled={busy} onClick={() => void reloadArchives()}>重试归档状态</button></div>}
-        <div className="tauri-sidebar__section-title">项目</div>
+        <div className="tauri-sidebar__section-heading">
+          <div className="tauri-sidebar__section-title">项目</div>
+          <button type="button" className="tauri-sidebar__refresh" aria-label="刷新会话" title="刷新会话列表并重新核验目录" onClick={() => void retryWorkbenchSessionDirectory()} disabled={busy || sessionPageLoading}>
+            <RefreshCw size={14} aria-hidden="true" /><span>{sessionPageLoading ? "刷新中…" : "刷新会话"}</span>
+          </button>
+        </div>
         {sessionPageCursor && <p className="tauri-sidebar__page-note" role="status">项目组会话数按当前已加载页统计；继续加载后数量可能变化。</p>}
         {searchingSessions && sessionPageCursor && <p className="tauri-sidebar__page-note" role="status">仅搜索已加载的会话；加载更多后可找到更早的对话。</p>}
         {projectFoldersWarning && <div className="tauri-pending-deletes__error" role="status">
@@ -3671,28 +3676,20 @@ export function TauriSessionPreview() {
           {sessionPageError && <p className="tauri-sidebar__page-error" role="alert">加载失败：{sessionPageError}</p>}
           {sessionPageCatalogWarning && <p className="tauri-sidebar__page-note" role="alert">{sessionPageCatalogWarning}</p>}
           {sessionPageNotice && <p className="tauri-sidebar__page-note" role="status">{sessionPageNotice}</p>}
-          <button type="button" className="tauri-sidebar__load-more" aria-label="重新检查会话目录" onClick={() => void retryWorkbenchSessionDirectory()} disabled={busy || sessionPageLoading}>
-            {sessionPageLoading ? "正在重新检查…" : "重新检查会话目录"}
-          </button>
-          {sessionPageSource === "legacy" && <>
-            <p className="tauri-sidebar__page-note" role="status">
-              当前使用本地兼容目录，最多 50 条；{sessionPageDirectoryCount !== null && sessionPageDirectoryCount !== visibleTabs.length && <>身份目录本次盘点为 {sessionPageDirectoryCount} 条（仅是审计数量，无法从当前回退列表翻页），</>}
-              持久会话目录未通过校验，列表可能不完整。{catalogAudit ? `原因：${sessionShadowDifferenceSummary(catalogAudit)}。` : "本次未能读取 shadow 诊断，暂时无法确定回退原因。"}
-              点击“重新检查会话目录”会重试旧目录导入并重新核验；未认领 transcript 不会自动导入，差异详情见“运行状态”。
-            </p>
-          </>}
-          {sessionPageSource === "partial_identity" && <p className="tauri-sidebar__page-note" role="status">
-            当前分页显示已登记且通过身份结构、工作区与磁盘状态核验的会话。
-            {sessionPageTitleMismatchCount ? `其中 ${sessionPageTitleMismatchCount} 条标题与本地兼容目录不同，当前显示持久身份目录标题。` : ""}
-            {sessionPageMissingTranscriptCount ? `其中 ${sessionPageMissingTranscriptCount} 条已确认 transcript 缺失；对应行会标记“文件缺失”、禁止打开，但可显式删除失效记录。` : ""}
-            {sessionPageUnclaimedCount ? `另发现 ${sessionPageUnclaimedCount} 个未认领 transcript，尚未导入本目录；这些文件不会自动分配或认领 ID，需经审核导入。` : ""}
-          </p>}
+          {sessionPageSource === "legacy" && <div className="tauri-sidebar__catalog-warning" role="status">
+            <p>会话列表可能不完整，兼容目录最多 50 条；请刷新会话重试。</p>
+            <button type="button" onClick={() => setDiagnosticsOpen(true)}>查看详情</button>
+          </div>}
+          {sessionPageSource === "partial_identity" && Boolean(sessionPageMissingTranscriptCount || sessionPageUnclaimedCount) && <div className="tauri-sidebar__catalog-warning" role="status">
+            <p>{[sessionPageMissingTranscriptCount ? `${sessionPageMissingTranscriptCount} 条会话文件缺失` : "", sessionPageUnclaimedCount ? `${sessionPageUnclaimedCount} 个记录尚未导入` : ""].filter(Boolean).join("；")}；请查看详情处理。</p>
+            <button type="button" onClick={() => setDiagnosticsOpen(true)}>查看详情</button>
+          </div>}
           {sessionPageSource === "cached" && <p className="tauri-sidebar__page-note" role="status">当前无法完成实时目录校验，分页来自本次运行中上一次审计的快照，共 {sessionPageDirectoryCount ?? tabs.length} 条；{catalogAudit && !isSessionShadowSafeToPage(catalogAudit) ? `当时已发现目录差异：${sessionShadowDifferenceSummary(catalogAudit)}。` : "该快照当时通过目录结构核验。"}{sessionPageUnclaimedCount ? `另报告 ${sessionPageUnclaimedCount} 个未认领 transcript。` : ""}内容可能已过期且当前只读。服务恢复后点击“重新检查会话目录”，完成实时校验后才能操作。</p>}
         </nav>
         <div className="tauri-sidebar__footer">
-          <span className={`tauri-health${status?.running ? " is-ready" : ""}`}><i />{status?.running ? "本地运行正常" : "正在连接本地服务…"}</span>
-          <button type="button" className="tauri-sidebar__diagnostics" onClick={() => { setSettingsTab("general"); setSettingsOpen(true); }}><Settings size={15} />设置</button>
-          <button type="button" className="tauri-sidebar__diagnostics" onClick={() => setDiagnosticsOpen(true)}><Activity size={15} />运行状态</button>
+          <span className={`tauri-health${status?.running ? " is-ready" : ""}`} title={status?.running ? "本地运行正常" : "正在连接本地服务…"}><i /><span>{status?.running ? "本地运行正常" : "正在连接本地服务…"}</span></span>
+          <button type="button" className="tauri-sidebar__diagnostics" onClick={() => { setSettingsTab("general"); setSettingsOpen(true); }}><Settings size={14} aria-hidden="true" />设置</button>
+          <button type="button" className="tauri-sidebar__diagnostics" onClick={() => setDiagnosticsOpen(true)}><Activity size={14} aria-hidden="true" />运行状态</button>
         </div>
       </aside>
 
@@ -3888,6 +3885,14 @@ export function TauriSessionPreview() {
                 {catalogAudit.directoryOnlyCount > 0 && <p>身份目录新增项：{catalogAudit.directoryOnlyCount} 条</p>}
                 {catalogAudit.missingTranscripts > 0 && <p>transcript 缺失：{catalogAudit.missingTranscripts} 条</p>}
               </> : <p>{catalogAuditError || "正在分页读取身份目录并与旧目录比较…"}</p>}
+              {sessionPageSource === "partial_identity" && <p>
+                当前分页显示已登记且通过身份结构、工作区与磁盘状态核验的会话。
+                {sessionPageTitleMismatchCount ? `其中 ${sessionPageTitleMismatchCount} 条标题与本地兼容目录不同，当前显示持久身份目录标题。` : ""}
+                {sessionPageMissingTranscriptCount ? `其中 ${sessionPageMissingTranscriptCount} 条已确认 transcript 缺失；对应行会标记“文件缺失”、禁止打开，但可显式删除失效记录。` : ""}
+                {sessionPageUnclaimedCount ? `另发现 ${sessionPageUnclaimedCount} 个未认领 transcript，尚未导入本目录；这些文件不会自动分配或认领 ID，需经审核导入。` : ""}
+              </p>}
+              <p>重新检查会重试旧目录导入并核验当前会话列表；未认领文件需经审核后导入。</p>
+              <button type="button" className="tauri-diagnostic-action" onClick={() => void retryWorkbenchSessionDirectory()} disabled={busy || sessionPageLoading}>{sessionPageLoading ? "正在重新检查…" : "重新检查会话目录"}</button>
               {profile?.managedProfile && <button type="button" className="tauri-diagnostic-action" onClick={() => void openScanImportReview()} disabled={busy || scanImportLoading}>扫描并审核未认领 transcript</button>}
             </section>
             <section className="tauri-diagnostic-card"><h3>预览配置</h3><p>配置与会话保存在独立 Preview 目录，导入与备份入口位于设置的存储页。</p><button type="button" className="tauri-diagnostic-action" onClick={() => { setDiagnosticsOpen(false); setSettingsTab("data"); setSettingsOpen(true); }}>打开存储设置</button></section>
