@@ -309,17 +309,15 @@
 .tauri-session-delete__confirm { border-color: transparent; background: var(--danger, #d64545); color: #fff !important; }
 .tauri-session-delete__confirm:disabled, .tauri-session-delete__cancel:disabled { opacity: .5; }
 
-.tauri-sidebar__footer { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 4px; margin-top: auto; padding: 8px 0 0; border-top: 1px solid var(--border-soft); white-space: nowrap; }
-.tauri-sidebar__footer .tauri-health { flex: 1; min-width: 0; gap: 5px; }
-.tauri-sidebar__footer .tauri-health i { flex: 0 0 auto; }
-.tauri-sidebar__footer .tauri-health span { overflow: hidden; text-overflow: ellipsis; }
+.tauri-sidebar__footer { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; margin-top: auto; padding: 8px 0 0; border-top: 1px solid var(--border-soft); white-space: nowrap; }
+.tauri-sidebar__status .tauri-health { justify-content: center; width: 14px; flex: 0 0 14px; }
 .tauri-health { display: inline-flex; align-items: center; gap: 7px; color: var(--fg-faint); font-size: 11px; }
 .tauri-health i { width: 7px; height: 7px; border-radius: 50%; background: var(--fg-faint); }
 .tauri-health.is-ready i { background: #56b77a; box-shadow: 0 0 0 3px color-mix(in srgb, #56b77a 14%, transparent); }
 .tauri-health.is-ready { color: var(--fg-dim); }
 .tauri-sidebar__diagnostics, .tauri-archives-toggle { display: flex; height: 32px; align-items: center; gap: 9px; padding: 0 3px; border: 0; background: transparent; color: var(--fg-dim) !important; text-align: left; font-size: 12px !important; }
 .tauri-sidebar__diagnostics:hover, .tauri-archives-toggle:hover { color: var(--fg) !important; }
-.tauri-sidebar__footer .tauri-sidebar__diagnostics { flex: 0 0 auto; height: 28px; gap: 4px; padding: 0 1px; border-radius: 5px; font-size: 11px !important; }
+.tauri-sidebar__footer .tauri-sidebar__diagnostics { flex: 1; justify-content: center; height: 28px; gap: 6px; padding: 0 4px; border-radius: 5px; font-size: 12px !important; }
 .tauri-sidebar__footer .tauri-sidebar__diagnostics:hover { background: var(--sidebar-hover); }
 .tauri-sidebar__footer .tauri-sidebar__diagnostics:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 

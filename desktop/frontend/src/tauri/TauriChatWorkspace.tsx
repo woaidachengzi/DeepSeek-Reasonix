@@ -3687,9 +3687,8 @@ export function TauriSessionPreview() {
           {sessionPageSource === "cached" && <p className="tauri-sidebar__page-note" role="status">当前无法完成实时目录校验，分页来自本次运行中上一次审计的快照，共 {sessionPageDirectoryCount ?? tabs.length} 条；{catalogAudit && !isSessionShadowSafeToPage(catalogAudit) ? `当时已发现目录差异：${sessionShadowDifferenceSummary(catalogAudit)}。` : "该快照当时通过目录结构核验。"}{sessionPageUnclaimedCount ? `另报告 ${sessionPageUnclaimedCount} 个未认领 transcript。` : ""}内容可能已过期且当前只读。服务恢复后点击“重新检查会话目录”，完成实时校验后才能操作。</p>}
         </nav>
         <div className="tauri-sidebar__footer">
-          <span className={`tauri-health${status?.running ? " is-ready" : ""}`} title={status?.running ? "本地运行正常" : "正在连接本地服务…"}><i /><span>{status?.running ? "本地运行正常" : "正在连接本地服务…"}</span></span>
           <button type="button" className="tauri-sidebar__diagnostics" onClick={() => { setSettingsTab("general"); setSettingsOpen(true); }}><Settings size={14} aria-hidden="true" />设置</button>
-          <button type="button" className="tauri-sidebar__diagnostics" onClick={() => setDiagnosticsOpen(true)}><Activity size={14} aria-hidden="true" />运行状态</button>
+          <button type="button" className="tauri-sidebar__diagnostics tauri-sidebar__status" title={status?.running ? "本地服务运行正常，点击查看运行状态" : "正在连接本地服务，点击查看连接情况"} onClick={() => setDiagnosticsOpen(true)}><span className={`tauri-health${status?.running ? " is-ready" : ""}`} aria-hidden="true"><i /></span>运行状态</button>
         </div>
       </aside>
 
