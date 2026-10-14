@@ -1,0 +1,12 @@
+{
+  "version": "0.1.6",
+  "identifier": "io.reasonix.desktop.takeover",
+  "signaturesVerified": true,
+  "dmgBinariesMatch": true,
+  "sha256": "61645aa700f7d82902a09b552077845d37a7a58ca5757ca6ff9618f95ec62988",
+  "binaries": {
+    "reasonix-tauri": "4a7bb4ca4213653a10f376f72e5cfbeb0b66cf300cf6440b83726c827b593497",
+    "reasonix-desktop-bridge": "4baa2c14dff0202c9fe55de044b5329d52148c3010b5ca4fd77b6f2c96bd0249"
+  },
+  "buildCommit": "c8598c7b5"
+}
