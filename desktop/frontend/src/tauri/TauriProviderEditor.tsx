@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { deleteTauriProviderConfig, previewTauriProviderReasoning, discoverTauriProviderModels, installTauriProviderPreset, resetTauriProviderPreset, saveTauriProviderAPIKey, saveTauriProviderConfig, tauriMessageFrom, tauriProviderConfigs, tauriProviderSummary, type TauriModelReasoning, type TauriProviderConfig, type TauriProviderConfigInput, type TauriProviderPreset, type TauriProviderSummary } from "../lib/tauriBridge";
 import { ModelReasoningControl } from "../components/ModelReasoningControl";
 import { useProviderT as useT } from "../lib/providerSettingsLocale";
@@ -24,6 +24,9 @@ export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyC
   const [discoveringModels, setDiscoveringModels] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const modelInput = useRef<HTMLTextAreaElement>(null);
+  const modelErrorId = useId();
+  const modelError = error === t("settings.previewProvider.error.modelsRequired");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [reasoningPreview, setReasoningPreview] = useState<{ signature: string; models: TauriModelReasoning[]; error?: string } | null>(null);
   const [reasoningRetry, setReasoningRetry] = useState(0);
@@ -99,7 +102,11 @@ export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyC
     if (!editing || saving || pendingKeys.length) return;
     const models = modelText.split(/\r?\n|,/).map(value => value.trim()).filter(Boolean);
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(editing.name)) { setError(t("settings.previewProvider.error.invalidName")); return; }
-    if (models.length === 0 || new Set(models).size !== models.length) { setError(t("settings.previewProvider.error.modelsRequired")); return; }
+    if (models.length === 0 || new Set(models).size !== models.length) {
+      setError(t("settings.previewProvider.error.modelsRequired"));
+      modelInput.current?.focus();
+      return;
+    }
     if (!editingExisting && configs.some(provider => provider.name === editing.name)) { setError(t("settings.previewProvider.error.duplicateName")); return; }
     if (!editingExisting && !editing.baseUrl.trim()) { setError(t("settings.previewProvider.error.endpointRequired")); return; }
     if (editing.baseUrl.trim()) {
@@ -245,9 +252,10 @@ export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyC
 
   const connectionFields = editing ? <>
       <label>{t("settings.previewProvider.endpoint")}<input value={editing.baseUrl} disabled={saving} onChange={event => setEditing({ ...editing, baseUrl: event.target.value })} placeholder={editingExisting ? t("settings.previewProvider.keepEndpoint") : "https://example.com/v1"} /></label>
-      <label>{t("settings.previewProvider.models")}<textarea rows={4} value={modelText} disabled={saving || discoveringModels} onChange={event => setModelText(event.target.value)} /></label>
+      <label>{t("settings.previewProvider.models")}<textarea ref={modelInput} rows={4} value={modelText} aria-invalid={modelError || undefined} aria-describedby={modelError ? modelErrorId : undefined} disabled={saving || discoveringModels} onChange={event => { setModelText(event.target.value); if (modelError) setError(""); }} /></label>
+      {modelError && <p id={modelErrorId} className="tauri-diagnostic-error" role="alert">{error}</p>}
       {editingExisting && <button type="button" className="tauri-settings-button" onClick={() => void discoverModels()} disabled={saving || discoveringModels}>{discoveringModels ? t("settings.previewProvider.discoveringModels") : t("settings.previewProvider.discoverModels")}</button>}
-      {modelText.trim() && <label>{t("settings.previewProvider.defaultModel")}<select value={editing.default && modelText.split(/\r?\n|,/).map(value => value.trim()).includes(editing.default) ? editing.default : modelText.split(/\r?\n|,/).map(value => value.trim()).filter(Boolean)[0] ?? ""} disabled={saving} onChange={event => setEditing({ ...editing, default: event.target.value })}>{modelText.split(/\r?\n|,/).map(value => value.trim()).filter(Boolean).map(model => <option key={model} value={model}>{model}</option>)}</select></label>}
+      {previewModels.length > 0 && <label>{t("settings.previewProvider.defaultModel")}<select value={previewModels.includes(editing.default) ? editing.default : previewModels[0]} disabled={saving} onChange={event => setEditing({ ...editing, default: event.target.value })}>{previewModels.map(model => <option key={model} value={model}>{model}</option>)}</select></label>}
 
       {reasoningReady && reasoningPreview?.error && <p role="alert">{t("providerUI.reasoningReadFailed")} <button type="button" className="tauri-settings-button" disabled={saving} onClick={() => setReasoningRetry(value => value + 1)}>{t("common.retry")}</button></p>}
       {previewModels.map(model => {
@@ -279,6 +287,8 @@ export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyC
         {editingExisting && editing.modelsUrlSet && <label className="tauri-provider-editor-checkbox"><input type="checkbox" checked={editing.clearModelsUrl} disabled={saving} onChange={event => setEditing({ ...editing, clearModelsUrl: event.target.checked, modelsUrl: "" })} />{t("settings.previewProvider.clearModelsEndpoint")}</label>}
       </div></details>
       {!editingExisting && <label className="tauri-provider-editor-checkbox"><input type="checkbox" checked={editing.useApiKey} disabled={saving} onChange={event => setEditing({ ...editing, useApiKey: event.target.checked })} />{t("settings.previewProvider.apiKeyAuthentication")}</label>}
+      {error && !modelError && <p className="tauri-diagnostic-error" role="alert">{error}</p>}
+      {message && <p className="tauri-settings-hint" role="status">{message}</p>}
       <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" onClick={() => void save()} disabled={saving || discoveringModels || pendingKeys.length > 0}>{saving ? t("settings.previewProvider.saving") : t("settings.previewProvider.saveService")}</button><button type="button" className="tauri-settings-button" onClick={() => { setEditing(null); setAdding(null); setApiKey(""); }} disabled={saving || discoveringModels || pendingKeys.length > 0}>{t("common.cancel")}</button></div>
     </div> : null;
 
@@ -310,9 +320,15 @@ export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyC
           <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" disabled={saving || pendingKeys.length > 0 || reviewedPreset.status === "installed" || reviewedPreset.status === "name_conflict"} onClick={() => { if (reviewedPreset.status === "installed_modified") { if (resetArmed === reviewedPreset.id) void changePreset(reviewedPreset, "reset"); else setResetArmed(reviewedPreset.id); } else void changePreset(reviewedPreset, "add"); }}>{reviewedPreset.status === "installed_modified" ? resetArmed === reviewedPreset.id ? t("settings.previewProvider.confirmResetPreset") : t("settings.previewProvider.resetPreset") : reviewedPreset.status === "installed" ? t("settings.addProvider.alreadyAddedAction") : t("common.save")}</button></div>
         </>}
       </div>
-      {!editingExisting && editorForm}
+      {adding === "custom" && editorForm}
       {adding === "catalog" && <button type="button" className="tauri-settings-button" disabled={saving || discoveringModels || pendingKeys.length > 0} onClick={() => setAdding(null)}>{t("common.cancel")}</button>}
     </section>}
+    {(!editing || adding === "catalog") && <>
+      {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}
+      {message && <p className="tauri-settings-hint" role="status">{message}</p>}
+    </>}
+    {editingExisting && adding === null && editorForm}
+    {pendingKeys.length > 0 && <div role="status" className="tauri-provider-key-retry"><p>{t("settings.previewProvider.connectionKeyRetry")}</p><label>API Key<input type="password" autoComplete="off" disabled={saving} value={adding === "catalog" ? presetKey : apiKey} onChange={event => adding === "catalog" ? setPresetKey(event.target.value) : setApiKey(event.target.value)} /></label><button type="button" className="tauri-settings-button" disabled={saving || !(adding === "catalog" ? presetKey : apiKey).trim()} onClick={() => void retryKeys()}>{t("settings.previewProvider.saveKey")}</button></div>}
     {loading ? <p className="tauri-settings-hint">{t("common.loading")}</p> : configs.filter(provider => !provider.hidden).map(provider => <div className="tauri-provider-editor-row" key={provider.name}>
       <span><strong>{provider.displayName || provider.name}</strong><small>{provider.kind} · {t("settings.previewProvider.modelCount", { count: provider.models.length })}</small></span>
       <button type="button" className="tauri-settings-button" onClick={() => { setAdding(null); startEdit(provider); }} disabled={saving || discoveringModels || pendingKeys.length > 0 || !["openai", "anthropic", "responses"].includes(provider.kind)}>{t("common.edit")}</button>
@@ -324,9 +340,5 @@ export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyC
         <button type="button" className="tauri-settings-button" disabled={saving || discoveringModels || pendingKeys.length > 0} onClick={() => void restore(provider)}>重新添加</button>
       </div>)}
     </details>}
-    {editingExisting && adding === null && editorForm}
-    {pendingKeys.length > 0 && <div role="status" className="tauri-provider-key-retry"><p>{t("settings.previewProvider.connectionKeyRetry")}</p><label>API Key<input type="password" autoComplete="off" disabled={saving} value={adding === "catalog" ? presetKey : apiKey} onChange={event => adding === "catalog" ? setPresetKey(event.target.value) : setApiKey(event.target.value)} /></label><button type="button" className="tauri-settings-button" disabled={saving || !(adding === "catalog" ? presetKey : apiKey).trim()} onClick={() => void retryKeys()}>{t("settings.previewProvider.saveKey")}</button></div>}
-    {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}
-    {message && <p className="tauri-settings-hint" role="status">{message}</p>}
   </div></fieldset>;
 }
