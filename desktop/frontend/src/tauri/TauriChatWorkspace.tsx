@@ -1310,9 +1310,6 @@ export function TauriSessionPreview() {
           if (event.eventKind === "usage" || event.eventKind === "turn_started" || event.eventKind === "stream_attempt" || event.eventKind === "turn_done") {
             setObservedUsage(previous => observeTauriUsage(previous, event));
           }
-          if (event.eventKind === "steer") {
-            setSteeringNotice({sessionId:session.id,text:"引导已应用到当前任务。"});
-          }
           if (event.eventKind === "notice" && event.payload.code === "unapplied_steer") {
             setError("引导未被应用；请确认任务状态后重新提交。");
           }
@@ -2991,7 +2988,34 @@ export function TauriSessionPreview() {
     setDraftAttachmentPaths(previous => previous.filter((_, itemIndex) => itemIndex !== index));
   }
 
-  const [steeringNotice, setSteeringNotice] = useState<{sessionId:string; text:string} | null>(null);
+  const [steeringCards, setSteeringCards] = useState<{id:string; sessionId:string; text:string; state:"sending"|"submitted"|"applied"|"unapplied"}[]>([]);
+  useEffect(() => {
+    let active = true;
+    let off: (() => void) | undefined;
+    const seen = new Set<number>();
+    void onTauriBridgeEvent(event => {
+      if (!active || seen.has(event.sequence)) return;
+      const applied = event.eventKind === "steer";
+      const unapplied = event.eventKind === "notice" && event.payload.code === "unapplied_steer";
+      if (!applied && !unapplied) return;
+      seen.add(event.sequence);
+      if (seen.size > 200) seen.delete(seen.values().next().value!);
+      const text = applied ? String(event.payload.text ?? "") : String(event.payload.text ?? "").split("\n").slice(1).join("\n");
+      setSteeringCards(previous => {
+        const index = previous.findIndex(card => card.sessionId === event.sessionId && card.text === text && (card.state === "sending" || card.state === "submitted"));
+        if (index < 0) return previous;
+        return previous.map((card, i) => i === index ? {...card, state:applied ? "applied" : "unapplied"} : card);
+      });
+    }).then(stop => { if (active) off = stop; else stop(); }).catch(() => {});
+    return () => { active = false; off?.(); };
+  }, [status?.sidecarInstanceId]);
+  const visibleSteeringCards = steeringCards.filter(card => card.sessionId === session?.id).slice(-3);
+  function cancelSteeringDraft() {
+    if (busy) return;
+    setPrompt("");
+    if (session) setSelectedTextDrafts(previous => ({...previous,[session.id]:[]}));
+    composerRef.current?.focus();
+  }
   const canSteer = session?.state === "running" || session?.state === "paused";
   async function steerCurrentTurn(text: string) {
     if (!session || busy || submitInFlightRef.current || !streamReady || !canSteer || isReadOnlyWorkbenchSource(sessionPageSource)) return;
@@ -3001,15 +3025,18 @@ export function TauriSessionPreview() {
     submitInFlightRef.current = true;
     setBusy(true);
     setError("");
-    setSteeringNotice(null);
+    const cardId = crypto.randomUUID();
+    setSteeringCards(previous => [...previous, {id:cardId,sessionId:targetId,text,state:"sending"}].slice(-100));
     try {
       await steerTauriBridge(targetId, text);
+      setSteeringCards(previous => previous.map(card => card.id === cardId && card.state === "sending" ? {...card,state:"submitted"} : card));
       if (epoch !== turnEpochRef.current) return;
       setPrompt("");
       setSelectedTextDrafts(previous => ({...previous, [targetId]: []}));
       conversationDraftsRef.current.delete(draftKey(targetId));
-      setSteeringNotice(previous => previous?.sessionId === targetId && previous.text === "引导已应用到当前任务。" ? previous : {sessionId:targetId,text:"引导已提交，等待当前任务处理。"});
+
     } catch (cause) {
+      setSteeringCards(previous => previous.filter(card => card.id !== cardId || card.state === "applied"));
       if (epoch === turnEpochRef.current) setError(tauriMessageFrom(cause));
     } finally {
       submitInFlightRef.current = false;
@@ -3042,7 +3069,6 @@ export function TauriSessionPreview() {
     if (emptyComposer && canContinue) { await continueCurrentTurn(); return; }
     const text = [prompt.trim(), formatSelectedTextContext(selectedTexts)].filter(Boolean).join("\n\n");
     if (canSteer) { await steerCurrentTurn(text); return; }
-    setSteeringNotice(null);
     if (busy || submitInFlightRef.current || isReadOnlyWorkbenchSource(sessionPageSource) ||
         (!text && attachments.length === 0 && draftAttachmentPaths.length === 0)) return;
     if (session && (!streamReady || session.state !== "idle")) return;
@@ -3739,6 +3765,12 @@ export function TauriSessionPreview() {
           <TauriPinnedFilesShelf files={pinnedFiles.files} error={pinnedFiles.error} disabled={pinnedFiles.disabled} english={locale === "en"}
             onRemove={path => void pinnedFiles.change(path, false)} onRetry={pinnedFiles.retry}
             onPreview={path => { setWorkspaceOpen(true); setWorkspaceView("files"); void previewWorkspaceFile({ path, name: path, isDir: false }); }} />
+          {visibleSteeringCards.length > 0 && <section className="tauri-steering-cards" aria-label="已提交的会话引导">
+            {visibleSteeringCards.map(card => <article className="tauri-steering-card" key={card.id}>
+              <header><span>会话引导</span><span role="status" className={`is-${card.state}`}>{card.state === "sending" ? "提交中" : card.state === "submitted" ? "引导已提交" : card.state === "applied" ? "引导已应用" : "引导未应用"}</span></header>
+              <p>{card.text}</p>
+            </article>)}
+          </section>}
           <div className={`tauri-composer${dragging ? " is-dragging" : ""}`}>
             {selectedTexts.length > 0 && <div className="composer-context" aria-label={t("composer.selectedText")}>
               {selectedTexts.map(reference => <ComposerContextCard key={reference.id} variant="selection"
@@ -3756,7 +3788,7 @@ export function TauriSessionPreview() {
               <span className="tauri-composer__attachment-icon">{stagedImagesRef.current.get(path)?.previewUrl ? <img src={stagedImagesRef.current.get(path)!.previewUrl} alt="待发送图片" /> : <FileText size={15} />}</span><span className="tauri-composer__attachment-name">{path.split(/[\\/]/).pop() || path}</span><small>待发送</small>
               <button type="button" onClick={() => removeDraftAttachment(index)} disabled={busy} aria-label={`移除待发送文件 ${path.split(/[\\/]/).pop() || path}`}><X size={13} /></button>
             </div>)}</div>}
-            {canSteer && steeringNotice?.sessionId === session?.id && <p className="tauri-composer-hint" role="status">{steeringNotice.text}</p>}
+            {canSteer && <div className="tauri-steering-editor-label">引导当前任务<span>补充指令，调整执行方向</span></div>}
             <textarea ref={composerRef} value={prompt} onChange={event => setPrompt(event.target.value)} onPaste={event => {
               const files = pastedImageFiles(event.clipboardData);
               if (files === null) return;
@@ -3783,7 +3815,10 @@ export function TauriSessionPreview() {
               <button className="tauri-attach-button" type="button" onClick={() => void addAttachments()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state !== "idle"))} aria-label="添加文件" title="从本机选择文件并附加到消息"><Plus size={23} /></button>
               <TauriComposerControls key={session?.id ?? "new"} sessionId={session?.id} workspaceRoot={currentWorkspace} effort={session ? session.effort || "auto" : draftEffort && draftEffort.model === providerSummary?.defaultModel ? draftEffort.level : "auto"} onEffortChange={changeEffort} model={session?.modelRef || providerSummary?.defaultModel || ""} providers={providerSummary} onProvidersChange={setProviderSummary} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state !== "idle" || attachments.length > 0 || draftAttachmentPaths.length > 0))} refreshToken={settingsOpen} onModelChange={model => session ? changeCurrentSessionModel(model) : changeDefaultModel(model)} onBusyChange={setBusy} onError={setError} onOpenModels={() => { setSettingsTab("providers"); setSettingsOpen(true); }} />
               <div className="tauri-composer__actions">
-                {canSteer && <button className="tauri-send-button" type="button" onClick={() => void submit()} disabled={busy || !streamReady || isReadOnlyWorkbenchSource(sessionPageSource) || (!prompt.trim() && selectedTexts.length === 0)} aria-label="引导当前任务" title="提交文字引导，附件保留待后续发送"><ArrowUp size={18} /></button>}
+                {canSteer && <>
+                  {(prompt.trim() || selectedTexts.length > 0) && <button type="button" className="tauri-steering-cancel" onClick={cancelSteeringDraft} disabled={busy} aria-label="取消引导" title="取消编辑，不停止任务">取消</button>}
+                  <button type="button" className="tauri-steering-submit" onClick={() => void submit()} disabled={busy || !streamReady || isReadOnlyWorkbenchSource(sessionPageSource) || (!prompt.trim() && selectedTexts.length === 0)} aria-label="提交引导">提交引导</button>
+                </>}
                 {canSteer ? <button className="tauri-send-button is-stop" type="button" onClick={() => void cancel()} disabled={busy} aria-label="停止生成"><Square size={15} fill="currentColor" /></button> : <button className="tauri-send-button" type="button" onClick={() => void submit()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state === "paused")) || (emptyComposer && !canContinue)} aria-label={emptyComposer && canContinue ? "继续运行" : "发送消息"} title={emptyComposer && canContinue ? "使用当前模型继续，不追加消息" : "发送消息"}><ArrowUp size={18} /></button>}
               </div>
             </div>
