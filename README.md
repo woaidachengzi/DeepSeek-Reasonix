@@ -19,7 +19,7 @@ There are two explicit desktop modes:
 | Mode | Version / application identity | Data behavior |
 | --- | --- | --- |
 | **Reasonix Tauri Preview** | `0.1.0` / `io.reasonix.desktop.preview` | Uses a separate managed profile for development and isolated evaluation |
-| **Reasonix Tauri** (original-profile takeover) | `0.1.5` / `io.reasonix.desktop.takeover` | Uses the original `~/.reasonix` after verified backup and offline preparation |
+| **Reasonix Tauri** (original-profile takeover) | `0.1.6` / `io.reasonix.desktop.takeover` | Uses the original `~/.reasonix` after verified backup and offline preparation |
 
 The previous macOS Apple Silicon takeover candidate (0.1.3) passed current-history and restart acceptance, and the maintainer confirmed practical use. Version 0.1.4 adds parallel conversations; its separate acceptance scope is recorded below. This is a verified migration path for the tested profile, not a claim that all historical formats, platforms, or release gates are complete.
 
@@ -28,6 +28,7 @@ The previous macOS Apple Silicon takeover candidate (0.1.3) passed current-histo
 - **Tauri desktop host:** a Rust shell supervises the Go sidecar, native windows, menus, and desktop services; the frontend uses a typed bridge.
 - **Desktop workbench:** projects and sessions, model selection, streamed conversations, Markdown, attachments, and session lifecycle management.
 - **History and navigation:** persistent session identities, paged directory reads, cached directory snapshots, bounded history responses, and navigation independent of running sessions. Projects can be renamed; empty projects can be removed from the sidebar without deleting disk files.
+- **Steer running tasks (0.1.6):** submit text guidance without stopping the active task. Stop remains separate; rejected guidance keeps its draft, and approvals remain required. See [behavior, latest upstream references and acceptance](./docs/tauri/SESSION_STEERING.md).
 - **Empty-composer continuation (0.1.5):** continue a loaded idle conversation using its current model without adding a visible user message. New conversations still require input. See [behavior and regression checks](./docs/tauri/EMPTY_COMPOSER_CONTINUE.md).
 - **Parallel conversations:** switch views while tasks continue; independent output, approvals, cancellation, model settings and drafts. Up to 16 resident runtimes, with active tasks and retained resources protected from eviction. See the [architecture and acceptance record](./docs/tauri/PARALLEL_SESSIONS.md).
 - **Message-level conversation forks:** fork from a completed assistant answer and continue in an independent conversation; the source remains available.
@@ -83,20 +84,20 @@ Status as of 2026-10-14; Windows/Linux rows retain their 2026-10-07 evidence:
 
 | Platform | Package | Current evidence |
 | --- | --- | --- |
-| macOS Apple Silicon | `0.1.5` takeover app / DMG; isolated Preview also available | Parallel execution verified with actual Go controllers, headless React UI and a packaged Preview supervisor using private fixtures; 0.1.4 passed original-history navigation, draft isolation and private Preview parallel clicks; 0.1.5 adds empty-composer continuation with Go/Rust/frontend regression coverage; ad hoc signed, not Apple notarized |
+| macOS Apple Silicon | `0.1.6` takeover app / DMG; isolated Preview also available | Parallel execution verified with actual Go controllers, headless React UI and a packaged Preview supervisor using private fixtures; 0.1.4 passed original-history navigation, draft isolation and private Preview parallel clicks; 0.1.5 adds empty-composer continuation; 0.1.6 adds steering with actual Go controller and browser UI coverage; ad hoc signed, not Apple notarized |
 | Windows x64 | NSIS installer `.exe` | Built and package contents checked; the full native manual matrix remains unrecorded |
 | Ubuntu 26.04 ARM64 | `.deb` / `.AppImage` | Native build, 224 Rust tests passed / 1 ignored, package audit completed; maintainer confirmed manual acceptance |
 | Linux x64 / other distributions | Native build support and manual x64 packaging workflow | Not validated by the Ubuntu ARM64 result |
 
 See [Windows acceptance](./docs/tauri/WINDOWS_PREVIEW_ACCEPTANCE.md), [Linux acceptance](./docs/tauri/LINUX_PREVIEW_ACCEPTANCE.md), and [Ubuntu package hashes](./docs/tauri/evidence/2026-10-07-linux-arm64/README.md).
 
-The `0.1.5` takeover candidate is a local macOS handoff; it does not establish a notarized, automatically updated stable release channel. Upstream npm packages, websites, downloads, and signing statements do not describe this fork's Tauri packages.
+The `0.1.6` takeover candidate is a local macOS handoff; it does not establish a notarized, automatically updated stable release channel. Upstream npm packages, websites, downloads, and signing statements do not describe this fork's Tauri packages.
 
 ## Install and choose a data mode
 
 Use the package handed off for your exact OS and architecture, and verify its supplied SHA256 before running it. Install/launch **Reasonix Tauri Preview**, then configure a provider and model in the application.
 
-For the macOS Apple Silicon takeover package, open `Reasonix Tauri_0.1.5_aarch64.dmg` and drag **Reasonix Tauri** into Applications. The original profile must already have a verified backup and a matching `tauri-takeover-v1.json` completion receipt; building/installing the app does not perform this preparation. Keep the referenced backup available and fully quit Wails before starting the takeover app. Preparation and rollback are described in the [takeover record](./docs/tauri/STABLE_TAKEOVER.md). The local candidate uses ad hoc signing and is not Apple notarized.
+For the macOS Apple Silicon takeover package, open `Reasonix Tauri_0.1.6_aarch64.dmg` and drag **Reasonix Tauri** into Applications. The original profile must already have a verified backup and a matching `tauri-takeover-v1.json` completion receipt; building/installing the app does not perform this preparation. Keep the referenced backup available and fully quit Wails before starting the takeover app. Preparation and rollback are described in the [takeover record](./docs/tauri/STABLE_TAKEOVER.md). The local candidate uses ad hoc signing and is not Apple notarized.
 
 For the Ubuntu ARM64 handoff, open a terminal in the package directory:
 

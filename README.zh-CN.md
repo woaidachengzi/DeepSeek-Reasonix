@@ -19,7 +19,7 @@
 | 方式 | 版本 / 应用标识 | 资料使用方式 |
 | --- | --- | --- |
 | **Reasonix Tauri Preview** | `0.1.0` / `io.reasonix.desktop.preview` | 使用独立托管资料目录，适合开发和隔离试用 |
-| **Reasonix Tauri 原资料接管版** | `0.1.5` / `io.reasonix.desktop.takeover` | 完成备份核验与离线准备后，直接使用原 `~/.reasonix` |
+| **Reasonix Tauri 原资料接管版** | `0.1.6` / `io.reasonix.desktop.takeover` | 完成备份核验与离线准备后，直接使用原 `~/.reasonix` |
 
 此前 0.1.3 macOS Apple Silicon 接管候选包已通过当前历史及重启恢复验收，维护者已确认实际使用体验。0.1.4 新增多会话并行，其验收范围见下文。这表示已验证的资料接管路径可用，不代表所有历史格式、平台和正式发布门禁均已完成。
 
@@ -28,6 +28,7 @@
 - **Tauri 桌面宿主**：Rust 外壳管理 Go sidecar、原生窗口、菜单与系统能力，前端通过类型化 bridge 通信。
 - **桌面工作台**：项目与会话管理、模型选择、流式对话、Markdown、附件及会话生命周期管理。
 - **历史与导航**：持久会话身份、目录分页与快照缓存、限制历史响应大小、查看会话与运行任务分离。项目可改名，空项目可从侧栏移除，保留磁盘文件。
+- **运行中引导（0.1.6）**：追加文字指令调整当前任务方向，保留独立停止；未接受时保留草稿，不跳过审批。见[行为、最新源码参考与验收](./docs/tauri/SESSION_STEERING.md)。
 - **空输入继续（0.1.5）**：已加载的空闲对话可直接点击“继续运行”，沿用当前模型，不追加可见用户消息；新对话仍需输入。见[行为与回归记录](./docs/tauri/EMPTY_COMPOSER_CONTINUE.md)。
 - **多会话并行**：执行期间可切换和提交其他对话；输出、审批、停止、模型配置与草稿分别归属对应会话。最多驻留 16 个实例，活跃任务和保留资源受保护。见[架构与验收记录](./docs/tauri/PARALLEL_SESSIONS.md)。
 - **消息级分叉对话**：从已完成的助手回答处分叉，在独立对话中继续，保留原对话。
@@ -83,20 +84,20 @@ flowchart LR
 
 | 平台 | 安装包 | 当前验证情况 |
 | --- | --- | --- |
-| macOS Apple Silicon | `0.1.5` 接管 app / DMG，另保留隔离 Preview | 实际 Go 控制器、headless React 界面与私有夹具 Preview 原生宿主通过并行验收；0.1.4 原历史／草稿及私有 Preview 原生并行点击通过；0.1.5 空输入继续通过 Go／Rust／前端回归；ad hoc 签名，未 Apple 公证 |
+| macOS Apple Silicon | `0.1.6` 接管 app / DMG，另保留隔离 Preview | 实际 Go 控制器、headless React 界面与私有夹具 Preview 原生宿主通过并行验收；0.1.4 原历史／草稿及私有 Preview 原生并行点击通过；0.1.5 空输入继续通过回归；0.1.6 引导通过真实 Go 控制器及浏览器 UI 验证；ad hoc 签名，未 Apple 公证 |
 | Windows x64 | NSIS 安装器 `.exe` | 已完成构建和包结构检查；完整原生手动矩阵尚未逐项记录 |
 | Ubuntu 26.04 ARM64 | `.deb` / `.AppImage` | 原生构建、包审计完成，Rust 224 项通过 / 1 项忽略；维护者已确认手动验收通过 |
 | Linux x64 / 其他发行版 | 同架构构建适配及手动 x64 打包工作流 | 不能继承 Ubuntu ARM64 的通过结论 |
 
 详见 [Windows 验收](./docs/tauri/WINDOWS_PREVIEW_ACCEPTANCE.md)、[Linux 验收](./docs/tauri/LINUX_PREVIEW_ACCEPTANCE.md) 和 [Ubuntu 包摘要](./docs/tauri/evidence/2026-10-07-linux-arm64/README.md)。
 
-`0.1.5` 接管候选包为本地 macOS 交付，不代表已建立 Apple 公证或自动更新的稳定发布渠道。上游 npm 包、官网、下载页及签名声明不代表本分支的 Tauri 安装包。
+`0.1.6` 接管候选包为本地 macOS 交付，不代表已建立 Apple 公证或自动更新的稳定发布渠道。上游 npm 包、官网、下载页及签名声明不代表本分支的 Tauri 安装包。
 
 ## 安装与选择资料模式
 
 使用与你的系统、架构对应的交付包，运行前核对随包 SHA256。安装并启动 **Reasonix Tauri Preview** 后，在应用内配置模型服务即可。
 
-macOS Apple Silicon 接管包：打开 `Reasonix Tauri_0.1.5_aarch64.dmg`，将 **Reasonix Tauri** 拖入 Applications。原资料目录须事先完成完整备份核验，并具有匹配的 `tauri-takeover-v1.json` 完成凭据；单纯构建或安装不会代办接管准备。保留凭据引用的备份，使用接管版前完全退出 Wails。准备与回退见[接管记录](./docs/tauri/STABLE_TAKEOVER.md)。该本地候选包为 ad hoc 签名，尚未 Apple 公证。
+macOS Apple Silicon 接管包：打开 `Reasonix Tauri_0.1.6_aarch64.dmg`，将 **Reasonix Tauri** 拖入 Applications。原资料目录须事先完成完整备份核验，并具有匹配的 `tauri-takeover-v1.json` 完成凭据；单纯构建或安装不会代办接管准备。保留凭据引用的备份，使用接管版前完全退出 Wails。准备与回退见[接管记录](./docs/tauri/STABLE_TAKEOVER.md)。该本地候选包为 ad hoc 签名，尚未 Apple 公证。
 
 Ubuntu ARM64 交付包可在安装包目录打开终端执行：
 
