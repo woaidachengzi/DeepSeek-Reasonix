@@ -25,6 +25,7 @@ const fixture = globalThis as typeof globalThis & {
   __tauriBridgeCalls: { name: string; args: Record<string, unknown> }[];
   __historyGate?: Promise<void>;
   __switchFailure?: string;
+  __steerFailure?: string;
   __chosenAttachmentPaths?: string[];
 };
 fixture.__workbenchSessions = ["a", "b"].map(id => ({ sessionId: id, title: "Task " + id.toUpperCase(), workspaceRoot: "/tmp/parallel" }));
@@ -60,6 +61,16 @@ try {
   assert(body().includes("A checkpoint"), "running response restores from authoritative checkpoint");
   assert.equal(row("b").querySelector<HTMLButtonElement>(".tauri-sidebar__session")!.disabled, false, "another session is selectable while A runs");
   assert(row("a").textContent?.includes("运行中"), "sidebar shows A activity");
+  await typeDraft("先分析，不修改文件");
+  fixture.__steerFailure = "当前任务未接受引导";
+  await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="引导当前任务"]')!.click(); await settle(); });
+  assert.equal(document.querySelector("textarea")!.value, "先分析，不修改文件", "rejected steering preserves the draft");
+  fixture.__steerFailure = undefined;
+  await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="引导当前任务"]')!.click(); await settle(); });
+  assert.equal(fixture.__tauriBridgeCalls.filter(call => call.name === "bridge_steer").at(-1)?.args.sessionId, "a");
+  assert.equal(document.querySelector("textarea")!.value, "", "accepted guidance clears its own input");
+  assert(body().includes("A checkpoint") && body().includes("引导已提交"), "guidance preserves the active answer and acknowledges admission");
+  assert(document.querySelector('[aria-label="停止生成"]'), "independent stop control remains available");
   await typeDraft("unsent A");
   await select("b");
   assert.equal(document.querySelector("textarea")!.value, "", "A draft does not enter B");
@@ -100,6 +111,11 @@ try {
   assert(body().includes("Approval A") && !body().includes("Approval B"), "A prompt replays with exact ownership");
   await select("b");
   assert(body().includes("Approval B") && !body().includes("Approval A"), "paused A does not block B prompt");
+  await typeDraft("先检查再继续");
+  await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="引导当前任务"]')!.click(); await settle(); });
+  assert(body().includes("Approval B"), "steering does not bypass pending approval");
+  assert(document.querySelector(".tauri-composer__attachments"), "text steering retains staged attachments");
+  await typeDraft("unsent B");
   await act(async () => { document.querySelector<HTMLButtonElement>(".tauri-prompt-card__allow")!.click(); await settle(); });
   const approval = fixture.__tauriBridgeCalls.filter(call => call.name === "bridge_approve").at(-1);
   assert.equal(approval?.args.sessionId, "b", "same-number approval submits to B only");

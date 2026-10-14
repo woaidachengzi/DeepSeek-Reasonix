@@ -767,6 +767,9 @@ func (b *bridgeServer) sessionCommand(w http.ResponseWriter, r *http.Request) {
 	const prefix = "/v1/sessions/"
 	path := strings.TrimPrefix(r.URL.Path, prefix)
 	switch {
+	case strings.HasSuffix(path, ":steer"):
+		r.SetPathValue("id", strings.TrimSuffix(path, ":steer"))
+		b.idempotent(32<<10, b.steerSession)(w, r)
 	case strings.HasSuffix(path, ":continue"):
 		r.SetPathValue("id", strings.TrimSuffix(path, ":continue"))
 		b.idempotent(1024, b.continueSession)(w, r)
@@ -1834,6 +1837,22 @@ func (b *bridgeServer) setSessionModel(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})
 }
 
+func (b *bridgeServer) steerSession(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		Input string `json:"input"`
+	}
+	if err := decodeJSONBody(w, r, 32<<10, &request); err != nil {
+		writeProtocolError(w, 400, "invalid_request", "invalid steering input")
+		return
+	}
+	view, err := b.runtimes.Steer(r.PathValue("id"), request.Input)
+	if err != nil {
+		b.writeRuntimeError(w, err, "unable to steer this session")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"protocolVersion": desktopbridge.ProtocolVersion, "session": view})
+}
+
 func (b *bridgeServer) continueSession(w http.ResponseWriter, r *http.Request) {
 	view, err := b.runtimes.Continue(r.Context(), r.PathValue("id"))
 	if err != nil {
@@ -2188,6 +2207,8 @@ func (b *bridgeServer) replayPendingPrompts(w http.ResponseWriter, r *http.Reque
 func (b *bridgeServer) writeRuntimeError(w http.ResponseWriter, err error, message string) {
 	status, code := http.StatusInternalServerError, "internal"
 	switch {
+	case errors.Is(err, desktopbridge.ErrSteerUnavailable):
+		status, code = http.StatusConflict, "steer_unavailable"
 	case errors.Is(err, desktopbridge.ErrRuntimeCapacity):
 		status, code = http.StatusTooManyRequests, "runtime_capacity"
 		message = "live session capacity reached; finish a task or close its background resources before opening another session"

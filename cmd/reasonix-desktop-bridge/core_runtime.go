@@ -1359,6 +1359,10 @@ func truncateBridgeHistoryContent(content string) (string, bool) {
 	return string(runes[:bridgeHistoryMaxContentRunes]) + "\n\n[Preview truncated this message]", true
 }
 
+func (r *controllerRuntime) TrySteer(input string) bool {
+	return r.controller.TrySteer(input)
+}
+
 func (r *controllerRuntime) ContinueTurn() bool {
 	accepted := r.controller.ContinueTurn()
 	if accepted {

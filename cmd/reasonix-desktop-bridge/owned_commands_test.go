@@ -24,8 +24,10 @@ type ownedCommandCall struct {
 	request provider.Request
 }
 type ownedCommandProvider struct {
-	calls  chan ownedCommandCall
-	finish chan struct{}
+	calls        chan ownedCommandCall
+	finish       chan struct{}
+	boundaryOnce bool
+	callsStarted atomic.Uint64
 }
 
 var ownedCommandProviderOnce sync.Once
@@ -34,6 +36,7 @@ var ownedCommandProviderSequence atomic.Uint64
 
 func (*ownedCommandProvider) Name() string { return "preview-owned-command-test" }
 func (p *ownedCommandProvider) Stream(ctx context.Context, request provider.Request) (<-chan provider.Chunk, error) {
+	sequence := p.callsStarted.Add(1)
 	select {
 	case p.calls <- ownedCommandCall{ctx, request}:
 	case <-ctx.Done():
@@ -47,7 +50,11 @@ func (p *ownedCommandProvider) Stream(ctx context.Context, request provider.Requ
 			return
 		case <-p.finish:
 		}
-		out <- provider.Chunk{Type: provider.ChunkText, Text: "owned result"}
+		if p.boundaryOnce && sequence == 1 {
+			out <- provider.Chunk{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: "steer-boundary", Name: "read_file", Arguments: `{"path":"README.md"}`}}
+		} else {
+			out <- provider.Chunk{Type: provider.ChunkText, Text: "owned result"}
+		}
 		out <- provider.Chunk{Type: provider.ChunkDone}
 	}()
 	return out, nil

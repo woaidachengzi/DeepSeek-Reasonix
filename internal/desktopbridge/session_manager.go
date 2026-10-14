@@ -43,6 +43,7 @@ type SessionManager interface {
 	CancelMCPOAuth(sessionID, flowID string) error
 	ClearMCPAuthentication(sessionID, name string) (bool, error)
 	History(sessionID string) (HistoryView, error)
+	Steer(sessionID, input string) (SessionView, error)
 	Continue(ctx context.Context, sessionID string) (SessionView, error)
 	Submit(ctx context.Context, sessionID, input string) (SessionView, error)
 	AttachFile(sessionID, path string) (AttachmentView, error)

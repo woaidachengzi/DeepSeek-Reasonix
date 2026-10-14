@@ -61,6 +61,16 @@ try {
   await row("a").locator(".tauri-sidebar__session").click();
   await page.getByText("A public running response", { exact: true }).waitFor();
   assert.equal(await row("b").locator(".tauri-sidebar__session").isEnabled(), true);
+  await page.locator(".tauri-composer textarea").fill("先分析，暂不修改文件");
+  await page.getByRole("button", { name: "引导当前任务", exact: true }).click();
+  await page.getByText("引导已提交，等待当前任务处理。", { exact: true }).waitFor();
+  assert.equal(await page.locator(".tauri-composer textarea").inputValue(), "");
+  assert(await page.evaluate(() => globalThis.__tauriBridgeCalls.some(call => call.name === "bridge_steer" && call.args.sessionId === "a")));
+  assert(await page.getByText("A public running response", { exact: true }).isVisible());
+  const steerBounds = await page.getByRole("button", { name: "引导当前任务", exact: true }).boundingBox();
+  const stopBounds = await page.getByRole("button", { name: "停止生成", exact: true }).boundingBox();
+  assert(steerBounds.x + steerBounds.width <= stopBounds.x, "steering and stop overlap");
+  checks.push("running guidance preserves the answer and keeps a separate stop action");
   await page.locator(".tauri-composer textarea").fill("A unsent draft");
   await row("b").locator(".tauri-sidebar__session").click();
   await page.getByText("Question B", { exact: true }).waitFor();

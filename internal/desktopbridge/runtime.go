@@ -981,6 +981,38 @@ func (m *RuntimeManager) History(sessionID string) (HistoryView, error) {
 // the event transport added on top of this lifecycle layer. Saved settings are
 // applied first, so a key written after the controller froze it still reaches
 // the provider.
+var ErrSteerUnavailable = errors.New("current turn did not accept steering")
+
+type RuntimeSteering interface{ TrySteer(string) bool }
+
+func (m *RuntimeManager) Steer(sessionID, input string) (SessionView, error) {
+	input = strings.TrimSpace(input)
+	if input == "" || len(input) > 16<<10 {
+		return SessionView{}, ErrInvalidInput
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return SessionView{}, ErrClosed
+	}
+	if m.runtime == nil || m.view.ID != strings.TrimSpace(sessionID) {
+		return SessionView{}, ErrSessionNotFound
+	}
+	state := m.runtime.State()
+	if state != "running" && state != "paused" {
+		return SessionView{}, ErrSteerUnavailable
+	}
+	runtime, ok := m.runtime.(RuntimeSteering)
+	if !ok || !runtime.TrySteer(input) {
+		return SessionView{}, ErrSteerUnavailable
+	}
+	m.localInputVersion++
+	m.signalLocalReclaimLocked()
+	view := m.view
+	view.State = m.runtime.State()
+	return view, nil
+}
+
 // RuntimeContinuation admits an explicit host continuation without user prose.
 type RuntimeContinuation interface{ ContinueTurn() bool }
 

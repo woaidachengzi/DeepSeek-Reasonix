@@ -1800,6 +1800,11 @@ export async function tauriBridgeHistory(sessionId: string): Promise<TauriBridge
   return invoke<TauriBridgeHistory>("bridge_session_history", { request: { sessionId } });
 }
 
+export async function steerTauriBridge(sessionId: string, input: string): Promise<TauriBridgeSession> {
+  requireTauri();
+  return invoke<TauriBridgeSession>("bridge_steer", { request: { sessionId, input } });
+}
+
 export async function continueTauriBridge(sessionId: string): Promise<TauriBridgeSession> {
   requireTauri();
   return invoke<TauriBridgeSession>("bridge_continue", { request: { sessionId } });
@@ -2166,6 +2171,7 @@ export function tauriMessageFrom(error: unknown): string {
   if (message === "desktop bridge request failed with status 400 (model_unavailable)") {
     return "该会话的模型已不可用；请在模型设置中选择可用的默认模型后重试。";
   }
+  if (message === "desktop bridge request failed with status 409 (steer_unavailable)") return "当前任务未接受引导，输入已保留；请确认任务状态后重新发送。";
   if (message === "desktop bridge request failed with status 409 (settings_apply_failed)") return "当前会话设置应用失败；请检查配置后重试。";
   if (message === "desktop bridge request failed with status 429 (runtime_capacity)") return "同时驻留的会话已达上限；请等待任务完成或关闭后台终端后重试。";
   const workspaceErrors: Record<string, Parameters<typeof t>[0]> = {

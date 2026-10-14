@@ -4052,6 +4052,20 @@ impl BridgeSupervisor {
         Ok(result)
     }
 
+    pub fn steer(&self, request: SubmitRequest) -> Result<BridgeSession, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        if request.input.trim().is_empty() || request.input.len() > 16 * 1024 {
+            return Err("invalid steering input".into());
+        }
+        let request_id = opaque_secret()?;
+        let path = format!("/v1/sessions/{session_id}:steer");
+        let response = self.request_session("POST", &path, Some(json!({"input": request.input})), Some(&request_id))?;
+        if response.session.id != session_id {
+            return Err("invalid steering owner".into());
+        }
+        Ok(response.session)
+    }
+
     pub fn continue_session(&self, request: SessionRequest) -> Result<BridgeSession, String> {
         let session_id = session_path_component(&request.session_id)?;
         let request_id = opaque_secret()?;
@@ -5279,7 +5293,8 @@ fn parse_json_response(response: &[u8]) -> Result<Value, String> {
                             | "resync_required"
                             | "workspace_file_ambiguous"
                             | "terminal_busy"
-                            | "settings_apply_failed",
+                            | "settings_apply_failed"
+                            | "steer_unavailable",
                     ),
                 ) | (400, Some("terminal_invalid_request" | "model_unavailable"))
                     | (404, Some("workspace_file_not_found" | "terminal_not_found"))

@@ -513,6 +513,11 @@ export function tauriBridgeHistory(sessionId) {
   return globalThis.__historyGate ? globalThis.__historyGate.then(() => result) : Promise.resolve(result);
 }
 
+export function steerTauriBridge(sessionId, input) {
+  record("bridge_steer", {sessionId,input});
+  if (globalThis.__steerFailure) return Promise.reject(new Error(globalThis.__steerFailure));
+  return Promise.resolve({id:sessionId,path:"/tmp/"+sessionId+".jsonl",state:globalThis.__parallelSessionStates?.[sessionId] ?? "running"});
+}
 export function continueTauriBridge(sessionId) {
   record("bridge_continue", { sessionId });
   if (globalThis.__parallelSessionStates) globalThis.__parallelSessionStates[sessionId] = "running";

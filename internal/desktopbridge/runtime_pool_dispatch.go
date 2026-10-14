@@ -501,3 +501,11 @@ func (p *RuntimePool) Continue(ctx context.Context, sessionID string) (SessionVi
 	}
 	return slot.Continue(ctx, sessionID)
 }
+
+func (p *RuntimePool) Steer(sessionID, input string) (SessionView, error) {
+	slot, err := p.slot(sessionID)
+	if err != nil {
+		return SessionView{}, err
+	}
+	return slot.Steer(sessionID, input)
+}
