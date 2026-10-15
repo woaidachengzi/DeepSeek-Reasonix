@@ -57,13 +57,14 @@ Object.defineProperty(window, "matchMedia", {
 
 let latestItems: StatusBarItemId[] = [];
 
-function Harness() {
+function Harness({ defaults }: { defaults?: readonly StatusBarItemId[] }) {
   const [items, setItems] = useState<StatusBarItemId[]>([...DEFAULT_STATUS_BAR_ITEMS]);
   latestItems = items;
   return (
     <LocaleProvider>
       <StatusBarItemsEditor
         items={items}
+        defaultItems={defaults}
         busy={false}
         onChange={setItems}
         itemLabel={(id) => id}
@@ -127,6 +128,13 @@ await act(async () => {
   await flush();
 });
 ok(latestItems.every((id, index) => id === DEFAULT_STATUS_BAR_ITEMS[index]), "restore default returns all items to canonical order");
+
+await act(async () => { root.render(<Harness key="compact" defaults={["workspace"]} />); await flush(); });
+await act(async () => { document.querySelector<HTMLButtonElement>('button[aria-label="Expand status bar items"]')?.click(); await flush(); });
+await act(async () => { Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent === "Restore default")?.click(); await flush(); });
+ok(latestItems.length === 1 && latestItems[0] === "workspace", "restore default supports a compact subset without removing available choices");
+await act(async () => { Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent === "Show all")?.click(); await flush(); });
+ok(latestItems.length === DEFAULT_STATUS_BAR_ITEMS.length, "Show all remains independent from the compact default");
 
 await act(async () => root.unmount());
 dom.window.close();

@@ -38,6 +38,9 @@ const MAX_TREND_DAYS = 180;
 // every desktop startup bundle.
 const USAGE_STATS_TRANSLATIONS = {
   en: {
+    "settings.stats.billingTitle": "Cost and plan estimates",
+    "settings.stats.billingPayg": "Pay-as-you-go amounts are estimates based on token usage and configured rates. Actual charges are determined by the provider.",
+    "settings.stats.billingPlan": "For plans or relay services, pay-as-you-go equivalents are not plan bills, actual charges, or remaining allowance. Check the provider’s allowance and billing details.",
     "common.loading": "Loading…",
     "common.none": "none",
     "settings.stats.range": "Time range",
@@ -81,6 +84,9 @@ const USAGE_STATS_TRANSLATIONS = {
     "settings.stats.empty": "No usage data in this range yet. Token usage is recorded from the day this feature ships.",
   },
   zh: {
+    "settings.stats.billingTitle": "费用与套餐口径",
+    "settings.stats.billingPayg": "按量计费金额根据 Token 用量与配置单价估算，实际扣费以服务商账单为准。",
+    "settings.stats.billingPlan": "套餐或中转服务的按量折算不代表套餐账单、实际扣费或剩余额度；请以服务商提供的额度和账单为准。",
     "common.loading": "加载中…",
     "common.none": "无",
     "settings.stats.range": "时间范围",
@@ -124,6 +130,9 @@ const USAGE_STATS_TRANSLATIONS = {
     "settings.stats.empty": "当前时间范围内暂无用量数据。Token 用量从本功能启用后开始累计。",
   },
   "zh-TW": {
+    "settings.stats.billingTitle": "費用與方案口徑",
+    "settings.stats.billingPayg": "隨用隨付金額依 Token 用量與設定單價估算，實際扣費以服務商帳單為準。",
+    "settings.stats.billingPlan": "方案或中轉服務的按量折算不代表方案帳單、實際扣費或剩餘額度；請以服務商提供的額度與帳單為準。",
     "common.loading": "載入中…",
     "common.none": "無",
     "settings.stats.range": "時間範圍",
@@ -386,6 +395,12 @@ export function UsageStatsPanel({ loadStats = defaultLoadStats, sources = SOURCE
           {t("settings.stats.refresh")}
         </button>
       </div>
+
+      <details className="usage-stats__billing-note">
+        <summary>{t("settings.stats.billingTitle")}</summary>
+        <p>{t("settings.stats.billingPayg")}</p>
+        <p>{t("settings.stats.billingPlan")}</p>
+      </details>
 
       {error && <div className="provider-fetch-banner provider-fetch-banner--warn">{error}</div>}
       {loading && !stats && <div className="usage-stats__loading">{t("common.loading")}</div>}

@@ -10,12 +10,14 @@ type DragTarget<T extends string> = { id: T; placement: DropPlacement };
 export function StatusBarItemsEditor<T extends string>({
   items,
   availableItems = DEFAULT_STATUS_BAR_ITEMS as unknown as readonly T[],
+  defaultItems = availableItems,
   busy,
   onChange,
   itemLabel,
 }: {
   items: T[];
   availableItems?: readonly T[];
+  defaultItems?: readonly T[];
   busy: boolean;
   onChange: (items: T[]) => void;
   itemLabel: (id: T) => string;
@@ -35,8 +37,8 @@ export function StatusBarItemsEditor<T extends string>({
   const hiddenItems = availableItems.filter((id) => !visibleSet.has(id));
   const visiblePaneLabel = t("settings.statusBarItemsVisible", { count: visibleItems.length });
   const hiddenPaneLabel = t("settings.statusBarItemsHidden", { count: hiddenItems.length });
-  const isDefault = visibleItems.length === availableItems.length &&
-    visibleItems.every((id, index) => id === availableItems[index]);
+  const isDefault = visibleItems.length === defaultItems.length &&
+    visibleItems.every((id, index) => id === defaultItems[index]);
 
   useEffect(() => () => mouseDragCleanupRef.current?.(), []);
 
@@ -249,7 +251,7 @@ export function StatusBarItemsEditor<T extends string>({
               <button type="button" className="status-bar-items-editor__action status-bar-items-editor__action--accent" disabled={busy || hiddenItems.length === 0} onClick={() => onChange([...visibleItems, ...hiddenItems])}>
                 {t("settings.statusBarItemsShowAll")}
               </button>
-              <button type="button" className="status-bar-items-editor__action" disabled={busy || isDefault} onClick={() => onChange([...availableItems])}>
+              <button type="button" className="status-bar-items-editor__action" disabled={busy || isDefault} onClick={() => onChange([...defaultItems])}>
                 {t("settings.statusBarItemsRestoreDefault")}
               </button>
             </>

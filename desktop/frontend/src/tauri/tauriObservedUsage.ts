@@ -1,5 +1,7 @@
 import type { TauriBridgeEvent } from "../lib/tauriBridge";
 
+export type TauriUsageBillingMode = "payg" | "subscription_equivalent" | "mixed" | "unknown";
+
 export interface TauriObservedUsage {
   sessionId: string;
   tokens: number;
@@ -19,10 +21,16 @@ export interface TauriObservedUsage {
   sessionCost: number;
   sessionCurrency: string;
   costComplete: boolean;
+  turnBillingMode?: TauriUsageBillingMode;
+  sessionBillingMode?: TauriUsageBillingMode;
 }
 
 function safeTokenCount(value: unknown): number | null {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+function mergeBillingMode(previous: TauriUsageBillingMode | undefined, next: TauriUsageBillingMode): TauriUsageBillingMode {
+  return !previous || previous === next ? next : "mixed";
 }
 
 /** Count only usage frames actually received in this synchronized stream. */
@@ -48,6 +56,7 @@ export function observeTauriUsage(previous: TauriObservedUsage | null, event: Ta
       sessionCost: sameSession ? previous.sessionCost : 0,
       sessionCurrency: sameSession ? previous.sessionCurrency : "",
       costComplete: sameSession ? previous.costComplete : true,
+      sessionBillingMode: sameSession ? previous.sessionBillingMode : undefined,
     };
   }
   if (event.eventKind === "stream_attempt") {
@@ -89,7 +98,7 @@ export function observeTauriUsage(previous: TauriObservedUsage | null, event: Ta
   const cacheMissTokens = safeTokenCount(data.cacheMissTokens);
   const cacheTokens = (cacheHitTokens ?? 0) + (cacheMissTokens ?? 0);
   const sameSession = previous?.sessionId === event.sessionId;
-  const baseline = sameSession ? previous : { sessionId: event.sessionId, tokens: 0, turnTokens: 0, turnOutputTokens: 0, turnTpsTokens: 0, turnCacheTokens: 0, latestCacheHitTokens: null, latestCacheMissTokens: null, turnTps: null, turnModelMs: 0, streamAttemptStartedAt: null, turns: 1, turnCost: 0, turnCurrency: "", turnCostComplete: true, sessionCost: 0, sessionCurrency: "", costComplete: true };
+  const baseline: TauriObservedUsage = sameSession ? previous : { sessionId: event.sessionId, tokens: 0, turnTokens: 0, turnOutputTokens: 0, turnTpsTokens: 0, turnCacheTokens: 0, latestCacheHitTokens: null, latestCacheMissTokens: null, turnTps: null, turnModelMs: 0, streamAttemptStartedAt: null, turns: 1, turnCost: 0, turnCurrency: "", turnCostComplete: true, sessionCost: 0, sessionCurrency: "", costComplete: true };
   const nextTokens = baseline.tokens + tokens;
   const nextTurnTokens = baseline.turnTokens + tokens;
   const nextTurnOutputTokens = baseline.turnOutputTokens + outputTokens;
@@ -97,6 +106,7 @@ export function observeTauriUsage(previous: TauriObservedUsage | null, event: Ta
   const nextTurnCacheTokens = baseline.turnCacheTokens + cacheTokens;
   if (![nextTokens, nextTurnTokens, nextTurnOutputTokens, nextTurnTpsTokens, nextTurnCacheTokens].every(Number.isSafeInteger)) return previous;
   const quote = data.costQuote && typeof data.costQuote === "object" && !Array.isArray(data.costQuote) ? data.costQuote as Record<string, unknown> : null;
+  const billingMode: TauriUsageBillingMode = quote?.billingMode === "subscription_equivalent" || quote?.billingMode === "payg" || quote?.billingMode === "mixed" ? quote.billingMode : "unknown";
   const selected = quote?.selected && typeof quote.selected === "object" && !Array.isArray(quote.selected) ? quote.selected as Record<string, unknown> : null;
   const selectedAmount = typeof selected?.amount === "string" ? Number(selected.amount) : typeof selected?.amount === "number" ? selected.amount : typeof data.cost === "number" ? data.cost : Number.NaN;
   const selectedCurrency = typeof selected?.currency === "string" ? selected.currency : typeof data.currencyCode === "string" ? data.currencyCode : typeof data.currency === "string" ? data.currency : "";
@@ -128,5 +138,7 @@ export function observeTauriUsage(previous: TauriObservedUsage | null, event: Ta
     sessionCost: Number.isFinite(nextSessionCost) ? nextSessionCost : baseline.sessionCost,
     sessionCurrency: costCurrency,
     costComplete: canAggregateCost,
+    turnBillingMode: mergeBillingMode(baseline.turnBillingMode, billingMode),
+    sessionBillingMode: mergeBillingMode(baseline.sessionBillingMode, billingMode),
   };
 }

@@ -34,7 +34,7 @@ import { TAURI_SHORTCUT_ACTIONS, defaultTauriShortcut, getTauriShortcut, isTauri
 import "../components/SettingsPanel.css";
 import "../components/CompactRatioSettings.css";
 import { getTauriNotificationsEnabled, getTauriNotificationEvents, setTauriNotificationEvent, setTauriNotificationsEnabled, getTauriProgressMode, setTauriProgressMode, type TauriNotificationKind, type TauriProgressMode } from "./tauriPreferences";
-import { TAURI_STATUS_BAR_ITEM_IDS, setTauriStatusBarPreferences, useTauriStatusBarPreferences, type TauriStatusBarItemId } from "./tauriStatusBarPreferences";
+import { TAURI_DEFAULT_STATUS_BAR_ITEMS, TAURI_STATUS_BAR_ITEM_IDS, setTauriStatusBarPreferences, useTauriStatusBarPreferences, type TauriStatusBarItemId } from "./tauriStatusBarPreferences";
 import { setTauriDesktopLayout, useTauriDesktopLayout } from "./tauriDesktopLayout";
 import { COMPACT_RATIO_MAX_PERCENT, COMPACT_RATIO_MIN_PERCENT } from "../lib/compactRatio";
 import { getSuccessPreference, setSuccessPreference, getAttentionPreference, setAttentionPreference, getNotificationVolume, setNotificationVolume, playSuccessChime, playAttentionChime, type SoundWavPref } from "../lib/sound";
@@ -749,7 +749,7 @@ function GeneralSettings({ languagePref, onLanguageChange, languageSaving, langu
       </div>}
     </div>
     <div className="tauri-settings-field"><PanelTop className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.statusBarStyle")}<small>{t("settings.statusBarStyleHint")}</small></span><TauriSettingsChoice ariaLabel={t("settings.statusBarStyle")} value={statusBar.style} options={[{ value: "icon", label: t("settings.statusBarStyle.icon") }, { value: "text", label: t("settings.statusBarStyle.text") }]} onChange={style => setTauriStatusBarPreferences({ ...statusBar, style })} /></div>
-    <div className="tauri-settings-field tauri-settings-status-items"><Activity className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.statusBarItems")}<small>{t("settings.statusBarItemsHint")}</small></span><StatusBarItemsEditor items={statusBar.items} availableItems={TAURI_STATUS_BAR_ITEM_IDS} busy={false} onChange={items => setTauriStatusBarPreferences({ ...statusBar, items })} itemLabel={id => t(TAURI_STATUS_BAR_LABEL_KEYS[id])} /></div>
+    <div className="tauri-settings-field tauri-settings-status-items"><Activity className="tauri-settings-field-icon" size={18} /><span className="tauri-settings-field-label">{t("settings.statusBarItems")}<small>{t("settings.statusBarItemsHint")}</small></span><StatusBarItemsEditor items={statusBar.items} availableItems={TAURI_STATUS_BAR_ITEM_IDS} defaultItems={TAURI_DEFAULT_STATUS_BAR_ITEMS} busy={false} onChange={items => setTauriStatusBarPreferences({ ...statusBar, items })} itemLabel={id => t(TAURI_STATUS_BAR_LABEL_KEYS[id])} /></div>
     </SettingsSection>
   </div>;
 }
