@@ -30,9 +30,14 @@ async function main() {
     { name: "project-check", description: "Project check", scope: "project", invocation: "/project-check", invocationMode: "manual", editable: true, revision: "rev-1", allowedTools: ["read_file"] },
     { name: "external-review", description: "External profile", scope: "custom", invocation: "/external-review", invocationMode: "manual", readOnly: true },
   ];
+  const internalModel = "mimo-token-plan-cn-0123456789abcdef0123456789abcdef/mimo-v2.6-flash";
+  Object.assign(globalThis, { __subagentModelRefs: [internalModel], __subagentModelLabels: { [internalModel]: "MiMo Token Plan CN/mimo-v2.6-flash" } });
   const root = createRoot(document.getElementById("root")!);
   await act(async () => { root.render(React.createElement(LocaleProvider, null, React.createElement(TauriSubagentSettings, { workspaceRoot: "/tmp/preview-project", onUseInChat: command => usedCommands.push(command) }))); await settle(); });
   ok(Boolean(document.querySelector(".tauri-subagent-profile-group")) && document.querySelectorAll(".tauri-subagent-profile").length === 4, "discovered profiles are grouped and rendered even when optional tool metadata is missing");
+  const friendlyOption = [...document.querySelectorAll<HTMLOptionElement>("option")].find(option => option.value === internalModel);
+  ok(friendlyOption?.textContent === "MiMo Token Plan CN/mimo-v2.6-flash", "model options show provider display names while retaining the exact internal reference");
+  ok(!document.body.textContent?.includes("0123456789abcdef0123456789abcdef"), "internal provider identifiers are absent from visible labels");
   const builtinEffectiveValues = [...document.querySelectorAll(".tauri-subagent-profile--builtin .tauri-subagent-effective-value")].map(node => node.textContent?.trim() ?? "");
   ok(builtinEffectiveValues.includes("Effective: demo/m") && builtinEffectiveValues.includes("Effective: demo/override") && builtinEffectiveValues.includes("Effective: auto"), "built-in model and effort selectors show inherited and overridden effective values");
   await act(async () => { document.querySelector<HTMLButtonElement>(".tauri-subagent-profile--custom .tauri-subagent-invocation button:last-child")?.click(); await settle(); });

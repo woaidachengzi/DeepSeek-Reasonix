@@ -41,6 +41,7 @@ type subagentSettingsView struct {
 	MaxConcurrency     int                      `json:"maxConcurrency"`
 	MaxParallelWriters int                      `json:"maxParallelWriters"`
 	ModelRefs          []string                 `json:"modelRefs"`
+	ModelLabels        map[string]string        `json:"modelLabels"`
 	ModelEfforts       map[string][]string      `json:"modelEfforts"`
 	Profiles           []previewSubagentProfile `json:"profiles"`
 }
@@ -120,12 +121,17 @@ func loadSubagentSettings(workspaceRoot string) (subagentSettingsView, error) {
 		ProtocolVersion: desktopbridge.ProtocolVersion, DefaultModel: cfg.DefaultModel,
 		SubagentModel: cfg.Agent.SubagentModel, SubagentEffort: cfg.Agent.SubagentEffort,
 		MaxDepth: depth, MaxConcurrency: total, MaxParallelWriters: writers,
-		ModelRefs: []string{}, ModelEfforts: map[string][]string{}, Profiles: []previewSubagentProfile{},
+		ModelRefs: []string{}, ModelLabels: map[string]string{}, ModelEfforts: map[string][]string{}, Profiles: []previewSubagentProfile{},
 	}
 	for _, provider := range global.Providers {
 		for _, model := range provider.Models {
 			ref := provider.Name + "/" + model
 			view.ModelRefs = append(view.ModelRefs, ref)
+			label := strings.TrimSpace(provider.DisplayName)
+			if label == "" {
+				label = provider.Name
+			}
+			view.ModelLabels[ref] = label + "/" + model
 			if entry, ok := global.ResolveModel(ref); ok {
 				capability := configpkg.EffortCapabilityForEntry(entry)
 				if capability.Supported {

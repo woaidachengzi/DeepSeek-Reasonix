@@ -3306,7 +3306,7 @@ export const zh: Record<DictKey, string> = {
   "settings.bots.channelAccessMode": "谁可以使用此连接",
   "settings.bots.accessTrusted": "仅允许列表中的用户",
   "settings.bots.accessEveryone": "允许所有人",
-  "settings.bots.desktopUnavailable": "Preview 未接入桌面对话控制、审批和事件监听；机器人不会控制桌面会话。",
+  "settings.bots.desktopUnavailable": "机器人当前未连接桌面会话，暂无法控制、审批或接收会话事件。请检查运行信息后重启机器人。",
   "settings.bots.messages": "收到 {count} 条消息",
   "settings.bots.sends": "发送 {count} 条",
   "settings.bots.sendErrors": "发送失败 {count} 次",

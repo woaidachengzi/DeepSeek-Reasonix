@@ -11,6 +11,8 @@ export function TauriBotSettings() {
   const [status, setStatus] = useState<TauriBotRuntimeStatus | null>(null);
   const [settings, setSettings] = useState<TauriBotSettings | null>(null);
   const [providerSummary, setProviderSummary] = useState<TauriProviderSummary | null>(null);
+  const modelLabels = new Map<string, string>(providerSummary?.providers.flatMap(provider => provider.models.map(model => [`${provider.name}/${model}`, `${provider.displayName || provider.name}/${model}`] as const)));
+  const modelLabel = (ref: string) => modelLabels.get(ref) || ref;
   const [loading, setLoading] = useState(true);
   const [saving, setSavingState] = useState(false);
   const savingRef = useRef(false);
@@ -290,7 +292,7 @@ export function TauriBotSettings() {
             </div>
             <div className="tauri-bot-route__grid tauri-bot-route__grid--outputs">
               <label className="tauri-bot-runtime-field"><span>{t("settings.botWorkspaceRoot")}</span><input className="tauri-settings-input" value={route.workspaceRoot} disabled={saving} placeholder={t("settings.botWorkspaceRootPlaceholder")} spellCheck={false} maxLength={4096} onChange={event => updateRoute(index, { workspaceRoot: event.target.value })} /></label>
-              <label className="tauri-bot-runtime-field"><span>{t("settings.botChannelModel")}</span><select className="tauri-settings-input" value={route.model} disabled={saving} onChange={event => updateRoute(index, { model: event.target.value })}><option value="">{t("settings.botChannelModelAuto")}</option>{providerSummary?.providers.flatMap(provider => provider.models.map(model => `${provider.name}/${model}`)).filter((model, modelIndex, all) => all.indexOf(model) === modelIndex).map(model => <option value={model} key={model}>{model}</option>)}{route.model && !providerSummary?.providers.some(provider => provider.models.some(model => `${provider.name}/${model}` === route.model)) && <option value={route.model}>{route.model}</option>}</select></label>
+              <label className="tauri-bot-runtime-field"><span>{t("settings.botChannelModel")}</span><select className="tauri-settings-input" value={route.model} disabled={saving} onChange={event => updateRoute(index, { model: event.target.value })}><option value="">{t("settings.botChannelModelAuto")}</option>{providerSummary?.providers.flatMap(provider => provider.models.map(model => `${provider.name}/${model}`)).filter((model, modelIndex, all) => all.indexOf(model) === modelIndex).map(model => <option value={model} key={model}>{modelLabel(model)}</option>)}{route.model && !providerSummary?.providers.some(provider => provider.models.some(model => `${provider.name}/${model}` === route.model)) && <option value={route.model}>{modelLabel(route.model)}</option>}</select></label>
               <label className="tauri-bot-runtime-field"><span>{t("settings.botToolApprovalMode")}</span><select className="tauri-settings-input" value={route.toolApprovalMode} disabled={saving} onChange={event => updateRoute(index, { toolApprovalMode: event.target.value as TauriBotRoute["toolApprovalMode"] })}>{(["", "ask", "auto", "yolo"] as const).map(mode => <option key={mode || "inherit"} value={mode}>{t(`settings.botToolApprovalMode.${mode || "inherit"}` as "settings.botToolApprovalMode.inherit" | "settings.botToolApprovalMode.ask" | "settings.botToolApprovalMode.auto" | "settings.botToolApprovalMode.yolo")}</option>)}</select></label>
             </div>
           </section>)}</div>}
@@ -324,8 +326,8 @@ export function TauriBotSettings() {
             <div className="tauri-bot-channel-runtime__body">
               <label className="tauri-bot-runtime-field"><span>{t("settings.botChannelModel")}</span><select className="tauri-settings-input" value={channel.model ?? ""} disabled={saving} onChange={event => void saveChannelRuntime({ action: "set_channel_runtime", channelId: channel.id, model: event.target.value })}>
                 <option value="">{t("settings.botChannelModelAuto")}</option>
-                {providerSummary?.providers.flatMap(provider => provider.models.map(model => `${provider.name}/${model}`)).filter((model, index, all) => all.indexOf(model) === index).map(model => <option value={model} key={model}>{model}</option>)}
-                {channel.model && !providerSummary?.providers.some(provider => provider.models.some(model => `${provider.name}/${model}` === channel.model)) && <option value={channel.model}>{channel.model}</option>}
+                {providerSummary?.providers.flatMap(provider => provider.models.map(model => `${provider.name}/${model}`)).filter((model, index, all) => all.indexOf(model) === index).map(model => <option value={model} key={model}>{modelLabel(model)}</option>)}
+                {channel.model && !providerSummary?.providers.some(provider => provider.models.some(model => `${provider.name}/${model}` === channel.model)) && <option value={channel.model}>{modelLabel(channel.model)}</option>}
               </select></label>
               <label className="tauri-bot-runtime-field"><span>{t("settings.botToolApprovalMode")}</span><select className="tauri-settings-input" value={channel.toolApprovalMode ?? ""} disabled={saving} onChange={event => void saveChannelRuntime({ action: "set_channel_runtime", channelId: channel.id, toolApprovalMode: event.target.value as "" | "ask" | "auto" | "yolo" })}>
                 <option value="">{t("settings.botToolApprovalMode.inherit")}</option>
@@ -360,7 +362,7 @@ export function TauriBotSettings() {
         {status.startedAt && <span><strong>{new Date(status.startedAt).toLocaleString()}</strong><small>{t("settings.bots.startedAt")}</small></span>}
       </div>
       {status.status === "blocked" && <div className="tauri-bot-notice"><ShieldAlert size={17} /><span>{t("settings.bots.accessRequired")}</span></div>}
-      {!status.desktopBridgeAvailable && <div className="tauri-bot-notice"><ShieldAlert size={17} /><span>{t("settings.bots.desktopUnavailable")}</span></div>}
+      {status.running && !status.refreshing && !status.desktopBridgeAvailable && <div className="tauri-bot-notice"><ShieldAlert size={17} /><span>{t("settings.bots.desktopUnavailable")}</span></div>}
       {status.adapterHealth?.length ? <div className="tauri-bot-adapters">{status.adapterHealth.map(adapter => <section className="tauri-bot-adapter" key={adapter.id}>
         <div className="tauri-bot-adapter-heading"><Bot size={17} /><strong>{adapter.name || adapter.domain || adapter.platform}</strong><span className={`tauri-bot-adapter-state is-${adapter.status}`}>{statusLabel(adapter.status)}</span></div>
         <small>{adapter.platform}{adapter.domain ? ` · ${adapter.domain}` : ""}{adapter.id ? ` · ${adapter.id}` : ""}</small>

@@ -46,7 +46,7 @@ async function main() {
   ok((document.getElementById("bot-channel-access-feishu-lark-users") as HTMLTextAreaElement | null)?.value === "", "a null connection-specific allowlist renders as an empty list instead of crashing settings");
   ok(document.body.textContent?.includes("Degraded"), "runtime health is rendered from the bridge status");
   ok(document.body.textContent?.includes("feishu-lark") && document.body.textContent?.includes("4 messages received"), "adapter identity and counters are visible");
-  ok(document.body.textContent?.includes("not connected to desktop session control"), "unsupported desktop command bridge is disclosed");
+  ok(document.body.textContent?.includes("The bot is disconnected from desktop sessions"), "a running bot reports the current desktop connection failure");
   const checkboxes = [...document.querySelectorAll<HTMLInputElement>("input[type=checkbox]")];
   ok(checkboxes.length === 6 && !checkboxes[0].checked && !checkboxes[1].checked && !checkboxes[2].checked && checkboxes[3].checked && checkboxes[4].checked && !checkboxes[5].checked, "gateway, global and connection access policies, self-message filtering, and channel preferences are shown separately");
   await act(async () => { checkboxes[0].click(); await settle(); });
@@ -123,6 +123,18 @@ async function main() {
   const credentialCall = [...calls].reverse().find(call => call.name === "change_bot_settings") as { args?: { change?: { action?: string; identity?: string; secret?: string } } } | undefined;
   ok(credentialCall?.args?.change?.action === "set_credentials" && credentialCall.args.change.secret === "hidden-bot-secret", "credential form sends the secret only with the save request");
   ok(!document.body.textContent?.includes("hidden-bot-secret") && secret?.value === "", "saved bot credential is cleared and never echoed into the page");
+  for (const [state, running, refreshing, desktopBridgeAvailable, visible] of [
+    ["stopped", false, false, false, false],
+    ["refreshing", true, true, false, false],
+    ["connected", true, false, true, false],
+    ["disconnected", true, false, false, true],
+  ] as const) {
+    (globalThis as typeof globalThis & { __botRuntimeStatus?: unknown }).__botRuntimeStatus = {
+      protocolVersion: 1, running, refreshing, desktopBridgeAvailable, status: running ? "running" : "stopped", message: state, connections: running ? 1 : 0,
+    };
+    await act(async () => { root.render(React.createElement(LocaleProvider, null, React.createElement(TauriBotSettings, { key: state }))); await settle(); });
+    ok(Boolean(document.body.textContent?.includes("The bot is disconnected from desktop sessions")) === visible, `${state}: desktop notice follows live readiness instead of claiming the feature is unimplemented`);
+  }
   await act(async () => { root.unmount(); });
   process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
   if (failed > 0) process.exitCode = 1;

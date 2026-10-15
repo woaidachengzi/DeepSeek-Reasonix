@@ -3303,7 +3303,7 @@ export const en = {
   "settings.bots.channelAccessMode": "Who can use this connection",
   "settings.bots.accessTrusted": "Allowlisted users only",
   "settings.bots.accessEveryone": "Allow everyone",
-  "settings.bots.desktopUnavailable": "Preview is not connected to desktop session control, approvals, or event watchers. Bot messages cannot control other desktop sessions.",
+  "settings.bots.desktopUnavailable": "The bot is disconnected from desktop sessions. Control, approvals and events are unavailable. Check runtime details, then restart the bot.",
   "settings.bots.messages": "{count} messages received",
   "settings.bots.sends": "{count} sent",
   "settings.bots.sendErrors": "{count} send errors",

@@ -1120,6 +1120,7 @@ export interface TauriSubagentSettings {
   maxConcurrency: number;
   maxParallelWriters: number;
   modelRefs: string[];
+  modelLabels?: Record<string, string>;
   modelEfforts: Record<string, string[]>;
   profiles: TauriSubagentProfile[];
 }

@@ -4057,7 +4057,7 @@ export const zhTW: Record<DictKey, string> = {
   "settings.bots.channelAccessMode": "連線使用者",
   "settings.bots.accessTrusted": "僅允許清單中的使用者",
   "settings.bots.accessEveryone": "允許所有人",
-  "settings.bots.desktopUnavailable": "Preview 尚未接入桌面控制、審批及事件監聽；機器人不會控制桌面工作階段。",
+  "settings.bots.desktopUnavailable": "機器人目前未連接桌面工作階段，暫無法控制、審批或接收事件。請檢查執行資訊後重新啟動機器人。",
   "settings.bots.messages": "收到 {count} 則訊息",
   "settings.bots.sends": "已傳送 {count} 則",
   "settings.bots.sendErrors": "傳送失敗 {count} 次",

@@ -28,6 +28,7 @@ security_review = "local/chat"
 
 [[providers]]
 name = "local"
+display_name = "Local Demo"
 kind = "openai"
 base_url = "http://127.0.0.1:11434/v1"
 models = ["chat"]
@@ -67,6 +68,9 @@ supported_efforts = ["low", "medium", "high"]
 		return view
 	}
 	view := read()
+	if view.ModelLabels["local/chat"] != "Local Demo/chat" || view.ModelRefs[0] != "local/chat" {
+		t.Fatalf("display labels must not change model references: %+v", view)
+	}
 	if got := view.ModelEfforts["local/chat"]; len(got) != 4 || got[0] != "auto" || got[1] != "low" {
 		t.Fatalf("model effort choices = %v", got)
 	}

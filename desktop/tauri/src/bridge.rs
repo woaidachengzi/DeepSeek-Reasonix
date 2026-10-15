@@ -1320,6 +1320,8 @@ pub struct SubagentSettingsView {
     pub max_concurrency: i32,
     pub max_parallel_writers: i32,
     pub model_refs: Vec<String>,
+    #[serde(default)]
+    pub model_labels: std::collections::HashMap<String, String>,
     pub model_efforts: std::collections::HashMap<String, Vec<String>>,
     pub profiles: Vec<SubagentProfileView>,
 }
@@ -6318,6 +6320,11 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(subagents.model_efforts["local/chat"], ["auto", "low"]);
+        assert!(subagents.model_labels.is_empty(), "older responses remain compatible");
+        let mut labeled = serde_json::to_value(&subagents).unwrap();
+        labeled["modelLabels"] = json!({"local/chat": "Local Demo/chat"});
+        let labeled: SubagentSettingsView = serde_json::from_value(labeled).unwrap();
+        assert_eq!(serde_json::to_value(labeled).unwrap()["modelLabels"]["local/chat"], "Local Demo/chat");
         assert!(subagents.profiles[0].editable);
         assert_eq!(subagents.profiles[0].allowed_tools, ["Read"]);
         assert!(serde_json::to_value(subagents)
