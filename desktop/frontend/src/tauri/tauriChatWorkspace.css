@@ -1263,6 +1263,7 @@
 .tauri-remote-host-card > div:first-child { display: grid; min-width: 0; gap: 4px; }
 .tauri-remote-serve { grid-column: 1 / -1; min-width: 0; padding-top: 12px; border-top: 1px solid var(--border-soft); }
 .tauri-remote-serve > p { margin: 0 0 10px; }
+.tauri-remote-serve > .tauri-diagnostic-error { white-space: pre-wrap; overflow-wrap: anywhere; }
 .tauri-remote-workspace-enter { border-color: var(--accent) !important; background: color-mix(in srgb, var(--accent) 10%, var(--surface)) !important; color: var(--accent) !important; }
 .tauri-remote-host-card small[role="status"] { color: var(--ok); }
 .tauri-remote-advanced, .tauri-remote-config, .tauri-remote-editor-advanced { margin-top: 14px; color: var(--fg-dim); font-size: 11px; }

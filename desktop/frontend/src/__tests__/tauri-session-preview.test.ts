@@ -65,6 +65,7 @@ ok(
 console.log("\ntauri session preview — tauriMessageFrom");
 
 eq(tauriMessageFrom(new Error("boom")), "boom", "Error extracts message");
+eq(tauriMessageFrom(new Error("desktop bridge request failed with status 502 (remote_serve_start_failed): bootstrap: npm: command not found\nno local CLI")), "远程工作区启动失败（502）：\nbootstrap: npm: command not found\nno local CLI", "remote bootstrap errors preserve their specific multiline diagnostic");
 eq(tauriMessageFrom({ toString: () => "custom" }), "custom", "object with toString");
 eq(tauriMessageFrom("raw string"), "raw string", "string passes through");
 eq(tauriMessageFrom(42), "42", "number converts to string");

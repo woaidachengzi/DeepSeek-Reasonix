@@ -2168,6 +2168,8 @@ export function newTauriSessionId(): string {
 
 export function tauriMessageFrom(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
+  const remoteStartPrefix = "desktop bridge request failed with status 502 (remote_serve_start_failed): ";
+  if (message.startsWith(remoteStartPrefix)) return `远程工作区启动失败（502）：\n${message.slice(remoteStartPrefix.length)}`;
   if (message === "desktop bridge request failed with status 400 (model_unavailable)") {
     return "该会话的模型已不可用；请在模型设置中选择可用的默认模型后重试。";
   }

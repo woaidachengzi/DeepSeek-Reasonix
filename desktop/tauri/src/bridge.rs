@@ -5278,6 +5278,24 @@ fn parse_json_response(response: &[u8]) -> Result<Value, String> {
     }
     let raw = decoded_body.as_deref().unwrap_or(body);
     if !(200..300).contains(&status) {
+        // Remote bootstrap explicitly publishes a bounded, credential-redacted
+        // diagnostic. This exception must not expose other endpoints' messages.
+        if status == 502 {
+            if let Ok(parsed) = serde_json::from_slice::<Value>(first_json_value(raw)) {
+                if parsed.pointer("/error/code").and_then(Value::as_str)
+                    == Some("remote_serve_start_failed")
+                {
+                    if let Some(detail) = parsed.pointer("/error/detail").and_then(Value::as_str) {
+                        if !detail.trim().is_empty() && detail.chars().count() <= 2049 {
+                            return Err(format!(
+                                "desktop bridge request failed with status 502 (remote_serve_start_failed): {}",
+                                detail.trim()
+                            ));
+                        }
+                    }
+                }
+            }
+        }
         // Carry only a small allowlist of recovery codes across the Tauri
         // String error boundary. Never forward the bridge's free-text message:
         // it may contain a private transcript or workspace path.
@@ -7020,6 +7038,24 @@ mod tests {
         let response = b"HTTP/1.1 400 Error\r\n\r\n{\"error\":{\"code\":\"model_unavailable\",\"message\":\"private-provider-and-key\"}}";
         assert_eq!(parse_json_response(response).unwrap_err(),
             "desktop bridge request failed with status 400 (model_unavailable)");
+    }
+
+    #[test]
+    fn response_parser_exposes_only_explicit_remote_bootstrap_diagnostics() {
+        let response = b"HTTP/1.1 502 Error\r\n\r\n{\"error\":{\"code\":\"remote_serve_start_failed\",\"message\":\"unused private message\",\"detail\":\"bootstrap: npm: command not found\\nno local CLI\"}}";
+        assert_eq!(parse_json_response(response).unwrap_err(), "desktop bridge request failed with status 502 (remote_serve_start_failed): bootstrap: npm: command not found\nno local CLI");
+        for (status, code, detail) in [
+            (502, "other", "private diagnostic".to_string()),
+            (500, "remote_serve_start_failed", "private diagnostic".to_string()),
+            (502, "remote_serve_start_failed", "".to_string()),
+            (502, "remote_serve_start_failed", "x".repeat(2050)),
+        ] {
+            let body = json!({"error":{"code":code,"message":"private message","detail":detail}});
+            let response = format!("HTTP/1.1 {status} Error\r\n\r\n{body}");
+            assert_eq!(parse_json_response(response.as_bytes()).unwrap_err(), format!("desktop bridge request failed with status {status}"));
+        }
+        let missing = b"HTTP/1.1 502 Error\r\n\r\n{\"error\":{\"code\":\"remote_serve_start_failed\",\"message\":\"private message\"}}";
+        assert_eq!(parse_json_response(missing).unwrap_err(), "desktop bridge request failed with status 502");
     }
 
     #[test]

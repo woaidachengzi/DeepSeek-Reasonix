@@ -10,12 +10,14 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	configpkg "reasonix/internal/config"
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/remote"
 	"reasonix/internal/remote/bootstrap"
 	"reasonix/internal/remote/forward"
+	"reasonix/internal/secrets"
 	"reasonix/internal/store"
 )
 
@@ -49,6 +51,27 @@ const (
 	remoteServeTimeout = 45 * time.Second
 	remoteServeLogMax  = 500
 )
+
+// Only this diagnostic boundary exposes bootstrap failures to the renderer.
+// Preserve the command's failure reason, never its credentials or unbounded output.
+func writeRemoteServeStartError(w http.ResponseWriter, err error) {
+	detail := strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) && r != '\n' && r != '\t' {
+			return -1
+		}
+		return r
+	}, secrets.RedactError(err))
+	text := []rune(strings.TrimSpace(detail))
+	if len(text) > 2048 {
+		text = append(text[:2048], []rune("…")...)
+	}
+	writeJSON(w, http.StatusBadGateway, map[string]any{
+		"protocolVersion": desktopbridge.ProtocolVersion,
+		"error": map[string]string{
+			"code": "remote_serve_start_failed", "message": "could not start remote workspace", "detail": string(text),
+		},
+	})
+}
 
 // serveForwardName matches the workspace-derived name used by the Wails
 // desktop. It keeps each workspace isolated while retaining only loopback
@@ -156,7 +179,7 @@ func (b *bridgeServer) startRemoteServe(w http.ResponseWriter, r *http.Request) 
 		MinVersion:  bootstrap.MinServeVersion,
 	})
 	if err != nil {
-		writeProtocolError(w, http.StatusBadGateway, "remote_serve_failed", "could not start remote Serve; verify its install policy and remote Reasonix or npm availability")
+		writeRemoteServeStartError(w, err)
 		return
 	}
 	if !b.remoteServeStillConnected(input.Name, client) || r.Context().Err() != nil {
@@ -254,7 +277,7 @@ func (b *bridgeServer) openRemoteController(w http.ResponseWriter, r *http.Reque
 		MinVersion:  bootstrap.MinServeVersion,
 	})
 	if err != nil {
-		writeProtocolError(w, http.StatusBadGateway, "remote_serve_failed", "could not start remote Serve; verify its install policy and remote Reasonix or npm availability")
+		writeRemoteServeStartError(w, err)
 		return
 	}
 	if !b.remoteServeStillConnected(input.Name, client) || r.Context().Err() != nil {
