@@ -45,7 +45,7 @@ async function main() {
   const root = createRoot(document.getElementById("root")!);
   await act(async () => { root.render(React.createElement(LocaleProvider, null, React.createElement(TauriRemoteSettings))); await settle(); });
   ok(document.body.textContent?.includes("No remote hosts configured"), "empty host list is visible");
-  await act(async () => { click("Scan SSH config"); await settle(); });
+  await act(async () => { click("Add from SSH config"); await settle(); });
   ok(document.body.textContent?.includes("gpu"), "SSH alias scan returns importable aliases");
   await act(async () => { click("gpu"); await settle(); });
   const name = document.querySelector<HTMLInputElement>("#remote-host-name");
@@ -54,9 +54,13 @@ async function main() {
   const password = document.querySelector<HTMLInputElement>('[aria-label="SSH password"]');
   const passphrase = document.querySelector<HTMLInputElement>('[aria-label="Private-key passphrase"]');
   const workspace = document.querySelector<HTMLInputElement>("#remote-host-workspace");
-  if (password) typeInto(password, "private-password");
-  if (passphrase) typeInto(passphrase, "private-passphrase");
-  if (workspace) typeInto(workspace, "/srv/workspace");
+  ok(!document.querySelector<HTMLDetailsElement>(".tauri-remote-editor-advanced")?.open, "optional authentication and server settings start collapsed");
+  await act(async () => {
+    document.querySelector<HTMLDetailsElement>(".tauri-remote-editor-advanced")!.open = true;
+    if (password) typeInto(password, "private-password");
+    if (passphrase) typeInto(passphrase, "private-passphrase");
+    if (workspace) typeInto(workspace, "/srv/workspace");
+  });
   await act(async () => { click("Save"); await settle(); await settle(); });
   const calls = (globalThis as typeof globalThis & {
     __tauriBridgeCalls: { name: string; args: { change?: { host?: { name?: string; host?: string; workspace?: string; useSSHConfig?: boolean } }; request?: { trustFingerprint?: string; password?: string; passphrase?: string }; input?: { action?: string; name?: string; workspace?: string } } }[];
@@ -75,15 +79,23 @@ async function main() {
   await act(async () => { click("Trust fingerprint and connect"); await settle(); await settle(); });
   const connectCalls = calls.filter(call => call.name === "connect_remote_host");
   ok(connectCalls.length === 2 && connectCalls[1]?.args.request?.trustFingerprint === "SHA256:trusted-test", "host key is trusted only after confirming the displayed fingerprint");
-  ok(document.body.textContent?.includes("Connection verified"), "verified connection status is shown on the host card");
-  ok(document.body.textContent?.includes("Reasonix Serve"), "a connected host exposes the Reasonix Serve lifecycle entry");
+  ok(document.querySelector('.tauri-remote-host-card small[role="status"]')?.textContent === "Connected", "connected SSH is a status label rather than a redundant action");
+  ok(!document.querySelector<HTMLDetailsElement>(".tauri-remote-advanced")?.open && !document.body.textContent?.includes("Start Serve"), "service controls stay out of the default host view");
+  ok(!calls.some(call => call.name === "remote_forwards"), "connecting does not fetch advanced port forwarding data");
+  await act(async () => { click("Enter remote workspace"); click("Enter remote workspace"); await settle(); await settle(); });
+  const controllerCalls = calls.filter(call => call.name === "open_remote_controller");
+  ok(controllerCalls.length === 1 && controllerCalls[0]?.args.input?.name === "gpu" && controllerCalls[0].args.input.workspace === "/srv/workspace", "the main entry prepares the selected workspace once even after a duplicate click");
+  ok(!calls.some(call => call.name === "remote_serve" && call.args.input?.action === "start"), "entering a workspace does not require a separate manual service start");
+  await act(async () => {
+    const advanced = document.querySelector<HTMLDetailsElement>(".tauri-remote-advanced")!;
+    advanced.open = true;
+    advanced.dispatchEvent(new dom.window.Event("toggle"));
+    await settle(); await settle();
+  });
   await act(async () => { click("Start Serve"); await settle(); await settle(); });
   const serveStart = calls.find(call => call.name === "remote_serve" && call.args.input?.action === "start");
   ok(serveStart?.args.input?.name === "gpu" && serveStart.args.input.workspace === "/srv/workspace", "starting Serve scopes the request to the connected host and its saved workspace");
   ok(document.body.textContent?.includes("http://127.0.0.1:41234/"), "a ready Serve reports its loopback tunnel without exposing an auth token");
-  await act(async () => { click("Open controller"); await settle(); });
-  const controllerOpen = calls.find(call => call.name === "open_remote_controller");
-  ok(controllerOpen?.args.input?.name === "gpu" && controllerOpen.args.input.workspace === "/srv/workspace", "opening the controller is scoped to the connected host and workspace without passing a URL to the renderer");
   await act(async () => { click("Disconnect"); await settle(); });
   (globalThis as typeof globalThis & { __remoteConnectResults?: unknown[] }).__remoteConnectResults = [
     { protocolVersion: 1, status: "failed", message: "authentication_failed" },
@@ -93,14 +105,16 @@ async function main() {
   ok(document.querySelector(".tauri-remote-credential-prompt") !== null, "authentication failure offers an explicit temporary credential prompt");
   const passwordPrompt = document.querySelector<HTMLInputElement>("#remote-password-gpu");
   const passphrasePrompt = document.querySelector<HTMLInputElement>("#remote-passphrase-gpu");
-  if (passwordPrompt) typeInto(passwordPrompt, "one-time-password");
-  if (passphrasePrompt) typeInto(passphrasePrompt, "one-time-passphrase");
+  await act(async () => {
+    if (passwordPrompt) typeInto(passwordPrompt, "one-time-password");
+    if (passphrasePrompt) typeInto(passphrasePrompt, "one-time-passphrase");
+  });
   const configWritesBeforeCredentialRetry = calls.filter(call => call.name === "change_remote_settings").length;
   await act(async () => { click("Retry with credentials"); await settle(); await settle(); });
   const finalConnectCall = calls.filter(call => call.name === "connect_remote_host").at(-1);
   ok(finalConnectCall?.args.request?.password === "one-time-password" && finalConnectCall.args.request.passphrase === "one-time-passphrase", "temporary password and key passphrase are sent only with the retry request");
   ok(calls.filter(call => call.name === "change_remote_settings").length === configWritesBeforeCredentialRetry, "temporary SSH credentials are not written to host settings");
-  ok(!document.querySelector("#remote-password-gpu") && document.body.textContent?.includes("Connection verified"), "successful retry clears the temporary credential form");
+  ok(!document.querySelector("#remote-password-gpu") && document.querySelector('.tauri-remote-host-card small[role="status"]')?.textContent === "Connected", "successful retry clears the temporary credential form");
   (globalThis as typeof globalThis & { __remoteBrowseResults?: unknown[] }).__remoteBrowseResults = [
     { protocolVersion: 1, path: "/srv/workspace", parentPath: "/srv", entries: [{ name: "project", path: "/srv/workspace/project", isDir: true, symlink: false, size: 0, modTime: 0 }, { name: "README.md", path: "/srv/workspace/README.md", isDir: false, symlink: false, size: 12, modTime: 0 }], truncated: false },
     { protocolVersion: 1, path: "/srv/workspace", parentPath: "/srv", entries: [{ name: "project", path: "/srv/workspace/project", isDir: true, symlink: false, size: 0, modTime: 0 }, { name: "README.md", path: "/srv/workspace/README.md", isDir: false, symlink: false, size: 12, modTime: 0 }], truncated: false },
