@@ -251,7 +251,7 @@ func (b *bridgeServer) connectRemoteHost(w http.ResponseWriter, r *http.Request)
 	}
 	input.Name = strings.TrimSpace(input.Name)
 	input.TrustFingerprint = strings.TrimSpace(input.TrustFingerprint)
-	if !previewProviderName.MatchString(input.Name) || len(input.TrustFingerprint) > 256 || len(input.Password) > 4096 || len(input.Passphrase) > 4096 || strings.ContainsAny(input.Password, "\r\n") || strings.ContainsAny(input.Passphrase, "\r\n") {
+	if !validRemoteHostName(input.Name) || len(input.TrustFingerprint) > 256 || len(input.Password) > 4096 || len(input.Passphrase) > 4096 || strings.ContainsAny(input.Password, "\r\n") || strings.ContainsAny(input.Passphrase, "\r\n") {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid SSH connection request")
 		return
 	}
@@ -374,7 +374,7 @@ func (b *bridgeServer) disconnectRemoteHost(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	input.Name = strings.TrimSpace(input.Name)
-	if !previewProviderName.MatchString(input.Name) {
+	if !validRemoteHostName(input.Name) {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid SSH disconnect request")
 		return
 	}
@@ -390,7 +390,7 @@ func (b *bridgeServer) browseRemoteHost(w http.ResponseWriter, r *http.Request) 
 	}
 	input.Name = strings.TrimSpace(input.Name)
 	input.Path = strings.TrimSpace(input.Path)
-	if !previewProviderName.MatchString(input.Name) || len(input.Path) > 4096 || strings.ContainsRune(input.Path, '\x00') {
+	if !validRemoteHostName(input.Name) || len(input.Path) > 4096 || strings.ContainsRune(input.Path, '\x00') {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid remote directory request")
 		return
 	}
@@ -462,7 +462,7 @@ func (b *bridgeServer) previewRemoteFile(w http.ResponseWriter, r *http.Request)
 	}
 	input.Name = strings.TrimSpace(input.Name)
 	input.Path = strings.TrimSpace(input.Path)
-	if !previewProviderName.MatchString(input.Name) || input.Path == "" || len(input.Path) > 4096 || strings.ContainsRune(input.Path, '\x00') {
+	if !validRemoteHostName(input.Name) || input.Path == "" || len(input.Path) > 4096 || strings.ContainsRune(input.Path, '\x00') {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid remote file request")
 		return
 	}
@@ -524,7 +524,7 @@ func (b *bridgeServer) saveRemoteFile(w http.ResponseWriter, r *http.Request) {
 	}
 	input.Name = strings.TrimSpace(input.Name)
 	input.Path = strings.TrimSpace(input.Path)
-	if !previewProviderName.MatchString(input.Name) || input.Path == "" || len(input.Path) > 4096 || strings.ContainsRune(input.Path, '\x00') || len(input.Content) > 1<<20 || !utf8.ValidString(input.Content) || strings.ContainsRune(input.Content, '\x00') {
+	if !validRemoteHostName(input.Name) || input.Path == "" || len(input.Path) > 4096 || strings.ContainsRune(input.Path, '\x00') || len(input.Content) > 1<<20 || !utf8.ValidString(input.Content) || strings.ContainsRune(input.Content, '\x00') {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid remote file save request")
 		return
 	}
@@ -599,7 +599,7 @@ func (b *bridgeServer) changeRemotePath(w http.ResponseWriter, r *http.Request) 
 	input.Name = strings.TrimSpace(input.Name)
 	input.Path = strings.TrimSpace(input.Path)
 	input.NewPath = strings.TrimSpace(input.NewPath)
-	if !previewProviderName.MatchString(input.Name) || input.Path == "" || len(input.Path) > 4096 || len(input.NewPath) > 4096 ||
+	if !validRemoteHostName(input.Name) || input.Path == "" || len(input.Path) > 4096 || len(input.NewPath) > 4096 ||
 		strings.ContainsRune(input.Path, '\x00') || strings.ContainsRune(input.NewPath, '\x00') ||
 		(input.Action != "mkdir" && input.Action != "rename" && input.Action != "delete") ||
 		(input.Action == "rename" && input.NewPath == "") || (input.Action != "rename" && input.NewPath != "") {

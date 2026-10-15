@@ -40,7 +40,7 @@ func (b *bridgeServer) remoteForwards(w http.ResponseWriter, r *http.Request) {
 	input.Name = strings.TrimSpace(input.Name)
 	input.ID = strings.TrimSpace(input.ID)
 	input.RemoteHost = strings.TrimSpace(input.RemoteHost)
-	if !previewProviderName.MatchString(input.Name) || (input.Action != "list" && input.Action != "add" && input.Action != "remove") {
+	if !validRemoteHostName(input.Name) || (input.Action != "list" && input.Action != "add" && input.Action != "remove") {
 		writeProtocolError(w, 400, "invalid_request", "invalid forward request")
 		return
 	}

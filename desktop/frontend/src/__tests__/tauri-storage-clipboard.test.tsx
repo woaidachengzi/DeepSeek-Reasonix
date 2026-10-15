@@ -30,6 +30,8 @@ const label = t("settings.storage.currentWorkspace");
 const copy = () => [...document.querySelectorAll<HTMLButtonElement>(".tauri-storage-path button")].find(button => button.getAttribute("aria-label") === t("settings.storage.copyLabel", { label }))!;
 const refresh = () => [...document.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === t("settings.storage.refresh"))!;
 await render("/workspace-a");
+assert.ok(!document.body.textContent?.includes("Preview"), "storage labels describe the current app instead of assuming a Preview profile");
+assert.equal(document.querySelector<HTMLInputElement>(`input[aria-label="${t("settings.storage.profile")}"]`)?.value, "/private/profile", "storage displays the effective core-reported profile without rewriting its path");
 await act(async () => copy().click());
 assert.equal(clipboard, "/workspace-a");
 assert.equal(copy().title, t("settings.storage.copied"));

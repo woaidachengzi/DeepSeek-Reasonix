@@ -68,7 +68,7 @@ func TestPreviewRemoteConnectRequiresAndPersistsExplicitHostKeyTrust(t *testing.
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	contents := "default_model = \"deepseek-flash\"\n\n[remote]\n\n[[remote.hosts]]\nname = \"loopback\"\nhost = \"127.0.0.1\"\nport = " + address + "\nuser = \"preview-test\"\n"
+	contents := "default_model = \"deepseek-flash\"\n\n[remote]\n\n[[remote.hosts]]\nname = \"172.21.0.5\"\nhost = \"127.0.0.1\"\nport = " + address + "\nuser = \"preview-test\"\n"
 	if err := os.WriteFile(configPath, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestPreviewRemoteConnectRequiresAndPersistsExplicitHostKeyTrust(t *testing.
 	t.Cleanup(bridge.remoteSessions.closeAll)
 	request := func(trust string) remoteConnectResponse {
 		t.Helper()
-		body, err := json.Marshal(remoteConnectRequest{Name: "loopback", TrustFingerprint: trust})
+		body, err := json.Marshal(remoteConnectRequest{Name: "172.21.0.5", TrustFingerprint: trust})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -116,9 +116,9 @@ func TestPreviewRemoteConnectRequiresAndPersistsExplicitHostKeyTrust(t *testing.
 	if _, err := os.Stat(knownHosts); err != nil {
 		t.Fatalf("accepted host key was not persisted: %v", err)
 	}
-	connectedClient, _ := bridge.remoteSessions.get("loopback")
+	connectedClient, _ := bridge.remoteSessions.get("172.21.0.5")
 	workspaceBody, _ := json.Marshal(remoteSettingsChange{Action: "upsert", Host: remoteSettingsHostInput{
-		Name: "loopback", Host: "127.0.0.1", Port: port, User: "preview-test",
+		Name: "172.21.0.5", Host: "127.0.0.1", Port: port, User: "preview-test",
 		Workspace: "/selected/project", ServeInstall: "auto", CredentialMode: "remote",
 	}})
 	workspaceReq := httptest.NewRequest(http.MethodPost, "/v1/settings/remote/hosts", strings.NewReader(string(workspaceBody)))
@@ -130,11 +130,11 @@ func TestPreviewRemoteConnectRequiresAndPersistsExplicitHostKeyTrust(t *testing.
 	if workspaceResponse.Code != http.StatusOK {
 		t.Fatalf("save workspace path: %d %s", workspaceResponse.Code, workspaceResponse.Body.String())
 	}
-	if currentClient, _ := bridge.remoteSessions.get("loopback"); currentClient != connectedClient {
+	if currentClient, _ := bridge.remoteSessions.get("172.21.0.5"); currentClient != connectedClient {
 		t.Fatal("changing only the workspace path disconnected the live SSH client")
 	}
 
-	browseBody, _ := json.Marshal(remoteBrowseRequest{Name: "loopback", Path: "~"})
+	browseBody, _ := json.Marshal(remoteBrowseRequest{Name: "172.21.0.5", Path: "~"})
 	browseReq := httptest.NewRequest(http.MethodPost, "/v1/settings/remote/browse", strings.NewReader(string(browseBody)))
 	browseReq.Header.Set("Content-Type", "application/json")
 	browseReq.Header.Set("Authorization", "Bearer "+testToken)
@@ -150,7 +150,7 @@ func TestPreviewRemoteConnectRequiresAndPersistsExplicitHostKeyTrust(t *testing.
 	if listing.Path == "" || listing.ParentPath == "" || len(listing.Entries) != 2 || !listing.Entries[0].IsDir || listing.Entries[1].Name != "README.md" {
 		t.Fatalf("remote listing = %#v", listing)
 	}
-	previewBody, _ := json.Marshal(remotePreviewRequest{Name: "loopback", Path: listing.Entries[1].Path})
+	previewBody, _ := json.Marshal(remotePreviewRequest{Name: "172.21.0.5", Path: listing.Entries[1].Path})
 	previewReq := httptest.NewRequest(http.MethodPost, "/v1/settings/remote/preview", strings.NewReader(string(previewBody)))
 	previewReq.Header.Set("Content-Type", "application/json")
 	previewReq.Header.Set("Authorization", "Bearer "+testToken)
@@ -169,7 +169,7 @@ func TestPreviewRemoteConnectRequiresAndPersistsExplicitHostKeyTrust(t *testing.
 	if preview.Revision != remoteContentRevision([]byte("remote workspace")) {
 		t.Fatalf("remote preview revision = %q", preview.Revision)
 	}
-	saveBody, _ := json.Marshal(remoteSaveRequest{Name: "loopback", Path: preview.Path, Revision: preview.Revision, Content: "updated remote text"})
+	saveBody, _ := json.Marshal(remoteSaveRequest{Name: "172.21.0.5", Path: preview.Path, Revision: preview.Revision, Content: "updated remote text"})
 	saveReq := httptest.NewRequest(http.MethodPost, "/v1/settings/remote/save", strings.NewReader(string(saveBody)))
 	saveReq.Header.Set("Content-Type", "application/json")
 	saveReq.Header.Set("Authorization", "Bearer "+testToken)
@@ -193,7 +193,7 @@ func TestPreviewRemoteConnectRequiresAndPersistsExplicitHostKeyTrust(t *testing.
 	if err != nil || updatedInfo.Mode().Perm() != 0o644 {
 		t.Fatalf("remote file mode after save = %v, err=%v", updatedInfo, err)
 	}
-	staleBody, _ := json.Marshal(remoteSaveRequest{Name: "loopback", Path: preview.Path, Revision: preview.Revision, Content: "stale overwrite"})
+	staleBody, _ := json.Marshal(remoteSaveRequest{Name: "172.21.0.5", Path: preview.Path, Revision: preview.Revision, Content: "stale overwrite"})
 	staleReq := httptest.NewRequest(http.MethodPost, "/v1/settings/remote/save", strings.NewReader(string(staleBody)))
 	staleReq.Header.Set("Content-Type", "application/json")
 	staleReq.Header.Set("Authorization", "Bearer "+testToken)
@@ -207,7 +207,7 @@ func TestPreviewRemoteConnectRequiresAndPersistsExplicitHostKeyTrust(t *testing.
 	for _, content := range []string{"parallel update A", "parallel update B"} {
 		go func(content string) {
 			<-startSaves
-			body, _ := json.Marshal(remoteSaveRequest{Name: "loopback", Path: saved.Path, Revision: saved.Revision, Content: content})
+			body, _ := json.Marshal(remoteSaveRequest{Name: "172.21.0.5", Path: saved.Path, Revision: saved.Revision, Content: content})
 			req := httptest.NewRequest(http.MethodPost, "/v1/settings/remote/save", strings.NewReader(string(body)))
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("Authorization", "Bearer "+testToken)
@@ -221,7 +221,7 @@ func TestPreviewRemoteConnectRequiresAndPersistsExplicitHostKeyTrust(t *testing.
 	if !((firstSave == http.StatusOK && secondSave == http.StatusConflict) || (secondSave == http.StatusOK && firstSave == http.StatusConflict)) {
 		t.Fatalf("concurrent saves accepted the same revision: statuses %d and %d", firstSave, secondSave)
 	}
-	previewBody, _ = json.Marshal(remotePreviewRequest{Name: "loopback", Path: listing.Path})
+	previewBody, _ = json.Marshal(remotePreviewRequest{Name: "172.21.0.5", Path: listing.Path})
 	previewReq = httptest.NewRequest(http.MethodPost, "/v1/settings/remote/preview", strings.NewReader(string(previewBody)))
 	previewReq.Header.Set("Content-Type", "application/json")
 	previewReq.Header.Set("Authorization", "Bearer "+testToken)
@@ -246,42 +246,42 @@ func TestPreviewRemoteConnectRequiresAndPersistsExplicitHostKeyTrust(t *testing.
 		return response
 	}
 	created := path.Join(listing.Path, "created")
-	if response := pathCall(remotePathChangeRequest{Name: "loopback", Action: "mkdir", Path: created}, "mkdir-created"); response.Code != http.StatusOK {
+	if response := pathCall(remotePathChangeRequest{Name: "172.21.0.5", Action: "mkdir", Path: created}, "mkdir-created"); response.Code != http.StatusOK {
 		t.Fatalf("create remote directory: %d %s", response.Code, response.Body.String())
 	}
 	if info, err := os.Stat(filepath.Join(remoteRoot, "created")); err != nil || !info.IsDir() {
 		t.Fatalf("created directory missing: %v, %v", info, err)
 	}
 	renamed := path.Join(listing.Path, "renamed")
-	if response := pathCall(remotePathChangeRequest{Name: "loopback", Action: "rename", Path: created, NewPath: renamed}, "rename-created"); response.Code != http.StatusOK {
+	if response := pathCall(remotePathChangeRequest{Name: "172.21.0.5", Action: "rename", Path: created, NewPath: renamed}, "rename-created"); response.Code != http.StatusOK {
 		t.Fatalf("rename remote directory: %d %s", response.Code, response.Body.String())
 	}
 	if _, err := os.Stat(filepath.Join(remoteRoot, "renamed")); err != nil {
 		t.Fatalf("renamed directory missing: %v", err)
 	}
-	if response := pathCall(remotePathChangeRequest{Name: "loopback", Action: "rename", Path: renamed, NewPath: preview.Path}, "rename-conflict"); response.Code != http.StatusConflict {
+	if response := pathCall(remotePathChangeRequest{Name: "172.21.0.5", Action: "rename", Path: renamed, NewPath: preview.Path}, "rename-conflict"); response.Code != http.StatusConflict {
 		t.Fatalf("rename over an existing remote path = %d, want 409: %s", response.Code, response.Body.String())
 	}
 	if err := os.WriteFile(filepath.Join(remoteRoot, "renamed", "child.txt"), []byte("remove me"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if response := pathCall(remotePathChangeRequest{Name: "loopback", Action: "delete", Path: renamed}, "delete-nonempty"); response.Code != http.StatusConflict {
+	if response := pathCall(remotePathChangeRequest{Name: "172.21.0.5", Action: "delete", Path: renamed}, "delete-nonempty"); response.Code != http.StatusConflict {
 		t.Fatalf("nonrecursive remote directory delete = %d, want 409: %s", response.Code, response.Body.String())
 	}
-	if response := pathCall(remotePathChangeRequest{Name: "loopback", Action: "delete", Path: renamed, Recursive: true}, "delete-recursive"); response.Code != http.StatusOK {
+	if response := pathCall(remotePathChangeRequest{Name: "172.21.0.5", Action: "delete", Path: renamed, Recursive: true}, "delete-recursive"); response.Code != http.StatusOK {
 		t.Fatalf("recursive remote directory delete: %d %s", response.Code, response.Body.String())
 	}
 	if _, err := os.Stat(filepath.Join(remoteRoot, "renamed")); !os.IsNotExist(err) {
 		t.Fatalf("recursive remote delete left directory: %v", err)
 	}
-	if response := pathCall(remotePathChangeRequest{Name: "loopback", Action: "delete", Path: listing.Path, Recursive: true}, "delete-home"); response.Code != http.StatusBadRequest {
+	if response := pathCall(remotePathChangeRequest{Name: "172.21.0.5", Action: "delete", Path: listing.Path, Recursive: true}, "delete-home"); response.Code != http.StatusBadRequest {
 		t.Fatalf("remote home delete = %d, want 400: %s", response.Code, response.Body.String())
 	}
 	link := filepath.Join(remoteRoot, "project-link")
 	if err := os.Symlink(filepath.Join(remoteRoot, "project"), link); err != nil {
 		t.Fatal(err)
 	}
-	if response := pathCall(remotePathChangeRequest{Name: "loopback", Action: "delete", Path: path.Join(listing.Path, "project-link"), Recursive: true}, "delete-symlink"); response.Code != http.StatusOK {
+	if response := pathCall(remotePathChangeRequest{Name: "172.21.0.5", Action: "delete", Path: path.Join(listing.Path, "project-link"), Recursive: true}, "delete-symlink"); response.Code != http.StatusOK {
 		t.Fatalf("delete symlink: %d %s", response.Code, response.Body.String())
 	}
 	if _, err := os.Lstat(link); !os.IsNotExist(err) {
@@ -312,7 +312,7 @@ func TestPreviewRemoteConnectRequiresAndPersistsExplicitHostKeyTrust(t *testing.
 	}
 	localPort := portProbe.Addr().(*net.TCPAddr).Port
 	_ = portProbe.Close()
-	forwardInput := remoteForwardRequest{Name: "loopback", Action: "add", ID: "test", LocalPort: localPort, RemoteHost: "127.0.0.1", RemotePort: target.Addr().(*net.TCPAddr).Port}
+	forwardInput := remoteForwardRequest{Name: "172.21.0.5", Action: "add", ID: "test", LocalPort: localPort, RemoteHost: "127.0.0.1", RemotePort: target.Addr().(*net.TCPAddr).Port}
 	forwardCall := func(input remoteForwardRequest, id string) *httptest.ResponseRecorder {
 		t.Helper()
 		body, _ := json.Marshal(input)
@@ -368,7 +368,7 @@ func TestPreviewRemoteConnectRequiresAndPersistsExplicitHostKeyTrust(t *testing.
 		t.Fatal("live state missing on settings reopen")
 	}
 
-	disconnectBody, _ := json.Marshal(remoteDisconnectRequest{Name: "loopback"})
+	disconnectBody, _ := json.Marshal(remoteDisconnectRequest{Name: "172.21.0.5"})
 	disconnectReq := httptest.NewRequest(http.MethodPost, "/v1/settings/remote/disconnect", strings.NewReader(string(disconnectBody)))
 	disconnectReq.Header.Set("Content-Type", "application/json")
 	disconnectReq.Header.Set("Authorization", "Bearer "+testToken)
@@ -377,7 +377,7 @@ func TestPreviewRemoteConnectRequiresAndPersistsExplicitHostKeyTrust(t *testing.
 	if disconnectResponse.Code != http.StatusOK {
 		t.Fatalf("disconnect remote host: %d %s", disconnectResponse.Code, disconnectResponse.Body.String())
 	}
-	if client, _ := bridge.remoteSessions.get("loopback"); client != nil {
+	if client, _ := bridge.remoteSessions.get("172.21.0.5"); client != nil {
 		t.Fatal("disconnect left an SSH client in the Preview session manager")
 	}
 

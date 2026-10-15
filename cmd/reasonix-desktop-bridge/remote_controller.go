@@ -203,7 +203,7 @@ func (b *bridgeServer) attachRemoteController(w http.ResponseWriter, r *http.Req
 		return
 	}
 	input.Name, input.Workspace = strings.TrimSpace(input.Name), strings.TrimSpace(input.Workspace)
-	if !previewProviderName.MatchString(input.Name) || !controllerDisplayPath(input.Workspace) {
+	if !validRemoteHostName(input.Name) || !controllerDisplayPath(input.Workspace) {
 		writeProtocolError(w, 400, "invalid_request", "remote controller requires a saved host and workspace")
 		return
 	}

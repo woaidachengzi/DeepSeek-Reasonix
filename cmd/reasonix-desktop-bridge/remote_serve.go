@@ -309,7 +309,7 @@ func (b *bridgeServer) remoteServeConnectedClient(w http.ResponseWriter, r *http
 		return remoteServeRequest{}, nil, false
 	}
 	input.Name, input.Workspace = strings.TrimSpace(input.Name), strings.TrimSpace(input.Workspace)
-	if !previewProviderName.MatchString(input.Name) || input.Workspace == "" || len(input.Workspace) > 4096 || strings.ContainsRune(input.Workspace, '\x00') {
+	if !validRemoteHostName(input.Name) || input.Workspace == "" || len(input.Workspace) > 4096 || strings.ContainsRune(input.Workspace, '\x00') {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "remote Serve requires a configured host and workspace")
 		return remoteServeRequest{}, nil, false
 	}

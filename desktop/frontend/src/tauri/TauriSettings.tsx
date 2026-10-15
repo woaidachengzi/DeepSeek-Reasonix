@@ -868,9 +868,10 @@ function DataSettings({ profile, busy, onRefreshProfile, onImportStableProfile, 
     }
   };
   const disabled = busy || actionBusy;
+  const managedPreview = profile?.managedProfile === true && !profile.takeoverProfile;
   return <div className="tauri-settings-section tauri-settings-data">
-    <div className="tauri-settings-data__heading"><div><h3>{t("settings.data.previewTitle")}</h3><p>{t("settings.data.previewDescription")}</p></div>{onRefreshProfile && <button type="button" className="tauri-settings-button" onClick={() => void run(onRefreshProfile)} disabled={disabled}><RefreshCw size={13} />{t("settings.data.refresh")}</button>}</div>
-    {profile ? <>
+    <div className="tauri-settings-data__heading"><div><h3>{t(managedPreview ? "settings.data.previewTitle" : "settings.data.currentTitle")}</h3><p>{t(managedPreview ? "settings.data.previewDescription" : "settings.data.currentDescription")}</p></div>{managedPreview && onRefreshProfile && <button type="button" className="tauri-settings-button" onClick={() => void run(onRefreshProfile)} disabled={disabled}><RefreshCw size={13} />{t("settings.data.refresh")}</button>}</div>
+    {profile ? managedPreview && <>
       <div className="tauri-settings-data__path"><span>{t("settings.data.configDirectory")}</span><code>{profile.previewHome}</code></div>
       {profile.stableConfig && <div className="tauri-settings-data__path"><span>{t("settings.data.stableConfig")}</span><code>{profile.stableConfig}</code></div>}
       <div className="tauri-settings-data__actions">

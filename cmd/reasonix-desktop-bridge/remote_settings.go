@@ -4,11 +4,22 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	configpkg "reasonix/internal/config"
 	"reasonix/internal/desktopbridge"
 	"reasonix/internal/remote"
 )
+
+// SSH aliases are saved identifiers, not model-provider IDs: IP addresses,
+// dotted aliases and non-ASCII labels are valid. Keep the same name boundary
+// for saving and every operation which looks up a saved remote host.
+func validRemoteHostName(name string) bool {
+	return name != "" && len(name) <= 64 && utf8.ValidString(name) &&
+		!strings.ContainsAny(name, "/:@") &&
+		strings.IndexFunc(name, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) < 0
+}
 
 type remoteSettingsView struct {
 	ProtocolVersion int                  `json:"protocolVersion"`
@@ -132,6 +143,9 @@ func changeRemoteSettings(change remoteSettingsChange) (remoteSettingsView, erro
 		change.Host.Workspace = strings.TrimSpace(change.Host.Workspace)
 		change.Host.ServeInstall = strings.TrimSpace(change.Host.ServeInstall)
 		change.Host.CredentialMode = strings.TrimSpace(change.Host.CredentialMode)
+		if !validRemoteHostName(change.Host.Name) {
+			return remoteSettingsView{}, fmt.Errorf("invalid remote host name")
+		}
 		if len(change.Host.Name) > 64 || len(change.Host.Host) > 2048 || len(change.Host.User) > 256 || len(change.Host.IdentityFile) > 4096 || len(change.Host.ProxyJump) > 2048 || len(change.Host.Workspace) > 4096 {
 			return remoteSettingsView{}, fmt.Errorf("remote host setting exceeds its size limit")
 		}
