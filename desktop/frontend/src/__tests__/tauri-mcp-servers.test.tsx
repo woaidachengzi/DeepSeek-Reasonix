@@ -100,6 +100,9 @@ async function main() {
   const { TauriSessionApp } = await import("../tauri/TauriChatWorkspace");
   const { TauriMCPSettings } = await import("../tauri/TauriMCPSettings");
   const { mcpDraftFromMarketplace, mcpDraftToInput } = await import("../tauri/tauriMCPServers");
+  const { browserUseDraft, BROWSER_MCP_ARGS } = await import("../tauri/tauriBrowserUse");
+  const collision = browserUseDraft(["reasonix-browser", "reasonix-browser-2"].map(name => ({ name })) as Parameters<typeof browserUseDraft>[0], "project");
+  eq(collision.name, "reasonix-browser-3", "browser configuration never overwrites a colliding MCP server");
   const packageDraft = mcpDraftFromMarketplace({name:"io.example/package",suggestedName:"package",installable:true,transport:"stdio",command:"npx",args:["--yes","name with spaces"]}, [], "global");
   eq(JSON.stringify(mcpDraftToInput(packageDraft).args), JSON.stringify(["--yes","name with spaces"]), "Registry package argument boundaries survive the reviewed form");
 
@@ -315,6 +318,35 @@ async function main() {
   eq((runtimeActions[1]?.args as { request?: { action?: string } } | undefined)?.request?.action, "disconnect", "disconnect is an explicit runtime action");
   ok(!text().includes("Connected to this session · 2 tools"), "disconnect refreshes the current session status");
   await act(async () => { activeRoot.unmount(); });
+
+  (globalThis as unknown as { __mcpServers: unknown[] }).__mcpServers = [];
+  const browserRoot = createRoot(document.getElementById("root")!);
+  await act(async () => {
+    browserRoot.render(React.createElement(LocaleProvider, null,
+      React.createElement(React.Fragment, null, React.createElement(ForceEnglish), React.createElement(TauriMCPSettings, { workspaceRoot: "/tmp/browser-project" })),
+    ));
+    await settle();
+    await settle();
+  });
+  ok(text().includes("Browser use (preview)"), "browser use has a discoverable settings entry");
+  const savesBeforePreset = bridgeCalls().filter(call => call.name === "save_mcp_server").length;
+  await act(async () => { click(mcpButtons("Configure browser use")[0]); await settle(); });
+  eq(bridgeCalls().filter(call => call.name === "save_mcp_server").length, savesBeforePreset, "configuring a browser opens a reviewable draft without starting or saving a server");
+  eq(field("Name")?.value, "reasonix-browser", "the browser preset populates the server name");
+  eq(field("Command")?.value, "npx", "the browser preset uses the Node package runner");
+  eq(field("Arguments")?.value, JSON.stringify(BROWSER_MCP_ARGS), "browser startup pins the package, enables vision, and isolates the profile");
+  await act(async () => { click(mcpButtons("Cancel")[0]); await settle(); });
+  eq(bridgeCalls().filter(call => call.name === "save_mcp_server").length, savesBeforePreset, "cancel does not persist the browser preset");
+  await act(async () => { click(mcpButtons("Configure browser use")[0]); await settle(); });
+  await act(async () => { click(mcpButtons("Add server")[0]); await settle(); });
+  const browserSave = bridgeCalls().filter(call => call.name === "save_mcp_server").at(-1);
+  const browserRequest = (browserSave?.args as { server?: { scope?: string; args?: string[] } } | undefined)?.server;
+  eq(browserRequest?.scope, "project", "browser installation follows the current project scope");
+  eq(JSON.stringify(browserRequest?.args), JSON.stringify(BROWSER_MCP_ARGS), "the saved browser server retains exact argument boundaries");
+  ok(Boolean(mcpButtons("View browser configuration")[0]), "an installed browser offers configuration instead of duplicate installation");
+  await act(async () => { click(mcpButtons("View browser configuration")[0]); await settle(); });
+  ok(Boolean(mcpButtons("Save changes")[0]), "viewing browser configuration opens the existing server for editing");
+  await act(async () => { browserRoot.unmount(); });
 
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);

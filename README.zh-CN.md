@@ -42,6 +42,20 @@
 
 上述是已接入的功能面，不代表与 Wails 完全对齐。Tauri 原生远程 tab、剩余机器人流程、管理页实际包验收等见 [E 迁移清单](./docs/tauri/E_MIGRATION_CHECKLIST.md)。自动更新不在本轮迁移范围内。
 
+## 浏览器操作（试用）
+
+进入 **设置 → MCP 与工具 → 浏览器操作**，点击 **配置浏览器操作**，检查并保存预设。使用官方 [Microsoft Playwright MCP](https://github.com/microsoft/playwright-mcp)，固定版本 `0.0.83`，启用 Chrome、隔离环境、截图与视觉工具，并关闭网页提供的 WebMCP 工具。需要 Node.js 24+ 和 Google Chrome，首次连接会下载 npm 工具包。
+
+保存后新建会话，或在空闲时点击 **应用到当前会话**，随后发送：`/browser-use 打开 https://example.com，查看页面内容并截图`。内置技能引导 Agent 发现工具、观察网页、执行操作并验证结果。网页结构操作可使用支持工具调用的模型；理解截图需要视觉模型或已配置的图片识别服务。
+
+Tauri 每个会话独立持有 MCP 进程和浏览器环境，不继承日常浏览器登录。如需登录，请在新打开的浏览器窗口中完成；关闭会话后登录状态不保留。本次试用支持网页操作，原生桌面应用控制尚未接入。
+
+真实工具验收命令覆盖导航、输入、点击、截图图片返回与两个 MCP Host 的浏览器隔离：
+
+```bash
+REASONIX_LIVE_PLAYWRIGHT_MCP=1 go test ./internal/plugin -run '^TestPlaywrightMCPLive$' -v -count=1 -timeout=4m
+```
+
 ## Tauri 在这个项目中的好处
 
 - **原生桌面宿主，沿用现有网页界面。** Tauri 使用系统 WebView：macOS 为 WKWebView，Windows 为 WebView2，Linux 为 WebKitGTK，无需随应用分发独立浏览器运行时。参见官方[进程模型](https://v2.tauri.app/concept/process-model/)。

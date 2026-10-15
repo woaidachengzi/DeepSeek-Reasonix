@@ -27,15 +27,16 @@ const (
 // concurrent request correlation, cancellation, and server requests are owned
 // by the official SDK's IOTransport.
 type stdioTransport struct {
-	name        string
-	cmd         *exec.Cmd
-	job         uintptr // Windows Job Object handle (0 elsewhere); reaps detached grandchildren on close
-	stdin       io.WriteCloser
-	stdout      io.ReadCloser
-	stderr      *tailBuffer
-	waitOnce    sync.Once
-	closeOnce   sync.Once
-	releaseSlot func() // returns a bounded instance slot (e.g. CodeGraph) on close; nil when unbounded
+	name           string
+	cmd            *exec.Cmd
+	job            uintptr // Windows Job Object handle (0 elsewhere); reaps detached grandchildren on close
+	stdin          io.WriteCloser
+	stdout         io.ReadCloser
+	stderr         *tailBuffer
+	waitOnce       sync.Once
+	closeOnce      sync.Once
+	releaseSlot    func() // returns a bounded instance slot (e.g. CodeGraph) on close; nil when unbounded
+	cleanupSockets func() // removes this process's private short Playwright socket directory
 }
 
 func newStdioTransport(ctx context.Context, s Spec) (*stdioTransport, error) {
@@ -71,6 +72,15 @@ func newStdioTransport(ctx context.Context, s Spec) (*stdioTransport, error) {
 	if err != nil {
 		return nil, err
 	}
+	processSandbox, env, cleanupSockets, err := preparePlaywrightSockets(s, processSandbox, env)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if cleanupSockets != nil {
+			cleanupSockets()
+		}
+	}()
 	launchArgs := append([]string{exe}, effectiveLaunchArgs(s)...)
 	var argv []string
 	if s.ResolvedProcessMode() == MCPProcessConfined {
@@ -108,16 +118,49 @@ func newStdioTransport(ctx context.Context, s Spec) (*stdioTransport, error) {
 		proc.LowPriorityStarted(cmd)
 	}
 	t := &stdioTransport{
-		name:        s.Name,
-		cmd:         cmd,
-		job:         job,
-		stdin:       stdin,
-		stdout:      stdout,
-		stderr:      stderr,
-		releaseSlot: releaseSlot,
+		name:           s.Name,
+		cmd:            cmd,
+		job:            job,
+		stdin:          stdin,
+		stdout:         stdout,
+		stderr:         stderr,
+		releaseSlot:    releaseSlot,
+		cleanupSockets: cleanupSockets,
 	}
 	releaseSlot = nil // ownership transferred to t; close() releases it
+	cleanupSockets = nil
 	return t, nil
+}
+
+// Playwright puts Unix sockets below TMPDIR. Our intentionally long private
+// state paths can exceed macOS's 104-byte sockaddr_un limit. Its supported
+// override keeps just sockets in a short, random, mode-0700 per-process dir;
+// npm caches and all other temporary files remain in the private state tree.
+func preparePlaywrightSockets(s Spec, processSandbox sandbox.Spec, env []string) (sandbox.Spec, []string, func(), error) {
+	if runtime.GOOS == "windows" {
+		return processSandbox, env, nil, nil
+	}
+	playwright := false
+	for _, arg := range s.Args {
+		if arg == "@playwright/mcp" || strings.HasPrefix(arg, "@playwright/mcp@") {
+			playwright = true
+			break
+		}
+	}
+	if !playwright {
+		return processSandbox, env, nil, nil
+	}
+	if value, _ := envValue(env, "PWTEST_SOCKETS_DIR"); strings.TrimSpace(value) != "" {
+		return processSandbox, env, nil, nil
+	}
+	dir, err := os.MkdirTemp("/tmp", "rx-pw-")
+	if err != nil {
+		return processSandbox, env, nil, fmt.Errorf("create browser socket directory: %w", err)
+	}
+	cleanup := func() { _ = os.RemoveAll(dir) }
+	processSandbox.WriteRoots = append(processSandbox.WriteRoots, dir)
+	env = setEnvValue(env, "PWTEST_SOCKETS_DIR", dir)
+	return processSandbox, env, cleanup, nil
 }
 
 func prepareMCPPrivateState(s Spec, processSandbox sandbox.Spec, env []string) (sandbox.Spec, []string, error) {
@@ -577,6 +620,9 @@ func waitFinishedWithinBudget(wait func(), budget time.Duration) bool {
 // stall a boot or turn teardown.
 func (t *stdioTransport) close() {
 	t.closeOnce.Do(func() {
+		if t.cleanupSockets != nil {
+			defer t.cleanupSockets()
+		}
 		if t.releaseSlot != nil {
 			defer t.releaseSlot()
 		}

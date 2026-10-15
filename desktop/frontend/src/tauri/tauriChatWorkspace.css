@@ -1339,6 +1339,12 @@
 .tauri-mcp-settings__heading p { margin: 0; color: var(--fg-faint); font-size: 11px; }
 .tauri-mcp-settings__heading code { color: var(--fg-dim); }
 .tauri-mcp-settings__actions { display: flex; flex: 0 0 auto; gap: 6px; }
+.tauri-browser-use { display: grid; gap: 8px; margin: 16px 0; padding: 16px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface); }
+.tauri-browser-use__heading { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; color: var(--accent); }
+.tauri-browser-use__heading h4 { flex: 1; margin: 0; color: var(--fg); font-size: 13px; }
+.tauri-browser-use p { margin: 0; color: var(--fg-dim); font-size: 12px; line-height: 1.6; }
+.tauri-browser-use code { padding: 9px 11px; border-radius: 6px; background: var(--bg); color: var(--fg); font: 11px/1.6 var(--font-mono); overflow-wrap: anywhere; user-select: text; }
+.tauri-browser-use small { color: var(--fg-faint); font-size: 11px; line-height: 1.6; }
 @media (max-width: 570px) { .tauri-mcp-settings__heading { flex-direction: column; } }
 .tauri-settings-data__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .tauri-settings-data__heading p { margin: 0 0 12px; }

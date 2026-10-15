@@ -72,3 +72,52 @@ func TestPrepareMCPPrivateStateUnixIsolatesTemp(t *testing.T) {
 		t.Fatalf("private Unix temp directory = (%v, %v), want directory", info, err)
 	}
 }
+
+func TestPlaywrightSocketsAreShortPrivateAndOwned(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows uses named pipes")
+	}
+	spec := Spec{Args: []string{"-y", "@playwright/mcp@0.0.83"}}
+	env := []string{"TMPDIR=" + filepath.Join(t.TempDir(), strings.Repeat("long", 20))}
+	_, first, cleanFirst, err := preparePlaywrightSockets(spec, sandbox.Spec{}, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cleanFirst)
+	_, second, cleanSecond, err := preparePlaywrightSockets(spec, sandbox.Spec{}, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cleanSecond)
+	a, _ := envValue(first, "PWTEST_SOCKETS_DIR")
+	b, _ := envValue(second, "PWTEST_SOCKETS_DIR")
+	if a == b || len(a) > 40 {
+		t.Fatalf("socket dirs must be unique and short: %q, %q", a, b)
+	}
+	if info, err := os.Stat(a); err != nil || info.Mode().Perm() != 0o700 {
+		t.Fatalf("socket dir must be private: %v %v", info, err)
+	}
+	if got, _ := envValue(first, "TMPDIR"); got != strings.TrimPrefix(env[0], "TMPDIR=") {
+		t.Fatal("other temporary state must stay isolated")
+	}
+	transport := &stdioTransport{cleanupSockets: cleanFirst}
+	transport.close()
+	transport.close()
+	if _, err := os.Stat(a); !os.IsNotExist(err) {
+		t.Fatal("transport close did not remove its socket dir")
+	}
+	if _, err := os.Stat(b); err != nil {
+		t.Fatal("closing one transport removed another's socket dir")
+	}
+	_, custom, cleanup, err := preparePlaywrightSockets(spec, sandbox.Spec{}, []string{"PWTEST_SOCKETS_DIR=/custom"})
+	if err != nil || cleanup != nil {
+		t.Fatal("an explicit socket directory must stay user-owned")
+	}
+	if value, _ := envValue(custom, "PWTEST_SOCKETS_DIR"); value != "/custom" {
+		t.Fatal("explicit directory was overridden")
+	}
+	_, _, cleanup, err = preparePlaywrightSockets(Spec{Args: []string{"other-mcp"}}, sandbox.Spec{}, env)
+	if err != nil || cleanup != nil {
+		t.Fatal("other MCP servers must retain their existing launch behavior")
+	}
+}

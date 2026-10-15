@@ -42,6 +42,20 @@ The previous macOS Apple Silicon takeover candidate (0.1.3) passed current-histo
 
 These are implemented areas, not a claim of complete Wails feature parity. Native remote tabs, remaining bot workflows, and package-level management-page acceptance are tracked in the [E migration checklist](./docs/tauri/E_MIGRATION_CHECKLIST.md). Automatic updates are outside the current migration scope.
 
+## Browser use (preview)
+
+In **Settings → MCP & tools → Browser use**, choose **Configure browser use** and save the reviewed preset. It uses the official [Microsoft Playwright MCP](https://github.com/microsoft/playwright-mcp), pinned to `0.0.83`, with Chrome, isolated storage, screenshot/vision tools, and page-provided WebMCP tools disabled. Requires Node.js 24+ and Google Chrome; the first connection downloads the npm package.
+
+Start a new session, or **Apply to current session** while idle. Then try `/browser-use Open https://example.com, inspect the page, and take a screenshot`. The shipped inline skill guides discovery, observation, actions, and verification. Page structure actions work with tool-capable models; screenshot understanding needs a vision-capable model or configured image fallback.
+
+Each Tauri session owns its MCP process and isolated browser context. It does not inherit your normal browser logins; sign in in the new browser window if required. Closing the session discards that login state. This preview operates web pages; native desktop app control is outside this integration's scope.
+
+An opt-in real-tool test covers navigation, typing, clicking, screenshot image return, and isolation between two MCP hosts:
+
+```bash
+REASONIX_LIVE_PLAYWRIGHT_MCP=1 go test ./internal/plugin -run '^TestPlaywrightMCPLive$' -v -count=1 -timeout=4m
+```
+
 ## Why Tauri in this project
 
 - **A native desktop host with the existing web UI.** Tauri uses the operating system's WebView: WKWebView on macOS, WebView2 on Windows, and WebKitGTK on Linux. This avoids distributing a separate browser runtime. See the official [process model](https://v2.tauri.app/concept/process-model/).

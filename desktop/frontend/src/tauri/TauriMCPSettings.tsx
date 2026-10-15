@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cancelTauriMCPOAuth, clearTauriMCPAuthentication, deleteTauriMCPServer, resolveTauriMCPMarketplace, saveTauriMCPServer, searchTauriMCPMarketplace, setTauriMCPServerEnabled, startTauriMCPOAuth, tauriMCPOAuthStatus, tauriMCPRuntimeAction, tauriMCPServers, tauriMessageFrom, type TauriMCPOAuthFlow, type TauriMCPMarketplace, type TauriMCPMarketplaceEntry, type TauriMCPServer } from "../lib/tauriBridge";
-import { useT } from "../lib/i18n";
+import { useI18n, type useT } from "../lib/i18n";
+import { Globe } from "lucide-react";
+import { browserUseCopy, browserUseDraft, findBrowserUseServer } from "./tauriBrowserUse";
 import { emptyMCPDraft, mcpDraftForEditing, mcpDraftFromMarketplace, mcpDraftToInput, mcpTransportSummary, type MCPDraft } from "./tauriMCPServers";
 
 function runtimeSummary(server: TauriMCPServer, t: ReturnType<typeof useT>): string {
@@ -43,7 +45,8 @@ export function TauriMCPSettings({ workspaceRoot, sessionId, currentSessionState
   currentSessionHasAttachments?: boolean;
   onApplyToCurrentSession?: () => Promise<boolean>;
 }) {
-  const t = useT();
+  const { t, locale } = useI18n();
+  const browserCopy = browserUseCopy[locale];
   const [servers, setServers] = useState<TauriMCPServer[]>([]);
   const [notice, setNotice] = useState("");
   const [draft, setDraft] = useState<MCPDraft | null>(null);
@@ -58,6 +61,12 @@ export function TauriMCPSettings({ workspaceRoot, sessionId, currentSessionState
   const [marketplace, setMarketplace] = useState<TauriMCPMarketplace | null>(null);
   const generation = useRef(0);
   const mutationBusy = useRef(false);
+  const editorRef = useRef<HTMLFormElement>(null);
+  const hasDraft = draft !== null;
+  useEffect(() => {
+    if (hasDraft) editorRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [hasDraft]);
+  const browserServer = findBrowserUseServer(servers);
 
   const refresh = useCallback(async () => {
     const request = ++generation.current;
@@ -336,6 +345,14 @@ export function TauriMCPSettings({ workspaceRoot, sessionId, currentSessionState
         {pendingApply && currentSessionState && onApplyToCurrentSession && <button type="button" className="tauri-settings-button" onClick={() => void applyCurrent()} disabled={busy || currentSessionState !== "idle" || currentSessionHasAttachments}>{t("settings.mcp.applyCurrent")}</button>}
       </div>
     </div>
+    {!marketplaceOpen && <div className="tauri-browser-use">
+      <div className="tauri-browser-use__heading"><Globe size={18} aria-hidden="true" /><h4>{browserCopy.title}</h4><button type="button" className="tauri-settings-button" disabled={busy || loading || hasDraft || Boolean(browserServer?.managedByPackage)} onClick={() => setDraft(browserServer ? mcpDraftForEditing(browserServer) : browserUseDraft(servers, workspaceRoot ? "project" : "global"))}>{browserServer ? browserCopy.manage : browserCopy.configure}</button></div>
+      <p>{browserCopy.description}</p>
+      <p>{browserCopy.requirements}</p>
+      <p>{browserCopy.steps}</p>
+      <code>{browserCopy.example}</code>
+      <small>{browserCopy.vision}</small>
+    </div>}
     {notice && <p className="tauri-diagnostic-error" role="alert">{notice}</p>}
     {status && <p className="tauri-settings-hint" role="status">{status}</p>}
     {authFlow?.status === "pending" && <p className="tauri-settings-hint" role="status">{t("settings.mcp.authorizing")} <button type="button" className="tauri-settings-button" onClick={() => void cancelAuthorization()} disabled={busy}>{t("settings.mcp.cancelAuthorization")}</button></p>}
@@ -354,7 +371,7 @@ export function TauriMCPSettings({ workspaceRoot, sessionId, currentSessionState
       {server.managedByPackage && <small>{t("settings.mcp.managedByPlugin")}</small>}
       <div className="tauri-mcp-list__actions"><button type="button" className="tauri-mcp-list__toggle" role="switch" aria-checked={server.enabled} aria-label={`${server.name} ${server.enabled ? t("caps.pluginEnabled") : t("caps.pluginDisabled")}`} onClick={() => void toggle(server)} disabled={busy}>{server.enabled ? t("caps.pluginEnabled") : t("caps.pluginDisabled")}</button>{sessionId && server.enabled && <>{server.nativeOAuthEligible && <button type="button" onClick={() => void authorizeServer(server)} disabled={busy || Boolean(authFlow) || currentSessionState !== "idle" || currentSessionHasAttachments}>{t("settings.mcp.authorize")}</button>}<button type="button" onClick={() => void changeRuntimeConnection(server, "connect")} disabled={busy || currentSessionState !== "idle" || currentSessionHasAttachments}>{runtimeActionName === server.name ? t("settings.mcp.runtimeChanging") : server.runtimeStatus === "connected" ? t("settings.mcp.reconnectCurrent") : t("settings.mcp.connectCurrent")}</button>{server.runtimeStatus === "connected" && <button type="button" onClick={() => void changeRuntimeConnection(server, "disconnect")} disabled={busy || currentSessionState !== "idle" || currentSessionHasAttachments}>{t("settings.mcp.disconnectCurrent")}</button>}</>}{sessionId && server.authenticationSaved && !server.managedByPackage && <button type="button" onClick={() => void clearAuthentication(server)} disabled={busy || Boolean(authFlow) || currentSessionState !== "idle" || currentSessionHasAttachments}>{t("settings.mcp.clearAuth")}</button>}<button type="button" onClick={() => setDraft(mcpDraftForEditing(server))} disabled={busy || server.managedByPackage}>{t("common.edit")}</button><button type="button" onClick={() => void remove(server)} disabled={busy || server.managedByPackage}>{t("common.delete")}</button></div>
     </li>)}</ul>}
-    {draft && <form className="tauri-mcp-form" onSubmit={event => { event.preventDefault(); void save(); }}>
+    {draft && <form ref={editorRef} className="tauri-mcp-form" onSubmit={event => { event.preventDefault(); void save(); }}>
       <label>{t("settings.mcp.nameLabel")}<input value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} disabled={draft.editing || busy} aria-label={t("settings.mcp.nameLabel")} /></label>
       <label>{t("settings.mcp.scopeLabel")}<select value={draft.scope} onChange={event => setDraft({ ...draft, scope: event.target.value === "project" ? "project" : "global" })} disabled={draft.editing || busy}><option value="project" disabled={!workspaceRoot}>{t("settings.mcp.projectConfigScope", { config: "reasonix.toml" })}</option><option value="global">{t("settings.mcp.globalConfigScope")}</option></select></label>
       <label>{t("settings.mcp.transportLabel")}<select value={draft.type} onChange={event => setDraft({ ...draft, type: event.target.value === "http" ? "http" : event.target.value === "sse" ? "sse" : "stdio" })} disabled={busy}><option value="stdio">stdio</option><option value="http">http</option><option value="sse">sse</option></select></label>
