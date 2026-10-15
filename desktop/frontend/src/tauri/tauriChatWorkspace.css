@@ -5,6 +5,7 @@
 
 .tauri-shell {
   --tauri-conversation-max: 820px;
+  --tauri-footer-height: 38px;
   display: grid;
   grid-template-columns: 254px minmax(0, 1fr);
   width: 100%;
@@ -31,6 +32,8 @@
   .tauri-shell[data-desktop-layout="creation"] .tauri-sidebar {
     border-right: 0;
     background: var(--bg-soft);
+    /* Match the main panel's 8px bottom margin and 1px border. */
+    padding-bottom: calc(8px + 1px);
   }
   .tauri-shell[data-desktop-layout="creation"] .tauri-main {
     margin: 8px 8px 8px 0;
@@ -115,7 +118,7 @@
   min-width: 0;
   min-height: 0;
   flex-direction: column;
-  padding: var(--titlebar-height) 12px 12px;
+  padding: var(--titlebar-height) 12px 0;
   border-right: 1px solid var(--border-soft);
   background: var(--sidebar-bg);
 }
@@ -309,7 +312,7 @@
 .tauri-session-delete__confirm { border-color: transparent; background: var(--danger, #d64545); color: #fff !important; }
 .tauri-session-delete__confirm:disabled, .tauri-session-delete__cancel:disabled { opacity: .5; }
 
-.tauri-sidebar__footer { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; margin-top: auto; padding: 8px 0 0; border-top: 1px solid var(--border-soft); white-space: nowrap; }
+.tauri-sidebar__footer { display: flex; height: var(--tauri-footer-height); flex: 0 0 auto; align-items: center; gap: 8px; margin: auto -12px 0; padding: 0 12px; border-top: 1px solid var(--border-soft); white-space: nowrap; }
 .tauri-sidebar__status .tauri-health { justify-content: center; width: 14px; flex: 0 0 14px; }
 .tauri-health { display: inline-flex; align-items: center; gap: 7px; color: var(--fg-faint); font-size: 11px; }
 .tauri-health i { width: 7px; height: 7px; border-radius: 50%; background: var(--fg-faint); }
@@ -531,9 +534,7 @@
 .tauri-send-button:hover:not(:disabled) { filter: brightness(1.08); }
 .tauri-send-button:disabled { background: var(--surface-2); color: var(--fg-faint) !important; opacity: 1 !important; }
 .tauri-send-button.is-stop { background: var(--surface-2); color: var(--fg) !important; }
-.tauri-composer-hint { margin: 8px 0 0; color: var(--fg-faint); text-align: center; font-size: 10px; }
-.tauri-composer-hint button { padding: 0 0 0 4px; border: 0; background: transparent; color: var(--fg-dim); font-size: 10px; text-decoration: underline; text-underline-offset: 2px; }
-.tauri-statusbar { display: flex; min-height: 29px; flex: 0 0 auto; align-items: center; gap: 18px; padding: 0 18px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; border-top: 1px solid var(--border-soft); background: var(--surface); color: var(--fg-faint); font-size: 10px; }
+.tauri-statusbar { display: flex; height: var(--tauri-footer-height); flex: 0 0 auto; align-items: center; gap: 18px; padding: 0 18px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; border-top: 1px solid var(--border-soft); background: var(--surface); color: var(--fg-faint); font-size: 10px; }
 .tauri-statusbar::-webkit-scrollbar { display: none; }
 .tauri-statusbar__item { display: inline-flex; min-width: 0; max-width: 40%; flex: 0 0 auto; align-items: center; gap: 5px; overflow: hidden; white-space: nowrap; }
 .tauri-statusbar__item svg { flex: 0 0 auto; color: var(--fg-faint); }

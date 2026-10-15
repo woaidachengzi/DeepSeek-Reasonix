@@ -3827,7 +3827,6 @@ export function TauriSessionPreview() {
               </div>
             </div>
           </div>
-          <p className="tauri-composer-hint">Reasonix 可能会出错，请核对重要信息。<button type="button" onClick={() => setDiagnosticsOpen(true)}>预览版说明</button></p>
         </footer>
         {session && terminalSessionId === session.id && !isReadOnlyWorkbenchSource(sessionPageSource) && <div className="tauri-terminal-drawer" hidden={!terminalOpen}>
           <Suspense fallback={<div className="terminal-empty" role="status">正在载入终端…</div>}><TauriTerminalDock key={session.id} sessionId={session.id} cwd={currentWorkspace} open={terminalOpen} onClose={() => setTerminalOpen(false)} onAddToChat={addSelectedText} /></Suspense>
@@ -3905,6 +3904,7 @@ export function TauriSessionPreview() {
               <button type="button" className="tauri-diagnostic-action" onClick={() => { setDiagnosticsOpen(false); setSettingsTab("mcp"); setSettingsOpen(true); }}>打开 MCP 设置</button>
             </section>
             <details className="tauri-diagnostic-card tauri-runtime-details"><summary>构建与版本详情</summary>{!runtimeInfo ? <p>正在读取构建信息…</p> : <dl><div><dt>稳定版基线</dt><dd>v{runtimeInfo.stableVersion} · {runtimeInfo.stableCommit.slice(0, 12)}</dd></div><div><dt>Preview / Tauri</dt><dd>v{runtimeInfo.previewVersion} · v{runtimeInfo.tauriVersion}</dd></div><div><dt>Preview 源码</dt><dd>{runtimeInfo.previewCommit === "unknown" ? "未知" : runtimeInfo.previewCommit.slice(0, 12)}{runtimeInfo.previewDirty && "（含未提交改动）"}</dd></div><div><dt>宿主构建时间</dt><dd>{runtimeInfo.previewBuild}</dd></div><div><dt>桥接协议</dt><dd>v{runtimeInfo.bridgeProtocolVersion}</dd></div><div><dt>Sidecar</dt><dd>{runtimeInfo.sidecarInstanceId ?? "未运行"}</dd></div>{session && <div><dt>会话 ID</dt><dd>{session.id}</dd></div>}{session && <div><dt>会话路径</dt><dd>{session.path}</dd></div>}{history && <div><dt>历史记录</dt><dd>{history.totalMessages} 条</dd></div>}<div><dt>事件游标</dt><dd>{sequence} · 最近 {events.length} 个事件</dd></div></dl>}</details>
+            <details className="tauri-diagnostic-card"><summary>预览版说明</summary><p>Reasonix 可能会出错，请核对重要信息。</p></details>
             <details className="tauri-diagnostic-card tauri-event-details"><summary>桥接事件日志</summary>{events.length === 0 ? <p>开始一个对话后，这里会显示桥接事件。</p> : <ol>{events.map(event => <li key={event.sequence}><b>#{event.sequence} · {event.eventKind}</b><pre>{tauriEventSummary(event)}</pre></li>)}</ol>}</details>
             {session && <button type="button" className="tauri-diagnostic-action" onClick={() => void refreshHistory()} disabled={busy}>刷新当前对话状态与记录</button>}
             <p className="tauri-diagnostics__note">切换对话不会中断后台任务；停止和审批只作用于对应对话。</p>
