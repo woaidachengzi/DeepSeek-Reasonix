@@ -38,6 +38,14 @@ assert.equal(localStorage.getItem("reasonix.customShortcuts"), null, "stable sho
 assert.equal(tauriShortcutConflict("new_session", { key: "q", ctrl: true, shift: true }, "linux"), "settings");
 assert.equal(setTauriShortcut("new_session", { key: "q", ctrl: true, shift: true }, "linux"), false, "conflicting shortcuts cannot be saved");
 assert.equal(isValidTauriShortcut("send_message", { key: "o", ctrl: true }), false, "send stays on Enter");
+for (const platform of ["darwin", "linux", "windows"] as const) {
+  assert.deepEqual(defaultTauriShortcut("send_message", platform), { key: "Enter" }, "Enter sends by default on every platform");
+  assert.equal(matchesTauriShortcut(key("Enter"), "send_message", platform), true);
+  assert.equal(matchesTauriShortcut(key("Enter", false, true), "send_message", platform), false, "Shift+Enter is never sent");
+}
+assert.equal(setTauriShortcut("send_message", { key: "Enter", meta: true }, "darwin"), true, "explicit modified-Enter preferences remain available");
+assert.equal(matchesTauriShortcut(key("Enter"), "send_message", "darwin"), false, "an explicit send preference is respected");
+assert.equal(setTauriShortcut("send_message", { key: "Enter" }, "darwin"), true, "plain Enter can be restored in settings");
 assert.equal(isValidTauriShortcut("composer_newline", { key: "Enter", shift: true }), true, "newline accepts the safe Shift+Enter chord without a global modifier");
 assert.equal(isValidTauriShortcut("composer_newline", { key: "o", ctrl: true, shift: true }), false, "newline remains bound to Enter");
 assert.equal(isValidTauriShortcut("settings", { key: "o" }), false, "plain typing cannot become a global shortcut");

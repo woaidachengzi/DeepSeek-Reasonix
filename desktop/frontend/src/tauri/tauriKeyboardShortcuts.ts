@@ -91,10 +91,11 @@ function normalizeCombo(value: unknown): ShortcutCombo | null {
 
 function validForAction(action: TauriShortcutAction, combo: ShortcutCombo): boolean {
   if (action === "composer_newline") return combo.key === "Enter" && combo.shift === true;
-  // All Preview shortcuts require a primary modifier, so typing and native
-  // textarea editing remain outside the application shortcut layer.
+  // Sending is handled only by the composer; bare Enter is safe there.
+  if (action === "send_message") return combo.key === "Enter" && (Boolean(combo.meta || combo.ctrl) || (!combo.shift && !combo.alt));
+  // Global actions require a primary modifier so ordinary typing stays native.
   if (!combo.meta && !combo.ctrl) return false;
-  return action !== "send_message" || combo.key === "Enter";
+  return true;
 }
 
 function readOverrides(): Overrides {
@@ -173,6 +174,7 @@ export function defaultTauriShortcut(action: TauriShortcutAction, platform: Shor
   };
   const key = defaults[action];
   const modifier = platform === "darwin" ? { meta: true } : { ctrl: true };
+  if (action === "send_message") return { key };
   if (action === "composer_newline") return { key, shift: true };
   return action.startsWith("open_") || action === "workspace_files"
     ? { key, ...modifier, shift: true }
