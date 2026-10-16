@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, lazy, Suspense, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef, lazy, Suspense, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { Check, ArrowLeft, Search, X, Keyboard, Globe, Languages, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles, Users, Webhook, Package, Bot, Mic } from "lucide-react";
 import { tauriProviderConfigs, deleteTauriProviderConfig, type TauriProviderConfig, tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, setTauriAgentPreference, testTauriProviderModel, tauriDesktopPreferences, tauriActiveThemeId, setTauriActiveThemeId, tauriUserThemes, tauriPluginThemes, saveTauriUserTheme, deleteTauriUserTheme, importTauriUserTheme, exportTauriUserTheme, setTauriDesktopApproval, setTauriDesktopTerminalTheme, setTauriDesktopAppearance, setTauriDesktopLanguage, setTauriDesktopCurrency, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, tauriZoomFactor, setTauriZoomFactor, saveTauriProviderAPIKey, clearTauriProviderAPIKey, keychainImportLegacy, keychainImportWails, keychainImportWailsEnv, keychainImportFailureCode, tauriNotificationPermission, type TauriNotificationPermission, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, tauriCapabilityDiagnostics, tauriRuntimeDoctor, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
 import { applyTerminalThemePreference, normalizeTerminalThemePreference, getCustomTerminalPalette, setCustomTerminalPalette, DEFAULT_TERMINAL_PALETTE, type TerminalPalette, type TerminalPaletteKey, type TerminalThemePreference } from "../lib/terminalTheme";
@@ -234,6 +234,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
   const [navQuery, setNavQuery] = useState("");
   const [runtimeInfo, setRuntimeInfo] = useState<TauriPreviewRuntimeInfo | null>(null);
   const [providerSummary, setProviderSummaryState] = useState<TauriProviderSummary | null>(null);
+  const usageProviderNames = useMemo(() => Object.fromEntries((providerSummary?.providers ?? []).map(provider => [provider.name, provider.displayName || provider.name])), [providerSummary]);
   const [modelLoading, setModelLoading] = useState(true);
   const [aboutLoading, setAboutLoading] = useState(true);
   const [modelLoadError, setModelLoadError] = useState(false);
@@ -642,7 +643,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
           <div className="tauri-settings-page-heading"><h1>{settingTitles[tab].title}</h1><p>{settingTitles[tab].description}</p></div>
           {tab === "general" ? <GeneralSettings languagePref={languagePref} onLanguageChange={handleLanguageChange} languageSaving={languageSaving} languageError={languageError} displayCurrency={displayCurrency} onDisplayCurrencyChange={handleDisplayCurrencyChange} currencySaving={currencySaving} currencyError={currencyError} notificationsEnabled={notificationsEnabled} onNotificationsChange={enabled => { setNotificationsEnabled(enabled); setTauriNotificationsEnabled(enabled); }} notificationEvents={notificationEvents} onNotificationEventChange={kind => { const next = setTauriNotificationEvent(kind, !notificationEvents[kind]); setNotificationEvents(next); }} progressMode={progressMode} onProgressModeChange={next => { setProgressMode(next); setTauriProgressMode(next); }} closeBehavior={closeBehavior} onCloseBehaviorChange={handleCloseBehaviorChange} closeLoading={closeLoading} closeSaving={closeSaving} closeError={closeError} approvalMode={approvalMode} onApprovalChange={handleApprovalChange} approvalLoading={approvalLoading} approvalSaving={approvalSaving} approvalError={approvalError} currentSessionState={currentSessionState} /> : tab === "shortcuts" ? <ShortcutSettings /> : tab === "appearance" ? <AppearanceSettings appearance={appearance} onChange={handleAppearanceChange} appearanceSaving={appearanceSaving} appearanceError={appearanceError} activeThemeId={activeThemeId} userThemes={userThemes} onRefreshPluginThemes={refreshPluginThemes} onThemeApply={handleThemeApply} onUserThemeSave={handleUserThemeSave} onUserThemeDelete={handleUserThemeDelete} onUserThemeImport={handleUserThemeImport} onUserThemeExport={handleUserThemeExport} conversationWidth={conversationWidth} onConversationWidthChange={handleConversationWidthChange} textSize={textSize} onTextSizeChange={handleTextSizeChange} fontFamily={fontFamily} onFontFamilyChange={handleFontFamilyChange} monoFontFamily={monoFontFamily} onMonoFontFamilyChange={handleMonoFontFamilyChange} customFontName={customFontName} onCustomFontChange={handleCustomFontChange} customMonoFontName={customMonoFontName} onCustomMonoFontChange={handleCustomMonoFontChange} terminalTheme={terminalTheme} onTerminalThemeChange={handleTerminalThemeChange} terminalThemeSaving={terminalThemeSaving} terminalThemeError={terminalThemeError} /> : <>
             {(tab === "model" || tab === "providers") && (modelLoading ? <div className="tauri-settings-loading">{t("settings.loading")}</div> : <>{modelLoadError && <SettingsLoadError onRetry={loadSettings} />}{providerSummary && (tab === "model" ? <ModelPreferenceSettings providerSummary={providerSummary} workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionModelRef={currentSessionModelRef} onCurrentSessionModelChange={onCurrentSessionModelChange} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} onModelChange={handleModelChange} onRoleChange={handleModelRoleChange} onAgentPreferenceChange={handleAgentPreferenceChange} saving={modelSaving} error={modelSaveError} onOpenProviders={() => setTab("providers")} /> : <ProviderSettings providerSummary={providerSummary} onProviderSummaryChange={updateProviderSummary} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />)}</>)}
-            {tab === "stats" && <Suspense fallback={<div className="tauri-settings-loading">{t("settings.loading")}</div>}><TauriUsageStatsPanel loadStats={tauriUsageStats} sources={["all", "desktop-tauri"]} /></Suspense>}
+            {tab === "stats" && <Suspense fallback={<div className="tauri-settings-loading">{t("settings.loading")}</div>}><TauriUsageStatsPanel providerDisplayNames={usageProviderNames} loadStats={tauriUsageStats} sources={["all", "desktop-tauri"]} /></Suspense>}
             {tab === "bots" && <TauriBotSettings />}
             {tab === "mcp" && <TauriMCPSettings key={`${workspaceRoot ?? ""}:${currentSessionId ?? ""}`} workspaceRoot={workspaceRoot} sessionId={currentSessionId} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "remote" && <TauriRemoteSettings />}
@@ -946,7 +947,7 @@ function AppearanceSettings({ appearance, onChange, appearanceSaving, appearance
         <span className="tauri-settings-field-label">{t("settings.themeGallery.title")}<small>{t("settings.themeGallery.subtitle")}</small></span>
         <button type="button" className="btn btn--secondary" onClick={() => { setThemeGalleryOpen(true); void onRefreshPluginThemes(); }}>{t("settings.themeGallery.browse")} <ArrowLeft size={14} className="tauri-settings-theme-gallery-entry__arrow" /></button>
       </div>
-      <div className="tauri-settings-field">
+      <div className="tauri-settings-field tauri-settings-theme-mode">
         <Palette className="tauri-settings-field-icon" size={18} />
         <span className="tauri-settings-field-label">{t("settings.theme")}<small>{t("settings.appearance.themeHint")}</small></span>
         <div className="tauri-settings-radio-group" role="radiogroup" aria-label={t("settings.theme")}>
@@ -1607,20 +1608,19 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
 
   return (
     <div className="tauri-settings-section">
-      <h3>{t("settings.models.services")}</h3>
       <p className="tauri-settings-hint">{t("settings.previewProvider.pageHint")}</p>
       {serviceDeleteError && <p className="tauri-diagnostic-error" role="alert">{serviceDeleteError}</p>}
-      <TauriProviderEditor key={configVersion} onSummaryChange={onProviderSummaryChange} disabled={keyBusy || Boolean(deleteReview) || Object.values(probeBusy).some(Boolean)} onBusyChange={setConfigBusy} />
-      {providerSummary.providers.length === 0 ? (
+      <TauriProviderEditor key={configVersion} onSummaryChange={onProviderSummaryChange} disabled={keyBusy || Boolean(deleteReview) || Object.values(probeBusy).some(Boolean)} onBusyChange={setConfigBusy} renderServices={({editButton, editor}) => providerSummary.providers.length === 0 ? (
         <div className="tauri-settings-empty">{t("settings.previewProvider.noServices")}</div>
       ) : (
         <div className="tauri-settings-model-list">
           {providerSummary.providers.map(provider => (
-            <div key={provider.name} className="tauri-settings-model-card">
-              <div className="tauri-settings-model-header">
-                <strong>{provider.displayName || provider.name}</strong>
-                <span className={`tauri-settings-badge${provider.configured ? " is-ready" : ""}`}>{provider.configured ? t("settings.previewProvider.ready") : t("settings.previewProvider.notConfigured")}</span>
-                <button type="button" className="tauri-settings-button tauri-settings-button--danger" disabled={keyBusy || configBusy || Boolean(deleteReview) || Object.values(probeBusy).some(Boolean)} onClick={() => void reviewServiceDelete(provider.name)}>删除模型服务</button>
+            <div key={provider.name} className="tauri-settings-model-card" data-provider-service={provider.name}>
+              <div className="tauri-provider-service-header">
+                <div className="tauri-provider-service-title"><strong>{provider.displayName || provider.name}</strong>
+                <span className={`tauri-settings-badge${provider.configured ? " is-ready" : ""}`}>{provider.configured ? t("settings.previewProvider.ready") : t("settings.previewProvider.notConfigured")}</span></div>
+                <div className="tauri-provider-service-actions">{editButton(provider.name)}
+                <button type="button" className="tauri-settings-button tauri-settings-button--danger" disabled={keyBusy || configBusy || Boolean(deleteReview) || Object.values(probeBusy).some(Boolean)} onClick={() => void reviewServiceDelete(provider.name)}>删除模型服务</button></div>
               </div>
               {deleteReview?.name === provider.name && <div role="group" aria-label="确认删除模型服务" className="tauri-provider-delete-review">
                 <p>{t("settings.previewProvider.confirmDelete", { name: deleteReview.displayName || deleteReview.name })}</p>
@@ -1629,6 +1629,7 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
                 <button type="button" className="tauri-settings-button" disabled={keyBusy} onClick={() => setDeleteReview(null)}>{t("common.cancel")}</button>
               </div>}
               <p className="tauri-settings-model-meta">{provider.kind} · {t("settings.previewProvider.modelCount", { count: provider.modelCount })}</p>
+              {editor(provider.name)}
               <div className="tauri-settings-provider-probe">
                 <label>{t("settings.previewProvider.probeModel")}
                   <select className="tauri-settings-input" aria-label={t("settings.previewProvider.probeModelFor", { name: provider.displayName || provider.name })} value={probeModels[provider.name] || provider.models[0] || ""} disabled={keyBusy || configBusy || Boolean(deleteReview) || probeBusy[provider.name] || provider.models.length === 0} onChange={event => setProbeModels(prev => ({ ...prev, [provider.name]: event.target.value }))}>
@@ -1684,7 +1685,7 @@ function ProviderSettings({ providerSummary, onProviderSummaryChange, currentSes
             </div>
           ))}
         </div>
-      )}
+      )} />
       <p className="tauri-settings-hint">{t("settings.previewProvider.keychainHint")}</p>
     </div>
   );

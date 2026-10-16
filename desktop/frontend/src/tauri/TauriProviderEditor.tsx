@@ -1,11 +1,21 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { deleteTauriProviderConfig, previewTauriProviderReasoning, discoverTauriProviderModels, installTauriProviderPreset, resetTauriProviderPreset, saveTauriProviderAPIKey, saveTauriProviderConfig, tauriMessageFrom, tauriProviderConfigs, tauriProviderSummary, type TauriModelReasoning, type TauriProviderConfig, type TauriProviderConfigInput, type TauriProviderPreset, type TauriProviderSummary } from "../lib/tauriBridge";
 import { ModelReasoningControl } from "../components/ModelReasoningControl";
 import { useProviderT as useT } from "../lib/providerSettingsLocale";
 
 const EMPTY: TauriProviderConfigInput = { name: "", displayName: "", kind: "openai", baseUrl: "", modelsUrl: "", clearModelsUrl: false, modelsUrlSet: false, noProxy: false, contextWindow: 0, responsesMode: "", balanceUrl: "", clearBalanceUrl: false, balanceUrlSet: false, models: [], default: "", useApiKey: true };
 
-export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyChange }: { onSummaryChange: (summary: TauriProviderSummary) => void; disabled?: boolean; onBusyChange?: (busy: boolean) => void }) {
+type ProviderServiceControls = {
+  editButton: (name: string) => ReactNode;
+  editor: (name: string) => ReactNode;
+};
+
+export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyChange, renderServices }: {
+  onSummaryChange: (summary: TauriProviderSummary) => void;
+  disabled?: boolean;
+  onBusyChange?: (busy: boolean) => void;
+  renderServices?: (controls: ProviderServiceControls) => ReactNode;
+}) {
   const t = useT();
   const [configs, setConfigs] = useState<TauriProviderConfig[]>([]);
   const [presets, setPresets] = useState<TauriProviderPreset[]>([]);
@@ -292,8 +302,15 @@ export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyC
       <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" onClick={() => void save()} disabled={saving || discoveringModels || pendingKeys.length > 0}>{saving ? t("settings.previewProvider.saving") : t("settings.previewProvider.saveService")}</button><button type="button" className="tauri-settings-button" onClick={() => { setEditing(null); setAdding(null); setApiKey(""); }} disabled={saving || discoveringModels || pendingKeys.length > 0}>{t("common.cancel")}</button></div>
     </div> : null;
 
-  return <fieldset disabled={disabled} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><div className="tauri-provider-editor">
-    <div className="tauri-settings-model-header"><strong>{t("settings.previewProvider.serviceConfig")}</strong><button type="button" className="tauri-settings-button" onClick={() => setAdding("catalog")} disabled={saving || discoveringModels || pendingKeys.length > 0}>{t("settings.addProvider")}</button></div>
+  const removedServices = configs.some(provider => provider.hidden) && <details><summary>已移除的服务</summary>
+      {configs.filter(provider => provider.hidden).map(provider => <div className="tauri-provider-editor-row" key={provider.name}>
+        <strong>{provider.displayName || provider.name}</strong>
+        <button type="button" className="tauri-settings-button" disabled={saving || discoveringModels || pendingKeys.length > 0} onClick={() => void restore(provider)}>重新添加</button>
+      </div>)}
+    </details>;
+
+  return <><fieldset disabled={disabled} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><div className={`tauri-provider-editor${renderServices ? " tauri-provider-editor--integrated" : ""}`}>
+    <div className={`tauri-settings-model-header${renderServices ? " tauri-provider-add-header" : ""}`}>{!renderServices && <strong>{t("settings.previewProvider.serviceConfig")}</strong>}<button type="button" className="tauri-settings-button" onClick={() => setAdding("catalog")} disabled={saving || discoveringModels || pendingKeys.length > 0}>{t("settings.addProvider")}</button></div>
     {adding && <section className="tauri-provider-connect" aria-label={t("settings.addProvider")}>
       <div className="tauri-provider-connect-tabs" role="tablist" aria-label={t("settings.addProvider.chooseTitle")}>
         <button type="button" role="tab" aria-selected={adding === "catalog"} disabled={saving || discoveringModels || pendingKeys.length > 0} onClick={() => setAdding("catalog")}>{t("settings.previewProvider.catalogTab")}</button>
@@ -327,18 +344,24 @@ export function TauriProviderEditor({ onSummaryChange, disabled = false, onBusyC
       {error && <p className="tauri-diagnostic-error" role="alert">{error}</p>}
       {message && <p className="tauri-settings-hint" role="status">{message}</p>}
     </>}
-    {editingExisting && adding === null && editorForm}
+    {!renderServices && editingExisting && adding === null && editorForm}
     {pendingKeys.length > 0 && <div role="status" className="tauri-provider-key-retry"><p>{t("settings.previewProvider.connectionKeyRetry")}</p><label>API Key<input type="password" autoComplete="off" disabled={saving} value={adding === "catalog" ? presetKey : apiKey} onChange={event => adding === "catalog" ? setPresetKey(event.target.value) : setApiKey(event.target.value)} /></label><button type="button" className="tauri-settings-button" disabled={saving || !(adding === "catalog" ? presetKey : apiKey).trim()} onClick={() => void retryKeys()}>{t("settings.previewProvider.saveKey")}</button></div>}
-    {loading ? <p className="tauri-settings-hint">{t("common.loading")}</p> : configs.filter(provider => !provider.hidden).map(provider => <div className="tauri-provider-editor-row" key={provider.name}>
+    {renderServices && loading && <p className="tauri-settings-hint">{t("common.loading")}</p>}
+    {!renderServices && (loading ? <p className="tauri-settings-hint">{t("common.loading")}</p> : configs.filter(provider => !provider.hidden).map(provider => <div className="tauri-provider-editor-row" key={provider.name}>
       <span><strong>{provider.displayName || provider.name}</strong><small>{provider.kind} · {t("settings.previewProvider.modelCount", { count: provider.models.length })}</small></span>
       <button type="button" className="tauri-settings-button" onClick={() => { setAdding(null); startEdit(provider); }} disabled={saving || discoveringModels || pendingKeys.length > 0 || !["openai", "anthropic", "responses"].includes(provider.kind)}>{t("common.edit")}</button>
       {provider.removable && <button type="button" className="tauri-settings-button" onClick={() => void remove(provider)} disabled={saving || discoveringModels || pendingKeys.length > 0}>{t("common.delete")}</button>}
-    </div>)}
-    {configs.some(provider => provider.hidden) && <details><summary>已移除的服务</summary>
-      {configs.filter(provider => provider.hidden).map(provider => <div className="tauri-provider-editor-row" key={provider.name}>
-        <strong>{provider.displayName || provider.name}</strong>
-        <button type="button" className="tauri-settings-button" disabled={saving || discoveringModels || pendingKeys.length > 0} onClick={() => void restore(provider)}>重新添加</button>
-      </div>)}
-    </details>}
-  </div></fieldset>;
+    </div>))}
+    {!renderServices && removedServices}
+  </div></fieldset>
+  {/* Credential/probe controls own their disabled states, independently of the editor fieldset. */}
+  {renderServices?.({
+    editButton: name => {
+      const provider=configs.find(item => item.name === name && !item.hidden);
+      return <button type="button" className="tauri-settings-button" disabled={disabled || loading || saving || discoveringModels || pendingKeys.length > 0 || !provider || !["openai", "anthropic", "responses"].includes(provider.kind)} onClick={() => { if(provider){setAdding(null);startEdit(provider);} }}>{t("common.edit")}</button>;
+    },
+    editor: name => editingExisting && adding === null && editing?.name === name ? <fieldset disabled={disabled} className="tauri-provider-editor-inline">{editorForm}</fieldset> : null,
+  })}
+  {renderServices && removedServices && <fieldset disabled={disabled} className="tauri-provider-editor-inline">{removedServices}</fieldset>}
+  </>;
 }

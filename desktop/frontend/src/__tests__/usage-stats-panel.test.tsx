@@ -167,6 +167,25 @@ const trendTip = rootEl.querySelector(".usage-stats__tip--screen");
 ok(trendTip?.querySelectorAll(".usage-stats__tip-row--other").length === 5, "daily tooltip caps the visible Other breakdown");
 ok(trendTip?.querySelector(".usage-stats__tip-more") !== null, "daily tooltip discloses omitted Other models");
 
+// Resolve presentation without changing accounting/group identity, including
+// distinct services that deliberately share a display name.
+const displayNames = { deepseek: "My service" };
+await act(async () => {
+  root.render(<LocaleProvider><UsageStatsPanel providerDisplayNames={displayNames} /></LocaleProvider>);
+  await settleLabels();
+});
+function settleLabels() { return new Promise(resolve => setTimeout(resolve, 0)); }
+ok(rootEl.querySelector(".usage-stats__card-value--wrap")?.textContent === "My service/model", "top-model card resolves its service label");
+ok(rootEl.querySelector(".usage-stats__legend")?.textContent?.includes("My service/model-1") === true, "trend legend uses display labels");
+ok(rootEl.querySelector(".usage-stats__model-list")?.textContent?.includes("My service/model-21") === true, "expanded Other rows use display labels");
+ok(rootEl.querySelector(".usage-stats__model-provider")?.textContent === "My service", "provider column uses the same display label");
+ok(rootEl.querySelectorAll("circle.usage-stats__donut-seg").length === 6, "label changes preserve model grouping");
+await act(async () => {
+  rootEl.querySelector("circle.usage-stats__donut-seg")?.dispatchEvent(new dom.window.MouseEvent("mouseover", { bubbles: true, clientX: 120, clientY: 120 }));
+  await settleLabels();
+});
+ok(rootEl.querySelector(".usage-stats__donut-wrap .usage-stats__tip-title")?.textContent === "My service/model-1", "donut tooltip uses display labels");
+
 const cliButton = [...rootEl.querySelectorAll("button")].find((button) => button.textContent === "CLI");
 if (!cliButton) throw new Error("missing CLI source button");
 await act(async () => {

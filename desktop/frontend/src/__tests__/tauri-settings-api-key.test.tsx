@@ -139,7 +139,7 @@ const summary = (scope = "global") => ({
       case "export_frontend_diagnostics": exportedFrontendDiagnostics = args?.payload; return true;
       case "preview_runtime_info":
         if (failRuntime) { failRuntime = false; throw new Error("runtime unavailable"); }
-        return { previewVersion: "1", previewCommit: "unknown", previewDirty: false, stableVersion: "1", stableCommit: "test", tauriVersion: "2", bridgeProtocolVersion: 1, previewBuild: "test" };
+        return { previewVersion: "0.1.35", previewCommit: "unknown", previewDirty: false, stableVersion: "1", stableCommit: "test", tauriVersion: "2", bridgeProtocolVersion: 1, previewBuild: "test" };
       case "provider_summary":
         if (failSummary) { failSummary = false; throw new Error("summary unavailable"); }
         return summary(args?.scope ?? "global");
@@ -785,7 +785,11 @@ await act(async () => { click(["权限", "Permissions"]); });
 await act(async () => { click(["沙盒", "沙箱", "Sandbox"]); });
 assert.match(visibleText(), /沙箱与工作区/, "sandbox editor is available in settings");
 assert.equal(sandboxQueryRoot, "/preview/project", "sandbox effective roots are queried for the current workspace");
-assert.match(visibleText(), /实际可写根/, "sandbox shows core-computed write roots");
+assert.match(visibleText(), /文件写入范围/, "sandbox separates configured write scope from computed directories");
+assert.equal(document.querySelectorAll("#tauri-sandbox-effective-roots").length, 1, "sandbox has one computed-directory heading");
+assert.match(visibleText(), /实际可写目录/, "sandbox shows core-computed write roots");
+assert.ok(!document.querySelector(".tauri-sandbox-settings__roots .tauri-permissions-rule-list"), "computed roots do not inherit the permission editor's tall minimum height");
+assert.ok(!document.querySelector(".tauri-sandbox-settings__roots")?.textContent?.includes("Preview"), "computed directories use user-facing guidance");
 assert.match(visibleText(), /Shell 检测|Shell 偵測/, "sandbox reports the detected host shell inventory");
 assert.match(visibleText(), /\/bin\/bash/, "sandbox shows the resolved executable path from the host capability inventory");
 assert.match(visibleText(), /\/usr\/bin\/git/, "sandbox shows Git from the same host capability inventory");
@@ -978,7 +982,12 @@ await act(async () => { click("保存 Hooks"); });
 assert.deepEqual(hooks.hooks, { Stop: [{ command: "echo done" }] }, "hooks JSON is saved through the bridge");
 await act(async () => { click(["模型服务", "Model services"]); });
 assert.match(visibleText(), /已就绪/, ".env credential configures the provider");
-assert.match(visibleText(), /服务配置/, "provider configuration is editable from settings");
+const unifiedProvider=document.querySelector('[data-provider-service="demo"]');
+assert.ok(unifiedProvider,"the configured service has one combined card");
+assert.equal(document.querySelectorAll('[data-provider-service="demo"]').length,1);
+assert.equal(document.querySelectorAll('.tauri-provider-editor-row').length,0,"active services are not repeated in a second list");
+assert.equal(unifiedProvider.querySelectorAll('.tauri-provider-service-actions button').length,2,"edit and delete share one action group");
+assert.ok(unifiedProvider.querySelector('.tauri-settings-apikey input'),"credentials belong to the same service card");
 await act(async () => { enterKey("one-time-probe-key"); });
 await act(async () => { click("测试连接"); });
 assert.deepEqual(lastProbeRequest, { name: "demo", model: "m", apiKey: "one-time-probe-key" }, "provider probe sends the selected model and optional key only for this request");
@@ -986,6 +995,8 @@ assert.match(visibleText(), /连接成功 · 123 ms/, "successful provider probe
 assert.equal(document.querySelector<HTMLInputElement>(".tauri-settings-apikey input")?.value, "one-time-probe-key", "testing does not silently save or clear the draft key");
 await act(async () => { click("编辑"); });
 assert.match(visibleText(), /余额查询 URL/, "provider editor exposes the optional balance endpoint");
+assert.ok(unifiedProvider.contains(document.querySelector('.tauri-provider-editor-form:not([hidden])')),"editing expands within the matching service card");
+assert.equal(document.querySelector<HTMLInputElement>(".tauri-settings-apikey input")?.value,"one-time-probe-key","opening inline editing preserves the credential draft");
 await act(async () => { click("取消"); });
 await act(async () => { click("更新"); });
 assert.match(visibleText(), /Preview 版本|Preview version/, "updates page shows the current Preview release");
@@ -997,12 +1008,12 @@ await act(async () => { click("English"); });
 await act(async () => { click(["Model services", "模型服务"]); });
 await act(async () => { click("+ Add provider"); });
 assert.match(visibleText(), /Provider presets/, "provider presets follow the selected locale");
-assert.match(visibleText(), /Service configuration/, "provider editor follows the selected locale");
+assert.ok([...document.querySelectorAll(".tauri-provider-service-actions button")].some(button => button.textContent === "Edit"), "merged provider actions follow the selected locale");
 assert.ok(document.querySelector('input[aria-label="Search provider presets"]'), "preset search has a localized accessible label");
 await act(async () => { click(["General", "通用"]); });
 await act(async () => { click("中文"); });
 await act(async () => { click(["模型服务", "Model services"]); });
-assert.match(visibleText(), /服务配置/, "provider settings return to Simplified Chinese");
+assert.ok([...document.querySelectorAll(".tauri-provider-service-actions button")].some(button => button.textContent === "编辑"), "merged provider actions return to Simplified Chinese");
 function choosePreset() {
   const select = document.querySelector<HTMLSelectElement>(".tauri-provider-connect select")!;
   Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, "value")!.set!.call(select, "mimo-api");
@@ -1270,6 +1281,10 @@ assert.match(visibleText(), /桥接服务已重启/, "restart outcome is shown i
 
 await act(async () => { click("关于"); });
 assert.match(visibleText(), /关于 Reasonix Tauri Preview/, "About page uses the locale catalog");
+assert.match(document.querySelector(".tauri-settings-about")?.textContent ?? "", /v0\.1\.35/, "About shows the package version returned by the host");
+await act(async () => { click("更新"); });
+assert.match(document.querySelector(".tauri-updates-settings")?.textContent ?? "", /v0\.1\.35/, "Updates uses the same host package version");
+await act(async () => { click("关于"); });
 const githubLink = document.querySelector<HTMLAnchorElement>('.tauri-settings-about a[href^="https://github.com/"]')
   ?? document.querySelector<HTMLAnchorElement>('.tauri-settings-actions a[href^="https://github.com/"]');
 assert.ok(githubLink, "About page has a GitHub link");

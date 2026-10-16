@@ -10,7 +10,7 @@ pub const STABLE_COMMIT: &str = "fa018e4109268c912063c8cc619302fccdb57d74";
 pub struct PreviewRuntimeInfo {
     pub stable_version: &'static str,
     pub stable_commit: &'static str,
-    pub preview_version: &'static str,
+    pub preview_version: String,
     pub preview_commit: &'static str,
     pub preview_dirty: bool,
     pub tauri_version: &'static str,
@@ -23,11 +23,13 @@ pub struct PreviewRuntimeInfo {
 }
 
 impl PreviewRuntimeInfo {
-    pub fn from_status(status: BridgeStatus) -> Self {
+    pub fn from_status(status: BridgeStatus, package_info: &tauri::PackageInfo) -> Self {
         Self {
             stable_version: STABLE_VERSION,
             stable_commit: STABLE_COMMIT,
-            preview_version: env!("CARGO_PKG_VERSION"),
+            // Tauri merges the selected build config into PackageInfo. The
+            // Cargo crate version can stay unchanged between preview packages.
+            preview_version: package_info.version.to_string(),
             preview_commit: env!("REASONIX_PREVIEW_COMMIT"),
             preview_dirty: env!("REASONIX_PREVIEW_DIRTY") == "1",
             tauri_version: tauri::VERSION,
@@ -82,11 +84,15 @@ mod tests {
 
     #[test]
     fn identifies_the_frozen_stable_baseline_and_live_sidecar() {
-        let info = PreviewRuntimeInfo::from_status(BridgeStatus {
-            running: true,
-            protocol_version: Some(1),
-            sidecar_instance_id: Some("bridge-test-instance".into()),
-        });
+        let context = crate::application_context();
+        let info = PreviewRuntimeInfo::from_status(
+            BridgeStatus {
+                running: true,
+                protocol_version: Some(1),
+                sidecar_instance_id: Some("bridge-test-instance".into()),
+            },
+            context.package_info(),
+        );
 
         assert_eq!(info.stable_version, "1.38.3");
         assert_eq!(info.stable_commit, STABLE_COMMIT);
@@ -95,10 +101,42 @@ mod tests {
             info.sidecar_instance_id.as_deref(),
             Some("bridge-test-instance")
         );
-        assert!(!info.preview_version.is_empty());
+        assert_eq!(
+            info.preview_version,
+            context.package_info().version.to_string()
+        );
+        assert_eq!(
+            Some(info.preview_version.as_str()),
+            context.config().version.as_deref()
+        );
         assert!(!info.preview_commit.is_empty());
         assert!(!info.tauri_version.is_empty());
         assert!(!info.preview_build.is_empty());
+    }
+
+    #[test]
+    fn reports_the_package_version_even_when_the_crate_version_differs() {
+        let package_info = tauri::PackageInfo {
+            name: "Version fixture".into(),
+            version: "9.8.7".parse().unwrap(),
+            authors: "",
+            description: "",
+            crate_name: "reasonix-tauri",
+        };
+        assert_ne!(package_info.version.to_string(), env!("CARGO_PKG_VERSION"));
+        let info = PreviewRuntimeInfo::from_status(
+            BridgeStatus {
+                running: false,
+                protocol_version: None,
+                sidecar_instance_id: None,
+            },
+            &package_info,
+        );
+        assert_eq!(info.preview_version, "9.8.7");
+        assert_eq!(
+            serde_json::to_value(info).unwrap()["previewVersion"],
+            "9.8.7"
+        );
     }
 
     #[test]

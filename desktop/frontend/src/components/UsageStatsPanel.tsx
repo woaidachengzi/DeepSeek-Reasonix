@@ -17,7 +17,7 @@ import { Activity, CalendarDays, ChevronDown, ChevronRight, Coins, Cpu, MessageS
 import { useI18n } from "../lib/i18n";
 import { app } from "../lib/bridge";
 import type { DailyTokenUsage, ModelTokenUsage, UsageStatsRange, UsageStatsRequest } from "../lib/types";
-import { formatUsageTokens as formatTokens } from "../lib/usageStatsFormat";
+import { formatUsageTokens as formatTokens, formatUsageModel, formatUsageProvider } from "../lib/usageStatsFormat";
 import "./UsageStatsPanel.css";
 
 const RANGE_PRESETS = ["7", "14", "30", "90"] as const;
@@ -178,6 +178,9 @@ const USAGE_STATS_TRANSLATIONS = {
 } as const;
 
 type UsageStatsKey = keyof typeof USAGE_STATS_TRANSLATIONS.en;
+type UsageLabels = { model: (ref: string) => string; provider: (ref: string) => string };
+const EMPTY_PROVIDER_NAMES: Readonly<Record<string, string>> = {};
+
 type UsageStatsTranslator = (key: UsageStatsKey) => string;
 const defaultLoadStats = (request: UsageStatsRequest) => app.UsageStats(request);
 
@@ -213,8 +216,12 @@ function localDay(offsetDays: number): string {
   return `${y}-${m}-${day}`;
 }
 
-export function UsageStatsPanel({ loadStats = defaultLoadStats, sources = SOURCES }: { loadStats?: (request: UsageStatsRequest) => Promise<UsageStatsRange>; sources?: readonly StatsSource[] } = {}) {
+export function UsageStatsPanel({ loadStats = defaultLoadStats, sources = SOURCES, providerDisplayNames = EMPTY_PROVIDER_NAMES }: { providerDisplayNames?: Readonly<Record<string, string>>; loadStats?: (request: UsageStatsRequest) => Promise<UsageStatsRange>; sources?: readonly StatsSource[] } = {}) {
   const { locale } = useI18n();
+  const labels = useMemo<UsageLabels>(() => ({
+    model: ref => formatUsageModel(ref, providerDisplayNames),
+    provider: ref => formatUsageProvider(providerOf(ref), providerDisplayNames),
+  }), [providerDisplayNames]);
   const t = useCallback<UsageStatsTranslator>((key) => USAGE_STATS_TRANSLATIONS[locale][key], [locale]);
   const [range, setRange] = useState<string>("30");
   const [customFrom, setCustomFrom] = useState("");
@@ -406,10 +413,10 @@ export function UsageStatsPanel({ loadStats = defaultLoadStats, sources = SOURCE
       {loading && !stats && <div className="usage-stats__loading">{t("common.loading")}</div>}
       {!loading && stats && (
         <>
-          <StatCards stats={stats} t={t} />
+          <StatCards stats={stats} t={t} labels={labels} />
           <Heatmap daily={heatDaily} from={heatWindow.from} to={heatWindow.to} t={t} />
-          <DailyTrend daily={dailyGrouped} modelOrder={groupedModels.map((m) => m.model)} t={t} colorForModel={colorForModel} />
-          <ModelUsage models={groupedModels} t={t} colorForModel={colorForModel} />
+          <DailyTrend labels={labels} daily={dailyGrouped} modelOrder={groupedModels.map((m) => m.model)} t={t} colorForModel={colorForModel} />
+          <ModelUsage labels={labels} models={groupedModels} t={t} colorForModel={colorForModel} />
           {stats.to && (
             <div className="usage-stats__foot">
               {t("settings.stats.asOf")} {stats.to}
@@ -426,8 +433,8 @@ export function UsageStatsPanel({ loadStats = defaultLoadStats, sources = SOURCE
 
 // ── Section 2+3: numeric cards ────────────────────────────────────────────
 
-function StatCards({ stats, t }: { stats: UsageStatsRange; t: UsageStatsTranslator }) {
-  const topModel = stats.topModel || t("common.none");
+function StatCards({ stats, t, labels }: { stats: UsageStatsRange; t: UsageStatsTranslator; labels: UsageLabels }) {
+  const topModel = labels.model(stats.topModel) || t("common.none");
   // The model name is the longest value: it may wrap to a second line on
   // narrow windows instead of being shrunk or truncated; tokens shows the
   // exact number and stays on one line (FitText shrinks it if needed).
@@ -619,7 +626,7 @@ function Heatmap({ daily, from, to, t }: { daily: DailyTokenUsage[]; from: strin
 
 // ── Section 5: stacked daily token trend ──────────────────────────────────
 
-function DailyTrend({ daily, modelOrder, t, colorForModel }: { daily: GroupedDaily[]; modelOrder: string[]; t: UsageStatsTranslator; colorForModel: (m: string) => string }) {
+function DailyTrend({ daily, modelOrder, t, colorForModel, labels }: { labels: UsageLabels; daily: GroupedDaily[]; modelOrder: string[]; t: UsageStatsTranslator; colorForModel: (m: string) => string }) {
   const trendDaily = daily.length > MAX_TREND_DAYS ? daily.slice(-MAX_TREND_DAYS) : daily;
   const trendLimited = trendDaily.length !== daily.length;
   const [tip, setTip] = useState<{ day: string; total: number; byModel: Record<string, number>; otherByModel?: Record<string, number>; cacheHit: number; cacheMiss: number; cx: number; top: number; bottom: number } | null>(null);
@@ -821,10 +828,10 @@ function DailyTrend({ daily, modelOrder, t, colorForModel }: { daily: GroupedDai
             <div className="usage-stats__tip-title">{tip.day}</div>
             <div>{t("settings.stats.total")}: {formatTokens(tip.total)}</div>
             {modelOrder.filter((m) => tip.byModel[m] !== undefined).map((m) => (
-              <div key={m} className="usage-stats__tip-row"><i className="usage-stats__legend-swatch" style={{ background: colorForModel(m) }} />{m === OTHER_MODEL ? t("settings.stats.other") : m}: {formatTokens(tip.byModel[m])}</div>
+              <div key={m} className="usage-stats__tip-row"><i className="usage-stats__legend-swatch" style={{ background: colorForModel(m) }} />{m === OTHER_MODEL ? t("settings.stats.other") : labels.model(m)}: {formatTokens(tip.byModel[m])}</div>
             ))}
             {tipOtherVisible.map(([m, v]) => (
-              <div key={m} className="usage-stats__tip-row usage-stats__tip-row--other"><i className="usage-stats__legend-swatch" style={{ background: OTHER_COLOR }} />{m}: {formatTokens(v)}</div>
+              <div key={m} className="usage-stats__tip-row usage-stats__tip-row--other"><i className="usage-stats__legend-swatch" style={{ background: OTHER_COLOR }} />{labels.model(m)}: {formatTokens(v)}</div>
             ))}
             {tipOtherRemaining > 0 && <div className="usage-stats__tip-more">+{tipOtherRemaining} {t("settings.stats.moreModels")}</div>}
             <div>{t("settings.stats.cacheHitRate")}: {cacheRateText(tip.cacheHit, tip.cacheMiss)}</div>
@@ -834,7 +841,7 @@ function DailyTrend({ daily, modelOrder, t, colorForModel }: { daily: GroupedDai
           {legendModels.map((model) => (
             <span key={model} className="usage-stats__legend-item" onMouseEnter={() => setHover(model)} onMouseLeave={() => setHover(null)}>
               <i className="usage-stats__legend-swatch" style={{ background: colorForModel(model) }} />
-              {model === OTHER_MODEL ? t("settings.stats.other") : model}
+              {model === OTHER_MODEL ? t("settings.stats.other") : labels.model(model)}
             </span>
           ))}
           <span className="usage-stats__legend-item" aria-hidden="true">
@@ -849,7 +856,7 @@ function DailyTrend({ daily, modelOrder, t, colorForModel }: { daily: GroupedDai
 
 // ── Section 6: per-model donut + list ─────────────────────────────────────
 
-function ModelUsage({ models, t, colorForModel }: { models: GroupedModel[]; t: UsageStatsTranslator; colorForModel: (m: string) => string }) {
+function ModelUsage({ models, t, colorForModel, labels }: { labels: UsageLabels; models: GroupedModel[]; t: UsageStatsTranslator; colorForModel: (m: string) => string }) {
   const [tip, setTip] = useState<{ model: string; tokens: number; percent: number; x: number; y: number; items?: ModelTokenUsage[] } | null>(null);
   const [hover, setHover] = useState<string | null>(null);
   const [expandedOther, setExpandedOther] = useState(false);
@@ -918,13 +925,13 @@ function ModelUsage({ models, t, colorForModel }: { models: GroupedModel[]; t: U
           </svg>
           {tip && (
             <div className="usage-stats__tip usage-stats__tip--chart" style={{ transform: `translate(${tipX}px, ${tipY}px) translate(-50%, ${tipAbove ? "-100%" : "0"})` }}>
-              <div className="usage-stats__tip-title">{tip.model === OTHER_MODEL ? t("settings.stats.other") : tip.model}</div>
+              <div className="usage-stats__tip-title">{tip.model === OTHER_MODEL ? t("settings.stats.other") : labels.model(tip.model)}</div>
               <div>{t("settings.stats.total")}: {formatTokens(tip.tokens)}</div>
               <div>{t("settings.stats.percent")}: {formatPercent(tip.percent)}</div>
               {tipItems.length > 0 && (
                 <div className="usage-stats__tip-breakdown">
                   {tipItemsVisible.map((it) => (
-                    <div key={it.model} className="usage-stats__tip-row usage-stats__tip-row--other"><i className="usage-stats__legend-swatch" style={{ background: OTHER_COLOR }} />{it.model}: {formatTokens(it.tokens)}</div>
+                    <div key={it.model} className="usage-stats__tip-row usage-stats__tip-row--other"><i className="usage-stats__legend-swatch" style={{ background: OTHER_COLOR }} />{labels.model(it.model)}: {formatTokens(it.tokens)}</div>
                   ))}
                   {tipItemsRemaining > 0 && <div className="usage-stats__tip-more">+{tipItemsRemaining} {t("settings.stats.moreModels")}</div>}
                 </div>
@@ -944,9 +951,9 @@ function ModelUsage({ models, t, colorForModel }: { models: GroupedModel[]; t: U
                       {expandedOther ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                     </span>
                   )}
-                  {isOther ? t("settings.stats.other") : m.model}
+                  {isOther ? t("settings.stats.other") : labels.model(m.model)}
                 </span>
-                <span className="usage-stats__model-provider">{isOther ? "" : providerOf(m.model)}</span>
+                <span className="usage-stats__model-provider">{isOther ? "" : labels.provider(m.model)}</span>
                 <span className="usage-stats__model-tokens">{formatTokens(m.tokens)}</span>
                 <span className="usage-stats__model-pct">{formatPercent(m.percent)}</span>
               </>
@@ -984,8 +991,8 @@ function ModelUsage({ models, t, colorForModel }: { models: GroupedModel[]; t: U
                 {other.items.map((it) => (
                   <li key={it.model} className="usage-stats__model-row usage-stats__model-row--sub">
                     <i className="usage-stats__legend-swatch" style={{ background: OTHER_COLOR }} />
-                    <span className="usage-stats__model-name">{it.model}</span>
-                    <span className="usage-stats__model-provider">{providerOf(it.model)}</span>
+                    <span className="usage-stats__model-name">{labels.model(it.model)}</span>
+                    <span className="usage-stats__model-provider">{labels.provider(it.model)}</span>
                     <span className="usage-stats__model-tokens">{formatTokens(it.tokens)}</span>
                     <span className="usage-stats__model-pct">{formatPercent(it.percent)}</span>
                   </li>

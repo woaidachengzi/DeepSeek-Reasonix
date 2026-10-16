@@ -1,5 +1,67 @@
 # E 迁移清单
 
+## 2026-10-16 设置与运行版本批次提交前 review
+
+审查 0.1.30–0.1.35 的累计增量：语音选项排版、服务配置／凭据卡片合并、编辑与删除互锁、凭据草稿与失败恢复、用量显示名及统计身份、机器人分区保存／部分失败补存、沙箱结果展示、终端主题横排以及应用打包版本来源。未发现本批新增的阻塞性问题；本轮不再修改功能实现。
+
+提交前完整 Rust 回归 325 passed／6 ignored；服务编辑专项、完整设置／凭据组件、机器人 31 项、用量格式／组件、五组语音及测试 TypeScript 均通过。正式应用 clippy、前端构建／hooks／生产类型／资源预算、各专项浏览器和 0.1.35 安装包核验沿用最终源码已完成的通过结果，不重复打包。全测试目标 clippy 的既有 `native_profile_smoke.rs` 测试模块排序告警单独保留；此前旧远程会话／管理页／进度折叠夹具失败也不表述为整套 Tauri 回归通过。证据 `/private/tmp/reasonix-settings-review-*`。
+
+本次提交仅含 19 个源码、测试、版本配置及迁移记录文件，不含安装包、用户配置、凭据或临时验证产物；提交到现有 `experiment/tauri`，不推送或发布。
+
+## 2026-10-16 运行版本与安装包一致（macOS 0.1.35）
+
+用户截图的关于页仍显示 v0.1.0。原因是安装包版本通过 takeover 配置逐版提升，而运行信息及原生关于／更新菜单仍读取 Cargo 工程版本。现在运行信息从 AppHandle.package_info 的合并配置版本生成，原生两个菜单共用该来源；关于页与更新页继续消费同一运行信息字段，不硬编码页面版本，也不手动同步 Cargo 版本。
+
+正式启动与原生回归共用一个 application_context，避免测试重复嵌入 macOS Info.plist。Rust 使用 TAURI_CONFIG={version:0.1.35} 验证合并版本与运行信息一致，另用不同于 Cargo 的 9.8.7 PackageInfo 检查序列化，版本／稳定基线／桥接信息专项 3 项通过。完整设置／凭据组件回归新增关于页与更新页显示同一宿主版本的断言并通过。Browser 插件未提供，Playwright／Chrome 隔离夹具验证 1440×1000 明色／900×760 暗色的关于、刷新和更新页，相关 console/page errors 为零；浏览器桥接模拟，读取当前发布配置的版本，原生合并解析由 Rust 回归覆盖，不冒充真实 WKWebView 调用实测。证据 `/private/tmp/reasonix-0.1.35-runtime-tests.log`、`/private/tmp/reasonix-0.1.35-settings-tests.log`、`/private/tmp/reasonix-version-35-browser*`。
+
+正式应用目标 clippy 严格检查通过；额外 `--all-targets -D warnings` 在未修改的 `native_profile_smoke.rs` 触发既有 `items_after_test_module`（parallel_tests 在 start_if_requested 之前），单独记录，不将全部目标检查表述为通过。证据 `/private/tmp/reasonix-0.1.35-clippy-production.log`、`/private/tmp/reasonix-0.1.35-clippy.log`。
+
+完整前端构建／hooks／生产类型／资源预算通过；最终 App／DMG 版本 0.1.35、deep/strict ad-hoc 签名、只读挂载和包内二进制一致性核对通过。安装包 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.35_aarch64.dmg`，46,874,494 字节，SHA256 `37f0edddb39f6f18ec766fe894a91e6cc0114aca1fcb53dcbf8547bcca67a3e2`；证据 `/private/tmp/reasonix-0.1.35-build.log`、`/private/tmp/reasonix-0.1.35-package.log`。未安装、未提交或推送。
+
+## 2026-10-16 终端主题横向选择（macOS 0.1.34）
+
+终端主题外层控件与明暗模式共用宽度规则，内层分段选择填满容器且不换行，跟随应用／浅色／深色保持横向排列，与明暗模式左边缘、宽度、按钮高度一致。950px 以下仅将这两行改为图标／标题及下方横向选择的双行布局，避免全宽控件把标题挤成单字竖排。保持原选择状态、禁用、即时应用、保存与失败恢复逻辑。
+
+设置／凭据完整组件回归通过。Browser 插件未提供，使用 Playwright／Chrome 隔离夹具验证明色 1440×1000／暗色 900×760：控件坐标／尺寸一致、三项横排、标题有足够宽度、切换三种模式并保存、保存中全部禁用、失败恢复跟随应用及恢复系统输出主题。相关 console/page errors 为零，无水平溢出、无框架错误覆盖；原生偏好保存模拟，不修改用户真实外观。证据 `/private/tmp/reasonix-terminal-34-browser*`、`/private/tmp/reasonix-0.1.34-settings-tests.log`。
+
+完整前端构建／hooks／生产类型／资源预算通过；最终 App／DMG 版本、deep/strict ad-hoc 签名、只读挂载和包内二进制一致性核对通过。安装包 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.34_aarch64.dmg`，46,868,892 字节，SHA256 `d1369ce83882e52d521a5238a7e0d135d6b28ca0d08f692115381f866483e1cc`。证据 `/private/tmp/reasonix-0.1.34-build.log`、`/private/tmp/reasonix-0.1.34-package.log`。最终产物包含窄窗口标题修正；未安装、未提交或推送。
+
+## 2026-10-16 沙箱写入范围展示（macOS 0.1.33）
+
+上方配置区标题改为“文件写入范围”，计算结果区使用“实际可写目录”，消除重复标题。未选择项目时取消整块空结果卡片，改为一行选择项目提示；已有项目的目录结果独立使用紧凑只读区域，不再继承权限规则编辑器的最小高度。长路径换行，多目录列表限制高度。简体／繁体／英文结果说明移除 Preview 内核措辞，明确按已保存配置计算和新会话／重新加载后生效，不把尚未保存的草稿当成生效范围。
+
+仅调整展示与文案，沿用原始根目录计算、权限、保存及应用到当前会话的路径。当前项目读取失败仍保留错误，空目录结果与无项目状态区分。设置／凭据完整组件回归及测试 TypeScript 通过。Browser 插件未提供，采用 Playwright／Chrome 隔离桥接验证明色 1440×1000、暗色 900×760 的无项目单行状态、标题、项目结果、草稿不冒充已保存结果、增补目录与保存、读取失败、零目录及超长多目录边界；无水平溢出、框架覆盖或相关 console/page errors。所有配置与权限均模拟，不修改用户真实沙箱。证据 `/private/tmp/reasonix-sandbox-33-browser*`、`/private/tmp/reasonix-0.1.33-settings-tests.log`。
+
+完整前端构建／hooks／生产类型／资源预算通过；最终 App／DMG 版本、deep/strict ad-hoc 签名、只读挂载和包内二进制一致性核对通过。安装包 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.33_aarch64.dmg`，46,871,011 字节，SHA256 `dd4ff42426a0fccf7e64aa7d5de7e9de472291db1c9c5e573f2095fd07c0c874`。证据 `/private/tmp/reasonix-0.1.33-build.log`、`/private/tmp/reasonix-0.1.33-package.log`。本包包含此前界面增量；未安装、未提交或推送。
+
+## 2026-10-16 用量显示名与机器人分区保存（macOS 0.1.32）
+
+用量统计统一通过服务显示名解析最常用模型、趋势图例／悬浮提示、模型占比／悬浮提示及其他模型明细；没有显示名的历史服务仅移除末尾生成的 32 位十六进制标识。展示解析不修改统计数据、分组 key、颜色、Token 或占比，同名服务仍保留各自统计。自定义服务名及模型路径保留，映射仅读取自有属性。
+
+机器人允许列表改为每个平台卡片一个“保存列表”，连接访问控制每个连接一个，自身账号 ID 区域共用一个。先校验整个区域，再顺序提交有变化的列表，成功响应逐项更新基线；中途失败保留草稿，重试只补存未成功项目。沿用原桥接接口，非服务端原子批量操作。
+
+验证：用量格式与组件专项、机器人组件 31 项、生产／测试 TypeScript 通过。Browser 插件未提供，使用 Playwright／Chrome 隔离夹具，真实设置组件／CSS，桥接与配置均模拟，不操作用户实际服务或机器人。明色 1440×1000／暗色 900×760 覆盖显示名／历史后缀、同名服务不合并、其他明细／悬浮提示、每区单按钮、多项归一化保存、统一校验零写入、部分失败保留草稿及补存、自身 ID／连接分区保存，无水平溢出、无框架错误覆盖，相关 console/page errors 为零。证据 `/private/tmp/reasonix-settings-32-browser*`、`/private/tmp/reasonix-0.1.32-*-tests.log`。
+
+完整前端构建／hooks／类型／预算通过；最终 App／DMG 版本、deep/strict ad-hoc 签名、只读挂载和包内二进制一致性核对通过。安装包 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.32_aarch64.dmg`，46,868,691 字节，SHA256 `10a378f8e10884255ac44a34513bce6d1270a9e16ed76df6783badb3f72143ec`；证据 `/private/tmp/reasonix-0.1.32-build.log`、`/private/tmp/reasonix-0.1.32-package.log`。本包包含 0.1.30／0.1.31 布局改动；未安装、未提交或推送。
+
+## 2026-10-16 模型服务合并卡片（macOS 0.1.31）
+
+将上方服务配置列表与下方连接／凭据列表合为每个服务一张卡片，取消重复页面内标题和重复名称列表；卡片左侧名称／就绪状态，右侧编辑／删除固定相邻。编辑在对应卡片内展开，连接测试和 API Key 操作保留在同一卡片，添加入口仍在列表右上角，已移除服务仍可重新添加。连接测试按钮紧邻测试模型下拉框，窄窗口允许换行。
+
+`TauriProviderEditor` 保留配置新增／编辑／预设及恢复的状态和请求所有权，以展示插槽提供编辑按钮和就地表单；凭据、探测、删除确认仍由原 `ProviderSettings` 持有，不新增后端接口。合并卡片位于编辑器禁用 fieldset 之外，避免删除确认被继承禁用；实际编辑表单独立沿用禁用状态。独立编辑器默认呈现及凭据失败后恢复路径保留。
+
+模型服务连接／凭据完整组件测试及生产／测试 TypeScript 通过，更新旧重复标题断言，新增一服务一卡片、编辑／删除同组、同卡片凭据／就地表单和编辑保留密钥草稿断言。Browser 插件未提供，采用现有 Playwright／Chrome 隔离夹具验证三服务明色 1440×1000／暗色 900×760，实测操作间距 8px、测试模型与探测按钮间距 10px，覆盖对应卡片编辑、草稿保留、探测不保存密钥、删除前审查／取消／确认、恢复服务及无水平溢出，相关 console/page errors 为零。所有配置／凭据／探测为模拟，不操作用户真实服务。证据 `/private/tmp/reasonix-provider-cards-*`。
+
+完整前端构建／hooks／类型／预算通过，最终 App／DMG 版本、deep/strict ad-hoc 签名、只读挂载和包内二进制一致性核对通过。安装包 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.31_aarch64.dmg`，46,870,745 字节，SHA256 `746d7d25084ff5467385440c73241d29c7c33f3536717cd7355c1c464fb856d0`，证据 `/private/tmp/reasonix-0.1.31-build.log`、`/private/tmp/reasonix-0.1.31-package.log`。包含上一版音色行对齐改动；本次布局增量未安装、未提交或推送，上一批已推送提交仍为 `2d10b6c78`。
+
+## 2026-10-16 音色行排版对齐（macOS 0.1.30）
+
+交流方式／识别渠道／播报渠道／音色共用 4em 标题列，标题右对齐、下拉框左边缘一致；下拉框与试听按钮统一 32px 高，按钮预留完整“停止试听”宽度 88px，切换试听状态不会改变音色下拉框宽度。去掉按钮原本额外的上下／右侧 margin。极窄页面将试听按钮放到下拉框下一行，并把浮层约束在视口内；实际原生窗口仍保持既有 900px 最小宽度。
+
+仅修改展示结构和 CSS，不改变语音合成、发送或取消逻辑。Browser 插件未提供，使用既有 Playwright／Chrome 隔离夹具，验证真实控件坐标、4 个下拉框起点、32px 等高、88px 按钮稳定、浮层边界，以及打开／切换音色／停止／重听／自然结束／迟到结果保护；1440×1000 明色、900×760 暗色及 400×800 极窄页面通过，相关 console/page errors 为零。首次极窄截图发现浮层越界，修复定位后完整复验通过。语音服务仍使用模拟，不调用真实账号。证据 `/private/tmp/reasonix-voice-layout-browser*`。
+
+完整前端构建／hooks／类型／预算通过，最终 App／DMG 版本、deep/strict ad-hoc 签名、只读挂载和包内二进制一致性核对通过。安装包 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.30_aarch64.dmg`，46,868,193 字节，SHA256 `d8b9758c7359a6639792f676838008663a5b4c68ba40f38d8d03a5067c6bfa18`，证据 `/private/tmp/reasonix-0.1.30-build.log`、`/private/tmp/reasonix-0.1.30-package.log`。本次四文件布局增量未安装、未提交或推送；上一批提交仍为 `2d10b6c78`。
+
 ## 2026-10-16 本批语音／图片改动提交前 review
 
 审查包含提交后的截图预览、独立 ASR 设置／凭据、语音采集与自动发送、最终回答播报、连续检测／打断、音色试听及 Rust IPC 取消。检查了保存地址与密钥绑定、仅主窗口访问、提交确认前禁止播报、重试 begin／discard 与 commit 区别、会话更换和迟到结果，以及真实音源／socket／麦克风关闭；未发现本批新增的阻塞性问题。

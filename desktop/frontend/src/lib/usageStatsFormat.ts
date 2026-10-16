@@ -10,3 +10,16 @@ export function formatUsageTokens(n: number, locale: Locale = getLocale()): stri
     maximumFractionDigits: 1,
   }).format(n);
 }
+
+// Imported service IDs carry a generated 32-hex suffix. Keep accounting keys
+// intact and resolve only visible labels; historical removed services may no
+// longer have display-name metadata.
+export function formatUsageProvider(provider: string, names: Readonly<Record<string, string>> = {}): string {
+  const displayName = Object.prototype.hasOwnProperty.call(names, provider) ? names[provider]?.trim() : "";
+  return (displayName && displayName !== provider) ? displayName : provider.replace(/-[a-f0-9]{32}$/i, "");
+}
+
+export function formatUsageModel(ref: string, names: Readonly<Record<string, string>> = {}): string {
+  const slash = ref.indexOf("/");
+  return slash < 0 ? ref : `${formatUsageProvider(ref.slice(0, slash), names)}/${ref.slice(slash + 1)}`;
+}

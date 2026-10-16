@@ -6,6 +6,10 @@ import { TauriBotConnectionManager } from "./TauriBotConnectionManager";
 import { TauriBotDiagnostics } from "./TauriBotDiagnostics";
 import { useManagementT } from "./tauriManagementI18n";
 
+const BOT_PLATFORMS = ["qq", "feishu", "weixin", "dingtalk"] as const;
+const ACCESS_LISTS = ["users", "groups", "approvers", "admins"] as const;
+type BotListChange = Extract<TauriBotSettingsChange, { action: "set_allowlist" | "set_channel_allowlist" | "set_self_user_ids" }>;
+
 export function TauriBotSettings() {
   const t = useManagementT();
   const [status, setStatus] = useState<TauriBotRuntimeStatus | null>(null);
@@ -90,21 +94,6 @@ export function TauriBotSettings() {
     void saveGatewayRuntime({ action: "set_gateway_runtime", [field]: value } as Extract<TauriBotSettingsChange, { action: "set_gateway_runtime" }>);
   };
 
-  const saveSelfUserIDs = async (platform: "qq" | "feishu" | "weixin" | "dingtalk") => {
-    const values = [...new Set((selfUserDrafts[platform] ?? joinBotAllowlist(settings?.selfUserIds?.[platform])).split(/[\n,，]/).map(value => value.trim()).filter(Boolean))];
-    if (values.some(value => value.length > 512) || values.length > 100 || savingRef.current) {
-      setError(t("settings.bots.allowlistInvalid"));
-      return;
-    }
-    setSaving(true); setError("");
-    try {
-      setSettings(await changeTauriBotSettings({ action: "set_self_user_ids", platform, values }));
-      setSelfUserDrafts(current => ({ ...current, [platform]: values.join("\n") }));
-      setStatus(await tauriBotRuntimeStatus());
-    } catch (err) { setError(tauriMessageFrom(err)); }
-    finally { setSaving(false); }
-  };
-
   const saveRoutes = async () => {
     if (savingRef.current || routeDrafts.length > 200) return;
     setSaving(true); setError("");
@@ -141,24 +130,6 @@ export function TauriBotSettings() {
     finally { setSaving(false); }
   };
 
-  const saveChannelAllowlist = async (channelId: string, list: "users" | "groups" | "approvers" | "admins") => {
-    const key = `channel:${channelId}:${list}`;
-    const access = settings?.channels.find(channel => channel.id === channelId)?.access;
-    const raw = accessDrafts[key] ?? joinBotAllowlist(access?.[list]);
-    const values = [...new Set(raw.split(/[\n,，]/).map(value => value.trim()).filter(Boolean))];
-    if (values.some(value => value.length > 512) || values.length > 100 || savingRef.current) {
-      setError(t("settings.bots.allowlistInvalid"));
-      return;
-    }
-    setSaving(true); setError("");
-    try {
-      setSettings(await changeTauriBotSettings({ action: "set_channel_allowlist", channelId, list, values }));
-      setAccessDrafts(current => ({ ...current, [key]: values.join("\n") }));
-      setStatus(await tauriBotRuntimeStatus());
-    } catch (err) { setError(tauriMessageFrom(err)); }
-    finally { setSaving(false); }
-  };
-
   const saveChannelRuntime = async (change: Extract<TauriBotSettingsChange, { action: "set_channel_runtime" }>) => {
     if (savingRef.current) return;
     setSaving(true); setError("");
@@ -169,19 +140,32 @@ export function TauriBotSettings() {
     finally { setSaving(false); }
   };
 
-  const saveAllowlist = async (platform: "qq" | "feishu" | "weixin" | "dingtalk", list: "users" | "groups" | "approvers" | "admins") => {
-    const key = `${platform}.${list}`;
-    const raw = accessDrafts[key] ?? joinBotAllowlist(settings?.allowlist?.[platform]?.[list]);
-    const values = [...new Set(raw.split(/[\n,，]/).map(value => value.trim()).filter(Boolean))];
-    if (values.some(value => value.length > 512) || values.length > 100 || savingRef.current) {
+  const saveListGroup = async (group: "self" | "platform" | "channel", id = "") => {
+    if (savingRef.current || !settings) return;
+    const fields: { key: string; raw: string; saved: unknown; change: (values: string[]) => BotListChange }[] = group === "self"
+      ? BOT_PLATFORMS.map(platform => ({ key: platform, raw: selfUserDrafts[platform] ?? joinBotAllowlist(settings.selfUserIds?.[platform]), saved: settings.selfUserIds?.[platform], change: values => ({ action: "set_self_user_ids", platform, values }) }))
+      : ACCESS_LISTS.map(list => {
+        const platform = id as typeof BOT_PLATFORMS[number];
+        const key = group === "channel" ? `channel:${id}:${list}` : `${platform}.${list}`;
+        const saved = group === "channel" ? settings.channels.find(channel => channel.id === id)?.access?.[list] : settings.allowlist?.[platform]?.[list];
+        return { key, raw: accessDrafts[key] ?? joinBotAllowlist(saved), saved, change: values => group === "channel" ? { action: "set_channel_allowlist", channelId: id, list, values } : { action: "set_allowlist", platform, list, values } };
+      });
+    const changes = fields.map(field => ({ ...field, values: [...new Set(field.raw.split(/[\n,，]/).map(value => value.trim()).filter(Boolean))] }));
+    // Validate the entire section before persisting any list. Each successful
+    // response updates the baseline, so a partial failure can retry the rest.
+    if (changes.some(field => field.values.length > 100 || field.values.some(value => value.length > 512))) {
       setError(t("settings.bots.allowlistInvalid"));
       return;
     }
     setSaving(true); setError("");
     try {
-      const next = await changeTauriBotSettings({ action: "set_allowlist", platform, list, values });
-      setSettings(next);
-      setAccessDrafts(current => ({ ...current, [key]: values.join("\n") }));
+      for (const field of changes) {
+        if (field.values.join("\n") !== joinBotAllowlist(field.saved)) {
+          setSettings(await changeTauriBotSettings(field.change(field.values)));
+        }
+        const setDrafts = group === "self" ? setSelfUserDrafts : setAccessDrafts;
+        setDrafts(current => ({ ...current, [field.key]: field.values.join("\n") }));
+      }
       setStatus(await tauriBotRuntimeStatus());
     } catch (err) { setError(tauriMessageFrom(err)); }
     finally { setSaving(false); }
@@ -275,7 +259,8 @@ export function TauriBotSettings() {
             <label className="tauri-settings-toggle"><span><strong>{t("settings.botIgnoreSelfMessages")}</strong><small>{t("settings.botIgnoreSelfMessagesHint")}</small></span><input type="checkbox" checked={settings.ignoreSelfMessages} disabled={saving} onChange={event => void saveGatewayRuntime({ action: "set_gateway_runtime", ignoreSelfMessages: event.target.checked })} /></label>
           </div>
           <h4>{t("settings.botSelfUserIds")}</h4><p className="tauri-settings-hint">{t("settings.botSelfUserIdsHint")}</p>
-          <div className="tauri-bot-channel-access__lists">{(["qq", "feishu", "weixin", "dingtalk"] as const).map(platform => <div className="tauri-bot-access-field" key={platform}><label htmlFor={`bot-self-id-${platform}`}>{t((`settings.bots.channel.${platform}`) as "settings.bots.channel.qq" | "settings.bots.channel.feishu" | "settings.bots.channel.weixin" | "settings.bots.channel.dingtalk")}</label><textarea id={`bot-self-id-${platform}`} className="tauri-settings-input" rows={2} maxLength={102400} disabled={saving} value={selfUserDrafts[platform] ?? joinBotAllowlist(settings.selfUserIds?.[platform])} placeholder={t("settings.bots.allowlistPlaceholder")} onChange={event => setSelfUserDrafts(current => ({ ...current, [platform]: event.target.value }))} /><button type="button" className="tauri-settings-button" disabled={saving} onClick={() => void saveSelfUserIDs(platform)}>{t("settings.bots.saveAllowlist")}</button></div>)}</div>
+          <div className="tauri-bot-channel-access__lists">{(["qq", "feishu", "weixin", "dingtalk"] as const).map(platform => <div className="tauri-bot-access-field" key={platform}><label htmlFor={`bot-self-id-${platform}`}>{t((`settings.bots.channel.${platform}`) as "settings.bots.channel.qq" | "settings.bots.channel.feishu" | "settings.bots.channel.weixin" | "settings.bots.channel.dingtalk")}</label><textarea id={`bot-self-id-${platform}`} className="tauri-settings-input" rows={2} maxLength={102400} disabled={saving} value={selfUserDrafts[platform] ?? joinBotAllowlist(settings.selfUserIds?.[platform])} placeholder={t("settings.bots.allowlistPlaceholder")} onChange={event => setSelfUserDrafts(current => ({ ...current, [platform]: event.target.value }))} /></div>)}</div>
+          <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" disabled={saving} onClick={() => void saveListGroup("self")}>{t("settings.bots.saveAllowlist")}</button></div>
         </div>
       </details>
       <details className="tauri-bot-channel-access tauri-bot-routes">
@@ -303,8 +288,9 @@ export function TauriBotSettings() {
         <h4>{t((`settings.bots.channel.${platform}`) as "settings.bots.channel.qq" | "settings.bots.channel.feishu" | "settings.bots.channel.weixin" | "settings.bots.channel.dingtalk")}</h4>
         {(["users", "groups", "approvers", "admins"] as const).map(list => {
           const key = `${platform}.${list}`;
-          return <div className="tauri-bot-access-field" key={key}><label htmlFor={`bot-access-${key}`}>{t(`settings.bots.access.${list}` as "settings.bots.access.users" | "settings.bots.access.groups" | "settings.bots.access.approvers" | "settings.bots.access.admins")}</label><textarea id={`bot-access-${key}`} className="tauri-settings-input" rows={2} maxLength={102400} disabled={saving} value={accessDrafts[key] ?? joinBotAllowlist(settings.allowlist?.[platform]?.[list])} placeholder={t("settings.bots.allowlistPlaceholder")} onChange={event => setAccessDrafts(current => ({ ...current, [key]: event.target.value }))} /><button type="button" className="tauri-settings-button" disabled={saving} onClick={() => void saveAllowlist(platform, list)}>{t("settings.bots.saveAllowlist")}</button></div>;
+          return <div className="tauri-bot-access-field" key={key}><label htmlFor={`bot-access-${key}`}>{t(`settings.bots.access.${list}` as "settings.bots.access.users" | "settings.bots.access.groups" | "settings.bots.access.approvers" | "settings.bots.access.admins")}</label><textarea id={`bot-access-${key}`} className="tauri-settings-input" rows={2} maxLength={102400} disabled={saving} value={accessDrafts[key] ?? joinBotAllowlist(settings.allowlist?.[platform]?.[list])} placeholder={t("settings.bots.allowlistPlaceholder")} onChange={event => setAccessDrafts(current => ({ ...current, [key]: event.target.value }))} /></div>;
         })}
+        <div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" disabled={saving} onClick={() => void saveListGroup("platform", platform)}>{t("settings.bots.saveAllowlist")}</button></div>
       </section>)}</div>
       <h3>{t("settings.bots.channelsTitle")}</h3>
       <div className="tauri-bot-channel-list">{settings.channels.map(channel => {
@@ -346,8 +332,8 @@ export function TauriBotSettings() {
               </div>
               {access.allowAll ? <div className="tauri-bot-notice" role="alert"><ShieldAlert size={17} /><span>{t("settings.bots.allowAllWarning")}</span></div> : <div className="tauri-bot-channel-access__lists">{(["users", "groups", "approvers", "admins"] as const).map(list => {
                 const key = `channel:${channel.id}:${list}`;
-                return <div className="tauri-bot-access-field" key={key}><label htmlFor={`bot-channel-access-${channel.id}-${list}`}>{t(`settings.bots.access.${list}` as "settings.bots.access.users" | "settings.bots.access.groups" | "settings.bots.access.approvers" | "settings.bots.access.admins")}</label><textarea id={`bot-channel-access-${channel.id}-${list}`} className="tauri-settings-input" rows={2} maxLength={102400} disabled={saving} value={accessDrafts[key] ?? joinBotAllowlist(access?.[list])} placeholder={t("settings.bots.allowlistPlaceholder")} onChange={event => setAccessDrafts(current => ({ ...current, [key]: event.target.value }))} /><button type="button" className="tauri-settings-button" disabled={saving} onClick={() => void saveChannelAllowlist(channel.id, list)}>{t("settings.bots.saveAllowlist")}</button></div>;
-              })}</div>}
+                return <div className="tauri-bot-access-field" key={key}><label htmlFor={`bot-channel-access-${channel.id}-${list}`}>{t(`settings.bots.access.${list}` as "settings.bots.access.users" | "settings.bots.access.groups" | "settings.bots.access.approvers" | "settings.bots.access.admins")}</label><textarea id={`bot-channel-access-${channel.id}-${list}`} className="tauri-settings-input" rows={2} maxLength={102400} disabled={saving} value={accessDrafts[key] ?? joinBotAllowlist(access?.[list])} placeholder={t("settings.bots.allowlistPlaceholder")} onChange={event => setAccessDrafts(current => ({ ...current, [key]: event.target.value }))} /></div>;
+              })}<div className="tauri-settings-actions"><button type="button" className="tauri-settings-button" disabled={saving} onClick={() => void saveListGroup("channel", channel.id)}>{t("settings.bots.saveAllowlist")}</button></div></div>}
               <label className="tauri-settings-toggle"><ShieldAlert className="tauri-settings-field-icon" size={18} /><span><strong>{t("settings.bots.pairingEnabled")}</strong><small>{t("settings.bots.pairingHint")}</small></span><input type="checkbox" checked={access.pairingEnabled} disabled={saving} onChange={event => void saveChannelAccess({ action: "set_channel_pairing", channelId: channel.id, enabled: event.target.checked })} /></label>
             </div>
           </details>}

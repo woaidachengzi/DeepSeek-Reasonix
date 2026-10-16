@@ -1508,8 +1508,8 @@ async fn legacy_ui_preferences(app: tauri::AppHandle) -> Result<serde_json::Valu
 }
 
 #[tauri::command]
-fn preview_runtime_info(supervisor: State<'_, BridgeSupervisor>) -> PreviewRuntimeInfo {
-    PreviewRuntimeInfo::from_status(supervisor.status())
+fn preview_runtime_info(app: tauri::AppHandle, supervisor: State<'_, BridgeSupervisor>) -> PreviewRuntimeInfo {
+    PreviewRuntimeInfo::from_status(supervisor.status(), app.package_info())
 }
 
 #[tauri::command]
@@ -4458,6 +4458,10 @@ fn setup_preview(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     Ok(())
 }
 
+fn application_context() -> tauri::Context<tauri::Wry> {
+    tauri::generate_context!()
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .register_uri_scheme_protocol("reasonix-preview", |context, request| {
@@ -4563,7 +4567,7 @@ fn main() {
                     tray::show_main_window(app);
                 }
                 "about" => {
-                    let version = env!("CARGO_PKG_VERSION");
+                    let version = app.package_info().version.to_string();
                     let stable = runtime_info::STABLE_VERSION;
                     let commit = &runtime_info::STABLE_COMMIT[..8];
                     let msg = format!(
@@ -4584,7 +4588,7 @@ fn main() {
                     }
                 }
                 "check_updates" => {
-                    let version = env!("CARGO_PKG_VERSION");
+                    let version = app.package_info().version.to_string();
                     let msg = format!(
                         "Current version: {version}\n\nUpdate checks are not available in Tauri Preview yet.\nFor released versions and manual downloads, visit:\nhttps://github.com/esengine/DeepSeek-Reasonix/releases"
                     );
@@ -4867,7 +4871,7 @@ fn main() {
                 }
             }
         })
-        .build(tauri::generate_context!())
+        .build(application_context())
         .unwrap_or_else(|error| {
             // App construction errors are ordinary startup failures.
             eprintln!("Reasonix could not start: {error}");
