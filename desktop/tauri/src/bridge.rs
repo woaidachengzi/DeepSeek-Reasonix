@@ -4852,7 +4852,7 @@ impl BridgeSupervisor {
         })
     }
 
-    fn event_connection(&self) -> Result<(SocketAddr, String), String> {
+    pub(crate) fn event_connection(&self) -> Result<(SocketAddr, String), String> {
         let mut process = self
             .process
             .lock()

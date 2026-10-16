@@ -1584,3 +1584,48 @@
 .tauri-composer__actions .tauri-steering-cancel:hover:enabled { background:var(--surface-2); color:var(--fg); }
 .tauri-composer__actions .tauri-steering-submit:focus-visible, .tauri-composer__actions .tauri-steering-cancel:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 @media (max-width:640px) { .tauri-steering-editor-label span { display:none; } .tauri-composer__actions .tauri-steering-submit, .tauri-composer__actions .tauri-steering-cancel { padding:8px; } }
+
+/* Speech input shares the existing composer; recording never submits a turn. */
+.tauri-voice-input { position: relative; display: flex; align-items: center; margin-left: auto; flex-shrink: 0; }
+.tauri-voice-button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; color: var(--fg-dim); cursor: pointer; }
+.tauri-voice-button:hover, .tauri-voice-button[aria-expanded="true"] { color: var(--fg); background: var(--surface-2); }
+.tauri-voice-button:disabled { opacity: .4; cursor: default; }
+.tauri-voice-panel { position: absolute; bottom: calc(100% + 12px); right: 0; width: min(360px, calc(100vw - 40px)); padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--fg); box-shadow: 0 8px 32px rgba(0,0,0,.16); z-index: var(--z-popover); font-size: 12px; }
+.tauri-voice-heading, .tauri-voice-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tauri-voice-heading { justify-content: space-between; margin-bottom: 12px; }
+.tauri-voice-panel label { display: flex; align-items: center; gap: 8px; }
+.tauri-voice-panel select { min-width: 0; flex: 1; padding: 6px; color: inherit; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; }
+.tauri-voice-panel p { margin: 10px 0; line-height: 1.6; color: var(--fg-dim); }
+.tauri-voice-panel button { display: inline-flex; align-items: center; gap: 4px; margin: 4px 8px 0 0; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--fg); cursor: pointer; }
+.tauri-voice-panel button:disabled { opacity: .4; cursor: default; }
+.tauri-voice-panel .tauri-voice-error { color: var(--danger, #d64545); }
+.tauri-voice-panel textarea { box-sizing: border-box; width: 100%; min-height: 64px; color: inherit; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
+.tauri-voice-input button:focus-visible, .tauri-voice-panel select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.tauri-voice-input--inline { display: block; }
+.tauri-voice-input--inline .tauri-voice-button { width: auto; gap: 6px; padding: 6px 10px; }
+.tauri-voice-input--inline .tauri-voice-panel { position: static; width: 100%; max-width: 520px; margin-top: 10px; box-shadow: none; }
+.tauri-speech-settings .tauri-speech-secret { display: flex; align-items: center; gap: 8px; min-width: 0; width: min(520px, 100%); }
+.tauri-speech-settings .tauri-speech-secret input { flex: 1; min-width: 0; }
+.tauri-speech-settings .tauri-settings-field { min-width: 0; }
+.tauri-speech-settings p { color: var(--fg-dim); line-height: 1.6; overflow-wrap: anywhere; }
+.tauri-speech-settings [role="alert"] { color: var(--danger, #c74d43); }
+.tauri-speech-settings .tauri-settings-actions { flex-wrap: wrap; }
+
+.tauri-speech-settings .tauri-settings-field-label { flex: 1; min-width: 100px; }
+.tauri-speech-settings .tauri-settings-input, .tauri-speech-settings .tauri-settings-select { width: min(520px, 100%); }
+.tauri-speech-settings textarea.tauri-settings-input { width: 100%; padding: 10px; resize: vertical; }
+
+.tauri-voice-call-panel { width: min(420px, calc(100vw - 40px)); max-height: min(680px, calc(100vh - 160px)); overflow-y: auto; }
+.tauri-voice-call-panel label { margin-top: 8px; }
+.tauri-voice-call-panel .tauri-voice-hold { display: flex; width: 100%; min-height: 48px; justify-content: center; touch-action: none; user-select: none; -webkit-user-select: none; }
+.tauri-voice-call-panel .tauri-voice-hold:active { background: var(--accent); color: var(--surface); }
+.tauri-voice-call-recognized { max-height: 100px; overflow-y: auto; overflow-wrap: anywhere; }
+.tauri-voice-preview-row { display: flex; align-items: flex-end; gap: 8px; }
+.tauri-voice-preview-row > label { flex: 1; min-width: 0; }
+.tauri-voice-preview-row > button { flex: 0 0 auto; }
+
+.tauri-continuous-option input { margin: 0; }
+.tauri-continuous-status { display: flex; align-items: center; gap: 6px; }
+.tauri-continuous-status > span { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--fg-dim); }
+.tauri-continuous-status > span.is-live { background: var(--accent); }

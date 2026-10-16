@@ -2331,3 +2331,39 @@ export async function tauriRemoteForwards(input: { name: string; action: "list" 
   requireTauri();
   return invoke<TauriRemoteForwards>("remote_forwards", { input });
 }
+
+export interface TauriSpeechProvider { name: string; label: string; preferred?: boolean; description?: string }
+export interface TauriSpeechSettings {
+ protocolVersion: number; mode: "mimo" | "custom"; provider: string; protocol: "mimo" | "transcriptions";
+ endpoint: string; model: string; keySet: boolean; revision: string;
+}
+export type TauriSpeechSettingsChange = Omit<TauriSpeechSettings, "protocolVersion" | "keySet"> & { keyAction: "keep" | "replace" | "clear"; apiKey: string };
+export async function tauriSpeechSettings(): Promise<TauriSpeechSettings> {
+ requireTauri(); return invoke<TauriSpeechSettings>("speech_settings");
+}
+export async function saveTauriSpeechSettings(input: TauriSpeechSettingsChange): Promise<TauriSpeechSettings> {
+ requireTauri(); return invoke<TauriSpeechSettings>("save_speech_settings", { input });
+}
+export async function tauriSpeechProviders(): Promise<TauriSpeechProvider[]> {
+  requireTauri();
+  const response = await invoke<{ protocolVersion: number; providers: TauriSpeechProvider[] }>("speech_providers");
+  if (response.protocolVersion !== 1 || !Array.isArray(response.providers)) throw new Error("语音渠道信息无效；请重新打开语音输入。");
+  return response.providers;
+}
+export async function tauriSpeechTranscribe(operationId: string, provider: string, audio: string): Promise<string> {
+  requireTauri();
+  const response = await invoke<{ protocolVersion: number; text: string }>("speech_transcribe", { input: { operationId, provider, audio } });
+  if (response.protocolVersion !== 1 || typeof response.text !== "string" || !response.text.trim()) throw new Error("没有识别到语音；请重新录音。");
+  return response.text;
+}
+export async function tauriSpeechCancel(operationId: string): Promise<void> {
+  requireTauri();
+  await invoke("speech_cancel", { operationId });
+}
+
+export async function tauriSpeechSynthesize(operationId: string, provider: string, text: string, voice: string): Promise<string> {
+ requireTauri();
+ const response = await invoke<{protocolVersion:number;audio:string}>("speech_synthesize", {input:{operationId,provider,text,voice}});
+ if(response.protocolVersion!==1 || typeof response.audio!=="string" || !response.audio || response.audio.length>11_184_812) throw new Error("播报音频无效；请检查语音服务。");
+ return response.audio;
+}

@@ -138,6 +138,10 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 			fmt.Fprintf(&b, "conversation_width = %q   # desktop: standard|full transcript width; empty = standard\n", width)
 		}
 		b.WriteString("\n")
+		if speech := c.Desktop.Speech; speech != (DesktopSpeechConfig{}) {
+			b.WriteString("[desktop.speech]\n")
+			fmt.Fprintf(&b, "mode = %q\nprovider = %q\nprotocol = %q\nendpoint = %q\nmodel = %q\n\n", speech.Mode, speech.Provider, speech.Protocol, speech.Endpoint, speech.Model)
+		}
 		b.WriteString("[billing]\n")
 		if pref := c.DisplayCurrencyPref(); pref != "" {
 			fmt.Fprintf(&b, "display_currency = %q   # auto|CNY|USD; display only — does not rewrite provider list prices\n", pref)

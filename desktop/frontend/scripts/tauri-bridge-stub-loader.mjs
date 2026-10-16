@@ -70,6 +70,12 @@ export function tauriChangePinnedFile(sessionId, path, pin) {
   globalThis.__pinnedFiles[sessionId] = files;
   return Promise.resolve(files);
 }
+export async function tauriSpeechSettings() { record("speech_settings", {}); return globalThis.__speechSettings ?? {protocolVersion:1,mode:"mimo",provider:"",protocol:"transcriptions",endpoint:"",model:"",keySet:false,revision:"fixture-speech-revision"}; }
+export async function saveTauriSpeechSettings(input) { record("save_speech_settings", {...input,apiKey:undefined}); if(globalThis.__saveSpeechSettings) return globalThis.__saveSpeechSettings(input); const {keyAction,apiKey,...fields}=input; const previous=await tauriSpeechSettings(); globalThis.__speechSettings={...fields,protocolVersion:1,keySet:keyAction==='keep'?previous.keySet:keyAction==='replace',revision:'fixture-speech-'+Date.now()}; return globalThis.__speechSettings; }
+export async function tauriSpeechProviders() { record("speech_providers", {}); const entries=(globalThis.__speechProviders ?? []).map(entry=>({...entry})); const view=globalThis.__speechSettings; if(view?.mode==='custom' && view?.endpoint && view?.model) entries.push({name:'custom:'+view.revision,label:'自定义识别服务 · '+view.model,preferred:view.mode==='custom'}); if(view?.mode==='mimo') {const selected=entries.find(entry=>entry.name===view.provider)??entries.find(entry=>!entry.name.startsWith('custom:')); if(selected) selected.preferred=true;} return entries; }
+export async function tauriSpeechTranscribe(operationId, provider, audio) { record("speech_transcribe", { operationId, provider, audio }); return globalThis.__speechTranscribe?.(operationId, provider, audio) ?? "语音测试"; }
+export async function tauriSpeechSynthesize(operationId,provider,text,voice) { record("speech_synthesize", {operationId,provider,text,voice}); return globalThis.__speechSynthesize?.(operationId,provider,text,voice) ?? ""; }
+export async function tauriSpeechCancel(operationId) { record("speech_cancel", { operationId }); }
 export function tauriWorkspaceImage(sessionId, source) {
   record("bridge_workspace_image", { sessionId, source });
   if (globalThis.__imageGate) return globalThis.__imageGate(sessionId, source);

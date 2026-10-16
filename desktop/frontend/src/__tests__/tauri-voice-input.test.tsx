@@ -1,0 +1,58 @@
+import assert from "node:assert/strict";
+import { JSDOM } from "jsdom";
+import { encodeSpeechWav, startVoiceCapture } from "../tauri/voiceCapture";
+const wav = Uint8Array.from(atob(encodeSpeechWav([Float32Array.of(1,1,1,-1,-1,-1),Float32Array.of(1,1,1,-1,-1,-1)],48000)),c=>c.charCodeAt(0));
+assert.equal(wav.length,48); const view=new DataView(wav.buffer);
+assert.equal(view.getUint32(24,true),16000); assert.equal(view.getInt16(44,true),32767); assert.equal(view.getInt16(46,true),-32768);
+assert.throws(()=>encodeSpeechWav([],48000)); assert.throws(()=>encodeSpeechWav([new Float32Array(16000*91)],16000)); assert.throws(()=>encodeSpeechWav([Float32Array.of(1)],0));
+const dom=new JSDOM("<!doctype html><html><body><div id='root'></div></body></html>",{url:"http://localhost/",pretendToBeVisual:true});
+Object.assign(globalThis,{window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,localStorage:dom.window.localStorage,IS_REACT_ACT_ENVIRONMENT:true});
+Object.defineProperty(globalThis,"navigator",{value:dom.window.navigator,configurable:true});
+const React=await import("react"); const {act,useState,useRef}=React; const {createRoot}=await import("react-dom/client");
+const {TauriVoiceInput}=await import("../tauri/TauriVoiceInput"); const root=createRoot(document.getElementById("root")!);
+const calls:string[]=[]; let recordedSignal:AbortSignal|undefined; let resolveTranscript:(text:string)=>void=()=>{};
+const capture={stop:async()=>{calls.push("stop");return "fixture-wav";},cancel:()=>{calls.push("cancel-capture");}};
+let captureGate:Promise<typeof capture>|undefined;let catalogGate:Promise<{name:string;label:string}[]>|undefined;
+let active=false;let draft="草稿：";let changeDraft!:(text:string)=>void;
+const api={providers:async()=>catalogGate??[{name:"mimo",label:"小米 MiMo"}],transcribe:async()=>{calls.push("transcribe");return new Promise<string>(resolve=>{resolveTranscript=resolve;});},cancel:async()=>{calls.push("cancel-request");},capture:async(signal:AbortSignal)=>{recordedSignal=signal;return captureGate??capture;}};
+const onActiveChange=(value:boolean)=>{active=value;};
+function Fixture({owner="a",disabled=false}:{owner?:string;disabled?:boolean}){
+ const[value,setValue]=useState(draft);const ref=useRef<HTMLTextAreaElement>(null);draft=value;changeDraft=setValue;
+ return <><textarea ref={ref} value={value} onChange={e=>setValue(e.target.value)}/><TauriVoiceInput key={owner} owner={owner} value={value} onChange={setValue} inputRef={ref} disabled={disabled} onActiveChange={onActiveChange} onOpenSettings={()=>calls.push("settings")} api={api}/></>;
+}
+const tick=async()=>{await new Promise(resolve=>setTimeout(resolve,0));};
+const render=async(owner="a",disabled=false)=>{await act(async()=>{root.render(<Fixture owner={owner} disabled={disabled}/>);await tick();});};
+const click=async(name:string)=>{await act(async()=>{const button=[...document.querySelectorAll<HTMLButtonElement>("button")].find(b=>b.getAttribute("aria-label")===name||b.textContent===name);assert(button,`missing button: ${name}`);button.click();await tick();});};
+const begin=async()=>{await click("语音输入");await click("开始录音");assert(active);assert(document.body.textContent?.includes("正在录音"));};
+try{
+ await render();await begin();assert(recordedSignal&&!recordedSignal.aborted);await click("完成录音");
+ assert(document.body.textContent?.includes("正在识别"));await act(async()=>{resolveTranscript("你好");await tick();});
+ assert.equal(draft,"你好草稿：","recognized text inserts at captured selection");assert.equal(active,false);assert.equal(document.querySelector('.tauri-voice-panel'),null);
+ assert.equal(calls.filter(c=>c==="transcribe").length,1,"no recognition retries");
+ await begin();await click("完成录音");await act(async()=>changeDraft("我继续打字"));await act(async()=>{resolveTranscript("保留语音结果");await tick();});
+ assert.equal(draft,"我继续打字");assert.equal(document.querySelector<HTMLTextAreaElement>('[aria-label="保留的语音识别结果"]')?.value,"保留语音结果");
+ await click("追加到输入框");assert.equal(draft,"我继续打字\n保留语音结果");
+ await begin();await click("完成录音");const original=draft;
+ await act(async()=>changeDraft("temporary edit"));await act(async()=>changeDraft(original));
+ await act(async()=>{resolveTranscript("ABA RESULT");await tick();});assert.equal(draft,original,"editing and restoring the same text cannot authorize an old insertion");
+ assert.equal(document.querySelector<HTMLTextAreaElement>('[aria-label="保留的语音识别结果"]')?.value,"ABA RESULT");await click("关闭语音输入");
+ await begin();await click("完成录音");const beforeCancel=draft;await click("取消");assert(recordedSignal?.aborted);
+ await act(async()=>{resolveTranscript("LATE CANCELLED");await tick();});assert.equal(draft,beforeCancel);assert(!document.body.textContent?.includes("LATE CANCELLED"));await click("关闭语音输入");
+ await begin();await click("完成录音");await render("b");await act(async()=>{resolveTranscript("FOREIGN SESSION");await tick();});
+ assert.equal(draft,beforeCancel);assert(!document.body.textContent?.includes("FOREIGN SESSION"));
+ let finishPermission!:(value:typeof capture)=>void;captureGate=new Promise(resolve=>{finishPermission=resolve;});
+ await click("语音输入");await click("开始录音");assert(document.body.textContent?.includes("正在请求麦克风"));await click("取消");
+ const cancels=calls.filter(c=>c==="cancel-capture").length;await act(async()=>{finishPermission(capture);await tick();});
+ assert.equal(calls.filter(c=>c==="cancel-capture").length,cancels+1,"late capture is immediately released");captureGate=undefined;await click("关闭语音输入");
+ let finishCatalog!:(value:{name:string;label:string}[])=>void;catalogGate=new Promise(resolve=>{finishCatalog=resolve;});
+ await click("语音输入");await click("关闭语音输入");await act(async()=>{finishCatalog([{name:"old",label:"STALE PROVIDER"}]);await tick();});
+ assert(!document.body.textContent?.includes("STALE PROVIDER"));catalogGate=undefined;
+ await begin();await render("b",true);assert(recordedSignal?.aborted);assert.equal(active,false);assert(document.querySelector<HTMLButtonElement>('[aria-label="语音输入"]')?.disabled);
+ console.log("PASS voice: WAV, selected insertion, changed draft retention, explicit append, cancellation, session fence, late permission/catalogue, disabled cleanup");
+}finally{await act(async()=>root.unmount());dom.window.close();}
+let stoppedTracks=0;let grant!:(stream:MediaStream)=>void;
+Object.defineProperty(navigator,"mediaDevices",{configurable:true,value:{getUserMedia:()=>new Promise<MediaStream>(resolve=>{grant=resolve;})}});
+Object.assign(globalThis,{MediaRecorder:class{},AudioContext:class{}});
+const abort=new AbortController();const waiting=startVoiceCapture(abort.signal,()=>{});abort.abort();
+grant({getTracks:()=>[{stop:()=>stoppedTracks++}]} as unknown as MediaStream);
+await assert.rejects(waiting,/取消/);assert.equal(stoppedTracks,1);console.log("PASS actual capture closes a late microphone permission grant");

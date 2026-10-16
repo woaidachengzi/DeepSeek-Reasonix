@@ -2,6 +2,7 @@
 
 mod bot_diagnostics;
 mod bridge;
+mod speech_input;
 mod live_sessions;
 mod credential_namespace;
 mod data_profile;
@@ -4453,6 +4454,7 @@ fn setup_preview(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     app.manage(project_catalog);
     app.manage(SessionShadowSnapshotCache::default());
     app.manage(pasted_images::PastedImages::default());
+    app.manage(speech_input::SpeechInput::default());
     Ok(())
 }
 
@@ -4537,6 +4539,9 @@ fn main() {
                 }
             }
             if matches!(event, tauri::WindowEvent::Destroyed) {
+                if window.label() == "main" {
+                    window.app_handle().state::<speech_input::SpeechInput>().cancel_all();
+                }
                 if let Some(supervisor) = window.app_handle().try_state::<BridgeSupervisor>() {
                     supervisor.clear_remote_subscriptions();
                 }
@@ -4716,6 +4721,12 @@ fn main() {
             preview_profile_status,
             legacy_ui_preferences,
             preview_runtime_info,
+            speech_input::speech_settings,
+            speech_input::save_speech_settings,
+            speech_input::speech_providers,
+            speech_input::speech_transcribe,
+            speech_input::speech_synthesize,
+            speech_input::speech_cancel,
             provider_summary,
             save_provider_api_key,
             clear_provider_api_key,

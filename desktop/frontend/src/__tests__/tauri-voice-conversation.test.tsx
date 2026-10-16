@@ -1,0 +1,55 @@
+import assert from "node:assert/strict";
+import { JSDOM } from "jsdom";
+import { VoiceReplyTracker, spokenReply } from "../tauri/voiceConversation";
+import type { TauriBridgeEvent } from "../lib/tauriBridge";
+let sequence=0;
+const event=(kind:string,payload:Record<string,unknown>={},sessionId="session"):TauriBridgeEvent=>({protocolVersion:1,sessionId,sequence:++sequence,eventKind:kind,payload:{kind,...payload}});
+const tracker=new VoiceReplyTracker("session",0);
+assert.equal(tracker.accept(event("text",{text:"OLD"})),null);
+tracker.accept(event("turn_started",{turnId:"own"}));
+tracker.accept(event("reasoning",{text:"PRIVATE"}));
+tracker.accept(event("text",{text:"TOOL PREFACE",turnId:"own"}));tracker.accept(event("tool_dispatch"));
+tracker.accept(event("text",{text:"partial"}));tracker.accept(event("stream_attempt",{streamAttempt:{id:"retry",action:"discard"}}));
+tracker.accept(event("text",{text:"FOREIGN",turnId:"other"}));tracker.accept(event("text",{text:"最终回答",turnId:"own"}));
+const done=event("turn_done",{status:"completed",turnId:"own"});assert.deepEqual(tracker.accept(done),{text:"最终回答"});assert.equal(tracker.accept(done),null);
+// The real engine commits each successful sampling attempt after its text.
+const committed=new VoiceReplyTracker("session",0);
+committed.accept(event("turn_started"));
+committed.accept(event("stream_attempt",{streamAttempt:{id:"first",action:"begin"}}));
+committed.accept(event("text",{text:"丢弃的旧片段"}));
+committed.accept(event("stream_attempt",{streamAttempt:{id:"first",action:"discard"}}));
+committed.accept(event("stream_attempt",{streamAttempt:{id:"second",action:"begin"}}));
+committed.accept(event("text",{text:"应当朗读的回答。"}));
+committed.accept(event("stream_attempt",{streamAttempt:{id:"second",action:"commit"}}));
+assert.deepEqual(committed.accept(event("turn_done",{status:"completed"})),{text:"应当朗读的回答。"},"successful sampling commit must retain the spoken reply");
+for(const payload of [{status:"failed"},{status:"interrupted"},{outcome:"cancelled"}]){const cancelled=new VoiceReplyTracker("session",0);cancelled.accept(event("turn_started"));cancelled.accept(event("text",{text:"partial"}));assert(cancelled.accept(event("turn_done",payload))?.error);}
+assert.deepEqual(spokenReply("**你好** [链接](https://example.com)\n```sh\nprivate command\n```"),{chunks:["你好 链接"],truncated:false});assert.equal(spokenReply("字".repeat(5000)).chunks.join("").length,4000);assert(spokenReply("字".repeat(5000)).truncated);
+const dom=new JSDOM("<!doctype html><html><body><div id='root'></div></body></html>",{url:"http://localhost/",pretendToBeVisual:true});
+Object.assign(globalThis,{window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,localStorage:dom.window.localStorage,IS_REACT_ACT_ENVIRONMENT:true});
+Object.defineProperty(globalThis,"navigator",{value:dom.window.navigator,configurable:true});
+const React=await import("react");const {act}=React;const {createRoot}=await import("react-dom/client");const {TauriVoiceConversation}=await import("../tauri/TauriVoiceConversation");const root=createRoot(document.getElementById("root")!);
+const sink:{current:((e:TauriBridgeEvent)=>void)|null}={current:null};
+let sendGate:Promise<boolean>|undefined,captureGate:Promise<{stop:()=>Promise<string>;cancel:()=>void}>|undefined,synthGate:Promise<string>|undefined,recognitionGate:Promise<string>|undefined;
+const calls:string[]=[];const sent:string[]=[];const spoken:string[]=[];let signal:AbortSignal|undefined;let failTTS=false;
+const capture={stop:async()=>"WAV",cancel:()=>calls.push("capture-cancel")};
+const api={providers:async()=>[{name:"mimo",label:"套餐",preferred:true}],transcribe:async()=>recognitionGate??"语音问题",synthesize:async(_id:string,_provider:string,text:string)=>{spoken.push(text);if(failTTS)throw new Error("TTS unavailable");return synthGate??"AUDIO";},cancel:async()=>{calls.push("native-cancel");},capture:async(next:AbortSignal)=>{signal=next;return captureGate??capture;},playback:()=>({play:async()=>{calls.push("play");},stop:()=>{calls.push("stop");},close:()=>{calls.push("close");}})};
+const send=async(text:string)=>{sent.push(text);return sendGate??true;};const active=()=>{};const tick=async()=>{await new Promise(resolve=>setTimeout(resolve,0));};
+const render=async(owner="session",open=true)=>{await act(async()=>{root.render(<TauriVoiceConversation owner={owner} sequence={sequence} open={open} canSend hardBlocked={false} paused={false} phaseLabel="正在等待模型回答…" eventSink={sink} onOpen={()=>{}} onEnd={()=>calls.push("end")} onActiveChange={active} onSend={send} onOpenSettings={()=>{}} api={api}/>);await tick();});};
+const key=async(type:"keydown"|"keyup")=>{await act(async()=>{document.querySelector('[aria-label="按住说话，松开发送"]')!.dispatchEvent(new dom.window.KeyboardEvent(type,{key:" ",bubbles:true}));await tick();});};
+const click=async(text:string)=>{await act(async()=>{const button=[...document.querySelectorAll<HTMLButtonElement>("button")].find(b=>b.textContent===text);assert(button,text);button.click();await tick();});};
+const emit=async(kind:string,payload:Record<string,unknown>={})=>{await act(async()=>{sink.current?.(event(kind,payload));await tick();});};
+try{
+ await render();let accept!:(value:boolean)=>void;sendGate=new Promise(resolve=>{accept=resolve;});
+ await key("keydown");assert(document.body.textContent?.includes("正在录音"));await key("keyup");assert.equal(sent.length,1);
+ await emit("turn_started");await emit("reasoning",{text:"PRIVATE"});await emit("text",{text:"工具之前"});await emit("tool_dispatch");await emit("text",{text:"这是最终回答。"});await emit("stream_attempt",{streamAttempt:{id:"answer",action:"commit"}});await emit("turn_done",{status:"completed"});
+ assert.equal(spoken.length,0,"reply cannot be spoken before submission is confirmed");
+ await act(async()=>{accept(true);await tick();});assert.deepEqual(spoken,["这是最终回答。"]);assert.equal(calls.filter(c=>c==="play").length,1);sendGate=undefined;
+ await emit("stream_attempt",{streamAttempt:{id:"answer",action:"commit"}});await emit("turn_done",{status:"completed"});assert.equal(spoken.length,1,"no duplicate playback");
+ let finishAudio!:(text:string)=>void;synthGate=new Promise(resolve=>{finishAudio=resolve;});await key("keydown");await key("keyup");await emit("turn_started");await emit("text",{text:"迟到声音"});await emit("stream_attempt",{streamAttempt:{id:"answer",action:"commit"}});await emit("turn_done",{status:"completed"});await click("停止播报");
+ await act(async()=>{finishAudio("LATE");await tick();});assert.equal(calls.filter(c=>c==="play").length,1,"stopped synthesis cannot play late");synthGate=undefined;
+ let grant!:(value:typeof capture)=>void;captureGate=new Promise(resolve=>{grant=resolve;});const sends=sent.length;await key("keydown");await key("keyup");assert(signal?.aborted);await act(async()=>{grant(capture);await tick();});assert.equal(sent.length,sends,"releasing before permission never auto sends a late capture");captureGate=undefined;
+ let recognize!:(value:string)=>void;recognitionGate=new Promise(resolve=>{recognize=resolve;});await key("keydown");await key("keyup");await render("other");await act(async()=>{recognize("FOREIGN RESULT");await tick();});assert.equal(sent.length,sends);recognitionGate=undefined;
+ await render();failTTS=true;await key("keydown");await key("keyup");await emit("turn_started");await emit("text",{text:"TTS失败的回答"});await emit("stream_attempt",{streamAttempt:{id:"answer",action:"commit"}});await emit("turn_done",{status:"completed"});assert(document.body.textContent?.includes("TTS unavailable"));assert(!document.body.textContent?.includes("重新发送识别文字"),"TTS failure must not offer a duplicate model submission");failTTS=false;
+ await key("keydown");await click("结束对话");assert(signal?.aborted);assert(calls.includes("close"));
+ console.log("PASS voice conversation: final answer only, admission fence, exactly-once playback, stop/late audio, late permission, session fence, TTS failure without resubmit, end cleanup");
+}finally{await act(async()=>root.unmount());dom.window.close();}

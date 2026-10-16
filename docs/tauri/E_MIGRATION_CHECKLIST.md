@@ -1,5 +1,98 @@
 # E 迁移清单
 
+## 2026-10-16 本批语音／图片改动提交前 review
+
+审查包含提交后的截图预览、独立 ASR 设置／凭据、语音采集与自动发送、最终回答播报、连续检测／打断、音色试听及 Rust IPC 取消。检查了保存地址与密钥绑定、仅主窗口访问、提交确认前禁止播报、重试 begin／discard 与 commit 区别、会话更换和迟到结果，以及真实音源／socket／麦克风关闭；未发现本批新增的阻塞性问题。
+
+完整 bridge／config race 通过（缓存命中），Go vet、协议生成 check、完整 Rust 324 passed／6 ignored、clippy 严格检查通过。Tauri 总回归先通过五组语音、并行会话、历史／冷启动／固定文件等检查后，在旧远程会话文案断言处停止；继续独立运行后续 45 个顶层命令／测试组，43 通过、2 失败，另行验证图片提交／思考／流式／完成预览通过。连同前面的远程失败，共三处失败分别为 `tauri-remote-sessions`（旧英文标题）、`tauri-e-management`（旧连接状态展示）、`tauri-progress-collapse`（旧状态栏结构）。三项均在隔离导出的原 HEAD `125e832a5` 上复现，不冒充整套测试全绿。原有夹具还存在空图片 src／act 警告。
+
+生产／测试 TypeScript、hooks 与完整前端构建／预算沿用本批最后的 0.1.29 成功结果，源码未再改动。此前浏览器音频、明暗主题及安装包签名／内容核验的范围与限制保留。review 证据在 `/private/tmp/reasonix-review-*`；只提交源码／测试／文档，不提交安装包、账号配置或临时验证文件。目标为现有 `origin/experiment/tauri`，不发布 Release。
+
+## 2026-10-16 音色自动试听（macOS 0.1.29）
+
+语音对话切换音色时自动使用当前播报渠道合成固定示例“你好，很高兴与你交流。这是我的声音，你喜欢吗？”，旁边增加“试听／停止试听”按钮，可重听当前音色。仅显式切换或点击试听触发请求，打开面板不自动消耗额度，界面提示使用所选渠道额度；不访问麦克风，不发送聊天消息或历史正文。按住／连续模式共用此控件。
+
+试听独立持有请求、AbortController 和 AudioContext，切换音色时取消旧请求及实际音源，迟到结果不能回播；停止、换播报渠道、切换会话、关闭面板、页面隐藏和连接阻断均清理资源。开始按住录音或连续聆听前停止试听，避免声音进入麦克风。实际录音／对话进行时保持音色选择禁用。合成权限或网络错误直接显示在音色区域，不自动重试，不触发重新发送模型消息。
+
+五组语音专项、测试 TypeScript 通过。新增组件测试覆盖显式触发、快速选择、停止／重听、渠道／会话／关闭／阻断保护、两种交流模式、服务错误、麦克风所有权和零模型提交。Browser 插件未提供，使用既有 Playwright／隔离 Chrome：真实 WAV 解码和播放、自然结束、迟到声音取消、错误展示及明暗主题 1440×1000／900×760 均通过，相关 console/page errors 为零；ASR／TTS native adapter 模拟，未调用真实用户账号。证据 `/private/tmp/reasonix-voice-preview-*`。
+
+连续对话的静音／自动提交／分句预加载／回声和打断／失焦清理浏览器回归通过。完整前端构建、既有预算与 hooks 门禁、App 签名及 DMG 只读挂载／版本／包内二进制一致性通过。安装包 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.29_aarch64.dmg`，46,867,521 字节，SHA256 `8c04e34de79921ae61a7913649b37bf2c91c4720b4021b15668645474cd96eb4`；证据 `/private/tmp/reasonix-0.1.29-build.log`、`/private/tmp/reasonix-0.1.29-package.log`。未安装、未提交或推送，真实 MiMo 音色和系统输出效果待用户安装试听。
+
+## 2026-10-16 修复回答完成却不播报（macOS 0.1.28）
+
+用户实测语音问题已正常发送、模型也给出文字回答，但没有自动声音。定位到第一版／连续模式共用的 `VoiceReplyTracker` 把所有 `stream_attempt` 都当作重试清空：实际引擎 `sampling_recovery.go` 在成功输出文字后仍发送 `action=commit`，因此 `turn_done` 时待播报文字已变空。此前模拟只覆盖无 action 的重试，未覆盖成功 commit，此项旧测试证据不足。
+
+现仅在 begin／discard 时清空候选文字，commit 保留；工具前说明、推理、失败／取消、跨会话及重复完成保护保持原语义。连续模式没有可朗读正文时补充明确提示，避免无声返回聆听状态。
+
+按实际 begin→text→discard→begin→text→commit→turn_done 序列新增回归，修复前确定失败（actual text 为空），修复后四组语音专项和测试 TypeScript 通过；按住／连续组件和浏览器夹具均加入 commit 事件，避免再次遗漏真实协议阶段。隔离浏览器使用实际音频解码／播放及合成麦克风，native ASR／TTS 和模型仍模拟，不冒充真实账号或 WKWebView 云端播报实测。证据 `/private/tmp/reasonix-voice-commit-*`。
+
+完整前端构建门禁通过，隔离 Chrome 两种模式（1440×1000 明色／900×760 暗色）的合成和实际 BufferSource 播放、停止、迟到音频保护回归通过，相关 console/page errors 为零。Browser 插件未提供，使用现有 Playwright／Chrome。App 构建、deep/strict ad-hoc 签名、DMG 只读挂载和包内二进制一致性通过；安装包 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.28_aarch64.dmg`，46,867,743 字节，SHA256 `12f66d639aef21efea84bdea5aa529dd9558ad0a1a824d9f17353a6188df3dad`。证据 `/private/tmp/reasonix-0.1.28-build.log`、`/private/tmp/reasonix-0.1.28-package.log`。未安装、未提交或推送，用户实际 MiMo／系统输出效果仍待修复包验收。
+
+## 2026-10-16 连续语音对话第二版（macOS 0.1.27）
+
+语音对话新增“交流方式 → 连续对话”，需要用户明确点击开始。持续采集在本机检测声音，检测到说话并停顿约 900ms 后自动识别、经原 admission 路径发送；回答完成后分句播放，并最多预加载下一句，播放结束继续聆听。原“按住说话”模式保留。识别渠道继续沿用独立语音设置，播报沿用已保存 MiMo 渠道，不增加模型下载或运行依赖。
+
+静态同源 AudioWorklet 采集 20ms PCM 帧并转换为 16kHz 单声道 WAV，不放宽 CSP、不使用 blob 脚本。VAD 保留约 400ms 前置声音、约 180ms 起音确认、至少 300ms 说话及最长 88 秒录音；静音、过短片段和稳定持续噪音不发送。提供三档拾音灵敏度。原始连续帧只用于本机检测，仅检测出的录音片段提交识别服务。
+
+可选说话打断：系统 echoCancellation、最近播放参考信号抵消及播报文本重复检测共同减少扬声器回流误触发。未确认设备开启系统回声消除时自动关闭说话打断，保留连续轮流交流和手动停止。打断取消旧 TTS、预加载及实际播放音源，迟到结果不得重新播放。模型等待阶段不将环境声音自动提交为追加指令；回答仍在本轮正常完成后播报，不朗读思考或工具过程。
+
+暂停、结束、会话变化、页面隐藏及原生／DOM 窗口失焦均关闭麦克风、播放资源和未完成语音请求；迟到麦克风授权也立即释放。语音失败暂停并保留文字，不自动重试模型提交。停止播报不撤销已提交模型任务，工具审批仍经原聊天流程处理。
+
+验证：四组语音专项、生产／测试 TypeScript、hooks、前端构建与既有资源／single-writer 门禁通过。隔离 Chrome 使用真实 AudioWorklet、合成麦克风、实际 WAV 解码播放及播放信号回流，覆盖静音零上传、停顿自动发送、句子预加载、纯回声抑制、双声源打断、迟到音频取消、手动停止、暂停释放、原生／DOM 失焦、严格 self-only CSP 和切回按住模式；1440×1000 明色与 900×760 暗色通过，相关 console/page errors 为零。原第一版按住模式浏览器回归同时通过。Browser 插件未提供，使用现有 Playwright／Chrome。证据 `/private/tmp/reasonix-continuous-*`、`/private/tmp/reasonix-call-browser-0.1.27.log`。
+
+交付安装包 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.27_aarch64.dmg`（46,867,924 字节，约 45MiB），SHA256 `33984f4331ea069e1976776cec1180f04fce6a75f07bebb001514bfdae0caa2b`。最终 App／DMG 版本、deep/strict ad-hoc 签名、只读挂载和包内二进制一致性检查通过；静态 worklet 的源码与 dist 内容一致。证据 `/private/tmp/reasonix-0.1.27-build.log`、`/private/tmp/reasonix-0.1.27-package.log`。最终通用播报状态文案与浏览器复验一致，关闭说话打断时不再提示可开口打断。
+
+本次未使用真实麦克风或 MiMo 账号；浏览器回流测试的设备 AEC 标志由夹具模拟，不能替代实际声卡／扬声器回声验收。真实服务延迟、外放误触发和耳机效果待用户试听。未安装、未提交、未推送或发布。
+
+## 2026-10-16 轮流语音对话第一版（macOS 0.1.26）
+
+输入框新增耳机入口，与原麦克风听写入口独立。按住按钮或空格／回车开始录音，松开后识别并经原聊天 admission 路径提交，只有确认接收的本次回合正常结束后才合成、播放最终文字；聊天记录保留原文，思考、工具输出及工具调用前说明不朗读。支持新建空白对话、独立选择识别／MiMo 播报渠道、九种预置音色、停止播报和结束语音对话；工具审批仍由原聊天流程处理。
+
+麦克风未就绪就松手、失焦时仍按住、取消、隐藏页面、切换会话及结束对话均释放录音并阻止迟到提交；发送接收确认早晚、回合序列／身份、重复完成、重试片段和跨会话事件有专项验证。停止时取消 ASR／TTS 原生请求、停止实际音源；停止播报或结束语音模式不撤销已发送的模型任务，界面明确提示可在聊天区审批或停止。草稿、附件及粘贴中不会被语音对话自动带出；TTS 失败保留文字，不提供重复发送模型请求的按钮。
+
+MiMo TTS 调用现有保存渠道的 OpenAI 兼容地址及凭据，固定 `mimo-v2.5-tts`，WAV 非流式、分段顺序合成和播放；请求限 600 字／6000 字节，响应限 8MiB WAV，不跟随重定向、不自动重试，取消沿用实际 socket／context 关闭机制。自动朗读过滤代码块和标记，最多前 4000 字并明确提示截断；录音最长 90 秒。当前不含自动端点检测、连续监听或声音打断，不内置模型。
+
+语音专项（ASR／独立设置／对话组件及竞争序列）、Go HTTP 合约／鉴权／重定向和取消夹具、Rust 共享取消机制及 TypeScript 检查通过。隔离 Chrome 使用真实 MediaRecorder 和 AudioContext WAV 解码／播放，合成麦克风，识别／模型／TTS native adapter 模拟；1440×1000 明色、900×760 暗色的按住／松手自动发送、最终回答播报、音色选择、停止迟到音频、结束对话及新草稿建会话后语音流程通过，相关 console/page errors 为零。Browser 插件未提供，使用现有 Playwright／Chrome。证据 `/private/tmp/reasonix-call-*`。
+
+交付验证：完整 bridge race（63.062s）、Go vet、协议生成 check、Rust 语音取消专项、clippy、生产／测试 TypeScript、完整 Transcript、并行会话与图片回填回归、前端构建及资源预算通过。已有组件夹具仍有空图片 src 警告，隔离浏览器目标流程相关 console/page errors 为零。实际播放中停止、停止迟到 TTS、已有草稿保护及新会话完整流程的最终浏览器复验通过。
+
+安装包 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.26_aarch64.dmg`（约 45MB），SHA256 `fec73144c967585b8df2ef4251d99ca049400d70f288b4baca26c24ff9d2d74c`。已核对 App／DMG 版本、deep/strict ad-hoc 签名、只读挂载及包内二进制一致性；证据 `/private/tmp/reasonix-0.1.26-build.log`、`/private/tmp/reasonix-0.1.26-package.log`。
+
+本次未使用真实麦克风、真实 MiMo 账号或云端额度，实际音色、服务延迟和网络表现待用户安装后试听；此前 0.1.24 用户实测语音输入好用的结论不等同本次语音对话验收。未安装、未提交或推送。
+
+## 2026-10-16 独立语音识别设置（macOS 0.1.25）
+
+新增“设置 → 语音识别”，麦克风面板可直达。默认继续沿用已有 MiMo 渠道与原凭据，无自动迁移写入；可指定默认 MiMo 渠道，或保存自定义服务的完整接口地址、模型和可选 Bearer API Key。支持 MiMo `chat/completions` JSON `input_audio` 与 `audio/transcriptions` multipart（`file`/`model`/`response_format=json`，响应 `text`）两种格式；不下载模型，不直接对接 Gradio 网页。
+
+非密钥配置保存到用户级 `[desktop.speech]`，密钥保存到现有全局凭据存储，不返回界面、不写 TOML。配置带版本校验，修改地址必须重新输入或清除原密钥；自定义录音绑定配置版本，拒绝录音期间变更服务后提交的旧请求。保留原录音取消、会话隔离、仅回填草稿、禁重定向及禁自动重试机制。
+
+设置页提供明确的“尚未测试／本次测试通过”状态与主动录音测试，说明音频上传及云端可能收费；测试结果仅在设置页显示，不写入聊天或自动发送。未保存修改时禁止测试，不把渠道名称匹配视为能力验证。实际运行中的权限、额度和网络错误仍按请求结果提示。
+
+验证：语音专项与设置组件测试、完整 config/bridge race（14.902s／70.308s）、Go vet、协议生成 check、Rust 语音取消专项、生产/测试 TypeScript 检查及前端构建通过。隔离 Chrome 合成麦克风走真实 MediaRecorder，覆盖麦克风入口→独立设置、自定义保存及识别测试、改地址清密钥、两种格式选择、切回原 MiMo 与聊天回填；1440×1000 明色及 900×760 暗色无横向溢出，相关 console/page errors 为零。实际 ASR HTTP 合约由 Go 本机夹具覆盖，浏览器 native adapter 模拟。证据 `/private/tmp/reasonix-speech-*` 与 `/private/tmp/reasonix-0.1.25-*`。
+
+交付：`desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.25_aarch64.dmg`（约 45MB），SHA256 `4b918edda02f1a4eed373fe32955991df090df96dabef76ee137c5433e9c28bc`。App/DMG 版本及 deep/strict ad-hoc 签名、只读挂载后的包内二进制一致性验证通过。最终模式保护变更后语音 race 专项 2.073s、Chrome 全流程复验通过；MiMo 模式不暴露保留的自定义服务为自动候选。Browser 插件未提供，使用现有 Playwright 与隔离 Chrome。
+
+用户已反馈 0.1.24 实际语音输入好用；本次新加的自定义服务仍需用户使用自己的实际部署验收，不能由模拟测试替代。本批未安装、未提交或推送，也未访问用户真实麦克风、密钥或云端额度。
+
+## 2026-10-16 MiMo 语音输入接入（macOS 0.1.24）
+
+聊天输入框新增麦克风入口：选择已保存的 MiMo OpenAI 兼容渠道，开始录音，点击“完成录音”后识别并插入文字，由用户确认后发送。识别固定使用 `mimo-v2.5-asr`，与当前聊天模型独立；使用云端转写，不下载本地模型、不自动发送消息，也不包含回答朗读。渠道必须单独具备 ASR 使用权限，Token Plan 聊天路由不代表支持语音识别。
+
+录音仅驻留内存，最长 90 秒，转换为 16kHz 单声道 PCM16 WAV；所选渠道使用原有代理与受保护凭据，密钥、端点和会话历史不发送给 renderer。原生 IPC 限主窗口，取消实际关闭 bridge socket，Go 请求 context 取消上游连接，不跟随重定向、不自动重试。取消、隐藏页面、会话更换及禁用时释放采集；草稿发生修改（含改后恢复原文）时保留识别结果供显式追加，拒绝迟到结果进入新会话。
+
+验证：新语音专项、完整 Go bridge race、Go vet、协议生成 check、Rust 324 passed / 6 ignored、clippy、前端生产/测试类型及生产构建通过。Chrome 真实 MediaRecorder + 合成麦克风的录音、WAV 编码、文字回填、零自动发送、停止/取消后 tracks ended 与明暗主题 1440×1000、900×760 布局通过，相关 console/page errors 为零；转写 native adapter 模拟，真实 HTTP 合约由 Go loopback 夹具覆盖。实际 App 已核对麦克风用途说明及签名 audio-input 权限。证据 `/private/tmp/reasonix-voice-*` 与 `/private/tmp/reasonix-0.1.24-*`。
+
+用户真实麦克风授权及真实 MiMo 账号识别尚待安装新包后手动验证，不能据上述夹具标记为已通过；既有终端/窗口用户手动通过结论保持。本批不安装、不推送，不覆盖用户配置和历史。
+
+## 2026-10-16 终端与窗口专项：用户手动验收通过
+
+用户确认：“终端和窗口我手动验收了，暂时没发现问题，标记通过吧”。据此更新当前使用的 macOS App 验收状态：
+
+- [x] 原生终端专项：用户手动验收通过，暂未发现问题。
+- [x] 原生窗口专项：用户手动验收通过，暂未发现问题。
+
+以上为用户人工验收结论，当前进度汇总不再将这两项列为待验收。此前各批次的自动化失败、截图与诊断记录保留其历史状态；本次不改写为自动化通过，也不据此扩大到 Windows/Linux 或其他未确认专项。下文记录为对应日期的阶段状态，终端与窗口当前人工验收结论以本节为准。
+
 ## 2026-10-11 短期目标：固定文件管理与分叉恢复
 
 用户恢复改造并要求每批最多 15 个文件，review 和测试通过后提交。已分批提交共同保存／修改层（9 文件，`64cf24b03`）、带会话身份校验及请求去重的 HTTP／Rust／TypeScript 接口（11 文件，`71433c4aa`）、文件预览固定按钮及 composer 固定清单（7 文件，`127dfe63f`）；收尾批 4 文件补分叉继承及打包恢复验证。本短期目标不等同完整跨平台迁移完成。

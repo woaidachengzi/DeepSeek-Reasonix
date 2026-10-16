@@ -6,20 +6,21 @@ import "strings"
 // separate from top-level language and [ui] so desktop choices do not affect CLI
 // language, terminal colours, or provider-visible prompt/request data.
 type DesktopConfig struct {
-	Language                  string   `toml:"language"`                     // auto|en|zh; empty/auto = browser/OS auto-detect
-	Currency                  string   `toml:"currency"`                     // legacy display currency; migrated to [billing].display_currency
-	LayoutStyle               string   `toml:"layout_style"`                 // workbench|creation; legacy classic is migrated on startup
-	Theme                     string   `toml:"theme"`                        // auto|dark|light; empty resolves to auto
-	ThemeStyle                string   `toml:"theme_style"`                  // graphite|aurora|slate|carbon|nocturne|amber and legacy aliases
-	TerminalTheme             string   `toml:"terminal_theme"`               // auto|dark|light; auto follows the desktop app theme
-	ExternalOpener            string   `toml:"external_opener"`              // preferred installed app used by the desktop Open control
-	CloseBehavior             string   `toml:"close_behavior"`               // quit|background; desktop window close behavior
-	DisplayMode               string   `toml:"display_mode"`                 // standard|compact (legacy "minimal" maps to compact); transcript display mode
-	StatusBarStyle            string   `toml:"status_bar_style"`             // icon|text; desktop status bar metric labels
-	StatusBarStyleInitialized bool     `toml:"status_bar_style_initialized"` // one-time icon default upgrade; later choices are user-owned
-	StatusBarItems            []string `toml:"status_bar_items"`             // ordered visible desktop status bar items
-	DefaultToolApprovalMode   string   `toml:"default_tool_approval_mode"`   // ask|auto|yolo; defaults to auto for newly-created desktop sessions
-	CheckUpdates              *bool    `toml:"check_updates"`                // startup update checks; nil keeps the default enabled
+	Speech                    DesktopSpeechConfig `toml:"speech"`
+	Language                  string              `toml:"language"`                     // auto|en|zh; empty/auto = browser/OS auto-detect
+	Currency                  string              `toml:"currency"`                     // legacy display currency; migrated to [billing].display_currency
+	LayoutStyle               string              `toml:"layout_style"`                 // workbench|creation; legacy classic is migrated on startup
+	Theme                     string              `toml:"theme"`                        // auto|dark|light; empty resolves to auto
+	ThemeStyle                string              `toml:"theme_style"`                  // graphite|aurora|slate|carbon|nocturne|amber and legacy aliases
+	TerminalTheme             string              `toml:"terminal_theme"`               // auto|dark|light; auto follows the desktop app theme
+	ExternalOpener            string              `toml:"external_opener"`              // preferred installed app used by the desktop Open control
+	CloseBehavior             string              `toml:"close_behavior"`               // quit|background; desktop window close behavior
+	DisplayMode               string              `toml:"display_mode"`                 // standard|compact (legacy "minimal" maps to compact); transcript display mode
+	StatusBarStyle            string              `toml:"status_bar_style"`             // icon|text; desktop status bar metric labels
+	StatusBarStyleInitialized bool                `toml:"status_bar_style_initialized"` // one-time icon default upgrade; later choices are user-owned
+	StatusBarItems            []string            `toml:"status_bar_items"`             // ordered visible desktop status bar items
+	DefaultToolApprovalMode   string              `toml:"default_tool_approval_mode"`   // ask|auto|yolo; defaults to auto for newly-created desktop sessions
+	CheckUpdates              *bool               `toml:"check_updates"`                // startup update checks; nil keeps the default enabled
 	// UpdateChannel is a legacy compatibility field. It is accepted on read but
 	// ignored and omitted from future canonical writes.
 	UpdateChannel        string   `toml:"update_channel"`
@@ -30,6 +31,16 @@ type DesktopConfig struct {
 	ExpandThinking       bool     `toml:"expand_thinking"`    // deprecated compatibility alias: true maps to auto
 	ReasoningDisplayMode string   `toml:"reasoning_display_mode"`
 	ConversationWidth    string   `toml:"conversation_width"` // standard|full; max transcript width; empty = standard
+}
+
+// DesktopSpeechConfig selects a user-owned ASR service. API keys live only in
+// the credential store; project configuration never selects a recording target.
+type DesktopSpeechConfig struct {
+	Mode     string `toml:"mode"` // empty/mimo = saved MiMo channel; custom = explicit endpoint
+	Provider string `toml:"provider"`
+	Protocol string `toml:"protocol"` // mimo | transcriptions
+	Endpoint string `toml:"endpoint"`
+	Model    string `toml:"model"`
 }
 
 // DesktopExternalOpener returns the selected opener id; unavailable ids fall

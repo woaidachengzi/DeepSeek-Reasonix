@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import { Check, ArrowLeft, Search, X, Keyboard, Globe, Languages, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles, Users, Webhook, Package, Bot } from "lucide-react";
+import { Check, ArrowLeft, Search, X, Keyboard, Globe, Languages, Palette, Info, RefreshCw, ExternalLink, Key, Eye, EyeOff, Server, Database, SlidersHorizontal, Activity, Cable, Monitor, PanelTop, ShieldCheck, Power, Bell, Volume2, Play, ChevronDown, ChartNoAxesColumn, Box, Sparkles, Users, Webhook, Package, Bot, Mic } from "lucide-react";
 import { tauriProviderConfigs, deleteTauriProviderConfig, type TauriProviderConfig, tauriPreviewRuntimeInfo, tauriProviderSummary, setTauriDefaultModel, setTauriModelRole, setTauriAgentPreference, testTauriProviderModel, tauriDesktopPreferences, tauriActiveThemeId, setTauriActiveThemeId, tauriUserThemes, tauriPluginThemes, saveTauriUserTheme, deleteTauriUserTheme, importTauriUserTheme, exportTauriUserTheme, setTauriDesktopApproval, setTauriDesktopTerminalTheme, setTauriDesktopAppearance, setTauriDesktopLanguage, setTauriDesktopCurrency, tauriPlatformInfo, getTauriCloseBehavior, setTauriCloseBehavior, tauriZoomFactor, setTauriZoomFactor, saveTauriProviderAPIKey, clearTauriProviderAPIKey, keychainImportLegacy, keychainImportWails, keychainImportWailsEnv, keychainImportFailureCode, tauriNotificationPermission, type TauriNotificationPermission, openTauriExternalURL, tauriMessageFrom, tauriUsageStats, tauriCapabilityDiagnostics, tauriRuntimeDoctor, type TauriToolApprovalMode, type TauriBridgeStatus, type TauriCloseBehavior, type TauriPreviewProfileStatus, type TauriPreviewRuntimeInfo, type TauriProviderSummary, type TauriSessionShadowReport } from "../lib/tauriBridge";
 import { applyTerminalThemePreference, normalizeTerminalThemePreference, getCustomTerminalPalette, setCustomTerminalPalette, DEFAULT_TERMINAL_PALETTE, type TerminalPalette, type TerminalPaletteKey, type TerminalThemePreference } from "../lib/terminalTheme";
 import { THEME_STYLES, type Theme, type ThemeStyle } from "../lib/theme";
@@ -15,6 +15,7 @@ import { TauriMCPSettings } from "./TauriMCPSettings";
 import { TauriProviderEditor } from "./TauriProviderEditor";
 import { TauriPermissionsSettings } from "./TauriPermissionsSettings";
 import { TauriSandboxSettings } from "./TauriSandboxSettings";
+import { TauriSpeechSettings } from "./TauriSpeechSettings";
 import { TauriNetworkSettings } from "./TauriNetworkSettings";
 import { TauriSkillsSettings } from "./TauriSkillsSettings";
 import { TauriPluginSettings } from "./TauriPluginSettings";
@@ -70,7 +71,7 @@ interface TauriSettingsProps {
   onRefreshCatalogAudit?: () => Promise<void>;
 }
 
-export type TauriSettingsTab = "general" | "appearance" | "model" | "providers" | "stats" | "bots" | "mcp" | "remote" | "skills" | "subagents" | "plugins" | "hooks" | "memory" | "permissions" | "sandbox" | "network" | "diagnostics" | "data" | "shortcuts" | "updates" | "about";
+export type TauriSettingsTab = "speech" | "general" | "appearance" | "model" | "providers" | "stats" | "bots" | "mcp" | "remote" | "skills" | "subagents" | "plugins" | "hooks" | "memory" | "permissions" | "sandbox" | "network" | "diagnostics" | "data" | "shortcuts" | "updates" | "about";
 
 const TauriUsageStatsPanel = lazy(() => import("../components/UsageStatsPanel").then(module => ({ default: module.UsageStatsPanel })));
 const TauriCapabilityDiagnosticsPage = lazy(() => import("../components/DiagnosticsSettingsPage").then(module => ({ default: module.DiagnosticsSettingsPage })));
@@ -84,6 +85,7 @@ const SETTINGS_GROUPS = (t: Translator) => [
   { label: t("settings.tab.models"), items: [
     { id: "model", label: t("settings.models.preferences"), description: t("settings.tabSub.models"), icon: Globe },
     { id: "providers", label: t("settings.models.services"), description: t("settings.tabSub.providers"), icon: Cable },
+    { id: "speech", label: "语音识别", description: "MiMo 云端与自定义识别服务", icon: Mic },
     { id: "stats", label: t("settings.modelTab.stats"), description: t("settings.tabSub.models"), icon: ChartNoAxesColumn },
   ] },
   { label: t("settings.navGroup.connections"), items: [{ id: "bots", label: t("settings.tab.bots"), description: t("settings.tabSub.bots"), icon: Bot }, { id: "mcp", label: t("settings.tab.mcp"), description: t("settings.tabSub.mcp"), icon: Server }, { id: "remote", label: t("settings.tab.remote"), description: t("settings.tabSub.remote"), icon: Cable }] },
@@ -105,6 +107,7 @@ const SETTINGS_GROUPS = (t: Translator) => [
 ] as const;
 
 const SETTINGS_TITLES = (t: Translator): Record<TauriSettingsTab, { title: string; description: string }> => ({
+  speech: { title: "语音识别设置", description: "独立配置语音服务，录音转文字后由你确认发送" },
   general: { title: t("settings.tab.general"), description: t("settings.tabSub.general") },
   model: { title: t("settings.models.preferences"), description: t("settings.tabSub.models") },
   providers: { title: t("settings.models.services"), description: t("settings.tabSub.providers") },
@@ -650,6 +653,7 @@ export function TauriSettings({ onClose, onProviderSummaryChange, currentSession
             {tab === "memory" && <TauriMemorySettings key={`${workspaceRoot ?? ""}:${currentSessionId ?? ""}`} workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "permissions" && <TauriPermissionsSettings key={`${workspaceRoot ?? ""}:${currentSessionId ?? ""}`} workspaceRoot={workspaceRoot} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "sandbox" && <TauriSandboxSettings key={`${workspaceRoot ?? ""}:${currentSessionId ?? ""}`} workspaceRoot={workspaceRoot} sessionId={currentSessionId} currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
+            {tab === "speech" && <TauriSpeechSettings onOpenProviders={() => setTab("providers")} />}
             {tab === "network" && <TauriNetworkSettings currentSessionState={currentSessionState} currentSessionHasAttachments={currentSessionHasAttachments} onApplyToCurrentSession={onApplyToCurrentSession} />}
             {tab === "diagnostics" && <DiagnosticsSettings bridgeStatus={bridgeStatus} catalogAudit={catalogAudit} catalogAuditError={catalogAuditError} sessionPageSource={sessionPageSource} hostError={hostError} workspaceRoot={workspaceRoot} busy={Boolean(importBusy)} onRestartBridge={onRestartBridge} onRefreshCatalogAudit={onRefreshCatalogAudit} onOpenData={() => setTab("data")} onOpenProviders={() => setTab("providers")} onNavigateSettings={next => setTab(next)} />}
             {tab === "data" && <><TauriStorageSettings workspaceRoot={workspaceRoot} defaultWorkspace={defaultWorkspace} onChooseDefaultWorkspace={onChooseDefaultWorkspace} onClearDefaultWorkspace={onClearDefaultWorkspace} /><DataSettings profile={profile} busy={Boolean(importBusy)} onRefreshProfile={onRefreshProfile} onImportStableProfile={onImportStableProfile} onImportStableProjectFolders={onImportStableProjectFolders} onScanUnclaimedSessions={onScanUnclaimedSessions} onClose={onClose} /></>}
