@@ -30,14 +30,16 @@ Object.defineProperty(globalThis,"navigator",{value:dom.window.navigator,configu
 const React=await import("react");const {act}=React;const {createRoot}=await import("react-dom/client");const {TauriVoiceConversation}=await import("../tauri/TauriVoiceConversation");const root=createRoot(document.getElementById("root")!);
 const sink:{current:((e:TauriBridgeEvent)=>void)|null}={current:null};
 let sendGate:Promise<boolean>|undefined,captureGate:Promise<{stop:()=>Promise<string>;cancel:()=>void}>|undefined,synthGate:Promise<string>|undefined,recognitionGate:Promise<string>|undefined;
+let playbackGate:Promise<void>|undefined;
 const calls:string[]=[];const sent:string[]=[];const spoken:string[]=[];let signal:AbortSignal|undefined;let failTTS=false;
 const capture={stop:async()=>"WAV",cancel:()=>calls.push("capture-cancel")};
-const api={providers:async()=>[{name:"mimo",label:"套餐",preferred:true}],transcribe:async()=>recognitionGate??"语音问题",synthesize:async(_id:string,_provider:string,text:string)=>{spoken.push(text);if(failTTS)throw new Error("TTS unavailable");return synthGate??"AUDIO";},cancel:async()=>{calls.push("native-cancel");},capture:async(next:AbortSignal)=>{signal=next;return captureGate??capture;},playback:()=>({play:async()=>{calls.push("play");},stop:()=>{calls.push("stop");},close:()=>{calls.push("close");}})};
+const api={providers:async()=>[{name:"mimo",label:"套餐",preferred:true}],transcribe:async()=>recognitionGate??"语音问题",synthesize:async(_id:string,_provider:string,text:string)=>{spoken.push(text);if(failTTS)throw new Error("TTS unavailable");return synthGate??"AUDIO";},cancel:async()=>{calls.push("native-cancel");},capture:async(next:AbortSignal)=>{signal=next;return captureGate??capture;},playback:()=>({play:async()=>{calls.push("play");await playbackGate;},stop:()=>{calls.push("stop");},close:()=>{calls.push("close");}})};
 const send=async(text:string)=>{sent.push(text);return sendGate??true;};const active=()=>{};const tick=async()=>{await new Promise(resolve=>setTimeout(resolve,0));};
 const render=async(owner="session",open=true)=>{await act(async()=>{root.render(<TauriVoiceConversation owner={owner} sequence={sequence} open={open} canSend hardBlocked={false} paused={false} phaseLabel="正在等待模型回答…" eventSink={sink} onOpen={()=>{}} onEnd={()=>calls.push("end")} onActiveChange={active} onSend={send} onOpenSettings={()=>{}} api={api}/>);await tick();});};
 const key=async(type:"keydown"|"keyup")=>{await act(async()=>{document.querySelector('[aria-label="按住说话，松开发送"]')!.dispatchEvent(new dom.window.KeyboardEvent(type,{key:" ",bubbles:true}));await tick();});};
 const click=async(text:string)=>{await act(async()=>{const button=[...document.querySelectorAll<HTMLButtonElement>("button")].find(b=>b.textContent===text);assert(button,text);button.click();await tick();});};
 const emit=async(kind:string,payload:Record<string,unknown>={})=>{await act(async()=>{sink.current?.(event(kind,payload));await tick();});};
+const visibility=async(hidden:boolean)=>{await act(async()=>{Object.defineProperty(document,"hidden",{configurable:true,value:hidden});document.dispatchEvent(new dom.window.Event("visibilitychange"));await tick();});};
 try{
  await render();let accept!:(value:boolean)=>void;sendGate=new Promise(resolve=>{accept=resolve;});
  await key("keydown");assert(document.body.textContent?.includes("正在录音"));await key("keyup");assert.equal(sent.length,1);
@@ -50,6 +52,42 @@ try{
  let grant!:(value:typeof capture)=>void;captureGate=new Promise(resolve=>{grant=resolve;});const sends=sent.length;await key("keydown");await key("keyup");assert(signal?.aborted);await act(async()=>{grant(capture);await tick();});assert.equal(sent.length,sends,"releasing before permission never auto sends a late capture");captureGate=undefined;
  let recognize!:(value:string)=>void;recognitionGate=new Promise(resolve=>{recognize=resolve;});await key("keydown");await key("keyup");await render("other");await act(async()=>{recognize("FOREIGN RESULT");await tick();});assert.equal(sent.length,sends);recognitionGate=undefined;
  await render();failTTS=true;await key("keydown");await key("keyup");await emit("turn_started");await emit("text",{text:"TTS失败的回答"});await emit("stream_attempt",{streamAttempt:{id:"answer",action:"commit"}});await emit("turn_done",{status:"completed"});assert(document.body.textContent?.includes("TTS unavailable"));assert(!document.body.textContent?.includes("重新发送识别文字"),"TTS failure must not offer a duplicate model submission");failTTS=false;
- await key("keydown");await click("结束对话");assert(signal?.aborted);assert(calls.includes("close"));
- console.log("PASS voice conversation: final answer only, admission fence, exactly-once playback, stop/late audio, late permission, session fence, TTS failure without resubmit, end cleanup");
+ // A temporary hidden window must not discard an already-submitted answer.
+ await render("session",false);await render();
+ const beforeHidden=spoken.length;
+ await key("keydown");await key("keyup");await emit("turn_started");
+ await visibility(true);
+ await emit("text",{text:"返回窗口后应当朗读的回答。"});await emit("stream_attempt",{streamAttempt:{id:"visible-answer",action:"commit"}});await emit("turn_done",{status:"completed"});
+ assert.equal(spoken.length,beforeHidden,"a hidden window does not start TTS");
+ await visibility(false);
+ assert.equal(spoken.length,beforeHidden+1,"returning to the window must speak the submitted answer exactly once");
+
+ // Idle visibility changes must not falsely report a cancelled conversation.
+ await visibility(true);assert(!document.body.textContent?.includes("录音与播报已停止"));await visibility(false);
+ // A result already being synthesized is retained, but no hidden audio starts.
+ let completeTTS!:(value:string)=>void;synthGate=new Promise(resolve=>{completeTTS=resolve;});
+ const beforeSynthesis=spoken.length,playsBeforeSynthesis=calls.filter(c=>c==="play").length;
+ await key("keydown");await key("keyup");await emit("turn_started");await emit("text",{text:"合成过程中隐藏的回答。"});await emit("turn_done",{status:"completed"});
+ assert.equal(spoken.length,beforeSynthesis+1);await visibility(true);
+ await act(async()=>{completeTTS("DEFERRED AUDIO");await tick();});assert.equal(calls.filter(c=>c==="play").length,playsBeforeSynthesis);
+ await visibility(false);assert.equal(calls.filter(c=>c==="play").length,playsBeforeSynthesis+1);assert.equal(spoken.length,beforeSynthesis+1,"return does not request or charge TTS twice");synthGate=undefined;
+ // Returning cannot bypass submission confirmation.
+ let confirmHidden!:(value:boolean)=>void;sendGate=new Promise(resolve=>{confirmHidden=resolve;});
+ const beforeAdmission=spoken.length;
+ await key("keydown");await key("keyup");await emit("turn_started");await visibility(true);await emit("text",{text:"确认发送后才能播报。"});await emit("turn_done",{status:"completed"});await visibility(false);
+ assert.equal(spoken.length,beforeAdmission);await act(async()=>{confirmHidden(true);await tick();});assert.equal(spoken.length,beforeAdmission+1);sendGate=undefined;
+ // Explicit stop and session replacement still revoke the deferred reply.
+ for(const action of ["stop","switch"]){
+  const beforeRevocation=spoken.length;
+  await key("keydown");await key("keyup");await emit("turn_started");await visibility(true);await emit("text",{text:"已经取消的待播报回答。"});await emit("turn_done",{status:"completed"});
+  if(action==="stop")await click("停止播报");else await render("other");
+  await visibility(false);assert.equal(spoken.length,beforeRevocation,"deferred answer cannot survive "+action);await render();
+ }
+ // Recording and active audio still stop on hide; neither restarts on return.
+ const beforeRecording=sent.length;await key("keydown");await visibility(true);assert(signal?.aborted);await visibility(false);await key("keyup");assert.equal(sent.length,beforeRecording);
+ let finishPlayback!:()=>void;playbackGate=new Promise(resolve=>{finishPlayback=resolve;});
+ await key("keydown");await key("keyup");await emit("turn_started");await emit("text",{text:"播放开始后隐藏窗口。"});await emit("turn_done",{status:"completed"});
+ const beforePlayingHide=calls.filter(c=>c==="play").length;await visibility(true);assert(signal?.aborted);await visibility(false);await act(async()=>{finishPlayback();await tick();});assert.equal(calls.filter(c=>c==="play").length,beforePlayingHide);playbackGate=undefined;
+ await key("keydown");await click("切换到文字输入");assert(signal?.aborted);assert(calls.includes("close"));
+ console.log("PASS voice conversation: final answer only, admission fence, exactly-once playback, stop/late audio, late permission, session fence, TTS failure without resubmit, hidden waiting/synthesis/admission, stop/session revocation, recording/playback privacy, end cleanup");
 }finally{await act(async()=>root.unmount());dom.window.close();}

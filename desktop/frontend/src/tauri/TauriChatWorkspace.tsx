@@ -1,4 +1,5 @@
 import { TauriVoiceConversation, type VoiceEventSink } from "./TauriVoiceConversation";
+import { useTauriSelectionSpeech } from "./useTauriSelectionSpeech";
 import { TauriVoiceInput } from "./TauriVoiceInput";
 import { Component, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Activity, Archive, ArrowUp, Check, ChevronDown, ChevronRight, Eye, FileText, FolderOpen, FolderTree, GitBranch, Keyboard, MessageSquare, Paperclip, Pin, PinOff, PanelLeftClose, PanelLeftOpen, Pencil, Plus, RefreshCw, Search, Settings, Sparkles, Square, TerminalSquare, Trash2, X } from "lucide-react";
@@ -550,6 +551,8 @@ export function TauriSessionPreview() {
   const [voiceActive, setVoiceActive] = useState(false);
   const [voiceCallActive, setVoiceCallActive] = useState(false);
   const [voiceCallSession, setVoiceCallSession] = useState<string | null>(null);
+  const voiceCallOpen = !!session && voiceCallSession === session.id;
+  const [voiceDock,setVoiceDock] = useState<HTMLDivElement|null>(null);
   const voiceEventSink = useRef<VoiceEventSink | null>(null);
   const pendingVoiceCall = useRef<string | null>(null);
   useEffect(() => { if (voiceCallSession && voiceCallSession !== session?.id) setVoiceCallSession(null); }, [session?.id, voiceCallSession]);
@@ -605,6 +608,7 @@ export function TauriSessionPreview() {
   const [sessionPageCatalogWarning, setSessionPageCatalogWarning] = useState("");
   const catalogAuditRequestRef = useRef(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const selectionSpeech=useTauriSelectionSpeech({owner:session?.id??"",blocked:voiceActive||settingsOpen||isReadOnlyWorkbenchSource(sessionPageSource),voiceCallActive,onStart:()=>setVoiceCallSession(null)});
   const [settingsTab, setSettingsTab] = useState<TauriSettingsTab>("general");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
@@ -3126,20 +3130,34 @@ export function TauriSessionPreview() {
 
   async function openVoiceConversation() {
     if (busy || voiceActive || isReadOnlyWorkbenchSource(sessionPageSource)) return;
-    if (session) { setVoiceCallSession(session.id); return; }
-    if (prompt.trim() || selectedTexts.length || attachments.length || draftAttachmentPaths.length || pasteInFlightRef.current) {
-      setError("请先处理输入框草稿与附件，再开始语音对话。"); return;
+    if (pasteInFlightRef.current) {
+      setError("图片正在添加，请等待完成后再开始语音对话。"); return;
     }
+    if (session) { setVoiceCallSession(session.id); return; }
+    const previousDraftKey = draftKey();
     const id = newTauriSessionId();
     pendingVoiceCall.current = id;
-    if (!await activateSession(id, workspaceRoot.trim() || undefined)) pendingVoiceCall.current = null;
+    if (!await activateSession(id, workspaceRoot.trim() || undefined)) {
+      pendingVoiceCall.current = null;
+    } else {
+      const draft = conversationDraftsRef.current.get(previousDraftKey);
+      if (draft) {
+        conversationDraftsRef.current.set(id, draft);
+        conversationDraftsRef.current.delete(previousDraftKey);
+        restoreConversationDraft(id);
+      }
+    }
+  }
+  function closeVoiceConversation(restoreFocus = true) {
+    setVoiceCallSession(null);
+    if (restoreFocus) window.requestAnimationFrame(() => composerRef.current?.focus());
   }
   async function sendVoiceMessage(text: string): Promise<boolean> {
     if (!session || voiceCallSession !== session.id || busy || submitInFlightRef.current || !streamReady || session.state !== "idle" ||
-        isReadOnlyWorkbenchSource(sessionPageSource) || pasteInFlightRef.current || prompt.trim() || selectedTexts.length || attachments.length || draftAttachmentPaths.length || !text.trim()) return false;
+        isReadOnlyWorkbenchSource(sessionPageSource) || pasteInFlightRef.current || !text.trim()) return false;
     submitInFlightRef.current = true;
     setBusy(true); setError("");
-    return await submitPreparedInput(session.id, text, [], [], false, session.workspaceRoot);
+    return await submitPreparedInput(session.id, text, [], [], false, session.workspaceRoot, true);
   }
 
   async function submitPreparedInput(
@@ -3149,6 +3167,7 @@ export function TauriSessionPreview() {
     pendingPaths: string[],
     firstTurn: boolean,
     root?: string,
+    preserveDraft = false,
   ) {
     const submitEpoch = ++turnEpochRef.current;
     clearLiveResponse();
@@ -3206,16 +3225,18 @@ export function TauriSessionPreview() {
           }
         }
       }
-      setPrompt("");
-      setSelectedTextDrafts(previous => {
-        const remaining = (previous[sessionId] ?? []).filter(item => !selectedTexts.some(sent => sent.id === item.id));
-        return { ...previous, [sessionId]: remaining };
-      });
-      setAttachments([]);
-      setDraftAttachmentPaths([]);
-      discardDraftImages();
-      conversationDraftsRef.current.delete(draftKey(sessionId));
-      if (firstTurn) conversationDraftsRef.current.delete(draftKey(undefined, root ?? ""));
+      if (!preserveDraft) {
+        setPrompt("");
+        setSelectedTextDrafts(previous => {
+          const remaining = (previous[sessionId] ?? []).filter(item => !selectedTexts.some(sent => sent.id === item.id));
+          return { ...previous, [sessionId]: remaining };
+        });
+        setAttachments([]);
+        setDraftAttachmentPaths([]);
+        discardDraftImages();
+        conversationDraftsRef.current.delete(draftKey(sessionId));
+        if (firstTurn) conversationDraftsRef.current.delete(draftKey(undefined, root ?? ""));
+      }
       if (attachmentError) setError(`部分文件未能添加：${attachmentError}`);
       // Fetch history after a short delay to let the backend settle
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -3816,7 +3837,12 @@ export function TauriSessionPreview() {
               <p>{card.text}</p>
             </article>)}
           </section>}
-          <div className={`tauri-composer${dragging ? " is-dragging" : ""}`}>
+          {(selectionSpeech.status||selectionSpeech.error)&&<div className="tauri-selection-speech" aria-label="选文播报">
+            <span role={selectionSpeech.error?"alert":"status"}>{selectionSpeech.error||selectionSpeech.status}</span>
+            <button type="button" onClick={()=>{selectionSpeech.stop();selectionSpeech.dismissError();}}>{selectionSpeech.error?"关闭":"停止播报"}</button>
+          </div>}
+          <div className="tauri-voice-dock" ref={setVoiceDock}/>
+          <div className={`tauri-composer${dragging ? " is-dragging" : ""}`} hidden={voiceCallOpen}>
             {selectedTexts.length > 0 && <div className="composer-context" aria-label={t("composer.selectedText")}>
               {selectedTexts.map(reference => <ComposerContextCard key={reference.id} variant="selection"
                 name={selectedTextSnippet(reference.text)} meta={t("composer.selectedText")}
@@ -3860,7 +3886,7 @@ export function TauriSessionPreview() {
               <button className="tauri-attach-button" type="button" onClick={() => void addAttachments()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state !== "idle"))} aria-label="添加文件" title="从本机选择文件并附加到消息"><Plus size={23} /></button>
               <TauriComposerControls key={session?.id ?? "new"} sessionId={session?.id} workspaceRoot={currentWorkspace} effort={session ? session.effort || "auto" : draftEffort && draftEffort.model === providerSummary?.defaultModel ? draftEffort.level : "auto"} onEffortChange={changeEffort} model={session?.modelRef || providerSummary?.defaultModel || ""} providers={providerSummary} onProvidersChange={setProviderSummary} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state !== "idle" || attachments.length > 0 || draftAttachmentPaths.length > 0))} refreshToken={settingsOpen} onModelChange={model => session ? changeCurrentSessionModel(model) : changeDefaultModel(model)} onBusyChange={setBusy} onError={setError} onOpenModels={() => { setSettingsTab("providers"); setSettingsOpen(true); }} />
               <TauriVoiceInput key={`voice:${draftKey(session?.id, currentWorkspace)}`} owner={draftKey(session?.id, currentWorkspace)} value={prompt} onChange={setPrompt} inputRef={composerRef} disabled={voiceCallActive || busy || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && (!streamReady || session.state === "paused"))} onActiveChange={setVoiceActive} onOpenSettings={() => { setSettingsTab("speech"); setSettingsOpen(true); }} />
-              <TauriVoiceConversation key={`call:${session?.id ?? "new"}`} owner={session?.id ?? ""} sequence={sequence} open={!!session && voiceCallSession === session.id} hardBlocked={voiceActive || settingsOpen || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && !streamReady)} canSend={!busy && !!session && streamReady && session.state === "idle" && !prompt.trim() && !selectedTexts.length && !attachments.length && !draftAttachmentPaths.length} paused={session?.state === "paused"} phaseLabel={liveProgress.phase === "tool" ? "正在执行工具…" : "正在等待模型回答…"} eventSink={voiceEventSink} onOpen={() => void openVoiceConversation()} onEnd={() => setVoiceCallSession(null)} onActiveChange={setVoiceCallActive} onSend={sendVoiceMessage} onOpenSettings={() => { setSettingsTab("speech"); setSettingsOpen(true); }} />
+              <TauriVoiceConversation dock={voiceDock} key={`call:${session?.id ?? "new"}`} owner={session?.id ?? ""} sequence={sequence} open={voiceCallOpen} hardBlocked={voiceActive || settingsOpen || isReadOnlyWorkbenchSource(sessionPageSource) || Boolean(session && !streamReady)} canSend={!busy && !!session && streamReady && session.state === "idle"} paused={session?.state === "paused"} phaseLabel={liveProgress.phase === "tool" ? "正在执行工具…" : "正在等待模型回答…"} eventSink={voiceEventSink} onOpen={() => void openVoiceConversation()} onEnd={closeVoiceConversation} onActiveChange={setVoiceCallActive} onSend={sendVoiceMessage} onOpenSettings={() => { setSettingsTab("speech"); setSettingsOpen(true); }} />
               <div className="tauri-composer__actions">
                 {canSteer && <>
                   {(prompt.trim() || selectedTexts.length > 0) && <button type="button" className="tauri-steering-cancel" onClick={cancelSteeringDraft} disabled={busy} aria-label="取消引导" title="取消编辑，不停止任务">取消</button>}
@@ -4089,6 +4115,7 @@ export function TauriSessionPreview() {
         enabled={Boolean(session && !settingsOpen && !diagnosticsOpen && !workspaceOpen && !commandPaletteOpen && !shortcutsHelpOpen)}
         resetKey={session?.id ?? "tauri-empty"}
         onAddToChat={addSelectedText}
+        onSpeak={selectionSpeech.speak}
         addToChatShortcut={{ combo: getTauriShortcut("add_selection", shortcutPlatform), matches: matchesSelectionShortcut }}
       /></Suspense>
       <ShortcutsCheatsheet open={shortcutsHelpOpen} platform={shortcutPlatform} onClose={() => setShortcutsHelpOpen(false)} t={t} items={shortcutHelpItems} />

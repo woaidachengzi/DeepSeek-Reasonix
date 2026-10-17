@@ -658,5 +658,40 @@ console.log("\ntranscript selection menu");
   dom.window.close();
 }
 
+{
+  const dom=installDom(),root=createRoot(document.getElementById("root")!);
+  const readers:Array<()=>Promise<string|null>>=[];
+  const additions:string[]=[];
+  const render=async(scope="speech-a")=>{await act(async()=>{
+    root.render(<LocaleProvider><TranscriptSelectionMenu resetKey={scope} onAddToChat={text=>additions.push(text)} onSpeak={resolve=>readers.push(resolve)}/></LocaleProvider>);
+    await flushTimers();
+  });};
+  document.body.insertAdjacentHTML("beforeend",'<div class="msg__body">选文播报内容</div>');
+  const body=document.querySelector('.msg__body')!;
+  await render();const stable=transcriptActionHost();
+  selectNodeText(body.firstChild!);
+  await act(async()=>{body.dispatchEvent(new window.MouseEvent("pointerup",{bubbles:true,button:0}));await drainFrame();});
+  const speak=[...stable!.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='播报')!;
+  ok(!!speak&&!speak.disabled,"selected text offers a Read Aloud sibling alongside Add to Chat");
+  await act(async()=>{speak.dispatchEvent(new window.MouseEvent("pointerdown",{bubbles:true,button:0}));speak.click();await flushTimers();});
+  eq(readers.length,1,"Read Aloud invokes its preparation callback in the click gesture");
+  eq(await readers[0](),"选文播报内容","Read Aloud resolves only the frozen selected text");
+  eq(additions.length,0,"Read Aloud does not add text to the composer");
+  eq(document.getSelection()?.toString(),"选文播报内容","Read Aloud preserves the visible native selection");
+  eq(transcriptActionHost(),stable,"the two selection actions keep the stable overlay host");
+  await act(async()=>{speak.click();await flushTimers();});await render("speech-b");
+  eq(await readers[1](),null,"session replacement revokes a deferred native speech selection");
+  let finish!:(text:string)=>void;const delayed=new Promise<string>(resolve=>{finish=resolve;});
+  await act(async()=>{
+    transcriptSelectionStore.beginNative("speech-b");
+    transcriptSelectionStore.promoteToLogical("speech-b",{rowKey:"spoken-row",textOffset:1,affinity:"forward"},{rowKey:"spoken-row",textOffset:4,affinity:"forward"},[{rowKey:"spoken-row",sourceText:"abcdef",contentRevision:1,resolveText:()=>delayed}]);
+    transcriptSelectionStore.settleLogical();await flushTimers();
+  });
+  await act(async()=>{speak.click();await flushTimers();});
+  const projected=readers[2]();await render("speech-c");finish("abcdef");
+  eq(await projected,null,"late logical materialization cannot speak in the next session");
+  await act(async()=>{root.unmount();transcriptSelectionStore.clear("test-cleanup");});dom.window.close();
+}
+
 console.log(`\n${passed} passed, ${failed} failed, ${passed + failed} total`);
 if (failed > 0) process.exit(1);

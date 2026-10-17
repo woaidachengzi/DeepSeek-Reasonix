@@ -13,8 +13,11 @@ const {TauriVoiceInput}=await import("../tauri/TauriVoiceInput"); const root=cre
 const calls:string[]=[]; let recordedSignal:AbortSignal|undefined; let resolveTranscript:(text:string)=>void=()=>{};
 const capture={stop:async()=>{calls.push("stop");return "fixture-wav";},cancel:()=>{calls.push("cancel-capture");}};
 let captureGate:Promise<typeof capture>|undefined;let catalogGate:Promise<{name:string;label:string}[]>|undefined;
+let levelCallback:((level:number)=>void)|undefined;
+let captureFailure:Error|undefined;
+let usedProvider="";
 let active=false;let draft="草稿：";let changeDraft!:(text:string)=>void;
-const api={providers:async()=>catalogGate??[{name:"mimo",label:"小米 MiMo"}],transcribe:async()=>{calls.push("transcribe");return new Promise<string>(resolve=>{resolveTranscript=resolve;});},cancel:async()=>{calls.push("cancel-request");},capture:async(signal:AbortSignal)=>{recordedSignal=signal;return captureGate??capture;}};
+const api={providers:async()=>catalogGate??[{name:"old",label:"之前渠道"},{name:"mimo",label:"小米 MiMo",preferred:true}],transcribe:async(_id:string,provider:string)=>{usedProvider=provider;calls.push("transcribe");return new Promise<string>(resolve=>{resolveTranscript=resolve;});},cancel:async()=>{calls.push("cancel-request");},capture:async(signal:AbortSignal,_limit:()=>void,onLevel?:((level:number)=>void))=>{recordedSignal=signal;levelCallback=onLevel;if(captureFailure)throw captureFailure;return captureGate??capture;}};
 const onActiveChange=(value:boolean)=>{active=value;};
 function Fixture({owner="a",disabled=false}:{owner?:string;disabled?:boolean}){
  const[value,setValue]=useState(draft);const ref=useRef<HTMLTextAreaElement>(null);draft=value;changeDraft=setValue;
@@ -23,12 +26,18 @@ function Fixture({owner="a",disabled=false}:{owner?:string;disabled?:boolean}){
 const tick=async()=>{await new Promise(resolve=>setTimeout(resolve,0));};
 const render=async(owner="a",disabled=false)=>{await act(async()=>{root.render(<Fixture owner={owner} disabled={disabled}/>);await tick();});};
 const click=async(name:string)=>{await act(async()=>{const button=[...document.querySelectorAll<HTMLButtonElement>("button")].find(b=>b.getAttribute("aria-label")===name||b.textContent===name);assert(button,`missing button: ${name}`);button.click();await tick();});};
-const begin=async()=>{await click("语音输入");await click("开始录音");assert(active);assert(document.body.textContent?.includes("正在录音"));};
+const begin=async()=>{await click("语音输入");assert(active);assert(document.body.textContent?.includes("正在录音"));};
 try{
- await render();await begin();assert(recordedSignal&&!recordedSignal.aborted);await click("完成录音");
+ await render();await begin();
+ assert.equal(document.querySelector('[role="dialog"]')?.getAttribute('aria-modal'),'true');
+ assert.equal(document.querySelector('select'),null,"dictation never opens a provider settings form");
+ assert.equal(document.querySelector('time')?.textContent,"00:00");
+ await act(async()=>{levelCallback?.(0.8);await tick();});assert.equal(document.querySelector('.tauri-dictation-wave')?.getAttribute('data-level'),"0.800");
+ await act(async()=>{levelCallback?.(0);await tick();});assert.equal(document.querySelector('.tauri-dictation-wave')?.getAttribute('data-level'),"0.000");
+ assert(recordedSignal&&!recordedSignal.aborted);await click("完成录音");
  assert(document.body.textContent?.includes("正在识别"));await act(async()=>{resolveTranscript("你好");await tick();});
- assert.equal(draft,"你好草稿：","recognized text inserts at captured selection");assert.equal(active,false);assert.equal(document.querySelector('.tauri-voice-panel'),null);
- assert.equal(calls.filter(c=>c==="transcribe").length,1,"no recognition retries");
+ assert.equal(draft,"你好草稿：","recognized text inserts at captured selection");assert.equal(active,false);assert.equal(document.querySelector('.tauri-dictation-dialog'),null);
+ assert.equal(calls.filter(c=>c==="transcribe").length,1,"no recognition retries");assert.equal(usedProvider,"mimo","dictation respects the preferred service from speech settings");
  await begin();await click("完成录音");await act(async()=>changeDraft("我继续打字"));await act(async()=>{resolveTranscript("保留语音结果");await tick();});
  assert.equal(draft,"我继续打字");assert.equal(document.querySelector<HTMLTextAreaElement>('[aria-label="保留的语音识别结果"]')?.value,"保留语音结果");
  await click("追加到输入框");assert.equal(draft,"我继续打字\n保留语音结果");
@@ -37,17 +46,23 @@ try{
  await act(async()=>{resolveTranscript("ABA RESULT");await tick();});assert.equal(draft,original,"editing and restoring the same text cannot authorize an old insertion");
  assert.equal(document.querySelector<HTMLTextAreaElement>('[aria-label="保留的语音识别结果"]')?.value,"ABA RESULT");await click("关闭语音输入");
  await begin();await click("完成录音");const beforeCancel=draft;await click("取消");assert(recordedSignal?.aborted);
- await act(async()=>{resolveTranscript("LATE CANCELLED");await tick();});assert.equal(draft,beforeCancel);assert(!document.body.textContent?.includes("LATE CANCELLED"));await click("关闭语音输入");
+ await act(async()=>{resolveTranscript("LATE CANCELLED");await tick();});assert.equal(draft,beforeCancel);assert(!document.body.textContent?.includes("LATE CANCELLED"));assert.equal(document.querySelector('.tauri-dictation-dialog'),null);
  await begin();await click("完成录音");await render("b");await act(async()=>{resolveTranscript("FOREIGN SESSION");await tick();});
  assert.equal(draft,beforeCancel);assert(!document.body.textContent?.includes("FOREIGN SESSION"));
  let finishPermission!:(value:typeof capture)=>void;captureGate=new Promise(resolve=>{finishPermission=resolve;});
- await click("语音输入");await click("开始录音");assert(document.body.textContent?.includes("正在请求麦克风"));await click("取消");
+ await click("语音输入");assert(document.body.textContent?.includes("正在请求麦克风"));await click("取消");
  const cancels=calls.filter(c=>c==="cancel-capture").length;await act(async()=>{finishPermission(capture);await tick();});
- assert.equal(calls.filter(c=>c==="cancel-capture").length,cancels+1,"late capture is immediately released");captureGate=undefined;await click("关闭语音输入");
+ assert.equal(calls.filter(c=>c==="cancel-capture").length,cancels+1,"late capture is immediately released");captureGate=undefined;
  let finishCatalog!:(value:{name:string;label:string}[])=>void;catalogGate=new Promise(resolve=>{finishCatalog=resolve;});
  await click("语音输入");await click("关闭语音输入");await act(async()=>{finishCatalog([{name:"old",label:"STALE PROVIDER"}]);await tick();});
  assert(!document.body.textContent?.includes("STALE PROVIDER"));catalogGate=undefined;
  await begin();await render("b",true);assert(recordedSignal?.aborted);assert.equal(active,false);assert(document.querySelector<HTMLButtonElement>('[aria-label="语音输入"]')?.disabled);
+ await render("b",false);await begin();
+ const beforeEscape=calls.filter(c=>c==="transcribe").length;
+ await act(async()=>{document.dispatchEvent(new dom.window.KeyboardEvent("keydown",{key:"Escape",bubbles:true,cancelable:true}));await tick();});
+ assert(recordedSignal?.aborted);assert.equal(document.querySelector('.tauri-dictation-dialog'),null);assert.equal(calls.filter(c=>c==="transcribe").length,beforeEscape,"Escape cancels without recognition");
+ captureFailure=Object.assign(new Error("denied"),{name:"NotAllowedError"});await click("语音输入");assert(document.querySelector('[role="alert"]')?.textContent?.includes("麦克风权限未开启"));assert.equal(active,false);await click("关闭语音输入");captureFailure=undefined;
+ catalogGate=Promise.resolve([]);await click("语音输入");assert(document.querySelector('[role="alert"]')?.textContent?.includes("尚无可用语音服务"));assert(recordedSignal?.aborted);await click("语音识别设置");assert(calls.includes("settings"));catalogGate=undefined;
  console.log("PASS voice: WAV, selected insertion, changed draft retention, explicit append, cancellation, session fence, late permission/catalogue, disabled cleanup");
 }finally{await act(async()=>root.unmount());dom.window.close();}
 let stoppedTracks=0;let grant!:(stream:MediaStream)=>void;

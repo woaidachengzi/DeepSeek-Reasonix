@@ -1,29 +1,35 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { Headphones, Mic, PhoneOff, Square, Volume2 } from "lucide-react";
+import { createPortal } from "react-dom";
+import { readVoicePreferences, saveVoicePreferences } from "./voicePreferences";
+import { Headphones, Keyboard, Mic, Settings, Square, Volume2 } from "lucide-react";
 import { tauriSpeechProviders, tauriSpeechTranscribe, tauriSpeechSynthesize, tauriSpeechCancel, tauriMessageFrom, type TauriSpeechProvider, type TauriBridgeEvent } from "../lib/tauriBridge";
 import { TauriContinuousVoice } from "./TauriContinuousVoice";
 import { startVoiceCapture, type VoiceCapture } from "./voiceCapture";
-import { VoiceReplyTracker, spokenReply, createVoicePlayback, type VoicePlayback, type VoiceReply } from "./voiceConversation";
+import { VoiceReplyTracker, spokenReply, createVoicePlayback, waitForVoiceVisibility, type VoicePlayback, type VoiceReply } from "./voiceConversation";
 
 const callAPI = { providers: tauriSpeechProviders, transcribe: tauriSpeechTranscribe, synthesize: tauriSpeechSynthesize, cancel: tauriSpeechCancel, capture: startVoiceCapture, playback: createVoicePlayback };
 type Phase = "idle" | "preparing" | "recording" | "recognizing" | "waiting" | "synthesizing" | "speaking";
-type CallOperation = { controller: AbortController; requests: Set<string>; capture?: VoiceCapture; released?: boolean; finishing?: boolean; tracker?: VoiceReplyTracker; admitted?: boolean; reply?: VoiceReply; ttsProvider: string; voice: string };
+type CallOperation = { controller: AbortController; requests: Set<string>; capture?: VoiceCapture; released?: boolean; finishing?: boolean; tracker?: VoiceReplyTracker; admitted?: boolean; reply?: VoiceReply; replyStarted?: boolean; playing?: boolean; ttsProvider: string; voice: string };
+const HIDDEN_REPLY_NOTICE = "窗口暂时不可见，回答会在返回后继续播报。";
 export type VoiceEventSink = (event: TauriBridgeEvent) => void;
 
-export function TauriVoiceConversation({ owner, sequence, open, hardBlocked, canSend, paused, phaseLabel, eventSink, onOpen, onEnd, onActiveChange, onSend, onOpenSettings, api = callAPI }: {
+export function TauriVoiceConversation({ owner, sequence, open, hardBlocked, canSend, paused, phaseLabel, eventSink, onOpen, onEnd, onActiveChange, onSend, onOpenSettings, dock, api = callAPI }: {
  owner: string; sequence: number; open: boolean; hardBlocked: boolean; canSend: boolean; paused: boolean; phaseLabel: string;
- eventSink: RefObject<VoiceEventSink | null>; onOpen: () => void; onEnd: () => void; onActiveChange: (active: boolean) => void;
- onSend: (text: string) => Promise<boolean>; onOpenSettings: () => void; api?: typeof callAPI;
+ eventSink: RefObject<VoiceEventSink | null>; onOpen: () => void; onEnd: (restoreFocus?: boolean) => void; onActiveChange: (active: boolean) => void;
+ onSend: (text: string) => Promise<boolean>; onOpenSettings: () => void; dock?: HTMLElement | null; api?: typeof callAPI;
 }) {
  const [providers,setProviders] = useState<TauriSpeechProvider[]>([]);
  const [recognizer,setRecognizer] = useState("");
  const [speaker,setSpeaker] = useState("");
- const [voice,setVoice] = useState("mimo_default");
+ const [voice,setVoice] = useState(()=>readVoicePreferences().voice);
  const [previewPhase,setPreviewPhase] = useState<"idle"|"loading"|"playing">("idle");
  const [previewError,setPreviewError] = useState("");
  const preview = useRef<{controller:AbortController;id:string;playback:VoicePlayback}|null>(null);
  const [phase,setPhase] = useState<Phase>("idle");
  const [mode,setMode]=useState<"hold"|"continuous">("hold");
+ const [settingsExpanded,setSettingsExpanded]=useState(false);
+ const [spaceEnabled,setSpaceEnabled]=useState(()=>readVoicePreferences().spaceEnabled);
+ const keyboardHolding=useRef(false);
  const [continuousRunning,setContinuousRunning]=useState(false);
  const [loading,setLoading] = useState(false);
  const [error,setError] = useState("");
@@ -58,28 +64,34 @@ export function TauriVoiceConversation({ owner, sequence, open, hardBlocked, can
  }
  const cancel = useCallback(() => {
   stopPreview();
-  const op=operation.current; operation.current=null; pointer.current=null; holding.current=false;
+  const op=operation.current; operation.current=null; pointer.current=null; holding.current=false; keyboardHolding.current=false;
   if(op) { op.controller.abort(); op.capture?.cancel(); for(const id of op.requests) void api.cancel(id).catch(()=>{}); }
   playback.current?.stop();
  },[api,stopPreview]);
- const end = () => { cancel(); playback.current?.close(); playback.current=null; setPhase("idle"); current.current.onEnd(); };
+ const end = (restoreFocus = true) => { cancel(); playback.current?.close(); playback.current=null; setPhase("idle"); current.current.onEnd(restoreFocus); };
  const stop = () => { cancel(); setPhase("idle"); setNotice("本次录音或播报已停止，可以继续按住说话。"); };
  const nativeID = (op: CallOperation) => { const id=crypto.randomUUID(); op.requests.add(id); return id; };
  async function speak(op: CallOperation,reply: VoiceReply) {
-  if(!valid(op)) return;
+  if(!valid(op)||op.replyStarted) return;
+  op.replyStarted=true;
   if(reply.error) { setError(reply.error); operation.current=null; setPhase("idle"); return; }
   const {chunks,truncated}=spokenReply(reply.text);
   if(!chunks.length) { setNotice("本轮没有可播报的文字，请查看聊天记录。"); operation.current=null; setPhase("idle"); return; }
   if(truncated) setNotice("回答较长，语音播放前 4000 字；完整回答保留在聊天记录中。");
   try {
    for(const text of chunks) {
+    await waitForVoiceVisibility(op.controller.signal);
     if(!valid(op)) return;
     setPhase("synthesizing");
     const audio=await api.synthesize(nativeID(op),op.ttsProvider,text,op.voice);
     if(!valid(op)) return;
+    await waitForVoiceVisibility(op.controller.signal);
+    if(!valid(op)) return;
     setPhase("speaking");
     if(!playback.current) throw new Error("播放设备已关闭；请重新按住说话。");
-    await playback.current.play(audio,op.controller.signal);
+    op.playing=true;
+    try {await playback.current.play(audio,op.controller.signal);}
+    finally {op.playing=false;}
    }
   } catch(cause) { if(valid(op)) setError(tauriMessageFrom(cause)); }
   finally { if(valid(op)) { operation.current=null; setPhase("idle"); } }
@@ -107,9 +119,10 @@ export function TauriVoiceConversation({ owner, sequence, open, hardBlocked, can
    if(!active) return;
    setProviders(entries);
    const preferred=entries.find(entry=>entry.preferred)??entries[0];
-   setRecognizer(preferred?.name??"");
+   const saved=readVoicePreferences();
+   setRecognizer(entries.some(entry=>entry.name===saved.recognizer)?saved.recognizer:preferred?.name??"");
    const speakers=entries.filter(entry=>!entry.name.startsWith("custom:"));
-   setSpeaker(speakers.some(entry=>entry.name===preferred?.name)?preferred!.name:speakers[0]?.name??"");
+   setSpeaker(speakers.some(entry=>entry.name===saved.speaker)?saved.speaker:speakers.some(entry=>entry.name===preferred?.name)?preferred!.name:speakers[0]?.name??"");
   }).catch(cause=>{if(active) setError(tauriMessageFrom(cause));}).finally(()=>{if(active) setLoading(false);});
   return ()=>{active=false; cancel(); playback.current?.close(); playback.current=null; current.current.onActiveChange(false);};
  },[open,owner,api,cancel]);
@@ -119,16 +132,25 @@ export function TauriVoiceConversation({ owner, sequence, open, hardBlocked, can
  },[open,hardBlocked,cancel]);
  useEffect(()=>{
   if(!open) return;
-  const abort=()=>{cancel();setPhase("idle");setNotice("录音与播报已停止，可以重新按住说话。");};
-  const hidden=()=>{if(document.hidden) abort();};
-  const blur=()=>{if(holding.current) abort();};
+  const abort=(notice="录音与播报已停止，可以重新按住说话。")=>{cancel();setPhase("idle");setNotice(notice);};
+  const hidden=()=>{
+   if(!document.hidden){setNotice(previous=>previous===HIDDEN_REPLY_NOTICE?"":previous);return;}
+   stopPreview();
+   const op=operation.current;
+   if(!op)return;
+   // Recording/recognition still cancel immediately. Once the model owns the
+   // submitted turn, keep its tracker and wait before starting the next sound.
+   if(op.tracker&&!op.playing){setNotice(HIDDEN_REPLY_NOTICE);return;}
+   abort("窗口暂时不可见，本次录音或正在播放的声音已停止。");
+  };
+  const blur=()=>{if(holding.current) abort("窗口已失去焦点，本次录音已取消。");};
   const key=(event:KeyboardEvent)=>{if(event.key==="Escape") {event.stopPropagation();abort();current.current.onEnd();}};
   document.addEventListener("visibilitychange",hidden); document.addEventListener("keydown",key,true); window.addEventListener("blur",blur);
   return ()=>{document.removeEventListener("visibilitychange",hidden);document.removeEventListener("keydown",key,true);window.removeEventListener("blur",blur);};
- },[open,cancel]);
+ },[open,cancel,stopPreview]);
  async function sendRecognized(op: CallOperation,text: string) {
   if(!valid(op)) return;
-  if(!current.current.canSend) { setError("当前对话暂不能发送；请处理草稿、附件或等待本轮结束，再重新发送识别文字。"); operation.current=null;setPhase("idle");return; }
+  if(!current.current.canSend) { setError("当前对话暂不能发送；请等待本轮结束并完成待确认操作，再重新发送识别文字。"); operation.current=null;setPhase("idle");return; }
   setRetrySend(false); op.tracker=new VoiceReplyTracker(owner,current.current.sequence); setPhase("waiting");
   try {
    const admitted=await current.current.onSend(text);
@@ -167,27 +189,44 @@ export function TauriVoiceConversation({ owner, sequence, open, hardBlocked, can
  const active=phase!=="idle"||continuousRunning;
  const speakers=providers.filter(entry=>!entry.name.startsWith("custom:"));
  const ready=!loading && !active && canSend && !hardBlocked && !!recognizer && !!speaker;
+ const shortcut=useRef({begin,release,ready,mode,spaceEnabled});shortcut.current={begin,release,ready,mode,spaceEnabled};
+ useEffect(()=>{
+  if(!open)return;
+  const down=(event:KeyboardEvent)=>{
+   const next=shortcut.current;
+   if(event.key!==" "||event.defaultPrevented||event.repeat||event.isComposing||event.ctrlKey||event.altKey||event.metaKey||event.shiftKey||next.mode!=="hold"||!next.spaceEnabled||!next.ready||keyboardHolding.current||holding.current)return;
+   const target=event.target instanceof HTMLElement?event.target:null;
+   if(target?.closest('input,textarea,select,a,[contenteditable]:not([contenteditable="false"]),[role="textbox"],[role="dialog"],[role="menu"]')||(target?.closest('button')&&!target.closest('[aria-label="开始语音对话"]')))return;
+   event.preventDefault();keyboardHolding.current=true;void next.begin();
+  };
+  const up=(event:KeyboardEvent)=>{if(event.key===" "&&keyboardHolding.current){event.preventDefault();keyboardHolding.current=false;shortcut.current.release();}};
+  document.addEventListener("keydown",down);document.addEventListener("keyup",up);
+  return()=>{keyboardHolding.current=false;document.removeEventListener("keydown",down);document.removeEventListener("keyup",up);};
+ },[open]);
  const status=loading?"正在读取语音渠道…":phase==="preparing"?"正在请求麦克风，松开后发送…":phase==="recording"?"正在录音，松开发送…":phase==="recognizing"?"正在识别语音…":phase==="waiting"?(paused?"等待你的确认，请在聊天区处理…":phaseLabel):phase==="synthesizing"?"正在合成回答声音…":phase==="speaking"?"正在播报回答…":"按住说话，松开后自动发送";
- return <div className="tauri-voice-input tauri-voice-call">
-  <button type="button" className="tauri-voice-button" aria-label="开始语音对话" title="语音对话：按住说话，回答自动播放" aria-expanded={open} disabled={hardBlocked && !open} onClick={()=>{if(open) end();else onOpen();}}><Headphones size={17}/></button>
-  {open && <section className="tauri-voice-panel tauri-voice-call-panel" aria-label="语音对话">
-   <div className="tauri-voice-heading"><strong>语音对话</strong><button type="button" onClick={end}><PhoneOff size={14}/>结束对话</button></div>
+ const panel=open && <section className="tauri-voice-panel tauri-voice-call-panel" aria-label="语音对话">
+   <div className="tauri-voice-heading"><strong><Headphones size={14}/>语音对话</strong><div><button type="button" aria-label="语音对话设置" aria-expanded={settingsExpanded} onClick={()=>setSettingsExpanded(value=>!value)}><Settings size={14}/>{settingsExpanded?"收起设置":"设置"}</button><button type="button" onClick={()=>end()} title="结束语音对话，切换到文字输入"><Keyboard size={14}/>切换到文字输入</button></div></div>
+   <div className="tauri-voice-call-settings" hidden={!settingsExpanded}>
    <p>录音和回答文本会发送到所选语音服务，并使用其额度。每次录音最长 90 秒。</p>
    <label className="tauri-voice-field"><span>交流方式</span><select aria-label="语音对话交流方式" value={mode} disabled={active} onChange={event=>{cancel();setMode(event.target.value as "hold"|"continuous");setError("");}}><option value="hold">按住说话</option><option value="continuous">连续对话</option></select></label>
-   <label className="tauri-voice-field"><span>识别渠道</span><select aria-label="对话语音识别渠道" value={recognizer} disabled={active||loading} onChange={event=>setRecognizer(event.target.value)}>{providers.map(entry=><option key={entry.name} value={entry.name}>{entry.label}</option>)}</select></label>
-   <label className="tauri-voice-field"><span>播报渠道</span><select aria-label="对话语音播报渠道" value={speaker} disabled={active||loading} onChange={event=>{stopPreview();setPreviewError("");setSpeaker(event.target.value);}}>{speakers.map(entry=><option key={entry.name} value={entry.name}>{entry.label}</option>)}</select></label>
-   <div className="tauri-voice-preview-row"><label className="tauri-voice-field"><span>音色</span><select aria-label="语音对话音色" value={voice} disabled={active||loading} onChange={event=>{setVoice(event.target.value);void previewVoice(event.target.value);}}>{["mimo_default","冰糖","茉莉","苏打","白桦","Mia","Chloe","Milo","Dean"].map(name=><option key={name} value={name}>{name==="mimo_default"?"MiMo 默认音色":name}</option>)}</select></label>
+   <label className="tauri-voice-field"><span>识别渠道</span><select aria-label="对话语音识别渠道" value={recognizer} disabled={active||loading} onChange={event=>{setRecognizer(event.target.value);saveVoicePreferences({recognizer:event.target.value});}}>{providers.map(entry=><option key={entry.name} value={entry.name}>{entry.label}</option>)}</select></label>
+   <label className="tauri-voice-field"><span>播报渠道</span><select aria-label="对话语音播报渠道" value={speaker} disabled={active||loading} onChange={event=>{stopPreview();setPreviewError("");setSpeaker(event.target.value);saveVoicePreferences({speaker:event.target.value});}}>{speakers.map(entry=><option key={entry.name} value={entry.name}>{entry.label}</option>)}</select></label>
+   <div className="tauri-voice-preview-row"><label className="tauri-voice-field"><span>音色</span><select aria-label="语音对话音色" value={voice} disabled={active||loading} onChange={event=>{setVoice(event.target.value);saveVoicePreferences({voice:event.target.value});void previewVoice(event.target.value);}}>{["mimo_default","冰糖","茉莉","苏打","白桦","Mia","Chloe","Milo","Dean"].map(name=><option key={name} value={name}>{name==="mimo_default"?"MiMo 默认音色":name}</option>)}</select></label>
    {previewPhase==="idle"?<button type="button" disabled={active||loading||hardBlocked||!speaker} onClick={()=>void previewVoice(voice)}><Volume2 size={14}/>试听</button>:<button type="button" onClick={stopPreview}><Square size={14}/>停止试听</button>}</div>
    <p role="status">{previewPhase==="loading"?"正在准备音色试听…":previewPhase==="playing"?`正在试听：${voice==="mimo_default"?"MiMo 默认音色":voice}`:"切换音色会自动试听，使用所选播报渠道的额度。"}</p>
    {previewError&&<p role="alert" className="tauri-voice-error">{previewError}</p>}
    {!loading&&(!providers.length||!speakers.length)&&<p>语音对话需要识别服务及支持 MiMo TTS 的播报渠道；请先配置可用的 MiMo 渠道。</p>}
-   {mode==="continuous"&&<TauriContinuousVoice owner={owner} sequence={sequence} canSend={canSend} blocked={hardBlocked||loading} paused={paused} phaseLabel={phaseLabel} recognizer={recognizer} speaker={speaker} voice={voice} eventSink={eventSink} onSend={onSend} onRunning={running=>{if(running)stopPreview();setContinuousRunning(running);}}/> }
+   <label className="tauri-continuous-option"><input type="checkbox" checked={spaceEnabled} onChange={event=>{setSpaceEnabled(event.target.checked);saveVoicePreferences({spaceEnabled:event.target.checked});}} disabled={active}/>按住空格键说话，松开发送（编辑文字时不生效）</label>
+   <button type="button" disabled={active} onClick={()=>{end(false);onOpenSettings();}}>语音识别设置</button>
+   <p>停止或结束会关闭录音和声音；已发送的任务可在聊天区查看、审批或停止。</p>
+   </div>
+   {mode==="continuous"&&<TauriContinuousVoice settingsExpanded={settingsExpanded} owner={owner} sequence={sequence} canSend={canSend} blocked={hardBlocked||loading} paused={paused} phaseLabel={phaseLabel} recognizer={recognizer} speaker={speaker} voice={voice} eventSink={eventSink} onSend={onSend} onRunning={running=>{if(running)stopPreview();setContinuousRunning(running);}}/> }
    {mode==="hold"&&<>
-   {!canSend&&!active&&<p>请先处理输入框草稿与附件，或等待当前回合结束，再按住说话。</p>}
-   <p role="status">{status}</p>
-   {recognized&&<p className="tauri-voice-call-recognized">你说：{recognized}</p>}
+   {!canSend&&!active&&<p>当前回合尚未就绪，请等待回合结束并完成待确认操作后再说话。</p>}
+   <div className="tauri-voice-compact-status"><p role="status">{status}</p>{spaceEnabled&&phase==="idle"&&<small>按住空格键说话</small>}</div>
+   {recognized&&settingsExpanded&&<p className="tauri-voice-call-recognized">你说：{recognized}</p>}
    {notice&&<p role="status">{notice}</p>}{error&&<p className="tauri-voice-error" role="alert">{error}</p>}
-   <button type="button" className="tauri-voice-hold" aria-label="按住说话，松开发送" disabled={!ready&&phase!=="preparing"&&phase!=="recording"}
+   <div className="tauri-voice-call-actions"><button type="button" className="tauri-voice-hold" aria-label="按住说话，松开发送" disabled={!ready&&phase!=="preparing"&&phase!=="recording"}
     onPointerDown={event=>{if(event.button!==0||!ready)return;event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);pointer.current=event.pointerId;void begin();}}
     onPointerUp={event=>{if(pointer.current===event.pointerId)release();}}
     onPointerCancel={()=>{cancel();setPhase("idle");setNotice("录音已取消，没有发送。");}}
@@ -195,10 +234,12 @@ export function TauriVoiceConversation({ owner, sequence, open, hardBlocked, can
     onKeyDown={event=>{if((event.key===" "||event.key==="Enter")&&!event.repeat&&ready){event.preventDefault();void begin();}}}
     onKeyUp={event=>{if(event.key===" "||event.key==="Enter"){event.preventDefault();release();}}}><Mic size={16}/>{phase==="preparing"||phase==="recording"?"松开发送":"按住说话"}</button>
    {active&&<button type="button" onClick={stop}><Square size={14}/>{phase==="speaking"||phase==="synthesizing"||phase==="waiting"?"停止播报":"取消本次录音"}</button>}
+   </div>
    {retrySend&&recognized&&error&&phase==="idle"&&<button type="button" disabled={!ready} onClick={()=>{const op:CallOperation={controller:new AbortController(),requests:new Set(),ttsProvider:speaker,voice};operation.current=op;try{playback.current??=api.playback();void sendRecognized(op,recognized);}catch(cause){operation.current=null;setError(tauriMessageFrom(cause));}}}>重新发送识别文字</button>}
    </>}
-   <button type="button" disabled={active} onClick={()=>{end();onOpenSettings();}}>语音识别设置</button>
-   <p>停止播报或结束对话会停止录音和声音；已发送的模型任务仍可在聊天区查看、审批或停止。</p>
-  </section>}
+  </section>;
+ return <div className="tauri-voice-input tauri-voice-call">
+  <button type="button" className="tauri-voice-button" aria-label="开始语音对话" title="语音对话：按住说话，回答自动播放" aria-expanded={open} disabled={hardBlocked && !open} onClick={()=>{if(open) end();else onOpen();}}><Headphones size={17}/></button>
+  {dock?createPortal(panel,dock):panel}
  </div>;
 }

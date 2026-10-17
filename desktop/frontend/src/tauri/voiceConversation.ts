@@ -2,6 +2,23 @@ import { mono16k } from "./voiceActivity";
 import { tauriAssistantTextDelta, type TauriBridgeEvent } from "../lib/tauriBridge";
 
 export interface VoiceReply { text: string; error?: string }
+
+/** Keep an admitted reply while hidden without starting synthesis or audio. */
+export function waitForVoiceVisibility(signal: AbortSignal): Promise<void> {
+ return new Promise((resolve,reject)=>{
+  const finish=(error?:Error)=>{
+   document.removeEventListener("visibilitychange",visible);
+   signal.removeEventListener("abort",abort);
+   if(error)reject(error);else resolve();
+  };
+  const visible=()=>{if(!document.hidden)finish();};
+  const abort=()=>finish(new Error("播报已取消"));
+  document.addEventListener("visibilitychange",visible);
+  signal.addEventListener("abort",abort,{once:true});
+  if(signal.aborted)abort();else visible();
+ });
+}
+
 /** Only the explicitly submitted turn can become a spoken reply. */
 export class VoiceReplyTracker {
  private started = false;
@@ -65,6 +82,9 @@ export function createVoicePlayback(): VoicePlayback {
   close() { stop(); void context.close().catch(() => {}); },
   async play(encoded, signal) {
    await ready; if(signal.aborted) throw new Error("播报已取消");
+   // WebKit may suspend an unlocked context while its window is hidden.
+   if(context.state!=="running")await context.resume();
+   if(signal.aborted) throw new Error("播报已取消");
    const bytes=Uint8Array.from(atob(encoded),char=>char.charCodeAt(0));
    const buffer=await context.decodeAudioData(bytes.buffer);
    if(signal.aborted) throw new Error("播报已取消");

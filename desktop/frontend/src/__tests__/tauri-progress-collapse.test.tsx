@@ -5,6 +5,8 @@ import { JSDOM } from "jsdom";
 const dom = new JSDOM("<!doctype html><html><body><div id='root'></div></body></html>", { url: "http://localhost/", pretendToBeVisual: true });
 Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, Event: dom.window.Event, MouseEvent: dom.window.MouseEvent, FileReader: dom.window.FileReader, requestAnimationFrame: dom.window.requestAnimationFrame.bind(dom.window), cancelAnimationFrame: dom.window.cancelAnimationFrame.bind(dom.window), localStorage: dom.window.localStorage, IS_REACT_ACT_ENVIRONMENT: true });
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
+localStorage.setItem("reasonix.tauri.status-bar.v1", JSON.stringify({ style: "text", items: ["workspace", "bridge"], customized: true }));
+Object.assign(dom.window, { __TAURI_INTERNALS__: { invoke: async () => [] } });
 (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri = true;
 (dom.window as unknown as { __TAURI__?: unknown }).__TAURI__ = { core: { invoke: () => Promise.resolve(null) } };
 (globalThis as unknown as { __workbenchSessions: unknown[] }).__workbenchSessions = [
@@ -118,7 +120,7 @@ await act(async () => { statusItemsToggle.click(); });
 const bridgeItem = document.querySelector<HTMLInputElement>('[data-statusbar-setting-item="bridge"] input');
 assert.ok(bridgeItem);
 await act(async () => { bridgeItem.click(); });
-assert.equal(statusBar()?.querySelector('[title^="本地服务："], [title^="Local service:"]'), null, "hiding an item removes its real status value");
+assert.equal(statusBar()?.querySelector('[title^="本地服务："], [title^="Local service:"]') ?? null, null, "hiding an item removes its real status value");
 assert.equal(JSON.parse(localStorage.getItem("reasonix.tauri.status-bar.v1") ?? "null")?.style, "icon", "status bar preference persists");
 const shortcutsNav = [...document.querySelectorAll<HTMLButtonElement>(".tauri-settings-nav-item")].find(button => /快捷键|Shortcuts/.test(button.textContent ?? ""));
 assert.ok(shortcutsNav);

@@ -15,7 +15,7 @@ const api:RemoteControllerAPI={sessionImage:async()=>{throw new Error("catalogue
 const pool=new RemoteControllerPool(api);
 async function render(workspace:string){await act(async()=>{root.render(<LocaleProvider><TauriRemoteSessions name="gpu" workspace={workspace} pool={pool}/></LocaleProvider>);await tick();});}
 async function click(label:string){await act(async()=>{const button=[...document.querySelectorAll<HTMLButtonElement>("button")].find(v=>v.textContent===label);assert.ok(button);button.click();await tick();});}
-await render("/p");assert.equal(document.querySelectorAll("li").length,50);assert.ok(document.body.textContent?.includes("Read-only remote sessions"));assert.ok(document.body.textContent?.includes("Current on server"));assert.equal(document.querySelectorAll("textarea,a").length,0,"no composer or local file links");
+await render("/p");assert.equal(document.querySelectorAll("li").length,50);assert.ok(document.body.textContent?.includes("Remote sessions"));assert.ok(document.body.textContent?.includes("Current on server"));assert.equal(document.querySelectorAll("textarea,a").length,0,"no composer or local file links");
 await click("Next page");assert.equal(document.querySelectorAll("li").length,1);assert.ok(document.body.textContent?.includes("Question 50"));
 await click("Previous page");assert.equal(document.querySelectorAll("li").length,50);
 let finish!:(value:BridgeRemoteControllerSessionsResponse)=>void;

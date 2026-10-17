@@ -1,5 +1,49 @@
 # E 迁移清单
 
+## 2026-10-17 语音／文字切换与本批提交前 review（macOS 0.1.38）
+
+语音对话开启时隐藏整个文字编辑区，语音控制通过 portal 保持在独立 dock 中；“切换到文字输入”结束录音／播报并恢复文字输入焦点。语音消息仅发送本次识别内容，保留文字、附件、粘贴图片和选文引用草稿；从欢迎页开启语音时将未发送草稿转移到新会话，切换已有会话继续按会话隔离草稿。更新不可发送时的提示，不再要求清空隐藏草稿。
+
+审查覆盖当前全部语音增量。修复进入语音识别设置时延迟恢复焦点会抢占设置页的问题：进入设置不恢复后台输入框焦点，主动切回文字仍恢复。录音浮层改用现有 `--z-modal`，并接入构建及 `check:css` 的语法／层级门禁。新增真实工作台集成回归覆盖隐藏编辑区、独立语音提交、文字／附件／引用保留、录音中切换取消、已有和新会话草稿、设置入口焦点。同步三处既有测试夹具：远程会话标题、远程高级功能展开入口与状态栏显式偏好；没有修改这些功能的生产行为。
+
+验证：九组 `test:tauri-voice`、完整 `test:transcript`、测试类型检查、完整前端构建／hooks／生产类型／资源预算通过。`test:tauri` 的全部命令在更新旧夹具后分段通过，未跳过用例；证据 `/private/tmp/reasonix-review-tauri.log`、`/private/tmp/reasonix-review-tauri-remaining.log`、`/private/tmp/reasonix-review-tauri-final.log`、`/private/tmp/reasonix-review-voice-final.log`、`/private/tmp/reasonix-review-transcript.log`、`/private/tmp/reasonix-review-test-types.log`。夹具中的空图片 src 和既有异步 act 告警保留，不表述为生产故障。
+
+Browser 插件未提供，使用既有 Playwright／Chrome 在 1440×1000 与 390×844 验证上述切换、草稿保留、录音取消及设置页焦点；7 项交互检查通过，相关 console/page errors 为零。证据 `/private/tmp/reasonix-review-browser.log` 和 `/private/tmp/reasonix-voice-switch-qa/`。桥接和麦克风为模拟，不代表真实 WKWebView、麦克风或云服务验收。
+
+最终 App／DMG 已按审查修复后的代码重新生成，deep/strict ad-hoc 签名与 DMG 校验通过，未安装或 Apple 公证。安装包仍为 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.38_aarch64.dmg`，当前 SHA256 `b5af0124dde0e9039d26f81eb46e66cdef9c84a2737b3fa9fd1d8b5296a815f9`；下文同版本旧 SHA 对应先前打包。证据 `/private/tmp/reasonix-review-build.log`、`/private/tmp/reasonix-review-dmg-verify.log`。
+
+## 2026-10-17 语音输入中央录音浮层（macOS 0.1.38）
+
+麦克风入口改为点击即开始录音，中央浮层提供真实音量声波、录音计时、完成、取消与 Esc；移除日常录音中的渠道配置表单，使用语音识别设置中的首选服务，没有首选标记时使用当前可用服务。未配置／权限被拒时给出问题与处理入口。音量来自同一录音 MediaStream 的 AnalyserNode RMS，不连接扬声器，不保存波形或额外录音；静音时回落，遵循减少动态效果偏好。音量刷新限为约 20Hz，仅更新录音组件。
+
+在点击手势中解锁监测音频上下文，渠道查询并行进行。完成后关闭麦克风、计时和音量监测，再将录音转为 16kHz WAV 并识别，文字插入原光标位置，由用户确认后发送。保留草稿修订与会话隔离，编辑后的识别结果保留为手动追加；取消、关闭、Esc、页面隐藏、失焦录音、禁用与换会话撤销迟到结果。焦点限制在浮层内；成功识别后回到输入框。录音结束、取消、权限拒绝／迟到、录音器故障均清理监测、动画帧、AudioContext 与音轨，释放逻辑幂等。
+
+验证：八组语音专项及测试类型检查通过；新增真实 RMS／静音回落与资源释放的确定性测试，原输入草稿、取消、迟到权限／识别和会话隔离回归保留。Browser 插件未提供，既有 Playwright／Chrome 在 1440×1000 明色、900×760 暗色、480×850 暗色且减少动态效果下，验证一键录音、中央定位、焦点循环、可控合成声音驱动真实 AnalyserNode 后升起／静音回落、计时、完成后关闭麦克风、实际 MediaRecorder／WAV 解码与重采样、插入光标但不提交模型、Esc／迟到结果／隐藏取消、权限拒绝和缺服务入口。识别桥接模拟，未调用用户真实麦克风和云服务；相关 console/page errors 为零、无水平溢出。证据 `/private/tmp/reasonix-38-voice-tests.log`、`/private/tmp/reasonix-38-types.log`、`/private/tmp/reasonix-38-browser.log` 及 `/private/tmp/reasonix-voice-38-browser/`。
+
+共享录音层调整后再跑原 0.1.37 的完整浏览器流程，空格对话、返回后只播一次、音色保留、选文播报和连续聆听折叠均通过，证据 `/private/tmp/reasonix-38-conversation-browser.log`。
+
+完整前端构建／hooks／生产类型／资源预算通过；最终 App／DMG 版本 0.1.38、deep/strict ad-hoc 签名、只读挂载及包内二进制一致性检查通过。安装包 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.38_aarch64.dmg`，SHA256 `388db5ffcf6d91d859b3713bab5142c8f0121b68b4ff4e9992f599330dd3ffaf`。证据 `/private/tmp/reasonix-0.1.38-build.log`、`/private/tmp/reasonix-0.1.38-package.log`。未安装或提交、推送。
+
+## 2026-10-17 紧凑语音控制、空格录音与选文播报（macOS 0.1.37）
+
+语音对话从覆盖正文的大浮层改为输入框上方的静态控制区，渠道、音色、交流方式和说明默认收起，点击设置展开。保持同一语音引擎及事件接收器，收起设置不停止连续聆听。按住模式支持窗口内按住空格录音、松开发送；长按不重复提交，编辑框、可编辑区域、其他交互控件、组合键与输入法组合态不抢占；窗口失焦取消录音，不发送。设置中可关闭此快捷键，渠道、音色和快捷键开关保存在本设备。
+
+聊天正文选区的稳定操作栏在“添加到聊天”旁增加“播报”，仅朗读选中的文字，复用最近音色／播报渠道，默认选择可用 MiMo TTS 渠道。保持既有原生／逻辑选区与会话校验；在点击手势中先解锁音频，再异步解析逻辑选文。选文播报先结束当前语音对话并释放麦克风；不修改草稿或提交模型消息。控制区可停止播报；新选文取代旧播报，换会话、页面隐藏、开启录音或进入设置均撤销迟到的声音。沿用每次最多 4000 字的播报上限，并提示截断。
+
+验证：七组语音专项、测试 TypeScript 及完整 `test:transcript` 通过，选区测试覆盖相邻播报按钮、原操作不变、稳定 DOM、原生选文及逻辑文本迟到后的会话隔离。Browser 插件未提供，使用既有 Playwright／Chrome，1440×1000 明色、900×760／480×850 暗色验证紧凑静态布局、展开收起、实际空格录音与松开发送、输入框空格不录音、试听及音色保留、从真实聊天正文选择两字后播报、选文不新建模型提交、连续模式收起设置仍保持聆听。ASR／模型／TTS 桥接模拟；MediaRecorder、WAV 解码、AudioContext 与测试麦克风实际运行，未消耗用户服务额度。相关 console/page errors 为零，无水平溢出；保留 0.1.36 的回答隐藏／返回恢复回归。证据 `/private/tmp/reasonix-37-voice-tests.log`、`/private/tmp/reasonix-37-types.log`、`/private/tmp/reasonix-37-transcript.log`、`/private/tmp/reasonix-37-browser.log` 及 `/private/tmp/reasonix-voice-37-browser/`。
+
+完整前端构建／hooks／生产类型／资源预算通过；App／DMG 版本 0.1.37、deep/strict ad-hoc 签名、只读挂载及包内二进制一致性通过。安装包 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.37_aarch64.dmg`，SHA256 `457bba0d2d0e837418e79cec21399b07e31de0fe1a5d24e418f4307cb6a4f57b`。证据 `/private/tmp/reasonix-0.1.37-build.log`、`/private/tmp/reasonix-0.1.37-package.log`。既有 Tauri 选文集成测试通过，夹具的空图片 src 警告单独保留，不将其表述为生产错误；本次浏览器交互检查无相关告警。未安装或提交、推送。
+
+## 2026-10-17 按住语音的待播报回答恢复（macOS 0.1.36）
+
+用户反馈新开会话只有文字，音色试听可发声，是否切换窗口不确定。本机最近一轮只读记录有正常正文、sampling commit 和 completed 事件；不复制用户会话内容到仓库。复现到按住模式在窗口 visibilitychange 为隐藏时无条件取消整个操作：即使录音已结束、模型回合已经提交，等待中的回答仍被清空，返回后无法播报。回归在原实现上因返回后未调用 TTS 确定失败。
+
+现按阶段处理：录音／识别与正在播放的声音仍立即取消；已提交回合在等待回答或合成声音期间保留跟踪，在窗口可见前不发起下一次 TTS 或播放。已请求的 TTS 结果保留在本次异步流程，返回后不重复合成；主动停止、结束、切换会话或连接阻断仍取消，等待可见性的监听随 AbortSignal 清理。播放前恢复可能被 WebKit 挂起的已解锁 AudioContext；空闲窗口隐藏不再伪报“录音与播报已停止”。连续聆听的离开窗口暂停策略不变，也不自动恢复麦克风。
+
+验证：五组语音及测试 TypeScript 通过；新增窗口隐藏／返回、TTS 中途隐藏、发送确认时序、显式停止／换会话撤销、录音和已开始播放时取消的回归。Browser 插件未提供，使用既有 Playwright／Chrome 在新空白会话验证明色 1440×1000／暗色 900×760：合成麦克风、实际 MediaRecorder／WAV 解码、真实 AudioContext 音源启动／结束、强制挂起后恢复运行、返回只播一次、无重复 TTS、麦克风关闭、停止和新会话不接收旧声音，以及另一新会话首轮前台正常播放；相关 console/page errors 为零、无水平溢出。窗口可见性由夹具模拟，ASR／模型／TTS 桥接模拟，不消耗真实 MiMo 额度；真实 WKWebView 窗口状态与用户声音输出仍待安装验收，不能断言此前实测只存在这一条原因。证据 `/private/tmp/reasonix-voice-resume-baseline.log`、`/private/tmp/reasonix-voice-resume-fixed.log`、`/private/tmp/reasonix-voice-36-*`。
+
+完整前端构建／hooks／生产类型／资源预算通过；最终 App／DMG 版本 0.1.36、deep/strict ad-hoc 签名、只读挂载和包内二进制一致性核对通过。安装包 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.36_aarch64.dmg`，46,874,767 字节，SHA256 `1e18e7b84afbbc953741429ac3555188f3745454da4f9e7079a42d44dc77fc61`。证据 `/private/tmp/reasonix-0.1.36-build.log`、`/private/tmp/reasonix-0.1.36-package.log`。未安装、未提交或推送。
+
 ## 2026-10-16 设置与运行版本批次提交前 review
 
 审查 0.1.30–0.1.35 的累计增量：语音选项排版、服务配置／凭据卡片合并、编辑与删除互锁、凭据草稿与失败恢复、用量显示名及统计身份、机器人分区保存／部分失败补存、沙箱结果展示、终端主题横排以及应用打包版本来源。未发现本批新增的阻塞性问题；本轮不再修改功能实现。

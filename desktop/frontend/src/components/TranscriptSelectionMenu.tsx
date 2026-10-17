@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, Volume2 } from "lucide-react";
 import { ContextMenu, type ContextMenuPoint } from "./ContextMenu";
 import { messageSelectionContextText, TRANSCRIPT_COPY_FAILED_EVENT } from "../lib/messageSelectionCopy";
 import { writeClipboardText } from "../lib/clipboard";
@@ -80,10 +80,12 @@ export function TranscriptSelectionMenu({
   resetKey,
   onAddToChat,
   addToChatShortcut,
+  onSpeak,
 }: {
   enabled?: boolean;
   resetKey?: string | number;
   onAddToChat?: (text: string) => void;
+  onSpeak?: (resolveText: () => Promise<string | null>) => void;
   addToChatShortcut?: {
     combo: ShortcutCombo;
     matches: (event: KeyboardEvent, platform: ShortcutPlatform) => boolean;
@@ -212,6 +214,19 @@ export function TranscriptSelectionMenu({
     closeAction();
     onAddToChat(text);
   }, [action, closeAction, onAddToChat, resolveLogical]);
+
+  const speakSelection = () => {
+    if (!action || !onSpeak || !enabled) return;
+    const captured = action;
+    const scope = activeResetKeyRef.current;
+    // Invoke before awaiting logical text so the caller can unlock audio in
+    // this click gesture. Materialization retains the existing session fence.
+    onSpeak(async () => {
+      const text = captured.kind === "native" ? captured.text : await resolveLogical(captured);
+      if (activeResetKeyRef.current !== scope) return null;
+      return text;
+    });
+  };
 
   useGlobalShortcut(
     "selection.addToChat",
@@ -441,6 +456,10 @@ export function TranscriptSelectionMenu({
           <span>{t("selection.addToChat")}</span>
           <kbd>{addShortcut}</kbd>
         </button>
+        {onSpeak && <button type="button" disabled={actionOverlay.phase !== "open"}
+          tabIndex={actionOverlay.phase === "open" ? 0 : -1} onClick={speakSelection}>
+          <Volume2 size={14} aria-hidden="true" /><span>播报</span>
+        </button>}
       </div>,
       document.body,
     )}

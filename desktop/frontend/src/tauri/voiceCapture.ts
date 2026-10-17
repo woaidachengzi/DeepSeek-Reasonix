@@ -25,10 +25,60 @@ export function encodeSpeechWav(channels: readonly Float32Array[], sampleRate: n
   return btoa(binary);
 }
 
-export async function startVoiceCapture(signal: AbortSignal, onLimit: () => void): Promise<VoiceCapture> {
+/** Optional meter owns no output connection and retains no recorded samples. */
+function createVoiceMeter(onLevel: (level: number) => void) {
+  // Unlock before getUserMedia's first await, while the click owns activation.
+  const context = new AudioContext();
+  void context.resume().catch(() => {});
+  let source: MediaStreamAudioSourceNode | undefined;
+  let analyser: AnalyserNode | undefined;
+  let frame: number | undefined;
+  let closed = false, previous = 0, lastSample = -Infinity;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    if (frame !== undefined) cancelAnimationFrame(frame);
+    source?.disconnect(); analyser?.disconnect();
+    void context.close().catch(() => {});
+    onLevel(0);
+  };
+  return {
+    close,
+    connect(stream: MediaStream) {
+      if (closed) return;
+      try {
+        source = context.createMediaStreamSource(stream);
+        analyser = context.createAnalyser(); analyser.fftSize = 256;
+        source.connect(analyser);
+        const samples = new Float32Array(analyser.fftSize);
+        const sample = (now: number) => {
+          if (closed || !analyser) return;
+          if (now - lastSample >= 50) {
+            lastSample = now; analyser.getFloatTimeDomainData(samples);
+            const rms = Math.sqrt(samples.reduce((sum, value) => sum + value * value, 0) / samples.length);
+            const next = Math.min(1, Math.max(0, (rms - 0.008) * 9));
+            previous = Math.max(next, previous * 0.7);
+            onLevel(previous);
+          }
+          frame = requestAnimationFrame(sample);
+        };
+        frame = requestAnimationFrame(sample);
+      } catch { close(); } // A meter failure must not discard a valid recording.
+    },
+  };
+}
+
+export async function startVoiceCapture(signal: AbortSignal, onLimit: () => void, onLevel?: (level: number) => void): Promise<VoiceCapture> {
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined" || typeof AudioContext === "undefined") throw new Error("当前环境不支持录音；请在新版桌面 App 中使用语音输入。");
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }, video: false });
-  const release = () => stream.getTracks().forEach(track => track.stop());
+  if (signal.aborted) throw new Error("录音已取消");
+  const meter = onLevel ? createVoiceMeter(onLevel) : null;
+  const abandonMeter = () => meter?.close();
+  signal.addEventListener("abort", abandonMeter, { once: true });
+  let stream: MediaStream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }, video: false }); }
+  catch (cause) { signal.removeEventListener("abort", abandonMeter); meter?.close(); throw cause; }
+  let released = false;
+  const release = () => { if (released) return; released = true; signal.removeEventListener("abort", abandonMeter); stream.getTracks().forEach(track => track.stop()); meter?.close(); };
   if (signal.aborted) { release(); throw new Error("录音已取消"); }
   let recorder: MediaRecorder;
   try { recorder = new MediaRecorder(stream); } catch { release(); throw new Error("无法启动录音；请检查麦克风是否被占用。"); }
@@ -59,13 +109,14 @@ export async function startVoiceCapture(signal: AbortSignal, onLimit: () => void
   };
   signal.addEventListener("abort", cancel, { once: true });
   try { recorder.start(1000); } catch { cancel(); throw new Error("无法启动录音；请检查麦克风权限。"); }
+  meter?.connect(stream);
   timer = setTimeout(onLimit, (VOICE_MAX_SECONDS - 1) * 1000);
   return {
     cancel,
     async stop() {
       if (captureError) throw captureError;
       if (stopping || cancelled || signal.aborted) throw new Error("录音已结束或取消；请重新录音。");
-      stopping = true; clearTimeout(timer);
+      stopping = true; clearTimeout(timer); meter?.close();
       if (recorder.state !== "inactive") recorder.stop();
       const blob = await stopped;
       const context = new AudioContext();

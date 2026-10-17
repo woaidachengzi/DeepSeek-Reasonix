@@ -36,7 +36,7 @@ try{
  await click("试听");await render("another",true,true);await resolve(6,"BLOCKED");assert(!played.includes("BLOCKED"));await render("another");
  await choose("语音对话交流方式","hold");await click("试听");await resolve(7,"BEFORE MIC");
  await act(async()=>{document.querySelector('[aria-label="按住说话，松开发送"]')!.dispatchEvent(new dom.window.KeyboardEvent("keydown",{key:" ",bubbles:true}));await tick();});assert(cancelled.includes(requests[7].id));assert.equal(captures,1);assert(document.querySelector<HTMLSelectElement>('[aria-label="语音对话音色"]')?.disabled);
- await click("结束对话");await render("another",false);assert.equal(sends,0,"preview never submits a model message");assert(closed>=8);
+ await click("切换到文字输入");await render("another",false);assert.equal(sends,0,"preview never submits a model message");assert(closed>=8);
  await render("last");await click("试听");await render("last",false);await resolve(8,"CLOSED");assert(!played.includes("CLOSED"));
  console.log("PASS voice preview: explicit selection/replay, latest voice only, stop playback, provider/session/close/blocked fences, both modes, errors, microphone ownership and zero model sends");
 }finally{await act(async()=>root.unmount());dom.window.close();}
