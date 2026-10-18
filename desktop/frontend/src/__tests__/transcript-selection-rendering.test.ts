@@ -11,6 +11,7 @@ const transcriptSelectionSource = readFileSync(
   "utf8",
 );
 const terminalSource = readFileSync(resolve(testDir, "../components/TerminalPanel.tsx"), "utf8");
+const sharedStyles = readFileSync(resolve(testDir, "../styles.css"), "utf8");
 
 let passed = 0;
 let failed = 0;
@@ -34,6 +35,11 @@ function ruleBody(selector: string): string {
 }
 
 console.log("\ntranscript selection rendering");
+
+ok(
+  /\.tauri-transcript \.md > \*\s*\{\s*content-visibility:\s*visible;\s*contain-intrinsic-size:\s*none;/.test(sharedStyles),
+  "Tauri Markdown keeps renderers active so clearing an offscreen selection invalidates its paint",
+);
 
 ok(
   transcriptSelectionSource.includes('data-surface="transcript"')

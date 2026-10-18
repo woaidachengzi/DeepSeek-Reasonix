@@ -1,5 +1,31 @@
 # E 迁移清单
 
+## 2026-10-18 可调宽度的并排工作区（macOS 0.1.41）
+
+提交前 review 覆盖本批 0.1.39–0.1.41 的选区清除、WebKit 绘制与并排工作区改动，未发现新增阻塞问题。重新运行完整 `test:tauri`、`test:transcript`、生产／测试类型检查及相关 ESLint，均通过；日志 `/private/tmp/reasonix-review-{tauri,transcript,types,test-types,eslint}.log`。下文各版未提交状态记录对应打包时点。
+
+宽窗口的右侧文件列表、预览与差异统一改为并排工作区，不再添加聊天遮罩；拖动左侧分隔线调整宽度，支持方向键、Home/End、双击恢复默认，并记住宽度。窗口空间不足时保留抽屉，临时收窄不覆盖偏好。复用共享 pointer/RAF 生命周期，拖动逐帧更新 CSS，结束后保存状态；失焦、取消、丢失捕获与卸载均释放手势。正文重排提交既有 Kernel display-change 事务，由唯一视口 writer 保持 reader/tail 归属，补充确定性锚点与抢占测试。面板打开时聊天输入、选文引用和会话导航仍可用。
+
+新面板交互测试、生产/测试 TypeScript、相关 ESLint、选文引用集成及完整 `test:transcript` 通过。Browser 插件未提供，使用既有 Playwright/Chrome，在真实组件、共享样式及模拟桥接下验证 1600×1000 并排、真实拖动、键盘边界/恢复、预览独立滚动、选文引用、关闭重开/刷新宽度记忆、差异共用宽度、900×800 与 480×850 抽屉及无横向溢出；相关 console/page errors 为零。页面身份、非空及无 Vite 错误覆盖亦通过。证据 `/private/tmp/reasonix-workspace-panel-{browser,transcript,types,test-types,eslint,selection}.log`，截图 `/private/tmp/reasonix-workspace-panel-qa/`；隔离 Swift WKWebView 容器中通过 CUA 验证并排显示、真实拖动 520→640、双击文件进入预览后保持 640 宽度；模拟文件均来自测试桥接，未操作用户真实工作区。原生交互与画面在当前任务工具记录中。完整生产构建、类型、CSS/token 及资源预算通过；0.1.41 App 版本与 deep/strict 签名、DMG 完整性通过。安装包 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.41_aarch64.dmg`，42,612,320 字节，SHA256 `623e55892c9586e88b6872e2816168db555940771aa89b13a70673e96bb89ae0`；构建/校验日志 `/private/tmp/reasonix-0.1.41-{build,verify}.log`。未替换已安装应用，未提交或推送。
+
+## 2026-10-18 WKWebView 跨视口选区残影（macOS 0.1.40）
+
+0.1.39 安装后原生窗口仍可见蓝色高亮；聚焦输入框、进入设置清空 Range、建立另一处新选区，旧蓝色均不消失。上一版对事件传播的修正覆盖了实际选区未清空的情况，但没有覆盖 WebKit 绘制缓存。
+
+使用隔离的 Swift WKWebView 容器加载真实 Tauri React 组件、共享样式与模拟桥接，35 段正文及代码块组成长回答。先在末尾选择整个 transcript，再向上滚动两页、点击空白清除选区、向下滚动三页，旧段落与代码块重新出现蓝色残影；原生事件记录确认选区长度为 0、collapsed 为 true。将 `.tauri-transcript .md > *` 纳入已有的正常绘制规则（`content-visibility: visible; contain-intrinsic-size: none`）后，在关闭临时测试覆盖样式的情况下重复上述操作，选区完整读取，滚回原处无残影。无重试、重挂载或滚动补偿；Tauri 正文沿用已有懒加载，增加已挂载 Markdown 子块的正常布局与绘制成本。
+
+原生测试容器与页面仅位于 `/private/tmp/ReasonixSelectionQA.app`、`/private/tmp/ReasonixSelectionQA.swift`、`/private/tmp/reasonix-selection-wk-server.mjs`，固定字段事件记录 `/private/tmp/reasonix-selection-wk-events.jsonl`；交互与画面由 CUA 验证。未复制用户会话内容作为测试夹具。新增样式回归约束；完整 `test:transcript`（含选区菜单 106 项、绘制约束 7 项）及相关 ESLint 通过。正常原生拖选与添加到聊天引用亦通过。报告 `/private/tmp/reasonix-selection-webkit-report.json`，测试日志 `/private/tmp/reasonix-selection-webkit-transcript.log`。完整前端生产构建、类型及资源预算通过。0.1.40 App 版本与 deep/strict 签名、DMG 完整性通过；安装包 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.40_aarch64.dmg`（42,610,599 字节），SHA256 `3457c1565ba0eb79def86dd2e63011b34b84021cea401411523c7506ffa67e77`。构建日志 `/private/tmp/reasonix-0.1.40-build.log`，校验日志 `/private/tmp/reasonix-0.1.40-verify.log`。未替换用户已安装的应用，未提交或推送。
+
+## 2026-10-18 点击空白清除残留选区（macOS 0.1.39）
+
+用户反馈多段正文选中后点击空白仍保留高亮。原清除逻辑仅依赖 document 冒泡阶段的 pointerdown；控件拦截事件并保留原生选区时，pointerup 会收起操作栏，但旧 Range 仍存在。原代码的确定性测试有 4 项失败，实际 Tauri React 页面中以表格／代码块组成的多段选区和拦截事件的空白区域重现相同状态；不据此断言用户设备只存在这一原因。
+
+改为捕获阶段清除，兼容 mousedown，并同步关闭旧 Copy 菜单；复制／添加到聊天／播报操作栏保留其选区，右键不会提前清除。新增回归覆盖停止冒泡、仅鼠标事件、原生与逻辑选区及旧菜单撤销。选区菜单 106 项及完整 `test:transcript` 通过，生产类型和相关 ESLint 通过。
+
+Browser 插件未提供，既有 Playwright／Chrome 在 1440×1000 明色、900×760 暗色检查空白清除、鼠标兼容、右键复制菜单、选文播报保留、添加引用及真实鼠标重新拖选，7 项通过，相关 console/page errors 为零。原生浏览器 Range 和鼠标事件实际运行；服务桥接模拟，未读取用户真实会话，真实 WKWebView 仍待用户安装验证。证据 `/private/tmp/reasonix-selection-dismiss-baseline.log`、`/private/tmp/reasonix-selection-dismiss-fixed.log`、`/private/tmp/reasonix-selection-dismiss-transcript.log`、`/private/tmp/reasonix-selection-dismiss-browser-{baseline,fixed}.log` 及对应 `/private/tmp/reasonix-selection-dismiss-{baseline,qa}/`。
+
+完整前端构建／生产类型／资源预算通过，0.1.39 App／DMG 已生成，deep/strict ad-hoc 签名与 DMG 完整性校验通过，未安装或 Apple 公证。安装包 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.39_aarch64.dmg`，SHA256 `0e639c512f3baf28a044b26c3290dbf73f7881b6b6a82a2ec3f6e326475b6852`；证据 `/private/tmp/reasonix-0.1.39-build.log`、`/private/tmp/reasonix-0.1.39-verify.log`。
+
 ## 2026-10-17 语音／文字切换与本批提交前 review（macOS 0.1.38）
 
 语音对话开启时隐藏整个文字编辑区，语音控制通过 portal 保持在独立 dock 中；“切换到文字输入”结束录音／播报并恢复文字输入焦点。语音消息仅发送本次识别内容，保留文字、附件、粘贴图片和选文引用草稿；从欢迎页开启语音时将未发送草稿转移到新会话，切换已有会话继续按会话隔离草稿。更新不可发送时的提示，不再要求清空隐藏草稿。

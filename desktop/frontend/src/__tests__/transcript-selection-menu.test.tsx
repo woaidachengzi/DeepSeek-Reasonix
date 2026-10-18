@@ -254,6 +254,43 @@ console.log("\ntranscript selection menu");
   });
   eq(document.getSelection()?.isCollapsed, true, "a new left-click clears the previous transcript selection");
   eq(transcriptActionState(), "closed", "clearing the selection closes the floating action");
+
+  // Blank/interactive surfaces can stop bubbling, and native WebViews can
+  // deliver the compatibility mouse press without a pointer press.
+  const stopPress = (event: Event) => event.stopPropagation();
+  sidebar.addEventListener("pointerdown", stopPress);
+  sidebar.addEventListener("mousedown", stopPress);
+  for (const type of ["pointerdown", "mousedown"]) {
+    selectNodeText(msgBody.firstChild as Node);
+    await act(async () => {
+      msgBody.dispatchEvent(new window.MouseEvent("pointerup", { bubbles: true, button: 0 }));
+      await drainFrame();
+    });
+    await act(async () => {
+      sidebar.dispatchEvent(new window.MouseEvent(type, { bubbles: true, button: 0 }));
+      await flushTimers();
+    });
+    eq(document.getSelection()?.isCollapsed, true, `${type} clears text even when the blank surface stops bubbling`);
+    eq(transcriptActionState(), "closed", `${type} dismisses stale actions before bubbling is stopped`);
+  }
+  sidebar.removeEventListener("pointerdown", stopPress);
+  sidebar.removeEventListener("mousedown", stopPress);
+
+  selectNodeText(msgBody.firstChild as Node);
+  await dispatchContextMenu(msgBody);
+  await act(async () => {
+    sidebar.dispatchEvent(new window.MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    await flushTimers();
+  });
+  eq(document.querySelector(".context-menu"), null, "mouse-only dismissal also closes Copy so stale text cannot be copied later");
+
+  selectNodeText(msgBody.firstChild as Node);
+  await act(async () => {
+    msgBody.dispatchEvent(new window.MouseEvent("pointerup", { bubbles: true, button: 0 }));
+    await drainFrame();
+    stableActionHost?.querySelector("button")?.dispatchEvent(new window.MouseEvent("mousedown", { bubbles: true, button: 0 }));
+  });
+  eq(document.getSelection()?.toString(), "assistant reply text", "compatibility mouse press on a selection action preserves its captured text");
   selectNodeText(msgBody.firstChild as Node);
   await act(async () => {
     msgBody.dispatchEvent(new window.MouseEvent("pointerup", { bubbles: true, button: 0 }));
@@ -522,6 +559,19 @@ console.log("\ntranscript selection menu");
   });
   eq(clipboard[0], "lpha\n\nbra", "logical right-click Copy resolves the frozen snapshot");
   eq(transcriptSelectionStore.getSnapshot().mode, "none", "successful logical Copy clears the snapshot");
+
+  for (const type of ["pointerdown", "mousedown"]) {
+    const blockBubbling = (event: Event) => event.stopPropagation();
+    document.body.addEventListener(type, blockBubbling);
+    await act(async () => { selectLogical(); await flushTimers(); });
+    await act(async () => {
+      document.body.dispatchEvent(new window.MouseEvent(type, { bubbles: true, button: 0 }));
+      await flushTimers();
+    });
+    eq(transcriptSelectionStore.getSnapshot().mode, "none", `${type} releases logical selection when the blank surface stops bubbling`);
+    eq(transcriptActionState(), "closed", `${type} closes logical selection actions`);
+    document.body.removeEventListener(type, blockBubbling);
+  }
 
   let finishProjection!: (text: string) => void;
   const delayedProjection = new Promise<string>((resolve) => { finishProjection = resolve; });

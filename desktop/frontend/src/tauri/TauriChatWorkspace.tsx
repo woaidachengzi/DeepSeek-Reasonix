@@ -14,6 +14,7 @@ import { CodeViewer } from "../components/CodeViewer";
 import { DiffView } from "../components/DiffView";
 import { pathToLang } from "../lib/lang";
 import { restoreWorkspaceChangesPosition } from "./workspaceDrawerScroll";
+import { useTauriWorkspaceLayout } from "./useTauriWorkspaceLayout";
 import { SourceReferenceContext } from "../components/SourceReferenceContext";
 import { workspaceSourcePath, type SourceReference } from "../lib/sourceReference";
 const TranscriptSelectionMenu = lazy(() => import("../components/TranscriptSelectionMenu").then(module => ({ default: module.TranscriptSelectionMenu })));
@@ -615,6 +616,12 @@ export function TauriSessionPreview() {
   const [progressMode, setProgressMode] = useState(getTauriProgressMode);
   const [sidebarVisible, setSidebarVisible] = useState(getTauriSidebarVisible);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const workspaceLayout = useTauriWorkspaceLayout(workspaceOpen, sidebarVisible, desktopLayout, () => {
+    // Reflow keeps the existing reader/tail anchor through the sole viewport
+    // writer. Resizing the workspace never assigns a transcript offset.
+    transcriptKernel.begin("display-change", transcriptKernel.anchor);
+    commitViewportGeometry();
+  });
   const [workspacePath, setWorkspacePath] = useState("");
   const [workspaceEntries, setWorkspaceEntries] = useState<TauriWorkspaceEntry[]>([]);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
@@ -1039,7 +1046,7 @@ export function TauriSessionPreview() {
           && matchesTauriShortcut(event, action, shortcutPlatform));
         if (sessionShortcut) {
           event.preventDefault();
-          if (!settingsOpen && !diagnosticsOpen && !workspaceOpen && !busy) {
+          if (!settingsOpen && !diagnosticsOpen && (!workspaceOpen || workspaceLayout.docked) && !busy) {
             const position = Number(sessionShortcut.slice("goto_session_".length)) - 1;
             const target = visibleTabs.filter(tab => !isMissingWorkbenchSession(tab))[position];
             if (target && target.sessionId !== session?.id) void activateSession(target.sessionId, target.workspaceRoot);
@@ -1058,7 +1065,7 @@ export function TauriSessionPreview() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [busy, switchingBlocked, session, settingsOpen, diagnosticsOpen, workspaceOpen, commandPaletteOpen, shortcutsHelpOpen, archivesOpen, visibleTabs]);
+  }, [busy, switchingBlocked, session, settingsOpen, diagnosticsOpen, workspaceOpen, workspaceLayout.docked, commandPaletteOpen, shortcutsHelpOpen, archivesOpen, visibleTabs]);
 
   useEffect(() => {
     let active = true;
@@ -3635,7 +3642,7 @@ export function TauriSessionPreview() {
 
   return (
     <SourceReferenceContext.Provider value={openSourceReference}>
-    <main className="tauri-shell" data-platform={platform} data-desktop-layout={desktopLayout} data-sidebar-hidden={sidebarVisible ? undefined : "true"}>
+    <main className="tauri-shell" ref={workspaceLayout.shellRef} style={workspaceLayout.style} data-workspace-docked={workspaceLayout.docked ? "true" : undefined} data-platform={platform} data-desktop-layout={desktopLayout} data-sidebar-hidden={sidebarVisible ? undefined : "true"}>
       <aside className="tauri-sidebar" aria-label="会话导航">
         <div className="tauri-sidebar__drag" data-tauri-drag-region aria-hidden="true" />
         <div className="tauri-sidebar__brand"><img src={logoWordmark} alt="Reasonix" draggable={false} /><span>{profile?.takeoverProfile ? "本地版" : "PREVIEW"}</span></div>
@@ -3982,8 +3989,9 @@ export function TauriSessionPreview() {
       </>}
 
       {workspaceOpen && <>
-        <button className="tauri-workspace-drawer__scrim" aria-label="关闭工作区文件" type="button" onClick={() => setWorkspaceOpen(false)} />
-        <aside className={`tauri-workspace-drawer${workspaceFilePreviewActive || workspaceDiffActive ? " tauri-workspace-drawer--preview" : ""}${workspaceDiffActive ? " tauri-workspace-drawer--diff" : ""}`} aria-label="工作区文件">
+        {!workspaceLayout.docked && <button className="tauri-workspace-drawer__scrim" aria-label="关闭工作区文件" type="button" onClick={() => setWorkspaceOpen(false)} />}
+        <aside id="tauri-workspace-panel" className={`tauri-workspace-drawer${workspaceFilePreviewActive || workspaceDiffActive ? " tauri-workspace-drawer--preview" : ""}${workspaceDiffActive ? " tauri-workspace-drawer--diff" : ""}`} aria-label="工作区文件">
+          {workspaceLayout.docked && <button type="button" className="tauri-workspace-resizer" aria-label="调整工作区面板宽度" title="拖动调整宽度，双击恢复默认；方向键微调" {...workspaceLayout.separatorProps} />}
           <header className="tauri-workspace-drawer__header">
             <div><p>WORKSPACE</p><h2>{workspaceDiffActive ? (locale === "en" ? "File changes" : "文件差异") : workspaceFilePreviewActive ? (locale === "en" ? "File preview" : "文件预览") : workspaceView === "files" ? "文件" : workspaceView === "changes" ? "变更" : recoveryCopy.tab}</h2><span title={workspaceDiffActive ? workspaceChangeDetailPath : workspaceFilePreviewActive ? (workspacePreview?.path || workspacePreviewPath) : currentWorkspace}>{workspaceDiffActive ? workspaceChangeDetailPath : workspaceFilePreviewActive ? (workspacePreview?.path || workspacePreviewPath) : workspaceView === "files" ? (workspacePath ? `/${workspacePath}` : "工作区根目录") : workspaceView === "changes" ? (workspaceChanges?.gitBranch ? `Git · ${workspaceChanges.gitBranch}` : "Git 工作区") : currentWorkspace}</span></div>
             <button type="button" className="tauri-icon-button" onClick={() => setWorkspaceOpen(false)} aria-label="关闭"><X size={17} /></button>
@@ -4112,7 +4120,7 @@ export function TauriSessionPreview() {
 
       <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} items={commandPaletteItems} placeholder={t("palette.placeholder")} emptyText={t("palette.empty")} />
       <Suspense fallback={null}><TranscriptSelectionMenu
-        enabled={Boolean(session && !settingsOpen && !diagnosticsOpen && !workspaceOpen && !commandPaletteOpen && !shortcutsHelpOpen)}
+        enabled={Boolean(session && !settingsOpen && !diagnosticsOpen && (!workspaceOpen || workspaceLayout.docked) && !commandPaletteOpen && !shortcutsHelpOpen)}
         resetKey={session?.id ?? "tauri-empty"}
         onAddToChat={addSelectedText}
         onSpeak={selectionSpeech.speak}

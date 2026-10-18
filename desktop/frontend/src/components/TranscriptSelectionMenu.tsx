@@ -348,7 +348,7 @@ export function TranscriptSelectionMenu({
       dismissedRef.current = null;
       scheduleShow(event.target);
     };
-    const onPointerDown = (event: PointerEvent) => {
+    const onPressStart = (event: MouseEvent) => {
       if (event.button !== 0) return;
       const target = event.target instanceof Element ? event.target : null;
       // Menu activation owns the captured selection until copy succeeds. A
@@ -361,6 +361,7 @@ export function TranscriptSelectionMenu({
       const selection = document.getSelection();
       if (selection && !selection.isCollapsed) selection.removeAllRanges();
       dismissedRef.current = null;
+      setMenu(null);
       closeAction();
     };
     const onKeyUp = (event: KeyboardEvent) => {
@@ -388,7 +389,10 @@ export function TranscriptSelectionMenu({
     const closeNative = () => {
       if (actionOverlayStateRef.current.action?.kind === "native") closeAction();
     };
-    document.addEventListener("pointerdown", onPointerDown);
+    // Clear before component handlers can stop propagation or preserve the
+    // browser range. Mouse presses also cover native compatibility delivery.
+    document.addEventListener("pointerdown", onPressStart, true);
+    document.addEventListener("mousedown", onPressStart, true);
     document.addEventListener("pointerup", onPointerUp);
     document.addEventListener("keyup", onKeyUp);
     document.addEventListener("keydown", onKeyDown);
@@ -397,7 +401,8 @@ export function TranscriptSelectionMenu({
     window.addEventListener("scroll", closeNative, true);
     return () => {
       if (frame !== null) cancelAnimationFrame(frame);
-      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("pointerdown", onPressStart, true);
+      document.removeEventListener("mousedown", onPressStart, true);
       document.removeEventListener("pointerup", onPointerUp);
       document.removeEventListener("keyup", onKeyUp);
       document.removeEventListener("keydown", onKeyDown);

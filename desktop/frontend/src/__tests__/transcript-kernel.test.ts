@@ -327,5 +327,26 @@ kernel.endUserGesture();
   kernel.endUserGesture();
   ok(canFollowQuestionAppend(false,kernel.intent,kernel.userGestureActive), "passive growth may continue an existing settled tail owner");
 }
+{
+  const clock = new FakeClock();
+  const kernel = new TranscriptKernel({ clock });
+  const offsets: number[] = [];
+  kernel.connectWriter(request => { offsets.push(request.offset); return { accepted: true, offset: request.offset, changed: true }; });
+  kernel.replaceSurface("workspace-resize");
+  kernel.beginUserGesture(snapshot);
+  kernel.observeNativeScroll(snapshot);
+  kernel.endUserGesture();
+  for (const top of [300, 420]) {
+    const resize = kernel.begin("display-change", kernel.anchor)!;
+    kernel.advanceGeometry();
+    kernel.correctAnchor(resize, () => top);
+  }
+  ok(offsets.join(",") === "320,440" && kernel.intent === "reader", "workspace width reflows preserve the same logical reader anchor across resize frames");
+  const pending = kernel.begin("display-change", kernel.anchor)!;
+  kernel.afterCurrentGenerationPaint(() => { kernel.advanceGeometry(); kernel.correctAnchor(pending, () => 600); });
+  kernel.beginUserGesture({ ...snapshot, scrollTop: 440 });
+  clock.flushFrames();
+  ok(pending.status === "cancelled" && offsets.length === 2, "native reader input preempts a pending workspace resize without a late correction");
+}
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

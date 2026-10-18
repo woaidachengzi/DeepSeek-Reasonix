@@ -3611,16 +3611,18 @@ a[href] {
   height: max(0px, calc(var(--transcript-row-estimate) - 32px));
   overflow: hidden;
 }
-/* Offscreen blocks are unmounted by the window adapter, so content-visibility
-   culling is redundant inside rows — and skipping it keeps offsetHeight
-   measurements exact instead of contain-intrinsic-size placeholders. */
+/* Windowed rows already own offscreen culling and exact measurements. Tauri's
+   transcript must also keep Markdown renderers active: WKWebView can retain a
+   skipped child's selection paint after the native range has been cleared,
+   leaving blue highlights when the reader scrolls back to that child. */
 .transcript__row .msg,
 .transcript__row .turn-collapse,
 .transcript__row .tool,
 .transcript__row .process-card,
 .transcript__row .readonly-batch,
 .transcript__row .tool-group,
-.transcript__row .md > * {
+.transcript__row .md > *,
+.tauri-transcript .md > * {
   content-visibility: visible;
   contain-intrinsic-size: none;
 }
