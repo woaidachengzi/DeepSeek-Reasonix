@@ -5,6 +5,8 @@ Object.assign(globalThis,{window:dom.window,document:dom.window.document,HTMLEle
 Object.defineProperty(globalThis,"navigator",{value:dom.window.navigator,configurable:true});
 const React=await import("react");const {act}=React;const {createRoot}=await import("react-dom/client");
 const {TauriVoiceConversation}=await import("../tauri/TauriVoiceConversation");
+const cloneA="clone:"+"a".repeat(32),cloneB="clone:"+"b".repeat(32);
+const emptyVoiceLibrary={list:async()=>[{id:cloneA,name:"First voice"},{id:cloneB,name:"Second voice"}],import:async()=>[],remove:async()=>[]};
 const root=createRoot(document.getElementById("root")!);
 const tick=async()=>{await new Promise(resolve=>setTimeout(resolve,0));};
 const requests:{id:string;provider:string;text:string;voice:string;resolve:(audio:string)=>void;reject:(error:Error)=>void}[]=[];
@@ -16,7 +18,7 @@ const api={providers:async()=>[{name:"mimo",label:"MiMo",preferred:true},{name:"
  playback:()=>({play:(audio:string,signal:AbortSignal)=>{played.push(audio);return new Promise<void>((_resolve,reject)=>signal.addEventListener("abort",()=>reject(new Error("cancelled")),{once:true}));},stop:()=>{},close:()=>{closed++;}}),
 };
 const sink={current:null};const noop=()=>{};
-const render=async(owner="session",open=true,hardBlocked=false)=>{await act(async()=>{root.render(<TauriVoiceConversation owner={owner} sequence={0} open={open} canSend hardBlocked={hardBlocked} paused={false} phaseLabel="等待" eventSink={sink} onOpen={noop} onEnd={noop} onActiveChange={noop} onSend={async()=>{sends++;return true;}} onOpenSettings={noop} api={api}/>);await tick();});};
+const render=async(owner="session",open=true,hardBlocked=false)=>{await act(async()=>{root.render(<TauriVoiceConversation owner={owner} sequence={0} open={open} canSend hardBlocked={hardBlocked} paused={false} phaseLabel="等待" eventSink={sink} onOpen={noop} onEnd={noop} onActiveChange={noop} onSend={async()=>{sends++;return true;}} onOpenSettings={noop} api={api} voiceLibraryAPI={emptyVoiceLibrary}/>);await tick();});};
 const choose=async(label:string,value:string)=>{await act(async()=>{const select=document.querySelector<HTMLSelectElement>(`[aria-label="${label}"]`)!;select.value=value;select.dispatchEvent(new dom.window.Event("change",{bubbles:true}));await tick();});};
 const click=async(text:string)=>{await act(async()=>{const button=[...document.querySelectorAll<HTMLButtonElement>("button")].find(b=>b.textContent===text);assert(button,text);button.click();await tick();});};
 const resolve=async(index:number,audio:string)=>{await act(async()=>{requests[index].resolve(audio);await tick();});};
@@ -38,5 +40,12 @@ try{
  await act(async()=>{document.querySelector('[aria-label="按住说话，松开发送"]')!.dispatchEvent(new dom.window.KeyboardEvent("keydown",{key:" ",bubbles:true}));await tick();});assert(cancelled.includes(requests[7].id));assert.equal(captures,1);assert(document.querySelector<HTMLSelectElement>('[aria-label="语音对话音色"]')?.disabled);
  await click("切换到文字输入");await render("another",false);assert.equal(sends,0,"preview never submits a model message");assert(closed>=8);
  await render("last");await click("试听");await render("last",false);await resolve(8,"CLOSED");assert(!played.includes("CLOSED"));
+ await render("cloned");
+ const next=requests.length;
+ await choose("语音对话音色",cloneA);assert.equal(requests[next].voice,cloneA);assert.equal(JSON.parse(localStorage.getItem("reasonix-tauri-voice-preferences-v1")!).voice,cloneA);
+ await choose("语音对话音色",cloneB);assert(cancelled.includes(requests[next].id));await resolve(next,"OLD CLONE");assert(!played.includes("OLD CLONE"));
+ await resolve(next+1,"SELECTED CLONE");assert(played.includes("SELECTED CLONE"));assert(document.body.textContent?.includes("正在试听：Second voice"));
+ await click("停止试听");await render("cloned",false);await render("cloned");assert.equal(document.querySelector<HTMLSelectElement>('[aria-label="语音对话音色"]')!.value,cloneB);
+ assert.equal(requests.length,next+2,"reopening cloned voices never auto-spends quota");
  console.log("PASS voice preview: explicit selection/replay, latest voice only, stop playback, provider/session/close/blocked fences, both modes, errors, microphone ownership and zero model sends");
 }finally{await act(async()=>root.unmount());dom.window.close();}

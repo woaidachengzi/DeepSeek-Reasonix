@@ -3762,7 +3762,7 @@ export function TauriSessionPreview() {
       </aside>
 
       <section className="tauri-main">
-        <header className="tauri-topbar" data-tauri-drag-region>
+        <header className="tauri-topbar" data-tauri-drag-region="deep">
           <div className="tauri-topbar__title">
             <div className="tauri-topbar__title-row">
               {session && titleEditing ? <form className="tauri-session-title-edit" onSubmit={event => { event.preventDefault(); void saveTitle(); }}>
@@ -3846,6 +3846,7 @@ export function TauriSessionPreview() {
           </section>}
           {(selectionSpeech.status||selectionSpeech.error)&&<div className="tauri-selection-speech" aria-label="选文播报">
             <span role={selectionSpeech.error?"alert":"status"}>{selectionSpeech.error||selectionSpeech.status}</span>
+            {selectionSpeech.canRetry&&<button type="button" onClick={selectionSpeech.retry}>重试播报</button>}
             <button type="button" onClick={()=>{selectionSpeech.stop();selectionSpeech.dismissError();}}>{selectionSpeech.error?"关闭":"停止播报"}</button>
           </div>}
           <div className="tauri-voice-dock" ref={setVoiceDock}/>

@@ -1,5 +1,31 @@
 # E 迁移清单
 
+## 2026-10-19 选文播报错误恢复与顶部双击（macOS 0.1.43）
+
+提交前 review 覆盖本批 0.1.42–0.1.43 改动，修复一项边界问题：选文播报重试时，音频设备同步初始化失败原本会清空保留的选文；现在仍保留原文、渠道与音色，设备恢复后可再次重试，且初始化失败不会发送合成请求。新增回归在修复前失败、修复后通过。完整 `test:tauri`、`test:tauri-voice`、`test:transcript`、Go `TestSpeech*` 竞态检查、Rust 响应错误边界 8 项、生产／测试类型、相关 ESLint 和完整生产构建均通过；日志 `/private/tmp/reasonix-review-043-{tauri,voice,transcript,go,rust,types,test-types,eslint,build}.log`。未发现其他阻塞问题。下文安装包记录对应打包时点；本次 review 补充修复尚未重新打包。
+
+用户报告选中文字后点击播报偶发 `desktop bridge request failed with status 502`。确认 Go 返回的语音故障类别在 Rust 通用错误边界被抹掉，前端无法区分超时、网络、权限、限流、接口支持和音频结果异常。现在识别／播报分别发布受限的机器码，原生端只映射已知状态码和机器码为固定中文提示，不转发服务端自由文本、凭证、文件路径或录音。截图不足以确定那一次上游失败的根因，本次没有据此断言已消除服务端偶发故障，也没有自动重试或发送更多真实声音样本。
+
+选文播报失败后保留本次已解析的文字、渠道和音色，显示“重试播报”；点击后分配新请求 ID，从失败片段继续，不再读取已清除的选区，也不重播成功片段。关闭提示、停止、切换会话、隐藏窗口或麦克风接管都会撤销保留状态。按住说话后的回答播报同样可显式重试，不会重新提交问题或生成重复回答。
+
+窗口双击失效源于最小 capability 清单缺少 `core:window:allow-internal-toggle-maximize`。补齐仅主窗口的权限，顶部 drag region 使用 `deep` 让空白子区域生效，交互按钮继续由 Tauri 的原生拖动脚本排除。沿用系统普通窗口 Zoom，不调用 fullscreen 或新增自定义窗口几何补偿。
+
+Go 全部 `TestSpeech*`、Rust 响应错误边界测试 8 项、完整 `test:tauri-voice`、`test:transcript`、生产／测试类型及完整生产构建门禁通过。新增测试覆盖识别和播报错误分类、不转发私有服务响应、不自动重复请求、保留选文重试、成功片段不重播及会话撤销。Browser 插件未提供；Playwright/Chrome 使用真实选文菜单、浏览器原生选区、真实播报 hook 与模拟服务，在 1440px 深色／390px 浅色验证“选择→播报→中文错误→原文重试→正常结束”，无横向溢出、无相关 page/console errors。报告和截图 `/private/tmp/reasonix-043-ui-qa/`；日志 `/private/tmp/reasonix-043-{go,rust,voice,transcript,browser,test-types}.log`。
+
+独立应用标识的原生 QA 构建使用同一 capability、窗口和前端实现，在临时 HOME 中通过 CUA 实际双击：正常窗口 2560×1640、位置 (814,132)，放大后为当前显示器完整可用区 3840×1966、位置 (0,60)，再次双击准确恢复原尺寸和位置；AppKit fullscreen 位未置位，也未进入全屏 Space。顶部按钮双击不放大。只读原生几何记录 `/private/tmp/reasonix-window-043-o_vv4fdo/{before-double-click,after-double-click,after-second-double-click,button-double-click}.json`。未操作当前安装版的用户会话，QA 应用已退出。
+
+最终 0.1.43 已包含后补的选文重试实现；takeover App 标识和版本、deep/strict 签名、DMG 完整性均通过。安装包 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.43_aarch64.dmg`，42,694,467 字节，SHA256 `d48615fe42153a0fe1df2453c7eea8ce56b84344c9849e185eb501c73c87c370`。构建／校验日志 `/private/tmp/reasonix-0.1.43-{build,verify}.log`。未替换已安装应用，未提交或推送。
+
+## 2026-10-19 本机克隆音色库（macOS 0.1.42）
+
+语音对话设置增加本机克隆音色分组、MP3/WAV 样本导入与确认删除。样本按独立随机 ID 存储在 Reasonix home 的 `voices/`，目录 0700、文件 0600，不进入项目、代码、安装包或前端 localStorage；选择偏好只保存 ID。上限 32 个音色，单样本 7.5 MB，严格 Base64、格式标识和名称校验，不接受远程样本 URL 或任意路径。音色列表不返回音频内容。
+
+新增经过认证的 `GET/POST /v1/speech/voices` 和 `DELETE /v1/speech/voices/{id}`，由仅主窗口可调用的原生命令转发。播报统一按 ID 读取所选样本，并使用 `mimo-v2.5-tts-voiceclone` 与对应 data URI；预设音色保留原模型。试听、按住说话、连续对话与选文播报沿用相同合成入口。音色切换继续取消旧试听；导入不自动生成语音，删除当前音色恢复默认；关闭或切换会话撤销迟到的列表/导入状态，文件读取完成前关闭可阻止导入调用。
+
+Go 音色库/克隆/合成测试、原生语音生命周期测试 3 项、完整 `test:tauri`、生产及测试类型检查、完整生产构建门禁通过。Browser 插件未提供，Playwright/Chrome 以真实组件和共享样式、模拟语音服务验证 9 项：显式克隆音色试听及身份隔离、停止旧试听、重开保留选择且不自动合成、实际文件选择导入、确认删除，以及 900px 深色／390px 浅色无横向溢出；相关 page/console errors 为零。测试页身份、非空、无 Vite 错误覆盖通过。日志 `/private/tmp/reasonix-clone-{go,rust-tests,types,test-types,voice-tests,tauri,browser}.log`；浏览器报告和截图 `/private/tmp/reasonix-clone-ui-qa/`。
+
+用户选定的两个 00 样本已写入本机独立音色资料，校验与源文件一致；检查打包 App 未含样本内容。云端试听最初被自动审批拦截；用户随后明确允许把这两个样本发送到 `token-plan-cn.xiaomimimo.com` 各生成一段试听。经同一个 Reasonix 合成处理入口实测，两个请求均返回 200，得到 24 kHz 单声道 PCM16 WAV（9.60 秒与 13.12 秒），无数字削波。目标主机在临时操作测试中限定为已授权的 HTTPS 主机，未输出凭证；临时测试源文件已删除，生成音频与报告仅保存在本机。实测日志 `/private/tmp/reasonix-clone-live.log`。当前配置渠道已验证支持这两段短句的 VoiceClone，音色相似度仍需用户试听判断。App 0.1.42 版本、deep/strict 签名及 DMG 完整性通过；安装包 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.42_aarch64.dmg`，42,678,487 字节，SHA256 `675967c8f73e2b998a60afd7c90ee3d3a283f00b96b41161cf4e3bd69eaa80b5`。构建／校验日志 `/private/tmp/reasonix-0.1.42-{build,verify}.log`。未替换已安装的应用，未提交或推送。
+
 ## 2026-10-18 可调宽度的并排工作区（macOS 0.1.41）
 
 提交前 review 覆盖本批 0.1.39–0.1.41 的选区清除、WebKit 绘制与并排工作区改动，未发现新增阻塞问题。重新运行完整 `test:tauri`、`test:transcript`、生产／测试类型检查及相关 ESLint，均通过；日志 `/private/tmp/reasonix-review-{tauri,transcript,types,test-types,eslint}.log`。下文各版未提交状态记录对应打包时点。

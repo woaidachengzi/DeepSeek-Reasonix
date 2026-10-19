@@ -12,6 +12,44 @@ use std::{
 use tauri::{Manager, State};
 
 const CANCELLED: &str = "语音识别已取消；可以重新录音。";
+
+/// Only fixed, host-owned copy crosses this boundary. Never display the
+/// upstream/bridge message, which can contain credentials, text or audio.
+pub(crate) fn safe_speech_error(status: u16, code: &str) -> Option<String> {
+    if status == 502 {
+        let (stage, kind) = code.strip_prefix("speech_")?.split_once('_')?;
+        let label = match stage {
+            "tts" => "语音播报",
+            "asr" => "语音识别",
+            _ => return None,
+        };
+        let detail = match kind {
+            "timeout" => "等待超时；请稍后重试或缩短内容。",
+            "network" => "连接失败；请检查网络后重试。",
+            "auth" => "渠道未授权；请检查 API Key 和对应语音模型权限。",
+            "unsupported" => "请求不受支持；请检查渠道接口、模型权限及音色。",
+            "rate_limit" => "额度不足或请求过多；请检查额度或稍后重试。",
+            "upstream" | "failed" => "服务暂时不可用；请稍后重试或切换语音渠道。",
+            "result" => "返回了无效或不完整的结果；请缩短内容后重试。",
+            "no_text" if stage == "asr" => "未检测到有效文字；请靠近麦克风重新录音。",
+            "voice" if stage == "tts" => "的声音样本无法读取；请重新导入该音色。",
+            _ => return None,
+        };
+        return Some(format!("{label}{detail}"));
+    }
+    let message = match (status, code) {
+        (400, "speech_input") => "录音格式无效或过长；请重新录音。",
+        (400, "speech_provider") => "语音渠道不可用；请在语音设置中重新选择并检查渠道权限。",
+        (400, "speech_synthesis") => "播报内容或音色无效；请缩短内容或重新选择音色。",
+        (429, "speech_busy") => "语音服务繁忙；请等待当前操作结束后重试。",
+        (500, "speech_config") => "无法读取语音配置；请检查设置后重新打开语音面板。",
+        (409, "speech_voices") => "音色名称已存在；请换一个名称。",
+        (400, "speech_voices") => "音色资料无效或数量超限；请使用 1–40 字名称和不超过 7.5 MB 的 MP3/WAV 样本，并保留最多 32 个音色。",
+        (500, "speech_voices") => "本机音色资料无法读取或保存；请检查文件权限和存储空间。",
+        _ => return None,
+    };
+    Some(message.into())
+}
 #[derive(Default)]
 struct Operation {
     cancelled: AtomicBool,
@@ -203,6 +241,85 @@ pub(crate) async fn speech_providers(
     .map_err(|_| "speech catalogue worker failed".to_string())?
 }
 
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct SpeechVoiceImport {
+    name: String,
+    format: String,
+    audio: String,
+}
+
+async fn speech_voice_request(
+    app: tauri::AppHandle,
+    method: &'static str,
+    path: String,
+    input: Option<serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let (address, token) = app.state::<BridgeSupervisor>().event_connection()?;
+        crate::bridge::request_json_with_timeout(
+            address,
+            &token,
+            method,
+            &path,
+            input,
+            None,
+            Duration::from_secs(10),
+        )
+    })
+    .await
+    .map_err(|_| "音色操作失败；请重新打开语音设置后重试。".to_string())?
+}
+
+#[tauri::command]
+pub(crate) async fn speech_voices(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+) -> Result<serde_json::Value, String> {
+    crate::remote_controller::ensure_main_window(window.label())?;
+    speech_voice_request(app, "GET", "/v1/speech/voices".into(), None).await
+}
+
+#[tauri::command]
+pub(crate) async fn import_speech_voice(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    input: SpeechVoiceImport,
+) -> Result<serde_json::Value, String> {
+    crate::remote_controller::ensure_main_window(window.label())?;
+    if input.name.len() > 160
+        || input.audio.len() > 10_000_000
+        || !matches!(input.format.as_str(), "mp3" | "wav")
+    {
+        return Err("声音样本无效或过大；请选择不超过 7.5 MB 的 MP3 或 WAV 录音。".into());
+    }
+    speech_voice_request(
+        app,
+        "POST",
+        "/v1/speech/voices".into(),
+        Some(serde_json::to_value(input).map_err(|_| "invalid voice")?),
+    )
+    .await
+}
+
+#[tauri::command]
+pub(crate) async fn delete_speech_voice(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    id: String,
+) -> Result<serde_json::Value, String> {
+    crate::remote_controller::ensure_main_window(window.label())?;
+    if !id.strip_prefix("clone:").is_some_and(|value| {
+        value.len() == 32
+            && value
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    }) {
+        return Err("音色无效；请重新选择。".into());
+    }
+    speech_voice_request(app, "DELETE", format!("/v1/speech/voices/{id}"), None).await
+}
+
 #[tauri::command]
 pub(crate) async fn speech_transcribe(
     window: tauri::WebviewWindow,
@@ -275,7 +392,7 @@ pub(crate) async fn speech_synthesize(
     input: SpeechSynthesisRequest,
 ) -> Result<SpeechAudio, String> {
     crate::remote_controller::ensure_main_window(window.label())?;
-    if input.text.len() > 6000 || input.provider.len() > 64 || input.voice.len() > 32 {
+    if input.text.len() > 6000 || input.provider.len() > 64 || input.voice.len() > 64 {
         return Err("播报内容无效；请缩短后重试。".into());
     }
     let operation = app.state::<SpeechInput>().begin(&input.operation_id)?;

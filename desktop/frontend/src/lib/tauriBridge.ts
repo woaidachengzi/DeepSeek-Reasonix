@@ -2333,6 +2333,20 @@ export async function tauriRemoteForwards(input: { name: string; action: "list" 
 }
 
 export interface TauriSpeechProvider { name: string; label: string; preferred?: boolean; description?: string }
+export interface TauriSpeechVoice { id: string; name: string }
+function speechVoiceCatalog(value: {protocolVersion: number; voices: TauriSpeechVoice[]}): TauriSpeechVoice[] {
+ if(value.protocolVersion !== 1 || !Array.isArray(value.voices) || value.voices.length > 32 || value.voices.some(voice => !/^clone:[a-f0-9]{32}$/.test(voice.id) || typeof voice.name !== "string" || !voice.name.trim())) throw new Error("音色列表无效；请重新打开语音设置。");
+ return value.voices;
+}
+export async function tauriSpeechVoices(): Promise<TauriSpeechVoice[]> {
+ requireTauri(); return speechVoiceCatalog(await invoke("speech_voices"));
+}
+export async function importTauriSpeechVoice(input: {name: string; format: "mp3" | "wav"; audio: string}): Promise<TauriSpeechVoice[]> {
+ requireTauri(); return speechVoiceCatalog(await invoke("import_speech_voice", {input}));
+}
+export async function deleteTauriSpeechVoice(id: string): Promise<TauriSpeechVoice[]> {
+ requireTauri(); return speechVoiceCatalog(await invoke("delete_speech_voice", {id}));
+}
 export interface TauriSpeechSettings {
  protocolVersion: number; mode: "mimo" | "custom"; provider: string; protocol: "mimo" | "transcriptions";
  endpoint: string; model: string; keySet: boolean; revision: string;

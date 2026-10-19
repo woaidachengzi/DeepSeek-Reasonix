@@ -5280,6 +5280,13 @@ fn parse_json_response(response: &[u8]) -> Result<Value, String> {
     }
     let raw = decoded_body.as_deref().unwrap_or(body);
     if !(200..300).contains(&status) {
+        if let Ok(parsed) = serde_json::from_slice::<Value>(first_json_value(raw)) {
+            if let Some(code) = parsed.pointer("/error/code").and_then(Value::as_str) {
+                if let Some(message) = crate::speech_input::safe_speech_error(status, code) {
+                    return Err(message);
+                }
+            }
+        }
         // Remote bootstrap explicitly publishes a bounded, credential-redacted
         // diagnostic. This exception must not expose other endpoints' messages.
         if status == 502 {
@@ -7007,6 +7014,26 @@ mod tests {
         let response = b"HTTP/1.1 202 Accepted\r\nContent-Type: application/json\r\n\r\n{\"protocolVersion\":1}";
         assert_eq!(parse_json_response(response).unwrap()["protocolVersion"], 1);
         assert!(parse_json_response(b"HTTP/1.1 401 Unauthorized\r\n\r\n{}").is_err());
+    }
+
+    #[test]
+    fn response_parser_localizes_known_speech_codes_without_private_messages() {
+        for (code, expected) in [
+            ("speech_tts_timeout", "语音播报等待超时"),
+            ("speech_asr_network", "语音识别连接失败"),
+            ("speech_tts_auth", "渠道未授权"),
+            ("speech_tts_rate_limit", "额度不足"),
+            ("speech_asr_result", "不完整的结果"),
+        ] {
+            let response = format!("HTTP/1.1 502 Error\r\n\r\n{{\"error\":{{\"code\":\"{code}\",\"message\":\"SECRET /private/voice.wav\"}}}}");
+            let error = parse_json_response(response.as_bytes()).unwrap_err();
+            assert!(error.contains(expected));
+            assert!(!error.contains("SECRET") && !error.contains("/private"));
+        }
+        for (status, code) in [(502,"speech_tts_arbitrary"),(500,"speech_tts_auth"),(502,"unexpected")] {
+            let response = format!("HTTP/1.1 {status} Error\r\n\r\n{{\"error\":{{\"code\":\"{code}\",\"message\":\"SECRET\"}}}}");
+            assert_eq!(parse_json_response(response.as_bytes()).unwrap_err(),format!("desktop bridge request failed with status {status}"));
+        }
     }
 
     #[test]

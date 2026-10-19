@@ -5,8 +5,8 @@ Object.assign(globalThis,{window:dom.window,document:dom.window.document,localSt
 Object.defineProperty(globalThis,"navigator",{value:dom.window.navigator,configurable:true});
 const React=await import("react"),{act}=React,{createRoot}=await import("react-dom/client");
 const {useTauriSelectionSpeech}=await import("../tauri/useTauriSelectionSpeech");const {saveVoicePreferences}=await import("../tauri/voicePreferences");
-const calls:string[]=[],requests:{id:string;provider:string;text:string;voice:string;resolve:(audio:string)=>void}[]=[];const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
-let noProviders=false;const api={providers:async()=>noProviders?[]:[{name:"first",label:"First",preferred:true},{name:"saved",label:"Saved"}],synthesize:(id:string,provider:string,text:string,voice:string)=>new Promise<string>(resolve=>requests.push({id,provider,text,voice,resolve})),cancel:async(id:string)=>{calls.push("cancel:"+id);},playback:()=>{calls.push("unlock");return{play:async(audio:string)=>{calls.push(audio);},stop:()=>{},close:()=>{calls.push("close");}};}};
+const calls:string[]=[],requests:{id:string;provider:string;text:string;voice:string;resolve:(audio:string)=>void;reject:(error:Error)=>void}[]=[];const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
+let noProviders=false,playbackUnavailable=false;const api={providers:async()=>noProviders?[]:[{name:"first",label:"First",preferred:true},{name:"saved",label:"Saved"}],synthesize:(id:string,provider:string,text:string,voice:string)=>new Promise<string>((resolve,reject)=>requests.push({id,provider,text,voice,resolve,reject})),cancel:async(id:string)=>{calls.push("cancel:"+id);},playback:()=>{calls.push("unlock");if(playbackUnavailable)throw new Error("音频设备暂时不可用");return{play:async(audio:string)=>{calls.push(audio);},stop:()=>{},close:()=>{calls.push("close");}};}};
 let control!:ReturnType<typeof useTauriSelectionSpeech>;
 function Harness({owner="a",blocked=false,voiceCallActive=false}:{owner?:string;blocked?:boolean;voiceCallActive?:boolean}){control=useTauriSelectionSpeech({owner,blocked,voiceCallActive,onStart:()=>{calls.push("pause-conversation");},api});return <div>{control.status}{control.error}</div>;}
 const root=createRoot(document.getElementById("root")!);const render=async(owner="a",blocked=false,voiceCallActive=false)=>{await act(async()=>{root.render(<Harness owner={owner} blocked={blocked} voiceCallActive={voiceCallActive}/>);await tick();});};
@@ -24,5 +24,21 @@ try{
  await start();await render("b",true);await resolve(7,"BLOCKED");assert(!calls.includes("BLOCKED"));await start();assert.equal(requests.length,8);await render("b");
  noProviders=true;await start();assert(document.body.textContent?.includes("没有可用的播报渠道"));noProviders=false;
  await act(async()=>{control.speak(async()=>null);await tick();});assert.equal(requests.length,8,"stale logical selection cannot spend TTS quota");
+
+ const retryStart=requests.length;let sourceReads=0;
+ await act(async()=>{control.speak(async()=>{sourceReads++;return "字".repeat(300);});await tick();});
+ await resolve(retryStart,"FIRST CHUNK");
+ await act(async()=>{requests[retryStart+1].reject(new Error("语音播报服务暂时不可用；请稍后重试。"));await tick();});
+ assert(control.canRetry);assert.equal(sourceReads,1);assert(document.body.textContent?.includes("服务暂时不可用"));
+ const failedText=requests[retryStart+1].text;
+ playbackUnavailable=true;
+ await act(async()=>{control.retry();await tick();});
+ assert(control.canRetry,"audio device initialization failure must retain retry text");assert.equal(requests.length,retryStart+2,"failed audio initialization cannot spend TTS quota");assert.equal(sourceReads,1);assert(document.body.textContent?.includes("音频设备暂时不可用"));
+ playbackUnavailable=false;
+ await act(async()=>{control.retry();await tick();});
+ assert.equal(sourceReads,1,"retry does not re-resolve the cleared native selection");assert.equal(requests[retryStart+2].text,failedText);assert.equal(requests[retryStart+2].provider,"saved");assert.equal(requests[retryStart+2].voice,"苏打");assert.notEqual(requests[retryStart+2].id,requests[retryStart+1].id);
+ await resolve(retryStart+2,"RESUMED");assert.equal(calls.filter(value=>value==="FIRST CHUNK").length,1,"completed chunks do not play twice");assert(!control.canRetry);
+ await start("待重试");const failed=requests.length-1;await act(async()=>{requests[failed].reject(new Error("timeout"));await tick();});assert(control.canRetry);
+ await render("another");assert(!control.canRetry);const count=requests.length;await act(async()=>{control.retry();await tick();});assert.equal(requests.length,count,"changing sessions revokes retained retry text");
  console.log("PASS selection speech: gesture unlock before async selection, saved provider/voice, exact selected text, pause conversation, stop/session/visibility/microphone/blocked fences, latest selection only, unavailable channel and stale-selection feedback");
 }finally{await act(async()=>root.unmount());dom.window.close();}

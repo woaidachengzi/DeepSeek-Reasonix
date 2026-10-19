@@ -8,8 +8,9 @@ const {TauriVoiceConversation}=await import("../tauri/TauriVoiceConversation");
 const {readVoicePreferences}=await import("../tauri/voicePreferences");
 let captures=0,sends=0,cancels=0,ends=0;const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
 const api={providers:async()=>[{name:"mimo",label:"MiMo",preferred:true}],transcribe:async()=>"语音问题",synthesize:async()=>"WAV",cancel:async()=>{},capture:async()=>{captures++;return{stop:async()=>"WAV",cancel:()=>{cancels++;}};},playback:()=>({play:async()=>{},stop:()=>{},close:()=>{}})};
+const emptyVoiceLibrary={list:async()=>[],import:async()=>[],remove:async()=>[]};
 const root=createRoot(document.getElementById("root")!);const sink={current:null};
-const render=async(open=true,hardBlocked=false)=>{await act(async()=>{root.render(<TauriVoiceConversation owner="session" sequence={0} open={open} hardBlocked={hardBlocked} canSend paused={false} phaseLabel="等待回答" eventSink={sink} onOpen={()=>{}} onEnd={()=>{ends++;}} onActiveChange={()=>{}} onSend={async()=>{sends++;return true;}} onOpenSettings={()=>{}} api={api}/>);await tick();});};
+const render=async(open=true,hardBlocked=false)=>{await act(async()=>{root.render(<TauriVoiceConversation owner="session" sequence={0} open={open} hardBlocked={hardBlocked} canSend paused={false} phaseLabel="等待回答" eventSink={sink} onOpen={()=>{}} onEnd={()=>{ends++;}} onActiveChange={()=>{}} onSend={async()=>{sends++;return true;}} onOpenSettings={()=>{}} api={api} voiceLibraryAPI={emptyVoiceLibrary}/>);await tick();});};
 const key=async(type:string,target:Element|Document=document,options:KeyboardEventInit={})=>{const event=new dom.window.KeyboardEvent(type,{key:" ",bubbles:true,cancelable:true,...options});await act(async()=>{target.dispatchEvent(event);await tick();});return event;};
 const click=async(text:string)=>{await act(async()=>{[...document.querySelectorAll<HTMLButtonElement>("button")].find(b=>b.textContent===text)!.click();await tick();});};
 try{

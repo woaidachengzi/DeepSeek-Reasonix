@@ -1,6 +1,6 @@
 {
   "productName": "Reasonix Tauri",
-  "version": "0.1.41",
+  "version": "0.1.43",
   "identifier": "io.reasonix.desktop.takeover",
   "bundle": {
     "targets": ["app", "dmg"]

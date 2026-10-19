@@ -177,7 +177,7 @@ func (b *bridgeServer) speechTranscribe(w http.ResponseWriter, r *http.Request) 
 	defer cancel()
 	text, err := recognizeSpeechService(ctx, target, proxy, audio)
 	if err != nil {
-		writeProtocolError(w, 502, "speech_failed", err.Error())
+		writeSpeechFailure(w, "asr", err)
 		return
 	}
 	if ctx.Err() != nil {
@@ -254,23 +254,26 @@ func recognizeSpeechService(ctx context.Context, target speechTarget, proxy netc
 	}
 	response, err := client.Do(request)
 	if err != nil {
-		return "", errors.New("语音识别连接失败或超时；请检查网络和所选渠道后重试。")
+		return "", speechConnectionFailure(err, "语音识别连接失败或超时；请检查网络和所选渠道后重试。")
 	}
 	defer response.Body.Close()
 	switch response.StatusCode {
 	case 401, 403:
-		return "", errors.New("语音渠道未授权；请检查 API Key 及语音识别使用权限。")
+		return "", speechFailure("auth", "语音渠道未授权；请检查 API Key 及语音识别使用权限。")
 	case 404:
-		return "", errors.New("语音接口不存在；请在语音识别设置中检查服务地址和接口格式。")
+		return "", speechFailure("unsupported", "语音接口不存在；请在语音识别设置中检查服务地址和接口格式。")
 	case 429:
-		return "", errors.New("语音渠道额度不足或请求过多；请检查额度或稍后重试。")
+		return "", speechFailure("rate_limit", "语音渠道额度不足或请求过多；请检查额度或稍后重试。")
 	}
 	if response.StatusCode != 200 {
-		return "", errors.New("语音服务返回异常；请稍后重试或切换语音渠道。")
+		return "", speechFailure("upstream", "语音服务返回异常；请稍后重试或切换语音渠道。")
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, 256<<10+1))
 	if err != nil || len(data) > 256<<10 {
-		return "", errors.New("语音识别结果过大或读取失败；请缩短录音后重试。")
+		if err != nil {
+			return "", speechConnectionFailure(err, "语音识别结果读取失败；请重新录音。")
+		}
+		return "", speechFailure("result", "语音识别结果过大；请缩短录音后重试。")
 	}
 	var decoded struct {
 		Text    string `json:"text"`
@@ -282,17 +285,17 @@ func recognizeSpeechService(ctx context.Context, target speechTarget, proxy netc
 		} `json:"choices"`
 	}
 	if json.Unmarshal(data, &decoded) != nil {
-		return "", errors.New("语音服务响应格式不匹配；请检查接口格式后重试。")
+		return "", speechFailure("result", "语音服务响应格式不匹配；请检查接口格式后重试。")
 	}
 	text := strings.TrimSpace(decoded.Text)
 	if target.Protocol == "mimo" {
 		if len(decoded.Choices) != 1 || decoded.Choices[0].FinishReason != "stop" {
-			return "", errors.New("语音识别结果不完整；请检查接口格式或重新录音。")
+			return "", speechFailure("result", "语音识别结果不完整；请检查接口格式或重新录音。")
 		}
 		text = strings.TrimSpace(decoded.Choices[0].Message.Content)
 	}
 	if text == "" || len(text) > speechTextLimit || !utf8.ValidString(text) || strings.ContainsRune(text, 0) {
-		return "", errors.New("没有识别到有效语音；请靠近麦克风重新录制。")
+		return "", speechFailure("no_text", "没有识别到有效语音；请靠近麦克风重新录制。")
 	}
 	return text, nil
 }
