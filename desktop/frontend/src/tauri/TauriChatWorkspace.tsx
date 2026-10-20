@@ -3608,11 +3608,6 @@ export function TauriSessionPreview() {
     }
   }
 
-  async function selectStarterPrompt(value: string) {
-    setPrompt(value);
-    composerRef.current?.focus();
-  }
-
   const currentWorkspace = workspaceRoot || session?.workspaceRoot || "";
   const activeProjectKey = workbenchProjectKey(currentWorkspace, platform);
   const openSourceReference = useCallback((reference: SourceReference) => {
@@ -3815,14 +3810,8 @@ export function TauriSessionPreview() {
             {(session?.state === "running" || session?.state === "paused") && <TauriLiveProgress progress={liveProgress} paused={session.state === "paused"} />}
           </div> : <section className="tauri-welcome">
             <div className="tauri-welcome__mark"><Sparkles size={24} /></div>
-            <p className="tauri-welcome__eyebrow">{profile?.takeoverProfile ? "REASONIX · 原配置与记录" : "REASONIX · TAURI PREVIEW"}</p>
             <h1>把复杂的事，<br /><span>一步步想清楚。</span></h1>
             <p className="tauri-welcome__copy">代码、想法或待办——从一个问题开始，Reasonix 会陪你一起拆解。</p>
-            <div className="tauri-starters" aria-label="开始方式">
-              <button type="button" onClick={() => void selectStarterPrompt("帮我梳理一下这个项目的结构和关键模块")} disabled={busy}><span className="tauri-starters__icon"><FolderOpen size={16} /></span><span><b>理解一个代码库</b><small>梳理项目结构与关键模块</small></span><ArrowUp size={14} /></button>
-              <button type="button" onClick={() => void selectStarterPrompt("帮我把这个想法拆解成清晰、可执行的步骤")} disabled={busy}><span className="tauri-starters__icon"><Sparkles size={16} /></span><span><b>拆解一个想法</b><small>从目标整理到可执行计划</small></span><ArrowUp size={14} /></button>
-              <button type="button" onClick={() => void selectStarterPrompt("请帮我检查这段内容，指出问题并给出改进建议")} disabled={busy}><span className="tauri-starters__icon"><Check size={16} /></span><span><b>检查并改进</b><small>发现问题并给出具体建议</small></span><ArrowUp size={14} /></button>
-            </div>
             {!session && <button className="tauri-welcome__start" type="button" onClick={() => composerRef.current?.focus()} disabled={busy}><Plus size={16} />开始新对话</button>}
           </section>}
         </div></TauriHistorySurface></TauriImageScope>
