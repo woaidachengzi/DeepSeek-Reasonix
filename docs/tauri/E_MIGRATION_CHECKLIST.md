@@ -1,5 +1,11 @@
 # E 迁移清单
 
+## 2026-10-20 侧栏开关向右微调（macOS 0.1.46）
+
+按用户截图箭头，将 macOS 桌面侧栏开关右移至侧栏顶部靠右，距侧栏右边缘 12px；使用侧栏宽度计算位置，适配 workbench/creation。展开与收起继续共用节点和位置；小屏幕沿用原有窗口按钮避让，Linux/Windows 未改。Review 仅涉及两行定位 CSS、发布版本和本记录。
+
+CSS 语法与 diff 检查通过；既有 Playwright 隔离夹具验证右边缘对齐、36 组平台/宽度/布局/明暗组合、首帧原生区域预留、点击/Enter、节点与焦点保持、快捷键和刷新恢复，相关 page/console errors 为零。日志 /private/tmp/reasonix-sidebar-toggle-qa/right-align.log；模拟原生桥接，不代表原生窗口交互验收。发布配置升至 0.1.46；从本次提交构建 macOS ARM64 app/DMG，构建和镜像校验日志 /private/tmp/reasonix-0.1.46-*.log，来源与产物摘要记录 desktop/tauri/target/release/bundle/Reasonix-0.1.46-build.json。不推送、不替换已安装应用。
+
 ## 2026-10-20 侧栏开关移至左上角及本批 review（macOS 0.1.45）
 
 侧栏开关从右上操作组移到窗口外层，展开和收起共用同一个按钮节点与位置；macOS 预留红黄绿区域，Linux/Windows 预留侧栏品牌位置，收起时标题避开开关。补充 aria-controls/aria-expanded，简繁中文与英文提示对应收起/展开，原快捷键及保存逻辑保留。
