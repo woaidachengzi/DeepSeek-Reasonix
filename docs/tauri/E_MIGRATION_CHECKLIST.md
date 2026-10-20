@@ -6,6 +6,9 @@
 
 CSS 语法与 diff 检查通过；既有 Playwright 隔离夹具验证右边缘对齐、36 组平台/宽度/布局/明暗组合、首帧原生区域预留、点击/Enter、节点与焦点保持、快捷键和刷新恢复，相关 page/console errors 为零。日志 /private/tmp/reasonix-sidebar-toggle-qa/right-align.log；模拟原生桥接，不代表原生窗口交互验收。发布配置升至 0.1.46；从本次提交构建 macOS ARM64 app/DMG，构建和镜像校验日志 /private/tmp/reasonix-0.1.46-*.log，来源与产物摘要记录 desktop/tauri/target/release/bundle/Reasonix-0.1.46-build.json。不推送、不替换已安装应用。
 
+
+同一未交付的 0.1.46 版本追加移除右上角重复的「运行状态与设置」波形按钮，左下角运行状态和命令面板入口继续保留。组件既有交互测试及上述浏览器矩阵再次通过，额外验证右上入口消失、左下入口可正常打开/关闭诊断面板；日志 /private/tmp/reasonix-046-toolbar-{unit,browser}.log。最终安装包包含右移与入口精简两项改动，按最终提交重建，不交付中间候选。
+
 ## 2026-10-20 侧栏开关移至左上角及本批 review（macOS 0.1.45）
 
 侧栏开关从右上操作组移到窗口外层，展开和收起共用同一个按钮节点与位置；macOS 预留红黄绿区域，Linux/Windows 预留侧栏品牌位置，收起时标题避开开关。补充 aria-controls/aria-expanded，简繁中文与英文提示对应收起/展开，原快捷键及保存逻辑保留。

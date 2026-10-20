@@ -3788,7 +3788,6 @@ export function TauriSessionPreview() {
             <button type="button" className="tauri-icon-button tauri-workspace-tree-button" aria-label="浏览工作区文件" title="浏览工作区文件" onClick={toggleWorkspace} disabled={busy || !session}>
               <FolderTree size={17} />
             </button>
-            <button type="button" className="tauri-icon-button" aria-label="打开运行状态与设置" onClick={() => setDiagnosticsOpen(true)}><Activity size={17} /></button>
             <button type="button" className="tauri-icon-button" aria-label="切换终端面板" title="终端（不会自动执行命令）" aria-expanded={terminalSessionId === session?.id && terminalOpen} disabled={!session || !streamReady || isReadOnlyWorkbenchSource(sessionPageSource)} onClick={() => {
               if (!session) return;
               setTerminalSessionId(session.id);
