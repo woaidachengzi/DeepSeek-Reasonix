@@ -68,7 +68,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 		if style := c.UIThemeStyle(); style != "" {
 			fmt.Fprintf(&b, "theme_style = %q   # CLI accent palette; REASONIX_THEME_STYLE can override per run\n", style)
 		} else {
-			b.WriteString("# theme_style = \"graphite\"   # graphite|aurora|slate|carbon|nocturne|amber and legacy aliases\n")
+			b.WriteString("# theme_style = \"graphite\"   # system|graphite|aurora|slate|carbon|nocturne|amber and legacy aliases\n")
 		}
 		if layout := c.UIShortcutLayout(); layout != "classic" {
 			fmt.Fprintf(&b, "shortcut_layout = %q   # classic|desktop; compatibility setting; Shift+Tab toggles Plan, Ctrl+Y toggles YOLO\n", layout)
@@ -110,7 +110,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 		if style := c.DesktopThemeStyle(); style != "" {
 			fmt.Fprintf(&b, "theme_style = %q   # desktop accent palette\n", style)
 		} else {
-			b.WriteString("# theme_style = \"graphite\"   # graphite|aurora|slate|carbon|nocturne|amber and legacy aliases\n")
+			b.WriteString("# theme_style = \"graphite\"   # system|graphite|aurora|slate|carbon|nocturne|amber and legacy aliases\n")
 		}
 		if opener := c.DesktopExternalOpener(); opener != "" {
 			fmt.Fprintf(&b, "external_opener = %q   # desktop Open control: installed application id\n", opener)

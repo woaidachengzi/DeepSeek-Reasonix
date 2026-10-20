@@ -24,6 +24,10 @@ const MIN_CODE_CONTRAST = 4.5;
 const DIFF_TINT_ALPHA = 0.12;
 
 const BASE_SURFACES: Record<string, Record<CodeReadabilityMode, { bg: string; code: string; fg: string }>> = {
+  system: {
+    dark: { bg: "#171717", code: "#1c1c1c", fg: "#ededed" },
+    light: { bg: "#ffffff", code: "#f5f5f5", fg: "#1a1a1a" },
+  },
   graphite: {
     dark: { bg: "#0c0d10", code: "#101115", fg: "#f1f1ef" },
     light: { bg: "#f4f3ef", code: "#f6f5f1", fg: "#16181d" },

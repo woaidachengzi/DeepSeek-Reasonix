@@ -281,7 +281,7 @@ func (c *Config) SetDesktopAppearance(theme, style string) error {
 	}
 	normalized := normalizeThemeStyle(style)
 	if normalized == "" {
-		return fmt.Errorf("desktop theme style %q: must be graphite|aurora|slate|carbon|nocturne|amber", style)
+		return fmt.Errorf("desktop theme style %q: must be system|graphite|aurora|slate|carbon|nocturne|amber", style)
 	}
 	c.Desktop.ThemeStyle = normalized
 	return nil

@@ -1,6 +1,6 @@
 // theme.ts manages the appearance override. The stylesheet follows the OS via
 // prefers-color-scheme unless data-theme forces "dark" or "light". A separate
-// data-theme-style attribute selects a visual direction (graphite/aurora/slate/
+// data-theme-style attribute selects a visual direction (system/graphite/aurora/slate/
 // carbon/nocturne/amber) — orthogonal to theme, so every direction supports both
 // light & dark.
 //
@@ -14,6 +14,7 @@ export type Theme = "auto" | "light" | "dark";
 export type ResolvedTheme = Exclude<Theme, "auto">;
 
 export const THEME_STYLES = [
+  "system",
   "graphite",
   "aurora",
   "slate",

@@ -4,6 +4,8 @@
 }
 
 .tauri-shell {
+  position: relative;
+  --tauri-sidebar-toggle-left: 12px;
   --tauri-sidebar-width: 254px;
   --tauri-workspace-width: 520px;
   --tauri-conversation-max: 820px;
@@ -24,6 +26,13 @@
 .tauri-shell[data-sidebar-hidden="true"] { grid-template-columns: minmax(0, 1fr); }
 .tauri-shell[data-sidebar-hidden="true"] .tauri-sidebar { display: none; }
 .tauri-shell[data-desktop-layout="creation"][data-sidebar-hidden="true"] { grid-template-columns: minmax(0, 1fr); }
+
+/* Keep the same control outside the sidebar so collapsing it never moves or hides it. */
+.tauri-sidebar-toggle { position: absolute; top: 15px; left: var(--tauri-sidebar-toggle-left); z-index: var(--z-local-handle); }
+.tauri-shell[data-platform="darwin"] { --tauri-sidebar-toggle-left: calc(var(--traffic-light-left) + var(--traffic-light-width) + 12px); }
+.tauri-shell[data-platform="darwin"] .tauri-sidebar-toggle { top: 9px; }
+.tauri-shell:not([data-platform="darwin"]) .tauri-sidebar__brand { padding-left: 44px; }
+.tauri-shell[data-sidebar-hidden="true"] .tauri-topbar { padding-left: calc(var(--tauri-sidebar-toggle-left) + 34px + 12px); }
 
 /* Creation mode keeps the project list available while giving the current task a calmer canvas. */
 @media (min-width: 641px) {
@@ -656,6 +665,9 @@
   .tauri-shell[data-sidebar-hidden="true"] { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); }
   .tauri-sidebar { max-height: 125px; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--border-soft); }
   .tauri-sidebar__brand { height: 25px; margin-bottom: 7px; }
+  .tauri-shell[data-platform="darwin"] .tauri-sidebar { padding-top: calc(var(--titlebar-height) + 8px); max-height: calc(125px + var(--titlebar-height)); }
+  .tauri-shell[data-platform="darwin"][data-sidebar-hidden="true"] .tauri-topbar { height: calc(54px + var(--titlebar-height)); min-height: calc(54px + var(--titlebar-height)); padding-top: var(--titlebar-height); padding-left: 15px; }
+
   .tauri-sidebar__brand img { width: 98px; }
   .tauri-sidebar__new { position: absolute; top: 9px; right: 12px; width: 38px; min-height: 32px; justify-content: center; padding: 0; }
   .tauri-sidebar__new span, .tauri-sidebar__new kbd, .tauri-sidebar__section-title, .tauri-sidebar__section-heading, .tauri-sidebar__footer { display: none; }
@@ -936,6 +948,7 @@
 .tauri-terminal-palette__color { display: flex; min-width: 0; min-height: 35px; align-items: center; justify-content: space-between; gap: 5px; padding: 4px 7px; border: 1px solid var(--border-soft); border-radius: 7px; color: var(--fg-faint); font: 10px var(--font-mono); }
 .tauri-terminal-palette__color input { width: 24px; height: 23px; padding: 0; border: 0; background: transparent; cursor: pointer; }
 @media (max-width: 800px) { .tauri-terminal-palette__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tauri-settings-style-swatches[data-style="system"] { --preview-bg: #171717; --preview-surface: #ededed; --preview-accent: #ededed; }
 .tauri-settings-style-swatches[data-style="graphite"] { --preview-bg: #0c0d10; --preview-surface: #55565a; --preview-accent: #ff6a3d; }
 .tauri-settings-style-swatches[data-style="aurora"] { --preview-bg: #0e0d18; --preview-surface: #454064; --preview-accent: #9a80ff; }
 .tauri-settings-style-swatches[data-style="slate"] { --preview-bg: #0d0f12; --preview-surface: #35465f; --preview-accent: #4d8df6; }

@@ -637,6 +637,12 @@ func TestDesktopApprovalEndpointPersistsNarrowChange(t *testing.T) {
 	if err := persistDesktopTerminalTheme("sepia"); err == nil {
 		t.Fatal("invalid terminal theme was accepted")
 	}
+	if got := call(http.MethodPost, "/v1/settings/desktop/appearance", `{"theme":"auto","style":"system"}`); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"themeStyle":"system"`) {
+		t.Fatalf("save monochrome appearance: %d %s", got.Code, got.Body.String())
+	}
+	if saved, err := loadDesktopPreferences(); err != nil || saved.ThemeStyle != "system" || saved.Theme != "auto" {
+		t.Fatal("monochrome appearance was not restored from config", err)
+	}
 	if err := persistDesktopAppearance("light", "sepia"); err == nil {
 		t.Fatal("invalid appearance style was accepted")
 	}

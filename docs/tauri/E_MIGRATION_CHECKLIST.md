@@ -1,5 +1,25 @@
 # E 迁移清单
 
+## 2026-10-20 侧栏开关移至左上角及本批 review（macOS 0.1.45）
+
+侧栏开关从右上操作组移到窗口外层，展开和收起共用同一个按钮节点与位置；macOS 预留红黄绿区域，Linux/Windows 预留侧栏品牌位置，收起时标题避开开关。补充 aria-controls/aria-expanded，简繁中文与英文提示对应收起/展开，原快捷键及保存逻辑保留。
+
+Review 覆盖本批系统黑白主题、前后端主题允许值/持久化、侧栏布局、构建权限契约与验收记录，修复一处启动边界：原生平台信息异步返回前，空的平台标识会令按钮短暂位于 macOS 系统按钮区域。首帧现按浏览器平台初始化，原生结果返回后仍更新；既有组件测试通过 flushSync 验证首帧，延迟原生平台返回的真实浏览器夹具在修复前失败、修复后通过。
+
+完整 test:tauri、主题测试 314 项、构建契约 73 项及 Linux preflight/CI 模拟、测试类型、Go 配置/外观/主题专项、Rust host preferences 12 项通过。Browser 插件未提供，使用现有 Playwright/Chrome，在 http://127.0.0.1:5207/sidebar-qa 模拟原生桥接验证 macOS/Linux/Windows 三种布局，1440/900/390px、明暗和 workbench/creation 共 36 组，覆盖按钮固定位置、同一 DOM/焦点、点击/Enter、快捷键、刷新恢复及标题避让；无 page/console errors 或 Vite 错误遮罩。测试服务和浏览器已关闭。日志在 /private/tmp/reasonix-review-045-*.log，截图与 report.json 在本机 visualizations 的 sidebar-toggle 目录。
+
+打包配置升至 0.1.45，目标为 macOS ARM64 app/DMG，沿用 takeover 身份和本机 ad-hoc 签名。从提交后的源码构建，构建与镜像校验日志在 /private/tmp/reasonix-0.1.45-*.log，来源及产物摘要记录于 desktop/tauri/target/release/bundle/Reasonix-0.1.45-build.json。浏览器测试不等同于原生窗口拖动或红黄绿位置的运行时验收；本批未更换已安装应用，不包含私人音色/渠道凭据，不推送远端。
+
+## 2026-10-20 系统黑白配色（macOS 0.1.44）
+
+在「设置 → 外观 → 视觉风格」增加「系统黑白」。浅色为纯白正文、浅灰侧栏和黑色主按钮；深色为柔和黑底、分层灰色表面和浅色主按钮。用户消息、选中状态、悬停与焦点统一为灰阶；代码语法、错误和运行状态继续保留语义颜色。明暗与配色仍是独立设置，选择「自动」即可随系统即时切换。沿用现有布局、字体、主题库和存储链路，原有主题及默认选择保持兼容。
+
+前端及 Go/Rust 的基础主题校验、主题画廊、预览色板和代码可读性同步支持 `system`。新增保存／重开恢复与回滚覆盖；主题单测 314 项、真实设置组件交互、生产／测试类型、Go 桥接外观和配置测试、desktop 主题测试、Rust host preferences 12 项、主题 catalog 构建测试及生产构建通过。浏览器主题表面回归覆盖全部 7 套主题的强制浅／深色及自动浅／深色，验证系统黑白实际颜色及浮层不透明度。
+
+Browser 插件未提供，使用已安装的 Playwright/Chrome，在 `http://127.0.0.1:5198/monochrome-qa` 加载真实 Tauri 组件与共享样式，仅桥接与会话使用模拟资料。实测「打开外观 → 系统黑白 → 自动 → 返回对话 → 系统深浅切换 → 刷新保留」，以及深色并排文件预览、1440×1000 与 390×844 布局；无横向溢出、无相关 console/page errors，页面身份、非空与无 Vite 错误覆盖通过。已直接查看改造前后截图，对照正文／侧栏层次、主按钮反色、代码对比度、设置选中／悬停状态及窄窗口排版；沿用既有设计系统，仅新增配色，无布局改造。截图在 `/Users/jerry/.codex/visualizations/2026/10/17/01a14a23-d946-7a00-842b-5417a338c84e/system-theme/`，日志 `/private/tmp/reasonix-system-theme-{unit,go,desktop-go,rust,types,test-types,catalog,surfaces,browser,build}.log`。测试服务器和浏览器已关闭，临时测试脚本已移除。
+
+0.1.44 takeover App 标识与版本、deep/strict 签名及 DMG 完整性通过；安装包 `desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.44_aarch64.dmg`，42,694,202 字节，SHA256 `2512904333775c004202b8116db2e0c537c5973d26fd9d2595446a0a7b14ef1e`。构建日志 `/private/tmp/reasonix-0.1.44-build.log`，镜像校验 `/private/tmp/reasonix-0.1.44-dmg-verify.log`。未替换已安装应用，未提交或推送。
+
 ## 2026-10-19 选文播报错误恢复与顶部双击（macOS 0.1.43）
 
 提交前 review 覆盖本批 0.1.42–0.1.43 改动，修复一项边界问题：选文播报重试时，音频设备同步初始化失败原本会清空保留的选文；现在仍保留原文、渠道与音色，设备恢复后可再次重试，且初始化失败不会发送合成请求。新增回归在修复前失败、修复后通过。完整 `test:tauri`、`test:tauri-voice`、`test:transcript`、Go `TestSpeech*` 竞态检查、Rust 响应错误边界 8 项、生产／测试类型、相关 ESLint 和完整生产构建均通过；日志 `/private/tmp/reasonix-review-043-{tauri,voice,transcript,go,rust,types,test-types,eslint,build}.log`。未发现其他阻塞问题。下文安装包记录对应打包时点；本次 review 补充修复尚未重新打包。

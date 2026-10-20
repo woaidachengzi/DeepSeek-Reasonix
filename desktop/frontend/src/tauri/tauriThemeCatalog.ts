@@ -16,6 +16,7 @@ const assetFiles = (import.meta.env?.MODE ? import.meta.glob("../../../themes/of
 }) : {}) as Record<string, string>;
 
 const styleNames: Record<ThemeStyle, string> = {
+  system: "settings.style.system.zh",
   graphite: "settings.style.graphite.zh",
   aurora: "settings.style.aurora.zh",
   slate: "settings.style.slate.zh",

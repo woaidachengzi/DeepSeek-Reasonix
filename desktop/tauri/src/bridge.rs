@@ -3618,7 +3618,7 @@ impl BridgeSupervisor {
         if !matches!(theme.as_str(), "auto" | "dark" | "light")
             || !matches!(
                 style.as_str(),
-                "" | "graphite" | "aurora" | "slate" | "carbon" | "nocturne" | "amber"
+                "" | "system" | "graphite" | "aurora" | "slate" | "carbon" | "nocturne" | "amber"
             )
         {
             return Err("invalid desktop appearance".to_string());

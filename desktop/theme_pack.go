@@ -36,6 +36,7 @@ const (
 
 // Allowed base styles match the existing desktop theme directions.
 var themePackBaseStyles = map[string]struct{}{
+	"system":   {},
 	"graphite": {},
 	"aurora":   {},
 	"slate":    {},
@@ -531,9 +532,10 @@ func isBuiltinThemeID(id string) bool {
 }
 
 func builtinThemePacks() []ThemePackManifest {
-	// Built-in packs mirror the six style directions with empty token overrides.
-	order := []string{"graphite", "aurora", "slate", "carbon", "nocturne", "amber"}
+	// Built-in packs mirror the style directions with empty token overrides.
+	order := []string{"system", "graphite", "aurora", "slate", "carbon", "nocturne", "amber"}
 	names := map[string]string{
+		"system":   "System monochrome",
 		"graphite": "Graphite",
 		"aurora":   "Aurora",
 		"slate":    "Slate",

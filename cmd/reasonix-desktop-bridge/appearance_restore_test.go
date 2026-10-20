@@ -14,6 +14,7 @@ import (
 func TestDesktopAppearanceRollbackRestoresUnsetExplicitAndLegacyState(t *testing.T) {
 	for _, seed := range []struct{ name, desktop string }{
 		{"unset", ""}, {"explicit-auto", "theme = \"auto\"\n"}, {"legacy-style", "theme = \"dark\"\ntheme_style = \"glacier\"\n"},
+		{"system-style", "theme = \"auto\"\ntheme_style = \"system\"\n"},
 	} {
 		t.Run(seed.name, func(t *testing.T) {
 			t.Setenv("REASONIX_HOME", t.TempDir())

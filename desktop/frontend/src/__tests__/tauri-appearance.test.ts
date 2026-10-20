@@ -22,6 +22,13 @@ applyTauriAppearance({ mode: "auto", style: "amber" });
 assert.equal(document.documentElement.hasAttribute("data-theme"), false, "system mode follows the OS media query");
 assert.equal(document.documentElement.getAttribute("data-theme-style"), "amber");
 
+applyTauriAppearance({ mode: "auto", style: "system" });
+document.documentElement.setAttribute("data-theme-style", "graphite");
+initTauriAppearance();
+assert.deepEqual(readTauriAppearance(), { mode: "auto", style: "system" }, "monochrome style survives restart independently of appearance mode");
+assert.equal(document.documentElement.hasAttribute("data-theme"), false);
+assert.equal(document.documentElement.getAttribute("data-theme-style"), "system");
+
 localStorage.setItem("tauri-theme", "system");
 localStorage.setItem("tauri-theme-style", "unknown");
 assert.deepEqual(readTauriAppearance(), { mode: "auto", style: "graphite" }, "old system mode and invalid style resolve safely");

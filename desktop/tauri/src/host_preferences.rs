@@ -25,7 +25,7 @@ const THEME_TOKENS: &[&str] = &[
     "warn",
     "err",
 ];
-const BASE_STYLES: &[&str] = &["graphite", "aurora", "slate", "carbon", "nocturne", "amber"];
+const BASE_STYLES: &[&str] = &["system", "graphite", "aurora", "slate", "carbon", "nocturne", "amber"];
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

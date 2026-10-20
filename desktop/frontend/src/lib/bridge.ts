@@ -4959,7 +4959,7 @@ function makeMockApp(): AppBindings {
           settings.desktopTheme = theme === "auto" || theme === "light" ? theme : "dark";
           settings.desktopThemeStyle = style;
           mockThemeMode = settings.desktopTheme as "auto" | "light" | "dark";
-          if (["graphite","aurora","slate","carbon","nocturne","amber"].includes(style)) {
+          if (["system","graphite","aurora","slate","carbon","nocturne","amber"].includes(style)) {
             mockBaseStyle = style;
           }
         },
@@ -4978,13 +4978,13 @@ function makeMockApp(): AppBindings {
         },
         async GetActiveThemePack() {
           // Base style ids are never active packs in the redesigned model.
-          const pack = mockActiveThemeId && !["graphite","aurora","slate","carbon","nocturne","amber"].includes(mockActiveThemeId)
+          const pack = mockActiveThemeId && !["system","graphite","aurora","slate","carbon","nocturne","amber"].includes(mockActiveThemeId)
             ? mockThemePacks.find((p) => p.id === mockActiveThemeId)
             : null;
           return { activeThemeId: pack ? mockActiveThemeId : "", pack: pack ? { ...pack, active: true } : null };
         },
         async GetThemeExperience() {
-          const pack = mockActiveThemeId && !["graphite","aurora","slate","carbon","nocturne","amber"].includes(mockActiveThemeId)
+          const pack = mockActiveThemeId && !["system","graphite","aurora","slate","carbon","nocturne","amber"].includes(mockActiveThemeId)
             ? mockThemePacks.find((p) => p.id === mockActiveThemeId)
             : null;
           return {
@@ -4997,14 +4997,14 @@ function makeMockApp(): AppBindings {
         },
         async ActivateThemePack(id: string) {
           const next = String(id || "").trim();
-          if (["graphite","aurora","slate","carbon","nocturne","amber"].includes(next)) {
+          if (["system","graphite","aurora","slate","carbon","nocturne","amber"].includes(next)) {
             throw new Error(`base style ${next} is not a theme pack; use ActivateBaseStyle`);
           }
           mockActiveThemeId = next;
         },
         async ActivateBaseStyle(style: string) {
           const s = String(style || "").trim().toLowerCase();
-          if (!["graphite","aurora","slate","carbon","nocturne","amber"].includes(s)) {
+          if (!["system","graphite","aurora","slate","carbon","nocturne","amber"].includes(s)) {
             throw new Error(`unknown base style ${s}`);
           }
           mockBaseStyle = s;

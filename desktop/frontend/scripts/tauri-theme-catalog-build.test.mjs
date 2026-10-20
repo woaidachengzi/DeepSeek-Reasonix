@@ -64,7 +64,8 @@ try {
     const selected = catalog.tauriThemeCatalog("graphite", manifest.id);
     assert.deepEqual(Array.from(selected.filter(pack => pack.active), pack => pack.id), [manifest.id]);
   }
-  assert.equal(catalog.tauriThemeCatalog("graphite", "").filter(pack => pack.kind === "base").length, 6);
+  assert.equal(catalog.tauriThemeCatalog("graphite", "").filter(pack => pack.kind === "base").length, 7);
+  assert.deepEqual(Array.from(catalog.tauriThemeCatalog("system", "").filter(pack => pack.active), pack => pack.id), ["system"], "monochrome is an independently selectable base style");
   assert.deepEqual(Array.from(catalog.tauriThemeCatalog("graphite", "").filter(pack => pack.active), pack => pack.id), ["graphite"]);
   assert.equal(catalog.tauriThemePackById("official-missing"), null);
   assert(!catalog.isSafeBackgroundURL("https://foreign.invalid/assets/background-untrusted.webp"));

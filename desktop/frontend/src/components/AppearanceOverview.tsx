@@ -27,6 +27,7 @@ import { ThemeGallery } from "./ThemeGallery";
 import { TypographySettings } from "./TypographySettings";
 
 const STYLE_NAME_KEY: Record<ThemeStyle, DictKey> = {
+  system: "settings.style.system.zh",
   graphite: "settings.style.graphite.zh",
   aurora: "settings.style.aurora.zh",
   slate: "settings.style.slate.zh",

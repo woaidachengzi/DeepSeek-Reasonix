@@ -17,11 +17,15 @@ export type ThemePreviewPalette = {
 };
 
 /**
- * Canonical miniature palettes for the six native appearance directions.
+ * Canonical miniature palettes for the built-in appearance directions.
  * These mirror the semantic variables in styles.css so every gallery surface
  * previews the selected base style instead of falling back to Graphite.
  */
 export const BASE_STYLE_PREVIEW_PALETTES: Record<ThemeStyle, Record<ThemePreviewMode, ThemePreviewPalette>> = {
+  system: {
+    dark: { bg: "#171717", bgSoft: "#1c1c1c", panel: "#242424", sidebar: "#202020", fg: "#ededed", fgDim: "#b4b4b4", accent: "#ededed", accentFg: "#171717", border: "#3d3d3d", radius: "8px" },
+    light: { bg: "#ffffff", bgSoft: "#f5f5f5", panel: "#ffffff", sidebar: "#f7f7f7", fg: "#1a1a1a", fgDim: "#595959", accent: "#1a1a1a", accentFg: "#ffffff", border: "#dedede", radius: "8px" },
+  },
   graphite: {
     dark: { bg: "#0c0d10", bgSoft: "#101115", panel: "#15161a", sidebar: "#15161a", fg: "#f1f1ef", fgDim: "#a7a8ad", accent: "#ff6a3d", accentFg: "#0c0d10", border: "rgba(255, 255, 255, 0.1)", radius: "8px" },
     light: { bg: "#f4f3ef", bgSoft: "#f0efe9", panel: "#ffffff", sidebar: "#ffffff", fg: "#16181d", fgDim: "#4a4d56", accent: "#ff5a2c", accentFg: "#ffffff", border: "rgba(20, 22, 28, 0.12)", radius: "8px" },

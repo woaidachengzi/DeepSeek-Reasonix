@@ -23,9 +23,14 @@ Object.assign(dom.window, { __TAURI_INTERNALS__: { invoke: async () => [] } });
 const React = await import("react");
 const { act } = React;
 const { createRoot } = await import("react-dom/client");
+const { flushSync } = await import("react-dom");
 const { TauriSessionApp } = await import("../tauri/TauriChatWorkspace");
 const root = createRoot(document.getElementById("root")!);
-await act(async () => { root.render(React.createElement(TauriSessionApp)); await new Promise(resolve => setTimeout(resolve, 0)); });
+await act(async () => {
+  flushSync(() => root.render(React.createElement(TauriSessionApp)));
+  assert.equal(document.querySelector<HTMLElement>(".tauri-shell")?.dataset.platform, "linux", "the first paint reserves platform chrome before the native platform promise resolves");
+  await new Promise(resolve => setTimeout(resolve, 0));
+});
 const shell = document.querySelector<HTMLElement>(".tauri-shell");
 assert.ok(shell);
 assert.equal(shell.hasAttribute("data-sidebar-hidden"), false, "sidebar is visible by default");

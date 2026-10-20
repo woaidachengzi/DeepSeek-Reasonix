@@ -713,7 +713,7 @@ export function TauriSessionPreview() {
     unavailable: () => showToast(t("composer.sessionContextReadFailed"), "warn"),
     failed: () => showToast(t("notifications.openFailed"), "warn"),
   }, { busy, blocked: busy, source: sessionPageSource, sessionId: session?.id });
-  const [platform, setPlatform] = useState<string>("");
+  const [platform, setPlatform] = useState<string>(() => detectShortcutPlatform());
   // Optimistic user message: displayed immediately after submit, cleared when history loads
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const [pendingUserMessageTime, setPendingUserMessageTime] = useState<number>();
@@ -3643,7 +3643,10 @@ export function TauriSessionPreview() {
   return (
     <SourceReferenceContext.Provider value={openSourceReference}>
     <main className="tauri-shell" ref={workspaceLayout.shellRef} style={workspaceLayout.style} data-workspace-docked={workspaceLayout.docked ? "true" : undefined} data-platform={platform} data-desktop-layout={desktopLayout} data-sidebar-hidden={sidebarVisible ? undefined : "true"}>
-      <aside className="tauri-sidebar" aria-label="会话导航">
+      <button type="button" className="tauri-icon-button tauri-sidebar-toggle" aria-label={t(sidebarVisible ? "settings.tauriShortcut.hideSidebar" : "settings.tauriShortcut.showSidebar")} title={`${t(sidebarVisible ? "settings.tauriShortcut.hideSidebar" : "settings.tauriShortcut.showSidebar")} (${formatShortcutCombo(shortcutOverrides.toggle_sidebar ?? defaultTauriShortcut("toggle_sidebar", shortcutPlatform), shortcutPlatform)})`} aria-controls="tauri-session-navigation" aria-expanded={sidebarVisible} aria-pressed={!sidebarVisible} onClick={() => setSidebarVisible(previous => { const next = !previous; setTauriSidebarVisible(next); return next; })}>
+        {sidebarVisible ? <PanelLeftClose size={17} aria-hidden="true" /> : <PanelLeftOpen size={17} aria-hidden="true" />}
+      </button>
+      <aside id="tauri-session-navigation" className="tauri-sidebar" aria-label="会话导航">
         <div className="tauri-sidebar__drag" data-tauri-drag-region aria-hidden="true" />
         <div className="tauri-sidebar__brand"><img src={logoWordmark} alt="Reasonix" draggable={false} /><span>{profile?.takeoverProfile ? "本地版" : "PREVIEW"}</span></div>
         <button className="tauri-sidebar__new" type="button" onClick={() => void createSession()} disabled={busy || isReadOnlyWorkbenchSource(sessionPageSource)}>
@@ -3779,9 +3782,6 @@ export function TauriSessionPreview() {
           <div className="tauri-topbar__actions">
             {session && <ExternalOpener key={session.id} tabId={session.id} dismissSignal={settingsOpen ? 1 : 0} bridge={tauriExternalOpenerBridge} />}
             <button type="button" className="tauri-icon-button" aria-label={t("shortcuts.action.commandPalette")} title={`${t("shortcuts.action.commandPalette")} (${formatShortcutCombo(shortcutOverrides.command_palette ?? defaultTauriShortcut("command_palette", shortcutPlatform), shortcutPlatform)})`} onClick={() => setCommandPaletteOpen(true)}><Search size={17} /></button>
-            <button type="button" className="tauri-icon-button tauri-sidebar-toggle" aria-label={t(sidebarVisible ? "settings.tauriShortcut.hideSidebar" : "settings.tauriShortcut.showSidebar")} title={`${t(sidebarVisible ? "settings.tauriShortcut.hideSidebar" : "settings.tauriShortcut.showSidebar")} (${formatShortcutCombo(shortcutOverrides.toggle_sidebar ?? defaultTauriShortcut("toggle_sidebar", shortcutPlatform), shortcutPlatform)})`} aria-pressed={!sidebarVisible} onClick={() => setSidebarVisible(previous => { const next = !previous; setTauriSidebarVisible(next); return next; })}>
-              {sidebarVisible ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}
-            </button>
             <button type="button" className="tauri-workspace-button" onClick={() => { void chooseDefaultWorkspace().catch(() => {}); }} disabled={busy || session?.state === "running"} title={defaultWorkspace ? `新对话默认工作区：${defaultWorkspace}` : "选择工作区（用于新对话）"}>
               <FolderOpen size={15} /><span>{currentWorkspace || "选择工作区"}</span><ChevronDown size={13} />
             </button>

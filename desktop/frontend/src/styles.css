@@ -502,6 +502,103 @@
    Order: default-dark block, then forced-light override, then prefers-light
    override (for auto / no data-theme). */
 
+/* ---- System — neutral black, white and gray in both appearance modes. ---- */
+:root[data-theme-style="system"] {
+  --stage: var(--bg);
+  --surface: var(--bg-elev);
+  --surface-2: var(--bg-elev-2);
+  --surface-3: var(--bg-soft);
+  --panel: var(--bg-elev);
+  --chat-bg: var(--bg);
+  --workspace-preview-bg: var(--bg);
+  --workspace-files-bg: var(--sidebar-bg);
+  --workspace-files-hover: var(--sidebar-hover);
+  --workspace-selection-bg: var(--sidebar-active);
+  --workspace-selection-fg: var(--accent);
+  --workspace-selection-bar: var(--accent);
+  --text: var(--fg);
+  --text-2: var(--fg-dim);
+  --text-3: var(--fg-faint);
+  --accent: var(--fg);
+  --accent-fg: #171717;
+  --accent-text: var(--accent-fg);
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-strong: var(--accent);
+  --sidebar-active: color-mix(in srgb, var(--accent) 12%, var(--sidebar-bg));
+  --control-primary-bg: var(--accent);
+  --control-primary-fg: var(--accent-fg);
+  --chat-user-bg: var(--bg-elev-2);
+  --chat-user-border: transparent;
+  --chat-user-fg: var(--fg);
+  --chat-user-shadow: none;
+  --code-bg: var(--bg-soft);
+  --grad: linear-gradient(0deg, var(--accent), var(--accent));
+  --focus-ring: 0 0 0 3px var(--accent-soft);
+  --r-s: 5px;
+  --r: 8px;
+  --r-l: 11px;
+  --radius: 8px;
+  --bg: #171717;
+  --bg-soft: #1c1c1c;
+  --bg-elev: #242424;
+  --bg-elev-2: #2e2e2e;
+  --sidebar-bg: #202020;
+  --sidebar-hover: #2a2a2a;
+  --border: #3d3d3d;
+  --border-2: #555555;
+  --border-soft: #303030;
+  --fg: #ededed;
+  --fg-dim: #b4b4b4;
+  --fg-faint: #939393;
+  --ok: #68c58c;
+  --warn: #e4b45b;
+  --err: #f08080;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 18%);
+  --shadow-2: 0 14px 40px rgb(0 0 0 / 35%);
+}
+:root[data-theme="light"][data-theme-style="system"] {
+  --bg: #ffffff;
+  --bg-soft: #f5f5f5;
+  --bg-elev: #ffffff;
+  --bg-elev-2: #f0f0f0;
+  --sidebar-bg: #f7f7f7;
+  --sidebar-hover: #ededed;
+  --border: #dedede;
+  --border-2: #bdbdbd;
+  --border-soft: #ebebeb;
+  --fg: #1a1a1a;
+  --fg-dim: #595959;
+  --fg-faint: #737373;
+  --accent-fg: #ffffff;
+  --ok: #237b46;
+  --warn: #946100;
+  --err: #c53535;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 4%);
+  --shadow-2: 0 12px 34px rgb(0 0 0 / 12%);
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme-style="system"]:not([data-theme]) {
+    --bg: #ffffff;
+    --bg-soft: #f5f5f5;
+    --bg-elev: #ffffff;
+    --bg-elev-2: #f0f0f0;
+    --sidebar-bg: #f7f7f7;
+    --sidebar-hover: #ededed;
+    --border: #dedede;
+    --border-2: #bdbdbd;
+    --border-soft: #ebebeb;
+    --fg: #1a1a1a;
+    --fg-dim: #595959;
+    --fg-faint: #737373;
+    --accent-fg: #ffffff;
+    --ok: #237b46;
+    --warn: #946100;
+    --err: #c53535;
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 4%);
+    --shadow-2: 0 12px 34px rgb(0 0 0 / 12%);
+  }
+}
+
 /* ---- Graphite — paper, hairline borders, orange accent (desktop default). ---- */
 :root[data-theme-style="graphite"] {
   --stage: #08090c;

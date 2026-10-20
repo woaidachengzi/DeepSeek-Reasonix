@@ -132,6 +132,7 @@ const SETTINGS_TITLES = (t: Translator): Record<TauriSettingsTab, { title: strin
 });
 
 const STYLE_LABEL_KEYS: Record<ThemeStyle, DictKey> = {
+  system: "settings.style.system.zh",
   graphite: "settings.style.graphite.zh",
   aurora: "settings.style.aurora.zh",
   slate: "settings.style.slate.zh",

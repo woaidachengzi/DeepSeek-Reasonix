@@ -41,7 +41,7 @@ const requiredRootTokens = new Map([
   ["--overlay-surface-bg", "var(--bg-elev)"],
 ]);
 
-const themeStyles = ["graphite", "aurora", "slate", "carbon", "nocturne", "amber"];
+const themeStyles = ["system", "graphite", "aurora", "slate", "carbon", "nocturne", "amber"];
 const amberExpected = {
   dark: {
     "--bg": "#090a0c",

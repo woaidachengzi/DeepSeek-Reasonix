@@ -1289,7 +1289,7 @@ func (b *bridgeServer) setDesktopAppearance(w http.ResponseWriter, r *http.Reque
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid desktop appearance")
 		return
 	}
-	if (request.Theme != "auto" && request.Theme != "dark" && request.Theme != "light") || (request.Style != "" && request.Style != "graphite" && request.Style != "aurora" && request.Style != "slate" && request.Style != "carbon" && request.Style != "nocturne" && request.Style != "amber") {
+	if (request.Theme != "auto" && request.Theme != "dark" && request.Theme != "light") || (request.Style != "" && request.Style != "system" && request.Style != "graphite" && request.Style != "aurora" && request.Style != "slate" && request.Style != "carbon" && request.Style != "nocturne" && request.Style != "amber") {
 		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid desktop appearance")
 		return
 	}

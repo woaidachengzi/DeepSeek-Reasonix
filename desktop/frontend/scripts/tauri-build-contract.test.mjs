@@ -200,6 +200,7 @@ const expectedWebviewPermissions = [
   "core:event:allow-listen",
   "core:event:allow-unlisten",
   "core:window:allow-start-dragging",
+  "core:window:allow-internal-toggle-maximize",
   "dialog:allow-open",
   "clipboard-manager:allow-read-text",
   "clipboard-manager:allow-write-text",
@@ -207,7 +208,7 @@ const expectedWebviewPermissions = [
 eq(
   JSON.stringify([...mainWindowCapability.permissions].sort()),
   JSON.stringify(expectedWebviewPermissions.sort()),
-  "WebView has only event-listener, drag, file-picker, and text clipboard permissions",
+  "WebView has only event-listener, drag/zoom, file-picker, and text clipboard permissions",
 );
 
 // Tauri decodes the configured PNG into an RGBA buffer at application launch.

@@ -437,6 +437,9 @@ await act(async () => {
   Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(settingsSearch, "");
   settingsSearch.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
 });
+await act(async () => { click("系统黑白"); });
+assert.equal(desktopThemeStyle, "system", "monochrome style is persisted through the native settings bridge");
+assert.equal(document.documentElement.getAttribute("data-theme-style"), "system");
 await act(async () => { click("深色"); });
 assert.equal(document.documentElement.getAttribute("data-theme"), "dark");
 assert.equal(localStorage.getItem("tauri-theme"), "dark");

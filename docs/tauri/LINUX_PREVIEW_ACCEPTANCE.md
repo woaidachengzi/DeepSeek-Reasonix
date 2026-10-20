@@ -1,5 +1,20 @@
 # Linux Preview 构建与验收
 
+## 2026-10-20 系统黑白主题 Ubuntu 0.1.44 安装包
+
+在已运行的 Ubuntu 26.04 ARM64 虚拟机中完成原生构建，产物位于 `desktop/tauri/target/linux-system-0.1.44-20261020/packages/`，Mac 副本与 guest 摘要一致：
+
+| 包 | 字节 | SHA256 |
+| --- | ---: | --- |
+| `Reasonix Tauri_0.1.44_arm64.deb` | 43348792 | `34eb52ed73187641084b1eef4ef3fbb04cf8e092ec8de3d7afae52ea95e5016d` |
+| `Reasonix Tauri_0.1.44_aarch64.AppImage` | 119323144 | `b13a1014b0dd2bf2b3a067e0f4449ae5b6eb203c8d9f40a8227fa825e40a6369` |
+
+来源为 base `f86d15f1de35292568f75cc89873e3081546d113` 加 31 个工作区变更（含系统黑白主题与窗口缩放权限契约修正），冻结源码归档 SHA256 `462bcdf5c511ce7dcc163b4cc2fabb233866901f8e0c964e09eaa03431198359`。私有 guest root 为 `linux-system-0.1.44-20261020.1qs8Tq`；归档不含 `.git`，因此包内提交号为 unknown，完整来源以该目录的 `SOURCE_IDENTITY.json` 为准。Ubuntu 私有配置保持既有 `io.reasonix.desktop.preview` 隔离身份，避免误用要求 macOS 迁移凭据的 takeover 身份；产品名为 Reasonix Tauri，版本 0.1.44，updater endpoints 为空。没有修改 Mac 构建身份。
+
+首次契约检查暴露已有双击缩放权限缺少对应预期项；仅补齐测试白名单，未新增运行时权限。修复后 73 个契约、Linux preflight/CI 模拟、全部构建前端门禁与资源预算通过，Rust release 编译 2m32s，原构建 session5890 exit0。审计 session24893 exit0：架构/版本、ldd 无缺失、apt 仅模拟、两个包与当前构建的 sidecar 一致及私有文件清单检查通过。deb host 和真实 AppRun 各 managed/explicit 两种私有档案共四次 Xvfb/D-Bus 启动及普通 RunEvent::Exit 通过，包含认证边界、私有 profile 和 sidecar/readiness 清理；语音、外观及批准设置后端专项通过。
+
+准确 deb host SHA256 `9bad2174b1d499ed52fc1d8601a3fb4ee7a7d032b7a47e3beca36a36f6e6f498`，Go sidecar `b529d8ec7a1081edbaa3fd24233c427350d85741a6e4e8e0d880942be71a3190`。保留 unused appearance、portal/PipeWire/D-Bus 提示，不据此声称可见桌面/Wayland、实际音频或真实模型调用已验收。构建及审计日志、脚本、来源记录与安装说明均保留在上述 target 目录。未安装覆盖应用、迁移用户数据、打包私人音色/密钥、提交或推送。
+
 ## 2026-10-10 共享固定文件 loader 新包验收及 review 边界
 
 新 ARM64 deb/AppImage 位于 `desktop/tauri/target/linux-pinnedloader-20261010/packages/`，SHA256 分别为 `a886a8da0806c292b9b665592248b8f9d1576411bb237017d6d38a0ede49ed06`、`24805d9d88057249612a7787383759975ca39c1f3e102107c72ecb9660a972a9`；Mac副本核对一致。来源为 base `de8bd83a…` + 打包时十五文件dirty，源码归档 `b94feac8…`、guest冻结快照 `73702d76…`，私有root `linux-pinnedloader-20261010.UeDzHX`。原前端门禁/预算及73契约通过，Rust release1m28s，build session73203最终exit0。首次完整缓存复制被空间门禁拒绝（session33685 exit1），未删除旧目录或放宽空间门槛；后续只复制release依赖缓存，不复制debug/旧bundle。

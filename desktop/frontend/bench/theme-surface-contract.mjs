@@ -11,7 +11,7 @@ process.env.PLAYWRIGHT_BROWSERS_PATH = !process.env.PLAYWRIGHT_BROWSERS_PATH || 
 const { chromium } = await import("playwright");
 
 const styles = fs.readFileSync(path.join(frontendDir, "src", "styles.css"), "utf8");
-const themeStyles = ["graphite", "aurora", "slate", "carbon", "nocturne", "amber"];
+const themeStyles = ["system", "graphite", "aurora", "slate", "carbon", "nocturne", "amber"];
 const modes = [
   { name: "forced dark", attribute: "dark", media: "dark" },
   { name: "forced light", attribute: "light", media: "dark" },
@@ -50,6 +50,11 @@ const surfaceSelectors = [
 const fixtures = [...new Set([...overlaySelectors, ...surfaceSelectors])]
   .map((selector) => `<div class="${selector.slice(1)}">surface</div>`)
   .join("");
+
+const systemExpected = {
+  dark: { "--bg": "#171717", "--sidebar-bg": "#202020", "--panel": "#242424", "--fg": "#ededed", "--accent": "#ededed", "--accent-fg": "#171717", "--chat-user-bg": "#2e2e2e", "--code-bg": "#1c1c1c" },
+  light: { "--bg": "#ffffff", "--sidebar-bg": "#f7f7f7", "--panel": "#ffffff", "--fg": "#1a1a1a", "--accent": "#1a1a1a", "--accent-fg": "#ffffff", "--chat-user-bg": "#f0f0f0", "--code-bg": "#f5f5f5" },
+};
 
 const amberExpected = {
   dark: {
@@ -135,8 +140,8 @@ try {
       }
       assert(result.mutedColor === result.expectedMutedColor, `${style} ${mode.name} resolves muted text to --fg-faint`);
 
-      if (style === "amber") {
-        const expected = amberExpected[mode.media === "light" || mode.attribute === "light" ? "light" : "dark"];
+      if (style === "amber" || style === "system") {
+        const expected = (style === "system" ? systemExpected : amberExpected)[mode.media === "light" || mode.attribute === "light" ? "light" : "dark"];
         const colors = await page.evaluate((entries) => {
           const result = {};
           for (const [token] of entries) {
@@ -160,7 +165,7 @@ try {
           return result;
         }, Object.entries(expected));
         for (const token of Object.keys(expected)) {
-          assert(colors[token] === expectedColors[token], `Amber ${mode.name} ${token} matches preview (${colors[token]})`);
+          assert(colors[token] === expectedColors[token], `${style} ${mode.name} ${token} matches preview (${colors[token]})`);
         }
       }
     }

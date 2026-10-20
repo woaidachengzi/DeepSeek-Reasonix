@@ -11,7 +11,7 @@ type DesktopConfig struct {
 	Currency                  string              `toml:"currency"`                     // legacy display currency; migrated to [billing].display_currency
 	LayoutStyle               string              `toml:"layout_style"`                 // workbench|creation; legacy classic is migrated on startup
 	Theme                     string              `toml:"theme"`                        // auto|dark|light; empty resolves to auto
-	ThemeStyle                string              `toml:"theme_style"`                  // graphite|aurora|slate|carbon|nocturne|amber and legacy aliases
+	ThemeStyle                string              `toml:"theme_style"`                  // system|graphite|aurora|slate|carbon|nocturne|amber and legacy aliases
 	TerminalTheme             string              `toml:"terminal_theme"`               // auto|dark|light; auto follows the desktop app theme
 	ExternalOpener            string              `toml:"external_opener"`              // preferred installed app used by the desktop Open control
 	CloseBehavior             string              `toml:"close_behavior"`               // quit|background; desktop window close behavior

@@ -603,14 +603,14 @@ ok(gallerySource.includes("ThemePreviewSurface") || gallerySource.includes("them
 ok(previewSurfaceSource.includes("theme-preview-surface__code-island"), "theme preview includes real code and diff samples");
 ok(gallerySource.includes('themePackKind(pack) === "base"') && gallerySource.includes('variant="thumbnail"'), "base gallery cards render semantic UI thumbnails");
 ok(gallerySource.includes('themePackKind(p) === "base"'), "immersive rail renders base-style thumbnails");
-for (const style of ["graphite", "aurora", "slate", "carbon", "nocturne", "amber"] as const) {
+for (const style of ["system", "graphite", "aurora", "slate", "carbon", "nocturne", "amber"] as const) {
   const basePack = { id: style, name: style, baseStyle: style, builtin: true, kind: "base" as const, active: false, hasBackground: false, tokens: {}, recipes: {} };
   for (const mode of ["light", "dark"] as const) {
     const palette = themePreviewPalette(basePack, mode);
     ok(palette === BASE_STYLE_PREVIEW_PALETTES[style][mode], `${style} ${mode} uses its canonical preview palette`);
   }
 }
-ok(new Set(Object.values(BASE_STYLE_PREVIEW_PALETTES).map((modes) => modes.dark.accent)).size === 6, "six base previews have distinct dark accents");
+ok(new Set(Object.values(BASE_STYLE_PREVIEW_PALETTES).map((modes) => modes.dark.accent)).size === 7, "seven base previews have distinct dark accents");
 ok(
   !gallerySource.includes('tab === "catalog" && !immersive') &&
     gallerySource.includes("if (!immersive)") &&
