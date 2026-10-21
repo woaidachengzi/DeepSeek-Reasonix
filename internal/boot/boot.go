@@ -95,6 +95,9 @@ func agentKeepPolicy(keep []string) agent.KeepPolicy {
 // read from configuration. Model "" falls back to default_model; MaxSteps 0
 // uses automatic execution; RequireKey fails fast on a missing key.
 type Options struct {
+	// CompactRatioSource lets a desktop host update context maintenance
+	// without rebuilding the controller. The source must be concurrency-safe.
+	CompactRatioSource func() float64
 	// ModelSettings supplies an immutable desktop credential-proxy resolver.
 	// The bundle contains virtual tunnel credentials only and stays in memory.
 	ModelSettings *config.ModelRuntimeSettings
@@ -1118,6 +1121,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			SoftCompactRatio:    cfg.Agent.SoftCompactRatio,
 			ToolResultSnipRatio: cfg.Agent.ToolResultSnipRatio,
 			CompactRatio:        cfg.Agent.CompactRatio,
+			CompactRatioSource:  opts.CompactRatioSource,
 			CompactForceRatio:   cfg.Agent.CompactForceRatio,
 			ContextEditing:      cfg.Agent.ContextEditing,
 			Temperature:         cfg.Agent.Temperature,
@@ -1242,7 +1246,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// read_only_task, so they cannot write, install, mutate memory, resume/fork
 	// transcripts, or delegate further.
 	//
-	subagentSkillOptions := newSubagentSkillOptionsFactory(cfg.Agent, quoteCtx, headlessGate, keepPolicy, maxSubagentDepth, opts.Ablation, workspaceLease, writeRootSet)
+	subagentSkillOptions := newSubagentSkillOptionsFactory(cfg.Agent, quoteCtx, headlessGate, keepPolicy, maxSubagentDepth, opts.Ablation, workspaceLease, writeRootSet, opts.CompactRatioSource)
 	readOnlySkillRunner := func(sctx context.Context, sk skill.Skill, task string, runOpts skill.SubagentRunOptions) (string, error) {
 		if strings.TrimSpace(runOpts.ContinueFrom) != "" || strings.TrimSpace(runOpts.ForkFrom) != "" {
 			return "", fmt.Errorf("read_only_skill does not support continue_from/fork_from")
@@ -1666,7 +1670,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	})
 
 	execSess := newObservedSession(sysPrompt)
-	executor := agent.New(execProv, reg, execSess, agent.Options{
+	executor := agent.New(execProv, reg, execSess, withCompactionOptions(agent.Options{
 		ImageInput:   imageConfig,
 		MaxSteps:     maxSteps,
 		MaxStepsKey:  opts.MaxStepsKey,
@@ -1693,13 +1697,6 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		CapabilityAudit:              capAudit,
 		ContextWindow:                entry.ContextWindow,
 		MaxOutputTokens:              entry.MaxOutputTokens,
-		SoftCompactRatio:             cfg.Agent.SoftCompactRatio,
-		ToolResultSnipRatio:          cfg.Agent.ToolResultSnipRatio,
-		CompactRatio:                 cfg.Agent.CompactRatio,
-		CompactForceRatio:            cfg.Agent.CompactForceRatio,
-		ContextEditing:               cfg.Agent.ContextEditing,
-		RecentKeep:                   cfg.Agent.RecentKeep,
-		ArchiveDir:                   config.ArchiveDir(),
 		KeepPolicy:                   keepPolicy,
 		ReasoningLanguage:            config.ReasoningLanguageForEntry(entry, cfg.ReasoningLanguage()),
 		PlanModeReadOnlyCommands:     cfg.Agent.PlanModeReadOnlyCommands,
@@ -1707,7 +1704,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		SubagentDepth:                0,
 		MaxSubagentDepth:             maxSubagentDepth,
 		MissingReasoningWarnStateDir: config.MissingReasoningWarnStateDir(),
-	}, sink)
+	}, cfg.Agent, opts.CompactRatioSource), sink)
 	reg.Add(sessiontool.NewSetSessionTitleTool(sessionDir, executor.SessionPath, opts.OnSessionTitleChanged))
 
 	var runner agent.Runner = executor
@@ -1744,20 +1741,13 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			}
 			plannerTools.Add(capRuntime.NewFrontend(plannerLedger, plannerAudit))
 		}
-		plannerOpts := agent.Options{
+		plannerOpts := withCompactionOptions(agent.Options{
 			ImageInput:                   imageConfig,
 			MaxSteps:                     0,
 			Gate:                         headlessGate,
 			ModelRef:                     modelRefFromEntry(pe),
 			QuoteContext:                 quoteCtx,
 			ContextWindow:                pe.ContextWindow,
-			SoftCompactRatio:             cfg.Agent.SoftCompactRatio,
-			ToolResultSnipRatio:          cfg.Agent.ToolResultSnipRatio,
-			CompactRatio:                 cfg.Agent.CompactRatio,
-			CompactForceRatio:            cfg.Agent.CompactForceRatio,
-			ContextEditing:               cfg.Agent.ContextEditing,
-			RecentKeep:                   cfg.Agent.RecentKeep,
-			ArchiveDir:                   config.ArchiveDir(),
 			KeepPolicy:                   keepPolicy,
 			ReasoningLanguage:            config.ReasoningLanguageForEntry(pe, cfg.ReasoningLanguage()),
 			PlanModeReadOnlyCommands:     cfg.Agent.PlanModeReadOnlyCommands,
@@ -1767,7 +1757,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			WriteRoots:                   writeRootSet,
 			HomeDir:                      userHomeDir(),
 			StateRoot:                    config.MemoryUserDir(),
-		}
+		}, cfg.Agent, opts.CompactRatioSource)
 		runner = agent.NewCoordinatorWithPlannerPolicy(plannerProv, plannerSess, pe.Price, plannerTools, plannerOpts, executor, cfg.Agent.Temperature, sink, control.NewPlannerPolicy())
 		label = entry.Model + " + planner " + pe.Model
 	}

@@ -579,6 +579,7 @@ type Messages struct {
 	ProviderErrOpenCodeGoGrokRoute string // recovery hint for OpenCode Go Grok routing
 	ProviderErrQuotaExhaustedFmt   string // provider name, actual HTTP status
 	ProviderErrReasonMissing       string
+	ProviderErrNoDeliverable       string
 	SearchSourcesNotProvided       string
 	SearchModelUnavailable         string
 	ProtocolRecoveryLabel          string

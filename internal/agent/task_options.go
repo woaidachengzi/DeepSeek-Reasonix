@@ -27,7 +27,7 @@ func (t *TaskTool) subagentOptions(ctx context.Context, maxSteps int, pricing *p
 		Gate:                     t.gate,
 		ContextWindow:            ctxWin,
 		RecentKeep:               t.recentKeep,
-		CompactRatio:             t.compactRatio,
+		CompactRatio:             t.currentCompactRatio(),
 		ArchiveDir:               t.archiveDir,
 		KeepPolicy:               t.keepPolicy,
 		ResponseLanguage:         ResponseLanguageFromContext(ctx),
@@ -71,6 +71,7 @@ type TaskToolOptions struct {
 	SoftCompactRatio                      float64
 	ToolResultSnipRatio                   float64
 	CompactRatio                          float64
+	CompactRatioSource                    func() float64
 	CompactForceRatio                     float64
 	Temperature                           float64
 	ContextEditing, ArchiveDir, SysPrompt string
@@ -79,4 +80,45 @@ type TaskToolOptions struct {
 	SubagentModel                         string
 	SubagentEffort                        string
 	ResolveProvider                       func(string, string) (provider.Provider, *provider.Pricing, int, error)
+}
+
+func (t *TaskTool) currentCompactRatio() float64 {
+	if t.compactRatioSource != nil {
+		if ratio := t.compactRatioSource(); ratio > 0 && ratio < 1 {
+			return ratio
+		}
+	}
+	return t.compactRatio
+}
+
+// NewTaskToolWithOptions is the internal standard constructor for TaskTool.
+// An empty SysPrompt still resolves to DefaultTaskSystemPrompt. No extra
+// validation or default overrides are applied beyond the historical NewTaskTool
+// behavior.
+func NewTaskToolWithOptions(opts TaskToolOptions) *TaskTool {
+	sysPrompt := opts.SysPrompt
+	if sysPrompt == "" {
+		sysPrompt = DefaultTaskSystemPrompt
+	}
+	return &TaskTool{
+		imageInput:         opts.ImageInput,
+		prov:               opts.Provider,
+		pricing:            opts.Pricing,
+		quoteContext:       opts.QuoteContext,
+		parentReg:          opts.ParentRegistry,
+		maxSteps:           opts.MaxSteps,
+		contextWindow:      opts.ContextWindow,
+		recentKeep:         opts.RecentKeep,
+		compactRatio:       opts.CompactRatio,
+		compactRatioSource: opts.CompactRatioSource,
+		temperature:        opts.Temperature,
+		archiveDir:         opts.ArchiveDir,
+		keepPolicy:         opts.KeepPolicy,
+		sysPrompt:          sysPrompt,
+		gate:               opts.Gate,
+		subagentModel:      opts.SubagentModel,
+		subagentEffort:     opts.SubagentEffort,
+		resolveProvider:    opts.ResolveProvider,
+		maxSubagentDepth:   DefaultMaxSubagentDepth,
+	}
 }

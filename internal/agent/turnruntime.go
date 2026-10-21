@@ -184,8 +184,8 @@ func (s *evidenceBlockState) snapshot() []string {
 
 // terminalProtocolState groups the run's terminal-protocol bookkeeping: the
 type terminalProtocolState struct {
-	// emptyFinalBlocks counts consecutive reasoning-only stops retried for a
-	// visible final answer.
+	// emptyFinalBlocks counts no-answer stops across this Run. Tool progress
+	// must not replenish the single continuation.
 	emptyFinalBlocks int
 	// handoffNudges counts executor-handoff repairs sent this run.
 	handoffNudges int

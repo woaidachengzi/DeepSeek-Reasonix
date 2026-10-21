@@ -31,7 +31,7 @@ func TestManagedRecoveryOneHTTPRequestAndServerDelay(t *testing.T) {
 	}
 }
 func TestRecoveryDoesNotRetryPermanentOrUnknownErrors(t *testing.T) {
-	for _, err := range []error{context.Canceled, context.DeadlineExceeded, errors.New("arbitrary failure"), &APIError{Status: 429, Body: `{"error":{"code":"insufficient_quota"}}`}, &APIError{Status: 503, ShouldRetry: "false"}, &AuthError{Status: 401}} {
+	for _, err := range []error{context.Canceled, context.DeadlineExceeded, errors.New("arbitrary failure"), fmt.Errorf("turn: %w", ErrNoDeliverableOutput), &APIError{Status: 429, Body: `{"error":{"code":"insufficient_quota"}}`}, &APIError{Status: 503, ShouldRetry: "false"}, &AuthError{Status: 401}} {
 		if ClassifyRecovery(err).Retryable {
 			t.Fatalf("retried %v", err)
 		}

@@ -253,6 +253,7 @@ type TaskTool struct {
 	maxSteps                      int
 	contextWindow                 int
 	compactRatio                  float64
+	compactRatioSource            func() float64
 	recentKeep                    int
 	temperature                   float64
 	archiveDir                    string
@@ -292,37 +293,6 @@ type TaskTool struct {
 	// sub-agent gets its own use_capability frontend so ledger state stays
 	// isolated while connections reuse the parent Host.
 	capabilityRuntime *MCPCapabilityRuntime
-}
-
-// NewTaskToolWithOptions is the internal standard constructor for TaskTool.
-// An empty SysPrompt still resolves to DefaultTaskSystemPrompt. No extra
-// validation or default overrides are applied beyond the historical NewTaskTool
-// behavior.
-func NewTaskToolWithOptions(opts TaskToolOptions) *TaskTool {
-	sysPrompt := opts.SysPrompt
-	if sysPrompt == "" {
-		sysPrompt = DefaultTaskSystemPrompt
-	}
-	return &TaskTool{
-		imageInput:       opts.ImageInput,
-		prov:             opts.Provider,
-		pricing:          opts.Pricing,
-		quoteContext:     opts.QuoteContext,
-		parentReg:        opts.ParentRegistry,
-		maxSteps:         opts.MaxSteps,
-		contextWindow:    opts.ContextWindow,
-		recentKeep:       opts.RecentKeep,
-		compactRatio:     opts.CompactRatio,
-		temperature:      opts.Temperature,
-		archiveDir:       opts.ArchiveDir,
-		keepPolicy:       opts.KeepPolicy,
-		sysPrompt:        sysPrompt,
-		gate:             opts.Gate,
-		subagentModel:    opts.SubagentModel,
-		subagentEffort:   opts.SubagentEffort,
-		resolveProvider:  opts.ResolveProvider,
-		maxSubagentDepth: DefaultMaxSubagentDepth,
-	}
 }
 
 // NewTaskTool wires a task tool to the parent agent's environment so its

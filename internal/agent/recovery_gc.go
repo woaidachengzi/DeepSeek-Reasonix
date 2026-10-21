@@ -252,7 +252,7 @@ func ReclaimableRecoveryBranches(dir string, now time.Time, grace time.Duration)
 	}
 	var out []string
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") || strings.HasSuffix(e.Name(), ".events.jsonl") {
+		if e.IsDir() || !store.IsSessionTranscriptName(e.Name()) {
 			continue
 		}
 		path := filepath.Join(dir, e.Name())
@@ -397,7 +397,7 @@ func trashCoveredRecoveryBranch(path, parentDir string, requireIdle bool) error 
 		return fmt.Errorf("recovery branch must be a direct child of its session directory")
 	}
 	key := filepath.Base(path)
-	if !strings.HasSuffix(key, ".jsonl") || strings.HasSuffix(key, ".events.jsonl") {
+	if !store.IsSessionTranscriptName(key) {
 		return fmt.Errorf("invalid recovery session path")
 	}
 
@@ -692,7 +692,7 @@ func clearRecoveryTrashPending(itemDir string) error {
 
 func validRecoveryTrashKey(key string) bool {
 	return key != "" && filepath.Base(key) == key && key != "." && key != ".." &&
-		strings.HasSuffix(key, ".jsonl") && !strings.HasSuffix(key, ".events.jsonl")
+		store.IsSessionTranscriptName(key)
 }
 
 func reserveRecoveryTrashItemDir(dir, key string) (string, string, error) {

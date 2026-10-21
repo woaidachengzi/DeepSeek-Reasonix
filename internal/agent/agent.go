@@ -45,7 +45,7 @@ const maxToolOutputBytes = 32 * 1024
 
 var deprecatedContextRetentionWarning sync.Once
 
-const maxEmptyFinalBlocks = 3
+const maxEmptyFinalBlocks = 2
 
 // maxStreamRecoveries is the number of body-phase stream retries after the
 // initial sampling attempt (Pi-style default: 1 + 3 = 4 attempts total).
@@ -298,8 +298,7 @@ type Agent struct {
 	responseLanguage     atomic.Value // string: auto|zh|en
 	reasoningLanguage    atomic.Value // string: auto|zh|en
 
-	requireVisibleFinal bool // internal callers require final Content
-	continuationPolicy  ContinuationPolicy
+	continuationPolicy ContinuationPolicy
 
 	// unwrittenResolve is the resolve watermark a failed state write still owes.
 	// It outlives the conversation, which is why it is not in sessionRuntime.
@@ -839,10 +838,6 @@ func (a *Agent) steerQueueLen() int {
 	return len(a.steerQueue)
 }
 
-// CompactRatio returns the fraction of the window at which auto-compaction
-// fires (e.g. 0.8). The status line uses it to show headroom to the next compact.
-func (a *Agent) CompactRatio() float64 { return a.compactRatio }
-
 // CompactNow forces one projection compaction (canonical transcript untouched).
 func (a *Agent) CompactNow(ctx context.Context, instructions string) error {
 	_, err := a.contextManager().Prepare(ctx, ContextPreparePolicy{
@@ -881,7 +876,7 @@ type Options struct {
 	// provider instance. It is attached to emitted Usage events so downstream
 	// usage accounting can attribute tokens to the exact model.
 	ModelRef string
-	// RequireVisibleFinal makes internal callers reject reasoning-only responses.
+	// Deprecated: all callers now require a visible answer after bounded recovery.
 	RequireVisibleFinal bool
 	// ContinuationPolicy is the internal host policy for synthetic same-Run
 	// continuation. The zero value (ContinuationDisabled) is the product default.
@@ -913,6 +908,9 @@ type Options struct {
 	// RecentKeep fall back to defaults when unset.
 	ContextWindow int
 	CompactRatio  float64
+	// CompactRatioSource is concurrency-safe. Root agents read it live;
+	// subagents snapshot it when they are constructed.
+	CompactRatioSource func() float64
 	// Deprecated compatibility inputs. New agents ignore these fields; automatic
 	// maintenance is controlled only by CompactRatio.
 	SoftCompactRatio       float64
@@ -1113,6 +1111,7 @@ func New(prov provider.Provider, tools *tool.Registry, session *Session, opts Op
 			maxSubagentDepth:        maxSubagentDepth,
 			contextWindow:           opts.ContextWindow,
 			compactRatio:            opts.CompactRatio,
+			compactRatioSource:      opts.CompactRatioSource,
 			recentKeep:              opts.RecentKeep,
 			archiveDir:              opts.ArchiveDir,
 			legacyAnchorSafetyGate:  opts.LegacyAnchorSafetyGate,
@@ -1128,8 +1127,7 @@ func New(prov provider.Provider, tools *tool.Registry, session *Session, opts Op
 			ledger: evidence.NewLedger(),
 			budget: runBudget{limit: normalizeTaskBudget(opts.TaskBudget)},
 		},
-		requireVisibleFinal: opts.RequireVisibleFinal,
-		continuationPolicy:  opts.ContinuationPolicy,
+		continuationPolicy: opts.ContinuationPolicy,
 		recovery: recoveryIdentity{
 			agentID: strings.TrimSpace(opts.RecoveryAgentID),
 			taskID:  strings.TrimSpace(opts.RecoveryTaskID),

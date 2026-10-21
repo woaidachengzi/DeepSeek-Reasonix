@@ -416,6 +416,7 @@ type streamedCall struct {
 	id, name, arguments string
 	argChars            int
 	completed           bool
+	announced           bool
 }
 
 func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<- provider.Chunk, requestMessages []provider.Message) {
@@ -465,7 +466,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 		if call := calls[itemID]; call != nil {
 			return call
 		}
-		call := &streamedCall{id: itemID}
+		call := &streamedCall{}
 		calls[itemID] = call
 		callOrder = append(callOrder, itemID)
 		return call
@@ -492,12 +493,23 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 		}
 		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 		if data == "[DONE]" {
+			if !c.checkTerminalCalls(ctx, out, calls) {
+				return
+			}
 			terminal = true
 			break
 		}
 		var event sseEvent
 		if json.Unmarshal([]byte(data), &event) != nil {
+			if malformedFunctionEvent([]byte(data)) {
+				c.rejectTerminalCalls(ctx, out, ErrInvalidFunctionCall)
+				return
+			}
 			continue
+		}
+		if !validArgumentsEvent([]byte(data), event.Type) {
+			c.rejectTerminalCalls(ctx, out, ErrInvalidFunctionCall)
+			return
 		}
 		key := fmt.Sprintf("%s:%d", event.ItemID, event.ContentIndex)
 		reasoningSnapshots.capture(event)
@@ -532,9 +544,12 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 			if event.Item != nil {
 				switch event.Item.Type {
 				case "function_call":
-					call := callForItem(event.Item.ID)
-					call.id = event.Item.CallID
-					call.name = event.Item.Name
+					call, err := bindFunctionCall(*event.Item, calls, callForItem)
+					if err != nil {
+						c.rejectTerminalCalls(ctx, out, err)
+						return
+					}
+					call.announced = true
 					if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCallStart, ToolCall: &provider.ToolCall{ID: call.id, Name: call.name}}) {
 						return
 					}
@@ -551,21 +566,18 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 			}
 		case "response.function_call_arguments.delta":
 			call := callForItem(event.ItemID)
+			if call.completed {
+				c.rejectTerminalCalls(ctx, out, ErrInvalidFunctionCall)
+				return
+			}
 			call.arguments += event.Delta
 			call.argChars += len(event.Delta)
 			if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCallArgsDelta, ToolCall: &provider.ToolCall{ID: call.id, Name: call.name}, ArgChars: call.argChars}) {
 				return
 			}
 		case "response.function_call_arguments.done":
-			call := callForItem(event.ItemID)
-			if event.Arguments != "" {
-				call.arguments = event.Arguments
-			}
-			if !call.completed {
-				call.completed = true
-				if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: call.id, Name: call.name, Arguments: call.arguments}}) {
-					return
-				}
+			if !c.finishStreamedArguments(ctx, out, callForItem(event.ItemID), event.Arguments) {
+				return
 			}
 		case "response.output_item.done":
 			if event.Item != nil && event.Item.Type == "web_search_call" && c.search.NativeEnabled {
@@ -587,19 +599,13 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 			if event.Item != nil {
 				switch event.Item.Type {
 				case "function_call":
-					call := callForItem(event.Item.ID)
-					if event.Item.CallID != "" {
-						call.id = event.Item.CallID
+					items, err := terminalOutputCalls(&sseResponse{Output: []json.RawMessage{event.Item.Raw}})
+					if err != nil {
+						c.rejectTerminalCalls(ctx, out, err)
+						return
 					}
-					if event.Item.Name != "" {
-						call.name = event.Item.Name
-					}
-					if event.Item.Arguments != "" {
-						call.arguments = event.Item.Arguments
-					}
-					if !call.completed {
-						call.completed = true
-						if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: call.id, Name: call.name, Arguments: call.arguments}}) {
+					for _, item := range items {
+						if !c.completeFunctionItem(ctx, out, item, calls, callForItem) {
 							return
 						}
 					}
@@ -615,28 +621,11 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 			}
 		case "response.completed", "response.incomplete", "response.failed":
 			terminal = true
-			if event.Type == "response.incomplete" {
-				if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkReasoning, ReasoningState: provider.ReasoningIncomplete}) {
-					return
-				}
-			}
 			completedResponseID = terminalResponseID(event)
-			if !emitTerminalResponseUsage(ctx, out, event) {
+			var ok bool
+			failed, ok = c.finishResponse(ctx, out, event, calls, callForItem)
+			if !ok {
 				return
-			}
-			if event.Type == "response.failed" {
-				failed = true
-				err := fmt.Errorf("responses: response failed")
-				if event.Response != nil && event.Response.Error != nil {
-					if authErr := authErrorFromResponse(c, event.Response.Error); authErr != nil {
-						err = authErr
-					} else {
-						err = fmt.Errorf("responses: %s", event.Response.Error.Message)
-					}
-				}
-				if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: err}) {
-					return
-				}
 			}
 		}
 		if terminal {
@@ -674,12 +663,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 	}
 	if completedResponseID != "" {
 		assistant := provider.Message{Role: provider.RoleAssistant, Content: text.String(), ReasoningContent: reasoning.String(), ReasoningID: reasoningID, ReasoningStatus: reasoningStatus, ResponsesItems: responsesItems}
-		for _, itemID := range callOrder {
-			call := calls[itemID]
-			if call.completed {
-				assistant.ToolCalls = append(assistant.ToolCalls, provider.ToolCall{ID: call.id, Name: call.name, Arguments: call.arguments})
-			}
-		}
+		assistant.ToolCalls = completedToolCalls(calls, callOrder)
 		expected := append(append([]provider.Message(nil), requestMessages...), assistant)
 		c.mu.Lock()
 		c.lastResponseID = completedResponseID
@@ -785,7 +769,7 @@ func (i *sseItem) UnmarshalJSON(data []byte) error {
 }
 
 type sseResponse struct {
-	Output            []sseItem         `json:"output"`
+	Output            []json.RawMessage `json:"output"`
 	ID                string            `json:"id"`
 	Usage             *sseUsage         `json:"usage"`
 	Error             *sseError         `json:"error"`

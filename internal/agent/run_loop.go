@@ -364,6 +364,9 @@ func sleepRecovery(ctx context.Context, delay time.Duration) bool {
 // and final compaction. cont=true continues the tool loop; cont=false returns
 // err from Run (err may be nil for a clean final answer).
 func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, text, reasoning string, usage *provider.Usage) (cont bool, err error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	if a.readPipelineActive() {
 		instruction, pause := a.readContinuation(true)
 		if pause != nil {
@@ -438,20 +441,7 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 		event.RecordReadinessAudit(a.svc.sink, readiness.audit(evidence.ReadinessAllowed, a.turn.readinessRecovered))
 	}
 	if !hasVisibleFinalAnswer(text) {
-		// Harness-style termination accepts a reasoning-only clean stop. Only
-		// explicit internal callers that require visible output retain the
-		// bounded synthetic retry below. A truly empty response is classified
-		// before this function and retried with the frozen provider request.
-		if a.requireVisibleFinal {
-			state.terminal.emptyFinalBlocks++
-			if state.terminal.emptyFinalBlocks >= maxEmptyFinalBlocks {
-				return false, fmt.Errorf("model finished without a visible final answer %d times", state.terminal.emptyFinalBlocks)
-			}
-			a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Code: event.NoticeCodeEmptyFinal, Text: emptyFinalNotice(), Detail: emptyFinalNoticeDetail(a.svc.prov.Name(), usage, len(reasoning))})
-			a.sess.conversation.Add(HostGeneratedUserMessage(a.withTurnPreferences(emptyFinalRetryMessage())))
-			a.contextManager().ObserveUsage(usage)
-			return true, nil
-		}
+		return a.recoverNoDeliverable(ctx, state, reasoning, usage)
 	}
 	if a.hostContinuationEnabled(ctx) && state.executorHandoff && !state.usedAnyTool && state.terminal.handoffNudges < maxExecutorHandoffNudges && shouldNudgeExecutorHandoff(state.input, text) {
 		state.terminal.handoffNudges++
@@ -483,7 +473,6 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 // max-steps grace round. cont=true continues the tool loop; cont=false returns
 // err from Run.
 func (a *Agent) handleToolRound(ctx context.Context, state *turnRuntime, step int, text, reasoning string, calls []provider.ToolCall, usage *provider.Usage) (cont bool, err error) {
-	state.terminal.emptyFinalBlocks = 0
 	state.usedAnyTool = true
 	unavailableContextTools := a.unavailableContextualToolCalls(ctx, calls)
 	if len(unavailableContextTools) > 0 && state.terminal.contextToolRepairs > 0 {

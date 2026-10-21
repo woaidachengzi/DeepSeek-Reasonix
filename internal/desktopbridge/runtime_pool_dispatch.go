@@ -190,6 +190,14 @@ func (p *RuntimePool) SetReasoningLanguage(sessionID, language string) bool {
 	return slot.SetReasoningLanguage(sessionID, language)
 }
 
+func (p *RuntimePool) SetCompactRatio(sessionID string, ratio float64) bool {
+	slot, err := p.slot(sessionID)
+	if err != nil {
+		return false
+	}
+	return slot.SetCompactRatio(sessionID, ratio)
+}
+
 func (p *RuntimePool) MCPRuntimeAction(sessionID, name, action string) (int, error) {
 	slot, err := p.slot(sessionID)
 	if err != nil {

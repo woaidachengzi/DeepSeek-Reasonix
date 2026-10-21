@@ -512,6 +512,7 @@ var ChineseTraditional = Messages{
 	ProviderErrOpenCodeGoGrokRoute: "OpenCode Go 的 `grok-4.5` 請使用 OpenCode Go Responses 預設。",
 	ProviderErrQuotaExhaustedFmt:   "%s：供應商餘額或方案額度不足（HTTP %d）。請檢查帳戶額度後繼續。",
 	ProviderErrReasonMissing:       "上游拒絕了請求，但未提供具體原因。",
+	ProviderErrNoDeliverable:       "模型補答一次後仍未產生答案，本輪未完成。請傳送訊息繼續，或切換模型後重試。",
 	SearchSourcesNotProvided:       "搜尋已完成，供應商未提供可用的結構化來源。",
 	SearchModelUnavailable:         "指定的網頁搜尋模型不可用；不會改用其他帳號。",
 	ProtocolRecoveryLabel:          "從有效歷史恢復",

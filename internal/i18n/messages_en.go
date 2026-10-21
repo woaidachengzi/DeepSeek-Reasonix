@@ -539,6 +539,7 @@ var English = Messages{
 	ProviderErrOpenCodeGoGrokRoute: "For OpenCode Go, use the OpenCode Go Responses preset with `grok-4.5`.",
 	ProviderErrQuotaExhaustedFmt:   "%s: provider credits or subscription quota exhausted (HTTP %d). Check your account allowance before continuing.",
 	ProviderErrReasonMissing:       "The upstream rejected the request but did not provide a specific reason.",
+	ProviderErrNoDeliverable:       "The model produced no answer after one continuation. This turn did not complete. Send another message to continue or switch models.",
 	SearchSourcesNotProvided:       "Search completed; the provider did not supply usable structured sources.",
 	SearchModelUnavailable:         "Assigned web search model is unavailable; no other account will be used.",
 	ProtocolRecoveryLabel:          "Recover from valid history",

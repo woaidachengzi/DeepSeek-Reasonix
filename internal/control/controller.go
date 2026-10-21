@@ -54,6 +54,7 @@ import (
 	"reasonix/internal/provider"
 	"reasonix/internal/recovery"
 	"reasonix/internal/sandbox"
+	"reasonix/internal/secrets"
 	"reasonix/internal/sessioncontext"
 	"reasonix/internal/sessioninbox"
 	"reasonix/internal/sessiontemp"
@@ -1927,6 +1928,7 @@ func (c *Controller) RunShell(command string) {
 		start := time.Now()
 		res := shellrun.RunForeground(ctx, shellrun.Request{
 			Argv:           argv,
+			Env:            shellrun.WithLoginPATH(secrets.ProcessEnv(), shellrun.LoginShellPATH(ctx)),
 			Dir:            c.workspaceRoot,
 			Timeout:        shellTimeout,
 			WaitDelay:      shellWaitDelay,
@@ -4016,10 +4018,7 @@ func (c *Controller) stripCancelledVisibleTurnMessagesAfterWithFallbackAt(idx in
 			recovery.DroppedPartialText = recovery.DroppedPartialText || strings.TrimSpace(m.Content) != ""
 			recovery.DroppedPartialReasoning = recovery.DroppedPartialReasoning || strings.TrimSpace(m.ReasoningContent) != ""
 			if previousRecovery != nil {
-				recovery.CompletedTools = append(recovery.CompletedTools, previousRecovery.CompletedTools...)
-				recovery.InterruptedTools = append(recovery.InterruptedTools, previousRecovery.InterruptedTools...)
-				recovery.NotStartedTools = append(recovery.NotStartedTools, previousRecovery.NotStartedTools...)
-				recovery.UnknownTools = append(recovery.UnknownTools, previousRecovery.UnknownTools...)
+				mergeInterruptedRecovery(recovery, previousRecovery)
 			} else {
 				for _, call := range m.ToolCalls {
 					provider.RecordToolRecovery(recovery, interruptedToolSummary(call), provider.ToolRunUnknown)

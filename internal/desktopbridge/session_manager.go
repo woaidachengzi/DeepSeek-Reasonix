@@ -36,6 +36,7 @@ type SessionManager interface {
 	SessionBalance(ctx context.Context, sessionID string) (*SessionBalance, bool, error)
 	MemoryRecall(sessionID, workspaceRoot string) (MemoryRecallView, bool)
 	SetReasoningLanguage(sessionID, language string) bool
+	SetCompactRatio(sessionID string, ratio float64) bool
 	MCPStatus(workspaceRoot string) ([]MCPRuntimeServer, bool)
 	MCPRuntimeAction(sessionID, name, action string) (int, error)
 	StartMCPOAuth(sessionID, name string) (string, error)

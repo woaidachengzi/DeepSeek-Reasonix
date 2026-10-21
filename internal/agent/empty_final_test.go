@@ -16,54 +16,47 @@ func textTurn(text string) []provider.Chunk {
 	return []provider.Chunk{{Type: provider.ChunkText, Text: text}, {Type: provider.ChunkDone}}
 }
 
-func TestRunAcceptsReasoningOnlyFinalAnswer(t *testing.T) {
+func TestRunRetriesReasoningOnlyFinalAnswer(t *testing.T) {
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
-		{
-			{Type: provider.ChunkReasoning, Text: "I should answer the user."},
-			{Type: provider.ChunkDone},
-		},
+		{{Type: provider.ChunkReasoning, Text: "I should answer the user."}, {Type: provider.ChunkDone}},
+		textTurn("visible answer"),
 	}}
 	a := New(prov, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
-
-	if err := a.Run(context.Background(), "answer me"); err != nil {
-		t.Fatalf("Run: %v", err)
+	if err := a.Run(t.Context(), "answer me"); err != nil {
+		t.Fatal(err)
 	}
-	if prov.call != 1 {
-		t.Fatalf("provider calls = %d, want one clean reasoning-only completion", prov.call)
+	if prov.call != 2 || lastAssistantContent(a.sess.conversation) != "visible answer" {
+		t.Fatalf("calls=%d history=%+v", prov.call, a.Session().Snapshot())
 	}
-	if got := lastAssistantContent(a.sess.conversation); got != "" {
-		t.Fatalf("last assistant content = %q, want empty content beside reasoning", got)
-	}
-	if sessionHasUserMessageContaining(a.sess.conversation, "visible answer") {
-		t.Fatal("must not inject a synthetic visible-answer retry")
+	if !sessionHasUserMessageContaining(a.sess.conversation, "visible answer") {
+		t.Fatal("missing bounded continuation")
 	}
 }
 
 func TestRunPrefixesReasoningLanguageOnReasoningOnlyCompletion(t *testing.T) {
 	prov := &mockProvider{name: "p", streams: [][]provider.Chunk{
-		{
-			{Type: provider.ChunkReasoning, Text: "I should answer the user."},
-			{Type: provider.ChunkDone},
-		},
+		{{Type: provider.ChunkReasoning, Text: "I should answer the user."}, {Type: provider.ChunkDone}},
+		textTurn("visible reply"),
 	}}
 	a := New(prov, tool.NewRegistry(), NewSession(""), Options{ReasoningLanguage: "zh"}, event.Discard)
-
-	if err := a.Run(context.Background(), "answer me"); err != nil {
-		t.Fatalf("Run: %v", err)
+	if err := a.Run(t.Context(), "answer me"); err != nil {
+		t.Fatal(err)
 	}
-	if len(prov.requests) != 1 {
-		t.Fatalf("provider requests = %d, want 1", len(prov.requests))
+	if len(prov.requests) != 2 {
+		t.Fatalf("requests=%d", len(prov.requests))
 	}
-	got := lastUser(prov.requests[0])
-	if !strings.HasPrefix(got, "<reasoning-language>") || !strings.Contains(got, "简体中文") {
-		t.Fatalf("last user = %q, want reasoning-language prefix", got)
+	for _, req := range prov.requests {
+		got := lastUser(req)
+		if !strings.HasPrefix(got, "<reasoning-language>") || !strings.Contains(got, "简体中文") {
+			t.Fatalf("missing language preference: %q", got)
+		}
 	}
-	if strings.Contains(got, "visible answer") {
-		t.Fatalf("reasoning-only completion must not receive a synthetic visible-answer retry: %q", got)
+	if !strings.Contains(lastUser(prov.requests[1]), "visible answer") {
+		t.Fatal("missing continuation")
 	}
 }
 
-func TestRunRequiresVisibleFinalOnlyWhenExplicitlyRequested(t *testing.T) {
+func TestRunRequiresVisibleFinalForInternalCallers(t *testing.T) {
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
 		{{Type: provider.ChunkReasoning, Text: "thinking 1"}, {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkReasoning, Text: "thinking 2"}, {Type: provider.ChunkDone}},
@@ -78,8 +71,8 @@ func TestRunRequiresVisibleFinalOnlyWhenExplicitlyRequested(t *testing.T) {
 	if !strings.Contains(err.Error(), "visible final answer") {
 		t.Fatalf("error = %v, want visible final answer", err)
 	}
-	if prov.call != 3 {
-		t.Fatalf("provider calls = %d, want three empty-answer attempts", prov.call)
+	if prov.call != maxEmptyFinalBlocks {
+		t.Fatalf("provider calls = %d, want %d empty-answer attempts", prov.call, maxEmptyFinalBlocks)
 	}
 }
 
@@ -147,69 +140,31 @@ func lastAssistantContent(s *Session) string {
 	return out
 }
 
-// deepseekThinkingProvider marks a scripted provider as DeepSeek thinking mode
-// (provider.ToolCallReasoningPolicy) — the scope within which a reasoning-only
-// finish_reason="stop" turn is accepted as a final answer.
+// deepseekThinkingProvider exercises the same no-answer contract for
+// providers that require round-tripping reasoning alongside tool calls.
 type deepseekThinkingProvider struct{ *scriptedProvider }
 
 func (deepseekThinkingProvider) RequiresToolCallReasoning() bool { return true }
 
-func TestRunAcceptsReasoningOnlyFinalWhenModelStopped(t *testing.T) {
-	// DeepSeek thinking mode streams a long reasoning_content and then
-	// finishes with finish_reason="stop" but an empty content block. The
-	// model has explicitly signalled completion and its reasoning was
-	// streamed to the user, so the host must accept the turn instead of
-	// retrying and forcing another expensive thinking round.
-	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
-		{
-			{Type: provider.ChunkReasoning, Text: "The user asked a simple question; I have reasoned through it and the answer is ready."},
-			{Type: provider.ChunkUsage, Usage: &provider.Usage{FinishReason: "stop", TotalTokens: 10}},
-			{Type: provider.ChunkDone},
-		},
-	}}
-	a := New(deepseekThinkingProvider{prov}, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
-
-	if err := a.Run(context.Background(), "answer me"); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if prov.call != 1 {
-		t.Fatalf("provider calls = %d, want 1 (model signalled stop; no retry)", prov.call)
-	}
-	if sessionHasUserMessageContaining(a.sess.conversation, "visible answer") {
-		t.Fatal("must not inject a synthetic visible-answer retry when the model signalled stop")
-	}
-	if got := lastAssistantContent(a.sess.conversation); got != "" {
-		t.Fatalf("last assistant content = %q, want empty (answer lived in reasoning)", got)
-	}
-}
-
-func TestRunAcceptsReasoningOnlyStopWithoutDeepSeekPolicy(t *testing.T) {
-	// Same chunk sequence as the accept test, but the provider does not
-	// declare DeepSeek thinking mode (ToolCallReasoningPolicy). The accept
-	// path must stay scoped to DeepSeek: local <think>-tag models keep the
-	// retry safety net that often recovers a visible answer on the second
-	// attempt, and a gateway that mislabels truncation as "stop" must not
-	// have a degenerate turn committed as the final answer.
-	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
-		{
-			{Type: provider.ChunkReasoning, Text: "thinking only, nothing visible"},
-			{Type: provider.ChunkUsage, Usage: &provider.Usage{FinishReason: "stop", TotalTokens: 10}},
-			{Type: provider.ChunkDone},
-		},
-	}}
-	a := New(prov, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
-
-	if err := a.Run(context.Background(), "answer me"); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if prov.call != 1 {
-		t.Fatalf("provider calls = %d, want 1 for a reasoning-only clean terminal", prov.call)
-	}
-	if sessionHasUserMessageContaining(a.sess.conversation, "visible answer") {
-		t.Fatal("must not inject a synthetic visible-answer retry")
-	}
-	if got := lastAssistantContent(a.sess.conversation); got != "" {
-		t.Fatalf("last assistant content = %q, want empty content beside reasoning", got)
+func TestRunRetriesReasoningOnlyStopAcrossProviderPolicies(t *testing.T) {
+	for _, thinking := range []bool{false, true} {
+		t.Run(map[bool]string{false: "ordinary", true: "thinking"}[thinking], func(t *testing.T) {
+			p := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
+				{{Type: provider.ChunkReasoning, Text: "reasoning only"}, {Type: provider.ChunkUsage, Usage: &provider.Usage{FinishReason: "stop", TotalTokens: 10}}, {Type: provider.ChunkDone}},
+				textTurn("answer"),
+			}}
+			var prov provider.Provider = p
+			if thinking {
+				prov = deepseekThinkingProvider{p}
+			}
+			a := New(prov, tool.NewRegistry(), NewSession(""), Options{}, event.Discard)
+			if err := a.Run(t.Context(), "answer me"); err != nil {
+				t.Fatal(err)
+			}
+			if p.call != 2 || lastAssistantContent(a.sess.conversation) != "answer" {
+				t.Fatalf("calls=%d history=%+v", p.call, a.Session().Snapshot())
+			}
+		})
 	}
 }
 

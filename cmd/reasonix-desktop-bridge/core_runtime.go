@@ -172,6 +172,11 @@ func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.Open
 	if err != nil {
 		return nil, err
 	}
+	// Zero means use each agent's resolved construction-time setting until
+	// the host publishes a preference change. All root/planner reads share it;
+	// new children snapshot the value without changing already running children.
+	liveCompactRatio := newLiveCompactionSettings(opts.WorkspaceRoot)
+	opts.CompactRatioSource = liveCompactRatio.ratio
 	controller, err := boot.Build(ctx, opts)
 	if err != nil {
 		return nil, errors.Join(err, lifecycleSink.Close())
@@ -191,7 +196,7 @@ func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.Open
 			}
 		}
 	}
-	runtime := &controllerRuntime{controller: controller, sessionID: request.SessionID, lifecycleSink: lifecycleSink, effort: selectedBridgeEffort(opts), terminalEvents: f.events}
+	runtime := &controllerRuntime{controller: controller, sessionID: request.SessionID, lifecycleSink: lifecycleSink, effort: selectedBridgeEffort(opts), terminalEvents: f.events, liveCompactRatio: liveCompactRatio}
 	if err := persistBridgeReasoning(controller, runtime.effort); err != nil {
 		controller.Close()
 		return nil, errors.Join(err, lifecycleSink.Close())
@@ -489,6 +494,7 @@ func bridgeSessionPath(sessionDir, sessionID string) (string, error) {
 // controllerRuntime adapts the established controller to the bridge's minimal
 // Runtime surface.
 type controllerRuntime struct {
+	liveCompactRatio    *liveCompactionSettings
 	effort              string
 	controller          *control.Controller
 	sessionID           string
@@ -567,16 +573,6 @@ func (r *controllerRuntime) BoundShell() string  { return r.controller.BoundShel
 // key changed after the controller froze its credentials.
 func (r *controllerRuntime) ModelSettingsState() (string, string, error) {
 	return r.controller.ModelSettingsState()
-}
-
-func (r *controllerRuntime) SessionMetrics() desktopbridge.SessionMetrics {
-	used, window := r.controller.ContextSnapshot()
-	hit, miss := r.controller.SessionCache()
-	return desktopbridge.SessionMetrics{
-		ContextUsedTokens: max(0, used), ContextWindowTokens: max(0, window),
-		CompactThresholdPercent: max(0, min(100, int(r.controller.CompactRatio()*100))),
-		CacheHitTokens:          max(0, hit), CacheMissTokens: max(0, miss),
-	}
 }
 
 func (r *controllerRuntime) SessionBalance(ctx context.Context) (*desktopbridge.SessionBalance, error) {
@@ -1124,6 +1120,10 @@ func projectBridgeHistory(history []provider.Message) []desktopbridge.HistoryMes
 	tokens, _ := agent.ConversationPrefixTokens(history)
 	usage := newHistoryUsage()
 	for index, message := range history {
+		if failure, ok := bridgeNoDeliverableHistory(message); ok {
+			messages = append(messages, failure)
+			continue
+		}
 		if message.Role == provider.RoleUser && bridgeHistoryMessageVisible(message) {
 			usage = newHistoryUsage()
 		}

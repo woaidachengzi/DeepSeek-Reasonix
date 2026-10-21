@@ -25,14 +25,21 @@ func newSubagentSkillOptionsFactory(
 	ablationSet ablation.Set,
 	lease *workspacelease.Owner,
 	writeRoots *sandbox.WritableRootSet,
+	compactRatioSource func() float64,
 ) func(context.Context, int, *provider.Pricing, int, int) agent.Options {
 	home, stateRoot := userHomeDir(), config.MemoryUserDir()
 	return func(ctx context.Context, steps int, price *provider.Pricing, ctxWin, childDepth int) agent.Options {
+		ratio := cfg.CompactRatio
+		if compactRatioSource != nil {
+			if current := compactRatioSource(); current > 0 && current < 1 {
+				ratio = current
+			}
+		}
 		return agent.Options{
 			MaxSteps: steps, Temperature: cfg.Temperature, Pricing: price, QuoteContext: quoteCtx, UsageSource: event.UsageSourceSubagent,
 			Gate: gate, ContextWindow: ctxWin, RecentKeep: cfg.RecentKeep,
 			SoftCompactRatio: cfg.SoftCompactRatio, ToolResultSnipRatio: cfg.ToolResultSnipRatio,
-			CompactRatio: cfg.CompactRatio, CompactForceRatio: cfg.CompactForceRatio, ContextEditing: cfg.ContextEditing,
+			CompactRatio: ratio, CompactForceRatio: cfg.CompactForceRatio, ContextEditing: cfg.ContextEditing,
 			ArchiveDir: config.ArchiveDir(), KeepPolicy: keepPolicy,
 			ResponseLanguage: agent.ResponseLanguageFromContext(ctx), ReasoningLanguage: agent.ReasoningLanguageFromContext(ctx),
 			SubagentDepth: childDepth, MaxSubagentDepth: maxDepth,

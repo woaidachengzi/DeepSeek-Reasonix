@@ -1546,7 +1546,7 @@ func ListCleanupPending(dir string) ([]CleanupPendingInfo, error) {
 	}
 	var out []CleanupPendingInfo
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), cleanupPendingExt) {
+		if e.IsDir() || store.IsStudioImportName(e.Name()) || !strings.HasSuffix(e.Name(), cleanupPendingExt) {
 			continue
 		}
 		markerPath := filepath.Join(dir, e.Name())
@@ -1630,7 +1630,7 @@ func ReconcileSessionSidecars(dir string) error {
 		return errors.Join(errs...)
 	}
 	for _, e := range entries {
-		if e.IsDir() {
+		if e.IsDir() || store.IsStudioImportName(e.Name()) {
 			continue
 		}
 		name := e.Name()

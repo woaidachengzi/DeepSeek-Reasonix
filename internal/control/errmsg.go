@@ -11,7 +11,6 @@ import (
 	"reasonix/internal/i18n"
 	"reasonix/internal/provider"
 	"reasonix/internal/secrets"
-	"reasonix/internal/turnevent"
 )
 
 // explainError maps a provider HTTP failure to an actionable, localized message
@@ -21,11 +20,8 @@ func explainError(err error) error {
 	if err == nil {
 		return nil
 	}
-	// Filesystem errors can satisfy net.Error on some platforms. Preserve the
-	// storage sentinel before provider retry classification so a poisoned WAL
-	// is never reported as a model-stream disconnect.
-	if errors.Is(err, turnevent.ErrTurnLedgerUnavailable) {
-		return err
+	if terminal := explainLocalTerminalError(err); terminal != nil {
+		return terminal
 	}
 	// The exhausted wait wraps its transport cause; explain the wait itself
 	// before the connect/status branches below explain that cause instead.

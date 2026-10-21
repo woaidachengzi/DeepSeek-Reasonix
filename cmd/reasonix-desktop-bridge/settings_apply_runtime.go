@@ -28,6 +28,8 @@ func (f *controllerFactory) Rebuild(ctx context.Context, previous desktopbridge.
 		}
 	}
 	opts.ForceFullRebuild = true
+	liveCompactRatio := newLiveCompactionSettings(opts.WorkspaceRoot)
+	opts.CompactRatioSource = liveCompactRatio.ratio
 	result, err := boot.Rebuild(ctx, old.controller, opts)
 	if err != nil {
 		return nil, errors.Join(err, undo(), sink.Close())
@@ -35,7 +37,7 @@ func (f *controllerFactory) Rebuild(ctx context.Context, previous desktopbridge.
 	// The boot layer migrates posture and grants; host prompt wiring belongs
 	// to the replacement controller and must be reinstalled.
 	result.Controller.EnableInteractiveApproval()
-	next := &controllerRuntime{controller: result.Controller, sessionID: request.SessionID, lifecycleSink: sink, effort: selectedBridgeEffort(opts), terminalEvents: f.events, replacementRollback: undo}
+	next := &controllerRuntime{controller: result.Controller, sessionID: request.SessionID, lifecycleSink: sink, effort: selectedBridgeEffort(opts), terminalEvents: f.events, replacementRollback: undo, liveCompactRatio: liveCompactRatio}
 	next.startTurnSnapshotMonitor()
 	return next, nil
 }

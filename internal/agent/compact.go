@@ -99,7 +99,7 @@ func (a *Agent) compactTrigger() int {
 	if a == nil || window <= 0 {
 		return 0
 	}
-	ratio := a.compactRatio
+	ratio := a.CompactRatio()
 	if ratio <= 0 {
 		ratio = defaultCompactRatio
 	}

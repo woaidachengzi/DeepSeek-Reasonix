@@ -30,6 +30,7 @@ type agentConfig struct {
 	// checkpoint is installed; recentKeep and archiveDir shape what it keeps.
 	contextWindow          int
 	compactRatio           float64
+	compactRatioSource     func() float64
 	recentKeep             int
 	archiveDir             string
 	legacyAnchorSafetyGate bool

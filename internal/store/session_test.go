@@ -70,6 +70,8 @@ func TestIsSessionTranscriptName(t *testing.T) {
 		want bool
 	}{
 		{"session.jsonl", true},
+		{"v4-foreign.jsonl", false},
+		{" v4-foreign.jsonl ", false},
 		{"session.events.jsonl", false},
 		{"session.turns.jsonl", false},
 		{"session.conflicts.jsonl", false},

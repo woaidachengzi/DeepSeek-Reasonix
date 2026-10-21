@@ -16,13 +16,19 @@ package store
 
 import "strings"
 
+// IsStudioImportName identifies Studio-owned imports and their sidecars.
+// Classic runtimes must leave their lifecycle and recovery metadata untouched.
+func IsStudioImportName(name string) bool {
+	return strings.HasPrefix(strings.TrimSpace(name), "v4-")
+}
+
 // IsSessionTranscriptName reports whether name is a primary session transcript
 // file. Append-only event logs and guardian sidecars also end in .jsonl, so
 // callers that discover sessions by directory scan must use this helper instead
 // of filepath.Ext.
 func IsSessionTranscriptName(name string) bool {
 	name = strings.TrimSpace(name)
-	return strings.HasSuffix(name, ".jsonl") &&
+	return !IsStudioImportName(name) && strings.HasSuffix(name, ".jsonl") &&
 		!strings.HasSuffix(name, ".events.jsonl") &&
 		!strings.HasSuffix(name, ".turns.jsonl") &&
 		!strings.HasSuffix(name, ".conflicts.jsonl") &&

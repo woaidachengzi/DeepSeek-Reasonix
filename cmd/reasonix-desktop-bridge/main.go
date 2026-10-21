@@ -72,6 +72,7 @@ type bridgeServer struct {
 	shutdownRequested       chan struct{}
 	shutdownOnce            sync.Once
 	runtimes                desktopbridge.SessionManager
+	agentPreferencesMu      sync.Mutex
 	events                  *desktopbridge.EventStream
 	requestIDs              *idempotencyLedger
 	remoteSessions          *previewRemoteSessions
@@ -1384,31 +1385,6 @@ func (b *bridgeServer) setModelRole(w http.ResponseWriter, r *http.Request) {
 	summary, err := loadProviderSummaryForScope(request.Scope, request.WorkspaceRoot)
 	if err != nil {
 		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read provider summary")
-		return
-	}
-	writeJSON(w, http.StatusOK, summary)
-}
-
-func (b *bridgeServer) setAgentPreferences(w http.ResponseWriter, r *http.Request) {
-	var request setAgentPreferenceRequest
-	if err := decodeJSONBody(w, r, 64<<10, &request); err != nil {
-		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid agent preference request")
-		return
-	}
-	if err := persistAgentPreferences(request); err != nil {
-		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "agent preference could not be saved")
-		return
-	}
-	if request.ReasoningLanguage != "" && request.Scope != "project" && b.runtimes != nil {
-		if session, active := b.runtimes.Snapshot(); active && session.WorkspaceRoot != "" {
-			if effective, err := appconfig.LoadForRootWithoutCredentialsReadOnly(session.WorkspaceRoot); err == nil {
-				b.runtimes.SetReasoningLanguage(session.ID, effective.ReasoningLanguage())
-			}
-		}
-	}
-	summary, err := loadProviderSummaryForScope(request.Scope, request.WorkspaceRoot)
-	if err != nil {
-		writeProtocolError(w, http.StatusInternalServerError, "internal", "unable to read agent preferences")
 		return
 	}
 	writeJSON(w, http.StatusOK, summary)
