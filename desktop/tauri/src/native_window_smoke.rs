@@ -926,6 +926,7 @@ fn fullscreen(app: &AppHandle, directory: &std::path::Path) -> Result<(), String
 fn run(app: &AppHandle, phase: &str) -> Result<(), String> {
     let directory = marker_directory()?;
     match phase {
+        "computer-use" => crate::native_computeruse_smoke::run(app, &directory)?,
         "ui-native-reload" => crate::native_reload_smoke::run(app, &directory)?,
         "exercise" => exercise(app, &directory)?,
         "exercise-loaded" => exercise_control(app, &directory, true, false)?,
