@@ -185,17 +185,7 @@ func (f *controllerFactory) Open(ctx context.Context, request desktopbridge.Open
 		controller.Close()
 		return nil, errors.Join(err, lifecycleSink.Close())
 	}
-	// A composer choice can be durable before the first transcript turn.
-	// Prefer saved per-session metadata; desktop defaults only seed a new choice.
-	if path, pathErr := bridgeSessionPath(controller.SessionDir(), request.SessionID); pathErr == nil {
-		if meta, exists, loadErr := agent.LoadBranchMeta(path); loadErr == nil && exists && validBridgeApprovalMode(meta.ToolApprovalMode) {
-			controller.SetToolApprovalMode(meta.ToolApprovalMode)
-		} else if _, statErr := os.Lstat(path); errors.Is(statErr, os.ErrNotExist) {
-			if cfg, loadErr := appconfig.LoadUserConfigReadOnly(); loadErr == nil {
-				controller.SetToolApprovalMode(cfg.DesktopDefaultToolApprovalMode())
-			}
-		}
-	}
+	initializeBridgeApproval(controller, request.SessionID)
 	runtime := &controllerRuntime{controller: controller, sessionID: request.SessionID, lifecycleSink: lifecycleSink, effort: selectedBridgeEffort(opts), terminalEvents: f.events, liveCompactRatio: liveCompactRatio}
 	if err := persistBridgeReasoning(controller, runtime.effort); err != nil {
 		controller.Close()

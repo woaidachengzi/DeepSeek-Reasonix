@@ -68,7 +68,7 @@ func (c computerUse) ExecuteWithImages(ctx context.Context, args json.RawMessage
 	} else {
 		approver := tool.ComputerUseApproverFrom(ctx)
 		if approver == nil {
-			return "", nil, &computerUseError{cause: errors.New("computer control requires explicit app access approval from an interactive host")}
+			return "", nil, &computerUseError{cause: tool.Blocked("computer control is unavailable: the interactive host did not install its app access approval handler. This is a host configuration failure, not revoked macOS permission. Stop desktop input and report it; do not fall back to Bash, osascript/JXA, CGEvent, or clipboard probes")}
 		}
 		target, resolveErr := c.controller.Target(ctx, r.PID)
 		if resolveErr != nil {

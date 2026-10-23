@@ -39,6 +39,8 @@ func TestComputerUseRequiresHumanBeforeCapture(t *testing.T) {
 		args := json.RawMessage(`{"action":"observe","pid":42}`)
 		if _, _, err := c.ExecuteWithImages(t.Context(), args); err == nil || f.captures != 0 {
 			t.Fatal("missing approver captured screen")
+		} else if _, blocked := tool.BlockedMessage(err); !blocked {
+			t.Fatal("missing host must be a refusal, not a failed input attempt")
 		}
 		ctx := tool.WithComputerUseApprover(t.Context(), desktopConsentFunc(func(_ context.Context, target tool.ComputerUseTarget) (bool, error) {
 			if target.Name != "Native name" || f.captures != 0 {

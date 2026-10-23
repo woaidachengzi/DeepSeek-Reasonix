@@ -150,11 +150,8 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 	ex.MutationRisk = tool.ShellMutationUnknown
 	ex.Verification = tool.ShellVerificationNotVerification
 
-	var p bashParams
-	if err := json.Unmarshal(args, &p); err != nil {
-		return bashPreflightFailure(ex, start, fmt.Errorf("invalid args: %w", err))
-	}
-	if err := validateBashParams(p); err != nil {
+	p, err := parseBashParams(ctx, args)
+	if err != nil {
 		return bashPreflightFailure(ex, start, err)
 	}
 
