@@ -391,7 +391,11 @@ for (const path of localeChunks) {
   // (82321 -> 82465 B), measured by removing only those keys from the emitted
   // chunks. Account for that copy with the next decimal ceilings; keep all
   // initial JavaScript and CSS limits unchanged.
-  const budget = (name.startsWith("zh-TW-") ? 80.6 : 80.0) * 1024;
+  // Computer control adds 36 localized navigation, permission and recovery
+  // captions. Removing only those keys from emitted chunks measures
+  // 81889 -> 82806 B (zh, +917 B), 82493 -> 83418 B (zh-TW, +925 B).
+  // Bound that measured copy growth; retain all initial JS and CSS budgets.
+  const budget = (name.startsWith("zh-TW-") ? 81.5 : 80.9) * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 

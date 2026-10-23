@@ -4748,6 +4748,8 @@ fn main() {
             storage_settings,
             capability_diagnostics,
             runtime_doctor,
+            bridge::computer_use_settings::computer_use_status,
+            bridge::computer_use_settings::open_computer_use_permission,
             remote_settings,
             scan_remote_ssh_config,
             change_remote_settings,

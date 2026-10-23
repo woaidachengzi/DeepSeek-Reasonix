@@ -14,6 +14,14 @@ policy, grant system access, or prompt for macOS permissions automatically.
 
 ## Build and use
 
+Open Settings → Integrations & connections → Computer control (the first item).
+This page reads native component availability, Accessibility and Screen Recording
+status from the bridge process without prompting, capturing, or sending input.
+It links to the fixed macOS permission panes and the existing sandbox, action
+approval and model settings. Opening a system pane does not grant permission;
+refresh the status after authorizing the app. Opening this page does not change
+the workspace sandbox or tool approval policy.
+
 Build the Tauri app normally on macOS with `CGO_ENABLED=1`. ScreenCaptureKit is
 loaded dynamically so older systems can still start the application without
 advertising this capability. Run the app from a stable installation path. In
@@ -89,7 +97,7 @@ Accessibility traversal is bounded and indicates truncation. Secure text values
 are omitted from the accessibility data; screenshots still show the selected
 window as the user sees it. Capture is app-window scoped, not a full-desktop
 recording. This initial implementation does not provide drag-and-drop,
-Record & Replay, Windows/Linux desktop input, or a dedicated settings page.
+Record & Replay or Windows/Linux desktop input.
 
 ## Verification
 

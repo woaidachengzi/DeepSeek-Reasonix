@@ -2,6 +2,7 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::TryRngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+pub(crate) mod computer_use_settings;
 #[cfg(any(debug_assertions, test))]
 use std::{
     env,
