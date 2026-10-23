@@ -2283,12 +2283,14 @@ func (c *Controller) EnableInteractiveApproval() {
 	trustGate := planModeReadOnlyTrustApprover{c}
 	escapeApprover := sandboxEscapeApprover{c}
 	configApprover := managedConfigWriteApprover{c}
+	desktopApprover := &computerUseApprover{c: c}
 	c.writeAccess.interactive = true
 	if c.executor != nil {
 		c.executor.SetGate(c.newInteractiveGate())
 		c.executor.SetPlanModeReadOnlyTrustGate(trustGate)
 		c.executor.SetSandboxEscapeApprover(escapeApprover)
 		c.executor.SetConfigWriteApprover(configApprover)
+		c.executor.SetComputerUseApprover(desktopApprover)
 		c.executor.SetWriteAccessGate(c)
 		c.executor.SetWriteRoots(c.writeAccess.roots)
 		c.executor.SetAsker(c)
@@ -2313,6 +2315,11 @@ func (c *Controller) EnableInteractiveApproval() {
 		SetWriteAccessGate(agent.WriteAccessGate)
 	}); ok {
 		setter.SetWriteAccessGate(c)
+	}
+	if setter, ok := c.runner.(interface {
+		SetComputerUseApprover(tool.ComputerUseApprover)
+	}); ok {
+		setter.SetComputerUseApprover(desktopApprover)
 	}
 	if setter, ok := c.runner.(interface {
 		SetWriteRoots(*sandbox.WritableRootSet)

@@ -56,6 +56,7 @@ type agentServices struct {
 	// configWrite can ask the user whether a file tool may write a
 	// Reasonix-managed config file outside the workspace roots.
 	configWrite tool.ConfigWriteApprover
+	computerUse tool.ComputerUseApprover
 	// writeRoots is the session-scoped writable directory manager.
 	writeRoots *sandbox.WritableRootSet
 	// writeAccess authorizes extra writable directories. nil skips expansion

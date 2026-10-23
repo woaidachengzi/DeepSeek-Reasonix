@@ -70,6 +70,9 @@ var desktopMu sync.Mutex
 
 func New() *Controller { return &Controller{backend: nativeBackend{}, now: time.Now} }
 
+// ValidateRequest checks arguments before an interactive host asks for access.
+func ValidateRequest(r Request) error { return validate(r) }
+
 func validate(r Request) error {
 	switch r.Action {
 	case "status", "apps":
@@ -170,6 +173,16 @@ func (c *Controller) publish(v nativeResult, pid int) (Result, error) {
 }
 
 func (c *Controller) Execute(ctx context.Context, r Request) (Result, error) {
+	return c.execute(ctx, r, nil)
+}
+
+// ExecuteForTarget rechecks the approved process incarnation inside the native
+// operation lock, before any screen capture or input.
+func (c *Controller) ExecuteForTarget(ctx context.Context, r Request, target Target) (Result, error) {
+	return c.execute(ctx, r, &target)
+}
+
+func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Result, error) {
 	if err := validate(r); err != nil {
 		return Result{}, err
 	}
@@ -179,6 +192,12 @@ func (c *Controller) Execute(ctx context.Context, r Request) (Result, error) {
 	defer desktopMu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
+	}
+	if target != nil {
+		current, err := c.target(ctx, r.PID)
+		if err != nil || current != *target {
+			return Result{}, errors.New("approved app changed; list apps and request access again")
+		}
 	}
 	if r.Action == "observe" {
 		c.receipt = receipt{}

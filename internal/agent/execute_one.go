@@ -562,6 +562,9 @@ func (a *Agent) prepareToolExecution(ctx context.Context, plan *toolCallPlan) (t
 	if a.svc.configWrite != nil {
 		cctx = tool.WithConfigWriteApprover(cctx, a.svc.configWrite)
 	}
+	if a.svc.computerUse != nil {
+		cctx = tool.WithComputerUseApprover(cctx, a.svc.computerUse)
+	}
 	if v := a.responseLanguage.Load(); v != nil {
 		if lang, ok := v.(string); ok {
 			cctx = WithResponseLanguagePreference(cctx, lang)
@@ -576,6 +579,12 @@ func (a *Agent) prepareToolExecution(ctx context.Context, plan *toolCallPlan) (t
 		cctx = memory.WithQueue(cctx, a.svc.memQueue)
 	}
 	callID := plan.call.ID
+	cctx = tool.WithComputerUsePreview(cctx, func(p tool.ComputerUsePreview) {
+		a.svc.sink.Emit(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: callID, Name: "computer_use", ComputerUsePreview: &event.ComputerUsePreview{
+			AppName: p.Target.Name, BundleID: p.Target.BundleID, PID: p.Target.PID,
+			WindowID: p.WindowID, Action: p.Action, Image: p.Image,
+		}}})
+	})
 	cctx = tool.WithProgress(cctx, func(chunk string) {
 		a.svc.sink.Emit(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: callID, Output: chunk}})
 	})

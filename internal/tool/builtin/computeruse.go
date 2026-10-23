@@ -11,8 +11,14 @@ import (
 )
 
 type computerUse struct {
-	controller *computeruse.Controller
+	controller computerUseController
 	confined   bool
+}
+
+type computerUseController interface {
+	Target(context.Context, int) (computeruse.Target, error)
+	Execute(context.Context, computeruse.Request) (computeruse.Result, error)
+	ExecuteForTarget(context.Context, computeruse.Request, computeruse.Target) (computeruse.Result, error)
 }
 
 func init() {
@@ -52,7 +58,40 @@ func (c computerUse) ExecuteWithImages(ctx context.Context, args json.RawMessage
 	if err := json.Unmarshal(args, &r); err != nil {
 		return "", nil, err
 	}
-	result, err := c.controller.Execute(ctx, r)
+	if err := computeruse.ValidateRequest(r); err != nil {
+		return "", nil, &computerUseError{cause: err}
+	}
+	var result computeruse.Result
+	var err error
+	if r.Action == "status" || r.Action == "apps" {
+		result, err = c.controller.Execute(ctx, r)
+	} else {
+		approver := tool.ComputerUseApproverFrom(ctx)
+		if approver == nil {
+			return "", nil, &computerUseError{cause: errors.New("computer control requires explicit app access approval from an interactive host")}
+		}
+		target, resolveErr := c.controller.Target(ctx, r.PID)
+		if resolveErr != nil {
+			return "", nil, &computerUseError{cause: resolveErr}
+		}
+		allow, approveErr := approver.ApproveComputerUse(ctx, tool.ComputerUseTarget(target))
+		if approveErr != nil {
+			return "", nil, &computerUseError{cause: approveErr}
+		}
+		if !allow {
+			return "", nil, &computerUseError{cause: errors.New("user declined access to this app; do not retry in this task")}
+		}
+		result, err = c.controller.ExecuteForTarget(ctx, r, target)
+		if result.Image != "" {
+			var state struct {
+				WindowID int `json:"window_id"`
+			}
+			_ = json.Unmarshal(result.State, &state)
+			if thumbnail := computeruse.PreviewImage(result.Image); thumbnail != "" {
+				tool.PublishComputerUsePreview(ctx, tool.ComputerUsePreview{Target: tool.ComputerUseTarget(target), WindowID: state.WindowID, Action: r.Action, Image: thumbnail})
+			}
+		}
+	}
 	// A changed frame is a new observation, not a dispatch failure. Returning
 	// it normally preserves its image through the engine's result channel.
 	if result.StateChanged {

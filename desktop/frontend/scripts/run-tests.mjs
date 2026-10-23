@@ -63,6 +63,7 @@ const OWNED_ELSEWHERE = new Map(Object.entries({
   "remote-session-surface.test.tsx": "test:remote (needs the svg stub register)",
   "tauri-parallel-sessions.test.tsx": "test:tauri-parallel-sessions (needs Tauri and asset stubs)",
   "tauri-chat-workspace-delete.test.tsx": "test:tauri (needs the svg stub register)",
+  "tauri-computer-use-preview.test.tsx": "test:tauri (needs Tauri and asset stubs)",
   "remote-running-reconcile.test.ts": "test:remote",
   "remote-project-tree.test.tsx": "test:remote",
   "statusbar-workspace.test.tsx": "test:remote",

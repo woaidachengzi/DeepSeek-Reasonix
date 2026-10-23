@@ -517,7 +517,7 @@ func (l *Ledger) appendLocked(e event.Event, status event.TurnStatus) (event.Eve
 		return e, true, nil
 	}
 
-	w := eventwire.ToWire(e)
+	w := persistedWireEvent(e)
 	attemptID := ""
 	if e.Kind == event.StreamAttempt {
 		attemptID = e.StreamAttempt.ID

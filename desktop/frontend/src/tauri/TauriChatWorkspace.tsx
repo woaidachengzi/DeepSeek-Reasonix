@@ -35,6 +35,9 @@ import { QuestionJumpBar } from "../components/QuestionJumpBar";
 import { useTranscriptKernel } from "../lib/useTranscriptKernel";
 import { TauriLiveAnswer } from "./TauriLiveAnswer";
 import { TauriLiveProgress } from "./TauriLiveProgress";
+import { TauriComputerUsePreview } from "./TauriComputerUsePreview";
+import { TauriPromptCard } from "./TauriPromptCard";
+import { advanceComputerUsePreview, type ComputerUsePreviewState } from "./computerUsePreview";
 import { advanceLiveAnswer, advanceLiveProgress, EMPTY_LIVE_ANSWER, EMPTY_LIVE_PROGRESS } from "./liveProgress";
 import { attachPastedImages, pastedImageFiles } from "./pastedImages";
 import { parseAttachmentRefsForDisplay } from "../lib/attachmentDisplay";
@@ -225,7 +228,6 @@ import {
   tauriWorkbenchProjectFolders,
   tauriWorkspaceRootsAvailability,
   tauriSessionPreviews,
-  tauriSafeMCPURL,
   openTauriExternalURL,
   tauriTitleError,
   tauriTurnFailure,
@@ -430,48 +432,6 @@ function SessionRow({ tab, active, busy, switchingBlocked, runtimeState, retryAc
   );
 }
 
-interface PromptCardProps {
-  prompt: TauriPendingPrompt;
-  busy: boolean;
-  selections: Record<string, string[]>;
-  onApproval: (allow: boolean) => void;
-  onAskSelection: (questionId: string, label: string, multi: boolean) => void;
-  onAskSubmit: () => void;
-  onMCPAction: (action: "accept" | "decline" | "cancel") => void;
-  onOpenExternalURL: (url: string) => void;
-}
-
-function PromptCard({ prompt, busy, selections, onApproval, onAskSelection, onAskSubmit, onMCPAction, onOpenExternalURL }: PromptCardProps) {
-  if (prompt.kind === "approval") {
-    return <section className="tauri-prompt-card" aria-live="polite" aria-label="等待权限确认">
-      <div className="tauri-prompt-card__heading"><Sparkles size={17} /><div><strong>需要你的确认</strong><span>{prompt.tool}</span></div></div>
-      {prompt.subject && <p className="tauri-prompt-card__subject">{prompt.subject}</p>}
-      {prompt.reason && <p className="tauri-prompt-card__reason">{prompt.reason}</p>}
-      <div className="tauri-prompt-card__actions"><button type="button" className="tauri-prompt-card__allow" onClick={() => onApproval(true)} disabled={busy}>允许一次</button><button type="button" className="tauri-prompt-card__deny" onClick={() => onApproval(false)} disabled={busy}>拒绝</button></div>
-    </section>;
-  }
-  if (prompt.kind === "ask") {
-    return <section className="tauri-prompt-card" aria-live="polite" aria-label="回答助手提问">
-      <div className="tauri-prompt-card__heading"><Sparkles size={17} /><div><strong>请回答一个问题</strong><span>回答后助手会继续工作</span></div></div>
-      <div className="tauri-prompt-card__questions">{prompt.questions.map(question => {
-        const selected = selections[question.id] ?? [];
-        return <fieldset key={question.id} className="tauri-prompt-card__question"><legend>{question.header || "问题"}</legend><p>{question.prompt}</p><div className="tauri-prompt-card__options">{question.options.map(option => {
-          const active = selected.includes(option.label);
-          return <button key={option.label} type="button" className={active ? "is-selected" : ""} onClick={() => onAskSelection(question.id, option.label, question.multi)} disabled={busy} aria-pressed={active}><b>{option.label}</b>{option.description && <small>{option.description}</small>}</button>;
-        })}</div></fieldset>;
-      })}</div>
-      <div className="tauri-prompt-card__actions"><button type="button" className="tauri-prompt-card__allow" onClick={onAskSubmit} disabled={busy}>提交回答</button><button type="button" className="tauri-prompt-card__deny" onClick={onAskSubmit} disabled={busy}>跳过</button></div>
-    </section>;
-  }
-  const safeURL = tauriSafeMCPURL(prompt.url);
-  const linkHint = prompt.mode !== "url" ? "这是一个外部服务请求" : safeURL ? "打开链接完成后再继续" : "链接不可安全打开，请检查服务配置";
-  return <section className="tauri-prompt-card" aria-live="polite" aria-label="MCP 服务请求">
-    <div className="tauri-prompt-card__heading"><Sparkles size={17} /><div><strong>{prompt.server} 请求你的操作</strong><span>{linkHint}</span></div></div>
-    {prompt.message && <p className="tauri-prompt-card__subject">{prompt.message}</p>}
-    {safeURL && <a className="tauri-prompt-card__link" href={safeURL} onClick={event => { event.preventDefault(); onOpenExternalURL(safeURL); }}>打开外部链接（{new URL(safeURL).host}）</a>}
-    <div className="tauri-prompt-card__actions"><button type="button" className="tauri-prompt-card__allow" onClick={() => onMCPAction("accept")} disabled={busy}>接受并继续</button><button type="button" className="tauri-prompt-card__deny" onClick={() => onMCPAction("decline")} disabled={busy}>拒绝</button><button type="button" className="tauri-prompt-card__cancel" onClick={() => onMCPAction("cancel")} disabled={busy}>取消</button></div>
-  </section>;
-}
 
 const matchesSelectionShortcut = (event: KeyboardEvent, platform: ReturnType<typeof detectShortcutPlatform>) => matchesTauriShortcut(event, "add_selection", platform);
 
@@ -593,12 +553,15 @@ export function TauriSessionPreview() {
   const [liveAnswer, setLiveAnswer] = useState(EMPTY_LIVE_ANSWER);
   const liveText = liveAnswer.segments.join("\n\n");
   const [liveProgress, setLiveProgress] = useState(EMPTY_LIVE_PROGRESS);
+  const [computerPreview, setComputerPreview] = useState<ComputerUsePreviewState | null>(null);
+  const [computerStopping, setComputerStopping] = useState(false);
   const clearLiveResponse = useCallback(() => {
     setLiveAnswer(EMPTY_LIVE_ANSWER);
     setLiveProgress(EMPTY_LIVE_PROGRESS);
   }, []);
   const [sequence, setSequence] = useState(0);
   const [streamRevision, setStreamRevision] = useState(0);
+  useEffect(() => { setComputerPreview(null); setComputerStopping(false); }, [session?.id, streamRevision]);
   const [streamReady, setStreamReady] = useState(false);
   const [operationBusy, setBusy] = useState(false);
   const pinnedFiles = useTauriPinnedFiles({ sessionId: session?.id, ready: streamReady, idle: session?.state === "idle", readOnly: isReadOnlyWorkbenchSource(sessionPageSource), busy: operationBusy });
@@ -1333,6 +1296,7 @@ export function TauriSessionPreview() {
           };
           voiceEventSink.current?.(event);
           lastSequence = event.sequence;
+          setComputerPreview(previous => advanceComputerUsePreview(previous, event));
           setSequence(previous => Math.max(previous, event.sequence));
           setEvents(previous => [event, ...previous].slice(0, 100));
           if (event.eventKind === "usage" || event.eventKind === "turn_started" || event.eventKind === "stream_attempt" || event.eventKind === "turn_done") {
@@ -3330,6 +3294,7 @@ export function TauriSessionPreview() {
       const cancelled = await cancelTauriBridge(sessionId);
       setSession(cancelled);
       clearLiveResponse();
+      setComputerPreview(previous => previous?.sessionId === sessionId ? { ...previous, ended: true, preview: null } : previous);
       setPendingPrompt(null);
       setPromptSelections({});
       // Refresh history after cancel
@@ -3819,7 +3784,12 @@ export function TauriSessionPreview() {
         {questions.length >= 2 && <QuestionJumpBar loadedQuestions={questions} totalQuestions={questions.length} activeTurn={activeQuestion} onJump={jumpToQuestion}
           height={Math.min(240, Math.max(48, questions.length * 18 + 12))} />}
 
-        {pendingPrompt && <PromptCard prompt={pendingPrompt} busy={busy} selections={promptSelections} onApproval={allow => void answerApproval(allow)} onAskSelection={selectPromptOption} onAskSubmit={() => void answerAsk()} onMCPAction={action => void answerMCP(action)} onOpenExternalURL={url => void openTauriExternalURL(url).catch(() => setError("无法在系统浏览器中打开链接"))} />}
+        {pendingPrompt && <TauriPromptCard prompt={pendingPrompt} busy={busy} selections={promptSelections} onApproval={allow => void answerApproval(allow)} onAskSelection={selectPromptOption} onAskSubmit={() => void answerAsk()} onMCPAction={action => void answerMCP(action)} onOpenExternalURL={url => void openTauriExternalURL(url).catch(() => setError("无法在系统浏览器中打开链接"))} />}
+        {computerPreview && computerPreview.sessionId === session?.id && computerPreview.preview && !computerPreview.ended && !settingsOpen && <TauriComputerUsePreview key={`${computerPreview.sessionId}:${computerPreview.turnId}`} preview={computerPreview.preview} busy={computerStopping} onStop={() => {
+          if (computerStopping) return;
+          setComputerStopping(true);
+          void cancel().finally(() => setComputerStopping(false));
+        }} />}
 
         <footer className="tauri-composer-area">
           {error && <p className="tauri-error" role="alert">{error}</p>}

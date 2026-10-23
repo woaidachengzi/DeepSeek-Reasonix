@@ -291,7 +291,7 @@ char *reasonix_computer_use(const char *input) {
                 NSMutableArray *apps=[NSMutableArray array];
                 for(NSRunningApplication *app in NSWorkspace.sharedWorkspace.runningApplications) {
                     if(app.activationPolicy!=NSApplicationActivationPolicyRegular || app.terminated)continue;
-                    [apps addObject:@{@"pid":@(app.processIdentifier),@"name":app.localizedName?:@"",@"bundle_id":app.bundleIdentifier?:@""}];
+                    [apps addObject:@{@"pid":@(app.processIdentifier),@"name":app.localizedName?:@"",@"bundle_id":app.bundleIdentifier?:@"",@"launch_time":@([app.launchDate timeIntervalSince1970])}];
                 }
                 result=@{@"ok":@YES,@"state":@{@"apps":apps},@"dispatched":@NO};
             } else if ([action isEqualToString:@"observe"]) result=RXObserve([r[@"pid"] intValue],[r[@"window_id"] unsignedIntValue],NO);
