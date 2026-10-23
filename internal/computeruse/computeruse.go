@@ -28,15 +28,19 @@ type Request struct {
 	Key         string   `json:"key,omitempty"`
 	Modifiers   []string `json:"modifiers,omitempty"`
 	Delta       int      `json:"delta,omitempty"`
+	// VerifiedFocus is stamped by the host, never trusted from tool arguments.
+	VerifiedFocus json.RawMessage `json:"verified_focus,omitempty"`
 }
 
 type Result struct {
-	State           json.RawMessage `json:"state"`
-	Observation     string          `json:"observation,omitempty"`
-	Dispatched      bool            `json:"dispatched"`
-	DispatchUnknown bool            `json:"dispatch_unknown,omitempty"`
-	StateChanged    bool            `json:"state_changed,omitempty"`
-	Image           string          `json:"-"`
+	State             json.RawMessage `json:"state"`
+	Observation       string          `json:"observation,omitempty"`
+	Dispatched        bool            `json:"dispatched"`
+	DispatchUnknown   bool            `json:"dispatch_unknown,omitempty"`
+	StateChanged      bool            `json:"state_changed,omitempty"`
+	BlockedReason     string          `json:"blocked_reason,omitempty"`
+	InputVerification string          `json:"input_verification,omitempty"`
+	Image             string          `json:"-"`
 }
 
 type nativeResult struct {
@@ -47,6 +51,7 @@ type nativeResult struct {
 	WindowID        int             `json:"window_id,omitempty"`
 	Dispatched      bool            `json:"dispatched"`
 	DispatchUnknown bool            `json:"dispatch_unknown,omitempty"`
+	BlockedReason   string          `json:"blocked_reason,omitempty"`
 }
 
 type backend interface {
@@ -58,6 +63,7 @@ type receipt struct {
 	digest      [32]byte
 	identity    [32]byte
 	expires     time.Time
+	snapshot    nativeResult
 }
 type Controller struct {
 	backend backend
@@ -131,7 +137,7 @@ func digest(v nativeResult) [32]byte {
 	// Include pixels as well as accessibility state: a canvas may change without
 	// producing an AX revision. A changed screen requires a fresh observation.
 	h := sha256.New()
-	h.Write(v.State)
+	h.Write(canonicalState(v.State))
 	h.Write(framePixels(v))
 	var d [32]byte
 	copy(d[:], h.Sum(nil))
@@ -167,7 +173,7 @@ func (c *Controller) publish(v nativeResult, pid int) (Result, error) {
 	if _, err := rand.Read(token[:]); err != nil {
 		return result, err
 	}
-	c.receipt = receipt{token: hex.EncodeToString(token[:]), pid: pid, window: v.WindowID, digest: digest(v), identity: identity(v), expires: c.now().Add(30 * time.Second)}
+	c.receipt = receipt{token: hex.EncodeToString(token[:]), pid: pid, window: v.WindowID, digest: digest(v), identity: identity(v), expires: c.now().Add(30 * time.Second), snapshot: v}
 	result.Observation = c.receipt.token
 	return result, nil
 }
@@ -183,6 +189,7 @@ func (c *Controller) ExecuteForTarget(ctx context.Context, r Request, target Tar
 }
 
 func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Result, error) {
+	r.VerifiedFocus = nil
 	if err := validate(r); err != nil {
 		return Result{}, err
 	}
@@ -202,16 +209,24 @@ func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Re
 	if r.Action == "observe" {
 		c.receipt = receipt{}
 	}
+	var before nativeResult
 	if r.Action != "status" && r.Action != "apps" && r.Action != "observe" {
 		prior := c.receipt
-		if r.Observation != prior.token || r.PID != prior.pid || !c.now().Before(prior.expires) {
-			return Result{}, errors.New("observation is expired or belongs to another app/session; observe again")
+		if r.Observation != prior.token || r.PID != prior.pid {
+			return Result{BlockedReason: "invalid_observation"}, errors.New("observation belongs to another app/session or was already consumed; observe again; no input sent")
+		}
+		if !c.now().Before(prior.expires) {
+			c.receipt = receipt{}
+			return Result{BlockedReason: "observation_expired"}, errors.New("observation expired; observe again before input; no input sent")
 		}
 		current, err := c.observe(ctx, r.PID, prior.window)
 		if err != nil {
 			return Result{}, err
 		}
 		changed := digest(current) != prior.digest
+		if changed && (r.Action == "type" || r.Action == "key") && caretBlinkOnly(prior.snapshot, current) {
+			changed = false
+		}
 		// Activation sends no content input. Stage Manager can animate or hide
 		// an inactive window, so only its app/window identity must stay fixed.
 		if r.Action == "activate" {
@@ -221,7 +236,7 @@ func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Re
 		// after that work, immediately before accepting the verified receipt.
 		if !c.now().Before(prior.expires) {
 			c.receipt = receipt{}
-			return Result{}, errors.New("observation expired during verification; observe again")
+			return Result{BlockedReason: "observation_expired"}, errors.New("observation expired during verification; observe again; no input sent")
 		}
 		if changed {
 			result, e := c.publish(current, r.PID)
@@ -229,9 +244,18 @@ func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Re
 				return result, e
 			}
 			result.StateChanged = true
+			result.BlockedReason = observationChangeReason(prior.snapshot, current)
 			return result, errors.New("app state changed; no input sent; inspect the new observation before retrying")
 		}
 		r.WindowID = prior.window
+		before = current
+		if r.Action == "type" || r.Action == "key" {
+			var state struct {
+				Focus json.RawMessage `json:"focus"`
+			}
+			_ = json.Unmarshal(current.State, &state)
+			r.VerifiedFocus = state.Focus
+		}
 		// Consume before dispatch. An uncertain or failed action must never be
 		// automatically replayed using the same receipt.
 		c.receipt = receipt{}
@@ -241,12 +265,13 @@ func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Re
 	}
 	v, err := c.backend.call(ctx, r)
 	if err != nil {
-		return Result{Dispatched: v.Dispatched, DispatchUnknown: v.DispatchUnknown}, err
+		return verifiedInputResult(Result{Dispatched: v.Dispatched, DispatchUnknown: v.DispatchUnknown}, r, before, v), err
 	}
 	if !v.OK {
-		return Result{State: v.State, Dispatched: v.Dispatched, DispatchUnknown: v.DispatchUnknown}, errors.New(v.Error)
+		return verifiedInputResult(Result{State: v.State, Dispatched: v.Dispatched, DispatchUnknown: v.DispatchUnknown, BlockedReason: v.BlockedReason}, r, before, v), errors.New(v.Error)
 	}
-	return c.publish(v, r.PID)
+	result, err := c.publish(v, r.PID)
+	return verifiedInputResult(result, r, before, v), err
 }
 
 func supportedKey(key string) bool {

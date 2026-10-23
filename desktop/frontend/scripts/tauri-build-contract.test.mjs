@@ -141,9 +141,8 @@ contains(scriptSource, '!process.env.APPLE_SIGNING_IDENTITY', "ad-hoc signing on
 
 console.log("\ntauri-build contract — Tauri config");
 
-// The script reads productName from tauri.conf.json for the .app bundle path.
-contains(scriptSource, 'tauri.conf.json', "reads tauri.conf.json");
-contains(scriptSource, 'productName', "uses productName for bundle path");
+contains(scriptSource, 'resolveMacOSProductName(tauriDirectory, bundleArguments)', "resolves the actual build flavor before signature verification");
+contains(scriptSource, '${macOSProductName}.app', "verifies the merged product name, including takeover builds");
 
 // The build uses the local Tauri CLI from node_modules.
 contains(scriptSource, '"@tauri-apps", "cli", "tauri.js"', "uses the local Tauri JS entrypoint on all platforms");

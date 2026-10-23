@@ -4,6 +4,7 @@
 #import <ApplicationServices/ApplicationServices.h>
 #import <ImageIO/ImageIO.h>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
+#import <CommonCrypto/CommonDigest.h>
 #include <stdlib.h>
 #include <dlfcn.h>
 #include <string.h>
@@ -31,13 +32,29 @@ static CGRect RXRect(AXUIElementRef element) {
 static NSDictionary *RXBounds(CGRect r) {
     return @{ @"x":@(r.origin.x),@"y":@(r.origin.y),@"width":@(r.size.width),@"height":@(r.size.height) };
 }
+static NSString *RXValueHash(NSString *text) {
+    NSData *data=[text dataUsingEncoding:NSUTF8StringEncoding];
+    if (!data || data.length>UINT32_MAX) return @"";
+    unsigned char hash[CC_SHA256_DIGEST_LENGTH];CC_SHA256(data.bytes,(CC_LONG)data.length,hash);
+    NSMutableString *hex=[NSMutableString stringWithCapacity:CC_SHA256_DIGEST_LENGTH*2];
+    for (NSUInteger i=0;i<CC_SHA256_DIGEST_LENGTH;i++) [hex appendFormat:@"%02x",hash[i]];
+    return hex;
+}
 static NSDictionary *RXFocus(pid_t pid) {
     AXUIElementRef app=AXUIElementCreateApplication(pid);AXUIElementSetMessagingTimeout(app,0.05);
     id focused=RXAttribute(app,kAXFocusedUIElementAttribute);CFRelease(app);
     if (!focused || CFGetTypeID((__bridge CFTypeRef)focused)!=AXUIElementGetTypeID()) return @{};
     AXUIElementRef e=(__bridge AXUIElementRef)focused;
     NSString *role=RXText(RXAttribute(e,kAXRoleAttribute)),*subrole=RXText(RXAttribute(e,kAXSubroleAttribute));
-    NSMutableDictionary *result=[@{@"role":role,@"bounds":RXBounds(RXRect(e)),@"value":[subrole isEqualToString:@"AXSecureTextField"]?@"[secure]":RXText(RXAttribute(e,kAXValueAttribute))} mutableCopy];
+    BOOL secure=[subrole isEqualToString:@"AXSecureTextField"];
+    id rawValue=secure?nil:RXAttribute(e,kAXValueAttribute);
+    NSMutableDictionary *result=[@{@"role":role,@"subrole":subrole,@"identifier":RXText(RXAttribute(e,kAXIdentifierAttribute)),@"bounds":RXBounds(RXRect(e)),@"value":secure?@"[secure]":RXText(rawValue)} mutableCopy];
+    // An unavailable AX value is not an empty field. Keep it unknown so a
+    // caret-only exception or readback cannot rely on an invented empty value.
+    if (!secure && ![rawValue isKindOfClass:NSString.class]) [result removeObjectForKey:@"value"];
+    if (!secure && ([role isEqualToString:@"AXTextField"] || [role isEqualToString:@"AXTextArea"]) && [rawValue isKindOfClass:NSString.class]) {
+        result[@"value_hash"]=RXValueHash(rawValue);result[@"value_length"]=@([rawValue length]);
+    }
     if (![role isEqualToString:@"AXTextField"] && ![role isEqualToString:@"AXTextArea"]) return result;
     id selected=RXAttribute(e,kAXSelectedTextRangeAttribute);CFRange range;
     if (!selected || CFGetTypeID((__bridge CFTypeRef)selected)!=AXValueGetTypeID() || !AXValueGetValue((__bridge AXValueRef)selected,kAXValueCFRangeType,&range)) return result;
@@ -223,7 +240,14 @@ static NSDictionary *RXAct(NSDictionary *request) {
         return RXObserve(pid,wid,YES);
     }
     NSDictionary *top=RXWindow(pid,0);
-    if (!app.active || [top[(id)kCGWindowNumber] unsignedIntValue]!=wid) return RXError(@"The observed window is not active. Activate the app and observe again before input.",NO);
+    if (!app.active || [top[(id)kCGWindowNumber] unsignedIntValue]!=wid) return @{ @"ok":@NO,@"error":@"The observed window is not active. Activate the app and observe again before input.",@"dispatched":@NO,@"blocked_reason":@"window_not_active" };
+    if ([action isEqualToString:@"type"] || [action isEqualToString:@"key"]) {
+        id verified=request[@"verified_focus"];
+        if (![verified isKindOfClass:NSDictionary.class]) return RXError(@"Keyboard input requires a host-verified focus snapshot. Observe again; no input sent.",NO);
+        NSMutableDictionary *expected=[verified mutableCopy],*current=[RXFocus(pid) mutableCopy];
+        [expected removeObjectForKey:@"caret"];[current removeObjectForKey:@"caret"];
+        if (![expected isEqualToDictionary:current]) return @{ @"ok":@NO,@"error":@"Keyboard focus or field contents changed immediately before input. Observe again; no input sent.",@"dispatched":@NO,@"blocked_reason":@"focus_changed" };
+    }
     CGRect bounds;CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)window[(id)kCGWindowBounds],&bounds);
     BOOL sent=NO;
     if ([action isEqualToString:@"click"]) {

@@ -71,7 +71,7 @@ func TestComputerUseChangedPixelsSendNoInput(t *testing.T) {
 	f.image = "different pixels"
 	f.calls = nil
 	next, err := c.Execute(t.Context(), Request{Action: "key", PID: 42, Key: "return", Observation: r.Observation})
-	if err == nil || !next.StateChanged || next.Dispatched || next.Observation == "" || next.Observation == r.Observation || next.Image != f.image {
+	if err == nil || !next.StateChanged || next.Dispatched || next.BlockedReason != "visual_changed" || next.Observation == "" || next.Observation == r.Observation || next.Image != f.image {
 		t.Fatalf("changed frame: %+v err=%v", next, err)
 	}
 	if len(f.calls) != 1 || f.calls[0].Action != "observe" {
@@ -88,7 +88,7 @@ func TestComputerUseExpiryDuringVerificationSendsNoInput(t *testing.T) {
 	f.calls = nil
 	request := Request{Action: "key", PID: 42, Key: "return", Observation: r.Observation}
 	result, err := c.Execute(t.Context(), request)
-	if err == nil || result.Dispatched || len(f.calls) != 1 || f.calls[0].Action != "observe" {
+	if err == nil || result.Dispatched || result.BlockedReason != "observation_expired" || len(f.calls) != 1 || f.calls[0].Action != "observe" {
 		t.Fatalf("expired during capture: %+v calls=%+v err=%v", result, f.calls, err)
 	}
 	if c.receipt.token != "" {

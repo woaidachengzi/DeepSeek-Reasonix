@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveBuildRunner, resolveBuildTarget, resolveBundleDirectory } from "./tauri-build-target.mjs";
+import { resolveMacOSProductName } from "./tauri-build-config.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, "../../..");
@@ -62,6 +63,7 @@ const placeholderBytes = existsSync(frontendPlaceholder) ? readFileSync(frontend
 // Tauri must sign the app before bundling the DMG. Signing only the standalone
 // .app after `tauri build` leaves the copy already sealed in the DMG invalid.
 const macOSBuild = requestedTarget.endsWith("-apple-darwin");
+const macOSProductName = macOSBuild ? resolveMacOSProductName(tauriDirectory, bundleArguments) : null;
 const adHocMacOSBuild = macOSBuild && !process.env.APPLE_SIGNING_IDENTITY;
 const bundleDirectory = resolveBundleDirectory(tauriDirectory, bundleArguments, requestedTarget, process.env.CARGO_TARGET_DIR);
 // Keep development bundles out of app search. The compatibility alias retains
@@ -102,11 +104,7 @@ if (tauri.status !== 0) process.exit(tauri.status ?? 1);
 // Verify the exact .app Tauri placed into the bundle. A local preview uses
 // ad-hoc signing; official builds keep their Developer ID signature.
 if (macOSBuild) {
-  const { productName } = JSON.parse(readFileSync(join(tauriDirectory, "tauri.conf.json"), "utf8"));
-  if (typeof productName !== "string" || !productName.trim()) {
-    throw new Error("tauri.conf.json must define a productName before macOS signature verification");
-  }
-  const appBundle = join(bundleDirectory, "macos", `${productName}.app`);
+  const appBundle = join(bundleDirectory, "macos", `${macOSProductName}.app`);
   const signing = spawnSync("codesign", ["--verify", "--deep", "--strict", appBundle], {
     stdio: "inherit",
   });
