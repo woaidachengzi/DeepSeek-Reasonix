@@ -80,11 +80,21 @@ fn frame(event: &BridgeEvent) -> Option<Frame> {
 #[path = "computer_use_cursor/native.rs"]
 mod native;
 
-pub fn observe(app: &tauri::AppHandle, event: &BridgeEvent) {
+pub fn begin_stream(app: &tauri::AppHandle, after_sequence: u64) -> u64 {
     #[cfg(target_os = "macos")]
-    native::observe(app, event);
+    return native::begin_stream(app, after_sequence);
     #[cfg(not(target_os = "macos"))]
-    let _ = (app, event);
+    {
+        let _ = (app, after_sequence);
+        0
+    }
+}
+
+pub fn observe(app: &tauri::AppHandle, event: &BridgeEvent, stream: u64) {
+    #[cfg(target_os = "macos")]
+    native::observe(app, event, stream);
+    #[cfg(not(target_os = "macos"))]
+    let _ = (app, event, stream);
 }
 
 pub fn clear_session(app: &tauri::AppHandle, session: &str) {

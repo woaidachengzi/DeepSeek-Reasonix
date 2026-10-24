@@ -5747,6 +5747,7 @@ fn forward_events(
     mut after_sequence: u64,
     stop: Arc<AtomicBool>,
 ) {
+    let cursor_stream = crate::computer_use_cursor::begin_stream(&app, after_sequence);
     let mut disconnected = false;
     let mut connected_once = false;
     while !stop.load(Ordering::Acquire) {
@@ -5782,7 +5783,7 @@ fn forward_events(
                                 }
                                 continue;
                             }
-                            crate::computer_use_cursor::observe(&app, &event);
+                            crate::computer_use_cursor::observe(&app, &event, cursor_stream);
                             let _ = app.emit("bridge:event", event);
                         }
                     }

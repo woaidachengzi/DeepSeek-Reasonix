@@ -9,10 +9,12 @@ use objc2_foundation::{NSData, NSPoint, NSRect, NSSize};
 use std::{
     cell::RefCell,
     collections::{BTreeMap, VecDeque},
+    sync::atomic::{AtomicU64, Ordering},
     time::Duration,
 };
 
 const ART: &str = include_str!("../../resources/blue-whale-cursor.svg");
+static STREAM: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Default)]
 struct State {
@@ -134,7 +136,17 @@ fn hide(state: &mut State) {
     }
 }
 
-pub(super) fn observe(app: &tauri::AppHandle, event: &BridgeEvent) {
+pub(super) fn begin_stream(app: &tauri::AppHandle, after_sequence: u64) -> u64 {
+    let stream = STREAM.fetch_add(1, Ordering::AcqRel).wrapping_add(1);
+    let _ = app.run_on_main_thread(move || {
+        if STREAM.load(Ordering::Acquire) == stream {
+            STATE.with(|cell| cell.borrow_mut().begin_stream(after_sequence));
+        }
+    });
+    stream
+}
+
+pub(super) fn observe(app: &tauri::AppHandle, event: &BridgeEvent, stream: u64) {
     let sample = frame(event);
     let sequence = event.sequence;
     let owner = event
@@ -155,6 +167,10 @@ pub(super) fn observe(app: &tauri::AppHandle, event: &BridgeEvent) {
     }
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
+        // A replaced subscription may still have main-thread work queued.
+        if STREAM.load(Ordering::Acquire) != stream {
+            return;
+        }
         let Some(mtm) = MainThreadMarker::new() else {
             return;
         };
@@ -169,12 +185,12 @@ pub(super) fn observe(app: &tauri::AppHandle, event: &BridgeEvent) {
             }
             let generation = state.generation;
             drop(state);
-            animate(handle, frame, generation);
+            animate(handle, frame, generation, stream);
         });
     });
 }
 
-fn animate(app: tauri::AppHandle, frame: Frame, generation: u64) {
+fn animate(app: tauri::AppHandle, frame: Frame, generation: u64, stream: u64) {
     // A bounded display-only animation. All AppKit access and generation
     // checks stay on the main thread; stale completions perform zero writes.
     std::thread::spawn(move || {
@@ -184,6 +200,9 @@ fn animate(app: tauri::AppHandle, frame: Frame, generation: u64) {
             }
             let frame = frame.clone();
             let _ = app.run_on_main_thread(move || {
+                if STREAM.load(Ordering::Acquire) != stream {
+                    return;
+                }
                 STATE.with(|cell| {
                     let Some(mtm) = MainThreadMarker::new() else {
                         return;
@@ -217,6 +236,15 @@ pub(super) fn clear_session(app: &tauri::AppHandle, session: &str) {
 }
 
 impl State {
+    fn begin_stream(&mut self, after_sequence: u64) {
+        hide(self);
+        self.owner = None;
+        self.sequence = after_sequence;
+        // The new snapshot may skip turn_started. Do not pin healthy sessions
+        // to an obsolete turn, but retain cancellation fences across resync.
+        self.known_turns
+            .retain(|session, _| self.cancelled.contains(session));
+    }
     fn remember(&mut self, owner: (String, String)) {
         if self.ended.contains(&owner) {
             return;
@@ -444,6 +472,63 @@ mod tests {
         next.turn = "new".into();
         assert!(state
             .apply(3, None, false, false, false, Some(next))
+            .is_some());
+    }
+    #[test]
+    fn new_stream_accepts_reset_sequences_and_turns_missing_from_replay() {
+        let mut state = State::default();
+        assert!(state
+            .apply(100, None, false, false, false, Some(sample("a")))
+            .is_some());
+        let old_animation = state.generation;
+        state.begin_stream(2);
+        assert!(state.owner.is_none());
+        assert!(!state.expire(old_animation));
+        let mut next = sample("a");
+        next.turn = "new".into();
+        assert!(state
+            .apply(3, None, false, false, false, Some(next))
+            .is_some());
+
+        state.begin_stream(200);
+        assert!(
+            state
+                .apply(199, None, false, false, false, Some(sample("b")))
+                .is_none(),
+            "snapshot high-water mark still rejects replayed samples"
+        );
+    }
+    #[test]
+    fn stream_replacement_preserves_cancelled_and_completed_turn_fences() {
+        let mut state = State::default();
+        state.apply(1, None, false, false, false, Some(sample("a")));
+        state.cancel("a");
+        state.apply(
+            2,
+            Some(("b".into(), "turn".into())),
+            true,
+            false,
+            false,
+            None,
+        );
+        state.begin_stream(2);
+        for (sequence, session) in [(3, "a"), (4, "b")] {
+            assert!(state
+                .apply(sequence, None, false, false, false, Some(sample(session)))
+                .is_none());
+        }
+        state.apply(
+            5,
+            Some(("a".into(), "new".into())),
+            false,
+            false,
+            true,
+            None,
+        );
+        let mut next = sample("a");
+        next.turn = "new".into();
+        assert!(state
+            .apply(6, None, false, false, false, Some(next))
             .is_some());
     }
     #[test]
