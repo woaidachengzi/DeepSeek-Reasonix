@@ -177,8 +177,14 @@ func (c *Controller) observe(ctx context.Context, pid, window int) (nativeResult
 	return v, err
 }
 
+// Preserve native input facts even if the subsequent observation or transport
+// fails. This projection never issues a receipt; only publish may do that.
+func nativeOutcome(v nativeResult) Result {
+	return Result{State: v.State, Image: v.Image, Dispatched: v.Dispatched, DispatchMethod: v.DispatchMethod, DispatchUnknown: v.DispatchUnknown, BlockedReason: v.BlockedReason, InputVerification: v.InputVerification, Unchanged: v.Unchanged}
+}
+
 func (c *Controller) publish(v nativeResult, pid int) (Result, error) {
-	result := Result{State: v.State, Image: v.Image, Dispatched: v.Dispatched, DispatchMethod: v.DispatchMethod, DispatchUnknown: v.DispatchUnknown, InputVerification: v.InputVerification, Unchanged: v.Unchanged}
+	result := nativeOutcome(v)
 	if v.WindowID == 0 {
 		return result, nil
 	}
@@ -280,10 +286,10 @@ func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Re
 	}
 	v, err := c.backend.call(ctx, r)
 	if err != nil {
-		return verifiedInputResult(Result{Dispatched: v.Dispatched, DispatchMethod: v.DispatchMethod, DispatchUnknown: v.DispatchUnknown, InputVerification: v.InputVerification}, r, before, v), err
+		return verifiedInputResult(nativeOutcome(v), r, before, v), err
 	}
 	if !v.OK {
-		return verifiedInputResult(Result{State: v.State, Dispatched: v.Dispatched, DispatchMethod: v.DispatchMethod, DispatchUnknown: v.DispatchUnknown, BlockedReason: v.BlockedReason, InputVerification: v.InputVerification}, r, before, v), errors.New(v.Error)
+		return verifiedInputResult(nativeOutcome(v), r, before, v), errors.New(v.Error)
 	}
 	result, err := c.publish(v, r.PID)
 	return verifiedInputResult(result, r, before, v), err

@@ -139,7 +139,9 @@ func aiTraceComputerUse(m provider.Message) json.RawMessage {
 		return nil
 	}
 	var result map[string]json.RawMessage
-	if json.Unmarshal([]byte(value[start:]), &result) != nil || result["dispatched"] == nil {
+	// Image understanding may append prose after the native JSON. Only its
+	// first object contains dispatch evidence; never parse facts from the suffix.
+	if json.NewDecoder(strings.NewReader(value[start:])).Decode(&result) != nil || result["dispatched"] == nil {
 		return nil
 	}
 	facts := map[string]json.RawMessage{}

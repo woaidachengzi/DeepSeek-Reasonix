@@ -3,6 +3,7 @@ package computeruse
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"image"
 	"testing"
 )
@@ -11,6 +12,8 @@ type fillBackend struct {
 	calls      []Request
 	dispatched bool
 	unknown    bool
+	failResult bool
+	callError  error
 }
 
 func TestFillAcceptsOnlyVerifiedCaretBlink(t *testing.T) {
@@ -48,8 +51,42 @@ func (f *fillBackend) call(_ context.Context, r Request) (nativeResult, error) {
 		v.DispatchUnknown = f.unknown
 		v.InputVerification = "confirmed"
 		v.Unchanged = !f.dispatched
+		if f.failResult {
+			v.OK = false
+			v.Error = "post-write capture unavailable"
+		}
+		return v, f.callError
 	}
 	return v, nil
+}
+
+func TestFillKeepsVerifiedOutcomeWhenPostWriteObservationFails(t *testing.T) {
+	for _, dispatched := range []bool{false, true} {
+		for _, transport := range []bool{false, true} {
+			f := &fillBackend{dispatched: dispatched, unknown: dispatched, failResult: true}
+			if transport {
+				f.callError = errors.New("post-write transport failure")
+			}
+			c := New()
+			c.backend = f
+			receipt := observed(t, c)
+			request := Request{Action: "fill", PID: 42, Observation: receipt.Observation, Element: "0.1", Text: "complete field value"}
+			result, err := c.Execute(t.Context(), request)
+			if err == nil || result.Dispatched != dispatched || result.DispatchUnknown != dispatched || result.Unchanged == dispatched || result.InputVerification != "confirmed" {
+				t.Fatalf("post-write failure changed verified input facts (transport=%v): %+v %v", transport, result, err)
+			}
+			if string(result.State) != `{"pid":42,"window_id":11,"frontmost":true}` || result.Image != "stable" {
+				t.Fatal("post-write failure discarded native observation evidence")
+			}
+			if result.Observation != "" || c.receipt.token != "" {
+				t.Fatal("a post-write error issued an actionable receipt")
+			}
+			count := len(f.calls)
+			if _, err := c.Execute(t.Context(), request); err == nil || len(f.calls) != count {
+				t.Fatal("post-write failure replayed input with the consumed receipt")
+			}
+		}
+	}
 }
 
 func TestFillUsesOneVerifiedActionAndKeepsReadback(t *testing.T) {

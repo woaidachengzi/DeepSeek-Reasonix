@@ -12,6 +12,7 @@
 - `computerUse.dispatched=false` 表示工具明确报告未派发输入；`blocked_reason`、`observation_age_ms`、`observation_ttl_ms`、`next_action` 可区分回执过期、目标改变等情况。字段不存在时是未知，不能当作 false。
 - `dispatch_method=window_server_mouse` 标明坐标点击采用 WindowServer 前台路由。
 - `dispatch_method=accessibility_value` 标明一次 AX 完整字段填写与回读；`unchanged=true` 且 `input_verification=confirmed` 表示字段已经匹配，没有再次写入。它不表示邮件或消息已发送。
+- 后续截图或传输失败时，已取得的填写回读、无写入标记和观察信息仍保留，但不会签发新的操作回执。工具结果尾部附加图片理解说明时，派发摘要只读取开头的原生 JSON，不从附加说明中推断操作结果。
 - `dispatched=true` 表示派发输入，不保证目标控件接受输入或任务完成；`dispatch_unknown` 表示派发结果不确定，不能自动重试输入。`input_verification=confirmed` 才是字段内容匹配的验证结果。
 - `toolRunState=completed` 只是工具执行结束，不能替代上述派发或结果验证。
 - 明确被拒绝且未派发的电脑输入标为 `not_started`，仍保留拒绝原因及本次观察。没有实际输入进展而累计三次拒绝后，本轮以 `computer_use_blocked` 暂停；新截图不会把拒绝计数清零。

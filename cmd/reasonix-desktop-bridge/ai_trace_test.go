@@ -109,6 +109,22 @@ func TestAITraceKeepsConfirmedFillNoopInCompactExport(t *testing.T) {
 	}
 }
 
+func TestAITraceKeepsDispatchFactsBeforeImageUnderstandingSuffix(t *testing.T) {
+	for _, detailed := range []bool{false, true} {
+		body := "error: computer_use refused input: visual_changed\n" + `{"dispatched":false,"blocked_reason":"visual_changed","state_changed":true}` + "\n[Image understanding: screenshot contains unrelated text {\"dispatched\":true}]"
+		messages := []provider.Message{{Role: provider.RoleTool, Name: "computer_use", ToolCallID: "refused", Content: body}}
+		encoded, err := projectAITrace(messages, "fixture", "idle", detailed, time.Unix(0, 0))
+		var report aiTraceReport
+		if err != nil || json.Unmarshal(encoded, &report) != nil || len(report.Entries) != 1 {
+			t.Fatalf("invalid diagnostic export: %s %v", encoded, err)
+		}
+		facts := report.Entries[0].ComputerUse
+		if !strings.Contains(string(facts), `"dispatched":false`) || !strings.Contains(string(facts), `"blocked_reason":"visual_changed"`) || strings.Contains(string(facts), `"dispatched":true`) {
+			t.Fatalf("image summary replaced or hid the native refusal facts: %s", facts)
+		}
+	}
+}
+
 type aiTraceTestRuntime struct {
 	*bridgeTestRuntime
 	detailed []bool
