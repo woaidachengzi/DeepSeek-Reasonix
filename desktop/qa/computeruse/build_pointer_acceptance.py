@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
-"""Build a disposable app for explicit local-only mouse delivery acceptance.
+"""Build a disposable app for explicit local-only input acceptance.
 
 No permission requests or input are sent by this builder. After granting the
 app Accessibility, launch it through LaunchServices. It clicks only its own
 native button and inline WKWebView page, on at most two displays, then exits.
+With --fill it instead tests only its own text fields, refusals and readback.
 """
 import pathlib
+import argparse
 import plistlib
 import subprocess
 import tempfile
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--fill', action='store_true', help='test local AX text fill, readback, refusals and idempotence')
+    args = parser.parse_args()
     source = pathlib.Path(__file__).resolve().parent
     repo = source.parents[2]
     # LaunchServices/TCC may not resolve an application stored in macOS's
@@ -32,7 +37,7 @@ def main():
         'xcrun', '--sdk', 'macosx', 'clang', '-fobjc-arc', '-Wno-deprecated-declarations',
         '-framework', 'AppKit', '-framework', 'ApplicationServices',
         '-framework', 'ImageIO', '-framework', 'WebKit',
-        str(source / 'native_pointer_acceptance.m'),
+        str(source / ('native_fill_acceptance.m' if args.fill else 'native_pointer_acceptance.m')),
         str(repo / 'internal/computeruse/native_pointer_darwin.m'), '-o', str(binary),
     ], check=True)
     subprocess.run(['codesign', '--force', '--sign', '-', str(app)], check=True)

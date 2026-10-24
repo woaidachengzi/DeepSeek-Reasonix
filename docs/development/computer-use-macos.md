@@ -51,7 +51,7 @@ Inspect that capability to obtain its action schema.
 2. `apps` lists running regular applications and their PIDs.
 3. `observe` with a selected PID returns one visible window, accessibility
    elements, window bounds in points, screenshot, and an observation receipt.
-4. Use that receipt for one `activate`, `click`, `type`, `key`, or `scroll`.
+4. Use that receipt for one `activate`, `click`, `fill`, `type`, `key`, or `scroll`.
    Activation is explicit; input never silently switches the target application.
 5. Read the result and observe again whenever the state or outcome is unclear.
 
@@ -64,6 +64,20 @@ the longest side. Convert from image pixels using the returned window bounds.
 Input requires the selected window to be active. Named keys include return,
 tab, escape, backspace, space, arrows, and common command-letter shortcuts.
 Typing is Unicode-aware and does not overwrite the user's clipboard.
+For a verified writable, non-secure `AXTextField` or `AXTextArea`, prefer
+`fill` with an observed element path or window-local field coordinates. It sets
+the complete value with the public AX API and reads back the same field in one
+local action. It sends no Return or submit-button press. Unsupported or
+unverifiable targets refuse before writing; do not repeatedly retry them.
+`dispatch_method=accessibility_value` identifies this path.
+`input_verification=confirmed` means the actual field value matched the requested
+text. If it already matched, `unchanged=true` and `dispatched=false` report a
+verified no-op. An unconfirmed or uncertain write must be inspected before any
+further input. The application's own change handling can still affect its UI;
+field readback does not establish a completed recipient chip or a sent message.
+The host first reads the application's public AX role to let applications such
+as Chromium initialize native accessibility. It does not change browser
+preferences or force undocumented accessibility flags.
 Coordinate clicks use normal foreground WindowServer routing. Before posting,
 the native host checks PostEvent access, the physical left button, the frontmost
 mouse-down window at the exact point, its CG owner/ID/bounds, and the active
@@ -92,8 +106,8 @@ AX-reported render region (including neighboring compression blocks) is excluded
 too; focus, selection, text value and geometry still invalidate observations.
 No whole text field or general animation region is ignored.
 The model receives `state_changed=true`, `dispatched=false`, and the new image
-as a normal observation result, so it can inspect the change before deciding
-on its next action. This is not an automatic input retry.
+with a blocked input outcome, so it can inspect the change before deciding
+on its next action. This is not an automatic input retry or successful input.
 Activation compares app/window identity and launch time rather than pixels;
 inactive-window animations must not prevent bringing an app forward.
 Desktop operations are serialized across controllers in the current process.
@@ -114,6 +128,28 @@ are omitted from the accessibility data; screenshots still show the selected
 window as the user sees it. Capture is app-window scoped, not a full-desktop
 recording. This initial implementation does not provide drag-and-drop,
 Record & Replay or Windows/Linux desktop input.
+
+## Request size and bounded refusal handling
+
+The model-request view retains the two latest recognized desktop observations
+in full. Older desktop results retain input outcomes, refusal/uncertainty fields,
+window identity, bounds and focus, but omit superseded screenshots, AX trees
+and expired receipt tokens. User attachments, other tools, assistant text and
+tool pairing are unchanged. Unrecognized result formats are retained. This is
+a copy-on-write request projection, not deletion or compaction of saved history;
+complete original tool results remain available via `session:tool_result`.
+
+Three proven desktop input refusals without an intervening dispatched action or
+confirmed field result arm one finalization round, then pause the current run
+with `computer_use_blocked`. A fresh screenshot alone does not reset that count.
+The next user message starts a fresh attempt budget. The host keeps each refused
+result and image and marks its input state `not_started`; an uncertain dispatch
+is never classified as a proven zero-input refusal. Existing app consent,
+receipt consumption, live state checks and final-action approval remain in force.
+
+An opt-in local JSONL replay test reports only counts and token estimates:
+`REASONIX_COMPUTER_USE_REPLAY=/absolute/local/session.jsonl go test ./internal/agent -run TestComputerUseContextLocalReplay -v`.
+These estimates do not measure provider latency or predict end-to-end task time.
 
 ## Verification
 

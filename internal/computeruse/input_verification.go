@@ -70,6 +70,12 @@ func observationChangeReason(before, after nativeResult) string {
 }
 
 func verifiedInputResult(result Result, request Request, before, after nativeResult) Result {
+	if request.Action == "fill" {
+		if (result.Dispatched || result.DispatchUnknown) && result.InputVerification != "confirmed" {
+			result.InputVerification = "unconfirmed"
+		}
+		return result
+	}
 	if request.Action != "type" || (!result.Dispatched && !result.DispatchUnknown) {
 		return result
 	}

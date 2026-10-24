@@ -1,0 +1,108 @@
+{
+  "scope": "Native production fill gateway only. No full agent/receipt/approval chain, Chromium mailbox or provider latency acceptance.",
+  "nativeFillConfirmed": true,
+  "webFillConfirmed": false,
+  "webFieldsRefusedWithoutInput": true,
+  "cases": [
+    {
+      "kind": "refuse_secure_and_button",
+      "passed": true,
+      "screen": 0
+    },
+    {
+      "screen": 0,
+      "x": 960,
+      "repeat": {
+        "input_verification": "confirmed",
+        "dispatch_method": "accessibility_value",
+        "unchanged": true,
+        "dispatched": false,
+        "error": "Desktop access is unavailable. Grant Accessibility and Screen Recording to Reasonix in System Settings, then restart Reasonix.",
+        "ok": false
+      },
+      "y": 389,
+      "independent_value_matches": true,
+      "passed": true,
+      "kind": "fill_native",
+      "first": {
+        "input_verification": "confirmed",
+        "dispatch_method": "accessibility_value",
+        "unchanged": false,
+        "dispatched": true,
+        "error": "Desktop access is unavailable. Grant Accessibility and Screen Recording to Reasonix in System Settings, then restart Reasonix.",
+        "ok": false
+      }
+    },
+    {
+      "screen": 0,
+      "x": 960,
+      "repeat": {},
+      "y": 582,
+      "independent_value_matches": false,
+      "passed": false,
+      "kind": "fill_web",
+      "first": {
+        "blocked_reason": "editable_target_unverified",
+        "dispatched": false,
+        "error": "This is not a verified writable non-secure text field. Use a fresh observation; no text was sent.",
+        "ok": false
+      }
+    },
+    {
+      "kind": "refuse_secure_and_button",
+      "passed": true,
+      "screen": 1
+    },
+    {
+      "screen": 1,
+      "x": -960,
+      "repeat": {
+        "input_verification": "confirmed",
+        "dispatch_method": "accessibility_value",
+        "unchanged": true,
+        "dispatched": false,
+        "error": "Desktop access is unavailable. Grant Accessibility and Screen Recording to Reasonix in System Settings, then restart Reasonix.",
+        "ok": false
+      },
+      "y": 422,
+      "independent_value_matches": true,
+      "passed": true,
+      "kind": "fill_native",
+      "first": {
+        "input_verification": "confirmed",
+        "dispatch_method": "accessibility_value",
+        "unchanged": false,
+        "dispatched": true,
+        "error": "Desktop access is unavailable. Grant Accessibility and Screen Recording to Reasonix in System Settings, then restart Reasonix.",
+        "ok": false
+      }
+    },
+    {
+      "screen": 1,
+      "x": -960,
+      "repeat": {},
+      "y": 615,
+      "independent_value_matches": false,
+      "passed": false,
+      "kind": "fill_web",
+      "first": {
+        "blocked_reason": "editable_target_unverified",
+        "dispatched": false,
+        "error": "This is not a verified writable non-secure text field. Use a fresh observation; no text was sent.",
+        "ok": false
+      }
+    }
+  ],
+  "productionSourceSha256": {
+    "internal/computeruse/native_darwin.m": "48cf00af783079e80100129ee41de1f6d6900e898686eb292749b4bc5a89d1d1",
+    "internal/computeruse/native_fill_darwin.h": "748e2940f343afab6a9fca3bf153c3976ee06dd29e7f91fb1ecf75102eeb243e"
+  },
+  "testExecutableSha256": "f82d246c27520d1b83b7e5527e79b8b4da91bda6b975b0888b6aed62e739dfc6",
+  "temporaryPermissionRemoved": {
+    "phase": "preflight",
+    "accessibility": 0,
+    "input_posting": false,
+    "writes": 0,
+    "ok": false
+  }
+}

@@ -14,7 +14,8 @@ import (
 
 // Browsers may expose the focused value and selection but no insertion bounds.
 // Accept only a caret-shaped pixel transition, with every AX field unchanged.
-// This exception is used for keyboard input, never coordinate clicks/scrolls.
+// This exception is used for keyboard input or verified AX field fill, never
+// coordinate clicks/scrolls. Fill also resolves and checks the writable target.
 func caretBlinkOnly(before, after nativeResult) bool {
 	if !bytes.Equal(canonicalState(before.State), canonicalState(after.State)) {
 		return false

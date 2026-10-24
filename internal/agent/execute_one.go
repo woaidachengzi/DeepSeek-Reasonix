@@ -638,6 +638,11 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 	// before evidence, hooks, and recovery observation, so every downstreamconsumer sees the final
 	// (possiblyreplaced) outcome.
 	result, err = a.interceptToolAfter(ctx, call, result, err)
+	desktopRefusal := computerUseRefusal(evidenceName, result)
+	desktopProgress := computerUseInputProgress(evidenceName, result)
+	if desktopRefusal != "" {
+		err = fmt.Errorf("%s%s", computerUseRefusalPrefix, desktopRefusal)
+	}
 	// A tool that refused its own call never ran:
 	// reportitlikethepermissionandplan-modeblocksaboveratherthanasanexecution failure.
 	if msg, refused := tool.BlockedMessage(err); refused {
@@ -658,7 +663,8 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 	a.finalizeObservedToolReceipts(plan, result, execution, err)
 	result = a.withRecoveryObservation(ctx, evidenceName, evidenceArgs, readOnly, mutates, result, err, recoveryGen)
 	if err != nil {
-		detail := result
+		processed := a.computerUseRefusalImages(cctx, desktopRefusal, result, images)
+		detail := processed.text
 		// Malformed-args failures are a transient model JSON glitch (e.g. optionswritten as ["a":"b"] →
 		// "invalidcharacter ':' after array element"). Theargs can't be safely re-parsed,
 		// butechoingthetool'sschemamakes theretry land valid insteadofrepeating the same broken shape.
@@ -669,10 +675,12 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 		rawErr := fmt.Sprintf("error: %v\n%s", err, detail)
 		body, truncMsg, original := a.boundProviderVisibleResult(rawErr, providerResultToolName(plan), call.ID)
 		out := toolOutcome{
-			runState: outcomeRunState(toolOutcome{executed: true, output: rawErr}),
-			output:   body, errMsg: firstLine(err.Error()), truncated: truncMsg != "" || original != "", truncMsg: truncMsg,
+			computerUseInputProgress: desktopProgress,
+			runState:                 outcomeRunState(toolOutcome{executed: true, output: rawErr}),
+			output:                   body, errMsg: firstLine(err.Error()), truncated: truncMsg != "" || original != "", truncMsg: truncMsg,
 			execution: execution, mcpApp: toProviderMCPApp(plan.mcpApp), recoveryGeneration: recoveryGen, subagentOutcome: subagentOutcomeFromError(err),
 		}
+		markComputerUseRefusal(&out, desktopRefusal, images, processed.summary)
 		if original != "" {
 			out.rawOutput = original
 		}
@@ -696,7 +704,8 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 	}
 	body, truncMsg, original, readObserver := a.boundIncompleteReadAwareResult(plan, result)
 	out := toolOutcome{
-		runState: runState, output: body, images: images, visionSummary: visionSummary, truncated: truncMsg != "" || original != "", truncMsg: truncMsg,
+		computerUseInputProgress: desktopProgress,
+		runState:                 runState, output: body, images: images, visionSummary: visionSummary, truncated: truncMsg != "" || original != "", truncMsg: truncMsg,
 		execution: execution, mcpApp: toProviderMCPApp(plan.mcpApp), recoveryGeneration: recoveryGen,
 	}
 	if original != "" {

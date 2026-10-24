@@ -1,0 +1,11 @@
+{
+  "scope": "Local saved-session replay through modelInputMessages; estimator, not provider measurement",
+  "messages": 455,
+  "estimatedTokensBefore": 609949,
+  "estimatedTokensAfter": 340643,
+  "imageCountBefore": 77,
+  "imageCountAfter": 11,
+  "fullDesktopObservationsKept": 2,
+  "userOrOtherImagesKept": 9,
+  "privateTranscriptPublished": false
+}

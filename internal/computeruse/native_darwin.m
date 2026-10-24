@@ -41,8 +41,16 @@ static NSString *RXValueHash(NSString *text) {
     for (NSUInteger i=0;i<CC_SHA256_DIGEST_LENGTH;i++) [hex appendFormat:@"%02x",hash[i]];
     return hex;
 }
+static AXUIElementRef RXApplication(pid_t pid) {
+    AXUIElementRef app=AXUIElementCreateApplication(pid);
+    AXUIElementSetMessagingTimeout(app,0.05);
+    // Reading the public application role lets Chromium initialize native
+    // accessibility for assistive clients before focus/children are queried.
+    (void)RXAttribute(app,kAXRoleAttribute);
+    return app;
+}
 static NSDictionary *RXFocus(pid_t pid) {
-    AXUIElementRef app=AXUIElementCreateApplication(pid);AXUIElementSetMessagingTimeout(app,0.05);
+    AXUIElementRef app=RXApplication(pid);
     id focused=RXAttribute(app,kAXFocusedUIElementAttribute);CFRelease(app);
     if (!focused || CFGetTypeID((__bridge CFTypeRef)focused)!=AXUIElementGetTypeID()) return @{};
     AXUIElementRef e=(__bridge AXUIElementRef)focused;
@@ -88,8 +96,7 @@ static void RXTree(AXUIElementRef e,NSString *path,NSUInteger depth,NSMutableArr
     }
 }
 static AXUIElementRef RXWindowAX(pid_t pid,CGRect bounds) {
-    AXUIElementRef app=AXUIElementCreateApplication(pid);
-    AXUIElementSetMessagingTimeout(app,0.05);
+    AXUIElementRef app=RXApplication(pid);
     id window=RXAttribute(app,kAXFocusedWindowAttribute);
     CFRelease(app);
     if (!window || CFGetTypeID((__bridge CFTypeRef)window)!=AXUIElementGetTypeID()) return NULL;
@@ -248,6 +255,7 @@ static NSString *RXPointerBlock(pid_t pid,CGWindowID window,CGRect bounds,CGPoin
     if (!RXPointerWindowMatches(windows,pid,window,point,RXPointerWindowAtPoint(point))) return @"pointer_target_changed";
     return nil;
 }
+#import "native_fill_darwin.h"
 static NSDictionary *RXAct(NSDictionary *request) {
     NSString *action=request[@"action"];pid_t pid=[request[@"pid"] intValue];CGWindowID wid=[request[@"window_id"] unsignedIntValue];
     NSDictionary *window=RXWindow(pid,wid);NSRunningApplication *app=[NSRunningApplication runningApplicationWithProcessIdentifier:pid];
@@ -268,6 +276,7 @@ static NSDictionary *RXAct(NSDictionary *request) {
         if (![expected isEqualToDictionary:current]) return @{ @"ok":@NO,@"error":@"Keyboard focus or field contents changed immediately before input. Observe again; no input sent.",@"dispatched":@NO,@"blocked_reason":@"focus_changed" };
     }
     CGRect bounds;CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)window[(id)kCGWindowBounds],&bounds);
+    if ([action isEqualToString:@"fill"]) return RXFill(request,pid,wid,bounds);
     BOOL sent=NO;NSString *dispatchMethod=nil;
     if ([action isEqualToString:@"click"]) {
         NSString *path=request[@"element"];

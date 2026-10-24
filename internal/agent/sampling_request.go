@@ -27,7 +27,7 @@ func isEmptyStreamResult(text, reasoning string, calls []provider.ToolCall, resp
 // storage. Tool Content is the first-visible bounded result; RawContent stays
 // local and is available only through the explicit session result reader.
 func modelInputMessages(msgs []provider.Message) []provider.Message {
-	return provider.ModelMessages(msgs)
+	return computerUseContext(provider.ModelMessages(msgs))
 }
 
 // normalizeModelRequestMessages is shared by ordinary sampling and compaction

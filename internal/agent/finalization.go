@@ -103,6 +103,9 @@ func (c landCause) nudge(state *turnRuntime, submitPlan bool) string {
 	if submitPlan {
 		close = "Do not call any more research tools. Synthesize the evidence already collected into the best executor-ready plan you can, label remaining uncertainty, and call submit_plan now."
 	}
+	if c.kind == "computer_use_blocked" {
+		return "Computer control refused three input attempts without a dispatched action. Fresh observations did not prove input progress. " + close + " Explain the actual refusal and do not claim the input channel is broken or bypass app consent/state checks. The user can continue with new instructions."
+	}
 	if c.kind == "task_budget" {
 		return fmt.Sprintf("This task has reached its %s budget. %s Use the evidence already collected and label what is still uncertain; the user can continue in the next message.", c.axis, close)
 	}
@@ -111,6 +114,9 @@ func (c landCause) nudge(state *turnRuntime, submitPlan bool) string {
 }
 
 func (c landCause) noticeText() string {
+	if c.kind == "computer_use_blocked" {
+		return loopGuardNoticeText()
+	}
 	if c.kind == "task_budget" {
 		return i18n.M.TaskBudget
 	}
@@ -129,13 +135,20 @@ func (a *Agent) armFinalizationRound(ctx context.Context, state *turnRuntime, ca
 	state.landCause = cause
 	_, canSubmitPlan := planSubmissionFromContext(ctx)
 	a.sess.conversation.Add(HostGeneratedUserMessage(a.withTurnPreferences(cause.nudge(state, canSubmitPlan))))
-	a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Code: event.NoticeCodeToolBudget,
+	code := event.NoticeCodeToolBudget
+	if cause.kind == "computer_use_blocked" {
+		code = event.NoticeCodeLoopGuard
+	}
+	a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Code: code,
 		Text: cause.noticeText(), Detail: cause.detail})
 }
 
 // gracePause is the resumable stop a finalized turn ends with, chosen by what
 // caused the landing.
 func (a *Agent) gracePause(state *turnRuntime) error {
+	if state.landCause.kind == "computer_use_blocked" {
+		return &RecoveryPauseError{Message: "Computer control paused after three input refusals without progress; work is saved. Check the reported target/state before continuing.", StopReason: "computer_use_blocked"}
+	}
 	if state.landCause.kind == "task_budget" {
 		return &taskBudgetPause{axis: state.landCause.axis, detail: state.landCause.detail}
 	}

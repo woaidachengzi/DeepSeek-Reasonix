@@ -48,19 +48,22 @@ type Result struct {
 	StateChanged      bool            `json:"state_changed,omitempty"`
 	BlockedReason     string          `json:"blocked_reason,omitempty"`
 	InputVerification string          `json:"input_verification,omitempty"`
+	Unchanged         bool            `json:"unchanged,omitempty"`
 	Image             string          `json:"-"`
 }
 
 type nativeResult struct {
-	OK              bool            `json:"ok"`
-	Error           string          `json:"error,omitempty"`
-	State           json.RawMessage `json:"state"`
-	Image           string          `json:"image,omitempty"`
-	WindowID        int             `json:"window_id,omitempty"`
-	Dispatched      bool            `json:"dispatched"`
-	DispatchMethod  string          `json:"dispatch_method,omitempty"`
-	DispatchUnknown bool            `json:"dispatch_unknown,omitempty"`
-	BlockedReason   string          `json:"blocked_reason,omitempty"`
+	OK                bool            `json:"ok"`
+	Error             string          `json:"error,omitempty"`
+	State             json.RawMessage `json:"state"`
+	Image             string          `json:"image,omitempty"`
+	WindowID          int             `json:"window_id,omitempty"`
+	Dispatched        bool            `json:"dispatched"`
+	DispatchMethod    string          `json:"dispatch_method,omitempty"`
+	DispatchUnknown   bool            `json:"dispatch_unknown,omitempty"`
+	BlockedReason     string          `json:"blocked_reason,omitempty"`
+	InputVerification string          `json:"input_verification,omitempty"`
+	Unchanged         bool            `json:"unchanged,omitempty"`
 }
 
 type backend interface {
@@ -93,7 +96,7 @@ func validate(r Request) error {
 	switch r.Action {
 	case "status", "apps":
 		return nil
-	case "observe", "activate", "click", "type", "key", "scroll":
+	case "observe", "activate", "click", "fill", "type", "key", "scroll":
 	default:
 		return errors.New("unknown computer_use action")
 	}
@@ -113,17 +116,17 @@ func validate(r Request) error {
 }
 
 func validateInput(r Request) error {
-	if r.Action == "click" && r.Element == "" && (r.X == nil || r.Y == nil) {
-		return errors.New("click requires an observed element or screenshot x/y coordinates")
+	if (r.Action == "click" || r.Action == "fill") && r.Element == "" && (r.X == nil || r.Y == nil) {
+		return fmt.Errorf("%s requires an observed element or screenshot x/y coordinates", r.Action)
 	}
 	if r.X != nil && (math.IsNaN(*r.X) || math.IsInf(*r.X, 0)) || r.Y != nil && (math.IsNaN(*r.Y) || math.IsInf(*r.Y, 0)) {
 		return errors.New("coordinates must be finite")
 	}
 	if len(r.Text) > 16384 {
-		return errors.New("type text exceeds 16 KiB; split it into smaller inputs")
+		return errors.New("text exceeds 16 KiB; split type input or shorten the complete fill value")
 	}
-	if r.Action == "type" && r.Text == "" {
-		return errors.New("type requires nonempty text")
+	if (r.Action == "type" || r.Action == "fill") && r.Text == "" {
+		return fmt.Errorf("%s requires nonempty text", r.Action)
 	}
 	if len(r.Modifiers) > 4 {
 		return errors.New("too many key modifiers")
@@ -175,7 +178,7 @@ func (c *Controller) observe(ctx context.Context, pid, window int) (nativeResult
 }
 
 func (c *Controller) publish(v nativeResult, pid int) (Result, error) {
-	result := Result{State: v.State, Image: v.Image, Dispatched: v.Dispatched, DispatchMethod: v.DispatchMethod, DispatchUnknown: v.DispatchUnknown}
+	result := Result{State: v.State, Image: v.Image, Dispatched: v.Dispatched, DispatchMethod: v.DispatchMethod, DispatchUnknown: v.DispatchUnknown, InputVerification: v.InputVerification, Unchanged: v.Unchanged}
 	if v.WindowID == 0 {
 		return result, nil
 	}
@@ -236,7 +239,7 @@ func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Re
 			return Result{}, err
 		}
 		changed := digest(current) != prior.digest
-		if changed && (r.Action == "type" || r.Action == "key") && caretBlinkOnly(prior.snapshot, current) {
+		if changed && (r.Action == "type" || r.Action == "key" || r.Action == "fill") && caretBlinkOnly(prior.snapshot, current) {
 			changed = false
 		}
 		// Activation sends no content input. Stage Manager can animate or hide
@@ -277,10 +280,10 @@ func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Re
 	}
 	v, err := c.backend.call(ctx, r)
 	if err != nil {
-		return verifiedInputResult(Result{Dispatched: v.Dispatched, DispatchMethod: v.DispatchMethod, DispatchUnknown: v.DispatchUnknown}, r, before, v), err
+		return verifiedInputResult(Result{Dispatched: v.Dispatched, DispatchMethod: v.DispatchMethod, DispatchUnknown: v.DispatchUnknown, InputVerification: v.InputVerification}, r, before, v), err
 	}
 	if !v.OK {
-		return verifiedInputResult(Result{State: v.State, Dispatched: v.Dispatched, DispatchMethod: v.DispatchMethod, DispatchUnknown: v.DispatchUnknown, BlockedReason: v.BlockedReason}, r, before, v), errors.New(v.Error)
+		return verifiedInputResult(Result{State: v.State, Dispatched: v.Dispatched, DispatchMethod: v.DispatchMethod, DispatchUnknown: v.DispatchUnknown, BlockedReason: v.BlockedReason, InputVerification: v.InputVerification}, r, before, v), errors.New(v.Error)
 	}
 	result, err := c.publish(v, r.PID)
 	return verifiedInputResult(result, r, before, v), err

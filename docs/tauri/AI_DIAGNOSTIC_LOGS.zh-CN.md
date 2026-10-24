@@ -8,11 +8,13 @@
 
 - `entries[].modelReturnedReasoning` 是渠道返回的思考文本。有些模型不返回；不能据此认定工具实际完成了操作。
 - 工具调用与结果用 `toolCalls[].id` / `toolCallId` 对应，`resolvedName` / `capabilityId` 标明能力代理实际调用的目标。
-- 详细模式的工具 `content` 优先采用完整本地结果，`modelVisibleResult` 记录被截断或折叠后模型看到的内容。
+- 详细模式的工具 `content` 优先采用完整本地结果，`modelVisibleResult` 记录该工具返回时被截断或折叠后的内容。后续请求会进一步省略已被新观察替代的旧电脑截图、AX 树和回执；这个字段不是某次后续请求的完整输入快照。
 - `computerUse.dispatched=false` 表示工具明确报告未派发输入；`blocked_reason`、`observation_age_ms`、`observation_ttl_ms`、`next_action` 可区分回执过期、目标改变等情况。字段不存在时是未知，不能当作 false。
 - `dispatch_method=window_server_mouse` 标明坐标点击采用 WindowServer 前台路由。
+- `dispatch_method=accessibility_value` 标明一次 AX 完整字段填写与回读；`unchanged=true` 且 `input_verification=confirmed` 表示字段已经匹配，没有再次写入。它不表示邮件或消息已发送。
 - `dispatched=true` 表示派发输入，不保证目标控件接受输入或任务完成；`dispatch_unknown` 表示派发结果不确定，不能自动重试输入。`input_verification=confirmed` 才是字段内容匹配的验证结果。
 - `toolRunState=completed` 只是工具执行结束，不能替代上述派发或结果验证。
+- 明确被拒绝且未派发的电脑输入标为 `not_started`，仍保留拒绝原因及本次观察。没有实际输入进展而累计三次拒绝后，本轮以 `computer_use_blocked` 暂停；新截图不会把拒绝计数清零。
 - `createdAt`、`workDurationMs` 沿用现有会话元数据；`recentToolTimings` 提供当前本地服务内存事件窗口内的工具开始、结束与耗时。该窗口有界，服务重启后清空，早期事件可能被淘汰，缺少时间不能解释为耗时为零。
 - 原生导出附加 `host` 中的程序版本、提交、构建是否有未提交改动、平台与会话标识，便于确认运行的是哪个安装包。
 

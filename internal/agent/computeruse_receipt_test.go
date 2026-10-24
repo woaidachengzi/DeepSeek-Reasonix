@@ -34,11 +34,17 @@ func TestRepeatedDesktopOutcomesRemainVisibleThroughProxy(t *testing.T) {
 		a := New(&scriptedProvider{name: "fixture"}, reg, NewSession("sys"), Options{}, event.Discard)
 		for _, id := range []string{"first", "second"} {
 			result := a.executeOne(t.Context(), &a.turn, provider.ToolCall{ID: id, Name: "use_capability", Arguments: `{"action":"call","capability_id":"tool:computer_use","arguments":{}}`})
-			if result.blocked || strings.Contains(result.output, "duplicate tool result omitted") || !strings.Contains(result.output, `"dispatched":`) {
+			if strings.Contains(result.output, "duplicate tool result omitted") || !strings.Contains(result.output, `"dispatched":`) {
 				t.Fatalf("native outcome disappeared on %s (fail=%v): %+v", id, fail, result)
 			}
 			if fail && !strings.Contains(result.output, `"blocked_reason":"observation_expired"`) {
 				t.Fatal("a refusal could be mistaken for dispatched input")
+			}
+			if result.blocked != fail || (fail && result.runState != provider.ToolRunNotStarted) {
+				t.Fatal("a preserved zero-input refusal must remain blocked, not successful")
+			}
+			if result.computerUseInputProgress == fail {
+				t.Fatal("proxy result lost its actual input progress classification")
 			}
 		}
 	}

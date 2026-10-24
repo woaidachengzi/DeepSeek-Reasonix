@@ -101,6 +101,14 @@ func TestAITraceIncludesMouseDispatchMethodInCompactExport(t *testing.T) {
 	}
 }
 
+func TestAITraceKeepsConfirmedFillNoopInCompactExport(t *testing.T) {
+	messages := []provider.Message{{Role: provider.RoleTool, Name: "computer_use", ToolCallID: "fill", Content: `{"dispatched":false,"dispatch_method":"accessibility_value","input_verification":"confirmed","unchanged":true}`}}
+	encoded, err := projectAITrace(messages, "fixture", "idle", false, time.Unix(0, 0))
+	if err != nil || !strings.Contains(string(encoded), `"unchanged":true`) || !strings.Contains(string(encoded), `"input_verification":"confirmed"`) {
+		t.Fatalf("verified no-op became an unexplained refusal: %s %v", encoded, err)
+	}
+}
+
 type aiTraceTestRuntime struct {
 	*bridgeTestRuntime
 	detailed []bool

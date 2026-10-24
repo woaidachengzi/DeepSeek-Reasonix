@@ -58,6 +58,7 @@ func (a *Agent) applyBatchGuards(ctx context.Context, cancelled bool, calls []pr
 	if cancelled {
 		return
 	}
+	a.applyComputerUseProgress(ctx, calls, outcomes, receiptMark)
 	storm := a.applyStormBreaker(calls, outcomes, receiptMark)
 	_, goalScoped := DeliveryExecutionScopeFromContext(ctx)
 	progress := a.applyProgressGuard(outcomes, receiptMark, goalScoped)

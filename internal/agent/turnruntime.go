@@ -67,7 +67,8 @@ type turnRuntime struct {
 	// blockedTurnStreak counts consecutive rounds the host blocked outright.
 	// stormSig catches fixation on one call shape; this catches rotation
 	// between blocked shapes, which is zero progress all the same.
-	blockedTurnStreak int
+	blockedTurnStreak   int
+	computerUseRefusals int
 
 	// loopGuardArmed stands final readiness down after a loop guard fired:
 	// demanding receipts the blocker prevents would restart the loop. The mark
