@@ -9,6 +9,7 @@
 #include <dlfcn.h>
 #include <string.h>
 #import "native_pointer_darwin.h"
+#import "native_capture_darwin.h"
 
 static NSDictionary *RXError(NSString *message, BOOL dispatched) {
     return @{ @"ok":@NO, @"error":message, @"dispatched":@(dispatched) };
@@ -133,9 +134,9 @@ static NSString *RXCapture(CGWindowID window) {
             if (!selected) {dispatch_semaphore_signal(done);return;}
             SCContentFilter *filter=[[NSClassFromString(@"SCContentFilter") alloc] initWithDesktopIndependentWindow:selected];
             SCStreamConfiguration *config=[NSClassFromString(@"SCStreamConfiguration") new];
-            double width=selected.frame.size.width,height=selected.frame.size.height;
-            double scale=fmin(2.0,1920.0/fmax(width,height));
-            config.width=(size_t)fmax(1,width*scale); config.height=(size_t)fmax(1,height*scale);
+            CGSize size=RXCaptureSize(selected.frame.size);
+            if (size.width<1 || size.height<1) {dispatch_semaphore_signal(done);return;}
+            config.width=(size_t)size.width; config.height=(size_t)size.height;
             config.showsCursor=NO;config.ignoreShadowsSingleWindow=YES;
             [(id)NSClassFromString(@"SCScreenshotManager") captureImageWithFilter:filter configuration:config completionHandler:^(CGImageRef image,NSError *captureError) {
                 if (!captureError) encoded=RXEncode(image);
@@ -170,7 +171,7 @@ static NSDictionary *RXObserve(pid_t pid,CGWindowID wanted,BOOL dispatched) {
     NSString *image=RXCapture(wid);
     if (!image && app.active) return RXError(@"Window capture failed. Check Screen Recording permission and observe a visible window again.",dispatched);
     NSDictionary *state=@{ @"pid":@(pid),@"bundle_id":app.bundleIdentifier?:@"",@"name":app.localizedName?:@"",@"launch_time":@([app.launchDate timeIntervalSince1970]),
-        @"window_id":@(wid),@"bounds":RXBounds(bounds),@"frontmost":@(app.active),@"capture_available":image?@YES:@NO,@"focus":RXFocus(pid),@"elements":elements,@"elements_truncated":@(truncated),@"image_coordinates":@"window points; x/y origin at top left; image may be scaled" };
+        @"window_id":@(wid),@"bounds":RXBounds(bounds),@"frontmost":@(app.active),@"capture_available":image?@YES:@NO,@"focus":RXFocus(pid),@"elements":elements,@"elements_truncated":@(truncated),@"image_coordinates":@"For screenshot targets pass coordinate_space=image and x/y in image_geometry pixels. Host converts to window points. Do not add screen origins." };
     return @{ @"ok":@YES,@"state":state,@"image":image?:@"",@"window_id":@(wid),@"dispatched":@(dispatched) };
 }
 static AXUIElementRef RXElement(AXUIElementRef root,NSString *path) {

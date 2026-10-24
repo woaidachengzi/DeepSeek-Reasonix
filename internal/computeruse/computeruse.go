@@ -21,17 +21,18 @@ import (
 const ObservationTTL = 2 * time.Minute
 
 type Request struct {
-	Action      string   `json:"action"`
-	PID         int      `json:"pid,omitempty"`
-	WindowID    int      `json:"window_id,omitempty"`
-	Observation string   `json:"observation,omitempty"`
-	Element     string   `json:"element,omitempty"`
-	X           *float64 `json:"x,omitempty"`
-	Y           *float64 `json:"y,omitempty"`
-	Text        string   `json:"text,omitempty"`
-	Key         string   `json:"key,omitempty"`
-	Modifiers   []string `json:"modifiers,omitempty"`
-	Delta       int      `json:"delta,omitempty"`
+	Action          string   `json:"action"`
+	PID             int      `json:"pid,omitempty"`
+	WindowID        int      `json:"window_id,omitempty"`
+	Observation     string   `json:"observation,omitempty"`
+	Element         string   `json:"element,omitempty"`
+	X               *float64 `json:"x,omitempty"`
+	Y               *float64 `json:"y,omitempty"`
+	CoordinateSpace string   `json:"coordinate_space,omitempty"`
+	Text            string   `json:"text,omitempty"`
+	Key             string   `json:"key,omitempty"`
+	Modifiers       []string `json:"modifiers,omitempty"`
+	Delta           int      `json:"delta,omitempty"`
 	// VerifiedFocus is stamped by the host, never trusted from tool arguments.
 	VerifiedFocus json.RawMessage `json:"verified_focus,omitempty"`
 }
@@ -49,6 +50,7 @@ type Result struct {
 	BlockedReason     string          `json:"blocked_reason,omitempty"`
 	InputVerification string          `json:"input_verification,omitempty"`
 	Unchanged         bool            `json:"unchanged,omitempty"`
+	ImageGeometry     *ImageGeometry  `json:"image_geometry,omitempty"`
 	Image             string          `json:"-"`
 }
 
@@ -116,6 +118,9 @@ func validate(r Request) error {
 }
 
 func validateInput(r Request) error {
+	if err := validateCoordinateSpace(r); err != nil {
+		return err
+	}
 	if (r.Action == "click" || r.Action == "fill") && r.Element == "" && (r.X == nil || r.Y == nil) {
 		return fmt.Errorf("%s requires an observed element or screenshot x/y coordinates", r.Action)
 	}
@@ -180,7 +185,7 @@ func (c *Controller) observe(ctx context.Context, pid, window int) (nativeResult
 // Preserve native input facts even if the subsequent observation or transport
 // fails. This projection never issues a receipt; only publish may do that.
 func nativeOutcome(v nativeResult) Result {
-	return Result{State: v.State, Image: v.Image, Dispatched: v.Dispatched, DispatchMethod: v.DispatchMethod, DispatchUnknown: v.DispatchUnknown, BlockedReason: v.BlockedReason, InputVerification: v.InputVerification, Unchanged: v.Unchanged}
+	return Result{State: v.State, Image: v.Image, Dispatched: v.Dispatched, DispatchMethod: v.DispatchMethod, DispatchUnknown: v.DispatchUnknown, BlockedReason: v.BlockedReason, InputVerification: v.InputVerification, Unchanged: v.Unchanged, ImageGeometry: observationImageGeometry(v)}
 }
 
 func (c *Controller) publish(v nativeResult, pid int) (Result, error) {
@@ -280,6 +285,13 @@ func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Re
 		// Consume before dispatch. An uncertain or failed action must never be
 		// automatically replayed using the same receipt.
 		c.receipt = receipt{}
+		resolved, err := windowPointRequest(r, before)
+		if err != nil {
+			result := nativeOutcome(before)
+			result.BlockedReason, result.NextAction = "coordinate_mapping_unavailable", "observe"
+			return result, err
+		}
+		r = resolved
 	}
 	if err := ctx.Err(); err != nil {
 		return Result{}, err

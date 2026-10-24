@@ -58,9 +58,22 @@ Inspect that capability to obtain its action schema.
 An inactive window hidden by Stage Manager can return metadata without an
 image (`capture_available=false`). Activate it, then observe the full window.
 
-An accessibility click uses the returned element path. A coordinate click uses
-window-local points; screenshots may be downscaled to at most 1920 pixels on
-the longest side. Convert from image pixels using the returned window bounds.
+An accessibility click uses the returned element path. For screenshot targets,
+pass `coordinate_space="image"` and `x/y` in the exact returned image pixels.
+The host derives `image_geometry` (width, height and points per pixel) from the
+verified JPEG and window bounds, then converts to window-local points before
+native dispatch. Do not add the screen origin or use preview thumbnail pixels.
+`coordinate_space="window"`, or omission for legacy callers, retains window-local
+point semantics. Image mode cannot be mixed with an element path. Unknown image
+geometry or out-of-image coordinates refuse input and consume the old receipt;
+obtain a fresh observation before another action.
+
+Screenshots are no longer upscaled above the window's logical point dimensions.
+Larger windows are downscaled to at most 1920 pixels on the longest side; the
+explicit image mode handles that scaling without model-side arithmetic. This
+also avoids the earlier 1686x983 Chrome window being enlarged to 1920x1119,
+where using image y=351 directly as a window point clicked the following row
+instead of the intended target at about y=308.
 Input requires the selected window to be active. Named keys include return,
 tab, escape, backspace, space, arrows, and common command-letter shortcuts.
 Typing is Unicode-aware and does not overwrite the user's clipboard.

@@ -1,4 +1,5 @@
 #import "native_pointer_darwin.h"
+#import "native_capture_darwin.h"
 #import <AppKit/AppKit.h>
 #include <math.h>
 #include <stdio.h>
@@ -102,6 +103,12 @@ static void headlessHitTest(void) {
 }
 int main(void) {
     @autoreleasepool {
+        CHECK(CGSizeEqualToSize(RXCaptureSize(CGSizeMake(1686,983)),CGSizeMake(1686,983)));
+        CHECK(CGSizeEqualToSize(RXCaptureSize(CGSizeMake(800,600)),CGSizeMake(800,600)));
+        CHECK(CGSizeEqualToSize(RXCaptureSize(CGSizeMake(3840,2160)),CGSizeMake(1920,1080)));
+        CHECK(CGSizeEqualToSize(RXCaptureSize(CGSizeMake(2160,3840)),CGSizeMake(1080,1920)));
+        CHECK(CGSizeEqualToSize(RXCaptureSize(CGSizeMake(NAN,983)),CGSizeZero));
+        CHECK(CGSizeEqualToSize(RXCaptureSize(CGSizeMake(1686,0)),CGSizeZero));
         CFDictionaryRef session=CGSessionCopyCurrentDictionary();
         if (!session) return 77;
         CFRelease(session);

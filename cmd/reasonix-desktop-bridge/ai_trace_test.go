@@ -94,10 +94,13 @@ func TestAITraceBoundsAndChineseTruncation(t *testing.T) {
 }
 
 func TestAITraceIncludesMouseDispatchMethodInCompactExport(t *testing.T) {
-	messages := []provider.Message{{Role: provider.RoleTool, Name: "computer_use", ToolCallID: "mouse", Content: `{"dispatched":true,"dispatch_method":"window_server_mouse"}`}}
+	messages := []provider.Message{{Role: provider.RoleTool, Name: "computer_use", ToolCallID: "mouse", Content: `{"dispatched":true,"dispatch_method":"window_server_mouse","image_geometry":{"width":1920,"height":1119,"points_per_pixel_x":0.878125,"points_per_pixel_y":0.87846291331546}}`}}
 	encoded, err := projectAITrace(messages, "fixture", "idle", false, time.Unix(0, 0))
 	if err != nil || !strings.Contains(string(encoded), `"dispatch_method":"window_server_mouse"`) {
 		t.Fatalf("dispatch route missing: %s %v", encoded, err)
+	}
+	if !strings.Contains(string(encoded), `"points_per_pixel_x":0.878125`) || !strings.Contains(string(encoded), `"height":1119`) {
+		t.Fatal("compact diagnostics lost the image-to-window mapping")
 	}
 }
 

@@ -11,6 +11,7 @@
 - 详细模式的工具 `content` 优先采用完整本地结果，`modelVisibleResult` 记录该工具返回时被截断或折叠后的内容。后续请求会进一步省略已被新观察替代的旧电脑截图、AX 树和回执；这个字段不是某次后续请求的完整输入快照。
 - `computerUse.dispatched=false` 表示工具明确报告未派发输入；`blocked_reason`、`observation_age_ms`、`observation_ttl_ms`、`next_action` 可区分回执过期、目标改变等情况。字段不存在时是未知，不能当作 false。
 - `dispatch_method=window_server_mouse` 标明坐标点击采用 WindowServer 前台路由。
+- `image_geometry` 保留原始观察截图的像素尺寸和每像素对应的窗口点数。结合工具参数 `coordinate_space`、`x/y` 可检查是否把截图像素当成了窗口点；它不包含图片内容。
 - `dispatch_method=accessibility_value` 标明一次 AX 完整字段填写与回读；`unchanged=true` 且 `input_verification=confirmed` 表示字段已经匹配，没有再次写入。它不表示邮件或消息已发送。
 - 后续截图或传输失败时，已取得的填写回读、无写入标记和观察信息仍保留，但不会签发新的操作回执。工具结果尾部附加图片理解说明时，派发摘要只读取开头的原生 JSON，不从附加说明中推断操作结果。
 - `dispatched=true` 表示派发输入，不保证目标控件接受输入或任务完成；`dispatch_unknown` 表示派发结果不确定，不能自动重试输入。`input_verification=confirmed` 才是字段内容匹配的验证结果。
