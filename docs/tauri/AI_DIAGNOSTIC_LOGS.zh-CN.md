@@ -10,6 +10,7 @@
 - 工具调用与结果用 `toolCalls[].id` / `toolCallId` 对应，`resolvedName` / `capabilityId` 标明能力代理实际调用的目标。
 - 详细模式的工具 `content` 优先采用完整本地结果，`modelVisibleResult` 记录被截断或折叠后模型看到的内容。
 - `computerUse.dispatched=false` 表示工具明确报告未派发输入；`blocked_reason`、`observation_age_ms`、`observation_ttl_ms`、`next_action` 可区分回执过期、目标改变等情况。字段不存在时是未知，不能当作 false。
+- `dispatch_method=window_server_mouse` 标明坐标点击采用 WindowServer 前台路由。
 - `dispatched=true` 表示派发输入，不保证目标控件接受输入或任务完成；`dispatch_unknown` 表示派发结果不确定，不能自动重试输入。`input_verification=confirmed` 才是字段内容匹配的验证结果。
 - `toolRunState=completed` 只是工具执行结束，不能替代上述派发或结果验证。
 - `createdAt`、`workDurationMs` 沿用现有会话元数据；`recentToolTimings` 提供当前本地服务内存事件窗口内的工具开始、结束与耗时。该窗口有界，服务重启后清空，早期事件可能被淘汰，缺少时间不能解释为耗时为零。

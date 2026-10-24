@@ -45,13 +45,15 @@ pub fn run(app: &AppHandle, directory: &Path) -> Result<(), String> {
         let snapshot = supervisor.snapshot(SessionRequest {
             session_id: id.clone(),
         })?;
-        if snapshot.session.state != "running" {
+        // A scoped app-access prompt pauses the turn. Let the operator answer
+        // the real UI rather than treating a pending approval as completion.
+        if snapshot.session.state == "idle" {
             let fixture: serde_json::Value = serde_json::from_slice(
                 &std::fs::read(root.join("fixture-state.json"))
                     .map_err(|_| "read fixture state")?,
             )
             .map_err(|_| "decode fixture state")?;
-            let success = fixture["clicks"] == 1
+            let success = fixture["clicks"] == 2
                 && fixture["text"] == "Desktop acceptance passed ✅"
                 && fixture["scroll_y"].as_f64().unwrap_or(0.0) > 0.0;
             std::fs::write(

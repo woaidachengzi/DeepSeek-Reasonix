@@ -64,11 +64,18 @@ the longest side. Convert from image pixels using the returned window bounds.
 Input requires the selected window to be active. Named keys include return,
 tab, escape, backspace, space, arrows, and common command-letter shortcuts.
 Typing is Unicode-aware and does not overwrite the user's clipboard.
+Coordinate clicks use normal foreground WindowServer routing. Before posting,
+the native host checks PostEvent access, the physical left button, the frontmost
+window at the exact point, AX ownership/window bounds, and the active focused
+window. An overlay or unverifiable target refuses all mouse events. The mouse
+pointer moves to the selected point; the tool does not restore it to another
+application afterwards. AX element presses remain app-targeted.
+
 Scrolling uses the selected window's vertical accessibility scroller, at an
 optional observed element path or the scroll area containing its center.
 Negative delta moves down, positive moves up; some native controls use page
 granularity. Windows without an accessible scroller report unsupported instead
-of sending a wheel event without a window target. The desktop pointer is not moved.
+of sending a wheel event without a window target. Scrolling does not move the pointer.
 
 ## Observation and dispatch contract
 
@@ -89,6 +96,10 @@ Other processes and physical users can still change the UI between observation
 and dispatch; there is no claim of a system-wide atomic UI transaction.
 
 `dispatched` means an input was sent, not that its intended effect completed.
+`dispatch_method=window_server_mouse` identifies a coordinate click sent through
+WindowServer. `pointer_target_changed`, `pointer_target_unverified`,
+`pointer_busy`, and `input_permission_missing` mean no mouse input was posted;
+resolve that condition and obtain a fresh observation before another attempt.
 `dispatch_unknown` means the operation may have happened. Such outcomes require
 fresh observation, never automatic replay. All computer-use errors explicitly
 opt out of the engine's generic transient-tool retries.
@@ -124,7 +135,8 @@ python3 desktop/qa/computeruse/run.py --app /absolute/path/Reasonix\ Tauri\ Prev
 
 This builds a disposable Cocoa fixture, starts a deterministic loopback model,
 and runs the normal packaged model/tool chain in a private core profile. It
-checks AX button press, coordinate focus, Chinese/emoji typing, Command-A,
+checks AX button press plus an independent coordinate-button counter increment,
+coordinate focus from a non-text initial responder, Chinese/emoji typing, Command-A,
 replacement typing, and scrolling against the fixture's independently recorded
 state. It keeps logs in a newly created temporary directory and closes its
 fixture and Preview instance afterwards. It does not grant TCC permissions.
@@ -143,3 +155,26 @@ background activation, AX button press (counter 1), coordinate field focus,
 Chinese/emoji typing, Command-A replacement (`Desktop acceptance passed ✅`),
 and `scroll` moving the native view by 91 points. The fixture recorded its own
 postconditions. This verifies that fixture and host, not every macOS application.
+
+
+The older fixture started with a text field eligible for initial focus and only
+counted its AX button press. That could not independently prove coordinate-click
+delivery. The current fixture requires two counter increments (one AX press and
+one coordinate click) and starts with a non-text responder. The updated native
+gateway tests inspect real Core Graphics event objects with a non-posting test
+callback; they verify refusal sends zero events, window-stack ownership,
+overlays, negative origins and move/down/up envelopes. They do not establish
+real WindowServer delivery or Chromium acceptance without the packaged app's
+TCC grants and a completed interactive fixture run.
+
+For a smaller native-path acceptance, run
+`python3 desktop/qa/computeruse/build_pointer_acceptance.py`. The builder only
+compiles and signs a disposable app; its `--preflight` launch reads permissions
+and posts no events. After the operator explicitly authorizes that exact app's
+Accessibility access, launch it through LaunchServices. It exercises the
+production native preflight/gateway against its own native button and inline,
+nonpersistent WKWebView page on at most two displays. Independent counters and
+bounds are written to `result.json`. It never requests permissions itself,
+loads a user's browser profile, or sends messages. Remove the temporary
+Accessibility entry afterwards. This tests the native gateway, not the full
+agent/approval chain or Chromium specifically.

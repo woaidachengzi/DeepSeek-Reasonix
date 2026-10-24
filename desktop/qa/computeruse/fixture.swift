@@ -1,5 +1,9 @@
 import AppKit
 
+final class FocusSink: NSView {
+  override var acceptsFirstResponder: Bool { true }
+}
+
 final class Delegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
   var window: NSWindow!
   var field: NSTextField!
@@ -42,7 +46,8 @@ final class Delegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
       contentRect: NSRect(x: 180, y: 200, width: 600, height: 500),
       styleMask: [.titled, .closable], backing: .buffered, defer: false)
     window.title = "Reasonix isolated desktop acceptance"
-    let root = window.contentView!
+    let root = FocusSink(frame: window.contentView!.bounds)
+    window.contentView = root
     let title = NSTextField(labelWithString: "Local test only — Reasonix computer_use")
     title.frame = NSRect(x: 24, y: 434, width: 550, height: 26)
     root.addSubview(title)
@@ -79,7 +84,9 @@ final class Delegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
       return event
     }
     window.center()
+    window.initialFirstResponder = root
     window.makeKeyAndOrderFront(nil)
+    window.makeFirstResponder(root)
     NSApp.activate(ignoringOtherApps: true)
     record()
   }

@@ -93,6 +93,14 @@ func TestAITraceBoundsAndChineseTruncation(t *testing.T) {
 	}
 }
 
+func TestAITraceIncludesMouseDispatchMethodInCompactExport(t *testing.T) {
+	messages := []provider.Message{{Role: provider.RoleTool, Name: "computer_use", ToolCallID: "mouse", Content: `{"dispatched":true,"dispatch_method":"window_server_mouse"}`}}
+	encoded, err := projectAITrace(messages, "fixture", "idle", false, time.Unix(0, 0))
+	if err != nil || !strings.Contains(string(encoded), `"dispatch_method":"window_server_mouse"`) {
+		t.Fatalf("dispatch route missing: %s %v", encoded, err)
+	}
+}
+
 type aiTraceTestRuntime struct {
 	*bridgeTestRuntime
 	detailed []bool

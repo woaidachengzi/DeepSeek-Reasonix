@@ -43,6 +43,7 @@ type Result struct {
 	ObservationAgeMS  int64           `json:"observation_age_ms,omitempty"`
 	NextAction        string          `json:"next_action,omitempty"`
 	Dispatched        bool            `json:"dispatched"`
+	DispatchMethod    string          `json:"dispatch_method,omitempty"`
 	DispatchUnknown   bool            `json:"dispatch_unknown,omitempty"`
 	StateChanged      bool            `json:"state_changed,omitempty"`
 	BlockedReason     string          `json:"blocked_reason,omitempty"`
@@ -57,6 +58,7 @@ type nativeResult struct {
 	Image           string          `json:"image,omitempty"`
 	WindowID        int             `json:"window_id,omitempty"`
 	Dispatched      bool            `json:"dispatched"`
+	DispatchMethod  string          `json:"dispatch_method,omitempty"`
 	DispatchUnknown bool            `json:"dispatch_unknown,omitempty"`
 	BlockedReason   string          `json:"blocked_reason,omitempty"`
 }
@@ -173,7 +175,7 @@ func (c *Controller) observe(ctx context.Context, pid, window int) (nativeResult
 }
 
 func (c *Controller) publish(v nativeResult, pid int) (Result, error) {
-	result := Result{State: v.State, Image: v.Image, Dispatched: v.Dispatched, DispatchUnknown: v.DispatchUnknown}
+	result := Result{State: v.State, Image: v.Image, Dispatched: v.Dispatched, DispatchMethod: v.DispatchMethod, DispatchUnknown: v.DispatchUnknown}
 	if v.WindowID == 0 {
 		return result, nil
 	}
@@ -275,10 +277,10 @@ func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Re
 	}
 	v, err := c.backend.call(ctx, r)
 	if err != nil {
-		return verifiedInputResult(Result{Dispatched: v.Dispatched, DispatchUnknown: v.DispatchUnknown}, r, before, v), err
+		return verifiedInputResult(Result{Dispatched: v.Dispatched, DispatchMethod: v.DispatchMethod, DispatchUnknown: v.DispatchUnknown}, r, before, v), err
 	}
 	if !v.OK {
-		return verifiedInputResult(Result{State: v.State, Dispatched: v.Dispatched, DispatchUnknown: v.DispatchUnknown, BlockedReason: v.BlockedReason}, r, before, v), errors.New(v.Error)
+		return verifiedInputResult(Result{State: v.State, Dispatched: v.Dispatched, DispatchMethod: v.DispatchMethod, DispatchUnknown: v.DispatchUnknown, BlockedReason: v.BlockedReason}, r, before, v), errors.New(v.Error)
 	}
 	result, err := c.publish(v, r.PID)
 	return verifiedInputResult(result, r, before, v), err

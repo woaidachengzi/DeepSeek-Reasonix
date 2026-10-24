@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <dlfcn.h>
 #include <string.h>
+#import "native_pointer_darwin.h"
 
 static NSDictionary *RXError(NSString *message, BOOL dispatched) {
     return @{ @"ok":@NO, @"error":message, @"dispatched":@(dispatched) };
@@ -229,6 +230,35 @@ static AXError RXScroll(pid_t pid,CGRect bounds,NSString *path,int delta) {
     }
     CFRelease(target);return outcome;
 }
+static NSString *RXPointerBlock(pid_t pid,CGWindowID window,CGRect bounds,CGPoint point) {
+    if (!CGPreflightPostEventAccess()) return @"input_permission_missing";
+    if (CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState,kCGMouseButtonLeft)) return @"pointer_busy";
+    NSArray *windows=CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly|kCGWindowListExcludeDesktopElements,kCGNullWindowID));
+    if (!RXPointerWindowMatches(windows,pid,window,point)) return @"pointer_target_changed";
+    AXUIElementRef system=AXUIElementCreateSystemWide(),hit=NULL;
+    AXUIElementSetMessagingTimeout(system,0.1);
+    AXError error=AXUIElementCopyElementAtPosition(system,point.x,point.y,&hit);CFRelease(system);
+    if (error!=kAXErrorSuccess || !hit) {if(hit)CFRelease(hit);return @"pointer_target_unverified";}
+    id targetWindow=RXAttribute(hit,kAXWindowAttribute);
+    if (!targetWindow && [RXText(RXAttribute(hit,kAXRoleAttribute)) isEqualToString:@"AXWindow"]) targetWindow=(__bridge id)hit;
+    BOOL matches=NO;
+    if (targetWindow && CFGetTypeID((__bridge CFTypeRef)targetWindow)==AXUIElementGetTypeID()) {
+        // Web content may expose a remote AX element from a renderer process.
+        // Its containing window must still belong to the approved application.
+        pid_t owner=0;
+        if (AXUIElementGetPid((__bridge AXUIElementRef)targetWindow,&owner)!=kAXErrorSuccess || owner!=pid) {CFRelease(hit);return @"pointer_target_changed";}
+        CGRect actual=RXRect((__bridge AXUIElementRef)targetWindow);
+        matches=fabs(actual.origin.x-bounds.origin.x)<=3 && fabs(actual.origin.y-bounds.origin.y)<=3 && fabs(actual.size.width-bounds.size.width)<=6 && fabs(actual.size.height-bounds.size.height)<=6;
+    }
+    CFRelease(hit);
+    if (!matches) return @"pointer_target_unverified";
+    AXUIElementRef focused=RXWindowAX(pid,bounds);
+    if (!focused) return @"window_not_active";
+    CFRelease(focused);
+    NSRunningApplication *app=[NSRunningApplication runningApplicationWithProcessIdentifier:pid];
+    if (!app.active || [RXWindow(pid,0)[(id)kCGWindowNumber] unsignedIntValue]!=window) return @"window_not_active";
+    return nil;
+}
 static NSDictionary *RXAct(NSDictionary *request) {
     NSString *action=request[@"action"];pid_t pid=[request[@"pid"] intValue];CGWindowID wid=[request[@"window_id"] unsignedIntValue];
     NSDictionary *window=RXWindow(pid,wid);NSRunningApplication *app=[NSRunningApplication runningApplicationWithProcessIdentifier:pid];
@@ -249,7 +279,7 @@ static NSDictionary *RXAct(NSDictionary *request) {
         if (![expected isEqualToDictionary:current]) return @{ @"ok":@NO,@"error":@"Keyboard focus or field contents changed immediately before input. Observe again; no input sent.",@"dispatched":@NO,@"blocked_reason":@"focus_changed" };
     }
     CGRect bounds;CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)window[(id)kCGWindowBounds],&bounds);
-    BOOL sent=NO;
+    BOOL sent=NO;NSString *dispatchMethod=nil;
     if ([action isEqualToString:@"click"]) {
         NSString *path=request[@"element"];
         if (path.length) {
@@ -263,9 +293,14 @@ static NSDictionary *RXAct(NSDictionary *request) {
             double x=[request[@"x"] doubleValue],y=[request[@"y"] doubleValue];
             if (!isfinite(x) || !isfinite(y) || x<0 || y<0 || x>=bounds.size.width || y>=bounds.size.height) return RXError(@"Click coordinates are outside the observed window. Use window point coordinates.",NO);
             CGPoint point=CGPointMake(bounds.origin.x+x,bounds.origin.y+y);
-            CGEventRef down=CGEventCreateMouseEvent(NULL,kCGEventLeftMouseDown,point,kCGMouseButtonLeft),up=CGEventCreateMouseEvent(NULL,kCGEventLeftMouseUp,point,kCGMouseButtonLeft);
-            if (down && up) {CGEventSetFlags(down,0);CGEventSetFlags(up,0);CGEventPostToPid(pid,down);CGEventPostToPid(pid,up);sent=YES;}
-            if(down)CFRelease(down);if(up)CFRelease(up);
+            NSString *blocked=RXPostWindowServerClick(pid,wid,bounds,point,RXPointerBlock,CGEventPost);
+            if (blocked) {
+                return @{ @"ok":@NO,@"error":@"Pointer target or input access could not be verified. Observe the approved window again; no input sent.",@"dispatched":@NO,@"blocked_reason":blocked };
+            }
+            // Process-only posts skip WindowServer hit-testing and can arrive
+            // with windowNumber=0. Route an ordinary foreground click through
+            // WindowServer only after both window-stack and AX ownership checks.
+            sent=YES;dispatchMethod=@"window_server_mouse";
         }
     } else if ([action isEqualToString:@"type"]) {
         NSString *text=request[@"text"]?:@"";NSUInteger count=text.length;
@@ -300,7 +335,9 @@ static NSDictionary *RXAct(NSDictionary *request) {
         sent=YES;
     }
     if (!sent)return RXError(@"The app did not accept this action. Observe again; do not assume input succeeded.",NO);
-    return RXObserve(pid,wid,YES);
+    NSMutableDictionary *result=[RXObserve(pid,wid,YES) mutableCopy];
+    if (dispatchMethod) result[@"dispatch_method"]=dispatchMethod;
+    return result;
 }
 char *reasonix_computer_use(const char *input) {
     @autoreleasepool {
@@ -310,7 +347,7 @@ char *reasonix_computer_use(const char *input) {
             NSDictionary *result;
             NSString *action=r[@"action"];
             if ([action isEqualToString:@"status"]) {
-                result=@{@"ok":@YES,@"state":@{@"platform":@"macos",@"accessibility":(AXIsProcessTrusted()?@YES:@NO),@"screen_recording":@(CGPreflightScreenCaptureAccess()),@"permission_prompted":@NO},@"dispatched":@NO};
+                result=@{@"ok":@YES,@"state":@{@"platform":@"macos",@"accessibility":(AXIsProcessTrusted()?@YES:@NO),@"screen_recording":@(CGPreflightScreenCaptureAccess()),@"input_posting":@(CGPreflightPostEventAccess()),@"permission_prompted":@NO},@"dispatched":@NO};
             } else if ([action isEqualToString:@"apps"]) {
                 NSMutableArray *apps=[NSMutableArray array];
                 for(NSRunningApplication *app in NSWorkspace.sharedWorkspace.runningApplications) {

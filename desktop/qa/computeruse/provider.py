@@ -11,7 +11,7 @@ class FixtureModel:
         self.stale = 0
         self.waits = 0
         self.actions = ['status', 'apps', 'observe', 'activate', 'observe',
-                        'click_button', 'observe', 'click_field', 'observe',
+                        'click_button', 'observe', 'click_button_coordinate', 'observe', 'click_field', 'observe',
                         'type', 'observe', 'select_all', 'observe', 'replace',
                         'observe', 'scroll', 'observe']
 
@@ -57,22 +57,29 @@ class FixtureModel:
             return {'role': 'assistant', 'content': 'QA stopped: grant the packaged app Accessibility and Screen Recording.'}
         if self.step == 2 and not any(a['pid'] == fixture['pid'] and a['bundle_id'] == 'io.reasonix.control.fixture' for a in state.get('apps', [])):
             return {'role': 'assistant', 'content': 'QA stopped: fixture identity not in real app catalog.'}
-        if self.step == 11 and fixture['text'] != 'Reasonix 验收 🧪':
+        if action == 'select_all' and fixture['text'] != 'Reasonix 验收 🧪':
             return {'role': 'assistant', 'content': 'QA stopped: Unicode input postcondition failed.'}
+        if action == 'click_field' and fixture['clicks'] != 2:
+            return {'role': 'assistant', 'content': 'QA stopped: independent coordinate-button click postcondition failed.'}
         args = {'action': action, 'pid': fixture['pid']}
         if action in ('status', 'apps'):
             args = {'action': action}
         elif action != 'observe':
             args['observation'] = prior.get('observation', '')
             elements = state.get('elements', [])
-            if action == 'click_button':
+            if action in ('click_button', 'click_button_coordinate'):
                 button = next((e for e in elements if 'Increment test counter' in (e.get('title', '') + e.get('description', ''))), None)
                 if button is None:
                     if self.waits < 4:
                         self.waits += 1
                         return self.call({'action': 'observe', 'pid': fixture['pid']})
                     return {'role': 'assistant', 'content': 'QA stopped: fixture button unavailable.'}
-                args.update(action='click', element=button['element'])
+                if action == 'click_button':
+                    args.update(action='click', element=button['element'])
+                else:
+                    b, w = button['bounds'], state['bounds']
+                    args.update(action='click', x=b['x'] - w['x'] + b['width'] / 2,
+                                y=b['y'] - w['y'] + b['height'] / 2)
             if action == 'click_field':
                 field = next((e for e in elements if e.get('role') == 'AXTextField'), None)
                 if field is None:
