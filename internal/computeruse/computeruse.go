@@ -40,21 +40,22 @@ type Request struct {
 }
 
 type Result struct {
-	State             json.RawMessage `json:"state"`
-	Observation       string          `json:"observation,omitempty"`
-	ObservationTTLMS  int64           `json:"observation_ttl_ms,omitempty"`
-	ObservationAgeMS  int64           `json:"observation_age_ms,omitempty"`
-	NextAction        string          `json:"next_action,omitempty"`
-	Dispatched        bool            `json:"dispatched"`
-	DispatchMethod    string          `json:"dispatch_method,omitempty"`
-	DispatchUnknown   bool            `json:"dispatch_unknown,omitempty"`
-	StateChanged      bool            `json:"state_changed,omitempty"`
-	BlockedReason     string          `json:"blocked_reason,omitempty"`
-	InputVerification string          `json:"input_verification,omitempty"`
-	Unchanged         bool            `json:"unchanged,omitempty"`
-	ImageGeometry     *ImageGeometry  `json:"image_geometry,omitempty"`
-	PointerPreview    *PointerPreview `json:"pointer_preview,omitempty"`
-	Image             string          `json:"-"`
+	State                 json.RawMessage `json:"state"`
+	Observation           string          `json:"observation,omitempty"`
+	ObservationTTLMS      int64           `json:"observation_ttl_ms,omitempty"`
+	ObservationAgeMS      int64           `json:"observation_age_ms,omitempty"`
+	NextAction            string          `json:"next_action,omitempty"`
+	Dispatched            bool            `json:"dispatched"`
+	DispatchMethod        string          `json:"dispatch_method,omitempty"`
+	DispatchUnknown       bool            `json:"dispatch_unknown,omitempty"`
+	StateChanged          bool            `json:"state_changed,omitempty"`
+	BlockedReason         string          `json:"blocked_reason,omitempty"`
+	InputVerification     string          `json:"input_verification,omitempty"`
+	Unchanged             bool            `json:"unchanged,omitempty"`
+	ImageGeometry         *ImageGeometry  `json:"image_geometry,omitempty"`
+	PointerPreview        *PointerPreview `json:"pointer_preview,omitempty"`
+	ObservationValidation string          `json:"observation_validation,omitempty"`
+	Image                 string          `json:"-"`
 }
 
 type nativeResult struct {
@@ -195,6 +196,12 @@ func nativeOutcome(v nativeResult) Result {
 	return Result{State: v.State, Image: v.Image, Dispatched: v.Dispatched, DispatchMethod: v.DispatchMethod, DispatchUnknown: v.DispatchUnknown, BlockedReason: v.BlockedReason, InputVerification: v.InputVerification, Unchanged: v.Unchanged, ImageGeometry: observationImageGeometry(v)}
 }
 
+func validatedNativeOutcome(v nativeResult, validation string) Result {
+	result := nativeOutcome(v)
+	result.ObservationValidation = validation
+	return result
+}
+
 func (c *Controller) publish(v nativeResult, pid int) (Result, error) {
 	result := nativeOutcome(v)
 	if v.WindowID == 0 {
@@ -244,6 +251,7 @@ func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Re
 		c.receipt = receipt{}
 	}
 	var before nativeResult
+	validation := ""
 	if r.Action != "status" && r.Action != "apps" && r.Action != "observe" {
 		prior := c.receipt
 		if r.Observation != prior.token || r.PID != prior.pid {
@@ -258,8 +266,9 @@ func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Re
 			return Result{}, err
 		}
 		changed := digest(current) != prior.digest
-		if changed && (r.Action == "type" || r.Action == "key" || r.Action == "fill") && caretBlinkOnly(prior.snapshot, current) {
+		if changed && caretBlinkActionAllowed(r, prior.snapshot, current) {
 			changed = false
+			validation = "caret_only"
 		}
 		// Activation sends no content input. Stage Manager can animate or hide
 		// an inactive window, so only its app/window identity must stay fixed.
@@ -305,12 +314,13 @@ func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Re
 	}
 	v, err := c.backend.call(ctx, r)
 	if err != nil {
-		return verifiedInputResult(nativeOutcome(v), r, before, v), err
+		return verifiedInputResult(validatedNativeOutcome(v, validation), r, before, v), err
 	}
 	if !v.OK {
-		return verifiedInputResult(nativeOutcome(v), r, before, v), errors.New(v.Error)
+		return verifiedInputResult(validatedNativeOutcome(v, validation), r, before, v), errors.New(v.Error)
 	}
 	result, err := c.publishAction(v, r)
+	result.ObservationValidation = validation
 	return verifiedInputResult(result, r, before, v), err
 }
 

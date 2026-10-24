@@ -14,44 +14,51 @@ import (
 
 // Browsers may expose the focused value and selection but no insertion bounds.
 // Accept only a caret-shaped pixel transition, with every AX field unchanged.
-// This exception is used for keyboard input or verified AX field fill, never
-// coordinate clicks/scrolls. Fill also resolves and checks the writable target.
+// Positional actions additionally verify that their target is outside the
+// focused field and the complete caret/JPEG change region (see caret_action.go).
 func caretBlinkOnly(before, after nativeResult) bool {
+	return !caretBlinkRegion(before, after).Empty()
+}
+
+func caretBlinkRegion(before, after nativeResult) image.Rectangle {
 	if !bytes.Equal(canonicalState(before.State), canonicalState(after.State)) {
-		return false
+		return image.Rectangle{}
 	}
 	var state inputState
 	if json.Unmarshal(after.State, &state) != nil || !state.Frontmost || !editableFocus(state.Focus) || state.Focus.Caret != nil {
-		return false
+		return image.Rectangle{}
 	}
 	f := state.Focus
 	if f.Selection == nil || f.Selection.Length != 0 || f.Selection.Location < 0 || !insideRect(f.Bounds, state.Bounds, 0) {
-		return false
+		return image.Rectangle{}
 	}
 	length := len(utf16.Encode([]rune(*f.Value)))
 	if f.ValueHash != "" {
 		length = f.ValueLength
 	} else if length >= 512 {
-		return false
+		return image.Rectangle{}
 	}
 	if f.Selection.Location > length {
-		return false
+		return image.Rectangle{}
 	}
 	a, b := caretFrame(before.Image), caretFrame(after.Image)
 	if a == nil || b == nil || a.Bounds() != b.Bounds() {
-		return false
+		return image.Rectangle{}
 	}
 	all, strong, count := pixelChanges(a, b)
 	if strong.Empty() {
-		return false
+		return image.Rectangle{}
 	}
 	sx, sy := float64(a.Bounds().Dx())/state.Bounds.Width, float64(a.Bounds().Dy())/state.Bounds.Height
 	bar := frameRect{X: state.Bounds.X + float64(strong.Min.X)/sx, Y: state.Bounds.Y + float64(strong.Min.Y)/sy, Width: float64(strong.Dx()) / sx, Height: float64(strong.Dy()) / sy}
 	if bar.Width > 4 || bar.Height < 8 || bar.Height > 100 || !insideRect(bar, f.Bounds, 2) || float64(count) < float64(strong.Dy())*.7 {
-		return false
+		return image.Rectangle{}
 	}
 	mask := caretMask(state.Bounds, bar, a.Bounds())
-	return !mask.Empty() && all.In(mask)
+	if !mask.Empty() && all.In(mask) {
+		return mask
+	}
+	return image.Rectangle{}
 }
 
 func insideRect(inner, outer frameRect, padding float64) bool {

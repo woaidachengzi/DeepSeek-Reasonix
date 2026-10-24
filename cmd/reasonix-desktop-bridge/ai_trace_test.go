@@ -184,3 +184,11 @@ func TestAITraceHTTPRequiresAuthenticationAndExactSession(t *testing.T) {
 		t.Fatalf("invalid requests reached runtime: %v", runtime.detailed)
 	}
 }
+
+func TestAITraceKeepsCaretValidationFact(t *testing.T) {
+	messages := []provider.Message{{Role: provider.RoleTool, Name: "computer_use", ToolCallID: "click", Content: `{"dispatched":true,"dispatch_method":"window_server_mouse","observation_validation":"caret_only"}`}}
+	encoded, err := projectAITrace(messages, "fixture", "idle", false, time.Unix(0, 0))
+	if err != nil || !strings.Contains(string(encoded), `"observation_validation":"caret_only"`) {
+		t.Fatalf("caret validation fact missing: %s %v", encoded, err)
+	}
+}
