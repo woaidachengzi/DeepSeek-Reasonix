@@ -582,7 +582,7 @@ func (a *Agent) prepareToolExecution(ctx context.Context, plan *toolCallPlan) (t
 	cctx = tool.WithComputerUsePreview(cctx, func(p tool.ComputerUsePreview) {
 		a.svc.sink.Emit(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: callID, Name: "computer_use", ComputerUsePreview: &event.ComputerUsePreview{
 			AppName: p.Target.Name, BundleID: p.Target.BundleID, PID: p.Target.PID,
-			WindowID: p.WindowID, Action: p.Action, Image: p.Image,
+			WindowID: p.WindowID, Action: p.Action, Image: p.Image, Cursor: computerUseCursorEvent(p.Cursor),
 		}}})
 	})
 	cctx = tool.WithProgress(cctx, func(chunk string) {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { ChevronDown, ChevronUp, GripHorizontal, Monitor, Square } from "lucide-react";
 import { clampPreviewPosition, type ComputerUsePreview } from "./computerUsePreview";
 import "./TauriComputerUsePreview.css";
+import whaleCursor from "../../../tauri/resources/blue-whale-cursor.svg";
 
 const actionLabels: Record<string, string> = { observe: "查看窗口", activate: "切换窗口", move: "核对鼠标落点", confirm_click: "按确认落点点击", fill: "填写文本", click: "点击", type: "输入文字", key: "按键", scroll: "滚动" };
 
@@ -47,7 +48,19 @@ export function TauriComputerUsePreview({ preview, busy, onStop }: { preview: Co
         }}><GripHorizontal size={14} aria-hidden="true" /><Monitor size={14} aria-hidden="true" /><span>{preview.appName}</span></button>
       <button type="button" aria-label={collapsed ? "展开操作预览" : "收起操作预览"} aria-expanded={!collapsed} onClick={() => setCollapsed(value => !value)}>{collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}</button>
     </div>
-    {!collapsed && <div className="tauri-computer-preview__image"><img src={preview.image} alt={`${preview.appName} 最近一次观察到的窗口`} draggable={false} /></div>}
+    {!collapsed && <div className="tauri-computer-preview__image"><img src={preview.image} alt={`${preview.appName} 最近一次观察到的窗口`} draggable={false} /><WhalePointer preview={preview} /></div>}
     <div className="tauri-computer-preview__footer"><span>{actionLabels[preview.action]} · 最近画面</span><button type="button" onClick={onStop} disabled={busy}><Square size={12} aria-hidden="true" />{busy ? "正在停止…" : "停止操作"}</button></div>
   </aside>;
+}
+
+function WhalePointer({ preview }: { preview: ComputerUsePreview }) {
+  const cursor = preview.cursor;
+  if (!cursor) return null;
+  const { imageWidth: width, imageHeight: height } = cursor;
+  const size = Math.max(width, height) / 8;
+  const x = cursor.x * width, y = cursor.y * height;
+  return <svg className="tauri-computer-preview__cursor" viewBox={`0 0 ${width} ${height}`} aria-label="蓝色小鲸鱼：系统鼠标真实落点" role="img">
+    {cursor.clicked && <circle key={preview.sampleId} className="tauri-computer-preview__click-wave" cx={x} cy={y} r={size / 5} fill="none" stroke="#39a4ff" strokeWidth="2" vectorEffect="non-scaling-stroke" />}
+    <image href={whaleCursor} x={x - size * 12 / 64} y={y - size * 12 / 64} width={size} height={size} />
+  </svg>;
 }

@@ -7,6 +7,14 @@ const preview = { appName: "测试应用", bundleId: "example.app", pid: 42, win
 const frame = (kind: string, turnId = "turn-1", patch = {}): TauriBridgeEvent => ({ protocolVersion: 1, sessionId: "preview-session", sequence: 1, eventKind: kind, payload: { turnId, tool: { name: "computer_use", computerUsePreview: preview }, ...patch } });
 assert.equal(computerUsePreviewFromEvent(frame("tool_result")), null);
 assert.equal(computerUsePreviewFromEvent(frame("tool_progress", "turn-1", { tool: { name: "computer_use", computerUsePreview: { ...preview, image: "https://example.com/private.jpg" } } })), null);
+const cursor = { x: .4, y: .3, screenX: -1000, screenY: 200, clicked: true, imageWidth: 1200, imageHeight: 800 };
+const cursorFrame = frame("tool_progress", "turn-1", { tool: { name: "computer_use", computerUsePreview: { ...preview, action: "click", cursor } } });
+assert.equal(computerUsePreviewFromEvent(cursorFrame)?.cursor?.clicked, true);
+assert.equal(computerUsePreviewFromEvent(frame("tool_progress", "turn-1", { tool: { name: "computer_use", computerUsePreview: { ...preview, cursor } } }))?.cursor?.clicked, false, "observation cannot claim a click");
+for (const patch of [{ x: 1 }, { y: -.1 }, { imageWidth: 0 }, { screenX: 1e99 }, { clicked: "yes" }]) {
+  const invalid = frame("tool_progress", "turn-1", { tool: { name: "computer_use", computerUsePreview: { ...preview, cursor: { ...cursor, ...patch } } } });
+  assert.equal(computerUsePreviewFromEvent(invalid)?.cursor, undefined, "unverified cursor is hidden while the valid image remains");
+}
 let state = advanceComputerUsePreview(null, frame("turn_started"));
 state = advanceComputerUsePreview(state, frame("tool_progress"));
 assert.equal(state?.preview?.appName, preview.appName);
@@ -49,6 +57,12 @@ assert.ok(document.body.textContent?.includes("按确认落点点击"));
 await emit("tool_progress", { tool: { name: "computer_use", computerUsePreview: { ...preview, action: "fill" } } });
 assert.ok(document.body.textContent?.includes("填写文本"));
 assert.ok(document.querySelector('[aria-label="电脑操作预览"] img'), "authorized live screenshot is rendered");
+await emit("tool_progress", { tool: { name: "computer_use", computerUsePreview: { ...preview, action: "click", cursor } } });
+assert.ok(document.querySelector('[aria-label="蓝色小鲸鱼：系统鼠标真实落点"] image'));
+assert.ok(document.querySelector('.tauri-computer-preview__click-wave'));
+await emit("tool_progress", { tool: { name: "computer_use", computerUsePreview: { ...preview, cursor: { ...cursor, x: -1 } } } });
+assert.equal(document.querySelector('[aria-label="蓝色小鲸鱼：系统鼠标真实落点"]'), null);
+
 await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="收起操作预览"]')!.click(); });
 assert.equal(document.querySelector('[aria-label="电脑操作预览"] img'), null);
 assert.ok(document.querySelector('[aria-label="电脑操作预览"]')?.textContent?.includes("停止操作"), "stop remains available when collapsed");

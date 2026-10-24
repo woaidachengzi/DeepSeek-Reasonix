@@ -88,7 +88,7 @@ func (c computerUse) ExecuteWithImages(ctx context.Context, args json.RawMessage
 			}
 			_ = json.Unmarshal(result.State, &state)
 			if thumbnail := computeruse.PreviewImage(result.Image); thumbnail != "" {
-				tool.PublishComputerUsePreview(ctx, tool.ComputerUsePreview{Target: tool.ComputerUseTarget(target), WindowID: state.WindowID, Action: r.Action, Image: thumbnail})
+				tool.PublishComputerUsePreview(ctx, tool.ComputerUsePreview{Target: tool.ComputerUseTarget(target), WindowID: state.WindowID, Action: r.Action, Image: thumbnail, Cursor: computerUseCursor(result)})
 			}
 		}
 	}
@@ -118,3 +118,11 @@ type computerUseError struct{ cause error }
 func (e *computerUseError) Error() string          { return e.cause.Error() }
 func (e *computerUseError) Unwrap() error          { return e.cause }
 func (*computerUseError) RetryableToolError() bool { return false }
+
+func computerUseCursor(result computeruse.Result) *tool.ComputerUseCursor {
+	p, g := result.Cursor, result.ImageGeometry
+	if p == nil || g == nil {
+		return nil
+	}
+	return &tool.ComputerUseCursor{X: p.ImageX / float64(g.Width), Y: p.ImageY / float64(g.Height), ScreenX: p.ScreenX, ScreenY: p.ScreenY, Clicked: p.Clicked, ImageWidth: g.Width, ImageHeight: g.Height}
+}

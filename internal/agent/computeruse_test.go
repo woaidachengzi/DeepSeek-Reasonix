@@ -29,7 +29,7 @@ func (*previewTool) Execute(ctx context.Context, _ json.RawMessage) (string, err
 	if allow, err := approver.ApproveComputerUse(ctx, target); err != nil || !allow {
 		return "denied", err
 	}
-	tool.PublishComputerUsePreview(ctx, tool.ComputerUsePreview{Target: target, WindowID: 11, Action: "observe", Image: "data:image/jpeg;base64,AAAA"})
+	tool.PublishComputerUsePreview(ctx, tool.ComputerUsePreview{Target: target, WindowID: 11, Action: "observe", Image: "data:image/jpeg;base64,AAAA", Cursor: &tool.ComputerUseCursor{X: .4, Y: .3, ScreenX: -1000, ScreenY: 200, ImageWidth: 1200, ImageHeight: 800, Clicked: true}})
 	return "observed", nil
 }
 
@@ -59,7 +59,7 @@ func TestAgentRoutesAppConsentAndPreviewToOwningTool(t *testing.T) {
 	}
 	wire := eventwire.ToWire(previews[0])
 	raw, err := json.Marshal(wire)
-	if err != nil || wire.Tool.ComputerUsePreview.AppName != "Fixture" || len(raw) > 64<<10 {
+	if err != nil || wire.Tool.ComputerUsePreview.AppName != "Fixture" || wire.Tool.ComputerUsePreview.Cursor == nil || !wire.Tool.ComputerUsePreview.Cursor.Clicked || len(raw) > 64<<10 {
 		t.Fatalf("invalid desktop wire: %s %v", raw, err)
 	}
 }

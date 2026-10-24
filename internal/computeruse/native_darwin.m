@@ -172,7 +172,12 @@ static NSDictionary *RXObserve(pid_t pid,CGWindowID wanted,BOOL dispatched) {
     if (!image && app.active) return RXError(@"Window capture failed. Check Screen Recording permission and observe a visible window again.",dispatched);
     NSDictionary *state=@{ @"pid":@(pid),@"bundle_id":app.bundleIdentifier?:@"",@"name":app.localizedName?:@"",@"launch_time":@([app.launchDate timeIntervalSince1970]),
         @"window_id":@(wid),@"bounds":RXBounds(bounds),@"frontmost":@(app.active),@"capture_available":image?@YES:@NO,@"focus":RXFocus(pid),@"elements":elements,@"elements_truncated":@(truncated),@"image_coordinates":@"For screenshot targets pass coordinate_space=image and x/y in image_geometry pixels. Host converts to window points. Do not add screen origins." };
-    return @{ @"ok":@YES,@"state":state,@"image":image?:@"",@"window_id":@(wid),@"dispatched":@(dispatched) };
+    NSMutableDictionary *result=[@{ @"ok":@YES,@"state":state,@"image":image?:@"",@"window_id":@(wid),@"dispatched":@(dispatched) } mutableCopy];
+    CGPoint cursor;
+    if (app.active && RXReadPointer(&cursor) && CGRectContainsPoint(bounds,cursor) && RXPointerWindowAtPoint(cursor)==wid) {
+        result[@"cursor"]=@{@"screen_x":@(cursor.x),@"screen_y":@(cursor.y)};
+    }
+    return result;
 }
 static AXUIElementRef RXElement(AXUIElementRef root,NSString *path) {
     NSArray *parts=[path componentsSeparatedByString:@"."];

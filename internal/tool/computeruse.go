@@ -21,6 +21,17 @@ type ComputerUsePreview struct {
 	WindowID int
 	Action   string
 	Image    string
+	Cursor   *ComputerUseCursor
+}
+
+type ComputerUseCursor struct {
+	X           float64 `json:"x"`
+	Y           float64 `json:"y"`
+	ScreenX     float64 `json:"screenX"`
+	ScreenY     float64 `json:"screenY"`
+	Clicked     bool    `json:"clicked"`
+	ImageWidth  int     `json:"imageWidth"`
+	ImageHeight int     `json:"imageHeight"`
 }
 
 type computerUseApproverKey struct{}

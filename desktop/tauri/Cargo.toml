@@ -32,7 +32,7 @@ tauri-plugin-shell = "2.3.6"
 [target.'cfg(target_os = "macos")'.dependencies]
 dispatch2 = "0.3.1"
 objc2 = "0.6.4"
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSApplication", "NSRunningApplication", "NSAppearance", "NSResponder", "NSWindow", "NSView", "NSPasteboard", "NSMenu", "NSMenuItem", "NSEvent", "NSWorkspace", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSGraphicsContext", "NSOpenPanel", "NSSavePanel", "objc2-core-graphics"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSApplication", "NSRunningApplication", "NSAppearance", "NSResponder", "NSWindow", "NSPanel", "NSImageView", "NSColor", "NSScreen", "NSGraphics", "libc", "NSView", "NSPasteboard", "NSMenu", "NSMenuItem", "NSEvent", "NSWorkspace", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSGraphicsContext", "NSOpenPanel", "NSSavePanel", "objc2-core-graphics"] }
 objc2-web-kit = { version = "0.3.2", default-features = false, features = ["std", "WKWebView", "WKWebViewConfiguration", "WKWebsiteDataStore", "WKSnapshotConfiguration", "block2", "objc2-app-kit"] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSURL", "NSData", "NSDictionary", "NSGeometry", "NSBundle", "NSError", "NSObject", "NSArray", "NSNotification", "NSOperation", "block2"] }
 objc2-core-graphics = { version = "0.3.2", default-features = false, features = ["std", "CGBitmapContext", "CGColorSpace", "CGContext", "CGGeometry", "CGImage"] }
@@ -63,3 +63,10 @@ async-channel = "2.5.0"
 async-io = "2.6.0"
 futures-lite = "2.6.1"
 zbus = "5.19.0"
+
+[features]
+cursor-qa = ["objc2-foundation/NSRunLoop", "objc2-foundation/NSDate"]
+
+[[example]]
+name = "blue_whale_cursor_qa"
+required-features = ["cursor-qa"]

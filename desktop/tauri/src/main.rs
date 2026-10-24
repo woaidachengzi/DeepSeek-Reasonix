@@ -3,6 +3,7 @@
 mod bot_diagnostics;
 mod ai_trace;
 mod bridge;
+mod computer_use_cursor;
 mod speech_input;
 mod live_sessions;
 mod credential_namespace;
@@ -1438,9 +1439,11 @@ fn workspace_roots_availability(roots: Vec<String>) -> Result<Vec<Option<bool>>,
 
 #[tauri::command]
 fn bridge_cancel(
+    app: tauri::AppHandle,
     supervisor: State<'_, BridgeSupervisor>,
     request: SessionRequest,
 ) -> Result<BridgeSession, String> {
+    computer_use_cursor::clear_session(&app, &request.session_id);
     supervisor.cancel(request)
 }
 

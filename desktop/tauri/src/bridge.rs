@@ -5782,6 +5782,7 @@ fn forward_events(
                                 }
                                 continue;
                             }
+                            crate::computer_use_cursor::observe(&app, &event);
                             let _ = app.emit("bridge:event", event);
                         }
                     }

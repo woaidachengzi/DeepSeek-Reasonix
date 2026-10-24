@@ -54,6 +54,7 @@ type Result struct {
 	Unchanged             bool            `json:"unchanged,omitempty"`
 	ImageGeometry         *ImageGeometry  `json:"image_geometry,omitempty"`
 	PointerPreview        *PointerPreview `json:"pointer_preview,omitempty"`
+	Cursor                *CursorSnapshot `json:"cursor,omitempty"`
 	ObservationValidation string          `json:"observation_validation,omitempty"`
 	Image                 string          `json:"-"`
 }
@@ -71,6 +72,7 @@ type nativeResult struct {
 	InputVerification string           `json:"input_verification,omitempty"`
 	Unchanged         bool             `json:"unchanged,omitempty"`
 	Pointer           *PointerPosition `json:"pointer,omitempty"`
+	Cursor            *PointerPosition `json:"cursor,omitempty"`
 }
 
 type backend interface {
@@ -193,7 +195,8 @@ func (c *Controller) observe(ctx context.Context, pid, window int) (nativeResult
 // Preserve native input facts even if the subsequent observation or transport
 // fails. This projection never issues a receipt; only publish may do that.
 func nativeOutcome(v nativeResult) Result {
-	return Result{State: v.State, Image: v.Image, Dispatched: v.Dispatched, DispatchMethod: v.DispatchMethod, DispatchUnknown: v.DispatchUnknown, BlockedReason: v.BlockedReason, InputVerification: v.InputVerification, Unchanged: v.Unchanged, ImageGeometry: observationImageGeometry(v)}
+	geometry := observationImageGeometry(v)
+	return Result{State: v.State, Image: v.Image, Dispatched: v.Dispatched, DispatchMethod: v.DispatchMethod, DispatchUnknown: v.DispatchUnknown, BlockedReason: v.BlockedReason, InputVerification: v.InputVerification, Unchanged: v.Unchanged, ImageGeometry: geometry, Cursor: observedCursor(v, geometry)}
 }
 
 func validatedNativeOutcome(v nativeResult, validation string) Result {
@@ -321,6 +324,7 @@ func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Re
 	}
 	result, err := c.publishAction(v, r)
 	result.ObservationValidation = validation
+	markCursorClick(&result, r, before)
 	return verifiedInputResult(result, r, before, v), err
 }
 

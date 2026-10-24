@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"strings"
 
+	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/tool"
 )
 
 const computerUseRefusalPrefix = "computer_use refused input: "
@@ -67,4 +69,12 @@ func (a *Agent) applyComputerUseProgress(ctx context.Context, calls []provider.T
 			return
 		}
 	}
+}
+
+func computerUseCursorEvent(cursor *tool.ComputerUseCursor) *event.ComputerUseCursor {
+	if cursor == nil {
+		return nil
+	}
+	result := event.ComputerUseCursor(*cursor)
+	return &result
 }

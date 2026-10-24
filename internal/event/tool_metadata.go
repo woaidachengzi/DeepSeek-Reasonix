@@ -3,12 +3,23 @@ package event
 // ComputerUsePreview is a bounded, display-only image from an authorized
 // observation. It is excluded from the durable turn ledger.
 type ComputerUsePreview struct {
-	AppName  string `json:"appName"`
-	BundleID string `json:"bundleId"`
-	PID      int    `json:"pid"`
-	WindowID int    `json:"windowId"`
-	Action   string `json:"action"`
-	Image    string `json:"image"`
+	AppName  string             `json:"appName"`
+	BundleID string             `json:"bundleId"`
+	PID      int                `json:"pid"`
+	WindowID int                `json:"windowId"`
+	Action   string             `json:"action"`
+	Image    string             `json:"image"`
+	Cursor   *ComputerUseCursor `json:"cursor,omitempty"`
+}
+
+type ComputerUseCursor struct {
+	X           float64 `json:"x"`
+	Y           float64 `json:"y"`
+	ScreenX     float64 `json:"screenX"`
+	ScreenY     float64 `json:"screenY"`
+	Clicked     bool    `json:"clicked"`
+	ImageWidth  int     `json:"imageWidth"`
+	ImageHeight int     `json:"imageHeight"`
 }
 
 // ShellExecution mirrors tool.ShellExecution for event sinks without importing

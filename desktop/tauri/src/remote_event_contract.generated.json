@@ -2328,6 +2328,89 @@
                 "kind": "string"
               }
             },
+            "computerUsePreview": {
+              "optional": true,
+              "shape": {
+                "kind": "object",
+                "nullable": true,
+                "fields": {
+                  "action": {
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "appName": {
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "bundleId": {
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "cursor": {
+                    "optional": true,
+                    "shape": {
+                      "kind": "object",
+                      "nullable": true,
+                      "fields": {
+                        "clicked": {
+                          "shape": {
+                            "kind": "boolean"
+                          }
+                        },
+                        "imageHeight": {
+                          "shape": {
+                            "kind": "integer"
+                          }
+                        },
+                        "imageWidth": {
+                          "shape": {
+                            "kind": "integer"
+                          }
+                        },
+                        "screenX": {
+                          "shape": {
+                            "kind": "number"
+                          }
+                        },
+                        "screenY": {
+                          "shape": {
+                            "kind": "number"
+                          }
+                        },
+                        "x": {
+                          "shape": {
+                            "kind": "number"
+                          }
+                        },
+                        "y": {
+                          "shape": {
+                            "kind": "number"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "image": {
+                    "shape": {
+                      "kind": "string"
+                    }
+                  },
+                  "pid": {
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  },
+                  "windowId": {
+                    "shape": {
+                      "kind": "integer"
+                    }
+                  }
+                }
+              }
+            },
             "diff": {
               "optional": true,
               "shape": {
