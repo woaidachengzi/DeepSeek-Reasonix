@@ -55,6 +55,7 @@ type Result struct {
 	ImageGeometry         *ImageGeometry  `json:"image_geometry,omitempty"`
 	PointerPreview        *PointerPreview `json:"pointer_preview,omitempty"`
 	Cursor                *CursorSnapshot `json:"cursor,omitempty"`
+	ClickEvidence         *ClickEvidence  `json:"click_evidence,omitempty"`
 	ObservationValidation string          `json:"observation_validation,omitempty"`
 	Image                 string          `json:"-"`
 }
@@ -231,12 +232,13 @@ func (c *Controller) ExecuteForTarget(ctx context.Context, r Request, target Tar
 	return c.execute(ctx, r, &target)
 }
 
-func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Result, error) {
+func (c *Controller) execute(ctx context.Context, r Request, target *Target) (out Result, executeErr error) {
 	r.VerifiedFocus = nil
 	r.VerifiedPointer = nil
 	if err := validate(r); err != nil {
 		return Result{}, err
 	}
+	defer func() { out.ClickEvidence = clickEvidence(r.Action, out) }()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	desktopMu.Lock()

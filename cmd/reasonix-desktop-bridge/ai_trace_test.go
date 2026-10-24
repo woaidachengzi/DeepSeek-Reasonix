@@ -120,6 +120,31 @@ func TestAITraceKeepsActualPointerPreview(t *testing.T) {
 	}
 }
 
+func TestAITraceKeepsClickEvidenceSeparateFromCursorFeedback(t *testing.T) {
+	body := `{"dispatched":true,"dispatch_method":"window_server_mouse","cursor":{"screen_x":-1000,"screen_y":200,"image_x":200,"image_y":100,"clicked":true},"click_evidence":{"input_delivery":"posted","target_verification":"window_only","application_effect":"unverified"}}`
+	messages := []provider.Message{{Role: provider.RoleTool, Name: "computer_use", ToolCallID: "click", Content: body}}
+	for _, detailed := range []bool{false, true} {
+		encoded, err := projectAITrace(messages, "fixture", "idle", detailed, time.Unix(0, 0))
+		var report aiTraceReport
+		if err != nil || json.Unmarshal(encoded, &report) != nil || len(report.Entries) != 1 {
+			t.Fatalf("invalid click trace: %s %v", encoded, err)
+		}
+		var facts struct {
+			Cursor struct {
+				Clicked bool `json:"clicked"`
+				ScreenX int  `json:"screen_x"`
+			} `json:"cursor"`
+			Evidence struct {
+				Effect string `json:"application_effect"`
+				Target string `json:"target_verification"`
+			} `json:"click_evidence"`
+		}
+		if json.Unmarshal(report.Entries[0].ComputerUse, &facts) != nil || !facts.Cursor.Clicked || facts.Cursor.ScreenX != -1000 || facts.Evidence.Effect != "unverified" || facts.Evidence.Target != "window_only" {
+			t.Fatalf("click feedback became proof of page success: %s", report.Entries[0].ComputerUse)
+		}
+	}
+}
+
 func TestAITraceKeepsDispatchFactsBeforeImageUnderstandingSuffix(t *testing.T) {
 	for _, detailed := range []bool{false, true} {
 		body := "error: computer_use refused input: visual_changed\n" + `{"dispatched":false,"blocked_reason":"visual_changed","state_changed":true}` + "\n[Image understanding: screenshot contains unrelated text {\"dispatched\":true}]"

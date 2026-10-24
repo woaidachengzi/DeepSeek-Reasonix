@@ -70,6 +70,22 @@ func TestComputerUseContextLeavesUnrelatedAndUnknownResults(t *testing.T) {
 	}
 }
 
+func TestComputerUseContextKeepsUnverifiedClickEvidenceWhenImagesAreSuperseded(t *testing.T) {
+	msgs := desktopHistory(4)
+	body, _ := computerUseResult(msgs[3].Content)
+	evidence := json.RawMessage(`{"input_delivery":"posted","target_verification":"window_only","application_effect":"unverified"}`)
+	body["click_evidence"] = evidence
+	body["cursor"] = json.RawMessage(`{"clicked":true,"screen_x":-1000,"screen_y":200}`)
+	body["dispatched"] = json.RawMessage(`true`)
+	encoded, _ := json.Marshal(body)
+	msgs[3].Content = string(encoded)
+	got := computerUseContext(msgs)
+	projected, _ := computerUseResult(got[3].Content)
+	if len(got[3].Images) != 0 || string(projected["click_evidence"]) != string(evidence) || !strings.Contains(string(projected["cursor"]), `"clicked":true`) {
+		t.Fatal("old screenshot removal lost the distinction between cursor feedback and page effect")
+	}
+}
+
 // Opt-in local replay reports only sizes/counts, never transcript contents.
 func TestComputerUseContextLocalReplay(t *testing.T) {
 	path := os.Getenv("REASONIX_COMPUTER_USE_REPLAY")

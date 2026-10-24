@@ -25,6 +25,25 @@ Reasonix 画中画中的落点标记。图案前端的小圆点对应系统读�
 普通位置样本变成 move/confirm_click 的操作凭证。点击前的权限、窗口身份、
 内容状态、原生命中检测和单次回执校验保持原有行为。
 
+## 点击诊断边界
+
+`cursor.clicked` 仅用于显示已发出坐标点击且实际鼠标位置匹配的波纹，不是
+浏览器 DOM 回执。点击与确认点击的 `click_evidence` 分别记录：
+
+- `input_delivery`：`not_sent`、`posted` 或 `unknown`。
+- `target_verification`：`window_only` 只证明通过了原生目标窗口检查；其他情况
+  为 `unverified`，没有声称网页按钮命中。
+- `application_effect`：`unverified`，由模型检查返回页面是否出现对应完成状态。
+
+页面有变化也不自动等于发送成功；页面未变化也不能证明网站拒绝合成点击。
+快捷键成功仅证明替代路径完成，不能解释此前点击为何无效。原因未验证时保留为
+假设，不存成网站通用经验。发送结果不明时先观察，避免鼠标与快捷键重复发送。
+简要和详细 AI 诊断均保留点击证据、鼠标坐标与点击反馈；这些字段不增加模型
+调用或原生截图次数，不改变权限、命中检查及单次回执校验。
+
+本次系统策略文字变更会改变模型请求的 system/prefix 缓存键，首次请求需要重新
+建立缓存；启动 golden 已同步更新，工具参数 schema 保持不变。
+
 ## 开发检查
 
 唯一图案源为 `desktop/tauri/resources/blue-whale-cursor.svg`，由 AppKit 和前端

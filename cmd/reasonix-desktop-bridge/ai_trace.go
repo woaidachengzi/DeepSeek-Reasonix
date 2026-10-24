@@ -65,6 +65,7 @@ func projectAITrace(messages []provider.Message, model, state string, detailed b
 		Model: secrets.RedactCredentials(model), State: state, Scope: "current conversation snapshot; latest bounded messages; not an atomic execution trace",
 		Notes: []string{"Reasoning is only text returned by the provider, not proof of execution. Some models return none.",
 			"Tool completion does not prove input dispatch or task success. Inspect computerUse.dispatched, blocked_reason and input_verification.",
+			"click_evidence distinguishes posted input from application effect. cursor.clicked is display feedback, not DOM acknowledgement or proof that a site rejects synthetic clicks.",
 			"Missing timestamps are unknown, not zero-duration actions. Running requests may not yet appear. Screenshots and system prompts are omitted.",
 			"Credential patterns are masked; conversation text and personal information remain. Review before sharing."},
 		TotalMessages: len(messages), Entries: []aiTraceEntry{}}
@@ -145,7 +146,7 @@ func aiTraceComputerUse(m provider.Message) json.RawMessage {
 		return nil
 	}
 	facts := map[string]json.RawMessage{}
-	for _, key := range []string{"dispatched", "dispatch_method", "dispatch_unknown", "blocked_reason", "state_changed", "input_verification", "unchanged", "image_geometry", "pointer_preview", "observation_validation", "observation_ttl_ms", "observation_age_ms", "next_action"} {
+	for _, key := range []string{"dispatched", "dispatch_method", "dispatch_unknown", "blocked_reason", "state_changed", "input_verification", "unchanged", "image_geometry", "pointer_preview", "cursor", "click_evidence", "observation_validation", "observation_ttl_ms", "observation_age_ms", "next_action"} {
 		if value := result[key]; value != nil {
 			facts[key] = value
 		}
