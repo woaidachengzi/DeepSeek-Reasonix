@@ -1,0 +1,41 @@
+import assert from "node:assert/strict";
+import { JSDOM } from "jsdom";
+const dom = new JSDOM("<!doctype html><div id='root'></div>", { url: "http://localhost" });
+Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, localStorage: dom.window.localStorage, IS_REACT_ACT_ENVIRONMENT: true });
+Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
+Object.defineProperty(dom.window.navigator, "language", { value: "zh-CN", configurable: true });
+localStorage.setItem("reasonix-lang", "zh");
+const React = await import("react");
+const { act } = React;
+const { createRoot } = await import("react-dom/client");
+const { LocaleProvider } = await import("../lib/i18n");
+const { TauriAITraceSettings } = await import("../tauri/TauriAITraceSettings");
+const root = createRoot(document.getElementById("root")!);
+const calls: Array<[string, boolean]> = [];
+let resolve!: (value: boolean) => void;
+let result: "success" | "cancel" | "pending" | "error" = "success";
+const api = async (id: string, detailed: boolean) => {
+  calls.push([id, detailed]);
+  if (result === "error") throw new Error("无法保存，请选择可写目录");
+  if (result === "pending") return new Promise<boolean>(r => { resolve = r; });
+  return result !== "cancel";
+};
+const render = async (sessionId?: string) => { await act(async () => { root.render(<LocaleProvider><TauriAITraceSettings sessionId={sessionId} api={api} /></LocaleProvider>); }); };
+const button = () => document.querySelector("button")!;
+const click = async () => { await act(async () => { button().click(); }); };
+try {
+  await render(); assert(button().disabled); assert.equal(calls.length, 0);
+  await render("one"); assert(document.querySelector("input")!.checked);
+  await click(); assert.deepEqual(calls, [["one", true]]); assert(document.body.textContent?.includes("日志已保存"));
+  await act(async () => { document.querySelector("input")!.click(); });
+  assert.equal(localStorage.getItem("reasonix-ai-trace-detailed"), "false");
+  result = "cancel"; await click(); assert(document.body.textContent?.includes("已取消导出")); assert.deepEqual(calls.at(-1), ["one", false]);
+  result = "error"; await click(); assert(document.querySelector('[role="alert"]')?.textContent?.includes("可写目录"));
+  result = "pending"; await click(); assert(button().disabled);
+  const finishOld = resolve;
+  await render("two"); assert(!button().disabled);
+  await act(async () => { finishOld(true); });
+  assert(!document.body.textContent?.includes("日志已保存"), "old export must not update a different session");
+  assert.equal(document.querySelector('[role="alert"]'), null);
+  console.log("PASS AI trace settings: no automatic export, modes, saved/cancel/error, exact session and stale completion");
+} finally { await act(async () => root.unmount()); dom.window.close(); }

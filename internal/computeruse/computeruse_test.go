@@ -53,7 +53,7 @@ func TestComputerUseRequiresOwnedFreshObservation(t *testing.T) {
 			case "wrong-pid":
 				request.PID = 99
 			case "expired":
-				c.now = func() time.Time { return time.Now().Add(time.Minute) }
+				c.now = func() time.Time { return time.Now().Add(ObservationTTL) }
 			}
 			f.calls = nil
 			if _, err := c.Execute(t.Context(), request); err == nil {
@@ -84,7 +84,7 @@ func TestComputerUseExpiryDuringVerificationSendsNoInput(t *testing.T) {
 	now := time.Now()
 	c.now = func() time.Time { return now }
 	r := observed(t, c)
-	f.onObserve = func() { now = now.Add(30 * time.Second) }
+	f.onObserve = func() { now = now.Add(ObservationTTL) }
 	f.calls = nil
 	request := Request{Action: "key", PID: 42, Key: "return", Observation: r.Observation}
 	result, err := c.Execute(t.Context(), request)

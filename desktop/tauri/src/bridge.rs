@@ -2737,6 +2737,13 @@ impl BridgeSupervisor {
         })
     }
 
+    pub fn ai_trace(&self, request: SessionRequest, detailed: bool) -> Result<Value, String> {
+        let session_id = session_path_component(&request.session_id)?;
+        let detail = if detailed { "full" } else { "compact" };
+        let path = format!("/v1/sessions/{session_id}/ai-trace?detail={detail}");
+        self.request_json("GET", &path, None, None)
+    }
+
     pub fn provider_summary(&self) -> Result<BridgeProviderSummaryResponse, String> {
         let response = self.request_json("GET", "/v1/providers", None, None)?;
         let summary: BridgeProviderSummaryResponse =

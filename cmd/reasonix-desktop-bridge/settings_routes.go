@@ -4,6 +4,7 @@ import "net/http"
 
 // settingsRoutes preserves the authenticated settings surface and mutation limits.
 func (b *bridgeServer) settingsRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /v1/sessions/{id}/ai-trace", b.authorized(b.sessionAITrace))
 	mux.HandleFunc("GET /v1/settings/provider-configs", b.authorized(b.providerConfigs))
 	mux.HandleFunc("POST /v1/settings/provider-configs", b.authorized(b.idempotent(64<<10, b.saveProviderConfig)))
 	mux.HandleFunc("POST /v1/settings/provider-configs/delete", b.authorized(b.idempotent(64<<10, b.deleteProviderConfig)))

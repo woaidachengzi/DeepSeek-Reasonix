@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod bot_diagnostics;
+mod ai_trace;
 mod bridge;
 mod speech_input;
 mod live_sessions;
@@ -4847,6 +4848,7 @@ fn main() {
             import_user_theme,
             export_user_theme,
             export_frontend_diagnostics,
+            ai_trace::export_ai_trace,
             open_external_url,
             open_external_link,
             local_paths::open_local_path,

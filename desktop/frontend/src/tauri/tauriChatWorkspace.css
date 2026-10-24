@@ -504,8 +504,8 @@
 .tauri-prompt-card__link { display: inline-block; margin: 9px 0 0 26px; color: var(--accent); font-size: 10px; text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
 .tauri-prompt-card__actions { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0 0 26px; }
 .tauri-prompt-card__actions button { min-height: 29px; padding: 0 10px; border-radius: 8px; font-size: 10px; }
-.tauri-prompt-card__allow { border: 1px solid color-mix(in srgb, var(--accent) 48%, var(--border)); background: var(--accent); color: var(--accent-fg); }
-.tauri-prompt-card__deny, .tauri-prompt-card__cancel { border: 1px solid var(--border-soft); background: var(--surface); color: var(--fg-dim); }
+.tauri-prompt-card__actions > .tauri-prompt-card__allow { border: 1px solid color-mix(in srgb, var(--accent) 48%, var(--border)); background: var(--control-primary-bg); color: var(--control-primary-fg); }
+.tauri-prompt-card__actions > .tauri-prompt-card__deny, .tauri-prompt-card__actions > .tauri-prompt-card__cancel { border: 1px solid var(--border-soft); background: var(--surface); color: var(--fg-dim); }
 .tauri-prompt-card__deny:hover:not(:disabled), .tauri-prompt-card__cancel:hover:not(:disabled) { border-color: var(--border); color: var(--fg); }
 
 .tauri-composer-area { width: min(var(--tauri-conversation-max), calc(100% - 48px)); flex: 0 0 auto; align-self: center; padding: 9px 0 13px; }

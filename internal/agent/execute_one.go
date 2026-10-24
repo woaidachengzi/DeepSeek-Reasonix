@@ -667,7 +667,7 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 		}
 		a.recordRepeatFailure(call, t, err)
 		rawErr := fmt.Sprintf("error: %v\n%s", err, detail)
-		body, truncMsg, original := a.boundProviderVisibleResult(rawErr, call.Name, call.ID)
+		body, truncMsg, original := a.boundProviderVisibleResult(rawErr, providerResultToolName(plan), call.ID)
 		out := toolOutcome{
 			runState: outcomeRunState(toolOutcome{executed: true, output: rawErr}),
 			output:   body, errMsg: firstLine(err.Error()), truncated: truncMsg != "" || original != "", truncMsg: truncMsg,

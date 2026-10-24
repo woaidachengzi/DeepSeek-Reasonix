@@ -16,6 +16,10 @@ import (
 	"time"
 )
 
+// ObservationTTL permits a model round trip; every action still captures and
+// validates current native state immediately before consuming its receipt.
+const ObservationTTL = 2 * time.Minute
+
 type Request struct {
 	Action      string   `json:"action"`
 	PID         int      `json:"pid,omitempty"`
@@ -35,6 +39,9 @@ type Request struct {
 type Result struct {
 	State             json.RawMessage `json:"state"`
 	Observation       string          `json:"observation,omitempty"`
+	ObservationTTLMS  int64           `json:"observation_ttl_ms,omitempty"`
+	ObservationAgeMS  int64           `json:"observation_age_ms,omitempty"`
+	NextAction        string          `json:"next_action,omitempty"`
 	Dispatched        bool            `json:"dispatched"`
 	DispatchUnknown   bool            `json:"dispatch_unknown,omitempty"`
 	StateChanged      bool            `json:"state_changed,omitempty"`
@@ -63,6 +70,7 @@ type receipt struct {
 	digest      [32]byte
 	identity    [32]byte
 	expires     time.Time
+	issued      time.Time
 	snapshot    nativeResult
 }
 type Controller struct {
@@ -173,8 +181,10 @@ func (c *Controller) publish(v nativeResult, pid int) (Result, error) {
 	if _, err := rand.Read(token[:]); err != nil {
 		return result, err
 	}
-	c.receipt = receipt{token: hex.EncodeToString(token[:]), pid: pid, window: v.WindowID, digest: digest(v), identity: identity(v), expires: c.now().Add(30 * time.Second), snapshot: v}
+	now := c.now()
+	c.receipt = receipt{token: hex.EncodeToString(token[:]), pid: pid, window: v.WindowID, digest: digest(v), identity: identity(v), expires: now.Add(ObservationTTL), issued: now, snapshot: v}
 	result.Observation = c.receipt.token
+	result.ObservationTTLMS = ObservationTTL.Milliseconds()
 	return result, nil
 }
 
@@ -217,7 +227,7 @@ func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Re
 		}
 		if !c.now().Before(prior.expires) {
 			c.receipt = receipt{}
-			return Result{BlockedReason: "observation_expired"}, errors.New("observation expired; observe again before input; no input sent")
+			return expiredObservation(prior, c.now()), errors.New("observation expired; no input was sent. Call observe, inspect the fresh result, then issue one action; this is not evidence of a broken input channel")
 		}
 		current, err := c.observe(ctx, r.PID, prior.window)
 		if err != nil {
@@ -236,7 +246,7 @@ func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Re
 		// after that work, immediately before accepting the verified receipt.
 		if !c.now().Before(prior.expires) {
 			c.receipt = receipt{}
-			return Result{BlockedReason: "observation_expired"}, errors.New("observation expired during verification; observe again; no input sent")
+			return expiredObservation(prior, c.now()), errors.New("observation expired during verification; no input was sent. Call observe before another action; this is not evidence of a broken input channel")
 		}
 		if changed {
 			result, e := c.publish(current, r.PID)
