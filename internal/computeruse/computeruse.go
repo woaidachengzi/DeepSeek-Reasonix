@@ -35,6 +35,8 @@ type Request struct {
 	Delta           int      `json:"delta,omitempty"`
 	// VerifiedFocus is stamped by the host, never trusted from tool arguments.
 	VerifiedFocus json.RawMessage `json:"verified_focus,omitempty"`
+	// VerifiedPointer is copied from a move receipt, never from tool arguments.
+	VerifiedPointer *PointerPosition `json:"verified_pointer,omitempty"`
 }
 
 type Result struct {
@@ -51,21 +53,23 @@ type Result struct {
 	InputVerification string          `json:"input_verification,omitempty"`
 	Unchanged         bool            `json:"unchanged,omitempty"`
 	ImageGeometry     *ImageGeometry  `json:"image_geometry,omitempty"`
+	PointerPreview    *PointerPreview `json:"pointer_preview,omitempty"`
 	Image             string          `json:"-"`
 }
 
 type nativeResult struct {
-	OK                bool            `json:"ok"`
-	Error             string          `json:"error,omitempty"`
-	State             json.RawMessage `json:"state"`
-	Image             string          `json:"image,omitempty"`
-	WindowID          int             `json:"window_id,omitempty"`
-	Dispatched        bool            `json:"dispatched"`
-	DispatchMethod    string          `json:"dispatch_method,omitempty"`
-	DispatchUnknown   bool            `json:"dispatch_unknown,omitempty"`
-	BlockedReason     string          `json:"blocked_reason,omitempty"`
-	InputVerification string          `json:"input_verification,omitempty"`
-	Unchanged         bool            `json:"unchanged,omitempty"`
+	OK                bool             `json:"ok"`
+	Error             string           `json:"error,omitempty"`
+	State             json.RawMessage  `json:"state"`
+	Image             string           `json:"image,omitempty"`
+	WindowID          int              `json:"window_id,omitempty"`
+	Dispatched        bool             `json:"dispatched"`
+	DispatchMethod    string           `json:"dispatch_method,omitempty"`
+	DispatchUnknown   bool             `json:"dispatch_unknown,omitempty"`
+	BlockedReason     string           `json:"blocked_reason,omitempty"`
+	InputVerification string           `json:"input_verification,omitempty"`
+	Unchanged         bool             `json:"unchanged,omitempty"`
+	Pointer           *PointerPosition `json:"pointer,omitempty"`
 }
 
 type backend interface {
@@ -98,7 +102,7 @@ func validate(r Request) error {
 	switch r.Action {
 	case "status", "apps":
 		return nil
-	case "observe", "activate", "click", "fill", "type", "key", "scroll":
+	case "observe", "activate", "move", "confirm_click", "click", "fill", "type", "key", "scroll":
 	default:
 		return errors.New("unknown computer_use action")
 	}
@@ -118,6 +122,9 @@ func validate(r Request) error {
 }
 
 func validateInput(r Request) error {
+	if err := validatePointerAction(r); err != nil {
+		return err
+	}
 	if err := validateCoordinateSpace(r); err != nil {
 		return err
 	}
@@ -216,6 +223,7 @@ func (c *Controller) ExecuteForTarget(ctx context.Context, r Request, target Tar
 
 func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Result, error) {
 	r.VerifiedFocus = nil
+	r.VerifiedPointer = nil
 	if err := validate(r); err != nil {
 		return Result{}, err
 	}
@@ -275,13 +283,12 @@ func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Re
 		}
 		r.WindowID = prior.window
 		before = current
-		if r.Action == "type" || r.Action == "key" {
-			var state struct {
-				Focus json.RawMessage `json:"focus"`
-			}
-			_ = json.Unmarshal(current.State, &state)
-			r.VerifiedFocus = state.Focus
+		pinned, err := pinVerifiedInput(r, prior.snapshot, current)
+		if err != nil {
+			c.receipt = receipt{}
+			return Result{BlockedReason: "pointer_preview_required", NextAction: "observe"}, err
 		}
+		r = pinned
 		// Consume before dispatch. An uncertain or failed action must never be
 		// automatically replayed using the same receipt.
 		c.receipt = receipt{}
@@ -303,7 +310,7 @@ func (c *Controller) execute(ctx context.Context, r Request, target *Target) (Re
 	if !v.OK {
 		return verifiedInputResult(nativeOutcome(v), r, before, v), errors.New(v.Error)
 	}
-	result, err := c.publish(v, r.PID)
+	result, err := c.publishAction(v, r)
 	return verifiedInputResult(result, r, before, v), err
 }
 

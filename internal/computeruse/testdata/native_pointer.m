@@ -15,7 +15,8 @@ static NSDictionary *window(pid_t pid,CGWindowID number,CGRect bounds,int layer,
 
 static int checks=0,posts=0;
 static NSString *refusal=nil;
-static CGPoint expected;
+static CGPoint expected,actual;
+static BOOL confirmOnly=NO,readable=YES;
 static NSString *preflight(pid_t pid,CGWindowID number,CGRect bounds,CGPoint point) {
     checks++;
     CHECK(pid==42 && number==11 && CGRectContainsPoint(bounds,point));
@@ -27,8 +28,8 @@ static void post(CGEventTapLocation tap,CGEventRef event) {
     CHECK(CGPointEqualToPoint(CGEventGetLocation(event),expected));
     CHECK(CGEventGetFlags(event)==0);
     CGEventType types[]={kCGEventMouseMoved,kCGEventLeftMouseDown,kCGEventLeftMouseUp};
-    CHECK(posts<3 && CGEventGetType(event)==types[posts]);
-    if (posts>0) {
+    CHECK(posts<(confirmOnly?2:3) && CGEventGetType(event)==types[posts+(confirmOnly?1:0)]);
+    if (posts>0 || confirmOnly) {
         CHECK(CGEventGetIntegerValueField(event,kCGMouseEventClickState)==1);
         CHECK(CGEventGetIntegerValueField(event,kCGMouseEventButtonNumber)==kCGMouseButtonLeft);
         CHECK(CGEventGetIntegerValueField(event,kCGMouseEventNumber)>0);
@@ -81,6 +82,37 @@ static void dispatchTests(void) {
     CHECK(!RXCreateWindowServerClick(CGPointMake(INFINITY,0),&move,&down,&up));
     CHECK(!move && !down && !up);
 }
+static BOOL readPointer(CGPoint *point) {*point=actual;return readable;}
+static void previewTests(void) {
+    CGRect bounds=CGRectMake(-1920,30,1920,983);
+    expected=CGPointMake(-1803,195);actual=expected;
+    checks=0;posts=0;refusal=nil;
+    CHECK(RXPostWindowServerMove(42,11,bounds,expected,preflight,post)==nil);
+    CHECK(checks==1 && posts==1); // Movement must never emit down/up.
+    checks=0;posts=0;refusal=@"pointer_target_changed";
+    CHECK(RXPostWindowServerMove(42,11,bounds,expected,preflight,post)!=nil);
+    CHECK(checks==1 && posts==0);
+    confirmOnly=YES;
+    for (NSString *reason in @[@"pointer_target_changed",@"pointer_target_unverified",@"input_permission_missing",@"pointer_busy",@"window_not_active"]) {
+        checks=0;posts=0;refusal=reason;
+        CHECK([RXPostConfirmedWindowServerClick(42,11,bounds,expected,readPointer,preflight,post) isEqualToString:reason]);
+        CHECK(checks==1 && posts==0);
+    }
+    refusal=nil;
+    for (NSNumber *offset in @[@0,@0.5,@2,@(-2000)]) {
+        checks=0;posts=0;actual=CGPointMake(expected.x+offset.doubleValue,expected.y);
+        NSString *blocked=RXPostConfirmedWindowServerClick(42,11,bounds,expected,readPointer,preflight,post);
+        CHECK(checks==1);
+        if (fabs(offset.doubleValue)<=1) {CHECK(blocked==nil && posts==2);}
+        else {CHECK([blocked isEqualToString:@"pointer_moved"] && posts==0);}
+    }
+    checks=0;posts=0;readable=NO;
+    CHECK([RXPostConfirmedWindowServerClick(42,11,bounds,expected,readPointer,preflight,post) isEqualToString:@"pointer_moved"]);
+    CHECK(posts==0);readable=YES;
+    CHECK(!RXPointerNear(CGPointMake(NAN,0),expected));
+    CHECK(!RXPointerNear(expected,CGPointMake(INFINITY,0)));
+    confirmOnly=NO;posts=0;
+}
 static void headlessHitTest(void) {
     CHECK(NSApp==nil);
     NSArray *windows=CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly|kCGWindowListExcludeDesktopElements,0));
@@ -112,7 +144,7 @@ int main(void) {
         CFDictionaryRef session=CGSessionCopyCurrentDictionary();
         if (!session) return 77;
         CFRelease(session);
-        routingTests();dispatchTests();
+        routingTests();dispatchTests();previewTests();
         headlessHitTest();
         puts("PASS native pointer: window ownership, overlays, negative origins, preflight refusals send zero events, valid move/down/up. No real input posted.");
     }

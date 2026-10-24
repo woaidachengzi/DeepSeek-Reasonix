@@ -3,7 +3,7 @@ import { ChevronDown, ChevronUp, GripHorizontal, Monitor, Square } from "lucide-
 import { clampPreviewPosition, type ComputerUsePreview } from "./computerUsePreview";
 import "./TauriComputerUsePreview.css";
 
-const actionLabels: Record<string, string> = { observe: "查看窗口", activate: "切换窗口", click: "点击", type: "输入文字", key: "按键", scroll: "滚动" };
+const actionLabels: Record<string, string> = { observe: "查看窗口", activate: "切换窗口", move: "核对鼠标落点", confirm_click: "按确认落点点击", fill: "填写文本", click: "点击", type: "输入文字", key: "按键", scroll: "滚动" };
 
 export function TauriComputerUsePreview({ preview, busy, onStop }: { preview: ComputerUsePreview; busy: boolean; onStop: () => void }) {
   const [collapsed, setCollapsed] = useState(false);

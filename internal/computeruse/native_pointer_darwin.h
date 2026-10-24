@@ -11,3 +11,10 @@ typedef NSString *(*RXPointerPreflight)(pid_t,CGWindowID,CGRect,CGPoint);
 typedef void (*RXPointerPost)(CGEventTapLocation,CGEventRef);
 NSString *RXPostWindowServerClick(pid_t pid,CGWindowID window,CGRect bounds,CGPoint point,
                                   RXPointerPreflight preflight,RXPointerPost post);
+typedef BOOL (*RXPointerRead)(CGPoint *);
+BOOL RXReadPointer(CGPoint *point);
+BOOL RXPointerNear(CGPoint actual,CGPoint expected);
+NSString *RXPostWindowServerMove(pid_t pid,CGWindowID window,CGRect bounds,CGPoint point,
+                                 RXPointerPreflight preflight,RXPointerPost post);
+NSString *RXPostConfirmedWindowServerClick(pid_t pid,CGWindowID window,CGRect bounds,CGPoint point,
+                                          RXPointerRead read,RXPointerPreflight preflight,RXPointerPost post);

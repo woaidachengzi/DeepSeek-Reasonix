@@ -16,7 +16,7 @@ export interface ComputerUsePreviewState {
   preview: ComputerUsePreview | null;
 }
 
-const actions = new Set(["observe", "activate", "click", "type", "key", "scroll"]);
+const actions = new Set(["observe", "activate", "move", "confirm_click", "click", "fill", "type", "key", "scroll"]);
 
 export function computerUsePreviewFromEvent(event: TauriBridgeEvent): ComputerUsePreview | null {
   if (event.eventKind !== "tool_progress") return null;

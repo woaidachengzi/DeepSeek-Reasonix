@@ -79,3 +79,44 @@ NSString *RXPostWindowServerClick(pid_t pid,CGWindowID window,CGRect bounds,CGPo
     CFRelease(move);CFRelease(down);CFRelease(up);
     return blocked;
 }
+
+BOOL RXReadPointer(CGPoint *point) {
+    CGEventRef event=CGEventCreate(NULL);
+    if (!event) return NO;
+    *point=CGEventGetLocation(event);CFRelease(event);
+    return isfinite(point->x) && isfinite(point->y);
+}
+
+BOOL RXPointerNear(CGPoint actual,CGPoint expected) {
+    return isfinite(actual.x) && isfinite(actual.y) && isfinite(expected.x) && isfinite(expected.y)
+        && hypot(actual.x-expected.x,actual.y-expected.y)<=1.0;
+}
+
+NSString *RXPostWindowServerMove(pid_t pid,CGWindowID window,CGRect bounds,CGPoint point,RXPointerPreflight preflight,RXPointerPost post) {
+    if (!preflight || !post || !CGRectContainsPoint(bounds,point)) return @"pointer_target_unverified";
+    CGEventSourceRef source=CGEventSourceCreate(kCGEventSourceStatePrivate);
+    if (!source) return @"mouse_event_allocation_failed";
+    CGEventSourceSetLocalEventsSuppressionInterval(source,0);
+    CGEventRef move=CGEventCreateMouseEvent(source,kCGEventMouseMoved,point,kCGMouseButtonLeft);
+    CFRelease(source);
+    if (!move) return @"mouse_event_allocation_failed";
+    CGEventSetFlags(move,0);
+    NSString *blocked=preflight(pid,window,bounds,point);
+    if (!blocked) post(kCGHIDEventTap,move);
+    CFRelease(move);
+    return blocked;
+}
+
+NSString *RXPostConfirmedWindowServerClick(pid_t pid,CGWindowID window,CGRect bounds,CGPoint point,RXPointerRead read,RXPointerPreflight preflight,RXPointerPost post) {
+    if (!read || !preflight || !post || !CGRectContainsPoint(bounds,point)) return @"pointer_target_unverified";
+    CGEventRef move=NULL,down=NULL,up=NULL;
+    if (!RXCreateWindowServerClick(point,&move,&down,&up)) return @"mouse_event_allocation_failed";
+    NSString *blocked=preflight(pid,window,bounds,point);
+    CGPoint actual;
+    // Read after the potentially blocking ownership checks. Never move back
+    // to a stale preview position or click if the user moved the pointer.
+    if (!blocked && (!read(&actual) || !RXPointerNear(actual,point))) blocked=@"pointer_moved";
+    if (!blocked) {post(kCGHIDEventTap,down);post(kCGHIDEventTap,up);}
+    CFRelease(move);CFRelease(down);CFRelease(up);
+    return blocked;
+}

@@ -257,6 +257,7 @@ static NSString *RXPointerBlock(pid_t pid,CGWindowID window,CGRect bounds,CGPoin
     return nil;
 }
 #import "native_fill_darwin.h"
+#import "native_pointer_preview_darwin.h"
 static NSDictionary *RXAct(NSDictionary *request) {
     NSString *action=request[@"action"];pid_t pid=[request[@"pid"] intValue];CGWindowID wid=[request[@"window_id"] unsignedIntValue];
     NSDictionary *window=RXWindow(pid,wid);NSRunningApplication *app=[NSRunningApplication runningApplicationWithProcessIdentifier:pid];
@@ -278,6 +279,8 @@ static NSDictionary *RXAct(NSDictionary *request) {
     }
     CGRect bounds;CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)window[(id)kCGWindowBounds],&bounds);
     if ([action isEqualToString:@"fill"]) return RXFill(request,pid,wid,bounds);
+    if ([action isEqualToString:@"move"]) return RXMove(request,pid,wid,bounds);
+    if ([action isEqualToString:@"confirm_click"]) return RXConfirmClick(request,pid,wid,bounds);
     BOOL sent=NO;NSString *dispatchMethod=nil;
     if ([action isEqualToString:@"click"]) {
         NSString *path=request[@"element"];

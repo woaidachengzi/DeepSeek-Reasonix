@@ -94,3 +94,13 @@ func TestComputerUseErrorsNeverRetry(t *testing.T) {
 		t.Fatal("desktop errors must opt out of automatic tool replay")
 	}
 }
+
+func TestComputerUsePointerPreviewRequiresConsent(t *testing.T) {
+	for _, args := range []string{`{"action":"move","pid":42,"observation":"test","coordinate_space":"image","x":100,"y":120}`, `{"action":"confirm_click","pid":42,"observation":"test"}`} {
+		f := &desktopConsentFixture{}
+		c := computerUse{controller: f}
+		if _, _, err := c.ExecuteWithImages(t.Context(), json.RawMessage(args)); err == nil || f.captures != 0 {
+			t.Fatal("pointer preview or confirmation bypassed interactive consent")
+		}
+	}
+}

@@ -98,3 +98,12 @@ func TestComputerUseRefusalKeepsImageUnderstandingFallback(t *testing.T) {
 		t.Fatalf("a blocked desktop result lost observation/image fallback: %+v", out)
 	}
 }
+
+func TestComputerUsePointerMoveIsNotInputProgress(t *testing.T) {
+	if computerUseInputProgress("computer_use", `{"dispatched":true,"dispatch_method":"window_server_move","pointer_preview":{"screen_x":10,"screen_y":20}}`) {
+		t.Fatal("cursor preview reset refused-click budget")
+	}
+	if !computerUseInputProgress("computer_use", `{"dispatched":true,"dispatch_method":"window_server_mouse"}`) {
+		t.Fatal("confirmed click was not input progress")
+	}
+}

@@ -112,6 +112,14 @@ func TestAITraceKeepsConfirmedFillNoopInCompactExport(t *testing.T) {
 	}
 }
 
+func TestAITraceKeepsActualPointerPreview(t *testing.T) {
+	messages := []provider.Message{{Role: provider.RoleTool, Name: "computer_use", ToolCallID: "move", Content: `{"dispatched":true,"dispatch_method":"window_server_move","pointer_preview":{"screen_x":-1519.5,"screen_y":230.25,"image_x":200.25,"image_y":100.125},"next_action":"inspect_pointer_then_confirm_click"}`}}
+	encoded, err := projectAITrace(messages, "fixture", "idle", false, time.Unix(0, 0))
+	if err != nil || !strings.Contains(string(encoded), `"screen_x":-1519.5`) || !strings.Contains(string(encoded), `"image_x":200.25`) || !strings.Contains(string(encoded), "inspect_pointer_then_confirm_click") {
+		t.Fatalf("actual pointer facts missing from compact diagnostics: %s %v", encoded, err)
+	}
+}
+
 func TestAITraceKeepsDispatchFactsBeforeImageUnderstandingSuffix(t *testing.T) {
 	for _, detailed := range []bool{false, true} {
 		body := "error: computer_use refused input: visual_changed\n" + `{"dispatched":false,"blocked_reason":"visual_changed","state_changed":true}` + "\n[Image understanding: screenshot contains unrelated text {\"dispatched\":true}]"

@@ -42,7 +42,12 @@ const allow = document.querySelector<HTMLButtonElement>(".tauri-prompt-card__all
 assert.equal(allow.textContent, "允许本次任务");
 await act(async () => { allow.click(); });
 assert.ok(fixture.__tauriBridgeCalls.some(c => c.name === "bridge_approve" && c.args.allow === true));
-await emit("tool_progress");
+await emit("tool_progress", { tool: { name: "computer_use", computerUsePreview: { ...preview, action: "move" } } });
+assert.ok(document.body.textContent?.includes("核对鼠标落点"), "actual pointer preview remains visible before confirmation");
+await emit("tool_progress", { tool: { name: "computer_use", computerUsePreview: { ...preview, action: "confirm_click" } } });
+assert.ok(document.body.textContent?.includes("按确认落点点击"));
+await emit("tool_progress", { tool: { name: "computer_use", computerUsePreview: { ...preview, action: "fill" } } });
+assert.ok(document.body.textContent?.includes("填写文本"));
 assert.ok(document.querySelector('[aria-label="电脑操作预览"] img'), "authorized live screenshot is rendered");
 await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="收起操作预览"]')!.click(); });
 assert.equal(document.querySelector('[aria-label="电脑操作预览"] img'), null);

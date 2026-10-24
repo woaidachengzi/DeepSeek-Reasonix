@@ -47,8 +47,8 @@ func validateCoordinateSpace(r Request) error {
 	if r.CoordinateSpace != "" && r.CoordinateSpace != "window" && r.CoordinateSpace != "image" {
 		return errors.New("coordinate_space must be image or window")
 	}
-	if r.CoordinateSpace == "image" && ((r.Action != "click" && r.Action != "fill") || r.Element != "" || r.X == nil || r.Y == nil) {
-		return errors.New("coordinate_space=image requires a click/fill x/y target without an element path")
+	if r.CoordinateSpace == "image" && ((r.Action != "click" && r.Action != "fill" && r.Action != "move") || r.Element != "" || r.X == nil || r.Y == nil) {
+		return errors.New("coordinate_space=image requires a click/fill/move x/y target without an element path")
 	}
 	return nil
 }

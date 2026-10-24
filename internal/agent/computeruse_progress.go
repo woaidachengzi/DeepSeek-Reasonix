@@ -28,7 +28,7 @@ func computerUseInputProgress(name, result string) bool {
 		return false
 	}
 	body, _ := computerUseResult(result)
-	return string(body["dispatched"]) == "true" || string(body["input_verification"]) == `"confirmed"`
+	return (string(body["dispatched"]) == "true" && string(body["dispatch_method"]) != `"window_server_move"`) || string(body["input_verification"]) == `"confirmed"`
 }
 
 func (a *Agent) computerUseRefusalImages(ctx context.Context, reason, text string, images []string) imageResult {
