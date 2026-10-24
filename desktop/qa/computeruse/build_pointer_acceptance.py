@@ -14,7 +14,11 @@ import tempfile
 def main():
     source = pathlib.Path(__file__).resolve().parent
     repo = source.parents[2]
-    root = pathlib.Path(tempfile.mkdtemp(prefix='reasonix-pointer-acceptance-'))
+    # LaunchServices/TCC may not resolve an application stored in macOS's
+    # ephemeral temp directory. Keep the disposable build in ignored target/.
+    target = repo / 'desktop/tauri/target'
+    target.mkdir(parents=True, exist_ok=True)
+    root = pathlib.Path(tempfile.mkdtemp(prefix='pointer-acceptance-', dir=target))
     app = root / 'Reasonix Pointer QA.app'
     binary = app / 'Contents/MacOS/pointer-qa'
     binary.parent.mkdir(parents=True)
@@ -33,6 +37,10 @@ def main():
     ], check=True)
     subprocess.run(['codesign', '--force', '--sign', '-', str(app)], check=True)
     subprocess.run(['codesign', '--verify', '--deep', '--strict', str(app)], check=True)
+    subprocess.run([
+        '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister',
+        '-f', str(app),
+    ], check=True)
     print(f'App: {app}')
     print(f'Results: {root / "result.json"}')
     print('Read-only preflight: open -n -W -a "' + str(app) + '" --args --preflight')

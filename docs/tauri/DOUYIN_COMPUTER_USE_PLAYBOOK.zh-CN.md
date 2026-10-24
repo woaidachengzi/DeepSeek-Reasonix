@@ -98,3 +98,9 @@ app.getAXState()
 日志增加 `dispatch_method=window_server_mouse`，简洁导出也保留。`dispatched` 仍表示投递，不代表网页已接受或任务成功。`pointer_target_changed`、`pointer_target_unverified`、`pointer_busy`、`input_permission_missing` 均须先解决原因并重新观察，不能盲目重复点击。
 
 验收夹具新增独立坐标按钮计数，初始焦点固定在非文本视图，避免把本来已有焦点的输入框当作坐标点击成功。原生测试验证事件封装、窗口遮挡/负坐标以及预检拒绝零事件；测试回调不发送真实输入。当前测试进程没有辅助功能及 PostEvent 权限，尚未完成新路径的系统投递、Chromium 网页或真实邮箱端到端验收。
+
+## 2026-10-24 双屏实际点击验收与覆盖层修正
+
+0.1.53 进一步修正了矩形覆盖判断：Dock 与其他应用的点击穿透层可以覆盖整屏，却不是鼠标事件目标。改用公开的 AppKit mouse-down 窗口查询，核对准确窗口 ID、CG 所有者/层级/边界及 AX 前台焦点窗口。没有按应用名字跳过覆盖层；真实接收输入的其他窗口仍拒绝。网页 AX 叶节点不再必须提供 AXWindow，窗口身份由系统鼠标目标与批准应用的焦点窗口共同确认。后台 Go 进程通过 NSApplicationLoad 惰性建立只读查询环境，不激活窗口。
+
+经用户临时授权，独立本地夹具在主屏、负 X 副屏分别验证原生按钮和 WKWebView 按钮各收到一次点击。测试后已移除临时权限并只读确认失效。完整范围和回显计数见[验收记录](evidence/2026-10-24-pointer-dual-display/README.md)。尚未验证 Chromium、真实邮箱、打字或完整 agent/审批链；本结果不能代替这些验收。

@@ -233,30 +233,19 @@ static AXError RXScroll(pid_t pid,CGRect bounds,NSString *path,int delta) {
 static NSString *RXPointerBlock(pid_t pid,CGWindowID window,CGRect bounds,CGPoint point) {
     if (!CGPreflightPostEventAccess()) return @"input_permission_missing";
     if (CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState,kCGMouseButtonLeft)) return @"pointer_busy";
-    NSArray *windows=CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly|kCGWindowListExcludeDesktopElements,kCGNullWindowID));
-    if (!RXPointerWindowMatches(windows,pid,window,point)) return @"pointer_target_changed";
-    AXUIElementRef system=AXUIElementCreateSystemWide(),hit=NULL;
-    AXUIElementSetMessagingTimeout(system,0.1);
-    AXError error=AXUIElementCopyElementAtPosition(system,point.x,point.y,&hit);CFRelease(system);
-    if (error!=kAXErrorSuccess || !hit) {if(hit)CFRelease(hit);return @"pointer_target_unverified";}
-    id targetWindow=RXAttribute(hit,kAXWindowAttribute);
-    if (!targetWindow && [RXText(RXAttribute(hit,kAXRoleAttribute)) isEqualToString:@"AXWindow"]) targetWindow=(__bridge id)hit;
-    BOOL matches=NO;
-    if (targetWindow && CFGetTypeID((__bridge CFTypeRef)targetWindow)==AXUIElementGetTypeID()) {
-        // Web content may expose a remote AX element from a renderer process.
-        // Its containing window must still belong to the approved application.
-        pid_t owner=0;
-        if (AXUIElementGetPid((__bridge AXUIElementRef)targetWindow,&owner)!=kAXErrorSuccess || owner!=pid) {CFRelease(hit);return @"pointer_target_changed";}
-        CGRect actual=RXRect((__bridge AXUIElementRef)targetWindow);
-        matches=fabs(actual.origin.x-bounds.origin.x)<=3 && fabs(actual.origin.y-bounds.origin.y)<=3 && fabs(actual.size.width-bounds.size.width)<=6 && fabs(actual.size.height-bounds.size.height)<=6;
-    }
-    CFRelease(hit);
-    if (!matches) return @"pointer_target_unverified";
+    // Inspect the approved application's focused window, not the remote AX
+    // leaf at the point. Web renderers may omit kAXWindowAttribute entirely.
+    // The actual mouse-down window below is authoritative for point routing.
     AXUIElementRef focused=RXWindowAX(pid,bounds);
     if (!focused) return @"window_not_active";
+    pid_t owner=0;
+    AXError ownerError=AXUIElementGetPid(focused,&owner);
     CFRelease(focused);
+    if (ownerError!=kAXErrorSuccess || owner!=pid) return @"pointer_target_unverified";
     NSRunningApplication *app=[NSRunningApplication runningApplicationWithProcessIdentifier:pid];
     if (!app.active || [RXWindow(pid,0)[(id)kCGWindowNumber] unsignedIntValue]!=window) return @"window_not_active";
+    NSArray *windows=CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly|kCGWindowListExcludeDesktopElements,kCGNullWindowID));
+    if (!RXPointerWindowMatches(windows,pid,window,point,RXPointerWindowAtPoint(point))) return @"pointer_target_changed";
     return nil;
 }
 static NSDictionary *RXAct(NSDictionary *request) {
@@ -299,7 +288,7 @@ static NSDictionary *RXAct(NSDictionary *request) {
             }
             // Process-only posts skip WindowServer hit-testing and can arrive
             // with windowNumber=0. Route an ordinary foreground click through
-            // WindowServer only after both window-stack and AX ownership checks.
+            // WindowServer only after both mouse-target and AX ownership checks.
             sent=YES;dispatchMethod=@"window_server_mouse";
         }
     } else if ([action isEqualToString:@"type"]) {

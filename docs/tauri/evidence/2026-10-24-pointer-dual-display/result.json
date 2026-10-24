@@ -1,0 +1,77 @@
+{
+  "accessibility" : 1,
+  "input_posting" : true,
+  "scope" : "Only this disposable app's native button and local WKWebView HTML; production RXPointerBlock and RXPostWindowServerClick",
+  "ok" : 1,
+  "error" : "",
+  "cases" : [
+    {
+      "screen" : 0,
+      "bounds" : {
+        "y" : 338,
+        "x" : 740,
+        "width" : 440,
+        "height" : 368
+      },
+      "before" : 0,
+      "point" : {
+        "x" : 960,
+        "y" : 426
+      },
+      "after" : 1,
+      "kind" : "native",
+      "delta" : 1
+    },
+    {
+      "screen" : 0,
+      "bounds" : {
+        "y" : 338,
+        "x" : 740,
+        "width" : 440,
+        "height" : 368
+      },
+      "before" : 0,
+      "point" : {
+        "x" : 960,
+        "y" : 576
+      },
+      "after" : 1,
+      "kind" : "web",
+      "delta" : 1
+    },
+    {
+      "screen" : 1,
+      "bounds" : {
+        "y" : 371,
+        "x" : -1180,
+        "width" : 440,
+        "height" : 368
+      },
+      "before" : 1,
+      "point" : {
+        "x" : -960,
+        "y" : 459
+      },
+      "after" : 2,
+      "kind" : "native",
+      "delta" : 1
+    },
+    {
+      "screen" : 1,
+      "bounds" : {
+        "y" : 371,
+        "x" : -1180,
+        "width" : 440,
+        "height" : 368
+      },
+      "before" : 1,
+      "point" : {
+        "x" : -960,
+        "y" : 609
+      },
+      "after" : 2,
+      "kind" : "web",
+      "delta" : 1
+    }
+  ]
+}

@@ -18,7 +18,7 @@ func TestComputerUseNativePointerRouting(t *testing.T) {
 	defer cancel()
 	binary := filepath.Join(t.TempDir(), "pointer-test")
 	compile := exec.CommandContext(ctx, "/usr/bin/xcrun", "--sdk", "macosx", "clang", "-fobjc-arc", "-I.",
-		"-framework", "Foundation", "-framework", "ApplicationServices", "native_pointer_darwin.m", "testdata/native_pointer.m", "-o", binary)
+		"-framework", "AppKit", "-framework", "ApplicationServices", "native_pointer_darwin.m", "testdata/native_pointer.m", "-o", binary)
 	if output, err := compile.CombinedOutput(); err != nil {
 		t.Fatalf("compile native pointer tests: %v\n%s", err, output)
 	}

@@ -66,8 +66,13 @@ tab, escape, backspace, space, arrows, and common command-letter shortcuts.
 Typing is Unicode-aware and does not overwrite the user's clipboard.
 Coordinate clicks use normal foreground WindowServer routing. Before posting,
 the native host checks PostEvent access, the physical left button, the frontmost
-window at the exact point, AX ownership/window bounds, and the active focused
-window. An overlay or unverifiable target refuses all mouse events. The mouse
+mouse-down window at the exact point, its CG owner/ID/bounds, and the active
+AX focused window's owner/bounds. AppKit's public `windowNumberAtPoint` query
+distinguishes input-covering windows from click-through visual surfaces; a
+window-list rectangle alone cannot do so. A different or unverifiable mouse
+target refuses all mouse events. Remote web AX leaves need not expose an
+`AXWindow` attribute. Headless Go hosts lazily use `NSApplicationLoad`, which
+preserves a prohibited activation policy and creates no windows. The mouse
 pointer moves to the selected point; the tool does not restore it to another
 application afterwards. AX element presses remain app-targeted.
 
@@ -162,8 +167,10 @@ counted its AX button press. That could not independently prove coordinate-click
 delivery. The current fixture requires two counter increments (one AX press and
 one coordinate click) and starts with a non-text responder. The updated native
 gateway tests inspect real Core Graphics event objects with a non-posting test
-callback; they verify refusal sends zero events, window-stack ownership,
-overlays, negative origins and move/down/up envelopes. They do not establish
+callback; they verify refusal sends zero events, mouse-target ownership,
+input-covering versus click-through overlays, negative origins and move/down/up
+envelopes. A read-only worker-thread check verifies headless AppKit startup and
+real mouse-target lookup without creating a window or posting events. They do not establish
 real WindowServer delivery or Chromium acceptance without the packaged app's
 TCC grants and a completed interactive fixture run.
 
@@ -178,3 +185,9 @@ bounds are written to `result.json`. It never requests permissions itself,
 loads a user's browser profile, or sends messages. Remove the temporary
 Accessibility entry afterwards. This tests the native gateway, not the full
 agent/approval chain or Chromium specifically.
+
+On 2026-10-24 the disposable fixture independently counted one native and one
+WKWebView click on each of two displays, including the display at negative X.
+The temporary permission was then removed and read-only preflight confirmed
+both Accessibility and PostEvent unavailable. See the scoped
+[acceptance record](../tauri/evidence/2026-10-24-pointer-dual-display/README.md).

@@ -35,16 +35,33 @@ static void save(NSDictionary *result) {
     CGRect bounds;
     if (!info || !CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)info[(id)kCGWindowBounds],&bounds)) {[self finish:@"own window not available"];return;}
     int before=web?self.webClicks:self.nativeClicks;
-    NSString *blocked=RXPostWindowServerClick(getpid(),(CGWindowID)self.window.windowNumber,bounds,point,RXPointerBlock,CGEventPost);
-    if (blocked) {[self finish:blocked];return;}
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,700*NSEC_PER_MSEC),dispatch_get_main_queue(),^{
-        int after=web?self.webClicks:self.nativeClicks;
-        [self.cases addObject:@{@"kind":web?@"web":@"native",@"screen":@(self.screenIndex),@"bounds":RXBounds(bounds),@"point":@{@"x":@(point.x),@"y":@(point.y)},@"before":@(before),@"after":@(after),@"delta":@(after-before)}];
-        if (after-before!=1) {[self finish:@"independent click counter did not increase exactly once"];return;}
-        if (!web) {[self trial:YES];return;}
-        self.screenIndex++;
-        if (self.screenIndex<MIN(2,NSScreen.screens.count)) {[self moveAndTest];return;}
-        [self finish:nil];
+    CGWindowID window=(CGWindowID)self.window.windowNumber;
+    // The target app must keep servicing AX requests while the production
+    // gateway inspects it, as a separate desktop bridge process normally does.
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0),^{
+        NSString *blocked=RXPostWindowServerClick(getpid(),window,bounds,point,RXPointerBlock,CGEventPost);
+        dispatch_async(dispatch_get_main_queue(),^{
+            if (blocked) {
+                NSMutableArray *hits=[NSMutableArray array];
+                NSArray *windows=CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly|kCGWindowListExcludeDesktopElements,kCGNullWindowID));
+                for (NSDictionary *candidate in windows) {
+                    CGRect rect;
+                    if (!CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)candidate[(id)kCGWindowBounds],&rect) || !CGRectContainsPoint(rect,point)) continue;
+                    [hits addObject:@{@"pid":candidate[(id)kCGWindowOwnerPID]?:@0,@"window":candidate[(id)kCGWindowNumber]?:@0,@"layer":candidate[(id)kCGWindowLayer]?:@0,@"alpha":candidate[(id)kCGWindowAlpha]?:@0,@"bounds":RXBounds(rect)}];
+                }
+                [self.cases addObject:@{@"kind":web?@"web":@"native",@"screen":@(self.screenIndex),@"own_pid":@(getpid()),@"own_window":@(self.window.windowNumber),@"mouse_target":@(RXPointerWindowAtPoint(point)),@"bounds":RXBounds(bounds),@"point":@{@"x":@(point.x),@"y":@(point.y)},@"blocked":blocked,@"windows_at_point":hits}];
+                [self finish:blocked];return;
+            }
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW,700*NSEC_PER_MSEC),dispatch_get_main_queue(),^{
+                int after=web?self.webClicks:self.nativeClicks;
+                [self.cases addObject:@{@"kind":web?@"web":@"native",@"screen":@(self.screenIndex),@"bounds":RXBounds(bounds),@"point":@{@"x":@(point.x),@"y":@(point.y)},@"before":@(before),@"after":@(after),@"delta":@(after-before)}];
+                if (after-before!=1) {[self finish:@"independent click counter did not increase exactly once"];return;}
+                if (!web) {[self trial:YES];return;}
+                self.screenIndex++;
+                if (self.screenIndex<MIN(2,NSScreen.screens.count)) {[self moveAndTest];return;}
+                [self finish:nil];
+            });
+        });
     });
 }
 -(void)moveAndTest {

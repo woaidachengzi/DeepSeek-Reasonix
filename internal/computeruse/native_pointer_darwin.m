@@ -1,23 +1,41 @@
 //go:build darwin && cgo
 
 #import "native_pointer_darwin.h"
+#import <AppKit/AppKit.h>
 #include <stdatomic.h>
 #include <math.h>
 
-BOOL RXPointerWindowMatches(NSArray<NSDictionary *> *windows,pid_t pid,CGWindowID window,CGPoint point) {
-    if (!isfinite(point.x) || !isfinite(point.y) || pid<=0 || !window) return NO;
-    // WindowServer returns these front to back. A window from another app,
-    // another window of the same app, or an overlay must block global input.
+CGWindowID RXPointerWindowAtPoint(CGPoint point) {
+    if (!isfinite(point.x) || !isfinite(point.y)) return kCGNullWindowID;
+    // A Go sidecar has no NSApplication. NSApplicationLoad is AppKit's public
+    // startup entry for non-Cocoa hosts; unlike sharedApplication, it keeps a
+    // headless host's activation policy prohibited. No windows or event loop.
+    static dispatch_once_t startup;
+    static BOOL loaded=NO;
+    dispatch_once(&startup,^{loaded=NSApp!=nil || NSApplicationLoad();});
+    if (!loaded) return kCGNullWindowID;
+    // AppKit uses a bottom-left primary-display origin; CG/AX use top-left.
+    NSPoint location=NSMakePoint(point.x,CGRectGetMaxY(CGDisplayBounds(CGMainDisplayID()))-point.y);
+    NSInteger hit=[NSWindow windowNumberAtPoint:location belowWindowWithWindowNumber:0];
+    return hit>0 && hit<=UINT32_MAX?(CGWindowID)hit:kCGNullWindowID;
+}
+
+BOOL RXPointerWindowMatches(NSArray<NSDictionary *> *windows,pid_t pid,CGWindowID window,CGPoint point,CGWindowID mouseTarget) {
+    if (!isfinite(point.x) || !isfinite(point.y) || pid<=0 || !window || mouseTarget!=window) return NO;
+    // A rectangle is not an input hit test: Dock and click-through overlays
+    // can cover an entire display. Require the actual mouse-down target,
+    // then independently verify its owner, layer and bounds. No app allowlist.
     for (NSDictionary *candidate in windows) {
+        if ([candidate[(id)kCGWindowNumber] unsignedIntValue]!=window) continue;
+        id owner=candidate[(id)kCGWindowOwnerPID],layer=candidate[(id)kCGWindowLayer];
+        if (![owner isKindOfClass:NSNumber.class] || ![layer isKindOfClass:NSNumber.class]) return NO;
         id alpha=candidate[(id)kCGWindowAlpha];
-        if ([alpha isKindOfClass:NSNumber.class] && [alpha doubleValue]<=0) continue;
+        if ([alpha isKindOfClass:NSNumber.class] && [alpha doubleValue]<=0) return NO;
         CGRect bounds;
         id value=candidate[(id)kCGWindowBounds];
         if (![value isKindOfClass:NSDictionary.class] || !CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)value,&bounds)) return NO;
-        if (!CGRectContainsPoint(bounds,point)) continue;
-        return [candidate[(id)kCGWindowOwnerPID] intValue]==pid &&
-               [candidate[(id)kCGWindowNumber] unsignedIntValue]==window &&
-               [candidate[(id)kCGWindowLayer] intValue]==0;
+        if (!CGRectContainsPoint(bounds,point)) return NO;
+        return [owner intValue]==pid && [layer intValue]==0;
     }
     return NO;
 }

@@ -1,4 +1,5 @@
 #import "native_pointer_darwin.h"
+#import <AppKit/AppKit.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,18 +38,27 @@ static void routingTests(void) {
     CGRect main=CGRectMake(0,30,1920,983),left=CGRectMake(-1920,30,1920,983);
     CGPoint p=CGPointMake(117,195),negative=CGPointMake(-1803,195);
     NSDictionary *target=window(42,11,main,0,1);
-    CHECK(RXPointerWindowMatches(@[target],42,11,p));
-    CHECK(RXPointerWindowMatches(@[window(42,11,left,0,1)],42,11,negative));
-    CHECK(!RXPointerWindowMatches(@[target],42,11,negative));
-    CHECK(!RXPointerWindowMatches(@[window(99,12,main,0,1),target],42,11,p));
-    CHECK(!RXPointerWindowMatches(@[window(42,12,main,0,1),target],42,11,p));
-    CHECK(!RXPointerWindowMatches(@[window(99,12,main,25,1),target],42,11,p));
-    CHECK(RXPointerWindowMatches(@[window(99,12,CGRectMake(500,500,30,30),0,1),target],42,11,p));
-    CHECK(RXPointerWindowMatches(@[window(99,12,main,0,0),target],42,11,p));
-    CHECK(!RXPointerWindowMatches(@[],42,11,p));
-    CHECK(!RXPointerWindowMatches(@[@{}],42,11,p));
-    CHECK(!RXPointerWindowMatches(@[target],42,11,CGPointMake(NAN,195)));
-    CHECK(!RXPointerWindowMatches(@[target],42,11,CGPointMake(1920,195)));
+    CHECK(RXPointerWindowMatches(@[target],42,11,p,11));
+    CHECK(RXPointerWindowMatches(@[window(42,11,left,0,1)],42,11,negative,11));
+    CHECK(!RXPointerWindowMatches(@[target],42,11,negative,11));
+    // Actual input-covering windows block regardless of owner or layer.
+    CHECK(!RXPointerWindowMatches(@[window(99,12,main,0,1),target],42,11,p,12));
+    CHECK(!RXPointerWindowMatches(@[window(42,12,main,0,1),target],42,11,p,12));
+    CHECK(!RXPointerWindowMatches(@[window(99,12,main,25,1),target],42,11,p,12));
+    // A click-through surface can have alpha 1 and cover the entire screen.
+    CHECK(RXPointerWindowMatches(@[window(99,12,main,20,1),target],42,11,p,11));
+    CHECK(RXPointerWindowMatches(@[window(99,12,main,3,1),target],42,11,p,11));
+    CHECK(!RXPointerWindowMatches(@[target],42,11,p,0));
+    CHECK(!RXPointerWindowMatches(@[window(99,11,main,0,1)],42,11,p,11));
+    CHECK(!RXPointerWindowMatches(@[window(42,11,main,25,1)],42,11,p,11));
+    CHECK(!RXPointerWindowMatches(@[window(42,11,main,0,0)],42,11,p,11));
+    CHECK(!RXPointerWindowMatches(@[],42,11,p,11));
+    CHECK(!RXPointerWindowMatches(@[@{}],42,11,p,11));
+    CHECK(!RXPointerWindowMatches(@[@{(id)kCGWindowNumber:@11}],42,11,p,11));
+    NSMutableDictionary *missingLayer=[target mutableCopy];[missingLayer removeObjectForKey:(id)kCGWindowLayer];
+    CHECK(!RXPointerWindowMatches(@[missingLayer],42,11,p,11));
+    CHECK(!RXPointerWindowMatches(@[target],42,11,CGPointMake(NAN,195),11));
+    CHECK(!RXPointerWindowMatches(@[target],42,11,CGPointMake(1920,195),11));
 }
 static void dispatchTests(void) {
     for (NSString *reason in @[@"pointer_target_changed",@"pointer_target_unverified",@"input_permission_missing",@"pointer_busy",@"window_not_active"]) {
@@ -70,12 +80,33 @@ static void dispatchTests(void) {
     CHECK(!RXCreateWindowServerClick(CGPointMake(INFINITY,0),&move,&down,&up));
     CHECK(!move && !down && !up);
 }
+static void headlessHitTest(void) {
+    CHECK(NSApp==nil);
+    NSArray *windows=CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly|kCGWindowListExcludeDesktopElements,0));
+    CGPoint point=CGPointZero;
+    BOOL found=NO;
+    for (NSDictionary *candidate in windows) {
+        CGRect rect;
+        if ([candidate[(id)kCGWindowLayer] intValue]!=0 || !CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)candidate[(id)kCGWindowBounds],&rect) || rect.size.width<100 || rect.size.height<100) continue;
+        point=CGPointMake(CGRectGetMidX(rect),CGRectGetMidY(rect));found=YES;break;
+    }
+    if (!found) return;
+    dispatch_semaphore_t done=dispatch_semaphore_create(0);
+    __block CGWindowID hit=0;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT,0),^{
+        @autoreleasepool {hit=RXPointerWindowAtPoint(point);dispatch_semaphore_signal(done);}
+    });
+    CHECK(dispatch_semaphore_wait(done,dispatch_time(DISPATCH_TIME_NOW,5*NSEC_PER_SEC))==0);
+    CHECK(hit!=0 && NSApp!=nil && NSApp.activationPolicy==NSApplicationActivationPolicyProhibited);
+    CHECK([NSApp windows].count==0 && posts==0);
+}
 int main(void) {
     @autoreleasepool {
         CFDictionaryRef session=CGSessionCopyCurrentDictionary();
         if (!session) return 77;
         CFRelease(session);
         routingTests();dispatchTests();
+        headlessHitTest();
         puts("PASS native pointer: window ownership, overlays, negative origins, preflight refusals send zero events, valid move/down/up. No real input posted.");
     }
     return 0;
