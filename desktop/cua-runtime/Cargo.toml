@@ -1,0 +1,26 @@
+[package]
+name = "reasonix-cua-runtime"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Reasonix app-scoped adapter for the MIT Cua Driver SDK"
+
+[dependencies]
+cua-driver-sdk = { path = "../cua-source/libs/cua-driver/rust/crates/cua-driver-sdk" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+[build-dependencies]
+serde_json = "1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.5"
+
+[profile.release]
+opt-level = 2
+lto = false
+codegen-units = 16
+strip = "debuginfo"
+
+[workspace]

@@ -1,0 +1,12 @@
+{
+  "productName": "Reasonix Tauri",
+  "version": "0.1.59",
+  "identifier": "io.reasonix.desktop.takeover",
+  "bundle": {
+    "targets": ["app", "dmg"],
+    "externalBin": ["binaries/reasonix-desktop-bridge", "binaries/reasonix-cua-runtime"],
+    "resources": { "../cua-runtime/generated-notices/": "cua-notices/" },
+    "macOS": { "minimumSystemVersion": "14.0" }
+  },
+  "plugins": { "updater": { "endpoints": [] } }
+}

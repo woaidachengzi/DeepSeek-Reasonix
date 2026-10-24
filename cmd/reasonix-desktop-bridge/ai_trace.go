@@ -146,7 +146,7 @@ func aiTraceComputerUse(m provider.Message) json.RawMessage {
 		return nil
 	}
 	facts := map[string]json.RawMessage{}
-	for _, key := range []string{"dispatched", "dispatch_method", "dispatch_unknown", "blocked_reason", "state_changed", "input_verification", "unchanged", "image_geometry", "pointer_preview", "cursor", "click_evidence", "observation_validation", "observation_ttl_ms", "observation_age_ms", "next_action"} {
+	for _, key := range []string{"engine", "driver_version", "source_revision", "cua_action", "dispatched", "dispatch_method", "dispatch_unknown", "blocked_reason", "state_changed", "input_verification", "unchanged", "image_geometry", "pointer_preview", "cursor", "click_evidence", "observation_validation", "observation_ttl_ms", "observation_age_ms", "next_action"} {
 		if value := result[key]; value != nil {
 			facts[key] = value
 		}

@@ -8,6 +8,7 @@
     "dev": "vite",
     "tauri:dev": "node scripts/tauri-dev.mjs",
     "tauri:build": "node scripts/tauri-build.mjs",
+    "tauri:build:cua": "python3 ../cua-runtime/scripts/build.py --bundle",
     "build": "pnpm lint:hooks && pnpm check:waapi && pnpm check:scroll-writer && pnpm check:app-layers && pnpm check:wails-bindings && node scripts/check-css-syntax.mjs src/tauri/TauriVoiceInput.css src/styles.css src/components/RemoteConnectWizard.css src/components/TranscriptSelectionMenu.css src/components/MCPInteractionCard.css src/components/SubagentDetails.css && node scripts/check-z-index-tokens.mjs src/tauri/TauriVoiceInput.css src/styles.css src/components/RemoteConnectWizard.css && node scripts/check-theme-token-contract.mjs && tsc --noEmit && vite build && node scripts/check-bundle-budget.mjs",
     "check:bundle": "node scripts/check-bundle-budget.mjs",
     "check:scroll-writer": "node scripts/check-single-scroll-writer.mjs",

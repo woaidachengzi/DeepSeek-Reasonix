@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"image"
 	"image/jpeg"
+	_ "image/png"
 	"strings"
 )
 
@@ -12,18 +13,22 @@ import (
 // observation. It never captures additional screens or accepts external URLs.
 func PreviewImage(data string) string {
 	const prefix = "data:image/jpeg;base64,"
-	if !strings.HasPrefix(data, prefix) || len(data) > 5<<20 {
+	inputPrefix := prefix
+	if strings.HasPrefix(data, "data:image/png;base64,") {
+		inputPrefix = "data:image/png;base64,"
+	}
+	if !strings.HasPrefix(data, inputPrefix) || len(data) > 5<<20 {
 		return ""
 	}
-	raw, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(data, prefix))
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(data, inputPrefix))
 	if err != nil {
 		return ""
 	}
-	config, err := jpeg.DecodeConfig(bytes.NewReader(raw))
+	config, _, err := image.DecodeConfig(bytes.NewReader(raw))
 	if err != nil || config.Width < 1 || config.Height < 1 || config.Width > 4096 || config.Height > 4096 {
 		return ""
 	}
-	src, err := jpeg.Decode(bytes.NewReader(raw))
+	src, _, err := image.Decode(bytes.NewReader(raw))
 	if err != nil {
 		return ""
 	}

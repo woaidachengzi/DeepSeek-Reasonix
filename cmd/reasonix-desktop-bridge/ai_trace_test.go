@@ -120,6 +120,16 @@ func TestAITraceKeepsActualPointerPreview(t *testing.T) {
 	}
 }
 
+func TestAITraceKeepsCuaSourceAndEffectEvidence(t *testing.T) {
+	body := `{"engine":"cua","driver_version":"0.38.0","source_revision":"pinned-source","dispatched":false,"dispatch_unknown":true,"cua_action":{"route":"accessibility","effect":"unverifiable"}}`
+	facts := aiTraceComputerUse(provider.Message{Content: body})
+	for _, expected := range []string{`"source_revision":"pinned-source"`, `"effect":"unverifiable"`, `"dispatch_unknown":true`} {
+		if !strings.Contains(string(facts), expected) {
+			t.Fatalf("Cua diagnostic evidence omitted: %s", facts)
+		}
+	}
+}
+
 func TestAITraceKeepsClickEvidenceSeparateFromCursorFeedback(t *testing.T) {
 	body := `{"dispatched":true,"dispatch_method":"window_server_mouse","cursor":{"screen_x":-1000,"screen_y":200,"image_x":200,"image_y":100,"clicked":true},"click_evidence":{"input_delivery":"posted","target_verification":"window_only","application_effect":"unverified"}}`
 	messages := []provider.Message{{Role: provider.RoleTool, Name: "computer_use", ToolCallID: "click", Content: body}}

@@ -6,9 +6,21 @@ import (
 	"encoding/base64"
 	"image"
 	"image/jpeg"
+	"image/png"
 	"strings"
 	"testing"
 )
+
+func TestPreviewImageAcceptsCuaPNG(t *testing.T) {
+	var source bytes.Buffer
+	if err := png.Encode(&source, image.NewRGBA(image.Rect(0, 0, 640, 400))); err != nil {
+		t.Fatal(err)
+	}
+	thumb := PreviewImage("data:image/png;base64," + base64.StdEncoding.EncodeToString(source.Bytes()))
+	if !strings.HasPrefix(thumb, "data:image/jpeg;base64,") {
+		t.Fatal("Cua PNG did not publish a bounded JPEG preview")
+	}
+}
 
 func TestPreviewImageBoundedAndRejectsUntrustedInputs(t *testing.T) {
 	var source bytes.Buffer

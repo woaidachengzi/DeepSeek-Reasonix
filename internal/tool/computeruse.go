@@ -36,6 +36,18 @@ type ComputerUseCursor struct {
 
 type computerUseApproverKey struct{}
 type computerUsePreviewKey struct{}
+type computerUseLifetimeKey struct{}
+
+// The host run owns this context. Per-call timeouts must not extend it or let
+// a replacement task reuse the driver's element tokens and process.
+func WithComputerUseLifetime(ctx, lifetime context.Context) context.Context {
+	return context.WithValue(ctx, computerUseLifetimeKey{}, lifetime)
+}
+
+func ComputerUseLifetimeFrom(ctx context.Context) context.Context {
+	lifetime, _ := ctx.Value(computerUseLifetimeKey{}).(context.Context)
+	return lifetime
+}
 
 func WithComputerUseApprover(ctx context.Context, approver ComputerUseApprover) context.Context {
 	return context.WithValue(ctx, computerUseApproverKey{}, approver)

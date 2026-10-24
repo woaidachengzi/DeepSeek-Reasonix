@@ -72,6 +72,11 @@ benchmarks/context-maintenance-e2e/run/
 
 # Local scratch
 temp/
+/desktop/cua-source/
+/desktop/cua-runtime/target/
+/desktop/cua-runtime/generated-notices/
+/desktop/cua-runtime/scripts/__pycache__/
+/desktop/qa/computeruse/__pycache__/
 
 # Tauri migration test scratch (progress docs, not committed)
 /desktop/tauri/tests/

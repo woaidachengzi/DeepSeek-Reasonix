@@ -1,0 +1,142 @@
+import AppKit
+import WebKit
+
+final class Fixture: NSObject, NSApplicationDelegate {
+    let window = NSWindow(contentRect: NSRect(x: 180, y: 180, width: 720, height: 480), styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
+    let field = NSTextField(frame: NSRect(x: 30, y: 365, width: 600, height: 32))
+    let status = NSTextField(labelWithString: "等待临时授权，只测试本窗口。")
+    var count = 0
+    let web = WKWebView(frame: NSRect(x: 30, y: 20, width: 650, height: 225))
+    var busy = false
+    var process: Process!
+    var input: FileHandle!
+    var output: FileHandle!
+    var buffer = Data()
+    var sequence = 0
+    var timer: Timer?
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        window.title = "Reasonix Cua QA · 仅本地测试"
+        field.placeholderString = "Cua 验收文本框"
+        field.setAccessibilityLabel("Cua 验收文本框")
+        window.contentView!.addSubview(field)
+        let button = NSButton(title: "Cua 本地测试按钮", target: self, action: #selector(clicked))
+        button.frame = NSRect(x: 30, y: 310, width: 250, height: 36)
+        window.contentView!.addSubview(button)
+        status.frame = NSRect(x: 30, y: 265, width: 650, height: 30)
+        window.contentView!.addSubview(status)
+        web.loadHTMLString("<html><body><h3>本地网页验收</h3><label>网页测试文本 <input aria-label='网页测试文本'></label><button onclick='this.textContent=\"网页点击成功\"'>网页测试按钮</button></body></html>", baseURL: nil)
+        window.contentView!.addSubview(web)
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        process = Process()
+        process.executableURL = Bundle.main.executableURL!.deletingLastPathComponent().appendingPathComponent("reasonix-cua-runtime")
+        let stdin = Pipe(), stdout = Pipe()
+        process.standardInput = stdin; process.standardOutput = stdout
+        process.standardError = FileHandle.nullDevice
+        input = stdin.fileHandleForWriting; output = stdout.fileHandleForReading
+        do { try process.run() } catch { log(["launch_error": "\(error)"]); return }
+        DispatchQueue.global().async { self.log(self.call(["action":"status"])) }
+        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+            let flag = "/private/tmp/reasonix-cua-qa-command"
+            guard let command = try? String(contentsOfFile: flag, encoding: .utf8) else { return }
+            try? FileManager.default.removeItem(atPath: flag)
+            guard !self.busy else { return }
+            self.busy = true
+            DispatchQueue.global().async { self.run(command.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        }
+    }
+    @objc func clicked() { count += 1; status.stringValue = "本地按钮计数：\(count)" }
+    func call(_ request: [String:Any]) -> [String:Any] {
+        sequence += 1
+        let app = NSRunningApplication.current
+        let target: [String:Any] = ["pid":app.processIdentifier,"name":"Reasonix Cua QA","bundle_id":Bundle.main.bundleIdentifier!,"launch_time":app.launchDate!.timeIntervalSince1970]
+        let envelope: [String:Any] = ["protocol":1,"id":sequence,"request":request,"approved_target":target]
+        input.write(try! JSONSerialization.data(withJSONObject: envelope) + Data([10]))
+        while buffer.firstIndex(of: 10) == nil {
+            let chunk = output.availableData
+            if chunk.isEmpty { return ["error":"worker ended"] }
+            buffer.append(chunk)
+        }
+        let end = buffer.firstIndex(of: 10)!
+        let line = buffer.prefix(upTo: end); buffer.removeSubrange(...end)
+        return (try? JSONSerialization.jsonObject(with: line)) as? [String:Any] ?? ["error":"invalid reply"]
+    }
+    func log(_ value: [String:Any]) {
+        var small = value
+        if let images = small["images"] as? [[String:Any]] { small["images"] = images.map { ["mime_type":$0["mime_type"] ?? "", "bytes":($0["data_base64"] as? String)?.count ?? 0] } }
+        let data = try! JSONSerialization.data(withJSONObject: small, options: [.sortedKeys]) + Data([10])
+        let path = "/private/tmp/reasonix-cua-qa-results.jsonl"
+        if !FileManager.default.fileExists(atPath:path) { FileManager.default.createFile(atPath:path,contents:nil) }
+        let handle = try! FileHandle(forWritingTo: URL(fileURLWithPath:path)); handle.seekToEndOfFile(); handle.write(data); try? handle.close()
+    }
+    func run(_ mode: String) {
+        defer { DispatchQueue.main.async { self.busy = false } }
+        if mode == "coordinates" || mode == "second-screen" {
+            coordinateTest(second: mode == "second-screen"); return
+        }
+        if mode == "web" { webTest(); return }
+
+        var base: [String:Any] = ["pid":getpid(),"window_id":DispatchQueue.main.sync { window.windowNumber }]
+        base["action"] = "observe"
+        let observed = call(base); log(observed)
+        if mode == "observe" { return }
+        let elements = (observed["result"] as? [String:Any])?["elements"] as? [[String:Any]] ?? []
+        guard let token = elements.first(where: { ($0["label"] as? String) == "Cua 验收文本框" })?["element_token"] as? String else { log(["test_error":"native field token missing"]); return }
+        var type = base; type["action"] = "type"; type["element_token"] = token; type["text"] = "Reasonix Cua 本地输入 123"
+        log(call(type))
+        let second = call(base); log(second)
+        let refreshed = (second["result"] as? [String:Any])?["elements"] as? [[String:Any]] ?? []
+        guard let buttonToken = refreshed.first(where: { ($0["label"] as? String) == "Cua 本地测试按钮" })?["element_token"] as? String else { log(["test_error":"native button token missing"]); return }
+        var click = base; click["action"] = "click"; click["element_token"] = buttonToken
+        log(call(click))
+        log(call(base))
+        let check = DispatchQueue.main.sync { ["field_value":field.stringValue,"click_count":count] as [String:Any] }
+        log(["fixture_readback":check])
+        DispatchQueue.main.async { self.status.stringValue = "测试结束：\(check)" }
+    }
+    func observation() -> [String:Any] {
+        return call(["action":"observe","pid":getpid(),"window_id":DispatchQueue.main.sync { window.windowNumber }])
+    }
+    func rows(_ reply: [String:Any]) -> [[String:Any]] {
+        return (reply["result"] as? [String:Any])?["elements"] as? [[String:Any]] ?? []
+    }
+    func coordinateTest(second: Bool) {
+        if second {
+            let moved = DispatchQueue.main.sync { () -> Bool in
+                guard NSScreen.screens.count > 1 else { return false }
+                let frame = NSScreen.screens[1].visibleFrame
+                window.setFrameOrigin(NSPoint(x:frame.minX+80,y:frame.minY+80)); return true
+            }
+            if !moved { log(["test_error":"second display missing"]); return }
+        }
+        let state = observation(); log(state)
+        guard let button = rows(state).first(where: { ($0["label"] as? String) == "Cua 本地测试按钮" }),
+              let frame = button["screenshot_frame"] as? [String:Double],
+              let capture = (state["result"] as? [String:Any])?["capture_id"] as? String,
+              let x=frame["x"],let y=frame["y"],let w=frame["w"],let h=frame["h"] else { log(["test_error":"screenshot mapping missing"]); return }
+        var action: [String:Any] = ["action":"move","pid":getpid(),"window_id":DispatchQueue.main.sync { window.windowNumber },"x":x+w/2,"y":y+h/2,"delivery_mode":"foreground"]
+        log(call(action))
+        action["action"]="click"
+        action["capture_id"]=capture
+        let before = DispatchQueue.main.sync { count }
+        log(call(action)); log(observation())
+        let after = DispatchQueue.main.sync { count }
+        log(["coordinate_readback":["second_screen":second,"before":before,"after":after,"passed":after==before+1]])
+    }
+    func webTest() {
+        let state=observation(); log(state)
+        guard let fieldToken=rows(state).first(where: { ($0["label"] as? String)=="网页测试文本" && ($0["role"] as? String)=="AXTextField" })?["element_token"] as? String else { log(["test_error":"web field missing"]); return }
+        let win=DispatchQueue.main.sync { window.windowNumber }
+        log(call(["action":"type","pid":getpid(),"window_id":win,"element_token":fieldToken,"text":"Cua 网页输入验证","delivery_mode":"foreground"]))
+        let next=observation(); log(next)
+        guard let button=rows(next).first(where: { ($0["label"] as? String)=="网页测试按钮" })?["element_token"] as? String else { log(["test_error":"web button missing"]); return }
+        log(call(["action":"click","pid":getpid(),"window_id":win,"element_token":button,"delivery_mode":"foreground"]))
+        log(observation())
+        DispatchQueue.main.async { self.web.evaluateJavaScript("({value:document.querySelector('input').value,button:document.querySelector('button').textContent})") { result,error in self.log(["web_readback":result ?? "missing","error":error.map { "\($0)" } ?? ""]) } }
+    }
+    func applicationWillTerminate(_ notification: Notification) { input?.closeFile(); process?.terminate() }
+}
+let app = NSApplication.shared
+app.setActivationPolicy(.regular)
+let delegate = Fixture(); app.delegate = delegate
+app.run()
