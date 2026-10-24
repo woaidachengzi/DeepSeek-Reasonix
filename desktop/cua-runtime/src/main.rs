@@ -6,7 +6,8 @@ use serde_json::{json, Value};
 use std::io::{self, BufRead, Read, Write};
 const PROTOCOL: u32 = 1;
 const SOURCE_REVISION: &str = env!("REASONIX_CUA_SOURCE_REVISION");
-const MAX_REQUEST: usize = 64 * 1024;
+// Go's JSON encoder can escape a 16 KiB text field into 96 KiB on the wire.
+const MAX_REQUEST: usize = 128 * 1024;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
