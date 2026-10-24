@@ -16,6 +16,12 @@ type ComputerUseApprover interface {
 	ApproveComputerUse(context.Context, ComputerUseTarget) (bool, error)
 }
 
+// Browser profile attachment is a separate residual boundary. Ordinary app
+// consent does not authorize enabling debugging or attaching to logged-in tabs.
+type BrowserProfileApprover interface {
+	ApproveBrowserProfile(context.Context, ComputerUseTarget, int) (bool, error)
+}
+
 type ComputerUsePreview struct {
 	Target   ComputerUseTarget
 	WindowID int

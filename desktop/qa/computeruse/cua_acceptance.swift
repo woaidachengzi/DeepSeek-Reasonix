@@ -71,6 +71,24 @@ final class Fixture: NSObject, NSApplicationDelegate {
     }
     func run(_ mode: String) {
         defer { DispatchQueue.main.async { self.busy = false } }
+        if mode == "browser" {
+            let test = Process()
+            let directory = Bundle.main.executableURL!.deletingLastPathComponent()
+            test.executableURL = URL(fileURLWithPath:"/opt/homebrew/bin/python3")
+            test.arguments = [Bundle.main.resourceURL!.appendingPathComponent("browser_acceptance.py").path,
+                "--runtime",directory.appendingPathComponent("reasonix-cua-runtime").path,
+                "--state-helper",directory.appendingPathComponent("browser-fixture-info").path,
+                "--output",directory.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("browser-results").path,
+                "--allow-local-input"]
+            let pipe = Pipe(); test.standardOutput=pipe; test.standardError=pipe
+            do {
+                try test.run()
+                let output = pipe.fileHandleForReading.readDataToEndOfFile()
+                test.waitUntilExit()
+                log(["browser_acceptance_exit":test.terminationStatus,"output":String(data:output,encoding:.utf8) ?? ""])
+            } catch { log(["browser_acceptance_error":"\(error)"]) }
+            return
+        }
         if mode == "coordinates" || mode == "second-screen" {
             coordinateTest(second: mode == "second-screen"); return
         }

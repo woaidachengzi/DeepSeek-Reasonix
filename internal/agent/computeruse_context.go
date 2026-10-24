@@ -50,7 +50,7 @@ func computerUseContext(msgs []provider.Message) []provider.Message {
 		body["state"], _ = json.Marshal(state)
 		delete(body, "observation")
 		body["superseded_observation"] = json.RawMessage(`true`)
-		body["history_note"] = json.RawMessage(`"Old screenshot and AX tree omitted from model input; full result remains locally via session:tool_result. Observe again before input."`)
+		body["history_note"] = json.RawMessage(`"Old screenshot and AX/DOM tree omitted from model input; full result remains locally via session:tool_result. Observe again before input."`)
 		encoded, err := json.Marshal(body)
 		if err != nil {
 			continue

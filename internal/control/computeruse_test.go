@@ -67,6 +67,37 @@ func TestComputerUseConsentScopedAndNeverYolo(t *testing.T) {
 	if r := <-run(t.Context(), target); !r.allow || r.err != nil {
 		t.Fatalf("cached: %+v", r)
 	}
+	// Native app access must not answer the broader logged-in profile grant.
+	browserDone := make(chan result, 1)
+	go func() {
+		allow, err := a.ApproveBrowserProfile(t.Context(), target, 11)
+		browserDone <- result{allow, err}
+	}()
+	id = waitApprovalID(t, ids)
+	c.Approve(id, true, true, true)
+	if r := <-browserDone; !r.allow || r.err != nil {
+		t.Fatalf("browser grant: %+v", r)
+	}
+	if allow, err := a.ApproveBrowserProfile(t.Context(), target, 11); !allow || err != nil {
+		t.Fatal("same browser window did not reuse task grant", err)
+	}
+	go func() {
+		allow, err := a.ApproveBrowserProfile(t.Context(), target, 12)
+		browserDone <- result{allow, err}
+	}()
+	id = waitApprovalID(t, ids)
+	c.Approve(id, false, false, false)
+	if r := <-browserDone; r.allow || r.err != nil {
+		t.Fatalf("browser grant escaped its native window: %+v", r)
+	}
+	if !RequiresFreshHumanApprovalTool(BrowserProfileApprovalTool) || allowsFreshSessionGrantTool(BrowserProfileApprovalTool) {
+		t.Fatal("browser profile permits a generic remembered grant")
+	}
+	c.approval.grantSession(BrowserProfileApprovalTool, "*")
+	if c.approval.preApprovedForDecision(BrowserProfileApprovalTool, "another", nil, true) {
+		t.Fatal("generic grant bypassed browser profile approval")
+	}
+
 	target.PID = 43
 	done = run(t.Context(), target)
 	id = waitApprovalID(t, ids)

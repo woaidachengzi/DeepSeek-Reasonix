@@ -125,17 +125,32 @@ func (c *CuaRuntime) start(lifetime context.Context) error {
 }
 
 func (c *CuaRuntime) Call(ctx, lifetime context.Context, request CuaRequest, target *Target) (CuaReply, error) {
+	return c.call(ctx, lifetime, request, target, false)
+}
+
+// Only the interactive host may supply this approval; it is never a model field.
+func (c *CuaRuntime) CallWithBrowserApproval(ctx, lifetime context.Context, request CuaRequest, target *Target) (CuaReply, error) {
+	if request.Action != "browser_prepare" || target == nil {
+		return CuaReply{}, errors.New("browser approval applies only to an exact app attachment")
+	}
+	return c.call(ctx, lifetime, request, target, true)
+}
+
+func (c *CuaRuntime) call(ctx, lifetime context.Context, request CuaRequest, target *Target, browserApproved bool) (CuaReply, error) {
 	if lifetime == nil || lifetime.Done() == nil {
 		return CuaReply{}, errors.New("Cua requires a host-owned task lifetime")
 	}
 	if err := request.Validate(); err != nil {
 		return CuaReply{}, err
 	}
+	if request.Action == "browser_prepare" && !browserApproved {
+		return CuaReply{}, errors.New("browser attachment requires separate profile approval")
+	}
 	if lifetime.Err() != nil || ctx.Err() != nil {
 		return CuaReply{}, context.Canceled
 	}
 	if c.tasks != nil {
-		return c.task(lifetime).Call(ctx, lifetime, request, target)
+		return c.task(lifetime).call(ctx, lifetime, request, target, browserApproved)
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -157,11 +172,12 @@ func (c *CuaRuntime) Call(ctx, lifetime context.Context, request CuaRequest, tar
 	c.sequence++
 	id := c.sequence
 	body, _ := json.Marshal(struct {
-		Protocol int        `json:"protocol"`
-		ID       uint64     `json:"id"`
-		Request  CuaRequest `json:"request"`
-		Target   *Target    `json:"approved_target"`
-	}{cuaProtocol, id, request, target})
+		Protocol        int        `json:"protocol"`
+		ID              uint64     `json:"id"`
+		Request         CuaRequest `json:"request"`
+		Target          *Target    `json:"approved_target"`
+		BrowserApproved bool       `json:"browser_profile_approved"`
+	}{cuaProtocol, id, request, target, browserApproved})
 	type outcome struct {
 		value CuaReply
 		err   error
@@ -188,7 +204,12 @@ func (c *CuaRuntime) Call(ctx, lifetime context.Context, request CuaRequest, tar
 		completed <- outcome{value, err}
 	}()
 	// A transport failure after the write cannot prove that input was unsent.
-	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	timeout := 45 * time.Second
+	if request.Action == "browser_prepare" {
+		// The browser can require its own visible consent after host approval.
+		timeout = 90 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	select {
 	case result := <-completed:

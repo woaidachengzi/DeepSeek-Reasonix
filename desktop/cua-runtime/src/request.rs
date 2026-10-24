@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Target {
     pub pid: i32,
@@ -17,6 +17,8 @@ pub struct Envelope {
     pub id: u64,
     pub request: Request,
     pub approved_target: Option<Target>,
+    #[serde(default)]
+    pub browser_profile_approved: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -38,6 +40,14 @@ pub struct Request {
     pub amount: Option<u32>,
     pub query: Option<String>,
     pub delivery_mode: Option<String>,
+    pub target_id: Option<String>,
+    pub tab_id: Option<String>,
+    pub r#ref: Option<String>,
+    pub continuation: Option<String>,
+    #[serde(default)]
+    pub include_screenshot: bool,
+    #[serde(default)]
+    pub replace: bool,
 }
 
 impl Envelope {
@@ -67,6 +77,18 @@ impl Envelope {
         }
         if r.window_id == 0 {
             return Err("select an exact window_id".into());
+        }
+        if r.is_browser() {
+            return self.browser_plan();
+        }
+        if r.target_id.is_some()
+            || r.tab_id.is_some()
+            || r.r#ref.is_some()
+            || r.continuation.is_some()
+            || r.include_screenshot
+            || r.replace
+        {
+            return Err("browser fields require a browser action".into());
         }
         if r.action == "observe" {
             if r.query.as_ref().is_some_and(|v| v.len() > 256) {
@@ -208,6 +230,9 @@ mod tests {
             "screenshot_out_file",
             "_approved",
             "script",
+            "browser_profile_approved",
+            "profile",
+            "endpoint",
         ] {
             let mut v = json!({"action":"observe","pid":42,"window_id":11});
             v[key] = json!("untrusted");
@@ -222,7 +247,7 @@ mod tests {
 
     #[tokio::test]
     async fn adapter_arguments_match_the_actual_pinned_sdk_inventory() {
-        let driver = cua_driver_sdk::CuaDriver::create(None).unwrap();
+        let (driver, _) = crate::create_driver().unwrap();
         let inventory: Value =
             serde_json::from_str(&driver.list_tools_json().await.unwrap()).unwrap();
         let tools = inventory["tools"].as_array().unwrap();
@@ -238,6 +263,10 @@ mod tests {
             json!({"action":"hotkey","keys":["command","a"]}),
             json!({"action":"scroll","x":100.,"y":80.,"direction":"down","amount":2}),
             json!({"action":"move","x":100.,"y":80.}),
+            json!({"action":"browser_observe"}),
+            json!({"action":"browser_observe","target_id":"b1","tab_id":"t1","ref":"p1:e1","query":"field","include_screenshot":true,"continuation":"next"}),
+            json!({"action":"browser_click","target_id":"b1","tab_id":"t1","ref":"p1:e1"}),
+            json!({"action":"browser_type","target_id":"b1","tab_id":"t1","ref":"p1:e1","text":"test","replace":true}),
         ] {
             let mut request = fields;
             request["pid"] = json!(42);
@@ -257,6 +286,41 @@ mod tests {
                 }
             }
         }
+        let mut prep = envelope(json!({"action":"browser_prepare","pid":42,"window_id":11}));
+        prep.browser_profile_approved = true;
+        let (name, args) = prep.plan().unwrap();
+        let schema = &tools.iter().find(|tool| tool["name"] == name).unwrap()["inputSchema"];
+        assert!(args
+            .as_object()
+            .unwrap()
+            .keys()
+            .all(|key| schema["properties"].get(key).is_some()));
+        let session = driver
+            .create_trusted_session(cua_driver_sdk::TrustedSessionOptions {
+                public_session: "reasonix_browser_test".into(),
+                mode: cua_driver_sdk::SessionPermissionMode::Standard,
+                ttl_seconds: 60,
+                idle_ttl_seconds: 60,
+                capability_manifest_path: None,
+                bounded_manifest_path: None,
+            })
+            .unwrap();
+        let reply = session
+            .call_tool(
+                "get_browser_state".into(),
+                json!({"pid":2147483647,"window_id":1}).to_string(),
+            )
+            .await
+            .unwrap();
+        assert!(
+            !reply.text.contains("declare an explicit session"),
+            "{}",
+            reply.text
+        );
+        let state: Value = serde_json::from_str(&reply.structured_json.unwrap()).unwrap();
+        assert_eq!(state["status"], "refused");
+        assert_eq!(state["refusal"]["code"], "browser_route_unavailable");
+        session.close();
         driver.shutdown().await.unwrap();
     }
 }

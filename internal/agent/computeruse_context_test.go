@@ -119,3 +119,29 @@ func TestComputerUseContextLocalReplay(t *testing.T) {
 	}
 	t.Logf("local replay: messages=%d estimated tokens=%d -> %d; images=%d -> %d", len(messages), estimateMessagesTokens(before), estimateMessagesTokens(after), images(before), images(after))
 }
+
+func TestComputerUseContextBoundsDOMSnapshotsWithoutLosingLatestTabRefs(t *testing.T) {
+	msgs := desktopHistory(5)
+	for i, m := range msgs {
+		if m.Role != provider.RoleTool {
+			continue
+		}
+		body, _ := computerUseResult(m.Content)
+		body["state"] = json.RawMessage(`{"pid":42,"window_id":11,"mode":"snapshot","target_id":"b1","tab_id":"t1","outline":"old DOM outline","refs":[{"ref":"p1:e1","name":"field"}]}`)
+		body["summary"] = json.RawMessage(`"Cua window observation; inspect state and image."`)
+		encoded, _ := json.Marshal(body)
+		msgs[i].Content = string(encoded)
+	}
+	got := computerUseContext(msgs)
+	old, _ := computerUseResult(got[3].Content)
+	if strings.Contains(string(old["state"]), "old DOM outline") || strings.Contains(string(old["state"]), "p1:e1") {
+		t.Fatal("old DOM refs remained actionable")
+	}
+	latest, _ := computerUseResult(got[len(got)-1].Content)
+	if !strings.Contains(string(latest["state"]), `"tab_id":"t1"`) || !strings.Contains(string(latest["state"]), "p1:e1") {
+		t.Fatal("latest browser binding/refs were removed")
+	}
+	if !strings.Contains(msgs[3].Content, "old DOM outline") {
+		t.Fatal("stored DOM evidence was mutated")
+	}
+}

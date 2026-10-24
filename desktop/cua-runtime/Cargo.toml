@@ -6,6 +6,7 @@ license = "MIT"
 description = "Reasonix app-scoped adapter for the MIT Cua Driver SDK"
 
 [dependencies]
+async-trait = "0.1"
 cua-driver-sdk = { path = "../cua-source/libs/cua-driver/rust/crates/cua-driver-sdk" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
