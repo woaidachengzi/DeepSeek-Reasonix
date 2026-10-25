@@ -1,0 +1,18 @@
+{
+  "installed_version": "0.1.61",
+  "fixture_processes_stopped": true,
+  "task_cua_worker_reaped": true,
+  "reasonix_still_running": true,
+  "app_processes": [
+    {
+      "pid": 49867,
+      "ppid": 1,
+      "executable": "/Applications/Reasonix Tauri.app/Contents/MacOS/reasonix-tauri"
+    },
+    {
+      "pid": 49872,
+      "ppid": 49867,
+      "executable": "/Applications/Reasonix Tauri.app/Contents/MacOS/reasonix-desktop-bridge"
+    }
+  ]
+}

@@ -48,11 +48,19 @@ pub struct Request {
     pub include_screenshot: bool,
     #[serde(default)]
     pub replace: bool,
+    pub url: Option<String>,
+    pub label: Option<String>,
+    pub value: Option<String>,
+    pub gesture: Option<String>,
+    pub delta_x: Option<f64>,
+    pub delta_y: Option<f64>,
+    pub destination_ref: Option<String>,
 }
 
 impl Envelope {
     pub fn plan(&self) -> Result<(&'static str, Value), String> {
         let r = &self.request;
+        r.validate_browser_operation_fields()?;
         if r.action == "status" {
             return Ok(("check_permissions", json!({"prompt":false})));
         }
@@ -267,6 +275,11 @@ mod tests {
             json!({"action":"browser_observe","target_id":"b1","tab_id":"t1","ref":"p1:e1","query":"field","include_screenshot":true,"continuation":"next"}),
             json!({"action":"browser_click","target_id":"b1","tab_id":"t1","ref":"p1:e1"}),
             json!({"action":"browser_type","target_id":"b1","tab_id":"t1","ref":"p1:e1","text":"test","replace":true}),
+            json!({"action":"browser_navigate","target_id":"b1","tab_id":"t1","url":"https://example.test"}),
+            json!({"action":"browser_select","target_id":"b1","tab_id":"t1","ref":"p1:e1","value":""}),
+            json!({"action":"browser_pointer","target_id":"b1","tab_id":"t1","ref":"p1:e1","gesture":"hover"}),
+            json!({"action":"browser_pointer","target_id":"b1","tab_id":"t1","ref":"p1:e1","gesture":"scroll","delta_y":350.}),
+            json!({"action":"browser_pointer","target_id":"b1","tab_id":"t1","ref":"p1:e1","gesture":"drag","destination_ref":"p1:e2"}),
         ] {
             let mut request = fields;
             request["pid"] = json!(42);
@@ -279,6 +292,11 @@ mod tests {
             }
             if let Some(required) = schema["required"].as_array() {
                 for key in required {
+                    if key == "session" && name.starts_with("browser_") {
+                        // TrustedSession supplies its private transport session.
+                        assert!(args.get("session").is_none());
+                        continue;
+                    }
                     assert!(
                         args.get(key.as_str().unwrap()).is_some(),
                         "{name} lacks {key}"

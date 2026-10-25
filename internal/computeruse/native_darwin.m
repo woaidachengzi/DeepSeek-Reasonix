@@ -355,6 +355,17 @@ char *reasonix_computer_use(const char *input) {
             NSString *action=r[@"action"];
             if ([action isEqualToString:@"status"]) {
                 result=@{@"ok":@YES,@"state":@{@"platform":@"macos",@"accessibility":(AXIsProcessTrusted()?@YES:@NO),@"screen_recording":@(CGPreflightScreenCaptureAccess()),@"input_posting":@(CGPreflightPostEventAccess()),@"permission_prompted":@NO},@"dispatched":@NO};
+            } else if ([action isEqualToString:@"resolve_target"]) {
+                // Internal identity read only. Unlike runningApplications, a
+                // direct PID lookup does not depend on NSWorkspace's cached
+                // catalog being refreshed by a Cocoa main run loop.
+                pid_t pid=[r[@"pid"] intValue];
+                NSRunningApplication *app=pid>0?[NSRunningApplication runningApplicationWithProcessIdentifier:pid]:nil;
+                NSDictionary *target=@{};
+                if(app && !app.terminated && app.activationPolicy==NSApplicationActivationPolicyRegular) {
+                    target=@{@"pid":@(app.processIdentifier),@"name":app.localizedName?:@"",@"bundle_id":app.bundleIdentifier?:@"",@"launch_time":@([app.launchDate timeIntervalSince1970])};
+                }
+                result=@{@"ok":@YES,@"state":@{@"target":target},@"dispatched":@NO};
             } else if ([action isEqualToString:@"apps"]) {
                 NSMutableArray *apps=[NSMutableArray array];
                 for(NSRunningApplication *app in NSWorkspace.sharedWorkspace.runningApplications) {

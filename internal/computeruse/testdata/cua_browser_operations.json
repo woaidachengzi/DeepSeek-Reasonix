@@ -1,0 +1,636 @@
+[
+  {
+    "name": "valid-0-browser_navigate",
+    "valid": true,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_navigate",
+      "url": "https://example.test/path?q=中文"
+    }
+  },
+  {
+    "name": "valid-1-browser_navigate",
+    "valid": true,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_navigate",
+      "url": "http://127.0.0.1:12345/"
+    }
+  },
+  {
+    "name": "valid-2-browser_navigate",
+    "valid": true,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_navigate",
+      "url": "about:blank"
+    }
+  },
+  {
+    "name": "valid-3-browser_select",
+    "valid": true,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_select",
+      "ref": "p1:e1",
+      "label": "中文选项"
+    }
+  },
+  {
+    "name": "valid-4-browser_select",
+    "valid": true,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_select",
+      "ref": "p1:e1",
+      "value": ""
+    }
+  },
+  {
+    "name": "valid-5-browser_pointer",
+    "valid": true,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_pointer",
+      "ref": "p1:e1",
+      "gesture": "hover"
+    }
+  },
+  {
+    "name": "valid-6-browser_pointer",
+    "valid": true,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_pointer",
+      "ref": "p1:e1",
+      "gesture": "right_click"
+    }
+  },
+  {
+    "name": "valid-7-browser_pointer",
+    "valid": true,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_pointer",
+      "ref": "p1:e1",
+      "gesture": "double_click"
+    }
+  },
+  {
+    "name": "valid-8-browser_pointer",
+    "valid": true,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_pointer",
+      "ref": "p1:e1",
+      "gesture": "scroll",
+      "delta_y": 350
+    }
+  },
+  {
+    "name": "valid-9-browser_pointer",
+    "valid": true,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_pointer",
+      "ref": "p1:e1",
+      "gesture": "scroll",
+      "delta_x": -10000,
+      "delta_y": 0,
+      "delivery_mode": "foreground"
+    }
+  },
+  {
+    "name": "valid-10-browser_pointer",
+    "valid": true,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_pointer",
+      "ref": "p1:e1",
+      "gesture": "drag",
+      "destination_ref": "p1:e2"
+    }
+  },
+  {
+    "name": "invalid-0-browser_navigate",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_navigate",
+      "url": ""
+    }
+  },
+  {
+    "name": "invalid-1-browser_navigate",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_navigate",
+      "url": "javascript:alert(1)"
+    }
+  },
+  {
+    "name": "invalid-2-browser_navigate",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_navigate",
+      "url": "file:///tmp/test"
+    }
+  },
+  {
+    "name": "invalid-3-browser_navigate",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_navigate",
+      "url": "data:text/html,test"
+    }
+  },
+  {
+    "name": "invalid-4-browser_navigate",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_navigate",
+      "url": "chrome://settings"
+    }
+  },
+  {
+    "name": "invalid-5-browser_navigate",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_navigate",
+      "url": "about:config"
+    }
+  },
+  {
+    "name": "invalid-6-browser_navigate",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_navigate",
+      "url": "https://user:secret@example.test"
+    }
+  },
+  {
+    "name": "invalid-7-browser_navigate",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_navigate",
+      "url": "http://@example.test"
+    }
+  },
+  {
+    "name": "invalid-8-browser_navigate",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_navigate",
+      "url": "https:///example.test"
+    }
+  },
+  {
+    "name": "invalid-9-browser_navigate",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_navigate",
+      "url": "https://example.test\\other"
+    }
+  },
+  {
+    "name": "invalid-10-browser_navigate",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_navigate",
+      "url": "https://example.test/\npath"
+    }
+  },
+  {
+    "name": "invalid-11-browser_navigate",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_navigate",
+      "url": "example.test"
+    }
+  },
+  {
+    "name": "invalid-12-browser_navigate",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_navigate",
+      "url": "https://"
+    }
+  },
+  {
+    "name": "invalid-13-browser_navigate",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_navigate",
+      "url": "https://example.test",
+      "ref": "p1:e1"
+    }
+  },
+  {
+    "name": "invalid-14-browser_navigate",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_navigate",
+      "url": "https://example.test",
+      "include_screenshot": true
+    }
+  },
+  {
+    "name": "invalid-15-browser_navigate",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_navigate",
+      "url": "https://example.test",
+      "delivery_mode": "foreground"
+    }
+  },
+  {
+    "name": "invalid-16-browser_navigate",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "action": "browser_navigate",
+      "url": "https://example.test"
+    }
+  },
+  {
+    "name": "invalid-17-browser_select",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_select",
+      "ref": "p1:e1"
+    }
+  },
+  {
+    "name": "invalid-18-browser_select",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_select",
+      "ref": "p1:e1",
+      "label": "x",
+      "value": "x"
+    }
+  },
+  {
+    "name": "invalid-19-browser_select",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_select",
+      "value": "x"
+    }
+  },
+  {
+    "name": "invalid-20-browser_select",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_select",
+      "ref": "p1:e1",
+      "value": "x",
+      "delivery_mode": "foreground"
+    }
+  },
+  {
+    "name": "invalid-21-browser_select",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_select",
+      "ref": "p1:e1",
+      "value": "x",
+      "replace": true
+    }
+  },
+  {
+    "name": "invalid-22-browser_pointer",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_pointer",
+      "ref": "p1:e1",
+      "gesture": "click"
+    }
+  },
+  {
+    "name": "invalid-23-browser_pointer",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_pointer",
+      "ref": "p1:e1",
+      "gesture": "scroll"
+    }
+  },
+  {
+    "name": "invalid-24-browser_pointer",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_pointer",
+      "ref": "p1:e1",
+      "gesture": "scroll",
+      "delta_x": 0,
+      "delta_y": 0
+    }
+  },
+  {
+    "name": "invalid-25-browser_pointer",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_pointer",
+      "ref": "p1:e1",
+      "gesture": "scroll",
+      "delta_y": 10001
+    }
+  },
+  {
+    "name": "invalid-26-browser_pointer",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_pointer",
+      "ref": "p1:e1",
+      "gesture": "scroll",
+      "delta_y": 1,
+      "destination_ref": "p1:e2"
+    }
+  },
+  {
+    "name": "invalid-27-browser_pointer",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_pointer",
+      "ref": "p1:e1",
+      "gesture": "drag"
+    }
+  },
+  {
+    "name": "invalid-28-browser_pointer",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_pointer",
+      "ref": "p1:e1",
+      "gesture": "drag",
+      "destination_ref": "p1:e2",
+      "delta_y": 1
+    }
+  },
+  {
+    "name": "invalid-29-browser_pointer",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_pointer",
+      "ref": "p1:e1",
+      "gesture": "hover",
+      "delta_x": 1
+    }
+  },
+  {
+    "name": "invalid-30-browser_pointer",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_pointer",
+      "ref": "p1:e1",
+      "gesture": "double_click",
+      "destination_ref": "p1:e2"
+    }
+  },
+  {
+    "name": "invalid-31-browser_pointer",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_pointer",
+      "gesture": "hover",
+      "x": 5,
+      "y": 5
+    }
+  },
+  {
+    "name": "invalid-32-browser_pointer",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_pointer",
+      "ref": "p1:e1",
+      "gesture": "hover",
+      "element_token": "native"
+    }
+  },
+  {
+    "name": "invalid-33-browser_pointer",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_pointer",
+      "ref": "p1:e1",
+      "gesture": "hover",
+      "include_screenshot": true
+    }
+  },
+  {
+    "name": "invalid-34-browser_observe",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_observe",
+      "url": "https://example.test"
+    }
+  },
+  {
+    "name": "invalid-35-browser_type",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "browser_type",
+      "ref": "p1:e1",
+      "text": "x",
+      "value": "x"
+    }
+  },
+  {
+    "name": "invalid-36-observe",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "observe",
+      "gesture": "hover"
+    }
+  },
+  {
+    "name": "invalid-37-apps",
+    "valid": false,
+    "request": {
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "action": "apps",
+      "delta_y": 1
+    }
+  }
+]

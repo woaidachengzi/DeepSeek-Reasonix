@@ -1,0 +1,13 @@
+{
+  "reference": "/Users/jerry/Downloads/cua-main/libs/cua-driver/rust",
+  "pinned_revision": "e754cfec69c41400eb2aabde716c27d15607b2f0",
+  "compared_files": 773,
+  "differences": [
+    "Cargo.lock",
+    "crates/cua-driver-sdk/src/lib.rs",
+    "crates/cua-driver/src/serve.rs",
+    "crates/cua-driver/src/stop.rs",
+    "crates/cua-driver/src/cli.rs"
+  ],
+  "browser_tools_identical": true
+}

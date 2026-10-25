@@ -44,17 +44,17 @@ func TestPreviewImageBoundedAndRejectsUntrustedInputs(t *testing.T) {
 
 func TestApprovedTargetReplacementNeverCaptures(t *testing.T) {
 	c, f := fixture()
-	f.state = `{"apps":[{"pid":42,"name":"Test","bundle_id":"example.test","launch_time":100}]}`
+	f.state = `{"target":{"pid":42,"name":"Test","bundle_id":"example.test","launch_time":100}}`
 	target, err := c.Target(t.Context(), 42)
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.state = `{"apps":[{"pid":42,"name":"Test","bundle_id":"example.test","launch_time":200}]}`
+	f.state = `{"target":{"pid":42,"name":"Test","bundle_id":"example.test","launch_time":200}}`
 	f.calls = nil
 	if _, err = c.ExecuteForTarget(t.Context(), Request{Action: "observe", PID: 42}, target); err == nil {
 		t.Fatal("replaced app accepted")
 	}
-	if len(f.calls) != 1 || f.calls[0].Action != "apps" {
+	if len(f.calls) != 1 || f.calls[0].Action != "resolve_target" || f.calls[0].PID != 42 {
 		t.Fatal("captured before approval identity check")
 	}
 	ctx, cancel := context.WithCancel(t.Context())

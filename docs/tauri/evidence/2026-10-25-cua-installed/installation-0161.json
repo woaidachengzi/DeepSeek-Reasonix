@@ -1,0 +1,18 @@
+{
+  "version": "0.1.61",
+  "installed": "/Applications/Reasonix Tauri.app",
+  "backup": "/Users/jerry/temp/app/reasonix-tauri/desktop/takeover-backups.noindex/cua-0161-install-20261025T054443Z/Reasonix Tauri.app",
+  "previous_in_apps": "/Applications/.Reasonix-Cua-20261025T054443Z.noindex/previous.app",
+  "candidate": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos.noindex/Reasonix Tauri.app",
+  "codesign_deep_strict": "passed",
+  "runtime_identical_to_previous_accepted_candidate": true,
+  "binary_hashes": {
+    "reasonix-cua-runtime": "8427fda8739564c01d2ca5e30dad1bf6f7c696d0345c96791234b7e5b87e7d88",
+    "reasonix-desktop-bridge": "a300d73c7053969032f83a90c5761c3ad49c61c2ddce39375c7aa00e457b8ad9",
+    "reasonix-tauri": "abc8be7a0cfb1832de2f434f2cf29f5b3e5a1e6495342f180476328318b34b2e"
+  },
+  "installed_hashes_match": true,
+  "dmg": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.61_aarch64.dmg",
+  "dmg_sha256": "da7e3c81ce11dc50b0336c7638b532e4ab7abbdea65c1f2d797cc56565ab3482",
+  "dmg_readonly_contents_match_installation": true
+}

@@ -1,0 +1,53 @@
+warning: `/Users/jerry/.cargo/config` is deprecated in favor of `config.toml`
+  |
+  = help: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+warning: constant in pattern `kAXErrorFailure` should have an upper case name
+   --> /Users/jerry/temp/app/reasonix-tauri/desktop/cua-source/libs/cua-driver/rust/crates/platform-macos/src/tools/click.rs:153:9
+    |
+153 |         kAXErrorFailure | kAXErrorAttributeUnsupported | kAXErrorActionUnsupported
+    |         ^^^^^^^^^^^^^^^ help: convert the identifier to upper case: `K_AXERROR_FAILURE`
+    |
+    = note: `#[warn(non_upper_case_globals)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: constant in pattern `kAXErrorAttributeUnsupported` should have an upper case name
+   --> /Users/jerry/temp/app/reasonix-tauri/desktop/cua-source/libs/cua-driver/rust/crates/platform-macos/src/tools/click.rs:153:27
+    |
+153 |         kAXErrorFailure | kAXErrorAttributeUnsupported | kAXErrorActionUnsupported
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to upper case: `K_AXERROR_ATTRIBUTE_UNSUPPORTED`
+
+warning: constant in pattern `kAXErrorActionUnsupported` should have an upper case name
+   --> /Users/jerry/temp/app/reasonix-tauri/desktop/cua-source/libs/cua-driver/rust/crates/platform-macos/src/tools/click.rs:153:58
+    |
+153 |         kAXErrorFailure | kAXErrorAttributeUnsupported | kAXErrorActionUnsupported
+    |                                                          ^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to upper case: `K_AXERROR_ACTION_UNSUPPORTED`
+
+warning: `AXValueCreate` redeclared with a different signature
+   --> /Users/jerry/temp/app/reasonix-tauri/desktop/cua-source/libs/cua-driver/rust/crates/platform-macos/src/document_edit.rs:65:5
+    |
+ 65 |     fn AXValueCreate(the_type: u32, value_ptr: *const std::ffi::c_void) -> *const std::ffi::c_void;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this signature doesn't match the previous declaration
+    |
+   ::: /Users/jerry/temp/app/reasonix-tauri/desktop/cua-source/libs/cua-driver/rust/crates/platform-macos/src/ax/bindings.rs:127:5
+    |
+127 |     pub fn AXValueCreate(the_type: AXValueType, value_ptr: *const c_void) -> AXValueRef;
+    |     ------------------------------------------------------------------------------------ `AXValueCreate` previously declared here
+    |
+    = note: expected `unsafe extern "C" fn(i32, *const c_void) -> *mut __AXValue`
+               found `unsafe extern "C" fn(u32, *const c_void) -> *const c_void`
+    = note: `#[warn(clashing_extern_declarations)]` on by default
+
+warning: `platform-macos` (lib) generated 4 warnings
+   Compiling reasonix-cua-runtime v0.1.0 (/Users/jerry/temp/app/reasonix-tauri/desktop/cua-runtime)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.11s
+     Running unittests src/main.rs (desktop/cua-runtime/target/debug/deps/reasonix_cua_runtime-deb6d901e477a0d4)
+
+running 7 tests
+test browser::tests::profile_consent_does_not_cover_other_residual_operations_or_windows ... ok
+test request::tests::agent_cannot_supply_reserved_driver_or_file_arguments ... ok
+test request::tests::only_explicit_window_and_observed_tokens_reach_the_sdk ... ok
+test browser::tests::dom_routes_do_not_accept_native_pixels_or_authority_overrides ... ok
+test browser::tests::browser_ids_are_bound_to_native_window_and_process_incarnation ... ok
+test browser::tests::browser_operation_wire_contract_matches_the_host ... ok
+test request::tests::adapter_arguments_match_the_actual_pinned_sdk_inventory ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.05s

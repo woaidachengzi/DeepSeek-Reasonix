@@ -1,0 +1,30 @@
+{
+  "app": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos.noindex/Reasonix Tauri.app",
+  "dmg": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.60_aarch64.dmg",
+  "version": "0.1.60",
+  "bundle_id": "io.reasonix.desktop.takeover",
+  "codesign_deep_strict": "passed",
+  "runtime_unsigned_code_matches_accepted_qa": true,
+  "runtime_unsigned_sha256": "dd62db75e91ceda3c1a6111a8ba47e566ce8a914f4c054b3d19ab0c331ad677c",
+  "runtime_bundle_cdhash": "fdaf38e519e9d88035c9a407a7d0e3f25f09fbb0",
+  "runtime_qa_cdhash": "4e511e37aead67b0201cc52b05c23eea490508ee",
+  "signature_difference": "Tauri applies hardened runtime signing; QA used a plain ad hoc signature. Unsigned executable bytes match.",
+  "notice_inventory": true,
+  "binaries": {
+    "reasonix-cua-runtime": {
+      "sha256": "8427fda8739564c01d2ca5e30dad1bf6f7c696d0345c96791234b7e5b87e7d88",
+      "bytes": 27324160
+    },
+    "reasonix-desktop-bridge": {
+      "sha256": "be5d8980f3c6f05bad6286dfffc5c651c58eb7039cb14d933b0d2fa91c243cc6",
+      "bytes": 53793664
+    },
+    "reasonix-tauri": {
+      "sha256": "71fdb44a1b9f14338b8674b556e205c4eb5166398fb22663b782ac12ca3a66ca",
+      "bytes": 35668656
+    }
+  },
+  "dmg_sha256": "7940435889daf3b4488b1c9523bde8df4d5ee68bb92acc4b39365ca4cd82dbe8",
+  "dmg_readonly_mount_signature_and_binary_hashes": "passed",
+  "dmg_checksum_verification": "passed"
+}

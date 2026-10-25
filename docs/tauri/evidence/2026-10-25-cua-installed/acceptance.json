@@ -1,0 +1,35 @@
+{
+  "passed": true,
+  "installed_version": "0.1.61",
+  "session_id": "tauri-tauri-e6f5b129-557e-4220-81ad-17553c493f05",
+  "model": "deepseek/deepseek-flash",
+  "engine": "cua",
+  "driver_version": "0.38.0",
+  "source_revision": "e754cfec69c41400eb2aabde716c27d15607b2f0",
+  "permissions": {
+    "accessibility": true,
+    "screen_recording": true
+  },
+  "fixture": {
+    "pid": 49919,
+    "window_id": 1299,
+    "url": "file:///private/tmp/reasonix-cua-installed-0161-final/fixture.html",
+    "next_url": "http://127.0.0.1:53330/next",
+    "state_path": "/private/tmp/reasonix-cua-installed-0161-final/page-state.json"
+  },
+  "postconditions": {
+    "text": "Reasonix Cua installed 中文 2026",
+    "choice": "zh",
+    "clicks": 1,
+    "trusted_click": true,
+    "navigated": true
+  },
+  "destination_dom_verified": true,
+  "browser_click_requests": 1,
+  "desktop_call_count": 24,
+  "all_desktop_calls_use_only_fixture_pid": true,
+  "non_desktop_tools": [
+    "update_goal"
+  ],
+  "note": "Internal model goal completion was also recorded; all desktop operations used computer_use. No shell or alternate UI tools were used."
+}

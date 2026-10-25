@@ -3,8 +3,53 @@ package computeruse
 import (
 	"context"
 	"encoding/json"
+	"math"
+	"os"
 	"testing"
 )
+
+// Shared with the Rust worker: both ends must accept/refuse the same model wire
+// requests, including an explicitly empty option value and gesture bounds.
+func TestCuaBrowserOperationWireContract(t *testing.T) {
+	data, err := os.ReadFile("testdata/cua_browser_operations.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		Name    string     `json:"name"`
+		Valid   bool       `json:"valid"`
+		Request CuaRequest `json:"request"`
+	}
+	if err := json.Unmarshal(data, &cases); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			if err := tc.Request.Validate(); (err == nil) != tc.Valid {
+				t.Fatalf("validation = %v, want valid %v", err, tc.Valid)
+			}
+			if tc.Valid {
+				wire, err := json.Marshal(tc.Request)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var decoded CuaRequest
+				if err := json.Unmarshal(wire, &decoded); err != nil || decoded.Validate() != nil {
+					t.Fatalf("request lost during host serialization: %s %v", wire, err)
+				}
+				if tc.Request.Value != nil && *tc.Request.Value == "" && (decoded.Value == nil || *decoded.Value != "") {
+					t.Fatal("explicit empty option value lost")
+				}
+			}
+		})
+	}
+	for _, n := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		r := CuaRequest{Action: "browser_pointer", PID: 42, WindowID: 11, TargetID: "b1", TabID: "t1", Ref: "p1:e1", Gesture: "scroll", DeltaY: &n}
+		if r.Validate() == nil {
+			t.Fatal("nonfinite scroll accepted")
+		}
+	}
+}
 
 func TestCuaBrowserArgumentsAndHostOnlyApproval(t *testing.T) {
 	for _, raw := range []string{

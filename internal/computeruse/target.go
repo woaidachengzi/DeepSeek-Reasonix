@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 )
 
 type Target struct {
@@ -27,20 +28,25 @@ func (c *Controller) Target(ctx context.Context, pid int) (Target, error) {
 
 // target requires both native-operation locks to be held by the caller.
 func (c *Controller) target(ctx context.Context, pid int) (Target, error) {
-	v, err := c.backend.call(ctx, Request{Action: "apps"})
+	if pid < 1 || pid > math.MaxInt32 {
+		return Target{}, errors.New("select a running app PID returned by apps")
+	}
+	// NSWorkspace.runningApplications requires a Cocoa main run loop to update.
+	// The Go bridge has no such loop; resolve the exact PID directly instead of
+	// trusting its cached catalog when an app starts or restarts during a session.
+	v, err := c.backend.call(ctx, Request{Action: "resolve_target", PID: pid})
 	if err != nil {
 		return Target{}, err
 	}
-	var catalog struct {
-		Apps []Target `json:"apps"`
+	var state struct {
+		Target Target `json:"target"`
 	}
-	if !v.OK || json.Unmarshal(v.State, &catalog) != nil {
+	if !v.OK || json.Unmarshal(v.State, &state) != nil {
 		return Target{}, errors.New("unable to resolve computer control app")
 	}
-	for _, app := range catalog.Apps {
-		if app.PID == pid && app.Name != "" && app.BundleID != "" && app.LaunchTime > 0 {
-			return app, nil
-		}
+	app := state.Target
+	if app.PID == pid && app.Name != "" && app.BundleID != "" && finite(app.LaunchTime) && app.LaunchTime > 0 {
+		return app, nil
 	}
 	return Target{}, errors.New("selected app is unavailable; list apps again")
 }

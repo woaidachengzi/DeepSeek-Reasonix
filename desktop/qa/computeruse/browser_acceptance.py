@@ -6,6 +6,8 @@ Chrome user-data-dir and a local fixture only. The flag acknowledges that input
 will be sent to this disposable page. No accounts, credentials or models used.
 """
 import argparse
+import functools
+import http.server
 import json
 import os
 from pathlib import Path
@@ -14,6 +16,7 @@ import shutil
 import signal
 import subprocess
 import tempfile
+import threading
 import time
 
 HTML = '''<!doctype html><meta charset="utf-8"><title>Reasonix Cua DOM QA</title>
@@ -21,7 +24,20 @@ HTML = '''<!doctype html><meta charset="utf-8"><title>Reasonix Cua DOM QA</title
 <label>姓名<input aria-label="姓名" value="initial"></label>
 <label>内容<textarea aria-label="内容"></textarea></label>
 <button onclick="this.textContent='本地提交成功 1';document.querySelector('output').textContent='仅本地测试，已完成'">提交本地测试</button>
-<output aria-live="polite">等待测试</output>'''
+<output aria-live="polite">等待测试</output>
+<label>选项<select aria-label="选项" onchange="document.getElementById('selected').textContent='selected='+this.value">
+<option value="">空选项</option><option value="zh">中文选项</option></select></label>
+<output id="selected">selected=initial</output>
+<button aria-label="指针目标" onmouseenter="document.getElementById('hover').textContent='hover=ok'"
+oncontextmenu="event.preventDefault();document.getElementById('context').textContent='context=ok'"
+ondblclick="document.getElementById('double').textContent='double=ok'">指针目标</button>
+<output id="hover">hover=pending</output><output id="context">context=pending</output><output id="double">double=pending</output>
+<div role="region" aria-label="滚动区域" style="height:90px;width:300px;overflow:auto"
+onscroll="document.getElementById('scroll').textContent=this.scrollTop>0?'scroll=ok':'scroll=pending'">
+<div style="height:800px">本地滚动内容</div></div><output id="scroll">scroll=pending</output>
+<button aria-label="拖拽起点" onpointerdown="window.qaDragging=true">拖拽起点</button>
+<button aria-label="拖拽终点" onpointerup="if(window.qaDragging)document.getElementById('drag').textContent='drag=ok';window.qaDragging=false">拖拽终点</button>
+<output id="drag">drag=pending</output>'''
 
 
 def main():
@@ -40,6 +56,13 @@ def main():
     root = Path(tempfile.mkdtemp(prefix='dom-',dir=args.output))
     html = root / 'fixture.html'
     html.write_text(HTML)
+    (root / 'next.html').write_text('<!doctype html><meta charset="utf-8"><title>Reasonix Navigation QA</title><h1>本地导航完成</h1><button>新页面按钮</button>')
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, *_): pass
+    server = http.server.ThreadingHTTPServer(('127.0.0.1',0),functools.partial(Handler,directory=str(root)))
+    server_thread = threading.Thread(target=server.serve_forever,daemon=True)
+    server_thread.start()
+    next_url = f'http://127.0.0.1:{server.server_port}/next.html'
     log = (root / 'evidence.jsonl').open('w')
     browser = worker = None
     sequence = 0
@@ -101,6 +124,13 @@ def main():
             found = [r['ref'] for r in state['refs'] if r['name']==name]
             assert len(found)==1, 'fixture DOM ref not unique: '+name
             return found[0]
+        def wait_for(text):
+            deadline = time.monotonic()+5
+            while True:
+                state = observe()
+                if text in json.dumps(state,ensure_ascii=False): return state
+                if time.monotonic() >= deadline: raise AssertionError('fixture postcondition missing: '+text)
+                time.sleep(.1)
         observed = observe()
         text = 'Reasonix DOM 中文验收 123'
         typed = call(dict(anchor,action='browser_type',ref=ref(observed,'姓名'),text=text,replace=True))
@@ -115,6 +145,27 @@ def main():
         assert not cleared['is_error']
         observed = observe()
         assert any(r['name']=='姓名' and r.get('value') in ('',None) for r in observed['refs']), 'clear failed'
+        selected = call(dict(anchor,action='browser_select',ref=ref(observed,'选项'),label='中文选项'))
+        assert not selected['is_error'] and selected['result']['changed'] and selected['result']['value']=='zh', selected
+        observed = wait_for('selected=zh')
+        selected = call(dict(anchor,action='browser_select',ref=ref(observed,'选项'),value=''))
+        assert not selected['is_error'] and selected['result']['value']=='', selected
+        observed = observe()
+        selected = call(dict(anchor,action='browser_select',ref=ref(observed,'选项'),value=''))
+        assert not selected['is_error'] and selected['result']['changed'] is False, selected
+        for gesture,postcondition in [('hover','hover=ok'),('right_click','context=ok'),('double_click','double=ok')]:
+            observed = observe()
+            pointed = call(dict(anchor,action='browser_pointer',ref=ref(observed,'指针目标'),gesture=gesture,delivery_mode='foreground'))
+            assert not pointed['is_error'], pointed
+            wait_for(postcondition)
+        observed = observe()
+        scrolled = call(dict(anchor,action='browser_pointer',ref=ref(observed,'滚动区域'),gesture='scroll',delta_y=240,delivery_mode='foreground'))
+        assert not scrolled['is_error'], scrolled
+        wait_for('scroll=ok')
+        observed = observe()
+        dragged = call(dict(anchor,action='browser_pointer',ref=ref(observed,'拖拽起点'),destination_ref=ref(observed,'拖拽终点'),gesture='drag',delivery_mode='foreground'))
+        assert not dragged['is_error'], dragged
+        observed = wait_for('drag=ok')
         clicked = call(dict(anchor,action='browser_click',ref=ref(observed,'提交本地测试'),delivery_mode='foreground'))
         assert not clicked['is_error']
         final = observe(True)
@@ -123,9 +174,21 @@ def main():
         # The adapter must reject a known tab paired with a different native window.
         refused = call(dict(anchor,action='browser_click',ref='p1:e1'),window_id=window+1)
         assert refused['is_error'] and refused['completion']=='not_started'
-        record({'ok':True,'checks':['profile-consent','exact-tab','Chinese-replace-readback','no-duplicate','clear','DOM-click-readback','CDP-screenshot','cross-window-refusal']})
+        for action,fields in [('browser_navigate',{'url':next_url}),('browser_select',{'ref':'p1:e1','value':''}),('browser_pointer',{'ref':'p1:e1','gesture':'hover'})]:
+            refused = call(dict(anchor,action=action,**fields),window_id=window+1)
+            assert refused['is_error'] and refused['completion']=='not_started', refused
+        old_ref = ref(final,'本地提交成功 1')
+        navigated = call(dict(anchor,action='browser_navigate',url=next_url))
+        assert not navigated['is_error'] and navigated['result']['refs_invalidated'], navigated
+        stale = call(dict(anchor,action='browser_click',ref=old_ref,delivery_mode='foreground'))
+        assert stale['is_error'] and 'browser_ref_stale' in json.dumps(stale), stale
+        wait_for('本地导航完成')
+        record({'ok':True,'checks':['profile-consent','exact-tab','Chinese-replace-readback','no-duplicate','clear','DOM-select-label','DOM-select-empty-value','DOM-select-no-op','trusted-hover','trusted-right-click','trusted-double-click','trusted-scroll','trusted-drag','DOM-click-readback','CDP-screenshot','cross-window-refusal','navigate-readback','navigation-invalidates-refs']})
         print(json.dumps({'ok':True,'evidence':str(root/'evidence.jsonl')},ensure_ascii=False),flush=True)
     finally:
+        server.shutdown()
+        server.server_close()
+        server_thread.join(timeout=5)
         if worker:
             worker.stdin.close()
             try: worker.wait(timeout=5)

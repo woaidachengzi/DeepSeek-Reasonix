@@ -152,6 +152,49 @@ func TestCuaBrowserProjectedFailuresRemainUncertain(t *testing.T) {
 	}
 }
 
+func TestCuaBrowserMutationAcknowledgements(t *testing.T) {
+	for _, tc := range []struct {
+		name, action, result, method string
+		unknown, noChange            bool
+	}{
+		{"navigation", "browser_navigate", `{"status":"ok","target_id":"b1","tab_id":"t1","url":"https://example.test","refs_invalidated":true}`, "cua_browser_navigation", false, false},
+		{"navigation-missing-invalidation", "browser_navigate", `{"status":"ok","target_id":"b1","tab_id":"t1","url":"https://example.test"}`, "", true, false},
+		{"navigation-wrong-tab", "browser_navigate", `{"status":"ok","target_id":"b1","tab_id":"foreign","url":"https://example.test","refs_invalidated":true}`, "", true, false},
+		{"selection", "browser_select", `{"status":"ok","target_id":"b1","tab_id":"t1","ref":"p1:e1","changed":true,"value":""}`, "cua_dom_select", false, false},
+		{"selection-already-selected", "browser_select", `{"status":"ok","target_id":"b1","tab_id":"t1","ref":"p1:e1","changed":false,"value":""}`, "", false, true},
+		{"selection-wrong-value", "browser_select", `{"status":"ok","target_id":"b1","tab_id":"t1","ref":"p1:e1","changed":true,"value":"other"}`, "", true, false},
+		{"selection-missing-change", "browser_select", `{"status":"ok","target_id":"b1","tab_id":"t1","ref":"p1:e1","value":""}`, "", true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			empty := ""
+			r := computeruse.CuaRequest{Action: tc.action, TargetID: "b1", TabID: "t1", Ref: "p1:e1", URL: "https://example.test", Value: &empty}
+			reply := computeruse.CuaReply{Result: json.RawMessage(tc.result)}
+			body, _, err := (computerUse{}).cuaResult(t.Context(), r, nil, reply)
+			var facts map[string]any
+			if err != nil || json.Unmarshal([]byte(body), &facts) != nil || (facts["dispatch_unknown"] == true) != tc.unknown || (facts["no_change"] == true) != tc.noChange || facts["dispatched"] != (tc.method != "") || tc.method != "" && facts["dispatch_method"] != tc.method {
+				t.Fatalf("incorrect mutation acknowledgement: %s %v", body, err)
+			}
+			if tc.method != "" || tc.noChange {
+				reply.IsError = true
+				if cuaBrowserMutationAcknowledged(r, reply) {
+					t.Fatal("failed reply acknowledged as successful mutation")
+				}
+				reply.IsError = false
+				reply.Completion = "unknown"
+				if cuaBrowserMutationAcknowledged(r, reply) {
+					t.Fatal("uncertain reply acknowledged as successful mutation")
+				}
+			}
+		})
+	}
+	// Pointer delivery shares the existing partial-input contract.
+	raw := json.RawMessage(`{"effect":"partial","route":"trusted_input","delivery":{"mode":"foreground","delivered_count":1},"error":{"code":"browser_input_incomplete"}}`)
+	body, _, _ := (computerUse{}).cuaResult(t.Context(), computeruse.CuaRequest{Action: "browser_pointer"}, nil, computeruse.CuaReply{IsError: true, Action: raw, Result: raw})
+	if !strings.Contains(body, `"dispatch_unknown":true`) || !strings.Contains(body, `"dispatched":true`) {
+		t.Fatalf("pointer partial delivery lost: %s", body)
+	}
+}
+
 func TestCuaBrowserFollowUpsUsePublicSchemaAndNoPrivateSession(t *testing.T) {
 	request := computeruse.CuaRequest{Action: "browser_type", PID: 42, WindowID: 11, TargetID: "bt-live", TabID: "tab-live"}
 	raw := json.RawMessage(`{"effect":"unverifiable","next_call":{"tool":"get_browser_state","arguments":{"session":"reasonix_browser","target_id":"foreign","tab_id":"foreign","script":"ignored"}}}`)

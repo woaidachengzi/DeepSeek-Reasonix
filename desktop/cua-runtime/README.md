@@ -42,6 +42,10 @@ the diagnostic evidence; responses with a mismatched revision are rejected.
 
 The host resolves app PID/bundle ID/launch time before consent, checks again after
 consent, and the Rust worker independently checks the approved app incarnation.
+The host resolves the exact PID directly rather than reading
+`NSWorkspace.runningApplications`: that catalog updates only through a Cocoa
+main run loop, which the long-running Go bridge does not run. This keeps newly
+launched/restarted applications available without reusing an old process grant.
 Only app/window-scoped reads and allowlisted native or typed browser input actions are exposed.
 The existing app consent, workspace restriction, stop, and screenshot PiP remain.
 `effect=confirmed` means the driver's stated evidence was verified; it never means
@@ -71,6 +75,21 @@ remain available for browsers that cannot attach and for other applications:
    `replace=true` replaces the field, and empty text with replace clears it.
    Observe the postcondition to establish application success. Never repeat an
    uncertain submit without checking whether the previous one completed.
+6. `browser_navigate` navigates the exact bound tab to an absolute HTTP(S) URL
+   without embedded credentials, or `about:blank`. All previous DOM refs become
+   invalid; observe the destination before further input. Internal browser pages,
+   local file URLs and JavaScript/data URLs are not navigation destinations.
+7. `browser_select` requires a native HTML select ref and exactly one option
+   `label` or `value`. Empty values are preserved. Input/change events are
+   synthetic; verify that the page accepted them. An already-selected option is
+   reported as `no_change=true`, not dispatched input.
+8. `browser_pointer` takes a current DOM `ref` and `gesture` of `hover`,
+   `right_click`, `double_click`, `scroll` or `drag`. Scroll takes nonzero
+   `delta_x`/`delta_y` in CSS pixels (absolute value at most 10000); drag takes a
+   `destination_ref` in the same frame. The origin must declare the appropriate
+   pointer/scroll capability. Only trusted CDP input is exposed, with background
+   delivery by default and explicit foreground delivery after inspecting a
+   refusal. Native screenshot coordinates are not accepted here.
 
 Example after receiving the real target/tab/ref values:
 
@@ -99,6 +118,11 @@ file-upload or output-file API is exposed. Background AX/CDP input may leave the
 physical mouse stationary. The original whale feedback belongs to the native
 engine; a Cua background action is not drawn as a fake physical cursor.
 Screenshots continue to appear in the existing PiP.
+
+The regular `/Applications/Reasonix Tauri.app` is not necessarily the Cua edition.
+The bundle must contain both `reasonix-desktop-bridge` and
+`reasonix-cua-runtime` in `Contents/MacOS`; source support or successful tests
+alone do not switch a running native-engine installation to Cua.
 
 ## Source and notices
 
@@ -136,3 +160,13 @@ only its own disposable browser. It never uses existing browser accounts.
 Grant the QA host Accessibility only after explicit consent; if the OS requires
 another grant, stop and obtain it separately. The test does not edit TCC or grant
 permissions. Results are under the ignored QA target's `browser-results` folder.
+
+On 2026-10-25 the expanded local Chrome acceptance passed 18 checks, including
+label/empty-value selection, a selection no-op, all five trusted pointer gestures,
+navigation readback, and rejection of old refs after navigation. Every new route
+also refused another native window before dispatch. Temporary QA Accessibility
+permission was enabled after user approval and switched off after acceptance;
+Screen Recording was not granted. See the
+[candidate evidence](../../docs/tauri/evidence/2026-10-25-cua-browser-actions/README.md).
+Go and Rust share a wire-contract corpus so that request validation covers both
+sides, including empty selection values and bounded gesture arguments.

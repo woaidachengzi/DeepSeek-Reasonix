@@ -12,8 +12,101 @@ impl Request {
     pub fn is_browser(&self) -> bool {
         matches!(
             self.action.as_str(),
-            "browser_prepare" | "browser_observe" | "browser_click" | "browser_type"
+            "browser_prepare"
+                | "browser_observe"
+                | "browser_click"
+                | "browser_type"
+                | "browser_navigate"
+                | "browser_select"
+                | "browser_pointer"
         )
+    }
+
+    pub fn validate_browser_operation_fields(&self) -> Result<(), String> {
+        if self.action == "browser_navigate" {
+            let raw = self.url.as_deref().ok_or("navigation needs a URL")?;
+            let parsed = url::Url::parse(raw).map_err(|_| "invalid navigation URL")?;
+            let authority = raw
+                .split_once("://")
+                .map(|(_, rest)| rest.split(['/', '?', '#']).next().unwrap_or(""));
+            if raw.len() > 8192
+                || raw
+                    .chars()
+                    .any(|c| c.is_ascii_control() || c == ' ' || c == '\\')
+                || !parsed.username().is_empty()
+                || parsed.password().is_some()
+                || !(matches!(parsed.scheme(), "http" | "https")
+                    && parsed.host_str().is_some()
+                    && authority.is_some_and(|s| !s.is_empty() && !s.contains('@'))
+                    && raw
+                        .to_ascii_lowercase()
+                        .starts_with(&format!("{}://", parsed.scheme()))
+                    || raw == "about:blank")
+            {
+                return Err("navigation requires an absolute http/https URL without credentials, or about:blank".into());
+            }
+        } else if self.url.is_some() {
+            return Err("url requires browser_navigate".into());
+        }
+        if self.action == "browser_select" {
+            if self.label.is_some() == self.value.is_some()
+                || self.label.as_ref().is_some_and(|s| s.len() > 16384)
+                || self.value.as_ref().is_some_and(|s| s.len() > 16384)
+            {
+                return Err("selection requires exactly one bounded label or value".into());
+            }
+        } else if self.label.is_some() || self.value.is_some() {
+            return Err("label and value require browser_select".into());
+        }
+        if self.action != "browser_pointer" {
+            return if self.gesture.is_some()
+                || self.delta_x.is_some()
+                || self.delta_y.is_some()
+                || self.destination_ref.is_some()
+            {
+                Err("gesture, deltas and destination_ref require browser_pointer".into())
+            } else {
+                Ok(())
+            };
+        }
+        match self.gesture.as_deref() {
+            Some("scroll") => {
+                if self.destination_ref.is_some()
+                    || self.delta_x.is_none() && self.delta_y.is_none()
+                    || [self.delta_x, self.delta_y]
+                        .into_iter()
+                        .flatten()
+                        .any(|v| !v.is_finite() || v.abs() > 10000.)
+                    || ![self.delta_x, self.delta_y]
+                        .into_iter()
+                        .flatten()
+                        .any(|v| v != 0.)
+                {
+                    return Err("scroll needs nonzero finite CSS pixel deltas within 10000 and no destination".into());
+                }
+            }
+            Some("drag") => {
+                if !self
+                    .destination_ref
+                    .as_ref()
+                    .is_some_and(|s| !s.is_empty() && s.len() <= 256)
+                    || self.delta_x.is_some()
+                    || self.delta_y.is_some()
+                {
+                    return Err("drag needs a destination_ref and no deltas".into());
+                }
+            }
+            Some("hover" | "right_click" | "double_click") => {
+                if self.delta_x.is_some()
+                    || self.delta_y.is_some()
+                    || self.destination_ref.is_some()
+                {
+                    return Err("this pointer gesture accepts no deltas or destination".into());
+                }
+            }
+            _ => return Err("unsupported browser gesture".into()),
+        }
+        Ok(())
     }
 }
 
@@ -108,6 +201,13 @@ impl Envelope {
         if r.query.is_some() || r.continuation.is_some() || r.include_screenshot {
             return Err("snapshot fields require browser_observe".into());
         }
+        if r.action == "browser_navigate" {
+            if r.r#ref.is_some() || r.delivery_mode.is_some() {
+                return Err("navigation requires an observed target/tab and URL only".into());
+            }
+            args["url"] = json!(r.url);
+            return Ok(("browser_navigate", args));
+        }
         args["ref"] = json!(r
             .r#ref
             .as_ref()
@@ -128,6 +228,33 @@ impl Envelope {
                 args["mode"] = json!("insert_text");
                 args["replace"] = json!(r.replace);
                 Ok(("browser_type", args))
+            }
+            "browser_select" => {
+                if r.delivery_mode.is_some() {
+                    return Err("selection does not support delivery_mode".into());
+                }
+                if let Some(label) = &r.label {
+                    args["label"] = json!(label);
+                }
+                if let Some(value) = &r.value {
+                    args["value"] = json!(value);
+                }
+                Ok(("browser_select", args))
+            }
+            "browser_pointer" => {
+                args["action"] = json!(r.gesture);
+                args["input_route"] = json!("trusted");
+                args["delivery_mode"] = json!(mode);
+                if let Some(delta) = r.delta_x {
+                    args["delta_x"] = json!(delta);
+                }
+                if let Some(delta) = r.delta_y {
+                    args["delta_y"] = json!(delta);
+                }
+                if let Some(destination) = &r.destination_ref {
+                    args["destination_ref"] = json!(destination);
+                }
+                Ok(("browser_pointer", args))
             }
             _ => Err("unsupported browser action".into()),
         }
@@ -273,6 +400,30 @@ mod tests {
     fn envelope(request: Value) -> Envelope {
         serde_json::from_value(json!({"protocol":1,"id":1,"request":request,
             "approved_target":{"pid":42,"name":"Fixture","bundle_id":"test.fixture","launch_time":100.}})).unwrap()
+    }
+    #[test]
+    fn browser_operation_wire_contract_matches_the_host() {
+        let cases: Value = serde_json::from_str(include_str!(
+            "../../../internal/computeruse/testdata/cua_browser_operations.json"
+        ))
+        .unwrap();
+        for case in cases.as_array().unwrap() {
+            let planned = envelope(case["request"].clone()).plan();
+            assert_eq!(
+                planned.is_ok(),
+                case["valid"].as_bool().unwrap(),
+                "{}: {:?}",
+                case["name"],
+                planned
+            );
+            if case["valid"] == true && case["request"]["action"] == "browser_pointer" {
+                let (tool, args) = planned.unwrap();
+                assert_eq!(tool, "browser_pointer");
+                assert_eq!(args["input_route"], "trusted");
+                assert_eq!(args["action"], case["request"]["gesture"]);
+                assert!(args.get("x").is_none() && args.get("y").is_none());
+            }
+        }
     }
     #[test]
     fn dom_routes_do_not_accept_native_pixels_or_authority_overrides() {
