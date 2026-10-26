@@ -1,6 +1,21 @@
 # Reasonix Tauri host
 
-## 当前状态（2026-10-13）
+## 当前状态（2026-10-26）
+
+当前总览见[中文 README](../../README.zh-CN.md)和 [English README](../../README.md)。普通 macOS 接管配置为 **0.1.58**，macOS Cua 接管配置为 **0.1.61**，GNU/Linux Cua Preview 配置为 **0.1.62**；默认隔离 Preview 配置仍为 **0.1.0**。各配置分别管理应用身份、资料模式和附带引擎，不是同一个跨平台发布序列。
+
+已接入多会话并行、运行中引导、消息级分叉、固定上下文文件、并排工作区、独立语音识别与语音对话、克隆音色库，以及应用／窗口范围的电脑控制。Cua 版额外提供任务独立 worker 和 Chromium DOM 操作；普通包不会因源码存在这些能力而自动成为 Cua 包。
+
+- [macOS Cua 0.1.61 安装版验收](../../docs/tauri/evidence/2026-10-25-cua-installed/README.md)：普通聊天和审批链路完成无账号测试页上的输入、选择、点击及导航读回。
+- [Ubuntu ARM64 Cua 0.1.62 验收](../../docs/tauri/evidence/2026-10-26-cua-linux/README.md)：原生包、X11/XWayland GTK、隔离 Chromium 和设置页验证；不覆盖 GNOME 50+ 原生 Wayland、x86_64 Linux 或真实模型聊天。
+- [Cua 构建与权限指南](../cua-runtime/README.md)：macOS 14+、Linux 额外依赖、应用与浏览器授权、固定上游源码及第三方声明。
+- [SQLite 事件库 RFC](../../docs/tauri/SESSION_SQLITE_EVENT_STORE_RFC.md)：事件权威仅在受管 Preview capability 下启用，不等于对原资料接管或其他宿主完成了全量消息迁移。
+
+macOS 本地包使用 ad hoc 签名，尚未建立 Apple 公证与自动更新渠道；Windows 未接入 Cua／原生电脑控制。原资料接管仍须事先核验备份与完成凭据，不能用环境变量覆盖代替准备。
+
+## 历史实施与验收记录（保留原日期和范围）
+
+以下记录从 2026-10-13 及更早阶段保留，包含当时的候选版本、未完成项和开发方法；其中“当前”指该条记录的时点，不覆盖上方进度及后来的实现／验收结论。
 
 0.1.3 修复设置页与会话运行时的 MiMo 2.6 模型目录不一致，已验证实际历史切换及已保存密钥的连接测试。证据与边界见[MiMo 模型切换修复](../../docs/tauri/MIMO_MODEL_SWITCH_RECOVERY.md)。
 
@@ -34,7 +49,7 @@ macOS Apple Silicon `Reasonix Tauri` 0.1.3 接管候选包已完成当前资料�
 监管它。token 经子进程 stdin 管道发送，bridge 读完后关闭管道并将标准输入切到空设备；
 token 不放在 macOS 进程列表可见的启动环境或命令行中。
 
-## 当前平台范围
+### 当前平台范围
 
 当前安装包的实际配置备份回退可用 `python3 tools/tauri/smoke-backup-rollback.py '<installed-app>' --legacy-cli '<official-1.38.3-app>/Contents/MacOS/reasonix' --output /private/tmp/new-backup-evidence` 验收（Python 3.11+）。只接受官方内嵌 CLI 固定摘要；备份应用到独立私有目录，验证旧 CLI 回读、原配置/备份保持及正常退出。失败保留私有夹具、成功清理，不修改用户档案，也不代替完整资料或物理 GUI 回退。
 
@@ -66,7 +81,7 @@ Ubuntu 26.04 ARM64 的 deb/AppImage 已交付，原生 Rust 224 项通过，用�
 [Linux Preview 验收](../../docs/tauri/LINUX_PREVIEW_ACCEPTANCE.md)。
 D→E 的顺序及 macOS 待验项以 [迁移清单](../../docs/tauri/API_SURFACE_AUDIT.md) 为准。
 
-## 数据隔离
+### 数据隔离
 
 Preview 使用 Tauri 应用数据目录下私有的 `REASONIX_HOME`。因此它不会静默读取、迁移或
 写入稳定 Wails 客户端的配置、会话和缓存；稳定版可与它并存。导入稳定版数据会作为单独的
@@ -155,7 +170,7 @@ pnpm tauri:dev
 
 这不依赖全局 `cargo tauri`，也不会将 sidecar 路径、token 或 loopback 地址暴露给 WebView。
 
-## 构建 macOS 测试包
+### 构建 macOS 测试包
 
 ```bash
 cd desktop/frontend
@@ -167,7 +182,7 @@ pnpm tauri:build
 构建，非 Windows 主机的 Windows 交叉构建使用 cargo-xwin。后者仍需 Windows 原生验收，
 不能把交叉编译通过当作平台支持已验证。
 
-## 构建 Linux 测试包
+### 构建 Linux 测试包
 
 在配置好 WebKitGTK 4.1、GTK3、AppIndicator、D-Bus 开发库的同架构 GNU Linux 上执行：
 
@@ -186,7 +201,7 @@ Linux 新档案默认关闭即退出；显式保存的关闭偏好继续有效�
 将此类包作为正式下载发布。配置 Developer ID 与公证凭据后，正式发布流程必须保留 Tauri
 的签名并完成 Apple notarization。
 
-## 测试
+### 测试
 
 依赖 Go bridge 的受监督生命周期测试在本地默认跳过。要让它们真正运行，先构建 bridge
 并把路径传进去：

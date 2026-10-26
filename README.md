@@ -4,138 +4,142 @@
 
 # Reasonix Tauri
 
-[简体中文](./README.zh-CN.md) · [Tauri host](./desktop/tauri/README.md) · [Migration checklist](./docs/tauri/E_MIGRATION_CHECKLIST.md)
+[简体中文](./README.zh-CN.md) · [Desktop build guide](./desktop/tauri/README.md) · [Cua edition](./desktop/cua-runtime/README.md)
 
-An independently maintained Tauri desktop adaptation of Reasonix. This branch focuses on the desktop experience, configuration management, and native packaging for macOS, Windows, and Linux, while retaining the existing Go agent engine.
+A desktop coding agent built around the Reasonix Go engine, a Tauri 2 / Rust host, and a React workbench. Run conversations in parallel, steer ongoing work, branch from a chosen answer, inspect project files, and use voice, browser and application-control tools in the same workspace.
 
-Repository: [woaidachengzi/DeepSeek-Reasonix](https://github.com/woaidachengzi/DeepSeek-Reasonix) · Branch: `experiment/tauri`
+Independently maintained by [woaidachengzi](https://github.com/woaidachengzi), based on [upstream Reasonix](https://github.com/esengine/DeepSeek-Reasonix).
 
-## Maintenance and project scope
+Repository: [woaidachengzi/DeepSeek-Reasonix](https://github.com/woaidachengzi/DeepSeek-Reasonix) · Development branch: `experiment/tauri`
 
-This adaptation is independently developed and maintained by [woaidachengzi](https://github.com/woaidachengzi). The Tauri migration and the improvements described below are work on this fork; the original Go engine and inherited features come from upstream Reasonix.
+## Current status
 
-There are two explicit desktop modes:
+Updated **2026-10-26**. Versions belong to separate build configurations, not one universal release number.
 
-| Mode | Version / application identity | Data behavior |
+| Build | Configuration version | Profile and scope |
 | --- | --- | --- |
-| **Reasonix Tauri Preview** | `0.1.0` / `io.reasonix.desktop.preview` | Uses a separate managed profile for development and isolated evaluation |
-| **Reasonix Tauri** (original-profile takeover) | `0.1.7` / `io.reasonix.desktop.takeover` | Uses the original `~/.reasonix` after verified backup and offline preparation |
+| Isolated Tauri Preview | `0.1.0` | Separate managed profile for development and migration evaluation |
+| macOS original-profile edition | `0.1.58` | Prepared original `~/.reasonix` profile; native macOS computer-control engine |
+| macOS Cua edition | `0.1.61` | Same takeover application identity and prepared profile; bundles the Cua Rust runtime; macOS 14+ |
+| GNU/Linux Cua Preview | `0.1.62` | Preview identity; ARM64 Ubuntu package and scoped acceptance recorded below |
 
-The previous macOS Apple Silicon takeover candidate (0.1.3) passed current-history and restart acceptance, and the maintainer confirmed practical use. Version 0.1.4 adds parallel conversations; its separate acceptance scope is recorded below. This is a verified migration path for the tested profile, not a claim that all historical formats, platforms, or release gates are complete.
+Sources: [Preview](./desktop/tauri/tauri.conf.json), [takeover](./desktop/tauri/tauri.takeover.conf.json), [macOS Cua](./desktop/tauri/tauri.cua.conf.json), [Linux Cua](./desktop/tauri/tauri.cua.linux.conf.json). Check **Runtime status → Build and version details** for the app actually running. Source support alone does not switch an ordinary installation to Cua.
 
-## Work on this branch
+## What you can do
 
-- **Tauri desktop host:** a Rust shell supervises the Go sidecar, native windows, menus, and desktop services; the frontend uses a typed bridge.
-- **Desktop workbench:** projects and sessions, model selection, streamed conversations, Markdown, attachments, and session lifecycle management.
-- **History and navigation:** persistent session identities, paged directory reads, cached directory snapshots, bounded history responses, and navigation independent of running sessions. Projects can be renamed; empty projects can be removed from the sidebar without deleting disk files.
-- **Steer running tasks (0.1.6):** submit text guidance without stopping the active task. Stop remains separate; rejected guidance keeps its draft, and approvals remain required. Version 0.1.7 adds explicit Submit/Cancel controls and cards showing guidance content and status. See [behavior, latest upstream references and acceptance](./docs/tauri/SESSION_STEERING.md).
-- **Empty-composer continuation (0.1.5):** continue a loaded idle conversation using its current model without adding a visible user message. New conversations still require input. See [behavior and regression checks](./docs/tauri/EMPTY_COMPOSER_CONTINUE.md).
-- **Parallel conversations:** switch views while tasks continue; independent output, approvals, cancellation, model settings and drafts. Up to 16 resident runtimes, with active tasks and retained resources protected from eviction. See the [architecture and acceptance record](./docs/tauri/PARALLEL_SESSIONS.md).
-- **Message-level conversation forks:** fork from a completed assistant answer and continue in an independent conversation; the source remains available.
-- **Pinned context files:** select workspace files as persistent conversation context; forks inherit the pinned-file selection.
-- **Original-profile takeover:** verified backup, original-path registration for current Wails JSONL histories, and compatible projections for selected older v5 records. Configuration and original source records are preserved during preparation.
-- **Model and configuration pages:** provider/model settings, credential save/delete, and consistent model-preference and model-service page backgrounds across themes and layouts.
-- **Remote management:** SSH authentication and host-fingerprint confirmation, SFTP browsing/editing/path operations, and Serve status/log/start/stop controls with a system-browser controller entry.
-- **Bot and management migration:** account management, pairing approvals, and settings surfaces for permissions, plugins, MCP, hooks, memory, subagents, data, and diagnostics. Migration and real-service acceptance remain incremental.
-- **Native packages:** Windows x64 NSIS and native Linux ARM64 deb/AppImage previews, plus platform-specific tray and window-close handling.
-- **Profile isolation and verification:** Preview-managed data is separate from the stable profile; source identity, regression tests, package hashes, and acceptance records accompany the migration.
+- **Work across conversations:** navigate while tasks keep running. Output, approvals, cancellation, models, drafts and retained resources belong to their own sessions. Up to 16 resident runtimes, with active work protected from idle eviction.
+- **Guide and continue:** submit/cancel steering text during a task, with its content and status shown in the conversation. Continue an existing idle session from an empty composer without adding a visible “continue” message. Enter sends by default; Shift+Enter inserts a newline, with configurable shortcuts.
+- **Branch from an answer:** fork at a completed assistant message and continue independently, inheriting pinned context-file selections while retaining the original conversation.
+- **Manage projects and files:** rename projects, remove empty sidebar projects without deleting folders, pin context files, add selected text to chat, preview files/diffs, and resize a side-by-side workspace on wide windows.
+- **Choose models and inspect usage:** manage providers, credentials and per-session models. Selectors use service display names rather than generated internal IDs. Context, throughput and usage indicators are configurable; subscription/plan usage is distinguished from metered cost estimates.
+- **Use voice:** speech-to-text, hold-to-talk, continuous conversations, answer/selection playback and a local cloned-voice library. Recognition is configured independently of the chat model.
+- **Connect tools and services:** MCP presets, skills, subagent profiles, hooks, permissions, sandbox, network, memory and diagnostics. Bot desktop-session control, approval handling and event observation are integrated; availability depends on the running gateway, channel access and session ownership.
+- **Use remote workspaces:** SSH authentication/fingerprint confirmation, SFTP browsing/editing, remote Serve controls and conversation/controller entry points. SSH connectivity alone does not establish a working remote Agent; model credentials must be configured remotely. Tauri's local-credential proxy mode remains unavailable.
 
-These are implemented areas, not a claim of complete Wails feature parity. Native remote tabs, remaining bot workflows, and package-level management-page acceptance are tracked in the [E migration checklist](./docs/tauri/E_MIGRATION_CHECKLIST.md). Automatic updates are outside the current migration scope.
+Details: [parallel sessions](./docs/tauri/PARALLEL_SESSIONS.md), [steering](./docs/tauri/SESSION_STEERING.md), [continuation](./docs/tauri/EMPTY_COMPOSER_CONTINUE.md), [dated migration/acceptance log](./docs/tauri/E_MIGRATION_CHECKLIST.md).
 
-## Browser use (preview)
+## Browser and computer control
 
-In **Settings → MCP & tools → Browser use**, choose **Configure browser use** and save the reviewed preset. It uses the official [Microsoft Playwright MCP](https://github.com/microsoft/playwright-mcp), pinned to `0.0.83`, with Chrome, isolated storage, screenshot/vision tools, and page-provided WebMCP tools disabled. Requires Node.js 24+ and Google Chrome; the first connection downloads the npm package.
+| Path | Intended use | Setup |
+| --- | --- | --- |
+| **Isolated Playwright MCP** | Web tasks in a separate browser context | Settings → MCP & tools → Browser use; Node 24+ and Google Chrome |
+| **Cua browser control** | DOM interaction with an approved Chromium window/tab | Cua edition, app access and separate browser-profile/setup consent |
+| **Native application control** | Inspect an approved application's accessibility tree/window image, then click, type or use keys | Settings → Computer control; system permissions and compatible workspace policy |
 
-Start a new session, or **Apply to current session** while idle. Then try `/browser-use Open https://example.com, inspect the page, and take a screenshot`. The shipped inline skill guides discovery, observation, actions, and verification. Page structure actions work with tool-capable models; screenshot understanding needs a vision-capable model or configured image fallback.
+### Application control and Cua
 
-Each Tauri session owns its MCP process and isolated browser context. It does not inherit your normal browser logins; sign in in the new browser window if required. Closing the session discards that login state. This preview operates web pages; native desktop app control is outside this integration's scope.
+Open **Settings → Computer control** to check the installed engine, system permissions and workspace restrictions. On macOS, grant Accessibility and Screen Recording through System Settings when requested. App access is scoped to the actual process and task; browser-profile access requires an additional explicit decision.
 
-An opt-in real-tool test covers navigation, typing, clicking, screenshot image return, and isolation between two MCP hosts:
+Try: “Inspect the form in this application, fill the draft fields, and verify the result.” The agent observes before acting and should inspect the resulting application state before claiming success. A delivered click does not establish that a submission succeeded.
 
-```bash
-REASONIX_LIVE_PLAYWRIGHT_MCP=1 go test ./internal/plugin -run '^TestPlaywrightMCPLive$' -v -count=1 -timeout=4m
+The Cua edition uses the open-source **Cua Driver Rust SDK 0.38.0** at a pinned revision. Each running task owns a private worker that is cleaned up when the task stops. Browser actions include observation, typing, clicking, navigation, native select options, hover, right-click, double-click, scrolling and dragging. DOM refs belong to the approved window/tab and must be refreshed after navigation.
+
+Screenshots appear in a draggable picture-in-picture preview with a stop control. The native macOS engine also shows a blue-whale indicator for verified physical cursor positions; background AX/CDP actions do not invent cursor movement. This adapter exposes neither arbitrary browser JavaScript nor a generic shell/full-desktop capture API.
+
+See the [Cua runtime guide and build instructions](./desktop/cua-runtime/README.md), [cursor behavior](./docs/tauri/COMPUTER_USE_CURSOR.md), and [AI diagnostic export](./docs/tauri/AI_DIAGNOSTIC_LOGS.zh-CN.md).
+
+### Isolated Playwright MCP
+
+Review and save the preset in **Settings → MCP & tools → Browser use**. It pins the official [Microsoft Playwright MCP](https://github.com/microsoft/playwright-mcp) to `0.0.83`, enables screenshot/vision tools and disables page-provided WebMCP tools. Start a new session, or apply the setting to an idle session, then try:
+
+```text
+/browser-use Open https://example.com, inspect the page, and take a screenshot.
 ```
 
-## Why Tauri in this project
+Each Tauri session owns its MCP process and isolated browser context. This path does not inherit ordinary browser logins; its login state is discarded when the session closes. DOM/accessibility operations can work with tool-capable text models; interpreting screenshots requires a vision-capable model or configured image fallback.
 
-- **A native desktop host with the existing web UI.** Tauri uses the operating system's WebView: WKWebView on macOS, WebView2 on Windows, and WebKitGTK on Linux. This avoids distributing a separate browser runtime. See the official [process model](https://v2.tauri.app/concept/process-model/).
-- **Clear ownership of desktop operations.** Rust owns windows, menus, dialogs, credential storage, and sidecar supervision. The React UI uses typed commands and events instead of managing these resources directly. Tauri's [IPC model](https://v2.tauri.app/concept/inter-process-communication/) provides this boundary; the project's bridge enforces its own protocol and validation.
-- **Reuse of the Go agent engine.** Model calls, tools, configuration, and session recovery stay in Go. We can improve the desktop host without rewriting the established agent behavior; Rust supervises sidecar startup, restart, and cleanup.
-- **Separate packaging and profile choices.** Native package configuration and explicit Preview/takeover identities let us validate desktop changes against private fixtures before using an existing profile.
+## Voice
 
-The improvement reported during practical use combines host work with history, rendering, and lifecycle fixes. We have not published a controlled benchmark comparing Wails and Tauri memory use or latency.
+Configure **Settings → Speech recognition** separately from the chat provider. MiMo ASR and the supported custom-service formats have a recording test; saving an endpoint does not establish availability. Voice controls retain drafts when switching text/voice modes, support playback cancellation, and retry failed speech without replaying successful segments.
 
-## History-session architecture
+Cloned voices use local MP3/WAV samples and a selected voice ID; samples are not included in source control or packages. Recognition audio and samples required for cloud synthesis are sent to the selected service. Provider support, credentials, microphone permission and quota still apply. Implementation and scoped acceptance are in the [migration log](./docs/tauri/E_MIGRATION_CHECKLIST.md).
+
+## Why Tauri
+
+- **Keep the engine:** model calls, tools, configuration and recovery remain in Go, allowing the desktop host to evolve independently.
+- **Give native resources one owner:** Rust supervises sidecars, windows, menus, dialogs, credentials and desktop integrations; React uses typed commands/events.
+- **Use the system WebView:** WKWebView on macOS, WebView2 on Windows and WebKitGTK on Linux, without shipping a separate browser runtime for the workbench.
+- **Separate application and data choices:** Preview and takeover identities allow isolated verification before using an existing profile.
+
+Practical improvements combine host, rendering, history and lifecycle fixes. No controlled Wails-versus-Tauri memory or latency benchmark is claimed.
+
+## History, persistence and memory
 
 ```mermaid
 flowchart LR
-    UI[React conversation UI] -->|Typed commands| Host[Rust Tauri host]
-    Host -->|Authenticated local bridge| Engine[Go agent engine]
-    Engine --> Directory[SQLite session identity directory]
-    Engine --> History[Transcript and model-context storage]
-    Engine -->|Events| Host
-    Host -->|UI updates| UI
+    UI[React workbench] -->|Typed IPC| Host[Rust Tauri host]
+    Host -->|Authenticated local bridge| Engine[Go controllers and session pool]
+    Engine --> Identity[SQLite identity and lifecycle]
+    Engine --> Transcript[History, model context and event storage]
+    Engine --> Memory[Instructions and Markdown facts]
+    Engine -->|Owned events| Host
+    Host -->|View updates| UI
 ```
 
-The recent-session list is now navigation metadata, rather than the only authority for session existence. A persistent identity directory and verified transcript ownership underpin opening, paging, renaming, and deletion.
+| Responsibility | Current design |
+| --- | --- |
+| Identity | Persistent SQLite directory with IDs, profile-relative locations, title revisions, workspace, order and lifecycle; recent-session lists are navigation metadata |
+| Presentation | Audited directory paging/cache, bounded history responses and cold Markdown readiness before revealing a newly opened conversation |
+| Model context | Display history and the compacted workset remain separate, with coverage/provenance checks |
+| Original-profile compatibility | Registered Wails JSONL paths and supported older projections are preserved; unknown/changed identities are not silently opened as new empty sessions |
+| Experimental event authority | Managed Preview can use the SQLite event DAG and rebuild JSONL projections; this gated capability is not a blanket migration of takeover, custom-profile, CLI or Wails data |
+| Durable context | Standing instructions are separate from fallible project/global Markdown facts; retrieval is budgeted and scoped, with revisions and provenance |
 
-| Layer | Change | Practical effect |
-| --- | --- | --- |
-| Identity directory | SQLite stores session ID, profile-relative path, workspace, title/revision, order, and lifecycle state | Identity survives restart; a deleted, missing, or changed-path session cannot silently become a new blank conversation |
-| Original-path compatibility | Imported Wails IDs bind to a hash of the original profile-relative JSONL path | Current project histories remain in their original locations; unknown or mismatched legacy IDs are rejected |
-| Directory and history reads | Directory cursors include snapshot identity; audited directory snapshots are cached, checks run off the native event loop, and the history response contains at most the latest 200 visible messages | Reduces repeated directory audits and the amount sent to/rendered in the UI; stale directory pages cannot be mixed silently |
-| Display and model context | Full display history and the compacted model workset are preserved separately, with coverage/provenance checks | Imported conversations retain readable history and their existing model context rather than rebuilding context from the UI text |
-| Forks and pinned files | A completed-answer prefix token identifies the fork position; child sessions receive independent identities and inherit pinned-file selection | Continue from a chosen answer without replacing the original conversation |
-| Takeover preparation | Stop writers, verify a complete backup, prepare new identities/compatible projections under a profile gate, then publish a completion receipt | The takeover host refuses an unprepared profile; unsupported old binaries still require operational separation |
+The bridge currently returns at most the latest **200 visible history messages**. This does not imply complete backward scroll pagination; engine recovery may still read the full transcript. SQLite identity storage must not be confused with a completed migration of every profile's messages into SQLite.
 
-The 200-message history response is a current display bound, not complete scroll-back pagination. The engine may still read the full transcript for recovery. End-to-end performance and older-message browsing remain areas for further work.
+Memory uses Reasonix **Context Engine v2**: hierarchical `REASONIX.md` / `AGENTS.md` / `CLAUDE.md` instructions, project/global facts, explicit pinning, conservative automatic recall, and confirmation/revision checks for writes. It is separate from persistence and does not imply a complete port of MiMo's checkpoint-writer, Dream or Distill.
 
-The current takeover acceptance covered **25 current conversations**: **21** reused original JSONL paths and **4** used matching older v5 projections. Packaged-host checks opened all 25 and verified matching history counts after restart. Actual native UI checks also covered reopening original history, recent-list registration, startup replay, and the fork entry. These counts describe the tested profile, not every user's data. See the [takeover implementation and acceptance record](./docs/tauri/STABLE_TAKEOVER.md).
+Details: [session storage](./docs/tauri/SESSION_STORAGE_IMPLEMENTATION_V3.md), [gated SQLite event-store RFC](./docs/tauri/SESSION_SQLITE_EVENT_STORE_RFC.md), [memory/retrieval](./docs/SESSION_MEMORY_RETRIEVAL.md), [takeover](./docs/tauri/STABLE_TAKEOVER.md).
 
-## Platform status
+## Platform evidence and limits
 
-Status as of 2026-10-14; Windows/Linux rows retain their 2026-10-07 evidence:
+| Platform | Recorded scope |
+| --- | --- |
+| macOS Apple Silicon | Original-profile use and native desktop workflows; installed Cua 0.1.61 used the ordinary chat/tool/approval chain and an account-free Chrome fixture to verify Chinese input, selection, one trusted click and destination DOM after navigation |
+| Ubuntu 26.04 ARM64 | Ordinary Preview packaging/manual acceptance; Cua Preview 0.1.62 deb/AppImage built, installed and audited, with GTK control on X11/XWayland, Chromium Snap on an owned Xvfb server, lifecycle and packaged-settings checks |
+| Windows x64 | Ordinary Tauri NSIS build/package checks; Cua/native computer control is not integrated, and the full manual matrix remains separate |
+| Other Linux environments | Same-architecture build support does not establish x86_64, other-distribution or compositor acceptance |
 
-| Platform | Package | Current evidence |
-| --- | --- | --- |
-| macOS Apple Silicon | `0.1.7` takeover app / DMG; isolated Preview also available | Parallel execution verified with actual Go controllers, headless React UI and a packaged Preview supervisor using private fixtures; 0.1.4 passed original-history navigation, draft isolation and private Preview parallel clicks; 0.1.5 adds empty-composer continuation; 0.1.6 adds steering with actual Go controller and browser UI coverage; ad hoc signed, not Apple notarized |
-| Windows x64 | NSIS installer `.exe` | Built and package contents checked; the full native manual matrix remains unrecorded |
-| Ubuntu 26.04 ARM64 | `.deb` / `.AppImage` | Native build, 224 Rust tests passed / 1 ignored, package audit completed; maintainer confirmed manual acceptance |
-| Linux x64 / other distributions | Native build support and manual x64 packaging workflow | Not validated by the Ubuntu ARM64 result |
+Linux native Wayland remains experimental/off by default. The pinned helper refuses GNOME 50+ native Wayland windows; Ubuntu 26.04 acceptance uses XWayland-compatible applications. Linux screenshot-coordinate `move` is not exposed; DOM-ref hover is available. Linux fixture results do not establish real model-driven chat or everyday browser-profile acceptance.
 
-See [Windows acceptance](./docs/tauri/WINDOWS_PREVIEW_ACCEPTANCE.md), [Linux acceptance](./docs/tauri/LINUX_PREVIEW_ACCEPTANCE.md), and [Ubuntu package hashes](./docs/tauri/evidence/2026-10-07-linux-arm64/README.md).
+macOS results do not establish production-account, canvas-only or every-application coverage. Local macOS packages use ad hoc signing; Apple notarization and an automatic update channel are not established. Cua packages include third-party notices and required source archives; not all transitive dependencies are MIT.
 
-The `0.1.7` takeover candidate is a local macOS handoff; it does not establish a notarized, automatically updated stable release channel. Upstream npm packages, websites, downloads, and signing statements do not describe this fork's Tauri packages.
+Evidence: [installed macOS Cua](./docs/tauri/evidence/2026-10-25-cua-installed/README.md), [browser actions](./docs/tauri/evidence/2026-10-25-cua-browser-actions/README.md), [Linux Cua](./docs/tauri/evidence/2026-10-26-cua-linux/README.md), [Windows Preview](./docs/tauri/WINDOWS_PREVIEW_ACCEPTANCE.md), [ordinary Linux Preview](./docs/tauri/LINUX_PREVIEW_ACCEPTANCE.md).
 
-## Install and choose a data mode
+## Install and choose a profile
 
-Use the package handed off for your exact OS and architecture, and verify its supplied SHA256 before running it. Install/launch **Reasonix Tauri Preview**, then configure a provider and model in the application.
+Use a package for your exact platform, architecture and desired engine, and verify its supplied SHA256. On macOS, drag **Reasonix Tauri** from the DMG into Applications. Cua packages contain both the Go bridge and the private Cua runtime; ordinary packages do not. Check Runtime status and Computer control after installing.
 
-For the macOS Apple Silicon takeover package, open `Reasonix Tauri_0.1.7_aarch64.dmg` and drag **Reasonix Tauri** into Applications. The original profile must already have a verified backup and a matching `tauri-takeover-v1.json` completion receipt; building/installing the app does not perform this preparation. Keep the referenced backup available and fully quit Wails before starting the takeover app. Preparation and rollback are described in the [takeover record](./docs/tauri/STABLE_TAKEOVER.md). The local candidate uses ad hoc signing and is not Apple notarized.
+- **Preview:** a separate managed profile. Existing-data import is explicit; custom `REASONIX_HOME` remains subject to profile protections.
+- **Original-profile takeover:** directly uses the original default `~/.reasonix` after verified backup and offline preparation. A matching `tauri-takeover-v1.json` receipt is required; building/installing does not prepare the profile. Keep the backup and fully quit Wails before opening takeover. Follow the [preparation and rollback guide](./docs/tauri/STABLE_TAKEOVER.md).
 
-For the Ubuntu ARM64 handoff, open a terminal in the package directory:
+For a supplied Linux deb, verify the package manifest, then install that exact file with `sudo apt install ./<package>.deb`. AppImages need executable permission; `APPIMAGE_EXTRACT_AND_RUN=1` is an alternative without FUSE. Linux Cua retains the Preview identity, not the macOS takeover identity.
 
-```bash
-sha256sum -c SHA256SUMS
-sudo apt install "./Reasonix Tauri Preview_0.1.0_arm64.deb"
-```
+Packages contain no maintainer API keys, personal configuration or cloned-voice samples. Configure your own providers. Linux system credential storage requires session D-Bus and Secret Service.
 
-AppImage alternative:
+## Build
 
-```bash
-chmod +x "./Reasonix Tauri Preview_0.1.0_aarch64.AppImage"
-"./Reasonix Tauri Preview_0.1.0_aarch64.AppImage"
-# If FUSE is unavailable:
-APPIMAGE_EXTRACT_AND_RUN=1 "./Reasonix Tauri Preview_0.1.0_aarch64.AppImage"
-```
-
-Packages do not include the maintainer's personal API keys or configuration. Default model entries are not saved credentials; supply your own provider credentials. Linux system credential storage requires an available session D-Bus and Secret Service.
-
-The default managed Preview profile is isolated from the stable `~/.reasonix` profile. Existing data is imported only through an explicit action. In Preview mode, an explicitly supplied `REASONIX_HOME` selects a profile subject to the host's profile protections. The takeover installation selects the original default profile and checks its completion receipt instead. Do not substitute an environment override for verified takeover preparation.
-
-## Build this branch
-
-Prerequisites: Node 24+, pnpm 10.34.5, Go matching `go.mod` (currently toolchain 1.26.6), Rust 1.89+, and your platform's native build/WebView dependencies. The local frontend Tauri CLI is used; Wails CLI is not required for the Tauri build.
+Ordinary builds need **Node 24+**, **pnpm 10.34.5**, Go matching `go.mod` (toolchain **1.26.6**), Rust and native build/WebView dependencies. The ordinary host declares Rust 1.89+; Cua has additional system/SDK prerequisites in its [build guide](./desktop/cua-runtime/README.md).
 
 ```bash
 git clone --branch experiment/tauri https://github.com/woaidachengzi/DeepSeek-Reasonix.git
@@ -144,56 +148,48 @@ pnpm --dir desktop/frontend install --frozen-lockfile
 pnpm --dir desktop/frontend tauri:dev
 ```
 
-Isolated macOS Preview package:
+macOS packages:
 
 ```bash
+# Isolated Preview
 pnpm --dir desktop/frontend tauri:build
-```
-
-macOS original-profile takeover package (requires separate profile preparation before launch):
-
-```bash
+# Original-profile edition: prepare the profile separately before launch
 pnpm --dir desktop/frontend tauri:build -- --config tauri.takeover.conf.json --bundles app,dmg
+# Cua: macOS 14+, Python 3.12+, pinned SDK and additional prerequisites
+python3 desktop/cua-runtime/scripts/build.py --bundle
 ```
 
-The takeover app and DMG are generated under `desktop/tauri/target/release/bundle/`. This candidate's takeover acceptance is macOS Apple Silicon only.
-
-Windows native build, from the repository root after installing Visual Studio C++ Build Tools:
+Native Windows and GNU/Linux:
 
 ```powershell
+# Windows: Visual Studio C++ Build Tools and ordinary Tauri prerequisites
 powershell -ExecutionPolicy Bypass -File desktop/tauri/scripts/build-windows.ps1
 ```
 
-Native GNU Linux build, on the same architecture after preparing GTK/WebKitGTK and other required libraries:
-
 ```bash
+# Ordinary Linux Preview, on the target architecture
 bash desktop/tauri/scripts/build-linux.sh
-# Debian package only:
-bash desktop/tauri/scripts/build-linux.sh deb
+# Linux Cua, with its X11/PipeWire build dependencies and AT-SPI environment
+python3 desktop/cua-runtime/scripts/build.py --bundle --bundles deb
 ```
 
-Linux packages are generated under `desktop/tauri/target/<native Rust triple>/release/bundle/`. This packaging path does not support macOS-to-Linux or cross-architecture Linux builds. See the [Tauri host guide](./desktop/tauri/README.md) for details and Windows cross-build prerequisites.
-
-The inherited CLI can still be built with `make build`; legacy Wails instructions are in [desktop/README.md](./desktop/README.md). These are separate from the Tauri Preview build.
+The Cua script handles source fetching, revision checks, notices and platform configuration. Linux builds are native/same-architecture; this path does not support macOS-to-Linux cross-packaging. Tauri uses the local frontend CLI without Wails CLI. The inherited Go CLI still builds with `make build`; [legacy Wails instructions](./desktop/README.md) describe a separate desktop host.
 
 ## Documentation
 
-- [Tauri host, development, and profile boundaries](./desktop/tauri/README.md)
-- [MiMo model switching fix in 0.1.3](./docs/tauri/MIMO_MODEL_SWITCH_RECOVERY.md)
-- [History model recovery in 0.1.2](./docs/tauri/HISTORY_MODEL_RECOVERY.md)
-- [Original-profile takeover, acceptance, and rollback](./docs/tauri/STABLE_TAKEOVER.md)
-- [E migration scope and remaining work](./docs/tauri/E_MIGRATION_CHECKLIST.md)
-- [API surface audit and release gates](./docs/tauri/API_SURFACE_AUDIT.md)
-- [Windows preview acceptance](./docs/tauri/WINDOWS_PREVIEW_ACCEPTANCE.md)
-- [Linux preview acceptance](./docs/tauri/LINUX_PREVIEW_ACCEPTANCE.md)
-- Inherited engine documentation: [Guide](./docs/GUIDE.md) · [CLI](./docs/CLI.md) · [ACP](./docs/ACP.md) · [Extensions](./docs/EXTENSIONS.md) · [Configuration paths](./docs/CONFIG_PATHS.md)
+- [Tauri host and historical acceptance](./desktop/tauri/README.md)
+- [Cua engine, permissions, build and limits](./desktop/cua-runtime/README.md)
+- [AI diagnostic export](./docs/tauri/AI_DIAGNOSTIC_LOGS.zh-CN.md)
+- [Parallel sessions](./docs/tauri/PARALLEL_SESSIONS.md) · [Steering](./docs/tauri/SESSION_STEERING.md) · [Continuation](./docs/tauri/EMPTY_COMPOSER_CONTINUE.md)
+- [Takeover/rollback](./docs/tauri/STABLE_TAKEOVER.md) · [Session storage](./docs/tauri/SESSION_STORAGE_IMPLEMENTATION_V3.md) · [SQLite events](./docs/tauri/SESSION_SQLITE_EVENT_STORE_RFC.md)
+- [Instructions, memory and retrieval](./docs/SESSION_MEMORY_RETRIEVAL.md)
+- [Dated migration log](./docs/tauri/E_MIGRATION_CHECKLIST.md) · [API audit](./docs/tauri/API_SURFACE_AUDIT.md)
+- Inherited engine: [Guide](./docs/GUIDE.md) · [CLI](./docs/CLI.md) · [ACP](./docs/ACP.md) · [Extensions](./docs/EXTENSIONS.md) · [Configuration paths](./docs/CONFIG_PATHS.md)
 
-Engine and legacy desktop documents may describe upstream/Wails behavior; use the Tauri migration and acceptance records for this Preview's actual scope.
+Historical evidence retains its original date and scope. Older failures/successes do not by themselves describe the current package; engine and Wails documents may describe upstream behavior rather than this adaptation.
 
-## Project origin and license
+## Origin and license
 
-This fork is based on [esengine/DeepSeek-Reasonix](https://github.com/esengine/DeepSeek-Reasonix). Thanks to the upstream authors and contributors for the original engine and project foundation. The retained project logo is credited to [Bernardxu123](https://github.com/Bernardxu123).
+The upstream engine and inherited features come from [esengine/DeepSeek-Reasonix](https://github.com/esengine/DeepSeek-Reasonix). The Tauri host and branch-specific improvements are independently maintained here. The retained logo is credited to [Bernardxu123](https://github.com/Bernardxu123).
 
-Upstream contributors are historical contributors to that foundation, not a list of developers working on this Tauri adaptation. This README does not display an upstream contribution leaderboard or donation destination as belonging to this fork.
-
-The original copyright and MIT license notice are retained in [LICENSE](./LICENSE).
+Original copyright and MIT notices remain in [LICENSE](./LICENSE). Cua and its dependencies retain separate notices/source obligations as documented in the runtime guide.
