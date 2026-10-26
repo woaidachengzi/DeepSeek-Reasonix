@@ -1,5 +1,17 @@
 use crate::request::Target;
 
+#[cfg(any(target_os = "linux", test))]
+mod linux;
+
+#[cfg(target_os = "linux")]
+pub fn verify(target: &Target) -> Result<(), String> {
+    let (identity, ticks) = linux::resolve(target.pid)?;
+    if target.bundle_id != identity || target.launch_time != ticks as f64 {
+        return Err("approved Linux app incarnation changed".into());
+    }
+    Ok(())
+}
+
 // Recheck the approved native process incarnation before entering the SDK.
 #[cfg(target_os = "macos")]
 pub fn verify(target: &Target) -> Result<(), String> {
@@ -28,7 +40,7 @@ pub fn verify(target: &Target) -> Result<(), String> {
     })
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 pub fn verify(_: &Target) -> Result<(), String> {
-    Err("this Reasonix Cua adapter is currently macOS-only".into())
+    Err("this Reasonix Cua adapter requires macOS or GNU/Linux".into())
 }

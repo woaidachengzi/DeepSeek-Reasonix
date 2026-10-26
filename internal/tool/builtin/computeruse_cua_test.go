@@ -70,6 +70,14 @@ func TestCuaObservationDoesNotDuplicateTreeInSummary(t *testing.T) {
 	}
 }
 
+func TestCuaObservationPreservesTextOnlyDriverError(t *testing.T) {
+	reply := computeruse.CuaReply{IsError: true, Result: json.RawMessage(`null`), Text: "fixture capture unavailable"}
+	body, _, err := (computerUse{}).cuaResult(t.Context(), computeruse.CuaRequest{Action: "observe"}, nil, reply)
+	if err == nil || !strings.Contains(err.Error(), reply.Text) || !strings.Contains(body, reply.Text) {
+		t.Fatalf("observation hid driver diagnostic: %s %v", body, err)
+	}
+}
+
 func TestCuaSDKRefusalIsDistinctFromUnknownCompletion(t *testing.T) {
 	for _, unknown := range []bool{false, true} {
 		reply := computeruse.CuaReply{IsError: true, ErrorCode: "invalid_arguments", Result: json.RawMessage(`{"status":"refused","refusal":{"code":"invalid_arguments"}}`)}

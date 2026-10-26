@@ -395,7 +395,10 @@ for (const path of localeChunks) {
   // captions. Removing only those keys from emitted chunks measures
   // 81889 -> 82806 B (zh, +917 B), 82493 -> 83418 B (zh-TW, +925 B).
   // Bound that measured copy growth; retain all initial JS and CSS budgets.
-  const budget = (name.startsWith("zh-TW-") ? 81.5 : 80.9) * 1024;
+  // Linux readiness adds six captions and generalizes two platform labels:
+  // 82806 -> 83157 B (zh, +351 B), 83418 -> 83782 B (zh-TW, +364 B).
+  // Use the next decimal ceilings; keep initial JS/CSS budgets unchanged.
+  const budget = (name.startsWith("zh-TW-") ? 81.9 : 81.3) * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 

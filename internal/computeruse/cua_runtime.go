@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -103,10 +104,7 @@ func (c *CuaRuntime) start(lifetime context.Context) error {
 		return err
 	}
 	// Do not inherit model keys, user config, shell init, or driver overrides.
-	cmd.Env = []string{"PATH=/usr/bin:/bin:/usr/sbin:/sbin"}
-	if home, err := os.UserHomeDir(); err == nil {
-		cmd.Env = append(cmd.Env, "HOME="+home)
-	}
+	cmd.Env = cuaProcessEnvironment(runtime.GOOS)
 	cmd.Stderr = io.Discard
 	if err := cmd.Start(); err != nil {
 		_ = input.Close()

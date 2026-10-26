@@ -2,6 +2,7 @@
   "repository": "https://github.com/trycua/cua.git",
   "revision": "e754cfec69c41400eb2aabde716c27d15607b2f0",
   "scope": "libs/cua-driver/rust",
+  "additional_scopes": ["libs/cua-driver/wayland-helper"],
   "license": "MIT",
   "excluded": ["Cua Spaces", "cua-driver-bench", "perception model artifacts"]
 }

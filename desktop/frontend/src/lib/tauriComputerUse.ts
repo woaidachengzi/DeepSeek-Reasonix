@@ -6,6 +6,7 @@ export interface ComputerUseStatus {
   available: boolean;
   accessibility: boolean;
   screenRecording: boolean;
+  linux?: { x11: boolean; atspi: boolean; wayland: boolean; wayland_enabled: boolean; xsend_event: boolean; gnome_shell_major?: number };
 }
 
 export type ComputerUsePermission = "accessibility" | "screen_recording";

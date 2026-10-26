@@ -1,0 +1,63 @@
+{
+  "stat": [
+    {
+      "name": "spaces and closing parentheses",
+      "text": "42 (fixture ) with spaces) S 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 12345 0 0",
+      "ticks": 12345
+    },
+    {
+      "name": "maximum exact float",
+      "text": "42 (fixture ) with spaces) S 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 9007199254740991",
+      "ticks": 9007199254740991
+    },
+    {
+      "name": "missing comm",
+      "text": "invalid",
+      "ticks": null
+    },
+    {
+      "name": "short",
+      "text": "42 (x) S",
+      "ticks": null
+    },
+    {
+      "name": "zombie",
+      "text": "42 (fixture ) with spaces) Z 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 123",
+      "ticks": null
+    },
+    {
+      "name": "dead",
+      "text": "42 (fixture ) with spaces) X 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 123",
+      "ticks": null
+    },
+    {
+      "name": "zero",
+      "text": "42 (fixture ) with spaces) S 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0",
+      "ticks": null
+    },
+    {
+      "name": "overflow",
+      "text": "42 (fixture ) with spaces) S 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 9007199254740992",
+      "ticks": null
+    },
+    {
+      "name": "invalid",
+      "text": "42 (fixture ) with spaces) S 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 oops",
+      "ticks": null
+    },
+    {
+      "name": "negative",
+      "text": "42 (fixture ) with spaces) S 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1",
+      "ticks": null
+    }
+  ],
+  "fingerprint": {
+    "boot": "12345678-1234-1234-1234-123456789abc\n",
+    "namespace": "pid:[4026531836]",
+    "uid": 1000,
+    "dev": 2049,
+    "ino": 987654321,
+    "exe": "/opt/测试 app/browser",
+    "expected": "linux:5eb5d9d3dd20b158f2134be281bee026d16d3c0578b7fc6f0ba2c15e03bcf8b4"
+  }
+}

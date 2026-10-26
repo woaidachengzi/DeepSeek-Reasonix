@@ -56,8 +56,19 @@ try {
   assert(!document.body.textContent?.includes("Included with the app"), "failed reads must not retain stale readiness");
   fail = false; native = { ...native, available: false, platform: "linux" };
   await click("Refresh status");
-  assert(document.body.textContent?.includes("Requires macOS 14"));
-  assert(button("Open Screen recording settings").disabled);
+  assert(document.body.textContent?.includes("GNU/Linux build with the Cua runtime"));
+  assert(!button("Open Screen recording settings"), "Linux must not show macOS permission controls");
+  native = { ...native, available: true, linux: { x11: true, atspi: false, wayland: true, wayland_enabled: false, xsend_event: true } };
+  await click("Refresh status");
+  assert(document.body.textContent?.includes("X11 / XWayland"));
+  assert(document.body.textContent?.includes("AT-SPI"));
+  assert(document.body.textContent?.includes("only supported XWayland windows"));
+  assert(!document.body.textContent?.includes("Screen recording"));
+  assert.equal(opened.length, 1, "Linux readiness must not open OS permission settings");
+  native = { ...native, linux: { ...native.linux!, gnome_shell_major: 50 } };
+  await click("Refresh status");
+  assert(document.body.textContent?.includes("GNOME 50"));
+  assert(!document.body.textContent?.includes("Native Wayland support is off"), "unsupported compositor must not suggest simply enabling its unsafe helper");
 
   heldStatus = new Promise(resolve => { oldRequest = resolve; });
   await render("/qa/old");

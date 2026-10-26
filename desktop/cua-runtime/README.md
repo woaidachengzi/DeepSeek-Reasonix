@@ -1,6 +1,6 @@
 # Reasonix Cua edition
 
-The first macOS integration links the MIT Cua Driver Rust SDK from
+The macOS and GNU/Linux integration links the MIT Cua Driver Rust SDK from
 [`trycua/cua` at `e754cfec69c41400eb2aabde716c27d15607b2f0`](https://github.com/trycua/cua/tree/e754cfec69c41400eb2aabde716c27d15607b2f0/libs/cua-driver/rust).
 The linked driver reports version `0.38.0`. No reverse engineering or proprietary
 Cua Spaces code is used.
@@ -24,7 +24,59 @@ available through `tauri:build` and `tauri.takeover.conf.json`.
 Compatibility adjustments: sibling upstream crates receive an explicit
 `workspace = "../.."` Cargo manifest entry; `apple-metal` stays at `0.6.0`, as in
 the upstream lock, for the supported Command Line Tools SDK; our executable adds
-`/usr/lib/swift` to its runtime search paths. Upstream behavior source is unchanged.
+`/usr/lib/swift` to its runtime search paths. Two Linux parent-module aliases use
+equivalent fully qualified imports for Ubuntu's Rust 1.93. The patch's before/after
+hashes ship in `reasonix-source-patches.json`. The Linux AT-SPI insert/fallback
+lengths also use UTF-8 byte counts, as required by the
+[GNOME interface](https://gnome.pages.gitlab.gnome.org/at-spi2-core/libatspi/method.EditableText.insert_text.html),
+instead of character counts that truncate Chinese input. These two MIT source
+patches are applied only after a clean pinned export and fail if the expected
+source statements change. No MPL source files are modified.
+
+## GNU/Linux build and scope
+
+Build natively on x64 or ARM64 GNU/Linux with Rust, Go, Python 3.12+, Node 24+
+and the regular Linux Preview WebKitGTK/GTK prerequisites. Cua additionally
+needs X11/XTest/XInput development libraries, libxkbcommon, PipeWire development
+headers and libclang for the PipeWire bindings. On Ubuntu these include
+`libx11-dev libxtst-dev libxi-dev libxrandr-dev libxfixes-dev libxcomposite-dev
+libxext-dev libxkbcommon-dev libpipewire-0.3-dev libclang-dev`.
+
+```sh
+python3 desktop/cua-runtime/scripts/build.py --bundle
+# Optional: build only a deb package
+python3 desktop/cua-runtime/scripts/build.py --bundle --bundles deb
+```
+
+Linux uses `tauri.cua.linux.conf.json` and its existing Preview data identity;
+it does not use the macOS takeover identity. Both the bridge and private Cua
+runtime are bundled. Normal Linux packages without that runtime do not register
+a nonfunctional computer-control tool. `REASONIX_COMPUTER_USE_ENGINE=native`
+disables Cua on Linux, where there is no legacy native implementation.
+
+Run the app as the logged-in desktop user, with the session's display and D-Bus
+environment. Settings report X11 and AT-SPI independently. Native Wayland is
+experimental in the pinned upstream SDK, remains off by default, and requires
+explicit `CUA_DRIVER_RS_ENABLE_WAYLAND=1` at application launch. Portal input
+and PipeWire capture support are compiled in; this does not imply that every
+compositor supports per-window capture or background input. Missing compositor
+helpers, portal consent, unsupported surfaces or an unverified window cause
+refusals. Do not fall back to full-desktop screenshots or uncontrolled input.
+The pinned WinRects helper explicitly refuses GNOME 50+ due to reported
+session-ending crashes. Keep that guard and helper version validation intact;
+Ubuntu 26.04 GNOME 50 needs XWayland-compatible applications for this preview.
+Settings detect GNOME 50+ and display the limitation. XWayland support and
+native Wayland support require separate live acceptance. Native `move` is not
+exposed on Linux: upstream only offers an unbound cursor overlay in that route,
+not a window-scoped screenshot-coordinate move. Browser ref-scoped hover remains
+available through `browser_pointer`.
+
+Linux app approval binds a same-user process to its kernel start ticks and a
+SHA-256 fingerprint of boot identity, PID namespace and executable path/device/
+inode. The process directory is pinned while reading identity. Go checks before
+and after consent; Rust checks independently before SDK dispatch. The existing
+`launch_time` wire field carries exact kernel start ticks on Linux, not Unix
+time. Both languages share a fingerprint and malformed/zombie-stat test corpus.
 
 ## Host contract
 

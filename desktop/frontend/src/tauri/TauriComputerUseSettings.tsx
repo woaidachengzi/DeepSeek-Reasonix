@@ -74,7 +74,14 @@ export function TauriComputerUseSettings({ workspaceRoot, sessionId, onOpenSandb
         </div>
         <p>{t("settings.computerUse.sandboxHint")}</p>
       </SettingsSection>
-      <SettingsSection title={t("settings.computerUse.systemPermissions")} description={t("settings.computerUse.permissionHint")}>
+      {view.native.platform === "linux" ? <SettingsSection title={t("settings.computerUse.linuxStatus")} description={t("settings.computerUse.linuxHint")}>
+        {(["x11", "atspi"] as const).map(capability => {
+          const ready = view.native.available && view.native.linux?.[capability] === true;
+          const Icon = ready ? CircleCheck : CircleAlert;
+          return <div className="tauri-computer-use-row" key={capability}><div><strong>{capability === "x11" ? "X11 / XWayland" : "AT-SPI"}</strong><p className="tauri-computer-use-permission"><Icon size={14} aria-hidden="true" />{t(ready ? "settings.computerUse.connected" : "settings.computerUse.disconnected")}</p></div></div>;
+        })}
+        {view.native.linux?.wayland && <p role="note">{t((view.native.linux.gnome_shell_major ?? 0) >= 50 ? "settings.computerUse.gnomeUnsupported" : view.native.linux.wayland_enabled ? "settings.computerUse.waylandEnabled" : "settings.computerUse.waylandDisabled")}</p>}
+      </SettingsSection> : <SettingsSection title={t("settings.computerUse.systemPermissions")} description={t("settings.computerUse.permissionHint")}>
         {view.native.available && (!view.native.accessibility || !view.native.screenRecording) && <p role="note">{t("settings.computerUse.permissionRecovery")}</p>}
         {(["accessibility", "screen_recording"] as const).map(permission => {
           const granted = permission === "accessibility" ? view.native.accessibility : view.native.screenRecording;
@@ -85,7 +92,7 @@ export function TauriComputerUseSettings({ workspaceRoot, sessionId, onOpenSandb
             <button type="button" className="tauri-settings-button" disabled={!view.native.available || opening} aria-label={t("settings.computerUse.openPermission", { permission: label })} onClick={() => void openPermission(permission)}><ExternalLink size={14} aria-hidden="true" />{t("settings.computerUse.openSystemSettings")}</button>
           </div>;
         })}
-      </SettingsSection>
+      </SettingsSection>}
       <SettingsSection title={t("settings.computerUse.rules")}>
         <div className="tauri-computer-use-row"><div><strong>{t("settings.computerUse.approval")}</strong><p>{t("settings.computerUse.approvalHint")}</p></div><button type="button" className="tauri-settings-button" onClick={onOpenPermissions}>{t("settings.computerUse.manageApproval")}</button></div>
         <div className="tauri-computer-use-row"><div><strong>{t("settings.computerUse.scope")}</strong><p>{t("settings.computerUse.scopeHint")}</p></div></div>

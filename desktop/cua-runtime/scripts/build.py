@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the source-pinned macOS adapter; optionally bundle the Cua edition."""
+"""Build the source-pinned native macOS/GNU Linux adapter and Cua edition."""
 import argparse
 import hashlib
 import json
@@ -32,9 +32,10 @@ def prepare(source):
     CACHE.mkdir(parents=True, exist_ok=True)
     marker.write_text('Source cache managed by desktop/cua-runtime/scripts/build.py\n')
     checkout = source or CACHE / '.checkout'
+    scopes = [PIN['scope'], *PIN.get('additional_scopes', [])]
     if not checkout.exists():
         run(['git', 'clone', '--filter=blob:none', '--no-checkout', PIN['repository'], checkout])
-        run(['git', '-C', checkout, 'sparse-checkout', 'set', PIN['scope']])
+        run(['git', '-C', checkout, 'sparse-checkout', 'set', *scopes])
         run(['git', '-C', checkout, 'checkout', '--detach', PIN['revision']])
     if output(['git', '-C', checkout, 'rev-parse', 'HEAD']) != PIN['revision']:
         raise RuntimeError('Upstream source revision differs from upstream.json')
@@ -42,21 +43,46 @@ def prepare(source):
         raise RuntimeError('Upstream checkout contains tracked modifications')
     with tempfile.TemporaryDirectory(prefix='reasonix-cua-source-') as temp:
         archive = Path(temp) / 'source.tar'
-        run(['git', '-C', checkout, 'archive', '--format=tar', f'--output={archive}', PIN['revision'], PIN['scope'], 'LICENSE.md'])
+        run(['git', '-C', checkout, 'archive', '--format=tar', f'--output={archive}', PIN['revision'], *scopes, 'LICENSE.md'])
         extracted = Path(temp) / 'extracted'
         with tarfile.open(archive) as contents:
             contents.extractall(extracted, filter='data')
-        destination = CACHE / PIN['scope']
-        if destination.exists():
-            shutil.rmtree(destination)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(extracted / PIN['scope'], destination)
+        for scope in scopes:
+            destination = CACHE / scope
+            if destination.exists():
+                shutil.rmtree(destination)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(extracted / scope, destination)
         shutil.copy2(extracted / 'LICENSE.md', CACHE / 'LICENSE.md')
     # Explicit workspace membership prevents Cargo adopting sibling path crates
     # into our small wrapper workspace. Source behavior is unchanged.
-    for manifest in destination.glob('crates/*/Cargo.toml'):
+    for manifest in (CACHE / PIN['scope']).glob('crates/*/Cargo.toml'):
         content = manifest.read_text()
         manifest.write_text(content.replace('[package]', '[package]\nworkspace = "../.."', 1))
+    # Keep Linux fixes explicit, bounded to the pinned source, and auditable.
+    patches = [
+        ('src/input/targeted.rs', 'Rust 1.93 compatible qualified module imports; no behavior change', [
+            (b'use super as input;', b'use crate::input;', 2),
+        ]),
+        ('src/atspi/native.rs', 'AT-SPI InsertText requires UTF-8 byte length; prevents truncating non-ASCII input', [
+            (b'let len = text.chars().count() as i32;', b'let len = text.len() as i32;', 1),
+            (b'let len = value.chars().count() as i32;', b'let len = value.len() as i32;', 1),
+        ]),
+    ]
+    records = []
+    for file, reason, replacements in patches:
+        relative = PIN['scope'] + '/crates/platform-linux/' + file
+        source_file = CACHE / relative
+        original = patched = source_file.read_bytes()
+        for before, after, count in replacements:
+            if patched.count(before) != count:
+                raise RuntimeError(f'Pinned Linux patch no longer matches: {relative}')
+            patched = patched.replace(before, after)
+        source_file.write_bytes(patched)
+        records.append(dict(file=relative, reason=reason,
+                            original_sha256=hashlib.sha256(original).hexdigest(),
+                            patched_sha256=hashlib.sha256(patched).hexdigest()))
+    (CACHE / 'reasonix-source-patches.json').write_text(json.dumps(records, indent=2) + '\n')
     (CACHE / 'reasonix-source.json').write_text(json.dumps(PIN, indent=2) + '\n')
     if (CACHE / 'LICENSE.md').read_bytes() != (RUNTIME / 'licenses/Cua-MIT.txt').read_bytes():
         raise RuntimeError('Pinned Cua MIT notice differs from shipped notice')
@@ -76,6 +102,7 @@ def notices(target):
     if folder.exists():
         shutil.rmtree(folder)
     shutil.copytree(RUNTIME / 'licenses', folder)
+    shutil.copy2(CACHE / 'reasonix-source-patches.json', folder / 'reasonix-source-patches.json')
     lock = tomllib.loads((RUNTIME / 'Cargo.lock').read_text())
     checksums = {(p['name'], p['version']): p.get('checksum') for p in lock['package']}
     index = []
@@ -126,11 +153,13 @@ def notices(target):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, help='existing clean checkout at the pinned revision')
-    parser.add_argument('--bundle', action='store_true', help='also build the Cua macOS app and DMG')
+    parser.add_argument('--bundle', action='store_true', help='also build the native Cua desktop packages')
+    parser.add_argument('--bundles', choices=['deb', 'appimage', 'deb,appimage'], default='deb,appimage', help='Linux package selection')
     args = parser.parse_args()
     target = output(['rustc', '--print', 'host-tuple'])
-    if not target.endswith('-apple-darwin'):
-        raise RuntimeError('This first adapter is macOS-only')
+    linux = target in ('x86_64-unknown-linux-gnu', 'aarch64-unknown-linux-gnu')
+    if not linux and target not in ('x86_64-apple-darwin', 'aarch64-apple-darwin'):
+        raise RuntimeError('Cua desktop packages require a native macOS or x64/ARM64 GNU Linux build host')
     if f'const cuaSourceRevision = "{PIN["revision"]}"' not in (ROOT / 'internal/computeruse/cua_runtime.go').read_text():
         raise RuntimeError('Go host and Rust runtime source pins differ')
     prepare(args.source.resolve() if args.source else None)
@@ -144,7 +173,10 @@ def main():
     shutil.copy2(binary, destination)
     print(f'Cua {PIN["revision"]}: {destination}', flush=True)
     if args.bundle:
-        run(['node', ROOT / 'desktop/frontend/scripts/tauri-build.mjs', '--config', 'tauri.cua.conf.json'], cwd=ROOT / 'desktop/frontend')
+        bundle_args = ['--config', 'tauri.cua.conf.json']
+        if linux:
+            bundle_args = ['--config', 'tauri.cua.linux.conf.json', '--target', target, '--bundles', args.bundles]
+        run(['node', ROOT / 'desktop/frontend/scripts/tauri-build.mjs', *bundle_args], cwd=ROOT / 'desktop/frontend')
 
 
 if __name__ == '__main__':

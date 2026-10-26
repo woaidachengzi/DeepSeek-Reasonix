@@ -43,7 +43,7 @@ pub fn open_computer_use_permission(
     permission: ComputerUsePermission,
 ) -> Result<(), String> {
     if !cfg!(target_os = "macos") {
-        return Err("desktop control requires macOS 14 or later".into());
+        return Err("this system permission pane is only available on macOS".into());
     }
     app.opener()
         .open_url(permission.url(), None::<&str>)

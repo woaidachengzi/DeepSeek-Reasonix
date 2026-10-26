@@ -1,0 +1,38 @@
+{
+  "checks": [
+    {
+      "profile": "managed",
+      "startup": "passed",
+      "unauthenticatedHealth": 401,
+      "privateProfile": true,
+      "cleanup": "ordinary RunEvent::Exit; sidecar/readiness gone",
+      "artifact": "deb"
+    },
+    {
+      "profile": "explicit",
+      "startup": "passed",
+      "unauthenticatedHealth": 401,
+      "privateProfile": true,
+      "cleanup": "ordinary RunEvent::Exit; sidecar/readiness gone",
+      "artifact": "deb"
+    },
+    {
+      "profile": "managed",
+      "startup": "passed",
+      "unauthenticatedHealth": 401,
+      "privateProfile": true,
+      "cleanup": "ordinary RunEvent::Exit; sidecar/readiness gone",
+      "artifact": "AppImage AppRun"
+    },
+    {
+      "profile": "explicit",
+      "startup": "passed",
+      "unauthenticatedHealth": 401,
+      "privateProfile": true,
+      "cleanup": "ordinary RunEvent::Exit; sidecar/readiness gone",
+      "artifact": "AppImage AppRun"
+    }
+  ],
+  "passed": true,
+  "scope": "Owned Xvfb and private D-Bus, fresh disposable profile; no Wayland portal acceptance"
+}

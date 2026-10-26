@@ -1,0 +1,28 @@
+{
+  "scope": "Only processes owned by UID 1000 with both exact disposable QA HOME and XDG_RUNTIME_DIR; PID start times rechecked",
+  "selected_pids": [
+    108781,
+    108782,
+    108786,
+    108798,
+    108804,
+    108806,
+    108812,
+    108815,
+    108837,
+    108843,
+    108854,
+    108896,
+    108904,
+    108913,
+    108947,
+    108984,
+    109003,
+    109014,
+    129843
+  ],
+  "remaining_live_pids": [],
+  "passed": true,
+  "user_session_untouched": true,
+  "installed_application_untouched": true
+}

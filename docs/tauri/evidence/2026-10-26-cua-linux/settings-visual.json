@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "observed_at": "2026-10-26T17:37:00+08:00",
+  "navigation": "User opened Settings > Computer control; agent verified through CUA screenshot",
+  "checks": {
+    "bundled_desktop_control": true,
+    "x11_xwayland_connected": true,
+    "atspi_connected": true,
+    "gnome50_wayland_limitation_visible": true,
+    "macos_permission_controls_absent_from_linux_status_card": true,
+    "enforced_workspace_isolation_disables_control": true
+  },
+  "policy_changed": false,
+  "screenshot": "linux-settings.png",
+  "screenshot_sha256": "5a41443e38b379bbfc6300c07dc5be913134ca44ea9af029aab88404777e7d16"
+}

@@ -191,6 +191,9 @@ impl Envelope {
                 "scroll"
             }
             "move" => {
+                if cfg!(target_os = "linux") {
+                    return Err("app-scoped native move is unavailable on Linux; use browser_pointer hover for an observed browser ref".into());
+                }
                 if point.is_none() {
                     return Err("move needs a screenshot point".into());
                 }
@@ -281,10 +284,16 @@ mod tests {
             json!({"action":"browser_pointer","target_id":"b1","tab_id":"t1","ref":"p1:e1","gesture":"scroll","delta_y":350.}),
             json!({"action":"browser_pointer","target_id":"b1","tab_id":"t1","ref":"p1:e1","gesture":"drag","destination_ref":"p1:e2"}),
         ] {
+            let unavailable_move = cfg!(target_os = "linux") && fields["action"] == "move";
             let mut request = fields;
             request["pid"] = json!(42);
             request["window_id"] = json!(11);
-            let (name, args) = envelope(request).plan().unwrap();
+            let planned = envelope(request).plan();
+            if unavailable_move {
+                assert!(planned.unwrap_err().contains("app-scoped native move"));
+                continue;
+            }
+            let (name, args) = planned.unwrap();
             let schema = &tools.iter().find(|tool| tool["name"] == name).unwrap()["inputSchema"];
             let properties = schema["properties"].as_object().unwrap();
             for key in args.as_object().unwrap().keys() {
@@ -337,7 +346,12 @@ mod tests {
         );
         let state: Value = serde_json::from_str(&reply.structured_json.unwrap()).unwrap();
         assert_eq!(state["status"], "refused");
-        assert_eq!(state["refusal"]["code"], "browser_route_unavailable");
+        let expected = if cfg!(target_os = "linux") {
+            "browser_binding_stale"
+        } else {
+            "browser_route_unavailable"
+        };
+        assert_eq!(state["refusal"]["code"], expected);
         session.close();
         driver.shutdown().await.unwrap();
     }

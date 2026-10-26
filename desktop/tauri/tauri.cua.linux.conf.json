@@ -1,0 +1,19 @@
+{
+  "productName": "Reasonix Tauri",
+  "version": "0.1.62",
+  "identifier": "io.reasonix.desktop.preview",
+  "bundle": {
+    "targets": ["deb", "appimage"],
+    "externalBin": ["binaries/reasonix-desktop-bridge", "binaries/reasonix-cua-runtime"],
+    "resources": {
+      "../cua-runtime/generated-notices/": "cua-notices/",
+      "../cua-source/libs/cua-driver/wayland-helper/winrects@cua/": "cua-wayland-helper/winrects@cua/"
+    },
+    "linux": {
+      "deb": {
+        "depends": ["libayatana-appindicator3-1", "libx11-6", "libxtst6", "libxi6", "libxkbcommon0", "libpipewire-0.3-0", "libdbus-1-3"]
+      }
+    }
+  },
+  "plugins": { "updater": { "endpoints": [] } }
+}

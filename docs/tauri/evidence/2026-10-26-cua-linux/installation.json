@@ -1,0 +1,12 @@
+{
+  "previous_version": "0.1.44",
+  "installed_version": "0.1.62",
+  "architecture": "arm64",
+  "sha256": {
+    "reasonix-tauri": "6a459cbe35c2d1e79ba0605ca3de62f37f46505a437bf5cb701876d74f8f83b2",
+    "reasonix-desktop-bridge": "8b96b2324949fac850bcac5561e605f73adc1d9ae3993283c8a244b70edf1276",
+    "reasonix-cua-runtime": "c98d5f0609d28a4e476cca64dbf269259969c16372b3bc7181b4de81b3038eb9"
+  },
+  "rollback_package": "/home/parallels/reasonix-builds/linux-cua-20261026.77SlQe/rollback-0.1.44",
+  "user_profile_unchanged": true
+}

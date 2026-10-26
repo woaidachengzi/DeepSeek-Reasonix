@@ -1,0 +1,29 @@
+{
+  "passed": true,
+  "pid": 108290,
+  "window_id": 2097154,
+  "oracle": {
+    "clicks": 1,
+    "trusted": true
+  },
+  "checks": [
+    "actual-builtin-route",
+    "profile-consent-refusal",
+    "exact-tab",
+    "Chinese-replace-readback",
+    "select-label",
+    "select-empty",
+    "select-no-op",
+    "background-trust-refusal-readback",
+    "trusted-hover",
+    "trusted-right-click",
+    "trusted-double-click",
+    "trusted-scroll",
+    "trusted-drag",
+    "one-trusted-click-oracle",
+    "cross-window-refusal",
+    "navigate-readback",
+    "stale-ref-refusal",
+    "tab-screenshots"
+  ]
+}
