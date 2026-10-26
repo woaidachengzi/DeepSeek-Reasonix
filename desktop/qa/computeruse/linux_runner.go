@@ -18,8 +18,9 @@ import (
 )
 
 type fixtureApproval struct {
-	target  tool.ComputerUseTarget
-	browser bool
+	target     tool.ComputerUseTarget
+	browser    bool
+	foreground bool
 }
 
 func (a fixtureApproval) ApproveComputerUse(_ context.Context, target tool.ComputerUseTarget) (bool, error) {
@@ -28,10 +29,14 @@ func (a fixtureApproval) ApproveComputerUse(_ context.Context, target tool.Compu
 func (a fixtureApproval) ApproveBrowserProfile(_ context.Context, target tool.ComputerUseTarget, window int) (bool, error) {
 	return a.browser && target == a.target && window > 0, nil
 }
+func (a fixtureApproval) ApproveComputerUseForeground(_ context.Context, target tool.ComputerUseTarget, window int, _ string) (bool, error) {
+	return a.foreground && target == a.target && window > 0, nil
+}
 
 func main() {
 	pid := flag.Int("pid", 0, "PID of this run's disposable fixture")
 	browser := flag.Bool("browser-profile-approved", false, "explicitly approve attaching this disposable browser profile")
+	foreground := flag.Bool("foreground-approved", false, "explicitly permit foreground input on this disposable fixture")
 	flag.Parse()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -41,7 +46,7 @@ func main() {
 		os.Exit(1)
 	}
 	ctx = tool.WithComputerUseLifetime(ctx, ctx)
-	ctx = tool.WithComputerUseApprover(ctx, fixtureApproval{target: tool.ComputerUseTarget(target), browser: *browser})
+	ctx = tool.WithComputerUseApprover(ctx, fixtureApproval{target: tool.ComputerUseTarget(target), browser: *browser, foreground: *foreground})
 	control := builtin.ConfineComputerUse(sandbox.Spec{})
 	input := bufio.NewScanner(os.Stdin)
 	input.Buffer(make([]byte, 4096), 128<<10)

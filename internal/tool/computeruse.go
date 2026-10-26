@@ -22,6 +22,12 @@ type BrowserProfileApprover interface {
 	ApproveBrowserProfile(context.Context, ComputerUseTarget, int) (bool, error)
 }
 
+// Foreground access is a single action, never covered by ordinary app/profile
+// access. Hosts must obtain a fresh human decision; unattended hosts refuse.
+type ComputerUseForegroundApprover interface {
+	ApproveComputerUseForeground(context.Context, ComputerUseTarget, int, string) (bool, error)
+}
+
 type ComputerUsePreview struct {
 	Target   ComputerUseTarget
 	WindowID int

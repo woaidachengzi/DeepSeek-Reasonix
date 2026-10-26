@@ -4730,7 +4730,7 @@ export const en = {
   "settings.computerUse.opened": "System Settings opened. After granting access, return and refresh the status.",
   "settings.computerUse.rules": "Usage rules",
   "settings.computerUse.approval": "Action confirmation",
-  "settings.computerUse.approvalHint": "Uses the current session’s tool approval policy.",
+  "settings.computerUse.approvalHint": "Cua uses background by default; each foreground step needs your confirmation.",
   "settings.computerUse.manageApproval": "Manage confirmations",
   "settings.computerUse.scope": "Scope of control",
   "settings.computerUse.scopeHint": "Controls the selected app’s active window: click, type, keyboard shortcuts, and vertical scrolling.",

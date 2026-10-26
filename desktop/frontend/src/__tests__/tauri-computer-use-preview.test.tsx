@@ -50,6 +50,13 @@ const allow = document.querySelector<HTMLButtonElement>(".tauri-prompt-card__all
 assert.equal(allow.textContent, "允许本次任务");
 await act(async () => { allow.click(); });
 assert.ok(fixture.__tauriBridgeCalls.some(c => c.name === "bridge_approve" && c.args.allow === true));
+await emit("approval_request", { approval: { id: "foreground-once", tool: "computer_use_foreground", subject: "测试应用 · 窗口 11 · 点击", reason: "这一步需要切到前台，只允许这一步。" } });
+assert.ok(document.body.textContent?.includes("这一步需要切到前台"));
+assert.equal(document.querySelector<HTMLButtonElement>(".tauri-prompt-card__allow")?.textContent, "允许这一步");
+const keepBackground = document.querySelector<HTMLButtonElement>(".tauri-prompt-card__deny")!;
+assert.equal(keepBackground.textContent, "保持后台");
+await act(async () => { keepBackground.click(); });
+assert.ok(fixture.__tauriBridgeCalls.some(c => c.name === "bridge_approve" && c.args.allow === false));
 await emit("tool_progress", { tool: { name: "computer_use", computerUsePreview: { ...preview, action: "move" } } });
 assert.ok(document.body.textContent?.includes("核对鼠标落点"), "actual pointer preview remains visible before confirmation");
 await emit("tool_progress", { tool: { name: "computer_use", computerUsePreview: { ...preview, action: "confirm_click" } } });

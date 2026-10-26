@@ -1,0 +1,7 @@
+{
+  "qa_permission_revoked": true,
+  "qa_permission_verified_by": "System Settings toggle visibly off after test",
+  "screen_recording_not_granted": true,
+  "qa_host_and_idle_worker_stopped": true,
+  "remaining_own_processes": []
+}

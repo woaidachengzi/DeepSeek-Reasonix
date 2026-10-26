@@ -1,0 +1,35 @@
+{
+  "ok": true,
+  "delivery_mode": "background",
+  "parallel": {
+    "focus_changes": 0,
+    "key_events": 20,
+    "monitoring": true,
+    "own_frontmost": true,
+    "pointer_changes": 0,
+    "text": "reasonixparallel2026"
+  },
+  "checks": [
+    "profile-consent",
+    "exact-tab",
+    "Chinese-replace-readback",
+    "no-duplicate",
+    "clear",
+    "DOM-select-label",
+    "DOM-select-empty-value",
+    "DOM-select-no-op",
+    "trusted-hover",
+    "trusted-right-click",
+    "trusted-double-click",
+    "trusted-scroll",
+    "trusted-drag",
+    "DOM-click-readback",
+    "CDP-screenshot",
+    "cross-window-refusal",
+    "navigate-readback",
+    "navigation-invalidates-refs",
+    "foreground-retained",
+    "real-pointer-unchanged",
+    "parallel-keyboard-readback"
+  ]
+}

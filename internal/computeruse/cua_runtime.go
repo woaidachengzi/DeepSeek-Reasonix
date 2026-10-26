@@ -123,32 +123,48 @@ func (c *CuaRuntime) start(lifetime context.Context) error {
 }
 
 func (c *CuaRuntime) Call(ctx, lifetime context.Context, request CuaRequest, target *Target) (CuaReply, error) {
-	return c.call(ctx, lifetime, request, target, false)
+	return c.CallWithHostApprovals(ctx, lifetime, request, target, CuaHostApprovals{})
 }
 
-// Only the interactive host may supply this approval; it is never a model field.
+// These approvals travel only over the host's private pipe, never in the model
+// request schema. A foreground grant is consumed by this one call.
+type CuaHostApprovals struct {
+	BrowserProfile bool
+	Foreground     bool
+}
+
 func (c *CuaRuntime) CallWithBrowserApproval(ctx, lifetime context.Context, request CuaRequest, target *Target) (CuaReply, error) {
-	if request.Action != "browser_prepare" || target == nil {
+	return c.CallWithHostApprovals(ctx, lifetime, request, target, CuaHostApprovals{BrowserProfile: true})
+}
+
+func (c *CuaRuntime) CallWithHostApprovals(ctx, lifetime context.Context, request CuaRequest, target *Target, approvals CuaHostApprovals) (CuaReply, error) {
+	if approvals.BrowserProfile && (request.Action != "browser_prepare" || target == nil) {
 		return CuaReply{}, errors.New("browser approval applies only to an exact app attachment")
 	}
-	return c.call(ctx, lifetime, request, target, true)
+	if approvals.Foreground && (request.DeliveryMode != "foreground" || target == nil) {
+		return CuaReply{}, errors.New("foreground approval applies only to this exact foreground action")
+	}
+	return c.call(ctx, lifetime, request, target, approvals)
 }
 
-func (c *CuaRuntime) call(ctx, lifetime context.Context, request CuaRequest, target *Target, browserApproved bool) (CuaReply, error) {
+func (c *CuaRuntime) call(ctx, lifetime context.Context, request CuaRequest, target *Target, approvals CuaHostApprovals) (CuaReply, error) {
 	if lifetime == nil || lifetime.Done() == nil {
 		return CuaReply{}, errors.New("Cua requires a host-owned task lifetime")
 	}
 	if err := request.Validate(); err != nil {
 		return CuaReply{}, err
 	}
-	if request.Action == "browser_prepare" && !browserApproved {
+	if request.DeliveryMode == "foreground" && !approvals.Foreground {
+		return CuaReply{}, errors.New("foreground action requires fresh single-action host approval; keep background delivery")
+	}
+	if request.Action == "browser_prepare" && !approvals.BrowserProfile {
 		return CuaReply{}, errors.New("browser attachment requires separate profile approval")
 	}
 	if lifetime.Err() != nil || ctx.Err() != nil {
 		return CuaReply{}, context.Canceled
 	}
 	if c.tasks != nil {
-		return c.task(lifetime).call(ctx, lifetime, request, target, browserApproved)
+		return c.task(lifetime).call(ctx, lifetime, request, target, approvals)
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -170,12 +186,13 @@ func (c *CuaRuntime) call(ctx, lifetime context.Context, request CuaRequest, tar
 	c.sequence++
 	id := c.sequence
 	body, _ := json.Marshal(struct {
-		Protocol        int        `json:"protocol"`
-		ID              uint64     `json:"id"`
-		Request         CuaRequest `json:"request"`
-		Target          *Target    `json:"approved_target"`
-		BrowserApproved bool       `json:"browser_profile_approved"`
-	}{cuaProtocol, id, request, target, browserApproved})
+		Protocol           int        `json:"protocol"`
+		ID                 uint64     `json:"id"`
+		Request            CuaRequest `json:"request"`
+		Target             *Target    `json:"approved_target"`
+		BrowserApproved    bool       `json:"browser_profile_approved"`
+		ForegroundApproved bool       `json:"foreground_approved"`
+	}{cuaProtocol, id, request, target, approvals.BrowserProfile, approvals.Foreground})
 	type outcome struct {
 		value CuaReply
 		err   error

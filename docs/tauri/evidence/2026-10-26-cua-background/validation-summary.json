@@ -1,0 +1,17 @@
+{
+  "go_race_packages": 5,
+  "rust_tests": 9,
+  "shared_request_cases": 51,
+  "python_export_tests": 2,
+  "frontend_settings_dom": "passed",
+  "frontend_foreground_prompt_dom": "passed",
+  "full_frontend_build_and_budgets": "passed",
+  "linux_fixture_cross_compile": "passed; no VM execution",
+  "parallel_passes": 2,
+  "parallel_checks_per_pass": 21,
+  "foreground_key_events_per_pass": 20,
+  "focus_changes_per_pass": 0,
+  "real_pointer_changes_per_pass": 0,
+  "initial_parallel_trial": "failed/inconclusive pointer movement; preserved",
+  "installed_version": "0.1.63"
+}

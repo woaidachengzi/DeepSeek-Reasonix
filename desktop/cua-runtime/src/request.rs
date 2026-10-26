@@ -19,6 +19,8 @@ pub struct Envelope {
     pub approved_target: Option<Target>,
     #[serde(default)]
     pub browser_profile_approved: bool,
+    #[serde(default)]
+    pub foreground_approved: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -60,6 +62,20 @@ pub struct Request {
 impl Envelope {
     pub fn plan(&self) -> Result<(&'static str, Value), String> {
         let r = &self.request;
+        let foreground = r.delivery_mode.as_deref() == Some("foreground");
+        if foreground != self.foreground_approved || foreground && self.approved_target.is_none() {
+            return Err("foreground input requires fresh single-action host approval".into());
+        }
+        // A new Chrome DevTools connection can activate Chrome independently
+        // of our input. Do not use upstream's activate-then-restore guard as a
+        // promise of no interruption, even when the window is on another Space.
+        if cfg!(target_os = "macos")
+            && r.action == "browser_prepare"
+            && self.browser_profile_approved
+            && !foreground
+        {
+            return Err("macOS browser connection setup may activate the browser; pause and request foreground with fresh single-action confirmation, then use background for ordinary page work".into());
+        }
         r.validate_browser_operation_fields()?;
         if r.action == "status" {
             return Ok(("check_permissions", json!({"prompt":false})));
@@ -212,6 +228,39 @@ mod tests {
         serde_json::from_value(json!({"protocol":1,"id":1,"request":request,"approved_target":{"pid":42,"name":"Fixture","bundle_id":"test.fixture","launch_time":100.}})).unwrap()
     }
     #[test]
+    fn foreground_requires_one_action_private_host_approval() {
+        let mut e = envelope(
+            json!({"action":"key","pid":42,"window_id":11,"key":"tab","delivery_mode":"foreground"}),
+        );
+        assert!(e
+            .plan()
+            .unwrap_err()
+            .contains("single-action host approval"));
+        e.foreground_approved = true;
+        let (_, args) = e.plan().unwrap();
+        assert_eq!(args["delivery_mode"], "foreground");
+        assert!(args.get("foreground_approved").is_none());
+        e.request.delivery_mode = None;
+        assert!(
+            e.plan().is_err(),
+            "grant leaked into a later background request"
+        );
+        let mut prep = envelope(
+            json!({"action":"browser_prepare","pid":42,"window_id":11,"delivery_mode":"foreground"}),
+        );
+        prep.browser_profile_approved = true;
+        assert!(
+            prep.plan().is_err(),
+            "profile approval granted foreground access"
+        );
+        prep.foreground_approved = true;
+        assert!(prep.plan().is_ok());
+        assert!(serde_json::from_value::<Request>(
+            json!({"action":"key","foreground_approved":true})
+        )
+        .is_err());
+    }
+    #[test]
     fn only_explicit_window_and_observed_tokens_reach_the_sdk() {
         let e = envelope(
             json!({"action":"click","pid":42,"window_id":11,"element_token":"s12345678:2"}),
@@ -315,6 +364,14 @@ mod tests {
         }
         let mut prep = envelope(json!({"action":"browser_prepare","pid":42,"window_id":11}));
         prep.browser_profile_approved = true;
+        if cfg!(target_os = "macos") {
+            assert!(prep
+                .plan()
+                .unwrap_err()
+                .contains("connection setup may activate"));
+            prep.request.delivery_mode = Some("foreground".into());
+            prep.foreground_approved = true;
+        }
         let (name, args) = prep.plan().unwrap();
         let schema = &tools.iter().find(|tool| tool["name"] == name).unwrap()["inputSchema"];
         assert!(args

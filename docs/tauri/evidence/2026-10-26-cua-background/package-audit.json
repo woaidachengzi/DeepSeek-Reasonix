@@ -1,0 +1,18 @@
+{
+  "version": "0.1.63",
+  "identifier": "io.reasonix.desktop.takeover",
+  "architecture": "aarch64-apple-darwin",
+  "app": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/macos/Reasonix Tauri.app",
+  "dmg": "/Users/jerry/temp/app/reasonix-tauri/desktop/tauri/target/release/bundle/dmg/Reasonix Tauri_0.1.63_aarch64.dmg",
+  "dmg_sha256": "5e584b940645229d3a4f327ddd32f6e5c256f4d4955db356243f493800346998",
+  "executables_sha256": {
+    "reasonix-tauri": "ec7301094ad1c00e1f8b599d870e5a2f11345d048f8360b9083630ccf37a405c",
+    "reasonix-desktop-bridge": "d31f16b07a77365aa7fa6ab4a83d6b9516c7494b2a72322ee1d3ff06d21e793a",
+    "reasonix-cua-runtime": "06aa6f93c2017d5c8a3e5cad211c9c43d8ad9f5e6399e8235f5961222021ff76"
+  },
+  "qa_package_runtime_unsigned_sha256": "7ed4d11321ba603770e964fdad5fd7c6f30970ab4e0717f50a3c01c5346f8e7c",
+  "private_files": [],
+  "readonly_dmg_matches": true,
+  "deep_strict_signature_verified": true,
+  "notarized": false
+}

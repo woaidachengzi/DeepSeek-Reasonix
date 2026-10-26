@@ -1,0 +1,5 @@
+ok  	reasonix/internal/computeruse	24.951s
+ok  	reasonix/internal/tool/builtin	3.679s
+ok  	reasonix/internal/control	1.731s
+ok  	reasonix/internal/agent	1.872s
+ok  	reasonix/cmd/reasonix-desktop-bridge	1.797s

@@ -13,7 +13,7 @@ import (
 	"reasonix/internal/tool"
 )
 
-const cuaDescription = "Control one approved desktop app on macOS or GNU/Linux through Reasonix's MIT Cua Driver Rust runtime. This build uses Cua actions, not legacy observation receipts. Start with apps, then windows with a selected PID; windows and every screenshot/input require fresh task-scoped app consent. Use observe with exact pid/window_id for a screenshot and accessibility element_tokens. Prefer click using a returned element_token; stale tokens require observe again. Coordinates are pixels of that exact screenshot, never global screen coordinates; do not manually scale. type inserts text in the exact window, key sends one key, hotkey uses platform-appropriate keys: [command,enter] on macOS or [control,enter] on Linux. On Linux, inspect status for X11/AT-SPI and Wayland availability; native Wayland support is experimental and compositor dependent. The pinned WinRects helper refuses GNOME 50+ for session safety; do not bypass its guard. Native move is unavailable on Linux; use browser_pointer hover for an observed browser ref. Background delivery is the default; if explicitly refused, inspect the reason and request foreground for the intended window. Cua effect=confirmed verifies only the reported evidence (such as a field value), not the whole task. Inspect the returned state or observe after uncertain clicks. Never infer site-wide synthetic-click rejection from an unchanged page or shortcut success. Before another send/submit, verify the prior one did not complete. No automatic retry after interrupted/uncertain input. Tokens and runtime end with the host task; re-observe in a new task. For Chromium web pages prefer browser_observe: first pid/window_id to bind and list tabs, then the returned target_id/tab_id to read semantic DOM refs. browser_prepare attaches the exact browser window only after separate interactive profile approval; it may enable remote debugging and show browser consent. If declined or unavailable, keep using native observe/click; never use shell or legacy page to bypass it. browser_click requires a current DOM ref and uses trusted CDP input; browser_type requires an editable ref, inserts text by default, replace=true replaces the field (empty text clears it). browser_navigate navigates the observed target/tab to an absolute http/https URL or about:blank; all old DOM refs become invalid, so observe again. browser_select requires a current native HTML select ref and exactly one exact label or value (empty value is allowed); its input/change events are synthetic, so verify application acceptance. browser_pointer uses a current ref and gesture hover, right_click, double_click, scroll or drag with trusted CDP input only; scroll needs nonzero delta_x/delta_y in CSS pixels, drag needs destination_ref from the same frame. Read the declared ref actions before using pointer/scroll. Background is the default; if explicitly refused, inspect before requesting foreground. Native element_token and screenshot coordinates are not DOM refs. browser_observe supports query, ref for a scoped read, continuation and optional include_screenshot; DOM-only reads avoid unnecessary images. Request include_screenshot=true for the first tab snapshot and meaningful visual milestones to keep the PiP current; use DOM-only reads between them. After input inspect the postcondition before claiming success or repeating a submission. Do not call browser_prepare repeatedly when it asks for human/browser confirmation. This adapter does not expose arbitrary JavaScript, shell, clipboard, file paths, full-desktop capture, or automatic logged-in browser-profile attachment without separate approval. Upstream hints can name tools this adapter does not expose, such as page or run_steps; use only the current computer_use schema. get_window_state means observe; get_browser_state means browser_observe. Workspace sandbox restrictions and existing app consent still apply."
+const cuaDescription = "Control one approved desktop app on macOS or GNU/Linux through Reasonix's MIT Cua Driver Rust runtime. This build uses Cua actions, not legacy observation receipts. Start with apps, then windows with a selected PID; windows and every screenshot/input require fresh task-scoped app consent. Use observe with exact pid/window_id for a screenshot and accessibility element_tokens. Prefer click using a returned element_token; stale tokens require observe again. Coordinates are pixels of that exact screenshot, never global screen coordinates; do not manually scale. type inserts text in the exact window, key sends one key, hotkey uses platform-appropriate keys: [command,enter] on macOS or [control,enter] on Linux. On Linux, inspect status for X11/AT-SPI and Wayland availability; native Wayland support is experimental and compositor dependent. The pinned WinRects helper refuses GNOME 50+ for session safety; do not bypass its guard. Native move is unavailable on Linux; use browser_pointer hover for an observed browser ref. Background delivery is the default. Never escalate automatically: if background is explicitly refused, inspect the result and pause. Foreground requires fresh human confirmation for each exact window/action; app access or browser profile approval does not include it. If declined, keep the window in background and do not ask again in this task. Cua effect=confirmed verifies only the reported evidence (such as a field value), not the whole task. Inspect the returned state or observe after uncertain clicks. Never infer site-wide synthetic-click rejection from an unchanged page or shortcut success. Before another send/submit, verify the prior one did not complete. No automatic retry after interrupted/uncertain input. Tokens and runtime end with the host task; re-observe in a new task. For Chromium web pages prefer browser_observe: first pid/window_id to bind and list tabs, then the returned target_id/tab_id to read semantic DOM refs. On macOS, browser_prepare connection setup requires delivery_mode=foreground and fresh single-action confirmation because Chrome may activate its own debugging prompt; once attached, keep ordinary page actions in background. browser_prepare attaches the exact browser window only after separate interactive profile approval; it may enable remote debugging and show browser consent. If declined or unavailable, keep using native observe/click; never use shell or legacy page to bypass it. browser_click requires a current DOM ref and uses trusted CDP input; browser_type requires an editable ref, inserts text by default, replace=true replaces the field (empty text clears it). browser_navigate navigates the observed target/tab to an absolute http/https URL or about:blank; all old DOM refs become invalid, so observe again. browser_select requires a current native HTML select ref and exactly one exact label or value (empty value is allowed); its input/change events are synthetic, so verify application acceptance. browser_pointer uses a current ref and gesture hover, right_click, double_click, scroll or drag with trusted CDP input only; scroll needs nonzero delta_x/delta_y in CSS pixels, drag needs destination_ref from the same frame. Read the declared ref actions before using pointer/scroll. Keep browser input in background; do not choose foreground merely to recover from a stale ref or an unconfirmed effect. Native element_token and screenshot coordinates are not DOM refs. browser_observe supports query, ref for a scoped read, continuation and optional include_screenshot; DOM-only reads avoid unnecessary images. Request include_screenshot=true for the first tab snapshot and meaningful visual milestones to keep the PiP current; use DOM-only reads between them. After input inspect the postcondition before claiming success or repeating a submission. Do not call browser_prepare repeatedly when it asks for human/browser confirmation. This adapter does not expose arbitrary JavaScript, shell, clipboard, file paths, full-desktop capture, or automatic logged-in browser-profile attachment without separate approval. Upstream hints can name tools this adapter does not expose, such as page or run_steps; use only the current computer_use schema. get_window_state means observe; get_browser_state means browser_observe. Workspace sandbox restrictions and existing app consent still apply."
 
 func (c computerUse) executeCua(ctx context.Context, args json.RawMessage) (string, []string, error) {
 	var request computeruse.CuaRequest
@@ -33,7 +33,7 @@ func (c computerUse) executeCua(ctx context.Context, args json.RawMessage) (stri
 		return "", nil, &computerUseError{cause: tool.Blocked("Cua requires an active host-owned task")}
 	}
 	var target *computeruse.Target
-	browserApproved := false
+	approvals := computeruse.CuaHostApprovals{}
 	if request.Action != "status" && request.Action != "apps" {
 		approver := tool.ComputerUseApproverFrom(ctx)
 		if approver == nil {
@@ -55,10 +55,23 @@ func (c computerUse) executeCua(ctx context.Context, args json.RawMessage) (stri
 			if !ok {
 				return "", nil, &computerUseError{cause: tool.Blocked("browser attachment requires separate interactive profile approval; use native observe instead")}
 			}
-			browserApproved, err = browserApprover.ApproveBrowserProfile(ctx, tool.ComputerUseTarget(resolved), request.WindowID)
-			if err != nil || !browserApproved {
+			approvals.BrowserProfile, err = browserApprover.ApproveBrowserProfile(ctx, tool.ComputerUseTarget(resolved), request.WindowID)
+			if err != nil || !approvals.BrowserProfile {
 				if err == nil {
 					err = errors.New("user declined browser profile attachment; do not retry in this task")
+				}
+				return "", nil, &computerUseError{cause: err}
+			}
+		}
+		if request.DeliveryMode == "foreground" {
+			foregroundApprover, ok := approver.(tool.ComputerUseForegroundApprover)
+			if !ok {
+				return "", nil, &computerUseError{cause: tool.Blocked("foreground input requires fresh single-action confirmation; stay in background")}
+			}
+			approvals.Foreground, err = foregroundApprover.ApproveComputerUseForeground(ctx, tool.ComputerUseTarget(resolved), request.WindowID, request.Action)
+			if err != nil || !approvals.Foreground {
+				if err == nil {
+					err = errors.New("user kept this window in background; no input sent; do not request foreground again in this task")
 				}
 				return "", nil, &computerUseError{cause: err}
 			}
@@ -69,13 +82,7 @@ func (c computerUse) executeCua(ctx context.Context, args json.RawMessage) (stri
 		}
 		target = &resolved
 	}
-	var reply computeruse.CuaReply
-	var err error
-	if browserApproved {
-		reply, err = c.cua.CallWithBrowserApproval(ctx, lifetime, request, target)
-	} else {
-		reply, err = c.cua.Call(ctx, lifetime, request, target)
-	}
+	reply, err := c.cua.CallWithHostApprovals(ctx, lifetime, request, target, approvals)
 	if err != nil {
 		var uncertain *computeruse.CuaTransportError
 		body, _ := json.Marshal(map[string]any{"engine": "cua", "dispatched": false, "dispatch_unknown": errors.As(err, &uncertain), "next_action": "observe_before_retry"})

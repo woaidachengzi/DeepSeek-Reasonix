@@ -15,11 +15,12 @@ interface PromptCardProps {
 export function TauriPromptCard({ prompt, busy, selections, onApproval, onAskSelection, onAskSubmit, onMCPAction, onOpenExternalURL }: PromptCardProps) {
   if (prompt.kind === "approval") {
     const appAccess = prompt.tool === "computer_use_access";
+    const foreground = prompt.tool === "computer_use_foreground";
     return <section className="tauri-prompt-card" aria-live="polite" aria-label="等待权限确认">
-      <div className="tauri-prompt-card__heading"><Sparkles size={17} /><div><strong>{appAccess ? "允许查看并控制这个应用？" : "需要你的确认"}</strong><span>{appAccess ? "电脑控制 · 仅本次任务" : prompt.tool}</span></div></div>
+      <div className="tauri-prompt-card__heading"><Sparkles size={17} /><div><strong>{foreground ? "这一步需要切到前台" : appAccess ? "允许查看并控制这个应用？" : "需要你的确认"}</strong><span>{foreground ? "电脑控制 · 仅这一步" : appAccess ? "电脑控制 · 仅本次任务" : prompt.tool}</span></div></div>
       {prompt.subject && <p className="tauri-prompt-card__subject">{prompt.subject}</p>}
       {prompt.reason && <p className="tauri-prompt-card__reason">{prompt.reason}</p>}
-      <div className="tauri-prompt-card__actions"><button type="button" className="tauri-prompt-card__allow" onClick={() => onApproval(true)} disabled={busy}>{appAccess ? "允许本次任务" : "允许一次"}</button><button type="button" className="tauri-prompt-card__deny" onClick={() => onApproval(false)} disabled={busy}>拒绝</button></div>
+      <div className="tauri-prompt-card__actions"><button type="button" className="tauri-prompt-card__allow" onClick={() => onApproval(true)} disabled={busy}>{foreground ? "允许这一步" : appAccess ? "允许本次任务" : "允许一次"}</button><button type="button" className="tauri-prompt-card__deny" onClick={() => onApproval(false)} disabled={busy}>{foreground ? "保持后台" : "拒绝"}</button></div>
     </section>;
   }
   if (prompt.kind === "ask") {

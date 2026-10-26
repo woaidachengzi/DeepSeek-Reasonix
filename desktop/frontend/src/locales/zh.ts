@@ -4733,7 +4733,7 @@ export const zh: Record<DictKey, string> = {
   "settings.computerUse.opened": "已打开系统设置。授权后请返回并刷新状态。",
   "settings.computerUse.rules": "使用规则",
   "settings.computerUse.approval": "操作确认",
-  "settings.computerUse.approvalHint": "沿用当前会话的工具操作审批设置。",
+  "settings.computerUse.approvalHint": "Cua 默认后台操作；每次切到前台都需单独确认。",
   "settings.computerUse.manageApproval": "管理操作确认",
   "settings.computerUse.scope": "操作范围",
   "settings.computerUse.scopeHint": "操作选中应用的活动窗口，支持点击、文字输入、快捷键和垂直滚动。",

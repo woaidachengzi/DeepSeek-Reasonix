@@ -1,0 +1,11 @@
+{
+  "version": "0.1.63",
+  "platform": "macOS ARM64",
+  "accessibility": true,
+  "screen_recording": true,
+  "verified_from": "Installed app Computer control settings after System Settings re-add and restart",
+  "background_rule_visible": true,
+  "about_version_verified": true,
+  "qa_accessibility_revoked": true,
+  "user_profile_modified_by_installer": false
+}

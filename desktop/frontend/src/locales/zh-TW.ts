@@ -4729,7 +4729,7 @@ export const zhTW: Record<DictKey, string> = {
   "settings.computerUse.opened": "已開啟系統設定。授權後請返回並重新整理狀態。",
   "settings.computerUse.rules": "使用規則",
   "settings.computerUse.approval": "操作確認",
-  "settings.computerUse.approvalHint": "沿用目前對話的工具操作審批設定。",
+  "settings.computerUse.approvalHint": "Cua 預設在背景操作；每次切到前景都需個別確認。",
   "settings.computerUse.manageApproval": "管理操作確認",
   "settings.computerUse.scope": "操作範圍",
   "settings.computerUse.scopeHint": "操作所選 App 的作用中視窗，支援點擊、文字輸入、快捷鍵和垂直捲動。",

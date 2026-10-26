@@ -113,6 +113,11 @@ impl Request {
 impl Envelope {
     pub fn browser_plan(&self) -> Result<(&'static str, Value), String> {
         let r = &self.request;
+        if r.delivery_mode.as_deref() == Some("foreground")
+            && matches!(r.action.as_str(), "browser_observe" | "browser_type")
+        {
+            return Err("this browser route runs in background; omit delivery_mode".into());
+        }
         if r.x.is_some()
             || r.y.is_some()
             || r.element_token.is_some()
@@ -408,7 +413,11 @@ mod tests {
         ))
         .unwrap();
         for case in cases.as_array().unwrap() {
-            let planned = envelope(case["request"].clone()).plan();
+            let mut e = envelope(case["request"].clone());
+            // This corpus checks operation arguments after host consent;
+            // request.rs separately proves that model fields cannot grant it.
+            e.foreground_approved = e.request.delivery_mode.as_deref() == Some("foreground");
+            let planned = e.plan();
             assert_eq!(
                 planned.is_ok(),
                 case["valid"].as_bool().unwrap(),
@@ -431,6 +440,14 @@ mod tests {
         assert!(e.plan().is_err());
         let mut approved = e;
         approved.browser_profile_approved = true;
+        if cfg!(target_os = "macos") {
+            assert!(
+                approved.plan().is_err(),
+                "setup must not activate Chrome under a background promise"
+            );
+            approved.request.delivery_mode = Some("foreground".into());
+            approved.foreground_approved = true;
+        }
         let (_, args) = approved.plan().unwrap();
         assert_eq!(args["strategy"], json!({"kind":"existing_profile"}));
         for bad in [

@@ -1,0 +1,10 @@
+{
+  "counted_as_pass": false,
+  "observed": {
+    "focus_changes": 0,
+    "key_events": 0,
+    "pointer_changes": 1,
+    "text": ""
+  },
+  "cause": "Cursor movement source not attributed; no driver code changed between this run and the two subsequent passing trials."
+}

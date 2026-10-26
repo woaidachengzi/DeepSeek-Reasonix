@@ -14,6 +14,17 @@ final class Fixture: NSObject, NSApplicationDelegate {
     var buffer = Data()
     var sequence = 0
     var timer: Timer?
+    var sentryTimer: Timer?
+    var sentryDirectory: URL?
+    var sentryMonitoring = false
+    var sentryBegin: Date?
+    var sentryFocusChanges = 0
+    var sentryPointerChanges = 0
+    var sentryKeyEvents = 0
+    var sentryOrigin = NSPoint.zero
+    var sentryLast = Data()
+    var activationObserver: NSObjectProtocol?
+    var keyObserver: Any?
     func applicationDidFinishLaunching(_ notification: Notification) {
         window.title = "Reasonix Cua QA · 仅本地测试"
         field.placeholderString = "Cua 验收文本框"
@@ -28,6 +39,17 @@ final class Fixture: NSObject, NSApplicationDelegate {
         window.contentView!.addSubview(web)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { note in
+            guard self.sentryMonitoring,
+                  let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                  app.processIdentifier != getpid() else { return }
+            self.sentryFocusChanges += 1
+        }
+        keyObserver = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if self.sentryMonitoring { self.sentryKeyEvents += 1 }
+            return event
+        }
+        sentryTimer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { _ in self.sentryTick() }
         process = Process()
         process.executableURL = Bundle.main.executableURL!.deletingLastPathComponent().appendingPathComponent("reasonix-cua-runtime")
         let stdin = Pipe(), stdout = Pipe()
@@ -46,11 +68,50 @@ final class Fixture: NSObject, NSApplicationDelegate {
         }
     }
     @objc func clicked() { count += 1; status.stringValue = "本地按钮计数：\(count)" }
+    func sentryTick() {
+        guard let directory = sentryDirectory else { return }
+        let control = directory.appendingPathComponent("command")
+        if let command = try? String(contentsOf: control, encoding: .utf8) {
+            try? FileManager.default.removeItem(at: control)
+            if command == "begin" {
+                // Setup only. No activation, restoration or pointer changes
+                // are allowed after the monitor begins.
+                field.stringValue = ""
+                window.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+                window.makeFirstResponder(field)
+                sentryFocusChanges = 0; sentryPointerChanges = 0; sentryKeyEvents = 0
+                sentryBegin = Date(timeIntervalSinceNow: 0.4)
+                status.stringValue = "后台并行验收：请在本窗口输入 reasonixparallel2026"
+            } else if command == "end" {
+                sentryMonitoring = false; sentryBegin = nil
+            }
+        }
+        if let begin = sentryBegin, Date() >= begin {
+            sentryBegin = nil
+            sentryOrigin = NSEvent.mouseLocation
+            sentryMonitoring = true
+        }
+        let ownFront = NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid()
+        if sentryMonitoring {
+            // Events catch brief app activation; polling also catches a lost
+            // foreground posture when no workspace notification arrives.
+            if !ownFront && sentryFocusChanges == 0 { sentryFocusChanges = 1 }
+            if NSEvent.mouseLocation != sentryOrigin && sentryPointerChanges == 0 { sentryPointerChanges = 1 }
+        }
+        let snapshot: [String:Any] = ["monitoring":sentryMonitoring,"own_frontmost":ownFront,
+            "focus_changes":sentryFocusChanges,"pointer_changes":sentryPointerChanges,
+            "key_events":sentryKeyEvents,"text":field.currentEditor()?.string ?? field.stringValue]
+        if let data = try? JSONSerialization.data(withJSONObject:snapshot,options:[.sortedKeys]), data != sentryLast {
+            try? data.write(to:directory.appendingPathComponent("state.json"),options:.atomic)
+            sentryLast = data
+        }
+    }
     func call(_ request: [String:Any]) -> [String:Any] {
         sequence += 1
         let app = NSRunningApplication.current
         let target: [String:Any] = ["pid":app.processIdentifier,"name":"Reasonix Cua QA","bundle_id":Bundle.main.bundleIdentifier!,"launch_time":app.launchDate!.timeIntervalSince1970]
-        let envelope: [String:Any] = ["protocol":1,"id":sequence,"request":request,"approved_target":target]
+        let envelope: [String:Any] = ["protocol":1,"id":sequence,"request":request,"approved_target":target,"foreground_approved":request["delivery_mode"] as? String == "foreground"]
         input.write(try! JSONSerialization.data(withJSONObject: envelope) + Data([10]))
         while buffer.firstIndex(of: 10) == nil {
             let chunk = output.availableData
@@ -71,7 +132,7 @@ final class Fixture: NSObject, NSApplicationDelegate {
     }
     func run(_ mode: String) {
         defer { DispatchQueue.main.async { self.busy = false } }
-        if mode == "browser" {
+        if mode == "browser" || mode == "background" {
             let test = Process()
             let directory = Bundle.main.executableURL!.deletingLastPathComponent()
             test.executableURL = URL(fileURLWithPath:"/opt/homebrew/bin/python3")
@@ -80,6 +141,13 @@ final class Fixture: NSObject, NSApplicationDelegate {
                 "--state-helper",directory.appendingPathComponent("browser-fixture-info").path,
                 "--output",directory.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("browser-results").path,
                 "--allow-local-input"]
+            if mode == "background" {
+                let directory = FileManager.default.temporaryDirectory.appendingPathComponent("reasonix-background-sentry-"+UUID().uuidString)
+                do { try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true,attributes:[.posixPermissions:0o700]) }
+                catch { log(["test_error":"could not create private sentry directory"]); return }
+                DispatchQueue.main.sync { self.sentryDirectory = directory; self.sentryLast = Data() }
+                test.arguments! += ["--background-only","--sentry-control",directory.path]
+            }
             let pipe = Pipe(); test.standardOutput=pipe; test.standardError=pipe
             do {
                 try test.run()

@@ -45,7 +45,7 @@ def main():
     log = (root/'evidence.jsonl').open('w')
     browser = runner = None
     def start_runner(approved):
-        flags = ['--browser-profile-approved'] if approved else []
+        flags = ['--browser-profile-approved', '--foreground-approved'] if approved else []
         return subprocess.Popen([str(args.runner),'--pid',str(browser.pid),*flags],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=(root/('approved.log' if approved else 'unapproved.log')).open('w'),text=True,start_new_session=True)
     def stop(process):
         if not process: return

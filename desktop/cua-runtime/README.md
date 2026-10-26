@@ -80,6 +80,32 @@ time. Both languages share a fingerprint and malformed/zombie-stat test corpus.
 
 ## Host contract
 
+### Background delivery and foreground confirmation
+
+App and browser-profile access do not authorize changing the user's foreground
+app. Delivery defaults to background. A foreground request pauses for a fresh
+human decision bound to the exact app incarnation, window and action. Neither
+YOLO nor remembered/session grants can answer it. An allow applies once; a
+denial suppresses further foreground prompts for that task/window. Cancellation
+and process identity are checked again after the prompt. The private Rust
+envelope independently requires `foreground_approved`; that field is not in the
+model schema and cannot be supplied inside a model request.
+
+On macOS, establishing a new browser debugging connection can activate Chrome.
+`browser_prepare` therefore requires explicit foreground delivery plus both
+profile consent and single-action foreground consent. This also avoids relying
+on upstream's activate-and-restore guard on another Space. Once connected,
+ordinary browser actions remain in background. Browser reads and DOM text
+insertion reject an unnecessary foreground request rather than asking to front
+the app for an operation that does not use that delivery mode.
+
+The parallel acceptance mode (`background` in the local QA host) holds a
+separate editable fixture in front while the Cua worker controls disposable
+Chrome in background. It observes app-activation events, cursor displacement
+and real key events in that fixture. It never restores focus during the measured
+phase. These checks cover the tested browser workflow; they do not establish a
+universal no-activation guarantee for third-party native apps and their dialogs.
+
 The Go bridge discovers only a bundled sibling `reasonix-cua-runtime` executable.
 Its presence selects the Cua `computer_use` schema. Setting
 `REASONIX_COMPUTER_USE_ENGINE=native` before launch selects the existing engine.

@@ -1,0 +1,28 @@
+{
+  "base": "69926dad7b55dd951770e552d93252d3580cb476",
+  "dirty": true,
+  "files": {
+    "desktop/cua-runtime/src/browser.rs": "d2dc9390eb3003ccf339ff63d72ce9f08e415cc5552e37c88ae69698eb280c60",
+    "desktop/cua-runtime/src/request.rs": "fc9d416e9b96f298a5b4dfcafedfcd2dbafcd55c9e982877e8fdafabdb53708a",
+    "desktop/frontend/src/__tests__/tauri-computer-use-preview.test.tsx": "ca5752a70a669efc3f68ada25f58298f856c3541619b334de1852462850d49d5",
+    "desktop/frontend/src/locales/en.ts": "eb2495c72b84ebb8056e762fb1c8c769a7911ff4daa114f3afefd55e83a86b7f",
+    "desktop/frontend/src/locales/zh-TW.ts": "d505a78d6c3f07511c46e8293527ec562915da9479e5d81113d7c9466141f4a9",
+    "desktop/frontend/src/locales/zh.ts": "e8951a04a04438c0705d20bb99c0f90026906137f32ccf907e0cc4e948659489",
+    "desktop/frontend/src/tauri/TauriPromptCard.tsx": "6a615417d1c2bab1da47e38a329173803311e45f1020dde2b396e1304b3723ca",
+    "desktop/qa/computeruse/browser_acceptance.py": "a04bf63406f97f321a11445afe69e292d0a41f8572c35da33a7960633735b574",
+    "desktop/qa/computeruse/cua_acceptance.swift": "08624cbafd9952cd5f6d859b17134e29ef48d2cdbd34768be59d44ebfc5b64a5",
+    "desktop/qa/computeruse/linux_browser_acceptance.py": "07331cd29f425ab85f3b92ff539f87a3b0939b1a6222f506030174730d95c959",
+    "desktop/qa/computeruse/linux_runner.go": "00bb95e6b1d293af26452657ba21a919e335c7d350d3aeacfe56e0ef16afe8bd",
+    "desktop/tauri/tauri.cua.conf.json": "e56deb88f2e34a3e17423473b8774aad5b3b85c7987773c06682ec2a1ef6da96",
+    "internal/computeruse/cua_request.go": "80cc74692cbb2e52df21e6aeccd9f964f91daf4a248a48b20eaeb94dbc4a346a",
+    "internal/computeruse/cua_runtime.go": "0115dfb9f0d531f2d1cf3865bb1ba42fa16ea6e31dcf9859642f69abf7d0858d",
+    "internal/computeruse/cua_runtime_test.go": "556853c2333e516b9f698e9cb4c1d3a2c0026bcea1993a23bc23e703bd65fc9f",
+    "internal/computeruse/testdata/cua_browser_operations.json": "f508995bda5763fa0af642180d9bc96cc52e68c64e175e3e369e5f094ae2f334",
+    "internal/control/approval.go": "b05aa4743a6e0923e4d05756c73676dbd085caf5ac814e51e1180687b5b77391",
+    "internal/control/computeruse.go": "334cd0e42fc019aa0a01e63b0656a448b16179e1e7515512f388d8890a98d37c",
+    "internal/control/computeruse_test.go": "93d08c17ceabb89088cf3699505010360ad20c577582369c17d0d485ccb06948",
+    "internal/tool/builtin/computeruse_cua.go": "f7899ce665a3dafaed75529e749e0b25ad5a92480c5dec4b2be3bbe6cf3001a7",
+    "internal/tool/builtin/computeruse_foreground_test.go": "e6b379ad2ad7a816f1b3bdcce67a89696bf62bd7e1f1dade6d96e523bfb8f116",
+    "internal/tool/computeruse.go": "67d04e0d97c5dd18991074a2c336f24ed2bb9965f99cafa022cb6f79790f85f0"
+  }
+}

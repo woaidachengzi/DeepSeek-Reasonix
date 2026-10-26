@@ -19,7 +19,9 @@ func TestCuaRuntimeHelperProcess(t *testing.T) {
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		var r struct {
-			ID uint64 `json:"id"`
+			ID         uint64 `json:"id"`
+			Foreground bool   `json:"foreground_approved"`
+			Browser    bool   `json:"browser_profile_approved"`
 		}
 		if json.Unmarshal(scanner.Bytes(), &r) != nil {
 			os.Exit(2)
@@ -34,9 +36,48 @@ func TestCuaRuntimeHelperProcess(t *testing.T) {
 		if mode == "wrong-source" {
 			revision = "unexpected-source"
 		}
+		if mode == "approvals" {
+			body, _ := json.Marshal(CuaReply{Protocol: cuaProtocol, ID: r.ID, Driver: "cua", SourceRevision: revision, Result: json.RawMessage(fmt.Sprintf(`{"foreground":%t,"browser":%t}`, r.Foreground, r.Browser))})
+			fmt.Println(string(body))
+			continue
+		}
 		fmt.Printf("{\"protocol\":1,\"driver\":\"cua\",\"version\":\"fixture\",\"source_revision\":%q,\"id\":%d,\"result\":{\"pid\":%d}}\n", revision, r.ID, os.Getpid())
 	}
 	os.Exit(0)
+}
+
+func TestCuaForegroundNeedsFreshHostApprovalForEachCall(t *testing.T) {
+	c := cuaFixture("approvals")
+	lifetime, stop := context.WithCancel(t.Context())
+	defer stop()
+	defer c.stop()
+	target := &Target{PID: 42, Name: "Fixture", BundleID: "fixture.app", LaunchTime: 1}
+	request := CuaRequest{Action: "key", PID: 42, WindowID: 11, Key: "tab", DeliveryMode: "foreground"}
+	if _, err := c.Call(t.Context(), lifetime, request, target); err == nil || c.process != nil {
+		t.Fatal("foreground started a worker without one-action consent", err)
+	}
+	if _, err := c.CallWithHostApprovals(t.Context(), lifetime, request, nil, CuaHostApprovals{Foreground: true}); err == nil {
+		t.Fatal("unbound foreground approval accepted")
+	}
+	reply, err := c.CallWithHostApprovals(t.Context(), lifetime, request, target, CuaHostApprovals{Foreground: true})
+	if err != nil || string(reply.Result) != `{"foreground":true,"browser":false}` {
+		t.Fatalf("foreground approval did not reach private envelope: %s %v", reply.Result, err)
+	}
+	if _, err := c.Call(t.Context(), lifetime, request, target); err == nil || c.sequence != 1 {
+		t.Fatal("prior foreground consent reused", err)
+	}
+	request.DeliveryMode = ""
+	reply, err = c.Call(t.Context(), lifetime, request, target)
+	if err != nil || string(reply.Result) != `{"foreground":false,"browser":false}` {
+		t.Fatalf("background inherited prior foreground grant: %s %v", reply.Result, err)
+	}
+	request = CuaRequest{Action: "browser_prepare", PID: 42, WindowID: 11, DeliveryMode: "foreground"}
+	if _, err := c.CallWithBrowserApproval(t.Context(), lifetime, request, target); err == nil {
+		t.Fatal("browser profile consent authorized foreground")
+	}
+	if _, err := c.CallWithHostApprovals(t.Context(), lifetime, request, target, CuaHostApprovals{Foreground: true}); err == nil {
+		t.Fatal("foreground consent authorized browser attachment")
+	}
 }
 
 func cuaFixture(mode string) *CuaRuntime {

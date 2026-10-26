@@ -46,9 +46,13 @@ def main():
     parser.add_argument('--state-helper', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--allow-local-input', action='store_true')
+    parser.add_argument('--background-only', action='store_true', help='observe a separate fixture window for focus/pointer/input interference')
+    parser.add_argument('--sentry-control', type=Path)
     args = parser.parse_args()
     if not args.allow_local_input:
         parser.error('explicit --allow-local-input and temporary host consent required')
+    if args.background_only and (args.sentry_control is None or not args.sentry_control.is_dir()):
+        parser.error('background acceptance requires the owned QA host sentry')
     chrome = Path('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
     if not chrome.is_file():
         parser.error('a system Chrome installation is required')
@@ -67,6 +71,15 @@ def main():
     browser = worker = None
     sequence = 0
     target = None
+    sentry = None
+    parallel_started = None
+    def sentry_state():
+        try: return json.loads((args.sentry_control/'state.json').read_text())
+        except (FileNotFoundError, json.JSONDecodeError): return {}
+    def sentry_command(command):
+        temporary = args.sentry_control/'command.tmp'
+        temporary.write_text(command)
+        temporary.replace(args.sentry_control/'command')
     def record(value):
         safe = dict(value)
         safe['images'] = [{'mime_type':i['mime_type'],'base64_bytes':len(i['data_base64'])} for i in value.get('images',[])]
@@ -94,7 +107,7 @@ def main():
             nonlocal sequence
             sequence += 1
             request = dict(request,pid=target['pid'],window_id=window_id)
-            envelope = dict(protocol=1,id=sequence,request=request,approved_target=target,browser_profile_approved=approved)
+            envelope = dict(protocol=1,id=sequence,request=request,approved_target=target,browser_profile_approved=approved,foreground_approved=request.get('delivery_mode')=='foreground')
             worker.stdin.write(json.dumps(envelope,ensure_ascii=False)+'\n'); worker.stdin.flush()
             with selectors.DefaultSelector() as ready:
                 ready.register(worker.stdout,selectors.EVENT_READ)
@@ -116,6 +129,16 @@ def main():
         tabs = [t for t in binding['tabs'] if t['url']==html.as_uri()]
         assert len(tabs)==1, 'fixture tab binding was not exact'
         anchor = {'target_id':binding['target_id'],'tab_id':tabs[0]['tab_id']}
+        mode = 'background' if args.background_only else 'foreground'
+        if args.background_only:
+            sentry_command('begin')
+            deadline = time.monotonic()+15
+            while not sentry_state().get('monitoring'):
+                if time.monotonic() >= deadline: raise RuntimeError('sentry did not begin monitoring')
+                time.sleep(.1)
+            assert sentry_state()['own_frontmost'], 'sentry was not foreground at the start'
+            parallel_started = time.monotonic()
+            print(json.dumps({'parallel_ready':True,'sentry':str(args.sentry_control)},ensure_ascii=False),flush=True)
         def observe(screenshot=False):
             r = call(dict(anchor,action='browser_observe',include_screenshot=screenshot))
             assert not r['is_error'] and r['result']['mode']=='snapshot', r
@@ -155,22 +178,39 @@ def main():
         assert not selected['is_error'] and selected['result']['changed'] is False, selected
         for gesture,postcondition in [('hover','hover=ok'),('right_click','context=ok'),('double_click','double=ok')]:
             observed = observe()
-            pointed = call(dict(anchor,action='browser_pointer',ref=ref(observed,'指针目标'),gesture=gesture,delivery_mode='foreground'))
+            pointed = call(dict(anchor,action='browser_pointer',ref=ref(observed,'指针目标'),gesture=gesture,delivery_mode=mode))
             assert not pointed['is_error'], pointed
             wait_for(postcondition)
         observed = observe()
-        scrolled = call(dict(anchor,action='browser_pointer',ref=ref(observed,'滚动区域'),gesture='scroll',delta_y=240,delivery_mode='foreground'))
+        scrolled = call(dict(anchor,action='browser_pointer',ref=ref(observed,'滚动区域'),gesture='scroll',delta_y=240,delivery_mode=mode))
         assert not scrolled['is_error'], scrolled
         wait_for('scroll=ok')
         observed = observe()
-        dragged = call(dict(anchor,action='browser_pointer',ref=ref(observed,'拖拽起点'),destination_ref=ref(observed,'拖拽终点'),gesture='drag',delivery_mode='foreground'))
+        dragged = call(dict(anchor,action='browser_pointer',ref=ref(observed,'拖拽起点'),destination_ref=ref(observed,'拖拽终点'),gesture='drag',delivery_mode=mode))
         assert not dragged['is_error'], dragged
         observed = wait_for('drag=ok')
-        clicked = call(dict(anchor,action='browser_click',ref=ref(observed,'提交本地测试'),delivery_mode='foreground'))
+        clicked = call(dict(anchor,action='browser_click',ref=ref(observed,'提交本地测试'),delivery_mode=mode))
         assert not clicked['is_error']
         final = observe(True)
         assert any(r['name']=='本地提交成功 1' for r in final['refs']), 'click did not update fixture'
         assert any('本地提交成功 1' in json.dumps(v,ensure_ascii=False) for v in [final['outline'],final['refs']])
+        if args.background_only:
+            # Continue real browser work while keys arrive in the independent
+            # foreground fixture. Never raise either app or restore focus here.
+            deadline = time.monotonic()+120
+            expected = 'reasonixparallel2026'
+            while True:
+                sentry = sentry_state()
+                assert sentry.get('monitoring') and sentry.get('own_frontmost'), sentry
+                assert sentry['focus_changes']==0 and sentry['pointer_changes']==0, sentry
+                if sentry['text']==expected and sentry['key_events']>=len(expected) and time.monotonic()-parallel_started>=5:
+                    break
+                if time.monotonic()>=deadline: raise AssertionError('parallel keyboard input incomplete: '+json.dumps(sentry))
+                observed = observe()
+                assert not any(expected in str(r.get('value','')) for r in observed['refs']), 'foreground text leaked into browser'
+                pointed = call(dict(anchor,action='browser_pointer',ref=ref(observed,'指针目标'),gesture='hover',delivery_mode='background'))
+                assert not pointed['is_error'], pointed
+                time.sleep(.2)
         # The adapter must reject a known tab paired with a different native window.
         refused = call(dict(anchor,action='browser_click',ref='p1:e1'),window_id=window+1)
         assert refused['is_error'] and refused['completion']=='not_started'
@@ -180,12 +220,19 @@ def main():
         old_ref = ref(final,'本地提交成功 1')
         navigated = call(dict(anchor,action='browser_navigate',url=next_url))
         assert not navigated['is_error'] and navigated['result']['refs_invalidated'], navigated
-        stale = call(dict(anchor,action='browser_click',ref=old_ref,delivery_mode='foreground'))
+        stale = call(dict(anchor,action='browser_click',ref=old_ref,delivery_mode=mode))
         assert stale['is_error'] and 'browser_ref_stale' in json.dumps(stale), stale
         wait_for('本地导航完成')
-        record({'ok':True,'checks':['profile-consent','exact-tab','Chinese-replace-readback','no-duplicate','clear','DOM-select-label','DOM-select-empty-value','DOM-select-no-op','trusted-hover','trusted-right-click','trusted-double-click','trusted-scroll','trusted-drag','DOM-click-readback','CDP-screenshot','cross-window-refusal','navigate-readback','navigation-invalidates-refs']})
+        if args.background_only:
+            sentry = sentry_state()
+            assert sentry['focus_changes']==0 and sentry['pointer_changes']==0 and sentry['own_frontmost'] and sentry['text']=='reasonixparallel2026', sentry
+        summary = {'ok':True,'delivery_mode':mode,'parallel':sentry,'checks':['profile-consent','exact-tab','Chinese-replace-readback','no-duplicate','clear','DOM-select-label','DOM-select-empty-value','DOM-select-no-op','trusted-hover','trusted-right-click','trusted-double-click','trusted-scroll','trusted-drag','DOM-click-readback','CDP-screenshot','cross-window-refusal','navigate-readback','navigation-invalidates-refs']}
+        if args.background_only: summary['checks'] += ['foreground-retained','real-pointer-unchanged','parallel-keyboard-readback']
+        record(summary)
+        (root/'acceptance.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n')
         print(json.dumps({'ok':True,'evidence':str(root/'evidence.jsonl')},ensure_ascii=False),flush=True)
     finally:
+        if args.background_only: sentry_command('end')
         server.shutdown()
         server.server_close()
         server_thread.join(timeout=5)

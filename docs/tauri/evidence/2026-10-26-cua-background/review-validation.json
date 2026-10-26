@@ -1,0 +1,37 @@
+{
+  "findings_fixed": [
+    "Shared app-access consent must not promise background delivery for the legacy engine; restored neutral app-scope copy.",
+    "Qualified the settings hint as Cua-specific in all three locales."
+  ],
+  "remaining_blocking_findings": [],
+  "post_package_changes": {
+    "desktop/frontend/src/locales/en.ts": {
+      "packaged_sha256": "eb2495c72b84ebb8056e762fb1c8c769a7911ff4daa114f3afefd55e83a86b7f",
+      "reviewed_sha256": "7ec20d9029d199ffcee2cf8afa50e3d84f3ccfbd29dd3a47ef0c325288d00872"
+    },
+    "desktop/frontend/src/locales/zh-TW.ts": {
+      "packaged_sha256": "d505a78d6c3f07511c46e8293527ec562915da9479e5d81113d7c9466141f4a9",
+      "reviewed_sha256": "b10eba42f05414936301e6cd61bd1aa49462e833836eb066083b95373895820e"
+    },
+    "desktop/frontend/src/locales/zh.ts": {
+      "packaged_sha256": "e8951a04a04438c0705d20bb99c0f90026906137f32ccf907e0cc4e948659489",
+      "reviewed_sha256": "9bd6708715b28830c2042fd8a6a52c99ab60688ab887d55976f3ad919c58cb8b"
+    },
+    "internal/control/computeruse.go": {
+      "packaged_sha256": "334cd0e42fc019aa0a01e63b0656a448b16179e1e7515512f388d8890a98d37c",
+      "reviewed_sha256": "a772cf35efb6f50cec83f37b7bfa40c00e11c17cdcc0fbd3ac3b06742a0dc2f4"
+    }
+  },
+  "installed_app_rebuilt_during_review": false,
+  "fresh_checks": {
+    "go_core_full_race_packages": 3,
+    "go_control_agent_approval_race_packages": 2,
+    "rust_tests": 9,
+    "python_export_tests": 2,
+    "foreground_prompt_dom": "passed",
+    "settings_dom": "passed",
+    "frontend_build_and_budgets": "passed",
+    "go_rust_formatting": "passed",
+    "diff_whitespace": "passed"
+  }
+}

@@ -632,5 +632,31 @@
       "action": "apps",
       "delta_y": 1
     }
+  },
+  {
+    "name": "invalid-foreground-browser_type",
+    "valid": false,
+    "request": {
+      "action": "browser_type",
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "delivery_mode": "foreground",
+      "ref": "p1:e1",
+      "text": "fixture"
+    }
+  },
+  {
+    "name": "invalid-foreground-browser_observe",
+    "valid": false,
+    "request": {
+      "action": "browser_observe",
+      "pid": 42,
+      "window_id": 11,
+      "target_id": "b1",
+      "tab_id": "t1",
+      "delivery_mode": "foreground"
+    }
   }
 ]

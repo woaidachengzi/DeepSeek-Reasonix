@@ -97,6 +97,51 @@ func TestComputerUseConsentScopedAndNeverYolo(t *testing.T) {
 	if c.approval.preApprovedForDecision(BrowserProfileApprovalTool, "another", nil, true) {
 		t.Fatal("generic grant bypassed browser profile approval")
 	}
+	// Ordinary app/profile grants, YOLO and remembered answers cannot authorize
+	// even the first foreground step, and an allow is consumed only once.
+	if !RequiresFreshHumanApprovalTool(ComputerUseForegroundApprovalTool) || allowsFreshSessionGrantTool(ComputerUseForegroundApprovalTool) {
+		t.Fatal("foreground permits a remembered approval")
+	}
+	c.approval.grantSession(ComputerUseForegroundApprovalTool, "*")
+	if c.approval.preApprovedForDecision(ComputerUseForegroundApprovalTool, "another", nil, true) {
+		t.Fatal("generic grant bypassed foreground consent")
+	}
+	foreground := func(ctx context.Context, window int, action string) chan result {
+		done := make(chan result, 1)
+		go func() {
+			allow, err := a.ApproveComputerUseForeground(ctx, target, window, action)
+			done <- result{allow, err}
+		}()
+		return done
+	}
+	foregroundDone := foreground(t.Context(), 11, "browser_click")
+	id = waitApprovalID(t, ids)
+	select {
+	case <-foregroundDone:
+		t.Fatal("app/profile consent or YOLO answered foreground consent")
+	default:
+	}
+	c.Approve(id, true, true, true)
+	if r := <-foregroundDone; !r.allow || r.err != nil {
+		t.Fatalf("foreground grant: %+v", r)
+	}
+	foregroundDone = foreground(t.Context(), 11, "browser_click")
+	id = waitApprovalID(t, ids)
+	c.Approve(id, false, false, false)
+	if r := <-foregroundDone; r.allow || r.err != nil {
+		t.Fatalf("foreground denial: %+v", r)
+	}
+	if r := <-foreground(t.Context(), 11, "key"); r.allow || r.err != nil {
+		t.Fatalf("denied window asked again through a different action: %+v", r)
+	}
+	foregroundCtx, closeForeground := context.WithCancel(t.Context())
+	foregroundDone = foreground(foregroundCtx, 13, "click")
+	id = waitApprovalID(t, ids)
+	closeForeground()
+	c.Approve(id, true, false, false)
+	if r := <-foregroundDone; r.allow || r.err == nil {
+		t.Fatalf("late foreground approval survived cancellation: %+v", r)
+	}
 
 	target.PID = 43
 	done = run(t.Context(), target)

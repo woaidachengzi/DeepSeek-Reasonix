@@ -12,15 +12,17 @@ import (
 
 const ComputerUseAccessApprovalTool = "computer_use_access"
 const BrowserProfileApprovalTool = "browser_profile_access"
+const ComputerUseForegroundApprovalTool = "computer_use_foreground"
 
 // One host per controller. Grants and denials belong to one live task and the
 // exact native process incarnation. Never store them in generic session grants.
 type computerUseApprover struct {
-	c                *Controller
-	mu               sync.Mutex
-	turn             string
-	decisions        map[tool.ComputerUseTarget]bool
-	browserDecisions map[browserApprovalKey]bool
+	c                 *Controller
+	mu                sync.Mutex
+	turn              string
+	decisions         map[tool.ComputerUseTarget]bool
+	browserDecisions  map[browserApprovalKey]bool
+	foregroundDenials map[browserApprovalKey]bool
 }
 
 type browserApprovalKey struct {
@@ -39,17 +41,9 @@ func (a *computerUseApprover) ApproveComputerUse(ctx context.Context, target too
 func (a *computerUseApprover) approve(ctx context.Context, target tool.ComputerUseTarget, windowID int) (bool, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if err := ctx.Err(); err != nil {
+	turn, err := a.approvalTurn(ctx)
+	if err != nil {
 		return false, err
-	}
-	turn, status, _, _ := a.c.turnEventRuntimeStatus()
-	if turn == "" || status.Terminal() {
-		return false, errors.New("computer control requires an active task")
-	}
-	if a.turn != turn {
-		a.turn = turn
-		a.decisions = make(map[tool.ComputerUseTarget]bool)
-		a.browserDecisions = make(map[browserApprovalKey]bool)
 	}
 	key := browserApprovalKey{target, windowID}
 	allow, exists := a.decisions[target]
@@ -67,7 +61,7 @@ func (a *computerUseApprover) approve(ctx context.Context, target tool.ComputerU
 		approvalTool = BrowserProfileApprovalTool
 		subject = fmt.Sprintf("连接 %s 的网页 · 窗口 %d", target.Name, windowID)
 		args, _ = json.Marshal(key)
-		reason = "允许本次任务连接这个浏览器窗口的已登录标签页，读取网页内容并点击、填写。网页内容会提供给当前配置的模型处理。连接可能将浏览器带到前台、打开远程调试设置页并开启远程调试；该设置可能在任务结束后保留，浏览器也可能要求你再次确认。不会复制浏览器资料或重启浏览器。停止或任务结束后连接失效；其他窗口需要另行同意。"
+		reason = "允许本次任务连接这个浏览器窗口的已登录标签页，读取网页内容并点击、填写。网页内容会提供给当前配置的模型处理。连接可能需要打开远程调试设置并开启远程调试；设置可能在任务结束后保留，浏览器也可能要求你确认。需要切到前台时会暂停并单独询问。不会复制浏览器资料或重启浏览器。停止或任务结束后连接失效；其他窗口需要另行同意。"
 	}
 	reply, err := a.c.requestFreshApprovalDecision(ctx, approvalTool, subject, args, reason)
 	current, currentStatus, _, _ := a.c.turnEventRuntimeStatus()
@@ -84,6 +78,67 @@ func (a *computerUseApprover) approve(ctx context.Context, target tool.ComputerU
 		a.decisions[target] = reply.allow
 	} else {
 		a.browserDecisions[key] = reply.allow
+	}
+	return reply.allow, nil
+}
+
+// Caller holds a.mu. Denials last for this task/window; foreground allowances
+// deliberately have no cache, even if a client replies with "remember" flags.
+func (a *computerUseApprover) approvalTurn(ctx context.Context) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	turn, status, _, _ := a.c.turnEventRuntimeStatus()
+	if turn == "" || status.Terminal() {
+		return "", errors.New("computer control requires an active task")
+	}
+	if a.turn != turn {
+		a.turn = turn
+		a.decisions = make(map[tool.ComputerUseTarget]bool)
+		a.browserDecisions = make(map[browserApprovalKey]bool)
+		a.foregroundDenials = make(map[browserApprovalKey]bool)
+	}
+	return turn, nil
+}
+
+func (a *computerUseApprover) ApproveComputerUseForeground(ctx context.Context, target tool.ComputerUseTarget, windowID int, action string) (bool, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	turn, err := a.approvalTurn(ctx)
+	if err != nil {
+		return false, err
+	}
+	label := map[string]string{"click": "点击", "type": "输入文字", "key": "按键", "hotkey": "快捷键", "scroll": "滚动", "move": "移动指针", "browser_prepare": "连接浏览器", "browser_click": "点击网页", "browser_pointer": "操作网页指针"}[action]
+	if windowID <= 0 || label == "" {
+		return false, errors.New("foreground consent requires an exact window and supported action")
+	}
+	key := browserApprovalKey{target, windowID}
+	if !a.decisions[target] || action == "browser_prepare" && !a.browserDecisions[key] {
+		return false, errors.New("foreground consent requires prior app/profile approval")
+	}
+	if a.foregroundDenials[key] {
+		return false, nil
+	}
+	args, _ := json.Marshal(struct {
+		Target   tool.ComputerUseTarget `json:"target"`
+		WindowID int                    `json:"window_id"`
+		Action   string                 `json:"action"`
+	}{target, windowID, action})
+	subject := fmt.Sprintf("%s · 窗口 %d · %s", target.Name, windowID, label)
+	reason := "助手请求将目标窗口切到前台执行这一步，可能改变焦点或使用真实鼠标、键盘，打断你当前的操作。只允许这一步，后续前台步骤仍需确认。选择保持后台不会发送这一步的输入，本次任务也不会再次请求这个窗口的前台操作。"
+	reply, err := a.c.requestFreshApprovalDecision(ctx, ComputerUseForegroundApprovalTool, subject, args, reason)
+	current, status, _, _ := a.c.turnEventRuntimeStatus()
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+	if err != nil {
+		return false, err
+	}
+	if current != turn || status.Terminal() {
+		return false, errors.New("computer control task has ended")
+	}
+	if !reply.allow {
+		a.foregroundDenials[key] = true
 	}
 	return reply.allow, nil
 }
