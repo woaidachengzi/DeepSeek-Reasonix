@@ -45,6 +45,8 @@
   --fg: #f4f5f7;
   --fg-dim: #c0c4cc;
   --fg-faint: #858b96;
+  --link-local: #78a9ff;
+  --link-external: #ff9675;
 
   /* Shared semantic contract. Theme directions may override any of these,
      while partial directions such as Amber inherit a complete, usable set. */
@@ -343,6 +345,8 @@
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) {
+    --link-local: #2563eb;
+    --link-external: #b6411b;
     color-scheme: light;
 
     --bg: #f7f8fb;
@@ -418,6 +422,8 @@
 
 /* Force light regardless of OS when the user picks it in Settings. */
 :root[data-theme="light"] {
+  --link-local: #2563eb;
+  --link-external: #b6411b;
   color-scheme: light;
 
   --bg: #f7f8fb;
@@ -5499,10 +5505,19 @@ button.reasoning-summary:focus-visible {
   color: var(--fg-faint);
 }
 .md a {
-  color: var(--accent);
+  color: var(--link-local);
   text-decoration: none;
 }
+.md .md-rich-link--external,
+.md .md-rich-link--github {
+  color: var(--link-external);
+}
 .md a:hover {
+  text-decoration: underline;
+}
+.md a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
   text-decoration: underline;
 }
 .md .md-rich-link {
