@@ -22,7 +22,7 @@ func ReasoningForConfig(cfg provider.Config) provider.ReasoningCapability {
 		cap = provider.ReasoningOptions("adaptive", "adaptive", "disabled")
 	case protocol == "deepseek" || (protocol == "" && IsDeepSeek(cfg.BaseURL)):
 		cap = provider.ReasoningOptions("high", "disabled", "high", "max")
-		if cfg.Model == "deepseek-v4-flash" || cfg.Model == "deepseek-v4-pro" || IsOfficialDeepSeekVisionModel(cfg.Model) {
+		if provider.IsDeepSeekReasoningModel(cfg.Model) {
 			cap = provider.ReasoningOptions("high", "disabled", "low", "high", "max")
 		}
 	case protocol == "" && IsOllamaCloud(cfg.BaseURL):

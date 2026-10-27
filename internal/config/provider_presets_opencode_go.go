@@ -50,6 +50,11 @@ func openCodeGoRecommendedChatOverrides() map[string]ProviderModelOverride {
 		out[id] = ProviderModelOverride{ContextWindow: lim.Context, MaxOutputTokens: minPositive(lim.MaxOutput, 32_768)}
 	}
 	for id, ov := range map[string]ProviderModelOverride{
+		"deepseek-v4.1-flash": {
+			ReasoningProtocol: ReasoningProtocolDeepSeek,
+			SupportedEfforts:  []string{"disabled", "low", "high", "max"},
+			DefaultEffort:     "high",
+		},
 		"deepseek-v4-flash-vision-exp": {
 			ReasoningProtocol: ReasoningProtocolDeepSeek,
 			SupportedEfforts:  []string{"disabled", "low", "high", "max"},
@@ -165,7 +170,7 @@ var opencodeGoRecommendedPreset = ProviderPreset{
 		{
 			Name:            "opencode-go",
 			Kind:            "openai",
-			BaseURL:         "https://opencode.ai/zen/go/v1",
+			BaseURL:         "https://opencode.ai/inference/go/openai/v1",
 			Models:          opencodeGoModels,
 			VisionModels:    opencodeGoVisionModels,
 			Default:         "glm-5.3",
@@ -178,7 +183,7 @@ var opencodeGoRecommendedPreset = ProviderPreset{
 		{
 			Name:            "opencode-go-anthropic",
 			Kind:            "anthropic",
-			BaseURL:         "https://opencode.ai/zen/go",
+			BaseURL:         "https://opencode.ai/inference/go/anthropic",
 			Models:          opencodeGoAnthropicModels,
 			VisionModels:    opencodeGoAnthropicVisionModels,
 			Default:         "qwen3.7-plus",
@@ -192,7 +197,7 @@ var opencodeGoRecommendedPreset = ProviderPreset{
 		{
 			Name:             "opencode-go-responses",
 			Kind:             "responses",
-			BaseURL:          "https://opencode.ai/zen/go/v1",
+			BaseURL:          "https://opencode.ai/inference/go/openai/v1",
 			Models:           opencodeGoResponsesModels,
 			VisionModels:     opencodeGoResponsesVisionModels,
 			Default:          "grok-4.5",
@@ -222,7 +227,7 @@ var opencodeGoAnthropicPreset = ProviderPreset{
 	Entries: []ProviderEntry{{
 		Name:            "opencode-go-anthropic",
 		Kind:            "anthropic",
-		BaseURL:         "https://opencode.ai/zen/go",
+		BaseURL:         "https://opencode.ai/inference/go/anthropic",
 		Models:          opencodeGoAnthropicModels,
 		VisionModels:    opencodeGoAnthropicVisionModels,
 		Default:         "qwen3.7-plus",
@@ -249,7 +254,7 @@ var opencodeGoResponsesPreset = ProviderPreset{
 	Entries: []ProviderEntry{{
 		Name:             "opencode-go-responses",
 		Kind:             "responses",
-		BaseURL:          "https://opencode.ai/zen/go/v1",
+		BaseURL:          "https://opencode.ai/inference/go/openai/v1",
 		Models:           opencodeGoResponsesModels,
 		VisionModels:     opencodeGoResponsesVisionModels,
 		Default:          "grok-4.5",

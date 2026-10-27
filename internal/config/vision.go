@@ -75,15 +75,15 @@ func modelTokenSeparator(r rune) bool {
 
 // CanConfigureVision is retained for the Wails payload contract. Capability
 // choices are now derived from model metadata; the wire layer still refuses
-// unsupported official DeepSeek Flash/Pro image payloads.
+// unsupported official DeepSeek Pro image payloads.
 func CanConfigureVision(e *ProviderEntry) bool {
 	return e != nil
 }
 
 // EffectiveVision resolves whether the selected model accepts image input.
 // Official DeepSeek Settings can mark any enabled model for image input, but
-// only the pinned vision SKU actually receives image parts. An unconfigured
-// catalog (VisionModels == nil) still enables that SKU so CLI/model-switch
+// Flash and its retained aliases receive image parts. An unconfigured
+// catalog (VisionModels == nil) enables them so CLI/model-switch
 // users keep image input without a Settings round-trip. Explicit provider
 // vision still wins for custom gateways; the MiMo endpoint heuristic is
 // deliberately limited to known MiMo endpoints so arbitrary OpenAI-compatible

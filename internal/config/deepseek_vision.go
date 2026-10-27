@@ -12,14 +12,23 @@ import (
 // in the enabled model list. Settings can still mark other models for image
 // input; this helper is only the stock default.
 func OfficialDeepSeekPinnedVisionModels(models []string) []string {
-	if !slices.ContainsFunc(models, openai.IsOfficialDeepSeekVisionModel) {
-		return nil
+	var out []string
+	for _, model := range models {
+		if openai.IsOfficialDeepSeekVisionModel(model) && !slices.Contains(out, model) {
+			out = append(out, model)
+		}
 	}
-	return []string{openai.OfficialDeepSeekVisionModel}
+	return out
 }
 
 func backfillOfficialDeepSeekVisionModel(p *ProviderEntry) {
 	if p == nil || officialProviderHost(p.BaseURL) != "api.deepseek.com" {
+		return
+	}
+	if p.HasModel(provider.DeepSeekFlashModel) {
+		if p.VisionModels == nil {
+			p.VisionModels = OfficialDeepSeekPinnedVisionModels(p.ModelList())
+		}
 		return
 	}
 	sku := openai.OfficialDeepSeekVisionModel

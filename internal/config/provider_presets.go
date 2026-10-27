@@ -101,8 +101,8 @@ var (
 	kimiCodingModels    = []string{"kimi-for-coding"}
 
 	longCat20Models              = []string{"LongCat-2.0"}
-	deepSeekOfficialModels       = []string{"deepseek-v4-flash", "deepseek-v4-pro", openai.OfficialDeepSeekVisionModel}
-	deepSeekOfficialVisionModels = []string{openai.OfficialDeepSeekVisionModel}
+	deepSeekOfficialModels       = []string{provider.DeepSeekFlashModel, "deepseek-v4-pro", "deepseek-v4-flash", openai.OfficialDeepSeekVisionModel}
+	deepSeekOfficialVisionModels = []string{provider.DeepSeekFlashModel, "deepseek-v4-flash", openai.OfficialDeepSeekVisionModel}
 	tokenRhythmModels            = []string{
 		"deepseek-v4-flash", "deepseek-v4-pro", "glm-5", "glm-5.1",
 		"minimax-m2.7", "kimi-k2.5", "kimi-k2.6", "minimax-m2.5",
@@ -229,7 +229,7 @@ var curatedProviderPresets = []ProviderPreset{
 			Kind:           "anthropic",
 			BaseURL:        deepSeekAnthropicBaseURL,
 			Models:         deepSeekOfficialModels,
-			Default:        "deepseek-v4-flash",
+			Default:        provider.DeepSeekFlashModel,
 			VisionModels:   deepSeekOfficialVisionModels,
 			APIKeyEnv:      "DEEPSEEK_API_KEY",
 			BalanceURL:     "https://api.deepseek.com/user/balance",
@@ -581,7 +581,7 @@ var curatedProviderPresets = []ProviderPreset{
 			Kind:           "responses",
 			BaseURL:        "https://api.deepseek.com",
 			Models:         deepSeekOfficialModels,
-			Default:        "deepseek-v4-flash",
+			Default:        provider.DeepSeekFlashModel,
 			VisionModels:   deepSeekOfficialVisionModels,
 			APIKeyEnv:      "DEEPSEEK_API_KEY",
 			BalanceURL:     "https://api.deepseek.com/user/balance",
@@ -721,6 +721,11 @@ var curatedProviderPresets = []ProviderPreset{
 				"glm-5.2": {
 					ReasoningProtocol: ReasoningProtocolOpenAI,
 					SupportedEfforts:  []string{"high", "max"},
+					DefaultEffort:     "high",
+				},
+				"deepseek-v4.1-flash": {
+					ReasoningProtocol: ReasoningProtocolDeepSeek,
+					SupportedEfforts:  []string{"disabled", "low", "high", "max"},
 					DefaultEffort:     "high",
 				},
 				"deepseek-v4-flash": {

@@ -157,6 +157,7 @@ func setOpenCodeGoRoute(p *ProviderEntry, route string) {
 	if p == nil {
 		return
 	}
+	_, inference := provider.CanonicalOpenCodeGoModelsURL(p.BaseURL)
 	switch route {
 	case provider.OpenCodeGoRouteChat:
 		p.Kind = "openai"
@@ -170,6 +171,12 @@ func setOpenCodeGoRoute(p *ProviderEntry, route string) {
 		p.Kind = "responses"
 		p.BaseURL = "https://opencode.ai/zen/go/v1"
 		p.ResponsesMode = "stateless"
+	}
+	if inference {
+		p.BaseURL = "https://opencode.ai/inference/go/openai/v1"
+		if route == provider.OpenCodeGoRouteAnthropic {
+			p.BaseURL = "https://opencode.ai/inference/go/anthropic"
+		}
 	}
 }
 

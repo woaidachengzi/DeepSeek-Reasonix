@@ -265,7 +265,7 @@ func TestOpenCodeGoResponsesPresetRoutesGrokToResponsesAPI(t *testing.T) {
 		t.Fatalf("opencode-go-responses preset = %+v, found=%v", preset, ok)
 	}
 	entry := preset.Entries[0]
-	if entry.Kind != "responses" || entry.BaseURL != "https://opencode.ai/zen/go/v1" || entry.ResponsesMode != "stateless" || entry.DefaultModel() != "grok-4.5" {
+	if entry.Kind != "responses" || entry.BaseURL != "https://opencode.ai/inference/go/openai/v1" || entry.ResponsesMode != "stateless" || entry.DefaultModel() != "grok-4.5" {
 		t.Fatalf("opencode-go-responses entry = %+v", entry)
 	}
 	for _, model := range []string{"grok-4.5", "gpt-5.6-luna", "muse-spark-1.2-contributor"} {
@@ -310,9 +310,9 @@ func TestOpenCodeGoRecommendedPresetIsOneClickAndCostBounded(t *testing.T) {
 		model  string
 		window int
 	}{
-		"opencode-go":           {kind: "openai", base: "https://opencode.ai/zen/go/v1", model: "glm-5.3", window: 128_000},
-		"opencode-go-anthropic": {kind: "anthropic", base: "https://opencode.ai/zen/go", model: "qwen3.7-plus", window: 262_144},
-		"opencode-go-responses": {kind: "responses", base: "https://opencode.ai/zen/go/v1", model: "grok-4.5", window: 500_000},
+		"opencode-go":           {kind: "openai", base: "https://opencode.ai/inference/go/openai/v1", model: "glm-5.3", window: 128_000},
+		"opencode-go-anthropic": {kind: "anthropic", base: "https://opencode.ai/inference/go/anthropic", model: "qwen3.7-plus", window: 262_144},
+		"opencode-go-responses": {kind: "responses", base: "https://opencode.ai/inference/go/openai/v1", model: "grok-4.5", window: 500_000},
 	}
 	for _, entry := range preset.Entries {
 		w, exists := want[entry.Name]
@@ -331,7 +331,7 @@ func TestDeepSeekAnthropicPresetIsOptionalAndModelScoped(t *testing.T) {
 		t.Fatalf("DeepSeek Anthropic preset = %+v, want one entry", preset)
 	}
 	entry := preset.Entries[0]
-	if entry.Kind != "anthropic" || entry.BaseURL != deepSeekAnthropicBaseURL || entry.Default != "deepseek-v4-flash" || entry.Thinking != "enabled" || !EffectiveWebSearch(&entry) || entry.Vision || entry.APIKeyEnv != "DEEPSEEK_API_KEY" {
+	if entry.Kind != "anthropic" || entry.BaseURL != deepSeekAnthropicBaseURL || entry.Default != "deepseek-flash" || entry.Thinking != "enabled" || !EffectiveWebSearch(&entry) || entry.Vision || entry.APIKeyEnv != "DEEPSEEK_API_KEY" {
 		t.Fatalf("DeepSeek Anthropic preset entry = %+v", entry)
 	}
 	var cfg Config
@@ -366,7 +366,7 @@ func TestDeepSeekResponsesPresetMatchesOfficialSupport(t *testing.T) {
 	if entry.Kind != "responses" || entry.BaseURL != "https://api.deepseek.com" || entry.ResponsesMode != "stateless" {
 		t.Fatalf("deepseek responses endpoint = %+v", entry)
 	}
-	if !entry.HasModel("deepseek-v4-flash") || !entry.HasModel("deepseek-v4-pro") || entry.Default != "deepseek-v4-flash" {
+	if !entry.HasModel("deepseek-v4-flash") || !entry.HasModel("deepseek-v4-pro") || entry.Default != "deepseek-flash" {
 		t.Fatalf("deepseek responses models = %v default=%q", entry.Models, entry.Default)
 	}
 	if entry.ModelsURL != "" {
@@ -863,7 +863,7 @@ func TestCuratedProviderPresetCapabilities(t *testing.T) {
 	if !ok {
 		t.Fatal("opencode-go-anthropic provider missing")
 	}
-	if goAnthropic.Kind != "anthropic" || goAnthropic.BaseURL != "https://opencode.ai/zen/go" || goAnthropic.DefaultModel() != "qwen3.7-plus" || !goAnthropic.HasModel("qwen3.8-max") || !goAnthropic.HasModel("minimax-m3") || goAnthropic.HasModel("deepseek-v4-flash") {
+	if goAnthropic.Kind != "anthropic" || goAnthropic.BaseURL != "https://opencode.ai/inference/go/anthropic" || goAnthropic.DefaultModel() != "qwen3.7-plus" || !goAnthropic.HasModel("qwen3.8-max") || !goAnthropic.HasModel("minimax-m3") || goAnthropic.HasModel("deepseek-v4-flash") {
 		t.Fatalf("opencode-go-anthropic capability mismatch: %+v", goAnthropic)
 	}
 

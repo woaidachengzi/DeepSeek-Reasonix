@@ -31,8 +31,10 @@ type EffortCapability struct {
 type modelReasoningCapability struct{ Protocol string }
 
 var modelReasoningCapabilities = map[string]modelReasoningCapability{
-	"deepseek-v4-flash": {Protocol: ReasoningProtocolDeepSeek},
-	"deepseek-v4-pro":   {Protocol: ReasoningProtocolDeepSeek},
+	"deepseek-flash":      {Protocol: ReasoningProtocolDeepSeek},
+	"deepseek-v4.1-flash": {Protocol: ReasoningProtocolDeepSeek},
+	"deepseek-v4-flash":   {Protocol: ReasoningProtocolDeepSeek},
+	"deepseek-v4-pro":     {Protocol: ReasoningProtocolDeepSeek},
 }
 
 // EffortCapabilityForEntry returns the user-facing /effort levels for a resolved

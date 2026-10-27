@@ -10,9 +10,11 @@ import (
 // Official OpenCode Go routes verified against the public endpoint list.
 // Similar hostnames, custom proxies, and extra query/userinfo never match.
 const (
-	openCodeGoHost          = "opencode.ai"
-	openCodeGoChatPath      = "/zen/go/v1"
-	openCodeGoAnthropicPath = "/zen/go"
+	openCodeGoHost                   = "opencode.ai"
+	openCodeGoChatPath               = "/zen/go/v1"
+	openCodeGoAnthropicPath          = "/zen/go"
+	openCodeGoInferenceChatPath      = "/inference/go/openai/v1"
+	openCodeGoInferenceAnthropicPath = "/inference/go/anthropic"
 )
 
 // OpenCodeGoModelLimits is the static models.dev snapshot used by both config
@@ -35,6 +37,7 @@ func OpenCodeGoChatModels() map[string]OpenCodeGoModelLimits {
 		"glm-5.1": {Context: 202_752, MaxOutput: 32_768}, "kimi-k3": {Context: 1_048_576, MaxOutput: 131_072},
 		"kimi-k2.7-code": {Context: 262_144, MaxOutput: 262_144}, "kimi-k2.6": {Context: 262_144, MaxOutput: 65_536},
 		"deepseek-v4-pro": {Context: 1_000_000, MaxOutput: 384_000}, "deepseek-v4-flash": {Context: 1_000_000, MaxOutput: 384_000},
+		"deepseek-v4.1-flash":          {Context: 1_000_000, MaxOutput: 384_000},
 		"deepseek-v4-flash-vision-exp": {Context: 1_000_000, MaxOutput: 384_000}, "mimo-v2.5-pro": {Context: 1_048_576, MaxOutput: 128_000},
 		"mimo-v2.5": {Context: 1_000_000, MaxOutput: 128_000}, "hy3": {Context: 256_000, MaxOutput: 64_000},
 	})
@@ -127,6 +130,21 @@ func officialOpenCodeGoPath(baseURL string) (string, bool) {
 	return strings.TrimRight(u.EscapedPath(), "/"), true
 }
 
+func isOpenCodeGoAPIPath(path string) bool {
+	return path == openCodeGoChatPath || path == openCodeGoAnthropicPath ||
+		path == openCodeGoInferenceChatPath || path == openCodeGoInferenceAnthropicPath
+}
+
+// CanonicalOpenCodeGoModelsURL preserves explicit model URL overrides while
+// mapping the new protocol-specific inference bases to the shared catalog.
+func CanonicalOpenCodeGoModelsURL(raw string) (string, bool) {
+	path, ok := officialOpenCodeGoPath(raw)
+	if !ok || (path != openCodeGoInferenceChatPath && path != openCodeGoInferenceAnthropicPath) {
+		return "", false
+	}
+	return "https://opencode.ai/inference/go/v1/models", true
+}
+
 // OfficialOpenCodeGoRoute reports the exact official route for kind+URL.
 // kind is openai/chat, anthropic, or responses. Unknown kind/URL is false.
 func OfficialOpenCodeGoRoute(kind, baseURL string) (string, bool) {
@@ -136,15 +154,15 @@ func OfficialOpenCodeGoRoute(kind, baseURL string) (string, bool) {
 	}
 	switch strings.ToLower(strings.TrimSpace(kind)) {
 	case "openai", "chat", "":
-		if path == openCodeGoChatPath {
+		if path == openCodeGoChatPath || path == openCodeGoInferenceChatPath {
 			return OpenCodeGoRouteChat, true
 		}
 	case "responses":
-		if path == openCodeGoChatPath {
+		if path == openCodeGoChatPath || path == openCodeGoInferenceChatPath {
 			return OpenCodeGoRouteResponses, true
 		}
 	case "anthropic":
-		if path == openCodeGoAnthropicPath {
+		if path == openCodeGoAnthropicPath || path == openCodeGoInferenceAnthropicPath {
 			return OpenCodeGoRouteAnthropic, true
 		}
 	}
@@ -175,6 +193,13 @@ func LookupOfficialOpenCodeGo(kind, baseURL, model string) (OpenCodeGoModelLimit
 	if !ok {
 		return OpenCodeGoModelLimits{}, false
 	}
+	if route != OpenCodeGoRouteChat && strings.EqualFold(strings.TrimSpace(model), "deepseek-v4.1-flash") {
+		return OpenCodeGoModelLimits{}, false
+	}
+	path, _ := officialOpenCodeGoPath(baseURL)
+	if route != OpenCodeGoRouteChat && path != openCodeGoChatPath && path != openCodeGoAnthropicPath && isDeepSeekModelID(model) {
+		return OpenCodeGoModelLimits{}, false // new inference documentation lists DeepSeek on Chat only.
+	}
 	switch route {
 	case OpenCodeGoRouteChat:
 		return lookupOpenCodeGoLimits(OpenCodeGoChatModels(), model)
@@ -200,6 +225,9 @@ func LookupOfficialOpenCodeGo(kind, baseURL, model string) (OpenCodeGoModelLimit
 // official OpenCode Go route. It intentionally returns text-only for every
 // listed model unless the local adapter has an explicit image declaration.
 func OpenCodeGoModelInfo(kind, baseURL, model string) (ModelInfo, bool) {
+	if route, ok := OfficialOpenCodeGoRoute(kind, baseURL); ok && route == OpenCodeGoRouteChat && strings.EqualFold(strings.TrimSpace(model), "deepseek-v4.1-flash") {
+		return ModelInfo{ID: strings.TrimSpace(model), InputModalities: []ModelModality{ModalityText, ModalityImage}, ContextWindow: 1_000_000, MaxOutputTokens: 384_000, Reasoning: true}, true
+	}
 	if info, ok := PiCatalogModelInfo(kind, baseURL, model); ok {
 		return info, true
 	}
@@ -231,15 +259,27 @@ func BuiltinModelInfo(kind, baseURL, model string) (ModelInfo, bool) {
 	if info, ok := ModelScopeModelInfo(kind, baseURL, model); ok {
 		return info, true
 	}
+	return OfficialDeepSeekModelInfo(kind, baseURL, model)
+}
+
+func OfficialDeepSeekModelInfo(kind, baseURL, model string) (ModelInfo, bool) {
 	if strings.EqualFold(strings.TrimSpace(kind), "openai") || strings.EqualFold(strings.TrimSpace(kind), "responses") || strings.EqualFold(strings.TrimSpace(kind), "anthropic") {
 		u, err := url.Parse(strings.TrimSpace(baseURL))
-		if err == nil && strings.EqualFold(u.Scheme, "https") && strings.EqualFold(u.Hostname(), "api.deepseek.com") {
-			id := strings.TrimSpace(model)
-			if id == "deepseek-v4-flash-vision-exp" {
-				return ModelInfo{ID: id, InputModalities: []ModelModality{ModalityText, ModalityImage}}, true
+		if err == nil && strings.EqualFold(u.Scheme, "https") && strings.EqualFold(u.Hostname(), "api.deepseek.com") && u.Port() == "" && u.User == nil && u.RawQuery == "" && u.Fragment == "" {
+			path := strings.TrimRight(u.EscapedPath(), "/")
+			if strings.EqualFold(strings.TrimSpace(kind), "anthropic") {
+				if path != "/anthropic" && path != "/anthropic/v1" {
+					return ModelInfo{}, false
+				}
+			} else if path != "" && path != "/v1" {
+				return ModelInfo{}, false
 			}
-			if id == "deepseek-v4-flash" || id == "deepseek-v4-pro" {
-				return ModelInfo{ID: id, InputModalities: []ModelModality{ModalityText}}, true
+			id := strings.TrimSpace(model)
+			if IsDeepSeekFlashModel(id) {
+				return ModelInfo{ID: id, InputModalities: []ModelModality{ModalityText, ModalityImage}, ContextWindow: 1_000_000, MaxOutputTokens: 384_000, Reasoning: true}, true
+			}
+			if id == "deepseek-v4-pro" {
+				return ModelInfo{ID: id, InputModalities: []ModelModality{ModalityText}, ContextWindow: 1_000_000, MaxOutputTokens: 384_000, Reasoning: true}, true
 			}
 		}
 	}

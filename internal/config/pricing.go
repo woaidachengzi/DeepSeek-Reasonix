@@ -9,7 +9,7 @@ import (
 )
 
 func deepSeekV4FlashPriceCNY() *provider.Pricing {
-	return &provider.Pricing{CacheHit: 0.10, Input: 3, Output: 9, Currency: "¥"}
+	return &provider.Pricing{CacheHit: 0.04, Input: 2, Output: 8, Currency: "¥"}
 }
 
 func deepSeekV4ProPriceCNY() *provider.Pricing {
@@ -18,6 +18,7 @@ func deepSeekV4ProPriceCNY() *provider.Pricing {
 
 func deepSeekV4PricesCNY() map[string]*provider.Pricing {
 	return map[string]*provider.Pricing{
+		provider.DeepSeekFlashModel:        deepSeekV4FlashPriceCNY(),
 		"deepseek-v4-flash":                deepSeekV4FlashPriceCNY(),
 		openai.OfficialDeepSeekVisionModel: deepSeekV4FlashPriceCNY(),
 		"deepseek-v4-pro":                  deepSeekV4ProPriceCNY(),
@@ -25,7 +26,7 @@ func deepSeekV4PricesCNY() map[string]*provider.Pricing {
 }
 
 func deepSeekV4FlashPriceUSD() *provider.Pricing {
-	return &provider.Pricing{CacheHit: 0.014, Input: 0.44, Output: 1.32, Currency: "$"}
+	return &provider.Pricing{CacheHit: 0.006, Input: 0.30, Output: 1.20, Currency: "$"}
 }
 
 func deepSeekV4ProPriceUSD() *provider.Pricing {
@@ -34,6 +35,7 @@ func deepSeekV4ProPriceUSD() *provider.Pricing {
 
 func deepSeekV4PricesUSD() map[string]*provider.Pricing {
 	return map[string]*provider.Pricing{
+		provider.DeepSeekFlashModel:        deepSeekV4FlashPriceUSD(),
 		"deepseek-v4-flash":                deepSeekV4FlashPriceUSD(),
 		openai.OfficialDeepSeekVisionModel: deepSeekV4FlashPriceUSD(),
 		"deepseek-v4-pro":                  deepSeekV4ProPriceUSD(),
@@ -127,13 +129,13 @@ func applyDeepSeekOfficialDefaultPricingWithOverride(c *Config, overridePersiste
 		// Only refresh when the row still matches a known official default in
 		// the provider's own billing currency. Display currency must not win.
 		if isKnownDeepSeekOfficialPricing(p.Model, p.Price) && (overridePersisted || p.persistedOfficialCurrency == "" || p.persistedOfficialCurrency == currency) {
-			if samePricing(p.Price, deepSeekV4PriceForModel(currency, p.Model)) || overridePersisted {
+			if samePricing(p.Price, deepSeekV4PriceForModel(currency, p.Model)) || isAugustFlashPrice(p.Model, p.Price, currency) || overridePersisted {
 				p.Price = deepSeekV4PriceForModel(currency, p.Model)
 			}
 		}
 		for model, price := range p.Prices {
 			if isKnownDeepSeekOfficialPricing(model, price) && (overridePersisted || p.persistedOfficialCurrency == "" || p.persistedOfficialCurrency == currency) {
-				if samePricing(price, deepSeekV4PriceForModel(currency, model)) || overridePersisted {
+				if samePricing(price, deepSeekV4PriceForModel(currency, model)) || isAugustFlashPrice(model, price, currency) || overridePersisted {
 					p.Prices[model] = deepSeekV4PriceForModel(currency, model)
 				}
 			}
@@ -469,12 +471,28 @@ func isKnownDeepSeekOfficialPricing(model string, price *provider.Pricing) bool 
 	if model == "" || price == nil {
 		return false
 	}
+	if isAugustFlashPrice(model, price, normalizeDeepSeekPricingCurrency(price.Currency)) {
+		return true
+	}
 	for _, prices := range []map[string]*provider.Pricing{
 		deepSeekV4PricesCNY(), deepSeekV4PricesUSD(), legacyDeepSeekV4PricesCNY(), legacyDeepSeekV4PricesUSD(),
 	} {
 		if samePricingNormalizedCurrency(price, prices[model]) {
 			return true
 		}
+	}
+	return false
+}
+
+func isAugustFlashPrice(model string, price *provider.Pricing, currency string) bool {
+	if model != "deepseek-v4-flash" && model != openai.OfficialDeepSeekVisionModel {
+		return false
+	}
+	if currency == "CNY" {
+		return samePricingNormalizedCurrency(price, &provider.Pricing{CacheHit: 0.10, Input: 3, Output: 9, Currency: "¥"})
+	}
+	if currency == "USD" {
+		return samePricingNormalizedCurrency(price, &provider.Pricing{CacheHit: 0.014, Input: 0.44, Output: 1.32, Currency: "$"})
 	}
 	return false
 }

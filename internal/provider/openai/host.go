@@ -37,20 +37,19 @@ func IsDeepSeek(baseURL string) bool {
 	return matchesVendorHost(baseURL, "deepseek.com", "api.deepseek.com")
 }
 
-// OfficialDeepSeekVisionModel has built-in image support. Unknown models need
-// capability metadata or an explicit declaration, not a name-based guess.
+// OfficialDeepSeekVisionModel is the retained vision-preview alias. New
+// configurations use provider.DeepSeekFlashModel; all Flash aliases accept images.
 const OfficialDeepSeekVisionModel = "deepseek-v4-flash-vision-exp"
 
-// IsOfficialDeepSeekVisionModel reports whether model is the pinned official
-// DeepSeek vision SKU. Matching is case-insensitive and trims surrounding space.
+// IsOfficialDeepSeekVisionModel reports the current Flash model and its aliases.
 func IsOfficialDeepSeekVisionModel(model string) bool {
-	return strings.EqualFold(strings.TrimSpace(model), OfficialDeepSeekVisionModel)
+	return provider.IsDeepSeekFlashModel(model)
 }
 
 // IsOfficialDeepSeekTextModel identifies known text-only models, not future SKUs.
 func IsOfficialDeepSeekTextModel(model string) bool {
 	switch strings.ToLower(strings.TrimSpace(model)) {
-	case "deepseek-v4-flash", "deepseek-v4-pro":
+	case "deepseek-v4-pro":
 		return true
 	}
 	return false

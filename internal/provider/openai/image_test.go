@@ -238,7 +238,7 @@ func TestOfficialDeepSeekVisionSKUEmbedsUserImages(t *testing.T) {
 }
 
 func TestOfficialRequestURLImageHardLimit(t *testing.T) {
-	p, err := New(provider.Config{BaseURL: "https://relay.test", Model: "deepseek-v4-flash", Extra: map[string]any{"request_url": "https://api.deepseek.com/v1/chat/completions", "vision": true}, ModelInfo: &provider.ModelInfo{InputModalities: []provider.ModelModality{provider.ModalityText, provider.ModalityImage}}})
+	p, err := New(provider.Config{BaseURL: "https://relay.test", Model: "deepseek-v4-pro", Extra: map[string]any{"request_url": "https://api.deepseek.com/v1/chat/completions", "vision": true}, ModelInfo: &provider.ModelInfo{InputModalities: []provider.ModelModality{provider.ModalityText, provider.ModalityImage}}})
 	if err != nil {
 		t.Fatal(err)
 	}

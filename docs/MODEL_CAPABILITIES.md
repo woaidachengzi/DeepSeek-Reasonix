@@ -33,7 +33,7 @@ the cache; late requests cannot replace newer successful discoveries.
 
 Built-in adapters also ship verified local catalogs for all untouched curated
 provider presets. The catalogs cover the official OpenCode Go routes, the
-DeepSeek vision SKU, ModelScope Qwen3.5 SKUs, and the remaining preset model
+DeepSeek Flash model and its retained aliases, ModelScope Qwen3.5 SKUs, and the remaining preset model
 lists. They work without a model-list request; a custom endpoint, edited preset,
 or model not in a local catalog stays unknown unless another valid source applies.
 
@@ -58,7 +58,7 @@ vision = true # false disables; remove this field for Auto
 
 Final priority is official protocol restriction → per-model override → existing
 automatic chain (curated preset, legacy config, exact local catalog, valid online
-cache) → unknown. Official DeepSeek text models remain blocked; its visual model
+cache) → unknown. Official DeepSeek Pro remains text-only; Flash and its aliases
 can be explicitly disabled. Capability changes preserve catalog context, output,
 API and reasoning metadata. Discovery never saves UI-provided capabilities as facts.
 
@@ -86,3 +86,17 @@ reviewed.
 
 Text-only and unknown models use the existing `Agent.VisionModel`, OCR, and MCP
 vision fallback paths. Raw image payloads are never sent to those models.
+
+## Current DeepSeek / OpenCode Go compatibility (2026-10-27)
+
+New direct DeepSeek configurations use `deepseek-flash`. Both retained aliases,
+`deepseek-v4-flash` and `deepseek-v4-flash-vision-exp`, accept images as well.
+Explicit per-model Off still suppresses images; Pro remains text-only.
+
+Recommended Go presets use `/inference/go/openai/v1` for Chat/Responses and
+`/inference/go/anthropic` for Messages. Model discovery uses
+`/inference/go/v1/models`. Legacy `/zen/go` configurations and separately
+verified DeepSeek search presets remain supported. Go's `deepseek-v4.1-flash`
+model is catalogued on the documented Chat route only.
+
+See the [implementation and verification notes](DEEPSEEK_OPENCODE_ADAPTATION.zh-CN.md).

@@ -24,7 +24,7 @@ TTL；请求失败不覆盖成功结果，成功返回 ID-only 时会记录未�
 路由与凭据变化隔离缓存，晚到的旧请求不能覆盖较新的成功发现。
 
 内置 Adapter 还会为所有未被修改的精选 Provider 预设生成本地校验目录，
-覆盖官方 OpenCode Go 路由、DeepSeek vision SKU、ModelScope Qwen3.5 SKU 及
+覆盖官方 OpenCode Go 路由、DeepSeek Flash 及其兼容名称、ModelScope Qwen3.5 SKU 及
 其他预设模型列表，因此不依赖模型列表请求即可工作。自定义 Endpoint、已
 编辑的预设或本地目录之外的模型，在没有其他有效来源时保持未知。
 
@@ -47,7 +47,7 @@ vision = true # false 为关闭；删除此字段恢复自动
 ```
 
 最终优先级：官方协议硬限制 → 当前模型显式覆盖 → 原自动链路（精选预设、
-旧配置、本地精确目录、有效在线缓存）→ 未知。官方 DeepSeek 文本型号不能
+旧配置、本地精确目录、有效在线缓存）→ 未知。官方 DeepSeek Pro 文本型号不能
 被手动开启，其视觉型号可以显式关闭。能力覆盖不会丢失本地目录的上下文、
 输出上限、协议与 reasoning 元数据。界面回传的能力信息不作为发现事实保存。
 
@@ -70,3 +70,17 @@ Dependabot 每周为 `sky-valley/pi` 单独创建升级 PR，不与无关的 Go 
 
 文本模型和未知模型继续使用现有的 `Agent.VisionModel`、OCR、MCP vision
 fallback。原始图片不会发送给这些模型。
+
+## DeepSeek / OpenCode Go 当前兼容规则（2026-10-27）
+
+DeepSeek 官方新配置使用 `deepseek-flash`。`deepseek-v4-flash` 和
+`deepseek-v4-flash-vision-exp` 保留兼容，三者均支持原生图片；Pro 仍为纯文本。
+逐模型“关闭”仍优先于 Flash 的默认图片能力，不会向模型发送原图。
+
+OpenCode Go 推荐预设使用 `/inference/go/openai/v1`（Chat / Responses）和
+`/inference/go/anthropic`（Messages），模型发现使用 `/inference/go/v1/models`。
+旧 `/zen/go` 配置及单独验证过的 DeepSeek 搜索预设继续保留。Go 的新 Flash ID
+为 `deepseek-v4.1-flash`；当前只将它登记在官方文档列出的 Chat 路由，不将官方
+DeepSeek 的图片或搜索能力自动推广到任意中转站。
+
+实现和验证范围见 [本轮适配记录](DEEPSEEK_OPENCODE_ADAPTATION.zh-CN.md)。

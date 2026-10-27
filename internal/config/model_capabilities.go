@@ -162,6 +162,10 @@ func (r *ModelCapabilityResolver) resolveAutomatic(entry *ProviderEntry, credent
 	// Resolve catalog facts separately so a vision override or legacy declaration
 	// cannot erase context/output/protocol metadata.
 	facts, hasFacts := provider.PiCatalogModelInfoForProvider(entry.Name, entry.Kind, entry.BaseURL, model)
+	// The embedded catalog may predate the official Flash alias cutover.
+	if current, ok := provider.OfficialDeepSeekModelInfo(entry.Kind, entry.BaseURL, model); ok {
+		facts, hasFacts = current, true
+	}
 	if !hasFacts {
 		facts, hasFacts = provider.BuiltinModelInfo(entry.Kind, entry.BaseURL, model)
 	}

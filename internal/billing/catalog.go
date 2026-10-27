@@ -14,6 +14,10 @@ const (
 
 var deepSeekV4August2026EffectiveAt = time.Date(2026, time.August, 16, 16, 0, 0, 0, time.UTC)
 
+// Official release notice: new Flash rates took effect at 04:00 UTC Sep 10.
+// Keep the schedule identity stable; historical occurrences retain their rates.
+var deepSeekFlashSeptember2026EffectiveAt = time.Date(2026, time.September, 10, 4, 0, 0, 0, time.UTC)
+
 // CatalogEntry is one official list price for a model in a billing currency.
 type CatalogEntry struct {
 	Provider      string // deepseek | longcat | mimo
@@ -84,6 +88,30 @@ func OfficialCatalog() []CatalogEntry {
 		{Provider: "mimo", Model: "mimo-v2-flash", Currency: "CNY", CacheHit: 0.07, Input: 0.70, Output: 2.10, DocURL: DocMiMoPAYG, BillingMode: BillingModePAYG},
 		{Provider: "mimo", Model: "mimo-v2.5-pro", Currency: "CNY", CacheHit: 0.025, Input: 3, Output: 6, DocURL: DocMiMoTokenPlan, BillingMode: BillingModeSubscriptionEquivalent, Notes: "payg_equivalent_not_plan_bill"},
 		{Provider: "mimo", Model: "mimo-v2.5", Currency: "CNY", CacheHit: 0.02, Input: 1, Output: 2, DocURL: DocMiMoTokenPlan, BillingMode: BillingModeSubscriptionEquivalent, Notes: "payg_equivalent_not_plan_bill"},
+	}
+	for i := range entries {
+		if entries[i].Provider == "deepseek" && strings.Contains(entries[i].Model, "flash") && entries[i].EffectiveTo.IsZero() {
+			entries[i].EffectiveTo = deepSeekFlashSeptember2026EffectiveAt
+		}
+	}
+	for _, model := range []string{"deepseek-flash", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp"} {
+		for _, rates := range []struct {
+			currency           string
+			hit, input, output float64
+		}{
+			{"CNY", 0.04, 2, 8}, {"USD", 0.006, 0.30, 1.20},
+		} {
+			for _, band := range []string{RateBandPeak, RateBandOffPeak} {
+				factor := 1.0
+				if band == RateBandOffPeak {
+					factor = 0.5
+				}
+				entries = append(entries, CatalogEntry{Provider: "deepseek", Model: model, Currency: rates.currency,
+					CacheHit: rates.hit * factor, Input: rates.input * factor, Output: rates.output * factor,
+					ScheduleID: ScheduleDeepSeekV4August2026, RateBand: band, EffectiveFrom: deepSeekFlashSeptember2026EffectiveAt,
+					DocURL: DocDeepSeekPricing, BillingMode: BillingModePAYG})
+			}
+		}
 	}
 	for i := range entries {
 		entries[i].Fingerprint = PricingFingerprint(RateCardFromCatalog(entries[i]))
@@ -157,6 +185,9 @@ func ResolveScheduledRate(provider, model, currency, billingMode, scheduleID str
 func LookupCatalog(provider, model, currency, billingMode string) (CatalogEntry, bool) {
 	var fallback CatalogEntry
 	for _, e := range OfficialCatalog() {
+		if !e.EffectiveTo.IsZero() {
+			continue
+		}
 		if !catalogIdentityMatches(e, provider, model, currency, billingMode) {
 			continue
 		}
@@ -191,6 +222,9 @@ func RateCardFromCatalog(e CatalogEntry) RateCard {
 func MatchesCatalog(provider, model string, rates RateCard) (CatalogEntry, bool) {
 	cur := NormalizeCurrency(rates.Currency)
 	for _, e := range OfficialCatalog() {
+		if !e.EffectiveTo.IsZero() {
+			continue
+		}
 		// Historical and off-peak rows require a trusted schedule resolution.
 		// Static custom rates that merely equal one of those rows are not official.
 		if e.ScheduleID != "" && e.RateBand != RateBandPeak {

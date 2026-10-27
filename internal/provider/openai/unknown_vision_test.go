@@ -11,7 +11,7 @@ func TestUnknownDeepSeekVisionRequiresDeclaration(t *testing.T) {
 			t.Fatalf("%s ignored explicit image declaration", model)
 		}
 	}
-	if DeepSeekImageInputAllowed(true, "", "deepseek-v4-flash", true, true) {
+	if DeepSeekImageInputAllowed(true, "", "deepseek-v4-pro", true, true) {
 		t.Fatal("known text-only model accepted images")
 	}
 }

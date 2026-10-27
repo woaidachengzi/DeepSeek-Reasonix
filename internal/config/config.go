@@ -1927,7 +1927,7 @@ func Default() *Config {
 		Providers: []ProviderEntry{
 			{
 				Name: "deepseek-flash", Kind: "openai", BaseURL: "https://api.deepseek.com",
-				Model: "deepseek-v4-flash", APIKeyEnv: "DEEPSEEK_API_KEY",
+				Model: provider.DeepSeekFlashModel, APIKeyEnv: "DEEPSEEK_API_KEY",
 				BalanceURL: "https://api.deepseek.com/user/balance", Thinking: "enabled",
 				WebSearch: boolPointer(true), SupportedEfforts: []string{"disabled", "low", "high", "max"}, DefaultEffort: "high",
 				ContextWindow: 1_000_000, Price: deepSeekV4FlashPriceUSD(),

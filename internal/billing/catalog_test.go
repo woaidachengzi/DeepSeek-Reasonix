@@ -27,7 +27,7 @@ func TestResolveDeepSeekScheduledRateBoundaries(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !MatchesScheduleAnchor("deepseek", "deepseek-v4-flash", ScheduleDeepSeekV4August2026, anchor) {
+			if !MatchesScheduleAnchor("deepseek", "deepseek-v4-flash", ScheduleDeepSeekV4August2026, RateCard{CacheHit: 0.04, Input: 2, Output: 8, Currency: "CNY"}) {
 				t.Fatal("current peak anchor was not recognized")
 			}
 			got, ok := ResolveScheduledRate("deepseek", "deepseek-v4-flash", "CNY", BillingModePAYG, ScheduleDeepSeekV4August2026, at)
@@ -60,7 +60,7 @@ func TestBuildQuoteScheduledRateUsesMatchingPeerBand(t *testing.T) {
 	at := time.Date(2026, 8, 17, 0, 0, 0, 0, time.UTC)
 	q := BuildQuote(QuoteInput{
 		Usage:      UsageTokens{CacheHitTokens: 1_000_000, CacheMissTokens: 1_000_000, CompletionTokens: 1_000_000},
-		Rates:      RateCard{CacheHit: 0.10, Input: 3, Output: 9, Currency: "CNY"},
+		Rates:      RateCard{CacheHit: 0.04, Input: 2, Output: 8, Currency: "CNY"},
 		OccurredAt: at, DisplayCurrency: "USD", BillingMode: BillingModePAYG,
 		ProviderKind: "deepseek", ModelID: "deepseek-v4-flash", ScheduleID: ScheduleDeepSeekV4August2026,
 	})
@@ -72,7 +72,7 @@ func TestBuildQuoteScheduledRateUsesMatchingPeerBand(t *testing.T) {
 	}
 	peak := BuildQuote(QuoteInput{
 		Usage:        UsageTokens{PromptTokens: 1_000_000},
-		Rates:        RateCard{CacheHit: 0.10, Input: 3, Output: 9, Currency: "CNY"},
+		Rates:        RateCard{CacheHit: 0.04, Input: 2, Output: 8, Currency: "CNY"},
 		OccurredAt:   time.Date(2026, 8, 17, 1, 0, 0, 0, time.UTC),
 		ProviderKind: "deepseek", ModelID: "deepseek-v4-flash", ScheduleID: ScheduleDeepSeekV4August2026,
 	})
@@ -87,11 +87,11 @@ func TestDeepSeekScheduledRatesAllModelsCurrenciesAndTokenClasses(t *testing.T) 
 		anchor, peak, off RateCard
 	}
 	sets := []priceSet{
-		{"deepseek-v4-flash", "CNY", RateCard{0.10, 3, 9, "CNY"}, RateCard{0.10, 3, 9, "CNY"}, RateCard{0.05, 1.5, 4.5, "CNY"}},
-		{"deepseek-v4-flash-vision-exp", "CNY", RateCard{0.10, 3, 9, "CNY"}, RateCard{0.10, 3, 9, "CNY"}, RateCard{0.05, 1.5, 4.5, "CNY"}},
+		{"deepseek-v4-flash", "CNY", RateCard{0.04, 2, 8, "CNY"}, RateCard{0.10, 3, 9, "CNY"}, RateCard{0.05, 1.5, 4.5, "CNY"}},
+		{"deepseek-v4-flash-vision-exp", "CNY", RateCard{0.04, 2, 8, "CNY"}, RateCard{0.10, 3, 9, "CNY"}, RateCard{0.05, 1.5, 4.5, "CNY"}},
 		{"deepseek-v4-pro", "CNY", RateCard{0.30, 9, 27, "CNY"}, RateCard{0.30, 9, 27, "CNY"}, RateCard{0.15, 4.5, 13.5, "CNY"}},
-		{"deepseek-v4-flash", "USD", RateCard{0.014, 0.44, 1.32, "USD"}, RateCard{0.014, 0.44, 1.32, "USD"}, RateCard{0.007, 0.22, 0.66, "USD"}},
-		{"deepseek-v4-flash-vision-exp", "USD", RateCard{0.014, 0.44, 1.32, "USD"}, RateCard{0.014, 0.44, 1.32, "USD"}, RateCard{0.007, 0.22, 0.66, "USD"}},
+		{"deepseek-v4-flash", "USD", RateCard{0.006, 0.30, 1.20, "USD"}, RateCard{0.014, 0.44, 1.32, "USD"}, RateCard{0.007, 0.22, 0.66, "USD"}},
+		{"deepseek-v4-flash-vision-exp", "USD", RateCard{0.006, 0.30, 1.20, "USD"}, RateCard{0.014, 0.44, 1.32, "USD"}, RateCard{0.007, 0.22, 0.66, "USD"}},
 		{"deepseek-v4-pro", "USD", RateCard{0.044, 1.32, 3.96, "USD"}, RateCard{0.044, 1.32, 3.96, "USD"}, RateCard{0.022, 0.66, 1.98, "USD"}},
 	}
 	bands := []struct {
@@ -164,7 +164,7 @@ func TestScheduledPricingBeforeCutoverUsesHistoricalFingerprint(t *testing.T) {
 	at := time.Date(2026, 8, 16, 15, 59, 59, 0, time.UTC)
 	q := BuildQuote(QuoteInput{
 		Usage:      UsageTokens{PromptTokens: 1_000_000},
-		Rates:      RateCard{CacheHit: 0.10, Input: 3, Output: 9, Currency: "CNY"},
+		Rates:      RateCard{CacheHit: 0.04, Input: 2, Output: 8, Currency: "CNY"},
 		OccurredAt: at, ProviderKind: "deepseek", ModelID: "deepseek-v4-flash",
 		ScheduleID: ScheduleDeepSeekV4August2026, PricingFingerprint: "caller-fingerprint",
 	})

@@ -45,8 +45,8 @@ func TestEffectiveVisionHonorsOfficialDeepSeekVisionModels(t *testing.T) {
 		Model:        "deepseek-v4-flash",
 		VisionModels: []string{"deepseek-v4-flash", openai.OfficialDeepSeekVisionModel},
 	}
-	if EffectiveVision(flash) || ExplicitModelVision(flash) {
-		t.Fatal("checking image input on Flash must not enable official DeepSeek image payloads")
+	if !EffectiveVision(flash) || !ExplicitModelVision(flash) {
+		t.Fatal("Flash alias must accept explicitly enabled image input")
 	}
 }
 
@@ -160,7 +160,7 @@ func TestDeepSeekOfficialPresetsRouteVisionToPinnedSKU(t *testing.T) {
 			t.Fatalf("%s preset = %+v found=%v", id, preset, ok)
 		}
 		entry := preset.Entries[0]
-		if !entry.HasModel(openai.OfficialDeepSeekVisionModel) || entry.Default != "deepseek-v4-flash" || entry.Vision {
+		if !entry.HasModel(openai.OfficialDeepSeekVisionModel) || entry.Default != "deepseek-flash" || entry.Vision {
 			t.Fatalf("%s entry = %+v", id, entry)
 		}
 		var cfg Config
@@ -173,7 +173,7 @@ func TestDeepSeekOfficialPresetsRouteVisionToPinnedSKU(t *testing.T) {
 		if flash == nil || pro == nil || !ok {
 			t.Fatalf("%s models did not resolve", id)
 		}
-		if EffectiveVision(flash) || EffectiveVision(pro) || !EffectiveVision(vision) {
+		if !EffectiveVision(flash) || EffectiveVision(pro) || !EffectiveVision(vision) {
 			t.Fatalf("%s vision routing = flash:%t pro:%t vision:%t", id, EffectiveVision(flash), EffectiveVision(pro), EffectiveVision(vision))
 		}
 	}

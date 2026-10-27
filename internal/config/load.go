@@ -1732,15 +1732,19 @@ func normalizeOfficialDeepSeekModels(c *Config) {
 		if officialProviderHost(p.BaseURL) != "api.deepseek.com" {
 			continue
 		}
+		flashModel := "deepseek-v4-flash"
+		if p.HasModel(provider.DeepSeekFlashModel) {
+			flashModel = provider.DeepSeekFlashModel
+		}
 		switch strings.TrimSpace(p.Name) {
 		case "deepseek":
-			ensureProviderModels(p, []string{"deepseek-v4-flash", "deepseek-v4-pro"}, "deepseek-v4-flash")
+			ensureProviderModels(p, []string{flashModel, "deepseek-v4-pro"}, flashModel)
 		case "deepseek-flash":
-			ensureProviderModels(p, []string{"deepseek-v4-flash"}, "deepseek-v4-flash")
+			ensureProviderModels(p, []string{flashModel}, flashModel)
 		case "deepseek-pro":
 			ensureProviderModels(p, []string{"deepseek-v4-pro"}, "deepseek-v4-pro")
 		case "deepseek-responses":
-			ensureProviderModels(p, []string{"deepseek-v4-flash", "deepseek-v4-pro"}, "deepseek-v4-flash")
+			ensureProviderModels(p, []string{flashModel, "deepseek-v4-pro"}, flashModel)
 		}
 		backfillOfficialDeepSeekResponsesModels(p)
 		backfillDeepSeekAnthropicCapabilities(p)

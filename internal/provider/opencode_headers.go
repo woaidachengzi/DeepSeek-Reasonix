@@ -30,7 +30,7 @@ func NewClientIdentityHeaders() http.Header {
 // for all three wire adapters. It never changes model input or other vendors.
 func ApplyOpenCodeGoHeaders(req *http.Request, baseURL string, fallback http.Header) {
 	path, ok := officialOpenCodeGoPath(baseURL)
-	if !ok || (path != openCodeGoChatPath && path != openCodeGoAnthropicPath) {
+	if !ok || !isOpenCodeGoAPIPath(path) {
 		return
 	}
 	if req.Header.Get("User-Agent") == "" {

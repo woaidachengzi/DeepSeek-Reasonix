@@ -61,7 +61,7 @@ func TestCostQuoteReachesInnerSinkBeforeRecording(t *testing.T) {
 		Kind:     event.Usage,
 		ModelRef: "deepseek-flash/deepseek-v4-flash",
 		Usage:    &provider.Usage{PromptTokens: 1_000_000, CompletionTokens: 1_000_000, TotalTokens: 2_000_000},
-		Pricing:  &provider.Pricing{CacheHit: 0.10, Input: 3, Output: 9, Currency: "¥"},
+		Pricing:  &provider.Pricing{CacheHit: 0.04, Input: 2, Output: 8, Currency: "¥"},
 	})
 	if basis != billing.BasisOfficialTable {
 		t.Fatalf("USD valuation basis = %q, want official_table", basis)
