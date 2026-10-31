@@ -116,12 +116,20 @@ func legacyConfigPath() string {
 // lowest-priority source anyway (the v2 config and .mcp.json win on a name
 // collision — see Load).
 func loadLegacyMCP(path string) []PluginEntry {
+	entries, _ := loadLegacyMCPStrict(path)
+	return entries
+}
+
+func loadLegacyMCPStrict(path string) ([]PluginEntry, error) {
 	if path == "" {
-		return nil
+		return nil, nil
 	}
 	b, err := fileencoding.ReadFileUTF8(path)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	var doc struct {
 		MCP         []string                     `json:"mcp"`
@@ -130,7 +138,7 @@ func loadLegacyMCP(path string) []PluginEntry {
 		MCPDisabled []string                     `json:"mcpDisabled"`
 	}
 	if err := json.Unmarshal(b, &doc); err != nil {
-		return nil
+		return nil, err
 	}
 	disabled := make(map[string]bool, len(doc.MCPDisabled))
 	for _, n := range doc.MCPDisabled {
@@ -161,7 +169,7 @@ func loadLegacyMCP(path string) []PluginEntry {
 	for i := range entries {
 		entries[i].Source = MCPSourceLegacyUser
 	}
-	return entries
+	return entries, nil
 }
 
 var legacyMCPSpecName = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_-]*)=(.*)$`)

@@ -19,6 +19,8 @@ func TestAssessRememberWriteAutoAllowsOnlyLowRiskProjectCreates(t *testing.T) {
 		"implicit type":    json.RawMessage(`{"name":"release-target","description":"Release target","body":"Use main-v2."}`),
 		"global":           json.RawMessage(`{"name":"release-target","description":"Release target","type":"project","scope":"global","body":"Use main-v2."}`),
 		"global reference": json.RawMessage(`{"name":"global/release-target.md","description":"Release target","type":"project","body":"Use main-v2."}`),
+		"pinned project":   json.RawMessage(`{"name":"release-target","description":"Release target","type":"project","activation":"pinned","body":"Use main-v2."}`),
+		"pinned reference": json.RawMessage(`{"name":"release-target","description":"Release target","type":"reference","activation":" PINNED ","body":"Use main-v2."}`),
 		"user preference":  json.RawMessage(`{"name":"prefers-go","description":"Preferred language","type":"user","body":"Prefer Go."}`),
 		"feedback":         json.RawMessage(`{"name":"concise","description":"Response style","type":"feedback","body":"Keep answers concise."}`),
 		"stable id update": json.RawMessage(`{"id":"mem-existing","expected_revision":1,"description":"Update","type":"project","body":"Updated body."}`),

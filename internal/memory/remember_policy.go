@@ -24,7 +24,7 @@ type RememberAssessment struct {
 }
 
 // AssessRememberWrite permits only bounded, non-sensitive project/reference
-// creates. Global facts, preferences, feedback, updates, and potential
+// creates. Pinned facts, global facts, preferences, feedback, updates, and potential
 // duplicates remain explicit user decisions.
 func AssessRememberWrite(store Store, args json.RawMessage) RememberAssessment {
 	in, err := parseRememberRequest(args)
@@ -63,6 +63,10 @@ func AssessRememberWrite(store Store, args json.RawMessage) RememberAssessment {
 	}
 	if strings.TrimSpace(in.ID) != "" || in.ExpectedRevision > 0 {
 		assessment.Reason = "memory updates require confirmation"
+		return assessment
+	}
+	if NormalizeActivation(in.Activation) == ActivationPinned {
+		assessment.Reason = "pinning a memory loads it into every session and requires confirmation"
 		return assessment
 	}
 	if assessment.Name == "" {

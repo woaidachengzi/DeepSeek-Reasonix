@@ -1216,28 +1216,6 @@ func removePluginFromSourceForRootLocked(entry PluginEntry, path string) (bool, 
 	return true, path, nil
 }
 
-// RemovePluginFromEffectiveSourceForRoot removes only the declaration currently
-// selected by the project-over-global precedence rules.
-func RemovePluginFromEffectiveSourceForRoot(root, name string) (PluginEntry, bool, string, error) {
-	unlock, err := LockConfigFilesEdits(mcpConfigSourcePathsForRoot(root)...)
-	if err != nil {
-		return PluginEntry{}, false, "", fmt.Errorf("remove effective MCP server: %w", err)
-	}
-	defer unlock()
-
-	cfg, err := LoadForRootReadOnly(root)
-	if err != nil {
-		return PluginEntry{}, false, "", err
-	}
-	entry, found := pluginEntryByName(cfg.Plugins, strings.TrimSpace(name))
-	if !found {
-		return PluginEntry{}, false, "", nil
-	}
-	path := MCPConfigPathForEntry(root, entry)
-	removed, path, err := removePluginFromSourceForRootLocked(entry, path)
-	return entry, removed, path, err
-}
-
 // mcpConfigSourcePathsForRoot returns every writable source whose precedence can
 // decide which declaration is effective. A source-selection operation must lock
 // all of them before loading, otherwise another process can add a higher-priority
