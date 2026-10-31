@@ -203,14 +203,13 @@ final class Fixture: NSObject, NSApplicationDelegate {
               let frame = button["screenshot_frame"] as? [String:Double],
               let capture = (state["result"] as? [String:Any])?["capture_id"] as? String,
               let x=frame["x"],let y=frame["y"],let w=frame["w"],let h=frame["h"] else { log(["test_error":"screenshot mapping missing"]); return }
-        var action: [String:Any] = ["action":"move","pid":getpid(),"window_id":DispatchQueue.main.sync { window.windowNumber },"x":x+w/2,"y":y+h/2,"delivery_mode":"foreground"]
-        log(call(action))
-        action["action"]="click"
+        var action: [String:Any] = ["action":"click","pid":getpid(),"window_id":DispatchQueue.main.sync { window.windowNumber },"x":x+w/2,"y":y+h/2,"delivery_mode":"foreground"]
         action["capture_id"]=capture
         let before = DispatchQueue.main.sync { count }
-        log(call(action)); log(observation())
+        let clicked = call(action); log(clicked); log(observation())
         let after = DispatchQueue.main.sync { count }
-        log(["coordinate_readback":["second_screen":second,"before":before,"after":after,"passed":after==before+1]])
+        let accepted = clicked["is_error"] as? Bool == false
+        log(["coordinate_readback":["second_screen":second,"before":before,"after":after,"passed":accepted && after==before+1]])
     }
     func webTest() {
         let state=observation(); log(state)

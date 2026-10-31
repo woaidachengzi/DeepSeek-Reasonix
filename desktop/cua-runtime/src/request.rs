@@ -214,13 +214,7 @@ impl Envelope {
                 "scroll"
             }
             "move" => {
-                if cfg!(target_os = "linux") {
-                    return Err("app-scoped native move is unavailable on Linux; use browser_pointer hover for an observed browser ref".into());
-                }
-                if point.is_none() {
-                    return Err("move needs a screenshot point".into());
-                }
-                "move_cursor"
+                return Err("native move is unavailable in the Cua SDK adapter; use browser_pointer hover for an observed browser ref".into());
             }
             _ => return Err("tool is outside the Reasonix Cua adapter".into()),
         };
@@ -391,13 +385,13 @@ mod tests {
             json!({"action":"browser_pointer","target_id":"b1","tab_id":"t1","ref":"p1:e1","gesture":"scroll","delta_y":350.}),
             json!({"action":"browser_pointer","target_id":"b1","tab_id":"t1","ref":"p1:e1","gesture":"drag","destination_ref":"p1:e2"}),
         ] {
-            let unavailable_move = cfg!(target_os = "linux") && fields["action"] == "move";
+            let unavailable_move = fields["action"] == "move";
             let mut request = fields;
             request["pid"] = json!(42);
             request["window_id"] = json!(11);
             let planned = envelope(request).plan();
             if unavailable_move {
-                assert!(planned.unwrap_err().contains("app-scoped native move"));
+                assert!(planned.unwrap_err().contains("native move"));
                 continue;
             }
             let (name, args) = planned.unwrap();

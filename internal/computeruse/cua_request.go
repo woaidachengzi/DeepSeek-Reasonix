@@ -5,7 +5,6 @@ import (
 	"errors"
 	"math"
 	"net/url"
-	"runtime"
 	"strings"
 )
 
@@ -42,8 +41,8 @@ type CuaRequest struct {
 }
 
 func (r CuaRequest) Validate() error {
-	if runtime.GOOS == "linux" && r.Action == "move" {
-		return errors.New("app-scoped native move is unavailable on Linux; use browser_pointer hover for an observed browser ref")
+	if r.Action == "move" {
+		return errors.New("native move is unavailable in the Cua SDK adapter; use browser_pointer hover for an observed browser ref")
 	}
 	if err := r.validateBrowserOperationFields(); err != nil {
 		return err
@@ -51,7 +50,7 @@ func (r CuaRequest) Validate() error {
 	switch r.Action {
 	case "apps", "status":
 		return nil
-	case "windows", "observe", "click", "type", "key", "hotkey", "scroll", "move", "browser_prepare", "browser_observe", "browser_click", "browser_type", "browser_navigate", "browser_select", "browser_pointer":
+	case "windows", "observe", "click", "type", "key", "hotkey", "scroll", "browser_prepare", "browser_observe", "browser_click", "browser_type", "browser_navigate", "browser_select", "browser_pointer":
 	default:
 		return errors.New("unsupported Cua action")
 	}
@@ -218,7 +217,7 @@ func (r CuaRequest) validateInput() error {
 	if r.Action == "click" && ((r.ElementToken == "") == (r.X == nil)) {
 		return errors.New("click needs either an observed element_token or screenshot x/y")
 	}
-	if (r.Action == "scroll" || r.Action == "move") && r.X == nil {
+	if r.Action == "scroll" && r.X == nil {
 		return errors.New("scroll and move require screenshot x/y")
 	}
 	if r.Action == "type" && r.Text == "" || r.Action == "key" && r.Key == "" || r.Action == "hotkey" && len(r.Keys) < 2 {
@@ -233,9 +232,6 @@ func (r CuaRequest) validateInput() error {
 func finite(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
 
 func CuaSchema() json.RawMessage {
-	schema := `{"type":"object","properties":{"action":{"type":"string","enum":["status","apps","windows","observe","click","type","key","hotkey","scroll","move","browser_prepare","browser_observe","browser_click","browser_type","browser_navigate","browser_select","browser_pointer"]},"target_id":{"type":"string","maxLength":128},"tab_id":{"type":"string","maxLength":128},"ref":{"type":"string","maxLength":256,"description":"DOM ref from this task and tab latest browser_observe; distinct from native element_token"},"continuation":{"type":"string","maxLength":4096},"include_screenshot":{"type":"boolean","description":"Optional exact tab viewport image for browser_observe, default false"},"replace":{"type":"boolean","description":"browser_type only: replace whole field; empty text clears it"},"pid":{"type":"integer","minimum":1},"window_id":{"type":"integer","minimum":1},"element_token":{"type":"string","description":"Exact token from this task's latest window observation"},"capture_id":{"type":"string"},"x":{"type":"number","minimum":0,"description":"Screenshot pixels from the returned image, never add screen origins"},"y":{"type":"number","minimum":0},"text":{"type":"string","maxLength":16384},"key":{"type":"string"},"keys":{"type":"array","items":{"type":"string"},"minItems":2,"maxItems":4},"direction":{"type":"string","enum":["up","down"]},"amount":{"type":"integer","minimum":1,"maximum":20},"query":{"type":"string","maxLength":256},"delivery_mode":{"type":"string","enum":["background","foreground"],"description":"Default background. Foreground pauses for fresh human confirmation of this one action; never escalate or retry automatically."},"url":{"type":"string","maxLength":8192,"description":"browser_navigate only: absolute http/https URL without credentials, or about:blank. Navigation invalidates DOM refs; observe again."},"label":{"type":"string","maxLength":16384,"description":"browser_select only: exact option label; supply exactly one of label or value."},"value":{"type":"string","maxLength":16384,"description":"browser_select only: exact option value, including empty string."},"gesture":{"type":"string","enum":["hover","right_click","double_click","scroll","drag"],"description":"browser_pointer only; requires an observed DOM ref, trusted CDP input."},"delta_x":{"type":"number","minimum":-10000,"maximum":10000,"description":"browser_pointer scroll only: horizontal CSS pixel delta."},"delta_y":{"type":"number","minimum":-10000,"maximum":10000,"description":"browser_pointer scroll only: vertical CSS pixel delta."},"destination_ref":{"type":"string","maxLength":256,"description":"browser_pointer drag only: observed destination DOM ref in the same frame."}},"required":["action"],"additionalProperties":false}`
-	if runtime.GOOS == "linux" {
-		schema = strings.Replace(schema, `"move",`, "", 1)
-	}
+	schema := `{"type":"object","properties":{"action":{"type":"string","enum":["status","apps","windows","observe","click","type","key","hotkey","scroll","browser_prepare","browser_observe","browser_click","browser_type","browser_navigate","browser_select","browser_pointer"]},"target_id":{"type":"string","maxLength":128},"tab_id":{"type":"string","maxLength":128},"ref":{"type":"string","maxLength":256,"description":"DOM ref from this task and tab latest browser_observe; distinct from native element_token"},"continuation":{"type":"string","maxLength":4096},"include_screenshot":{"type":"boolean","description":"Optional exact tab viewport image for browser_observe, default false"},"replace":{"type":"boolean","description":"browser_type only: replace whole field; empty text clears it"},"pid":{"type":"integer","minimum":1},"window_id":{"type":"integer","minimum":1},"element_token":{"type":"string","description":"Exact token from this task's latest window observation"},"capture_id":{"type":"string"},"x":{"type":"number","minimum":0,"description":"Screenshot pixels from the returned image, never add screen origins"},"y":{"type":"number","minimum":0},"text":{"type":"string","maxLength":16384},"key":{"type":"string"},"keys":{"type":"array","items":{"type":"string"},"minItems":2,"maxItems":4},"direction":{"type":"string","enum":["up","down"]},"amount":{"type":"integer","minimum":1,"maximum":20},"query":{"type":"string","maxLength":256},"delivery_mode":{"type":"string","enum":["background","foreground"],"description":"Default background. Foreground pauses for fresh human confirmation of this one action; never escalate or retry automatically."},"url":{"type":"string","maxLength":8192,"description":"browser_navigate only: absolute http/https URL without credentials, or about:blank. Navigation invalidates DOM refs; observe again."},"label":{"type":"string","maxLength":16384,"description":"browser_select only: exact option label; supply exactly one of label or value."},"value":{"type":"string","maxLength":16384,"description":"browser_select only: exact option value, including empty string."},"gesture":{"type":"string","enum":["hover","right_click","double_click","scroll","drag"],"description":"browser_pointer only; requires an observed DOM ref, trusted CDP input."},"delta_x":{"type":"number","minimum":-10000,"maximum":10000,"description":"browser_pointer scroll only: horizontal CSS pixel delta."},"delta_y":{"type":"number","minimum":-10000,"maximum":10000,"description":"browser_pointer scroll only: vertical CSS pixel delta."},"destination_ref":{"type":"string","maxLength":256,"description":"browser_pointer drag only: observed destination DOM ref in the same frame."}},"required":["action"],"additionalProperties":false}`
 	return json.RawMessage(schema)
 }

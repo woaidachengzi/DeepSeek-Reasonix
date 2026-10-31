@@ -123,8 +123,11 @@ session-ending crashes. Keep that guard and helper version validation intact;
 Ubuntu 26.04 GNOME 50 needs XWayland-compatible applications for this preview.
 Settings detect GNOME 50+ and display the limitation. XWayland support and
 native Wayland support require separate live acceptance. Native `move` is not
-exposed on Linux: upstream only offers an unbound cursor overlay in that route,
-not a window-scoped screenshot-coordinate move. Browser ref-scoped hover remains
+exposed by this adapter. On macOS, upstream window-scoped
+`move_cursor` operates an agent overlay and does not move the physical pointer;
+our private worker has no overlay host. Linux also lacks a window-scoped input
+route for this action. Screenshot-coordinate clicks use their `capture_id`
+directly, without moving a cursor first. Browser ref-scoped hover remains
 available through `browser_pointer`.
 
 Linux app approval binds a same-user process to its kernel start ticks and a
