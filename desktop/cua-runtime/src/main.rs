@@ -1,6 +1,8 @@
 // Private adapter over the source-pinned MIT Cua SDK. No network listener.
 mod browser;
 mod identity;
+#[cfg(test)]
+mod linux_region_tests;
 mod request;
 use cua_driver_sdk::{
     ConfiguredDriverOptions, CuaDriver, RuntimeAuthorizationOptions, SessionPermissionMode,
@@ -11,6 +13,7 @@ use std::io::{self, BufRead, Read, Write};
 use std::sync::Arc;
 const PROTOCOL: u32 = 1;
 const SOURCE_REVISION: &str = env!("REASONIX_CUA_SOURCE_REVISION");
+const SOURCE_FINGERPRINT: &str = env!("REASONIX_CUA_SOURCE_FINGERPRINT");
 // Go's JSON encoder can escape a 16 KiB text field into 96 KiB on the wire.
 const MAX_REQUEST: usize = 128 * 1024;
 
@@ -114,6 +117,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
         reply["source_revision"] = json!(SOURCE_REVISION);
+        reply["source_fingerprint"] = json!(SOURCE_FINGERPRINT);
         let encoded = serde_json::to_vec(&reply)?;
         if encoded.len() > 15 * 1024 * 1024 {
             break;

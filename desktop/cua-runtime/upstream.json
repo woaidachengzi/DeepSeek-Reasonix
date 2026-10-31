@@ -2,7 +2,146 @@
   "repository": "https://github.com/trycua/cua.git",
   "revision": "e754cfec69c41400eb2aabde716c27d15607b2f0",
   "scope": "libs/cua-driver/rust",
-  "additional_scopes": ["libs/cua-driver/wayland-helper"],
+  "additional_scopes": [
+    "libs/cua-driver/wayland-helper"
+  ],
   "license": "MIT",
-  "excluded": ["Cua Spaces", "cua-driver-bench", "perception model artifacts"]
+  "excluded": [
+    "Cua Spaces",
+    "cua-driver-bench",
+    "perception model artifacts"
+  ],
+  "backports": [
+    {
+      "revision": "8fbdf83c1e05bf0a8b84a6199fe697cc58f0e24f",
+      "reason": "Capture raw pixels once; preserve default PNG output and capture IDs; support opt-in JPEG without capture IDs.",
+      "patch": "patches/8fbdf83c1e-capture-encoding.patch",
+      "sha256": "2be4684c97fd2d8f5a56c07c3064c08c709bde0bc1e391449866203dc955c3dd",
+      "files": [
+        {
+          "file": "libs/cua-driver/rust/crates/cua-driver-core/src/image_utils.rs",
+          "original_sha256": "8a034848008644ab1b02d13427a67f8df68a47efb31d8ae3b854d6bf8eb98fc8",
+          "patched_sha256": "a83b1ae465f3bf9d7ff997cac5ecd946c17ea2b0ee302f2c51c2d5ce10b073f3"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-macos/src/capture.rs",
+          "original_sha256": "e94bc12acbaade034a6c7087f823f7982278bdc0374ff35f673f47ccbb942521",
+          "patched_sha256": "5787c21824836505d2ec7fd187d968b752981295a3be6c8d74fb001d68abd0f6"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-macos/src/tools/get_window_state.rs",
+          "original_sha256": "e13efbaaa5e1481ad63019d8e07f6d0ac13fc94c90146bd99cb3dcc9622774df",
+          "patched_sha256": "a64c8e8595ec0cb83f0d89f169deaf1f571a5c2670ef901949c52cba4a6de41b"
+        }
+      ]
+    },
+    {
+      "revision": "5bc914abfd3b0a4015d10dc72f4cf04cc6675db4",
+      "reason": "Resolve Finder by bundle ID when its name is outside the standard application roots.",
+      "patch": "patches/5bc914abfd-finder.patch",
+      "sha256": "71e89b0769fef41ae51a2eb52a896054a8f9785ab52087d6c753af45642b023b",
+      "files": [
+        {
+          "file": "libs/cua-driver/rust/crates/platform-macos/src/apps/mod.rs",
+          "original_sha256": "ef76ce2eb70c857e571db5251b12ad3693e96c770a4998dbbfaa327d57b5368e",
+          "patched_sha256": "607c41affc52b5ef7fb90b064fb0ac70771c424c7e1d330bcec1c9a0ca3d404f"
+        }
+      ]
+    },
+    {
+      "revision": "41591b1b3969325142b7508e92417faa9575a18b",
+      "reason": "Allow macOS callers to skip synchronous window-change reporting while retaining the detached watch.",
+      "patch": "patches/41591b1b39-post-action-wait.patch",
+      "sha256": "1afb923eb234867817a7d919eb5124d736eefc0cd73d050ae8f1b22903225834",
+      "files": [
+        {
+          "file": "libs/cua-driver/rust/crates/cua-driver-core/src/lib.rs",
+          "original_sha256": "b59a649dd28cf40b1fb41f074832f0efba1398c62b3a9d984f570e8b86565e01",
+          "patched_sha256": "8d46c79702227f4c68f97943d28506d367c11ce8ff1235764da9298fba50c382"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/cua-driver-core/src/post_action_wait.rs",
+          "original_sha256": null,
+          "patched_sha256": "56d80bc8bc602f1f7f27afba0757b4dc30b73f4582fdccc2fecdfc2090001603"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/cua-driver-core/src/tool.rs",
+          "original_sha256": "62c90b6f638e7494d2cc24a2da1aaf02d823dab9560d469f27ae8e37a94fe486",
+          "patched_sha256": "2cc56b7b7b9c59fc1f804557e613d2d9559f5cdb9840f3969744ff3dd72a4418"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-macos/src/window_change_detector.rs",
+          "original_sha256": "01ab9be822d8a51e94fc25685e6420cefcf044c1c8a2b0a6c909f7159677a09d",
+          "patched_sha256": "16abe9e14b6a1a6107aa171965463c1e9e8e87b6f84bb25f20190e5c8b94976d"
+        }
+      ]
+    },
+    {
+      "revision": "64cddca307bef011b94c5a313a2bfe0becf7578d",
+      "reason": "Map Wayland punctuation shortcuts without losing modifiers or implicitly adding Shift.",
+      "patch": "patches/64cddca307-wayland-shortcuts.patch",
+      "sha256": "5bfc56f57c982b4c505811fa9cc7f2750061dafe28e6310f35ef16fe461a1d79",
+      "files": [
+        {
+          "file": "libs/cua-driver/rust/crates/platform-linux/src/wayland/mod.rs",
+          "original_sha256": "0a47748974c922f7d91eb1d270a6b76143a3bedd7ad1ee16231b2bdbda82a196",
+          "patched_sha256": "87619dd2837a0d9a3312f609da1103f957001ade15396dfd6183b1a4aaa45d5a"
+        }
+      ]
+    },
+    {
+      "revision": "1e0da1a9649e52673104c357e1f70267b8b4a425",
+      "reason": "Preserve desktop-layout libei coordinates and reject points outside negotiated monitor regions.",
+      "patch": "patches/1e0da1a964-libei-regions.patch",
+      "sha256": "6f4c123913c63363fd3efd2c4a616883f1d1cfd97fab8ac3d1db5aa04ea456ad",
+      "files": [
+        {
+          "file": "libs/cua-driver/rust/crates/platform-linux/src/wayland/libei.rs",
+          "original_sha256": "74de613e0ef108e64044e636ebcf55eccda0c2195ce3ff54147487fb0996f7f5",
+          "patched_sha256": "a0b28d508dfc0c486a76c8a21d73b36f4e763fa4bafa56d2ed05fdcfcbaf32eb"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-linux/src/wayland/mod.rs",
+          "original_sha256": "87619dd2837a0d9a3312f609da1103f957001ade15396dfd6183b1a4aaa45d5a",
+          "patched_sha256": "2b6edff86292b603c356b8951e2d58de546e14163f2d4d556418ee01f838302c"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-linux/src/wayland/region_route.rs",
+          "original_sha256": null,
+          "patched_sha256": "a59eb48365c940e82128db3f1df0ffb4e1f4ef00994af3683f15aaa3900ea97b"
+        }
+      ]
+    },
+    {
+      "revision": "6a48bfc0ade6d8226e7d0866eeafc3dde40a235b",
+      "reason": "Cache the immutable tool contract manifest once per process.",
+      "patch": "patches/6a48bfc0ad-contract-cache.patch",
+      "sha256": "ec3e7e4711ef4bb920bad6900395fb59a1ff57ff37670d9776cff858772e007a",
+      "files": [
+        {
+          "file": "libs/cua-driver/rust/crates/cua-driver-contract/src/lib.rs",
+          "original_sha256": "05bc196b7eb7415e03bb2ef7340ba6964893841aa34a0afe114aa8994a96fa78",
+          "patched_sha256": "422048b828d47f1bdf96e59fdbf31ecda5a0f255058284f37b3157462b1eb64e"
+        }
+      ]
+    },
+    {
+      "revision": "f92b01906fc4f99be4c23cf7dc8282eef4a75b17",
+      "reason": "Await synthetic smooth-scroll readback inside the SDK; Reasonix continues to expose only trusted CDP pointer input.",
+      "patch": "patches/f92b01906f-scroll-readback.patch",
+      "sha256": "8614153b1742d8a3c79c3ba13fd9188c0c08508ab5ed78e352d1456e8c8b93ab",
+      "files": [
+        {
+          "file": "libs/cua-driver/rust/crates/cua-driver-core/src/browser/pointer.rs",
+          "original_sha256": "307e25de9fc75433a7b94f826e9fbe903b84216c671120b56fd793db1297c3cb",
+          "patched_sha256": "cf9f9e850aaccc8bee3207814786d35ce24f494b552d785a40f5dc7cefe9fe71"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/cua-driver-core/src/browser/v2_tests.rs",
+          "original_sha256": "e81bd8fc1fa4d1d439ef4c4c4e70c5e9e9993460d5819d4fae1e2c17a4a28d71",
+          "patched_sha256": "772ea18aca4ff4949f4a7d5767250d35811875199dff943bf8dba2e7dae9d88f"
+        }
+      ]
+    }
+  ]
 }

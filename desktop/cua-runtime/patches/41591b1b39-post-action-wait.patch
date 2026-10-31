@@ -1,0 +1,535 @@
+diff --git a/libs/cua-driver/rust/crates/cua-driver-core/src/lib.rs b/libs/cua-driver/rust/crates/cua-driver-core/src/lib.rs
+--- a/libs/cua-driver/rust/crates/cua-driver-core/src/lib.rs
++++ b/libs/cua-driver/rust/crates/cua-driver-core/src/lib.rs
+@@ -90,6 +90,7 @@ pub mod perception_tools;
+ pub mod pip_hook;
+ pub mod pointer_shape;
+ pub mod policy;
++pub mod post_action_wait;
+ pub mod protocol;
+ pub mod recording;
+ pub mod recording_loader;
+diff --git a/libs/cua-driver/rust/crates/cua-driver-core/src/post_action_wait.rs b/libs/cua-driver/rust/crates/cua-driver-core/src/post_action_wait.rs
+new file mode 100644
+--- /dev/null
++++ b/libs/cua-driver/rust/crates/cua-driver-core/src/post_action_wait.rs
+@@ -0,0 +1,148 @@
++//! Whether an action's result waits for its post-action window-change report.
++//!
++//! After an input action the macOS adapter watches the window list for a short
++//! time (300 ms for a direct call) so its result can name a menu, dialog, new
++//! window or foreground change the action caused. For an agent that reads the
++//! window state after every action anyway, that wait is most of a background
++//! click's latency.
++//!
++//! The optional per-call argument [`POST_ACTION_WAIT_ARG`] lets a caller skip
++//! it: with `"none"` the result returns as soon as the input is delivered and
++//! says that window changes were not observed. The watch itself, and the
++//! focus-steal suppression it holds, still run detached for the full deadline,
++//! and a change it sees is reported on the next action's result. Omitted, or
++//! `"default"`, keeps the current behavior.
++//!
++//! The dispatch boundary reads the argument and runs the tool inside [`scope`];
++//! adapters read [`current`]. Only macOS implements the skip: the Linux X11
++//! foreground transaction uses its window watch as delivery evidence, and the
++//! Windows adapter does not watch for window changes after an action. On those
++//! platforms the argument is not advertised, and the closed action schemas
++//! refuse it as an unknown argument.
++
++use std::future::Future;
++
++use serde_json::{json, Value};
++
++/// The per-call argument name.
++pub const POST_ACTION_WAIT_ARG: &str = "post_action_wait";
++
++/// Tools whose result waits for the post-action window-change report, and
++/// therefore accept [`POST_ACTION_WAIT_ARG`].
++pub const POST_ACTION_WAIT_TOOLS: &[&str] = &[
++    "click",
++    "double_click",
++    "right_click",
++    "drag",
++    "scroll",
++    "type_text",
++    "press_key",
++    "hotkey",
++    "set_value",
++];
++
++/// Whether this platform's adapter implements `"none"`.
++pub const SKIP_SUPPORTED: bool = cfg!(target_os = "macos");
++
++/// The caller's choice for the action being dispatched.
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++pub enum PostActionWait {
++    /// Wait for the window-change report as usual.
++    #[default]
++    Default,
++    /// Return without waiting; the result says nothing was observed.
++    None,
++}
++
++tokio::task_local! {
++    static CURRENT: PostActionWait;
++}
++
++/// Run `future` with `wait` as the choice of every action it dispatches.
++pub async fn scope<F: Future>(wait: PostActionWait, future: F) -> F::Output {
++    CURRENT.scope(wait, future).await
++}
++
++/// The choice for the action being dispatched; [`PostActionWait::Default`]
++/// outside a [`scope`].
++pub fn current() -> PostActionWait {
++    CURRENT.try_with(|wait| *wait).unwrap_or_default()
++}
++
++/// Whether `tool` accepts [`POST_ACTION_WAIT_ARG`] on this platform. Only
++/// macOS implements the skip; elsewhere the argument is not advertised, so the
++/// closed action schemas refuse it as an unknown argument.
++pub fn accepts(tool: &str) -> bool {
++    SKIP_SUPPORTED && POST_ACTION_WAIT_TOOLS.contains(&tool)
++}
++
++/// The JSON schema of [`POST_ACTION_WAIT_ARG`].
++pub fn schema() -> Value {
++    json!({
++        "type": "string",
++        "enum": ["default", "none"],
++        "description": "Whether the result waits for the post-action window-change report \
++                        (default \"default\": up to 300 ms for a new window, menu, dialog or \
++                        foreground change). \"none\" returns as soon as the input is delivered \
++                        and says window changes were not observed; the watch keeps running in \
++                        the background and a change it sees is reported on the next action's \
++                        result. Only paths that already observe window changes are affected; \
++                        for example a right_click that does not watch is unchanged."
++    })
++}
++
++/// Read the caller's choice from a `tool` call's arguments. `Err` carries the
++/// message and structured content of the `invalid_arguments` refusal.
++pub fn from_args(tool: &str, args: &Value) -> Result<PostActionWait, (String, Value)> {
++    match args.get(POST_ACTION_WAIT_ARG) {
++        None => Ok(PostActionWait::Default),
++        Some(Value::String(s)) if s == "default" => Ok(PostActionWait::Default),
++        Some(Value::String(s)) if s == "none" => Ok(PostActionWait::None),
++        Some(other) => {
++            let detail = format!("post_action_wait must be \"default\" or \"none\", got {other}");
++            Err((
++                format!("{tool}: {detail}"),
++                json!({ "code": "invalid_arguments", "tool": tool, "detail": detail }),
++            ))
++        }
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn omitted_and_default_keep_the_wait() {
++        for args in [json!({}), json!({"post_action_wait": "default"})] {
++            assert_eq!(from_args("click", &args).unwrap(), PostActionWait::Default);
++        }
++    }
++
++    #[test]
++    fn none_skips_the_wait() {
++        assert_eq!(
++            from_args("click", &json!({"post_action_wait": "none"})).unwrap(),
++            PostActionWait::None
++        );
++    }
++
++    #[test]
++    fn other_values_are_invalid() {
++        for value in [json!(null), json!("off"), json!(0), json!(true)] {
++            let (_, structured) =
++                from_args("click", &json!({"post_action_wait": value})).unwrap_err();
++            assert_eq!(structured["code"], "invalid_arguments", "{value}");
++        }
++    }
++
++    #[tokio::test]
++    async fn the_choice_is_scoped_to_the_call() {
++        assert_eq!(current(), PostActionWait::Default);
++        scope(PostActionWait::None, async {
++            assert_eq!(current(), PostActionWait::None);
++        })
++        .await;
++        assert_eq!(current(), PostActionWait::Default);
++    }
++}
+diff --git a/libs/cua-driver/rust/crates/cua-driver-core/src/tool.rs b/libs/cua-driver/rust/crates/cua-driver-core/src/tool.rs
+--- a/libs/cua-driver/rust/crates/cua-driver-core/src/tool.rs
++++ b/libs/cua-driver/rust/crates/cua-driver-core/src/tool.rs
+@@ -619,6 +619,13 @@ pub(crate) fn advertised_runtime_input_schema(tool_name: &str, schema: &Value) -
+             .entry("session")
+             .or_insert_with(crate::tool_schema::session_schema);
+     }
++    // Dispatch reads `post_action_wait` for every action that waits for the
++    // post-action window-change report (see `crate::post_action_wait`).
++    if crate::post_action_wait::accepts(tool_name) {
++        properties
++            .entry(crate::post_action_wait::POST_ACTION_WAIT_ARG)
++            .or_insert_with(crate::post_action_wait::schema);
++    }
+     if !crate::action_target::supports_typed_target(tool_name) {
+         return schema;
+     }
+@@ -1697,10 +1704,25 @@ impl ToolRegistry {
+             .and_then(Value::as_str)
+             .map(str::to_owned);
+         let in_batch = crate::step_pacing::in_batch();
+-        let mut result = self
+-            .invoke_authorized_unannotated(name, args, context, evidence)
+-            .await;
+-        let tool = renamed_tool(name).unwrap_or(name);
++        let tool = match name {
++            "type_text_chars" => "type_text",
++            other => renamed_tool(other).unwrap_or(other),
++        };
++        let wait = if crate::post_action_wait::accepts(tool) {
++            crate::post_action_wait::from_args(tool, &args)
++        } else {
++            Ok(crate::post_action_wait::PostActionWait::Default)
++        };
++        let mut result = match wait {
++            Ok(wait) => {
++                crate::post_action_wait::scope(
++                    wait,
++                    self.invoke_authorized_unannotated(name, args, context, evidence),
++                )
++                .await
++            }
++            Err((message, structured)) => ToolResult::error(message).with_structured(structured),
++        };
+         crate::recovery_hint::annotate(tool, &seed, &mut result);
+         crate::batch_nudge::annotate(tool, session.as_deref(), in_batch, &mut result);
+         result
+@@ -3676,6 +3698,27 @@ mod runtime_isolation_tests {
+         def: super::ToolDef,
+     }
+ 
++    /// Records the post-action wait each invocation runs under.
++    struct WaitProbe {
++        seen: Arc<Mutex<Vec<crate::post_action_wait::PostActionWait>>>,
++        def: super::ToolDef,
++    }
++
++    #[async_trait::async_trait]
++    impl super::Tool for WaitProbe {
++        fn def(&self) -> &super::ToolDef {
++            &self.def
++        }
++
++        async fn invoke(&self, _args: serde_json::Value) -> crate::protocol::ToolResult {
++            self.seen
++                .lock()
++                .unwrap()
++                .push(crate::post_action_wait::current());
++            crate::protocol::ToolResult::text("input delivered")
++        }
++    }
++
+     struct AttestedProbe {
+         hits: Arc<AtomicUsize>,
+         scope: serde_json::Value,
+@@ -4960,6 +5003,150 @@ resources:
+         );
+     }
+ 
++    #[tokio::test]
++    async fn dispatch_resolves_type_text_chars_before_reading_the_wait() {
++        use crate::post_action_wait::{PostActionWait, SKIP_SUPPORTED};
++        use serde_json::json;
++        if !SKIP_SUPPORTED {
++            return;
++        }
++        let seen = Arc::new(Mutex::new(Vec::new()));
++        let mut registry = super::ToolRegistry::new();
++        registry.register(Box::new(WaitProbe {
++            seen: seen.clone(),
++            def: super::ToolDef {
++                name: "type_text".into(),
++                description: "test input".into(),
++                input_schema: json!({"type": "object", "properties": {}, "additionalProperties": false}),
++                read_only: false,
++                destructive: false,
++                idempotent: false,
++                open_world: false,
++            },
++        }));
++        let registry = Arc::new(registry);
++        let ok = registry
++            .invoke_with_context(
++                "type_text_chars",
++                json!({"post_action_wait": "none"}),
++                standard_context(),
++            )
++            .await;
++        assert_ne!(ok.is_error, Some(true), "{ok:?}");
++        assert_eq!(seen.lock().unwrap().as_slice(), &[PostActionWait::None]);
++        for value in [json!(null), json!("off")] {
++            let r = registry
++                .invoke_with_context(
++                    "type_text_chars",
++                    json!({"post_action_wait": value}),
++                    standard_context(),
++                )
++                .await;
++            assert_eq!(r.structured_content.unwrap()["code"], "invalid_arguments");
++        }
++        assert_eq!(seen.lock().unwrap().len(), 1);
++    }
++
++    #[tokio::test]
++    async fn dispatch_runs_the_action_under_its_post_action_wait() {
++        use crate::post_action_wait::{
++            current, PostActionWait, POST_ACTION_WAIT_ARG, POST_ACTION_WAIT_TOOLS, SKIP_SUPPORTED,
++        };
++        use serde_json::json;
++        let schema = json!({"type": "object", "properties": {}, "additionalProperties": false});
++        for tool in POST_ACTION_WAIT_TOOLS {
++            let advertised = super::advertised_runtime_input_schema(tool, &schema);
++            assert_eq!(
++                advertised["properties"].get(POST_ACTION_WAIT_ARG).is_some(),
++                SKIP_SUPPORTED,
++                "{tool}"
++            );
++        }
++
++        let seen = Arc::new(Mutex::new(Vec::new()));
++        let mut registry = super::ToolRegistry::new();
++        registry.register(Box::new(WaitProbe {
++            seen: seen.clone(),
++            def: super::ToolDef {
++                name: "click".into(),
++                description: "test input".into(),
++                input_schema: schema,
++                read_only: false,
++                destructive: false,
++                idempotent: false,
++                open_world: false,
++            },
++        }));
++        let registry = Arc::new(registry);
++        let refusal_code = |result: crate::protocol::ToolResult| {
++            assert_eq!(result.is_error, Some(true), "{result:?}");
++            let structured = result.structured_content.expect("structured refusal");
++            if SKIP_SUPPORTED {
++                structured["code"].clone()
++            } else {
++                structured["refusal"]["code"].clone()
++            }
++        };
++
++        // Omitted keeps the wait.
++        let result = registry
++            .invoke_with_context("click", json!({}), standard_context())
++            .await;
++        assert_ne!(result.is_error, Some(true), "{result:?}");
++
++        // "default" and "none" reach the adapter through the task-local scope
++        // on macOS; elsewhere the closed schema refuses the argument.
++        for value in ["default", "none"] {
++            let result = registry
++                .invoke_with_context(
++                    "click",
++                    json!({"post_action_wait": value}),
++                    standard_context(),
++                )
++                .await;
++            if SKIP_SUPPORTED {
++                assert_ne!(result.is_error, Some(true), "{result:?}");
++            } else {
++                assert_eq!(refusal_code(result), "invalid_arguments", "{value}");
++            }
++        }
++        let expected: &[PostActionWait] = if SKIP_SUPPORTED {
++            &[
++                PostActionWait::Default,
++                PostActionWait::Default,
++                PostActionWait::None,
++            ]
++        } else {
++            &[PostActionWait::Default]
++        };
++        assert_eq!(seen.lock().unwrap().as_slice(), expected);
++        assert_eq!(
++            current(),
++            PostActionWait::Default,
++            "the choice must not leak"
++        );
++
++        // Values outside the enum, null included, never reach the tool.
++        for value in [json!(null), json!("off"), json!(0)] {
++            let result = registry
++                .invoke_with_context(
++                    "click",
++                    json!({"post_action_wait": value}),
++                    standard_context(),
++                )
++                .await;
++            if SKIP_SUPPORTED {
++                assert!(result.structured_content.as_ref().unwrap()["hint"].is_string());
++            }
++            assert_eq!(refusal_code(result), "invalid_arguments", "{value}");
++        }
++        assert_eq!(
++            seen.lock().unwrap().as_slice(),
++            expected,
++            "must refuse before invocation"
++        );
++    }
++
+     #[tokio::test]
+     async fn desktop_background_click_refuses_before_platform_invocation() {
+         let hits = Arc::new(AtomicUsize::new(0));
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/window_change_detector.rs b/libs/cua-driver/rust/crates/platform-macos/src/window_change_detector.rs
+--- a/libs/cua-driver/rust/crates/platform-macos/src/window_change_detector.rs
++++ b/libs/cua-driver/rust/crates/platform-macos/src/window_change_detector.rs
+@@ -91,6 +91,11 @@ pub struct Changes {
+     /// skipped it or the poll task was lost: an empty `new_windows` then means
+     /// nothing was watched, not that nothing opened.
+     pub polled: bool,
++    /// The caller passed `post_action_wait: "none"`: the result did not wait
++    /// for a change, and the watch runs detached (see
++    /// [`cua_driver_core::post_action_wait`]). The result says so instead of
++    /// reporting "no change".
++    pub deferred: bool,
+ }
+ 
+ impl Changes {
+@@ -101,6 +106,7 @@ impl Changes {
+             earlier_new_windows: Vec::new(),
+             earlier_foreground_changed: false,
+             polled: true,
++            deferred: false,
+         }
+     }
+ 
+@@ -119,6 +125,15 @@ impl Changes {
+         }
+     }
+ 
++    /// The result returned without waiting for a change; the watch went on
++    /// detached.
++    pub fn deferred() -> Self {
++        Self {
++            deferred: true,
++            ..Self::not_polled()
++        }
++    }
++
+     /// True when we found evidence that the action triggered a cross-app
+     /// side-effect that required (or would have required) a foreground
+     /// restore. Matches Swift's `Changes.needsRestore`.
+@@ -144,6 +159,10 @@ impl Changes {
+                 "\n\n🔀 After the previous action returned, a different app became frontmost.",
+             );
+         }
++        if self.deferred {
++            suffix.push_str(DEFERRED_NOTE);
++            return suffix;
++        }
+         if !self.needs_restore() {
+             return suffix;
+         }
+@@ -160,6 +179,12 @@ impl Changes {
+     }
+ }
+ 
++/// Result suffix for an action whose caller skipped the window-change wait.
++pub(crate) const DEFERRED_NOTE: &str =
++    "\n\n⏭️ Window changes not observed: post_action_wait \"none\" \
++     returned without waiting. A new window or foreground change seen afterwards is reported \
++     on the next action's result.";
++
+ /// `App ("Title", …); Other` for a result suffix, grouped by app name.
+ fn window_summaries(windows: &[WindowEvent]) -> String {
+     let mut by_app: std::collections::BTreeMap<&str, Vec<&str>> = std::collections::BTreeMap::new();
+@@ -445,6 +470,12 @@ impl Snapshot {
+             return Changes::not_polled().with_earlier(earlier);
+         }
+         let started = Instant::now();
++        if report_window.is_zero() {
++            // The caller skipped the wait: the whole deadline runs detached,
++            // lease held, exactly as the remainder of a quiet poll does.
++            self.continue_detached(started + bounds.timeout, bounds.poll, observe);
++            return Changes::deferred().with_earlier(earlier);
++        }
+         let report = report_window.min(bounds.timeout);
+         let mut observe = observe;
+         let changes = match self.poll_until(started + report, bounds.poll, &mut observe) {
+@@ -465,7 +496,13 @@ impl Snapshot {
+         // A step of a batch returns after a shorter report window, because
+         // the next step follows at once. The pacing is read here: a blocking
+         // thread does not inherit the task's batch marker.
+-        let report_window = cua_driver_core::step_pacing::report_window(REPORT_WINDOW);
++        // `post_action_wait: "none"` skips the wait altogether.
++        let report_window = match cua_driver_core::post_action_wait::current() {
++            cua_driver_core::post_action_wait::PostActionWait::None => Duration::ZERO,
++            cua_driver_core::post_action_wait::PostActionWait::Default => {
++                cua_driver_core::step_pacing::report_window(REPORT_WINDOW)
++            }
++        };
+         // Move the Snapshot (and its embedded lease) onto the blocking
+         // thread; the lease's Drop runs there when detect_with returns.
+         tokio::task::spawn_blocking(move || {
+@@ -981,6 +1018,53 @@ mod tests {
+         assert_eq!(changes.new_windows.len(), 1);
+     }
+ 
++    /// `post_action_wait: "none"` (a zero report window) returns at once
++    /// without observing, says so, and hands the whole deadline to the
++    /// detached watch, which still records a late window.
++    #[test]
++    fn a_skipped_wait_returns_at_once_and_watches_detached() {
++        let _serial = lock(&TAIL_TEST_LOCK);
++        end_tail();
++        lock(&LATE).take();
++        let opened = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
++        let observed_opened = opened.clone();
++        let snap = WindowChangeDetector::capture_from(HashSet::from([1]), Some(7), false, None);
++        let started = Instant::now();
++        let changes = snap.detect_bounded_reporting(
++            observation_bounds_from(Some("2000"), Some("10")),
++            Duration::ZERO,
++            move || {
++                if observed_opened.load(Ordering::SeqCst) {
++                    (
++                        vec![win(1, 7, "App", "Main"), win(2, 7, "App", "Save")],
++                        Some(7),
++                    )
++                } else {
++                    (vec![win(1, 7, "App", "Main")], Some(7))
++                }
++            },
++        );
++        let elapsed = started.elapsed();
++        assert!(changes.deferred && !changes.polled);
++        assert!(!changes.needs_restore());
++        assert!(
++            elapsed < Duration::from_millis(100),
++            "returned after {elapsed:?}"
++        );
++        assert_eq!(changes.result_suffix(), DEFERRED_NOTE);
++        assert!(lock(&TAIL).is_some(), "the deadline runs detached");
++        opened.store(true, Ordering::SeqCst);
++        let wait_until = Instant::now() + Duration::from_secs(2);
++        while lock(&LATE).is_none() && Instant::now() < wait_until {
++            std::thread::sleep(Duration::from_millis(10));
++        }
++        assert!(
++            take_late().is_some_and(|late| late.new_windows.len() == 1),
++            "the detached watch records the late window"
++        );
++        end_tail();
++    }
++
+     /// A deadline inside the report window behaves as before: no tail.
+     #[test]
+     fn a_short_deadline_leaves_no_detached_tail() {

@@ -30,6 +30,7 @@ subprocess.run(['swiftc', '-module-cache-path', str(root / 'swift-cache'),
 resources = contents / 'Resources'
 resources.mkdir(exist_ok=True)
 shutil.copy2(Path(__file__).with_name('browser_acceptance.py'), resources / 'browser_acceptance.py')
+shutil.copy2(repo / 'desktop/cua-runtime/upstream.json', resources / 'upstream.json')
 subprocess.run(['swiftc', '-module-cache-path', str(root / 'swift-cache'),
                 str(Path(__file__).with_name('browser_fixture_info.swift')),
                 '-o', str(binary.parent / 'browser-fixture-info'), '-framework', 'AppKit'], check=True)

@@ -101,7 +101,7 @@ func (c computerUse) cuaResult(ctx context.Context, request computeruse.CuaReque
 	if !reply.IsError && (request.Action == "observe" || request.Action == "browser_observe") {
 		summary = "Cua window observation; inspect state and image."
 	}
-	body := map[string]any{"engine": "cua", "platform": runtime.GOOS, "driver_version": reply.Version, "source_revision": reply.SourceRevision, "state": reply.Result, "summary": summary, "dispatched": false, "cua_action": reply.Action}
+	body := map[string]any{"engine": "cua", "platform": runtime.GOOS, "driver_version": reply.Version, "source_revision": reply.SourceRevision, "source_fingerprint": reply.SourceFingerprint, "state": reply.Result, "summary": summary, "dispatched": false, "cua_action": reply.Action}
 	if request.Action == "browser_observe" {
 		// Give DOM snapshots the same bounded-history contract as native frames.
 		var state map[string]json.RawMessage

@@ -1,0 +1,878 @@
+diff --git a/libs/cua-driver/rust/crates/cua-driver-core/src/image_utils.rs b/libs/cua-driver/rust/crates/cua-driver-core/src/image_utils.rs
+--- a/libs/cua-driver/rust/crates/cua-driver-core/src/image_utils.rs
++++ b/libs/cua-driver/rust/crates/cua-driver-core/src/image_utils.rs
+@@ -49,6 +49,183 @@ pub fn png_bytes_to_jpeg(png_bytes: &[u8], quality: u8) -> Result<Vec<u8>> {
+     Ok(jpeg_bytes)
+ }
+ 
++// ── Screenshot encoding ───────────────────────────────────────────────────
++
++/// Default JPEG quality for a screenshot requested as `jpeg`.
++pub const DEFAULT_JPEG_QUALITY: u8 = 85;
++
++/// Highest accepted JPEG quality, matching the `screenshot` tool's `quality`.
++pub const MAX_JPEG_QUALITY: u8 = 95;
++
++/// How a screenshot is encoded for the caller.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum ScreenshotEncoding {
++    /// Lossless PNG with alpha (the default).
++    Png,
++    /// Baseline JPEG at `quality` (1 to [`MAX_JPEG_QUALITY`]); alpha is dropped.
++    Jpeg { quality: u8 },
++}
++
++impl ScreenshotEncoding {
++    /// The image's MIME type.
++    pub fn mime_type(self) -> &'static str {
++        match self {
++            Self::Png => "image/png",
++            Self::Jpeg { .. } => "image/jpeg",
++        }
++    }
++
++    /// Resolve the encoding from a `format` (`"png"` or `"jpeg"`) and a JPEG
++    /// `quality` argument. Both omitted (or `null`) is PNG; a quality without
++    /// `"jpeg"` is refused rather than ignored. `Err` names the problem.
++    pub fn from_args(
++        format_name: &str,
++        format: Option<&serde_json::Value>,
++        quality_name: &str,
++        quality: Option<&serde_json::Value>,
++    ) -> std::result::Result<Self, String> {
++        use serde_json::Value;
++        let format = match format {
++            None | Some(Value::Null) => None,
++            Some(Value::String(s)) if s == "png" => Some(false),
++            Some(Value::String(s)) if s == "jpeg" => Some(true),
++            Some(other) => {
++                return Err(format!(
++                    "{format_name} must be \"png\" or \"jpeg\", got {other}"
++                ))
++            }
++        };
++        let quality = match quality {
++            None | Some(Value::Null) => None,
++            Some(value) => match value.as_u64() {
++                Some(q) if (1..=u64::from(MAX_JPEG_QUALITY)).contains(&q) => Some(q as u8),
++                _ => {
++                    return Err(format!(
++                    "{quality_name} must be an integer from 1 to {MAX_JPEG_QUALITY}, got {value}"
++                ))
++                }
++            },
++        };
++        match (format, quality) {
++            (Some(true), quality) => Ok(Self::Jpeg {
++                quality: quality.unwrap_or(DEFAULT_JPEG_QUALITY),
++            }),
++            (_, Some(_)) => Err(format!(
++                "{quality_name} applies only with {format_name}: \"jpeg\""
++            )),
++            (_, None) => Ok(Self::Png),
++        }
++    }
++}
++
++/// Straight-alpha RGBA8 pixels, top-down and row-major.
++#[derive(Clone, Debug, PartialEq, Eq)]
++pub struct RgbaFrame {
++    pub width: u32,
++    pub height: u32,
++    pub rgba: Vec<u8>,
++}
++
++/// A capture as a backend produced it: raw pixels from an in-process
++/// capture, or PNG bytes from one that only writes files.
++///
++/// Keeping the pixels lets [`CapturedImage::encode`] resize and encode once,
++/// instead of encoding a PNG, decoding it again and re-encoding it.
++#[derive(Clone, Debug, PartialEq, Eq)]
++pub enum CapturedImage {
++    Png(Vec<u8>),
++    Rgba(RgbaFrame),
++}
++
++impl CapturedImage {
++    /// True when the backend produced no image data.
++    pub fn is_empty(&self) -> bool {
++        match self {
++            Self::Png(bytes) => bytes.is_empty(),
++            Self::Rgba(frame) => frame.rgba.is_empty(),
++        }
++    }
++
++    /// Pixel dimensions of the capture.
++    pub fn dimensions(&self) -> Result<(u32, u32)> {
++        match self {
++            Self::Png(bytes) => png_dimensions(bytes),
++            Self::Rgba(frame) => Ok((frame.width, frame.height)),
++        }
++    }
++
++    /// The capture as PNG bytes, identical to what the backend used to return.
++    pub fn into_png(self) -> Result<Vec<u8>> {
++        match self {
++            Self::Png(bytes) => Ok(bytes),
++            Self::Rgba(frame) => encode_rgba_to_png(&frame.rgba, frame.width, frame.height),
++        }
++    }
++
++    /// Downscale so neither edge exceeds `max_dim` (`0`: no cap) and encode.
++    /// Returns the bytes and their dimensions.
++    ///
++    /// With [`ScreenshotEncoding::Png`] the bytes are identical to
++    /// `resize_png_if_needed(&self.into_png()?, max_dim)`: PNG is lossless, so
++    /// resizing the raw pixels gives the same image as resizing the decoded
++    /// PNG, and both encode through the same encoder.
++    pub fn encode(self, max_dim: u32, encoding: ScreenshotEncoding) -> Result<(Vec<u8>, u32, u32)> {
++        let RgbaFrame {
++            width: w,
++            height: h,
++            rgba,
++        } = match self {
++            Self::Png(bytes) => {
++                let png = resize_png_if_needed(&bytes, max_dim)?;
++                let (w, h) = png_dimensions(&png)?;
++                let out = match encoding {
++                    ScreenshotEncoding::Png => png,
++                    ScreenshotEncoding::Jpeg { quality } => png_bytes_to_jpeg(&png, quality)?,
++                };
++                return Ok((out, w, h));
++            }
++            Self::Rgba(frame) => frame,
++        };
++        if encoding == ScreenshotEncoding::Png && !needs_resize(w, h, max_dim) {
++            return Ok((encode_rgba_to_png(&rgba, w, h)?, w, h));
++        }
++        let buffer: ImageBuffer<image::Rgba<u8>, Vec<u8>> = ImageBuffer::from_raw(w, h, rgba)
++            .ok_or_else(|| anyhow!("invalid RGBA buffer for w={w} h={h}"))?;
++        let mut img = DynamicImage::ImageRgba8(buffer);
++        if needs_resize(w, h, max_dim) {
++            let (new_w, new_h) = resized_dimensions(w, h, max_dim);
++            img = img.resize(new_w, new_h, image::imageops::FilterType::Lanczos3);
++        }
++        let (out_w, out_h) = (img.width(), img.height());
++        let mut out = Vec::new();
++        match encoding {
++            ScreenshotEncoding::Png => {
++                img.write_to(&mut std::io::Cursor::new(&mut out), ImageFormat::Png)?;
++            }
++            ScreenshotEncoding::Jpeg { quality } => {
++                let rgb = img.to_rgb8();
++                let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality);
++                enc.encode(rgb.as_raw(), out_w, out_h, ColorType::Rgb8.into())?;
++            }
++        }
++        Ok((out, out_w, out_h))
++    }
++}
++
++/// Whether a `w`×`h` image exceeds a `max_dim` long edge (`0`: no cap).
++fn needs_resize(w: u32, h: u32, max_dim: u32) -> bool {
++    max_dim != 0 && (w > max_dim || h > max_dim)
++}
++
++/// Dimensions after scaling the long edge down to `max_dim`, aspect kept.
++fn resized_dimensions(w: u32, h: u32, max_dim: u32) -> (u32, u32) {
++    let scale = (max_dim as f64) / (w.max(h) as f64);
++    (
++        (w as f64 * scale).round() as u32,
++        (h as f64 * scale).round() as u32,
++    )
++}
++
+ // ── Downscale ─────────────────────────────────────────────────────────────
+ 
+ /// The screenshot long-edge limits that apply to one capture.
+@@ -93,12 +270,10 @@ pub fn resize_png_if_needed(png_bytes: &[u8], max_dim: u32) -> Result<Vec<u8>> {
+         return Ok(png_bytes.to_vec());
+     }
+     let (w, h) = png_dimensions(png_bytes)?;
+-    if w <= max_dim && h <= max_dim {
++    if !needs_resize(w, h, max_dim) {
+         return Ok(png_bytes.to_vec());
+     }
+-    let scale = (max_dim as f64) / (w.max(h) as f64);
+-    let new_w = (w as f64 * scale).round() as u32;
+-    let new_h = (h as f64 * scale).round() as u32;
++    let (new_w, new_h) = resized_dimensions(w, h, max_dim);
+ 
+     let cursor = std::io::Cursor::new(png_bytes);
+     let decoder = image::codecs::png::PngDecoder::new(cursor)?;
+@@ -326,6 +501,97 @@ pub fn encode_bgra_to_png(bgra: &[u8], w: u32, h: u32) -> Result<Vec<u8>> {
+ mod tests {
+     use super::*;
+ 
++    /// A frame with varied pixels and partial alpha, so resampling and
++    /// encoding differences would show.
++    fn gradient_frame(width: u32, height: u32) -> RgbaFrame {
++        let mut rgba = Vec::with_capacity((width * height * 4) as usize);
++        for y in 0..height {
++            for x in 0..width {
++                rgba.extend_from_slice(&[
++                    (x * 7 % 256) as u8,
++                    (y * 13 % 256) as u8,
++                    ((x + y) * 3 % 256) as u8,
++                    if (x + y) % 5 == 0 { 128 } else { 255 },
++                ]);
++            }
++        }
++        RgbaFrame {
++            width,
++            height,
++            rgba,
++        }
++    }
++
++    #[test]
++    fn png_from_raw_pixels_is_byte_identical_to_the_png_round_trip() {
++        let frame = CapturedImage::Rgba(gradient_frame(300, 200));
++        let png = frame.clone().into_png().unwrap();
++        for max_dim in [0, 300, 1366, 120, 77] {
++            let (bytes, w, h) = frame
++                .clone()
++                .encode(max_dim, ScreenshotEncoding::Png)
++                .unwrap();
++            let expected = resize_png_if_needed(&png, max_dim).unwrap();
++            assert_eq!(bytes, expected, "max_dim {max_dim}");
++            assert_eq!((w, h), png_dimensions(&expected).unwrap());
++        }
++    }
++
++    #[test]
++    fn jpeg_keeps_the_resized_dimensions() {
++        for image in [
++            CapturedImage::Rgba(gradient_frame(300, 200)),
++            CapturedImage::Png(
++                CapturedImage::Rgba(gradient_frame(300, 200))
++                    .into_png()
++                    .unwrap(),
++            ),
++        ] {
++            let (bytes, w, h) = image
++                .encode(150, ScreenshotEncoding::Jpeg { quality: 80 })
++                .unwrap();
++            assert_eq!((w, h), (150, 100));
++            assert_eq!(&bytes[..3], &[0xFF, 0xD8, 0xFF], "JPEG SOI marker");
++            let decoded = image::load_from_memory_with_format(&bytes, ImageFormat::Jpeg).unwrap();
++            assert_eq!((decoded.width(), decoded.height()), (150, 100));
++        }
++    }
++
++    #[test]
++    fn screenshot_encoding_defaults_to_png_and_validates_quality() {
++        use serde_json::json;
++        let parse = |format: Option<serde_json::Value>, quality: Option<serde_json::Value>| {
++            ScreenshotEncoding::from_args("f", format.as_ref(), "q", quality.as_ref())
++        };
++        assert_eq!(parse(None, None), Ok(ScreenshotEncoding::Png));
++        assert_eq!(parse(Some(json!("png")), None), Ok(ScreenshotEncoding::Png));
++        assert_eq!(
++            parse(Some(json!("jpeg")), None),
++            Ok(ScreenshotEncoding::Jpeg {
++                quality: DEFAULT_JPEG_QUALITY
++            })
++        );
++        assert_eq!(
++            parse(Some(json!("jpeg")), Some(json!(60))),
++            Ok(ScreenshotEncoding::Jpeg { quality: 60 })
++        );
++        assert_eq!(
++            parse(Some(json!("webp")), None),
++            Err("f must be \"png\" or \"jpeg\", got \"webp\"".to_string())
++        );
++        assert_eq!(
++            parse(Some(json!("jpeg")), Some(json!(0))),
++            Err("q must be an integer from 1 to 95, got 0".to_string())
++        );
++        assert_eq!(
++            parse(Some(json!("jpeg")), Some(json!(96))),
++            Err("q must be an integer from 1 to 95, got 96".to_string())
++        );
++        let only_jpeg = Err("q applies only with f: \"jpeg\"".to_string());
++        assert_eq!(parse(None, Some(json!(60))), only_jpeg);
++        assert_eq!(parse(Some(json!("png")), Some(json!(60))), only_jpeg);
++    }
++
+     #[test]
+     fn image_dimension_override_wins_and_legacy_cap_folds_with_ceiling() {
+         // (configured, legacy max_dimension, max_image_dimension) -> max_dim
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/capture.rs b/libs/cua-driver/rust/crates/platform-macos/src/capture.rs
+--- a/libs/cua-driver/rust/crates/platform-macos/src/capture.rs
++++ b/libs/cua-driver/rust/crates/platform-macos/src/capture.rs
+@@ -40,6 +40,7 @@
+ //! its fallback and reports that it could not exclude the overlay.
+ 
+ use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
++pub use cua_driver_core::image_utils::{CapturedImage, RgbaFrame};
+ use objc2::rc::autoreleasepool;
+ use std::collections::HashMap;
+ use std::hash::Hash;
+@@ -217,10 +218,10 @@ fn capture_window_with_backends<N, F>(
+     window_id: u32,
+     native: N,
+     fallback: F,
+-) -> anyhow::Result<Vec<u8>>
++) -> anyhow::Result<CapturedImage>
+ where
+-    N: FnOnce(u32) -> anyhow::Result<Vec<u8>>,
+-    F: FnOnce(u32) -> anyhow::Result<Vec<u8>>,
++    N: FnOnce(u32) -> anyhow::Result<CapturedImage>,
++    F: FnOnce(u32) -> anyhow::Result<CapturedImage>,
+ {
+     match native(window_id) {
+         Ok(bytes) if !bytes.is_empty() => Ok(bytes),
+@@ -548,24 +549,36 @@ fn window_capture_config(
+         .with_shows_cursor(false)
+ }
+ 
+-/// Single-frame capture + RGBA/PNG encode from an existing plan.
++/// Single-frame capture from an existing plan, kept as raw RGBA pixels.
+ ///
+ /// https://developer.apple.com/documentation/screencapturekit/scscreenshotmanager
+-fn capture_window_from_plan(window_id: u32, plan: &WindowCapturePlan) -> anyhow::Result<Vec<u8>> {
++fn capture_window_from_plan(
++    window_id: u32,
++    plan: &WindowCapturePlan,
++) -> anyhow::Result<CapturedImage> {
+     use screencapturekit::screenshot_manager::SCScreenshotManager;
+ 
+     let image = SCScreenshotManager::capture_image(&plan.filter, &plan.config).map_err(|e| {
+         anyhow::anyhow!("SCScreenshotManager::capture_image failed for window {window_id}: {e}")
+     })?;
+ 
+-    cgimage_to_png(&image, &format!("window {window_id}"))
++    cgimage_to_rgba(&image, &format!("window {window_id}")).map(CapturedImage::Rgba)
+ }
+ 
+ /// Encode a ScreenCaptureKit `CGImage` as PNG after checking its geometry.
+ fn cgimage_to_png(
+     image: &screencapturekit::screenshot_manager::CGImage,
+     label: &str,
+ ) -> anyhow::Result<Vec<u8>> {
++    let frame = cgimage_to_rgba(image, label)?;
++    cua_driver_core::image_utils::encode_rgba_to_png(&frame.rgba, frame.width, frame.height)
++}
++
++/// Read a ScreenCaptureKit `CGImage`'s RGBA pixels after checking its geometry.
++fn cgimage_to_rgba(
++    image: &screencapturekit::screenshot_manager::CGImage,
++    label: &str,
++) -> anyhow::Result<RgbaFrame> {
+     use screencapturekit::screenshot_manager::CGImageExt;
+ 
+     let w = checked_image_dim(image.width(), "CGImage width")?;
+@@ -586,11 +599,15 @@ fn cgimage_to_png(
+         );
+     }
+ 
+-    cua_driver_core::image_utils::encode_rgba_to_png(&rgba, w, h)
++    Ok(RgbaFrame {
++        width: w,
++        height: h,
++        rgba,
++    })
+ }
+ 
+ enum CaptureIdentityValidation {
+-    Matched(Vec<u8>),
++    Matched(CapturedImage),
+     Changed(WindowCaptureIdentity),
+ }
+ 
+@@ -603,7 +620,7 @@ fn capture_then_validate_identity<C, I>(
+     current_identity: I,
+ ) -> anyhow::Result<CaptureIdentityValidation>
+ where
+-    C: FnOnce() -> anyhow::Result<Vec<u8>>,
++    C: FnOnce() -> anyhow::Result<CapturedImage>,
+     I: FnOnce() -> anyhow::Result<WindowCaptureIdentity>,
+ {
+     let bytes = capture()?;
+@@ -638,7 +655,7 @@ fn retry_after_identity_change(
+     window_id: u32,
+     stale_plan: &std::sync::Arc<WindowCapturePlan>,
+     actual_identity: WindowCaptureIdentity,
+-) -> anyhow::Result<Vec<u8>> {
++) -> anyhow::Result<CapturedImage> {
+     evict_window_capture_plan(window_id, stale_plan);
+     let rebuilt = build_window_capture_plan(window_id, actual_identity)?;
+     {
+@@ -666,7 +683,7 @@ fn retry_after_identity_change(
+ /// Uses a desktop-independent window filter and `SCScreenshotManager` —
+ /// see module docs for Apple + crate source URLs. No subprocess/temp/base64.
+ /// Warm hits reuse a bounded two-second filter/config plan cache.
+-fn screenshot_window_bytes_sck_inner(window_id: u32) -> anyhow::Result<Vec<u8>> {
++fn screenshot_window_bytes_sck_inner(window_id: u32) -> anyhow::Result<CapturedImage> {
+     let identity = current_window_capture_identity(window_id)?;
+     let cached = {
+         let mut cache = lock_window_plan_cache();
+@@ -747,7 +764,7 @@ fn screenshot_window_bytes_sck_inner(window_id: u32) -> anyhow::Result<Vec<u8>>
+ /// Bound the dependency's synchronous callback wrappers without permitting an
+ /// unbounded number of detached workers. Ownership of the gate permit and all
+ /// ScreenCaptureKit/CF objects stays on the worker until it really returns.
+-fn screenshot_window_bytes_sck(window_id: u32) -> anyhow::Result<Vec<u8>> {
++fn screenshot_window_bytes_sck(window_id: u32) -> anyhow::Result<CapturedImage> {
+     run_native_capture_worker(
+         native_capture_gate(),
+         WINDOW_CAPTURE_NATIVE_TIMEOUT,
+@@ -767,17 +784,23 @@ fn screenshot_window_bytes_sck(window_id: u32) -> anyhow::Result<Vec<u8>> {
+ /// Tries ScreenCaptureKit first; falls back to the `screencapture` CLI on
+ /// native error or empty output.
+ pub fn screenshot_window_bytes(window_id: u32) -> anyhow::Result<Vec<u8>> {
++    screenshot_window_image(window_id)?.into_png()
++}
++
++/// Capture a window by its `window_id` (CGWindowID), keeping the raw pixels
++/// when the backend has them so the caller resizes and encodes only once
++/// ([`CapturedImage::encode`]). Same backends and fallbacks as
++/// [`screenshot_window_bytes`].
++pub fn screenshot_window_image(window_id: u32) -> anyhow::Result<CapturedImage> {
+     refuse_without_direct_capture_consent()?;
+     let off_space = crate::windows::window_on_current_space_by_id(window_id) == Some(false);
+     capture_window_with_space_route(
+         window_id,
+         off_space,
+         |id| {
+-            capture_window_with_backends(
+-                id,
+-                screenshot_window_bytes_sck,
+-                screenshot_window_bytes_shell,
+-            )
++            capture_window_with_backends(id, screenshot_window_bytes_sck, |id| {
++                screenshot_window_bytes_shell(id).map(CapturedImage::Png)
++            })
+         },
+         screenshot_window_bytes_skylight,
+     )
+@@ -794,10 +817,10 @@ fn capture_window_with_space_route<P, S>(
+     off_space: bool,
+     public: P,
+     skylight: S,
+-) -> anyhow::Result<Vec<u8>>
++) -> anyhow::Result<CapturedImage>
+ where
+-    P: FnOnce(u32) -> anyhow::Result<Vec<u8>>,
+-    S: FnOnce(u32) -> anyhow::Result<Vec<u8>>,
++    P: FnOnce(u32) -> anyhow::Result<CapturedImage>,
++    S: FnOnce(u32) -> anyhow::Result<CapturedImage>,
+ {
+     if off_space {
+         let skylight_err = match skylight(window_id) {
+@@ -827,20 +850,20 @@ where
+ }
+ 
+ /// Off-Space capture through `SLSHWCaptureWindowList` (see module docs).
+-fn screenshot_window_bytes_skylight(window_id: u32) -> anyhow::Result<Vec<u8>> {
++fn screenshot_window_bytes_skylight(window_id: u32) -> anyhow::Result<CapturedImage> {
+     let image = crate::input::skylight::hw_capture_window(window_id).ok_or_else(|| {
+         anyhow::anyhow!("SLSHWCaptureWindowList returned no image for window {window_id}")
+     })?;
+-    core_cgimage_to_png(&image, &format!("window {window_id}"))
++    core_cgimage_to_rgba(&image, &format!("window {window_id}")).map(CapturedImage::Rgba)
+ }
+ 
+-/// Encode a CoreGraphics image of any pixel layout as an RGBA PNG by drawing
+-/// it into an RGBA8 bitmap. Fails on a fully transparent image, which is what
+-/// WindowServer hands back for a window with no backing store.
+-fn core_cgimage_to_png(
++/// Read a CoreGraphics image of any pixel layout as straight-alpha RGBA8 by
++/// drawing it into an RGBA8 bitmap. Fails on a fully transparent image, which
++/// is what WindowServer hands back for a window with no backing store.
++fn core_cgimage_to_rgba(
+     image: &core_graphics::image::CGImage,
+     label: &str,
+-) -> anyhow::Result<Vec<u8>> {
++) -> anyhow::Result<RgbaFrame> {
+     use core_graphics::base::{kCGBitmapByteOrder32Big, kCGImageAlphaPremultipliedLast};
+     use core_graphics::color_space::CGColorSpace;
+     use core_graphics::context::CGContext;
+@@ -872,7 +895,11 @@ fn core_cgimage_to_png(
+     if !unpremultiply_rgba(&mut rgba) {
+         anyhow::bail!("capture of {label} is fully transparent (no window content)");
+     }
+-    cua_driver_core::image_utils::encode_rgba_to_png(&rgba, w, h)
++    Ok(RgbaFrame {
++        width: w,
++        height: h,
++        rgba,
++    })
+ }
+ 
+ /// Convert premultiplied RGBA8 to straight alpha in place. Returns whether
+@@ -1161,6 +1188,10 @@ mod tests {
+     use std::rc::Rc;
+     use std::sync::Arc;
+ 
++    fn png(bytes: Vec<u8>) -> CapturedImage {
++        CapturedImage::Png(bytes)
++    }
++
+     /// Regression for trycua/cua#5476: with the pointer outside the window,
+     /// a pointer-showing window capture came back scaled and offset while
+     /// still sized like the window, so clicks aimed from it missed by ~37 px.
+@@ -1181,10 +1212,10 @@ mod tests {
+                 public_calls.set(public_calls.get() + 1);
+                 anyhow::bail!("public backends must not run when SkyLight succeeds off-Space")
+             },
+-            |window_id| Ok(format!("sky-{window_id}").into_bytes()),
++            |window_id| Ok(png(format!("sky-{window_id}").into_bytes())),
+         )
+         .expect("off-Space SkyLight capture should succeed");
+-        assert_eq!(got, b"sky-7");
++        assert_eq!(got, png(b"sky-7".to_vec()));
+         assert_eq!(public_calls.get(), 0);
+     }
+ 
+@@ -1193,20 +1224,20 @@ mod tests {
+         let got = capture_window_with_space_route(
+             7,
+             true,
+-            |_| Ok(b"public".to_vec()),
++            |_| Ok(png(b"public".to_vec())),
+             |_| anyhow::bail!("SPI missing"),
+         )
+         .expect("public fallback should run");
+-        assert_eq!(got, b"public");
++        assert_eq!(got, png(b"public".to_vec()));
+ 
+         let got = capture_window_with_space_route(
+             7,
+             true,
+-            |_| Ok(b"public".to_vec()),
+-            |_| Ok(Vec::new()),
++            |_| Ok(png(b"public".to_vec())),
++            |_| Ok(png(Vec::new())),
+         )
+         .expect("empty SkyLight bytes fall back");
+-        assert_eq!(got, b"public");
++        assert_eq!(got, png(b"public".to_vec()));
+     }
+ 
+     #[test]
+@@ -1215,14 +1246,14 @@ mod tests {
+         let got = capture_window_with_space_route(
+             7,
+             false,
+-            |_| Ok(b"public".to_vec()),
++            |_| Ok(png(b"public".to_vec())),
+             |_| {
+                 sky_calls.set(sky_calls.get() + 1);
+-                Ok(b"sky".to_vec())
++                Ok(png(b"sky".to_vec()))
+             },
+         )
+         .expect("public capture should succeed");
+-        assert_eq!(got, b"public");
++        assert_eq!(got, png(b"public".to_vec()));
+         assert_eq!(
+             sky_calls.get(),
+             0,
+@@ -1233,10 +1264,10 @@ mod tests {
+             7,
+             false,
+             |_| anyhow::bail!("sck and shell failed"),
+-            |_| Ok(b"sky".to_vec()),
++            |_| Ok(png(b"sky".to_vec())),
+         )
+         .expect("SkyLight is the last resort");
+-        assert_eq!(got, b"sky");
++        assert_eq!(got, png(b"sky".to_vec()));
+     }
+ 
+     #[test]
+@@ -1286,7 +1317,7 @@ mod tests {
+     }
+ 
+     #[test]
+-    fn core_cgimage_to_png_round_trips_pixels() {
++    fn core_cgimage_to_rgba_reads_pixels() {
+         use core_graphics::base::{kCGBitmapByteOrder32Big, kCGImageAlphaPremultipliedLast};
+         use core_graphics::color_space::CGColorSpace;
+         use core_graphics::context::CGContext;
+@@ -1302,8 +1333,9 @@ mod tests {
+         );
+         ctx.data().copy_from_slice(&[255u8, 0, 0, 255].repeat(6));
+         let image = ctx.create_image().expect("image from bitmap");
+-        let png = core_cgimage_to_png(&image, "test").expect("encode");
+-        assert_eq!(png_dimensions(&png).expect("dims"), (3, 2));
++        let frame = core_cgimage_to_rgba(&image, "test").expect("read");
++        assert_eq!((frame.width, frame.height), (3, 2));
++        assert_eq!(frame.rgba, [255u8, 0, 0, 255].repeat(6));
+ 
+         let mut clear = CGContext::create_bitmap_context(
+             None,
+@@ -1316,7 +1348,7 @@ mod tests {
+         );
+         clear.data().fill(0);
+         let image = clear.create_image().expect("image from bitmap");
+-        let err = core_cgimage_to_png(&image, "test").expect_err("blank image fails");
++        let err = core_cgimage_to_rgba(&image, "test").expect_err("blank image fails");
+         assert!(err.to_string().contains("fully transparent"), "{err}");
+     }
+ 
+@@ -1340,7 +1372,7 @@ mod tests {
+             move |window_id| {
+                 native_calls_n.set(native_calls_n.get() + 1);
+                 native_window_id_n.set(Some(window_id));
+-                Ok(png_n)
++                Ok(CapturedImage::Png(png_n))
+             },
+             move |_window_id| {
+                 fallback_calls_f.set(fallback_calls_f.get() + 1);
+@@ -1356,19 +1388,23 @@ mod tests {
+             "native backend receives window id 42"
+         );
+         assert_eq!(fallback_calls.get(), 0, "shell fallback must not run");
+-        assert_eq!(got, png, "helper returns native PNG bytes verbatim");
++        assert_eq!(
++            got,
++            CapturedImage::Png(png),
++            "helper returns native PNG bytes verbatim"
++        );
+     }
+ 
+     #[test]
+     fn empty_native_capture_uses_shell_fallback() {
+         let got = capture_window_with_backends(
+             42,
+-            |_| Ok(Vec::new()),
+-            |window_id| Ok(format!("fallback-{window_id}").into_bytes()),
++            |_| Ok(png(Vec::new())),
++            |window_id| Ok(png(format!("fallback-{window_id}").into_bytes())),
+         )
+         .expect("empty native capture should fall back");
+ 
+-        assert_eq!(got, b"fallback-42");
++        assert_eq!(got, png(b"fallback-42".to_vec()));
+     }
+ 
+     #[test]
+@@ -1472,8 +1508,9 @@ mod tests {
+         let before = WindowCaptureIdentity::new(10, 0, 1.0, 2.0, 800.0, 600.0);
+         let after = WindowCaptureIdentity::new(10, 0, 5.0, 2.0, 800.0, 600.0);
+ 
+-        let outcome = capture_then_validate_identity(before, || Ok(vec![1, 2, 3]), || Ok(after))
+-            .expect("capture and identity read succeed");
++        let outcome =
++            capture_then_validate_identity(before, || Ok(png(vec![1, 2, 3])), || Ok(after))
++                .expect("capture and identity read succeed");
+ 
+         assert!(matches!(
+             outcome,
+@@ -1487,14 +1524,15 @@ mod tests {
+         let second = WindowCaptureIdentity::new(10, 0, 5.0, 2.0, 800.0, 600.0);
+         let third = WindowCaptureIdentity::new(10, 0, 5.0, 2.0, 900.0, 600.0);
+ 
+-        let first_attempt = capture_then_validate_identity(first, || Ok(vec![1]), || Ok(second))
+-            .expect("first attempt completes");
++        let first_attempt =
++            capture_then_validate_identity(first, || Ok(png(vec![1])), || Ok(second))
++                .expect("first attempt completes");
+         assert!(matches!(
+             first_attempt,
+             CaptureIdentityValidation::Changed(identity) if identity == second
+         ));
+ 
+-        let retry = capture_then_validate_identity(second, || Ok(vec![2]), || Ok(third))
++        let retry = capture_then_validate_identity(second, || Ok(png(vec![2])), || Ok(third))
+             .expect("retry completes");
+         assert!(matches!(
+             retry,
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/tools/get_window_state.rs b/libs/cua-driver/rust/crates/platform-macos/src/tools/get_window_state.rs
+--- a/libs/cua-driver/rust/crates/platform-macos/src/tools/get_window_state.rs
++++ b/libs/cua-driver/rust/crates/platform-macos/src/tools/get_window_state.rs
+@@ -55,7 +55,18 @@ fn def() -> &'static ToolDef {
+                 },
+                 "screenshot_out_file": {
+                     "type": "string",
+-                    "description": "When set, write the PNG to this file path (~ expanded) instead of embedding base64 in the response. The structured output will contain screenshot_file_path instead."
++                    "description": "When set, write the screenshot (PNG, or JPEG with screenshot_format:\"jpeg\") to this file path (~ expanded) instead of embedding base64 in the response. The structured output will contain screenshot_file_path instead."
++                },
++                "screenshot_format": {
++                    "type": "string",
++                    "enum": ["png", "jpeg"],
++                    "description": "Encoding of the returned screenshot. Default \"png\". \"jpeg\" is smaller, drops alpha, and mints no capture_id (capture_id-bound tools need a PNG read); pixel coordinates are unchanged."
++                },
++                "screenshot_quality": {
++                    "type": "integer",
++                    "minimum": 1,
++                    "maximum": 95,
++                    "description": "JPEG quality, 1-95, with screenshot_format:\"jpeg\" only. Default 85."
+                 },
+                 "max_elements": {
+                     "type": "integer",
+@@ -101,15 +112,15 @@ fn prefetch_capture<T: Send + 'static>(
+ 
+ fn verified_capture(
+     window_id: u32,
+-    prefetched: Option<anyhow::Result<Vec<u8>>>,
++    prefetched: Option<anyhow::Result<crate::capture::CapturedImage>>,
+     bounds: &crate::windows::WindowBounds,
+-    capture: impl FnOnce() -> anyhow::Result<Vec<u8>>,
+-) -> Result<(Vec<u8>, u32, u32, f64), super::px_frame::PxFrameError> {
++    capture: impl FnOnce() -> anyhow::Result<crate::capture::CapturedImage>,
++) -> Result<(crate::capture::CapturedImage, u32, u32, f64), super::px_frame::PxFrameError> {
+     use super::px_frame::{validate_capture_frame, PxFrameError};
+-    let validate = |raw: anyhow::Result<Vec<u8>>| {
++    let validate = |raw: anyhow::Result<crate::capture::CapturedImage>| {
+         let (raw, w, h) = (|| -> anyhow::Result<_> {
+             let raw = raw?;
+-            let (w, h) = crate::capture::png_dimensions(&raw)?;
++            let (w, h) = raw.dimensions()?;
+             Ok((raw, w, h))
+         })()
+         .map_err(|e| PxFrameError::CaptureUnavailable {
+@@ -284,6 +295,24 @@ impl Tool for GetWindowStateTool {
+             .get("max_image_dimension")
+             .and_then(|v| v.as_u64())
+             .map(|v| v as u32);
++        let encoding = match cua_driver_core::image_utils::ScreenshotEncoding::from_args(
++            "screenshot_format",
++            args.get("screenshot_format"),
++            "screenshot_quality",
++            args.get("screenshot_quality"),
++        ) {
++            Ok(encoding) => encoding,
++            Err(detail) => {
++                return ToolResult::error(format!("get_window_state: {detail}")).with_structured(
++                    serde_json::json!({
++                        "code": "invalid_arguments",
++                        "tool": "get_window_state",
++                        "detail": detail,
++                    }),
++                );
++            }
++        };
++        let jpeg = encoding != cua_driver_core::image_utils::ScreenshotEncoding::Png;
+         // Internal direct-tool mode used by verify_state. Registry ingress
+         // strips underscore-prefixed arguments before public dispatch; only
+         // a trusted direct in-process invocation can enable this mode.
+@@ -319,7 +348,7 @@ impl Tool for GetWindowStateTool {
+         // ScreenCaptureKit and the accessibility walk use independent system
+         // services, and the read otherwise pays for them one after the other.
+         let prefetched_capture = prefetch_capture(should_capture, want_tree, move || {
+-            crate::capture::screenshot_window_bytes(window_id)
++            crate::capture::screenshot_window_image(window_id)
+         });
+         let (tree_result, prepared_snapshot) = if want_tree {
+             let q = query.clone();
+@@ -423,15 +452,11 @@ impl Tool for GetWindowStateTool {
+                     window_id,
+                     prefetched_raw,
+                     &bounds,
+-                    || crate::capture::screenshot_window_bytes(window_id),
++                    || crate::capture::screenshot_window_image(window_id),
+                 )?;
+-                let png = crate::capture::resize_png_if_needed(&raw, max_dim).map_err(|e| {
+-                    super::px_frame::PxFrameError::CaptureUnavailable {
+-                        window_id,
+-                        reason: e.to_string(),
+-                    }
+-                })?;
+-                let (w, h) = crate::capture::png_dimensions(&png).map_err(|e| {
++                // Resize and encode once from the raw pixels; the PNG bytes
++                // are identical to the former encode-decode-resize round trip.
++                let (png, w, h) = raw.encode(max_dim, encoding).map_err(|e| {
+                     super::px_frame::PxFrameError::CaptureUnavailable {
+                         window_id,
+                         reason: e.to_string(),
+@@ -505,7 +530,11 @@ impl Tool for GetWindowStateTool {
+         if let Some((png, ref file_path, w, h, _, _, _, _)) = screenshot.as_ref() {
+             if file_path.is_none() {
+                 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+-                content.push(Content::image_png(BASE64.encode(png)));
++                content.push(if jpeg {
++                    Content::image_jpeg(BASE64.encode(png))
++                } else {
++                    Content::image_png(BASE64.encode(png))
++                });
+             }
+ 
+             // Summary text line (matching Swift reference format).
+@@ -591,7 +620,8 @@ impl Tool for GetWindowStateTool {
+                 })
+                 .unzip(),
+         };
+-        let capture_id = match (snapshot_id, screenshot.as_ref()) {
++        // The capture registry holds PNG captures only; a JPEG read mints none.
++        let capture_id = match (snapshot_id, screenshot.as_ref().filter(|_| !jpeg)) {
+             (Some(_), Some((png, _, width, height, native_width, native_height, _, _))) => {
+                 match self.state.capture_bindings.publish_window(
+                     &args,
+@@ -819,7 +849,7 @@ impl Tool for GetWindowStateTool {
+             // know what they're holding. `Content::image_png` already carries
+             // `mimeType` on the protocol image part — this mirrors it onto
+             // the structured side. Additive: keeps every existing field.
+-            structured["screenshot_mime_type"] = serde_json::json!("image/png");
++            structured["screenshot_mime_type"] = serde_json::json!(encoding.mime_type());
+         }
+         if let Some((bounds, scale)) = screenshot_frame {
+             structured["window_bounds"] = serde_json::json!({
+@@ -1448,12 +1478,13 @@ mod tests {
+             width: 4.0,
+             height: 4.0,
+         };
+-        let valid = png(4, 4);
++        use crate::capture::CapturedImage;
++        let valid = CapturedImage::Png(png(4, 4));
+         for (prefetched, expected_calls) in [
+             (Some(Ok(valid.clone())), 0),
+             (Some(Err(anyhow::anyhow!("prefetch failed"))), 1),
+-            (Some(Ok(png(3, 4))), 1),
+-            (Some(Ok(vec![0])), 1),
++            (Some(Ok(CapturedImage::Png(png(3, 4)))), 1),
++            (Some(Ok(CapturedImage::Png(vec![0]))), 1),
+             (None, 1),
+         ] {
+             let calls = Cell::new(0);
+@@ -1465,6 +1496,48 @@ mod tests {
+             assert_eq!(frame, (valid.clone(), 4, 4, 1.0));
+             assert_eq!(calls.get(), expected_calls);
+         }
++        let raw = |w: u32, h: u32| {
++            CapturedImage::Rgba(cua_driver_core::image_utils::RgbaFrame {
++                width: w,
++                height: h,
++                rgba: vec![0; (w * h * 4) as usize],
++            })
++        };
++        let calls = Cell::new(0);
++        let frame = verified_capture(7, Some(Ok(raw(4, 4))), &bounds, || {
++            calls.set(calls.get() + 1);
++            Ok(valid.clone())
++        })
++        .unwrap();
++        assert_eq!(frame, (raw(4, 4), 4, 4, 1.0));
++        assert_eq!(calls.get(), 0);
++        let calls = Cell::new(0);
++        let frame = verified_capture(7, Some(Ok(raw(3, 4))), &bounds, || {
++            calls.set(calls.get() + 1);
++            Ok(valid.clone())
++        })
++        .unwrap();
++        assert_eq!(frame, (valid.clone(), 4, 4, 1.0));
++        assert_eq!(calls.get(), 1);
++        let calls = Cell::new(0);
++        let error = verified_capture(7, Some(Ok(raw(3, 4))), &bounds, || {
++            calls.set(calls.get() + 1);
++            Ok(raw(3, 4))
++        })
++        .unwrap_err();
++        assert_eq!(
++            error,
++            PxFrameError::FrameMismatch {
++                window_id: 7,
++                bounds_width: 4.0,
++                bounds_height: 4.0,
++                capture_width: 3,
++                capture_height: 4,
++                scale_x: 0.75,
++                scale_y: 1.0,
++            }
++        );
++        assert_eq!(calls.get(), 1);
+         for prefetched in [Some(Err(anyhow::anyhow!("old error"))), None] {
+             let calls = Cell::new(0);
+             let error = verified_capture(7, prefetched, &bounds, || {

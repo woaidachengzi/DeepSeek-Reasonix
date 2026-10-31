@@ -18,6 +18,7 @@ import (
 const cuaProtocol = 1
 const maxCuaReply = 16 << 20
 const cuaSourceRevision = "e754cfec69c41400eb2aabde716c27d15607b2f0"
+const cuaSourceFingerprint = "0fb33d8bdccf38cbdaf6334bb7ea74c734600630e12dbc5ba3c81c04253b4643"
 
 type CuaImage struct {
 	MIME string `json:"mime_type"`
@@ -25,19 +26,20 @@ type CuaImage struct {
 }
 
 type CuaReply struct {
-	Protocol       int             `json:"protocol"`
-	ID             uint64          `json:"id"`
-	Driver         string          `json:"driver"`
-	Version        string          `json:"version"`
-	SourceRevision string          `json:"source_revision"`
-	Result         json.RawMessage `json:"result"`
-	Text           string          `json:"text"`
-	Images         []CuaImage      `json:"images,omitempty"`
-	Action         json.RawMessage `json:"action,omitempty"`
-	IsError        bool            `json:"is_error"`
-	ErrorCode      string          `json:"error_code,omitempty"`
-	Error          string          `json:"error,omitempty"`
-	Completion     string          `json:"completion,omitempty"`
+	Protocol          int             `json:"protocol"`
+	ID                uint64          `json:"id"`
+	Driver            string          `json:"driver"`
+	Version           string          `json:"version"`
+	SourceRevision    string          `json:"source_revision"`
+	SourceFingerprint string          `json:"source_fingerprint"`
+	Result            json.RawMessage `json:"result"`
+	Text              string          `json:"text"`
+	Images            []CuaImage      `json:"images,omitempty"`
+	Action            json.RawMessage `json:"action,omitempty"`
+	IsError           bool            `json:"is_error"`
+	ErrorCode         string          `json:"error_code,omitempty"`
+	Error             string          `json:"error,omitempty"`
+	Completion        string          `json:"completion,omitempty"`
 }
 
 // Transport uncertainty must never be turned into a retryable refusal.
@@ -187,12 +189,13 @@ func (c *CuaRuntime) call(ctx, lifetime context.Context, request CuaRequest, tar
 	id := c.sequence
 	body, _ := json.Marshal(struct {
 		Protocol           int        `json:"protocol"`
+		SourceFingerprint  string     `json:"source_fingerprint"`
 		ID                 uint64     `json:"id"`
 		Request            CuaRequest `json:"request"`
 		Target             *Target    `json:"approved_target"`
 		BrowserApproved    bool       `json:"browser_profile_approved"`
 		ForegroundApproved bool       `json:"foreground_approved"`
-	}{cuaProtocol, id, request, target, approvals.BrowserProfile, approvals.Foreground})
+	}{cuaProtocol, cuaSourceFingerprint, id, request, target, approvals.BrowserProfile, approvals.Foreground})
 	type outcome struct {
 		value CuaReply
 		err   error
@@ -213,7 +216,7 @@ func (c *CuaRuntime) call(ctx, lifetime context.Context, request CuaRequest, tar
 		}
 		var value CuaReply
 		err := json.Unmarshal(p.lines.Bytes(), &value)
-		if err == nil && (value.Protocol != cuaProtocol || value.ID != id || value.Driver != "cua" || value.SourceRevision != cuaSourceRevision) {
+		if err == nil && (value.Protocol != cuaProtocol || value.ID != id || value.Driver != "cua" || value.SourceRevision != cuaSourceRevision || value.SourceFingerprint != cuaSourceFingerprint) {
 			err = errors.New("Cua response identity is invalid")
 		}
 		completed <- outcome{value, err}

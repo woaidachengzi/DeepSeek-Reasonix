@@ -82,10 +82,63 @@ def prepare(source):
         records.append(dict(file=relative, reason=reason,
                             original_sha256=hashlib.sha256(original).hexdigest(),
                             patched_sha256=hashlib.sha256(patched).hexdigest()))
+    records.extend(apply_backports())
     (CACHE / 'reasonix-source-patches.json').write_text(json.dumps(records, indent=2) + '\n')
     (CACHE / 'reasonix-source.json').write_text(json.dumps(PIN, indent=2) + '\n')
     if (CACHE / 'LICENSE.md').read_bytes() != (RUNTIME / 'licenses/Cua-MIT.txt').read_bytes():
         raise RuntimeError('Pinned Cua MIT notice differs from shipped notice')
+
+
+def apply_backports():
+    """Apply reviewed MIT source changes only to the owned, clean export.
+
+    Validate patch bytes and every input/output file so upstream drift or a
+    partial application fails instead of silently changing packaged behavior.
+    """
+    records = []
+    for backport in PIN.get('backports', []):
+        patch = (RUNTIME / backport['patch']).resolve()
+        if not patch.is_relative_to((RUNTIME / 'patches').resolve()):
+            raise RuntimeError('Backport patch is outside the reviewed patch directory')
+        if hashlib.sha256(patch.read_bytes()).hexdigest() != backport['sha256']:
+            raise RuntimeError('Backport patch checksum mismatch')
+        audited = backport['files']
+        expected = [entry['file'] for entry in audited]
+        for entry in audited:
+            source = (CACHE / entry['file']).resolve()
+            if not source.is_relative_to((CACHE / PIN['scope']).resolve()):
+                raise RuntimeError('Backport source is outside the pinned MIT scope')
+            if entry['original_sha256'] is None:
+                if source.exists():
+                    raise RuntimeError(f"Backport new source already exists: {entry['file']}")
+                continue
+            if hashlib.sha256(source.read_bytes()).hexdigest() != entry['original_sha256']:
+                raise RuntimeError(f"Backport source differs from the reviewed input: {entry['file']}")
+        # Running outside the parent checkout keeps patch paths relative to
+        # the export, independent of the caller's working directory.
+        with tempfile.TemporaryDirectory(prefix='reasonix-cua-backport-') as temp:
+            export = Path(temp)
+            changed = output(['git', 'apply', '--numstat', '-z', patch], cwd=export).split('\0')
+            paths = [line.split('\t', 2)[-1] for line in changed if line]
+            if len(set(expected)) != len(expected) or sorted(paths) != sorted(expected):
+                raise RuntimeError('Backport patch files differ from the reviewed manifest')
+            for entry in audited:
+                dest = export / entry['file']
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                if entry['original_sha256'] is not None:
+                    shutil.copy2(CACHE / entry['file'], dest)
+            run(['git', 'apply', '--check', patch], cwd=export)
+            run(['git', 'apply', patch], cwd=export)
+            for entry in audited:
+                source = export / entry['file']
+                if hashlib.sha256(source.read_bytes()).hexdigest() != entry['patched_sha256']:
+                    raise RuntimeError(f"Backport output differs from the reviewed result: {entry['file']}")
+            for entry in audited:
+                dest = CACHE / entry['file']
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(export / entry['file'], dest)
+                records.append({**entry, 'reason': backport['reason'], 'upstream_revision': backport['revision']})
+    return records
 
 
 def notices(target):
@@ -103,6 +156,11 @@ def notices(target):
         shutil.rmtree(folder)
     shutil.copytree(RUNTIME / 'licenses', folder)
     shutil.copy2(CACHE / 'reasonix-source-patches.json', folder / 'reasonix-source-patches.json')
+    shutil.copy2(CACHE / 'reasonix-source.json', folder / 'reasonix-source.json')
+    for backport in PIN.get('backports', []):
+        dest = folder / backport['patch']
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(RUNTIME / backport['patch'], dest)
     lock = tomllib.loads((RUNTIME / 'Cargo.lock').read_text())
     checksums = {(p['name'], p['version']): p.get('checksum') for p in lock['package']}
     index = []
@@ -162,6 +220,9 @@ def main():
         raise RuntimeError('Cua desktop packages require a native macOS or x64/ARM64 GNU Linux build host')
     if f'const cuaSourceRevision = "{PIN["revision"]}"' not in (ROOT / 'internal/computeruse/cua_runtime.go').read_text():
         raise RuntimeError('Go host and Rust runtime source pins differ')
+    fingerprint = hashlib.sha256((RUNTIME / 'upstream.json').read_bytes()).hexdigest()
+    if f'const cuaSourceFingerprint = "{fingerprint}"' not in (ROOT / 'internal/computeruse/cua_runtime.go').read_text():
+        raise RuntimeError('Go host and Rust runtime patch fingerprints differ')
     prepare(args.source.resolve() if args.source else None)
     # --locked retains apple-metal 0.6.0, matching the pinned upstream lock;
     # newer versions need APIs missing from the supported Command Line Tools SDK.

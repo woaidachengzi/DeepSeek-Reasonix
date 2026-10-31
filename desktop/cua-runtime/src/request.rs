@@ -15,6 +15,8 @@ pub struct Target {
 pub struct Envelope {
     pub protocol: u32,
     pub id: u64,
+    #[serde(default)]
+    pub source_fingerprint: String,
     pub request: Request,
     pub approved_target: Option<Target>,
     #[serde(default)]
@@ -61,6 +63,11 @@ pub struct Request {
 
 impl Envelope {
     pub fn plan(&self) -> Result<(&'static str, Value), String> {
+        if self.source_fingerprint != crate::SOURCE_FINGERPRINT {
+            return Err(
+                "host and Cua runtime source fingerprints differ; rebuild both helpers".into(),
+            );
+        }
         let r = &self.request;
         let foreground = r.delivery_mode.as_deref() == Some("foreground");
         if foreground != self.foreground_approved || foreground && self.approved_target.is_none() {
@@ -217,6 +224,15 @@ impl Envelope {
             }
             _ => return Err("tool is outside the Reasonix Cua adapter".into()),
         };
+        if cfg!(target_os = "macos")
+            && mode == "background"
+            && matches!(
+                name,
+                "click" | "type_text" | "press_key" | "hotkey" | "scroll"
+            )
+        {
+            args["post_action_wait"] = json!("none");
+        }
         Ok((name, args))
     }
 }
@@ -225,7 +241,15 @@ impl Envelope {
 mod tests {
     use super::*;
     fn envelope(request: Value) -> Envelope {
-        serde_json::from_value(json!({"protocol":1,"id":1,"request":request,"approved_target":{"pid":42,"name":"Fixture","bundle_id":"test.fixture","launch_time":100.}})).unwrap()
+        serde_json::from_value(json!({"protocol":1,"id":1,"source_fingerprint":crate::SOURCE_FINGERPRINT,"request":request,"approved_target":{"pid":42,"name":"Fixture","bundle_id":"test.fixture","launch_time":100.}})).unwrap()
+    }
+    #[test]
+    fn source_mismatch_is_refused_before_any_sdk_dispatch() {
+        let mut e = envelope(json!({"action":"status"}));
+        for fingerprint in ["", "old-patch-set"] {
+            e.source_fingerprint = fingerprint.into();
+            assert!(e.plan().unwrap_err().contains("fingerprints differ"));
+        }
     }
     #[test]
     fn foreground_requires_one_action_private_host_approval() {
@@ -240,6 +264,7 @@ mod tests {
         let (_, args) = e.plan().unwrap();
         assert_eq!(args["delivery_mode"], "foreground");
         assert!(args.get("foreground_approved").is_none());
+        assert!(args.get("post_action_wait").is_none());
         e.request.delivery_mode = None;
         assert!(
             e.plan().is_err(),
@@ -257,6 +282,39 @@ mod tests {
         assert!(prep.plan().is_ok());
         assert!(serde_json::from_value::<Request>(
             json!({"action":"key","foreground_approved":true})
+        )
+        .is_err());
+    }
+    #[test]
+    fn only_background_native_actions_skip_window_change_reporting() {
+        for fields in [
+            json!({"action":"click","element_token":"token_test"}),
+            json!({"action":"type","text":"hello"}),
+            json!({"action":"key","key":"tab"}),
+            json!({"action":"hotkey","keys":["cmd","a"]}),
+            json!({"action":"scroll","x":10.,"y":20.,"direction":"down","amount":1}),
+        ] {
+            let mut request = fields;
+            request["pid"] = json!(42);
+            request["window_id"] = json!(11);
+            let mut e = envelope(request);
+            let (_, args) = e.plan().unwrap();
+            if cfg!(target_os = "macos") {
+                assert_eq!(args["post_action_wait"], "none");
+            } else {
+                assert!(args.get("post_action_wait").is_none());
+            }
+            e.request.delivery_mode = Some("foreground".into());
+            e.foreground_approved = true;
+            let (_, args) = e.plan().unwrap();
+            assert!(args.get("post_action_wait").is_none());
+        }
+        let (_, args) = envelope(json!({"action":"observe","pid":42,"window_id":11}))
+            .plan()
+            .unwrap();
+        assert!(args.get("post_action_wait").is_none());
+        assert!(serde_json::from_value::<Request>(
+            json!({"action":"key","post_action_wait":"none"})
         )
         .is_err());
     }

@@ -1,7 +1,9 @@
 import AppKit
 import WebKit
+import CryptoKit
 
 final class Fixture: NSObject, NSApplicationDelegate {
+    lazy var sourceFingerprint = SHA256.hash(data: try! Data(contentsOf: Bundle.main.resourceURL!.appendingPathComponent("upstream.json"))).map { String(format:"%02x",$0) }.joined()
     let window = NSWindow(contentRect: NSRect(x: 180, y: 180, width: 720, height: 480), styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
     let field = NSTextField(frame: NSRect(x: 30, y: 365, width: 600, height: 32))
     let status = NSTextField(labelWithString: "等待临时授权，只测试本窗口。")
@@ -111,7 +113,7 @@ final class Fixture: NSObject, NSApplicationDelegate {
         sequence += 1
         let app = NSRunningApplication.current
         let target: [String:Any] = ["pid":app.processIdentifier,"name":"Reasonix Cua QA","bundle_id":Bundle.main.bundleIdentifier!,"launch_time":app.launchDate!.timeIntervalSince1970]
-        let envelope: [String:Any] = ["protocol":1,"id":sequence,"request":request,"approved_target":target,"foreground_approved":request["delivery_mode"] as? String == "foreground"]
+        let envelope: [String:Any] = ["protocol":1,"id":sequence,"source_fingerprint":sourceFingerprint,"request":request,"approved_target":target,"foreground_approved":request["delivery_mode"] as? String == "foreground"]
         input.write(try! JSONSerialization.data(withJSONObject: envelope) + Data([10]))
         while buffer.firstIndex(of: 10) == nil {
             let chunk = output.availableData
@@ -139,6 +141,7 @@ final class Fixture: NSObject, NSApplicationDelegate {
             test.arguments = [Bundle.main.resourceURL!.appendingPathComponent("browser_acceptance.py").path,
                 "--runtime",directory.appendingPathComponent("reasonix-cua-runtime").path,
                 "--state-helper",directory.appendingPathComponent("browser-fixture-info").path,
+                "--source-manifest",Bundle.main.resourceURL!.appendingPathComponent("upstream.json").path,
                 "--output",directory.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("browser-results").path,
                 "--allow-local-input"]
             if mode == "background" {

@@ -8,6 +8,7 @@ will be sent to this disposable page. No accounts, credentials or models used.
 import argparse
 import functools
 import http.server
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -43,12 +44,14 @@ onscroll="document.getElementById('scroll').textContent=this.scrollTop>0?'scroll
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--runtime', type=Path, required=True)
+    parser.add_argument('--source-manifest', type=Path, default=Path(__file__).resolve().parents[2] / 'cua-runtime/upstream.json')
     parser.add_argument('--state-helper', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--allow-local-input', action='store_true')
     parser.add_argument('--background-only', action='store_true', help='observe a separate fixture window for focus/pointer/input interference')
     parser.add_argument('--sentry-control', type=Path)
     args = parser.parse_args()
+    fingerprint = hashlib.sha256(args.source_manifest.read_bytes()).hexdigest()
     if not args.allow_local_input:
         parser.error('explicit --allow-local-input and temporary host consent required')
     if args.background_only and (args.sentry_control is None or not args.sentry_control.is_dir()):
@@ -107,7 +110,7 @@ def main():
             nonlocal sequence
             sequence += 1
             request = dict(request,pid=target['pid'],window_id=window_id)
-            envelope = dict(protocol=1,id=sequence,request=request,approved_target=target,browser_profile_approved=approved,foreground_approved=request.get('delivery_mode')=='foreground')
+            envelope = dict(protocol=1,id=sequence,source_fingerprint=fingerprint,request=request,approved_target=target,browser_profile_approved=approved,foreground_approved=request.get('delivery_mode')=='foreground')
             worker.stdin.write(json.dumps(envelope,ensure_ascii=False)+'\n'); worker.stdin.flush()
             with selectors.DefaultSelector() as ready:
                 ready.register(worker.stdout,selectors.EVENT_READ)
@@ -116,6 +119,7 @@ def main():
             if not line: raise RuntimeError('Cua fixture worker ended')
             reply = json.loads(line); record(reply)
             assert reply['id']==sequence and reply['driver']=='cua'
+            assert reply['source_fingerprint']==fingerprint
             return reply
         # No profile authorization: must refuse without attaching or setup.
         denied = call({'action':'browser_prepare'})

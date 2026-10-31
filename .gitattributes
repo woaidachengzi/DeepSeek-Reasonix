@@ -26,3 +26,5 @@
 *.yml text eol=lf
 .githooks/** text eol=lf
 benchmarks/**/*.sh text eol=lf
+# Unified diffs retain a single space on empty context lines.
+desktop/cua-runtime/patches/*.patch text eol=lf whitespace=-blank-at-eol

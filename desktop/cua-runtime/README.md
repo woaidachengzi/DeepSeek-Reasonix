@@ -33,6 +33,51 @@ instead of character counts that truncate Chinese input. These two MIT source
 patches are applied only after a clean pinned export and fail if the expected
 source statements change. No MPL source files are modified.
 
+The pinned SDK backports upstream
+[capture encoding optimization `8fbdf83c1e`](https://github.com/trycua/cua/commit/8fbdf83c1e05bf0a8b84a6199fe697cc58f0e24f)
+across three MIT runtime files.
+macOS capture retains raw RGBA pixels until the final resize/encode, avoiding
+an intermediate PNG encode/decode. Reasonix continues to request default PNG;
+the screenshot dimensions and `capture_id` requirement for coordinate input are
+unchanged. The SDK's optional JPEG path does not mint a `capture_id` and is not
+exposed in the Reasonix tool schema. The base SDK revision stays pinned above.
+`upstream.json` records the backport commit, patch checksum and each file's
+before/after checksum. The build verifies all of them before applying the patch
+to a clean export; the manifest, patch and audit records ship with the notices.
+New files have a null input checksum and must be absent before patching. Patches
+are applied in manifest order; the Wayland shortcut patch precedes libei routing.
+
+## Upstream review (2026-10-31)
+
+This is a selective backport onto the pinned SDK, not a full upgrade to upstream
+Reasonix Studio or Cua Spaces. The reviewed candidates are accounted for below.
+
+| Upstream change | Local disposition |
+| --- | --- |
+| [Pinned memory confirmation `4227c20b83`](https://github.com/esengine/DeepSeek-Reasonix/commit/4227c20b83741c792b35b8842b6c086fd129ed43) | Applied to the shared remember policy, including headless modes. |
+| [Capture encoding `8fbdf83c1e`](https://github.com/trycua/cua/commit/8fbdf83c1e05bf0a8b84a6199fe697cc58f0e24f) | Backported; Reasonix still requests PNG with capture IDs. |
+| [Post-action wait `41591b1b39`](https://github.com/trycua/cua/commit/41591b1b3969325142b7508e92417faa9575a18b) | Backported; macOS background native input skips synchronous reporting, foreground retains the default wait. |
+| [Finder lookup `5bc914abfd`](https://github.com/trycua/cua/commit/5bc914abfd3b0a4015d10dc72f4cf04cc6675db4) | Backported to the SDK. No new app-launch action is exposed. |
+| [Wayland punctuation `64cddca307`](https://github.com/trycua/cua/commit/64cddca307bef011b94c5a313a2bfe0becf7578d) | Backported; preserves shortcut modifiers without implicit Shift. |
+| [libei monitor regions `1e0da1a964`](https://github.com/trycua/cua/commit/1e0da1a9649e52673104c357e1f70267b8b4a425) | Backported; portable region tests run on macOS, native Linux acceptance remains required. |
+| [Contract cache `6a48bfc0ad`](https://github.com/trycua/cua/commit/6a48bfc0ade6d8226e7d0866eeafc3dde40a235b) | Backported; immutable schema generation runs once per process. |
+| [Synthetic scroll readback `f92b01906f`](https://github.com/trycua/cua/commit/f92b01906f) | Backported inside the SDK. The host still exposes only trusted CDP pointer input. |
+| [Stale MCP removal `f98edeec7b`](https://github.com/esengine/DeepSeek-Reasonix/commit/f98edeec7b99b3dc1d88e15105e8c32b4ddbce5e) | Adapted to local config/runtime APIs; validates source readability and retains plugin ownership restrictions. |
+| [Fork context projection `02bf796dcc`](https://github.com/esengine/DeepSeek-Reasonix/commit/02bf796dcc) | Already covered by `CopyValidContextProjection` in all local branch paths. |
+| [Summary reset recovery `8094bcb3a8`](https://github.com/esengine/DeepSeek-Reasonix/commit/8094bcb3a8) | Already covered by bounded `StreamAuxiliary` recovery. |
+| [Browser tab reservations `d1852af99f`](https://github.com/esengine/DeepSeek-Reasonix/commit/d1852af99ff26187813529ba0e89d95e1f0780b5) | Not applicable: local computer use binds existing Chromium tabs; the upstream Go browser session/open API is absent. |
+| [Orphan import indexes `b3bea0d076`](https://github.com/esengine/DeepSeek-Reasonix/commit/b3bea0d076999a59c475fdd6758465edf028757d) | Not applicable: the newer Studio session-import architecture is absent. |
+| Built-in browser element picker | Not ported: the Electron browser surface is absent from this Tauri/external-Chromium route. |
+
+The existing Spaces, Bench and model-artifact exclusions in `upstream.json`
+remain in place. Linux desktop behavior requires its own native build and
+session acceptance; a passing portable routing test is not that acceptance.
+
+```sh
+python3 -m unittest discover -s desktop/cua-runtime/scripts -p 'test_*.py'
+cargo test --manifest-path desktop/cua-runtime/Cargo.toml --locked --bin reasonix-cua-runtime
+```
+
 ## GNU/Linux build and scope
 
 Build natively on x64 or ARM64 GNU/Linux with Rust, Go, Python 3.12+, Node 24+
@@ -91,6 +136,14 @@ and process identity are checked again after the prompt. The private Rust
 envelope independently requires `foreground_approved`; that field is not in the
 model schema and cannot be supplied inside a model request.
 
+On macOS, background native click, typing, key, hotkey and scroll calls use the
+SDK's `post_action_wait: "none"`. The input result returns without waiting for
+window-change reporting; the detached watch retains its full deadline and
+focus-suppression lease. The result explicitly says changes were not yet
+observed, and late changes may appear on the next action. Foreground delivery
+retains the default wait. This private adapter choice is not model-controlled;
+application success still requires observing the resulting state.
+
 On macOS, establishing a new browser debugging connection can activate Chrome.
 `browser_prepare` therefore requires explicit foreground delivery plus both
 profile consent and single-action foreground consent. This also avoids relying
@@ -116,7 +169,11 @@ Every Agent.Run owns a cancellable worker lifetime. Task end/stop kills and reap
 the worker, discarding its tokens. Transport interruption is an uncertain action;
 the adapter refuses automatic restart/replay in that task. A new task starts a
 fresh worker and must observe again. Version and pinned source revision accompany
-the diagnostic evidence; responses with a mismatched revision are rejected.
+the diagnostic evidence. The private envelope and each reply also carry the
+SHA-256 of `upstream.json`, binding both helpers to the same reviewed patch set.
+The worker refuses a mismatched host fingerprint before SDK dispatch; the host
+rejects mismatched replies and never replays uncertain input. Older workers
+reject the new private envelope field before dispatch as well.
 
 The host resolves app PID/bundle ID/launch time before consent, checks again after
 consent, and the Rust worker independently checks the approved app incarnation.

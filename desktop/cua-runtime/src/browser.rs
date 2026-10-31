@@ -403,7 +403,7 @@ fn matches_resource(app: &Target, window: u32, request: &DriverAuthorizationRequ
 mod tests {
     use super::*;
     fn envelope(request: Value) -> Envelope {
-        serde_json::from_value(json!({"protocol":1,"id":1,"request":request,
+        serde_json::from_value(json!({"protocol":1,"id":1,"source_fingerprint":crate::SOURCE_FINGERPRINT,"request":request,
             "approved_target":{"pid":42,"name":"Fixture","bundle_id":"test.fixture","launch_time":100.}})).unwrap()
     }
     #[test]

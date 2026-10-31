@@ -33,15 +33,22 @@ func TestCuaRuntimeHelperProcess(t *testing.T) {
 			r.ID++
 		}
 		revision := cuaSourceRevision
+		fingerprint := cuaSourceFingerprint
+		if mode == "wrong-patches" {
+			fingerprint = "old-patch-set"
+		}
+		if mode == "missing-patches" {
+			fingerprint = ""
+		}
 		if mode == "wrong-source" {
 			revision = "unexpected-source"
 		}
 		if mode == "approvals" {
-			body, _ := json.Marshal(CuaReply{Protocol: cuaProtocol, ID: r.ID, Driver: "cua", SourceRevision: revision, Result: json.RawMessage(fmt.Sprintf(`{"foreground":%t,"browser":%t}`, r.Foreground, r.Browser))})
+			body, _ := json.Marshal(CuaReply{Protocol: cuaProtocol, ID: r.ID, Driver: "cua", SourceRevision: revision, SourceFingerprint: fingerprint, Result: json.RawMessage(fmt.Sprintf(`{"foreground":%t,"browser":%t}`, r.Foreground, r.Browser))})
 			fmt.Println(string(body))
 			continue
 		}
-		fmt.Printf("{\"protocol\":1,\"driver\":\"cua\",\"version\":\"fixture\",\"source_revision\":%q,\"id\":%d,\"result\":{\"pid\":%d}}\n", revision, r.ID, os.Getpid())
+		fmt.Printf("{\"protocol\":1,\"driver\":\"cua\",\"version\":\"fixture\",\"source_revision\":%q,\"source_fingerprint\":%q,\"id\":%d,\"result\":{\"pid\":%d}}\n", revision, fingerprint, r.ID, os.Getpid())
 	}
 	os.Exit(0)
 }
@@ -115,7 +122,7 @@ func TestCuaRuntimePrivateProcessBelongsToOneTask(t *testing.T) {
 }
 
 func TestCuaRuntimeUncertainTransportIsNotReplayed(t *testing.T) {
-	for _, mode := range []string{"hang", "wrong-id", "wrong-source"} {
+	for _, mode := range []string{"hang", "wrong-id", "wrong-source", "wrong-patches", "missing-patches"} {
 		t.Run(mode, func(t *testing.T) {
 			c := cuaFixture(mode)
 			lifetime, closeTask := context.WithCancel(t.Context())

@@ -1,0 +1,82 @@
+diff --git a/libs/cua-driver/rust/crates/cua-driver-core/src/browser/pointer.rs b/libs/cua-driver/rust/crates/cua-driver-core/src/browser/pointer.rs
+--- a/libs/cua-driver/rust/crates/cua-driver-core/src/browser/pointer.rs
++++ b/libs/cua-driver/rust/crates/cua-driver-core/src/browser/pointer.rs
+@@ -442,7 +442,29 @@ impl BrowserPointerTool {
+                 json!([]),
+             ),
+             PointerAction::Scroll => (
+-                "function(dx,dy) { const o={deltaX:dx,deltaY:dy,bubbles:true,cancelable:true,composed:true,view:this.ownerDocument.defaultView}; this.dispatchEvent(new WheelEvent('wheel',o)); let n=this; while (n && n !== this.ownerDocument.documentElement) { const s=this.ownerDocument.defaultView.getComputedStyle(n); if (/(auto|scroll)/.test(s.overflow+s.overflowX+s.overflowY)) break; n=n.parentElement; } const target=n || this.ownerDocument.scrollingElement || this.ownerDocument.documentElement; const beforeX=target.scrollLeft; const beforeY=target.scrollTop; target.scrollBy(dx,dy); const changed=target.scrollLeft !== beforeX || target.scrollTop !== beforeY; if (changed) target.dispatchEvent(new Event('scroll')); return changed; }",
++                r#"async function(dx,dy) {
++                    const view=this.ownerDocument.defaultView;
++                    const o={deltaX:dx,deltaY:dy,bubbles:true,cancelable:true,composed:true,view};
++                    this.dispatchEvent(new WheelEvent('wheel',o));
++                    let n=this;
++                    while (n && n !== this.ownerDocument.documentElement) {
++                        const s=view.getComputedStyle(n);
++                        if (/(auto|scroll)/.test(s.overflow+s.overflowX+s.overflowY)) break;
++                        n=n.parentElement;
++                    }
++                    const target=n || this.ownerDocument.scrollingElement || this.ownerDocument.documentElement;
++                    const beforeX=target.scrollLeft;
++                    const beforeY=target.scrollTop;
++                    target.scrollBy(dx,dy);
++                    // Smooth scrolling can start after this JavaScript task returns.
++                    const deadline=view.performance.now()+250;
++                    while (target.scrollLeft === beforeX && target.scrollTop === beforeY) {
++                        if (view.performance.now() >= deadline) return false;
++                        await new Promise(resolve => view.setTimeout(resolve,25));
++                    }
++                    target.dispatchEvent(new Event('scroll'));
++                    return true;
++                }"#,
+                 json!([{ "value": request.delta_x }, { "value": request.delta_y }]),
+             ),
+             PointerAction::Drag => {
+@@ -486,6 +508,7 @@ impl BrowserPointerTool {
+                     "functionDeclaration": function,
+                     "arguments": arguments,
+                     "returnByValue": true,
++                    "awaitPromise": request.action == PointerAction::Scroll,
+                 }),
+             )
+             .await
+diff --git a/libs/cua-driver/rust/crates/cua-driver-core/src/browser/v2_tests.rs b/libs/cua-driver/rust/crates/cua-driver-core/src/browser/v2_tests.rs
+--- a/libs/cua-driver/rust/crates/cua-driver-core/src/browser/v2_tests.rs
++++ b/libs/cua-driver/rust/crates/cua-driver-core/src/browser/v2_tests.rs
+@@ -2895,6 +2895,36 @@ async fn foreground_delivery_mode_accepts_window_activation_for_trusted_click()
+     assert_eq!(public["delivery"]["mode"], "foreground", "{public}");
+ }
+ 
++#[tokio::test]
++async fn synthetic_scroll_awaits_page_readback_without_changing_routes() {
++    let f = fixture().await;
++    let (target, tab) = bind(&f).await;
++    let snap = snapshot(&f, &target, &tab).await;
++    let main_ref = ref_of(&snap, "main", "main-btn");
++    let result = BrowserPointerTool::new(f.engine.clone())
++        .invoke(json!({
++            "target_id": target, "tab_id": tab, "ref": main_ref,
++            "action": "scroll", "input_route": "dom_event",
++            "delta_y": 240, "session": SESSION
++        }))
++        .await;
++    assert_eq!(structured(&result)["status"], "ok");
++    let calls = recorded_calls(&f, "Runtime.callFunctionOn");
++    let scroll_calls: Vec<_> = calls
++        .iter()
++        .filter(|call| {
++            call.1["functionDeclaration"]
++                .as_str()
++                .is_some_and(|s| s.contains("target.scrollBy"))
++        })
++        .collect();
++    assert_eq!(scroll_calls.len(), 1, "scroll must not be retried");
++    assert_eq!(scroll_calls[0].1["awaitPromise"], true);
++    assert!(recorded_calls(&f, "Input.dispatchMouseEvent").is_empty());
++    assert!(recorded_calls(&f, "Page.bringToFront").is_empty());
++    assert!(recorded_calls(&f, "Target.activateTarget").is_empty());
++}
++
+ #[tokio::test]
+ async fn trusted_click_refuses_when_standalone_background_posture_is_unavailable() {
+     let f = fixture_with_platform(|_| {}, true).await;
