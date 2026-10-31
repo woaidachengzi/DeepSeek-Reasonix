@@ -76,7 +76,18 @@ session acceptance; a passing portable routing test is not that acceptance.
 ```sh
 python3 -m unittest discover -s desktop/cua-runtime/scripts -p 'test_*.py'
 cargo test --manifest-path desktop/cua-runtime/Cargo.toml --locked --bin reasonix-cua-runtime
+python3 desktop/cua-runtime/scripts/test_sdk.py
 ```
+
+`test_sdk.py` creates a temporary workspace containing only the selected native
+platform and its path dependencies, retaining the SDK skills and Wayland helper
+resources used by compile-time includes. It rejects registry dependencies not
+present in the shipped lock and fails if a selected regression matches no tests.
+The macOS run covers 162 SDK regressions; the wrapper covers 14 additional cases,
+including patch-fingerprint mismatch before dispatch. The explicit Linux Preview
+workflow also builds the Cua Debian variant and runs the native libei fake-server
+and Wayland shortcut regressions. That workflow does not replace live compositor
+acceptance on a GNOME/KDE desktop.
 
 ## GNU/Linux build and scope
 
