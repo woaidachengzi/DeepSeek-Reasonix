@@ -84,10 +84,6 @@ var readOnlyPrefixes = map[string]map[string]bool{
 		"get": true, "describe": true, "logs": true, "explain": true,
 		"api-resources": true, "api-versions": true,
 	},
-	// Version/help probes for common runtimes (the second word is a flag).
-	"node":    {"-v": true, "--version": true},
-	"python":  {"--version": true, "-v": true, "-V": true},
-	"python3": {"--version": true, "-v": true, "-V": true},
 }
 
 // ContainsShellSyntax reports whether a command uses shell operators or
@@ -121,6 +117,12 @@ func ClassifyReadOnlyCommand(command string) (base, sub string, fields []string,
 		return "", "", nil, false
 	}
 	base = strings.ToLower(fields[0])
+	if runtime, version := runtimeVersionProbe(fields); runtime {
+		if version {
+			return base, fields[1], fields, true
+		}
+		return "", "", nil, false
+	}
 	if readOnlyCommands[base] {
 		if hasResolvedSubstitution(fields) && !substitutionSafeCommands[base] {
 			return "", "", nil, false
@@ -255,6 +257,12 @@ func readOnlyFields(fields []string) (base, sub string, ok bool) {
 		return "", "", false
 	}
 	base = strings.ToLower(fields[0])
+	if runtime, version := runtimeVersionProbe(fields); runtime {
+		if version {
+			return base, fields[1], true
+		}
+		return "", "", false
+	}
 	if readOnlyCommands[base] {
 		return base, "", true
 	}

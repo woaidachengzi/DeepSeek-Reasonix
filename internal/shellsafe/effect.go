@@ -191,6 +191,12 @@ func classifyStaticFields(fields []string) CommandEffect {
 	}
 	base := strings.ToLower(strings.TrimSuffix(filepath.Base(fields[0]), ".exe"))
 	args := fields[1:]
+	if runtime, version := runtimeVersionProbe(fields); runtime {
+		if version {
+			return knownReader(base)
+		}
+		return unknownCodeEffect(base, "runtime invocation is not a bare version probe")
+	}
 	switch base {
 	case "git":
 		return classifyGit(args)

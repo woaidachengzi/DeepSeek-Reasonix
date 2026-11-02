@@ -78,7 +78,10 @@ func (bashOutput) Execute(ctx context.Context, args json.RawMessage) (string, er
 	}
 	header := fmt.Sprintf("[%s] %s", p.JobID, status)
 	if strings.TrimSpace(text) == "" {
-		return header + "\n(no new output)", nil
+		text = "(no new output)"
+	}
+	if status == jobs.Running {
+		text += runningJobNote
 	}
 	return header + "\n" + text, nil
 }
@@ -179,9 +182,12 @@ func (waitJob) Execute(ctx context.Context, args json.RawMessage) (string, error
 		return "No background jobs to wait for.", nil
 	}
 	var b strings.Builder
+	running := false
 	for i, r := range results {
 		if r.Status != jobs.Running {
 			collectBackgroundEvidence(ctx, jm, r.ID)
+		} else {
+			running = true
 		}
 		if i > 0 {
 			b.WriteString("\n\n")
@@ -195,8 +201,15 @@ func (waitJob) Execute(ctx context.Context, args json.RawMessage) (string, error
 			b.WriteString("\n" + r.Output)
 		}
 	}
+	if running {
+		b.WriteString(runningJobNote)
+	}
 	return b.String(), nil
 }
+
+// Local controllers deliver completion notes on the next turn; unlike Studio
+// they do not start a turn merely because a job ends. Never promise a wakeup.
+const runningJobNote = "\n\nThe job is still running. A wait timeout or no new output does not mean failure or abandonment. If this task needs the result, keep using wait and collect the final status before reporting completion. Completion updates are included on the next conversation turn; they do not automatically start a turn."
 
 func collectBackgroundEvidence(ctx context.Context, jm *jobs.Manager, jobID string) {
 	// A Plan turn should not consume a finished background writer's mutation

@@ -118,7 +118,7 @@ allow = ["Bash(go test:*)"]                  # never prompted
 [serve]
 auth_mode = "none"             # none|token|password; use auth before binding beyond localhost
 # token = ""                   # optional fixed token; empty token mode generates one at startup
-# password_hash = ""           # bcrypt hash generated with reasonix serve --hash-password --password '...'
+# password_hash = ""           # bcrypt hash generated with reasonix serve --hash-password --password-file /private/path/serve.password
 # behind_proxy = false         # true only behind a trusted reverse proxy
 
 [[plugins]]
@@ -251,17 +251,17 @@ or put it behind a reverse proxy, enable authentication before sharing the URL:
 ```bash
 reasonix serve --auth token
 reasonix serve --addr 0.0.0.0:8787 --auth token
-reasonix serve --auth password --password 'temporary-password'
+reasonix serve --auth password --password-file /private/path/serve.password
 ```
 
 Token mode prints a share URL with `#token=...`; the Web page exchanges the
 fragment for an HttpOnly cookie before starting API or SSE requests, keeping the
 token out of request URLs, browser history, referrers, and access logs. Pass `--token` or set
 `[serve].token` to reuse a stable token. Password mode requires either
-`--password` at startup or a stored bcrypt hash:
+`--password-file` at startup or a stored bcrypt hash. The file must contain one non-empty line and use owner-only permissions (`chmod 600`). It overrides `--password` and keeps the secret out of process arguments:
 
 ```bash
-reasonix serve --hash-password --password 'strong-password'
+reasonix serve --hash-password --password-file /private/path/serve.password
 
 # <Reasonix home>/config.toml
 [serve]

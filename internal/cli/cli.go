@@ -833,7 +833,8 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 	auth := fs.String("auth", "", authHelp)
 	token := fs.String("token", "", "pre-shared token for auth=token (auto-generated if empty)")
 	password := fs.String("password", "", "password for auth=password (use --hash-password to store a hash instead)")
-	hashPassword := fs.Bool("hash-password", false, "print a bcrypt hash of --password and exit")
+	passwordFile := fs.String("password-file", "", "read password from an owner-only file (overrides --password; keeps the secret out of argv)")
+	hashPassword := fs.Bool("hash-password", false, "print a bcrypt hash of --password-file or --password and exit")
 	behindProxy := fs.Bool("behind-proxy", false, "trust X-Forwarded-For / X-Forwarded-Proto headers from a reverse proxy")
 	portFile := fs.String("port-file", "", "write the actual bound listen address (host:port) to this file after binding")
 	tokenFile := fs.String("token-file", "", "read the auth=token pre-shared token from this file (overrides --token; keeps the secret out of argv)")
@@ -865,19 +866,14 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 		return 2
 	}
 
-	// --hash-password: generate a bcrypt hash and exit.
+	resolvedPassword, err := servePassword(*password, *passwordFile)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+		return 1
+	}
+	// --hash-password reads the file before bootstrap, so it needs no config.
 	if *hashPassword {
-		if *password == "" {
-			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "--hash-password requires --password")
-			return 1
-		}
-		h, err := serve.HashPassword(*password)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
-			return 1
-		}
-		fmt.Println(h)
-		return 0
+		return printServePasswordHash(resolvedPassword)
 	}
 
 	ctx := context.Background()
@@ -911,10 +907,10 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 		return 1
 	}
 	serveCfg.AuthMode = mode
-	if *password != "" && serveCfg.AuthMode == "password" {
+	if resolvedPassword != "" && serveCfg.AuthMode == "password" {
 		// Hash the password at startup so the config never stores plaintext.
 		// If a PasswordHash is already set in config, the CLI password overrides it.
-		h, err := serve.HashPassword(*password)
+		h, err := serve.HashPassword(resolvedPassword)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "failed to hash password:", err)
 			return 1
@@ -922,7 +918,7 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 		serveCfg.PasswordHash = h
 	}
 	if serveCfg.AuthMode == "password" && strings.TrimSpace(serveCfg.PasswordHash) == "" {
-		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "auth mode password requires --password or serve.password_hash")
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "auth mode password requires --password-file, --password or serve.password_hash")
 		return 1
 	}
 

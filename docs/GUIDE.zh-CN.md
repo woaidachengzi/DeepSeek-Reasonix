@@ -113,7 +113,7 @@ allow = ["Bash(go test:*)"]                  # 从不询问
 [serve]
 auth_mode = "none"             # none|token|password；绑定到非 localhost 前请先开启认证
 # token = ""                   # 可选固定 token；token 模式为空时启动时自动生成
-# password_hash = ""           # 用 reasonix serve --hash-password --password '...' 生成
+# password_hash = ""           # 用 reasonix serve --hash-password --password-file /private/path/serve.password 生成
 # behind_proxy = false         # 只在可信反向代理后方设为 true
 
 [[plugins]]
@@ -225,16 +225,16 @@ reasonix web
 ```bash
 reasonix serve --auth token
 reasonix serve --addr 0.0.0.0:8787 --auth token
-reasonix serve --auth password --password 'temporary-password'
+reasonix serve --auth password --password-file /private/path/serve.password
 ```
 
 Token 模式会在终端打印带 `#token=...` 的分享链接；Web 页面会先将 fragment 换成
 HttpOnly Cookie，再启动 API 与 SSE 请求，从而避免 Token 进入请求 URL、浏览器历史、
 Referrer 和访问日志。可通过 `--token` 或 `[serve].token`
-复用固定 token。Password 模式必须在启动时传 `--password`，或在配置里保存 bcrypt hash：
+复用固定 token。Password 模式可以在启动时传 `--password-file`，或在配置里保存 bcrypt hash。密码文件只能包含一行非空内容，权限须为 `chmod 600`；它优先于 `--password`，避免密码出现在进程参数里：
 
 ```bash
-reasonix serve --hash-password --password 'strong-password'
+reasonix serve --hash-password --password-file /private/path/serve.password
 
 # <Reasonix home>/config.toml
 [serve]
