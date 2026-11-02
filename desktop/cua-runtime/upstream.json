@@ -142,6 +142,172 @@
           "patched_sha256": "772ea18aca4ff4949f4a7d5767250d35811875199dff943bf8dba2e7dae9d88f"
         }
       ]
+    },
+    {
+      "revision": "337c62c9a41e340b772b40615624c5f83fa49c43",
+      "reason": "Read the current macOS front process from WindowServer without relying on an AppKit activation run loop.",
+      "patch": "patches/337c62c9a4-frontmost-app.patch",
+      "sha256": "f4060e8e695d27faffffd25e91c5da93559d3e0c70a09ba0cd444022903c8fb2",
+      "files": [
+        {
+          "file": "libs/cua-driver/rust/crates/cua-driver-e2e/tests/frontmost_app_macos_test.rs",
+          "original_sha256": null,
+          "patched_sha256": "9b63841fe755004186735d35df61268687fb50674ef2264765d8e47c3e537081"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-macos/src/apps/mod.rs",
+          "original_sha256": "607c41affc52b5ef7fb90b064fb0ac70771c424c7e1d330bcec1c9a0ca3d404f",
+          "patched_sha256": "71401777fe7df48d1d45601fed5e00e632b78dd676d189dad432f90a288abf47"
+        }
+      ]
+    },
+    {
+      "revision": "e12ccfe29b5d9f354210a6a48880cbd4a8a42535",
+      "reason": "Count only the elements returned by an incremental window-state read.",
+      "patch": "patches/e12ccfe29b-elements-diff-count.patch",
+      "sha256": "905e4aaa47652c4e0158d9f9bcd7666bab8784ff4e180d754cfbb5f295765b72",
+      "files": [
+        {
+          "file": "libs/cua-driver/rust/crates/cua-driver-core/src/window_state_view.rs",
+          "original_sha256": "d626950796651cee184b3435f83c9a33f53027ba4b45fc5723014bf2659c79da",
+          "patched_sha256": "95046110f05d7e59bb3e8a1e3546e24b331ff013a1fb6d222fb8605b11c40b5b"
+        }
+      ]
+    },
+    {
+      "revision": "0cdcec94bc9988d41087d470b32f1fad2ba28691",
+      "reason": "Name current snapshots on stale token refusals and refuse bare row numbers after ambiguous or repeated reads.",
+      "patch": "patches/0cdcec94bc-snapshot-token-lifecycle.patch",
+      "sha256": "e2378d087b67bffac55df5d1392bd8289dee7343591d9564dba90dbfa9dc8192",
+      "files": [
+        {
+          "file": "libs/cua-driver/rust/Skills/cua-driver/WORKFLOW.md",
+          "original_sha256": "1e3d2ed4751af6983ce0858d176db0acb977fe0cf02f3e38bcad5a3568b91be8",
+          "patched_sha256": "3398fc38ea8d7f8e42f981f1324c5c9c588c6e08712fdcb657085a96d42fda40"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/cua-driver-core/src/element_token.rs",
+          "original_sha256": "118874069d701cf6d710656b9d92bfe1ad225436bbbf2d957b412325507a0721",
+          "patched_sha256": "502afd1e740707e151e6e101ccfa5182bec244acc923fe77027caaa94f54ab62"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/cua-driver-core/src/snapshot_store.rs",
+          "original_sha256": "3e516a89e68fd7e9da6ef730bff94e8108b9bae0e62e5e77f5e9909f33e3edd1",
+          "patched_sha256": "a6d1ac69cfa97d69ae0933ce794429da494cf67619e8d81c06dbf9d991d53493"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/cua-driver-core/src/window_target.rs",
+          "original_sha256": "d1f76db25a4355f0155c0aab34cc234b2ff6a4c3b329169057225ffce52a2777",
+          "patched_sha256": "cb35972cb6a9e028786193baca490a6c8de07cd21e1d0cb4d5514b12a66d742e"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-linux/src/tools/impl_.rs",
+          "original_sha256": "71cd888b0edccc52b7f4a92fa268e3b6f4776bc66c49cdf5060afdc13a824bf8",
+          "patched_sha256": "3e7967477ff7cf2f3649075dd1c3be4b67de2947f4eabbe72a01e36b73948251"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-macos/src/tools/mod.rs",
+          "original_sha256": "5795f304e9d89dd817f57a7f16055bc813be8995736d814dcfd7da6e21cb55b4",
+          "patched_sha256": "fd25ad66a4c657af13d98f3e05d1f123f8669ed162539fc79ce42266bf514c55"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-windows/src/tools/impl_.rs",
+          "original_sha256": "161a37ef3fe8d654e66a47fa56f8efa6ea301a21fb95e5177ae2113a2daadcbf",
+          "patched_sha256": "16130996248c46f546129fb3e3f2a98d3946552f6cf086763a385ed83749411c"
+        }
+      ]
+    },
+    {
+      "revision": "039fa6486d8959ecd5c9c901a707b3511d03024d",
+      "reason": "Never reserve evdev KEY_RESERVED (X keycode 8) when typing Linux text.",
+      "patch": "patches/039fa6486d-linux-spare-keycode.patch",
+      "sha256": "c5b6c00a72230ef373a71d0aa0f84ceffb89043ee76d365725945ff43eb6db44",
+      "files": [
+        {
+          "file": "libs/cua-driver/rust/crates/platform-linux/src/input/mod.rs",
+          "original_sha256": "239892b7a60c25a3b313b2beca630a0f7acb8bdeb749476a038c270e8f1c81e2",
+          "patched_sha256": "521b199ed498660c4300c29e3c434bb1dccecb19bfe1463e46b7c4b4978fa4a9"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-linux/src/input/mpx_keyboard.rs",
+          "original_sha256": "00b02174fd7d19b6ffa2c79adeca53bae1037dca6adcf76dc599545ccdd8e64e",
+          "patched_sha256": "e5e9ee537f5ef3a41c1ad44bdb2883a6c01bafe60d5f2df39fa8677504f82504"
+        }
+      ]
+    },
+    {
+      "revision": "4e3b6ba1f296fb9d6e9fb760395a7d521865d8d2",
+      "reason": "Stop restoring Linux focus when the previously active window has been destroyed; preserve pinned settle timings.",
+      "patch": "patches/4e3b6ba1f2-linux-focus-restore.patch",
+      "sha256": "7ba0952ad217aa2268fa6c4f00e9efbe3bf058297b8ff72e87dbd4459bc51f9a",
+      "files": [
+        {
+          "file": "libs/cua-driver/rust/crates/platform-linux/src/input/mod.rs",
+          "original_sha256": "521b199ed498660c4300c29e3c434bb1dccecb19bfe1463e46b7c4b4978fa4a9",
+          "patched_sha256": "4889af693cf3e21f0dd4bf39089cf1d62f591225326f917c7d8ce20e0feb5781"
+        }
+      ]
+    },
+    {
+      "revision": "9416cc6bc42b2042c78ad0ae5e3b834c7dbdbeed",
+      "reason": "Treat reachable Linux screenshot-portal refusals as terminal instead of falling back to an X11 display capture.",
+      "patch": "patches/9416cc6bc4-portal-capture-refusal.patch",
+      "sha256": "26624cae09455deba59e76b3139bcb51776adc398cf3fef063eb5828146f2f09",
+      "files": [
+        {
+          "file": "libs/cua-driver/rust/crates/platform-linux/src/capture.rs",
+          "original_sha256": "c1eaf2046fd49af871e77ad460d2e71e4a46d70fcbb68ad12c362700bbc74306",
+          "patched_sha256": "b8f5a83b394c52bf69128e4c38bffa5721c11b0a177bbba08813ee22d5fe3954"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-linux/src/wayland/mod.rs",
+          "original_sha256": "2b6edff86292b603c356b8951e2d58de546e14163f2d4d556418ee01f838302c",
+          "patched_sha256": "fd648da1ef882efbf25c3cc467135348987ca9678fe49b8c37b5bc013bad2cef"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-linux/src/wayland/portal_screenshot.rs",
+          "original_sha256": "a1fce9b2bf27ebda2bce842b7d78aa7060bd2663cb3ddda11f5adae096f7aab6",
+          "patched_sha256": "bf641864e0b330ea80cd813ab957df8dbf4626c9cdba23afbb5911232a9ecd7a"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-linux/tests/portal_screenshot_cascade.rs",
+          "original_sha256": null,
+          "patched_sha256": "583f5ad61225b08ee7d3803567f6edd91bfcfc9a81cf96075a9a4050e1a0b423"
+        }
+      ]
+    },
+    {
+      "revision": "61efedd41149342c02f6ab9608fc3364cfe03585",
+      "reason": "Share the DevTools version probe across browser adapters while preserving validation behavior.",
+      "patch": "patches/61efedd411-devtools-version-probe.patch",
+      "sha256": "6bd7c59a35e1dcc19334f63cdf1019dc1d25289eeaa69262f76cc694cf67ddea",
+      "files": [
+        {
+          "file": "libs/cua-driver/rust/crates/cua-driver-core/src/browser/adapter_support.rs",
+          "original_sha256": "e144026e18aaa2847827fec8c984fd1ffddf4c345bd119cce1b1db852d754a88",
+          "patched_sha256": "46e7fe0735894d4e592c82af3b5b51291b68bf830f6fcbaa7ccae6c7d6421387"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/cua-driver-core/src/browser/mod.rs",
+          "original_sha256": "6fa6f1dfacc6029328ac40138d82bd2241af9bcf210d93cb6edbf0b7800481c5",
+          "patched_sha256": "a4ff9dc4a72c4205449eee3ddb277e3008f7db72234e4c723df6943ddf14a13d"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-linux/src/browser_platform.rs",
+          "original_sha256": "f43b04fd992b59672eb7c4ba552d5d98321ee324c257ec54ca04654840688438",
+          "patched_sha256": "1d52dd50eb3c6cf46ba8bcc2c4c4bcb7066565e28ccadaa006fa60595439eb69"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-macos/src/browser/platform.rs",
+          "original_sha256": "0e7f0e048526bdc0e6058868027f44c7480208dc2ea72feac3113895e7194890",
+          "patched_sha256": "c397e42fe3b7942f6dbc7fe80d8479bad8d3d154824f1a23a2310ee84c064c33"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-windows/src/browser_platform.rs",
+          "original_sha256": "cf2d4bd97381fe99958748867fb2d9b846c957b8e1dac8302907d6e7eed741b4",
+          "patched_sha256": "f7a10128216ccc5338b93761786a20dc6240762efe57866f15fd0731c0609a33"
+        }
+      ]
     }
   ]
 }

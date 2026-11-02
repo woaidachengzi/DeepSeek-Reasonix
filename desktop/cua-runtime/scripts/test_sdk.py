@@ -58,11 +58,14 @@ def main():
         raise RuntimeError('Build a clean pinned export with build.py first')
     core = [('cua-driver-contract', ''), ('cua-driver-core', 'image_utils::tests'),
             ('cua-driver-core', 'post_action_wait'), ('cua-driver-core', 'before_reading_the_wait'),
-            ('cua-driver-core', 'scroll')]
+            ('cua-driver-core', 'scroll'), ('cua-driver-core', 'snapshot_store::tests'),
+            ('cua-driver-core', 'element_token::tests'), ('cua-driver-core', 'window_state_view::tests'),
+            ('cua-driver-core', 'browser::adapter_support::tests')]
     patterns = ['capture::tests', 'tools::get_window_state::tests',
                 'window_change_detector::tests', 'finder_is_located_by_name_outside_the_app_roots']
     if platform == 'platform-linux':
-        patterns = ['wayland::tests', 'wayland::libei::tests']
+        patterns = ['wayland::tests', 'wayland::libei::tests', 'wayland::portal_screenshot::tests',
+                    'input::key_name_alias_tests', 'input::mpx_keyboard::tests', 'input::own_dialog_tests']
     features = ['--features', 'platform-linux/portal-libei'] if platform == 'platform-linux' else []
     with tempfile.TemporaryDirectory(prefix='reasonix-sdk-tests-') as temp:
         workspace = Path(temp) / 'libs/cua-driver/rust'
@@ -84,6 +87,12 @@ def main():
             result.check_returncode()
             if not any(int(n) > 0 for n in re.findall(r'test result: ok\. (\d+) passed', result.stdout)):
                 raise RuntimeError(f'No regressions matched {package}: {pattern}')
+        if platform == 'platform-linux':
+            # The public capture path must preserve a portal refusal. These
+            # tests own a private D-Bus daemon and need no real compositor.
+            build.run(['cargo', 'test', *args, '--locked', '--target-dir',
+                       build.RUNTIME / 'target', '-p', platform, '--features', 'portal-libei',
+                       '--test', 'portal_screenshot_cascade'])
 
 
 if __name__ == '__main__':

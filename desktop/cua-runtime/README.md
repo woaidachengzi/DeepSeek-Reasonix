@@ -83,11 +83,44 @@ python3 desktop/cua-runtime/scripts/test_sdk.py
 platform and its path dependencies, retaining the SDK skills and Wayland helper
 resources used by compile-time includes. It rejects registry dependencies not
 present in the shipped lock and fails if a selected regression matches no tests.
-The macOS run covers 162 SDK regressions; the wrapper covers 14 additional cases,
+The macOS run covers 243 SDK regressions; the wrapper covers 14 additional cases,
 including patch-fingerprint mismatch before dispatch. The explicit Linux Preview
 workflow also builds the Cua Debian variant and runs the native libei fake-server
 and Wayland shortcut regressions. That workflow does not replace live compositor
 acceptance on a GNOME/KDE desktop.
+
+## Upstream review (2026-11-02)
+
+Version `0.1.68` retains the same `0.38.0` base and now carries 14 audited
+backports. The new batch adapts the following MIT changes instead of replacing
+our app-scoped protocol with an upstream nightly or the separate Spaces SDK.
+
+| Upstream change | Local disposition |
+| --- | --- |
+| [Runtime version probes `aaa4f586b1`](https://github.com/esengine/DeepSeek-Reasonix/commit/aaa4f586b1624e15de4836c613da4bc96d6c506e) / stable 1.39.11 | Applied to shared effect classification, legacy readers and nested substitutions. Only exact bare Node/Python version flags are readers; Python `-v` and extra arguments require the writer policy. |
+| [Private serve passwords `2bd960b09d`](https://github.com/esengine/DeepSeek-Reasonix/commit/2bd960b09da298735275d927bfbd0b0f99f3f09a) | Adapted for both serve/web startup and hash generation, using existing owner-only single-line token-file checks. An invalid file never falls back to argv. |
+| [Reasoning-only final recovery `860651f866`](https://github.com/esengine/DeepSeek-Reasonix/commit/860651f86601845c407a628780efbab6097cae80) | Already covered by `recoverNoDeliverable`, including DeepSeek `stop`, internal callers, tool rounds, cancellation and budget limits. Local recovery remains one additional round, not the upstream two. |
+| [Background job guidance `d56abf84d1`](https://github.com/esengine/DeepSeek-Reasonix/commit/d56abf84d18d2b4ac57bca590741af17ab2f9dc9) | Adapted to actual local lifecycle: launch/output/wait explain that timeout is not failure and results must be collected. This controller drains completion notes on the next turn; it has no Studio completion observer that automatically starts a turn, so no automatic wakeup is promised. |
+| [macOS frontmost app `337c62c9a4`](https://github.com/trycua/cua/commit/337c62c9a41e340b772b40615624c5f83fa49c43) | Backported; query WindowServer instead of stale AppKit activation state in the private child. |
+| [Incremental element counts `e12ccfe29b`](https://github.com/trycua/cua/commit/e12ccfe29b5d9f354210a6a48880cbd4a8a42535) | Backported; both changed and unchanged reads satisfy output validation. The host still requests a complete observation. |
+| [Snapshot token lifecycle `0cdcec94bc`](https://github.com/trycua/cua/commit/0cdcec94bc9988d41087d470b32f1fad2ba28691) | Backported; retired-token refusals identify known current snapshots, and reread bare row numbers fail closed. Full snapshot tokens remain the recommended input. |
+| [Linux spare keycode `039fa6486d`](https://github.com/trycua/cua/commit/039fa6486d8959ecd5c9c901a707b3511d03024d) | Backported, including spare-batch and keyboard-plan regressions. |
+| [Linux focus restore `4e3b6ba1f2`](https://github.com/trycua/cua/commit/4e3b6ba1f296fb9d6e9fb760395a7d521865d8d2) | Backported with a context-only adaptation for the pinned sleep calls; existing settle timings remain unchanged. Destroyed saved windows are not reactivated. |
+| [Portal capture refusal `9416cc6bc4`](https://github.com/trycua/cua/commit/9416cc6bc42b2042c78ad0ae5e3b834c7dbdbeed) | Backported with public capture-path private-bus regressions. A reachable portal refusal is terminal. The Reasonix host still exposes no full-display capture action. |
+| [Shared DevTools probe `61efedd411`](https://github.com/trycua/cua/commit/61efedd41149342c02f6ab9608fc3364cfe03585) | Backported; loopback listener and returned URL attestation remain mandatory. |
+
+The Linux SDK runner also selects keycode/focus and screenshot-portal tests,
+including the public capture integration test on its own D-Bus daemon. Native
+Linux compilation and live X11/Wayland behavior cannot be certified on this Mac;
+the explicit Linux Preview workflow is prepared for those checks, not claimed
+as executed here. Upstream's macOS frontmost-app E2E fixture is retained as
+source, but it is not part of the minimal SDK unit workspace.
+
+New Studio Office preview/model-health UI, Electron 45 packaging, queue/skill-card
+presentation and Spaces/Volume/VM features do not map to this Tauri branch's
+existing surfaces and are outside this reliability backport. They were reviewed
+as separate features, not silently treated as implemented. This frontend already
+has its own global reduced-motion rule; no Studio animation classes are copied.
 
 ## GNU/Linux build and scope
 

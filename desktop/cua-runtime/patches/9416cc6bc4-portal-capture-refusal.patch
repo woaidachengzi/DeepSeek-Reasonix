@@ -1,0 +1,577 @@
+diff --git a/libs/cua-driver/rust/crates/platform-linux/src/capture.rs b/libs/cua-driver/rust/crates/platform-linux/src/capture.rs
+--- a/libs/cua-driver/rust/crates/platform-linux/src/capture.rs
++++ b/libs/cua-driver/rust/crates/platform-linux/src/capture.rs
+@@ -947,7 +947,8 @@ pub fn png_dimensions_pub(data: &[u8]) -> Result<(u32, u32)> {
+ ///   routes through [`crate::wayland::screenshot_display_dispatch`] which
+ ///   owns the complete GNOME helper → wlroots screencopy →
+ ///   ext-image-copy-capture-v1 → portal Screenshot → X11 cascade. An
+-///   available GNOME helper's capture failure is terminal.
++///   available GNOME helper's capture failure is terminal, and so is a
++///   refusal from a reachable portal.
+ /// - X11 / Wayland-disabled: ImageMagick `import` → x11rb `XGetImage`.
+ pub fn screenshot_display_bytes() -> Result<Vec<u8>> {
+     screenshot_display_bytes_with_dispatch(
+diff --git a/libs/cua-driver/rust/crates/platform-linux/src/wayland/mod.rs b/libs/cua-driver/rust/crates/platform-linux/src/wayland/mod.rs
+--- a/libs/cua-driver/rust/crates/platform-linux/src/wayland/mod.rs
++++ b/libs/cua-driver/rust/crates/platform-linux/src/wayland/mod.rs
+@@ -1172,7 +1172,8 @@ fn crop_png_to_rect(
+ ///    consent).
+ /// 3. ext-image-copy-capture-v1 on supported compositors.
+ /// 4. xdg-desktop-portal Screenshot via ashpd. Triggers a consent prompt on
+-///    first use per session.
++///    first use per session. A refusal from the portal is terminal; the
++///    request has a 30-second deadline, after which the cascade continues.
+ /// 5. X11: existing root-window path.
+ pub fn screenshot_display_dispatch() -> anyhow::Result<Vec<u8>> {
+     if is_wayland() && hyprland::is_session() {
+@@ -1214,15 +1215,11 @@ pub fn screenshot_display_dispatch() -> anyhow::Result<Vec<u8>> {
+                 );
+             }
+         }
+-        // Tier 4: xdg-desktop-portal (GNOME, KDE, COSMIC fallback).
+-        match portal_screenshot::screenshot_via_portal() {
+-            Ok(bytes) => return Ok(bytes),
+-            Err(e) => {
+-                tracing::debug!(
+-                    "xdg-desktop-portal Screenshot unavailable ({e}); falling through to X11"
+-                );
+-            }
+-        }
++        // Tier 4: xdg-desktop-portal (GNOME, KDE, COSMIC fallback), then X11.
++        return portal_or_x11(
++            portal_screenshot::screenshot_via_portal,
++            crate::capture::screenshot_display_bytes_x11,
++        );
+     }
+     // Final fallback: X11 root window. Call the X11-only path explicitly
+     // so we don't re-enter screenshot_display_bytes (which routes back here
+@@ -1275,6 +1272,19 @@ fn checked_shell_helper_capture(
+         .then(|| capture().ok_or_else(|| anyhow::anyhow!("GNOME compositor helper capture failed")))
+ }
+ 
++/// The cascade tail: the portal tier, then the X11 root window. A portal
++/// refusal (`Err`) ends the cascade; only an unavailable portal (`Ok(None)`)
++/// falls through to X11.
++fn portal_or_x11(
++    portal: impl FnOnce() -> anyhow::Result<Option<Vec<u8>>>,
++    x11: impl FnOnce() -> anyhow::Result<Vec<u8>>,
++) -> anyhow::Result<Vec<u8>> {
++    if let Some(bytes) = portal()? {
++        return Ok(bytes);
++    }
++    x11()
++}
++
+ /// Per-window capture dispatcher. Kept as the explicit window-capture entry
+ /// point for callers outside `get_window_state`; it shares the same fail-closed
+ /// Wayland contract as [`screenshot_dispatch`].
+@@ -4327,6 +4337,45 @@ mod tests {
+         assert!(!called.get());
+     }
+ 
++    /// Run the display cascade's portal-then-X11 tail with a portal request
++    /// that resolves to `outcome`, reporting whether X11 was captured. The
++    /// refusal contract is owned by `tests/portal_screenshot_cascade.rs`,
++    /// which drives the public capture path against a portal on D-Bus.
++    fn portal_tail(
++        outcome: Result<String, portal_screenshot::RequestError>,
++    ) -> (anyhow::Result<Vec<u8>>, bool) {
++        let rt = tokio::runtime::Builder::new_current_thread()
++            .enable_all()
++            .build()
++            .unwrap();
++        let x11_called = std::cell::Cell::new(false);
++        let result = portal_or_x11(
++            || {
++                rt.block_on(portal_screenshot::request_outcome(
++                    async { outcome },
++                    portal_screenshot::SCREENSHOT_TIMEOUT,
++                ))
++            },
++            || {
++                x11_called.set(true);
++                Ok(b"x11-root".to_vec())
++            },
++        );
++        (result, x11_called.get())
++    }
++
++    #[test]
++    fn portal_unavailable_falls_through_to_x11() {
++        for unavailable in [
++            ashpd::Error::NoResponse.into(),
++            portal_screenshot::RequestError::Connect(anyhow::anyhow!("session bus unreachable")),
++        ] {
++            let (result, x11_called) = portal_tail(Err(unavailable));
++            assert_eq!(result.unwrap(), b"x11-root");
++            assert!(x11_called);
++        }
++    }
++
+     #[test]
+     fn injectable_text_accepts_printable_ascii_newline_and_tab() {
+         validate_injectable_text("Hello, World! 123 @#$%\t\n").expect("printable ASCII is typable");
+diff --git a/libs/cua-driver/rust/crates/platform-linux/src/wayland/portal_screenshot.rs b/libs/cua-driver/rust/crates/platform-linux/src/wayland/portal_screenshot.rs
+--- a/libs/cua-driver/rust/crates/platform-linux/src/wayland/portal_screenshot.rs
++++ b/libs/cua-driver/rust/crates/platform-linux/src/wayland/portal_screenshot.rs
+@@ -11,22 +11,53 @@
+ //! is sync because it's called from `tokio::task::spawn_blocking`. We build
+ //! a dedicated single-threaded tokio runtime per call so the async ashpd
+ //! work has somewhere to live without colliding with the caller's runtime.
++//!
++//! This module owns the portal tier's cascade policy: a refusal from a
++//! reachable portal is terminal, while an unreachable or unresponsive portal
++//! lets the display cascade continue.
+ 
++use std::future::Future;
+ use std::path::PathBuf;
++use std::time::Duration;
+ 
+ use ashpd::desktop::screenshot::Screenshot;
++use ashpd::desktop::ResponseError;
++use ashpd::PortalError;
++
++/// Deadline for the whole portal Screenshot request, connection included.
++/// Much longer than [`super::portal::PROBE_TIMEOUT`] because a person may
++/// have to answer a first-use consent dialog; without it an unanswered
++/// dialog would block the capture call forever.
++pub(super) const SCREENSHOT_TIMEOUT: Duration = Duration::from_secs(30);
++
++/// Why a portal Screenshot request did not produce a file URI.
++pub(super) enum RequestError {
++    /// The session bus could not be reached.
++    Connect(anyhow::Error),
++    /// The portal (or ashpd talking to it) reported a failure.
++    Portal(ashpd::Error),
++}
++
++impl From<ashpd::Error> for RequestError {
++    fn from(e: ashpd::Error) -> Self {
++        Self::Portal(e)
++    }
++}
+ 
+ /// Capture the current display via `org.freedesktop.portal.Screenshot.Screenshot`.
+-/// Returns the PNG/JPEG bytes the portal wrote to disk, or a typed error
+-/// when the portal isn't reachable (e.g. wlroots compositor without
+-/// `xdg-desktop-portal-wlr`, KDE without `xdg-desktop-portal-kde` running,
+-/// or no D-Bus session bus).
++///
++/// - `Ok(Some(bytes))`: the portal captured the display.
++/// - `Ok(None)`: the portal is unavailable (no session bus, no portal
++///   backend, no response, or no answer within [`SCREENSHOT_TIMEOUT`]); the
++///   reason is logged and the caller may try another capture path.
++/// - `Err(_)`: the portal refused the screenshot (denied, dismissed, or
++///   ended without a grant). This is terminal for the display cascade.
+ ///
+ /// `interactive=false` skips the customization dialog (region select,
+ /// post-shot editor) — the user still consents to the screenshot itself
+ /// on the first call per session unless they've pre-approved the
+ /// requesting binary in their DE's privacy settings.
+-pub fn screenshot_via_portal() -> anyhow::Result<Vec<u8>> {
++pub fn screenshot_via_portal() -> anyhow::Result<Option<Vec<u8>>> {
+     if tokio::runtime::Handle::try_current().is_ok() {
+         return std::thread::spawn(screenshot_via_portal_blocking)
+             .join()
+@@ -35,38 +66,113 @@ pub fn screenshot_via_portal() -> anyhow::Result<Vec<u8>> {
+     screenshot_via_portal_blocking()
+ }
+ 
+-fn screenshot_via_portal_blocking() -> anyhow::Result<Vec<u8>> {
+-    let rt = tokio::runtime::Builder::new_current_thread()
++fn screenshot_via_portal_blocking() -> anyhow::Result<Option<Vec<u8>>> {
++    let rt = match tokio::runtime::Builder::new_current_thread()
+         .enable_all()
+         .build()
+-        .map_err(|e| anyhow::anyhow!("failed to build tokio runtime for ashpd: {e}"))?;
+-    let uri = rt.block_on(async {
+-        let connection = super::portal::fresh_session_connection().await?;
+-        Screenshot::request()
++    {
++        Ok(rt) => rt,
++        Err(e) => {
++            return Ok(unavailable(format!(
++                "failed to build tokio runtime for ashpd: {e}"
++            )))
++        }
++    };
++    let request = async {
++        let connection = super::portal::fresh_session_connection()
++            .await
++            .map_err(RequestError::Connect)?;
++        let response = Screenshot::request()
+             .interactive(false)
+             .modal(false)
+             .connection(Some(connection))
+             .send()
+-            .await
+-            .map_err(map_ashpd_err)?
+-            .response()
+-            .map_err(map_ashpd_err)
+-            .map(|resp| resp.uri().clone())
+-    })?;
++            .await?
++            .response()?;
++        Ok(response.uri().to_string())
++    };
++    rt.block_on(request_outcome(request, SCREENSHOT_TIMEOUT))
++}
+ 
++/// Apply the portal tier's policy to one Screenshot request: bound it by
++/// `deadline`, turn a refusal into a terminal error, and read the captured
++/// file. Everything else is "unavailable" (`Ok(None)`).
++pub(super) async fn request_outcome(
++    request: impl Future<Output = Result<String, RequestError>>,
++    deadline: Duration,
++) -> anyhow::Result<Option<Vec<u8>>> {
++    let uri = match tokio::time::timeout(deadline, request).await {
++        Err(_) => return Ok(unavailable(format!("request timed out after {deadline:?}"))),
++        Ok(Err(RequestError::Connect(e))) => return Ok(unavailable(e)),
++        Ok(Err(RequestError::Portal(e))) => match refusal(&e) {
++            Some(refused) => return Err(refused),
++            None => return Ok(unavailable(describe_unavailable(&e))),
++        },
++        Ok(Ok(uri)) => uri,
++    };
+     // The portal returns a file:// URI pointing at a PNG (typically in
+     // /tmp or $XDG_RUNTIME_DIR/doc/...). Decode it via the `url` crate.
+-    let path = uri_to_path(&uri.to_string())
+-        .ok_or_else(|| anyhow::anyhow!("portal returned a non-file URI: {uri}"))?;
+-    let bytes = std::fs::read(&path)
+-        .map_err(|e| anyhow::anyhow!("portal screenshot at {} unreadable: {e}", path.display()))?;
++    let Some(path) = uri_to_path(&uri) else {
++        return Ok(unavailable(format!(
++            "portal returned a non-file URI: {uri}"
++        )));
++    };
++    let bytes = match std::fs::read(&path) {
++        Ok(bytes) => bytes,
++        Err(e) => {
++            return Ok(unavailable(format!(
++                "portal screenshot at {} unreadable: {e}",
++                path.display()
++            )))
++        }
++    };
+     // Best-effort cleanup: the portal places the file in a process-readable
+     // location that can outlive our process. Removing avoids the disk
+     // accumulating one PNG per call. If removal fails (permissions, file
+     // already gone) we silently drop the error — the bytes are already
+     // captured.
+     let _ = std::fs::remove_file(&path);
+-    Ok(bytes)
++    Ok(Some(bytes))
++}
++
++fn unavailable(reason: impl std::fmt::Display) -> Option<Vec<u8>> {
++    tracing::debug!("xdg-desktop-portal Screenshot unavailable ({reason}); falling through to X11");
++    None
++}
++
++/// A terminal error when the reachable portal answered without granting the
++/// screenshot, or `None` when the failure means the portal is unavailable.
++fn refusal(e: &ashpd::Error) -> Option<anyhow::Error> {
++    match e {
++        ashpd::Error::Response(ResponseError::Cancelled)
++        | ashpd::Error::Portal(PortalError::Cancelled(_) | PortalError::NotAllowed(_)) => {
++            Some(anyhow::anyhow!(
++                "xdg-desktop-portal Screenshot denied: {e}. Grant screenshot permission for \
++                 this process in the desktop's privacy settings and retry."
++            ))
++        }
++        // ashpd: the interaction ended for an unspecified reason. Not
++        // reported as a denial, but still no screenshot from a reachable
++        // portal, so an X11 root image would not be the requested desktop.
++        ashpd::Error::Response(ResponseError::Other) => Some(anyhow::anyhow!(
++            "xdg-desktop-portal Screenshot not granted: the portal ended the request without \
++             a screenshot and gave no reason. Check the portal backend logs or the desktop's \
++             screenshot permission."
++        )),
++        _ => None,
++    }
++}
++
++fn describe_unavailable(e: &ashpd::Error) -> String {
++    let msg = e.to_string();
++    if matches!(e, ashpd::Error::PortalNotFound(_))
++        || msg.contains("ServiceUnknown")
++        || msg.contains("NotFound")
++    {
++        format!("xdg-desktop-portal is not running on this session ({msg}). Install xdg-desktop-portal-gnome / xdg-desktop-portal-kde / xdg-desktop-portal-wlr for your compositor.")
++    } else {
++        msg
++    }
+ }
+ 
+ /// Convert a `file://...` URI string to a local PathBuf. Returns None for
+@@ -81,21 +187,6 @@ fn uri_to_path(uri_str: &str) -> Option<PathBuf> {
+     url.to_file_path().ok()
+ }
+ 
+-fn map_ashpd_err<E: std::fmt::Display>(e: E) -> anyhow::Error {
+-    let msg = format!("xdg-desktop-portal Screenshot failed: {e}");
+-    // Pattern-match common failure modes to produce a typed-ish error
+-    // the caller can pivot on.
+-    if msg.contains("ServiceUnknown") || msg.contains("NotFound") {
+-        anyhow::anyhow!("xdg-desktop-portal is not running on this session ({msg}). Install xdg-desktop-portal-gnome / xdg-desktop-portal-kde / xdg-desktop-portal-wlr for your compositor.")
+-    } else if msg.contains("Cancelled") || msg.contains("denied") {
+-        anyhow::anyhow!(
+-            "xdg-desktop-portal Screenshot consent dialog was cancelled or denied: {msg}"
+-        )
+-    } else {
+-        anyhow::anyhow!(msg)
+-    }
+-}
+-
+ /// Probe whether the portal *service* is reachable on the session bus.
+ /// Returns Ok(true) when the `org.freedesktop.portal.Desktop` name has an
+ /// owner, Ok(false) otherwise, and Err(...) for transport failures
+@@ -140,3 +231,34 @@ pub fn probe_portal() -> anyhow::Result<bool> {
+         .map_err(|_| anyhow::anyhow!("xdg-desktop-portal availability probe timed out"))?
+     })
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[tokio::test(start_paused = true)]
++    async fn pending_request_times_out_at_deadline() {
++        let started = tokio::time::Instant::now();
++        let outcome = request_outcome(
++            std::future::pending::<Result<String, RequestError>>(),
++            SCREENSHOT_TIMEOUT,
++        )
++        .await;
++        assert!(outcome.unwrap().is_none());
++        assert!(started.elapsed() >= SCREENSHOT_TIMEOUT);
++    }
++
++    #[tokio::test]
++    async fn request_resolving_before_deadline_returns_bytes() {
++        let dir = tempfile::tempdir().unwrap();
++        let path = dir.path().join("portal-shot.png");
++        std::fs::write(&path, b"png-bytes").unwrap();
++        let uri = url::Url::from_file_path(&path).unwrap().to_string();
++        let outcome = request_outcome(async { Ok(uri) }, SCREENSHOT_TIMEOUT).await;
++        assert_eq!(outcome.unwrap().as_deref(), Some(&b"png-bytes"[..]));
++        assert!(
++            !path.exists(),
++            "portal file should be removed after reading"
++        );
++    }
++}
+diff --git a/libs/cua-driver/rust/crates/platform-linux/tests/portal_screenshot_cascade.rs b/libs/cua-driver/rust/crates/platform-linux/tests/portal_screenshot_cascade.rs
+new file mode 100644
+--- /dev/null
++++ b/libs/cua-driver/rust/crates/platform-linux/tests/portal_screenshot_cascade.rs
+@@ -0,0 +1,209 @@
++// SPDX-License-Identifier: MIT
++
++//! The Wayland display-capture cascade against an xdg-desktop-portal served
++//! on a private session bus. No compositor, X server or real portal is used:
++//! `WAYLAND_DISPLAY` names a socket that does not exist and `DISPLAY` is
++//! unset, so the cascade reaches the portal tier and any X11 fallback shows
++//! up as an X11 error.
++
++#![cfg(target_os = "linux")]
++
++use std::collections::HashMap;
++use std::io::BufRead;
++use std::path::Path;
++use std::process::{Child, Command, Stdio};
++use std::sync::Mutex;
++use std::time::Duration;
++
++use zbus::message::Header;
++use zbus::zvariant::{OwnedObjectPath, OwnedValue};
++
++/// The tests set process-wide environment, so they run one at a time.
++static ENV_LOCK: Mutex<()> = Mutex::new(());
++
++/// What the fake portal answers to a Screenshot request, as the
++/// `org.freedesktop.portal.Request::Response` code.
++#[derive(Clone, Copy)]
++enum Answer {
++    /// 1: the user cancelled or denied the request.
++    Denied,
++    /// 2: the interaction ended for some other reason.
++    Other,
++}
++
++struct FakeScreenshotPortal {
++    answer: Answer,
++}
++
++#[zbus::interface(name = "org.freedesktop.portal.Screenshot")]
++impl FakeScreenshotPortal {
++    async fn screenshot(
++        &self,
++        #[zbus(header)] header: Header<'_>,
++        #[zbus(connection)] connection: &zbus::Connection,
++        _parent_window: &str,
++        options: HashMap<String, OwnedValue>,
++    ) -> zbus::fdo::Result<OwnedObjectPath> {
++        let sender = header.sender().expect("request has a sender").to_string();
++        let token = options
++            .get("handle_token")
++            .and_then(|value| String::try_from(value.try_clone().ok()?).ok())
++            .expect("ashpd sends a handle_token");
++        let path = OwnedObjectPath::try_from(format!(
++            "/org/freedesktop/portal/desktop/request/{}/{token}",
++            sender.trim_start_matches(':').replace('.', "_")
++        ))
++        .expect("request object path");
++        let code: u32 = match self.answer {
++            Answer::Denied => 1,
++            Answer::Other => 2,
++        };
++        let connection = connection.clone();
++        let signal_path = path.clone();
++        tokio::spawn(async move {
++            // Answer after the method reply, as a real portal does.
++            tokio::time::sleep(Duration::from_millis(100)).await;
++            connection
++                .emit_signal(
++                    None::<()>,
++                    &signal_path,
++                    "org.freedesktop.portal.Request",
++                    "Response",
++                    &(code, HashMap::<String, OwnedValue>::new()),
++                )
++                .await
++                .expect("emit Request::Response");
++        });
++        Ok(path)
++    }
++
++    #[zbus(property)]
++    fn version(&self) -> u32 {
++        2
++    }
++}
++
++/// A private `dbus-daemon`, killed on drop.
++struct PrivateBus {
++    child: Child,
++    address: String,
++}
++
++impl Drop for PrivateBus {
++    fn drop(&mut self) {
++        let _ = self.child.kill();
++        let _ = self.child.wait();
++    }
++}
++
++/// Start a private session bus in `directory`, or `None` (skip) when
++/// `dbus-daemon` is not installed. Explicit config: a sandbox (Nix) has no
++/// session.conf.
++fn start_private_bus(directory: &Path) -> Option<PrivateBus> {
++    let config = directory.join("session-bus.conf");
++    std::fs::write(
++        &config,
++        format!(
++            "<busconfig><type>session</type>\
++             <listen>unix:path={}</listen><auth>EXTERNAL</auth>\
++             <policy context=\"default\"><allow send_destination=\"*\" eavesdrop=\"true\"/>\
++             <allow eavesdrop=\"true\"/><allow own=\"*\"/></policy></busconfig>",
++            directory.join("session-bus.sock").display()
++        ),
++    )
++    .expect("write private bus config");
++    let mut child = match Command::new("dbus-daemon")
++        .arg(format!("--config-file={}", config.display()))
++        .args(["--nofork", "--print-address=1"])
++        .stdin(Stdio::null())
++        .stdout(Stdio::piped())
++        .stderr(Stdio::null())
++        .spawn()
++    {
++        Ok(child) => child,
++        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
++            eprintln!("skipping: dbus-daemon is not installed");
++            return None;
++        }
++        Err(error) => panic!("private test bus: {error}"),
++    };
++    let mut address = String::new();
++    std::io::BufReader::new(child.stdout.take().expect("dbus-daemon stdout"))
++        .read_line(&mut address)
++        .expect("read private bus address");
++    let bus = PrivateBus {
++        child,
++        address: address.trim().to_owned(),
++    };
++    assert!(!bus.address.is_empty(), "dbus-daemon printed no address");
++    Some(bus)
++}
++
++/// Capture the display through the public cascade while the fake portal on
++/// a private bus gives `answer`. `None` when the test is skipped.
++fn capture_with_portal_answer(answer: Answer) -> Option<anyhow::Result<Vec<u8>>> {
++    let _env = ENV_LOCK
++        .lock()
++        .unwrap_or_else(|poisoned| poisoned.into_inner());
++    let directory = tempfile::Builder::new()
++        .prefix("cua-portal-cascade-")
++        .tempdir_in("/tmp")
++        .expect("temporary test directory");
++    let bus = start_private_bus(directory.path())?;
++    let runtime = tokio::runtime::Runtime::new().expect("portal runtime");
++    let _portal = runtime.block_on(async {
++        zbus::connection::Builder::address(bus.address.as_str())
++            .expect("private bus address")
++            .name("org.freedesktop.portal.Desktop")
++            .expect("portal name")
++            .serve_at(
++                "/org/freedesktop/portal/desktop",
++                FakeScreenshotPortal { answer },
++            )
++            .expect("serve fake portal")
++            .build()
++            .await
++            .expect("own org.freedesktop.portal.Desktop on the private bus")
++    });
++    std::env::set_var("DBUS_SESSION_BUS_ADDRESS", &bus.address);
++    std::env::set_var("CUA_DRIVER_RS_ENABLE_WAYLAND", "1");
++    std::env::set_var("WAYLAND_DISPLAY", directory.path().join("no-compositor"));
++    for name in [
++        "DISPLAY",
++        "HYPRLAND_INSTANCE_SIGNATURE",
++        "CUA_INJECT_SOCKET",
++        "XDG_CURRENT_DESKTOP",
++    ] {
++        std::env::remove_var(name);
++    }
++    Some(platform_linux::capture::screenshot_display_bytes())
++}
++
++#[test]
++fn denied_portal_screenshot_reaches_the_caller_as_a_denied_error() {
++    let Some(result) = capture_with_portal_answer(Answer::Denied) else {
++        return;
++    };
++    let message = result
++        .expect_err("a denied portal must not produce a capture")
++        .to_string();
++    assert!(
++        message.starts_with("xdg-desktop-portal Screenshot denied"),
++        "denial was not reported to the caller: {message}"
++    );
++}
++
++#[test]
++fn unspecified_portal_refusal_is_not_granted_and_not_called_denied() {
++    let Some(result) = capture_with_portal_answer(Answer::Other) else {
++        return;
++    };
++    let message = result
++        .expect_err("a refused portal must not produce a capture")
++        .to_string();
++    assert!(
++        message.starts_with("xdg-desktop-portal Screenshot not granted"),
++        "refusal was not reported to the caller: {message}"
++    );
++    assert!(!message.contains("denied"), "{message}");
++}
