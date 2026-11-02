@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -770,16 +771,17 @@ func resolveSymlinks(p string) (string, error) {
 
 // humanSize returns a human-readable byte size.
 func humanSize(b int64) string {
-	const (
-		_KiB = 1024
-		_MiB = 1024 * _KiB
-	)
-	switch {
-	case b >= _MiB:
-		return fmt.Sprintf("%.1f MiB", float64(b)/float64(_MiB))
-	case b >= _KiB:
-		return fmt.Sprintf("%.1f KiB", float64(b)/float64(_KiB))
-	default:
+	if b < 1024 {
 		return fmt.Sprintf("%d B", b)
 	}
+	units := [...]string{"KiB", "MiB", "GiB", "TiB", "PiB", "EiB"}
+	value := float64(b) / 1024
+	unit := 0
+	// Formatting rounds to one decimal; carry at that boundary as well as
+	// exact powers so the display never says 1024.0 KiB.
+	for unit < len(units)-1 && math.Round(value*10)/10 >= 1024 {
+		value /= 1024
+		unit++
+	}
+	return fmt.Sprintf("%.1f %s", value, units[unit])
 }

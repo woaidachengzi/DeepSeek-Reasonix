@@ -109,6 +109,13 @@ our app-scoped protocol with an upstream nightly or the separate Spaces SDK.
 | [Portal capture refusal `9416cc6bc4`](https://github.com/trycua/cua/commit/9416cc6bc42b2042c78ad0ae5e3b834c7dbdbeed) | Backported with public capture-path private-bus regressions. A reachable portal refusal is terminal. The Reasonix host still exposes no full-display capture action. |
 | [Shared DevTools probe `61efedd411`](https://github.com/trycua/cua/commit/61efedd41149342c02f6ab9608fc3364cfe03585) | Backported; loopback listener and returned URL attestation remain mandatory. |
 
+The local Unicode fixes also cover semantic-router descriptions, recovery
+argument summaries and MCP startup failure summaries using the existing
+grapheme-aware text utility. Credential redaction still precedes truncation.
+CLI download sizes now carry to the next unit when one-decimal rounding would
+display 1024.0 of the previous unit. Serve help and config guidance include the
+password-file route in all shipped CLI languages.
+
 The Linux SDK runner also selects keycode/focus and screenshot-portal tests,
 including the public capture integration test on its own D-Bus daemon. Native
 Linux compilation and live X11/Wayland behavior cannot be certified on this Mac;

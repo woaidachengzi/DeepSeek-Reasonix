@@ -203,6 +203,10 @@ func TestHumanSize(t *testing.T) {
 		{500, "500 B"},
 		{2048, "2.0 KiB"},
 		{19_000_000, "18.1 MiB"},
+		{(1 << 20) - 52, "1023.9 KiB"},
+		{(1 << 20) - 51, "1.0 MiB"},
+		{(1 << 30) - 1, "1.0 GiB"},
+		{1 << 40, "1.0 TiB"},
 	}
 	for _, tt := range tests {
 		if got := humanSize(tt.bytes); got != tt.want {

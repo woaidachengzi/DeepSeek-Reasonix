@@ -26,6 +26,7 @@ import (
 	"reasonix/internal/mcplaunch"
 	"reasonix/internal/sandbox"
 	"reasonix/internal/secrets"
+	"reasonix/internal/textutil"
 	"reasonix/internal/tool"
 )
 
@@ -1673,11 +1674,7 @@ func shortNameHash(s string) string {
 
 func summarizeFailureError(err error) string {
 	msg := strings.Join(strings.Fields(secrets.RedactCredentials(err.Error())), " ")
-	const max = 500
-	if len(msg) > max {
-		msg = msg[:max] + "..."
-	}
-	return msg
+	return textutil.TruncateGraphemes(msg, 500, "...")
 }
 
 // remote tool adapter

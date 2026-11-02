@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"reasonix/internal/textutil"
 )
 
 // CallFingerprint builds a one-shot authorization fingerprint from the
@@ -59,8 +61,5 @@ func ArgsSummary(args json.RawMessage, max int) string {
 		}
 	}
 	s = strings.Join(strings.Fields(s), " ")
-	if len(s) > max {
-		return s[:max] + "…"
-	}
-	return s
+	return textutil.TruncateGraphemes(s, max, "…")
 }

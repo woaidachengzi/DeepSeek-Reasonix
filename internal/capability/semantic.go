@@ -10,6 +10,7 @@ import (
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/textutil"
 )
 
 const (
@@ -292,9 +293,5 @@ func (r *SemanticRouter) cachePut(key string, ids []string) {
 }
 
 func truncate(s string, n int) string {
-	s = strings.TrimSpace(s)
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "…"
+	return textutil.TruncateGraphemes(strings.TrimSpace(s), n, "…")
 }

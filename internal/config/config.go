@@ -973,7 +973,7 @@ type ServeConfig struct {
 	// cryptographically random token is generated at startup and printed.
 	Token string `toml:"token"`
 	// PasswordHash is a bcrypt hash of the password for auth_mode = "password".
-	// Generate one with: reasonix serve --hash-password --password '...'
+	// Generate one with: reasonix serve --hash-password --password-file /private/path/serve.password
 	PasswordHash string `toml:"password_hash"`
 	// BehindProxy indicates the server sits behind a trusted reverse proxy
 	// (nginx, Caddy, Cloudflare, etc.) that sets X-Forwarded-For and
